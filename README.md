@@ -698,8 +698,8 @@ Explore the UI and features of Neon Sidekick by expanding the panel below.
     <td><img src="./assets/screenshots/screen_splash.png" alt="Welcome splash screen"><br><center><b>Welcome splash screen</b></center></td>
   </tr>
   <tr>
-    <td><img src="./assets/screenshots/screen_ask.png" alt="Ask user"><br><center><b>Tool calls and code blocks</b></center></td>
-    <td><img src="./assets/screenshots/screen_menus.png" alt="Intuitive menu panes"><br><center><b>Welcome splash screen</b></center></td>
+    <td><img src="./assets/screenshots/screen_ask.png" alt="Ask user"><br><center><b>Ask user</b></center></td>
+    <td><img src="./assets/screenshots/screen_menus.png" alt="Intuitive menu panes"><br><center><b>Intuitive menu panes</b></center></td>
   </tr>
 </table>
 </details>
