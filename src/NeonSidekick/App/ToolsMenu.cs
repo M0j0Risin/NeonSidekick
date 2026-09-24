@@ -69,7 +69,7 @@ internal sealed class ToolsMenu
             tabs[t] = menu.FieldsTab(ToolsText.TabTitles[t], SettingsMenu.ToolsTabFields[t - 1], saved);
         }
 
-        return MenuPage.Tabbed(ToolsText.Label, tabs, tab, SettingsMenu.TabKeys) with { SpaceToggles = true, TabCursors = [ToolsText.FirstToolRow(offered), 0, 0, 0, 0, 0, 0, 0, 0] };
+        return MenuPage.Tabbed(ToolsText.Label, tabs, tab, SettingsMenu.TabKeys) with { SpaceToggles = true, TabCursors = [ToolsText.FirstToolRow(offered), 0, 0, 0, 0, 0, 0, 0, 0, 0] };
     }
 
     /// <summary>The nine tabs as plain lines, for a console without the pane: each tab's title as a heading, its content indented.</summary>

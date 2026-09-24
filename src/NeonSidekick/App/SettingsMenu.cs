@@ -349,6 +349,36 @@ public enum SettingsField
 
     /// <summary>A pick among <see cref="UI.ThemeName.Names"/>: the look (<see cref="Settings.AppSettingsData.Theme"/>, 2026-09-23). The General tab's last row; a change puts the theme in force at once (the pane re-colours) and raises <see cref="SettingsChanges.Theme"/>, so the screen starts over as <c>/splash</c> does when the pane closes. No reconnect. Last in the enum, as every newcomer.</summary>
     Theme,
+
+    /// <summary>A toggle: whether a turn offers the image tools (<see cref="Settings.AppSettingsData.ComfyTools"/>). The ComfyUI tab of <c>/tools</c>' first row (2026-09-24); no reconnect (read at each turn). Last in the enum, as every newcomer.</summary>
+    ComfyTools,
+
+    /// <summary>The ComfyUI server's URL, or empty (<see cref="Settings.AppSettingsData.ComfyUrl"/>). The ComfyUI tab's second row (2026-09-24); typed, no reconnect (read at each call).</summary>
+    ComfyUrl,
+
+    /// <summary>Typed: seconds one generation may take, 10 to 3600 (<see cref="Settings.AppSettingsData.ComfyTimeoutSeconds"/>). The ComfyUI tab's third row (2026-09-24); no reconnect.</summary>
+    ComfyTimeoutSeconds,
+
+    /// <summary>Typed: the folder under the working directory the pictures are saved in (<see cref="Settings.AppSettingsData.ComfyOutputFolder"/>). The ComfyUI tab's last row (2026-09-24); no reconnect.</summary>
+    ComfyOutputFolder,
+
+    /// <summary>A checklist: which installed ComfyUI workflows the model is offered (<see cref="Settings.AppSettingsData.ComfyWorkflowsOffered"/>). The ComfyUI tab's third row (later on 2026-09-24); no reconnect (read at each call). Last in the enum, as every newcomer.</summary>
+    ComfyWorkflowsOffered,
+
+    /// <summary>An action row, no setting behind it (later on 2026-09-24, the user's ask): Enter walks a new workflow — built from the server's models, or imported from a ComfyUI export — through every choice, tests it and saves it into a comfy folder (<c>SettingsMenu.ComfyWizard.cs</c>). The ComfyUI tab's fourth row. Last in the enum, as every newcomer.</summary>
+    ComfyAddWorkflow,
+
+    /// <summary>Typed: the command line a double-clicked picture opens in, or empty for the image editor Windows registers (<see cref="Settings.AppSettingsData.ImageEditor"/>). The General tab, under <see cref="DraftEditor"/> (later on 2026-09-24); no reconnect (read at each double-click). Last in the enum, as every newcomer.</summary>
+    ImageEditor,
+
+    /// <summary>Typed: the most pictures one <c>generate_image</c> call or <c>/imagine --count</c> makes, 1 to 16 (<see cref="Settings.AppSettingsData.ComfyMaxPicturesPerCall"/>). The ComfyUI tab, under the timeout (later on 2026-09-24); no reconnect. Last in the enum, as every newcomer.</summary>
+    ComfyMaxPicturesPerCall,
+
+    /// <summary>A toggle: whether the model appends reinforcing tags to a workflow's negative (<see cref="Settings.AppSettingsData.ComfyReinforceNegatives"/>). The ComfyUI tab, under the pictures cap (later still on 2026-09-24); no reconnect. Last in the enum, as every newcomer.</summary>
+    ComfyReinforceNegatives,
+
+    /// <summary>A toggle: whether the prompt and negative sent to ComfyUI show under a picture's line (<see cref="Settings.AppSettingsData.ComfyShowPrompts"/>). The ComfyUI tab, under reinforce negatives (later still on 2026-09-24); no reconnect.</summary>
+    ComfyShowPrompts,
 }
 
 /// <summary>The tabs of <c>/settings</c> on the pane, in strip order (Sessions right after General — the user's order, 2026-09-18; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
@@ -576,7 +606,7 @@ internal sealed partial class SettingsMenu
     /// </summary>
     public static readonly IReadOnlyList<IReadOnlyList<SettingsField>> TabFields =
     [
-        [SettingsField.Profile, SettingsField.NewProfileMode, SettingsField.WorkingDirectory, SettingsField.QueueMessages, SettingsField.QueueCancelMode, SettingsField.Memory, SettingsField.CopyUserPrompt, SettingsField.ShowImageThumbnails, SettingsField.ImageThumbnailSize, SettingsField.TranscriptMarkdown, SettingsField.PastePreviewLines, SettingsField.HideExitAutocomplete, SettingsField.CommandTypoIntercept, SettingsField.WelcomeSplash, SettingsField.ShowWorkingDirectory, SettingsField.ShowToolbar, SettingsField.DraftEditor, SettingsField.Theme],
+        [SettingsField.Profile, SettingsField.NewProfileMode, SettingsField.WorkingDirectory, SettingsField.QueueMessages, SettingsField.QueueCancelMode, SettingsField.Memory, SettingsField.CopyUserPrompt, SettingsField.ShowImageThumbnails, SettingsField.ImageThumbnailSize, SettingsField.TranscriptMarkdown, SettingsField.PastePreviewLines, SettingsField.HideExitAutocomplete, SettingsField.CommandTypoIntercept, SettingsField.WelcomeSplash, SettingsField.ShowWorkingDirectory, SettingsField.ShowToolbar, SettingsField.DraftEditor, SettingsField.ImageEditor, SettingsField.Theme],
         [SettingsField.SessionLogging, SettingsField.SessionRetentionDays, SettingsField.SessionNamingMode, SettingsField.SessionShowName, SettingsField.SessionTool, SettingsField.SessionSearchMaxResults],
         [SettingsField.LlmScanMode, SettingsField.LlmUrl, SettingsField.LlmModel, SettingsField.LlmApiKey, SettingsField.LlmReasoning, SettingsField.LlmRequestTimeoutSeconds, SettingsField.LlmTurnTimeoutSeconds, SettingsField.LlmContextLength, SettingsField.LlmCompactType, SettingsField.LlmCompactKeepRecent, SettingsField.LlmCompactShowSummary, SettingsField.LlmAutoCompactPercent, SettingsField.LlmOfferTools, SettingsField.LlmToolCompactType, SettingsField.LlmMaxToolIterations, SettingsField.LlmUseFunVerbs],
         [SettingsField.TtsOutput, SettingsField.TtsSource, SettingsField.TtsHttpUrl, SettingsField.TtsVoicePreview, SettingsField.TtsVoice, SettingsField.TtsVoice2, SettingsField.TtsVoiceMix, SettingsField.TtsSpeed],
@@ -624,6 +654,7 @@ internal sealed partial class SettingsMenu
         [SettingsField.GitNativeTools, SettingsField.GitNativeDiffMaxLines, SettingsField.GitNativeLogMaxCommits, SettingsField.GitNativeEmail, SettingsField.GitNativeName],
         [SettingsField.ObsidianTools, SettingsField.ObsidianVault, SettingsField.ObsidianAllowDelete],
         [SettingsField.SqlTools, SettingsField.SqlConnectionsOffered, SettingsField.SqlDefaultConnection, SettingsField.SqlSetPassword, SettingsField.SqlAddConnection, SettingsField.SqlPercentMention, SettingsField.SqlQueryMaxRows, SettingsField.SqlQueryTimeoutSeconds, SettingsField.SqlConnectionsProfile, SettingsField.SqlConnectionsGlobal],
+        [SettingsField.ComfyTools, SettingsField.ComfyUrl, SettingsField.ComfyWorkflowsOffered, SettingsField.ComfyAddWorkflow, SettingsField.ComfyTimeoutSeconds, SettingsField.ComfyMaxPicturesPerCall, SettingsField.ComfyReinforceNegatives, SettingsField.ComfyShowPrompts, SettingsField.ComfyOutputFolder],
         [SettingsField.ToolsDollarMention, SettingsField.ToolCollapseCount, SettingsField.CodeCollapseCount],
     ];
 
@@ -649,6 +680,7 @@ internal sealed partial class SettingsMenu
     private readonly Func<string, CancellationToken, Task<string?>>? _browseVault;
     private readonly Action<string>? _openFile;
     private readonly Func<Sql.SqlNamedConnection, CancellationToken, Task<Sql.SqlRun>> _testSqlConnection;
+    private readonly Func<Comfy.ComfyClient?> _comfyClient;
     private readonly Func<string, string?> _locateBrowser;
     private readonly Func<IReadOnlySet<string>> _installedShells;
     private readonly Func<IReadOnlySet<string>> _installedLanguages;
@@ -672,8 +704,10 @@ internal sealed partial class SettingsMenu
     /// <param name="testSqlConnection">What the <c>SQL add connection</c> summary's test runs over the unsaved draft (later on 2026-09-23), its typed password in it as a plain <c>file</c> value; null = a real <see cref="Sql.SqlAccess"/> run of <see cref="SqlTestQuery"/>.</param>
     /// <param name="openFile">What the SQL tab's edit rows open <c>sql.json</c> with (2026-09-23): the screen's editor opener; null = the rows say there is none.</param>
     /// <param name="browseFolder">The folder picker the <c>Working directory (cwd)</c> row opens (2026-09-22, the user's ask): the screen's <c>/cwd browse</c> tree, returning what to save — <c>""</c> for the profile's folder, a full path, or null for nothing chosen. Null (and a console with no pane) falls back to the typed path the row asked for until then.</param>
-    public SettingsMenu(IAnsiConsole console, AppSettings settings, Func<SettingsField, string?> overriddenBy, InputLine input, TranscriptRenderer transcript, SpeechSession speech, MenuPane pane, Func<string, string?>? locateBrowser = null, Func<IReadOnlySet<string>>? installedShells = null, Func<IReadOnlySet<string>>? installedLanguages = null, Func<CancellationToken, Task<string?>>? browseFolder = null, Func<string, CancellationToken, Task<string?>>? browseVault = null, Action<string>? openFile = null, Func<Sql.SqlNamedConnection, CancellationToken, Task<Sql.SqlRun>>? testSqlConnection = null)
+    public SettingsMenu(IAnsiConsole console, AppSettings settings, Func<SettingsField, string?> overriddenBy, InputLine input, TranscriptRenderer transcript, SpeechSession speech, MenuPane pane, Func<string, string?>? locateBrowser = null, Func<IReadOnlySet<string>>? installedShells = null, Func<IReadOnlySet<string>>? installedLanguages = null, Func<CancellationToken, Task<string?>>? browseFolder = null, Func<string, CancellationToken, Task<string?>>? browseVault = null, Action<string>? openFile = null, Func<Sql.SqlNamedConnection, CancellationToken, Task<Sql.SqlRun>>? testSqlConnection = null, Func<Comfy.ComfyClient?>? comfyClient = null)
     {
+        // The ComfyUI client the add-workflow wizard lists the server's models and runs its test with (later on 2026-09-24): the screen's, so a stub reaches it in tests; null = none, the wizard says there is no server.
+        _comfyClient = comfyClient ?? (() => null);
         _testSqlConnection = testSqlConnection ?? TestSqlConnectionAsync;
         _browseFolder = browseFolder;
         _openFile = openFile;
@@ -868,7 +902,7 @@ internal sealed partial class SettingsMenu
             or SettingsField.QueueMessages or SettingsField.SessionLogging or SettingsField.SessionTool
             or SettingsField.ToolsDollarMention or SettingsField.ReflectionIncludesSessions or SettingsField.McpServers or SettingsField.GitNativeTools
             or SettingsField.LlmCompactShowSummary or SettingsField.ShellToolBridge or SettingsField.ShellPoliceOutsidePaths
-            or SettingsField.ObsidianTools or SettingsField.ObsidianAllowDelete or SettingsField.SqlTools or SettingsField.SqlPercentMention;
+            or SettingsField.ObsidianTools or SettingsField.ObsidianAllowDelete or SettingsField.SqlTools or SettingsField.SqlPercentMention or SettingsField.ComfyTools or SettingsField.ComfyReinforceNegatives or SettingsField.ComfyShowPrompts;
 
     public static string FieldName(SettingsField field) => field switch
     {
@@ -900,6 +934,7 @@ internal sealed partial class SettingsMenu
         SettingsField.WorkingDirectory => "Working directory (cwd)",
         SettingsField.CopyUserPrompt => "Copy user prompt",
         SettingsField.DraftEditor => "Draft editor",
+        SettingsField.ImageEditor => "Image editor",
         SettingsField.FileViewImageMaxPerCall => "File view image max (per call)",
         SettingsField.McpServers => "MCP servers",
         SettingsField.McpConnectTimeoutSeconds => "MCP connect timeout (s)",
@@ -937,6 +972,15 @@ internal sealed partial class SettingsMenu
         SettingsField.ObsidianTools => "Obsidian tools",
         SettingsField.ObsidianVault => "Obsidian vault",
         SettingsField.SqlTools => "SQL tools",
+        SettingsField.ComfyTools => "ComfyUI tools",
+        SettingsField.ComfyUrl => "ComfyUI URL",
+        SettingsField.ComfyTimeoutSeconds => "ComfyUI timeout (s)",
+        SettingsField.ComfyMaxPicturesPerCall => "ComfyUI max pictures per call",
+        SettingsField.ComfyReinforceNegatives => "ComfyUI reinforce negatives",
+        SettingsField.ComfyShowPrompts => "ComfyUI show prompts",
+        SettingsField.ComfyOutputFolder => "ComfyUI output folder",
+        SettingsField.ComfyWorkflowsOffered => "ComfyUI workflows offered",
+        SettingsField.ComfyAddWorkflow => "ComfyUI add workflow",
         SettingsField.SqlDefaultConnection => "SQL default connection",
         SettingsField.SqlConnectionsOffered => "SQL connections offered",
         SettingsField.SqlSetPassword => "SQL set password",
@@ -1080,6 +1124,15 @@ internal sealed partial class SettingsMenu
             SettingsField.ObsidianTools => OnOff(data.ObsidianTools),
             SettingsField.ObsidianAllowDelete => OnOff(data.ObsidianAllowDelete),
             SettingsField.SqlTools => OnOff(data.SqlTools),
+            SettingsField.ComfyTools => OnOff(data.ComfyTools),
+            SettingsField.ComfyUrl => string.IsNullOrWhiteSpace(data.ComfyUrl) ? NoComfyUrlLabel : data.ComfyUrl,
+            SettingsField.ComfyTimeoutSeconds => Seconds(data.ComfyTimeoutSeconds),
+            SettingsField.ComfyMaxPicturesPerCall => ComfyPictures(data.ComfyMaxPicturesPerCall),
+            SettingsField.ComfyReinforceNegatives => OnOff(data.ComfyReinforceNegatives),
+            SettingsField.ComfyShowPrompts => OnOff(data.ComfyShowPrompts),
+            SettingsField.ComfyOutputFolder => string.IsNullOrWhiteSpace(data.ComfyOutputFolder) ? ComfyOutputHereLabel : data.ComfyOutputFolder,
+            SettingsField.ComfyWorkflowsOffered => ComfyOfferedValue(data.ComfyWorkflowsOffered, InstalledComfyWorkflows(profileDirectory)),
+            SettingsField.ComfyAddWorkflow => ComfyAddWorkflowLabel,
             SettingsField.SqlDefaultConnection => string.IsNullOrWhiteSpace(data.SqlDefaultConnection) ? FirstSqlConnectionLabel : data.SqlDefaultConnection,
             SettingsField.SqlSetPassword => SqlSetPasswordLabel,
             SettingsField.SqlAddConnection => SqlAddConnectionLabel,
@@ -1093,6 +1146,7 @@ internal sealed partial class SettingsMenu
             SettingsField.WebBrowserMode => data.WebBrowserMode,
             SettingsField.WebBrowserPath => string.IsNullOrWhiteSpace(data.WebBrowserPath) ? AutoBrowserLabel(locatedBrowser) : data.WebBrowserPath,
             SettingsField.DraftEditor => string.IsNullOrWhiteSpace(data.DraftEditor) ? DefaultDraftEditorLabel : data.DraftEditor,
+            SettingsField.ImageEditor => string.IsNullOrWhiteSpace(data.ImageEditor) ? DefaultImageEditorLabel : data.ImageEditor,
             SettingsField.FileViewImageMaxPerCall => Pictures(data.FileViewImageMaxPerCall),
             SettingsField.McpServers => OnOff(data.McpServers),
             SettingsField.McpConnectTimeoutSeconds => Seconds(data.McpConnectTimeoutSeconds),
@@ -1237,11 +1291,37 @@ internal sealed partial class SettingsMenu
     /// <summary>How the menu shows an empty <see cref="AppSettingsData.DraftEditor"/>: <c>/draft</c> hands the file to whatever Windows opens a <c>.txt</c> with. Pinned.</summary>
     public const string DefaultDraftEditorLabel = "(default .txt editor)";
 
+    /// <summary>How the menu shows an empty <see cref="AppSettingsData.ImageEditor"/>: a double-clicked picture opens in the image editor Windows registers (later on 2026-09-24). Pinned.</summary>
+    public const string DefaultImageEditorLabel = "(default image editor)";
+
     /// <summary>The settings-menu wording for a bad <see cref="SettingsField.WebBrowserPath"/>. Pinned.</summary>
     public const string BrowserPathError = "must be the full path of an existing executable, or empty to find Edge, Chrome or Brave";
 
     /// <summary>The settings-menu wording for a bad <see cref="SettingsField.WebSearxngUrl"/>. Pinned.</summary>
     public const string SearxngUrlError = "must be an http or https URL, or empty";
+
+    /// <summary>How the menu shows an empty <see cref="AppSettingsData.ComfyUrl"/> (2026-09-24): no server, so no image tool. Pinned.</summary>
+    public const string NoComfyUrlLabel = "(not set)";
+
+    /// <summary>How the menu shows an empty <see cref="AppSettingsData.ComfyOutputFolder"/> (2026-09-24): the pictures land in the working directory itself. Pinned.</summary>
+    public const string ComfyOutputHereLabel = "(the working directory)";
+
+    /// <summary>The settings-menu wording for a bad <see cref="SettingsField.ComfyUrl"/>. Pinned.</summary>
+    public const string ComfyUrlError = "must be an http or https URL (http://host:8188), or empty";
+
+    /// <summary>The settings-menu wording for a bad <see cref="SettingsField.ComfyOutputFolder"/>. Pinned.</summary>
+    public const string ComfyOutputFolderError = "must be a folder under the working directory (a relative path), or empty";
+
+    /// <summary>How the menu shows <see cref="AppSettingsData.ComfyMaxPicturesPerCall"/>. Pinned.</summary>
+    public static string ComfyPictures(int value) => value.ToString(CultureInfo.InvariantCulture) + (value == 1 ? " picture" : " pictures");
+
+    /// <summary>The settings-menu wording for a bad <see cref="SettingsField.ComfyMaxPicturesPerCall"/>. Pinned.</summary>
+    public static readonly string ComfyMaxPicturesRangeError =
+        "must be " + AppSettingsData.MinComfyMaxPicturesPerCall.ToString(CultureInfo.InvariantCulture) + " to " + AppSettingsData.MaxComfyMaxPicturesPerCall.ToString(CultureInfo.InvariantCulture) + " pictures";
+
+    /// <summary>The settings-menu wording for a bad <see cref="SettingsField.ComfyTimeoutSeconds"/>. Pinned.</summary>
+    public static readonly string ComfyTimeoutRangeError =
+        "must be " + AppSettingsData.MinComfyTimeoutSeconds.ToString(CultureInfo.InvariantCulture) + " to " + AppSettingsData.MaxComfyTimeoutSeconds.ToString(CultureInfo.InvariantCulture) + " seconds";
 
     /// <summary>The settings-menu wording for a bad <see cref="SettingsField.SessionRetentionDays"/>. Pinned.</summary>
     public static readonly string SessionRetentionDaysRangeError =
@@ -1473,7 +1553,12 @@ internal sealed partial class SettingsMenu
         SettingsField.WorkingDirectory => data.WorkingDirectory,
         SettingsField.WebBrowserPath => data.WebBrowserPath,
         SettingsField.WebSearxngUrl => data.WebSearxngUrl,
+        SettingsField.ComfyUrl => data.ComfyUrl,
+        SettingsField.ComfyOutputFolder => data.ComfyOutputFolder,
+        SettingsField.ComfyTimeoutSeconds => data.ComfyTimeoutSeconds.ToString(CultureInfo.InvariantCulture),
+        SettingsField.ComfyMaxPicturesPerCall => data.ComfyMaxPicturesPerCall.ToString(CultureInfo.InvariantCulture),
         SettingsField.DraftEditor => data.DraftEditor,
+        SettingsField.ImageEditor => data.ImageEditor,
         SettingsField.Theme => data.Theme,
         SettingsField.FileViewImageMaxPerCall => data.FileViewImageMaxPerCall.ToString(CultureInfo.InvariantCulture),
         SettingsField.McpConnectTimeoutSeconds => data.McpConnectTimeoutSeconds.ToString(CultureInfo.InvariantCulture),
@@ -2120,6 +2205,16 @@ internal sealed partial class SettingsMenu
             return await SetSqlPasswordAsync(cancellationToken).ConfigureAwait(false);
         }
 
+        if (field == SettingsField.ComfyWorkflowsOffered)
+        {
+            return await EditComfyOfferedAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        if (field == SettingsField.ComfyAddWorkflow)
+        {
+            return await AddComfyWorkflowAsync(cancellationToken).ConfigureAwait(false);
+        }
+
         if (field is SettingsField.SqlConnectionsProfile or SettingsField.SqlConnectionsGlobal)
         {
             // An edit row (2026-09-23): the file in the editor, made with its commented shape first; nothing saved here.
@@ -2144,7 +2239,7 @@ internal sealed partial class SettingsMenu
             return await PickVoskModelAsync(saved, cancellationToken).ConfigureAwait(false);
         }
 
-        bool allowEmpty = field is SettingsField.LlmUrl or SettingsField.LlmModel or SettingsField.TtsVoice2 or SettingsField.WorkingDirectory or SettingsField.WebBrowserPath or SettingsField.WebSearxngUrl or SettingsField.DraftEditor or SettingsField.GitNativeEmail or SettingsField.GitNativeName or SettingsField.ObsidianVault;
+        bool allowEmpty = field is SettingsField.LlmUrl or SettingsField.LlmModel or SettingsField.TtsVoice2 or SettingsField.WorkingDirectory or SettingsField.WebBrowserPath or SettingsField.WebSearxngUrl or SettingsField.DraftEditor or SettingsField.ImageEditor or SettingsField.GitNativeEmail or SettingsField.GitNativeName or SettingsField.ObsidianVault or SettingsField.ComfyUrl or SettingsField.ComfyOutputFolder;
         var result = await EditTextAsync(field, page, row, EditableValue(field, saved), allowEmpty, cancellationToken).ConfigureAwait(false);
         if (result is not InputResult.Submitted submitted)
         {
@@ -2337,6 +2432,26 @@ internal sealed partial class SettingsMenu
                 Apply(field, d => d.SqlQueryTimeoutSeconds = sqlTimeout);
                 return true;
 
+            case SettingsField.ComfyTimeoutSeconds:
+                if (!int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out int comfyTimeout) || comfyTimeout < AppSettingsData.MinComfyTimeoutSeconds || comfyTimeout > AppSettingsData.MaxComfyTimeoutSeconds)
+                {
+                    Sink.Error($"{FieldName(field)} {ComfyTimeoutRangeError}; keeping {EditableValue(field, saved)}.");
+                    return false;
+                }
+
+                Apply(field, d => d.ComfyTimeoutSeconds = comfyTimeout);
+                return true;
+
+            case SettingsField.ComfyMaxPicturesPerCall:
+                if (!int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out int comfyPictures) || comfyPictures < AppSettingsData.MinComfyMaxPicturesPerCall || comfyPictures > AppSettingsData.MaxComfyMaxPicturesPerCall)
+                {
+                    Sink.Error($"{FieldName(field)} {ComfyMaxPicturesRangeError}; keeping {EditableValue(field, saved)}.");
+                    return false;
+                }
+
+                Apply(field, d => d.ComfyMaxPicturesPerCall = comfyPictures);
+                return true;
+
             case SettingsField.ShellTimeoutSeconds:
                 if (!int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out int shellTimeout) || shellTimeout < AppSettingsData.MinShellTimeoutSeconds || shellTimeout > AppSettingsData.MaxShellTimeoutSeconds)
                 {
@@ -2465,6 +2580,32 @@ internal sealed partial class SettingsMenu
                 }
 
                 Apply(field, d => d.WebSearxngUrl = text);
+                return true;
+
+            case SettingsField.ComfyUrl:
+                if (text.Length > 0 && !(Uri.TryCreate(text, UriKind.Absolute, out var comfy) && Web.WebFetcher.IsHttp(comfy)))
+                {
+                    Sink.Error($"{FieldName(field)} {ComfyUrlError}; keeping {FieldValue(field, saved, _settings.ProfileDirectory)}.");
+                    return false;
+                }
+
+                Apply(field, d => d.ComfyUrl = text);
+                return true;
+
+            case SettingsField.ComfyOutputFolder:
+                // Under the sandbox only: a rooted path or one climbing out would be refused at every call, so it is refused here once.
+                if (Path.IsPathRooted(text) || text.Replace('\\', '/').Split('/').Contains(".."))
+                {
+                    Sink.Error($"{FieldName(field)} {ComfyOutputFolderError}; keeping {FieldValue(field, saved, _settings.ProfileDirectory)}.");
+                    return false;
+                }
+
+                Apply(field, d => d.ComfyOutputFolder = text);
+                return true;
+
+            case SettingsField.ImageEditor:
+                // A command line, as the draft editor's: a word cmd cannot find shows at the next double-click.
+                Apply(field, d => d.ImageEditor = text);
                 return true;
 
             case SettingsField.DraftEditor:
@@ -2973,6 +3114,9 @@ internal sealed partial class SettingsMenu
             SettingsField.ObsidianTools => data.ObsidianTools,
             SettingsField.ObsidianAllowDelete => data.ObsidianAllowDelete,
             SettingsField.SqlTools => data.SqlTools,
+            SettingsField.ComfyTools => data.ComfyTools,
+            SettingsField.ComfyReinforceNegatives => data.ComfyReinforceNegatives,
+            SettingsField.ComfyShowPrompts => data.ComfyShowPrompts,
             SettingsField.SqlPercentMention => data.SqlPercentMention,
             SettingsField.LlmCompactShowSummary => data.LlmCompactShowSummary,
             SettingsField.TtsVoicePreview => data.TtsVoicePreview,
@@ -3021,6 +3165,9 @@ internal sealed partial class SettingsMenu
             case SettingsField.ObsidianTools: data.ObsidianTools = on; break;
             case SettingsField.ObsidianAllowDelete: data.ObsidianAllowDelete = on; break;
             case SettingsField.SqlTools: data.SqlTools = on; break;
+            case SettingsField.ComfyTools: data.ComfyTools = on; break;
+            case SettingsField.ComfyReinforceNegatives: data.ComfyReinforceNegatives = on; break;
+            case SettingsField.ComfyShowPrompts: data.ComfyShowPrompts = on; break;
             case SettingsField.SqlPercentMention: data.SqlPercentMention = on; break;
             case SettingsField.LlmCompactShowSummary: data.LlmCompactShowSummary = on; break;
             case SettingsField.TtsVoicePreview: data.TtsVoicePreview = on; break;
@@ -3078,6 +3225,9 @@ internal sealed partial class SettingsMenu
         SettingsField.ObsidianTools => on ? "the model reads and edits the notes of the Obsidian vault" : "no vault tools",
         SettingsField.ObsidianAllowDelete => on ? "vault_delete may move a note or attachment to the vault's .trash" : "no vault tool deletes anything",
         SettingsField.SqlTools => on ? "the model reads the SQL Server connections of sql.json" : "no SQL tools",
+        SettingsField.ComfyTools => on ? "the model makes pictures with the ComfyUI workflows" : "no image tools",
+        SettingsField.ComfyReinforceNegatives => on ? "the model adds a few opposite tags to a workflow's negative" : "the workflow's negative as it is",
+        SettingsField.ComfyShowPrompts => on ? "the prompt and negative sent to ComfyUI under each picture's line" : "just the picture's line",
         SettingsField.SqlPercentMention => on ? "% and part of a name lists the SQL connections on the line" : "% is ordinary text",
         SettingsField.LlmCompactShowSummary => on ? "the summary's lines or the pruned results, then the protected counts" : "the one compact notice alone",
         SettingsField.AgentSkills => on ? "the skills catalog, load_skill and skill_editor are offered" : "no skills, no project notes",
@@ -3088,7 +3238,7 @@ internal sealed partial class SettingsMenu
         SettingsField.ReflectionAutoLearn => on ? "enough tool calls, or an error it recovered from, teaches a skill" : "nothing is learned unasked; /learn and skill_editor still work",
         SettingsField.ReflectionIncludesSessions => on ? "the earlier sessions matching the turn open the reflection, readable too" : "a reflection reads the conversation on screen alone",
         SettingsField.HideExitAutocomplete => on ? "hide '/exit' from the autocomplete list" : "show '/exit' in the autocomplete list",
-        SettingsField.CommandTypoIntercept => on ? "a line that is only a command's name offers the command first" : "a line that is only a command's name is sent as typed",
+        SettingsField.CommandTypoIntercept => on ? "a command typed without its slash or with extra ones offers the command" : "a command typed without its slash or with extra ones is sent as typed",
         SettingsField.WelcomeSplash => on ? "a picture greets you under the banner at startup, until the first line" : "the banner alone at startup",
         SettingsField.ShowWorkingDirectory => on ? "show the working directory in the header" : "hide the working directory in the header",
         SettingsField.ShowToolbar => on ? "show the toolbar" : "hide the toolbar",

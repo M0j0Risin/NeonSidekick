@@ -35,7 +35,7 @@ public class ToolsMenuTests : IDisposable
 
     public ToolsMenuTests()
     {
-        _console.Profile.Width = 100;
+        _console.Profile.Width = 120;   // 100 until 2026-09-24, when the Images tab took the ten-tab strip to 107 cells
         _settings = new AppSettings(_dir);
         _settings.Update(d => { d.TtsOutput = true; d.TtsSource = "http"; d.ToolsDisabled = []; d.GitNativeTools = true; });   // delete off by default (2026-09-20), Git native tools off by default (2026-09-21): the Offered-tab scripts start from every tool on
         _speech = new SpeechSession(_ => _synth, _ => new FakeAudioPlayback(), new ModelStore(Path.Combine(_dir, "models"), new HttpClient(new StubHttpMessageHandler())));
@@ -86,13 +86,13 @@ public class ToolsMenuTests : IDisposable
     }
 
     /// <summary>The menu over a pane with geometry: every list is a level of the pane, the notices its status line.</summary>
-    private (ToolsMenu Menu, ScreenPane Pane, SettingsMenu Settings) PaneMenu(Func<string, CancellationToken, Task<string?>>? browseVault = null, Func<NeonSidekick.Sql.SqlNamedConnection, CancellationToken, Task<NeonSidekick.Sql.SqlRun>>? testSql = null)
+    private (ToolsMenu Menu, ScreenPane Pane, SettingsMenu Settings) PaneMenu(Func<string, CancellationToken, Task<string?>>? browseVault = null, Func<NeonSidekick.Sql.SqlNamedConnection, CancellationToken, Task<NeonSidekick.Sql.SqlRun>>? testSql = null, Func<NeonSidekick.Comfy.ComfyClient?>? comfy = null)
     {
         _console.Profile.Height = 40;
         var pane = new ScreenPane(_console, new ScreenGeometry(() => null), new ManualTimeProvider()) { Hint = () => "idle" };
         var keys = new KeySource(_console.Input, TimeSpan.FromMilliseconds(1));
         var menuPane = new MenuPane(pane, keys);
-        var settings = new SettingsMenu(new ConsoleWithInput(pane, keys), _settings, _ => null, new InputLine(pane, keys), new TranscriptRenderer(pane), _speech, menuPane, _ => FakeBrowserPath, browseVault: browseVault, testSqlConnection: testSql);
+        var settings = new SettingsMenu(new ConsoleWithInput(pane, keys), _settings, _ => null, new InputLine(pane, keys), new TranscriptRenderer(pane), _speech, menuPane, _ => FakeBrowserPath, browseVault: browseVault, testSqlConnection: testSql, comfyClient: comfy);
         var menu = new ToolsMenu(Facts, _settings, settings, new TranscriptRenderer(pane), menuPane);
         pane.Show();
         return (menu, pane, settings);
@@ -123,12 +123,12 @@ public class ToolsMenuTests : IDisposable
             : row + new string(' ', _console.Profile.Width - 2 - TextCells.Width(row)) + ScreenPane.CloseGlyph;
 
     /// <summary>The strip as the pane prints it: the label, then every tab title with a space either side, two spaces between. Pinned.</summary>
-    private const string Strip = ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Git (native)    Obsidian    SQL    Options ";   // SQL since 2026-09-23, Obsidian since 2026-09-22, Options last since later that day (second from later on 2026-09-19); the user's order (Web, Files, Shell, Ask, Git (native)) since later on 2026-09-21, alphabetical before
+    private const string Strip = ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Git (native)    Obsidian    SQL    ComfyUI    Options ";   // Images since 2026-09-24, SQL since 2026-09-23, Obsidian since 2026-09-22, Options last since later that day (second from later on 2026-09-19); the user's order (Web, Files, Shell, Ask, Git (native)) since later on 2026-09-21, alphabetical before
 
-    /// <summary>A tool row as the pane prints it at width 100 (the markup rendered): the name padded to 22, the state to 5, then the description, cut to 99 cells and an ellipsis (FittedMarkup; every description is longer).</summary>
+    /// <summary>A tool row as the pane prints it at width 120 (the markup rendered): the name padded to 22, the state to 5, then the description, cut to 119 cells and an ellipsis (FittedMarkup; every description is longer).</summary>
     private string Row(string name, bool on, string mark = "  ") => Fitted(mark + name.PadRight(22) + (on ? "on" : "off").PadRight(5) + Description(name));
 
-    private static string Fitted(string row) => row.Length <= 100 ? row : row[..99] + "…";
+    private static string Fitted(string row) => row.Length <= 120 ? row : row[..119] + "…";
 
     private string Description(string name) => Facts().Groups.SelectMany(g => g.Tools).Single(t => t.Name == name).Description;
 
@@ -138,9 +138,9 @@ public class ToolsMenuTests : IDisposable
         // The three tabs that left /settings (2026-09-19): their rows unchanged, every field on exactly one tab of the three panes (Skills left for /skills later that day);
         // the Options tab ahead of them (later on 2026-09-19): the pane's own $-mention switch.
         Assert.Equal(5, SettingsMenu.TabFields.Count);
-        Assert.Equal(8, SettingsMenu.ToolsTabFields.Count);   // SQL since 2026-09-23   // Obsidian since 2026-09-22   // Git since 2026-09-20, Shell since 2026-09-21; the user's order (Web, Files, Shell, Ask, Git (native)) since later on 2026-09-21, alphabetical before
-        Assert.Equal(["Offered", "Web", "Files", "Shell", "Ask", "Git (native)", "Obsidian", "SQL", "Options"], ToolsText.TabTitles);
-        Assert.Equal([SettingsField.ToolsDollarMention, SettingsField.ToolCollapseCount, SettingsField.CodeCollapseCount], SettingsMenu.ToolsTabFields[7]);   // the fold's count under the switch (2026-09-22, the user's place), the code fold's under it
+        Assert.Equal(9, SettingsMenu.ToolsTabFields.Count);   // Images since 2026-09-24; SQL since 2026-09-23   // Obsidian since 2026-09-22   // Git since 2026-09-20, Shell since 2026-09-21; the user's order (Web, Files, Shell, Ask, Git (native)) since later on 2026-09-21, alphabetical before
+        Assert.Equal(["Offered", "Web", "Files", "Shell", "Ask", "Git (native)", "Obsidian", "SQL", "ComfyUI", "Options"], ToolsText.TabTitles);
+        Assert.Equal([SettingsField.ToolsDollarMention, SettingsField.ToolCollapseCount, SettingsField.CodeCollapseCount], SettingsMenu.ToolsTabFields[8]);   // the fold's count under the switch (2026-09-22, the user's place), the code fold's under it
         Assert.Equal([SettingsField.WebTools, SettingsField.WebBrowserMode, SettingsField.WebBrowserPath, SettingsField.WebBrowserNetworkMode, SettingsField.WebSearchMethod, SettingsField.WebSearxngUrl, SettingsField.WebSearchMaxResults], SettingsMenu.ToolsTabFields[0]);
         Assert.Equal([SettingsField.FileTools, SettingsField.FileSafeEdits, SettingsField.FileTreeMaxLength, SettingsField.FileTreeShowSizes, SettingsField.FileMentionFolderMode, SettingsField.FileBrowserMode, SettingsField.FileViewImageMaxPerCall], SettingsMenu.ToolsTabFields[1]);   // the view_image cap last, 2026-09-19; the browser mode under the folder mode, 2026-09-21
         Assert.Equal([SettingsField.ShellCommandPolicy, SettingsField.ShellCommandAllowed, SettingsField.ShellPoliceOutsidePaths, SettingsField.ShellDefault, SettingsField.ShellTimeoutSeconds, SettingsField.ShellForegroundCapSeconds, SettingsField.ShellOutputMaxChars, SettingsField.ShellCodeLanguages, SettingsField.ShellCodeTimeoutSeconds, SettingsField.ShellToolBridge, SettingsField.ShellCodeMaxToolCalls], SettingsMenu.ToolsTabFields[2]);   // the policy (the switch) first, then the list, the shell, the caps, then execute_code's four (2026-09-21; the bridge switch later that day; the police toggle third, 2026-09-22)
@@ -149,7 +149,7 @@ public class ToolsMenuTests : IDisposable
         Assert.Equal([SettingsField.ObsidianTools, SettingsField.ObsidianVault, SettingsField.ObsidianAllowDelete], SettingsMenu.ToolsTabFields[5]);   // the switch, then the vault (2026-09-22), then the delete switch (later that day)
         Assert.Equal([SettingsField.SqlTools, SettingsField.SqlConnectionsOffered, SettingsField.SqlDefaultConnection, SettingsField.SqlSetPassword, SettingsField.SqlAddConnection, SettingsField.SqlPercentMention, SettingsField.SqlQueryMaxRows, SettingsField.SqlQueryTimeoutSeconds, SettingsField.SqlConnectionsProfile, SettingsField.SqlConnectionsGlobal], SettingsMenu.ToolsTabFields[6]);   // the switch, the offered list (later that day), the default, the password prompt, the add-connection wizard and the %-mention switch (later that day), the two caps, the two edit rows (2026-09-23)
         Assert.Equal(Enum.GetValues<SettingsField>().Order(), SettingsMenu.TabFields.Concat(SettingsMenu.SkillsTabFields).Concat(SettingsMenu.ToolsTabFields).Concat(SettingsMenu.McpTabFields).SelectMany(t => t).Order());
-        Assert.Equal(21, SettingsMenu.LabelWidthOf(SettingsMenu.ToolsTabFields[7]));   // "Tool collapse count" (2026-09-22; "$-mention enabled", 19, before)
+        Assert.Equal(21, SettingsMenu.LabelWidthOf(SettingsMenu.ToolsTabFields[8]));   // "Tool collapse count" (2026-09-22; "$-mention enabled", 19, before)
         Assert.Equal(26, SettingsMenu.LabelWidthOf(SettingsMenu.ToolsTabFields[0]));   // "Web browser network mode" (the Web-prefixed labels, later still on 2026-09-19; "Web search max results", 24, before)
         Assert.Equal(32, SettingsMenu.LabelWidthOf(SettingsMenu.ToolsTabFields[1]));   // "File view image max (per call)" (later still on 2026-09-19; "Stale line number guard", 25, that morning; "Always return line numbers", 28, before)
         Assert.Equal(29, SettingsMenu.LabelWidthOf(SettingsMenu.ToolsTabFields[2]));   // "Shell tool bridge max calls" (the Shell tab, 2026-09-21; the row was "Shell code max tool calls", 27, until later that day)
@@ -320,7 +320,7 @@ public class ToolsMenuTests : IDisposable
         Directory.CreateDirectory(plain);
         Directory.CreateDirectory(Path.Combine(vault, ".obsidian"));
         var (menu, _, _) = PaneMenu();
-        Push(Keys.Left, Keys.Left, Keys.Left, Keys.Down, Keys.Enter);   // Offered → Options → SQL → Obsidian, the vault row's typed slot
+        Push(Keys.Left, Keys.Left, Keys.Left, Keys.Left, Keys.Down, Keys.Enter);   // Offered → Options → Images → SQL → Obsidian, the vault row's typed slot
         Push([.. plain.Select(Keys.Char), Keys.Enter]);         // no .obsidian: refused, kept
         Push(Keys.Enter);
         Push([.. vault.Select(Keys.Char), Keys.Enter]);
@@ -344,7 +344,7 @@ public class ToolsMenuTests : IDisposable
         Directory.CreateDirectory(_settings.ProfileDirectory);
         File.WriteAllText(path, """{ "connections": { "prod": { "server": "x", "auth": "runas", "user": "CONTOSO\\svc-test" }, "mine": { "server": "y", "auth": "windows" } } }""");
         var (menu, _, _) = PaneMenu();
-        Push(Keys.Left, Keys.Left, Keys.Down, Keys.Down, Keys.Down, Keys.Enter);   // Offered → Options → SQL, the set-password row (the third since the offered list): the pick
+        Push(Keys.Left, Keys.Left, Keys.Left, Keys.Down, Keys.Down, Keys.Down, Keys.Enter);   // Offered → Options → Images → SQL, the set-password row (the third since the offered list): the pick
         Push(Keys.Enter);                                               // prod, the one connection that takes a password
         Push([.. "s3cret".Select(Keys.Char), Keys.Enter]);
         Push(Keys.Escape);
@@ -365,7 +365,7 @@ public class ToolsMenuTests : IDisposable
     private void Type(string text) => Push([.. text.Select(Keys.Char), Keys.Enter]);
 
     /// <summary>Offered → Options → SQL, the add-connection row (the fifth, under the password prompt): the wizard.</summary>
-    private void OpenSqlWizard() => Push(Keys.Left, Keys.Left, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter);
+    private void OpenSqlWizard() => Push(Keys.Left, Keys.Left, Keys.Left, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter);
 
     /// <summary>
     /// <c>SQL add connection</c> (later on 2026-09-23, the user's ask): a SQL login walked through every page into the profile's
@@ -595,7 +595,7 @@ public class ToolsMenuTests : IDisposable
         Directory.CreateDirectory(_settings.ProfileDirectory);
         File.WriteAllText(path, """{ "connections": { "aw": { "server": "x", "auth": "windows" }, "prod": { "server": "y", "auth": "windows" } } }""");
         var (menu, _, _) = PaneMenu();
-        Push(Keys.Left, Keys.Left, Keys.Down, Keys.Enter);   // Offered → Options → SQL, the offered row: the checklist
+        Push(Keys.Left, Keys.Left, Keys.Left, Keys.Down, Keys.Enter);   // Offered → Options → Images → SQL, the offered row: the checklist
         Push(Keys.Down, Keys.Enter);                         // prod off
         Push(Keys.Char(' '));                                // and on again (Space flips too)
         Push(Keys.Enter);                                    // and off
@@ -624,7 +624,7 @@ public class ToolsMenuTests : IDisposable
         var opened = new List<string>();
         var answers = new Queue<string?>([vault, null]);
         var (menu, pane, _) = PaneMenu((openOn, _) => { opened.Add(openOn); return Task.FromResult(answers.Dequeue()); });
-        Push(Keys.Left, Keys.Left, Keys.Left, Keys.Down, Keys.Enter);   // Offered → Options → SQL → Obsidian, the vault row: the picker, the vault picked
+        Push(Keys.Left, Keys.Left, Keys.Left, Keys.Left, Keys.Down, Keys.Enter);   // Offered → Options → Images → SQL → Obsidian, the vault row: the picker, the vault picked
         Push(Keys.Enter);                                       // again: nothing picked
         Push(Keys.Escape);
 
@@ -640,7 +640,7 @@ public class ToolsMenuTests : IDisposable
     public async Task OnThePane_TheGitTab_SitsBeforeObsidian_ItsCapsAreTyped()
     {
         var (menu, pane, _) = PaneMenu();
-        Push(Keys.Left, Keys.Left, Keys.Left, Keys.Left);       // the strip wraps: Offered → Options → SQL → Obsidian → Git (native), its first row
+        Push(Keys.Left, Keys.Left, Keys.Left, Keys.Left, Keys.Left);   // the strip wraps: Offered → Options → Images → SQL → Obsidian → Git (native), its first row
         Push(Keys.Down, Keys.Enter);                            // Git diff max lines: the typed slot, pre-filled with 500
         Push(Keys.Backspace, Keys.Backspace, Keys.Backspace, Keys.Char('1'), Keys.Char('0'), Keys.Char('0'), Keys.Char('0'), Keys.Enter);
         Push(Keys.Down, Keys.Enter);                            // Git log max commits: the slot, pre-filled with 20; 500 is out of range, kept
@@ -972,7 +972,7 @@ public class ToolsMenuTests : IDisposable
         Assert.Contains("  · Web\n  ·   Web tools: on\n  ·   Web browser mode: default\n  ·   Web browser path: (auto: msedge.exe)\n", _console.Output);
         Assert.Contains("  ·   Web search max results: 20 results\n  · Files\n  ·   File tools: on\n  ·   File safe edits: off\n", _console.Output);
         Assert.Contains("  · Shell\n  ·   Shell command policy: ask\n", _console.Output);
-        Assert.Contains("  · Ask\n  ·   Ask user: on\n  ·   Ask max questions: 10 questions\n  ·   Ask max choices per question: 10 choices\n  · Git (native)\n  ·   Git native tools: on\n  ·   Git native diff max lines: 500 lines\n  ·   Git native log max commits: 20 commits\n  ·   Git native email: (not set)\n  ·   Git native name: (not set)\n  · Obsidian\n  ·   Obsidian tools: on\n  ·   Obsidian vault: (not set)\n  ·   Obsidian allow delete (.trash): on\n  · SQL\n  ·   SQL tools: on\n  ·   SQL connections offered: all (not narrowed)\n  ·   SQL default connection: (the first connection)\n  ·   SQL set password: Enter to set password for a connection\n  ·   SQL add connection: Enter to start connection wizard\n  ·   SQL %-mention enabled: on\n  ·   SQL max rows: 100 rows\n  ·   SQL query timeout (s): 30\n  ·   SQL connections (profile): (none) · Enter edits sql.json\n  ·   SQL connections (global): (none) · Enter edits sql.json\n  · Options\n  ·   $-mention enabled: on\n  ·   Tool collapse count: 2 lines\n  ·   Code collapse count: 20 lines\n", _console.Output);
+        Assert.Contains("  · Ask\n  ·   Ask user: on\n  ·   Ask max questions: 10 questions\n  ·   Ask max choices per question: 10 choices\n  · Git (native)\n  ·   Git native tools: on\n  ·   Git native diff max lines: 500 lines\n  ·   Git native log max commits: 20 commits\n  ·   Git native email: (not set)\n  ·   Git native name: (not set)\n  · Obsidian\n  ·   Obsidian tools: on\n  ·   Obsidian vault: (not set)\n  ·   Obsidian allow delete (.trash): on\n  · SQL\n  ·   SQL tools: on\n  ·   SQL connections offered: all (not narrowed)\n  ·   SQL default connection: (the first connection)\n  ·   SQL set password: Enter to set password for a connection\n  ·   SQL add connection: Enter to start connection wizard\n  ·   SQL %-mention enabled: on\n  ·   SQL max rows: 100 rows\n  ·   SQL query timeout (s): 30\n  ·   SQL connections (profile): (none) · Enter edits sql.json\n  ·   SQL connections (global): (none) · Enter edits sql.json\n  · ComfyUI\n  ·   ComfyUI tools: on\n  ·   ComfyUI URL: (not set)\n  ·   ComfyUI workflows offered: all (not narrowed)\n  ·   ComfyUI add workflow: Enter to start workflow wizard\n  ·   ComfyUI timeout (s): 300\n  ·   ComfyUI max pictures per call: 4 pictures\n  ·   ComfyUI reinforce negatives: on\n  ·   ComfyUI show prompts: on\n  ·   ComfyUI output folder: comfy_images\n  · Options\n  ·   $-mention enabled: on\n  ·   Tool collapse count: 2 lines\n  ·   Code collapse count: 20 lines\n", _console.Output);
         Assert.False(pane.OverlayOpen);
         pane.Dispose();
     }
@@ -1021,5 +1021,151 @@ public class ToolsMenuTests : IDisposable
         Assert.Equal(["Shell allowed commands", "  " + SettingsMenu.NoAllowedCommandsRow], ToolsMenu.AllowedCommandLines(new AppSettingsData()));
         Assert.False(pane.OverlayOpen);
         pane.Dispose();
+    }
+
+    // ── The ComfyUI tab (Images until later on 2026-09-24): workflows offered and the add-workflow wizard (later on 2026-09-24) ─
+
+    private const string ComfyServer = "http://comfy.lan:8188";
+
+    private static void ComfyWorkflowFile(string folder, string name)
+    {
+        Directory.CreateDirectory(folder);
+        File.WriteAllText(Path.Combine(folder, name + ".json"), "{\"6\":{\"class_type\":\"CLIPTextEncode\",\"inputs\":{\"text\":\"{{prompt}}\"}}}");
+    }
+
+    /// <summary>A ComfyUI stand-in: two checkpoints, three samplers, two schedulers, and a job that finishes at once.</summary>
+    private (NeonSidekick.Comfy.ComfyClient Client, StubHttpMessageHandler Stub) ComfyStub()
+    {
+        var stub = new StubHttpMessageHandler()
+            .Map(ComfyServer + "/object_info/CheckpointLoaderSimple", System.Net.HttpStatusCode.OK, "{\"CheckpointLoaderSimple\":{\"input\":{\"required\":{\"ckpt_name\":[[\"juggernautXL_ragnarok.safetensors\",\"ponyDiffusionV6XL.safetensors\"]]}}}}")
+            .Map(ComfyServer + "/object_info/KSampler", System.Net.HttpStatusCode.OK, "{\"KSampler\":{\"input\":{\"required\":{\"sampler_name\":[[\"euler\",\"euler_ancestral\",\"dpmpp_2m_sde\"]],\"scheduler\":[[\"normal\",\"karras\"]]}}}}")
+            .Map(ComfyServer + "/prompt", System.Net.HttpStatusCode.OK, "{\"prompt_id\":\"t-1\"}")
+            .Map(ComfyServer + "/history/", System.Net.HttpStatusCode.OK, "{\"t-1\":{\"outputs\":{\"9\":{\"images\":[{\"filename\":\"neon_00001_.png\",\"subfolder\":\"neon\",\"type\":\"output\"}]}}}}")
+            .Map(ComfyServer + "/view", (_, _) => Task.FromResult(StubHttpMessageHandler.Bytes(System.Net.HttpStatusCode.OK, [1, 2, 3], "image/png")));
+        return (new NeonSidekick.Comfy.ComfyClient(new Uri(ComfyServer), new HttpClient(stub), TimeSpan.FromMilliseconds(1)), stub);
+    }
+
+    /// <summary>Offered → Options → ComfyUI, then the row: 2 the offered checklist, 3 the add-workflow wizard.</summary>
+    private void OpenImagesRow(int row) => Push([Keys.Left, Keys.Left, .. Enumerable.Repeat(Keys.Down, row), Keys.Enter]);
+
+    [Fact]
+    public async Task OnThePane_TheComfyUITab_NarrowsTheOfferedWorkflows_AndANewOneStartsHidden()
+    {
+        ComfyWorkflowFile(_settings.ProfileComfyDirectory, "pony-txt2img");
+        ComfyWorkflowFile(_settings.GlobalComfyDirectory, "juggernaut-xl");
+        var (menu, _, _) = PaneMenu();
+        OpenImagesRow(2);
+        Push(Keys.Enter);                                    // juggernaut-xl off (the list is by name)
+        Push(Keys.Escape, Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Equal(["pony-txt2img"], _settings.Current.ComfyWorkflowsOffered);
+        Assert.Matches(@"ComfyUI workflows offered +all \(not narrowed\)", _console.Output);   // the column is the tab's widest label
+        Assert.Matches(@"ComfyUI workflows offered +1 of 2", _console.Output);
+        Assert.Contains("[ ] juggernaut-xl  ", _console.Output);
+
+        ComfyWorkflowFile(_settings.ProfileComfyDirectory, "new-one");
+        var installed = new NeonSidekick.Comfy.ComfyWorkflowCatalog(() => [_settings.ProfileComfyDirectory, _settings.GlobalComfyDirectory]).Workflows;
+        Assert.Equal("1 of 3", SettingsMenu.ComfyOfferedValue(_settings.Current.ComfyWorkflowsOffered, installed));   // the new one hidden until ticked
+        Assert.Equal(SettingsMenu.ComfyNotNarrowedLabel, SettingsMenu.ComfyOfferedValue(null, installed));
+        Assert.Equal("none of 3", SettingsMenu.ComfyOfferedValue([], installed));
+    }
+
+    /// <summary>The wizard's build path: the server's checkpoints, the family guessed from the pick, Pony's CLIP skip and sampler as the defaults, a small test run, then both files saved.</summary>
+    [Fact]
+    public async Task OnThePane_TheComfyWizard_BuildsFromTheServer_TestsIt_AndSavesIt()
+    {
+        var (client, stub) = ComfyStub();
+        var (menu, _, _) = PaneMenu(comfy: () => client);
+        OpenImagesRow(3);
+        Push(Keys.Enter);                     // build
+        Push(Keys.Enter);                     // text → image
+        Push(Keys.Down, Keys.Enter);          // ponyDiffusionV6XL: family pony, name ponydiffusionv6xl
+        Push(Keys.Enter);                     // pony (the guess)
+        Push(Keys.Enter);                     // this profile
+        Push(Keys.Enter);                     // the suggested name
+        Push(Keys.Enter);                     // CLIP skip 2 (pony's)
+        Push(Keys.Enter);                     // euler_ancestral (pony's)
+        Push(Keys.Enter);                     // normal
+        Push(Keys.Enter, Keys.Enter, Keys.Enter, Keys.Enter);   // 1024, 1024, 25, 7
+        Push(Keys.Enter);                     // pony's negative
+        Type("anime portraits");
+        Push(Keys.Down, Keys.Enter);          // Test
+        Push(Keys.Up, Keys.Enter);            // Save
+        Push(Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        string json = Path.Combine(_settings.ProfileComfyDirectory, "ponydiffusionv6xl.json");
+        Assert.True(NeonSidekick.Comfy.ComfyWorkflow.TryLoad(json, out var workflow, out string? problem), problem);
+        Assert.Equal(NeonSidekick.Comfy.ComfyFamily.Pony, workflow!.Family);
+        Assert.Equal("anime portraits", workflow.Description);
+        Assert.Equal(NeonSidekick.Comfy.ComfyFamilies.PonyNegative, workflow.Defaults.Negative);
+        string text = File.ReadAllText(json);
+        Assert.Contains("\"CLIPSetLastLayer\"", text);
+        Assert.Contains("\"euler_ancestral\"", text);
+        Assert.Contains("\"ponyDiffusionV6XL.safetensors\"", text);
+        string queued = stub.Requests.Single(r => r.Uri.AbsolutePath == "/prompt").Body!;
+        Assert.Contains("\"width\":512", queued);   // the test is small
+        Assert.Contains("\"steps\":8", queued);
+        Assert.Contains("Tested 'ponydiffusionv6xl' in ", _console.Output);
+        Assert.Contains("Added workflow 'ponydiffusionv6xl' to ", _console.Output);
+        Assert.Null(_settings.Current.ComfyWorkflowsOffered);
+    }
+
+    /// <summary>The import path: an exported graph placeholdered, its own values the defaults, saved on a narrowed profile and offered to the model.</summary>
+    [Fact]
+    public async Task OnThePane_TheComfyWizard_ImportsAnExport_AndOffersIt()
+    {
+        _settings.Update(d => d.ComfyWorkflowsOffered = ["other"]);
+        string export = Path.Combine(_dir, "My Export.json");
+        File.WriteAllText(export, ComfyTests.Export);
+        var (menu, _, _) = PaneMenu();
+        OpenImagesRow(3);
+        Push(Keys.Down, Keys.Enter);          // import
+        Type(export);
+        Push(Keys.Enter);                     // pony (guessed from the checkpoint)
+        Push(Keys.Down, Keys.Enter);          // the home's folder
+        Push(Keys.Enter);                     // my-export
+        Push(Keys.Enter, Keys.Enter, Keys.Enter, Keys.Enter);   // 832, 1216, 20, 6.5 from the export
+        Push(Keys.Enter);                     // its own negative
+        Push(Keys.Enter);                     // no description
+        Push(Keys.Enter);                     // Save, and offer it
+        Push(Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        string json = Path.Combine(_settings.GlobalComfyDirectory, "my-export.json");
+        Assert.True(NeonSidekick.Comfy.ComfyWorkflow.TryLoad(json, out var workflow, out string? problem), problem);
+        Assert.Equal(new NeonSidekick.Comfy.ComfyDefaults(832, 1216, 20, 6.5, "score_4, blurry"), workflow!.Defaults);
+        Assert.Contains("Found {{prompt}} → node 6 CLIPTextEncode.text", _console.Output);
+        Assert.Equal(["other", "my-export"], _settings.Current.ComfyWorkflowsOffered);
+        Assert.Contains(SettingsMenu.ComfyWizardSaveHiddenRow[..40], _console.Output);
+    }
+
+    /// <summary>ESC out of the first page writes nothing; a name already in a comfy folder is refused.</summary>
+    [Fact]
+    public async Task OnThePane_TheComfyWizard_EscWritesNothing_AndATakenNameIsRefused()
+    {
+        ComfyWorkflowFile(_settings.GlobalComfyDirectory, "juggernautxl_ragnarok");
+        var (client, _) = ComfyStub();
+        var (menu, _, _) = PaneMenu(comfy: () => client);
+        OpenImagesRow(3);
+        Push(Keys.Escape);                    // out of the first page: cancelled
+        Push(Keys.Enter);                     // the wizard again
+        Push(Keys.Enter, Keys.Enter);         // build, text → image
+        Push(Keys.Enter);                     // juggernautXL_ragnarok: its name is taken
+        Push(Keys.Enter, Keys.Enter);         // sdxl, this profile
+        Push(Keys.Enter);                     // the suggested name: refused, asked again
+        Push(Keys.Escape, Keys.Escape, Keys.Escape, Keys.Escape, Keys.Escape, Keys.Escape);   // back out page by page
+        Push(Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Contains(SettingsMenu.ComfyWizardCancelledNotice, _console.Output);
+        Assert.Contains("a workflow named 'juggernautxl_ragnarok' is already in", _console.Output);
+        Assert.Equal(["juggernautxl_ragnarok.json"], Directory.GetFiles(_settings.GlobalComfyDirectory).Select(Path.GetFileName));
+        Assert.Empty(Directory.GetFiles(_settings.ProfileComfyDirectory));
     }
 }

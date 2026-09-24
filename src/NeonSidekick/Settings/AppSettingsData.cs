@@ -58,6 +58,14 @@ public sealed class AppSettingsData
     public string DraftEditor { get; set; } = "";
 
     /// <summary>
+    /// The command line a double-clicked picture in the transcript opens in (later on 2026-09-24, the user's ask), the
+    /// file's path appended, run through <c>cmd.exe</c> as <see cref="DraftEditor"/> is (<c>mspaint</c>,
+    /// <c>"C:\Program Files\GIMP 3\bin\gimp-3.exe"</c>); empty = the image editor Windows registers for the type
+    /// (Paint), else its viewer. Read at each double-click, no reconnect. No variable.
+    /// </summary>
+    public string ImageEditor { get; set; } = "";
+
+    /// <summary>
     /// Whether the <c>/</c> completion list leaves <c>/exit</c> out (on by default, 2026-09-18) so a
     /// pick never ends the app by mistake; typed in full it exits as ever. Read at each keystroke. No variable.
     /// </summary>
@@ -933,6 +941,89 @@ public sealed class AppSettingsData
     public const int MinSqlQueryTimeoutSeconds = 1;
     public const int MaxSqlQueryTimeoutSeconds = 600;
     public const int DefaultSqlQueryTimeoutSeconds = 30;
+
+    // ─── Images (ComfyUI) ───────────────────────────────────────────────────────
+    // The image tools (2026-09-24, the user's ask: "what can we do with comfyui?" — text to image, img2img, their own
+    // exported workflows, splash art, and prompts written for Pony Diffusion XL and the other families, or sent as typed).
+
+    /// <summary>
+    /// Whether a turn offers the image tools (<c>generate_image</c>, <c>set_splash_image</c>) over the ComfyUI server
+    /// at <see cref="ComfyUrl"/> (2026-09-24); read at each turn like <see cref="SqlTools"/>, no reconnect. On by
+    /// default for the same reason: it offers nothing until a URL is set and a workflow is in a <c>comfy</c> folder.
+    /// No variable.
+    /// </summary>
+    public bool ComfyTools { get; set; } = true;
+
+    /// <summary>
+    /// The ComfyUI server (2026-09-24): <c>http://host:8188</c>, often another machine on the LAN — the user's own
+    /// server like <see cref="LlmUrl"/>, so never judged by the web tools' network mode. Empty = no image tool.
+    /// Variable: <c>NEONSIDEKICK_COMFY_URL</c>.
+    /// </summary>
+    public string ComfyUrl { get; set; } = "";
+
+    /// <summary>
+    /// Which installed ComfyUI workflows the model is offered (later on 2026-09-24, the user's ask: "similar to how
+    /// we've done it for the SQL connections … so we could possibly limit it down to one"). Null = not narrowed: every
+    /// workflow, a new one included. A list = exactly those names (any case), so a workflow added later stays hidden
+    /// until ticked; an empty list offers none. <c>generate_image</c>'s description and its unnamed pick see only these,
+    /// as does a bare <c>/imagine</c>; <c>/imagine &lt;name&gt;</c> may still name any installed one. The ComfyUI tab of
+    /// <c>/tools</c>. No variable.
+    /// </summary>
+    public List<string>? ComfyWorkflowsOffered { get; set; }
+
+    /// <summary>
+    /// Seconds one generation may take, queue wait included, before the tool gives up waiting (2026-09-24; the job
+    /// itself runs on in ComfyUI): <see cref="MinComfyTimeoutSeconds"/> to <see cref="MaxComfyTimeoutSeconds"/>.
+    /// </summary>
+    public int ComfyTimeoutSeconds { get; set; } = DefaultComfyTimeoutSeconds;
+
+    public const int MinComfyTimeoutSeconds = 10;
+    public const int MaxComfyTimeoutSeconds = 3600;
+    public const int DefaultComfyTimeoutSeconds = 300;
+
+    /// <summary>
+    /// The most pictures one <c>generate_image</c> call or <c>/imagine --count</c> makes (later on 2026-09-24, the user's
+    /// ask: a setting, as <see cref="FileViewImageMaxPerCall"/> is for <c>view_image</c>; a fixed 4 before):
+    /// <see cref="MinComfyMaxPicturesPerCall"/> to <see cref="MaxComfyMaxPicturesPerCall"/>. Why a cap at all: each picture
+    /// is a full job the server runs in turn, while the model's turn waits, and every one rides to the model in the next
+    /// request, where a local vision server has a ceiling of its own (LM Studio + Gemma 4 fell over at six, 2026-09-14).
+    /// A hand-edited value is clamped. The ComfyUI tab of <c>/tools</c>. No variable.
+    /// </summary>
+    public int ComfyMaxPicturesPerCall { get; set; } = DefaultComfyMaxPicturesPerCall;
+
+    /// <summary>
+    /// Whether the model is asked to reinforce its prompts through the negative (later still on 2026-09-24, the user's ask:
+    /// "append to the negative prompt tags to help reinforce the positive prompt"): <c>generate_image</c>'s
+    /// <c>negative_extra</c>, a few tags opposite to what the prompt asks (night → daylight, solo → multiple girls), appended to
+    /// the workflow's own negative — never for a prompt the user gave verbatim, a negative set for the call, <c>/imagine</c>,
+    /// a family that runs without a negative, or a workflow whose sidecar says <c>reinforce: false</c>. The ComfyUI tab of
+    /// <c>/tools</c>. No variable.
+    /// </summary>
+    public bool ComfyReinforceNegatives { get; set; } = true;
+
+    /// <summary>
+    /// Whether the transcript shows what was sent to ComfyUI (later still on 2026-09-24, the user's ask): the <c>prompt:</c>
+    /// and <c>negative:</c> lines of a generation's result — the prompt the model wrote, the negative after the workflow's or
+    /// the family's and any reinforcing tags — each in full under the picture's line, for <c>generate_image</c> and
+    /// <c>/imagine</c> alike. Off, the picture's line alone. The model's result is the same either way. On by default since
+    /// later still on 2026-09-24 (the user's call); a profile saved with it off keeps it off. The ComfyUI tab of
+    /// <c>/tools</c>. No variable.
+    /// </summary>
+    public bool ComfyShowPrompts { get; set; } = true;
+
+    public const int MinComfyMaxPicturesPerCall = 1;
+    public const int MaxComfyMaxPicturesPerCall = 16;
+    public const int DefaultComfyMaxPicturesPerCall = 4;
+
+    /// <summary>
+    /// The folder under the working directory the generated pictures are saved in (2026-09-24), made on first use;
+    /// empty = the working directory itself. A path that leaves the sandbox is refused at the call, as any file tool's.
+    /// <c>comfy_images</c> since later still on 2026-09-24 (the user's call: <c>images</c> said nothing of where they came
+    /// from); a profile saved with the old <c>images</c> keeps it — no migration, no files moved.
+    /// </summary>
+    public string ComfyOutputFolder { get; set; } = DefaultComfyOutputFolder;
+
+    public const string DefaultComfyOutputFolder = "comfy_images";
 
     // ─── Shell ──────────────────────────────────────────────────────────────────
 

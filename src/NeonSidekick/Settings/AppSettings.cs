@@ -97,6 +97,12 @@ public sealed class AppSettings : IDisposable
     /// <summary>The loaded profile's own splash folder: <c>splash</c> under <see cref="ProfileDirectory"/>, whose pictures stand in for the embedded set (<see cref="UI.SplashImages.FromDirectory"/>).</summary>
     public string ProfileSplashDirectory => Path.Combine(ProfileDirectory, UI.SplashImages.ProfileFolderName);
 
+    /// <summary>The loaded profile's ComfyUI workflows folder: <c>comfy</c> under <see cref="ProfileDirectory"/> (2026-09-24), read ahead of <see cref="GlobalComfyDirectory"/> (<see cref="Comfy.ComfyWorkflowCatalog"/>).</summary>
+    public string ProfileComfyDirectory => Path.Combine(ProfileDirectory, Comfy.ComfyWorkflowCatalog.DirectoryName);
+
+    /// <summary>The global ComfyUI workflows folder: <c>comfy</c> under the home, every profile's (2026-09-24).</summary>
+    public string GlobalComfyDirectory => Path.Combine(StorageDirectory, Comfy.ComfyWorkflowCatalog.DirectoryName);
+
     /// <summary>The loaded profile's name, spelt as its directory is.</summary>
     public string ProfileName
     {
@@ -130,6 +136,10 @@ public sealed class AppSettings : IDisposable
     public static string SplashFolderWarning(string path, string detail) =>
         $"Could not create the splash folder {path}: {detail}";
 
+    /// <summary>The warning when the profile's ComfyUI workflows folder could not be created (2026-09-24); the app runs on, and an absent folder is no workflow. Pinned.</summary>
+    public static string ComfyFolderWarning(string path, string detail) =>
+        $"Could not create the ComfyUI workflows folder {path}: {detail}";
+
     /// <summary>
     /// The folders a loaded profile is given exist: the two skills roots (2026-09-18, the user's
     /// call) — <see cref="GlobalSkillsDirectory"/> and <see cref="ProfileSkillsDirectory"/> — and
@@ -139,15 +149,17 @@ public sealed class AppSettings : IDisposable
     /// embedded set stands). Made whenever a profile is loaded — the constructor, a switch (the one
     /// after <c>/profile add</c> included), a reset of the loaded profile, a reload. Never for a
     /// profile that is not loaded (nothing is created for a look). A failure is a warning, never an
-    /// exception. Named <c>EnsureSkillsDirectories</c> until the splash folder joined it.
+    /// exception. Named <c>EnsureSkillsDirectories</c> until the splash folder joined it. <see cref="ProfileComfyDirectory"/>
+    /// joined on 2026-09-24, so the place a ComfyUI workflow goes is there to be found.
     /// </summary>
     private void EnsureProfileDirectories()
     {
-        foreach ((string path, bool skills) in new[]
+        foreach ((string path, Func<string, string, string> warning) in new (string, Func<string, string, string>)[]
         {
-            (GlobalSkillsDirectory, true),
-            (ProfileSkillsDirectory, true),
-            (ProfileSplashDirectory, false),
+            (GlobalSkillsDirectory, SkillsFolderWarning),
+            (ProfileSkillsDirectory, SkillsFolderWarning),
+            (ProfileSplashDirectory, SplashFolderWarning),
+            (ProfileComfyDirectory, ComfyFolderWarning),
         })
         {
             try
@@ -156,7 +168,7 @@ public sealed class AppSettings : IDisposable
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
-                DiagnosticLog.Warn(Category, skills ? SkillsFolderWarning(path, ex.Message) : SplashFolderWarning(path, ex.Message));
+                DiagnosticLog.Warn(Category, warning(path, ex.Message));
             }
         }
     }
@@ -571,6 +583,7 @@ public sealed class AppSettings : IDisposable
         CommandTypoIntercept = source.CommandTypoIntercept,
         CopyUserPrompt = source.CopyUserPrompt,
         DraftEditor = source.DraftEditor,
+        ImageEditor = source.ImageEditor,
         HideExitAutocomplete = source.HideExitAutocomplete,
         ImageThumbnailSize = source.ImageThumbnailSize,
         Memory = source.Memory,
@@ -665,6 +678,14 @@ public sealed class AppSettings : IDisposable
         SqlPercentMention = source.SqlPercentMention,
         SqlQueryMaxRows = source.SqlQueryMaxRows,
         SqlQueryTimeoutSeconds = source.SqlQueryTimeoutSeconds,
+        ComfyTools = source.ComfyTools,
+        ComfyUrl = source.ComfyUrl,
+        ComfyWorkflowsOffered = source.ComfyWorkflowsOffered is null ? null : [.. source.ComfyWorkflowsOffered],
+        ComfyTimeoutSeconds = source.ComfyTimeoutSeconds,
+        ComfyMaxPicturesPerCall = source.ComfyMaxPicturesPerCall,
+        ComfyReinforceNegatives = source.ComfyReinforceNegatives,
+        ComfyShowPrompts = source.ComfyShowPrompts,
+        ComfyOutputFolder = source.ComfyOutputFolder,
         ShellCodeLanguages = [.. source.ShellCodeLanguages],
         ShellCodeMaxToolCalls = source.ShellCodeMaxToolCalls,
         ShellCodeTimeoutSeconds = source.ShellCodeTimeoutSeconds,

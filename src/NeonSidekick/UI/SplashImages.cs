@@ -7,9 +7,11 @@ namespace NeonSidekick.UI;
 /// <summary>
 /// The screen's splash seam (2026-09-19): the pictures' names in the order Left / Right walk them and
 /// the loader for one of them. <see cref="SplashImages.Source"/> in the app; a test hands a list of
-/// names over generated pictures; null = no splash whatever the setting says.
+/// names over generated pictures; null = no splash whatever the setting says. <see cref="Directory"/>
+/// (2026-09-24) is the folder the names are files in — set by <see cref="SplashImages.FromDirectory"/>
+/// alone, so Delete Delete may remove a picture of the profile's own and never an embedded one.
 /// </summary>
-public sealed record SplashSource(IReadOnlyList<string> Names, Func<string, ImageAttachment?> Load);
+public sealed record SplashSource(IReadOnlyList<string> Names, Func<string, ImageAttachment?> Load, string? Directory = null);
 
 /// <summary>
 /// The welcome splash pictures (2026-09-18): the files under the repo's <c>assets\splash</c>,
@@ -123,7 +125,8 @@ public static class SplashImages
     /// <see cref="ImageFile.TryLoad(string, out ImageAttachment?, out ImageLoadFailure)"/> — the
     /// same caps as a picture put on the line, a refusal logged at Trace and drawn as nothing. Null
     /// when the folder is missing, unreadable or holds no image file: the embedded set then stands.
-    /// Read at each show and each arrow, so a picture dropped in mid-session joins the walk.
+    /// Read at each show and each arrow, so a picture dropped in mid-session joins the walk. The top
+    /// level only: <see cref="TrashFolderName"/> (and any other subfolder) is never looked into.
     /// </summary>
     public static SplashSource? FromDirectory(string directory)
     {
@@ -165,7 +168,7 @@ public static class SplashImages
 
             DiagnosticLog.Trace("Splash", $"The profile's splash picture {name} did not load: {failure}.");
             return null;
-        });
+        }, directory);
     }
 
     /// <summary><c>Splash: 3 pictures from D:\…\profiles\default\splash</c> — the Debug line when the profile's folder stands in for the embedded set. Pinned.</summary>
@@ -173,5 +176,52 @@ public static class SplashImages
     {
         ArgumentNullException.ThrowIfNull(directory);
         return $"Splash: {count.ToString(System.Globalization.CultureInfo.InvariantCulture)} picture{(count == 1 ? "" : "s")} from {directory}";
+    }
+
+    /// <summary>
+    /// The subfolder of the profile's splash folder a Delete Delete moves a picture into (2026-09-24, the
+    /// user's call over a <c>File.Delete</c>: recoverable by hand, no Recycle Bin P/Invoke).
+    /// <see cref="FromDirectory"/> reads the folder's top level only, so nothing in here is ever offered.
+    /// </summary>
+    public const string TrashFolderName = ".trash";
+
+    /// <summary>
+    /// Moves <paramref name="name"/> out of <paramref name="directory"/> into its
+    /// <see cref="TrashFolderName"/> subfolder (made if missing) and returns where it landed; a name
+    /// already there gets <c> (2)</c>, <c> (3)</c>… before its extension, so an earlier one is never
+    /// overwritten. Throws what <see cref="File.Move(string, string)"/> throws — the caller logs it.
+    /// </summary>
+    public static string SetAside(string directory, string name)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(directory);
+        ArgumentException.ThrowIfNullOrEmpty(name);
+        string bin = Path.Combine(directory, TrashFolderName);
+        Directory.CreateDirectory(bin);
+        string target = Path.Combine(bin, name);
+        string stem = Path.GetFileNameWithoutExtension(name);
+        string extension = Path.GetExtension(name);
+        for (int n = 2; File.Exists(target); n++)
+        {
+            target = Path.Combine(bin, $"{stem} ({n.ToString(System.Globalization.CultureInfo.InvariantCulture)}){extension}");
+        }
+
+        File.Move(Path.Combine(directory, name), target);
+        return target;
+    }
+
+    /// <summary><c>Splash: moved D:\…\splash\one.png to D:\…\splash\.trash\one.png</c> — the Info line after Delete Delete set a profile's picture aside (2026-09-24). Pinned.</summary>
+    public static string DeletedLogLine(string path, string movedTo)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        ArgumentNullException.ThrowIfNull(movedTo);
+        return $"Splash: moved {path} to {movedTo}";
+    }
+
+    /// <summary><c>Splash: could not move D:\…\one.png to .trash: IOException: …</c> — the Warning line when the file would not go (2026-09-24). Pinned.</summary>
+    public static string DeleteFailedLogLine(string path, Exception error)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        ArgumentNullException.ThrowIfNull(error);
+        return $"Splash: could not move {path} to {TrashFolderName}: {error.GetType().Name}: {error.Message}";
     }
 }

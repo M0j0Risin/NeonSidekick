@@ -39,8 +39,8 @@ public sealed class PasteBlocks
     private const char FirstToken = '';
     private const char LastToken = '';
 
-    /// <summary>One held thing: a text block or an image, with its number among its own kind.</summary>
-    private sealed record Block(int Number, string? Text, ImageAttachment? Image);
+    /// <summary>One held thing: a text block or an image, with its number among its own kind — and an image's source, when known (<see cref="Original"/>).</summary>
+    private sealed record Block(int Number, string? Text, ImageAttachment? Image, byte[]? Original = null, string? SourcePath = null);
 
     private readonly List<Block> _blocks = new();
     private int _texts;
@@ -140,22 +140,73 @@ public sealed class PasteBlocks
         return Keep(new Block(++_texts, block, null));
     }
 
-    /// <summary>Keeps <paramref name="image"/> and returns its token for the draft.</summary>
-    public char AddImage(ImageAttachment image)
+    /// <summary>
+    /// Keeps <paramref name="image"/> and returns its token for the draft. <paramref name="original"/> is a clipboard
+    /// picture's own bytes and <paramref name="sourcePath"/> a dropped file's path (later still on 2026-09-24): what
+    /// <see cref="Original"/> hands <c>generate_image</c> at full size, where the attachment may be the 2048 downscale.
+    /// A clipboard picture that fitted is the same array as the attachment's, so keeping it costs nothing; a dropped
+    /// file is read again at use, so it costs nothing either.
+    /// </summary>
+    public char AddImage(ImageAttachment image, byte[]? original = null, string? sourcePath = null)
     {
         ArgumentNullException.ThrowIfNull(image);
-        return Keep(new Block(++_images, null, image));
+        lock (_blocks)
+        {
+            return Keep(new Block(++_images, null, image, original, sourcePath));
+        }
+    }
+
+    /// <summary>
+    /// The <paramref name="number"/>th pasted picture as it was before any downscale (later still on 2026-09-24, the
+    /// user's ask: a paste as <c>generate_image</c>'s input): a clipboard picture's own bytes with no name (the saver
+    /// stamps one), or a dropped file read again under its own name. Null for no such picture, one kept without a source, or a dropped file that is gone
+    /// or unreadable now. Called from a turn's task, so the store's list is read under its lock.
+    /// </summary>
+    public PastedPicture? Original(int number)
+    {
+        Block? block;
+        lock (_blocks)
+        {
+            block = _blocks.Find(b => b.Image is not null && b.Number == number);
+        }
+
+        if (block is null)
+        {
+            return null;
+        }
+
+        if (block.Original is { } bytes)
+        {
+            return new PastedPicture(bytes, null);
+        }
+
+        if (block.SourcePath is { } path)
+        {
+            try
+            {
+                return File.Exists(path) ? new PastedPicture(File.ReadAllBytes(path), Path.GetFileName(path)) : null;
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                return null;
+            }
+        }
+
+        return null;
     }
 
     private char Keep(Block block)
     {
-        if (_blocks.Count > LastToken - FirstToken)
+        lock (_blocks)
         {
-            throw new InvalidOperationException("No room for another pasted block this session.");
-        }
+            if (_blocks.Count > LastToken - FirstToken)
+            {
+                throw new InvalidOperationException("No room for another pasted block this session.");
+            }
 
-        _blocks.Add(block);
-        return (char)(FirstToken + _blocks.Count - 1);
+            _blocks.Add(block);
+            return (char)(FirstToken + _blocks.Count - 1);
+        }
     }
 
     /// <summary>The text a token stands for (an image token's is its label); null for a character that is not one of this store's tokens.</summary>

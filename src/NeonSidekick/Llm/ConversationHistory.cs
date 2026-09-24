@@ -78,21 +78,24 @@ public sealed class ConversationHistory
     /// <summary>
     /// The carrier's text: names the source and disclaims the user, so a small model answers the
     /// question it was asked rather than this line. <c>(attached by view_image, not typed by the
-    /// user: ladybug.png)</c>; several names joined by <c>, </c> after <c>the pictures:</c>. Pinned.
+    /// user: ladybug.png)</c>; several names joined by <c>, </c> after <c>the pictures:</c>. Since 2026-09-24
+    /// <paramref name="source"/> names the tool (<c>generate_image</c>'s pictures ride the same carrier; several tools
+    /// in one iteration are joined by <c> and </c>), <c>view_image</c> when none is given. Pinned.
     /// </summary>
-    public static string ImageCarrierText(IReadOnlyList<string> names)
+    public static string ImageCarrierText(IReadOnlyList<string> names, string? source = null)
     {
         ArgumentNullException.ThrowIfNull(names);
-        return "(attached by " + Tools.ViewImageTool.ToolName + ", not typed by the user" + (names.Count == 1 ? ": " : " — the pictures: ") + string.Join(", ", names) + ")";
+        return "(attached by " + (string.IsNullOrWhiteSpace(source) ? Tools.ViewImageTool.ToolName : source) + ", not typed by the user" + (names.Count == 1 ? ": " : " — the pictures: ") + string.Join(", ", names) + ")";
     }
 
     /// <summary>
-    /// The carrier for a <c>view_image</c> result (or several in one iteration): one user-role
+    /// The carrier for a <c>view_image</c> or <c>generate_image</c> result (or several in one iteration): one user-role
     /// message, <see cref="ImageCarrierText"/> then one image part per attachment, tagged
     /// <see cref="CarrierKey"/>. Appended right after the iteration's tool results, so the next
     /// request shows the model the picture its call fetched. Nothing for none; no trim, since it is no turn.
+    /// <paramref name="source"/> is the tool name (or names) the carrier text credits.
     /// </summary>
-    public void AddToolImages(IReadOnlyList<ImageAttachment> images)
+    public void AddToolImages(IReadOnlyList<ImageAttachment> images, string? source = null)
     {
         ArgumentNullException.ThrowIfNull(images);
         if (images.Count == 0)
@@ -100,7 +103,7 @@ public sealed class ConversationHistory
             return;
         }
 
-        var contents = new List<AIContent>(images.Count + 1) { new TextContent(ImageCarrierText(images.Select(i => i.Path).ToList())) };
+        var contents = new List<AIContent>(images.Count + 1) { new TextContent(ImageCarrierText(images.Select(i => i.Path).ToList(), source)) };
         foreach (var image in images)
         {
             contents.Add(new DataContent(image.Bytes, image.MediaType));

@@ -1193,6 +1193,35 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     public void WriteToolLine(IRenderable renderable) => WriteFlow(renderable, member: true);
 
     /// <summary>
+    /// A flow write of pictures (later on 2026-09-24): stored with where each landed — <paramref name="renderable"/>'s
+    /// <see cref="IPictureLayout.Spans"/> after the pane rendered it, one list per line — so <see cref="PictureAt"/>
+    /// can say which picture a click hit. Disabled, the plain write.
+    /// </summary>
+    public void WritePictures(IPictureLayout renderable)
+    {
+        ArgumentNullException.ThrowIfNull(renderable);
+        WriteFlow((IRenderable)renderable, member: false, renderable);
+    }
+
+    /// <summary>
+    /// The picture under screen cell (<paramref name="x"/>, <paramref name="y"/>) in the transcript region (later on
+    /// 2026-09-24): its id, or null — off the region, off a picture, the pane disabled, lifted, or with no geometry.
+    /// The row is found as <see cref="TryToggleToolGroupAt"/> finds it.
+    /// </summary>
+    public int? PictureAt(int x, int y)
+    {
+        if (!Enabled)
+        {
+            return null;
+        }
+
+        lock (_gate)
+        {
+            return StoreRowAt(y) is int row ? _store.PictureAt(row, x) : null;
+        }
+    }
+
+    /// <summary>
     /// Opens a tool run that keeps its last <paramref name="keep"/> lines while it runs
     /// (<see cref="Scrollback.BeginGroup"/>; 0 never folds). <paramref name="lead"/> is the reply's
     /// glyph when the run follows it bare; <paramref name="absorbOpenLine"/> when that glyph is
@@ -1311,36 +1340,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
 
         lock (_gate)
         {
-            if (!_drawn || _batch > 0 || _modal > 0 || _geometry?.CursorTop() is not int top)
-            {
-                return false;
-            }
-
-            int region = RegionRows(_paneRows);
-            int r = y - (top - CursorDepth - 1 - region);
-            if (r < 0 || r >= region)
-            {
-                return false;
-            }
-
-            int count = _store.Rows(Width).Count;
-            int row;
-            if (_drawnScrolled)
-            {
-                row = _top + r;
-            }
-            else
-            {
-                int last = _col > 0 ? _row : _row - 1;
-                if (_blank || r > last)
-                {
-                    return false;
-                }
-
-                row = count - 1 - (last - r);
-            }
-
-            if (row < 0 || row >= count || _store.GroupAtRow(row) is not int id || !_store.Toggle(id))
+            if (StoreRowAt(y) is not int row || _store.GroupAtRow(row) is not int id || !_store.Toggle(id))
             {
                 return false;
             }
@@ -1348,6 +1348,44 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
             RedrawIfReshaped();
             return true;
         }
+    }
+
+    /// <summary>
+    /// The store row screen row <paramref name="y"/> shows in the transcript region, or null (lifted, mid-batch or
+    /// modal, no geometry, off the region, below the flow's end). Under the lock.
+    /// </summary>
+    private int? StoreRowAt(int y)
+    {
+        if (!_drawn || _batch > 0 || _modal > 0 || _geometry?.CursorTop() is not int top)
+        {
+            return null;
+        }
+
+        int region = RegionRows(_paneRows);
+        int r = y - (top - CursorDepth - 1 - region);
+        if (r < 0 || r >= region)
+        {
+            return null;
+        }
+
+        int count = _store.Rows(Width).Count;
+        int row;
+        if (_drawnScrolled)
+        {
+            row = _top + r;
+        }
+        else
+        {
+            int last = _col > 0 ? _row : _row - 1;
+            if (_blank || r > last)
+            {
+                return null;
+            }
+
+            row = count - 1 - (last - r);
+        }
+
+        return row < 0 || row >= count ? null : row;
     }
 
     /// <summary>After a store change above the flow's end: the screen drawn again from the store (the draw rebuilds the flow), unless a batch or a modal will.</summary>
@@ -1359,7 +1397,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         }
     }
 
-    private void WriteFlow(IRenderable renderable, bool member)
+    private void WriteFlow(IRenderable renderable, bool member, IPictureLayout? pictures = null)
     {
         ArgumentNullException.ThrowIfNull(renderable);
         if (!Enabled)
@@ -1378,12 +1416,14 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
             }
 
             var segments = renderable.GetSegments(_inner).ToList();
+            // A picture's spans are known once it is rendered (later on 2026-09-24): the store tags its lines with them.
+            var spans = pictures?.Spans;
             if (_top >= 0)
             {
                 // Scrolled: the store takes it, the screen shows the window; the count below changed
                 // (and a run that folded above it redraws the window).
                 FlushLive();
-                EmitAs(segments, member);
+                EmitAs(segments, member, spans);
                 if (_store.Reshaped)
                 {
                     Redraw();
@@ -1405,7 +1445,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
             Lift();
             RestoreFlow();
             FlushLive();
-            EmitAs(segments, member);
+            EmitAs(segments, member, spans);
             if (_batch == 0)
             {
                 Draw();
@@ -1435,9 +1475,10 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     }
 
     /// <summary><see cref="Emit"/> with the store told whether the segments are a tool run's line.</summary>
-    private void EmitAs(List<Segment> segments, bool member)
+    private void EmitAs(List<Segment> segments, bool member, IReadOnlyList<IReadOnlyList<PictureSpan>>? pictures = null)
     {
         _member = member;
+        _pictureSpans = pictures;
         try
         {
             Emit(segments);
@@ -1445,8 +1486,12 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         finally
         {
             _member = false;
+            _pictureSpans = null;
         }
     }
+
+    // Set around EmitAs for a picture's write (later on 2026-09-24): the spans the store tags its lines with.
+    private IReadOnlyList<IReadOnlyList<PictureSpan>>? _pictureSpans;
 
     // Set around EmitAs: the segments being stored are the open tool run's line.
     private bool _member;
@@ -1454,7 +1499,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     /// <summary>The segments into the store; a scrolled anchor follows the rows the cap dropped.</summary>
     private void Store(List<Segment> segments)
     {
-        int dropped = _store.Append(segments, Width, _member);
+        int dropped = _store.Append(segments, Width, _member, _pictureSpans);
         if (_top >= 0 && dropped > 0)
         {
             _top = Math.Max(0, _top - dropped);

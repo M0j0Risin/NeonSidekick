@@ -3783,4 +3783,40 @@ public class ScreenPaneTests : IDisposable
         Assert.False(pane.Scrolled);
         Assert.EndsWith("\n🔧" + new string(' ', 33) + @"D:\x", Strip(Output).TrimEnd());
     }
+
+    /// <summary>Pictures on the screen (later on 2026-09-24): a click on a tile's cell names its picture; the text above, the gap and the rows under the flow name none; without the pane nothing does.</summary>
+    [Fact]
+    public void Pictures_OnTheScreen_AClickNamesWhichOne()
+    {
+        _cursorTop = 100;   // rule 99 over the input row: the region's six rows are 93–98
+        using var pane = Pane();
+        pane.Show();
+        pane.Write(new Markup("a\n"));
+        static ImageThumbnail Tile(int width) => new(width, 2, Enumerable.Repeat(Color.Red, width * 2).ToArray());
+        pane.WritePictures(new ImageStrip([Tile(4), Tile(3)], [5, 6]));
+
+        Assert.Null(pane.PictureAt(0, 93));        // "a"
+        Assert.Equal(5, pane.PictureAt(1, 94));
+        Assert.Null(pane.PictureAt(4, 94));        // the gap
+        Assert.Equal(6, pane.PictureAt(6, 94));
+        Assert.Null(pane.PictureAt(1, 95));        // under the flow
+
+        using var plain = Pane(geometry: false);
+        plain.WritePictures(new CenteredPicture(Tile(4), 1));
+        Assert.Null(plain.PictureAt(0, 0));
+    }
+
+    /// <summary>A centred picture (/view, /imagine, the splash): every one of its rows names it across its columns, centred as Spectre centres it — (40 − 4) / 2 = 18.</summary>
+    [Fact]
+    public void Pictures_ACenteredOne_IsFoundOnEachOfItsRows()
+    {
+        _cursorTop = 100;   // the region's six rows are 93–98
+        using var pane = Pane();
+        pane.Show();
+        pane.Write(new Markup("a\n"));
+        pane.WritePictures(new CenteredPicture(new ImageThumbnail(4, 4, Enumerable.Repeat(Color.Red, 16).ToArray()), 9));
+
+        Assert.Equal([null, 9, 9, null], new[] { 93, 94, 95, 96 }.Select(y => pane.PictureAt(19, y)));   // a 4×4 picture is two rows
+        Assert.Equal([null, 9, 9, null], new[] { 17, 18, 21, 22 }.Select(x => pane.PictureAt(x, 94)));
+    }
 }

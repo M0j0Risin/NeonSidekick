@@ -236,6 +236,9 @@ public static class SystemPromptSummary
     /// <summary>The tail of the SQL group while the SQL tools cannot be offered: the switch off, or no connection in <c>sql.json</c> (2026-09-23). Pinned.</summary>
     public const string SqlOffSuffix = "SQL tools is off or no connection is set in sql.json";
 
+    /// <summary>The tail of the ComfyUI group while the image tools cannot be offered (2026-09-24). Pinned.</summary>
+    public const string ComfyOffSuffix = "ComfyUI tools is off, no ComfyUI URL is set or no workflow is in a comfy folder";
+
     /// <summary>The note on <c>execute_code</c> while none of the languages <c>Shell code languages</c> names is installed (2026-09-21). Pinned.</summary>
     public const string NoInterpreterSuffix = "no interpreter found for the languages in Shell code languages";
 
@@ -622,7 +625,9 @@ public static class SystemPromptSummary
         IReadOnlyList<AIFunction>? obsidian = null,
         bool obsidianEnabled = true,
         IReadOnlyList<AIFunction>? sql = null,
-        bool sqlEnabled = true)
+        bool sqlEnabled = true,
+        IReadOnlyList<AIFunction>? comfy = null,
+        bool comfyEnabled = true)
     {
         ArgumentNullException.ThrowIfNull(clock);
         ArgumentNullException.ThrowIfNull(timers);
@@ -669,6 +674,13 @@ public static class SystemPromptSummary
             // The SQL tools (2026-09-23): after the vault tools; offered while the setting SQL tools is on and sql.json holds a connection.
             string sqlNote = !sqlEnabled ? NotOffered(SqlOffSuffix) : standing;
             groups.Add(Group(ToolsText.SqlTabTitle, sql, sqlNote, sqlEnabled && toolsEnabled, SettingsField.SqlTools, disabled));
+        }
+
+        if (comfy is not null)
+        {
+            // The image tools (2026-09-24): after the SQL tools; offered while ComfyUI tools is on, a URL is set and a workflow is installed.
+            string comfyNote = !comfyEnabled ? NotOffered(ComfyOffSuffix) : standing;
+            groups.Add(Group(ToolsText.ComfyTabTitle, comfy, comfyNote, comfyEnabled && toolsEnabled, SettingsField.ComfyTools, disabled));
         }
 
         if (web is not null)

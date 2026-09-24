@@ -51,7 +51,8 @@ public class EnvironmentOverridesTests
             (EnvironmentOverrides.LlmContextVariable, "32768"),
             (EnvironmentOverrides.SearxngUrlVariable, " http://box:8080 "),
             (EnvironmentOverrides.CommandPolicyVariable, " YOLO "),
-            (EnvironmentOverrides.ObsidianVaultVariable, @" D:\Notes "));
+            (EnvironmentOverrides.ObsidianVaultVariable, @" D:\Notes "),
+            (EnvironmentOverrides.ComfyUrlVariable, " http://gpu-box:8188 "));
 
         var e = env.ApplyTo(new AppSettingsData());
 
@@ -73,6 +74,7 @@ public class EnvironmentOverridesTests
         Assert.Equal("http://box:8080", e.WebSearxngUrl);   // trimmed
         Assert.Equal("yolo", e.ShellCommandPolicy);   // normalised to the saved word (2026-09-21)
         Assert.Equal(@"D:\Notes", e.ObsidianVault);   // trimmed (2026-09-22)
+        Assert.Equal("http://gpu-box:8188", e.ComfyUrl);   // trimmed (2026-09-24)
         Assert.Equal(EnvironmentOverrides.AllVariables.Length - 1, env.ActiveVariables().Count);   // everything but HOME
     }
 

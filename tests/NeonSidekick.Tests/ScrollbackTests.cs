@@ -379,4 +379,24 @@ public class ScrollbackTests
         store.SetAllExpanded(true);
         Assert.Equal(new[] { "before", "  ▾ E", "    c1", "    c2", " " }, Texts(store.Rows(40)));
     }
+
+    /// <summary>A picture's lines carry its tiles' columns (later on 2026-09-24): a click finds the tile under it, not the gap, not another line — and nothing once the line wraps.</summary>
+    [Fact]
+    public void Pictures_TagTheirLines_AndAClickFindsTheTile()
+    {
+        var store = new Scrollback();
+        store.Append(Segments("text\n"), 40);
+        IReadOnlyList<PictureSpan> row = [new(0, 4, 7), new(6, 3, 8)];
+        store.Append(Segments("aaaa  bbb\n", "aaaa  bbb\n"), 40, member: false, [row, row]);
+        store.Append(Segments("after\n"), 40);
+
+        Assert.Null(store.PictureAt(0, 0));        // the text
+        Assert.Equal(7, store.PictureAt(1, 3));
+        Assert.Null(store.PictureAt(1, 4));        // the gap
+        Assert.Equal(8, store.PictureAt(2, 6));
+        Assert.Null(store.PictureAt(2, 9));        // past the last tile
+        Assert.Null(store.PictureAt(3, 0));        // after
+        store.Rows(5);                             // narrower than the strip: its lines wrap
+        Assert.Null(store.PictureAt(1, 3));
+    }
 }

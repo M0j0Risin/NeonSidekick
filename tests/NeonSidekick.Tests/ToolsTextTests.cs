@@ -56,7 +56,7 @@ public class ToolsTextTests : IDisposable
     {
         Assert.Equal("🛠️ Tools", ToolsText.Label);
         Assert.Equal("Offered", ToolsText.OfferedTabTitle);
-        Assert.Equal(["Offered", "Web", "Files", "Shell", "Ask", "Git (native)", "Obsidian", "SQL", "Options"], ToolsText.TabTitles);   // SQL 2026-09-23, Obsidian 2026-09-22, Options last later that day   // Options second since later on 2026-09-19; Git since 2026-09-20, Shell since 2026-09-21; the user's order and Git (native) since later on 2026-09-21 (alphabetical before)
+        Assert.Equal(["Offered", "Web", "Files", "Shell", "Ask", "Git (native)", "Obsidian", "SQL", "ComfyUI", "Options"], ToolsText.TabTitles);   // SQL 2026-09-23, Obsidian 2026-09-22, Options last later that day   // Options second since later on 2026-09-19; Git since 2026-09-20, Shell since 2026-09-21; the user's order and Git (native) since later on 2026-09-21 (alphabetical before)
         Assert.Equal("Git (native)", ToolsText.GitTabTitle);
         Assert.Equal("Options", ToolsText.OptionsTabTitle);
         Assert.Equal("Enter / Space = on or off · ←/→ tabs · ESC = close", ToolsText.OfferedKeys);

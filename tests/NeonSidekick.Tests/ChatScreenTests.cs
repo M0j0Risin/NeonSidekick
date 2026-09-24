@@ -66,6 +66,8 @@ public partial class ChatScreenTests : IDisposable
 
     /// <summary>What /draft opens its temporary file with (2026-09-19): a lambda that writes the file and returns, or waits on the token; null = the screen has no editor.</summary>
     private Func<string, string, CancellationToken, Task>? _editDraft;
+    private Func<Uri, NeonSidekick.Comfy.ComfyClient>? _comfyClient;
+    private Action<string, string>? _openImage;   // a double-clicked picture (later on 2026-09-24): null = the plain opener, _openedFiles   // /imagine and the image tools (2026-09-24): a client over a stub server
     private string? _logFile;   // /log (2026-09-22): the --log file the screen is handed; null = started without --log
     private Action<bool>? _mouse;
     private Action<bool>? _holdWheel;
@@ -248,7 +250,7 @@ public partial class ChatScreenTests : IDisposable
     private async Task<string> RunAsync(IAnsiConsoleInput input, CancellationToken cancellationToken = default)
     {
         _keys = new KeySource(input, TimeSpan.FromMilliseconds(1));
-        var screen = new ChatScreen(_console, _settings, () => _settings.Current, _overriddenBy, _session, _speech, _keys, _voice, _openFile ?? _openedFiles.Add, RenderScreen, _time, _geometry, mouse: _mouse, copyToClipboard: CopyToClipboard, random: _random, clipboardImage: _clipboardImage, web: _web, setTitle: _titles.Add, externalSkills: Path.Combine(_dir, "agents-skills"), holdWheel: _holdWheel, splash: _splash, editDraft: _editDraft, mcp: _mcp, logFile: _logFile);
+        var screen = new ChatScreen(_console, _settings, () => _settings.Current, _overriddenBy, _session, _speech, _keys, _voice, _openFile ?? _openedFiles.Add, RenderScreen, _time, _geometry, mouse: _mouse, copyToClipboard: CopyToClipboard, random: _random, clipboardImage: _clipboardImage, web: _web, setTitle: _titles.Add, externalSkills: Path.Combine(_dir, "agents-skills"), holdWheel: _holdWheel, splash: _splash, editDraft: _editDraft, mcp: _mcp, logFile: _logFile, comfyClient: _comfyClient, openImage: _openImage);
         int code = await screen.RunAsync(cancellationToken);
         Assert.Equal(0, code);
         return Output;
@@ -4164,13 +4166,15 @@ public partial class ChatScreenTests : IDisposable
         _console.Input.PushKey(Keys.Right);     // Git (native) (2026-09-20; so named since later on 2026-09-21 — the user's order)
         _console.Input.PushKey(Keys.Right);     // Obsidian (2026-09-22)
         _console.Input.PushKey(Keys.Right);     // SQL (2026-09-23)
+        _console.Input.PushKey(Keys.Right);     // ComfyUI (2026-09-24; Images until later that day)
         _console.Input.PushKey(Keys.Right);     // Options (second until later on 2026-09-22, last since — the user's ask)
         _console.Input.PushKey(Keys.Escape);
         PushLine("/exit");
 
         string output = await RunAsync();
 
-        Assert.Contains(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Git (native)    Obsidian    SQL    Options ", output);
+        Assert.Contains(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Git (native)    Obsidian    SQL    ComfyUI    Options ", output);
+        Assert.Contains("\n▸ ComfyUI tools                  on\n  ComfyUI URL                    (not set)\n  ComfyUI workflows offered      all (not narrowed)\n  ComfyUI add workflow           Enter to start workflow wizard\n  ComfyUI timeout (s)            300\n  ComfyUI max pictures per call  4 pictures\n  ComfyUI reinforce negatives    on\n  ComfyUI show prompts           on\n  ComfyUI output folder          comfy_images\n", output);   // 2026-09-24; the offered checklist and the wizard later that day
         Assert.Contains("\n  Clock (3)\n▸ get_current_time      on   ", output);
         Assert.Contains("\n  · get_current_time: off\n  Clock (2 of 3)\n▸ get_current_time      off  ", output);
         Assert.Equal(["get_current_time"], _settings.Current.ToolsDisabled);
@@ -4414,7 +4418,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Git (native)    Obsidian    SQL    Options ", output);
+        Assert.Contains(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Git (native)    Obsidian    SQL    ComfyUI    Options ", output);
         Assert.Contains("  · get_current_time: off", output);
         Assert.Equal(["get_current_time"], _settings.Current.ToolsDisabled);
         Assert.DoesNotContain(ChatScreen.MidTurnRefusedNotice("/tools"), output);
@@ -5585,7 +5589,7 @@ public partial class ChatScreenTests : IDisposable
     public void QuietTools_AreTheMemoryClockTimerAndFileTools()
     {
         Assert.Equal(ShellToolNames.All.Order(), ChatScreen.ShellToolNames.Order());
-        string[] expected = [SaveMemoryTool.ToolName, RecallMemoryTool.ToolName, AskUserTool.ToolName, WebSearchTool.ToolName, WebFetchTool.ToolName, OpenUrlTool.ToolName, DownloadFileTool.ToolName, SessionManagerTool.ToolName, GetCurrentTimeTool.ToolName, ShiftDateTool.ToolName, DaysBetweenTool.ToolName, StartTimerTool.ToolName, StopTimerTool.ToolName, ListTimersTool.ToolName, .. FileToolNames.All, LoadSkillTool.ToolName, SkillEditorTool.ToolName, .. GitToolNames.All, .. ShellToolNames.All];
+        string[] expected = [SaveMemoryTool.ToolName, RecallMemoryTool.ToolName, AskUserTool.ToolName, WebSearchTool.ToolName, WebFetchTool.ToolName, OpenUrlTool.ToolName, DownloadFileTool.ToolName, SessionManagerTool.ToolName, GetCurrentTimeTool.ToolName, ShiftDateTool.ToolName, DaysBetweenTool.ToolName, StartTimerTool.ToolName, StopTimerTool.ToolName, ListTimersTool.ToolName, .. FileToolNames.All, GenerateImageTool.ToolName, SetSplashImageTool.ToolName, LoadSkillTool.ToolName, SkillEditorTool.ToolName, .. GitToolNames.All, .. ShellToolNames.All];   // the image tools since 2026-09-24
         Assert.Equal(GitToolNames.All.Order(), ChatScreen.GitToolNames.Order());
         Assert.Equal(expected.Order(), ChatScreen.QuietTools.Order());
     }
@@ -7277,7 +7281,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.False(_settings.Current.ShellPoliceOutsidePaths);
         string memory = "\n" + Titled(MemoryMenu.Title) + "\n";
         string settings = "\n" + Titled(SettingsMenu.Title + "   General    Sessions    LLM    TTS    STT ") + "\n";
-        string tools = "\n" + Titled(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Git (native)    Obsidian    SQL    Options ") + "\n";
+        string tools = "\n" + Titled(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Git (native)    Obsidian    SQL    ComfyUI    Options ") + "\n";
         string allowed = "\n" + Titled(AllowedCommandsTitle) + "\n";
         Assert.Equal(1, output.Split(memory).Length - 1);
         Assert.Equal(1, output.Split(allowed).Length - 1);
@@ -7847,7 +7851,7 @@ public partial class ChatScreenTests : IDisposable
     public async Task WithGeometry_HelpOpensTheInfoPane_AndEscClosesIt()
     {
         _settings.Update(d => d.TtsOutput = false);
-        _console.Profile.Height = 61;   // 61 with /theme (2026-09-23); the Commands tab is 48 rows (38 commands + 10 blanks) since the three tool switches went (2026-09-18); the pane scrolls past 40
+        _console.Profile.Height = 63;   // 63 with /imagine and /comfy (2026-09-24), 61 with /theme (2026-09-23); the Commands tab is 48 rows (38 commands + 10 blanks) since the three tool switches went (2026-09-18); the pane scrolls past 40
         _geometry = new ScreenGeometry(() => null);
         PushLine("/help");
         _console.Input.PushKey(Keys.Right);
@@ -8300,7 +8304,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("\n" + ScreenPane.ToolbarRow(ChatScreen.ToolbarStripFor(true, CommandPolicyMode.Ask, true), cwd, 239), output);
         Assert.DoesNotContain("\n" + ScreenPane.ToolbarRow(ChatScreen.ToolbarStrip, cwd, 239), output);   // never the six alone: memory, the policy and the police are on
         int settings = output.IndexOf("\n" + Titled(SettingsMenu.Title + "   General    Sessions    LLM    TTS    STT ") + "\n", StringComparison.Ordinal);
-        int tools = output.IndexOf(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Git (native)    Obsidian    SQL    Options ", StringComparison.Ordinal);
+        int tools = output.IndexOf(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Git (native)    Obsidian    SQL    ComfyUI    Options ", StringComparison.Ordinal);
         int mcp = output.IndexOf(McpText.Label + "   Servers    Tools    Options ", StringComparison.Ordinal);
         int skills = output.IndexOf(SkillsText.Label + "   Offered    Reflection    Project    Options ", StringComparison.Ordinal);
         int sys = output.IndexOf("\n" + Titled(SystemPromptSummary.Label + "   Prompt    Tools ") + "\n", StringComparison.Ordinal);
@@ -8392,7 +8396,7 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         string settings = "\n" + Titled(SettingsMenu.Title + "   General    Sessions    LLM    TTS    STT ") + "\n";
-        string tools = "\n" + Titled(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Git (native)    Obsidian    SQL    Options ") + "\n";
+        string tools = "\n" + Titled(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Git (native)    Obsidian    SQL    ComfyUI    Options ") + "\n";
         string help = "\n" + Titled(InfoPane.Title + "   Commands    Keys ") + "\n";
         string sys = "\n" + Titled(SystemPromptSummary.Label + "   Prompt    Tools ") + "\n";
         string sessions = "\n" + Titled(SessionsMenu.Title) + "\n";
@@ -8773,7 +8777,7 @@ public partial class ChatScreenTests : IDisposable
         }
 
         Assert.Equal(lines.Length, line);
-        Assert.Equal(57, lines.Length);   // 49 commands + 8 blank rows: /theme under /splash on 2026-09-23; /police under /cmdlist later still on 2026-09-22; /vault under /tree later still on 2026-09-22; /expand and /collapse under /loop later on 2026-09-22; /forget went 2026-09-22, its wipe now /memory forget, and /memcopy later that day, its copy now /memory copy; /cmdlist under /cmdcopy later on 2026-09-21; /cmdcopy under /memcopy 2026-09-21; /loop under /draft 2026-09-21; /git under /emptytrash 2026-09-21; /mcp under /tools 2026-09-20; /splash under /new later still on 2026-09-19; /draft under /copy since 2026-09-19; nine groups since later on 2026-09-19 (/skills + /learn under /sessions, /window under /view, /timer under /help); 39 + 10 with /tools under /settings that morning (38 + 10 since the three tool switches went, 2026-09-18)
+        Assert.Equal(59, lines.Length);   // 51 commands + 8 blank rows: /imagine and /comfy under /view on 2026-09-24; /theme under /splash on 2026-09-23; /police under /cmdlist later still on 2026-09-22; /vault under /tree later still on 2026-09-22; /expand and /collapse under /loop later on 2026-09-22; /forget went 2026-09-22, its wipe now /memory forget, and /memcopy later that day, its copy now /memory copy; /cmdlist under /cmdcopy later on 2026-09-21; /cmdcopy under /memcopy 2026-09-21; /loop under /draft 2026-09-21; /git under /emptytrash 2026-09-21; /mcp under /tools 2026-09-20; /splash under /new later still on 2026-09-19; /draft under /copy since 2026-09-19; nine groups since later on 2026-09-19 (/skills + /learn under /sessions, /window under /view, /timer under /help); 39 + 10 with /tools under /settings that morning (38 + 10 since the three tool switches went, 2026-09-18)
         Assert.StartsWith(HelpRow("/settings, //", "edit and save settings"), lines[0]);
         Assert.StartsWith(HelpRow("/profile", "switch profiles, or /profile <name> | add <name> | delete <name> | rename <name> <new-name> | reset [name] | edit | reload"), lines[1]);   // the user's order since 2026-09-22: the profile and its sessions ahead of the tool panes
         Assert.StartsWith(HelpRow("/sessions", "list, restore and purge sessions: /sessions [<id> | purge <id> | purge older <age> | purge all | title <text>]"), lines[2]);   // under /profile since later on 2026-09-18
@@ -8813,13 +8817,15 @@ public partial class ChatScreenTests : IDisposable
         Assert.StartsWith(HelpRow("/speak", "read a text file from the working directory aloud, as a reply: /speak <file> [n], or /speak to resume, or /speak <n> from sentence n"), lines[44]);
         Assert.StartsWith(HelpRow("/echo", "print a line as a reply and read it aloud when speech is on: /echo <text>"), lines[45]);
         Assert.StartsWith(HelpRow("/view", "show an image from the working directory in the transcript, as large as the window allows: /view <image>"), lines[46]);
-        Assert.StartsWith(HelpRow("/window", "show the terminal window's width and height"), lines[47]);
-        Assert.True(string.IsNullOrWhiteSpace(lines[48]));
-        Assert.StartsWith(HelpRow("/persona", "export and manage persona.md (the personality) in your editor, or /persona reset to go back to the default, or /persona copy <profile> [force] to copy it into another profile"), lines[49]);   // copy 2026-09-21
-        Assert.True(string.IsNullOrWhiteSpace(lines[52]));
-        Assert.StartsWith(HelpRow("/timer", "list timers, or /timer <duration> [name] (10m, 90s, 1h30m) | stop <name> | stop all"), lines[53]);   // the bottom group's first row since later still on 2026-09-19 (under /help from earlier that day)
-        Assert.StartsWith(HelpRow("/help", "show help"), lines[54]);   // the bottom group since 2026-09-16, above /about; under /timer since later still on 2026-09-19
-        Assert.StartsWith(HelpRow("/about", "show general information about the app and profile"), lines[55]);
+        Assert.StartsWith(HelpRow("/imagine", "generate a picture on ComfyUI from your own prompt, sent as typed: /imagine [workflow] <prompt> [-- <negative>] [--seed N] [--size WxH]"), lines[47]);   // 2026-09-24
+        Assert.StartsWith(HelpRow("/comfy", "show the ComfyUI server's status and the workflows the image tools can run, or /comfy edit json|markdown <workflow> to open its file in your editor"), lines[48]);
+        Assert.StartsWith(HelpRow("/window", "show the terminal window's width and height"), lines[49]);
+        Assert.True(string.IsNullOrWhiteSpace(lines[50]));
+        Assert.StartsWith(HelpRow("/persona", "export and manage persona.md (the personality) in your editor, or /persona reset to go back to the default, or /persona copy <profile> [force] to copy it into another profile"), lines[51]);   // copy 2026-09-21
+        Assert.True(string.IsNullOrWhiteSpace(lines[54]));
+        Assert.StartsWith(HelpRow("/timer", "list timers, or /timer <duration> [name] (10m, 90s, 1h30m) | stop <name> | stop all"), lines[55]);   // the bottom group's first row since later still on 2026-09-19 (under /help from earlier that day)
+        Assert.StartsWith(HelpRow("/help", "show help"), lines[56]);   // the bottom group since 2026-09-16, above /about; under /timer since later still on 2026-09-19
+        Assert.StartsWith(HelpRow("/about", "show general information about the app and profile"), lines[57]);
         Assert.StartsWith(HelpRow("/exit", "exit/quit the application"), lines[^1]);   // the very last row since 2026-09-16
         Assert.DoesNotContain("/windowsize", Output);
         Assert.DoesNotContain("(also", Output);
@@ -10103,7 +10109,7 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         output = string.Join("\n", output.Split('\n').Select(l => l.TrimEnd()));
-        string tools = "\n" + Titled(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Git (native)    Obsidian    SQL    Options ") + "\n";
+        string tools = "\n" + Titled(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Git (native)    Obsidian    SQL    ComfyUI    Options ") + "\n";
         string sys = "\n" + Titled(SystemPromptSummary.Label + "   Prompt    Tools ") + "\n";
         string sessions = "\n" + Titled(SessionsMenu.Title) + "\n";
         string settings = "\n" + Titled(SettingsMenu.Title + "   General    Sessions    LLM    TTS    STT ") + "\n";
@@ -11298,7 +11304,7 @@ public partial class ChatScreenTests : IDisposable
         _console.Write(ChatScreen.CommandsTab(log: true));
 
         string[] lines = Output.TrimEnd('\n').Split('\n');
-        Assert.Equal(58, lines.Length);   // CommandsTab()'s 57 and the /log row
+        Assert.Equal(60, lines.Length);   // CommandsTab()'s 59 and the /log row
         int help = Array.FindIndex(lines, l => l.StartsWith(HelpRow("/help", "show help"), StringComparison.Ordinal));
         Assert.StartsWith(HelpRow("/log", SlashCommands.LogEntry.Summary), lines[help - 1]);
         Assert.StartsWith(HelpRow("/timer", "list timers, or /timer <duration> [name] (10m, 90s, 1h30m) | stop <name> | stop all"), lines[help - 2]);
@@ -11621,6 +11627,193 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("  ✗ " + FileText.NotAnImage("notes.txt"), output);
         Assert.Contains("  ✗ " + FileText.OutsideRoot(@"..\x.png"), output);
         Assert.Equal("Could not draw 'a.png'", ChatScreen.ViewNotDrawnError("a.png"));
+        Assert.Empty(_chat.Requests);
+    }
+
+    // ── /imagine and /comfy (2026-09-24) ────────────────────────────────────
+
+    /// <summary>A ComfyUI stand-in for the screen: one workflow in the profile's comfy folder, a server that finishes at once and serves a 4×4 picture.</summary>
+    private StubHttpMessageHandler ComfyServer()
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.ComfyUrl = "http://comfy.lan:8188"; });
+        File.WriteAllText(Path.Combine(_settings.ProfileComfyDirectory, "pony.json"),
+            "{\"3\":{\"class_type\":\"KSampler\",\"inputs\":{\"seed\":\"{{seed}}\"}},\"6\":{\"class_type\":\"CLIPTextEncode\",\"inputs\":{\"text\":\"{{prompt}}\"}},\"7\":{\"class_type\":\"CLIPTextEncode\",\"inputs\":{\"text\":\"{{negative}}\"}}}");
+        var stub = new StubHttpMessageHandler()
+            .Map("http://comfy.lan:8188/prompt", HttpStatusCode.OK, "{\"prompt_id\":\"p-1\"}")
+            .Map("http://comfy.lan:8188/history/", HttpStatusCode.OK, "{\"p-1\":{\"outputs\":{\"9\":{\"images\":[{\"filename\":\"x.png\",\"subfolder\":\"\",\"type\":\"output\"}]}}}}")
+            .Map("http://comfy.lan:8188/view", (_, _) => Task.FromResult(StubHttpMessageHandler.Bytes(HttpStatusCode.OK, SmokeChecks.SolidBmp(4, 4), "image/png")))
+            .Map("http://comfy.lan:8188/system_stats", HttpStatusCode.OK, "{\"system\":{\"comfyui_version\":\"0.3.40\"},\"devices\":[]}");
+        _comfyClient = url => new NeonSidekick.Comfy.ComfyClient(url, new HttpClient(stub), TimeSpan.FromMilliseconds(1));
+        return stub;
+    }
+
+    [Fact]
+    public async Task Imagine_SendsThePromptAsTyped_DrawsThePicture_AndTheNextMessageCarriesIt()
+    {
+        var stub = ComfyServer();
+        _chat.EnqueueText("A black square.");
+        PushLine("/imagine score_9, score_8_up, (1girl:1.2) -- score_4 --seed 5");
+        PushLine("what did you make?");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        string body = stub.Requests.Single(r => r.Uri.AbsolutePath == "/prompt").Body!;
+        Assert.Contains("\"text\":\"score_9, score_8_up, (1girl:1.2)\"", body);   // as typed, nothing added
+        Assert.Contains("\"text\":\"score_4\"", body);
+        Assert.Contains(NeonSidekick.Comfy.ComfyText.Glyph + @"generated 1 picture with pony (seed 5, 1024×1024): comfy_images\pony-5.png", output);
+        Assert.True(File.Exists(Path.Combine(_settings.ProfileDirectory, WorkingDirectory.DefaultFolderName, "comfy_images", "pony-5.png")));
+        Assert.Contains("\n" + new string(' ', 118) + "▀▀▀▀", output);   // drawn as /view draws, centred
+        var user = _chat.Requests[0].Last(m => m.Role == ChatRole.User);
+        Assert.StartsWith("(the user generated a picture with /imagine", user.Text);
+        Assert.EndsWith("what did you make?", user.Text);
+        Assert.Single(user.Contents.OfType<DataContent>());   // the picture rides with the message
+    }
+
+    /// <summary>ComfyUI show prompts (later still on 2026-09-24, the user's ask): off, the picture's line alone; on, the prompt and negative sent, in full, under it — the model's pictures and /imagine alike.</summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ShowPrompts_PutsWhatWasSentUnderThePicturesLine_OnlyWhenOn(bool on)
+    {
+        ComfyServer();
+        _settings.Update(d => d.ComfyShowPrompts = on);
+        string longPrompt = "score_9, " + string.Join(", ", Enumerable.Range(1, 40).Select(i => "tag" + i.ToString(CultureInfo.InvariantCulture)));   // past the tool line's 200
+        _chat.Enqueue(FakeChatClient.Call("g1", GenerateImageTool.ToolName, new Dictionary<string, object?> { ["prompt"] = longPrompt, ["seed"] = 7, ["verbatim"] = true }));
+        _chat.EnqueueText("Done.");
+        PushLine("make one");
+        PushLine("/imagine a cat -- blurry --seed 5");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        string flat = Regex.Replace(output, @"\s+", " ");
+        Assert.Contains("generated 1 picture with pony (seed 7, 1024×1024)", output);
+        Assert.Contains("generated 1 picture with pony (seed 5, 1024×1024)", output);
+        if (on)
+        {
+            Assert.Contains("prompt: score_9, tag1, tag2", flat);
+            Assert.Contains("tag39, tag40", flat);   // whole, not cut at the tool line's 200
+            Assert.Contains("prompt: a cat", flat);
+            Assert.Contains("negative: blurry", flat);
+        }
+        else
+        {
+            Assert.DoesNotContain("prompt:", output);
+            Assert.DoesNotContain("negative:", output);
+            Assert.DoesNotContain("tag1,", output);
+        }
+    }
+
+    [Fact]
+    public async Task Imagine_WithoutAServer_OrAPrompt_IsAnError_AndComfyListsTheWorkflows()
+    {
+        _settings.Update(d => d.TtsOutput = false);
+        PushLine("/imagine a cat");
+        PushLine("/imagine");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains("  ✗ " + NeonSidekick.Comfy.ComfyText.NoServer, output);
+        Assert.Contains("  ✗ " + NeonSidekick.Comfy.ComfyText.ImagineUsage, output);
+        Assert.Empty(_chat.Requests);
+    }
+
+    /// <summary>ComfyUI workflows offered narrows the model, not you (later on 2026-09-24): /imagine may name a hidden workflow, and without a name uses the one offered.</summary>
+    [Fact]
+    public async Task Imagine_NamesAHiddenWorkflow_AndWithoutANameUsesTheOfferedOne()
+    {
+        ComfyServer();
+        File.Copy(Path.Combine(_settings.ProfileComfyDirectory, "pony.json"), Path.Combine(_settings.ProfileComfyDirectory, "other.json"));
+        _settings.Update(d => d.ComfyWorkflowsOffered = ["other"]);
+        PushLine("/imagine pony a cat --seed 1");
+        PushLine("/imagine a dog --seed 2 --no-negative");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains("generated 1 picture with pony (seed 1,", output);
+        Assert.Contains("generated 1 picture with other (seed 2,", output);
+        Assert.Empty(_chat.Requests);
+    }
+
+    /// <summary>/imagine's argument list (later on 2026-09-24, the user's ask): the workflow names while the first word is typed, nothing once the prompt starts.</summary>
+    [Fact]
+    public void ArgumentItems_Imagine_OffersTheWorkflows_WhileTheFirstWordIsTyped()
+    {
+        static MentionResult None(string _) => new(FileOutcome.Ok, [], false);
+        var sources = new ChatScreen.ArgumentSources(() => [], "default", [], _ => [], None, None,
+            Workflows: () => [new("juggernaut-xl", "sdxl · text → image · 1024×1024"), new("pony-txt2img", "pony · text → image · 1024×1024 · hidden from the model")]);
+
+        Assert.Equal(["pony-txt2img"], ChatScreen.ArgumentItems("/imagine", "po", sources).Select(i => i.Text));
+        Assert.Equal(2, ChatScreen.ArgumentItems("/imagine", "", sources).Count);
+        Assert.Empty(ChatScreen.ArgumentItems("/imagine", "pony-txt2img score_9", sources));
+    }
+
+    /// <summary>
+    /// /comfy edit json|markdown (later still on 2026-09-24, the user's ask): a workflow's .json or .md in the editor — an .md made
+    /// first when it has none, its family written in; md for markdown; an unknown name, a missing kind or a stray word is an error.
+    /// </summary>
+    [Fact]
+    public async Task ComfyEdit_OpensTheJsonOrTheMd_MakingTheMdWhenMissing()
+    {
+        _settings.Update(d => d.TtsOutput = false);
+        string folder = _settings.ProfileComfyDirectory;
+        const string graph = "{\"6\":{\"class_type\":\"CLIPTextEncode\",\"inputs\":{\"text\":\"{{prompt}}\"}}}";
+        File.WriteAllText(Path.Combine(folder, "pony-txt2img.json"), graph);
+        File.WriteAllText(Path.Combine(folder, "pony-txt2img.md"), "---\nfamily: pony\n---\ntips\n");
+        File.WriteAllText(Path.Combine(folder, "bare.json"), graph);
+        PushLine("/comfy edit markdown PONY-txt2img");
+        PushLine("/comfy edit md bare");
+        PushLine("/comfy edit json bare");
+        PushLine("/comfy edit json nope");
+        PushLine("/comfy edit bare");
+        PushLine("/comfy open pony-txt2img");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Equal([Path.Combine(folder, "pony-txt2img.md"), Path.Combine(folder, "bare.md"), Path.Combine(folder, "bare.json")], _openedFiles);
+        Assert.Equal("---\nfamily: pony\n---\ntips\n", File.ReadAllText(Path.Combine(folder, "pony-txt2img.md")));   // an existing one untouched
+        Assert.Equal("---\nfamily: other\n---\n", File.ReadAllText(Path.Combine(folder, "bare.md")));   // made, the family written in
+        Assert.Equal(graph, File.ReadAllText(Path.Combine(folder, "bare.json")));   // the graph only opened
+        Assert.Contains(ChatScreen.ComfyEditNotice("bare", Path.Combine(folder, "bare.md"), json: false, created: true), output);
+        string jsonNotice = ChatScreen.ComfyEditNotice("bare", Path.Combine(folder, "bare.json"), json: true, created: false);   // wider than the console, so it wraps
+        Assert.Contains(jsonNotice[..jsonNotice.IndexOf(';', StringComparison.Ordinal)], output);
+        Assert.Contains("bare's graph is read again at your next message", output);
+        Assert.Contains("  ✗ no workflow named 'nope'; the workflows are: bare, pony-txt2img", output);
+        Assert.Equal(2, output.Split("  ✗ " + ChatScreen.ComfyUsageError).Length - 1);   // edit with no kind, and open
+        Assert.Empty(_chat.Requests);
+    }
+
+    [Fact]
+    public void ArgumentItems_Comfy_OffersEdit_ThenTheKind_ThenTheWorkflows()
+    {
+        static MentionResult None(string _) => new(FileOutcome.Ok, [], false);
+        var sources = new ChatScreen.ArgumentSources(() => [], "default", [], _ => [], None, None,
+            Workflows: () => [new("juggernaut-xl", "juggernaut · text → image · 1024×1024"), new("pony-txt2img", "pony · text → image · 1024×1024")]);
+
+        Assert.Equal([ChatScreen.ComfyEditWord], ChatScreen.ArgumentItems("/comfy", "", sources).Select(i => i.Text));
+        Assert.Equal(["edit"], ChatScreen.ArgumentItems("/comfy", "ed", sources).Select(i => i.Text));
+        Assert.Equal(["edit json", "edit markdown"], ChatScreen.ArgumentItems("/comfy", "edit ", sources).Select(i => i.Text));
+        Assert.Equal(["edit markdown"], ChatScreen.ArgumentItems("/comfy", "edit m", sources).Select(i => i.Text));
+        Assert.Equal(["edit json juggernaut-xl", "edit json pony-txt2img"], ChatScreen.ArgumentItems("/comfy", "edit json ", sources).Select(i => i.Text));
+        Assert.Equal(["edit markdown pony-txt2img"], ChatScreen.ArgumentItems("/comfy", "edit markdown po", sources).Select(i => i.Text));
+        Assert.Equal("pony · text → image · 1024×1024", ChatScreen.ArgumentItems("/comfy", "edit markdown po", sources).Single().Note);
+    }
+
+    [Fact]
+    public async Task Comfy_ShowsTheServer_AndTheWorkflows()
+    {
+        ComfyServer();
+        PushLine("/comfy");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains("http://comfy.lan:8188 — ComfyUI 0.3.40", output);
+        Assert.Contains("pony · pony · text → image · 1024×1024 · {{negative}} {{prompt}} {{seed}}", output);
         Assert.Empty(_chat.Requests);
     }
 
@@ -12012,6 +12205,127 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(expected, ChatScreen.SplashHintLine(rest));
 
     [Fact]
+    public void SplashDeleteArmedHint_IsPinned() =>
+        Assert.Equal("DEL again to trash one.png", ChatScreen.SplashDeleteArmedHint("one.png"));
+
+    // ── Delete Delete removes a profile's splash picture (2026-09-24, the user's ask) ─────────────────
+
+    [Fact]
+    public async Task Splash_DeleteTwiceInARow_OverAProfilesPicture_DeletesTheFile_AndShowsTheNextPicture()
+    {
+        _settings.Update(d => d.TtsOutput = false);
+        PaneOf40Rows();
+        _random = new Random(7);
+        SplashOf((2380, 100), (2380, 200));   // the embedded stand-in: never drawn while the folder holds a picture
+        string folder = Path.Combine(_settings.ProfileDirectory, SplashImages.ProfileFolderName);
+        Directory.CreateDirectory(folder);
+        string[] names = ["one.bmp", "two.bmp"];
+        File.WriteAllBytes(Path.Combine(folder, names[0]), SmokeChecks.SolidBmp(2380, 100));   // five half-block rows
+        File.WriteAllBytes(Path.Combine(folder, names[1]), SmokeChecks.SolidBmp(2380, 60));    // three
+        int first = new Random(7).Next(2);
+        bool armedHint = false, fileAfterOne = false;
+        var events = new List<DiagnosticEvent>();
+        Action<DiagnosticEvent> capture = e => { if (e.Category == "Splash") { events.Add(e); } };
+        DiagnosticLog.Emitted += capture;
+        StepsWhenIdle(
+            Key(Keys.Delete),
+            input =>
+            {
+                armedHint = Output.Contains(ChatScreen.SplashDeleteArmedHint(names[first]), StringComparison.Ordinal);
+                fileAfterOne = File.Exists(Path.Combine(folder, names[first]));
+                input.Push(Keys.Delete);
+            },
+            Line("/exit"));
+
+        string output;
+        try
+        {
+            output = await RunAsync();
+        }
+        finally
+        {
+            DiagnosticLog.Emitted -= capture;
+        }
+
+        Assert.True(armedHint, output);
+        Assert.True(fileAfterOne);                                     // one press deletes nothing
+        string movedTo = Path.Combine(folder, SplashImages.TrashFolderName, names[first]);
+        Assert.False(File.Exists(Path.Combine(folder, names[first])));
+        Assert.True(File.Exists(movedTo));                             // set aside, never gone
+        Assert.True(File.Exists(Path.Combine(folder, names[1 - first])));
+        Assert.Contains(events, e => e.Level == DiagnosticLevel.Info && e.Message == SplashImages.DeletedLogLine(Path.Combine(folder, names[first]), movedTo));
+        Assert.Empty(_splashLoads);
+        string wide = " " + new string('▀', 238) + " ";
+        int[] rows = [5, 3];
+        int[] screens = Enumerable.Range(0, 3).Select(i => NthScreen(output, i)).ToArray();
+        Assert.Equal(rows[first], Count(output[screens[0]..screens[1]], wide));
+        Assert.Equal(rows[1 - first], Count(output[screens[1]..screens[2]], wide));   // the other, redrawn in its place
+        Assert.Equal(2, Refreshes(output));                                            // the delete's redraw, then /exit's wipe
+    }
+
+    [Fact]
+    public async Task Splash_DeleteThenAnotherKey_OrAfterTheWindow_DeletesNothing()
+    {
+        _settings.Update(d => d.TtsOutput = false);
+        PaneOf40Rows();
+        SplashOf(2380, 100);
+        string folder = Path.Combine(_settings.ProfileDirectory, SplashImages.ProfileFolderName);
+        Directory.CreateDirectory(folder);
+        File.WriteAllBytes(Path.Combine(folder, "one.bmp"), SmokeChecks.SolidBmp(2380, 100));
+        File.WriteAllBytes(Path.Combine(folder, "two.bmp"), SmokeChecks.SolidBmp(2380, 60));
+        StepsWhenIdle(
+            Key(Keys.Delete), Key(Keys.Right), Key(Keys.Delete),                  // the arrow between breaks the pair
+            input => { _time.Advance(ChatScreen.SplashDeleteWindow + TimeSpan.FromSeconds(1)); input.Push(Keys.Delete); },   // in a row, but too late
+            input => { input.Push(Keys.Char('x')); input.Push(Keys.Backspace); input.Push(Keys.Delete); },   // typing between breaks it too
+            Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.True(File.Exists(Path.Combine(folder, "one.bmp")), output);
+        Assert.True(File.Exists(Path.Combine(folder, "two.bmp")));
+        Assert.Equal(2, Refreshes(output));   // the Right's walk and /exit's wipe: no delete redrew
+    }
+
+    [Fact]
+    public async Task Splash_DeleteTwice_OverAnEmbeddedPicture_IsNothing()
+    {
+        _settings.Update(d => d.TtsOutput = false);
+        PaneOf40Rows();
+        SplashOf((2380, 100), (2380, 200));
+        StepsWhenIdle(Key(Keys.Delete), Key(Keys.Delete), Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.Single(_splashLoads);
+        Assert.Equal(1, Refreshes(output));   // /exit's wipe alone
+        Assert.DoesNotContain("DEL again", output);
+    }
+
+    [Fact]
+    public async Task Splash_DeletingTheFoldersLastPicture_FallsBackToTheEmbeddedSet()
+    {
+        _settings.Update(d => d.TtsOutput = false);
+        PaneOf40Rows();
+        SplashOf(2380, 100);   // the embedded stand-in: five rows
+        string folder = Path.Combine(_settings.ProfileDirectory, SplashImages.ProfileFolderName);
+        Directory.CreateDirectory(folder);
+        File.WriteAllBytes(Path.Combine(folder, "only.bmp"), SmokeChecks.SolidBmp(2380, 60));   // three
+        StepsWhenIdle(
+            input => { input.Push(Keys.Delete); input.Push(Keys.Delete); },
+            Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.False(File.Exists(Path.Combine(folder, "only.bmp")));
+        Assert.True(File.Exists(Path.Combine(folder, SplashImages.TrashFolderName, "only.bmp")));
+        Assert.Equal([SplashName(0)], _splashLoads);   // the .trash subfolder is never a picture source: the embedded set stands
+        string wide = " " + new string('▀', 238) + " ";
+        int[] screens = Enumerable.Range(0, 3).Select(i => NthScreen(output, i)).ToArray();
+        Assert.Equal(3, Count(output[screens[0]..screens[1]], wide));
+        Assert.Equal(5, Count(output[screens[1]..screens[2]], wide));
+    }
+
+    [Fact]
     public async Task Startup_WelcomeSplash_TheSwitchOffMidSession_StopsTheWalk()
     {
         _settings.Update(d => d.TtsOutput = false);
@@ -12228,7 +12542,7 @@ public partial class ChatScreenTests : IDisposable
         _settings.Update(d => d.TtsOutput = false);
         PushLine("hi");
         PushLine("/settings");
-        for (int i = 0; i < Enum.GetValues<SettingsField>().Length - 1; i++)
+        for (int i = 0; i < Array.IndexOf(Enum.GetValues<SettingsField>(), SettingsField.Theme); i++)   // the last row until the ComfyUI rows came after it (2026-09-24)
         {
             _console.Input.PushKey(Keys.Down);
         }
@@ -14870,6 +15184,71 @@ public partial class ChatScreenTests : IDisposable
         Assert.Empty(_chat.Requests);   // "clear" was never sent (never committed either: InputLineTests pins that through History, since the live row draws like a committed line)
     }
 
+    [Theory]
+    [InlineData("//tools", "/tools", "/tools ")]
+    [InlineData("///settings", "/settings", "/settings ")]
+    [InlineData("  //Tools  ", "/tools", "/tools ")]
+    [InlineData("//profile work", "/profile", "/profile work")]
+    [InlineData("////profile   work  x", "/profile", "/profile work  x")]
+    [InlineData("//exit", "/exit", "/exit ")]
+    [InlineData("//", null, null)]
+    [InlineData("///", null, null)]
+    [InlineData("// tools", null, null)]
+    [InlineData("/tools", null, null)]
+    [InlineData("//nosuch", null, null)]
+    [InlineData("//toolsy", null, null)]
+    [InlineData("tools", null, null)]
+    [InlineData("", null, null)]
+    public void TypoSlashes_IsACommandTypedWithExtraSlashes_ItsArgumentsKept(string text, string? command, string? line)
+    {
+        // Later still on 2026-09-24 (the user's ask): //tools and ///settings are the command's typo too; a bare // is /settings' alias still.
+        var hit = ChatScreen.TypoSlashes(text, SlashCommands.Completions);
+        Assert.Equal(command, hit?.Item.Text);
+        Assert.Equal(line, hit?.Line);
+    }
+
+    [Fact]
+    public async Task WithGeometry_ACommandWithExtraSlashes_OpensTheTypoPane_EnterPutsTheCommandOnTheLine()
+    {
+        _settings.Update(d => d.TtsOutput = false);
+        _geometry = new ScreenGeometry(() => null);
+        StepsWhenIdle(Line("//clear"), Key(Keys.Enter), Key(Keys.Enter), Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.Contains(Titled(ChatScreen.TypoTitle("/clear")), output);
+        Assert.Equal(1, Refreshes(output));   // /clear ran
+        Assert.Contains("› /clear", output);
+        Assert.Empty(_chat.Requests);
+    }
+
+    [Fact]
+    public async Task WithGeometry_ACommandWithExtraSlashes_AndArguments_IsOfferedWhole_AndEscapeSendsItAsTyped()
+    {
+        _settings.Update(d => d.TtsOutput = false);
+        _geometry = new ScreenGeometry(() => null);
+        StepsWhenIdle(Line("//clear now"), Key(Keys.Escape), Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.Contains(ChatScreen.TypoTitle("/clear now"), output);
+        Assert.Contains("› //clear now", output);   // as typed
+        Assert.Equal(0, Refreshes(output));         // /clear never ran
+    }
+
+    [Fact]
+    public async Task WithGeometry_TypoIntercept_Off_LeavesExtraSlashesAlone_AndABareDoubleSlashIsSettings()
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.CommandTypoIntercept = false; });
+        _geometry = new ScreenGeometry(() => null);
+        StepsWhenIdle(Line("//clear"), Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.DoesNotContain(ChatScreen.TypoTitle("/clear"), output);
+        Assert.Equal(0, Refreshes(output));
+    }
+
     [Fact]
     public async Task WithGeometry_TypoPane_Escape_SendsTheLineAsTyped()
     {
@@ -15818,5 +16197,64 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("ask_user: 1 question answered", ChatScreen.AskUserAnsweredLogLine(1));
         Assert.Equal("ask_user: not answered (ESC).", ChatScreen.AskUserNotAnsweredLogLine);
         Assert.Equal("ask_user: never asked (no watcher to run the pane).", ChatScreen.AskUserNotAskedLogLine);
+    }
+
+    // ── A double-clicked picture opens in the image editor (later on 2026-09-24) ─
+
+    /// <summary>A pair of clicks on every transcript row at <paramref name="column"/>: wherever the picture landed, its rows answer; the others are nothing.</summary>
+    private static Action<ScriptedInput> DoubleClickDown(int column) => input =>
+    {
+        for (int y = 60; y < 99; y++)
+        {
+            input.PushClick(column, y);
+            input.PushClick(column, y);
+        }
+    };
+
+    [Fact]
+    public async Task APictureDoubleClicked_OpensInTheImageEditor_TheSettingsCommandPassed()
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.ImageEditor = "mspaint"; });
+        PaneOf40Rows();
+        string files = Path.Combine(_settings.ProfileDirectory, WorkingDirectory.DefaultFolderName);
+        Directory.CreateDirectory(Path.Combine(files, "docs"));
+        File.WriteAllBytes(Path.Combine(files, "docs", "square.bmp"), SmokeChecks.SolidBmp(4, 4));
+        var opened = new List<(string Path, string Editor)>();
+        _openImage = (path, editor) => opened.Add((path, editor));
+        StepsWhenIdle(Line("/view docs/square.bmp"), DoubleClickDown(119), DoubleClickDown(10), Line("/exit"));
+
+        string output = await RunAsync();
+
+        // Once: the notice the open prints moves the picture up a row, past the rest of the downward pass; the column-10 pass hits nothing.
+        Assert.Equal((Path.Combine(files, "docs", "square.bmp"), "mspaint"), Assert.Single(opened));
+        Assert.Contains(ChatScreen.PictureOpenedNotice("square.bmp", "mspaint"), output);
+        Assert.Equal("(🖼️ opened a.png in the image editor)", ChatScreen.PictureOpenedNotice("a.png", ""));
+        Assert.Empty(_chat.Requests);
+    }
+
+    [Fact]
+    public async Task APictureWithNoFile_IsWrittenToTemp_AndAGoneFileIsAnError()
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.WelcomeSplash = false; });
+        PaneOf40Rows();
+        SplashOf((4, 4));
+        string files = Path.Combine(_settings.ProfileDirectory, WorkingDirectory.DefaultFolderName);
+        Directory.CreateDirectory(files);
+        File.WriteAllBytes(Path.Combine(files, "gone.bmp"), SmokeChecks.SolidBmp(4, 4));
+        StepsWhenIdle(
+            Line("/splash"),
+            DoubleClickDown(119),
+            Line("/clear"),
+            Line("/view gone.bmp"),
+            input => { File.Delete(Path.Combine(files, "gone.bmp")); DoubleClickDown(119)(input); },
+            Line("/exit"));
+
+        string output = await RunAsync();
+
+        string temp = Path.Combine(ChatScreen.PictureTempFolder, "01.bmp");
+        Assert.Contains(temp, _openedFiles);   // the bundled splash has no file: its bytes went to temp
+        Assert.True(File.Exists(temp));
+        Assert.Contains(ChatScreen.PictureGoneError(Path.Combine(files, "gone.bmp")), output);
+        Assert.DoesNotContain(Path.Combine(files, "gone.bmp"), _openedFiles);
     }
 }

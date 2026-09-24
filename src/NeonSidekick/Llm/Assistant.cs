@@ -965,6 +965,7 @@ public sealed class Assistant
 
             var results = new List<FunctionResultContent>(calls.Count);
             var fetched = new List<ImageAttachment>();
+            var fetchers = new List<string>();
             log.ToolCalls += calls.Count;
             foreach (var call in calls)
             {
@@ -977,13 +978,18 @@ public sealed class Assistant
                 var (result, pictures) = await InvokeToolAsync(_tools, call, cancellationToken).ConfigureAwait(false);
                 results.Add(ResultContent(call, result));
                 fetched.AddRange(pictures);
+                if (pictures.Count > 0 && !fetchers.Contains(call.Name, StringComparer.Ordinal))
+                {
+                    fetchers.Add(call.Name);
+                }
+
                 yield return new TurnEvent.ToolResult(call.Name, call.CallId, result, pictures.Count > 0 ? pictures : null);
             }
 
             _history.AddToolResults(results);
 
-            // The pictures the iteration fetched, in one carrier after the results (none for none).
-            _history.AddToolImages(fetched);
+            // The pictures the iteration fetched, in one carrier after the results (none for none), crediting the tools that fetched them (2026-09-24).
+            _history.AddToolImages(fetched, string.Join(" and ", fetchers));
 
             // The mid-turn guard, after the iteration's results are in: they are the last
             // iteration a prune keeps, and a stop leaves no call unanswered.

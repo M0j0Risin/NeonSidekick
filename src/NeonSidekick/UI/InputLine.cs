@@ -257,6 +257,15 @@ public sealed class InputLine
         _ => -5 - hit.Column,
     };
 
+    /// <summary>
+    /// What two clicks on a transcript picture must share to pair (later on 2026-09-24): the picture's id, far below every
+    /// toolbar key (<see cref="ToolbarPairKey"/> goes down one per column), so no two parts ever share one. Pinned.
+    /// </summary>
+    public static int PicturePairKey(int id) => -1_000_000 - id;
+
+    /// <summary>What a double-click on a transcript picture does with its id (later on 2026-09-24): the screen's opener; null = nothing.</summary>
+    public Action<int>? OpenPicture { get; set; }
+
     public static string SubmittedMarkup(string text)
     {
         ArgumentNullException.ThrowIfNull(text);
@@ -371,12 +380,16 @@ public sealed class InputLine
     /// for Left and +1 for Right: true means the key was spent (the screen turns the welcome splash
     /// to the previous or next picture; the pane's own draw puts the row back) and the read goes on;
     /// false or null is the key as ever, which on an empty draft is nothing. A settings field never passes it.
+    /// <paramref name="emptyDelete"/> (2026-09-24, the user's ask) is asked the same way on a plain Delete over an
+    /// empty draft, with whether the event just before it was a Delete it spent — the "twice in a row" is the
+    /// line's to say, since the screen never sees the keys in between: true means the key was spent (the screen
+    /// arms, or deletes the profile's splash picture on screen), false or null the key as ever.
     /// <paramref name="mask"/> (later on 2026-09-23, the SQL tab's <c>SQL set password</c>) draws every character as
     /// <see cref="MaskGlyph"/> — the cursor, the selection and the editing keys as ever — never remembers the line, and
     /// never copies a selection of it (Ctrl+C over one is the copy-failed notice, not the secret on the clipboard).
     /// Throws <see cref="OperationCanceledException"/> when <paramref name="cancellationToken"/> fires.
     /// </summary>
-    public async Task<InputResult> ReadAsync(string initialText = "", bool remember = true, bool allowEmpty = false, ConsoleKey? pushToTalk = null, CancellationToken cancellationToken = default, CancellationToken wake = default, CancellationToken alert = default, bool escapeCancels = false, bool multiline = false, MentionFolderAction? mentions = null, int pastePreview = 0, Func<bool>? softEscape = null, Func<bool>? interrupt = null, Func<string, CancellationToken, Task<string?>>? intercept = null, Action? beforeCommit = null, IReadOnlyList<InputEvent>? replay = null, Func<int, bool>? emptyArrow = null, bool mask = false)
+    public async Task<InputResult> ReadAsync(string initialText = "", bool remember = true, bool allowEmpty = false, ConsoleKey? pushToTalk = null, CancellationToken cancellationToken = default, CancellationToken wake = default, CancellationToken alert = default, bool escapeCancels = false, bool multiline = false, MentionFolderAction? mentions = null, int pastePreview = 0, Func<bool>? softEscape = null, Func<bool>? interrupt = null, Func<string, CancellationToken, Task<string?>>? intercept = null, Action? beforeCommit = null, IReadOnlyList<InputEvent>? replay = null, Func<int, bool>? emptyArrow = null, bool mask = false, Func<bool, bool>? emptyDelete = null)
     {
         ArgumentNullException.ThrowIfNull(initialText);
 
@@ -392,6 +405,8 @@ public sealed class InputLine
         // Any other input ends both.
         int goalCol = -1;
         bool walking = false;
+        // The last event was an empty Delete that emptyDelete spent (2026-09-24): the next one's repeat flag.
+        bool deleteSpent = false;
         // The completion list (@-mention, command, argument, #skill, $tool): open while `list` is set;
         // `dismissed` is the word ESC closed it on, so a cursor move over the same word does not
         // bring it straight back. The chat line on the pane is the only read with any of the five.
@@ -441,6 +456,11 @@ public sealed class InputLine
                     goalCol = -1;
                     walking = false;
                 }
+
+                // Whether the event before this one was an empty Delete the screen spent (2026-09-24):
+                // any event at all in between — a key, a click, a paste, a wheel notch — ends the pair.
+                bool deleteRepeat = deleteSpent;
+                deleteSpent = false;
 
                 if (input is InputEvent.Paste paste)
                 {
@@ -517,6 +537,16 @@ public sealed class InputLine
                             {
                                 EndRow();
                                 return new InputResult.ToolbarRow(text.ToString(), tool);
+                            }
+                        }
+                        else if (_pane.PictureAt(click.X, click.Y) is int picture)
+                        {
+                            // A picture in the transcript (later on 2026-09-24, the user's ask): a double-click
+                            // opens it in the image editor; the draft is untouched.
+                            anchor = -1;
+                            if (_hintClicks.Second(PicturePairKey(picture)))
+                            {
+                                OpenPicture?.Invoke(picture);
                             }
                         }
                         else
@@ -747,6 +777,14 @@ public sealed class InputLine
                     }
 
                     case ConsoleKey.Delete:
+                        // A plain Delete over an empty draft has nothing to remove: the screen may spend
+                        // it on the splash picture (2026-09-24), told whether the key before was one too.
+                        if (text.Length == 0 && !shift && !control && !alt && emptyDelete is not null && emptyDelete(deleteRepeat))
+                        {
+                            deleteSpent = true;
+                            continue;
+                        }
+
                         if (HasSelection())
                         {
                             DeleteSelection();
@@ -1032,7 +1070,8 @@ public sealed class InputLine
                 return;
             }
 
-            Insert(_pastes.AddImage(image).ToString());
+            // The clipboard's own bytes kept beside it (later still on 2026-09-24): generate_image's input at full size.
+            Insert(_pastes.AddImage(image, original: picture).ToString());
         }
 
         // What a paste becomes on the line, in place of the selection: the chat line keeps the
@@ -1060,7 +1099,7 @@ public sealed class InputLine
                         var image = await Task.Run(() => ImageFile.Load(path, out error)).ConfigureAwait(false);
                         if (image is not null)
                         {
-                            pieces.Add(_pastes.AddImage(image).ToString());
+                            pieces.Add(_pastes.AddImage(image, sourcePath: path).ToString());
                         }
                         else
                         {

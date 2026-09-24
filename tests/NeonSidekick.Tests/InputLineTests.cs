@@ -227,6 +227,33 @@ public class InputLineTests : IDisposable
     }
 
     [Fact]
+    public async Task EmptyDelete_IsAskedOnAPlainDeleteOverAnEmptyDraft_WithWhetherTheLastEventWasOne()
+    {
+        // The splash's Delete Delete (2026-09-24): the line says "in a row" — any other key between is a first again.
+        var repeats = new List<bool>();
+        Push(Keys.Delete, Keys.Delete, Keys.Left, Keys.Delete, Keys.Shift(ConsoleKey.Delete), Keys.Delete);
+        Type("ab");
+        Push(Keys.Home, Keys.Delete, Keys.Enter);   // a draft: the key is the line's, 'a' goes
+
+        var submitted = Assert.IsType<InputResult.Submitted>(await _line.ReadAsync(emptyDelete: repeat => { repeats.Add(repeat); return true; }));
+
+        Assert.Equal("b", submitted.Text);
+        Assert.Equal([false, true, false, false], repeats);
+    }
+
+    [Fact]
+    public async Task EmptyDelete_ThatDeclines_NeverCountsAsTheFirstOfAPair()
+    {
+        var repeats = new List<bool>();
+        Push(Keys.Delete, Keys.Delete, Keys.Enter);
+        int asked = 0;
+
+        await _line.ReadAsync(allowEmpty: true, emptyDelete: repeat => { repeats.Add(repeat); return asked++ > 0; });
+
+        Assert.Equal([false, false], repeats);
+    }
+
+    [Fact]
     public async Task SoftEscape_ThatDeclines_ClearsTheDraft()
     {
         int asked = 0;
@@ -2054,6 +2081,22 @@ public class InputLineTests : IDisposable
         pane.Show();
         var scripted = new ScriptedInput();
         return (new InputLine(pane, new KeySource(scripted, TimeSpan.FromMilliseconds(1)), clipboard, notices: new TranscriptRenderer(pane), clipboardImage: picture), scripted);
+    }
+
+    [Fact]
+    public async Task CtrlV_KeepsTheClipboardsOwnBytes_ForGenerateImage_WhileTheModelGetsTheDownscale()
+    {
+        // A paste as generate_image's input (later still on 2026-09-24): the store keeps the picture as it was.
+        byte[] wide = SmokeChecks.SolidBmp(3000, 10);
+        var (line, keys) = PictureLine(() => wide);
+        keys.Push(CtrlV).Push(Keys.Enter);
+
+        var submitted = Assert.IsType<InputResult.Submitted>(await line.ReadAsync(multiline: true));
+
+        Assert.True(Assert.Single(submitted.Images).Width <= ImageFile.MaxSide);
+        var original = line.Pastes.Original(1);
+        Assert.Same(wide, original!.Bytes);
+        Assert.Null(original.FileName);   // a clipboard picture has no name: the saver stamps one
     }
 
     [Fact]

@@ -120,6 +120,38 @@ public sealed class PersonaFile : PromptFile
         await editor.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// Opens a picture for editing, not waited for (later on 2026-09-24, the user's ask: a double-clicked thumbnail "in the
+    /// default image editing application for the OS … overridden with a path to an editor similar to /draft"). A blank
+    /// <paramref name="editorCommand"/> is a shell execute with the <c>edit</c> verb — the editor Windows registers for
+    /// the type (Paint for png, jpg, bmp) — and, for a type with no edit verb, the plain open, its viewer. A command line
+    /// (<c>mspaint</c>, a quoted GIMP path) runs through <c>cmd.exe /s /c "&lt;command&gt; "&lt;path&gt;""</c> with no window of
+    /// its own, <see cref="EditAndWaitAsync"/>'s launch (<see cref="App.DraftFile.CommandLine"/>). Sets
+    /// <see cref="NoAttachConsoleVariable"/> first. Throws <see cref="System.ComponentModel.Win32Exception"/> or
+    /// <see cref="InvalidOperationException"/> when the launch fails; the screen prints the detail.
+    /// </summary>
+    public static void OpenImage(string path, string editorCommand)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        ArgumentNullException.ThrowIfNull(editorCommand);
+        Environment.SetEnvironmentVariable(NoAttachConsoleVariable, "1");
+        if (!string.IsNullOrWhiteSpace(editorCommand))
+        {
+            using var editor = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("cmd.exe") { UseShellExecute = false, CreateNoWindow = true, Arguments = App.DraftFile.CommandLine(editorCommand.Trim(), path) });
+            return;
+        }
+
+        try
+        {
+            using var edit = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(path) { UseShellExecute = true, Verb = "edit" });
+        }
+        catch (System.ComponentModel.Win32Exception ex)
+        {
+            DiagnosticLog.Info(Category, $"No edit verb for {Path.GetFileName(path)} ({ex.Message}); opening it instead.");
+            ShellOpen(path);
+        }
+    }
+
     /// <summary>The persona text as the prompt carries it: CRLF folded to LF, trimmed, cut at <see cref="MaxLength"/> with an ellipsis. Pure; pinned.</summary>
     public static string Normalize(string raw) => Normalize(raw, out _);
 

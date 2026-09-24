@@ -752,6 +752,7 @@ public class SettingsMenuTests : IDisposable
                 SettingsField.ToolCollapseCount, SettingsField.CodeCollapseCount,
                 SettingsField.ObsidianTools, SettingsField.ObsidianVault, SettingsField.ObsidianAllowDelete,
                 SettingsField.SqlTools, SettingsField.SqlDefaultConnection, SettingsField.SqlQueryMaxRows, SettingsField.SqlQueryTimeoutSeconds, SettingsField.SqlConnectionsProfile, SettingsField.SqlConnectionsGlobal, SettingsField.SqlSetPassword, SettingsField.SqlPercentMention, SettingsField.SqlConnectionsOffered, SettingsField.SqlAddConnection, SettingsField.Theme,
+                SettingsField.ComfyTools, SettingsField.ComfyUrl, SettingsField.ComfyTimeoutSeconds, SettingsField.ComfyOutputFolder, SettingsField.ComfyWorkflowsOffered, SettingsField.ComfyAddWorkflow, SettingsField.ImageEditor, SettingsField.ComfyMaxPicturesPerCall, SettingsField.ComfyReinforceNegatives, SettingsField.ComfyShowPrompts,
             },
             Enum.GetValues<SettingsField>());
         // The compact rows: on the LLM tab after the context length but no reconnect; the type a picker, the two others typed.
@@ -899,10 +900,10 @@ public class SettingsMenuTests : IDisposable
         Assert.Equal("protected   [#9A8BB8]loaded skills survive a prune and the mid-turn guard[/]", SettingsMenu.SkillCompactModeLabel("protected"));
         Assert.Equal("unprotected [#9A8BB8]loaded skills prune like any tool result[/]", SettingsMenu.SkillCompactModeLabel("unprotected"));
         Assert.Equal(5, SettingsMenu.TabFields.Count);   // 9 until 2026-09-19, when Ask, Files and Web moved to /tools (ToolsTabFields) and, later that day, Skills to /skills (SkillsTabFields)
-        Assert.Equal(8, SettingsMenu.ToolsTabFields.Count);   // SQL since 2026-09-23; Obsidian since 2026-09-22 and Options last later that day (first since later on 2026-09-19); Git between Files and Web since 2026-09-20; Shell between Git and Web since 2026-09-21
+        Assert.Equal(9, SettingsMenu.ToolsTabFields.Count);   // Images since 2026-09-24; SQL since 2026-09-23; Obsidian since 2026-09-22 and Options last later that day (first since later on 2026-09-19); Git between Files and Web since 2026-09-20; Shell between Git and Web since 2026-09-21
         Assert.Equal(2, SettingsMenu.SkillsTabFields.Count);   // Options and Reflection, since later on 2026-09-19 (one list of 11, then 14, before)
         Assert.Equal(12, SettingsMenu.SkillsTabFields.Sum(t => t.Count));   // 13 until Allow skill delete went on 2026-09-23; 14 until Reflection verbose went later still on 2026-09-19
-        Assert.Equal(new[] { SettingsField.Profile, SettingsField.NewProfileMode, SettingsField.WorkingDirectory, SettingsField.QueueMessages, SettingsField.QueueCancelMode, SettingsField.Memory, SettingsField.CopyUserPrompt, SettingsField.ShowImageThumbnails, SettingsField.ImageThumbnailSize, SettingsField.TranscriptMarkdown, SettingsField.PastePreviewLines, SettingsField.HideExitAutocomplete, SettingsField.CommandTypoIntercept, SettingsField.WelcomeSplash, SettingsField.ShowWorkingDirectory, SettingsField.ShowToolbar, SettingsField.DraftEditor, SettingsField.Theme }, SettingsMenu.TabFields[(int)SettingsTab.General]);
+        Assert.Equal(new[] { SettingsField.Profile, SettingsField.NewProfileMode, SettingsField.WorkingDirectory, SettingsField.QueueMessages, SettingsField.QueueCancelMode, SettingsField.Memory, SettingsField.CopyUserPrompt, SettingsField.ShowImageThumbnails, SettingsField.ImageThumbnailSize, SettingsField.TranscriptMarkdown, SettingsField.PastePreviewLines, SettingsField.HideExitAutocomplete, SettingsField.CommandTypoIntercept, SettingsField.WelcomeSplash, SettingsField.ShowWorkingDirectory, SettingsField.ShowToolbar, SettingsField.DraftEditor, SettingsField.ImageEditor, SettingsField.Theme }, SettingsMenu.TabFields[(int)SettingsTab.General]);   // Image editor under Draft editor, later on 2026-09-24
         // Draft editor (2026-09-19): typed, the General tab's last row, blank = the shell's default for .txt, no reconnect (read at each /draft).
         Assert.False(SettingsMenu.IsToggle(SettingsField.DraftEditor));
         Assert.Equal("Draft editor", SettingsMenu.FieldName(SettingsField.DraftEditor));
@@ -1290,7 +1291,7 @@ public class SettingsMenuTests : IDisposable
         Assert.Equal("unprotected", SettingsMenu.FieldValue(SettingsField.SkillCompactMode, new AppSettingsData { SkillCompactMode = "unprotected" }, _settings.ProfileDirectory));
         Assert.Equal("protected   [#9A8BB8]loaded skills survive a prune and the mid-turn guard[/]", SettingsMenu.SkillCompactModeLabel("protected"));
         Assert.Equal("unprotected [#9A8BB8]loaded skills prune like any tool result[/]", SettingsMenu.SkillCompactModeLabel("unprotected"));
-        Assert.Equal([SettingsField.ToolsDollarMention, SettingsField.ToolCollapseCount, SettingsField.CodeCollapseCount], SettingsMenu.ToolsTabFields[7]);   // the Options tab, later on 2026-09-19 (index 7 since the SQL tab, 2026-09-23); the fold's count under the switch 2026-09-22, the code fold's under it later that day
+        Assert.Equal([SettingsField.ToolsDollarMention, SettingsField.ToolCollapseCount, SettingsField.CodeCollapseCount], SettingsMenu.ToolsTabFields[8]);   // the Options tab, later on 2026-09-19 (index 7 since the SQL tab, 2026-09-23); the fold's count under the switch 2026-09-22, the code fold's under it later that day
         Assert.Equal([SettingsField.AskUser, SettingsField.AskMaxQuestions, SettingsField.AskMaxChoices], SettingsMenu.ToolsTabFields[3]);   // the Ask tab: second after Options until later on 2026-09-21, between Shell and Git (native) since
         Assert.True(SettingsMenu.IsToggle(SettingsField.AskUser));
         Assert.False(SettingsMenu.IsToggle(SettingsField.AskMaxQuestions) || SettingsMenu.IsToggle(SettingsField.AskMaxChoices));
@@ -1314,7 +1315,7 @@ public class SettingsMenuTests : IDisposable
         Assert.Equal(26, SettingsMenu.TabLabelWidth(SettingsTab.Llm));       // "LLM compact show summary" (2026-09-21; "LLM request timeout (s)", 23, before)
         Assert.Equal(19, SettingsMenu.TabLabelWidth(SettingsTab.Tts));       // "TTS voice preview"
         Assert.Equal(26, SettingsMenu.TabLabelWidth(SettingsTab.Stt));       // "STT interrupt echo guard"
-        Assert.Equal(21, SettingsMenu.LabelWidthOf(SettingsMenu.ToolsTabFields[7]));   // the Options tab (index 7 since SQL, 2026-09-23): "Tool collapse count" (2026-09-22; "$-mention enabled", 19, the Options tab's one row from later on 2026-09-19)
+        Assert.Equal(21, SettingsMenu.LabelWidthOf(SettingsMenu.ToolsTabFields[8]));   // the Options tab (index 7 since SQL, 2026-09-23): "Tool collapse count" (2026-09-22; "$-mention enabled", 19, the Options tab's one row from later on 2026-09-19)
         Assert.Equal(26, SettingsMenu.LabelWidthOf(SettingsMenu.ToolsTabFields[0]));   // "Web browser network mode" (the Web-prefixed labels, later still on 2026-09-19; "Web search max results", 24, before)
         Assert.Equal(32, SettingsMenu.LabelWidthOf(SettingsMenu.ToolsTabFields[1]));   // "File view image max (per call)" (the File-prefixed labels, later still on 2026-09-19; "Stale line number guard", 25, that morning; "Always return line numbers", 28, from 2026-09-17 until it went; "Tree max length", 17, before)
         Assert.Equal(29, SettingsMenu.LabelWidthOf(SettingsMenu.ToolsTabFields[2]));   // "Shell tool bridge max calls" (the Shell tab, 2026-09-21; the row was "Shell code max tool calls", 27, until later that day)
@@ -1516,7 +1517,7 @@ public class SettingsMenuTests : IDisposable
     public async Task Theme_IsTheLastRow_APicker_PutInForceAtOnce_AndTheScreenHearsIt()
     {
         using var scope = new ThemeScope();
-        Down(Enum.GetValues<SettingsField>().Length - 1);
+        Down(Array.IndexOf(Enum.GetValues<SettingsField>(), SettingsField.Theme));   // the last row until the ComfyUI rows came after it (2026-09-24)
         Push(Keys.Enter);                           // Theme: the picker opens on synthwave
         Push(Keys.Down, Keys.Enter);                // netrunner
         Push(Keys.Escape);
@@ -1534,7 +1535,7 @@ public class SettingsMenuTests : IDisposable
     public async Task Theme_PickedAndPickedBack_IsNoChangeForTheScreen()
     {
         using var scope = new ThemeScope();
-        Down(Enum.GetValues<SettingsField>().Length - 1);
+        Down(Array.IndexOf(Enum.GetValues<SettingsField>(), SettingsField.Theme));   // the last row until the ComfyUI rows came after it (2026-09-24)
         Push(Keys.Enter, Keys.Down, Keys.Down, Keys.Enter);   // nostromo
         Push(Keys.Enter, Keys.Up, Keys.Up, Keys.Enter);       // synthwave again
         Push(Keys.Escape);
@@ -1549,7 +1550,7 @@ public class SettingsMenuTests : IDisposable
     public async Task Theme_EscapeKeepsIt()
     {
         using var scope = new ThemeScope();
-        Down(Enum.GetValues<SettingsField>().Length - 1);
+        Down(Array.IndexOf(Enum.GetValues<SettingsField>(), SettingsField.Theme));   // the last row until the ComfyUI rows came after it (2026-09-24)
         Push(Keys.Enter, Keys.Escape, Keys.Escape);
 
         Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));
@@ -2757,7 +2758,7 @@ public class SettingsMenuTests : IDisposable
         string cwd = SettingsMenu.DefaultWorkingDirectoryLabel(_settings.ProfileDirectory);
         Assert.StartsWith("(", cwd);
         Assert.EndsWith(@"\profiles\default\files)", cwd);
-        Assert.Contains(Rule(240) + "\n" + Titled(Strip) + "\n \n▸ Profile                      default (" + _settings.ProfileDirectory + ")\n  New profile mode             basic\n  Working directory (cwd)      " + cwd + "\n  Queue messages               on\n  Queue cancel mode            empty\n  Memory                       on\n  Copy user prompt             on\n  Show image thumbnails        on\n  Image thumbnail size         small\n  Transcript markdown          on\n  Paste preview lines          25 lines\n  Hide /exit autocomplete      on\n  Command typo intercept       on\n  Welcome splash               on\n  Working directory in header  off\n  Show toolbar                 on\n  Draft editor                 (default .txt editor)\n  Theme                        synthwave\n" + Rule(240) + "\n" + SettingsMenu.TabKeys + "\n", _console.Output);
+        Assert.Contains(Rule(240) + "\n" + Titled(Strip) + "\n \n▸ Profile                      default (" + _settings.ProfileDirectory + ")\n  New profile mode             basic\n  Working directory (cwd)      " + cwd + "\n  Queue messages               on\n  Queue cancel mode            empty\n  Memory                       on\n  Copy user prompt             on\n  Show image thumbnails        on\n  Image thumbnail size         small\n  Transcript markdown          on\n  Paste preview lines          25 lines\n  Hide /exit autocomplete      on\n  Command typo intercept       on\n  Welcome splash               on\n  Working directory in header  off\n  Show toolbar                 on\n  Draft editor                 (default .txt editor)\n  Image editor                 (default image editor)\n  Theme                        synthwave\n" + Rule(240) + "\n" + SettingsMenu.TabKeys + "\n", _console.Output);
         Assert.DoesNotContain("File /tree max length", _console.Output);   // the Files tab's since 2026-09-15
         Assert.DoesNotContain("LLM URL", _console.Output);
         Assert.False(pane.OverlayOpen);
@@ -3844,8 +3845,8 @@ public class SettingsMenuTests : IDisposable
         Assert.Equal("/copy copies model replies only", SettingsMenu.ToggleDescribe(SettingsField.CopyUserPrompt, false));
         Assert.Equal("hide '/exit' from the autocomplete list", SettingsMenu.ToggleDescribe(SettingsField.HideExitAutocomplete, true));   // the user's words, 2026-09-21
         Assert.Equal("show '/exit' in the autocomplete list", SettingsMenu.ToggleDescribe(SettingsField.HideExitAutocomplete, false));
-        Assert.Equal("a line that is only a command's name offers the command first", SettingsMenu.ToggleDescribe(SettingsField.CommandTypoIntercept, true));
-        Assert.Equal("a line that is only a command's name is sent as typed", SettingsMenu.ToggleDescribe(SettingsField.CommandTypoIntercept, false));
+        Assert.Equal("a command typed without its slash or with extra ones offers the command", SettingsMenu.ToggleDescribe(SettingsField.CommandTypoIntercept, true));   // extra slashes since later still on 2026-09-24
+        Assert.Equal("a command typed without its slash or with extra ones is sent as typed", SettingsMenu.ToggleDescribe(SettingsField.CommandTypoIntercept, false));
         Assert.Equal("a picture greets you under the banner at startup, until the first line", SettingsMenu.ToggleDescribe(SettingsField.WelcomeSplash, true));
         Assert.Equal("the banner alone at startup", SettingsMenu.ToggleDescribe(SettingsField.WelcomeSplash, false));
         Assert.Equal("show the working directory in the header", SettingsMenu.ToggleDescribe(SettingsField.ShowWorkingDirectory, true));   // the user's words, 2026-09-21

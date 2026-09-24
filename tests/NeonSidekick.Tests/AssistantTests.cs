@@ -746,7 +746,7 @@ public class AssistantTests
         Assert.Empty(second[3].Contents.OfType<DataContent>());
         var carrier = second[4];
         Assert.True(ConversationHistory.IsImageCarrier(carrier));
-        Assert.Equal(ConversationHistory.ImageCarrierText(["pic.png"]), carrier.Text);
+        Assert.Equal(ConversationHistory.ImageCarrierText(["pic.png"], "picture"), carrier.Text);   // the tool that fetched it is credited (2026-09-24)
         var part = Assert.Single(carrier.Contents.OfType<DataContent>());
         Assert.Equal(ImageFile.Png, part.MediaType);
         Assert.Equal(new byte[] { 1, 2, 3 }, part.Data.ToArray());
@@ -768,7 +768,7 @@ public class AssistantTests
         var second = client.Requests[1];
         Assert.Equal(ChatRole.User, second[^1].Role);
         Assert.Equal(2, second[^1].Contents.OfType<DataContent>().Count());
-        Assert.Equal(ConversationHistory.ImageCarrierText(["a.png", "b.jpg"]), second[^1].Text);
+        Assert.Equal(ConversationHistory.ImageCarrierText(["a.png", "b.jpg"], "picture and picture2"), second[^1].Text);   // both tools credited (2026-09-24)
         Assert.Equal(2, second[^2].Contents.OfType<FunctionResultContent>().Count());
         Assert.Equal(1, history.TurnCount);
     }

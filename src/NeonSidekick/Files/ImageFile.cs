@@ -10,6 +10,13 @@ namespace NeonSidekick.Files;
 public sealed record ImageAttachment(string Path, byte[] Bytes, string MediaType, int Width, int Height);
 
 /// <summary>
+/// A pasted picture as it was before any downscale (later still on 2026-09-24): the bytes <c>generate_image</c> saves and
+/// uploads when the model names the paste by its <c>[Image #N]</c> label, and a dropped file's own name — null for a
+/// clipboard picture, which has none: the saver stamps it (<c>ComfyStudio.PastedStem</c>).
+/// </summary>
+public sealed record PastedPicture(byte[] Bytes, string? FileName);
+
+/// <summary>
 /// Why <see cref="ImageFile.TryLoad"/> gave no attachment. <see cref="ImageFile.Notice"/> turns one into
 /// the sentence the input line shows; <see cref="WorkingDirectory.ReadImage"/> maps one to a <see cref="FileOutcome"/>.
 /// </summary>
@@ -367,6 +374,16 @@ public static class ImageFile
 
     /// <summary>What a picture pasted off the clipboard is called: the nth image on the line, and always a PNG in truth (a PNG block stays one, a DIB re-encodes as one). Pinned.</summary>
     public static string ClipboardName(int number) => $"clipboard-{number}.png";
+
+    /// <summary>
+    /// The extension an image file's bytes call for (later still on 2026-09-24, a pasted picture saved for
+    /// <c>generate_image</c>): <c>.bmp</c> for the <c>BM</c> header the clipboard's DIB becomes, <c>.jpg</c> for a JPEG's
+    /// <c>FF D8 FF</c>, <c>.png</c> for the rest (the clipboard's own PNG block among them). Pinned.
+    /// </summary>
+    public static string ExtensionOf(ReadOnlySpan<byte> bytes) =>
+        bytes.StartsWith("BM"u8) ? ".bmp"
+        : bytes.StartsWith((ReadOnlySpan<byte>)[0xFF, 0xD8, 0xFF]) ? ".jpg"
+        : ".png";
 
     /// <summary>What a re-encoded image is sent as: JPEG for a JPEG or WebP source (a photo), PNG for the rest (a drawing, a screenshot). Pinned.</summary>
     public static string SentAs(string sourceMediaType)

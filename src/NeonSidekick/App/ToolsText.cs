@@ -43,8 +43,11 @@ public static class ToolsText
     /// <summary>The SQL tools' tab and group (2026-09-23), after Obsidian, before Options.</summary>
     public const string SqlTabTitle = "SQL";
 
+    /// <summary>The image tools' tab and group (2026-09-24), after SQL, before Options; "Images" until later that day (the user's call: it is ComfyUI's tab).</summary>
+    public const string ComfyTabTitle = "ComfyUI";
+
     /// <summary>The nine tabs in strip order: Offered, Web, Files, Shell, Ask, Git (native), Obsidian, SQL (2026-09-23), Options — Options last since later on 2026-09-22 (the user's ask; second, after Offered, before), Obsidian added that day; the user's order of the rest since later on 2026-09-21 (alphabetical before: Ask, Files, Git, Shell, Web); the last eight index <see cref="SettingsMenu.ToolsTabFields"/> one down.</summary>
-    public static readonly IReadOnlyList<string> TabTitles = [OfferedTabTitle, WebTabTitle, FilesTabTitle, ShellTabTitle, AskTabTitle, GitTabTitle, ObsidianTabTitle, SqlTabTitle, OptionsTabTitle];
+    public static readonly IReadOnlyList<string> TabTitles = [OfferedTabTitle, WebTabTitle, FilesTabTitle, ShellTabTitle, AskTabTitle, GitTabTitle, ObsidianTabTitle, SqlTabTitle, ComfyTabTitle, OptionsTabTitle];
 
     /// <summary>The Offered tab's hint row. Pinned.</summary>
     public const string OfferedKeys = "Enter / Space = on or off · ←/→ tabs · ESC = close";
@@ -60,6 +63,9 @@ public static class ToolsText
 
     /// <summary>After the SQL heading while the group is not offered: the switch is off or <c>sql.json</c> holds no connection (2026-09-23). Pinned.</summary>
     public const string SqlOffSuffix = "(off: SQL tools is off or no connection is set in sql.json)";
+
+    /// <summary>After the ComfyUI heading while the group is not offered: the switch is off, no ComfyUI URL is set or no workflow is in a comfy folder (2026-09-24). Pinned.</summary>
+    public const string ComfyOffSuffix = "(off: ComfyUI tools is off, no ComfyUI URL is set or no workflow is in a comfy folder)";
 
     /// <summary>The name column of a tool row: <see cref="SystemPromptSummary.ToolNameWidth"/>, the plain lines' column.</summary>
     public const int NameWidth = SystemPromptSummary.ToolNameWidth;
@@ -133,6 +139,12 @@ public static class ToolsText
         {
             // Two things keep the vault group off (2026-09-22): the switch, or no vault set — the switch alone would mislead.
             return ObsidianOffSuffix;
+        }
+
+        if (group.Switch == SettingsField.ComfyTools)
+        {
+            // The SQL shape (2026-09-24): the switch, the server or the workflows.
+            return ComfyOffSuffix;
         }
 
         if (group.Switch == SettingsField.SqlTools)

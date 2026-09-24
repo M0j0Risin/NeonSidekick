@@ -7,15 +7,6 @@ using NeonSidekick.Settings;
 namespace NeonSidekick.Llm.Tools;
 
 /// <summary>
-/// What <see cref="ViewImageTool"/> returns when at least one picture loaded: the text that goes
-/// back as the tool result (one line per path, <see cref="FileText.Image"/>'s sentence or its
-/// <c>Error:</c>) and the pictures <see cref="Assistant"/> puts in the carrier message after it
-/// (<see cref="ConversationHistory.AddToolImages"/>). Two parts because an OpenAI-format tool
-/// message is text only: the pictures cannot ride the result.
-/// </summary>
-public sealed record ToolImageResult(string Text, IReadOnlyList<ImageAttachment> Images);
-
-/// <summary>
 /// <c>view_image(path | paths)</c>: one picture under the working directory, or several in one
 /// call, for the model to look at. The result is one line per path the transcript shows verbatim
 /// — <c>ladybug.png (1024×768 image/png, 213.4 KB): the picture is in the next message</c> — and

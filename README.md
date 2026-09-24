@@ -52,7 +52,7 @@ Neon Sidekick brings privacy-first, local LLM inference to your terminal. Powere
 
 **Navigation**
 * **Keyboard:** ←/→ (switch tabs), ↑/↓ (move), Enter (edit/toggle), ESC (close).
-* **Mouse:** Single-click moves the cursor; double-click selects rows/tabs. The top-right × acts as ESC. Double-clicking anywhere outside an open pane closes it.
+* **Mouse:** Single-click moves the cursor; double-click selects rows/tabs. The top-right × acts as ESC. Double-clicking anywhere outside an open pane closes it. Double-clicking a picture in the transcript — a sent one, one a tool fetched or generated, `/view`, `/imagine`, the splash — opens it in your image editor (*Image editor*; Paint by default). A pasted picture or the built-in splash has no file of its own, so it is written to `%TEMP%\NeonSidekick\pictures` first.
 
 **Double-Click Shortcuts**
 * **Toolbar:** Glyph toggles its pane (or switches to another) | Working directory opens `/cwd browse` | Blank space opens `/settings`.
@@ -85,11 +85,12 @@ Neon Sidekick brings privacy-first, local LLM inference to your terminal. Powere
 | Transcript markdown | Renders replies as styled Markdown (bold, lists, code fences, tables) instead of plain streamed text. A fence named for C#, JavaScript/TypeScript, Python, Bash, PowerShell, JSON, YAML, TOML/INI, SQL, C/C++, Java, Kotlin, Go, Rust, CSS, XML/HTML or diff is syntax-highlighted; any other fence stays plain. | on |
 | Paste preview lines | How many lines of a long paste the transcript shows in dim under its `[Pasted text #n]` placeholder (0–200; 0 = the placeholder alone). | 25 |
 | Hide /exit autocomplete | Leaves `/exit` out of the `/` completion list so a pick never closes the app by mistake; typed in full it still exits. | on |
-| Command typo intercept | A line that is exactly a command's name without its slash (`clear`) asks *Did you mean /clear?* before sending it as text. | on |
-| Welcome splash | Shows one of the splash pictures under the banner at startup until the first line is sent (`←`/`→` walk the set; a profile's own `splash\` folder replaces the built-in pictures — the folder is made for you, so a picture can be dropped straight in). | on |
+| Command typo intercept | A line that is exactly a command's name without its slash (`clear`) asks *Did you mean /clear?* before sending it as text; so does a command typed with extra slashes (`//tools`, `///settings`), its arguments kept (`//profile work` → *Did you mean /profile work?*). A bare `//` is still `/settings`. | on |
+| Welcome splash | Shows one of the splash pictures under the banner at startup until the first line is sent (`←`/`→` walk the set; a profile's own `splash\` folder replaces the built-in pictures — the folder is made for you, so a picture can be dropped straight in; `Delete` twice in a row on an empty line moves the picture on screen into that folder's `.trash` subfolder, which is never shown — move it back to restore it; the built-in pictures are unaffected). | on |
 | Working directory in header | Prints the working directory at the right edge of the banner's title line. | off |
 | Show toolbar | Draws a toolbar under the hint row: at its left the glyphs a double-click opens — ⚙️ `/settings`, 🛠️ `/tools`, 🔌 `/mcp`, 🎓 `/skills`, 🎭 `/sys`, 💬 `/sessions`, 💾 `/memory` while *Memory* is on, then a lock that follows *Shell command policy* (🔒 under `ask`, 🔓 under `yolo`, none under `off`) `/cmdlist`, and 👮 while *Shell police outside paths* is on and the policy is not `off` `/police` — at its right the working directory, a double-click on which is `/cwd browse`, and between them blanks a double-click on which is `/settings`. | on |
 | Draft editor | The command `/draft` opens its temporary file with (`code --wait`, `notepad`…); empty uses whatever Windows opens `.txt` files with. | (default .txt editor) |
+| Image editor | The command a double-clicked picture in the transcript opens in, the file's path appended (`mspaint`, `"C:\Program Files\GIMP 3\bin\gimp-3.exe"`…); empty uses the editor Windows registers for the picture's type (Paint for png, jpg and bmp), or its viewer when there is none. | (default image editor) |
 | Theme | The colour theme: `synthwave` (the default), `netrunner` (green phosphor), `nostromo` (amber phosphor), `noir` (greyscale), `cyberpunk` (colorful) or `vaporwave` (pastel). | `synthwave` |
 
 #### Sessions
@@ -193,7 +194,7 @@ One row, **Project file**: whether `NEON.md` (or `AGENTS.md`) in the working dir
 
 #### Offered
 
-Every tool the app has, grouped (Clock, Timers, Files, Git, Shell, Obsidian, SQL, Web, Memory, Skills, Sessions, Questions) with the description the model reads. Enter or Space flips a single tool on or off; a group whose switch is off is shown dim. `git_delete` — the git tool that loses branches, tags and stashes — and `zip` / `unzip` — the bulk pack and extract — start off; `git_discard` is on out of the box (a profile saved earlier keeps its own list).
+Every tool the app has, grouped (Clock, Timers, Files, Git, Shell, Obsidian, SQL, ComfyUI, Web, Memory, Skills, Sessions, Questions) with the description the model reads. Enter or Space flips a single tool on or off; a group whose switch is off is shown dim. `git_delete` — the git tool that loses branches, tags and stashes — and `zip` / `unzip` — the bulk pack and extract — start off; `git_discard` is on out of the box (a profile saved earlier keeps its own list).
 
 #### Web
 
@@ -275,6 +276,20 @@ Every tool the app has, grouped (Clock, Timers, Files, Git, Shell, Obsidian, SQL
 | SQL query timeout (s) | How long one SQL tool's batch may run on the server before it is stopped (1–600). | 30 |
 | SQL connections (profile) | Enter opens the profile's `sql.json` in the editor (made first with a commented example of each kind: a SQL login, Windows sign-in as you, and runas with its password in Credential Manager or in the file); the value counts its connections. | (none) |
 | SQL connections (global) | The same for the home's `sql.json`, which every profile reads; the profile's wins a name. | (none) |
+
+#### ComfyUI
+
+| Setting | What it does | Default |
+|---|---|---|
+| ComfyUI tools | Offers the image tools (`generate_image`, `set_splash_image`) over your ComfyUI server. On, but nothing is offered until *ComfyUI URL* is set and a workflow is in a `comfy` folder. | on |
+| ComfyUI URL | The ComfyUI server, often another machine on your LAN (`http://gpu-box:8188`). Your own server like the LLM's, so the web tools' network mode never blocks it. `NEONSIDEKICK_COMFY_URL` outranks it. | (not set) |
+| ComfyUI workflows offered | Which installed workflows the model is offered: a checklist of every workflow in the two `comfy` folders. Until you first use it every workflow is offered, new ones too; once narrowed, only the ticked ones are, and a workflow added later stays hidden until you tick it. Narrow it to one and every plain request, and a plain `/imagine`, goes there. `/imagine <name>` can still use a hidden one. | all (not narrowed) |
+| ComfyUI add workflow | Enter walks a new workflow through every choice, one page each. **Build** makes a standard one from what your server has: text → image or image → image, the checkpoint (from the server's list), the family, the folder (this profile's or every profile's), the name, the CLIP skip, the sampler and scheduler (from the server's lists), the default size, steps, CFG, denoise and negative, and a description. **Import** takes a workflow you exported from ComfyUI (*Workflow → Export (API)*): the wizard finds the prompt, negative, seed, steps, CFG, size and input-image nodes, puts the placeholders in, and keeps the export's values as the defaults. It reads both kinds of sampler graph: a plain `KSampler`, and the custom-sampler graph FLUX.2 uses (`SamplerCustomAdvanced` with its `RandomNoise`, scheduler and guider — the `FluxGuidance` is what CFG sets there). A value fed by a primitive node gets its placeholder there; one set by another node (a switch, a resolution picker) is left as the author built it, and the wizard says so. FLUX.2, Krea 2, Z-Image, Qwen Image, Ernie Image, Boogu, LongCat Image, HiDream I1 and Ideogram 4 load as separate model files, which **Build** cannot wire: export ComfyUI's own template for them and **Import** it. (Copybara has no family yet.) The summary can **test** the draft (one small run, 512 px and 8 steps at most, nothing saved here) and saves it as `<name>.json` + `<name>.md`; on a profile that narrowed *ComfyUI workflows offered* it can offer the new one too. ESC steps back a page. | — |
+| ComfyUI timeout (s) | How long one generation may take, queue wait included, before the tool stops waiting (10–3600); the job may still finish in ComfyUI. | 300 |
+| ComfyUI max pictures per call | The most pictures one `generate_image` call or `/imagine --count` makes (1–16). Each is a full job the server runs in turn while the reply waits, and every one the model makes goes to it in the next request, where a local vision server has its own limit, hence a cap. | 4 |
+| ComfyUI reinforce negatives | When the model writes a prompt itself, it also names a handful of opposite tags where the image model tends to drift (a solo figure → `multiple girls`, night → `daylight`, a photo → `illustration, anime`), appended to the workflow's own negative — which stays. Never for a prompt you gave it to send as is, a negative set for the call, `/imagine`, a family that runs without a negative (Flux, FLUX.2, Klein, Krea 2, Z-Image, Ernie Turbo, Boogu, Ideogram 4), or a workflow whose `.md` says `reinforce: false`. The result's `negative:` line shows what was sent. | on |
+| ComfyUI show prompts | Show what was sent to ComfyUI under each picture's line — the `prompt:` (the one the model wrote, or yours) and the `negative:` (the workflow's or the family's, plus any reinforcing tags) — in full, for the model's pictures and `/imagine` alike. Off, the picture's line alone; the model sees the same result either way. | on |
+| ComfyUI output folder | The folder under the working directory the pictures are saved in (`comfy_images\pony-txt2img-1234.png`, a number added when the name is taken); empty = the working directory itself. A profile saved with the earlier default, `images`, keeps it. | `comfy_images` |
 
 #### Options
 
@@ -376,7 +391,9 @@ Type `/` and the list opens with every command and its summary; after the comman
 | `/tts [on\|off]` | Toggle speech output. |
 | `/usage` | Show token usage and performance statistics. |
 | `/vault [path]` | Print a tree of the *Obsidian vault*'s folders and notes (or of a folder under it, which the argument list completes as you type), as `/tree` prints the working directory: the dot-folders (`.obsidian`, `.trash`, `.git`) left out, capped by *File /tree max length*, sizes under *File /tree show sizes*. An error while *Obsidian tools* is off, no vault is set, or the folder cannot be reached or has no `.obsidian`. |
-| `/view <image>` | Show an image from the working directory in the transcript. |
+| `/view <image>` | Show an image from the working directory in the transcript; double-click it to open it in your image editor. |
+| `/imagine [workflow] <prompt> [-- <negative> \| --no-negative] [--seed N] [--size WxH] [--steps N] [--cfg X] [--denoise X] [--image <path>] [--count N]` | Generate a picture on ComfyUI from your own prompt, sent exactly as typed (`score_9, score_8_up, …` stays as it is), no model in between. The picture is drawn in the transcript, saved in *ComfyUI output folder*, and handed to the model with your next message. `--count` is capped by *ComfyUI max pictures per call*. The first word names the workflow when it is one's name; the argument list offers the workflow names as you type it. `--no-negative` sends no negative at all, not even the workflow's default. Without a name, a workflow the model is offered is used. |
+| `/comfy` | Show the ComfyUI server's status, the workflows found (family, input, size, placeholders), the files skipped and why, and where workflows go. `/comfy edit json <workflow>` opens a workflow's graph in your editor (read again at your next message); `/comfy edit markdown <workflow>` (or `md`) opens its `.md` settings and tips, making one with the family filled in when it has none. Both complete the kind and the workflow names. |
 | `/vocalia [reset \| copy <profile> [force]]` | Edit `vocalia.md` (the spoken-reply directive) in your editor, go back to the default, or copy it into another profile (`force` replaces the one it has). |
 | `/wake [on\|off]` | Toggle the speech-input wake word. |
 | `/window` | Show the terminal window's width and height. |
@@ -386,7 +403,7 @@ Type `/` and the list opens with every command and its summary; after the comman
 ## Tools
 [↑ Back to top](#neon-sidekick)
 
-What the model can call, in the groups `/tools` and `/sys` show. A group's switch (`File tools`, `Git native tools`, `Shell command policy`, `Obsidian tools`, `SQL tools`, `Web tools`, `Memory`, `Agent skills`, `Session tool`, `Ask user`, `MCP servers`) offers or withholds the whole group; a single tool can be switched on or off on `/tools`' Offered tab.
+What the model can call, in the groups `/tools` and `/sys` show. A group's switch (`File tools`, `Git native tools`, `Shell command policy`, `Obsidian tools`, `SQL tools`, `ComfyUI tools`, `Web tools`, `Memory`, `Agent skills`, `Session tool`, `Ask user`, `MCP servers`) offers or withholds the whole group; a single tool can be switched on or off on `/tools`' Offered tab.
 
 <details>
 <summary><b>🕒 Clock & Timers</b></summary>
@@ -580,6 +597,60 @@ The `sql_query` tool strictly guarantees safe, single-statement data retrieval:
 | `sql_relationships` | `connection?, database?, table?` | The foreign-key join paths `from_table.from_column -> to_table.to_column`, every one or those touching a table. |
 | `sql_indexes` | `connection?, database?, table?, schema?, missing?` | The indexes of a table, a schema or the whole database: kind (clustered, PK, unique, unique constraint, disabled), key and included columns, filter and size; then each one's seeks, scans, lookups and updates since the server started, a nonclustered index nothing has read marked *(no reads since restart)*. `missing: true` adds the optimizer's missing-index suggestions. The usage and suggestions come from DMVs, which need `VIEW SERVER STATE`; without it the indexes still list and a line says why the rest is missing. |
 | `sql_query` | `sql, connection?, database?, params?, max_rows?` | One read-only `SELECT`; `params` is an object (`{"id": 43659}` for `@id`), `max_rows` 1–1000 (*SQL max rows* by default). |
+
+</details>
+
+<details>
+<summary><b>🎨 Images (ComfyUI)</b></summary>
+
+### Images (ComfyUI)
+
+The image tools run **your own ComfyUI workflows** on your ComfyUI server (*ComfyUI URL*), save the pictures under the working directory and show them to the model in the next message, so it can describe or refine what it made.
+
+#### 1. Adding a workflow
+
+The quickest way is **ComfyUI add workflow** on the ComfyUI tab of `/tools`: it builds a standard workflow from your server's checkpoints, or imports one you exported and puts the placeholders in for you. To do it by hand:
+
+1. Build the workflow in ComfyUI and export it in the **API format**: *Workflow → Export (API)* (or enable dev mode and use *Save (API)*). The regular save, with `nodes` and `links`, is refused with a note saying so.
+2. Put placeholders where the call's values go, then drop the file into `<profile>\comfy\` (this profile) or `<home>\comfy\` (every profile; the profile's wins a name). The file name is the workflow's name. Workflows are re-read at every call.
+
+| Placeholder | Becomes |
+|---|---|
+| `{{prompt}}` | The positive prompt (required: a workflow without it is skipped). |
+| `{{negative}}` | The negative prompt. |
+| `{{seed}}`, `{{width}}`, `{{height}}`, `{{steps}}`, `{{cfg}}`, `{{denoise}}` | Numbers, when the placeholder is the whole value (`"seed": "{{seed}}"`); inside a longer string (`"neon-{{seed}}"`) they are text. |
+| `{{image}}` | The uploaded input picture's name, for a `LoadImage` node: a workflow with it takes an image (img2img, upscale, inpaint). |
+| `{{!name}}` | A literal `{{name}}` sent as written — for a workflow whose own nodes use double braces (Ideogram 4's `StringReplace` searches for `{{width}}`). **Import** escapes such text for you. |
+
+3. Optionally, a sidecar `<name>.md` beside it sets the defaults and tips:
+
+```markdown
+---
+description: Anime portraits on Pony Diffusion XL
+family: pony          # pony, illustrious, juggernaut, sdxl, flux, flux2, flux2klein, krea2, zimage, qwenimage, sd35, ernie, boogu, longcat, hidream, ideogram4, sd15 or other (guessed from the file name otherwise)
+width: 832
+height: 1216
+steps: 25
+cfg: 7
+negative: score_6, score_5, score_4, blurry
+reinforce: false      # optional: send this negative as written, nothing appended (ComfyUI reinforce negatives)
+---
+Prefer source_anime; keep rating_safe unless asked.
+```
+
+#### 2. Prompts: written by the model, or sent as you typed them
+
+- **Describe what you want** ("a cozy neon ramen stall at night") and the model writes the prompt in the dialect of the workflow's family — for Pony Diffusion XL the `score_9, score_8_up, score_7_up` prefix, a `source_*` tag (no `rating_*` unless you ask for one), then well-known Danbooru tags, weighted like `(tag:1.3)` where it helps, with a short phrase only where no tag is specific enough; for Illustrious XL and NoobAI `masterpiece, best quality, amazing quality, very aesthetic, absurdres` then Danbooru tags; for Juggernaut XL a photographic description (subject, setting, light, lens); plain sentences for Flux; long structured prose with hex colours for FLUX.2 dev, a few clear sentences for FLUX.2 Klein; one rich paragraph for Krea 2; concise prose for Z-Image Turbo; long prose with the exact words in quotes for Qwen Image (it renders text well); sentences plus style phrases for SD3.5; rich prose with the words in quotes for Ernie Image and LongCat Image; descriptive sentences for Boogu; long detailed prose for HiDream I1; a JSON prompt (description, style, colour palette, laid-out elements) for Ideogram 4; tags and weights for SD 1.5 and SDXL. The family's default negative is added unless the sidecar names one.
+- **Give your own prompt** ("use this prompt: score_9, …") and the model passes it through unchanged with `verbatim: true`: nothing is added, not even the family's default negative.
+- **Skip the model**: `/imagine score_9, score_8_up, source_anime, 1girl -- score_4, blurry --seed 42` sends it straight to ComfyUI. `--no-negative` in place of `-- …` sends no negative at all.
+- **Choose what the model may use** with *ComfyUI workflows offered* on the ComfyUI tab of `/tools`. With one ticked, the model has no choice to make.
+
+#### 3. The tools
+
+| Tool | Arguments | What it does |
+|---|---|---|
+| `generate_image` | `prompt, workflow?, negative?, negative_extra?, verbatim?, width?, height?, seed?, steps?, cfg?, denoise?, image?, count?` | Runs a workflow (the only one that fits when none is named) and saves 1 to *ComfyUI max pictures per call* pictures (4 by default), each with the next seed; the result names the files and the seed, and the pictures follow in the next message. ComfyUI's refusal names the node and input at fault (a missing checkpoint, a bad value). `image` is a path under the working directory, or a pasted picture's `[Image #N]` label: the paste is sent at its original size (not the 2048 copy the model saw), saved into the output folder's `.pasted\` subfolder the first time it is used (`comfy_images\.pasted\pasted-20260924-153012.png`; a dropped file keeps its own name), and the result names the saved file. |
+| `set_splash_image` | `path, name?` | Copies a picture from the working directory into the profile's `splash` folder, so it shows at start and on `/splash`. The first picture there stands in for the bundled set until more are added, and the result says so. |
 
 </details>
 

@@ -196,4 +196,60 @@ public class PasteBlocksTests
         Assert.Empty(blocks.ImagesIn(""));
         Assert.Throws<ArgumentNullException>(() => blocks.ImagesIn(null!));
     }
+
+    [Fact]
+    public void Original_IsTheClipboardsOwnBytes_NotTheDownscale_NamedByWhatTheyAre()
+    {
+        // generate_image's input (later still on 2026-09-24): the paste before the 2048 downscale the model was shown.
+        byte[] wide = App.SmokeChecks.SolidBmp(3000, 10);
+        Assert.True(ImageFile.TryLoad(wide, ImageFile.ClipboardName(1), out var shown, out _));
+        Assert.True(shown!.Width <= ImageFile.MaxSide);   // what the model saw was scaled down
+        var blocks = new PasteBlocks();
+        blocks.Add(Lines(5));   // a text block between: image numbers count images alone
+        blocks.AddImage(shown, original: wide);
+        blocks.AddImage(Image("plain.png"));   // kept without a source (a test's, a replayed one)
+
+        var original = blocks.Original(1);
+
+        Assert.NotNull(original);
+        Assert.Same(wide, original.Bytes);
+        Assert.Null(original.FileName);   // a clipboard picture has no name: the saver stamps one
+        Assert.Null(blocks.Original(2));   // no source kept
+        Assert.Null(blocks.Original(3));   // no such picture
+        Assert.Null(blocks.Original(0));
+    }
+
+    [Fact]
+    public void Original_OfADroppedFile_ReadsItAgain_AndIsNullOnceItIsGone()
+    {
+        string dir = Path.Combine(Path.GetTempPath(), "NeonSidekick.Tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            string path = Path.Combine(dir, "photo.bmp");
+            byte[] bytes = App.SmokeChecks.SolidBmp(4, 2);
+            File.WriteAllBytes(path, bytes);
+            var blocks = new PasteBlocks();
+            blocks.AddImage(Image("photo.bmp"), sourcePath: path);
+
+            var original = blocks.Original(1);
+            File.Delete(path);
+
+            Assert.Equal(bytes, original!.Bytes);
+            Assert.Equal("photo.bmp", original.FileName);
+            Assert.Null(blocks.Original(1));
+        }
+        finally
+        {
+            try { Directory.Delete(dir, recursive: true); } catch { /* best effort */ }
+        }
+    }
+
+    [Theory]
+    [InlineData(new byte[] { 0x42, 0x4D, 0, 0 }, ".bmp")]
+    [InlineData(new byte[] { 0xFF, 0xD8, 0xFF, 0xE0 }, ".jpg")]
+    [InlineData(new byte[] { 0x89, 0x50, 0x4E, 0x47 }, ".png")]
+    [InlineData(new byte[] { }, ".png")]
+    public void ExtensionOf_ReadsTheHeader(byte[] bytes, string expected) =>
+        Assert.Equal(expected, ImageFile.ExtensionOf(bytes));
 }

@@ -91,6 +91,127 @@ public static class ToolArguments
     }
 
     /// <summary>
+    /// A whole-number argument too wide for <see cref="TryReadInt32"/> (a ComfyUI seed, 2026-09-24): the same shapes
+    /// and the same rules — null when missing, JSON null or blank; false for anything else, <paramref name="raw"/>
+    /// holding what was sent.
+    /// </summary>
+    public static bool TryReadInt64(AIFunctionArguments arguments, string name, out long? value, out string raw)
+    {
+        ArgumentNullException.ThrowIfNull(arguments);
+        value = null;
+        raw = "";
+        if (!arguments.TryGetValue(name, out var sent) || sent is null)
+        {
+            return true;
+        }
+
+        switch (sent)
+        {
+            case JsonElement { ValueKind: JsonValueKind.Null }:
+                return true;
+            case JsonElement { ValueKind: JsonValueKind.Number } element:
+                raw = element.GetRawText();
+                if (element.TryGetInt64(out long number))
+                {
+                    value = number;
+                    return true;
+                }
+
+                return false;
+            case JsonElement { ValueKind: JsonValueKind.String } element:
+                raw = element.GetString() ?? "";
+                break;
+            case JsonElement element:
+                raw = element.GetRawText();
+                return false;
+            case int i:
+                value = i;
+                return true;
+            case long l:
+                value = l;
+                return true;
+            default:
+                raw = sent.ToString() ?? "";
+                break;
+        }
+
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return true;
+        }
+
+        if (long.TryParse(raw.Trim(), NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out long parsed))
+        {
+            value = parsed;
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// A number argument that may have a fraction (ComfyUI's <c>cfg</c> and <c>denoise</c>, 2026-09-24): null when
+    /// missing, JSON null or blank; the value for a JSON number, a numeric string (invariant culture) or a CLR number;
+    /// false for anything else or a value that is not finite, <paramref name="raw"/> holding what was sent.
+    /// </summary>
+    public static bool TryReadDouble(AIFunctionArguments arguments, string name, out double? value, out string raw)
+    {
+        ArgumentNullException.ThrowIfNull(arguments);
+        value = null;
+        raw = "";
+        if (!arguments.TryGetValue(name, out var sent) || sent is null)
+        {
+            return true;
+        }
+
+        switch (sent)
+        {
+            case JsonElement { ValueKind: JsonValueKind.Null }:
+                return true;
+            case JsonElement { ValueKind: JsonValueKind.Number } element:
+                raw = element.GetRawText();
+                if (element.TryGetDouble(out double number) && double.IsFinite(number))
+                {
+                    value = number;
+                    return true;
+                }
+
+                return false;
+            case JsonElement { ValueKind: JsonValueKind.String } element:
+                raw = element.GetString() ?? "";
+                break;
+            case JsonElement element:
+                raw = element.GetRawText();
+                return false;
+            case double d when double.IsFinite(d):
+                value = d;
+                return true;
+            case int i:
+                value = i;
+                return true;
+            case long l:
+                value = l;
+                return true;
+            default:
+                raw = Convert.ToString(sent, CultureInfo.InvariantCulture) ?? "";
+                break;
+        }
+
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return true;
+        }
+
+        if (double.TryParse(raw.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out double parsed) && double.IsFinite(parsed))
+        {
+            value = parsed;
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
     /// A yes/no argument: null when missing, JSON null or blank; the value for a JSON boolean, a
     /// CLR bool or the words <c>true</c> / <c>false</c> in any case; false for anything else, with
     /// <paramref name="raw"/> holding what was sent.

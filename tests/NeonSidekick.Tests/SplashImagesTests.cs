@@ -48,6 +48,42 @@ public class SplashImagesTests
             Assert.Equal("splash", SplashImages.ProfileFolderName);
             Assert.Equal("Splash: 1 picture from " + dir, SplashImages.FolderLogLine(1, dir));
             Assert.Equal("Splash: 3 pictures from " + dir, SplashImages.FolderLogLine(3, dir));
+            Assert.Equal(dir, source.Directory);   // the folder the names are files in: what Delete Delete removes from (2026-09-24)
+            Assert.Null(SplashImages.Source.Directory);   // the embedded set has none: never deleted
+            Assert.Equal("Splash: moved a.png to b.png", SplashImages.DeletedLogLine("a.png", "b.png"));
+            Assert.Equal("Splash: could not move " + dir + " to .trash: IOException: busy", SplashImages.DeleteFailedLogLine(dir, new IOException("busy")));
+        }
+        finally
+        {
+            try { Directory.Delete(dir, recursive: true); } catch { /* best effort */ }
+        }
+    }
+
+    [Fact]
+    public void SetAside_MovesThePictureIntoDotTrash_NumberingAClash_AndTheFolderNeverOffersIt()
+    {
+        // Delete Delete's move (2026-09-24, the user's call over a delete): into splash\.trash, an earlier one kept.
+        string dir = Path.Combine(Path.GetTempPath(), "NeonSidekick.Tests", Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(dir);
+            File.WriteAllBytes(Path.Combine(dir, "a.bmp"), App.SmokeChecks.SolidBmp(4, 2));
+            string bin = Path.Combine(dir, SplashImages.TrashFolderName);
+
+            string first = SplashImages.SetAside(dir, "a.bmp");
+            File.WriteAllBytes(Path.Combine(dir, "a.bmp"), App.SmokeChecks.SolidBmp(6, 3));
+            string second = SplashImages.SetAside(dir, "a.bmp");
+            File.WriteAllBytes(Path.Combine(dir, "a.bmp"), App.SmokeChecks.SolidBmp(8, 4));
+            string third = SplashImages.SetAside(dir, "a.bmp");
+
+            Assert.Equal(".trash", SplashImages.TrashFolderName);
+            Assert.Equal(Path.Combine(bin, "a.bmp"), first);
+            Assert.Equal(Path.Combine(bin, "a (2).bmp"), second);
+            Assert.Equal(Path.Combine(bin, "a (3).bmp"), third);
+            Assert.All([first, second, third], p => Assert.True(File.Exists(p)));
+            Assert.False(File.Exists(Path.Combine(dir, "a.bmp")));
+            Assert.Null(SplashImages.FromDirectory(dir));   // only .trash holds pictures: the folder offers none
+            Assert.Throws<FileNotFoundException>(() => SplashImages.SetAside(dir, "gone.bmp"));
         }
         finally
         {

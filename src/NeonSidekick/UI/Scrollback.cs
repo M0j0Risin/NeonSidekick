@@ -60,6 +60,9 @@ public sealed class Scrollback
 
         /// <summary>The member's place in its group; −1 for the summary.</summary>
         public int Member = -1;
+
+        /// <summary>The pictures drawn on this line and their columns (later on 2026-09-24): what a double-click there opens. Null for any other line.</summary>
+        public IReadOnlyList<PictureSpan>? Pictures;
     }
 
     /// <summary>A tool run or a code block: its summary line, its members in order, how many stay while it runs, and its own expanded state (null = the store's <see cref="ExpandAll"/>).</summary>
@@ -137,9 +140,17 @@ public sealed class Scrollback
     /// with nothing kept). Any other append ends the open run first — text, a notice, the reply's
     /// block: the run is over the moment something else is said.
     /// </summary>
-    public int Append(IReadOnlyList<Segment> segments, int width, bool member)
+    public int Append(IReadOnlyList<Segment> segments, int width, bool member) => Append(segments, width, member, null);
+
+    /// <summary>
+    /// <see cref="Append(IReadOnlyList{Segment}, int, bool)"/>, the lines it opens tagged in order with
+    /// <paramref name="pictures"/> — the spans of a picture's rows (later on 2026-09-24), one list per line.
+    /// </summary>
+    public int Append(IReadOnlyList<Segment> segments, int width, bool member, IReadOnlyList<IReadOnlyList<PictureSpan>>? pictures)
     {
         ArgumentNullException.ThrowIfNull(segments);
+        _picturing = pictures;
+        _pictured = 0;
         Layout(width);
         if (member)
         {
@@ -158,6 +169,12 @@ public sealed class Scrollback
             current = _lines[^1];
             _rows.RemoveRange(_rows.Count - current.Rows, current.Rows);
             touched.Add(current);
+            if (pictures is { Count: > 0 } && segments.Any(s => !s.IsControlCode))
+            {
+                // A picture's first row joins the open line (later on 2026-09-24): the first spans are that line's.
+                var spans = pictures[_pictured++];
+                current.Pictures = spans.Count > 0 ? spans : null;
+            }
         }
 
         _tagging = member ? _open : null;
@@ -207,6 +224,7 @@ public sealed class Scrollback
         }
 
         _tagging = null;
+        _picturing = null;
         if (member && _open!.Folds)
         {
             // The fold moved (a member hid, the summary showed or grew): the run laid out again —
@@ -375,6 +393,40 @@ public sealed class Scrollback
         return null;
     }
 
+    /// <summary>
+    /// The picture at store row <paramref name="row"/>, column <paramref name="col"/> (later on 2026-09-24): the id of
+    /// the span covering it on a picture's line, or null. Only while the line takes one row — narrowed past a strip, the
+    /// line wraps and its tiles are no longer where they were drawn.
+    /// </summary>
+    public int? PictureAt(int row, int col)
+    {
+        int at = 0;
+        foreach (var line in _lines)
+        {
+            if (row < at + line.Rows)
+            {
+                if (line.Rows != 1 || line.Pictures is not { } spans)
+                {
+                    return null;
+                }
+
+                foreach (var span in spans)
+                {
+                    if (col >= span.Col && col < span.Col + span.Width)
+                    {
+                        return span.Id;
+                    }
+                }
+
+                return null;
+            }
+
+            at += line.Rows;
+        }
+
+        return null;
+    }
+
     /// <summary>Unfolds a folded run, folds an unfolded one (its own state from now on); false for no such run, or a code block that does not fold (its label is only a label).</summary>
     public bool Toggle(int id)
     {
@@ -437,9 +489,19 @@ public sealed class Scrollback
     // The run the lines an append opens belong to (members), null for a plain append.
     private Group? _tagging;
 
+    // The picture spans for the lines an append opens, in order, and how many were given out (later on 2026-09-24).
+    private IReadOnlyList<IReadOnlyList<PictureSpan>>? _picturing;
+    private int _pictured;
+
     private Line Open(List<Line> touched)
     {
         var line = new Line();
+        if (_picturing is { } pictures && _pictured < pictures.Count)
+        {
+            var spans = pictures[_pictured++];
+            line.Pictures = spans.Count > 0 ? spans : null;
+        }
+
         if (_tagging is { } group)
         {
             line.Group = group;

@@ -14,6 +14,7 @@ using NeonSidekick.Sessions;
 using NeonSidekick.Settings;
 using NeonSidekick.Shell;
 using NeonSidekick.Sql;
+using NeonSidekick.Comfy;
 using NeonSidekick.Skills;
 using NeonSidekick.Speech;
 using NeonSidekick.Timers;
@@ -260,6 +261,17 @@ internal sealed partial class ChatScreen
     /// Ranked after <see cref="ExitHint"/>; an open list's or the scroll's hint hides it like both.
     /// </summary>
     public const string SplashHint = "← → slideshow";
+
+    /// <summary>
+    /// The hint row after one Delete over a profile's splash picture; the next Delete in a row within
+    /// <see cref="SplashDeleteWindow"/> moves the file into the folder's <c>.trash</c> (2026-09-24). The
+    /// only hint the feature has: the idle row never advertises it (the user's call). Pinned.
+    /// </summary>
+    public static string SplashDeleteArmedHint(string name)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+        return "DEL again to trash " + name;
+    }
     /// <summary>
     /// A connect or model download cancelled by Ctrl+C under its spinner (2026-09-17); the app stays.
     /// Since 2026-09-22 (the user's pick) it wears the glyph of what was connecting —
@@ -456,11 +468,14 @@ internal sealed partial class ChatScreen
     // day), so the arrows walk it whatever Welcome splash says; the count is the source's picture
     // count at the show, what the hint row reads on every tick in place of a scan of the profile's
     // folder (CycleSplash reads the folder live, so a file dropped or removed mid-session moves the
-    // walk and not the hint until the next show). All four fall together.
+    // walk and not the hint until the next show). The folder (2026-09-24) is the source's
+    // SplashSource.Directory at the show — the profile's own splash folder, null over the embedded
+    // set — what Delete Delete removes the named file from. All five fall together (ForgetSplash).
     private bool _splashShown;
     private bool _splashForced;
     private string? _splashName;
     private int _splashCount;
+    private string? _splashFolder;
     private readonly IReadOnlyList<AIFunction> _clockTools;
     private readonly WorkingDirectory _files;
     private readonly IReadOnlyList<AIFunction> _fileTools;
@@ -472,6 +487,12 @@ internal sealed partial class ChatScreen
     private readonly IReadOnlyList<AIFunction> _vaultTools;
     private readonly SqlAccess _sql;
     private readonly IReadOnlyList<AIFunction> _sqlTools;
+    private readonly ComfyStudio _comfy;
+    private readonly IReadOnlyList<AIFunction> _comfyTools;
+
+    // What /imagine made since the last message (2026-09-24): the result lines and the pictures, handed to the model with the next one.
+    private readonly List<string> _imagineNotes = [];
+    private readonly List<ImageAttachment> _imagineImages = [];
     private readonly Interpreters _interpreters;
     private readonly ShellRunner _runner;
     private readonly ProcessRegistry _processes;
@@ -487,6 +508,13 @@ internal sealed partial class ChatScreen
     private readonly KeySource _keys;
     private readonly TranscriptRenderer _transcript;
     private readonly InputLine _input;
+    private readonly Action<string, string> _openImage;
+
+    /// <summary>A picture drawn in the transcript, for a double-click to open (later on 2026-09-24): its name, the file it came from when there is one, and its bytes for when there is none.</summary>
+    private sealed record PictureSource(string Name, string? FullPath, byte[] Bytes);
+
+    // Every picture drawn, by id (its index); read on the watcher task too, so under its own lock.
+    private readonly List<PictureSource> _pictures = [];
     private readonly InfoPane _info;
     private readonly FolderPane _folderPane;
     private readonly MenuPane _menuPane;
@@ -591,6 +619,16 @@ internal sealed partial class ChatScreen
     /// on the pane's timer thread — a long under <see cref="Volatile"/>, never a struct.
     /// </summary>
     private long _exitArmedUntil;
+
+    /// <summary>How long after a first Delete over a profile's splash picture the second one deletes it (2026-09-24, as <see cref="ExitConfirmWindow"/>).</summary>
+    public static readonly TimeSpan SplashDeleteWindow = TimeSpan.FromSeconds(2);
+
+    /// <summary>
+    /// The splash delete's arm (2026-09-24): the UTC tick until which a second Delete in a row removes
+    /// the picture on screen, 0 = none. Written on the read's task (<see cref="DeleteSplash"/>), read by
+    /// <see cref="HintText"/> on the pane's timer thread, as <see cref="_exitArmedUntil"/> is.
+    /// </summary>
+    private long _splashDeleteArmedUntil;
 
     /// <summary>
     /// A console write that draws nothing new, for the moment the console's input mode changes
@@ -716,7 +754,9 @@ internal sealed partial class ChatScreen
         Func<string, string, CancellationToken, Task>? editDraft = null,
         McpSession? mcp = null,
         Func<string, string?>? environment = null,
-        string? logFile = null)
+        string? logFile = null,
+        Func<Uri, ComfyClient>? comfyClient = null,
+        Action<string, string>? openImage = null)
     {
         _logFile = logFile;
         ArgumentNullException.ThrowIfNull(time);
@@ -735,6 +775,8 @@ internal sealed partial class ChatScreen
         _voice = voice ?? throw new ArgumentNullException(nameof(voice));
         _openFile = openFile ?? throw new ArgumentNullException(nameof(openFile));
         _editDraft = editDraft;
+        // A double-clicked picture's opener (later on 2026-09-24): the image editor in the app; without one, the plain opener (the command unused).
+        _openImage = openImage ?? ((path, _) => _openFile(path));
         _ownsMcp = mcp is null;
         _mcp = mcp ?? new McpSession(settings, McpSession.DefaultTransport, time);
         _clockTools = ClockTools(time);
@@ -756,6 +798,11 @@ internal sealed partial class ChatScreen
         // Narrowed to the connections the profile offers (later that day): every tool, the rules and the %-mention see only those.
         _sql = new SqlAccess(() => SqlConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory).Offered(_effective().SqlConnectionsOffered));
         _sqlTools = SqlTools(_sql, _effective);
+        // The image tools (2026-09-24): the profile's comfy folder over the home's, rescanned at every call; the client made for the ComfyUI URL in force.
+        // A pasted picture as generate_image's input (later still on 2026-09-24): the line's store at full size, read at
+        // call time — the input line is built below, so the lambda reads the field then, not now.
+        _comfy = new ComfyStudio(ComfyCatalog(settings), _files, _effective, comfyClient, _random, pasted: n => _input?.Pastes.Original(n), time: _time);
+        _comfyTools = ComfyTools(_comfy, _files, () => _settings.ProfileSplashDirectory);
         // The shell tools (2026-09-21): the runner is the one process-start site of the group; the allow
         // list lives for the process (a /clear or a profile switch keeps the session's allows, the permanent
         // ones are the loaded profile's); the gate asks through the approval pane (ApproveCommandAsync).
@@ -821,6 +868,7 @@ internal sealed partial class ChatScreen
         // the command and #-mention lists the catalog and the two Skills-tab switches (2026-09-17);
         // Ctrl+C over a selection writes the clipboard with /copy's writer.
         _input = new InputLine(_pane, keys, clipboard, _transcript, clipboardImage, query => _files.Complete(query), CommandChoices, ArgumentChoices, HashChoices, DollarChoices, _copy, PercentChoices);
+        _input.OpenPicture = OpenPicture;
         _mouse = mouse;
         _holdWheel = holdWheel;
         // The screen holds the mouse and the wheel from its start (RunAsync; the user's call,
@@ -844,7 +892,7 @@ internal sealed partial class ChatScreen
         _flow = new FlowSink(this);
         _queueMenu = new QueueMenu(_queue, _flow, _menuPane);
         _queuedClicks = new DoubleClick(_pane.Time);
-        _menu = new SettingsMenu(new ConsoleWithInput(_pane, keys), settings, overriddenBy, _input, _transcript, speech, _menuPane, _web.Browser.Locate, () => _interpreters.AvailableShells().Select(ShellKinds.Name).ToHashSet(StringComparer.Ordinal), () => _interpreters.AvailableLanguages([CodeLanguage.PowerShell, CodeLanguage.Python, CodeLanguage.Node]).Select(CodeLanguages.Name).ToHashSet(StringComparer.Ordinal), BrowseWorkingDirectoryAsync, BrowseVaultAsync, _openFile)
+        _menu = new SettingsMenu(new ConsoleWithInput(_pane, keys), settings, overriddenBy, _input, _transcript, speech, _menuPane, _web.Browser.Locate, () => _interpreters.AvailableShells().Select(ShellKinds.Name).ToHashSet(StringComparer.Ordinal), () => _interpreters.AvailableLanguages([CodeLanguage.PowerShell, CodeLanguage.Python, CodeLanguage.Node]).Select(CodeLanguages.Name).ToHashSet(StringComparer.Ordinal), BrowseWorkingDirectoryAsync, BrowseVaultAsync, _openFile, comfyClient: _comfy.Client)
         {
             // A picker opened mid-turn closes on the watcher task: its saved line waits for the turn task.
             Flow = _flow,
@@ -1142,7 +1190,9 @@ internal sealed partial class ChatScreen
     /// <summary>
     /// The standing hint: <see cref="ExitHint"/> while the exit is armed (the pane's tick re-reads
     /// it, so the row clears itself at the window's end — hidden behind an open list's or the
-    /// scroll's hint, which the pane ranks first), else <see cref="SplashHint"/> ahead of the rest
+    /// scroll's hint, which the pane ranks first), else <see cref="SplashDeleteArmedHint"/> while a first
+    /// Delete over a profile's splash picture is fresh (2026-09-24, cleared by the same tick), else
+    /// <see cref="SplashHint"/> ahead of the rest
     /// while the welcome splash stands with an empty draft and the arrows would walk it
     /// (<see cref="SplashArrowsOffered"/>, <see cref="ScreenPane.DraftEmpty"/> — the pane redraws
     /// the row on the key that empties or fills the draft), else the timers / usage / reading line.
@@ -1152,6 +1202,11 @@ internal sealed partial class ChatScreen
         if (ExitArmed())
         {
             return ExitHint;
+        }
+
+        if (SplashDeleteArmed() && _pane.DraftEmpty && _splashName is { } armed)
+        {
+            return SplashDeleteArmedHint(armed);
         }
 
         string rest = HintLine(TimerText.StatusLine(_timers.Snapshot()), UsageText.HintPart(_session.Usage, _session.ContextLength), _hintReading?.StatusLine());
@@ -1389,6 +1444,17 @@ internal sealed partial class ChatScreen
             {
                 // A tool run's summary (2026-09-22): one click unfolds or folds it, nothing answered.
                 _queuedClicks.Reset();
+                return null;
+            }
+
+            if (_pane.PictureAt(click.X, click.Y) is int picture)
+            {
+                // A picture in the transcript (later on 2026-09-24): a double-click opens it in the image editor.
+                if (_queuedClicks.Second(InputLine.PicturePairKey(picture)))
+                {
+                    OpenPicture(picture);
+                }
+
                 return null;
             }
 
@@ -2157,7 +2223,7 @@ internal sealed partial class ChatScreen
         var disabled = ToolsText.DisabledSet(effective.ToolsDisabled);
         var fileTools = FileToolsFor(_fileTools, effective.FileSafeEdits);   // restore only with File safe edits on (later still on 2026-09-20)
         bool files = effective.FileTools && Without(fileTools, disabled).Count > 0;
-        var groups = SystemPromptSummary.ToolGroups(_clockTools, _timerTools, fileTools, _memoryTools, effective.Memory, effective.LlmOfferTools, WebToolsFor(_webTools, files), effective.WebTools, effective.FileTools, _askTools, effective.AskUser, _pane.Enabled, _skillTools, effective.AgentSkills, _sessionTools, effective.SessionTool, disabled, skillInstalled: Catalog(effective).Count > 0, mcp: _mcp.ServerTools, mcpEnabled: effective.McpServers, git: _gitTools, gitEnabled: effective.GitNativeTools, shell: _shellTools, shellEnabled: ShellOffered(effective), codeAvailable: CodeAvailable(), obsidian: ObsidianToolsFor(_vaultTools, effective), obsidianEnabled: ObsidianOffered(effective), sql: _sqlTools, sqlEnabled: SqlOffered(effective, _sql));
+        var groups = SystemPromptSummary.ToolGroups(_clockTools, _timerTools, fileTools, _memoryTools, effective.Memory, effective.LlmOfferTools, WebToolsFor(_webTools, files), effective.WebTools, effective.FileTools, _askTools, effective.AskUser, _pane.Enabled, _skillTools, effective.AgentSkills, _sessionTools, effective.SessionTool, disabled, skillInstalled: Catalog(effective).Count > 0, mcp: _mcp.ServerTools, mcpEnabled: effective.McpServers, git: _gitTools, gitEnabled: effective.GitNativeTools, shell: _shellTools, shellEnabled: ShellOffered(effective), codeAvailable: CodeAvailable(), obsidian: ObsidianToolsFor(_vaultTools, effective), obsidianEnabled: ObsidianOffered(effective), sql: _sqlTools, sqlEnabled: SqlOffered(effective, _sql), comfy: _comfyTools, comfyEnabled: ComfyOffered(effective, _comfy));
         return groups.SelectMany(g => g.Tools.Where(t => g.Offers(t.Name)).Select(t => new CompletionItem(t.Name, t.Description))).ToList();
     }
 
@@ -2255,14 +2321,53 @@ internal sealed partial class ChatScreen
             return null;
         }
 
-        return commands.FirstOrDefault(item => item.Text.Length == word.Length + 1 && item.Text[0] == '/'
-            && item.Text.AsSpan(1).Equals(word, StringComparison.OrdinalIgnoreCase));
+        return CommandNamed(word, commands);
     }
+
+    /// <summary>
+    /// The command a line typed with extra slashes means, and the line it becomes (later still on 2026-09-24, the user's
+    /// ask: <c>//tools</c>, <c>///settings</c>): the trimmed text starts with two or more <c>/</c>, and the first word after
+    /// them — up to the first whitespace — is an item's text less its slash, the case ignored, the first hit
+    /// (<see cref="TypoCommand"/>'s match). The line is the item's own spelling, a space, then the rest of the line as
+    /// typed (the user's call: <c>//profile work</c> → <c>/profile work</c>); a bare <c>/tools </c> when nothing follows,
+    /// a completion pick's shape. No word after the slashes is no match, so a bare <c>//</c> stays <c>/settings</c>'
+    /// alias and <c>// tools</c> is text. Pure; pinned.
+    /// </summary>
+    public static (CompletionItem Item, string Line)? TypoSlashes(string text, IReadOnlyList<CompletionItem> commands)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        ArgumentNullException.ThrowIfNull(commands);
+        string line = text.Trim();
+        if (!line.StartsWith("//", StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        string after = line.TrimStart('/');
+        int end = 0;
+        while (end < after.Length && !char.IsWhiteSpace(after[end]))
+        {
+            end++;
+        }
+
+        if (end == 0 || CommandNamed(after[..end], commands) is not { } item)
+        {
+            return null;
+        }
+
+        return (item, item.Text + " " + after[end..].TrimStart());
+    }
+
+    /// <summary>The <c>/</c> item whose text less its slash is <paramref name="word"/>, the case ignored; the first hit, or null.</summary>
+    private static CompletionItem? CommandNamed(string word, IReadOnlyList<CompletionItem> commands) =>
+        commands.FirstOrDefault(item => item.Text.Length == word.Length + 1 && item.Text[0] == '/'
+            && item.Text.AsSpan(1).Equals(word, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>
     /// <see cref="InputLine.ReadAsync"/>'s <c>intercept</c> hook: under the setting, on the pane, a
     /// line that is a command's bare name (<see cref="TypoCommand"/> over the <c>/</c> table with
-    /// <c>/exit</c> kept whatever <c>Hide /exit autocomplete</c> says) opens a one-row
+    /// <c>/exit</c> kept whatever <c>Hide /exit autocomplete</c> says) — or a command typed with extra slashes, its
+    /// arguments kept (<see cref="TypoSlashes"/>, later still on 2026-09-24; the title then names the whole line) — opens a one-row
     /// <see cref="MenuPane"/> — Enter puts the command and a space on the line (a completion pick's
     /// shape, so its argument list opens where there is one), ESC / Ctrl+C sends the line as typed
     /// (null). Never headless, never mid-turn (the hook is the idle read's alone), never without the pane.
@@ -2275,16 +2380,27 @@ internal sealed partial class ChatScreen
             return null;
         }
 
-        if (TypoCommand(text, CommandItems()) is not { } item)
+        var commands = CommandItems();
+        CompletionItem item;
+        string line;
+        if (TypoCommand(text, commands) is { } bare)
+        {
+            (item, line) = (bare, bare.Text + " ");
+        }
+        else if (TypoSlashes(text, commands) is { } slashed)
+        {
+            (item, line) = slashed;
+        }
+        else
         {
             return null;
         }
 
-        var page = new MenuPage(TypoTitle(item.Text), [TypoRow(item)], TypoKeys);
+        var page = new MenuPage(TypoTitle(line.TrimEnd()), [TypoRow(item)], TypoKeys);
         try
         {
             var picked = await _menuPane.PickAsync(page, 0, cancellationToken).ConfigureAwait(false);
-            return picked is null ? null : item.Text + " ";
+            return picked is null ? null : line;
         }
         finally
         {
@@ -2303,7 +2419,7 @@ internal sealed partial class ChatScreen
     /// (<c>Complete(query, ImageFile.IsImagePath)</c>, for <c>/view</c>) — <see cref="ArgumentPaths"/> —
     /// the disk reads behind a function each, so <c>/tts o</c> scans no catalog.
     /// </summary>
-    public sealed record ArgumentSources(Func<IReadOnlyList<string>> Profiles, string LoadedProfile, IReadOnlyList<string> Timers, Func<string, IReadOnlyList<string>> Folders, Func<string, MentionResult> TextFiles, Func<string, MentionResult> ImageFiles, Func<IReadOnlyList<CompletionItem>>? Sessions = null, Func<IReadOnlyList<CompletionItem>>? Skills = null, Func<string, IReadOnlyList<string>>? VaultFolders = null);
+    public sealed record ArgumentSources(Func<IReadOnlyList<string>> Profiles, string LoadedProfile, IReadOnlyList<string> Timers, Func<string, IReadOnlyList<string>> Folders, Func<string, MentionResult> TextFiles, Func<string, MentionResult> ImageFiles, Func<IReadOnlyList<CompletionItem>>? Sessions = null, Func<IReadOnlyList<CompletionItem>>? Skills = null, Func<string, IReadOnlyList<string>>? VaultFolders = null, Func<IReadOnlyList<CompletionItem>>? Workflows = null);
 
     /// <summary>The note beside <c>on</c> / <c>off</c> on a switch's list: what the switch is. Pinned.</summary>
     public static string SwitchSubject(SlashCommand command) => command switch
@@ -2417,6 +2533,31 @@ internal sealed partial class ChatScreen
 
             case SlashCommand.Reasoning:
                 return MentionCompleter.Matches(ReasoningLevel.Levels.Select(level => new CompletionItem(level, ReasoningLevel.Describe(level))).ToList(), argText);
+
+            case SlashCommand.Comfy:
+            {
+                // /comfy edit json|markdown <workflow> (later still on 2026-09-24): the verb, the kind, then every installed workflow.
+                foreach (string fileKind in (string[])[ComfyJsonWord, ComfyMarkdownWord])
+                {
+                    string head = ComfyEditWord + " " + fileKind + " ";
+                    if (argText.StartsWith(head, StringComparison.OrdinalIgnoreCase))
+                    {
+                        var names = (sources.Workflows?.Invoke() ?? []).Select(w => new CompletionItem(head + w.Text, w.Note)).ToList();
+                        return MentionCompleter.Matches(names, argText);
+                    }
+                }
+
+                if (argText.StartsWith(ComfyEditWord + " ", StringComparison.OrdinalIgnoreCase))
+                {
+                    return MentionCompleter.Matches([new(ComfyEditWord + " " + ComfyJsonWord, ComfyJsonNote), new(ComfyEditWord + " " + ComfyMarkdownWord, ComfyMarkdownNote)], argText);
+                }
+
+                return MentionCompleter.Matches([new(ComfyEditWord, ComfyEditNote)], argText);
+            }
+
+            case SlashCommand.Imagine:
+                // The workflow names (later on 2026-09-24, the user's ask): only while the first word is typed; the prompt after it is free text.
+                return argText.Contains(' ', StringComparison.Ordinal) ? [] : MentionCompleter.Matches(sources.Workflows?.Invoke() ?? [], argText);
 
             case SlashCommand.Theme:
                 return MentionCompleter.Matches(ThemeName.Names.Select(name => new CompletionItem(name, ThemeName.Describe(name))).ToList(), argText);
@@ -2627,7 +2768,8 @@ internal sealed partial class ChatScreen
             prefix => _files.Complete(prefix, ImageFile.IsImagePath),
             SessionChoices,
             SkillChoices,
-            VaultFolderChoices);
+            VaultFolderChoices,
+            WorkflowChoices);
         return ArgumentPaths(command, argText, sources) is { } paths
             ? new ArgumentList([], paths.Paths, paths.Truncated)
             : new ArgumentList(ArgumentItems(command, argText, sources));
@@ -2651,7 +2793,7 @@ internal sealed partial class ChatScreen
         var disabled = ToolsText.DisabledSet(effective.ToolsDisabled);
         var fileTools = FileToolsFor(_fileTools, effective.FileSafeEdits);   // restore only with File safe edits on (later still on 2026-09-20): /sys shows the list cut, Files (14)
         bool files = effective.FileTools && Without(fileTools, disabled).Count > 0;   // the turn's rule (PrepareTurn): an emptied file group is the switch off
-        return SystemPromptSummary.ToolGroups(_clockTools, _timerTools, fileTools, _memoryTools, effective.Memory, effective.LlmOfferTools, WebToolsFor(_webTools, files), effective.WebTools, effective.FileTools, _askTools, effective.AskUser, _pane.Enabled, _skillTools, effective.AgentSkills, _sessionTools, effective.SessionTool, disabled, mcp: _mcp.ServerTools, mcpEnabled: effective.McpServers, git: _gitTools, gitEnabled: effective.GitNativeTools, shell: _shellTools, shellEnabled: ShellOffered(effective), codeAvailable: CodeAvailable(), obsidian: ObsidianOffered(effective) ? ObsidianToolsFor(_vaultTools, effective) : null, sql: SqlOffered(effective, _sql) ? _sqlTools : null);   // the vault group only with a vault (2026-09-22): /sys stays as it was for a profile that never names one
+        return SystemPromptSummary.ToolGroups(_clockTools, _timerTools, fileTools, _memoryTools, effective.Memory, effective.LlmOfferTools, WebToolsFor(_webTools, files), effective.WebTools, effective.FileTools, _askTools, effective.AskUser, _pane.Enabled, _skillTools, effective.AgentSkills, _sessionTools, effective.SessionTool, disabled, mcp: _mcp.ServerTools, mcpEnabled: effective.McpServers, git: _gitTools, gitEnabled: effective.GitNativeTools, shell: _shellTools, shellEnabled: ShellOffered(effective), codeAvailable: CodeAvailable(), obsidian: ObsidianOffered(effective) ? ObsidianToolsFor(_vaultTools, effective) : null, sql: SqlOffered(effective, _sql) ? _sqlTools : null, comfy: ComfyOffered(effective, _comfy) ? _comfyTools : null);   // the vault group only with a vault (2026-09-22): /sys stays as it was for a profile that never names one
     }
 
     /// <summary>Whether <c>execute_code</c> has a language to run (2026-09-21): the setting's languages, one of them installed.</summary>
@@ -2679,7 +2821,7 @@ internal sealed partial class ChatScreen
         var disabled = ToolsText.DisabledSet(effective.ToolsDisabled);
         // The whole file list, restore noted under File safe edits off (later still on 2026-09-20): the row stays, dim, with its reason — the download_file shape.
         _interpreters.Refresh();
-        var groups = SystemPromptSummary.ToolGroups(_clockTools, _timerTools, _fileTools, _memoryTools, effective.Memory, effective.LlmOfferTools, _webTools, effective.WebTools, effective.FileTools, _askTools, effective.AskUser, _pane.Enabled, _skillTools, effective.AgentSkills, _sessionTools, effective.SessionTool, disabled, skillInstalled: Catalog(effective).Count > 0, git: _gitTools, gitEnabled: effective.GitNativeTools, safeEdits: effective.FileSafeEdits, shell: _shellTools, shellEnabled: ShellOffered(effective), codeAvailable: CodeAvailable(), obsidian: ObsidianToolsFor(_vaultTools, effective), obsidianEnabled: ObsidianOffered(effective), sql: _sqlTools, sqlEnabled: SqlOffered(effective, _sql));
+        var groups = SystemPromptSummary.ToolGroups(_clockTools, _timerTools, _fileTools, _memoryTools, effective.Memory, effective.LlmOfferTools, _webTools, effective.WebTools, effective.FileTools, _askTools, effective.AskUser, _pane.Enabled, _skillTools, effective.AgentSkills, _sessionTools, effective.SessionTool, disabled, skillInstalled: Catalog(effective).Count > 0, git: _gitTools, gitEnabled: effective.GitNativeTools, safeEdits: effective.FileSafeEdits, shell: _shellTools, shellEnabled: ShellOffered(effective), codeAvailable: CodeAvailable(), obsidian: ObsidianToolsFor(_vaultTools, effective), obsidianEnabled: ObsidianOffered(effective), sql: _sqlTools, sqlEnabled: SqlOffered(effective, _sql), comfy: _comfyTools, comfyEnabled: ComfyOffered(effective, _comfy));
         return new ToolsFacts(groups, effective.LlmOfferTools, disabled);
     }
 
@@ -2993,6 +3135,41 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>
+    /// <c>/imagine</c>'s argument list (later on 2026-09-24): every installed workflow — <c>/imagine</c> may name any —
+    /// with what it is, the ones the model is not offered noted (<see cref="ComfyText.CompletionNote"/>).
+    /// </summary>
+    private IReadOnlyList<CompletionItem> WorkflowChoices()
+    {
+        var offered = _comfy.OfferedWorkflows();
+        return _comfy.Catalog.Workflows.Select(w => new CompletionItem(w.Name, ComfyText.CompletionNote(w, offered.Contains(w)))).ToList();
+    }
+
+    /// <summary>The ComfyUI workflows catalog over the loaded profile's <c>comfy</c> folder, then the home's (2026-09-24), asked afresh at each scan so a profile switch needs no rebuild.</summary>
+    public static ComfyWorkflowCatalog ComfyCatalog(AppSettings settings)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        return new ComfyWorkflowCatalog(() => [settings.ProfileComfyDirectory, settings.GlobalComfyDirectory]);
+    }
+
+    /// <summary>
+    /// The image tools (2026-09-24): <c>generate_image</c> over the ComfyUI server and the workflows, and <c>set_splash_image</c>
+    /// into the loaded profile's splash folder, offered on every turn while <see cref="ComfyOffered"/> says so (headless too).
+    /// </summary>
+    public static IReadOnlyList<AIFunction> ComfyTools(ComfyStudio studio, WorkingDirectory files, Func<string> splashDirectory) => new AIFunction[]
+    {
+        new GenerateImageTool(studio),
+        new SetSplashImageTool(files, splashDirectory),
+    };
+
+    /// <summary>Whether the image group is offered (2026-09-24): the setting <c>ComfyUI tools</c> on, <c>ComfyUI URL</c> an http(s) URL and at least one workflow in a <c>comfy</c> folder.</summary>
+    public static bool ComfyOffered(AppSettingsData effective, ComfyStudio studio)
+    {
+        ArgumentNullException.ThrowIfNull(effective);
+        ArgumentNullException.ThrowIfNull(studio);
+        return effective.ComfyTools && ComfyStudio.ServerOf(effective) is not null && studio.OfferedWorkflows().Count > 0;
+    }
+
+    /// <summary>
     /// The shell tools (2026-09-21): <c>run_command</c>, <c>process</c> and <c>execute_code</c>, offered on every turn
     /// while the setting <c>Shell command policy</c> is not <c>off</c> (headless too, where the gate has no asker and
     /// the allow list alone decides); <c>execute_code</c> only while a language it may run is installed
@@ -3078,6 +3255,8 @@ internal sealed partial class ChatScreen
         FileInfoTool.ToolName,
         ReadFileTool.ToolName,
         ViewImageTool.ToolName,
+        GenerateImageTool.ToolName,
+        SetSplashImageTool.ToolName,
         WriteFileTool.ToolName,
         PatchFileTool.ToolName,
         CreateDirectoryTool.ToolName,
@@ -3154,7 +3333,7 @@ internal sealed partial class ChatScreen
     /// (<see cref="Assistant.TimerRule"/>, 2026-09-20) rides only while a timer tool is among <paramref name="standingTools"/>:
     /// headless passes the clock alone (nothing could ring the alert), and the pane loses the three on <c>/tools</c>. Shared with headless.
     /// </summary>
-    public static void PrepareTurn(Assistant assistant, MemoryStore memory, IReadOnlyList<AIFunction> memoryTools, IReadOnlyList<AIFunction> standingTools, PersonaFile persona, OperataFile operata, VocaliaFile vocalia, bool memoryEnabled, bool speechOutput, int maxToolIterations = Assistant.DefaultMaxToolIterations, bool toolsEnabled = true, IReadOnlyList<AIFunction>? webTools = null, bool webEnabled = false, Assistant.TurnContextGuard? contextGuard = null, IReadOnlyList<AIFunction>? fileTools = null, bool filesEnabled = false, IReadOnlyList<AIFunction>? askTools = null, SkillsForTurn? skills = null, bool markdown = false, IReadOnlyList<AIFunction>? sessionTools = null, bool sessionsEnabled = false, IReadOnlySet<string>? disabledTools = null, IReadOnlyList<AIFunction>? mcpTools = null, bool mcpEnabled = false, bool safeEdits = true, IReadOnlyList<AIFunction>? gitTools = null, bool gitEnabled = false, IReadOnlyList<AIFunction>? shellTools = null, bool shellEnabled = false, ProcessRegistry? processes = null, bool shellBridge = false, bool shellPolice = true, IReadOnlyList<AIFunction>? obsidianTools = null, bool obsidianEnabled = false, IReadOnlyList<AIFunction>? sqlTools = null, bool sqlEnabled = false)
+    public static void PrepareTurn(Assistant assistant, MemoryStore memory, IReadOnlyList<AIFunction> memoryTools, IReadOnlyList<AIFunction> standingTools, PersonaFile persona, OperataFile operata, VocaliaFile vocalia, bool memoryEnabled, bool speechOutput, int maxToolIterations = Assistant.DefaultMaxToolIterations, bool toolsEnabled = true, IReadOnlyList<AIFunction>? webTools = null, bool webEnabled = false, Assistant.TurnContextGuard? contextGuard = null, IReadOnlyList<AIFunction>? fileTools = null, bool filesEnabled = false, IReadOnlyList<AIFunction>? askTools = null, SkillsForTurn? skills = null, bool markdown = false, IReadOnlyList<AIFunction>? sessionTools = null, bool sessionsEnabled = false, IReadOnlySet<string>? disabledTools = null, IReadOnlyList<AIFunction>? mcpTools = null, bool mcpEnabled = false, bool safeEdits = true, IReadOnlyList<AIFunction>? gitTools = null, bool gitEnabled = false, IReadOnlyList<AIFunction>? shellTools = null, bool shellEnabled = false, ProcessRegistry? processes = null, bool shellBridge = false, bool shellPolice = true, IReadOnlyList<AIFunction>? obsidianTools = null, bool obsidianEnabled = false, IReadOnlyList<AIFunction>? sqlTools = null, bool sqlEnabled = false, IReadOnlyList<AIFunction>? comfyTools = null, bool comfyEnabled = false)
     {
         ArgumentNullException.ThrowIfNull(assistant);
         ArgumentNullException.ThrowIfNull(memory);
@@ -3194,6 +3373,7 @@ internal sealed partial class ChatScreen
             shellTools = shellTools is null ? null : Without(shellTools, disabledTools);
             obsidianTools = obsidianTools is null ? null : Without(obsidianTools, disabledTools);
             sqlTools = sqlTools is null ? null : Without(sqlTools, disabledTools);
+            comfyTools = comfyTools is null ? null : Without(comfyTools, disabledTools);
             memoryTools = Without(memoryTools, disabledTools);
             skillTools = Without(skillTools, disabledTools);
             sessionTools = sessionTools is null ? null : Without(sessionTools, disabledTools);
@@ -3231,6 +3411,9 @@ internal sealed partial class ChatScreen
         // The SQL tools after the vault tools (2026-09-23): the setting SQL tools and a connection in sql.json are the group's switch.
         bool sql = sqlEnabled && sqlTools is { Count: > 0 };
         offered = sql ? [.. offered, .. sqlTools!] : offered;
+        // The image tools after the SQL tools (2026-09-24): ComfyUI tools, a URL and a workflow are the group's switch; no rule — the description carries the workflows and the prompt styles.
+        bool comfy = comfyEnabled && comfyTools is { Count: > 0 };
+        offered = comfy ? [.. offered, .. comfyTools!] : offered;
         // The shell rule's execute_code sentence promises neon_tools only while the setting Shell tool bridge is on (later on 2026-09-21).
         bool bridge = shell && shellBridge;
         // … and its head says the shell stays under the working directory only while the setting Shell police outside paths is on (2026-09-22); off, it says a command starts there and no more.
@@ -4854,7 +5037,199 @@ internal sealed partial class ChatScreen
             return;
         }
 
-        _transcript.Picture(picture);
+        _transcript.Picture(picture, RegisterPicture(image, sandbox: true));
+    }
+
+    // ── /imagine and /comfy (2026-09-24) ────────────────────────────────────
+
+    /// <summary>
+    /// <c>/imagine [workflow] &lt;prompt&gt; [-- &lt;negative&gt;] [--seed N] …</c> (2026-09-24, the user's ask: their own prompts —
+    /// <c>score_9, score_8_up, …</c> — sent as typed, no model in between): the prompt straight to ComfyUI through the same
+    /// engine as <c>generate_image</c> (<see cref="ComfyStudio"/>), under a spinner ESC cancels, the picture drawn as large as the
+    /// window allows (several as a strip), the result line a notice. The result and the pictures ride with the next message
+    /// (<see cref="TakeImagineNotes"/>), so the model knows what was made and can look at it. Refused mid-turn; not headless.
+    /// </summary>
+    private async Task HandleImagineAsync(string args, CancellationToken cancellationToken)
+    {
+        var (request, error) = ComfyImagine.Parse(args, _comfy.Catalog.Workflows, ComfyStudio.MaxCountOf(_effective()));
+        if (request is null)
+        {
+            _transcript.Error(error!);
+            return;
+        }
+
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        using var stop = new CancellationTokenSource();
+        _queuedClicks.Reset();
+        var watcher = _keys.WatchAsync(cts, stop.Token, null, null, spend: e => { _queuedClicks.Reset(); return ScrollInput(e); }, onClick: _pane.Enabled ? HintClickLine : null);
+        ComfyGeneration? generation = null;
+        bool cancelled = false;
+        try
+        {
+            generation = await _transcript.WithSpinnerAsync(ComfyText.Generating(request.Workflow ?? "ComfyUI"), () => _comfy.GenerateAsync(request, cts.Token)).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cts.IsCancellationRequested)
+        {
+            cancelled = true;
+        }
+        finally
+        {
+            stop.Cancel();
+            await watcher.ConfigureAwait(false);
+        }
+
+        if (cancelled || generation is null)
+        {
+            _transcript.Notice(ComfyText.Cancelled);
+        }
+        else if (!generation.Ok)
+        {
+            _transcript.Error(generation.Text);
+        }
+        else
+        {
+            ComfyLines(generation.Text, line => _transcript.Notice(ComfyText.Glyph + line));
+            ShowPictures(generation.Images);
+            _imagineNotes.Add(ComfyText.ImagineNote(generation.Text));
+            _imagineImages.AddRange(generation.Images);
+        }
+
+        DrainDiagnostics();
+    }
+
+    /// <summary>One picture as large as the window allows (the <c>/view</c> box), several as a thumbnail strip.</summary>
+    private void ShowPictures(IReadOnlyList<ImageAttachment> images)
+    {
+        if (images.Count == 1)
+        {
+            var box = ThumbnailSize.Fit(_pane.Profile.Width, _pane.Profile.Height, _pane.Enabled ? ScreenPane.PaneRows + _pane.InputRows + _pane.ToolbarRows : 0);
+            if (ImageThumbnail.Read(images[0], box.Columns, box.MaxRows) is { } picture)
+            {
+                _transcript.Picture(picture, RegisterPicture(images[0], sandbox: true));
+            }
+
+            return;
+        }
+
+        var (tiles, ids) = ReadThumbnails(images, ThumbnailSize.Resolve(_effective()), sandbox: true);
+        _transcript.Images(tiles, ids);
+    }
+
+    /// <summary>The message as the model gets it (2026-09-24): the <c>/imagine</c> notes since the last one ahead of the text, their pictures after the user's own; then the notes are spent.</summary>
+    private (string Text, IReadOnlyList<ImageAttachment> Images) TakeImagineNotes(string text, IReadOnlyList<ImageAttachment> images)
+    {
+        if (_imagineNotes.Count == 0)
+        {
+            return (text, images);
+        }
+
+        string notes = string.Join("\n", _imagineNotes);
+        IReadOnlyList<ImageAttachment> all = [.. images, .. _imagineImages];
+        _imagineNotes.Clear();
+        _imagineImages.Clear();
+        return (notes + "\n\n" + text, all);
+    }
+
+    /// <summary>The one verb <c>/comfy</c> takes (later still on 2026-09-24). Pinned.</summary>
+    public const string ComfyEditWord = "edit";
+
+    /// <summary>The two kinds of file <c>/comfy edit</c> opens (the user's call, later still that day: the graph too, not only the settings). Pinned.</summary>
+    public const string ComfyJsonWord = "json";
+    public const string ComfyMarkdownWord = "markdown";
+
+    /// <summary>The argument-list notes. Pinned.</summary>
+    public const string ComfyEditNote = "open a workflow's .json or .md in your editor";
+    public const string ComfyJsonNote = "open a workflow's .json (its ComfyUI graph) in your editor";
+    public const string ComfyMarkdownNote = "open a workflow's .md (its settings and tips) in your editor";
+
+    /// <summary>A <c>/comfy</c> argument that is not <c>edit json|markdown &lt;workflow&gt;</c>. Pinned.</summary>
+    public const string ComfyUsageError = "Usage: /comfy, or /comfy edit json|markdown <workflow>";
+
+    /// <summary>The line after <c>/comfy edit</c> opened a workflow's file; <paramref name="created"/> when an <c>.md</c> had to be made first. Pinned.</summary>
+    public static string ComfyEditNotice(string name, string path, bool json, bool created) =>
+        $"({ComfyText.Glyph}{(created ? "made and opened" : "opened")} {path}; " +
+        (json ? $"{name}'s graph is read again at your next message (a save ComfyUI's API format cannot read is skipped, with a warning)" : $"{name}'s settings and tips are read at your next message") + ")";
+
+    /// <summary>A <c>/comfy edit</c> whose file could not be made or opened. Pinned.</summary>
+    public static string ComfyEditFailedError(string path, string detail) => $"Could not open {path}: {detail}";
+
+    /// <summary>
+    /// <c>/comfy edit json|markdown &lt;workflow&gt;</c> (later still on 2026-09-24, the user's ask): the workflow's <c>.json</c>
+    /// (its ComfyUI graph) or <c>.md</c> (its settings and tips) — whichever <c>comfy</c> folder holds it — in the editor Windows
+    /// associates with it, as <c>/persona</c> opens <c>persona.md</c>. A workflow with no <c>.md</c> is given one first, its family
+    /// written in, so there is somewhere to put the settings and tips. <c>md</c> is taken for <c>markdown</c>. Any installed
+    /// workflow, offered to the model or not; nothing waits, the next turn reads what was saved.
+    /// </summary>
+    private void HandleComfyVerb(string args)
+    {
+        string[] words = args.Split((char[]?)null, 3, StringSplitOptions.RemoveEmptyEntries);
+        bool? json = words.Length < 2 ? null : words[1].ToLowerInvariant() switch
+        {
+            ComfyJsonWord => true,
+            ComfyMarkdownWord or "md" => false,
+            _ => null,
+        };
+        if (!string.Equals(words[0], ComfyEditWord, StringComparison.OrdinalIgnoreCase) || json is null || words.Length < 3)
+        {
+            _transcript.Error(ComfyUsageError);
+            return;
+        }
+
+        var installed = _comfy.Catalog.Workflows;
+        if (installed.FirstOrDefault(w => string.Equals(w.Name, words[2].Trim(), StringComparison.OrdinalIgnoreCase)) is not { } workflow)
+        {
+            _transcript.Error(ComfyText.UnknownWorkflow(words[2].Trim(), installed).Replace("Error: ", "", StringComparison.Ordinal));
+            return;
+        }
+
+        string path = json.Value ? workflow.FilePath : Path.ChangeExtension(workflow.FilePath, ".md");
+        try
+        {
+            bool created = !json.Value && !File.Exists(path);
+            if (created)
+            {
+                File.WriteAllText(path, "---\nfamily: " + ComfyFamilies.Name(workflow.Family) + "\n---\n");
+            }
+
+            _openFile(path);
+            _transcript.Notice(ComfyEditNotice(workflow.Name, path, json.Value, created));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.ComponentModel.Win32Exception or InvalidOperationException)
+        {
+            _transcript.Error(ComfyEditFailedError(path, ex.Message));
+        }
+    }
+
+    /// <summary>
+    /// <c>/comfy</c> (2026-09-24): the ComfyUI server's status (<c>/system_stats</c>), the workflows found with their family, input,
+    /// size and placeholders, the files skipped and why, and the folders a workflow goes in — what to look at when the image tools are
+    /// not offered.
+    /// </summary>
+    private async Task HandleComfyAsync(CancellationToken cancellationToken)
+    {
+        var effective = _effective();
+        if (_comfy.Client() is { } client)
+        {
+            var (ok, status) = await _transcript.WithSpinnerAsync(ComfyText.CheckingServer, () => client.StatusAsync(cancellationToken)).ConfigureAwait(false);
+            if (ok)
+            {
+                _transcript.Notice(ComfyText.Glyph + client.BaseUrl + " — " + status);
+            }
+            else
+            {
+                _transcript.Error(status);
+            }
+        }
+        else
+        {
+            _transcript.Error(ComfyText.NoServer);
+        }
+
+        var (workflows, problems) = _comfy.Catalog.Scan();
+        foreach (var line in ComfyText.StatusLines(workflows, problems, _comfy.Catalog.Roots, effective.ComfyTools, effective.ComfyWorkflowsOffered))
+        {
+            _transcript.Notice(line);
+        }
     }
 
     // ── /emptytrash ─────────────────────────────────────────────────────────
@@ -5511,6 +5886,7 @@ internal sealed partial class ChatScreen
             _timers.Dispose();
             // The background processes go with the screen (2026-09-21): what still runs is killed, tree and all.
             _processes.Dispose();
+            _comfy.Dispose();
             _sessions.Dispose();
             if (_ownsMcp)
             {
@@ -5650,7 +6026,8 @@ internal sealed partial class ChatScreen
                 intercept: TypoInterceptAsync,
                 beforeCommit: DismissSplash,
                 replay: replay,
-                emptyArrow: CycleSplash).ConfigureAwait(false);
+                emptyArrow: CycleSplash,
+                emptyDelete: DeleteSplash).ConfigureAwait(false);
         }
         finally
         {
@@ -5877,10 +6254,18 @@ internal sealed partial class ChatScreen
             ReportTimers();
         }
 
+        ForgetSplash();
+    }
+
+    /// <summary>The splash is off the screen: its flags, its name, its count, its folder and the delete's arm fall together.</summary>
+    private void ForgetSplash()
+    {
         _splashShown = false;
         _splashForced = false;
         _splashName = null;
         _splashCount = 0;
+        _splashFolder = null;
+        Volatile.Write(ref _splashDeleteArmedUntil, 0);
     }
 
     /// <summary>
@@ -5951,10 +6336,11 @@ internal sealed partial class ChatScreen
             return;
         }
 
-        _transcript.Picture(picture);
+        _transcript.Picture(picture, RegisterPicture(image, sandbox: false));
         _splashShown = true;
         _splashName = name;
         _splashCount = source.Names.Count;
+        _splashFolder = source.Directory;
     }
 
     /// <summary>
@@ -5996,6 +6382,82 @@ internal sealed partial class ChatScreen
             RedrawScreen();
             ShowSplash(source, next);
             _splashForced = forced && _splashShown;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Whether Delete would remove the splash picture now (2026-09-24): the splash on screen, the pane,
+    /// and the picture one of the profile's own files (<see cref="SplashSource.Directory"/>) — never an
+    /// embedded one. <c>Welcome splash</c> is not read: the picture is already there, and it is the user's file.
+    /// </summary>
+    private bool SplashDeleteOffered() =>
+        _splashShown && _pane.Enabled && _splashFolder is not null && _splashName is not null;
+
+    /// <summary>A first Delete over the profile's splash picture is still fresh: the next one in a row deletes it.</summary>
+    private bool SplashDeleteArmed() => _time.GetUtcNow().UtcTicks < Volatile.Read(ref _splashDeleteArmedUntil);
+
+    /// <summary>
+    /// Delete at an empty idle line while one of the profile's own splash pictures stands (2026-09-24,
+    /// the user's ask) — the input line's <c>emptyDelete</c> hook. The first press arms and shows
+    /// <see cref="SplashDeleteArmedHint"/>; a second in a row (<paramref name="repeat"/>: the input line
+    /// saw no other event between) within <see cref="SplashDeleteWindow"/> moves the file into the folder's
+    /// <see cref="SplashImages.TrashFolderName"/> subfolder (<see cref="SplashImages.SetAside"/> — the
+    /// user's call over a <c>File.Delete</c>: out of the walk, back by hand) and the screen is redrawn
+    /// as <see cref="CycleSplash"/> redraws it over the folder's next picture in name order or, the folder
+    /// now empty, a random one of the embedded set (<see cref="CurrentSplash"/> falls back by itself; the
+    /// user's call too). A file that will not go is a Warning in the log and the picture stays. False —
+    /// the key is the line's, nothing on an empty draft — over an embedded picture, once the splash is
+    /// gone or without the pane.
+    /// </summary>
+    private bool DeleteSplash(bool repeat)
+    {
+        if (!SplashDeleteOffered() || _splashFolder is not { } folder || _splashName is not { } name)
+        {
+            return false;
+        }
+
+        if (!repeat || !SplashDeleteArmed())
+        {
+            Volatile.Write(ref _splashDeleteArmedUntil, _time.GetUtcNow().UtcTicks + SplashDeleteWindow.Ticks);
+            _pane.RefreshHint();
+            return true;
+        }
+
+        Volatile.Write(ref _splashDeleteArmedUntil, 0);
+        // The neighbour is taken from the walk before the file goes, so the next picture is the one Right would show.
+        IReadOnlyList<string> before = CurrentSplash() is { Directory: not null } walk ? walk.Names : [name];
+        string? after = SplashImages.Next(before, name, +1);
+        string path = Path.Combine(folder, name);
+        string movedTo;
+        try
+        {
+            movedTo = SplashImages.SetAside(folder, name);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            DiagnosticLog.Warn("Splash", SplashImages.DeleteFailedLogLine(path, e));
+            _pane.RefreshHint();
+            return true;
+        }
+
+        DiagnosticLog.Info("Splash", SplashImages.DeletedLogLine(path, movedTo));
+        bool forced = _splashForced;
+        using (_pane.Batch())
+        {
+            RedrawScreen();
+            if (CurrentSplash() is { } source)
+            {
+                string? next = source.Directory is not null && after is not null && source.Names.Contains(after, StringComparer.Ordinal)
+                    ? after
+                    : source.Directory is not null ? source.Names[0] : SplashImages.Pick(_random, source.Names);
+                if (next is not null)
+                {
+                    ShowSplash(source, next);
+                    _splashForced = forced && _splashShown;
+                }
+            }
         }
 
         return true;
@@ -6771,6 +7233,20 @@ internal sealed partial class ChatScreen
                 HandleView(args);
                 return false;
 
+            case SlashCommand.Imagine:
+                await HandleImagineAsync(args, cancellationToken).ConfigureAwait(false);
+                return false;
+
+            case SlashCommand.Comfy:
+                if (args.Length > 0)
+                {
+                    HandleComfyVerb(args);
+                    return false;
+                }
+
+                await HandleComfyAsync(cancellationToken).ConfigureAwait(false);
+                return false;
+
             case SlashCommand.Echo:
                 HandleEcho(args, cancellationToken);
                 return false;
@@ -7300,10 +7776,7 @@ internal sealed partial class ChatScreen
         _session.Usage.ResetConversation();
         _log.Clear();
         ForgetReading();
-        _splashShown = false;
-        _splashForced = false;
-        _splashName = null;
-        _splashCount = 0;
+        ForgetSplash();
         using (_pane.Batch())
         {
             _renderScreen(_pane);
@@ -7880,7 +8353,7 @@ internal sealed partial class ChatScreen
         bool styled = StyledReply(effective.TranscriptMarkdown, _pane.Enabled);
         // The shells found are probed afresh per turn (2026-09-21): an install during the session shows without a restart, and the schema and the run agree.
         _interpreters.Refresh();
-        PrepareTurn(assistant, _memory, _memoryTools, [.. _clockTools, .. _timerTools], _persona, _operata, _vocalia, effective.Memory, speaker is not null, effective.LlmMaxToolIterations, effective.LlmOfferTools, _webTools, effective.WebTools, ContextGuardFor(effective, _session.ContextLength), _fileTools, effective.FileTools, _pane.Enabled && effective.AskUser ? _askTools : null, SkillsFor(effective), markdown, _sessionTools, effective.SessionTool, ToolsText.DisabledSet(effective.ToolsDisabled), _mcp.Tools, effective.McpServers, effective.FileSafeEdits, _gitTools, effective.GitNativeTools, _shellTools, ShellOffered(effective), _processes, effective.ShellToolBridge, effective.ShellPoliceOutsidePaths, ObsidianToolsFor(_vaultTools, effective), ObsidianOffered(effective), _sqlTools, SqlOffered(effective, _sql));
+        PrepareTurn(assistant, _memory, _memoryTools, [.. _clockTools, .. _timerTools], _persona, _operata, _vocalia, effective.Memory, speaker is not null, effective.LlmMaxToolIterations, effective.LlmOfferTools, _webTools, effective.WebTools, ContextGuardFor(effective, _session.ContextLength), _fileTools, effective.FileTools, _pane.Enabled && effective.AskUser ? _askTools : null, SkillsFor(effective), markdown, _sessionTools, effective.SessionTool, ToolsText.DisabledSet(effective.ToolsDisabled), _mcp.Tools, effective.McpServers, effective.FileSafeEdits, _gitTools, effective.GitNativeTools, _shellTools, ShellOffered(effective), _processes, effective.ShellToolBridge, effective.ShellPoliceOutsidePaths, ObsidianToolsFor(_vaultTools, effective), ObsidianOffered(effective), _sqlTools, SqlOffered(effective, _sql), _comfyTools, ComfyOffered(effective, _comfy));
         bool armed = false;
         EchoProbe? probe = null;
         if (speaker is not null && _voice.InterruptReady)
@@ -7912,7 +8385,9 @@ internal sealed partial class ChatScreen
         ThumbnailBox? thumbnails = effective.ShowImageThumbnails ? ThumbnailSize.Resolve(effective) : null;
         if (thumbnails is { } box)
         {
-            _transcript.Images(ReadThumbnails(images, box));
+            // A dropped picture's path is full; a pasted one has none (its bytes are kept for a double-click).
+            var (tiles, ids) = ReadThumbnails(images, box, sandbox: false);
+            _transcript.Images(tiles, ids);
         }
 
         _session.Usage.BeginTurn();
@@ -7923,7 +8398,9 @@ internal sealed partial class ChatScreen
         var stages = new TurnStages(effective.LlmUseFunVerbs, _random);
         string label = stages.Start();
         using var busy = _transcript.BeginBusy(label);
-        var events = assistant.RunTurnAsync(text, images, turnCts.Token).GetAsyncEnumerator(turnCts.Token);
+        // What /imagine made since the last message rides with this one (2026-09-24): the notes ahead of the text, the pictures after the user's own.
+        var (sentText, sentImages) = TakeImagineNotes(text, images);
+        var events = assistant.RunTurnAsync(sentText, sentImages, turnCts.Token).GetAsyncEnumerator(turnCts.Token);
         // The next event, selected against the mid-turn acts (NextEventAsync): a quick command
         // runs between two events, however long the model takes over the next one.
         Task<bool> NextAsync() => NextEventAsync(events.MoveNextAsync().AsTask());
@@ -8238,19 +8715,116 @@ internal sealed partial class ChatScreen
         }, appToken);
     }
 
-    /// <summary>The thumbnails of <paramref name="images"/> scaled to fit <paramref name="box"/>; a picture the codecs refuse is left out.</summary>
-    private static List<ImageThumbnail> ReadThumbnails(IReadOnlyList<ImageAttachment> images, ThumbnailBox box)
+    /// <summary>
+    /// The thumbnails of <paramref name="images"/> scaled to fit <paramref name="box"/>, each registered for a double-click
+    /// (<see cref="RegisterPicture"/>, <paramref name="sandbox"/> saying whether the paths are the working directory's);
+    /// a picture the codecs refuse is left out.
+    /// </summary>
+    private (List<ImageThumbnail> Tiles, List<int> Ids) ReadThumbnails(IReadOnlyList<ImageAttachment> images, ThumbnailBox box, bool sandbox)
     {
         var tiles = new List<ImageThumbnail>(images.Count);
+        var ids = new List<int>(images.Count);
         foreach (var image in images)
         {
             if (ImageThumbnail.Read(image, box.Columns, box.MaxRows) is { } thumbnail)
             {
                 tiles.Add(thumbnail);
+                ids.Add(RegisterPicture(image, sandbox));
             }
         }
 
-        return tiles;
+        return (tiles, ids);
+    }
+
+    // ── Opening a picture from the transcript (later on 2026-09-24) ─────────
+
+    /// <summary>The line after a double-clicked picture was handed to its editor. Pinned.</summary>
+    public static string PictureOpenedNotice(string name, string editorCommand) =>
+        $"(🖼️ opened {name} in " + (string.IsNullOrWhiteSpace(editorCommand) ? "the image editor" : editorCommand.Trim()) + ")";
+
+    /// <summary>A double-clicked picture whose file is gone since it was drawn. Pinned.</summary>
+    public static string PictureGoneError(string path) => $"{path} is no longer there";
+
+    /// <summary>A double-clicked picture whose editor would not start. Pinned.</summary>
+    public static string PictureOpenFailedError(string name, string detail) => $"Could not open {name}: {detail}";
+
+    /// <summary>The folder a picture with no file of its own (pasted, the bundled splash) is written into to be opened.</summary>
+    public static string PictureTempFolder => Path.Combine(Path.GetTempPath(), "NeonSidekick", "pictures");
+
+    /// <summary>
+    /// Keeps <paramref name="image"/> for a double-click and returns its id. The file is found now — the working directory may
+    /// change later: <paramref name="sandbox"/> resolves the path under it; else a fully qualified path that exists is taken
+    /// as it is. A picture with neither (pasted from the clipboard, the bundled splash) keeps its bytes.
+    /// </summary>
+    private int RegisterPicture(ImageAttachment image, bool sandbox)
+    {
+        string? full = null;
+        if (sandbox)
+        {
+            if (_files.Resolve(image.Path, forWrite: false, out string resolved) == FileOutcome.Ok && File.Exists(resolved))
+            {
+                full = resolved;
+            }
+        }
+        else if (Path.IsPathFullyQualified(image.Path) && File.Exists(image.Path))
+        {
+            full = image.Path;
+        }
+
+        string name = Path.GetFileName(image.Path.Replace('/', Path.DirectorySeparatorChar));
+        lock (_pictures)
+        {
+            _pictures.Add(new PictureSource(name.Length > 0 ? name : "picture.png", full, image.Bytes));
+            return _pictures.Count - 1;
+        }
+    }
+
+    /// <summary>
+    /// A double-click on picture <paramref name="id"/>: its file (one without, written into <see cref="PictureTempFolder"/> first)
+    /// handed to the <c>Image editor</c> setting's command, or the one Windows registers. The line through the flow sink, so
+    /// it waits for a running reply. Any thread.
+    /// </summary>
+    private void OpenPicture(int id)
+    {
+        PictureSource? source;
+        lock (_pictures)
+        {
+            source = id >= 0 && id < _pictures.Count ? _pictures[id] : null;
+        }
+
+        if (source is null)
+        {
+            return;
+        }
+
+        string editor = _effective().ImageEditor;
+        try
+        {
+            string path;
+            if (source.FullPath is { } full)
+            {
+                if (!File.Exists(full))
+                {
+                    _flow.Error(PictureGoneError(full));
+                    return;
+                }
+
+                path = full;
+            }
+            else
+            {
+                Directory.CreateDirectory(PictureTempFolder);
+                path = Path.Combine(PictureTempFolder, source.Name);
+                File.WriteAllBytes(path, source.Bytes);
+            }
+
+            _openImage(path, editor);
+            _flow.Notice(PictureOpenedNotice(source.Name, editor));
+        }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException or IOException or UnauthorizedAccessException)
+        {
+            _flow.Error(PictureOpenFailedError(source.Name, ex.Message));
+        }
     }
 
     /// <param name="thumbnails">The thumbnail box, read once at the turn's start (null with <c>Show image thumbnails</c> off): the pictures a tool fetched are drawn under its 🛠️ line the way sent ones are drawn under the user's.</param>
@@ -8315,13 +8889,14 @@ internal sealed partial class ChatScreen
                 // A command's output is the model's to read; the line is the result's header: the exit code, the time, the command (ShellText.Note, 2026-09-21).
                 _transcript.ToolNote(ShellText.Note(result.Text));
                 break;
+            case TurnEvent.ToolResult result when string.Equals(result.Name, GenerateImageTool.ToolName, StringComparison.Ordinal):
+                // The picture's line, then — with ComfyUI show prompts on (later still on 2026-09-24) — what was sent, in full.
+                ComfyLines(result.Text, _transcript.ToolNote);
+                ToolThumbnails(result, thumbnails);
+                break;
             case TurnEvent.ToolResult result when QuietTools.Contains(result.Name):
                 _transcript.ToolNote(result.Text);
-                if (thumbnails is { } fetchedBox && result.Images is { Count: > 0 } fetched)
-                {
-                    _transcript.Images(ReadThumbnails(fetched, fetchedBox));
-                }
-
+                ToolThumbnails(result, thumbnails);
                 break;
             case TurnEvent.ToolResult result:
                 _transcript.ToolResult(result.Name, result.Text);
@@ -8335,6 +8910,33 @@ internal sealed partial class ChatScreen
             case TurnEvent.Usage usage:
                 _session.Usage.Add(usage.Tokens);
                 break;
+        }
+    }
+
+    /// <summary>The pictures a tool fetched or made, drawn under its line (null <paramref name="thumbnails"/> with <c>Show image thumbnails</c> off).</summary>
+    private void ToolThumbnails(TurnEvent.ToolResult result, ThumbnailBox? thumbnails)
+    {
+        if (thumbnails is { } box && result.Images is { Count: > 0 } fetched)
+        {
+            var (tiles, ids) = ReadThumbnails(fetched, box, sandbox: true);
+            _transcript.Images(tiles, ids);
+        }
+    }
+
+    /// <summary>
+    /// A generation's result on the transcript (later still on 2026-09-24): the picture's line through <paramref name="head"/>,
+    /// then, with <c>ComfyUI show prompts</c> on, the <c>prompt:</c> and <c>negative:</c> lines whole (<see cref="TranscriptRenderer.ToolDetail"/>).
+    /// </summary>
+    private void ComfyLines(string result, Action<string> head)
+    {
+        var (line, details) = ComfyText.SplitGenerated(result);
+        head(line);
+        if (_effective().ComfyShowPrompts)
+        {
+            foreach (string detail in details)
+            {
+                _transcript.ToolDetail(detail);
+            }
         }
     }
 

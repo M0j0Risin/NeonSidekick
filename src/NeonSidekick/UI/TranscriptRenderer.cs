@@ -177,8 +177,11 @@ public sealed class TranscriptRenderer : INoticeSink
         _state = LineState.AtLineStart;
     }
 
-    /// <summary>The sent pictures under the user's line, tiled left to right (<see cref="ImageStrip"/>); nothing for none.</summary>
-    public void Images(IReadOnlyList<ImageThumbnail> thumbnails)
+    /// <summary>
+    /// The sent pictures under the user's line, tiled left to right (<see cref="ImageStrip"/>); nothing for none. With
+    /// <paramref name="ids"/> (later on 2026-09-24) the pane keeps where each tile landed, so a double-click opens it.
+    /// </summary>
+    public void Images(IReadOnlyList<ImageThumbnail> thumbnails, IReadOnlyList<int>? ids = null)
     {
         ArgumentNullException.ThrowIfNull(thumbnails);
         if (thumbnails.Count == 0)
@@ -188,7 +191,16 @@ public sealed class TranscriptRenderer : INoticeSink
 
         EndRun();
         BreakIfMidText();
-        _console.Write(new ImageStrip(thumbnails));
+        var strip = new ImageStrip(thumbnails, ids);
+        if (ids is not null && _pane is { Enabled: true } pane)
+        {
+            pane.WritePictures(strip);
+        }
+        else
+        {
+            _console.Write(strip);
+        }
+
         _state = LineState.AtLineStart;
     }
 
@@ -198,12 +210,21 @@ public sealed class TranscriptRenderer : INoticeSink
     /// console's, so the picture sits in the middle of the window as it is now. The strip under a
     /// sent line (<see cref="Images"/>) stays at the left, under the line it belongs to.
     /// </summary>
-    public void Picture(ImageThumbnail thumbnail)
+    public void Picture(ImageThumbnail thumbnail, int? id = null)
     {
         ArgumentNullException.ThrowIfNull(thumbnail);
         EndRun();
         BreakIfMidText();
-        _console.Write(Align.Center(thumbnail.ToCanvas()));
+        if (id is { } key && _pane is { Enabled: true } pane)
+        {
+            // Where it landed kept (later on 2026-09-24): a double-click opens it.
+            pane.WritePictures(new CenteredPicture(thumbnail, key));
+        }
+        else
+        {
+            _console.Write(Align.Center(thumbnail.ToCanvas()));
+        }
+
         _state = LineState.AtLineStart;
     }
 
@@ -235,6 +256,17 @@ public sealed class TranscriptRenderer : INoticeSink
     public void ToolResult(string name, string text) => ToolLine(ToolResultMarkup(name, text), ToolResultMarkup(name, text).TrimStart());
 
     public void ToolNote(string text) => ToolLine(ToolNoteMarkup(text), Theme.ColorMarkup(Theme.Dim, ToolGlyph.TrimStart() + Truncate(text, ToolTextLimit)));
+
+    /// <summary>
+    /// A tool note's detail line (later still on 2026-09-24, <c>ComfyUI show prompts</c>): the same dim line behind the tools'
+    /// glyph, but whole — wrapped by the window, never cut at <see cref="ToolTextLimit"/> — since a prompt is read in full.
+    /// </summary>
+    public void ToolDetail(string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        string flat = text.ReplaceLineEndings(" ");
+        ToolLine(Theme.ColorMarkup(Theme.Dim, ToolGlyph + flat), Theme.ColorMarkup(Theme.Dim, ToolGlyph.TrimStart() + flat));
+    }
 
     /// <summary><see cref="ToolNote"/> for a skill tool's result: the same dim line behind <see cref="SkillGlyph"/>.</summary>
     public void SkillNote(string text) => ToolLine(SkillNoteMarkup(text), Theme.ColorMarkup(Theme.Dim, SkillGlyph.TrimStart() + Truncate(text, ToolTextLimit)));

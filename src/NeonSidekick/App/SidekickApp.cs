@@ -60,6 +60,7 @@ public sealed class SidekickApp
     private readonly HttpClient _modelHttpClient;
     private readonly WebAccess _web;
     private readonly Func<Mcp.McpServerConfig, string, ModelContextProtocol.Client.IClientTransport> _mcpTransport;
+    private readonly Func<Uri, Comfy.ComfyClient>? _comfyClient;
     private readonly string _externalSkills;
     private readonly Func<int> _inputDeviceCount;
     private readonly Func<string, string, IWakeWordDetector> _wakeDetectorFactory;
@@ -128,8 +129,11 @@ public sealed class SidekickApp
         WebAccess? web = null,
         Action<string>? setTitle = null,
         string? externalSkills = null,
-        Func<Mcp.McpServerConfig, string, ModelContextProtocol.Client.IClientTransport>? mcpTransport = null)
+        Func<Mcp.McpServerConfig, string, ModelContextProtocol.Client.IClientTransport>? mcpTransport = null,
+        Func<Uri, Comfy.ComfyClient>? comfyClient = null)
     {
+        // The ComfyUI client (2026-09-24): over its own transport in the app, a stub handler in tests.
+        _comfyClient = comfyClient;
         _console = console ?? throw new ArgumentNullException(nameof(console));
         // The MCP servers' transport (2026-09-20): the SDK's stdio child or streamable HTTP in the app, a pipe to an in-process server in tests.
         _mcpTransport = mcpTransport ?? McpSession.DefaultTransport;
@@ -444,6 +448,9 @@ public sealed class SidekickApp
         var vaultTools = ChatScreen.ObsidianTools(new Obsidian.ObsidianVault(() => EffectiveSettings.ObsidianVault, _time), () => EffectiveSettings);
         var sql = new Sql.SqlAccess(() => Sql.SqlConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory).Offered(EffectiveSettings.SqlConnectionsOffered));
         var sqlTools = ChatScreen.SqlTools(sql, () => EffectiveSettings);
+        // The image tools (2026-09-24): no console needed, so headless has them too.
+        using var comfy = new Comfy.ComfyStudio(ChatScreen.ComfyCatalog(_settings), files, () => EffectiveSettings, _comfyClient);
+        var comfyTools = ChatScreen.ComfyTools(comfy, files, () => _settings.ProfileSplashDirectory);
         // The shell tools (2026-09-21): headless has no pane to ask on, so the gate has no asker — under ask the
         // allow list alone decides, and NEONSIDEKICK_COMMAND_POLICY=yolo is how a scripted run says yes.
         var interpreters = new Shell.Interpreters(_environment.System);
@@ -573,7 +580,7 @@ public sealed class SidekickApp
                 }
 
                 // Per turn, as the screen does: a memory saved in this turn is in the next one's prompt.
-                ChatScreen.PrepareTurn(assistant, memory, memoryTools, standingTools, persona, operata, vocalia, EffectiveSettings.Memory, speechOutput: false, EffectiveSettings.LlmMaxToolIterations, EffectiveSettings.LlmOfferTools, webTools, EffectiveSettings.WebTools, ChatScreen.ContextGuardFor(EffectiveSettings, session.ContextLength), fileTools, EffectiveSettings.FileTools, skills: skills with { Enabled = EffectiveSettings.AgentSkills, External = EffectiveSettings.AgentSkills && EffectiveSettings.ExternalSkills }, sessionTools: sessionTools, sessionsEnabled: EffectiveSettings.SessionTool, disabledTools: ToolsText.DisabledSet(EffectiveSettings.ToolsDisabled), mcpTools: mcp.Tools, mcpEnabled: EffectiveSettings.McpServers, safeEdits: EffectiveSettings.FileSafeEdits, gitTools: gitTools, gitEnabled: EffectiveSettings.GitNativeTools, shellTools: shellTools, shellEnabled: ChatScreen.ShellOffered(EffectiveSettings), processes: processes, shellBridge: EffectiveSettings.ShellToolBridge, shellPolice: EffectiveSettings.ShellPoliceOutsidePaths, obsidianTools: ChatScreen.ObsidianToolsFor(vaultTools, EffectiveSettings), obsidianEnabled: ChatScreen.ObsidianOffered(EffectiveSettings), sqlTools: sqlTools, sqlEnabled: ChatScreen.SqlOffered(EffectiveSettings, sql));
+                ChatScreen.PrepareTurn(assistant, memory, memoryTools, standingTools, persona, operata, vocalia, EffectiveSettings.Memory, speechOutput: false, EffectiveSettings.LlmMaxToolIterations, EffectiveSettings.LlmOfferTools, webTools, EffectiveSettings.WebTools, ChatScreen.ContextGuardFor(EffectiveSettings, session.ContextLength), fileTools, EffectiveSettings.FileTools, skills: skills with { Enabled = EffectiveSettings.AgentSkills, External = EffectiveSettings.AgentSkills && EffectiveSettings.ExternalSkills }, sessionTools: sessionTools, sessionsEnabled: EffectiveSettings.SessionTool, disabledTools: ToolsText.DisabledSet(EffectiveSettings.ToolsDisabled), mcpTools: mcp.Tools, mcpEnabled: EffectiveSettings.McpServers, safeEdits: EffectiveSettings.FileSafeEdits, gitTools: gitTools, gitEnabled: EffectiveSettings.GitNativeTools, shellTools: shellTools, shellEnabled: ChatScreen.ShellOffered(EffectiveSettings), processes: processes, shellBridge: EffectiveSettings.ShellToolBridge, shellPolice: EffectiveSettings.ShellPoliceOutsidePaths, obsidianTools: ChatScreen.ObsidianToolsFor(vaultTools, EffectiveSettings), obsidianEnabled: ChatScreen.ObsidianOffered(EffectiveSettings), sqlTools: sqlTools, sqlEnabled: ChatScreen.SqlOffered(EffectiveSettings, sql), comfyTools: comfyTools, comfyEnabled: ChatScreen.ComfyOffered(EffectiveSettings, comfy));
                 var turn = await RunHeadlessTurnAsync(session, assistant, text, cancellationToken).ConfigureAwait(false);
                 if (EffectiveSettings.SessionLogging)
                 {
@@ -779,7 +786,7 @@ public sealed class SidekickApp
         // on the row and hands it back to the terminal otherwise, so the terminal's own selection
         // and right-click copy work whenever there is nothing to click into.
         var mouse = _input as WindowsConsoleInput;
-        var screen = new ChatScreen(_console, _settings, () => EffectiveSettings, OverriddenBy, session, speech, new KeySource(_input ?? _console.Input), voice, PersonaFile.OpenInEditor, RenderScreen, _time, _geometry, _clipboard, mouse is null ? null : mouse.Capture, _copyToClipboard, clipboardImage: _clipboardImage, web: _web, setTitle: _setTitle, externalSkills: _externalSkills, holdWheel: mouse is null ? null : mouse.HoldWheel, splash: SplashImages.Source, editDraft: PersonaFile.EditAndWaitAsync, mcp: mcp, environment: _environment.System, logFile: _options.LogPath is { } logPath ? Path.GetFullPath(logPath) : null);
+        var screen = new ChatScreen(_console, _settings, () => EffectiveSettings, OverriddenBy, session, speech, new KeySource(_input ?? _console.Input), voice, PersonaFile.OpenInEditor, RenderScreen, _time, _geometry, _clipboard, mouse is null ? null : mouse.Capture, _copyToClipboard, clipboardImage: _clipboardImage, web: _web, setTitle: _setTitle, externalSkills: _externalSkills, holdWheel: mouse is null ? null : mouse.HoldWheel, splash: SplashImages.Source, editDraft: PersonaFile.EditAndWaitAsync, mcp: mcp, environment: _environment.System, logFile: _options.LogPath is { } logPath ? Path.GetFullPath(logPath) : null, comfyClient: _comfyClient, openImage: PersonaFile.OpenImage);
         if (mouse is not null)
         {
             mouse.ModeChanged = screen.FlushConsole;
@@ -872,6 +879,7 @@ public sealed class SidekickApp
         SettingsField.WebSearxngUrl => _environment.WebSearxngUrl is not null ? EnvironmentOverrides.SearxngUrlVariable : null,
         SettingsField.ShellCommandPolicy => _environment.ShellCommandPolicy is not null ? EnvironmentOverrides.CommandPolicyVariable : null,
         SettingsField.ObsidianVault => _environment.ObsidianVault is not null ? EnvironmentOverrides.ObsidianVaultVariable : null,
+        SettingsField.ComfyUrl => _environment.ComfyUrl is not null ? EnvironmentOverrides.ComfyUrlVariable : null,
         _ => null,
     };
 
