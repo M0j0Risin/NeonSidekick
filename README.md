@@ -59,7 +59,7 @@ Neon Sidekick brings privacy-first, local LLM inference to your terminal. Powere
 * **Hint Row:** Model name → `/server` (server, then model, then reasoning) | Reasoning glyph → `/reasoning` | Tokens/spinner → `/usage` | Queued count → `/queue` | Blank space → `/settings`.
 
 **Available Panes**
-* `/settings`: App, sessions, LLM, and voice stack
+* `/settings`: App, sessions, LLM, voice stack, and `/botchat` pictures
 * `/skills`: Agent skills and self-reflection
 * `/tools`: Callable model tools
 * `/mcp`: External MCP servers
@@ -129,7 +129,7 @@ Neon Sidekick brings privacy-first, local LLM inference to your terminal. Powere
 
 | Setting | What it does | Default |
 |---|---|---|
-| TTS output | Reads replies aloud (`/tts`). | off |
+| TTS output | Reads replies aloud (`/tts`). Fenced code blocks are shown but never read aloud (nor by `/speak`). | off |
 | TTS source | `in-process` runs Kokoro in this process over ONNX Runtime (the model downloads on first use); `http` uses a Kokoro-FastAPI server. | `in-process` |
 | TTS HTTP URL | The Kokoro-FastAPI base URL, read while the source is `http`. | `http://localhost:8880/v1` |
 | TTS voice preview | The voice pickers speak the highlighted voice as you move through them. | on |
@@ -151,6 +151,15 @@ Neon Sidekick brings privacy-first, local LLM inference to your terminal. Powere
 | STT push-to-talk key | The key that records: `F1`–`F10`, `Insert`, `Home`, `End`, `PageUp` or `PageDown`. | `F4` |
 | STT whisper model | The Whisper model that transcribes: `ggml-tiny.en.bin`, `ggml-base.en.bin` or `ggml-small.en.bin` (downloaded on first use). | `ggml-base.en.bin` |
 | STT vosk model | The Vosk model the wake word and interrupt listen with: `vosk-model-small-en-us-0.15`, `vosk-model-en-us-0.22-lgraph` or `vosk-model-small-en-in-0.4`. | `vosk-model-small-en-us-0.15` |
+
+#### Botchat
+
+| Setting | What it does | Default |
+|---|---|---|
+| Botchat images enabled | Adds pictures to `/botchat` while the ComfyUI image tools are offered (ComfyUI tools on, a URL set, at least one workflow offered). Off, the chat is talk only, with no tools. | off |
+| Botchat image mode | Who draws the pictures. `automatic`: after each reply, the model writes an image prompt from it in the workflow family's style, and the app draws it. The bots get no tool. `autonomous`: the bots are offered `generate_image` and draw when they choose. If a bot's reply talks about a picture it never drew (or its call failed), the app draws that picture. A call a bot writes out as text is run as a real call and never shown or spoken. | `automatic` |
+| Botchat image workflow | The text → image workflow for the `automatic` pictures, picked from the offered workflows that take no input picture. Blank means the first one. | (the first) |
+| Botchat image async | On: the next bot speaks while the picture renders, and the picture appears, labelled with whose reply it shows, when nothing is streaming. Off: the reply is written first but held back; its picture is drawn, then the reply appears (and is spoken) under it. ESC skips just that picture. The image prompt is always written before the next turn. | on |
 
 </details>
 
@@ -367,7 +376,7 @@ Type `/` and the list opens with every command and its summary; after the comman
 | `/learn [note \| sessions [N \| text]]` | Write or improve a skill in the background from the last turn, or from the stored sessions. |
 | `/log` | Only when the app was started with `--log <path>`: open that diagnostic log file in your editor. Without the flag, `/log` is an unknown command and neither `/help` nor the `/` list shows it. |
 | `/loop <count> [delay] <message>`, `/loop infinite [delay] <message>` | Send the message that many times, or until ESC or Ctrl+C stops it, each reply waited for; a cancelled, withdrawn or failed turn ends the loop. An optional delay after the count (`30s`, `5m`, `1h30m`, one word, up to 24 hours) waits that long after each reply before the next pass; ESC or Ctrl+C during the wait stops the loop too: `/loop infinite 1m check the build`. |
-| `/botchat [profile ...] [topic]` | Let the profiles talk to each other until ESC or Ctrl+C: the profiles named, or every profile when none is, with this one always joining and speaking first. A leading word that isn't a profile starts the topic: `/botchat ada max the best pizza`; after `--` the rest is always the topic, even when it starts with a profile's name: `/botchat ada -- max speed of light`. Without a topic the bots pick their own. Each reply is in the speaker's own persona (`persona.md`) and, with speech on, its own voice. Every turn runs on this profile's LLM server and model, one after another; the other profiles' LLM settings are ignored. A bot named in the last line (yours, or the last reply) speaks next, one of them if several are named; otherwise the next speaker is random but never the one who just spoke. No tools. A line you type meanwhile joins the chat before the next reply. With speech on, ESC skips the current bot's voice and the chat goes on; ESC again stops the chat. Each bot is told the others' pronouns from their profile's first TTS voice: `am_`, `bm_`… male, anything else female. With `Session logging` on the chat is saved as a session of its own; the current conversation is left as it was. |
+| `/botchat [profile ...] [topic]` | Let the profiles talk to each other until ESC or Ctrl+C: the profiles named, or every profile when none is, with this one always joining and speaking first. A leading word that isn't a profile starts the topic: `/botchat ada max the best pizza`; after `--` the rest is always the topic, even when it starts with a profile's name: `/botchat ada -- max speed of light`. Without a topic the bots pick their own. Each reply is in the speaker's own persona (`persona.md`) and, with speech on, its own voice. Every turn runs on this profile's LLM server and model, one after another; the other profiles' LLM settings are ignored. A bot named in the last line (yours, or the last reply) speaks next, one of them if several are named; otherwise the next speaker is random but never the one who just spoke. No tools, except pictures: with `Botchat images enabled` on (the Botchat tab of `/settings`) and ComfyUI offered, the app draws a picture of each reply or the bots are offered `generate_image`, as `Botchat image mode` says. A line you type meanwhile joins the chat before the next reply. With speech on, ESC skips the current bot's voice and the chat goes on; ESC again stops the chat. `/botchat --resume [line]` carries on the last chat of this run where it stopped (same cast, topic and lines, and the same session row); a line after it joins the chat as yours. Each bot is told the others' pronouns from their profile's first TTS voice: `am_`, `bm_`… male, anything else female. With `Session logging` on the chat is saved as a session of its own; the current conversation is left as it was. |
 | `/expand` | Show every line of the folded tool runs and code blocks in the transcript, and of the ones to come (Ctrl+O flips between this and `/collapse`). |
 | `/collapse` | Fold the tool runs and code blocks in the transcript again. |
 | `/mcp` | Connect external MCP servers and switch their tools on or off. |

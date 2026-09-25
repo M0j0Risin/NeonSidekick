@@ -29,6 +29,19 @@ public class BotChatTests
         Assert.Equal(topic, parsedTopic);
     }
 
+    [Theory]
+    [InlineData("--resume", true, "")]
+    [InlineData("  --RESUME   Talk about cats  ", true, "Talk about cats")]
+    [InlineData("--resume\tcats", true, "cats")]
+    [InlineData("ada --resume", false, "")]          // only as the first word
+    [InlineData("--resumed", false, "")]             // a whole word
+    [InlineData("-- resume", false, "")]             // the topic separator, then a topic
+    [InlineData("", false, "")]
+    public void ParseResume_IsTheFirstWord_TheRestTheUsersLine(string args, bool resume, string line)
+    {
+        Assert.Equal((resume, line), BotChat.ParseResume(args));
+    }
+
     [Fact]
     public void ParseArgs_NamingOnlyTheStarter_LeavesACastOfOne()
     {

@@ -42,6 +42,17 @@ public class SpeakReadingTests
     }
 
     [Fact]
+    public void Split_LeavesOutTheFencedCodeBlocks_OffsetsStillVerbatim()
+    {
+        string text = "Run this:\n```bash\necho Hi.\nls\n```\nThen this.\n~~~\nopen\n";
+
+        var sentences = SpeakReading.Split(text);
+
+        Assert.Equal(["Run this:", "Then this."], sentences.Select(s => s.Text));
+        Assert.All(sentences, s => Assert.Equal(s.Text, text.Substring(s.Offset, s.Text.Length)));
+    }
+
+    [Fact]
     public void Split_ARunOnSentence_BreaksAtTheChunkerLimit_AndTheSameWordTwiceKeepsOrder()
     {
         string words = string.Join(" ", Enumerable.Repeat("word", 70));   // 349 chars, no terminator

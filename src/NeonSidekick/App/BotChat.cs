@@ -2,7 +2,9 @@ using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.AI;
+using NeonSidekick.Comfy;
 using NeonSidekick.Llm;
+using NeonSidekick.Llm.Tools;
 using NeonSidekick.Settings;
 
 namespace NeonSidekick.App;
@@ -16,7 +18,10 @@ namespace NeonSidekick.App;
 /// is; a random speaker each turn, never the one who spoke last; no tools, only talk; each reply in the
 /// speaker's own persona (its <c>persona.md</c>, rebuilt every turn, never another bot's) and voice; and
 /// every turn on the starting profile's LLM server and model, one after another — a profile's own
-/// <c>LLM URL</c> and <c>LLM model</c> are never read here.</para>
+/// <c>LLM URL</c> and <c>LLM model</c> are never read here. The one exception to "no tools" (2026-09-25, the
+/// user's ask): with the Botchat tab's <c>Botchat images enabled</c> on and ComfyUI offered, pictures — the
+/// bots' own <c>generate_image</c> (<see cref="ImageRule"/>) or the app's picture of each reply
+/// (<see cref="ImagePromptInstruction"/>), as <c>Botchat image mode</c> says.</para>
 ///
 /// <para>Who speaks next (2026-09-25, the user's report: a bot asked another by name and a third answered):
 /// a bot named in the last line — the user's lines since the last reply first, then that reply — answers,
@@ -28,7 +33,7 @@ namespace NeonSidekick.App;
 /// too — as user messages written <c>Name: text</c>, consecutive ones merged (local chat templates want
 /// the roles to alternate), the oldest dropped past <see cref="MaxLines"/> so an endless chat fits a window.</para>
 /// </summary>
-public static class BotChat
+public static partial class BotChat
 {
     /// <summary>How many of the latest lines a speaker is shown: <see cref="ConversationHistory.MaxTurns"/>, the main chat's own memory.</summary>
     public const int MaxLines = ConversationHistory.MaxTurns;
@@ -234,18 +239,19 @@ public static class BotChat
     /// profile has no <c>persona.md</c>) through <see cref="Assistant.SystemPrompt"/> with every tool off, then
     /// <see cref="Rules"/>. Built afresh for every turn from that speaker's persona alone. Pure.
     /// </summary>
-    public static string SystemPrompt(string? persona, string speaker, IReadOnlyList<string> others, string topic, bool speechOutput, string? voiceDirective, bool markdown, string? pronouns = null) =>
+    public static string SystemPrompt(string? persona, string speaker, IReadOnlyList<string> others, string topic, bool speechOutput, string? voiceDirective, bool markdown, string? pronouns = null, bool images = false) =>
         Assistant.SystemPrompt(speechOutput, memories: null, persona: string.IsNullOrWhiteSpace(persona) ? null : persona, voiceDirective: voiceDirective,
             tools: false, files: false, timers: false, markdown: markdown)
-        + "\n\n" + Rules(speaker, others, topic, pronouns);
+        + "\n\n" + Rules(speaker, others, topic, pronouns, images);
 
     /// <summary>
     /// The group-chat rules after the persona (2026-09-24): who else is in the room, speak only as yourself,
     /// no name prefix, short replies, keep it going — small local models otherwise drift into agreeing and
     /// saying goodbye. <paramref name="pronouns"/> (<see cref="PronounsLine"/>, 2026-09-25) follows the first
-    /// sentence when given. Pinned: it is prompt text.
+    /// sentence when given; <paramref name="images"/> (the bots offered <c>generate_image</c>, 2026-09-25) closes
+    /// it with <see cref="ImageRule"/>. Pinned: it is prompt text.
     /// </summary>
-    public static string Rules(string speaker, IReadOnlyList<string> others, string topic, string? pronouns = null)
+    public static string Rules(string speaker, IReadOnlyList<string> others, string topic, string? pronouns = null, bool images = false)
     {
         ArgumentNullException.ThrowIfNull(others);
         var text = new StringBuilder().Append(CultureInfo.InvariantCulture, $"You are {speaker}, in a group chat with {JoinNames(others)} and the user, who may join in at any time. ");
@@ -261,8 +267,196 @@ public static class BotChat
             text.Append(CultureInfo.InvariantCulture, $" The topic: {topic}");
         }
 
+        if (images)
+        {
+            text.Append(' ').Append(ImageRule);
+        }
+
         return text.ToString();
     }
+
+    /// <summary>
+    /// The rules' last sentence while the bots are offered <c>generate_image</c> (2026-09-25, <c>Botchat image mode</c>
+    /// <c>autonomous</c>): a picture now and then, never instead of talking. Pinned: it is prompt text.
+    /// </summary>
+    public const string ImageRule = "You can draw a picture with generate_image when one would add something to the conversation — at most one per reply, and never instead of saying something. "
+        + "If you say you are drawing, painting, sketching, generating, making, sharing or showing " + PictureWords + ", call generate_image in that same reply, with a prompt: "
+        + "never describe one you have not made, and never write the call out as text.";
+
+    /// <summary>
+    /// Every word a model may use for what it draws (later on 2026-09-25, the user's report: the rule said only "picture", and a bot
+    /// talking of an image or a photo did not take it as its own), shared by <see cref="ImageRule"/> and
+    /// <see cref="PromisedPictureInstruction"/> so the two never drift apart.
+    /// </summary>
+    private const string PictureWords = "a picture, image, photo, drawing, painting, sketch, illustration, portrait, artwork or anything else to look at";
+
+    // ── A picture a bot only talked about (2026-09-25) ──────────────────────
+
+    /// <summary>
+    /// What a bot's turn did with <c>generate_image</c> (2026-09-25): <c>Tried</c> — it called the tool; <c>Drew</c> — a call's result
+    /// was no <c>Error:</c> (later the same day, the user's report: a call with no prompt answered "give prompt" and counted as a
+    /// drawing, so the promised picture never came). A bot's history is built afresh each turn from text lines, so any call in
+    /// it is the turn's own. Pure.
+    /// </summary>
+    public static (bool Tried, bool Drew) PictureAttempt(IEnumerable<ChatMessage> messages)
+    {
+        ArgumentNullException.ThrowIfNull(messages);
+        var contents = messages.SelectMany(m => m.Contents).ToList();
+        var calls = contents.OfType<FunctionCallContent>().Where(call => string.Equals(call.Name, GenerateImageTool.ToolName, StringComparison.Ordinal)).Select(call => call.CallId).ToHashSet(StringComparer.Ordinal);
+        bool drew = contents.OfType<FunctionResultContent>().Any(result => calls.Contains(result.CallId)
+            && !(result.Result?.ToString() ?? "").StartsWith("Error", StringComparison.Ordinal));
+        return (calls.Count > 0, drew);
+    }
+
+    /// <summary>
+    /// Whether a reply talks about a picture at all (2026-09-25, <c>Botchat image mode</c> <c>autonomous</c>): the cheap sieve
+    /// before <see cref="PromisedPictureInstruction"/>'s side request, so a reply with no picture word costs nothing. Loose on
+    /// purpose — the request decides. Pure.
+    /// </summary>
+    public static bool MentionsPicture(string? reply) => !string.IsNullOrEmpty(reply) && PictureWord().IsMatch(reply);
+
+    [GeneratedRegex(@"\b(?:draw|drew|drawn|sketch|paint|doodle|pic|pics|picture|image|illustrat|render|portrait|photo|snapshot|selfie|snap|art\b|artwork|graphic|cartoon|comic|poster|wallpaper)", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase)]
+    private static partial Regex PictureWord();
+
+    /// <summary>
+    /// The answer of <see cref="PromisedPictureInstruction"/>'s request when the line promises no picture (2026-09-25). Pinned: it is prompt text.
+    /// </summary>
+    public const string NoPictureAnswer = "NONE";
+
+    /// <summary>
+    /// The system message of the promised-picture request (2026-09-25, the user's ask: under <c>autonomous</c> a bot often says it
+    /// drew something without calling <c>generate_image</c>, and the reply should be true): decide whether the line says its speaker
+    /// is drawing, sharing or showing a picture — <see cref="NoPictureAnswer"/> when not — and otherwise write the prompt for
+    /// <em>that</em> picture, in <paramref name="workflow"/>'s family style and its sidecar's tips. Pinned: it is prompt text.
+    /// </summary>
+    public static string PromisedPictureInstruction(ComfyWorkflow workflow)
+    {
+        ArgumentNullException.ThrowIfNull(workflow);
+        var text = new StringBuilder("You write prompts for an image generator. Given one line of a group chat, decide whether its speaker says they are drawing, painting, sketching, generating, making, sharing or showing " + PictureWords + " right now. ")
+            .Append(CultureInfo.InvariantCulture, $"If they do not, answer exactly {NoPictureAnswer}. ")
+            .Append("If they do, write a single prompt for the picture they describe — what it shows, its mood — never the chat itself, no speech bubbles, no screens of text. ")
+            .Append("Write it in this style: ").Append(ComfyFamilies.StyleGuide(workflow.Family));
+        if (!string.IsNullOrWhiteSpace(workflow.Tips))
+        {
+            text.Append("\n\nTips for this workflow: ").Append(workflow.Tips.Trim());
+        }
+
+        text.Append(CultureInfo.InvariantCulture, $"\n\nAnswer with the prompt alone, or {NoPictureAnswer}: no preamble, no explanation, no quotes.");
+        return text.ToString();
+    }
+
+    /// <summary>Whether a cleaned promised-picture answer means no picture: empty, or <see cref="NoPictureAnswer"/> (a trailing full stop allowed). Pure.</summary>
+    public static bool IsNoPicture(string prompt) =>
+        prompt.Length == 0 || string.Equals(prompt.TrimEnd('.'), NoPictureAnswer, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>The <c>--log</c> line of a promised picture's prompt (2026-09-25).</summary>
+    public static string PromisedPictureLogLine(string speaker, string workflow, string prompt) => $"Botchat picture {speaker} talked about but did not draw, on {workflow}: {prompt}";
+
+    // ── The app's pictures (2026-09-25) ─────────────────────────────────────
+
+    /// <summary>
+    /// The workflows a <c>/botchat</c> picture may use (2026-09-25): those of <paramref name="workflows"/> (the offered ones)
+    /// that take a prompt and no input picture — text → image — in the order given. Pure.
+    /// </summary>
+    public static IReadOnlyList<ComfyWorkflow> ImageWorkflows(IReadOnlyList<ComfyWorkflow> workflows)
+    {
+        ArgumentNullException.ThrowIfNull(workflows);
+        return workflows.Where(w => w.ImageCount == 0 && w.TakesPrompt).ToList();
+    }
+
+    /// <summary>
+    /// The workflow the app's picture uses (2026-09-25, <c>Botchat image workflow</c>): the one <paramref name="setting"/>
+    /// names (ignoring case) when it is among <see cref="ImageWorkflows"/>, else the first of those; null when there is none. Pure.
+    /// </summary>
+    public static ComfyWorkflow? ImageWorkflow(IReadOnlyList<ComfyWorkflow> offered, string? setting)
+    {
+        var usable = ImageWorkflows(offered);
+        string name = setting?.Trim() ?? "";
+        return usable.FirstOrDefault(w => name.Length > 0 && string.Equals(w.Name, name, StringComparison.OrdinalIgnoreCase))
+            ?? usable.FirstOrDefault();
+    }
+
+    /// <summary>
+    /// The system message of the image-prompt request (2026-09-25): one prompt that pictures the reply, in the style of
+    /// <paramref name="workflow"/>'s family (<see cref="ComfyFamilies.StyleGuide"/>) and its sidecar's tips, and nothing
+    /// else — no preamble, no quotes. Pinned: it is prompt text.
+    /// </summary>
+    public static string ImagePromptInstruction(ComfyWorkflow workflow)
+    {
+        ArgumentNullException.ThrowIfNull(workflow);
+        var text = new StringBuilder("You write prompts for an image generator. Given one line of a group chat, write a single prompt for a picture that illustrates it: ")
+            .Append("the scene, the things or ideas it talks about, its mood — never the chat itself, no speech bubbles, no screens of text. ")
+            .Append("Write it in this style: ").Append(ComfyFamilies.StyleGuide(workflow.Family));
+        if (!string.IsNullOrWhiteSpace(workflow.Tips))
+        {
+            text.Append("\n\nTips for this workflow: ").Append(workflow.Tips.Trim());
+        }
+
+        text.Append("\n\nAnswer with the prompt alone: no preamble, no explanation, no quotes.");
+        return text.ToString();
+    }
+
+    /// <summary>The user message of the image-prompt request (2026-09-25): whose line, the topic when there is one, and the line. Pinned: it is prompt text.</summary>
+    public static string ImagePromptRequest(string speaker, string reply, string topic)
+    {
+        ArgumentNullException.ThrowIfNull(reply);
+        ArgumentNullException.ThrowIfNull(topic);
+        string about = topic.Length > 0 ? $" (the chat's topic: {topic})" : "";
+        return $"{speaker}'s line{about}:\n\n{reply}";
+    }
+
+    /// <summary>
+    /// The model's image prompt as ComfyUI gets it (2026-09-25): trimmed, a code fence around it dropped, a leading
+    /// <c>Prompt:</c> label dropped, and one pair of wrapping quotes taken off. Empty means no picture. Pure.
+    /// </summary>
+    public static string CleanImagePrompt(string? text)
+    {
+        string prompt = (text ?? "").Trim();
+        if (prompt.StartsWith("```", StringComparison.Ordinal))
+        {
+            int open = prompt.IndexOf('\n', StringComparison.Ordinal);
+            prompt = open < 0 ? "" : prompt[(open + 1)..];
+            int close = prompt.LastIndexOf("```", StringComparison.Ordinal);
+            prompt = (close < 0 ? prompt : prompt[..close]).Trim();
+        }
+
+        if (prompt.StartsWith("prompt:", StringComparison.OrdinalIgnoreCase))
+        {
+            prompt = prompt["prompt:".Length..].Trim();
+        }
+
+        if (prompt.Length >= 2 && ((prompt[0] == '"' && prompt[^1] == '"') || (prompt[0] == '\'' && prompt[^1] == '\'')))
+        {
+            prompt = prompt[1..^1].Trim();
+        }
+
+        return prompt;
+    }
+
+    /// <summary>The spinner while a held reply is written unseen (<c>Botchat image async</c> off, later on 2026-09-25).</summary>
+    public static string ThinkingSpinner(string speaker) => $"{speaker} is thinking…";
+
+    /// <summary>A held turn's reply as the screen will show it: its text deltas joined, trimmed (later on 2026-09-25). Pure.</summary>
+    public static string ReplyText(IEnumerable<TurnEvent> events)
+    {
+        ArgumentNullException.ThrowIfNull(events);
+        return string.Concat(events.OfType<TurnEvent.TextDelta>().Select(delta => delta.Text)).Trim();
+    }
+
+    /// <summary>The spinner while the model writes a reply's image prompt (2026-09-25).</summary>
+    public static string PromptSpinner(string speaker) => $"Imagining {speaker}'s picture…";
+
+    /// <summary>The line over an app's picture drawn after later lines (<c>Botchat image async</c>, 2026-09-25): whose reply it pictures. Pinned.</summary>
+    public static string PictureNotice(string speaker) => $"(botchat: {speaker}'s picture)";
+
+    /// <summary>Once per chat, when pictures are on but no offered workflow is text → image (2026-09-25). Pinned.</summary>
+    public const string NoWorkflowNotice = "(botchat: no offered ComfyUI workflow makes a picture from text alone, so there are no pictures of the replies)";
+
+    /// <summary>When the model wrote no image prompt for a reply (2026-09-25). Pinned.</summary>
+    public const string NoPromptNotice = "(botchat: no image prompt came back for that reply; no picture)";
+
+    /// <summary>The <c>--log</c> line of an image prompt (2026-09-25).</summary>
+    public static string ImagePromptLogLine(string speaker, string workflow, string prompt) => $"Botchat picture of {speaker}'s reply on {workflow}: {prompt}";
 
     /// <summary>
     /// A bot's gender from its profile's first TTS voice (2026-09-25, the user's ask: the bots were guessing each
@@ -318,7 +512,7 @@ public static class BotChat
 
     // ── The screen's words (pinned) ──────────────────────────────────────────
 
-    public const string UsageError = "Usage: /botchat [profile ...] [[--] topic]: names two or more profiles (this one always joins), or none for every profile; after --, the rest is the topic whatever its first word; ESC or Ctrl+C stops it.";
+    public const string UsageError = "Usage: /botchat [profile ...] [[--] topic]: names two or more profiles (this one always joins), or none for every profile; after --, the rest is the topic whatever its first word; ESC or Ctrl+C stops it, and /botchat --resume [line] carries it on.";
 
     public const string TooFewError = "/botchat needs at least two profiles: add one with /profile add <name>.";
 
@@ -337,6 +531,46 @@ public static class BotChat
     /// <summary>A profile whose <c>profile.json</c> could not be read sits the chat out.</summary>
     public static string SkippedNotice(string name, string reason) => $"(botchat: {name} sits this one out: {reason})";
 
+    // ── Resuming (2026-09-25) ───────────────────────────────────────────────
+
+    /// <summary>
+    /// The first word that carries on the last chat of this run (2026-09-25, the user's ask: a stopped chat could only start over).
+    /// A whole word of its own, so it never reads as a profile's name nor as <see cref="TopicSeparator"/>. Pinned.
+    /// </summary>
+    public const string ResumeSwitch = "--resume";
+
+    /// <summary>The argument list's note beside <see cref="ResumeSwitch"/>.</summary>
+    public const string ResumeNote = "carry on the last botchat of this run";
+
+    /// <summary>
+    /// Whether <paramref name="args"/> resume the last chat: <see cref="ResumeSwitch"/> as the first word, ignoring case; the rest
+    /// of the line is <c>Line</c>, which joins the chat as the user's before the next reply (empty for none). Pure.
+    /// </summary>
+    public static (bool Resume, string Line) ParseResume(string args)
+    {
+        ArgumentNullException.ThrowIfNull(args);
+        string rest = args.Trim();
+        int split = rest.IndexOfAny([' ', '\t']);
+        string word = split < 0 ? rest : rest[..split];
+        return string.Equals(word, ResumeSwitch, StringComparison.OrdinalIgnoreCase)
+            ? (true, split < 0 ? "" : rest[(split + 1)..].Trim())
+            : (false, "");
+    }
+
+    /// <summary>When there is no chat of this run to resume.</summary>
+    public const string NothingToResumeError = "There is no /botchat to resume in this run: start one with /botchat.";
+
+    /// <summary>When the chat to resume was started from another profile than the one loaded now.</summary>
+    public static string ResumeOtherProfileError(string starter) =>
+        $"The last /botchat was started from the profile '{starter}': load it again with /profile to resume it.";
+
+    /// <summary>The line above a resumed chat: the cast, the replies so far, and how to stop it.</summary>
+    public static string ResumeNotice(IReadOnlyList<string> names, string topic, int replies)
+    {
+        string about = topic.Length > 0 ? $" on \"{topic}\"" : "";
+        return $"(botchat resumed: {JoinNames(names)}{about}, {UsageText.Plural(replies, "reply", "replies")} so far; type to join in, ESC or Ctrl+C stops it)";
+    }
+
     /// <summary>The session's title (2026-09-24): <c>Botchat: neon, ada and max</c>.</summary>
     public static string SessionTitle(IReadOnlyList<string> names) => "Botchat: " + JoinNames(names);
 
@@ -346,6 +580,13 @@ public static class BotChat
 
 /// <summary>One line of the shared botchat transcript: a bot's reply (<paramref name="Speaker"/> its profile) or the user's interjection.</summary>
 public sealed record BotChatLine(string Speaker, string Text, bool IsUser = false);
+
+/// <summary>
+/// A stopped <c>/botchat</c>, kept for <see cref="BotChat.ResumeSwitch"/> (2026-09-25): in memory, this run only. The profile it
+/// was started from, the cast's names in order, the topic, the shared lines, who spoke last — a name, so it maps onto a cast
+/// rebuilt without one of them — the replies so far and its session row, if any.
+/// </summary>
+public sealed record BotChatState(string Starter, IReadOnlyList<string> Cast, string Topic, IReadOnlyList<BotChatLine> Lines, string? LastSpeaker, int Replies, long? SessionId);
 
 /// <summary>
 /// One bot of the chat: its profile's name, its persona (null = the default) and <c>vocalia.md</c> directive,

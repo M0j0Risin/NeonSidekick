@@ -8425,40 +8425,45 @@ internal sealed partial class ChatScreen
     /// reply, or the app token. With <c>Session logging</c> on the chat is a session of its own (each reply a
     /// turn, the starter's view as its history, so <c>/sessions</c> brings it back as a chat with the starter);
     /// the main conversation is never touched. Returns true when the shell should exit.
+    ///
+    /// <para>Pictures (2026-09-25, the user's ask): with <c>Botchat images enabled</c> on and the ComfyUI tools offered
+    /// (<see cref="ComfyOffered"/>), <c>Botchat image mode</c> says who draws. The bots, offered <c>generate_image</c> alone
+    /// (<see cref="BotImageTool"/>), draw through the turn like the main chat's model; the app, after every reply, has the
+    /// model write an image prompt from it (<see cref="WriteBotPictureAsync"/>) and draws it with <c>Botchat image workflow</c>.
+    /// With <c>Botchat image async</c> off (later on 2026-09-25, the user's ask: the picture before the words) the reply is
+    /// written unseen first (<see cref="CollectBotTurnAsync"/>), its picture made, and then the turn is replayed — the name,
+    /// the picture, the reply shown and spoken; on, the reply streams as ever and its picture renders while the next bot
+    /// answers, drawn when nothing streams (<see cref="ShowReadyBotPictures"/>). The pictures never reach the bots nor the session row.
+    /// Under <c>autonomous</c> (later on 2026-09-25, the user's ask: the reply should be true) a reply that talks about a picture its
+    /// bot did not draw (<see cref="BotChat.MentionsPicture"/>, <see cref="BotChat.PictureAttempt"/> — a failed call counts as not
+    /// drawn) gets it from the app, the prompt written by <see cref="BotChat.PromisedPictureInstruction"/> — or nothing, when the model
+    /// finds no picture promised. A call the bot writes out as text runs as a real one (<see cref="Assistant.TextToolCalls"/>).</para>
+    ///
+    /// <para>Resuming (2026-09-25, the user's ask: a stopped chat could only start over): however a chat ends, its cast, topic,
+    /// lines, last speaker, reply count and session row are kept (<see cref="_lastBotChat"/>, this run only), and
+    /// <c>/botchat --resume [line]</c> carries it on — the cast rebuilt afresh (<see cref="BuildBotCast"/>), the line joining as the
+    /// user's. Only from the profile that started it.</para>
     /// </summary>
     private async Task<bool> HandleBotChatAsync(string args, CancellationToken cancellationToken)
     {
-        string home = _settings.StorageDirectory;
         string starter = _settings.ProfileName;
-        var (names, topic) = BotChat.ParseArgs(args, Profiles.List(home), starter);
-        var effective = _effective();
-        var cast = new List<BotParticipant>();
-        foreach (var name in names)
+        var (resume, resumeLine) = BotChat.ParseResume(args);
+        var saved = resume ? _lastBotChat : null;
+        if (resume && saved is null)
         {
-            if (Profiles.NameEquals(name, starter))
-            {
-                // The starter is the loaded profile: its files as bound, its voice as the session holds it.
-                cast.Add(new BotParticipant(name, _persona.Read(), _vocalia.Read(), _speech.VoiceSpec, _speech.Speed, cast.Count, BotChat.GenderOf(effective.TtsVoice)));
-                continue;
-            }
-
-            string directory = Profiles.Directory(home, name);
-            AppSettingsData data;
-            try
-            {
-                data = Profiles.ReadProfileFile(Profiles.ProfileFile(home, name));
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.Json.JsonException)
-            {
-                _transcript.Notice(BotChat.SkippedNotice(name, ex.Message));
-                continue;
-            }
-
-            // Only the persona, the spoken-reply directive and the voice are read: never the LLM settings.
-            string voice = VoiceMix.Spec(data.TtsVoice, data.TtsVoice2, data.TtsVoiceMix);
-            cast.Add(new BotParticipant(name, new PersonaFile(directory).Read(), new VocaliaFile(directory).Read(), voice, data.TtsSpeed, cast.Count, BotChat.GenderOf(data.TtsVoice)));
+            _transcript.Error(BotChat.NothingToResumeError);
+            return false;
         }
 
+        if (saved is not null && !Profiles.NameEquals(saved.Starter, starter))
+        {
+            _transcript.Error(BotChat.ResumeOtherProfileError(saved.Starter));
+            return false;
+        }
+
+        var (names, topic) = saved is not null ? (saved.Cast, saved.Topic) : BotChat.ParseArgs(args, Profiles.List(_settings.StorageDirectory), starter);
+        var effective = _effective();
+        var cast = BuildBotCast(names, starter, effective);
         if (cast.Count < 2)
         {
             _transcript.Error(BotChat.TooFewError);
@@ -8472,19 +8477,40 @@ internal sealed partial class ChatScreen
         }
 
         var castNames = cast.Select(bot => bot.Name).ToList();
-        _transcript.Notice(BotChat.StartNotice(castNames, topic));
-        DiagnosticLog.Info(AppCategory, BotChat.StartNotice(castNames, topic));
-        long? sessionId = effective.SessionLogging ? _sessions.Begin(BotChat.SessionTitle(castNames), _session.Endpoint?.ModelId ?? "") : null;
-        var lines = new List<BotChatLine>();
+        string opening = saved is not null ? BotChat.ResumeNotice(castNames, topic, saved.Replies) : BotChat.StartNotice(castNames, topic);
+        _transcript.Notice(opening);
+        DiagnosticLog.Info(AppCategory, opening);
+        // A resumed chat (2026-09-25) carries on its own session row; a new one begins when there is none and logging is on.
+        long? sessionId = saved?.SessionId ?? (effective.SessionLogging ? _sessions.Begin(BotChat.SessionTitle(castNames), _session.Endpoint?.ModelId ?? "") : null);
+        var lines = saved is not null ? saved.Lines.ToList() : new List<BotChatLine>();
         int? last = null;
-        int replies = 0;
+        if (saved?.LastSpeaker is { } lastName)
+        {
+            // By name: a cast rebuilt without the last speaker simply has no last speaker.
+            int spoke = castNames.FindIndex(name => Profiles.NameEquals(name, lastName));
+            last = spoke >= 0 ? spoke : null;
+        }
+
+        int replies = saved?.Replies ?? 0;
+        if (resumeLine.Length > 0)
+        {
+            // The line after --resume joins the chat as the user's, as a line typed under a reply does.
+            _transcript.User(resumeLine);
+            lines.Add(new BotChatLine(BotChat.UserName, resumeLine, IsUser: true));
+        }
+
+        // The app's pictures still rendering (Botchat image async), oldest first; ending the chat cancels them.
+        using var pictureCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var pictures = new List<(BotParticipant Bot, Task<ComfyGeneration?> Job)>();
+        _botNoWorkflowTold = false;
         _botChatRunning = true;
         try
         {
             while (!cancellationToken.IsCancellationRequested)
             {
-                // The lines typed under the last reply join the chat as the user's, in order.
+                // The lines typed under the last reply join the chat as the user's, in order; then the pictures made meanwhile.
                 TakeInterjections(lines);
+                ShowReadyBotPictures(pictures);
 
                 // A bot the last line names answers next (2026-09-25); anyone but the last speaker otherwise.
                 int next = last is null ? 0 : BotChat.NextSpeaker(cast.Count, last, _random, BotChat.Addressed(lines, castNames));
@@ -8497,7 +8523,11 @@ internal sealed partial class ChatScreen
                 var (prior, turnText) = BotChat.BuildView(bot.Name, lines, others, topic);
                 // The others' pronouns from their first voices (2026-09-25); never the speaker's own.
                 string pronouns = BotChat.PronounsLine(cast.Where(b => b != bot).Select(b => (b.Name, b.Gender)).ToList());
-                var history = new ConversationHistory(BotChat.SystemPrompt(bot.Persona, bot.Name, others, topic, speaking, bot.VoiceDirective, markdown, pronouns));
+                // Pictures (2026-09-25): read per reply, so a switch mid-chat holds from the next one.
+                var imageMode = BotChatImageMode.Resolve(effective);
+                bool pictured = effective.BotChatImages && ComfyOffered(effective, _comfy);
+                var imageTool = pictured && BotChatImageMode.Offers(imageMode) ? BotImageTool(effective) : null;
+                var history = new ConversationHistory(BotChat.SystemPrompt(bot.Persona, bot.Name, others, topic, speaking, bot.VoiceDirective, markdown, pronouns, images: imageTool is not null));
                 history.Replace(prior);
                 if (_session.CreateAssistant(history) is not { } assistant)
                 {
@@ -8505,8 +8535,46 @@ internal sealed partial class ChatScreen
                     break;
                 }
 
+                if (imageTool is not null)
+                {
+                    assistant.Tools = [imageTool];
+                    assistant.MaxToolIterations = BotImageToolIterations;
+                    // A bot that writes generate_image(…) out as text (later on 2026-09-25, the user's report) has it run, unseen and unspoken.
+                    assistant.TextToolCalls = true;
+                }
+
                 DiagnosticLog.Info(AppCategory, BotChat.TurnLogLine(replies + 1, bot.Name));
-                var outcome = await RunTurnAsync(assistant, turnText, [], cancellationToken, bot).ConfigureAwait(false);
+                // Async off (later on 2026-09-25): the reply is written unseen, its picture made, then both shown — picture first.
+                bool held = pictured && BotChatImageMode.Draws(imageMode) && !effective.BotChatImageAsync;
+                IReadOnlyList<TurnEvent>? replay = null;
+                ComfyGeneration? picture = null;
+                if (held)
+                {
+                    var (collected, thinkingCancelled) = await UnderWatchAsync(BotChat.ThinkingSpinner(bot.Name), token => CollectBotTurnAsync(assistant, turnText, token), cancellationToken).ConfigureAwait(false);
+                    if (thinkingCancelled || collected is null)
+                    {
+                        // ESC over the unseen reply stops the chat, as it does over a streaming one.
+                        if (!cancellationToken.IsCancellationRequested)
+                        {
+                            _transcript.Notice(CancelledNotice);
+                        }
+
+                        break;
+                    }
+
+                    replay = collected;
+                    string written = BotChat.ReplyText(collected);
+                    if (written.Length > 0 && !collected.Any(e => e is TurnEvent.Notice { IsError: true }))
+                    {
+                        picture = await PaintBotPictureAsync(assistant, bot, written, topic, effective, pictureCts.Token).ConfigureAwait(false);
+                        if (cancellationToken.IsCancellationRequested)
+                        {
+                            break;
+                        }
+                    }
+                }
+
+                var outcome = await RunTurnAsync(assistant, turnText, [], cancellationToken, bot, replay, picture).ConfigureAwait(false);
                 await EndTurnAsync(closePane: outcome is not (TurnOutcome.Continue or TurnOutcome.Withdrawn), cancellationToken).ConfigureAwait(false);
                 if (outcome == TurnOutcome.Exit)
                 {
@@ -8537,10 +8605,42 @@ internal sealed partial class ChatScreen
                     break;
                 }
 
+                if (pictured && BotChatImageMode.Draws(imageMode) && !held && reply.Length > 0)
+                {
+                    await DrawBotPictureAsync(assistant, bot, reply, topic, effective, pictures, pictureCts.Token).ConfigureAwait(false);
+                    if (cancellationToken.IsCancellationRequested)
+                    {
+                        break;
+                    }
+                }
+
+                // Autonomous (2026-09-25, the user's ask: a bot said it drew something and had not): a reply that talks about
+                // a picture its bot never called generate_image for gets that picture from the app, so the reply is true. A call
+                // that failed (no prompt, later the same day) drew nothing and is intent enough: the word sieve is skipped.
+                var attempt = BotChat.PictureAttempt(history.Messages);
+                if (imageMode == BotImageMode.Autonomous && imageTool is not null && reply.Length > 0
+                    && !attempt.Drew && (attempt.Tried || BotChat.MentionsPicture(reply)))
+                {
+                    if (effective.BotChatImageAsync)
+                    {
+                        await DrawBotPictureAsync(assistant, bot, reply, topic, effective, pictures, pictureCts.Token, promised: true).ConfigureAwait(false);
+                    }
+                    else if (await PaintBotPictureAsync(assistant, bot, reply, topic, effective, pictureCts.Token, promised: true).ConfigureAwait(false) is { } promised)
+                    {
+                        // The reply has streamed already: its picture goes under it.
+                        ShowBotPicture(bot, promised, late: false);
+                    }
+
+                    if (cancellationToken.IsCancellationRequested)
+                    {
+                        break;
+                    }
+                }
+
                 // Speech on: the next voice waits for this one's audio to end — under ESC, which stops the chat,
                 // and under the line hook, so a line sent meanwhile joins the chat at once.
                 if (_speech.Playing is { } playing
-                    && await WaitForBotSpeechAsync(playing, lines, cancellationToken).ConfigureAwait(false))
+                    && await WaitForBotSpeechAsync(playing, lines, pictures, cancellationToken).ConfigureAwait(false))
                 {
                     await _speech.StopAsync().ConfigureAwait(false);
                     break;
@@ -8550,10 +8650,295 @@ internal sealed partial class ChatScreen
         finally
         {
             _botChatRunning = false;
+            // Kept for /botchat --resume (2026-09-25), however the chat ended; one with nothing said has nothing to carry on.
+            if (lines.Count > 0)
+            {
+                // The last speaker is the last bot line's: a reply cancelled before a word never joined the lines, so its bot has not spoken.
+                _lastBotChat = new BotChatState(starter, castNames, topic, lines.ToList(), lines.LastOrDefault(line => !line.IsUser)?.Speaker, replies, sessionId);
+            }
+
+            // The pictures still rendering are dropped with the chat; those already made are drawn below.
+            await pictureCts.CancelAsync().ConfigureAwait(false);
+            await Task.WhenAll(pictures.Select(p => p.Job)).ConfigureAwait(false);
         }
 
+        ShowReadyBotPictures(pictures);
         _transcript.Notice(BotChat.StoppedNotice(replies));
         return false;
+    }
+
+    /// <summary>The last <c>/botchat</c> of this run, kept when it stopped, for <see cref="BotChat.ResumeSwitch"/> (2026-09-25); null before the first.</summary>
+    private BotChatState? _lastBotChat;
+
+    /// <summary>
+    /// The bots for <paramref name="names"/>, in order (pulled out of <see cref="HandleBotChatAsync"/> on 2026-09-25 for
+    /// <see cref="BotChat.ResumeSwitch"/>, which rebuilds a stopped chat's cast): each read afresh, so an edit since shows. A profile
+    /// that cannot be read sits the chat out with <see cref="BotChat.SkippedNotice"/>.
+    /// </summary>
+    private List<BotParticipant> BuildBotCast(IReadOnlyList<string> names, string starter, AppSettingsData effective)
+    {
+        string home = _settings.StorageDirectory;
+        var cast = new List<BotParticipant>();
+        foreach (var name in names)
+        {
+            if (Profiles.NameEquals(name, starter))
+            {
+                // The starter is the loaded profile: its files as bound, its voice as the session holds it.
+                cast.Add(new BotParticipant(name, _persona.Read(), _vocalia.Read(), _speech.VoiceSpec, _speech.Speed, cast.Count, BotChat.GenderOf(effective.TtsVoice)));
+                continue;
+            }
+
+            string directory = Profiles.Directory(home, name);
+            AppSettingsData data;
+            try
+            {
+                data = Profiles.ReadProfileFile(Profiles.ProfileFile(home, name));
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.Json.JsonException)
+            {
+                _transcript.Notice(BotChat.SkippedNotice(name, ex.Message));
+                continue;
+            }
+
+            // Only the persona, the spoken-reply directive and the voice are read: never the LLM settings.
+            string voice = VoiceMix.Spec(data.TtsVoice, data.TtsVoice2, data.TtsVoiceMix);
+            cast.Add(new BotParticipant(name, new PersonaFile(directory).Read(), new VocaliaFile(directory).Read(), voice, data.TtsSpeed, cast.Count, BotChat.GenderOf(data.TtsVoice)));
+        }
+
+        return cast;
+    }
+
+    /// <summary>The model's round trips a bot's turn may take while it is offered <c>generate_image</c> (2026-09-25): a picture or two, then its words.</summary>
+    private const int BotImageToolIterations = 3;
+
+    /// <summary>Whether <see cref="BotChat.NoWorkflowNotice"/> was shown this chat: once is enough.</summary>
+    private bool _botNoWorkflowTold;
+
+    /// <summary>
+    /// The one tool a bot is offered (2026-09-25, <c>Botchat image mode</c> <c>autonomous</c>): the screen's
+    /// <c>generate_image</c>, the one the main chat's model gets; null when it is switched off by name on <c>/tools</c>.
+    /// </summary>
+    private AIFunction? BotImageTool(AppSettingsData effective) =>
+        Without(_comfyTools, ToolsText.DisabledSet(effective.ToolsDisabled)).FirstOrDefault(tool => string.Equals(tool.Name, GenerateImageTool.ToolName, StringComparison.Ordinal));
+
+    /// <summary>
+    /// The app's picture of one <c>/botchat</c> reply with <c>Botchat image async</c> on (2026-09-25): the prompt
+    /// (<see cref="WriteBotPictureAsync"/>), then the generation left running in <paramref name="pictures"/>, drawn when
+    /// nothing streams (<see cref="ShowReadyBotPictures"/>).
+    /// </summary>
+    private async Task DrawBotPictureAsync(Assistant assistant, BotParticipant bot, string reply, string topic, AppSettingsData effective, List<(BotParticipant Bot, Task<ComfyGeneration?> Job)> pictures, CancellationToken pictureToken, bool promised = false)
+    {
+        if (await WriteBotPictureAsync(assistant, bot, reply, topic, effective, pictureToken, promised).ConfigureAwait(false) is { } job)
+        {
+            pictures.Add((bot, GenerateBotPictureAsync(job, pictureToken)));
+        }
+    }
+
+    /// <summary>
+    /// The app's picture of one held <c>/botchat</c> reply, <c>Botchat image async</c> off (later on 2026-09-25): the prompt
+    /// (<see cref="WriteBotPictureAsync"/>), then the generation under a spinner, not drawn — <see cref="RunTurnAsync"/> draws
+    /// it under the speaker's name, above the reply. Null when there is no picture; ESC skips it alone, the reply still shows.
+    /// </summary>
+    private async Task<ComfyGeneration?> PaintBotPictureAsync(Assistant assistant, BotParticipant bot, string reply, string topic, AppSettingsData effective, CancellationToken pictureToken, bool promised = false)
+    {
+        if (await WriteBotPictureAsync(assistant, bot, reply, topic, effective, pictureToken, promised).ConfigureAwait(false) is not { } job)
+        {
+            return null;
+        }
+
+        var (generation, skipped) = await UnderWatchAsync(ComfyText.Generating(job.Workflow ?? "ComfyUI"), token => GenerateBotPictureAsync(job, token), pictureToken).ConfigureAwait(false);
+        if (skipped || generation is null)
+        {
+            _transcript.Notice(ComfyText.Cancelled);
+            return null;
+        }
+
+        return generation;
+    }
+
+    /// <summary>
+    /// The request for the app's picture of one <c>/botchat</c> reply (2026-09-25): the workflow (<see cref="BotChat.ImageWorkflow"/>;
+    /// none → a notice, once), then the image prompt the model writes from the reply (<see cref="BotChat.ImagePromptInstruction"/>,
+    /// one side request under a spinner — always before the next turn, so the server is never asked two things at once). Null,
+    /// with its notice, when there is no workflow, no prompt came back, or ESC skipped it; the chat goes on.
+    /// <paramref name="promised"/> (2026-09-25, <c>autonomous</c>: a picture the bot talked about but did not draw) asks with
+    /// <see cref="BotChat.PromisedPictureInstruction"/> instead, and its <see cref="BotChat.NoPictureAnswer"/> is no picture, quietly.
+    /// </summary>
+    private async Task<ComfyRequest?> WriteBotPictureAsync(Assistant assistant, BotParticipant bot, string reply, string topic, AppSettingsData effective, CancellationToken pictureToken, bool promised = false)
+    {
+        if (BotChat.ImageWorkflow(_comfy.OfferedWorkflows(), effective.BotChatImageWorkflow) is not { } workflow)
+        {
+            if (!_botNoWorkflowTold)
+            {
+                _botNoWorkflowTold = true;
+                _transcript.Notice(BotChat.NoWorkflowNotice);
+            }
+
+            return null;
+        }
+
+        var request = new List<ChatMessage>
+        {
+            new(ChatRole.System, promised ? BotChat.PromisedPictureInstruction(workflow) : BotChat.ImagePromptInstruction(workflow)),
+            new(ChatRole.User, BotChat.ImagePromptRequest(bot.Name, reply, topic)),
+        };
+        var (written, cancelled) = await UnderWatchAsync(BotChat.PromptSpinner(bot.Name), async token =>
+        {
+            try
+            {
+                return (await assistant.RequestAsync(request, [], ReasoningEffort.None, token).ConfigureAwait(false)).Text;
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                DiagnosticLog.Warn(AppCategory, "The botchat image prompt failed: " + Assistant.Explain(ex));
+                return null;
+            }
+        }, pictureToken).ConfigureAwait(false);
+        if (cancelled)
+        {
+            _transcript.Notice(ComfyText.Cancelled);
+            return null;
+        }
+
+        string prompt = BotChat.CleanImagePrompt(written);
+        if (promised)
+        {
+            if (BotChat.IsNoPicture(prompt))
+            {
+                // The picture word was only a word: the reply promised nothing, so nothing is owed.
+                return null;
+            }
+
+            DiagnosticLog.Info(AppCategory, BotChat.PromisedPictureLogLine(bot.Name, workflow.Name, prompt));
+            return new ComfyRequest(prompt, Workflow: workflow.Name);
+        }
+
+        if (prompt.Length == 0)
+        {
+            _transcript.Notice(BotChat.NoPromptNotice);
+            return null;
+        }
+
+        DiagnosticLog.Info(AppCategory, BotChat.ImagePromptLogLine(bot.Name, workflow.Name, prompt));
+        return new ComfyRequest(prompt, Workflow: workflow.Name);
+    }
+
+    /// <summary>
+    /// A bot's turn run unseen (later on 2026-09-25, <c>Botchat image async</c> off): every event the assistant yields, kept for
+    /// <see cref="RunTurnAsync"/> to replay once the picture is made. An exception is kept as the error notice a streamed turn
+    /// would show; a cancel propagates.
+    /// </summary>
+    private static async Task<IReadOnlyList<TurnEvent>> CollectBotTurnAsync(Assistant assistant, string text, CancellationToken cancellationToken)
+    {
+        var events = new List<TurnEvent>();
+        try
+        {
+            await foreach (var evt in assistant.RunTurnAsync(text, [], cancellationToken).ConfigureAwait(false))
+            {
+                events.Add(evt);
+            }
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            events.Add(new TurnEvent.Notice(TurnFailedPrefix + Assistant.Explain(ex), IsError: true));
+        }
+
+        return events;
+    }
+
+    /// <summary>A held turn's events as <see cref="RunTurnAsync"/> reads a live one: in order, each after a yield, so the keys and the acts keep their turns.</summary>
+    private static async IAsyncEnumerable<TurnEvent> ReplayAsync(IReadOnlyList<TurnEvent> events, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        foreach (var evt in events)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            await Task.Yield();
+            yield return evt;
+        }
+    }
+
+    /// <summary>One app picture's generation; null when it was cancelled (the chat ended, or ESC). Every other failure is an <c>Error:</c> text, never a throw.</summary>
+    private async Task<ComfyGeneration?> GenerateBotPictureAsync(ComfyRequest request, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await _comfy.GenerateAsync(request, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            return null;
+        }
+        catch (Exception ex)
+        {
+            // The engine answers every failure in text; anything else still must not escape a picture left running.
+            return new ComfyGeneration("Error: " + ex.Message, []);
+        }
+    }
+
+    /// <summary>
+    /// <paramref name="work"/> under a spinner and ESC, <see cref="HandleImagineAsync"/>'s shape (2026-09-25, for <c>/botchat</c>'s
+    /// pictures): the watcher's ESC or Ctrl+C cancels the work alone. <c>Cancelled</c> is true when it did, or
+    /// <paramref name="cancellationToken"/> ended; the result is then default.
+    /// </summary>
+    private async Task<(T? Result, bool Cancelled)> UnderWatchAsync<T>(string label, Func<CancellationToken, Task<T>> work, CancellationToken cancellationToken)
+    {
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        using var stop = new CancellationTokenSource();
+        _queuedClicks.Reset();
+        var watcher = _keys.WatchAsync(cts, stop.Token, null, null, spend: e => { _queuedClicks.Reset(); return ScrollInput(e); }, onClick: _pane.Enabled ? HintClickLine : null);
+        try
+        {
+            var result = await _transcript.WithSpinnerAsync(label, () => work(cts.Token)).ConfigureAwait(false);
+            return cts.IsCancellationRequested ? (default, true) : (result, false);
+        }
+        catch (OperationCanceledException) when (cts.IsCancellationRequested)
+        {
+            return (default, true);
+        }
+        finally
+        {
+            stop.Cancel();
+            await watcher.ConfigureAwait(false);
+            DrainDiagnostics();
+        }
+    }
+
+    /// <summary>The app's pictures that are done, drawn oldest first (<c>Botchat image async</c>, 2026-09-25); one still rendering holds back those after it, so they keep their order.</summary>
+    private void ShowReadyBotPictures(List<(BotParticipant Bot, Task<ComfyGeneration?> Job)> pictures)
+    {
+        while (pictures.Count > 0 && pictures[0].Job.IsCompleted)
+        {
+            var (bot, job) = pictures[0];
+            pictures.RemoveAt(0);
+            if (job.Result is { } generation)
+            {
+                ShowBotPicture(bot, generation, late: true);
+            }
+        }
+    }
+
+    /// <summary>
+    /// One app picture in the transcript (2026-09-25), <see cref="HandleImagineAsync"/>'s tail: a failure as an error, else the
+    /// result lines, the strip, the picture. <paramref name="late"/> (drawn after later lines, <c>Botchat image async</c>) heads it
+    /// with <see cref="BotChat.PictureNotice"/>, whose reply it pictures.
+    /// </summary>
+    private void ShowBotPicture(BotParticipant bot, ComfyGeneration generation, bool late)
+    {
+        if (!generation.Ok)
+        {
+            _transcript.Error(generation.Text);
+            return;
+        }
+
+        if (late)
+        {
+            _transcript.Notice(BotChat.PictureNotice(bot.Name));
+        }
+
+        ComfyLines(generation.Text, line => _transcript.Notice(ComfyText.Glyph + line));
+        // The strip first: the picture's window box then leaves its rows.
+        AddToPictureStrip(generation.Images);
+        ShowPictures(generation.Images);
     }
 
     /// <summary>
@@ -8572,7 +8957,7 @@ internal sealed partial class ChatScreen
     /// when the wait was cancelled — that second press, or a command that cancels, <c>/clear</c> and the like;
     /// the caller stops the speech and the chat.</para>
     /// </summary>
-    private async Task<bool> WaitForBotSpeechAsync(SpeechOutput playing, List<BotChatLine> lines, CancellationToken cancellationToken)
+    private async Task<bool> WaitForBotSpeechAsync(SpeechOutput playing, List<BotChatLine> lines, List<(BotParticipant Bot, Task<ComfyGeneration?> Job)> pictures, CancellationToken cancellationToken)
     {
         using var waitCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         using var stop = new CancellationTokenSource();
@@ -8606,9 +8991,12 @@ internal sealed partial class ChatScreen
             while (!playing.Completion.IsCompleted && !waitCts.IsCancellationRequested)
             {
                 var signal = Volatile.Read(ref _actSignal).Task;
-                await Task.WhenAny(playing.Completion, signal, cancelled).ConfigureAwait(false);
+                // A picture still rendering (Botchat image async, 2026-09-25) is drawn the moment it is done, under the voice.
+                Task picture = pictures.Count > 0 ? pictures[0].Job : cancelled;
+                await Task.WhenAny(playing.Completion, signal, cancelled, picture).ConfigureAwait(false);
                 await DrainActsAsync().ConfigureAwait(false);
                 TakeInterjections(lines);
+                ShowReadyBotPictures(pictures);
             }
         }
         finally
@@ -8673,6 +9061,12 @@ internal sealed partial class ChatScreen
             .Where(name => !Profiles.NameEquals(name, sources.LoadedProfile) && !typed.Any(word => Profiles.NameEquals(word, name)))
             .Select(name => new CompletionItem(prefix + name, BotChat.ProfileNote))
             .ToList();
+        if (typed.Count == 0)
+        {
+            // Only as the first word (2026-09-25): after a name it would be the topic's.
+            offered.Add(new CompletionItem(BotChat.ResumeSwitch, BotChat.ResumeNote));
+        }
+
         return MentionCompleter.Matches(offered, argText);
     }
 
@@ -9022,7 +9416,7 @@ internal sealed partial class ChatScreen
     /// a hit, or a speech ESC stopped — the device is silenced and waited for, and only then is the
     /// reason decided and printed (<see cref="TurnEndNotice"/>): keys win over the microphone.</para>
     /// </summary>
-    private async Task<TurnOutcome> RunTurnAsync(Assistant assistant, string text, IReadOnlyList<ImageAttachment> images, CancellationToken cancellationToken, BotParticipant? bot = null)
+    private async Task<TurnOutcome> RunTurnAsync(Assistant assistant, string text, IReadOnlyList<ImageAttachment> images, CancellationToken cancellationToken, BotParticipant? bot = null, IReadOnlyList<TurnEvent>? replay = null, ComfyGeneration? picture = null)
     {
         using var turnCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         using var stop = new CancellationTokenSource();
@@ -9124,6 +9518,11 @@ internal sealed partial class ChatScreen
         else
         {
             _transcript.Speaker(bot.Name, SpeakerColor(bot.ColorIndex));
+            // A held /botchat reply's picture (Botchat image async off, later on 2026-09-25): under the name, above the words.
+            if (picture is not null)
+            {
+                ShowBotPicture(bot, picture, late: false);
+            }
         }
 
         // The spinner over the whole turn (the pane): its count keeps moving through the streamed
@@ -9135,7 +9534,8 @@ internal sealed partial class ChatScreen
         using var busy = _transcript.BeginBusy(label);
         // What /imagine made since the last message rides with this one (2026-09-24): the notes ahead of the text, the pictures after the user's own.
         var (sentText, sentImages) = bot is null ? TakeImagineNotes(text, images) : (text, images);
-        var events = assistant.RunTurnAsync(sentText, sentImages, turnCts.Token).GetAsyncEnumerator(turnCts.Token);
+        // A held /botchat turn (later on 2026-09-25) replays the events it already has: the model is not asked again.
+        var events = (replay is null ? assistant.RunTurnAsync(sentText, sentImages, turnCts.Token) : ReplayAsync(replay, turnCts.Token)).GetAsyncEnumerator(turnCts.Token);
         // The next event, selected against the mid-turn acts (NextEventAsync): a quick command
         // runs between two events, however long the model takes over the next one.
         Task<bool> NextAsync() => NextEventAsync(events.MoveNextAsync().AsTask());

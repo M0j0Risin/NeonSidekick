@@ -208,18 +208,18 @@ public class PictureStripTests : IDisposable
         using var pane = Pane(strip);
         pane.Show();
 
-        // 20 rows, the flow at row 0: ten empty rows, the strip's six, then rule / input / rule / hint.
-        Assert.Equal(PictureStrip.Rows, pane.StripRows);
-        Assert.Equal(10, pane.Padding);
+        // 20 rows, the flow at row 0: nine empty rows, the strip's rule (2026-09-25) and its six, then rule / input / rule / hint.
+        Assert.Equal(ScreenPane.StripPaneRows, pane.StripRows);
+        Assert.Equal(9, pane.Padding);
         string row = " " + Blocks(12) + "  " + Blocks(12) + " ";
         Assert.EndsWith(row + "\n" + Rule(40) + "\n" + InputLine.PromptGlyph + "\n" + Rule(40) + "\nidle", Output);
-        Assert.StartsWith(new string('\n', 10) + row + "\n", Output);
+        Assert.StartsWith(new string('\n', 9) + Rule(40) + "\n" + row + "\n", Output);
     }
 
     [Fact]
     public void Pane_DrawsNoStrip_InAShortWindow_UnderAnOverlay_OrEmpty()
     {
-        _console.Profile.Height = 13;   // 4 + 6 + 4 = 14 needed
+        _console.Profile.Height = 14;   // 4 + 7 + 4 = 15 needed: the strip's rule is one of its rows
         using (var pane = Pane(StripOf(1)))
         {
             pane.Show();
@@ -236,11 +236,11 @@ public class PictureStripTests : IDisposable
         using (var pane = Pane(StripOf(1)))
         {
             pane.Show();
-            Assert.Equal(PictureStrip.Rows, pane.StripRows);
+            Assert.Equal(ScreenPane.StripPaneRows, pane.StripRows);
             pane.ShowOverlay(new Markup("menu"), "hint");
             Assert.Equal(0, pane.StripRows);
             pane.CloseOverlay();
-            Assert.Equal(PictureStrip.Rows, pane.StripRows);
+            Assert.Equal(ScreenPane.StripPaneRows, pane.StripRows);
         }
     }
 
@@ -256,7 +256,7 @@ public class PictureStripTests : IDisposable
         // A picture from another thread: the tick draws it.
         strip.Add(Tile(12, 12), 0);
         _time.Advance(ScreenPane.Tick);
-        Assert.Equal(PictureStrip.Rows, pane.StripRows);
+        Assert.Equal(ScreenPane.StripPaneRows, pane.StripRows);
 
         // Nothing changed: nothing drawn.
         int mark = Output.Length;
@@ -294,7 +294,7 @@ public class PictureStripTests : IDisposable
         using var pane = Pane(strip);
         pane.Show();
 
-        // The input row at 100, the upper rule at 99, the strip on 93–98.
+        // The input row at 100, the upper rule at 99, the strip on 93–98, its own rule at 92.
         Assert.Equal(5, pane.PictureAt(1, 97));
         Assert.Equal(5, pane.PictureAt(12, 98));
         Assert.Equal(4, pane.PictureAt(15, 93));
@@ -304,7 +304,9 @@ public class PictureStripTests : IDisposable
         Assert.Null(pane.PictureAt(0, 95));    // the edge cell
         Assert.Null(pane.PictureAt(13, 95));   // the gap
         Assert.Null(pane.PictureAt(1, 99));    // the rule
-        Assert.Null(pane.PictureAt(1, 92));    // over the strip
+        Assert.Null(pane.PictureAt(1, 92));    // the strip's own rule
+        Assert.False(pane.TryHitStrip(1, 92, out _));
+        Assert.Null(pane.PictureAt(1, 91));    // over the strip
         Assert.True(pane.TryHitHint(0, 102));  // the hint row two under the cursor, the strip notwithstanding
         Assert.False(pane.TryHitHint(0, 103));
     }

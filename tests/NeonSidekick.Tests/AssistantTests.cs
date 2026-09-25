@@ -655,6 +655,41 @@ public class AssistantTests
     }
 
     [Fact]
+    public async Task TextToolCalls_On_ACallWrittenAsText_RunsAsARealOne_AndIsNeverShown()
+    {
+        var echo = new EchoTool();
+        var (client, history, assistant) = Build(new AIFunction[] { echo });
+        assistant.TextToolCalls = true;
+        client.EnqueueText("Sure. ec", "ho(text=\"hi there\")", " Done.").EnqueueText("It echoed.");
+
+        var events = await Run(assistant, "a");
+
+        Assert.Equal(["hi there"], echo.Received);
+        var call = Assert.Single(events.OfType<TurnEvent.ToolCall>());
+        Assert.Equal("echo", call.Name);
+        Assert.Equal("echo: hi there", Assert.Single(events.OfType<TurnEvent.ToolResult>()).Text);
+        Assert.Equal("Sure. Done.It echoed.", string.Concat(Deltas(events)));
+        Assert.DoesNotContain(Deltas(events), d => d.Contains("echo(", StringComparison.Ordinal));
+        var asked = history.Messages.Single(m => m.Contents.OfType<FunctionCallContent>().Any());
+        Assert.Equal("Sure. Done.", asked.Text);
+        Assert.Equal(call.CallId, asked.Contents.OfType<FunctionCallContent>().Single().CallId);
+    }
+
+    [Fact]
+    public async Task TextToolCalls_Off_TheTextPassesAsWritten()
+    {
+        var echo = new EchoTool();
+        var (client, _, assistant) = Build(new AIFunction[] { echo });
+        client.EnqueueText("Try echo(text=\"hi\") yourself.");
+
+        var events = await Run(assistant, "a");
+
+        Assert.Empty(echo.Received);
+        Assert.Empty(events.OfType<TurnEvent.ToolCall>());
+        Assert.Equal("Try echo(text=\"hi\") yourself.", string.Concat(Deltas(events)));
+    }
+
+    [Fact]
     public void VoiceDirective_FirstSentence_ExemptsToolCalls()
     {
         string first = Assistant.VoiceDirective.Split(". ")[0];

@@ -388,6 +388,18 @@ public enum SettingsField
 
     /// <summary>A toggle: whether a turn's start pauses a running reflection, which runs again after the reply (<see cref="Settings.AppSettingsData.ReflectionYieldsToTurns"/>). The Reflection tab of <c>/skills</c>' last row (2026-09-24); no reconnect (read at each turn's start). Last in the enum, as every newcomer.</summary>
     ReflectionYieldsToTurns,
+
+    /// <summary>A toggle: whether <c>/botchat</c> has pictures (<see cref="Settings.AppSettingsData.BotChatImages"/>). The Botchat tab's first row (2026-09-25); no reconnect (read per reply).</summary>
+    BotChatImages,
+
+    /// <summary>A picker: who draws a <c>/botchat</c> picture — <c>automatic</c> / <c>autonomous</c> (<see cref="Settings.AppSettingsData.BotChatImageMode"/>). The Botchat tab, under the switch (2026-09-25); no reconnect.</summary>
+    BotChatImageMode,
+
+    /// <summary>A picker: the text → image workflow of the app's <c>/botchat</c> pictures, or the first (<see cref="Settings.AppSettingsData.BotChatImageWorkflow"/>). The Botchat tab, under the mode (2026-09-25); no reconnect.</summary>
+    BotChatImageWorkflow,
+
+    /// <summary>A toggle: whether the next bot answers while the app's <c>/botchat</c> picture renders (<see cref="Settings.AppSettingsData.BotChatImageAsync"/>). The Botchat tab's last row (2026-09-25); no reconnect.</summary>
+    BotChatImageAsync,
 }
 
 /// <summary>The tabs of <c>/settings</c> on the pane, in strip order (Sessions right after General — the user's order, 2026-09-18; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
@@ -402,8 +414,11 @@ public enum SettingsTab
     Llm,
     Tts,
 
-    /// <summary>The voice rows, last since 2026-09-19 (Ask, Files and Web after it until then).</summary>
+    /// <summary>The voice rows, last since 2026-09-19 (Ask, Files and Web after it until then) until the Botchat tab came after them.</summary>
     Stt,
+
+    /// <summary>The <c>/botchat</c> picture rows (2026-09-25, the user's ask: a Botchat tab on <c>/settings</c>), last.</summary>
+    BotChat,
 }
 
 /// <summary>What <see cref="SettingsMenu.ShowAsync"/> changed, so the screen rebuilds only what depends on it.</summary>
@@ -596,7 +611,7 @@ internal sealed partial class SettingsMenu
     private static readonly SettingsField[] Fields = Enum.GetValues<SettingsField>();
 
     /// <summary>The strip titles, one per <see cref="SettingsTab"/> (five since 2026-09-19: Ask, Files and Web are <c>/tools</c>' tabs, <see cref="ToolsText.TabTitles"/>, and Skills is <c>/skills</c>' Options tab, <see cref="SkillsText.OptionsTabTitle"/>). Pinned.</summary>
-    public static readonly IReadOnlyList<string> TabTitles = ["General", "Sessions", "LLM", "TTS", "STT"];
+    public static readonly IReadOnlyList<string> TabTitles = ["General", "Sessions", "LLM", "TTS", "STT", "Botchat"];
 
     /// <summary>
     /// The rows of each tab on the pane, indexed by <see cref="SettingsTab"/>, in the order shown
@@ -620,6 +635,7 @@ internal sealed partial class SettingsMenu
         [SettingsField.LlmScanMode, SettingsField.LlmUrl, SettingsField.LlmModel, SettingsField.LlmApiKey, SettingsField.LlmReasoning, SettingsField.LlmRequestTimeoutSeconds, SettingsField.LlmTurnTimeoutSeconds, SettingsField.LlmContextLength, SettingsField.LlmCompactType, SettingsField.LlmCompactKeepRecent, SettingsField.LlmCompactShowSummary, SettingsField.LlmAutoCompactPercent, SettingsField.LlmOfferTools, SettingsField.LlmToolCompactType, SettingsField.LlmMaxToolIterations, SettingsField.LlmUseFunVerbs],
         [SettingsField.TtsOutput, SettingsField.TtsSource, SettingsField.TtsHttpUrl, SettingsField.TtsVoicePreview, SettingsField.TtsVoice, SettingsField.TtsVoice2, SettingsField.TtsVoiceMix, SettingsField.TtsSpeed],
         Fields.Where(IsVoiceField).ToArray(),
+        [SettingsField.BotChatImages, SettingsField.BotChatImageMode, SettingsField.BotChatImageWorkflow, SettingsField.BotChatImageAsync],
     ];
 
     /// <summary>
@@ -908,7 +924,8 @@ internal sealed partial class SettingsMenu
             or SettingsField.QueueMessages or SettingsField.SessionLogging or SettingsField.SessionTool
             or SettingsField.ToolsDollarMention or SettingsField.ReflectionIncludesSessions or SettingsField.ReflectionYieldsToTurns or SettingsField.McpServers or SettingsField.GitNativeTools
             or SettingsField.LlmCompactShowSummary or SettingsField.ShellToolBridge or SettingsField.ShellPoliceOutsidePaths
-            or SettingsField.ObsidianTools or SettingsField.ObsidianAllowDelete or SettingsField.SqlTools or SettingsField.SqlPercentMention or SettingsField.ComfyTools or SettingsField.ComfyReinforceNegatives or SettingsField.ComfyShowPrompts or SettingsField.ComfyCaretMention or SettingsField.ComfyPictureStrip;
+            or SettingsField.ObsidianTools or SettingsField.ObsidianAllowDelete or SettingsField.SqlTools or SettingsField.SqlPercentMention or SettingsField.ComfyTools or SettingsField.ComfyReinforceNegatives or SettingsField.ComfyShowPrompts or SettingsField.ComfyCaretMention or SettingsField.ComfyPictureStrip
+            or SettingsField.BotChatImages or SettingsField.BotChatImageAsync;
 
     public static string FieldName(SettingsField field) => field switch
     {
@@ -986,6 +1003,10 @@ internal sealed partial class SettingsMenu
         SettingsField.ComfyShowPrompts => "ComfyUI show prompts",
         SettingsField.ComfyCaretMention => "ComfyUI ^-mention enabled",
         SettingsField.ComfyPictureStrip => "ComfyUI picture strip",
+        SettingsField.BotChatImages => "Botchat images enabled",
+        SettingsField.BotChatImageMode => "Botchat image mode",
+        SettingsField.BotChatImageWorkflow => "Botchat image workflow",
+        SettingsField.BotChatImageAsync => "Botchat image async",
         SettingsField.ComfyOutputFolder => "ComfyUI output folder",
         SettingsField.ComfyWorkflowsOffered => "ComfyUI workflows offered",
         SettingsField.ComfyAddWorkflow => "ComfyUI add workflow",
@@ -1141,6 +1162,10 @@ internal sealed partial class SettingsMenu
             SettingsField.ComfyShowPrompts => OnOff(data.ComfyShowPrompts),
             SettingsField.ComfyCaretMention => OnOff(data.ComfyCaretMention),
             SettingsField.ComfyPictureStrip => OnOff(data.ComfyPictureStrip),
+            SettingsField.BotChatImages => OnOff(data.BotChatImages),
+            SettingsField.BotChatImageMode => data.BotChatImageMode,
+            SettingsField.BotChatImageWorkflow => string.IsNullOrWhiteSpace(data.BotChatImageWorkflow) ? FirstBotChatWorkflowLabel : data.BotChatImageWorkflow,
+            SettingsField.BotChatImageAsync => OnOff(data.BotChatImageAsync),
             SettingsField.ComfyOutputFolder => string.IsNullOrWhiteSpace(data.ComfyOutputFolder) ? ComfyOutputHereLabel : data.ComfyOutputFolder,
             SettingsField.ComfyWorkflowsOffered => ComfyOfferedValue(data.ComfyWorkflowsOffered, InstalledComfyWorkflows(profileDirectory)),
             SettingsField.ComfyAddWorkflow => ComfyAddWorkflowLabel,
@@ -1230,6 +1255,9 @@ internal sealed partial class SettingsMenu
 
     /// <summary>How the menu shows an empty <see cref="AppSettingsData.SqlDefaultConnection"/> (2026-09-23): a call naming no connection gets the first in <c>sql.json</c>. Pinned.</summary>
     public const string FirstSqlConnectionLabel = "(the first connection)";
+
+    /// <summary>The <c>Botchat image workflow</c> value and first picker row while none is named (2026-09-25). Pinned.</summary>
+    public const string FirstBotChatWorkflowLabel = "(the first text → image workflow)";
 
     /// <summary>
     /// The value of an edit row over one <c>sql.json</c> (2026-09-23): how many connections it holds and how many
@@ -1432,6 +1460,10 @@ internal sealed partial class SettingsMenu
     /// <summary>One row of the queue-cancel-mode picker: the mode and its hint (padded to six: <c>drain</c> and <c>empty</c> are five). Pinned.</summary>
     public static string QueueCancelModeLabel(string name) =>
         Markup.Escape(name.PadRight(6)) + Theme.DimMarkup(QueueCancelMode.Describe(name));
+
+    /// <summary>One row of the botchat-image-mode picker: the mode and its hint (padded to eleven: <c>autonomous</c> is ten). Pinned.</summary>
+    public static string BotChatImageModeLabel(string name) =>
+        Markup.Escape(name.PadRight(11)) + Theme.DimMarkup(App.BotChatImageMode.Describe(name));
 
     /// <summary>One row of the welcome-splash picker: the mode and its hint (padded to nine: <c>fullsize</c> and <c>disabled</c> are eight). Pinned.</summary>
     public static string WelcomeSplashModeLabel(string name) =>
@@ -2167,6 +2199,16 @@ internal sealed partial class SettingsMenu
         if (field == SettingsField.QueueCancelMode)
         {
             return await PickQueueCancelModeAsync(saved, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (field == SettingsField.BotChatImageMode)
+        {
+            return await PickBotChatImageModeAsync(saved, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (field == SettingsField.BotChatImageWorkflow)
+        {
+            return await PickBotChatImageWorkflowAsync(saved, cancellationToken).ConfigureAwait(false);
         }
 
         if (field == SettingsField.WelcomeSplash)
@@ -3140,6 +3182,8 @@ internal sealed partial class SettingsMenu
             SettingsField.ComfyShowPrompts => data.ComfyShowPrompts,
             SettingsField.ComfyCaretMention => data.ComfyCaretMention,
             SettingsField.ComfyPictureStrip => data.ComfyPictureStrip,
+            SettingsField.BotChatImages => data.BotChatImages,
+            SettingsField.BotChatImageAsync => data.BotChatImageAsync,
             SettingsField.SqlPercentMention => data.SqlPercentMention,
             SettingsField.LlmCompactShowSummary => data.LlmCompactShowSummary,
             SettingsField.TtsVoicePreview => data.TtsVoicePreview,
@@ -3193,6 +3237,8 @@ internal sealed partial class SettingsMenu
             case SettingsField.ComfyShowPrompts: data.ComfyShowPrompts = on; break;
             case SettingsField.ComfyCaretMention: data.ComfyCaretMention = on; break;
             case SettingsField.ComfyPictureStrip: data.ComfyPictureStrip = on; break;
+            case SettingsField.BotChatImages: data.BotChatImages = on; break;
+            case SettingsField.BotChatImageAsync: data.BotChatImageAsync = on; break;
             case SettingsField.SqlPercentMention: data.SqlPercentMention = on; break;
             case SettingsField.LlmCompactShowSummary: data.LlmCompactShowSummary = on; break;
             case SettingsField.TtsVoicePreview: data.TtsVoicePreview = on; break;
@@ -3255,6 +3301,8 @@ internal sealed partial class SettingsMenu
         SettingsField.ComfyShowPrompts => on ? "the prompt and negative sent to ComfyUI under each picture's line" : "just the picture's line",
         SettingsField.ComfyCaretMention => on ? "^ and part of a name lists the offered workflows on the line" : "^ is ordinary text",
         SettingsField.ComfyPictureStrip => on ? "the session's pictures in a strip above the line" : "no strip",
+        SettingsField.BotChatImages => on ? "/botchat draws pictures while the ComfyUI tools are offered" : "/botchat is talk alone",
+        SettingsField.BotChatImageAsync => on ? "the next bot answers while the picture renders" : "the chat waits for each picture",
         SettingsField.SqlPercentMention => on ? "% and part of a name lists the SQL connections on the line" : "% is ordinary text",
         SettingsField.LlmCompactShowSummary => on ? "the summary's lines or the pruned results, then the protected counts" : "the one compact notice alone",
         SettingsField.AgentSkills => on ? "the skills catalog, load_skill and skill_editor are offered" : "no skills, no project notes",
@@ -3598,6 +3646,45 @@ internal sealed partial class SettingsMenu
 
         string name = QueueCancelMode.Names[index];
         Apply(SettingsField.QueueCancelMode, d => d.QueueCancelMode = name);
+        return true;
+    }
+
+    /// <summary>The botchat-image-mode picker under the settings list (2026-09-25): one <see cref="BotChatImageModeLabel"/> row per <see cref="App.BotChatImageMode.Names"/> entry, the saved one under the cursor.</summary>
+    private async Task<bool> PickBotChatImageModeAsync(AppSettingsData saved, CancellationToken cancellationToken)
+    {
+        var names = App.BotChatImageMode.Names;
+        var page = new MenuPage(Crumb(FieldName(SettingsField.BotChatImageMode)), names.Select(BotChatImageModeLabel).ToList(), PickKeys);
+        int? picked = await PickAsync(page, Math.Max(0, Array.IndexOf(names, saved.BotChatImageMode)), cancellationToken).ConfigureAwait(false);
+        if (picked is not { } index)
+        {
+            return Unchanged();
+        }
+
+        string name = names[index];
+        Apply(SettingsField.BotChatImageMode, d => d.BotChatImageMode = name);
+        return true;
+    }
+
+    /// <summary>
+    /// The <c>Botchat image workflow</c> pick (2026-09-25): <see cref="FirstBotChatWorkflowLabel"/>, then every offered workflow
+    /// that takes a prompt and no input picture (<see cref="BotChat.ImageWorkflows"/>) with its family and size, the cursor on the one saved.
+    /// </summary>
+    private async Task<bool> PickBotChatImageWorkflowAsync(AppSettingsData saved, CancellationToken cancellationToken)
+    {
+        var workflows = BotChat.ImageWorkflows(Comfy.ComfyWorkflowCatalog.Offered(InstalledComfyWorkflows(_settings.ProfileDirectory), saved.ComfyWorkflowsOffered));
+        int width = workflows.Count == 0 ? 0 : workflows.Max(w => w.Name.Length) + 2;
+        var rows = new List<string> { Markup.Escape(FirstBotChatWorkflowLabel) };
+        rows.AddRange(workflows.Select(w => Markup.Escape(w.Name.PadRight(width)) + Theme.DimMarkup(Comfy.ComfyFamilies.Name(w.Family) + " · " + Invariant(w.Defaults.Width) + "×" + Invariant(w.Defaults.Height))));
+        int current = workflows.ToList().FindIndex(w => string.Equals(w.Name, saved.BotChatImageWorkflow?.Trim(), StringComparison.OrdinalIgnoreCase));
+        var page = new MenuPage(Crumb(FieldName(SettingsField.BotChatImageWorkflow)), rows, PickKeys);
+        int? picked = await PickAsync(page, current + 1, cancellationToken).ConfigureAwait(false);
+        if (picked is not { } index)
+        {
+            return Unchanged();
+        }
+
+        string? name = index == 0 ? null : workflows[index - 1].Name;
+        Apply(SettingsField.BotChatImageWorkflow, d => d.BotChatImageWorkflow = name);
         return true;
     }
 

@@ -1,0 +1,353 @@
+using Microsoft.Extensions.AI;
+using NeonSidekick.App;
+using NeonSidekick.Comfy;
+using NeonSidekick.Files;
+using NeonSidekick.Llm.Tools;
+using NeonSidekick.Tests.Fakes;
+using NeonSidekick.UI;
+
+namespace NeonSidekick.Tests;
+
+/// <summary>
+/// <c>/botchat</c>'s pictures on the screen (2026-09-25): off, the chat is talk alone; <c>automatic</c>, the model writes an
+/// image prompt from each reply and the app draws it — under the reply, or with <c>Botchat image async</c> on while the next
+/// bot answers; <c>autonomous</c>, the bots are offered <c>generate_image</c> alone; ESC under a picture skips it alone.
+/// </summary>
+public partial class ChatScreenTests
+{
+    private const string DogReply = "I once saw a dog surf.";
+
+    /// <summary>The two-bot fixture on a stub ComfyUI with one text → image workflow (pony), pictures on in <paramref name="mode"/>.</summary>
+    private StubHttpMessageHandler BotPicturesFixture(string mode = "automatic", bool async = false)
+    {
+        BotChatFixture();
+        var stub = ComfyServer();
+        _settings.Update(d => { d.BotChatImages = true; d.BotChatImageMode = mode; d.BotChatImageAsync = async; });
+        return stub;
+    }
+
+    private static IList<AITool> ToolsOf(ChatOptions? options) => options?.Tools ?? [];
+
+    private string ComfyImages => Path.Combine(_settings.ProfileDirectory, WorkingDirectory.DefaultFolderName, "comfy_images");
+
+    [Fact]
+    public async Task BotChat_PicturesOff_OffersNoTool_AndAsksForNoPicture()
+    {
+        BotChatFixture();
+        var stub = ComfyServer();
+        _chat.EnqueueText(DogReply);
+        _chat.EnqueueText("Ada ", "answers.");
+        EscDuringRequest(2);
+        PushLine("/botchat");
+        PushLine("/exit");
+
+        await RunAsync();
+
+        Assert.Equal(2, _chat.Requests.Count);
+        Assert.All(_chat.Options, options => Assert.Empty(ToolsOf(options)));
+        Assert.DoesNotContain(BotChat.ImageRule, SystemText(_chat.Requests[0]));
+        Assert.DoesNotContain(stub.Requests, r => r.Uri.AbsolutePath == "/prompt");
+    }
+
+    [Fact]
+    public async Task BotChat_Automatic_Sync_WritesAPromptFromTheHeldReply_AndDrawsThePictureAboveIt()
+    {
+        var stub = BotPicturesFixture();
+        _chat.EnqueueText(DogReply);
+        _chat.EnqueueText("```\n\"a dog surfing a wave, sunny\"\n```");
+        _chat.EnqueueText("Ada ", "answers.");
+        EscDuringRequest(3);
+        PushLine("/botchat");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        // The second request is the image prompt's: the family's style and the reply, no tools; the bots get none either.
+        Assert.Equal(3, _chat.Requests.Count);
+        var pony = BotChat.ImageWorkflow([.. new ComfyWorkflowCatalog(() => [_settings.ProfileComfyDirectory]).Workflows], null)!;
+        Assert.Equal(BotChat.ImagePromptInstruction(pony), SystemText(_chat.Requests[1]));
+        Assert.Equal(BotChat.ImagePromptRequest("default", DogReply, ""), _chat.Requests[1][^1].Text);
+        Assert.All(_chat.Options, options => Assert.Empty(ToolsOf(options)));
+        Assert.Contains(AdaMarker, SystemText(_chat.Requests[2]));
+
+        // The cleaned prompt reaches ComfyUI; the reply was held (later on 2026-09-25): the name, then the picture, then the words.
+        Assert.Contains("\"text\":\"a dog surfing a wave, sunny", stub.Requests.Single(r => r.Uri.AbsolutePath == "/prompt").Body!);
+        int name = output.IndexOf(TranscriptRenderer.SpeakerGlyph + "default\n", StringComparison.Ordinal);
+        int picture = output.IndexOf(ComfyText.Glyph + "generated 1 picture with pony", StringComparison.Ordinal);
+        int words = output.IndexOf("● " + DogReply, StringComparison.Ordinal);
+        Assert.True(name >= 0 && picture > name && words > picture, $"name {name}, picture {picture}, words {words}");
+        Assert.Contains(BotChat.ThinkingSpinner("default"), output);
+        Assert.DoesNotContain(BotChat.PictureNotice("default"), output);
+        // ESC over ada's unseen reply stops the chat.
+        Assert.Contains("  · " + ChatScreen.CancelledNotice + "\n", output);
+        Assert.Contains(BotChat.StoppedNotice(1), output);
+    }
+
+    [Fact]
+    public async Task BotChat_Automatic_Async_DrawsThePictureLater_UnderWhoseItIs()
+    {
+        var stub = BotPicturesFixture(async: true);
+        _chat.EnqueueText(DogReply);
+        _chat.EnqueueText("a dog surfing a wave");
+        _chat.EnqueueText("Ada ", "answers.");
+        _chat.EnqueueText("   ");                     // ada's image prompt: nothing, so no picture
+        _chat.EnqueueText("Neon ", "again");
+        _chat.BeforeUpdate = async (i, ct) =>
+        {
+            if (_chat.Requests.Count == 3 && i == 0)
+            {
+                // Ada answers while the picture renders; the reply waits until it is saved, so it is drawn after it.
+                for (int tries = 0; tries < 500 && !(Directory.Exists(ComfyImages) && Directory.EnumerateFiles(ComfyImages).Any()); tries++)
+                {
+                    await Task.Delay(10, CancellationToken.None);
+                }
+
+                await Task.Delay(100, CancellationToken.None);
+            }
+
+            if (_chat.Requests.Count == 5 && i == 1)
+            {
+                _console.Input.PushKey(Keys.Escape);
+                while (!ct.IsCancellationRequested)
+                {
+                    await Task.Delay(5, CancellationToken.None);
+                }
+            }
+        };
+        PushLine("/botchat");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Equal(5, _chat.Requests.Count);
+        Assert.Single(stub.Requests, r => r.Uri.AbsolutePath == "/prompt");
+        int label = output.IndexOf(BotChat.PictureNotice("default"), StringComparison.Ordinal);
+        Assert.True(label >= 0);
+        Assert.True(output.IndexOf(ComfyText.Glyph + "generated 1 picture with pony", label, StringComparison.Ordinal) > label);
+        Assert.Contains(BotChat.NoPromptNotice, output);
+    }
+
+    [Fact]
+    public async Task BotChat_Autonomous_OffersTheBotsGenerateImageAlone_AndTheAppDrawsNothing()
+    {
+        var stub = BotPicturesFixture(mode: "autonomous");
+        _chat.Enqueue(FakeChatClient.Call("g1", GenerateImageTool.ToolName, new Dictionary<string, object?> { ["prompt"] = "a dog surfing", ["seed"] = 7, ["verbatim"] = true }));
+        _chat.EnqueueText("Here is my dog.");
+        _chat.EnqueueText("Ada ", "answers.");
+        EscDuringRequest(3);
+        PushLine("/botchat");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        // Neon's turn is two round trips (the call, then its words); no image-prompt request follows, ada speaks next.
+        Assert.Equal(3, _chat.Requests.Count);
+        Assert.Equal([GenerateImageTool.ToolName], ToolsOf(_chat.Options[0]).Select(t => t.Name));
+        Assert.Equal([GenerateImageTool.ToolName], ToolsOf(_chat.Options[2]).Select(t => t.Name));
+        Assert.Contains(BotChat.ImageRule, SystemText(_chat.Requests[0]));
+        Assert.Contains(AdaMarker, SystemText(_chat.Requests[2]));
+        Assert.Single(stub.Requests, r => r.Uri.AbsolutePath == "/prompt");
+        Assert.Contains("generated 1 picture with pony (seed 7", output);
+    }
+
+    [Fact]
+    public async Task BotChat_EscUnderThePicture_SkipsItAlone_AndTheChatGoesOn()
+    {
+        var stub = BotPicturesFixture();
+        _chat.EnqueueText(DogReply);
+        _chat.EnqueueText("a dog ", "surfing");
+        _chat.EnqueueText("Ada ", "answers.");
+        _chat.BeforeUpdate = async (i, ct) =>
+        {
+            if (_chat.Requests.Count is 2 or 3 && i == 1)
+            {
+                _console.Input.PushKey(Keys.Escape);
+                while (!ct.IsCancellationRequested)
+                {
+                    await Task.Delay(5, CancellationToken.None);
+                }
+            }
+        };
+        PushLine("/botchat");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        // The first ESC cancels the image prompt alone: the held reply still shows, and ada speaks next; the second ends the chat.
+        Assert.Equal(3, _chat.Requests.Count);
+        Assert.Contains(AdaMarker, SystemText(_chat.Requests[2]));
+        int skipped = output.IndexOf(ComfyText.Cancelled, StringComparison.Ordinal);
+        Assert.True(skipped >= 0 && output.IndexOf("● " + DogReply, StringComparison.Ordinal) > skipped);
+        Assert.DoesNotContain(stub.Requests, r => r.Uri.AbsolutePath == "/prompt");
+    }
+
+    [Fact]
+    public async Task BotChat_Sync_EscOverTheUnseenReply_StopsTheChat_WithNoPicture()
+    {
+        var stub = BotPicturesFixture();
+        _chat.EnqueueText("I once saw ", "a dog surf.");
+        EscDuringRequest(1);
+        PushLine("/botchat");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Single(_chat.Requests);
+        Assert.Contains("  · " + ChatScreen.CancelledNotice + "\n", output);
+        Assert.Contains(BotChat.StoppedNotice(0), output);
+        Assert.DoesNotContain("● I once saw", output);
+        Assert.DoesNotContain(stub.Requests, r => r.Uri.AbsolutePath == "/prompt");
+    }
+
+    private const string SketchReply = "Here's a sketch I drew of a dog surfing.";
+
+    private ComfyWorkflow PonyWorkflow => BotChat.ImageWorkflow([.. new ComfyWorkflowCatalog(() => [_settings.ProfileComfyDirectory]).Workflows], null)!;
+
+    [Fact]
+    public async Task BotChat_Autonomous_APictureTheBotOnlyTalkedAbout_IsDrawnUnderTheReply()
+    {
+        var stub = BotPicturesFixture(mode: "autonomous");
+        _chat.EnqueueText(SketchReply);
+        _chat.EnqueueText("a dog surfing a big wave");     // the promised picture's prompt
+        _chat.EnqueueText("Ada ", "answers.");
+        EscDuringRequest(3);
+        PushLine("/botchat");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        // Neon's words, then the promised-picture request (no tools), then ada; one picture, under the words.
+        Assert.Equal(3, _chat.Requests.Count);
+        Assert.Equal(BotChat.PromisedPictureInstruction(PonyWorkflow), SystemText(_chat.Requests[1]));
+        Assert.Equal(BotChat.ImagePromptRequest("default", SketchReply, ""), _chat.Requests[1][^1].Text);
+        Assert.Empty(ToolsOf(_chat.Options[1]));
+        Assert.Contains(AdaMarker, SystemText(_chat.Requests[2]));
+        Assert.Contains("\"text\":\"a dog surfing a big wave", stub.Requests.Single(r => r.Uri.AbsolutePath == "/prompt").Body!);
+        int words = output.IndexOf(SketchReply, StringComparison.Ordinal);
+        int picture = output.IndexOf(ComfyText.Glyph + "generated 1 picture with pony", StringComparison.Ordinal);
+        Assert.True(words >= 0 && picture > words, $"words {words}, picture {picture}");
+        Assert.DoesNotContain(BotChat.PictureNotice("default"), output);
+    }
+
+    [Fact]
+    public async Task BotChat_Autonomous_WhenTheModelFindsNoPicturePromised_NothingIsDrawn_Quietly()
+    {
+        var stub = BotPicturesFixture(mode: "autonomous");
+        _chat.EnqueueText("What a picture you paint with words.");
+        _chat.EnqueueText("NONE");
+        _chat.EnqueueText("Ada ", "answers.");
+        EscDuringRequest(3);
+        PushLine("/botchat");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Equal(3, _chat.Requests.Count);
+        Assert.Contains(AdaMarker, SystemText(_chat.Requests[2]));
+        Assert.DoesNotContain(stub.Requests, r => r.Uri.AbsolutePath == "/prompt");
+        Assert.DoesNotContain(BotChat.NoPromptNotice, output);
+    }
+
+    [Fact]
+    public async Task BotChat_Autonomous_ABotThatDrewItsPicture_IsNotDrawnForAgain()
+    {
+        var stub = BotPicturesFixture(mode: "autonomous");
+        _chat.Enqueue(FakeChatClient.Call("g1", GenerateImageTool.ToolName, new Dictionary<string, object?> { ["prompt"] = "a dog surfing", ["seed"] = 7, ["verbatim"] = true }));
+        _chat.EnqueueText("Here is the picture I drew.");
+        _chat.EnqueueText("Ada ", "answers.");
+        EscDuringRequest(3);
+        PushLine("/botchat");
+        PushLine("/exit");
+
+        await RunAsync();
+
+        // The call and the words, then ada at once: no promised-picture request.
+        Assert.Equal(3, _chat.Requests.Count);
+        Assert.Contains(AdaMarker, SystemText(_chat.Requests[2]));
+        Assert.Single(stub.Requests, r => r.Uri.AbsolutePath == "/prompt");
+    }
+
+    [Fact]
+    public async Task BotChat_Autonomous_ACallWithNoPrompt_DrewNothing_SoThePromisedPictureIsMade()
+    {
+        var stub = BotPicturesFixture(mode: "autonomous");
+        _chat.Enqueue(FakeChatClient.Call("g1", GenerateImageTool.ToolName, new Dictionary<string, object?>()));
+        _chat.EnqueueText("Oops, there it is anyway.");      // no picture word: the failed call is intent enough
+        _chat.EnqueueText("a dog surfing a big wave");
+        _chat.EnqueueText("Ada ", "answers.");
+        EscDuringRequest(4);
+        PushLine("/botchat");
+        PushLine("/exit");
+
+        await RunAsync();
+
+        // The failed call and the words, the promised-picture request, then ada.
+        Assert.Equal(4, _chat.Requests.Count);
+        Assert.Equal(BotChat.PromisedPictureInstruction(PonyWorkflow), SystemText(_chat.Requests[2]));
+        Assert.Contains(AdaMarker, SystemText(_chat.Requests[3]));
+        Assert.Contains("\"text\":\"a dog surfing a big wave", stub.Requests.Single(r => r.Uri.AbsolutePath == "/prompt").Body!);
+    }
+
+    [Fact]
+    public async Task BotChat_Autonomous_ACallWrittenAsText_Runs_AndIsNeverShown()
+    {
+        var stub = BotPicturesFixture(mode: "autonomous");
+        _chat.EnqueueText("Here you go! generate_image(prompt=\"a dog ", "surfing\", seed=7, verbatim=true)");
+        _chat.EnqueueText("Hope you like it.");
+        _chat.EnqueueText("Ada ", "answers.");
+        EscDuringRequest(3);
+        PushLine("/botchat");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        // The written call ran as a real one: its picture, the bot's words after it, then ada — no promised-picture request.
+        Assert.Equal(3, _chat.Requests.Count);
+        Assert.Contains(AdaMarker, SystemText(_chat.Requests[2]));
+        Assert.Contains("\"text\":\"a dog surfing", stub.Requests.Single(r => r.Uri.AbsolutePath == "/prompt").Body!);
+        Assert.Contains("generated 1 picture with pony (seed 7", output);
+        Assert.Contains("Here you go!", output);
+        Assert.DoesNotContain("prompt=\"a dog", output);
+    }
+
+    [Fact]
+    public async Task BotChat_Autonomous_Async_APromisedPictureIsDrawnLater_UnderWhoseItIs()
+    {
+        var stub = BotPicturesFixture(mode: "autonomous", async: true);
+        _chat.EnqueueText(SketchReply);
+        _chat.EnqueueText("a dog surfing a big wave");
+        _chat.EnqueueText("Ada ", "answers.");
+        _chat.BeforeUpdate = async (i, ct) =>
+        {
+            if (_chat.Requests.Count == 3 && i == 0)
+            {
+                // Ada answers while the picture renders; wait until it is saved so it is drawn when the chat ends.
+                for (int tries = 0; tries < 500 && !(Directory.Exists(ComfyImages) && Directory.EnumerateFiles(ComfyImages).Any()); tries++)
+                {
+                    await Task.Delay(10, CancellationToken.None);
+                }
+
+                await Task.Delay(100, CancellationToken.None);
+            }
+
+            if (_chat.Requests.Count == 3 && i == 1)
+            {
+                _console.Input.PushKey(Keys.Escape);
+                while (!ct.IsCancellationRequested)
+                {
+                    await Task.Delay(5, CancellationToken.None);
+                }
+            }
+        };
+        PushLine("/botchat");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Equal(3, _chat.Requests.Count);
+        Assert.Single(stub.Requests, r => r.Uri.AbsolutePath == "/prompt");
+        int label = output.IndexOf(BotChat.PictureNotice("default"), StringComparison.Ordinal);
+        Assert.True(label >= 0);
+        Assert.True(output.IndexOf(ComfyText.Glyph + "generated 1 picture with pony", label, StringComparison.Ordinal) > label);
+    }
+}

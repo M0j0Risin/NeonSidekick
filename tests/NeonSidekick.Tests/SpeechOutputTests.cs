@@ -214,6 +214,20 @@ public class SpeechOutputTests
     }
 
     [Fact]
+    public async Task Feed_AFencedCodeBlock_IsNeverSpoken_TheWordsAroundItAre()
+    {
+        var output = Output();
+
+        output.Feed("Here is the code:\n``");
+        output.Feed("`csharp\nConsole.WriteLine(\"Hi.\");\nvar x = 1;\n``");
+        output.Feed("`\nIt prints a greeting.");
+        output.CompleteAdding();
+        await output.Completion.WaitAsync(Timeout);
+
+        Assert.Equal(new[] { "Here is the code:", "It prints a greeting." }, _synth.SpokenText);
+    }
+
+    [Fact]
     public async Task Playback_IsStartedLazily_OnTheFirstChunk_AndNothingIsSpokenForNothing()
     {
         var output = Output();

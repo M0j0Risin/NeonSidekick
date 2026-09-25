@@ -553,8 +553,8 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     }
 
     /// <summary>
-    /// The session's picture strip (later still on 2026-09-24): drawn <see cref="UI.PictureStrip.Rows"/> tall over the
-    /// upper rule while this answers one with pictures in it, no overlay is open, the window keeps
+    /// The session's picture strip (later still on 2026-09-24): drawn <see cref="UI.PictureStrip.Rows"/> tall under a rule of
+    /// its own (<see cref="StripRuleRows"/>, 2026-09-25) and over the upper rule while this answers one with pictures in it, no overlay is open, the window keeps
     /// <see cref="StripTranscriptRows"/> transcript rows over the strip and the pane, and is at least
     /// <see cref="UI.PictureStrip.MinCells"/> wide; null = none (the default). Read at each draw and on the tick, so a
     /// picture added, a step or the setting's flip shows by itself; <see cref="RedrawStrip"/> shows it at once. The
@@ -569,7 +569,17 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     /// <summary>The transcript rows the window must keep over the strip and the smallest pane for the strip to be drawn.</summary>
     public const int StripTranscriptRows = 4;
 
-    /// <summary>The rows the picture strip took in the last draw: <see cref="UI.PictureStrip.Rows"/> while drawn, else 0 (the thumbnail sizing adds it, as <see cref="ToolbarRows"/>).</summary>
+    /// <summary>
+    /// The rule over the strip (2026-09-25, the user's ask: the strip reads as part of the pane, not as more transcript): one
+    /// row of <see cref="RuleGlyph"/> in <see cref="Theme.PaneRule"/>, the input rows' own rule, counted as a strip row so every
+    /// sum that leaves room for the strip leaves room for it too.
+    /// </summary>
+    public const int StripRuleRows = 1;
+
+    /// <summary>The pane rows a drawn strip takes: its rule and its <see cref="UI.PictureStrip.Rows"/>.</summary>
+    public const int StripPaneRows = UI.PictureStrip.Rows + StripRuleRows;
+
+    /// <summary>The rows the picture strip took in the last draw: <see cref="StripPaneRows"/> while drawn, else 0 (the thumbnail sizing adds it, as <see cref="ToolbarRows"/>).</summary>
     public int StripRows
     {
         get { lock (_gate) { return _stripRows; } }
@@ -577,8 +587,8 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
 
     /// <summary>The rows the strip takes in a window of <paramref name="width"/> × <paramref name="height"/> with <paramref name="toolbarRows"/> for the toolbar, as things stand: <see cref="PictureStrip"/>'s rule.</summary>
     private int StripRowsFor(int width, int height, int toolbarRows) =>
-        _overlay is null && _pictureStrip() is { Count: > 0 } && height >= PaneRows + toolbarRows + UI.PictureStrip.Rows + StripTranscriptRows && width - 1 >= UI.PictureStrip.MinCells
-            ? UI.PictureStrip.Rows
+        _overlay is null && _pictureStrip() is { Count: > 0 } && height >= PaneRows + toolbarRows + StripPaneRows + StripTranscriptRows && width - 1 >= UI.PictureStrip.MinCells
+            ? StripPaneRows
             : 0;
 
     /// <summary>The strip the provider answers now is not the drawn one: it came or went, changed, or its highlight did.</summary>
@@ -634,8 +644,9 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
                 return false;
             }
 
+            // The tiles are the rows between the strip's own rule and the upper rule.
             int rule = top - CursorDepth - 1;
-            if (y < rule - _stripRows || y >= rule)
+            if (y < rule - _stripRows + StripRuleRows || y >= rule)
             {
                 return false;
             }
@@ -3049,7 +3060,8 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         var toolbar = _toolbar();
         int toolbarRows = toolbar is not null && h >= PaneRows + 2 ? 1 : 0;
 
-        // The picture strip (later still on 2026-09-24) over the upper rule: its rows count into the pane's, so the
+        // The picture strip (later still on 2026-09-24) over the upper rule, under a rule of its own (2026-09-25): its rows,
+        // the rule's with them, count into the pane's, so the
         // padding, the lift and the region leave room for it; the input rows are capped over what it leaves.
         int stripRows = StripRowsFor(w, h, toolbarRows);
         var strip = stripRows > 0 ? _pictureStrip() : null;
@@ -3230,6 +3242,8 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
 
         if (stripLines is not null)
         {
+            // Its rule first (2026-09-25), the input rows' own.
+            WriteRule(w);
             foreach (var line in stripLines)
             {
                 _inner.Write(new SegmentList(line));

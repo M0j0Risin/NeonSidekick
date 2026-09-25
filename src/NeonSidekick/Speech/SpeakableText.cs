@@ -33,9 +33,9 @@ public static partial class SpeakableText
 
         var s = text;
 
-        // Fenced code blocks: drop the fence line entirely. Reading code aloud helps nobody, but
-        // the content is left alone — a chunk is one sentence, so the fence and the code rarely
-        // arrive together, and silently swallowing a whole answer would be worse.
+        // A stray fence line: dropped. Whole blocks never get this far since 2026-09-25 — CodeBlockFilter
+        // takes them out before the text is cut into sentences (the user's call: code is never read aloud);
+        // this still catches a fence line in a sentence handed over directly.
         s = CodeFence().Replace(s, string.Empty);
 
         // Table separator rows (|---|:---:|) carry no words at all.

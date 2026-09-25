@@ -281,9 +281,95 @@ public partial class ChatScreenTests
     {
         var sources = new ChatScreen.ArgumentSources(() => ["default", "ada", "max"], "default", [], _ => [], _ => new Files.MentionResult(Files.FileOutcome.Ok, [], false), _ => new Files.MentionResult(Files.FileOutcome.Ok, [], false));
 
-        Assert.Equal(new[] { "ada", "max" }, ChatScreen.BotChatChoices("", sources).Select(i => i.Text));
-        Assert.Equal(new[] { "ada max" }, ChatScreen.BotChatChoices("ada ", sources).Select(i => i.Text));
+        Assert.Equal(new[] { "ada", "max", BotChat.ResumeSwitch }, ChatScreen.BotChatChoices("", sources).Select(i => i.Text));
+        Assert.Equal(new[] { "ada max" }, ChatScreen.BotChatChoices("ada ", sources).Select(i => i.Text));   // --resume only first
         Assert.Empty(ChatScreen.BotChatChoices("pizza ", sources));
         Assert.Empty(ChatScreen.BotChatChoices("ada -- ", sources));   // after the separator the topic is free text
+    }
+
+    /// <summary>ESC during each of the <paramref name="requests"/>th requests (1-based): one stop per chat.</summary>
+    private void EscDuringRequests(params int[] requests) =>
+        _chat.BeforeUpdate = async (i, ct) =>
+        {
+            if (requests.Contains(_chat.Requests.Count) && i == 1)
+            {
+                _console.Input.PushKey(Keys.Escape);
+                while (!ct.IsCancellationRequested)
+                {
+                    await Task.Delay(5, CancellationToken.None);
+                }
+            }
+        };
+
+    [Fact]
+    public async Task BotChat_Resume_CarriesOnTheLastChat_WhereItStopped()
+    {
+        BotChatFixture();
+        _chat.EnqueueText("One.");
+        _chat.EnqueueText("Two.");
+        _chat.EnqueueText("Neon ", "again");     // cut by ESC: "Neon" is the chat's third line
+        _chat.EnqueueText("Four.");
+        _chat.EnqueueText("Five ", "more");
+        EscDuringRequests(3, 5);
+        PushLine("/botchat pizza");
+        PushLine("/botchat --resume");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        // The resumed chat's first speaker is ada (default spoke last), shown every line so far, on the saved topic.
+        Assert.Equal(5, _chat.Requests.Count);
+        Assert.Contains(AdaMarker, SystemText(_chat.Requests[3]));
+        Assert.Contains(BotChat.Rules("ada", ["default"], "pizza", BotChat.PronounsLine([("default", BotGender.Female)])), SystemText(_chat.Requests[3]));
+        Assert.Equal(ChatRole.Assistant, _chat.Requests[3][^2].Role);
+        Assert.Equal("Two.", _chat.Requests[3][^2].Text);
+        Assert.Equal("default: Neon", _chat.Requests[3][^1].Text);
+        Assert.Contains(NeonMarker, SystemText(_chat.Requests[4]));
+
+        // Stopped, resumed with the replies so far, and the stop counts them all.
+        int stopped = output.IndexOf(BotChat.StoppedNotice(3), StringComparison.Ordinal);
+        int resumed = output.IndexOf(BotChat.ResumeNotice(["default", "ada"], "pizza", 3), StringComparison.Ordinal);
+        Assert.True(stopped >= 0 && resumed > stopped, $"stopped {stopped}, resumed {resumed}");
+        Assert.True(output.IndexOf(BotChat.StoppedNotice(5), resumed, StringComparison.Ordinal) > resumed);
+    }
+
+    [Fact]
+    public async Task BotChat_ResumeWithALine_TheLineJoinsAsTheUsers_InTheSameSession()
+    {
+        BotChatFixture();
+        _settings.Update(d => d.SessionLogging = true);
+        _chat.EnqueueText("One.");
+        _chat.EnqueueText("Two ", "cut");
+        _chat.EnqueueText("Three ", "cut");
+        EscDuringRequests(2, 3);
+        PushLine("/botchat");
+        PushLine("/botchat --resume Talk about cats");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        // default answers next: it sees ada's line and the user's, signed.
+        Assert.Equal(3, _chat.Requests.Count);
+        Assert.Contains(NeonMarker, SystemText(_chat.Requests[2]));
+        Assert.Equal("ada: Two\n\n" + BotChat.UserName + ": Talk about cats", _chat.Requests[2][^1].Text);
+        Assert.Contains("Talk about cats", output);
+
+        // One session row holds the turns of both runs.
+        using var store = OpenSessions();
+        var summary = Assert.Single(store.List(10));
+        Assert.Equal(new[] { "default: One.", "ada: Two", "default: Three" }, store.Load(summary.Id)!.Turns.Select(t => t.ReplyText));
+    }
+
+    [Fact]
+    public async Task BotChat_Resume_WithNothingToResume_IsRefused()
+    {
+        BotChatFixture();
+        PushLine("/botchat --resume");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains(BotChat.NothingToResumeError, output);
+        Assert.Empty(_chat.Requests);
     }
 }

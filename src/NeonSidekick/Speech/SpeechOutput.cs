@@ -4,8 +4,9 @@ using NeonSidekick.Diagnostics;
 namespace NeonSidekick.Speech;
 
 /// <summary>
-/// Speech for one reply: streamed text in, audio out. Composes <see cref="SentenceChunker"/>,
-/// <see cref="SpeechQueue"/>, an <see cref="ISpeechSynthesizer"/> and an <see cref="IAudioPlayback"/>.
+/// Speech for one reply: streamed text in, audio out. Composes <see cref="CodeBlockFilter"/> (fenced code is never
+/// spoken, 2026-09-25), <see cref="SentenceChunker"/>, <see cref="SpeechQueue"/>, an <see cref="ISpeechSynthesizer"/> and
+/// an <see cref="IAudioPlayback"/>.
 ///
 /// <para>The loop feeds every text delta through <see cref="Feed"/>; whole sentences are queued
 /// and a consumer synthesises them in order, streaming each one's PCM straight into playback.
@@ -47,6 +48,7 @@ internal sealed class SpeechOutput
     private readonly double _speed;
     private readonly CancellationToken _turnToken;
     private readonly Action<string>? _onFailure;
+    private readonly CodeBlockFilter _code = new();
     private readonly SentenceChunker _chunker = new();
     private readonly SpeechQueue _queue;
     private readonly object _chunkGate = new();
@@ -209,7 +211,8 @@ internal sealed class SpeechOutput
             return;
         }
 
-        foreach (var sentence in _chunker.Append(delta))
+        // The code blocks go before the text is cut into sentences: the chunker would split a block across several.
+        foreach (var sentence in _chunker.Append(_code.Push(delta)))
         {
             Enqueue(sentence);
         }
@@ -218,6 +221,11 @@ internal sealed class SpeechOutput
     /// <summary>The text is finished: queue the trailing partial sentence and close the queue. Call on every path.</summary>
     public void CompleteAdding()
     {
+        foreach (var sentence in _chunker.Append(_code.Flush()))
+        {
+            Enqueue(sentence);
+        }
+
         var tail = _chunker.Flush();
         if (tail.Length > 0)
         {

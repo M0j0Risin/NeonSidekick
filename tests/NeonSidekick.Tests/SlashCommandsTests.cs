@@ -636,7 +636,7 @@ public class SlashCommandsTests
         Assert.Equal("/loop", SlashCommands.HelpEntries[20].Command);   // 2026-09-21
         Assert.Equal("repeat a message, each reply waited for: /loop <count> [delay] <message> | infinite [delay] <message> (ESC ends it)", SlashCommands.HelpEntries[20].Summary);
         Assert.Equal("/botchat", SlashCommands.HelpEntries[21].Command);   // 2026-09-24: every row under it one down
-        Assert.Equal("let the profiles talk to each other, each in its own persona, until ESC: /botchat [profile ...] [[--] topic]", SlashCommands.HelpEntries[21].Summary);
+        Assert.Equal("let the profiles talk to each other, each in its own persona, until ESC: /botchat [profile ...] [[--] topic], or /botchat --resume [line] to carry on the last one", SlashCommands.HelpEntries[21].Summary);   // --resume 2026-09-25
         Assert.Equal("/expand", SlashCommands.HelpEntries[22].Command);   // under /loop since later on 2026-09-22: every row under it two down
         Assert.Equal("show every line of the folded tool runs and code blocks in the transcript (Ctrl+O flips)", SlashCommands.HelpEntries[22].Summary);
         Assert.Equal("/collapse", SlashCommands.HelpEntries[23].Command);

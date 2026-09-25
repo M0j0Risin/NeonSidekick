@@ -460,6 +460,14 @@ public sealed class Assistant
     }
 
     /// <summary>
+    /// Whether a call to an offered tool that the model wrote out as text is caught (<see cref="TextToolCallFilter"/>): kept out of
+    /// the reply shown and spoken, and run as a real call (2026-09-25, the user's report: a <c>/botchat</c> bot wrote
+    /// <c>generate_image(prompt=…)</c> into its line and no picture came). Off by default and on for botchat alone — the user's
+    /// call: in the main chat a reply that shows a call as an example would run it.
+    /// </summary>
+    public bool TextToolCalls { get; set; }
+
+    /// <summary>
     /// The context window the tool loop measures a request's usage against (<see cref="WindowTokens"/>,
     /// the figure behind <c>/usage</c>), the share of it that trips the guard (<see cref="Percent"/>,
     /// the setting <c>LLM auto compact (%)</c>; 0 = never) and what the loop then does (<see cref="Mode"/>,
@@ -803,6 +811,8 @@ public sealed class Assistant
             var updates = new List<ChatResponseUpdate>();
             var partial = new StringBuilder();
             var filter = new ThinkTagFilter();
+            // After the think filter: a call written as text, caught when the turn asks for it and offers tools.
+            var written = TextToolCalls && _tools.Count > 0 ? new TextToolCallFilter(_tools.Select(t => t.Name)) : null;
             Exception? failure = null;
             bool cancelled = false;
 
@@ -851,6 +861,11 @@ public sealed class Assistant
                     // The decoder can emit "" for the leading bytes of a multi-byte sequence, and
                     // the filter holds back a possible tag start; either way nothing is yielded.
                     string text = filter.Push(update.Text);
+                    if (written is not null && text.Length > 0)
+                    {
+                        text = written.Push(text);
+                    }
+
                     if (text.Length > 0)
                     {
                         partial.Append(text);
@@ -864,6 +879,15 @@ public sealed class Assistant
 
             // A reply that ends in "<" was held back as a possible tag; it is text after all.
             string held = filter.Flush();
+            if (written is not null)
+            {
+                held = (held.Length > 0 ? written.Push(held) : "") + written.Flush();
+                if (written.SawBroken)
+                {
+                    DiagnosticLog.Info(Category, TextCallBrokenNote);
+                }
+            }
+
             if (held.Length > 0)
             {
                 partial.Append(held);
@@ -910,6 +934,13 @@ public sealed class Assistant
                 // The model produced the tags, but they go back as content next time and prime it
                 // to repeat the pattern (and a whole block would re-send the thinking as answer text).
                 ReplaceText(response.Messages, partial.ToString());
+            }
+
+            if (written is not null && (written.Calls.Count > 0 || written.SawBroken))
+            {
+                // The written calls go into the history as real ones, the reply's text without them, so the model sees what ran.
+                ReplaceText(response.Messages, partial.ToString());
+                AddWrittenCalls(response.Messages, written.Calls, iteration);
             }
 
             foreach (var message in response.Messages)
@@ -1226,6 +1257,41 @@ public sealed class Assistant
     /// <see cref="TextContent"/> goes, and the cleaned text (if any) becomes one item at the front
     /// of the first message. Function calls and reasoning items stay where they are.
     /// </summary>
+    /// <summary>The <c>--log</c> line when a call written as text never closed and was dropped (2026-09-25).</summary>
+    internal const string TextCallBrokenNote = "The model wrote a tool call out as text and never closed it; it was dropped from the reply.";
+
+    /// <summary>The <c>--log</c> line for a call the model wrote out as text (2026-09-25): <c>Text tool call generate_image: prompt="…"</c>, cut like <see cref="ToolCallLogLine"/>.</summary>
+    internal static string TextCallLogLine(string name, string arguments) =>
+        "Text tool call " + name + ": " + (arguments.Length <= ToolCallLogChars ? arguments : arguments[..(ToolCallLogChars - 1)] + "…");
+
+    /// <summary>
+    /// The calls <see cref="TextToolCallFilter"/> caught, added to the response's last message as real
+    /// <see cref="FunctionCallContent"/>s (2026-09-25) with ids of their own (<c>text-call-{iteration}-{n}</c>), so the loop runs them
+    /// as it runs native ones. A call whose arguments do not parse is logged and left out.
+    /// </summary>
+    internal static void AddWrittenCalls(IList<ChatMessage> messages, IReadOnlyList<(string Name, string Arguments)> calls, int iteration)
+    {
+        if (messages.Count == 0)
+        {
+            messages.Add(new ChatMessage(ChatRole.Assistant, (string?)null));
+        }
+
+        int n = 0;
+        foreach (var (name, text) in calls)
+        {
+            DiagnosticLog.Info(Category, TextCallLogLine(name, text));
+            if (TextToolCallFilter.ParseArguments(text) is not { } arguments)
+            {
+                DiagnosticLog.Warn(Category, "The arguments of a " + name + " call written as text did not parse; it was not run.");
+                continue;
+            }
+
+            n++;
+            string id = "text-call-" + iteration.ToString(CultureInfo.InvariantCulture) + "-" + n.ToString(CultureInfo.InvariantCulture);
+            messages[^1].Contents.Add(new FunctionCallContent(id, name, arguments));
+        }
+    }
+
     internal static void ReplaceText(IList<ChatMessage> messages, string text)
     {
         foreach (var message in messages)

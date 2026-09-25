@@ -507,7 +507,45 @@ public sealed class AppSettingsData
     /// </summary>
     public string SttWhisperModel { get; set; } = "ggml-base.en.bin";
 
-    // ─── Skills ─────────────────────────────────────────────────────────────────
+    // ─── Botchat ────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Whether <c>/botchat</c> has pictures (2026-09-25, the user's ask): while on and the ComfyUI image tools are offered
+    /// (<c>ChatScreen.ComfyOffered</c>), <see cref="BotChatImageMode"/> says who draws — the app a picture of every reply,
+    /// the bots with <c>generate_image</c>, or both. Off (the default), the chat is talk alone, no tool at all. Read per
+    /// reply, no reconnect. The Botchat tab of <c>/settings</c>. No variable.
+    /// </summary>
+    public bool BotChatImages { get; set; }
+
+    /// <summary>
+    /// Who draws a <c>/botchat</c> picture (2026-09-25, the user's three words): one of <see cref="App.BotChatImageMode.Names"/> —
+    /// <c>automatic</c> (the default: after every reply the model writes an image prompt from it, in the workflow's family
+    /// style, and <see cref="BotChatImageWorkflow"/> draws it; the bots are offered no tool), <c>autonomous</c> (the bots are
+    /// offered <c>generate_image</c> and draw when they choose; the app draws only a picture a bot talked about but did not
+    /// draw — a call that failed counts as not drawn, and a call written out as text runs as a real one — later on 2026-09-25,
+    /// so the reply is true). Only while
+    /// <see cref="BotChatImages"/> is on. The Botchat tab of <c>/settings</c>. No variable.
+    /// </summary>
+    public string BotChatImageMode { get; set; } = App.BotChatImageMode.Default;
+
+    /// <summary>
+    /// The text → image workflow the app's <c>/botchat</c> pictures use (2026-09-25): a name among the offered workflows
+    /// that take no input picture; blank (the default), or a name no longer offered, is the first of those. The bots'
+    /// own <c>generate_image</c> calls pick as they would in the main chat. The Botchat tab of <c>/settings</c>. No variable.
+    /// </summary>
+    public string? BotChatImageWorkflow { get; set; }
+
+    /// <summary>
+    /// Whether the chat waits for the app's <c>/botchat</c> picture (2026-09-25, the user's call, on by default): on, the
+    /// picture renders while the next bot answers and is drawn — labelled with whose it is — at the first moment nothing
+    /// streams: before a turn, or while a voice plays. Off (later on 2026-09-25, the user's ask: the picture before the
+    /// words), the reply is written unseen, its picture made, and then the name, the picture and the reply are shown — the
+    /// reply spoken — ESC under the picture skipping it alone. The image prompt is written before the next turn either way,
+    /// so the LLM server is never asked two things at once. The Botchat tab of <c>/settings</c>. No variable.
+    /// </summary>
+    public bool BotChatImageAsync { get; set; } = true;
+
+    // ─── Skills─────────────────────────────────────────────────────────────────
 
     /// <summary>
     /// Whether the model gets skills (2026-09-16): the Agent Skills folders under
