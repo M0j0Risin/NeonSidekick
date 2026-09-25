@@ -120,6 +120,13 @@ public sealed class TranscriptRenderer : INoticeSink
 
     public static string UserMarkup(string text) => InputLine.SubmittedMarkup(text);
 
+    /// <summary>The glyph ahead of a <c>/botchat</c> speaker's name (2026-09-24). Pinned.</summary>
+    public const string SpeakerGlyph = "◆ ";
+
+    /// <summary>A <c>/botchat</c> speaker's name line: the glyph and the name in bold, in its colour. The name is escaped.</summary>
+    public static string SpeakerMarkup(string name, Color color) =>
+        string.Concat("[", Theme.ToHex(color), " bold]", Markup.Escape(SpeakerGlyph + name), "[/]");
+
     public static string NoticeMarkup(string text) => Theme.ColorMarkup(Theme.Dim, NoticeGlyph + text);
 
     public static string WarningMarkup(string text) => Theme.ColorMarkup(Theme.Warn, WarningGlyph + text);
@@ -174,6 +181,19 @@ public sealed class TranscriptRenderer : INoticeSink
         EndRun();
         BreakIfMidText();
         _console.MarkupLine(UserMarkup(text));
+        _state = LineState.AtLineStart;
+    }
+
+    /// <summary>
+    /// Who speaks next in a <c>/botchat</c> (2026-09-24): the name on a line of its own above the reply, which
+    /// opens with its glyph as any reply does — the reply's own rendering is untouched.
+    /// </summary>
+    public void Speaker(string name, Color color)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+        EndRun();
+        BreakIfMidText();
+        _console.MarkupLine(SpeakerMarkup(name, color));
         _state = LineState.AtLineStart;
     }
 

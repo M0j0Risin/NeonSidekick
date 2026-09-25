@@ -294,6 +294,15 @@ internal sealed class SpeechSession : IDisposable
         _synth is { } synth && IsReady ? Begin(synth, VoiceSpec, Speed, appToken) : null;
 
     /// <summary>
+    /// <see cref="BeginTurn(CancellationToken)"/> in another voice: <c>/botchat</c>'s (2026-09-24), each bot
+    /// speaking in its own profile's <paramref name="voice"/> (a <see cref="VoiceMix.Spec"/>) at its
+    /// <paramref name="speed"/> through the one synthesizer this session connected — a profile's own
+    /// <c>TTS source</c> is never read. A blank voice is the session's own.
+    /// </summary>
+    public SpeechOutput? BeginTurn(CancellationToken appToken, string voice, double speed) =>
+        _synth is { } synth && IsReady ? Begin(synth, string.IsNullOrWhiteSpace(voice) ? VoiceSpec : voice, speed, appToken) : null;
+
+    /// <summary>
     /// A speaker for the settings menu's preview: <paramref name="voice"/> as given (a name alone
     /// for the pickers, the blend for the mix and speed rows) at <paramref name="speed"/>, through
     /// the connected synthesizer — so null when speech is not ready or <paramref name="request"/>

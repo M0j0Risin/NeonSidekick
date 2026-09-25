@@ -96,6 +96,9 @@ public enum SlashCommand
     /// <summary><c>/loop &lt;count&gt; [delay] &lt;message&gt;</c> | <c>/loop infinite [delay] &lt;message&gt;</c>: the message sent that many times, or until ESC or Ctrl+C, each reply waited for as if typed again (2026-09-21, the user's ask), and with a delay (<c>30s</c>, <c>5m</c>; 2026-09-24) that long a gap after each reply. Refused mid-turn like <see cref="Draft"/>: it sends what the running turn cannot take.</summary>
     Loop,
 
+    /// <summary><c>/botchat [profile …] [topic]</c> (2026-09-24, the user's ask): the profiles talk to each other — the named ones, or every profile when none is named — each reply in the speaker's own persona and voice, all on this profile's LLM server and model, one turn after another, a random speaker each time but never the same one twice running, until ESC or Ctrl+C. No tools. A line typed meanwhile joins the chat as the user's; the chat is saved as a session. Refused mid-turn like <see cref="Loop"/>.</summary>
+    BotChat,
+
     /// <summary><c>/expand</c>: every folded tool run and code block in the transcript unfolded, and the ones to come (2026-09-22, the user's ask: what <c>/tools expand</c> did that morning, as a root word). No argument; Ctrl+O flips the same state.</summary>
     Expand,
 
@@ -178,7 +181,7 @@ public static class SlashCommands
     /// from 2026-09-15 — gone later on 2026-09-18, the same day <c>/sessions</c> moved under <c>/profile</c> and <c>/copy</c>
     /// under <c>/queue</c>, leaving <c>/skills</c> + <c>/learn</c> and <c>/timer</c> + <c>/windowsize</c> as groups, the user's call;
     /// later still on 2026-09-19 (the user's call again) <c>/skills</c> + <c>/learn</c> went under <c>/sessions</c>, <c>/windowsize</c>
-    /// became <c>/window</c> under <c>/view</c> and <c>/timer</c> went under <c>/help</c> — nine groups; <c>/draft</c> under <c>/copy</c>, 2026-09-19; later still that day <c>/splash</c> under <c>/new</c> and <c>/help</c> under <c>/timer</c>, the user's ask; <c>/theme</c> under <c>/splash</c>, 2026-09-23; <c>/forget</c> left the memory group on 2026-09-22, its wipe now <c>/memory forget</c>, and <c>/memcopy</c> left it later that day, its copy now <c>/memory copy</c>; and later still that day the first group became <c>/settings</c>, <c>/profile</c>, <c>/sessions</c>, <c>/tools</c>, <c>/mcp</c>, <c>/skills</c>, <c>/learn</c> — the user's order, the profile and its sessions ahead of the tool panes; <c>/expand</c> and <c>/collapse</c> directly under <c>/loop</c> the same day, the user's place, when they left <c>/tools</c> as its arguments). Pinned by tests.
+    /// became <c>/window</c> under <c>/view</c> and <c>/timer</c> went under <c>/help</c> — nine groups; <c>/draft</c> under <c>/copy</c>, 2026-09-19; later still that day <c>/splash</c> under <c>/new</c> and <c>/help</c> under <c>/timer</c>, the user's ask; <c>/theme</c> under <c>/splash</c>, 2026-09-23; <c>/forget</c> left the memory group on 2026-09-22, its wipe now <c>/memory forget</c>, and <c>/memcopy</c> left it later that day, its copy now <c>/memory copy</c>; and later still that day the first group became <c>/settings</c>, <c>/profile</c>, <c>/sessions</c>, <c>/tools</c>, <c>/mcp</c>, <c>/skills</c>, <c>/learn</c> — the user's order, the profile and its sessions ahead of the tool panes; <c>/expand</c> and <c>/collapse</c> directly under <c>/loop</c> the same day, the user's place, when they left <c>/tools</c> as its arguments; <c>/botchat</c> directly under <c>/loop</c>, 2026-09-24). Pinned by tests.
     /// </summary>
     public static readonly IReadOnlyList<IReadOnlyList<HelpEntry>> HelpGroups =
     [
@@ -208,6 +211,7 @@ public static class SlashCommands
             new("/copy", "copy the last reply to the clipboard as markdown, or /copy <n> | all"),
             new("/draft", "write the next message in your editor: a temporary file, sent when it is saved and closed"),
             new("/loop", "repeat a message, each reply waited for: /loop <count> [delay] <message> | infinite [delay] <message> (ESC ends it)"),
+            new("/botchat", "let the profiles talk to each other, each in its own persona, until ESC: /botchat [profile ...] [[--] topic]"),
             new("/expand", "show every line of the folded tool runs and code blocks in the transcript (Ctrl+O flips)"),
             new("/collapse", "fold the tool runs and code blocks in the transcript again"),
         ],
@@ -337,7 +341,7 @@ public static class SlashCommands
     }
 
     /// <summary>Every command word, for help and completion.</summary>
-    public static readonly string[] Words = { "/help", "/clear", "/new", "/splash", "/theme", "/queue", "/sessions", "/compact", "/server", "/model", "/reasoning", "/settings", "//", "/tools", "/mcp", "/tts", "/stt", "/wake", "/interrupt", "/speak", "/remember", "/memory", "/cmdcopy", "/cmdlist", "/police", "/persona", "/operata", "/vocalia", "/sys", "/usage", "/profile", "/timer", "/cwd", "/tree", "/vault", "/explore", "/view", "/imagine", "/comfy", "/echo", "/emptytrash", "/git", "/copy", "/draft", "/loop", "/expand", "/collapse", "/window", "/skills", "/learn", "/about", "/exit" };
+    public static readonly string[] Words = { "/help", "/clear", "/new", "/splash", "/theme", "/queue", "/sessions", "/compact", "/server", "/model", "/reasoning", "/settings", "//", "/tools", "/mcp", "/tts", "/stt", "/wake", "/interrupt", "/speak", "/remember", "/memory", "/cmdcopy", "/cmdlist", "/police", "/persona", "/operata", "/vocalia", "/sys", "/usage", "/profile", "/timer", "/cwd", "/tree", "/vault", "/explore", "/view", "/imagine", "/comfy", "/echo", "/emptytrash", "/git", "/copy", "/draft", "/loop", "/botchat", "/expand", "/collapse", "/window", "/skills", "/learn", "/about", "/exit" };
 
     /// <summary>The <c>/queue</c> word: what a double-click on the hint row's queued part sends through the mid-turn line hook, so the pane opens exactly as the typed command's does (2026-09-18). Pinned.</summary>
     public const string QueueWord = "/queue";
@@ -422,6 +426,7 @@ public static class SlashCommands
             "/copy" => SlashCommand.Copy,
             "/draft" => SlashCommand.Draft,
             "/loop" => SlashCommand.Loop,
+            "/botchat" => SlashCommand.BotChat,
             "/expand" => SlashCommand.Expand,
             "/collapse" => SlashCommand.Collapse,
             "/emptytrash" => SlashCommand.EmptyTrash,
@@ -455,5 +460,5 @@ public static class SlashCommands
         or SlashCommand.Persona or SlashCommand.Operata or SlashCommand.Vocalia
         or SlashCommand.Remember or SlashCommand.Memory or SlashCommand.CmdCopy or SlashCommand.Profile or SlashCommand.Timer
         or SlashCommand.Cwd or SlashCommand.Tree or SlashCommand.Vault or SlashCommand.Explore or SlashCommand.Copy or SlashCommand.Session or SlashCommand.Git
-        or SlashCommand.Loop or SlashCommand.Queue;
+        or SlashCommand.Loop or SlashCommand.BotChat or SlashCommand.Queue;
 }

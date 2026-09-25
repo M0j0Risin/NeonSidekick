@@ -185,6 +185,20 @@ internal sealed class LlmSession : IDisposable
         }
     }
 
+    /// <summary>
+    /// A second assistant over this session's one client (<c>/botchat</c>, 2026-09-24, the user's call:
+    /// every bot on the starting profile's server and model): <paramref name="history"/> its own, the
+    /// timeouts and the reasoning effort the main assistant's as they stand, no tools. Null while nothing
+    /// is connected. The client stays this session's; nothing here is disposed with the assistant.
+    /// </summary>
+    public Assistant? CreateAssistant(ConversationHistory history)
+    {
+        ArgumentNullException.ThrowIfNull(history);
+        return _client is { } client && Assistant is { } main
+            ? new Assistant(client, history, Timeouts, time: _time, reasoning: main.Reasoning)
+            : null;
+    }
+
     /// <summary>What every later call needs from the settings a connect was made with.</summary>
     private void Remember(AppSettingsData effective)
     {

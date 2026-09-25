@@ -112,7 +112,7 @@ internal sealed partial class ChatScreen
     /// with a level, <c>/queue</c> with a word (<c>clear</c>, 2026-09-21: the drop on the turn task, or the usage error), <c>/copy</c>, <c>/remember</c>, <c>/explore</c>, <c>/log</c> (2026-09-22: an editor launch like <c>/explore</c>'s), <c>/timer</c> and an unknown
     /// command are <see cref="MidTurnClass.Quick"/>; <c>/clear</c>, <c>/new</c>, <c>/splash</c> (2026-09-19) and <c>/exit</c> cancel; the rest
     /// (<c>/profile</c>, <c>/theme</c> (2026-09-23, the user's call: a theme change waits for the reply to end, like its <c>Theme</c> row on the settings pane — it cancelled the reply as <c>/splash</c> does until later that day), <c>/server</c>, <c>/model</c>, <c>/compact</c>, <c>/cwd</c>, <c>/tree</c>, <c>/vault</c> (2026-09-22, as <c>/tree</c>),
-    /// <c>/learn</c>, <c>/window</c>, <c>/cmdcopy</c> (2026-09-21), <c>/git</c> (2026-09-21), <c>/speak</c> — the turn owns the transcript and the speaker —, <c>/draft</c> (2026-09-19: it would send a message the turn cannot take), <c>/loop</c> (2026-09-21, the same reason), the three prompt files) are refused; <c>/skills</c> is a pane (2026-09-16 as <c>/skills</c>, <c>/skill list</c> then the bare <c>/skill</c> on 2026-09-18, the plural again since 2026-09-19; <c>/skill</c> with a name was refused until later on 2026-09-18, when the name form went — an argument was <see cref="SlashCommand.Overloaded"/>, quick like an unknown command, until <c>/skills edit &lt;name&gt;</c> came on 2026-09-21: an editor launch, refused like <c>/profile edit</c>; since it went on 2026-09-23 <c>/skills</c> takes none, an argument is <see cref="SlashCommand.Overloaded"/> again, and the bare word is the pane). Pure.
+    /// <c>/learn</c>, <c>/window</c>, <c>/cmdcopy</c> (2026-09-21), <c>/git</c> (2026-09-21), <c>/speak</c> — the turn owns the transcript and the speaker —, <c>/draft</c> (2026-09-19: it would send a message the turn cannot take), <c>/loop</c> (2026-09-21, the same reason), <c>/botchat</c> (2026-09-24, the same again), the three prompt files) are refused; <c>/skills</c> is a pane (2026-09-16 as <c>/skills</c>, <c>/skill list</c> then the bare <c>/skill</c> on 2026-09-18, the plural again since 2026-09-19; <c>/skill</c> with a name was refused until later on 2026-09-18, when the name form went — an argument was <see cref="SlashCommand.Overloaded"/>, quick like an unknown command, until <c>/skills edit &lt;name&gt;</c> came on 2026-09-21: an editor launch, refused like <c>/profile edit</c>; since it went on 2026-09-23 <c>/skills</c> takes none, an argument is <see cref="SlashCommand.Overloaded"/> again, and the bare word is the pane). Pure.
     /// </summary>
     public static MidTurnClass MidTurnPolicy(SlashCommand command, bool hasArgs) => command switch
     {
@@ -185,17 +185,25 @@ internal sealed partial class ChatScreen
     /// A message typed under the reply (2026-09-18), on the watcher task: under <c>Queue messages</c>
     /// its events go into the queue — taken off the buffer, so the mirror re-previews an empty row —
     /// and the idle loop replays them once the reply ends; a blank line, or the switch off, leaves
-    /// it type-ahead as before. The setting is read here, at each Enter.
+    /// it type-ahead as before. The setting is read here, at each Enter. Under <c>/botchat</c>
+    /// (2026-09-24) a line is always queued whatever the switch says: the chat takes it between two
+    /// replies as the user's interjection.
     /// </summary>
     private bool QueueLine(KeySource.WatchedLine line)
     {
         string label = line.Label.Trim();
-        if (!_effective().QueueMessages || label.Length == 0)
+        if ((!_effective().QueueMessages && !_botChatRunning) || label.Length == 0)
         {
             return false;
         }
 
         _queue.Enqueue(new QueuedMessage(label, line.Events));
+        if (_botChatRunning)
+        {
+            // /botchat's speech wait takes the line at once (later on 2026-09-24): its select wakes on the act signal.
+            Volatile.Read(ref _actSignal).TrySetResult();
+        }
+
         return true;
     }
 

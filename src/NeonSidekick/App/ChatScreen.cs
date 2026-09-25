@@ -2918,6 +2918,9 @@ internal sealed partial class ChatScreen
                 // The one word; a count and the message are free text (2026-09-21).
                 return MentionCompleter.Matches([new(LoopInfiniteWord, LoopInfiniteNote)], argText);
 
+            case SlashCommand.BotChat:
+                return BotChatChoices(argText, sources);
+
             default:
                 return [];
         }
@@ -7738,6 +7741,9 @@ internal sealed partial class ChatScreen
             case SlashCommand.Loop:
                 return await HandleLoopAsync(args, images, cancellationToken).ConfigureAwait(false);
 
+            case SlashCommand.BotChat:
+                return await HandleBotChatAsync(args, cancellationToken).ConfigureAwait(false);
+
             case SlashCommand.Learn:
                 HandleLearn(args, cancellationToken);
                 return false;
@@ -8397,6 +8403,279 @@ internal sealed partial class ChatScreen
         return false;
     }
 
+    /// <summary>A <c>/botchat</c> turn is running (2026-09-24): its usage events stay out of the main conversation's tally. Set and cleared on the turn task.</summary>
+    private bool _botTurnRunning;
+
+    /// <summary><c>/botchat</c> is running (2026-09-24): a line typed under a reply is queued whatever <c>Queue messages</c> says (<c>QueueLine</c>). Read on the watcher task.</summary>
+    private volatile bool _botChatRunning;
+
+    /// <summary>The last turn's reply as shown (what <c>/copy</c> keeps), for <c>/botchat</c>'s shared transcript.</summary>
+    private string _lastReply = "";
+
+    /// <summary>
+    /// <c>/botchat [profile …] [topic]</c> (2026-09-24, the user's ask; <see cref="BotChat"/> has the rules):
+    /// the profiles talk to each other until ESC or Ctrl+C. Every turn runs through <see cref="RunTurnAsync"/>
+    /// on an assistant of its own over this profile's one client (<see cref="LlmSession.CreateAssistant"/>:
+    /// the user's call, every bot on the starting profile's server and model), strictly one after another,
+    /// with a system prompt built afresh from the speaker's own <c>persona.md</c> and no tools; its reply
+    /// speaks in the speaker's own voice. A message typed meanwhile is queued (<see cref="_botChatRunning"/>)
+    /// and joins the chat before the next reply as the user's line — at once when it is sent while the last
+    /// reply is still being heard (<see cref="WaitForBotSpeechAsync"/>). With speech on, the next speaker waits for
+    /// the last one's audio to end, under ESC. Stops as <c>/loop</c> does — a cancelled, withdrawn or failed
+    /// reply, or the app token. With <c>Session logging</c> on the chat is a session of its own (each reply a
+    /// turn, the starter's view as its history, so <c>/sessions</c> brings it back as a chat with the starter);
+    /// the main conversation is never touched. Returns true when the shell should exit.
+    /// </summary>
+    private async Task<bool> HandleBotChatAsync(string args, CancellationToken cancellationToken)
+    {
+        string home = _settings.StorageDirectory;
+        string starter = _settings.ProfileName;
+        var (names, topic) = BotChat.ParseArgs(args, Profiles.List(home), starter);
+        var effective = _effective();
+        var cast = new List<BotParticipant>();
+        foreach (var name in names)
+        {
+            if (Profiles.NameEquals(name, starter))
+            {
+                // The starter is the loaded profile: its files as bound, its voice as the session holds it.
+                cast.Add(new BotParticipant(name, _persona.Read(), _vocalia.Read(), _speech.VoiceSpec, _speech.Speed, cast.Count, BotChat.GenderOf(effective.TtsVoice)));
+                continue;
+            }
+
+            string directory = Profiles.Directory(home, name);
+            AppSettingsData data;
+            try
+            {
+                data = Profiles.ReadProfileFile(Profiles.ProfileFile(home, name));
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.Json.JsonException)
+            {
+                _transcript.Notice(BotChat.SkippedNotice(name, ex.Message));
+                continue;
+            }
+
+            // Only the persona, the spoken-reply directive and the voice are read: never the LLM settings.
+            string voice = VoiceMix.Spec(data.TtsVoice, data.TtsVoice2, data.TtsVoiceMix);
+            cast.Add(new BotParticipant(name, new PersonaFile(directory).Read(), new VocaliaFile(directory).Read(), voice, data.TtsSpeed, cast.Count, BotChat.GenderOf(data.TtsVoice)));
+        }
+
+        if (cast.Count < 2)
+        {
+            _transcript.Error(BotChat.TooFewError);
+            return false;
+        }
+
+        if (_session.Assistant is null)
+        {
+            _transcript.Error(NoAssistantError);
+            return false;
+        }
+
+        var castNames = cast.Select(bot => bot.Name).ToList();
+        _transcript.Notice(BotChat.StartNotice(castNames, topic));
+        DiagnosticLog.Info(AppCategory, BotChat.StartNotice(castNames, topic));
+        long? sessionId = effective.SessionLogging ? _sessions.Begin(BotChat.SessionTitle(castNames), _session.Endpoint?.ModelId ?? "") : null;
+        var lines = new List<BotChatLine>();
+        int? last = null;
+        int replies = 0;
+        _botChatRunning = true;
+        try
+        {
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                // The lines typed under the last reply join the chat as the user's, in order.
+                TakeInterjections(lines);
+
+                // A bot the last line names answers next (2026-09-25); anyone but the last speaker otherwise.
+                int next = last is null ? 0 : BotChat.NextSpeaker(cast.Count, last, _random, BotChat.Addressed(lines, castNames));
+                var bot = cast[next];
+                var others = castNames.Where(name => !Profiles.NameEquals(name, bot.Name)).ToList();
+                // Read per turn: a /tts or Transcript markdown switch mid-chat holds from the next reply.
+                effective = _effective();
+                bool speaking = effective.TtsOutput && _speech.IsReady;
+                bool markdown = MarkdownTurn(effective.TranscriptMarkdown, _pane.Enabled, speaking);
+                var (prior, turnText) = BotChat.BuildView(bot.Name, lines, others, topic);
+                // The others' pronouns from their first voices (2026-09-25); never the speaker's own.
+                string pronouns = BotChat.PronounsLine(cast.Where(b => b != bot).Select(b => (b.Name, b.Gender)).ToList());
+                var history = new ConversationHistory(BotChat.SystemPrompt(bot.Persona, bot.Name, others, topic, speaking, bot.VoiceDirective, markdown, pronouns));
+                history.Replace(prior);
+                if (_session.CreateAssistant(history) is not { } assistant)
+                {
+                    _transcript.Error(NoAssistantError);
+                    break;
+                }
+
+                DiagnosticLog.Info(AppCategory, BotChat.TurnLogLine(replies + 1, bot.Name));
+                var outcome = await RunTurnAsync(assistant, turnText, [], cancellationToken, bot).ConfigureAwait(false);
+                await EndTurnAsync(closePane: outcome is not (TurnOutcome.Continue or TurnOutcome.Withdrawn), cancellationToken).ConfigureAwait(false);
+                if (outcome == TurnOutcome.Exit)
+                {
+                    return true;
+                }
+
+                string reply = _lastReply.Trim();
+                bool stopped = _lastTurnCancelled || _lastTurnFailed || outcome != TurnOutcome.Continue;
+                if (outcome != TurnOutcome.Withdrawn)
+                {
+                    // Even an empty reply passes the turn on: the same bot is never asked twice running.
+                    last = next;
+                }
+
+                if (outcome != TurnOutcome.Withdrawn && reply.Length > 0)
+                {
+                    lines.Add(new BotChatLine(bot.Name, reply));
+                    replies++;
+                    if (sessionId is { } id)
+                    {
+                        _sessions.AppendTurn(id, turnText, BotChat.Signed(lines[^1]), 0, [], [], _lastTurnFailed ? 1 : 0, 0, 0, _lastTurnCancelled);
+                        _sessions.SaveHistory(id, SessionHistory.ToJson(BotChat.StoredHistory(starter, lines, castNames, topic)));
+                    }
+                }
+
+                if (stopped || cancellationToken.IsCancellationRequested)
+                {
+                    break;
+                }
+
+                // Speech on: the next voice waits for this one's audio to end — under ESC, which stops the chat,
+                // and under the line hook, so a line sent meanwhile joins the chat at once.
+                if (_speech.Playing is { } playing
+                    && await WaitForBotSpeechAsync(playing, lines, cancellationToken).ConfigureAwait(false))
+                {
+                    await _speech.StopAsync().ConfigureAwait(false);
+                    break;
+                }
+            }
+        }
+        finally
+        {
+            _botChatRunning = false;
+        }
+
+        _transcript.Notice(BotChat.StoppedNotice(replies));
+        return false;
+    }
+
+    /// <summary>
+    /// The wait for a bot's audio to end (later on 2026-09-24, the user's report: lines typed while a bot spoke
+    /// reached the chat only after ESC, and then the main conversation). With speech on this wait is most of a
+    /// turn, and <see cref="WaitUnderWatchAsync"/>'s watcher has no line hook, so an Enter there stayed type-ahead
+    /// until the idle line. Here the keys are watched as under a reply — <see cref="OnMidTurnLineAsync"/>, the
+    /// panes, the pointer — and each line queued meanwhile is taken at once (<c>QueueLine</c> wakes the act
+    /// signal while <see cref="_botChatRunning"/>): echoed and added to the chat, the bot speaking on to its end
+    /// (the user's call: let it finish, then the next bot answers).
+    ///
+    /// <para>ESC or Ctrl+C (2026-09-25, the user's ask): the first press skips this bot's voice alone — the speech
+    /// stops, <see cref="SpeechStoppedNotice"/> under it, and the chat goes on to the next bot, spoken as ever — the
+    /// soft cancel a reply's own <c>StopSpeechFirst</c> is. A second press in the same wait, or at the next bot
+    /// before its voice starts (its reply's watcher then has nothing to stop and cancels), ends the chat. True
+    /// when the wait was cancelled — that second press, or a command that cancels, <c>/clear</c> and the like;
+    /// the caller stops the speech and the chat.</para>
+    /// </summary>
+    private async Task<bool> WaitForBotSpeechAsync(SpeechOutput playing, List<BotChatLine> lines, CancellationToken cancellationToken)
+    {
+        using var waitCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        using var stop = new CancellationTokenSource();
+        _turnRunning = true;
+        _paneClose?.Dispose();
+        _paneClose = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var paneToken = _paneClose.Token;
+        _queuedClicks.Reset();
+        // Written on the watcher task, read once it is joined (the finally).
+        bool skipped = false;
+        bool SkipSpeech()
+        {
+            if (skipped)
+            {
+                return false;
+            }
+
+            skipped = true;
+            _speech.Stop();
+            return true;
+        }
+
+        var watcher = _keys.WatchAsync(waitCts, stop.Token, null, null,
+            onLine: _pane.Enabled ? line => OnMidTurnLineAsync(line, waitCts, paneToken) : null,
+            softCancel: SkipSpeech,
+            spend: e => { _queuedClicks.Reset(); return ScrollInput(e); },
+            onClick: _pane.Enabled ? HintClickLine : null);
+        var cancelled = Task.Delay(Timeout.Infinite, waitCts.Token);
+        try
+        {
+            while (!playing.Completion.IsCompleted && !waitCts.IsCancellationRequested)
+            {
+                var signal = Volatile.Read(ref _actSignal).Task;
+                await Task.WhenAny(playing.Completion, signal, cancelled).ConfigureAwait(false);
+                await DrainActsAsync().ConfigureAwait(false);
+                TakeInterjections(lines);
+            }
+        }
+        finally
+        {
+            stop.Cancel();
+            await watcher.ConfigureAwait(false);
+            await EndTurnAsync(closePane: waitCts.IsCancellationRequested, cancellationToken).ConfigureAwait(false);
+        }
+
+        bool ended = waitCts.IsCancellationRequested && !cancellationToken.IsCancellationRequested;
+        if (skipped && !ended)
+        {
+            // The device silent before the next bot speaks; the line says why this voice ended early.
+            await _speech.StopAsync().ConfigureAwait(false);
+            _transcript.Notice(SpeechStoppedNotice);
+        }
+
+        TakeInterjections(lines);
+        DrainDiagnostics();
+        return ended;
+    }
+
+    /// <summary>The lines queued under a <c>/botchat</c> reply or its speech: each echoed as the user's row and added to the chat, in order.</summary>
+    private void TakeInterjections(List<BotChatLine> lines)
+    {
+        while (!_queue.Held && _queue.TryDequeue(out var queued))
+        {
+            _transcript.User(queued.Label);
+            lines.Add(new BotChatLine(BotChat.UserName, queued.Label, IsUser: true));
+        }
+    }
+
+    /// <summary>A <c>/botchat</c> speaker's name colour: the palette's bright hues in turn, read at draw time so a theme change follows.</summary>
+    private static Spectre.Console.Color SpeakerColor(int index) => (index % 6) switch
+    {
+        0 => Theme.Primary,
+        1 => Theme.Secondary,
+        2 => Theme.Tertiary,
+        3 => Theme.Highlight,
+        4 => Theme.Warm,
+        _ => Theme.Tint,
+    };
+
+    /// <summary>
+    /// <c>/botchat</c>'s argument list (2026-09-24): after the names already typed, every other profile but the
+    /// loaded one (it always joins); nothing once a word that is no profile starts the topic. Pure.
+    /// </summary>
+    public static IReadOnlyList<CompletionItem> BotChatChoices(string argText, ArgumentSources sources)
+    {
+        ArgumentNullException.ThrowIfNull(argText);
+        ArgumentNullException.ThrowIfNull(sources);
+        var profiles = sources.Profiles();
+        var words = argText.Split([' ', '\t'], StringSplitOptions.None);
+        var typed = words[..^1].Where(word => word.Length > 0).ToList();
+        if (typed.Any(word => !profiles.Any(name => Profiles.NameEquals(name, word))))
+        {
+            return [];
+        }
+
+        string prefix = argText[..(argText.Length - words[^1].Length)];
+        var offered = profiles
+            .Where(name => !Profiles.NameEquals(name, sources.LoadedProfile) && !typed.Any(word => Profiles.NameEquals(word, name)))
+            .Select(name => new CompletionItem(prefix + name, BotChat.ProfileNote))
+            .ToList();
+        return MentionCompleter.Matches(offered, argText);
+    }
+
     /// <summary>
     /// A message for the model, typed or spoken. Returns true when the shell should exit.
     ///
@@ -8743,7 +9022,7 @@ internal sealed partial class ChatScreen
     /// a hit, or a speech ESC stopped — the device is silenced and waited for, and only then is the
     /// reason decided and printed (<see cref="TurnEndNotice"/>): keys win over the microphone.</para>
     /// </summary>
-    private async Task<TurnOutcome> RunTurnAsync(Assistant assistant, string text, IReadOnlyList<ImageAttachment> images, CancellationToken cancellationToken)
+    private async Task<TurnOutcome> RunTurnAsync(Assistant assistant, string text, IReadOnlyList<ImageAttachment> images, CancellationToken cancellationToken, BotParticipant? bot = null)
     {
         using var turnCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         using var stop = new CancellationTokenSource();
@@ -8762,7 +9041,9 @@ internal sealed partial class ChatScreen
         var effective = _effective();
         // The server is the reply's (2026-09-24): a running reflection pauses and runs again after it.
         YieldLearn(effective);
-        var speaker = effective.TtsOutput && _speech.IsReady ? _speech.BeginTurn(cancellationToken) : null;
+        // A /botchat turn (2026-09-24) speaks in its bot's own voice through the one synthesizer.
+        var speaker = !(effective.TtsOutput && _speech.IsReady) ? null
+            : bot is null ? _speech.BeginTurn(cancellationToken) : _speech.BeginTurn(cancellationToken, bot.Voice, bot.Speed);
         // The cancel (the second ESC, the wake phrase, the app token) silences the reply exactly as
         // before the tail outlived the turn; the registration goes with the turn, the speaker may not.
         using var stopSpeech = speaker is null ? default : turnCts.Token.Register(_speech.Stop);
@@ -8791,8 +9072,13 @@ internal sealed partial class ChatScreen
         bool markdown = MarkdownTurn(effective.TranscriptMarkdown, _pane.Enabled, speaker is not null);
         bool styled = StyledReply(effective.TranscriptMarkdown, _pane.Enabled);
         // The shells found are probed afresh per turn (2026-09-21): an install during the session shows without a restart, and the schema and the run agree.
-        _interpreters.Refresh();
-        PrepareTurn(assistant, _memory, _memoryTools, [.. _clockTools, .. _timerTools], _persona, _operata, _vocalia, effective.Memory, speaker is not null, effective.LlmMaxToolIterations, effective.LlmOfferTools, _webTools, effective.WebTools, ContextGuardFor(effective, _session.ContextLength), _fileTools, effective.FileTools, _pane.Enabled && effective.AskUser ? _askTools : null, SkillsFor(effective), markdown, _sessionTools, effective.SessionTool, ToolsText.DisabledSet(effective.ToolsDisabled), _mcp.Tools, effective.McpServers, effective.FileSafeEdits, _gitTools, effective.GitNativeTools, _shellTools, ShellOffered(effective), _processes, effective.ShellToolBridge, effective.ShellPoliceOutsidePaths, ObsidianToolsFor(_vaultTools, effective), ObsidianOffered(effective), _sqlTools, SqlOffered(effective, _sql), _comfyTools, ComfyOffered(effective, _comfy));
+        // A /botchat turn's prompt and (empty) tool list are its own, set by HandleBotChatAsync.
+        if (bot is null)
+        {
+            _interpreters.Refresh();
+            PrepareTurn(assistant, _memory, _memoryTools, [.. _clockTools, .. _timerTools], _persona, _operata, _vocalia, effective.Memory, speaker is not null, effective.LlmMaxToolIterations, effective.LlmOfferTools, _webTools, effective.WebTools, ContextGuardFor(effective, _session.ContextLength), _fileTools, effective.FileTools, _pane.Enabled && effective.AskUser ? _askTools : null, SkillsFor(effective), markdown, _sessionTools, effective.SessionTool, ToolsText.DisabledSet(effective.ToolsDisabled), _mcp.Tools, effective.McpServers, effective.FileSafeEdits, _gitTools, effective.GitNativeTools, _shellTools, ShellOffered(effective), _processes, effective.ShellToolBridge, effective.ShellPoliceOutsidePaths, ObsidianToolsFor(_vaultTools, effective), ObsidianOffered(effective), _sqlTools, SqlOffered(effective, _sql), _comfyTools, ComfyOffered(effective, _comfy));
+        }
+
         bool armed = false;
         EchoProbe? probe = null;
         if (speaker is not null && _voice.InterruptReady)
@@ -8829,7 +9115,17 @@ internal sealed partial class ChatScreen
             _transcript.Images(tiles, ids);
         }
 
-        _session.Usage.BeginTurn();
+        // A /botchat turn's tokens stay out of the main conversation's usage (its auto-compact reads the last request).
+        _botTurnRunning = bot is not null;
+        if (bot is null)
+        {
+            _session.Usage.BeginTurn();
+        }
+        else
+        {
+            _transcript.Speaker(bot.Name, SpeakerColor(bot.ColorIndex));
+        }
+
         // The spinner over the whole turn (the pane): its count keeps moving through the streamed
         // text, a buffered tool call and the next request's wait, so a quiet stretch never reads as
         // a stall. The label follows the turn's stage (TurnStages: thinking, writing, a tool's name)
@@ -8838,7 +9134,7 @@ internal sealed partial class ChatScreen
         string label = stages.Start();
         using var busy = _transcript.BeginBusy(label);
         // What /imagine made since the last message rides with this one (2026-09-24): the notes ahead of the text, the pictures after the user's own.
-        var (sentText, sentImages) = TakeImagineNotes(text, images);
+        var (sentText, sentImages) = bot is null ? TakeImagineNotes(text, images) : (text, images);
         var events = assistant.RunTurnAsync(sentText, sentImages, turnCts.Token).GetAsyncEnumerator(turnCts.Token);
         // The next event, selected against the mid-turn acts (NextEventAsync): a quick command
         // runs between two events, however long the model takes over the next one.
@@ -8993,7 +9289,8 @@ internal sealed partial class ChatScreen
             DrainLearn();
             // A reply that ran to its end with no usage report is counted as unreported; a cut or
             // failed one is not (its report never had the chance to arrive).
-            if (!cancelled && !failed && !sawError)
+            _botTurnRunning = false;
+            if (!cancelled && !failed && !sawError && bot is null)
             {
                 _session.Usage.EndTurn();
                 // The turn the reflection may learn from: whole, and not cut by the wake phrase.
@@ -9015,10 +9312,11 @@ internal sealed partial class ChatScreen
 
             // What /copy sees: the reply as shown, partial or whole, with the line that asked for it.
             _log.Add(text, reply.ToString());
+            _lastReply = reply.ToString();
             // What the session store keeps (2026-09-18): the same pair, the model's call count and
             // the request's tokens, then the whole history as it stands. A withdrawn turn left the
             // history already and is not written.
-            if (outcome != TurnOutcome.Withdrawn)
+            if (outcome != TurnOutcome.Withdrawn && bot is null)
             {
                 LogTurn(assistant, text, reply.ToString(), trace, cancelled, effective, cancellationToken);
             }
@@ -9399,7 +9697,7 @@ internal sealed partial class ChatScreen
             case TurnEvent.Notice notice:
                 _transcript.Notice(notice.Text);
                 break;
-            case TurnEvent.Usage usage:
+            case TurnEvent.Usage usage when !_botTurnRunning:
                 _session.Usage.Add(usage.Tokens);
                 break;
         }

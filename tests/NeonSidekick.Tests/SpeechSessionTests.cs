@@ -92,6 +92,25 @@ public class SpeechSessionTests : IDisposable
         Assert.Equal(0, _playback.Stopped);
     }
 
+    /// <summary><c>/botchat</c>'s overload (2026-09-24): the bot's own voice and speed through the session's synthesizer; a blank voice is the session's.</summary>
+    [Fact]
+    public async Task BeginTurn_WithAVoice_SpeaksInIt()
+    {
+        await ConnectAsync();
+
+        var speaker = _speech.BeginTurn(CancellationToken.None, "bm_george", 1.5)!;
+        speaker.Feed("One.");
+        speaker.CompleteAdding();
+        await speaker.Completion.WaitAsync(Timeout);
+        var blank = _speech.BeginTurn(CancellationToken.None, " ", 1.0)!;
+        blank.Feed("Two.");
+        blank.CompleteAdding();
+        await blank.Completion.WaitAsync(Timeout);
+
+        Assert.Equal(("bm_george", 1.5), (_synth.Spoken[0].Voice, _synth.Spoken[0].Speed));
+        Assert.Equal(_speech.VoiceSpec, _synth.Spoken[1].Voice);
+    }
+
     [Fact]
     public async Task StopAsync_WithAudioOwed_SilencesTheDevice_AndReportsIt()
     {
