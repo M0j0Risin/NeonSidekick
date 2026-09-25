@@ -52,9 +52,6 @@ public static class ClockText
     /// <summary><c>2026-12-25</c>.</summary>
     public static string Iso(DateOnly date) => date.ToString(DateFormat, CultureInfo.InvariantCulture);
 
-    /// <summary><c>Friday 25 December 2026</c>.</summary>
-    public static string FormatDate(DateOnly date) => date.ToString("dddd d MMMM yyyy", CultureInfo.InvariantCulture);
-
     /// <summary><c>Friday</c>.</summary>
     public static string Weekday(DateOnly date) => date.ToString("dddd", CultureInfo.InvariantCulture);
 

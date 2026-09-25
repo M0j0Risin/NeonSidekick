@@ -7,17 +7,9 @@ public class WebTextTests
     [Fact]
     public void Constants_ArePinned()
     {
-        Assert.Equal("Error: give the URL to fetch", WebText.NoUrl);
-        Assert.Equal("Error: give the text to search for", WebText.NoQuery);
-        Assert.Equal("Error: offset must be 0 or more", WebText.NegativeOffset);
-        Assert.Equal("(untitled)", WebText.Untitled);
-        Assert.Equal("http", WebText.HttpEngine);
-        Assert.Equal("headless browser", WebText.BrowserEngine);
         Assert.Equal("DuckDuckGo", WebText.DuckDuckGoName);
         Assert.Equal("SearXNG", WebText.SearxngName);
-        Assert.Equal("Error: no headless browser (Edge, Chrome or Brave) was found; set Web browser path in /tools", WebText.NoBrowser);
         Assert.Equal("Error: max_results must be 1 to 20", WebText.BadResultCount);
-        Assert.Equal("; no headless browser was found to try instead", WebText.NoBrowserToTry);
         Assert.Equal("Error: open_url takes at most 5 links at a time", WebText.TooManyLinks);
     }
 

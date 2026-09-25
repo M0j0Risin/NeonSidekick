@@ -27,7 +27,6 @@ public class PersonaFileTests : IDisposable
         Assert.Equal(FilePath, persona.FilePath);
         Assert.Equal("persona.md", PersonaFile.FileName);
         Assert.Equal(4000, PersonaFile.MaxLength);
-        Assert.Equal("ELECTRON_NO_ATTACH_CONSOLE", PersonaFile.NoAttachConsoleVariable);   // what VS Code's own launcher sets; a rename is deliberate
     }
 
     [Fact]

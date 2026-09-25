@@ -73,9 +73,6 @@ public class QueueMenuTests : IDisposable
     [Fact]
     public void Strings_ArePinned()
     {
-        Assert.Equal("⏳ Queue", QueueMenu.Title);
-        Assert.Equal("Enter = remove · c = clear all · ESC = back", QueueMenu.Keys);
-        Assert.Equal("⊠ clear all", QueueMenu.ClearAllButton);
         Assert.Equal('c', QueueMenu.ClearAllKey);
         Assert.Equal(new MenuButton("⊠ clear all", 'c'), Assert.Single(QueueMenu.Buttons));
         Assert.Equal("(⏳ nothing queued)", QueueMenu.EmptyNotice);

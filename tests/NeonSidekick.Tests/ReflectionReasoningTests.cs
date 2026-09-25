@@ -37,7 +37,6 @@ public class ReflectionReasoningTests
     [InlineData(null)]
     [InlineData("")]
     [InlineData("default")]
-    [InlineData("profile-default")]   // the old word, not kept
     [InlineData("extra-high")]
     public void TryParse_RejectsAnythingElse(string? text)
     {

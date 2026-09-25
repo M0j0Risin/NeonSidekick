@@ -279,49 +279,6 @@ public static class Theme
         return sb.ToString();
     }
 
-    /// <summary>
-    /// The retro "sunset" logo: a small disc of full blocks with horizontal slits in its lower
-    /// half, tinted highlight → warm → tint → primary → deep from the top down (synthwave's
-    /// amber → orange → magenta → violet). Multi-line markup.
-    /// </summary>
-    public static string Sun()
-    {
-        var rows = new[]
-        {
-            "..█▄▄▄█..",
-            ".███████.",
-            "█████████",
-            "█████████",
-            "█████████",
-            "█.████.█",
-            "█████████",
-            "█..██..█",
-            "█...█...█",
-        };
-
-        ThemePalette p = Current;
-        var colors = new[]
-        {
-            p.Highlight, p.Highlight, p.Warm, p.Warm, p.Tint, p.Tint, p.Primary, p.Primary, p.Deep,
-        };
-
-        var sb = new StringBuilder();
-        for (int r = 0; r < rows.Length; r++)
-        {
-            string row = rows[r];
-            sb.Append('[').Append(ToHex(colors[r])).Append(']');
-            foreach (char ch in row)
-            {
-                sb.Append(ch == '.' ? ' ' : ch);
-            }
-
-            sb.Append("[/]\n");
-        }
-
-        sb.Length--; // drop the trailing newline
-        return sb.ToString();
-    }
-
     // ── Widget factories ────────────────────────────────────────────────────
     /// <summary>
     /// Applies the theme's look to a selection menu: highlight, disabled style, page size and

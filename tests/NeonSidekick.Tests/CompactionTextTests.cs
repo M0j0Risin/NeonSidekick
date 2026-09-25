@@ -23,7 +23,6 @@ public class CompactionTextTests
         Assert.Equal("(🗜️ nothing to compact)", CompactionText.NothingToCompact);
         Assert.Equal("(🗜️ compact cancelled)", CompactionText.Cancelled);
         Assert.Equal("🗜️ Compact failed: ", CompactionText.FailedPrefix);
-        Assert.Equal("compacting the conversation", CompactionText.CompactingLabel);   // the spinner's label: no glyph
     }
 
     [Fact]

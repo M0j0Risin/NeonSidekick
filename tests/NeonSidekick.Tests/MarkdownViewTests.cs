@@ -279,16 +279,6 @@ public class MarkdownViewTests : IDisposable
         Assert.Equal(new[] { "● one two ", "  three four" }, lines);
     }
 
-    [Fact]
-    public void Glyphs_ArePinned()
-    {
-        Assert.Equal("• ", MarkdownView.BulletGlyph);
-        Assert.Equal("▎ ", MarkdownView.QuoteGlyph);
-        Assert.Equal("  ", MarkdownView.CodeIndent);
-        Assert.Equal("code", MarkdownView.CodeLabel);
-        Assert.Equal("  ", ReplyBlock.ContinuationIndent);
-    }
-
     // ── Code spans (2026-09-22, the code fold) ──────────────────────────────
 
     private const string TwoBlocks = "Intro text here.\n\n```csharp\nint a = 1;\nint b = 2;\n```\n\nBetween.\n\n```\nplain one\nplain two that is long enough to wrap at twenty\nplain three\n```\n\n- item\n\n  ```js\n  let x;\n  ```\n\nEnd.";
@@ -325,7 +315,6 @@ public class MarkdownViewTests : IDisposable
     {
         Assert.Equal("▸ 📜 csharp · 57 lines", CodeFoldText.Summary("csharp", 57, expanded: false));
         Assert.Equal("▾ 📜 code · 1 line", CodeFoldText.Summary("code", 1, expanded: true));
-        Assert.Equal("📜 ", MarkdownView.CodeGlyph);   // the user's pick, 2026-09-22
         Assert.Equal(3, TextCells.Width(MarkdownView.CodeGlyph));
         Assert.Equal("📜 csharp", MarkdownView.CodeHeading("csharp"));
         Assert.Equal("📜 code", MarkdownView.CodeHeading(null));

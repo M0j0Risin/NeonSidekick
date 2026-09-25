@@ -306,18 +306,9 @@ public class FolderTreeTests
     [Fact]
     public void Words_ArePinned()
     {
-        Assert.Equal("Folders", FolderText.Title);
-        Assert.Equal("⊟ collapse all", FolderText.CollapseAllButton);
         Assert.Equal('-', FolderText.CollapseAllKey);
-        Assert.Equal("Enter = choose · Space = expand/collapse · - = collapse all · ESC = back", FolderText.Hint);
         Assert.Equal("📂 Working directory kept.", FolderText.KeptNotice);
-        Assert.Equal("/cwd browse needs the interactive screen.", FolderText.NeedsPaneNotice);
-        Assert.Equal("pick a folder on the screen", FolderText.BrowseNote);
         Assert.Equal("Cannot read X.", FolderText.DeniedNotice("X"));
-        Assert.Equal("⌂", FolderText.ShortcutGlyph);
-        Assert.Equal("profile", FolderText.ProfileLabel);
-        Assert.Equal("▣", FolderText.SplashGlyph);
-        Assert.Equal("splash", FolderText.SplashLabel);
         Assert.Equal(Theme.DimMarkup(@"C:\x [y]"), FolderText.PathMarkup(@"C:\x [y]"));
     }
 }

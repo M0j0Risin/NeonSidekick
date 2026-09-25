@@ -273,7 +273,6 @@ public class AskUserToolTests
     [Fact]
     public void Text_IsPinned()
     {
-        Assert.Equal("(questions not answered)", AskUserText.NotAnswered);
         Assert.Equal("Error: questions must be a list of 1 to 5 objects like [{\"question\": \"…\", \"type\": \"single\", \"options\": [\"a\", \"b\"]}]; got: (nothing)", AskUserText.NoQuestions("  ", 5));
         Assert.Equal("Error: questions must be a list of 1 to 10 objects like " + AskUserText.Shape + "; got: a b", AskUserText.NoQuestions("a\r\nb", 10));
         // A long text is cut in the middle (2026-09-16): the tail shows too, where a parser's stray brace sits.

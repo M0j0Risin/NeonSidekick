@@ -169,7 +169,6 @@ public class UsageTextTests
 
         tally.AddLearning(Usage(3000, 120, 2, 0.5, 1), requests: 2);
 
-        Assert.Equal("Skill learning", UsageText.LearningLabel);
         Assert.Equal("2 requests · 3,120 tokens", UsageText.LearningValue(tally));
         Assert.Equal("skill learning: 2 requests · 3,120 tokens", UsageText.Lines(tally, null)[^1]);
         Assert.StartsWith("Tokens — since launch (every request summed): 3,240 (3,100 in, 140 out, 3 requests)", UsageText.Lines(tally, null)[3], StringComparison.Ordinal);
@@ -207,7 +206,6 @@ public class UsageTextTests
             ("Total", "100"), ("Prompt", "100"), ("Completion", "0"), ("Reasoning", "—"), ("Requests", "1"),
             ("Time to first token", "0.5 s"),
         ], UsageText.Rows(Usage(100, 0, 1, 0.5, 0), averaged: true));
-        Assert.Equal("—", UsageText.NoReasoningReport);
         Assert.Contains(("Reasoning", "0"), UsageText.Rows(Usage(100, 4, 1, 0.5, 1, reasoning: 0), averaged: true));
 
         // An aggregate with nothing counted (the conversation after /clear) has no wait to average.
@@ -332,7 +330,6 @@ public class UsageTextTests
         Assert.StartsWith("The counts are the server's own usage report", UsageText.Notes[0]);
         Assert.Contains("the last request's prompt plus its completion is the context in use", UsageText.Notes[1]);
         Assert.Contains("the conversation and launch totals sum every request", UsageText.Notes[1]);
-        Assert.Equal("every request summed", UsageText.SummedNote);
         Assert.Contains("thinking included", UsageText.Notes[2]);
         Assert.Contains("A picture in the conversation is tokenised by the server and counted in the prompt figure", UsageText.Notes[2]);
         Assert.StartsWith("Reasoning is the thinking's share of the completion", UsageText.Notes[3]);

@@ -41,10 +41,8 @@ public class SlashCommandsTests
     [InlineData("/sys", SlashCommand.Sys)]   // the name since 2026-09-21; /sysprompt before
     [InlineData("/SYS", SlashCommand.Sys)]
     [InlineData("/window", SlashCommand.Window)]
-    [InlineData("/windowsize", SlashCommand.Unknown)]   // the old word, later on 2026-09-19
     [InlineData("/sessions", SlashCommand.Session)]   // the plural since later on 2026-09-21
     [InlineData("/SESSIONS", SlashCommand.Session)]
-    [InlineData("/session", SlashCommand.Unknown)]   // the old word
     [InlineData("/usage", SlashCommand.Usage)]
     [InlineData("/about", SlashCommand.About)]
     [InlineData("/ABOUT", SlashCommand.About)]
@@ -95,19 +93,6 @@ public class SlashCommandsTests
         Assert.Equal((SlashCommand.Overloaded, "expand"), SlashCommands.Parse("/tools expand"));
     }
 
-    [Theory]
-    [InlineData("/ask")]
-    [InlineData("/ASK on")]
-    [InlineData("/files")]
-    [InlineData("/files off")]
-    [InlineData("/web")]
-    [InlineData("/web on")]
-    public void Parse_TheRetiredToolSwitches_AreUnknown(string line)
-    {
-        // The three went later on 2026-09-18 (the user's call): the settings rows Ask user / File tools / Web tools are the one switch.
-        Assert.Equal(SlashCommand.Unknown, SlashCommands.Parse(line).Command);
-    }
-
     [Fact]
     public void Parse_SkillsTakesTheRestOfTheLine_TheHandlerJudgesIt()
     {
@@ -122,8 +107,6 @@ public class SlashCommandsTests
         Assert.Equal((SlashCommand.Overloaded, "list"), SlashCommands.Parse("/skills list"));   // /skill list was the pane for part of 2026-09-18
         Assert.Equal((SlashCommand.Loop, "3 hi there"), SlashCommands.Parse("/loop 3 hi there"));   // 2026-09-21: the count and the message are the handler's
         Assert.Equal((SlashCommand.Loop, ""), SlashCommands.Parse("/loop"));
-        Assert.Equal((SlashCommand.Unknown, ""), SlashCommands.Parse("/skill"));
-        Assert.Equal((SlashCommand.Unknown, "now"), SlashCommands.Parse("/skill now"));
     }
 
     [Fact]
@@ -339,22 +322,8 @@ public class SlashCommandsTests
     }
 
     [Theory]
-    [InlineData("/cls everything")]
-    [InlineData("/sysprompt tools")]   // renamed /sys on 2026-09-21
-    [InlineData("/mem 2")]
-    [InlineData("/win 80x24")]
-    [InlineData("/windowsize")]   // /window took the word later on 2026-09-19
-    [InlineData("/session")]   // /sessions took the word later on 2026-09-21
-    [InlineData("/forget")]   // folded into /memory as a word on 2026-09-22; the standalone command went with it
-    [InlineData("/forget everything")]
-    [InlineData("/memcopy")]   // folded into /memory as copy <profile> [overwrite] later on 2026-09-22; the standalone command went the same way
-    [InlineData("/memcopy work")]
     [InlineData("/")]
     [InlineData("/bogus")]
-    [InlineData("/config")]   // retired 2026-09-16
-    [InlineData("/config x")]
-    [InlineData("/use reset")]
-    [InlineData("/ab x")]
     [InlineData("/////")]
     public void Parse_AnUnknownWord_IsUnknown(string line)
     {
@@ -516,33 +485,28 @@ public class SlashCommandsTests
         Assert.Equal(SlashCommand.Exit, SlashCommands.Parse("/exit").Command);   // typed in full it still exits
     }
 
-    [Theory]
-    [InlineData("/?")]
-    [InlineData("/cls")]
-    [InlineData("/comp keep it")]
-    [InlineData("/srv")]
-    [InlineData("/mod")]
-    [InlineData("/reason high")]
-    [InlineData("/int on")]
-    [InlineData("/rem x")]
-    [InlineData("/mem")]
-    [InlineData("/use")]
-    [InlineData("/prof")]
-    [InlineData("/tim 5m")]
-    [InlineData("/cd ~")]
-    [InlineData("/dir")]
-    [InlineData("/ls docs")]
-    [InlineData("/ex")]
-    [InlineData("/cp all")]
-    [InlineData("/win")]
-    [InlineData("/ab")]
-    [InlineData("/quit")]
-    [InlineData("///")]     // /tools for part of 2026-09-21
-    [InlineData("////")]    // /skills the same day
-    public void Parse_TheRetiredAliases_AreUnknown(string line)
+    /// <summary>
+    /// Every word that was a command once and went, with and without an argument: unknown, never
+    /// silently some other command. One fact over the list rather than a theory row each
+    /// (2026-09-24): the per-word history lives in git, the list here only has to grow.
+    /// </summary>
+    [Fact]
+    public void Parse_RetiredWords_AreUnknown()
     {
-        // Every alias but // went on 2026-09-16 (the user's call): the completion list makes them redundant; /// and //// came and went on 2026-09-21.
-        Assert.Equal(SlashCommand.Unknown, SlashCommands.Parse(line).Command);
+        string[] retired =
+        [
+            // The tool switches, later on 2026-09-18: the settings rows are the one switch.
+            "/ask", "/ASK on", "/files", "/files off", "/web", "/web on",
+            // Every alias but //, 2026-09-16; /// and //// came and went on 2026-09-21.
+            "/?", "/cls", "/cls everything", "/comp keep it", "/srv", "/mod", "/reason high", "/int on", "/rem x", "/mem", "/mem 2",
+            "/use", "/use reset", "/prof", "/tim 5m", "/cd ~", "/dir", "/ls docs", "/ex", "/cp all", "/win", "/win 80x24", "/ab", "/ab x",
+            "/quit", "///", "////", "/config", "/config x",
+            // Renamed or folded into another command's words.
+            "/sysprompt tools", "/windowsize", "/session", "/forget", "/forget everything", "/memcopy", "/memcopy work",
+            "/skill", "/skill now",
+        ];
+
+        Assert.All(retired, line => Assert.Equal(SlashCommand.Unknown, SlashCommands.Parse(line).Command));
     }
 
     [Theory]
@@ -604,9 +568,6 @@ public class SlashCommandsTests
         Assert.Contains(Row("/vocalia", "export and manage vocalia.md (the spoken-reply directive) in your editor, or /vocalia reset to go back to the default, or /vocalia copy <profile> [force] to copy it into another profile"), SlashCommands.HelpText);
         Assert.Contains(Row("/about", "show general information about the app and profile"), SlashCommands.HelpText);
         Assert.DoesNotContain("M5", SlashCommands.HelpText);
-        Assert.DoesNotContain("/ask", SlashCommands.HelpText);   // the three tool switches went 2026-09-18
-        Assert.DoesNotContain("/files", SlashCommands.HelpText);
-        Assert.DoesNotContain("/web", SlashCommands.HelpText);
         Assert.EndsWith("F4 = talk (push-to-talk key)", SlashCommands.HelpText);
 
         // A blank line ahead of every group but the first.
@@ -716,8 +677,6 @@ public class SlashCommandsTests
         Assert.Equal("/help", SlashCommands.HelpEntries[48].Command);
         Assert.Equal("/about", SlashCommands.HelpEntries[49].Command);
         Assert.Equal("/exit", SlashCommands.HelpEntries[^1].Command);
-        Assert.DoesNotContain(SlashCommands.HelpEntries, e => e.Command == "/windowsize");
-        Assert.DoesNotContain(SlashCommands.HelpEntries, e => e.Command is "/ask" or "/files" or "/web");
 
         // Every word is one entry's command or one of its aliases — never in a summary.
         var labels = SlashCommands.HelpEntries.SelectMany(e => e.Aliases.Prepend(e.Command)).ToList();
@@ -732,7 +691,7 @@ public class SlashCommandsTests
 
         // The plain text is the groups, one line each with a blank line between the groups, between the heading and the key line.
         string[] lines = SlashCommands.HelpText.Split('\n');
-        Assert.Equal(1 + 51 + 8 + 1, lines.Length);   // 51 rows with /imagine and /comfy (2026-09-24); 49 rows with /theme (2026-09-23); 48 rows with /police (later still on 2026-09-22); 47 rows with /vault (later still on 2026-09-22); 46 rows with /expand and /collapse (later still on 2026-09-22); 44 since /memcopy went (later on 2026-09-22), 45 since /forget went that morning; 46 with /cmdlist (later on 2026-09-21), 45 with /cmdcopy (2026-09-21), 44 with /loop, 43 with /git (2026-09-21); 42 with /mcp (2026-09-20)   // nine groups since later on 2026-09-19; 41 rows with /draft and /splash
+        Assert.Equal(1 + SlashCommands.HelpEntries.Count + (SlashCommands.HelpGroups.Count - 1) + 1, lines.Length);   // the heading, a row each, a blank between groups, the key line
         Assert.Equal("Commands:", lines[0]);
         Assert.Equal(SlashCommands.KeysLine, lines[^1]);
         var line = 1;

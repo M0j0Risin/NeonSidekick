@@ -304,7 +304,6 @@ internal sealed partial class ChatScreen
     /// <summary>The spinner's first label under <c>TTS source</c> = <c>in-process</c>; the session renames it while the model downloads and loads.</summary>
     public const string SpeechLoadingLabel = "preparing in-process Kokoro";
     public const string VoiceConnectingLabel = "preparing voice input";
-    public const string TranscribingLabel = VoicePipeline.TranscribingLabel;
     public const string TurnFailedPrefix = "Turn failed: ";
     public const string TtsUsageError = "/tts takes on or off, or nothing to toggle.";
     public const string VoiceUsageError = "/stt takes on or off, or nothing to toggle.";
@@ -3503,7 +3502,7 @@ internal sealed partial class ChatScreen
     /// (<see cref="Assistant.OpeningCalls"/>); and the round-trip cap (<see cref="Assistant.MaxToolIterations"/>)
     /// from the setting <c>LLM max tool iterations</c>. With <paramref name="toolsEnabled"/> false (the
     /// setting <c>LLM offer tools</c> off) the turn offers no tool, seeds no opening call and reads the
-    /// tool-free defaults (<see cref="Assistant.OperatingRulesWithoutTools"/>) — nothing stands in for
+    /// tool-free defaults (<see cref="Assistant.PlainTextRule"/>) — nothing stands in for
     /// the clock or the path. The web tools (<paramref name="webTools"/>) go the way of the memory
     /// tool: offered, and <see cref="Assistant.WebRule"/> appended to the default rules, while
     /// <paramref name="webEnabled"/> (the setting <c>Web tools</c>) says so; the file tools

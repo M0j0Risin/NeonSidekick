@@ -13,7 +13,6 @@ public class SettingsDiffTests
         var lines = SettingsDiff.Changes(before, after);
 
         Assert.Equal([@"WorkingDirectory:  → D:\x", "TtsOutput: false → true", "TtsSpeed: 1.2 → 1.3"], lines);
-        Assert.Equal(" → ", SettingsDiff.Arrow);
     }
 
     [Fact]
@@ -35,7 +34,6 @@ public class SettingsDiffTests
         Assert.Contains("LlmApiKey: " + SettingsDiff.Redacted, lines);
         Assert.Contains("ToolsDisabled: [git_delete, unzip, zip] → [read_file, web_fetch]", lines);   // git_delete off by default since 2026-09-20 (git_discard too until 2026-09-23), zip and unzip since 2026-09-21; delete was too until later that day
         Assert.DoesNotContain(lines, l => l.Contains("sk-secret", StringComparison.Ordinal));
-        Assert.Equal("(redacted)", SettingsDiff.Redacted);
         Assert.Contains(nameof(AppSettingsData.LlmApiKey), SettingsDiff.Secrets);
     }
 
@@ -49,6 +47,5 @@ public class SettingsDiffTests
         Assert.Equal(["LlmApiKey=" + SettingsDiff.Redacted, "LlmUrl=http://h:1/v1", "TtsSpeed=1"], lines);
         Assert.Equal("Not default: LlmUrl=http://h:1/v1, TtsSpeed=1", AppSettings.NotDefaultLogLine(["LlmUrl=http://h:1/v1", "TtsSpeed=1"]));
         Assert.Equal(AppSettings.AllDefaultLogLine, AppSettings.NotDefaultLogLine([]));
-        Assert.Equal("Every setting is at its default.", AppSettings.AllDefaultLogLine);
     }
 }

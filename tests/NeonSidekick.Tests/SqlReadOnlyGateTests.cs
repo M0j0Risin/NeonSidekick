@@ -91,8 +91,6 @@ public sealed class SqlReadOnlyGateTests
     {
         Assert.Equal("Error: the SQL is 2 statements; send exactly one SELECT per call (a CTE may lead it)", SqlText.NotOneStatement(2));
         Assert.Equal("Error: the SQL is a DELETE statement; the SQL tools only read — send one SELECT (a CTE may lead it)", SqlText.NotASelect("DELETE"));
-        Assert.Equal("Error: SELECT … INTO creates a table; the SQL tools only read — drop the INTO", SqlText.SelectInto);
         Assert.Equal("Error: the SELECT uses OPENQUERY, which the SQL tools refuse (it reaches outside this server or changes state a rollback cannot undo)", SqlText.Forbidden("OPENQUERY"));
-        Assert.Equal("Error: give the SELECT to run in \"sql\"", SqlText.NoSql);
     }
 }

@@ -75,7 +75,6 @@ public class VoiceSessionTests : IDisposable
         Assert.False(_voice.Available);
         Assert.True(_voice.StatusIsWarning);
         Assert.Equal(VoiceSession.UnavailableLine(VoiceSession.ConnectCancelledDetail), _voice.StatusLine());
-        Assert.Equal("cancelled", VoiceSession.ConnectCancelledDetail);
     }
 
     // ── Status lines ────────────────────────────────────────────────────────
@@ -99,7 +98,6 @@ public class VoiceSessionTests : IDisposable
         Assert.Equal(TimeSpan.FromSeconds(4), VoiceSession.InterruptionOptions.NoSpeechTimeout);
         Assert.Equal(VoicePipelineOptions.Default.MaxUtterance, VoiceSession.InterruptionOptions.MaxUtterance);
         Assert.Equal("👂 Wake word: unavailable (HTTP 404); push-to-talk still works, /stt retries", VoiceSession.WakeUnavailableLine("HTTP 404"));
-        Assert.Equal("unpacking vosk model…", VoiceSession.UnpackingLabel);
         Assert.Equal("downloading vosk model (41 MB)…", VoiceSession.DownloadLabel("vosk model", 40_960_000));
     }
 

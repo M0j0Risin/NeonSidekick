@@ -62,7 +62,6 @@ public class ClockTextTests
         var christmas = new DateOnly(2026, 12, 25);
 
         Assert.Equal("2026-12-25", ClockText.Iso(christmas));
-        Assert.Equal("Friday 25 December 2026", ClockText.FormatDate(christmas));
         Assert.Equal("Friday", ClockText.Weekday(Today));
         Assert.Equal("0001-01-01", ClockText.Iso(DateOnly.MinValue));
     }
@@ -177,7 +176,6 @@ public class ClockTextTests
         Assert.Equal("Error: unknown time zone 'Mars'; give an IANA name such as Europe/Paris", ClockText.UnknownZone(" Mars "));
         Assert.Equal("Error: 'soon' is not a date for 'from'; use today or yyyy-MM-dd", ClockText.BadDate("from", "soon"));
         Assert.Equal("Error: 'many' is not a whole number for 'days'", ClockText.BadInteger("days", "many"));
-        Assert.Equal("Error: that date is out of range", ClockText.OutOfRange);
     }
 
     [Fact]

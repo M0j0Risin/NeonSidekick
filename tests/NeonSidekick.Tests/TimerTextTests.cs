@@ -117,10 +117,7 @@ public class TimerTextTests
         Assert.Equal("Error: a timer called 'cooking' is already running (7 minutes 12 seconds left); stop it first or use another name", TimerText.Duplicate(Running("cooking", 600, 432)));
         Assert.Equal("Error: a timer called 'cooking' is done and ringing; stop it first or use another name", TimerText.Duplicate(Ringing("cooking")));
         Assert.Equal("Error: too many timers (20); stop one first", TimerText.Full(20));
-        Assert.Equal("Error: a timer runs from 1 second to 24 hours", TimerText.BadDuration);
-        Assert.Equal("Error: give the duration in hours, minutes and/or seconds", TimerText.NoDuration);
         Assert.Equal("Error: a timer name is 1 to 40 characters and not 'all'", TimerText.BadName);
-        Assert.Equal("Error: give the name of the timer to stop", TimerText.NoName);
         Assert.Equal("stopped the cooking timer with 7 minutes 12 seconds left", TimerText.Stopped(Running("cooking", 600, 432)));
         Assert.Equal("silenced the cooking timer", TimerText.Stopped(Ringing("cooking")));
         Assert.Equal("Error: no timer called 'cooking'; running: tea, eggs", TimerText.NoSuchTimer("cooking", new[] { Running("tea", 60, 30), Ringing("eggs") }));

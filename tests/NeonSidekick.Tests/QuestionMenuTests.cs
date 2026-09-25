@@ -202,13 +202,6 @@ public class QuestionMenuTests : IDisposable
     [Fact]
     public void Statics_ArePinned()
     {
-        Assert.Equal("Questions", QuestionMenu.Title);
-        Assert.Equal("Enter = choose · Space = mark · ←/→ tabs · ESC = cancel", QuestionMenu.SingleKeys);
-        Assert.Equal("Space / Enter = toggle · ←/→ tabs · ESC = cancel", QuestionMenu.MultiKeys);
-        Assert.Equal("Enter = submit or revisit · ←/→ tabs · ESC = cancel", QuestionMenu.SubmitKeys);
-        Assert.Equal("Enter = save · ESC = back", QuestionMenu.OtherKeys);
-        Assert.Equal("Check your answers, then choose Submit.", QuestionMenu.SubmitCaption);
-        Assert.Equal("(no answer)", QuestionMenu.NoAnswer);
         Assert.Equal(12, QuestionMenu.TabTitleCells);
 
         Assert.Equal("Q1", QuestionMenu.TabTitle(1, null));

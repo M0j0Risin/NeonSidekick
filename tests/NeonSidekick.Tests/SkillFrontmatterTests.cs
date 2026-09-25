@@ -104,7 +104,6 @@ public class SkillFrontmatterTests
         Assert.False(SkillFrontmatter.IsValidName(new string('a', 65)));
         Assert.Equal(64, SkillFrontmatter.MaxNameLength);
         Assert.Equal(1024, SkillFrontmatter.MaxDescriptionLength);
-        Assert.Equal("1 to 64 lowercase letters, digits and hyphens, not starting or ending with a hyphen and with no two hyphens in a row", SkillFrontmatter.NameRule);
     }
 
     [Fact]

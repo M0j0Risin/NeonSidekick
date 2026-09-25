@@ -13,6 +13,9 @@ namespace NeonSidekick.Tests;
 
 public class SettingsMenuTests : IDisposable
 {
+    /// <summary>A second level's label inside <c>/settings</c> (<c>Settings › TTS voice</c>). Test-side since 2026-09-24: src builds the crumb its own way and never called the helper.</summary>
+    internal static string Breadcrumb(string label) => SettingsMenu.Title + " › " + label;
+
     private readonly string _dir = Path.Combine(Path.GetTempPath(), "NeonSidekick.Tests", Guid.NewGuid().ToString("N"));
     private readonly TestConsole _console = new TestConsole().Interactive();
     private readonly AppSettings _settings;
@@ -334,7 +337,7 @@ public class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.Voice, await _menu.ShowAsync(CancellationToken.None));
 
         Assert.Equal("F9", _settings.Current.SttPushToTalkKey);
-        Assert.Contains(SettingsMenu.Breadcrumb("STT push-to-talk key"), _console.Output);
+        Assert.Contains(Breadcrumb("STT push-to-talk key"), _console.Output);
         Assert.Contains("  · STT push-to-talk key: F9", _console.Output);
         Assert.Contains("F4  the default", _console.Output);
         Assert.DoesNotContain("F11", _console.Output);   // only the listed keys are offered
@@ -376,7 +379,6 @@ public class SettingsMenuTests : IDisposable
         Assert.Equal("Insert", SettingsMenu.PushToTalkLabel(ConsoleKey.Insert));
         Assert.StartsWith("F4", SettingsMenu.PushToTalkLabel(ConsoleKey.F4));
         Assert.Contains("the default", SettingsMenu.PushToTalkLabel(ConsoleKey.F4));
-        Assert.Equal("must be one of F1–F10, Insert, Home, End, PageUp or PageDown", SettingsMenu.PushToTalkKeyError);
     }
 
     [Fact]
@@ -517,7 +519,7 @@ public class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.Voice, await _menu.ShowAsync(CancellationToken.None));
 
         Assert.Equal("ggml-small.en.bin", _settings.Current.SttWhisperModel);
-        Assert.Contains(SettingsMenu.Breadcrumb("STT whisper model"), _console.Output);
+        Assert.Contains(Breadcrumb("STT whisper model"), _console.Output);
         Assert.Contains("  · STT whisper model: ggml-small.en.bin", _console.Output);
         Assert.Contains("ggml-base.en.bin   the default, 148 MB", _console.Output);
         Assert.Contains("ggml-small.en.bin  most accurate, 488 MB", _console.Output);
@@ -587,7 +589,7 @@ public class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.Voice, await _menu.ShowAsync(CancellationToken.None));
 
         Assert.Equal("vosk-model-en-us-0.22-lgraph", _settings.Current.SttVoskModel);
-        Assert.Contains(SettingsMenu.Breadcrumb("STT vosk model"), _console.Output);
+        Assert.Contains(Breadcrumb("STT vosk model"), _console.Output);
         Assert.Contains("  · STT vosk model: vosk-model-en-us-0.22-lgraph", _console.Output);
         Assert.Contains("vosk-model-small-en-us-0.15   the default, 41 MB", _console.Output);
         Assert.Contains("vosk-model-en-us-0.22-lgraph  most accurate, 131 MB", _console.Output);
@@ -720,7 +722,6 @@ public class SettingsMenuTests : IDisposable
         Assert.Equal("vosk-model-small-en-us-0.15", SettingsMenu.FieldValue(SettingsField.SttVoskModel, data, _settings.ProfileDirectory));
         Assert.True(SettingsMenu.IsVoiceField(SettingsField.SttWakePhrase));
         Assert.True(SettingsMenu.IsVoiceField(SettingsField.SttWake));
-        Assert.Equal("must be one to three words of letters", SettingsMenu.WakePhraseError);
         Assert.Equal("ggml-base.en.bin", SettingsMenu.FieldValue(SettingsField.SttWhisperModel, data, _settings.ProfileDirectory));
         // The menu order, top to bottom: the row order is the enum order and every Down(n) above counts on it.
         Assert.Equal(
@@ -807,7 +808,6 @@ public class SettingsMenuTests : IDisposable
         Assert.Equal("2", SettingsMenu.EditableValue(SettingsField.LlmCompactKeepRecent, data));
         Assert.Equal("85", SettingsMenu.EditableValue(SettingsField.LlmAutoCompactPercent, data));
         Assert.Equal("must be 0 to 24 turns", SettingsMenu.LlmCompactKeepRecentRangeError);
-        Assert.Equal("must be 0 (off) or 1 to 100 percent", SettingsMenu.LlmAutoCompactPercentRangeError);
         Assert.Equal("summary [#9A8BB8]summarise the older turns into one message, keep the recent ones[/]", SettingsMenu.CompactTypeLabel("summary"));
         Assert.Equal("prune   [#9A8BB8]stub the bulky tool results in the older turns, keep every turn[/]", SettingsMenu.CompactTypeLabel("prune"));
         // The context length: an LLM row (a reconnect), typed, 0 for the server's own figure.
@@ -819,7 +819,6 @@ public class SettingsMenuTests : IDisposable
         Assert.Equal("32,768 tokens", SettingsMenu.FieldValue(SettingsField.LlmContextLength, new AppSettingsData { LlmContextLength = 32_768 }, _settings.ProfileDirectory));
         Assert.Equal("32768", SettingsMenu.EditableValue(SettingsField.LlmContextLength, new AppSettingsData { LlmContextLength = 32_768 }));
         Assert.Equal(SettingsField.LlmContextLength, SettingsMenu.TabFields[(int)SettingsTab.Llm][^9]);   // the four compact rows, the tools, the tool-compact picker, the cap and the fun verbs follow it
-        Assert.Equal("must be 0 (the server's figure) or a whole number of tokens", SettingsMenu.ContextLengthRangeError);
         // The pane's tabs (five since 2026-09-19: Ask, Files and Web are /tools' tabs, Skills is /skills' Options tab): General, Sessions, LLM in their own order, TTS / STT the enum order of their session's fields; every field on exactly one tab of the three panes.
         Assert.Equal(["General", "Sessions", "LLM", "TTS", "STT"], SettingsMenu.TabTitles);   // Sessions right after General (2026-09-18); Web last until 2026-09-19, Skills third until later that day
         // The Options tab of /skills (2026-09-19; the Skills tab of /settings from 2026-09-16 until then): the skills switch, the external-folder switch and the compact-mode picker, then (2026-09-17) the #-mention switch, the delete switch, then the auto-learn switch and the reflection rows; none a reconnect.
@@ -916,7 +915,6 @@ public class SettingsMenuTests : IDisposable
         // Draft editor (2026-09-19): typed, the General tab's last row, blank = the shell's default for .txt, no reconnect (read at each /draft).
         Assert.False(SettingsMenu.IsToggle(SettingsField.DraftEditor));
         Assert.Equal("Draft editor", SettingsMenu.FieldName(SettingsField.DraftEditor));
-        Assert.Equal("(default .txt editor)", SettingsMenu.DefaultDraftEditorLabel);
         Assert.Equal(SettingsMenu.DefaultDraftEditorLabel, SettingsMenu.FieldValue(SettingsField.DraftEditor, data, _settings.ProfileDirectory));
         Assert.Equal("code --wait", SettingsMenu.FieldValue(SettingsField.DraftEditor, new AppSettingsData { DraftEditor = "code --wait" }, _settings.ProfileDirectory));
         Assert.Equal("", SettingsMenu.EditableValue(SettingsField.DraftEditor, data));
@@ -1043,8 +1041,6 @@ public class SettingsMenuTests : IDisposable
         Assert.Equal("must be 1 to 500 tool calls", SettingsMenu.ShellCodeMaxToolCallsRangeError);
         Assert.Equal("[[x]] python     [#9A8BB8]a .py through python.exe; from neon_tools import …[/]", SettingsMenu.CodeLanguageLabel("python", enabled: true, installed: true));   // the marks escaped for markup
         Assert.Equal("[[ ]] node       [#9A8BB8]a .js through node.exe; require('neon_tools') — not found[/]", SettingsMenu.CodeLanguageLabel("node", enabled: false, installed: false));
-        Assert.Equal("Enter / Space = on or off · ESC = back", SettingsMenu.ToggleKeys);
-        Assert.Equal("At least one language stays on.", SettingsMenu.LastLanguageError);
         Assert.Equal("Shell command policy", SettingsMenu.FieldName(SettingsField.ShellCommandPolicy));
         Assert.Equal("Shell allowed commands", SettingsMenu.FieldName(SettingsField.ShellCommandAllowed));
         Assert.Equal("Shell default", SettingsMenu.FieldName(SettingsField.ShellDefault));
@@ -1072,15 +1068,12 @@ public class SettingsMenuTests : IDisposable
         Assert.Equal("off  [#9A8BB8]no shell or script tool is offered[/]", SettingsMenu.CommandPolicyLabel("off"));
         Assert.Equal("bash       [#9A8BB8]Git Bash, when bash.exe is found — not found[/]", SettingsMenu.ShellLabel("bash", installed: false));
         Assert.Equal("cmd        [#9A8BB8]cmd.exe: batch syntax[/]", SettingsMenu.ShellLabel("cmd", installed: true));
-        Assert.Equal("(none)", SettingsMenu.NoAllowedCommandsRow);   // the bare word since 2026-09-23
-        Assert.Equal("Enter = remove · ESC = back", SettingsMenu.RemoveKeys);
         Assert.Equal("Shell allowed commands: git push removed", SettingsMenu.PrefixRemovedNotice("git push"));
         // The git rows (2026-09-20): the Git tab (Git (native), the last, since later on 2026-09-21) — the switch, then the two caps alphabetically; typed, none a reconnect.
         Assert.Equal(new[] { SettingsField.GitNativeTools, SettingsField.GitNativeDiffMaxLines, SettingsField.GitNativeLogMaxCommits, SettingsField.GitNativeEmail, SettingsField.GitNativeName }, SettingsMenu.ToolsTabFields[4]);
         // The identity pair (2026-09-21): typed, empty allowed and shown as (not set), no validation.
         Assert.Equal("Git native email", SettingsMenu.FieldName(SettingsField.GitNativeEmail));   // the Git native labels, later on 2026-09-21
         Assert.Equal("Git native name", SettingsMenu.FieldName(SettingsField.GitNativeName));
-        Assert.Equal("(not set)", SettingsMenu.NoGitIdentityLabel);
         Assert.Equal("(not set)", SettingsMenu.FieldValue(SettingsField.GitNativeEmail, data, _settings.ProfileDirectory));
         Assert.Equal("(not set)", SettingsMenu.FieldValue(SettingsField.GitNativeName, data, _settings.ProfileDirectory));
         Assert.Equal("me@example.invalid", SettingsMenu.FieldValue(SettingsField.GitNativeEmail, new AppSettingsData { GitNativeEmail = "me@example.invalid" }, _settings.ProfileDirectory));
@@ -1145,8 +1138,6 @@ public class SettingsMenuTests : IDisposable
         Assert.Equal("", SettingsMenu.EditableValue(SettingsField.WebBrowserPath, data));
         Assert.Equal("", SettingsMenu.EditableValue(SettingsField.WebSearxngUrl, data));
         Assert.Equal("must be 1 to 20 results", SettingsMenu.WebSearchMaxResultsRangeError);
-        Assert.Equal("must be the full path of an existing executable, or empty to find Edge, Chrome or Brave", SettingsMenu.BrowserPathError);
-        Assert.Equal("must be an http or https URL, or empty", SettingsMenu.SearxngUrlError);
         Assert.Equal("default    [#9A8BB8]HttpClient, then a headless browser when a page is blocked or empty[/]", SettingsMenu.BrowserModeLabel("default"));
         Assert.Equal("httpclient [#9A8BB8]HttpClient alone, with browser-like headers[/]", SettingsMenu.BrowserModeLabel("httpclient"));
         Assert.Equal("chromium   [#9A8BB8]a headless Edge, Chrome or Brave for every page[/]", SettingsMenu.BrowserModeLabel("chromium"));
@@ -1244,7 +1235,6 @@ public class SettingsMenuTests : IDisposable
         Assert.Equal("on", SettingsMenu.FieldValue(SettingsField.TtsVoicePreview, data, _settings.ProfileDirectory));
         Assert.Equal("off", SettingsMenu.FieldValue(SettingsField.TtsVoicePreview, new AppSettingsData { TtsVoicePreview = false }, _settings.ProfileDirectory));
         Assert.False(SettingsMenu.IsLlmField(SettingsField.TtsVoicePreview) || SettingsMenu.IsTtsField(SettingsField.TtsVoicePreview) || SettingsMenu.IsVoiceField(SettingsField.TtsVoicePreview));
-        Assert.Equal("Hello. I am Neon, your friendly and concise terminal sidekick.", SettingsMenu.VoicePreviewText);   // the user's sentence (2026-09-15; "Hello from Kokoro." before)
         var chunker = new SentenceChunker();
         Assert.Equal(PreviewSentences, new List<string>([.. chunker.Append(SettingsMenu.VoicePreviewText), chunker.Flush()]));
         Assert.Equal(Enum.GetValues<SettingsField>().Where(SettingsMenu.IsVoiceField), SettingsMenu.TabFields[(int)SettingsTab.Stt]);
@@ -1339,8 +1329,6 @@ public class SettingsMenuTests : IDisposable
         Assert.Equal(31, SettingsMenu.LabelWidthOf(SettingsMenu.SkillsTabFields[1]));   // "Reflection cooldown (minutes)" (the Reflection tab, later on 2026-09-19)
         Assert.Equal("TTS speed          [#EFE6FF]1.2[/]", SettingsMenu.FieldLabel(SettingsField.TtsSpeed, data, _settings.ProfileDirectory, null, SettingsMenu.TabLabelWidth(SettingsTab.Tts)));   // 1.0 until 2026-09-18
         Assert.Equal(@"Profile                      [#EFE6FF]work[/][#9A8BB8] (D:\home\profiles\work)[/]", SettingsMenu.ProfileLabel("work", @"D:\home\profiles\work", SettingsMenu.TabLabelWidth(SettingsTab.General)));
-        Assert.Equal("Enter = edit · ←/→ tabs · ESC = close", SettingsMenu.TabKeys);   // "or toggle" went with the on/off pickers (2026-09-17)
-        Assert.Equal("Enter = edit · ESC = close", SettingsMenu.TitleKeys);
         Assert.False(SettingsMenu.IsToggle(SettingsField.WorkingDirectory));
         Assert.False(SettingsMenu.IsLlmField(SettingsField.WorkingDirectory));
         Assert.False(SettingsMenu.IsTtsField(SettingsField.WorkingDirectory));
@@ -1350,9 +1338,7 @@ public class SettingsMenuTests : IDisposable
         Assert.Equal("", SettingsMenu.EditableValue(SettingsField.WorkingDirectory, data));
         Assert.Equal(@"D:\x\[v]", SettingsMenu.FieldValue(SettingsField.WorkingDirectory, new AppSettingsData { WorkingDirectory = @"D:\x\[v]" }, _settings.ProfileDirectory));
         Assert.Equal("Working directory (cwd)               [#EFE6FF]D:\\x\\[[v]][/]", SettingsMenu.FieldLabel(SettingsField.WorkingDirectory, new AppSettingsData { WorkingDirectory = @"D:\x\[v]" }, _settings.ProfileDirectory, null));
-        Assert.Equal("must be a full path, or empty for the profile's files folder", SettingsMenu.WorkingDirectoryError);
         Assert.Equal(@"(D:\home\profiles\p\files)", SettingsMenu.DefaultWorkingDirectoryLabel(@"D:\home\profiles\p"));
-        Assert.Equal("(profile folder)", SettingsMenu.ProfileFolderNote);
         Assert.Equal("Could not create Q:\\nope (boom); keeping (profile folder).", SettingsMenu.WorkingDirectoryCreateError(@"Q:\nope", "boom", "(profile folder)"));
         Assert.True(SettingsMenu.IsToggle(SettingsField.Memory));
         Assert.False(SettingsMenu.IsLlmField(SettingsField.Memory));
@@ -1379,20 +1365,17 @@ public class SettingsMenuTests : IDisposable
         Assert.Equal("100 %", SettingsMenu.FieldValue(SettingsField.SttInterruptEchoGuard, data, _settings.ProfileDirectory));
         Assert.Equal("100", SettingsMenu.EditableValue(SettingsField.SttInterruptEchoGuard, data));
         Assert.Equal("100 %", SettingsMenu.Percent(100));
-        Assert.Equal("must be a whole number from 50 to 100 (100 = only the exact phrase counts as an echo)", SettingsMenu.SttInterruptEchoGuardRangeError);
         Assert.True(SettingsMenu.IsVoiceField(SettingsField.SttInterruptConfirmMs));
         Assert.False(SettingsMenu.IsToggle(SettingsField.SttInterruptConfirmMs));
         Assert.Equal("STT interrupt confirm", SettingsMenu.FieldName(SettingsField.SttInterruptConfirmMs));
         Assert.Equal("200 ms", SettingsMenu.FieldValue(SettingsField.SttInterruptConfirmMs, data, _settings.ProfileDirectory));
         Assert.Equal("200", SettingsMenu.EditableValue(SettingsField.SttInterruptConfirmMs, data));
-        Assert.Equal("must be a whole number of milliseconds from 0 to 2000", SettingsMenu.SttInterruptConfirmRangeError);
         Assert.Equal("300 ms", SettingsMenu.Milliseconds(300));
         Assert.True(SettingsMenu.IsLlmField(SettingsField.LlmReasoning));
         Assert.False(SettingsMenu.IsToggle(SettingsField.LlmReasoning));
         Assert.Equal("LLM reasoning", SettingsMenu.FieldName(SettingsField.LlmReasoning));
         Assert.Equal("none", SettingsMenu.FieldValue(SettingsField.LlmReasoning, data, _settings.ProfileDirectory));
         Assert.Equal("xhigh   [#9A8BB8]maximum thinking, slowest[/]", SettingsMenu.ReasoningLabel("xhigh"));
-        Assert.Equal("🤔 LLM reasoning", SettingsMenu.ReasoningTitle);
         Assert.Equal("/reasoning takes none, low, medium, high or xhigh, or nothing to pick from a list.", SettingsMenu.ReasoningLevelError);
         Assert.True(SettingsMenu.IsTtsField(SettingsField.TtsVoice2));
         Assert.True(SettingsMenu.IsTtsField(SettingsField.TtsVoiceMix));
@@ -1409,8 +1392,6 @@ public class SettingsMenuTests : IDisposable
         Assert.Equal("50 % / 50 %", SettingsMenu.FieldValue(SettingsField.TtsVoiceMix, new AppSettingsData { TtsVoiceMix = 50 }, _settings.ProfileDirectory));
         Assert.Equal("80", SettingsMenu.EditableValue(SettingsField.TtsVoiceMix, data));
         Assert.Equal("70 % / 30 %", SettingsMenu.Mix(70));
-        Assert.Equal("(none)", SettingsMenu.NoSecondaryVoice);
-        Assert.Equal("must be a whole number from 0 to 100 (the primary voice's share)", SettingsMenu.TtsVoiceMixRangeError);
         Assert.Null(Record.Exception(() => new Markup(SettingsMenu.FieldLabel(SettingsField.LlmUrl, new AppSettingsData { LlmUrl = "http://x/[v1]" }, _settings.ProfileDirectory, null))));
     }
 
@@ -1477,7 +1458,7 @@ public class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));
 
         Assert.Equal("medium", _settings.Current.ImageThumbnailSize);
-        Assert.Contains(SettingsMenu.Breadcrumb("Image thumbnail size"), _console.Output);
+        Assert.Contains(Breadcrumb("Image thumbnail size"), _console.Output);
         Assert.Contains("  · Image thumbnail size: medium", _console.Output);
         Assert.Equal(0, _synth.ListCalls);          // no server is consulted
     }
@@ -1521,7 +1502,6 @@ public class SettingsMenuTests : IDisposable
         Assert.Equal("synthwave [#9A8BB8]default theme[/]", SettingsMenu.ThemeLabel("synthwave"));
         Assert.Equal("noir      [#9A8BB8]greyscale[/]", SettingsMenu.ThemeLabel("noir"));
         Assert.Equal("nostromo  [#9A8BB8]amber phosphor[/]", SettingsMenu.ThemeLabel("nostromo"));
-        Assert.Equal("🎨 Theme", SettingsMenu.ThemeTitle);
         Assert.Equal("No theme named \"matrix\". /theme takes synthwave, netrunner, nostromo, noir, cyberpunk or vaporwave, or nothing to pick from a list.", SettingsMenu.ThemeNameError("matrix"));
         Assert.Equal("Theme: noir (already in force)", SettingsMenu.ThemeAlreadyNotice("noir"));
         Assert.Equal("Theme: netrunner", SettingsMenu.SavedNotice(SettingsField.Theme, new AppSettingsData { Theme = "netrunner" }, _settings.ProfileDirectory));
@@ -1540,7 +1520,7 @@ public class SettingsMenuTests : IDisposable
 
         Assert.Equal("netrunner", _settings.Current.Theme);
         Assert.Same(ThemePalette.Netrunner, Theme.Current);
-        Assert.Contains(SettingsMenu.Breadcrumb("Theme"), _console.Output);
+        Assert.Contains(Breadcrumb("Theme"), _console.Output);
         Assert.Contains("  · Theme: netrunner", _console.Output);
         Assert.Equal(0, _synth.ListCalls);          // no server is consulted
     }
@@ -1670,7 +1650,7 @@ public class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));
 
         Assert.Equal("advanced", _settings.Current.NewProfileMode);
-        Assert.Contains(SettingsMenu.Breadcrumb("New profile mode"), _console.Output);
+        Assert.Contains(Breadcrumb("New profile mode"), _console.Output);
         Assert.Contains("  · New profile mode: advanced", _console.Output);
         Assert.Equal(0, _synth.ListCalls);          // no server is consulted
     }
@@ -1713,7 +1693,7 @@ public class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));
 
         Assert.Equal("remote", _settings.Current.LlmScanMode);
-        Assert.Contains(SettingsMenu.Breadcrumb("LLM scan mode"), _console.Output);
+        Assert.Contains(Breadcrumb("LLM scan mode"), _console.Output);
         Assert.Contains("  · 🖥️ LLM scan mode: remote", _console.Output);
         Assert.Contains("the usual ports on every other machine on the local network", _console.Output);
         Assert.Equal(0, _synth.ListCalls);          // no server is consulted
@@ -1757,7 +1737,7 @@ public class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.Tts, await _menu.ShowAsync(CancellationToken.None));
 
         Assert.Equal("in-process", _settings.Current.TtsSource);
-        Assert.Contains(SettingsMenu.Breadcrumb("TTS source"), _console.Output);
+        Assert.Contains(Breadcrumb("TTS source"), _console.Output);
         Assert.Contains("  · TTS source: in-process", _console.Output);
         Assert.Contains("kokoro.onnx (326 MB) downloads on first use", _console.Output);
         Assert.Equal(0, _synth.ListCalls);          // the menu itself connects nothing; the screen reconnects after it closes
@@ -1775,7 +1755,7 @@ public class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));
 
         Assert.Equal("folder-apply", _settings.Current.FileMentionFolderMode);
-        Assert.Contains(SettingsMenu.Breadcrumb("File @-mention folder mode"), _console.Output);
+        Assert.Contains(Breadcrumb("File @-mention folder mode"), _console.Output);
         Assert.Contains("  · File @-mention folder mode: folder-apply", _console.Output);
         Assert.Contains("insert @folder/ and close the list", _console.Output);
     }
@@ -1870,7 +1850,7 @@ public class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));
 
         Assert.Equal("stop", _settings.Current.LlmToolCompactType);
-        Assert.Contains(SettingsMenu.Breadcrumb("LLM tool compact type"), _console.Output);
+        Assert.Contains(Breadcrumb("LLM tool compact type"), _console.Output);
         Assert.Contains("  · 🖥️ LLM tool compact type: stop", _console.Output);
         Assert.Contains("end the turn with a notice; /compact or /clear first", _console.Output);
         Assert.Contains("no check; the server's own limit answers", _console.Output);
@@ -1926,7 +1906,7 @@ public class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));
 
         Assert.Equal("chromium", _settings.Current.WebBrowserMode);
-        Assert.Contains(SettingsMenu.Breadcrumb("Web browser mode"), _console.Output);
+        Assert.Contains(Breadcrumb("Web browser mode"), _console.Output);
         Assert.Contains("  · Web browser mode: chromium", _console.Output);
         Assert.Contains("HttpClient, then a headless browser when a page is blocked or empty", _console.Output);
         Assert.Contains("a headless Edge, Chrome or Brave for every page", _console.Output);
@@ -1985,7 +1965,7 @@ public class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));
 
         Assert.Equal("local_area_network", _settings.Current.WebBrowserNetworkMode);
-        Assert.Contains(SettingsMenu.Breadcrumb("Web browser network mode"), _console.Output);
+        Assert.Contains(Breadcrumb("Web browser network mode"), _console.Output);
         Assert.Contains("  · Web browser network mode: local_area_network", _console.Output);
         Assert.Contains("public addresses alone; this machine and the local network refused", _console.Output);
         Assert.Contains("this machine and the local network alone; the internet refused", _console.Output);
@@ -2084,7 +2064,7 @@ public class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.Llm, await _menu.ShowAsync(CancellationToken.None));
 
         Assert.Equal("high", _settings.Current.LlmReasoning);
-        Assert.Contains(SettingsMenu.Breadcrumb("LLM reasoning"), _console.Output);
+        Assert.Contains(Breadcrumb("LLM reasoning"), _console.Output);
         Assert.Contains("  · 🖥️ LLM reasoning: high", _console.Output);
         Assert.Contains("  ! " + SettingsMenu.OverrideNotice(EnvironmentOverrides.LlmReasoningVariable), _console.Output);
         Assert.Equal(0, _synth.ListCalls);          // no server is consulted
@@ -2127,7 +2107,7 @@ public class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.Tts, await _menu.ShowAsync(CancellationToken.None));
 
         Assert.Equal("af_bella", _settings.Current.TtsVoice);
-        Assert.Contains(SettingsMenu.Breadcrumb("TTS voice"), _console.Output);
+        Assert.Contains(Breadcrumb("TTS voice"), _console.Output);
         Assert.Contains("  · TTS voice: af_bella", _console.Output);
         Assert.Equal(1, _synth.ListCalls);
     }
@@ -2173,7 +2153,7 @@ public class SettingsMenuTests : IDisposable
 
         Assert.Equal("bf_emma", _settings.Current.TtsVoice);
         Assert.Contains("did not list voices", _console.Output);
-        Assert.DoesNotContain(SettingsMenu.Breadcrumb("TTS voice"), _console.Output);
+        Assert.DoesNotContain(Breadcrumb("TTS voice"), _console.Output);
     }
 
     // ── TTS voice 2 and the mix ─────────────────────────────────────────────
@@ -2190,7 +2170,7 @@ public class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.Tts, await _menu.ShowAsync(CancellationToken.None));
 
         Assert.Equal("af_bella", _settings.Current.TtsVoice2);
-        Assert.Contains(SettingsMenu.Breadcrumb("TTS voice 2"), _console.Output);
+        Assert.Contains(Breadcrumb("TTS voice 2"), _console.Output);
         Assert.Contains("  · TTS voice 2: af_bella", _console.Output);
         Assert.Equal(1, _synth.ListCalls);
     }
@@ -2232,7 +2212,7 @@ public class SettingsMenuTests : IDisposable
         Assert.Equal("bf_emma", _settings.Current.TtsVoice2);
         Assert.Contains("  · TTS voice 2: (none)", _console.Output);
         Assert.Contains("  · TTS voice 2: bf_emma", _console.Output);
-        Assert.DoesNotContain(SettingsMenu.Breadcrumb("TTS voice 2"), _console.Output);
+        Assert.DoesNotContain(Breadcrumb("TTS voice 2"), _console.Output);
     }
 
     [Fact]
@@ -2344,7 +2324,7 @@ public class SettingsMenuTests : IDisposable
 
         Assert.Equal("high", _settings.Current.LlmReasoning);
         Assert.Contains(SettingsMenu.ReasoningTitle, _console.Output);
-        Assert.DoesNotContain(SettingsMenu.Breadcrumb("LLM reasoning"), _console.Output);
+        Assert.DoesNotContain(Breadcrumb("LLM reasoning"), _console.Output);
         Assert.Contains("  · 🖥️ LLM reasoning: high", _console.Output);
         Assert.Contains("maximum thinking, slowest", _console.Output);   // every level's hint is on its row
     }
@@ -2514,9 +2494,6 @@ public class SettingsMenuTests : IDisposable
     [Fact]
     public void ServerStrings_ArePinned()
     {
-        Assert.Equal("🖥️ LLM server", SettingsMenu.ServerTitle);
-        Assert.Equal("🖥️ Pick an LLM server", SettingsMenu.StartupServerTitle);   // since 2026-09-23: shown for a single answer too
-        Assert.Equal("Enter = choose · ESC = the first listed", SettingsMenu.StartupServerKeys);
         Assert.Equal(SettingsMenu.ServerTitle + "   Enter = choose · ESC = keep", SettingsMenu.PromptTitle(SettingsMenu.ServerTitle, SettingsMenu.KeepKeys));
         Assert.Equal("LM Studio  [#EFE6FF]http://127.0.0.1:1234/v1[/][#9A8BB8]  1 chat model[/]", SettingsMenu.ServerLabel(Server(1234, "LM Studio", "lm")));
         Assert.Equal("Not a usable server URL: bad", SettingsMenu.ServerUrlError("bad"));
@@ -2527,9 +2504,6 @@ public class SettingsMenuTests : IDisposable
     [Fact]
     public void ProfileStrings_ArePinned()
     {
-        Assert.Equal("🪪 Profile", SettingsMenu.ProfileTitle);
-        Assert.Equal("Enter = switch · ESC = keep", SettingsMenu.ProfileKeys);
-        Assert.Equal(SettingsMenu.Title + " › Profile", SettingsMenu.Breadcrumb(SettingsMenu.FieldName(SettingsField.Profile)));   // the settings row's crumb: the field's name, no glyph (later on 2026-09-21)
         Assert.Equal(@"Profile                               [#EFE6FF]work[/][#9A8BB8] (D:\home\profiles\work)[/]", SettingsMenu.ProfileLabel("work", @"D:\home\profiles\work"));
         Assert.Equal(@"Profile                               [#EFE6FF]p[/][#9A8BB8] (D:\h[[x]]\profiles\p)[/]", SettingsMenu.ProfileLabel("p", @"D:\h[x]\profiles\p"));   // the path escaped
         Assert.Equal("profiles: default (current), work", SettingsMenu.ProfileListLine(new[] { "default", "work" }, "default"));
@@ -2816,7 +2790,7 @@ public class SettingsMenuTests : IDisposable
 
         Assert.False(_settings.Current.TtsOutput);
         // The on/off page under the breadcrumb: the saved value on the cursor, each row with its sentence.
-        Assert.Contains("\n" + Titled(SettingsMenu.Breadcrumb("TTS output")) + "\n \n▸ on  " + SettingsMenu.ToggleDescribe(SettingsField.TtsOutput, true) + "\n  off " + SettingsMenu.ToggleDescribe(SettingsField.TtsOutput, false) + "\n", _console.Output);
+        Assert.Contains("\n" + Titled(Breadcrumb("TTS output")) + "\n \n▸ on  " + SettingsMenu.ToggleDescribe(SettingsField.TtsOutput, true) + "\n  off " + SettingsMenu.ToggleDescribe(SettingsField.TtsOutput, false) + "\n", _console.Output);
         // The status under the strip: the saved notice and the override warning, the tab's list under them with the cursor kept.
         Assert.Contains("\n" + Titled(Strip) + "\n  · TTS output: off\n  ! " + SettingsMenu.OverrideNotice("X") + "\n▸ TTS output         off  (overridden by X)\n  TTS source", _console.Output);
         Assert.Equal(0, pane.FlowRow);
@@ -2838,7 +2812,7 @@ public class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.None, await menu.ShowAsync(CancellationToken.None));
 
         Assert.True(_settings.Current.Memory);
-        Assert.Contains("\n" + Titled(SettingsMenu.Breadcrumb("Memory")) + "\n \n▸ on  ", _console.Output);
+        Assert.Contains("\n" + Titled(Breadcrumb("Memory")) + "\n \n▸ on  ", _console.Output);
         Assert.Contains("\n" + Titled(Strip) + "\n  · " + SettingsMenu.UnchangedNotice + "\n", _console.Output);
         Assert.False(pane.OverlayOpen);
         Assert.True(input.IsAvailable);
@@ -2861,7 +2835,7 @@ public class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.None, await menu.ShowAsync(CancellationToken.None));
 
         Assert.False(_settings.Current.Memory);
-        Assert.Contains("\n" + Titled(SettingsMenu.Breadcrumb("Memory")) + "\n \n▸ on  " + SettingsMenu.ToggleDescribe(SettingsField.Memory, true) + "\n  off " + SettingsMenu.ToggleDescribe(SettingsField.Memory, false) + "\n", _console.Output);
+        Assert.Contains("\n" + Titled(Breadcrumb("Memory")) + "\n \n▸ on  " + SettingsMenu.ToggleDescribe(SettingsField.Memory, true) + "\n  off " + SettingsMenu.ToggleDescribe(SettingsField.Memory, false) + "\n", _console.Output);
         Assert.Contains("\n" + Titled(Strip) + "\n  · Memory: off\n  Profile                      default (", _console.Output);
         Assert.Contains("\n▸ Memory                       off\n", _console.Output);
         Assert.False(pane.OverlayOpen);
@@ -2891,7 +2865,7 @@ public class SettingsMenuTests : IDisposable
         Assert.False(pane.Dismissed);
         Assert.True(input.IsAvailable);
         // Nothing after the page's draw: the unwinding drew no list.
-        int page = _console.Output.LastIndexOf(Titled(SettingsMenu.Breadcrumb("Memory")), StringComparison.Ordinal);
+        int page = _console.Output.LastIndexOf(Titled(Breadcrumb("Memory")), StringComparison.Ordinal);
         Assert.True(page > mark);
         Assert.DoesNotContain(Titled(Strip), _console.Output[page..]);
         Assert.Equal(0, pane.FlowRow);
@@ -2949,7 +2923,6 @@ public class SettingsMenuTests : IDisposable
         Assert.False(SettingsMenu.RefusedMidTurn(SettingsField.LlmMaxToolIterations));
         Assert.False(SettingsMenu.RefusedMidTurn(SettingsField.TtsVoicePreview));
         Assert.False(SettingsMenu.RefusedMidTurn(SettingsField.Memory));
-        Assert.Equal("(not while a reply runs)", SettingsMenu.NotWhileReplyRunsNotice);
     }
 
     [Fact]
@@ -2983,7 +2956,6 @@ public class SettingsMenuTests : IDisposable
         Push(Keys.Down, Keys.Enter);
         Assert.True(await _menu.ConfirmAsync("Empty the trash?", CancellationToken.None));
         Assert.Equal(new[] { "No", "Yes" }, SettingsMenu.ConfirmRows);
-        Assert.Equal("y / n = pick · Enter = choose · ESC = no", SettingsMenu.ConfirmKeys);
         Assert.Equal(new Dictionary<char, int> { ['n'] = 0, ['y'] = 1 }, SettingsMenu.ConfirmHotkeys);
     }
 
@@ -3146,7 +3118,7 @@ public class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.None, await menu.ShowAsync(CancellationToken.None));
 
         Assert.Equal(Profiles.DefaultName, _settings.ProfileName);
-        Assert.Contains(Rule(240) + "\n" + Titled(SettingsMenu.Breadcrumb("Profile")) + "\n \n▸ default\n  work\n" + Rule(240) + "\n" + SettingsMenu.SwitchKeys + "\n", _console.Output);
+        Assert.Contains(Rule(240) + "\n" + Titled(Breadcrumb("Profile")) + "\n \n▸ default\n  work\n" + Rule(240) + "\n" + SettingsMenu.SwitchKeys + "\n", _console.Output);
         Assert.Contains("\n" + Titled(Strip) + "\n  · " + SettingsMenu.UnchangedNotice + "\n▸ Profile                      default (", _console.Output);
         Assert.False(pane.OverlayOpen);
         pane.Dispose();
@@ -3245,7 +3217,6 @@ public class SettingsMenuTests : IDisposable
     [Fact]
     public async Task OnThePane_TheVoice2Picker_BackspaceJumpsToNone_EnterClearsIt_ThePrimaryPickerIgnoresIt()
     {
-        Assert.Equal("Enter = choose · Backspace = none · ESC = back", SettingsMenu.NoneKeys);
         _settings.Update(d => { d.TtsVoice = "af_heart"; d.TtsVoice2 = "af_bella"; });
         var (menu, pane) = PaneMenu();
         GoTo(SettingsTab.Tts); Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter);   // TTS voice 2, opening on af_bella
@@ -3503,7 +3474,7 @@ public class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));
 
         Assert.Equal("searxng", _settings.Current.WebSearchMethod);
-        Assert.Contains(SettingsMenu.Breadcrumb("Web search method"), _console.Output);
+        Assert.Contains(Breadcrumb("Web search method"), _console.Output);
         Assert.Contains("  · Web search method: searxng", _console.Output);
         Assert.Contains("the built-in DuckDuckGo scrape, no setup", _console.Output);
         Assert.Contains("the instance named in Web SearXNG URL; DuckDuckGo until one is set", _console.Output);
@@ -3612,7 +3583,7 @@ public class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));
 
         Assert.Equal("unprotected", _settings.Current.SkillCompactMode);
-        Assert.Contains(SettingsMenu.Breadcrumb("Skill compact mode"), _console.Output);
+        Assert.Contains(Breadcrumb("Skill compact mode"), _console.Output);
         Assert.Contains("  · Skill compact mode: unprotected", _console.Output);
         Assert.Contains("loaded skills prune like any tool result", _console.Output);
         Assert.Equal(0, _synth.ListCalls);
@@ -3799,12 +3770,12 @@ public class SettingsMenuTests : IDisposable
         Assert.Equal(30, _settings.Current.SessionRetentionDays);
         // The six rows padded to the tab's own column (28) in the user's order (retention second, the show-name picker under the naming mode, the tool above the search cap), then the picker's page, then the notices on the status line.
         Assert.Contains("\n" + Titled(Strip) + "\n \n▸ Session logging             on\n  Session retention (days)    forever\n  Session naming mode         model-written\n  Session show name           all-names\n  Session tool                on\n  Session search max results  10 results\n" + Rule(100), _console.Output);
-        Assert.Contains("\n" + Titled(SettingsMenu.Breadcrumb("Session naming mode")) + "\n \n  first-line     the session is named after its first sent line\n▸ model-written  the model writes a short title after the first turn\n" + Rule(100), _console.Output);
+        Assert.Contains("\n" + Titled(Breadcrumb("Session naming mode")) + "\n \n  first-line     the session is named after its first sent line\n▸ model-written  the model writes a short title after the first turn\n" + Rule(100), _console.Output);
         Assert.Contains("\n  · Session retention (days): 30 days\n", _console.Output);
         Assert.Contains("\n▸ Session retention (days)    30 days\n", _console.Output);
         Assert.Contains("\n  · Session naming mode: first-line\n", _console.Output);
         Assert.Contains("\n▸ Session naming mode         first-line\n", _console.Output);
-        Assert.Contains("\n" + Titled(SettingsMenu.Breadcrumb("Session show name")) + "\n \n▸ all-names      every session name shows on the rule above the input row\n  model-written  only a model-written or typed name shows; the first line never does\n  none           the rule stays bare\n" + Rule(100), _console.Output);
+        Assert.Contains("\n" + Titled(Breadcrumb("Session show name")) + "\n \n▸ all-names      every session name shows on the rule above the input row\n  model-written  only a model-written or typed name shows; the first line never does\n  none           the rule stays bare\n" + Rule(100), _console.Output);
         Assert.Contains("\n  · Session show name: none\n", _console.Output);
         Assert.Contains("\n▸ Session show name           none\n", _console.Output);
         Assert.False(SettingsMenu.IsToggle(SettingsField.SessionShowName));
@@ -3914,7 +3885,7 @@ public class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));
 
         Assert.Equal("tiled", _settings.Current.WelcomeSplashMode);
-        Assert.Contains(SettingsMenu.Breadcrumb("Welcome splash"), _console.Output);
+        Assert.Contains(Breadcrumb("Welcome splash"), _console.Output);
         Assert.Contains("  · Welcome splash: tiled", _console.Output);
         Assert.Contains("the banner alone at startup", _console.Output);
         Assert.Equal(0, _synth.ListCalls);
@@ -3980,7 +3951,7 @@ public class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));
 
         Assert.Equal("hold", _settings.Current.QueueCancelMode);
-        Assert.Contains(SettingsMenu.Breadcrumb("Queue cancel mode"), _console.Output);
+        Assert.Contains(Breadcrumb("Queue cancel mode"), _console.Output);
         Assert.Contains("  · Queue cancel mode: hold", _console.Output);
         Assert.Contains("a cancelled reply holds the queue; your next message runs first, then it resumes", _console.Output);
         Assert.Contains("a cancelled reply sends the next queued message at once", _console.Output);
@@ -4022,7 +3993,7 @@ public class SettingsMenuTests : IDisposable
         Assert.True(_settings.Current.Memory);
         Assert.Equal(2, _console.Output.Split(SettingsMenu.UnchangedNotice).Length - 1);
         Assert.DoesNotContain("Memory: on", _console.Output);
-        Assert.Contains(SettingsMenu.PromptTitle(SettingsMenu.Breadcrumb("Memory"), SettingsMenu.PickKeys), _console.Output);
+        Assert.Contains(SettingsMenu.PromptTitle(Breadcrumb("Memory"), SettingsMenu.PickKeys), _console.Output);
         Assert.Contains(SettingsMenu.ToggleDescribe(SettingsField.Memory, false), _console.Output);
     }
 
@@ -4046,7 +4017,7 @@ public class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.Voice, await menu.ShowAsync(CancellationToken.None));
 
         Assert.True(_settings.Current.SttInput);
-        Assert.Contains("\n" + Titled(SettingsMenu.Breadcrumb("STT input")) + "\n \n  on  " + SettingsMenu.ToggleDescribe(SettingsField.SttInput, true) + "\n▸ off " + SettingsMenu.ToggleDescribe(SettingsField.SttInput, false) + "\n", _console.Output);
+        Assert.Contains("\n" + Titled(Breadcrumb("STT input")) + "\n \n  on  " + SettingsMenu.ToggleDescribe(SettingsField.SttInput, true) + "\n▸ off " + SettingsMenu.ToggleDescribe(SettingsField.SttInput, false) + "\n", _console.Output);
         Assert.Contains("\n" + Titled(Strip) + "\n  · STT input: on\n▸ STT input                 on\n", _console.Output);
         pane.Dispose();
     }

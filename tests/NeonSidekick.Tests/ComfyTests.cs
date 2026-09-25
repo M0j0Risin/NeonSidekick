@@ -636,7 +636,6 @@ public sealed class ComfyTests : IDisposable
         Assert.Equal("ComfyUI picture strip", SettingsMenu.FieldName(SettingsField.ComfyPictureStrip));
         var tab = SettingsMenu.ToolsTabFields.Single(fields => fields.Contains(SettingsField.ComfyTools)).ToList();
         Assert.Equal(tab.IndexOf(SettingsField.ComfyShowPrompts) + 1, tab.IndexOf(SettingsField.ComfyPictureStrip));
-        Assert.Equal("← → pictures", ComfyText.StripHint);
         Assert.Equal("← → picture 2/7 · Enter opens", ComfyText.StripSelectedHint(2, 7));
     }
 
@@ -880,7 +879,6 @@ public sealed class ComfyTests : IDisposable
         Assert.Equal(1, ComfyStudio.MaxCountOf(new AppSettingsData { ComfyMaxPicturesPerCall = 0 }));
         Assert.Equal("1 picture", SettingsMenu.ComfyPictures(1));
         Assert.Equal("must be 1 to 16 pictures", SettingsMenu.ComfyMaxPicturesRangeError);
-        Assert.Equal("ComfyUI", ToolsText.ComfyTabTitle);
     }
 
     // ── The six newer families and their graphs (later still on 2026-09-24), built from the templates ComfyUI ships ─

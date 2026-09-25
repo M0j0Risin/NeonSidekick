@@ -73,7 +73,6 @@ public class SessionTextTests
         Assert.Equal("#12 · 2026-09-11 14:05 · 12 turns · Vosk wiring", SessionText.Label(Summary(), Zone));
         Assert.Equal("1 tool call", SessionText.ToolCallsNote(1));
         Assert.Equal("3 tool calls", SessionText.ToolCallsNote(3));
-        Assert.Equal("(untitled)", SessionText.Untitled);
     }
 
     // ---- ages (2026-09-21) ----
@@ -208,8 +207,6 @@ public class SessionTextTests
         Assert.Equal("Error: no session #12; call list or search first", SessionText.Missing(12));
         Assert.Equal("Error: 'purge' is not one of search, list, read for 'action'", SessionText.BadAction(" purge "));
         Assert.Equal("Error: max_results must be 1 to 20", SessionText.BadResultCount(1, 20));
-        Assert.Equal("Error: give the text to search for", SessionText.NoQuery);
-        Assert.Equal("Error: give the session id to read", SessionText.NoId);
         Assert.Equal("abc", SessionText.Cut("abc", 3));
         Assert.Equal("ab…", SessionText.Cut("abcd", 3));
     }

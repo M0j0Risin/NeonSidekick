@@ -9,8 +9,6 @@ public class MentionCompleterTests
     [Fact]
     public void Wording_IsPinned()
     {
-        Assert.Equal("↑/↓ pick · Enter/Tab apply · ESC close", MentionCompleter.Hint);
-        Assert.Equal("… keep typing to narrow the list", MentionCompleter.TruncatedRow);
         Assert.Equal(8, MentionCompleter.MaxRows);
     }
 

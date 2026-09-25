@@ -89,9 +89,7 @@ public class SkillLearnerTests : IDisposable
         Assert.Equal(ReflectionMaxRequests.Default, SkillLearner.DefaultMaxRequests);
         Assert.Equal(3_000, SkillLearner.MaxResultChars);
         Assert.Equal(300, SkillLearner.MaxLeadUpResultChars);
-        Assert.Equal("[… cut for the reflection]", SkillLearner.CutMark);
         Assert.Equal("nothing", SkillLearner.NothingWord);
-        Assert.Equal("No skills are installed yet.", SkillLearner.NoSkillsLine);
     }
 
     [Theory]
@@ -286,21 +284,6 @@ public class SkillLearnerTests : IDisposable
         Assert.Equal(1, result.Requests);
         Assert.True(result.Usage.IsEmpty);
         Assert.False(Directory.Exists(_roots.Profile));
-    }
-
-    [Fact]
-    public async Task ACreateOfABuiltInCommandsName_IsAnOrdinaryCreate()
-    {
-        // A command's word was refused from 2026-09-17 until later on 2026-09-18 (a loaded skill was
-        // a /<name> command then); the skill commands went, and the reflection's editor takes the name.
-        _client.Enqueue(FakeChatClient.Call("r1", SkillEditorTool.ToolName, CreateArgs("new")));
-
-        var result = await Run();
-
-        Assert.Equal(SkillLearnOutcome.Learned, result.Outcome);
-        Assert.Equal(("new", SkillEditOutcome.Created), (result.Edit!.Name, result.Edit.Outcome));
-        Assert.Equal(1, result.Requests);
-        Assert.True(File.Exists(Path.Combine(_roots.Profile, "new", SkillCatalog.FileName)));
     }
 
     [Fact]

@@ -15,6 +15,9 @@ public class AssistantTests
 {
     private static readonly LlmTimeouts Timeouts = new(TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(10));
 
+    /// <summary>What a fresh profile sends (the web and file tools on by default): the default prompt with the web and download rules on its end. A test-side oracle since 2026-09-24; src never needed the name.</summary>
+    private const string DefaultWebSystemPrompt = Assistant.DefaultSystemPrompt + " " + Assistant.WebRule + " " + Assistant.DownloadRule;
+
     private static (FakeChatClient Client, ConversationHistory History, Assistant Assistant) Build(
         IReadOnlyList<AIFunction>? tools = null, TimeProvider? time = null, LlmTimeouts? timeouts = null, ReasoningEffort? reasoning = null)
     {
@@ -117,7 +120,7 @@ public class AssistantTests
         string prompt = Assistant.SystemPrompt(false, new[] { "Their name is Chris.", "They live in Leeds." }, tools: false);
 
         Assert.Equal(
-            Assistant.DefaultPersona + " " + Assistant.OperatingRulesWithoutTools + "\n\n" + MemoryPrompt.DirectiveWithoutTool + "\n\n" + MemoryPrompt.Heading + "\n- Their name is Chris.\n- They live in Leeds.",
+            Assistant.DefaultPersona + " " + Assistant.PlainTextRule + "\n\n" + MemoryPrompt.DirectiveWithoutTool + "\n\n" + MemoryPrompt.Heading + "\n- Their name is Chris.\n- They live in Leeds.",
             prompt);
     }
 
@@ -149,9 +152,8 @@ public class AssistantTests
     public void WithoutTools_TheDefaultsLoseEveryToolSentence_AndAreBuiltFromTheSameParts()
     {
         Assert.Equal("Reply in plain text: no markdown headings, tables or code fences unless the user asks for code.", Assistant.PlainTextRule);
-        Assert.Equal(Assistant.PlainTextRule, Assistant.OperatingRulesWithoutTools);
         Assert.StartsWith(Assistant.PlainTextRule + " ", Assistant.OperatingRules, StringComparison.Ordinal);
-        Assert.DoesNotContain("_", Assistant.OperatingRulesWithoutTools);   // no tool name
+        Assert.DoesNotContain("_", Assistant.PlainTextRule);   // no tool name
         Assert.Equal(
             "Your reply is shown on screen and also read aloud by a text-to-speech engine, so keep it short and in plain spoken English. " +
             "Do not use markdown, headings, bullet points, numbered lists, tables, code blocks or emoji, " +
@@ -161,14 +163,14 @@ public class AssistantTests
         Assert.DoesNotContain("tool", Assistant.VoiceDirectiveWithoutTools);
 
         // Both defaults: one paragraph, as with tools. A custom file stands verbatim either way.
-        Assert.Equal(Assistant.DefaultPersona + " " + Assistant.OperatingRulesWithoutTools, Assistant.SystemPrompt(false, null, tools: false));
-        Assert.Equal("Be terse.\n\n" + Assistant.OperatingRulesWithoutTools, Assistant.SystemPrompt(false, null, persona: "Be terse.", tools: false));
+        Assert.Equal(Assistant.DefaultPersona + " " + Assistant.PlainTextRule, Assistant.SystemPrompt(false, null, tools: false));
+        Assert.Equal("Be terse.\n\n" + Assistant.PlainTextRule, Assistant.SystemPrompt(false, null, persona: "Be terse.", tools: false));
         Assert.Equal(Assistant.DefaultPersona + "\n\nAlways end with a haiku, then call view_image.", Assistant.SystemPrompt(false, null, operatingRules: "Always end with a haiku, then call view_image.", tools: false));
         Assert.Equal(
-            Assistant.DefaultPersona + " " + Assistant.OperatingRulesWithoutTools + "\n\n" + MemoryPrompt.DirectiveWithoutTool + "\n\n" + Assistant.VoiceDirectiveWithoutTools,
+            Assistant.DefaultPersona + " " + Assistant.PlainTextRule + "\n\n" + MemoryPrompt.DirectiveWithoutTool + "\n\n" + Assistant.VoiceDirectiveWithoutTools,
             Assistant.SystemPrompt(true, [], tools: false));
         Assert.Equal(
-            Assistant.DefaultPersona + " " + Assistant.OperatingRulesWithoutTools + "\n\n" + MemoryPrompt.DirectiveWithoutTool + "\n\nSpeak like a pirate.",
+            Assistant.DefaultPersona + " " + Assistant.PlainTextRule + "\n\n" + MemoryPrompt.DirectiveWithoutTool + "\n\nSpeak like a pirate.",
             Assistant.SystemPrompt(true, [], voiceDirective: "Speak like a pirate.", tools: false));
         Assert.Equal(Assistant.SystemPrompt(true, ["Their name is Chris."]), Assistant.SystemPrompt(true, ["Their name is Chris."], tools: true));
     }
@@ -184,17 +186,16 @@ public class AssistantTests
         Assert.Equal(
             "To save a file or a picture from the web into the working directory call download_file with its URL (and a path when the user names one); it saves without reading — view_image or read_file look at the result.",
             Assistant.DownloadRule);
-        Assert.Equal(Assistant.DefaultSystemPrompt + " " + Assistant.WebRule + " " + Assistant.DownloadRule, Assistant.DefaultWebSystemPrompt);
-        Assert.Equal(Assistant.DefaultWebSystemPrompt, Assistant.SystemPrompt(false, null, web: true));
+        Assert.Equal(DefaultWebSystemPrompt, Assistant.SystemPrompt(false, null, web: true));
         Assert.Equal(Assistant.DefaultSystemPrompt, Assistant.SystemPrompt(false, null, web: false));
         Assert.Equal(Assistant.DefaultSystemPrompt, Assistant.SystemPrompt(false, null));
         // The sentence rides the rules block, ahead of the memory section and the directive.
-        Assert.Equal(Assistant.DefaultWebSystemPrompt + "\n\n" + MemoryPrompt.Directive + "\n\n" + Assistant.VoiceDirective, Assistant.SystemPrompt(true, [], web: true));
+        Assert.Equal(DefaultWebSystemPrompt + "\n\n" + MemoryPrompt.Directive + "\n\n" + Assistant.VoiceDirective, Assistant.SystemPrompt(true, [], web: true));
         Assert.Equal("Be terse.\n\n" + Assistant.OperatingRules + " " + Assistant.WebRule + " " + Assistant.DownloadRule, Assistant.SystemPrompt(false, null, persona: "Be terse.", web: true));
         // A custom operata.md stands verbatim: it names the tools itself or not at all.
         Assert.Equal(Assistant.DefaultPersona + "\n\nAnswer in haiku.", Assistant.SystemPrompt(false, null, operatingRules: "Answer in haiku.", web: true));
         // LLM offer tools off: no web sentence either, whatever the switch says.
-        Assert.Equal(Assistant.DefaultPersona + " " + Assistant.OperatingRulesWithoutTools, Assistant.SystemPrompt(false, null, tools: false, web: true));
+        Assert.Equal(Assistant.DefaultPersona + " " + Assistant.PlainTextRule, Assistant.SystemPrompt(false, null, tools: false, web: true));
     }
 
     [Fact]
@@ -224,14 +225,14 @@ public class AssistantTests
             "Your earlier conversations with the user are stored: when they ask what was said, decided or done before, or refer to something you cannot see in this conversation, call session_manager — search with the words they remember, list for the newest, then read a session by its id for the turns; never guess at them. " +
             "The user restores, renames or removes a session with /sessions, not you.",
             Assistant.SessionRule);
-        Assert.Equal(Assistant.DefaultWebSystemPrompt + " " + Assistant.SessionRule, Assistant.SystemPrompt(false, null, web: true, sessions: true));
+        Assert.Equal(DefaultWebSystemPrompt + " " + Assistant.SessionRule, Assistant.SystemPrompt(false, null, web: true, sessions: true));
         Assert.Equal(Assistant.DefaultSystemPrompt + " " + Assistant.SessionRule, Assistant.SystemPrompt(false, null, sessions: true));
-        Assert.Equal(Assistant.DefaultWebSystemPrompt, Assistant.SystemPrompt(false, null, web: true));
+        Assert.Equal(DefaultWebSystemPrompt, Assistant.SystemPrompt(false, null, web: true));
         // After the ask sentence, ahead of the memory section and the directive.
-        Assert.Equal(Assistant.DefaultWebSystemPrompt + " " + Assistant.AskRule(AskLimits.Default) + " " + Assistant.SessionRule + "\n\n" + MemoryPrompt.Directive + "\n\n" + Assistant.VoiceDirective, Assistant.SystemPrompt(true, [], web: true, ask: AskLimits.Default, sessions: true));
+        Assert.Equal(DefaultWebSystemPrompt + " " + Assistant.AskRule(AskLimits.Default) + " " + Assistant.SessionRule + "\n\n" + MemoryPrompt.Directive + "\n\n" + Assistant.VoiceDirective, Assistant.SystemPrompt(true, [], web: true, ask: AskLimits.Default, sessions: true));
         // A custom operata.md stands verbatim; LLM offer tools off drops it whatever the switch says.
         Assert.Equal(Assistant.DefaultPersona + "\n\nAnswer in haiku.", Assistant.SystemPrompt(false, null, operatingRules: "Answer in haiku.", sessions: true));
-        Assert.Equal(Assistant.DefaultPersona + " " + Assistant.OperatingRulesWithoutTools, Assistant.SystemPrompt(false, null, tools: false, sessions: true));
+        Assert.Equal(Assistant.DefaultPersona + " " + Assistant.PlainTextRule, Assistant.SystemPrompt(false, null, tools: false, sessions: true));
         Assert.Equal(Assistant.DefaultRules(false, true) + " " + Assistant.SessionRule, Assistant.DefaultRules(false, true, sessions: true));
     }
 
@@ -247,12 +248,12 @@ public class AssistantTests
         Assert.DoesNotContain("git_discard", Assistant.GitRule);
         Assert.DoesNotContain("git_delete", Assistant.GitRule);
         Assert.Equal(Assistant.DefaultSystemPrompt + " " + Assistant.GitRule, Assistant.SystemPrompt(false, null, git: true));
-        Assert.Equal(Assistant.DefaultWebSystemPrompt + " " + Assistant.GitRule, Assistant.SystemPrompt(false, null, web: true, git: true));
-        Assert.Equal(Assistant.DefaultWebSystemPrompt + " " + Assistant.GitRule + " " + Assistant.AskRule(AskLimits.Default) + " " + Assistant.SessionRule + " " + Assistant.McpRule, Assistant.SystemPrompt(false, null, web: true, ask: AskLimits.Default, sessions: true, mcp: true, git: true));
+        Assert.Equal(DefaultWebSystemPrompt + " " + Assistant.GitRule, Assistant.SystemPrompt(false, null, web: true, git: true));
+        Assert.Equal(DefaultWebSystemPrompt + " " + Assistant.GitRule + " " + Assistant.AskRule(AskLimits.Default) + " " + Assistant.SessionRule + " " + Assistant.McpRule, Assistant.SystemPrompt(false, null, web: true, ask: AskLimits.Default, sessions: true, mcp: true, git: true));
         Assert.Equal(Assistant.DefaultPersona + " " + Assistant.OperatingRulesWithoutFiles + " " + Assistant.GitRule, Assistant.SystemPrompt(false, null, files: false, git: true));   // its own switch: the file tools off leave it
         Assert.Equal(Assistant.DefaultSystemPrompt, Assistant.SystemPrompt(false, null));
         Assert.Equal(Assistant.DefaultPersona + "\n\nAnswer in haiku.", Assistant.SystemPrompt(false, null, operatingRules: "Answer in haiku.", git: true));
-        Assert.Equal(Assistant.DefaultPersona + " " + Assistant.OperatingRulesWithoutTools, Assistant.SystemPrompt(false, null, tools: false, git: true));
+        Assert.Equal(Assistant.DefaultPersona + " " + Assistant.PlainTextRule, Assistant.SystemPrompt(false, null, tools: false, git: true));
         Assert.Equal(Assistant.DefaultRules(false, true) + " " + Assistant.GitRule, Assistant.DefaultRules(false, true, git: true));
         Assert.Equal(Assistant.OperatingRules, Assistant.DefaultRules(false, true));
     }
@@ -271,7 +272,7 @@ public class AssistantTests
         Assert.DoesNotContain("vault_delete", Assistant.ObsidianRule, StringComparison.Ordinal);   // its own sentence, only while it is offered (later on 2026-09-22)
         Assert.Equal(Assistant.DefaultSystemPrompt + " " + Assistant.ObsidianRule, Assistant.SystemPrompt(false, null, obsidian: true));
         Assert.Equal(Assistant.DefaultSystemPrompt + " " + Assistant.ShellRule + " " + Assistant.ObsidianRule + " " + Assistant.AskRule(AskLimits.Default), Assistant.SystemPrompt(false, null, shell: true, bridge: true, ask: AskLimits.Default, obsidian: true));
-        Assert.Equal(Assistant.DefaultPersona + " " + Assistant.OperatingRulesWithoutTools, Assistant.SystemPrompt(false, null, tools: false, obsidian: true));
+        Assert.Equal(Assistant.DefaultPersona + " " + Assistant.PlainTextRule, Assistant.SystemPrompt(false, null, tools: false, obsidian: true));
         Assert.Equal(Assistant.DefaultPersona + "\n\nAnswer in haiku.", Assistant.SystemPrompt(false, null, operatingRules: "Answer in haiku.", obsidian: true));
     }
 
@@ -283,7 +284,7 @@ public class AssistantTests
         Assert.Equal(Assistant.DefaultSystemPrompt + " " + Assistant.ObsidianRule + " " + Assistant.ObsidianDeleteRule, Assistant.SystemPrompt(false, null, obsidian: true, obsidianDelete: true));
         Assert.Equal(Assistant.DefaultSystemPrompt, Assistant.SystemPrompt(false, null, obsidianDelete: true));   // no vault rule, no delete sentence
         Assert.Equal(Assistant.DefaultRules(false, true, obsidian: true), Assistant.DefaultRules(false, true, obsidian: true, obsidianDelete: false));
-        Assert.Equal(Assistant.DefaultPersona + " " + Assistant.OperatingRulesWithoutTools, Assistant.SystemPrompt(false, null, tools: false, obsidian: true, obsidianDelete: true));
+        Assert.Equal(Assistant.DefaultPersona + " " + Assistant.PlainTextRule, Assistant.SystemPrompt(false, null, tools: false, obsidian: true, obsidianDelete: true));
     }
 
     /// <summary>The shell rule (2026-09-21): after the git rule, before the ask rule, only with tools, only while the tool is offered; it names the tool, its two arguments, the sandbox as the start, the approval and the finality of a denial.</summary>
@@ -302,11 +303,11 @@ public class AssistantTests
         // The bridge rule rides with bridge: true (the setting Shell tool bridge, later on 2026-09-21); the shell tools alone carry the rule without it.
         Assert.Equal(Assistant.DefaultSystemPrompt + " " + Assistant.ShellRule, Assistant.SystemPrompt(false, null, shell: true, bridge: true));
         Assert.Equal(Assistant.DefaultSystemPrompt + " " + Assistant.GitRule + " " + Assistant.ShellRule, Assistant.SystemPrompt(false, null, git: true, shell: true, bridge: true));
-        Assert.Equal(Assistant.DefaultWebSystemPrompt + " " + Assistant.GitRule + " " + Assistant.ShellRule + " " + Assistant.AskRule(AskLimits.Default) + " " + Assistant.SessionRule + " " + Assistant.McpRule, Assistant.SystemPrompt(false, null, web: true, ask: AskLimits.Default, sessions: true, mcp: true, git: true, shell: true, bridge: true));
+        Assert.Equal(DefaultWebSystemPrompt + " " + Assistant.GitRule + " " + Assistant.ShellRule + " " + Assistant.AskRule(AskLimits.Default) + " " + Assistant.SessionRule + " " + Assistant.McpRule, Assistant.SystemPrompt(false, null, web: true, ask: AskLimits.Default, sessions: true, mcp: true, git: true, shell: true, bridge: true));
         Assert.Equal(Assistant.DefaultPersona + " " + Assistant.OperatingRulesWithoutFiles + " " + Assistant.ShellRule, Assistant.SystemPrompt(false, null, files: false, shell: true, bridge: true));   // its own switch: the file tools off leave it
         Assert.Equal(Assistant.DefaultSystemPrompt, Assistant.SystemPrompt(false, null));
         Assert.Equal(Assistant.DefaultPersona + "\n\nAnswer in haiku.", Assistant.SystemPrompt(false, null, operatingRules: "Answer in haiku.", shell: true, bridge: true));
-        Assert.Equal(Assistant.DefaultPersona + " " + Assistant.OperatingRulesWithoutTools, Assistant.SystemPrompt(false, null, tools: false, shell: true, bridge: true));
+        Assert.Equal(Assistant.DefaultPersona + " " + Assistant.PlainTextRule, Assistant.SystemPrompt(false, null, tools: false, shell: true, bridge: true));
         Assert.Equal(Assistant.DefaultRules(false, true) + " " + Assistant.ShellRule, Assistant.DefaultRules(false, true, shell: true, bridge: true));
     }
 
@@ -371,10 +372,10 @@ public class AssistantTests
             Assistant.McpRule);
         Assert.Equal(Assistant.DefaultSystemPrompt + " " + Assistant.McpRule, Assistant.SystemPrompt(false, null, mcp: true));
         Assert.Equal(Assistant.DefaultSystemPrompt + " " + Assistant.SessionRule + " " + Assistant.McpRule, Assistant.SystemPrompt(false, null, sessions: true, mcp: true));
-        Assert.Equal(Assistant.DefaultWebSystemPrompt + " " + Assistant.AskRule(AskLimits.Default) + " " + Assistant.SessionRule + " " + Assistant.McpRule + "\n\n" + MemoryPrompt.Directive + "\n\n" + Assistant.VoiceDirective, Assistant.SystemPrompt(true, [], web: true, ask: AskLimits.Default, sessions: true, mcp: true));
+        Assert.Equal(DefaultWebSystemPrompt + " " + Assistant.AskRule(AskLimits.Default) + " " + Assistant.SessionRule + " " + Assistant.McpRule + "\n\n" + MemoryPrompt.Directive + "\n\n" + Assistant.VoiceDirective, Assistant.SystemPrompt(true, [], web: true, ask: AskLimits.Default, sessions: true, mcp: true));
         Assert.Equal(Assistant.DefaultSystemPrompt, Assistant.SystemPrompt(false, null));
         Assert.Equal(Assistant.DefaultPersona + "\n\nAnswer in haiku.", Assistant.SystemPrompt(false, null, operatingRules: "Answer in haiku.", mcp: true));
-        Assert.Equal(Assistant.DefaultPersona + " " + Assistant.OperatingRulesWithoutTools, Assistant.SystemPrompt(false, null, tools: false, mcp: true));
+        Assert.Equal(Assistant.DefaultPersona + " " + Assistant.PlainTextRule, Assistant.SystemPrompt(false, null, tools: false, mcp: true));
         Assert.Equal(Assistant.DefaultRules(false, true) + " " + Assistant.McpRule, Assistant.DefaultRules(false, true, mcp: true));
         Assert.Equal(Assistant.OperatingRules, Assistant.DefaultRules(false, true));
     }
@@ -392,15 +393,15 @@ public class AssistantTests
         // The rule quotes the caps it is given (the Ask tab's two rows), the floor the tool's own.
         Assert.Contains("up to 3 questions in one call, 2 to 15 options each", Assistant.AskRule(new AskLimits(3, 15)));
         Assert.Equal(Assistant.DefaultSystemPrompt + " " + rule, Assistant.SystemPrompt(false, null, ask: limits));
-        Assert.Equal(Assistant.DefaultWebSystemPrompt + " " + rule, Assistant.SystemPrompt(false, null, web: true, ask: limits));
+        Assert.Equal(DefaultWebSystemPrompt + " " + rule, Assistant.SystemPrompt(false, null, web: true, ask: limits));
         Assert.Equal(Assistant.DefaultSystemPrompt, Assistant.SystemPrompt(false, null, ask: null));
         Assert.Equal(Assistant.DefaultPersona + " " + Assistant.OperatingRulesWithoutFiles + " " + rule, Assistant.SystemPrompt(false, null, files: false, ask: limits));
         // The sentence rides the rules block, ahead of the memory section and the directive.
-        Assert.Equal(Assistant.DefaultWebSystemPrompt + " " + rule + "\n\n" + MemoryPrompt.Directive + "\n\n" + Assistant.VoiceDirective, Assistant.SystemPrompt(true, [], web: true, ask: limits));
+        Assert.Equal(DefaultWebSystemPrompt + " " + rule + "\n\n" + MemoryPrompt.Directive + "\n\n" + Assistant.VoiceDirective, Assistant.SystemPrompt(true, [], web: true, ask: limits));
         Assert.Equal("Be terse.\n\n" + Assistant.OperatingRules + " " + rule, Assistant.SystemPrompt(false, null, persona: "Be terse.", ask: limits));
         // A custom operata.md stands verbatim; LLM offer tools off wins over everything.
         Assert.Equal(Assistant.DefaultPersona + "\n\nAnswer in haiku.", Assistant.SystemPrompt(false, null, operatingRules: "Answer in haiku.", ask: limits));
-        Assert.Equal(Assistant.DefaultPersona + " " + Assistant.OperatingRulesWithoutTools, Assistant.SystemPrompt(false, null, tools: false, web: true, ask: limits));
+        Assert.Equal(Assistant.DefaultPersona + " " + Assistant.PlainTextRule, Assistant.SystemPrompt(false, null, tools: false, web: true, ask: limits));
     }
 
     [Fact]
@@ -417,7 +418,7 @@ public class AssistantTests
         // DefaultRules with markdown off is the pinned consts byte for byte; on, the Markdown sentence leads.
         Assert.Equal(Assistant.OperatingRules, Assistant.DefaultRules(false, tools: true));
         Assert.Equal(Assistant.OperatingRulesWithoutFiles, Assistant.DefaultRules(false, tools: true, files: false));
-        Assert.Equal(Assistant.OperatingRulesWithoutTools, Assistant.DefaultRules(false, tools: false));
+        Assert.Equal(Assistant.PlainTextRule, Assistant.DefaultRules(false, tools: false));
         Assert.Equal(Assistant.OperatingRules + " " + Assistant.WebRule + " " + Assistant.DownloadRule, Assistant.DefaultRules(false, tools: true, web: true));
         Assert.Equal(Assistant.OperatingRulesWithoutFiles + " " + Assistant.WebRule, Assistant.DefaultRules(false, tools: true, files: false, web: true));
         Assert.Equal(Assistant.MarkdownRule + " " + Assistant.ToolRules + " " + Assistant.FileRule, Assistant.DefaultRules(true, tools: true));
@@ -454,7 +455,7 @@ public class AssistantTests
         Assert.Equal(Assistant.PlainTextRule + " " + Assistant.ToolRulesWithoutTimers + " " + Assistant.FileRule, Assistant.DefaultRules(false, tools: true, timers: false));
         Assert.Equal(Assistant.PlainTextRule + " " + Assistant.ToolRulesWithoutTimers, Assistant.DefaultRules(false, tools: true, files: false, timers: false));
         Assert.Equal(Assistant.MarkdownRule + " " + Assistant.ToolRulesWithoutTimers + " " + Assistant.FileRule + " " + Assistant.WebRule + " " + Assistant.DownloadRule, Assistant.DefaultRules(true, tools: true, web: true, timers: false));
-        Assert.Equal(Assistant.OperatingRulesWithoutTools, Assistant.DefaultRules(false, tools: false, timers: false));   // no tool sentence at all there
+        Assert.Equal(Assistant.PlainTextRule, Assistant.DefaultRules(false, tools: false, timers: false));   // no tool sentence at all there
         Assert.Equal(Assistant.DefaultPersona + " " + Assistant.PlainTextRule + " " + Assistant.ToolRulesWithoutTimers + " " + Assistant.FileRule, Assistant.SystemPrompt(false, null, timers: false));
         Assert.DoesNotContain("start_timer", Assistant.SystemPrompt(false, null, timers: false), StringComparison.Ordinal);
         Assert.Equal(Assistant.OperatingRules, Assistant.DefaultRules(false, tools: true, timers: true));
@@ -491,7 +492,7 @@ public class AssistantTests
         Assert.Equal("Be terse.\n\n" + Assistant.OperatingRulesWithoutFiles, Assistant.SystemPrompt(false, null, persona: "Be terse.", files: false));
         // A custom operata.md stands verbatim; LLM offer tools off wins over everything.
         Assert.Equal(Assistant.DefaultPersona + "\n\nAnswer in haiku.", Assistant.SystemPrompt(false, null, operatingRules: "Answer in haiku.", files: false));
-        Assert.Equal(Assistant.DefaultPersona + " " + Assistant.OperatingRulesWithoutTools, Assistant.SystemPrompt(false, null, tools: false, web: true, files: false));
+        Assert.Equal(Assistant.DefaultPersona + " " + Assistant.PlainTextRule, Assistant.SystemPrompt(false, null, tools: false, web: true, files: false));
     }
 
     [Fact]
@@ -1218,7 +1219,7 @@ public class AssistantTests
             Assistant.SystemPrompt(true, [], project: notes, skills: [Haiku]));
         Assert.Equal("Be terse.\n\nAnswer in haiku.\n\n" + Assistant.ProjectNotesSection(notes), Assistant.SystemPrompt(false, null, persona: "Be terse.", operatingRules: "Answer in haiku.", project: notes));
         // LLM offer tools off keeps the notes: they are context, not a tool.
-        Assert.Equal(Assistant.DefaultPersona + " " + Assistant.OperatingRulesWithoutTools + "\n\n" + Assistant.ProjectNotesSection(notes), Assistant.SystemPrompt(false, null, tools: false, project: notes));
+        Assert.Equal(Assistant.DefaultPersona + " " + Assistant.PlainTextRule + "\n\n" + Assistant.ProjectNotesSection(notes), Assistant.SystemPrompt(false, null, tools: false, project: notes));
         Assert.Equal(Assistant.DefaultSystemPrompt, Assistant.SystemPrompt(false, null, project: null));
     }
 
@@ -1231,7 +1232,7 @@ public class AssistantTests
         Assert.Equal(Assistant.DefaultSystemPrompt + "\n\n" + MemoryPrompt.Directive + "\n\n" + SkillsPrompt.Section([Haiku]), Assistant.SystemPrompt(false, [], skills: [Haiku]));
         Assert.Equal(Assistant.DefaultSystemPrompt + "\n\n" + SkillsPrompt.Section([Haiku]) + "\n\n" + Assistant.VoiceDirective, Assistant.SystemPrompt(true, null, skills: [Haiku]));
         // LLM offer tools off: nothing could load one, so the block is dropped whatever was passed.
-        Assert.Equal(Assistant.DefaultPersona + " " + Assistant.OperatingRulesWithoutTools, Assistant.SystemPrompt(false, null, tools: false, skills: [Haiku]));
+        Assert.Equal(Assistant.DefaultPersona + " " + Assistant.PlainTextRule, Assistant.SystemPrompt(false, null, tools: false, skills: [Haiku]));
         // A custom operata.md leaves the block in place: it is not a rule sentence.
         Assert.Equal(Assistant.DefaultPersona + "\n\nAnswer in haiku.\n\n" + SkillsPrompt.Section([Haiku]), Assistant.SystemPrompt(false, null, operatingRules: "Answer in haiku.", skills: [Haiku]));
     }

@@ -250,10 +250,8 @@ public class SessionsMenuTests : IDisposable
         var summary = new SessionSummary(12, ManualTimeProvider.DefaultUtcNow, ManualTimeProvider.DefaultUtcNow, "x [y]", TitleSource.FirstLine, "llama", 12);
 
         Assert.Equal("💬 Sessions", SessionsMenu.Title);
-        Assert.Equal("Enter = open · ESC = close", SessionsMenu.Keys);
         Assert.Equal(SettingsMenu.PickKeys, SessionsMenu.RowKeys);
         Assert.Equal("(💬 no sessions)", SessionsMenu.EmptyNotice);
-        Assert.Equal("this conversation", SessionsMenu.CurrentNote);
         Assert.Equal("(💬 that is this conversation)", SessionsMenu.CurrentNotice);
         Assert.Equal(new[] { "restore", "rename", "purge" }, SessionsMenu.RowWords);
         Assert.Equal(SessionsMenu.Title + " › #12 x [y]", SessionsMenu.RowTitle(summary));

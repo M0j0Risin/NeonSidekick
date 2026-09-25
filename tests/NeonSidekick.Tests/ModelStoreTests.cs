@@ -166,13 +166,11 @@ public class ModelStoreTests : IDisposable
         Assert.Equal("https://huggingface.co/sandrohanea/whisper.net/resolve/v4/classic/", ModelStore.WhisperRepository);
         Assert.Equal("https://huggingface.co/sandrohanea/whisper.net/resolve/v4/vad/ggml-silero-v6.2.0.bin", ModelStore.SileroUrl);
         Assert.Equal(new[] { "ggml-tiny.en.bin", "ggml-base.en.bin", "ggml-small.en.bin" }, ModelStore.WhisperModelNames);
-        Assert.Equal("must be ggml-tiny.en.bin, ggml-base.en.bin, ggml-small.en.bin or an absolute path to a ggml .bin", ModelStore.WhisperModelError);
         Assert.Equal("https://alphacephei.com/vosk/models/", ModelStore.VoskRepository);
         Assert.Equal("https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip", ModelStore.VoskModelUrl);
         Assert.Equal("vosk-model-small-en-us-0.15", ModelStore.VoskModelDirectoryName);
         Assert.Equal(new[] { "vosk-model-small-en-us-0.15", "vosk-model-en-us-0.22-lgraph", "vosk-model-small-en-in-0.4" }, ModelStore.VoskModelNames);
         Assert.Equal(ModelStore.VoskModelDirectoryName, ModelStore.VoskModelNames[0]);
-        Assert.Equal("must be vosk-model-small-en-us-0.15, vosk-model-en-us-0.22-lgraph or vosk-model-small-en-in-0.4", ModelStore.VoskModelError);
         Assert.Equal("https://github.com/Lyrcaxis/KokoroSharpBinaries/releases/download/v2.0.0/kokoro.onnx", ModelStore.KokoroModelUrl);
         Assert.Equal("kokoro.onnx", ModelStore.KokoroFileName);
         Assert.Equal(new[] { "am/final.mdl", "conf/model.conf", "graph/HCLr.fst", "graph/Gr.fst", "ivector/final.ie" }, ModelStore.VoskRequiredFiles);

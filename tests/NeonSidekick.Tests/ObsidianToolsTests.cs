@@ -164,7 +164,6 @@ public sealed class ObsidianToolsTests : IDisposable
         Assert.Equal(ObsidianText.Required("note"), await Invoke<VaultDeleteTool>(("note", "")));
         Assert.True(File.Exists(Path.Combine(_root, "Projects", "Plan.md")));
         Assert.Equal("Error: Projects is a folder; vault_delete takes one note or attachment at a time.", ObsidianText.IsAFolder("Projects"));
-        Assert.Equal("Error: deleting is off (Obsidian allow delete (.trash), on the Obsidian tab of /tools).", ObsidianText.DeleteOff);   // the row's name since 2026-09-23
     }
 
     [Fact]

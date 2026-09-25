@@ -752,9 +752,6 @@ internal sealed partial class SettingsMenu
     /// <summary>The prompt host's title: the label and the keys, three spaces apart (<c>Settings   Enter = edit or toggle · ESC = close</c>).</summary>
     public static string PromptTitle(string label, string keys) => label + "   " + keys;
 
-    /// <summary>A second level's label inside <c>/settings</c>: <c>Settings › TTS voice</c>.</summary>
-    public static string Breadcrumb(string label) => Title + " › " + label;
-
     /// <summary>
     /// The pane this menu is editing for, the first word of every second level's label: <see cref="Title"/>
     /// (<c>Settings › Web browser mode</c>), or <see cref="ToolsText.Label"/> while <see cref="ToolsMenu"/> hosts the

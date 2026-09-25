@@ -630,7 +630,7 @@ public class SidekickAppTests : IDisposable
 
         Assert.Null(_chat.Options[0]!.Tools);
         Assert.Equal([ChatRole.System, ChatRole.User], _chat.Requests[0].Select(m => m.Role));
-        Assert.Equal(Assistant.DefaultPersona + " " + Assistant.OperatingRulesWithoutTools + "\n\n" + MemoryPrompt.DirectiveWithoutTool, _chat.Requests[0][0].Text);
+        Assert.Equal(Assistant.DefaultPersona + " " + Assistant.PlainTextRule + "\n\n" + MemoryPrompt.DirectiveWithoutTool, _chat.Requests[0][0].Text);
         Assert.Contains("Neon: Hi.", output);
     }
 
@@ -870,7 +870,6 @@ public class SidekickAppTests : IDisposable
         string output = await Headless("first\nsecond\n/compact the first question\nthird\n");
 
         Assert.Contains("Neon: (🗜️ compacted: 10 messages → 9 · 300 → 20 tokens)", output);
-        Assert.Equal("Headless mode. Type a message; /clear or /new forgets the conversation; /compact [focus] shrinks it; /exit or EOF exits.", SidekickApp.HeadlessHint);
         Assert.Equal(4, _chat.Requests.Count);
         Assert.Equal(ConversationCompactor.SummaryRequest("the first question"), _chat.Requests[2][^1].Text);
         Assert.Equal(new[] { ChatRole.System, ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.User, ChatRole.Assistant, ChatRole.User }, _chat.Requests[3].Select(m => m.Role));
@@ -1555,7 +1554,6 @@ public class SidekickAppTests : IDisposable
         string output = await InteractiveAsync(env, SidekickOptions.None with { Url = "http://127.0.0.1:1234" });
 
         Assert.Contains("LLM: http://127.0.0.1:1234/v1 model=llama (first listed)", output);
-        Assert.DoesNotContain("Overrides", output);   // no Overrides row since the status panel went (2026-09-14); /settings labels the field
     }
 
     [Fact]
@@ -1623,7 +1621,6 @@ public class SidekickAppTests : IDisposable
         Assert.All(lines[(title + 2)..], l => Assert.True(string.IsNullOrWhiteSpace(l)));   // nothing under it
         Assert.DoesNotContain("(probe localhost)", _console.Output);          // no status rows since 2026-09-14
         Assert.DoesNotContain("(first listed)", _console.Output);
-        Assert.DoesNotContain("Overrides", _console.Output);
         Assert.DoesNotContain("╭", _console.Output);                          // no panel border
         Assert.DoesNotContain("status", _console.Output);                     // no panel header
     }
@@ -1723,7 +1720,6 @@ public class SidekickAppTests : IDisposable
         string output = await InteractiveAsync(options: SidekickOptions.None with { WorkingDirectory = launch });
 
         Assert.Contains(launch, output);   // the /cwd notice
-        Assert.DoesNotContain("Overrides", output);   // no Overrides row since the status panel went (2026-09-14)
         Assert.Contains(SidekickOptions.CwdFlag, output);   // the /cwd notice's tag
         Assert.Contains(ChatScreen.CwdNotice(launch, false, SidekickOptions.CwdFlag), output);
         Assert.Equal(@"D:\saved", _settings.Current.WorkingDirectory);

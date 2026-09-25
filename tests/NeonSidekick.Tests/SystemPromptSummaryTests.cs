@@ -126,7 +126,6 @@ public class SystemPromptSummaryTests : IDisposable
         Assert.Equal("", off[5].Body);
         Assert.Equal(Assistant.SystemPrompt(false, []), SystemPromptSummary.SystemPrompt(Facts(skills: false, catalog: [haiku], project: notes)));
         // The Project file toggle off (later on 2026-09-19): the row says why, the skills stand.
-        Assert.Equal("Project file is off on the Project tab of /skills", SystemPromptSummary.ProjectFileOffSuffix);
         var fileOff = SystemPromptSummary.PromptSections(Facts(catalog: [haiku], projectFile: false));
         Assert.Equal("Project notes — off (Project file is off on the Project tab of /skills)", fileOff[3].Heading);
         Assert.Equal("", fileOff[3].Body);
@@ -137,7 +136,6 @@ public class SystemPromptSummaryTests : IDisposable
         Assert.Equal("Skills — not included (LLM offer tools is off)", noTools[5].Heading);
         Assert.Equal("", noTools[5].Body);
         Assert.Equal(Assistant.SystemPrompt(false, [], tools: false, project: notes), SystemPromptSummary.SystemPrompt(Facts(tools: false, catalog: [haiku], project: notes)));
-        Assert.Equal("agent skills is off", SystemPromptSummary.SkillsOffSuffix);
     }
 
     [Fact]
@@ -166,7 +164,6 @@ public class SystemPromptSummaryTests : IDisposable
         Assert.Equal("", SystemPromptSummary.PromptSections(Facts(memoryEnabled: false))[4].Body);
         Assert.Equal("Opening memory call — not sent: memory is off", Headings(Facts(memoryEnabled: false))[12]);
         Assert.Equal("", SystemPromptSummary.PromptSections(Facts(memoryEnabled: false))[12].Body);
-        Assert.Equal("memory is off", SystemPromptSummary.MemoryOffSuffix);
         Assert.Equal("Voice directive — not included: TTS is not ready", Headings(Facts(speechOutput: true, speechReady: false))[9]);
         Assert.Equal("Voice directive — not included: speech output is off", Headings(Facts(speechOutput: false, speechReady: true))[9]);
         Assert.Equal("Request — reasoning_effort xhigh", Headings(Facts(reasoning: ReasoningEffort.ExtraHigh))[13]);
@@ -254,7 +251,6 @@ public class SystemPromptSummaryTests : IDisposable
         Assert.Equal(Assistant.OperatingRulesWithoutFiles, sections[1].Body);
         Assert.Equal("", sections[11].Body);
         Assert.Equal(Assistant.SystemPrompt(false, ["Their name is Chris."], files: false, skills: []), SystemPromptSummary.SystemPrompt(Facts(memories: ["Their name is Chris."], files: false)));
-        Assert.Equal("file tools is off", SystemPromptSummary.FilesOffSuffix);
 
         // LLM offer tools off says so first, whatever File tools reads.
         var none = SystemPromptSummary.PromptSections(Facts(tools: false, files: false));
@@ -323,7 +319,7 @@ public class SystemPromptSummaryTests : IDisposable
         Assert.False(Facts(disabled: three).Timers);
         Assert.True(Facts(disabled: [StartTimerTool.ToolName]).Timers);
         Assert.Equal(Assistant.OperatingRules, SystemPromptSummary.PromptSections(Facts(disabled: [StartTimerTool.ToolName]))[1].Body);
-        Assert.Equal(Assistant.OperatingRulesWithoutTools, SystemPromptSummary.PromptSections(Facts(tools: false, disabled: three))[1].Body);
+        Assert.Equal(Assistant.PlainTextRule, SystemPromptSummary.PromptSections(Facts(tools: false, disabled: three))[1].Body);
     }
 
     [Fact]
@@ -359,7 +355,6 @@ public class SystemPromptSummaryTests : IDisposable
         Assert.Equal(SettingsField.Memory, groups[3].Switch);
         Assert.Null(groups[0].Switch);
         Assert.Empty(groups[1].ToolNotes);
-        Assert.Equal("switched off in /tools", SystemPromptSummary.DisabledSuffix);
         // The plain lines and the tab carry the note after the description.
         var lines = SystemPromptSummary.ToolLines(groups).ToList();
         Assert.Contains("  read_file             " + files.Single(t => t.Name == ReadFileTool.ToolName).Description + " — not offered: switched off in /tools", lines);
@@ -393,7 +388,6 @@ public class SystemPromptSummaryTests : IDisposable
         Assert.False(noted[4].Offers(LoadSkillTool.ToolName));
         Assert.True(noted[4].Offers(SkillEditorTool.ToolName));
         Assert.Empty(plain[4].ToolNotes);
-        Assert.Equal("no skill installed", SystemPromptSummary.NoSkillSuffix);
         // download_file under File tools off, over the whole web list (the /tools list; /sys passes the list already cut).
         var web = ChatScreen.WebTools(new WebAccess(new HttpClient(new StubHttpMessageHandler()), new FakeHeadlessBrowser(), _time), new Files.WorkingDirectory(() => Path.Combine(Path.GetTempPath(), "NeonSidekick.Tests", "unused"), _time), () => new AppSettingsData());
         var filesOff = SystemPromptSummary.ToolGroups(clock, timers, files, memory, memoryEnabled: true, web: web, filesEnabled: false);
@@ -407,7 +401,6 @@ public class SystemPromptSummaryTests : IDisposable
         Assert.False(safeOff[2].Offers(RestoreTool.ToolName));
         Assert.True(safeOff[2].Offers(DeleteTool.ToolName));
         Assert.Empty(plain[2].ToolNotes);
-        Assert.Equal("File safe edits is off", SystemPromptSummary.SafeEditsOffSuffix);
         // The safe-edits reason wins over the /tools one on the same row, as download_file's does.
         Assert.Equal("not offered: File safe edits is off", SystemPromptSummary.ToolGroups(clock, timers, files, memory, memoryEnabled: true, disabled: new HashSet<string>(StringComparer.Ordinal) { RestoreTool.ToolName }, safeEdits: false)[2].ToolNotes[RestoreTool.ToolName]);
         // The list already cut (what /sys and the $ list pass): no note, Files (14).
@@ -440,7 +433,7 @@ public class SystemPromptSummaryTests : IDisposable
                 "Request — reasoning_effort none · chat_template_kwargs.enable_thinking=false",
             ],
             sections.Select(s => s.Heading));
-        Assert.Equal(Assistant.OperatingRulesWithoutTools, sections[1].Body);
+        Assert.Equal(Assistant.PlainTextRule, sections[1].Body);
         // No pair can carry the list, so the prompt does (the one case it still holds the facts, 2026-09-17).
         Assert.Equal(MemoryPrompt.Section(["Their name is Chris."], tools: false), sections[4].Body);
         Assert.Contains("- Their name is Chris.", sections[4].Body);
@@ -450,7 +443,6 @@ public class SystemPromptSummaryTests : IDisposable
         Assert.Equal("", sections[11].Body);
         Assert.Equal("", sections[12].Body);
         Assert.Equal([SystemPromptPart.Request, SystemPromptPart.Request, SystemPromptPart.Request], sections.Skip(10).Take(3).Select(s => s.Part));
-        Assert.Equal("LLM offer tools is off", SystemPromptSummary.ToolsOffSuffix);
 
         // A custom file keeps its own heading and text; the turn count changes nothing (nothing was seeded).
         var custom = Headings(Facts(operatingRules: "Answer in haiku.", voiceDirective: "Speak like a pirate.", speechOutput: true, speechReady: true, turnCount: 3, tools: false));
@@ -485,8 +477,6 @@ public class SystemPromptSummaryTests : IDisposable
         // Tools off: the Markdown sentence alone, like the plain-text one.
         Assert.Equal(Assistant.MarkdownRule, SystemPromptSummary.PromptSections(Facts(markdown: true, tools: false))[1].Body);
 
-        Assert.Equal("transcript markdown is off", SystemPromptSummary.MarkdownOffSuffix);
-        Assert.Equal("the turn speaks", SystemPromptSummary.SpokenSuffix);
         Assert.Equal("operata.md stands", SystemPromptSummary.OperataStandsSuffix);
     }
 
@@ -624,7 +614,6 @@ public class SystemPromptSummaryTests : IDisposable
         Assert.Equal("Questions (1) — not offered: ask user is off", askOff[5].Title);
         Assert.False(askOff[5].Offered);
         Assert.True(askOff[4].Offered);
-        Assert.Equal("ask user is off", SystemPromptSummary.AskOffSuffix);
         // The setting's reason first, then the pane's, then LLM offer tools.
         Assert.Equal("Questions (1) — not offered: ask user is off", SystemPromptSummary.ToolGroups(clock, timers, files, memory, memoryEnabled: true, toolsEnabled: false, web, webEnabled: true, filesEnabled: true, questions, askEnabled: false, paneOn: false)[5].Title);
         Assert.Equal("Questions (1) — not offered: no pane", SystemPromptSummary.ToolGroups(clock, timers, files, memory, memoryEnabled: true, toolsEnabled: false, web, webEnabled: true, filesEnabled: true, questions, askEnabled: true, paneOn: false)[5].Title);
@@ -657,7 +646,6 @@ public class SystemPromptSummaryTests : IDisposable
         Assert.False(sessionsOff[6].Offered);
         Assert.True(sessionsOff[5].Offered && sessionsOff[7].Offered);
         Assert.Equal("Sessions (1) — not offered: LLM offer tools is off", SystemPromptSummary.ToolGroups(clock, timers, files, memory, memoryEnabled: true, toolsEnabled: false, web, webEnabled: true, filesEnabled: true, questions, askEnabled: true, paneOn: true, skills, skillsEnabled: true, sessions, sessionsEnabled: true)[6].Title);
-        Assert.Equal("session tool is off", SystemPromptSummary.SessionsOffSuffix);
 
         // The MCP groups (2026-09-20): one per connected server after the sessions and before the questions, the setting MCP servers their switch, a disabled row naming /mcp.
         var echo = new EchoTool();
@@ -674,8 +662,6 @@ public class SystemPromptSummaryTests : IDisposable
         Assert.False(mcpOff[7].Offered && mcpOff[8].Offered);
         Assert.True(mcpOff[6].Offered && mcpOff[9].Offered);
         Assert.Equal("MCP chrome (1) — not offered: LLM offer tools is off", SystemPromptSummary.ToolGroups(clock, timers, files, memory, memoryEnabled: true, toolsEnabled: false, web, webEnabled: true, filesEnabled: true, questions, askEnabled: true, paneOn: true, skills, skillsEnabled: true, sessions, sessionsEnabled: true, mcp: mcp, mcpEnabled: true)[8].Title);
-        Assert.Equal("switched off in /mcp", SystemPromptSummary.McpDisabledSuffix);
-        Assert.Equal("MCP servers is off", SystemPromptSummary.McpOffSuffix);
         Assert.Equal("MCP ", SystemPromptSummary.McpGroupPrefix);
         Assert.Equal(8, SystemPromptSummary.ToolGroups(clock, timers, files, memory, memoryEnabled: true, toolsEnabled: true, web, webEnabled: true, filesEnabled: true, questions, askEnabled: true, paneOn: true, skills, skillsEnabled: true, sessions, sessionsEnabled: true, mcp: [], mcpEnabled: true).Count);   // no server connected: no group
         _ = echo;
@@ -746,7 +732,6 @@ public class SystemPromptSummaryTests : IDisposable
         Assert.Equal(ShellHeading, Headings(Facts())[7]);
         Assert.Equal("Shell tools — off (Shell command policy is off)", Headings(Facts() with { ShellEnabled = false })[7]);
         Assert.Equal("Shell tools — not offered (LLM offer tools is off)", Headings(Facts(tools: false))[7]);
-        Assert.Equal("Shell command policy is off", SystemPromptSummary.ShellOffSuffix);
         // The rule rides the defaults only while the tool is offered, after the git sentence; which rule follows the setting Shell tool bridge (later on 2026-09-21).
         Assert.Contains(Assistant.ShellRule, SystemPromptSummary.PromptSections(Facts(shellTools: 1, shellBridge: true))[1].Body);
         Assert.Contains(Assistant.ShellRuleWithoutBridge, SystemPromptSummary.PromptSections(Facts(shellTools: 1))[1].Body);

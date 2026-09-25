@@ -78,14 +78,6 @@ public class ThemeTests
         Assert.Equal(Theme.Primary, Theme.SampleGradient(0.5, Theme.GradientStops));
     }
 
-    [Fact]
-    public void Sun_HasNineRowsAndParses()
-    {
-        string sun = Theme.Sun();
-        Assert.Equal(9, sun.Split('\n').Length);
-        Assert.NotNull(new Markup(sun));
-    }
-
     // ── Themes (2026-09-23) ─────────────────────────────────────────────────
 
     [Fact]
@@ -111,7 +103,6 @@ public class ThemeTests
         Assert.Equal(ThemePalette.Netrunner.Highlight, Theme.CodeString.Foreground);
         Assert.Equal("[#00FF41 bold]x[/]", Theme.AccentMarkup("x"));
         Assert.StartsWith("[#0F6B2E]a[/]", Theme.GradientMarkup("ab"));
-        Assert.StartsWith("[#E0FF6B]", Theme.Sun());   // the sun's top rows wear the highlight
 
         Theme.Use(ThemePalette.Synthwave);
         Assert.Equal("#FF2E97", Theme.ToHex(Theme.Primary));

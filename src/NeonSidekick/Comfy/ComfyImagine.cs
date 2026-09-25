@@ -25,9 +25,6 @@ public static partial class ComfyImagine
     [GeneratedRegex(@"(?:^|\s)--no-negative(?=\s|$)", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase)]
     private static partial Regex NoNegativeFlag();
 
-    /// <summary>The bare switch that sends no negative prompt at all.</summary>
-    public const string NoNegativeSwitch = "--no-negative";
-
     /// <summary>The request, or the sentence for the first thing that does not read (<see cref="ComfyText.ImagineUsage"/> for nothing at all).</summary>
     public static (ComfyRequest? Request, string? Error) Parse(string args, IReadOnlyList<ComfyWorkflow> workflows, int maxCount = Settings.AppSettingsData.DefaultComfyMaxPicturesPerCall)
     {

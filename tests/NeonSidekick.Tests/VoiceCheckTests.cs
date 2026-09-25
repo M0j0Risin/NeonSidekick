@@ -126,7 +126,6 @@ public class VoiceCheckTests : IDisposable
     {
         Assert.Equal("Voice input check: up to 5 s from the default microphone at 16000 Hz, 16-bit, mono.", VoiceCheck.IntroLine);
         Assert.Equal("RESULT: heard \"hi\" (1.5 s of audio, transcribed in 340 ms)", VoiceCheck.TranscriptLine("hi", TimeSpan.FromSeconds(1.5), TimeSpan.FromMilliseconds(340)));
-        Assert.Equal("RESULT: NO TRANSCRIPT. Voice input is not working.", VoiceCheck.NoTranscriptLine);
         Assert.Equal(TimeSpan.FromSeconds(5), VoiceCheck.CheckOptions.MaxUtterance);
         Assert.Equal(TimeSpan.FromSeconds(5), VoiceCheck.CheckOptions.NoSpeechTimeout);
         Assert.Equal(VoicePipelineOptions.Default.DeliveryWatchdog, VoiceCheck.CheckOptions.DeliveryWatchdog);

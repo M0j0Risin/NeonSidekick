@@ -73,20 +73,18 @@ public sealed class SessionStore : IDisposable
     public const string FileName = "sessions.db";
 
     /// <summary>
-    /// The store's own schema number, kept in the <c>meta</c> table; a newer file than the code
-    /// knows is refused as unavailable, an older one migrated in place at <see cref="Open"/>.
-    /// 2 since later on 2026-09-18: schema 1 carried a <c>skill_calls</c> column (the <c>/skill &lt;name&gt;</c>
-    /// activation counter), dropped with the name form (<see cref="MigrateToSchema2"/>). 3 since
-    /// 2026-09-19: the <c>turns</c> rows carry <c>tool_names</c>, <c>skills_loaded</c> and <c>errors</c>
-    /// and a <c>reflections</c> table records every reflection (<see cref="MigrateToSchema3"/>).
+    /// The store's own schema number, kept in the <c>meta</c> table. A file at any other number
+    /// is refused as unavailable (<see cref="SchemaMismatchWarning"/>). 3 since 2026-09-19: the
+    /// <c>turns</c> rows carry <c>tool_names</c>, <c>skills_loaded</c> and <c>errors</c> and a
+    /// <c>reflections</c> table records every reflection. The 1 → 2 → 3 migrations went on
+    /// 2026-09-24 (the user's call): every real file had long been at 3, and a schema that lived a
+    /// day was not worth the code, the fixtures and a smoke leg.
     /// </summary>
     public const int SchemaVersion = 3;
 
-    /// <summary>Logged (Info) once a schema-1 file has been brought to schema 2. Pinned.</summary>
-    public const string MigratedNotice = "sessions.db was migrated from schema 1 to 2 (the skill_calls column dropped).";
-
-    /// <summary>Logged (Info) once a schema-2 file has been brought to schema 3. Pinned.</summary>
-    public const string MigratedToThreeNotice = "sessions.db was migrated from schema 2 to 3 (the turns' tool names, loaded skills and error counts; the reflections table).";
+    /// <summary>Logged (Warn) when the file's stored schema is not <see cref="SchemaVersion"/>: sessions are off, the file untouched. Pinned.</summary>
+    public static string SchemaMismatchWarning(long stored) =>
+        $"{FileName} is at schema {stored.ToString(CultureInfo.InvariantCulture)}, this version reads {SchemaVersion.ToString(CultureInfo.InvariantCulture)}; sessions are off until it is moved away.";
 
     /// <summary>The separator between the names in a <c>tool_names</c> / <c>skills_loaded</c> cell; a tool or skill name never carries one.</summary>
     public const char NameSeparator = ',';
@@ -885,7 +883,7 @@ public sealed class SessionStore : IDisposable
         }
     }
 
-    /// <summary>The connection, opened and migrated on first use; null after a failed open or a newer schema. Caller holds the lock.</summary>
+    /// <summary>The connection, opened on first use; null after a failed open or a schema other than <see cref="SchemaVersion"/>. Caller holds the lock.</summary>
     private SqliteConnection? Open()
     {
         if (_connection is not null)
@@ -910,34 +908,28 @@ public sealed class SessionStore : IDisposable
                 pragmas.ExecuteNonQuery();
             }
 
+            // The version is read before Schema runs, so a file this code does not know is refused
+            // untouched (Schema would otherwise add today's tables to it). A new file has no meta yet.
+            // Two statements, not one CASE: SQLite resolves a table's name when it prepares, so a query
+            // naming meta fails on a file that has none even behind a guard.
+            using (var version = connection.CreateCommand())
+            {
+                version.CommandText = "SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = 'meta'";
+                bool hasMeta = version.ExecuteScalar() is long tables && tables > 0;
+                version.CommandText = "SELECT value FROM meta WHERE key = 'schema'";
+                if (hasMeta && version.ExecuteScalar() is long stored && stored != SchemaVersion)
+                {
+                    connection.Dispose();
+                    _failed = true;
+                    DiagnosticLog.Warn(Category, SchemaMismatchWarning(stored));
+                    return null;
+                }
+            }
+
             using (var schema = connection.CreateCommand())
             {
                 schema.CommandText = Schema;
                 schema.ExecuteNonQuery();
-            }
-
-            using (var version = connection.CreateCommand())
-            {
-                version.CommandText = "SELECT value FROM meta WHERE key = 'schema'";
-                long stored = version.ExecuteScalar() is long v ? v : 0;
-                if (stored > SchemaVersion)
-                {
-                    connection.Dispose();
-                    _failed = true;
-                    DiagnosticLog.Warn(Category, $"{FileName} was written by a newer version (schema {stored.ToString(CultureInfo.InvariantCulture)}); sessions are off until it is moved away.");
-                    return null;
-                }
-
-                // The chain: a schema-1 file runs both steps in order (each stamps meta for the next).
-                if (stored == 1)
-                {
-                    MigrateToSchema2(connection);
-                }
-
-                if (stored is 1 or 2)
-                {
-                    MigrateToSchema3(connection);
-                }
             }
 
             _connection = connection;
@@ -952,55 +944,6 @@ public sealed class SessionStore : IDisposable
         }
     }
 
-    /// <summary>
-    /// Schema 1 → 2 (later on 2026-09-18): the <c>skill_calls</c> column dropped from <c>sessions</c>
-    /// and the <c>meta</c> row moved on, in one transaction. <c>ALTER TABLE … DROP COLUMN</c> has been
-    /// SQLite's since 3.35 (2021); the bundled <c>e_sqlite3</c> is well past it. A failure throws
-    /// into <see cref="Open"/>'s catch, so the file is left as it was and sessions are off.
-    /// </summary>
-    private static void MigrateToSchema2(SqliteConnection connection)
-    {
-        using var migrate = connection.CreateCommand();
-        migrate.CommandText = "BEGIN; ALTER TABLE sessions DROP COLUMN skill_calls; UPDATE meta SET value = 2 WHERE key = 'schema'; COMMIT;";
-        migrate.ExecuteNonQuery();
-        DiagnosticLog.Info(Category, MigratedNotice);
-    }
-
-    /// <summary>
-    /// Schema 2 → 3 (2026-09-19): the three telemetry columns added to <c>turns</c> and the
-    /// <c>meta</c> row moved on, in one transaction. <see cref="Open"/> has run <see cref="Schema"/>
-    /// already (every statement <c>IF NOT EXISTS</c>), so the <c>reflections</c> table and its index
-    /// are there and an old <c>turns</c> table stands in its old shape — each column is added only
-    /// while <c>pragma_table_info</c> says it is missing, which also makes the step safe on a file
-    /// whose <c>turns</c> table <see cref="Schema"/> just created. A failure throws into
-    /// <see cref="Open"/>'s catch: the file as it was, sessions off.
-    /// </summary>
-    private static void MigrateToSchema3(SqliteConnection connection)
-    {
-        var sb = new StringBuilder("BEGIN;");
-        foreach (var (column, definition) in Schema3TurnColumns)
-        {
-            if (!Has(connection, "turns", column))
-            {
-                sb.Append(" ALTER TABLE turns ADD COLUMN ").Append(column).Append(' ').Append(definition).Append(';');
-            }
-        }
-
-        sb.Append(" UPDATE meta SET value = 3 WHERE key = 'schema'; COMMIT;");
-        using var migrate = connection.CreateCommand();
-        migrate.CommandText = sb.ToString();
-        migrate.ExecuteNonQuery();
-        DiagnosticLog.Info(Category, MigratedToThreeNotice);
-    }
-
-    /// <summary>The columns schema 3 added to <c>turns</c>, with the definitions the <c>ALTER TABLE</c> needs (a default, so old rows read as no names, no errors).</summary>
-    private static readonly (string Column, string Definition)[] Schema3TurnColumns =
-    [
-        ("tool_names", "TEXT NOT NULL DEFAULT ''"),
-        ("skills_loaded", "TEXT NOT NULL DEFAULT ''"),
-        ("errors", "INTEGER NOT NULL DEFAULT 0"),
-    ];
-
     private static bool Has(SqliteConnection connection, string table, string column)
     {
         using var command = connection.CreateCommand();
@@ -1010,7 +953,7 @@ public sealed class SessionStore : IDisposable
         return command.ExecuteScalar() is long count && count > 0;
     }
 
-    /// <summary>The stored <c>meta</c> schema number, or -1 while the store is unavailable. A read for the tests and the smoke probe.</summary>
+    /// <summary>The stored <c>meta</c> schema number, or -1 while the store is unavailable. A read for the tests.</summary>
     public long SchemaStored()
     {
         lock (_gate)
@@ -1026,7 +969,7 @@ public sealed class SessionStore : IDisposable
         }
     }
 
-    /// <summary>Whether <paramref name="table"/> has a column named <paramref name="column"/> (<c>PRAGMA table_info</c>); false while the store is unavailable. For the tests and the smoke probe.</summary>
+    /// <summary>Whether <paramref name="table"/> has a column named <paramref name="column"/> (<c>PRAGMA table_info</c>); false while the store is unavailable. For the tests.</summary>
     public bool HasColumn(string table, string column)
     {
         ArgumentNullException.ThrowIfNull(table);
@@ -1041,90 +984,6 @@ public sealed class SessionStore : IDisposable
             return Has(connection, table, column);
         }
     }
-
-    /// <summary>
-    /// Writes a <c>sessions.db</c> as the schema-1 code wrote it (the <c>skill_calls</c> column, the
-    /// <c>meta</c> row at 1, the <c>turns</c> table without the schema-3 columns) holding one session
-    /// titled <paramref name="title"/> with an empty history and one turn, at <paramref name="path"/>
-    /// — the fixture the migration tests and the smoke probe open. The FTS5 side is the same in every
-    /// schema, so it is left to <see cref="Open"/>.
-    /// </summary>
-    public static void WriteSchema1File(string path, string title)
-    {
-        ArgumentNullException.ThrowIfNull(path);
-        ArgumentNullException.ThrowIfNull(title);
-        WriteLegacyFile(path, title, Schema1Sessions, "INSERT INTO sessions(started_at, updated_at, title, title_source, model, turns, history_json, skill_calls) VALUES ('2026-09-18T00:00:00.0000000+00:00', '2026-09-18T00:00:00.0000000+00:00', $title, 'first-line', 'legacy-model', 1, '[]', 3);");
-    }
-
-    /// <summary>
-    /// Writes a <c>sessions.db</c> as the schema-2 code wrote it (later on 2026-09-18 until 2026-09-19:
-    /// no telemetry columns, no <c>reflections</c> table, the <c>meta</c> row at 2) holding one
-    /// session titled <paramref name="title"/> with one turn, at <paramref name="path"/> — the
-    /// fixture the 2 → 3 migration test and the smoke probe open.
-    /// </summary>
-    public static void WriteSchema2File(string path, string title)
-    {
-        ArgumentNullException.ThrowIfNull(path);
-        ArgumentNullException.ThrowIfNull(title);
-        WriteLegacyFile(path, title, Schema2Sessions, "INSERT INTO sessions(started_at, updated_at, title, title_source, model, turns, history_json) VALUES ('2026-09-18T00:00:00.0000000+00:00', '2026-09-18T00:00:00.0000000+00:00', $title, 'first-line', 'legacy-model', 1, '[]');");
-    }
-
-    private static void WriteLegacyFile(string path, string title, string sessionsDdl, string insertSession)
-    {
-        using var connection = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = path, Mode = SqliteOpenMode.ReadWriteCreate, Pooling = false }.ToString());
-        connection.Open();
-        using var command = connection.CreateCommand();
-        command.CommandText = sessionsDdl + Schema2Turns + SchemaFts + " " + insertSession
-            + " INSERT INTO turns(session_id, ordinal, at, user_text, reply_text, tool_calls, input_tokens, output_tokens, cancelled) VALUES (1, 1, '2026-09-18T00:00:01.0000000Z', 'legacy question', 'legacy answer', 2, 10, 5, 0);";
-        command.Parameters.AddWithValue("$title", title);
-        command.ExecuteNonQuery();
-    }
-
-    /// <summary>The <c>meta</c> and <c>sessions</c> tables as schema 1 made them (2026-09-18, until later that day). Kept for <see cref="WriteSchema1File"/> alone.</summary>
-    private const string Schema1Sessions = """
-        CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value INTEGER NOT NULL);
-        INSERT OR IGNORE INTO meta(key, value) VALUES ('schema', 1);
-        CREATE TABLE IF NOT EXISTS sessions(
-            id INTEGER PRIMARY KEY,
-            started_at TEXT NOT NULL,
-            updated_at TEXT NOT NULL,
-            title TEXT NOT NULL,
-            title_source TEXT NOT NULL,
-            model TEXT NOT NULL,
-            turns INTEGER NOT NULL,
-            history_json TEXT NOT NULL,
-            skill_calls INTEGER NOT NULL);
-        """;
-
-    /// <summary>The <c>meta</c> and <c>sessions</c> tables as schema 2 made them (later on 2026-09-18). Kept for <see cref="WriteSchema2File"/> alone.</summary>
-    private const string Schema2Sessions = """
-        CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value INTEGER NOT NULL);
-        INSERT OR IGNORE INTO meta(key, value) VALUES ('schema', 2);
-        CREATE TABLE IF NOT EXISTS sessions(
-            id INTEGER PRIMARY KEY,
-            started_at TEXT NOT NULL,
-            updated_at TEXT NOT NULL,
-            title TEXT NOT NULL,
-            title_source TEXT NOT NULL,
-            model TEXT NOT NULL,
-            turns INTEGER NOT NULL,
-            history_json TEXT NOT NULL);
-        """;
-
-    /// <summary>The <c>turns</c> table as schemas 1 and 2 made it (no telemetry columns). Kept for the legacy fixtures alone.</summary>
-    private const string Schema2Turns = """
-        CREATE TABLE IF NOT EXISTS turns(
-            id INTEGER PRIMARY KEY,
-            session_id INTEGER NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
-            ordinal INTEGER NOT NULL,
-            at TEXT NOT NULL,
-            user_text TEXT NOT NULL,
-            reply_text TEXT NOT NULL,
-            tool_calls INTEGER NOT NULL,
-            input_tokens INTEGER NOT NULL,
-            output_tokens INTEGER NOT NULL,
-            cancelled INTEGER NOT NULL);
-        """;
 
     private static void Fail(string what, SqliteException ex) =>
         DiagnosticLog.Error(Category, $"Could not {what} in {FileName}: {ex.Message}", ex);
@@ -1173,7 +1032,7 @@ public sealed class SessionStore : IDisposable
         CREATE INDEX IF NOT EXISTS reflections_at ON reflections(at);
         """ + SchemaFts;
 
-    /// <summary>The FTS5 external-content table over <c>turns</c> and its three sync triggers — the same in every schema, so the legacy fixtures run it too.</summary>
+    /// <summary>The FTS5 external-content table over <c>turns</c> and its three sync triggers.</summary>
     private const string SchemaFts = """
         CREATE VIRTUAL TABLE IF NOT EXISTS turns_fts USING fts5(user_text, reply_text, content='turns', content_rowid='id', tokenize='unicode61');
         CREATE TRIGGER IF NOT EXISTS turns_ai AFTER INSERT ON turns BEGIN

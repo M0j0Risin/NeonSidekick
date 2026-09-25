@@ -262,11 +262,8 @@ public class TranscriptRendererTests : IDisposable
         Assert.Equal("[#9A8BB8]  🛠️ t → r[/]", TranscriptRenderer.ToolResultMarkup("t", "r"));
         Assert.Equal("[#9A8BB8]  🛠️ remembered: [[x]][/]", TranscriptRenderer.ToolNoteMarkup("remembered: [x]"));
         Assert.Equal("[#9A8BB8]  🎓 loaded skill '[[x]]'[/]", TranscriptRenderer.SkillNoteMarkup("loaded skill '[x]'"));   // later on 2026-09-21
-        Assert.Equal("  🎓 ", TranscriptRenderer.SkillGlyph);
         Assert.Equal("[#9A8BB8]  👮 Error: outside the working directory: '[[x]]' — a command or a script may only name paths under it[/]", TranscriptRenderer.PoliceNoteMarkup("Error: outside the working directory: '[x]' — a command or a script may only name paths under it"));   // 2026-09-22
-        Assert.Equal("  👮 ", TranscriptRenderer.PoliceGlyph);
         Assert.Equal(InputLine.SubmittedMarkup("u"), TranscriptRenderer.UserMarkup("u"));
-        Assert.Equal("● ", TranscriptRenderer.AssistantGlyph);
     }
 
     [Fact]

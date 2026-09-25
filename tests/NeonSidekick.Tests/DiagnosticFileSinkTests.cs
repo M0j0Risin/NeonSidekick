@@ -115,7 +115,6 @@ public class DiagnosticFileSinkTests : IDisposable
             string[] lines = File.ReadAllLines(path);
             Assert.EndsWith("[Info] Log: " + DiagnosticFileSink.OpenedLine, lines[0], StringComparison.Ordinal);
             Assert.EndsWith("[Info] Log: " + DiagnosticFileSink.ClosedLine, lines[^1], StringComparison.Ordinal);
-            Assert.Equal("--- log closed ---", DiagnosticFileSink.ClosedLine);
             Assert.Empty(warnings);
         }
         finally

@@ -1090,6 +1090,5 @@ public class MenuPaneTests : IDisposable
         Assert.Equal(TranscriptRenderer.NoticeMarkup("saved"), MenuPane.StatusMarkup(MenuPane.NoticeKind.Notice, "saved"));
         Assert.Equal(TranscriptRenderer.WarningMarkup("w"), MenuPane.StatusMarkup(MenuPane.NoticeKind.Warning, "w"));
         Assert.Equal(TranscriptRenderer.ErrorMarkup("e"), MenuPane.StatusMarkup(MenuPane.NoticeKind.Error, "e"));
-        Assert.Equal("↑/↓ for more", MenuPane.MoreHint);
     }
 }

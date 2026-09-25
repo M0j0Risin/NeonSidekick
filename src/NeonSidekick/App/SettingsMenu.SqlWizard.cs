@@ -86,8 +86,6 @@ internal sealed partial class SettingsMenu
 
     public static string SqlWizardFileRow(bool global, string path) => (global ? "global  " : "profile ") + path;
 
-    public static string SqlWizardTestingNotice(string name) => $"Tested '{name}' ({SqlTestQuery}).";
-
     public static string SqlWizardTestOkNotice(string name, string version) => $"Connected to '{name}': {version}";
 
     /// <summary>The step a wizard page asks; the summary last. The rows of <see cref="SqlWizardLabels"/> by index.</summary>

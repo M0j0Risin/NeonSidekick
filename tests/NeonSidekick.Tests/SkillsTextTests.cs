@@ -20,15 +20,9 @@ public class SkillsTextTests
     public void Labels_ArePinned()
     {
         Assert.Equal("🎓 Skills", SkillsText.Label);
-        Assert.Equal("Offered", SkillsText.OfferedTabTitle);
-        Assert.Equal("Options", SkillsText.OptionsTabTitle);   // Loaded until 2026-09-19 (the user's call: the same word as /tools' first tab)
-        Assert.Equal("Project", SkillsText.ProjectTabTitle);   // the Roots tab after it until later on 2026-09-19
         Assert.Equal("Enter / Space = on or off · ←/→ tabs · ESC = close", SkillsText.ProjectKeys);
-        Assert.Equal("Project file", SkillsText.NotesLabel);
         Assert.Equal("Project file: off", SkillsText.ProjectFlippedNotice(false));
         Assert.Equal("Project file: on", SkillsText.ProjectFlippedNotice(true));
-        Assert.Equal("Agent skills is off (the Options tab of /skills): no skill is listed, no skill tool offered, and the project notes are not read.", SkillsText.OffLine);
-        Assert.Equal("(no skill installed: a folder with a SKILL.md under one of the roots, or ask the model to write one)", SkillsText.NoneLine);
         Assert.Equal("none (NEON.md or AGENTS.md in the working directory)", SkillsText.NoNotesLine);   // the user's wording, 2026-09-16
     }
 

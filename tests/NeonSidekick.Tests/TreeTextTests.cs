@@ -71,14 +71,4 @@ public sealed class TreeTextTests
         Assert.Equal(FileText.IsAFile("a.txt"), TreeText.Error(new FileTreeResult(FileOutcome.IsAFile, "a.txt", "", [], false)));
         Assert.Equal(FileText.CouldNot("list", @"docs\", "boom"), TreeText.Error(new FileTreeResult(FileOutcome.Failed, @"docs\", "", [], false, "boom")));
     }
-
-    [Fact]
-    public void Glyphs_ArePinned()
-    {
-        Assert.Equal("├── ", TreeText.Branch);
-        Assert.Equal("└── ", TreeText.LastBranch);
-        Assert.Equal("│   ", TreeText.Continuation);
-        Assert.Equal("    ", TreeText.Gap);
-        Assert.Equal("(empty)", TreeText.EmptyLine);
-    }
 }

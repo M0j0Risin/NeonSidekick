@@ -13,9 +13,6 @@ public abstract class FileTool : AIFunction
     public const string PathArgument = "path";
     public const string OverwriteArgument = "overwrite";
 
-    /// <summary>The words the model uses for the folder, repeated in every description so any of them finds the tool.</summary>
-    public const string RelativeRule = "relative to the working directory (the user's cwd / current directory)";
-
     protected FileTool(WorkingDirectory files)
     {
         Files = files ?? throw new ArgumentNullException(nameof(files));

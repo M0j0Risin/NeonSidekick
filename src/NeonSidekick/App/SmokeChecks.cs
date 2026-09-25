@@ -655,11 +655,8 @@ public static partial class SmokeChecks
     /// folder through Microsoft.Data.Sqlite (the e_sqlite3 bundle must load beside the exe) — a
     /// session begun, a turn appended, the FTS5 search finding it (the virtual table and its
     /// triggers, compiled in or not), the OR search (<see cref="Sessions.SessionStore.SearchAny"/>),
-    /// a skill's usage and a reflection row (schema 3), the history round-tripped, the purge — then a
-    /// schema-1 and a schema-2 file written by hand and opened, so the <c>ALTER TABLE … DROP COLUMN</c>
-    /// (<see cref="Sessions.SessionStore.MigrateToSchema2"/>) and <c>ADD COLUMN</c>
-    /// (<see cref="Sessions.SessionStore.MigrateToSchema3"/>) migrations are proven on the bundled
-    /// SQLite too — then the folder removed.
+    /// a skill's usage and a reflection row (schema 3), the history round-tripped, the purge — then the
+    /// folder removed. (The schema-1 and schema-2 migration legs went with the migrations, 2026-09-24.)
     /// </summary>
     public static SmokeCheck ProbeSessions()
     {
@@ -700,33 +697,7 @@ public static partial class SmokeChecks
                 }
             }
 
-            string legacy = Path.Combine(dir, "legacy");
-            Directory.CreateDirectory(legacy);
-            Sessions.SessionStore.WriteSchema1File(Path.Combine(legacy, Sessions.SessionStore.FileName), "legacy");
-            using (var store = new Sessions.SessionStore(legacy))
-            {
-                var loaded = store.Load(1);
-                bool migrated = store.SchemaStored() == Sessions.SessionStore.SchemaVersion && !store.HasColumn("sessions", "skill_calls") && store.HasColumn("turns", "skills_loaded");
-                if (loaded is null || loaded.Summary.Title != "legacy" || loaded.Turns.Count != 1 || !migrated)
-                {
-                    return new SmokeCheck(name, false, $"SQLite {version}; the schema-1 file did not migrate (loaded {(loaded is null ? "nothing" : "'" + loaded.Summary.Title + "'")}, schema {store.SchemaStored()})");
-                }
-            }
-
-            string second = Path.Combine(dir, "legacy2");
-            Directory.CreateDirectory(second);
-            Sessions.SessionStore.WriteSchema2File(Path.Combine(second, Sessions.SessionStore.FileName), "legacy two");
-            using (var store = new Sessions.SessionStore(second))
-            {
-                var loaded = store.Load(1);
-                bool migrated = store.SchemaStored() == Sessions.SessionStore.SchemaVersion && store.HasColumn("turns", "tool_names") && store.LastReflectionWrite() is null;
-                if (loaded is null || loaded.Summary.Title != "legacy two" || loaded.Turns is not [{ ToolNames.Count: 0, Errors: 0 }] || !migrated)
-                {
-                    return new SmokeCheck(name, false, $"SQLite {version}; the schema-2 file did not migrate (loaded {(loaded is null ? "nothing" : "'" + loaded.Summary.Title + "'")}, schema {store.SchemaStored()})");
-                }
-            }
-
-            return new SmokeCheck(name, true, $"SQLite {version}; 1 FTS5 hit, 1 OR hit, a skill's usage and a reflection recorded, 2 messages restored, 1 purged, a schema-1 and a schema-2 file migrated");
+            return new SmokeCheck(name, true, $"SQLite {version}; 1 FTS5 hit, 1 OR hit, a skill's usage and a reflection recorded, 2 messages restored, 1 purged");
         }
         catch (Exception ex)
         {

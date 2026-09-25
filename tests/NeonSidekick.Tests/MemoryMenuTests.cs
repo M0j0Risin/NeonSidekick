@@ -218,7 +218,6 @@ public class MemoryMenuTests : IDisposable
         var undated = new MemoryEntry { Text = "z" };
 
         Assert.Equal("💾 Memory", MemoryMenu.Title);
-        Assert.Equal("Enter = remove · ESC = back", MemoryMenu.Keys);
         Assert.Equal(MemoryMenu.Title + "   Enter = remove · ESC = back", SettingsMenu.PromptTitle(MemoryMenu.Title, MemoryMenu.Keys));
         Assert.Equal("(💾 nothing remembered)", MemoryMenu.EmptyNotice);
         Assert.Equal("(💾 removed: x)", MemoryMenu.RemovedNotice("x"));

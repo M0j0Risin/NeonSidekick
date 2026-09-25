@@ -919,7 +919,6 @@ public class InputLineTests : IDisposable
     public void SubmittedMarkup_IsPinned_AndEscaped()
     {
         Assert.Equal("[#33E0FF bold]› hi [[x]][/]", InputLine.SubmittedMarkup("hi [x]"));
-        Assert.Equal("› ", InputLine.PromptGlyph);
         Assert.Equal(37, InputLine.AvailableCells(40));
         Assert.Equal(1, InputLine.AvailableCells(2));
     }

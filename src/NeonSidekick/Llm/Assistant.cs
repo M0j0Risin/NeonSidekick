@@ -47,7 +47,7 @@ public sealed class Assistant
 
     /// <summary>
     /// The one operating rule that names no tool: the whole of the default rules while the
-    /// setting <c>LLM offer tools</c> is off (<see cref="OperatingRulesWithoutTools"/>), the first
+    /// setting <c>LLM offer tools</c> is off (<see cref="PlainTextRule"/>), the first
     /// sentence of <see cref="OperatingRules"/> otherwise. Pinned.
     /// </summary>
     public const string PlainTextRule = "Reply in plain text: no markdown headings, tables or code fences unless the user asks for code.";
@@ -89,13 +89,6 @@ public sealed class Assistant
     /// </summary>
     public const string TimerRule =
         "For a countdown, use " + NeonSidekick.Llm.Tools.StartTimerTool.ToolName + ", " + NeonSidekick.Llm.Tools.StopTimerTool.ToolName + " and " + NeonSidekick.Llm.Tools.ListTimersTool.ToolName + "; never guess what is left on a timer.";
-
-    /// <summary>
-    /// The default operating rules for a turn that offers no tools (<c>LLM offer tools</c> off): the
-    /// plain-text rule alone. Nothing replaces the tool sentences — the model then has no clock and
-    /// no path, on purpose (the date and the path are never prompt text).
-    /// </summary>
-    public const string OperatingRulesWithoutTools = PlainTextRule;
 
     /// <summary>
     /// The default operating rules for a turn without the file tools (the setting <c>File tools</c>
@@ -319,9 +312,6 @@ public sealed class Assistant
     /// <summary>The system prompt with the default persona: one paragraph, the persona and the rules.</summary>
     public const string DefaultSystemPrompt = DefaultPersona + " " + OperatingRules;
 
-    /// <summary><see cref="DefaultSystemPrompt"/> with <see cref="WebRule"/> and <see cref="DownloadRule"/> on its end: what a fresh profile sends (the web and file tools on by default).</summary>
-    public const string DefaultWebSystemPrompt = DefaultSystemPrompt + " " + WebRule + " " + DownloadRule;
-
     /// <summary>
     /// Appended <em>last</em> to the system prompt while speech output is in force, so it wins
     /// against everything above it.
@@ -388,7 +378,7 @@ public sealed class Assistant
     /// null or blank) last when <paramref name="speechOutput"/> is on, so it still wins — the file
     /// changes what is appended, never whether. With <paramref name="tools"/> false (the setting
     /// <c>LLM offer tools</c> off) every <em>default</em> swaps for its tool-free form
-    /// (<see cref="OperatingRulesWithoutTools"/>, <see cref="MemoryPrompt.DirectiveWithoutTool"/>,
+    /// (<see cref="PlainTextRule"/>, <see cref="MemoryPrompt.DirectiveWithoutTool"/>,
     /// <see cref="VoiceDirectiveWithoutTools"/>); a custom file stands verbatim either way. With
     /// <paramref name="web"/> true (the web tools offered) the default rules end with <see cref="WebRule"/>;
     /// with <paramref name="files"/> false (the setting <c>File tools</c> off, the file tools not offered)

@@ -366,8 +366,6 @@ public sealed class ShellTests
         Assert.Equal("0.0 s", ShellText.Elapsed(TimeSpan.FromSeconds(-1)));
         Assert.Equal("12,345", ShellText.Count(12345));
         Assert.Equal("exit 0 in 0.0 s (cmd): x", ShellText.Note("exit 0 in 0.0 s (cmd): x\nline"));
-        Assert.Equal("(no output)", ShellText.NoOutput);
-        Assert.Equal("--- stderr ---", ShellText.StderrSeparator);
         Assert.Equal(".shell", ShellText.SpillFolderName);
 
         OutputLine[] none = [];
@@ -388,15 +386,12 @@ public sealed class ShellTests
         Assert.Equal("… (412,345 chars cut; the whole output is in x.log) …", ShellText.CutLine(412345, "x.log"));
         string result = ShellText.Result("h", Enumerable.Range(1, 40).Select(i => new OutputLine("line " + i.ToString(System.Globalization.CultureInfo.InvariantCulture), false)).ToList(), 100, null);
         Assert.StartsWith("h — output cut\nline 1\n", result);
-        Assert.Equal(" — output cut", ShellText.CutSuffix);
         Assert.Equal(0.6, ShellText.HeadShare);
     }
 
     [Fact]
     public void ShellText_Errors_LogLines_AndThePane_ArePinned()
     {
-        Assert.Equal("Error: command is required", ShellText.CommandRequired);
-        Assert.Equal("Error: Shell command policy is off: no command runs", ShellText.PolicyOff);
         Assert.Equal("Error: the script was denied by the user (python); do not retry it or work around the refusal", ShellText.Denied(new CommandRequest("python", "print(1)", ["code:python"], IsScript: true)));
         Assert.Equal("Error: bash is not installed (no bash.exe found)", ShellText.ShellNotInstalled(ShellKind.Bash));
         Assert.Equal("Error: workdir '../x' is outside the working directory", ShellText.WorkdirOutside("../x"));
@@ -408,7 +403,6 @@ public sealed class ShellTests
         Assert.Equal("approval: refused (denied by the user) — cmd \"dir\"", ShellText.RefusedLogLine(new CommandRequest("cmd", "dir", ["dir"]), "denied by the user"));
         Assert.Equal("run_command: cmd \"dir\" → exit 0 in 0.1 s (2,340 chars)", ShellText.RunLogLine("cmd", "dir", "exit 0 in 0.1 s", 2340));
         // The police (2026-09-22): the sentence names the token and the rule, never the setting; the transcript keys 👮 on its head.
-        Assert.Equal("Error: outside the working directory: ", ShellText.OutsideHead);
         Assert.Equal(@"Error: outside the working directory: 'C:\Windows\win.ini' — a command or a script may only name paths under it", ShellText.OutsidePath(@"C:\Windows\win.ini"));
         Assert.True(ShellText.IsOutside(ShellText.OutsidePath("~")));
         Assert.False(ShellText.IsOutside(ShellText.WorkdirOutside("..")));
@@ -417,11 +411,6 @@ public sealed class ShellTests
         Assert.Equal("police: refused ('C:\\') — cmd \"cd C:\\ dir\"", ShellText.PolicedLogLine(new CommandRequest("cmd", "cd C:\\\ndir", ["cd", "dir"]), "C:\\"));
 
         var request = new CommandRequest("powershell", "git push origin main && rm x", ["git push", "rm"]);
-        Assert.Equal("Run this command?", ShellText.ApprovalTitle);
-        Assert.Equal("Run this script?", ShellText.ScriptApprovalTitle);
-        Assert.Equal("Deny", ShellText.DenyRow);
-        Assert.Equal("Allow once", ShellText.OnceRow);
-        Assert.Equal("d / o / s / a = pick · Enter = choose · ESC = deny", ShellText.ApprovalKeys);
         Assert.Equal("powershell › git push origin main && rm x", ShellText.Caption(request));
         Assert.Equal("Allow \"git push\", \"rm\" for this session", ShellText.SessionRow(request));
         Assert.Equal("Allow \"git push\", \"rm\" always (saved to the profile)", ShellText.PermanentRow(request));

@@ -287,8 +287,6 @@ public sealed class FileToolsTests : IDisposable
         Assert.Equal(FileText.EditAmbiguous("style.css", 2, [new MatchLocation(4, "}"), new MatchLocation(7, "}")]), await Invoke(patch, ("path", "style.css"), ("old_text", "      }"), ("new_text", "}}")));
         Assert.Equal("Error: old_text appears 2 times in 'style.css'; include enough surrounding text to make it unique, or pass replace_all true:\n  line 4: }\n  line 7: }", FileText.EditAmbiguous("style.css", 2, [new MatchLocation(4, "}"), new MatchLocation(7, "}")]));
         Assert.Equal(FileText.EditNotFound("style.css"), await Invoke(patch, ("path", "style.css"), ("old_text", "  padding: 9em 9em;"), ("new_text", "x")));
-        Assert.Equal(" (old_text matched with each line's leading and trailing spaces ignored)", FileText.LineTrimmedNote);
-        Assert.Equal("Error: old_text and new_text are the same; nothing to change", FileText.EditSame);
         // replace_all takes a deterministic strategy's matches too (Hermes' rule), each landing with its own line's indentation.
         Put("dup.txt", "a a");
         Assert.Equal(FileText.EditAmbiguous("dup.txt", 2, [new MatchLocation(1, "a a"), new MatchLocation(1, "a a")]), await Invoke(patch, ("path", "dup.txt"), ("old_text", "a"), ("new_text", "b")));
@@ -366,7 +364,6 @@ public sealed class FileToolsTests : IDisposable
             " A .git folder, anything in it, or a folder holding one is never deleted.",   // the .git note on both forms since 2026-09-23 (the user's call)
             DeleteTool.DescribeTool(false));
         Assert.EndsWith(DeleteTool.GitNote, DeleteTool.DescribeTool(true), StringComparison.Ordinal);
-        Assert.Equal(" A .git folder, anything in it, or a folder holding one is never deleted.", DeleteTool.GitNote);
         Assert.DoesNotContain("safe edits", DeleteTool.DescribeTool(false), StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("brings it back", DeleteTool.DescribeTool(false));
         Assert.Equal("deleted d.txt", await Invoke(delete, ("path", "d.txt")));   // no "(File safe edits is off: nothing was kept)" since 2026-09-21
@@ -548,7 +545,6 @@ public sealed class FileToolsTests : IDisposable
         Assert.Equal(["a.bmp", "b.bmp"], five.Images.Select(i => i.Path));
         Assert.EndsWith("\n" + FileText.MorePictures(["a.bmp"]), five.Text, StringComparison.Ordinal);
         Assert.Equal(FileText.BadStringList("paths", "[1]"), await Invoke(view, ("paths", Json("[1]"))));
-        Assert.Equal("Error: give path (one picture) or paths (several)", ViewImageTool.NoPathError);
     }
 
     [Fact]

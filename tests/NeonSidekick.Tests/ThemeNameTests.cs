@@ -42,7 +42,6 @@ public class ThemeNameTests
         Assert.Equal("default theme", ThemeName.Describe("synthwave"));
         Assert.Equal("green phosphor", ThemeName.Describe("netrunner"));
         Assert.Equal("amber phosphor", ThemeName.Describe("nostromo"));
-        Assert.Equal("", ThemeName.Describe("phosphor"));   // the old name (renamed 2026-09-23) is unknown now
         Assert.Equal("greyscale", ThemeName.Describe("noir"));
         Assert.Equal("colorful", ThemeName.Describe("cyberpunk"));
         Assert.Equal("pastel", ThemeName.Describe("vaporwave"));

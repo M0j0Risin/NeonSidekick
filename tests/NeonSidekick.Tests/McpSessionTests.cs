@@ -40,14 +40,11 @@ public class McpSessionTests : IAsyncDisposable
     {
         Assert.Equal("Mcp", McpSession.Category);
         Assert.Equal("NeonSidekick", McpSession.ClientName);
-        Assert.Equal("🔌", McpText.Glyph);
         Assert.Equal("🔌 MCP: 2 servers, 14 tools", McpText.StatusLine(2, 14));
         Assert.Equal("🔌 MCP: 1 server, 1 tool", McpText.StatusLine(1, 1));
         Assert.Equal("🔌 MCP: no server connected", McpText.StatusLine(0, 0));
         Assert.Equal("🔌 MCP: docker failed: timed out after 5 s", McpText.FailedLine("docker", McpText.TimedOut(5)));
-        Assert.Equal("connecting MCP servers", McpText.ConnectingLabel);
         Assert.Equal("connecting MCP servers (1 of 3)", McpText.ConnectingProgress(1, 3));
-        Assert.Equal("cancelled", McpText.Cancelled);
         Assert.Equal(SpeechSession.ConnectCancelledDetail, McpText.Cancelled);
         Assert.Equal("Connected docker: 3 tools in 12 ms", McpText.ConnectedLogLine("docker", 3, TimeSpan.FromMilliseconds(12.7)));
         Assert.Equal("Failed docker: boom", McpText.FailedLogLine("docker", "boom"));

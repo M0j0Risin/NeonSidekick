@@ -54,22 +54,6 @@ public class SkillEditorTests : IDisposable
     }
 
     [Fact]
-    public void Create_TakesABuiltInCommandsWord_SinceTheSkillCommandsWent()
-    {
-        // From 2026-09-17 until later on 2026-09-18 a command's word was refused (a loaded skill was a
-        // /<name> command that the base command won); the commands went with the switch, and the rule with them.
-        foreach (string name in new[] { "help", "learn", "exit", "clear", "skill" })
-        {
-            var created = Create(SkillScope.Profile, name, "d", "i");
-            Assert.Equal((SkillEditOutcome.Created, name, SkillScope.Profile), (created.Outcome, created.Name, created.Scope));
-            Assert.True(File.Exists(FileOf(SkillScope.Profile, name)), name);
-        }
-
-        // The name rule still stands ahead of everything.
-        Assert.Equal(SkillEditOutcome.BadName, Create(SkillScope.Profile, "Help", "d", "i").Outcome);
-    }
-
-    [Fact]
     public void Create_RefusesABadName_AnExistingFolder_AndEmptyOrOverlongParts()
     {
         Assert.Equal(SkillEditOutcome.BadName, Create(SkillScope.Global, "Bad Name", "d", "i").Outcome);

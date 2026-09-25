@@ -14,13 +14,6 @@ public sealed class TurnStagesTests
     private static TurnEvent Result(string name) => new TurnEvent.ToolResult(name, "call_0001", "ok");
 
     [Fact]
-    public void Labels_ArePinned()
-    {
-        Assert.Equal("thinking", ChatScreen.ThinkingLabel);
-        Assert.Equal("writing", TurnStages.WritingLabel);
-    }
-
-    [Fact]
     public void PlainWords_FollowTheStages_ThinkingWritingToolThinking()
     {
         var stages = new TurnStages(funVerbs: false, new Random(7));

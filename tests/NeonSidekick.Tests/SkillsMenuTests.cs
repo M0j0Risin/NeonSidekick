@@ -132,8 +132,6 @@ public class SkillsMenuTests : IDisposable
     [Fact]
     public void Strings_ArePinned()
     {
-        Assert.Equal("Enter = move, rename, edit or delete · ←/→ tabs · ESC = close", SkillsMenu.LoadedKeys);   // rename 2026-09-21, edit 2026-09-23
-        Assert.Equal("←/→ tabs · ESC = close", SkillsMenu.OtherKeys);
         Assert.Equal("Enter = choose · ESC = back", SkillsMenu.ScopeKeys);
         Assert.Equal("delete", SkillsMenu.DeleteWord);
         Assert.Equal("(kept)", SkillsMenu.KeptNotice);
@@ -144,7 +142,6 @@ public class SkillsMenuTests : IDisposable
         Assert.Equal(2, SkillsMenu.ProjectTab);
         Assert.Equal(3, SkillsMenu.OptionsTab);   // last since 2026-09-22 (second before)
         Assert.Equal(["Options", "Reflection"], SkillsMenu.SettingsTabTitles);
-        Assert.Equal("Reflection", SkillsText.ReflectionTabTitle);
         Assert.Equal("profile  [#9A8BB8]" + _roots.Profile.Replace("[", "[[", StringComparison.Ordinal) + "[/]", SkillsMenu.ScopeRow(SkillScope.Profile, _roots));
         Assert.Equal("delete   [#9A8BB8]remove the folder and everything in it[/]", SkillsMenu.DeleteRow);
         // The rename (2026-09-21).
@@ -152,7 +149,6 @@ public class SkillsMenuTests : IDisposable
         Assert.Equal("rename   [#9A8BB8]give it a new name (letters, digits and hyphens)[/]", SkillsMenu.RenameRow);
         Assert.Equal("(🎓 renamed: haiku → my-haiku)", SkillsMenu.RenamedNotice("haiku", "my-haiku"));
         Assert.Equal("Could not rename skill 'haiku' to 'pdf': the global skills already hold it", SkillsMenu.RenameExistsError("haiku", "pdf", SkillScope.Global));
-        Assert.Equal("Could not rename the skill: the name needs at least one letter or digit", SkillsMenu.RenameEmptyError);
         Assert.Equal("Could not rename the skill: boom", SkillsMenu.RenameFailedError("boom"));
         // The edit row (2026-09-23): /skills edit <name>'s words, on the status line now.
         Assert.Equal("edit", SkillsMenu.EditWord);

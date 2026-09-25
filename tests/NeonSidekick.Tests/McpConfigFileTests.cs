@@ -30,7 +30,6 @@ public class McpConfigFileTests : IDisposable
     {
         Assert.Equal("mcp.json", McpConfigFile.FileName);
         Assert.Equal("Mcp", McpConfigFile.Category);
-        Assert.Equal("{\n  \"mcpServers\": {}\n}\n", McpConfigFile.EmptyText);
         Assert.Equal(Path.Combine(@"D:\home\profiles\work", "mcp.json"), McpConfigFile.ProfilePath(@"D:\home\profiles\work"));
         Assert.Equal(Path.Combine(@"D:\home", "mcp.json"), McpConfigFile.GlobalPath(@"D:\home"));
     }
@@ -130,10 +129,7 @@ public class McpConfigFileTests : IDisposable
                 (path, McpText.BlankName),
             ],
             load.Problems.Select(p => (p.Source, p.Reason)));
-        Assert.Equal("names neither a command nor a url", McpText.NeitherCommandNorUrl);
-        Assert.Equal("names both a command and a url; one or the other", McpText.BothCommandAndUrl);
         Assert.Equal("the url 'not a url' is not an absolute http(s) address", McpText.BadUrl("not a url"));
-        Assert.Equal("a server with a blank name was skipped", McpText.BlankName);
         Assert.Equal(path + " › neither: names neither a command nor a url", McpText.ProblemLine(load.Problems[0]));
     }
 

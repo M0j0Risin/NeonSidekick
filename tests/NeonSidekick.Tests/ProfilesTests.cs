@@ -64,13 +64,10 @@ public class ProfilesTests : IDisposable
         Assert.Equal("profiles", Profiles.DirectoryName);
         Assert.Equal("default", Profiles.DefaultName);
         Assert.Equal("profile.json", Profiles.FileName);
-        Assert.Equal("must be 1 to 32 letters, digits, - or _ (and not neon, add, delete, edit, reload, rename or reset)", Profiles.NameError);   // edit and reload reserved since 2026-09-21, neon later that day
         Assert.Equal("neon", Profiles.SidekickName);
         Assert.False(Profiles.IsValidName("edit"));
         Assert.False(Profiles.IsValidName("Reload"));
-        Assert.Equal("The default profile cannot be deleted.", Profiles.DefaultUndeletable);
         Assert.Equal("\"work\" is the current profile; switch to another (/profile <name>) before deleting it.", Profiles.CurrentUndeletable("work"));
-        Assert.Equal("The default profile cannot be renamed.", Profiles.DefaultUnrenamable);
         Assert.Equal("\"work\" is the current profile; switch to another (/profile <name>) before renaming it.", Profiles.CurrentUnrenamable("work"));
     }
 
@@ -376,7 +373,6 @@ public class ProfilesTests : IDisposable
         Assert.Null(Profiles.ResetRefusal("DEFAULT", "default"));   // the default resets itself
         Assert.Null(Profiles.ResetRefusal("Work", "work"));         // the loaded one may reset
         Assert.Null(Profiles.ResetRefusal("work", "default"));      // and any other from anywhere
-        Assert.Equal("The default profile can only be reset while it is loaded.", Profiles.DefaultUnresettable);
     }
     [Fact]
     public void CreateDeleteRename_EachLogOneLine()

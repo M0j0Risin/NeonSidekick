@@ -27,7 +27,6 @@ public static class GitText
     public const string CheckoutConflict = "Error: that would overwrite local changes; commit or stash them first";
     public const string Conflicts = "Error: the index has unmerged conflicts; the user resolves them first";
     public const string BadDiffArguments = "Error: give ref alone, from with to, or staged — not a mix";
-    public const string DiffLegend = "the patch below is a unified diff; narrow it with path when it is cut";
 
     public static string NoRepository(string root) => $"Error: '{root}' is not inside a git repository; /cwd into one, or ask the user to git init it";
     public static string AboveSandbox(string workTree) => $"Error: the repository's root '{workTree}' is above the working directory, so the git tools cannot reach it; the user can /cwd to the repository's root";
@@ -37,7 +36,6 @@ public static class GitText
     public static string TrashReadOnly(string path) => $"Error: '{path}' is in the .trash folder, which git never touches";
     public static string NotInRepository(string path) => $"Error: '{path}' is not inside the repository";
     public static string Missing(string path) => $"Error: '{path}' is not there";
-    public static string MissingAt(string path, string reference) => $"Error: '{path}' is not in {reference}";
     public static string RefNotFound(string reference) => $"Error: '{reference}' names no commit, branch or tag";
     public static string RefAmbiguous(string reference) => $"Error: '{reference}' is ambiguous; give a longer sha or the full name";
     public static string NoStash(string index) => $"Error: there is no stash@{{{index}}}";

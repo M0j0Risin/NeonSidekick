@@ -248,8 +248,10 @@ public class SessionStoreTests : IDisposable
         Assert.StartsWith("Could not open sessions.db; sessions are off: ", warning.Message);
     }
 
-    [Fact]
-    public void ANewerSchema_IsRefused_AsUnavailable()
+    [Theory]
+    [InlineData(99)]
+    [InlineData(2)]   // an older file is refused as well since the migrations went (2026-09-24)
+    public void AnotherSchema_IsRefused_AsUnavailable_WithOneWarning(long stored)
     {
         long id = Begin();
         _store.Dispose();
@@ -257,102 +259,27 @@ public class SessionStoreTests : IDisposable
         {
             connection.Open();
             using var bump = connection.CreateCommand();
-            bump.CommandText = "UPDATE meta SET value = 99 WHERE key = 'schema'";
+            bump.CommandText = "UPDATE meta SET value = $v WHERE key = 'schema'";
+            bump.Parameters.AddWithValue("$v", stored);
             bump.ExecuteNonQuery();
         }
 
-        using var newer = new SessionStore(_dir, _time);
-        Assert.False(newer.Available);
-        Assert.Null(newer.Load(id));
-    }
-
-    [Fact]
-    public void ASchemaOneFile_IsMigratedOnOpen_TheSkillCallsColumnDropped_ThenTheTelemetryAdded()
-    {
-        // Schema 1 (2026-09-18) carried the /skill <name> activation counter; the name form went later
-        // that day and the column with it — an existing file is brought to schema 2 in place, then (2026-09-19)
-        // to schema 3, the chain running both steps in order, one Info line each.
-        Directory.CreateDirectory(_dir);
-        SessionStore.WriteSchema1File(Path.Combine(_dir, SessionStore.FileName), "old chat");
-        var events = new List<DiagnosticEvent>();
-        Action<DiagnosticEvent> capture = e => { if (e.Category == "Sessions") { events.Add(e); } };
+        var warnings = new List<DiagnosticEvent>();
+        Action<DiagnosticEvent> capture = e => { if (e.Category == "Sessions" && e.Level >= DiagnosticLevel.Warning) { warnings.Add(e); } };
         DiagnosticLog.Emitted += capture;
         try
         {
-            using (var store = new SessionStore(_dir, _time))
-            {
-                Assert.True(store.HasColumn("sessions", "title"));
-                Assert.False(store.HasColumn("sessions", "skill_calls"));
-                Assert.True(store.HasColumn("turns", "tool_names"));
-                Assert.True(store.HasColumn("turns", "skills_loaded"));
-                Assert.True(store.HasColumn("turns", "errors"));
-                Assert.True(store.HasColumn("reflections", "outcome"));
-                Assert.Equal(3, store.SchemaStored());
-                Assert.True(store.Available);
-                var record = store.Load(1);
-                Assert.NotNull(record);
-                Assert.Equal("old chat", record.Summary.Title);
-                Assert.Equal("[]", record.HistoryJson);
-                // The legacy turn reads as no names, no errors (the columns' defaults).
-                var legacy = Assert.Single(record.Turns);
-                Assert.Equal(("legacy question", 2, 0, 0, 0), (legacy.UserText, legacy.ToolCalls, legacy.ToolNames.Count, legacy.SkillsLoaded.Count, legacy.Errors));
-
-                // The migrated file works as a fresh one: a turn appended and found, a session begun.
-                store.AppendTurn(1, "hello", "hi", 0, [], [], 0, 1, 1, false);
-                Assert.Single(store.Search("hello", 5));
-                Assert.Equal(2, store.Begin("new", "m"));
-            }
-
-            // Opened again: nothing to migrate, no second notice.
-            using (var again = new SessionStore(_dir, _time))
-            {
-                Assert.Equal(3, again.SchemaStored());
-                Assert.Equal(2, again.Count);
-            }
+            using var other = new SessionStore(_dir, _time);
+            Assert.False(other.Available);
+            Assert.Null(other.Load(id));
         }
         finally
         {
             DiagnosticLog.Emitted -= capture;
         }
 
-        // The store's own Debug lines (a turn appended, a session begun) ride along since 2026-09-19; the two notices are the Info lines.
-        Assert.Equal([SessionStore.MigratedNotice, SessionStore.MigratedToThreeNotice], events.Where(e => e.Level >= DiagnosticLevel.Info).Select(e => e.Message));
-        Assert.Equal("sessions.db was migrated from schema 1 to 2 (the skill_calls column dropped).", SessionStore.MigratedNotice);
-        Assert.Equal("sessions.db was migrated from schema 2 to 3 (the turns' tool names, loaded skills and error counts; the reflections table).", SessionStore.MigratedToThreeNotice);
-    }
-
-    [Fact]
-    public void ASchemaTwoFile_IsMigratedOnOpen_TheTelemetryColumnsAdded_TheReflectionsTableEmpty()
-    {
-        // Schema 2 (later on 2026-09-18 until 2026-09-19): no telemetry columns, no reflections table.
-        Directory.CreateDirectory(_dir);
-        SessionStore.WriteSchema2File(Path.Combine(_dir, SessionStore.FileName), "yesterday");
-        var events = new List<DiagnosticEvent>();
-        Action<DiagnosticEvent> capture = e => { if (e.Category == "Sessions") { events.Add(e); } };
-        DiagnosticLog.Emitted += capture;
-        try
-        {
-            using var store = new SessionStore(_dir, _time);
-            Assert.Equal(3, store.SchemaStored());
-            Assert.True(store.HasColumn("turns", "tool_names"));
-            Assert.True(store.HasColumn("turns", "skills_loaded"));
-            Assert.True(store.HasColumn("turns", "errors"));
-            Assert.Null(store.LastReflectionWrite());
-            Assert.Null(store.SkillUsageOf("anything"));
-            var record = store.Load(1);
-            Assert.NotNull(record);
-            Assert.Equal("yesterday", record.Summary.Title);
-            Assert.Equal([], Assert.Single(record.Turns).ToolNames);
-            // The legacy turn is in the FTS index: the fixture wrote the triggers as the old code did.
-            Assert.Single(store.Search("legacy", 5));
-        }
-        finally
-        {
-            DiagnosticLog.Emitted -= capture;
-        }
-
-        var notice = Assert.Single(events, e => e.Level >= DiagnosticLevel.Info);
-        Assert.Equal(SessionStore.MigratedToThreeNotice, notice.Message);
+        Assert.Equal(SessionStore.SchemaMismatchWarning(stored), Assert.Single(warnings).Message);
+        Assert.Equal("sessions.db is at schema 2, this version reads 3; sessions are off until it is moved away.", SessionStore.SchemaMismatchWarning(2));
     }
 
     [Fact]

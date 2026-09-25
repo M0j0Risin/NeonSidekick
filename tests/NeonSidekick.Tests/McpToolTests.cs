@@ -87,7 +87,6 @@ public class McpToolTests
     {
         Assert.Equal("one\ntwo", McpTool.Render(new CallToolResult { Content = [new TextContentBlock { Text = "one" }, new TextContentBlock { Text = "two" }] }));
         Assert.Equal("(no content)", McpTool.Render(new CallToolResult { Content = [] }));
-        Assert.Equal("(no content)", McpText.NoContent);
         Assert.Equal("(an image block was dropped)", McpTool.Render(new CallToolResult { Content = [new ImageContentBlock { Data = new byte[] { 1 }, MimeType = "image/png" }] }));
         Assert.Equal("(an audio block was dropped)", McpTool.Render(new CallToolResult { Content = [new AudioContentBlock { Data = new byte[] { 1 }, MimeType = "audio/wav" }] }));
         Assert.Equal("(a resource_link block was dropped)", McpText.BlockDropped("resource_link"));
@@ -105,7 +104,6 @@ public class McpToolTests
         Assert.Equal("Reads a file. Use for text.", McpText.OneLine("  Reads a file.\n\n   Use for\tstext.".Replace("stext", "text")));
         Assert.Equal("", McpText.OneLine(null));
         Assert.Equal("", McpText.OneLine("  \n "));
-        Assert.Equal("(no description)", McpText.NoDescription);
     }
 
     /// <summary>The whole path: the pipe server listed through the real client, wrapped, invoked through the turn loop's static, the echo back.</summary>

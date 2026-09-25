@@ -55,13 +55,7 @@ public class ToolsTextTests : IDisposable
     public void Labels_ArePinned()
     {
         Assert.Equal("🛠️ Tools", ToolsText.Label);
-        Assert.Equal("Offered", ToolsText.OfferedTabTitle);
         Assert.Equal(["Offered", "Web", "Files", "Shell", "Ask", "Git (native)", "Obsidian", "SQL", "ComfyUI", "Options"], ToolsText.TabTitles);   // SQL 2026-09-23, Obsidian 2026-09-22, Options last later that day   // Options second since later on 2026-09-19; Git since 2026-09-20, Shell since 2026-09-21; the user's order and Git (native) since later on 2026-09-21 (alphabetical before)
-        Assert.Equal("Git (native)", ToolsText.GitTabTitle);
-        Assert.Equal("Options", ToolsText.OptionsTabTitle);
-        Assert.Equal("Enter / Space = on or off · ←/→ tabs · ESC = close", ToolsText.OfferedKeys);
-        Assert.Equal("LLM offer tools is off (the LLM tab of /settings): nothing is offered; a switch here saves for when it is on again.", ToolsText.OffLine);
-        Assert.Equal("(off: no pane)", ToolsText.NoPaneSuffix);
         Assert.Equal("(off: File tools is off)", ToolsText.GroupOffSuffix("File tools"));
         Assert.Equal("read_file: off", ToolsText.FlippedNotice("read_file", false));
         Assert.Equal("read_file: on", ToolsText.FlippedNotice("read_file", true));
@@ -69,8 +63,6 @@ public class ToolsTextTests : IDisposable
         Assert.Equal(SystemPromptSummary.ToolNameWidth, ToolsText.NameWidth);
         Assert.Equal(5, ToolsText.StateWidth);
         // The summary's per-tool notes (2026-09-19).
-        Assert.Equal("switched off in /tools", SystemPromptSummary.DisabledSuffix);
-        Assert.Equal("no skill installed", SystemPromptSummary.NoSkillSuffix);
         Assert.Equal("recall_memory is off in /tools", SystemPromptSummary.ToolOff(RecallMemoryTool.ToolName));
         Assert.Equal("Files (15)", SystemPromptSummary.GroupName("Files", 15, 15));
         Assert.Equal("Files (13 of 15)", SystemPromptSummary.GroupName("Files", 13, 15));

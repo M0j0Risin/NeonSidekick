@@ -28,9 +28,6 @@ public sealed class AppSettings : IDisposable
     /// <summary>The log category of every settings line, <see cref="Profiles"/>' too.</summary>
     public const string Category = "Settings";
 
-    /// <summary>The root files a pre-profile install kept next to <c>settings.json</c>; moved into the default profile once.</summary>
-    private static readonly string[] MigratedFiles = { "memory.json", "persona.md" };
-
     /// <summary>
     /// How long a burst of edits coalesces. Long enough that a menu that touches six fields
     /// writes once; short enough that a user who changes something and immediately kills the
@@ -52,13 +49,8 @@ public sealed class AppSettings : IDisposable
         StorageDirectory = storageDirectory;
         PointerPath = Path.Combine(storageDirectory, FileName);
 
-        var pointer = LoadPointer(PointerPath, out bool oldShape, out var oldSettings);
-        bool rewritePointer = oldShape || !File.Exists(PointerPath);
-
-        if (oldShape)
-        {
-            Migrate(oldSettings);
-        }
+        var pointer = LoadPointer(PointerPath);
+        bool rewritePointer = !File.Exists(PointerPath);
 
         string? resolved = Profiles.Resolve(storageDirectory, pointer.Profile);
         if (resolved is null)
@@ -445,15 +437,13 @@ public sealed class AppSettings : IDisposable
     }
 
     /// <summary>
-    /// Reads the root file. <paramref name="oldShape"/> is true for a file from before profiles:
-    /// the full settings with no <c>Profile</c> property, handed back in
-    /// <paramref name="oldSettings"/> for <see cref="Migrate"/>. Missing or unreadable is a pointer
-    /// to the default, logged as the settings file always was.
+    /// Reads the root file. Missing or unreadable is a pointer to the default, logged as the
+    /// settings file always was. The one-time move of a pre-profile root file (the full settings,
+    /// no <c>Profile</c> property) into <c>profiles\default</c> went on 2026-09-24, the user's call:
+    /// such a file now reads as a pointer to the default profile, its settings not carried over.
     /// </summary>
-    private static RootSettingsData LoadPointer(string path, out bool oldShape, out AppSettingsData? oldSettings)
+    private static RootSettingsData LoadPointer(string path)
     {
-        oldShape = false;
-        oldSettings = null;
         try
         {
             if (!File.Exists(path))
@@ -462,19 +452,6 @@ public sealed class AppSettings : IDisposable
             }
 
             string json = File.ReadAllText(path);
-            using (var document = JsonDocument.Parse(json))
-            {
-                oldShape = document.RootElement.ValueKind == JsonValueKind.Object
-                    && !document.RootElement.TryGetProperty(nameof(RootSettingsData.Profile), out _);
-            }
-
-            if (oldShape)
-            {
-                oldSettings = JsonSerializer.Deserialize(json, SettingsJsonContext.Default.AppSettingsData);
-                DiagnosticLog.Info(Category, $"{FileName} is from before profiles; migrating it into the {Profiles.DefaultName} profile.");
-                return new RootSettingsData();
-            }
-
             var loaded = JsonSerializer.Deserialize(json, SettingsJsonContext.Default.RootSettingsData);
             if (loaded is not null)
             {
@@ -493,51 +470,6 @@ public sealed class AppSettings : IDisposable
         }
 
         return new RootSettingsData();
-    }
-
-    /// <summary>
-    /// The one-time move from the flat layout into <c>profiles\default</c>: the old settings become
-    /// its <c>profile.json</c> when it has none, and a root <c>memory.json</c> / <c>persona.md</c>
-    /// is moved in when the profile has none of its own. Nothing in a profile is ever overwritten
-    /// and nothing in the root is deleted; a step that fails is one Warning and the launch goes on.
-    /// </summary>
-    private void Migrate(AppSettingsData? oldSettings)
-    {
-        string profileFile = Profiles.ProfileFile(StorageDirectory, Profiles.DefaultName);
-        if (oldSettings is not null && !File.Exists(profileFile))
-        {
-            try
-            {
-                Profiles.Create(StorageDirectory, Profiles.DefaultName, oldSettings);
-                DiagnosticLog.Info(Category, $"Moved the settings into {profileFile}.");
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-            {
-                DiagnosticLog.Warn(Category, $"Could not write {profileFile}; the {Profiles.DefaultName} profile starts from defaults: {ex.Message}", ex);
-            }
-        }
-
-        string profileDir = Profiles.Directory(StorageDirectory, Profiles.DefaultName);
-        foreach (var file in MigratedFiles)
-        {
-            string source = Path.Combine(StorageDirectory, file);
-            string target = Path.Combine(profileDir, file);
-            if (!File.Exists(source) || File.Exists(target))
-            {
-                continue;
-            }
-
-            try
-            {
-                Directory.CreateDirectory(profileDir);
-                File.Move(source, target);
-                DiagnosticLog.Info(Category, $"Moved {file} into the {Profiles.DefaultName} profile.");
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-            {
-                DiagnosticLog.Warn(Category, $"Could not move {file} into the {Profiles.DefaultName} profile: {ex.Message}", ex);
-            }
-        }
     }
 
     /// <summary>

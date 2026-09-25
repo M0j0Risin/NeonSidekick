@@ -402,14 +402,12 @@ public sealed class GitToolsTests : IDisposable
         Assert.Equal("Error: there is no commit to amend yet", GitText.Error(GitOutcome.NothingToAmend, ""));
         Assert.Equal("Error: the index has unmerged conflicts; the user resolves them first", GitText.Error(GitOutcome.Conflicts, ""));
         Assert.Equal(GitText.NoIdentity, GitText.Error(GitOutcome.NoIdentity, ""));
-        Assert.Equal("Error: git has no user.name / user.email for commits; ask the user to run git config --global user.name \"…\" and git config --global user.email \"…\", then try again", GitText.NoIdentity);
         Assert.Equal("Error: 'x.png' is binary", GitText.Error(GitOutcome.Binary, "x.png"));
         Assert.Equal("Error: 'big' is too big to read as text", GitText.Error(GitOutcome.TooBig, "big"));
         Assert.Equal("Error: at most 100 paths in one call", GitText.Error(GitOutcome.TooManyPaths, ""));
         Assert.Equal("Error: git refused (boom)", GitText.Error(GitOutcome.Failed, "boom"));
         Assert.Equal("Error: git refused ()", GitText.Error(GitOutcome.Ok, ""));
         Assert.Equal("first line", GitText.Note("first line\nsecond"));
-        Assert.Equal("A added · M modified · D deleted · R renamed · T type changed · ? untracked · U conflict", GitText.Legend);
         Assert.Equal("2026-09-20 14:05", GitText.When(new DateTimeOffset(2026, 9, 20, 21, 5, 0, TimeSpan.Zero), TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time")));
         Assert.Equal("Files changed (2, +3 −1):\nM a (+3 −1)\nD b (binary)", GitText.FilesChanged([new GitChange('M', "a", null, 3, 1, false), new GitChange('D', "b", null, 0, 0, true)], truncated: false));
         Assert.Equal("No files changed", GitText.FilesChanged([], truncated: false));

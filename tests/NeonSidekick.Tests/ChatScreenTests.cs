@@ -1313,7 +1313,7 @@ public partial class ChatScreenTests : IDisposable
 
         Assert.Contains("› hello", output);
         Assert.Contains("● Hi there.", output);
-        Assert.Contains(ChatScreen.TranscribingLabel, output);   // the label the fakes leave on the spinner's last frame
+        Assert.Contains(VoicePipeline.TranscribingLabel, output);   // the label the fakes leave on the spinner's last frame
         Assert.Single(_chat.Requests);
         Assert.Equal("hello", UserText(_chat.Requests[0]));
         Assert.Equal(new[] { "start", "stop" }, _capture.Log);
@@ -2142,7 +2142,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.True(_voice.WakeReady);
         Assert.Contains("› what time is it?", output);
         Assert.Contains("● It is noon.", output);
-        Assert.Contains(ChatScreen.TranscribingLabel, output);
+        Assert.Contains(VoicePipeline.TranscribingLabel, output);
         Assert.Equal("what time is it?", UserText(_chat.Requests[0]));
         Assert.Equal(3200, _recognizer.Received[0].Length);       // the seed, nothing else
         Assert.Equal(new[] { "start", "stop", "start", "stop" }, _capture.Log);   // the listener, then re-armed for the next line after the tail; never the pipeline
@@ -2222,7 +2222,7 @@ public partial class ChatScreenTests : IDisposable
 
         Assert.Contains("› Tell me a joke.", output);
         Assert.DoesNotContain("› Neon", output);
-        Assert.Contains(ChatScreen.TranscribingLabel, output);   // the spinner's last frame; the wake label is pinned separately
+        Assert.Contains(VoicePipeline.TranscribingLabel, output);   // the spinner's last frame; the wake label is pinned separately
         Assert.Equal(3200 + 3200, _recognizer.Received[0].Length);   // seed + live audio
         Assert.Equal(3, _capture.Started);                          // listener, pipeline, listener again
         Assert.Equal("Tell me a joke.", UserText(_chat.Requests[0]));
@@ -2844,7 +2844,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("● Drafted.", output);
         Assert.Equal(2, _chat.Requests.Count);
         Assert.Equal("draft", _chat.Requests[1][^1].Text);
-        Assert.DoesNotContain(ChatScreen.TranscribingLabel, output);   // no follow-up listen
+        Assert.DoesNotContain(VoicePipeline.TranscribingLabel, output);   // no follow-up listen
     }
 
     [Fact]
@@ -3564,28 +3564,6 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("  🛠️ 1 memory recalled\n● Hi Chris.", output);
         Assert.DoesNotContain(RecallMemoryTool.ToolName, output);
         Assert.DoesNotContain("- Their name is Chris.", output);
-    }
-
-    [Fact]
-    public async Task RetiredToolSwitches_AreUnknownCommands_AndFlipNothing()
-    {
-        // /web, /files and /ask went later on 2026-09-18 (the user's call): the Web tools / File tools / Ask user rows are the one switch.
-        _settings.Update(d => d.TtsOutput = false);
-        PushLine("/web");
-        PushLine("/files off");
-        PushLine("/ask on");
-        PushLine("/exit");
-
-        string output = await RunAsync();
-
-        Assert.Contains("  ✗ " + ChatScreen.UnknownCommandError("/web"), output);
-        Assert.Contains("  ✗ " + ChatScreen.UnknownCommandError("/files"), output);
-        Assert.Contains("  ✗ " + ChatScreen.UnknownCommandError("/ask"), output);
-        Assert.DoesNotContain("tools off", output);
-        Assert.True(_settings.Current.WebTools);
-        Assert.True(_settings.Current.FileTools);
-        Assert.True(_settings.Current.AskUser);
-        Assert.Empty(_chat.Requests);
     }
 
     [Fact]
@@ -5259,7 +5237,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal([ChatRole.System, ChatRole.User], _chat.Requests[0].Select(m => m.Role));
         Assert.Equal([ChatRole.System, ChatRole.User, ChatRole.Assistant, ChatRole.User], _chat.Requests[1].Select(m => m.Role));
         Assert.All(_chat.Options, o => Assert.Null(o!.Tools));
-        Assert.Equal(Assistant.DefaultPersona + " " + Assistant.OperatingRulesWithoutTools + "\n\n" + MemoryPrompt.DirectiveWithoutTool, _chat.Requests[0][0].Text);
+        Assert.Equal(Assistant.DefaultPersona + " " + Assistant.PlainTextRule + "\n\n" + MemoryPrompt.DirectiveWithoutTool, _chat.Requests[0][0].Text);
         Assert.DoesNotContain(GetCurrentTimeTool.ToolName, _chat.Requests[0][0].Text!);
     }
 
@@ -5702,7 +5680,6 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(QueueAction.Invalid, ChatScreen.ParseQueueArgs("now"));
         Assert.Equal(QueueAction.Invalid, ChatScreen.ParseQueueArgs("clear all"));
         Assert.Equal("clear", ChatScreen.QueueClearWord);
-        Assert.Equal("/queue lists the queued messages; /queue clear drops them all.", ChatScreen.QueueUsageError);
         Assert.Equal([new CompletionItem("clear", ChatScreen.QueueClearNote)], ChatScreen.ArgumentItems("/queue", "", Sources()));
         Assert.Equal([new CompletionItem("clear", ChatScreen.QueueClearNote)], ChatScreen.ArgumentItems("/queue", "cl", Sources()));
         Assert.Empty(ChatScreen.ArgumentItems("/queue", "x", Sources()));
@@ -5778,10 +5755,6 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(new MemoryAction(MemoryActionKind.Invalid), ChatScreen.ParseMemoryArgs("copy work overwrite please"));
         Assert.Equal("forget", ChatScreen.MemoryForgetWord);
         Assert.Equal("edit", ChatScreen.MemoryEditWord);
-        Assert.Equal("open memory.json in your editor", ChatScreen.MemoryEditNote);
-        Assert.Equal("copy", ChatScreen.CopyWord);
-        Assert.Equal("overwrite", ChatScreen.OverwriteWord);
-        Assert.Equal("/memory lists the memories, /memory forget forgets them all, /memory edit opens memory.json in your editor, and /memory copy <profile> [overwrite] copies them into another profile.", ChatScreen.MemoryUsageError);
         Assert.Equal([new CompletionItem("forget", ChatScreen.MemoryForgetNote), new CompletionItem("copy", ChatScreen.MemoryCopyNote), new CompletionItem("edit", ChatScreen.MemoryEditNote)], ChatScreen.ArgumentItems("/memory", "", Sources()));
         Assert.Equal([new CompletionItem("forget", ChatScreen.MemoryForgetNote)], ChatScreen.ArgumentItems("/memory", "fo", Sources()));
         Assert.Equal([new CompletionItem("copy", ChatScreen.MemoryCopyNote)], ChatScreen.ArgumentItems("/memory", "co", Sources()));
@@ -5849,13 +5822,9 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public void MemoryLabels_ArePinned()
     {
-        Assert.Equal("/remember takes the text to keep: /remember <text>", ChatScreen.RememberUsageError);
         Assert.Equal("💾 Memory is off; turn it on in /settings (the Memory row).", ChatScreen.MemoryOffNotice);
         Assert.Equal("Memory is full (200 entries); /memory forget clears it.", ChatScreen.MemoryFullError);
-        Assert.Equal("Could not save the memory; the log has the reason.", ChatScreen.MemoryFailedError);
         Assert.Equal("(💾 nothing to forget)", ChatScreen.NothingToForgetNotice);
-        Assert.Equal("forget every memory", ChatScreen.MemoryForgetNote);
-        Assert.Equal("(kept)", ChatScreen.KeptNotice);
         Assert.Equal("(💾 remembered: x)", ChatScreen.RememberedNotice("x"));
         Assert.Equal("(💾 already remembered: x)", ChatScreen.AlreadyRememberedNotice("x"));
         Assert.Equal("💾 Forget 3 memories?", ChatScreen.ForgetPrompt(3));
@@ -5871,7 +5840,6 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public void Labels_ArePinned()
     {
-        Assert.Equal("/interrupt takes on or off, or nothing to toggle.", ChatScreen.InterruptUsageError);
         Assert.Equal("✋ Interrupting on; it works once voice input (/stt) and speech output (/tts) are on.", ChatScreen.InterruptOnNeedsVoiceNotice);
         Assert.Equal("✋ Interrupting off.", ChatScreen.InterruptOffNotice);
         Assert.Equal("✋ Interrupting works only while a reply is spoken; /tts turns speech output on.", ChatScreen.InterruptNeedsSpeechNotice);
@@ -5880,17 +5848,12 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("(✋ interrupted)", ChatScreen.InterruptedNotice);
         Assert.Equal("interrupted — say your request…  F4 or Enter = done   ESC = discard", ChatScreen.InterruptedLabel("F4"));
         Assert.Equal(TimeSpan.FromMilliseconds(300), ChatScreen.InterruptSettle);
-        Assert.Equal("switched off after two interruptions heard nothing", ChatScreen.InterruptDisabledReason);
         Assert.Equal("heard \"neon\"…  F4 or Enter = done   ESC = discard", ChatScreen.WakeListeningLabel("neon", "F4"));
-        Assert.Equal("/wake takes on or off, or nothing to toggle.", ChatScreen.WakeUsageError);
         Assert.Equal("👂 Wake word on; it listens once voice input is on (/stt).", ChatScreen.WakeOnNeedsVoiceNotice);
         Assert.Equal("👂 Wake word off.", ChatScreen.WakeOffNotice);
         Assert.Equal("listening…  F4 or Enter = done   ESC = discard", ChatScreen.ListeningLabel("F4"));
-        Assert.Equal("transcribing…", ChatScreen.TranscribingLabel);
-        Assert.Equal("preparing voice input", ChatScreen.VoiceConnectingLabel);
         Assert.Equal("(🎤 heard nothing)", ChatScreen.HeardNothingNotice);
         Assert.Equal("(🎤 discarded)", ChatScreen.VoiceDiscardedNotice);
-        Assert.Equal("/stt takes on or off, or nothing to toggle.", ChatScreen.VoiceUsageError);
         Assert.Equal("🎤 Voice input is off; /stt turns it on.", ChatScreen.VoiceOffHint);
     }
 
@@ -5912,7 +5875,6 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public void ProfileStrings_ArePinned()
     {
-        Assert.Equal("/profile takes nothing (pick), a name, add <name>, delete <name>, rename <name> <new-name>, reset [name], edit or reload.", ChatScreen.ProfileUsageError);
         Assert.Equal("Profile name must be 1 to 32 letters, digits, - or _ (and not neon, add, delete, edit, reload, rename or reset).", ChatScreen.ProfileNameError);
         // /profile edit and /profile reload (2026-09-21).
         Assert.Equal("(🪪 opened profile \"x\"'s profile.json in your editor; /profile reload reads it back)", ChatScreen.ProfileEditOpenedNotice("x"));
@@ -5990,7 +5952,6 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public void GitLabels_ArePinned()
     {
-        Assert.Equal("/git takes user [force].", ChatScreen.GitUsageError);
         Assert.Equal("Git native email and Git native name are not set; set them on the Git (native) tab of /tools.", ChatScreen.GitIdentityUnsetError(true, true));
         Assert.Equal("Git native email is not set; set it on the Git (native) tab of /tools.", ChatScreen.GitIdentityUnsetError(true, false));
         Assert.Equal("Git native name is not set; set it on the Git (native) tab of /tools.", ChatScreen.GitIdentityUnsetError(false, true));
@@ -6000,8 +5961,6 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(@"'D:\x' is not inside a git repository; /cwd into one first.", ChatScreen.GitNoRepositoryError(@"D:\x"));
         Assert.Equal("Could not write the git identity: why", ChatScreen.GitIdentityFailedError("why"));
         Assert.Equal(["user", "user force"], ChatScreen.GitVerbs.Select(v => v.Text));
-        Assert.Equal("write the Git native email and Git native name settings into this repository's .git/config", ChatScreen.GitUserNote);
-        Assert.Equal("the same, replacing a [user] section already there", ChatScreen.GitUserForceNote);
         Assert.Equal(["user"], ChatScreen.ArgumentItems("/git", "", Sources()).Select(i => i.Text));
         Assert.Equal(["user"], ChatScreen.ArgumentItems("/git", "us", Sources()).Select(i => i.Text));
         Assert.Equal(["user force"], ChatScreen.ArgumentItems("/git", "user ", Sources()).Select(i => i.Text));
@@ -6385,8 +6344,6 @@ public partial class ChatScreenTests : IDisposable
     public void LoopStrings_AndArgumentList_ArePinned()
     {
         Assert.Equal("infinite", ChatScreen.LoopInfiniteWord);
-        Assert.Equal("send the message until ESC or Ctrl+C stops it: /loop infinite [delay] <message>", ChatScreen.LoopInfiniteNote);
-        Assert.Equal("Usage: /loop <count> [delay] <message>, or /loop infinite [delay] <message>; delay like 30s, 5m, 1h30m (ESC or Ctrl+C stops it).", ChatScreen.LoopUsageError);
         Assert.Equal("(loop waiting 30 seconds)", ChatScreen.LoopWaitNotice(TimeSpan.FromSeconds(30)));
         Assert.Equal("(loop waiting 1 hour 30 minutes)", ChatScreen.LoopWaitNotice(TimeSpan.FromMinutes(90)));
         Assert.Equal(TimeSpan.FromHours(24), ChatScreen.LoopMaxDelay);
@@ -7991,7 +7948,6 @@ public partial class ChatScreenTests : IDisposable
         // The label column follows the widest key ("Left / Right", 12 cells) + the gap of 2.
         Assert.Contains("Ctrl+Home     scroll to top of the chat pane", output);
         Assert.Contains("Ctrl+End      scroll to bottom of the chat pane", output);
-        Assert.DoesNotContain("Mouse         click places the cursor", output);   // the six rows went later on 2026-09-20
         Assert.Contains("Ctrl+C        copy the selected text · stop the speech · cancel the reply · twice to exit", output);
         Assert.DoesNotContain("F4", output[output.IndexOf("Help   Commands    Keys", StringComparison.Ordinal)..]);
         // ESC: the normal pane again, and the next line is read as usual.
@@ -8896,7 +8852,6 @@ public partial class ChatScreenTests : IDisposable
         }
 
         Assert.Equal(lines.Length, line);
-        Assert.Equal(59, lines.Length);   // 51 commands + 8 blank rows: /imagine and /comfy under /view on 2026-09-24; /theme under /splash on 2026-09-23; /police under /cmdlist later still on 2026-09-22; /vault under /tree later still on 2026-09-22; /expand and /collapse under /loop later on 2026-09-22; /forget went 2026-09-22, its wipe now /memory forget, and /memcopy later that day, its copy now /memory copy; /cmdlist under /cmdcopy later on 2026-09-21; /cmdcopy under /memcopy 2026-09-21; /loop under /draft 2026-09-21; /git under /emptytrash 2026-09-21; /mcp under /tools 2026-09-20; /splash under /new later still on 2026-09-19; /draft under /copy since 2026-09-19; nine groups since later on 2026-09-19 (/skills + /learn under /sessions, /window under /view, /timer under /help); 39 + 10 with /tools under /settings that morning (38 + 10 since the three tool switches went, 2026-09-18)
         Assert.StartsWith(HelpRow("/settings, //", "edit and save settings"), lines[0]);
         Assert.StartsWith(HelpRow("/profile", "switch profiles, or /profile <name> | add <name> | delete <name> | rename <name> <new-name> | reset [name] | edit | reload"), lines[1]);   // the user's order since 2026-09-22: the profile and its sessions ahead of the tool panes
         Assert.StartsWith(HelpRow("/sessions", "list, restore and purge sessions: /sessions [<id> | purge <id> | purge older <age> | purge all | title <text>]"), lines[2]);   // under /profile since later on 2026-09-18
@@ -9249,7 +9204,6 @@ public partial class ChatScreenTests : IDisposable
     {
         Assert.Equal(@"🗑️ Empty D:\x\.trash — 3 files, 1 folder, 1.2 KB?", ChatScreen.EmptyTrashPrompt(@"D:\x\.trash", 3, 1, 1_234, false));
         Assert.Equal(@"🗑️ Empty D:\x\.trash — 1 file, 0 folders, 0 B, counted the first 10,000 entries only?", ChatScreen.EmptyTrashPrompt(@"D:\x\.trash", 1, 0, 0, true));
-        Assert.Equal(" y = yes, anything else = keep", ChatScreen.TypedConfirmSuffix);
         Assert.Equal(@"(🗑️ nothing in D:\x\.trash)", ChatScreen.TrashAlreadyEmptyNotice(@"D:\x\.trash"));
         Assert.Equal("(🗑️ emptied the trash: 2 files, 2 folders, 8 B)", ChatScreen.TrashEmptiedNotice(2, 2, 8));
         Assert.Equal("Could not empty the trash: locked", ChatScreen.EmptyTrashFailedError("locked"));
@@ -10077,7 +10031,6 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("(🎤 voice input off — applies when this reply ends)", ChatScreen.MidTurnSwitchNotice(ChatScreen.VoiceInputWord, false));
         Assert.Equal("wake word", ChatScreen.WakeWordWord);
         Assert.Equal("interrupt", ChatScreen.InterruptWord);
-        Assert.Equal("(applies when this reply ends)", ChatScreen.MidTurnAppliesNotice);
     }
 
     [Fact]
@@ -10924,7 +10877,6 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("📨 12 queued", ChatScreen.QueuedHintPart(12));
         Assert.Equal("(⏳ 1 queued message dropped)", ChatScreen.QueueDroppedNotice(1));
         Assert.Equal("(⏳ 3 queued messages dropped)", ChatScreen.QueueDroppedNotice(3));
-        Assert.Equal("/queue", SlashCommands.QueueWord);
     }
 
     [Fact]
@@ -13659,9 +13611,6 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(new CopyAction(CopyActionKind.Invalid, 0), ChatScreen.ParseCopyArgs("1.5"));
         Assert.Equal(new CopyAction(CopyActionKind.Invalid, 0), ChatScreen.ParseCopyArgs("2 all"));
         Assert.Equal("all", ChatScreen.CopyAllWord);
-        Assert.Equal("/copy copies the last reply; /copy <n> the last n; /copy all every one.", ChatScreen.CopyUsageError);
-        Assert.Equal("(nothing to copy yet)", ChatScreen.NothingToCopyNotice);
-        Assert.Equal("Could not write to the clipboard; try again.", ChatScreen.CopyFailedError);
         Assert.Equal("(copied the last reply to the clipboard)", ChatScreen.CopiedNotice(1, 1, withUserText: false));
         Assert.Equal("(copied the last reply to the clipboard)", ChatScreen.CopiedNotice(1, 5, withUserText: false));
         Assert.Equal("(copied the last 2 replies to the clipboard)", ChatScreen.CopiedNotice(2, 5, withUserText: false));
@@ -14262,24 +14211,6 @@ public partial class ChatScreenTests : IDisposable
         var (command, args) = SlashCommands.Parse("/skills edit x");
         Assert.Equal((SlashCommand.Overloaded, "edit x"), (command, args));
         Assert.Equal(MidTurnClass.Quick, ChatScreen.MidTurnPolicy(command, args.Length > 0));
-    }
-
-    [Fact]
-    public async Task Skill_Command_IsUnknown_SinceSkillsTookItsPlace()
-    {
-        // /skills is the word again since 2026-09-19 (the user's call, the plural beside /tools; a bare /skill from later on
-        // 2026-09-18, /skills from 2026-09-16 until then): the singular is the unknown-command line, no alias, no pane. (A bare
-        // /skill⏎ on the line applies the /skills completion instead of sending — the word is a prefix now; an argument closes the list.)
-        _settings.Update(d => d.TtsOutput = false);
-        PutSkill(ProfileSkills, "haiku");
-        PushLine("/skill now");
-        PushLine("/exit");
-
-        string output = await RunAsync();
-
-        Assert.Contains(ChatScreen.UnknownCommandError("/skill"), output);
-        Assert.DoesNotContain("Offered", output);
-        Assert.Empty(_chat.Requests);
     }
 
     // ── Reflection (auto-learn) + /learn (2026-09-17) ─────────────────────────────
@@ -15592,31 +15523,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("(🧠 learned: updated skill 'x' (global, 12 bytes))", ChatScreen.LearnNotice(new SkillLearnResult(SkillLearnOutcome.Learned, new SkillEditResult(SkillEditOutcome.Updated, "x", SkillScope.Global, 12), "", usage, 1)));
     }
 
-    // ── Skill slash commands (2026-09-17, retired later on 2026-09-18) ────────
-
-    [Fact]
-    public async Task ASkillsName_AsACommand_IsUnknown_WhateverTheSwitchesSay()
-    {
-        // From 2026-09-17 until later on 2026-09-18 a loaded skill was /<name> [message] under the
-        // Skills-tab switch Skill slash commands; the switch and the commands went (the user's call:
-        // the #-mention covers it), so the word is an unknown command with the skills on, off, and the tools off.
-        _settings.Update(d => d.TtsOutput = false);
-        PutSkill(ProfileSkills, "haiku");
-        PushLine("/haiku");
-        PushLine("/HAIKU  one about rain ");
-        PushLine("/exit");
-        string on = await RunAsync();
-        Assert.Equal(2, CountOf(on, ChatScreen.UnknownCommandError("/haiku")) + CountOf(on, ChatScreen.UnknownCommandError("/HAIKU")));
-        Assert.DoesNotContain("loaded skill", on);
-
-        _settings.Update(d => d.LlmOfferTools = false);
-        PushLine("/haiku");
-        PushLine("/exit");
-        string noTools = await RunAsync();
-        Assert.Contains(ChatScreen.UnknownCommandError("/haiku"), noTools[on.Length..]);   // the output accumulates over the runs
-        Assert.DoesNotContain(ChatScreen.SkillsNeedToolsError, noTools);
-        Assert.Empty(_chat.Requests);
-    }
+    // ── A skill named like a command (later on 2026-09-18) ─────────────────────
 
     [Fact]
     public async Task ASkillNamedAfterABaseCommand_LoadsAsASkill_TheCommandIsTheCommand()
@@ -15632,26 +15539,6 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("edit the skill settings and the project file on a pane", output);   // the help, not the skill
         Assert.DoesNotContain("loaded skill 'help'", output);
         Assert.Empty(_chat.Requests);
-    }
-
-    [Fact]
-    public async Task MidTurn_ASkillsName_IsTheUnknownCommandLine_NotARefusal()
-    {
-        // Until later on 2026-09-18 a skill's command waited like /skill <name>; an unknown command is quick.
-        PutSkill(ProfileSkills, "haiku");
-        MidTurnFixture(i =>
-        {
-            if (i == 1)
-            {
-                PushLine("/haiku one");
-            }
-        });
-
-        string output = await RunAsync();
-
-        Assert.Contains(ChatScreen.UnknownCommandError("/haiku"), output);
-        Assert.DoesNotContain(ChatScreen.MidTurnRefusedNotice("/haiku"), output);
-        Assert.Single(_chat.Requests);
     }
 
     [Fact]
@@ -16005,21 +15892,6 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("/settings" + new string(' ', MentionCompleter.NoteGap) + "edit and save settings", output);
         Assert.Contains(MentionCompleter.Hint, output);
         Assert.DoesNotContain("/srv", output);
-        Assert.Empty(_chat.Requests);
-    }
-
-    [Fact]
-    public async Task Line_ASpaceAfterSkill_ListsNothing()
-    {
-        // The catalog opened after "/skill " from 2026-09-16 until later on 2026-09-18, when the name form went: the command takes nothing, so nothing is listed.
-        _settings.Update(d => d.TtsOutput = false);
-        _geometry = new ScreenGeometry(() => null);
-        PutSkill(ProfileSkills, "haiku");
-        StepsWhenIdle([.. Typed("/skill "), Key(Keys.Escape), Key(Keys.Escape), Line("/exit")]);
-
-        string output = await RunAsync();
-
-        Assert.DoesNotContain(MenuPane.Pointer + "haiku", output);   // the command list opened on the /, the catalog never
         Assert.Empty(_chat.Requests);
     }
 
@@ -16796,8 +16668,6 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("Interrupt switched off for this session: two interruptions in a row heard nothing.", ChatScreen.InterruptDisabledLogLine);
         Assert.Equal("ask_user: 2 questions answered", ChatScreen.AskUserAnsweredLogLine(2));
         Assert.Equal("ask_user: 1 question answered", ChatScreen.AskUserAnsweredLogLine(1));
-        Assert.Equal("ask_user: not answered (ESC).", ChatScreen.AskUserNotAnsweredLogLine);
-        Assert.Equal("ask_user: never asked (no watcher to run the pane).", ChatScreen.AskUserNotAskedLogLine);
     }
 
     // ── A double-clicked picture opens in the image editor (later on 2026-09-24) ─

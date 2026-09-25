@@ -369,7 +369,6 @@ public class VoicePipelineTests
         Assert.Equal(TimeSpan.FromSeconds(10), d.NoSpeechTimeout);
         Assert.Equal(TimeSpan.FromSeconds(30), d.MaxUtterance);
         Assert.Equal(TimeSpan.FromSeconds(2), d.DeliveryWatchdog);
-        Assert.Equal("transcribing…", VoicePipeline.TranscribingLabel);
         Assert.Contains("Privacy & security > Microphone", VoicePipeline.NoAudioDetail);
         Assert.False(ListenResult.Failed(ListenEnd.NoAudio, TimeSpan.Zero, TimeSpan.Zero, "x").HeardNothing);
     }

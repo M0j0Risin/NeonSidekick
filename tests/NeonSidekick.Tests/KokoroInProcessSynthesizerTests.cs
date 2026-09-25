@@ -47,10 +47,6 @@ public class KokoroInProcessSynthesizerTests : IDisposable
         Assert.Equal("voices", KokoroInProcessSynthesizer.VoicesFolder);
         Assert.Equal("espeak", KokoroInProcessSynthesizer.EspeakFolder);
         Assert.Equal(".npy", KokoroInProcessSynthesizer.VoiceExtension);
-        Assert.Equal("onnxruntime.dll is missing beside the exe", KokoroInProcessSynthesizer.MissingRuntimeDetail);
-        Assert.Equal("the voices folder is missing beside the exe", KokoroInProcessSynthesizer.MissingVoicesDetail);
-        Assert.Equal("kokoro.onnx is missing", KokoroInProcessSynthesizer.MissingModelDetail);
-        Assert.Equal("in-process Kokoro is not loaded", KokoroInProcessSynthesizer.NotLoadedDetail);
         Assert.Equal("unknown voice 'zz_nobody'", KokoroInProcessSynthesizer.UnknownVoiceDetail("zz_nobody"));
         Assert.Equal(PcmFormat.Kokoro, new KokoroInProcessSynthesizer(Path.Combine(_dir, "kokoro.onnx")).Format);
     }

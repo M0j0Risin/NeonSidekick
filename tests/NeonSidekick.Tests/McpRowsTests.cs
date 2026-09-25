@@ -62,21 +62,9 @@ public class McpRowsTests : IAsyncDisposable
     {
         Assert.Equal("🔌 MCP", McpText.Label);
         Assert.Equal(["Servers", "Tools", "Options"], McpText.TabTitles);
-        Assert.Equal("Enter / Space = on or off · Enter on failed = retry · ←/→ tabs · ESC = close", McpText.ServersKeys);
-        Assert.Equal("MCP servers is off (the Options tab)", McpText.OffLine);
         Assert.Equal("🔌 MCP servers is off: switch it on under the Options tab first", McpText.OffNotice);
-        Assert.Equal("no MCP server is configured — the edit rows below open mcp.json", McpText.NoServersLine);
-        Assert.Equal("no MCP server is connected", McpText.NoToolsLine);
-        Assert.Equal("Skipped:", McpText.SkippedHeading);
-        Assert.Equal("edit profile mcp.json", McpText.EditProfileRow);
-        Assert.Equal("edit global mcp.json", McpText.EditGlobalRow);
-        Assert.Equal("reload", McpText.ReloadRow);
         Assert.Equal("connected · 14 tools", McpText.StatusConnected(14));
-        Assert.Equal("connecting", McpText.StatusConnecting);
         Assert.Equal("failed: boom", McpText.StatusFailed("boom"));
-        Assert.Equal("off", McpText.StatusOff);
-        Assert.Equal("shadowed by the profile's", McpText.StatusShadowed);
-        Assert.Equal("(global)", McpText.GlobalMark);
         Assert.Equal("🔌 docker: on", McpText.ServerFlippedNotice("docker", true));
         Assert.Equal("🔌 docker: off", McpText.ServerFlippedNotice("docker", false));
         Assert.Equal("🔌 connecting docker…", McpText.ConnectingNotice("docker"));

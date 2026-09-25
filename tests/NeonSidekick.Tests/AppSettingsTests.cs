@@ -512,7 +512,7 @@ public class AppSettingsTests : IDisposable
     }
 
     [Fact]
-    public void OldShapeProfileFile_LoadsWithDefaultsForMissingFields()
+    public void ProfileFile_MissingFields_LoadWithDefaults()
     {
         // A literal, not a round trip of the current type: round-tripping proves nothing about
         // files written by an older build.
@@ -577,62 +577,6 @@ public class AppSettingsTests : IDisposable
         Assert.False(settings.Current.SttWake);
         Assert.True(settings.Current.SttInput);
         Assert.Contains("\"SttInterrupt\": true", File.ReadAllText(Profiles.ProfileFile(_dir, Profiles.DefaultName)));   // untouched until a save
-    }
-
-    /// <summary>
-    /// The root file from before profiles (the full settings, no Profile property) becomes the
-    /// default profile's file, the root memory.json and persona.md move in with it, and the root
-    /// file is rewritten as a pointer.
-    /// </summary>
-    [Fact]
-    public void OldShapeRootFile_IsMigratedIntoTheDefaultProfile_Once()
-    {
-        Directory.CreateDirectory(_dir);
-        File.WriteAllText(Path.Combine(_dir, AppSettings.FileName),
-            "{ \"SchemaVersion\": 1, \"LlmUrl\": \"http://old:1234/v1\" }");
-        File.WriteAllText(Path.Combine(_dir, "memory.json"), "{ \"SchemaVersion\": 1, \"Entries\": [] }");
-        File.WriteAllText(Path.Combine(_dir, "persona.md"), "You are Rex.");
-
-        using (var settings = new AppSettings(_dir))
-        {
-            AssertOldShapeLoaded(settings.Current);
-            Assert.Equal(Profiles.DefaultName, settings.ProfileName);
-        }
-
-        string profileDir = Profiles.Directory(_dir, Profiles.DefaultName);
-        Assert.True(File.Exists(Path.Combine(profileDir, Profiles.FileName)));
-        Assert.Equal("You are Rex.", File.ReadAllText(Path.Combine(profileDir, "persona.md")));
-        Assert.True(File.Exists(Path.Combine(profileDir, "memory.json")));
-        Assert.False(File.Exists(Path.Combine(_dir, "persona.md")));
-        Assert.False(File.Exists(Path.Combine(_dir, "memory.json")));
-
-        string root = File.ReadAllText(Path.Combine(_dir, AppSettings.FileName));
-        Assert.Contains("\"SchemaVersion\": 2", root);
-        Assert.Contains("\"Profile\": \"default\"", root);
-        Assert.DoesNotContain("LlmUrl", root);
-
-        // The second launch reads the pointer; the profile file is what it wrote.
-        using var again = new AppSettings(_dir);
-        AssertOldShapeLoaded(again.Current);
-    }
-
-    [Fact]
-    public void Migration_NeverOverwritesAProfileFile_AndLeavesTheRootCopy()
-    {
-        Directory.CreateDirectory(_dir);
-        File.WriteAllText(Path.Combine(_dir, AppSettings.FileName),
-            "{ \"SchemaVersion\": 1, \"LlmUrl\": \"http://old:1234/v1\" }");
-        File.WriteAllText(Path.Combine(_dir, "persona.md"), "root persona");
-        string profileDir = Profiles.Directory(_dir, Profiles.DefaultName);
-        Directory.CreateDirectory(profileDir);
-        File.WriteAllText(Path.Combine(profileDir, "persona.md"), "profile persona");
-        Profiles.Create(_dir, Profiles.DefaultName, new AppSettingsData { LlmUrl = "http://profile:1/v1" });
-
-        using var settings = new AppSettings(_dir);
-
-        Assert.Equal("http://profile:1/v1", settings.Current.LlmUrl);
-        Assert.Equal("profile persona", File.ReadAllText(Path.Combine(profileDir, "persona.md")));
-        Assert.Equal("root persona", File.ReadAllText(Path.Combine(_dir, "persona.md")));
     }
 
     [Fact]
@@ -1035,7 +979,6 @@ public class AppSettingsTests : IDisposable
         // The message queue (2026-09-18): on, a cancelled reply holds it.
         Assert.True(s.QueueMessages);
         Assert.Equal("empty", s.QueueCancelMode);   // hold until 2026-09-20
-        Assert.Equal("empty", QueueCancelMode.Default);
         // The paste preview (2026-09-16): 25 lines of a collapsed paste under the sent line, 0 = the label alone.
         Assert.Equal(25, s.PastePreviewLines);
         Assert.Equal(25, PasteBlocks.DefaultPreviewLines);

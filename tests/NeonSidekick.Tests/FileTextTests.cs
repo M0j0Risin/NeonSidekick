@@ -26,15 +26,12 @@ public class FileTextTests
         Assert.Equal("Error: 'a.txt' is a file, not a folder", FileText.IsAFile("a.txt"));
         Assert.Equal("Error: 'a.bin' is not a text file", FileText.NotText("a.bin"));
         Assert.Equal("Error: 'a.PNG' is not a text file; use view_image to look at it", FileText.NotText("a.PNG"));
-        Assert.Equal("; use view_image to look at it", FileText.ViewImageHint);
         Assert.Equal("Error: 'a.png' could not be read as an image", FileText.NotAnImage("a.png"));
         Assert.Equal("Error: 'a.png' is over 20 MB or 40 megapixels; too large to view", FileText.ImageTooBig("a.png"));
-        Assert.Equal("the picture is in the next message", FileText.ImageFollows);
         Assert.Equal("Error: 'a.txt' is not a zip archive", FileText.NotAnArchive("a.txt"));
         Assert.Equal("Error: no deleted copy of 'a.txt' is in .trash", FileText.NotInTrash("a.txt"));
         Assert.Equal("Error: 'a.txt' already exists; call again with overwrite true to replace it", FileText.Exists("a.txt"));
         Assert.Equal("Error: old_text was not found in 'a.txt', even with spacing, indentation, quotes and dashes matched loosely; read the file again and copy the text as it is (the line numbers an edit result shows are not part of the file)", FileText.EditNotFound("a.txt"));
-        Assert.Equal(" (the line numbers an edit result shows are not part of the file)", FileText.GutterHint);
         Assert.Equal("Error: old_text appears 3 times in 'a.txt'; include enough surrounding text to make it unique, or pass replace_all true", FileText.EditAmbiguous("a.txt", 3));
         // The patch_file refusals (2026-09-19): the locations named, the approximate replace_all, the escape drifts, and the done-already sentence that is no error.
         Assert.Equal(
@@ -67,9 +64,6 @@ public class FileTextTests
         Assert.Equal(new string('a', 79) + "…", FileText.Quote(new string('a', 81)));
         Assert.Equal(new string('a', 80), FileText.Quote(new string('a', 80)));
         Assert.Equal("Error: 'a.txt' is already there; call again with overwrite true to put the trashed copy over it", FileText.RestoreExists("a.txt"));
-        Assert.Equal(" (previous version in .trash)", FileText.CopyKeptSuffix);
-        Assert.Equal("--", FileText.ContextSeparator);
-        Assert.Equal("UTF-8 BOM", FileText.BomNote);
         Assert.Equal("Error: cannot put 'docs\\' inside itself ('docs\\in\\')", FileText.IntoItself(@"docs\", @"docs\in\"));
         Assert.Equal("Error: cannot put 'the working directory' inside itself ('x\\')", FileText.IntoItself("", @"x\"));
         Assert.Equal("Error: 'big.log' is too large to handle as text", FileText.TooBig("big.log"));
@@ -79,11 +73,8 @@ public class FileTextTests
         Assert.Equal("Error: 'e.zip' holds an entry that would land outside the destination ('../x'); nothing was extracted", FileText.ZipSlip("e.zip", "../x"));
         Assert.Equal("Error: could not write 'a.txt': locked", FileText.CouldNot("write", "a.txt", "locked"));
         Assert.Equal("Error: could not list 'the working directory': gone", FileText.CouldNot("list", "", "gone"));
-        Assert.Equal("Error: old_text is empty or only whitespace; give the exact text to replace, as read_file shows it, and do not send this call again unchanged", FileText.EditEmpty);
-        Assert.Equal("Error: old_text and new_text are the same; nothing to change", FileText.EditSame);
         Assert.Equal("Error: from is required: the file or folder, relative to the working directory", FileText.PathRequired("from"));
         Assert.Equal(FileText.EditSame, FileText.Error(FileOutcome.Same, "x", "edit"));
-        Assert.Equal("Error: that is the working directory itself", FileText.RootItself);
     }
 
     [Fact]
@@ -170,7 +161,6 @@ public class FileTextTests
         string truncated = FileText.SearchHits(result with { Truncated = true, TimedOut = 2 }, "needle");
         Assert.Contains("\n… only the first 2 matches are shown; narrow the search or the folder", truncated);   // the list's own count (2026-09-19): a cut list holds exactly the limit
         Assert.Equal("… only the first 50 matches are shown", FileText.OnlyFirst(50, "matches"));
-        Assert.Equal("; narrow the search or the folder", FileText.NarrowHint);
         Assert.EndsWith("\n2 lines skipped: the expression took too long on them", truncated);
         // One file as the path (2026-09-18): the header names it, no file counts.
         Assert.Equal(

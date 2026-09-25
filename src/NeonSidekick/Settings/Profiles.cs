@@ -29,7 +29,7 @@ public static class Profiles
     /// <summary>
     /// The sidekick's own files beside <see cref="FileName"/>, in the order <see cref="CopySidekickFiles"/>
     /// takes them: the memories, the persona, the operating rules, the voice directive, the MCP servers
-    /// (2026-09-20). Literals like <c>AppSettings.MigratedFiles</c>; <c>ProfilesTests</c> pins each to its owner's <c>FileName</c>.
+    /// (2026-09-20). Literals; <c>ProfilesTests</c> pins each to its owner's <c>FileName</c>.
     /// </summary>
     public static readonly string[] SidekickFiles = { "memory.json", "persona.md", "operata.md", "vocalia.md", "mcp.json" };
 
