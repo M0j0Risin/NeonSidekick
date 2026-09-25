@@ -113,6 +113,9 @@ public partial class ChatScreenTests : IDisposable
         // day a reflection opens with the earlier sessions found for the turn and gets session_manager (Reflection includes
         // sessions, on by default): the learning tests pin the bare request, so the fixture opts out and the evidence tests opt in.
         _settings.Update(d => { d.ReflectionCooldownMinutes = 0; d.ReflectionIncludesSessions = false; });
+        // A turn pauses a running reflection by default (Reflection yields to turns, 2026-09-24): the slot tests hold a reflection
+        // across the next turn on purpose, so the fixture opts out and the yield tests opt in.
+        _settings.Update(d => d.ReflectionYieldsToTurns = false);
         // The model-written session title is the default (2026-09-18, the user's call); the same shape — the title request
         // would dequeue the next scripted reply — so the fixture opts out and the titling tests opt in.
         _settings.Update(d => d.SessionNamingMode = "first-line");
@@ -4189,7 +4192,7 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         Assert.Contains(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Git (native)    Obsidian    SQL    ComfyUI    Options ", output);
-        Assert.Contains("\n▸ ComfyUI tools                  on\n  ComfyUI URL                    (not set)\n  ComfyUI workflows offered      all (not narrowed)\n  ComfyUI add workflow           Enter to start workflow wizard\n  ^-mention enabled              on\n  ComfyUI timeout (s)            300\n  ComfyUI max pictures per call  4 pictures\n  ComfyUI reinforce negatives    on\n  ComfyUI show prompts           on\n  ComfyUI output folder          comfy_images\n", output);   // 2026-09-24; the offered checklist and the wizard later that day, the ^-mention switch later still
+        Assert.Contains("\n▸ ComfyUI tools                  on\n  ComfyUI URL                    (not set)\n  ComfyUI workflows offered      all (not narrowed)\n  ComfyUI add workflow           Enter to start workflow wizard\n  ComfyUI ^-mention enabled      on\n  ComfyUI timeout (s)            300\n  ComfyUI max pictures per call  5 pictures\n  ComfyUI reinforce negatives    on\n  ComfyUI show prompts           on\n  ComfyUI picture strip          on\n  ComfyUI output folder          comfy_images\n", output);   // 2026-09-24; the offered checklist and the wizard later that day, the ^-mention switch later still
         Assert.Contains("\n  Clock (3)\n▸ get_current_time      on   ", output);
         Assert.Contains("\n  · get_current_time: off\n  Clock (2 of 3)\n▸ get_current_time      off  ", output);
         Assert.Equal(["get_current_time"], _settings.Current.ToolsDisabled);
@@ -11821,6 +11824,79 @@ public partial class ChatScreenTests : IDisposable
         }
     }
 
+    // ── The picture strip (later still on 2026-09-24) ───────────────────────
+
+    private string ComfyPicture(string name) => Path.Combine(_settings.ProfileDirectory, WorkingDirectory.DefaultFolderName, "comfy_images", name);
+
+    /// <summary>The model's picture and an /imagine one gather in the strip, the newest leftmost: → takes the newest, → again the older, Enter opens it.</summary>
+    [Fact]
+    public async Task PictureStrip_GathersTheSessionsPictures_TheArrowsWalkIt_AndEnterOpensTheHighlighted()
+    {
+        ComfyServer();
+        PaneOf40Rows();
+        var opened = new List<(string Path, string Editor)>();
+        _openImage = (path, editor) => opened.Add((path, editor));
+        _chat.Enqueue(FakeChatClient.Call("g1", GenerateImageTool.ToolName, new Dictionary<string, object?> { ["prompt"] = "a dog", ["seed"] = 7, ["verbatim"] = true }));
+        _chat.EnqueueText("Done.");
+        StepsWhenIdle(Line("make one"), Line("/imagine a cat --seed 5"), Key(Keys.Right), Key(Keys.Right), Key(Keys.Enter), Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.Equal(ComfyPicture("pony-7.png"), Assert.Single(opened).Path);
+        Assert.Contains(NeonSidekick.Comfy.ComfyText.StripHint, output);
+        Assert.Contains(NeonSidekick.Comfy.ComfyText.StripSelectedHint(1, 2), output);
+        Assert.Contains(NeonSidekick.Comfy.ComfyText.StripSelectedHint(2, 2), output);
+        Assert.Contains(PictureStrip.LeftBar + "▀▀▀▀" + PictureStrip.RightBar, output);
+        Assert.Equal(2, _chat.Requests.Count);   // the tool call and its answer; the Enter sent nothing
+    }
+
+    /// <summary>A double-click on a strip tile opens it, as one on a transcript picture does: the tile sits on the strip's bottom rows, over the upper rule.</summary>
+    [Fact]
+    public async Task PictureStrip_ATileDoubleClicked_Opens()
+    {
+        ComfyServer();
+        PaneOf40Rows();
+        var opened = new List<(string Path, string Editor)>();
+        _openImage = (path, editor) => opened.Add((path, editor));
+        // The input row at 100, the rule at 99: the 4×4 picture's two rows are 97 and 98, columns 1 to 4.
+        StepsWhenIdle(Line("/imagine a cat --seed 5"), input => { input.PushClick(2, 98); input.PushClick(2, 98); }, Line("/exit"));
+
+        await RunAsync();
+
+        Assert.Equal(ComfyPicture("pony-5.png"), Assert.Single(opened).Path);
+    }
+
+    /// <summary>Off, or after a /clear, there is no strip: the arrows and the Enter are the line's, nothing opens.</summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task PictureStrip_Off_OrCleared_LeavesTheKeysToTheLine(bool clear)
+    {
+        ComfyServer();
+        PaneOf40Rows();
+        if (!clear)
+        {
+            _settings.Update(d => d.ComfyPictureStrip = false);
+        }
+
+        var opened = new List<(string Path, string Editor)>();
+        _openImage = (path, editor) => opened.Add((path, editor));
+        var steps = new List<Action<ScriptedInput>> { Line("/imagine a cat --seed 5") };
+        if (clear)
+        {
+            steps.Add(Line("/clear"));
+        }
+
+        steps.AddRange([Key(Keys.Right), Key(Keys.Enter), Line("/exit")]);
+        StepsWhenIdle([.. steps]);
+
+        string output = await RunAsync();
+
+        Assert.Empty(opened);
+        Assert.DoesNotContain(NeonSidekick.Comfy.ComfyText.StripSelectedHint(1, 1), output);
+        Assert.DoesNotContain(PictureStrip.LeftBar, output);
+    }
+
     [Fact]
     public async Task Imagine_WithoutAServer_OrAPrompt_IsAnError_AndComfyListsTheWorkflows()
     {
@@ -14105,7 +14181,7 @@ public partial class ChatScreenTests : IDisposable
 
         Assert.Contains("  · Offered\n  ·   haiku  profile  Writes haiku. Use when asked for one.\n  · Reflection\n", output);   // Reflection right after Offered since 2026-09-22
         Assert.Contains("  · Options\n  ·   Agent skills: on\n  ·   Use external skills (.agents\\skills): off\n", output);   // the Options section last (2026-09-22; between Offered and Reflection from 2026-09-19)
-        Assert.Contains("  · Reflection\n  ·   Reflection (auto-learn): off\n  ·   Reflection reasoning: none\n  ·   Reflection window: 3 turns\n  ·   Reflection min tool calls: 4 tool calls\n  ·   Reflection max requests: 4 requests\n  ·   Reflection cooldown (minutes): off\n  ·   Reflection cooldown mode: last-written-skill\n  ·   Reflection includes sessions: off\n  · Project\n", output);   // the fixture turns the auto-learn off, the verbose lines on, the cooldown and the sessions evidence off
+        Assert.Contains("  · Reflection\n  ·   Reflection (auto-learn): off\n  ·   Reflection reasoning: none\n  ·   Reflection window: 3 turns\n  ·   Reflection min tool calls: 4 tool calls\n  ·   Reflection max requests: 4 requests\n  ·   Reflection cooldown (minutes): off\n  ·   Reflection cooldown mode: last-written-skill\n  ·   Reflection includes sessions: off\n  ·   Reflection yields to turns: off\n  · Project\n", output);   // the fixture turns the auto-learn off, the verbose lines on, the cooldown and the sessions evidence off
         Assert.Contains("  · Project\n  ·   Project file  on   NEON.md (6 characters)\n", output);   // the toggle row alone since later on 2026-09-19 (the working directory over it, and a Roots section after, until then)
         Assert.DoesNotContain("Roots", output);
         Assert.DoesNotContain("Working directory", output);
@@ -14886,6 +14962,149 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("what time is it, twice again", LastAsk(_chat.Requests[5]));   // the /learn's snapshot is the last turn at its time
     }
 
+    [Fact]
+    public async Task YieldsToTurns_ATurnPausesTheReflection_AndTheSameOneRunsAgainAfterTheReply()
+    {
+        // Reflection yields to turns (2026-09-24, the user's ask): the turn's start cancels the running reflection so the
+        // reply has the server; its snapshot goes back in the slot and runs again at the reply's end. Silent in the transcript.
+        _settings.Update(d => { d.TtsOutput = false; d.ReflectionYieldsToTurns = true; });
+        _chat.EnqueueText("Hello.");                                                                          // 0: hi
+        _chat.Enqueue(FakeChatClient.Call("r1", SkillEditorTool.ToolName, CreateSkillArgs("greeting")));   // 1: the /learn, held until cancelled
+        _chat.EnqueueText("Sure thing.");                                                                     // 2: the reply that paused it
+        _chat.Enqueue(FakeChatClient.Call("r2", SkillEditorTool.ToolName, CreateSkillArgs("greeting")));   // 3: the same reflection, again
+        bool pausedUnderTheReply = false;
+        _chat.BeforeUpdateOf = async (r, i, token) =>
+        {
+            if (r == 1 && i == 0)
+            {
+                await Task.Delay(Timeout.Infinite, token);
+            }
+            else if (r == 2 && i == 0)
+            {
+                var until = DateTime.UtcNow + TimeSpan.FromSeconds(20);
+                while (_session.Learning is not { IsCompleted: true } && DateTime.UtcNow < until)
+                {
+                    await Task.Delay(10, CancellationToken.None);
+                }
+
+                pausedUnderTheReply = _session.Learning is { IsCompleted: true, Result.Outcome: SkillLearnOutcome.Cancelled };
+            }
+        };
+        var events = new List<DiagnosticEvent>();
+        Action<DiagnosticEvent> capture = e => { if (e.Category == SkillCatalog.Category) { lock (events) { events.Add(e); } } };
+        DiagnosticLog.Emitted += capture;
+        var input = Scripted();
+        int step = 0;
+        input.OnWait = () =>
+        {
+            switch (step)
+            {
+                case 0: step++; PushLine(input, "hi"); break;
+                case 1: step++; PushLine(input, "/learn keep the greeting"); break;
+                case 2: step++; WaitForRequests(2); PushLine(input, "and now?"); break;
+                case 3:
+                    if (Output.Contains("(🧠 learned: created skill 'greeting'", StringComparison.Ordinal))
+                    {
+                        step++;
+                        PushLine(input, "/exit");
+                    }
+
+                    break;
+            }
+        };
+
+        string output;
+        try
+        {
+            output = await RunAsync();
+        }
+        finally
+        {
+            DiagnosticLog.Emitted -= capture;
+        }
+
+        Assert.True(pausedUnderTheReply);
+        Assert.Equal(4, _chat.Requests.Count);
+        Assert.Equal(SkillLearner.Request("keep the greeting"), _chat.Requests[3][^1].Text);
+        Assert.Equal(["hi"], Asks(_chat.Requests[3]));   // the snapshot taken at /learn, not the window after "and now?"
+        Assert.True(output.IndexOf("Sure thing.", StringComparison.Ordinal) < output.IndexOf("(🧠 learned: created skill 'greeting'", StringComparison.Ordinal));
+        Assert.DoesNotContain(ChatScreen.LearnCancelledNotice, output);
+        Assert.DoesNotContain(ChatScreen.LearnQueuedNotice, output);
+        Assert.DoesNotContain(ChatScreen.CancelledNotice, output);
+        Assert.True(File.Exists(Path.Combine(ProfileSkills, "greeting", SkillCatalog.FileName)));
+        List<string> lines;
+        lock (events)
+        {
+            lines = events.Select(e => e.Message).ToList();
+        }
+
+        int paused = lines.IndexOf(ChatScreen.LearnPausedLogLine);
+        int resumed = lines.IndexOf(ChatScreen.LearnResumedLogLine);
+        Assert.True(paused >= 0 && resumed > paused, string.Join("\n", lines));
+    }
+
+    [Fact]
+    public async Task YieldsToTurns_WithMessagesQueued_ThePausedReflectionRunsOnceTheLastIsAnswered()
+    {
+        // A queue of messages would pause a restarted reflection once each: the slot waits for the queue to empty.
+        // The pane queues a line typed under a reply (without it the line stays type-ahead), hence the geometry.
+        _settings.Update(d => { d.TtsOutput = false; d.ReflectionYieldsToTurns = true; });
+        _console.Profile.Height = 40;
+        _geometry = new ScreenGeometry(() => null);
+        _chat.EnqueueText("Hello.");                                                                          // 0: hi
+        _chat.Enqueue(FakeChatClient.Call("r1", SkillEditorTool.ToolName, CreateSkillArgs("greeting")));   // 1: held until cancelled
+        _chat.EnqueueText("One ", "two ", "three.");                                                          // 2: "one", two queued under it
+        _chat.EnqueueText("Two.");                                                                            // 3: "two"
+        _chat.EnqueueText("Three.");                                                                          // 4: "three"
+        _chat.Enqueue(FakeChatClient.Call("r2", SkillEditorTool.ToolName, CreateSkillArgs("greeting")));   // 5: the paused reflection, once
+        _chat.BeforeUpdateOf = async (r, i, token) =>
+        {
+            if (r == 1 && i == 0)
+            {
+                await Task.Delay(Timeout.Infinite, token);
+            }
+            else if (r == 2)
+            {
+                if (i == 0)
+                {
+                    PushLine("two");
+                    PushLine("three");
+                }
+
+                await Task.Delay(40, CancellationToken.None);
+            }
+        };
+        var input = Scripted();
+        int step = 0;
+        input.OnWait = () =>
+        {
+            switch (step)
+            {
+                case 0: step++; PushLine(input, "hi"); break;
+                case 1: step++; PushLine(input, "/learn keep the greeting"); break;
+                case 2: step++; WaitForRequests(2); PushLine(input, "one"); break;
+                case 3:
+                    if (Output.Contains("(🧠 learned: created skill 'greeting'", StringComparison.Ordinal))
+                    {
+                        step++;
+                        PushLine(input, "/exit");
+                    }
+
+                    break;
+            }
+        };
+
+        string output = await RunAsync();
+
+        Assert.Equal(6, _chat.Requests.Count);
+        Assert.Equal("two", _chat.Requests[3][^1].Text);
+        Assert.Equal("three", _chat.Requests[4][^1].Text);
+        Assert.Equal(SkillLearner.Request("keep the greeting"), _chat.Requests[5][^1].Text);   // no reflection between the queued turns
+        Assert.Equal(["hi"], Asks(_chat.Requests[5]));
+        Assert.True(output.IndexOf("Three.", StringComparison.Ordinal) < output.IndexOf("(🧠 learned: created skill 'greeting'", StringComparison.Ordinal));
+        Assert.False(_session.IsLearning);
+    }
+
     /// <summary>The user text of a reflection request's last turn: the last turn-start message before the closing ask.</summary>
     private static string LastAsk(IReadOnlyList<ChatMessage> request) => Asks(request).Last();
 
@@ -15360,6 +15579,10 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("(🧠 learning failed: ", ChatScreen.LearnFailedPrefix);
         Assert.Equal("(🧠 learning from this turn follows the one running)", ChatScreen.LearnQueuedNotice);
         Assert.Equal("(🧠 learning cancelled)", ChatScreen.LearnCancelledNotice);
+        Assert.Equal("Reflection paused for the turn; it runs again after the reply.", ChatScreen.LearnPausedLogLine);   // 2026-09-24
+        Assert.Equal("The paused reflection waits in the slot to run again.", ChatScreen.LearnResumedLogLine);
+        Assert.Equal("The paused reflection had already finished; it does not run again.", ChatScreen.LearnPauseMissedLogLine);
+        Assert.Equal("The paused reflection does not run again: a newer one waits in the slot.", ChatScreen.LearnPauseDisplacedLogLine);
         Assert.Equal("Nothing to learn from yet; send a message first.", ChatScreen.LearnNoTurnError);
         var usage = TokenUsage.Zero;
         Assert.Null(ChatScreen.LearnNotice(new SkillLearnResult(SkillLearnOutcome.Nothing, null, "nothing", usage, 1)));

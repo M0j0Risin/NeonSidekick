@@ -124,7 +124,7 @@ public class SkillsMenuTests : IDisposable
     private const string OptionsRows = "▸ Agent skills                          on\n  Use external skills (.agents\\skills)  off\n  Skill compact mode                    protected\n  #-mention enabled                     on\n";   // Allow skill delete, the fifth, went on 2026-09-23 (delete always offered)
 
     /// <summary>The Reflection tab's nine rows at their defaults (later on 2026-09-19), padded to its own column (31: the cooldown minutes label). Pinned.</summary>
-    private const string ReflectionRows = "▸ Reflection (auto-learn)        on\n  Reflection reasoning           none\n  Reflection window              3 turns\n  Reflection min tool calls      4 tool calls\n  Reflection max requests        4 requests\n  Reflection cooldown (minutes)  5 minutes\n  Reflection cooldown mode       last-written-skill\n  Reflection includes sessions   on\n";
+    private const string ReflectionRows = "▸ Reflection (auto-learn)        on\n  Reflection reasoning           none\n  Reflection window              3 turns\n  Reflection min tool calls      4 tool calls\n  Reflection max requests        4 requests\n  Reflection cooldown (minutes)  5 minutes\n  Reflection cooldown mode       last-written-skill\n  Reflection includes sessions   on\n  Reflection yields to turns     on\n";
 
     /// <summary>A row as the menu prints it at width 100: whole when it fits, else cut to 99 cells and an ellipsis (FittedMarkup; the temp roots are long).</summary>
     private static string Fitted(string row) => row.Length <= 100 ? row : row[..99] + "…";
@@ -534,7 +534,7 @@ public class SkillsMenuTests : IDisposable
         await menu.ShowAsync(CancellationToken.None);
 
         // In the strip's order: Offered, Reflection, Project, Options last (2026-09-22; Options second from 2026-09-19, Reflection later that day), every row as `label: value`; the Project section the toggle row, no Roots section.
-        Assert.Contains("  · Offered\n  ·   haiku  profile  Writes haiku.\n  · Reflection\n  ·   Reflection (auto-learn): on\n  ·   Reflection reasoning: none\n  ·   Reflection window: 3 turns\n  ·   Reflection min tool calls: 4 tool calls\n  ·   Reflection max requests: 4 requests\n  ·   Reflection cooldown (minutes): 5 minutes\n  ·   Reflection cooldown mode: last-written-skill\n  ·   Reflection includes sessions: on\n  · Project\n  ·   Project file  on   " + SkillsText.NoNotesLine + "\n  · Options\n  ·   Agent skills: on\n  ·   Use external skills (.agents\\skills): off\n  ·   Skill compact mode: protected\n  ·   #-mention enabled: on\n", _console.Output);
+        Assert.Contains("  · Offered\n  ·   haiku  profile  Writes haiku.\n  · Reflection\n  ·   Reflection (auto-learn): on\n  ·   Reflection reasoning: none\n  ·   Reflection window: 3 turns\n  ·   Reflection min tool calls: 4 tool calls\n  ·   Reflection max requests: 4 requests\n  ·   Reflection cooldown (minutes): 5 minutes\n  ·   Reflection cooldown mode: last-written-skill\n  ·   Reflection includes sessions: on\n  ·   Reflection yields to turns: on\n  · Project\n  ·   Project file  on   " + SkillsText.NoNotesLine + "\n  · Options\n  ·   Agent skills: on\n  ·   Use external skills (.agents\\skills): off\n  ·   Skill compact mode: protected\n  ·   #-mention enabled: on\n", _console.Output);
         Assert.DoesNotContain("Roots", _console.Output);
     }
 
@@ -549,7 +549,7 @@ public class SkillsMenuTests : IDisposable
         Push(Keys.Left);                                        // the strip wraps: Offered → Options
         Push(Keys.Enter, Keys.Down, Keys.Enter);                // Agent skills: the page, off picked
         Push(Keys.Left, Keys.Left);                             // Project, Reflection
-        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter, Keys.Down, Keys.Enter);   // Reflection includes sessions (the last row; Reflection verbose there until later still on 2026-09-19): the page (the cursor on the saved on row), off picked under it
+        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter, Keys.Down, Keys.Enter);   // Reflection includes sessions (the last row until Reflection yields to turns on 2026-09-24; Reflection verbose there until later still on 2026-09-19): the page (the cursor on the saved on row), off picked under it
         Push(Keys.Right);                                       // Project
         Push(Keys.Left, Keys.Left);                             // Reflection, Offered (the off line now)
         Push(Keys.Escape);

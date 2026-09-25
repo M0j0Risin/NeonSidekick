@@ -213,6 +213,37 @@ public class InputLineTests : IDisposable
     }
 
     [Fact]
+    public async Task EmptyEnter_IsAskedOnAnEnterWithNothingToSend_OnlyOverAnEmptyDraft()
+    {
+        // The picture strip's Enter (later still on 2026-09-24): spent, the read goes on; a row of spaces is not asked, it is cleared as ever.
+        int asked = 0;
+        Push(Keys.Enter);
+        Type("  ");
+        Push(Keys.Enter);
+        Type("ab");
+        Push(Keys.Enter);
+
+        var submitted = Assert.IsType<InputResult.Submitted>(await _line.ReadAsync(emptyEnter: () => { asked++; return true; }));
+
+        Assert.Equal("ab", submitted.Text);
+        Assert.Equal(1, asked);
+    }
+
+    [Fact]
+    public async Task EmptyEnter_ThatDeclines_IsTheOldNoOp()
+    {
+        int asked = 0;
+        Push(Keys.Enter);
+        Type("x");
+        Push(Keys.Enter);
+
+        var submitted = Assert.IsType<InputResult.Submitted>(await _line.ReadAsync(emptyEnter: () => { asked++; return false; }));
+
+        Assert.Equal("x", submitted.Text);
+        Assert.Equal(1, asked);
+    }
+
+    [Fact]
     public async Task EmptyArrow_ThatDeclines_IsTheOldNoOp()
     {
         int asked = 0;

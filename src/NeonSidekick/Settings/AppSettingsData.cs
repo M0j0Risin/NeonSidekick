@@ -584,6 +584,17 @@ public sealed class AppSettingsData
     public bool ReflectionIncludesSessions { get; set; } = true;
 
     /// <summary>
+    /// Whether a turn pauses a running reflection (2026-09-24, the user's ask: on a one-slot local
+    /// server a message sent while a reflection runs waits behind it). On = the turn's start
+    /// cancels the reflection and the same snapshot runs again once the reply — and every message
+    /// queued behind it — is done; the cancelled requests' tokens are spent. Off = the reflection
+    /// runs on beside the turn, as before (a server with parallel slots loses nothing to it). Read
+    /// at each turn's start, no reconnect; the Reflection tab of <c>/skills</c>, last row, labelled
+    /// <c>Reflection yields to turns</c>. No variable.
+    /// </summary>
+    public bool ReflectionYieldsToTurns { get; set; } = true;
+
+    /// <summary>
     /// How many model requests one reflection may make before it is given up as exhausted
     /// (<c>Skills.ReflectionMaxRequests</c>; a load or two, then the write — the reflection's own
     /// cap, never <see cref="LlmMaxToolIterations"/>, the turn's). <see cref="MinReflectionMaxRequests"/>
@@ -1000,8 +1011,8 @@ public sealed class AppSettingsData
 
     /// <summary>
     /// The most pictures one <c>generate_image</c> call or <c>/imagine --count</c> makes (later on 2026-09-24, the user's
-    /// ask: a setting, as <see cref="FileViewImageMaxPerCall"/> is for <c>view_image</c>; a fixed 4 before):
-    /// <see cref="MinComfyMaxPicturesPerCall"/> to <see cref="MaxComfyMaxPicturesPerCall"/>. Why a cap at all: each picture
+    /// ask: a setting, as <see cref="FileViewImageMaxPerCall"/> is for <c>view_image</c>; a fixed 4 before;
+    /// the default 5 since later on 2026-09-24, the user's call): <see cref="MinComfyMaxPicturesPerCall"/> to <see cref="MaxComfyMaxPicturesPerCall"/>. Why a cap at all: each picture
     /// is a full job the server runs in turn, while the model's turn waits, and every one rides to the model in the next
     /// request, where a local vision server has a ceiling of its own (LM Studio + Gemma 4 fell over at six, 2026-09-14).
     /// A hand-edited value is clamped. The ComfyUI tab of <c>/tools</c>. No variable.
@@ -1028,9 +1039,19 @@ public sealed class AppSettingsData
     /// </summary>
     public bool ComfyShowPrompts { get; set; } = true;
 
+    /// <summary>
+    /// Whether the session's ComfyUI pictures stand in a strip over the pane's upper rule (later still on 2026-09-24, the
+    /// user's ask): every picture <c>generate_image</c> or <c>/imagine</c> made this session as a small thumbnail
+    /// (<see cref="UI.PictureStrip"/>), the newest at the left pushing the older ones right; with the draft empty ← / →
+    /// walk a highlight over them, Enter opens the highlighted one in the image viewer, a double-click opens any. Per
+    /// session: <c>/clear</c>, <c>/new</c> and a switch empty it. Read at each draw, no reconnect. On by default (the
+    /// user's call). The ComfyUI tab of <c>/tools</c>. No variable.
+    /// </summary>
+    public bool ComfyPictureStrip { get; set; } = true;
+
     public const int MinComfyMaxPicturesPerCall = 1;
     public const int MaxComfyMaxPicturesPerCall = 16;
-    public const int DefaultComfyMaxPicturesPerCall = 4;
+    public const int DefaultComfyMaxPicturesPerCall = 5;
 
     /// <summary>
     /// The folder under the working directory the generated pictures are saved in (2026-09-24), made on first use;

@@ -2288,11 +2288,15 @@ public sealed class WorkingDirectory
     /// 2026-09-17), folders too when asked, never into a reparse point, never into the root's
     /// <c>.trash</c>, never below <paramref name="maxDepth"/> levels (1 = the folder's own entries; <c>search_files</c>'s
     /// <c>depth</c>, 2026-09-19). Each entry's size and write time come with it — no second stat.
+    /// Brace groups are expanded first (<see cref="PathGlob.ExpandBraces"/>, 2026-09-24) and each
+    /// alternative is judged name-or-path on its own, so <c>{src/*.cs,*.md}</c> mixes the two.
     /// </summary>
     private FileSystemEnumerable<WalkEntry> Walk(string directory, string? namePattern, bool recurse, bool includeDirectories = false, int maxDepth = int.MaxValue)
     {
         string root = Root;
-        bool byPath = namePattern is not null && PathGlob.IsPathPattern(namePattern);
+        GlobAlternative[]? alternatives = namePattern is null
+            ? null
+            : [.. PathGlob.ExpandBraces(namePattern).Select(p => new GlobAlternative(p, PathGlob.IsPathPattern(p)))];
         return new FileSystemEnumerable<WalkEntry>(
             directory,
             (ref FileSystemEntry entry) => new WalkEntry(entry.ToFullPath(), entry.IsDirectory ? 0 : entry.Length, entry.LastWriteTimeUtc.UtcDateTime, entry.IsDirectory),
@@ -2301,7 +2305,7 @@ public sealed class WorkingDirectory
             ShouldIncludePredicate = (ref FileSystemEntry entry) =>
                 (includeDirectories || !entry.IsDirectory)
                 && !IsRootTrash(ref entry, root)
-                && (namePattern is null || entry.IsDirectory || (byPath ? MatchesPath(namePattern, entry.ToFullPath(), directory, root) : FileSystemName.MatchesSimpleExpression(namePattern, entry.FileName, ignoreCase: true))),
+                && (alternatives is null || entry.IsDirectory || MatchesAny(alternatives, ref entry, directory, root)),
             ShouldRecursePredicate = (ref FileSystemEntry entry) => !IsRootTrash(ref entry, root) && DepthUnder(entry.Directory, directory) < maxDepth,
         };
     }
@@ -2330,6 +2334,26 @@ public sealed class WorkingDirectory
         }
 
         return 1 + segments;
+    }
+
+    /// <summary>One brace alternative of a walk's pattern, with whether it is a path glob.</summary>
+    private readonly record struct GlobAlternative(string Pattern, bool ByPath);
+
+    /// <summary>Whether the entry matches any alternative; its full path is built only if a path glob asks for it.</summary>
+    private static bool MatchesAny(GlobAlternative[] alternatives, ref FileSystemEntry entry, string directory, string root)
+    {
+        string? fullPath = null;
+        foreach (var alternative in alternatives)
+        {
+            if (alternative.ByPath
+                ? MatchesPath(alternative.Pattern, fullPath ??= entry.ToFullPath(), directory, root)
+                : FileSystemName.MatchesSimpleExpression(alternative.Pattern, entry.FileName, ignoreCase: true))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>A path glob against the entry's path under the walked folder, else under the root (so <c>src/**/*.cs</c> works from either).</summary>

@@ -380,8 +380,14 @@ public enum SettingsField
     /// <summary>A toggle: whether the prompt and negative sent to ComfyUI show under a picture's line (<see cref="Settings.AppSettingsData.ComfyShowPrompts"/>). The ComfyUI tab, under reinforce negatives (later still on 2026-09-24); no reconnect.</summary>
     ComfyShowPrompts,
 
-    /// <summary>A toggle: whether <c>^</c> and part of a name lists the offered ComfyUI workflows on the chat line (<see cref="Settings.AppSettingsData.ComfyCaretMention"/>). The ComfyUI tab, under the add-workflow wizard (later still on 2026-09-24); no reconnect (read at each keystroke). Last in the enum, as every newcomer.</summary>
+    /// <summary>A toggle: whether <c>^</c> and part of a name lists the offered ComfyUI workflows on the chat line (<see cref="Settings.AppSettingsData.ComfyCaretMention"/>). The ComfyUI tab, under the add-workflow wizard (later still on 2026-09-24); no reconnect (read at each keystroke).</summary>
     ComfyCaretMention,
+
+    /// <summary>A toggle: whether the session's ComfyUI pictures stand in a strip over the input line (<see cref="Settings.AppSettingsData.ComfyPictureStrip"/>). The ComfyUI tab, under show prompts (later still on 2026-09-24); no reconnect (read at each draw).</summary>
+    ComfyPictureStrip,
+
+    /// <summary>A toggle: whether a turn's start pauses a running reflection, which runs again after the reply (<see cref="Settings.AppSettingsData.ReflectionYieldsToTurns"/>). The Reflection tab of <c>/skills</c>' last row (2026-09-24); no reconnect (read at each turn's start). Last in the enum, as every newcomer.</summary>
+    ReflectionYieldsToTurns,
 }
 
 /// <summary>The tabs of <c>/settings</c> on the pane, in strip order (Sessions right after General — the user's order, 2026-09-18; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
@@ -630,7 +636,7 @@ internal sealed partial class SettingsMenu
     public static readonly IReadOnlyList<IReadOnlyList<SettingsField>> SkillsTabFields =
     [
         [SettingsField.AgentSkills, SettingsField.ExternalSkills, SettingsField.SkillCompactMode, SettingsField.SkillHashMention],
-        [SettingsField.ReflectionAutoLearn, SettingsField.ReflectionReasoning, SettingsField.ReflectionWindow, SettingsField.ReflectionMinToolCalls, SettingsField.ReflectionMaxRequests, SettingsField.ReflectionCooldownMinutes, SettingsField.ReflectionCooldownMode, SettingsField.ReflectionIncludesSessions],
+        [SettingsField.ReflectionAutoLearn, SettingsField.ReflectionReasoning, SettingsField.ReflectionWindow, SettingsField.ReflectionMinToolCalls, SettingsField.ReflectionMaxRequests, SettingsField.ReflectionCooldownMinutes, SettingsField.ReflectionCooldownMode, SettingsField.ReflectionIncludesSessions, SettingsField.ReflectionYieldsToTurns],
     ];
 
     /// <summary>
@@ -657,7 +663,7 @@ internal sealed partial class SettingsMenu
         [SettingsField.GitNativeTools, SettingsField.GitNativeDiffMaxLines, SettingsField.GitNativeLogMaxCommits, SettingsField.GitNativeEmail, SettingsField.GitNativeName],
         [SettingsField.ObsidianTools, SettingsField.ObsidianVault, SettingsField.ObsidianAllowDelete],
         [SettingsField.SqlTools, SettingsField.SqlConnectionsOffered, SettingsField.SqlDefaultConnection, SettingsField.SqlSetPassword, SettingsField.SqlAddConnection, SettingsField.SqlPercentMention, SettingsField.SqlQueryMaxRows, SettingsField.SqlQueryTimeoutSeconds, SettingsField.SqlConnectionsProfile, SettingsField.SqlConnectionsGlobal],
-        [SettingsField.ComfyTools, SettingsField.ComfyUrl, SettingsField.ComfyWorkflowsOffered, SettingsField.ComfyAddWorkflow, SettingsField.ComfyCaretMention, SettingsField.ComfyTimeoutSeconds, SettingsField.ComfyMaxPicturesPerCall, SettingsField.ComfyReinforceNegatives, SettingsField.ComfyShowPrompts, SettingsField.ComfyOutputFolder],
+        [SettingsField.ComfyTools, SettingsField.ComfyUrl, SettingsField.ComfyWorkflowsOffered, SettingsField.ComfyAddWorkflow, SettingsField.ComfyCaretMention, SettingsField.ComfyTimeoutSeconds, SettingsField.ComfyMaxPicturesPerCall, SettingsField.ComfyReinforceNegatives, SettingsField.ComfyShowPrompts, SettingsField.ComfyPictureStrip, SettingsField.ComfyOutputFolder],
         [SettingsField.ToolsDollarMention, SettingsField.ToolCollapseCount, SettingsField.CodeCollapseCount],
     ];
 
@@ -903,9 +909,9 @@ internal sealed partial class SettingsMenu
             or SettingsField.SkillHashMention or SettingsField.ReflectionAutoLearn
             or SettingsField.HideExitAutocomplete or SettingsField.CommandTypoIntercept or SettingsField.ShowWorkingDirectory or SettingsField.ShowToolbar
             or SettingsField.QueueMessages or SettingsField.SessionLogging or SettingsField.SessionTool
-            or SettingsField.ToolsDollarMention or SettingsField.ReflectionIncludesSessions or SettingsField.McpServers or SettingsField.GitNativeTools
+            or SettingsField.ToolsDollarMention or SettingsField.ReflectionIncludesSessions or SettingsField.ReflectionYieldsToTurns or SettingsField.McpServers or SettingsField.GitNativeTools
             or SettingsField.LlmCompactShowSummary or SettingsField.ShellToolBridge or SettingsField.ShellPoliceOutsidePaths
-            or SettingsField.ObsidianTools or SettingsField.ObsidianAllowDelete or SettingsField.SqlTools or SettingsField.SqlPercentMention or SettingsField.ComfyTools or SettingsField.ComfyReinforceNegatives or SettingsField.ComfyShowPrompts or SettingsField.ComfyCaretMention;
+            or SettingsField.ObsidianTools or SettingsField.ObsidianAllowDelete or SettingsField.SqlTools or SettingsField.SqlPercentMention or SettingsField.ComfyTools or SettingsField.ComfyReinforceNegatives or SettingsField.ComfyShowPrompts or SettingsField.ComfyCaretMention or SettingsField.ComfyPictureStrip;
 
     public static string FieldName(SettingsField field) => field switch
     {
@@ -981,7 +987,8 @@ internal sealed partial class SettingsMenu
         SettingsField.ComfyMaxPicturesPerCall => "ComfyUI max pictures per call",
         SettingsField.ComfyReinforceNegatives => "ComfyUI reinforce negatives",
         SettingsField.ComfyShowPrompts => "ComfyUI show prompts",
-        SettingsField.ComfyCaretMention => "^-mention enabled",
+        SettingsField.ComfyCaretMention => "ComfyUI ^-mention enabled",
+        SettingsField.ComfyPictureStrip => "ComfyUI picture strip",
         SettingsField.ComfyOutputFolder => "ComfyUI output folder",
         SettingsField.ComfyWorkflowsOffered => "ComfyUI workflows offered",
         SettingsField.ComfyAddWorkflow => "ComfyUI add workflow",
@@ -1026,6 +1033,7 @@ internal sealed partial class SettingsMenu
         SettingsField.ReflectionCooldownMinutes => "Reflection cooldown (minutes)",
         SettingsField.ReflectionCooldownMode => "Reflection cooldown mode",
         SettingsField.ReflectionIncludesSessions => "Reflection includes sessions",
+        SettingsField.ReflectionYieldsToTurns => "Reflection yields to turns",
         SettingsField.HideExitAutocomplete => "Hide /exit autocomplete",
         SettingsField.CommandTypoIntercept => "Command typo intercept",
         SettingsField.WelcomeSplash => "Welcome splash",
@@ -1135,6 +1143,7 @@ internal sealed partial class SettingsMenu
             SettingsField.ComfyReinforceNegatives => OnOff(data.ComfyReinforceNegatives),
             SettingsField.ComfyShowPrompts => OnOff(data.ComfyShowPrompts),
             SettingsField.ComfyCaretMention => OnOff(data.ComfyCaretMention),
+            SettingsField.ComfyPictureStrip => OnOff(data.ComfyPictureStrip),
             SettingsField.ComfyOutputFolder => string.IsNullOrWhiteSpace(data.ComfyOutputFolder) ? ComfyOutputHereLabel : data.ComfyOutputFolder,
             SettingsField.ComfyWorkflowsOffered => ComfyOfferedValue(data.ComfyWorkflowsOffered, InstalledComfyWorkflows(profileDirectory)),
             SettingsField.ComfyAddWorkflow => ComfyAddWorkflowLabel,
@@ -1184,6 +1193,7 @@ internal sealed partial class SettingsMenu
             SettingsField.ReflectionCooldownMinutes => Minutes(data.ReflectionCooldownMinutes),
             SettingsField.ReflectionCooldownMode => data.ReflectionCooldownMode,
             SettingsField.ReflectionIncludesSessions => OnOff(data.ReflectionIncludesSessions),
+            SettingsField.ReflectionYieldsToTurns => OnOff(data.ReflectionYieldsToTurns),
             SettingsField.HideExitAutocomplete => OnOff(data.HideExitAutocomplete),
             SettingsField.CommandTypoIntercept => OnOff(data.CommandTypoIntercept),
             SettingsField.WelcomeSplash => data.WelcomeSplashMode,
@@ -3132,6 +3142,7 @@ internal sealed partial class SettingsMenu
             SettingsField.ComfyReinforceNegatives => data.ComfyReinforceNegatives,
             SettingsField.ComfyShowPrompts => data.ComfyShowPrompts,
             SettingsField.ComfyCaretMention => data.ComfyCaretMention,
+            SettingsField.ComfyPictureStrip => data.ComfyPictureStrip,
             SettingsField.SqlPercentMention => data.SqlPercentMention,
             SettingsField.LlmCompactShowSummary => data.LlmCompactShowSummary,
             SettingsField.TtsVoicePreview => data.TtsVoicePreview,
@@ -3146,6 +3157,7 @@ internal sealed partial class SettingsMenu
             SettingsField.McpServers => data.McpServers,
             SettingsField.ReflectionAutoLearn => data.ReflectionAutoLearn,
             SettingsField.ReflectionIncludesSessions => data.ReflectionIncludesSessions,
+            SettingsField.ReflectionYieldsToTurns => data.ReflectionYieldsToTurns,
             SettingsField.HideExitAutocomplete => data.HideExitAutocomplete,
             SettingsField.CommandTypoIntercept => data.CommandTypoIntercept,
             SettingsField.ShowWorkingDirectory => data.ShowWorkingDirectory,
@@ -3183,6 +3195,7 @@ internal sealed partial class SettingsMenu
             case SettingsField.ComfyReinforceNegatives: data.ComfyReinforceNegatives = on; break;
             case SettingsField.ComfyShowPrompts: data.ComfyShowPrompts = on; break;
             case SettingsField.ComfyCaretMention: data.ComfyCaretMention = on; break;
+            case SettingsField.ComfyPictureStrip: data.ComfyPictureStrip = on; break;
             case SettingsField.SqlPercentMention: data.SqlPercentMention = on; break;
             case SettingsField.LlmCompactShowSummary: data.LlmCompactShowSummary = on; break;
             case SettingsField.TtsVoicePreview: data.TtsVoicePreview = on; break;
@@ -3197,6 +3210,7 @@ internal sealed partial class SettingsMenu
             case SettingsField.McpServers: data.McpServers = on; break;
             case SettingsField.ReflectionAutoLearn: data.ReflectionAutoLearn = on; break;
             case SettingsField.ReflectionIncludesSessions: data.ReflectionIncludesSessions = on; break;
+            case SettingsField.ReflectionYieldsToTurns: data.ReflectionYieldsToTurns = on; break;
             case SettingsField.HideExitAutocomplete: data.HideExitAutocomplete = on; break;
             case SettingsField.CommandTypoIntercept: data.CommandTypoIntercept = on; break;
             case SettingsField.ShowWorkingDirectory: data.ShowWorkingDirectory = on; break;
@@ -3243,6 +3257,7 @@ internal sealed partial class SettingsMenu
         SettingsField.ComfyReinforceNegatives => on ? "the model adds a few opposite tags to a workflow's negative" : "the workflow's negative as it is",
         SettingsField.ComfyShowPrompts => on ? "the prompt and negative sent to ComfyUI under each picture's line" : "just the picture's line",
         SettingsField.ComfyCaretMention => on ? "^ and part of a name lists the offered workflows on the line" : "^ is ordinary text",
+        SettingsField.ComfyPictureStrip => on ? "the session's pictures in a strip above the line" : "no strip",
         SettingsField.SqlPercentMention => on ? "% and part of a name lists the SQL connections on the line" : "% is ordinary text",
         SettingsField.LlmCompactShowSummary => on ? "the summary's lines or the pruned results, then the protected counts" : "the one compact notice alone",
         SettingsField.AgentSkills => on ? "the skills catalog, load_skill and skill_editor are offered" : "no skills, no project notes",
@@ -3252,6 +3267,7 @@ internal sealed partial class SettingsMenu
         SettingsField.McpServers => on ? "the configured MCP servers connect and their tools are offered" : "no MCP server is started; the pane still lists the config",
         SettingsField.ReflectionAutoLearn => on ? "enough tool calls, or an error it recovered from, teaches a skill" : "nothing is learned unasked; /learn and skill_editor still work",
         SettingsField.ReflectionIncludesSessions => on ? "the earlier sessions matching the turn open the reflection, readable too" : "a reflection reads the conversation on screen alone",
+        SettingsField.ReflectionYieldsToTurns => on ? "a turn pauses a running reflection; it runs again after the reply" : "a reflection runs on beside the turn",
         SettingsField.HideExitAutocomplete => on ? "hide '/exit' from the autocomplete list" : "show '/exit' in the autocomplete list",
         SettingsField.CommandTypoIntercept => on ? "a command typed without its slash or with extra ones offers the command" : "a command typed without its slash or with extra ones is sent as typed",
         SettingsField.ShowWorkingDirectory => on ? "show the working directory in the header" : "hide the working directory in the header",

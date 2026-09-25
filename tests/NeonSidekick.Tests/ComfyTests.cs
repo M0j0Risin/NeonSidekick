@@ -596,7 +596,7 @@ public sealed class ComfyTests : IDisposable
         Assert.Equal(ComfyText.ImagineUsage, ComfyImagine.Parse("  ", workflows).Error);
         Assert.Equal(ComfyText.ImagineUsage, ComfyImagine.Parse("pony-txt2img", workflows).Error);
         Assert.Equal("--size takes WxH (1024x1024), not 'big'", ComfyImagine.Parse("a cat --size big", workflows).Error);
-        Assert.Equal("Error: count must be 1 to 4, not '9'", ComfyImagine.Parse("a cat --count 9", workflows).Error);
+        Assert.Equal("Error: count must be 1 to 5, not '9'", ComfyImagine.Parse("a cat --count 9", workflows).Error);
     }
 
     [Fact]
@@ -624,6 +624,20 @@ public sealed class ComfyTests : IDisposable
         Assert.Equal("on", SettingsMenu.FieldValue(SettingsField.ComfyShowPrompts, new AppSettingsData(), ""));   // on by default (later still on 2026-09-24)
         Assert.True(SettingsMenu.IsToggle(SettingsField.ComfyShowPrompts));
         Assert.Equal("ComfyUI show prompts", SettingsMenu.FieldName(SettingsField.ComfyShowPrompts));
+    }
+
+    /// <summary>The picture strip's toggle (later still on 2026-09-24): on by default, on the ComfyUI tab under show prompts, and its hint words.</summary>
+    [Fact]
+    public void PictureStrip_Setting_IsAToggle_OnByDefault_UnderShowPrompts()
+    {
+        Assert.True(new AppSettingsData().ComfyPictureStrip);
+        Assert.Equal("on", SettingsMenu.FieldValue(SettingsField.ComfyPictureStrip, new AppSettingsData(), ""));
+        Assert.True(SettingsMenu.IsToggle(SettingsField.ComfyPictureStrip));
+        Assert.Equal("ComfyUI picture strip", SettingsMenu.FieldName(SettingsField.ComfyPictureStrip));
+        var tab = SettingsMenu.ToolsTabFields.Single(fields => fields.Contains(SettingsField.ComfyTools)).ToList();
+        Assert.Equal(tab.IndexOf(SettingsField.ComfyShowPrompts) + 1, tab.IndexOf(SettingsField.ComfyPictureStrip));
+        Assert.Equal("← → pictures", ComfyText.StripHint);
+        Assert.Equal("← → picture 2/7 · Enter opens", ComfyText.StripSelectedHint(2, 7));
     }
 
     /// <summary>Later still on 2026-09-24, the user's call: tips keep their lines, indented under the workflow, blank runs squeezed to one.</summary>
@@ -849,10 +863,10 @@ public sealed class ComfyTests : IDisposable
         var tool = new GenerateImageTool(_studio);
         var workflows = _studio.Catalog.Workflows;
 
-        Assert.Equal(4, tool.MaxCount);   // the default
-        Assert.Equal("Error: count must be 1 to 4, not '5'", (string?)await tool.InvokeAsync(Args(("prompt", "x"), ("count", 5))));
-        Assert.Contains("How many pictures, 1 to 4,", tool.JsonSchema.GetRawText());
-        Assert.Equal("Error: count must be 1 to 4, not '9'", ComfyImagine.Parse("a cat --count 9", workflows).Error);
+        Assert.Equal(5, tool.MaxCount);   // the default (4 until later on 2026-09-24)
+        Assert.Equal("Error: count must be 1 to 5, not '6'", (string?)await tool.InvokeAsync(Args(("prompt", "x"), ("count", 6))));
+        Assert.Contains("How many pictures, 1 to 5,", tool.JsonSchema.GetRawText());
+        Assert.Equal("Error: count must be 1 to 5, not '9'", ComfyImagine.Parse("a cat --count 9", workflows).Error);
 
         _settings.ComfyMaxPicturesPerCall = 6;
         Assert.Contains("How many pictures, 1 to 6,", tool.JsonSchema.GetRawText());   // rebuilt for the new cap

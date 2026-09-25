@@ -389,12 +389,15 @@ public sealed class InputLine
     /// empty draft, with whether the event just before it was a Delete it spent — the "twice in a row" is the
     /// line's to say, since the screen never sees the keys in between: true means the key was spent (the screen
     /// arms, or deletes the profile's splash picture on screen), false or null the key as ever.
+    /// <paramref name="emptyEnter"/> (later still on 2026-09-24, the picture strip) is asked on an Enter that has nothing
+    /// to send over an empty draft — a row of spaces is not asked (and <paramref name="allowEmpty"/> off): true means the key was spent (the screen opens the highlighted
+    /// picture) and the read goes on; false or null the key as ever — the blank draft cleared.
     /// <paramref name="mask"/> (later on 2026-09-23, the SQL tab's <c>SQL set password</c>) draws every character as
     /// <see cref="MaskGlyph"/> — the cursor, the selection and the editing keys as ever — never remembers the line, and
     /// never copies a selection of it (Ctrl+C over one is the copy-failed notice, not the secret on the clipboard).
     /// Throws <see cref="OperationCanceledException"/> when <paramref name="cancellationToken"/> fires.
     /// </summary>
-    public async Task<InputResult> ReadAsync(string initialText = "", bool remember = true, bool allowEmpty = false, ConsoleKey? pushToTalk = null, CancellationToken cancellationToken = default, CancellationToken wake = default, CancellationToken alert = default, bool escapeCancels = false, bool multiline = false, MentionFolderAction? mentions = null, int pastePreview = 0, Func<bool>? softEscape = null, Func<bool>? interrupt = null, Func<string, CancellationToken, Task<string?>>? intercept = null, Action? beforeCommit = null, IReadOnlyList<InputEvent>? replay = null, Func<int, bool>? emptyArrow = null, bool mask = false, Func<bool, bool>? emptyDelete = null)
+    public async Task<InputResult> ReadAsync(string initialText = "", bool remember = true, bool allowEmpty = false, ConsoleKey? pushToTalk = null, CancellationToken cancellationToken = default, CancellationToken wake = default, CancellationToken alert = default, bool escapeCancels = false, bool multiline = false, MentionFolderAction? mentions = null, int pastePreview = 0, Func<bool>? softEscape = null, Func<bool>? interrupt = null, Func<string, CancellationToken, Task<string?>>? intercept = null, Action? beforeCommit = null, IReadOnlyList<InputEvent>? replay = null, Func<int, bool>? emptyArrow = null, bool mask = false, Func<bool, bool>? emptyDelete = null, Func<bool>? emptyEnter = null)
     {
         ArgumentNullException.ThrowIfNull(initialText);
 
@@ -716,6 +719,11 @@ public sealed class InputLine
                         string submitted = _pastes.Expand(draftText).TrimEnd();
                         if (submitted.Length == 0 && !allowEmpty)
                         {
+                            if (text.Length == 0 && emptyEnter is not null && emptyEnter())
+                            {
+                                continue;
+                            }
+
                             // Nothing to send; a row of spaces is not worth keeping either.
                             text.Clear();
                             cursor = 0;

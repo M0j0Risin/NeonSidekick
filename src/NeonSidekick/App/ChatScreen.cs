@@ -561,6 +561,9 @@ internal sealed partial class ChatScreen
 
     // Every picture drawn, by id (its index); read on the watcher task too, so under its own lock.
     private readonly List<PictureSource> _pictures = [];
+
+    /// <summary>The session's ComfyUI pictures over the pane's upper rule (later still on 2026-09-24): filled by <see cref="AddToPictureStrip"/>, emptied with every new conversation.</summary>
+    private readonly PictureStrip _pictureStrip = new();
     private readonly InfoPane _info;
     private readonly FolderPane _folderPane;
     private readonly MenuPane _menuPane;
@@ -900,6 +903,9 @@ internal sealed partial class ChatScreen
             // not Resolve: the draw must not warn on a hand-edited word, the turn does. The disk and
             // the officer (2026-09-22) follow Memory and Shell police outside paths the same way.
             Toolbar = () => _effective() is { ShowToolbar: true } shown ? new ScreenPane.ToolbarParts(ToolbarStripFor(shown.Memory, ToolbarPolicy(shown), shown.ShellPoliceOutsidePaths), WorkingDirectory.Resolve(shown.WorkingDirectory, _settings.ProfileDirectory)) : null,
+            // The picture strip over the upper rule (later still on 2026-09-24): while ComfyUI picture strip is on;
+            // read per draw and on the tick, so a flip shows at once.
+            PictureStrip = () => _effective().ComfyPictureStrip ? _pictureStrip : null,
             Placeholder = InputPlaceholder,
         };
         _keys.Mirror = _pane;
@@ -1260,6 +1266,13 @@ internal sealed partial class ChatScreen
         }
 
         string rest = HintLine(TimerText.StatusLine(_timers.Snapshot()), UsageText.HintPart(_session.Usage, _session.ContextLength), _hintReading?.StatusLine());
+        if (!SplashArrowsOffered() && _pane.DraftEmpty && PictureStripOffered())
+        {
+            // The picture strip's arrows (later still on 2026-09-24): the splash keeps them while it stands.
+            int at = _pictureStrip.Selected;
+            return SplashHintLine(rest, at >= 0 ? ComfyText.StripSelectedHint(at + 1, _pictureStrip.Count) : ComfyText.StripHint);
+        }
+
         if (!SplashArrowsOffered() || !_pane.DraftEmpty)
         {
             return rest;
@@ -1560,6 +1573,7 @@ internal sealed partial class ChatScreen
                 // reflections' queue for the turn's end, since the turn task is the one transcript writer.
                 if (_queuedClicks.Second(InputLine.HintPairKey(hit)))
                 {
+                    ForgetPausedLearn();
                     _session.CancelLearning();
                     _learnNotices.Enqueue(LearnCancelledNotice);
                 }
@@ -2011,8 +2025,11 @@ internal sealed partial class ChatScreen
     /// </summary>
     private bool QueueOrStart(PendingLearn pending, string log)
     {
+        // A paused one takes its place in the slot first, so a start here never loses its outcome.
+        ResumePausedLearn();
         bool forced = pending.Forced;
-        if (!_session.IsLearning)
+        bool running = _session.IsLearning;
+        if (!running && _pendingLearn is null && !LearnWaitsForQueue)
         {
             DiagnosticLog.Info(SkillCatalog.Category, (forced ? "Reflection (/learn): " : "Reflection: ") + log + ".");
             StartLearn(pending);
@@ -2021,18 +2038,109 @@ internal sealed partial class ChatScreen
 
         if (!forced && _pendingLearn is { Forced: true })
         {
-            DiagnosticLog.Info(SkillCatalog.Category, "No reflection: a /learn is already waiting behind the running one (" + log + ").");
+            DiagnosticLog.Info(SkillCatalog.Category, "No reflection: a /learn is already waiting in the slot (" + log + ").");
             return false;
         }
 
-        DiagnosticLog.Info(SkillCatalog.Category, (forced ? "Reflection (/learn) queued" : "Reflection queued") + " behind the running one (" + log + ")" + (_pendingLearn is null ? "." : "; the earlier waiting turn is displaced."));
+        string where = running ? " behind the running one (" : " for the queued messages (";
+        DiagnosticLog.Info(SkillCatalog.Category, (forced ? "Reflection (/learn) queued" : "Reflection queued") + where + log + ")" + (_pendingLearn is null ? "." : "; the earlier waiting turn is displaced."));
         _pendingLearn = pending;
-        _transcript.Notice(pending.QueuedNotice);
+        if (running)
+        {
+            // Waiting on the queue says nothing (2026-09-24): the brain comes up once the messages are answered.
+            _transcript.Notice(pending.QueuedNotice);
+        }
+
         // The running one may have ended between the check above and now, its nudge already
         // spent: start from the slot here rather than at the next line.
         DrainLearn();
         return true;
     }
+
+    /// <summary>
+    /// The reflection now running, as it was started (<see cref="StartLearn"/>): what a turn's start
+    /// puts aside when it pauses it (<see cref="YieldLearn"/>). Stale once it ends; read only while
+    /// <see cref="LlmSession.IsLearning"/>. The turn task's.
+    /// </summary>
+    private PendingLearn? _runningLearn;
+
+    /// <summary>
+    /// The reflection a turn's start paused (<c>Reflection yields to turns</c>, 2026-09-24, the user's
+    /// ask: on a one-slot server a reflection holds the reply up), waiting for its job to answer so
+    /// <see cref="ResumePausedLearn"/> can put it back in the slot. Set on the turn task; a double-click
+    /// on the brain clears it from the watcher task too (a cancel the user asked for is final), hence
+    /// <see cref="Interlocked.Exchange{T}(ref T, T)"/> on every take.
+    /// </summary>
+    private PendingLearn? _pausedLearn;
+
+    /// <summary>The Info line when a turn's start pauses the running reflection. Pinned.</summary>
+    public const string LearnPausedLogLine = "Reflection paused for the turn; it runs again after the reply.";
+
+    /// <summary>The Info line when the paused reflection goes back in the slot. Pinned.</summary>
+    public const string LearnResumedLogLine = "The paused reflection waits in the slot to run again.";
+
+    /// <summary>The Info line when the paused reflection had already finished as the pause landed, so it never runs again. Pinned.</summary>
+    public const string LearnPauseMissedLogLine = "The paused reflection had already finished; it does not run again.";
+
+    /// <summary>The Info line when a newer reflection holds the slot the paused one would go back to. Pinned.</summary>
+    public const string LearnPauseDisplacedLogLine = "The paused reflection does not run again: a newer one waits in the slot.";
+
+    /// <summary>
+    /// At a turn's start (2026-09-24): under <c>Reflection yields to turns</c> the running reflection
+    /// is cancelled so the reply has the server, and its snapshot is kept to run again
+    /// (<see cref="ResumePausedLearn"/>). Nothing printed — the brain leaving the strip says it.
+    /// </summary>
+    private void YieldLearn(AppSettingsData effective)
+    {
+        if (!effective.ReflectionYieldsToTurns || !_session.IsLearning || _runningLearn is not { } running)
+        {
+            return;
+        }
+
+        Volatile.Write(ref _pausedLearn, running);
+        _session.CancelLearning();
+        DiagnosticLog.Info(SkillCatalog.Category, LearnPausedLogLine);
+    }
+
+    /// <summary>
+    /// The paused reflection back in the slot once its job has answered, on the turn task. Only a
+    /// job that answered <see cref="SkillLearnOutcome.Cancelled"/> runs again: one that finished as
+    /// the pause landed wrote its skill (or found nothing) already. The slot's rules hold, and the
+    /// paused one is the older: it takes the slot only as a <c>/learn</c> over an automatic one.
+    /// </summary>
+    private void ResumePausedLearn()
+    {
+        if (_session.IsLearning || Volatile.Read(ref _pausedLearn) is null || Interlocked.Exchange(ref _pausedLearn, null) is not { } paused)
+        {
+            return;
+        }
+
+        if (_session.Learning is not { IsCompletedSuccessfully: true } job || job.Result.Outcome != SkillLearnOutcome.Cancelled)
+        {
+            DiagnosticLog.Info(SkillCatalog.Category, LearnPauseMissedLogLine);
+            return;
+        }
+
+        if (_pendingLearn is { } waiting && (waiting.Forced || !paused.Forced))
+        {
+            DiagnosticLog.Info(SkillCatalog.Category, LearnPauseDisplacedLogLine);
+            return;
+        }
+
+        DiagnosticLog.Info(SkillCatalog.Category, LearnResumedLogLine);
+        _pendingLearn = paused;
+    }
+
+    /// <summary>
+    /// Whether the slot waits for the queue (2026-09-24): under <c>Reflection yields to turns</c> a
+    /// reflection started with messages about to go would be paused by each of them in turn, so it
+    /// starts once the loop top has sent the last (the same test as the loop's own take).
+    /// </summary>
+    private bool LearnWaitsForQueue =>
+        _effective().ReflectionYieldsToTurns && _restoreDraft is null && !_queue.Held && _queue.Count > 0;
+
+    /// <summary>A cancel the user asked for (the brain's double-click): the paused reflection, if any, never runs again. Safe from the watcher task.</summary>
+    private void ForgetPausedLearn() => Interlocked.Exchange(ref _pausedLearn, null);
 
     /// <summary>
     /// The one starter: the job under <see cref="LlmSession.StartLearning"/> (nothing printed — the
@@ -2049,6 +2157,7 @@ internal sealed partial class ChatScreen
             return;
         }
 
+        _runningLearn = pending;
         _ = job.ContinueWith(t =>
         {
             var result = t.Result;
@@ -2190,7 +2299,9 @@ internal sealed partial class ChatScreen
             _transcript.Notice(line);
         }
 
-        if (_pendingLearn is { } next && !_session.IsLearning)
+        ResumePausedLearn();
+        _learnAwaitsQueue = LearnWaitsForQueue;
+        if (_pendingLearn is { } next && !_session.IsLearning && !_learnAwaitsQueue)
         {
             _pendingLearn = null;
             DiagnosticLog.Info(SkillCatalog.Category, (next.Forced ? "Reflection (/learn)" : "Reflection") + " starts from the slot.");
@@ -2199,7 +2310,17 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>Whether a reflection's notice or a queued reflection waits for the loop top (the idle read's arm-time check).</summary>
-    private bool LearnPending => !_learnNotices.IsEmpty || (_pendingLearn is not null && !_session.IsLearning);
+    private bool LearnPending =>
+        !_learnNotices.IsEmpty
+        || (!_session.IsLearning && !_learnAwaitsQueue && (Volatile.Read(ref _pausedLearn) is not null || _pendingLearn is not null));
+
+    /// <summary>
+    /// <see cref="LearnWaitsForQueue"/> as the last <see cref="DrainLearn"/> found it (2026-09-24): the loop
+    /// top drains before it takes the next queued message, so the read that replays the last one sees
+    /// the queue empty — read live, <see cref="LearnPending"/> would cut that read short. The last
+    /// queued turn's end drains again and starts the slot.
+    /// </summary>
+    private bool _learnAwaitsQueue;
 
     /// <summary>
     /// The state a turn would be prepared from right now, read as <see cref="RunTurnAsync"/> reads it
@@ -2323,7 +2444,7 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// The input line's <c>^</c>-mention list (later still on 2026-09-24): the offered ComfyUI workflows (<see cref="ComfyChoices"/>)
-    /// while the setting <c>^-mention enabled</c> is on and the image tools are offered (<see cref="ComfyOffered"/>), else
+    /// while the setting <c>ComfyUI ^-mention enabled</c> is on and the image tools are offered (<see cref="ComfyOffered"/>), else
     /// nothing — <c>^</c> is ordinary text then. A hidden workflow is left out: the model could not run it.
     /// </summary>
     private IReadOnlyList<CompletionItem> CaretChoices()
@@ -4132,6 +4253,7 @@ internal sealed partial class ChatScreen
             _lastTrace = null;
             _learnTrace = null;
             _session.Usage.ResetConversation();
+            _pictureStrip.Clear();
             _log.Clear();
             ForgetReading();
             _sessionId = id;
@@ -5187,6 +5309,8 @@ internal sealed partial class ChatScreen
         else
         {
             ComfyLines(generation.Text, line => _transcript.Notice(ComfyText.Glyph + line));
+            // The strip first: the picture's window box then leaves its rows.
+            AddToPictureStrip(generation.Images);
             ShowPictures(generation.Images);
             _imagineNotes.Add(ComfyText.ImagineNote(generation.Text));
             _imagineImages.AddRange(generation.Images);
@@ -5200,7 +5324,7 @@ internal sealed partial class ChatScreen
     /// the pane's rows. <c>/view</c>'s, a lone <c>/imagine</c> picture's, and every thumbnail's under <c>fullsize</c> (2026-09-24).
     /// </summary>
     private ThumbnailBox WindowBox() =>
-        ThumbnailSize.Fit(_pane.Profile.Width, _pane.Profile.Height, _pane.Enabled ? ScreenPane.PaneRows + _pane.InputRows + _pane.ToolbarRows : 0);
+        ThumbnailSize.Fit(_pane.Profile.Width, _pane.Profile.Height, _pane.Enabled ? ScreenPane.PaneRows + _pane.InputRows + _pane.ToolbarRows + _pane.StripRows : 0);
 
     /// <summary>One picture as large as the window allows (the <c>/view</c> box), several as a thumbnail strip.</summary>
     private void ShowPictures(IReadOnlyList<ImageAttachment> images)
@@ -5991,6 +6115,7 @@ internal sealed partial class ChatScreen
                             // The brain is drawn only while a reflection runs, so the click is its
                             // cancel (the busy row's too since 2026-09-24, through HintClickLine). The job
                             // answers Cancelled, which LearnNotice keeps quiet, so the line is written here.
+                            ForgetPausedLearn();
                             _session.CancelLearning();
                             _transcript.Notice(LearnCancelledNotice);
                         }
@@ -6069,6 +6194,7 @@ internal sealed partial class ChatScreen
         {
             // A reflection still running has no screen to report to; its request aborts, and one waiting never starts.
             _pendingLearn = null;
+            ForgetPausedLearn();
             _session.CancelLearning();
             _timers.Dispose();
             // The background processes go with the screen (2026-09-21): what still runs is killed, tree and all.
@@ -6213,8 +6339,9 @@ internal sealed partial class ChatScreen
                 intercept: TypoInterceptAsync,
                 beforeCommit: DismissSplash,
                 replay: replay,
-                emptyArrow: CycleSplash,
-                emptyDelete: DeleteSplash).ConfigureAwait(false);
+                emptyArrow: step => CycleSplash(step) || StepPictureStrip(step),
+                emptyDelete: DeleteSplash,
+                emptyEnter: OpenStripPicture).ConfigureAwait(false);
         }
         finally
         {
@@ -6403,6 +6530,7 @@ internal sealed partial class ChatScreen
             _lastTrace = null;
             _learnTrace = null;
             _session.Usage.ResetConversation();
+            _pictureStrip.Clear();
             _log.Clear();
             ForgetReading();
             ForgetSession();
@@ -6772,6 +6900,7 @@ internal sealed partial class ChatScreen
         _lastTrace = null;
         _learnTrace = null;
         _session.Usage.ResetConversation();
+        _pictureStrip.Clear();
         ForgetReading();
         ForgetSession();
     }
@@ -7306,6 +7435,7 @@ internal sealed partial class ChatScreen
             _lastTrace = null;
             _learnTrace = null;
             _session.Usage.ResetConversation();
+            _pictureStrip.Clear();
             _log.Clear();
             ForgetSession();
             _transcript.Notice(ToolsChangedNotice(_effective().LlmOfferTools));
@@ -8065,6 +8195,7 @@ internal sealed partial class ChatScreen
         _lastTrace = null;
         _learnTrace = null;
         _session.Usage.ResetConversation();
+        _pictureStrip.Clear();
         _log.Clear();
         ForgetReading();
         ForgetSplash();
@@ -8630,6 +8761,8 @@ internal sealed partial class ChatScreen
         var paneToken = _paneClose.Token;
 
         var effective = _effective();
+        // The server is the reply's (2026-09-24): a running reflection pauses and runs again after it.
+        YieldLearn(effective);
         var speaker = effective.TtsOutput && _speech.IsReady ? _speech.BeginTurn(cancellationToken) : null;
         // The cancel (the second ESC, the wake phrase, the app token) silences the reply exactly as
         // before the tail outlived the turn; the registration goes with the turn, the speaker may not.
@@ -9043,6 +9176,59 @@ internal sealed partial class ChatScreen
         return (tiles, ids);
     }
 
+    // ── The picture strip (later still on 2026-09-24) ───────────────────────
+
+    /// <summary>
+    /// The pictures ComfyUI made (a <c>generate_image</c> result, an <c>/imagine</c>) into the strip over the input line,
+    /// in the order they came, so the last one lands leftmost; each registered for a double-click as the transcript's are.
+    /// Kept whatever <c>ComfyUI picture strip</c> says — the setting hides the strip, it does not stop the gathering, so a
+    /// flip back on shows the session's pictures. <c>Show image thumbnails</c> is not consulted. Any thread.
+    /// </summary>
+    private void AddToPictureStrip(IReadOnlyList<ImageAttachment> images)
+    {
+        foreach (var image in images)
+        {
+            if (ImageThumbnail.Read(image, PictureStrip.MaxColumns, PictureStrip.Rows) is { } tile)
+            {
+                _pictureStrip.Add(tile, RegisterPicture(image, sandbox: true));
+            }
+        }
+
+        _pane.RedrawStrip();
+    }
+
+    /// <summary>Whether the strip is on the screen now: the pane, the setting, and a window that has room for it (<see cref="ScreenPane.StripRows"/> as last drawn).</summary>
+    private bool PictureStripOffered() =>
+        _pane.Enabled && _effective().ComfyPictureStrip && _pictureStrip.Count > 0 && _pane.StripRows > 0;
+
+    /// <summary>
+    /// Left or Right at an empty idle line with the strip on the screen and the splash declining the key (the input line's
+    /// <c>emptyArrow</c> hook, after <see cref="CycleSplash"/>): the highlight moves (<see cref="PictureStrip.Step"/>) and the
+    /// pane follows at once. False — the key is the line's — without the strip.
+    /// </summary>
+    private bool StepPictureStrip(int step)
+    {
+        if (!PictureStripOffered() || !_pictureStrip.Step(step))
+        {
+            return false;
+        }
+
+        _pane.RedrawStrip();
+        return true;
+    }
+
+    /// <summary>Enter with nothing to send (the input line's <c>emptyEnter</c> hook): the highlighted picture opened as a double-click opens it. False without the strip or a highlight.</summary>
+    private bool OpenStripPicture()
+    {
+        if (!PictureStripOffered() || _pictureStrip.SelectedId is not { } id)
+        {
+            return false;
+        }
+
+        OpenPicture(id);
+        return true;
+    }
+
     // ── Opening a picture from the transcript (later on 2026-09-24) ─────────
 
     /// <summary>A double-clicked picture whose file is gone since it was drawn. Pinned.</summary>
@@ -9195,6 +9381,11 @@ internal sealed partial class ChatScreen
                 // The picture's line, then — with ComfyUI show prompts on (later still on 2026-09-24) — what was sent, in full.
                 ComfyLines(result.Text, _transcript.ToolNote);
                 ToolThumbnails(result, thumbnails);
+                if (result.Images is { Count: > 0 } made)
+                {
+                    AddToPictureStrip(made);
+                }
+
                 break;
             case TurnEvent.ToolResult result when QuietTools.Contains(result.Name):
                 _transcript.ToolNote(result.Text);

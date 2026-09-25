@@ -17,7 +17,10 @@ namespace NeonSidekick.Llm.Tools;
 /// whatever scope is passed — so the model can never shadow a skill with a copy. <c>summary</c>
 /// (2026-09-19, the user's ask) is the model's sentence on what changed, kept on
 /// <see cref="LastResult"/> for the reflection's transcript line (printed whenever it is given);
-/// the tool's own answer never repeats it, and a normal turn's call may pass it unread.
+/// the tool's own answer never repeats it, and a normal turn's call may pass it unread. <c>scope</c> is
+/// optional since 2026-09-24 (the user's report: models sent <c>""</c> more often than not, were refused and
+/// retried): blank means <c>profile</c>, and <c>update</c> takes any value, since it changes the skill where it
+/// lives anyway; only a <c>create</c> naming a root that is not writable is still refused.
 /// </summary>
 public sealed class SkillEditorTool : AIFunction
 {
@@ -38,13 +41,13 @@ public sealed class SkillEditorTool : AIFunction
           "type": "object",
           "properties": {
             "action": { "type": "string", "enum": ["create", "update"], "description": "create writes a new skill (the name must not be a skill in any folder yet); update changes an existing one's description, instructions or both, wherever it lives." },
-            "scope": { "type": "string", "enum": ["profile", "global"], "description": "Where a new skill goes: profile keeps it for this profile only, global for every profile. For update, the skill is changed where it already is, whatever scope you pass." },
+            "scope": { "type": "string", "enum": ["profile", "global"], "description": "Where a new skill goes: profile (the default) keeps it for this profile only, global for every profile. Optional; ignored for update, which changes the skill where it already is." },
             "name": { "type": "string", "description": "The skill's name and folder: 1 to 64 lowercase letters, digits and hyphens (pdf-processing), not starting or ending with a hyphen." },
             "description": { "type": "string", "description": "One or two sentences on what the skill does and when to use it, with the words a task would contain; at most 1,024 characters. Required for create." },
             "instructions": { "type": "string", "description": "The skill's Markdown body: the steps to follow, examples, edge cases. Required for create; replaces the whole body on update." },
             "summary": { "type": "string", "description": "One or two sentences on what you changed and why, for the user to read; never part of the skill. Optional." }
           },
-          "required": ["action", "scope", "name"]
+          "required": ["action", "name"]
         }
         """);
 
@@ -91,7 +94,8 @@ public sealed class SkillEditorTool : AIFunction
             default: return SkillText.BadAction(action);
         }
 
-        if (!SkillScopes.TryParseWritable(scope, out var where))
+        // Blank is the profile; an update redirects to where the skill lives, so its scope is never refused.
+        if (!SkillScopes.TryParseWritable(scope, out var where) && create && !string.IsNullOrWhiteSpace(scope))
         {
             return SkillText.BadScope(scope);
         }

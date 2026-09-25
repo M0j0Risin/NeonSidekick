@@ -13,6 +13,13 @@ public static class ComfyText
     /// <summary>The glyph the image lines open with.</summary>
     public const string Glyph = "🎨 ";
 
+    /// <summary>The hint row's lead while the picture strip stands with nothing highlighted and the draft empty (later still on 2026-09-24). Pinned.</summary>
+    public const string StripHint = "← → pictures";
+
+    /// <summary>The hint row's lead while picture <paramref name="index"/> (one-based, the newest 1) of <paramref name="count"/> is highlighted. Pinned.</summary>
+    public static string StripSelectedHint(int index, int count) =>
+        $"← → picture {index.ToString(CultureInfo.InvariantCulture)}/{count.ToString(CultureInfo.InvariantCulture)} · Enter opens";
+
     /// <summary>The sentence when <c>ComfyUI URL</c> is empty or no http(s) URL. Pinned.</summary>
     public const string NoServer = "Error: no ComfyUI server is set; set ComfyUI URL on the ComfyUI tab of /tools (or NEONSIDEKICK_COMFY_URL)";
 

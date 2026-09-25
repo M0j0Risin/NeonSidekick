@@ -105,6 +105,7 @@ public class AppSettingsTests : IDisposable
         ReflectionMinToolCalls = 7,
         ReflectionReasoning = "high",
         ReflectionWindow = 5,
+        ReflectionYieldsToTurns = false,
         SkillCompactMode = "unprotected",
         SkillHashMention = false,
         SessionLogging = false,
@@ -207,6 +208,7 @@ public class AppSettingsTests : IDisposable
         Assert.Equal(expected.ReflectionMinToolCalls, actual.ReflectionMinToolCalls);
         Assert.Equal(expected.ReflectionReasoning, actual.ReflectionReasoning);
         Assert.Equal(expected.ReflectionWindow, actual.ReflectionWindow);
+        Assert.Equal(expected.ReflectionYieldsToTurns, actual.ReflectionYieldsToTurns);
         Assert.Equal(expected.SkillCompactMode, actual.SkillCompactMode);
         Assert.Equal(expected.SkillHashMention, actual.SkillHashMention);
         Assert.Equal(expected.SessionLogging, actual.SessionLogging);
@@ -318,6 +320,7 @@ public class AppSettingsTests : IDisposable
             d.ReflectionMinToolCalls = full.ReflectionMinToolCalls;
             d.ReflectionReasoning = full.ReflectionReasoning;
             d.ReflectionWindow = full.ReflectionWindow;
+            d.ReflectionYieldsToTurns = full.ReflectionYieldsToTurns;
             d.SkillCompactMode = full.SkillCompactMode;
             d.SkillHashMention = full.SkillHashMention;
             d.SessionLogging = full.SessionLogging;
@@ -426,6 +429,7 @@ public class AppSettingsTests : IDisposable
                 d.ReflectionMinToolCalls = full.ReflectionMinToolCalls;
                 d.ReflectionReasoning = full.ReflectionReasoning;
                 d.ReflectionWindow = full.ReflectionWindow;
+                d.ReflectionYieldsToTurns = full.ReflectionYieldsToTurns;
                 d.SkillCompactMode = full.SkillCompactMode;
                 d.SkillHashMention = full.SkillHashMention;
                 d.SessionLogging = full.SessionLogging;
@@ -1099,6 +1103,7 @@ public class AppSettingsTests : IDisposable
         Assert.Equal(0, AppSettingsData.MinReflectionCooldownMinutes);
         Assert.Equal(1440, AppSettingsData.MaxReflectionCooldownMinutes);
         Assert.True(s.ReflectionIncludesSessions);
+        Assert.True(s.ReflectionYieldsToTurns);
         Assert.Equal(1, AppSettingsData.MinAskMaxQuestions);
         Assert.Equal(10, AppSettingsData.MaxAskMaxQuestions);
         Assert.Equal(10, AppSettingsData.DefaultAskMaxQuestions);

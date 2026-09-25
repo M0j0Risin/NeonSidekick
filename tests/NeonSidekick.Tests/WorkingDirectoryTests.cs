@@ -536,6 +536,23 @@ public sealed class WorkingDirectoryTests : IDisposable
     }
 
     [Fact]
+    public void FilesPattern_BraceAlternatives_NameAndPathMixed()
+    {
+        // 2026-09-24: a model's *.{png,jpg,jpeg,gif,webp} found nothing — braces were taken literally.
+        Put("a.png", "x");
+        Put("b.JPG", "x");
+        Put("c.txt", "x");
+        Put(@"d\e.webp", "x");
+        Put(@"d\f.txt", "x");
+
+        Assert.Equal(new[] { "a.png", "b.JPG", @"d\e.webp" }, _files.Find("*.{png,jpg,jpeg,gif,webp}", "").Paths);
+        Assert.Equal(new[] { "c.txt", @"d\e.webp" }, _files.Find("{d/*.webp,c.*}", "").Paths);
+        Assert.Equal(new[] { @"d\e.webp", @"d\f.txt" }, _files.Find("d/*.{webp,txt}", "").Paths);
+        Assert.Equal(new[] { "c.txt", @"d\f.txt" }, _files.Search("x", "", "*.{txt,md}", false, CancellationToken.None).Hits.Select(h => h.RelativePath));
+        Assert.Empty(_files.Find("*.{png", "").Paths);   // an unclosed brace stays literal
+    }
+
+    [Fact]
     public void Search_Context_RidesEachHit_ClippedLikeTheHit_AndCountsForNothing()
     {
         Put("a.txt", "l1\nl2 needle\nl3\nl4\nl5\nl6 needle\nl7");

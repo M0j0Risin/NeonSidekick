@@ -52,17 +52,17 @@ public class SkillEditorToolTests : IDisposable
         Assert.Contains("Never deletes anything", _tool.Description);
         Assert.Contains("use update — never create a copy under another scope", _tool.Description);
         Assert.Contains("wherever it lives", _tool.JsonSchema.GetProperty("properties").GetProperty("action").GetProperty("description").GetString());
-        Assert.Contains("the skill is changed where it already is, whatever scope you pass", _tool.JsonSchema.GetProperty("properties").GetProperty("scope").GetProperty("description").GetString());
+        Assert.Contains("profile (the default)", _tool.JsonSchema.GetProperty("properties").GetProperty("scope").GetProperty("description").GetString());
         var schema = _tool.JsonSchema;
         Assert.Equal(["action", "scope", "name", "description", "instructions", "summary"], schema.GetProperty("properties").EnumerateObject().Select(p => p.Name));
-        Assert.Equal(["action", "scope", "name"], schema.GetProperty("required").EnumerateArray().Select(e => e.GetString()));
+        Assert.Equal(["action", "name"], schema.GetProperty("required").EnumerateArray().Select(e => e.GetString()));
         Assert.Equal(["create", "update"], schema.GetProperty("properties").GetProperty("action").GetProperty("enum").EnumerateArray().Select(e => e.GetString()));
         Assert.Equal(["profile", "global"], schema.GetProperty("properties").GetProperty("scope").GetProperty("enum").EnumerateArray().Select(e => e.GetString()));
         Assert.All(schema.GetProperty("properties").EnumerateObject(), p => Assert.False(string.IsNullOrWhiteSpace(p.Value.GetProperty("description").GetString())));
         // The summary argument (2026-09-19): optional, for the reflection's transcript line, never the skill.
         Assert.Equal("summary", SkillEditorTool.SummaryArgument);
         Assert.Equal("One or two sentences on what you changed and why, for the user to read; never part of the skill. Optional.", schema.GetProperty("properties").GetProperty("summary").GetProperty("description").GetString());
-        Assert.Equal(["action", "scope", "name"], schema.GetProperty("required").EnumerateArray().Select(e => e.GetString()));
+        Assert.Equal(["action", "name"], schema.GetProperty("required").EnumerateArray().Select(e => e.GetString()));
     }
 
     [Fact]
@@ -127,6 +127,21 @@ public class SkillEditorToolTests : IDisposable
         Assert.False(Directory.Exists(_roots.Profile));
         // A name that is a skill nowhere: create is the right next call, as before.
         Assert.Equal("Error: there is no skill 'tanka' in the profile skills; call again with action create to write it", await Invoke(("action", "update"), ("scope", "profile"), ("name", "tanka"), ("description", "x")));
+    }
+
+    [Fact]
+    public async Task ABlankScope_IsTheProfile_AndUpdateTakesAnyScope()
+    {
+        // 2026-09-24, the user's report: models sent "" more often than not and retried until a word stuck.
+        Assert.Equal("created skill 'haiku' (profile, 38 bytes); it is in the list from the next reply on", await Invoke(("action", "create"), ("scope", ""), ("name", "haiku"), ("description", "x"), ("instructions", "y")));
+        Assert.Equal("created skill 'tanka' (profile, 38 bytes); it is in the list from the next reply on", await Invoke(("action", "create"), ("name", "tanka"), ("description", "x"), ("instructions", "y")));
+        Assert.Equal("created skill 'renga' (global, 38 bytes); it is in the list from the next reply on", await Invoke(("action", "create"), ("scope", "global"), ("name", "renga"), ("description", "x"), ("instructions", "y")));
+
+        // An update is changed where the skill lives, whatever the scope says, blank or not a scope at all.
+        Assert.Equal("updated skill 'renga' (global, 38 bytes)", await Invoke(("action", "update"), ("scope", ""), ("name", "renga"), ("instructions", "z")));
+        Assert.Equal("updated skill 'renga' (global, 38 bytes)", await Invoke(("action", "update"), ("scope", "external"), ("name", "renga"), ("instructions", "w")));
+        Assert.Equal("updated skill 'haiku' (profile, 38 bytes)", await Invoke(("action", "update"), ("name", "haiku"), ("instructions", "v")));
+        Assert.Equal("---\nname: renga\ndescription: x\n---\n\nw\n", File.ReadAllText(Path.Combine(_roots.Global, "renga", "SKILL.md")));
     }
 
     [Fact]

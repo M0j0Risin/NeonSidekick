@@ -223,6 +223,15 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     private int _toolbarPathColumn = -1;
     private int _toolbarPathCells;
 
+    // The picture strip (later still on 2026-09-24): the provider, the rows the last draw gave it (0 or
+    // PictureStrip.Rows — Draw is the only writer), the strip's version and highlight as drawn (the tick's
+    // comparison), and where its tiles landed (TryHitStrip).
+    private Func<PictureStrip?> _pictureStrip = static () => null;
+    private int _stripRows;
+    private int _drawnStripVersion;
+    private bool _drawnStripHighlight;
+    private List<PictureSpan> _stripSpans = [];
+
     private sealed record Overlay(IRenderable Content, string Hint, bool Input, bool Close);
 
     // Where the last dismissing double-click landed (Dismiss(x, y)), until TakeDismissHit.
@@ -541,6 +550,107 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     public int ToolbarRows
     {
         get { lock (_gate) { return _toolbarRows; } }
+    }
+
+    /// <summary>
+    /// The session's picture strip (later still on 2026-09-24): drawn <see cref="UI.PictureStrip.Rows"/> tall over the
+    /// upper rule while this answers one with pictures in it, no overlay is open, the window keeps
+    /// <see cref="StripTranscriptRows"/> transcript rows over the strip and the pane, and is at least
+    /// <see cref="UI.PictureStrip.MinCells"/> wide; null = none (the default). Read at each draw and on the tick, so a
+    /// picture added, a step or the setting's flip shows by itself; <see cref="RedrawStrip"/> shows it at once. The
+    /// highlight is drawn only while the draft is empty — typing puts the arrows back on the line, and the highlight goes.
+    /// </summary>
+    public Func<PictureStrip?> PictureStrip
+    {
+        get => _pictureStrip;
+        set => _pictureStrip = value ?? throw new ArgumentNullException(nameof(value));
+    }
+
+    /// <summary>The transcript rows the window must keep over the strip and the smallest pane for the strip to be drawn.</summary>
+    public const int StripTranscriptRows = 4;
+
+    /// <summary>The rows the picture strip took in the last draw: <see cref="UI.PictureStrip.Rows"/> while drawn, else 0 (the thumbnail sizing adds it, as <see cref="ToolbarRows"/>).</summary>
+    public int StripRows
+    {
+        get { lock (_gate) { return _stripRows; } }
+    }
+
+    /// <summary>The rows the strip takes in a window of <paramref name="width"/> × <paramref name="height"/> with <paramref name="toolbarRows"/> for the toolbar, as things stand: <see cref="PictureStrip"/>'s rule.</summary>
+    private int StripRowsFor(int width, int height, int toolbarRows) =>
+        _overlay is null && _pictureStrip() is { Count: > 0 } && height >= PaneRows + toolbarRows + UI.PictureStrip.Rows + StripTranscriptRows && width - 1 >= UI.PictureStrip.MinCells
+            ? UI.PictureStrip.Rows
+            : 0;
+
+    /// <summary>The strip the provider answers now is not the drawn one: it came or went, changed, or its highlight did.</summary>
+    private bool StripChanged()
+    {
+        int toolbarRows = ToolbarRowsFor(Height);
+        if (StripRowsFor(Width, Height, toolbarRows) != _stripRows)
+        {
+            return true;
+        }
+
+        return _stripRows > 0 && _pictureStrip() is { } strip && (strip.Version != _drawnStripVersion || (_text.Length == 0) != _drawnStripHighlight);
+    }
+
+    /// <summary>
+    /// The pane again now if the strip changed (<see cref="StripChanged"/>): the screen calls it after a step or a new
+    /// picture so the strip follows the key, not the next tick. Nothing lifted, under a batch or a modal, or disabled.
+    /// </summary>
+    public void RedrawStrip()
+    {
+        if (!Enabled)
+        {
+            return;
+        }
+
+        lock (_gate)
+        {
+            if (_drawn && StripChanged())
+            {
+                Redraw();
+            }
+        }
+    }
+
+    /// <summary>
+    /// The picture under a click at buffer cell (<paramref name="x"/>, <paramref name="y"/>) on the drawn strip (later
+    /// still on 2026-09-24): its id, for the double-click that opens it. False off the strip's rows or tiles, with no
+    /// strip drawn, when the pane is lifted, or when the console cannot say where the cursor is. The strip's rows sit
+    /// right over the upper rule, which is one row over the area's first row.
+    /// </summary>
+    public bool TryHitStrip(int x, int y, out int id)
+    {
+        id = -1;
+        if (!Enabled)
+        {
+            return false;
+        }
+
+        lock (_gate)
+        {
+            if (!_drawn || _drawnOverlay || _stripRows == 0 || _batch > 0 || _modal > 0 || _geometry?.CursorTop() is not int top)
+            {
+                return false;
+            }
+
+            int rule = top - CursorDepth - 1;
+            if (y < rule - _stripRows || y >= rule)
+            {
+                return false;
+            }
+
+            foreach (var span in _stripSpans)
+            {
+                if (x >= span.Col && x < span.Col + span.Width)
+                {
+                    id = span.Id;
+                    return true;
+                }
+            }
+
+            return false;
+        }
     }
 
     /// <summary>
@@ -1208,7 +1318,8 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     /// <summary>
     /// The picture under screen cell (<paramref name="x"/>, <paramref name="y"/>) in the transcript region (later on
     /// 2026-09-24): its id, or null — off the region, off a picture, the pane disabled, lifted, or with no geometry.
-    /// The row is found as <see cref="TryToggleToolGroupAt"/> finds it.
+    /// The row is found as <see cref="TryToggleToolGroupAt"/> finds it. A tile of the picture strip answers too (later
+    /// still on 2026-09-24, <see cref="TryHitStrip"/>), so both double-click paths open it with no hook of their own.
     /// </summary>
     public int? PictureAt(int x, int y)
     {
@@ -1219,6 +1330,11 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
 
         lock (_gate)
         {
+            if (TryHitStrip(x, y, out int id))
+            {
+                return id;
+            }
+
             return StoreRowAt(y) is int row ? _store.PictureAt(row, x) : null;
         }
     }
@@ -1868,7 +1984,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
             return;
         }
 
-        var shown = LayoutInput(Width, Height - _toolbarRows);
+        var shown = LayoutInput(Width, Height - _toolbarRows - _stripRows);
         if (shown.Rows.Count == _inputRows)
         {
             RewriteInputRows(shown);
@@ -2186,8 +2302,13 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         }
 
         int firstRow = _firstRow;
-        var shown = LayoutInput(Width, Height - _toolbarRows);
-        if (shown.Rows.Count == _inputRows && firstRow == _firstRow)
+        var shown = LayoutInput(Width, Height - _toolbarRows - _stripRows);
+        if (_stripRows > 0 && (text.Length == 0) != _drawnStripHighlight)
+        {
+            // The draft emptied or filled under a highlighted strip: the highlight follows it, the whole pane again.
+            Redraw();
+        }
+        else if (shown.Rows.Count == _inputRows && firstRow == _firstRow)
         {
             RewriteInputRows(shown);
             // A hint that reads the draft (the splash hint, 2026-09-20) follows it on the same
@@ -2928,12 +3049,33 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         var toolbar = _toolbar();
         int toolbarRows = toolbar is not null && h >= PaneRows + 2 ? 1 : 0;
 
+        // The picture strip (later still on 2026-09-24) over the upper rule: its rows count into the pane's, so the
+        // padding, the lift and the region leave room for it; the input rows are capped over what it leaves.
+        int stripRows = StripRowsFor(w, h, toolbarRows);
+        var strip = stripRows > 0 ? _pictureStrip() : null;
+        List<SegmentLine>? stripLines = null;
+        bool stripHighlight = _text.Length == 0;
+        if (strip is not null)
+        {
+            var (lines, spans) = strip.Render(RenderOptions.Create(_inner, _inner.Profile.Capabilities), w - 1, stripHighlight);
+            stripLines = lines;
+            _stripSpans = spans;
+            _drawnStripVersion = strip.Version;
+        }
+        else
+        {
+            stripRows = 0;
+            _stripSpans = [];
+        }
+
+        _drawnStripHighlight = stripHighlight;
+
         List<SegmentLine>? overlayLines = null;
         int overlayRows = 0;
         ShownInput? shown = null;
         if (_overlay is null || _overlay.Input)
         {
-            shown = LayoutInput(w, h - toolbarRows);
+            shown = LayoutInput(w, h - toolbarRows - stripRows);
         }
 
         int closeColumn = -1;
@@ -2959,8 +3101,9 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
             }
         }
 
-        _paneRows = 3 + overlayRows + (shown?.Rows.Count ?? 0) + toolbarRows;
+        _paneRows = 3 + overlayRows + (shown?.Rows.Count ?? 0) + toolbarRows + stripRows;
         _toolbarRows = toolbarRows;
+        _stripRows = stripRows;
 
         // Scrolled: the anchor against the region this pane leaves; at or past the last window it
         // is the bottom after all (a taller pane, a store that shrank).
@@ -3085,6 +3228,15 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
             }
         }
 
+        if (stripLines is not null)
+        {
+            foreach (var line in stripLines)
+            {
+                _inner.Write(new SegmentList(line));
+                _inner.WriteLine();
+            }
+        }
+
         WriteUpperRule(w);
         if (overlayLines is not null)
         {
@@ -3198,6 +3350,9 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         // with the erase — the next draw lays the block out again.
         up += _liveRows;
         _liveRows = 0;
+
+        // The strip's rows sit between the padding and the upper rule.
+        up += _stripRows;
 
         _inner.Cursor.Show(false);
         _inner.Cursor.Move(CursorDirection.Up, up + CursorDepth);
@@ -3375,10 +3530,10 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     private int CursorDepth => !_drawnOverlay ? _cursorRow : _drawnInput ? _overlayRows + _cursorRow : 0;
 
     /// <summary>How many rows under the terminal's cursor the hint row sits, as last drawn: over the rows under the cursor and the lower rule; the toolbar, when drawn, is one further.</summary>
-    private int HintRowBelowCursor => _paneRows - 2 - _toolbarRows - CursorDepth;
+    private int HintRowBelowCursor => _paneRows - 2 - _toolbarRows - _stripRows - CursorDepth;
 
     /// <summary>How many rows under the terminal's cursor the pane's last row sits, as last drawn: the hint row, or the toolbar under it (2026-09-21).</summary>
-    private int LastRowBelowCursor => _paneRows - 2 - CursorDepth;
+    private int LastRowBelowCursor => _paneRows - 2 - _stripRows - CursorDepth;
 
     private void WriteRule(int width)
     {
@@ -3685,6 +3840,22 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
             {
                 // The toolbar came or went (the screen's switch, a window at the edge): the whole
                 // pane again — its shape changed.
+                if (_busyLabel is not null)
+                {
+                    _frame++;
+                }
+
+                BeginSync();
+                Lift();
+                Draw();
+                EndSync();
+                return;
+            }
+
+            if (StripChanged())
+            {
+                // A picture came, the highlight moved, the setting flipped: the whole pane again — the strip's rows
+                // are part of its shape.
                 if (_busyLabel is not null)
                 {
                     _frame++;

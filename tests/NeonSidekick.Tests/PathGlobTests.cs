@@ -53,9 +53,35 @@ public sealed class PathGlobTests
     public void MatchSegment_StarAndQuestionMark_IgnoringCase(string pattern, string text, bool expected) =>
         Assert.Equal(expected, PathGlob.MatchSegment(pattern, text));
 
+    [Theory]
+    [InlineData("*.cs", "*.cs")]
+    [InlineData("*.{png,jpg}", "*.png|*.jpg")]
+    [InlineData("{src,lib}/**/*.{cs,md}", "src/**/*.cs|src/**/*.md|lib/**/*.cs|lib/**/*.md")]
+    [InlineData("a{b,c{d,e}}", "ab|acd|ace")]
+    [InlineData("a{,b}", "a|ab")]
+    [InlineData("a{b", "a{b")]
+    [InlineData("{x}", "{x}")]
+    [InlineData("a}b{", "a}b{")]
+    [InlineData("{x}.{a,b}", "{x}.a|{x}.b")]
+    [InlineData("{a{b,c}", "{ab|{ac")]
+    [InlineData("*.{PNG,png}", "*.PNG")]
+    [InlineData("", "")]
+    public void ExpandBraces_BashStyle(string pattern, string expected) =>
+        Assert.Equal(expected.Split('|'), PathGlob.ExpandBraces(pattern));
+
+    [Fact]
+    public void ExpandBraces_PastTheCap_ComesBackWhole()
+    {
+        string many = "{a,b,c,d}{a,b,c,d}{a,b,c,d}";   // 64: at the cap
+        Assert.Equal(PathGlob.MaxBraceExpansions, PathGlob.ExpandBraces(many).Count);
+        string tooMany = many + "{a,b}";
+        Assert.Equal(new[] { tooMany }, PathGlob.ExpandBraces(tooMany));
+    }
+
     [Fact]
     public void NullArguments_Throw()
     {
+        Assert.Throws<ArgumentNullException>(() => PathGlob.ExpandBraces(null!));
         Assert.Throws<ArgumentNullException>(() => PathGlob.IsMatch(null!, "a"));
         Assert.Throws<ArgumentNullException>(() => PathGlob.IsMatch("a", null!));
         Assert.Throws<ArgumentNullException>(() => PathGlob.MatchSegment(null!, "a"));

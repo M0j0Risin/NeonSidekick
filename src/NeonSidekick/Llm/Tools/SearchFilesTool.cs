@@ -9,7 +9,7 @@ namespace NeonSidekick.Llm.Tools;
 /// <c>text</c>, a case-insensitive search inside the text files under the working directory, a
 /// subfolder or one file, <c>file:line: text</c> per hit with <c>context</c> lines around each in
 /// grep's shape (2026-09-17), or one row per file with its count under <c>output</c> files
-/// (2026-09-19); <c>files</c> is a name pattern or a path glob (<c>src/**/*.cs</c>). Without <c>text</c>
+/// (2026-09-19); <c>files</c> is a name pattern or a path glob (<c>src/**/*.cs</c>), braces for alternatives (<c>*.{png,jpg}</c>, 2026-09-24). Without <c>text</c>
 /// it lists (2026-09-19, when <c>list_directory</c> and <c>recent_files</c> folded in): the folder's
 /// own entries, folders first with sizes, nested to <c>depth</c> levels; the files whose names match
 /// <c>files</c>, every level; or under <c>order</c> modified the most recently changed files, newest
@@ -44,7 +44,7 @@ public sealed class SearchFilesTool : FileTool
           "properties": {
             "text": { "type": "string", "description": "The word or phrase to look for inside files. Case does not matter. Leave it out to list files instead of searching inside them." },
             "path": { "type": "string", "description": "A subfolder to search or list, or one file to search in, relative to the working directory. Leave it out for the working directory itself." },
-            "files": { "type": "string", "description": "Only files matching this pattern: a name pattern such as *.md or *.cs, or a path pattern such as src/**/*.cs (** spans folders). Without text, lists the matching files at every level." },
+            "files": { "type": "string", "description": "Only files matching this pattern: a name pattern such as *.md or *.cs, or a path pattern such as src/**/*.cs (** spans folders); braces give alternatives, *.{png,jpg}. Without text, lists the matching files at every level." },
             "regex": { "type": "boolean", "description": "true to treat text as a regular expression instead of plain words. Default false." },
             "context": { "type": "integer", "description": "Lines to show before and after each hit, 0 to 5 (default 0). Context lines read file-11- text around the hit's file:12: text." },
             "output": { "type": "string", "enum": ["content", "files"], "description": "With text: content (the default) shows every matching line; files shows one row per file with how many lines matched." },
