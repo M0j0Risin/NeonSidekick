@@ -5,9 +5,9 @@ namespace NeonSidekick.Tests;
 
 public class MessageQueueTests
 {
-    /// <summary>A queued line: its label and the keys that typed it, Enter last.</summary>
+    /// <summary>A queued line: its label and the line the live row handed back.</summary>
     private static QueuedMessage Line(string text) =>
-        new(text, [.. text.Select(c => new InputEvent.Key(Keys.Char(c))), new InputEvent.Key(Keys.Enter)]);
+        new(text, new SubmittedLine(text, text, [], text));
 
     private static IEnumerable<string> Labels(MessageQueue queue) => queue.Snapshot().Select(m => m.Label);
 
@@ -26,7 +26,7 @@ public class MessageQueueTests
 
         Assert.True(queue.TryDequeue(out var first));
         Assert.Same(one, first);
-        Assert.Equal(4, first.Events.Count);   // o n e Enter — the events ride along
+        Assert.Equal("one", first.Line.Text);   // the line rides along
         Assert.True(queue.TryDequeue(out var second));
         Assert.Equal("two", second.Label);
         Assert.False(queue.TryDequeue(out _));

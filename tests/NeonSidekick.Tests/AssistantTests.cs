@@ -675,6 +675,21 @@ public class AssistantTests
         Assert.Equal(call.CallId, asked.Contents.OfType<FunctionCallContent>().Single().CallId);
     }
 
+    /// <summary>The line form (later on 2026-09-25, the user's /botchat report): the tool's name, then its parameters as <c>key: value</c>, on a line of its own.</summary>
+    [Fact]
+    public async Task TextToolCalls_On_ACallWrittenAsALine_RunsAsARealOne_AndIsNeverShown()
+    {
+        var echo = new EchoTool();
+        var (client, _, assistant) = Build(new AIFunction[] { echo });
+        assistant.TextToolCalls = true;
+        client.EnqueueText("Sure.\nec", "ho text: hi, there\n", "Done.").EnqueueText("It echoed.");
+
+        var events = await Run(assistant, "a");
+
+        Assert.Equal(["hi, there"], echo.Received);
+        Assert.Equal("Sure.\nDone.It echoed.", string.Concat(Deltas(events)));
+    }
+
     [Fact]
     public async Task TextToolCalls_Off_TheTextPassesAsWritten()
     {

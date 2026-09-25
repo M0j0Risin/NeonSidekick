@@ -3841,7 +3841,7 @@ public class SettingsMenuTests : IDisposable
         Assert.Equal("show the toolbar", SettingsMenu.ToggleDescribe(SettingsField.ShowToolbar, true));
         Assert.Equal("hide the toolbar", SettingsMenu.ToggleDescribe(SettingsField.ShowToolbar, false));
         Assert.Equal("a message sent while a reply runs is queued and sent when the reply ends", SettingsMenu.ToggleDescribe(SettingsField.QueueMessages, true));
-        Assert.Equal("a message sent during a reply stays type-ahead; /queue leaves the / list", SettingsMenu.ToggleDescribe(SettingsField.QueueMessages, false));
+        Assert.Equal("a message sent during a reply goes when it ends, unlisted; no /queue", SettingsMenu.ToggleDescribe(SettingsField.QueueMessages, false));
     }
 
     [Fact]
@@ -3936,7 +3936,7 @@ public class SettingsMenuTests : IDisposable
         Assert.False(_settings.Current.QueueMessages);
         Assert.Contains("  · Queue messages: off", _console.Output);
         Assert.Contains("a message sent while a reply runs is queued and sent when the reply ends", _console.Output);
-        Assert.Contains("a message sent during a reply stays type-ahead; /queue leaves the / list", _console.Output);
+        Assert.Contains("a message sent during a reply goes when it ends, unlisted; no /queue", _console.Output);
         Assert.Equal(0, _synth.ListCalls);
     }
 

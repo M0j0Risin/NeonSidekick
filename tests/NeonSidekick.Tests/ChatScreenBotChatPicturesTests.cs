@@ -18,10 +18,10 @@ public partial class ChatScreenTests
     private const string DogReply = "I once saw a dog surf.";
 
     /// <summary>The two-bot fixture on a stub ComfyUI with one text → image workflow (pony), pictures on in <paramref name="mode"/>.</summary>
-    private StubHttpMessageHandler BotPicturesFixture(string mode = "automatic", bool async = false)
+    private StubHttpMessageHandler BotPicturesFixture(string mode = "automatic", bool async = false, int width = 4, int height = 4)
     {
         BotChatFixture();
-        var stub = ComfyServer();
+        var stub = ComfyServer(width, height);
         _settings.Update(d => { d.BotChatImages = true; d.BotChatImageMode = mode; d.BotChatImageAsync = async; });
         return stub;
     }
@@ -29,6 +29,32 @@ public partial class ChatScreenTests
     private static IList<AITool> ToolsOf(ChatOptions? options) => options?.Tools ?? [];
 
     private string ComfyImages => Path.Combine(_settings.ProfileDirectory, WorkingDirectory.DefaultFolderName, "comfy_images");
+
+    /// <summary>
+    /// The app's picture is drawn at <c>Image thumbnail size</c> (later on 2026-09-25, the user's report: it filled the window
+    /// whatever the setting said): a wide picture fills the size's columns, one half-block row at 4 px tall; <c>fullsize</c>
+    /// is the window's 238 of 240.
+    /// </summary>
+    [Theory]
+    [InlineData("tiny", 32)]
+    [InlineData("medium", 64)]
+    [InlineData("fullsize", 238)]
+    public async Task BotChat_TheAppsPicture_IsDrawnAtTheThumbnailSize(string size, int columns)
+    {
+        BotPicturesFixture(width: 512, height: 4);
+        _settings.Update(d => d.ImageThumbnailSize = size);
+        _chat.EnqueueText(DogReply);
+        _chat.EnqueueText("a dog surfing a wave");
+        _chat.EnqueueText("Ada ", "answers.");
+        EscDuringRequest(3);
+        PushLine("/botchat");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains(new string('▀', columns), output);
+        Assert.DoesNotContain(new string('▀', columns + 1), output);
+    }
 
     [Fact]
     public async Task BotChat_PicturesOff_OffersNoTool_AndAsksForNoPicture()
@@ -107,6 +133,8 @@ public partial class ChatScreenTests
 
             if (_chat.Requests.Count == 5 && i == 1)
             {
+                // Twice: the first cuts neon short, the second ends the chat at ada's turn (the ESC ladder, 2026-09-25).
+                _console.Input.PushKey(Keys.Escape);
                 _console.Input.PushKey(Keys.Escape);
                 while (!ct.IsCancellationRequested)
                 {
@@ -162,6 +190,12 @@ public partial class ChatScreenTests
             if (_chat.Requests.Count is 2 or 3 && i == 1)
             {
                 _console.Input.PushKey(Keys.Escape);
+                if (_chat.Requests.Count == 3)
+                {
+                    // Ada's reply: cut short, then the chat's end (the ESC ladder, 2026-09-25).
+                    _console.Input.PushKey(Keys.Escape);
+                }
+
                 while (!ct.IsCancellationRequested)
                 {
                     await Task.Delay(5, CancellationToken.None);
@@ -182,7 +216,7 @@ public partial class ChatScreenTests
     }
 
     [Fact]
-    public async Task BotChat_Sync_EscOverTheUnseenReply_StopsTheChat_WithNoPicture()
+    public async Task BotChat_Sync_EscOverTheUnseenReply_CutsTheBotShort_TwiceStopsTheChat_WithNoPicture()
     {
         var stub = BotPicturesFixture();
         _chat.EnqueueText("I once saw ", "a dog surf.");
@@ -192,7 +226,9 @@ public partial class ChatScreenTests
 
         string output = await RunAsync();
 
+        // The first ESC cuts neon short over its unseen reply, the second ends the chat as ada's turn opens (2026-09-25).
         Assert.Single(_chat.Requests);
+        Assert.Contains("  · " + BotChat.CutShortNotice("default") + "\n", output);
         Assert.Contains("  · " + ChatScreen.CancelledNotice + "\n", output);
         Assert.Contains(BotChat.StoppedNotice(0), output);
         Assert.DoesNotContain("● I once saw", output);
@@ -332,6 +368,8 @@ public partial class ChatScreenTests
 
             if (_chat.Requests.Count == 3 && i == 1)
             {
+                // Twice: ada cut short, then the chat's end (the ESC ladder, 2026-09-25).
+                _console.Input.PushKey(Keys.Escape);
                 _console.Input.PushKey(Keys.Escape);
                 while (!ct.IsCancellationRequested)
                 {

@@ -117,7 +117,9 @@ public sealed class AppSettingsData
     /// <summary>
     /// Whether a message sent while a reply runs waits in the queue (<see cref="App.MessageQueue"/>,
     /// sent when the reply ends, listed by <c>/queue</c>) or stays type-ahead on the input line as
-    /// before (2026-09-18); off, <c>/queue</c> leaves the input line's <c>/</c> list too (later that day). Pane only, read at each mid-turn Enter and each keystroke. No variable.
+    /// before (2026-09-18) — since the row became a live editor under the reply (2026-09-25), off means the line waits
+    /// for the idle line unlisted and is sent as the reply ends all the same; off, <c>/queue</c> leaves the input line's
+    /// <c>/</c> list too (later on 2026-09-18). Pane only, read at each mid-turn Enter and each keystroke. No variable.
     /// </summary>
     public bool QueueMessages { get; set; } = true;
 

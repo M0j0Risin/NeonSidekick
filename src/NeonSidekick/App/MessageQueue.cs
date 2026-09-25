@@ -5,14 +5,13 @@ using NeonSidekick.Diagnostics;
 namespace NeonSidekick.App;
 
 /// <summary>
-/// One message waiting in the <see cref="MessageQueue"/> (2026-09-18): the line's input events
-/// as the watcher took them off its buffer — its Enter last — and the label a pane row shows
-/// (<see cref="KeySource.LineLabel"/>: a paste as <c>[Pasted text +N lines]</c>). The events, not
-/// a text, so the line is sent by replaying them through the input line when its turn comes:
-/// a paste gets its numbered token, its preview and its expansion there, as a typed-at-idle
-/// line does, and the history remembers it the same way.
+/// One message waiting in the <see cref="MessageQueue"/> (2026-09-18): the line the live row handed back
+/// (<see cref="SubmittedLine"/> — its token form, its expansion and pictures) and the label a pane row shows
+/// (a paste as <c>[Pasted text #1 +N lines]</c>). Until 2026-09-25 it held the watcher's buffered key events and was
+/// replayed through the input line; the row has been the idle line's editor under a reply since, so the line is
+/// whole when it is queued and <see cref="InputLine.Send"/> commits it when its turn comes.
 /// </summary>
-public sealed record QueuedMessage(string Label, IReadOnlyList<InputEvent> Events);
+public sealed record QueuedMessage(string Label, SubmittedLine Line);
 
 /// <summary>
 /// The messages sent while a reply runs, waiting to be sent one by one (2026-09-18, behind

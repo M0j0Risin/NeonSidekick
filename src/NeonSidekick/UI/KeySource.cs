@@ -32,6 +32,11 @@ public enum Interrupt
 /// command's pane) and a pane request (<see cref="RequestPaneAsync"/>: the <c>ask_user</c> tool,
 /// which runs on the turn task and must not read keys itself).</para>
 ///
+    /// <para>Given the chat line's editor (<see cref="InputLine.Editor"/>, 2026-09-25, the user's ask: under <c>/botchat</c>
+/// the arrows, the history, the lists and the mouse did nothing until the turn ended), the watcher buffers nothing: every
+/// key, paste, drag and input-row click edits the draft exactly as the idle line would, Enter hands the edited line to the
+/// line hook, and the draft outlives the watch. Without one (no pane) the keys are type-ahead as before.</para>
+///
 /// <para>It is itself an <see cref="IAnsiConsoleInput"/> that serves the buffer first, so a Spectre
 /// prompt shown on a <see cref="ConsoleWithInput"/> over it sees type-ahead too.</para>
 ///
@@ -205,10 +210,10 @@ public sealed class KeySource : IAnsiConsoleInput
     /// command — and <see cref="Label"/> what the line reads as on a pane row (<see cref="LineLabel"/>).
     /// The events are what the screen keeps to send the line later, through the input line again.
     /// </summary>
-    public sealed record WatchedLine(string? Text, IReadOnlyList<InputEvent> Events)
+    public sealed record WatchedLine(string? Text, IReadOnlyList<InputEvent> Events, SubmittedLine? Line = null)
     {
         /// <summary>The line as a pane row shows it.</summary>
-        public string Label => LineLabel(Events);
+        public string Label => Line?.Label ?? LineLabel(Events);
     }
 
     /// <summary>
@@ -380,8 +385,16 @@ public sealed class KeySource : IAnsiConsoleInput
     /// without <paramref name="onLine"/> (later on 2026-09-18): a pair on the scroll's hint is
     /// spent inside it — the bottom again, a pane repaint on this task, <paramref name="spend"/>'s
     /// class — and answers nothing. It never throws.</para>
+    ///
+    /// <para><paramref name="editor"/> (2026-09-25) is the live row: set, the keys, pastes and drags that are not a cancel,
+    /// an accept or spent go to it instead of the buffer, a click to it first (the input rows' caret and selection, a
+    /// right-click paste) and to <paramref name="onClick"/> when it declines; a line it hands back is offered to
+    /// <paramref name="onLine"/> as a <see cref="WatchedLine"/> with its <see cref="SubmittedLine"/> — taken, the row empties;
+    /// kept, the draft stays. A cancel key is spent first on the row where it means something there: Ctrl+C over a selection
+    /// copies it, and ESC — after <paramref name="softCancel"/> — closes an open list; the draft itself is never cleared
+    /// under a reply. A bare ESC the row declines (under a watch whose cancel key is Ctrl+C alone) is type-ahead as ever.</para>
     /// </summary>
-    public async Task<Interrupt> WatchAsync(CancellationTokenSource turnCts, CancellationToken stop, Func<ConsoleKeyInfo, bool>? accept, CancellationTokenSource? acceptCts, Func<WatchedLine, Task<bool>>? onLine = null, Func<bool>? softCancel = null, Func<InputEvent, bool>? spend = null, Func<ConsoleKeyInfo, bool>? cancel = null, Func<InputEvent.Click, string?>? onClick = null)
+    public async Task<Interrupt> WatchAsync(CancellationTokenSource turnCts, CancellationToken stop, Func<ConsoleKeyInfo, bool>? accept, CancellationTokenSource? acceptCts, Func<WatchedLine, Task<bool>>? onLine = null, Func<bool>? softCancel = null, Func<InputEvent, bool>? spend = null, Func<ConsoleKeyInfo, bool>? cancel = null, Func<InputEvent.Click, string?>? onClick = null, InputLine.Editor? editor = null)
     {
         ArgumentNullException.ThrowIfNull(turnCts);
         cancel ??= IsTurnCancel;
@@ -390,6 +403,10 @@ public sealed class KeySource : IAnsiConsoleInput
         {
             _watching = true;
         }
+
+        var previous = _editor;
+        _editor = editor;
+        editor?.BeginLive();
 
         try
         {
@@ -446,9 +463,21 @@ public sealed class KeySource : IAnsiConsoleInput
                     {
                         if (cancel(k))
                         {
+                            if (editor is not null && Keys.IsInterrupt(k) && editor.TryCopySelection())
+                            {
+                                // Ctrl+C over a selection on the live row (2026-09-25): the copy, as at the idle line.
+                                continue;
+                            }
+
                             if (softCancel is not null && softCancel())
                             {
                                 // The key was spent (the speech stopped); the next one cancels.
+                                continue;
+                            }
+
+                            if (editor is not null && Keys.IsCancel(k) && editor.TryCloseList())
+                            {
+                                // ESC over an open list on the live row (2026-09-25): the list goes, the reply runs on.
                                 continue;
                             }
 
@@ -473,6 +502,22 @@ public sealed class KeySource : IAnsiConsoleInput
                             continue;
                         }
                     }
+
+                    if (editor is not null && e is not (null or InputEvent.Wheel or InputEvent.Click))
+                    {
+                        // The live row (2026-09-25): a key, a paste or a drag edits the draft as at the idle line.
+                        if (!await FeedAsync(editor, e, onLine, stop).ConfigureAwait(false))
+                        {
+                            return accepted ? Interrupt.Accept : Interrupt.None;
+                        }
+
+                        continue;
+                    }
+
+                    if (e is InputEvent.Key)
+                    {
+                        // Type-ahead, below.
+                    }
                     else if (e is InputEvent.Wheel)
                     {
                         // The wheel scrolls the transcript under a reply (the hook); with none it is nobody's.
@@ -481,6 +526,12 @@ public sealed class KeySource : IAnsiConsoleInput
                     }
                     else if (e is InputEvent.Click click)
                     {
+                        // The live row's own clicks first (2026-09-25): the caret, a selection's anchor, a right-click paste.
+                        if (editor is not null && await editor.FeedAsync(click, stop).ConfigureAwait(false) != EditOutcome.Declined)
+                        {
+                            continue;
+                        }
+
                         // A click during a reply is nobody's — the reply owns the screen — unless
                         // the hook makes a line of it (a double-click on the queued count): that
                         // line runs the line hook as a typed one would, nothing to hand back. The
@@ -529,6 +580,9 @@ public sealed class KeySource : IAnsiConsoleInput
         }
         finally
         {
+            // The list does not outlive the watch; the draft does (the idle read draws it again).
+            editor?.CloseList();
+            _editor = previous;
             lock (_requestGate)
             {
                 // A request the watcher never reached is cancelled, never left for the next turn.
@@ -671,6 +725,9 @@ public sealed class KeySource : IAnsiConsoleInput
     {
         var held = _buffer.ToArray();
         _buffer.Clear();
+        // A live row's list closes while a pane reads the keys (2026-09-25); the row is drawn again after.
+        var editor = _editor;
+        editor?.Suspend();
         var back = await phase().ConfigureAwait(false);
 
         // What the phase's reader left (nothing, normally: a pane reads until ESC) comes after
@@ -692,7 +749,67 @@ public sealed class KeySource : IAnsiConsoleInput
             _buffer.Enqueue(e);
         }
 
-        Preview();
+        if (editor is not null)
+        {
+            // The pane's own slot emptied the row; the watch may have ended meanwhile, and the draft is still the session's.
+            editor.Redraw();
+        }
+        else
+        {
+            Preview();
+        }
+    }
+
+    /// <summary>The editor the running watch feeds (2026-09-25); null with none, or no watch.</summary>
+    private InputLine.Editor? _editor;
+
+    /// <summary>
+    /// One event on the live row (2026-09-25): the editor's, and a line it hands back (Enter) is offered to
+    /// <paramref name="onLine"/> as a <see cref="WatchedLine"/> — taken, the editor empties the row and remembers it
+    /// (<see cref="InputLine.Editor.Accept"/>); kept, the draft stays (the hook may have put another there). With no hook
+    /// the Enter is nothing: the draft waits for the idle line. A key the editor declines (a bare ESC under a watch whose
+    /// cancel key is Ctrl+C alone) is type-ahead as ever. False when <paramref name="stop"/> fired under the hook's pane.
+    /// </summary>
+    private async Task<bool> FeedAsync(InputLine.Editor editor, InputEvent e, Func<WatchedLine, Task<bool>>? onLine, CancellationToken stop)
+    {
+        var outcome = await editor.FeedAsync(e, stop).ConfigureAwait(false);
+        if (outcome == EditOutcome.Declined)
+        {
+            if (e is InputEvent.Key)
+            {
+                _buffer.Enqueue(e);
+            }
+
+            return true;
+        }
+
+        if (outcome is not EditOutcome.Submit { Line: var line } || onLine is null)
+        {
+            return true;
+        }
+
+        async Task<IReadOnlyList<InputEvent>> Phase()
+        {
+            bool taken;
+            try
+            {
+                taken = await onLine(new WatchedLine(line.CommandText, [], line)).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is not OutOfMemoryException)
+            {
+                // A hook that fails keeps the line on the row.
+                taken = false;
+            }
+
+            if (taken)
+            {
+                editor.Accept(line);
+            }
+
+            return [];
+        }
+
+        return await ServiceAsync(Phase, stop, null).ConfigureAwait(false);
     }
 
     /// <summary>The buffer's last line — the events after the last Enter before the tail's Enter, that Enter included — taken off the tail.</summary>

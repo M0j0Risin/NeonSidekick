@@ -812,7 +812,7 @@ public sealed class Assistant
             var partial = new StringBuilder();
             var filter = new ThinkTagFilter();
             // After the think filter: a call written as text, caught when the turn asks for it and offers tools.
-            var written = TextToolCalls && _tools.Count > 0 ? new TextToolCallFilter(_tools.Select(t => t.Name)) : null;
+            var written = TextToolCalls && _tools.Count > 0 ? new TextToolCallFilter(_tools.Select(t => (t.Name, ParameterNames(t.JsonSchema)))) : null;
             Exception? failure = null;
             bool cancelled = false;
 
@@ -822,6 +822,9 @@ public sealed class Assistant
             long sent = _time.GetTimestamp();
             long? first = null;
 
+            // A turn cancelled before its request (2026-09-25: the /botchat ESC that ends the chat can land as the next bot's
+            // turn opens) asks nothing: the server never sees a request its caller has already given up on.
+            cancellationToken.ThrowIfCancellationRequested();
             var request = _history.BuildRequest();
             log.Requests++;
             DiagnosticLog.Debug(Category, RequestLogLine(iteration, request.Count, _tools.Count, _reasoning));
@@ -1259,6 +1262,12 @@ public sealed class Assistant
     /// </summary>
     /// <summary>The <c>--log</c> line when a call written as text never closed and was dropped (2026-09-25).</summary>
     internal const string TextCallBrokenNote = "The model wrote a tool call out as text and never closed it; it was dropped from the reply.";
+
+    /// <summary>A tool schema's parameter names (its <c>properties</c>), for the written call's line form (later on 2026-09-25); none when it has none.</summary>
+    internal static IReadOnlyList<string> ParameterNames(System.Text.Json.JsonElement schema) =>
+        schema.ValueKind == System.Text.Json.JsonValueKind.Object && schema.TryGetProperty("properties", out var properties) && properties.ValueKind == System.Text.Json.JsonValueKind.Object
+            ? properties.EnumerateObject().Select(property => property.Name).ToList()
+            : [];
 
     /// <summary>The <c>--log</c> line for a call the model wrote out as text (2026-09-25): <c>Text tool call generate_image: prompt="…"</c>, cut like <see cref="ToolCallLogLine"/>.</summary>
     internal static string TextCallLogLine(string name, string arguments) =>

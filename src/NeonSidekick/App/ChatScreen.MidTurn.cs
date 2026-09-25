@@ -9,7 +9,7 @@ namespace NeonSidekick.App;
 /// <summary>How a line submitted while a reply runs is handled (<see cref="ChatScreen.MidTurnPolicy"/>).</summary>
 public enum MidTurnClass
 {
-    /// <summary>Not a command: type-ahead, sent when the reply ends.</summary>
+    /// <summary>Not a command: queued, or left for the idle line, and sent when the reply ends.</summary>
     Message,
 
     /// <summary>A pane that reads the keys until ESC while the reply streams under it (<c>/help</c>, <c>/settings</c>, <c>/memory</c>, a confirmation).</summary>
@@ -131,19 +131,21 @@ internal sealed partial class ChatScreen
     private static string CommandWord(string text) => text.Trim().Split(' ', 2)[0];
 
     /// <summary>
-    /// The watcher's line hook (<see cref="KeySource.WatchAsync(CancellationTokenSource, CancellationToken, Func{ConsoleKeyInfo, bool}?, CancellationTokenSource?, Func{string, Task{bool}}?, Func{bool}?)"/>),
+    /// The watcher's line hook (<see cref="KeySource.WatchAsync(CancellationTokenSource, CancellationToken, Func{ConsoleKeyInfo, bool}?, CancellationTokenSource?, Func{KeySource.WatchedLine, Task{bool}}?, Func{bool}?, Func{InputEvent, bool}?, Func{ConsoleKeyInfo, bool}?, Func{InputEvent.Click, string?}?, InputLine.Editor?)"/>),
     /// on the watcher task. True when the line was taken (a pane ran, an act was posted, a refusal
     /// was posted, a message was queued under <c>Queue messages</c> — a line holding a paste is always one, its
-    /// <c>Text</c> null); false leaves it type-ahead — a message with
-    /// the queue off, and <c>/clear</c> / <c>/new</c> / <c>/exit</c> after
-    /// cancelling the turn, so the idle line that follows runs them.
+    /// <c>Text</c> null — or left for the idle line, <see cref="_pendingLines"/>); false leaves it where it was —
+    /// on the live row (2026-09-25: the typo intercept's replacement is there instead), or type-ahead for a clicked word.
+    /// Since the row became the idle line's editor under a reply (2026-09-25) a message with the queue off and
+    /// <c>/clear</c> / <c>/new</c> / <c>/exit</c> (after cancelling the turn) wait in <see cref="_pendingLines"/>, which the
+    /// idle loop sends first; they were type-ahead before.
     /// </summary>
     private async Task<bool> OnMidTurnLineAsync(KeySource.WatchedLine line, CancellationTokenSource turnCts, CancellationToken paneToken)
     {
         if (line.Text is not { } text)
         {
             // A paste in the line: never a command (the README's rule); queued like a message
-            // under the switch, type-ahead as before without it.
+            // under the switch, left for the idle line without it.
             return QueueLine(line);
         }
 
@@ -157,18 +159,27 @@ internal sealed partial class ChatScreen
         switch (policy)
         {
             case MidTurnClass.Message:
+                // The typo intercept at the Enter (2026-09-25; the idle read's alone before, a queued line meeting it when
+                // replayed): a replacement is the row's draft again, the line never sent.
+                if (line.Line is not null && await TypoInterceptAsync(text, paneToken).ConfigureAwait(false) is { } replacement)
+                {
+                    _input.Chat.Load(replacement);
+                    return false;
+                }
+
                 return QueueLine(line);
             case MidTurnClass.Cancel:
                 // The queue goes with the conversation whatever Queue cancel mode says (2026-09-18):
-                // the line stays type-ahead and is read after the loop top's drain, so under drain
+                // the line waits for the idle loop, which sends it before the queue, so under drain
                 // a queued message would otherwise reach the conversation about to be forgotten.
                 if (_queue.Clear() is > 0 and var dropped)
                 {
                     Post(() => _transcript.Notice(QueueDroppedNotice(dropped)));
                 }
 
+                bool pended = line.Line is { } cancelLine && Pend(cancelLine);
                 VoiceSession.SafeCancel(turnCts);
-                return false;
+                return pended;
             case MidTurnClass.Refused:
                 Post(() => _transcript.Notice(MidTurnRefusedNotice(CommandWord(text))));
                 return true;
@@ -183,21 +194,26 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// A message typed under the reply (2026-09-18), on the watcher task: under <c>Queue messages</c>
-    /// its events go into the queue — taken off the buffer, so the mirror re-previews an empty row —
-    /// and the idle loop replays them once the reply ends; a blank line, or the switch off, leaves
-    /// it type-ahead as before. The setting is read here, at each Enter. Under <c>/botchat</c>
+    /// it goes into the queue and the idle loop sends it once the reply ends; with the switch off it waits in
+    /// <see cref="_pendingLines"/> (2026-09-25: it was type-ahead until the live row) and is sent as the reply ends
+    /// all the same, only never shown as queued. The setting is read here, at each Enter. Under <c>/botchat</c>
     /// (2026-09-24) a line is always queued whatever the switch says: the chat takes it between two
-    /// replies as the user's interjection.
+    /// replies as the user's interjection. A blank line, or one with no live row behind it, stays where it was.
     /// </summary>
     private bool QueueLine(KeySource.WatchedLine line)
     {
         string label = line.Label.Trim();
-        if ((!_effective().QueueMessages && !_botChatRunning) || label.Length == 0)
+        if (line.Line is not { } submitted || label.Length == 0)
         {
             return false;
         }
 
-        _queue.Enqueue(new QueuedMessage(label, line.Events));
+        if (!_effective().QueueMessages && !_botChatRunning)
+        {
+            return Pend(submitted);
+        }
+
+        _queue.Enqueue(new QueuedMessage(label, submitted));
         if (_botChatRunning)
         {
             // /botchat's speech wait takes the line at once (later on 2026-09-24): its select wakes on the act signal.
@@ -206,6 +222,23 @@ internal sealed partial class ChatScreen
 
         return true;
     }
+
+    /// <summary>
+    /// The lines left for the idle line (2026-09-25): a message with <c>Queue messages</c> off, a command that cancels the
+    /// reply (<c>/clear</c>, <c>/new</c>, <c>/exit</c>…), or a line sent under a spinner that takes no command. Filled on the
+    /// watcher task, emptied by the idle loop ahead of every other line, oldest first.
+    /// </summary>
+    private readonly ConcurrentQueue<SubmittedLine> _pendingLines = new();
+
+    /// <summary>Leaves <paramref name="line"/> for the idle line; always taken.</summary>
+    private bool Pend(SubmittedLine line)
+    {
+        _pendingLines.Enqueue(line);
+        return true;
+    }
+
+    /// <summary>The line hook of a watch that takes no command (a spinner's, a listen's): every line waits for the idle line (2026-09-25).</summary>
+    private Task<bool> PendLineAsync(KeySource.WatchedLine line) => Task.FromResult(line.Line is { } submitted && Pend(submitted));
 
     /// <summary>
     /// The pane phase of a mid-turn pane command, on the watcher task; its acts are posted. Then

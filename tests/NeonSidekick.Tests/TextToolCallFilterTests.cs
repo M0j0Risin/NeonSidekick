@@ -110,4 +110,113 @@ public class TextToolCallFilterTests
     {
         Assert.Null(TextToolCallFilter.ParseArguments(text));
     }
+
+    // ── The line form (later on 2026-09-25, the user's report from /botchat) ──
+
+    private static readonly string[] Parameters = ["prompt", "negative", "negative_extra", "width", "height", "seed", "image", "image2"];
+
+    private const string UsersLine = "generate_image prompt: score_9, score_8_up, source_anime, 1girl, solo, cute, shy, blush, looking at viewer, standing, dark lighting, messy background    width: 1024 height: 1024";
+
+    private static (string Text, TextToolCallFilter Filter) RunLines(params string[] deltas)
+    {
+        var filter = new TextToolCallFilter([(Tool, (IReadOnlyList<string>)Parameters)]);
+        var text = new StringBuilder();
+        foreach (string delta in deltas)
+        {
+            text.Append(filter.Push(delta));
+        }
+
+        text.Append(filter.Flush());
+        return (text.ToString(), filter);
+    }
+
+    private static JsonElement Argument(TextToolCallFilter filter, string key) =>
+        (JsonElement)TextToolCallFilter.ParseArguments(Assert.Single(filter.Calls).Arguments)![key]!;
+
+    [Fact]
+    public void TheLineForm_TheUsersLine_IsCaught_WholeOrSplitAnywhere()
+    {
+        var (whole, filter) = RunLines(UsersLine);
+        Assert.Equal("", whole);
+        Assert.Equal(Tool, Assert.Single(filter.Calls).Name);
+        Assert.Equal("score_9, score_8_up, source_anime, 1girl, solo, cute, shy, blush, looking at viewer, standing, dark lighting, messy background", Argument(filter, "prompt").GetString());
+        Assert.Equal(1024, Argument(filter, "width").GetInt32());
+        Assert.Equal(1024, Argument(filter, "height").GetInt32());
+        Assert.False(filter.SawBroken);
+
+        for (int i = 1; i < UsersLine.Length; i++)
+        {
+            var (text, split) = RunLines(UsersLine[..i], UsersLine[i..]);
+            Assert.Equal("", text);
+            Assert.Equal(filter.Calls, split.Calls);
+        }
+    }
+
+    [Fact]
+    public void TheLineForm_OnItsOwnLine_TheLinesAroundItKept()
+    {
+        const string reply = "Here is my sketch!\n" + UsersLine + "\nDo you like it?";
+        var (whole, filter) = RunLines(reply);
+        Assert.Equal("Here is my sketch!\nDo you like it?", whole);
+        Assert.Single(filter.Calls);
+
+        for (int i = 1; i < reply.Length; i++)
+        {
+            var (text, split) = RunLines(reply[..i], reply[i..]);
+            Assert.Equal(whole, text);
+            Assert.Equal(filter.Calls, split.Calls);
+        }
+    }
+
+    [Fact]
+    public void TheLineForm_TakesAColonAfterTheName_ABacktick_AndQuotes()
+    {
+        var (text, filter) = RunLines("  `generate_image: prompt=\"a dog, surfing\" negative_extra: cats seed: 7`\n");
+        Assert.Equal("", text);
+        Assert.Equal("a dog, surfing", Argument(filter, "prompt").GetString());
+        Assert.Equal("cats", Argument(filter, "negative_extra").GetString());   // never read as negative
+        Assert.Equal(7, Argument(filter, "seed").GetInt32());
+    }
+
+    [Theory]
+    [InlineData("generate_image is how I draw.")]                       // the name, then no parameter
+    [InlineData("generate_image: nice")]                                // a colon, then no parameter
+    [InlineData("I used generate_image prompt: x")]                     // mid-line
+    [InlineData("generate_images prompt: x")]                           // another word
+    [InlineData("first line\ngenerate_image is how I draw.\nlast")]
+    public void TheLineForm_AnythingElse_PassesThrough(string reply)
+    {
+        var (text, filter) = RunLines(reply);
+        Assert.Equal(reply, text);
+        Assert.Empty(filter.Calls);
+
+        for (int i = 1; i < reply.Length; i++)
+        {
+            Assert.Equal(reply, RunLines(reply[..i], reply[i..]).Text);
+        }
+    }
+
+    [Fact]
+    public void TheLineForm_NeedsTheParameters_TheNamesAloneNeverCatchIt()
+    {
+        var (text, filter) = Run(UsersLine);
+        Assert.Equal(UsersLine, text);
+        Assert.Empty(filter.Calls);
+    }
+
+    [Fact]
+    public void TheParenthesisedForm_StillCaught_WithTheParametersGiven()
+    {
+        var (text, filter) = RunLines("generate_image(prompt=\"a dog\")\nNice?");
+        Assert.Equal("Nice?", text);
+        Assert.Equal([(Tool, "prompt=\"a dog\"")], filter.Calls);
+    }
+
+    [Fact]
+    public void LineArguments_StartsWithAKey_OrIsNull()
+    {
+        Assert.Null(TextToolCallFilter.LineArguments("a dog prompt: x", Parameters));
+        Assert.Null(TextToolCallFilter.LineArguments("", Parameters));
+        Assert.Equal("{\"prompt\":\"a dog\",\"image2\":\"b.png\"}", TextToolCallFilter.LineArguments("PROMPT = a dog image2: b.png", Parameters));
+    }
 }

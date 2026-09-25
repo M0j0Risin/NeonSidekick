@@ -32,7 +32,7 @@ public class QueueMenuTests : IDisposable
     {
         foreach (var text in texts)
         {
-            _queue.Enqueue(new QueuedMessage(text, [new InputEvent.Key(Keys.Enter)]));
+            _queue.Enqueue(new QueuedMessage(text, new SubmittedLine(text, text, [], text)));
         }
     }
 

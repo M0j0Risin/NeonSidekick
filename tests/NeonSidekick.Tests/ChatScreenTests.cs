@@ -10473,9 +10473,9 @@ public partial class ChatScreenTests : IDisposable
     }
 
     [Fact]
-    public async Task MidTurn_AMessage_WithTheQueueOff_StaysTypeAhead_AndIsSentAfterTheReply()
+    public async Task MidTurn_AMessage_WithTheQueueOff_WaitsForTheIdleLine_AndIsSentAfterTheReply()
     {
-        // The switch off: the line stays on the input row as before and the next idle read sends it; no count.
+        // The switch off: the line waits for the idle line (type-ahead until the live row, 2026-09-25) and is sent there; no count.
         _settings.Update(d => d.QueueMessages = false);
         MidTurnFixture(i =>
         {
@@ -11705,7 +11705,8 @@ public partial class ChatScreenTests : IDisposable
     // ── /imagine and /comfy (2026-09-24) ────────────────────────────────────
 
     /// <summary>A ComfyUI stand-in for the screen: one workflow in the profile's comfy folder, a server that finishes at once and serves a 4×4 picture.</summary>
-    private StubHttpMessageHandler ComfyServer()
+    /// <summary>A stub ComfyUI whose every picture is a solid <paramref name="width"/> × <paramref name="height"/> image (4 × 4 unless a test needs one wide enough to show its drawn size).</summary>
+    private StubHttpMessageHandler ComfyServer(int width = 4, int height = 4)
     {
         _settings.Update(d => { d.TtsOutput = false; d.ComfyUrl = "http://comfy.lan:8188"; });
         File.WriteAllText(Path.Combine(_settings.ProfileComfyDirectory, "pony.json"),
@@ -11713,7 +11714,7 @@ public partial class ChatScreenTests : IDisposable
         var stub = new StubHttpMessageHandler()
             .Map("http://comfy.lan:8188/prompt", HttpStatusCode.OK, "{\"prompt_id\":\"p-1\"}")
             .Map("http://comfy.lan:8188/history/", HttpStatusCode.OK, "{\"p-1\":{\"outputs\":{\"9\":{\"images\":[{\"filename\":\"x.png\",\"subfolder\":\"\",\"type\":\"output\"}]}}}}")
-            .Map("http://comfy.lan:8188/view", (_, _) => Task.FromResult(StubHttpMessageHandler.Bytes(HttpStatusCode.OK, SmokeChecks.SolidBmp(4, 4), "image/png")))
+            .Map("http://comfy.lan:8188/view", (_, _) => Task.FromResult(StubHttpMessageHandler.Bytes(HttpStatusCode.OK, SmokeChecks.SolidBmp(width, height), "image/png")))
             .Map("http://comfy.lan:8188/system_stats", HttpStatusCode.OK, "{\"system\":{\"comfyui_version\":\"0.3.40\"},\"devices\":[]}");
         _comfyClient = url => new NeonSidekick.Comfy.ComfyClient(url, new HttpClient(stub), TimeSpan.FromMilliseconds(1));
         return stub;

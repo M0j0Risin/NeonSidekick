@@ -690,6 +690,16 @@ internal sealed partial class ChatScreen
     private readonly Action<bool>? _holdWheel;
 
     /// <summary>
+    /// The chat line's editor for a key watcher (2026-09-25, the user's ask: the arrows, the history, the lists and the
+    /// mouse did nothing under a <c>/botchat</c>): the row stays the idle line's editor under every reply and spinner. Only
+    /// on the pane — without it the row is not drawn under a reply and the keys stay type-ahead, as before.
+    /// </summary>
+    private InputLine.Editor? LiveEditor => _pane.Enabled ? _input.Chat : null;
+
+    /// <summary>The line hook of a watch that runs no command (a spinner's, 2026-09-25): a line sent there waits for the idle line. Null without the pane.</summary>
+    private Func<KeySource.WatchedLine, Task<bool>>? LiveLineHook => _pane.Enabled ? PendLineAsync : null;
+
+    /// <summary>
     /// The key watcher's <c>spend</c> hook: PgUp/PgDn page the transcript region, a wheel notch
     /// scrolls it (<see cref="ScreenPane.WheelRows"/>) and Ctrl+End is the bottom again
     /// (<see cref="ScreenPane.ScrollToEnd"/>) while a turn, a compact or a recording runs, as they
@@ -1435,11 +1445,19 @@ internal sealed partial class ChatScreen
     public const string SkillsNeedToolsError = "LLM offer tools is off (the LLM tab of /settings): a skill rides a tool result, so none can be loaded.";
 
     /// <summary>
-    /// The line a withdrawn turn hands back (<see cref="TurnOutcome.Withdrawn"/>): the next idle
-    /// read opens with it as the draft, then it is cleared. The token form the history recalls,
-    /// so a pasted block or a picture comes back as its token, not inlined.
+    /// The line a withdrawn turn hands back (<see cref="TurnOutcome.Withdrawn"/>): put on the chat line's row at once,
+    /// ahead of anything typed under the reply (2026-09-25; the next read opened with it before), and kept here while it
+    /// is there — the queue waits until it is sent or cleared. The token form the history recalls, so a pasted block or a
+    /// picture comes back as its token, not inlined.
     /// </summary>
     private string? _restoreDraft;
+
+    /// <summary>
+    /// The last line sent, as the history holds it (2026-09-25): what a withdrawn turn hands back. The history's last
+    /// entry was that line until the row became a live editor under the reply — a line typed there is remembered at its
+    /// Enter, ahead of the withdrawn one's return.
+    /// </summary>
+    private string? _sentDraft;
 
     /// <summary>
     /// What <c>/draft</c> left to send (2026-09-19): the saved text as a paste and its Enter
@@ -5283,7 +5301,7 @@ internal sealed partial class ChatScreen
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         using var stop = new CancellationTokenSource();
         _queuedClicks.Reset();
-        var watcher = _keys.WatchAsync(cts, stop.Token, null, null, spend: e => { _queuedClicks.Reset(); return ScrollInput(e); }, onClick: _pane.Enabled ? HintClickLine : null);
+        var watcher = _keys.WatchAsync(cts, stop.Token, null, null, LiveLineHook, spend: e => { _queuedClicks.Reset(); return ScrollInput(e); }, onClick: _pane.Enabled ? HintClickLine : null, editor: LiveEditor);
         ComfyGeneration? generation = null;
         bool cancelled = false;
         try
@@ -5998,7 +6016,6 @@ internal sealed partial class ChatScreen
             // fills what is left, and no picture write lands under a spinner.
             ShowSplash();
 
-            string draft = "";
             while (!cancellationToken.IsCancellationRequested)
             {
                 DrainDiagnostics();
@@ -6008,6 +6025,7 @@ internal sealed partial class ChatScreen
                 }
 
                 IReadOnlyList<InputEvent>? replay = null;
+                SubmittedLine? send = null;
                 // A draft the editor just handed back (2026-09-19) goes first: the user is
                 // waiting on it, and /draft ran at this idle line, so no withdrawn draft stands.
                 bool fromDraft = _draftReplay is not null;
@@ -6016,24 +6034,46 @@ internal sealed partial class ChatScreen
                     replay = _draftReplay;
                     _draftReplay = null;
                 }
+                else if (_pendingLines.TryDequeue(out var pendingLine))
+                {
+                    // A line left for the idle line under the reply (2026-09-25): a message with the queue
+                    // off, or the command that cancelled the reply — sent before anything else.
+                    send = pendingLine;
+                }
                 else if (_restoreDraft is null && !_queue.Held && _queue.TryDequeue(out var queued))
                 {
-                    // The next queued message is read as if typed now (2026-09-18): its events
-                    // ahead of the console, the Enter among them the send — the › row with a
-                    // paste's token and preview, the history, the expansion for the model, then
-                    // the Submitted arm as for any line. A withdrawn draft comes back first: a
-                    // replay into a read that starts with one would append to it.
-                    replay = queued.Events;
-                }
-                else if (_restoreDraft is { } restore)
-                {
-                    // A withdrawn message (ESC before the model answered) is the draft again.
-                    draft = restore;
-                    _restoreDraft = null;
+                    // The next queued message is sent now (2026-09-18; its events were replayed through
+                    // a read until the row became a live editor, 2026-09-25): the › row with a paste's
+                    // label and preview, then the Submitted arm as for any line. A withdrawn draft is
+                    // sent or cleared first: it came back to the row ahead of the queue.
+                    send = queued.Line;
                 }
 
-                var (result, hit, tailArmed) = await ReadLineAsync(draft, cancellationToken, replay).ConfigureAwait(false);
-                draft = "";
+                InputResult result;
+                WakeHit? hit = null;
+                bool tailArmed = false;
+                if (send is not null)
+                {
+                    // Nothing to listen for, no microphone armed: the line was typed already. The
+                    // draft on the row, if any, stays for the next read.
+                    result = _input.Send(send, DismissSplash, Math.Clamp(_effective().PastePreviewLines, 0, PasteBlocks.MaxPreviewLines));
+                    _sentDraft = send.Draft;
+                }
+                else
+                {
+                    (result, hit, tailArmed) = await ReadLineAsync(cancellationToken, replay).ConfigureAwait(false);
+                    if (result is InputResult.Submitted && _input.History.Count > 0)
+                    {
+                        _sentDraft = _input.History[^1];
+                    }
+
+                    if (_input.Chat.Text.Length == 0)
+                    {
+                        // The withdrawn draft was sent or cleared: the queue may go on.
+                        _restoreDraft = null;
+                    }
+                }
+
                 // Leaving the line stops the tail: a sent line (a message or a command, and the
                 // ringing timer's Enter) silently — the next thing is the feedback; the push-to-talk
                 // key and the idle wake before the microphone opens (a drained speaker forgotten
@@ -6075,13 +6115,11 @@ internal sealed partial class ChatScreen
                             return 0;
                         }
 
-                        draft = wake.Draft;
                         break;
                     case InputResult.WakeWord wake:
                         if (wake.Draft.Length > 0 || hit is null)
                         {
-                            // Like F4 with text on the line: ignored, and the draft comes back.
-                            draft = wake.Draft;
+                            // Like F4 with text on the line: ignored, and the draft comes back (it is the chat line's).
                             break;
                         }
 
@@ -6095,8 +6133,7 @@ internal sealed partial class ChatScreen
                         break;
                     case InputResult.Alert alert:
                         // A timer went off under the read, or the tail ended; the loop top prints
-                        // what is queued and the draft comes back.
-                        draft = alert.Draft;
+                        // what is queued and the draft comes back (the chat line keeps it).
                         break;
                     case InputResult.HintRow hint:
                         // A double-click on the hint row (2026-09-18), as if the
@@ -6111,7 +6148,6 @@ internal sealed partial class ChatScreen
                         _timers.Acknowledge();
                         DisarmExit();
                         await _speech.StopAsync().ConfigureAwait(false);
-                        draft = hint.Draft;
                         if (hint.Hit.Zone == ScreenPane.HintZone.Strip && hint.Hit.Glyph == LearnStripGlyph)
                         {
                             // The brain is drawn only while a reflection runs, so the click is its
@@ -6151,7 +6187,6 @@ internal sealed partial class ChatScreen
                         _timers.Acknowledge();
                         DisarmExit();
                         await _speech.StopAsync().ConfigureAwait(false);
-                        draft = tool.Draft;
                         string? toolbarLine = tool.Hit.Zone switch
                         {
                             ScreenPane.ToolbarZone.Path => CwdBrowseLine,
@@ -6235,7 +6270,7 @@ internal sealed partial class ChatScreen
     /// <see cref="SpeechStoppedNotice"/> is printed here once the microphone is closed; the next
     /// ESC clears the draft. The flag, not the speaker's completion, decides the second press.
     /// </summary>
-    private async Task<(InputResult Result, WakeHit? Hit, bool TailArmed)> ReadLineAsync(string draft, CancellationToken cancellationToken, IReadOnlyList<InputEvent>? replay = null)
+    private async Task<(InputResult Result, WakeHit? Hit, bool TailArmed)> ReadLineAsync(CancellationToken cancellationToken, IReadOnlyList<InputEvent>? replay = null)
     {
         using var wake = new CancellationTokenSource();
         using var alert = new CancellationTokenSource();
@@ -6327,7 +6362,6 @@ internal sealed partial class ChatScreen
         try
         {
             result = await _input.ReadAsync(
-                initialText: draft,
                 allowEmpty: _timers.HasRinging,
                 pushToTalk: _voice.Enabled ? _voice.PushToTalk : null,
                 cancellationToken: cancellationToken,
@@ -6343,7 +6377,10 @@ internal sealed partial class ChatScreen
                 replay: replay,
                 emptyArrow: step => CycleSplash(step) || StepPictureStrip(step),
                 emptyDelete: DeleteSplash,
-                emptyEnter: OpenStripPicture).ConfigureAwait(false);
+                emptyEnter: OpenStripPicture,
+                // The chat line's own editor (2026-09-25): its draft lives on under the replies. A /draft replay reads on
+                // a fresh one, so what was typed under the editor's wait stays on the row, unsent.
+                editor: replay is null ? _input.Chat : null).ConfigureAwait(false);
         }
         finally
         {
@@ -6449,7 +6486,7 @@ internal sealed partial class ChatScreen
         using var compactCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         using var stop = new CancellationTokenSource();
         _queuedClicks.Reset();
-        var watcher = _keys.WatchAsync(compactCts, stop.Token, null, null, spend: e => { _queuedClicks.Reset(); return ScrollInput(e); }, onClick: _pane.Enabled ? HintClickLine : null);
+        var watcher = _keys.WatchAsync(compactCts, stop.Token, null, null, LiveLineHook, spend: e => { _queuedClicks.Reset(); return ScrollInput(e); }, onClick: _pane.Enabled ? HintClickLine : null, editor: LiveEditor);
         ConversationCompactor.Result? result = null;
         string? failure = null;
         bool cancelled = false;
@@ -7047,7 +7084,9 @@ internal sealed partial class ChatScreen
     /// transcript's pictures) gives the watcher a reply's mouse — the wheel and scroll keys through
     /// <see cref="ScrollInput"/>, clicks through <see cref="HintClickLine"/> (a picture's double-click
     /// opens it, a tool run folds) — for a wait long enough to read the transcript through. A word a
-    /// click answers is dropped: no line hook runs panes here.</para>
+    /// click answers is dropped: no line hook runs panes here. It gives the row the chat line's live editor too
+    /// (2026-09-25), a line sent there waiting for the idle line; a connect's short wait keeps the keys type-ahead,
+    /// so an ESC typed under it still reaches the picker after it.</para>
     /// </summary>
     private async Task<bool> WaitUnderWatchAsync(Func<CancellationToken, Task> work, Func<ConsoleKeyInfo, bool> cancel, CancellationToken cancellationToken, bool pointer = false)
     {
@@ -7059,7 +7098,7 @@ internal sealed partial class ChatScreen
         }
 
         var watcher = pointer
-            ? _keys.WatchAsync(workCts, stop.Token, null, null, spend: e => { _queuedClicks.Reset(); return ScrollInput(e); }, cancel: cancel, onClick: _pane.Enabled ? HintClickLine : null)
+            ? _keys.WatchAsync(workCts, stop.Token, null, null, LiveLineHook, spend: e => { _queuedClicks.Reset(); return ScrollInput(e); }, cancel: cancel, onClick: _pane.Enabled ? HintClickLine : null, editor: LiveEditor)
             : _keys.WatchAsync(workCts, stop.Token, null, null, cancel: cancel);
         try
         {
@@ -8414,7 +8453,10 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// <c>/botchat [profile …] [topic]</c> (2026-09-24, the user's ask; <see cref="BotChat"/> has the rules):
-    /// the profiles talk to each other until ESC or Ctrl+C. Every turn runs through <see cref="RunTurnAsync"/>
+    /// the profiles talk to each other until ESC or Ctrl+C ends it — up <see cref="BotEscLadder"/> since 2026-09-25 (the
+    /// user's ask): a press stops the speaking bot's voice, the next cuts the bot replying short and the chat goes on with
+    /// the next one (<see cref="BotChat.CutShortNotice"/>, the words so far kept as its line), the next — before that next
+    /// bot has shown or said anything — ends the chat. The input row stays the idle line's editor throughout. Every turn runs through <see cref="RunTurnAsync"/>
     /// on an assistant of its own over this profile's one client (<see cref="LlmSession.CreateAssistant"/>:
     /// the user's call, every bot on the starting profile's server and model), strictly one after another,
     /// with a system prompt built afresh from the speaker's own <c>persona.md</c> and no tools; its reply
@@ -8502,6 +8544,10 @@ internal sealed partial class ChatScreen
         // The app's pictures still rendering (Botchat image async), oldest first; ending the chat cancels them.
         using var pictureCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         var pictures = new List<(BotParticipant Bot, Task<ComfyGeneration?> Job)>();
+        // Their pace with no voice to wait for (2026-09-25): one at a time, a second's rest after each.
+        var pacer = new BotPicturePacer(_time);
+        // ESC's ladder (2026-09-25): the voice, then the bot replying, then the chat.
+        var ladder = new BotEscLadder();
         _botNoWorkflowTold = false;
         _botChatRunning = true;
         try
@@ -8544,16 +8590,26 @@ internal sealed partial class ChatScreen
                 }
 
                 DiagnosticLog.Info(AppCategory, BotChat.TurnLogLine(replies + 1, bot.Name));
+                int turnId = ladder.BeginBot();
                 // Async off (later on 2026-09-25): the reply is written unseen, its picture made, then both shown — picture first.
                 bool held = pictured && BotChatImageMode.Draws(imageMode) && !effective.BotChatImageAsync;
                 IReadOnlyList<TurnEvent>? replay = null;
                 ComfyGeneration? picture = null;
                 if (held)
                 {
-                    var (collected, thinkingCancelled) = await UnderWatchAsync(BotChat.ThinkingSpinner(bot.Name), token => CollectBotTurnAsync(assistant, turnText, token), cancellationToken).ConfigureAwait(false);
+                    var (collected, thinkingCancelled) = await UnderWatchAsync(BotChat.ThinkingSpinner(bot.Name), token => CollectBotTurnAsync(assistant, turnText, token), cancellationToken,
+                        softCancel: () => ladder.Press(turnId, shown: false, voiceAudible: false, responding: true) == BotPress.StopVoice).ConfigureAwait(false);
                     if (thinkingCancelled || collected is null)
                     {
-                        // ESC over the unseen reply stops the chat, as it does over a streaming one.
+                        // ESC over the unseen reply is the ladder's, as over a streaming one (2026-09-25): this bot cut
+                        // short and the next one asked, or — the press after a skip, a command that cancels — the chat's end.
+                        if (!cancellationToken.IsCancellationRequested && ladder.Skipped(turnId) && !ladder.EndRequested)
+                        {
+                            _transcript.Notice(BotChat.CutShortNotice(bot.Name));
+                            last = next;
+                            continue;
+                        }
+
                         if (!cancellationToken.IsCancellationRequested)
                         {
                             _transcript.Notice(CancelledNotice);
@@ -8574,7 +8630,7 @@ internal sealed partial class ChatScreen
                     }
                 }
 
-                var outcome = await RunTurnAsync(assistant, turnText, [], cancellationToken, bot, replay, picture).ConfigureAwait(false);
+                var outcome = await RunTurnAsync(assistant, turnText, [], cancellationToken, bot, replay, picture, ladder, turnId).ConfigureAwait(false);
                 await EndTurnAsync(closePane: outcome is not (TurnOutcome.Continue or TurnOutcome.Withdrawn), cancellationToken).ConfigureAwait(false);
                 if (outcome == TurnOutcome.Exit)
                 {
@@ -8582,14 +8638,17 @@ internal sealed partial class ChatScreen
                 }
 
                 string reply = _lastReply.Trim();
-                bool stopped = _lastTurnCancelled || _lastTurnFailed || outcome != TurnOutcome.Continue;
-                if (outcome != TurnOutcome.Withdrawn)
+                // Cut short by the ladder (2026-09-25): the chat goes on. Any other cancel — the press that ends the chat, a
+                // command that cancels (/exit, /clear), the wake phrase — or a failure stops it, as before.
+                bool skipped = ladder.Skipped(turnId) && !ladder.EndRequested;
+                bool stopped = ladder.EndRequested || _lastTurnFailed || outcome is TurnOutcome.Exit or TurnOutcome.Interrupted || (_lastTurnCancelled && !skipped);
+                if (outcome != TurnOutcome.Withdrawn || skipped)
                 {
                     // Even an empty reply passes the turn on: the same bot is never asked twice running.
                     last = next;
                 }
 
-                if (outcome != TurnOutcome.Withdrawn && reply.Length > 0)
+                if ((outcome != TurnOutcome.Withdrawn || skipped) && reply.Length > 0)
                 {
                     lines.Add(new BotChatLine(bot.Name, reply));
                     replies++;
@@ -8605,9 +8664,15 @@ internal sealed partial class ChatScreen
                     break;
                 }
 
+                if (skipped)
+                {
+                    // A reply cut short gets no picture and has no voice left to wait for: the next bot answers.
+                    continue;
+                }
+
                 if (pictured && BotChatImageMode.Draws(imageMode) && !held && reply.Length > 0)
                 {
-                    await DrawBotPictureAsync(assistant, bot, reply, topic, effective, pictures, pictureCts.Token).ConfigureAwait(false);
+                    await DrawBotPictureAsync(assistant, bot, reply, topic, effective, pictures, pacer, pictureCts.Token).ConfigureAwait(false);
                     if (cancellationToken.IsCancellationRequested)
                     {
                         break;
@@ -8623,7 +8688,7 @@ internal sealed partial class ChatScreen
                 {
                     if (effective.BotChatImageAsync)
                     {
-                        await DrawBotPictureAsync(assistant, bot, reply, topic, effective, pictures, pictureCts.Token, promised: true).ConfigureAwait(false);
+                        await DrawBotPictureAsync(assistant, bot, reply, topic, effective, pictures, pacer, pictureCts.Token, promised: true).ConfigureAwait(false);
                     }
                     else if (await PaintBotPictureAsync(assistant, bot, reply, topic, effective, pictureCts.Token, promised: true).ConfigureAwait(false) is { } promised)
                     {
@@ -8640,7 +8705,7 @@ internal sealed partial class ChatScreen
                 // Speech on: the next voice waits for this one's audio to end — under ESC, which stops the chat,
                 // and under the line hook, so a line sent meanwhile joins the chat at once.
                 if (_speech.Playing is { } playing
-                    && await WaitForBotSpeechAsync(playing, lines, pictures, cancellationToken).ConfigureAwait(false))
+                    && await WaitForBotSpeechAsync(playing, lines, pictures, ladder, turnId, cancellationToken).ConfigureAwait(false))
                 {
                     await _speech.StopAsync().ConfigureAwait(false);
                     break;
@@ -8724,13 +8789,16 @@ internal sealed partial class ChatScreen
     /// <summary>
     /// The app's picture of one <c>/botchat</c> reply with <c>Botchat image async</c> on (2026-09-25): the prompt
     /// (<see cref="WriteBotPictureAsync"/>), then the generation left running in <paramref name="pictures"/>, drawn when
-    /// nothing streams (<see cref="ShowReadyBotPictures"/>).
+    /// nothing streams (<see cref="ShowReadyBotPictures"/>). With no voice to pace the chat (2026-09-25, the user's ask:
+    /// <see cref="BotPicturePacer.Applies"/>, read at the send) the generation goes through <paramref name="pacer"/>: after
+    /// the one before it, and a second after that one was made.
     /// </summary>
-    private async Task DrawBotPictureAsync(Assistant assistant, BotParticipant bot, string reply, string topic, AppSettingsData effective, List<(BotParticipant Bot, Task<ComfyGeneration?> Job)> pictures, CancellationToken pictureToken, bool promised = false)
+    private async Task DrawBotPictureAsync(Assistant assistant, BotParticipant bot, string reply, string topic, AppSettingsData effective, List<(BotParticipant Bot, Task<ComfyGeneration?> Job)> pictures, BotPicturePacer pacer, CancellationToken pictureToken, bool promised = false)
     {
         if (await WriteBotPictureAsync(assistant, bot, reply, topic, effective, pictureToken, promised).ConfigureAwait(false) is { } job)
         {
-            pictures.Add((bot, GenerateBotPictureAsync(job, pictureToken)));
+            bool paced = BotPicturePacer.Applies(_effective(), _speech.IsReady);
+            pictures.Add((bot, GenerateBotPictureAsync(job, pictureToken, paced ? pacer : null)));
         }
     }
 
@@ -8857,12 +8925,17 @@ internal sealed partial class ChatScreen
         }
     }
 
-    /// <summary>One app picture's generation; null when it was cancelled (the chat ended, or ESC). Every other failure is an <c>Error:</c> text, never a throw.</summary>
-    private async Task<ComfyGeneration?> GenerateBotPictureAsync(ComfyRequest request, CancellationToken cancellationToken)
+    /// <summary>
+    /// One app picture's generation; null when it was cancelled (the chat ended, or ESC). Every other failure is an <c>Error:</c>
+    /// text, never a throw. <paramref name="pacer"/> (2026-09-25), when given, holds the send for the picture before it and its rest.
+    /// </summary>
+    private async Task<ComfyGeneration?> GenerateBotPictureAsync(ComfyRequest request, CancellationToken cancellationToken, BotPicturePacer? pacer = null)
     {
         try
         {
-            return await _comfy.GenerateAsync(request, cancellationToken).ConfigureAwait(false);
+            return pacer is null
+                ? await _comfy.GenerateAsync(request, cancellationToken).ConfigureAwait(false)
+                : await pacer.RunAsync(token => _comfy.GenerateAsync(request, token), cancellationToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
@@ -8877,15 +8950,24 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// <paramref name="work"/> under a spinner and ESC, <see cref="HandleImagineAsync"/>'s shape (2026-09-25, for <c>/botchat</c>'s
-    /// pictures): the watcher's ESC or Ctrl+C cancels the work alone. <c>Cancelled</c> is true when it did, or
-    /// <paramref name="cancellationToken"/> ended; the result is then default.
+    /// pictures): the watcher's ESC or Ctrl+C cancels the work alone — unless <paramref name="softCancel"/> spends it (the
+    /// held reply's press asks the chat's <see cref="BotEscLadder"/>). <c>Cancelled</c> is true when it did, or
+    /// <paramref name="cancellationToken"/> ended; the result is then default. The row is the live editor, and a line sent
+    /// there goes through the mid-turn policy as under a reply: an interjection queued for the chat, a pane here, an act
+    /// at the wait's end (<see cref="EndTurnAsync"/>).
     /// </summary>
-    private async Task<(T? Result, bool Cancelled)> UnderWatchAsync<T>(string label, Func<CancellationToken, Task<T>> work, CancellationToken cancellationToken)
+    private async Task<(T? Result, bool Cancelled)> UnderWatchAsync<T>(string label, Func<CancellationToken, Task<T>> work, CancellationToken cancellationToken, Func<bool>? softCancel = null)
     {
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         using var stop = new CancellationTokenSource();
+        // A line typed under the spinner is the chat's, as under a reply (2026-09-25): an interjection queued, a command run
+        // by the mid-turn policy — its pane here, its act at the wait's end.
+        _turnRunning = true;
+        _paneClose?.Dispose();
+        _paneClose = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var paneToken = _paneClose.Token;
         _queuedClicks.Reset();
-        var watcher = _keys.WatchAsync(cts, stop.Token, null, null, spend: e => { _queuedClicks.Reset(); return ScrollInput(e); }, onClick: _pane.Enabled ? HintClickLine : null);
+        var watcher = _keys.WatchAsync(cts, stop.Token, null, null, _pane.Enabled ? line => OnMidTurnLineAsync(line, cts, paneToken) : null, softCancel, spend: e => { _queuedClicks.Reset(); return ScrollInput(e); }, onClick: _pane.Enabled ? HintClickLine : null, editor: LiveEditor);
         try
         {
             var result = await _transcript.WithSpinnerAsync(label, () => work(cts.Token)).ConfigureAwait(false);
@@ -8899,6 +8981,7 @@ internal sealed partial class ChatScreen
         {
             stop.Cancel();
             await watcher.ConfigureAwait(false);
+            await EndTurnAsync(closePane: cts.IsCancellationRequested, cancellationToken).ConfigureAwait(false);
             DrainDiagnostics();
         }
     }
@@ -8920,7 +9003,9 @@ internal sealed partial class ChatScreen
     /// <summary>
     /// One app picture in the transcript (2026-09-25), <see cref="HandleImagineAsync"/>'s tail: a failure as an error, else the
     /// result lines, the strip, the picture. <paramref name="late"/> (drawn after later lines, <c>Botchat image async</c>) heads it
-    /// with <see cref="BotChat.PictureNotice"/>, whose reply it pictures.
+    /// with <see cref="BotChat.PictureNotice"/>, whose reply it pictures. Drawn at <c>Image thumbnail size</c> (later on
+    /// 2026-09-25, the user's report: <see cref="ShowPictures"/>, <c>/imagine</c>'s drawer, filled the window whatever the
+    /// setting said), as a bot's own <c>generate_image</c> result is; <c>fullsize</c> is the window's box.
     /// </summary>
     private void ShowBotPicture(BotParticipant bot, ComfyGeneration generation, bool late)
     {
@@ -8936,9 +9021,10 @@ internal sealed partial class ChatScreen
         }
 
         ComfyLines(generation.Text, line => _transcript.Notice(ComfyText.Glyph + line));
-        // The strip first: the picture's window box then leaves its rows.
+        // The strip first: a fullsize box then leaves its rows.
         AddToPictureStrip(generation.Images);
-        ShowPictures(generation.Images);
+        var (tiles, ids) = ReadThumbnails(generation.Images, ThumbnailSize.Resolve(_effective(), WindowBox()), sandbox: true);
+        _transcript.Images(tiles, ids);
     }
 
     /// <summary>
@@ -8950,14 +9036,13 @@ internal sealed partial class ChatScreen
     /// signal while <see cref="_botChatRunning"/>): echoed and added to the chat, the bot speaking on to its end
     /// (the user's call: let it finish, then the next bot answers).
     ///
-    /// <para>ESC or Ctrl+C (2026-09-25, the user's ask): the first press skips this bot's voice alone — the speech
-    /// stops, <see cref="SpeechStoppedNotice"/> under it, and the chat goes on to the next bot, spoken as ever — the
-    /// soft cancel a reply's own <c>StopSpeechFirst</c> is. A second press in the same wait, or at the next bot
-    /// before its voice starts (its reply's watcher then has nothing to stop and cancels), ends the chat. True
-    /// when the wait was cancelled — that second press, or a command that cancels, <c>/clear</c> and the like;
-    /// the caller stops the speech and the chat.</para>
+    /// <para>ESC or Ctrl+C (2026-09-25, the user's ask) goes up the chat's <see cref="BotEscLadder"/>: the first press skips
+    /// this bot's voice alone — the speech stops, <see cref="SpeechStoppedNotice"/> under it, and the chat goes on to the
+    /// next bot, spoken as ever. A second press in the same wait, or at the next bot before it has shown or said anything,
+    /// ends the chat. True when the wait was cancelled — that second press, or a command that cancels, <c>/clear</c> and
+    /// the like; the caller stops the speech and the chat.</para>
     /// </summary>
-    private async Task<bool> WaitForBotSpeechAsync(SpeechOutput playing, List<BotChatLine> lines, List<(BotParticipant Bot, Task<ComfyGeneration?> Job)> pictures, CancellationToken cancellationToken)
+    private async Task<bool> WaitForBotSpeechAsync(SpeechOutput playing, List<BotChatLine> lines, List<(BotParticipant Bot, Task<ComfyGeneration?> Job)> pictures, BotEscLadder ladder, int turnId, CancellationToken cancellationToken)
     {
         using var waitCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         using var stop = new CancellationTokenSource();
@@ -8970,7 +9055,8 @@ internal sealed partial class ChatScreen
         bool skipped = false;
         bool SkipSpeech()
         {
-            if (skipped)
+            // The ladder's (2026-09-25): the reply is written, so a press is the voice or the chat's end.
+            if (ladder.Press(turnId, shown: true, voiceAudible: !skipped && !playing.Completion.IsCompleted, responding: false) != BotPress.StopVoice)
             {
                 return false;
             }
@@ -8984,7 +9070,8 @@ internal sealed partial class ChatScreen
             onLine: _pane.Enabled ? line => OnMidTurnLineAsync(line, waitCts, paneToken) : null,
             softCancel: SkipSpeech,
             spend: e => { _queuedClicks.Reset(); return ScrollInput(e); },
-            onClick: _pane.Enabled ? HintClickLine : null);
+            onClick: _pane.Enabled ? HintClickLine : null,
+            editor: LiveEditor);
         var cancelled = Task.Delay(Timeout.Infinite, waitCts.Token);
         try
         {
@@ -9131,7 +9218,9 @@ internal sealed partial class ChatScreen
                 // the history recalls it (its tokens intact; a spoken request was remembered too).
                 // A drained message went through the same Enter arm, so it comes back the same way,
                 // and the idle loop reads that draft before it drains the next (2026-09-18).
-                _restoreDraft = _input.History.Count > 0 ? _input.History[^1] : text;
+                _restoreDraft = _sentDraft ?? text;
+                // Back on the row at once (2026-09-25), ahead of whatever was typed under the reply.
+                _input.Chat.Load(_restoreDraft, prependToCurrent: true);
                 return false;
             }
 
@@ -9313,7 +9402,7 @@ internal sealed partial class ChatScreen
 
         var key = _voice.PushToTalk;
         _queuedClicks.Reset();
-        var watcher = _keys.WatchAsync(discard, stop.Token, k => k.Key == key || k.Key == ConsoleKey.Enter, finish, spend: e => { _queuedClicks.Reset(); return ScrollInput(e); }, onClick: _pane.Enabled ? HintClickLine : null);
+        var watcher = _keys.WatchAsync(discard, stop.Token, k => k.Key == key || k.Key == ConsoleKey.Enter, finish, spend: e => { _queuedClicks.Reset(); return ScrollInput(e); }, onClick: _pane.Enabled ? HintClickLine : null, editor: LiveEditor);
 
         ListenResult? result = null;
         try
@@ -9361,6 +9450,7 @@ internal sealed partial class ChatScreen
         DismissSplash();
         _transcript.User(text);
         _input.Remember(text);
+        _sentDraft = text;
         return new ListenOutcome(text, Exit: false, Discarded: false);
     }
 
@@ -9416,7 +9506,7 @@ internal sealed partial class ChatScreen
     /// a hit, or a speech ESC stopped — the device is silenced and waited for, and only then is the
     /// reason decided and printed (<see cref="TurnEndNotice"/>): keys win over the microphone.</para>
     /// </summary>
-    private async Task<TurnOutcome> RunTurnAsync(Assistant assistant, string text, IReadOnlyList<ImageAttachment> images, CancellationToken cancellationToken, BotParticipant? bot = null, IReadOnlyList<TurnEvent>? replay = null, ComfyGeneration? picture = null)
+    private async Task<TurnOutcome> RunTurnAsync(Assistant assistant, string text, IReadOnlyList<ImageAttachment> images, CancellationToken cancellationToken, BotParticipant? bot = null, IReadOnlyList<TurnEvent>? replay = null, ComfyGeneration? picture = null, BotEscLadder? ladder = null, int ladderTurn = 0)
     {
         using var turnCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         using var stop = new CancellationTokenSource();
@@ -9458,11 +9548,29 @@ internal sealed partial class ChatScreen
             return true;
         }
 
+        // A /botchat turn's press goes up the chat's ladder (2026-09-25, BotEscLadder): the voice, then this bot, then the
+        // chat — the last two cancel the turn, HandleBotChatAsync telling them apart. Whether this bot has shown a word is
+        // written on the turn task (the render loop) and read here, on the watcher's.
+        bool shown = false;
+        bool LadderPress()
+        {
+            bool heard = speaker is not null && speaker.WrittenBytes > 0;
+            bool audible = heard && !speechStopped && !speaker!.Completion.IsCompleted;
+            if (ladder!.Press(ladderTurn, Volatile.Read(ref shown) || heard, audible, responding: true) != BotPress.StopVoice)
+            {
+                return false;
+            }
+
+            speechStopped = true;
+            _speech.Stop();
+            return true;
+        }
+
         // The queued count's double-click (2026-09-18): the pair is timed here on the pane's
         // clock and a key or a notch between the two ends it — the spend hook sees every one.
         _queuedClicks.Reset();
-        var watcher = _keys.WatchAsync(turnCts, stop.Token, null, null, _pane.Enabled ? text => OnMidTurnLineAsync(text, turnCts, paneToken) : null, speaker is null ? null : StopSpeechFirst,
-            e => { _queuedClicks.Reset(); return ScrollInput(e); }, onClick: _pane.Enabled ? HintClickLine : null);
+        var watcher = _keys.WatchAsync(turnCts, stop.Token, null, null, _pane.Enabled ? text => OnMidTurnLineAsync(text, turnCts, paneToken) : null, ladder is not null ? LadderPress : speaker is null ? null : StopSpeechFirst,
+            e => { _queuedClicks.Reset(); return ScrollInput(e); }, onClick: _pane.Enabled ? HintClickLine : null, editor: LiveEditor);
         bool markdown = MarkdownTurn(effective.TranscriptMarkdown, _pane.Enabled, speaker is not null);
         bool styled = StyledReply(effective.TranscriptMarkdown, _pane.Enabled);
         // The shells found are probed afresh per turn (2026-09-21): an install during the session shows without a restart, and the schema and the run agree.
@@ -9599,6 +9707,11 @@ internal sealed partial class ChatScreen
                 }
 
                 Render(events.Current, speaker, reply, thumbnails);
+                if (events.Current is TurnEvent.TextDelta { Text.Length: > 0 })
+                {
+                    Volatile.Write(ref shown, true);
+                }
+
                 sawError |= events.Current is TurnEvent.Notice { IsError: true };
                 trace.Observe(events.Current);
                 DrainDiagnostics();
@@ -9655,6 +9768,11 @@ internal sealed partial class ChatScreen
 
             string? notice;
             (notice, outcome) = TurnEndNotice(cancelled, stoppedEarly, interrupt, hit is not null, cancellationToken.IsCancellationRequested, returned);
+            if (bot is not null && notice is not null && (cancelled || outcome == TurnOutcome.Withdrawn))
+            {
+                // A bot has no line to take back (2026-09-25): cut short by the ladder, or cancelled.
+                notice = ladder?.Skipped(ladderTurn) == true ? BotChat.CutShortNotice(bot.Name) : CancelledNotice;
+            }
             // Whether this reply was cut short for the queue's sake (2026-09-18): the key or the
             // phrase cancelled it, or it was withdrawn — Continue covers a key cancel after the
             // first event, so the outcome alone cannot say. Read once by RunMessageAsync.

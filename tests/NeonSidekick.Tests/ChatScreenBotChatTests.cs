@@ -27,12 +27,16 @@ public partial class ChatScreenTests
 
     private static string SystemText(IReadOnlyList<ChatMessage> request) => request.Single(m => m.Role == ChatRole.System).Text;
 
-    /// <summary>ESC during the <paramref name="n"/>th request (1-based) — the chat's stop.</summary>
+    /// <summary>
+    /// ESC twice during the <paramref name="n"/>th request (1-based) — the chat's stop: the first cuts that bot short, the
+    /// second is read as the next bot's turn starts, before its request, and ends the chat (the ESC ladder, 2026-09-25).
+    /// </summary>
     private void EscDuringRequest(int n) =>
         _chat.BeforeUpdate = async (i, ct) =>
         {
             if (_chat.Requests.Count == n && i == 1)
             {
+                _console.Input.PushKey(Keys.Escape);
                 _console.Input.PushKey(Keys.Escape);
                 while (!ct.IsCancellationRequested)
                 {
@@ -86,7 +90,9 @@ public partial class ChatScreenTests
         Assert.True(neon >= 0 && ada > neon);
         Assert.InRange(output.IndexOf("● Hello from Neon.", StringComparison.Ordinal), neon, ada);
         Assert.True(output.IndexOf("● Hello from Ada.", StringComparison.Ordinal) > ada);
-        Assert.Contains("  · " + ChatScreen.CancelledNotice + "\n", output);
+        // The first ESC cut neon short, the second ended the chat at ada's turn (the ESC ladder, 2026-09-25).
+        Assert.Contains("  · " + BotChat.CutShortNotice("default") + "\n", output);
+        Assert.True(output.IndexOf(ChatScreen.CancelledNotice, StringComparison.Ordinal) > output.IndexOf(BotChat.CutShortNotice("default"), StringComparison.Ordinal));
         Assert.Contains("  · " + BotChat.StoppedNotice(3) + "\n", output);
 
         // The main conversation is untouched: the bots' lines never reach its history.
@@ -287,12 +293,13 @@ public partial class ChatScreenTests
         Assert.Empty(ChatScreen.BotChatChoices("ada -- ", sources));   // after the separator the topic is free text
     }
 
-    /// <summary>ESC during each of the <paramref name="requests"/>th requests (1-based): one stop per chat.</summary>
+    /// <summary>ESC twice during each of the <paramref name="requests"/>th requests (1-based): one stop per chat (<see cref="EscDuringRequest"/>).</summary>
     private void EscDuringRequests(params int[] requests) =>
         _chat.BeforeUpdate = async (i, ct) =>
         {
             if (requests.Contains(_chat.Requests.Count) && i == 1)
             {
+                _console.Input.PushKey(Keys.Escape);
                 _console.Input.PushKey(Keys.Escape);
                 while (!ct.IsCancellationRequested)
                 {

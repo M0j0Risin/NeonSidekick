@@ -197,7 +197,7 @@ public enum SettingsField
     /// <summary>A toggle: whether the working directory sits at the right edge of the banner's title line (<see cref="Settings.AppSettingsData.ShowWorkingDirectory"/>). The General tab's row before Draft editor (2026-09-18, its last row until 2026-09-19); no reconnect (read at each banner draw).</summary>
     ShowWorkingDirectory,
 
-    /// <summary>A toggle: whether a message sent while a reply runs is queued rather than left type-ahead (<see cref="Settings.AppSettingsData.QueueMessages"/>). The General tab's row after Working directory (2026-09-18, the user's order); no reconnect (read at each mid-turn Enter).</summary>
+    /// <summary>A toggle: whether a message sent while a reply runs is queued rather than only left for the idle line (<see cref="Settings.AppSettingsData.QueueMessages"/>). The General tab's row after Working directory (2026-09-18, the user's order); no reconnect (read at each mid-turn Enter).</summary>
     QueueMessages,
 
     /// <summary>A picker: what a cancelled reply does to the queue — <c>hold</c> / <c>drain</c> / <c>empty</c> (<see cref="Settings.AppSettingsData.QueueCancelMode"/>). The General tab's row after Queue messages (2026-09-18); no reconnect (read when a turn ends).</summary>
@@ -3317,7 +3317,7 @@ internal sealed partial class SettingsMenu
         SettingsField.CommandTypoIntercept => on ? "a command typed without its slash or with extra ones offers the command" : "a command typed without its slash or with extra ones is sent as typed",
         SettingsField.ShowWorkingDirectory => on ? "show the working directory in the header" : "hide the working directory in the header",
         SettingsField.ShowToolbar => on ? "show the toolbar" : "hide the toolbar",
-        SettingsField.QueueMessages => on ? "a message sent while a reply runs is queued and sent when the reply ends" : "a message sent during a reply stays type-ahead; /queue leaves the / list",
+        SettingsField.QueueMessages => on ? "a message sent while a reply runs is queued and sent when the reply ends" : "a message sent during a reply goes when it ends, unlisted; no /queue",
         SettingsField.SessionLogging => on ? "every completed turn is written to this profile's session store" : "nothing is written; what is stored still lists, restores and purges",
         SettingsField.SessionTool => on ? "the model can search, list and read this profile's earlier sessions" : "the model never sees an earlier session",
         SettingsField.ShellToolBridge => on ? "a script may call this app's other tools through its neon_tools module" : "a script does everything itself: no neon_tools module, no tool calls",
