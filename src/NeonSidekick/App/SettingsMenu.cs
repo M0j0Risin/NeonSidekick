@@ -191,7 +191,7 @@ public enum SettingsField
     /// <summary>A toggle: whether a sent line that is a command's bare name offers the command first (<see cref="Settings.AppSettingsData.CommandTypoIntercept"/>). The General tab's row before Welcome splash (2026-09-18); no reconnect (read at each Enter).</summary>
     CommandTypoIntercept,
 
-    /// <summary>A toggle: whether a splash picture fills the transcript under the banner at startup (<see cref="Settings.AppSettingsData.WelcomeSplash"/>). The General tab's row before Show working directory (2026-09-18, the user's order); no reconnect (read once at startup).</summary>
+    /// <summary>A picker: how the splash greets you under the banner at startup — <c>fullsize</c> / <c>tiled</c> / <c>disabled</c> (<see cref="Settings.AppSettingsData.WelcomeSplashMode"/>; a toggle until 2026-09-24). The General tab's row before Show working directory (2026-09-18, the user's order); no reconnect (read at each show).</summary>
     WelcomeSplash,
 
     /// <summary>A toggle: whether the working directory sits at the right edge of the banner's title line (<see cref="Settings.AppSettingsData.ShowWorkingDirectory"/>). The General tab's row before Draft editor (2026-09-18, its last row until 2026-09-19); no reconnect (read at each banner draw).</summary>
@@ -368,7 +368,7 @@ public enum SettingsField
     /// <summary>An action row, no setting behind it (later on 2026-09-24, the user's ask): Enter walks a new workflow — built from the server's models, or imported from a ComfyUI export — through every choice, tests it and saves it into a comfy folder (<c>SettingsMenu.ComfyWizard.cs</c>). The ComfyUI tab's fourth row. Last in the enum, as every newcomer.</summary>
     ComfyAddWorkflow,
 
-    /// <summary>Typed: the command line a double-clicked picture opens in, or empty for the image editor Windows registers (<see cref="Settings.AppSettingsData.ImageEditor"/>). The General tab, under <see cref="DraftEditor"/> (later on 2026-09-24); no reconnect (read at each double-click). Last in the enum, as every newcomer.</summary>
+    /// <summary>Typed (the <c>Image viewer</c> row, <c>Image editor</c> until later still on 2026-09-24): the command line a double-clicked picture opens in, or empty for the app Windows registers (<see cref="Settings.AppSettingsData.ImageEditor"/>). The General tab, under <see cref="DraftEditor"/> (later on 2026-09-24); no reconnect (read at each double-click). Last in the enum, as every newcomer.</summary>
     ImageEditor,
 
     /// <summary>Typed: the most pictures one <c>generate_image</c> call or <c>/imagine --count</c> makes, 1 to 16 (<see cref="Settings.AppSettingsData.ComfyMaxPicturesPerCall"/>). The ComfyUI tab, under the timeout (later on 2026-09-24); no reconnect. Last in the enum, as every newcomer.</summary>
@@ -379,6 +379,9 @@ public enum SettingsField
 
     /// <summary>A toggle: whether the prompt and negative sent to ComfyUI show under a picture's line (<see cref="Settings.AppSettingsData.ComfyShowPrompts"/>). The ComfyUI tab, under reinforce negatives (later still on 2026-09-24); no reconnect.</summary>
     ComfyShowPrompts,
+
+    /// <summary>A toggle: whether <c>^</c> and part of a name lists the offered ComfyUI workflows on the chat line (<see cref="Settings.AppSettingsData.ComfyCaretMention"/>). The ComfyUI tab, under the add-workflow wizard (later still on 2026-09-24); no reconnect (read at each keystroke). Last in the enum, as every newcomer.</summary>
+    ComfyCaretMention,
 }
 
 /// <summary>The tabs of <c>/settings</c> on the pane, in strip order (Sessions right after General — the user's order, 2026-09-18; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
@@ -654,7 +657,7 @@ internal sealed partial class SettingsMenu
         [SettingsField.GitNativeTools, SettingsField.GitNativeDiffMaxLines, SettingsField.GitNativeLogMaxCommits, SettingsField.GitNativeEmail, SettingsField.GitNativeName],
         [SettingsField.ObsidianTools, SettingsField.ObsidianVault, SettingsField.ObsidianAllowDelete],
         [SettingsField.SqlTools, SettingsField.SqlConnectionsOffered, SettingsField.SqlDefaultConnection, SettingsField.SqlSetPassword, SettingsField.SqlAddConnection, SettingsField.SqlPercentMention, SettingsField.SqlQueryMaxRows, SettingsField.SqlQueryTimeoutSeconds, SettingsField.SqlConnectionsProfile, SettingsField.SqlConnectionsGlobal],
-        [SettingsField.ComfyTools, SettingsField.ComfyUrl, SettingsField.ComfyWorkflowsOffered, SettingsField.ComfyAddWorkflow, SettingsField.ComfyTimeoutSeconds, SettingsField.ComfyMaxPicturesPerCall, SettingsField.ComfyReinforceNegatives, SettingsField.ComfyShowPrompts, SettingsField.ComfyOutputFolder],
+        [SettingsField.ComfyTools, SettingsField.ComfyUrl, SettingsField.ComfyWorkflowsOffered, SettingsField.ComfyAddWorkflow, SettingsField.ComfyCaretMention, SettingsField.ComfyTimeoutSeconds, SettingsField.ComfyMaxPicturesPerCall, SettingsField.ComfyReinforceNegatives, SettingsField.ComfyShowPrompts, SettingsField.ComfyOutputFolder],
         [SettingsField.ToolsDollarMention, SettingsField.ToolCollapseCount, SettingsField.CodeCollapseCount],
     ];
 
@@ -898,11 +901,11 @@ internal sealed partial class SettingsMenu
             or SettingsField.AgentSkills or SettingsField.ExternalSkills or SettingsField.TranscriptMarkdown
             or SettingsField.FileSafeEdits
             or SettingsField.SkillHashMention or SettingsField.ReflectionAutoLearn
-            or SettingsField.HideExitAutocomplete or SettingsField.CommandTypoIntercept or SettingsField.WelcomeSplash or SettingsField.ShowWorkingDirectory or SettingsField.ShowToolbar
+            or SettingsField.HideExitAutocomplete or SettingsField.CommandTypoIntercept or SettingsField.ShowWorkingDirectory or SettingsField.ShowToolbar
             or SettingsField.QueueMessages or SettingsField.SessionLogging or SettingsField.SessionTool
             or SettingsField.ToolsDollarMention or SettingsField.ReflectionIncludesSessions or SettingsField.McpServers or SettingsField.GitNativeTools
             or SettingsField.LlmCompactShowSummary or SettingsField.ShellToolBridge or SettingsField.ShellPoliceOutsidePaths
-            or SettingsField.ObsidianTools or SettingsField.ObsidianAllowDelete or SettingsField.SqlTools or SettingsField.SqlPercentMention or SettingsField.ComfyTools or SettingsField.ComfyReinforceNegatives or SettingsField.ComfyShowPrompts;
+            or SettingsField.ObsidianTools or SettingsField.ObsidianAllowDelete or SettingsField.SqlTools or SettingsField.SqlPercentMention or SettingsField.ComfyTools or SettingsField.ComfyReinforceNegatives or SettingsField.ComfyShowPrompts or SettingsField.ComfyCaretMention;
 
     public static string FieldName(SettingsField field) => field switch
     {
@@ -934,7 +937,7 @@ internal sealed partial class SettingsMenu
         SettingsField.WorkingDirectory => "Working directory (cwd)",
         SettingsField.CopyUserPrompt => "Copy user prompt",
         SettingsField.DraftEditor => "Draft editor",
-        SettingsField.ImageEditor => "Image editor",
+        SettingsField.ImageEditor => "Image viewer",   // "Image editor" until later still on 2026-09-24 (the user's call); the field and the setting keep the old name
         SettingsField.FileViewImageMaxPerCall => "File view image max (per call)",
         SettingsField.McpServers => "MCP servers",
         SettingsField.McpConnectTimeoutSeconds => "MCP connect timeout (s)",
@@ -978,6 +981,7 @@ internal sealed partial class SettingsMenu
         SettingsField.ComfyMaxPicturesPerCall => "ComfyUI max pictures per call",
         SettingsField.ComfyReinforceNegatives => "ComfyUI reinforce negatives",
         SettingsField.ComfyShowPrompts => "ComfyUI show prompts",
+        SettingsField.ComfyCaretMention => "^-mention enabled",
         SettingsField.ComfyOutputFolder => "ComfyUI output folder",
         SettingsField.ComfyWorkflowsOffered => "ComfyUI workflows offered",
         SettingsField.ComfyAddWorkflow => "ComfyUI add workflow",
@@ -1130,6 +1134,7 @@ internal sealed partial class SettingsMenu
             SettingsField.ComfyMaxPicturesPerCall => ComfyPictures(data.ComfyMaxPicturesPerCall),
             SettingsField.ComfyReinforceNegatives => OnOff(data.ComfyReinforceNegatives),
             SettingsField.ComfyShowPrompts => OnOff(data.ComfyShowPrompts),
+            SettingsField.ComfyCaretMention => OnOff(data.ComfyCaretMention),
             SettingsField.ComfyOutputFolder => string.IsNullOrWhiteSpace(data.ComfyOutputFolder) ? ComfyOutputHereLabel : data.ComfyOutputFolder,
             SettingsField.ComfyWorkflowsOffered => ComfyOfferedValue(data.ComfyWorkflowsOffered, InstalledComfyWorkflows(profileDirectory)),
             SettingsField.ComfyAddWorkflow => ComfyAddWorkflowLabel,
@@ -1181,7 +1186,7 @@ internal sealed partial class SettingsMenu
             SettingsField.ReflectionIncludesSessions => OnOff(data.ReflectionIncludesSessions),
             SettingsField.HideExitAutocomplete => OnOff(data.HideExitAutocomplete),
             SettingsField.CommandTypoIntercept => OnOff(data.CommandTypoIntercept),
-            SettingsField.WelcomeSplash => OnOff(data.WelcomeSplash),
+            SettingsField.WelcomeSplash => data.WelcomeSplashMode,
             SettingsField.SessionLogging => OnOff(data.SessionLogging),
             SettingsField.SessionNamingMode => data.SessionNamingMode,
             SettingsField.SessionShowName => data.SessionShowName,
@@ -1291,8 +1296,8 @@ internal sealed partial class SettingsMenu
     /// <summary>How the menu shows an empty <see cref="AppSettingsData.DraftEditor"/>: <c>/draft</c> hands the file to whatever Windows opens a <c>.txt</c> with. Pinned.</summary>
     public const string DefaultDraftEditorLabel = "(default .txt editor)";
 
-    /// <summary>How the menu shows an empty <see cref="AppSettingsData.ImageEditor"/>: a double-clicked picture opens in the image editor Windows registers (later on 2026-09-24). Pinned.</summary>
-    public const string DefaultImageEditorLabel = "(default image editor)";
+    /// <summary>How the menu shows an empty <see cref="AppSettingsData.ImageEditor"/>: a double-clicked picture opens in the app Windows registers (later on 2026-09-24; "viewer" since later still that day). Pinned.</summary>
+    public const string DefaultImageEditorLabel = "(default image viewer)";
 
     /// <summary>The settings-menu wording for a bad <see cref="SettingsField.WebBrowserPath"/>. Pinned.</summary>
     public const string BrowserPathError = "must be the full path of an existing executable, or empty to find Edge, Chrome or Brave";
@@ -1421,6 +1426,10 @@ internal sealed partial class SettingsMenu
     public static string QueueCancelModeLabel(string name) =>
         Markup.Escape(name.PadRight(6)) + Theme.DimMarkup(QueueCancelMode.Describe(name));
 
+    /// <summary>One row of the welcome-splash picker: the mode and its hint (padded to nine: <c>fullsize</c> and <c>disabled</c> are eight). Pinned.</summary>
+    public static string WelcomeSplashModeLabel(string name) =>
+        Markup.Escape(name.PadRight(9)) + Theme.DimMarkup(UI.SplashMode.Describe(name));
+
     /// <summary>One row of the search-method picker: the method and its hint (padded to eleven: <c>duckduckgo</c> is ten). Pinned.</summary>
     public static string SearchMethodLabel(string name) =>
         Markup.Escape(name.PadRight(11)) + Theme.DimMarkup(Web.SearchMethod.Describe(name));
@@ -1480,9 +1489,9 @@ internal sealed partial class SettingsMenu
     public static string TtsSourceLabel(string name) =>
         Markup.Escape(name.PadRight(11)) + Theme.DimMarkup(Speech.TtsSource.Describe(name));
 
-    /// <summary>One row of the thumbnail-size picker: the size and its box. Pinned.</summary>
+    /// <summary>One row of the thumbnail-size picker: the size and its box (padded to nine: <c>fullsize</c> is eight). Pinned.</summary>
     public static string ImageThumbnailSizeLabel(string name) =>
-        Markup.Escape(name.PadRight(8)) + Theme.DimMarkup(ThumbnailSize.Describe(name));
+        Markup.Escape(name.PadRight(9)) + Theme.DimMarkup(ThumbnailSize.Describe(name));
 
     /// <summary>One row of the theme picker: the name and its note (padded to ten: the longest names are nine). Pinned.</summary>
     public static string ThemeLabel(string name) =>
@@ -2151,6 +2160,11 @@ internal sealed partial class SettingsMenu
         if (field == SettingsField.QueueCancelMode)
         {
             return await PickQueueCancelModeAsync(saved, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (field == SettingsField.WelcomeSplash)
+        {
+            return await PickWelcomeSplashModeAsync(saved, cancellationToken).ConfigureAwait(false);
         }
 
         if (field == SettingsField.WebSearchMethod)
@@ -3117,6 +3131,7 @@ internal sealed partial class SettingsMenu
             SettingsField.ComfyTools => data.ComfyTools,
             SettingsField.ComfyReinforceNegatives => data.ComfyReinforceNegatives,
             SettingsField.ComfyShowPrompts => data.ComfyShowPrompts,
+            SettingsField.ComfyCaretMention => data.ComfyCaretMention,
             SettingsField.SqlPercentMention => data.SqlPercentMention,
             SettingsField.LlmCompactShowSummary => data.LlmCompactShowSummary,
             SettingsField.TtsVoicePreview => data.TtsVoicePreview,
@@ -3133,7 +3148,6 @@ internal sealed partial class SettingsMenu
             SettingsField.ReflectionIncludesSessions => data.ReflectionIncludesSessions,
             SettingsField.HideExitAutocomplete => data.HideExitAutocomplete,
             SettingsField.CommandTypoIntercept => data.CommandTypoIntercept,
-            SettingsField.WelcomeSplash => data.WelcomeSplash,
             SettingsField.ShowWorkingDirectory => data.ShowWorkingDirectory,
             SettingsField.ShowToolbar => data.ShowToolbar,
             SettingsField.QueueMessages => data.QueueMessages,
@@ -3168,6 +3182,7 @@ internal sealed partial class SettingsMenu
             case SettingsField.ComfyTools: data.ComfyTools = on; break;
             case SettingsField.ComfyReinforceNegatives: data.ComfyReinforceNegatives = on; break;
             case SettingsField.ComfyShowPrompts: data.ComfyShowPrompts = on; break;
+            case SettingsField.ComfyCaretMention: data.ComfyCaretMention = on; break;
             case SettingsField.SqlPercentMention: data.SqlPercentMention = on; break;
             case SettingsField.LlmCompactShowSummary: data.LlmCompactShowSummary = on; break;
             case SettingsField.TtsVoicePreview: data.TtsVoicePreview = on; break;
@@ -3184,7 +3199,6 @@ internal sealed partial class SettingsMenu
             case SettingsField.ReflectionIncludesSessions: data.ReflectionIncludesSessions = on; break;
             case SettingsField.HideExitAutocomplete: data.HideExitAutocomplete = on; break;
             case SettingsField.CommandTypoIntercept: data.CommandTypoIntercept = on; break;
-            case SettingsField.WelcomeSplash: data.WelcomeSplash = on; break;
             case SettingsField.ShowWorkingDirectory: data.ShowWorkingDirectory = on; break;
             case SettingsField.ShowToolbar: data.ShowToolbar = on; break;
             case SettingsField.QueueMessages: data.QueueMessages = on; break;
@@ -3228,6 +3242,7 @@ internal sealed partial class SettingsMenu
         SettingsField.ComfyTools => on ? "the model makes pictures with the ComfyUI workflows" : "no image tools",
         SettingsField.ComfyReinforceNegatives => on ? "the model adds a few opposite tags to a workflow's negative" : "the workflow's negative as it is",
         SettingsField.ComfyShowPrompts => on ? "the prompt and negative sent to ComfyUI under each picture's line" : "just the picture's line",
+        SettingsField.ComfyCaretMention => on ? "^ and part of a name lists the offered workflows on the line" : "^ is ordinary text",
         SettingsField.SqlPercentMention => on ? "% and part of a name lists the SQL connections on the line" : "% is ordinary text",
         SettingsField.LlmCompactShowSummary => on ? "the summary's lines or the pruned results, then the protected counts" : "the one compact notice alone",
         SettingsField.AgentSkills => on ? "the skills catalog, load_skill and skill_editor are offered" : "no skills, no project notes",
@@ -3239,7 +3254,6 @@ internal sealed partial class SettingsMenu
         SettingsField.ReflectionIncludesSessions => on ? "the earlier sessions matching the turn open the reflection, readable too" : "a reflection reads the conversation on screen alone",
         SettingsField.HideExitAutocomplete => on ? "hide '/exit' from the autocomplete list" : "show '/exit' in the autocomplete list",
         SettingsField.CommandTypoIntercept => on ? "a command typed without its slash or with extra ones offers the command" : "a command typed without its slash or with extra ones is sent as typed",
-        SettingsField.WelcomeSplash => on ? "a picture greets you under the banner at startup, until the first line" : "the banner alone at startup",
         SettingsField.ShowWorkingDirectory => on ? "show the working directory in the header" : "hide the working directory in the header",
         SettingsField.ShowToolbar => on ? "show the toolbar" : "hide the toolbar",
         SettingsField.QueueMessages => on ? "a message sent while a reply runs is queued and sent when the reply ends" : "a message sent during a reply stays type-ahead; /queue leaves the / list",
@@ -3571,6 +3585,21 @@ internal sealed partial class SettingsMenu
 
         string name = QueueCancelMode.Names[index];
         Apply(SettingsField.QueueCancelMode, d => d.QueueCancelMode = name);
+        return true;
+    }
+
+    /// <summary>The welcome-splash picker under the settings list: one <see cref="WelcomeSplashModeLabel"/> row per <see cref="UI.SplashMode.Names"/> entry, the saved one under the cursor (2026-09-24).</summary>
+    private async Task<bool> PickWelcomeSplashModeAsync(AppSettingsData saved, CancellationToken cancellationToken)
+    {
+        var page = new MenuPage(Crumb(FieldName(SettingsField.WelcomeSplash)), UI.SplashMode.Names.Select(WelcomeSplashModeLabel).ToList(), PickKeys);
+        int? picked = await PickAsync(page, Array.IndexOf(UI.SplashMode.Names, saved.WelcomeSplashMode), cancellationToken).ConfigureAwait(false);
+        if (picked is not { } index)
+        {
+            return Unchanged();
+        }
+
+        string name = UI.SplashMode.Names[index];
+        Apply(SettingsField.WelcomeSplash, d => d.WelcomeSplashMode = name);
         return true;
     }
 

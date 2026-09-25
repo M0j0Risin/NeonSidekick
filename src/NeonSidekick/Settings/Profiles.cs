@@ -98,6 +98,17 @@ public static class Profiles
 
     public static bool NameEquals(string? a, string? b) => string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
 
+    /// <summary>The first character of a temporary profile's name (<see cref="IsTemporary"/>).</summary>
+    public const char TemporaryPrefix = '_';
+
+    /// <summary>
+    /// Whether <paramref name="name"/> is a temporary profile's (2026-09-24, the user's ask: a <c>_test</c> to try
+    /// things in): its name starts with <see cref="TemporaryPrefix"/>. Loaded and used like any other within a session,
+    /// but a launch never lands in it — <see cref="AppSettings"/> opens <see cref="DefaultName"/> instead and points
+    /// the pointer back there. Its directory and files are kept, so <c>/profile _test</c> picks up where it left off.
+    /// </summary>
+    public static bool IsTemporary(string? name) => !string.IsNullOrEmpty(name) && name[0] == TemporaryPrefix;
+
     public static bool IsDefault(string? name) => NameEquals(name, DefaultName);
 
     /// <summary>The home a profile folder sits in: <c>&lt;home&gt;\profiles\&lt;name&gt;</c> two levels up (2026-09-23, for the SQL tab's global row, whose static value knows only the profile's folder).</summary>

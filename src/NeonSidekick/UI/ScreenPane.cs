@@ -187,8 +187,10 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     // The column the last draw put the overlay's close glyph in; −1 when none was drawn.
     private int _closeColumn = -1;
 
-    // The standing hint row as last drawn (TryHitHint's zones): the strip at column 0 and the
-    // column the trailer starts in, −1 without one or under the busy row.
+    // The hint row as last drawn (TryHitHint's zones): the strip at column 0 — the busy row's too
+    // since 2026-09-24, when drawn whole (the user's ask: the brain's double-click cancels a
+    // reflection holding up the reply) — and the column the trailer starts in, −1 without one or
+    // under the busy row.
     private string _hintStrip = "";
     private int _trailerColumn = -1;
     private int _markColumn = -1;
@@ -2511,8 +2513,9 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     /// <see cref="HintZone.Trailer"/> over the model name at the right edge and <see cref="HintZone.Mark"/>
     /// over its reasoning mark on the last cells (2026-09-21), <see cref="HintZone.Usage"/> over the token tally (2026-09-21), <see cref="HintZone.Row"/>
     /// anywhere else — the separators between the glyphs included.
-    /// The zones are those of the standing row as last drawn; under the busy row the spinner and
-    /// its label are <see cref="HintZone.Usage"/> and every other hit is the row.
+    /// The zones are those of the standing row as last drawn; under the busy row the strip keeps its
+    /// glyphs (2026-09-24, the brain's mid-turn cancel), the spinner and its label are
+    /// <see cref="HintZone.Usage"/> and every other hit is the row.
     /// While the transcript is scrolled (either row) the row is <see cref="HintZone.Scrolled"/>
     /// instead — the strip and the trailer keep their zones — so a double-click on the scroll's
     /// hint is the bottom again; <c>/settings</c> from the row waits for the bottom.
@@ -3446,6 +3449,8 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
             _inner.Write(new RawText(frame, Theme.SpinnerStyle));
             WriteTrailed(rest + tail, mark);
             _shownHint = left + tail;
+            // The strip's place (2026-09-24): column 0, as on the standing row — when the fit left it whole, a cut glyph being no button.
+            _hintStrip = prefix == StripPrefix(_strip()) ? _strip() : "";
             // The queued part's place: after the prefix, the frame, the blank, the label and a separator — when the fit left it whole.
             RecordQueued(queued, TextCells.Width(prefix) + TextCells.Width(frame), TextCells.Width(" " + BusyText(label, elapsed) + HintSeparator), unfitted, restMax);
             // The usage zone: the frame and the label after the prefix — when the fit kept the label
@@ -3475,7 +3480,6 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
 
         if (_busyLabel is not null)
         {
-            _hintStrip = "";
             _trailerColumn = -1;
             _markColumn = -1;
         }

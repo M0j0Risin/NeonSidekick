@@ -218,7 +218,8 @@ internal sealed partial class SettingsMenu
         ComfyWizardStep.Width or ComfyWizardStep.Height => draft.Import ? draft.Imported?.Width is not null : !draft.FromImage,
         ComfyWizardStep.Steps => !draft.Import || draft.Imported?.Steps is not null,
         ComfyWizardStep.Cfg => !draft.Import || draft.Imported?.Cfg is not null,
-        ComfyWizardStep.Denoise => draft.TakesImage,
+        // An import asks it only where it found a denoise (later still on 2026-09-24: a face swap has no sampler).
+        ComfyWizardStep.Denoise => draft.Import ? draft.Imported?.Denoise is not null : draft.FromImage,
         _ => true,
     };
 
@@ -702,7 +703,7 @@ internal sealed partial class SettingsMenu
         ComfyWizardAsks(ComfyWizardStep.Height, draft) ? draft.EffHeight : null,
         ComfyWizardAsks(ComfyWizardStep.Steps, draft) ? draft.EffSteps : null,
         ComfyWizardAsks(ComfyWizardStep.Cfg, draft) ? draft.EffCfg : null,
-        draft.TakesImage ? draft.EffDenoise : null,
+        ComfyWizardAsks(ComfyWizardStep.Denoise, draft) ? draft.EffDenoise : null,
         draft.EffNegative));
 
     /// <summary>
@@ -730,7 +731,7 @@ internal sealed partial class SettingsMenu
         }
 
         var timeout = TimeSpan.FromSeconds(Math.Clamp(_settings.Current.ComfyTimeoutSeconds, AppSettingsData.MinComfyTimeoutSeconds, AppSettingsData.MaxComfyTimeoutSeconds));
-        string? image = null;
+        IReadOnlyList<string>? images = null;
         if (workflow!.TakesImage)
         {
             var (name, error) = await client.UploadAsync(SmokeChecks.SolidBmp(ComfyWizardTestSide, ComfyWizardTestSide), "neon-test.bmp", timeout, cancellationToken).ConfigureAwait(false);
@@ -740,11 +741,12 @@ internal sealed partial class SettingsMenu
                 return;
             }
 
-            image = name;
+            // The one test picture in every input slot (later still on 2026-09-24: a face swap takes two).
+            images = Enumerable.Repeat(name, workflow.ImageCount).ToList();
         }
 
         var d = workflow.Defaults;
-        var values = new ComfyValues(ComfyWizardTestPrompt, d.Negative, 1, Math.Min(d.Width, ComfyWizardTestSide), Math.Min(d.Height, ComfyWizardTestSide), Math.Min(d.Steps, ComfyWizardTestSteps), null, null, image);
+        var values = new ComfyValues(ComfyWizardTestPrompt, d.Negative, 1, Math.Min(d.Width, ComfyWizardTestSide), Math.Min(d.Height, ComfyWizardTestSide), Math.Min(d.Steps, ComfyWizardTestSteps), null, null, images);
         var clock = Stopwatch.StartNew();
         var run = await client.RunAsync(workflow.Fill(values), timeout, cancellationToken).ConfigureAwait(false);
         if (run.Ok)
@@ -807,7 +809,7 @@ internal sealed partial class SettingsMenu
     {
         ArgumentNullException.ThrowIfNull(workflow);
         var d = workflow.Defaults;
-        string note = ComfyFamilies.Name(workflow.Family) + " · " + (workflow.TakesImage ? "image → image" : "text → image") + " · " + Invariant(d.Width) + "×" + Invariant(d.Height);
+        string note = ComfyFamilies.Name(workflow.Family) + " · " + ComfyText.InputShape(workflow) + " · " + Invariant(d.Width) + "×" + Invariant(d.Height);
         return Markup.Escape((offered ? "[x] " : "[ ] ") + workflow.Name.PadRight(width)) + Theme.DimMarkup(note);
     }
 

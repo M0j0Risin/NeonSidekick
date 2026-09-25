@@ -1403,6 +1403,42 @@ public sealed class WorkingDirectoryTests : IDisposable
         Assert.Equal(FileOutcome.NotInTrash, _files.Restore("a.txt").Outcome);
     }
 
+    /// <summary>PurgeFolder (later still on 2026-09-24, <c>/comfy purge</c>): everything under the folder, dot-folders included, the folder kept, nothing beside it touched.</summary>
+    [Fact]
+    public void PurgeFolder_RemovesEverythingUnderTheFolder_KeepsTheFolder()
+    {
+        Put("keep.txt", "stays");
+        Put(@"comfy_images\a.png", "12345");
+        Put(@"comfy_images\.pasted\pasted-1.png", "678");
+        File.SetAttributes(Full(@"comfy_images\a.png"), FileAttributes.ReadOnly);
+
+        var result = _files.PurgeFolder("comfy_images");
+
+        Assert.Equal(FileOutcome.Ok, result.Outcome);
+        Assert.Equal((2, 1, 8L), (result.Files, result.Folders, result.Bytes));
+        Assert.True(Directory.Exists(Full("comfy_images")));
+        Assert.Empty(Directory.EnumerateFileSystemEntries(Full("comfy_images")));
+        Assert.Equal("stays", File.ReadAllText(Full("keep.txt")));
+    }
+
+    [Fact]
+    public void PurgeFolder_RefusesTheRoot_TheTrash_OutsideAndAFile_MissingIsOk()
+    {
+        Put("keep.txt", "stays");
+        Put(@".trash\x.txt", "t");
+
+        var root = _files.PurgeFolder(".");
+        Assert.Equal((FileOutcome.OutsideRoot, WorkingDirectory.PurgeRootRefusal), (root.Outcome, root.Detail));
+        Assert.Equal(FileOutcome.OutsideRoot, _files.PurgeFolder("").Outcome);
+        Assert.Equal(FileOutcome.OutsideRoot, _files.PurgeFolder(@"sub\..").Outcome);
+        Assert.Equal(FileOutcome.OutsideRoot, _files.PurgeFolder("..").Outcome);
+        Assert.Equal(FileOutcome.TrashReadOnly, _files.PurgeFolder(".trash").Outcome);
+        Assert.Equal(FileOutcome.IsAFile, _files.PurgeFolder("keep.txt").Outcome);
+        Assert.Equal(FileOutcome.Ok, _files.PurgeFolder("nothing-here").Outcome);
+        Assert.Equal("stays", File.ReadAllText(Full("keep.txt")));
+        Assert.True(File.Exists(Full(@".trash\x.txt")));
+    }
+
     [Fact]
     public void EmptyTrash_NoTrashFolder_IsOkWithZeros_AndCreatesNothing()
     {

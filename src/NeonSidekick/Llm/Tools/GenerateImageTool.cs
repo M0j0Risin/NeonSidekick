@@ -7,7 +7,7 @@ using NeonSidekick.Settings;
 namespace NeonSidekick.Llm.Tools;
 
 /// <summary>
-/// <c>generate_image(prompt, workflow?, negative?, verbatim?, width?, height?, seed?, steps?, cfg?, denoise?, image?, count?)</c>
+/// <c>generate_image(prompt?, workflow?, negative?, verbatim?, width?, height?, seed?, steps?, cfg?, denoise?, image?, image2?, image3?, count?)</c>
 /// (2026-09-24, the user's ask: "what can we do with comfyui?"): pictures from one of the user's ComfyUI workflows
 /// (<see cref="ComfyWorkflowCatalog"/>) on their server, saved under the working directory, and shown to the model in
 /// the next message the <c>view_image</c> way (<see cref="ToolImageResult"/>). The description is built from the
@@ -16,6 +16,9 @@ namespace NeonSidekick.Llm.Tools;
 /// for a Flux one without a round trip to ask. A prompt the user wrote is passed through as typed with
 /// <c>verbatim</c> (the user's ask: "we will be able to send standard prompts too, as in score_9, etc."), which also
 /// keeps the family's default negative off. The work is <see cref="ComfyStudio"/>'s, shared with <c>/imagine</c>.
+/// Later still on 2026-09-24 (the user's ask: a face swap, "replace the face in the first image with the face from the
+/// second image"): <c>image2</c> and <c>image3</c> for a workflow taking more than one picture, and <c>prompt</c> no
+/// longer required, since such a workflow may have none.
 /// </summary>
 public sealed class GenerateImageTool : AIFunction
 {
@@ -33,6 +36,11 @@ public sealed class GenerateImageTool : AIFunction
     public const string CfgArgument = "cfg";
     public const string DenoiseArgument = "denoise";
     public const string ImageArgument = "image";
+    public const string Image2Argument = "image2";
+    public const string Image3Argument = "image3";
+
+    /// <summary>The input-picture arguments in slot order, the placeholders' names (<see cref="ComfyWorkflow.ImageKeys"/>).</summary>
+    public static readonly IReadOnlyList<string> ImageArguments = [ImageArgument, Image2Argument, Image3Argument];
     public const string CountArgument = "count";
 
     // The schema's text; its count line quotes the cap in force (later on 2026-09-24), put in for {MAX}.
@@ -41,8 +49,8 @@ public sealed class GenerateImageTool : AIFunction
         {
           "type": "object",
           "properties": {
-            "prompt": { "type": "string", "description": "The positive prompt, in the dialect of the workflow's family — or the user's own prompt, exactly as they gave it, with verbatim true." },
-            "workflow": { "type": "string", "description": "Which workflow to run, by name from the list. May be left out when only one fits (one taking an image when image is given, one not taking an image otherwise)." },
+            "prompt": { "type": "string", "description": "The positive prompt, in the dialect of the workflow's family — or the user's own prompt, exactly as they gave it, with verbatim true. Leave it out only for a workflow marked 'no prompt'." },
+            "workflow": { "type": "string", "description": "Which workflow to run, by name from the list; a ^name in the user's message is that workflow (pass it without the ^). May be left out when only one fits (one taking an image when image is given, one not taking an image otherwise)." },
             "negative": { "type": "string", "description": "The negative prompt. Left out, the workflow's default is used (none with verbatim true unless the workflow names one)." },
             "negative_extra": { "type": "string", "description": "A few tags appended to the workflow's own negative to reinforce your prompt: the opposites of what it asks, where the model tends to drift. Only for your own prompts, and only for workflows marked 'negative reinforced'." },
             "verbatim": { "type": "boolean", "description": "True when prompt (and negative) are the user's own text passed through unchanged; nothing is added to them." },
@@ -53,9 +61,10 @@ public sealed class GenerateImageTool : AIFunction
             "cfg": { "type": "number", "description": "Classifier-free guidance scale (0 to 30); left out, the workflow's." },
             "denoise": { "type": "number", "description": "How much of an input image to repaint, 0 to 1 (image workflows): about 0.3 keeps it close, 0.8 changes it a lot." },
             "image": { "type": "string", "description": "An input picture, for a workflow that takes one (img2img, upscale, inpaint): a path under the working directory, or a picture the user pasted by its label ([Image #1]) — sent at full size and saved beside the output." },
+            "image2": { "type": "string", "description": "The second input picture, for a workflow taking two or more (a face swap's face, a second picture to compose), in the role its line names; the same forms as image." },
+            "image3": { "type": "string", "description": "The third input picture, for a workflow taking three." },
             "count": { "type": "integer", "description": "How many pictures, 1 to {MAX}, each with the next seed. Default 1." }
-          },
-          "required": ["prompt"]
+          }
         }
         """;
 
@@ -148,7 +157,24 @@ public sealed class GenerateImageTool : AIFunction
         string negative = ToolArguments.ReadString(arguments, NegativeArgument);
         string negativeExtra = ToolArguments.ReadString(arguments, NegativeExtraArgument);
         string workflow = ToolArguments.ReadString(arguments, WorkflowArgument);
-        string image = ToolArguments.ReadString(arguments, ImageArgument);
+        // The pictures in slot order; a later one without the one before is a slip, not a silent shift.
+        var images = new List<string>();
+        for (int i = 0; i < ImageArguments.Count; i++)
+        {
+            string image = ToolArguments.ReadString(arguments, ImageArguments[i]).Trim();
+            if (image.Length == 0)
+            {
+                continue;
+            }
+
+            if (images.Count != i)
+            {
+                return (null, ComfyText.ImageGap(ImageArguments[i], ImageArguments[images.Count]));
+            }
+
+            images.Add(image);
+        }
+
         var request = new ComfyRequest(
             ToolArguments.ReadString(arguments, PromptArgument),
             workflow.Length == 0 ? null : workflow,
@@ -161,7 +187,7 @@ public sealed class GenerateImageTool : AIFunction
             steps,
             cfg,
             denoise,
-            image.Length == 0 ? null : image,
+            images.Count == 0 ? null : images,
             count ?? 1,
             NegativeExtra: string.IsNullOrWhiteSpace(negativeExtra) ? null : negativeExtra);
         return (request, ComfyStudio.Check(request, maxCount));

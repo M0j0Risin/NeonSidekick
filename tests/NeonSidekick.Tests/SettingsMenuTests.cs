@@ -752,7 +752,7 @@ public class SettingsMenuTests : IDisposable
                 SettingsField.ToolCollapseCount, SettingsField.CodeCollapseCount,
                 SettingsField.ObsidianTools, SettingsField.ObsidianVault, SettingsField.ObsidianAllowDelete,
                 SettingsField.SqlTools, SettingsField.SqlDefaultConnection, SettingsField.SqlQueryMaxRows, SettingsField.SqlQueryTimeoutSeconds, SettingsField.SqlConnectionsProfile, SettingsField.SqlConnectionsGlobal, SettingsField.SqlSetPassword, SettingsField.SqlPercentMention, SettingsField.SqlConnectionsOffered, SettingsField.SqlAddConnection, SettingsField.Theme,
-                SettingsField.ComfyTools, SettingsField.ComfyUrl, SettingsField.ComfyTimeoutSeconds, SettingsField.ComfyOutputFolder, SettingsField.ComfyWorkflowsOffered, SettingsField.ComfyAddWorkflow, SettingsField.ImageEditor, SettingsField.ComfyMaxPicturesPerCall, SettingsField.ComfyReinforceNegatives, SettingsField.ComfyShowPrompts,
+                SettingsField.ComfyTools, SettingsField.ComfyUrl, SettingsField.ComfyTimeoutSeconds, SettingsField.ComfyOutputFolder, SettingsField.ComfyWorkflowsOffered, SettingsField.ComfyAddWorkflow, SettingsField.ImageEditor, SettingsField.ComfyMaxPicturesPerCall, SettingsField.ComfyReinforceNegatives, SettingsField.ComfyShowPrompts, SettingsField.ComfyCaretMention,
             },
             Enum.GetValues<SettingsField>());
         // The compact rows: on the LLM tab after the context length but no reconnect; the type a picker, the two others typed.
@@ -938,11 +938,14 @@ public class SettingsMenuTests : IDisposable
         Assert.Equal("on", SettingsMenu.FieldValue(SettingsField.ShowToolbar, data, _settings.ProfileDirectory));
         Assert.Equal("off", SettingsMenu.FieldValue(SettingsField.ShowToolbar, new AppSettingsData { ShowToolbar = false }, _settings.ProfileDirectory));
         Assert.False(SettingsMenu.RefusedMidTurn(SettingsField.ShowToolbar) || SettingsMenu.IsLlmField(SettingsField.ShowToolbar) || SettingsMenu.IsTtsField(SettingsField.ShowToolbar) || SettingsMenu.IsVoiceField(SettingsField.ShowToolbar));
-        // Welcome splash (2026-09-18): a toggle, the General tab's row before Show working directory (the user's order), no reconnect.
-        Assert.True(SettingsMenu.IsToggle(SettingsField.WelcomeSplash));
+        // Welcome splash (2026-09-18): the General tab's row before Show working directory (the user's order), no reconnect; a picker since 2026-09-24.
+        Assert.False(SettingsMenu.IsToggle(SettingsField.WelcomeSplash));
         Assert.Equal("Welcome splash", SettingsMenu.FieldName(SettingsField.WelcomeSplash));
-        Assert.Equal("on", SettingsMenu.FieldValue(SettingsField.WelcomeSplash, data, _settings.ProfileDirectory));
-        Assert.Equal("off", SettingsMenu.FieldValue(SettingsField.WelcomeSplash, new AppSettingsData { WelcomeSplash = false }, _settings.ProfileDirectory));
+        Assert.Equal("fullsize", SettingsMenu.FieldValue(SettingsField.WelcomeSplash, data, _settings.ProfileDirectory));
+        Assert.Equal("tiled", SettingsMenu.FieldValue(SettingsField.WelcomeSplash, new AppSettingsData { WelcomeSplashMode = "tiled" }, _settings.ProfileDirectory));
+        Assert.Equal("fullsize [#9A8BB8]one picture fills the screen under the banner at startup; ← → walk them[/]", SettingsMenu.WelcomeSplashModeLabel("fullsize"));
+        Assert.Equal("tiled    [#9A8BB8]the pictures as thumbnails at the image thumbnail size, a screenful at a time; ← → page[/]", SettingsMenu.WelcomeSplashModeLabel("tiled"));
+        Assert.Equal("disabled [#9A8BB8]the banner alone at startup[/]", SettingsMenu.WelcomeSplashModeLabel("disabled"));
         Assert.False(SettingsMenu.RefusedMidTurn(SettingsField.WelcomeSplash) || SettingsMenu.IsLlmField(SettingsField.WelcomeSplash) || SettingsMenu.IsTtsField(SettingsField.WelcomeSplash) || SettingsMenu.IsVoiceField(SettingsField.WelcomeSplash));
         // The two line switches of 2026-09-18: the General tab's last rows and the last enum members, toggles, no reconnect.
         Assert.True(SettingsMenu.IsToggle(SettingsField.HideExitAutocomplete));
@@ -1149,10 +1152,12 @@ public class SettingsMenuTests : IDisposable
         Assert.Equal("small", SettingsMenu.FieldValue(SettingsField.ImageThumbnailSize, data, _settings.ProfileDirectory));
         Assert.Equal("large", SettingsMenu.FieldValue(SettingsField.ImageThumbnailSize, new AppSettingsData { ImageThumbnailSize = "large" }, _settings.ProfileDirectory));
         Assert.False(SettingsMenu.IsLlmField(SettingsField.ImageThumbnailSize) || SettingsMenu.IsTtsField(SettingsField.ImageThumbnailSize) || SettingsMenu.IsVoiceField(SettingsField.ImageThumbnailSize));
-        Assert.Equal("small   [#9A8BB8]48 columns × 12 rows[/]", SettingsMenu.ImageThumbnailSizeLabel("small"));
-        Assert.Equal("medium  [#9A8BB8]64 columns × 16 rows[/]", SettingsMenu.ImageThumbnailSizeLabel("medium"));
-        Assert.Equal("large   [#9A8BB8]80 columns × 20 rows[/]", SettingsMenu.ImageThumbnailSizeLabel("large"));
-        Assert.Equal("xlarge  [#9A8BB8]96 columns × 24 rows[/]", SettingsMenu.ImageThumbnailSizeLabel("xlarge"));
+        Assert.Equal("tiny     [#9A8BB8]32 columns × 8 rows[/]", SettingsMenu.ImageThumbnailSizeLabel("tiny"));
+        Assert.Equal("small    [#9A8BB8]48 columns × 12 rows[/]", SettingsMenu.ImageThumbnailSizeLabel("small"));
+        Assert.Equal("medium   [#9A8BB8]64 columns × 16 rows[/]", SettingsMenu.ImageThumbnailSizeLabel("medium"));
+        Assert.Equal("large    [#9A8BB8]80 columns × 20 rows[/]", SettingsMenu.ImageThumbnailSizeLabel("large"));
+        Assert.Equal("xlarge   [#9A8BB8]96 columns × 24 rows[/]", SettingsMenu.ImageThumbnailSizeLabel("xlarge"));
+        Assert.Equal("fullsize [#9A8BB8]fits the window[/]", SettingsMenu.ImageThumbnailSizeLabel("fullsize"));
         // The new-profile mode: a General-tab picker under the profile, no reconnect.
         Assert.False(SettingsMenu.IsToggle(SettingsField.NewProfileMode));
         Assert.Equal("New profile mode", SettingsMenu.FieldName(SettingsField.NewProfileMode));
@@ -2758,7 +2763,7 @@ public class SettingsMenuTests : IDisposable
         string cwd = SettingsMenu.DefaultWorkingDirectoryLabel(_settings.ProfileDirectory);
         Assert.StartsWith("(", cwd);
         Assert.EndsWith(@"\profiles\default\files)", cwd);
-        Assert.Contains(Rule(240) + "\n" + Titled(Strip) + "\n \n▸ Profile                      default (" + _settings.ProfileDirectory + ")\n  New profile mode             basic\n  Working directory (cwd)      " + cwd + "\n  Queue messages               on\n  Queue cancel mode            empty\n  Memory                       on\n  Copy user prompt             on\n  Show image thumbnails        on\n  Image thumbnail size         small\n  Transcript markdown          on\n  Paste preview lines          25 lines\n  Hide /exit autocomplete      on\n  Command typo intercept       on\n  Welcome splash               on\n  Working directory in header  off\n  Show toolbar                 on\n  Draft editor                 (default .txt editor)\n  Image editor                 (default image editor)\n  Theme                        synthwave\n" + Rule(240) + "\n" + SettingsMenu.TabKeys + "\n", _console.Output);
+        Assert.Contains(Rule(240) + "\n" + Titled(Strip) + "\n \n▸ Profile                      default (" + _settings.ProfileDirectory + ")\n  New profile mode             basic\n  Working directory (cwd)      " + cwd + "\n  Queue messages               on\n  Queue cancel mode            empty\n  Memory                       on\n  Copy user prompt             on\n  Show image thumbnails        on\n  Image thumbnail size         small\n  Transcript markdown          on\n  Paste preview lines          25 lines\n  Hide /exit autocomplete      on\n  Command typo intercept       on\n  Welcome splash               fullsize\n  Working directory in header  off\n  Show toolbar                 on\n  Draft editor                 (default .txt editor)\n  Image viewer                 (default image viewer)\n  Theme                        synthwave\n" + Rule(240) + "\n" + SettingsMenu.TabKeys + "\n", _console.Output);
         Assert.DoesNotContain("File /tree max length", _console.Output);   // the Files tab's since 2026-09-15
         Assert.DoesNotContain("LLM URL", _console.Output);
         Assert.False(pane.OverlayOpen);
@@ -3847,8 +3852,6 @@ public class SettingsMenuTests : IDisposable
         Assert.Equal("show '/exit' in the autocomplete list", SettingsMenu.ToggleDescribe(SettingsField.HideExitAutocomplete, false));
         Assert.Equal("a command typed without its slash or with extra ones offers the command", SettingsMenu.ToggleDescribe(SettingsField.CommandTypoIntercept, true));   // extra slashes since later still on 2026-09-24
         Assert.Equal("a command typed without its slash or with extra ones is sent as typed", SettingsMenu.ToggleDescribe(SettingsField.CommandTypoIntercept, false));
-        Assert.Equal("a picture greets you under the banner at startup, until the first line", SettingsMenu.ToggleDescribe(SettingsField.WelcomeSplash, true));
-        Assert.Equal("the banner alone at startup", SettingsMenu.ToggleDescribe(SettingsField.WelcomeSplash, false));
         Assert.Equal("show the working directory in the header", SettingsMenu.ToggleDescribe(SettingsField.ShowWorkingDirectory, true));   // the user's words, 2026-09-21
         Assert.Equal("hide the working directory in the header", SettingsMenu.ToggleDescribe(SettingsField.ShowWorkingDirectory, false));
         Assert.Equal("vault_delete may move a note or attachment to the vault's .trash", SettingsMenu.ToggleDescribe(SettingsField.ObsidianAllowDelete, true));   // later on 2026-09-22
@@ -3890,17 +3893,21 @@ public class SettingsMenuTests : IDisposable
     }
 
     [Fact]
-    public async Task Toggle_WelcomeSplash_IsRow68_OnByDefault_PersistsAndNeedsNoReconnect()
+    public async Task WelcomeSplash_IsRow68_APicker_FullsizeByDefault_PersistsAndNeedsNoReconnect()
     {
-        // 2026-09-18: the General tab's row before Show working directory (the user's order).
-        Assert.True(_settings.Current.WelcomeSplash);
+        // 2026-09-18: the General tab's row before Show working directory (the user's order); a picker since 2026-09-24.
+        Assert.Equal("fullsize", _settings.Current.WelcomeSplashMode);
         Down(67);
-        Push(Keys.Enter, Keys.Down, Keys.Enter, Keys.Escape);
+        Push(Keys.Enter);                           // the picker opens on fullsize (the first row)
+        Push(Keys.Down, Keys.Enter);                // tiled
+        Push(Keys.Escape);
 
         Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));
 
-        Assert.False(_settings.Current.WelcomeSplash);
-        Assert.Contains("  · Welcome splash: off", _console.Output);
+        Assert.Equal("tiled", _settings.Current.WelcomeSplashMode);
+        Assert.Contains(SettingsMenu.Breadcrumb("Welcome splash"), _console.Output);
+        Assert.Contains("  · Welcome splash: tiled", _console.Output);
+        Assert.Contains("the banner alone at startup", _console.Output);
         Assert.Equal(0, _synth.ListCalls);
     }
 

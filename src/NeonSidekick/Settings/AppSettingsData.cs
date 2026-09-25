@@ -58,7 +58,8 @@ public sealed class AppSettingsData
     public string DraftEditor { get; set; } = "";
 
     /// <summary>
-    /// The command line a double-clicked picture in the transcript opens in (later on 2026-09-24, the user's ask), the
+    /// The command line a double-clicked picture in the transcript opens in (later on 2026-09-24, the user's ask; the menu's
+    /// <c>Image viewer</c> row since later still that day, <c>Image editor</c> before, the name kept so saved profiles read), the
     /// file's path appended, run through <c>cmd.exe</c> as <see cref="DraftEditor"/> is (<c>mspaint</c>,
     /// <c>"C:\Program Files\GIMP 3\bin\gimp-3.exe"</c>); empty = the image editor Windows registers for the type
     /// (Paint), else its viewer. Read at each double-click, no reconnect. No variable.
@@ -73,7 +74,8 @@ public sealed class AppSettingsData
 
     /// <summary>
     /// How big the thumbnail under a sent picture is drawn (<see cref="ShowImageThumbnails"/>):
-    /// <c>small</c> (48 columns × 12 rows), <c>medium</c> (64 × 16), <c>large</c> (80 × 20) or <c>xlarge</c> (96 × 24). One of
+    /// <c>tiny</c> (32 columns × 8 rows), <c>small</c> (48 × 12), <c>medium</c> (64 × 16), <c>large</c> (80 × 20), <c>xlarge</c> (96 × 24) or <c>fullsize</c>
+    /// (2026-09-24: each picture as large as the transcript window allows, more than one wrapping below). One of
     /// <see cref="UI.ThumbnailSize.Names"/>; anything else reads as <see cref="UI.ThumbnailSize.Default"/>. No variable.
     /// </summary>
     public string ImageThumbnailSize { get; set; } = UI.ThumbnailSize.Default;
@@ -168,12 +170,16 @@ public sealed class AppSettingsData
     public bool TranscriptMarkdown { get; set; } = true;
 
     /// <summary>
-    /// Whether one of the embedded splash pictures (<c>UI.SplashImages</c>, the repo's
-    /// <c>assets\splash</c>) is drawn under the banner at startup, filling the transcript region
-    /// until the first sent line wipes the screen back to the banner (on by default, 2026-09-18);
-    /// <c>/clear</c> never brings it back. Read once at startup; nothing without the pane. No variable.
+    /// How the splash pictures (<c>UI.SplashImages</c>, the repo's <c>assets\splash</c> or the profile's
+    /// own folder) greet the user under the banner at startup, until the first sent line wipes the
+    /// screen back to the banner (2026-09-18): one of <see cref="UI.SplashMode.Names"/> — <c>fullsize</c>
+    /// (one picture filling the transcript region, the default), <c>tiled</c> (thumbnails at
+    /// <see cref="ImageThumbnailSize"/>, a screenful at a time, Left / Right page) or <c>disabled</c>.
+    /// Anything else reads as <see cref="UI.SplashMode.Default"/>. <c>/clear</c> never brings it back.
+    /// Read at each show; nothing without the pane. Replaced the on/off <c>WelcomeSplash</c> on
+    /// 2026-09-24, no migration (the user's call: the old key is skipped, its default stands). No variable.
     /// </summary>
-    public bool WelcomeSplash { get; set; } = true;
+    public string WelcomeSplashMode { get; set; } = UI.SplashMode.Default;
 
     /// <summary>
     /// The folder the file tools may read and write, a full path. Empty means the profile's own
@@ -970,6 +976,17 @@ public sealed class AppSettingsData
     /// <c>/tools</c>. No variable.
     /// </summary>
     public List<string>? ComfyWorkflowsOffered { get; set; }
+
+    /// <summary>
+    /// Whether <c>^</c> and part of a name on the chat line lists the ComfyUI workflows (later still on 2026-09-24, the
+    /// user's ask: "similar to the @-mention or $-mention … autocomplete comfyui workflow names to mention in chat to
+    /// prompt the model which workflow to use"), as <c>%</c> lists the SQL connections: each name with its family,
+    /// shape and size, a pick writes <c>^name</c> into the draft — text the model reads (and passes as <c>workflow</c>),
+    /// nothing seeded. Only the offered ones (<see cref="ComfyWorkflowsOffered"/>) and only while the image tools are
+    /// offered at all, since a hidden workflow is one the model cannot run. Off = <c>^</c> is ordinary text. Read at each
+    /// keystroke, no reconnect; the ComfyUI tab of <c>/tools</c>. No variable.
+    /// </summary>
+    public bool ComfyCaretMention { get; set; } = true;
 
     /// <summary>
     /// Seconds one generation may take, queue wait included, before the tool gives up waiting (2026-09-24; the job

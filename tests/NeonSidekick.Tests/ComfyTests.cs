@@ -146,7 +146,7 @@ public sealed class ComfyTests : IDisposable
         Assert.Equal("score_9, (1girl:1.2), neon", graph["6"]!["inputs"]!["text"]!.GetValue<string>());
         Assert.Equal("score_4", graph["7"]!["inputs"]!["text"]!.GetValue<string>());
         Assert.Equal("neon-42", graph["9"]!["inputs"]!["filename_prefix"]!.GetValue<string>());   // a numeric placeholder inside a string is its text
-        Assert.Equal(ComfyWorkflow.DefaultImageDenoise, Parse("edit", Img2Img).Fill(new ComfyValues("x", "", 1, Image: "a.png"))["3"]!["inputs"]!["denoise"]!.GetValue<double>());
+        Assert.Equal(ComfyWorkflow.DefaultImageDenoise, Parse("edit", Img2Img).Fill(new ComfyValues("x", "", 1, Images: ["a.png"]))["3"]!["inputs"]!["denoise"]!.GetValue<double>());
     }
 
     [Fact]
@@ -303,6 +303,132 @@ public sealed class ComfyTests : IDisposable
         var graph = QueuedGraph();
         Assert.Equal("input.bmp", graph.GetProperty("10").GetProperty("inputs").GetProperty("image").GetString());
         Assert.Equal(0.4, graph.GetProperty("3").GetProperty("inputs").GetProperty("denoise").GetDouble());
+    }
+
+    /// <summary>A ReActor face swap as exported (later still on 2026-09-24): two pictures in, no sampler, no prompt.</summary>
+    private const string FaceSwapExport = """
+        {
+          "14": { "class_type": "LoadImage", "inputs": { "image": "face.png" } },
+          "2": { "class_type": "LoadImage", "inputs": { "image": "target.png" } },
+          "5": { "class_type": "ReActorFaceSwap", "inputs": { "enabled": true, "input_image": ["2", 0], "source_image": ["14", 0], "swap_model": "inswapper_128.onnx", "face_restore_model": "codeformer-v0.1.0.pth" } },
+          "9": { "class_type": "SaveImage", "inputs": { "filename_prefix": "swap", "images": ["5", 0] } }
+        }
+        """;
+
+    /// <summary>The same with its placeholders, as a template.</summary>
+    private const string FaceSwap = """
+        {
+          "2": { "class_type": "LoadImage", "inputs": { "image": "{{image}}" } },
+          "5": { "class_type": "ReActorFaceSwap", "inputs": { "input_image": ["2", 0], "source_image": ["14", 0] } },
+          "14": { "class_type": "LoadImage", "inputs": { "image": "{{image2}}" } }
+        }
+        """;
+
+    private const string FaceSwapSidecar = "---\ndescription: Face swap\nimage: the picture whose face is replaced\nimage2: the face to put in\n---\n";
+
+    [Fact]
+    public void TryParse_CountsTheImageSlots_ReadsTheirRoles_AndTakesAPromptlessImageWorkflow()
+    {
+        var swap = Parse("faceswap", FaceSwap, FaceSwapSidecar);
+        Assert.Equal(2, swap.ImageCount);
+        Assert.True(swap.TakesImage);
+        Assert.False(swap.TakesPrompt);
+        Assert.Equal(["the picture whose face is replaced", "the face to put in"], swap.ImageRoles);
+        Assert.Equal("2 images → image (image: the picture whose face is replaced; image2: the face to put in), no prompt", ComfyText.InputShape(swap, roles: true));
+        Assert.Equal("2 images → image, no prompt", ComfyText.InputShape(swap));
+        Assert.Equal("faceswap · other · 2 images → image (image: the picture whose face is replaced; image2: the face to put in), no prompt · 1024×1024 — Face swap", ComfyText.WorkflowLine(swap));
+        Assert.Equal("2 images → image (image: ?; image2: the face), no prompt", ComfyText.InputShape(Parse("x", FaceSwap, "---\nimage2: the face\n---\n"), roles: true));
+        Assert.Equal("image → image", ComfyText.InputShape(Parse("edit", Img2Img)));
+        Assert.Equal("text → image", ComfyText.InputShape(Parse("pony", Txt2Img)));
+
+        Assert.False(ComfyWorkflow.TryParse("gap", "gap.json", FaceSwap.Replace("{{image}}", "a.png", StringComparison.Ordinal), null, out _, out string? gap));
+        Assert.Equal(ComfyWorkflow.GapInImagesProblem, gap);
+    }
+
+    [Fact]
+    public void Fill_PutsEachUploadInItsSlot()
+    {
+        var graph = Parse("faceswap", FaceSwap).Fill(new ComfyValues("", "", 1, Images: ["target.png", "face.png"]));
+        Assert.Equal("target.png", graph["2"]!["inputs"]!["image"]!.GetValue<string>());
+        Assert.Equal("face.png", graph["14"]!["inputs"]!["image"]!.GetValue<string>());
+        Assert.Equal("", Parse("faceswap", FaceSwap).Fill(new ComfyValues("", "", 1, Images: ["only.png"]))["14"]!["inputs"]!["image"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task GenerateImage_AFaceSwap_UploadsBothInOrder_NeedsNoPrompt_AndPicksByCount()
+    {
+        Workflow("pony-txt2img", Txt2Img);
+        Workflow("restyle", Img2Img);
+        Workflow("faceswap", FaceSwap, FaceSwapSidecar);
+        int uploads = 0;
+        _stub.Map(Server + "/upload/image", (_, _) => Task.FromResult(StubHttpMessageHandler.Json(HttpStatusCode.OK,
+            "{\"name\":\"" + (++uploads == 1 ? "up-target.bmp" : "up-face.bmp") + "\",\"subfolder\":\"\",\"type\":\"input\"}")));
+        ServeOnePicture();   // after: the first route that matches answers
+        File.WriteAllBytes(Path.Combine(_root, "target.bmp"), Picture());
+        File.WriteAllBytes(Path.Combine(_root, "face.bmp"), Picture());
+        var tool = new GenerateImageTool(_studio);
+
+        var result = Assert.IsType<ToolImageResult>(await tool.InvokeAsync(Args(("image", "target.bmp"), ("image2", "face.bmp"))));
+
+        Assert.Equal(2, uploads);
+        var graph = QueuedGraph();
+        Assert.Equal("up-target.bmp", graph.GetProperty("2").GetProperty("inputs").GetProperty("image").GetString());
+        Assert.Equal("up-face.bmp", graph.GetProperty("14").GetProperty("inputs").GetProperty("image").GetString());
+        Assert.DoesNotContain("\nprompt:", result.Text, StringComparison.Ordinal);   // nothing was prompted
+        Assert.StartsWith("generated 1 picture with faceswap", result.Text, StringComparison.Ordinal);
+
+        Assert.Equal("Error: workflow 'faceswap' takes 2 input images (image, image2), not 1", (string?)await tool.InvokeAsync(Args(("workflow", "faceswap"), ("image", "target.bmp"))));
+        Assert.Equal("Error: workflow 'faceswap' takes 2 input images (image, image2), not 3", (string?)await tool.InvokeAsync(Args(("workflow", "faceswap"), ("image", "a"), ("image2", "b"), ("image3", "c"))));
+        Assert.Equal("Error: several workflows fit; name one of: faceswap, pony-txt2img, restyle", (string?)await tool.InvokeAsync(Args(("image", "a"), ("image2", "b"), ("image3", "c"))));
+        Assert.Equal(ComfyText.NeedsImage("restyle"), (string?)await tool.InvokeAsync(Args(("prompt", "x"), ("workflow", "restyle"))));
+        Assert.Equal(ComfyText.NoPrompt, (string?)await tool.InvokeAsync(Args(("workflow", "restyle"), ("image", "target.bmp"))));
+        Assert.Equal("Error: image2 needs image: the input pictures fill image, image2, image3 in order", (string?)await tool.InvokeAsync(Args(("image2", "face.bmp"))));
+        Assert.Equal("Error: image3 needs image2: the input pictures fill image, image2, image3 in order", (string?)await tool.InvokeAsync(Args(("image", "a"), ("image3", "c"))));
+    }
+
+    [Fact]
+    public void Imagine_ReadsImage2_AndRunsAPromptlessWorkflowOnItsPictures()
+    {
+        var workflows = new[] { Parse("faceswap", FaceSwap), Parse("restyle", Img2Img) };
+
+        var (request, error) = ComfyImagine.Parse("faceswap --image target.png --image2 \"my face.png\"", workflows);
+
+        Assert.Null(error);
+        Assert.Equal("faceswap", request!.Workflow);
+        Assert.Equal("", request.Prompt);
+        Assert.Equal(["target.png", "my face.png"], request.Images);
+        Assert.Equal(ComfyText.ImagineUsage, ComfyImagine.Parse("restyle --image a.png", workflows).Error);
+        Assert.Equal("Error: --image2 needs --image: the input pictures fill image, image2, image3 in order", ComfyImagine.Parse("faceswap --image2 a.png", workflows).Error);
+        Assert.Equal("--image3 takes a path, not ''", ComfyImagine.Parse("faceswap --image a --image3", workflows).Error);
+    }
+
+    [Fact]
+    public void Import_NumbersTheLoadImages_AndTakesASamplerlessImageGraph()
+    {
+        var (result, problem) = ComfyImport.Placehold(FaceSwapExport);
+
+        Assert.Null(problem);
+        Assert.Equal(2, result!.ImageCount);
+        Assert.Equal(["{{image}} → node 2 LoadImage.image", "{{image2}} → node 14 LoadImage.image"], result.Found);   // node-id order
+        Assert.Equal((null, null, null, null, null, "", ""), (result.Width, result.Height, result.Steps, result.Cfg, result.Denoise, result.Negative, result.Checkpoint));
+        var workflow = Parse("faceswap", result.GraphJson);
+        Assert.Equal(["image", "image2"], workflow.Placeholders.Order(StringComparer.Ordinal));
+        Assert.Contains("\"swap_model\": \"inswapper_128.onnx\"", result.GraphJson);   // the rest as exported
+
+        string four = "{" + string.Join(",", Enumerable.Range(1, 4).Select(i => $"\"{i}\":{{\"class_type\":\"LoadImage\",\"inputs\":{{\"image\":\"p{i}.png\"}}}}")) + "}";
+        var (many, _) = ComfyImport.Placehold(four);
+        Assert.Equal(3, many!.ImageCount);
+        Assert.Equal(ComfyImport.ImageLeftAsExported("4"), many.Found[^1]);
+        Assert.Equal("LoadImage node 4 left as exported: a workflow takes at most 3 input pictures", ComfyImport.ImageLeftAsExported("4"));
+    }
+
+    [Fact]
+    public void WorkflowFile_WritesTheImageRoles_AndTheyReadBack()
+    {
+        string sidecar = ComfyWorkflowFile.Sidecar(new ComfySidecar("Face swap", ComfyFamily.Other, null, null, null, null, null, "", ["the target", "", "x"]));
+        Assert.Contains("\nimage: the target\n", sidecar, StringComparison.Ordinal);
+        Assert.DoesNotContain("image2:", sidecar, StringComparison.Ordinal);
+        Assert.Equal(["the target", ""], Parse("faceswap", FaceSwap, sidecar).ImageRoles);
     }
 
     [Fact]
@@ -463,7 +589,7 @@ public sealed class ComfyTests : IDisposable
         Assert.True(request.Verbatim);
         Assert.Equal(99, request.Seed);
         Assert.Equal((832, 1216), (request.Width!.Value, request.Height!.Value));
-        Assert.Equal("my pics/a.png", request.Image);
+        Assert.Equal(["my pics/a.png"], request.Images);
 
         Assert.Equal("a cat", ComfyImagine.Parse("a cat", workflows).Request!.Prompt);
         Assert.Null(ComfyImagine.Parse("a cat", workflows).Request!.Workflow);
@@ -551,6 +677,21 @@ public sealed class ComfyTests : IDisposable
         Assert.False(ChatScreen.ComfyOffered(_settings, _studio));
         Assert.Contains("  pony-txt2img · pony · text → image · 1024×1024 · {{cfg}} {{height}} {{negative}} {{prompt}} {{seed}} {{steps}} {{width}} · hidden", ComfyText.StatusLines(_studio.Catalog.Workflows, [], [], true, []));
         Assert.Equal("pony · text → image · 1024×1024 · hidden from the model", ComfyText.CompletionNote(_studio.Catalog.Workflows[1], offered: false));
+    }
+
+    [Fact]
+    public void TheCaretMention_ListsEachOfferedWorkflow_WithWhatItIs()
+    {
+        Workflow("pony-txt2img", Txt2Img);
+        Workflow("juggernaut-xl", Txt2Img);
+        _settings.ComfyWorkflowsOffered = ["pony-txt2img"];
+
+        var items = ChatScreen.ComfyChoices(_studio.OfferedWorkflows());
+
+        Assert.Equal(["pony-txt2img"], items.Select(i => i.Text));   // the hidden one is no mention: the model could not run it
+        Assert.Equal(["pony · text → image · 1024×1024"], items.Select(i => i.Note));
+        Assert.Empty(ChatScreen.ComfyChoices([]));
+        Assert.True(new AppSettingsData().ComfyCaretMention);
     }
 
     [Theory]

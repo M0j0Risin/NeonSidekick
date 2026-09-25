@@ -12,6 +12,9 @@ namespace NeonSidekick.Comfy;
 /// given — a negative the workflow's sidecar names is the user's own setting and still applies. <see cref="AnyWorkflow"/>
 /// (later on 2026-09-24, <c>/imagine</c>'s) lets a named workflow be any installed one, not only those
 /// <c>ComfyUI workflows offered</c> gives the model; with no name the offered ones are still the choice.
+/// <see cref="Images"/> (later still on 2026-09-24, the face swap; one <c>Image</c> before) are the input pictures in
+/// slot order — <c>image</c>, <c>image2</c>, <c>image3</c> — each a sandbox path or a pasted picture's label; null or
+/// empty is none.
 /// </summary>
 public sealed record ComfyRequest(
     string Prompt,
@@ -24,10 +27,14 @@ public sealed record ComfyRequest(
     int? Steps = null,
     double? Cfg = null,
     double? Denoise = null,
-    string? Image = null,
+    IReadOnlyList<string>? Images = null,
     int Count = 1,
     bool AnyWorkflow = false,
-    string? NegativeExtra = null);
+    string? NegativeExtra = null)
+{
+    /// <summary>How many input pictures were given.</summary>
+    public int ImageCount => Images?.Count ?? 0;
+}
 
 /// <summary>What a generation came to: the result text (an <c>Error:</c> sentence on failure) and the saved pictures as the model sees them.</summary>
 public sealed record ComfyGeneration(string Text, IReadOnlyList<ImageAttachment> Images)
@@ -154,10 +161,10 @@ public sealed class ComfyStudio : IDisposable
 
     /// <summary>
     /// The workflow for <paramref name="request"/>: the one named (any case), else the only one of the right kind —
-    /// taking an image when <see cref="ComfyRequest.Image"/> is given, not taking one otherwise — else an error naming
-    /// the candidates.
+    /// taking as many input pictures as <paramref name="images"/> (later still on 2026-09-24; image or no image before)
+    /// — else an error naming the candidates.
     /// </summary>
-    public static (ComfyWorkflow? Workflow, string? Error) Pick(IReadOnlyList<ComfyWorkflow> workflows, string? name, bool withImage)
+    public static (ComfyWorkflow? Workflow, string? Error) Pick(IReadOnlyList<ComfyWorkflow> workflows, string? name, int images)
     {
         ArgumentNullException.ThrowIfNull(workflows);
         if (!string.IsNullOrWhiteSpace(name))
@@ -166,7 +173,7 @@ public sealed class ComfyStudio : IDisposable
             return named is null ? (null, ComfyText.UnknownWorkflow(name.Trim(), workflows)) : (named, null);
         }
 
-        var fit = workflows.Where(w => w.TakesImage == withImage).ToList();
+        var fit = workflows.Where(w => w.ImageCount == images).ToList();
         return fit.Count == 1 ? (fit[0], null)
             : workflows.Count == 1 ? (workflows[0], null)
             : (null, ComfyText.WhichWorkflow(fit.Count > 0 ? fit : workflows));
@@ -199,26 +206,25 @@ public sealed class ComfyStudio : IDisposable
             return Fail(ComfyText.NoneOffered);
         }
 
-        if (string.IsNullOrWhiteSpace(request.Prompt))
-        {
-            return Fail(ComfyText.NoPrompt);
-        }
-
-        bool withImage = !string.IsNullOrWhiteSpace(request.Image);
-        var (workflow, pickError) = Pick(workflows, request.Workflow, withImage);
+        var inputs = request.Images ?? [];
+        int given = inputs.Count;
+        var (workflow, pickError) = Pick(workflows, request.Workflow, given);
         if (workflow is null)
         {
             return Fail(pickError!);
         }
 
-        if (withImage && !workflow.TakesImage)
+        // Only a workflow that has a {{prompt}} needs one (later still on 2026-09-24: a face swap has nothing to say).
+        if (workflow.TakesPrompt && string.IsNullOrWhiteSpace(request.Prompt))
         {
-            return Fail(ComfyText.TakesNoImage(workflow.Name));
+            return Fail(ComfyText.NoPrompt);
         }
 
-        if (!withImage && workflow.TakesImage)
+        if (given != workflow.ImageCount)
         {
-            return Fail(ComfyText.NeedsImage(workflow.Name));
+            return Fail(given > 0 && !workflow.TakesImage ? ComfyText.TakesNoImage(workflow.Name)
+                : given == 0 && workflow.ImageCount == 1 ? ComfyText.NeedsImage(workflow.Name)
+                : ComfyText.WrongImageCount(workflow, given));
         }
 
         int maxCount = MaxCountOf(effective);
@@ -228,20 +234,25 @@ public sealed class ComfyStudio : IDisposable
         }
 
         var timeout = TimeSpan.FromSeconds(Math.Clamp(effective.ComfyTimeoutSeconds, AppSettingsData.MinComfyTimeoutSeconds, AppSettingsData.MaxComfyTimeoutSeconds));
-        string? uploaded = null;
-        string? inputNote = null;
-        if (withImage)
+        // Each input picture read and uploaded in slot order (later still on 2026-09-24: a face swap's target, then its face).
+        var uploaded = new List<string>(given);
+        var inputNotes = new List<string>();
+        foreach (string image in inputs)
         {
-            var input = ReadInput(request.Image!, effective.ComfyOutputFolder);
+            var input = ReadInput(image, effective.ComfyOutputFolder);
             if (input.Error is not null)
             {
                 return Fail(input.Error);
             }
 
-            if (input.Saved is not null && ComfyText.TryPastedLabel(request.Image!, out int pastedNumber))
+            if (input.Saved is not null && ComfyText.TryPastedLabel(image, out int pastedNumber))
             {
                 // Where the paste was written, so the model can name the file from now on.
-                inputNote = ComfyText.PastedInput(input.Saved, pastedNumber);
+                string note = ComfyText.PastedInput(input.Saved, pastedNumber);
+                if (!inputNotes.Contains(note))
+                {
+                    inputNotes.Add(note);
+                }
             }
 
             var (name, uploadError) = await client.UploadAsync(input.Bytes!, input.FileName!, timeout, cancellationToken).ConfigureAwait(false);
@@ -250,8 +261,10 @@ public sealed class ComfyStudio : IDisposable
                 return Fail(uploadError!);
             }
 
-            uploaded = name;
+            uploaded.Add(name);
         }
+
+        string? inputNote = inputNotes.Count == 0 ? null : string.Join("\n", inputNotes);
 
         var defaults = workflow.Defaults;
         string negative = request.Negative ?? (request.Verbatim ? workflow.Negative ?? "" : defaults.Negative);
@@ -267,7 +280,7 @@ public sealed class ComfyStudio : IDisposable
         for (int i = 0; i < count; i++)
         {
             long thisSeed = seed + i;
-            var values = new ComfyValues(request.Prompt, negative, thisSeed, request.Width, request.Height, request.Steps, request.Cfg, request.Denoise, uploaded);
+            var values = new ComfyValues(request.Prompt, negative, thisSeed, request.Width, request.Height, request.Steps, request.Cfg, request.Denoise, uploaded.Count == 0 ? null : uploaded);
             var run = await client.RunAsync(workflow.Fill(values), timeout, cancellationToken).ConfigureAwait(false);
             if (!run.Ok)
             {
@@ -301,7 +314,8 @@ public sealed class ComfyStudio : IDisposable
     private static string Report(ComfyWorkflow workflow, long seed, ComfyRequest request, IReadOnlyList<string> saved, string negative, bool attached, string? input)
     {
         var d = workflow.Defaults;
-        return ComfyText.Generated(workflow.Name, seed, request.Width ?? d.Width, request.Height ?? d.Height, saved, request.Prompt, negative, attached, input);
+        // A prompt the workflow has no {{prompt}} for never reached the picture, so it is not reported as sent.
+        return ComfyText.Generated(workflow.Name, seed, request.Width ?? d.Width, request.Height ?? d.Height, saved, workflow.TakesPrompt ? request.Prompt : "", negative, attached, input);
     }
 
     private static ComfyGeneration Fail(string text) => new(text, []);

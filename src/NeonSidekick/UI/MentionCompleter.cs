@@ -36,7 +36,7 @@ public sealed record MentionList(int Start, int End, string Query, IReadOnlyList
     /// <summary>The dim note per match (a command's summary, a skill's description); null on the path list.</summary>
     public IReadOnlyList<string>? Notes { get; init; }
 
-    /// <summary>What a pick writes ahead of the match (2026-09-17): <c>@</c> on the path list, <c>#</c> on the skill-mention list, <c>$</c> on the tool-mention list (2026-09-19), nothing on a command or argument list.</summary>
+    /// <summary>What a pick writes ahead of the match (2026-09-17): <c>@</c> on the path list, <c>#</c> on the skill-mention list, <c>$</c> on the tool-mention list (2026-09-19), <c>%</c> on the SQL connections' (2026-09-23), <c>^</c> on the ComfyUI workflows' (2026-09-24), nothing on a command or argument list.</summary>
     public string Prefix { get; init; } = "";
 
     /// <summary>Whether this is a word list with notes (a command, an argument, a <c>#</c>skill), drawn by <see cref="MentionCompleter.WordRows"/>; else the path list.</summary>

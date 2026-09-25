@@ -43,6 +43,21 @@ public class ProfilesTests : IDisposable
         Assert.Equal(valid, Profiles.IsValidName(name));
     }
 
+    [Theory]
+    [InlineData("_test", true)]
+    [InlineData("__", true)]
+    [InlineData("_", true)]
+    [InlineData("test_", false)]
+    [InlineData("te_st", false)]
+    [InlineData("default", false)]
+    [InlineData("", false)]
+    [InlineData(null, false)]
+    public void IsTemporary_IsTheLeadingUnderscore(string? name, bool temporary)
+    {
+        Assert.Equal(temporary, Profiles.IsTemporary(name));
+        Assert.Equal('_', Profiles.TemporaryPrefix);
+    }
+
     [Fact]
     public void Strings_ArePinned()
     {

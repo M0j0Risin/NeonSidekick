@@ -40,6 +40,20 @@ public static class ComfyText
     /// <summary>A workflow with <c>{{image}}</c> called without one. Pinned.</summary>
     public static string NeedsImage(string name) => $"Error: workflow '{name}' needs an input image: give image (a picture under the working directory, or a pasted one's [Image #N] label)";
 
+    /// <summary>A multi-image workflow (later still on 2026-09-24, the face swap) given another number of pictures than it takes. Pinned.</summary>
+    public static string WrongImageCount(ComfyWorkflow workflow, int given)
+    {
+        ArgumentNullException.ThrowIfNull(workflow);
+        int takes = workflow.ImageCount;
+        string keys = string.Join(", ", ComfyWorkflow.ImageKeys.Take(takes));
+        return $"Error: workflow '{workflow.Name}' takes {Pictures(takes)} ({keys}), not {given.ToString(CultureInfo.InvariantCulture)}";
+    }
+
+    /// <summary>A later input picture given without the one before it (<c>image2</c> with no <c>image</c>). Pinned.</summary>
+    public static string ImageGap(string given, string missing) => $"Error: {given} needs {missing}: the input pictures fill image, image2, image3 in order";
+
+    private static string Pictures(int count) => count == 1 ? "1 input image" : count.ToString(CultureInfo.InvariantCulture) + " input images";
+
     /// <summary>
     /// Whether <paramref name="image"/> names a pasted picture by the label the model read (later still on 2026-09-24):
     /// <c>[Image #1]</c>, or the same without the brackets or the <c>#</c>, any case, spaces around allowed — nothing
@@ -225,7 +239,8 @@ public static class ComfyText
         }
 
         // A pasted input's line (PastedInput, later still on 2026-09-24) sits between the head and the prompt.
-        return head + (input is null ? "" : "\n" + input) + "\nprompt: " + prompt + (negative.Length > 0 ? "\nnegative: " + negative : "");
+        // A workflow with no {{prompt}} (a face swap, later still on 2026-09-24) has no prompt line.
+        return head + (input is null ? "" : "\n" + input) + (prompt.Length > 0 ? "\nprompt: " + prompt : "") + (negative.Length > 0 ? "\nnegative: " + negative : "");
     }
 
     /// <summary>
@@ -253,7 +268,7 @@ public static class ComfyText
     public const string NegativeAndNoNegative = "give a negative after -- or --no-negative, not both";
 
     /// <summary><c>/imagine</c> with nothing after it. Pinned.</summary>
-    public const string ImagineUsage = "Usage: /imagine [workflow] <prompt> [-- <negative> | --no-negative] [--seed N] [--size WxH] [--steps N] [--cfg X] [--denoise X] [--image <path>]";
+    public const string ImagineUsage = "Usage: /imagine [workflow] <prompt> [-- <negative> | --no-negative] [--seed N] [--size WxH] [--steps N] [--cfg X] [--denoise X] [--image <path>] [--image2 <path>] [--image3 <path>]";
 
     /// <summary>A flag <c>/imagine</c> could not read. Pinned.</summary>
     public static string BadFlag(string flag, string value) => $"{flag} takes {FlagShape(flag)}, not '{value}'";
@@ -262,7 +277,7 @@ public static class ComfyText
     {
         "--size" => "WxH (1024x1024)",
         "--cfg" or "--denoise" => "a number",
-        "--image" => "a path",
+        "--image" or "--image2" or "--image3" => "a path",
         _ => "a whole number",
     };
 
@@ -288,9 +303,28 @@ public static class ComfyText
     {
         ArgumentNullException.ThrowIfNull(workflow);
         var d = workflow.Defaults;
-        string input = workflow.TakesImage ? "image → image" : "text → image";
+        string input = InputShape(workflow, roles: true);
         return $"{workflow.Name} · {ComfyFamilies.Name(workflow.Family)} · {input} · {d.Width.ToString(CultureInfo.InvariantCulture)}×{d.Height.ToString(CultureInfo.InvariantCulture)}"
             + (workflow.Description.Length > 0 ? " — " + workflow.Description : "");
+    }
+
+    /// <summary>
+    /// What a workflow takes in: <c>text → image</c>, <c>image → image</c>, or (later still on 2026-09-24, the face swap)
+    /// <c>2 images → image</c> — with <paramref name="roles"/> each input picture's sidecar role after it, <c>(image: the
+    /// picture whose face is replaced; image2: the face to put in)</c>, so the model knows which goes where — and
+    /// <c>, no prompt</c> for one with no <c>{{prompt}}</c>. Pinned.
+    /// </summary>
+    public static string InputShape(ComfyWorkflow workflow, bool roles = false)
+    {
+        ArgumentNullException.ThrowIfNull(workflow);
+        int count = workflow.ImageCount;
+        string shape = count == 0 ? "text → image" : count == 1 ? "image → image" : count.ToString(CultureInfo.InvariantCulture) + " images → image";
+        if (roles && Enumerable.Range(0, count).Any(i => workflow.ImageRole(i).Length > 0))
+        {
+            shape += " (" + string.Join("; ", Enumerable.Range(0, count).Select(i => ComfyWorkflow.ImageKeys[i] + ": " + (workflow.ImageRole(i) is { Length: > 0 } role ? role : "?"))) + ")";
+        }
+
+        return workflow.TakesPrompt ? shape : shape + ", no prompt";
     }
 
     /// <summary>
@@ -306,7 +340,8 @@ public static class ComfyText
             "Generates pictures on the user's ComfyUI server from one of their workflows and saves them under the working directory; you see them in the next message. " +
             "When the user describes a picture in their own words, write the prompt yourself in the dialect of the workflow's family (below). " +
             "When the user gives a ready-made prompt — tags, score_9 / score_8_up, (tag:1.2) weights, or says to use their prompt as is — pass it unchanged in prompt with verbatim true, and their negative the same way; never rewrite, reorder or add to it. " +
-            "For an edit, restyle or upscale of an existing picture, give its path — or, for a picture the user pasted, its label ([Image #1]), which sends it at full size — as image and pick a workflow that takes one. Seeds are random unless given; reuse the reported seed to vary a picture slightly.");
+            "For an edit, restyle or upscale of an existing picture, give its path — or, for a picture the user pasted, its label ([Image #1]), which sends it at full size — as image and pick a workflow that takes one. " +
+            "A workflow taking several pictures (a face swap, a composite) gets them as image, image2, image3, each in the role its line names; one marked 'no prompt' needs no prompt. Seeds are random unless given; reuse the reported seed to vary a picture slightly.");
         bool anyReinforced = reinforce && workflows.Any(w => w.TakesReinforcement);
         if (anyReinforced)
         {
@@ -376,7 +411,7 @@ public static class ComfyText
     {
         ArgumentNullException.ThrowIfNull(workflow);
         var d = workflow.Defaults;
-        return ComfyFamilies.Name(workflow.Family) + " · " + (workflow.TakesImage ? "image → image" : "text → image") + " · "
+        return ComfyFamilies.Name(workflow.Family) + " · " + InputShape(workflow) + " · "
             + d.Width.ToString(CultureInfo.InvariantCulture) + "×" + d.Height.ToString(CultureInfo.InvariantCulture) + (offered ? "" : " · hidden from the model");
     }
 
@@ -412,7 +447,7 @@ public static class ComfyText
             lines.Add("  skipped " + Path.GetFileName(problem.FilePath) + ": it " + problem.Problem);
         }
 
-        lines.Add("workflows go in " + string.Join(" or ", roots) + " — export them from ComfyUI with Save (API) and put {{prompt}} (and {{negative}}, {{seed}}, {{width}}, {{height}}, {{steps}}, {{cfg}}, {{image}}, {{denoise}}) where the values go");
+        lines.Add("workflows go in " + string.Join(" or ", roots) + " — export them from ComfyUI with Save (API) and put {{prompt}} (and {{negative}}, {{seed}}, {{width}}, {{height}}, {{steps}}, {{cfg}}, {{image}}, {{image2}}, {{image3}}, {{denoise}}) where the values go");
         return lines;
     }
 

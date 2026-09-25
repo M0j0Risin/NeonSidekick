@@ -36,7 +36,7 @@ Neon Sidekick brings privacy-first, local LLM inference to your terminal. Powere
 * **Message Queue:** Built-in queue for stacking and executing sequential messages.
 
 ### Profiles, Sessions & Skills
-* **Multi-Profile Support:** Switch between distinct configurations, each featuring its own working directory, independent settings and isolated session logging.
+* **Multi-Profile Support:** Switch between distinct configurations, each featuring its own working directory, independent settings and isolated session logging. A profile named with a leading `_` (`_test`) is temporary: the next launch opens `default` instead.
 * **Advanced Session Management:** Easily manage, resume, search and reflect on past sessions.
 * **Hierarchical Skills System:** Define and manage agent skills at the global, profile, project, or machine (`.agents\skills`) level.
 * **Self-Learning:** An automatic self-reflection system that dynamically updates and creates new skills based on interactions and tool outcomes.
@@ -52,7 +52,7 @@ Neon Sidekick brings privacy-first, local LLM inference to your terminal. Powere
 
 **Navigation**
 * **Keyboard:** ←/→ (switch tabs), ↑/↓ (move), Enter (edit/toggle), ESC (close).
-* **Mouse:** Single-click moves the cursor; double-click selects rows/tabs. The top-right × acts as ESC. Double-clicking anywhere outside an open pane closes it. Double-clicking a picture in the transcript — a sent one, one a tool fetched or generated, `/view`, `/imagine`, the splash — opens it in your image editor (*Image editor*; Paint by default). A pasted picture or the built-in splash has no file of its own, so it is written to `%TEMP%\NeonSidekick\pictures` first.
+* **Mouse:** Single-click moves the cursor; double-click selects rows/tabs. The top-right × acts as ESC. Double-clicking anywhere outside an open pane closes it. Double-clicking a picture in the transcript — a sent one, one a tool fetched or generated, `/view`, `/imagine`, the splash — opens it in your image viewer (*Image viewer*; Paint by default). A pasted picture or the built-in splash has no file of its own, so it is written to `%TEMP%\NeonSidekick\pictures` first. A successful open prints nothing in the transcript; only a failure is reported.
 
 **Double-Click Shortcuts**
 * **Toolbar:** Glyph toggles its pane (or switches to another) | Working directory opens `/cwd browse` | Blank space opens `/settings`.
@@ -81,16 +81,16 @@ Neon Sidekick brings privacy-first, local LLM inference to your terminal. Powere
 | Memory | Offers the model `save_memory` / `recall_memory` and opens every conversation with what it remembers. The toolbar shows 💾 while it is on, whose double-click is `/memory`. | on |
 | Copy user prompt | `/copy` includes your prompt above the reply; off copies the reply alone. | on |
 | Show image thumbnails | Draws a small colour block of each picture you send under your line. | on |
-| Image thumbnail size | The block's size: `small` (48×12), `medium` (64×16), `large` (80×20) or `xlarge` (96×24) columns × rows. | `small` |
+| Image thumbnail size | The block's size: `tiny` (32×8), `small` (48×12), `medium` (64×16), `large` (80×20) or `xlarge` (96×24) columns × rows, or `fullsize`: each picture as large as the transcript window allows (the width less 2, the rows above the pane), more than one stacked below each other. | `small` |
 | Transcript markdown | Renders replies as styled Markdown (bold, lists, code fences, tables) instead of plain streamed text. A fence named for C#, JavaScript/TypeScript, Python, Bash, PowerShell, JSON, YAML, TOML/INI, SQL, C/C++, Java, Kotlin, Go, Rust, CSS, XML/HTML or diff is syntax-highlighted; any other fence stays plain. | on |
 | Paste preview lines | How many lines of a long paste the transcript shows in dim under its `[Pasted text #n]` placeholder (0–200; 0 = the placeholder alone). | 25 |
 | Hide /exit autocomplete | Leaves `/exit` out of the `/` completion list so a pick never closes the app by mistake; typed in full it still exits. | on |
 | Command typo intercept | A line that is exactly a command's name without its slash (`clear`) asks *Did you mean /clear?* before sending it as text; so does a command typed with extra slashes (`//tools`, `///settings`), its arguments kept (`//profile work` → *Did you mean /profile work?*). A bare `//` is still `/settings`. | on |
-| Welcome splash | Shows one of the splash pictures under the banner at startup until the first line is sent (`←`/`→` walk the set; a profile's own `splash\` folder replaces the built-in pictures — the folder is made for you, so a picture can be dropped straight in; `Delete` twice in a row on an empty line moves the picture on screen into that folder's `.trash` subfolder, which is never shown — move it back to restore it; the built-in pictures are unaffected). | on |
+| Welcome splash | How the splash pictures greet you under the banner at startup, until the first line is sent: `fullsize` shows one picture filling the screen (`←`/`→` walk the set; `Delete` twice in a row on an empty line moves a picture of the profile's own into that folder's `.trash` subfolder, which is never shown — move it back to restore it; the built-in pictures are unaffected), `tiled` shows them as thumbnails at *Image thumbnail size*, only as many as fit on the screen (`←`/`→` page through them in sets; a double-click opens one), `disabled` shows none. A profile's own `splash\` folder replaces the built-in pictures — the folder is made for you, so a picture can be dropped straight in. `/splash` shows the splash whatever this says (`tiled` when it is tiled, otherwise one picture). | fullsize |
 | Working directory in header | Prints the working directory at the right edge of the banner's title line. | off |
 | Show toolbar | Draws a toolbar under the hint row: at its left the glyphs a double-click opens — ⚙️ `/settings`, 🛠️ `/tools`, 🔌 `/mcp`, 🎓 `/skills`, 🎭 `/sys`, 💬 `/sessions`, 💾 `/memory` while *Memory* is on, then a lock that follows *Shell command policy* (🔒 under `ask`, 🔓 under `yolo`, none under `off`) `/cmdlist`, and 👮 while *Shell police outside paths* is on and the policy is not `off` `/police` — at its right the working directory, a double-click on which is `/cwd browse`, and between them blanks a double-click on which is `/settings`. | on |
 | Draft editor | The command `/draft` opens its temporary file with (`code --wait`, `notepad`…); empty uses whatever Windows opens `.txt` files with. | (default .txt editor) |
-| Image editor | The command a double-clicked picture in the transcript opens in, the file's path appended (`mspaint`, `"C:\Program Files\GIMP 3\bin\gimp-3.exe"`…); empty uses the editor Windows registers for the picture's type (Paint for png, jpg and bmp), or its viewer when there is none. | (default image editor) |
+| Image viewer | The command a double-clicked picture in the transcript opens in, the file's path appended (`mspaint`, `"C:\Program Files\GIMP 3\bin\gimp-3.exe"`…); empty uses the editor Windows registers for the picture's type (Paint for png, jpg and bmp), or its viewer when there is none. | (default image viewer) |
 | Theme | The colour theme: `synthwave` (the default), `netrunner` (green phosphor), `nostromo` (amber phosphor), `noir` (greyscale), `cyberpunk` (colorful) or `vaporwave` (pastel). | `synthwave` |
 
 #### Sessions
@@ -285,6 +285,7 @@ Every tool the app has, grouped (Clock, Timers, Files, Git, Shell, Obsidian, SQL
 | ComfyUI URL | The ComfyUI server, often another machine on your LAN (`http://gpu-box:8188`). Your own server like the LLM's, so the web tools' network mode never blocks it. `NEONSIDEKICK_COMFY_URL` outranks it. | (not set) |
 | ComfyUI workflows offered | Which installed workflows the model is offered: a checklist of every workflow in the two `comfy` folders. Until you first use it every workflow is offered, new ones too; once narrowed, only the ticked ones are, and a workflow added later stays hidden until you tick it. Narrow it to one and every plain request, and a plain `/imagine`, goes there. `/imagine <name>` can still use a hidden one. | all (not narrowed) |
 | ComfyUI add workflow | Enter walks a new workflow through every choice, one page each. **Build** makes a standard one from what your server has: text → image or image → image, the checkpoint (from the server's list), the family, the folder (this profile's or every profile's), the name, the CLIP skip, the sampler and scheduler (from the server's lists), the default size, steps, CFG, denoise and negative, and a description. **Import** takes a workflow you exported from ComfyUI (*Workflow → Export (API)*): the wizard finds the prompt, negative, seed, steps, CFG, size and input-image nodes, puts the placeholders in, and keeps the export's values as the defaults. It reads both kinds of sampler graph: a plain `KSampler`, and the custom-sampler graph FLUX.2 uses (`SamplerCustomAdvanced` with its `RandomNoise`, scheduler and guider — the `FluxGuidance` is what CFG sets there). A value fed by a primitive node gets its placeholder there; one set by another node (a switch, a resolution picker) is left as the author built it, and the wizard says so. FLUX.2, Krea 2, Z-Image, Qwen Image, Ernie Image, Boogu, LongCat Image, HiDream I1 and Ideogram 4 load as separate model files, which **Build** cannot wire: export ComfyUI's own template for them and **Import** it. (Copybara has no family yet.) The summary can **test** the draft (one small run, 512 px and 8 steps at most, nothing saved here) and saves it as `<name>.json` + `<name>.md`; on a profile that narrowed *ComfyUI workflows offered* it can offer the new one too. ESC steps back a page. | — |
+| ^-mention enabled | `^` and part of a name on the input line lists the workflows the model is offered (with their family, shape and size); a pick writes `^name` as text, and `generate_image` reads it as the workflow to use. Lists nothing while the image tools are not offered (*ComfyUI tools* off, no *ComfyUI URL*, or no workflow offered). | on |
 | ComfyUI timeout (s) | How long one generation may take, queue wait included, before the tool stops waiting (10–3600); the job may still finish in ComfyUI. | 300 |
 | ComfyUI max pictures per call | The most pictures one `generate_image` call or `/imagine --count` makes (1–16). Each is a full job the server runs in turn while the reply waits, and every one the model makes goes to it in the next request, where a local vision server has its own limit, hence a cap. | 4 |
 | ComfyUI reinforce negatives | When the model writes a prompt itself, it also names a handful of opposite tags where the image model tends to drift (a solo figure → `multiple girls`, night → `daylight`, a photo → `illustration, anime`), appended to the workflow's own negative — which stays. Never for a prompt you gave it to send as is, a negative set for the call, `/imagine`, a family that runs without a negative (Flux, FLUX.2, Klein, Krea 2, Z-Image, Ernie Turbo, Boogu, Ideogram 4), or a workflow whose `.md` says `reinforce: false`. The result's `negative:` line shows what was sent. | on |
@@ -352,7 +353,7 @@ Type `/` and the list opens with every command and its summary; after the comman
 | `/police` | The *Shell police outside paths* on/off page on a pane, straight (the toolbar's 👮 opens it too): pick on or off, ESC closes. |
 | `/compact [focus]` | Shrink the current context; a focus steers the summary. |
 | `/copy [n \| all]` | Copy the last reply to the clipboard as Markdown, or reply *n*, or the whole transcript. |
-| `/cwd [path \| ~ \| browse]` | Show or change the working directory; `browse` opens a folder picker on the pane: the profile's own `files\` folder as `⌂ profile` above the drives, opened on the directory in force (Enter chooses — the profile row saves the default, like `~` — Space/→/← open and close, `-` collapses all; a click on a folder's glyph or a double-click on its name opens or closes it; only Enter chooses). |
+| `/cwd [path \| ~ \| browse]` | Show or change the working directory; `browse` opens a folder picker on the pane: the profile's own `files\` folder as `⌂ profile` and its `splash\` folder as `▣ splash` above the drives, opened on the directory in force (Enter chooses — the profile row saves the default, like `~` — Space/→/← open and close, `-` collapses all; a click on a folder's glyph or a double-click on its name opens or closes it; only Enter chooses). |
 | `/draft` | Write the next message in your editor; the file is sent when it is saved and closed. |
 | `/echo <text>` | Print a line as a reply and read it aloud when speech is on. |
 | `/emptytrash` | Empty the working directory's `.trash` for good (asks first). |
@@ -363,7 +364,7 @@ Type `/` and the list opens with every command and its summary; after the comman
 | `/interrupt [on\|off]` | Toggle the wake-word interrupt during a spoken reply. |
 | `/learn [note \| sessions [N \| text]]` | Write or improve a skill in the background from the last turn, or from the stored sessions. |
 | `/log` | Only when the app was started with `--log <path>`: open that diagnostic log file in your editor. Without the flag, `/log` is an unknown command and neither `/help` nor the `/` list shows it. |
-| `/loop <count> <message>`, `/loop infinite <message>` | Send the message that many times, or until ESC or Ctrl+C stops it, each reply waited for; a cancelled, withdrawn or failed turn ends the loop. |
+| `/loop <count> [delay] <message>`, `/loop infinite [delay] <message>` | Send the message that many times, or until ESC or Ctrl+C stops it, each reply waited for; a cancelled, withdrawn or failed turn ends the loop. An optional delay after the count (`30s`, `5m`, `1h30m`, one word, up to 24 hours) waits that long after each reply before the next pass; ESC or Ctrl+C during the wait stops the loop too: `/loop infinite 1m check the build`. |
 | `/expand` | Show every line of the folded tool runs and code blocks in the transcript, and of the ones to come (Ctrl+O flips between this and `/collapse`). |
 | `/collapse` | Fold the tool runs and code blocks in the transcript again. |
 | `/mcp` | Connect external MCP servers and switch their tools on or off. |
@@ -372,7 +373,7 @@ Type `/` and the list opens with every command and its summary; after the comman
 | `/new` | Start a new conversation without clearing the screen. |
 | `/operata [reset \| copy <profile> [force]]` | Edit `operata.md` (the operating rules) in your editor, go back to the default, or copy it into another profile (`force` replaces the one it has). |
 | `/persona [reset \| copy <profile> [force]]` | Edit `persona.md` (the personality) in your editor, go back to the default, or copy it into another profile (`force` replaces the one it has). |
-| `/profile [name \| add <name> \| delete <name> \| rename <name> <new> \| reset [name] \| edit \| reload]` | Switch, create, delete, rename or reset a profile; `edit` opens the loaded profile's `profile.json` in your editor and `reload` reads it back from disk, reconnecting only what changed. `default` can only be reset while it is loaded. A name is 1 to 32 letters, digits, `-` or `_`, and not `neon` or one of the verbs. |
+| `/profile [name \| add <name> \| delete <name> \| rename <name> <new> \| reset [name] \| edit \| reload]` | Switch, create, delete, rename or reset a profile; `edit` opens the loaded profile's `profile.json` in your editor and `reload` reads it back from disk, reconnecting only what changed. `default` can only be reset while it is loaded. A name is 1 to 32 letters, digits, `-` or `_`, and not `neon` or one of the verbs. A name starting with `_` is temporary: it loads as usual, but the next launch opens `default` instead (the profile is kept). |
 | `/queue [clear]` | List and prune the messages queued while a reply runs (the pane's `⊠ clear all` button, or `c`, drops them all); `/queue clear` drops them all without the pane. |
 | `/reasoning [level]` | Pick the reasoning effort (`none`, `low`, `medium`, `high`, `xhigh`). |
 | `/remember <text>` | Add a memory. |
@@ -391,9 +392,9 @@ Type `/` and the list opens with every command and its summary; after the comman
 | `/tts [on\|off]` | Toggle speech output. |
 | `/usage` | Show token usage and performance statistics. |
 | `/vault [path]` | Print a tree of the *Obsidian vault*'s folders and notes (or of a folder under it, which the argument list completes as you type), as `/tree` prints the working directory: the dot-folders (`.obsidian`, `.trash`, `.git`) left out, capped by *File /tree max length*, sizes under *File /tree show sizes*. An error while *Obsidian tools* is off, no vault is set, or the folder cannot be reached or has no `.obsidian`. |
-| `/view <image>` | Show an image from the working directory in the transcript; double-click it to open it in your image editor. |
-| `/imagine [workflow] <prompt> [-- <negative> \| --no-negative] [--seed N] [--size WxH] [--steps N] [--cfg X] [--denoise X] [--image <path>] [--count N]` | Generate a picture on ComfyUI from your own prompt, sent exactly as typed (`score_9, score_8_up, …` stays as it is), no model in between. The picture is drawn in the transcript, saved in *ComfyUI output folder*, and handed to the model with your next message. `--count` is capped by *ComfyUI max pictures per call*. The first word names the workflow when it is one's name; the argument list offers the workflow names as you type it. `--no-negative` sends no negative at all, not even the workflow's default. Without a name, a workflow the model is offered is used. |
-| `/comfy` | Show the ComfyUI server's status, the workflows found (family, input, size, placeholders), the files skipped and why, and where workflows go. `/comfy edit json <workflow>` opens a workflow's graph in your editor (read again at your next message); `/comfy edit markdown <workflow>` (or `md`) opens its `.md` settings and tips, making one with the family filled in when it has none. Both complete the kind and the workflow names. |
+| `/view <image>` | Show an image from the working directory in the transcript; double-click it to open it in your image viewer. |
+| `/imagine [workflow] <prompt> [-- <negative> \| --no-negative] [--seed N] [--size WxH] [--steps N] [--cfg X] [--denoise X] [--image <path>] [--image2 <path>] [--image3 <path>] [--count N]` | Generate a picture on ComfyUI from your own prompt, sent exactly as typed (`score_9, score_8_up, …` stays as it is), no model in between. The picture is drawn in the transcript, saved in *ComfyUI output folder*, and handed to the model with your next message. `--count` is capped by *ComfyUI max pictures per call*. The first word names the workflow when it is one's name; the argument list offers the workflow names as you type it. `--no-negative` sends no negative at all, not even the workflow's default. Without a name, a workflow the model is offered is used. `--image2`/`--image3` feed a workflow taking several pictures. One with no prompt (a face swap) runs on its pictures alone: `/imagine faceswap --image a.png --image2 b.png`. |
+| `/comfy` | Show the ComfyUI server's status, the workflows found (family, input, size, placeholders), the files skipped and why, and where workflows go. `/comfy edit json <workflow>` opens a workflow's graph in your editor (read again at your next message); `/comfy edit markdown <workflow>` (or `md`) opens its `.md` settings and tips, making one with the family filled in when it has none. Both complete the kind and the workflow names. `/comfy purge` deletes everything in the ComfyUI output folder for good, the `.pasted` inputs included, after a yes/no (refused when the output folder is the working directory itself). |
 | `/vocalia [reset \| copy <profile> [force]]` | Edit `vocalia.md` (the spoken-reply directive) in your editor, go back to the default, or copy it into another profile (`force` replaces the one it has). |
 | `/wake [on\|off]` | Toggle the speech-input wake word. |
 | `/window` | Show the terminal window's width and height. |
@@ -616,10 +617,11 @@ The quickest way is **ComfyUI add workflow** on the ComfyUI tab of `/tools`: it 
 
 | Placeholder | Becomes |
 |---|---|
-| `{{prompt}}` | The positive prompt (required: a workflow without it is skipped). |
+| `{{prompt}}` | The positive prompt (required, unless the workflow takes an input picture: a face swap or a plain upscale has nothing to say — it is listed as *no prompt*). |
 | `{{negative}}` | The negative prompt. |
 | `{{seed}}`, `{{width}}`, `{{height}}`, `{{steps}}`, `{{cfg}}`, `{{denoise}}` | Numbers, when the placeholder is the whole value (`"seed": "{{seed}}"`); inside a longer string (`"neon-{{seed}}"`) they are text. |
 | `{{image}}` | The uploaded input picture's name, for a `LoadImage` node: a workflow with it takes an image (img2img, upscale, inpaint). |
+| `{{image2}}`, `{{image3}}` | The second and third input pictures, for a workflow that takes several (a face swap's face, Qwen-Image-Edit's pictures to compose). They fill in order: `{{image2}}` needs `{{image}}`, `{{image3}}` needs `{{image2}}`, or the workflow is skipped. |
 | `{{!name}}` | A literal `{{name}}` sent as written — for a workflow whose own nodes use double braces (Ideogram 4's `StringReplace` searches for `{{width}}`). **Import** escapes such text for you. |
 
 3. Optionally, a sidecar `<name>.md` beside it sets the defaults and tips:
@@ -634,6 +636,7 @@ steps: 25
 cfg: 7
 negative: score_6, score_5, score_4, blurry
 reinforce: false      # optional: send this negative as written, nothing appended (ComfyUI reinforce negatives)
+image: the picture to restyle   # optional, per input picture: its role, shown to the model (image, image2, image3)
 ---
 Prefer source_anime; keep rating_safe unless asked.
 ```
@@ -645,11 +648,23 @@ Prefer source_anime; keep rating_safe unless asked.
 - **Skip the model**: `/imagine score_9, score_8_up, source_anime, 1girl -- score_4, blurry --seed 42` sends it straight to ComfyUI. `--no-negative` in place of `-- …` sends no negative at all.
 - **Choose what the model may use** with *ComfyUI workflows offered* on the ComfyUI tab of `/tools`. With one ticked, the model has no choice to make.
 
+**Face swaps and other several-picture workflows.** A workflow may take up to three pictures (`{{image}}`, `{{image2}}`, `{{image3}}`). For a face swap, install the ReActor node pack on your ComfyUI server, build the swap there (two `LoadImage` nodes → `ReActorFaceSwap` → `SaveImage`), export it with *Export (API)* and **Import** it: the `LoadImage` nodes become `{{image}}`, `{{image2}}` in node-id order (the wizard names which node got which), and a graph with no sampler is fine. Then say which picture is which in its `.md`, so the model puts them the right way round:
+
+```markdown
+---
+description: Face swap (ReActor)
+image: the picture whose face is replaced
+image2: the face to put in
+---
+```
+
+Now "put my face from [Image #2] on the person in [Image #1]" works in chat, or `/imagine faceswap --image target.png --image2 face.png` without the model. Import still expects a `CLIPTextEncode` prompt when there is a sampler. A Qwen-Image-Edit graph, whose prompt goes into `TextEncodeQwenImageEditPlus`, needs `{{prompt}}` put in by hand.
+
 #### 3. The tools
 
 | Tool | Arguments | What it does |
 |---|---|---|
-| `generate_image` | `prompt, workflow?, negative?, negative_extra?, verbatim?, width?, height?, seed?, steps?, cfg?, denoise?, image?, count?` | Runs a workflow (the only one that fits when none is named) and saves 1 to *ComfyUI max pictures per call* pictures (4 by default), each with the next seed; the result names the files and the seed, and the pictures follow in the next message. ComfyUI's refusal names the node and input at fault (a missing checkpoint, a bad value). `image` is a path under the working directory, or a pasted picture's `[Image #N]` label: the paste is sent at its original size (not the 2048 copy the model saw), saved into the output folder's `.pasted\` subfolder the first time it is used (`comfy_images\.pasted\pasted-20260924-153012.png`; a dropped file keeps its own name), and the result names the saved file. |
+| `generate_image` | `prompt?, workflow?, negative?, negative_extra?, verbatim?, width?, height?, seed?, steps?, cfg?, denoise?, image?, image2?, image3?, count?` | Runs a workflow (the only one that fits when none is named) and saves 1 to *ComfyUI max pictures per call* pictures (4 by default), each with the next seed; the result names the files and the seed, and the pictures follow in the next message. ComfyUI's refusal names the node and input at fault (a missing checkpoint, a bad value). `image` is a path under the working directory, or a pasted picture's `[Image #N]` label: the paste is sent at its original size (not the 2048 copy the model saw), saved into the output folder's `.pasted\` subfolder the first time it is used (`comfy_images\.pasted\pasted-20260924-153012.png`; a dropped file keeps its own name), and the result names the saved file. `image2` and `image3` are the further pictures of a workflow that takes several, in the roles its `.md` names. Without a name, the workflow that takes that many pictures is used. `prompt` may be left out only for a workflow with no `{{prompt}}`. |
 | `set_splash_image` | `path, name?` | Copies a picture from the working directory into the profile's `splash` folder, so it shows at start and on `/splash`. The first picture there stands in for the bundled set until more are added, and the result says so. |
 
 </details>

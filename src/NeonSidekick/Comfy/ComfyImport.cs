@@ -15,7 +15,11 @@ public sealed record ComfyImportResult(
     double? Cfg,
     double? Denoise,
     string Checkpoint,
-    bool TakesImage);
+    int ImageCount)
+{
+    /// <summary>Whether the graph loads a picture.</summary>
+    public bool TakesImage => ImageCount > 0;
+}
 
 /// <summary>
 /// A workflow exported from ComfyUI with <b>Export (API)</b> made into a template (later on 2026-09-24, the user's ask:
@@ -31,7 +35,9 @@ public sealed record ComfyImportResult(
 /// <c>seed</c> (or <c>noise_seed</c>), <c>steps</c> and <c>cfg</c> become placeholders, and <c>denoise</c> too when the
 /// graph loads an image; every empty-latent node's <c>width</c> / <c>height</c> and every <c>LoadImage</c>'s <c>image</c>
 /// likewise. The values replaced come back as the defaults, the negative text as the default negative. Anything else —
-/// LoRAs, upscalers, ControlNets — is left as exported. Pure.
+/// LoRAs, upscalers, ControlNets — is left as exported. Since later still that day (the face swap) the <c>LoadImage</c>
+/// nodes are numbered — <c>{{image}}</c>, <c>{{image2}}</c>, <c>{{image3}}</c> in node-id order — and a graph with no
+/// sampler that loads a picture (ReActor, an upscale) is taken too, only its pictures placeholdered. Pure.
 /// </summary>
 public static class ComfyImport
 {
@@ -75,14 +81,23 @@ public static class ComfyImport
         int escaped = Escape(graph);
         var nodes = graph.OrderBy(p => Order(p.Key)).Select(p => (Id: p.Key, Node: (JsonObject)p.Value!)).ToList();
         var sampler = nodes.FirstOrDefault(n => TypeOf(n.Node) is "KSampler" or "KSamplerAdvanced" or "SamplerCustomAdvanced");
+        var found = new List<string>();
+        bool loadsImage = nodes.Any(n => TypeOf(n.Node) == "LoadImage");
         if (sampler.Node is null)
         {
-            return (null, NoSamplerProblem);
+            if (!loadsImage)
+            {
+                return (null, NoSamplerProblem);
+            }
+
+            // No sampler but pictures in (later still on 2026-09-24, the user's ask: a ReActor face swap, a plain upscale):
+            // only the pictures become placeholders; there is no prompt, seed or size to take.
+            int only = TakeImages(nodes, found);
+            AddKept(found, escaped);
+            return (new ComfyImportResult(graph.ToJsonString(ComfyGraphs.Indented), found, "", null, null, null, null, null, "", only), null);
         }
 
-        var found = new List<string>();
         var inputs = Inputs(sampler.Node);
-        bool loadsImage = nodes.Any(n => TypeOf(n.Node) == "LoadImage");
 
         // Where each value lives: on the sampler itself (KSampler), or on the nodes a custom sampler's inputs lead to
         // (later still on 2026-09-24, FLUX.2's graph: RandomNoise, a scheduler, a guider).
@@ -161,21 +176,49 @@ public static class ComfyImport
             }
         }
 
+        int images = TakeImages(nodes, found);
+        AddKept(found, escaped);
+        string checkpoint = nodes.Select(n => Inputs(n.Node)["ckpt_name"] ?? Inputs(n.Node)["unet_name"])
+            .OfType<JsonValue>().Where(v => v.GetValueKind() == JsonValueKind.String).Select(v => v.GetValue<string>()).FirstOrDefault() ?? "";
+        return (new ComfyImportResult(graph.ToJsonString(ComfyGraphs.Indented), found, negativeText, width, height, steps, cfg, denoise, checkpoint, images), null);
+    }
+
+    /// <summary>
+    /// Each <c>LoadImage</c>'s <c>image</c> made a placeholder in node-id order (later still on 2026-09-24, the face swap; every
+    /// one was <c>{{image}}</c> before, so a two-picture graph got the same picture twice): the first <c>{{image}}</c>, the
+    /// next <c>{{image2}}</c>, then <c>{{image3}}</c>; any past <see cref="ComfyWorkflow.MaxInputImages"/> is left as exported
+    /// and said so. How many became placeholders.
+    /// </summary>
+    private static int TakeImages(List<(string Id, JsonObject Node)> nodes, List<string> found)
+    {
+        int count = 0;
         foreach (var load in nodes.Where(n => TypeOf(n.Node) == "LoadImage"))
         {
-            Inputs(load.Node)["image"] = "{{image}}";
-            found.Add(Where("image", load.Id, load.Node, "image"));
+            if (count == ComfyWorkflow.MaxInputImages)
+            {
+                found.Add(ImageLeftAsExported(load.Id));
+                continue;
+            }
+
+            string key = ComfyWorkflow.ImageKeys[count++];
+            Inputs(load.Node)["image"] = "{{" + key + "}}";
+            found.Add(Where(key, load.Id, load.Node, "image"));
         }
 
+        return count;
+    }
+
+    private static void AddKept(List<string> found, int escaped)
+    {
         if (escaped > 0)
         {
             found.Add(KeptOwnTexts(escaped));
         }
-
-        string checkpoint = nodes.Select(n => Inputs(n.Node)["ckpt_name"] ?? Inputs(n.Node)["unet_name"])
-            .OfType<JsonValue>().Where(v => v.GetValueKind() == JsonValueKind.String).Select(v => v.GetValue<string>()).FirstOrDefault() ?? "";
-        return (new ComfyImportResult(graph.ToJsonString(ComfyGraphs.Indented), found, negativeText, width, height, steps, cfg, denoise, checkpoint, loadsImage), null);
     }
+
+    /// <summary>The found-list's line for a <c>LoadImage</c> past the third. Pinned.</summary>
+    public static string ImageLeftAsExported(string id) =>
+        "LoadImage node " + id + " left as exported: a workflow takes at most " + ComfyWorkflow.MaxInputImages.ToString(CultureInfo.InvariantCulture) + " input pictures";
 
     /// <summary>The found-list's line for a workflow that had {{…}} texts of its own. Pinned.</summary>
     public static string KeptOwnTexts(int count) =>

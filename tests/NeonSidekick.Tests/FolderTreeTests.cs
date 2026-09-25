@@ -250,7 +250,7 @@ public class FolderTreeTests
             .Add(P(C, "Users", "alice", ".neonsidekick", "profiles", "default"), "files", "files2")
             .Add(files, "docs")
             .Add(files + "2", "other");
-        var tree = new FolderTree(folders, [new FolderShortcut("profile", files)]);
+        var tree = new FolderTree(folders, [new FolderShortcut("profile", files, FolderText.ShortcutGlyph)]);
 
         Assert.Equal(["profile", .. Roots], Names(tree));
         Assert.True(tree.Visible[0].IsShortcut);
@@ -278,6 +278,31 @@ public class FolderTreeTests
         Assert.Equal(0, tree.JumpFrom(2, 'p'));
     }
 
+    /// <summary>Two shortcuts (2026-09-24): profile then splash, each behind its own glyph; a path in splash opens under the splash row, not under the drive.</summary>
+    [Fact]
+    public void TwoShortcuts_EachDrawItsOwnGlyph_AndThePathUnderTheSecond_OpensThere()
+    {
+        string profileDir = P(C, "Users", "alice", ".neonsidekick", "profiles", "default");
+        string files = P(profileDir, "files");
+        string splash = P(profileDir, "splash");
+        var folders = Disks(hidden: true)
+            .Add(P(C, "Users", "alice", ".neonsidekick"), "profiles")
+            .Add(P(C, "Users", "alice", ".neonsidekick", "profiles"), "default")
+            .Add(profileDir, "files", "splash")
+            .Add(splash, "comfy");
+        var tree = new FolderTree(folders,
+            [new FolderShortcut(FolderText.ProfileLabel, files, FolderText.ShortcutGlyph), new FolderShortcut(FolderText.SplashLabel, splash, FolderText.SplashGlyph)]);
+
+        Assert.Equal(["profile", "splash", .. Roots], Names(tree));
+        Assert.Equal(FolderText.CollapsedGlyph + " ⌂ profile", FolderText.RowMarkup(tree.Visible[0]));
+        Assert.Equal(FolderText.CollapsedGlyph + " ▣ splash", FolderText.RowMarkup(tree.Visible[1]));
+        Assert.Null(tree.Visible[2].ShortcutGlyph);
+
+        Assert.Equal(2, tree.ExpandTo(P(splash, "comfy")));
+        Assert.Equal(["profile", "splash", "comfy", .. Roots], Names(tree));
+        Assert.Equal(1, tree.RootOf(2));
+    }
+
     [Fact]
     public void Words_ArePinned()
     {
@@ -291,6 +316,8 @@ public class FolderTreeTests
         Assert.Equal("Cannot read X.", FolderText.DeniedNotice("X"));
         Assert.Equal("⌂", FolderText.ShortcutGlyph);
         Assert.Equal("profile", FolderText.ProfileLabel);
+        Assert.Equal("▣", FolderText.SplashGlyph);
+        Assert.Equal("splash", FolderText.SplashLabel);
         Assert.Equal(Theme.DimMarkup(@"C:\x [y]"), FolderText.PathMarkup(@"C:\x [y]"));
     }
 }

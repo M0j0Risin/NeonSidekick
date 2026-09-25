@@ -7,9 +7,10 @@ namespace NeonSidekick.Comfy;
 
 /// <summary>
 /// What one generation fills a template with. Null numbers fall back to the sidecar's value, then the family's
-/// (<see cref="ComfyFamilies.Defaults"/>); <see cref="Image"/> is the name ComfyUI gave the uploaded input picture.
+/// (<see cref="ComfyFamilies.Defaults"/>); <see cref="Images"/> are the names ComfyUI gave the uploaded input pictures,
+/// in slot order — <c>{{image}}</c>, <c>{{image2}}</c>, <c>{{image3}}</c>.
 /// </summary>
-public sealed record ComfyValues(string Prompt, string Negative, long Seed, int? Width = null, int? Height = null, int? Steps = null, double? Cfg = null, double? Denoise = null, string? Image = null);
+public sealed record ComfyValues(string Prompt, string Negative, long Seed, int? Width = null, int? Height = null, int? Steps = null, double? Cfg = null, double? Denoise = null, IReadOnlyList<string>? Images = null);
 
 /// <summary>
 /// One ComfyUI workflow the image tools can run (2026-09-24): a graph the user exported from ComfyUI with
@@ -20,9 +21,16 @@ public sealed record ComfyValues(string Prompt, string Negative, long Seed, int?
 /// and <c>{{image}}</c> are replaced wherever they stand in a string (so <c>"{{prompt}}, masterpiece"</c> keeps its
 /// tail). A workflow holding <c>{{image}}</c> takes an input picture (img2img, upscale, inpaint).
 ///
+/// <para>Later still on 2026-09-24 (the user's ask: "replace the face in the first image with the face from the second
+/// image"): up to <see cref="MaxInputImages"/> input pictures, <c>{{image}}</c>, <c>{{image2}}</c>, <c>{{image3}}</c> —
+/// a ReActor face swap's target and source, Qwen-Image-Edit's pictures to compose. The slots run without a gap, and
+/// the sidecar's <c>image</c> / <c>image2</c> / <c>image3</c> lines say what each is for (<see cref="ImageRoles"/>), so
+/// the model knows which picture goes where. A workflow taking a picture needs no <c>{{prompt}}</c> then: a face swap
+/// or a plain upscale has nothing to say.</para>
+///
 /// <para>A sidecar <c>&lt;name&gt;.md</c> beside it is optional: YAML-ish <c>key: value</c> lines between two
 /// <c>---</c> fences — <c>description</c>, <c>family</c> (<see cref="ComfyFamilies.Names"/>), <c>width</c>,
-/// <c>height</c>, <c>steps</c>, <c>cfg</c>, <c>denoise</c>, <c>negative</c> — and, under them, free prompt tips the
+/// <c>height</c>, <c>steps</c>, <c>cfg</c>, <c>denoise</c>, <c>negative</c>, <c>image</c> / <c>image2</c> / <c>image3</c> (each input picture's role) — and, under them, free prompt tips the
 /// tool description carries. The graph is kept as text and parsed afresh for every fill, so no call sees another's
 /// values. Pure apart from <see cref="TryLoad"/>'s two reads.</para>
 /// </summary>
@@ -40,7 +48,8 @@ public sealed record ComfyWorkflow(
     double? Denoise = null,
     string? Negative = null,
     string Tips = "",
-    bool Reinforce = true)
+    bool Reinforce = true,
+    IReadOnlyList<string>? ImageRoles = null)
 {
     public const string PromptKey = "prompt";
     public const string NegativeKey = "negative";
@@ -51,6 +60,12 @@ public sealed record ComfyWorkflow(
     public const string StepsKey = "steps";
     public const string CfgKey = "cfg";
     public const string DenoiseKey = "denoise";
+
+    /// <summary>The most input pictures a workflow takes (Qwen-Image-Edit-2509's three).</summary>
+    public const int MaxInputImages = 3;
+
+    /// <summary>The input pictures' placeholders in slot order: <c>image</c>, <c>image2</c>, <c>image3</c>.</summary>
+    public static readonly IReadOnlyList<string> ImageKeys = [ImageKey, ImageKey + "2", ImageKey + "3"];
 
     /// <summary>The placeholders whose whole-string form becomes a number.</summary>
     public static readonly IReadOnlySet<string> NumericKeys = new HashSet<string>(StringComparer.Ordinal) { SeedKey, WidthKey, HeightKey, StepsKey, CfgKey, DenoiseKey };
@@ -63,12 +78,35 @@ public sealed record ComfyWorkflow(
     public const string UiFormatProblem = "is a UI-format save (it has \"nodes\" and \"links\"); in ComfyUI use Workflow → Export (API), or enable dev mode and Save (API)";
     public const string NotApiFormatProblem = "is no API-format workflow: expected an object of nodes, each with a class_type";
     public const string NoPromptProblem = "has no {{prompt}} placeholder, so nothing the call says would reach the picture";
+    public const string GapInImagesProblem = "has a gap in its image placeholders: {{image2}} needs {{image}}, and {{image3}} needs {{image2}}";
 
     /// <summary>Whether reinforcing tags may be appended to this workflow's negative: it has a <c>{{negative}}</c>, its family uses one, and its sidecar did not say <c>reinforce: false</c>.</summary>
     public bool TakesReinforcement => Reinforce && Placeholders.Contains(NegativeKey) && ComfyFamilies.UsesNegative(Family);
 
     /// <summary>Whether the workflow takes an input picture: it holds <c>{{image}}</c>.</summary>
-    public bool TakesImage => Placeholders.Contains(ImageKey);
+    public bool TakesImage => ImageCount > 0;
+
+    /// <summary>How many input pictures the workflow takes: its <see cref="ImageKeys"/> slots, counted from the first until one is missing.</summary>
+    public int ImageCount => CountImages(Placeholders);
+
+    /// <summary>Whether the workflow has a <c>{{prompt}}</c> — a face swap or an upscale may not.</summary>
+    public bool TakesPrompt => Placeholders.Contains(PromptKey);
+
+    /// <summary>The role the sidecar gave input picture <paramref name="slot"/> (0-based), or "".</summary>
+    public string ImageRole(int slot) => ImageRoles is { } roles && slot >= 0 && slot < roles.Count ? roles[slot] : "";
+
+    /// <summary>The <see cref="ImageKeys"/> slots <paramref name="placeholders"/> fills, from the first until one is missing. Pure.</summary>
+    public static int CountImages(IReadOnlySet<string> placeholders)
+    {
+        ArgumentNullException.ThrowIfNull(placeholders);
+        int count = 0;
+        while (count < ImageKeys.Count && placeholders.Contains(ImageKeys[count]))
+        {
+            count++;
+        }
+
+        return count;
+    }
 
     /// <summary>The fallbacks in force: the sidecar's numbers over the family's.</summary>
     public ComfyDefaults Defaults
@@ -119,7 +157,15 @@ public sealed record ComfyWorkflow(
         }
 
         var placeholders = FindPlaceholders(json);
-        if (!placeholders.Contains(PromptKey))
+        int images = CountImages(placeholders);
+        if (ImageKeys.Skip(images).Any(placeholders.Contains))
+        {
+            problem = GapInImagesProblem;
+            return false;
+        }
+
+        // A picture in is enough to work on (later still on 2026-09-24): a face swap or an upscale takes no prompt.
+        if (!placeholders.Contains(PromptKey) && images == 0)
         {
             problem = NoPromptProblem;
             return false;
@@ -143,7 +189,8 @@ public sealed record ComfyWorkflow(
             head.TryGetValue(NegativeKey, out string? negative) ? negative : null,
             body,
             // reinforce: false (later still on 2026-09-24): this workflow's negative is sent as written, nothing appended.
-            !(head.TryGetValue("reinforce", out string? reinforce) && reinforce.Trim().Equals("false", StringComparison.OrdinalIgnoreCase)));
+            !(head.TryGetValue("reinforce", out string? reinforce) && reinforce.Trim().Equals("false", StringComparison.OrdinalIgnoreCase)),
+            ImageKeys.Take(images).Select(key => head.TryGetValue(key, out string? role) ? role.Trim() : "").ToList());
         return true;
     }
 
@@ -231,8 +278,11 @@ public sealed record ComfyWorkflow(
         {
             [PromptKey] = values.Prompt,
             [NegativeKey] = values.Negative,
-            [ImageKey] = values.Image ?? "",
         };
+        for (int i = 0; i < ImageKeys.Count; i++)
+        {
+            texts[ImageKeys[i]] = values.Images is { } names && i < names.Count ? names[i] : "";
+        }
         foreach (var (key, number) in numbers)
         {
             texts[key] = number.ToJsonString();

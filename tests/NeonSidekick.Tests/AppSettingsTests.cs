@@ -35,7 +35,7 @@ public class AppSettingsTests : IDisposable
         QueueMessages = false,
         ShowImageThumbnails = false,
         TranscriptMarkdown = false,
-        WelcomeSplash = false,
+        WelcomeSplashMode = "tiled",
         ShowWorkingDirectory = false,
         ShowToolbar = false,
         WorkingDirectory = @"D:\elsewhere\files",
@@ -134,7 +134,7 @@ public class AppSettingsTests : IDisposable
         Assert.Equal(expected.QueueMessages, actual.QueueMessages);
         Assert.Equal(expected.ShowImageThumbnails, actual.ShowImageThumbnails);
         Assert.Equal(expected.TranscriptMarkdown, actual.TranscriptMarkdown);
-        Assert.Equal(expected.WelcomeSplash, actual.WelcomeSplash);
+        Assert.Equal(expected.WelcomeSplashMode, actual.WelcomeSplashMode);
         Assert.Equal(expected.ShowWorkingDirectory, actual.ShowWorkingDirectory);
         Assert.Equal(expected.ShowToolbar, actual.ShowToolbar);
         Assert.Equal(expected.WorkingDirectory, actual.WorkingDirectory);
@@ -245,7 +245,7 @@ public class AppSettingsTests : IDisposable
             d.QueueMessages = full.QueueMessages;
             d.ShowImageThumbnails = full.ShowImageThumbnails;
             d.TranscriptMarkdown = full.TranscriptMarkdown;
-            d.WelcomeSplash = full.WelcomeSplash;
+            d.WelcomeSplashMode = full.WelcomeSplashMode;
             d.ShowWorkingDirectory = full.ShowWorkingDirectory;
             d.ShowToolbar = full.ShowToolbar;
             d.WorkingDirectory = full.WorkingDirectory;
@@ -353,7 +353,7 @@ public class AppSettingsTests : IDisposable
                 d.QueueMessages = full.QueueMessages;
                 d.ShowImageThumbnails = full.ShowImageThumbnails;
                 d.TranscriptMarkdown = full.TranscriptMarkdown;
-                d.WelcomeSplash = full.WelcomeSplash;
+                d.WelcomeSplashMode = full.WelcomeSplashMode;
                 d.ShowWorkingDirectory = full.ShowWorkingDirectory;
                 d.ShowToolbar = full.ShowToolbar;
                 d.WorkingDirectory = full.WorkingDirectory;
@@ -537,9 +537,10 @@ public class AppSettingsTests : IDisposable
         // FileStaleGuard, ViewImageMaxPerCall and SearxngUrl are old spellings now, skipped the same way.
         // Later still that day Reflection verbose went altogether: a retired key, skipped like ShowProfileName.
         // Later still on 2026-09-19 FileStaleLineNumberGuard went with edit_lines (the eight file tools folded into four): retired, skipped the same way.
+        // On 2026-09-24 the on/off WelcomeSplash became the WelcomeSplashMode pick: no migration (the user's call), so an old off is fullsize again.
         Directory.CreateDirectory(Profiles.Directory(_dir, Profiles.DefaultName));
         File.WriteAllText(Profiles.ProfileFile(_dir, Profiles.DefaultName),
-            "{ \"SchemaVersion\": 1, \"LlmUrl\": \"http://old:1234/v1\", \"ShowProfileName\": false, \"ThinkingFunVerbs\": true, \"LlmUseFunVerbs\": true, \"SpeechOutputEnabled\": true, \"CopyUserText\": false, \"WebBrowserAllowLan\": true, \"SkillSlashCommands\": false, \"LlmTools\": false, \"FileLineNumbers\": true, \"FileStaleLineNumberGuard\": true, \"TreeMaxLength\": 750, \"SearxngUrl\": \"http://old:8080\", \"ReflectionVerbose\": false }");
+            "{ \"SchemaVersion\": 1, \"LlmUrl\": \"http://old:1234/v1\", \"ShowProfileName\": false, \"ThinkingFunVerbs\": true, \"LlmUseFunVerbs\": true, \"SpeechOutputEnabled\": true, \"CopyUserText\": false, \"WebBrowserAllowLan\": true, \"SkillSlashCommands\": false, \"LlmTools\": false, \"FileLineNumbers\": true, \"FileStaleLineNumberGuard\": true, \"TreeMaxLength\": 750, \"SearxngUrl\": \"http://old:8080\", \"ReflectionVerbose\": false, \"WelcomeSplash\": false }");
 
         using var settings = new AppSettings(_dir);
         Assert.Equal("http://old:1234/v1", settings.Current.LlmUrl);
@@ -547,6 +548,7 @@ public class AppSettingsTests : IDisposable
         Assert.False(settings.Current.TtsOutput);   // the old key, skipped
         Assert.True(settings.Current.CopyUserPrompt);   // the retired key, skipped
         Assert.Equal("internet", settings.Current.WebBrowserNetworkMode);   // the retired switch, skipped
+        Assert.Equal("fullsize", settings.Current.WelcomeSplashMode);   // the retired switch, skipped (2026-09-24)
         Assert.True(settings.Current.SkillHashMention);   // its neighbour untouched by the retired SkillSlashCommands key
         Assert.True(settings.Current.LlmOfferTools);   // the renamed key, skipped; the default stands
         Assert.Equal(["git_delete", "unzip", "zip"], settings.Current.ToolsDisabled);   // no ToolsDisabled key in the old file: the default fills it (a saved [] or ["delete"] would stand)
@@ -693,6 +695,42 @@ public class AppSettingsTests : IDisposable
         using var relaunched = new AppSettings(_dir);
         Assert.Equal("work", relaunched.ProfileName);
         Assert.Equal("work-2", relaunched.Current.LlmModel);
+    }
+
+    /// <summary>A temporary profile (<c>_test</c>, 2026-09-24) loads like any other, but the next launch opens default and points the pointer back; the profile is kept.</summary>
+    [Fact]
+    public async Task Launch_OnATemporaryProfile_LoadsDefault_AndRewritesThePointer()
+    {
+        Profiles.Create(_dir, "_test", new AppSettingsData { LlmModel = "test-model" });
+        using (var settings = new AppSettings(_dir))
+        {
+            await settings.SwitchProfileAsync("_test");
+            Assert.Equal("_test", settings.ProfileName);
+            Assert.Equal("test-model", settings.Current.LlmModel);
+            Assert.Contains("\"Profile\": \"_test\"", File.ReadAllText(settings.PointerPath));
+        }
+
+        var notes = new List<string>();
+        Action<NeonSidekick.Diagnostics.DiagnosticEvent> capture = e => { if (e.Category == "Settings") notes.Add(e.Message); };
+        NeonSidekick.Diagnostics.DiagnosticLog.Emitted += capture;
+        try
+        {
+            using var relaunched = new AppSettings(_dir);
+            Assert.Equal(Profiles.DefaultName, relaunched.ProfileName);
+            Assert.Contains("\"Profile\": \"default\"", File.ReadAllText(relaunched.PointerPath));
+
+            // Kept, and a switch still lands in it with its settings.
+            Assert.True(Profiles.Exists(_dir, "_test"));
+            await relaunched.SwitchProfileAsync("_test");
+            Assert.Equal("test-model", relaunched.Current.LlmModel);
+        }
+        finally
+        {
+            NeonSidekick.Diagnostics.DiagnosticLog.Emitted -= capture;
+        }
+
+        Assert.Contains(AppSettings.TemporaryProfileNotice("_test"), notes);
+        Assert.Equal("Profile \"_test\" is temporary (starts with _); loading default.", AppSettings.TemporaryProfileNotice("_test"));
     }
 
     [Fact]
@@ -979,7 +1017,7 @@ public class AppSettingsTests : IDisposable
         Assert.True(s.ProjectFile);   // later on 2026-09-19: the notes read unless the Project tab's toggle says not
         Assert.Equal("protected", s.SkillCompactMode);
         Assert.True(s.TranscriptMarkdown);
-        Assert.True(s.WelcomeSplash);   // 2026-09-18
+        Assert.Equal("fullsize", s.WelcomeSplashMode);   // 2026-09-18; a pick since 2026-09-24 (on was fullsize)
         Assert.False(s.ShowWorkingDirectory);   // 2026-09-18; off by default since 2026-09-21
         Assert.True(s.ShowToolbar);   // 2026-09-21
         Assert.Equal("", s.DraftEditor);   // 2026-09-19: the shell's default for .txt

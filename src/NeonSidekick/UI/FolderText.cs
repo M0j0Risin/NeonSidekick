@@ -27,11 +27,21 @@ public static class FolderText
     /// <summary>A node known to have nothing under it, or one the source could not read.</summary>
     public const string LeafGlyph = "·";
 
-    /// <summary>Ahead of a shortcut root's label (<see cref="FolderNode.IsShortcut"/>): the house.</summary>
+    /// <summary>Ahead of the <see cref="ProfileLabel"/> shortcut's label: the house.</summary>
     public const string ShortcutGlyph = "⌂";
+
+    /// <summary>
+    /// Ahead of the <see cref="SplashLabel"/> shortcut's label (2026-09-24): the framed square, a picture
+    /// frame — the user's pick over ✦ ❖ ☼. One cell, like the house; an emoji (🖼) is two and would
+    /// push the label off the house's column.
+    /// </summary>
+    public const string SplashGlyph = "▣";
 
     /// <summary>The profile's own <c>files</c> folder's label at the top of the tree (later on 2026-09-21, the user's word).</summary>
     public const string ProfileLabel = "profile";
+
+    /// <summary>The profile's <c>splash</c> folder's label, the row under <see cref="ProfileLabel"/> (2026-09-24, the user's ask).</summary>
+    public const string SplashLabel = "splash";
 
     /// <summary>Each depth's indent, ahead of the glyph.</summary>
     public const int IndentCells = 2;
@@ -57,13 +67,13 @@ public static class FolderText
 
     /// <summary>
     /// A row's markup past the pointer: the depth's indent, the glyph, a space, the name (the
-    /// house and a space ahead of a shortcut's label) — escaped, dim for a denied node. The
+    /// shortcut's own glyph and a space ahead of a shortcut's label) — escaped, dim for a denied node. The
     /// pointer and the highlight are the menu's (<see cref="MenuPane.RowMarkup"/>).
     /// </summary>
     public static string RowMarkup(FolderNode node)
     {
         ArgumentNullException.ThrowIfNull(node);
-        string text = new string(' ', node.Depth * IndentCells) + Glyph(node) + " " + (node.IsShortcut ? ShortcutGlyph + " " : "") + node.Name;
+        string text = new string(' ', node.Depth * IndentCells) + Glyph(node) + " " + (node.ShortcutGlyph is { } mark ? mark + " " : "") + node.Name;
         // DimMarkup escapes for itself.
         return node.Denied ? Theme.DimMarkup(text) : Markup.Escape(text);
     }

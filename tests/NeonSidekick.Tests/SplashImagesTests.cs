@@ -172,4 +172,36 @@ public class SplashImagesTests
         Assert.Null(SplashImages.Next([], "a", +1));
         Assert.Throws<ArgumentNullException>(() => SplashImages.Next(null!, "a", +1));
     }
+
+    /// <summary>A blank thumbnail <paramref name="width"/> cells across and <paramref name="height"/> pixels down (two a line).</summary>
+    private static ImageThumbnail Tile(int width, int height) => new(width, height, new Spectre.Console.Color[width * height]);
+
+    [Fact]
+    public void Paginate_CutsTheTilesIntoScreenfuls_AsTheStripLaysThemOut()
+    {
+        // The tiled splash (2026-09-24): 10 × 5-line tiles, two to a 30-wide row (10 + 2 + 10; a third makes 34).
+        var tiles = Enumerable.Range(0, 5).Select(_ => Tile(10, 10)).ToArray();
+
+        // 11 lines: two strip rows and the spacer between them exactly — four tiles, then the fifth alone.
+        Assert.Equal([(0, 4), (4, 1)], SplashImages.Paginate(tiles, 30, 11));
+        // 10 lines: one strip row a page.
+        Assert.Equal([(0, 2), (2, 2), (4, 1)], SplashImages.Paginate(tiles, 30, 10));
+        // Everything on one page when it all fits.
+        Assert.Equal([(0, 5)], SplashImages.Paginate(tiles, 30, 100));
+        // A narrow window: one tile a row, so two rows (5 + 1 + 5) a page.
+        Assert.Equal([(0, 2), (2, 2), (4, 1)], SplashImages.Paginate(tiles, 10, 11));
+    }
+
+    [Fact]
+    public void Paginate_ARowIsAsTallAsItsTallestTile_ATileTallerThanTheRowsStandsAlone_NothingOverNothing()
+    {
+        // One 1-line tile beside a 5-line one: the row is 5 lines.
+        Assert.Equal([(0, 2)], SplashImages.Paginate([Tile(10, 2), Tile(10, 10)], 30, 5));
+        Assert.Equal([(0, 1), (1, 1)], SplashImages.Paginate([Tile(10, 2), Tile(10, 10)], 30, 4));
+        // 20 lines in 11: a page of its own, never an empty one; odd pixel heights round up to a whole line.
+        Assert.Equal([(0, 1), (1, 1), (2, 1)], SplashImages.Paginate([Tile(10, 10), Tile(10, 40), Tile(10, 10)], 30, 11));
+        Assert.Equal([(0, 1), (1, 1)], SplashImages.Paginate([Tile(10, 3), Tile(10, 3)], 10, 4));   // 2 + 1 + 2 = 5
+        Assert.Empty(SplashImages.Paginate([], 30, 11));
+        Assert.Throws<ArgumentNullException>(() => SplashImages.Paginate(null!, 30, 11));
+    }
 }

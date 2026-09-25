@@ -67,6 +67,13 @@ public sealed class AppSettings : IDisposable
             resolved = Profiles.DefaultName;
             rewritePointer = true;
         }
+        else if (Profiles.IsTemporary(resolved))
+        {
+            // A temporary profile is never where a launch lands (2026-09-24): default instead, the profile itself kept.
+            DiagnosticLog.Info(Category, TemporaryProfileNotice(resolved));
+            resolved = Profiles.DefaultName;
+            rewritePointer = true;
+        }
 
         _profileName = resolved;
         _data = Load(FilePath);
@@ -127,6 +134,10 @@ public sealed class AppSettings : IDisposable
     /// <summary>The warning when the pointer names a profile that is not there. Pinned.</summary>
     public static string MissingProfileWarning(string name) =>
         $"Profile \"{name}\" does not exist; loading {Profiles.DefaultName}.";
+
+    /// <summary>The note when the pointer names a temporary profile (<see cref="Profiles.IsTemporary"/>, 2026-09-24). Pinned.</summary>
+    public static string TemporaryProfileNotice(string name) =>
+        $"Profile \"{name}\" is temporary (starts with {Profiles.TemporaryPrefix}); loading {Profiles.DefaultName}.";
 
     /// <summary>The warning when a skills folder could not be created (2026-09-18); the app runs on, the catalog reads an absent root as empty. Pinned.</summary>
     public static string SkillsFolderWarning(string path, string detail) =>
@@ -596,7 +607,7 @@ public sealed class AppSettings : IDisposable
         ShowToolbar = source.ShowToolbar,
         Theme = source.Theme,
         TranscriptMarkdown = source.TranscriptMarkdown,
-        WelcomeSplash = source.WelcomeSplash,
+        WelcomeSplashMode = source.WelcomeSplashMode,
         WorkingDirectory = source.WorkingDirectory,
         SessionLogging = source.SessionLogging,
         SessionNamingMode = source.SessionNamingMode,
@@ -681,6 +692,7 @@ public sealed class AppSettings : IDisposable
         ComfyTools = source.ComfyTools,
         ComfyUrl = source.ComfyUrl,
         ComfyWorkflowsOffered = source.ComfyWorkflowsOffered is null ? null : [.. source.ComfyWorkflowsOffered],
+        ComfyCaretMention = source.ComfyCaretMention,
         ComfyTimeoutSeconds = source.ComfyTimeoutSeconds,
         ComfyMaxPicturesPerCall = source.ComfyMaxPicturesPerCall,
         ComfyReinforceNegatives = source.ComfyReinforceNegatives,

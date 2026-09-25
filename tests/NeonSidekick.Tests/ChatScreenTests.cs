@@ -313,7 +313,22 @@ public partial class ChatScreenTests : IDisposable
         return at;
     }
 
-    private void RenderScreen(IAnsiConsole console) => console.WriteLine(ScreenMarker);
+    /// <summary>
+    /// Whether the fake banner wipes the pane first, as the app's does (<c>SidekickApp.RenderScreen</c>'s clear) — off for
+    /// the suite at large, whose flow row simply runs on; on for the tiled splash (2026-09-24), whose page is sized by the
+    /// rows under the banner at each redraw.
+    /// </summary>
+    private bool _renderClears;
+
+    private void RenderScreen(IAnsiConsole console)
+    {
+        if (_renderClears && console is ScreenPane pane)
+        {
+            pane.Clear(home: true);
+        }
+
+        console.WriteLine(ScreenMarker);
+    }
 
     /// <summary>
     /// The reply, then the notice as a line of its own after it: what a tail stopped at the input
@@ -4174,7 +4189,7 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         Assert.Contains(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Git (native)    Obsidian    SQL    ComfyUI    Options ", output);
-        Assert.Contains("\n▸ ComfyUI tools                  on\n  ComfyUI URL                    (not set)\n  ComfyUI workflows offered      all (not narrowed)\n  ComfyUI add workflow           Enter to start workflow wizard\n  ComfyUI timeout (s)            300\n  ComfyUI max pictures per call  4 pictures\n  ComfyUI reinforce negatives    on\n  ComfyUI show prompts           on\n  ComfyUI output folder          comfy_images\n", output);   // 2026-09-24; the offered checklist and the wizard later that day
+        Assert.Contains("\n▸ ComfyUI tools                  on\n  ComfyUI URL                    (not set)\n  ComfyUI workflows offered      all (not narrowed)\n  ComfyUI add workflow           Enter to start workflow wizard\n  ^-mention enabled              on\n  ComfyUI timeout (s)            300\n  ComfyUI max pictures per call  4 pictures\n  ComfyUI reinforce negatives    on\n  ComfyUI show prompts           on\n  ComfyUI output folder          comfy_images\n", output);   // 2026-09-24; the offered checklist and the wizard later that day, the ^-mention switch later still
         Assert.Contains("\n  Clock (3)\n▸ get_current_time      on   ", output);
         Assert.Contains("\n  · get_current_time: off\n  Clock (2 of 3)\n▸ get_current_time      off  ", output);
         Assert.Equal(["get_current_time"], _settings.Current.ToolsDisabled);
@@ -6367,8 +6382,11 @@ public partial class ChatScreenTests : IDisposable
     public void LoopStrings_AndArgumentList_ArePinned()
     {
         Assert.Equal("infinite", ChatScreen.LoopInfiniteWord);
-        Assert.Equal("send the message until ESC or Ctrl+C stops it: /loop infinite <message>", ChatScreen.LoopInfiniteNote);
-        Assert.Equal("Usage: /loop <count> <message>, or /loop infinite <message> (ESC or Ctrl+C stops it).", ChatScreen.LoopUsageError);
+        Assert.Equal("send the message until ESC or Ctrl+C stops it: /loop infinite [delay] <message>", ChatScreen.LoopInfiniteNote);
+        Assert.Equal("Usage: /loop <count> [delay] <message>, or /loop infinite [delay] <message>; delay like 30s, 5m, 1h30m (ESC or Ctrl+C stops it).", ChatScreen.LoopUsageError);
+        Assert.Equal("(loop waiting 30 seconds)", ChatScreen.LoopWaitNotice(TimeSpan.FromSeconds(30)));
+        Assert.Equal("(loop waiting 1 hour 30 minutes)", ChatScreen.LoopWaitNotice(TimeSpan.FromMinutes(90)));
+        Assert.Equal(TimeSpan.FromHours(24), ChatScreen.LoopMaxDelay);
         Assert.Equal("(loop 2 of 5)", ChatScreen.LoopTurnNotice(2, 5));
         Assert.Equal("(loop 2)", ChatScreen.LoopTurnNotice(2, null));
         Assert.Equal("(loop done: 5 messages sent)", ChatScreen.LoopDoneNotice(5));
@@ -6397,8 +6415,29 @@ public partial class ChatScreenTests : IDisposable
     [InlineData("3 ", false, null, "")]
     public void TryParseLoopArgs_IsPinned(string args, bool ok, int? count, string message)
     {
-        Assert.Equal(ok, ChatScreen.TryParseLoopArgs(args, out int? parsedCount, out string parsedMessage));
+        Assert.Equal(ok, ChatScreen.TryParseLoopArgs(args, out int? parsedCount, out TimeSpan? parsedDelay, out string parsedMessage));
         Assert.Equal(count, parsedCount);
+        Assert.Null(parsedDelay);
+        Assert.Equal(message, parsedMessage);
+    }
+
+    /// <summary>The delay word (2026-09-24): a duration with a unit, one word, after the count, up to 24 hours; a bare number stays the message's.</summary>
+    [Theory]
+    [InlineData("3 30s hi", true, 3, 30, "hi")]
+    [InlineData("infinite 1m check the build", true, null, 60, "check the build")]
+    [InlineData("3 1h30m hi", true, 3, 5400, "hi")]
+    [InlineData("2 24h hi", true, 2, 86400, "hi")]
+    [InlineData("3 5 hi", true, 3, null, "5 hi")]
+    [InlineData("3 hello world", true, 3, null, "hello world")]
+    [InlineData("3 30s", false, null, null, "")]
+    [InlineData("3 0s hi", true, 3, null, "0s hi")]
+    [InlineData("3 25h hi", false, null, null, "")]
+    [InlineData("infinite 2d hi", true, null, null, "2d hi")]
+    public void TryParseLoopArgs_Delay_IsPinned(string args, bool ok, int? count, int? delaySeconds, string message)
+    {
+        Assert.Equal(ok, ChatScreen.TryParseLoopArgs(args, out int? parsedCount, out TimeSpan? parsedDelay, out string parsedMessage));
+        Assert.Equal(count, parsedCount);
+        Assert.Equal(delaySeconds is { } d ? TimeSpan.FromSeconds(d) : null, parsedDelay);
         Assert.Equal(message, parsedMessage);
     }
 
@@ -6409,11 +6448,13 @@ public partial class ChatScreenTests : IDisposable
         PushLine("/loop");
         PushLine("/loop hi");
         PushLine("/loop 0 hi");
+        PushLine("/loop 3 30s");
+        PushLine("/loop 3 25h hi");
         PushLine("/exit");
 
         string output = await RunAsync();
 
-        Assert.Equal(3, CountOf(output, "  ✗ " + ChatScreen.LoopUsageError));
+        Assert.Equal(5, CountOf(output, "  ✗ " + ChatScreen.LoopUsageError));
         Assert.Empty(_chat.Requests);
     }
 
@@ -6503,6 +6544,81 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("● Two.\n  · " + ChatScreen.CancelledNotice + "\n", output);
         Assert.Contains("  · " + ChatScreen.LoopStoppedNotice(2) + "\n", output);
         Assert.DoesNotContain(ChatScreen.LoopTurnNotice(3, null), output);
+    }
+
+    /// <summary>
+    /// A delayed loop (2026-09-24): the wait notice after each reply but the last, and the next pass
+    /// only once the clock has moved the delay on. The clock is advanced from a poller, not
+    /// <c>ScriptedInput.OnWait</c>: the wait watches the keys, which never calls the read that fires it.
+    /// </summary>
+    [Fact]
+    public async Task Loop_Delay_WaitsBetweenPasses_NotAfterTheLast()
+    {
+        _settings.Update(d => d.TtsOutput = false);
+        _chat.EnqueueText("One.");
+        _chat.EnqueueText("Two.");
+        PushLine("/loop 2 30s say a number");
+        PushLine("/exit");
+        int requestsAtTheWait = -1;
+        using var done = new CancellationTokenSource();
+        var clock = Task.Run(async () =>
+        {
+            while (!done.IsCancellationRequested && !Output.Contains(ChatScreen.LoopWaitNotice(TimeSpan.FromSeconds(30)), StringComparison.Ordinal))
+            {
+                await Task.Delay(10, CancellationToken.None);
+            }
+
+            requestsAtTheWait = _chat.Requests.Count;
+            // Advanced until the pass goes: the notice is written just before the delay's timer is made.
+            while (!done.IsCancellationRequested && _chat.Requests.Count < 2)
+            {
+                _time.Advance(TimeSpan.FromSeconds(30));
+                await Task.Delay(20, CancellationToken.None);
+            }
+        });
+
+        string output = await RunAsync();
+        await done.CancelAsync();
+        await clock;
+
+        Assert.Equal(1, requestsAtTheWait);
+        Assert.Equal(2, _chat.Requests.Count);
+        Assert.Equal(1, CountOf(output, ChatScreen.LoopWaitNotice(TimeSpan.FromSeconds(30))));
+        Assert.Contains("● One.\n\n  · " + ChatScreen.LoopWaitNotice(TimeSpan.FromSeconds(30)) + "\n  · " + ChatScreen.LoopTurnNotice(2, 2) + "\n› say a number\n", output);
+        Assert.Contains("● Two.\n\n  · " + ChatScreen.LoopDoneNotice(2) + "\n", output);
+    }
+
+    /// <summary>ESC in the wait between passes stops the loop there: nothing more is sent, and the stopped notice counts the passes sent.</summary>
+    [Fact]
+    public async Task Loop_Delay_EscDuringTheWait_StopsTheLoop()
+    {
+        _settings.Update(d => d.TtsOutput = false);
+        _chat.EnqueueText("One.");
+        _chat.EnqueueText("never");
+        PushLine("/loop infinite 1m hi");
+        PushLine("/exit");
+        using var done = new CancellationTokenSource();
+        var esc = Task.Run(async () =>
+        {
+            while (!done.IsCancellationRequested && !Output.Contains(ChatScreen.LoopWaitNotice(TimeSpan.FromMinutes(1)), StringComparison.Ordinal))
+            {
+                await Task.Delay(10, CancellationToken.None);
+            }
+
+            if (!done.IsCancellationRequested)
+            {
+                _console.Input.PushKey(Keys.Escape);
+            }
+        });
+
+        string output = await RunAsync();
+        await done.CancelAsync();
+        await esc;
+
+        Assert.Single(_chat.Requests);
+        Assert.Contains("  · " + ChatScreen.LoopWaitNotice(TimeSpan.FromMinutes(1)) + "\n", output);
+        Assert.Contains("  · " + ChatScreen.LoopStoppedNotice(1) + "\n", output);
+        Assert.DoesNotContain(ChatScreen.LoopTurnNotice(2, null), output);
     }
 
     /// <summary>A failed reply (the server's error as the assistant's notice) ends the loop: a server that is down is not asked again.</summary>
@@ -8797,7 +8913,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.StartsWith(HelpRow("/queue", "list and prune the messages queued while a reply runs"), lines[19]);   // 2026-09-18
         Assert.StartsWith(HelpRow("/copy", "copy the last reply to the clipboard as markdown, or /copy <n> | all"), lines[20]);   // under /queue since later on 2026-09-18
         Assert.StartsWith(HelpRow("/draft", "write the next message in your editor: a temporary file, sent when it is saved and closed"), lines[21]);   // under /copy since 2026-09-19
-        Assert.StartsWith(HelpRow("/loop", "repeat a message, each reply waited for: /loop <count> <message> | infinite <message> (ESC ends it)"), lines[22]);   // under /draft since 2026-09-21
+        Assert.StartsWith(HelpRow("/loop", "repeat a message, each reply waited for: /loop <count> [delay] <message> | infinite [delay] <message> (ESC ends it)"), lines[22]);   // under /draft since 2026-09-21
         Assert.StartsWith(HelpRow("/expand", "show every line of the folded tool runs and code blocks in the transcript (Ctrl+O flips)"), lines[23]);   // under /loop since 2026-09-22 (/tools expand until then)
         Assert.StartsWith(HelpRow("/collapse", "fold the tool runs and code blocks in the transcript again"), lines[24]);
         Assert.True(string.IsNullOrWhiteSpace(lines[25]));
@@ -8818,7 +8934,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.StartsWith(HelpRow("/echo", "print a line as a reply and read it aloud when speech is on: /echo <text>"), lines[45]);
         Assert.StartsWith(HelpRow("/view", "show an image from the working directory in the transcript, as large as the window allows: /view <image>"), lines[46]);
         Assert.StartsWith(HelpRow("/imagine", "generate a picture on ComfyUI from your own prompt, sent as typed: /imagine [workflow] <prompt> [-- <negative>] [--seed N] [--size WxH]"), lines[47]);   // 2026-09-24
-        Assert.StartsWith(HelpRow("/comfy", "show the ComfyUI server's status and the workflows the image tools can run, or /comfy edit json|markdown <workflow> to open its file in your editor"), lines[48]);
+        Assert.StartsWith(HelpRow("/comfy", "show the ComfyUI server's status and the workflows the image tools can run, /comfy edit json|markdown <workflow> to open its file in your editor, or /comfy purge to empty the output folder"), lines[48]);
         Assert.StartsWith(HelpRow("/window", "show the terminal window's width and height"), lines[49]);
         Assert.True(string.IsNullOrWhiteSpace(lines[50]));
         Assert.StartsWith(HelpRow("/persona", "export and manage persona.md (the personality) in your editor, or /persona reset to go back to the default, or /persona copy <profile> [force] to copy it into another profile"), lines[51]);   // copy 2026-09-21
@@ -11787,6 +11903,69 @@ public partial class ChatScreenTests : IDisposable
         Assert.Empty(_chat.Requests);
     }
 
+    private string ComfyImagesDir => Path.Combine(_settings.ProfileDirectory, WorkingDirectory.DefaultFolderName, AppSettingsData.DefaultComfyOutputFolder);
+
+    /// <summary>/comfy purge (later still on 2026-09-24, the user's ask): the output folder emptied after a yes, .pasted included; anything else keeps.</summary>
+    [Fact]
+    public async Task ComfyPurge_Y_DeletesEverythingInTheOutputFolder_NoKeeps()
+    {
+        _settings.Update(d => d.TtsOutput = false);
+        Directory.CreateDirectory(Path.Combine(ComfyImagesDir, NeonSidekick.Comfy.ComfyStudio.PastedFolderName));
+        File.WriteAllText(Path.Combine(ComfyImagesDir, "a.png"), "12345");
+        File.WriteAllText(Path.Combine(ComfyImagesDir, NeonSidekick.Comfy.ComfyStudio.PastedFolderName, "pasted-1.png"), "678");
+        PushLine("/comfy purge");
+        _console.Input.PushKey(Keys.Enter);   // No is on the cursor
+        PushLine("/comfy PURGE");
+        PickYes();
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains("  · " + ChatScreen.KeptNotice, output);
+        Assert.Contains("  · " + ChatScreen.ComfyPurgedNotice(ComfyImagesDir, 2, 1, 8), output);
+        Assert.True(Directory.Exists(ComfyImagesDir));
+        Assert.Empty(Directory.EnumerateFileSystemEntries(ComfyImagesDir));
+        Assert.Empty(_chat.Requests);
+    }
+
+    [Fact]
+    public async Task ComfyPurge_MissingFolder_SaysSoWithoutAsking()
+    {
+        _settings.Update(d => d.TtsOutput = false);
+        PushLine("/comfy purge");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains("  · " + ChatScreen.ComfyPurgeEmptyNotice(ComfyImagesDir), output);
+        Assert.DoesNotContain(ChatScreen.KeptNotice, output);
+    }
+
+    [Fact]
+    public async Task ComfyPurge_OutputFolderIsTheWorkingDirectory_IsRefused()
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.ComfyOutputFolder = ""; });
+        string root = Path.Combine(_settings.ProfileDirectory, WorkingDirectory.DefaultFolderName);
+        Directory.CreateDirectory(root);
+        File.WriteAllText(Path.Combine(root, "keep.txt"), "stays");
+        PushLine("/comfy purge");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains("  ✗ " + ChatScreen.ComfyPurgeHereError, output);
+        Assert.Equal("stays", File.ReadAllText(Path.Combine(root, "keep.txt")));
+    }
+
+    [Fact]
+    public void ComfyPurge_Wording_IsPinned()
+    {
+        Assert.Equal(@"🗑️ Delete everything in D:\x\comfy_images for good — 3 files, 1 folder, 1.2 KB?", ChatScreen.ComfyPurgePrompt(@"D:\x\comfy_images", 3, 1, 1_234, false));
+        Assert.Equal(@"(🗑️ purged D:\x\comfy_images: 2 files, 1 folder, 8 B)", ChatScreen.ComfyPurgedNotice(@"D:\x\comfy_images", 2, 1, 8));
+        Assert.Equal(@"(🗑️ nothing in D:\x\comfy_images)", ChatScreen.ComfyPurgeEmptyNotice(@"D:\x\comfy_images"));
+        Assert.Equal("Usage: /comfy, /comfy purge, or /comfy edit json|markdown <workflow>", ChatScreen.ComfyUsageError);
+    }
+
     [Fact]
     public void ArgumentItems_Comfy_OffersEdit_ThenTheKind_ThenTheWorkflows()
     {
@@ -11794,7 +11973,8 @@ public partial class ChatScreenTests : IDisposable
         var sources = new ChatScreen.ArgumentSources(() => [], "default", [], _ => [], None, None,
             Workflows: () => [new("juggernaut-xl", "juggernaut · text → image · 1024×1024"), new("pony-txt2img", "pony · text → image · 1024×1024")]);
 
-        Assert.Equal([ChatScreen.ComfyEditWord], ChatScreen.ArgumentItems("/comfy", "", sources).Select(i => i.Text));
+        Assert.Equal([ChatScreen.ComfyEditWord, ChatScreen.ComfyPurgeWord], ChatScreen.ArgumentItems("/comfy", "", sources).Select(i => i.Text));
+        Assert.Equal(["purge"], ChatScreen.ArgumentItems("/comfy", "pu", sources).Select(i => i.Text));
         Assert.Equal(["edit"], ChatScreen.ArgumentItems("/comfy", "ed", sources).Select(i => i.Text));
         Assert.Equal(["edit json", "edit markdown"], ChatScreen.ArgumentItems("/comfy", "edit ", sources).Select(i => i.Text));
         Assert.Equal(["edit markdown"], ChatScreen.ArgumentItems("/comfy", "edit m", sources).Select(i => i.Text));
@@ -11910,7 +12090,7 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public async Task Startup_WelcomeSplashOff_OrNoPane_DrawsNothing_AndNeverAsksForAPicture()
     {
-        _settings.Update(d => { d.TtsOutput = false; d.WelcomeSplash = false; });
+        _settings.Update(d => { d.TtsOutput = false; d.WelcomeSplashMode = "disabled"; });
         PaneOf40Rows();
         SplashOf(2380, 100);
         PushLine("hi");
@@ -11924,7 +12104,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("› hi", output);
 
         // Without the pane (a redirected console) the switch on draws nothing either.
-        _settings.Update(d => d.WelcomeSplash = true);
+        _settings.Update(d => d.WelcomeSplashMode = "fullsize");
         _geometry = null;
         _console.Clear();
         PushLine("/exit");
@@ -12185,7 +12365,7 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public async Task Startup_WelcomeSplash_TheSettingOff_ShowsNoPictureAndNoSlideshowHint()
     {
-        _settings.Update(d => { d.TtsOutput = false; d.WelcomeSplash = false; });
+        _settings.Update(d => { d.TtsOutput = false; d.WelcomeSplashMode = "disabled"; });
         PaneOf40Rows();
         SplashOf((2380, 100), (2380, 200));
         StepsWhenIdle(Line("/exit"));
@@ -12286,6 +12466,113 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(2, Refreshes(output));   // the Right's walk and /exit's wipe: no delete redrew
     }
 
+    // ── The tiled splash (2026-09-24) ───────────────────────────────────────
+
+    /// <summary>Ten 480 × 240 pictures: at the small thumbnail (48 × 12) each is 48 cells by twelve lines, four to a 240-wide strip row (a fifth needs 248), two rows (12 + 1 + 12) under the banner of a 40-row screen — eight a page, then two.</summary>
+    private void TiledSplashOfTen()
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.WelcomeSplashMode = "tiled"; d.ImageThumbnailSize = "small"; });
+        PaneOf40Rows();
+        _renderClears = true;
+        SplashOf(Enumerable.Range(0, 10).Select(_ => (480, 240)).ToArray());
+    }
+
+    private static readonly string TileLine = new('▀', 48);
+
+    [Fact]
+    public async Task Startup_TiledSplash_ShowsAScreenfulOfThumbnails_AndLeftRightPage_Wrapping()
+    {
+        // Welcome splash tiled (2026-09-24, the user's ask): the pictures in name order at Image thumbnail size, only as
+        // many as fit; Right the next set, wrapping; Left back. Every picture is read once, whatever the paging.
+        TiledSplashOfTen();
+        StepsWhenIdle(Key(Keys.Right), Key(Keys.Right), Key(Keys.Left), Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.Equal(Enumerable.Range(0, 10).Select(SplashName), _splashLoads);
+        Assert.Equal(4, Refreshes(output));   // three pages, then the sent line's wipe
+        int[] screens = Enumerable.Range(0, 5).Select(i => NthScreen(output, i)).ToArray();
+        Assert.Equal(8 * 12, Count(output[screens[0]..screens[1]], TileLine));   // page 1: eight tiles, twelve lines each
+        Assert.Equal(2 * 12, Count(output[screens[1]..screens[2]], TileLine));   // page 2: the last two
+        Assert.Equal(8 * 12, Count(output[screens[2]..screens[3]], TileLine));   // Right wrapped to page 1
+        Assert.Equal(2 * 12, Count(output[screens[3]..screens[4]], TileLine));   // Left wrapped back to page 2
+        Assert.DoesNotContain("▀", output[screens[4]..]);
+        Assert.Contains(ChatScreen.SplashPageHint(0, 2), output[screens[0]..screens[1]]);
+        Assert.Contains(ChatScreen.SplashPageHint(1, 2), output[screens[1]..screens[2]]);
+        Assert.DoesNotContain(ChatScreen.SplashHint, output);
+        Assert.Empty(_chat.Requests);
+    }
+
+    [Fact]
+    public void SplashPageHint_IsOneBased_AndJoinsTheRest()
+    {
+        Assert.Equal("← → page 2 of 5", ChatScreen.SplashPageHint(1, 5));
+        Assert.Equal("← → page 1 of 2 · 3%", ChatScreen.SplashHintLine("3%", ChatScreen.SplashPageHint(0, 2)));
+        Assert.Equal("← → page 1 of 2", ChatScreen.SplashHintLine("", ChatScreen.SplashPageHint(0, 2)));
+    }
+
+    [Fact]
+    public async Task Startup_TiledSplash_OnePage_ShowsNoPageHint_AndTheArrowsAreTheLines()
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.WelcomeSplashMode = "tiled"; });
+        PaneOf40Rows();
+        SplashOf((480, 240), (480, 240), (480, 240));
+        StepsWhenIdle(Key(Keys.Right), Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.Equal(3 * 12, Count(output, TileLine));   // all three, on one strip row
+        Assert.Equal(1, Refreshes(output));              // Right paged nothing: /exit's wipe alone
+        Assert.DoesNotContain("← → page", output);
+    }
+
+    [Fact]
+    public async Task Startup_TiledSplash_DeleteTwice_OverTheProfilesPictures_TrashesNothing()
+    {
+        // No one picture stands on a page of tiles, so Delete is the line's key (2026-09-24, the user's call).
+        _settings.Update(d => { d.TtsOutput = false; d.WelcomeSplashMode = "tiled"; });
+        PaneOf40Rows();
+        SplashOf((480, 240));
+        string folder = Path.Combine(_settings.ProfileDirectory, SplashImages.ProfileFolderName);
+        Directory.CreateDirectory(folder);
+        File.WriteAllBytes(Path.Combine(folder, "one.bmp"), SmokeChecks.SolidBmp(480, 240));
+        File.WriteAllBytes(Path.Combine(folder, "two.bmp"), SmokeChecks.SolidBmp(480, 240));
+        StepsWhenIdle(Key(Keys.Delete), Key(Keys.Delete), Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.Equal(2 * 12, Count(output, TileLine));   // the folder's two, the seam's never loaded
+        Assert.Empty(_splashLoads);
+        Assert.True(File.Exists(Path.Combine(folder, "one.bmp")));
+        Assert.True(File.Exists(Path.Combine(folder, "two.bmp")));
+        Assert.False(Directory.Exists(Path.Combine(folder, SplashImages.TrashFolderName)));
+        Assert.DoesNotContain("DEL again", output);
+        Assert.Equal(1, Refreshes(output));
+    }
+
+    [Fact]
+    public async Task Splash_Command_ShowsTheTiledPages_WhenTheModeIsTiled_AndOnePictureWhenDisabled()
+    {
+        TiledSplashOfTen();
+        _settings.Update(d => d.WelcomeSplashMode = "disabled");
+        _random = new Random(7);
+        StepsWhenIdle(Line("/splash"),
+            input => { _settings.Update(d => d.WelcomeSplashMode = "tiled"); PushLine(input, "/splash"); },
+            Key(Keys.Right),
+            Line("/exit"));
+
+        string output = await RunAsync();
+
+        // Screens: the start, /splash, the second /splash's dismissal of the picture, its own wipe, the page flip, /exit's wipe.
+        Assert.Equal(5, Refreshes(output));
+        int[] screens = Enumerable.Range(0, 6).Select(i => NthScreen(output, i)).ToArray();
+        Assert.DoesNotContain("▀", output[screens[0]..screens[1]]);   // disabled: nothing at startup
+        Assert.Contains(new string('▀', 100), output[screens[1]..screens[2]]);   // /splash over disabled: one picture, far wider than a tile
+        Assert.DoesNotContain("▀", output[screens[2]..screens[3]]);
+        Assert.Equal(8 * 12, Count(output[screens[3]..screens[4]], TileLine));     // /splash over tiled: page 1
+        Assert.Equal(2 * 12, Count(output[screens[4]..screens[5]], TileLine));     // and the arrows page it
+    }
+
     [Fact]
     public async Task Splash_DeleteTwice_OverAnEmbeddedPicture_IsNothing()
     {
@@ -12336,7 +12623,7 @@ public partial class ChatScreenTests : IDisposable
             input =>
             {
                 hintsBefore = Count(Output, ChatScreen.SplashHint);
-                _settings.Update(d => d.WelcomeSplash = false);
+                _settings.Update(d => d.WelcomeSplashMode = "disabled");
                 int mark = Output.Length;
                 _time.Advance(ScreenPane.Tick);   // the tick re-reads the hint: the row again without it
                 Assert.Equal(Row(ChatScreen.HintLine(null)), Output[mark..]);
@@ -12390,7 +12677,7 @@ public partial class ChatScreenTests : IDisposable
     {
         // The setting gates the startup picture alone: /splash draws one whatever it says, and Left /
         // Right walk the set as they do at startup (the user's ask).
-        _settings.Update(d => { d.TtsOutput = false; d.WelcomeSplash = false; });
+        _settings.Update(d => { d.TtsOutput = false; d.WelcomeSplashMode = "disabled"; });
         PaneOf40Rows();
         _random = new Random(7);
         SplashOf((2380, 100), (2380, 200));
@@ -12420,7 +12707,7 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public async Task MidTurn_Splash_CancelsTheReply_AndRunsAtTheIdleLine()
     {
-        _settings.Update(d => d.WelcomeSplash = false);
+        _settings.Update(d => d.WelcomeSplashMode = "disabled");
         SplashOf(2380, 100);
         MidTurnFixture(i =>
         {
@@ -12446,7 +12733,7 @@ public partial class ChatScreenTests : IDisposable
     public async Task Theme_Named_SavesIt_PutsItInForce_AndStartsOverLikeSplash()
     {
         using var theme = new ThemeScope();
-        _settings.Update(d => { d.TtsOutput = false; d.WelcomeSplash = false; });
+        _settings.Update(d => { d.TtsOutput = false; d.WelcomeSplashMode = "disabled"; });
         PaneOf40Rows();
         SplashOf(2380, 100);
         LinesWhenIdle("hi", "/theme CyberPunk", "again", "/exit");
@@ -12568,7 +12855,7 @@ public partial class ChatScreenTests : IDisposable
     {
         // 2026-09-23, the user's call: a theme change waits for the reply to end, as its Settings row does.
         using var theme = new ThemeScope();
-        _settings.Update(d => d.WelcomeSplash = false);
+        _settings.Update(d => d.WelcomeSplashMode = "disabled");
         SplashOf(2380, 100);
         MidTurnFixture(i =>
         {
@@ -12992,6 +13279,7 @@ public partial class ChatScreenTests : IDisposable
     }
     /// <summary>The thumbnail is scaled to the size setting's box: a wide picture fills its columns (64 at medium, 48 at small), one half-block row at 2 px tall.</summary>
     [Theory]
+    [InlineData("tiny", 32)]
     [InlineData("small", 48)]
     [InlineData("medium", 64)]
     [InlineData("large", 80)]
@@ -13012,6 +13300,31 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("● A pink strip.", output);
     }
 
+    /// <summary>
+    /// <c>fullsize</c> (2026-09-24): each picture takes the window's box, 238 of the 240 columns; a second one no longer
+    /// fits beside it, so it wraps to a row of its own below the first rather than sharing the row.
+    /// </summary>
+    [Fact]
+    public async Task DroppedImages_AtFullSize_FillTheWindow_AndStackBelowEachOther()
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.ImageThumbnailSize = "fullsize"; });
+        _chat.EnqueueText("Two pink strips.");
+        string first = Bmp("strip1.bmp", width: 512, height: 4);
+        string second = Bmp("strip2.bmp", width: 512, height: 4);
+        var input = new ScriptedInput();
+        input.PushPaste(first).Push(Keys.Char(' ')).PushPaste(second).Push(Keys.Enter);
+        PushLine(input, "/exit");
+
+        string output = await RunAsync(input);
+
+        string row = new string('▀', 238);
+        Assert.Contains("› [Image #1] [Image #2]\n" + row + "\n", output);
+        Assert.Equal(2, Count(output, row));
+        Assert.DoesNotContain(new string('▀', 239), output);
+        Assert.DoesNotContain(row + new string(' ', ImageStrip.Gap) + "▀", output);
+        Assert.Contains("● Two pink strips.", output);
+    }
+
     /// <summary>A hand-edited size that is none of the four warns once and draws small.</summary>
     [Fact]
     public async Task ADroppedImage_WithAnUnknownSizeSaved_WarnsAndDrawsSmall()
@@ -13026,7 +13339,7 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync(input);
 
         Assert.Contains("› [Image #1]\n" + new string('▀', 48) + "\n", output);
-        Assert.Contains("ImageThumbnailSize='huge' is not one of small, medium, large, xlarge. Using small.", output);
+        Assert.Contains("ImageThumbnailSize='huge' is not one of tiny, small, medium, large, xlarge, fullsize. Using small.", output);
     }
 
     /// <summary>A /command sent with an image on the line runs as typed; the picture is dropped with a notice.</summary>
@@ -14271,6 +14584,71 @@ public partial class ChatScreenTests : IDisposable
         Assert.False(_session.IsLearning);
         Assert.False(Directory.Exists(Path.Combine(ProfileSkills, "greeting")));
         Assert.DoesNotContain(SettingsMenu.Title + "   General", output);   // the click was the brain's, never the row's /settings
+    }
+
+    [Fact]
+    public async Task ADoubleClickOnTheBrain_MidTurn_CancelsTheReflection_AndSaysSoAfterTheReply()
+    {
+        // The busy row's brain (2026-09-24, the user's ask: a reflection sharing the server holds the reply up): the
+        // watcher's click hook cancels it; the line waits for the reply's end, the turn task being the transcript's one writer.
+        _settings.Update(d => d.TtsOutput = false);
+        _console.Profile.Height = 40;
+        _console.Profile.Width = 240;
+        _geometry = new ScreenGeometry(() => null, () => 100);
+        _chat.EnqueueText("Hello.");
+        _chat.Enqueue(FakeChatClient.Call("r1", SkillEditorTool.ToolName, CreateSkillArgs("greeting")));   // request 1: the reflection, held until cancelled
+        _chat.EnqueueText("Sure thing.");                                                                     // request 2: the reply, clicked under
+        bool cancelledUnderTheReply = false;
+        _chat.BeforeUpdateOf = async (r, i, token) =>
+        {
+            if (r == 1 && i == 0)
+            {
+                await Task.Delay(Timeout.Infinite, token);
+            }
+            else if (r == 2 && i == 0)
+            {
+                Assert.True(_session.IsLearning);
+                _time.Advance(ScreenPane.Tick);
+                Scripted().PushClick(0, 102);         // 🧠 at 0–1 on the busy row
+                Scripted().PushClick(1, 102);
+                var until = DateTime.UtcNow + TimeSpan.FromSeconds(20);
+                while (_session.Learning is not { IsCompleted: true } && DateTime.UtcNow < until)
+                {
+                    await Task.Delay(10, CancellationToken.None);
+                }
+
+                cancelledUnderTheReply = _session.Learning is { IsCompleted: true };
+                Assert.DoesNotContain(ChatScreen.LearnCancelledNotice, Output);   // not mid-reply
+            }
+        };
+        var input = Scripted();
+        int step = 0;
+        input.OnWait = () =>
+        {
+            switch (step)
+            {
+                case 0: step++; PushLine(input, "hi"); break;
+                case 1: step++; PushLine(input, "/learn keep the greeting"); break;
+                case 2: step++; WaitForRequests(2); PushLine(input, "and now?"); break;
+                case 3:
+                    if (Output.Contains(ChatScreen.LearnCancelledNotice, StringComparison.Ordinal))
+                    {
+                        step++;
+                        PushLine(input, "/exit");
+                    }
+
+                    break;
+            }
+        };
+
+        string output = await RunAsync();
+
+        Assert.True(cancelledUnderTheReply);
+        Assert.True(output.IndexOf("Sure thing.", StringComparison.Ordinal) < output.IndexOf(ChatScreen.LearnCancelledNotice, StringComparison.Ordinal));
+        Assert.DoesNotContain("learned:", output);
+        Assert.DoesNotContain(ChatScreen.CancelledNotice, output);   // the reply ran on
+        Assert.False(_session.IsLearning);
+        Assert.False(Directory.Exists(Path.Combine(ProfileSkills, "greeting")));
     }
 
     [Fact]
@@ -16212,7 +16590,7 @@ public partial class ChatScreenTests : IDisposable
     };
 
     [Fact]
-    public async Task APictureDoubleClicked_OpensInTheImageEditor_TheSettingsCommandPassed()
+    public async Task APictureDoubleClicked_OpensInTheImageEditor_TheSettingsCommandPassed_AndNoLinePrinted()
     {
         _settings.Update(d => { d.TtsOutput = false; d.ImageEditor = "mspaint"; });
         PaneOf40Rows();
@@ -16225,17 +16603,55 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        // Once: the notice the open prints moves the picture up a row, past the rest of the downward pass; the column-10 pass hits nothing.
-        Assert.Equal((Path.Combine(files, "docs", "square.bmp"), "mspaint"), Assert.Single(opened));
-        Assert.Contains(ChatScreen.PictureOpenedNotice("square.bmp", "mspaint"), output);
-        Assert.Equal("(🖼️ opened a.png in the image editor)", ChatScreen.PictureOpenedNotice("a.png", ""));
+        // Every picture row of the downward pass opens it; the column-10 pass hits nothing. A good open prints no line (2026-09-24).
+        Assert.NotEmpty(opened);
+        Assert.All(opened, o => Assert.Equal((Path.Combine(files, "docs", "square.bmp"), "mspaint"), o));
+        Assert.DoesNotContain("🖼️ opened", output);
         Assert.Empty(_chat.Requests);
+    }
+
+    /// <summary>
+    /// A <c>/loop</c> wait keeps the mouse (2026-09-24, the user's ask: the pictures froze while a loop
+    /// waited): a picture double-clicked in the wait opens, and ESC after it still ends the loop.
+    /// </summary>
+    [Fact]
+    public async Task APictureDoubleClicked_DuringALoopWait_Opens_AndEscStillEndsTheLoop()
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.ImageEditor = "mspaint"; });
+        PaneOf40Rows();
+        string files = Path.Combine(_settings.ProfileDirectory, WorkingDirectory.DefaultFolderName);
+        Directory.CreateDirectory(Path.Combine(files, "docs"));
+        File.WriteAllBytes(Path.Combine(files, "docs", "square.bmp"), SmokeChecks.SolidBmp(4, 4));
+        var opened = new System.Collections.Concurrent.ConcurrentQueue<(string Path, string Editor)>();
+        _openImage = (path, editor) => opened.Enqueue((path, editor));
+        _chat.EnqueueText("One.");
+        _chat.EnqueueText("never");
+        var input = Scripted();
+        StepsWhenIdle(Line("/view docs/square.bmp"), Line("/loop 2 1m hi"), Line("/exit"));
+        using var done = new CancellationTokenSource();
+        var clicks = Task.Run(async () =>
+        {
+            await WaitUntilAsync(() => done.IsCancellationRequested || Output.Contains(ChatScreen.LoopWaitNotice(TimeSpan.FromMinutes(1)), StringComparison.Ordinal));
+            DoubleClickDown(119)(input);
+            await WaitUntilAsync(() => done.IsCancellationRequested || !opened.IsEmpty);
+            input.Push(Keys.Escape);
+        });
+
+        string output = await RunAsync();
+        await done.CancelAsync();
+        await clicks;
+
+        Assert.NotEmpty(opened);
+        Assert.All(opened, o => Assert.Equal((Path.Combine(files, "docs", "square.bmp"), "mspaint"), o));
+        Assert.Single(_chat.Requests);
+        Assert.Contains(ChatScreen.LoopStoppedNotice(1), output);
+        Assert.DoesNotContain(ChatScreen.LoopTurnNotice(2, 2), output);
     }
 
     [Fact]
     public async Task APictureWithNoFile_IsWrittenToTemp_AndAGoneFileIsAnError()
     {
-        _settings.Update(d => { d.TtsOutput = false; d.WelcomeSplash = false; });
+        _settings.Update(d => { d.TtsOutput = false; d.WelcomeSplashMode = "disabled"; });
         PaneOf40Rows();
         SplashOf((4, 4));
         string files = Path.Combine(_settings.ProfileDirectory, WorkingDirectory.DefaultFolderName);
@@ -16256,5 +16672,21 @@ public partial class ChatScreenTests : IDisposable
         Assert.True(File.Exists(temp));
         Assert.Contains(ChatScreen.PictureGoneError(Path.Combine(files, "gone.bmp")), output);
         Assert.DoesNotContain(Path.Combine(files, "gone.bmp"), _openedFiles);
+        Assert.DoesNotContain("🖼️ opened", output);   // a good open prints nothing, only the error above (2026-09-24)
+    }
+
+    [Fact]
+    public async Task ATiledSplashPictureDoubleClicked_Opens_WithNoNoticeLine()
+    {
+        // The splash's pictures open without the "(🖼️ opened …)" line; only an error would print (2026-09-24, the user's call).
+        _settings.Update(d => { d.TtsOutput = false; d.WelcomeSplashMode = "tiled"; d.ImageThumbnailSize = "small"; });
+        PaneOf40Rows();
+        SplashOf((480, 240), (480, 240), (480, 240));
+        StepsWhenIdle(DoubleClickDown(10), Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.Contains(Path.Combine(ChatScreen.PictureTempFolder, "01.bmp"), _openedFiles);
+        Assert.DoesNotContain("🖼️ opened", output);
     }
 }

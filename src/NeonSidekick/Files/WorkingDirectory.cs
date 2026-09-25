@@ -1933,8 +1933,63 @@ public sealed class WorkingDirectory
     /// </summary>
     public EmptyTrashResult EmptyTrash()
     {
-        string trash = TrashPath;
-        if (!Directory.Exists(trash))
+        var result = EmptyContents(TrashPath);
+        if (result.Outcome == FileOutcome.Ok && Directory.Exists(TrashPath))
+        {
+            DiagnosticLog.Info(Category, TrashEmptiedLogLine(result.Files, result.Folders, result.Bytes));
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Deletes everything under <paramref name="relative"/> for good; the folder itself stays (2026-09-24, the user's
+    /// ask: <c>/comfy purge</c> empties the ComfyUI output folder, its <c>.pasted</c> inputs included). The second
+    /// destructive operation here, after <see cref="EmptyTrash"/>, and like it reached only by a slash command after a
+    /// typed confirmation, never by a tool. Refused outside the sandbox, inside the trash, on the root itself (an
+    /// empty output folder setting means the working directory — purging that would take everything) and on a file.
+    /// A missing folder is nothing to do.
+    /// </summary>
+    public EmptyTrashResult PurgeFolder(string relative)
+    {
+        var outcome = Resolve(relative, forWrite: true, out string full);
+        if (outcome != FileOutcome.Ok)
+        {
+            return new EmptyTrashResult(outcome, 0, 0, 0);
+        }
+
+        if (string.Equals(full, Root, StringComparison.OrdinalIgnoreCase))
+        {
+            return new EmptyTrashResult(FileOutcome.OutsideRoot, 0, 0, 0, PurgeRootRefusal);
+        }
+
+        if (File.Exists(full))
+        {
+            return new EmptyTrashResult(FileOutcome.IsAFile, 0, 0, 0);
+        }
+
+        var result = EmptyContents(full);
+        if (result.Outcome == FileOutcome.Ok && Directory.Exists(full))
+        {
+            DiagnosticLog.Info(Category, FolderPurgedLogLine(Relative(full, isDirectory: true), result.Files, result.Folders, result.Bytes));
+        }
+
+        return result;
+    }
+
+    /// <summary>Why <see cref="PurgeFolder"/> will not empty the root. Pinned.</summary>
+    public const string PurgeRootRefusal = "that is the working directory itself";
+
+    public static string FolderPurgedLogLine(string relative, int files, int folders, long bytes) =>
+        string.Create(CultureInfo.InvariantCulture, $"Purged {relative}: {files} files, {folders} folders, {bytes:N0} bytes");
+
+    /// <summary>
+    /// The walk-and-delete behind <see cref="EmptyTrash"/> and <see cref="PurgeFolder"/>: everything under
+    /// <paramref name="target"/> counted, read-only cleared, then deleted; the folder itself stays. Absent = nothing to do.
+    /// </summary>
+    private static EmptyTrashResult EmptyContents(string target)
+    {
+        if (!Directory.Exists(target))
         {
             return new EmptyTrashResult(FileOutcome.Ok, 0, 0, 0);
         }
@@ -1943,7 +1998,7 @@ public sealed class WorkingDirectory
         long bytes = 0;
         try
         {
-            // Everything, hidden and system included — nothing in the trash is spared — but never
+            // Everything, hidden and system included — nothing in the folder is spared — but never
             // through a reparse point, which Directory.Delete below removes as a link too.
             var options = new EnumerationOptions
             {
@@ -1953,7 +2008,7 @@ public sealed class WorkingDirectory
                 ReturnSpecialDirectories = false,
             };
             foreach (var entry in new FileSystemEnumerable<WalkEntry>(
-                trash,
+                target,
                 (ref FileSystemEntry entry) => new WalkEntry(entry.ToFullPath(), entry.IsDirectory ? 0 : entry.Length, entry.LastWriteTimeUtc.UtcDateTime, entry.IsDirectory),
                 options))
             {
@@ -1972,17 +2027,16 @@ public sealed class WorkingDirectory
                 }
             }
 
-            foreach (var folder in Directory.EnumerateDirectories(trash))
+            foreach (var folder in Directory.EnumerateDirectories(target))
             {
                 Directory.Delete(folder, recursive: true);
             }
 
-            foreach (var file in Directory.EnumerateFiles(trash))
+            foreach (var file in Directory.EnumerateFiles(target))
             {
                 File.Delete(file);
             }
 
-            DiagnosticLog.Info(Category, TrashEmptiedLogLine(files, folders, bytes));
             return new EmptyTrashResult(FileOutcome.Ok, files, folders, bytes);
         }
         catch (Exception ex) when (IsFileFailure(ex))

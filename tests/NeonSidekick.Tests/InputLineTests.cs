@@ -2550,7 +2550,7 @@ public class InputLineTests : IDisposable
     }
 
     /// <summary>A pane line with the five sources: the command list, the argument table above, the mention tree of <see cref="MentionLine"/>, the skills as the #-mention list (2026-09-17; <paramref name="hash"/> false = an empty source, the switch off) and the tools as the $-mention list (2026-09-19; <paramref name="dollar"/> the same).</summary>
-    private (InputLine Line, ScriptedInput Keys, ScreenPane Pane, List<string> Asked) WordLine(bool commands = true, bool skills = true, bool hash = true, bool dollar = true, bool percent = true)
+    private (InputLine Line, ScriptedInput Keys, ScreenPane Pane, List<string> Asked) WordLine(bool commands = true, bool skills = true, bool hash = true, bool dollar = true, bool percent = true, bool caret = true)
     {
         _console.Profile.Height = 12;
         var pane = new ScreenPane(_console, new ScreenGeometry(() => null, () => 100), new ManualTimeProvider());
@@ -2563,7 +2563,7 @@ public class InputLineTests : IDisposable
             return new MentionResult(FileOutcome.Ok, Tree.TryGetValue(query, out var paths) ? paths : [], false);
         }
 
-        var line = new InputLine(pane, new KeySource(scripted, TimeSpan.FromMilliseconds(1)), mentions: Complete, commands: commands ? () => Commands : null, arguments: skills ? Arguments : null, skills: () => hash ? Skills : [], tools: () => dollar ? Tools : [], connections: () => percent ? Connections : []);
+        var line = new InputLine(pane, new KeySource(scripted, TimeSpan.FromMilliseconds(1)), mentions: Complete, commands: commands ? () => Commands : null, arguments: skills ? Arguments : null, skills: () => hash ? Skills : [], tools: () => dollar ? Tools : [], connections: () => percent ? Connections : [], workflows: () => caret ? Workflows : []);
         return (line, scripted, pane, asked);
     }
 
@@ -2788,6 +2788,79 @@ public class InputLineTests : IDisposable
             }
         };
         Assert.Equal("%p", Assert.IsType<InputResult.Submitted>(await off.ReadAsync(multiline: true, mentions: MentionFolderAction.Apply)).Text);
+    }
+
+    // ── ^-mentions (2026-09-24): the % shape over the offered ComfyUI workflows ─
+
+    private static readonly IReadOnlyList<CompletionItem> Workflows =
+    [
+        new("pony-txt2img", "pony · text → image · 1024×1024"),
+        new("juggernaut-xl", "sdxl · text → image · 1024×1024"),
+    ];
+
+    [Fact]
+    public async Task CaretMentions_ACaretWordOpensTheWorkflows_TypingNarrows_AndEnterWritesTheName_NotSends()
+    {
+        var (line, keys, pane, asked) = WordLine();
+        int waits = 0;
+        keys.Push(Chars("a fox with ^"));
+        keys.OnWait = () =>
+        {
+            switch (waits++)
+            {
+                case 0:
+                    // A bare ^ lists every workflow with what it is, the first highlighted.
+                    Assert.True(pane.OverlayOpen);
+                    Assert.Contains("pony-txt2img   pony", _console.Output);
+                    Assert.Contains("juggernaut-xl  sdxl", _console.Output);
+                    Assert.Contains(MentionCompleter.Hint, _console.Output);
+                    keys.Push(Chars("ju"));
+                    break;
+                case 1:
+                    Assert.True(pane.OverlayOpen);
+                    keys.Push(Keys.Enter);
+                    break;
+                case 2:
+                    Assert.False(pane.OverlayOpen);
+                    keys.Push(Chars("please")).Push(Keys.Enter);
+                    break;
+            }
+        };
+
+        var submitted = Assert.IsType<InputResult.Submitted>(await line.ReadAsync(multiline: true, mentions: MentionFolderAction.Apply));
+
+        Assert.Equal("a fox with ^juggernaut-xl please", submitted.Text);
+        Assert.Empty(asked);   // ^ is not @
+    }
+
+    [Fact]
+    public async Task CaretMentions_ACaretInsideAWord_OrTheSwitchOff_OpensNothing()
+    {
+        var (line, keys, pane, _) = WordLine();
+        int waits = 0;
+        keys.Push(Chars("2^p"));
+        keys.OnWait = () =>
+        {
+            if (waits++ == 0)
+            {
+                Assert.False(pane.OverlayOpen);   // a power is not a mention
+                keys.Push(Keys.Enter);
+            }
+        };
+        Assert.Equal("2^p", Assert.IsType<InputResult.Submitted>(await line.ReadAsync(multiline: true, mentions: MentionFolderAction.Apply)).Text);
+
+        var (off, offKeys, offPane, _) = WordLine(caret: false);
+        waits = 0;
+        offKeys.Push(Chars("^p"));
+        offKeys.OnWait = () =>
+        {
+            if (waits++ == 0)
+            {
+                Assert.False(offPane.OverlayOpen);
+                offKeys.Push(Keys.Enter);
+            }
+        };
+        Assert.Equal("^p", Assert.IsType<InputResult.Submitted>(await off.ReadAsync(multiline: true, mentions: MentionFolderAction.Apply)).Text);
     }
 
     // ── $-mentions (2026-09-19): the # shape over the offered tools ─────────

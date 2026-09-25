@@ -185,7 +185,7 @@ public class FolderPaneTests : IDisposable
         var (picker, screen, input) = Picker();
         using var _ = screen;
         string files = P(C, "Users", "alice", "files");
-        var tree = new FolderTree(Disks().Add(P(C, "Users", "alice"), "files").Add(files, "docs"), [new FolderShortcut(FolderText.ProfileLabel, files)]);
+        var tree = new FolderTree(Disks().Add(P(C, "Users", "alice"), "files").Add(files, "docs"), [new FolderShortcut(FolderText.ProfileLabel, files, FolderText.ShortcutGlyph)]);
         input.Push(Keys.Char(' '), Keys.Enter);            // the shortcut open, then chosen
 
         Assert.Equal(files, await picker.PickAsync(tree, 0, CancellationToken.None));

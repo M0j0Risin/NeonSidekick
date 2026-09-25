@@ -5,7 +5,7 @@ namespace NeonSidekick.Comfy;
 
 /// <summary>
 /// <c>/imagine [workflow] &lt;prompt&gt; [-- &lt;negative&gt;] [--seed N] [--size WxH] [--steps N] [--cfg X] [--denoise X]
-/// [--image &lt;path&gt;] [--count N]</c> read into a request (2026-09-24, the user's ask: "in addition to the model
+/// [--image &lt;path&gt;] [--image2 &lt;path&gt;] [--image3 &lt;path&gt;] [--count N]</c> read into a request (2026-09-24, the user's ask: "in addition to the model
 /// generating per-model prompts, we will be able to send standard prompts too, as in score_9, etc."). The prompt and
 /// the negative are the user's text exactly as typed — commas, parentheses and weights kept, nothing added — so the
 /// request is always <see cref="ComfyRequest.Verbatim"/>. The first word names the workflow when it is one's name;
@@ -16,7 +16,7 @@ namespace NeonSidekick.Comfy;
 /// </summary>
 public static partial class ComfyImagine
 {
-    [GeneratedRegex("""(?:^|\s)--(seed|size|steps|cfg|denoise|image|count)(?:\s+("[^"]*"|\S+))?(?=\s|$)""", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase)]
+    [GeneratedRegex("""(?:^|\s)--(seed|size|steps|cfg|denoise|image[23]?|count)(?:\s+("[^"]*"|\S+))?(?=\s|$)""", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase)]
     private static partial Regex FlagPattern();
 
     [GeneratedRegex(@"(?:^|\s)--(?:\s|$)", RegexOptions.CultureInvariant)]
@@ -41,7 +41,8 @@ public static partial class ComfyImagine
         long? seed = null;
         int? width = null, height = null, steps = null, count = null;
         double? cfg = null, denoise = null;
-        string? image = null;
+        // Slot order (later still on 2026-09-24, the face swap): --image, --image2, --image3.
+        var images = new string?[ComfyWorkflow.MaxInputImages];
         string? error = null;
         bool noNegative = NoNegativeFlag().IsMatch(args);
         string rest = FlagPattern().Replace(NoNegativeFlag().Replace(args, " "), match =>
@@ -60,7 +61,9 @@ public static partial class ComfyImagine
                 "--count" => TryInt(value, out count),
                 "--cfg" => TryDouble(value, out cfg),
                 "--denoise" => TryDouble(value, out denoise),
-                "--image" => (image = value).Length > 0,
+                "--image" => (images[0] = value).Length > 0,
+                "--image2" => (images[1] = value).Length > 0,
+                "--image3" => (images[2] = value).Length > 0,
                 _ => TrySize(value, out width, out height),
             };
             if (!ok)
@@ -88,9 +91,19 @@ public static partial class ComfyImagine
             positive = space < 0 ? "" : positive[(space + 1)..].Trim();
         }
 
-        if (positive.Length == 0)
+        // A named workflow with no {{prompt}} (a face swap) runs on its pictures alone.
+        bool promptless = workflow is not null && workflows.First(w => string.Equals(w.Name, workflow, StringComparison.OrdinalIgnoreCase)) is { TakesPrompt: false };
+        if (positive.Length == 0 && !promptless)
         {
             return (null, ComfyText.ImagineUsage);
+        }
+
+        for (int i = 1; i < images.Length; i++)
+        {
+            if (images[i] is not null && images[i - 1] is null)
+            {
+                return (null, ComfyText.ImageGap("--" + ComfyWorkflow.ImageKeys[i], "--" + ComfyWorkflow.ImageKeys[i - 1]));
+            }
         }
 
         if (noNegative && !string.IsNullOrEmpty(negative))
@@ -100,7 +113,7 @@ public static partial class ComfyImagine
 
         // "" is "no negative at all"; null leaves the workflow's own.
         string? sent = noNegative ? "" : string.IsNullOrEmpty(negative) ? null : negative;
-        var request = new ComfyRequest(positive, workflow, sent, Verbatim: true, seed, width, height, steps, cfg, denoise, image, count ?? 1, AnyWorkflow: true);
+        var request = new ComfyRequest(positive, workflow, sent, Verbatim: true, seed, width, height, steps, cfg, denoise, images.OfType<string>().ToList(), count ?? 1, AnyWorkflow: true);
         return ComfyStudio.Check(request, maxCount) is { } range ? (null, range) : (request, null);
     }
 

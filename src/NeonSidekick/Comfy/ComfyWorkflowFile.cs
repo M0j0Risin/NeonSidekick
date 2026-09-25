@@ -3,8 +3,11 @@ using System.Text;
 
 namespace NeonSidekick.Comfy;
 
-/// <summary>The sidecar's values as the wizard writes them (<see cref="ComfyWorkflowFile.Sidecar"/>).</summary>
-public sealed record ComfySidecar(string Description, ComfyFamily Family, int? Width, int? Height, int? Steps, double? Cfg, double? Denoise, string Negative);
+/// <summary>
+/// The sidecar's values as the wizard writes them (<see cref="ComfyWorkflowFile.Sidecar"/>); <see cref="ImageRoles"/> (later
+/// still on 2026-09-24, the face swap) are the input pictures' roles in slot order, a blank one left out.
+/// </summary>
+public sealed record ComfySidecar(string Description, ComfyFamily Family, int? Width, int? Height, int? Steps, double? Cfg, double? Denoise, string Negative, IReadOnlyList<string>? ImageRoles = null);
 
 /// <summary>
 /// Writing a new workflow into a <c>comfy</c> folder (later on 2026-09-24, the add-workflow wizard's save): the sidecar
@@ -58,6 +61,14 @@ public static class ComfyWorkflowFile
         if (values.Cfg is { } c) sb.Append("cfg: ").Append(c.ToString(CultureInfo.InvariantCulture)).Append('\n');
         if (values.Denoise is { } d) sb.Append("denoise: ").Append(d.ToString(CultureInfo.InvariantCulture)).Append('\n');
         sb.Append("negative: ").Append(values.Negative.Length == 0 ? "\"\"" : Skills.SkillFrontmatter.Scalar(values.Negative)).Append('\n');
+        for (int i = 0; values.ImageRoles is { } roles && i < roles.Count && i < ComfyWorkflow.ImageKeys.Count; i++)
+        {
+            if (!string.IsNullOrWhiteSpace(roles[i]))
+            {
+                sb.Append(ComfyWorkflow.ImageKeys[i]).Append(": ").Append(Skills.SkillFrontmatter.Scalar(roles[i].Trim())).Append('\n');
+            }
+        }
+
         return sb.Append("---\n").ToString();
     }
 

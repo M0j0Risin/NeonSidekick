@@ -95,24 +95,29 @@ public sealed class FileSystemFolders : IFolderSource
 
 /// <summary>
 /// A named root above the drives (later on 2026-09-21, the user's ask): <paramref name="Label"/>
-/// is what the row shows, <paramref name="Path"/> the folder it stands for. The screen puts the
-/// profile's own <c>files</c> folder there as <c>profile</c>.
+/// is what the row shows, <paramref name="Path"/> the folder it stands for, <paramref name="Glyph"/> the
+/// one-cell mark drawn ahead of the label. The screen puts the profile's own <c>files</c> folder there
+/// as <c>⌂ profile</c> and, since 2026-09-24 (the user's ask), the profile's <c>splash</c> folder under
+/// it as <c>▣ splash</c> — its own glyph, the framed square, the user's pick.
 /// </summary>
-public readonly record struct FolderShortcut(string Label, string Path);
+public readonly record struct FolderShortcut(string Label, string Path, string Glyph);
 
 /// <summary>One folder in the <see cref="FolderTree"/>: a root at depth 0, its subfolders one deeper.</summary>
 public sealed class FolderNode
 {
-    internal FolderNode(string path, string name, int depth, bool shortcut = false)
+    internal FolderNode(string path, string name, int depth, string? shortcutGlyph = null)
     {
         Path = path;
         Name = name;
         Depth = depth;
-        IsShortcut = shortcut;
+        ShortcutGlyph = shortcutGlyph;
     }
 
-    /// <summary>A <see cref="FolderShortcut"/>'s root: <see cref="Name"/> is its label, drawn behind the house glyph.</summary>
-    public bool IsShortcut { get; }
+    /// <summary>A <see cref="FolderShortcut"/>'s root: <see cref="Name"/> is its label, drawn behind <see cref="ShortcutGlyph"/>.</summary>
+    public bool IsShortcut => ShortcutGlyph is not null;
+
+    /// <summary>The <see cref="FolderShortcut.Glyph"/> of a shortcut root; null for every other node.</summary>
+    public string? ShortcutGlyph { get; }
 
     /// <summary>The full path, what a pick returns.</summary>
     public string Path { get; }
@@ -160,7 +165,7 @@ public sealed class FolderTree
         _roots = new List<FolderNode>();
         foreach (var shortcut in shortcuts ?? [])
         {
-            _roots.Add(new FolderNode(shortcut.Path, shortcut.Label, 0, shortcut: true));
+            _roots.Add(new FolderNode(shortcut.Path, shortcut.Label, 0, shortcut.Glyph));
         }
 
         foreach (var root in _source.Roots())

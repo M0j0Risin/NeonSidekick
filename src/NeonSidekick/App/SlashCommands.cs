@@ -13,7 +13,7 @@ public enum SlashCommand
     /// <summary><c>/new</c>: forget the conversation and keep the screen — a rule and a notice mark the boundary in the transcript (2026-09-16).</summary>
     New,
 
-    /// <summary><c>/splash</c>: forget the conversation, wipe the screen and show the welcome splash again — the startup view, whatever <c>Welcome splash</c> says (2026-09-19, the user's ask). No argument.</summary>
+    /// <summary><c>/splash</c>: forget the conversation, wipe the screen and show the welcome splash again — the startup view, whatever <c>Welcome splash</c> says (2026-09-19, the user's ask): its tiled pages when it says <c>tiled</c>, else one picture, <c>disabled</c> included (2026-09-24). No argument.</summary>
     Splash,
     /// <summary><c>/theme</c>: pick the colour theme from a list, or <c>/theme &lt;name&gt;</c> (2026-09-23, the user's ask); a change starts over the way <c>/splash</c> does — the conversation forgotten, the screen wiped, the splash shown in the new colours. Refused while a reply runs.</summary>
     Theme,
@@ -93,7 +93,7 @@ public enum SlashCommand
     /// <summary><c>/draft</c>: a temporary text file in your editor; saved and closed, its text is the next message — sent through the input line as a paste, so a long one lands as a token — and the file goes; blank, or closed unsaved, nothing is sent (2026-09-19). No argument.</summary>
     Draft,
 
-    /// <summary><c>/loop &lt;count&gt; &lt;message&gt;</c> | <c>/loop infinite &lt;message&gt;</c>: the message sent that many times, or until ESC or Ctrl+C, each reply waited for as if typed again (2026-09-21, the user's ask). Refused mid-turn like <see cref="Draft"/>: it sends what the running turn cannot take.</summary>
+    /// <summary><c>/loop &lt;count&gt; [delay] &lt;message&gt;</c> | <c>/loop infinite [delay] &lt;message&gt;</c>: the message sent that many times, or until ESC or Ctrl+C, each reply waited for as if typed again (2026-09-21, the user's ask), and with a delay (<c>30s</c>, <c>5m</c>; 2026-09-24) that long a gap after each reply. Refused mid-turn like <see cref="Draft"/>: it sends what the running turn cannot take.</summary>
     Loop,
 
     /// <summary><c>/expand</c>: every folded tool run and code block in the transcript unfolded, and the ones to come (2026-09-22, the user's ask: what <c>/tools expand</c> did that morning, as a root word). No argument; Ctrl+O flips the same state.</summary>
@@ -207,7 +207,7 @@ public static class SlashCommands
             new("/queue", "list and prune the messages queued while a reply runs, or /queue clear"),
             new("/copy", "copy the last reply to the clipboard as markdown, or /copy <n> | all"),
             new("/draft", "write the next message in your editor: a temporary file, sent when it is saved and closed"),
-            new("/loop", "repeat a message, each reply waited for: /loop <count> <message> | infinite <message> (ESC ends it)"),
+            new("/loop", "repeat a message, each reply waited for: /loop <count> [delay] <message> | infinite [delay] <message> (ESC ends it)"),
             new("/expand", "show every line of the folded tool runs and code blocks in the transcript (Ctrl+O flips)"),
             new("/collapse", "fold the tool runs and code blocks in the transcript again"),
         ],
@@ -237,7 +237,7 @@ public static class SlashCommands
             new("/echo", "print a line as a reply and read it aloud when speech is on: /echo <text>"),
             new("/view", "show an image from the working directory in the transcript, as large as the window allows: /view <image>"),
             new("/imagine", "generate a picture on ComfyUI from your own prompt, sent as typed: /imagine [workflow] <prompt> [-- <negative>] [--seed N] [--size WxH]"),
-            new("/comfy", "show the ComfyUI server's status and the workflows the image tools can run, or /comfy edit json|markdown <workflow> to open its file in your editor"),
+            new("/comfy", "show the ComfyUI server's status and the workflows the image tools can run, /comfy edit json|markdown <workflow> to open its file in your editor, or /comfy purge to empty the output folder"),
             new("/window", "show the terminal window's width and height"),
         ],
         [

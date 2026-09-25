@@ -2542,7 +2542,9 @@ public class ScreenPaneTests : IDisposable
         using (pane.BeginBusy("thinking"))
         {
             Assert.True(pane.TryHitHint(0, 102, out hit));
-            Assert.Equal(ScreenPane.HintZone.Row, hit.Zone);   // the busy row records no strip
+            Assert.Equal(new ScreenPane.HintHit(ScreenPane.HintZone.Strip, "🔊", 0), hit);   // the busy row's strip keeps its glyphs (2026-09-24: the brain's mid-turn cancel)
+            Assert.True(pane.TryHitHint(4, 102, out hit));    // the separator
+            Assert.Equal(ScreenPane.HintZone.Row, hit.Zone);
             Assert.True(pane.TryHitHint(5, 102, out hit));
             Assert.Equal(new ScreenPane.HintHit(ScreenPane.HintZone.Usage, "", 5), hit);
             Assert.True(pane.TryHitHint(20, 102, out hit));
@@ -2554,6 +2556,31 @@ public class ScreenPaneTests : IDisposable
         // The standing row again after the turn.
         Assert.True(pane.TryHitHint(5, 102, out hit));
         Assert.Equal(new ScreenPane.HintHit(ScreenPane.HintZone.Usage, "", 5), hit);
+    }
+
+    /// <summary>The busy row's strip (2026-09-24): a zone only when drawn whole — a strip the fit cut is no button.</summary>
+    [Fact]
+    public void TryHitHint_OnTheBusyRow_AStripCutByTheFit_IsNoZone()
+    {
+        _cursorTop = 100;
+        using var pane = Pane();
+        pane.Hint = () => "";
+        pane.Strip = () => "🧠 🔊 🎤";
+        pane.Show();
+        pane.ShowInput("abc", 3);
+        using (pane.BeginBusy("thinking"))
+        {
+            Assert.True(pane.TryHitHint(0, 102, out var hit));
+            Assert.Equal(new ScreenPane.HintHit(ScreenPane.HintZone.Strip, "🧠", 0), hit);   // whole at 40 columns
+        }
+
+        _console.Profile.Width = 9;   // "🧠 🔊 🎤 · " is eleven cells; the frame and the fit leave six
+        pane.RefreshHint();
+        using (pane.BeginBusy("thinking"))
+        {
+            Assert.True(pane.TryHitHint(0, 102, out var hit));
+            Assert.NotEqual(ScreenPane.HintZone.Strip, hit.Zone);
+        }
     }
 
     [Fact]
@@ -2592,12 +2619,13 @@ public class ScreenPaneTests : IDisposable
         Assert.True(pane.TryHitHint(38, 102, out hit));  // the model name too
         Assert.Equal(ScreenPane.HintZone.Trailer, hit.Zone);
 
-        // The busy row carries the scroll's hint as well; its strip and trailer are nobody's, so the whole row is Scrolled —
-        // the spinner and its label included (their Usage zone, 2026-09-21, is the bottom's alone).
+        // The busy row carries the scroll's hint as well; its trailer is nobody's, so the rest of the row is Scrolled —
+        // the spinner and its label included (their Usage zone, 2026-09-21, is the bottom's alone) — while the strip's
+        // glyph keeps its zone, as on the standing row (2026-09-24).
         using (pane.BeginBusy("thinking"))
         {
             Assert.True(pane.TryHitHint(0, 102, out hit));
-            Assert.Equal(ScreenPane.HintZone.Scrolled, hit.Zone);
+            Assert.Equal(new ScreenPane.HintHit(ScreenPane.HintZone.Strip, "🔊", 0), hit);
             Assert.True(pane.TryHitHint(8, 102, out hit));
             Assert.Equal(ScreenPane.HintZone.Scrolled, hit.Zone);
             Assert.True(pane.TryHitHint(38, 102, out hit));

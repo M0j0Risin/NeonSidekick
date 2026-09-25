@@ -263,6 +263,14 @@ internal sealed partial class ChatScreen
     public const string SplashHint = "← → slideshow";
 
     /// <summary>
+    /// The hint row's lead while the tiled splash stands with two or more pages (2026-09-24,
+    /// <c>Welcome splash</c> <c>tiled</c>): the arrows and where they are — <c>← → page 2 of 5</c>,
+    /// one-based. Stands where <see cref="SplashHint"/> does, under the same rules. Pinned.
+    /// </summary>
+    public static string SplashPageHint(int page, int count) =>
+        string.Create(CultureInfo.InvariantCulture, $"← → page {page + 1} of {count}");
+
+    /// <summary>
     /// The hint row after one Delete over a profile's splash picture; the next Delete in a row within
     /// <see cref="SplashDeleteWindow"/> moves the file into the folder's <c>.trash</c> (2026-09-24). The
     /// only hint the feature has: the idle row never advertises it (the user's call). Pinned.
@@ -322,8 +330,12 @@ internal sealed partial class ChatScreen
 
     // The /loop words and lines (2026-09-21, the user's ask). Pinned.
     public const string LoopInfiniteWord = "infinite";
-    public const string LoopInfiniteNote = "send the message until ESC or Ctrl+C stops it: /loop infinite <message>";
-    public const string LoopUsageError = "Usage: /loop <count> <message>, or /loop infinite <message> (ESC or Ctrl+C stops it).";
+    public const string LoopInfiniteNote = "send the message until ESC or Ctrl+C stops it: /loop infinite [delay] <message>";
+    public const string LoopUsageError = "Usage: /loop <count> [delay] <message>, or /loop infinite [delay] <message>; delay like 30s, 5m, 1h30m (ESC or Ctrl+C stops it).";
+    /// <summary>The longest wait between passes: <c>/timer</c>'s ceiling, 24 hours (2026-09-24).</summary>
+    public static readonly TimeSpan LoopMaxDelay = TimeSpan.FromHours(24);
+    /// <summary>The notice before the wait between two passes.</summary>
+    public static string LoopWaitNotice(TimeSpan delay) => $"(loop waiting {TimerText.Describe(delay)})";
     /// <summary>The notice above each pass: the count so far, of the total when there is one.</summary>
     public static string LoopTurnNotice(int n, int? total) => total is null ? $"(loop {n})" : $"(loop {n} of {total})";
     /// <summary>The notice after the last pass of a counted loop.</summary>
@@ -335,11 +347,19 @@ internal sealed partial class ChatScreen
     /// <c>/loop</c>'s grammar (2026-09-21): the first word is <see cref="LoopInfiniteWord"/> (any
     /// case; <paramref name="count"/> null) or a whole number of 1 or more (invariant digits, no
     /// sign), and what follows, trimmed, is the message — never empty. False for anything else. Pure.
+    ///
+    /// <para>The delay (2026-09-24, the user's ask): the word after the count is the gap to wait
+    /// after each reply before the next pass when <see cref="TimerText.TryParseDuration(string, out TimeSpan)"/>
+    /// takes it and it is not all digits (a bare number is <c>/timer</c>'s minutes, too easily read as
+    /// part of the message) — <c>30s</c>, <c>5m</c>, <c>1h30m</c>, one word, at most
+    /// <see cref="LoopMaxDelay"/>. A word that is no duration is the message's first, as before; a
+    /// duration past the ceiling, or with nothing after it, is a usage error.</para>
     /// </summary>
-    public static bool TryParseLoopArgs(string args, out int? count, out string message)
+    public static bool TryParseLoopArgs(string args, out int? count, out TimeSpan? delay, out string message)
     {
         ArgumentNullException.ThrowIfNull(args);
         count = null;
+        delay = null;
         message = "";
         string trimmed = args.Trim();
         int split = trimmed.IndexOfAny([' ', '\t']);
@@ -355,18 +375,31 @@ internal sealed partial class ChatScreen
             return false;
         }
 
-        if (string.Equals(first, LoopInfiniteWord, StringComparison.OrdinalIgnoreCase))
+        if (!string.Equals(first, LoopInfiniteWord, StringComparison.OrdinalIgnoreCase))
         {
-            message = rest;
-            return true;
+            if (!int.TryParse(first, NumberStyles.None, CultureInfo.InvariantCulture, out int n) || n < 1)
+            {
+                return false;
+            }
+
+            count = n;
         }
 
-        if (!int.TryParse(first, NumberStyles.None, CultureInfo.InvariantCulture, out int n) || n < 1)
+        int wordEnd = rest.IndexOfAny([' ', '\t']);
+        string word = wordEnd < 0 ? rest : rest[..wordEnd];
+        if (!word.All(char.IsAsciiDigit) && TimerText.TryParseDuration(word, out var wait))
         {
-            return false;
+            string after = wordEnd < 0 ? "" : rest[(wordEnd + 1)..].Trim();
+            if (wait > LoopMaxDelay || after.Length == 0)
+            {
+                count = null;
+                return false;
+            }
+
+            delay = wait;
+            rest = after;
         }
 
-        count = n;
         message = rest;
         return true;
     }
@@ -470,12 +503,22 @@ internal sealed partial class ChatScreen
     // folder (CycleSplash reads the folder live, so a file dropped or removed mid-session moves the
     // walk and not the hint until the next show). The folder (2026-09-24) is the source's
     // SplashSource.Directory at the show — the profile's own splash folder, null over the embedded
-    // set — what Delete Delete removes the named file from. All five fall together (ForgetSplash).
+    // set — what Delete Delete removes the named file from. The page (2026-09-24) is the tiled
+    // splash's (Welcome splash tiled): the page on screen, zero-based, null while one picture stands —
+    // then the count is the pages', the name and the folder null (no one picture to step from or to
+    // trash). All six fall together (ForgetSplash). The tiles are the tiled splash's pictures read
+    // once for a source and a box (ShowSplashPage), kept across a page flip and the redraw it makes —
+    // registered for a double-click once, too — and read again when the names, the folder or the box change.
     private bool _splashShown;
     private bool _splashForced;
     private string? _splashName;
     private int _splashCount;
     private string? _splashFolder;
+    private int? _splashPage;
+    private SplashTiles? _splashTiles;
+
+    /// <summary>The tiled splash's decoded pictures for one source and one thumbnail box, with their double-click ids.</summary>
+    private sealed record SplashTiles(IReadOnlyList<string> Names, string? Directory, ThumbnailBox Box, List<ImageThumbnail> Thumbnails, List<int> Ids);
     private readonly IReadOnlyList<AIFunction> _clockTools;
     private readonly WorkingDirectory _files;
     private readonly IReadOnlyList<AIFunction> _fileTools;
@@ -510,7 +553,10 @@ internal sealed partial class ChatScreen
     private readonly InputLine _input;
     private readonly Action<string, string> _openImage;
 
-    /// <summary>A picture drawn in the transcript, for a double-click to open (later on 2026-09-24): its name, the file it came from when there is one, and its bytes for when there is none.</summary>
+    /// <summary>
+    /// A picture drawn in the transcript, for a double-click to open (later on 2026-09-24): its name, the file it came from
+    /// when there is one, and its bytes for when there is none. An open prints nothing; only an error does (2026-09-24, the user's call).
+    /// </summary>
     private sealed record PictureSource(string Name, string? FullPath, byte[] Bytes);
 
     // Every picture drawn, by id (its index); read on the watcher task too, so under its own lock.
@@ -723,7 +769,7 @@ internal sealed partial class ChatScreen
     /// <param name="web">What the web tools run over (the client, the headless browser, the page cache); null = the app's own over the live <c>Web browser network mode</c> setting. Tests pass one over a stub client.</param>
     /// <param name="setTitle">What sets the terminal window's title to <see cref="WindowTitle"/> at launch and after every profile switch (<see cref="ConsoleTitle.TrySet"/> in the app; tests record the titles); null = never.</param>
     /// <param name="externalSkills">The cross-client skills folder (<see cref="SkillRoots.DefaultExternalDirectory"/> in the app; tests a temp folder); null = the app's.</param>
-    /// <param name="splash">The welcome splash pictures (<see cref="SplashImages.Source"/> in the app: the embedded names and their loader — one picked at random with <paramref name="random"/> at startup, the others walked by Left / Right; tests a name list over generated pictures); null = no splash whatever <see cref="AppSettingsData.WelcomeSplash"/> says.</param>
+    /// <param name="splash">The welcome splash pictures (<see cref="SplashImages.Source"/> in the app: the embedded names and their loader — one picked at random with <paramref name="random"/> at startup, the others walked by Left / Right; tests a name list over generated pictures); null = no splash whatever <see cref="AppSettingsData.WelcomeSplashMode"/> says.</param>
     /// <param name="editDraft">Opens <c>/draft</c>'s temporary file (the path, the <c>Draft editor</c> command line — blank for the shell's default — and a token) and completes when the editor is done with it (<see cref="PersonaFile.EditAndWaitAsync"/> in the app; tests a lambda that writes the file, or waits on the token); null = <c>/draft</c> answers <see cref="DraftUnavailableError"/>.</param>
     /// <param name="mcp">The MCP servers' session (2026-09-20; <see cref="SidekickApp"/> builds one beside the LLM session and disposes it after the screen); null = the screen builds its own over the real transports and disposes it when it closes (the tests', with nothing configured in their temp home).</param>
     /// <param name="environment">Reads a system variable for the shell probe (<c>PATH</c>, <c>PATHEXT</c>; <see cref="EnvironmentOverrides.System"/> in the app, 2026-09-21); null = no PATH at all, which still finds <c>cmd.exe</c> and Windows PowerShell under the system folder (the tests' deterministic pair).</param>
@@ -867,7 +913,7 @@ internal sealed partial class ChatScreen
         // The @-mention list asks the sandbox as it stands at the keystroke (the root is a live read too);
         // the command and #-mention lists the catalog and the two Skills-tab switches (2026-09-17);
         // Ctrl+C over a selection writes the clipboard with /copy's writer.
-        _input = new InputLine(_pane, keys, clipboard, _transcript, clipboardImage, query => _files.Complete(query), CommandChoices, ArgumentChoices, HashChoices, DollarChoices, _copy, PercentChoices);
+        _input = new InputLine(_pane, keys, clipboard, _transcript, clipboardImage, query => _files.Complete(query), CommandChoices, ArgumentChoices, HashChoices, DollarChoices, _copy, PercentChoices, CaretChoices);
         _input.OpenPicture = OpenPicture;
         _mouse = mouse;
         _holdWheel = holdWheel;
@@ -929,10 +975,14 @@ internal sealed partial class ChatScreen
     /// <paramref name="rest"/> (the timers / usage / reading line) is empty, else the two with
     /// <see cref="HintJoin"/> between — <c>← → slideshow · 4.6k / 151.4k · 3%</c>. Pinned.
     /// </summary>
-    public static string SplashHintLine(string rest)
+    public static string SplashHintLine(string rest) => SplashHintLine(rest, SplashHint);
+
+    /// <summary>As <see cref="SplashHintLine(string)"/> with <paramref name="lead"/> in place of <see cref="SplashHint"/> (the tiled splash's <see cref="SplashPageHint"/>, 2026-09-24).</summary>
+    public static string SplashHintLine(string rest, string lead)
     {
         ArgumentNullException.ThrowIfNull(rest);
-        return rest.Length == 0 ? SplashHint : SplashHint + HintJoin + rest;
+        ArgumentNullException.ThrowIfNull(lead);
+        return rest.Length == 0 ? lead : lead + HintJoin + rest;
     }
 
     /// <summary>
@@ -1210,7 +1260,12 @@ internal sealed partial class ChatScreen
         }
 
         string rest = HintLine(TimerText.StatusLine(_timers.Snapshot()), UsageText.HintPart(_session.Usage, _session.ContextLength), _hintReading?.StatusLine());
-        return SplashArrowsOffered() && _pane.DraftEmpty ? SplashHintLine(rest) : rest;
+        if (!SplashArrowsOffered() || !_pane.DraftEmpty)
+        {
+            return rest;
+        }
+
+        return _splashPage is { } page ? SplashHintLine(rest, SplashPageHint(page, _splashCount)) : SplashHintLine(rest);
     }
 
     /// <summary>A first Ctrl+C is still fresh: the next one exits.</summary>
@@ -1432,7 +1487,8 @@ internal sealed partial class ChatScreen
     /// 2026-09-21) answer <see cref="SlashCommands.UsageWord"/> — the Usage pane under the reply;
     /// two on a toolbar glyph (later on 2026-09-21) answer its <see cref="ToolbarWord"/> — the
     /// pane under the reply, as the typed command's — while the path is inert there (<c>/cwd</c>
-    /// is refused mid-turn, and a click deserves no refusal notice).
+    /// is refused mid-turn, and a click deserves no refusal notice); two on the strip's brain
+    /// (2026-09-24) cancel the running reflection, nothing answered — the other strip glyphs stay inert here.
     /// Any other click ends a pair. Every watcher passes it (a reply, a
     /// compact, a recording): a word answered without a line hook is dropped.
     /// </summary>
@@ -1495,6 +1551,20 @@ internal sealed partial class ChatScreen
             if (hit.Zone == ScreenPane.HintZone.Usage)
             {
                 return _queuedClicks.Second(2) ? SlashCommands.UsageWord : null;
+            }
+
+            if (hit.Zone == ScreenPane.HintZone.Strip && hit.Glyph == LearnStripGlyph)
+            {
+                // The brain on the busy row (2026-09-24, the user's ask: a reflection sharing the server
+                // can hold the reply up): the pair cancels it, as at idle; the line waits in the
+                // reflections' queue for the turn's end, since the turn task is the one transcript writer.
+                if (_queuedClicks.Second(InputLine.HintPairKey(hit)))
+                {
+                    _session.CancelLearning();
+                    _learnNotices.Enqueue(LearnCancelledNotice);
+                }
+
+                return null;
             }
         }
 
@@ -2252,6 +2322,24 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>
+    /// The input line's <c>^</c>-mention list (later still on 2026-09-24): the offered ComfyUI workflows (<see cref="ComfyChoices"/>)
+    /// while the setting <c>^-mention enabled</c> is on and the image tools are offered (<see cref="ComfyOffered"/>), else
+    /// nothing — <c>^</c> is ordinary text then. A hidden workflow is left out: the model could not run it.
+    /// </summary>
+    private IReadOnlyList<CompletionItem> CaretChoices()
+    {
+        var effective = _effective();
+        return effective.ComfyCaretMention && ComfyOffered(effective, _comfy) ? ComfyChoices(_comfy.OfferedWorkflows()) : [];
+    }
+
+    /// <summary>The workflows as mention items (later still on 2026-09-24): each name with <see cref="ComfyText.CompletionNote"/>, in the catalog's order. Pure.</summary>
+    public static IReadOnlyList<CompletionItem> ComfyChoices(IReadOnlyList<ComfyWorkflow> workflows)
+    {
+        ArgumentNullException.ThrowIfNull(workflows);
+        return workflows.Select(w => new CompletionItem(w.Name, ComfyText.CompletionNote(w, offered: true))).ToList();
+    }
+
+    /// <summary>
     /// The input line's command list (2026-09-17): the base commands — less <c>/exit</c> under
     /// <c>Hide /exit autocomplete</c> (2026-09-18) and less <c>/queue</c> while <c>Queue messages</c>
     /// is off (later that day; a pane there would list nothing). Every switch is read at each call
@@ -2552,7 +2640,7 @@ internal sealed partial class ChatScreen
                     return MentionCompleter.Matches([new(ComfyEditWord + " " + ComfyJsonWord, ComfyJsonNote), new(ComfyEditWord + " " + ComfyMarkdownWord, ComfyMarkdownNote)], argText);
                 }
 
-                return MentionCompleter.Matches([new(ComfyEditWord, ComfyEditNote)], argText);
+                return MentionCompleter.Matches([new(ComfyEditWord, ComfyEditNote), new(ComfyPurgeWord, ComfyPurgeNote)], argText);
             }
 
             case SlashCommand.Imagine:
@@ -4544,21 +4632,31 @@ internal sealed partial class ChatScreen
     private Task<string?> BrowseVaultAsync(string openOn, CancellationToken cancellationToken) =>
         BrowseFolderAsync(string.IsNullOrWhiteSpace(openOn) ? WorkingDirectory.Resolve(_effective().WorkingDirectory, _settings.ProfileDirectory) : openOn, cancellationToken);
 
-    /// <summary>The tree both pickers show (the drives <c>File browser roots</c> allows, the profile's <c>files</c> folder a shortcut above them), opened on <paramref name="openOn"/>; the full path picked, or null.</summary>
+    /// <summary>
+    /// The tree both pickers show (the drives <c>File browser roots</c> allows; above them the profile's <c>files</c>
+    /// folder and, since 2026-09-24, its <c>splash</c> folder as shortcuts), opened on <paramref name="openOn"/>; the full
+    /// path picked, or null.
+    /// </summary>
     private async Task<string?> BrowseFolderAsync(string openOn, CancellationToken cancellationToken)
     {
         var effective = _effective();
         string profileFiles = WorkingDirectory.Resolve("", _settings.ProfileDirectory);
-        try
+        string splash = _settings.ProfileSplashDirectory;
+        foreach (string folder in (string[])[profileFiles, splash])
         {
-            Directory.CreateDirectory(profileFiles);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            // Left to the tree: the row opens as denied.
+            try
+            {
+                Directory.CreateDirectory(folder);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // Left to the tree: the row opens as denied.
+            }
         }
 
-        var tree = new FolderTree(new FileSystemFolders(FileBrowserMode.Resolve(effective)), [new FolderShortcut(FolderText.ProfileLabel, profileFiles)]);
+        var tree = new FolderTree(
+            new FileSystemFolders(FileBrowserMode.Resolve(effective)),
+            [new FolderShortcut(FolderText.ProfileLabel, profileFiles, FolderText.ShortcutGlyph), new FolderShortcut(FolderText.SplashLabel, splash, FolderText.SplashGlyph)]);
         int cursor = tree.ExpandTo(openOn);
         return await _folderPane.PickAsync(tree, cursor, cancellationToken).ConfigureAwait(false);
     }
@@ -5030,7 +5128,7 @@ internal sealed partial class ChatScreen
             return;
         }
 
-        var box = ThumbnailSize.Fit(_pane.Profile.Width, _pane.Profile.Height, _pane.Enabled ? ScreenPane.PaneRows + _pane.InputRows + _pane.ToolbarRows : 0);
+        var box = WindowBox();
         if (ImageThumbnail.Read(image, box.Columns, box.MaxRows) is not { } picture)
         {
             _transcript.Error(ViewNotDrawnError(result.Relative));
@@ -5097,12 +5195,19 @@ internal sealed partial class ChatScreen
         DrainDiagnostics();
     }
 
+    /// <summary>
+    /// The box of a picture as large as the transcript allows: <see cref="ThumbnailSize.Fit"/> over the console's size less
+    /// the pane's rows. <c>/view</c>'s, a lone <c>/imagine</c> picture's, and every thumbnail's under <c>fullsize</c> (2026-09-24).
+    /// </summary>
+    private ThumbnailBox WindowBox() =>
+        ThumbnailSize.Fit(_pane.Profile.Width, _pane.Profile.Height, _pane.Enabled ? ScreenPane.PaneRows + _pane.InputRows + _pane.ToolbarRows : 0);
+
     /// <summary>One picture as large as the window allows (the <c>/view</c> box), several as a thumbnail strip.</summary>
     private void ShowPictures(IReadOnlyList<ImageAttachment> images)
     {
         if (images.Count == 1)
         {
-            var box = ThumbnailSize.Fit(_pane.Profile.Width, _pane.Profile.Height, _pane.Enabled ? ScreenPane.PaneRows + _pane.InputRows + _pane.ToolbarRows : 0);
+            var box = WindowBox();
             if (ImageThumbnail.Read(images[0], box.Columns, box.MaxRows) is { } picture)
             {
                 _transcript.Picture(picture, RegisterPicture(images[0], sandbox: true));
@@ -5111,7 +5216,7 @@ internal sealed partial class ChatScreen
             return;
         }
 
-        var (tiles, ids) = ReadThumbnails(images, ThumbnailSize.Resolve(_effective()), sandbox: true);
+        var (tiles, ids) = ReadThumbnails(images, ThumbnailSize.Resolve(_effective(), WindowBox()), sandbox: true);
         _transcript.Images(tiles, ids);
     }
 
@@ -5130,8 +5235,12 @@ internal sealed partial class ChatScreen
         return (notes + "\n\n" + text, all);
     }
 
-    /// <summary>The one verb <c>/comfy</c> takes (later still on 2026-09-24). Pinned.</summary>
+    /// <summary>The first verb <c>/comfy</c> took (later still on 2026-09-24). Pinned.</summary>
     public const string ComfyEditWord = "edit";
+
+    /// <summary><c>/comfy purge</c> (later still on 2026-09-24, the user's ask): the output folder emptied, <c>.pasted</c> included. Pinned.</summary>
+    public const string ComfyPurgeWord = "purge";
+    public const string ComfyPurgeNote = "delete every picture in the ComfyUI output folder, the pasted inputs too";
 
     /// <summary>The two kinds of file <c>/comfy edit</c> opens (the user's call, later still that day: the graph too, not only the settings). Pinned.</summary>
     public const string ComfyJsonWord = "json";
@@ -5143,7 +5252,7 @@ internal sealed partial class ChatScreen
     public const string ComfyMarkdownNote = "open a workflow's .md (its settings and tips) in your editor";
 
     /// <summary>A <c>/comfy</c> argument that is not <c>edit json|markdown &lt;workflow&gt;</c>. Pinned.</summary>
-    public const string ComfyUsageError = "Usage: /comfy, or /comfy edit json|markdown <workflow>";
+    public const string ComfyUsageError = "Usage: /comfy, /comfy purge, or /comfy edit json|markdown <workflow>";
 
     /// <summary>The line after <c>/comfy edit</c> opened a workflow's file; <paramref name="created"/> when an <c>.md</c> had to be made first. Pinned.</summary>
     public static string ComfyEditNotice(string name, string path, bool json, bool created) =>
@@ -5198,6 +5307,84 @@ internal sealed partial class ChatScreen
         {
             _transcript.Error(ComfyEditFailedError(path, ex.Message));
         }
+    }
+
+    /// <summary>The confirmation line before a <c>/comfy purge</c>: the folder and what is in it; <c>y</c> or <c>yes</c> deletes, anything else keeps. Pinned.</summary>
+    public static string ComfyPurgePrompt(string path, int files, int folders, long bytes, bool truncated) =>
+        $"{TrashGlyph}Delete everything in {path} for good — {TrashContents(files, folders, bytes)}"
+        + (truncated ? $", counted the first {WorkingDirectory.MaxInfoEntries.ToString("N0", CultureInfo.InvariantCulture)} entries only" : "")
+        + "?";
+
+    public static string ComfyPurgeEmptyNotice(string path) => $"({TrashGlyph}nothing in {path})";
+
+    public static string ComfyPurgedNotice(string path, int files, int folders, long bytes) => $"({TrashGlyph}purged {path}: {TrashContents(files, folders, bytes)})";
+
+    /// <summary>A <c>/comfy purge</c> with the output folder set to the working directory itself: refused, it would take everything. Pinned.</summary>
+    public const string ComfyPurgeHereError = "Not purging: the ComfyUI output folder is the working directory itself; set a folder under it first.";
+
+    public static string ComfyPurgeFailedError(string path, string detail) => $"Could not purge {path}: {detail}";
+
+    /// <summary>
+    /// <c>/comfy purge</c> (later still on 2026-09-24, the user's ask): everything in the ComfyUI output folder — the pictures,
+    /// the <c>.pasted</c> inputs, anything else put there — deleted for good, the folder kept; shaped like <c>/emptytrash</c>
+    /// (the count, one typed confirmation, then <see cref="WorkingDirectory.PurgeFolder"/>). An output folder that is the working
+    /// directory itself is refused rather than asked about. A paste saved before is written again at its next use.
+    /// </summary>
+    private async Task PurgeComfyAsync(CancellationToken cancellationToken)
+    {
+        string folder = ComfyStudio.OutputFolder(_effective().ComfyOutputFolder);
+        var outcome = _files.Resolve(folder, forWrite: true, out string full);
+        if (outcome == FileOutcome.Ok && string.Equals(full, _files.Root, StringComparison.OrdinalIgnoreCase))
+        {
+            _flow.Error(ComfyPurgeHereError);
+            return;
+        }
+
+        if (outcome != FileOutcome.Ok)
+        {
+            _flow.Error(FileText.Error(outcome, folder, "purge"));
+            return;
+        }
+
+        var info = _files.Info(folder);
+        if (info.Outcome == FileOutcome.Missing || (info.Outcome == FileOutcome.Ok && info.Files == 0 && info.Folders == 0))
+        {
+            _flow.Notice(ComfyPurgeEmptyNotice(full));
+            return;
+        }
+
+        if (info.Outcome != FileOutcome.Ok)
+        {
+            _flow.Error(ComfyPurgeFailedError(full, info.Detail));
+            return;
+        }
+
+        if (!info.IsDirectory)
+        {
+            _flow.Error(ComfyPurgeFailedError(full, "it is a file, not a folder"));
+            return;
+        }
+
+        if (!await ConfirmAsync(ComfyPurgePrompt(full, info.Files, info.Folders, info.Bytes, info.Truncated), cancellationToken).ConfigureAwait(false))
+        {
+            _flow.Notice(KeptNotice);
+            return;
+        }
+
+        RunOrPost(() =>
+        {
+            var result = _files.PurgeFolder(folder);
+            if (result.Outcome == FileOutcome.Ok)
+            {
+                _transcript.Notice(ComfyPurgedNotice(full, result.Files, result.Folders, result.Bytes));
+            }
+            else
+            {
+                _transcript.Error(ComfyPurgeFailedError(full, result.Detail.Length > 0 ? result.Detail : result.Outcome.ToString()));
+            }
+
+            DrainDiagnostics();
+        });
     }
 
     /// <summary>
@@ -5802,7 +5989,7 @@ internal sealed partial class ChatScreen
                         if (hint.Hit.Zone == ScreenPane.HintZone.Strip && hint.Hit.Glyph == LearnStripGlyph)
                         {
                             // The brain is drawn only while a reflection runs, so the click is its
-                            // cancel (the idle line's alone: the busy row records no strip). The job
+                            // cancel (the busy row's too since 2026-09-24, through HintClickLine). The job
                             // answers Cancelled, which LearnNotice keeps quiet, so the line is written here.
                             _session.CancelLearning();
                             _transcript.Notice(LearnCancelledNotice);
@@ -6257,7 +6444,7 @@ internal sealed partial class ChatScreen
         ForgetSplash();
     }
 
-    /// <summary>The splash is off the screen: its flags, its name, its count, its folder and the delete's arm fall together.</summary>
+    /// <summary>The splash is off the screen: its flags, its name, its count, its folder, its page and the delete's arm fall together (the tiles stay: they are read again only when their source or box changes).</summary>
     private void ForgetSplash()
     {
         _splashShown = false;
@@ -6265,6 +6452,7 @@ internal sealed partial class ChatScreen
         _splashName = null;
         _splashCount = 0;
         _splashFolder = null;
+        _splashPage = null;
         Volatile.Write(ref _splashDeleteArmedUntil, 0);
     }
 
@@ -6273,17 +6461,28 @@ internal sealed partial class ChatScreen
     /// picked with the screen's <see cref="Random"/>) drawn once at startup, centred, filling the
     /// rows of the transcript region under the banner and the startup lines — the <c>/view</c>
     /// shape (<see cref="ThumbnailSize.Fit"/> with the flow's rows, <see cref="ScreenPane.FlowRow"/>, reserved too), so the aspect is
-    /// kept and the banner stays. Behind <see cref="AppSettingsData.WelcomeSplash"/> and the pane;
+    /// kept and the banner stays. Behind <see cref="AppSettingsData.WelcomeSplashMode"/> and the pane;
     /// nothing without a picture source (headless, tests that pass none) or a picture the codecs
     /// refuse (logged at Trace by the loader). <c>Show image thumbnails</c> is not consulted.
     /// <paramref name="force"/> is <c>/splash</c>'s (later on 2026-09-19, the user's ask): the
     /// picture whatever <c>Welcome splash</c> says, and the arrows walk it whatever it says too
-    /// (<see cref="CycleSplash"/> reads <c>_splashForced</c>).
+    /// (<see cref="CycleSplash"/> reads <c>_splashForced</c>). Since 2026-09-24 <c>Welcome splash</c> is
+    /// a pick (<see cref="SplashMode"/>): <c>fullsize</c> is all of the above, <c>disabled</c> the old off,
+    /// and <c>tiled</c> the first page of thumbnails instead (<see cref="ShowSplashPage"/>) — forced too,
+    /// so <c>/splash</c> shows the style chosen, one picture when that is <c>disabled</c>.
     /// </summary>
     private void ShowSplash(bool force = false)
     {
-        if (!_pane.Enabled || (!force && !_effective().WelcomeSplash) || CurrentSplash(log: true) is not { } source)
+        var style = SplashMode.Resolve(_effective());
+        if (!_pane.Enabled || (!force && style == SplashStyle.Disabled) || CurrentSplash(log: true) is not { } source)
         {
+            return;
+        }
+
+        if (style == SplashStyle.Tiled)
+        {
+            ShowSplashPage(source, 0);
+            _splashForced = force && _splashShown;
             return;
         }
 
@@ -6330,7 +6529,7 @@ internal sealed partial class ChatScreen
             return;
         }
 
-        var box = ThumbnailSize.Fit(_pane.Profile.Width, _pane.Profile.Height, _pane.FlowRow + ScreenPane.PaneRows + _pane.InputRows + _pane.ToolbarRows);
+        var box = SplashArea();
         if (ImageThumbnail.Read(image, box.Columns, box.MaxRows) is not { } picture)
         {
             return;
@@ -6341,6 +6540,59 @@ internal sealed partial class ChatScreen
         _splashName = name;
         _splashCount = source.Names.Count;
         _splashFolder = source.Directory;
+        _splashPage = null;
+    }
+
+    /// <summary>The transcript's rows under the banner and the startup lines: the <c>/view</c> box with the flow's rows reserved too — the whole splash's, and the tiled splash's page.</summary>
+    private ThumbnailBox SplashArea() =>
+        ThumbnailSize.Fit(_pane.Profile.Width, _pane.Profile.Height, _pane.FlowRow + ScreenPane.PaneRows + _pane.InputRows + _pane.ToolbarRows);
+
+    /// <summary>
+    /// The tiled splash (2026-09-24, the user's ask: <c>Welcome splash</c> <c>tiled</c>): page
+    /// <paramref name="page"/> (wrapped into range, so a resize or a removed file that leaves fewer pages
+    /// still lands on one) of <paramref name="source"/>'s pictures as thumbnails at <c>Image thumbnail size</c>
+    /// (<see cref="ThumbnailSize.Resolve"/> over <see cref="SplashArea"/>, so <c>fullsize</c> is one picture a
+    /// page), in name order, only as many as fit under the banner (<see cref="SplashImages.Paginate"/>),
+    /// tiled left to right by the sent pictures' own strip (<see cref="TranscriptRenderer.Images"/>) — a
+    /// double-click opens one. The pictures are read once per source and box (<c>_splashTiles</c>); one
+    /// that does not load is left out. Nothing, and the splash gone, when none loads.
+    /// </summary>
+    private void ShowSplashPage(SplashSource source, int page)
+    {
+        var area = SplashArea();
+        var box = ThumbnailSize.Resolve(_effective(), area);
+        var tiles = _splashTiles;
+        if (tiles is null || tiles.Box != box || !string.Equals(tiles.Directory, source.Directory, StringComparison.Ordinal)
+            || !tiles.Names.SequenceEqual(source.Names, StringComparer.Ordinal))
+        {
+            var thumbnails = new List<ImageThumbnail>(source.Names.Count);
+            var ids = new List<int>(source.Names.Count);
+            foreach (string name in source.Names)
+            {
+                if (source.Load(name) is { } image && ImageThumbnail.Read(image, box.Columns, box.MaxRows) is { } thumbnail)
+                {
+                    thumbnails.Add(thumbnail);
+                    ids.Add(RegisterPicture(image, sandbox: false));
+                }
+            }
+
+            tiles = _splashTiles = new SplashTiles(source.Names.ToArray(), source.Directory, box, thumbnails, ids);
+        }
+
+        var pages = SplashImages.Paginate(tiles.Thumbnails, _pane.Profile.Width, area.MaxRows);
+        if (pages.Count == 0)
+        {
+            return;
+        }
+
+        int at = (page % pages.Count + pages.Count) % pages.Count;
+        var (start, count) = pages[at];
+        _transcript.Images(tiles.Thumbnails.GetRange(start, count), tiles.Ids.GetRange(start, count));
+        _splashShown = true;
+        _splashName = null;
+        _splashCount = pages.Count;
+        _splashFolder = null;
+        _splashPage = at;
     }
 
     /// <summary>
@@ -6350,7 +6602,7 @@ internal sealed partial class ChatScreen
     /// and two or more pictures at the show.
     /// </summary>
     private bool SplashArrowsOffered() =>
-        _splashShown && _pane.Enabled && (_splashForced || _effective().WelcomeSplash) && _splashCount >= 2;
+        _splashShown && _pane.Enabled && (_splashForced || SplashMode.Resolve(_effective()) != SplashStyle.Disabled) && _splashCount >= 2;
 
     /// <summary>
     /// Left or Right at an empty idle line while the welcome splash stands (2026-09-19, the user's
@@ -6362,10 +6614,30 @@ internal sealed partial class ChatScreen
     /// line's, a no-op on an empty draft — once the splash is gone, without the pane or a source,
     /// with <c>Welcome splash</c> off (read live, so a flip mid-session stops the walk — unless
     /// <c>/splash</c> drew the picture, which the setting never gates) or with
-    /// fewer than two pictures. The input line's <c>emptyArrow</c> hook.
+    /// fewer than two pictures. The input line's <c>emptyArrow</c> hook. Over the tiled splash
+    /// (2026-09-24) the arrows page instead: the previous or next set, wrapping, re-paged live
+    /// (<see cref="ShowSplashPage"/>), so a resize or a dropped file counts.
     /// </summary>
     private bool CycleSplash(int step)
     {
+        if (_splashPage is { } page)
+        {
+            if (!SplashArrowsOffered() || CurrentSplash() is not { } pages)
+            {
+                return false;
+            }
+
+            bool pageForced = _splashForced;
+            using (_pane.Batch())
+            {
+                RedrawScreen();
+                ShowSplashPage(pages, page + step);
+                _splashForced = pageForced && _splashShown;
+            }
+
+            return true;
+        }
+
         if (!SplashArrowsOffered() || CurrentSplash() is not { } source || source.Names.Count < 2)
         {
             return false;
@@ -6639,12 +6911,25 @@ internal sealed partial class ChatScreen
     /// after the work as well as caught, since a session may swallow the cancel into a result.
     /// True when a key cancelled it (the caller prints its own notice); the app token still
     /// propagates. Drains the diagnostics either way.
+    ///
+    /// <para><paramref name="pointer"/> (2026-09-24, the user's ask: a <c>/loop</c> wait froze the
+    /// transcript's pictures) gives the watcher a reply's mouse — the wheel and scroll keys through
+    /// <see cref="ScrollInput"/>, clicks through <see cref="HintClickLine"/> (a picture's double-click
+    /// opens it, a tool run folds) — for a wait long enough to read the transcript through. A word a
+    /// click answers is dropped: no line hook runs panes here.</para>
     /// </summary>
-    private async Task<bool> WaitUnderWatchAsync(Func<CancellationToken, Task> work, Func<ConsoleKeyInfo, bool> cancel, CancellationToken cancellationToken)
+    private async Task<bool> WaitUnderWatchAsync(Func<CancellationToken, Task> work, Func<ConsoleKeyInfo, bool> cancel, CancellationToken cancellationToken, bool pointer = false)
     {
         using var workCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         using var stop = new CancellationTokenSource();
-        var watcher = _keys.WatchAsync(workCts, stop.Token, null, null, cancel: cancel);
+        if (pointer)
+        {
+            _queuedClicks.Reset();
+        }
+
+        var watcher = pointer
+            ? _keys.WatchAsync(workCts, stop.Token, null, null, spend: e => { _queuedClicks.Reset(); return ScrollInput(e); }, cancel: cancel, onClick: _pane.Enabled ? HintClickLine : null)
+            : _keys.WatchAsync(workCts, stop.Token, null, null, cancel: cancel);
         try
         {
             await work(workCts.Token).ConfigureAwait(false);
@@ -7238,6 +7523,12 @@ internal sealed partial class ChatScreen
                 return false;
 
             case SlashCommand.Comfy:
+                if (string.Equals(args.Trim(), ComfyPurgeWord, StringComparison.OrdinalIgnoreCase))
+                {
+                    await PurgeComfyAsync(cancellationToken).ConfigureAwait(false);
+                    return false;
+                }
+
                 if (args.Length > 0)
                 {
                     HandleComfyVerb(args);
@@ -7930,11 +8221,14 @@ internal sealed partial class ChatScreen
     /// (<see cref="_lastTurnFailed"/>: a server that is down is not asked again and again) and on the
     /// app token. A withdrawn pass restores the <c>/loop</c> line itself (the history's last line), so
     /// the loop is one Enter from a re-run. The images go with the first pass alone. Messages queued
-    /// mid-turn wait for the loop's end, as they wait for any reply. Returns true when the shell should exit.
+    /// mid-turn wait for the loop's end, as they wait for any reply. With a delay (2026-09-24,
+    /// the user's ask) each pass after the first waits that long first — the gap after the last reply
+    /// ends, not a period between starts — and ESC or Ctrl+C in the wait stops the loop as it would a
+    /// reply. Returns true when the shell should exit.
     /// </summary>
     private async Task<bool> HandleLoopAsync(string args, IReadOnlyList<ImageAttachment> images, CancellationToken cancellationToken)
     {
-        if (!TryParseLoopArgs(args, out int? count, out string message))
+        if (!TryParseLoopArgs(args, out int? count, out TimeSpan? delay, out string message))
         {
             _transcript.Error(LoopUsageError);
             return false;
@@ -7942,6 +8236,19 @@ internal sealed partial class ChatScreen
 
         for (int n = 1; count is null || n <= count; n++)
         {
+            if (n > 1 && delay is { } wait)
+            {
+                // The gap after the last reply, never after the final pass (2026-09-24): on the
+                // clock, under the turn's keys, so ESC or Ctrl+C ends the loop here as mid-reply.
+                _transcript.Notice(LoopWaitNotice(wait));
+                if (await WaitUnderWatchAsync(ct => Task.Delay(wait, _time, ct), KeySource.IsTurnCancel, cancellationToken, pointer: true).ConfigureAwait(false)
+                    || cancellationToken.IsCancellationRequested)
+                {
+                    _transcript.Notice(LoopStoppedNotice(n - 1));
+                    return false;
+                }
+            }
+
             _transcript.Notice(LoopTurnNotice(n, count));
             _transcript.User(message);
             if (await RunMessageAsync(message, n == 1 ? images : [], cancellationToken).ConfigureAwait(false))
@@ -8382,7 +8689,7 @@ internal sealed partial class ChatScreen
         // The pictures under the user's line, before the spinner (nothing writes while it runs);
         // with the toggle off nothing is even decoded. Read once, switch and size: a picture a
         // tool fetches mid-turn is drawn by the same switch at the same size.
-        ThumbnailBox? thumbnails = effective.ShowImageThumbnails ? ThumbnailSize.Resolve(effective) : null;
+        ThumbnailBox? thumbnails = effective.ShowImageThumbnails ? ThumbnailSize.Resolve(effective, WindowBox()) : null;
         if (thumbnails is { } box)
         {
             // A dropped picture's path is full; a pasted one has none (its bytes are kept for a double-click).
@@ -8738,10 +9045,6 @@ internal sealed partial class ChatScreen
 
     // ── Opening a picture from the transcript (later on 2026-09-24) ─────────
 
-    /// <summary>The line after a double-clicked picture was handed to its editor. Pinned.</summary>
-    public static string PictureOpenedNotice(string name, string editorCommand) =>
-        $"(🖼️ opened {name} in " + (string.IsNullOrWhiteSpace(editorCommand) ? "the image editor" : editorCommand.Trim()) + ")";
-
     /// <summary>A double-clicked picture whose file is gone since it was drawn. Pinned.</summary>
     public static string PictureGoneError(string path) => $"{path} is no longer there";
 
@@ -8781,8 +9084,8 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// A double-click on picture <paramref name="id"/>: its file (one without, written into <see cref="PictureTempFolder"/> first)
-    /// handed to the <c>Image editor</c> setting's command, or the one Windows registers. The line through the flow sink, so
-    /// it waits for a running reply. Any thread.
+    /// handed to the <c>Image viewer</c> setting's command, or the one Windows registers. An open prints nothing (2026-09-24,
+    /// the user's call); only an error does, through the flow sink, so it waits for a running reply. Any thread.
     /// </summary>
     private void OpenPicture(int id)
     {
@@ -8819,7 +9122,6 @@ internal sealed partial class ChatScreen
             }
 
             _openImage(path, editor);
-            _flow.Notice(PictureOpenedNotice(source.Name, editor));
         }
         catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException or IOException or UnauthorizedAccessException)
         {

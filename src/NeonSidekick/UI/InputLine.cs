@@ -142,6 +142,7 @@ public sealed class InputLine
     private readonly Func<IReadOnlyList<CompletionItem>>? _skills;
     private readonly Func<IReadOnlyList<CompletionItem>>? _tools;
     private readonly Func<IReadOnlyList<CompletionItem>>? _connections;
+    private readonly Func<IReadOnlyList<CompletionItem>>? _workflows;
     private readonly INoticeSink? _notices;
     private readonly Func<string, bool>? _copy;
 
@@ -187,11 +188,14 @@ public sealed class InputLine
     /// <paramref name="connections"/> is the <c>%</c>-mention list's source (later on 2026-09-23; <c>ChatScreen.PercentChoices</c>:
     /// the SQL connections of <c>sql.json</c> with their server, database and description, empty while the setting or the
     /// SQL tools are off), the <c>$</c> shape: a pick writes <c>%name</c> and a space; null = that list never opens.
+    /// <paramref name="workflows"/> is the <c>^</c>-mention list's source (later still on 2026-09-24; <c>ChatScreen.CaretChoices</c>:
+    /// the ComfyUI workflows the model is offered with their family, shape and size, empty while the setting is off or the
+    /// image tools are not offered), the same shape: a pick writes <c>^name</c> and a space; null = that list never opens.
     /// <paramref name="copyToClipboard"/> is what Ctrl+C over a selection writes the selected text
     /// with (2026-09-17; <see cref="WindowsClipboard.TrySetText"/> in the app, the same writer as
     /// <c>/copy</c>'s; tests record the text), true on success; null = every copy fails and says so.
     /// </summary>
-    public InputLine(ScreenPane pane, KeySource keys, Func<string?>? clipboard = null, INoticeSink? notices = null, Func<byte[]?>? clipboardImage = null, Func<string, MentionResult>? mentions = null, Func<IReadOnlyList<CompletionItem>>? commands = null, Func<string, string, ArgumentList>? arguments = null, Func<IReadOnlyList<CompletionItem>>? skills = null, Func<IReadOnlyList<CompletionItem>>? tools = null, Func<string, bool>? copyToClipboard = null, Func<IReadOnlyList<CompletionItem>>? connections = null)
+    public InputLine(ScreenPane pane, KeySource keys, Func<string?>? clipboard = null, INoticeSink? notices = null, Func<byte[]?>? clipboardImage = null, Func<string, MentionResult>? mentions = null, Func<IReadOnlyList<CompletionItem>>? commands = null, Func<string, string, ArgumentList>? arguments = null, Func<IReadOnlyList<CompletionItem>>? skills = null, Func<IReadOnlyList<CompletionItem>>? tools = null, Func<string, bool>? copyToClipboard = null, Func<IReadOnlyList<CompletionItem>>? connections = null, Func<IReadOnlyList<CompletionItem>>? workflows = null)
     {
         _pane = pane ?? throw new ArgumentNullException(nameof(pane));
         _keys = keys ?? throw new ArgumentNullException(nameof(keys));
@@ -203,6 +207,7 @@ public sealed class InputLine
         _skills = skills;
         _tools = tools;
         _connections = connections;
+        _workflows = workflows;
         _notices = notices;
         _copy = copyToClipboard;
         _hintClicks = new DoubleClick(pane.Time);
@@ -417,6 +422,7 @@ public sealed class InputLine
         bool hashing = onPane && _skills is not null;
         bool dollaring = onPane && _tools is not null;
         bool percenting = onPane && _connections is not null;
+        bool careting = onPane && _workflows is not null;
         MentionList? list = null;
         (int Start, string Query)? dismissed = null;
 
@@ -1154,7 +1160,7 @@ public sealed class InputLine
         // when there is none (or nothing matches, or ESC dismissed this very word).
         void RefreshList()
         {
-            if (!completing && !commanding && !arguing && !hashing && !dollaring && !percenting)
+            if (!completing && !commanding && !arguing && !hashing && !dollaring && !percenting && !careting)
             {
                 return;
             }
@@ -1198,6 +1204,13 @@ public sealed class InputLine
                 string typed = query;
                 prefix = "%";
                 words = () => MentionCompleter.Matches(_connections!(), typed);
+            }
+            else if (careting && MentionCompleter.TryFind(draft, cursor, '^', out start, out end, out query))
+            {
+                // A ^workflow mention (later still on 2026-09-24): the %connection shape over the offered ComfyUI workflows.
+                string typed = query;
+                prefix = "^";
+                words = () => MentionCompleter.Matches(_workflows!(), typed);
             }
             else if (!completing || !MentionCompleter.TryFind(draft, cursor, out start, out end, out query))
             {
