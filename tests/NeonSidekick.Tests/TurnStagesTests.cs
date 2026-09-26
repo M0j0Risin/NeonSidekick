@@ -40,9 +40,24 @@ public sealed class TurnStagesTests
         // 2026-09-25: generate_image is the ComfyUI label, not the tool's name; the other tools keep theirs.
         var stages = new TurnStages(funVerbs: true, new Random(7));
         stages.Start();
-        Assert.Equal(ComfyText.GeneratingLabel, stages.Advance(Call(GenerateImageTool.ToolName)));
-        Assert.NotEqual(ComfyText.GeneratingLabel, stages.Advance(Result(GenerateImageTool.ToolName)));
+        Assert.Equal(ComfyText.TextToImageLabel, stages.Advance(Call(GenerateImageTool.ToolName)));
+        Assert.False(ComfyText.IsGeneratingLabel(stages.Advance(Result(GenerateImageTool.ToolName))!));
         Assert.Equal("read_file", stages.Advance(Call("read_file")));
+    }
+
+    [Theory]
+    [InlineData("{\"prompt\":\"a cat\"}", false)]
+    [InlineData("{\"prompt\":\"a cat\",\"image\":\"\"}", false)]
+    [InlineData("{\"prompt\":\"a cat\",\"image\":\"cat.png\"}", true)]
+    [InlineData("{\"image\":\"a.png\",\"image2\":\"b.png\"}", true)]
+    [InlineData("not json", false)]
+    public void TheModelsPictureCall_IsThePaletteWithAnInputPicture_TheFramedPictureWithout(string arguments, bool fromPicture)
+    {
+        // 2026-09-26, the user's ask: 🖼️ text-to-image, 🎨 image-to-image.
+        var stages = new TurnStages(funVerbs: false, new Random(7));
+        stages.Start();
+        Assert.Equal(fromPicture ? ComfyText.GeneratingLabel : ComfyText.TextToImageLabel,
+            stages.Advance(new TurnEvent.ToolCall(GenerateImageTool.ToolName, "call_0001", arguments)));
     }
 
     [Fact]

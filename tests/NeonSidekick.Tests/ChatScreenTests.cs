@@ -12281,7 +12281,7 @@ public partial class ChatScreenTests : IDisposable
         string body = stub.Requests.Single(r => r.Uri.AbsolutePath == "/prompt").Body!;
         Assert.Contains("\"text\":\"score_9, score_8_up, (1girl:1.2)\"", body);   // as typed, nothing added
         Assert.Contains("\"text\":\"score_4\"", body);
-        Assert.Contains(NeonSidekick.Comfy.ComfyText.Glyph + @"generated 1 picture with pony (seed 5, 1024×1024): comfy_images\pony-5.png", output);
+        Assert.Contains(NeonSidekick.Comfy.ComfyText.TextToImageGlyph + @"generated 1 picture with pony (seed 5, 1024×1024): comfy_images\pony-5.png", output);
         Assert.True(File.Exists(Path.Combine(_settings.ProfileDirectory, WorkingDirectory.DefaultFolderName, "comfy_images", "pony-5.png")));
         Assert.Contains("\n" + new string(' ', 118) + "▀▀▀▀", output);   // drawn as /view draws, centred
         var user = _chat.Requests[0].Last(m => m.Role == ChatRole.User);

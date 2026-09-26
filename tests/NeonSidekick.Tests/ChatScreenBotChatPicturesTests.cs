@@ -99,7 +99,7 @@ public partial class ChatScreenTests
         // The cleaned prompt reaches ComfyUI; the reply was held (later on 2026-09-25): the name, then the picture, then the words.
         Assert.Contains("\"text\":\"a dog surfing a wave, sunny", stub.Requests.Single(r => r.Uri.AbsolutePath == "/prompt").Body!);
         int name = output.IndexOf(TranscriptRenderer.SpeakerGlyph + "default\n", StringComparison.Ordinal);
-        int picture = output.IndexOf(ComfyText.Glyph + "generated 1 picture with pony", StringComparison.Ordinal);
+        int picture = output.IndexOf(ComfyText.TextToImageGlyph + "generated 1 picture with pony", StringComparison.Ordinal);
         int words = output.IndexOf("● " + DogReply, StringComparison.Ordinal);
         Assert.True(name >= 0 && picture > name && words > picture, $"name {name}, picture {picture}, words {words}");
         Assert.Contains(BotChat.ThinkingSpinner("default"), output);
@@ -151,7 +151,7 @@ public partial class ChatScreenTests
         Assert.Single(stub.Requests, r => r.Uri.AbsolutePath == "/prompt");
         int label = output.IndexOf(BotChat.PictureNotice("default"), StringComparison.Ordinal);
         Assert.True(label >= 0);
-        Assert.True(output.IndexOf(ComfyText.Glyph + "generated 1 picture with pony", label, StringComparison.Ordinal) > label);
+        Assert.True(output.IndexOf(ComfyText.TextToImageGlyph + "generated 1 picture with pony", label, StringComparison.Ordinal) > label);
         Assert.Contains(BotChat.NoPromptNotice, output);
     }
 
@@ -260,7 +260,7 @@ public partial class ChatScreenTests
         Assert.Contains(AdaMarker, SystemText(_chat.Requests[2]));
         Assert.Contains("\"text\":\"a dog surfing a big wave", stub.Requests.Single(r => r.Uri.AbsolutePath == "/prompt").Body!);
         int words = output.IndexOf(SketchReply, StringComparison.Ordinal);
-        int picture = output.IndexOf(ComfyText.Glyph + "generated 1 picture with pony", StringComparison.Ordinal);
+        int picture = output.IndexOf(ComfyText.TextToImageGlyph + "generated 1 picture with pony", StringComparison.Ordinal);
         Assert.True(words >= 0 && picture > words, $"words {words}, picture {picture}");
         Assert.DoesNotContain(BotChat.PictureNotice("default"), output);
     }
@@ -386,6 +386,6 @@ public partial class ChatScreenTests
         Assert.Single(stub.Requests, r => r.Uri.AbsolutePath == "/prompt");
         int label = output.IndexOf(BotChat.PictureNotice("default"), StringComparison.Ordinal);
         Assert.True(label >= 0);
-        Assert.True(output.IndexOf(ComfyText.Glyph + "generated 1 picture with pony", label, StringComparison.Ordinal) > label);
+        Assert.True(output.IndexOf(ComfyText.TextToImageGlyph + "generated 1 picture with pony", label, StringComparison.Ordinal) > label);
     }
 }

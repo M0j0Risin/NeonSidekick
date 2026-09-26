@@ -101,6 +101,24 @@ public sealed class ComfyTests : IDisposable
 
     private static AIFunctionArguments Args(params (string Name, object? Value)[] values) => new(values.ToDictionary(v => v.Name, v => v.Value));
 
+    // ── the glyphs (2026-09-26) ─────────────────────────────────────────────
+
+    [Fact]
+    public void TheGlyph_IsTheFramedPictureFromText_AndThePaletteFromAPicture()
+    {
+        Assert.Equal("🖼️ ", ComfyText.GlyphFor(0));
+        Assert.Equal("🎨 ", ComfyText.GlyphFor(1));
+        Assert.Equal("🎨 ", ComfyText.GlyphFor(2));
+        Assert.Equal("🖼️", ComfyText.GeneratingLabelFor(0));
+        Assert.Equal("🎨", ComfyText.GeneratingLabelFor(1));
+        Assert.True(ComfyText.IsGeneratingLabel("🖼️"));
+        Assert.True(ComfyText.IsGeneratingLabel("🎨"));
+        Assert.False(ComfyText.IsGeneratingLabel("thinking"));
+        // Two cells each, so the busy row's arithmetic is the same whichever is drawn.
+        Assert.Equal(2, NeonSidekick.UI.TextCells.Width(ComfyText.TextToImageLabel));
+        Assert.Equal(2, NeonSidekick.UI.TextCells.Width(ComfyText.GeneratingLabel));
+    }
+
     // ── the template ────────────────────────────────────────────────────────
 
     [Fact]

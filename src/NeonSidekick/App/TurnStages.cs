@@ -1,3 +1,4 @@
+using System.Text.Json;
 using NeonSidekick.Comfy;
 using NeonSidekick.Llm;
 using NeonSidekick.Llm.Tools;
@@ -11,7 +12,8 @@ namespace NeonSidekick.App;
 /// tool result — the server's wait, its reasoning, a tool call it is still writing — <c>writing</c>
 /// once the reply's text streams, and a running tool's bare name (<c>read_file</c>) between its
 /// call and its result — but <c>generate_image</c> reads <see cref="ComfyText.GeneratingLabel"/>, as every
-/// ComfyUI generation does (2026-09-25, the user's call; the pane draws it after the tally). Decided from the turn's events alone (<see cref="TurnEvent"/> marks no
+/// ComfyUI generation does (2026-09-25, the user's call; the pane draws it after the tally) — 🖼️ for a call with no
+/// input picture, 🎨 for one with (<see cref="ComfyText.GeneratingLabelFor"/>, 2026-09-26). Decided from the turn's events alone (<see cref="TurnEvent"/> marks no
 /// request, and its thinking — <see cref="TurnEvent.ThinkingDelta"/>, since 2026-09-26 — is the thinking
 /// stage still, so the first text is where thinking ends). With
 /// <see cref="AppSettingsData.LlmUseFunVerbs"/> on, every thinking and writing stage draws a
@@ -67,12 +69,36 @@ internal sealed class TurnStages
                 return Word(WritingLabel);
             case TurnEvent.ToolCall call:
                 _stage = Stage.Tool;
-                return string.Equals(call.Name, GenerateImageTool.ToolName, StringComparison.Ordinal) ? ComfyText.GeneratingLabel : call.Name;
+                return string.Equals(call.Name, GenerateImageTool.ToolName, StringComparison.Ordinal) ? ComfyText.GeneratingLabelFor(InputImages(call.ArgumentsJson)) : call.Name;
             case TurnEvent.ToolResult:
                 _stage = Stage.Thinking;
                 return Word(ChatScreen.ThinkingLabel);
             default:
                 return null;
+        }
+    }
+
+    /// <summary>
+    /// How many input pictures a <c>generate_image</c> call names (2026-09-26): its non-blank <c>image</c>, <c>image2</c>,
+    /// <c>image3</c> — what picks 🎨 over 🖼️. Arguments that are no JSON object count none.
+    /// </summary>
+    private static int InputImages(string argumentsJson)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(argumentsJson);
+            var root = document.RootElement;
+            if (root.ValueKind != JsonValueKind.Object)
+            {
+                return 0;
+            }
+
+            return new[] { GenerateImageTool.ImageArgument, GenerateImageTool.Image2Argument, GenerateImageTool.Image3Argument }
+                .Count(key => root.TryGetProperty(key, out var value) && value.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(value.GetString()));
+        }
+        catch (JsonException)
+        {
+            return 0;
         }
     }
 

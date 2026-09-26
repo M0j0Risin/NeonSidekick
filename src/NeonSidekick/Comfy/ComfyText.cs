@@ -290,8 +290,26 @@ public static class ComfyText
     /// <summary>The note the conversation gets after <c>/imagine</c> (2026-09-24), so the model knows the picture exists and what made it. Pinned.</summary>
     public static string ImagineNote(string result) => "(the user generated a picture with /imagine, not typed by the user: " + result.Replace("\n", "; ", StringComparison.Ordinal) + ")";
 
-    /// <summary>The spinner's label while a generation runs (<c>⠹ 🎨 00:12</c>; 2026-09-25, the user's wording — it read <c>Generating with &lt;workflow&gt;…</c>, then <c>ComfyUI:</c>, until later that day: the palette, <see cref="Glyph"/>'s, U+1F3A8, two cells, no variation selector). Pinned.</summary>
+    /// <summary>The spinner's label while a generation runs (<c>⠹ 🎨 00:12</c>; 2026-09-25, the user's wording — it read <c>Generating with &lt;workflow&gt;…</c>, then <c>ComfyUI:</c>, until later that day: the palette, <see cref="Glyph"/>'s, U+1F3A8, two cells, no variation selector). Since 2026-09-26 the image-to-image one; <see cref="TextToImageLabel"/> is the other. Pinned.</summary>
     public const string GeneratingLabel = "🎨";
+
+    /// <summary>
+    /// The text-to-image generation's glyph and spinner label (2026-09-26, the user's ask: 🖼️ when it draws from text, 🎨 when it
+    /// works from a picture): the framed picture, U+1F5BC with its U+FE0F — two cells, as <c>TextCells</c> counts the pair and
+    /// the selector, like <c>🗑️</c>. The kind is the request's input pictures (<see cref="GlyphFor"/>). Pinned.
+    /// </summary>
+    public const string TextToImageGlyph = "🖼️ ";
+    public const string TextToImageLabel = "🖼️";
+
+    /// <summary>The result line's glyph for a generation given <paramref name="inputImages"/> pictures: 🎨 with any, 🖼️ with none. Pure.</summary>
+    public static string GlyphFor(int inputImages) => inputImages > 0 ? Glyph : TextToImageGlyph;
+
+    /// <summary>The spinner's label for a generation given <paramref name="inputImages"/> pictures: 🎨 with any, 🖼️ with none. Pure.</summary>
+    public static string GeneratingLabelFor(int inputImages) => inputImages > 0 ? GeneratingLabel : TextToImageLabel;
+
+    /// <summary>Whether <paramref name="label"/> is a generation's spinner label, either kind (the pane draws it after the tally). Pure.</summary>
+    public static bool IsGeneratingLabel(string label) =>
+        string.Equals(label, GeneratingLabel, StringComparison.Ordinal) || string.Equals(label, TextToImageLabel, StringComparison.Ordinal);
 
     /// <summary>A generation the user stopped (ESC). Pinned.</summary>
     public const string Cancelled = "(image generation cancelled)";

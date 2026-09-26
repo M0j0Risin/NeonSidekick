@@ -927,7 +927,8 @@ internal sealed partial class ChatScreen
             // draw must not warn on a hand-edited word, the turn's start does. None under a /botchat turn — not tallied.
             BusyUsage = () => _botTurnRunning ? "" : UsageText.BusyHintPart(_session.Usage, _session.ContextLength, MidTurnUsageMode.TryParse(_effective().LlmMidTurnUsage, out var mode) ? mode : MidTurnUsage.LastKnown, _session.Meter.Read()) ?? "",
             // A ComfyUI generation's label after the tally (2026-09-25, the user's call): /imagine, a botchat picture and the model's generate_image alike.
-            LabelAfterUsage = label => string.Equals(label, ComfyText.GeneratingLabel, StringComparison.Ordinal),
+            // Either kind since 2026-09-26: 🖼️ text-to-image, 🎨 image-to-image.
+            LabelAfterUsage = ComfyText.IsGeneratingLabel,
             // The toolbar under the hint row (2026-09-21): the pane glyphs, the working directory in
             // force (the resolved path, what /cwd prints and the banner shows) and the folder; read
             // per draw and on the tick, so a /cwd change or a flipped Show toolbar shows at once —
@@ -5519,7 +5520,7 @@ internal sealed partial class ChatScreen
         bool cancelled = false;
         try
         {
-            generation = await _transcript.WithSpinnerAsync(ComfyText.GeneratingLabel, () => _comfy.GenerateAsync(request, cts.Token)).ConfigureAwait(false);
+            generation = await _transcript.WithSpinnerAsync(ComfyText.GeneratingLabelFor(request.ImageCount), () => _comfy.GenerateAsync(request, cts.Token)).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (cts.IsCancellationRequested)
         {
@@ -5544,7 +5545,7 @@ internal sealed partial class ChatScreen
         }
         else
         {
-            ComfyLines(generation.Text, line => _transcript.Notice(ComfyText.Glyph + line));
+            ComfyLines(generation.Text, line => _transcript.Notice(ComfyText.GlyphFor(request.ImageCount) + line));
             // The strip first: the picture's window box then leaves its rows.
             AddToPictureStrip(generation.Images);
             ShowPictures(generation.Images);
@@ -9246,7 +9247,7 @@ internal sealed partial class ChatScreen
             return null;
         }
 
-        var (generation, skipped) = await UnderWatchAsync(ComfyText.GeneratingLabel, token => GenerateBotPictureAsync(job, token), pictureToken).ConfigureAwait(false);
+        var (generation, skipped) = await UnderWatchAsync(ComfyText.GeneratingLabelFor(job.ImageCount), token => GenerateBotPictureAsync(job, token), pictureToken).ConfigureAwait(false);
         if (skipped || generation is null)
         {
             _transcript.Notice(ComfyText.Cancelled);
@@ -9452,7 +9453,8 @@ internal sealed partial class ChatScreen
             _transcript.Notice(BotChat.PictureNotice(bot.Name));
         }
 
-        ComfyLines(generation.Text, line => _transcript.Notice(ComfyText.Glyph + line));
+        // A bot's picture is drawn from its prompt alone (WriteBotPictureAsync gives no input), so text-to-image's 🖼️ (2026-09-26).
+        ComfyLines(generation.Text, line => _transcript.Notice(ComfyText.TextToImageGlyph + line));
         // The strip first: a fullsize box then leaves its rows.
         AddToPictureStrip(generation.Images);
         var (tiles, ids) = ReadThumbnails(generation.Images, ThumbnailSize.Resolve(_effective(), WindowBox()), sandbox: true);
