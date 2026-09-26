@@ -37,7 +37,7 @@ Neon Sidekick brings privacy-first, local LLM inference to your terminal. Powere
 * **Message Queue:** Built-in queue for stacking and executing sequential messages.
 
 ### Profiles, Sessions & Skills
-* **Multi-Profile Support:** Switch between distinct configurations, each featuring its own working directory, independent settings and isolated session logging. A profile named with a leading `_` (`_test`) is temporary: the next launch opens `default` instead. `--profile <name>` (or `NEONSIDEKICK_PROFILE`) opens a named profile for one launch — temporary ones included — without changing which profile the next launch opens; an unknown name exits with code 2.
+* **Multi-Profile Support:** Switch between distinct configurations, each featuring its own working directory, independent settings and isolated session logging. A profile named with a leading `_` (`_test`) is temporary: the next launch opens `default` instead. `--profile <name>` (or `NEONSIDEKICK_PROFILE`) opens a named profile for one launch — temporary ones included — without changing which profile the next launch opens; an unknown name exits with code 2. `--headless` with neither opens `default`.
 * **Advanced Session Management:** Easily manage, resume, search and reflect on past sessions.
 * **Hierarchical Skills System:** Define and manage agent skills at the global, profile, project, or machine (`.agents\skills`) level.
 * **Self-Learning:** An automatic self-reflection system that dynamically updates and creates new skills based on interactions and tool outcomes.
@@ -732,7 +732,7 @@ To bypass this and allow all commands for one launch, pass `--yolo`, or set the 
 
 The path police is separate. To let commands name paths outside the working directory for one launch, pass `--no-police`, or set `NEONSIDEKICK_SHELL_POLICE=off` (the flag wins). `--yolo --no-police` together leave no guard at all: any command, on any path, with your account's rights.
 
-A scripted run can name its profile rather than follow whichever one was last loaded: `--profile <name>` (or `NEONSIDEKICK_PROFILE=<name>`; the flag wins) loads that profile's settings, memory, sessions and allow list for this launch only, and `settings.json` is left as it is. An unknown name prints the profiles there and exits with code 2.
+A headless run loads `default`, never whichever profile the TUI was last switched to, unless it names another: `--profile <name>` (or `NEONSIDEKICK_PROFILE=<name>`; the flag wins) loads that profile's settings, memory, sessions and allow list for this launch only, and `settings.json` is left as it is. An unknown name prints the profiles there and exits with code 2.
 `Get-Content job.txt | NeonSidekick.exe --headless --profile work`
 
 | Tool | Arguments | What it does |
@@ -816,7 +816,7 @@ Every variable the app reads starts with `NEONSIDEKICK_`. They override a settin
 | Variable | What it does | Accepts |
 |---|---|---|
 | `NEONSIDEKICK_HOME` | The home folder: `settings.json`, `profiles\`, `models\`, `mcp.json`, `sql.json`. | A folder path. Default `%USERPROFILE%\.neonsidekick`. |
-| `NEONSIDEKICK_PROFILE` | The profile for this launch; `settings.json` is left pointing where it was. An unknown name exits with code 2. `--profile` wins. | A profile name. |
+| `NEONSIDEKICK_PROFILE` | The profile for this launch; `settings.json` is left pointing where it was. An unknown name exits with code 2. `--profile` wins. A headless run with neither loads `default`. | A profile name. |
 
 ### LLM
 

@@ -28,6 +28,26 @@ public class SidekickOptionsTests
         Assert.True(SidekickOptions.Parse(new[] { "--headless" }).Headless);
     }
 
+    /// <summary>
+    /// 2026-09-26: --profile over NEONSIDEKICK_PROFILE over, for a headless run, "default"; otherwise null, and the pointer
+    /// in settings.json decides (the TUI and the check modes).
+    /// </summary>
+    [Theory]
+    [InlineData("--headless --profile work", "home", "work")]
+    [InlineData("--headless", "home", "home")]
+    [InlineData("--headless", null, "default")]
+    [InlineData("--headless --smoke", null, "default")]
+    [InlineData("--profile work", null, "work")]
+    [InlineData("", "home", "home")]
+    [InlineData("", null, null)]
+    [InlineData("--smoke", null, null)]
+    public void LaunchProfile_HeadlessDefaultsToDefault_UnlessNamed(string args, string? environment, string? expected)
+    {
+        var o = SidekickOptions.Parse(args.Split(' ', StringSplitOptions.RemoveEmptyEntries));
+
+        Assert.Equal(expected, o.LaunchProfile(environment));
+    }
+
     [Fact]
     public void Parse_AudioCheck()
     {

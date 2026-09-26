@@ -68,7 +68,7 @@ What to use instead:
 | `/model [id]` | `--model <id>` or `NEONSIDEKICK_LLM_MODEL` |
 | `/reasoning [level]` | `NEONSIDEKICK_LLM_REASONING` |
 | `/cwd [path]` | `--cwd <path>` |
-| `/profile [name]` | `--profile <name>` or `NEONSIDEKICK_PROFILE`. `add`/`delete`/`rename`/`reset` need the TUI, or the files under `<home>\profiles`. |
+| `/profile [name]` | `--profile <name>` or `NEONSIDEKICK_PROFILE`; with neither, `default`. `add`/`delete`/`rename`/`reset` need the TUI, or the files under `<home>\profiles`. |
 | `/settings`, `//`, `/tools`, `/skills`, `/mcp` | Set things up in the TUI beforehand, or edit the profile's `profile.json` / `mcp.json`. Environment variables override some values for one run. |
 | `/remember <text>` | Ask in a message ("Remember that …"); the model has the `save_memory` tool. |
 | `/memory` | Ask the model to recall; to prune or edit, use the TUI or edit `memory.json`. |
@@ -235,6 +235,9 @@ A folder of documents rather than code:
 ---
 
 ## `--profile <name>`: which profile (settings, memory, sessions, allow list)
+
+Without `--profile` or `NEONSIDEKICK_PROFILE`, a headless run loads `default` — never whichever
+profile the TUI last switched to.
 
 Loads the named profile for this launch only; `settings.json` is left as it is, so the next
 normal launch opens whatever it opened before. Outranks `NEONSIDEKICK_PROFILE`. An unknown name
@@ -617,7 +620,7 @@ Flags beat variables; variables beat the profile's saved values.
 
 | Variable | Use in a headless run |
 |---|---|
-| `NEONSIDEKICK_PROFILE` | The profile, when there is no `--profile`. |
+| `NEONSIDEKICK_PROFILE` | The profile, when there is no `--profile`; with neither, `default`. |
 | `NEONSIDEKICK_HOME` | A whole separate home (its own `settings.json`, profiles, models, `mcp.json`, `sql.json`). |
 | `NEONSIDEKICK_LLM_URL` / `NEONSIDEKICK_LLM_MODEL` | Server and model, when there is no `--url` / `--model`. |
 | `NEONSIDEKICK_LLM_API_KEY` | The server's key; never put it on the command line. |

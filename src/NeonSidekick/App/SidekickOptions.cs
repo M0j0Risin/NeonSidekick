@@ -26,7 +26,8 @@ namespace NeonSidekick.App;
 /// <param name="Profile"><c>--profile</c>: the profile this launch loads (2026-09-26, the user's ask: a scripted
 /// headless run must not follow whichever profile was last clicked into). Outranks <c>NEONSIDEKICK_PROFILE</c> and
 /// the pointer in <c>settings.json</c>, and never rewrites that pointer. Not part of <see cref="ApplyTo"/>: it
-/// picks which <c>profile.json</c> is read, not a value in it; <c>Program.cs</c> hands it to <see cref="AppSettings"/>.</param>
+/// picks which <c>profile.json</c> is read, not a value in it; <c>Program.cs</c> hands it to <see cref="AppSettings"/>
+/// through <see cref="LaunchProfile"/>, which gives a headless run <c>default</c> when neither is set.</param>
 /// <param name="Yolo"><c>--yolo</c>: every shell command and script runs without asking, this launch only
 /// (2026-09-26, the user's ask: a scripted run named the policy only through <c>NEONSIDEKICK_COMMAND_POLICY</c>, awkward
 /// to set for one command in PowerShell or cmd). <see cref="ApplyTo"/> sets <c>Shell command policy</c> to <c>yolo</c>, so it
@@ -67,7 +68,7 @@ public sealed record SidekickOptions(
         "Usage: NeonSidekick [--headless] [--smoke] [--audio-check] [--voice-check] [--url <url>] [--model <id>] [--cwd <path>] [--profile <name>] [--yolo] [--no-police] [--log <path>] [--version] [--help]\n" +
         "\n" +
         "  (no flags)     interactive TUI\n" +
-        "  --headless     stdin/stdout REPL, no TUI\n" +
+        "  --headless     stdin/stdout REPL, no TUI (profile \"default\" unless --profile or NEONSIDEKICK_PROFILE names one)\n" +
         "  --smoke        render the banner, verify native dependencies, exit 0/1\n" +
         "  --audio-check  play a 440 Hz tone through the speech output path, exit 0/1\n" +
         "  --voice-check  record up to 5 s from the microphone, transcribe it, exit 0/1\n" +
@@ -229,6 +230,16 @@ public sealed record SidekickOptions(
 
         return flags;
     }
+
+    /// <summary>
+    /// The profile this launch loads: <c>--profile</c>, else <paramref name="environmentProfile"/>
+    /// (<c>NEONSIDEKICK_PROFILE</c>), else <c>default</c> for a headless run, else null — the pointer in
+    /// <c>settings.json</c> decides. The headless default is 2026-09-26, the user's call: a scripted run must not follow
+    /// whichever profile the TUI last switched to, even when nobody named one. It goes in as an override, so the pointer
+    /// is left alone as it is for <c>--profile</c>; <c>default</c> always exists, so it can never end the launch with 2.
+    /// </summary>
+    public string? LaunchProfile(string? environmentProfile) =>
+        Profile ?? environmentProfile ?? (Headless ? Profiles.DefaultName : null);
 
     /// <summary>The mode this launch runs: <c>interactive</c>, <c>headless</c>, <c>smoke</c>, <c>audio-check</c>, <c>voice-check</c>.</summary>
     public string Mode =>

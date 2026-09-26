@@ -747,6 +747,33 @@ public class AppSettingsTests : IDisposable
         Assert.Contains("\"Profile\": \"default\"", File.ReadAllText(settings.PointerPath));
     }
 
+    /// <summary>What a headless run with no profile named hands over (2026-09-26): "default" loads, the pointer stays put.</summary>
+    [Fact]
+    public async Task ProfileOverride_Default_LeavesThePointerOnAnotherProfile()
+    {
+        Profiles.Create(_dir, "work", new AppSettingsData());
+        using (var tui = new AppSettings(_dir))
+        {
+            await tui.SwitchProfileAsync("work");
+        }
+
+        using var settings = new AppSettings(_dir, Profiles.DefaultName);
+
+        Assert.Equal(Profiles.DefaultName, settings.ProfileName);
+        Assert.Contains("\"Profile\": \"work\"", File.ReadAllText(settings.PointerPath));
+    }
+
+    [Fact]
+    public void ProfileOverride_Default_OnAFreshHome_Loads()
+    {
+        Assert.True(Profiles.Exists(_dir, Profiles.DefaultName));
+
+        using var settings = new AppSettings(_dir, Profiles.DefaultName);
+
+        Assert.Equal(Profiles.DefaultName, settings.ProfileName);
+        Assert.Contains("\"Profile\": \"default\"", File.ReadAllText(settings.PointerPath));
+    }
+
     /// <summary>A temporary profile named on purpose loads; the redirect is for the pointer, not for asking.</summary>
     [Fact]
     public void ProfileOverride_LoadsATemporaryProfile()

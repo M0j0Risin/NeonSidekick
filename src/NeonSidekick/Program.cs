@@ -96,9 +96,10 @@ using var logSinkScope = logSink;
 var environment = new EnvironmentOverrides(Environment.GetEnvironmentVariable);
 string home = AppSettings.ResolveStorageDirectory(environment.Home);
 
-// The profile for this launch (2026-09-26): --profile over NEONSIDEKICK_PROFILE over the pointer. A name that is
-// not a profile ends the launch like a bad argument does, before anything is created under the home.
-string? profile = options.Profile ?? environment.Profile;
+// The profile for this launch (2026-09-26): --profile over NEONSIDEKICK_PROFILE over, headless, "default", over the
+// pointer (SidekickOptions.LaunchProfile). A name that is not a profile ends the launch like a bad argument does,
+// before anything is created under the home.
+string? profile = options.LaunchProfile(environment.Profile);
 if (profile is not null && !Profiles.Exists(home, profile))
 {
     console.WriteLine(AppSettings.UnknownProfileMessage(profile, Profiles.List(home)));
