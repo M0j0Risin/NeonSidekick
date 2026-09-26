@@ -626,6 +626,7 @@ Flags beat variables; variables beat the profile's saved values.
 | `NEONSIDEKICK_LLM_REASONING` | Reasoning effort for the run. |
 | `NEONSIDEKICK_COMMAND_POLICY` | `ask` (default: only allow-listed commands run, since nothing can ask), or `yolo` (every command runs; use only when you trust the job and the folder). `--yolo` outranks it. |
 | `NEONSIDEKICK_SHELL_POLICE` | `off` lets shell commands name paths outside the working directory for the run; `on` turns the police back on over a saved `off`. `--no-police` outranks it. |
+| `NEONSIDEKICK_SHELL_NATIVE` | `off` lets a single `cat`, `dir`, `git status`, `curl`… go to the shell as written for the run, instead of being sent back once a turn to the native tool that does it (*Shell prefer native tools*, on by default); `on` turns it back on over a saved `off`. A line sent back is not a refusal: it never makes the run exit 3. |
 | `NEONSIDEKICK_SEARXNG_URL`, `NEONSIDEKICK_OBSIDIAN_VAULT`, `NEONSIDEKICK_COMFY_URL` | The web search instance, notes vault and image server for the run. |
 
 ## Flags that don't combine with `--headless`

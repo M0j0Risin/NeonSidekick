@@ -276,6 +276,42 @@ public sealed class Assistant
     };
 
     /// <summary>
+    /// The sentence the default rules gain after the shell rule while the setting <c>Shell prefer native tools</c> is on
+    /// (2026-09-26, the user's ask: the model kept running <c>cat</c>, <c>dir</c>, <c>git status</c> or <c>curl</c> through
+    /// <c>run_command</c> when a tool of its own did the job). It names only the groups offered that turn —
+    /// <paramref name="files"/>, <paramref name="git"/>, <paramref name="web"/>, <paramref name="sql"/> — each with the shell
+    /// words it replaces, since a small model follows a named word better than a principle; empty when none is, so a
+    /// shell-only turn gains nothing. <c>run_command</c> backs it at the call (<see cref="Shell.NativeRedirect"/>). Pinned.
+    /// </summary>
+    public static string ShellNativeRule(bool files, bool git, bool web, bool sql)
+    {
+        var parts = new List<string>(4);
+        if (files)
+        {
+            parts.Add(NeonSidekick.Llm.Tools.ReadFileTool.ToolName + " and " + NeonSidekick.Llm.Tools.SearchFilesTool.ToolName + " read, search and list files (not cat, type, Get-Content, dir, ls or grep) and the file tools write, copy, move and delete them");
+        }
+
+        if (git)
+        {
+            parts.Add("the git_ tools look at and change the repository (not git status, log, diff, add or commit)");
+        }
+
+        if (web)
+        {
+            parts.Add(NeonSidekick.Llm.Tools.WebSearchTool.ToolName + " and " + NeonSidekick.Llm.Tools.WebFetchTool.ToolName + " reach the web (not curl or Invoke-WebRequest)");
+        }
+
+        if (sql)
+        {
+            parts.Add(NeonSidekick.Llm.Tools.SqlQueryTool.ToolName + " reads the databases (not sqlcmd)");
+        }
+
+        return parts.Count == 0
+            ? ""
+            : "Call " + NeonSidekick.Llm.Tools.RunCommandTool.ToolName + " only for what no other tool does: " + string.Join("; ", parts) + ".";
+    }
+
+    /// <summary>
     /// The sentence the default rules gain while <c>ask_user</c> is offered (the setting <c>Ask user</c>
     /// on, the bottom pane on): appended after <see cref="WebRule"/> by
     /// <see cref="SystemPrompt(bool, IReadOnlyList{string}?, string?, string?, string?, bool, bool, bool, AskLimits?)"/>;
@@ -356,13 +392,18 @@ public sealed class Assistant
     /// <paramref name="shell"/> (the shell tools offered: <c>Shell command policy</c> not off, 2026-09-21), as
     /// <see cref="ShellRuleWithoutBridge"/> unless <paramref name="bridge"/> (the setting <c>Shell tool bridge</c>, off by
     /// default, later that day), and as the <c>…Unpoliced</c> variant with <paramref name="police"/> false (the setting <c>Shell police
-    /// outside paths</c> off, 2026-09-22; <see cref="ShellRuleFor"/>). <see cref="ObsidianDeleteRule"/> follows <see cref="ObsidianRule"/>
+    /// outside paths</c> off, 2026-09-22; <see cref="ShellRuleFor"/>), followed by <see cref="ShellNativeRule"/> with <paramref name="native"/>
+    /// (the setting <c>Shell prefer native tools</c>, 2026-09-26) when it names a group. <see cref="ObsidianDeleteRule"/> follows <see cref="ObsidianRule"/>
     /// with <paramref name="obsidianDelete"/> (<c>vault_delete</c> offered, later on 2026-09-22); <see cref="SqlRule"/> after them with <paramref name="sql"/> (2026-09-23). With <paramref name="markdown"/> false it is <see cref="OperatingRules"/> and its variants byte for byte.
     /// </summary>
-    public static string DefaultRules(bool markdown, bool tools, bool files = true, bool web = false, AskLimits? ask = null, bool sessions = false, bool download = true, bool delete = true, bool mcp = false, bool safeEdits = true, bool timers = true, bool git = false, bool shell = false, bool bridge = false, bool police = true, bool obsidian = false, bool obsidianDelete = false, bool sql = false) =>
+    public static string DefaultRules(bool markdown, bool tools, bool files = true, bool web = false, AskLimits? ask = null, bool sessions = false, bool download = true, bool delete = true, bool mcp = false, bool safeEdits = true, bool timers = true, bool git = false, bool shell = false, bool bridge = false, bool police = true, bool obsidian = false, bool obsidianDelete = false, bool sql = false, bool native = false) =>
         tools
-            ? TextRule(markdown) + " " + (timers ? ToolRules : ToolRulesWithoutTimers) + (files ? " " + (delete ? (safeEdits ? FileRule : FileRuleDeleteInPlace) : FileRuleWithoutDelete) : "") + (web ? " " + WebRule : "") + (web && files && download ? " " + DownloadRule : "") + (git ? " " + GitRule : "") + (shell ? " " + ShellRuleFor(bridge, police) : "") + (obsidian ? " " + ObsidianRule + (obsidianDelete ? " " + ObsidianDeleteRule : "") : "") + (sql ? " " + SqlRule : "") + (ask is { } limits ? " " + AskRule(limits) : "") + (sessions ? " " + SessionRule : "") + (mcp ? " " + McpRule : "")
+            ? TextRule(markdown) + " " + (timers ? ToolRules : ToolRulesWithoutTimers) + (files ? " " + (delete ? (safeEdits ? FileRule : FileRuleDeleteInPlace) : FileRuleWithoutDelete) : "") + (web ? " " + WebRule : "") + (web && files && download ? " " + DownloadRule : "") + (git ? " " + GitRule : "") + (shell ? " " + ShellRuleFor(bridge, police) + NativeTail(native, files, git, web, sql) : "") + (obsidian ? " " + ObsidianRule + (obsidianDelete ? " " + ObsidianDeleteRule : "") : "") + (sql ? " " + SqlRule : "") + (ask is { } limits ? " " + AskRule(limits) : "") + (sessions ? " " + SessionRule : "") + (mcp ? " " + McpRule : "")
             : TextRule(markdown);
+
+    /// <summary><see cref="ShellNativeRule"/> after a space, or nothing: off, or no group to name.</summary>
+    private static string NativeTail(bool native, bool files, bool git, bool web, bool sql) =>
+        native && ShellNativeRule(files, git, web, sql) is { Length: > 0 } rule ? " " + rule : "";
 
     /// <summary>
     /// The system prompt for a turn, in this order: the persona (<paramref name="persona"/> from
@@ -401,11 +442,11 @@ public sealed class Assistant
     /// the third (2026-09-20) is a whole group: <paramref name="timers"/> false (no timer tool offered — headless, or the
     /// three switched off) drops <see cref="TimerRule"/>.
     /// </summary>
-    public static string SystemPrompt(bool speechOutput, IReadOnlyList<string>? memories, string? persona = null, string? operatingRules = null, string? voiceDirective = null, bool tools = true, bool web = false, bool files = true, AskLimits? ask = null, ProjectNotes? project = null, IReadOnlyList<Skills.Skill>? skills = null, bool markdown = false, bool sessions = false, bool download = true, bool recall = true, bool delete = true, bool mcp = false, bool safeEdits = true, bool timers = true, bool git = false, bool shell = false, bool bridge = false, bool police = true, bool obsidian = false, bool obsidianDelete = false, bool sql = false)
+    public static string SystemPrompt(bool speechOutput, IReadOnlyList<string>? memories, string? persona = null, string? operatingRules = null, string? voiceDirective = null, bool tools = true, bool web = false, bool files = true, AskLimits? ask = null, ProjectNotes? project = null, IReadOnlyList<Skills.Skill>? skills = null, bool markdown = false, bool sessions = false, bool download = true, bool recall = true, bool delete = true, bool mcp = false, bool safeEdits = true, bool timers = true, bool git = false, bool shell = false, bool bridge = false, bool police = true, bool obsidian = false, bool obsidianDelete = false, bool sql = false, bool native = false)
     {
         bool customPersona = !string.IsNullOrWhiteSpace(persona);
         bool customRules = !string.IsNullOrWhiteSpace(operatingRules);
-        string defaultRules = DefaultRules(markdown, tools, files, web, ask, sessions, download, delete, mcp, safeEdits, timers, git, shell, bridge, police, obsidian, obsidianDelete, sql);
+        string defaultRules = DefaultRules(markdown, tools, files, web, ask, sessions, download, delete, mcp, safeEdits, timers, git, shell, bridge, police, obsidian, obsidianDelete, sql, native);
         var sb = new StringBuilder(!customPersona && !customRules
             ? DefaultPersona + " " + defaultRules
             : (customPersona ? persona!.Trim() : DefaultPersona) + "\n\n" + (customRules ? operatingRules!.Trim() : defaultRules));

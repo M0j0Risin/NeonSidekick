@@ -751,6 +751,11 @@ public class SystemPromptSummaryTests : IDisposable
         Assert.Equal(Assistant.SystemPrompt(false, [], skills: [], shell: true, police: false), SystemPromptSummary.SystemPrompt(Facts(shellTools: 1, shellPolice: false)));
         Assert.True(Facts(shellPolice: false).Police);   // the police rides the shell rule alone: no shell tool, the default holds
         Assert.False(Facts(shellTools: 1, shellPolice: false).Police);
+        // Shell prefer native tools (2026-09-26): its sentence after the shell rule, as the turn sends it; nothing without a shell tool.
+        Assert.Equal(Assistant.DefaultRules(false, true, git: true, shell: true, native: true), SystemPromptSummary.PromptSections(Facts(gitTools: 11, shellTools: 1) with { ShellNative = true })[1].Body);
+        Assert.Contains(Assistant.ShellNativeRule(files: true, git: true, web: false, sql: false), SystemPromptSummary.PromptSections(Facts(gitTools: 11, shellTools: 1) with { ShellNative = true })[1].Body);
+        Assert.Equal(Assistant.SystemPrompt(false, [], skills: [], shell: true, native: true), SystemPromptSummary.SystemPrompt(Facts(shellTools: 1) with { ShellNative = true }));
+        Assert.False((Facts() with { ShellNative = true }).Native);
     }
 
     [Fact]

@@ -332,6 +332,15 @@ public static class ShellText
         return result.StartsWith(OutsideHead, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// What a <c>run_command</c> line a native tool covers answers (<see cref="NativeRedirect"/>, the setting <c>Shell prefer
+    /// native tools</c>, 2026-09-26): not run, the tool to call, and the way back — the same line again goes to the user.
+    /// Not an <c>Error:</c> on purpose: the rules forbid retrying a refused command, and this one may be retried once the
+    /// tool cannot do it. <c>Not run: 'cat' has a tool of its own — call read_file instead. …</c> Pinned.
+    /// </summary>
+    public static string UseNative(string prefix, string tool) =>
+        $"Not run: '{prefix}' has a tool of its own — call {tool} instead. If {tool} cannot do this, say why and call run_command again with the same command; the user will be asked.";
+
     public static string ShellNotInstalled(ShellKind kind) => $"Error: {ShellKinds.Name(kind)} is not installed (no {ShellKinds.FileName(kind)} found)";
     public static string WorkdirOutside(string path) => $"Error: workdir '{path}' is outside the working directory";
     public static string WorkdirNotFolder(string path) => $"Error: workdir '{path}' is not a folder";
@@ -358,6 +367,13 @@ public static class ShellText
     {
         ArgumentNullException.ThrowIfNull(request);
         return $"police: refused ('{token}') — {request.Kind} {Quote(request.Command)}";
+    }
+
+    /// <summary><c>native: read_file for 'cat' — powershell "cat README.md"</c>: a line sent back to its tool, before the gate is asked (2026-09-26).</summary>
+    public static string NativeLogLine(CommandRequest request, string prefix, string tool)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        return $"native: {tool} for '{prefix}' — {request.Kind} {Quote(request.Command)}";
     }
 
     /// <summary><c>run_command: powershell "git status" → exit 0 in 1.2 s (2,340 chars)</c>.</summary>

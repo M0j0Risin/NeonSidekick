@@ -42,6 +42,7 @@ public sealed class EnvironmentOverrides
     public const string ComfyUrlVariable = Prefix + "COMFY_URL";
     public const string ProfileVariable = Prefix + "PROFILE";
     public const string ShellPoliceVariable = Prefix + "SHELL_POLICE";
+    public const string ShellNativeVariable = Prefix + "SHELL_NATIVE";
 
     /// <summary>Every variable this class reads, for documentation.</summary>
     public static readonly string[] AllVariables =
@@ -51,6 +52,7 @@ public sealed class EnvironmentOverrides
         WhisperModelVariable, LlmReasoningVariable, TtsVoice2Variable, TtsMixVariable,
         InterruptEchoVariable, InterruptConfirmVariable, LlmContextVariable, SearxngUrlVariable,
         CommandPolicyVariable, ShellPoliceVariable, ObsidianVaultVariable, ComfyUrlVariable,
+        ShellNativeVariable,
     };
 
     /// <summary>The log category of every environment line.</summary>
@@ -136,6 +138,12 @@ public sealed class EnvironmentOverrides
     public bool? ShellPolice => ReadSwitch(ShellPoliceVariable);
 
     /// <summary>
+    /// <c>Shell prefer native tools</c> for this launch, or null when unset or not a switch word (2026-09-26, the
+    /// police's shape): <c>off</c> lets a run's scripted <c>cat</c> or <c>git status</c> go to the shell as written.
+    /// </summary>
+    public bool? ShellNative => ReadSwitch(ShellNativeVariable);
+
+    /// <summary>
     /// A variable that is not an override: <c>PATH</c>, <c>PATHEXT</c>, <c>ProgramFiles</c> — what the
     /// shell probe (<see cref="Shell.Interpreters"/>) walks (2026-09-21). The one door stays this class's:
     /// nothing else calls <c>Environment.GetEnvironmentVariable</c>, and tests hand a dictionary here too.
@@ -165,6 +173,7 @@ public sealed class EnvironmentOverrides
                 LlmContextVariable => LlmContextLength is not null,
                 CommandPolicyVariable => ShellCommandPolicy is not null,
                 ShellPoliceVariable => ShellPolice is not null,
+                ShellNativeVariable => ShellNative is not null,
                 _ => Read(name) is not null,
             };
             if (set)
@@ -229,6 +238,7 @@ public sealed class EnvironmentOverrides
         if (WebSearxngUrl is { } searxng) effective.WebSearxngUrl = searxng;
         if (ShellCommandPolicy is { } policy) effective.ShellCommandPolicy = policy;
         if (ShellPolice is { } police) effective.ShellPoliceOutsidePaths = police;
+        if (ShellNative is { } native) effective.ShellPreferNative = native;
         if (ObsidianVault is { } vault) effective.ObsidianVault = vault;
         if (ComfyUrl is { } comfy) effective.ComfyUrl = comfy;
 

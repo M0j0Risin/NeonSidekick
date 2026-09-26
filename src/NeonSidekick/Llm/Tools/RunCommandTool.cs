@@ -21,7 +21,9 @@ namespace NeonSidekick.Llm.Tools;
 /// and a denial is an <c>Error:</c> sentence the model is told not to work around. Since 2026-09-22
 /// the police stands before the gate (<see cref="PathPolice"/>, the setting <c>Shell police outside
 /// paths</c>, on by default): a line whose text names a path outside the working directory is refused
-/// with <see cref="ShellText.OutsidePath"/> and never put to the pane — lexical, the text and not what
+/// with <see cref="ShellText.OutsidePath"/> and never put to the pane; since 2026-09-26 a line a native tool offered
+/// that turn covers (<see cref="NativeRedirect"/>, the setting <c>Shell prefer native tools</c>) is sent back to that tool
+/// once a turn, the pane not asked either — lexical, the text and not what
 /// runs — and the description says the command stays under the working directory (off, it says only
 /// where the command starts). The shell is the
 /// argument's, else the setting <c>Shell default</c>; the <c>shell</c> enum the model sees is the
@@ -57,6 +59,11 @@ public sealed class RunCommandTool : AIFunction
     private readonly Func<AppSettingsData> _effective;
     private readonly Random _random;
 
+    // The turn's offer and the lines already sent back to a native tool in it (Shell prefer native tools, 2026-09-26): BeginTurn resets both; the lock because a turn may call tools side by side.
+    private readonly Lock _turnLock = new();
+    private IReadOnlySet<string> _offered = new HashSet<string>(StringComparer.Ordinal);
+    private readonly HashSet<string> _redirected = new(StringComparer.Ordinal);
+
     // The schema for the shells last seen: a request reads JsonSchema once per tool, and the set
     // changes only on an install or a settings edit, so one parse per change.
     private string _schemaKey = "";
@@ -83,14 +90,14 @@ public sealed class RunCommandTool : AIFunction
     public const string DescriptionPoliced =
         "Runs a command line in a shell on the user's computer and returns its exit code and output. " +
         "It runs in the working directory and may only name paths under it (relative, or absolute under it); the user approves a command before it runs and may deny it. " +
-        "Use it for a program, a build, a test or a script the user asks for; a denied or refused command must not be retried or worked around. " +
+        "Use it for a program, a build, a test or a script the user asks for, never for what another tool does (files, git, the web, SQL); a denied or refused command must not be retried or worked around. " +
         "Use background for a server or a long job and the process tool to read it.";
 
     /// <summary>… and with the police off: the command starts in the working directory, and not a word about where it may reach. Pinned.</summary>
     public const string DescriptionUnpoliced =
         "Runs a command line in a shell on the user's computer and returns its exit code and output. " +
         "It starts in the working directory; the user approves a command before it runs and may deny it. " +
-        "Use it for a program, a build, a test or a script the user asks for; a denied command must not be retried or worked around. " +
+        "Use it for a program, a build, a test or a script the user asks for, never for what another tool does (files, git, the web, SQL); a denied command must not be retried or worked around. " +
         "Use background for a server or a long job and the process tool to read it.";
 
     /// <summary>The two descriptions by the setting (<see cref="DescriptionPoliced"/>, <see cref="DescriptionUnpoliced"/>).</summary>
@@ -103,6 +110,31 @@ public sealed class RunCommandTool : AIFunction
 
     /// <summary>The default shell as the settings stand now.</summary>
     public string DefaultShell => ShellKinds.Name(ShellKinds.Resolve(_effective()));
+
+    /// <summary>
+    /// A new turn (2026-09-26): the names it offers, which <see cref="NativeRedirect"/> may send a line to, and no line
+    /// sent back yet — the once-a-turn rule of <c>Shell prefer native tools</c> starts over. Called by
+    /// <see cref="App.ChatScreen.PrepareTurn"/>, headless too; never called (tests over the tool alone), nothing is offered and nothing redirected.
+    /// </summary>
+    public void BeginTurn(IEnumerable<string> offeredNames)
+    {
+        ArgumentNullException.ThrowIfNull(offeredNames);
+        var offered = new HashSet<string>(offeredNames, StringComparer.Ordinal);
+        lock (_turnLock)
+        {
+            _offered = offered;
+            _redirected.Clear();
+        }
+    }
+
+    /// <summary>The native tool this line goes back to, or null: the first time this turn a line a tool offered this turn covers is seen.</summary>
+    private (string Prefix, string Tool)? Redirect(string command)
+    {
+        lock (_turnLock)
+        {
+            return NativeRedirect.For(command, _offered) is { } native && _redirected.Add(command) ? native : null;
+        }
+    }
 
     public override JsonElement JsonSchema
     {
@@ -231,6 +263,16 @@ public sealed class RunCommandTool : AIFunction
             DiagnosticLog.Info(ShellKinds.Category, ShellText.PolicedLogLine(request, outside));
             _gate.NoteRefused(request);
             return ShellText.OutsidePath(outside);
+        }
+
+        // Then a native tool's own line (Shell prefer native tools, 2026-09-26): sent back once a turn, before the pane is asked. A path outside the working directory
+        // with the police off is the shell's alone, no native tool reaching there.
+        if (effective.ShellPreferNative
+            && (effective.ShellPoliceOutsidePaths || PathPolice.Judge(command, _files, workdir, isScript: false) is null)
+            && Redirect(command) is { } native)
+        {
+            DiagnosticLog.Info(ShellKinds.Category, ShellText.NativeLogLine(request, native.Prefix, native.Tool));
+            return ShellText.UseNative(native.Prefix, native.Tool);
         }
 
         var verdict = await _gate.JudgeAsync(request, cancellationToken).ConfigureAwait(false);

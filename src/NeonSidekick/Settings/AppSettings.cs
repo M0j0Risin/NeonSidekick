@@ -685,6 +685,7 @@ public sealed class AppSettings : IDisposable
         ShellForegroundCapSeconds = source.ShellForegroundCapSeconds,
         ShellOutputMaxChars = source.ShellOutputMaxChars,
         ShellPoliceOutsidePaths = source.ShellPoliceOutsidePaths,
+        ShellPreferNative = source.ShellPreferNative,
         ShellTimeoutSeconds = source.ShellTimeoutSeconds,
         ShellToolBridge = source.ShellToolBridge,
         WebBrowserMode = source.WebBrowserMode,

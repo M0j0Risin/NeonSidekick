@@ -143,7 +143,7 @@ public class ToolsMenuTests : IDisposable
         Assert.Equal([SettingsField.ToolsDollarMention, SettingsField.ToolCollapseCount, SettingsField.CodeCollapseCount], SettingsMenu.ToolsTabFields[8]);   // the fold's count under the switch (2026-09-22, the user's place), the code fold's under it
         Assert.Equal([SettingsField.WebTools, SettingsField.WebBrowserMode, SettingsField.WebBrowserPath, SettingsField.WebBrowserNetworkMode, SettingsField.WebSearchMethod, SettingsField.WebSearxngUrl, SettingsField.WebSearchMaxResults], SettingsMenu.ToolsTabFields[0]);
         Assert.Equal([SettingsField.FileTools, SettingsField.FileSafeEdits, SettingsField.FileTreeMaxLength, SettingsField.FileTreeShowSizes, SettingsField.FileMentionFolderMode, SettingsField.FileBrowserMode, SettingsField.FileViewImageMaxPerCall], SettingsMenu.ToolsTabFields[1]);   // the view_image cap last, 2026-09-19; the browser mode under the folder mode, 2026-09-21
-        Assert.Equal([SettingsField.ShellCommandPolicy, SettingsField.ShellCommandAllowed, SettingsField.ShellPoliceOutsidePaths, SettingsField.ShellDefault, SettingsField.ShellTimeoutSeconds, SettingsField.ShellForegroundCapSeconds, SettingsField.ShellOutputMaxChars, SettingsField.ShellCodeLanguages, SettingsField.ShellCodeTimeoutSeconds, SettingsField.ShellToolBridge, SettingsField.ShellCodeMaxToolCalls], SettingsMenu.ToolsTabFields[2]);   // the policy (the switch) first, then the list, the shell, the caps, then execute_code's four (2026-09-21; the bridge switch later that day; the police toggle third, 2026-09-22)
+        Assert.Equal([SettingsField.ShellCommandPolicy, SettingsField.ShellCommandAllowed, SettingsField.ShellPoliceOutsidePaths, SettingsField.ShellPreferNative, SettingsField.ShellDefault, SettingsField.ShellTimeoutSeconds, SettingsField.ShellForegroundCapSeconds, SettingsField.ShellOutputMaxChars, SettingsField.ShellCodeLanguages, SettingsField.ShellCodeTimeoutSeconds, SettingsField.ShellToolBridge, SettingsField.ShellCodeMaxToolCalls], SettingsMenu.ToolsTabFields[2]);   // the policy (the switch) first, then the list, the shell, the caps, then execute_code's four (2026-09-21; the bridge switch later that day; the police toggle third, 2026-09-22; prefer native under it, 2026-09-26)
         Assert.Equal([SettingsField.AskUser, SettingsField.AskMaxQuestions, SettingsField.AskMaxChoices], SettingsMenu.ToolsTabFields[3]);
         Assert.Equal([SettingsField.GitNativeTools, SettingsField.GitNativeDiffMaxLines, SettingsField.GitNativeLogMaxCommits, SettingsField.GitNativeEmail, SettingsField.GitNativeName], SettingsMenu.ToolsTabFields[4]);   // the switch first, then the limits, then the identity pair (2026-09-21); the Git native labels later that day
         Assert.Equal([SettingsField.ObsidianTools, SettingsField.ObsidianVault, SettingsField.ObsidianAllowDelete], SettingsMenu.ToolsTabFields[5]);   // the switch, then the vault (2026-09-22), then the delete switch (later that day)
@@ -666,7 +666,7 @@ public class ToolsMenuTests : IDisposable
         Push(Keys.Right, Keys.Right, Keys.Right);   // Web, Files, Shell
         Push(Keys.Enter, Keys.Down, Keys.Enter);                            // Shell command policy: the picker opens on ask, yolo picked
         Push(Keys.Down, Keys.Enter, Keys.Enter, Keys.Escape);               // Shell allowed commands: the list, dotnet build removed, back
-        Push(Keys.Down, Keys.Down, Keys.Enter, Keys.Down, Keys.Enter);      // past Shell police outside paths (2026-09-22); Shell default: the picker, cmd picked
+        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Enter, Keys.Down, Keys.Enter);      // past Shell police outside paths (2026-09-22) and Shell prefer native tools (2026-09-26); Shell default: the picker, cmd picked
         Push(Keys.Down, Keys.Enter);                                        // Shell timeout (s): the typed slot, pre-filled with 180; 0 is out of range, kept
         Push(Keys.Backspace, Keys.Backspace, Keys.Backspace, Keys.Char('0'), Keys.Enter);
         Push(Keys.Escape);
@@ -678,7 +678,7 @@ public class ToolsMenuTests : IDisposable
         Assert.Equal("cmd", _settings.Current.ShellDefault);
         Assert.Equal(180, _settings.Current.ShellTimeoutSeconds);
         // The ten rows padded to the tab's own column (27), then the picker's rows, the list's, and the notices on the status line.
-        Assert.Contains("\n" + Titled(Strip) + "\n \n▸ Shell command policy         ask\n  Shell allowed commands       2 prefixes\n  Shell police outside paths   on\n  Shell default                powershell\n  Shell timeout (s)            180\n  Shell foreground cap (s)     600\n  Shell output max chars       30,000 chars\n  Shell code languages         powershell, python, node\n  Shell code timeout (s)       300\n  Shell tool bridge            off\n  Shell tool bridge max calls  50 tool calls\n" + Rule(100), _console.Output);
+        Assert.Contains("\n" + Titled(Strip) + "\n \n▸ Shell command policy         ask\n  Shell allowed commands       2 prefixes\n  Shell police outside paths   on\n  Shell prefer native tools    on\n  Shell default                powershell\n  Shell timeout (s)            180\n  Shell foreground cap (s)     600\n  Shell output max chars       30,000 chars\n  Shell code languages         powershell, python, node\n  Shell code timeout (s)       300\n  Shell tool bridge            off\n  Shell tool bridge max calls  50 tool calls\n" + Rule(100), _console.Output);
         Assert.Contains("\n" + Titled(ToolsText.Label + " › Shell command policy") + "\n \n  off  no shell or script tool is offered\n▸ ask  you approve each command not on the allow list\n  yolo every command runs, nothing is asked\n", _console.Output);
         Assert.Contains("  · Shell command policy: yolo\n", _console.Output);
         Assert.Contains("\n" + Titled(ToolsText.Label + " › Shell allowed commands") + "\n \n▸ dotnet build\n  git push\n", _console.Output);
@@ -695,7 +695,7 @@ public class ToolsMenuTests : IDisposable
     {
         var (menu, pane, _) = PaneMenu();
         Push(Keys.Right, Keys.Right, Keys.Right);   // Shell
-        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter);   // Shell tool bridge: the picker opens on off (one more Down since the police row, 2026-09-22)
+        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter);   // Shell tool bridge: the picker opens on off (one more Down since the police row, 2026-09-22, one more since prefer native, 2026-09-26)
         Push(Keys.Up, Keys.Enter);                                          // on is the row above
         Push(Keys.Escape);
 
@@ -723,7 +723,7 @@ public class ToolsMenuTests : IDisposable
         Assert.False(_settings.Current.ShellPoliceOutsidePaths);
         Assert.Contains("\n" + Titled(ToolsText.Label + " › Shell police outside paths") + "\n \n▸ on  paths outside the working directory are denied\n  off paths anywhere on the computer are allowed\n", _console.Output);
         Assert.Contains("  · Shell police outside paths: off", _console.Output);
-        Assert.Contains("\n▸ Shell police outside paths   off\n  Shell default                powershell\n", _console.Output);
+        Assert.Contains("\n▸ Shell police outside paths   off\n  Shell prefer native tools    on\n  Shell default                powershell\n", _console.Output);
         pane.Dispose();
     }
 
@@ -733,7 +733,7 @@ public class ToolsMenuTests : IDisposable
     {
         var (menu, pane, _) = PaneMenu();
         Push(Keys.Right, Keys.Right, Keys.Right);   // Shell
-        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter);   // Shell code languages: the list (one more Down since the police row, 2026-09-22)
+        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter);   // Shell code languages: the list (one more Down since the police row, 2026-09-22, one more since prefer native, 2026-09-26)
         Push(Keys.Char(' '));                                               // powershell off
         Push(Keys.Down, Keys.Enter);                                        // python off
         Push(Keys.Down, Keys.Enter);                                        // node: the last one, refused

@@ -2404,7 +2404,8 @@ internal sealed partial class ChatScreen
             Without(ObsidianToolsFor(_vaultTools, effective), disabled).Count,
             effective.ObsidianAllowDelete,
             SqlOffered(effective, _sql),
-            Without(_sqlTools, disabled).Count);
+            Without(_sqlTools, disabled).Count,
+            effective.ShellPreferNative);
     }
 
     /// <summary>
@@ -3628,9 +3629,11 @@ internal sealed partial class ChatScreen
     /// drops <c>restore</c> from the file list (<see cref="FileToolsFor"/>) ahead of the group decision, so the model never
     /// hears of the trash while the setting is off. The timer sentence
     /// (<see cref="Assistant.TimerRule"/>, 2026-09-20) rides only while a timer tool is among <paramref name="standingTools"/>:
-    /// headless passes the clock alone (nothing could ring the alert), and the pane loses the three on <c>/tools</c>. Shared with headless.
+    /// headless passes the clock alone (nothing could ring the alert), and the pane loses the three on <c>/tools</c>. With the shell offered,
+    /// <c>run_command</c> is told the turn's tool names (<see cref="RunCommandTool.BeginTurn"/>, 2026-09-26) and, with <paramref name="shellNative"/>
+    /// (the setting <c>Shell prefer native tools</c>), the rules gain <see cref="Assistant.ShellNativeRule"/> after the shell sentence. Shared with headless.
     /// </summary>
-    public static void PrepareTurn(Assistant assistant, MemoryStore memory, IReadOnlyList<AIFunction> memoryTools, IReadOnlyList<AIFunction> standingTools, PersonaFile persona, OperataFile operata, VocaliaFile vocalia, bool memoryEnabled, bool speechOutput, int maxToolIterations = Assistant.DefaultMaxToolIterations, bool toolsEnabled = true, IReadOnlyList<AIFunction>? webTools = null, bool webEnabled = false, Assistant.TurnContextGuard? contextGuard = null, IReadOnlyList<AIFunction>? fileTools = null, bool filesEnabled = false, IReadOnlyList<AIFunction>? askTools = null, SkillsForTurn? skills = null, bool markdown = false, IReadOnlyList<AIFunction>? sessionTools = null, bool sessionsEnabled = false, IReadOnlySet<string>? disabledTools = null, IReadOnlyList<AIFunction>? mcpTools = null, bool mcpEnabled = false, bool safeEdits = true, IReadOnlyList<AIFunction>? gitTools = null, bool gitEnabled = false, IReadOnlyList<AIFunction>? shellTools = null, bool shellEnabled = false, ProcessRegistry? processes = null, bool shellBridge = false, bool shellPolice = true, IReadOnlyList<AIFunction>? obsidianTools = null, bool obsidianEnabled = false, IReadOnlyList<AIFunction>? sqlTools = null, bool sqlEnabled = false, IReadOnlyList<AIFunction>? comfyTools = null, bool comfyEnabled = false)
+    public static void PrepareTurn(Assistant assistant, MemoryStore memory, IReadOnlyList<AIFunction> memoryTools, IReadOnlyList<AIFunction> standingTools, PersonaFile persona, OperataFile operata, VocaliaFile vocalia, bool memoryEnabled, bool speechOutput, int maxToolIterations = Assistant.DefaultMaxToolIterations, bool toolsEnabled = true, IReadOnlyList<AIFunction>? webTools = null, bool webEnabled = false, Assistant.TurnContextGuard? contextGuard = null, IReadOnlyList<AIFunction>? fileTools = null, bool filesEnabled = false, IReadOnlyList<AIFunction>? askTools = null, SkillsForTurn? skills = null, bool markdown = false, IReadOnlyList<AIFunction>? sessionTools = null, bool sessionsEnabled = false, IReadOnlySet<string>? disabledTools = null, IReadOnlyList<AIFunction>? mcpTools = null, bool mcpEnabled = false, bool safeEdits = true, IReadOnlyList<AIFunction>? gitTools = null, bool gitEnabled = false, IReadOnlyList<AIFunction>? shellTools = null, bool shellEnabled = false, ProcessRegistry? processes = null, bool shellBridge = false, bool shellPolice = true, IReadOnlyList<AIFunction>? obsidianTools = null, bool obsidianEnabled = false, IReadOnlyList<AIFunction>? sqlTools = null, bool sqlEnabled = false, IReadOnlyList<AIFunction>? comfyTools = null, bool comfyEnabled = false, bool shellNative = false)
     {
         ArgumentNullException.ThrowIfNull(assistant);
         ArgumentNullException.ThrowIfNull(memory);
@@ -3730,6 +3733,10 @@ internal sealed partial class ChatScreen
         bool mcp = mcpEnabled && mcpTools is { Count: > 0 };
         tools = mcp ? [.. tools, .. mcpTools!] : tools;
         assistant.Tools = ask is not null ? [.. tools, .. askTools!] : tools;
+        // run_command learns the turn's offer (Shell prefer native tools, 2026-09-26): what it may send a line back to, and the once-a-turn rule starts over.
+        (shell ? shellTools!.OfType<RunCommandTool>().FirstOrDefault() : null)?.BeginTurn(assistant.Tools.Select(t => t.Name));
+        // … and the rules say so after the shell sentence, naming the groups offered.
+        bool native = shell && shellNative;
 
         // An assistant built without the clock or the sandbox (tests over other tools, or the
         // file tools switched off) opens without that call.
@@ -3765,7 +3772,7 @@ internal sealed partial class ChatScreen
         assistant.OpeningCalls = opening;
         // The notified exits since the last turn ride in as seeded polls (2026-09-21), on every turn, while process is offered.
         assistant.PendingCalls = processes is null ? [] : PendingProcessPolls(processes, assistant.Tools);
-        assistant.History.SystemPrompt = Assistant.SystemPrompt(speechOutput, memoryEnabled ? memory.Snapshot() : null, persona.Read(), operata.Read(), vocalia.Read(), web: web, files: files, ask: ask, project: project, skills: catalog, markdown: markdown, sessions: sessions, download: download, recall: recall is not null, delete: delete, mcp: mcp, safeEdits: safeEdits, timers: timers, git: git, shell: shell, bridge: bridge, police: police, obsidian: obsidian, obsidianDelete: obsidianDelete, sql: sql);
+        assistant.History.SystemPrompt = Assistant.SystemPrompt(speechOutput, memoryEnabled ? memory.Snapshot() : null, persona.Read(), operata.Read(), vocalia.Read(), web: web, files: files, ask: ask, project: project, skills: catalog, markdown: markdown, sessions: sessions, download: download, recall: recall is not null, delete: delete, mcp: mcp, safeEdits: safeEdits, timers: timers, git: git, shell: shell, bridge: bridge, police: police, obsidian: obsidian, obsidianDelete: obsidianDelete, sql: sql, native: native);
     }
 
     /// <summary>
@@ -10003,7 +10010,7 @@ internal sealed partial class ChatScreen
         if (bot is null)
         {
             _interpreters.Refresh();
-            PrepareTurn(assistant, _memory, _memoryTools, [.. _clockTools, .. _timerTools], _persona, _operata, _vocalia, effective.Memory, speaker is not null, effective.LlmMaxToolIterations, effective.LlmOfferTools, _webTools, effective.WebTools, ContextGuardFor(effective, _session.ContextLength), _fileTools, effective.FileTools, _pane.Enabled && effective.AskUser ? _askTools : null, SkillsFor(effective), markdown, _sessionTools, effective.SessionTool, ToolsText.DisabledSet(effective.ToolsDisabled), _mcp.Tools, effective.McpServers, effective.FileSafeEdits, _gitTools, effective.GitNativeTools, _shellTools, ShellOffered(effective), _processes, effective.ShellToolBridge, effective.ShellPoliceOutsidePaths, ObsidianToolsFor(_vaultTools, effective), ObsidianOffered(effective), _sqlTools, SqlOffered(effective, _sql), _comfyTools, ComfyOffered(effective, _comfy));
+            PrepareTurn(assistant, _memory, _memoryTools, [.. _clockTools, .. _timerTools], _persona, _operata, _vocalia, effective.Memory, speaker is not null, effective.LlmMaxToolIterations, effective.LlmOfferTools, _webTools, effective.WebTools, ContextGuardFor(effective, _session.ContextLength), _fileTools, effective.FileTools, _pane.Enabled && effective.AskUser ? _askTools : null, SkillsFor(effective), markdown, _sessionTools, effective.SessionTool, ToolsText.DisabledSet(effective.ToolsDisabled), _mcp.Tools, effective.McpServers, effective.FileSafeEdits, _gitTools, effective.GitNativeTools, _shellTools, ShellOffered(effective), _processes, effective.ShellToolBridge, effective.ShellPoliceOutsidePaths, ObsidianToolsFor(_vaultTools, effective), ObsidianOffered(effective), _sqlTools, SqlOffered(effective, _sql), _comfyTools, ComfyOffered(effective, _comfy), effective.ShellPreferNative);
         }
 
         bool armed = false;

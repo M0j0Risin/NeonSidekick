@@ -98,7 +98,7 @@ public class SidekickAppTests : IDisposable
 
     /// <summary>The prompt as headless builds it: Agent skills on by default, no skill installed, so every prompt with tools ends with the skills block over an empty catalog (2026-09-16); no timer tool, so the tool rules lose their timer sentence (2026-09-20).</summary>
     private static string SkilledPrompt(bool speechOutput, IReadOnlyList<string>? memories, string? persona = null, string? operatingRules = null, string? voiceDirective = null, bool tools = true, bool web = false, bool files = true, AskLimits? ask = null, ProjectNotes? project = null, IReadOnlyList<Skill>? skills = null, bool sessions = true, bool mcp = false, bool git = true, bool shell = true) =>
-        Assistant.SystemPrompt(speechOutput, memories, persona, operatingRules, voiceDirective, tools, web, files, ask, project, skills ?? [], sessions: sessions && tools, mcp: mcp && tools, timers: false, git: git && tools, shell: shell && tools);
+        Assistant.SystemPrompt(speechOutput, memories, persona, operatingRules, voiceDirective, tools, web, files, ask, project, skills ?? [], sessions: sessions && tools, mcp: mcp && tools, timers: false, git: git && tools, shell: shell && tools, native: shell && tools);   // Shell prefer native tools on by default (2026-09-26)
 
     /// <summary>Every window title the app set (the <c>setTitle</c> seam): the interactive screen's launch, never headless.</summary>
     private readonly List<string> _titles = new();
@@ -437,6 +437,11 @@ public class SidekickAppTests : IDisposable
         Assert.Equal(0, await variable.RunAsync(SidekickOptions.None with { Headless = true }, CancellationToken.None));
         Assert.Equal(EnvironmentOverrides.ShellPoliceVariable, variable.OverriddenBy(SettingsField.ShellPoliceOutsidePaths));
         Assert.Null(App().OverriddenBy(SettingsField.ShellPoliceOutsidePaths));
+        // Shell prefer native tools has its variable too (later on 2026-09-26), no flag.
+        var native = App(new EnvironmentOverrides(n => n == EnvironmentOverrides.ShellNativeVariable ? "off" : null), new StringReader(""), new StringWriter());
+        Assert.Equal(0, await native.RunAsync(SidekickOptions.None with { Headless = true }, CancellationToken.None));
+        Assert.Equal(EnvironmentOverrides.ShellNativeVariable, native.OverriddenBy(SettingsField.ShellPreferNative));
+        Assert.Null(App().OverriddenBy(SettingsField.ShellPreferNative));
     }
 
     /// <summary>A background run headless (phase B): the start line, the exit as a <c>[notice]</c> at the loop top, and the seeded poll on the next turn.</summary>
@@ -663,7 +668,7 @@ public class SidekickAppTests : IDisposable
             (string[])["get_current_time", "shift_date", "days_between", .. FileToolNames.All, .. GitToolNames.All, .. ShellToolNames.All, "web_search", "web_fetch", "open_url", "download_file", "save_memory", "recall_memory", "load_skill", "skill_editor", "session_manager"],
             _chat.Options[0]!.Tools!.Cast<AIFunction>().Select(t => t.Name).ToArray());
         var haiku = new Skill("haiku", "Writes haiku.", SkillScope.Profile, skills);
-        Assert.Equal(Assistant.SystemPrompt(false, [], web: true, project: new ProjectNotes("AGENTS.md", "The notes."), skills: [haiku], sessions: true, timers: false, git: true, shell: true), _chat.Requests[0][0].Text);
+        Assert.Equal(Assistant.SystemPrompt(false, [], web: true, project: new ProjectNotes("AGENTS.md", "The notes."), skills: [haiku], sessions: true, timers: false, git: true, shell: true, native: true), _chat.Requests[0][0].Text);
         Assert.Contains("[tool] load_skill -> <skill_content name=\"haiku\">", output);
         Assert.True(ConversationHistory.IsSkillResult(Assert.Single(_chat.Requests[1][^1].Contents.OfType<FunctionResultContent>())));
         Assert.Contains("Old pond.", output);
@@ -673,7 +678,7 @@ public class SidekickAppTests : IDisposable
         _chat.EnqueueText("Hi.");
         await Headless("hello\n");
         Assert.DoesNotContain("skill_editor", _chat.Options[2]!.Tools!.Cast<AIFunction>().Select(t => t.Name));
-        Assert.Equal(Assistant.SystemPrompt(false, [], web: true, sessions: true, timers: false, git: true, shell: true), _chat.Requests[2][0].Text);
+        Assert.Equal(Assistant.SystemPrompt(false, [], web: true, sessions: true, timers: false, git: true, shell: true, native: true), _chat.Requests[2][0].Text);
     }
 
     [Fact]

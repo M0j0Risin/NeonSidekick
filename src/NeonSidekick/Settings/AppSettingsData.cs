@@ -1189,6 +1189,20 @@ public sealed class AppSettingsData
     public bool ShellPoliceOutsidePaths { get; set; } = true;
 
     /// <summary>
+    /// Whether the shell steps aside for a native tool (2026-09-26, the user's ask: the model kept reaching for
+    /// <c>cat</c>, <c>dir</c>, <c>git status</c> or <c>curl</c> through <c>run_command</c> when a tool of its own
+    /// did the job, which cost the user an approval and the tool's guarantees; on by default). On, the operating
+    /// rules gain <see cref="Llm.Assistant.ShellNativeRule"/>, naming the groups offered that turn, and a
+    /// <c>run_command</c> line of one command whose prefix a native tool offered that turn covers
+    /// (<see cref="Shell.NativeRedirect"/>) is not run: the model is told which tool to call, before the gate —
+    /// the pane is never asked. Once a turn per line: the same line again goes on to the gate, so a real need
+    /// (an option the tool lacks) still reaches the user. A line naming a path outside the working directory is
+    /// never redirected (no native tool reaches there). Off, the shell takes what it is given, as before.
+    /// Read at each call and at each turn's prompt, no reconnect. <c>NEONSIDEKICK_SHELL_NATIVE</c> outranks it.
+    /// </summary>
+    public bool ShellPreferNative { get; set; } = true;
+
+    /// <summary>
     /// The shell a <c>run_command</c> without <c>shell</c> runs in (2026-09-21): one of
     /// <see cref="Shell.ShellKinds.Names"/> — <c>powershell</c> (pwsh when installed, else Windows PowerShell),
     /// <c>cmd</c>, <c>bash</c> (Git Bash, when found). Anything else reads as <see cref="Shell.ShellKinds.Default"/>;

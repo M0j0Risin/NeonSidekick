@@ -362,6 +362,26 @@ public class AssistantTests
         Assert.Equal(Assistant.DefaultSystemPrompt, Assistant.SystemPrompt(false, null, police: false));   // the police rides the shell rule alone
     }
 
+    /// <summary>Shell prefer native tools (2026-09-26): one sentence after the shell rule, naming only the groups offered, with the shell words each replaces.</summary>
+    [Fact]
+    public void ShellNativeRule_NamesTheOfferedGroups_AfterTheShellRule()
+    {
+        Assert.Equal(
+            "Call run_command only for what no other tool does: read_file and search_files read, search and list files (not cat, type, Get-Content, dir, ls or grep) and the file tools write, copy, move and delete them; " +
+            "the git_ tools look at and change the repository (not git status, log, diff, add or commit); web_search and web_fetch reach the web (not curl or Invoke-WebRequest); sql_query reads the databases (not sqlcmd).",
+            Assistant.ShellNativeRule(files: true, git: true, web: true, sql: true));
+        Assert.Equal("Call run_command only for what no other tool does: the git_ tools look at and change the repository (not git status, log, diff, add or commit).", Assistant.ShellNativeRule(files: false, git: true, web: false, sql: false));
+        Assert.Equal("", Assistant.ShellNativeRule(false, false, false, false));
+
+        string files = Assistant.ShellNativeRule(files: true, git: false, web: false, sql: false);
+        Assert.Equal(Assistant.DefaultSystemPrompt + " " + Assistant.ShellRuleWithoutBridge + " " + files, Assistant.SystemPrompt(false, null, shell: true, native: true));
+        Assert.Equal(Assistant.DefaultSystemPrompt + " " + Assistant.GitRule + " " + Assistant.ShellRule + " " + Assistant.ShellNativeRule(true, true, false, true) + " " + Assistant.SqlRule, Assistant.SystemPrompt(false, null, git: true, shell: true, bridge: true, sql: true, native: true));   // before the SQL sentence, naming it
+        Assert.Equal(Assistant.DefaultSystemPrompt + " " + Assistant.ShellRuleWithoutBridge, Assistant.SystemPrompt(false, null, shell: true, native: false));   // the setting off
+        Assert.Equal(Assistant.DefaultSystemPrompt, Assistant.SystemPrompt(false, null, native: true));   // no shell, nothing to prefer over
+        Assert.Equal(Assistant.DefaultPersona + " " + Assistant.OperatingRulesWithoutFiles + " " + Assistant.ShellRuleWithoutBridge, Assistant.SystemPrompt(false, null, files: false, shell: true, native: true));   // no group: no sentence
+        Assert.Equal(Assistant.DefaultPersona + "\n\nAnswer in haiku.", Assistant.SystemPrompt(false, null, operatingRules: "Answer in haiku.", shell: true, native: true));   // a custom operata.md stands verbatim
+    }
+
     /// <summary>The MCP rule (2026-09-20): after the session rule, only with tools, only when asked for.</summary>
     [Fact]
     public void SystemPrompt_McpOn_AppendsTheMcpRule_Last_ToTheDefaultRulesOnly()

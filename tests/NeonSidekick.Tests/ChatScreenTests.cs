@@ -251,7 +251,7 @@ public partial class ChatScreenTests : IDisposable
         (string)Assert.Single(request.SelectMany(m => m.Contents.OfType<FunctionResultContent>()), r => r.CallId == Assistant.OpeningMemoryCallId).Result!;
 
     private static string SkilledPrompt(bool speechOutput, IReadOnlyList<string>? memories, string? persona = null, string? operatingRules = null, string? voiceDirective = null, bool tools = true, bool web = false, bool files = true, AskLimits? ask = null, ProjectNotes? project = null, IReadOnlyList<Skill>? skills = null, bool markdown = false, bool sessions = true, bool download = true, bool recall = true, bool mcp = false, bool timers = true, bool git = true, bool shell = true) =>
-        Assistant.SystemPrompt(speechOutput, memories, persona, operatingRules, voiceDirective, tools, web, files, ask, project, skills ?? [], markdown, sessions: sessions && tools, download: download, recall: recall, mcp: mcp && tools, timers: timers, git: git && tools, shell: shell && tools);
+        Assistant.SystemPrompt(speechOutput, memories, persona, operatingRules, voiceDirective, tools, web, files, ask, project, skills ?? [], markdown, sessions: sessions && tools, download: download, recall: recall, mcp: mcp && tools, timers: timers, git: git && tools, shell: shell && tools, native: shell && tools);   // Shell prefer native tools on by default (2026-09-26)
 
     private async Task<string> RunAsync(IAnsiConsoleInput input, CancellationToken cancellationToken = default)
     {
@@ -4182,7 +4182,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("\n▸ Ask user                      on\n", output);
         Assert.Contains("\n▸ File tools                      on\n", output);
         Assert.Contains("\n▸ Git native tools            on\n  Git native diff max lines   500 lines\n  Git native log max commits  20 commits\n  Git native email            (not set)\n  Git native name             (not set)\n", output);
-        Assert.Contains("\n▸ Shell command policy         ask\n  Shell allowed commands       none\n  Shell police outside paths   on\n  Shell default                powershell\n  Shell timeout (s)            180\n  Shell foreground cap (s)     600\n  Shell output max chars       30,000 chars\n  Shell code languages         powershell, python, node\n  Shell code timeout (s)       300\n  Shell tool bridge            off\n  Shell tool bridge max calls  50 tool calls\n", output);
+        Assert.Contains("\n▸ Shell command policy         ask\n  Shell allowed commands       none\n  Shell police outside paths   on\n  Shell prefer native tools    on\n  Shell default                powershell\n  Shell timeout (s)            180\n  Shell foreground cap (s)     600\n  Shell output max chars       30,000 chars\n  Shell code languages         powershell, python, node\n  Shell code timeout (s)       300\n  Shell tool bridge            off\n  Shell tool bridge max calls  50 tool calls\n", output);
         Assert.Contains("\n▸ Web tools                 on\n", output);
         Assert.Contains("\n▸ SQL tools                  on\n  SQL connections offered    all (not narrowed)\n  SQL default connection     (the first connection)\n  SQL set password           Enter to set password for a connection\n  SQL add connection         Enter to start connection wizard\n  SQL %-mention enabled      on\n  SQL max rows               100 rows\n  SQL query timeout (s)      30\n  SQL connections (profile)  (none) · Enter edits sql.json\n", output);   // 2026-09-23
         Assert.Contains("\n" + SettingsMenu.TabKeys, output);
@@ -14441,7 +14441,7 @@ public partial class ChatScreenTests : IDisposable
 
         Assert.Equal((string[])[.. StandingAndFileTools, LoadSkillTool.ToolName, SkillEditorTool.ToolName, SessionManagerTool.ToolName], _chat.Options[0]!.Tools!.Cast<AIFunction>().Select(t => t.Name).ToArray());
         var haiku = new Skill("haiku", "Writes haiku. Use when asked for one.", SkillScope.Profile, directory);
-        Assert.Equal(Assistant.SystemPrompt(false, [], web: true, skills: [haiku], sessions: true, git: true, shell: true), _chat.Requests[0][0].Text);
+        Assert.Equal(Assistant.SystemPrompt(false, [], web: true, skills: [haiku], sessions: true, git: true, shell: true, native: true), _chat.Requests[0][0].Text);
         Assert.Contains("<name>haiku</name>", _chat.Requests[0][0].Text);
         Assert.DoesNotContain("deploy", _chat.Requests[0][0].Text);
     }
@@ -14457,7 +14457,7 @@ public partial class ChatScreenTests : IDisposable
 
         await RunAsync();
 
-        Assert.Equal(Assistant.SystemPrompt(false, [], web: true, skills: [new Skill("deploy", "Deploys the site.", SkillScope.External, directory)], sessions: true, git: true, shell: true), _chat.Requests[0][0].Text);
+        Assert.Equal(Assistant.SystemPrompt(false, [], web: true, skills: [new Skill("deploy", "Deploys the site.", SkillScope.External, directory)], sessions: true, git: true, shell: true, native: true), _chat.Requests[0][0].Text);
     }
 
     [Fact]
@@ -14489,7 +14489,7 @@ public partial class ChatScreenTests : IDisposable
         await RunAsync();
 
         Assert.Equal((string[])[.. StandingAndFileTools, SessionManagerTool.ToolName], _chat.Options[0]!.Tools!.Cast<AIFunction>().Select(t => t.Name).ToArray());
-        Assert.Equal(Assistant.SystemPrompt(false, [], web: true, sessions: true, git: true, shell: true), _chat.Requests[0][0].Text);
+        Assert.Equal(Assistant.SystemPrompt(false, [], web: true, sessions: true, git: true, shell: true, native: true), _chat.Requests[0][0].Text);
     }
 
     [Fact]

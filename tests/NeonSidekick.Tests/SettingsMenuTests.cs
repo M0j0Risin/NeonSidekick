@@ -760,6 +760,7 @@ public class SettingsMenuTests : IDisposable
                 SettingsField.LlmMidTurnUsage,
                 SettingsField.KeepCommandHistory,
                 SettingsField.BotChatNonTtsDelaySeconds,
+                SettingsField.ShellPreferNative,
             },
             Enum.GetValues<SettingsField>());
         // The compact rows: on the LLM tab after the context length but no reconnect; the type a picker, the two others typed.
@@ -1033,7 +1034,8 @@ public class SettingsMenuTests : IDisposable
         Assert.Equal(new[] { SettingsField.WebTools, SettingsField.WebBrowserMode, SettingsField.WebBrowserPath, SettingsField.WebBrowserNetworkMode, SettingsField.WebSearchMethod, SettingsField.WebSearxngUrl, SettingsField.WebSearchMaxResults }, SettingsMenu.ToolsTabFields[0]);
         // The shell rows (2026-09-21): the Shell tab (between Git and Web that day, between Files and Ask since later on) — the policy (the group's switch, a picker), the allowed list, the default shell (a picker), then the three typed caps,
         // the languages, their timeout, the tool bridge (the tab's one toggle, later that day) above the tool-call cap it governs; none a reconnect. The outside-paths police (2026-09-22) sits third, under the list it guards beside.
-        Assert.Equal(new[] { SettingsField.ShellCommandPolicy, SettingsField.ShellCommandAllowed, SettingsField.ShellPoliceOutsidePaths, SettingsField.ShellDefault, SettingsField.ShellTimeoutSeconds, SettingsField.ShellForegroundCapSeconds, SettingsField.ShellOutputMaxChars, SettingsField.ShellCodeLanguages, SettingsField.ShellCodeTimeoutSeconds, SettingsField.ShellToolBridge, SettingsField.ShellCodeMaxToolCalls }, SettingsMenu.ToolsTabFields[2]);
+        // Shell prefer native tools (2026-09-26) sits under the police, the other guard in front of the gate.
+        Assert.Equal(new[] { SettingsField.ShellCommandPolicy, SettingsField.ShellCommandAllowed, SettingsField.ShellPoliceOutsidePaths, SettingsField.ShellPreferNative, SettingsField.ShellDefault, SettingsField.ShellTimeoutSeconds, SettingsField.ShellForegroundCapSeconds, SettingsField.ShellOutputMaxChars, SettingsField.ShellCodeLanguages, SettingsField.ShellCodeTimeoutSeconds, SettingsField.ShellToolBridge, SettingsField.ShellCodeMaxToolCalls }, SettingsMenu.ToolsTabFields[2]);
         Assert.Equal("Shell tool bridge", SettingsMenu.FieldName(SettingsField.ShellToolBridge));
         Assert.True(SettingsMenu.IsToggle(SettingsField.ShellToolBridge));
         Assert.False(SettingsMenu.IsLlmField(SettingsField.ShellToolBridge));
@@ -1067,7 +1069,10 @@ public class SettingsMenuTests : IDisposable
         Assert.Equal("Shell timeout (s)", SettingsMenu.FieldName(SettingsField.ShellTimeoutSeconds));
         Assert.Equal("Shell foreground cap (s)", SettingsMenu.FieldName(SettingsField.ShellForegroundCapSeconds));
         Assert.Equal("Shell output max chars", SettingsMenu.FieldName(SettingsField.ShellOutputMaxChars));
-        Assert.Equal([SettingsField.ShellPoliceOutsidePaths, SettingsField.ShellToolBridge], SettingsMenu.ToolsTabFields[2].Where(SettingsMenu.IsToggle));
+        Assert.Equal("Shell prefer native tools", SettingsMenu.FieldName(SettingsField.ShellPreferNative));
+        Assert.Equal("on", SettingsMenu.FieldValue(SettingsField.ShellPreferNative, data, _settings.ProfileDirectory));
+        Assert.Equal("off", SettingsMenu.FieldValue(SettingsField.ShellPreferNative, new AppSettingsData { ShellPreferNative = false }, _settings.ProfileDirectory));
+        Assert.Equal([SettingsField.ShellPoliceOutsidePaths, SettingsField.ShellPreferNative, SettingsField.ShellToolBridge], SettingsMenu.ToolsTabFields[2].Where(SettingsMenu.IsToggle));
         Assert.All(SettingsMenu.ToolsTabFields[2], f => Assert.False(SettingsMenu.RefusedMidTurn(f)));
         Assert.Equal("ask", SettingsMenu.FieldValue(SettingsField.ShellCommandPolicy, data, _settings.ProfileDirectory));
         Assert.Equal("none", SettingsMenu.FieldValue(SettingsField.ShellCommandAllowed, data, _settings.ProfileDirectory));

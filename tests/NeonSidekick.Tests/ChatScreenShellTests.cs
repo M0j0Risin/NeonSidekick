@@ -183,13 +183,30 @@ public partial class ChatScreenTests
     [Fact]
     public async Task RunCommand_Yolo_NeverAsks()
     {
-        _settings.Update(d => d.ShellCommandPolicy = "yolo");
+        _settings.Update(d => { d.ShellCommandPolicy = "yolo"; d.ShellPreferNative = false; });   // dir is search_files' line since 2026-09-26: the setting off, it runs
         ShellFixture([], "Ran.", "dir /b nothing-here-*");
 
         string output = await RunAsync();
 
         Assert.DoesNotContain(ShellText.ApprovalTitle, output);
         Assert.Equal("exit 1 in 0.0 s (cmd): dir /b nothing-here-*\n--- stderr ---\nFile Not Found", ToolResult(_chat.Requests[1], "c1"));
+    }
+
+    /// <summary>
+    /// Shell prefer native tools (2026-09-26): under ask, a line a native tool the turn offers covers comes back not run and the
+    /// pane is never asked; the same line again in the turn is put to the pane (denied here), so a real need reaches the user.
+    /// </summary>
+    [Fact]
+    public async Task RunCommand_ALineANativeToolCovers_GoesBackToIt_TheSameLineAgainReachesThePane()
+    {
+        ShellFixture([Keys.Down, Keys.Escape], "Read it natively.", "type notes.txt", "type notes.txt");
+
+        string output = await RunAsync();
+
+        Assert.Equal(ShellText.UseNative("type", ReadFileTool.ToolName), ToolResult(_chat.Requests[1], "c1"));
+        Assert.Equal("Error: the command was denied by the user: type notes.txt; do not retry it or work around the refusal", ToolResult(_chat.Requests[2], "c2"));
+        Assert.Contains("\n" + Titled(ShellText.ApprovalTitle) + "\ncmd › type notes.txt\n", output);   // the second was put to the pane
+        Assert.Contains("Call run_command only for what no other tool does: read_file and search_files", _chat.Requests[0][0].Text!, StringComparison.Ordinal);
     }
 
     /// <summary>

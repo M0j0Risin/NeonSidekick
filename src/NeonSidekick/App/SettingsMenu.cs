@@ -412,6 +412,9 @@ public enum SettingsField
 
     /// <summary>Typed: the seconds <c>/botchat</c> rests after a reply when no voice plays, 0 (off) to 30 (<see cref="Settings.AppSettingsData.BotChatNonTtsDelaySeconds"/>). The Botchat tab's last row (2026-09-26, the user's ask); no reconnect (read per reply). Last in the enum, as every newcomer.</summary>
     BotChatNonTtsDelaySeconds,
+
+    /// <summary>A toggle: whether <c>run_command</c> steps aside for a native tool (<see cref="Settings.AppSettingsData.ShellPreferNative"/>). The Shell tab's row under Shell police outside paths (2026-09-26, the user's ask); no reconnect (read at each call and each turn). Last in the enum, as every newcomer.</summary>
+    ShellPreferNative,
 }
 
 /// <summary>The tabs of <c>/settings</c> on the pane, in strip order (Sessions right after General — the user's order, 2026-09-18; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
@@ -689,7 +692,7 @@ internal sealed partial class SettingsMenu
     [
         [SettingsField.WebTools, SettingsField.WebBrowserMode, SettingsField.WebBrowserPath, SettingsField.WebBrowserNetworkMode, SettingsField.WebSearchMethod, SettingsField.WebSearxngUrl, SettingsField.WebSearchMaxResults],
         [SettingsField.FileTools, SettingsField.FileSafeEdits, SettingsField.FileTreeMaxLength, SettingsField.FileTreeShowSizes, SettingsField.FileMentionFolderMode, SettingsField.FileBrowserMode, SettingsField.FileViewImageMaxPerCall],
-        [SettingsField.ShellCommandPolicy, SettingsField.ShellCommandAllowed, SettingsField.ShellPoliceOutsidePaths, SettingsField.ShellDefault, SettingsField.ShellTimeoutSeconds, SettingsField.ShellForegroundCapSeconds, SettingsField.ShellOutputMaxChars, SettingsField.ShellCodeLanguages, SettingsField.ShellCodeTimeoutSeconds, SettingsField.ShellToolBridge, SettingsField.ShellCodeMaxToolCalls],
+        [SettingsField.ShellCommandPolicy, SettingsField.ShellCommandAllowed, SettingsField.ShellPoliceOutsidePaths, SettingsField.ShellPreferNative, SettingsField.ShellDefault, SettingsField.ShellTimeoutSeconds, SettingsField.ShellForegroundCapSeconds, SettingsField.ShellOutputMaxChars, SettingsField.ShellCodeLanguages, SettingsField.ShellCodeTimeoutSeconds, SettingsField.ShellToolBridge, SettingsField.ShellCodeMaxToolCalls],
         [SettingsField.AskUser, SettingsField.AskMaxQuestions, SettingsField.AskMaxChoices],
         [SettingsField.GitNativeTools, SettingsField.GitNativeDiffMaxLines, SettingsField.GitNativeLogMaxCommits, SettingsField.GitNativeEmail, SettingsField.GitNativeName],
         [SettingsField.ObsidianTools, SettingsField.ObsidianVault, SettingsField.ObsidianAllowDelete],
@@ -938,7 +941,7 @@ internal sealed partial class SettingsMenu
             or SettingsField.HideExitAutocomplete or SettingsField.CommandTypoIntercept or SettingsField.KeepCommandHistory or SettingsField.ShowWorkingDirectory or SettingsField.ShowToolbar
             or SettingsField.QueueMessages or SettingsField.SessionLogging or SettingsField.SessionTool
             or SettingsField.ToolsDollarMention or SettingsField.ReflectionIncludesSessions or SettingsField.ReflectionYieldsToTurns or SettingsField.McpServers or SettingsField.GitNativeTools
-            or SettingsField.LlmCompactShowSummary or SettingsField.ShellToolBridge or SettingsField.ShellPoliceOutsidePaths
+            or SettingsField.LlmCompactShowSummary or SettingsField.ShellToolBridge or SettingsField.ShellPoliceOutsidePaths or SettingsField.ShellPreferNative
             or SettingsField.ObsidianTools or SettingsField.ObsidianAllowDelete or SettingsField.SqlTools or SettingsField.SqlPercentMention or SettingsField.ComfyTools or SettingsField.ComfyReinforceNegatives or SettingsField.ComfyShowPrompts or SettingsField.ComfyCaretMention or SettingsField.ComfyPictureStrip
             or SettingsField.BotChatImages or SettingsField.BotChatImageAsync;
 
@@ -996,6 +999,7 @@ internal sealed partial class SettingsMenu
         SettingsField.ShellCommandPolicy => "Shell command policy",
         SettingsField.ShellCommandAllowed => "Shell allowed commands",
         SettingsField.ShellPoliceOutsidePaths => "Shell police outside paths",
+        SettingsField.ShellPreferNative => "Shell prefer native tools",
         SettingsField.ShellDefault => "Shell default",
         SettingsField.ShellTimeoutSeconds => "Shell timeout (s)",
         SettingsField.ShellForegroundCapSeconds => "Shell foreground cap (s)",
@@ -1159,6 +1163,7 @@ internal sealed partial class SettingsMenu
             SettingsField.ShellCommandPolicy => data.ShellCommandPolicy,
             SettingsField.ShellCommandAllowed => Prefixes(data.ShellCommandAllowed.Count),
             SettingsField.ShellPoliceOutsidePaths => OnOff(data.ShellPoliceOutsidePaths),
+            SettingsField.ShellPreferNative => OnOff(data.ShellPreferNative),
             SettingsField.ShellDefault => data.ShellDefault,
             SettingsField.ShellTimeoutSeconds => Seconds(data.ShellTimeoutSeconds),
             SettingsField.ShellForegroundCapSeconds => Seconds(data.ShellForegroundCapSeconds),
@@ -3261,6 +3266,7 @@ internal sealed partial class SettingsMenu
             SettingsField.SessionTool => data.SessionTool,
             SettingsField.ShellToolBridge => data.ShellToolBridge,
             SettingsField.ShellPoliceOutsidePaths => data.ShellPoliceOutsidePaths,
+            SettingsField.ShellPreferNative => data.ShellPreferNative,
             _ => false,
         };
     }
@@ -3317,6 +3323,7 @@ internal sealed partial class SettingsMenu
             case SettingsField.SessionTool: data.SessionTool = on; break;
             case SettingsField.ShellToolBridge: data.ShellToolBridge = on; break;
             case SettingsField.ShellPoliceOutsidePaths: data.ShellPoliceOutsidePaths = on; break;
+            case SettingsField.ShellPreferNative: data.ShellPreferNative = on; break;
         }
     }
 
@@ -3377,6 +3384,7 @@ internal sealed partial class SettingsMenu
         SettingsField.SessionTool => on ? "the model can search, list and read this profile's earlier sessions" : "the model never sees an earlier session",
         SettingsField.ShellToolBridge => on ? "a script may call this app's other tools through its neon_tools module" : "a script does everything itself: no neon_tools module, no tool calls",
         SettingsField.ShellPoliceOutsidePaths => on ? "paths outside the working directory are denied" : "paths anywhere on the computer are allowed",
+        SettingsField.ShellPreferNative => on ? "a command a native tool covers is sent back to that tool first" : "the shell runs whatever it is given",
         _ => "",
     };
 

@@ -52,6 +52,7 @@ public class EnvironmentOverridesTests
             (EnvironmentOverrides.SearxngUrlVariable, " http://box:8080 "),
             (EnvironmentOverrides.CommandPolicyVariable, " YOLO "),
             (EnvironmentOverrides.ShellPoliceVariable, " OFF "),
+            (EnvironmentOverrides.ShellNativeVariable, "no"),
             (EnvironmentOverrides.ObsidianVaultVariable, @" D:\Notes "),
             (EnvironmentOverrides.ComfyUrlVariable, " http://gpu-box:8188 "));
 
@@ -77,6 +78,7 @@ public class EnvironmentOverridesTests
         Assert.Equal(@"D:\Notes", e.ObsidianVault);   // trimmed (2026-09-22)
         Assert.Equal("http://gpu-box:8188", e.ComfyUrl);   // trimmed (2026-09-24)
         Assert.False(e.ShellPoliceOutsidePaths);   // any case, trimmed (2026-09-26)
+        Assert.False(e.ShellPreferNative);   // the police's switch words (later on 2026-09-26)
         Assert.Equal(EnvironmentOverrides.AllVariables.Length - 2, env.ActiveVariables().Count);   // everything but HOME and PROFILE
     }
 

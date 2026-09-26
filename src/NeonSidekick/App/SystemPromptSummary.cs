@@ -49,6 +49,7 @@ namespace NeonSidekick.App;
 /// <param name="ObsidianAllowDelete">The setting <c>Obsidian allow delete</c> (later on 2026-09-22; on by default since 2026-09-23, the parameter's false the bare facts' default): on, and <c>vault_delete</c> not switched off, the vault rule gains <see cref="Assistant.ObsidianDeleteRule"/>.</param>
 /// <param name="SqlEnabled">Whether the SQL tools may be offered (2026-09-23): the setting <c>SQL tools</c> on and a usable connection in <c>sql.json</c> — the group's switch (<see cref="ChatScreen.SqlOffered"/>).</param>
 /// <param name="SqlTools">How many SQL tools the next turn offers (the ones switched off on <c>/tools</c> left out); the rules carry <see cref="Assistant.SqlRule"/> while any is.</param>
+/// <param name="ShellNative">The setting <c>Shell prefer native tools</c> (2026-09-26): on, with a shell rule, the rules gain <see cref="Assistant.ShellNativeRule"/> after it.</param>
 public sealed record SystemPromptFacts(
     string? Persona,
     string? OperatingRules,
@@ -84,7 +85,8 @@ public sealed record SystemPromptFacts(
     int ObsidianTools = 0,
     bool ObsidianAllowDelete = false,
     bool SqlEnabled = false,
-    int SqlTools = 0)
+    int SqlTools = 0,
+    bool ShellNative = false)
 {
     /// <summary>Whether the rules carry <see cref="Assistant.McpRule"/>: tools on, the MCP switch on and at least one MCP tool offered.</summary>
     public bool Mcp => ToolsEnabled && McpEnabled && McpTools > 0;
@@ -100,6 +102,9 @@ public sealed record SystemPromptFacts(
 
     /// <summary>Whether that rule's head says the shell stays under the working directory (the police on, 2026-09-22); true without a shell rule, so the default holds (<see cref="Assistant.ShellRuleFor"/>).</summary>
     public bool Police => !Shell || ShellPolice;
+
+    /// <summary>Whether the shell rule is followed by <see cref="Assistant.ShellNativeRule"/> (2026-09-26): a shell rule, and the setting on.</summary>
+    public bool Native => Shell && ShellNative;
 
     /// <summary>Whether the rules carry <see cref="Assistant.ObsidianRule"/>: tools on, a vault set with its switch on, and at least one vault tool offered (2026-09-22).</summary>
     public bool Obsidian => ToolsEnabled && ObsidianEnabled && ObsidianTools > 0;
@@ -286,7 +291,7 @@ public static class SystemPromptSummary
 
         bool customRules = !string.IsNullOrWhiteSpace(facts.OperatingRules);
         string defaultLabel = !facts.ToolsEnabled ? $"default ({ToolsOffSuffix})" : !facts.FilesEnabled ? $"default ({FilesOffSuffix})" : "default";
-        string rules = customRules ? facts.OperatingRules!.Trim() : Assistant.DefaultRules(facts.Markdown, facts.ToolsEnabled, facts.FilesEnabled, delete: !facts.Off(DeleteTool.ToolName), mcp: facts.Mcp, safeEdits: facts.FileSafeEdits, timers: facts.Timers, git: facts.Git, shell: facts.Shell, bridge: facts.Bridge, police: facts.Police, obsidian: facts.Obsidian, obsidianDelete: facts.ObsidianDelete, sql: facts.Sql);
+        string rules = customRules ? facts.OperatingRules!.Trim() : Assistant.DefaultRules(facts.Markdown, facts.ToolsEnabled, facts.FilesEnabled, delete: !facts.Off(DeleteTool.ToolName), mcp: facts.Mcp, safeEdits: facts.FileSafeEdits, timers: facts.Timers, git: facts.Git, shell: facts.Shell, bridge: facts.Bridge, police: facts.Police, obsidian: facts.Obsidian, obsidianDelete: facts.ObsidianDelete, sql: facts.Sql, native: facts.Native);
         sections.Add(new(
             customRules ? $"Operating rules — {OperataFile.FileName} ({rules.Length.ToString(CultureInfo.InvariantCulture)} chars)" : $"Operating rules — {defaultLabel}",
             rules,
@@ -529,7 +534,8 @@ public static class SystemPromptSummary
             police: facts.Police,
             obsidian: facts.Obsidian,
             obsidianDelete: facts.ObsidianDelete,
-            sql: facts.Sql);
+            sql: facts.Sql,
+            native: facts.Native);
     }
 
     /// <summary>The Prompt tab: every section's heading and, when it has one, its text.</summary>

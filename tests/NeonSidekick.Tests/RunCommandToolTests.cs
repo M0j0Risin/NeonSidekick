@@ -55,7 +55,7 @@ public sealed class RunCommandToolTests : IDisposable
         Assert.Equal(
             "Runs a command line in a shell on the user's computer and returns its exit code and output. " +
             "It runs in the working directory and may only name paths under it (relative, or absolute under it); the user approves a command before it runs and may deny it. " +
-            "Use it for a program, a build, a test or a script the user asks for; a denied or refused command must not be retried or worked around. " +
+            "Use it for a program, a build, a test or a script the user asks for, never for what another tool does (files, git, the web, SQL); a denied or refused command must not be retried or worked around. " +
             "Use background for a server or a long job and the process tool to read it.",
             _tool.Description);
         Assert.Equal(RunCommandTool.DescriptionPoliced, _tool.Description);
@@ -63,7 +63,7 @@ public sealed class RunCommandToolTests : IDisposable
         Assert.Equal(
             "Runs a command line in a shell on the user's computer and returns its exit code and output. " +
             "It starts in the working directory; the user approves a command before it runs and may deny it. " +
-            "Use it for a program, a build, a test or a script the user asks for; a denied command must not be retried or worked around. " +
+            "Use it for a program, a build, a test or a script the user asks for, never for what another tool does (files, git, the web, SQL); a denied command must not be retried or worked around. " +
             "Use background for a server or a long job and the process tool to read it.",
             _tool.Description);
         Assert.Equal(RunCommandTool.DescriptionUnpoliced, _tool.Description);
@@ -118,6 +118,51 @@ public sealed class RunCommandToolTests : IDisposable
 
         // Every one of them is in the gate's record (2026-09-26): the police's four, then the three denials.
         Assert.Equal([@"type C:\Windows\win.ini", @"cd ..\..", "dir ~", "dir %USERPROFILE%\\Desktop", "dir " + _root, "cd ..", @"type C:\Windows\win.ini"], _gate.Refusals);
+    }
+
+    [Fact]
+    public async Task PreferNative_SendsALineBackToItsTool_OnceATurn_BeforeTheGate()
+    {
+        // Shell prefer native tools (2026-09-26): under ask, a line a tool the turn offers covers comes back not run, and the asker is never called.
+        _settings.ShellCommandPolicy = "ask";
+        _tool.BeginTurn([ReadFileTool.ToolName, SearchFilesTool.ToolName, GitStatusTool.ToolName, RunCommandTool.ToolName]);
+        string back = "Not run: 'type' has a tool of its own — call read_file instead. If read_file cannot do this, say why and call run_command again with the same command; the user will be asked.";
+        Assert.Equal(back, await Invoke(("command", "type notes.txt")));
+        Assert.Equal(ShellText.UseNative("dir", SearchFilesTool.ToolName), await Invoke(("command", "dir /s *.cs")));
+        Assert.Equal(ShellText.UseNative("git status", GitStatusTool.ToolName), await Invoke(("command", "git status --short")));
+        Assert.Empty(_asked);
+        Assert.Empty(_gate.Refusals);   // not a refusal: headless's exit 3 does not count it
+
+        // The same line again in the turn goes on to the gate: a real need still reaches the user.
+        Assert.StartsWith("Error: the command was denied by the user: type notes.txt", await Invoke(("command", "type notes.txt")));
+        Assert.Single(_asked);
+        // A tool not offered, a compound line, a verb with no tool: the gate, as before.
+        await Invoke(("command", "curl http://example.com"));
+        await Invoke(("command", "type a.txt | find \"x\""));
+        await Invoke(("command", "git push"));
+        Assert.Equal(4, _asked.Count);
+
+        // A new turn starts over.
+        _tool.BeginTurn([ReadFileTool.ToolName]);
+        Assert.Equal(back, await Invoke(("command", "type notes.txt")));
+        Assert.Equal(4, _asked.Count);
+    }
+
+    [Fact]
+    public async Task PreferNative_Off_OrAnOutsidePathWithThePoliceOff_GoesToTheGate()
+    {
+        _settings.ShellCommandPolicy = "ask";
+        _tool.BeginTurn([ReadFileTool.ToolName]);
+        _settings.ShellPreferNative = false;
+        Assert.StartsWith("Error: the command was denied by the user", await Invoke(("command", "type notes.txt")));
+        // On, but the line names a path no native tool reaches (the police off): the shell's alone.
+        _settings.ShellPreferNative = true;
+        _settings.ShellPoliceOutsidePaths = false;
+        Assert.StartsWith("Error: the command was denied by the user", await Invoke(("command", @"type C:\Windows\win.ini")));
+        Assert.Equal(2, _asked.Count);
+        // … and a line under the root still goes back to read_file.
+        Assert.Equal(ShellText.UseNative("type", ReadFileTool.ToolName), await Invoke(("command", "type notes.txt")));
+        Assert.Equal(2, _asked.Count);
     }
 
     [Fact]
