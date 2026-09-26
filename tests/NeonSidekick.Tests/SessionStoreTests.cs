@@ -53,6 +53,65 @@ public class SessionStoreTests : IDisposable
     }
 
     [Fact]
+    public void CommandHistory_AppendsInOrder_ClearsAndCounts()
+    {
+        // Keep command history (2026-09-25): the table beside the sessions, the schema number untouched.
+        // A read with no file yet never makes one (every profile is read at each load).
+        Assert.Empty(_store.CommandHistory());
+        Assert.Equal(0, _store.CommandHistoryCount);
+        Assert.Equal(0, _store.ClearCommandHistory());
+        Assert.False(File.Exists(Path.Combine(_dir, SessionStore.FileName)));
+        _store.AppendCommand("first");
+        _store.AppendCommand("second");
+        _store.AppendCommand("second");   // the input line de-duplicates; the store does too at the seam
+
+        Assert.Equal(new[] { "first", "second" }, _store.CommandHistory());
+        Assert.Equal(2, _store.CommandHistoryCount);
+        Assert.Equal(SessionStore.SchemaVersion, _store.SchemaStored());
+        Assert.Equal(3, SessionStore.SchemaVersion);
+        Assert.True(_store.HasColumn("command_history", "text"));
+        Assert.Equal(2, _store.ClearCommandHistory());
+        Assert.Empty(_store.CommandHistory());
+        Assert.Equal(0, _store.ClearCommandHistory());
+    }
+
+    [Fact]
+    public void CommandHistory_KeepsTheNewestCapLines()
+    {
+        Assert.Equal(1000, SessionStore.CommandHistoryCap);
+        var lines = Enumerable.Range(0, SessionStore.CommandHistoryCap + 5).Select(i => "line " + i.ToString(System.Globalization.CultureInfo.InvariantCulture)).ToList();
+        Assert.Equal(lines.Count, _store.AddCommandHistory(lines, overwrite: false));
+        _store.AppendCommand("last");
+
+        var kept = _store.CommandHistory();
+        Assert.Equal(SessionStore.CommandHistoryCap, kept.Count);
+        Assert.Equal("line 6", kept[0]);
+        Assert.Equal("last", kept[^1]);
+    }
+
+    [Fact]
+    public void AddCommandHistory_AppendsOrReplaces_SkippingARepeatAtTheSeam()
+    {
+        _store.AppendCommand("mine");
+        _store.AppendCommand("shared");
+
+        Assert.Equal(2, _store.AddCommandHistory(["shared", "a", "a", "b"], overwrite: false));
+        Assert.Equal(new[] { "mine", "shared", "a", "b" }, _store.CommandHistory());
+
+        Assert.Equal(2, _store.AddCommandHistory(["x", "y"], overwrite: true));
+        Assert.Equal(new[] { "x", "y" }, _store.CommandHistory());
+    }
+
+    [Fact]
+    public void CommandHistory_SurvivesAReopen()
+    {
+        _store.AppendCommand("kept");
+        _store.Dispose();
+        using var again = new SessionStore(_dir, _time);
+        Assert.Equal(new[] { "kept" }, again.CommandHistory());
+    }
+
+    [Fact]
     public void AppendTurn_NumbersTheTurns_BumpsTheCount_AndMovesUpdatedAt()
     {
         long id = Begin();

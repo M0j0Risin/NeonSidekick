@@ -45,8 +45,11 @@ public enum SlashCommand
     /// <summary><c>/memory</c>: list what is remembered, Enter removing one; <c>/memory forget</c> erases every one, after a confirmation; <c>/memory copy &lt;profile&gt; [overwrite]</c> copies them into another profile — appended, the duplicates skipped, or in place of its own — after a confirmation too (2026-09-22, the user's ask, twice: the wipe was <c>/forget</c>, its own command, until that morning, and the copy was <c>/memcopy</c> (2026-09-17) until later that day; both words are unknown commands now).</summary>
     Memory,
 
-    /// <summary><c>/cmdcopy &lt;profile&gt; [overwrite]</c>: copy this profile's allowed shell commands (the <c>Shell allowed commands</c> prefixes) into another's — appended, the duplicates skipped, or in place of them — after a confirmation (2026-09-21, the user's ask: what was <c>/memcopy</c> then — <c>/memory copy</c> since 2026-09-22 — for the approval pane's list).</summary>
+    /// <summary><c>/cmdcopy &lt;profile&gt; [--history] [overwrite]</c>: copy this profile's allowed shell commands (the <c>Shell allowed commands</c> prefixes) into another's — appended, the duplicates skipped, or in place of them — after a confirmation (2026-09-21, the user's ask: what was <c>/memcopy</c> then — <c>/memory copy</c> since 2026-09-22 — for the approval pane's list); with <c>--history</c> (2026-09-25, the user's ask) its command history instead, into the other profile's <c>sessions.db</c>.</summary>
     CmdCopy,
+
+    /// <summary><c>/cmdclear</c> (2026-09-25, the user's ask): this profile's command history — the input line's Up/Down recall, stored in <c>sessions.db</c> under <c>Keep command history</c> — emptied, stored and in memory, after a confirmation. No argument.</summary>
+    CmdClear,
 
     /// <summary><c>/cmdlist</c>: this profile's allowed shell commands (the <c>Shell allowed commands</c> prefixes) on a pane, Enter removing one — the Tools pane's row opened straight, ESC closing the pane (2026-09-21, the user's ask: the toolbar's lock glyph's word, typed). No argument.</summary>
     CmdList,
@@ -224,7 +227,8 @@ public static class SlashCommands
         [
             new("/memory", "list and prune memory items, or /memory forget | edit | copy <profile> [overwrite]"),
             new("/remember", "add a memory: /remember <text>"),
-            new("/cmdcopy", "copy this profile's allowed shell commands into another: /cmdcopy <profile> [overwrite]"),
+            new("/cmdcopy", "copy this profile's allowed shell commands into another, or with --history its command history: /cmdcopy <profile> [--history] [overwrite]"),
+            new("/cmdclear", "clear this profile's command history (the Up/Down recall), stored and in memory (asks first)"),
             new("/cmdlist", "list this profile's allowed shell commands on a pane, Enter removes one"),
             new("/police", "switch Shell police outside paths on or off on a pane: whether a shell command may name paths outside the working directory"),
         ],
@@ -341,7 +345,7 @@ public static class SlashCommands
     }
 
     /// <summary>Every command word, for help and completion.</summary>
-    public static readonly string[] Words = { "/help", "/clear", "/new", "/splash", "/theme", "/queue", "/sessions", "/compact", "/server", "/model", "/reasoning", "/settings", "//", "/tools", "/mcp", "/tts", "/stt", "/wake", "/interrupt", "/speak", "/remember", "/memory", "/cmdcopy", "/cmdlist", "/police", "/persona", "/operata", "/vocalia", "/sys", "/usage", "/profile", "/timer", "/cwd", "/tree", "/vault", "/explore", "/view", "/imagine", "/comfy", "/echo", "/emptytrash", "/git", "/copy", "/draft", "/loop", "/botchat", "/expand", "/collapse", "/window", "/skills", "/learn", "/about", "/exit" };
+    public static readonly string[] Words = { "/help", "/clear", "/new", "/splash", "/theme", "/queue", "/sessions", "/compact", "/server", "/model", "/reasoning", "/settings", "//", "/tools", "/mcp", "/tts", "/stt", "/wake", "/interrupt", "/speak", "/remember", "/memory", "/cmdcopy", "/cmdclear", "/cmdlist", "/police", "/persona", "/operata", "/vocalia", "/sys", "/usage", "/profile", "/timer", "/cwd", "/tree", "/vault", "/explore", "/view", "/imagine", "/comfy", "/echo", "/emptytrash", "/git", "/copy", "/draft", "/loop", "/botchat", "/expand", "/collapse", "/window", "/skills", "/learn", "/about", "/exit" };
 
     /// <summary>The <c>/queue</c> word: what a double-click on the hint row's queued part sends through the mid-turn line hook, so the pane opens exactly as the typed command's does (2026-09-18). Pinned.</summary>
     public const string QueueWord = "/queue";
@@ -404,6 +408,7 @@ public static class SlashCommands
             "/remember" => SlashCommand.Remember,
             "/memory" => SlashCommand.Memory,
             "/cmdcopy" => SlashCommand.CmdCopy,
+            "/cmdclear" => SlashCommand.CmdClear,
             "/cmdlist" => SlashCommand.CmdList,
             "/police" => SlashCommand.Police,
             "/persona" => SlashCommand.Persona,

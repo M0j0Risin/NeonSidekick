@@ -697,6 +697,19 @@ public sealed partial class InputLine
                     EndRow();
                     return new EditOutcome.End(new InputResult.Exit());
 
+                case ConsoleKey.X when control && !alt:
+                    // Ctrl+X (2026-09-25, the user's ask): the selection cut — copied, then removed as
+                    // Backspace would. A failed copy (a masked field, no clipboard writer) says so and
+                    // keeps the text, so nothing is lost. Nothing without a selection; the same on the
+                    // live row under a reply, where the key is no watcher's. Ctrl+Alt+X is AltGr+X, typed above.
+                    if (HasSelection && CopySelection())
+                    {
+                        DeleteSelection();
+                        Redraw();
+                    }
+
+                    break;
+
                 case ConsoleKey.V when control ^ alt:
                     // The line's own paste. Ctrl+V arrives only where the terminal lets it through
                     // (Windows Terminal keeps it and pastes text as key records instead); Alt+V is
@@ -728,6 +741,8 @@ public sealed partial class InputLine
                     }
 
                     var history = _line._history;
+                    // ReplaceHistory under a live walk (a /cmdclear under a reply, 2026-09-25) can leave the index past the end.
+                    _historyIndex = Math.Min(_historyIndex, history.Count);
                     if (delta < 0)
                     {
                         if (_historyIndex > 0)
@@ -855,15 +870,18 @@ public sealed partial class InputLine
         // The anchor for a Shift+move: where the cursor is now unless a selection already has one.
         private int Anchor() => _anchor = _anchor < 0 ? _cursor : _anchor;
 
-        // The selection copied, kept; a failure says so. A masked draft never reaches the clipboard.
-        private void CopySelection()
+        // The selection copied, kept; a failure says so (false). A masked draft never reaches the clipboard.
+        private bool CopySelection()
         {
             int start = Math.Min(Math.Min(_anchor, _cursor), _text.Length);
             int end = Math.Min(Math.Max(_anchor, _cursor), _text.Length);
             if (_o.Mask || _line._copy is null || !_line._copy(_line._pastes.Expand(_text.ToString(start, end - start))))
             {
                 _line._notices?.Notice(CopyFailedNotice);
+                return false;
             }
+
+            return true;
         }
 
         // The selected stretch removed, the cursor at its start; nothing without a selection.

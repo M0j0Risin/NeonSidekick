@@ -388,6 +388,63 @@ public class InputLineTests : IDisposable
         Assert.Contains("Could not write the selection", _console.Output[mark..]);
     }
 
+    // ── Ctrl+X (2026-09-25): cut the selection; nothing without one ────────────────────────
+
+    [Fact]
+    public async Task CtrlX_WithASelection_CutsIt()
+    {
+        var copied = new List<string>();
+        var line = new InputLine(_console, new KeySource(_console.Input, TimeSpan.FromMilliseconds(1)), text => { copied.Add(text); return true; });
+        int asked = 0;
+        Type("abcdef");
+        Push(Keys.Home, Keys.Right, ShiftRight, ShiftRight, ShiftRight);   // a[bcd]ef
+        Push(Keys.Ctrl(ConsoleKey.X));
+        Type("X");                                                          // the cursor where the cut was
+        Push(Keys.Enter);
+
+        var submitted = Assert.IsType<InputResult.Submitted>(await line.ReadAsync(interrupt: () => { asked++; return true; }));
+
+        Assert.Equal(["bcd"], copied);
+        Assert.Equal("aXef", submitted.Text);
+        Assert.Equal(0, asked);
+    }
+
+    [Fact]
+    public async Task CtrlX_OverAPasteToken_CutsTheBlock()
+    {
+        var copied = new List<string>();
+        var (line, keys) = PaneLine(copyToClipboard: text => { copied.Add(text); return true; });
+        string block = Block(5);
+        keys.Push(Chars("q ")).PushPaste(block).Push(Keys.Ctrl(ConsoleKey.A), Keys.Ctrl(ConsoleKey.X)).Push(Chars("z")).Push(Keys.Enter);
+
+        Assert.Equal("z", Assert.IsType<InputResult.Submitted>(await line.ReadAsync(multiline: true)).Text);
+        Assert.Equal(["q " + block.Replace("\r\n", "\n")], copied);
+    }
+
+    [Fact]
+    public async Task CtrlX_WhenTheCopyFails_SaysSo_AndKeepsTheText()
+    {
+        var pane = new ScreenPane(_console, null, TimeProvider.System);
+        var line = new InputLine(pane, new KeySource(_console.Input, TimeSpan.FromMilliseconds(1)), notices: new TranscriptRenderer(pane), copyToClipboard: _ => false);
+        Type("ab");
+        Push(Keys.Ctrl(ConsoleKey.A), Keys.Ctrl(ConsoleKey.X), Keys.Enter);
+
+        Assert.Equal("ab", Assert.IsType<InputResult.Submitted>(await line.ReadAsync()).Text);
+        Assert.Contains("Could not write the selection", _console.Output);
+    }
+
+    [Fact]
+    public async Task CtrlX_WithoutASelection_DoesNothing()
+    {
+        var copied = new List<string>();
+        var line = new InputLine(_console, new KeySource(_console.Input, TimeSpan.FromMilliseconds(1)), text => { copied.Add(text); return true; });
+        Type("abc");
+        Push(Keys.Ctrl(ConsoleKey.X), Keys.Enter);
+
+        Assert.Equal("abc", Assert.IsType<InputResult.Submitted>(await line.ReadAsync()).Text);
+        Assert.Empty(copied);
+    }
+
     [Fact]
     public async Task CtrlC_WithNoHook_IsEscape()
     {
@@ -913,6 +970,45 @@ public class InputLineTests : IDisposable
 
         Push(Keys.Up, Keys.Up, Keys.Enter);
         Assert.Equal("spoken", await SubmitAsync());
+    }
+
+    [Fact]
+    public async Task Remembered_IsToldEachLineTheHistoryGains_NeverARepeatOrAnUnrememberedRead()
+    {
+        // Keep command history (2026-09-25): the screen stores what this hook hears.
+        var heard = new List<string>();
+        _line.Remembered = heard.Add;
+        _line.Remember("spoken");
+        _line.Remember("spoken");
+        Type("typed");
+        Push(Keys.Enter);
+        await SubmitAsync();
+        Type("typed");
+        Push(Keys.Enter);
+        await SubmitAsync();
+        Push(Keys.Enter);
+        await _line.ReadAsync("masked", remember: false);
+
+        Assert.Equal(new[] { "spoken", "typed" }, heard);
+    }
+
+    [Fact]
+    public async Task ReplaceHistory_LoadsTheLines_DeDuplicated_AndUpRecallsThem_WithoutTellingRemembered()
+    {
+        var heard = new List<string>();
+        _line.Remembered = heard.Add;
+        _line.Remember("gone");
+        heard.Clear();
+
+        _line.ReplaceHistory(["older", "newer", "newer", ""]);
+
+        Assert.Equal(new[] { "older", "newer" }, _line.History);
+        Assert.Empty(heard);
+        Push(Keys.Up, Keys.Up, Keys.Enter);
+        Assert.Equal("older", await SubmitAsync());
+
+        _line.ReplaceHistory([]);
+        Assert.Empty(_line.History);
     }
 
     [Fact]

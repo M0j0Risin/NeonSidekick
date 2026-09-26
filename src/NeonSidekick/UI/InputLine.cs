@@ -88,7 +88,8 @@ public abstract record InputResult
 /// Ctrl+C (since 2026-09-17) copies the selection when there is one, else asks the chat line's
 /// <c>interrupt</c> hook — the screen stops the tail with it, or arms a two-press exit and shows the
 /// hint — and reports <see cref="InputResult.Exit"/> only when the hook declines (the second press);
-/// with no hook (a settings field) it is ESC. No key
+/// with no hook (a settings field) it is ESC. Ctrl+X (since 2026-09-25) cuts the selection — copied,
+/// then removed; kept when the copy fails — and does nothing without one. No key
 /// is special-cased before the printable branch.
 /// The push-to-talk key, when one is passed, is reported only from an <em>empty</em> line and only
 /// as a bare key: a key that types a character is never a push-to-talk key.</para>
@@ -235,6 +236,31 @@ public sealed partial class InputLine
         if (text.Length > 0 && (_history.Count == 0 || !string.Equals(_history[^1], text, StringComparison.Ordinal)))
         {
             _history.Add(text);
+            Remembered?.Invoke(text);
+        }
+    }
+
+    /// <summary>
+    /// Told each line the history gained — typed, sent from under a reply or spoken — after the de-duplication, so never
+    /// a repeat of the line before (2026-09-25, <c>Keep command history</c>: the screen stores it). Null = nobody listens.
+    /// </summary>
+    public Action<string>? Remembered { get; set; }
+
+    /// <summary>
+    /// The history replaced by <paramref name="lines"/>, oldest first, a line equal to the one before it skipped
+    /// (2026-09-25: the profile's stored history at startup and after a switch, empty after <c>/cmdclear</c>).
+    /// <see cref="Remembered"/> is not told. A walk starts at the bottom again at the next read.
+    /// </summary>
+    public void ReplaceHistory(IEnumerable<string> lines)
+    {
+        ArgumentNullException.ThrowIfNull(lines);
+        _history.Clear();
+        foreach (string line in lines)
+        {
+            if (line.Length > 0 && (_history.Count == 0 || !string.Equals(_history[^1], line, StringComparison.Ordinal)))
+            {
+                _history.Add(line);
+            }
         }
     }
 

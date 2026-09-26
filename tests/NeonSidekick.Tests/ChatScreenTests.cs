@@ -6071,7 +6071,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("computer", _settings.Current.SttWakePhrase);
         Assert.Contains("\"LlmModel\": \"llama\"", File.ReadAllText(Profiles.ProfileFile(_dir, "work")));
         Assert.Contains("\"Profile\": \"work\"", File.ReadAllText(_settings.PointerPath));
-        Assert.Equal(new[] { Profiles.FileName }, Directory.GetFiles(ProfileDir("work")).Select(Path.GetFileName));   // the default profile here has no memories, persona, operating rules or voice directive to copy
+        Assert.Equal(new[] { Profiles.FileName, SessionStore.FileName }, Directory.GetFiles(ProfileDir("work")).Select(Path.GetFileName).Order(StringComparer.Ordinal));   // the default profile here has no memories, persona, operating rules or voice directive to copy; sessions.db holds the /exit typed there (Keep command history, 2026-09-25), never copied
         // Startup discovery, then the reconnect after the switch (LLM, TTS and voice).
         Assert.Equal(2, ModelProbes);   // the fixture's URL, copied into the new profile: one probe each
         Assert.Equal(2, _synth.ListCalls);
@@ -6182,7 +6182,7 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         Assert.Contains("  · " + ChatScreen.ProfileCreatedNotice("work"), output);
-        Assert.Equal(new[] { Profiles.FileName }, Directory.GetFiles(ProfileDir("work")).Select(Path.GetFileName));
+        Assert.Equal(new[] { Profiles.FileName, SessionStore.FileName }, Directory.GetFiles(ProfileDir("work")).Select(Path.GetFileName).Order(StringComparer.Ordinal));   // sessions.db: the /exit typed there (Keep command history, 2026-09-25)
     }
 
     [Fact]
@@ -6197,7 +6197,7 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         Assert.Contains("  · " + ChatScreen.ProfileCreatedNotice("work", new[] { PersonaFile.FileName }), output);
-        Assert.Equal(new[] { PersonaFile.FileName, Profiles.FileName }.Order(), Directory.GetFiles(ProfileDir("work")).Select(Path.GetFileName).Order());
+        Assert.Equal(new[] { PersonaFile.FileName, Profiles.FileName, SessionStore.FileName }.Order(), Directory.GetFiles(ProfileDir("work")).Select(Path.GetFileName).Order());   // sessions.db: the /exit typed there (Keep command history, 2026-09-25)
     }
 
     [Fact]
@@ -6695,7 +6695,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("  · " + ChatScreen.ProfileRenamedNotice("work", "office"), output);
         Assert.False(Directory.Exists(ProfileDir("work")));
         Assert.Equal(
-            new[] { McpConfigFile.FileName, MemoryStore.FileName, OperataFile.FileName, PersonaFile.FileName, Profiles.FileName, VocaliaFile.FileName },
+            new[] { McpConfigFile.FileName, MemoryStore.FileName, OperataFile.FileName, PersonaFile.FileName, Profiles.FileName, SessionStore.FileName, VocaliaFile.FileName },   // sessions.db: the /exit typed there (Keep command history, 2026-09-25)
             Directory.GetFiles(ProfileDir("office")).Select(Path.GetFileName).OrderBy(n => n, StringComparer.Ordinal));
         // The rename alone changed nothing about the running app: the pointer, the title and the
         // connections stayed until the switch that followed.
@@ -7161,7 +7161,7 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public void CmdCopyText_IsPinned()
     {
-        Assert.Equal("/cmdcopy takes a profile name, and overwrite to replace its allowed commands: /cmdcopy <profile> [overwrite]", ChatScreen.CmdCopyUsageError);
+        Assert.Equal("/cmdcopy takes a profile name, --history to copy the command history instead of the allowed commands, and overwrite to replace the target's: /cmdcopy <profile> [--history] [overwrite]", ChatScreen.CmdCopyUsageError);   // --history 2026-09-25
         Assert.Equal("/cmdcopy copies into another profile; that one is loaded.", ChatScreen.CmdCopySelfError);
         Assert.Equal("(nothing to copy: this profile has no allowed commands)", ChatScreen.CmdCopyNothingNotice);
         Assert.Equal("Copy 3 allowed commands into \"work\"?", ChatScreen.CmdCopyPrompt(3, "work", overwrite: false));
@@ -7172,6 +7172,174 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("(0 allowed commands copied into \"work\", 3 already there)", ChatScreen.CmdCopiedNotice(0, 3, "work", overwrite: false));
         Assert.Equal("(replaced \"work\"'s allowed commands with 3 allowed commands)", ChatScreen.CmdCopiedNotice(3, 0, "work", overwrite: true));
         Assert.Equal("Could not write the profile's settings: x", ChatScreen.CmdCopyFailedError("x"));
+    }
+
+    // ── Keep command history, /cmdclear and /cmdcopy --history (2026-09-25) ──
+
+    private string[] StoredHistory(string profileDirectory)
+    {
+        using var store = new SessionStore(profileDirectory, _time);
+        return store.CommandHistory().ToArray();
+    }
+
+    private void SeedHistory(string profileDirectory, params string[] lines)
+    {
+        using var store = new SessionStore(profileDirectory, _time);
+        store.AddCommandHistory(lines, overwrite: false);
+    }
+
+    [Fact]
+    public async Task KeepCommandHistory_On_StoresEachLine_AndUpRecallsTheStoredOnes_AfterARestart()
+    {
+        _settings.Update(d => d.TtsOutput = false);
+        SeedHistory(_settings.ProfileDirectory, "from last time");
+        StepsWhenIdle(Line("hello"), Key(Keys.Up), Key(Keys.Up), Key(Keys.Enter), Line("/exit"));   // Up: hello, then the stored line
+
+        await RunAsync();
+
+        Assert.Equal(2, _chat.Requests.Count);
+        Assert.Equal("from last time", _chat.Requests[1].Last(m => m.Role == ChatRole.User).Text);
+        Assert.Equal(new[] { "from last time", "hello", "from last time", "/exit" }, StoredHistory(_settings.ProfileDirectory));
+    }
+
+    [Fact]
+    public async Task KeepCommandHistory_Off_DropsTheStoredLinesAtLoad_AndStoresNothing()
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.KeepCommandHistory = false; });
+        SeedHistory(_settings.ProfileDirectory, "old", "older");
+        StepsWhenIdle(Line("hello"), Key(Keys.Up), Key(Keys.Up), Key(Keys.Enter), Line("/exit"));   // hello again: nothing older was loaded
+
+        await RunAsync();
+
+        Assert.Equal(new[] { "hello", "hello" }, _chat.Requests.Select(r => r.Last(m => m.Role == ChatRole.User).Text));
+        Assert.Empty(StoredHistory(_settings.ProfileDirectory));
+    }
+
+    [Fact]
+    public async Task KeepCommandHistory_ALineHoldingAPaste_IsNotStored()
+    {
+        // The block behind the token is this session's alone (PasteBlocks): recalled after a restart it would expand to nothing.
+        _settings.Update(d => d.TtsOutput = false);
+        var input = new ScriptedInput();
+        foreach (char c in "summarise ")
+        {
+            input.Push(Keys.Char(c));
+        }
+
+        input.PushPaste(string.Join("\n", Enumerable.Range(1, 8).Select(i => "row " + i.ToString(System.Globalization.CultureInfo.InvariantCulture))));
+        input.Push(Keys.Enter);
+        PushLine(input, "/exit");
+
+        await RunAsync(input);
+
+        Assert.Single(_chat.Requests);
+        Assert.Equal(new[] { "/exit" }, StoredHistory(_settings.ProfileDirectory));
+    }
+
+    [Fact]
+    public async Task ProfileSwitch_RecallsTheNewProfilesHistory()
+    {
+        _settings.Update(d => d.TtsOutput = false);
+        Profiles.Create(_dir, "work", new AppSettingsData { TtsOutput = false });
+        SeedHistory(Profiles.Directory(_dir, "work"), "work line");
+        SeedHistory(_settings.ProfileDirectory, "default line");
+        StepsWhenIdle(Line("/profile work"), Key(Keys.Up), Key(Keys.Enter), Line("/exit"));   // Up: the work profile's last line, never /profile work
+
+        await RunAsync();
+
+        Assert.Equal("work line", _chat.Requests[0].Last(m => m.Role == ChatRole.User).Text);
+        Assert.Equal(new[] { "work line", "/exit" }, StoredHistory(Profiles.Directory(_dir, "work")));
+        Assert.Equal(new[] { "default line", "/profile work" }, StoredHistory(Profiles.Directory(_dir, Profiles.DefaultName)));
+    }
+
+    [Fact]
+    public async Task CmdClear_Yes_EmptiesTheStoreAndTheLine_No_Keeps()
+    {
+        _settings.Update(d => d.TtsOutput = false);
+        SeedHistory(_settings.ProfileDirectory, "a", "b");
+        // No (on the cursor), then a repeat of the line before (still three) and Yes; then Up recalls nothing, so /exit is typed on an empty line.
+        StepsWhenIdle(Line("/cmdclear"), Key(Keys.Enter), Line("/cmdclear"), Key(Keys.Down), Key(Keys.Enter), Key(Keys.Up), Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.Contains(SettingsMenu.PromptTitle(ChatScreen.CmdClearPrompt(3), SettingsMenu.ConfirmKeys), output);   // a, b, /cmdclear — both times
+        Assert.Contains("  · " + ChatScreen.KeptNotice, output);
+        Assert.Contains("  · " + ChatScreen.CmdClearedNotice(3), output);
+        Assert.Empty(_chat.Requests);
+        Assert.Equal(new[] { "/exit" }, StoredHistory(_settings.ProfileDirectory));
+        Assert.Equal(MidTurnClass.Pane, ChatScreen.MidTurnPolicy(SlashCommand.CmdClear, hasArgs: false));
+    }
+
+    [Fact]
+    public async Task CmdClear_Off_StillClearsTheLinesList()
+    {
+        // Off, the store is empty, but the line remembered /cmdclear itself: one line to clear.
+        _settings.Update(d => { d.TtsOutput = false; d.KeepCommandHistory = false; });
+        PushLine("/cmdclear");
+        _console.Input.PushKey(Keys.Escape);
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains(SettingsMenu.PromptTitle(ChatScreen.CmdClearPrompt(1), SettingsMenu.ConfirmKeys), output);
+        Assert.Contains("  · " + ChatScreen.KeptNotice, output);
+    }
+
+    [Fact]
+    public async Task CmdCopyHistory_AppendsIntoTheOtherProfilesStore_OrReplacesIt()
+    {
+        _settings.Update(d => d.TtsOutput = false);
+        Profiles.Create(_dir, "work", new AppSettingsData());
+        SeedHistory(Profiles.Directory(_dir, "work"), "theirs");
+        SeedHistory(_settings.ProfileDirectory, "mine", "also mine");
+        PushLine("/cmdcopy work --history");
+        PickYes();
+        PushLine("/cmdcopy work --history overwrite");
+        PickYes();
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains(SettingsMenu.PromptTitle(ChatScreen.CmdCopyHistoryPrompt(3, "work", overwrite: false), SettingsMenu.ConfirmKeys), output);   // mine, also mine, the command itself
+        Assert.Contains("  · " + ChatScreen.CmdHistoryCopiedNotice(3, "work", overwrite: false), output);
+        Assert.Contains("  · " + ChatScreen.CmdHistoryCopiedNotice(4, "work", overwrite: true), output);
+        Assert.Equal(new[] { "mine", "also mine", "/cmdcopy work --history", "/cmdcopy work --history overwrite" }, StoredHistory(Profiles.Directory(_dir, "work")));
+        Assert.Empty(ReadProfile(Profiles.ProfileFile(_dir, "work")).ShellCommandAllowed);   // the allowed commands untouched
+    }
+
+    [Fact]
+    public async Task CmdCopyHistory_Refusals_AskNothing()
+    {
+        _settings.Update(d => d.TtsOutput = false);
+        Profiles.Create(_dir, "work", new AppSettingsData { KeepCommandHistory = false });
+        PushLine("/cmdcopy --history work");
+        PushLine("/cmdcopy work --history --history");
+        PushLine("/cmdcopy work --history");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Equal(2, output.Split("  ✗ " + ChatScreen.CmdCopyUsageError).Length - 1);
+        Assert.Contains("  ✗ " + ChatScreen.CmdCopyHistoryOffError("work"), output);
+        Assert.DoesNotContain("Copy ", output);
+        Assert.Empty(StoredHistory(Profiles.Directory(_dir, "work")));
+    }
+
+    [Fact]
+    public void CommandHistoryText_IsPinned()
+    {
+        Assert.Equal("--history", ChatScreen.HistorySwitch);
+        Assert.Equal("(nothing to copy: this profile has no command history)", ChatScreen.CmdCopyHistoryNothingNotice);
+        Assert.Equal("\"work\" has Keep command history off, so its next load would drop the lines; switch it on there first.", ChatScreen.CmdCopyHistoryOffError("work"));
+        Assert.Equal("Copy 3 command lines of command history into \"work\"?", ChatScreen.CmdCopyHistoryPrompt(3, "work", overwrite: false));
+        Assert.Equal("Replace \"work\"'s command history with these 1 command line?", ChatScreen.CmdCopyHistoryPrompt(1, "work", overwrite: true));
+        Assert.Equal("(3 command lines copied into \"work\")", ChatScreen.CmdHistoryCopiedNotice(3, "work", overwrite: false));
+        Assert.Equal("(replaced \"work\"'s command history with 1 command line)", ChatScreen.CmdHistoryCopiedNotice(1, "work", overwrite: true));
+        Assert.Equal("Could not open \"work\"'s sessions.db; nothing was copied.", ChatScreen.CmdCopyHistoryFailedError("work"));
+        Assert.Equal("(nothing to clear: the command history is empty)", ChatScreen.CmdClearNothingNotice);
+        Assert.Equal("Clear 2 command lines of command history?", ChatScreen.CmdClearPrompt(2));
+        Assert.Equal("(cleared 1 command line)", ChatScreen.CmdClearedNotice(1));
+        Assert.Equal("Keep command history is off: dropped 2 command lines from sessions.db.", ChatScreen.CommandHistoryDroppedLogLine(2));
     }
 
     // ── /cmdlist (later on 2026-09-21): the allowed-commands list straight, the toolbar lock's word ──
@@ -7930,7 +8098,7 @@ public partial class ChatScreenTests : IDisposable
     public async Task WithGeometry_HelpOpensTheInfoPane_AndEscClosesIt()
     {
         _settings.Update(d => d.TtsOutput = false);
-        _console.Profile.Height = 64;   // 64 with /botchat (2026-09-24), 63 with /imagine and /comfy (2026-09-24), 61 with /theme (2026-09-23); the Commands tab is 48 rows (38 commands + 10 blanks) since the three tool switches went (2026-09-18); the pane scrolls past 40
+        _console.Profile.Height = 65;   // 65 with /cmdclear (2026-09-25), 64 with /botchat (2026-09-24), 63 with /imagine and /comfy (2026-09-24), 61 with /theme (2026-09-23); the Commands tab is 48 rows (38 commands + 10 blanks) since the three tool switches went (2026-09-18); the pane scrolls past 40
         _geometry = new ScreenGeometry(() => null);
         PushLine("/help");
         _console.Input.PushKey(Keys.Right);
@@ -8792,9 +8960,9 @@ public partial class ChatScreenTests : IDisposable
     }
 
     [Theory]
-    [InlineData(false, false, 13)]
-    [InlineData(true, false, 14)]
-    [InlineData(true, true, 15)]
+    [InlineData(false, false, 14)]
+    [InlineData(true, false, 15)]
+    [InlineData(true, true, 16)]
     public void KeyRows_ListWhatApplies(bool voiceOn, bool wakeReady, int count)
     {
         var rows = ChatScreen.KeyRows(voiceOn, ConsoleKey.F8, wakeReady, "hey neon");
@@ -8809,11 +8977,12 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(("Home / End", "hold Shift to select text to the beginning or end of the line starting from the cursor"), rows[5]);
         Assert.Equal(("PgUp / PgDn", "scroll the transcript a page at a time"), rows[6]);
         Assert.DoesNotContain(rows, r => r.Key is "Mouse" or "Drag" or "Drop" or "@" or "#" or "$");
-        Assert.Equal(("Ctrl+Home", "scroll to top of the chat pane"), rows[^6]);
-        Assert.Equal(("Ctrl+End", "scroll to bottom of the chat pane"), rows[^5]);
-        Assert.Equal(("Ctrl+O", "expand or collapse the tool calls and code blocks (or click a summary line)"), rows[^4]);   // 2026-09-22
-        Assert.Equal(("Alt+V", "paste content (text or images)"), rows[^3]);
-        Assert.Equal(("Ctrl+A", "select all text on the line"), rows[^2]);
+        Assert.Equal(("Ctrl+Home", "scroll to top of the chat pane"), rows[^7]);
+        Assert.Equal(("Ctrl+End", "scroll to bottom of the chat pane"), rows[^6]);
+        Assert.Equal(("Ctrl+O", "expand or collapse the tool calls and code blocks (or click a summary line)"), rows[^5]);   // 2026-09-22
+        Assert.Equal(("Alt+V", "paste content (text or images)"), rows[^4]);
+        Assert.Equal(("Ctrl+A", "select all text on the line"), rows[^3]);
+        Assert.Equal(("Ctrl+X", "cut the selected text"), rows[^2]);   // 2026-09-25
         Assert.Equal(("Ctrl+C", "copy the selected text · stop the speech · cancel the reply · twice to exit"), rows[^1]);
         Assert.Equal(voiceOn, rows.Any(r => r.Key == "F8"));
         if (voiceOn)
@@ -8883,27 +9052,28 @@ public partial class ChatScreenTests : IDisposable
         Assert.True(string.IsNullOrWhiteSpace(lines[31]));
         Assert.StartsWith(HelpRow("/memory", "list and prune memory items, or /memory forget | edit | copy <profile> [overwrite]"), lines[32]);   // the copy word folded in later on 2026-09-22 and /memcopy's row went, every row under it one up
         Assert.StartsWith(HelpRow("/remember", "add a memory: /remember <text>"), lines[33]);
-        Assert.StartsWith(HelpRow("/cmdcopy", "copy this profile's allowed shell commands into another: /cmdcopy <profile> [overwrite]"), lines[34]);   // 2026-09-21
-        Assert.StartsWith(HelpRow("/cmdlist", "list this profile's allowed shell commands on a pane, Enter removes one"), lines[35]);   // later on 2026-09-21
-        Assert.StartsWith(HelpRow("/police", "switch Shell police outside paths on or off on a pane: whether a shell command may name paths outside the working directory"), lines[36]);   // later still on 2026-09-22
-        Assert.StartsWith(HelpRow("/tree", "print a tree of the working directory's folders and files, or /tree <path>"), lines[39]);
-        Assert.StartsWith(HelpRow("/vault", "print a tree of the Obsidian vault's folders and notes, or /vault <path>"), lines[40]);   // under /tree since later still on 2026-09-22
-        Assert.StartsWith(HelpRow("/emptytrash", "empty the working directory's .trash for good (asks first)"), lines[42]);
-        Assert.StartsWith(HelpRow("/git", "write the Git native email and Git native name settings into the working directory's repository: /git user [force]"), lines[43]);   // 2026-09-21
-        Assert.True(string.IsNullOrWhiteSpace(lines[44]));
+        Assert.StartsWith(HelpRow("/cmdcopy", "copy this profile's allowed shell commands into another, or with --history its command history: /cmdcopy <profile> [--history] [overwrite]"), lines[34]);   // 2026-09-21; --history 2026-09-25
+        Assert.StartsWith(HelpRow("/cmdclear", "clear this profile's command history (the Up/Down recall), stored and in memory (asks first)"), lines[35]);   // 2026-09-25: every row under it one down
+        Assert.StartsWith(HelpRow("/cmdlist", "list this profile's allowed shell commands on a pane, Enter removes one"), lines[36]);   // later on 2026-09-21
+        Assert.StartsWith(HelpRow("/police", "switch Shell police outside paths on or off on a pane: whether a shell command may name paths outside the working directory"), lines[37]);   // later still on 2026-09-22
+        Assert.StartsWith(HelpRow("/tree", "print a tree of the working directory's folders and files, or /tree <path>"), lines[40]);
+        Assert.StartsWith(HelpRow("/vault", "print a tree of the Obsidian vault's folders and notes, or /vault <path>"), lines[41]);   // under /tree since later still on 2026-09-22
+        Assert.StartsWith(HelpRow("/emptytrash", "empty the working directory's .trash for good (asks first)"), lines[43]);
+        Assert.StartsWith(HelpRow("/git", "write the Git native email and Git native name settings into the working directory's repository: /git user [force]"), lines[44]);   // 2026-09-21
+        Assert.True(string.IsNullOrWhiteSpace(lines[45]));
         // /speak and /view: a group of their own (the user's call, 2026-09-17); /window (/windowsize until then) under /view since later on 2026-09-19.
-        Assert.StartsWith(HelpRow("/speak", "read a text file from the working directory aloud, as a reply: /speak <file> [n], or /speak to resume, or /speak <n> from sentence n"), lines[45]);
-        Assert.StartsWith(HelpRow("/echo", "print a line as a reply and read it aloud when speech is on: /echo <text>"), lines[46]);
-        Assert.StartsWith(HelpRow("/view", "show an image from the working directory in the transcript, as large as the window allows: /view <image>"), lines[47]);
-        Assert.StartsWith(HelpRow("/imagine", "generate a picture on ComfyUI from your own prompt, sent as typed: /imagine [workflow] <prompt> [-- <negative>] [--seed N] [--size WxH]"), lines[48]);   // 2026-09-24
-        Assert.StartsWith(HelpRow("/comfy", "show the ComfyUI server's status and the workflows the image tools can run, /comfy edit json|markdown <workflow> to open its file in your editor, or /comfy purge to empty the output folder"), lines[49]);
-        Assert.StartsWith(HelpRow("/window", "show the terminal window's width and height"), lines[50]);
-        Assert.True(string.IsNullOrWhiteSpace(lines[51]));
-        Assert.StartsWith(HelpRow("/persona", "export and manage persona.md (the personality) in your editor, or /persona reset to go back to the default, or /persona copy <profile> [force] to copy it into another profile"), lines[52]);   // copy 2026-09-21
-        Assert.True(string.IsNullOrWhiteSpace(lines[55]));
-        Assert.StartsWith(HelpRow("/timer", "list timers, or /timer <duration> [name] (10m, 90s, 1h30m) | stop <name> | stop all"), lines[56]);   // the bottom group's first row since later still on 2026-09-19 (under /help from earlier that day)
-        Assert.StartsWith(HelpRow("/help", "show help"), lines[57]);   // the bottom group since 2026-09-16, above /about; under /timer since later still on 2026-09-19
-        Assert.StartsWith(HelpRow("/about", "show general information about the app and profile"), lines[58]);
+        Assert.StartsWith(HelpRow("/speak", "read a text file from the working directory aloud, as a reply: /speak <file> [n], or /speak to resume, or /speak <n> from sentence n"), lines[46]);
+        Assert.StartsWith(HelpRow("/echo", "print a line as a reply and read it aloud when speech is on: /echo <text>"), lines[47]);
+        Assert.StartsWith(HelpRow("/view", "show an image from the working directory in the transcript, as large as the window allows: /view <image>"), lines[48]);
+        Assert.StartsWith(HelpRow("/imagine", "generate a picture on ComfyUI from your own prompt, sent as typed: /imagine [workflow] <prompt> [-- <negative>] [--seed N] [--size WxH]"), lines[49]);   // 2026-09-24
+        Assert.StartsWith(HelpRow("/comfy", "show the ComfyUI server's status and the workflows the image tools can run, /comfy edit json|markdown <workflow> to open its file in your editor, or /comfy purge to empty the output folder"), lines[50]);
+        Assert.StartsWith(HelpRow("/window", "show the terminal window's width and height"), lines[51]);
+        Assert.True(string.IsNullOrWhiteSpace(lines[52]));
+        Assert.StartsWith(HelpRow("/persona", "export and manage persona.md (the personality) in your editor, or /persona reset to go back to the default, or /persona copy <profile> [force] to copy it into another profile"), lines[53]);   // copy 2026-09-21
+        Assert.True(string.IsNullOrWhiteSpace(lines[56]));
+        Assert.StartsWith(HelpRow("/timer", "list timers, or /timer <duration> [name] (10m, 90s, 1h30m) | stop <name> | stop all"), lines[57]);   // the bottom group's first row since later still on 2026-09-19 (under /help from earlier that day)
+        Assert.StartsWith(HelpRow("/help", "show help"), lines[58]);   // the bottom group since 2026-09-16, above /about; under /timer since later still on 2026-09-19
+        Assert.StartsWith(HelpRow("/about", "show general information about the app and profile"), lines[59]);
         Assert.StartsWith(HelpRow("/exit", "exit/quit the application"), lines[^1]);   // the very last row since 2026-09-16
         Assert.DoesNotContain("/windowsize", Output);
         Assert.DoesNotContain("(also", Output);
@@ -11433,7 +11603,7 @@ public partial class ChatScreenTests : IDisposable
         _console.Write(ChatScreen.CommandsTab(log: true));
 
         string[] lines = Output.TrimEnd('\n').Split('\n');
-        Assert.Equal(61, lines.Length);   // CommandsTab()'s 60 (/botchat, 2026-09-24) and the /log row
+        Assert.Equal(62, lines.Length);   // CommandsTab()'s 61 (/cmdclear, 2026-09-25; 60 with /botchat, 2026-09-24) and the /log row
         int help = Array.FindIndex(lines, l => l.StartsWith(HelpRow("/help", "show help"), StringComparison.Ordinal));
         Assert.StartsWith(HelpRow("/log", SlashCommands.LogEntry.Summary), lines[help - 1]);
         Assert.StartsWith(HelpRow("/timer", "list timers, or /timer <duration> [name] (10m, 90s, 1h30m) | stop <name> | stop all"), lines[help - 2]);
@@ -16011,7 +16181,8 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public async Task SessionLoggingOff_WritesNothing_AndTheToolIsStillOffered()
     {
-        _settings.Update(d => { d.TtsOutput = false; d.SessionLogging = false; });
+        // Keep command history off too (2026-09-25): on, the sent lines alone would make the file.
+        _settings.Update(d => { d.TtsOutput = false; d.SessionLogging = false; d.KeepCommandHistory = false; });
         _chat.EnqueueText("Hello.");
         PushLine("hi");
         PushLine("/exit");
@@ -16490,7 +16661,10 @@ public partial class ChatScreenTests : IDisposable
 
         // /cmdcopy: the same shape, its own notes (2026-09-21).
         Assert.Equal([new CompletionItem("chef", ChatScreen.CmdCopyTargetNote), new CompletionItem("work", ChatScreen.CmdCopyTargetNote)], ChatScreen.ArgumentItems("/cmdcopy", "", sources));
-        Assert.Equal([new CompletionItem("work overwrite", ChatScreen.CmdCopyOverwriteNote)], ChatScreen.ArgumentItems("/cmdcopy", "work ", sources));
+        Assert.Equal([new CompletionItem("work overwrite", ChatScreen.CmdCopyOverwriteNote), new CompletionItem("work --history", ChatScreen.CmdCopyHistoryNote)], ChatScreen.ArgumentItems("/cmdcopy", "work ", sources));   // --history 2026-09-25
+        Assert.Equal([new CompletionItem("work --history overwrite", ChatScreen.CmdCopyHistoryOverwriteNote)], ChatScreen.ArgumentItems("/cmdcopy", "work --history ", sources));
+        Assert.Equal("copy this profile's command history into it instead", ChatScreen.CmdCopyHistoryNote);
+        Assert.Equal("replace its command history instead of adding to it", ChatScreen.CmdCopyHistoryOverwriteNote);
         Assert.Empty(ChatScreen.ArgumentItems("/cmdcopy", "default ", sources));
 
         // /timer: stop, then stop all | <name> with the names whole.

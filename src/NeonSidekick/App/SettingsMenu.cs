@@ -406,6 +406,9 @@ public enum SettingsField
 
     /// <summary>A picker: what the busy row's token tally shows while a turn runs — <c>estimate</c> / <c>last-known</c> (<see cref="Settings.AppSettingsData.LlmMidTurnUsage"/>). On the LLM tab under <see cref="LlmContextLength"/> (2026-09-25); no reconnect (read on every draw).</summary>
     LlmMidTurnUsage,
+
+    /// <summary>A toggle: whether the input line's Up/Down history is stored in <c>sessions.db</c> and recalled after a restart (<see cref="Settings.AppSettingsData.KeepCommandHistory"/>). The General tab's row under Command typo intercept (2026-09-25, the user's ask); no reconnect (read at each remembered line and each load). Last in the enum, as every newcomer.</summary>
+    KeepCommandHistory,
 }
 
 /// <summary>The tabs of <c>/settings</c> on the pane, in strip order (Sessions right after General — the user's order, 2026-09-18; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
@@ -625,7 +628,7 @@ internal sealed partial class SettingsMenu
     /// Files and Web tabs are <c>/tools</c>' since 2026-09-19, <see cref="ToolsTabFields"/>, and the Skills tab
     /// <c>/skills</c>' Options tab since later that day, <see cref="SkillsTabFields"/>).
     /// General is spelled out (the profile and what a new one copies, then where its files live, then the message queue's switch and its cancel mode (2026-09-18, the user's place: right under the working directory), then the switches and pickers (<c>Mouse in menus</c> sat among them until 2026-09-21, when the mouse became the pane's for good), the
-    /// transcript's Markdown and the paste preview, then the two line conveniences of 2026-09-18 — the hidden <c>/exit</c>, the typo intercept —, the welcome splash (the user's order, later that day), the banner's working directory, the draft editor (2026-09-19) and the theme last (2026-09-23)); LLM
+    /// transcript's Markdown and the paste preview, then the two line conveniences of 2026-09-18 — the hidden <c>/exit</c>, the typo intercept —, the command history's switch (2026-09-25), the welcome splash (the user's order, later that day), the banner's working directory, the draft editor (2026-09-19) and the theme last (2026-09-23)); LLM
     /// is spelled out too: the scan mode (where a blank URL looks, so it sits above the URL), the
     /// <see cref="IsLlmField"/> rows, the compact rows, then <see cref="SettingsField.LlmOfferTools"/> ABOVE
     /// <see cref="SettingsField.LlmToolCompactType"/> (the user's order, 2026-09-15), the round-trip cap and the fun
@@ -636,7 +639,7 @@ internal sealed partial class SettingsMenu
     /// </summary>
     public static readonly IReadOnlyList<IReadOnlyList<SettingsField>> TabFields =
     [
-        [SettingsField.Profile, SettingsField.NewProfileMode, SettingsField.WorkingDirectory, SettingsField.QueueMessages, SettingsField.QueueCancelMode, SettingsField.Memory, SettingsField.CopyUserPrompt, SettingsField.ShowImageThumbnails, SettingsField.ImageThumbnailSize, SettingsField.TranscriptMarkdown, SettingsField.PastePreviewLines, SettingsField.HideExitAutocomplete, SettingsField.CommandTypoIntercept, SettingsField.WelcomeSplash, SettingsField.ShowWorkingDirectory, SettingsField.ShowToolbar, SettingsField.DraftEditor, SettingsField.ImageEditor, SettingsField.Theme],
+        [SettingsField.Profile, SettingsField.NewProfileMode, SettingsField.WorkingDirectory, SettingsField.QueueMessages, SettingsField.QueueCancelMode, SettingsField.Memory, SettingsField.CopyUserPrompt, SettingsField.ShowImageThumbnails, SettingsField.ImageThumbnailSize, SettingsField.TranscriptMarkdown, SettingsField.PastePreviewLines, SettingsField.HideExitAutocomplete, SettingsField.CommandTypoIntercept, SettingsField.KeepCommandHistory, SettingsField.WelcomeSplash, SettingsField.ShowWorkingDirectory, SettingsField.ShowToolbar, SettingsField.DraftEditor, SettingsField.ImageEditor, SettingsField.Theme],
         [SettingsField.SessionLogging, SettingsField.SessionRetentionDays, SettingsField.SessionNamingMode, SettingsField.SessionShowName, SettingsField.SessionTool, SettingsField.SessionSearchMaxResults],
         [SettingsField.LlmScanMode, SettingsField.LlmUrl, SettingsField.LlmModel, SettingsField.LlmApiKey, SettingsField.LlmReasoning, SettingsField.LlmRequestTimeoutSeconds, SettingsField.LlmTurnTimeoutSeconds, SettingsField.LlmContextLength, SettingsField.LlmMidTurnUsage, SettingsField.LlmCompactType, SettingsField.LlmCompactKeepRecent, SettingsField.LlmCompactShowSummary, SettingsField.LlmAutoCompactPercent, SettingsField.LlmOfferTools, SettingsField.LlmToolCompactType, SettingsField.LlmMaxToolIterations, SettingsField.LlmUseFunVerbs],
         [SettingsField.TtsOutput, SettingsField.TtsSource, SettingsField.TtsHttpUrl, SettingsField.TtsVoicePreview, SettingsField.TtsVoice, SettingsField.TtsVoice2, SettingsField.TtsVoiceMix, SettingsField.TtsSpeed],
@@ -926,7 +929,7 @@ internal sealed partial class SettingsMenu
             or SettingsField.AgentSkills or SettingsField.ExternalSkills or SettingsField.TranscriptMarkdown
             or SettingsField.FileSafeEdits
             or SettingsField.SkillHashMention or SettingsField.ReflectionAutoLearn
-            or SettingsField.HideExitAutocomplete or SettingsField.CommandTypoIntercept or SettingsField.ShowWorkingDirectory or SettingsField.ShowToolbar
+            or SettingsField.HideExitAutocomplete or SettingsField.CommandTypoIntercept or SettingsField.KeepCommandHistory or SettingsField.ShowWorkingDirectory or SettingsField.ShowToolbar
             or SettingsField.QueueMessages or SettingsField.SessionLogging or SettingsField.SessionTool
             or SettingsField.ToolsDollarMention or SettingsField.ReflectionIncludesSessions or SettingsField.ReflectionYieldsToTurns or SettingsField.McpServers or SettingsField.GitNativeTools
             or SettingsField.LlmCompactShowSummary or SettingsField.ShellToolBridge or SettingsField.ShellPoliceOutsidePaths
@@ -1062,6 +1065,7 @@ internal sealed partial class SettingsMenu
         SettingsField.ReflectionYieldsToTurns => "Reflection yields to turns",
         SettingsField.HideExitAutocomplete => "Hide /exit autocomplete",
         SettingsField.CommandTypoIntercept => "Command typo intercept",
+        SettingsField.KeepCommandHistory => "Keep command history",
         SettingsField.WelcomeSplash => "Welcome splash",
         SettingsField.ShowWorkingDirectory => "Working directory in header",
         SettingsField.ShowToolbar => "Show toolbar",
@@ -1228,6 +1232,7 @@ internal sealed partial class SettingsMenu
             SettingsField.ReflectionYieldsToTurns => OnOff(data.ReflectionYieldsToTurns),
             SettingsField.HideExitAutocomplete => OnOff(data.HideExitAutocomplete),
             SettingsField.CommandTypoIntercept => OnOff(data.CommandTypoIntercept),
+            SettingsField.KeepCommandHistory => OnOff(data.KeepCommandHistory),
             SettingsField.WelcomeSplash => data.WelcomeSplashMode,
             SettingsField.SessionLogging => OnOff(data.SessionLogging),
             SettingsField.SessionNamingMode => data.SessionNamingMode,
@@ -3229,6 +3234,7 @@ internal sealed partial class SettingsMenu
             SettingsField.ReflectionYieldsToTurns => data.ReflectionYieldsToTurns,
             SettingsField.HideExitAutocomplete => data.HideExitAutocomplete,
             SettingsField.CommandTypoIntercept => data.CommandTypoIntercept,
+            SettingsField.KeepCommandHistory => data.KeepCommandHistory,
             SettingsField.ShowWorkingDirectory => data.ShowWorkingDirectory,
             SettingsField.ShowToolbar => data.ShowToolbar,
             SettingsField.QueueMessages => data.QueueMessages,
@@ -3284,6 +3290,7 @@ internal sealed partial class SettingsMenu
             case SettingsField.ReflectionYieldsToTurns: data.ReflectionYieldsToTurns = on; break;
             case SettingsField.HideExitAutocomplete: data.HideExitAutocomplete = on; break;
             case SettingsField.CommandTypoIntercept: data.CommandTypoIntercept = on; break;
+            case SettingsField.KeepCommandHistory: data.KeepCommandHistory = on; break;
             case SettingsField.ShowWorkingDirectory: data.ShowWorkingDirectory = on; break;
             case SettingsField.ShowToolbar: data.ShowToolbar = on; break;
             case SettingsField.QueueMessages: data.QueueMessages = on; break;
@@ -3343,6 +3350,7 @@ internal sealed partial class SettingsMenu
         SettingsField.ReflectionYieldsToTurns => on ? "a turn pauses a running reflection; it runs again after the reply" : "a reflection runs on beside the turn",
         SettingsField.HideExitAutocomplete => on ? "hide '/exit' from the autocomplete list" : "show '/exit' in the autocomplete list",
         SettingsField.CommandTypoIntercept => on ? "a command typed without its slash or with extra ones offers the command" : "a command typed without its slash or with extra ones is sent as typed",
+        SettingsField.KeepCommandHistory => on ? "sent lines are kept in sessions.db and recalled with Up after a restart" : "sent lines are forgotten at exit; the stored ones go at the next load",
         SettingsField.ShowWorkingDirectory => on ? "show the working directory in the header" : "hide the working directory in the header",
         SettingsField.ShowToolbar => on ? "show the toolbar" : "hide the toolbar",
         SettingsField.QueueMessages => on ? "a message sent while a reply runs is queued and sent when the reply ends" : "a message sent during a reply goes when it ends, unlisted; no /queue",

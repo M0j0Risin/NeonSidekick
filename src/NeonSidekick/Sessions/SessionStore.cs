@@ -78,7 +78,9 @@ public sealed class SessionStore : IDisposable
     /// <c>turns</c> rows carry <c>tool_names</c>, <c>skills_loaded</c> and <c>errors</c> and a
     /// <c>reflections</c> table records every reflection. The 1 → 2 → 3 migrations went on
     /// 2026-09-24 (the user's call): every real file had long been at 3, and a schema that lived a
-    /// day was not worth the code, the fixtures and a smoke leg.
+    /// day was not worth the code, the fixtures and a smoke leg. The <c>command_history</c> table (2026-09-25,
+    /// <c>Keep command history</c>) left it at 3: an added table is <c>IF NOT EXISTS</c> on every open, so a file
+    /// from before gains it and an older build reads past it; no row it knew changed shape.
     /// </summary>
     public const int SchemaVersion = 3;
 
@@ -772,6 +774,162 @@ public sealed class SessionStore : IDisposable
         return sb.ToString();
     }
 
+    // ── The command history (2026-09-25) ────────────────────────────────────
+
+    /// <summary>The most lines <c>command_history</c> keeps; an append past it drops the oldest. Pinned.</summary>
+    public const int CommandHistoryCap = 1000;
+
+    /// <summary>
+    /// The input line's Up/Down history as stored (2026-09-25, the user's ask: <c>Keep command history</c>): the lines
+    /// oldest first, empty while the store is unavailable — or while there is no file yet, which a read never creates
+    /// (every profile is read at each load; a profile that never stored a line keeps no <c>sessions.db</c> for it).
+    /// </summary>
+    public IReadOnlyList<string> CommandHistory()
+    {
+        lock (_gate)
+        {
+            if (NoFileYet() || Open() is not { } connection)
+            {
+                return [];
+            }
+
+            try
+            {
+                using var command = connection.CreateCommand();
+                command.CommandText = "SELECT text FROM command_history ORDER BY id";
+                using var reader = command.ExecuteReader();
+                var lines = new List<string>();
+                while (reader.Read())
+                {
+                    lines.Add(reader.GetString(0));
+                }
+
+                return lines;
+            }
+            catch (SqliteException ex)
+            {
+                Fail("read the command history", ex);
+                return [];
+            }
+        }
+    }
+
+    /// <summary>How many lines <c>command_history</c> holds; 0 while unavailable.</summary>
+    public int CommandHistoryCount
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return NoFileYet() ? 0 : (int)Scalar("SELECT count(*) FROM command_history", 0L);
+            }
+        }
+    }
+
+    /// <summary>One sent line appended, the oldest past <see cref="CommandHistoryCap"/> dropped. The caller de-duplicates (<c>InputLine.Remember</c>).</summary>
+    public void AppendCommand(string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        AddCommandHistory([text], overwrite: false);
+    }
+
+    /// <summary>
+    /// Lines appended in order (<c>/cmdcopy --history</c>, 2026-09-25) — or in place of every stored one when
+    /// <paramref name="overwrite"/> — a line equal to the one before it skipped, as the input line's own history
+    /// skips it, then the oldest past <see cref="CommandHistoryCap"/> dropped; one transaction. How many went in.
+    /// </summary>
+    public int AddCommandHistory(IReadOnlyList<string> lines, bool overwrite)
+    {
+        ArgumentNullException.ThrowIfNull(lines);
+        lock (_gate)
+        {
+            if (Open() is not { } connection)
+            {
+                return 0;
+            }
+
+            try
+            {
+                using var transaction = connection.BeginTransaction();
+                string? last = null;
+                if (overwrite)
+                {
+                    using var wipe = connection.CreateCommand();
+                    wipe.Transaction = transaction;
+                    wipe.CommandText = "DELETE FROM command_history";
+                    wipe.ExecuteNonQuery();
+                }
+                else
+                {
+                    using var tail = connection.CreateCommand();
+                    tail.Transaction = transaction;
+                    tail.CommandText = "SELECT text FROM command_history ORDER BY id DESC LIMIT 1";
+                    last = tail.ExecuteScalar() as string;
+                }
+
+                using var insert = connection.CreateCommand();
+                insert.Transaction = transaction;
+                insert.CommandText = "INSERT INTO command_history(at, text) VALUES ($at, $text)";
+                var at = insert.Parameters.Add("$at", SqliteType.Text);
+                var text = insert.Parameters.Add("$text", SqliteType.Text);
+                at.Value = Stamp(_time.GetUtcNow());
+                int added = 0;
+                foreach (string line in lines)
+                {
+                    if (line.Length == 0 || string.Equals(line, last, StringComparison.Ordinal))
+                    {
+                        continue;
+                    }
+
+                    text.Value = line;
+                    insert.ExecuteNonQuery();
+                    last = line;
+                    added++;
+                }
+
+                using var trim = connection.CreateCommand();
+                trim.Transaction = transaction;
+                trim.CommandText = "DELETE FROM command_history WHERE id <= (SELECT id FROM command_history ORDER BY id DESC LIMIT 1 OFFSET $cap)";
+                trim.Parameters.AddWithValue("$cap", CommandHistoryCap);
+                trim.ExecuteNonQuery();
+                transaction.Commit();
+                return added;
+            }
+            catch (SqliteException ex)
+            {
+                Fail("write the command history", ex);
+                return 0;
+            }
+        }
+    }
+
+    /// <summary>Every stored line removed (<c>/cmdclear</c>, and a load with <c>Keep command history</c> off); how many went.</summary>
+    public int ClearCommandHistory()
+    {
+        lock (_gate)
+        {
+            if (NoFileYet() || Open() is not { } connection)
+            {
+                return 0;
+            }
+
+            try
+            {
+                using var command = connection.CreateCommand();
+                command.CommandText = "DELETE FROM command_history";
+                return command.ExecuteNonQuery();
+            }
+            catch (SqliteException ex)
+            {
+                Fail("clear the command history", ex);
+                return 0;
+            }
+        }
+    }
+
+    /// <summary>Nothing opened and no file on disk: a command-history read answers empty rather than create one. Caller holds the lock.</summary>
+    private bool NoFileYet() => _connection is null && !File.Exists(_filePath);
+
     /// <summary>The stored form of a moment: ISO-8601 UTC, invariant, fixed width so text order is time order. Pinned.</summary>
     public static string Stamp(DateTimeOffset moment) => moment.ToUniversalTime().ToString("yyyy-MM-dd'T'HH:mm:ss.fffffff'Z'", CultureInfo.InvariantCulture);
 
@@ -1030,6 +1188,10 @@ public sealed class SessionStore : IDisposable
             input_tokens INTEGER NOT NULL,
             output_tokens INTEGER NOT NULL);
         CREATE INDEX IF NOT EXISTS reflections_at ON reflections(at);
+        CREATE TABLE IF NOT EXISTS command_history(
+            id INTEGER PRIMARY KEY,
+            at TEXT NOT NULL,
+            text TEXT NOT NULL);
         """ + SchemaFts;
 
     /// <summary>The FTS5 external-content table over <c>turns</c> and its three sync triggers.</summary>

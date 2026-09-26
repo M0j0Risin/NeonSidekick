@@ -15,29 +15,29 @@ public enum MidTurnUsage
 
 /// <summary>
 /// The setting <c>LLM mid-turn usage</c> (2026-09-25, the user's words): the busy row carries the token tally
-/// the idle row does, and this says how — <c>estimate</c> (the default: the context and the speed ticking with
+/// the idle row does, and this says how — <c>estimate</c> (the context and the speed ticking with
 /// the stream, marked <c>~</c>) or <c>last-known</c> (the server's report of the last completed request, still
-/// between reports). The server reports usage only in a request's last chunk, so anything live is an estimate.
+/// between reports; the default since later on 2026-09-25, the user's call — <c>estimate</c> was until then). The server reports usage only in a request's last chunk, so anything live is an estimate.
 /// The <see cref="BotChatLlmMode"/> shape: <see cref="Resolve"/> is the one place the saved string becomes the enum.
 /// </summary>
 public static class MidTurnUsageMode
 {
-    /// <summary>Estimate: the compiled default. Pinned.</summary>
-    public const string Default = "estimate";
+    /// <summary>Last-known: the compiled default (later on 2026-09-25; <c>estimate</c> until then). Pinned.</summary>
+    public const string Default = "last-known";
 
     /// <summary>The modes in menu order.</summary>
     public static readonly string[] Names = { "estimate", "last-known" };
 
     private const string Category = "Screen";
 
-    /// <summary>Trims and ignores case; false (and <see cref="MidTurnUsage.Estimate"/>) for anything that is not one of <see cref="Names"/>.</summary>
+    /// <summary>Trims and ignores case; false (and <see cref="MidTurnUsage.LastKnown"/>, the default) for anything that is not one of <see cref="Names"/>.</summary>
     public static bool TryParse(string? text, out MidTurnUsage mode)
     {
         switch (text?.Trim().ToLowerInvariant())
         {
             case "estimate": mode = MidTurnUsage.Estimate; return true;
             case "last-known": mode = MidTurnUsage.LastKnown; return true;
-            default: mode = MidTurnUsage.Estimate; return false;
+            default: mode = MidTurnUsage.LastKnown; return false;
         }
     }
 
@@ -60,6 +60,6 @@ public static class MidTurnUsageMode
 
         DiagnosticLog.Warn(Category,
             $"{nameof(AppSettingsData.LlmMidTurnUsage)}='{effective.LlmMidTurnUsage}' is not one of {string.Join(", ", Names)}. Using {Default}.");
-        return MidTurnUsage.Estimate;
+        return MidTurnUsage.LastKnown;
     }
 }

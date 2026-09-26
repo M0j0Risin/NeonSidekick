@@ -524,6 +524,7 @@ public sealed class AppSettings : IDisposable
     {
         SchemaVersion = source.SchemaVersion,
         CommandTypoIntercept = source.CommandTypoIntercept,
+        KeepCommandHistory = source.KeepCommandHistory,
         CopyUserPrompt = source.CopyUserPrompt,
         DraftEditor = source.DraftEditor,
         ImageEditor = source.ImageEditor,

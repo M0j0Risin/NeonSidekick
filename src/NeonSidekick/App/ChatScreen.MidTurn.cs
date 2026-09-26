@@ -107,7 +107,7 @@ internal sealed partial class ChatScreen
     /// is a pane as the list is, and so is <c>copy &lt;profile&gt;</c>'s — it writes another
     /// profile's file, nothing the turn holds —, so the word never changes the class; the standalone
     /// <c>/forget</c> was a pane too, and <c>/memcopy</c> was refused until the word folded in),
-    /// <c>/emptytrash</c>'s confirmation and the <c>/reasoning</c>
+    /// <c>/emptytrash</c>'s and <c>/cmdclear</c>'s (2026-09-25) confirmations and the <c>/reasoning</c>
     /// picker and <c>/queue</c> (2026-09-18) are <see cref="MidTurnClass.Pane"/> (<c>/expand</c> and <c>/collapse</c>, 2026-09-22 — <c>/tools expand|collapse</c> until later that day — quick like <c>/queue clear</c>), as is <c>/cmdlist</c> (2026-09-21: the <c>Shell allowed commands</c> row, which <c>/tools</c> edits under a reply too) and <c>/police</c> (2026-09-22, its <c>Shell police outside paths</c> row the same way); the four speech switches, <c>/reasoning</c>
     /// with a level, <c>/queue</c> with a word (<c>clear</c>, 2026-09-21: the drop on the turn task, or the usage error), <c>/copy</c>, <c>/remember</c>, <c>/explore</c>, <c>/log</c> (2026-09-22: an editor launch like <c>/explore</c>'s), <c>/timer</c> and an unknown
     /// command are <see cref="MidTurnClass.Quick"/>; <c>/clear</c>, <c>/new</c>, <c>/splash</c> (2026-09-19) and <c>/exit</c> cancel; the rest
@@ -118,7 +118,7 @@ internal sealed partial class ChatScreen
     {
         SlashCommand.None => MidTurnClass.Message,
         SlashCommand.Help or SlashCommand.Settings or SlashCommand.Sys or SlashCommand.Memory
-            or SlashCommand.Usage or SlashCommand.About or SlashCommand.EmptyTrash or SlashCommand.Mcp or SlashCommand.CmdList or SlashCommand.Police or SlashCommand.Tools or SlashCommand.Skills => MidTurnClass.Pane,
+            or SlashCommand.Usage or SlashCommand.About or SlashCommand.EmptyTrash or SlashCommand.CmdClear or SlashCommand.Mcp or SlashCommand.CmdList or SlashCommand.Police or SlashCommand.Tools or SlashCommand.Skills => MidTurnClass.Pane,
         SlashCommand.Reasoning or SlashCommand.Queue => hasArgs ? MidTurnClass.Quick : MidTurnClass.Pane,
         SlashCommand.Session => hasArgs ? MidTurnClass.Refused : MidTurnClass.Pane,
         SlashCommand.Tts or SlashCommand.Voice or SlashCommand.Wake or SlashCommand.Interrupt or SlashCommand.Copy
@@ -324,6 +324,10 @@ internal sealed partial class ChatScreen
                 break;
             case SlashCommand.EmptyTrash:
                 await EmptyTrashAsync(cancellationToken).ConfigureAwait(false);
+                break;
+            case SlashCommand.CmdClear:
+                // /cmdclear (2026-09-25): the confirmation is a pane; the wipe is posted to the turn task.
+                await CmdClearAsync(cancellationToken).ConfigureAwait(false);
                 break;
             case SlashCommand.Reasoning:
                 if (await _menu.PickReasoningAsync("", _effective().LlmReasoning, cancellationToken).ConfigureAwait(false))

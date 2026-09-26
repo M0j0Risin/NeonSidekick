@@ -23,13 +23,14 @@ public class AppSettingsTests : IDisposable
     {
         SchemaVersion = 7,
         CommandTypoIntercept = false,
+        KeepCommandHistory = false,
         CopyUserPrompt = false,
         DraftEditor = "code --wait",
         HideExitAutocomplete = false,
         ImageThumbnailSize = "large",
         Theme = "noir",
         BotChatLlmMode = "multi",
-        LlmMidTurnUsage = "last-known",
+        LlmMidTurnUsage = "estimate",   // last-known is the default since later on 2026-09-25
         BotChatImages = true,
         BotChatImageMode = "autonomous",
         BotChatImageWorkflow = "flux",
@@ -129,6 +130,7 @@ public class AppSettingsTests : IDisposable
     {
         Assert.Equal(expected.SchemaVersion, actual.SchemaVersion);
         Assert.Equal(expected.CommandTypoIntercept, actual.CommandTypoIntercept);
+        Assert.Equal(expected.KeepCommandHistory, actual.KeepCommandHistory);
         Assert.Equal(expected.CopyUserPrompt, actual.CopyUserPrompt);
         Assert.Equal(expected.DraftEditor, actual.DraftEditor);
         Assert.Equal(expected.HideExitAutocomplete, actual.HideExitAutocomplete);
@@ -241,6 +243,7 @@ public class AppSettingsTests : IDisposable
         {
             d.SchemaVersion = full.SchemaVersion;
             d.CommandTypoIntercept = full.CommandTypoIntercept;
+            d.KeepCommandHistory = full.KeepCommandHistory;
             d.CopyUserPrompt = full.CopyUserPrompt;
             d.DraftEditor = full.DraftEditor;
             d.HideExitAutocomplete = full.HideExitAutocomplete;
@@ -350,6 +353,7 @@ public class AppSettingsTests : IDisposable
             {
                 d.SchemaVersion = full.SchemaVersion;
                 d.CommandTypoIntercept = full.CommandTypoIntercept;
+                d.KeepCommandHistory = full.KeepCommandHistory;
                 d.CopyUserPrompt = full.CopyUserPrompt;
                 d.DraftEditor = full.DraftEditor;
                 d.HideExitAutocomplete = full.HideExitAutocomplete;
@@ -928,6 +932,7 @@ public class AppSettingsTests : IDisposable
         Assert.Equal(200, s.SttInterruptConfirmMs);   // 150 until 2026-09-17
         Assert.Equal("", s.WorkingDirectory);
         Assert.True(s.CommandTypoIntercept);
+        Assert.True(s.KeepCommandHistory);   // 2026-09-25
         Assert.True(s.CopyUserPrompt);
         Assert.True(s.HideExitAutocomplete);
         Assert.Equal(0, s.LlmContextLength);

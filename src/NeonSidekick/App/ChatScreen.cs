@@ -908,7 +908,7 @@ internal sealed partial class ChatScreen
             // The tally on the busy row too (2026-09-25, the user's ask), as LLM mid-turn usage says: re-read on every
             // tick, so the estimate moves with the stream and a flipped setting shows at once. TryParse, not Resolve: the
             // draw must not warn on a hand-edited word, the turn's start does. None under a /botchat turn — not tallied.
-            BusyUsage = () => _botTurnRunning ? "" : UsageText.BusyHintPart(_session.Usage, _session.ContextLength, MidTurnUsageMode.TryParse(_effective().LlmMidTurnUsage, out var mode) ? mode : MidTurnUsage.Estimate, _session.Meter.Read()) ?? "",
+            BusyUsage = () => _botTurnRunning ? "" : UsageText.BusyHintPart(_session.Usage, _session.ContextLength, MidTurnUsageMode.TryParse(_effective().LlmMidTurnUsage, out var mode) ? mode : MidTurnUsage.LastKnown, _session.Meter.Read()) ?? "",
             // A ComfyUI generation's label after the tally (2026-09-25, the user's call): /imagine, a botchat picture and the model's generate_image alike.
             LabelAfterUsage = label => string.Equals(label, ComfyText.GeneratingLabel, StringComparison.Ordinal),
             // The toolbar under the hint row (2026-09-21): the pane glyphs, the working directory in
@@ -935,6 +935,7 @@ internal sealed partial class ChatScreen
         // the command and #-mention lists the catalog and the two Skills-tab switches (2026-09-17);
         // Ctrl+C over a selection writes the clipboard with /copy's writer.
         _input = new InputLine(_pane, keys, clipboard, _transcript, clipboardImage, query => _files.Complete(query), CommandChoices, ArgumentChoices, HashChoices, DollarChoices, _copy, PercentChoices, CaretChoices);
+        _input.Remembered = StoreCommand;
         _input.OpenPicture = OpenPicture;
         _mouse = mouse;
         _holdWheel = holdWheel;
@@ -1339,6 +1340,7 @@ internal sealed partial class ChatScreen
         rows.Add(("Ctrl+O", "expand or collapse the tool calls and code blocks (or click a summary line)"));
         rows.Add(("Alt+V", "paste content (text or images)"));
         rows.Add(("Ctrl+A", "select all text on the line"));
+        rows.Add(("Ctrl+X", "cut the selected text"));
         rows.Add(("Ctrl+C", "copy the selected text · stop the speech · cancel the reply · twice to exit"));
         return rows.ToArray();
     }
@@ -2715,6 +2717,8 @@ internal sealed partial class ChatScreen
     /// <summary>The <c>/cmdcopy</c> notes (2026-09-21), the shape of the <c>/memory copy</c> pair.</summary>
     public const string CmdCopyTargetNote = "copy this profile's allowed commands into it";
     public const string CmdCopyOverwriteNote = "replace its allowed commands instead of adding to it";
+    public const string CmdCopyHistoryNote = "copy this profile's command history into it instead";
+    public const string CmdCopyHistoryOverwriteNote = "replace its command history instead of adding to it";
 
     /// <summary>The <c>/timer</c> list's entries. Pinned.</summary>
     public const string TimerStopNote = "stop a timer: /timer stop <name> | all";
@@ -2866,9 +2870,15 @@ internal sealed partial class ChatScreen
                 var targets = sources.Profiles().Where(name => !Profiles.NameEquals(name, sources.LoadedProfile)).ToList();
                 foreach (var name in targets)
                 {
+                    if (argText.StartsWith(name + " " + HistorySwitch + " ", StringComparison.OrdinalIgnoreCase))
+                    {
+                        return MentionCompleter.Matches([new(name + " " + HistorySwitch + " " + OverwriteWord, CmdCopyHistoryOverwriteNote)], argText);
+                    }
+
                     if (argText.StartsWith(name + " ", StringComparison.OrdinalIgnoreCase))
                     {
-                        return MentionCompleter.Matches([new(name + " " + OverwriteWord, CmdCopyOverwriteNote)], argText);
+                        // --history (2026-09-25): the command history instead of the allowed commands.
+                        return MentionCompleter.Matches([new(name + " " + OverwriteWord, CmdCopyOverwriteNote), new(name + " " + HistorySwitch, CmdCopyHistoryNote)], argText);
                     }
                 }
 
@@ -3085,7 +3095,47 @@ internal sealed partial class ChatScreen
         _sessionTools = SessionTools(_sessions, _effective, () => _sessionId, _time);
         _sessionsMenu = new SessionsMenu(_sessions, () => _sessionId, _flow, _menuPane, _input, _time, id => { if (_sessionId == id) { ForgetSession(); } });
         PurgeExpiredSessions();
+        LoadCommandHistory();
     }
+
+    /// <summary>
+    /// The profile's command history onto the input line (2026-09-25, <c>Keep command history</c>), at startup and after
+    /// every switch — the user's call: Up recalls the loaded profile's lines, never the last one's. Off, the stored lines
+    /// go (the setting's promise: deleted at the next load) and the line starts empty.
+    /// </summary>
+    private void LoadCommandHistory()
+    {
+        if (_effective().KeepCommandHistory)
+        {
+            _input.ReplaceHistory(_sessions.CommandHistory());
+            return;
+        }
+
+        int cleared = _sessions.ClearCommandHistory();
+        if (cleared > 0)
+        {
+            DiagnosticLog.Debug(SessionsCategory, CommandHistoryDroppedLogLine(cleared));
+        }
+
+        _input.ReplaceHistory([]);
+    }
+
+    /// <summary>
+    /// A line the input line's history gained, stored while <c>Keep command history</c> is on (2026-09-25) — unless it holds
+    /// a collapsed paste or a picture, whose block is this session's alone. <see cref="_sessions"/> is read at each line, so
+    /// the store follows a profile switch.
+    /// </summary>
+    private void StoreCommand(string line)
+    {
+        if (_effective().KeepCommandHistory && !line.Any(PasteBlocks.IsToken))
+        {
+            _sessions.AppendCommand(line);
+        }
+    }
+
+    /// <summary>The Debug line when a load with <c>Keep command history</c> off drops the stored lines. Pinned.</summary>
+    public static string CommandHistoryDroppedLogLine(int count) =>
+        $"Keep command history is off: dropped {CommandLines(count)} from {SessionStore.FileName}.";
 
     /// <summary>The session tool (<c>session_manager</c>, 2026-09-18), offered while the setting <c>Session tool</c> is on; the conversation on screen (<paramref name="current"/>) is left out of its answers. Shared with headless.</summary>
     public static IReadOnlyList<AIFunction> SessionTools(SessionStore store, Func<AppSettingsData> effective, Func<long?> current, TimeProvider time) => new AIFunction[]
@@ -4471,7 +4521,10 @@ internal sealed partial class ChatScreen
 
     // ── /cmdcopy (2026-09-21) ───────────────────────────────────────────────
 
-    public const string CmdCopyUsageError = "/cmdcopy takes a profile name, and overwrite to replace its allowed commands: /cmdcopy <profile> [overwrite]";
+    public const string CmdCopyUsageError = "/cmdcopy takes a profile name, --history to copy the command history instead of the allowed commands, and overwrite to replace the target's: /cmdcopy <profile> [--history] [overwrite]";
+
+    /// <summary>The <c>/cmdcopy</c> switch that copies the command history instead of the allowed commands (2026-09-25). Pinned.</summary>
+    public const string HistorySwitch = "--history";
 
     public const string CmdCopySelfError = "/cmdcopy copies into another profile; that one is loaded.";
 
@@ -4509,12 +4562,18 @@ internal sealed partial class ChatScreen
     /// (<see cref="Profiles.WriteProfileFile"/>); the loaded profile is never the target, so no
     /// pending save is at stake. Appending skips what the target holds (<see cref="CommandAllowList.Contains"/>);
     /// both lists come out normalised (<see cref="CommandAllowList.Merge"/>: lower case, sorted, no doubles).
+    /// <c>--history</c> after the name (2026-09-25) copies the command history instead (<see cref="CopyCommandHistoryAsync"/>).
     /// </summary>
     private async Task HandleCmdCopyAsync(string args, CancellationToken cancellationToken)
     {
-        string[] words = args.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+        string[] all = args.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+        // --history anywhere after the name (2026-09-25): the rest is the allowed commands' grammar as ever.
+        string[] words = all.Where(word => !string.Equals(word, HistorySwitch, StringComparison.OrdinalIgnoreCase)).ToArray();
+        bool history = words.Length < all.Length;
         bool overwrite = words.Length == 2 && string.Equals(words[1], OverwriteWord, StringComparison.OrdinalIgnoreCase);
-        if (words.Length == 0 || words.Length > 2 || (words.Length == 2 && !overwrite))
+        // The switch once, and never in the name's place.
+        bool misplaced = history && (all.Length - words.Length > 1 || string.Equals(all[0], HistorySwitch, StringComparison.OrdinalIgnoreCase));
+        if (misplaced || words.Length == 0 || words.Length > 2 || (words.Length == 2 && !overwrite))
         {
             _transcript.Error(CmdCopyUsageError);
             return;
@@ -4530,6 +4589,12 @@ internal sealed partial class ChatScreen
         if (Profiles.NameEquals(target, _settings.ProfileName))
         {
             _transcript.Error(CmdCopySelfError);
+            return;
+        }
+
+        if (history)
+        {
+            await CopyCommandHistoryAsync(home, target, overwrite, cancellationToken).ConfigureAwait(false);
             return;
         }
 
@@ -4566,6 +4631,115 @@ internal sealed partial class ChatScreen
     }
 
     private static string AllowedCommands(int count) => count == 1 ? "1 allowed command" : $"{count.ToString(System.Globalization.CultureInfo.InvariantCulture)} allowed commands";
+
+    // ── /cmdcopy --history and /cmdclear (2026-09-25) ───────────────────────
+
+    public const string CmdCopyHistoryNothingNotice = "(nothing to copy: this profile has no command history)";
+
+    /// <summary><c>/cmdcopy --history</c> into a profile whose <c>Keep command history</c> is off: its next load would drop the lines. Pinned.</summary>
+    public static string CmdCopyHistoryOffError(string profile) =>
+        $"\"{profile}\" has Keep command history off, so its next load would drop the lines; switch it on there first.";
+
+    /// <summary>The question before a history copy (the yes/no pane's title; <see cref="TypedConfirm"/> where menus cannot open). Pinned.</summary>
+    public static string CmdCopyHistoryPrompt(int count, string profile, bool overwrite) =>
+        overwrite ? $"Replace \"{profile}\"'s command history with these {CommandLines(count)}?" : $"Copy {CommandLines(count)} of command history into \"{profile}\"?";
+
+    /// <summary><c>(12 command lines copied into "work")</c>; an overwrite reads <c>(replaced "work"'s command history with 12 command lines)</c>. Pinned.</summary>
+    public static string CmdHistoryCopiedNotice(int added, string profile, bool overwrite) =>
+        overwrite ? $"(replaced \"{profile}\"'s command history with {CommandLines(added)})" : $"({CommandLines(added)} copied into \"{profile}\")";
+
+    public static string CmdCopyHistoryFailedError(string profile) => $"Could not open \"{profile}\"'s {SessionStore.FileName}; nothing was copied.";
+
+    public const string CmdClearNothingNotice = "(nothing to clear: the command history is empty)";
+
+    /// <summary>The question before a <c>/cmdclear</c> (the yes/no pane's title; <see cref="TypedConfirm"/> where menus cannot open). Pinned.</summary>
+    public static string CmdClearPrompt(int count) => $"Clear {CommandLines(count)} of command history?";
+
+    /// <summary><c>(cleared 12 command lines)</c>. Pinned.</summary>
+    public static string CmdClearedNotice(int count) => $"(cleared {CommandLines(count)})";
+
+    private static string CommandLines(int count) => count == 1 ? "1 command line" : $"{count.ToString(System.Globalization.CultureInfo.InvariantCulture)} command lines";
+
+    /// <summary>
+    /// <c>/cmdcopy &lt;profile&gt; --history [overwrite]</c> (2026-09-25, the user's ask): this profile's stored command
+    /// history into the other profile's <c>sessions.db</c> — appended, a line equal to the one before it skipped, or in
+    /// place of it — after a confirmation. The stored lines, not the line's list: what the setting keeps is what is copied.
+    /// Refused when the target has <c>Keep command history</c> off (its next load would drop them). The target's store is
+    /// opened for the copy alone; the loaded profile is never the target.
+    /// </summary>
+    private async Task CopyCommandHistoryAsync(string home, string target, bool overwrite, CancellationToken cancellationToken)
+    {
+        var lines = _sessions.CommandHistory();
+        if (lines.Count == 0)
+        {
+            _flow.Notice(CmdCopyHistoryNothingNotice);
+            return;
+        }
+
+        try
+        {
+            if (!Profiles.ReadProfileFile(Profiles.ProfileFile(home, target)).KeepCommandHistory)
+            {
+                _transcript.Error(CmdCopyHistoryOffError(target));
+                return;
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.Json.JsonException)
+        {
+            _transcript.Error(CmdCopyFailedError(ex.Message));
+            return;
+        }
+
+        if (!await ConfirmAsync(CmdCopyHistoryPrompt(lines.Count, target, overwrite), cancellationToken).ConfigureAwait(false))
+        {
+            _flow.Notice(KeptNotice);
+            return;
+        }
+
+        using (var store = new SessionStore(Profiles.Directory(home, target), _time))
+        {
+            if (store.Available)
+            {
+                _transcript.Notice(CmdHistoryCopiedNotice(store.AddCommandHistory(lines, overwrite), target, overwrite));
+            }
+            else
+            {
+                _transcript.Error(CmdCopyHistoryFailedError(target));
+            }
+        }
+
+        DrainDiagnostics();
+    }
+
+    /// <summary>
+    /// <c>/cmdclear</c> (2026-09-25, the user's ask): one confirmation, then the stored command history and the input line's
+    /// list both emptied (the user's call: Up recalls nothing after it), whatever <c>Keep command history</c> says. The count
+    /// asked about is the larger of the two, so a session with the setting off still has something to clear.
+    /// </summary>
+    private async Task CmdClearAsync(CancellationToken cancellationToken)
+    {
+        int count = Math.Max(_sessions.CommandHistoryCount, _input.History.Count);
+        if (count == 0)
+        {
+            _flow.Notice(CmdClearNothingNotice);
+            return;
+        }
+
+        if (!await ConfirmAsync(CmdClearPrompt(count), cancellationToken).ConfigureAwait(false))
+        {
+            _flow.Notice(KeptNotice);
+            return;
+        }
+
+        // The wipe and its line on the turn task when the question was asked mid-turn.
+        RunOrPost(() =>
+        {
+            _sessions.ClearCommandHistory();
+            _input.ReplaceHistory([]);
+            _transcript.Notice(CmdClearedNotice(count));
+            DrainDiagnostics();
+        });
+    }
 
     /// <summary>Whether a typed confirmation means yes.</summary>
     public static bool IsYes(string text) =>
@@ -7729,6 +7903,10 @@ internal sealed partial class ChatScreen
 
             case SlashCommand.EmptyTrash:
                 await EmptyTrashAsync(cancellationToken).ConfigureAwait(false);
+                return false;
+
+            case SlashCommand.CmdClear:
+                await CmdClearAsync(cancellationToken).ConfigureAwait(false);
                 return false;
 
             case SlashCommand.Log:

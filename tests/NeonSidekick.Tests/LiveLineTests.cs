@@ -152,6 +152,21 @@ public class LiveLineTests : IDisposable
     }
 
     [Fact]
+    public async Task CtrlX_OverASelection_Cuts_AndTheTurnRunsOn()
+    {
+        Push([.. Chars("cut me"), Keys.Home, ShiftRight, ShiftRight, ShiftRight, ShiftRight, Keys.Ctrl(ConsoleKey.X)]);
+        using var turn = new CancellationTokenSource();
+
+        Assert.Equal(Interrupt.None, await WatchAsync(turn));
+
+        Assert.Equal(["cut "], _copied);
+        Assert.Equal("me", _line.Chat.Text);
+        Assert.False(turn.IsCancellationRequested);
+    }
+
+    private static ConsoleKeyInfo ShiftRight => Keys.Shift(ConsoleKey.RightArrow);
+
+    [Fact]
     public async Task UnderACtrlCOnlyWatch_ABareEsc_IsTypeAhead_TheDraftUntouched()
     {
         // A connect's short wait: ESC is not its cancel key and stays for the picker after it.

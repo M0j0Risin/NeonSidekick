@@ -758,18 +758,28 @@ public class SettingsMenuTests : IDisposable
                 SettingsField.BotChatImages, SettingsField.BotChatImageMode, SettingsField.BotChatImageWorkflow, SettingsField.BotChatImageAsync,
                 SettingsField.BotChatLlmMode,
                 SettingsField.LlmMidTurnUsage,
+                SettingsField.KeepCommandHistory,
             },
             Enum.GetValues<SettingsField>());
         // The compact rows: on the LLM tab after the context length but no reconnect; the type a picker, the two others typed.
         Assert.False(SettingsMenu.IsLlmField(SettingsField.LlmCompactType));
         Assert.False(SettingsMenu.IsLlmField(SettingsField.LlmCompactKeepRecent));
         Assert.False(SettingsMenu.IsLlmField(SettingsField.LlmAutoCompactPercent));
-        // The mid-turn usage picker (2026-09-25): under the context length, no reconnect, estimate by default.
+        // The mid-turn usage picker (2026-09-25): under the context length, no reconnect, last-known by default (estimate until later that day).
         Assert.False(SettingsMenu.IsLlmField(SettingsField.LlmMidTurnUsage));
         Assert.False(SettingsMenu.IsToggle(SettingsField.LlmMidTurnUsage));
         Assert.Equal("LLM mid-turn usage", SettingsMenu.FieldName(SettingsField.LlmMidTurnUsage));
-        Assert.Equal("estimate", SettingsMenu.FieldValue(SettingsField.LlmMidTurnUsage, data, _settings.ProfileDirectory));
-        Assert.Equal("last-known", SettingsMenu.FieldValue(SettingsField.LlmMidTurnUsage, new AppSettingsData { LlmMidTurnUsage = "last-known" }, _settings.ProfileDirectory));
+        Assert.Equal("last-known", SettingsMenu.FieldValue(SettingsField.LlmMidTurnUsage, data, _settings.ProfileDirectory));
+        Assert.Equal("estimate", SettingsMenu.FieldValue(SettingsField.LlmMidTurnUsage, new AppSettingsData { LlmMidTurnUsage = "estimate" }, _settings.ProfileDirectory));
+        // Keep command history (2026-09-25): a General toggle under the typo intercept, on by default, no reconnect.
+        Assert.True(SettingsMenu.IsToggle(SettingsField.KeepCommandHistory));
+        Assert.Equal("Keep command history", SettingsMenu.FieldName(SettingsField.KeepCommandHistory));
+        Assert.Equal("on", SettingsMenu.FieldValue(SettingsField.KeepCommandHistory, data, _settings.ProfileDirectory));
+        Assert.Equal("off", SettingsMenu.FieldValue(SettingsField.KeepCommandHistory, new AppSettingsData { KeepCommandHistory = false }, _settings.ProfileDirectory));
+        Assert.False(SettingsMenu.RefusedMidTurn(SettingsField.KeepCommandHistory));
+        Assert.Equal("sent lines are kept in sessions.db and recalled with Up after a restart", SettingsMenu.ToggleDescribe(SettingsField.KeepCommandHistory, true));
+        Assert.Equal("sent lines are forgotten at exit; the stored ones go at the next load", SettingsMenu.ToggleDescribe(SettingsField.KeepCommandHistory, false));
+        Assert.Equal(SettingsField.KeepCommandHistory, SettingsMenu.TabFields[(int)SettingsTab.General][SettingsMenu.TabFields[(int)SettingsTab.General].ToList().IndexOf(SettingsField.CommandTypoIntercept) + 1]);
         // The show-summary toggle (2026-09-21): right under keep recent, no reconnect, off by default.
         Assert.False(SettingsMenu.IsLlmField(SettingsField.LlmCompactShowSummary));
         Assert.True(SettingsMenu.IsToggle(SettingsField.LlmCompactShowSummary));
@@ -920,7 +930,7 @@ public class SettingsMenuTests : IDisposable
         Assert.Equal(9, SettingsMenu.ToolsTabFields.Count);   // Images since 2026-09-24; SQL since 2026-09-23; Obsidian since 2026-09-22 and Options last later that day (first since later on 2026-09-19); Git between Files and Web since 2026-09-20; Shell between Git and Web since 2026-09-21
         Assert.Equal(2, SettingsMenu.SkillsTabFields.Count);   // Options and Reflection, since later on 2026-09-19 (one list of 11, then 14, before)
         Assert.Equal(13, SettingsMenu.SkillsTabFields.Sum(t => t.Count));   // 12 until Reflection yields to turns came on 2026-09-24; 13 until Allow skill delete went on 2026-09-23; 14 until Reflection verbose went later still on 2026-09-19
-        Assert.Equal(new[] { SettingsField.Profile, SettingsField.NewProfileMode, SettingsField.WorkingDirectory, SettingsField.QueueMessages, SettingsField.QueueCancelMode, SettingsField.Memory, SettingsField.CopyUserPrompt, SettingsField.ShowImageThumbnails, SettingsField.ImageThumbnailSize, SettingsField.TranscriptMarkdown, SettingsField.PastePreviewLines, SettingsField.HideExitAutocomplete, SettingsField.CommandTypoIntercept, SettingsField.WelcomeSplash, SettingsField.ShowWorkingDirectory, SettingsField.ShowToolbar, SettingsField.DraftEditor, SettingsField.ImageEditor, SettingsField.Theme }, SettingsMenu.TabFields[(int)SettingsTab.General]);   // Image editor under Draft editor, later on 2026-09-24
+        Assert.Equal(new[] { SettingsField.Profile, SettingsField.NewProfileMode, SettingsField.WorkingDirectory, SettingsField.QueueMessages, SettingsField.QueueCancelMode, SettingsField.Memory, SettingsField.CopyUserPrompt, SettingsField.ShowImageThumbnails, SettingsField.ImageThumbnailSize, SettingsField.TranscriptMarkdown, SettingsField.PastePreviewLines, SettingsField.HideExitAutocomplete, SettingsField.CommandTypoIntercept, SettingsField.KeepCommandHistory, SettingsField.WelcomeSplash, SettingsField.ShowWorkingDirectory, SettingsField.ShowToolbar, SettingsField.DraftEditor, SettingsField.ImageEditor, SettingsField.Theme }, SettingsMenu.TabFields[(int)SettingsTab.General]);   // Image editor under Draft editor, later on 2026-09-24; Keep command history under the typo intercept, 2026-09-25
         // Draft editor (2026-09-19): typed, the General tab's last row, blank = the shell's default for .txt, no reconnect (read at each /draft).
         Assert.False(SettingsMenu.IsToggle(SettingsField.DraftEditor));
         Assert.Equal("Draft editor", SettingsMenu.FieldName(SettingsField.DraftEditor));
@@ -2752,11 +2762,11 @@ public class SettingsMenuTests : IDisposable
 
         Assert.Equal(SettingsChanges.None, await menu.ShowAsync(CancellationToken.None));
 
-        // General: the seventeen rows in their own order (Mouse in menus gone, 2026-09-21; Draft editor last, 2026-09-19; Show toolbar after Show working directory, 2026-09-21) (the six web rows moved to the Web tab and the two /tree rows to Files, 2026-09-15; Transcript markdown and Paste preview lines, 2026-09-16; the @-mention folder mode to Files, 2026-09-17; the two line switches, Welcome splash, then Show working directory last, and the queue's two rows under Working directory, 2026-09-18), padded to the tab's own column (25), nothing of the other tabs.
+        // General: its rows in their own order (Keep command history under Command typo intercept, 2026-09-25; Mouse in menus gone, 2026-09-21; Draft editor last, 2026-09-19; Show toolbar after Show working directory, 2026-09-21) (the six web rows moved to the Web tab and the two /tree rows to Files, 2026-09-15; Transcript markdown and Paste preview lines, 2026-09-16; the @-mention folder mode to Files, 2026-09-17; the two line switches, Welcome splash, then Show working directory last, and the queue's two rows under Working directory, 2026-09-18), padded to the tab's own column (25), nothing of the other tabs.
         string cwd = SettingsMenu.DefaultWorkingDirectoryLabel(_settings.ProfileDirectory);
         Assert.StartsWith("(", cwd);
         Assert.EndsWith(@"\profiles\default\files)", cwd);
-        Assert.Contains(Rule(240) + "\n" + Titled(Strip) + "\n \n▸ Profile                      default (" + _settings.ProfileDirectory + ")\n  New profile mode             basic\n  Working directory (cwd)      " + cwd + "\n  Queue messages               on\n  Queue cancel mode            empty\n  Memory                       on\n  Copy user prompt             on\n  Show image thumbnails        on\n  Image thumbnail size         small\n  Transcript markdown          on\n  Paste preview lines          25 lines\n  Hide /exit autocomplete      on\n  Command typo intercept       on\n  Welcome splash               fullsize\n  Working directory in header  off\n  Show toolbar                 on\n  Draft editor                 (default .txt editor)\n  Image viewer                 (default image viewer)\n  Theme                        synthwave\n" + Rule(240) + "\n" + SettingsMenu.TabKeys + "\n", _console.Output);
+        Assert.Contains(Rule(240) + "\n" + Titled(Strip) + "\n \n▸ Profile                      default (" + _settings.ProfileDirectory + ")\n  New profile mode             basic\n  Working directory (cwd)      " + cwd + "\n  Queue messages               on\n  Queue cancel mode            empty\n  Memory                       on\n  Copy user prompt             on\n  Show image thumbnails        on\n  Image thumbnail size         small\n  Transcript markdown          on\n  Paste preview lines          25 lines\n  Hide /exit autocomplete      on\n  Command typo intercept       on\n  Keep command history         on\n  Welcome splash               fullsize\n  Working directory in header  off\n  Show toolbar                 on\n  Draft editor                 (default .txt editor)\n  Image viewer                 (default image viewer)\n  Theme                        synthwave\n" + Rule(240) + "\n" + SettingsMenu.TabKeys + "\n", _console.Output);
         Assert.DoesNotContain("File /tree max length", _console.Output);   // the Files tab's since 2026-09-15
         Assert.DoesNotContain("LLM URL", _console.Output);
         Assert.False(pane.OverlayOpen);
@@ -2776,7 +2786,7 @@ public class SettingsMenuTests : IDisposable
         // Each tab under the strip, padded to its own column (28, 26, 19, 26), the whole tab in view, nothing of another tab on it.
         Assert.Contains("\n \n▸ Session logging             on\n  Session retention (days)    forever\n  Session naming mode         model-written\n  Session show name           all-names\n  Session tool                on\n  Session search max results  10 results\n" + Rule(100), _console.Output);
         Assert.Contains("\n \n▸ LLM scan mode             local\n  LLM URL                   (probe local ports)\n  LLM model                 (first listed)\n  LLM API key               ", _console.Output);
-        Assert.Contains("\n  LLM reasoning             none\n  LLM request timeout (s)   3600\n  LLM turn timeout (s)      21600\n  LLM context length        (from the server)\n  LLM mid-turn usage        estimate\n  LLM compact type          summary\n  LLM compact keep recent   2 turns\n  LLM compact show summary  off\n  LLM auto compact (%)      85 %\n  LLM offer tools           on\n  LLM tool compact type     prune\n  LLM max tool iterations   10000 round trips\n  LLM use fun verbs         off\n" + Rule(100), _console.Output);
+        Assert.Contains("\n  LLM reasoning             none\n  LLM request timeout (s)   3600\n  LLM turn timeout (s)      21600\n  LLM context length        (from the server)\n  LLM mid-turn usage        last-known\n  LLM compact type          summary\n  LLM compact keep recent   2 turns\n  LLM compact show summary  off\n  LLM auto compact (%)      85 %\n  LLM offer tools           on\n  LLM tool compact type     prune\n  LLM max tool iterations   10000 round trips\n  LLM use fun verbs         off\n" + Rule(100), _console.Output);
         Assert.Contains("\n \n▸ TTS output         on\n  TTS source         http\n  TTS HTTP URL       http://localhost:8880/v1\n  TTS voice preview  on\n  TTS voice          af_heart\n  TTS voice 2        am_eric\n  TTS voice mix      80 % / 20 %\n  TTS speed          1.2\n" + Rule(100), _console.Output);
         Assert.Contains("\n \n▸ STT input                 off\n  STT wake                  off\n  STT wake phrase           hey neon\n  STT interrupt             off\n  STT interrupt echo guard  100 %\n  STT interrupt confirm     200 ms\n  STT push-to-talk key      F4\n  STT whisper model         ggml-base.en.bin\n  STT vosk model            vosk-model-small-en-us-0.15\n" + Rule(100), _console.Output);
         Assert.DoesNotContain("Ask user", _console.Output);   // /tools' since 2026-09-19

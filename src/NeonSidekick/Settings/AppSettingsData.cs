@@ -43,6 +43,16 @@ public sealed class AppSettingsData
     public bool CommandTypoIntercept { get; set; } = true;
 
     /// <summary>
+    /// Whether the input line's Up/Down history outlives the app (2026-09-25, the user's ask): on, every line the
+    /// history gains is stored in the profile's <c>sessions.db</c> (<c>command_history</c>, the newest
+    /// <see cref="Sessions.SessionStore.CommandHistoryCap"/>) and loaded again at startup and after a switch to the
+    /// profile; a line holding a collapsed paste or a picture is not stored (its block is the session's). Off, nothing
+    /// is stored and what is stored goes the next time the profile loads. <c>/cmdclear</c> empties it either way.
+    /// Read at each remembered line and at each load. No variable.
+    /// </summary>
+    public bool KeepCommandHistory { get; set; } = true;
+
+    /// <summary>
     /// Whether <c>/copy</c> puts the user's own prompt (as a blockquote) above each reply it
     /// copies, or the replies alone. A toggle like <see cref="Memory"/>: no variable.
     /// </summary>
@@ -293,9 +303,10 @@ public sealed class AppSettingsData
 
     /// <summary>
     /// What the busy row's token tally shows while a turn runs (2026-09-25, the user's ask: the tally used to vanish under
-    /// the spinner): one of <see cref="App.MidTurnUsageMode.Names"/> — <c>estimate</c> (the default: the context and tok/s
+    /// the spinner): one of <see cref="App.MidTurnUsageMode.Names"/> — <c>estimate</c> (the context and tok/s
     /// tick with the stream, marked <c>~</c>, the streamed chunks counted as tokens until the server's report lands) or
-    /// <c>last-known</c> (the server's figures as of the last completed request). Read on every draw. The LLM tab of
+    /// <c>last-known</c> (the default since later on 2026-09-25, the user's call: the server's figures as of the last
+    /// completed request). Read on every draw. The LLM tab of
     /// <c>/settings</c>, under <see cref="LlmContextLength"/>. No variable.
     /// </summary>
     public string LlmMidTurnUsage { get; set; } = App.MidTurnUsageMode.Default;
