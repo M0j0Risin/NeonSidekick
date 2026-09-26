@@ -512,6 +512,15 @@ public sealed class AppSettingsData
     // ─── Botchat ────────────────────────────────────────────────────────────────
 
     /// <summary>
+    /// Whose LLM the <c>/botchat</c> bots talk through (2026-09-25, the user's ask): one of <see cref="App.BotChatLlmMode.Names"/> —
+    /// <c>single</c> (the default, what the chat always did: every bot on this profile's server, model and reasoning effort) or
+    /// <c>multi</c> (each bot on its own profile's <see cref="LlmUrl"/>, <see cref="LlmModel"/>, <see cref="LlmApiKey"/>,
+    /// timeouts and <see cref="LlmReasoning"/>; a blank URL borrows this profile's server, and a bot whose server does not
+    /// answer sits the chat out — the user's calls). Read when a chat starts (or resumes). The Botchat tab of <c>/settings</c>. No variable.
+    /// </summary>
+    public string BotChatLlmMode { get; set; } = App.BotChatLlmMode.Default;
+
+    /// <summary>
     /// Whether <c>/botchat</c> has pictures (2026-09-25, the user's ask): while on and the ComfyUI image tools are offered
     /// (<c>ChatScreen.ComfyOffered</c>), <see cref="BotChatImageMode"/> says who draws — the app a picture of every reply,
     /// the bots with <c>generate_image</c>, or both. Off (the default), the chat is talk alone, no tool at all. Read per
@@ -1072,8 +1081,9 @@ public sealed class AppSettingsData
     /// <summary>
     /// Whether the transcript shows what was sent to ComfyUI (later still on 2026-09-24, the user's ask): the <c>prompt:</c>
     /// and <c>negative:</c> lines of a generation's result — the prompt the model wrote, the negative after the workflow's or
-    /// the family's and any reinforcing tags — each in full under the picture's line, for <c>generate_image</c> and
-    /// <c>/imagine</c> alike. Off, the picture's line alone. The model's result is the same either way. On by default since
+    /// the family's and any reinforcing tags — each in full under the picture's line, then (2026-09-25, the user's ask) the
+    /// <c>params:</c> line (<see cref="Comfy.ComfyText.Parameters"/>: size, steps, cfg, denoise, seed, sampler, scheduler), for
+    /// <c>generate_image</c> and <c>/imagine</c> alike. Off, the picture's line alone. The model's result is the same either way. On by default since
     /// later still on 2026-09-24 (the user's call); a profile saved with it off keeps it off. The ComfyUI tab of
     /// <c>/tools</c>. No variable.
     /// </summary>

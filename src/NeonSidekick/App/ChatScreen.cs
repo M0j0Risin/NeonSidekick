@@ -8457,8 +8457,10 @@ internal sealed partial class ChatScreen
     /// user's ask): a press stops the speaking bot's voice, the next cuts the bot replying short and the chat goes on with
     /// the next one (<see cref="BotChat.CutShortNotice"/>, the words so far kept as its line), the next — before that next
     /// bot has shown or said anything — ends the chat. The input row stays the idle line's editor throughout. Every turn runs through <see cref="RunTurnAsync"/>
-    /// on an assistant of its own over this profile's one client (<see cref="LlmSession.CreateAssistant"/>:
-    /// the user's call, every bot on the starting profile's server and model), strictly one after another,
+    /// on an assistant of its own over this profile's one client (<see cref="LlmSession.CreateAssistant(ConversationHistory)"/>:
+    /// the user's call, every bot on the starting profile's server and model) — or, with <c>Botchat LLM mode</c> <c>multi</c>
+    /// (later on 2026-09-25, the user's ask), each bot but the starter over its own profile's (<see cref="LinkBotsAsync"/>),
+    /// a bot whose server does not answer sitting the chat out — strictly one after another,
     /// with a system prompt built afresh from the speaker's own <c>persona.md</c> and no tools; its reply
     /// speaks in the speaker's own voice. A message typed meanwhile is queued (<see cref="_botChatRunning"/>)
     /// and joins the chat before the next reply as the user's line — at once when it is sent while the last
@@ -8518,6 +8520,46 @@ internal sealed partial class ChatScreen
             return false;
         }
 
+        // Multi (later on 2026-09-25): the bots' own LLMs, one per bot but the starter (null), aligned with the cast; read at
+        // the start, so a resume re-reads the mode and reaches them afresh. Disposed with the chat.
+        var links = new List<BotLink?>();
+        if (BotChatLlmMode.Resolve(effective) == BotLlmMode.Multi)
+        {
+            var (linked, linkCancelled) = await LinkBotsAsync(cast, cancellationToken).ConfigureAwait(false);
+            if (linkCancelled || linked is null)
+            {
+                _transcript.Notice(CancelledNotice);
+                return false;
+            }
+
+            var kept = new List<BotParticipant>();
+            for (int i = 0; i < cast.Count; i++)
+            {
+                var (link, problem) = linked[i];
+                if (cast[i].Profile is not null && link is null)
+                {
+                    _transcript.Notice(BotChat.SkippedNotice(cast[i].Name, problem ?? ""));
+                    continue;
+                }
+
+                if (link is not null)
+                {
+                    _transcript.Notice(BotChat.LinkNotice(cast[i].Name, link.Endpoint.BaseUrl, link.Endpoint.ModelId, ReasoningLevel.Name(link.Reasoning)));
+                }
+
+                kept.Add(cast[i]);
+                links.Add(link);
+            }
+
+            cast = kept;
+            if (cast.Count < 2)
+            {
+                links.ForEach(link => link?.Dispose());
+                _transcript.Error(BotChat.TooFewError);
+                return false;
+            }
+        }
+
         var castNames = cast.Select(bot => bot.Name).ToList();
         string opening = saved is not null ? BotChat.ResumeNotice(castNames, topic, saved.Replies) : BotChat.StartNotice(castNames, topic);
         _transcript.Notice(opening);
@@ -8575,7 +8617,7 @@ internal sealed partial class ChatScreen
                 var imageTool = pictured && BotChatImageMode.Offers(imageMode) ? BotImageTool(effective) : null;
                 var history = new ConversationHistory(BotChat.SystemPrompt(bot.Persona, bot.Name, others, topic, speaking, bot.VoiceDirective, markdown, pronouns, images: imageTool is not null));
                 history.Replace(prior);
-                if (_session.CreateAssistant(history) is not { } assistant)
+                if ((links.Count > 0 && links[next] is { } own ? _session.CreateAssistant(history, own) : _session.CreateAssistant(history)) is not { } assistant)
                 {
                     _transcript.Error(NoAssistantError);
                     break;
@@ -8725,6 +8767,8 @@ internal sealed partial class ChatScreen
             // The pictures still rendering are dropped with the chat; those already made are drawn below.
             await pictureCts.CancelAsync().ConfigureAwait(false);
             await Task.WhenAll(pictures.Select(p => p.Job)).ConfigureAwait(false);
+            // The bots' own LLMs (multi) go with the chat, after the last picture prompt that could use one.
+            links.ForEach(link => link?.Dispose());
         }
 
         ShowReadyBotPictures(pictures);
@@ -8765,12 +8809,37 @@ internal sealed partial class ChatScreen
                 continue;
             }
 
-            // Only the persona, the spoken-reply directive and the voice are read: never the LLM settings.
+            // The persona, the spoken-reply directive and the voice are read; the LLM settings ride along in the profile,
+            // read only under Botchat LLM mode multi (later on 2026-09-25, LinkBotsAsync).
             string voice = VoiceMix.Spec(data.TtsVoice, data.TtsVoice2, data.TtsVoiceMix);
-            cast.Add(new BotParticipant(name, new PersonaFile(directory).Read(), new VocaliaFile(directory).Read(), voice, data.TtsSpeed, cast.Count, BotChat.GenderOf(data.TtsVoice)));
+            cast.Add(new BotParticipant(name, new PersonaFile(directory).Read(), new VocaliaFile(directory).Read(), voice, data.TtsSpeed, cast.Count, BotChat.GenderOf(data.TtsVoice), data));
         }
 
         return cast;
+    }
+
+    /// <summary>
+    /// The bots' own LLMs (<c>Botchat LLM mode</c> <c>multi</c>, later on 2026-09-25, the user's ask): every bot with a
+    /// <see cref="BotParticipant.Profile"/> (all but the starter) reached through <see cref="LlmSession.LinkAsync"/>, together,
+    /// under a spinner ESC cancels; one result per bot, in cast order — the starter's empty. Cancelled, the links made are disposed.
+    /// </summary>
+    private async Task<((BotLink? Link, string? Problem)[]? Results, bool Cancelled)> LinkBotsAsync(List<BotParticipant> cast, CancellationToken cancellationToken)
+    {
+        Task<(BotLink? Link, string? Problem)>[] jobs = [];
+        var (results, cancelled) = await UnderWatchAsync(BotChat.LinkingSpinner, token =>
+        {
+            jobs = cast.Select(bot => bot.Profile is { } profile ? _session.LinkAsync(profile, token) : Task.FromResult<(BotLink?, string?)>((null, null))).ToArray();
+            return Task.WhenAll(jobs);
+        }, cancellationToken).ConfigureAwait(false);
+        if (cancelled)
+        {
+            foreach (var job in jobs.Where(job => job.IsCompletedSuccessfully))
+            {
+                job.Result.Link?.Dispose();
+            }
+        }
+
+        return (results, cancelled);
     }
 
     /// <summary>The model's round trips a bot's turn may take while it is offered <c>generate_image</c> (2026-09-25): a picture or two, then its words.</summary>

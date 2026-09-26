@@ -277,15 +277,19 @@ public sealed class ComfyStudio : IDisposable
         int count = Math.Clamp(request.Count, 1, maxCount);
         var saved = new List<string>();
         var images = new List<ImageAttachment>();
+        ComfyParameters? parameters = null;
         for (int i = 0; i < count; i++)
         {
             long thisSeed = seed + i;
             var values = new ComfyValues(request.Prompt, negative, thisSeed, request.Width, request.Height, request.Steps, request.Cfg, request.Denoise, uploaded.Count == 0 ? null : uploaded);
-            var run = await client.RunAsync(workflow.Fill(values), timeout, cancellationToken).ConfigureAwait(false);
+            var graph = workflow.Fill(values);
+            // The first run's parameters as sent (2026-09-25): the report's seed is the first one too.
+            parameters ??= ComfyWorkflow.ReadParameters(graph);
+            var run = await client.RunAsync(graph, timeout, cancellationToken).ConfigureAwait(false);
             if (!run.Ok)
             {
                 // What was saved before the failure stays saved, and is said.
-                return saved.Count == 0 ? Fail(run.Error!) : new ComfyGeneration(Report(workflow, seed, request, saved, negative, images.Count > 0, inputNote) + "\n" + run.Error, images);
+                return saved.Count == 0 ? Fail(run.Error!) : new ComfyGeneration(Report(workflow, seed, request, saved, negative, images.Count > 0, inputNote, parameters) + "\n" + run.Error, images);
             }
 
             for (int j = 0; j < run.Images.Count; j++)
@@ -296,7 +300,7 @@ public sealed class ComfyStudio : IDisposable
                 var (relative, saveError) = Save(effective.ComfyOutputFolder, stem, extension, picture.Bytes);
                 if (relative is null)
                 {
-                    return saved.Count == 0 ? Fail(saveError!) : new ComfyGeneration(Report(workflow, seed, request, saved, negative, images.Count > 0, inputNote) + "\n" + saveError, images);
+                    return saved.Count == 0 ? Fail(saveError!) : new ComfyGeneration(Report(workflow, seed, request, saved, negative, images.Count > 0, inputNote, parameters) + "\n" + saveError, images);
                 }
 
                 saved.Add(relative);
@@ -308,14 +312,26 @@ public sealed class ComfyStudio : IDisposable
         }
 
         DiagnosticLog.Info(Category, $"Generated {saved.Count.ToString(CultureInfo.InvariantCulture)} picture(s) with {workflow.Name}, seed {seed.ToString(CultureInfo.InvariantCulture)}.");
-        return new ComfyGeneration(Report(workflow, seed, request, saved, negative, images.Count > 0, inputNote), images);
+        return new ComfyGeneration(Report(workflow, seed, request, saved, negative, images.Count > 0, inputNote, parameters), images);
     }
 
-    private static string Report(ComfyWorkflow workflow, long seed, ComfyRequest request, IReadOnlyList<string> saved, string negative, bool attached, string? input)
+    private static string Report(ComfyWorkflow workflow, long seed, ComfyRequest request, IReadOnlyList<string> saved, string negative, bool attached, string? input, ComfyParameters? parameters)
     {
         var d = workflow.Defaults;
+        int width = request.Width ?? d.Width;
+        int height = request.Height ?? d.Height;
+        // What the graph carries wins (a template may hardcode its steps, 2026-09-25); what was asked for fills the rest.
+        // Denoise, the sampler and the scheduler are the graph's alone: a graph with none has none to report.
+        var sent = parameters is null ? null : parameters with
+        {
+            Width = parameters.Width ?? width,
+            Height = parameters.Height ?? height,
+            Steps = parameters.Steps ?? request.Steps ?? d.Steps,
+            Cfg = parameters.Cfg ?? request.Cfg ?? d.Cfg,
+            Seed = parameters.Seed ?? seed,
+        };
         // A prompt the workflow has no {{prompt}} for never reached the picture, so it is not reported as sent.
-        return ComfyText.Generated(workflow.Name, seed, request.Width ?? d.Width, request.Height ?? d.Height, saved, workflow.TakesPrompt ? request.Prompt : "", negative, attached, input);
+        return ComfyText.Generated(workflow.Name, seed, width, height, saved, workflow.TakesPrompt ? request.Prompt : "", negative, attached, input, sent);
     }
 
     private static ComfyGeneration Fail(string text) => new(text, []);

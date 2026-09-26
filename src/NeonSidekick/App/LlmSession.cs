@@ -187,9 +187,9 @@ internal sealed class LlmSession : IDisposable
 
     /// <summary>
     /// A second assistant over this session's one client (<c>/botchat</c>, 2026-09-24, the user's call:
-    /// every bot on the starting profile's server and model): <paramref name="history"/> its own, the
-    /// timeouts and the reasoning effort the main assistant's as they stand, no tools. Null while nothing
-    /// is connected. The client stays this session's; nothing here is disposed with the assistant.
+    /// every bot on the starting profile's server and model — <c>Botchat LLM mode</c> <c>single</c> since 2026-09-25):
+    /// <paramref name="history"/> its own, the timeouts and the reasoning effort the main assistant's as they stand, no
+    /// tools. Null while nothing is connected. The client stays this session's; nothing here is disposed with the assistant.
     /// </summary>
     public Assistant? CreateAssistant(ConversationHistory history)
     {
@@ -198,6 +198,72 @@ internal sealed class LlmSession : IDisposable
             ? new Assistant(client, history, Timeouts, time: _time, reasoning: main.Reasoning)
             : null;
     }
+
+    /// <summary>An assistant over a bot's own <paramref name="link"/> (<see cref="LinkAsync"/>): its client, timeouts and reasoning effort, no tools.</summary>
+    public Assistant CreateAssistant(ConversationHistory history, BotLink link)
+    {
+        ArgumentNullException.ThrowIfNull(history);
+        ArgumentNullException.ThrowIfNull(link);
+        return new Assistant(link.Client, history, link.Timeouts, time: _time, reasoning: link.Reasoning);
+    }
+
+    /// <summary>
+    /// A <c>/botchat</c> bot's own LLM (2026-09-25, the user's ask: <c>Botchat LLM mode</c> <c>multi</c>) from its saved
+    /// <paramref name="profile"/>: its URL, model, API key, timeouts and reasoning effort. A blank URL borrows the server
+    /// this session is connected to (the user's call: no scan per bot) — with the profile's model, or this session's when
+    /// that is blank too, and this session's API key while the profile keeps the default one — and asks it nothing. A URL
+    /// of its own is asked for its model list once; one that does not answer (or is no URL) is a problem, and the bot sits
+    /// the chat out (the user's call). Its model is the profile's, else the first its server lists. The caller disposes the link.
+    /// </summary>
+    public async Task<(BotLink? Link, string? Problem)> LinkAsync(AppSettingsData profile, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(profile);
+        string? model = string.IsNullOrWhiteSpace(profile.LlmModel) ? null : profile.LlmModel.Trim();
+        LlmEndpoint endpoint;
+        if (string.IsNullOrWhiteSpace(profile.LlmUrl))
+        {
+            if (Endpoint is not { } starter)
+            {
+                return (null, BotLinkNoServer);
+            }
+
+            string key = string.IsNullOrWhiteSpace(profile.LlmApiKey) || profile.LlmApiKey == LlmEndpoint.DefaultApiKey ? _apiKey : profile.LlmApiKey;
+            endpoint = starter with { ModelId = model ?? starter.ModelId, ApiKey = key, PublishedContextLength = null };
+        }
+        else
+        {
+            Uri v1;
+            try
+            {
+                v1 = LlmEndpoint.NormalizeBaseUrl(profile.LlmUrl);
+            }
+            catch (Exception ex) when (ex is ArgumentException or UriFormatException)
+            {
+                return (null, ex.Message);
+            }
+
+            var result = await _probe.ProbeAsync(v1, profile.LlmApiKey, cancellationToken).ConfigureAwait(false);
+            if (!result.Exists)
+            {
+                return (null, $"{v1} did not answer ({result.Detail})");
+            }
+
+            endpoint = LlmEndpointProbe.Endpoint(LlmServer.From(v1, result), profile.LlmApiKey, model, configured: true);
+        }
+
+        var timeouts = LlmTimeouts.Resolve(profile);
+        try
+        {
+            return (new BotLink(_factory(endpoint, timeouts), endpoint, timeouts, ReasoningLevel.Resolve(profile)), null);
+        }
+        catch (Exception ex)
+        {
+            return (null, "could not create the chat client: " + Llm.Assistant.Explain(ex));
+        }
+    }
+
+    /// <summary><see cref="LinkAsync"/>'s problem for a borrowed server while this session has none. Pinned.</summary>
+    public const string BotLinkNoServer = "no LLM URL of its own and no server connected to borrow";
 
     /// <summary>What every later call needs from the settings a connect was made with.</summary>
     private void Remember(AppSettingsData effective)
@@ -346,4 +412,21 @@ internal sealed class LlmSession : IDisposable
         _titlingCts?.Dispose();
         _titlingCts = null;
     }
+}
+
+/// <summary>
+/// A <c>/botchat</c> bot's own LLM (<see cref="LlmSession.LinkAsync"/>, 2026-09-25): the client over its endpoint, and the
+/// timeouts and reasoning effort of its profile. Owned by the chat that made it, disposed when that chat ends.
+/// </summary>
+internal sealed class BotLink(IChatClient client, LlmEndpoint endpoint, LlmTimeouts timeouts, ReasoningEffort reasoning) : IDisposable
+{
+    public IChatClient Client { get; } = client;
+
+    public LlmEndpoint Endpoint { get; } = endpoint;
+
+    public LlmTimeouts Timeouts { get; } = timeouts;
+
+    public ReasoningEffort Reasoning { get; } = reasoning;
+
+    public void Dispose() => Client.Dispose();
 }

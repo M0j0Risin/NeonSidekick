@@ -234,9 +234,10 @@ public static class ComfyText
     /// A generation's result, the first line the transcript's one tool line: <c>generated 2 pictures with
     /// pony-txt2img (seed 1234, 1024×1024): comfy_images\pony-txt2img-1234.png, comfy_images\pony-txt2img-1235.png — the
     /// pictures are in the next message</c>; <paramref name="attached"/> false (the <c>/imagine</c> note, or a picture
-    /// the codecs refused) drops the tail. The prompt follows on its own line, so what was sent is on record. Pinned.
+    /// the codecs refused) drops the tail. The prompt follows on its own line, so what was sent is on record, and after it
+    /// (2026-09-25, the user's ask) the line of <paramref name="parameters"/> (<see cref="Parameters"/>). Pinned.
     /// </summary>
-    public static string Generated(string workflow, long seed, int width, int height, IReadOnlyList<string> paths, string prompt, string negative, bool attached, string? input = null)
+    public static string Generated(string workflow, long seed, int width, int height, IReadOnlyList<string> paths, string prompt, string negative, bool attached, string? input = null, ComfyParameters? parameters = null)
     {
         string count = paths.Count == 1 ? "1 picture" : paths.Count.ToString(CultureInfo.InvariantCulture) + " pictures";
         string head = $"generated {count} with {workflow} (seed {seed.ToString(CultureInfo.InvariantCulture)}, {width.ToString(CultureInfo.InvariantCulture)}×{height.ToString(CultureInfo.InvariantCulture)}): " + string.Join(", ", paths);
@@ -247,12 +248,36 @@ public static class ComfyText
 
         // A pasted input's line (PastedInput, later still on 2026-09-24) sits between the head and the prompt.
         // A workflow with no {{prompt}} (a face swap, later still on 2026-09-24) has no prompt line.
-        return head + (input is null ? "" : "\n" + input) + (prompt.Length > 0 ? "\nprompt: " + prompt : "") + (negative.Length > 0 ? "\nnegative: " + negative : "");
+        return head + (input is null ? "" : "\n" + input) + (prompt.Length > 0 ? "\nprompt: " + prompt : "") + (negative.Length > 0 ? "\nnegative: " + negative : "")
+            + (parameters is null || Parameters(parameters) is not { Length: > 0 } line ? "" : "\n" + line);
+    }
+
+    /// <summary>
+    /// The parameters' line of a generation's result (2026-09-25, the user's ask: the rest of the params beside the prompts):
+    /// <c>params: 1024×1024, steps 20, cfg 7, denoise 1, seed 1234, sampler euler, scheduler normal</c> — each one the
+    /// graph has, in that order; empty when it has none. Pinned.
+    /// </summary>
+    public static string Parameters(ComfyParameters parameters)
+    {
+        ArgumentNullException.ThrowIfNull(parameters);
+        var parts = new List<string>();
+        if (parameters.Width is { } width && parameters.Height is { } height)
+        {
+            parts.Add(width.ToString(CultureInfo.InvariantCulture) + "×" + height.ToString(CultureInfo.InvariantCulture));
+        }
+
+        if (parameters.Steps is { } steps) parts.Add("steps " + steps.ToString(CultureInfo.InvariantCulture));
+        if (parameters.Cfg is { } cfg) parts.Add("cfg " + cfg.ToString("0.###", CultureInfo.InvariantCulture));
+        if (parameters.Denoise is { } denoise) parts.Add("denoise " + denoise.ToString("0.###", CultureInfo.InvariantCulture));
+        if (parameters.Seed is { } seed) parts.Add("seed " + seed.ToString(CultureInfo.InvariantCulture));
+        if (parameters.Sampler is { } sampler) parts.Add("sampler " + sampler);
+        if (parameters.Scheduler is { } scheduler) parts.Add("scheduler " + scheduler);
+        return parts.Count == 0 ? "" : "params: " + string.Join(", ", parts);
     }
 
     /// <summary>
     /// A generation's result (<see cref="Generated"/>) split for the transcript (later still on 2026-09-24): the first line — the
-    /// picture's line — and the rest, one entry per non-blank line (<c>prompt: …</c>, <c>negative: …</c>, a partial failure's
+    /// picture's line — and the rest, one entry per non-blank line (<c>prompt: …</c>, <c>negative: …</c>, <c>params: …</c>, a partial failure's
     /// error), shown in full under it with <c>ComfyUI show prompts</c> on. Pure.
     /// </summary>
     public static (string Head, IReadOnlyList<string> Details) SplitGenerated(string result)

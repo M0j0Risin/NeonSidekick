@@ -28,6 +28,7 @@ public class AppSettingsTests : IDisposable
         HideExitAutocomplete = false,
         ImageThumbnailSize = "large",
         Theme = "noir",
+        BotChatLlmMode = "multi",
         BotChatImages = true,
         BotChatImageMode = "autonomous",
         BotChatImageWorkflow = "flux",

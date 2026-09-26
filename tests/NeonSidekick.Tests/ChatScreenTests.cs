@@ -51,6 +51,9 @@ public partial class ChatScreenTests : IDisposable
     private readonly AppSettings _settings;
     private readonly StubHttpMessageHandler _http = new();
     private readonly FakeChatClient _chat = new();
+
+    /// <summary>Every endpoint the session's client factory was handed, in order (<c>Botchat LLM mode</c> <c>multi</c>, 2026-09-25).</summary>
+    private readonly List<LlmEndpoint> _endpoints = new();
     private readonly FakeSynthesizer _synth = new();
     private readonly FakeAudioPlayback _playback = new();
     private readonly FakeAudioCapture _capture = new();
@@ -131,7 +134,7 @@ public partial class ChatScreenTests : IDisposable
         // tests put the URL back to blank themselves.
         _settings.Update(d => d.LlmUrl = "http://127.0.0.1:1234/v1");   // the form /server saves
         _http.Map("http://127.0.0.1:1234/v1/models", HttpStatusCode.OK, StubHttpMessageHandler.ModelsJson("llama"));
-        _session = new LlmSession(new LlmEndpointProbe(new HttpClient(_http), TimeSpan.FromMilliseconds(500)), new ContextLengthProbe(new HttpClient(_http), TimeSpan.FromMilliseconds(500)), (_, _) => _chat, _time);
+        _session = new LlmSession(new LlmEndpointProbe(new HttpClient(_http), TimeSpan.FromMilliseconds(500)), new ContextLengthProbe(new HttpClient(_http), TimeSpan.FromMilliseconds(500)), (endpoint, _) => { _endpoints.Add(endpoint); return _chat; }, _time);
         _speech = new SpeechSession(_ => _synth, _ => _playback, new ModelStore(Path.Combine(_dir, "models"), new HttpClient(_http)));
         // The web tools over the same stub: every host public, so the LAN rule never trips in a script.
         _web = new WebAccess(new HttpClient(_http), _browser, _time, (_, _) => Task.FromResult(new[] { IPAddress.Parse("93.184.216.34") }), _openedUrls.Add);

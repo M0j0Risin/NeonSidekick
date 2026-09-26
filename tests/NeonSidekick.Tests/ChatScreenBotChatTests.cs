@@ -1,7 +1,9 @@
+using System.Net;
 using Microsoft.Extensions.AI;
 using NeonSidekick.App;
 using NeonSidekick.Llm;
 using NeonSidekick.Settings;
+using NeonSidekick.Tests.Fakes;
 using NeonSidekick.UI;
 
 namespace NeonSidekick.Tests;
@@ -378,5 +380,92 @@ public partial class ChatScreenTests
 
         Assert.Contains(BotChat.NothingToResumeError, output);
         Assert.Empty(_chat.Requests);
+    }
+
+    // ── Botchat LLM mode (2026-09-25) ───────────────────────────────────────
+
+    /// <summary>Multi: ada talks through her own server, model and reasoning, the starter through its own; the chat says where each bot talks.</summary>
+    [Fact]
+    public async Task BotChat_Multi_EachBotOnItsOwnProfilesLlm()
+    {
+        BotChatFixture();
+        _settings.Update(d => d.BotChatLlmMode = "multi");
+        Profiles.WriteProfileFile(Profiles.ProfileFile(_dir, "ada"), new AppSettingsData { LlmUrl = "http://ada-only-server:9999", LlmModel = "ada-only-model", LlmReasoning = "high", TtsVoice = "bm_george" });
+        _http.Map("http://ada-only-server:9999/v1/models", HttpStatusCode.OK, StubHttpMessageHandler.ModelsJson("ada-only-model", "other"));
+        _chat.EnqueueText("Hello from Neon.");
+        _chat.EnqueueText("Hello from Ada.");
+        _chat.EnqueueText("never");
+        EscDuringRequest(3);
+        PushLine("/botchat");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        var ada = Assert.Single(_endpoints, e => e.BaseUrl.Host == "ada-only-server");
+        Assert.Equal("ada-only-model", ada.ModelId);
+        Assert.Contains(_http.Requests, r => r.Uri.AbsoluteUri == "http://ada-only-server:9999/v1/models");
+        Assert.Contains("  · " + BotChat.LinkNotice("ada", ada.BaseUrl, "ada-only-model", "high") + "\n", output);
+        // Ada's request asks for her reasoning effort; the starter's for its own (none).
+        Assert.Contains(AdaMarker, SystemText(_chat.Requests[1]));
+        Assert.Equal(ReasoningEffort.High, _chat.Options[1]?.Reasoning?.Effort);
+        Assert.NotEqual(ReasoningEffort.High, _chat.Options[0]?.Reasoning?.Effort);
+    }
+
+    /// <summary>Multi, a blank URL (the user's call): the bot borrows the starter's server with its own model, and nothing is scanned.</summary>
+    [Fact]
+    public async Task BotChat_Multi_ABlankUrl_BorrowsTheStartersServer_WithItsOwnModel()
+    {
+        BotChatFixture();
+        _settings.Update(d => d.BotChatLlmMode = "multi");
+        Profiles.WriteProfileFile(Profiles.ProfileFile(_dir, "ada"), new AppSettingsData { LlmUrl = "", LlmModel = "ada-model" });
+        _chat.EnqueueText("One.");
+        _chat.EnqueueText("Two.");
+        _chat.EnqueueText("never");
+        EscDuringRequest(3);
+        PushLine("/botchat");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        var borrowed = _endpoints[^1];
+        Assert.Equal(_endpoints[0].BaseUrl, borrowed.BaseUrl);
+        Assert.Equal("ada-model", borrowed.ModelId);
+        Assert.Contains(BotChat.LinkNotice("ada", borrowed.BaseUrl, "ada-model", "none"), output);
+        // Ada spoke through it.
+        Assert.Contains(_chat.Requests, r => SystemText(r).Contains(AdaMarker, StringComparison.Ordinal));
+    }
+
+    /// <summary>Multi, a server that does not answer (the user's call): that bot sits the chat out — here leaving too few to chat.</summary>
+    [Fact]
+    public async Task BotChat_Multi_AnUnreachableServer_SitsItsBotOut()
+    {
+        BotChatFixture();   // ada's server is mapped nowhere: it refuses
+        _settings.Update(d => d.BotChatLlmMode = "multi");
+        PushLine("/botchat");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains("(botchat: ada sits this one out: ", output);
+        Assert.Contains(BotChat.TooFewError, output);
+        Assert.Empty(_chat.Requests);
+    }
+
+    /// <summary>Single (the default): ada's own LLM settings are never read, as before the setting.</summary>
+    [Fact]
+    public async Task BotChat_Single_NeverReachesABotsOwnServer()
+    {
+        BotChatFixture();
+        _chat.EnqueueText("One.");
+        _chat.EnqueueText("Two.");
+        _chat.EnqueueText("never");
+        EscDuringRequest(3);
+        PushLine("/botchat");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.DoesNotContain(_endpoints, e => e.BaseUrl.Host == "ada-only-server");
+        Assert.DoesNotContain("model=ada-only-model", output);
     }
 }

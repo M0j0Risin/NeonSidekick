@@ -400,6 +400,9 @@ public enum SettingsField
 
     /// <summary>A toggle: whether the next bot answers while the app's <c>/botchat</c> picture renders (<see cref="Settings.AppSettingsData.BotChatImageAsync"/>). The Botchat tab's last row (2026-09-25); no reconnect.</summary>
     BotChatImageAsync,
+
+    /// <summary>A picker: whose LLM the <c>/botchat</c> bots talk through — <c>single</c> / <c>multi</c> (<see cref="Settings.AppSettingsData.BotChatLlmMode"/>). The Botchat tab's first row (later on 2026-09-25); no reconnect (read at a chat's start).</summary>
+    BotChatLlmMode,
 }
 
 /// <summary>The tabs of <c>/settings</c> on the pane, in strip order (Sessions right after General — the user's order, 2026-09-18; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
@@ -635,7 +638,7 @@ internal sealed partial class SettingsMenu
         [SettingsField.LlmScanMode, SettingsField.LlmUrl, SettingsField.LlmModel, SettingsField.LlmApiKey, SettingsField.LlmReasoning, SettingsField.LlmRequestTimeoutSeconds, SettingsField.LlmTurnTimeoutSeconds, SettingsField.LlmContextLength, SettingsField.LlmCompactType, SettingsField.LlmCompactKeepRecent, SettingsField.LlmCompactShowSummary, SettingsField.LlmAutoCompactPercent, SettingsField.LlmOfferTools, SettingsField.LlmToolCompactType, SettingsField.LlmMaxToolIterations, SettingsField.LlmUseFunVerbs],
         [SettingsField.TtsOutput, SettingsField.TtsSource, SettingsField.TtsHttpUrl, SettingsField.TtsVoicePreview, SettingsField.TtsVoice, SettingsField.TtsVoice2, SettingsField.TtsVoiceMix, SettingsField.TtsSpeed],
         Fields.Where(IsVoiceField).ToArray(),
-        [SettingsField.BotChatImages, SettingsField.BotChatImageMode, SettingsField.BotChatImageWorkflow, SettingsField.BotChatImageAsync],
+        [SettingsField.BotChatLlmMode, SettingsField.BotChatImages, SettingsField.BotChatImageMode, SettingsField.BotChatImageWorkflow, SettingsField.BotChatImageAsync],
     ];
 
     /// <summary>
@@ -1003,6 +1006,7 @@ internal sealed partial class SettingsMenu
         SettingsField.ComfyShowPrompts => "ComfyUI show prompts",
         SettingsField.ComfyCaretMention => "ComfyUI ^-mention enabled",
         SettingsField.ComfyPictureStrip => "ComfyUI picture strip",
+        SettingsField.BotChatLlmMode => "Botchat LLM mode",
         SettingsField.BotChatImages => "Botchat images enabled",
         SettingsField.BotChatImageMode => "Botchat image mode",
         SettingsField.BotChatImageWorkflow => "Botchat image workflow",
@@ -1162,6 +1166,7 @@ internal sealed partial class SettingsMenu
             SettingsField.ComfyShowPrompts => OnOff(data.ComfyShowPrompts),
             SettingsField.ComfyCaretMention => OnOff(data.ComfyCaretMention),
             SettingsField.ComfyPictureStrip => OnOff(data.ComfyPictureStrip),
+            SettingsField.BotChatLlmMode => data.BotChatLlmMode,
             SettingsField.BotChatImages => OnOff(data.BotChatImages),
             SettingsField.BotChatImageMode => data.BotChatImageMode,
             SettingsField.BotChatImageWorkflow => string.IsNullOrWhiteSpace(data.BotChatImageWorkflow) ? FirstBotChatWorkflowLabel : data.BotChatImageWorkflow,
@@ -1460,6 +1465,10 @@ internal sealed partial class SettingsMenu
     /// <summary>One row of the queue-cancel-mode picker: the mode and its hint (padded to six: <c>drain</c> and <c>empty</c> are five). Pinned.</summary>
     public static string QueueCancelModeLabel(string name) =>
         Markup.Escape(name.PadRight(6)) + Theme.DimMarkup(QueueCancelMode.Describe(name));
+
+    /// <summary>One row of the botchat-LLM-mode picker: the mode and its hint (padded to seven: <c>single</c> is six). Pinned.</summary>
+    public static string BotChatLlmModeLabel(string name) =>
+        Markup.Escape(name.PadRight(7)) + Theme.DimMarkup(App.BotChatLlmMode.Describe(name));
 
     /// <summary>One row of the botchat-image-mode picker: the mode and its hint (padded to eleven: <c>autonomous</c> is ten). Pinned.</summary>
     public static string BotChatImageModeLabel(string name) =>
@@ -2199,6 +2208,11 @@ internal sealed partial class SettingsMenu
         if (field == SettingsField.QueueCancelMode)
         {
             return await PickQueueCancelModeAsync(saved, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (field == SettingsField.BotChatLlmMode)
+        {
+            return await PickBotChatLlmModeAsync(saved, cancellationToken).ConfigureAwait(false);
         }
 
         if (field == SettingsField.BotChatImageMode)
@@ -3298,7 +3312,7 @@ internal sealed partial class SettingsMenu
         SettingsField.SqlTools => on ? "the model reads the SQL Server connections of sql.json" : "no SQL tools",
         SettingsField.ComfyTools => on ? "the model makes pictures with the ComfyUI workflows" : "no image tools",
         SettingsField.ComfyReinforceNegatives => on ? "the model adds a few opposite tags to a workflow's negative" : "the workflow's negative as it is",
-        SettingsField.ComfyShowPrompts => on ? "the prompt and negative sent to ComfyUI under each picture's line" : "just the picture's line",
+        SettingsField.ComfyShowPrompts => on ? "the prompts and params sent to ComfyUI under each picture's line" : "just the picture's line",
         SettingsField.ComfyCaretMention => on ? "^ and part of a name lists the offered workflows on the line" : "^ is ordinary text",
         SettingsField.ComfyPictureStrip => on ? "the session's pictures in a strip above the line" : "no strip",
         SettingsField.BotChatImages => on ? "/botchat draws pictures while the ComfyUI tools are offered" : "/botchat is talk alone",
@@ -3646,6 +3660,22 @@ internal sealed partial class SettingsMenu
 
         string name = QueueCancelMode.Names[index];
         Apply(SettingsField.QueueCancelMode, d => d.QueueCancelMode = name);
+        return true;
+    }
+
+    /// <summary>The botchat-LLM-mode picker under the settings list (later on 2026-09-25): one <see cref="BotChatLlmModeLabel"/> row per <see cref="App.BotChatLlmMode.Names"/> entry, the saved one under the cursor.</summary>
+    private async Task<bool> PickBotChatLlmModeAsync(AppSettingsData saved, CancellationToken cancellationToken)
+    {
+        var names = App.BotChatLlmMode.Names;
+        var page = new MenuPage(Crumb(FieldName(SettingsField.BotChatLlmMode)), names.Select(BotChatLlmModeLabel).ToList(), PickKeys);
+        int? picked = await PickAsync(page, Math.Max(0, Array.IndexOf(names, saved.BotChatLlmMode)), cancellationToken).ConfigureAwait(false);
+        if (picked is not { } index)
+        {
+            return Unchanged();
+        }
+
+        string name = names[index];
+        Apply(SettingsField.BotChatLlmMode, d => d.BotChatLlmMode = name);
         return true;
     }
 

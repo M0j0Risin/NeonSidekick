@@ -13,6 +13,12 @@ namespace NeonSidekick.Comfy;
 public sealed record ComfyValues(string Prompt, string Negative, long Seed, int? Width = null, int? Height = null, int? Steps = null, double? Cfg = null, double? Denoise = null, IReadOnlyList<string>? Images = null);
 
 /// <summary>
+/// What a filled graph sends ComfyUI beside the prompts (2026-09-25, the user's ask: the rest of the params under
+/// <c>ComfyUI show prompts</c>), read by <see cref="ComfyWorkflow.ReadParameters"/>; null where the graph has none.
+/// </summary>
+public sealed record ComfyParameters(int? Width = null, int? Height = null, int? Steps = null, double? Cfg = null, double? Denoise = null, long? Seed = null, string? Sampler = null, string? Scheduler = null);
+
+/// <summary>
 /// One ComfyUI workflow the image tools can run (2026-09-24): a graph the user exported from ComfyUI with
 /// <b>Save (API)</b> — the API format, a JSON object of numbered nodes each with a <c>class_type</c> and
 /// <c>inputs</c> — dropped into a <c>comfy</c> folder (<see cref="ComfyWorkflowCatalog"/>), with placeholders where
@@ -290,6 +296,51 @@ public sealed record ComfyWorkflow(
 
         Walk(graph, numbers, texts);
         return graph;
+    }
+
+    /// <summary>
+    /// The parameters a filled graph (<see cref="Fill"/>) actually carries (2026-09-25, the user's ask): for each, the first
+    /// node input of that name holding a value rather than a link — <c>width</c>, <c>height</c>, <c>steps</c>, <c>cfg</c>,
+    /// <c>denoise</c>, <c>seed</c> or <c>noise_seed</c>, <c>sampler_name</c>, <c>scheduler</c> — so a template that hardcodes
+    /// its steps or its sampler is reported as it runs, whatever the placeholders say. <c>KSampler</c>, <c>KSamplerAdvanced</c>
+    /// and <c>KSamplerSelect</c> + <c>BasicScheduler</c> are all covered by the names alone. Pure.
+    /// </summary>
+    public static ComfyParameters ReadParameters(JsonObject graph)
+    {
+        ArgumentNullException.ThrowIfNull(graph);
+        var found = new Dictionary<string, JsonValue>(StringComparer.Ordinal);
+        foreach (var (_, node) in graph)
+        {
+            if (node is not JsonObject { } obj || obj["inputs"] is not JsonObject inputs)
+            {
+                continue;
+            }
+
+            foreach (var (name, input) in inputs)
+            {
+                // A link is an array ([node, slot]): what it carries is another node's, read there.
+                if (input is JsonValue value && !found.ContainsKey(name))
+                {
+                    found[name] = value;
+                }
+            }
+        }
+
+        return new ComfyParameters(
+            (int?)Number(WidthKey), (int?)Number(HeightKey), (int?)Number(StepsKey), Number(CfgKey), Number(DenoiseKey),
+            Whole(SeedKey) ?? Whole("noise_seed"), Text("sampler_name"), Text("scheduler"));
+
+        // A seed reaches 2^64 in ComfyUI: read whole, never through a double.
+        long? Whole(string name) =>
+            found.TryGetValue(name, out var value) && value.GetValueKind() == JsonValueKind.Number
+            && long.TryParse(value.ToJsonString(), NumberStyles.Integer, CultureInfo.InvariantCulture, out long number) ? number : null;
+
+        double? Number(string name) =>
+            found.TryGetValue(name, out var value) && value.GetValueKind() == JsonValueKind.Number
+            && double.TryParse(value.ToJsonString(), NumberStyles.Float, CultureInfo.InvariantCulture, out double number) ? number : null;
+
+        string? Text(string name) =>
+            found.TryGetValue(name, out var value) && value.GetValueKind() == JsonValueKind.String && value.GetValue<string>() is { Length: > 0 } text ? text : null;
     }
 
     private static void Walk(JsonNode node, Dictionary<string, JsonNode> numbers, Dictionary<string, string> texts)

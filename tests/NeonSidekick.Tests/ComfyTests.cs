@@ -264,6 +264,10 @@ public sealed class ComfyTests : IDisposable
 
         Assert.StartsWith("generated 1 picture with pony-txt2img (seed 1234, 1024×1024): comfy_images\\pony-txt2img-1234.png — the picture is in the next message", result.Text);
         Assert.Contains("\nnegative: " + ComfyFamilies.PonyNegative, result.Text);   // not verbatim: the family's negative
+        // The params as the graph carried them (2026-09-25): the family's size, steps and cfg, the graph's own denoise; no sampler input, no sampler.
+        var pony = ComfyFamilies.Defaults(ComfyFamily.Pony);
+        Assert.EndsWith("\n" + ComfyText.Parameters(new ComfyParameters(pony.Width, pony.Height, pony.Steps, pony.Cfg, 1, 1234)), result.Text);
+        Assert.DoesNotContain("sampler", result.Text);
         Assert.Equal("comfy_images\\pony-txt2img-1234.png", Assert.Single(result.Images).Path);
         Assert.True(File.Exists(Path.Combine(_root, "comfy_images", "pony-txt2img-1234.png")));
         Assert.Equal("score_9, score_8_up, 1girl", QueuedGraph().GetProperty("6").GetProperty("inputs").GetProperty("text").GetString());
@@ -619,6 +623,10 @@ public sealed class ComfyTests : IDisposable
         Assert.Equal(["prompt: a cat", "negative: blurry"], details);
 
         Assert.Equal(["prompt: a cat"], ComfyText.SplitGenerated(ComfyText.Generated("flux", 1, 1024, 1024, ["a.png"], "a cat", "", attached: false)).Details);
+        // The params line (2026-09-25) last, after the negative.
+        Assert.Equal(["prompt: a cat", "negative: blurry", "params: 832×1216, steps 30, cfg 5.5, denoise 0.6, seed 5, sampler euler, scheduler karras"],
+            ComfyText.SplitGenerated(ComfyText.Generated("pony", 5, 832, 1216, ["a.png"], "a cat", "blurry", attached: false, parameters: new ComfyParameters(832, 1216, 30, 5.5, 0.6, 5, "euler", "karras"))).Details);
+        Assert.Equal(["prompt: a cat"], ComfyText.SplitGenerated(ComfyText.Generated("flux", 1, 1024, 1024, ["a.png"], "a cat", "", attached: false, parameters: new ComfyParameters())).Details);
         Assert.Equal(["prompt: x", "Error: ComfyUI stopped"], ComfyText.SplitGenerated("generated …\r\nprompt: x\n\nError: ComfyUI stopped").Details);
         Assert.Empty(ComfyText.SplitGenerated("Error: no server").Details);
         Assert.Equal("on", SettingsMenu.FieldValue(SettingsField.ComfyShowPrompts, new AppSettingsData(), ""));   // on by default (later still on 2026-09-24)
@@ -723,6 +731,23 @@ public sealed class ComfyTests : IDisposable
         Assert.Equal("dpmpp_2m_sde", ComfyGraphs.DefaultSampler(ComfyFamily.Sdxl));
         Assert.Equal("karras", ComfyGraphs.DefaultScheduler(ComfyFamily.Sdxl));
         Assert.Equal(2, ComfyGraphs.DefaultClipSkip(ComfyFamily.Pony));
+    }
+
+    /// <summary>The params line (2026-09-25, the user's ask) reads what the filled graph carries: placeholders filled, values hardcoded, links skipped.</summary>
+    [Fact]
+    public void ReadParameters_ReadsTheFilledGraph()
+    {
+        var built = Parse("my-flow", ComfyGraphs.Build("my-flow", "ponyV6.safetensors", "euler_ancestral", "normal", 2, fromImage: false));
+        var filled = ComfyWorkflow.ReadParameters(built.Fill(new ComfyValues("a", "b", 42, 832, 1216, 30, 5.5)));
+        Assert.Equal((832, 1216, 30, 5.5, 42L, "euler_ancestral", "normal"), (filled.Width!.Value, filled.Height!.Value, filled.Steps!.Value, filled.Cfg!.Value, filled.Seed!.Value, filled.Sampler, filled.Scheduler));
+
+        // An export's hardcoded values, noise_seed for the seed; the model, the prompts and the latent are links, never read.
+        var exported = ComfyWorkflow.ReadParameters((System.Text.Json.Nodes.JsonObject)System.Text.Json.Nodes.JsonNode.Parse(Export)!);
+        Assert.Equal((20, 6.5, 5L, "euler", "normal"), (exported.Steps!.Value, exported.Cfg!.Value, exported.Seed!.Value, exported.Sampler, exported.Scheduler));
+
+        Assert.Equal(new ComfyParameters(), ComfyWorkflow.ReadParameters(new System.Text.Json.Nodes.JsonObject()));
+        Assert.Equal("", ComfyText.Parameters(new ComfyParameters()));
+        Assert.Equal("params: 1024×1024, steps 8, cfg 1, seed 18446744073709551", ComfyText.Parameters(new ComfyParameters(1024, 1024, 8, 1.0, Seed: 18446744073709551)));
     }
 
     [Fact]

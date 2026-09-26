@@ -534,6 +534,13 @@ public static partial class BotChat
     /// <summary>A profile whose <c>profile.json</c> could not be read sits the chat out.</summary>
     public static string SkippedNotice(string name, string reason) => $"(botchat: {name} sits this one out: {reason})";
 
+    /// <summary>The spinner while the bots' own LLMs are reached (<c>Botchat LLM mode</c> <c>multi</c>, 2026-09-25). Pinned.</summary>
+    public const string LinkingSpinner = "Reaching the bots' LLMs…";
+
+    /// <summary>A bot on its own LLM (<c>Botchat LLM mode</c> <c>multi</c>, 2026-09-25): where it talks, once per chat. Pinned.</summary>
+    public static string LinkNotice(string name, Uri server, string model, string reasoning) =>
+        $"(botchat: {name} on {server} model={model} reasoning={reasoning})";
+
     // ── Resuming (2026-09-25) ───────────────────────────────────────────────
 
     /// <summary>
@@ -595,9 +602,10 @@ public sealed record BotChatState(string Starter, IReadOnlyList<string> Cast, st
 /// One bot of the chat: its profile's name, its persona (null = the default) and <c>vocalia.md</c> directive,
 /// its voice (the <see cref="NeonSidekick.Speech.VoiceMix.Spec"/> of its TTS voices) and speed, and which of the palette's
 /// speaker colours its name takes (<see cref="BotChat"/>'s screen picks the colour, so a theme change follows), and
-/// its <see cref="BotGender"/> from its first voice (<see cref="BotChat.GenderOf"/>, 2026-09-25).
+/// its <see cref="BotGender"/> from its first voice (<see cref="BotChat.GenderOf"/>, 2026-09-25), and — for every bot but the
+/// starter — its saved <paramref name="Profile"/>, whose LLM settings <c>Botchat LLM mode</c> <c>multi</c> reads (later on 2026-09-25).
 /// </summary>
-public sealed record BotParticipant(string Name, string? Persona, string? VoiceDirective, string Voice, double Speed, int ColorIndex, BotGender Gender = BotGender.Female);
+public sealed record BotParticipant(string Name, string? Persona, string? VoiceDirective, string Voice, double Speed, int ColorIndex, BotGender Gender = BotGender.Female, NeonSidekick.Settings.AppSettingsData? Profile = null);
 
 /// <summary>A bot's gender, for the pronouns the others use (2026-09-25): from its first voice, female unless the voice says male.</summary>
 public enum BotGender

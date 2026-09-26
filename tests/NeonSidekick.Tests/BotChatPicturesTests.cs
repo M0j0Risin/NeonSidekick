@@ -112,15 +112,29 @@ public class BotChatPicturesTests
         Assert.All(BotChatImageMode.Names, name => Assert.NotEmpty(BotChatImageMode.Describe(name)));
     }
 
+    [Theory]
+    [InlineData("single", BotLlmMode.Single)]
+    [InlineData(" Multi ", BotLlmMode.Multi)]
+    [InlineData("both", BotLlmMode.Single)]   // a hand-edited word: the default
+    public void LlmMode_ResolvesTheSavedWord(string saved, BotLlmMode mode)
+    {
+        Assert.Equal(mode, BotChatLlmMode.Resolve(new AppSettingsData { BotChatLlmMode = saved }));
+        Assert.Equal("single", new AppSettingsData().BotChatLlmMode);
+        Assert.All(BotChatLlmMode.Names, name => Assert.NotEmpty(BotChatLlmMode.Describe(name)));
+    }
+
     [Fact]
-    public void TheBotchatTab_IsLast_ItsFourRowsDefaultingToOff_Automatic_TheFirstWorkflow_AndAsync()
+    public void TheBotchatTab_IsLast_ItsFiveRowsDefaultingToSingle_Off_Automatic_TheFirstWorkflow_AndAsync()
     {
         var data = new AppSettingsData();
 
         Assert.Equal("Botchat", SettingsMenu.TabTitles[(int)SettingsTab.BotChat]);
         Assert.Equal((int)SettingsTab.BotChat, SettingsMenu.TabTitles.Count - 1);
-        Assert.Equal([SettingsField.BotChatImages, SettingsField.BotChatImageMode, SettingsField.BotChatImageWorkflow, SettingsField.BotChatImageAsync], SettingsMenu.TabFields[(int)SettingsTab.BotChat]);
-        Assert.Equal(["Botchat images enabled", "Botchat image mode", "Botchat image workflow", "Botchat image async"], SettingsMenu.TabFields[(int)SettingsTab.BotChat].Select(SettingsMenu.FieldName));
+        Assert.Equal([SettingsField.BotChatLlmMode, SettingsField.BotChatImages, SettingsField.BotChatImageMode, SettingsField.BotChatImageWorkflow, SettingsField.BotChatImageAsync], SettingsMenu.TabFields[(int)SettingsTab.BotChat]);
+        Assert.Equal(["Botchat LLM mode", "Botchat images enabled", "Botchat image mode", "Botchat image workflow", "Botchat image async"], SettingsMenu.TabFields[(int)SettingsTab.BotChat].Select(SettingsMenu.FieldName));
+        Assert.False(SettingsMenu.IsToggle(SettingsField.BotChatLlmMode));
+        Assert.Equal("single", SettingsMenu.FieldValue(SettingsField.BotChatLlmMode, data, "."));
+        Assert.Equal("multi", SettingsMenu.FieldValue(SettingsField.BotChatLlmMode, new AppSettingsData { BotChatLlmMode = "multi" }, "."));
         Assert.True(SettingsMenu.IsToggle(SettingsField.BotChatImages));
         Assert.True(SettingsMenu.IsToggle(SettingsField.BotChatImageAsync));
         Assert.False(SettingsMenu.IsToggle(SettingsField.BotChatImageMode));
