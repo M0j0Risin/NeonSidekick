@@ -68,6 +68,37 @@ public class LanHostsTests
     }
 
     [Fact]
+    public void From_LeavesOutAnAddressADownAdapterHolds_InsideAScannedSubnet()
+    {
+        // 2026-09-26: Ethernet up at .217, Wi-Fi down but still holding .103 in the same /24.
+        var lan = LanHosts.From(
+        [
+            new LanHosts.Adapter(Scanned: true, [(IPAddress.Parse("192.168.1.217"), Slash24)]),
+            new LanHosts.Adapter(Scanned: false, [(IPAddress.Parse("192.168.1.103"), Slash24)]),
+        ]);
+
+        Assert.Equal(["192.168.1.0/24"], lan.Subnets);
+        Assert.Equal(252, lan.Hosts.Count);
+        Assert.DoesNotContain(IPAddress.Parse("192.168.1.103"), lan.Hosts);
+        Assert.DoesNotContain(IPAddress.Parse("192.168.1.217"), lan.Hosts);
+    }
+
+    [Fact]
+    public void From_ScansOnlyScannedAdapters_OutsideLinkLocal_EachSubnetOnce()
+    {
+        var lan = LanHosts.From(
+        [
+            new LanHosts.Adapter(Scanned: false, [(IPAddress.Parse("10.0.0.5"), Slash24)]),
+            new LanHosts.Adapter(Scanned: true, [(IPAddress.Parse("169.254.3.4"), IPAddress.Parse("255.255.0.0")), (IPAddress.Parse("fe80::1"), IPAddress.Any)]),
+            new LanHosts.Adapter(Scanned: true, [(Address, Slash24), (IPAddress.Parse("192.168.1.40"), Slash24)]),
+        ]);
+
+        Assert.Equal(["192.168.1.0/24"], lan.Subnets);
+        Assert.Equal(252, lan.Hosts.Count);   // 254 minus .37 and .40, both this machine's
+        Assert.Equal(lan.Hosts.Count, lan.Hosts.Distinct().Count());
+    }
+
+    [Fact]
     public void Discover_NeverThrows_AndNeverListsThisMachine()
     {
         // The real adapters: whatever they hold, no own address and no loopback / link-local host is in the list.

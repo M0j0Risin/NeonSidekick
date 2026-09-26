@@ -68,70 +68,79 @@ public sealed record LanHosts(IReadOnlyList<IPAddress> Hosts, IReadOnlyList<stri
         return FromUInt32(network) + "/" + prefix.ToString(CultureInfo.InvariantCulture);
     }
 
+    /// <summary>One adapter as <see cref="From"/> reads it: whether its subnets are scanned (up, neither loopback nor a tunnel) and its unicast addresses with their masks.</summary>
+    internal sealed record Adapter(bool Scanned, IReadOnlyList<(IPAddress Address, IPAddress Mask)> Addresses);
+
     /// <summary>
-    /// The network as the adapters see it: each interface that is up and neither loopback nor a
-    /// tunnel, each of its IPv4 addresses outside link-local (169.254/16), <see cref="Expand"/> over
-    /// the adapter's mask; the union distinct, minus every address this machine holds on any
-    /// interface. A failure to read the interfaces is a warning and <see cref="None"/>.
+    /// The network as the adapters see it (<see cref="From"/> over <see cref="NetworkInterface.GetAllNetworkInterfaces"/>).
+    /// A failure to read the interfaces is a warning and <see cref="None"/>.
     /// </summary>
     public static LanHosts Discover()
     {
         try
         {
-            var own = new HashSet<IPAddress>();
-            var subnets = new List<(IPAddress Address, IPAddress Mask)>();
-            foreach (var nic in NetworkInterface.GetAllNetworkInterfaces())
-            {
-                if (nic.OperationalStatus != OperationalStatus.Up
-                    || nic.NetworkInterfaceType is NetworkInterfaceType.Loopback or NetworkInterfaceType.Tunnel)
-                {
-                    continue;
-                }
-
-                foreach (var unicast in nic.GetIPProperties().UnicastAddresses)
-                {
-                    var address = unicast.Address;
-                    if (address.AddressFamily != AddressFamily.InterNetwork || IsLinkLocal(address))
-                    {
-                        continue;
-                    }
-
-                    own.Add(address);
-                    subnets.Add((address, unicast.IPv4Mask));
-                }
-            }
-
-            var hosts = new List<IPAddress>();
-            var seen = new HashSet<IPAddress>();
-            var names = new List<string>();
-            foreach (var (address, mask) in subnets)
-            {
-                string name = Describe(address, mask);
-                if (name.Length == 0 || names.Contains(name))
-                {
-                    continue;
-                }
-
-                names.Add(name);
-                foreach (var host in Expand(address, mask))
-                {
-                    if (!own.Contains(host) && seen.Add(host))
-                    {
-                        hosts.Add(host);
-                    }
-                }
-            }
-
-            DiagnosticLog.Debug(Category, names.Count == 0
+            var adapters = NetworkInterface.GetAllNetworkInterfaces().Select(nic => new Adapter(
+                nic.OperationalStatus == OperationalStatus.Up && nic.NetworkInterfaceType is not (NetworkInterfaceType.Loopback or NetworkInterfaceType.Tunnel),
+                // The mask read for IPv4 alone, as before: an IPv6 address's IPv4Mask is nothing to rely on.
+                nic.GetIPProperties().UnicastAddresses.Select(u => (u.Address, u.Address.AddressFamily == AddressFamily.InterNetwork ? u.IPv4Mask : IPAddress.Any)).ToList())).ToList();
+            var lan = From(adapters);
+            DiagnosticLog.Debug(Category, lan.Subnets.Count == 0
                 ? "No local network to scan: no adapter is up with an IPv4 address."
-                : $"Local network: {string.Join(", ", names)} ({hosts.Count.ToString(CultureInfo.InvariantCulture)} hosts to probe).");
-            return new LanHosts(hosts, names);
+                : $"Local network: {string.Join(", ", lan.Subnets)} ({lan.Hosts.Count.ToString(CultureInfo.InvariantCulture)} hosts to probe).");
+            return lan;
         }
         catch (Exception ex) when (ex is NetworkInformationException or PlatformNotSupportedException)
         {
             DiagnosticLog.Warn(Category, $"Could not read the network adapters: {ex.Message}");
             return None;
         }
+    }
+
+    /// <summary>
+    /// The hosts to probe over <paramref name="adapters"/>: each scanned adapter's IPv4 addresses outside link-local
+    /// (169.254/16), <see cref="Expand"/> over the adapter's mask; the union distinct, minus every address this machine
+    /// holds on <em>any</em> adapter — a down one's too (2026-09-26: a disconnected Wi-Fi still holding 192.168.1.103
+    /// inside the Ethernet's /24 was listed as a host, since only the scanned adapters' addresses were left out). Pure.
+    /// </summary>
+    internal static LanHosts From(IEnumerable<Adapter> adapters)
+    {
+        ArgumentNullException.ThrowIfNull(adapters);
+        var own = new HashSet<IPAddress>();
+        var subnets = new List<(IPAddress Address, IPAddress Mask)>();
+        foreach (var adapter in adapters)
+        {
+            foreach (var (address, mask) in adapter.Addresses)
+            {
+                own.Add(address);
+                if (adapter.Scanned && address.AddressFamily == AddressFamily.InterNetwork && !IsLinkLocal(address))
+                {
+                    subnets.Add((address, mask));
+                }
+            }
+        }
+
+        var hosts = new List<IPAddress>();
+        var seen = new HashSet<IPAddress>();
+        var names = new List<string>();
+        foreach (var (address, mask) in subnets)
+        {
+            string name = Describe(address, mask);
+            if (name.Length == 0 || names.Contains(name))
+            {
+                continue;
+            }
+
+            names.Add(name);
+            foreach (var host in Expand(address, mask))
+            {
+                if (!own.Contains(host) && seen.Add(host))
+                {
+                    hosts.Add(host);
+                }
+            }
+        }
+
+        return new LanHosts(hosts, names);
     }
 
     private static bool IsLinkLocal(IPAddress address)
