@@ -31,7 +31,7 @@ Neon Sidekick brings privacy-first, local LLM inference to your terminal. Powere
 ### AI Connectivity & Context Management
 * **Local AI Auto-Discovery:** Automatically detects and connects to most OpenAI-compatible servers on your local network (LM Studio, vLLM, SGLang, Ollama, Unsloth, etc.), while allowing full manual configuration for custom endpoints.
 * **Smart Context Handling:** Configurable automatic context compaction to optimize token usage and prevent window overflow.
-* **Prompt Transparency:** Visually inspect exactly what is being fed into the system prompt—no black boxes.
+* **Prompt Transparency:** Visually inspect exactly what is being fed into the system prompt and see detailed compaction summaries—no black boxes.
 * **Persistent Memory:** A UI-editable memory system that automatically injects essential, recurring details directly into context.
 * **Message Queue:** Built-in queue for stacking and executing sequential messages.
 
