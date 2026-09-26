@@ -40,11 +40,12 @@ public sealed class EnvironmentOverrides
     public const string CommandPolicyVariable = Prefix + "COMMAND_POLICY";
     public const string ObsidianVaultVariable = Prefix + "OBSIDIAN_VAULT";
     public const string ComfyUrlVariable = Prefix + "COMFY_URL";
+    public const string ProfileVariable = Prefix + "PROFILE";
 
     /// <summary>Every variable this class reads, for documentation.</summary>
     public static readonly string[] AllVariables =
     {
-        HomeVariable, LlmUrlVariable, LlmModelVariable, LlmApiKeyVariable,
+        HomeVariable, ProfileVariable, LlmUrlVariable, LlmModelVariable, LlmApiKeyVariable,
         RequestTimeoutVariable, TurnTimeoutVariable, TtsUrlVariable, TtsVoiceVariable, TtsSpeedVariable,
         WhisperModelVariable, LlmReasoningVariable, TtsVoice2Variable, TtsMixVariable,
         InterruptEchoVariable, InterruptConfirmVariable, LlmContextVariable, SearxngUrlVariable,
@@ -66,6 +67,13 @@ public sealed class EnvironmentOverrides
 
     /// <summary>Settings directory override, or null.</summary>
     public string? Home => Read(HomeVariable);
+
+    /// <summary>
+    /// The profile this launch loads, or null (2026-09-26): like <see cref="Home"/> it picks a file, not a value, so it
+    /// is not in <see cref="ApplyTo"/>; <c>--profile</c> outranks it and <c>Program.cs</c> hands the winner to
+    /// <see cref="AppSettings"/>. Checked there (an unknown name ends the launch), not here.
+    /// </summary>
+    public string? Profile => Read(ProfileVariable);
 
     public string? LlmUrl => Read(LlmUrlVariable);
     public string? LlmModel => Read(LlmModelVariable);

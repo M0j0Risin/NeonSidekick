@@ -692,6 +692,95 @@ public class AppSettingsTests : IDisposable
         Assert.Equal("Profile \"_test\" is temporary (starts with _); loading default.", AppSettings.TemporaryProfileNotice("_test"));
     }
 
+    /// <summary>
+    /// <c>--profile</c> / <c>NEONSIDEKICK_PROFILE</c> (2026-09-26): the named profile loads in its listed spelling,
+    /// the pointer is left as it is, and the next plain launch follows the pointer again.
+    /// </summary>
+    [Fact]
+    public async Task ProfileOverride_LoadsThatProfile_AndLeavesThePointerAlone()
+    {
+        Profiles.Create(_dir, "Work", new AppSettingsData { LlmModel = "work-model" });
+        Profiles.Create(_dir, "home", new AppSettingsData { LlmModel = "home-model" });
+        using (var pointed = new AppSettings(_dir))
+        {
+            await pointed.SwitchProfileAsync("home");
+        }
+
+        string pointer = File.ReadAllText(Path.Combine(_dir, AppSettings.FileName));
+        var notes = new List<string>();
+        Action<NeonSidekick.Diagnostics.DiagnosticEvent> capture = e => { if (e.Category == "Settings") notes.Add(e.Message); };
+        NeonSidekick.Diagnostics.DiagnosticLog.Emitted += capture;
+        try
+        {
+            using var settings = new AppSettings(_dir, "WORK");
+            Assert.Equal("Work", settings.ProfileName);
+            Assert.Equal("work-model", settings.Current.LlmModel);
+
+            // An edit lands in the overriding profile's file; the pointer is untouched.
+            settings.Update(d => d.LlmModel = "work-2");
+            await settings.FlushAsync();
+            Assert.Contains("work-2", File.ReadAllText(Profiles.ProfileFile(_dir, "Work")));
+        }
+        finally
+        {
+            NeonSidekick.Diagnostics.DiagnosticLog.Emitted -= capture;
+        }
+
+        Assert.Equal(pointer, File.ReadAllText(Path.Combine(_dir, AppSettings.FileName)));
+        Assert.Contains(AppSettings.OverrideProfileNotice("Work"), notes);
+        using var relaunched = new AppSettings(_dir);
+        Assert.Equal("home", relaunched.ProfileName);
+    }
+
+    [Fact]
+    public void ProfileOverride_OnAFreshHome_WritesTheDefaultPointer()
+    {
+        Profiles.Create(_dir, "work", new AppSettingsData());
+
+        using var settings = new AppSettings(_dir, "work");
+
+        Assert.Equal("work", settings.ProfileName);
+        Assert.Contains("\"Profile\": \"default\"", File.ReadAllText(settings.PointerPath));
+    }
+
+    /// <summary>A temporary profile named on purpose loads; the redirect is for the pointer, not for asking.</summary>
+    [Fact]
+    public void ProfileOverride_LoadsATemporaryProfile()
+    {
+        Profiles.Create(_dir, "_test", new AppSettingsData { LlmModel = "test-model" });
+
+        using var settings = new AppSettings(_dir, "_test");
+
+        Assert.Equal("_test", settings.ProfileName);
+        Assert.Equal("test-model", settings.Current.LlmModel);
+    }
+
+    [Theory]
+    [InlineData("ghost")]
+    [InlineData("..")]
+    public void ProfileOverride_Unknown_Throws_NamingTheProfilesThere(string name)
+    {
+        Profiles.Create(_dir, "work", new AppSettingsData());
+
+        var ex = Assert.Throws<ArgumentException>(() => new AppSettings(_dir, name));
+
+        Assert.StartsWith(AppSettings.UnknownProfileMessage(name, Profiles.List(_dir)), ex.Message);
+        Assert.Contains("default, work", ex.Message);
+        Assert.False(File.Exists(Path.Combine(_dir, AppSettings.FileName)));   // nothing written for a bad name
+    }
+
+    [Fact]
+    public async Task ProfileOverride_ThenASwitch_RewritesThePointerAsAlways()
+    {
+        Profiles.Create(_dir, "work", new AppSettingsData());
+        Profiles.Create(_dir, "home", new AppSettingsData());
+        using var settings = new AppSettings(_dir, "work");
+
+        await settings.SwitchProfileAsync("home");
+
+        Assert.Contains("\"Profile\": \"home\"", File.ReadAllText(settings.PointerPath));
+    }
+
     [Fact]
     public async Task SwitchProfile_ToADirectoryWithoutAFile_LoadsDefaults()
     {

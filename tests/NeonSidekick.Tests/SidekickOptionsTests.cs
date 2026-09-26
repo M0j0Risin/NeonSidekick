@@ -147,6 +147,40 @@ public class SidekickOptionsTests
         Assert.Equal("--cwd needs a value", o.Error);
     }
 
+    [Theory]
+    [InlineData("--profile", "work")]
+    [InlineData("--PROFILE=work", null)]
+    public void Parse_Profile_TakesAValue_AndIsAnActiveFlag(string first, string? second)
+    {
+        var args = second is null ? new[] { "--headless", first } : new[] { "--headless", first, second };
+        var o = SidekickOptions.Parse(args);
+        Assert.Null(o.Error);
+        Assert.True(o.Headless);
+        Assert.Equal("work", o.Profile);
+        Assert.Equal(new[] { SidekickOptions.ProfileFlag }, o.ActiveFlags());
+        Assert.Equal("--profile work", o.Describe());
+    }
+
+    [Theory]
+    [InlineData("--profile")]
+    [InlineData("--profile=")]
+    [InlineData("--profile --headless")]
+    public void Parse_Profile_WithoutAValue_IsAnError(string line)
+    {
+        var o = SidekickOptions.Parse(line.Split(' '));
+        Assert.Equal("--profile needs a value", o.Error);
+    }
+
+    [Fact]
+    public void ApplyTo_LeavesTheProfileToAppSettings()
+    {
+        var o = SidekickOptions.Parse(new[] { "--profile", "work" });
+        var saved = new AppSettingsData { LlmUrl = "http://saved:1" };
+        Assert.Equal(
+            System.Text.Json.JsonSerializer.Serialize(saved, SettingsJsonContext.Default.AppSettingsData),
+            System.Text.Json.JsonSerializer.Serialize(o.ApplyTo(saved), SettingsJsonContext.Default.AppSettingsData));
+    }
+
     [Fact]
     public void ApplyTo_MakesTheCwdFull_AgainstTheLaunchDirectory()
     {
@@ -167,6 +201,8 @@ public class SidekickOptionsTests
         Assert.Contains("--model <id>", SidekickOptions.Usage);
         Assert.Contains("--cwd <path>   working directory for this launch (outranks the saved setting)", SidekickOptions.Usage);
         Assert.Contains("[--cwd <path>]", SidekickOptions.Usage);
+        Assert.Contains("[--profile <name>]", SidekickOptions.Usage);
+        Assert.Contains("--profile <name>  profile for this launch (outranks NEONSIDEKICK_PROFILE and settings.json, which it leaves alone)", SidekickOptions.Usage);
         Assert.Contains("--log <path>   append every diagnostic line (Trace and up) to a file", SidekickOptions.Usage);
         Assert.Contains("--version", SidekickOptions.Usage);
         Assert.Contains("--help", SidekickOptions.Usage);

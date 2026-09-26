@@ -95,7 +95,17 @@ using var logSinkScope = logSink;
 // calls Environment.GetEnvironmentVariable directly; tests hand the same class a dictionary.
 var environment = new EnvironmentOverrides(Environment.GetEnvironmentVariable);
 string home = AppSettings.ResolveStorageDirectory(environment.Home);
-using var settings = new AppSettings(home);
+
+// The profile for this launch (2026-09-26): --profile over NEONSIDEKICK_PROFILE over the pointer. A name that is
+// not a profile ends the launch like a bad argument does, before anything is created under the home.
+string? profile = options.Profile ?? environment.Profile;
+if (profile is not null && !Profiles.Exists(home, profile))
+{
+    console.WriteLine(AppSettings.UnknownProfileMessage(profile, Profiles.List(home)));
+    return 2;
+}
+
+using var settings = new AppSettings(home, profile);
 
 // A crash lands in crash.log beside the profiles, stack and all: the terminal window closes with
 // the process, so the runtime's stderr print is never read, and --log carries no stack. The

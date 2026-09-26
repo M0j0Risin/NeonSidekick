@@ -36,7 +36,7 @@ Neon Sidekick brings privacy-first, local LLM inference to your terminal. Powere
 * **Message Queue:** Built-in queue for stacking and executing sequential messages.
 
 ### Profiles, Sessions & Skills
-* **Multi-Profile Support:** Switch between distinct configurations, each featuring its own working directory, independent settings and isolated session logging. A profile named with a leading `_` (`_test`) is temporary: the next launch opens `default` instead.
+* **Multi-Profile Support:** Switch between distinct configurations, each featuring its own working directory, independent settings and isolated session logging. A profile named with a leading `_` (`_test`) is temporary: the next launch opens `default` instead. `--profile <name>` (or `NEONSIDEKICK_PROFILE`) opens a named profile for one launch — temporary ones included — without changing which profile the next launch opens; an unknown name exits with code 2.
 * **Advanced Session Management:** Easily manage, resume, search and reflect on past sessions.
 * **Hierarchical Skills System:** Define and manage agent skills at the global, profile, project, or machine (`.agents\skills`) level.
 * **Self-Learning:** An automatic self-reflection system that dynamically updates and creates new skills based on interactions and tool outcomes.
@@ -723,6 +723,9 @@ When the app is run with `--headless`, interactive prompts are disabled. The `as
 
 To bypass this and allow all commands during a scripted or headless run, set the following environment variable:
 `NEONSIDEKICK_COMMAND_POLICY=yolo`
+
+A scripted run can name its profile rather than follow whichever one was last loaded: `--profile <name>` (or `NEONSIDEKICK_PROFILE=<name>`; the flag wins) loads that profile's settings, memory, sessions and allow list for this launch only, and `settings.json` is left as it is. An unknown name prints the profiles there and exits with code 2.
+`Get-Content job.txt | NeonSidekick.exe --headless --profile work`
 
 | Tool | Arguments | What it does |
 |---|---|---|

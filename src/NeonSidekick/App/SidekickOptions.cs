@@ -23,6 +23,10 @@ namespace NeonSidekick.App;
 /// <param name="LogPath"><c>--log</c>: a file every diagnostic line (Trace and up) is appended to.
 /// The TUI shows only warnings and errors; the Debug and Info lines (what the wake recogniser
 /// heard, why a hit was ignored) are how a voice problem is diagnosed in the field.</param>
+/// <param name="Profile"><c>--profile</c>: the profile this launch loads (2026-09-26, the user's ask: a scripted
+/// headless run must not follow whichever profile was last clicked into). Outranks <c>NEONSIDEKICK_PROFILE</c> and
+/// the pointer in <c>settings.json</c>, and never rewrites that pointer. Not part of <see cref="ApplyTo"/>: it
+/// picks which <c>profile.json</c> is read, not a value in it; <c>Program.cs</c> hands it to <see cref="AppSettings"/>.</param>
 /// <param name="Error">Set when an argument was not understood; the caller prints it with
 /// <see cref="Usage"/> and exits 2.</param>
 public sealed record SidekickOptions(
@@ -36,16 +40,18 @@ public sealed record SidekickOptions(
     string? Model,
     string? WorkingDirectory,
     string? LogPath,
+    string? Profile,
     string? Error)
 {
     public const string UrlFlag = "--url";
     public const string ModelFlag = "--model";
     public const string CwdFlag = "--cwd";
     public const string LogFlag = "--log";
+    public const string ProfileFlag = "--profile";
 
     /// <summary>The help text. Pinned wording; tests assert on it.</summary>
     public const string Usage =
-        "Usage: NeonSidekick [--headless] [--smoke] [--audio-check] [--voice-check] [--url <url>] [--model <id>] [--cwd <path>] [--log <path>] [--version] [--help]\n" +
+        "Usage: NeonSidekick [--headless] [--smoke] [--audio-check] [--voice-check] [--url <url>] [--model <id>] [--cwd <path>] [--profile <name>] [--log <path>] [--version] [--help]\n" +
         "\n" +
         "  (no flags)     interactive TUI\n" +
         "  --headless     stdin/stdout REPL, no TUI\n" +
@@ -55,6 +61,7 @@ public sealed record SidekickOptions(
         "  --url <url>    LLM base URL for this launch (outranks NEONSIDEKICK_LLM_URL and the saved setting)\n" +
         "  --model <id>   model id for this launch (outranks NEONSIDEKICK_LLM_MODEL and the saved setting)\n" +
         "  --cwd <path>   working directory for this launch (outranks the saved setting)\n" +
+        "  --profile <name>  profile for this launch (outranks NEONSIDEKICK_PROFILE and settings.json, which it leaves alone)\n" +
         "  --log <path>   append every diagnostic line (Trace and up) to a file\n" +
         "  --version      print the version and exit\n" +
         "  -h, --help     this text\n" +
@@ -62,7 +69,7 @@ public sealed record SidekickOptions(
         "Keys: ESC = cancel/back";
 
     /// <summary>The empty option set; every flag false, no values, no error.</summary>
-    public static SidekickOptions None { get; } = new(false, false, false, false, false, false, null, null, null, null, null);
+    public static SidekickOptions None { get; } = new(false, false, false, false, false, false, null, null, null, null, null, null);
 
     /// <summary>Parses <paramref name="args"/>. Never throws; an unknown argument or a missing value sets <see cref="Error"/>.</summary>
     public static SidekickOptions Parse(IReadOnlyList<string> args)
@@ -119,6 +126,17 @@ public sealed record SidekickOptions(
                 continue;
             }
 
+            if (TryValueFlag(ProfileFlag, args, ref i, arg, lower, out var profile, out error))
+            {
+                if (error is not null)
+                {
+                    return result with { Error = error };
+                }
+
+                result = result with { Profile = profile };
+                continue;
+            }
+
             switch (lower)
             {
                 case "--smoke":
@@ -171,6 +189,11 @@ public sealed record SidekickOptions(
             flags.Add(CwdFlag);
         }
 
+        if (Profile is not null)
+        {
+            flags.Add(ProfileFlag);
+        }
+
         return flags;
     }
 
@@ -202,6 +225,11 @@ public sealed record SidekickOptions(
         if (WorkingDirectory is not null)
         {
             parts.Add(CwdFlag + " " + WorkingDirectory);
+        }
+
+        if (Profile is not null)
+        {
+            parts.Add(ProfileFlag + " " + Profile);
         }
 
         if (LogPath is not null)

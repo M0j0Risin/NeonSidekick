@@ -75,7 +75,18 @@ public class EnvironmentOverridesTests
         Assert.Equal("yolo", e.ShellCommandPolicy);   // normalised to the saved word (2026-09-21)
         Assert.Equal(@"D:\Notes", e.ObsidianVault);   // trimmed (2026-09-22)
         Assert.Equal("http://gpu-box:8188", e.ComfyUrl);   // trimmed (2026-09-24)
-        Assert.Equal(EnvironmentOverrides.AllVariables.Length - 1, env.ActiveVariables().Count);   // everything but HOME
+        Assert.Equal(EnvironmentOverrides.AllVariables.Length - 2, env.ActiveVariables().Count);   // everything but HOME and PROFILE
+    }
+
+    [Fact]
+    public void Profile_IsReadTrimmedAndLoggedButNeverApplied()
+    {
+        var env = With((EnvironmentOverrides.ProfileVariable, " work "));
+
+        Assert.Equal("work", env.Profile);
+        Assert.Contains(EnvironmentOverrides.ProfileVariable, env.ActiveVariables());
+        Assert.Equal("NEONSIDEKICK_PROFILE=work", env.Describe());
+        Assert.Null(With((EnvironmentOverrides.ProfileVariable, "  ")).Profile);   // blank is unset
     }
 
     [Theory]

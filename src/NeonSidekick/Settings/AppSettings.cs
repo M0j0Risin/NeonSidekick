@@ -43,11 +43,36 @@ public sealed class AppSettings : IDisposable
     private bool _disposed;
 
     /// <param name="storageDirectory">The home: <c>settings.json</c>, <c>models</c> and <c>profiles</c> live under it. Created on first save if absent.</param>
-    public AppSettings(string storageDirectory)
+    /// <param name="profileOverride">
+    /// The profile this launch loads instead of the pointer's (2026-09-26, <c>--profile</c> / <c>NEONSIDEKICK_PROFILE</c>,
+    /// the user's ask: a scripted headless run names its profile rather than following the last one clicked into).
+    /// Matched as <see cref="Profiles.Resolve"/> matches, loaded under its listed spelling. Unlike the pointer it is
+    /// the caller's word, so it is honoured as given: a temporary profile loads (the redirect guards against the
+    /// pointer stranding a launch there, not against asking), and an unknown name throws <see cref="ArgumentException"/>
+    /// with <see cref="UnknownProfileMessage"/> rather than falling back — a script must not quietly run in the wrong
+    /// profile. The pointer is never rewritten for it (only created, as the default, when there is none); a later
+    /// <see cref="SwitchProfileAsync"/> rewrites it as always. Null = the pointer decides.
+    /// </param>
+    public AppSettings(string storageDirectory, string? profileOverride = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(storageDirectory);
         StorageDirectory = storageDirectory;
         PointerPath = Path.Combine(storageDirectory, FileName);
+
+        if (profileOverride is not null)
+        {
+            _profileName = Profiles.Resolve(storageDirectory, profileOverride)
+                ?? throw new ArgumentException(UnknownProfileMessage(profileOverride, Profiles.List(storageDirectory)), nameof(profileOverride));
+            _data = Load(FilePath);
+            if (!File.Exists(PointerPath))
+            {
+                TrySavePointer(Profiles.DefaultName);
+            }
+
+            DiagnosticLog.Info(Category, OverrideProfileNotice(_profileName));
+            EnsureProfileDirectories();
+            return;
+        }
 
         var pointer = LoadPointer(PointerPath);
         bool rewritePointer = !File.Exists(PointerPath);
@@ -126,6 +151,17 @@ public sealed class AppSettings : IDisposable
     /// <summary>The warning when the pointer names a profile that is not there. Pinned.</summary>
     public static string MissingProfileWarning(string name) =>
         $"Profile \"{name}\" does not exist; loading {Profiles.DefaultName}.";
+
+    /// <summary>
+    /// What an unknown <c>--profile</c> / <c>NEONSIDEKICK_PROFILE</c> ends the launch with (2026-09-26), the profiles
+    /// there are named so the script's author can fix the name. Pinned.
+    /// </summary>
+    public static string UnknownProfileMessage(string name, IReadOnlyList<string> available) =>
+        $"Profile \"{name}\" does not exist. Profiles: {string.Join(", ", available)}.";
+
+    /// <summary>The log line when a launch loads a named profile over the pointer (2026-09-26). Pinned.</summary>
+    public static string OverrideProfileNotice(string name) =>
+        $"Loading profile \"{name}\" for this launch; {FileName} left as it is.";
 
     /// <summary>The note when the pointer names a temporary profile (<see cref="Profiles.IsTemporary"/>, 2026-09-24). Pinned.</summary>
     public static string TemporaryProfileNotice(string name) =>
