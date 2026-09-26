@@ -158,8 +158,11 @@ public enum CopyActionKind
     Invalid,
 }
 
-/// <summary><see cref="Count"/> is set for <see cref="CopyActionKind.Count"/>, and is at least 1.</summary>
-public readonly record struct CopyAction(CopyActionKind Kind, int Count);
+/// <summary>
+/// <see cref="Count"/> is set for <see cref="CopyActionKind.Count"/>, and is at least 1; <see cref="Thinking"/>
+/// is <c>--thinking</c> (2026-09-26): the model's thinking copied too, where it happened.
+/// </summary>
+public readonly record struct CopyAction(CopyActionKind Kind, int Count, bool Thinking = false);
 
 /// <summary>What a <c>/queue</c> argument asks for (2026-09-21). Top-level like <see cref="CopyAction"/>, so the test project can pin the grammar.</summary>
 public enum QueueAction
@@ -451,7 +454,10 @@ internal sealed partial class ChatScreen
 
     /// <summary>The <c>/copy</c> word for every exchange.</summary>
     public const string CopyAllWord = "all";
-    public const string CopyUsageError = "/copy copies the last reply; /copy <n> the last n; /copy all every one.";
+
+    /// <summary>The <c>/copy</c> switch for the model's thinking too (2026-09-26, the user's ask), after <c>/cmdcopy</c>'s <see cref="HistorySwitch"/>.</summary>
+    public const string CopyThinkingSwitch = "--thinking";
+    public const string CopyUsageError = "/copy copies the last reply; /copy <n> the last n; /copy all every one; add --thinking for the model's thinking too.";
     public const string NothingToCopyNotice = "(nothing to copy yet)";
     public const string CopyFailedError = "Could not write to the clipboard; try again.";
     public static readonly string ProfileNameError = "Profile name " + Profiles.NameError + ".";
@@ -2742,6 +2748,9 @@ internal sealed partial class ChatScreen
     /// <summary>The <c>/copy</c> list's note on <c>all</c>. Pinned.</summary>
     public const string CopyAllNote = "every reply";
 
+    /// <summary>The <c>/copy</c> list's note on <see cref="CopyThinkingSwitch"/>.</summary>
+    public const string CopyThinkingNote = "with the model's thinking";
+
     /// <summary>The note on <c>reset</c> after a prompt-file command. Pinned.</summary>
     public static string PromptFileResetNote(string fileName) => $"remove {fileName} and go back to the default";
 
@@ -2908,7 +2917,28 @@ internal sealed partial class ChatScreen
                 return MentionCompleter.Matches((sources.VaultFolders?.Invoke(argText) ?? []).Select(folder => new CompletionItem(folder, "")).ToList(), argText);
 
             case SlashCommand.Copy:
-                return MentionCompleter.Matches([new("all", CopyAllNote)], argText);
+            {
+                // After a count or all and a space, the switch (2026-09-26); on its own, both.
+                // Only the half not yet typed: a head that holds both, or anything else, gets nothing
+                // (2026-09-26, the user's report: the switch was offered again after itself, over and over).
+                int space = argText.LastIndexOf(' ');
+                if (space > 0)
+                {
+                    string head = argText[..space];
+                    var action = ParseCopyArgs(head);
+                    var typed = head.Split([' ', '\t'], StringSplitOptions.RemoveEmptyEntries);
+                    if (action.Kind == CopyActionKind.Invalid || typed.Length != 1)
+                    {
+                        return [];
+                    }
+
+                    return action.Thinking
+                        ? MentionCompleter.Matches([new(head + " " + CopyAllWord, CopyAllNote)], argText)
+                        : MentionCompleter.Matches([new(head + " " + CopyThinkingSwitch, CopyThinkingNote)], argText);
+                }
+
+                return MentionCompleter.Matches([new(CopyAllWord, CopyAllNote), new(CopyThinkingSwitch, CopyThinkingNote)], argText);
+            }
 
             case SlashCommand.Queue:
                 return MentionCompleter.Matches([new(QueueClearWord, QueueClearNote)], argText);
@@ -5873,18 +5903,28 @@ internal sealed partial class ChatScreen
     /// The <c>/copy</c> grammar, pure: nothing ⇒ the last exchange; <c>all</c> (ignoring case) ⇒
     /// every one; an integer ⇒ that many, where less than one is one and more than <see cref="int.MaxValue"/>
     /// is all (the clamp to what exists is <see cref="ChatLog.Take"/>'s); anything else ⇒ invalid.
+    /// <see cref="CopyThinkingSwitch"/> (ignoring case) before or after it (2026-09-26) sets
+    /// <see cref="CopyAction.Thinking"/>; the switch twice, or two other words, is invalid.
     /// </summary>
     public static CopyAction ParseCopyArgs(string args)
     {
-        string text = (args ?? "").Trim();
-        if (text.Length == 0)
+        var tokens = (args ?? "").Split([' ', '\t'], StringSplitOptions.RemoveEmptyEntries).ToList();
+        int switches = tokens.RemoveAll(t => t.Equals(CopyThinkingSwitch, StringComparison.OrdinalIgnoreCase));
+        bool thinking = switches > 0;
+        if (switches > 1 || tokens.Count > 1)
         {
-            return new(CopyActionKind.Count, 1);
+            return new(CopyActionKind.Invalid, 0);
         }
 
+        if (tokens.Count == 0)
+        {
+            return new(CopyActionKind.Count, 1, thinking);
+        }
+
+        string text = tokens[0];
         if (text.Equals(CopyAllWord, StringComparison.OrdinalIgnoreCase))
         {
-            return new(CopyActionKind.All, 0);
+            return new(CopyActionKind.All, 0, thinking);
         }
 
         if (!long.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out long count))
@@ -5893,18 +5933,23 @@ internal sealed partial class ChatScreen
         }
 
         return count > int.MaxValue
-            ? new(CopyActionKind.All, 0)
-            : new(CopyActionKind.Count, (int)Math.Max(count, 1));
+            ? new(CopyActionKind.All, 0, thinking)
+            : new(CopyActionKind.Count, (int)Math.Max(count, 1), thinking);
     }
 
-    /// <summary>The line after a copy: how many went, of how many there are, as replies or exchanges. Pinned.</summary>
-    public static string CopiedNotice(int copied, int total, bool withUserText)
+    /// <summary>
+    /// The line after a copy: how many went, of how many there are, as replies or exchanges — and,
+    /// with <paramref name="withThinking"/> (2026-09-26), that the thinking went with them. Pinned.
+    /// </summary>
+    public static string CopiedNotice(int copied, int total, bool withUserText, bool withThinking = false)
     {
         string noun = withUserText ? "exchange" : "reply";
         string nouns = withUserText ? "exchanges" : "replies";
-        return copied == 1 ? $"(copied the last {noun} to the clipboard)"
-            : copied < total ? $"(copied the last {copied} {nouns} to the clipboard)"
-            : $"(copied all {copied} {nouns} to the clipboard)";
+        string one = withThinking ? " with its thinking" : "";
+        string many = withThinking ? " with their thinking" : "";
+        return copied == 1 ? $"(copied the last {noun}{one} to the clipboard)"
+            : copied < total ? $"(copied the last {copied} {nouns}{many} to the clipboard)"
+            : $"(copied all {copied} {nouns}{many} to the clipboard)";
     }
 
     private void HandleCopy(string args)
@@ -5925,10 +5970,10 @@ internal sealed partial class ChatScreen
         bool withUserText = _effective().CopyUserPrompt;
         int copied = _log.Take(action.Kind == CopyActionKind.All ? int.MaxValue : action.Count);
         // The log keeps the model's line endings; the clipboard gets the CF_UNICODETEXT convention.
-        string markdown = _log.Markdown(copied, withUserText).ReplaceLineEndings("\r\n");
+        string markdown = _log.Markdown(copied, withUserText, action.Thinking).ReplaceLineEndings("\r\n");
         if (_copy(markdown))
         {
-            _transcript.Notice(CopiedNotice(copied, _log.Count, withUserText));
+            _transcript.Notice(CopiedNotice(copied, _log.Count, withUserText, action.Thinking));
         }
         else
         {
@@ -10095,6 +10140,8 @@ internal sealed partial class ChatScreen
         bool returned = false;
         WakeHit? hit = null;
         var reply = new StringBuilder();
+        // The thinking where it happened in the reply, for /copy --thinking (2026-09-26).
+        var thoughts = new ChatLog.ThoughtTrail();
         var opening = new List<TurnEvent>(4);
         var trace = new TurnTrace();
         _lastTrace = null;
@@ -10104,7 +10151,7 @@ internal sealed partial class ChatScreen
         {
             foreach (var evt in opening)
             {
-                Render(evt, speaker, reply, thumbnails);
+                Render(evt, speaker, reply, thoughts, thumbnails);
             }
 
             opening.Clear();
@@ -10148,7 +10195,7 @@ internal sealed partial class ChatScreen
                     busy.SetLabel(stage);
                 }
 
-                Render(events.Current, speaker, reply, thumbnails);
+                Render(events.Current, speaker, reply, thoughts, thumbnails);
                 if (events.Current is TurnEvent.TextDelta { Text.Length: > 0 })
                 {
                     Volatile.Write(ref shown, true);
@@ -10271,7 +10318,7 @@ internal sealed partial class ChatScreen
             }
 
             // What /copy sees: the reply as shown, partial or whole, with the line that asked for it.
-            _log.Add(text, reply.ToString());
+            _log.Add(text, reply.ToString(), thoughts.Thoughts);
             _lastReply = reply.ToString();
             // What the session store keeps (2026-09-18): the same pair, the model's call count and
             // the request's tokens, then the whole history as it stands. A withdrawn turn left the
@@ -10573,7 +10620,7 @@ internal sealed partial class ChatScreen
     }
 
     /// <param name="thumbnails">The thumbnail box, read once at the turn's start (null with <c>Show image thumbnails</c> off): the pictures a tool fetched are drawn under its 🛠️ line the way sent ones are drawn under the user's.</param>
-    private void Render(TurnEvent evt, SpeechOutput? speaker, StringBuilder reply, ThumbnailBox? thumbnails)
+    private void Render(TurnEvent evt, SpeechOutput? speaker, StringBuilder reply, ChatLog.ThoughtTrail thoughts, ThumbnailBox? thumbnails)
     {
         if (evt is TurnEvent.ToolCall counted)
         {
@@ -10585,13 +10632,16 @@ internal sealed partial class ChatScreen
         {
             // The thinking block is over; the next one (after a tool call) counts its own time.
             _thinkingSince = null;
+            thoughts.End();
         }
 
         switch (evt)
         {
             case TurnEvent.ThinkingDelta thinking:
-                // Shown only, and only when asked (2026-09-26): never fed to the speaker, the reply,
-                // /copy or the session log. The next write of anything else folds the block.
+                // Shown only when asked (2026-09-26), never fed to the speaker, the reply or the
+                // session log. The next write of anything else folds the block. Kept for
+                // /copy --thinking whether shown or not: the copy is the user's explicit ask.
+                thoughts.Append(reply.Length, thinking.Text);
                 if (_showThinking)
                 {
                     long now = _time.GetTimestamp();

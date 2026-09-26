@@ -57,6 +57,57 @@ public class ChatLogTests
         Assert.Equal(0, log.Take(1));
     }
 
+    // ── The thinking (/copy --thinking, 2026-09-26) ──────────────────────────
+
+    [Fact]
+    public void ThoughtTrail_JoinsAPieceToTheOpenBlock_AndOpensANewOneAfterEnd()
+    {
+        var trail = new ChatLog.ThoughtTrail();
+        trail.Append(0, "Pondering ");
+        trail.Append(0, "the sky. ");
+        trail.End();
+        trail.End();
+        trail.Append(12, "   ");                // a blank block is left out
+        trail.End();
+        trail.Append(20, "\nThe tool said so.\n");
+
+        Assert.Equal(
+            new[] { new ChatLog.Thought(0, "Pondering the sky."), new ChatLog.Thought(20, "The tool said so.") },
+            trail.Thoughts);
+    }
+
+    [Fact]
+    public void Markdown_WithThinking_QuotesEachBlockWhereItHappened()
+    {
+        var log = new ChatLog();
+        string reply = "\n\nLet me look.The answer is 4.";
+        int second = reply.IndexOf("The", StringComparison.Ordinal);
+        log.Add("q", reply, [new(0, " Hmm, a sum.\n\nTwo and two. "), new(second, "The tool agrees."), new(reply.Length, "Done.")]);
+
+        string first = ChatLog.ThinkingHeader + "\n>\n> Hmm, a sum.\n>\n> Two and two.";
+        Assert.Equal("> 💭 **Thinking**", ChatLog.ThinkingHeader);
+        Assert.Equal(
+            first + "\n\nLet me look.\n\n" + ChatLog.ThinkingQuote("The tool agrees.") + "\n\nThe answer is 4.\n\n" + ChatLog.ThinkingQuote("Done."),
+            log.Markdown(1, includeUser: false, includeThinking: true));
+        Assert.Equal("> q\n\n" + first, log.Markdown(1, includeUser: true, includeThinking: true)[..("> q\n\n" + first).Length]);
+
+        // Without the switch: the reply as ever.
+        Assert.Equal("Let me look.The answer is 4.", log.Markdown(1, includeUser: false));
+    }
+
+    [Fact]
+    public void Markdown_WithThinking_OverSeveralExchanges_AndOnesWithout()
+    {
+        var log = new ChatLog();
+        log.Add("q1", "r1");
+        log.Add("q2", "r2", [new(0, "t2")]);
+        log.Add("q3", "   ", [new(0, "lost with its blank reply")]);
+
+        Assert.Equal(2, log.Count);
+        Assert.Equal("r1" + ChatLog.Separator + ChatLog.ThinkingQuote("t2") + "\n\nr2", log.Markdown(2, false, includeThinking: true));
+        Assert.Equal("r1" + ChatLog.Separator + "r2", log.Markdown(2, false));
+    }
+
     [Fact]
     public void Quote_PrefixesEveryLine_AnEmptyLineIsABareMarker()
     {

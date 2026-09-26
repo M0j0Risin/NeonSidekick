@@ -552,7 +552,7 @@ public class SlashCommandsTests
         Assert.Contains(Row("/clear", "start a new conversation and clear the screen"), SlashCommands.HelpText);
         Assert.Contains(Row("/new", "start a new conversation but do not clear the screen"), SlashCommands.HelpText);
         Assert.Contains(Row("/splash", "start a new conversation and show the splash screen"), SlashCommands.HelpText);   // 2026-09-19
-        Assert.Contains(Row("/copy", "copy the last reply to the clipboard as markdown, or /copy <n> | all"), SlashCommands.HelpText);
+        Assert.Contains(Row("/copy", "copy the last reply to the clipboard as markdown, or /copy <n> | all; --thinking for the model's thinking too"), SlashCommands.HelpText);
         Assert.Contains(Row("/tts", "toggle speech output, or /tts on|off"), SlashCommands.HelpText);
         Assert.Contains(Row("/stt", "toggle speech input, or /stt on|off"), SlashCommands.HelpText);
         Assert.Contains(Row("/wake", "toggle the speech input wake word, or /wake on|off"), SlashCommands.HelpText);
@@ -634,7 +634,7 @@ public class SlashCommandsTests
         Assert.Equal(["/clear", "/new", "/splash", "/theme", "/queue", "/copy", "/draft", "/loop", "/botchat", "/expand", "/collapse"], SlashCommands.HelpGroups[2].Select(e => e.Command));   // /botchat under /loop since 2026-09-24   // /expand and /collapse under /loop since later on 2026-09-22   // /loop under /draft since 2026-09-21   // /copy under /queue since later on 2026-09-18; /draft under /copy since 2026-09-19; /splash under /new later still
         Assert.Equal("list and prune the messages queued while a reply runs, or /queue clear", SlashCommands.HelpEntries[17].Summary);   // the clear word since 2026-09-21
         Assert.Equal("/copy", SlashCommands.HelpEntries[18].Command);
-        Assert.Equal("copy the last reply to the clipboard as markdown, or /copy <n> | all", SlashCommands.HelpEntries[18].Summary);
+        Assert.Equal("copy the last reply to the clipboard as markdown, or /copy <n> | all; --thinking for the model's thinking too", SlashCommands.HelpEntries[18].Summary);
         Assert.Equal("/draft", SlashCommands.HelpEntries[19].Command);
         Assert.Equal("write the next message in your editor: a temporary file, sent when it is saved and closed", SlashCommands.HelpEntries[19].Summary);
         Assert.Equal("/loop", SlashCommands.HelpEntries[20].Command);   // 2026-09-21

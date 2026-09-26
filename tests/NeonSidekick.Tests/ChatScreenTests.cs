@@ -4305,6 +4305,24 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains(_copied, c => c.Contains("It is blue.", StringComparison.Ordinal));
     }
 
+    /// <summary>/copy --thinking (2026-09-26, the user's ask): the thinking quoted above the answer, shown or not; plain /copy as ever.</summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Thinking_CopiedWithTheSwitch_WhereItHappened(bool show)
+    {
+        ThinkingTurn(show);
+        _settings.Update(d => d.CopyUserPrompt = false);
+        LinesWhenIdle("why?", "/copy --thinking", "/copy", "/exit");
+
+        string output = await RunAsync();
+
+        Assert.Equal(2, _copied.Count);
+        Assert.Equal((ChatLog.ThinkingQuote("Pondering the sky.") + "\n\nIt is blue.").ReplaceLineEndings("\r\n"), _copied[0]);
+        Assert.Equal("It is blue.", _copied[1]);
+        Assert.Contains("  · " + ChatScreen.CopiedNotice(1, 1, withUserText: false, withThinking: true), output);
+    }
+
     [Fact]
     public async Task Thinking_Off_ShowsNothingOfIt()
     {
@@ -9357,7 +9375,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.StartsWith(HelpRow("/splash", "start a new conversation and show the splash screen"), lines[17]);   // under /new since later still on 2026-09-19
         Assert.StartsWith(HelpRow("/theme", "switch the colour theme, starting a new conversation with the splash screen, or /theme <name>"), lines[18]);   // under /splash since 2026-09-23
         Assert.StartsWith(HelpRow("/queue", "list and prune the messages queued while a reply runs"), lines[19]);   // 2026-09-18
-        Assert.StartsWith(HelpRow("/copy", "copy the last reply to the clipboard as markdown, or /copy <n> | all"), lines[20]);   // under /queue since later on 2026-09-18
+        Assert.StartsWith(HelpRow("/copy", "copy the last reply to the clipboard as markdown, or /copy <n> | all; --thinking for the model's thinking too"), lines[20]);   // under /queue since later on 2026-09-18
         Assert.StartsWith(HelpRow("/draft", "write the next message in your editor: a temporary file, sent when it is saved and closed"), lines[21]);   // under /copy since 2026-09-19
         Assert.StartsWith(HelpRow("/loop", "repeat a message, each reply waited for: /loop <count> [delay] <message> | infinite [delay] <message> (ESC ends it)"), lines[22]);   // under /draft since 2026-09-21
         Assert.StartsWith(HelpRow("/botchat", "let the profiles talk to each other, each in its own persona, until ESC: /botchat [profile ...] [[--] topic]"), lines[23]);   // under /loop since 2026-09-24
@@ -14160,6 +14178,18 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(new CopyAction(CopyActionKind.Invalid, 0), ChatScreen.ParseCopyArgs("1.5"));
         Assert.Equal(new CopyAction(CopyActionKind.Invalid, 0), ChatScreen.ParseCopyArgs("2 all"));
         Assert.Equal("all", ChatScreen.CopyAllWord);
+
+        // --thinking (2026-09-26): before or after the count, any case; twice, or beside a bad word, invalid.
+        Assert.Equal("--thinking", ChatScreen.CopyThinkingSwitch);
+        Assert.Equal(new CopyAction(CopyActionKind.Count, 1, true), ChatScreen.ParseCopyArgs("--thinking"));
+        Assert.Equal(new CopyAction(CopyActionKind.All, 0, true), ChatScreen.ParseCopyArgs("all --thinking"));
+        Assert.Equal(new CopyAction(CopyActionKind.Count, 3, true), ChatScreen.ParseCopyArgs(" --THINKING  3 "));
+        Assert.Equal(new CopyAction(CopyActionKind.Invalid, 0), ChatScreen.ParseCopyArgs("--thinking --thinking"));
+        Assert.Equal(new CopyAction(CopyActionKind.Invalid, 0), ChatScreen.ParseCopyArgs("two --thinking"));
+        Assert.Equal(new CopyAction(CopyActionKind.Invalid, 0), ChatScreen.ParseCopyArgs("3 4"));
+        Assert.Equal("(copied the last reply with its thinking to the clipboard)", ChatScreen.CopiedNotice(1, 5, withUserText: false, withThinking: true));
+        Assert.Equal("(copied the last 2 exchanges with their thinking to the clipboard)", ChatScreen.CopiedNotice(2, 5, withUserText: true, withThinking: true));
+        Assert.Equal("(copied all 5 replies with their thinking to the clipboard)", ChatScreen.CopiedNotice(5, 5, withUserText: false, withThinking: true));
         Assert.Equal("(copied the last reply to the clipboard)", ChatScreen.CopiedNotice(1, 1, withUserText: false));
         Assert.Equal("(copied the last reply to the clipboard)", ChatScreen.CopiedNotice(1, 5, withUserText: false));
         Assert.Equal("(copied the last 2 replies to the clipboard)", ChatScreen.CopiedNotice(2, 5, withUserText: false));
@@ -17004,7 +17034,16 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(["Projects/", "Projects/Neon/"], Texts(ChatScreen.ArgumentItems("/vault", "P", vaultSources)));   // the vault's folders, as /tree's
         Assert.Equal(["Daily/", "Projects/", "Projects/Neon/"], Texts(ChatScreen.ArgumentItems("/vault", "", vaultSources)));
         Assert.Empty(ChatScreen.ArgumentItems("/speak", "", sources));   // a path list, ArgumentPaths (2026-09-17)
-        Assert.Equal([new CompletionItem("all", ChatScreen.CopyAllNote)], ChatScreen.ArgumentItems("/copy", "", sources));
+        Assert.Equal([new CompletionItem("all", ChatScreen.CopyAllNote), new CompletionItem("--thinking", ChatScreen.CopyThinkingNote)], ChatScreen.ArgumentItems("/copy", "", sources));
+        Assert.Equal([new CompletionItem("--thinking", ChatScreen.CopyThinkingNote)], ChatScreen.ArgumentItems("/copy", "--t", sources));   // 2026-09-26
+        Assert.Equal([new CompletionItem("all --thinking", ChatScreen.CopyThinkingNote)], ChatScreen.ArgumentItems("/copy", "all ", sources));
+        Assert.Equal([new CompletionItem("3 --thinking", ChatScreen.CopyThinkingNote)], ChatScreen.ArgumentItems("/copy", "3 --", sources));
+        Assert.Equal([new CompletionItem("--thinking all", ChatScreen.CopyAllNote)], ChatScreen.ArgumentItems("/copy", "--thinking ", sources));
+        // Both halves typed, or a bad head: nothing more (2026-09-26, the user's report: the switch again and again).
+        Assert.Empty(ChatScreen.ArgumentItems("/copy", "all --thinking ", sources));
+        Assert.Empty(ChatScreen.ArgumentItems("/copy", "all --thinking --", sources));
+        Assert.Empty(ChatScreen.ArgumentItems("/copy", "--thinking all ", sources));
+        Assert.Empty(ChatScreen.ArgumentItems("/copy", "two ", sources));
         Assert.Equal([new CompletionItem("reset", ChatScreen.PromptFileResetNote("persona.md"))], ChatScreen.ArgumentItems("/persona", "re", sources));
         Assert.Equal([new CompletionItem("reset", ChatScreen.PromptFileResetNote("operata.md")), new CompletionItem("copy", ChatScreen.PromptFileCopyNote("operata.md"))], ChatScreen.ArgumentItems("/operata", "", sources));   // copy 2026-09-21
         Assert.Equal([new CompletionItem("reset", ChatScreen.PromptFileResetNote("vocalia.md")), new CompletionItem("copy", ChatScreen.PromptFileCopyNote("vocalia.md"))], ChatScreen.ArgumentItems("/vocalia", "", sources));

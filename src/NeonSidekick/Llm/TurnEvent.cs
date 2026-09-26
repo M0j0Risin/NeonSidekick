@@ -23,8 +23,8 @@ public abstract record TurnEvent
     /// user's ask: thinking shown in the transcript). Never empty. From the server's
     /// <c>reasoning_content</c> (or <c>reasoning</c>) deltas, or a <c>&lt;think&gt;</c> block streamed as
     /// content (<see cref="ThinkTagFilter.TakeThinking"/>). Not reply text: never spoken, never in
-    /// <c>/copy</c> or the session log, and the assistant commits nothing of it to the history. A
-    /// host that does not show thinking skips it.
+    /// <c>/copy</c> unless asked with <c>--thinking</c> (2026-09-26) or in the session log, and the
+    /// assistant commits nothing of it to the history. A host that does not show thinking skips it.
     /// </summary>
     public sealed record ThinkingDelta(string Text) : TurnEvent;
 

@@ -132,7 +132,7 @@ Neon Sidekick brings privacy-first, local LLM inference to your terminal. Powere
 | LLM tool compact type | What happens when a single turn's tool calls approach the window: `prune` stubs this turn's older results and carries on, `stop` ends the turn with a notice, `nothing`. | `prune` |
 | LLM max tool iterations | How many tool round trips one message may make before the turn stops (1–10000). | 10000 |
 | LLM use fun verbs | The thinking spinner reads a random verb instead of `thinking` / `writing`. | off |
-| LLM show thinking | A reasoning model's thinking streams into the transcript as a dim block — only its last five lines show, scrolling as it goes — then folds to one `▸ 💭 thought for 4.2s` line when the answer starts (only with Transcript markdown on). Click the line, press Ctrl+O or use `/expand` to see it again. The thinking is never spoken, copied or logged. | on |
+| LLM show thinking | A reasoning model's thinking streams into the transcript as a dim block — only its last five lines show, scrolling as it goes — then folds to one `▸ 💭 thought for 4.2s` line when the answer starts (only with Transcript markdown on). Click the line, press Ctrl+O or use `/expand` to see it again. The thinking is never spoken or logged, and only copied when you ask with `/copy --thinking` (shown or not). | on |
 
 #### TTS
 
@@ -376,7 +376,7 @@ Type `/` and the list opens with every command and its summary; after the comman
 | `/cmdlist` | The *Shell allowed commands* list on a pane, straight (the toolbar's lock opens it too): Enter removes a prefix, ESC closes. |
 | `/police` | The *Shell police outside paths* on/off page on a pane, straight (the toolbar's 👮 opens it too): pick on or off, ESC closes. |
 | `/compact [focus]` | Shrink the current context; a focus steers the summary. |
-| `/copy [n \| all]` | Copy the last reply to the clipboard as Markdown, or reply *n*, or the whole transcript. |
+| `/copy [n \| all] [--thinking]` | Copy the last reply to the clipboard as Markdown, or the last *n* replies, or the whole transcript. `--thinking` includes the model's thinking, each block quoted under `💭 **Thinking**` where it happened. |
 | `/cwd [path \| ~ \| browse]` | Show or change the working directory; `browse` opens a folder picker on the pane: the profile's own `files\` folder as `⌂ profile` and its `splash\` folder as `▣ splash` above the drives, opened on the directory in force (Enter chooses — the profile row saves the default, like `~` — Space/→/← open and close, `-` collapses all; a click on a folder's glyph or a double-click on its name opens or closes it; only Enter chooses). |
 | `/draft` | Write the next message in your editor; the file is sent when it is saved and closed. |
 | `/echo <text>` | Print a line as a reply and read it aloud when speech is on. |
