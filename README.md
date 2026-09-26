@@ -132,7 +132,7 @@ Neon Sidekick brings privacy-first, local LLM inference to your terminal. Powere
 | LLM tool compact type | What happens when a single turn's tool calls approach the window: `prune` stubs this turn's older results and carries on, `stop` ends the turn with a notice, `nothing`. | `prune` |
 | LLM max tool iterations | How many tool round trips one message may make before the turn stops (1–10000). | 10000 |
 | LLM use fun verbs | The thinking spinner reads a random verb instead of `thinking` / `writing`. | off |
-| LLM show thinking | A reasoning model's thinking streams into the transcript as a dim block, then folds to one `▸ 💭 thought for 4.2s` line when the answer starts (only with Transcript markdown on). Click the line, press Ctrl+O or use `/expand` to see it again. The thinking is never spoken, copied or logged. | on |
+| LLM show thinking | A reasoning model's thinking streams into the transcript as a dim block — only its last five lines show, scrolling as it goes — then folds to one `▸ 💭 thought for 4.2s` line when the answer starts (only with Transcript markdown on). Click the line, press Ctrl+O or use `/expand` to see it again. The thinking is never spoken, copied or logged. | on |
 
 #### TTS
 

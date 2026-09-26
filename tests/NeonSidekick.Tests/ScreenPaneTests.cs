@@ -3,6 +3,7 @@ using System.Globalization;
 using NeonSidekick.UI;
 using NeonSidekick.UI.Markdown;
 using Spectre.Console;
+using Spectre.Console.Rendering;
 using Spectre.Console.Testing;
 
 namespace NeonSidekick.Tests;
@@ -265,6 +266,41 @@ public class ScreenPaneTests : IDisposable
         Assert.StartsWith("\e[?2026h\e[?25l\e[3A\e[20D\e[J", written);
         Assert.Contains("hi\n\n" + Rule(20) + "\n", Strip(written));
         Assert.EndsWith("\e[?25h\e[?2026l", written);
+    }
+
+    [Fact]
+    public void ALiveTick_PaintsOverTheOldFrame_NeverErasingItFirst()
+    {
+        // 2026-09-26, the user's report: the pane flickered under streaming thinking — each tick
+        // erased from the flow's end down, then drew. Now each row clears its own end, and the one
+        // erase down comes after the pane's last row.
+        _console.EmitAnsiSequences();
+        _console.Profile.Width = 20;
+        _console.Profile.Height = 12;
+        using var pane = Pane();
+        pane.Show();
+        pane.Write(new Markup("a\n"));
+        pane.SetLive(new ThinkingBlock("t1\nt2\nt3\nt4\nt5\nt6\nt7"));
+        _time.Advance(ScreenPane.Tick);
+
+        int mark = Output.Length;
+        pane.SetLive(new ThinkingBlock("t1\nt2\nt3\nt4\nt5\nt6\nt7\nt8"));
+        _time.Advance(ScreenPane.Tick);
+        string written = Output[mark..];
+
+        Assert.StartsWith("\e[?2026h\e[?25l", written);
+        Assert.Contains("    t8", Strip(written));
+        Assert.DoesNotContain("    t3", Strip(written));
+        int erase = written.IndexOf("\e[J", StringComparison.Ordinal);
+        Assert.True(erase > written.LastIndexOf(Rule(20), StringComparison.Ordinal), written);
+        Assert.Matches(@"t8(\e\[[0-9;]*m)*\e\[K\r\n", written);
+        Assert.True(written.IndexOf("\e[J", StringComparison.Ordinal) > written.IndexOf("t8", StringComparison.Ordinal));
+        Assert.EndsWith("\e[?25h\e[?2026l", written);
+
+        // A flow write still lifts with the erase.
+        mark = Output.Length;
+        pane.Write(new Markup("b\n"));
+        Assert.Contains("\e[J", Output[mark..][..Output[mark..].IndexOf('b', StringComparison.Ordinal)]);
     }
 
     [Fact]
@@ -926,30 +962,119 @@ public class ScreenPaneTests : IDisposable
         Assert.Equal(2, pane.StoredRows);
     }
 
+    private static string ThinkingLines(int from, int to) =>
+        string.Join("\n", Enumerable.Range(from, to - from + 1).Select(i => "t" + i.ToString(CultureInfo.InvariantCulture)));
+
+    /// <summary>
+    /// The streaming thinking block shows its header and its last five rows (2026-09-26), scrolling as
+    /// it grows, and commits nothing while it streams; folded, it went into the transcript whole.
+    /// </summary>
     [Fact]
-    public void Thinking_CommittedInParts_StillFoldsWhole()
+    public void Thinking_Streaming_ShowsOnlyItsLastFiveRows_AndFoldsWhole()
     {
-        // Twelve lines on a 10-row window: the header and the top rows go into the flow while the
-        // thinking streams (the excess commit), the rest at the commit — one group all the same.
+        _cursorTop = 100;   // rule 99 over the input row: the region's six rows are 93–98
         using var pane = Pane();
         pane.Show();
-        string body = string.Join("\n", Enumerable.Range(1, 12).Select(i => "t" + i.ToString(CultureInfo.InvariantCulture)));
-        pane.SetLive(new ThinkingBlock(body));
-        _time.Advance(ScreenPane.Tick);
-        Assert.True(pane.LiveCommitted > 0);
-
+        pane.Write(new Markup("a\n"));
         int mark = Output.Length;
-        pane.SetLive(new ThinkingBlock(body, TimeSpan.FromSeconds(75)));
+        pane.SetLive(new ThinkingBlock(ThinkingLines(1, 12)));
+        _time.Advance(ScreenPane.Tick);
+        Assert.Contains(ThinkingFoldText.LiveHeader + "\n    t8\n    t9\n    t10\n    t11\n    t12\n", Output[mark..]);
+        Assert.DoesNotContain("    t7\n", Output[mark..]);
+        Assert.Equal(0, pane.LiveCommitted);
+        Assert.Equal(6, pane.LiveRows);
+
+        mark = Output.Length;
+        pane.SetLive(new ThinkingBlock(ThinkingLines(1, 13)));
+        _time.Advance(ScreenPane.Tick);
+        Assert.Contains(ThinkingFoldText.LiveHeader + "\n    t9\n    t10\n    t11\n    t12\n    t13\n", Output[mark..]);
+        Assert.Equal(0, pane.LiveCommitted);
+
+        pane.SetLive(new ThinkingBlock(ThinkingLines(1, 13), TimeSpan.FromSeconds(75)));
+        pane.CommitLive();
+        Assert.Equal(2, pane.StoredRows);
+
+        mark = Output.Length;
+        Assert.True(pane.TryToggleToolGroupAt(3, 94));
+        Assert.Equal(15, pane.StoredRows);
+        pane.SetToolGroupsExpanded(true);
+        Assert.Equal(15, pane.StoredRows);
+        pane.SetToolGroupsExpanded(false);
+        Assert.Equal(2, pane.StoredRows);
+    }
+
+    [Fact]
+    public void Thinking_Streaming_ATailRowIsALaidOutRow()
+    {
+        // A wrapped line is several of the five: t3 and t4, then the long line's three rows.
+        using var pane = Pane();
+        pane.Show();
+        int mark = Output.Length;
+        pane.SetLive(new ThinkingBlock("t1\nt2\nt3\nt4\n" + new string('w', 80)));
+        _time.Advance(ScreenPane.Tick);
+        Assert.Contains(ThinkingFoldText.LiveHeader + "\n    t3\n    t4\n    w", Output[mark..]);
+        Assert.DoesNotContain("    t2\n", Output[mark..]);
+        Assert.Equal(6, pane.LiveRows);
+    }
+
+    [Fact]
+    public void Thinking_Streaming_OnARegionUnderTheTail_CommitsNothing_AndStillFoldsWhole()
+    {
+        _console.Profile.Height = 8;
+        using var pane = Pane();
+        pane.Show();
+        pane.SetLive(new ThinkingBlock(ThinkingLines(1, 12)));
+        _time.Advance(ScreenPane.Tick);
+        Assert.Equal(0, pane.LiveCommitted);
+        Assert.True(pane.LiveRows < 6);
+
+        pane.SetLive(new ThinkingBlock(ThinkingLines(1, 12), TimeSpan.FromSeconds(4)));
         pane.CommitLive();
         pane.Write(new Markup("answer\n"));
-
-        string tail = Output[mark..];
-        string folded = ThinkingFoldText.Summary(TimeSpan.FromSeconds(75), expanded: false);
-        int summary = tail.LastIndexOf(folded, StringComparison.Ordinal);
-        Assert.True(summary >= 0, tail);
-        Assert.Contains("answer", tail[summary..]);
-        Assert.DoesNotContain("    t", tail[summary..]);
         Assert.Equal(2, pane.StoredRows);
+        pane.SetToolGroupsExpanded(true);
+        Assert.Equal(14, pane.StoredRows);
+    }
+
+    [Theory]
+    [InlineData("plain")]
+    [InlineData("blank")]
+    [InlineData("wrapped")]
+    [InlineData("indented")]
+    [InlineData("short")]
+    public void ThinkingLiveView_TailsAsTheWholeBlockDoes(string kind)
+    {
+        string body = kind switch
+        {
+            "plain" => ThinkingLines(1, 200),
+            "blank" => ThinkingLines(1, 50) + "\n\n\nx\n\ny",
+            "wrapped" => ThinkingLines(1, 50) + "\n" + new string('w', 90) + "\nz",
+            "indented" => ThinkingLines(1, 50) + "\n    a\n  b\nc\nd\ne",
+            _ => "only\n  two",
+        };
+        static string Rows(List<SegmentLine> lines) =>
+            string.Join("\n", lines.Select(l => string.Concat(l.Select(s => s.Text))));
+
+        var block = new ThinkingBlock(body);
+        var whole = ThinkingBlock.Tail(ScreenPane.RenderLines(block, _console, 40), 20);
+        var view = ThinkingBlock.Tail(ScreenPane.RenderLines(block.LiveView(), _console, 40), 20);
+        Assert.Equal(Rows(whole), Rows(view));
+        Assert.True(block.LiveView().Text.Split('\n').Length <= ThinkingBlock.LiveTailRows);
+    }
+
+    [Fact]
+    public void ThinkingTail_KeepsTheHeaderAndTheLastRows()
+    {
+        static List<SegmentLine> Lines(int n) =>
+            Enumerable.Range(0, n).Select(i => new SegmentLine { new Segment(i.ToString(CultureInfo.InvariantCulture)) }).ToList();
+        static string Texts(List<SegmentLine> lines) => string.Join(",", lines.Select(l => l[0].Text));
+
+        Assert.Equal("0,1,2", Texts(ThinkingBlock.Tail(Lines(3), 20)));
+        Assert.Equal("0,5,6,7,8,9", Texts(ThinkingBlock.Tail(Lines(10), 20)));
+        Assert.Equal("0,8,9", Texts(ThinkingBlock.Tail(Lines(10), 3)));
+        Assert.Equal("9", Texts(ThinkingBlock.Tail(Lines(10), 1)));
+        Assert.Empty(ThinkingBlock.Tail(Lines(10), 0));
+        Assert.Empty(ThinkingBlock.Tail(Lines(0), 20));
     }
 
     [Fact]
@@ -3310,8 +3435,9 @@ public class ScreenPaneTests : IDisposable
         _time.Advance(ScreenPane.Tick);
         string written = Output[mark..];
 
-        // Up over the padding row, the rule and the live row (3), erase down, both rows, no padding, the pane.
-        Assert.StartsWith("\e[?2026h\e[?25l\e[3A\e[20D\e[J", written);
+        // Up over the padding row, the rule and the live row (3), both rows painted over the old frame
+        // (each clearing its end, 2026-09-26), no padding, the pane.
+        Assert.StartsWith("\e[?2026h\e[?25l\e[3A\e[20D\e[?25la\e[K\r\nb\e[K\r\n", written);
         Assert.Contains("a\nb\n" + Rule(20) + "\n", Strip(written));
         Assert.Equal(2, pane.LiveRows);
         Assert.Equal(0, pane.Padding);

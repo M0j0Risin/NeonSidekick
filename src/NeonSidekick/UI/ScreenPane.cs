@@ -3202,7 +3202,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
                 _inner.WriteLine();
             }
 
-            _liveCount = _live is null ? 0 : Math.Max(0, RenderLines(_live, _inner, w).Count - _liveCommitted);
+            _liveCount = _live is null ? 0 : Math.Max(0, LiveLayout(w, region).Count - _liveCommitted);
             _pad = 0;
         }
         else
@@ -3226,13 +3226,25 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
             // committed into the flow first (the terminal scrolls it away like any transcript), the tail
             // is drawn under the flow and lifted with the pane next time.
             List<SegmentLine>? live = null;
-            if (_live is not null)
+            if (_live is ThinkingBlock { Streaming: true })
+            {
+                // Streaming thinking shows its tail (2026-09-26) and nothing of it is committed: the
+                // whole block goes into the flow as one group when it folds (FlushLive).
+                live = LiveLayout(w, region);
+            }
+            else if (_live is not null)
             {
                 var lines = RenderLines(_live, _inner, w);
                 int skip = Math.Min(_liveCommitted, lines.Count);
                 int excess = lines.Count - skip - region;
                 if (excess > 0)
                 {
+                    if (_overpaint)
+                    {
+                        // The flow's writes go over the old frame's rows: they are cleared first, as a lift would.
+                        _inner.Write(EraseDown);
+                    }
+
                     EndFlowRow();
                     CommitLiveRows(lines, skip, skip + excess, w, final: false);
                     _liveCommitted += excess;
@@ -3259,7 +3271,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
 
             if (_col > 0)
             {
-                _inner.WriteLine();
+                EndRow();
             }
 
             if (live is not null)
@@ -3267,13 +3279,13 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
                 foreach (var line in live)
                 {
                     _inner.Write(new SegmentList(line));
-                    _inner.WriteLine();
+                    EndRow();
                 }
             }
 
             for (int i = 0; i < _pad; i++)
             {
-                _inner.WriteLine();
+                EndRow();
             }
 
             // Drawing past the last row scrolls the screen: the flow moves up with it.
@@ -3291,7 +3303,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
             foreach (var line in stripLines)
             {
                 _inner.Write(new SegmentList(line));
-                _inner.WriteLine();
+                EndRow();
             }
         }
 
@@ -3301,7 +3313,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
             for (int i = 0; i < overlayRows; i++)
             {
                 _inner.Write(new SegmentList(overlayLines[i]));
-                _inner.WriteLine();
+                EndRow();
             }
         }
 
@@ -3323,7 +3335,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
                     WriteRowText(shown.Rows[i], shown.Starts[i], 0);
                 }
 
-                _inner.WriteLine();
+                EndRow();
             }
         }
 
@@ -3331,12 +3343,18 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         WriteHintRow();
         if (toolbarRows > 0)
         {
-            _inner.WriteLine();
+            EndRow();
             WriteToolbarRow(toolbar!.Value, w);
         }
         else
         {
             ForgetToolbar();
+        }
+
+        if (_overpaint)
+        {
+            // Whatever a taller old frame left under the pane's last row.
+            _inner.Write(EraseDown);
         }
 
         _liveRows = liveRows;
@@ -3373,9 +3391,11 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     /// <summary>
     /// From the cursor's input row: back to the flow cursor, and everything from there to the end
     /// of the screen erased — or, drawn scrolled, back to the top row and the whole screen erased
-    /// (the flow is not on it; the next draw at the bottom writes it back).
+    /// (the flow is not on it; the next draw at the bottom writes it back). Without
+    /// <paramref name="erase"/> the cursor goes back all the same and the old frame stays for an
+    /// over-painting draw to cover (<see cref="Overpaint"/>).
     /// </summary>
-    private void Lift()
+    private void Lift(bool erase = true)
     {
         if (!_drawn)
         {
@@ -3420,8 +3440,57 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
             _inner.Cursor.Move(CursorDirection.Right, _col);
         }
 
-        _inner.Write(EraseDown);
+        if (erase)
+        {
+            _inner.Write(EraseDown);
+        }
+
         _drawn = false;
+    }
+
+    // An over-painting draw is under way (Overpaint): every row it writes clears what is left of the
+    // old frame's row after it.
+    private bool _overpaint;
+
+    /// <summary>
+    /// The pane drawn again over the frame on the screen, not after erasing it (2026-09-26, the user's
+    /// report: the pane flickered under a streaming thinking block — each tick erased everything from
+    /// the flow's end down and the rows were blank until the draw wrote them, which a terminal not
+    /// holding synchronized output shows). Each row ends in an erase to its end, the screen below the
+    /// last row is erased once, and no row is ever blank on the screen. Only where the new frame
+    /// stands where the old one did: at the bottom, drawn, the flow not to be written again — else
+    /// the erasing lift and draw.
+    /// </summary>
+    private void Overpaint()
+    {
+        if (_drawnScrolled || _top >= 0 || _blank || _store.Reshaped)
+        {
+            Lift();
+            Draw();
+            return;
+        }
+
+        Lift(erase: false);
+        _overpaint = true;
+        try
+        {
+            Draw();
+        }
+        finally
+        {
+            _overpaint = false;
+        }
+    }
+
+    /// <summary>The end of a drawn row: the rest of the old frame's row cleared first when over-painting.</summary>
+    private void EndRow()
+    {
+        if (_overpaint)
+        {
+            _inner.Write(EraseLineEnd);
+        }
+
+        _inner.WriteLine();
     }
 
     /// <summary>
@@ -3468,6 +3537,17 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         }
 
         ForgetLive();
+    }
+
+    /// <summary>
+    /// The live block laid out at <paramref name="width"/> as the slot draws it: a streaming thinking
+    /// block's <see cref="ThinkingBlock.Tail"/> for <paramref name="region"/> rows, anything else whole.
+    /// </summary>
+    private List<SegmentLine> LiveLayout(int width, int region)
+    {
+        return _live is ThinkingBlock { Streaming: true } thinking
+            ? ThinkingBlock.Tail(RenderLines(thinking.LiveView(), _inner, width), region)
+            : RenderLines(_live!, _inner, width);
     }
 
     private void ForgetLive()
@@ -3938,16 +4018,16 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
                 if (_drawnScrolled)
                 {
                     // Scrolled: the block is not drawn; its rows count in the hint.
-                    _liveCount = _live is null ? 0 : Math.Max(0, RenderLines(_live, _inner, w).Count - _liveCommitted);
+                    _liveCount = _live is null ? 0 : Math.Max(0, LiveLayout(w, RegionRows(_paneRows)).Count - _liveCommitted);
                     _liveDirty = false;
                     RedrawHint();
                     return;
                 }
 
-                // The reply grew since the last layout: the whole pane again, the spinner's frame with it.
+                // The reply grew since the last layout: the whole pane again, the spinner's frame with
+                // it — painted over the old frame, never erased first (Overpaint).
                 BeginSync();
-                Lift();
-                Draw();
+                Overpaint();
                 EndSync();
                 return;
             }
