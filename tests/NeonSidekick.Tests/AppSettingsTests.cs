@@ -29,6 +29,7 @@ public class AppSettingsTests : IDisposable
         ImageThumbnailSize = "large",
         Theme = "noir",
         BotChatLlmMode = "multi",
+        LlmMidTurnUsage = "last-known",
         BotChatImages = true,
         BotChatImageMode = "autonomous",
         BotChatImageWorkflow = "flux",

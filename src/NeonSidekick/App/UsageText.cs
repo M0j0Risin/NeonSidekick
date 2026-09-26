@@ -247,11 +247,46 @@ public static class UsageText
             return null;
         }
 
-        string part = Percent(inUse, window) is { } percent
-            ? CompactNumber(inUse) + " / " + CompactNumber(window!.Value.Tokens) + Sep + PercentText(percent)
-            : Compact(inUse);
+        string part = ContextPart(inUse, window, "");
         return tally.LastReply.TokensPerSecond is { } speed ? part + Sep + Speed(speed, 0) : part;
     }
+
+    /// <summary>What marks a figure of the busy row's <see cref="BusyHintPart"/> as estimated. Pinned.</summary>
+    public const string EstimateMark = "~";
+
+    /// <summary>
+    /// The busy row's part (2026-09-25, <c>LLM mid-turn usage</c>): the <see cref="HintPart"/> shape while a turn runs.
+    /// <see cref="MidTurnUsage.LastKnown"/> is the server's figures as of the last completed request, the speed
+    /// <see cref="TokenTally.LastKnownSpeed"/> (the turn before's until this one reports). <see cref="MidTurnUsage.Estimate"/>
+    /// is the same until the request streaming now (<paramref name="live"/>) has a chunk, then every figure estimated and
+    /// marked <see cref="EstimateMark"/>: the last request's total plus the chunks streamed, and the chunks' rate
+    /// (<c>~5.1k / 151.4k · ~3% · ~41 tok/s</c>). The base leaves out what the request added before it streamed (the new
+    /// message, the tool results) — the server's report puts it right when the request ends. Null while nothing is known.
+    /// </summary>
+    public static string? BusyHintPart(TokenTally tally, ContextLength? window, MidTurnUsage mode, StreamMeter.Reading live)
+    {
+        ArgumentNullException.ThrowIfNull(tally);
+        long known = tally.LastRequest.Total;
+        if (mode == MidTurnUsage.Estimate && live is { Streaming: true, Chunks: > 0 })
+        {
+            string part = ContextPart(known + live.Chunks, window, EstimateMark);
+            return live.ChunksPerSecond is { } rate ? part + Sep + EstimateMark + Speed(rate, 0) : part;
+        }
+
+        if (known == 0)
+        {
+            return null;
+        }
+
+        string last = ContextPart(known, window, "");
+        return tally.LastKnownSpeed is { } speed ? last + Sep + Speed(speed, 0) : last;
+    }
+
+    /// <summary>The context in use over the window and its share (<c>4.6k / 151.4k · 3%</c>), or <c>4.6k tokens</c> while the window is unknown; <paramref name="mark"/> ahead of each figure.</summary>
+    private static string ContextPart(long inUse, ContextLength? window, string mark) =>
+        Percent(inUse, window) is { } percent
+            ? mark + CompactNumber(inUse) + " / " + CompactNumber(window!.Value.Tokens) + Sep + mark + PercentText(percent)
+            : mark + Compact(inUse);
 
     /// <summary>
     /// The <c>/usage</c> lines: the context, the last reply, this conversation, since launch. The

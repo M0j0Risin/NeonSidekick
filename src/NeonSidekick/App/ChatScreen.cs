@@ -905,6 +905,12 @@ internal sealed partial class ChatScreen
             // The tally as HintText carries it (2026-09-21): the pane finds it in the drawn row and
             // records where, so a double-click on it (or on the spinner under a turn) opens /usage.
             Usage = () => UsageText.HintPart(_session.Usage, _session.ContextLength) ?? "",
+            // The tally on the busy row too (2026-09-25, the user's ask), as LLM mid-turn usage says: re-read on every
+            // tick, so the estimate moves with the stream and a flipped setting shows at once. TryParse, not Resolve: the
+            // draw must not warn on a hand-edited word, the turn's start does. None under a /botchat turn — not tallied.
+            BusyUsage = () => _botTurnRunning ? "" : UsageText.BusyHintPart(_session.Usage, _session.ContextLength, MidTurnUsageMode.TryParse(_effective().LlmMidTurnUsage, out var mode) ? mode : MidTurnUsage.Estimate, _session.Meter.Read()) ?? "",
+            // A ComfyUI generation's label after the tally (2026-09-25, the user's call): /imagine, a botchat picture and the model's generate_image alike.
+            LabelAfterUsage = label => string.Equals(label, ComfyText.GeneratingLabel, StringComparison.Ordinal),
             // The toolbar under the hint row (2026-09-21): the pane glyphs, the working directory in
             // force (the resolved path, what /cwd prints and the banner shows) and the folder; read
             // per draw and on the tick, so a /cwd change or a flipped Show toolbar shows at once —
@@ -5306,7 +5312,7 @@ internal sealed partial class ChatScreen
         bool cancelled = false;
         try
         {
-            generation = await _transcript.WithSpinnerAsync(ComfyText.Generating(request.Workflow ?? "ComfyUI"), () => _comfy.GenerateAsync(request, cts.Token)).ConfigureAwait(false);
+            generation = await _transcript.WithSpinnerAsync(ComfyText.GeneratingLabel, () => _comfy.GenerateAsync(request, cts.Token)).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (cts.IsCancellationRequested)
         {
@@ -8883,7 +8889,7 @@ internal sealed partial class ChatScreen
             return null;
         }
 
-        var (generation, skipped) = await UnderWatchAsync(ComfyText.Generating(job.Workflow ?? "ComfyUI"), token => GenerateBotPictureAsync(job, token), pictureToken).ConfigureAwait(false);
+        var (generation, skipped) = await UnderWatchAsync(ComfyText.GeneratingLabel, token => GenerateBotPictureAsync(job, token), pictureToken).ConfigureAwait(false);
         if (skipped || generation is null)
         {
             _transcript.Notice(ComfyText.Cancelled);
@@ -9691,6 +9697,8 @@ internal sealed partial class ChatScreen
         if (bot is null)
         {
             _session.Usage.BeginTurn();
+            // The busy row reads the mode quietly on every tick (BusyUsage); a hand-edited word is warned about here, once a turn.
+            _ = MidTurnUsageMode.Resolve(_effective());
         }
         else
         {

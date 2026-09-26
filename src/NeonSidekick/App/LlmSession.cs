@@ -49,7 +49,11 @@ internal sealed class LlmSession : IDisposable
         _contextProbe = contextProbe ?? throw new ArgumentNullException(nameof(contextProbe));
         _factory = factory ?? throw new ArgumentNullException(nameof(factory));
         _time = time ?? TimeProvider.System;
+        Meter = new StreamMeter(_time);
     }
+
+    /// <summary>The main assistant's request as it streams (2026-09-25): the busy row's <c>estimate</c> (<see cref="StreamMeter"/>); a botchat bot's assistant has none.</summary>
+    public StreamMeter Meter { get; }
 
     /// <summary>The conversation; survives <see cref="ConnectAsync"/>.</summary>
     public ConversationHistory History { get; } = new(Llm.Assistant.DefaultSystemPrompt);
@@ -174,7 +178,7 @@ internal sealed class LlmSession : IDisposable
         try
         {
             _client = _factory(Endpoint, Timeouts);
-            Assistant = new Assistant(_client, History, Timeouts, time: _time, reasoning: ReasoningLevel.Resolve(effective));
+            Assistant = new Assistant(_client, History, Timeouts, time: _time, reasoning: ReasoningLevel.Resolve(effective)) { Meter = Meter };
             return true;
         }
         catch (Exception ex)

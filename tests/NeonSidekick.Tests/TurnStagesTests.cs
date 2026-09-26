@@ -1,5 +1,7 @@
 using NeonSidekick.App;
+using NeonSidekick.Comfy;
 using NeonSidekick.Llm;
+using NeonSidekick.Llm.Tools;
 
 namespace NeonSidekick.Tests;
 
@@ -30,6 +32,17 @@ public sealed class TurnStagesTests
         // The next stream: writing again.
         Assert.Equal("writing", stages.Advance(Text));
         Assert.Null(stages.Advance(Text));
+    }
+
+    [Fact]
+    public void TheModelsPictureCall_ReadsAsEveryComfyUIGeneration()
+    {
+        // 2026-09-25: generate_image is the ComfyUI label, not the tool's name; the other tools keep theirs.
+        var stages = new TurnStages(funVerbs: true, new Random(7));
+        stages.Start();
+        Assert.Equal(ComfyText.GeneratingLabel, stages.Advance(Call(GenerateImageTool.ToolName)));
+        Assert.NotEqual(ComfyText.GeneratingLabel, stages.Advance(Result(GenerateImageTool.ToolName)));
+        Assert.Equal("read_file", stages.Advance(Call("read_file")));
     }
 
     [Fact]

@@ -553,6 +553,7 @@ public sealed class AppSettings : IDisposable
         LlmCompactShowSummary = source.LlmCompactShowSummary,
         LlmCompactType = source.LlmCompactType,
         LlmContextLength = source.LlmContextLength,
+        LlmMidTurnUsage = source.LlmMidTurnUsage,
         LlmMaxToolIterations = source.LlmMaxToolIterations,
         LlmModel = source.LlmModel,
         LlmOfferTools = source.LlmOfferTools,

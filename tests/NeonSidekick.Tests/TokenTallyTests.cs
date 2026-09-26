@@ -184,4 +184,31 @@ public class TokenTallyTests
         Assert.Equal(3, tally.LearningRequests);
         Assert.Equal(4450, tally.Learning.Total);
     }
+
+    [Fact]
+    public void LastKnownSpeed_IsThisTurnsOnceItReported_ElseTheTurnBefore()
+    {
+        var tally = new TokenTally();
+        Assert.Null(tally.LastKnownSpeed);
+
+        tally.BeginTurn();
+        tally.Add(One(100, 40, seconds: 2));   // 20 tok/s
+        tally.EndTurn();
+        Assert.Equal(20, tally.LastKnownSpeed);
+
+        // A new turn zeroes the last reply, not the speed the busy row shows.
+        tally.BeginTurn();
+        Assert.True(tally.LastReply.IsEmpty);
+        Assert.Equal(20, tally.LastKnownSpeed);
+
+        tally.Add(One(200, 30, seconds: 1));   // 30 tok/s
+        Assert.Equal(30, tally.LastKnownSpeed);
+
+        // A turn with nothing reported keeps the one before it.
+        tally.EndTurn();
+        tally.BeginTurn();
+        tally.EndTurn();
+        tally.BeginTurn();
+        Assert.Equal(30, tally.LastKnownSpeed);
+    }
 }

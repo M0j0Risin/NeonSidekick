@@ -292,6 +292,15 @@ public sealed class AppSettingsData
     public int LlmContextLength { get; set; }
 
     /// <summary>
+    /// What the busy row's token tally shows while a turn runs (2026-09-25, the user's ask: the tally used to vanish under
+    /// the spinner): one of <see cref="App.MidTurnUsageMode.Names"/> — <c>estimate</c> (the default: the context and tok/s
+    /// tick with the stream, marked <c>~</c>, the streamed chunks counted as tokens until the server's report lands) or
+    /// <c>last-known</c> (the server's figures as of the last completed request). Read on every draw. The LLM tab of
+    /// <c>/settings</c>, under <see cref="LlmContextLength"/>. No variable.
+    /// </summary>
+    public string LlmMidTurnUsage { get; set; } = App.MidTurnUsageMode.Default;
+
+    /// <summary>
     /// Model round trips one message may spend on tool calls before the turn stops with a notice
     /// (<see cref="Llm.Assistant.MaxToolIterations"/>): a tool call is one, a picture fetched by
     /// <c>view_image</c> one more. <see cref="MinToolIterations"/> to <see cref="MaxToolIterationsCap"/>;

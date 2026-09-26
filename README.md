@@ -121,6 +121,7 @@ Neon Sidekick brings privacy-first, local LLM inference to your terminal. Powere
 | LLM request timeout (s) | The most one HTTP request may take (up to 3600). | 3600 |
 | LLM turn timeout (s) | The most one whole turn — every tool round trip included — may take (up to 21600). | 21600 |
 | LLM context length | The model's context window in tokens, for the usage percentage; 0 takes the server's own figure. | 0 (server) |
+| LLM mid-turn usage | What the token usage on the hint row shows while a reply is running. `estimate`: the context and tok/s update live as the reply streams, marked `~` (each streamed chunk counts as one token), and the server's real figures replace them when each request ends. `last-known`: the server's figures from the last completed request, which change only between requests. | `estimate` |
 | LLM compact type | What `/compact` does: `summary` folds the older turns into one model-written summary; `prune` stubs their bulky tool results and keeps every turn. | `summary` |
 | LLM compact keep recent | How many recent user turns a compact keeps word for word (0–24). | 2 |
 | LLM compact show summary | After a compact, shows what it did under the notice: the summary's text as dim lines, or one line per pruned tool result (tool and size), then how many messages were protected at the start (the opening call pairs) and at the end (the recent turns kept). | off |

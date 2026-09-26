@@ -5515,7 +5515,7 @@ public partial class ChatScreenTests : IDisposable
                 case 1: PushLine(input, "/settings"); break;
                 case 2:
                     input.Push(Keys.Right, Keys.Right);   // the LLM tab (third since 2026-09-19; fourth from 2026-09-18 until then)
-                    input.Push(Enumerable.Repeat(Keys.Down, 12).ToArray());   // LLM offer tools, the thirteenth LLM row (the scan mode first, the show-summary toggle above it since 2026-09-21, the tool compact type just under it since 2026-09-15)
+                    input.Push(Enumerable.Repeat(Keys.Down, 13).ToArray());   // LLM offer tools, the fourteenth LLM row (the mid-turn usage picker under the context length since 2026-09-25, the scan mode first, the show-summary toggle above it since 2026-09-21, the tool compact type just under it since 2026-09-15)
                     input.Push(Keys.Enter, Keys.Down, Keys.Enter, Keys.Escape);   // the on/off page, off picked, closed
                     break;
                 case 3: PushLine(input, "hi again"); break;
@@ -10447,6 +10447,54 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("/about takes no argument; /help shows each command's form.", ChatScreen.NoArgumentError("/about"));
     }
 
+    [Theory]
+    [InlineData("estimate")]
+    [InlineData("last-known")]
+    public async Task MidTurn_TheBusyRow_CarriesTheTally_AsLlmMidTurnUsageSays(string mode)
+    {
+        // LLM mid-turn usage (2026-09-25): the first reply's report stands on the second turn's busy row;
+        // with estimate, a tick while the reply streams shows it grown by the chunks so far, marked.
+        _settings.Update(d =>
+        {
+            d.TtsOutput = false;
+            d.LlmMidTurnUsage = mode;
+        });
+        _console.Profile.Height = 40;
+        _geometry = new ScreenGeometry(() => null);
+        _chat.Enqueue(FakeChatClient.Text("First."), FakeChatClient.Usage(1_000, 240));
+        _chat.Enqueue(FakeChatClient.Text("a"), FakeChatClient.Text("b"), FakeChatClient.Text("c"), FakeChatClient.Usage(1_300, 3));
+        _chat.BeforeUpdate = (i, _) =>
+        {
+            if (_chat.Requests.Count == 2 && i == 2)
+            {
+                _time.Advance(TimeSpan.FromSeconds(1));   // the spinner ticks with two chunks streamed
+            }
+
+            return Task.CompletedTask;
+        };
+        LinesWhenIdle("hi", "more", "/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains(" " + ScreenPane.BusyRow(TurnStages.WritingLabel, TimeSpan.Zero, "", "", UsageText.BusyHintPart(Tally(1_240), _session.ContextLength, MidTurnUsage.LastKnown, StreamMeter.Reading.Idle)!), output);
+        if (mode == "estimate")
+        {
+            Assert.Contains(UsageText.EstimateMark + UsageText.CompactNumber(1_242), output);
+        }
+        else
+        {
+            Assert.DoesNotContain(UsageText.EstimateMark + UsageText.CompactNumber(1_242), output);
+        }
+    }
+
+    /// <summary>A tally whose last request totals <paramref name="total"/> tokens, no speed.</summary>
+    private static TokenTally Tally(long total)
+    {
+        var tally = new TokenTally();
+        tally.Add(new TokenUsage(total, 0, total, 1, TimeSpan.Zero, TimeSpan.Zero));
+        return tally;
+    }
+
     [Fact]
     public async Task MidTurn_AMessage_IsQueued_TheCountOnTheBusyRow_ItsRowWrittenWhenItIsSent()
     {
@@ -10698,7 +10746,13 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public async Task MidTurn_ADoubleClickOnTheBusyRowsQueuedCount_OpensTheQueuePane()
     {
-        _settings.Update(d => d.TtsOutput = false);
+        // last-known (2026-09-25): a first turn has no tally then, so the count stays where the column below says;
+        // under estimate the streamed chunks' figures would sit between the label and the count.
+        _settings.Update(d =>
+        {
+            d.TtsOutput = false;
+            d.LlmMidTurnUsage = "last-known";
+        });
         _console.Profile.Height = 40;
         _geometry = new ScreenGeometry(() => null, () => 100);
         _chat.EnqueueText("One ", "two ", "three.");

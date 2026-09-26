@@ -16,6 +16,7 @@ public sealed class TokenTally
 {
     private readonly object _gate = new();
     private TokenUsage _lastReply;
+    private TokenUsage _previousReply;
     private TokenUsage _conversation;
     private TokenUsage _session;
     private TokenUsage _lastRequest;
@@ -25,6 +26,13 @@ public sealed class TokenTally
 
     /// <summary>The turn in progress, or the last one that ran. Zero until the first reply.</summary>
     public TokenUsage LastReply { get { lock (_gate) { return _lastReply; } } }
+
+    /// <summary>
+    /// The speed the busy row shows as last known (2026-09-25): this turn's once a request of it reported, else the
+    /// turn's before it — <see cref="BeginTurn"/> zeroes <see cref="LastReply"/>, and the row would lose its speed
+    /// for the whole first request of every turn. Null until a reply streamed with a count.
+    /// </summary>
+    public double? LastKnownSpeed { get { lock (_gate) { return _lastReply.TokensPerSecond ?? _previousReply.TokensPerSecond; } } }
 
     /// <summary>Since launch or the last <see cref="ResetConversation"/>.</summary>
     public TokenUsage Conversation { get { lock (_gate) { return _conversation; } } }
@@ -49,6 +57,11 @@ public sealed class TokenTally
     {
         lock (_gate)
         {
+            if (!_lastReply.IsEmpty)
+            {
+                _previousReply = _lastReply;
+            }
+
             _lastReply = TokenUsage.Zero;
         }
     }

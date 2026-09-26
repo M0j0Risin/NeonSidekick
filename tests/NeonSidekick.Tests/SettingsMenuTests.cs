@@ -757,12 +757,19 @@ public class SettingsMenuTests : IDisposable
                 SettingsField.ReflectionYieldsToTurns,
                 SettingsField.BotChatImages, SettingsField.BotChatImageMode, SettingsField.BotChatImageWorkflow, SettingsField.BotChatImageAsync,
                 SettingsField.BotChatLlmMode,
+                SettingsField.LlmMidTurnUsage,
             },
             Enum.GetValues<SettingsField>());
         // The compact rows: on the LLM tab after the context length but no reconnect; the type a picker, the two others typed.
         Assert.False(SettingsMenu.IsLlmField(SettingsField.LlmCompactType));
         Assert.False(SettingsMenu.IsLlmField(SettingsField.LlmCompactKeepRecent));
         Assert.False(SettingsMenu.IsLlmField(SettingsField.LlmAutoCompactPercent));
+        // The mid-turn usage picker (2026-09-25): under the context length, no reconnect, estimate by default.
+        Assert.False(SettingsMenu.IsLlmField(SettingsField.LlmMidTurnUsage));
+        Assert.False(SettingsMenu.IsToggle(SettingsField.LlmMidTurnUsage));
+        Assert.Equal("LLM mid-turn usage", SettingsMenu.FieldName(SettingsField.LlmMidTurnUsage));
+        Assert.Equal("estimate", SettingsMenu.FieldValue(SettingsField.LlmMidTurnUsage, data, _settings.ProfileDirectory));
+        Assert.Equal("last-known", SettingsMenu.FieldValue(SettingsField.LlmMidTurnUsage, new AppSettingsData { LlmMidTurnUsage = "last-known" }, _settings.ProfileDirectory));
         // The show-summary toggle (2026-09-21): right under keep recent, no reconnect, off by default.
         Assert.False(SettingsMenu.IsLlmField(SettingsField.LlmCompactShowSummary));
         Assert.True(SettingsMenu.IsToggle(SettingsField.LlmCompactShowSummary));
@@ -772,7 +779,7 @@ public class SettingsMenuTests : IDisposable
         Assert.Equal("the summary's lines or the pruned results, then the protected counts", SettingsMenu.ToggleDescribe(SettingsField.LlmCompactShowSummary, true));
         Assert.Equal("the one compact notice alone", SettingsMenu.ToggleDescribe(SettingsField.LlmCompactShowSummary, false));
         // The LLM tab's tail (2026-09-15, the user's order): the tools toggle ABOVE the tool-compact picker, then the cap, then the fun verbs.
-        Assert.Equal(new[] { SettingsField.LlmContextLength, SettingsField.LlmCompactType, SettingsField.LlmCompactKeepRecent, SettingsField.LlmCompactShowSummary, SettingsField.LlmAutoCompactPercent, SettingsField.LlmOfferTools, SettingsField.LlmToolCompactType, SettingsField.LlmMaxToolIterations, SettingsField.LlmUseFunVerbs }, SettingsMenu.TabFields[(int)SettingsTab.Llm].TakeLast(9));
+        Assert.Equal(new[] { SettingsField.LlmContextLength, SettingsField.LlmMidTurnUsage, SettingsField.LlmCompactType, SettingsField.LlmCompactKeepRecent, SettingsField.LlmCompactShowSummary, SettingsField.LlmAutoCompactPercent, SettingsField.LlmOfferTools, SettingsField.LlmToolCompactType, SettingsField.LlmMaxToolIterations, SettingsField.LlmUseFunVerbs }, SettingsMenu.TabFields[(int)SettingsTab.Llm].TakeLast(10));
         // The tool-compact row (2026-09-15): a picker under LLM offer tools, no reconnect, read at each turn.
         Assert.False(SettingsMenu.IsLlmField(SettingsField.LlmToolCompactType));
         Assert.False(SettingsMenu.IsToggle(SettingsField.LlmToolCompactType));
@@ -820,7 +827,7 @@ public class SettingsMenuTests : IDisposable
         Assert.Equal("0", SettingsMenu.EditableValue(SettingsField.LlmContextLength, data));
         Assert.Equal("32,768 tokens", SettingsMenu.FieldValue(SettingsField.LlmContextLength, new AppSettingsData { LlmContextLength = 32_768 }, _settings.ProfileDirectory));
         Assert.Equal("32768", SettingsMenu.EditableValue(SettingsField.LlmContextLength, new AppSettingsData { LlmContextLength = 32_768 }));
-        Assert.Equal(SettingsField.LlmContextLength, SettingsMenu.TabFields[(int)SettingsTab.Llm][^9]);   // the four compact rows, the tools, the tool-compact picker, the cap and the fun verbs follow it
+        Assert.Equal(SettingsField.LlmContextLength, SettingsMenu.TabFields[(int)SettingsTab.Llm][^10]);   // the mid-turn usage picker, the four compact rows, the tools, the tool-compact picker, the cap and the fun verbs follow it
         // The pane's tabs (five since 2026-09-19: Ask, Files and Web are /tools' tabs, Skills is /skills' Options tab): General, Sessions, LLM in their own order, TTS / STT the enum order of their session's fields; every field on exactly one tab of the three panes.
         Assert.Equal(["General", "Sessions", "LLM", "TTS", "STT", "Botchat"], SettingsMenu.TabTitles);   // Botchat last since 2026-09-25;   // Sessions right after General (2026-09-18); Web last until 2026-09-19, Skills third until later that day
         // The Options tab of /skills (2026-09-19; the Skills tab of /settings from 2026-09-16 until then): the skills switch, the external-folder switch and the compact-mode picker, then (2026-09-17) the #-mention switch, the delete switch, then the auto-learn switch and the reflection rows; none a reconnect.
@@ -1199,7 +1206,7 @@ public class SettingsMenuTests : IDisposable
         Assert.Equal("on", SettingsMenu.FieldValue(SettingsField.LlmUseFunVerbs, new AppSettingsData { LlmUseFunVerbs = true }, _settings.ProfileDirectory));
         Assert.False(SettingsMenu.IsLlmField(SettingsField.LlmUseFunVerbs) || SettingsMenu.IsTtsField(SettingsField.LlmUseFunVerbs) || SettingsMenu.IsVoiceField(SettingsField.LlmUseFunVerbs));
         // The LLM tab: the scan mode first (where a blank URL looks, so above the URL; a picker, no reconnect), then the reconnecting LLM fields in enum order, the compact rows, the turn-loop rows and the fun verbs.
-        Assert.Equal(new[] { SettingsField.LlmScanMode, SettingsField.LlmUrl, SettingsField.LlmModel, SettingsField.LlmApiKey, SettingsField.LlmReasoning, SettingsField.LlmRequestTimeoutSeconds, SettingsField.LlmTurnTimeoutSeconds, SettingsField.LlmContextLength, SettingsField.LlmCompactType, SettingsField.LlmCompactKeepRecent, SettingsField.LlmCompactShowSummary, SettingsField.LlmAutoCompactPercent, SettingsField.LlmOfferTools, SettingsField.LlmToolCompactType, SettingsField.LlmMaxToolIterations, SettingsField.LlmUseFunVerbs }, SettingsMenu.TabFields[(int)SettingsTab.Llm]);
+        Assert.Equal(new[] { SettingsField.LlmScanMode, SettingsField.LlmUrl, SettingsField.LlmModel, SettingsField.LlmApiKey, SettingsField.LlmReasoning, SettingsField.LlmRequestTimeoutSeconds, SettingsField.LlmTurnTimeoutSeconds, SettingsField.LlmContextLength, SettingsField.LlmMidTurnUsage, SettingsField.LlmCompactType, SettingsField.LlmCompactKeepRecent, SettingsField.LlmCompactShowSummary, SettingsField.LlmAutoCompactPercent, SettingsField.LlmOfferTools, SettingsField.LlmToolCompactType, SettingsField.LlmMaxToolIterations, SettingsField.LlmUseFunVerbs }, SettingsMenu.TabFields[(int)SettingsTab.Llm]);
         Assert.Equal(Enum.GetValues<SettingsField>().Where(SettingsMenu.IsLlmField), SettingsMenu.TabFields[(int)SettingsTab.Llm].Skip(1).Take(7));
         Assert.False(SettingsMenu.IsLlmField(SettingsField.LlmScanMode) || SettingsMenu.IsTtsField(SettingsField.LlmScanMode) || SettingsMenu.IsVoiceField(SettingsField.LlmScanMode));
         Assert.False(SettingsMenu.IsToggle(SettingsField.LlmScanMode));
@@ -2769,7 +2776,7 @@ public class SettingsMenuTests : IDisposable
         // Each tab under the strip, padded to its own column (28, 26, 19, 26), the whole tab in view, nothing of another tab on it.
         Assert.Contains("\n \n▸ Session logging             on\n  Session retention (days)    forever\n  Session naming mode         model-written\n  Session show name           all-names\n  Session tool                on\n  Session search max results  10 results\n" + Rule(100), _console.Output);
         Assert.Contains("\n \n▸ LLM scan mode             local\n  LLM URL                   (probe local ports)\n  LLM model                 (first listed)\n  LLM API key               ", _console.Output);
-        Assert.Contains("\n  LLM reasoning             none\n  LLM request timeout (s)   3600\n  LLM turn timeout (s)      21600\n  LLM context length        (from the server)\n  LLM compact type          summary\n  LLM compact keep recent   2 turns\n  LLM compact show summary  off\n  LLM auto compact (%)      85 %\n  LLM offer tools           on\n  LLM tool compact type     prune\n  LLM max tool iterations   10000 round trips\n  LLM use fun verbs         off\n" + Rule(100), _console.Output);
+        Assert.Contains("\n  LLM reasoning             none\n  LLM request timeout (s)   3600\n  LLM turn timeout (s)      21600\n  LLM context length        (from the server)\n  LLM mid-turn usage        estimate\n  LLM compact type          summary\n  LLM compact keep recent   2 turns\n  LLM compact show summary  off\n  LLM auto compact (%)      85 %\n  LLM offer tools           on\n  LLM tool compact type     prune\n  LLM max tool iterations   10000 round trips\n  LLM use fun verbs         off\n" + Rule(100), _console.Output);
         Assert.Contains("\n \n▸ TTS output         on\n  TTS source         http\n  TTS HTTP URL       http://localhost:8880/v1\n  TTS voice preview  on\n  TTS voice          af_heart\n  TTS voice 2        am_eric\n  TTS voice mix      80 % / 20 %\n  TTS speed          1.2\n" + Rule(100), _console.Output);
         Assert.Contains("\n \n▸ STT input                 off\n  STT wake                  off\n  STT wake phrase           hey neon\n  STT interrupt             off\n  STT interrupt echo guard  100 %\n  STT interrupt confirm     200 ms\n  STT push-to-talk key      F4\n  STT whisper model         ggml-base.en.bin\n  STT vosk model            vosk-model-small-en-us-0.15\n" + Rule(100), _console.Output);
         Assert.DoesNotContain("Ask user", _console.Output);   // /tools' since 2026-09-19

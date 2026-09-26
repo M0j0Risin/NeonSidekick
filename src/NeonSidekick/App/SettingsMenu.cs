@@ -403,6 +403,9 @@ public enum SettingsField
 
     /// <summary>A picker: whose LLM the <c>/botchat</c> bots talk through — <c>single</c> / <c>multi</c> (<see cref="Settings.AppSettingsData.BotChatLlmMode"/>). The Botchat tab's first row (later on 2026-09-25); no reconnect (read at a chat's start).</summary>
     BotChatLlmMode,
+
+    /// <summary>A picker: what the busy row's token tally shows while a turn runs — <c>estimate</c> / <c>last-known</c> (<see cref="Settings.AppSettingsData.LlmMidTurnUsage"/>). On the LLM tab under <see cref="LlmContextLength"/> (2026-09-25); no reconnect (read on every draw).</summary>
+    LlmMidTurnUsage,
 }
 
 /// <summary>The tabs of <c>/settings</c> on the pane, in strip order (Sessions right after General — the user's order, 2026-09-18; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
@@ -635,7 +638,7 @@ internal sealed partial class SettingsMenu
     [
         [SettingsField.Profile, SettingsField.NewProfileMode, SettingsField.WorkingDirectory, SettingsField.QueueMessages, SettingsField.QueueCancelMode, SettingsField.Memory, SettingsField.CopyUserPrompt, SettingsField.ShowImageThumbnails, SettingsField.ImageThumbnailSize, SettingsField.TranscriptMarkdown, SettingsField.PastePreviewLines, SettingsField.HideExitAutocomplete, SettingsField.CommandTypoIntercept, SettingsField.WelcomeSplash, SettingsField.ShowWorkingDirectory, SettingsField.ShowToolbar, SettingsField.DraftEditor, SettingsField.ImageEditor, SettingsField.Theme],
         [SettingsField.SessionLogging, SettingsField.SessionRetentionDays, SettingsField.SessionNamingMode, SettingsField.SessionShowName, SettingsField.SessionTool, SettingsField.SessionSearchMaxResults],
-        [SettingsField.LlmScanMode, SettingsField.LlmUrl, SettingsField.LlmModel, SettingsField.LlmApiKey, SettingsField.LlmReasoning, SettingsField.LlmRequestTimeoutSeconds, SettingsField.LlmTurnTimeoutSeconds, SettingsField.LlmContextLength, SettingsField.LlmCompactType, SettingsField.LlmCompactKeepRecent, SettingsField.LlmCompactShowSummary, SettingsField.LlmAutoCompactPercent, SettingsField.LlmOfferTools, SettingsField.LlmToolCompactType, SettingsField.LlmMaxToolIterations, SettingsField.LlmUseFunVerbs],
+        [SettingsField.LlmScanMode, SettingsField.LlmUrl, SettingsField.LlmModel, SettingsField.LlmApiKey, SettingsField.LlmReasoning, SettingsField.LlmRequestTimeoutSeconds, SettingsField.LlmTurnTimeoutSeconds, SettingsField.LlmContextLength, SettingsField.LlmMidTurnUsage, SettingsField.LlmCompactType, SettingsField.LlmCompactKeepRecent, SettingsField.LlmCompactShowSummary, SettingsField.LlmAutoCompactPercent, SettingsField.LlmOfferTools, SettingsField.LlmToolCompactType, SettingsField.LlmMaxToolIterations, SettingsField.LlmUseFunVerbs],
         [SettingsField.TtsOutput, SettingsField.TtsSource, SettingsField.TtsHttpUrl, SettingsField.TtsVoicePreview, SettingsField.TtsVoice, SettingsField.TtsVoice2, SettingsField.TtsVoiceMix, SettingsField.TtsSpeed],
         Fields.Where(IsVoiceField).ToArray(),
         [SettingsField.BotChatLlmMode, SettingsField.BotChatImages, SettingsField.BotChatImageMode, SettingsField.BotChatImageWorkflow, SettingsField.BotChatImageAsync],
@@ -1007,6 +1010,7 @@ internal sealed partial class SettingsMenu
         SettingsField.ComfyCaretMention => "ComfyUI ^-mention enabled",
         SettingsField.ComfyPictureStrip => "ComfyUI picture strip",
         SettingsField.BotChatLlmMode => "Botchat LLM mode",
+        SettingsField.LlmMidTurnUsage => "LLM mid-turn usage",
         SettingsField.BotChatImages => "Botchat images enabled",
         SettingsField.BotChatImageMode => "Botchat image mode",
         SettingsField.BotChatImageWorkflow => "Botchat image workflow",
@@ -1167,6 +1171,7 @@ internal sealed partial class SettingsMenu
             SettingsField.ComfyCaretMention => OnOff(data.ComfyCaretMention),
             SettingsField.ComfyPictureStrip => OnOff(data.ComfyPictureStrip),
             SettingsField.BotChatLlmMode => data.BotChatLlmMode,
+            SettingsField.LlmMidTurnUsage => data.LlmMidTurnUsage,
             SettingsField.BotChatImages => OnOff(data.BotChatImages),
             SettingsField.BotChatImageMode => data.BotChatImageMode,
             SettingsField.BotChatImageWorkflow => string.IsNullOrWhiteSpace(data.BotChatImageWorkflow) ? FirstBotChatWorkflowLabel : data.BotChatImageWorkflow,
@@ -1469,6 +1474,10 @@ internal sealed partial class SettingsMenu
     /// <summary>One row of the botchat-LLM-mode picker: the mode and its hint (padded to seven: <c>single</c> is six). Pinned.</summary>
     public static string BotChatLlmModeLabel(string name) =>
         Markup.Escape(name.PadRight(7)) + Theme.DimMarkup(App.BotChatLlmMode.Describe(name));
+
+    /// <summary>One row of the mid-turn-usage picker: the mode and its hint (padded to eleven: <c>last-known</c> is ten). Pinned.</summary>
+    public static string MidTurnUsageLabel(string name) =>
+        Markup.Escape(name.PadRight(11)) + Theme.DimMarkup(MidTurnUsageMode.Describe(name));
 
     /// <summary>One row of the botchat-image-mode picker: the mode and its hint (padded to eleven: <c>autonomous</c> is ten). Pinned.</summary>
     public static string BotChatImageModeLabel(string name) =>
@@ -2213,6 +2222,11 @@ internal sealed partial class SettingsMenu
         if (field == SettingsField.BotChatLlmMode)
         {
             return await PickBotChatLlmModeAsync(saved, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (field == SettingsField.LlmMidTurnUsage)
+        {
+            return await PickMidTurnUsageAsync(saved, cancellationToken).ConfigureAwait(false);
         }
 
         if (field == SettingsField.BotChatImageMode)
@@ -3676,6 +3690,22 @@ internal sealed partial class SettingsMenu
 
         string name = names[index];
         Apply(SettingsField.BotChatLlmMode, d => d.BotChatLlmMode = name);
+        return true;
+    }
+
+    /// <summary>The mid-turn-usage picker under the settings list (2026-09-25): one <see cref="MidTurnUsageLabel"/> row per <see cref="MidTurnUsageMode.Names"/> entry, the saved one under the cursor.</summary>
+    private async Task<bool> PickMidTurnUsageAsync(AppSettingsData saved, CancellationToken cancellationToken)
+    {
+        var names = MidTurnUsageMode.Names;
+        var page = new MenuPage(Crumb(FieldName(SettingsField.LlmMidTurnUsage)), names.Select(MidTurnUsageLabel).ToList(), PickKeys);
+        int? picked = await PickAsync(page, Math.Max(0, Array.IndexOf(names, saved.LlmMidTurnUsage)), cancellationToken).ConfigureAwait(false);
+        if (picked is not { } index)
+        {
+            return Unchanged();
+        }
+
+        string name = names[index];
+        Apply(SettingsField.LlmMidTurnUsage, d => d.LlmMidTurnUsage = name);
         return true;
     }
 

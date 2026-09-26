@@ -167,6 +167,8 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     private string _shownHint = "";
     private Func<string> _queued = () => "";
     private Func<string> _usage = () => "";
+    private Func<string> _busyUsage = () => "";
+    private Func<string, bool> _labelAfterUsage = _ => false;
 
     // The overlay (the info pane, the menus): drawn where the input row is, the cursor hidden
     // meanwhile — or, with an input slot, above the input rows, the cursor on them.
@@ -528,6 +530,28 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     {
         get => _usage;
         set => _usage = value ?? throw new ArgumentNullException(nameof(value));
+    }
+
+    /// <summary>
+    /// The token tally the busy row draws after the spinner's label (2026-09-25, <c>LLM mid-turn usage</c>): the pane draws
+    /// this one itself (<see cref="BusyRow(string, TimeSpan, string, string, string)"/>), re-read on every tick so a live
+    /// estimate moves with the spinner; nothing under an overlay's hint or the scroll's, as the standing row's tally. Its
+    /// cells join the spinner's in <see cref="HintZone.Usage"/>. Empty = the row as before.
+    /// </summary>
+    public Func<string> BusyUsage
+    {
+        get => _busyUsage;
+        set => _busyUsage = value ?? throw new ArgumentNullException(nameof(value));
+    }
+
+    /// <summary>
+    /// Which busy labels the row draws after the tally rather than before it (2026-09-25, the user's call: the ComfyUI
+    /// generation's <c>ComfyUI:</c>, <c>⠹ 1.2k / 4.1k · 30% · ComfyUI: 00:12</c>); asked per draw. None by default.
+    /// </summary>
+    public Func<string, bool> LabelAfterUsage
+    {
+        get => _labelAfterUsage;
+        set => _labelAfterUsage = value ?? throw new ArgumentNullException(nameof(value));
     }
 
     /// <summary>
@@ -2035,12 +2059,30 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     /// <see cref="BusyRow(string, TimeSpan, string)"/> with the <paramref name="queued"/> part between the
     /// label and the overlay's hint (<c>thinking 00:12 · 📨 2 queued</c>, 2026-09-18); empty = the row as before. Pinned.
     /// </summary>
-    public static string BusyRow(string label, TimeSpan elapsed, string overlayHint, string queued)
+    public static string BusyRow(string label, TimeSpan elapsed, string overlayHint, string queued) => BusyRow(label, elapsed, overlayHint, queued, "");
+
+    /// <summary>
+    /// <see cref="BusyRow(string, TimeSpan, string, string)"/> with the token tally right after the label (2026-09-25,
+    /// <see cref="BusyUsage"/>): <c>thinking 00:12 · ~5.1k / 151.4k · ~3% · ~41 tok/s · 📨 2 queued</c> — beside the
+    /// spinner, so the two make one zone; empty = the row as before. Pinned.
+    /// </summary>
+    public static string BusyRow(string label, TimeSpan elapsed, string overlayHint, string queued, string usage) => BusyRow(label, elapsed, overlayHint, queued, usage, labelAfterUsage: false);
+
+    /// <summary>
+    /// <see cref="BusyRow(string, TimeSpan, string, string, string)"/> with the label and its count after the tally when
+    /// <paramref name="labelAfterUsage"/> (<see cref="LabelAfterUsage"/>, 2026-09-25): <c>1.2k / 4.1k · 30% · ComfyUI: 00:12 · 📨 2 queued</c>. Pinned.
+    /// </summary>
+    public static string BusyRow(string label, TimeSpan elapsed, string overlayHint, string queued, string usage, bool labelAfterUsage)
     {
         ArgumentNullException.ThrowIfNull(overlayHint);
         ArgumentNullException.ThrowIfNull(queued);
-        return HintRow(HintRow(BusyText(label, elapsed), queued), overlayHint);
+        ArgumentNullException.ThrowIfNull(usage);
+        return HintRow(HintRow(Labelled(BusyText(label, elapsed), usage, labelAfterUsage), queued), overlayHint);
     }
+
+    /// <summary>The spinner's label beside the tally, in the order <paramref name="labelAfterUsage"/> says.</summary>
+    private static string Labelled(string busyText, string usage, bool labelAfterUsage) =>
+        labelAfterUsage ? HintRow(usage, busyText) : HintRow(busyText, usage);
 
     /// <summary>Redraws the hint row if the standing hint changed (a state change with no transcript line).</summary>
     public void RefreshHint()
@@ -3608,8 +3650,13 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
             string frame = Theme.SpinnerFrames[_frame % Theme.SpinnerFrames.Length];
             string prefix = Fit(StripPrefix(_strip()), leftMax - TextCells.Width(frame));
             string queued = StandingQueued();
+            // The tally beside the label (2026-09-25), where the standing row would have it: not under an overlay's hint or the scroll's.
+            string usage = _overlay is null && _top < 0 ? _busyUsage() : "";
             var elapsed = _time.GetElapsedTime(_busySince);
-            string unfitted = " " + BusyRow(label, elapsed, _overlay?.Hint ?? (_top >= 0 ? ScrolledHint(RowsBelowLocked()) : ""), queued);
+            // A label that trails the tally (LabelAfterUsage, the ComfyUI generation's) swaps the two; nothing else moves.
+            bool after = usage.Length > 0 && _labelAfterUsage(label);
+            string unfitted = " " + BusyRow(label, elapsed, _overlay?.Hint ?? (_top >= 0 ? ScrolledHint(RowsBelowLocked()) : ""), queued, usage, after);
+            string labelled = " " + Labelled(BusyText(label, elapsed), usage, after);
             int restMax = leftMax - TextCells.Width(prefix) - TextCells.Width(frame);
             string rest = Fit(unfitted, restMax);
             string left = prefix + frame + rest;
@@ -3620,11 +3667,14 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
             _shownHint = left + tail;
             // The strip's place (2026-09-24): column 0, as on the standing row — when the fit left it whole, a cut glyph being no button.
             _hintStrip = prefix == StripPrefix(_strip()) ? _strip() : "";
-            // The queued part's place: after the prefix, the frame, the blank, the label and a separator — when the fit left it whole.
-            RecordQueued(queued, TextCells.Width(prefix) + TextCells.Width(frame), TextCells.Width(" " + BusyText(label, elapsed) + HintSeparator), unfitted, restMax);
-            // The usage zone: the frame and the label after the prefix — when the fit kept the label
-            // whole, and not while scrolled (the row is the scroll's then, like the standing one).
-            RecordUsage(_top < 0 ? frame + " " + BusyText(label, elapsed) : "", TextCells.Width(prefix), 0, frame + unfitted, restMax + TextCells.Width(frame));
+            // The queued part's place: after the prefix, the frame, the blank, the label, the tally and a separator — when the fit left it whole.
+            RecordQueued(queued, TextCells.Width(prefix) + TextCells.Width(frame), TextCells.Width(labelled + HintSeparator), unfitted, restMax);
+            // The usage zone: the frame, the label and the tally after the prefix — when the fit kept them
+            // whole, and not while scrolled (the row is the scroll's then, like the standing one). A tally
+            // the fit cut leaves the frame and whichever comes first — the label, or the tally ahead of a trailing one.
+            int zoneCells = restMax + TextCells.Width(frame);
+            string zone = TextCells.Width(frame + unfitted) <= zoneCells || TextCells.Width(frame + labelled) < zoneCells ? frame + labelled : frame + " " + (after ? usage : BusyText(label, elapsed));
+            RecordUsage(_top < 0 ? zone : "", TextCells.Width(prefix), 0, frame + unfitted, zoneCells);
         }
         else
         {

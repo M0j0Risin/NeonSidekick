@@ -499,6 +499,13 @@ public sealed class Assistant
     public TurnContextGuard? ContextGuard { get; set; }
 
     /// <summary>
+    /// Counts each request as it streams (2026-09-25): begun when the request goes out, a chunk per update with
+    /// content other than the usage report, ended when the stream does — completed, cancelled or failed — so the
+    /// busy row's <c>estimate</c> never outlives its request. Null (a botchat bot's assistant, a test) counts nothing.
+    /// </summary>
+    public StreamMeter? Meter { get; set; }
+
+    /// <summary>
     /// What a line where only tool results were pruned opens with (2026-09-19, the user's pick):
     /// the guard's <see cref="TurnPrunedNotice"/> and a prune-only compact's notice (<c>App.CompactionText</c>
     /// reads it; a summary wears the clamp). The scissors U+2702 with the variation selector — bare
@@ -830,52 +837,66 @@ public sealed class Assistant
             DiagnosticLog.Debug(Category, RequestLogLine(iteration, request.Count, _tools.Count, _reasoning));
 
             // Only MoveNextAsync sits inside the try: C# forbids `yield` inside a try with a catch.
-            await using (var stream = _client.GetStreamingResponseAsync(request, options, cancellationToken).GetAsyncEnumerator(cancellationToken))
+            // The meter's try is a finally alone, so it may: the caller abandoning the turn mid-yield still ends the count.
+            Meter?.Begin();
+            try
             {
-                while (true)
+                await using (var stream = _client.GetStreamingResponseAsync(request, options, cancellationToken).GetAsyncEnumerator(cancellationToken))
                 {
-                    try
+                    while (true)
                     {
-                        if (!await stream.MoveNextAsync().ConfigureAwait(false))
+                        try
                         {
+                            if (!await stream.MoveNextAsync().ConfigureAwait(false))
+                            {
+                                break;
+                            }
+                        }
+                        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                        {
+                            cancelled = true;
                             break;
                         }
-                    }
-                    catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-                    {
-                        cancelled = true;
-                        break;
-                    }
-                    catch (Exception ex)
-                    {
-                        // Includes the transport's own TaskCanceledException when the request
-                        // timeout fires with our token untouched: that is an error, not barge-in.
-                        failure = ex;
-                        break;
-                    }
+                        catch (Exception ex)
+                        {
+                            // Includes the transport's own TaskCanceledException when the request
+                            // timeout fires with our token untouched: that is an error, not barge-in.
+                            failure = ex;
+                            break;
+                        }
 
-                    var update = stream.Current;
-                    updates.Add(update);
-                    if (first is null && update.Contents.Count > 0)
-                    {
-                        first = _time.GetTimestamp();
-                    }
+                        var update = stream.Current;
+                        updates.Add(update);
+                        if (first is null && update.Contents.Count > 0)
+                        {
+                            first = _time.GetTimestamp();
+                        }
 
-                    // The decoder can emit "" for the leading bytes of a multi-byte sequence, and
-                    // the filter holds back a possible tag start; either way nothing is yielded.
-                    string text = filter.Push(update.Text);
-                    if (written is not null && text.Length > 0)
-                    {
-                        text = written.Push(text);
-                    }
+                        if (Meter is { } meter && update.Contents.Any(c => c is not UsageContent))
+                        {
+                            meter.Chunk();
+                        }
 
-                    if (text.Length > 0)
-                    {
-                        partial.Append(text);
-                        log.Chars += text.Length;
-                        yield return new TurnEvent.TextDelta(text);
+                        // The decoder can emit "" for the leading bytes of a multi-byte sequence, and
+                        // the filter holds back a possible tag start; either way nothing is yielded.
+                        string text = filter.Push(update.Text);
+                        if (written is not null && text.Length > 0)
+                        {
+                            text = written.Push(text);
+                        }
+
+                        if (text.Length > 0)
+                        {
+                            partial.Append(text);
+                            log.Chars += text.Length;
+                            yield return new TurnEvent.TextDelta(text);
+                        }
                     }
                 }
+            }
+            finally
+            {
+                Meter?.End();
             }
 
             long ended = _time.GetTimestamp();

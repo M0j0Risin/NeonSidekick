@@ -1332,6 +1332,53 @@ public class AssistantTests
     // ── Usage ───────────────────────────────────────────────────────────────
 
     [Fact]
+    public async Task Meter_CountsTheContentChunksWhileTheRequestStreams_AndEndsWithIt()
+    {
+        var clock = new ManualTimeProvider();
+        var (client, _, assistant) = Build(time: clock);
+        assistant.Meter = new StreamMeter(clock);
+        client.Enqueue(FakeChatClient.Text("Hel"), FakeChatClient.Text("lo"), FakeChatClient.Usage(10, 5));
+        client.BeforeUpdate = (i, _) =>
+        {
+            clock.Advance(i == 0 ? TimeSpan.FromMilliseconds(800) : TimeSpan.FromSeconds(1));
+            return Task.CompletedTask;
+        };
+
+        var seen = new List<StreamMeter.Reading>();
+        await foreach (var evt in assistant.RunTurnAsync("hi"))
+        {
+            seen.Add(assistant.Meter.Read());
+        }
+
+        // Each delta read mid-stream: one chunk, then two over the second since the first; the usage report is no chunk.
+        Assert.Equal(new StreamMeter.Reading(true, 1, null), seen[0]);
+        Assert.Equal(new StreamMeter.Reading(true, 2, 2.0), seen[1]);
+        // The usage event comes after the stream: the meter has ended.
+        Assert.Equal(StreamMeter.Reading.Idle, seen[^1]);
+        Assert.Equal(StreamMeter.Reading.Idle, assistant.Meter.Read());
+    }
+
+    [Fact]
+    public async Task Meter_EndsWhenTheTurnIsCancelledMidStream()
+    {
+        var (client, _, assistant) = Build();
+        assistant.Meter = new StreamMeter();
+        client.EnqueueText("a", "b", "c");
+        using var cts = new CancellationTokenSource();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
+        {
+            await foreach (var evt in assistant.RunTurnAsync("hi", cts.Token))
+            {
+                Assert.True(assistant.Meter.Read().Streaming);
+                cts.Cancel();
+            }
+        });
+
+        Assert.Equal(StreamMeter.Reading.Idle, assistant.Meter.Read());
+    }
+
+    [Fact]
     public async Task Usage_IsRaisedAfterTheStream_WithTheRequestsTwoPhases()
     {
         var clock = new ManualTimeProvider();
