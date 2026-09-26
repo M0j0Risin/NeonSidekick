@@ -21,6 +21,7 @@ public sealed class RunCommandToolTests : IDisposable
     private readonly ProcessRegistry _registry;
     private int _signals;
     private readonly RunCommandTool _tool;
+    private readonly CommandGate _gate;
 
     public RunCommandToolTests()
     {
@@ -29,10 +30,10 @@ public sealed class RunCommandToolTests : IDisposable
         _files = new Files.WorkingDirectory(() => _root, _time);
         _interpreters = new Interpreters(_ => null);
         var list = new CommandAllowList(() => _settings.ShellCommandAllowed, merged => _settings.ShellCommandAllowed = [.. merged]);
-        var gate = new CommandGate(() => _settings, list, (request, _) => { _asked.Add(request); return Task.FromResult(_answer); });
+        _gate = new CommandGate(() => _settings, list, (request, _) => { _asked.Add(request); return Task.FromResult(_answer); });
         var runner = new ShellRunner(_time);
         _registry = new ProcessRegistry(runner, new Random(1), () => Interlocked.Increment(ref _signals));
-        _tool = App.ChatScreen.ShellTools(runner, _registry, _files, gate, _interpreters, () => _settings, new Random(1), () => []).OfType<RunCommandTool>().Single();
+        _tool = App.ChatScreen.ShellTools(runner, _registry, _files, _gate, _interpreters, () => _settings, new Random(1), () => []).OfType<RunCommandTool>().Single();
     }
 
     public void Dispose()
@@ -114,6 +115,9 @@ public sealed class RunCommandToolTests : IDisposable
         _settings.ShellPoliceOutsidePaths = false;
         Assert.Equal(@"Error: the command was denied by the user: type C:\Windows\win.ini; do not retry it or work around the refusal", await Invoke(("command", @"type C:\Windows\win.ini")));
         Assert.Equal(3, _asked.Count);
+
+        // Every one of them is in the gate's record (2026-09-26): the police's four, then the three denials.
+        Assert.Equal([@"type C:\Windows\win.ini", @"cd ..\..", "dir ~", "dir %USERPROFILE%\\Desktop", "dir " + _root, "cd ..", @"type C:\Windows\win.ini"], _gate.Refusals);
     }
 
     [Fact]

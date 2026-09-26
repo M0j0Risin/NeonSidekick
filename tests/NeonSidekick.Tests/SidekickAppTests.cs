@@ -119,12 +119,12 @@ public class SidekickAppTests : IDisposable
         _settings.Update(d => d.LlmUrl = "http://127.0.0.1:1234/v1");
     }
 
-    private async Task<string> Headless(string input, EnvironmentOverrides? env = null, Func<LlmEndpoint, LlmTimeouts, IChatClient>? chat = null)
+    private async Task<string> Headless(string input, EnvironmentOverrides? env = null, Func<LlmEndpoint, LlmTimeouts, IChatClient>? chat = null, SidekickOptions? options = null, int exitCode = 0)
     {
         var stdout = new StringWriter();
         var app = App(env, new StringReader(input), stdout, chat: chat);
-        int code = await app.RunAsync(SidekickOptions.None with { Headless = true }, CancellationToken.None);
-        Assert.Equal(0, code);
+        int code = await app.RunAsync((options ?? SidekickOptions.None) with { Headless = true }, CancellationToken.None);
+        Assert.Equal(exitCode, code);
         Assert.Empty(_console.Output); // headless never touches the TUI console
         return stdout.ToString();
     }
@@ -335,17 +335,23 @@ public class SidekickAppTests : IDisposable
         Assert.Contains("git_discard", _chat.Options[0]!.Tools!.Cast<AIFunction>().Select(t => t.Name));   // the fixture opts every tool on; a fresh profile keeps the two opt-ins off
     }
 
-    /// <summary>Headless has no pane to ask on (2026-09-21): under <c>ask</c> a command whose prefix is not allowed is refused with the no-screen sentence; the tool and its rule are offered like the screen's.</summary>
+    /// <summary>
+    /// Headless has no pane to ask on (2026-09-21): under <c>ask</c> a command whose prefix is not allowed is refused with the
+    /// no-screen sentence; the tool and its rule are offered like the screen's. Since 2026-09-26 the run ends with the
+    /// refused-commands notice and exit code 3.
+    /// </summary>
     [Fact]
-    public async Task Headless_RunCommand_UnderAsk_IsRefusedWithoutAScreen()
+    public async Task Headless_RunCommand_UnderAsk_IsRefusedWithoutAScreen_AndExitsWith3()
     {
         ServerOn1234("llama");
         _chat.Enqueue(FakeChatClient.Call("c1", "run_command", new Dictionary<string, object?> { ["command"] = "echo hi", ["shell"] = "cmd" }));
         _chat.EnqueueText("Then not.");
 
-        string output = await Headless("run it\n");
+        string output = await Headless("run it\n", exitCode: SidekickApp.HeadlessRefusedExitCode);
 
-        Assert.Contains("[tool] run_command -> Error: the command was not approved: no screen to ask on (Shell command policy is ask; NEONSIDEKICK_COMMAND_POLICY=yolo or the profile's Shell allowed commands would let it run); allowed prefixes: none", output);
+        Assert.Contains("[tool] run_command -> " + NeonSidekick.Shell.ShellText.NotAskable([]), output);
+        Assert.EndsWith("[notice] " + NeonSidekick.Shell.ShellText.RefusedSummary(["echo hi"]) + Environment.NewLine, output);
+        Assert.Equal(3, SidekickApp.HeadlessRefusedExitCode);
         Assert.Contains(Assistant.ShellRuleWithoutBridge, _chat.Requests[0][0].Text!, StringComparison.Ordinal);   // the bridge off by default (later on 2026-09-21)
         var offered = _chat.Options[0]!.Tools!.Cast<AIFunction>().Select(t => t.Name).ToList();
         Assert.Equal(offered.IndexOf("git_delete") + 1, offered.IndexOf("run_command"));
@@ -365,6 +371,72 @@ public class SidekickAppTests : IDisposable
         Assert.Contains("[tool] run_command -> exit 0 in 0.0 s (cmd): echo hi", output);
         Assert.Equal(EnvironmentOverrides.CommandPolicyVariable, App(env).OverriddenBy(SettingsField.ShellCommandPolicy));
         Assert.Null(App().OverriddenBy(SettingsField.ShellCommandPolicy));
+        Assert.DoesNotContain("[notice] ", output);   // nothing refused: no summary, exit 0 (Headless' default)
+    }
+
+    /// <summary>
+    /// <c>--yolo</c> (2026-09-26): the same as the variable for this launch, outranking a variable that says ask; the
+    /// settings row names the flag; nothing is saved.
+    /// </summary>
+    [Fact]
+    public async Task Headless_RunCommand_UnderTheYoloFlag_Runs_OverAVariableSayingAsk()
+    {
+        ServerOn1234("llama");
+        var env = new EnvironmentOverrides(n => n == EnvironmentOverrides.CommandPolicyVariable ? "ask" : null);
+        _chat.Enqueue(FakeChatClient.Call("c1", "run_command", new Dictionary<string, object?> { ["command"] = "echo hi", ["shell"] = "cmd" }));
+        _chat.EnqueueText("It said hi.");
+        var yolo = SidekickOptions.None with { Yolo = true };
+
+        string output = await Headless("run it\n", env, options: yolo);
+
+        Assert.Contains("[tool] run_command -> exit 0 in 0.0 s (cmd): echo hi", output);
+        var app = App(env, new StringReader(""), new StringWriter());
+        Assert.Equal(0, await app.RunAsync(yolo with { Headless = true }, CancellationToken.None));
+        Assert.Equal(SidekickOptions.YoloFlag, app.OverriddenBy(SettingsField.ShellCommandPolicy));
+        Assert.Equal("ask", _settings.Current.ShellCommandPolicy);   // never saved
+    }
+
+    /// <summary>The path police still stands under <c>--yolo</c> (the user's call, 2026-09-26), and what it refuses counts toward exit code 3.</summary>
+    [Fact]
+    public async Task Headless_UnderTheYoloFlag_ThePoliceStillRefuses_AndExitsWith3()
+    {
+        ServerOn1234("llama");
+        _settings.Update(d => d.ShellPoliceOutsidePaths = true);
+        _chat.Enqueue(FakeChatClient.Call("c1", "run_command", new Dictionary<string, object?> { ["command"] = @"type C:\Windows\win.ini", ["shell"] = "cmd" }));
+        _chat.EnqueueText("Refused.");
+
+        string output = await Headless("read it\n", options: SidekickOptions.None with { Yolo = true }, exitCode: SidekickApp.HeadlessRefusedExitCode);
+
+        Assert.Contains("[tool] run_command -> " + NeonSidekick.Shell.ShellText.OutsideHead, output);
+        Assert.Contains("[notice] " + NeonSidekick.Shell.ShellText.RefusedSummary([@"type C:\Windows\win.ini"]), output);
+    }
+
+    /// <summary>
+    /// <c>--yolo --no-police</c> (2026-09-26): the line the police refuses above runs; nothing is saved; the settings row
+    /// names the flag, else the variable, else nothing.
+    /// </summary>
+    [Fact]
+    public async Task Headless_UnderYoloAndNoPolice_AnOutsidePathRuns_AndNothingIsSaved()
+    {
+        ServerOn1234("llama");
+        _settings.Update(d => d.ShellPoliceOutsidePaths = true);
+        _chat.Enqueue(FakeChatClient.Call("c1", "run_command", new Dictionary<string, object?> { ["command"] = @"type C:\Windows\win.ini", ["shell"] = "cmd" }));
+        _chat.EnqueueText("Read it.");
+        var loose = SidekickOptions.None with { Yolo = true, NoPolice = true };
+
+        string output = await Headless("read it\n", options: loose);
+
+        Assert.Contains(@"[tool] run_command -> exit 0 in 0.0 s (cmd): type C:\Windows\win.ini", output);
+        Assert.DoesNotContain("[notice] ", output);
+        Assert.True(_settings.Current.ShellPoliceOutsidePaths);   // never saved
+
+        var flagged = App(null, new StringReader(""), new StringWriter());
+        Assert.Equal(0, await flagged.RunAsync(loose with { Headless = true }, CancellationToken.None));
+        Assert.Equal(SidekickOptions.NoPoliceFlag, flagged.OverriddenBy(SettingsField.ShellPoliceOutsidePaths));
+        var variable = App(new EnvironmentOverrides(n => n == EnvironmentOverrides.ShellPoliceVariable ? "off" : null), new StringReader(""), new StringWriter());
+        Assert.Equal(0, await variable.RunAsync(SidekickOptions.None with { Headless = true }, CancellationToken.None));
+        Assert.Equal(EnvironmentOverrides.ShellPoliceVariable, variable.OverriddenBy(SettingsField.ShellPoliceOutsidePaths));
+        Assert.Null(App().OverriddenBy(SettingsField.ShellPoliceOutsidePaths));
     }
 
     /// <summary>A background run headless (phase B): the start line, the exit as a <c>[notice]</c> at the loop top, and the seeded poll on the next turn.</summary>

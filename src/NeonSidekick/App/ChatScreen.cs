@@ -3476,7 +3476,7 @@ internal sealed partial class ChatScreen
     public static IReadOnlyList<AIFunction> ShellTools(ShellRunner runner, ProcessRegistry processes, WorkingDirectory files, CommandGate gate, Interpreters interpreters, Func<AppSettingsData> effective, Random random, Func<IReadOnlyList<AIFunction>> turnTools, string? runsFolder = null) => new AIFunction[]
     {
         new RunCommandTool(runner, processes, files, gate, interpreters, effective, random),
-        new ProcessTool(processes, files, effective),
+        new ProcessTool(processes, files, effective, gate),
         new ExecuteCodeTool(runner, files, gate, interpreters, effective, turnTools, random, runsFolder),
     };
 

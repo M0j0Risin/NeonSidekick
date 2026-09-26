@@ -409,7 +409,7 @@ public partial class ChatScreenTests
             DiagnosticLog.Emitted -= capture;
         }
 
-        Assert.Equal("Error: the command was not approved: no screen to ask on (Shell command policy is ask; NEONSIDEKICK_COMMAND_POLICY=yolo or the profile's Shell allowed commands would let it run); allowed prefixes: ver", ToolResult(_chat.Requests[1], "c1"));
+        Assert.Equal(NeonSidekick.Shell.ShellText.NotAskable(["ver"]), ToolResult(_chat.Requests[1], "c1"));
         Assert.StartsWith("exit 0 in 0.0 s (cmd): ver\n", ToolResult(_chat.Requests[2], "c2"));
         Assert.Contains(events, e => e.Message == "approval: refused (never asked) — cmd \"echo hi\"");
         Assert.Contains(events, e => e.Message == "approval: on the allow list — cmd \"ver\"");

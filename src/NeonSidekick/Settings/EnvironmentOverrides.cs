@@ -41,6 +41,7 @@ public sealed class EnvironmentOverrides
     public const string ObsidianVaultVariable = Prefix + "OBSIDIAN_VAULT";
     public const string ComfyUrlVariable = Prefix + "COMFY_URL";
     public const string ProfileVariable = Prefix + "PROFILE";
+    public const string ShellPoliceVariable = Prefix + "SHELL_POLICE";
 
     /// <summary>Every variable this class reads, for documentation.</summary>
     public static readonly string[] AllVariables =
@@ -49,7 +50,7 @@ public sealed class EnvironmentOverrides
         RequestTimeoutVariable, TurnTimeoutVariable, TtsUrlVariable, TtsVoiceVariable, TtsSpeedVariable,
         WhisperModelVariable, LlmReasoningVariable, TtsVoice2Variable, TtsMixVariable,
         InterruptEchoVariable, InterruptConfirmVariable, LlmContextVariable, SearxngUrlVariable,
-        CommandPolicyVariable, ObsidianVaultVariable, ComfyUrlVariable,
+        CommandPolicyVariable, ShellPoliceVariable, ObsidianVaultVariable, ComfyUrlVariable,
     };
 
     /// <summary>The log category of every environment line.</summary>
@@ -127,6 +128,14 @@ public sealed class EnvironmentOverrides
     public string? ShellCommandPolicy => ReadCommandPolicy(CommandPolicyVariable);
 
     /// <summary>
+    /// The path police for this launch (<c>Shell police outside paths</c>), or null when unset or not a switch word
+    /// (2026-09-26, the user's ask: the police could only be turned off by saving the profile, which every later
+    /// launch then inherited). Either way: <c>on</c> can bring it back over a saved <c>off</c>. <c>--no-police</c>
+    /// outranks it. Separate from <see cref="ShellCommandPolicy"/> on purpose: <c>yolo</c> never implies it.
+    /// </summary>
+    public bool? ShellPolice => ReadSwitch(ShellPoliceVariable);
+
+    /// <summary>
     /// A variable that is not an override: <c>PATH</c>, <c>PATHEXT</c>, <c>ProgramFiles</c> — what the
     /// shell probe (<see cref="Shell.Interpreters"/>) walks (2026-09-21). The one door stays this class's:
     /// nothing else calls <c>Environment.GetEnvironmentVariable</c>, and tests hand a dictionary here too.
@@ -155,6 +164,7 @@ public sealed class EnvironmentOverrides
                 InterruptConfirmVariable => SttInterruptConfirmMs is not null,
                 LlmContextVariable => LlmContextLength is not null,
                 CommandPolicyVariable => ShellCommandPolicy is not null,
+                ShellPoliceVariable => ShellPolice is not null,
                 _ => Read(name) is not null,
             };
             if (set)
@@ -218,6 +228,7 @@ public sealed class EnvironmentOverrides
         if (LlmContextLength is { } context) effective.LlmContextLength = context;
         if (WebSearxngUrl is { } searxng) effective.WebSearxngUrl = searxng;
         if (ShellCommandPolicy is { } policy) effective.ShellCommandPolicy = policy;
+        if (ShellPolice is { } police) effective.ShellPoliceOutsidePaths = police;
         if (ObsidianVault is { } vault) effective.ObsidianVault = vault;
         if (ComfyUrl is { } comfy) effective.ComfyUrl = comfy;
 
@@ -239,6 +250,31 @@ public sealed class EnvironmentOverrides
         }
 
         return Shell.CommandPolicy.Name(mode);
+    }
+
+    private static readonly string[] OnWords = ["on", "true", "1", "yes"];
+    private static readonly string[] OffWords = ["off", "false", "0", "no"];
+
+    private bool? ReadSwitch(string name)
+    {
+        var raw = Read(name);
+        if (raw is null)
+        {
+            return null;
+        }
+
+        if (OnWords.Contains(raw, StringComparer.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        if (OffWords.Contains(raw, StringComparer.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        DiagnosticLog.Warn(Category, $"{name}='{raw}' is not on or off; ignoring it.");
+        return null;
     }
 
     private int? ReadTokens(string name)

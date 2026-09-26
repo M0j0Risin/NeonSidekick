@@ -17,14 +17,16 @@ public sealed class ProcessToolTests : IDisposable
     private readonly ShellRunner _runner;
     private readonly ProcessRegistry _registry;
     private readonly ProcessTool _tool;
+    private readonly CommandGate _gate;
     private int _signals;
 
     public ProcessToolTests()
     {
         Directory.CreateDirectory(_dir);
+        _gate = new CommandGate(() => _settings, new CommandAllowList(() => [], _ => { }), null);
         _runner = new ShellRunner(_time);
         _registry = new ProcessRegistry(_runner, new Random(7), () => Interlocked.Increment(ref _signals));
-        _tool = new ProcessTool(_registry, new Files.WorkingDirectory(() => _dir, _time), () => _settings);
+        _tool = new ProcessTool(_registry, new Files.WorkingDirectory(() => _dir, _time), () => _settings, _gate);
     }
 
     public void Dispose()
@@ -143,6 +145,7 @@ public sealed class ProcessToolTests : IDisposable
         Assert.Equal("sent a line to " + loose.Id, await Invoke(("action", "submit"), ("session_id", loose.Id), ("data", @"C:\")));
         Assert.Equal(loose.Id + " exited 0 after 0.0 s (cmd): set /p name=&& call echo hello %name% — 1 new line\nhello C:\\", await Invoke(("action", "wait"), ("session_id", loose.Id), ("timeout", 30)));
         _settings.ShellPoliceOutsidePaths = true;
+        Assert.Equal([@"cd C:\", "cd .."], _gate.Refusals);   // the two policed writes, noted on the gate (2026-09-26)
 
         var sleeper = Start("ping -n 30 127.0.0.1 >nul");
         var wait = _tool.InvokeAsync(Args(("action", "wait"), ("session_id", sleeper.Id), ("timeout", 5)));

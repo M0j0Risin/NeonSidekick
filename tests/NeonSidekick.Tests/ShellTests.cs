@@ -180,7 +180,37 @@ public sealed class ShellTests
         answers.Enqueue(null);   // never asked (no watcher)
         var unasked = await gate.JudgeAsync(Request("rm -rf x"), CancellationToken.None);
         Assert.False(unasked.Allowed);
-        Assert.Equal("Error: the command was not approved: no screen to ask on (Shell command policy is ask; NEONSIDEKICK_COMMAND_POLICY=yolo or the profile's Shell allowed commands would let it run); allowed prefixes: dotnet build, git push", unasked.Error);
+        Assert.Equal("Error: the command was not approved: no screen to ask on (Shell command policy is ask; --yolo, NEONSIDEKICK_COMMAND_POLICY=yolo or the profile's Shell allowed commands would let it run); allowed prefixes: dotnet build, git push; do not retry it or work around the refusal: tell the user what could not run", unasked.Error);
+
+        // The record (2026-09-26): the denial and the never-asked, not the approvals.
+        Assert.Equal(["git push origin", "rm -rf x"], gate.Refusals);
+    }
+
+    /// <summary>What a gate refused (2026-09-26): not approved without an asker, noted by a tool, never an approval, never the off policy's refusal.</summary>
+    [Fact]
+    public async Task CommandGate_Refusals_RecordWhatDidNotRun()
+    {
+        var settings = new AppSettingsData { ShellCommandAllowed = ["dir"] };
+        var gate = new CommandGate(() => settings, new CommandAllowList(() => settings.ShellCommandAllowed, _ => { }), null);
+
+        Assert.Empty(gate.Refusals);
+        await gate.JudgeAsync(Request("dir /b", "cmd"), CancellationToken.None);
+        await gate.JudgeAsync(Request("del x", "cmd"), CancellationToken.None);
+        gate.NoteRefused(new CommandRequest("python", "print(1)", [ShellText.ScriptPrefix("python")], IsScript: true));
+        Assert.Equal(["del x", "python script"], gate.Refusals);
+
+        settings.ShellCommandPolicy = "yolo";
+        Assert.True((await gate.JudgeAsync(Request("del y", "cmd"), CancellationToken.None)).Allowed);
+        settings.ShellCommandPolicy = "off";
+        Assert.False((await gate.JudgeAsync(Request("del z", "cmd"), CancellationToken.None)).Allowed);
+        Assert.Equal(["del x", "python script"], gate.Refusals);
+    }
+
+    [Fact]
+    public void RefusedSummary_CountsEachCommandOnce()
+    {
+        Assert.Equal("1 command was not run: \"whoami\"", ShellText.RefusedSummary(["whoami", "whoami"]));
+        Assert.Equal("2 commands were not run: \"npm install\", \"python script\"", ShellText.RefusedSummary(["npm install", "python script", "npm install"]));
     }
 
     [Fact]
@@ -194,8 +224,8 @@ public sealed class ShellTests
         var refused = await gate.JudgeAsync(Request("del x", "cmd"), CancellationToken.None);
         Assert.False(refused.Allowed);
         Assert.StartsWith("Error: the command was not approved: no screen to ask on", refused.Error);
-        Assert.EndsWith("allowed prefixes: dir", refused.Error);
-        Assert.EndsWith("allowed prefixes: none", (await new CommandGate(() => new AppSettingsData(), new CommandAllowList(() => [], _ => { }), null).JudgeAsync(Request(), CancellationToken.None)).Error);
+        Assert.Contains("allowed prefixes: dir; ", refused.Error);
+        Assert.Contains("allowed prefixes: none; ", (await new CommandGate(() => new AppSettingsData(), new CommandAllowList(() => [], _ => { }), null).JudgeAsync(Request(), CancellationToken.None)).Error);
     }
 
     // ── The probe ────────────────────────────────────────────────────────────

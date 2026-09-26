@@ -171,6 +171,62 @@ public class SidekickOptionsTests
         Assert.Equal("--profile needs a value", o.Error);
     }
 
+    [Theory]
+    [InlineData("--yolo")]
+    [InlineData("--YOLO")]
+    public void Parse_Yolo_IsASwitch_AndAnActiveFlag(string flag)
+    {
+        var o = SidekickOptions.Parse(new[] { "--headless", flag });
+        Assert.Null(o.Error);
+        Assert.True(o.Yolo);
+        Assert.Equal(new[] { SidekickOptions.YoloFlag }, o.ActiveFlags());
+        Assert.Equal("--yolo", o.Describe());
+        Assert.False(SidekickOptions.None.Yolo);
+    }
+
+    /// <summary><c>--yolo</c> (2026-09-26) sets the policy over whatever the variable and the file said, and leaves the path police alone.</summary>
+    [Fact]
+    public void ApplyTo_Yolo_SetsThePolicy_AndLeavesThePolice()
+    {
+        var effective = new AppSettingsData { ShellCommandPolicy = "off", ShellPoliceOutsidePaths = true };
+        var o = SidekickOptions.Parse(new[] { "--yolo" });
+
+        var result = o.ApplyTo(effective);
+
+        Assert.Equal("yolo", result.ShellCommandPolicy);
+        Assert.True(result.ShellPoliceOutsidePaths);
+        Assert.Equal("off", effective.ShellCommandPolicy);   // input untouched
+        Assert.Equal("off", SidekickOptions.None.ApplyTo(effective).ShellCommandPolicy);
+    }
+
+    [Theory]
+    [InlineData("--no-police")]
+    [InlineData("--NO-POLICE")]
+    public void Parse_NoPolice_IsASwitch_AndAnActiveFlag(string flag)
+    {
+        var o = SidekickOptions.Parse(new[] { "--headless", "--yolo", flag });
+        Assert.Null(o.Error);
+        Assert.True(o.NoPolice);
+        Assert.Equal(new[] { SidekickOptions.YoloFlag, SidekickOptions.NoPoliceFlag }, o.ActiveFlags());
+        Assert.Equal("--yolo --no-police", o.Describe());
+        Assert.False(SidekickOptions.None.NoPolice);
+        Assert.False(SidekickOptions.Parse(new[] { "--yolo" }).NoPolice);   // never implied by --yolo
+    }
+
+    /// <summary><c>--no-police</c> (2026-09-26) turns the police off over the variable and the file, and leaves the command policy.</summary>
+    [Fact]
+    public void ApplyTo_NoPolice_TurnsThePoliceOff_AndLeavesThePolicy()
+    {
+        var effective = new AppSettingsData { ShellCommandPolicy = "ask", ShellPoliceOutsidePaths = true };
+
+        var result = SidekickOptions.Parse(new[] { "--no-police" }).ApplyTo(effective);
+
+        Assert.False(result.ShellPoliceOutsidePaths);
+        Assert.Equal("ask", result.ShellCommandPolicy);
+        Assert.True(effective.ShellPoliceOutsidePaths);   // input untouched
+        Assert.True(SidekickOptions.None.ApplyTo(effective).ShellPoliceOutsidePaths);
+    }
+
     [Fact]
     public void ApplyTo_LeavesTheProfileToAppSettings()
     {
@@ -202,6 +258,11 @@ public class SidekickOptionsTests
         Assert.Contains("--cwd <path>   working directory for this launch (outranks the saved setting)", SidekickOptions.Usage);
         Assert.Contains("[--cwd <path>]", SidekickOptions.Usage);
         Assert.Contains("[--profile <name>]", SidekickOptions.Usage);
+        Assert.Contains("[--yolo]", SidekickOptions.Usage);
+        Assert.Contains("--yolo         run every shell command without asking, this launch only (outranks NEONSIDEKICK_COMMAND_POLICY; the path police still applies unless --no-police)", SidekickOptions.Usage);
+        Assert.Contains("[--no-police]", SidekickOptions.Usage);
+        Assert.Contains("--no-police    let shell commands name paths outside the working directory, this launch only (outranks NEONSIDEKICK_SHELL_POLICE)", SidekickOptions.Usage);
+        Assert.Contains("Exit codes: 0 done, 2 bad argument or unknown profile, 3 headless run in which a shell command was refused", SidekickOptions.Usage);
         Assert.Contains("--profile <name>  profile for this launch (outranks NEONSIDEKICK_PROFILE and settings.json, which it leaves alone)", SidekickOptions.Usage);
         Assert.Contains("--log <path>   append every diagnostic line (Trace and up) to a file", SidekickOptions.Usage);
         Assert.Contains("--version", SidekickOptions.Usage);

@@ -73,9 +73,12 @@ public sealed class ProcessTool : AIFunction
     private readonly ProcessRegistry _registry;
     private readonly WorkingDirectory _files;
     private readonly Func<AppSettingsData> _effective;
+    private readonly CommandGate? _gate;
 
-    public ProcessTool(ProcessRegistry registry, WorkingDirectory files, Func<AppSettingsData> effective)
+    /// <param name="gate">Where a write the police refuses is noted (<see cref="CommandGate.NoteRefused"/>, 2026-09-26: headless ends with exit code 3 on any refusal); null notes nothing. Writes are never judged by it — the process was approved when it started.</param>
+    public ProcessTool(ProcessRegistry registry, WorkingDirectory files, Func<AppSettingsData> effective, CommandGate? gate = null)
     {
+        _gate = gate;
         _registry = registry ?? throw new ArgumentNullException(nameof(registry));
         _files = files ?? throw new ArgumentNullException(nameof(files));
         _effective = effective ?? throw new ArgumentNullException(nameof(effective));
@@ -204,7 +207,9 @@ public sealed class ProcessTool : AIFunction
                 // The police (Shell police outside paths, 2026-09-22): what goes to a process's stdin is read like a command line, relative paths from where it started.
                 if (_effective().ShellPoliceOutsidePaths && PathPolice.Judge(data, _files, session.Launch.WorkingDirectory, isScript: false) is { } outside)
                 {
-                    DiagnosticLog.Info(ShellKinds.Category, ShellText.PolicedLogLine(new CommandRequest(session.Kind, data, []), outside));
+                    var refused = new CommandRequest(session.Kind, data, []);
+                    DiagnosticLog.Info(ShellKinds.Category, ShellText.PolicedLogLine(refused, outside));
+                    _gate?.NoteRefused(refused);
                     return ShellText.OutsidePath(outside);
                 }
 

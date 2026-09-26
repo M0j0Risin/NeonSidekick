@@ -229,6 +229,7 @@ public sealed class RunCommandTool : AIFunction
         if (effective.ShellPoliceOutsidePaths && PathPolice.Judge(command, _files, workdir, isScript: false) is { } outside)
         {
             DiagnosticLog.Info(ShellKinds.Category, ShellText.PolicedLogLine(request, outside));
+            _gate.NoteRefused(request);
             return ShellText.OutsidePath(outside);
         }
 

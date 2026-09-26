@@ -63,6 +63,30 @@ public sealed class CommandGate
     /// <summary>The allow list the gate judges by.</summary>
     public CommandAllowList AllowList => _allowList;
 
+    private readonly Lock _refusalsLock = new();
+    private readonly List<string> _refusals = new();
+
+    /// <summary>
+    /// Every command this gate kept from running (2026-09-26), in order: refused by the gate (not approved, never
+    /// asked, denied) or by the path police before it (<see cref="NoteRefused"/>). Not the <c>off</c> policy's
+    /// refusals — the tools are not offered then. Headless reads it at the end of the run for its summary notice
+    /// and exit code 3; the screen never does. A snapshot; each entry is the command line, or <c>python script</c> for an <c>execute_code</c> script.
+    /// </summary>
+    public IReadOnlyList<string> Refusals
+    {
+        get { lock (_refusalsLock) { return _refusals.ToArray(); } }
+    }
+
+    /// <summary>Records <paramref name="request"/> in <see cref="Refusals"/>: the gate's own refusals, and the path police's in the shell tools.</summary>
+    public void NoteRefused(CommandRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        lock (_refusalsLock)
+        {
+            _refusals.Add(request.IsScript ? request.Kind + " script" : request.Command);
+        }
+    }
+
     /// <summary>The policy as the settings stand now.</summary>
     public CommandPolicyMode Policy => CommandPolicy.Resolve(_effective());
 
@@ -97,6 +121,7 @@ public sealed class CommandGate
         if (_asker is null)
         {
             DiagnosticLog.Info(ShellKinds.Category, ShellText.RefusedLogLine(request, "no screen to ask on"));
+            NoteRefused(request);
             return CommandVerdict.Refuse(ShellText.NotAskable(_allowList.Snapshot()));
         }
 
@@ -116,9 +141,11 @@ public sealed class CommandGate
                 return CommandVerdict.Run;
             case CommandChoice.Deny:
                 DiagnosticLog.Info(ShellKinds.Category, ShellText.RefusedLogLine(request, "denied by the user"));
+                NoteRefused(request);
                 return CommandVerdict.Refuse(ShellText.Denied(request));
             default:
                 DiagnosticLog.Info(ShellKinds.Category, ShellText.RefusedLogLine(request, "never asked"));
+                NoteRefused(request);
                 return CommandVerdict.Refuse(ShellText.NotAskable(_allowList.Snapshot()));
         }
     }

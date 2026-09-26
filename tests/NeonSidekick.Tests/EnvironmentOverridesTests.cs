@@ -51,6 +51,7 @@ public class EnvironmentOverridesTests
             (EnvironmentOverrides.LlmContextVariable, "32768"),
             (EnvironmentOverrides.SearxngUrlVariable, " http://box:8080 "),
             (EnvironmentOverrides.CommandPolicyVariable, " YOLO "),
+            (EnvironmentOverrides.ShellPoliceVariable, " OFF "),
             (EnvironmentOverrides.ObsidianVaultVariable, @" D:\Notes "),
             (EnvironmentOverrides.ComfyUrlVariable, " http://gpu-box:8188 "));
 
@@ -75,7 +76,38 @@ public class EnvironmentOverridesTests
         Assert.Equal("yolo", e.ShellCommandPolicy);   // normalised to the saved word (2026-09-21)
         Assert.Equal(@"D:\Notes", e.ObsidianVault);   // trimmed (2026-09-22)
         Assert.Equal("http://gpu-box:8188", e.ComfyUrl);   // trimmed (2026-09-24)
+        Assert.False(e.ShellPoliceOutsidePaths);   // any case, trimmed (2026-09-26)
         Assert.Equal(EnvironmentOverrides.AllVariables.Length - 2, env.ActiveVariables().Count);   // everything but HOME and PROFILE
+    }
+
+    [Theory]
+    [InlineData("on", true)]
+    [InlineData("TRUE", true)]
+    [InlineData("1", true)]
+    [InlineData("Yes", true)]
+    [InlineData("off", false)]
+    [InlineData("False", false)]
+    [InlineData("0", false)]
+    [InlineData("no", false)]
+    public void ShellPolice_ReadsTheSwitchWords_EitherWay(string raw, bool expected)
+    {
+        var env = With((EnvironmentOverrides.ShellPoliceVariable, raw));
+
+        Assert.Equal(expected, env.ShellPolice);
+        Assert.Equal(expected, env.ApplyTo(new AppSettingsData { ShellPoliceOutsidePaths = !expected }).ShellPoliceOutsidePaths);
+        Assert.Contains(EnvironmentOverrides.ShellPoliceVariable, env.ActiveVariables());
+    }
+
+    [Theory]
+    [InlineData("maybe")]
+    [InlineData("")]
+    public void ShellPolice_AnythingElse_IsIgnored_AndTheSavedValueStands(string raw)
+    {
+        var env = With((EnvironmentOverrides.ShellPoliceVariable, raw));
+
+        Assert.Null(env.ShellPolice);
+        Assert.False(env.ApplyTo(new AppSettingsData { ShellPoliceOutsidePaths = false }).ShellPoliceOutsidePaths);
+        Assert.DoesNotContain(EnvironmentOverrides.ShellPoliceVariable, env.ActiveVariables());
     }
 
     [Fact]

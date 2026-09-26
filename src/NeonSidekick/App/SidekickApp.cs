@@ -43,6 +43,14 @@ public sealed class SidekickApp
     private const string Category = "App";
     private const string HeadlessReplyPrefix = "Neon: ";
 
+    /// <summary>
+    /// The exit code of a headless run in which a shell command was refused (2026-09-26, the user's call): not
+    /// approved under <c>ask</c> with nothing to ask, or stopped by the path police. The run still reads every line;
+    /// the code comes at the end, after a <see cref="Shell.ShellText.RefusedSummary"/> notice, so a script can tell
+    /// "a command did not run" from success (0) and from a bad argument or unknown profile (2).
+    /// </summary>
+    public const int HeadlessRefusedExitCode = 3;
+
     private readonly IAnsiConsole _console;
     private readonly AppSettings _settings;
     private readonly EnvironmentOverrides _environment;
@@ -458,7 +466,9 @@ public sealed class SidekickApp
         var runner = new Shell.ShellRunner(_time);
         // The background processes (2026-09-21): nothing to signal headless (the next line is read when it is read); the exits print as notices at the loop top and ride the next turn as seeded polls.
         using var processes = new Shell.ProcessRegistry(runner, Random.Shared, () => { });
-        var shellTools = ChatScreen.ShellTools(runner, processes, files, new Shell.CommandGate(() => EffectiveSettings, allowList, null), interpreters, () => EffectiveSettings, Random.Shared, () => session.Assistant?.Tools ?? []);
+        // Kept (2026-09-26): what it refused is the run's summary notice and exit code 3 at the end.
+        var gate = new Shell.CommandGate(() => EffectiveSettings, allowList, null);
+        var shellTools = ChatScreen.ShellTools(runner, processes, files, gate, interpreters, () => EffectiveSettings, Random.Shared, () => session.Assistant?.Tools ?? []);
         var persona = BuildPersonaFile();
         var operata = BuildOperataFile();
         var vocalia = BuildVocaliaFile();
@@ -594,9 +604,17 @@ public sealed class SidekickApp
                 }
             }
 
+            var refused = gate.Refusals;
+            if (refused.Count > 0)
+            {
+                string summary = Shell.ShellText.RefusedSummary(refused);
+                DiagnosticLog.Info(ChatScreen.AppCategory, summary);
+                await HeadlessNoticeLineAsync("[notice] " + summary).ConfigureAwait(false);
+            }
+
             await EnsureHeadlessLineStartAsync().ConfigureAwait(false);
             await _headlessOutput.FlushAsync(CancellationToken.None).ConfigureAwait(false);
-            return 0;
+            return refused.Count > 0 ? HeadlessRefusedExitCode : 0;
         }
         finally
         {
@@ -877,7 +895,8 @@ public sealed class SidekickApp
         SettingsField.LlmReasoning => _environment.LlmReasoning is not null ? EnvironmentOverrides.LlmReasoningVariable : null,
         SettingsField.WorkingDirectory => _options.WorkingDirectory is not null ? SidekickOptions.CwdFlag : null,
         SettingsField.WebSearxngUrl => _environment.WebSearxngUrl is not null ? EnvironmentOverrides.SearxngUrlVariable : null,
-        SettingsField.ShellCommandPolicy => _environment.ShellCommandPolicy is not null ? EnvironmentOverrides.CommandPolicyVariable : null,
+        SettingsField.ShellCommandPolicy => _options.Yolo ? SidekickOptions.YoloFlag : _environment.ShellCommandPolicy is not null ? EnvironmentOverrides.CommandPolicyVariable : null,
+        SettingsField.ShellPoliceOutsidePaths => _options.NoPolice ? SidekickOptions.NoPoliceFlag : _environment.ShellPolice is not null ? EnvironmentOverrides.ShellPoliceVariable : null,
         SettingsField.ObsidianVault => _environment.ObsidianVault is not null ? EnvironmentOverrides.ObsidianVaultVariable : null,
         SettingsField.ComfyUrl => _environment.ComfyUrl is not null ? EnvironmentOverrides.ComfyUrlVariable : null,
         _ => null,

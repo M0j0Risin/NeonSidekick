@@ -289,12 +289,30 @@ public static class ShellText
             : $"Error: the command was denied by the user: {request.Command}; do not retry it or work around the refusal";
     }
 
-    /// <summary>Under <c>ask</c> with no screen to ask on (headless, the pane off): the setting, the variable, and what is allowed. Pinned.</summary>
+    /// <summary>
+    /// Under <c>ask</c> with no screen to ask on (headless, the pane off): the setting, the flag and the variable,
+    /// and what is allowed. Pinned. Since 2026-09-26 it ends as <see cref="Denied"/> does (the user's call): told
+    /// only that a command was refused, a headless model reached for another command doing the same job, burning
+    /// tool calls and sometimes reporting a half-done job as done. The allowed prefixes stay, so a job an allowed
+    /// command really covers can still be done.
+    /// </summary>
     public static string NotAskable(IReadOnlyList<string> allowed)
     {
         ArgumentNullException.ThrowIfNull(allowed);
         string list = allowed.Count == 0 ? "none" : string.Join(", ", allowed);
-        return $"Error: the command was not approved: no screen to ask on (Shell command policy is ask; {Settings.EnvironmentOverrides.CommandPolicyVariable}=yolo or the profile's Shell allowed commands would let it run); allowed prefixes: {list}";
+        return $"Error: the command was not approved: no screen to ask on (Shell command policy is ask; {App.SidekickOptions.YoloFlag}, {Settings.EnvironmentOverrides.CommandPolicyVariable}=yolo or the profile's Shell allowed commands would let it run); allowed prefixes: {list}; do not retry it or work around the refusal: tell the user what could not run";
+    }
+
+    /// <summary>
+    /// The notice a headless run ends with when anything was refused (2026-09-26), beside exit code 3:
+    /// <c>2 commands were not run: "npm install", "choco upgrade"</c>, each once, in the order first refused. Pinned.
+    /// </summary>
+    public static string RefusedSummary(IReadOnlyList<string> refused)
+    {
+        ArgumentNullException.ThrowIfNull(refused);
+        var distinct = refused.Distinct(StringComparer.Ordinal).ToList();
+        string noun = distinct.Count == 1 ? "command was" : "commands were";
+        return $"{N(distinct.Count)} {noun} not run: {string.Join(", ", distinct.Select(Quote))}";
     }
 
     /// <summary>

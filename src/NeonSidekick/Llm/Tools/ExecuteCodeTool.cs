@@ -218,6 +218,7 @@ public sealed class ExecuteCodeTool : AIFunction
         if (effective.ShellPoliceOutsidePaths && PathPolice.Judge(code, _files, workingDirectory, isScript: true) is { } outside)
         {
             DiagnosticLog.Info(ShellKinds.Category, ShellText.PolicedLogLine(request, outside));
+            _gate.NoteRefused(request);
             return ShellText.OutsidePath(outside);
         }
 

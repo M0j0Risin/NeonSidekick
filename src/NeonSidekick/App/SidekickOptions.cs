@@ -27,6 +27,15 @@ namespace NeonSidekick.App;
 /// headless run must not follow whichever profile was last clicked into). Outranks <c>NEONSIDEKICK_PROFILE</c> and
 /// the pointer in <c>settings.json</c>, and never rewrites that pointer. Not part of <see cref="ApplyTo"/>: it
 /// picks which <c>profile.json</c> is read, not a value in it; <c>Program.cs</c> hands it to <see cref="AppSettings"/>.</param>
+/// <param name="Yolo"><c>--yolo</c>: every shell command and script runs without asking, this launch only
+/// (2026-09-26, the user's ask: a scripted run named the policy only through <c>NEONSIDEKICK_COMMAND_POLICY</c>, awkward
+/// to set for one command in PowerShell or cmd). <see cref="ApplyTo"/> sets <c>Shell command policy</c> to <c>yolo</c>, so it
+/// outranks the variable and the saved setting and is never saved; every mode, the screen included (no approval pane
+/// this launch). The path police is a setting of its own and still applies (the user's call) unless <see cref="NoPolice"/>.</param>
+/// <param name="NoPolice"><c>--no-police</c>: <c>Shell police outside paths</c> off for this launch (2026-09-26, the user's
+/// ask: the police could only be turned off by saving the profile). Outranks <c>NEONSIDEKICK_SHELL_POLICE</c> and the saved
+/// setting and is never saved; every mode. Never implied by <see cref="Yolo"/>: the two together leave no guard at all, so
+/// each has to be asked for.</param>
 /// <param name="Error">Set when an argument was not understood; the caller prints it with
 /// <see cref="Usage"/> and exits 2.</param>
 public sealed record SidekickOptions(
@@ -41,6 +50,8 @@ public sealed record SidekickOptions(
     string? WorkingDirectory,
     string? LogPath,
     string? Profile,
+    bool Yolo,
+    bool NoPolice,
     string? Error)
 {
     public const string UrlFlag = "--url";
@@ -48,10 +59,12 @@ public sealed record SidekickOptions(
     public const string CwdFlag = "--cwd";
     public const string LogFlag = "--log";
     public const string ProfileFlag = "--profile";
+    public const string YoloFlag = "--yolo";
+    public const string NoPoliceFlag = "--no-police";
 
     /// <summary>The help text. Pinned wording; tests assert on it.</summary>
     public const string Usage =
-        "Usage: NeonSidekick [--headless] [--smoke] [--audio-check] [--voice-check] [--url <url>] [--model <id>] [--cwd <path>] [--profile <name>] [--log <path>] [--version] [--help]\n" +
+        "Usage: NeonSidekick [--headless] [--smoke] [--audio-check] [--voice-check] [--url <url>] [--model <id>] [--cwd <path>] [--profile <name>] [--yolo] [--no-police] [--log <path>] [--version] [--help]\n" +
         "\n" +
         "  (no flags)     interactive TUI\n" +
         "  --headless     stdin/stdout REPL, no TUI\n" +
@@ -62,14 +75,18 @@ public sealed record SidekickOptions(
         "  --model <id>   model id for this launch (outranks NEONSIDEKICK_LLM_MODEL and the saved setting)\n" +
         "  --cwd <path>   working directory for this launch (outranks the saved setting)\n" +
         "  --profile <name>  profile for this launch (outranks NEONSIDEKICK_PROFILE and settings.json, which it leaves alone)\n" +
+        "  --yolo         run every shell command without asking, this launch only (outranks NEONSIDEKICK_COMMAND_POLICY; the path police still applies unless --no-police)\n" +
+        "  --no-police    let shell commands name paths outside the working directory, this launch only (outranks NEONSIDEKICK_SHELL_POLICE)\n" +
         "  --log <path>   append every diagnostic line (Trace and up) to a file\n" +
         "  --version      print the version and exit\n" +
         "  -h, --help     this text\n" +
         "\n" +
+        "Exit codes: 0 done, 2 bad argument or unknown profile, 3 headless run in which a shell command was refused\n" +
+        "\n" +
         "Keys: ESC = cancel/back";
 
     /// <summary>The empty option set; every flag false, no values, no error.</summary>
-    public static SidekickOptions None { get; } = new(false, false, false, false, false, false, null, null, null, null, null, null);
+    public static SidekickOptions None { get; } = new(false, false, false, false, false, false, null, null, null, null, null, false, false, null);
 
     /// <summary>Parses <paramref name="args"/>. Never throws; an unknown argument or a missing value sets <see cref="Error"/>.</summary>
     public static SidekickOptions Parse(IReadOnlyList<string> args)
@@ -151,6 +168,12 @@ public sealed record SidekickOptions(
                 case "--voice-check":
                     result = result with { VoiceCheck = true };
                     break;
+                case YoloFlag:
+                    result = result with { Yolo = true };
+                    break;
+                case NoPoliceFlag:
+                    result = result with { NoPolice = true };
+                    break;
                 case "--version":
                     result = result with { ShowVersion = true };
                     break;
@@ -194,6 +217,16 @@ public sealed record SidekickOptions(
             flags.Add(ProfileFlag);
         }
 
+        if (Yolo)
+        {
+            flags.Add(YoloFlag);
+        }
+
+        if (NoPolice)
+        {
+            flags.Add(NoPoliceFlag);
+        }
+
         return flags;
     }
 
@@ -232,6 +265,16 @@ public sealed record SidekickOptions(
             parts.Add(ProfileFlag + " " + Profile);
         }
 
+        if (Yolo)
+        {
+            parts.Add(YoloFlag);
+        }
+
+        if (NoPolice)
+        {
+            parts.Add(NoPoliceFlag);
+        }
+
         if (LogPath is not null)
         {
             parts.Add(LogFlag + " " + LogPath);
@@ -262,6 +305,16 @@ public sealed record SidekickOptions(
         if (WorkingDirectory is not null)
         {
             result.WorkingDirectory = Path.GetFullPath(WorkingDirectory);
+        }
+
+        if (Yolo)
+        {
+            result.ShellCommandPolicy = Shell.CommandPolicy.Name(Shell.CommandPolicyMode.Yolo);
+        }
+
+        if (NoPolice)
+        {
+            result.ShellPoliceOutsidePaths = false;
         }
 
         return result;

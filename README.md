@@ -15,6 +15,7 @@ Neon Sidekick brings privacy-first, local LLM inference to your terminal. Powere
 - [Settings & menus](#settings--menus)
 - [Slash commands](#slash-commands)
 - [Tools](#tools-2)
+- [Environment variables](#environment-variables)
 - [Screenshots](#screenshots)
 - [Components & Libraries](#components--libraries)
 - [Why "Neon"](#why-neon)
@@ -243,9 +244,9 @@ Every tool the app has, grouped (Clock, Timers, Files, Git, Shell, Obsidian, SQL
 
 | Setting | What it does | Default |
 |---|---|---|
-| Shell command policy | What stands between `run_command` and the shell: `off` (no shell tool is offered — the group's switch), `ask` (a command whose prefixes are not all allowed is put to you on the pane first: Deny, Allow once, Allow the prefixes for this session, or Allow them always; with no pane to ask on it is refused), `yolo` (everything runs, nothing is asked). The toolbar shows it as a lock — 🔒 under `ask`, 🔓 under `yolo`, none under `off` — whose double-click is `/cmdlist`. `NEONSIDEKICK_COMMAND_POLICY` outranks it, so a scripted `--headless` run can say `yolo`. | `ask` |
+| Shell command policy | What stands between `run_command` and the shell: `off` (no shell tool is offered — the group's switch), `ask` (a command whose prefixes are not all allowed is put to you on the pane first: Deny, Allow once, Allow the prefixes for this session, or Allow them always; with no pane to ask on it is refused), `yolo` (everything runs, nothing is asked). The toolbar shows it as a lock — 🔒 under `ask`, 🔓 under `yolo`, none under `off` — whose double-click is `/cmdlist`. `--yolo` (this launch only) and `NEONSIDEKICK_COMMAND_POLICY` outrank it, so a scripted `--headless` run can say `yolo`. | `ask` |
 | Shell allowed commands | The prefixes allowed for good — `git status`, `dotnet build`, `python` (the program, plus its subcommand for git, dotnet, npm, pip, gh, docker, cargo, go, winget and the like). Enter on one removes it; the pane's *Allow … always* adds one; `/cmdlist` (or the toolbar's lock) opens the list straight; `/cmdcopy` copies it into another profile. | none |
-| Shell police outside paths | Whether a `run_command` line, an `execute_code` script or the text `process` writes to a background process may name a path outside the working directory. On: an absolute path not under it (`C:\…`, a UNC share, a rooted `/etc/hosts`), a `..` that climbs out, `~`, or a folder variable (`%USERPROFILE%`, `$env:TEMP`, `$HOME`, `Path.home()`…) is refused before anything runs or the pane asks — the model gets `Error: outside the working directory: '…'`, the transcript line wears 👮 — and the tool descriptions and the operating rules say the shell stays under the working directory. It reads the text, not what runs: a script that computes a path is not seen, and a cmd switch (`dir /s`) or a URL is not a path. Off: any path goes, and nothing tells the model it may leave the working directory, so it does not try unless asked. The toolbar shows 👮 while it is on, unless *Shell command policy* is `off` (no shell tool to police); a double-click on it, or `/police`, opens this row's on/off page straight. | on |
+| Shell police outside paths | Whether a `run_command` line, an `execute_code` script or the text `process` writes to a background process may name a path outside the working directory. On: an absolute path not under it (`C:\…`, a UNC share, a rooted `/etc/hosts`), a `..` that climbs out, `~`, or a folder variable (`%USERPROFILE%`, `$env:TEMP`, `$HOME`, `Path.home()`…) is refused before anything runs or the pane asks — the model gets `Error: outside the working directory: '…'`, the transcript line wears 👮 — and the tool descriptions and the operating rules say the shell stays under the working directory. It reads the text, not what runs: a script that computes a path is not seen, and a cmd switch (`dir /s`) or a URL is not a path. Off: any path goes, and nothing tells the model it may leave the working directory, so it does not try unless asked. The toolbar shows 👮 while it is on, unless *Shell command policy* is `off` (no shell tool to police); a double-click on it, or `/police`, opens this row's on/off page straight. `--no-police` (off, this launch only) and `NEONSIDEKICK_SHELL_POLICE` (`on`/`off`) outrank it; `--yolo` never turns it off. | on |
 | Shell default | The shell a `run_command` without `shell` runs in: `powershell` (pwsh when installed, else Windows PowerShell 5.1), `cmd`, or `bash` (Git Bash, when found). | `powershell` |
 | Shell timeout (s) | How long a foreground command without `timeout` may run before it is killed (1–3600). | 180 |
 | Shell foreground cap (s) | The most a foreground command may wait, whatever its `timeout` says (10–3600). | 600 |
@@ -719,10 +720,16 @@ Executes commands on your local machine, starting in the specified working direc
 
 #### 3. Headless Mode & Scripting
 
-When the app is run with `--headless`, interactive prompts are disabled. The `ask` policy will only execute commands that are already on your saved allow list. 
+For worked examples of every flag, the slash commands that work headless, running "yolo", and scheduled or scripted jobs, see [HEADLESS.md](HEADLESS.md).
 
-To bypass this and allow all commands during a scripted or headless run, set the following environment variable:
-`NEONSIDEKICK_COMMAND_POLICY=yolo`
+When the app is run with `--headless`, interactive prompts are disabled. The `ask` policy will only execute commands that are already on your saved allow list. Any other command is refused, and the model is told not to retry it or work around the refusal. It should tell you what couldn't run instead.
+
+A headless run in which any command was refused, by the allow list or by the path police, ends with a `[notice] N commands were not run: …` line and **exit code 3**. Exit code 0 means nothing was refused; 2 means a bad argument or an unknown profile.
+
+To bypass this and allow all commands for one launch, pass `--yolo`, or set the environment variable `NEONSIDEKICK_COMMAND_POLICY=yolo` (the flag wins). Neither is saved to the profile, and the path police still applies.
+`Get-Content job.txt | NeonSidekick.exe --headless --yolo --cwd D:\Repo\MyApp`
+
+The path police is separate. To let commands name paths outside the working directory for one launch, pass `--no-police`, or set `NEONSIDEKICK_SHELL_POLICE=off` (the flag wins). `--yolo --no-police` together leave no guard at all: any command, on any path, with your account's rights.
 
 A scripted run can name its profile rather than follow whichever one was last loaded: `--profile <name>` (or `NEONSIDEKICK_PROFILE=<name>`; the flag wins) loads that profile's settings, memory, sessions and allow list for this launch only, and `settings.json` is left as it is. An unknown name prints the profiles there and exits with code 2.
 `Get-Content job.txt | NeonSidekick.exe --headless --profile work`
@@ -791,6 +798,72 @@ Each connected MCP server operates as its own isolated tool group.
   * Turn off individual tools via the **Tools tab** while keeping the rest of the server's tools active.
 
 </details>
+
+## Environment variables
+[↑ Back to top](#neon-sidekick)
+
+Every variable the app reads starts with `NEONSIDEKICK_`. They override a setting for one launch and are never saved.
+
+* **Precedence:** command-line flag > variable > the profile's saved setting > default. A settings row that a variable (or flag) overrides says so.
+* **Values:** blank means unset; values are trimmed and words match in any case. A value that doesn't parse is logged as a warning and ignored, and the launch goes on.
+* **Logging:** with `--log`, the startup lines list the variables in force; the API key shows only as `(set)`.
+
+[HEADLESS.md](HEADLESS.md) shows them in use for scripted runs.
+
+### Where and who
+
+| Variable | What it does | Accepts |
+|---|---|---|
+| `NEONSIDEKICK_HOME` | The home folder: `settings.json`, `profiles\`, `models\`, `mcp.json`, `sql.json`. | A folder path. Default `%USERPROFILE%\.neonsidekick`. |
+| `NEONSIDEKICK_PROFILE` | The profile for this launch; `settings.json` is left pointing where it was. An unknown name exits with code 2. `--profile` wins. | A profile name. |
+
+### LLM
+
+| Variable | Overrides | Accepts |
+|---|---|---|
+| `NEONSIDEKICK_LLM_URL` | LLM URL (`--url` wins) | A base URL, e.g. `http://127.0.0.1:1234/v1`. |
+| `NEONSIDEKICK_LLM_MODEL` | LLM model (`--model` wins) | A model id from the server. |
+| `NEONSIDEKICK_LLM_API_KEY` | LLM API key | The key. Never written to the log. |
+| `NEONSIDEKICK_LLM_REASONING` | LLM reasoning | `none`, `low`, `medium`, `high`, `xhigh`. |
+| `NEONSIDEKICK_LLM_REQUEST_TIMEOUT` | LLM request timeout (s) | Seconds, above 0 and up to 3600. |
+| `NEONSIDEKICK_LLM_TURN_TIMEOUT` | LLM turn timeout (s) | Seconds, above 0 and up to 21600. |
+| `NEONSIDEKICK_LLM_CONTEXT` | LLM context length | Tokens, a positive whole number. For servers that don't report their context window. |
+
+### Shell
+
+| Variable | Overrides | Accepts |
+|---|---|---|
+| `NEONSIDEKICK_COMMAND_POLICY` | Shell command policy (`--yolo` wins) | `off`, `ask`, `yolo`. Under `ask` with no screen (headless), only allow-listed commands run. |
+| `NEONSIDEKICK_SHELL_POLICE` | Shell police outside paths (`--no-police` wins) | `on`/`off` (also `true`/`false`, `1`/`0`, `yes`/`no`). |
+
+### Speech
+
+| Variable | Overrides | Accepts |
+|---|---|---|
+| `NEONSIDEKICK_TTS_URL` | TTS HTTP URL | A Kokoro HTTP server's URL. |
+| `NEONSIDEKICK_TTS_VOICE` | TTS voice | A voice name, e.g. `af_heart`. |
+| `NEONSIDEKICK_TTS_VOICE2` | TTS voice 2 | A voice name. It can't clear a saved second voice; `NEONSIDEKICK_TTS_MIX=100` plays the primary alone. |
+| `NEONSIDEKICK_TTS_MIX` | TTS voice mix | The primary voice's share, 0–100. |
+| `NEONSIDEKICK_TTS_SPEED` | TTS speed | A multiplier, 0.5–2.0. |
+| `NEONSIDEKICK_WHISPER_MODEL` | STT whisper model | A model name or a path to a ggml file. |
+| `NEONSIDEKICK_INTERRUPT_ECHO` | STT interrupt echo guard | A percentage, 50–100. |
+| `NEONSIDEKICK_INTERRUPT_CONFIRM` | STT interrupt confirm | Milliseconds, 0–2000. |
+
+### Integrations
+
+| Variable | Overrides | Accepts |
+|---|---|---|
+| `NEONSIDEKICK_SEARXNG_URL` | Web SearXNG URL | The instance's URL. *Web search method* still picks the engine. |
+| `NEONSIDEKICK_OBSIDIAN_VAULT` | Obsidian vault | The folder holding `.obsidian`. |
+| `NEONSIDEKICK_COMFY_URL` | ComfyUI URL | The ComfyUI server's URL, e.g. `http://gpu-box:8188`. |
+
+### Set by the app
+
+`NEONSIDEKICK_BRIDGE_ADDRESS` and `NEONSIDEKICK_BRIDGE_TOKEN` are given to an `execute_code` script while *Shell tool bridge* is on; the bundled `neon_tools` modules read them to call the app's tools. Don't set them yourself. To find shells and interpreters, the app also reads the standard `PATH`, `PATHEXT`, `ProgramFiles`, `ProgramW6432` and `LocalAppData`.
+
+### Test suite
+
+These only matter when running the test suite from source. Its live tests are skipped unless their resource is there. `NEONSIDEKICK_TEST_LLM_URL`, `NEONSIDEKICK_TEST_TTS_URL` and `NEONSIDEKICK_TEST_SQL_CONNECTION` point them at a server. `NEONSIDEKICK_TEST_WHISPER_MODEL`, `NEONSIDEKICK_TEST_SILERO_MODEL`, `NEONSIDEKICK_TEST_VOSK_MODEL` and `NEONSIDEKICK_TEST_KOKORO_MODEL` point at a model, when it isn't already under `%USERPROFILE%\.neonsidekick\models`.
 
 ## Screenshots
 [↑ Back to top](#neon-sidekick)

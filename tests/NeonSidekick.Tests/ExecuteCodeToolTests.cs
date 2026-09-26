@@ -44,6 +44,7 @@ public sealed class ExecuteCodeToolTests : IDisposable
     private readonly ProcessRegistry _registry;
     private readonly IReadOnlyList<AIFunction> _tools;
     private readonly ExecuteCodeTool _tool;
+    private readonly CommandGate _gate;
 
     public ExecuteCodeToolTests()
     {
@@ -53,11 +54,11 @@ public sealed class ExecuteCodeToolTests : IDisposable
         // The real PATH: python and node ride only where they are; cmd and PowerShell are always there.
         _interpreters = new Interpreters(name => Environment.GetEnvironmentVariable(name));
         var list = new CommandAllowList(() => _settings.ShellCommandAllowed, merged => _settings.ShellCommandAllowed = [.. merged]);
-        var gate = new CommandGate(() => _settings, list, (request, _) => { _asked.Add(request); return Task.FromResult(_answer); });
+        _gate = new CommandGate(() => _settings, list, (request, _) => { _asked.Add(request); return Task.FromResult(_answer); });
         var runner = new ShellRunner(_time);
         _registry = new ProcessRegistry(runner, new Random(3), () => { });
         IReadOnlyList<AIFunction> tools = [];
-        var shell = App.ChatScreen.ShellTools(runner, _registry, _files, gate, _interpreters, () => _settings, new Random(1), () => tools, Path.Combine(_dir, "runs"));
+        var shell = App.ChatScreen.ShellTools(runner, _registry, _files, _gate, _interpreters, () => _settings, new Random(1), () => tools, Path.Combine(_dir, "runs"));
         tools = [_echo, new GetWorkingDirectoryTool(_files, () => false), .. shell, new AskUserTool((_, _) => Task.FromResult<IReadOnlyList<AskAnswer>?>(null), () => _settings)];
         _tools = tools;
         _tool = shell.OfType<ExecuteCodeTool>().Single();
@@ -194,6 +195,9 @@ public sealed class ExecuteCodeToolTests : IDisposable
         _settings.ShellPoliceOutsidePaths = false;
         Assert.Equal("Error: the script was denied by the user (powershell); do not retry it or work around the refusal", await Invoke(("language", "powershell"), ("code", "Get-ChildItem $env:APPDATA")));
         Assert.Equal(2, _asked.Count);
+
+        // The gate's record (2026-09-26): three policed scripts and two denied, each as its language's script.
+        Assert.Equal(Enumerable.Repeat("powershell script", 5), _gate.Refusals);
     }
 
     [Fact]
