@@ -53,6 +53,17 @@ public class SpeakReadingTests
     }
 
     [Fact]
+    public void Split_LeavesOutTheTables_EvenOneInsideACodeBlock_OffsetsStillVerbatim()
+    {
+        string text = "Compare:\n| Name | Role |\n|---|---|\n| Ada. | Engineer. |\nThen this.\n```md\n| a |\n|---|\n```\nLast one.";
+
+        var sentences = SpeakReading.Split(text);
+
+        Assert.Equal(["Compare:", "Then this.", "Last one."], sentences.Select(s => s.Text));
+        Assert.All(sentences, s => Assert.Equal(s.Text, text.Substring(s.Offset, s.Text.Length)));
+    }
+
+    [Fact]
     public void Split_ARunOnSentence_BreaksAtTheChunkerLimit_AndTheSameWordTwiceKeepsOrder()
     {
         string words = string.Join(" ", Enumerable.Repeat("word", 70));   // 349 chars, no terminator

@@ -5,7 +5,7 @@ namespace NeonSidekick.Speech;
 
 /// <summary>
 /// Speech for one reply: streamed text in, audio out. Composes <see cref="CodeBlockFilter"/> (fenced code is never
-/// spoken, 2026-09-25), <see cref="SentenceChunker"/>, <see cref="SpeechQueue"/>, an <see cref="ISpeechSynthesizer"/> and
+/// spoken, 2026-09-25), <see cref="TableFilter"/> (nor are tables, 2026-09-26), <see cref="SentenceChunker"/>, <see cref="SpeechQueue"/>, an <see cref="ISpeechSynthesizer"/> and
 /// an <see cref="IAudioPlayback"/>.
 ///
 /// <para>The loop feeds every text delta through <see cref="Feed"/>; whole sentences are queued
@@ -49,6 +49,7 @@ internal sealed class SpeechOutput
     private readonly CancellationToken _turnToken;
     private readonly Action<string>? _onFailure;
     private readonly CodeBlockFilter _code = new();
+    private readonly TableFilter _tables = new();
     private readonly SentenceChunker _chunker = new();
     private readonly SpeechQueue _queue;
     private readonly object _chunkGate = new();
@@ -211,8 +212,9 @@ internal sealed class SpeechOutput
             return;
         }
 
-        // The code blocks go before the text is cut into sentences: the chunker would split a block across several.
-        foreach (var sentence in _chunker.Append(_code.Push(delta)))
+        // The code blocks and tables go before the text is cut into sentences: the chunker would split one across several.
+        // Code first, so a table inside a fence is already gone.
+        foreach (var sentence in _chunker.Append(_tables.Push(_code.Push(delta))))
         {
             Enqueue(sentence);
         }
@@ -221,7 +223,7 @@ internal sealed class SpeechOutput
     /// <summary>The text is finished: queue the trailing partial sentence and close the queue. Call on every path.</summary>
     public void CompleteAdding()
     {
-        foreach (var sentence in _chunker.Append(_code.Flush()))
+        foreach (var sentence in _chunker.Append(_tables.Push(_code.Flush()) + _tables.Flush()))
         {
             Enqueue(sentence);
         }

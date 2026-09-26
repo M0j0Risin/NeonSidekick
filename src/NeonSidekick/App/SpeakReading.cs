@@ -151,7 +151,7 @@ internal sealed class SpeakReading
     /// <paramref name="text"/> as the speech chunks it (<see cref="SentenceChunker"/> over the
     /// whole text, then its flush): every sentence a trimmed, verbatim slice in order, so each
     /// one's offset is where it is next found after the previous one. A line of punctuation alone
-    /// (<c>---</c>) yields no sentence, and nor does anything in a fenced code block. Pure.
+    /// (<c>---</c>) yields no sentence, and nor does anything in a fenced code block or a pipe table. Pure.
     /// </summary>
     public static IReadOnlyList<Sentence> Split(string text)
     {
@@ -164,9 +164,10 @@ internal sealed class SpeakReading
             pieces.Add(tail);
         }
 
-        // The fenced code blocks are never read (2026-09-25, CodeBlockFilter): a sentence starting inside one is dropped. None
-        // straddles an edge — a block starts and ends on a line's edge, and the chunker breaks at every newline.
-        var code = CodeBlockFilter.Spans(text);
+        // The fenced code blocks are never read (2026-09-25, CodeBlockFilter), nor the tables (2026-09-26, TableFilter): a
+        // sentence starting inside one is dropped. None straddles an edge — a block or table starts and ends on a line's edge,
+        // and the chunker breaks at every newline.
+        var code = CodeBlockFilter.Spans(text).Concat(TableFilter.Spans(text)).ToList();
         var sentences = new List<Sentence>(pieces.Count);
         int cursor = 0;
         foreach (var piece in pieces)

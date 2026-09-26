@@ -38,6 +38,8 @@ public static partial class SpeakableText
         // this still catches a fence line in a sentence handed over directly.
         s = CodeFence().Replace(s, string.Empty);
 
+        // Whole tables never get this far since 2026-09-26 — TableFilter takes them out upstream, as CodeBlockFilter does
+        // code. These two still catch a stray row: a pipe-led line with no delimiter row, or a sentence handed over directly.
         // Table separator rows (|---|:---:|) carry no words at all.
         s = TableSeparator().Replace(s, string.Empty);
 

@@ -228,6 +228,20 @@ public class SpeechOutputTests
     }
 
     [Fact]
+    public async Task Feed_ATable_IsNeverSpoken_TheWordsAroundItAre()
+    {
+        var output = Output();
+
+        output.Feed("Two options:\n| Name | Speed |\n|--");
+        output.Feed("-|---|\n| Fast. | Yes. |\n| Slow. |");
+        output.Feed(" No. |\nPick the first.");
+        output.CompleteAdding();
+        await output.Completion.WaitAsync(Timeout);
+
+        Assert.Equal(new[] { "Two options:", "Pick the first." }, _synth.SpokenText);
+    }
+
+    [Fact]
     public async Task Playback_IsStartedLazily_OnTheFirstChunk_AndNothingIsSpokenForNothing()
     {
         var output = Output();

@@ -137,7 +137,7 @@ Neon Sidekick brings privacy-first, local LLM inference to your terminal. Powere
 
 | Setting | What it does | Default |
 |---|---|---|
-| TTS output | Reads replies aloud (`/tts`). Fenced code blocks are shown but never read aloud (nor by `/speak`). | off |
+| TTS output | Reads replies aloud (`/tts`). Fenced code blocks and tables are shown but never read aloud (nor by `/speak`). | off |
 | TTS source | `in-process` runs Kokoro in this process over ONNX Runtime (the model downloads on first use); `http` uses a Kokoro-FastAPI server. | `in-process` |
 | TTS HTTP URL | The Kokoro-FastAPI base URL, read while the source is `http`. | `http://localhost:8880/v1` |
 | TTS voice preview | The voice pickers speak the highlighted voice as you move through them. | on |
