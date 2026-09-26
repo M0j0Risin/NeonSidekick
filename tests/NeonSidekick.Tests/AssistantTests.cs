@@ -155,9 +155,7 @@ public class AssistantTests
         Assert.StartsWith(Assistant.PlainTextRule + " ", Assistant.OperatingRules, StringComparison.Ordinal);
         Assert.DoesNotContain("_", Assistant.PlainTextRule);   // no tool name
         Assert.Equal(
-            "Your reply is shown on screen and also read aloud by a text-to-speech engine, so keep it short and in plain spoken English. " +
-            "Do not use markdown, headings, bullet points, numbered lists, tables, code blocks or emoji, " +
-            "and do not recite file paths, command lines or code unless the user asked for that exact text.",
+            "Your reply is shown on screen and also read aloud by a text-to-speech engine, so keep it short and in plain spoken language.",
             Assistant.VoiceDirectiveWithoutTools);
         Assert.Equal(Assistant.ToolChannelExemption + " " + Assistant.VoiceDirectiveWithoutTools, Assistant.VoiceDirective);
         Assert.DoesNotContain("tool", Assistant.VoiceDirectiveWithoutTools);
@@ -733,13 +731,15 @@ public class AssistantTests
     }
 
     [Fact]
-    public void VoiceDirective_ForbidsWhatGetsReadOut()
+    public void VoiceDirective_SaysItIsReadAloud_AndNoLongerBansFormatting()
     {
-        Assert.Contains("markdown", Assistant.VoiceDirective);
-        Assert.Contains("emoji", Assistant.VoiceDirective);
-        Assert.Contains("code", Assistant.VoiceDirective);
-        Assert.Contains("file paths", Assistant.VoiceDirective);
+        // 2026-09-26: the voice skips code, tables and emoji itself, so the directive no longer forbids them.
         Assert.Contains("read aloud", Assistant.VoiceDirective);
+        Assert.Contains("short", Assistant.VoiceDirective);
+        Assert.Contains("plain spoken language", Assistant.VoiceDirective);
+        Assert.DoesNotContain("markdown", Assistant.VoiceDirective);
+        Assert.DoesNotContain("emoji", Assistant.VoiceDirective);
+        Assert.DoesNotContain("file paths", Assistant.VoiceDirective);
     }
 
     [Fact]

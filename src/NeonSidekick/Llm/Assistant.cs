@@ -353,9 +353,15 @@ public sealed class Assistant
     /// against everything above it.
     ///
     /// <para><b>The first sentence exempts the tool channel</b>, and it is not padding. The rest
-    /// forbids markdown, code and file paths — a precise description of what a tool call looks
-    /// like — and a small model obeys the strongest instruction in the prompt. Without the
-    /// exemption the failure is a spoken answer <em>invented</em> instead of looked up.</para>
+    /// once forbade markdown, code and file paths — a precise description of what a tool call looks
+    /// like — and a small model obeys the strongest instruction in the prompt; "short and in plain
+    /// spoken language" still reads as a rule a tool call could break. Without the exemption the
+    /// failure is a spoken answer <em>invented</em> instead of looked up.</para>
+    ///
+    /// <para>No formatting ban since 2026-09-26 (the user's call): the voice skips fenced code
+    /// (<see cref="Speech.CodeBlockFilter"/>) and tables (<see cref="Speech.TableFilter"/>) and strips
+    /// emoji and markdown (<see cref="Speech.SpeakableText"/>) on its own, so forbidding them only cost
+    /// the reply its formatting on screen.</para>
     /// </summary>
     public const string VoiceDirective = ToolChannelExemption + " " + VoiceDirectiveWithoutTools;
 
@@ -370,9 +376,7 @@ public sealed class Assistant
     /// turn does not have. Pinned.
     /// </summary>
     public const string VoiceDirectiveWithoutTools =
-        "Your reply is shown on screen and also read aloud by a text-to-speech engine, so keep it short and in plain spoken English. " +
-        "Do not use markdown, headings, bullet points, numbered lists, tables, code blocks or emoji, " +
-        "and do not recite file paths, command lines or code unless the user asked for that exact text.";
+        "Your reply is shown on screen and also read aloud by a text-to-speech engine, so keep it short and in plain spoken language.";
 
     /// <summary>The system prompt for a turn: the persona alone, or with <see cref="VoiceDirective"/> last.</summary>
     public static string SystemPrompt(bool speechOutput) => SystemPrompt(speechOutput, null);
