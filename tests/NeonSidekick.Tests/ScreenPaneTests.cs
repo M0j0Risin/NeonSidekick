@@ -843,8 +843,8 @@ public class ScreenPaneTests : IDisposable
         Assert.Equal("thinking 00:12 · ~1.7k / 4.1k · ~42% · 📨 2 queued · ESC closes", ScreenPane.BusyRow("thinking", TimeSpan.FromSeconds(12), "ESC closes", "📨 2 queued", "~1.7k / 4.1k · ~42%"));
         Assert.Equal(ScreenPane.BusyRow("thinking", TimeSpan.FromSeconds(12), "ESC closes", "📨 2 queued"), ScreenPane.BusyRow("thinking", TimeSpan.FromSeconds(12), "ESC closes", "📨 2 queued", ""));
         // A label after the tally (the ComfyUI generation's, 2026-09-25): the two swap, nothing else moves; no tally, the row as before.
-        Assert.Equal("1.2k / 4.1k · 30% · ComfyUI: 00:12 · 📨 2 queued · ESC closes", ScreenPane.BusyRow("ComfyUI:", TimeSpan.FromSeconds(12), "ESC closes", "📨 2 queued", "1.2k / 4.1k · 30%", labelAfterUsage: true));
-        Assert.Equal(ScreenPane.BusyRow("ComfyUI:", TimeSpan.FromSeconds(12), "ESC closes", "📨 2 queued"), ScreenPane.BusyRow("ComfyUI:", TimeSpan.FromSeconds(12), "ESC closes", "📨 2 queued", "", labelAfterUsage: true));
+        Assert.Equal("1.2k / 4.1k · 30% · 🎨 00:12 · 📨 2 queued · ESC closes", ScreenPane.BusyRow("🎨", TimeSpan.FromSeconds(12), "ESC closes", "📨 2 queued", "1.2k / 4.1k · 30%", labelAfterUsage: true));
+        Assert.Equal(ScreenPane.BusyRow("🎨", TimeSpan.FromSeconds(12), "ESC closes", "📨 2 queued"), ScreenPane.BusyRow("🎨", TimeSpan.FromSeconds(12), "ESC closes", "📨 2 queued", "", labelAfterUsage: true));
     }
 
     /// <summary>

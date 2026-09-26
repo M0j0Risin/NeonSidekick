@@ -546,7 +546,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
 
     /// <summary>
     /// Which busy labels the row draws after the tally rather than before it (2026-09-25, the user's call: the ComfyUI
-    /// generation's <c>ComfyUI:</c>, <c>⠹ 1.2k / 4.1k · 30% · ComfyUI: 00:12</c>); asked per draw. None by default.
+    /// generation's <c>🎨</c>, <c>⠹ 1.2k / 4.1k · 30% · 🎨 00:12</c>); asked per draw. None by default.
     /// </summary>
     public Func<string, bool> LabelAfterUsage
     {
@@ -1480,8 +1480,8 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     /// summary row (2026-09-22) unfolds that run, or folds it again: true, and the screen shows it.
     /// False off a summary — any other transcript row, the pane, the live reply, the padding —
     /// when the pane is lifted, or when the console cannot say where its cursor is. The row is
-    /// measured up from the upper rule (<see cref="CursorDepth"/> + 1 rows over the cursor): the
-    /// region's rows are the store's from <c>_top</c> while scrolled, else the flow's tail ending on
+    /// measured up from the upper rule (<see cref="CursorDepth"/> + 1 rows over the cursor), over the
+    /// picture strip when it is drawn (2026-09-25): the region's rows are the store's from <c>_top</c> while scrolled, else the flow's tail ending on
     /// the flow cursor's row.
     /// </summary>
     public bool TryToggleToolGroupAt(int x, int y)
@@ -1514,8 +1514,10 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
             return null;
         }
 
+        // The picture strip and its rule sit between the region and the upper rule (2026-09-25, the user's report: a click
+        // on a tool run's summary did nothing while the strip showed — every row was read the strip's height too high).
         int region = RegionRows(_paneRows);
-        int r = y - (top - CursorDepth - 1 - region);
+        int r = y - (top - CursorDepth - 1 - _stripRows - region);
         if (r < 0 || r >= region)
         {
             return null;
@@ -2070,7 +2072,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
 
     /// <summary>
     /// <see cref="BusyRow(string, TimeSpan, string, string, string)"/> with the label and its count after the tally when
-    /// <paramref name="labelAfterUsage"/> (<see cref="LabelAfterUsage"/>, 2026-09-25): <c>1.2k / 4.1k · 30% · ComfyUI: 00:12 · 📨 2 queued</c>. Pinned.
+    /// <paramref name="labelAfterUsage"/> (<see cref="LabelAfterUsage"/>, 2026-09-25): <c>1.2k / 4.1k · 30% · 🎨 00:12 · 📨 2 queued</c>. Pinned.
     /// </summary>
     public static string BusyRow(string label, TimeSpan elapsed, string overlayHint, string queued, string usage, bool labelAfterUsage)
     {

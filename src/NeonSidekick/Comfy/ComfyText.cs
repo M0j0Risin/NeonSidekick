@@ -290,8 +290,8 @@ public static class ComfyText
     /// <summary>The note the conversation gets after <c>/imagine</c> (2026-09-24), so the model knows the picture exists and what made it. Pinned.</summary>
     public static string ImagineNote(string result) => "(the user generated a picture with /imagine, not typed by the user: " + result.Replace("\n", "; ", StringComparison.Ordinal) + ")";
 
-    /// <summary>The spinner's label while a generation runs (<c>⠹ ComfyUI: 00:12</c>; 2026-09-25, the user's wording — it read <c>Generating with &lt;workflow&gt;…</c> until then). Pinned.</summary>
-    public const string GeneratingLabel = "ComfyUI:";
+    /// <summary>The spinner's label while a generation runs (<c>⠹ 🎨 00:12</c>; 2026-09-25, the user's wording — it read <c>Generating with &lt;workflow&gt;…</c>, then <c>ComfyUI:</c>, until later that day: the palette, <see cref="Glyph"/>'s, U+1F3A8, two cells, no variation selector). Pinned.</summary>
+    public const string GeneratingLabel = "🎨";
 
     /// <summary>A generation the user stopped (ESC). Pinned.</summary>
     public const string Cancelled = "(image generation cancelled)";

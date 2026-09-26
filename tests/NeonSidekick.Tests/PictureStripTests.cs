@@ -310,4 +310,33 @@ public class PictureStripTests : IDisposable
         Assert.True(pane.TryHitHint(0, 102));  // the hint row two under the cursor, the strip notwithstanding
         Assert.False(pane.TryHitHint(0, 103));
     }
+
+    /// <summary>
+    /// A click on a tool run's summary with the strip drawn (2026-09-25, the user's report): the transcript's rows sit over
+    /// the strip, not on the upper rule — read from the rule they were the strip's height too high and the click missed.
+    /// </summary>
+    [Fact]
+    public void Pane_ToggleToolGroupAt_FindsTheSummary_OverTheStrip()
+    {
+        _cursorTop = 100;
+        using var pane = Pane(StripOf(1));
+        pane.Show();
+        pane.Write(new Markup("a\n"));
+        pane.BeginToolGroup(1);
+        pane.SetToolGroupSummary(new Markup("S"), new Markup("E"));
+        pane.WriteToolLine(new Markup("m1\n"));
+        pane.WriteToolLine(new Markup("m2\n"));
+        pane.WriteToolLine(new Markup("m3\n"));
+        pane.EndToolGroup();
+        Assert.Equal(ScreenPane.StripPaneRows, pane.StripRows);
+        Assert.Equal(2, pane.StoredRows);
+
+        // The upper rule at 99, the strip on 93–98 under its rule at 92: the region is 83–91, "a" on 83, the summary on 84.
+        Assert.False(pane.TryToggleToolGroupAt(0, 83));
+        Assert.False(pane.TryToggleToolGroupAt(0, 91));
+        Assert.True(pane.TryToggleToolGroupAt(0, 84));
+        Assert.Equal(5, pane.StoredRows);
+        Assert.True(pane.TryToggleToolGroupAt(0, 84));
+        Assert.Equal(2, pane.StoredRows);
+    }
 }
