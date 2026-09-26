@@ -124,14 +124,14 @@ public class BotChatPicturesTests
     }
 
     [Fact]
-    public void TheBotchatTab_IsLast_ItsFiveRowsDefaultingToSingle_Off_Automatic_TheFirstWorkflow_AndAsync()
+    public void TheBotchatTab_IsLast_ItsSixRowsDefaultingToSingle_Off_Automatic_TheFirstWorkflow_Async_AndAFiveSecondPause()
     {
         var data = new AppSettingsData();
 
         Assert.Equal("Botchat", SettingsMenu.TabTitles[(int)SettingsTab.BotChat]);
         Assert.Equal((int)SettingsTab.BotChat, SettingsMenu.TabTitles.Count - 1);
-        Assert.Equal([SettingsField.BotChatLlmMode, SettingsField.BotChatImages, SettingsField.BotChatImageMode, SettingsField.BotChatImageWorkflow, SettingsField.BotChatImageAsync], SettingsMenu.TabFields[(int)SettingsTab.BotChat]);
-        Assert.Equal(["Botchat LLM mode", "Botchat images enabled", "Botchat image mode", "Botchat image workflow", "Botchat image async"], SettingsMenu.TabFields[(int)SettingsTab.BotChat].Select(SettingsMenu.FieldName));
+        Assert.Equal([SettingsField.BotChatLlmMode, SettingsField.BotChatImages, SettingsField.BotChatImageMode, SettingsField.BotChatImageWorkflow, SettingsField.BotChatImageAsync, SettingsField.BotChatNonTtsDelaySeconds], SettingsMenu.TabFields[(int)SettingsTab.BotChat]);
+        Assert.Equal(["Botchat LLM mode", "Botchat images enabled", "Botchat image mode", "Botchat image workflow", "Botchat image async", "Botchat non-TTS delay"], SettingsMenu.TabFields[(int)SettingsTab.BotChat].Select(SettingsMenu.FieldName));
         Assert.False(SettingsMenu.IsToggle(SettingsField.BotChatLlmMode));
         Assert.Equal("single", SettingsMenu.FieldValue(SettingsField.BotChatLlmMode, data, "."));
         Assert.Equal("multi", SettingsMenu.FieldValue(SettingsField.BotChatLlmMode, new AppSettingsData { BotChatLlmMode = "multi" }, "."));
@@ -144,7 +144,22 @@ public class BotChatPicturesTests
         Assert.Equal(SettingsMenu.FirstBotChatWorkflowLabel, SettingsMenu.FieldValue(SettingsField.BotChatImageWorkflow, data, "."));
         Assert.Equal("flux", SettingsMenu.FieldValue(SettingsField.BotChatImageWorkflow, new AppSettingsData { BotChatImageWorkflow = "flux" }, "."));
         Assert.Equal("on", SettingsMenu.FieldValue(SettingsField.BotChatImageAsync, data, "."));
+        // The pause with no voice (2026-09-26): typed seconds, 5 by default, 0 off.
+        Assert.False(SettingsMenu.IsToggle(SettingsField.BotChatNonTtsDelaySeconds));
+        Assert.Equal("5 seconds", SettingsMenu.FieldValue(SettingsField.BotChatNonTtsDelaySeconds, data, "."));
+        Assert.Equal("off", SettingsMenu.FieldValue(SettingsField.BotChatNonTtsDelaySeconds, new AppSettingsData { BotChatNonTtsDelaySeconds = 0 }, "."));
+        Assert.Equal("1 second", SettingsMenu.SecondsLabel(1));
+        Assert.Equal("5", SettingsMenu.EditableValue(SettingsField.BotChatNonTtsDelaySeconds, data));
+        Assert.Equal("must be 0 (off) or 1 to 30 seconds", SettingsMenu.BotChatNonTtsDelayRangeError);
     }
+
+    [Theory]
+    [InlineData(5, 5)]
+    [InlineData(0, null)]
+    [InlineData(-3, null)]
+    [InlineData(90, 30)]
+    public void BotPause_IsTheSavedSeconds_ClampedToTheRange_NullAtZero(int saved, int? seconds) =>
+        Assert.Equal(seconds is { } s ? TimeSpan.FromSeconds(s) : null, ChatScreen.BotPause(new AppSettingsData { BotChatNonTtsDelaySeconds = saved }));
 
     [Fact]
     public void ReplyText_JoinsAHeldTurnsTextDeltas_AndNothingElse()

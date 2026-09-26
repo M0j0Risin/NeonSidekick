@@ -759,6 +759,7 @@ public class SettingsMenuTests : IDisposable
                 SettingsField.BotChatLlmMode,
                 SettingsField.LlmMidTurnUsage,
                 SettingsField.KeepCommandHistory,
+                SettingsField.BotChatNonTtsDelaySeconds,
             },
             Enum.GetValues<SettingsField>());
         // The compact rows: on the LLM tab after the context length but no reconnect; the type a picker, the two others typed.
@@ -1413,6 +1414,38 @@ public class SettingsMenuTests : IDisposable
         Assert.Equal("80", SettingsMenu.EditableValue(SettingsField.TtsVoiceMix, data));
         Assert.Equal("70 % / 30 %", SettingsMenu.Mix(70));
         Assert.Null(Record.Exception(() => new Markup(SettingsMenu.FieldLabel(SettingsField.LlmUrl, new AppSettingsData { LlmUrl = "http://x/[v1]" }, _settings.ProfileDirectory, null))));
+    }
+
+    // ── Botchat non-TTS delay ───────────────────────────────────────────────
+
+    /// <summary>The Botchat tab's last row (2026-09-26): typed seconds, 0 to 30, a value outside refused and the saved one kept; no reconnect.</summary>
+    [Fact]
+    public async Task OnThePane_BotChatNonTtsDelay_IsTheBotchatTabsLastRow_SavedAndRangeChecked()
+    {
+        _console.Profile.Width = 240;   // the error line is longer than 100 cells
+        var (menu, pane) = PaneMenu();
+        GoTo(SettingsTab.BotChat);
+        Down(SettingsMenu.TabFields[(int)SettingsTab.BotChat].Count - 1);
+        Push(Keys.Enter);                       // "5"
+        Backspace(1);
+        _console.Input.PushText("12");
+        Push(Keys.Enter);
+        Push(Keys.Enter);                       // the cursor stays on the row just edited: "12"
+        Backspace(2);
+        _console.Input.PushText("31");
+        Push(Keys.Enter);
+        Push(Keys.Enter);                       // still "12"
+        Backspace(2);
+        _console.Input.PushText("-1");
+        Push(Keys.Enter, Keys.Escape);
+
+        Assert.Equal(SettingsChanges.None, await menu.ShowAsync(CancellationToken.None));
+
+        Assert.Equal(12, _settings.Current.BotChatNonTtsDelaySeconds);
+        Assert.Contains("Botchat non-TTS delay: 12 seconds", _console.Output);
+        Assert.Contains(SettingsMenu.BotChatNonTtsDelayRangeError, _console.Output);
+        Assert.Contains("keeping 12", _console.Output);
+        pane.Dispose();
     }
 
     // ── Interrupt echo guard ────────────────────────────────────────────────

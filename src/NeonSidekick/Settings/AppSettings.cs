@@ -639,6 +639,7 @@ public sealed class AppSettings : IDisposable
         BotChatImageMode = source.BotChatImageMode,
         BotChatImageWorkflow = source.BotChatImageWorkflow,
         BotChatImageAsync = source.BotChatImageAsync,
+        BotChatNonTtsDelaySeconds = source.BotChatNonTtsDelaySeconds,
         ShellCodeLanguages = [.. source.ShellCodeLanguages],
         ShellCodeMaxToolCalls = source.ShellCodeMaxToolCalls,
         ShellCodeTimeoutSeconds = source.ShellCodeTimeoutSeconds,

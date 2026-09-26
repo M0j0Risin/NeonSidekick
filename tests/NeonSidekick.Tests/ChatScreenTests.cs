@@ -6620,6 +6620,264 @@ public partial class ChatScreenTests : IDisposable
         Assert.Single(_chat.Requests);
     }
 
+    // ── /loop over a command (2026-09-25) ───────────────────────────────────
+
+    [Fact]
+    public void LoopCommandStrings_ArePinned()
+    {
+        Assert.Equal([SlashCommand.Imagine, SlashCommand.Speak], ChatScreen.LoopableCommands);
+        Assert.Equal("(loop done: 3 runs)", ChatScreen.LoopCommandDoneNotice(3));
+        Assert.Equal("(loop done: 1 run)", ChatScreen.LoopCommandDoneNotice(1));
+        Assert.Equal("(loop stopped after 2 runs)", ChatScreen.LoopCommandStoppedNotice(2));
+        Assert.Equal(TimeSpan.FromMilliseconds(250), ChatScreen.LoopCommandMinGap);
+    }
+
+    /// <summary>A command loop's last line: its done or stopped notice.</summary>
+    private static readonly Regex LoopCommandEnd = new(@"\(loop (done:|stopped after) \d+ runs?\)", RegexOptions.CultureInvariant);
+
+    /// <summary>
+    /// A command loop's script over a <see cref="Scripted"/> input (2026-09-25): <paramref name="loop"/> at the first idle line, then
+    /// each of <paramref name="after"/> at an idle line of its own once the loop has ended — never queued up front, where whichever
+    /// of the loop's key watchers is up would read it (a full coverage run hung so). The last should be <c>/exit</c>. The loop's gaps
+    /// run on the screen's clock, which the fixture's is not moving on its own: <see cref="RunLoopAsync"/> moves it.
+    /// </summary>
+    private ScriptedInput LoopScript(string loop, params string[] after)
+    {
+        var input = Scripted();
+        int next = -1;
+        input.OnWait = () =>
+        {
+            if (next < 0)
+            {
+                PushLine(input, loop);
+                next = 0;
+            }
+            else if (next < after.Length && LoopCommandEnd.IsMatch(Output))
+            {
+                PushLine(input, after[next++]);
+            }
+        };
+        return input;
+    }
+
+    /// <summary>The run with the screen's clock moved on a gap at a time until it returns.</summary>
+    private async Task<string> RunLoopAsync()
+    {
+        using var done = new CancellationTokenSource();
+        var clock = Task.Run(async () =>
+        {
+            while (!done.IsCancellationRequested)
+            {
+                _time.Advance(ChatScreen.LoopCommandMinGap);
+                await Task.Delay(10, CancellationToken.None);
+            }
+        });
+        try
+        {
+            return await RunAsync();
+        }
+        finally
+        {
+            await done.CancelAsync();
+            await clock;
+        }
+    }
+
+    /// <summary>ESC pushed from the pool once <paramref name="when"/> holds (as <c>Speak_EscOverTheTail…</c> does): the loop's watchers poll, never the read that runs <c>OnWait</c>.</summary>
+    private static Task EscWhen(ScriptedInput input, Func<bool> when, CancellationToken done) => Task.Run(async () =>
+    {
+        while (!done.IsCancellationRequested && !when())
+        {
+            await Task.Delay(5, CancellationToken.None);
+        }
+
+        if (!done.IsCancellationRequested)
+        {
+            input.Push(Keys.Escape);
+        }
+    });
+
+    [Fact]
+    public async Task Loop_Imagine_RunsTheCommandCountTimes_WithoutTheModel()
+    {
+        var stub = ComfyServer();
+        LoopScript("/loop 3 /imagine a cat -- blurry --seed 5", "/exit");
+
+        string output = await RunLoopAsync();
+
+        Assert.Equal(3, stub.Requests.Count(r => r.Uri.AbsolutePath == "/prompt"));
+        Assert.All(stub.Requests.Where(r => r.Uri.AbsolutePath == "/prompt"), r => Assert.Contains("\"text\":\"a cat\"", r.Body));
+        Assert.Empty(_chat.Requests);
+        Assert.Contains("  · " + ChatScreen.LoopTurnNotice(3, 3), output);
+        Assert.Contains("  · " + ChatScreen.LoopCommandDoneNotice(3), output);
+        Assert.DoesNotContain("› /imagine", output);   // no user row: the command's lines are the pass
+    }
+
+    /// <summary>Only the last pass's picture rides with the next message; what /imagine queued before the loop stays.</summary>
+    [Fact]
+    public async Task Loop_Imagine_OnlyTheLastPassRidesWithTheNextMessage()
+    {
+        ComfyServer();
+        _chat.EnqueueText("Nice.");
+        var input = Scripted();
+        int step = 0;
+        input.OnWait = () =>
+        {
+            switch (step)
+            {
+                case 0:
+                    PushLine(input, "/imagine before --seed 1");
+                    step++;
+                    break;
+                case 1:
+                    PushLine(input, "/loop 3 /imagine a cat --seed 5");
+                    step++;
+                    break;
+                case 2 when LoopCommandEnd.IsMatch(Output):
+                    PushLine(input, "what did you make?");
+                    step++;
+                    break;
+                case 3:
+                    PushLine(input, "/exit");
+                    step++;
+                    break;
+            }
+        };
+
+        await RunLoopAsync();
+
+        var user = _chat.Requests.Single().Last(m => m.Role == ChatRole.User);
+        Assert.Equal(2, user.Contents.OfType<DataContent>().Count());   // the one before the loop, the loop's last
+        Assert.Equal(2, CountOf(user.Text, "(the user generated a picture with /imagine"));
+    }
+
+    [Fact]
+    public async Task Loop_Imagine_AFailedGeneration_StopsTheLoop()
+    {
+        ComfyServer();
+        var failing = new StubHttpMessageHandler().Map("http://comfy.lan:8188/prompt", HttpStatusCode.InternalServerError, "{\"error\":\"boom\"}");
+        _comfyClient = url => new NeonSidekick.Comfy.ComfyClient(url, new HttpClient(failing), TimeSpan.FromMilliseconds(1));
+        LoopScript("/loop 3 /imagine a cat", "/exit");
+
+        string output = await RunLoopAsync();
+
+        Assert.Single(failing.Requests, r => r.Uri.AbsolutePath == "/prompt");
+        Assert.Contains("  · " + ChatScreen.LoopCommandStoppedNotice(1), output);
+        Assert.DoesNotContain(ChatScreen.LoopTurnNotice(2, 3), output);
+    }
+
+    [Fact]
+    public async Task Loop_Imagine_EscDuringTheGeneration_StopsTheLoop()
+    {
+        ComfyServer();
+        var input = LoopScript("/loop infinite /imagine a cat", "/exit");
+        var slow = new StubHttpMessageHandler()
+            .Map("http://comfy.lan:8188/prompt", async (_, ct) =>
+            {
+                input.Push(Keys.Escape);
+                await Task.Delay(Timeout.Infinite, ct);
+                return StubHttpMessageHandler.Bytes(HttpStatusCode.OK, [], "application/json");
+            });
+        _comfyClient = url => new NeonSidekick.Comfy.ComfyClient(url, new HttpClient(slow), TimeSpan.FromMilliseconds(1));
+
+        string output = await RunLoopAsync();
+
+        Assert.Single(slow.Requests, r => r.Uri.AbsolutePath == "/prompt");
+        Assert.Contains("  · " + NeonSidekick.Comfy.ComfyText.Cancelled, output);
+        Assert.Contains("  · " + ChatScreen.LoopCommandStoppedNotice(1), output);
+        Assert.DoesNotContain(ChatScreen.LoopTurnNotice(2, null), output);
+    }
+
+    [Fact]
+    public async Task Loop_Speak_ReadsEachPassWhole_ThenTheDoneNotice()
+    {
+        string files = Path.Combine(_settings.ProfileDirectory, WorkingDirectory.DefaultFolderName);
+        Directory.CreateDirectory(files);
+        File.WriteAllText(Path.Combine(files, "notes.txt"), "One. Two.");
+        LoopScript("/loop 2 /speak notes.txt", "/exit");
+
+        string output = await RunLoopAsync();
+
+        Assert.Equal(new[] { "One.", "Two.", "One.", "Two." }, _synth.SpokenText);   // each pass heard whole, none cut by the next
+        Assert.Equal(2, CountOf(output, "● One. Two.\n"));
+        Assert.Contains("  · " + ChatScreen.LoopCommandDoneNotice(2), output);
+        Assert.DoesNotContain(ChatScreen.SpeechStoppedNotice, output);
+        Assert.Empty(_chat.Requests);
+    }
+
+    /// <summary>ESC while a looped reading is heard silences it and ends the loop.</summary>
+    [Fact]
+    public async Task Loop_Speak_EscWhileHeard_StopsTheSpeechAndTheLoop()
+    {
+        _playback.HoldBytes = true;   // nothing is heard until released: the reading is still owed audio at the ESC
+        string files = Path.Combine(_settings.ProfileDirectory, WorkingDirectory.DefaultFolderName);
+        Directory.CreateDirectory(files);
+        File.WriteAllText(Path.Combine(files, "notes.txt"), "One. Two.");
+        var input = LoopScript("/loop 5 /speak notes.txt", "/exit");
+        using var done = new CancellationTokenSource();
+        var esc = EscWhen(input, () => _synth.Spoken.Count >= 2 && _playback.Writes.Count >= 2, done.Token);
+
+        string output = await RunLoopAsync();
+        await done.CancelAsync();
+        await esc;
+
+        Assert.Equal(1, _playback.Started);
+        Assert.Contains("  · " + ChatScreen.SpeechStoppedNotice, output);
+        Assert.Contains("  · " + ChatScreen.LoopCommandStoppedNotice(1), output);
+        Assert.DoesNotContain(ChatScreen.LoopTurnNotice(2, 5), output);
+    }
+
+    [Fact]
+    public async Task Loop_Speak_ABadPath_StopsAfterTheFirstPass()
+    {
+        _settings.Update(d => d.TtsOutput = false);
+        LoopScript("/loop 3 /speak nope.txt", "/exit");
+
+        string output = await RunLoopAsync();
+
+        Assert.Equal(1, CountOf(output, "  ✗ " + FileText.Missing("nope.txt")));
+        Assert.Contains("  · " + ChatScreen.LoopCommandStoppedNotice(1), output);
+    }
+
+    /// <summary>An infinite loop over a pass that returns at once (speech off) still stops on ESC: the watched gap between passes.</summary>
+    [Fact]
+    public async Task Loop_Infinite_AnInstantPass_EscInTheGap_Stops()
+    {
+        _settings.Update(d => d.TtsOutput = false);
+        string files = Path.Combine(_settings.ProfileDirectory, WorkingDirectory.DefaultFolderName);
+        Directory.CreateDirectory(files);
+        File.WriteAllText(Path.Combine(files, "notes.txt"), "One.");
+        var input = LoopScript("/loop infinite /speak notes.txt", "/exit");
+        using var done = new CancellationTokenSource();
+        var esc = EscWhen(input, () => Output.Contains(ChatScreen.LoopTurnNotice(3, null), StringComparison.Ordinal), done.Token);
+
+        string output = await RunLoopAsync();
+        await done.CancelAsync();
+        await esc;
+
+        Assert.Contains(ChatScreen.LoopTurnNotice(3, null), output);
+        Assert.Matches(@"  · \(loop stopped after \d+ runs\)\n", output);   // in whichever gap the ESC landed
+        Assert.Empty(_chat.Requests);
+    }
+
+    [Fact]
+    public async Task Loop_OtherCommands_AreTheNotLoopableError_AndAnUnknownOneTheUnknownError()
+    {
+        _settings.Update(d => d.TtsOutput = false);
+        PushLine("/loop 2 /usage");
+        PushLine("/loop 2 /loop 2 hi");
+        PushLine("/loop 2 /nosuch thing");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains("  ✗ " + ChatScreen.LoopCommandNotLoopableError("/usage"), output);
+        Assert.Contains("  ✗ " + ChatScreen.LoopCommandNotLoopableError("/loop"), output);
+        Assert.Contains("  ✗ " + ChatScreen.UnknownCommandError("/nosuch"), output);
+        Assert.DoesNotContain(ChatScreen.LoopTurnNotice(1, 2), output);
+        Assert.Empty(_chat.Requests);
+    }
+
     [Fact]
     public async Task Profile_Edit_FlushesThenOpensTheFile_AndAFailedEditorIsTheError()
     {

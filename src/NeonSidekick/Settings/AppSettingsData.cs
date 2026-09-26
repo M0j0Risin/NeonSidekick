@@ -576,6 +576,22 @@ public sealed class AppSettingsData
     /// </summary>
     public bool BotChatImageAsync { get; set; } = true;
 
+    /// <summary>
+    /// The seconds <c>/botchat</c> rests after a reply when no voice plays (2026-09-26, the user's ask: with TTS off the
+    /// replies came back-to-back, too fast to read): the next bot answers after this pause, as it would after a voice.
+    /// Lines typed meanwhile join the chat at once, and ESC there ends the chat. <see cref="MinBotChatNonTtsDelaySeconds"/>
+    /// (0, off) to <see cref="MaxBotChatNonTtsDelaySeconds"/>; a hand-edited value outside is clamped at use. Read per
+    /// reply. The Botchat tab of <c>/settings</c>. No variable.
+    /// </summary>
+    public int BotChatNonTtsDelaySeconds { get; set; } = DefaultBotChatNonTtsDelaySeconds;
+
+    /// <summary>The accepted <see cref="BotChatNonTtsDelaySeconds"/> range; 0 is no pause.</summary>
+    public const int MinBotChatNonTtsDelaySeconds = 0;
+
+    public const int MaxBotChatNonTtsDelaySeconds = 30;
+
+    public const int DefaultBotChatNonTtsDelaySeconds = 5;
+
     // ─── Skills─────────────────────────────────────────────────────────────────
 
     /// <summary>

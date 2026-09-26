@@ -21,7 +21,8 @@ public partial class ChatScreenTests
     /// <summary>A second profile, <c>ada</c>, with its own persona and an LLM server and model of its own that must never be asked.</summary>
     private void BotChatFixture()
     {
-        _settings.Update(d => d.TtsOutput = false);
+        // No pause between replies (2026-09-26): the manual clock never moves on its own; the pause's own tests set it.
+        _settings.Update(d => { d.TtsOutput = false; d.BotChatNonTtsDelaySeconds = 0; });
         File.WriteAllText(Path.Combine(_settings.ProfileDirectory, PersonaFile.FileName), "You are Neon. " + NeonMarker);
         Profiles.Create(_dir, "ada", new AppSettingsData { LlmUrl = "http://ada-only-server:9999", LlmModel = "ada-only-model", TtsVoice = "bm_george" });
         File.WriteAllText(Path.Combine(ProfileDir("ada"), PersonaFile.FileName), "You are Ada. " + AdaMarker);
@@ -237,6 +238,95 @@ public partial class ChatScreenTests
         Assert.True(output.IndexOf(ChatScreen.SpeechStoppedNotice, StringComparison.Ordinal) < output.IndexOf(TranscriptRenderer.SpeakerGlyph + "ada", StringComparison.Ordinal));
         Assert.DoesNotContain(BotChat.StoppedNotice(1), output);
         Assert.True(_playback.Stopped >= 1);
+    }
+
+    /// <summary>
+    /// With no voice the next bot waits out <c>Botchat non-TTS delay</c> on the screen's clock (2026-09-26, the user's ask):
+    /// not asked at 4 s, asked at 5; a line typed during the pause joins the chat at once, before the next reply.
+    /// </summary>
+    [Fact]
+    public async Task BotChat_TtsOff_TheNextBotWaitsOutThePause_AndALineTypedMeanwhileJoins()
+    {
+        BotChatFixture();
+        _settings.Update(d => d.BotChatNonTtsDelaySeconds = 5);
+        _console.Profile.Height = 40;
+        _geometry = new ScreenGeometry(() => null);
+        _chat.EnqueueText("Hello from Neon.");
+        _chat.EnqueueText("Hello, user.");
+        _chat.BeforeUpdate = (i, _) =>
+        {
+            if (i == 0 && _chat.Requests.Count == 2)
+            {
+                PushLine("/exit");   // cancels the second reply and the chat, then runs at the idle line
+            }
+
+            return Task.CompletedTask;
+        };
+        int beforeTheClock = -1, atFourSeconds = -1;
+        bool echoedInThePause = false;
+        var clock = Task.Run(async () =>
+        {
+            var deadline = DateTime.UtcNow.AddSeconds(20);
+            while (!Output.Contains("Hello from Neon.", StringComparison.Ordinal) && DateTime.UtcNow < deadline)
+            {
+                await Task.Delay(10);
+            }
+
+            await Task.Delay(300);   // the reply has ended: the chat is in the pause
+            PushLine("hi bots");
+            while (!Output.Contains("› hi bots", StringComparison.Ordinal) && DateTime.UtcNow < deadline)
+            {
+                await Task.Delay(10);
+            }
+
+            echoedInThePause = _chat.Requests.Count == 1;
+            beforeTheClock = _chat.Requests.Count;
+            _time.Advance(TimeSpan.FromSeconds(4));
+            await Task.Delay(300);
+            atFourSeconds = _chat.Requests.Count;
+            _time.Advance(TimeSpan.FromSeconds(1));
+        });
+        PushLine("/botchat");
+
+        await RunAsync();
+        await clock;
+
+        Assert.Equal(1, beforeTheClock);
+        Assert.Equal(1, atFourSeconds);
+        Assert.True(echoedInThePause);
+        Assert.Equal(2, _chat.Requests.Count);
+        Assert.Equal("User: hi bots", _chat.Requests[1][^1].Text.Split("\n\n")[^1]);
+    }
+
+    /// <summary>ESC during the pause (2026-09-26) finds no voice to stop and nothing replying: the chat ends, no second request.</summary>
+    [Fact]
+    public async Task BotChat_TtsOff_EscDuringThePause_EndsTheChat()
+    {
+        BotChatFixture();
+        _settings.Update(d => d.BotChatNonTtsDelaySeconds = 5);
+        _console.Profile.Height = 40;
+        _geometry = new ScreenGeometry(() => null);
+        _chat.EnqueueText("Hello from Neon.");
+        _chat.EnqueueText("never");
+        var press = Task.Run(async () =>
+        {
+            var deadline = DateTime.UtcNow.AddSeconds(20);
+            while (!Output.Contains("Hello from Neon.", StringComparison.Ordinal) && DateTime.UtcNow < deadline)
+            {
+                await Task.Delay(10);
+            }
+
+            await Task.Delay(300);   // the reply has ended: the chat is in the pause
+            _console.Input.PushKey(Keys.Escape);
+            PushLine("/exit");
+        });
+        PushLine("/botchat");
+
+        string output = await RunAsync();
+        await press;
+
+        Assert.Single(_chat.Requests);
+        Assert.Contains(BotChat.StoppedNotice(1), output);
     }
 
     /// <summary>ESC twice while a bot's reply is still being heard ends the chat, as one ESC did before (2026-09-25): no second request.</summary>

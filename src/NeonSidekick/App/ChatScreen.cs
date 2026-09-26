@@ -342,6 +342,18 @@ internal sealed partial class ChatScreen
     /// <summary>The notice when a pass ended the loop early: cancelled, withdrawn or failed; <paramref name="ran"/> counts that pass.</summary>
     public static string LoopStoppedNotice(int ran) => $"(loop stopped after {UsageText.Plural(ran, "message", "messages")})";
 
+    // A looped command (2026-09-25, the user's ask: /loop infinite 1s /imagine …, no model in between). Pinned.
+    /// <summary>The commands <c>/loop</c> runs itself rather than send to the model — the user's pick, the two that make sense again and again.</summary>
+    public static readonly IReadOnlyList<SlashCommand> LoopableCommands = [SlashCommand.Imagine, SlashCommand.Speak];
+    /// <summary>The notice after the last pass of a counted command loop.</summary>
+    public static string LoopCommandDoneNotice(int total) => $"(loop done: {UsageText.Plural(total, "run", "runs")})";
+    /// <summary>The notice when a pass ended a command loop early: cancelled or failed; <paramref name="ran"/> counts that pass.</summary>
+    public static string LoopCommandStoppedNotice(int ran) => $"(loop stopped after {UsageText.Plural(ran, "run", "runs")})";
+    /// <summary>A <c>/loop</c> over a command it does not run.</summary>
+    public static string LoopCommandNotLoopableError(string token) => $"Only /imagine and /speak can be looped; {token} cannot.";
+    /// <summary>The watched gap between command passes when the loop names no delay: a pass that returns at once (<c>/speak</c> with speech off) still leaves ESC a moment to stop an infinite loop.</summary>
+    public static readonly TimeSpan LoopCommandMinGap = TimeSpan.FromMilliseconds(250);
+
     /// <summary>
     /// <c>/loop</c>'s grammar (2026-09-21): the first word is <see cref="LoopInfiniteWord"/> (any
     /// case; <paramref name="count"/> null) or a whole number of 1 or more (invariant digits, no
@@ -5281,19 +5293,22 @@ internal sealed partial class ChatScreen
     /// at the stopped sentence (the top again after a full read); <c>/speak &lt;n&gt;</c> — digits
     /// alone; a file named so is <c>./5</c> — starts at sentence <em>n</em>, the block printed from
     /// there.</para>
+    ///
+    /// <para>True when the reading started, false when an error line was printed instead — a looped
+    /// <c>/speak</c> (2026-09-25) stops on false.</para>
     /// </summary>
-    private void HandleSpeak(string args, CancellationToken cancellationToken)
+    private bool HandleSpeak(string args, CancellationToken cancellationToken)
     {
         if (args.Length == 0)
         {
             if (_reading is not { } resume)
             {
                 _transcript.Error(SpeakUsageError);
-                return;
+                return false;
             }
 
             StartReading(resume, resume.Resume, cancellationToken);
-            return;
+            return true;
         }
 
         if (SpeakReading.TryParsePosition(args, out int at))
@@ -5301,17 +5316,17 @@ internal sealed partial class ChatScreen
             if (_reading is not { } seek)
             {
                 _transcript.Error(SpeakNothingToSeekError);
-                return;
+                return false;
             }
 
             if (at < 1 || at > seek.Count)
             {
                 _transcript.Error(SpeakBeyondEndError(seek.File, seek.Count, at));
-                return;
+                return false;
             }
 
             StartReading(seek, at, cancellationToken);
-            return;
+            return true;
         }
 
         // The whole argument as a path first — a file named `notes 5` is read whole — then, when
@@ -5327,14 +5342,14 @@ internal sealed partial class ChatScreen
         if (read.Outcome != FileOutcome.Ok)
         {
             _transcript.Error(FileText.Error(read.Outcome, read.Relative, "read", read.Detail));
-            return;
+            return false;
         }
 
         var reading = new SpeakReading(read.Relative, read.Text) { Cut = read.Truncated };
         if (reading.Count == 0)
         {
             _transcript.Error(SpeakEmptyError(read.Relative));
-            return;
+            return false;
         }
 
         // Remembered even when the number is bad, so /speak <n> works on it next.
@@ -5342,10 +5357,11 @@ internal sealed partial class ChatScreen
         if (from < 1 || from > reading.Count)
         {
             _transcript.Error(SpeakBeyondEndError(reading.File, reading.Count, from));
-            return;
+            return false;
         }
 
         StartReading(reading, from, cancellationToken);
+        return true;
     }
 
     /// <summary>The block from sentence <paramref name="from"/> on, then the sentences to the speaker; the status onto the hint row.</summary>
@@ -5468,14 +5484,19 @@ internal sealed partial class ChatScreen
     /// engine as <c>generate_image</c> (<see cref="ComfyStudio"/>), under a spinner ESC cancels, the picture drawn as large as the
     /// window allows (several as a strip), the result line a notice. The result and the pictures ride with the next message
     /// (<see cref="TakeImagineNotes"/>), so the model knows what was made and can look at it. Refused mid-turn; not headless.
+    ///
+    /// <para>Under <c>/loop</c> (2026-09-25, the user's ask: <c>/loop infinite 1s /imagine …</c> with no model in between)
+    /// <paramref name="loopBase"/> is how much was queued when the loop began: each pass trims the queue back to it first, so
+    /// the next message carries the last pass's pictures alone, never an infinite loop's pile. Every picture is still drawn,
+    /// saved and put in the strip. The outcome tells the loop whether to go on.</para>
     /// </summary>
-    private async Task HandleImagineAsync(string args, CancellationToken cancellationToken)
+    private async Task<LoopPass> HandleImagineAsync(string args, CancellationToken cancellationToken, (int Notes, int Images)? loopBase = null)
     {
         var (request, error) = ComfyImagine.Parse(args, _comfy.Catalog.Workflows, ComfyStudio.MaxCountOf(_effective()));
         if (request is null)
         {
             _transcript.Error(error!);
-            return;
+            return LoopPass.Failed;
         }
 
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -5498,13 +5519,16 @@ internal sealed partial class ChatScreen
             await watcher.ConfigureAwait(false);
         }
 
+        LoopPass pass;
         if (cancelled || generation is null)
         {
             _transcript.Notice(ComfyText.Cancelled);
+            pass = LoopPass.Cancelled;
         }
         else if (!generation.Ok)
         {
             _transcript.Error(generation.Text);
+            pass = LoopPass.Failed;
         }
         else
         {
@@ -5512,11 +5536,28 @@ internal sealed partial class ChatScreen
             // The strip first: the picture's window box then leaves its rows.
             AddToPictureStrip(generation.Images);
             ShowPictures(generation.Images);
+            if (loopBase is { } keep)
+            {
+                // The last looped pass's batch goes; what was queued before the loop stays.
+                TrimTo(_imagineNotes, keep.Notes);
+                TrimTo(_imagineImages, keep.Images);
+            }
+
             _imagineNotes.Add(ComfyText.ImagineNote(generation.Text));
             _imagineImages.AddRange(generation.Images);
+            pass = LoopPass.Ok;
         }
 
         DrainDiagnostics();
+        return pass;
+
+        static void TrimTo<T>(List<T> list, int count)
+        {
+            if (list.Count > count)
+            {
+                list.RemoveRange(count, list.Count - count);
+            }
+        }
     }
 
     /// <summary>
@@ -7862,7 +7903,7 @@ internal sealed partial class ChatScreen
                 return false;
 
             case SlashCommand.Speak:
-                HandleSpeak(args, cancellationToken);
+                _ = HandleSpeak(args, cancellationToken);
                 return false;
 
             case SlashCommand.View:
@@ -7870,7 +7911,7 @@ internal sealed partial class ChatScreen
                 return false;
 
             case SlashCommand.Imagine:
-                await HandleImagineAsync(args, cancellationToken).ConfigureAwait(false);
+                _ = await HandleImagineAsync(args, cancellationToken).ConfigureAwait(false);
                 return false;
 
             case SlashCommand.Comfy:
@@ -8593,6 +8634,34 @@ internal sealed partial class ChatScreen
             return false;
         }
 
+        if (message.StartsWith('/'))
+        {
+            var (command, commandArgs) = ParseLine(message);
+            string token = message.Split(' ', 2)[0];
+            if (command == SlashCommand.Unknown)
+            {
+                _transcript.Error(UnknownCommandError(token));
+                return false;
+            }
+
+            if (command != SlashCommand.None)
+            {
+                if (!LoopableCommands.Contains(command))
+                {
+                    _transcript.Error(LoopCommandNotLoopableError(token));
+                    return false;
+                }
+
+                if (images.Count > 0)
+                {
+                    _transcript.Notice(ImagesIgnoredNotice(images.Count));
+                }
+
+                await RunLoopedCommandAsync(command, commandArgs, count, delay, cancellationToken).ConfigureAwait(false);
+                return false;
+            }
+        }
+
         for (int n = 1; count is null || n <= count; n++)
         {
             if (n > 1 && delay is { } wait)
@@ -8624,6 +8693,86 @@ internal sealed partial class ChatScreen
 
         _transcript.Notice(LoopDoneNotice(count!.Value));
         return false;
+    }
+
+    /// <summary>How one pass of a looped command went (2026-09-25): <see cref="Ok"/> goes on, the others stop the loop.</summary>
+    private enum LoopPass
+    {
+        Ok,
+        Cancelled,
+        Failed,
+    }
+
+    /// <summary>
+    /// <c>/loop</c> over one of <see cref="LoopableCommands"/> (2026-09-25, the user's ask: <c>/loop infinite 1s /imagine …</c>
+    /// went to the model as a message): the command run straight, pass after pass, no model in between and no user row
+    /// echoed — the command's own lines are the pass. <c>/imagine</c> under its own ESC watcher, its queue for the next message
+    /// kept to the last pass's pictures (the base taken here, before the first); <c>/speak</c> waits for the reading's audio to
+    /// end, under ESC, so the next pass does not cut it short. A cancelled or failed pass ends the loop, as a failed reply ends
+    /// a message loop. Between passes the delay as ever, or — none named — <see cref="LoopCommandMinGap"/>, watched and
+    /// unannounced, so an instant pass cannot spin past ESC.
+    /// </summary>
+    private async Task RunLoopedCommandAsync(SlashCommand command, string args, int? count, TimeSpan? delay, CancellationToken cancellationToken)
+    {
+        var loopBase = (_imagineNotes.Count, _imagineImages.Count);
+        for (int n = 1; count is null || n <= count; n++)
+        {
+            if (n > 1)
+            {
+                var wait = delay ?? LoopCommandMinGap;
+                if (delay is not null)
+                {
+                    _transcript.Notice(LoopWaitNotice(wait));
+                }
+
+                if (await WaitUnderWatchAsync(ct => Task.Delay(wait, _time, ct), KeySource.IsTurnCancel, cancellationToken, pointer: true).ConfigureAwait(false)
+                    || cancellationToken.IsCancellationRequested)
+                {
+                    _transcript.Notice(LoopCommandStoppedNotice(n - 1));
+                    return;
+                }
+            }
+
+            _transcript.Notice(LoopTurnNotice(n, count));
+            var pass = command == SlashCommand.Imagine
+                ? await HandleImagineAsync(args, cancellationToken, loopBase).ConfigureAwait(false)
+                : await SpeakPassAsync(args, cancellationToken).ConfigureAwait(false);
+            if (pass != LoopPass.Ok || cancellationToken.IsCancellationRequested)
+            {
+                _transcript.Notice(LoopCommandStoppedNotice(n));
+                return;
+            }
+        }
+
+        _transcript.Notice(LoopCommandDoneNotice(count!.Value));
+    }
+
+    /// <summary>One looped <c>/speak</c> (2026-09-25): the reading started, then its audio waited out under ESC, which stops it and the loop.</summary>
+    private async Task<LoopPass> SpeakPassAsync(string args, CancellationToken cancellationToken)
+    {
+        if (!HandleSpeak(args, cancellationToken))
+        {
+            return LoopPass.Failed;
+        }
+
+        if (_speech.Playing is not { } playing)
+        {
+            return LoopPass.Ok;
+        }
+
+        if (await WaitUnderWatchAsync(ct => playing.Completion.WaitAsync(ct), KeySource.IsTurnCancel, cancellationToken, pointer: true).ConfigureAwait(false))
+        {
+            // As ESC over a tail at the idle line: silenced, waited for, and the notice when audio was still owed.
+            if (await _speech.StopAsync().ConfigureAwait(false))
+            {
+                _transcript.Notice(SpeechStoppedNotice);
+            }
+
+            _pane.RefreshHint();
+            return LoopPass.Cancelled;
+        }
+
+        return LoopPass.Ok;
     }
 
     /// <summary>A <c>/botchat</c> turn is running (2026-09-24): its usage events stay out of the main conversation's tally. Set and cleared on the turn task.</summary>
@@ -8930,10 +9079,18 @@ internal sealed partial class ChatScreen
 
                 // Speech on: the next voice waits for this one's audio to end — under ESC, which stops the chat,
                 // and under the line hook, so a line sent meanwhile joins the chat at once.
-                if (_speech.Playing is { } playing
-                    && await WaitForBotSpeechAsync(playing, lines, pictures, ladder, turnId, cancellationToken).ConfigureAwait(false))
+                if (_speech.Playing is { } playing)
                 {
-                    await _speech.StopAsync().ConfigureAwait(false);
+                    if (await WaitForBotSpeechAsync(playing, lines, pictures, ladder, turnId, cancellationToken).ConfigureAwait(false))
+                    {
+                        await _speech.StopAsync().ConfigureAwait(false);
+                        break;
+                    }
+                }
+                else if (!speaking && BotPause(effective) is { } pause
+                    && await WaitForBotSpeechAsync(null, lines, pictures, ladder, turnId, cancellationToken, pause).ConfigureAwait(false))
+                {
+                    // Speech off (2026-09-26, the user's ask): the same watched wait, a pause in place of a voice.
                     break;
                 }
             }
@@ -8962,6 +9119,16 @@ internal sealed partial class ChatScreen
 
     /// <summary>The last <c>/botchat</c> of this run, kept when it stopped, for <see cref="BotChat.ResumeSwitch"/> (2026-09-25); null before the first.</summary>
     private BotChatState? _lastBotChat;
+
+    /// <summary>
+    /// The <c>/botchat</c> rest after a reply with no voice (<see cref="AppSettingsData.BotChatNonTtsDelaySeconds"/>,
+    /// 2026-09-26), a hand-edited value clamped to its range; null at 0, no pause. Pure.
+    /// </summary>
+    internal static TimeSpan? BotPause(AppSettingsData effective)
+    {
+        int seconds = Math.Clamp(effective.BotChatNonTtsDelaySeconds, AppSettingsData.MinBotChatNonTtsDelaySeconds, AppSettingsData.MaxBotChatNonTtsDelaySeconds);
+        return seconds == 0 ? null : TimeSpan.FromSeconds(seconds);
+    }
 
     /// <summary>
     /// The bots for <paramref name="names"/>, in order (pulled out of <see cref="HandleBotChatAsync"/> on 2026-09-25 for
@@ -9294,10 +9461,15 @@ internal sealed partial class ChatScreen
     /// next bot, spoken as ever. A second press in the same wait, or at the next bot before it has shown or said anything,
     /// ends the chat. True when the wait was cancelled — that second press, or a command that cancels, <c>/clear</c> and
     /// the like; the caller stops the speech and the chat.</para>
+    ///
+    /// <para>With no voice (2026-09-26, the user's ask: <see cref="AppSettingsData.BotChatNonTtsDelaySeconds"/>),
+    /// <paramref name="playing"/> is null and the wait is <paramref name="pause"/> on the screen's clock, watched the same
+    /// way; ESC there finds no voice to stop, so the ladder ends the chat.</para>
     /// </summary>
-    private async Task<bool> WaitForBotSpeechAsync(SpeechOutput playing, List<BotChatLine> lines, List<(BotParticipant Bot, Task<ComfyGeneration?> Job)> pictures, BotEscLadder ladder, int turnId, CancellationToken cancellationToken)
+    private async Task<bool> WaitForBotSpeechAsync(SpeechOutput? playing, List<BotChatLine> lines, List<(BotParticipant Bot, Task<ComfyGeneration?> Job)> pictures, BotEscLadder ladder, int turnId, CancellationToken cancellationToken, TimeSpan pause = default)
     {
         using var waitCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        Task done = playing?.Completion ?? Task.Delay(pause, _time, waitCts.Token);
         using var stop = new CancellationTokenSource();
         _turnRunning = true;
         _paneClose?.Dispose();
@@ -9309,7 +9481,7 @@ internal sealed partial class ChatScreen
         bool SkipSpeech()
         {
             // The ladder's (2026-09-25): the reply is written, so a press is the voice or the chat's end.
-            if (ladder.Press(turnId, shown: true, voiceAudible: !skipped && !playing.Completion.IsCompleted, responding: false) != BotPress.StopVoice)
+            if (ladder.Press(turnId, shown: true, voiceAudible: playing is not null && !skipped && !playing.Completion.IsCompleted, responding: false) != BotPress.StopVoice)
             {
                 return false;
             }
@@ -9328,12 +9500,12 @@ internal sealed partial class ChatScreen
         var cancelled = Task.Delay(Timeout.Infinite, waitCts.Token);
         try
         {
-            while (!playing.Completion.IsCompleted && !waitCts.IsCancellationRequested)
+            while (!done.IsCompleted && !waitCts.IsCancellationRequested)
             {
                 var signal = Volatile.Read(ref _actSignal).Task;
                 // A picture still rendering (Botchat image async, 2026-09-25) is drawn the moment it is done, under the voice.
                 Task picture = pictures.Count > 0 ? pictures[0].Job : cancelled;
-                await Task.WhenAny(playing.Completion, signal, cancelled, picture).ConfigureAwait(false);
+                await Task.WhenAny(done, signal, cancelled, picture).ConfigureAwait(false);
                 await DrainActsAsync().ConfigureAwait(false);
                 TakeInterjections(lines);
                 ShowReadyBotPictures(pictures);

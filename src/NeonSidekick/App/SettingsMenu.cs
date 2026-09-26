@@ -407,8 +407,11 @@ public enum SettingsField
     /// <summary>A picker: what the busy row's token tally shows while a turn runs — <c>estimate</c> / <c>last-known</c> (<see cref="Settings.AppSettingsData.LlmMidTurnUsage"/>). On the LLM tab under <see cref="LlmContextLength"/> (2026-09-25); no reconnect (read on every draw).</summary>
     LlmMidTurnUsage,
 
-    /// <summary>A toggle: whether the input line's Up/Down history is stored in <c>sessions.db</c> and recalled after a restart (<see cref="Settings.AppSettingsData.KeepCommandHistory"/>). The General tab's row under Command typo intercept (2026-09-25, the user's ask); no reconnect (read at each remembered line and each load). Last in the enum, as every newcomer.</summary>
+    /// <summary>A toggle: whether the input line's Up/Down history is stored in <c>sessions.db</c> and recalled after a restart (<see cref="Settings.AppSettingsData.KeepCommandHistory"/>). The General tab's row under Command typo intercept (2026-09-25, the user's ask); no reconnect (read at each remembered line and each load).</summary>
     KeepCommandHistory,
+
+    /// <summary>Typed: the seconds <c>/botchat</c> rests after a reply when no voice plays, 0 (off) to 30 (<see cref="Settings.AppSettingsData.BotChatNonTtsDelaySeconds"/>). The Botchat tab's last row (2026-09-26, the user's ask); no reconnect (read per reply). Last in the enum, as every newcomer.</summary>
+    BotChatNonTtsDelaySeconds,
 }
 
 /// <summary>The tabs of <c>/settings</c> on the pane, in strip order (Sessions right after General — the user's order, 2026-09-18; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
@@ -556,6 +559,9 @@ internal sealed partial class SettingsMenu
     /// <summary>The settings-menu wording for a bad <see cref="SettingsField.LlmAutoCompactPercent"/>. Pinned.</summary>
     public const string LlmAutoCompactPercentRangeError = "must be 0 (off) or 1 to 100 percent";
 
+    /// <summary>The settings-menu wording for a bad <see cref="SettingsField.BotChatNonTtsDelaySeconds"/>. Pinned.</summary>
+    public static readonly string BotChatNonTtsDelayRangeError = "must be 0 (off) or 1 to " + AppSettingsData.MaxBotChatNonTtsDelaySeconds.ToString(CultureInfo.InvariantCulture) + " seconds";
+
     /// <summary>The settings-menu wording for a bad <see cref="SettingsField.LlmRequestTimeoutSeconds"/> / <see cref="SettingsField.LlmTurnTimeoutSeconds"/>: each field its own ceiling. Pinned.</summary>
     public static readonly string LlmRequestTimeoutRangeError = TimeoutRangeError(Llm.LlmTimeouts.MaxRequestSeconds);
     public static readonly string LlmTurnTimeoutRangeError = TimeoutRangeError(Llm.LlmTimeouts.MaxTurnSeconds);
@@ -644,7 +650,7 @@ internal sealed partial class SettingsMenu
         [SettingsField.LlmScanMode, SettingsField.LlmUrl, SettingsField.LlmModel, SettingsField.LlmApiKey, SettingsField.LlmReasoning, SettingsField.LlmRequestTimeoutSeconds, SettingsField.LlmTurnTimeoutSeconds, SettingsField.LlmContextLength, SettingsField.LlmMidTurnUsage, SettingsField.LlmCompactType, SettingsField.LlmCompactKeepRecent, SettingsField.LlmCompactShowSummary, SettingsField.LlmAutoCompactPercent, SettingsField.LlmOfferTools, SettingsField.LlmToolCompactType, SettingsField.LlmMaxToolIterations, SettingsField.LlmUseFunVerbs],
         [SettingsField.TtsOutput, SettingsField.TtsSource, SettingsField.TtsHttpUrl, SettingsField.TtsVoicePreview, SettingsField.TtsVoice, SettingsField.TtsVoice2, SettingsField.TtsVoiceMix, SettingsField.TtsSpeed],
         Fields.Where(IsVoiceField).ToArray(),
-        [SettingsField.BotChatLlmMode, SettingsField.BotChatImages, SettingsField.BotChatImageMode, SettingsField.BotChatImageWorkflow, SettingsField.BotChatImageAsync],
+        [SettingsField.BotChatLlmMode, SettingsField.BotChatImages, SettingsField.BotChatImageMode, SettingsField.BotChatImageWorkflow, SettingsField.BotChatImageAsync, SettingsField.BotChatNonTtsDelaySeconds],
     ];
 
     /// <summary>
@@ -1018,6 +1024,7 @@ internal sealed partial class SettingsMenu
         SettingsField.BotChatImageMode => "Botchat image mode",
         SettingsField.BotChatImageWorkflow => "Botchat image workflow",
         SettingsField.BotChatImageAsync => "Botchat image async",
+        SettingsField.BotChatNonTtsDelaySeconds => "Botchat non-TTS delay",
         SettingsField.ComfyOutputFolder => "ComfyUI output folder",
         SettingsField.ComfyWorkflowsOffered => "ComfyUI workflows offered",
         SettingsField.ComfyAddWorkflow => "ComfyUI add workflow",
@@ -1180,6 +1187,7 @@ internal sealed partial class SettingsMenu
             SettingsField.BotChatImageMode => data.BotChatImageMode,
             SettingsField.BotChatImageWorkflow => string.IsNullOrWhiteSpace(data.BotChatImageWorkflow) ? FirstBotChatWorkflowLabel : data.BotChatImageWorkflow,
             SettingsField.BotChatImageAsync => OnOff(data.BotChatImageAsync),
+            SettingsField.BotChatNonTtsDelaySeconds => SecondsLabel(data.BotChatNonTtsDelaySeconds),
             SettingsField.ComfyOutputFolder => string.IsNullOrWhiteSpace(data.ComfyOutputFolder) ? ComfyOutputHereLabel : data.ComfyOutputFolder,
             SettingsField.ComfyWorkflowsOffered => ComfyOfferedValue(data.ComfyWorkflowsOffered, InstalledComfyWorkflows(profileDirectory)),
             SettingsField.ComfyAddWorkflow => ComfyAddWorkflowLabel,
@@ -1653,6 +1661,7 @@ internal sealed partial class SettingsMenu
         SettingsField.PastePreviewLines => data.PastePreviewLines.ToString(CultureInfo.InvariantCulture),
         SettingsField.SessionRetentionDays => data.SessionRetentionDays.ToString(CultureInfo.InvariantCulture),
         SettingsField.SessionSearchMaxResults => data.SessionSearchMaxResults.ToString(CultureInfo.InvariantCulture),
+        SettingsField.BotChatNonTtsDelaySeconds => data.BotChatNonTtsDelaySeconds.ToString(CultureInfo.InvariantCulture),
         _ => "",
     };
 
@@ -2416,6 +2425,16 @@ internal sealed partial class SettingsMenu
                 }
 
                 Apply(field, d => d.ReflectionCooldownMinutes = minutes);
+                return true;
+
+            case SettingsField.BotChatNonTtsDelaySeconds:
+                if (!int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out int pause) || pause < AppSettingsData.MinBotChatNonTtsDelaySeconds || pause > AppSettingsData.MaxBotChatNonTtsDelaySeconds)
+                {
+                    Sink.Error($"{FieldName(field)} {BotChatNonTtsDelayRangeError}; keeping {EditableValue(field, saved)}.");
+                    return false;
+                }
+
+                Apply(field, d => d.BotChatNonTtsDelaySeconds = pause);
                 return true;
 
             case SettingsField.LlmAutoCompactPercent:
@@ -4119,6 +4138,9 @@ internal sealed partial class SettingsMenu
 
     /// <summary><c>30 minutes</c>, <c>1 minute</c>, <c>off</c> at 0: the reflection cooldown as the row shows it. Pinned.</summary>
     public static string Minutes(int value) => value == 0 ? "off" : value.ToString(CultureInfo.InvariantCulture) + (value == 1 ? " minute" : " minutes");
+
+    /// <summary><c>5 seconds</c>, <c>1 second</c>, <c>off</c> at 0: the botchat non-TTS delay as the row shows it (2026-09-26). Pinned.</summary>
+    public static string SecondsLabel(int value) => value == 0 ? "off" : value.ToString(CultureInfo.InvariantCulture) + (value == 1 ? " second" : " seconds");
 
     /// <summary>A hit count as the menu shows it: <c>8 results</c>, <c>1 result</c>. Pinned.</summary>
     public static string Results(int value) => value.ToString(CultureInfo.InvariantCulture) + (value == 1 ? " result" : " results");
