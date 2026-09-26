@@ -13,7 +13,7 @@ using Spectre.Console.Rendering;
 namespace NeonSidekick.App;
 
 /// <summary>
-/// What <c>/sys</c> shows: the live state a turn is prepared from, read the way
+/// What <c>/sys</c>' Prompt tab shows: the live state a turn's system message is built from, read the way
 /// <see cref="ChatScreen.PrepareTurn"/> and <see cref="Assistant.RunTurnAsync"/> read it.
 /// </summary>
 /// <param name="Persona">The <c>persona.md</c> text, null for the default persona.</param>
@@ -23,10 +23,6 @@ namespace NeonSidekick.App;
 /// <param name="Memories">What is remembered, oldest first (empty when memory is off).</param>
 /// <param name="TtsOutput">The speech-output switch.</param>
 /// <param name="SpeechReady">Whether the TTS server answered: the directive goes in only when both are true.</param>
-/// <param name="TurnCount">The user turns in the history: zero means the opening calls are still to come.</param>
-/// <param name="OpeningResult">What the seeded <c>get_current_time</c> result would say now.</param>
-/// <param name="Reasoning">The reasoning effort the request carries.</param>
-/// <param name="OpeningCwdResult">What the seeded <c>get_working_directory</c> result says now — the text kept current in the history.</param>
 /// <param name="ToolsEnabled">The setting <c>LLM offer tools</c>: off means no tool offered, no opening call, and the tool-free defaults.</param>
 /// <param name="FilesEnabled">The setting <c>File tools</c>: off means no file tool offered, no opening working-directory call, and the default rules without <see cref="Assistant.FileRule"/>.</param>
 /// <param name="SkillsEnabled">The setting <c>Agent skills</c> (2026-09-16): off means no skills block, no project notes and no skill tool.</param>
@@ -35,7 +31,6 @@ namespace NeonSidekick.App;
 /// <param name="DisabledTools">The tools switched off one by one on <c>/tools</c> (2026-09-19, <c>ToolsDisabled</c>): an opening call whose tool is here is not sent, and <c>recall_memory</c> here puts the list back into the prompt.</param>
 /// <param name="ProjectFile">The setting <c>Project file</c> (later on 2026-09-19, the Project tab of <c>/skills</c>): off means the notes are not read, whatever the working directory holds.</param>
 /// <param name="McpEnabled">The setting <c>MCP servers</c> (2026-09-20, the Options tab of <c>/mcp</c>): off means no server is started and no MCP tool offered.</param>
-/// <param name="McpServers">How many MCP servers are connected.</param>
 /// <param name="McpTools">How many of their tools the next turn offers (the ones switched off on <c>/mcp</c> left out).</param>
 /// <param name="FileSafeEdits">The setting <c>File safe edits</c> (2026-09-20): off with <c>delete</c> offered puts <see cref="Assistant.FileRuleDeleteInPlace"/> into the default rules — <c>delete</c> removes for good then — and (later still that day) drops <c>restore</c> from the offer, so neither the rules nor the Tools tab name it.</param>
 /// <param name="GitEnabled">The setting <c>Git native tools</c> (2026-09-20, the Git (native) tab of <c>/tools</c>; <c>Git tools</c> on the Git tab until 2026-09-21).</param>
@@ -58,10 +53,6 @@ public sealed record SystemPromptFacts(
     IReadOnlyList<string> Memories,
     bool TtsOutput,
     bool SpeechReady,
-    int TurnCount,
-    string OpeningResult,
-    ReasoningEffort Reasoning,
-    string OpeningCwdResult,
     bool ToolsEnabled = true,
     bool FilesEnabled = true,
     bool SkillsEnabled = true,
@@ -72,7 +63,6 @@ public sealed record SystemPromptFacts(
     IReadOnlySet<string>? DisabledTools = null,
     bool ProjectFile = true,
     bool McpEnabled = true,
-    int McpServers = 0,
     int McpTools = 0,
     bool FileSafeEdits = true,
     bool GitEnabled = true,
@@ -128,21 +118,15 @@ public sealed record SystemPromptFacts(
     public bool Timers => !(Off(StartTimerTool.ToolName) && Off(StopTimerTool.ToolName) && Off(ListTimersTool.ToolName));
 }
 
-/// <summary>Where a part of the summary goes: in the system message, or elsewhere on the request.</summary>
-public enum SystemPromptPart
-{
-    /// <summary>A section of the system message (its text is empty when the section is left out).</summary>
-    Prompt,
-
-    /// <summary>Sent with the request but not as system-prompt text: the opening calls, the reasoning fields.</summary>
-    Request,
-}
-
-/// <summary>One part of the summary: a status heading, the text under it (empty when there is none), and where it goes.</summary>
-public sealed record SystemPromptSection(string Heading, string Body, SystemPromptPart Part)
+/// <summary>
+/// One section of the system message: a status heading and the text under it (empty when the section is
+/// left out). Every section is a part of the system message since 2026-09-26 — the opening calls and the
+/// request fields are no longer on the tab, so the Prompt / Request split went with them.
+/// </summary>
+public sealed record SystemPromptSection(string Heading, string Body)
 {
     /// <summary>True for a section whose text is in the system message.</summary>
-    public bool InPrompt => Part == SystemPromptPart.Prompt && Body.Length > 0;
+    public bool InPrompt => Body.Length > 0;
 }
 
 /// <summary>A group of the Tools tab: its name, why it is not offered (if it is not), its tools, and whether the next turn offers them.</summary>
@@ -164,6 +148,9 @@ public sealed record ToolGroup(string Name, string Note, IReadOnlyList<AIFunctio
     /// <summary>The settings row that switches the whole group (<c>File tools</c> for Files …); null for the standing clock and timer groups.</summary>
     public SettingsField? Switch { get; init; }
 
+    /// <summary>The group's bare name, without the count (<c>Files</c>, <c>MCP chrome</c>): what <see cref="SystemPromptSummary.OfferedOnly"/> recounts from (2026-09-26).</summary>
+    public string Label { get; init; } = Name;
+
     /// <summary>Whether the next turn offers <paramref name="tool"/>: the group offered and no note on the tool.</summary>
     public bool Offers(string tool) => Offered && !ToolNotes.ContainsKey(tool);
 
@@ -175,9 +162,12 @@ public sealed record ToolGroup(string Name, string Note, IReadOnlyList<AIFunctio
 /// and the tool lists. The Prompt tab is the system message the next turn sends, section by section
 /// under a status heading, in the order <see cref="Assistant.SystemPrompt(bool, IReadOnlyList{string}, string, string, string)"/>
 /// joins them — the bodies of the sections marked in the prompt, joined by a blank line, ARE that
-/// string, and a test pins it — then two parts that go on the request but not in the system message:
-/// the opening clock, working-directory and memory calls and the reasoning fields. The Tools tab lists every tool the turn offers,
-/// grouped, name and description, in one grid. Every heading in <see cref="Theme.SectionHeading"/> over rows
+/// string, and a test pins it — and nothing else: persona, operating rules, project notes, memory,
+/// skills and, on a spoken turn, the voice directive (2026-09-26, the user's call: the reply-format and
+/// per-tool-group headings, the opening calls and the request fields went; the rules carry the sentences
+/// those headings described, and the Tools tab the tools). The Tools tab lists every tool the turn offers,
+/// grouped, name and description, in one grid — and only those: a tool or a group the turn does not send is left out
+/// (<see cref="OfferedOnly"/>, 2026-09-26). Every heading in <see cref="Theme.SectionHeading"/> over rows
 /// labelled in <see cref="Theme.AccentSecondary"/>. <c>Text</c> cells everywhere, never <c>Markup</c>: a persona or a
 /// remembered fact may hold brackets.
 /// </summary>
@@ -190,25 +180,10 @@ public static class SystemPromptSummary
     public const string PromptTabTitle = "Prompt";
     public const string ToolsTabTitle = "Tools";
 
-    /// <summary>Above the parts that are sent but are not system-prompt text.</summary>
-    public const string AlsoSentHeading = "Also sent, outside the system prompt";
-
-    /// <summary>Under the opening clock call, whichever way it stands.</summary>
-    public const string OpeningNote = "The date is never in the prompt: it reaches the model as this tool result, and get_current_time again when a question needs it.";
-
-    /// <summary>Under the opening working-directory call, whichever way it stands.</summary>
-    public const string OpeningCwdNote = "Replaced in place when /cwd or the settings pane changes the path, so the model never holds a stale one.";
-
-    /// <summary>Under the opening memory call, whichever way it stands (2026-09-17).</summary>
-    public const string OpeningMemoryNote = "Replaced in place at every turn, so a fact saved, typed or forgotten since the first message is in the next request; the list is not in the prompt while a tool can carry it.";
-
     /// <summary>The tail of every heading that the setting <c>LLM offer tools</c> turned off. Pinned.</summary>
     public const string ToolsOffSuffix = "LLM offer tools is off";
 
-    /// <summary>The tail of the opening memory call while the setting <c>Memory</c> is off (2026-09-17). Pinned.</summary>
-    public const string MemoryOffSuffix = "memory is off";
-
-    /// <summary>The tail of the Files group and the opening working-directory call while the setting <c>File tools</c> is off (2026-09-15). Pinned.</summary>
+    /// <summary>The tail of the Files group and the rules heading while the setting <c>File tools</c> is off (2026-09-15). Pinned.</summary>
     public const string FilesOffSuffix = "file tools is off";
 
     /// <summary>The note on <c>restore</c> while the setting <c>File safe edits</c> is off (later still on 2026-09-20: nothing lands in <c>.trash</c> then, so the tool is not offered). Pinned.</summary>
@@ -229,13 +204,13 @@ public static class SystemPromptSummary
     /// <summary>The tail of the Sessions group while the setting <c>Session tool</c> is off (2026-09-18). Pinned.</summary>
     public const string SessionsOffSuffix = "session tool is off";
 
-    /// <summary>The tail of the Git (native) group and its Prompt-tab heading while the setting <c>Git native tools</c> is off (2026-09-20; the setting's new name since 2026-09-21). Pinned.</summary>
+    /// <summary>The tail of the Git (native) group while the setting <c>Git native tools</c> is off (2026-09-20; the setting's new name since 2026-09-21). Pinned.</summary>
     public const string GitOffSuffix = "git native tools is off";
 
-    /// <summary>The tail of the Shell group and its Prompt-tab heading while the setting <c>Shell command policy</c> is <c>off</c> (2026-09-21). Pinned.</summary>
+    /// <summary>The tail of the Shell group while the setting <c>Shell command policy</c> is <c>off</c> (2026-09-21). Pinned.</summary>
     public const string ShellOffSuffix = "Shell command policy is off";
 
-    /// <summary>The tail of the Obsidian group and its Prompt-tab heading while the vault tools cannot be offered: the switch off, or no vault set (2026-09-22). Pinned.</summary>
+    /// <summary>The tail of the Obsidian group while the vault tools cannot be offered: the switch off, or no vault set (2026-09-22). Pinned.</summary>
     public const string ObsidianOffSuffix = "Obsidian tools is off or no vault is set";
 
     /// <summary>The tail of the SQL group while the SQL tools cannot be offered: the switch off, or no connection in <c>sql.json</c> (2026-09-23). Pinned.</summary>
@@ -262,95 +237,76 @@ public static class SystemPromptSummary
     /// <summary>The note on <c>load_skill</c> while no skill is installed (the tool is dropped then; the <c>/tools</c> list says so, 2026-09-19). Pinned.</summary>
     public const string NoSkillSuffix = "no skill installed";
 
-    /// <summary>The tail of an opening call whose tool is switched off on <c>/tools</c>, and of the memory heading while the list is in the prompt for that reason (2026-09-19): <c>recall_memory is off in /tools</c>. Pinned.</summary>
+    /// <summary>The tail of the memory heading while the list is in the prompt because <c>recall_memory</c> is switched off on <c>/tools</c> (2026-09-19): <c>recall_memory is off in /tools</c>. Pinned.</summary>
     public static string ToolOff(string tool) => $"{tool} is off in /tools";
-
-    /// <summary>The Reply format heading while the setting <c>Transcript markdown</c> is off (2026-09-16). Pinned.</summary>
-    public const string MarkdownOffSuffix = "transcript markdown is off";
-
-    /// <summary>The Reply format heading while the turn speaks: the voice directive forbids Markdown, so plain text is asked for (2026-09-16). Pinned.</summary>
-    public const string SpokenSuffix = "the turn speaks";
-
-    /// <summary>The Reply format heading while <c>operata.md</c> stands: the file says what it says (2026-09-16). Pinned.</summary>
-    public const string OperataStandsSuffix = OperataFile.FileName + " stands";
 
     // ── The Prompt tab ──────────────────────────────────────────────────────
 
-    /// <summary>The sections in prompt order, then the two "also sent" parts. Pinned.</summary>
+    /// <summary>The sections in prompt order, nothing else (2026-09-26): the voice directive only while it is included. Pinned.</summary>
     public static IReadOnlyList<SystemPromptSection> PromptSections(SystemPromptFacts facts)
     {
         ArgumentNullException.ThrowIfNull(facts);
-        var sections = new List<SystemPromptSection>(10);
+        var sections = new List<SystemPromptSection>(6);
 
         bool custom = !string.IsNullOrWhiteSpace(facts.Persona);
         string persona = custom ? facts.Persona!.Trim() : Assistant.DefaultPersona;
         sections.Add(new(
             custom ? $"Persona — {PersonaFile.FileName} ({persona.Length.ToString(CultureInfo.InvariantCulture)} chars)" : "Persona — default",
-            persona,
-            SystemPromptPart.Prompt));
+            persona));
 
         bool customRules = !string.IsNullOrWhiteSpace(facts.OperatingRules);
         string defaultLabel = !facts.ToolsEnabled ? $"default ({ToolsOffSuffix})" : !facts.FilesEnabled ? $"default ({FilesOffSuffix})" : "default";
         string rules = customRules ? facts.OperatingRules!.Trim() : Assistant.DefaultRules(facts.Markdown, facts.ToolsEnabled, facts.FilesEnabled, delete: !facts.Off(DeleteTool.ToolName), mcp: facts.Mcp, safeEdits: facts.FileSafeEdits, timers: facts.Timers, git: facts.Git, shell: facts.Shell, bridge: facts.Bridge, police: facts.Police, obsidian: facts.Obsidian, obsidianDelete: facts.ObsidianDelete, sql: facts.Sql, native: facts.Native);
         sections.Add(new(
             customRules ? $"Operating rules — {OperataFile.FileName} ({rules.Length.ToString(CultureInfo.InvariantCulture)} chars)" : $"Operating rules — {defaultLabel}",
-            rules,
-            SystemPromptPart.Prompt));
-
-        // The reply format (2026-09-16): which sentence opens the default rules, and why — a heading only, the sentence is above.
-        string format = customRules ? $"Reply format — {OperataStandsSuffix}"
-            : facts.Markdown ? "Reply format — markdown (transcript markdown on, the pane on, the turn not spoken)"
-            : !facts.TranscriptMarkdown ? $"Reply format — plain text: {MarkdownOffSuffix}"
-            : !facts.PaneOn ? $"Reply format — plain text: {NoPaneSuffix}"
-            : $"Reply format — plain text: {SpokenSuffix}";
-        sections.Add(new(format, "", SystemPromptPart.Prompt));
+            rules));
 
         // The project notes (2026-09-16): after the rules, tools or not, while Agent skills is on.
         if (!facts.SkillsEnabled)
         {
-            sections.Add(new($"Project notes — off ({SkillsOffSuffix})", "", SystemPromptPart.Prompt));
+            sections.Add(new($"Project notes — off ({SkillsOffSuffix})", ""));
         }
         else if (!facts.ProjectFile)
         {
-            sections.Add(new($"Project notes — off ({ProjectFileOffSuffix})", "", SystemPromptPart.Prompt));
+            sections.Add(new($"Project notes — off ({ProjectFileOffSuffix})", ""));
         }
         else if (facts.Project is { } project)
         {
-            sections.Add(new($"Project notes — {project.FileName} ({project.Text.Length.ToString(CultureInfo.InvariantCulture)} chars)", Assistant.ProjectNotesSection(project), SystemPromptPart.Prompt));
+            sections.Add(new($"Project notes — {project.FileName} ({project.Text.Length.ToString(CultureInfo.InvariantCulture)} chars)", Assistant.ProjectNotesSection(project)));
         }
         else
         {
-            sections.Add(new($"Project notes — none ({string.Join(" / ", ProjectFile.FileNames)} not in the working directory)", "", SystemPromptPart.Prompt));
+            sections.Add(new($"Project notes — none ({string.Join(" / ", ProjectFile.FileNames)} not in the working directory)", ""));
         }
 
         string remembered = facts.Memories.Count == 1 ? "1 fact remembered" : $"{facts.Memories.Count.ToString(CultureInfo.InvariantCulture)} facts remembered";
         if (facts.Memory && facts.ToolsEnabled && facts.Recall)
         {
             // The list rides the opening call (2026-09-17): the section is the directive alone, the facts are under Also sent.
-            sections.Add(new($"Memory — on, directive (the list rides the opening {RecallMemoryTool.ToolName} call)", MemoryPrompt.Section(facts.Memories, tools: true), SystemPromptPart.Prompt));
+            sections.Add(new($"Memory — on, directive (the list rides the opening {RecallMemoryTool.ToolName} call)", MemoryPrompt.Section(facts.Memories, tools: true)));
         }
         else if (facts.Memory && facts.ToolsEnabled)
         {
             // recall_memory switched off on /tools (2026-09-19): nothing can carry the list, so it rides the prompt as under LLM offer tools off.
-            sections.Add(new($"Memory — on, {remembered} (in the prompt: {ToolOff(RecallMemoryTool.ToolName)})", MemoryPrompt.Section(facts.Memories, tools: false), SystemPromptPart.Prompt));
+            sections.Add(new($"Memory — on, {remembered} (in the prompt: {ToolOff(RecallMemoryTool.ToolName)})", MemoryPrompt.Section(facts.Memories, tools: false)));
         }
         else if (facts.Memory)
         {
-            sections.Add(new($"Memory — on, {remembered}", MemoryPrompt.Section(facts.Memories, tools: false), SystemPromptPart.Prompt));
+            sections.Add(new($"Memory — on, {remembered}", MemoryPrompt.Section(facts.Memories, tools: false)));
         }
         else
         {
-            sections.Add(new("Memory — off, not included", "", SystemPromptPart.Prompt));
+            sections.Add(new("Memory — off, not included", ""));
         }
 
         // The skills block (2026-09-16): after the memory section, only with tools to load one.
         if (!facts.SkillsEnabled)
         {
-            sections.Add(new($"Skills — off ({SkillsOffSuffix})", "", SystemPromptPart.Prompt));
+            sections.Add(new($"Skills — off ({SkillsOffSuffix})", ""));
         }
         else if (!facts.ToolsEnabled)
         {
-            sections.Add(new($"Skills — not included ({ToolsOffSuffix})", "", SystemPromptPart.Prompt));
+            sections.Add(new($"Skills — not included ({ToolsOffSuffix})", ""));
         }
         else
         {
@@ -358,152 +314,17 @@ public static class SystemPromptSummary
             int external = skills.Count(s => s.Scope == SkillScope.External);
             string count = skills.Count == 0 ? "none installed"
                 : (skills.Count == 1 ? "1 skill" : $"{skills.Count.ToString(CultureInfo.InvariantCulture)} skills") + (external > 0 ? $" ({external.ToString(CultureInfo.InvariantCulture)} external)" : "");
-            sections.Add(new($"Skills — on, {count}", SkillsPrompt.Section(skills), SystemPromptPart.Prompt));
+            sections.Add(new($"Skills — on, {count}", SkillsPrompt.Section(skills)));
         }
 
-        // The git tools (2026-09-20; the heading says Git native tools, the setting's name, since 2026-09-21): a heading only — the tools are on the Tools tab, the rule is in the rules above.
-        if (!facts.GitEnabled)
-        {
-            sections.Add(new($"Git native tools — off ({GitOffSuffix})", "", SystemPromptPart.Prompt));
-        }
-        else if (!facts.ToolsEnabled)
-        {
-            sections.Add(new($"Git native tools — not offered ({ToolsOffSuffix})", "", SystemPromptPart.Prompt));
-        }
-        else
-        {
-            sections.Add(new(facts.GitTools == 0 ? "Git native tools — on, none offered (every git tool is switched off in /tools)" : $"Git native tools — on, {GitText.Count(facts.GitTools, "tool")} offered", "", SystemPromptPart.Prompt));
-        }
-
-        // The shell tools (2026-09-21): a heading only, the git shape.
-        if (!facts.ShellEnabled)
-        {
-            sections.Add(new($"Shell tools — off ({ShellOffSuffix})", "", SystemPromptPart.Prompt));
-        }
-        else if (!facts.ToolsEnabled)
-        {
-            sections.Add(new($"Shell tools — not offered ({ToolsOffSuffix})", "", SystemPromptPart.Prompt));
-        }
-        else
-        {
-            sections.Add(new(facts.ShellTools == 0 ? "Shell tools — on, none offered (every shell tool is switched off in /tools)" : $"Shell tools — on, {GitText.Count(facts.ShellTools, "tool")} offered", "", SystemPromptPart.Prompt));
-        }
-
-        // The vault tools (2026-09-22): a heading only, the git shape — and only while a vault is offered: most profiles
-        // never name one, and an "off" heading on every /sys would be noise (the Tools tab still lists the group, dim).
-        if (facts.ObsidianEnabled)
-        {
-            sections.Add(new(
-                !facts.ToolsEnabled ? $"Obsidian tools — not offered ({ToolsOffSuffix})"
-                : facts.ObsidianTools == 0 ? "Obsidian tools — on, none offered (every vault tool is switched off in /tools)"
-                : $"Obsidian tools — on, {GitText.Count(facts.ObsidianTools, "tool")} offered",
-                "",
-                SystemPromptPart.Prompt));
-        }
-
-        // The SQL tools (2026-09-23): a heading only, the vault shape — only while a connection is offered.
-        if (facts.SqlEnabled)
-        {
-            sections.Add(new(
-                !facts.ToolsEnabled ? $"SQL tools — not offered ({ToolsOffSuffix})"
-                : facts.SqlTools == 0 ? "SQL tools — on, none offered (every SQL tool is switched off in /tools)"
-                : $"SQL tools — on, {GitText.Count(facts.SqlTools, "tool")} offered",
-                "",
-                SystemPromptPart.Prompt));
-        }
-
-        // The MCP servers (2026-09-20): a heading only — their tools are on the Tools tab, the rule is in the rules above.
-        if (!facts.McpEnabled)
-        {
-            sections.Add(new($"MCP servers — off ({McpOffSuffix})", "", SystemPromptPart.Prompt));
-        }
-        else if (!facts.ToolsEnabled)
-        {
-            sections.Add(new($"MCP servers — not offered ({ToolsOffSuffix})", "", SystemPromptPart.Prompt));
-        }
-        else if (facts.McpServers == 0)
-        {
-            sections.Add(new("MCP servers — none connected", "", SystemPromptPart.Prompt));
-        }
-        else
-        {
-            sections.Add(new($"MCP servers — on, {McpText.Servers(facts.McpServers)}, {McpText.Tools(facts.McpTools)} offered", "", SystemPromptPart.Prompt));
-        }
-
+        // The voice directive only while it is in the prompt (2026-09-26): a "not included" heading on every silent turn was noise.
         if (facts.TtsOutput && facts.SpeechReady)
         {
             bool customVoice = !string.IsNullOrWhiteSpace(facts.VoiceDirective);
             string voice = customVoice ? facts.VoiceDirective!.Trim() : facts.ToolsEnabled ? Assistant.VoiceDirective : Assistant.VoiceDirectiveWithoutTools;
             string source = customVoice ? $"{VocaliaFile.FileName} ({voice.Length.ToString(CultureInfo.InvariantCulture)} chars)" : defaultLabel;
-            sections.Add(new($"Voice directive — {source}, included (speech output on, TTS ready), always last", voice, SystemPromptPart.Prompt));
+            sections.Add(new($"Voice directive — {source}, included (speech output on, TTS ready), always last", voice));
         }
-        else
-        {
-            string why = facts.TtsOutput ? "TTS is not ready" : "speech output is off";
-            sections.Add(new($"Voice directive — not included: {why}", "", SystemPromptPart.Prompt));
-        }
-
-        if (facts.ToolsEnabled)
-        {
-            if (facts.Off(GetCurrentTimeTool.ToolName))
-            {
-                sections.Add(new($"Opening clock call — not sent: {ToolOff(GetCurrentTimeTool.ToolName)}", "", SystemPromptPart.Request));
-            }
-            else
-            {
-                sections.Add(new(
-                    facts.TurnCount == 0 ? "Opening clock call — seeded with the first message" : "Opening clock call — already sent with the first message",
-                    $"{GetCurrentTimeTool.ToolName} → {facts.OpeningResult}\n{OpeningNote}",
-                    SystemPromptPart.Request));
-            }
-
-            if (facts.FilesEnabled && facts.Off(GetWorkingDirectoryTool.ToolName))
-            {
-                sections.Add(new($"Opening working-directory call — not sent: {ToolOff(GetWorkingDirectoryTool.ToolName)}", "", SystemPromptPart.Request));
-            }
-            else if (facts.FilesEnabled)
-            {
-                sections.Add(new(
-                    facts.TurnCount == 0 ? "Opening working-directory call — seeded with the first message" : "Opening working-directory call — already sent with the first message, kept current",
-                    $"{GetWorkingDirectoryTool.ToolName} → {facts.OpeningCwdResult}\n{OpeningCwdNote}",
-                    SystemPromptPart.Request));
-            }
-            else
-            {
-                sections.Add(new($"Opening working-directory call — not sent: {FilesOffSuffix}", "", SystemPromptPart.Request));
-            }
-
-            // The memory call (2026-09-17): the last pair, the list the model reads.
-            if (facts.Memory && !facts.Recall)
-            {
-                sections.Add(new($"Opening memory call — not sent: {ToolOff(RecallMemoryTool.ToolName)}", "", SystemPromptPart.Request));
-            }
-            else if (facts.Memory)
-            {
-                sections.Add(new(
-                    facts.TurnCount == 0 ? $"Opening memory call — seeded with the first message, {remembered}" : $"Opening memory call — already sent with the first message, kept current, {remembered}",
-                    $"{RecallMemoryTool.ToolName} → {MemoryPrompt.Recalled(facts.Memories)}\n{OpeningMemoryNote}",
-                    SystemPromptPart.Request));
-            }
-            else
-            {
-                sections.Add(new($"Opening memory call — not sent: {MemoryOffSuffix}", "", SystemPromptPart.Request));
-            }
-        }
-        else
-        {
-            sections.Add(new($"Opening clock call — not sent: {ToolsOffSuffix}", "", SystemPromptPart.Request));
-            sections.Add(new($"Opening working-directory call — not sent: {ToolsOffSuffix}", "", SystemPromptPart.Request));
-            sections.Add(new($"Opening memory call — not sent: {ToolsOffSuffix}", "", SystemPromptPart.Request));
-        }
-
-        string effort = ReasoningLevel.Name(facts.Reasoning);
-        sections.Add(new(
-            facts.Reasoning == ReasoningEffort.None
-                ? $"Request — reasoning_effort {effort} · chat_template_kwargs.enable_thinking=false"
-                : $"Request — reasoning_effort {effort}",
-            "",
-            SystemPromptPart.Request));
 
         return sections;
     }
@@ -542,16 +363,8 @@ public static class SystemPromptSummary
     public static IRenderable PromptTab(SystemPromptFacts facts)
     {
         var rows = new List<IRenderable>();
-        bool divided = false;
         foreach (var section in PromptSections(facts))
         {
-            if (section.Part == SystemPromptPart.Request && !divided)
-            {
-                divided = true;
-                rows.Add(new Text(AlsoSentHeading, Theme.Label));
-                rows.Add(new Text(" "));
-            }
-
             rows.Add(new Text(section.Heading, Theme.SectionHeading));
             if (section.Body.Length > 0)
             {
@@ -568,15 +381,8 @@ public static class SystemPromptSummary
     /// <summary>The Prompt tab as plain lines, for a console without the pane.</summary>
     public static IEnumerable<string> PromptLines(SystemPromptFacts facts)
     {
-        bool divided = false;
         foreach (var section in PromptSections(facts))
         {
-            if (section.Part == SystemPromptPart.Request && !divided)
-            {
-                divided = true;
-                yield return AlsoSentHeading;
-            }
-
             yield return section.Heading;
             if (section.Body.Length > 0)
             {
@@ -751,8 +557,43 @@ public static class SystemPromptSummary
         {
             ToolNotes = notes ?? new Dictionary<string, string>(0, StringComparer.Ordinal),
             Switch = @switch,
+            Label = name,
         };
     }
+
+    /// <summary>
+    /// The groups cut to what the next turn sends, for <c>/sys</c>' Tools tab (2026-09-26, the user's call): a
+    /// group not offered goes, header and all; in an offered one, a tool with a note (switched off on <c>/tools</c>,
+    /// <c>load_skill</c> with no skill, <c>restore</c> under File safe edits off …) goes; a group left with no tool
+    /// goes too. The names recount what is left — <c>Files (14)</c>, never <c>14 of 15</c> — since the tab now
+    /// names only what is sent. <c>/tools</c>' Offered tab keeps the whole list: it is where a tool is switched back on.
+    /// </summary>
+    public static IReadOnlyList<ToolGroup> OfferedOnly(IReadOnlyList<ToolGroup> groups)
+    {
+        ArgumentNullException.ThrowIfNull(groups);
+        var kept = new List<ToolGroup>(groups.Count);
+        foreach (var group in groups)
+        {
+            if (!group.Offered)
+            {
+                continue;
+            }
+
+            var tools = group.Tools.Where(t => group.Offers(t.Name)).ToList();
+            if (tools.Count > 0)
+            {
+                kept.Add(new ToolGroup(GroupName(group.Label, tools.Count, tools.Count), "", tools, true) { Switch = group.Switch, Label = group.Label });
+            }
+        }
+
+        return kept;
+    }
+
+    /// <summary>The Tools tab's one line when the next turn offers no tool at all (2026-09-26): every group cut by <see cref="OfferedOnly"/>. Pinned.</summary>
+    public const string NoToolsOffered = "No tools offered";
+
+    /// <summary>The empty tab's line: <see cref="NoToolsOffered"/>, with the reason while <c>LLM offer tools</c> is off. Pinned.</summary>
+    public static string NoToolsLine(bool toolsEnabled) => toolsEnabled ? NoToolsOffered : $"{NoToolsOffered} ({ToolsOffSuffix})";
 
     /// <summary>The group's name and count: <c>Files (15)</c> with every tool offered, <c>Files (13 of 15)</c> with some switched off by name (2026-09-19). Pinned.</summary>
     public static string GroupName(string name, int offered, int total) =>
@@ -771,9 +612,15 @@ public static class SystemPromptSummary
     /// every heading (a grid per group sized its name column to its own longest tool name and the
     /// descriptions jumped between groups, 2026-09-16); a one-space row parts the groups.
     /// </summary>
-    public static IRenderable ToolsTab(IReadOnlyList<ToolGroup> groups)
+    public static IRenderable ToolsTab(IReadOnlyList<ToolGroup> groups, bool toolsEnabled = true)
     {
         ArgumentNullException.ThrowIfNull(groups);
+        if (groups.Count == 0)
+        {
+            // Nothing offered (2026-09-26): an empty grid renders no line at all, so the tab says so.
+            return new Text(NoToolsLine(toolsEnabled), Theme.DimText);
+        }
+
         var grid = ChatScreen.TwoColumns();
         for (int i = 0; i < groups.Count; i++)
         {
@@ -806,9 +653,15 @@ public static class SystemPromptSummary
     public const int ToolNameWidth = 22;
 
     /// <summary>The Tools tab as plain lines, for a console without the pane.</summary>
-    public static IEnumerable<string> ToolLines(IReadOnlyList<ToolGroup> groups)
+    public static IEnumerable<string> ToolLines(IReadOnlyList<ToolGroup> groups, bool toolsEnabled = true)
     {
         ArgumentNullException.ThrowIfNull(groups);
+        if (groups.Count == 0)
+        {
+            yield return NoToolsLine(toolsEnabled);
+            yield break;
+        }
+
         foreach (var group in groups)
         {
             yield return group.Title;

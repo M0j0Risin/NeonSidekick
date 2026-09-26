@@ -28,8 +28,6 @@ public class SystemPromptSummaryTests : IDisposable
         IReadOnlyList<string>? memories = null,
         bool speechOutput = false,
         bool speechReady = false,
-        int turnCount = 0,
-        ReasoningEffort reasoning = ReasoningEffort.None,
         string? operatingRules = null,
         string? voiceDirective = null,
         bool tools = true,
@@ -46,7 +44,7 @@ public class SystemPromptSummaryTests : IDisposable
         int shellTools = 0,
         bool shellBridge = false,
         bool shellPolice = true) =>
-        new(persona, operatingRules, voiceDirective, memoryEnabled, memories ?? [], speechOutput, speechReady, turnCount, "Friday 11 September 2026, 14:05 (Pacific Daylight Time, UTC-07:00)", reasoning, @"The working directory is 'D:\files' (the profile's default folder); every path you pass to a file tool is relative to it.", tools, files, skills, catalog, project, markdown, pane, disabled is null ? null : ToolsText.DisabledSet(disabled), projectFile, FileSafeEdits: safeEdits, GitTools: gitTools, ShellTools: shellTools, ShellBridge: shellBridge, ShellPolice: shellPolice);
+        new(persona, operatingRules, voiceDirective, memoryEnabled, memories ?? [], speechOutput, speechReady, tools, files, skills, catalog, project, markdown, pane, disabled is null ? null : ToolsText.DisabledSet(disabled), projectFile, FileSafeEdits: safeEdits, GitTools: gitTools, ShellTools: shellTools, ShellBridge: shellBridge, ShellPolice: shellPolice);
 
     /// <summary>The section heading for a working directory with neither notes file. Pinned.</summary>
     private const string NoNotesHeading = "Project notes — none (NEON.md / AGENTS.md not in the working directory)";
@@ -54,53 +52,36 @@ public class SystemPromptSummaryTests : IDisposable
     /// <summary>The section heading with Agent skills on and nothing installed. Pinned.</summary>
     private const string NoSkillsHeading = "Skills — on, none installed";
 
-    /// <summary>The section heading with MCP servers on and none connected (2026-09-20). Pinned.</summary>
-    private const string NoMcpHeading = "MCP servers — none connected";
-
-    /// <summary>The section heading with Git native tools on and none offered — the fixture passes no git tool, as it passes no web tool (2026-09-20; the setting's new name since 2026-09-21). Pinned.</summary>
-    private const string GitHeading = "Git native tools — on, none offered (every git tool is switched off in /tools)";
-
-    /// <summary>The section heading with the Shell command policy not off and no shell tool offered — the fixture passes none, as with git (2026-09-21). Pinned.</summary>
-    private const string ShellHeading = "Shell tools — on, none offered (every shell tool is switched off in /tools)";
-
     private static string[] Headings(SystemPromptFacts facts) => SystemPromptSummary.PromptSections(facts).Select(s => s.Heading).ToArray();
 
     [Fact]
-    public void DefaultProfile_TheFourteenSections_InOrder()
+    public void DefaultProfile_TheFiveSections_InOrder_AndNothingElse()
     {
         var sections = SystemPromptSummary.PromptSections(Facts());
 
-        // The project notes after the rules and the skills after the memory since 2026-09-16 (seven sections before); the Reply format row under the rules the same day; the opening memory call since 2026-09-17.
+        // The system message's own sections and nothing else (2026-09-26, the user's call): no Reply format, no per-tool-group heading,
+        // no opening call, no Request row, and no voice heading on a silent turn.
         Assert.Equal(
             [
                 "Persona — default",
                 "Operating rules — default",
-                "Reply format — plain text: transcript markdown is off",
                 NoNotesHeading,
                 "Memory — on, directive (the list rides the opening recall_memory call)",
                 NoSkillsHeading,
-                GitHeading,
-                ShellHeading,
-                NoMcpHeading,
-                "Voice directive — not included: speech output is off",
-                "Opening clock call — seeded with the first message",
-                "Opening working-directory call — seeded with the first message",
-                "Opening memory call — seeded with the first message, 0 facts remembered",
-                "Request — reasoning_effort none · chat_template_kwargs.enable_thinking=false",
             ],
             sections.Select(s => s.Heading));
         Assert.Equal(Assistant.DefaultPersona, sections[0].Body);
         Assert.Equal(Assistant.OperatingRules, sections[1].Body);
-        Assert.Equal("", sections[3].Body);
-        Assert.Equal(MemoryPrompt.Directive, sections[4].Body);
-        Assert.Equal(SkillsPrompt.DirectiveWithoutSkills, sections[5].Body);
-        Assert.Equal("", sections[9].Body);
-        Assert.Equal("get_current_time → Friday 11 September 2026, 14:05 (Pacific Daylight Time, UTC-07:00)\n" + SystemPromptSummary.OpeningNote, sections[10].Body);
-        Assert.Equal(@"get_working_directory → The working directory is 'D:\files' (the profile's default folder); every path you pass to a file tool is relative to it." + "\n" + SystemPromptSummary.OpeningCwdNote, sections[11].Body);
-        Assert.Equal("recall_memory → " + MemoryPrompt.NothingRemembered + "\n" + SystemPromptSummary.OpeningMemoryNote, sections[12].Body);
-        Assert.Equal("", sections[13].Body);
-        Assert.Equal([true, true, false, false, true, true, false, false, false, false, false, false, false, false], sections.Select(s => s.InPrompt));
-        Assert.Equal([SystemPromptPart.Prompt, SystemPromptPart.Prompt, SystemPromptPart.Prompt, SystemPromptPart.Prompt, SystemPromptPart.Prompt, SystemPromptPart.Prompt, SystemPromptPart.Prompt, SystemPromptPart.Prompt, SystemPromptPart.Prompt, SystemPromptPart.Prompt, SystemPromptPart.Request, SystemPromptPart.Request, SystemPromptPart.Request, SystemPromptPart.Request], sections.Select(s => s.Part));
+        Assert.Equal("", sections[2].Body);
+        Assert.Equal(MemoryPrompt.Directive, sections[3].Body);
+        Assert.Equal(SkillsPrompt.DirectiveWithoutSkills, sections[4].Body);
+        Assert.Equal([true, true, false, true, true], sections.Select(s => s.InPrompt));
+
+        // A spoken turn with TTS ready adds the voice directive, last; every tool group, on or off, adds nothing.
+        var speaking = Headings(Facts(speechOutput: true, speechReady: true, gitTools: 11, shellTools: 1) with { McpTools = 3, ObsidianEnabled = true, ObsidianTools = 8, SqlEnabled = true, SqlTools = 6 });
+        Assert.Equal(6, speaking.Length);
+        Assert.Equal("Voice directive — default, included (speech output on, TTS ready), always last", speaking[5]);
+        Assert.Equal(5, Headings(Facts(tools: false) with { GitEnabled = false, ShellEnabled = false, McpEnabled = false }).Length);
     }
 
     [Fact]
@@ -111,77 +92,67 @@ public class SystemPromptSummaryTests : IDisposable
         var notes = new ProjectNotes("NEON.md", "This folder is a .NET solution.");
         var sections = SystemPromptSummary.PromptSections(Facts(catalog: [haiku, shared], project: notes));
 
-        Assert.Equal("Project notes — NEON.md (31 chars)", sections[3].Heading);
-        Assert.Equal(Assistant.ProjectNotesSection(notes), sections[3].Body);
-        Assert.Equal("Skills — on, 2 skills (1 external)", sections[5].Heading);
-        Assert.Equal(SkillsPrompt.Section([haiku, shared]), sections[5].Body);
-        Assert.Equal("Skills — on, 1 skill", Headings(Facts(catalog: [haiku]))[5]);
+        Assert.Equal("Project notes — NEON.md (31 chars)", sections[2].Heading);
+        Assert.Equal(Assistant.ProjectNotesSection(notes), sections[2].Body);
+        Assert.Equal("Skills — on, 2 skills (1 external)", sections[4].Heading);
+        Assert.Equal(SkillsPrompt.Section([haiku, shared]), sections[4].Body);
+        Assert.Equal("Skills — on, 1 skill", Headings(Facts(catalog: [haiku]))[4]);
         Assert.Equal(Assistant.SystemPrompt(false, [], project: notes, skills: [haiku, shared]), SystemPromptSummary.SystemPrompt(Facts(catalog: [haiku, shared], project: notes)));
 
         // Agent skills off: neither goes in, and both headings say so; the tools off keeps the notes (plain context) and drops the skills.
         var off = SystemPromptSummary.PromptSections(Facts(skills: false, catalog: [haiku], project: notes));
-        Assert.Equal("Project notes — off (agent skills is off)", off[3].Heading);
-        Assert.Equal("", off[3].Body);
-        Assert.Equal("Skills — off (agent skills is off)", off[5].Heading);
-        Assert.Equal("", off[5].Body);
+        Assert.Equal("Project notes — off (agent skills is off)", off[2].Heading);
+        Assert.Equal("", off[2].Body);
+        Assert.Equal("Skills — off (agent skills is off)", off[4].Heading);
+        Assert.Equal("", off[4].Body);
         Assert.Equal(Assistant.SystemPrompt(false, []), SystemPromptSummary.SystemPrompt(Facts(skills: false, catalog: [haiku], project: notes)));
         // The Project file toggle off (later on 2026-09-19): the row says why, the skills stand.
         var fileOff = SystemPromptSummary.PromptSections(Facts(catalog: [haiku], projectFile: false));
-        Assert.Equal("Project notes — off (Project file is off on the Project tab of /skills)", fileOff[3].Heading);
-        Assert.Equal("", fileOff[3].Body);
-        Assert.Equal("Skills — on, 1 skill", fileOff[5].Heading);
-        Assert.Equal("Project notes — off (agent skills is off)", Headings(Facts(skills: false, projectFile: false))[3]);   // the skills switch first
+        Assert.Equal("Project notes — off (Project file is off on the Project tab of /skills)", fileOff[2].Heading);
+        Assert.Equal("", fileOff[2].Body);
+        Assert.Equal("Skills — on, 1 skill", fileOff[4].Heading);
+        Assert.Equal("Project notes — off (agent skills is off)", Headings(Facts(skills: false, projectFile: false))[2]);   // the skills switch first
         var noTools = SystemPromptSummary.PromptSections(Facts(tools: false, catalog: [haiku], project: notes));
-        Assert.Equal("Project notes — NEON.md (31 chars)", noTools[3].Heading);
-        Assert.Equal("Skills — not included (LLM offer tools is off)", noTools[5].Heading);
-        Assert.Equal("", noTools[5].Body);
+        Assert.Equal("Project notes — NEON.md (31 chars)", noTools[2].Heading);
+        Assert.Equal("Skills — not included (LLM offer tools is off)", noTools[4].Heading);
+        Assert.Equal("", noTools[4].Body);
         Assert.Equal(Assistant.SystemPrompt(false, [], tools: false, project: notes), SystemPromptSummary.SystemPrompt(Facts(tools: false, catalog: [haiku], project: notes)));
     }
 
     [Fact]
     public void Persona_MemoryList_VoiceDirective_AndTheOtherBranches()
     {
-        var facts = Facts(persona: "  You are Rex.\n", memories: ["Their name is Chris.", "They like tea."], speechOutput: true, speechReady: true, turnCount: 3, reasoning: ReasoningEffort.High);
+        var facts = Facts(persona: "  You are Rex.\n", memories: ["Their name is Chris.", "They like tea."], speechOutput: true, speechReady: true);
         var sections = SystemPromptSummary.PromptSections(facts);
 
         Assert.Equal("Persona — persona.md (12 chars)", sections[0].Heading);
         Assert.Equal("You are Rex.", sections[0].Body);
-        // The list rides the opening memory call (2026-09-17): the prompt section is the directive, the facts are under Also sent.
-        Assert.Equal("Memory — on, directive (the list rides the opening recall_memory call)", sections[4].Heading);
-        Assert.Equal(MemoryPrompt.Directive, sections[4].Body);
-        Assert.DoesNotContain("Their name is Chris.", sections[4].Body);
-        Assert.Equal("Voice directive — default, included (speech output on, TTS ready), always last", sections[9].Heading);
-        Assert.Equal(Assistant.VoiceDirective, sections[9].Body);
-        Assert.Equal("Opening clock call — already sent with the first message", sections[10].Heading);
-        Assert.Equal("Opening working-directory call — already sent with the first message, kept current", sections[11].Heading);
-        Assert.Equal("Opening memory call — already sent with the first message, kept current, 2 facts remembered", sections[12].Heading);
-        Assert.Equal("recall_memory → " + MemoryPrompt.Heading + "\n- Their name is Chris.\n- They like tea.\n" + SystemPromptSummary.OpeningMemoryNote, sections[12].Body);
-        Assert.Equal(SystemPromptPart.Request, sections[12].Part);
-        Assert.Equal("Request — reasoning_effort high", sections[13].Heading);
+        // The list rides the opening memory call (2026-09-17): the prompt section is the directive alone.
+        Assert.Equal("Memory — on, directive (the list rides the opening recall_memory call)", sections[3].Heading);
+        Assert.Equal(MemoryPrompt.Directive, sections[3].Body);
+        Assert.DoesNotContain("Their name is Chris.", sections[3].Body);
+        Assert.Equal("Voice directive — default, included (speech output on, TTS ready), always last", sections[5].Heading);
+        Assert.Equal(Assistant.VoiceDirective, sections[5].Body);
+        Assert.Equal(6, sections.Count);
 
-        Assert.Equal("Opening memory call — seeded with the first message, 1 fact remembered", Headings(Facts(memories: ["one"]))[12]);
-        Assert.Equal("Memory — off, not included", Headings(Facts(memoryEnabled: false))[4]);
-        Assert.Equal("", SystemPromptSummary.PromptSections(Facts(memoryEnabled: false))[4].Body);
-        Assert.Equal("Opening memory call — not sent: memory is off", Headings(Facts(memoryEnabled: false))[12]);
-        Assert.Equal("", SystemPromptSummary.PromptSections(Facts(memoryEnabled: false))[12].Body);
-        Assert.Equal("Voice directive — not included: TTS is not ready", Headings(Facts(speechOutput: true, speechReady: false))[9]);
-        Assert.Equal("Voice directive — not included: speech output is off", Headings(Facts(speechOutput: false, speechReady: true))[9]);
-        Assert.Equal("Request — reasoning_effort xhigh", Headings(Facts(reasoning: ReasoningEffort.ExtraHigh))[13]);
+        Assert.Equal("Memory — off, not included", Headings(Facts(memoryEnabled: false))[3]);
+        Assert.Equal("", SystemPromptSummary.PromptSections(Facts(memoryEnabled: false))[3].Body);
+        // The voice directive only while it is included (2026-09-26): no heading on a silent turn, nor while TTS is not ready.
+        Assert.DoesNotContain(Headings(Facts(speechOutput: true, speechReady: false)), h => h.StartsWith("Voice directive", StringComparison.Ordinal));
+        Assert.DoesNotContain(Headings(Facts(speechOutput: false, speechReady: true)), h => h.StartsWith("Voice directive", StringComparison.Ordinal));
     }
 
     [Fact]
     public void VocaliaFile_IsTheVoiceSection_WhenSpeaking_TrimmedAndCounted()
     {
         var speaking = SystemPromptSummary.PromptSections(Facts(speechOutput: true, speechReady: true, voiceDirective: "  Speak like a [pirate].\n"));
-        Assert.Equal("Voice directive — vocalia.md (22 chars), included (speech output on, TTS ready), always last", speaking[9].Heading);
-        Assert.Equal("Speak like a [pirate].", speaking[9].Body);
-        Assert.Equal("Voice directive — default, included (speech output on, TTS ready), always last", Headings(Facts(speechOutput: true, speechReady: true, voiceDirective: " \n"))[9]);
+        Assert.Equal("Voice directive — vocalia.md (22 chars), included (speech output on, TTS ready), always last", speaking[5].Heading);
+        Assert.Equal("Speak like a [pirate].", speaking[5].Body);
+        Assert.Equal("Voice directive — default, included (speech output on, TTS ready), always last", Headings(Facts(speechOutput: true, speechReady: true, voiceDirective: " \n"))[5]);
 
-        // The file changes what is appended, never whether: a silent turn shows the same not-included heading and nothing under it.
-        var silent = SystemPromptSummary.PromptSections(Facts(speechOutput: false, voiceDirective: "Speak like a pirate."));
-        Assert.Equal("Voice directive — not included: speech output is off", silent[9].Heading);
-        Assert.Equal("", silent[9].Body);
-        Assert.Equal("Voice directive — not included: TTS is not ready", Headings(Facts(speechOutput: true, speechReady: false, voiceDirective: "Speak like a pirate."))[9]);
+        // The file changes what is appended, never whether: a silent turn has no voice section at all (2026-09-26).
+        Assert.Equal(5, Headings(Facts(speechOutput: false, voiceDirective: "Speak like a pirate.")).Length);
+        Assert.Equal(5, Headings(Facts(speechOutput: true, speechReady: false, voiceDirective: "Speak like a pirate.")).Length);
     }
 
     [Fact]
@@ -226,69 +197,33 @@ public class SystemPromptSummaryTests : IDisposable
     }
 
     [Fact]
-    public void FileToolsOff_TheRulesLoseTheFileSentences_AndTheCwdCallIsNotSent_TheClocksStill()
+    public void FileToolsOff_TheRulesLoseTheFileSentences()
     {
         var sections = SystemPromptSummary.PromptSections(Facts(memories: ["Their name is Chris."], files: false));
 
-        Assert.Equal(
-            [
-                "Persona — default",
-                "Operating rules — default (file tools is off)",
-                "Reply format — plain text: transcript markdown is off",
-                NoNotesHeading,
-                "Memory — on, directive (the list rides the opening recall_memory call)",
-                NoSkillsHeading,
-                GitHeading,
-                ShellHeading,
-                NoMcpHeading,
-                "Voice directive — not included: speech output is off",
-                "Opening clock call — seeded with the first message",
-                "Opening working-directory call — not sent: file tools is off",
-                "Opening memory call — seeded with the first message, 1 fact remembered",
-                "Request — reasoning_effort none · chat_template_kwargs.enable_thinking=false",
-            ],
-            sections.Select(s => s.Heading));
+        Assert.Equal("Operating rules — default (file tools is off)", sections[1].Heading);
         Assert.Equal(Assistant.OperatingRulesWithoutFiles, sections[1].Body);
-        Assert.Equal("", sections[11].Body);
         Assert.Equal(Assistant.SystemPrompt(false, ["Their name is Chris."], files: false, skills: []), SystemPromptSummary.SystemPrompt(Facts(memories: ["Their name is Chris."], files: false)));
 
         // LLM offer tools off says so first, whatever File tools reads.
         var none = SystemPromptSummary.PromptSections(Facts(tools: false, files: false));
         Assert.Equal("Operating rules — default (LLM offer tools is off)", none[1].Heading);
-        Assert.Equal("Opening working-directory call — not sent: LLM offer tools is off", none[11].Heading);
     }
 
     [Fact]
-    public void RecallMemoryOff_PutsTheListInThePrompt_AndSkipsTheMemoryCall()
+    public void RecallMemoryOff_PutsTheListInThePrompt()
     {
         // recall_memory switched off on /tools (2026-09-19) while memory is on: nothing carries the list, so the section holds it as under LLM offer tools off.
         var facts = Facts(memories: ["Their name is Chris."], disabled: ["recall_memory"]);
         var sections = SystemPromptSummary.PromptSections(facts);
 
-        Assert.Equal("Memory — on, 1 fact remembered (in the prompt: recall_memory is off in /tools)", sections[4].Heading);
-        Assert.Equal(MemoryPrompt.Section(["Their name is Chris."], tools: false), sections[4].Body);
-        Assert.Equal("Opening memory call — not sent: recall_memory is off in /tools", sections[12].Heading);
-        Assert.Equal("Opening clock call — seeded with the first message", sections[10].Heading);
+        Assert.Equal("Memory — on, 1 fact remembered (in the prompt: recall_memory is off in /tools)", sections[3].Heading);
+        Assert.Equal(MemoryPrompt.Section(["Their name is Chris."], tools: false), sections[3].Body);
         Assert.Equal(Assistant.SystemPrompt(false, ["Their name is Chris."], skills: [], recall: false), SystemPromptSummary.SystemPrompt(facts));
         Assert.False(facts.Recall);
         Assert.True(Facts(memories: ["x"]).Recall);
         Assert.False(Facts(memoryEnabled: false).Recall);
         Assert.Equal("recall_memory is off in /tools", SystemPromptSummary.ToolOff(RecallMemoryTool.ToolName));
-    }
-
-    [Fact]
-    public void ClockOrCwdOff_SaysNotSent_TheRulesUntouched()
-    {
-        var sections = SystemPromptSummary.PromptSections(Facts(disabled: ["get_current_time", "get_working_directory"]));
-
-        Assert.Equal("Operating rules — default", sections[1].Heading);   // the file group stands: the screen passes FilesEnabled false only when every file tool is off
-        Assert.Equal("Opening clock call — not sent: get_current_time is off in /tools", sections[10].Heading);
-        Assert.Equal("", sections[10].Body);
-        Assert.Equal("Opening working-directory call — not sent: get_working_directory is off in /tools", sections[11].Heading);
-        Assert.Equal("Opening memory call — seeded with the first message, 0 facts remembered", sections[12].Heading);
-        // LLM offer tools off and File tools off say so first, whatever the list holds.
-        Assert.Equal("Opening clock call — not sent: LLM offer tools is off", SystemPromptSummary.PromptSections(Facts(tools: false, disabled: ["get_current_time"]))[10].Heading);
-        Assert.Equal("Opening working-directory call — not sent: file tools is off", SystemPromptSummary.PromptSections(Facts(files: false, disabled: ["get_working_directory"]))[11].Heading);
     }
 
     [Fact]
@@ -374,6 +309,31 @@ public class SystemPromptSummaryTests : IDisposable
     }
 
     [Fact]
+    public void OfferedOnly_LeavesOutEveryToolAndGroupTheTurnDoesNotSend()
+    {
+        // /sys' Tools tab (2026-09-26): only what the next turn sends — a disabled tool, a noted one, a group off by its switch, a group emptied by /tools.
+        var (clock, timers, files, memory) = Tools();
+        var disabled = ToolsText.DisabledSet(["read_file", "zip", "get_current_time", "shift_date", "days_between"]);
+
+        var groups = SystemPromptSummary.OfferedOnly(SystemPromptSummary.ToolGroups(clock, timers, files, memory, memoryEnabled: false, disabled: disabled, safeEdits: false));
+
+        Assert.Equal(["Timers (3)", "Files (12)"], groups.Select(g => g.Title));   // Clock emptied, Memory off; read_file, zip and restore gone
+        Assert.DoesNotContain(groups[1].Tools, t => t.Name is ReadFileTool.ToolName or ZipTool.ToolName or RestoreTool.ToolName);
+        Assert.All(groups, g => { Assert.True(g.Offered); Assert.Empty(g.ToolNotes); Assert.Equal("", g.Note); });
+        Assert.Equal(SettingsField.FileTools, groups[1].Switch);
+        Assert.Equal("Files", groups[1].Label);
+        Assert.DoesNotContain(SystemPromptSummary.ToolLines(groups), l => l.Contains("not offered", StringComparison.Ordinal));
+        // Nothing offered: the tab and the lines say so, with the reason while LLM offer tools is off.
+        var none = SystemPromptSummary.OfferedOnly(SystemPromptSummary.ToolGroups(clock, timers, files, memory, memoryEnabled: true, toolsEnabled: false));
+        Assert.Empty(none);
+        Assert.Equal(["No tools offered (LLM offer tools is off)"], SystemPromptSummary.ToolLines(none, toolsEnabled: false));
+        Assert.Equal(["No tools offered"], SystemPromptSummary.ToolLines(none));
+        var console = new TestConsole();
+        console.Write(SystemPromptSummary.ToolsTab(none, toolsEnabled: false));
+        Assert.Contains("No tools offered (LLM offer tools is off)", console.Output);
+    }
+
+    [Fact]
     public void ToolGroups_NoSkillInstalled_NotesLoadSkill_OnlyWhenAsked()
     {
         var (clock, timers, files, memory) = Tools();
@@ -411,7 +371,7 @@ public class SystemPromptSummaryTests : IDisposable
     }
 
     [Fact]
-    public void LlmToolsOff_TheDefaultsAreTheToolFreeOnes_AndTheOpeningCallsAreNotSent()
+    public void LlmToolsOff_TheDefaultsAreTheToolFreeOnes()
     {
         var sections = SystemPromptSummary.PromptSections(Facts(memories: ["Their name is Chris."], speechOutput: true, speechReady: true, tools: false));
 
@@ -419,104 +379,65 @@ public class SystemPromptSummaryTests : IDisposable
             [
                 "Persona — default",
                 "Operating rules — default (LLM offer tools is off)",
-                "Reply format — plain text: transcript markdown is off",
                 NoNotesHeading,
                 "Memory — on, 1 fact remembered",
                 "Skills — not included (LLM offer tools is off)",
-                "Git native tools — not offered (LLM offer tools is off)",
-                "Shell tools — not offered (LLM offer tools is off)",
-                "MCP servers — not offered (LLM offer tools is off)",
                 "Voice directive — default (LLM offer tools is off), included (speech output on, TTS ready), always last",
-                "Opening clock call — not sent: LLM offer tools is off",
-                "Opening working-directory call — not sent: LLM offer tools is off",
-                "Opening memory call — not sent: LLM offer tools is off",
-                "Request — reasoning_effort none · chat_template_kwargs.enable_thinking=false",
             ],
             sections.Select(s => s.Heading));
         Assert.Equal(Assistant.PlainTextRule, sections[1].Body);
         // No pair can carry the list, so the prompt does (the one case it still holds the facts, 2026-09-17).
-        Assert.Equal(MemoryPrompt.Section(["Their name is Chris."], tools: false), sections[4].Body);
-        Assert.Contains("- Their name is Chris.", sections[4].Body);
-        Assert.Equal("", sections[5].Body);
-        Assert.Equal(Assistant.VoiceDirectiveWithoutTools, sections[9].Body);
-        Assert.Equal("", sections[10].Body);
-        Assert.Equal("", sections[11].Body);
-        Assert.Equal("", sections[12].Body);
-        Assert.Equal([SystemPromptPart.Request, SystemPromptPart.Request, SystemPromptPart.Request], sections.Skip(10).Take(3).Select(s => s.Part));
+        Assert.Equal(MemoryPrompt.Section(["Their name is Chris."], tools: false), sections[3].Body);
+        Assert.Contains("- Their name is Chris.", sections[3].Body);
+        Assert.Equal("", sections[4].Body);
+        Assert.Equal(Assistant.VoiceDirectiveWithoutTools, sections[5].Body);
 
-        // A custom file keeps its own heading and text; the turn count changes nothing (nothing was seeded).
-        var custom = Headings(Facts(operatingRules: "Answer in haiku.", voiceDirective: "Speak like a pirate.", speechOutput: true, speechReady: true, turnCount: 3, tools: false));
+        // A custom file keeps its own heading and text.
+        var custom = Headings(Facts(operatingRules: "Answer in haiku.", voiceDirective: "Speak like a pirate.", speechOutput: true, speechReady: true, tools: false));
         Assert.Equal("Operating rules — operata.md (16 chars)", custom[1]);
-        Assert.Equal("Voice directive — vocalia.md (20 chars), included (speech output on, TTS ready), always last", custom[9]);
-        Assert.Equal("Opening clock call — not sent: LLM offer tools is off", custom[10]);
+        Assert.Equal("Voice directive — vocalia.md (20 chars), included (speech output on, TTS ready), always last", custom[5]);
     }
 
     [Fact]
-    public void ReplyFormat_SaysMarkdownOrWhyNot_AndTheRulesFollow()
+    public void Markdown_TheRulesFollow_NoHeadingOfItsOwn()
     {
-        // On, the pane on, not spoken: the Markdown sentence opens the default rules.
+        // On, the pane on, not spoken: the Markdown sentence opens the default rules; the Reply format heading went on 2026-09-26, the rules say it.
         var on = SystemPromptSummary.PromptSections(Facts(markdown: true));
-        Assert.Equal("Reply format — markdown (transcript markdown on, the pane on, the turn not spoken)", on[2].Heading);
-        Assert.Equal("", on[2].Body);
         Assert.Equal(Assistant.DefaultRules(markdown: true, tools: true), on[1].Body);
         Assert.StartsWith(Assistant.MarkdownRule + " ", on[1].Body);
+        Assert.DoesNotContain(on, s => s.Heading.StartsWith("Reply format", StringComparison.Ordinal));
         Assert.Equal(Assistant.SystemPrompt(false, [], skills: [], markdown: true), SystemPromptSummary.SystemPrompt(Facts(markdown: true)));
-
-        // The three reasons for plain text, in the order they are checked.
-        Assert.Equal("Reply format — plain text: transcript markdown is off", Headings(Facts(markdown: false))[2]);
-        Assert.Equal("Reply format — plain text: no pane", Headings(Facts(markdown: true, pane: false))[2]);
-        Assert.Equal("Reply format — plain text: the turn speaks", Headings(Facts(markdown: true, speechOutput: true, speechReady: true))[2]);
-        Assert.Equal("Reply format — markdown (transcript markdown on, the pane on, the turn not spoken)", Headings(Facts(markdown: true, speechOutput: true, speechReady: false))[2]);
         Assert.Equal(Assistant.OperatingRules, SystemPromptSummary.PromptSections(Facts(markdown: true, pane: false))[1].Body);
 
         // A custom operata.md stands whatever the switch says.
-        var custom = SystemPromptSummary.PromptSections(Facts(markdown: true, operatingRules: "Answer in haiku."));
-        Assert.Equal("Reply format — operata.md stands", custom[2].Heading);
-        Assert.Equal("Answer in haiku.", custom[1].Body);
+        Assert.Equal("Answer in haiku.", SystemPromptSummary.PromptSections(Facts(markdown: true, operatingRules: "Answer in haiku."))[1].Body);
 
         // Tools off: the Markdown sentence alone, like the plain-text one.
         Assert.Equal(Assistant.MarkdownRule, SystemPromptSummary.PromptSections(Facts(markdown: true, tools: false))[1].Body);
-
-        Assert.Equal("operata.md stands", SystemPromptSummary.OperataStandsSuffix);
     }
 
     [Fact]
-    public void PromptLines_HeadingsThenIndentedText_WithTheDividerOnce()
+    public void PromptLines_HeadingsThenIndentedText()
     {
         string[] lines = SystemPromptSummary.PromptLines(Facts(memories: ["Their name is Chris."])).ToArray();
 
-        Assert.Equal("Persona — default", lines[0]);
-        Assert.Equal("  " + Assistant.DefaultPersona, lines[1]);
-        Assert.Equal("Operating rules — default", lines[2]);
-        Assert.Equal("  " + Assistant.OperatingRules, lines[3]);
-        Assert.Equal("Reply format — plain text: transcript markdown is off", lines[4]);
-        Assert.Equal(NoNotesHeading, lines[5]);
-        Assert.Equal("Memory — on, directive (the list rides the opening recall_memory call)", lines[6]);
-        Assert.Equal("  " + MemoryPrompt.Directive, lines[7]);
-        Assert.Equal(NoSkillsHeading, lines[8]);
-        Assert.Equal("  " + SkillsPrompt.DirectiveWithoutSkills, lines[9]);
-        Assert.Equal(ShellHeading, lines[11]);
-        Assert.Equal(NoMcpHeading, lines[12]);
-        Assert.Equal("Voice directive — not included: speech output is off", lines[13]);
-        Assert.Equal(SystemPromptSummary.AlsoSentHeading, lines[14]);
-        Assert.Equal("Opening clock call — seeded with the first message", lines[15]);
-        Assert.StartsWith("  get_current_time → Friday", lines[16]);
-        Assert.Equal("  " + SystemPromptSummary.OpeningNote, lines[17]);
-        Assert.Equal("Opening working-directory call — seeded with the first message", lines[18]);
-        Assert.Equal(@"  get_working_directory → The working directory is 'D:\files' (the profile's default folder); every path you pass to a file tool is relative to it.", lines[19]);
-        Assert.Equal("  " + SystemPromptSummary.OpeningCwdNote, lines[20]);
-        // The list under the memory call (2026-09-17), one bullet a line, the note last.
-        Assert.Equal("Opening memory call — seeded with the first message, 1 fact remembered", lines[21]);
-        Assert.Equal("  recall_memory → " + MemoryPrompt.Heading, lines[22]);
-        Assert.Equal("  - Their name is Chris.", lines[23]);
-        Assert.Equal("  " + SystemPromptSummary.OpeningMemoryNote, lines[24]);
-        Assert.Equal("Request — reasoning_effort none · chat_template_kwargs.enable_thinking=false", lines[25]);
-        Assert.Equal(26, lines.Length);   // the Git tools heading since 2026-09-20, the Shell tools heading since 2026-09-21
-        Assert.Single(lines, SystemPromptSummary.AlsoSentHeading);
+        Assert.Equal(
+            [
+                "Persona — default",
+                "  " + Assistant.DefaultPersona,
+                "Operating rules — default",
+                "  " + Assistant.OperatingRules,
+                NoNotesHeading,
+                "Memory — on, directive (the list rides the opening recall_memory call)",
+                "  " + MemoryPrompt.Directive,
+                NoSkillsHeading,
+                "  " + SkillsPrompt.DirectiveWithoutSkills,
+            ],
+            lines);   // nothing after the skills since 2026-09-26: no tool-group headings, no Also sent part
     }
 
     [Fact]
-    public void PromptTab_RendersTheHeadingsAndTheText_WithTheDivider()
+    public void PromptTab_RendersTheHeadingsAndTheText()
     {
         using var console = new TestConsole();
         console.Profile.Width = 2000;
@@ -528,8 +449,8 @@ public class SystemPromptSummaryTests : IDisposable
         Assert.Equal(" ", lines[2]);
         Assert.Equal("Operating rules — default", lines[3]);
         Assert.Equal(Assistant.OperatingRules, lines[4]);
-        Assert.Contains(SystemPromptSummary.AlsoSentHeading, lines);
-        Assert.Contains("Request — reasoning_effort none · chat_template_kwargs.enable_thinking=false", lines);
+        Assert.Contains(NoSkillsHeading, lines);
+        Assert.DoesNotContain(lines, l => l.StartsWith("Request", StringComparison.Ordinal) || l.StartsWith("Opening", StringComparison.Ordinal) || l.StartsWith("Also sent", StringComparison.Ordinal));
     }
 
     private (IReadOnlyList<AIFunction> Clock, IReadOnlyList<AIFunction> Timers, IReadOnlyList<AIFunction> Files, IReadOnlyList<AIFunction> Memory) Tools()
@@ -675,45 +596,36 @@ public class SystemPromptSummaryTests : IDisposable
         protected override ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken) => new("ok");
     }
 
-    /// <summary>The Obsidian row (2026-09-22): absent while no vault is offered — /sys as it was for every profile that never names one — else on / none / not offered, the rule riding while any vault tool is.</summary>
+    /// <summary>The vault rule (2026-09-22) rides while any vault tool is offered; no heading of its own since 2026-09-26 — the rules say it.</summary>
     [Fact]
-    public void PromptSections_TheObsidianRow_OnlyWithAVault_AndTheRuleRidesWhileAnyToolIsOffered()
+    public void PromptSections_TheObsidianRule_RidesWhileAnyToolIsOffered_NoHeading()
     {
-        Assert.DoesNotContain(Headings(Facts()), h => h.StartsWith("Obsidian", StringComparison.Ordinal));
         var on = Facts() with { ObsidianEnabled = true, ObsidianTools = 8 };
-        Assert.Contains("Obsidian tools — on, 8 tools offered", Headings(on));
-        Assert.Contains("Obsidian tools — on, none offered (every vault tool is switched off in /tools)", Headings(on with { ObsidianTools = 0 }));
-        Assert.Contains("Obsidian tools — not offered (LLM offer tools is off)", Headings(on with { ToolsEnabled = false }));
-        Assert.Equal(Headings(Facts()).Length + 1, Headings(on).Length);
+        Assert.DoesNotContain(Headings(on), h => h.StartsWith("Obsidian", StringComparison.Ordinal));
+        Assert.Equal(Headings(Facts()).Length, Headings(on).Length);
         Assert.Contains(Assistant.ObsidianRule, SystemPromptSummary.PromptSections(on)[1].Body);
         Assert.DoesNotContain(Assistant.ObsidianRule, SystemPromptSummary.PromptSections(on with { ObsidianTools = 0 })[1].Body);
         Assert.Equal(Assistant.SystemPrompt(false, [], skills: [], obsidian: true), SystemPromptSummary.SystemPrompt(on));
     }
 
-    /// <summary>The SQL row (2026-09-23), the Obsidian shape: absent while no connection is offered, else on / none / not offered, the rule riding while any SQL tool is.</summary>
+    /// <summary>The SQL rule (2026-09-23), the Obsidian shape: it rides while any SQL tool is offered; no heading of its own since 2026-09-26.</summary>
     [Fact]
-    public void PromptSections_TheSqlRow_OnlyWithAConnection_AndTheRuleRidesWhileAnyToolIsOffered()
+    public void PromptSections_TheSqlRule_RidesWhileAnyToolIsOffered_NoHeading()
     {
-        Assert.DoesNotContain(Headings(Facts()), h => h.StartsWith("SQL", StringComparison.Ordinal));
         var on = Facts() with { SqlEnabled = true, SqlTools = 6 };
-        Assert.Contains("SQL tools — on, 6 tools offered", Headings(on));
-        Assert.Contains("SQL tools — on, none offered (every SQL tool is switched off in /tools)", Headings(on with { SqlTools = 0 }));
-        Assert.Contains("SQL tools — not offered (LLM offer tools is off)", Headings(on with { ToolsEnabled = false }));
-        Assert.Equal(Headings(Facts()).Length + 1, Headings(on).Length);
+        Assert.DoesNotContain(Headings(on), h => h.StartsWith("SQL", StringComparison.Ordinal));
+        Assert.Equal(Headings(Facts()).Length, Headings(on).Length);
         Assert.Contains(Assistant.SqlRule, SystemPromptSummary.PromptSections(on)[1].Body);
         Assert.DoesNotContain(Assistant.SqlRule, SystemPromptSummary.PromptSections(on with { SqlTools = 0 })[1].Body);
         Assert.Equal(Assistant.SystemPrompt(false, [], skills: [], sql: true), SystemPromptSummary.SystemPrompt(on));
     }
 
     [Fact]
-    public void PromptSections_TheGitRow_SaysOnOffOrNone_AndTheRuleRidesWhileAnyToolIsOffered()
+    public void PromptSections_TheGitRule_RidesWhileAnyToolIsOffered_NoHeading()
     {
-        Assert.Equal("Git native tools — on, 11 tools offered", Headings(Facts(gitTools: 11))[6]);
-        Assert.Equal("Git native tools — on, 9 tools offered", Headings(Facts(gitTools: 9))[6]);
-        Assert.Equal("Git native tools — on, 1 tool offered", Headings(Facts(gitTools: 1))[6]);
-        Assert.Equal(GitHeading, Headings(Facts())[6]);
-        Assert.Equal("Git native tools — off (git native tools is off)", Headings(Facts() with { GitEnabled = false })[6]);
-        Assert.Equal("Git native tools — not offered (LLM offer tools is off)", Headings(Facts(tools: false))[6]);
+        // No Git native tools heading since 2026-09-26, on or off: the rule in the rules is what the model reads.
+        Assert.DoesNotContain(Headings(Facts(gitTools: 11)), h => h.StartsWith("Git", StringComparison.Ordinal));
+        Assert.DoesNotContain(Headings(Facts() with { GitEnabled = false }), h => h.StartsWith("Git", StringComparison.Ordinal));
         // The rule rides the defaults only while a git tool is offered; it never names the two opt-in tools, so no variant.
         Assert.Contains(Assistant.GitRule, SystemPromptSummary.PromptSections(Facts(gitTools: 11))[1].Body);
         Assert.DoesNotContain(Assistant.GitRule, SystemPromptSummary.PromptSections(Facts())[1].Body);
@@ -726,12 +638,11 @@ public class SystemPromptSummaryTests : IDisposable
     }
 
     [Fact]
-    public void PromptSections_TheShellRow_SaysOnOffOrNone_AndTheRuleRidesWhileTheToolIsOffered()
+    public void PromptSections_TheShellRule_RidesWhileTheToolIsOffered_NoHeading()
     {
-        Assert.Equal("Shell tools — on, 1 tool offered", Headings(Facts(shellTools: 1))[7]);
-        Assert.Equal(ShellHeading, Headings(Facts())[7]);
-        Assert.Equal("Shell tools — off (Shell command policy is off)", Headings(Facts() with { ShellEnabled = false })[7]);
-        Assert.Equal("Shell tools — not offered (LLM offer tools is off)", Headings(Facts(tools: false))[7]);
+        // No Shell tools heading since 2026-09-26, on or off.
+        Assert.DoesNotContain(Headings(Facts(shellTools: 1)), h => h.StartsWith("Shell", StringComparison.Ordinal));
+        Assert.DoesNotContain(Headings(Facts() with { ShellEnabled = false }), h => h.StartsWith("Shell", StringComparison.Ordinal));
         // The rule rides the defaults only while the tool is offered, after the git sentence; which rule follows the setting Shell tool bridge (later on 2026-09-21).
         Assert.Contains(Assistant.ShellRule, SystemPromptSummary.PromptSections(Facts(shellTools: 1, shellBridge: true))[1].Body);
         Assert.Contains(Assistant.ShellRuleWithoutBridge, SystemPromptSummary.PromptSections(Facts(shellTools: 1))[1].Body);
@@ -759,18 +670,17 @@ public class SystemPromptSummaryTests : IDisposable
     }
 
     [Fact]
-    public void PromptSections_TheMcpRow_SaysOnOffOrNone()
+    public void PromptSections_TheMcpRule_RidesWhileAnyToolIsOffered_NoHeading()
     {
-        Assert.Equal("MCP servers — none connected", Headings(Facts())[8]);
-        Assert.Equal("MCP servers — on, 2 servers, 14 tools offered", Headings(Facts() with { McpServers = 2, McpTools = 14 })[8]);
-        Assert.Equal("MCP servers — off (MCP servers is off)", Headings(Facts() with { McpEnabled = false, McpServers = 2, McpTools = 14 })[8]);
-        Assert.Equal("MCP servers — not offered (LLM offer tools is off)", Headings(Facts(tools: false) with { McpServers = 2, McpTools = 14 })[8]);
+        // No MCP servers heading since 2026-09-26, on or off.
+        Assert.DoesNotContain(Headings(Facts() with { McpTools = 14 }), h => h.StartsWith("MCP", StringComparison.Ordinal));
+        Assert.DoesNotContain(Headings(Facts() with { McpEnabled = false }), h => h.StartsWith("MCP", StringComparison.Ordinal));
         // The rule rides the defaults only while something is offered.
-        Assert.Contains(Assistant.McpRule, SystemPromptSummary.PromptSections(Facts() with { McpServers = 1, McpTools = 1 })[1].Body);
-        Assert.DoesNotContain(Assistant.McpRule, SystemPromptSummary.PromptSections(Facts() with { McpServers = 1, McpTools = 0 })[1].Body);
-        Assert.DoesNotContain(Assistant.McpRule, SystemPromptSummary.PromptSections(Facts() with { McpEnabled = false, McpServers = 1, McpTools = 1 })[1].Body);
-        Assert.Equal(SystemPromptSummary.PromptSections(Facts() with { McpServers = 1, McpTools = 1 })[1].Body, Assistant.DefaultRules(false, true, mcp: true));
-        Assert.Equal(Assistant.SystemPrompt(false, [], skills: [], mcp: true), SystemPromptSummary.SystemPrompt(Facts() with { McpServers = 1, McpTools = 1 }));
+        Assert.Contains(Assistant.McpRule, SystemPromptSummary.PromptSections(Facts() with { McpTools = 1 })[1].Body);
+        Assert.DoesNotContain(Assistant.McpRule, SystemPromptSummary.PromptSections(Facts() with { McpTools = 0 })[1].Body);
+        Assert.DoesNotContain(Assistant.McpRule, SystemPromptSummary.PromptSections(Facts() with { McpEnabled = false, McpTools = 1 })[1].Body);
+        Assert.Equal(SystemPromptSummary.PromptSections(Facts() with { McpTools = 1 })[1].Body, Assistant.DefaultRules(false, true, mcp: true));
+        Assert.Equal(Assistant.SystemPrompt(false, [], skills: [], mcp: true), SystemPromptSummary.SystemPrompt(Facts() with { McpTools = 1 }));
     }
 
     [Fact]

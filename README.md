@@ -351,11 +351,11 @@ Read-only: exactly what the next reply will be sent, nothing paraphrased.
 
 #### Prompt
 
-The system prompt section by section, each with its status — **Persona** (default or `persona.md`), **Operating rules** (default or `operata.md`), **Reply format** (Markdown or plain text, and why), **Project notes** (`NEON.md` / `AGENTS.md`), **Memory**, **Skills** (the catalog), **Git native tools**, **Shell tools**, **Obsidian tools** (only while a vault is set), **SQL tools** (only while a connection is set), **MCP servers**, and **Voice directive** (default or `vocalia.md`, only on a spoken turn, always last). Under *Also sent, outside the system prompt*: the opening clock, working-directory and memory calls seeded with the first message, and the reasoning fields on the request.
+The system prompt section by section, each with its status — **Persona** (default or `persona.md`), **Operating rules** (default or `operata.md`; the reply-format and tool sentences live here), **Project notes** (`NEON.md` / `AGENTS.md`), **Memory**, **Skills** (the catalog), and **Voice directive** (default or `vocalia.md`, only on a spoken turn, always last).
 
 #### Tools
 
-Every tool the reply may call, grouped — Clock, Timers, Files, Git, Web, Memory, Skills, Sessions, one group per connected MCP server, Questions — each with the description the model reads, and a note on any that is switched off and why.
+Every tool the reply may call, grouped — Clock, Timers, Files, Git, Web, Memory, Skills, Sessions, one group per connected MCP server, Questions — each with the description the model reads. Only what the reply is actually sent: a tool switched off, or a whole group whose setting is off, is left out (`/tools` lists everything, with the reason).
 
 </details>
 

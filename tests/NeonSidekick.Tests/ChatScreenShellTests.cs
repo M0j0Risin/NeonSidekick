@@ -366,8 +366,8 @@ public partial class ChatScreenTests
         Assert.Contains(GitStatusTool.ToolName, offered);
         Assert.Equal(SkilledPrompt(false, [], web: true, ask: AskLimits.Default, markdown: true, shell: false), _chat.Requests[0][0].Text);
         Assert.DoesNotContain(Assistant.ShellRule, _chat.Requests[0][0].Text!, StringComparison.Ordinal);
-        Assert.Contains("Shell tools — off (Shell command policy is off)", output);
-        Assert.Matches(ToolsHeading("Shell (3)", "not offered: Shell command policy is off", RunCommandTool.ToolName), output);
+        Assert.DoesNotContain("Shell tools — ", output);   // no Shell tools heading on the Prompt tab since 2026-09-26
+        Assert.DoesNotMatch(GroupHeading("Shell"), output);   // not offered: left out of the Tools tab (2026-09-26)
     }
 
     /// <summary>Both shell tools switched off by name on /tools: the group is emptied, the rule goes with it (the git shape); one alone keeps the rule.</summary>

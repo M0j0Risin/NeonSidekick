@@ -1415,7 +1415,7 @@ internal sealed partial class ChatScreen
     private IReadOnlyList<InfoTab> SysPromptTabs() =>
     [
         new(SystemPromptSummary.PromptTabTitle, () => SystemPromptSummary.PromptTab(SystemPromptFacts())),
-        new(SystemPromptSummary.ToolsTabTitle, () => SystemPromptSummary.ToolsTab(ToolGroups())),
+        new(SystemPromptSummary.ToolsTabTitle, () => SystemPromptSummary.ToolsTab(ToolGroups(), _effective().LlmOfferTools)),
     ];
 
     /// <summary>The tabs <c>/usage</c> opens: the tally as it stands when shown, and the notes on how it is measured.</summary>
@@ -2372,8 +2372,6 @@ internal sealed partial class ChatScreen
     private SystemPromptFacts SystemPromptFacts()
     {
         var effective = _effective();
-        var clock = _clockTools.OfType<GetCurrentTimeTool>().FirstOrDefault();
-        var cwd = _fileTools.OfType<GetWorkingDirectoryTool>().FirstOrDefault();
         var disabled = ToolsText.DisabledSet(effective.ToolsDisabled);
         return new SystemPromptFacts(
             _persona.Read(),
@@ -2383,10 +2381,6 @@ internal sealed partial class ChatScreen
             effective.Memory ? _memory.Snapshot() : [],
             effective.TtsOutput,
             _speech.IsReady,
-            _session.History.TurnCount,
-            clock?.Describe("") ?? "",
-            ReasoningLevel.Resolve(effective),
-            cwd?.Describe() ?? "",
             effective.LlmOfferTools,
             effective.FileTools && Without(FileToolsFor(_fileTools, effective.FileSafeEdits), disabled).Count > 0,   // the turn's own rule: every file tool off on /tools (restore gone with File safe edits off) reads as the switch off
             effective.AgentSkills,
@@ -2397,7 +2391,6 @@ internal sealed partial class ChatScreen
             disabled,
             effective.ProjectFile,
             effective.McpServers,
-            _mcp.ServerTools.Count,
             Without(_mcp.Tools, disabled).Count,
             effective.FileSafeEdits,
             effective.GitNativeTools,
@@ -3051,13 +3044,14 @@ internal sealed partial class ChatScreen
         return _catalog.Skills;
     }
 
+    /// <summary>The <c>/sys</c> Tools tab's groups: only what the next turn sends (<see cref="SystemPromptSummary.OfferedOnly"/>, 2026-09-26) — <c>/tools</c> builds its own full list (<see cref="ToolsFacts"/>).</summary>
     private IReadOnlyList<ToolGroup> ToolGroups()
     {
         var effective = _effective();
         var disabled = ToolsText.DisabledSet(effective.ToolsDisabled);
         var fileTools = FileToolsFor(_fileTools, effective.FileSafeEdits);   // restore only with File safe edits on (later still on 2026-09-20): /sys shows the list cut, Files (14)
         bool files = effective.FileTools && Without(fileTools, disabled).Count > 0;   // the turn's rule (PrepareTurn): an emptied file group is the switch off
-        return SystemPromptSummary.ToolGroups(_clockTools, _timerTools, fileTools, _memoryTools, effective.Memory, effective.LlmOfferTools, WebToolsFor(_webTools, files), effective.WebTools, effective.FileTools, _askTools, effective.AskUser, _pane.Enabled, _skillTools, effective.AgentSkills, _sessionTools, effective.SessionTool, disabled, mcp: _mcp.ServerTools, mcpEnabled: effective.McpServers, git: _gitTools, gitEnabled: effective.GitNativeTools, shell: _shellTools, shellEnabled: ShellOffered(effective), codeAvailable: CodeAvailable(), obsidian: ObsidianOffered(effective) ? ObsidianToolsFor(_vaultTools, effective) : null, sql: SqlOffered(effective, _sql) ? _sqlTools : null, comfy: ComfyOffered(effective, _comfy) ? _comfyTools : null);   // the vault group only with a vault (2026-09-22): /sys stays as it was for a profile that never names one
+        return SystemPromptSummary.OfferedOnly(SystemPromptSummary.ToolGroups(_clockTools, _timerTools, fileTools, _memoryTools, effective.Memory, effective.LlmOfferTools, WebToolsFor(_webTools, files), effective.WebTools, effective.FileTools, _askTools, effective.AskUser, _pane.Enabled, _skillTools, effective.AgentSkills, _sessionTools, effective.SessionTool, disabled, mcp: _mcp.ServerTools, mcpEnabled: effective.McpServers, git: _gitTools, gitEnabled: effective.GitNativeTools, shell: _shellTools, shellEnabled: ShellOffered(effective), codeAvailable: CodeAvailable(), obsidian: ObsidianOffered(effective) ? ObsidianToolsFor(_vaultTools, effective) : null, sql: SqlOffered(effective, _sql) ? _sqlTools : null, comfy: ComfyOffered(effective, _comfy) ? _comfyTools : null));   // the vault group only with a vault (2026-09-22): /sys stays as it was for a profile that never names one
     }
 
     /// <summary>Whether <c>execute_code</c> has a language to run (2026-09-21): the setting's languages, one of them installed.</summary>
@@ -7876,7 +7870,7 @@ internal sealed partial class ChatScreen
                     _transcript.Notice(line);
                 }
 
-                foreach (var line in SystemPromptSummary.ToolLines(ToolGroups()))
+                foreach (var line in SystemPromptSummary.ToolLines(ToolGroups(), _effective().LlmOfferTools))
                 {
                     _transcript.Notice(line);
                 }
