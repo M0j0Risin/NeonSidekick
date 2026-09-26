@@ -12,7 +12,8 @@ namespace NeonSidekick.App;
 /// once the reply's text streams, and a running tool's bare name (<c>read_file</c>) between its
 /// call and its result — but <c>generate_image</c> reads <see cref="ComfyText.GeneratingLabel"/>, as every
 /// ComfyUI generation does (2026-09-25, the user's call; the pane draws it after the tally). Decided from the turn's events alone (<see cref="TurnEvent"/> marks no
-/// request and surfaces no reasoning, so the first text is where thinking ends). With
+/// request, and its thinking — <see cref="TurnEvent.ThinkingDelta"/>, since 2026-09-26 — is the thinking
+/// stage still, so the first text is where thinking ends). With
 /// <see cref="AppSettingsData.LlmUseFunVerbs"/> on, every thinking and writing stage draws a
 /// fresh verb from <see cref="ThinkingVerbs.All"/>, never the one shown just before; the tool
 /// stage still names the tool. The elapsed count is the pane's and runs on across stages.

@@ -683,6 +683,12 @@ public sealed class SidekickApp
         {
             while (await events.MoveNextAsync().ConfigureAwait(false))
             {
+                // The model's thinking is the TUI's to show (LLM show thinking, 2026-09-26): stdout carries the reply alone.
+                if (events.Current is TurnEvent.ThinkingDelta)
+                {
+                    continue;
+                }
+
                 if (!prefixed && !Assistant.IsOpeningEvent(events.Current))
                 {
                     await WriteHeadlessPrefixAsync().ConfigureAwait(false);

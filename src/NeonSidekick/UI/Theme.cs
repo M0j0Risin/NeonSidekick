@@ -136,6 +136,8 @@ public static class Theme
     public static Style MarkdownCodeBlock => s_current.MarkdownCodeBlock;
     /// <summary>The language label above a fenced code block.</summary>
     public static Style MarkdownCodeLabel => s_current.DimText;
+    /// <summary>The model's thinking (2026-09-26): dim italic on the code block's lifted fill — a panel like code, told apart by its ink.</summary>
+    public static Style ThinkingText => s_current.ThinkingText;
     /// <summary>A first-level heading.</summary>
     public static Style MarkdownHeading1 => s_current.Accent;
     /// <summary>Every other heading level.</summary>
@@ -386,6 +388,7 @@ public static class Theme
             MarkdownItalic = new(foreground: p.Ink, decoration: Decoration.Italic);
             MarkdownCode = new(foreground: p.Secondary);
             MarkdownCodeBlock = new(foreground: p.Ink, background: p.PanelBg);
+            ThinkingText = new(foreground: p.Dim, background: p.PanelBg, decoration: Decoration.Italic);
             CodeKeyword = new(foreground: p.Primary, background: p.PanelBg);
             CodeType = new(foreground: p.Secondary, background: p.PanelBg);
             CodeString = new(foreground: p.Highlight, background: p.PanelBg);
@@ -423,6 +426,7 @@ public static class Theme
         public Style MarkdownItalic { get; }
         public Style MarkdownCode { get; }
         public Style MarkdownCodeBlock { get; }
+        public Style ThinkingText { get; }
         public Style CodeKeyword { get; }
         public Style CodeType { get; }
         public Style CodeString { get; }

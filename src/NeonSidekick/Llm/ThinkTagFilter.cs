@@ -21,6 +21,11 @@ namespace NeonSidekick.Llm;
 ///
 /// <para>What it cannot do: text streamed before an orphan closing tag has already been emitted.
 /// The caller sees <see cref="SawOrphanClose"/> and can at least keep the tag out of the history.</para>
+///
+/// <para>The thinking itself (2026-09-26, the user's ask: thinking shown in the transcript) is kept
+/// aside rather than lost: <see cref="TakeThinking"/> hands over what a block held since it was last
+/// asked, for the host to show — never as reply text. A possible start of the closing tag stays back
+/// until the next delta says whether it was one.</para>
 /// </summary>
 public sealed class ThinkTagFilter
 {
@@ -28,6 +33,7 @@ public sealed class ThinkTagFilter
     public const string CloseTag = "</think>";
 
     private string _pending = string.Empty;
+    private readonly StringBuilder _thinking = new();
     private bool _inBlock;
     private bool _skipWhitespace;
 
@@ -73,11 +79,14 @@ public sealed class ThinkTagFilter
                 int close = s.IndexOf(CloseTag, pos, StringComparison.Ordinal);
                 if (close < 0)
                 {
-                    // Thinking is dropped; only a possible start of the closing tag is kept.
-                    _pending = s.Substring(s.Length - PartialSuffix(s, pos, CloseTag));
+                    // Thinking goes aside; only a possible start of the closing tag is kept back.
+                    int partial = PartialSuffix(s, pos, CloseTag);
+                    _thinking.Append(s, pos, s.Length - partial - pos);
+                    _pending = s.Substring(s.Length - partial);
                     break;
                 }
 
+                _thinking.Append(s, pos, close - pos);
                 pos = close + CloseTag.Length;
                 _inBlock = false;
                 SawBlock = true;
@@ -115,13 +124,31 @@ public sealed class ThinkTagFilter
 
     /// <summary>
     /// Releases whatever was held back as a possible tag start. Inside an unfinished block it is
-    /// thinking and is dropped.
+    /// thinking, and goes to <see cref="TakeThinking"/> instead.
     /// </summary>
     public string Flush()
     {
         string held = _inBlock ? string.Empty : _pending;
+        if (_inBlock)
+        {
+            _thinking.Append(_pending);
+        }
+
         _pending = string.Empty;
         return held;
+    }
+
+    /// <summary>The block text <see cref="Push"/> and <see cref="Flush"/> kept aside since the last call, possibly empty; cleared.</summary>
+    public string TakeThinking()
+    {
+        if (_thinking.Length == 0)
+        {
+            return string.Empty;
+        }
+
+        string thinking = _thinking.ToString();
+        _thinking.Clear();
+        return thinking;
     }
 
     private static bool IsSkippable(char c) => c is ' ' or '\n' or '\r' or '\t';

@@ -4275,6 +4275,68 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(1, Count(output[summary..], folded));
     }
 
+    /// <summary>A geometry pane, markdown on, speech on, and a reply that thinks first (2026-09-26): the reasoning as the server's own deltas.</summary>
+    private void ThinkingTurn(bool show = true)
+    {
+        _settings.Update(d => { d.TranscriptMarkdown = true; d.LlmShowThinking = show; });
+        _console.Profile.Height = 40;
+        _geometry = new ScreenGeometry(() => null);
+        _chat.Enqueue(
+            new ChatResponseUpdate(ChatRole.Assistant, new List<AIContent> { new TextReasoningContent("Pondering the ") }),
+            new ChatResponseUpdate(ChatRole.Assistant, new List<AIContent> { new TextReasoningContent("sky.") }),
+            FakeChatClient.Text("\n\nIt is blue."));
+    }
+
+    [Fact]
+    public async Task Thinking_Shown_StreamsThenFolds_AndIsNeverSpokenOrCopied()
+    {
+        ThinkingTurn();
+        LinesWhenIdle("why?", "/copy", "/exit");
+
+        string output = await RunAsync();
+
+        string folded = ThinkingFoldText.Summary(TimeSpan.Zero, expanded: false);
+        int summary = output.LastIndexOf(folded, StringComparison.Ordinal);
+        Assert.True(summary >= 0, output);
+        Assert.Contains("Pondering the sky.", output[..summary]);   // it streamed first
+        int answer = output.IndexOf("It is blue.", summary, StringComparison.Ordinal);
+        Assert.True(answer > summary, output);
+        Assert.DoesNotContain("Pondering", output[summary..answer]);   // the last rebuild: the summary alone above the answer
+        Assert.Equal(new[] { "It is blue." }, _synth.SpokenText);
+        Assert.DoesNotContain(_copied, c => c.Contains("Pondering", StringComparison.Ordinal));
+        Assert.Contains(_copied, c => c.Contains("It is blue.", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Thinking_Off_ShowsNothingOfIt()
+    {
+        ThinkingTurn(show: false);
+        LinesWhenIdle("why?", "/exit");
+
+        string output = await RunAsync();
+
+        Assert.DoesNotContain("Pondering", output);
+        Assert.DoesNotContain(ThinkingFoldText.Glyph, output);
+        Assert.Contains("It is blue.", output);
+        Assert.Equal(new[] { "It is blue." }, _synth.SpokenText);
+    }
+
+    [Fact]
+    public async Task CtrlO_UnfoldsTheThinking_WithTheToolRuns()
+    {
+        ThinkingTurn();
+        _settings.Update(d => d.TtsOutput = false);
+        PushLine("why?");
+        _console.Input.PushKey(Keys.CtrlO);
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        int open = output.LastIndexOf(ThinkingFoldText.Summary(TimeSpan.Zero, expanded: true), StringComparison.Ordinal);
+        Assert.True(open >= 0, output);
+        Assert.Contains("Pondering the sky.", output[open..]);
+    }
+
     [Fact]
     public async Task CodeBlock_WithinTheCount_OrCountZero_KeepsEveryLine_UnderItsLabel()
     {
@@ -9237,7 +9299,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.DoesNotContain(rows, r => r.Key is "Mouse" or "Drag" or "Drop" or "@" or "#" or "$");
         Assert.Equal(("Ctrl+Home", "scroll to top of the chat pane"), rows[^7]);
         Assert.Equal(("Ctrl+End", "scroll to bottom of the chat pane"), rows[^6]);
-        Assert.Equal(("Ctrl+O", "expand or collapse the tool calls and code blocks (or click a summary line)"), rows[^5]);   // 2026-09-22
+        Assert.Equal(("Ctrl+O", "expand or collapse the tool calls, code blocks and thinking (or click a summary line)"), rows[^5]);   // 2026-09-22
         Assert.Equal(("Alt+V", "paste content (text or images)"), rows[^4]);
         Assert.Equal(("Ctrl+A", "select all text on the line"), rows[^3]);
         Assert.Equal(("Ctrl+X", "cut the selected text"), rows[^2]);   // 2026-09-25
@@ -9303,8 +9365,8 @@ public partial class ChatScreenTests : IDisposable
         Assert.StartsWith(HelpRow("/draft", "write the next message in your editor: a temporary file, sent when it is saved and closed"), lines[21]);   // under /copy since 2026-09-19
         Assert.StartsWith(HelpRow("/loop", "repeat a message, each reply waited for: /loop <count> [delay] <message> | infinite [delay] <message> (ESC ends it)"), lines[22]);   // under /draft since 2026-09-21
         Assert.StartsWith(HelpRow("/botchat", "let the profiles talk to each other, each in its own persona, until ESC: /botchat [profile ...] [[--] topic]"), lines[23]);   // under /loop since 2026-09-24
-        Assert.StartsWith(HelpRow("/expand", "show every line of the folded tool runs and code blocks in the transcript (Ctrl+O flips)"), lines[24]);   // under /loop since 2026-09-22 (/tools expand until then)
-        Assert.StartsWith(HelpRow("/collapse", "fold the tool runs and code blocks in the transcript again"), lines[25]);
+        Assert.StartsWith(HelpRow("/expand", "show every line of the folded tool runs, code blocks and thinking in the transcript (Ctrl+O flips)"), lines[24]);   // under /loop since 2026-09-22 (/tools expand until then)
+        Assert.StartsWith(HelpRow("/collapse", "fold the tool runs, code blocks and thinking in the transcript again"), lines[25]);
         Assert.True(string.IsNullOrWhiteSpace(lines[26]));
         Assert.StartsWith(HelpRow("/interrupt", "toggle the speech input wake word interrupt, or /interrupt on|off"), lines[30]);
         Assert.True(string.IsNullOrWhiteSpace(lines[31]));

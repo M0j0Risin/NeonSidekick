@@ -670,6 +670,11 @@ internal sealed partial class ChatScreen
     private readonly Action<string>? _setTitle;
     private readonly TimeProvider _time;
 
+    // The turn's LLM show thinking, read at its start, and when the thinking block now streaming began
+    // (null between blocks): the fold's "thought for 4.2s" (2026-09-26). Written and read on the turn's thread.
+    private bool _showThinking;
+    private long? _thinkingSince;
+
     /// <summary>How long after a first idle Ctrl+C the second one exits (the hint shows meanwhile).</summary>
     public static readonly TimeSpan ExitConfirmWindow = TimeSpan.FromSeconds(2);
 
@@ -1349,7 +1354,7 @@ internal sealed partial class ChatScreen
 
         rows.Add(("Ctrl+Home", "scroll to top of the chat pane"));
         rows.Add(("Ctrl+End", "scroll to bottom of the chat pane"));
-        rows.Add(("Ctrl+O", "expand or collapse the tool calls and code blocks (or click a summary line)"));
+        rows.Add(("Ctrl+O", "expand or collapse the tool calls, code blocks and thinking (or click a summary line)"));
         rows.Add(("Alt+V", "paste content (text or images)"));
         rows.Add(("Ctrl+A", "select all text on the line"));
         rows.Add(("Ctrl+X", "cut the selected text"));
@@ -10073,6 +10078,8 @@ internal sealed partial class ChatScreen
         // and is renamed on the scope as the events arrive; the count runs on across them.
         var stages = new TurnStages(effective.LlmUseFunVerbs, _random);
         string label = stages.Start();
+        _showThinking = effective.LlmShowThinking;
+        _thinkingSince = null;
         using var busy = _transcript.BeginBusy(label);
         // What /imagine made since the last message rides with this one (2026-09-24): the notes ahead of the text, the pictures after the user's own.
         var (sentText, sentImages) = bot is null ? TakeImagineNotes(text, images) : (text, images);
@@ -10108,13 +10115,18 @@ internal sealed partial class ChatScreen
         }
 
         // The opening calls' events come first and at once; the spinner stays over the model's
-        // wait behind them, and they are shown after it, above the glyph.
+        // wait behind them, and they are shown after it, above the glyph. Without the pane the
+        // thinking is not shown (2026-09-26): Spectre's spinner stays over it too, as it always did.
         async Task<bool> FirstWaitAsync()
         {
             bool next = await NextAsync().ConfigureAwait(false);
-            while (next && Assistant.IsOpeningEvent(events.Current))
+            while (next && (Assistant.IsOpeningEvent(events.Current) || (busy is null && events.Current is TurnEvent.ThinkingDelta)))
             {
-                opening.Add(events.Current);
+                if (Assistant.IsOpeningEvent(events.Current))
+                {
+                    opening.Add(events.Current);
+                }
+
                 next = await NextAsync().ConfigureAwait(false);
             }
 
@@ -10573,8 +10585,25 @@ internal sealed partial class ChatScreen
             _transcript.CountToolCall(counted.Name);
         }
 
+        if (evt is not TurnEvent.ThinkingDelta)
+        {
+            // The thinking block is over; the next one (after a tool call) counts its own time.
+            _thinkingSince = null;
+        }
+
         switch (evt)
         {
+            case TurnEvent.ThinkingDelta thinking:
+                // Shown only, and only when asked (2026-09-26): never fed to the speaker, the reply,
+                // /copy or the session log. The next write of anything else folds the block.
+                if (_showThinking)
+                {
+                    long now = _time.GetTimestamp();
+                    _thinkingSince ??= now;
+                    _transcript.AppendThinking(thinking.Text, _time.GetElapsedTime(_thinkingSince.Value, now));
+                }
+
+                break;
             case TurnEvent.TextDelta delta:
                 _transcript.AppendDelta(delta.Text);
                 speaker?.Feed(delta.Text);

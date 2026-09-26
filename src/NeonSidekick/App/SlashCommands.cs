@@ -102,10 +102,10 @@ public enum SlashCommand
     /// <summary><c>/botchat [profile …] [topic]</c> (2026-09-24, the user's ask): the profiles talk to each other — the named ones, or every profile when none is named — each reply in the speaker's own persona and voice, all on this profile's LLM server and model, one turn after another, a random speaker each time but never the same one twice running, until ESC or Ctrl+C. No tools. A line typed meanwhile joins the chat as the user's; the chat is saved as a session. Refused mid-turn like <see cref="Loop"/>.</summary>
     BotChat,
 
-    /// <summary><c>/expand</c>: every folded tool run and code block in the transcript unfolded, and the ones to come (2026-09-22, the user's ask: what <c>/tools expand</c> did that morning, as a root word). No argument; Ctrl+O flips the same state.</summary>
+    /// <summary><c>/expand</c>: every folded tool run, code block and thinking block in the transcript unfolded, and the ones to come (2026-09-22, the user's ask: what <c>/tools expand</c> did that morning, as a root word). No argument; Ctrl+O flips the same state.</summary>
     Expand,
 
-    /// <summary><c>/collapse</c>: every tool run and code block past its collapse count folded again (2026-09-22, the user's ask: what <c>/tools collapse</c> did, as a root word). No argument.</summary>
+    /// <summary><c>/collapse</c>: every tool run and code block past its collapse count, and every thinking block, folded again (2026-09-22, the user's ask: what <c>/tools collapse</c> did, as a root word). No argument.</summary>
     Collapse,
 
     /// <summary><c>/emptytrash</c>: delete everything in the working directory's <c>.trash</c> for good, after a confirmation.</summary>
@@ -215,8 +215,8 @@ public static class SlashCommands
             new("/draft", "write the next message in your editor: a temporary file, sent when it is saved and closed"),
             new("/loop", "repeat a message, each reply waited for: /loop <count> [delay] <message> | infinite [delay] <message> (ESC ends it)"),
             new("/botchat", "let the profiles talk to each other, each in its own persona, until ESC: /botchat [profile ...] [[--] topic], or /botchat --resume [line] to carry on the last one"),
-            new("/expand", "show every line of the folded tool runs and code blocks in the transcript (Ctrl+O flips)"),
-            new("/collapse", "fold the tool runs and code blocks in the transcript again"),
+            new("/expand", "show every line of the folded tool runs, code blocks and thinking in the transcript (Ctrl+O flips)"),
+            new("/collapse", "fold the tool runs, code blocks and thinking in the transcript again"),
         ],
         [
             new("/tts", "toggle speech output, or /tts on|off"),

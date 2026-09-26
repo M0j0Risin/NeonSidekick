@@ -299,6 +299,79 @@ public class ScrollbackTests
         Assert.False(store.TakeReshaped());
     }
 
+    // ── Thinking (2026-09-26) ───────────────────────────────────────────────
+
+    /// <summary>A thinking block: its header "  ▾ thinking", folded "  ▸ T", unfolded "  ▾ T", and <paramref name="rows"/> rows t1…tN.</summary>
+    private static Scrollback Thinking(int rows, bool end = false)
+    {
+        var store = new Scrollback();
+        store.Append(Segments("before\n"), 40);
+        store.BeginThinkingGroup(Segments("  ▾ thinking"));
+        for (int i = 1; i <= rows; i++)
+        {
+            store.Append(Segments($"    t{i}\n"), 40, member: true);
+        }
+
+        if (end)
+        {
+            store.SetThinkingGroupSummary(Segments("  ▸ T"), Segments("  ▾ T"));
+            store.EndGroup();
+        }
+
+        return store;
+    }
+
+    [Fact]
+    public void Thinking_WhileLive_ShowsItsHeaderAndEveryRow_AndTogglesNothing()
+    {
+        var store = Thinking(rows: 3);
+
+        Assert.Equal(new[] { "before", "  ▾ thinking", "    t1", "    t2", "    t3" }, Texts(store.Rows(40)));
+        Assert.False(store.TakeReshaped());
+        Assert.True(store.ThinkingGroupOpen);
+        Assert.False(store.CodeGroupOpen);
+        Assert.False(store.GroupOpen);
+        Assert.False(store.Toggle(Assert.NotNull(store.GroupAtRow(1))));
+    }
+
+    [Fact]
+    public void Thinking_FoldsToItsSummary_TheMomentItEnds_EvenAsOneRow_AndTogglesOpen()
+    {
+        var store = Thinking(rows: 1, end: true);
+
+        Assert.Equal(new[] { "before", "  ▸ T" }, Texts(store.Rows(40)));
+        Assert.True(store.TakeReshaped());
+        Assert.False(store.ThinkingGroupOpen);
+
+        int id = Assert.NotNull(store.GroupAtRow(1));
+        Assert.True(store.Toggle(id));
+        Assert.Equal(new[] { "before", "  ▾ T", "    t1" }, Texts(store.Rows(40)));
+        Assert.True(store.Toggle(id));
+        Assert.Equal(new[] { "before", "  ▸ T" }, Texts(store.Rows(40)));
+    }
+
+    [Fact]
+    public void Thinking_UnfoldsWithTheRuns_OnExpandAll()
+    {
+        var store = Thinking(rows: 2, end: true);
+        store.Append(Segments("answer\n"), 40);
+
+        store.SetAllExpanded(true);
+        Assert.Equal(new[] { "before", "  ▾ T", "    t1", "    t2", "answer" }, Texts(store.Rows(40)));
+        store.SetAllExpanded(false);
+        Assert.Equal(new[] { "before", "  ▸ T", "answer" }, Texts(store.Rows(40)));
+    }
+
+    [Fact]
+    public void Thinking_SummaryIsForThinkingOnly()
+    {
+        var store = Code(keep: 1, size: 2, rows: 2);
+        store.SetThinkingGroupSummary(Segments("  ▸ T"), Segments("  ▾ T"));
+        store.EndGroup();
+
+        Assert.Equal(new[] { "before", "  ▸ S" }, Texts(store.Rows(40)));
+    }
+
     // ── Code blocks (later on 2026-09-22) ───────────────────────────────────
 
     /// <summary>A code block keeping <paramref name="keep"/> of <paramref name="size"/> source lines: its label "  cs", folded "  ▸ S", unfolded "  ▾ E", and <paramref name="rows"/> body rows c1…cN.</summary>

@@ -391,6 +391,16 @@ public sealed class AppSettingsData
     /// </summary>
     public bool LlmUseFunVerbs { get; set; }
 
+    /// <summary>
+    /// Whether the model's thinking streams into the transcript (2026-09-26, the user's ask): the
+    /// server's reasoning deltas and a <c>&lt;think&gt;</c> block streamed as content drawn live as a
+    /// dim block on the code-block panel, folded to one <c>▸ 💭 thought for 4.2s</c> line when the
+    /// answer starts (a click, Ctrl+O or <c>/expand</c> unfolds it); on the styled path only, as <see cref="CodeCollapseCount"/>. Display only: the thinking is
+    /// never spoken, never in <c>/copy</c> or the session log, and the request is the same either
+    /// way. Off, nothing of it is shown. On by default. No variable.
+    /// </summary>
+    public bool LlmShowThinking { get; set; } = true;
+
     // ─── TTS ────────────────────────────────────────────────────────────────────
 
     /// <summary>Base URL of the Kokoro-FastAPI server (OpenAI-compatible <c>/v1/audio/speech</c>).</summary>

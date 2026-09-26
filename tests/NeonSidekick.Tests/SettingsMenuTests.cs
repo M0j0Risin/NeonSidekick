@@ -761,6 +761,7 @@ public class SettingsMenuTests : IDisposable
                 SettingsField.KeepCommandHistory,
                 SettingsField.BotChatNonTtsDelaySeconds,
                 SettingsField.ShellPreferNative,
+                SettingsField.LlmShowThinking,
             },
             Enum.GetValues<SettingsField>());
         // The compact rows: on the LLM tab after the context length but no reconnect; the type a picker, the two others typed.
@@ -791,7 +792,7 @@ public class SettingsMenuTests : IDisposable
         Assert.Equal("the summary's lines or the pruned results, then the protected counts", SettingsMenu.ToggleDescribe(SettingsField.LlmCompactShowSummary, true));
         Assert.Equal("the one compact notice alone", SettingsMenu.ToggleDescribe(SettingsField.LlmCompactShowSummary, false));
         // The LLM tab's tail (2026-09-15, the user's order): the tools toggle ABOVE the tool-compact picker, then the cap, then the fun verbs.
-        Assert.Equal(new[] { SettingsField.LlmContextLength, SettingsField.LlmMidTurnUsage, SettingsField.LlmCompactType, SettingsField.LlmCompactKeepRecent, SettingsField.LlmCompactShowSummary, SettingsField.LlmAutoCompactPercent, SettingsField.LlmOfferTools, SettingsField.LlmToolCompactType, SettingsField.LlmMaxToolIterations, SettingsField.LlmUseFunVerbs }, SettingsMenu.TabFields[(int)SettingsTab.Llm].TakeLast(10));
+        Assert.Equal(new[] { SettingsField.LlmContextLength, SettingsField.LlmMidTurnUsage, SettingsField.LlmCompactType, SettingsField.LlmCompactKeepRecent, SettingsField.LlmCompactShowSummary, SettingsField.LlmAutoCompactPercent, SettingsField.LlmOfferTools, SettingsField.LlmToolCompactType, SettingsField.LlmMaxToolIterations, SettingsField.LlmUseFunVerbs, SettingsField.LlmShowThinking }, SettingsMenu.TabFields[(int)SettingsTab.Llm].TakeLast(11));
         // The tool-compact row (2026-09-15): a picker under LLM offer tools, no reconnect, read at each turn.
         Assert.False(SettingsMenu.IsLlmField(SettingsField.LlmToolCompactType));
         Assert.False(SettingsMenu.IsToggle(SettingsField.LlmToolCompactType));
@@ -839,7 +840,7 @@ public class SettingsMenuTests : IDisposable
         Assert.Equal("0", SettingsMenu.EditableValue(SettingsField.LlmContextLength, data));
         Assert.Equal("32,768 tokens", SettingsMenu.FieldValue(SettingsField.LlmContextLength, new AppSettingsData { LlmContextLength = 32_768 }, _settings.ProfileDirectory));
         Assert.Equal("32768", SettingsMenu.EditableValue(SettingsField.LlmContextLength, new AppSettingsData { LlmContextLength = 32_768 }));
-        Assert.Equal(SettingsField.LlmContextLength, SettingsMenu.TabFields[(int)SettingsTab.Llm][^10]);   // the mid-turn usage picker, the four compact rows, the tools, the tool-compact picker, the cap and the fun verbs follow it
+        Assert.Equal(SettingsField.LlmContextLength, SettingsMenu.TabFields[(int)SettingsTab.Llm][^11]);   // the mid-turn usage picker, the four compact rows, the tools, the tool-compact picker, the cap, the fun verbs and show thinking follow it
         // The pane's tabs (five since 2026-09-19: Ask, Files and Web are /tools' tabs, Skills is /skills' Options tab): General, Sessions, LLM in their own order, TTS / STT the enum order of their session's fields; every field on exactly one tab of the three panes.
         Assert.Equal(["General", "Sessions", "LLM", "TTS", "STT", "Botchat"], SettingsMenu.TabTitles);   // Botchat last since 2026-09-25;   // Sessions right after General (2026-09-18); Web last until 2026-09-19, Skills third until later that day
         // The Options tab of /skills (2026-09-19; the Skills tab of /settings from 2026-09-16 until then): the skills switch, the external-folder switch and the compact-mode picker, then (2026-09-17) the #-mention switch, the delete switch, then the auto-learn switch and the reflection rows; none a reconnect.
@@ -1217,12 +1218,21 @@ public class SettingsMenuTests : IDisposable
         // The fun verbs: the LLM tab's last row (General's until 2026-09-15, "Thinking use fun verbs" then), a toggle off by default, no reconnect; the member and the JSON key keep the old name.
         Assert.True(SettingsMenu.IsToggle(SettingsField.LlmUseFunVerbs));
         Assert.Equal("LLM use fun verbs", SettingsMenu.FieldName(SettingsField.LlmUseFunVerbs));
-        Assert.Equal(SettingsField.LlmUseFunVerbs, SettingsMenu.TabFields[(int)SettingsTab.Llm][^1]);
+        Assert.Equal(SettingsField.LlmUseFunVerbs, SettingsMenu.TabFields[(int)SettingsTab.Llm][^2]);
         Assert.Equal("off", SettingsMenu.FieldValue(SettingsField.LlmUseFunVerbs, data, _settings.ProfileDirectory));
         Assert.Equal("on", SettingsMenu.FieldValue(SettingsField.LlmUseFunVerbs, new AppSettingsData { LlmUseFunVerbs = true }, _settings.ProfileDirectory));
         Assert.False(SettingsMenu.IsLlmField(SettingsField.LlmUseFunVerbs) || SettingsMenu.IsTtsField(SettingsField.LlmUseFunVerbs) || SettingsMenu.IsVoiceField(SettingsField.LlmUseFunVerbs));
+        // Show thinking (2026-09-26): the LLM tab's last row, a toggle on by default, no reconnect, the user's descriptions.
+        Assert.True(SettingsMenu.IsToggle(SettingsField.LlmShowThinking));
+        Assert.Equal("LLM show thinking", SettingsMenu.FieldName(SettingsField.LlmShowThinking));
+        Assert.Equal(SettingsField.LlmShowThinking, SettingsMenu.TabFields[(int)SettingsTab.Llm][^1]);
+        Assert.Equal("on", SettingsMenu.FieldValue(SettingsField.LlmShowThinking, data, _settings.ProfileDirectory));
+        Assert.Equal("off", SettingsMenu.FieldValue(SettingsField.LlmShowThinking, new AppSettingsData { LlmShowThinking = false }, _settings.ProfileDirectory));
+        Assert.False(SettingsMenu.IsLlmField(SettingsField.LlmShowThinking) || SettingsMenu.IsTtsField(SettingsField.LlmShowThinking) || SettingsMenu.IsVoiceField(SettingsField.LlmShowThinking));
+        Assert.Equal("thinking shown in chat", SettingsMenu.ToggleDescribe(SettingsField.LlmShowThinking, true));
+        Assert.Equal("thinking not shown in chat", SettingsMenu.ToggleDescribe(SettingsField.LlmShowThinking, false));
         // The LLM tab: the scan mode first (where a blank URL looks, so above the URL; a picker, no reconnect), then the reconnecting LLM fields in enum order, the compact rows, the turn-loop rows and the fun verbs.
-        Assert.Equal(new[] { SettingsField.LlmScanMode, SettingsField.LlmUrl, SettingsField.LlmModel, SettingsField.LlmApiKey, SettingsField.LlmReasoning, SettingsField.LlmRequestTimeoutSeconds, SettingsField.LlmTurnTimeoutSeconds, SettingsField.LlmContextLength, SettingsField.LlmMidTurnUsage, SettingsField.LlmCompactType, SettingsField.LlmCompactKeepRecent, SettingsField.LlmCompactShowSummary, SettingsField.LlmAutoCompactPercent, SettingsField.LlmOfferTools, SettingsField.LlmToolCompactType, SettingsField.LlmMaxToolIterations, SettingsField.LlmUseFunVerbs }, SettingsMenu.TabFields[(int)SettingsTab.Llm]);
+        Assert.Equal(new[] { SettingsField.LlmScanMode, SettingsField.LlmUrl, SettingsField.LlmModel, SettingsField.LlmApiKey, SettingsField.LlmReasoning, SettingsField.LlmRequestTimeoutSeconds, SettingsField.LlmTurnTimeoutSeconds, SettingsField.LlmContextLength, SettingsField.LlmMidTurnUsage, SettingsField.LlmCompactType, SettingsField.LlmCompactKeepRecent, SettingsField.LlmCompactShowSummary, SettingsField.LlmAutoCompactPercent, SettingsField.LlmOfferTools, SettingsField.LlmToolCompactType, SettingsField.LlmMaxToolIterations, SettingsField.LlmUseFunVerbs, SettingsField.LlmShowThinking }, SettingsMenu.TabFields[(int)SettingsTab.Llm]);
         Assert.Equal(Enum.GetValues<SettingsField>().Where(SettingsMenu.IsLlmField), SettingsMenu.TabFields[(int)SettingsTab.Llm].Skip(1).Take(7));
         Assert.False(SettingsMenu.IsLlmField(SettingsField.LlmScanMode) || SettingsMenu.IsTtsField(SettingsField.LlmScanMode) || SettingsMenu.IsVoiceField(SettingsField.LlmScanMode));
         Assert.False(SettingsMenu.IsToggle(SettingsField.LlmScanMode));
@@ -2824,7 +2834,7 @@ public class SettingsMenuTests : IDisposable
         // Each tab under the strip, padded to its own column (28, 26, 19, 26), the whole tab in view, nothing of another tab on it.
         Assert.Contains("\n \n▸ Session logging             on\n  Session retention (days)    forever\n  Session naming mode         model-written\n  Session show name           all-names\n  Session tool                on\n  Session search max results  10 results\n" + Rule(100), _console.Output);
         Assert.Contains("\n \n▸ LLM scan mode             local\n  LLM URL                   (probe local ports)\n  LLM model                 (first listed)\n  LLM API key               ", _console.Output);
-        Assert.Contains("\n  LLM reasoning             none\n  LLM request timeout (s)   3600\n  LLM turn timeout (s)      21600\n  LLM context length        (from the server)\n  LLM mid-turn usage        last-known\n  LLM compact type          summary\n  LLM compact keep recent   2 turns\n  LLM compact show summary  off\n  LLM auto compact (%)      85 %\n  LLM offer tools           on\n  LLM tool compact type     prune\n  LLM max tool iterations   10000 round trips\n  LLM use fun verbs         off\n" + Rule(100), _console.Output);
+        Assert.Contains("\n  LLM reasoning             none\n  LLM request timeout (s)   3600\n  LLM turn timeout (s)      21600\n  LLM context length        (from the server)\n  LLM mid-turn usage        last-known\n  LLM compact type          summary\n  LLM compact keep recent   2 turns\n  LLM compact show summary  off\n  LLM auto compact (%)      85 %\n  LLM offer tools           on\n  LLM tool compact type     prune\n  LLM max tool iterations   10000 round trips\n  LLM use fun verbs         off\n  LLM show thinking         on\n" + Rule(100), _console.Output);
         Assert.Contains("\n \n▸ TTS output         on\n  TTS source         http\n  TTS HTTP URL       http://localhost:8880/v1\n  TTS voice preview  on\n  TTS voice          af_heart\n  TTS voice 2        am_eric\n  TTS voice mix      80 % / 20 %\n  TTS speed          1.2\n" + Rule(100), _console.Output);
         Assert.Contains("\n \n▸ STT input                 off\n  STT wake                  off\n  STT wake phrase           hey neon\n  STT interrupt             off\n  STT interrupt echo guard  100 %\n  STT interrupt confirm     200 ms\n  STT push-to-talk key      F4\n  STT whisper model         ggml-base.en.bin\n  STT vosk model            vosk-model-small-en-us-0.15\n" + Rule(100), _console.Output);
         Assert.DoesNotContain("Ask user", _console.Output);   // /tools' since 2026-09-19
@@ -4035,6 +4045,7 @@ public class SettingsMenuTests : IDisposable
 
         Assert.True(SettingsMenu.IsOn(SettingsField.Memory, data));
         Assert.False(SettingsMenu.IsOn(SettingsField.LlmUseFunVerbs, data));
+        Assert.True(SettingsMenu.IsOn(SettingsField.LlmShowThinking, data));
     }
 
     [Fact]

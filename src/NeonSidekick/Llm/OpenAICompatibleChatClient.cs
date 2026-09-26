@@ -112,6 +112,7 @@ public sealed class OpenAICompatibleChatClient : IChatClient
         await foreach (var update in _wrapped.GetStreamingResponseAsync(messages, WithThinkingOff(options), cancellationToken).ConfigureAwait(false))
         {
             FillTopLevelReasoningTokens(update);
+            FillReasoningField(update);
             yield return update;
         }
     }
@@ -164,6 +165,57 @@ public sealed class OpenAICompatibleChatClient : IChatClient
 
     /// <summary>The top-level field SGLang reports the thinking's share of the completion under.</summary>
     internal static ReadOnlySpan<byte> ReasoningTokensProperty => "reasoning_tokens"u8;
+
+    /// <summary>
+    /// The thinking from the field the adapter does not read (2026-09-26, with thinking shown in the
+    /// transcript). The adapter maps <c>delta.reasoning_content</c> (SGLang, LM Studio, older vLLM) to
+    /// <see cref="TextReasoningContent"/> itself; newer vLLM and Ollama stream <c>delta.reasoning</c>
+    /// instead, which the SDK keeps but names nowhere. Looked for only in an update that carries no
+    /// text and no reasoning already — a thinking chunk carries neither — so the adapter's mapping
+    /// wins where a server sends both, and a reply's chunks are never written out again.
+    /// </summary>
+    private static void FillReasoningField(ChatResponseUpdate update)
+    {
+        if (update.RawRepresentation is not StreamingChatCompletionUpdate raw
+            || update.Contents.Any(c => c is TextReasoningContent || c is TextContent { Text.Length: > 0 }))
+        {
+            return;
+        }
+
+        if (DeltaReasoning(raw) is { Length: > 0 } reasoning)
+        {
+            update.Contents.Add(new TextReasoningContent(reasoning));
+        }
+    }
+
+    /// <summary>
+    /// <c>choices[0].delta.reasoning</c> of one streamed chunk as a string, or null. Written out
+    /// through the SDK's <see cref="IJsonModel{T}"/> contract, as <see cref="TopLevelReasoningTokens"/>
+    /// does, and read back as a document: the chunk is small.
+    /// </summary>
+    internal static string? DeltaReasoning(StreamingChatCompletionUpdate update)
+    {
+        ArgumentNullException.ThrowIfNull(update);
+        var buffer = new ArrayBufferWriter<byte>();
+        using (var writer = new Utf8JsonWriter(buffer))
+        {
+            ((IJsonModel<StreamingChatCompletionUpdate>)update).Write(writer, ModelReaderWriterOptions.Json);
+        }
+
+        using var document = JsonDocument.Parse(buffer.WrittenMemory);
+        return document.RootElement.TryGetProperty("choices"u8, out var choices)
+            && choices.ValueKind == JsonValueKind.Array
+            && choices.GetArrayLength() > 0
+            && choices[0].TryGetProperty("delta"u8, out var delta)
+            && delta.ValueKind == JsonValueKind.Object
+            && delta.TryGetProperty(ReasoningProperty, out var reasoning)
+            && reasoning.ValueKind == JsonValueKind.String
+                ? reasoning.GetString()
+                : null;
+    }
+
+    /// <summary>The delta field newer vLLM and Ollama stream thinking under.</summary>
+    internal static ReadOnlySpan<byte> ReasoningProperty => "reasoning"u8;
 
     /// <summary>
     /// The one piece of server-specific request shaping. <see cref="ChatOptions.Reasoning"/> goes

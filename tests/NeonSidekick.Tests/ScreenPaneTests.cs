@@ -889,6 +889,69 @@ public class ScreenPaneTests : IDisposable
         Assert.Equal(2, pane.StoredRows);
     }
 
+    /// <summary>
+    /// The thinking block (2026-09-26): drawn live under its header, folded to its summary the moment
+    /// the slot commits it, and a click on the summary's row unfolds it and folds it again, as a tool
+    /// run's does; Ctrl+O's pane-wide state takes it too.
+    /// </summary>
+    [Fact]
+    public void Thinking_FoldsWhenCommitted_AndAClickOnItsSummaryToggles()
+    {
+        _cursorTop = 100;   // rule 99 over the input row: the region's six rows are 93–98
+        using var pane = Pane();
+        pane.Show();
+        pane.Write(new Markup("a\n"));
+        pane.SetLive(new ThinkingBlock("t1\nt2"));
+        _time.Advance(ScreenPane.Tick);
+        Assert.Contains(ThinkingFoldText.LiveHeader + "\n    t1\n    t2\n", Output);
+
+        int mark = Output.Length;
+        pane.SetLive(new ThinkingBlock("t1\nt2", TimeSpan.FromSeconds(4.2)));
+        pane.CommitLive();
+        string folded = ThinkingFoldText.Summary(TimeSpan.FromSeconds(4.2), expanded: false);
+        Assert.Equal("  ▸ 💭 thought for 4.2s", folded);
+        Assert.Contains("a\n" + folded + "\n", Output[mark..]);
+        Assert.Equal(2, pane.StoredRows);
+
+        mark = Output.Length;
+        Assert.True(pane.TryToggleToolGroupAt(3, 94));
+        Assert.Equal(4, pane.StoredRows);
+        Assert.Contains(ThinkingFoldText.Summary(TimeSpan.FromSeconds(4.2), expanded: true) + "\n    t1\n    t2\n", Output[mark..]);
+        Assert.True(pane.TryToggleToolGroupAt(3, 94));
+        Assert.Equal(2, pane.StoredRows);
+
+        pane.SetToolGroupsExpanded(true);
+        Assert.Equal(4, pane.StoredRows);
+        pane.SetToolGroupsExpanded(false);
+        Assert.Equal(2, pane.StoredRows);
+    }
+
+    [Fact]
+    public void Thinking_CommittedInParts_StillFoldsWhole()
+    {
+        // Twelve lines on a 10-row window: the header and the top rows go into the flow while the
+        // thinking streams (the excess commit), the rest at the commit — one group all the same.
+        using var pane = Pane();
+        pane.Show();
+        string body = string.Join("\n", Enumerable.Range(1, 12).Select(i => "t" + i.ToString(CultureInfo.InvariantCulture)));
+        pane.SetLive(new ThinkingBlock(body));
+        _time.Advance(ScreenPane.Tick);
+        Assert.True(pane.LiveCommitted > 0);
+
+        int mark = Output.Length;
+        pane.SetLive(new ThinkingBlock(body, TimeSpan.FromSeconds(75)));
+        pane.CommitLive();
+        pane.Write(new Markup("answer\n"));
+
+        string tail = Output[mark..];
+        string folded = ThinkingFoldText.Summary(TimeSpan.FromSeconds(75), expanded: false);
+        int summary = tail.LastIndexOf(folded, StringComparison.Ordinal);
+        Assert.True(summary >= 0, tail);
+        Assert.Contains("answer", tail[summary..]);
+        Assert.DoesNotContain("    t", tail[summary..]);
+        Assert.Equal(2, pane.StoredRows);
+    }
+
     [Fact]
     public void ToolRun_WithoutThePane_IsThePlainWrite()
     {

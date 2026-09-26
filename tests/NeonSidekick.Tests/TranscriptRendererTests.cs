@@ -512,6 +512,94 @@ public class TranscriptRendererTests : IDisposable
         }
     }
 
+    // ── Thinking (2026-09-26) ─────────────────────────────────────────────
+
+    [Fact]
+    public void Thinking_StreamsInTheSlot_ThenFolds_AndTheAnswerKeepsTheGlyph()
+    {
+        using var s = new Styled();
+        s.T.BeginAssistant(markdown: true);
+        s.T.AppendThinking("\n", TimeSpan.Zero);   // leading whitespace: nothing yet
+        Assert.False(s.T.ThinkingOpen);
+        s.T.AppendThinking("Hmm, ", TimeSpan.FromSeconds(1));
+        s.T.AppendThinking("the sky.", TimeSpan.FromSeconds(2.5));
+        Assert.True(s.T.ThinkingOpen);
+        s.Tick();
+        Assert.Contains(ThinkingFoldText.LiveHeader + "\n    Hmm, the sky.\n", s.Output);
+
+        s.T.AppendDelta("\n\n");   // the blank lines between: the block stays
+        Assert.True(s.T.ThinkingOpen);
+        s.T.AppendDelta("It is blue.");
+        Assert.False(s.T.ThinkingOpen);
+        s.T.EndAssistant();
+
+        InOrder(s.Output, ThinkingFoldText.Summary(TimeSpan.FromSeconds(2.5), expanded: false) + "\n", "● It is blue.\n");
+    }
+
+    [Fact]
+    public void Thinking_AfterReplyText_CommitsIt_AndTheAnswerAfterIsFlushLeft()
+    {
+        using var s = new Styled();
+        s.T.BeginAssistant(markdown: true);
+        s.T.AppendDelta("Let me check.");
+        s.T.AppendThinking("again", TimeSpan.FromSeconds(1));
+        s.T.AppendDelta("Done.");
+        s.T.EndAssistant();
+
+        InOrder(s.Output, "● Let me check.\n", ThinkingFoldText.Summary(TimeSpan.FromSeconds(1), expanded: false) + "\n", "Done.\n");
+        Assert.DoesNotContain("● Done.", s.Output);
+    }
+
+    [Fact]
+    public void Thinking_ThenAToolLine_FoldsFirst_TheToolLineAfterIt()
+    {
+        using var s = new Styled();
+        s.T.BeginAssistant(markdown: true);
+        s.T.AppendThinking("plan", TimeSpan.FromSeconds(1));
+        s.T.Tool("read_file", "{}");
+        s.T.EndAssistant();
+
+        InOrder(s.Output, ThinkingFoldText.Summary(TimeSpan.FromSeconds(1), expanded: false) + "\n", "read_file");
+    }
+
+    [Fact]
+    public void Thinking_WithNothingAfter_EndsAsTheFoldAndNoReply()
+    {
+        using var s = new Styled();
+        s.T.BeginAssistant(markdown: true);
+        s.T.AppendThinking("only this", TimeSpan.FromSeconds(3));
+        s.T.EndAssistant();
+
+        InOrder(s.Output, ThinkingFoldText.Summary(TimeSpan.FromSeconds(3), expanded: false) + "\n", "● " + TranscriptRenderer.NoReplyText);
+    }
+
+    [Fact]
+    public void Thinking_OnThePlainPath_ShowsNothing()
+    {
+        using var s = new Styled();
+        s.T.BeginAssistant(markdown: false);
+        s.T.AppendThinking("secret", TimeSpan.FromSeconds(1));
+        Assert.False(s.T.ThinkingOpen);
+        s.T.AppendDelta("Hi.");
+        s.T.EndAssistant();
+
+        Assert.DoesNotContain("secret", s.Output);
+        Assert.DoesNotContain(ThinkingFoldText.Glyph, s.Output);
+    }
+
+    [Fact]
+    public void ThinkingFoldText_Duration_SecondsThenMinutes()
+    {
+        Assert.Equal("0.0s", ThinkingFoldText.Duration(TimeSpan.Zero));
+        Assert.Equal("4.2s", ThinkingFoldText.Duration(TimeSpan.FromSeconds(4.2)));
+        Assert.Equal("59.9s", ThinkingFoldText.Duration(TimeSpan.FromSeconds(59.9)));
+        Assert.Equal("1m 00s", ThinkingFoldText.Duration(TimeSpan.FromSeconds(59.96)));
+        Assert.Equal("1m 15s", ThinkingFoldText.Duration(TimeSpan.FromSeconds(75)));
+        Assert.Equal("0.0s", ThinkingFoldText.Duration(TimeSpan.FromSeconds(-1)));
+        Assert.Equal("  ▾ 💭 thinking…", ThinkingFoldText.LiveHeader);
+        Assert.Equal("  ▾ 💭 thought for 4.2s", ThinkingFoldText.Summary(TimeSpan.FromSeconds(4.2), expanded: true));
+    }
+
     [Fact]
     public void Markdown_BeginAssistant_ShowsTheGlyphOnTheTick()
     {

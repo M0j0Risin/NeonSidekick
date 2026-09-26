@@ -34,6 +34,12 @@ namespace NeonSidekick.UI;
 /// until the block folds), it is measured by its source lines rather than its rows (a wrapped line
 /// counts once), and while it is live every member shows — the block streamed at full height and
 /// folds only once it is over. <see cref="ExpandAll"/> and <see cref="Toggle"/> are the runs'.</para>
+///
+/// <para>Thinking (2026-09-26, the user's ask): the model's thinking block is a group too
+/// (<see cref="BeginThinkingGroup"/>), its header line the summary and its rows the members. It is a
+/// code block's kind — the header shows as drawn and every member streams while it is live — except
+/// that it keeps nothing: once over it always folds, to <c>▸ 💭 thought for 4.2s</c>, and unfolds as the
+/// runs do (a click, <see cref="ExpandAll"/>).</para>
 /// </summary>
 public sealed class Scrollback
 {
@@ -81,6 +87,12 @@ public sealed class Scrollback
         /// <summary>A code block's group (<see cref="BeginCodeGroup"/>): the summary is its label, shown <see cref="Plain"/> until the block folds, and every member shows while it is live.</summary>
         public bool Code;
 
+        /// <summary>A thinking block's group (<see cref="BeginThinkingGroup"/>): a code block's kind that is always over, so it folds the moment it ends.</summary>
+        public bool Thinking;
+
+        /// <summary>Streamed at full height while live, its summary drawn as <see cref="Plain"/> until it folds: a code block or a thinking block.</summary>
+        public bool Streamed => Code || Thinking;
+
         /// <summary>The code block's label line as the reply drew it; null for a tool run (its summary hides until the run folds).</summary>
         public IReadOnlyList<Segment>? Plain;
 
@@ -88,10 +100,10 @@ public sealed class Scrollback
         public int? Size;
 
         /// <summary>More members (or source lines) than it keeps: the summary shows and the members fold.</summary>
-        public bool Over => Keep > 0 && (Size ?? Members.Count) > Keep;
+        public bool Over => Thinking || (Keep > 0 && (Size ?? Members.Count) > Keep);
 
-        /// <summary>Folded or unfolded as the summary reads it: over, and — a code block — no longer live.</summary>
-        public bool Folds => Over && !(Code && Live);
+        /// <summary>Folded or unfolded as the summary reads it: over, and — a code or thinking block — no longer live.</summary>
+        public bool Folds => Over && !(Streamed && Live);
     }
 
     /// <summary>
@@ -100,11 +112,14 @@ public sealed class Scrollback
     /// </summary>
     public bool ExpandAll { get; private set; }
 
-    /// <summary>A tool run is open: the next member joins it. An open code block is not one (<see cref="BeginCodeGroup"/>).</summary>
-    public bool GroupOpen => _open is { Code: false };
+    /// <summary>A tool run is open: the next member joins it. An open code or thinking block is not one (<see cref="BeginCodeGroup"/>, <see cref="BeginThinkingGroup"/>).</summary>
+    public bool GroupOpen => _open is { Streamed: false };
 
     /// <summary>A code block's group is open (<see cref="BeginCodeGroup"/>): its next rows join it.</summary>
     public bool CodeGroupOpen => _open is { Code: true };
+
+    /// <summary>A thinking block's group is open (<see cref="BeginThinkingGroup"/>): its next rows join it.</summary>
+    public bool ThinkingGroupOpen => _open is { Thinking: true };
 
     /// <summary>The open code block's label line as drawn; empty without one.</summary>
     public IReadOnlyList<Segment> CodeGroupLabel => _open is { Code: true, Plain: { } plain } ? plain : Array.Empty<Segment>();
@@ -316,7 +331,25 @@ public sealed class Scrollback
     /// takes its row now as any line would — folding past <paramref name="keep"/> source lines once
     /// it is over (0 = never). <see cref="SetCodeGroupSummary"/> gives the folded look and the size.
     /// </summary>
-    public void BeginCodeGroup(int keep, IReadOnlyList<Segment> label)
+    public void BeginCodeGroup(int keep, IReadOnlyList<Segment> label) => BeginStreamedGroup(keep, label, thinking: false);
+
+    /// <summary>
+    /// Opens a thinking block's group (the open group ended first; an open last line closed) whose
+    /// summary is <paramref name="header"/> — the block's header line as drawn while it streams —
+    /// folding the moment it ends. <see cref="SetThinkingGroupSummary"/> gives the folded look.
+    /// </summary>
+    public void BeginThinkingGroup(IReadOnlyList<Segment> header) => BeginStreamedGroup(0, header, thinking: true);
+
+    /// <summary>The open thinking block's summary folded (<paramref name="collapsed"/>) and unfolded (<paramref name="expanded"/>). Nothing without one.</summary>
+    public void SetThinkingGroupSummary(IReadOnlyList<Segment> collapsed, IReadOnlyList<Segment> expanded)
+    {
+        if (_open is { Thinking: true })
+        {
+            SetGroupSummary(collapsed, expanded);
+        }
+    }
+
+    private void BeginStreamedGroup(int keep, IReadOnlyList<Segment> label, bool thinking)
     {
         ArgumentNullException.ThrowIfNull(label);
         EndGroup();
@@ -328,7 +361,8 @@ public sealed class Scrollback
         var summary = new Line { Closed = true, Member = -1 };
         var group = new Group(_nextGroup++, Math.Max(0, keep), summary, Array.Empty<Segment>())
         {
-            Code = true,
+            Code = !thinking,
+            Thinking = thinking,
             Plain = label.Where(s => !s.IsControlCode && !s.IsLineBreak).ToList(),
         };
         summary.Group = group;
@@ -369,9 +403,9 @@ public sealed class Scrollback
 
         _open = null;
         group.Live = false;
-        if (group.Over && (!Expanded(group) || group.Code))
+        if (group.Over && (!Expanded(group) || group.Streamed))
         {
-            // A code block's summary changes look even unfolded: the label becomes ▾ … · n lines.
+            // A code or thinking block's summary changes look even unfolded: the label becomes ▾ … · n lines.
             Relayout(group.Summary);
         }
     }
@@ -427,10 +461,10 @@ public sealed class Scrollback
         return null;
     }
 
-    /// <summary>Unfolds a folded run, folds an unfolded one (its own state from now on); false for no such run, or a code block that does not fold (its label is only a label).</summary>
+    /// <summary>Unfolds a folded run, folds an unfolded one (its own state from now on); false for no such run, or a code or thinking block that does not fold (yet: its label is only a label).</summary>
     public bool Toggle(int id)
     {
-        if (!_groups.TryGetValue(id, out var group) || (group.Code && !group.Folds))
+        if (!_groups.TryGetValue(id, out var group) || (group.Streamed && !group.Folds))
         {
             return false;
         }
@@ -578,7 +612,7 @@ public sealed class Scrollback
         }
         else
         {
-            if (over && !expanded && !(group.Live && (group.Code || line.Member >= group.Members.Count - group.Keep)))
+            if (over && !expanded && !(group.Live && (group.Streamed || line.Member >= group.Members.Count - group.Keep)))
             {
                 return null;
             }

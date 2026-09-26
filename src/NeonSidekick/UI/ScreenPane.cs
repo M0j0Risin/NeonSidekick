@@ -3462,6 +3462,10 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         {
             _store.EndGroup();
         }
+        else if (_live is ThinkingBlock thinking)
+        {
+            EndThinkingGroup(thinking);
+        }
 
         ForgetLive();
     }
@@ -3490,6 +3494,12 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     /// </summary>
     private void CommitLiveRows(List<SegmentLine> lines, int from, int to, int width, bool final)
     {
+        if (_live is ThinkingBlock thinking)
+        {
+            CommitThinkingRows(thinking, lines, from, to, final);
+            return;
+        }
+
         IReadOnlyList<CodeSpan>? spans = null;
         int keep = 0;
         if (_live is ReplyBlock { CodeKeep: > 0 } reply)
@@ -3530,6 +3540,62 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
             _store.EndGroup();
             _liveCodeSpan = -1;
         }
+    }
+
+    /// <summary>
+    /// Rows <paramref name="from"/> to <paramref name="to"/> of a thinking block (2026-09-26) into the
+    /// flow as a thinking group (<see cref="Scrollback.BeginThinkingGroup"/>): its header row the
+    /// summary, written as a code label is, every other row a member. The excess commit of a long
+    /// block carries on in the same group at the next commit; <paramref name="final"/> (the slot is
+    /// emptied: the answer started) folds it to <see cref="ThinkingFoldText.Summary"/>.
+    /// </summary>
+    private void CommitThinkingRows(ThinkingBlock thinking, List<SegmentLine> lines, int from, int to, bool final)
+    {
+        for (int i = from; i < to; i++)
+        {
+            if (i == 0)
+            {
+                var segments = new List<Segment>(lines[0]);
+                _store.BeginThinkingGroup(segments);
+                if (_top < 0)
+                {
+                    segments.Add(Segment.LineBreak);
+                    _inner.Write(new SegmentList(segments));
+                    Count(segments);
+                }
+            }
+            else if (_store.ThinkingGroupOpen)
+            {
+                var segments = new List<Segment>(lines[i].Count + 1);
+                segments.AddRange(lines[i]);
+                segments.Add(Segment.LineBreak);
+                EmitAs(segments, member: true);
+            }
+            else
+            {
+                WriteFlowLine(lines[i]);
+            }
+        }
+
+        if (final)
+        {
+            EndThinkingGroup(thinking);
+        }
+    }
+
+    /// <summary>The open thinking group given its summary, from the block's <see cref="ThinkingBlock.Elapsed"/>, and ended: it folds. Nothing without one.</summary>
+    private void EndThinkingGroup(ThinkingBlock thinking)
+    {
+        if (!_store.ThinkingGroupOpen)
+        {
+            return;
+        }
+
+        var elapsed = thinking.Elapsed ?? TimeSpan.Zero;
+        _store.SetThinkingGroupSummary(
+            [new Segment(ThinkingFoldText.Summary(elapsed, expanded: false), Theme.DimText)],
+            [new Segment(ThinkingFoldText.Summary(elapsed, expanded: true), Theme.DimText)]);
+        _store.EndGroup();
     }
 
     /// <summary>The label row of a code block into the flow as its group's summary: stored by <see cref="Scrollback.BeginCodeGroup"/>, written and counted at the bottom.</summary>

@@ -68,6 +68,7 @@ public class AppSettingsTests : IDisposable
         LlmTurnTimeoutSeconds = 40,
         LlmUrl = "http://box:8000/v1",
         LlmUseFunVerbs = true,
+        LlmShowThinking = false,
         TtsHttpUrl = "http://box:8880/v1",
         TtsOutput = true,
         TtsSource = "http",
@@ -170,6 +171,7 @@ public class AppSettingsTests : IDisposable
         Assert.Equal(expected.LlmTurnTimeoutSeconds, actual.LlmTurnTimeoutSeconds);
         Assert.Equal(expected.LlmUrl, actual.LlmUrl);
         Assert.Equal(expected.LlmUseFunVerbs, actual.LlmUseFunVerbs);
+        Assert.Equal(expected.LlmShowThinking, actual.LlmShowThinking);
         Assert.Equal(expected.TtsHttpUrl, actual.TtsHttpUrl);
         Assert.Equal(expected.TtsOutput, actual.TtsOutput);
         Assert.Equal(expected.TtsSource, actual.TtsSource);
@@ -283,7 +285,7 @@ public class AppSettingsTests : IDisposable
             d.LlmOfferTools = full.LlmOfferTools;
             d.LlmTurnTimeoutSeconds = full.LlmTurnTimeoutSeconds;
             d.LlmUrl = full.LlmUrl;
-            d.LlmUseFunVerbs = full.LlmUseFunVerbs;
+            d.LlmUseFunVerbs = full.LlmUseFunVerbs; d.LlmShowThinking = full.LlmShowThinking;
             d.TtsHttpUrl = full.TtsHttpUrl;
             d.TtsOutput = full.TtsOutput;
             d.TtsSource = full.TtsSource;
@@ -394,7 +396,7 @@ public class AppSettingsTests : IDisposable
                 d.LlmOfferTools = full.LlmOfferTools;
                 d.LlmTurnTimeoutSeconds = full.LlmTurnTimeoutSeconds;
                 d.LlmUrl = full.LlmUrl;
-                d.LlmUseFunVerbs = full.LlmUseFunVerbs;
+                d.LlmUseFunVerbs = full.LlmUseFunVerbs; d.LlmShowThinking = full.LlmShowThinking;
                 d.TtsHttpUrl = full.TtsHttpUrl;
                 d.TtsOutput = full.TtsOutput;
                 d.TtsSource = full.TtsSource;
@@ -1071,6 +1073,7 @@ public class AppSettingsTests : IDisposable
         Assert.Equal("basic", s.NewProfileMode);
         Assert.True(s.LlmOfferTools);
         Assert.False(s.LlmUseFunVerbs);
+        Assert.True(s.LlmShowThinking);
         Assert.Equal("local", s.LlmScanMode);
         Assert.True(s.WebTools);
         Assert.Equal("default", s.WebBrowserMode);

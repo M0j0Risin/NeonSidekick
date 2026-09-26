@@ -922,9 +922,23 @@ public sealed class Assistant
                             meter.Chunk();
                         }
 
+                        // The thinking first (2026-09-26): the server's reasoning deltas, then a <think>
+                        // block the filter kept aside. Shown by the host, never part of the reply.
+                        string thinking = ReasoningText(update);
+                        if (thinking.Length > 0)
+                        {
+                            yield return new TurnEvent.ThinkingDelta(thinking);
+                        }
+
                         // The decoder can emit "" for the leading bytes of a multi-byte sequence, and
                         // the filter holds back a possible tag start; either way nothing is yielded.
                         string text = filter.Push(update.Text);
+                        string tagged = filter.TakeThinking();
+                        if (tagged.Length > 0)
+                        {
+                            yield return new TurnEvent.ThinkingDelta(tagged);
+                        }
+
                         if (written is not null && text.Length > 0)
                         {
                             text = written.Push(text);
@@ -948,6 +962,12 @@ public sealed class Assistant
 
             // A reply that ends in "<" was held back as a possible tag; it is text after all.
             string held = filter.Flush();
+            string unfinished = filter.TakeThinking();
+            if (unfinished.Length > 0)
+            {
+                yield return new TurnEvent.ThinkingDelta(unfinished);
+            }
+
             if (written is not null)
             {
                 held = (held.Length > 0 ? written.Push(held) : "") + written.Flush();
@@ -1181,6 +1201,10 @@ public sealed class Assistant
     /// <summary>The turn's closing line: <c>Turn 3 ended after 12.4 s: 2 requests, 3 tool calls, 512 chars, completed</c>. Pinned.</summary>
     public static string TurnEndedLogLine(int number, TimeSpan elapsed, int requests, int toolCalls, int chars, string ending) =>
         string.Create(CultureInfo.InvariantCulture, $"Turn {number} ended after {elapsed.TotalSeconds:F1} s: {Plural(requests, "request")}, {Plural(toolCalls, "tool call")}, {chars} chars, {ending}");
+
+    /// <summary>The thinking one streamed update carried (<see cref="TextReasoningContent"/>, joined), or empty.</summary>
+    internal static string ReasoningText(ChatResponseUpdate update) =>
+        string.Concat(update.Contents.OfType<TextReasoningContent>().Select(r => r.Text));
 
     /// <summary>One request's line: <c>Request 2: 14 messages, 19 tools, reasoning medium</c> (<c>no tools</c>, <c>reasoning default</c> when unset). Pinned.</summary>
     public static string RequestLogLine(int iteration, int messages, int tools, ReasoningEffort? reasoning) =>

@@ -315,6 +315,21 @@ public class SidekickAppTests : IDisposable
         Assert.True(_chat.Disposed);
     }
 
+    /// <summary>The model's thinking is the TUI's to show (2026-09-26): headless prints the reply alone, whatever LLM show thinking says.</summary>
+    [Fact]
+    public async Task Headless_PrintsNoThinking()
+    {
+        ServerOn1234("llama");
+        _chat.Enqueue(
+            new ChatResponseUpdate(ChatRole.Assistant, new List<AIContent> { new TextReasoningContent("Pondering.") }),
+            new ChatResponseUpdate(ChatRole.Assistant, "Hello"));
+
+        string output = await Headless("hi\n");
+
+        Assert.Contains("Neon: Hello", output);
+        Assert.DoesNotContain("Pondering", output);
+    }
+
     /// <summary>Headless offers the git tools over the sandbox's repository like the screen (2026-09-20): a call is a generic tool line there, the rule in the prompt.</summary>
     [Fact]
     public async Task Headless_GitStatus_ReadsTheSandboxRepository_AndPrintsTheToolLine()

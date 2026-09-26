@@ -415,6 +415,9 @@ public enum SettingsField
 
     /// <summary>A toggle: whether <c>run_command</c> steps aside for a native tool (<see cref="Settings.AppSettingsData.ShellPreferNative"/>). The Shell tab's row under Shell police outside paths (2026-09-26, the user's ask); no reconnect (read at each call and each turn). Last in the enum, as every newcomer.</summary>
     ShellPreferNative,
+
+    /// <summary>A toggle: whether the model's thinking streams into the transcript and folds when the answer starts (<see cref="Settings.AppSettingsData.LlmShowThinking"/>). The LLM tab's last row (2026-09-26, the user's ask); no reconnect (read at each turn). Last in the enum, as every newcomer.</summary>
+    LlmShowThinking,
 }
 
 /// <summary>The tabs of <c>/settings</c> on the pane, in strip order (Sessions right after General — the user's order, 2026-09-18; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
@@ -650,7 +653,7 @@ internal sealed partial class SettingsMenu
     [
         [SettingsField.Profile, SettingsField.NewProfileMode, SettingsField.WorkingDirectory, SettingsField.QueueMessages, SettingsField.QueueCancelMode, SettingsField.Memory, SettingsField.CopyUserPrompt, SettingsField.ShowImageThumbnails, SettingsField.ImageThumbnailSize, SettingsField.TranscriptMarkdown, SettingsField.PastePreviewLines, SettingsField.HideExitAutocomplete, SettingsField.CommandTypoIntercept, SettingsField.KeepCommandHistory, SettingsField.WelcomeSplash, SettingsField.ShowWorkingDirectory, SettingsField.ShowToolbar, SettingsField.DraftEditor, SettingsField.ImageEditor, SettingsField.Theme],
         [SettingsField.SessionLogging, SettingsField.SessionRetentionDays, SettingsField.SessionNamingMode, SettingsField.SessionShowName, SettingsField.SessionTool, SettingsField.SessionSearchMaxResults],
-        [SettingsField.LlmScanMode, SettingsField.LlmUrl, SettingsField.LlmModel, SettingsField.LlmApiKey, SettingsField.LlmReasoning, SettingsField.LlmRequestTimeoutSeconds, SettingsField.LlmTurnTimeoutSeconds, SettingsField.LlmContextLength, SettingsField.LlmMidTurnUsage, SettingsField.LlmCompactType, SettingsField.LlmCompactKeepRecent, SettingsField.LlmCompactShowSummary, SettingsField.LlmAutoCompactPercent, SettingsField.LlmOfferTools, SettingsField.LlmToolCompactType, SettingsField.LlmMaxToolIterations, SettingsField.LlmUseFunVerbs],
+        [SettingsField.LlmScanMode, SettingsField.LlmUrl, SettingsField.LlmModel, SettingsField.LlmApiKey, SettingsField.LlmReasoning, SettingsField.LlmRequestTimeoutSeconds, SettingsField.LlmTurnTimeoutSeconds, SettingsField.LlmContextLength, SettingsField.LlmMidTurnUsage, SettingsField.LlmCompactType, SettingsField.LlmCompactKeepRecent, SettingsField.LlmCompactShowSummary, SettingsField.LlmAutoCompactPercent, SettingsField.LlmOfferTools, SettingsField.LlmToolCompactType, SettingsField.LlmMaxToolIterations, SettingsField.LlmUseFunVerbs, SettingsField.LlmShowThinking],
         [SettingsField.TtsOutput, SettingsField.TtsSource, SettingsField.TtsHttpUrl, SettingsField.TtsVoicePreview, SettingsField.TtsVoice, SettingsField.TtsVoice2, SettingsField.TtsVoiceMix, SettingsField.TtsSpeed],
         Fields.Where(IsVoiceField).ToArray(),
         [SettingsField.BotChatLlmMode, SettingsField.BotChatImages, SettingsField.BotChatImageMode, SettingsField.BotChatImageWorkflow, SettingsField.BotChatImageAsync, SettingsField.BotChatNonTtsDelaySeconds],
@@ -933,7 +936,7 @@ internal sealed partial class SettingsMenu
     public static bool IsToggle(SettingsField field) =>
         field is SettingsField.TtsOutput or SettingsField.SttInput or SettingsField.SttWake or SettingsField.SttInterrupt
             or SettingsField.Memory or SettingsField.CopyUserPrompt or SettingsField.ShowImageThumbnails
-            or SettingsField.FileTreeShowSizes or SettingsField.LlmOfferTools or SettingsField.LlmUseFunVerbs
+            or SettingsField.FileTreeShowSizes or SettingsField.LlmOfferTools or SettingsField.LlmUseFunVerbs or SettingsField.LlmShowThinking
             or SettingsField.WebTools or SettingsField.TtsVoicePreview or SettingsField.FileTools or SettingsField.AskUser
             or SettingsField.AgentSkills or SettingsField.ExternalSkills or SettingsField.TranscriptMarkdown
             or SettingsField.FileSafeEdits
@@ -992,6 +995,7 @@ internal sealed partial class SettingsMenu
         SettingsField.NewProfileMode => "New profile mode",
         SettingsField.LlmOfferTools => "LLM offer tools",
         SettingsField.LlmUseFunVerbs => "LLM use fun verbs",
+        SettingsField.LlmShowThinking => "LLM show thinking",
         SettingsField.LlmScanMode => "LLM scan mode",
         SettingsField.WebTools => "Web tools",
         SettingsField.GitNativeTools => "Git native tools",
@@ -1155,6 +1159,7 @@ internal sealed partial class SettingsMenu
             SettingsField.NewProfileMode => data.NewProfileMode,
             SettingsField.LlmOfferTools => OnOff(data.LlmOfferTools),
             SettingsField.LlmUseFunVerbs => OnOff(data.LlmUseFunVerbs),
+            SettingsField.LlmShowThinking => OnOff(data.LlmShowThinking),
             SettingsField.LlmScanMode => data.LlmScanMode,
             SettingsField.TtsSource => data.TtsSource,
             SettingsField.WebTools => OnOff(data.WebTools),
@@ -3229,6 +3234,7 @@ internal sealed partial class SettingsMenu
             SettingsField.FileTreeShowSizes => data.FileTreeShowSizes,
             SettingsField.LlmOfferTools => data.LlmOfferTools,
             SettingsField.LlmUseFunVerbs => data.LlmUseFunVerbs,
+            SettingsField.LlmShowThinking => data.LlmShowThinking,
             SettingsField.WebTools => data.WebTools,
             SettingsField.GitNativeTools => data.GitNativeTools,
             SettingsField.ObsidianTools => data.ObsidianTools,
@@ -3286,6 +3292,7 @@ internal sealed partial class SettingsMenu
             case SettingsField.FileTreeShowSizes: data.FileTreeShowSizes = on; break;
             case SettingsField.LlmOfferTools: data.LlmOfferTools = on; break;
             case SettingsField.LlmUseFunVerbs: data.LlmUseFunVerbs = on; break;
+            case SettingsField.LlmShowThinking: data.LlmShowThinking = on; break;
             case SettingsField.WebTools: data.WebTools = on; break;
             case SettingsField.GitNativeTools: data.GitNativeTools = on; break;
             case SettingsField.ObsidianTools: data.ObsidianTools = on; break;
@@ -3343,6 +3350,7 @@ internal sealed partial class SettingsMenu
         SettingsField.TranscriptMarkdown => on ? "replies are styled as Markdown in the pane" : "replies stream as plain text",
         SettingsField.LlmOfferTools => on ? "the model gets the tools; a change starts a new conversation" : "no tools at all; a change starts a new conversation",
         SettingsField.LlmUseFunVerbs => on ? "the thinking spinner reads a random verb" : "the spinner reads thinking",
+        SettingsField.LlmShowThinking => on ? "thinking shown in chat" : "thinking not shown in chat",
         SettingsField.TtsOutput => on ? "replies are read aloud" : "replies are text only",
         SettingsField.TtsVoicePreview => on ? "the voice pickers speak the highlighted voice" : "the voice pickers are silent",
         SettingsField.SttInput => on ? "the push-to-talk key records a spoken message" : "the microphone is off",

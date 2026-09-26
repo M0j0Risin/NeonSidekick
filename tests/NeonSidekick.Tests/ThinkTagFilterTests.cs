@@ -125,4 +125,49 @@ public class ThinkTagFilterTests
     {
         Assert.Throws<ArgumentNullException>(() => new ThinkTagFilter().Push(null!));
     }
+
+    [Fact]
+    public void TakeThinking_HandsOverTheBlockText_AsItStreams()
+    {
+        var filter = new ThinkTagFilter();
+
+        Assert.Equal("", filter.Push("<think>The user"));
+        Assert.Equal("The user", filter.TakeThinking());
+        Assert.Equal("", filter.TakeThinking());
+        Assert.Equal("", filter.Push(" asks.</th"));
+
+        // The possible close tag stays back until the next delta settles it.
+        Assert.Equal(" asks.", filter.TakeThinking());
+        Assert.Equal("Answer.", filter.Push("ink>\n\nAnswer."));
+        Assert.Equal("", filter.TakeThinking());
+    }
+
+    [Fact]
+    public void TakeThinking_KeepsAFalseCloseTagStart_AsThinking()
+    {
+        var filter = new ThinkTagFilter();
+
+        filter.Push("<think>a </t");
+        filter.Push("able");
+        Assert.Equal("a </table", filter.TakeThinking());
+    }
+
+    [Fact]
+    public void TakeThinking_GetsAnUnfinishedBlock_FromFlush()
+    {
+        var filter = new ThinkTagFilter();
+
+        filter.Push("<think>still going</thi");
+        Assert.Equal("", filter.Flush());
+        Assert.Equal("still going</thi", filter.TakeThinking());
+    }
+
+    [Fact]
+    public void TakeThinking_IsEmpty_ForAnOrphanClose()
+    {
+        var (output, filter) = Run("Got it.", "</think>", "Done.");
+
+        Assert.Equal("Got it.Done.", output);
+        Assert.Equal("", filter.TakeThinking());
+    }
 }

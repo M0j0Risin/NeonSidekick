@@ -642,9 +642,9 @@ public class SlashCommandsTests
         Assert.Equal("/botchat", SlashCommands.HelpEntries[21].Command);   // 2026-09-24: every row under it one down
         Assert.Equal("let the profiles talk to each other, each in its own persona, until ESC: /botchat [profile ...] [[--] topic], or /botchat --resume [line] to carry on the last one", SlashCommands.HelpEntries[21].Summary);   // --resume 2026-09-25
         Assert.Equal("/expand", SlashCommands.HelpEntries[22].Command);   // under /loop since later on 2026-09-22: every row under it two down
-        Assert.Equal("show every line of the folded tool runs and code blocks in the transcript (Ctrl+O flips)", SlashCommands.HelpEntries[22].Summary);
+        Assert.Equal("show every line of the folded tool runs, code blocks and thinking in the transcript (Ctrl+O flips)", SlashCommands.HelpEntries[22].Summary);
         Assert.Equal("/collapse", SlashCommands.HelpEntries[23].Command);
-        Assert.Equal("fold the tool runs and code blocks in the transcript again", SlashCommands.HelpEntries[23].Summary);
+        Assert.Equal("fold the tool runs, code blocks and thinking in the transcript again", SlashCommands.HelpEntries[23].Summary);
         Assert.Equal("/tts", SlashCommands.HelpEntries[24].Command);
         Assert.Equal(["/tts", "/stt", "/wake", "/interrupt"], SlashCommands.HelpGroups[3].Select(e => e.Command));
         Assert.Equal(["/memory", "/remember", "/cmdcopy", "/cmdclear", "/cmdlist", "/police"], SlashCommands.HelpGroups[4].Select(e => e.Command));   // /forget went 2026-09-22, folded into /memory as a word, and /memcopy later that day, folded in as copy <profile> [overwrite] — every row under it one up   // /cmdlist last since later on 2026-09-21; /cmdcopy last from earlier that day until then; /memcopy last from 2026-09-17 until then

@@ -37,6 +37,13 @@ namespace NeonSidekick.UI;
 /// while it runs, the summary alone once anything else is said (<see cref="ScreenPane.WriteToolLine"/>).
 /// Every other write ends the run: a notice, the user's line, pictures, the reply speaking again,
 /// the reply's end.</para>
+///
+/// <para>Thinking (2026-09-26, the user's ask): on the styled path the model's thinking takes the
+/// slot as a <see cref="ThinkingBlock"/> while it streams (<see cref="AppendThinking"/>), and the next
+/// write of any kind — the answer, a tool line, a notice, the reply's end — commits it, which folds it
+/// to one <c>▸ 💭 thought for 4.2s</c> line (<see cref="ScreenPane.CommitLive"/>). A reply that had said
+/// nothing yet keeps its glyph for the answer after it. The plain path shows no thinking: its glyph
+/// is already in the flow, and printed text cannot fold.</para>
 /// </summary>
 public sealed class TranscriptRenderer : INoticeSink
 {
@@ -105,6 +112,13 @@ public sealed class TranscriptRenderer : INoticeSink
     private bool _slot;
     private bool _glyph;
     private readonly System.Text.StringBuilder _reply = new();
+
+    // The thinking block in the slot (2026-09-26): its text so far, how long it has streamed, and
+    // whether the reply had said nothing before it (the answer after it then opens with the glyph).
+    private bool _thinkingOpen;
+    private readonly System.Text.StringBuilder _thinking = new();
+    private TimeSpan _thinkingElapsed;
+    private bool _glyphAfterThinking;
 
     /// <param name="console">Where the lines go; a <see cref="ScreenPane"/> on the screen also takes the spinner into its hint row.</param>
     public TranscriptRenderer(IAnsiConsole console)
@@ -395,6 +409,17 @@ public sealed class TranscriptRenderer : INoticeSink
     public void AppendDelta(string text)
     {
         ArgumentNullException.ThrowIfNull(text);
+        if (_thinkingOpen)
+        {
+            // The blank lines between the thinking and the answer are nobody's: the block stays until words come.
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                return;
+            }
+
+            EndThinking();
+        }
+
         if (_skipLeadingWhitespace)
         {
             text = text.TrimStart();
@@ -452,6 +477,7 @@ public sealed class TranscriptRenderer : INoticeSink
     /// </summary>
     public void EndAssistant()
     {
+        EndThinking();
         EndRun();
         if (!_assistantOpen)
         {
@@ -499,6 +525,90 @@ public sealed class TranscriptRenderer : INoticeSink
 
         _state = LineState.AtLineStart;
         _assistantOpen = false;
+    }
+
+    /// <summary>
+    /// A piece of the model's thinking, <paramref name="elapsed"/> since its first piece (2026-09-26):
+    /// on the styled path it streams in the slot as a <see cref="ThinkingBlock"/> — the bare glyph or the
+    /// reply said so far out of it first, a tool run ended — and folds when anything else is written
+    /// (<see cref="EndThinking"/>). Leading whitespace is dropped; nothing on the plain path or outside
+    /// a reply.
+    /// </summary>
+    public void AppendThinking(string text, TimeSpan elapsed)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        if (!_assistantOpen || !_slot)
+        {
+            return;
+        }
+
+        if (!_thinkingOpen)
+        {
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                return;
+            }
+
+            EndRun();
+            using (_pane!.Batch())
+            {
+                _glyphAfterThinking = _state == LineState.GlyphOnly;
+                if (_glyphAfterThinking)
+                {
+                    DropSlot();
+                }
+                else if (_state == LineState.MidText)
+                {
+                    CommitSlot();
+                }
+            }
+
+            _heldWhitespace.Clear();
+            _thinking.Clear();
+            _thinkingOpen = true;
+            _state = LineState.AtLineStart;
+        }
+
+        _thinking.Append(text);
+        _thinkingElapsed = elapsed;
+        _pane!.SetLive(new ThinkingBlock(_thinking.ToString()));
+    }
+
+    /// <summary>The thinking is streaming in the slot (<see cref="AppendThinking"/>).</summary>
+    public bool ThinkingOpen => _thinkingOpen;
+
+    /// <summary>
+    /// The thinking block into the transcript, folded to its summary with the last elapsed time; the
+    /// slot then holds the bare glyph again when the reply had said nothing before it. Nothing
+    /// without one. Every other write calls it first.
+    /// </summary>
+    public void EndThinking()
+    {
+        if (!_thinkingOpen)
+        {
+            return;
+        }
+
+        _thinkingOpen = false;
+        using (_pane!.Batch())
+        {
+            _pane.SetLive(new ThinkingBlock(_thinking.ToString(), _thinkingElapsed));
+            _pane.CommitLive();
+            if (_glyphAfterThinking)
+            {
+                _reply.Clear();
+                _glyph = true;
+                _pane.SetLive(new ReplyBlock("", glyph: true, codeKeep: _codeKeep));
+                _state = LineState.GlyphOnly;
+            }
+            else
+            {
+                _state = LineState.AtLineStart;
+            }
+        }
+
+        _thinking.Clear();
+        _skipLeadingWhitespace = true;
     }
 
     // ── Spinner ─────────────────────────────────────────────────────────────
@@ -582,6 +692,7 @@ public sealed class TranscriptRenderer : INoticeSink
     /// </summary>
     private void ToolLine(string fullMarkup, string inlineMarkup)
     {
+        EndThinking();
         bool open = _run && _pane!.ToolGroupOpen;
         int keep = open ? 0 : ToolCollapseCount();
         if (!open && (_pane is not { Enabled: true } || keep <= 0))
@@ -658,6 +769,7 @@ public sealed class TranscriptRenderer : INoticeSink
     /// <summary>A line-shaped write: its own line, except right after a bare glyph where it continues that line.</summary>
     private void WriteLine(string fullMarkup, string inlineMarkup)
     {
+        EndThinking();
         _heldWhitespace.Clear();
         if (_state == LineState.GlyphOnly)
         {
@@ -687,6 +799,7 @@ public sealed class TranscriptRenderer : INoticeSink
 
     private void BreakIfMidText()
     {
+        EndThinking();
         _heldWhitespace.Clear();
         if (_state == LineState.AtLineStart)
         {

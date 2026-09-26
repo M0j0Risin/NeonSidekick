@@ -601,6 +601,7 @@ public sealed class AppSettings : IDisposable
         LlmTurnTimeoutSeconds = source.LlmTurnTimeoutSeconds,
         LlmUrl = source.LlmUrl,
         LlmUseFunVerbs = source.LlmUseFunVerbs,
+        LlmShowThinking = source.LlmShowThinking,
         TtsHttpUrl = source.TtsHttpUrl,
         TtsOutput = source.TtsOutput,
         TtsSource = source.TtsSource,

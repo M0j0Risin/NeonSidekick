@@ -18,6 +18,16 @@ public abstract record TurnEvent
     /// <summary>A piece of the reply, in order. Never empty.</summary>
     public sealed record TextDelta(string Text) : TurnEvent;
 
+    /// <summary>
+    /// A piece of the model's thinking, in order, ahead of the reply it leads to (2026-09-26, the
+    /// user's ask: thinking shown in the transcript). Never empty. From the server's
+    /// <c>reasoning_content</c> (or <c>reasoning</c>) deltas, or a <c>&lt;think&gt;</c> block streamed as
+    /// content (<see cref="ThinkTagFilter.TakeThinking"/>). Not reply text: never spoken, never in
+    /// <c>/copy</c> or the session log, and the assistant commits nothing of it to the history. A
+    /// host that does not show thinking skips it.
+    /// </summary>
+    public sealed record ThinkingDelta(string Text) : TurnEvent;
+
     /// <summary>The model asked for a tool; raised before it is invoked.</summary>
     public sealed record ToolCall(string Name, string CallId, string ArgumentsJson) : TurnEvent;
 
