@@ -778,8 +778,8 @@ public class SettingsMenuTests : IDisposable
         Assert.Equal("on", SettingsMenu.FieldValue(SettingsField.KeepCommandHistory, data, _settings.ProfileDirectory));
         Assert.Equal("off", SettingsMenu.FieldValue(SettingsField.KeepCommandHistory, new AppSettingsData { KeepCommandHistory = false }, _settings.ProfileDirectory));
         Assert.False(SettingsMenu.RefusedMidTurn(SettingsField.KeepCommandHistory));
-        Assert.Equal("sent lines are kept in sessions.db and recalled with Up after a restart", SettingsMenu.ToggleDescribe(SettingsField.KeepCommandHistory, true));
-        Assert.Equal("sent lines are forgotten at exit; the stored ones go at the next load", SettingsMenu.ToggleDescribe(SettingsField.KeepCommandHistory, false));
+        Assert.Equal("command history enabled", SettingsMenu.ToggleDescribe(SettingsField.KeepCommandHistory, true));
+        Assert.Equal("command history disabled", SettingsMenu.ToggleDescribe(SettingsField.KeepCommandHistory, false));
         Assert.Equal(SettingsField.KeepCommandHistory, SettingsMenu.TabFields[(int)SettingsTab.General][SettingsMenu.TabFields[(int)SettingsTab.General].ToList().IndexOf(SettingsField.CommandTypoIntercept) + 1]);
         // The show-summary toggle (2026-09-21): right under keep recent, no reconnect, off by default.
         Assert.False(SettingsMenu.IsLlmField(SettingsField.LlmCompactShowSummary));
@@ -879,7 +879,7 @@ public class SettingsMenuTests : IDisposable
         Assert.Equal("last-written-skill  [#9A8BB8]only a turn that loaded the skill just written waits; another lesson reflects at once[/]", SettingsMenu.ReflectionCooldownModeLabel("last-written-skill"));
         Assert.Equal("must be 0 (off) or 1 to 1440 minutes", SettingsMenu.ReflectionCooldownMinutesRangeError);
         Assert.Equal("on", SettingsMenu.FieldValue(SettingsField.ReflectionIncludesSessions, data, _settings.ProfileDirectory));
-        Assert.Equal("the earlier sessions matching the turn open the reflection, readable too", SettingsMenu.ToggleDescribe(SettingsField.ReflectionIncludesSessions, true));
+        Assert.Equal("a reflection can read past sessions for insights", SettingsMenu.ToggleDescribe(SettingsField.ReflectionIncludesSessions, true));
         Assert.Equal("a reflection reads the conversation on screen alone", SettingsMenu.ToggleDescribe(SettingsField.ReflectionIncludesSessions, false));
         // Reflection yields to turns (2026-09-24): the tab's last row, a toggle, on by default, never refused mid-turn.
         Assert.True(SettingsMenu.IsToggle(SettingsField.ReflectionYieldsToTurns));
@@ -887,8 +887,8 @@ public class SettingsMenuTests : IDisposable
         Assert.Equal("Reflection yields to turns", SettingsMenu.FieldName(SettingsField.ReflectionYieldsToTurns));
         Assert.Equal("on", SettingsMenu.FieldValue(SettingsField.ReflectionYieldsToTurns, data, _settings.ProfileDirectory));
         Assert.Equal("off", SettingsMenu.FieldValue(SettingsField.ReflectionYieldsToTurns, new AppSettingsData { ReflectionYieldsToTurns = false }, _settings.ProfileDirectory));
-        Assert.Equal("a turn pauses a running reflection; it runs again after the reply", SettingsMenu.ToggleDescribe(SettingsField.ReflectionYieldsToTurns, true));
-        Assert.Equal("a reflection runs on beside the turn", SettingsMenu.ToggleDescribe(SettingsField.ReflectionYieldsToTurns, false));
+        Assert.Equal("a turn pauses a running reflection which may resume after the turn", SettingsMenu.ToggleDescribe(SettingsField.ReflectionYieldsToTurns, true));
+        Assert.Equal("reflections run asynchronously (when the model allows)", SettingsMenu.ToggleDescribe(SettingsField.ReflectionYieldsToTurns, false));
         // Reflection window (2026-09-17): the tab's last row and the enum's last member, typed 1–5 like the compact keep-recent count.
         Assert.False(SettingsMenu.IsToggle(SettingsField.ReflectionWindow));
         Assert.Equal("Reflection window", SettingsMenu.FieldName(SettingsField.ReflectionWindow));
@@ -907,8 +907,8 @@ public class SettingsMenuTests : IDisposable
         Assert.Equal("high", SettingsMenu.FieldValue(SettingsField.ReflectionReasoning, new AppSettingsData { ReflectionReasoning = "high" }, _settings.ProfileDirectory));
         Assert.Equal("profile [#9A8BB8]the profile's LLM reasoning level[/]", SettingsMenu.ReflectionReasoningLabel("profile"));
         Assert.Equal("xhigh   [#9A8BB8]maximum thinking, slowest[/]", SettingsMenu.ReflectionReasoningLabel("xhigh"));
-        Assert.Equal("enough tool calls, or an error it recovered from, teaches a skill", SettingsMenu.ToggleDescribe(SettingsField.ReflectionAutoLearn, true));
-        Assert.Equal("nothing is learned unasked; /learn and skill_editor still work", SettingsMenu.ToggleDescribe(SettingsField.ReflectionAutoLearn, false));
+        Assert.Equal("automatic reflection enabled", SettingsMenu.ToggleDescribe(SettingsField.ReflectionAutoLearn, true));
+        Assert.Equal("automatic reflection disabled", SettingsMenu.ToggleDescribe(SettingsField.ReflectionAutoLearn, false));
         Assert.Equal(2, (int)SettingsTab.Llm);   // third since 2026-09-19 (Skills sat between from 2026-09-18 until then; the Options tab of /skills now)
         Assert.True(SettingsMenu.IsToggle(SettingsField.AgentSkills) && SettingsMenu.IsToggle(SettingsField.ExternalSkills));
         Assert.True(SettingsMenu.IsToggle(SettingsField.SkillHashMention));
@@ -1116,8 +1116,8 @@ public class SettingsMenuTests : IDisposable
         Assert.Equal("20", SettingsMenu.EditableValue(SettingsField.GitNativeLogMaxCommits, data));
         Assert.Equal("must be 20 to 5000 lines", SettingsMenu.GitNativeDiffMaxLinesRangeError);
         Assert.Equal("must be 1 to 200 commits", SettingsMenu.GitNativeLogMaxCommitsRangeError);
-        Assert.Equal("the model reads and changes the git repository in the working directory", SettingsMenu.ToggleDescribe(SettingsField.GitNativeTools, true));
-        Assert.Equal("no git native tools", SettingsMenu.ToggleDescribe(SettingsField.GitNativeTools, false));
+        Assert.Equal("git (native) tools enabled", SettingsMenu.ToggleDescribe(SettingsField.GitNativeTools, true));
+        Assert.Equal("git (native) tools disabled", SettingsMenu.ToggleDescribe(SettingsField.GitNativeTools, false));
         Assert.False(SettingsMenu.RefusedMidTurn(SettingsField.GitNativeTools));
         Assert.Equal("Web search method", SettingsMenu.FieldName(SettingsField.WebSearchMethod));
         Assert.Equal("duckduckgo", SettingsMenu.FieldValue(SettingsField.WebSearchMethod, data, _settings.ProfileDirectory));
@@ -1295,8 +1295,8 @@ public class SettingsMenuTests : IDisposable
         Assert.Equal("high", SettingsMenu.FieldValue(SettingsField.ReflectionReasoning, new AppSettingsData { ReflectionReasoning = "high" }, _settings.ProfileDirectory));
         Assert.Equal("profile [#9A8BB8]the profile's LLM reasoning level[/]", SettingsMenu.ReflectionReasoningLabel("profile"));
         Assert.Equal("xhigh   [#9A8BB8]maximum thinking, slowest[/]", SettingsMenu.ReflectionReasoningLabel("xhigh"));
-        Assert.Equal("enough tool calls, or an error it recovered from, teaches a skill", SettingsMenu.ToggleDescribe(SettingsField.ReflectionAutoLearn, true));
-        Assert.Equal("nothing is learned unasked; /learn and skill_editor still work", SettingsMenu.ToggleDescribe(SettingsField.ReflectionAutoLearn, false));
+        Assert.Equal("automatic reflection enabled", SettingsMenu.ToggleDescribe(SettingsField.ReflectionAutoLearn, true));
+        Assert.Equal("automatic reflection disabled", SettingsMenu.ToggleDescribe(SettingsField.ReflectionAutoLearn, false));
         Assert.Equal(2, (int)SettingsTab.Llm);   // third since 2026-09-19 (Skills sat between from 2026-09-18 until then; the Options tab of /skills now)
         Assert.True(SettingsMenu.IsToggle(SettingsField.AgentSkills) && SettingsMenu.IsToggle(SettingsField.ExternalSkills));
         Assert.True(SettingsMenu.IsToggle(SettingsField.SkillHashMention));
@@ -3875,8 +3875,8 @@ public class SettingsMenuTests : IDisposable
         Assert.Equal("memory enabled", SettingsMenu.ToggleDescribe(SettingsField.Memory, true));   // the user's words, 2026-09-21
         Assert.Equal("memory disabled", SettingsMenu.ToggleDescribe(SettingsField.Memory, false));
         Assert.Equal("no tools at all; a change starts a new conversation", SettingsMenu.ToggleDescribe(SettingsField.LlmOfferTools, false));
-        Assert.Equal("an edit keeps the previous version in .trash first, delete moves there", SettingsMenu.ToggleDescribe(SettingsField.FileSafeEdits, true));
-        Assert.Equal("an edit writes in place and delete removes for good", SettingsMenu.ToggleDescribe(SettingsField.FileSafeEdits, false));
+        Assert.Equal("edit and delete operations move copies to .trash first", SettingsMenu.ToggleDescribe(SettingsField.FileSafeEdits, true));
+        Assert.Equal("edit and delete operations function normally", SettingsMenu.ToggleDescribe(SettingsField.FileSafeEdits, false));
         Assert.Equal("%USERPROFILE%\\.agents\\skills is read too", SettingsMenu.ToggleDescribe(SettingsField.ExternalSkills, true));
         // 2026-09-18: the user's own sentences for /copy, and the two new line switches.
         Assert.Equal("/copy copies user prompts and model replies", SettingsMenu.ToggleDescribe(SettingsField.CopyUserPrompt, true));
@@ -3888,7 +3888,7 @@ public class SettingsMenuTests : IDisposable
         Assert.Equal("show the working directory in the header", SettingsMenu.ToggleDescribe(SettingsField.ShowWorkingDirectory, true));   // the user's words, 2026-09-21
         Assert.Equal("hide the working directory in the header", SettingsMenu.ToggleDescribe(SettingsField.ShowWorkingDirectory, false));
         Assert.Equal("vault_delete may move a note or attachment to the vault's .trash", SettingsMenu.ToggleDescribe(SettingsField.ObsidianAllowDelete, true));   // later on 2026-09-22
-        Assert.Equal("no vault tool deletes anything", SettingsMenu.ToggleDescribe(SettingsField.ObsidianAllowDelete, false));
+        Assert.Equal("vault_delete is disabled", SettingsMenu.ToggleDescribe(SettingsField.ObsidianAllowDelete, false));
         Assert.Equal("show the toolbar", SettingsMenu.ToggleDescribe(SettingsField.ShowToolbar, true));
         Assert.Equal("hide the toolbar", SettingsMenu.ToggleDescribe(SettingsField.ShowToolbar, false));
         Assert.Equal("a message sent while a reply runs is queued and sent when the reply ends", SettingsMenu.ToggleDescribe(SettingsField.QueueMessages, true));
