@@ -56,6 +56,83 @@ public partial class ChatScreenTests
         Assert.DoesNotContain(new string('▀', columns + 1), output);
     }
 
+    private static int ImagesIn(ChatMessage message) => message.Contents.OfType<DataContent>().Count();
+
+    /// <summary>
+    /// Botchat vision enabled (2026-09-27, the user's ask): the next bot's turn message carries the app's picture of the reply
+    /// before it, captioned; the first bot's next turn carries its own reply's picture and ada's, and no request's earlier
+    /// messages carry any.
+    /// </summary>
+    [Fact]
+    public async Task BotChat_Vision_TheNextBotSeesThePictureOfTheReplyBefore_AndEachBotWhatItMissed()
+    {
+        BotPicturesFixture();
+        _settings.Update(d => d.BotChatVision = true);
+        _chat.EnqueueText(DogReply);
+        _chat.EnqueueText("a dog surfing a wave");
+        _chat.EnqueueText("Ada answers.");
+        _chat.EnqueueText("a cat on a boat");
+        _chat.EnqueueText("Neon ", "again");
+        EscDuringRequest(5);
+        PushLine("/botchat");
+        PushLine("/exit");
+
+        await RunAsync();
+
+        Assert.Equal(5, _chat.Requests.Count);
+        Assert.Equal(0, ImagesIn(_chat.Requests[0][^1]));
+        var ada = _chat.Requests[2];
+        Assert.Contains(AdaMarker, SystemText(ada));
+        Assert.Equal(1, ImagesIn(ada[^1]));
+        Assert.EndsWith("the picture of default's reply.)", ada[^1].Text, StringComparison.Ordinal);
+        var neon = _chat.Requests[4];
+        Assert.Equal(2, ImagesIn(neon[^1]));
+        Assert.EndsWith("the picture of your reply, the picture of ada's reply.)", neon[^1].Text, StringComparison.Ordinal);
+        Assert.All(neon.Take(neon.Count - 1), m => Assert.Equal(0, ImagesIn(m)));
+        // The image-prompt requests see no picture.
+        Assert.Equal(0, ImagesIn(_chat.Requests[3][^1]));
+    }
+
+    [Fact]
+    public async Task BotChat_VisionOff_TheDefault_NoRequestCarriesAPicture()
+    {
+        BotPicturesFixture();
+        _chat.EnqueueText(DogReply);
+        _chat.EnqueueText("a dog surfing a wave");
+        _chat.EnqueueText("Ada ", "answers.");
+        EscDuringRequest(3);
+        PushLine("/botchat");
+        PushLine("/exit");
+
+        await RunAsync();
+
+        Assert.Equal(3, _chat.Requests.Count);
+        Assert.All(_chat.Requests.SelectMany(r => r), m => Assert.Equal(0, ImagesIn(m)));
+        Assert.DoesNotContain("(Attached, oldest first", _chat.Requests[2][^1].Text, StringComparison.Ordinal);
+    }
+
+    /// <summary>Autonomous, vision on (2026-09-27): a bot's own generate_image picture reaches the other bot next turn, not itself again.</summary>
+    [Fact]
+    public async Task BotChat_Vision_Autonomous_ABotsOwnPicture_ReachesTheOther_NotItself()
+    {
+        BotPicturesFixture(mode: "autonomous");
+        _settings.Update(d => d.BotChatVision = true);
+        _chat.Enqueue(FakeChatClient.Call("g1", GenerateImageTool.ToolName, new Dictionary<string, object?> { ["prompt"] = "a dog surfing", ["seed"] = 7, ["verbatim"] = true }));
+        _chat.EnqueueText("Here is my dog.");
+        _chat.EnqueueText("Nice dog.");
+        _chat.EnqueueText("Neon ", "again");
+        EscDuringRequest(4);
+        PushLine("/botchat");
+        PushLine("/exit");
+
+        await RunAsync();
+
+        Assert.Equal(4, _chat.Requests.Count);
+        Assert.Equal(1, ImagesIn(_chat.Requests[2][^1]));
+        Assert.EndsWith("default's picture.)", _chat.Requests[2][^1].Text, StringComparison.Ordinal);
+        Assert.Equal(0, ImagesIn(_chat.Requests[3][^1]));
+    }
+
     [Fact]
     public async Task BotChat_PicturesOff_OffersNoTool_AndAsksForNoPicture()
     {

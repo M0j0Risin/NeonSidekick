@@ -678,6 +678,8 @@ public sealed class AppSettings : IDisposable
         BotChatImageWorkflow = source.BotChatImageWorkflow,
         BotChatImageAsync = source.BotChatImageAsync,
         BotChatNonTtsDelaySeconds = source.BotChatNonTtsDelaySeconds,
+        BotChatSkills = source.BotChatSkills,
+        BotChatVision = source.BotChatVision,
         ClaudeExecutable = source.ClaudeExecutable,
         ClaudePermissions = source.ClaudePermissions,
         ClaudeModel = source.ClaudeModel,

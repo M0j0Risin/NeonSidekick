@@ -36,6 +36,8 @@ public class AppSettingsTests : IDisposable
         BotChatImageWorkflow = "flux",
         BotChatImageAsync = false,
         BotChatNonTtsDelaySeconds = 12,
+        BotChatSkills = true,
+        BotChatVision = true,
         Memory = false,
         NewProfileMode = "advanced",
         PastePreviewLines = 7,

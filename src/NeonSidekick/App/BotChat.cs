@@ -237,11 +237,15 @@ public static partial class BotChat
     /// <summary>
     /// The system prompt for one speaker's turn: its persona (<see cref="Assistant.DefaultPersona"/> when its
     /// profile has no <c>persona.md</c>) through <see cref="Assistant.SystemPrompt"/> with every tool off, then
-    /// <see cref="Rules"/>. Built afresh for every turn from that speaker's persona alone. Pure.
+    /// <see cref="Rules"/>. Built afresh for every turn from that speaker's persona alone. With <paramref name="skills"/>
+    /// (<c>Botchat skills enabled</c>, 2026-09-27: the main chat's catalog — the starting profile's, the global and the
+    /// external skills, never the speaker's own profile's) the load-only skills block
+    /// (<see cref="Skills.SkillsPrompt.LoadOnlySection"/>) goes between the two; null or empty, the prompt is as before. Pure.
     /// </summary>
-    public static string SystemPrompt(string? persona, string speaker, IReadOnlyList<string> others, string topic, bool speechOutput, string? voiceDirective, bool markdown, string? pronouns = null, bool images = false) =>
+    public static string SystemPrompt(string? persona, string speaker, IReadOnlyList<string> others, string topic, bool speechOutput, string? voiceDirective, bool markdown, string? pronouns = null, bool images = false, IReadOnlyList<Skills.Skill>? skills = null) =>
         Assistant.SystemPrompt(speechOutput, memories: null, persona: string.IsNullOrWhiteSpace(persona) ? null : persona, voiceDirective: voiceDirective,
             tools: false, files: false, timers: false, markdown: markdown)
+        + (skills is { Count: > 0 } ? "\n\n" + Skills.SkillsPrompt.LoadOnlySection(skills) : "")
         + "\n\n" + Rules(speaker, others, topic, pronouns, images);
 
     /// <summary>
@@ -586,7 +590,63 @@ public static partial class BotChat
 
     /// <summary>The <c>--log</c> line per turn.</summary>
     public static string TurnLogLine(int n, string speaker) => string.Create(CultureInfo.InvariantCulture, $"Botchat turn {n}: {speaker}");
+
+    /// <summary>The most pictures one turn message carries with <c>Botchat vision enabled</c> (2026-09-27): the newest; a local vision server pays for each.</summary>
+    public const int MaxVisionPictures = 4;
+
+    /// <summary>
+    /// The pictures a bot is shown on its turn (<c>Botchat vision enabled</c>, 2026-09-27): those logged after
+    /// <paramref name="seen"/> (the last <see cref="BotPicture.Seq"/> it was shown), less the ones it drew itself with
+    /// <c>generate_image</c> — it saw those as it drew them — the app's picture of its own reply kept (it never saw that).
+    /// The newest entries whose pictures come to at most <paramref name="max"/>, oldest first; one entry over the cap is
+    /// cut to its newest pictures. Pure.
+    /// </summary>
+    public static IReadOnlyList<BotPicture> PicturesFor(string speaker, IReadOnlyList<BotPicture> log, int seen, int max = MaxVisionPictures)
+    {
+        ArgumentNullException.ThrowIfNull(speaker);
+        ArgumentNullException.ThrowIfNull(log);
+        var kept = new List<BotPicture>();
+        int room = max;
+        foreach (var picture in log.Where(p => p.Seq > seen && p.Images.Count > 0 && !(p.Drawn && Profiles.NameEquals(p.Owner, speaker))).Reverse())
+        {
+            if (room <= 0)
+            {
+                break;
+            }
+
+            kept.Add(picture.Images.Count <= room ? picture : picture with { Images = picture.Images.TakeLast(room).ToList() });
+            room -= kept[^1].Images.Count;
+        }
+
+        kept.Reverse();
+        return kept;
+    }
+
+    /// <summary>
+    /// The line the turn text ends with when pictures ride along (2026-09-27): what they are and whose, in the order
+    /// attached. Pinned: it is prompt text.
+    /// </summary>
+    public static string PicturesCaption(string speaker, IReadOnlyList<BotPicture> pictures)
+    {
+        ArgumentNullException.ThrowIfNull(pictures);
+        var names = pictures.Select(p =>
+        {
+            bool mine = Profiles.NameEquals(p.Owner, speaker);
+            string count = p.Images.Count == 1 ? "" : p.Images.Count.ToString(CultureInfo.InvariantCulture) + " ";
+            string plural = p.Images.Count == 1 ? "picture" : "pictures";
+            return p.Drawn ? $"{p.Owner}'s {count}{plural}"
+                : $"the {count}{plural} of {(mine ? "your" : p.Owner + "'s")} reply";
+        });
+        return "(Attached, oldest first: the pictures shown in the chat since you last spoke — " + string.Join(", ", names) + ".)";
+    }
 }
+
+/// <summary>
+/// A picture shown in a <c>/botchat</c> (2026-09-27, <c>Botchat vision enabled</c>): its place in the chat's picture log,
+/// the bot it belongs to — the one whose reply the app pictured, or the one that drew it (<paramref name="Drawn"/>, its own
+/// <c>generate_image</c>) — and the pictures.
+/// </summary>
+public sealed record BotPicture(int Seq, string Owner, bool Drawn, IReadOnlyList<Files.ImageAttachment> Images);
 
 /// <summary>One line of the shared botchat transcript: a bot's reply (<paramref name="Speaker"/> its profile) or the user's interjection.</summary>
 public sealed record BotChatLine(string Speaker, string Text, bool IsUser = false);

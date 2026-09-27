@@ -12,12 +12,17 @@ namespace NeonSidekick.Skills;
 /// </summary>
 public static class SkillsPrompt
 {
-    /// <summary>With at least one skill installed: how to use the list, and how to add to it.</summary>
-    public static readonly string Directive =
+    /// <summary>
+    /// How to use the list, with no way to add to it (2026-09-27): the <c>/botchat</c> bots', offered <c>load_skill</c>
+    /// alone (<see cref="LoadOnlySection"/>). <see cref="Directive"/> is this and <see cref="EditorSentence"/>.
+    /// </summary>
+    public static readonly string LoadOnlyDirective =
         "You have skills: folders of instructions for specific tasks, listed below with what each does and when to use it. " +
         "When a task matches a skill's description, call " + LoadSkillTool.ToolName + " with its name to read its full instructions before proceeding, " +
-        "and read a file it bundles with " + LoadSkillTool.ToolName + "'s " + LoadSkillTool.FileArgument + " argument. " +
-        EditorSentence;
+        "and read a file it bundles with " + LoadSkillTool.ToolName + "'s " + LoadSkillTool.FileArgument + " argument.";
+
+    /// <summary>With at least one skill installed: how to use the list, and how to add to it.</summary>
+    public static readonly string Directive = LoadOnlyDirective + " " + EditorSentence;
 
     /// <summary>With none installed: only the way to write one.</summary>
     public static readonly string DirectiveWithoutSkills =
@@ -36,6 +41,13 @@ public static class SkillsPrompt
     {
         ArgumentNullException.ThrowIfNull(skills);
         return skills.Count == 0 ? DirectiveWithoutSkills : Directive + "\n\n" + Catalog(skills);
+    }
+
+    /// <summary>The load-only block (2026-09-27, the <c>/botchat</c> bots): <see cref="LoadOnlyDirective"/>, a blank line and the catalog. Only for a non-empty list.</summary>
+    public static string LoadOnlySection(IReadOnlyList<Skill> skills)
+    {
+        ArgumentNullException.ThrowIfNull(skills);
+        return LoadOnlyDirective + "\n\n" + Catalog(skills);
     }
 
     /// <summary>The specification's list: one <c>&lt;skill&gt;</c> per skill with its name and description, the description XML-escaped.</summary>

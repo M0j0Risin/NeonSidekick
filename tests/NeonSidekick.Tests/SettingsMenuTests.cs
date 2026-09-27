@@ -765,6 +765,8 @@ public class SettingsMenuTests : IDisposable
                 SettingsField.ClaudeExecutable, SettingsField.ClaudePermissions, SettingsField.ClaudeModel, SettingsField.ClaudeEffort,
                 SettingsField.ClaudeAdvisor, SettingsField.ClaudeAdvisorContext, SettingsField.ClaudeAdvisorCallsPerTurn, SettingsField.ClaudeAdvisorModel, SettingsField.ClaudeAdvisorEffort, SettingsField.ClaudeAdvisorConfirm,
                 SettingsField.ClaudeApi, SettingsField.ClaudeApiKey, SettingsField.ClaudeApiMaxTokens, SettingsField.ClaudeApiPromptCaching,
+                SettingsField.BotChatSkills,
+                SettingsField.BotChatVision,
             },
             Enum.GetValues<SettingsField>());
         // The compact rows: on the LLM tab after the context length but no reconnect; the type a picker, the two others typed.
@@ -1447,12 +1449,12 @@ public class SettingsMenuTests : IDisposable
 
     /// <summary>The Botchat tab's last row (2026-09-26): typed seconds, 0 to 30, a value outside refused and the saved one kept; no reconnect.</summary>
     [Fact]
-    public async Task OnThePane_BotChatNonTtsDelay_IsTheBotchatTabsLastRow_SavedAndRangeChecked()
+    public async Task OnThePane_BotChatNonTtsDelay_OnTheBotchatTab_SavedAndRangeChecked()
     {
         _console.Profile.Width = 240;   // the error line is longer than 100 cells
         var (menu, pane) = PaneMenu();
         GoTo(SettingsTab.BotChat);
-        Down(SettingsMenu.TabFields[(int)SettingsTab.BotChat].Count - 1);
+        Down(SettingsMenu.TabFields[(int)SettingsTab.BotChat].ToList().IndexOf(SettingsField.BotChatNonTtsDelaySeconds));   // the last row until Botchat skills enabled (2026-09-27)
         Push(Keys.Enter);                       // "5"
         Backspace(1);
         _console.Input.PushText("12");

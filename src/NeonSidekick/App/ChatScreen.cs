@@ -8975,6 +8975,26 @@ internal sealed partial class ChatScreen
     /// <summary><c>/botchat</c> is running (2026-09-24): a line typed under a reply is queued whatever <c>Queue messages</c> says (<c>QueueLine</c>). Read on the watcher task.</summary>
     private volatile bool _botChatRunning;
 
+    /// <summary>
+    /// The pictures shown in the running <c>/botchat</c>, in order (2026-09-27, <c>Botchat vision enabled</c>): the app's
+    /// (<see cref="ShowBotPicture"/>) and the bots' own <c>generate_image</c> results (<see cref="Render"/>, while
+    /// <see cref="_botSpeaker"/> is set). Null outside a chat; filled whatever the switch says, so turning it on mid-chat
+    /// shows the next bot what it missed.
+    /// </summary>
+    private List<BotPicture>? _botPictureLog;
+
+    /// <summary>The bot whose turn is running (2026-09-27): whose a <c>generate_image</c> picture is. Set and cleared with <see cref="_botTurnRunning"/>.</summary>
+    private string? _botSpeaker;
+
+    /// <summary>A picture into <see cref="_botPictureLog"/>, numbered on (2026-09-27); nothing outside a chat.</summary>
+    private void LogBotPicture(string owner, bool drawn, IReadOnlyList<ImageAttachment> images)
+    {
+        if (_botPictureLog is { } log && images.Count > 0)
+        {
+            log.Add(new BotPicture(log.Count + 1, owner, drawn, images));
+        }
+    }
+
     /// <summary>The last turn's reply as shown (what <c>/copy</c> keeps), for <c>/botchat</c>'s shared transcript.</summary>
     private string _lastReply = "";
 
@@ -9119,6 +9139,9 @@ internal sealed partial class ChatScreen
         var ladder = new BotEscLadder();
         _botNoWorkflowTold = false;
         _botChatRunning = true;
+        // Vision (2026-09-27): the pictures shown in this chat, and the last one each bot was shown, by name.
+        _botPictureLog = [];
+        var picturesSeen = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         try
         {
             while (!cancellationToken.IsCancellationRequested)
@@ -9142,7 +9165,24 @@ internal sealed partial class ChatScreen
                 var imageMode = BotChatImageMode.Resolve(effective);
                 bool pictured = effective.BotChatImages && ComfyOffered(effective, _comfy);
                 var imageTool = pictured && BotChatImageMode.Offers(imageMode) ? BotImageTool(effective) : null;
-                var history = new ConversationHistory(BotChat.SystemPrompt(bot.Persona, bot.Name, others, topic, speaking, bot.VoiceDirective, markdown, pronouns, images: imageTool is not null));
+                // Skills (2026-09-27): read per reply too — the main chat's catalog, so the starting profile's, never this bot's own.
+                var (skills, skillTool) = BotSkills(effective);
+                // Vision (2026-09-27): the pictures shown since this bot last spoke ride its turn message, with a caption saying whose.
+                // The caption rides the sent text alone: the stored session keeps the line as it was.
+                string sentText = turnText;
+                IReadOnlyList<ImageAttachment> seenImages = [];
+                if (effective.BotChatVision && _botPictureLog is { Count: > 0 } pictureLog)
+                {
+                    var shown = BotChat.PicturesFor(bot.Name, pictureLog, picturesSeen.GetValueOrDefault(bot.Name));
+                    if (shown.Count > 0)
+                    {
+                        sentText += "\n\n" + BotChat.PicturesCaption(bot.Name, shown);
+                        seenImages = shown.SelectMany(p => p.Images).ToList();
+                    }
+                }
+
+                picturesSeen[bot.Name] = _botPictureLog?.Count ?? 0;
+                var history = new ConversationHistory(BotChat.SystemPrompt(bot.Persona, bot.Name, others, topic, speaking, bot.VoiceDirective, markdown, pronouns, images: imageTool is not null, skills: skills));
                 history.Replace(prior);
                 if ((links.Count > 0 && links[next] is { } own ? _session.CreateAssistant(history, own) : _session.CreateAssistant(history)) is not { } assistant)
                 {
@@ -9158,6 +9198,13 @@ internal sealed partial class ChatScreen
                     assistant.TextToolCalls = true;
                 }
 
+                if (skillTool is not null)
+                {
+                    // Beside the picture tool when both are offered, the words' round trip counted once.
+                    assistant.Tools = imageTool is null ? [skillTool] : [imageTool, skillTool];
+                    assistant.MaxToolIterations = imageTool is null ? BotSkillToolIterations : BotImageToolIterations + BotSkillToolIterations - 1;
+                }
+
                 DiagnosticLog.Info(AppCategory, BotChat.TurnLogLine(replies + 1, bot.Name));
                 int turnId = ladder.BeginBot();
                 // Async off (later on 2026-09-25): the reply is written unseen, its picture made, then both shown — picture first.
@@ -9166,7 +9213,7 @@ internal sealed partial class ChatScreen
                 ComfyGeneration? picture = null;
                 if (held)
                 {
-                    var (collected, thinkingCancelled) = await UnderWatchAsync(BotChat.ThinkingSpinner(bot.Name), token => CollectBotTurnAsync(assistant, turnText, token), cancellationToken,
+                    var (collected, thinkingCancelled) = await UnderWatchAsync(BotChat.ThinkingSpinner(bot.Name), token => CollectBotTurnAsync(assistant, sentText, seenImages, token), cancellationToken,
                         softCancel: () => ladder.Press(turnId, shown: false, voiceAudible: false, responding: true) == BotPress.StopVoice).ConfigureAwait(false);
                     if (thinkingCancelled || collected is null)
                     {
@@ -9199,7 +9246,7 @@ internal sealed partial class ChatScreen
                     }
                 }
 
-                var outcome = await RunTurnAsync(assistant, turnText, [], cancellationToken, bot, replay, picture, ladder, turnId).ConfigureAwait(false);
+                var outcome = await RunTurnAsync(assistant, sentText, seenImages, cancellationToken, bot, replay, picture, ladder, turnId).ConfigureAwait(false);
                 await EndTurnAsync(closePane: outcome is not (TurnOutcome.Continue or TurnOutcome.Withdrawn), cancellationToken).ConfigureAwait(false);
                 if (outcome == TurnOutcome.Exit)
                 {
@@ -9292,6 +9339,7 @@ internal sealed partial class ChatScreen
         finally
         {
             _botChatRunning = false;
+            _botPictureLog = null;
             // Kept for /botchat --resume (2026-09-25), however the chat ended; one with nothing said has nothing to carry on.
             if (lines.Count > 0)
             {
@@ -9389,6 +9437,29 @@ internal sealed partial class ChatScreen
 
     /// <summary>The model's round trips a bot's turn may take while it is offered <c>generate_image</c> (2026-09-25): a picture or two, then its words.</summary>
     private const int BotImageToolIterations = 3;
+
+    /// <summary>The model's round trips a bot's turn may take while it is offered <c>load_skill</c> (2026-09-27): a skill and a file it bundles, then its words.</summary>
+    private const int BotSkillToolIterations = 3;
+
+    /// <summary>
+    /// The skills a bot sees and the one skill tool it is offered (2026-09-27, <c>Botchat skills enabled</c>): the main chat's
+    /// catalog, rescanned as a turn's is — the starting profile's, the global and (with <c>Use external skills</c>) the external
+    /// skills; a bot's own profile's are never read (the user's call) — and <c>load_skill</c>, never <c>skill_editor</c> (a bot
+    /// must not write the parent's skills). Nothing with the switch or <c>Agent skills</c> off, no skill installed, or
+    /// <c>load_skill</c> switched off by name on <c>/tools</c>.
+    /// </summary>
+    private (IReadOnlyList<Skill>? Skills, AIFunction? Tool) BotSkills(AppSettingsData effective)
+    {
+        if (!effective.BotChatSkills || !effective.AgentSkills
+            || Without(_skillTools, ToolsText.DisabledSet(effective.ToolsDisabled)).FirstOrDefault(tool => string.Equals(tool.Name, LoadSkillTool.ToolName, StringComparison.Ordinal)) is not { } tool)
+        {
+            return (null, null);
+        }
+
+        _catalog.Scan(effective.ExternalSkills);
+        var skills = _catalog.Skills;
+        return skills.Count == 0 ? (null, null) : (skills, tool);
+    }
 
     /// <summary>Whether <see cref="BotChat.NoWorkflowNotice"/> was shown this chat: once is enough.</summary>
     private bool _botNoWorkflowTold;
@@ -9510,12 +9581,12 @@ internal sealed partial class ChatScreen
     /// <see cref="RunTurnAsync"/> to replay once the picture is made. An exception is kept as the error notice a streamed turn
     /// would show; a cancel propagates.
     /// </summary>
-    private static async Task<IReadOnlyList<TurnEvent>> CollectBotTurnAsync(Assistant assistant, string text, CancellationToken cancellationToken)
+    private static async Task<IReadOnlyList<TurnEvent>> CollectBotTurnAsync(Assistant assistant, string text, IReadOnlyList<ImageAttachment> images, CancellationToken cancellationToken)
     {
         var events = new List<TurnEvent>();
         try
         {
-            await foreach (var evt in assistant.RunTurnAsync(text, [], cancellationToken).ConfigureAwait(false))
+            await foreach (var evt in assistant.RunTurnAsync(text, images, cancellationToken).ConfigureAwait(false))
             {
                 events.Add(evt);
             }
@@ -9636,6 +9707,7 @@ internal sealed partial class ChatScreen
 
         // A bot's picture is drawn from its prompt alone (WriteBotPictureAsync gives no input), so text-to-image's 🖼️ (2026-09-26).
         ComfyLines(generation.Text, line => _transcript.Notice(ComfyText.TextToImageGlyph + line));
+        LogBotPicture(bot.Name, drawn: false, generation.Images);
         // The strip first: a fullsize box then leaves its rows.
         AddToPictureStrip(generation.Images);
         var (tiles, ids) = ReadThumbnails(generation.Images, ThumbnailSize.Resolve(_effective(), WindowBox()), sandbox: true);
@@ -10237,7 +10309,8 @@ internal sealed partial class ChatScreen
         // with the toggle off nothing is even decoded. Read once, switch and size: a picture a
         // tool fetches mid-turn is drawn by the same switch at the same size.
         ThumbnailBox? thumbnails = effective.ShowImageThumbnails ? ThumbnailSize.Resolve(effective, WindowBox()) : null;
-        if (thumbnails is { } box)
+        // Not a /botchat turn's (2026-09-27, Botchat vision enabled): its pictures were drawn when they were made.
+        if (thumbnails is { } box && bot is null)
         {
             // A dropped picture's path is full; a pasted one has none (its bytes are kept for a double-click).
             var (tiles, ids) = ReadThumbnails(images, box, sandbox: false);
@@ -10246,6 +10319,7 @@ internal sealed partial class ChatScreen
 
         // A /botchat turn's tokens stay out of the main conversation's usage (its auto-compact reads the last request).
         _botTurnRunning = bot is not null;
+        _botSpeaker = bot?.Name;
         if (bot is null)
         {
             _session.Usage.BeginTurn();
@@ -10446,6 +10520,7 @@ internal sealed partial class ChatScreen
             // A reply that ran to its end with no usage report is counted as unreported; a cut or
             // failed one is not (its report never had the chance to arrive).
             _botTurnRunning = false;
+            _botSpeaker = null;
             if (!cancelled && !failed && !sawError && bot is null)
             {
                 _session.Usage.EndTurn();
@@ -10897,6 +10972,10 @@ internal sealed partial class ChatScreen
                 if (result.Images is { Count: > 0 } made)
                 {
                     AddToPictureStrip(made);
+                    if (_botSpeaker is { } drawer)
+                    {
+                        LogBotPicture(drawer, drawn: true, made);
+                    }
                 }
 
                 break;

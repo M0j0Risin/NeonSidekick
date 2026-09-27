@@ -2,6 +2,8 @@ using System.Net;
 using Microsoft.Extensions.AI;
 using NeonSidekick.App;
 using NeonSidekick.Llm;
+using NeonSidekick.Llm.Tools;
+using NeonSidekick.Skills;
 using NeonSidekick.Settings;
 using NeonSidekick.Tests.Fakes;
 using NeonSidekick.UI;
@@ -557,5 +559,61 @@ public partial class ChatScreenTests
 
         Assert.DoesNotContain(_endpoints, e => e.BaseUrl.Host == "ada-only-server");
         Assert.DoesNotContain("model=ada-only-model", output);
+    }
+
+    /// <summary>
+    /// Botchat skills enabled (2026-09-27, the user's ask): every bot sees the main chat's skills — the starting profile's
+    /// and the global ones — never its own profile's, and is offered load_skill alone; the skill loads mid-reply.
+    /// </summary>
+    [Fact]
+    public async Task BotChat_SkillsEnabled_EveryBotSeesTheStartersAndTheGlobalSkills_NotItsOwn_WithLoadSkillAlone()
+    {
+        BotChatFixture();
+        _settings.Update(d => d.BotChatSkills = true);
+        PutSkill(ProfileSkills, "haiku");
+        PutSkill(GlobalSkills, "limerick", "Writes limericks.");
+        PutSkill(Path.Combine(ProfileDir("ada"), SkillRoots.DirectoryName), "ada-only-skill", "Never listed.");
+        _chat.Enqueue(FakeChatClient.Call("c1", LoadSkillTool.ToolName, new Dictionary<string, object?> { ["name"] = "haiku" }));
+        _chat.EnqueueText("A haiku, then.");
+        _chat.EnqueueText("Hello from Ada.");
+        _chat.EnqueueText("Neon ", "again");
+        EscDuringRequest(4);
+        PushLine("/botchat poems");
+        PushLine("/exit");
+
+        await RunAsync();
+
+        Assert.Equal(4, _chat.Requests.Count);
+        foreach (int i in new[] { 0, 2 })
+        {
+            Assert.Equal([LoadSkillTool.ToolName], _chat.Options[i]!.Tools!.Cast<AIFunction>().Select(t => t.Name).ToArray());
+            string system = SystemText(_chat.Requests[i]);
+            Assert.Contains(SkillsPrompt.LoadOnlyDirective, system);
+            Assert.Contains("<name>haiku</name>", system);
+            Assert.Contains("<name>limerick</name>", system);
+            Assert.DoesNotContain("ada-only-skill", system);
+            Assert.DoesNotContain(SkillEditorTool.ToolName, system);
+        }
+
+        // The skill's body came back to the bot that asked for it.
+        Assert.Contains(_chat.Requests[1].SelectMany(m => m.Contents).OfType<FunctionResultContent>(), r => (r.Result?.ToString() ?? "").Contains("Five, seven, five.", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task BotChat_SkillsOff_TheDefault_NoToolAndNoSkillsBlock_WithSkillsInstalled()
+    {
+        BotChatFixture();
+        PutSkill(ProfileSkills, "haiku");
+        _chat.EnqueueText("One.");
+        _chat.EnqueueText("never");
+        EscDuringRequest(2);
+        PushLine("/botchat poems");
+        PushLine("/exit");
+
+        await RunAsync();
+
+        Assert.True(_chat.Options[0]?.Tools is null or { Count: 0 });
+        Assert.DoesNotContain(SkillsPrompt.LoadOnlyDirective, SystemText(_chat.Requests[0]));
+        Assert.DoesNotContain("<name>haiku</name>", SystemText(_chat.Requests[0]));
     }
 }

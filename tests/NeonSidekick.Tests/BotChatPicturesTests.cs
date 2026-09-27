@@ -124,14 +124,14 @@ public class BotChatPicturesTests
     }
 
     [Fact]
-    public void TheBotchatTab_IsLast_ItsSixRowsDefaultingToSingle_Off_Automatic_TheFirstWorkflow_Async_AndAFiveSecondPause()
+    public void TheBotchatTab_IsLast_ItsEightRowsDefaultingToSingle_Off_Automatic_TheFirstWorkflow_Async_AFiveSecondPause_NoSkills_AndNoVision()
     {
         var data = new AppSettingsData();
 
         Assert.Equal("Botchat", SettingsMenu.TabTitles[(int)SettingsTab.BotChat]);
         Assert.Equal((int)SettingsTab.BotChat, SettingsMenu.TabTitles.Count - 1);   // last again since later on 2026-09-27 (the Claude tab moved to /tools)
-        Assert.Equal([SettingsField.BotChatLlmMode, SettingsField.BotChatImages, SettingsField.BotChatImageMode, SettingsField.BotChatImageWorkflow, SettingsField.BotChatImageAsync, SettingsField.BotChatNonTtsDelaySeconds], SettingsMenu.TabFields[(int)SettingsTab.BotChat]);
-        Assert.Equal(["Botchat LLM mode", "Botchat images enabled", "Botchat image mode", "Botchat image workflow", "Botchat image async", "Botchat non-TTS delay"], SettingsMenu.TabFields[(int)SettingsTab.BotChat].Select(SettingsMenu.FieldName));
+        Assert.Equal([SettingsField.BotChatLlmMode, SettingsField.BotChatImages, SettingsField.BotChatImageMode, SettingsField.BotChatImageWorkflow, SettingsField.BotChatImageAsync, SettingsField.BotChatNonTtsDelaySeconds, SettingsField.BotChatSkills, SettingsField.BotChatVision], SettingsMenu.TabFields[(int)SettingsTab.BotChat]);
+        Assert.Equal(["Botchat LLM mode", "Botchat images enabled", "Botchat image mode", "Botchat image workflow", "Botchat image async", "Botchat non-TTS delay", "Botchat skills enabled", "Botchat vision enabled"], SettingsMenu.TabFields[(int)SettingsTab.BotChat].Select(SettingsMenu.FieldName));
         Assert.False(SettingsMenu.IsToggle(SettingsField.BotChatLlmMode));
         Assert.Equal("single", SettingsMenu.FieldValue(SettingsField.BotChatLlmMode, data, "."));
         Assert.Equal("multi", SettingsMenu.FieldValue(SettingsField.BotChatLlmMode, new AppSettingsData { BotChatLlmMode = "multi" }, "."));
@@ -151,6 +151,13 @@ public class BotChatPicturesTests
         Assert.Equal("1 second", SettingsMenu.SecondsLabel(1));
         Assert.Equal("5", SettingsMenu.EditableValue(SettingsField.BotChatNonTtsDelaySeconds, data));
         Assert.Equal("must be 0 (off) or 1 to 30 seconds", SettingsMenu.BotChatNonTtsDelayRangeError);
+        // The skills (2026-09-27): a toggle, off by default.
+        Assert.True(SettingsMenu.IsToggle(SettingsField.BotChatSkills));
+        Assert.Equal("off", SettingsMenu.FieldValue(SettingsField.BotChatSkills, data, "."));
+        Assert.Equal("on", SettingsMenu.FieldValue(SettingsField.BotChatSkills, new AppSettingsData { BotChatSkills = true }, "."));
+        // Vision (2026-09-27): a toggle, off by default.
+        Assert.True(SettingsMenu.IsToggle(SettingsField.BotChatVision));
+        Assert.Equal("off", SettingsMenu.FieldValue(SettingsField.BotChatVision, data, "."));
     }
 
     [Theory]

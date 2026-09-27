@@ -194,6 +194,54 @@ public class BotChatTests
         Assert.StartsWith(Assistant.DefaultPersona, BotChat.SystemPrompt(null, "neon", ["ada"], "", false, null, false), StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void SystemPrompt_WithSkills_PutsTheLoadOnlyBlock_BetweenThePersonaAndTheRules()
+    {
+        var haiku = new Skills.Skill("haiku", "Writes haiku.", Skills.SkillScope.Global, @"D:\home\skills\haiku");
+        string plain = BotChat.SystemPrompt("You are Ada.", "ada", ["default"], "ships", false, null, false);
+        string prompt = BotChat.SystemPrompt("You are Ada.", "ada", ["default"], "ships", false, null, false, skills: [haiku]);
+
+        Assert.Equal(plain, BotChat.SystemPrompt("You are Ada.", "ada", ["default"], "ships", false, null, false, skills: []));
+        Assert.DoesNotContain(Skills.SkillsPrompt.LoadOnlyDirective, plain, StringComparison.Ordinal);
+        Assert.EndsWith("\n\n" + Skills.SkillsPrompt.LoadOnlySection([haiku]) + "\n\n" + BotChat.Rules("ada", ["default"], "ships"), prompt, StringComparison.Ordinal);
+        Assert.StartsWith("You are Ada.", prompt, StringComparison.Ordinal);
+        Assert.DoesNotContain(Llm.Tools.SkillEditorTool.ToolName, prompt, StringComparison.Ordinal);
+    }
+
+    private static IReadOnlyList<Files.ImageAttachment> Pics(int n) =>
+        Enumerable.Range(0, n).Select(i => new Files.ImageAttachment("p" + i + ".png", [(byte)i], "image/png", 1, 1)).ToList();
+
+    [Fact]
+    public void PicturesFor_TheNewerOnes_LessTheSpeakersOwnDrawn_TheNewestFourPictures()
+    {
+        BotPicture[] log =
+        [
+            new(1, "ada", Drawn: false, Pics(1)),     // seen already
+            new(2, "neon", Drawn: true, Pics(1)),     // neon drew it: neon saw it then
+            new(3, "neon", Drawn: false, Pics(1)),    // the app's picture of neon's reply: neon never saw it
+            new(4, "max", Drawn: true, Pics(2)),
+            new(5, "ada", Drawn: false, Pics(2)),
+        ];
+
+        var shown = BotChat.PicturesFor("NEON", log, seen: 1);
+        Assert.Equal([4, 5], shown.Select(p => p.Seq));   // four pictures: 3 no longer fits
+        Assert.Equal([3, 4, 5], BotChat.PicturesFor("neon", log, seen: 1, max: 5).Select(p => p.Seq));
+        var cut = BotChat.PicturesFor("neon", log, seen: 1, max: 3);
+        Assert.Equal([4, 5], cut.Select(p => p.Seq));
+        Assert.Equal([log[3].Images[1]], cut[0].Images);   // the entry over the cap keeps its newest
+        Assert.Equal([2, 3, 4, 5], BotChat.PicturesFor("ada", log, seen: 1, max: 10).Select(p => p.Seq));
+        Assert.Empty(BotChat.PicturesFor("ada", log, seen: 5));
+    }
+
+    [Fact]
+    public void PicturesCaption_IsPinned()
+    {
+        BotPicture[] shown = [new(3, "neon", false, Pics(1)), new(4, "max", true, Pics(2)), new(5, "ada", false, Pics(1)), new(6, "neon", true, Pics(1))];
+
+        Assert.Equal("(Attached, oldest first: the pictures shown in the chat since you last spoke — the picture of your reply, max's 2 pictures, the picture of ada's reply, neon's picture.)",
+            BotChat.PicturesCaption("neon", shown));
+    }
+
     /// <summary>Prompt text is pinned (the test pin policy): the words the models are told.</summary>
     [Fact]
     public void Rules_ArePinned()

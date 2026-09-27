@@ -28,6 +28,15 @@ public class SkillsPromptTests
     }
 
     [Fact]
+    public void LoadOnlySection_IsTheDirectiveLessTheEditorSentence_ThenTheCatalog()
+    {
+        Assert.Equal(SkillsPrompt.LoadOnlyDirective + " " + SkillsPrompt.EditorSentence, SkillsPrompt.Directive);
+        Assert.Contains(LoadSkillTool.ToolName, SkillsPrompt.LoadOnlyDirective);
+        Assert.DoesNotContain(SkillEditorTool.ToolName, SkillsPrompt.LoadOnlyDirective);
+        Assert.Equal(SkillsPrompt.LoadOnlyDirective + "\n\n" + SkillsPrompt.Catalog([Haiku]), SkillsPrompt.LoadOnlySection([Haiku]));
+    }
+
+    [Fact]
     public void Section_WithNoSkill_IsTheShortDirectiveAlone()
     {
         Assert.Equal(SkillsPrompt.DirectiveWithoutSkills, SkillsPrompt.Section([]));

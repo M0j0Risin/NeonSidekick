@@ -612,6 +612,27 @@ public sealed class AppSettingsData
 
     public const int DefaultBotChatNonTtsDelaySeconds = 5;
 
+    /// <summary>
+    /// Whether the <c>/botchat</c> bots get skills (2026-09-27, the user's ask): on, and with <see cref="AgentSkills"/> on,
+    /// every bot's prompt lists the skills the main chat sees — the starting profile's, the global ones and, with
+    /// <see cref="ExternalSkills"/> on, the external ones; never a bot's own profile's (the user's call: the parent's
+    /// skills stand for the room) — and each bot is offered <c>load_skill</c>, never <c>skill_editor</c> (a bot must not
+    /// write the parent's skills). Off (the default), the chat is talk alone as before. Read per reply, no reconnect.
+    /// The Botchat tab of <c>/settings</c>, its last row. No variable.
+    /// </summary>
+    public bool BotChatSkills { get; set; }
+
+    /// <summary>
+    /// Whether the <c>/botchat</c> bots see the chat's pictures (2026-09-27, the user's ask: they reacted to each other's
+    /// words about a picture, never the picture): on, each bot's turn message carries the pictures shown in the chat since
+    /// it last spoke — the app's pictures, and the other bots' own <c>generate_image</c> pictures (not the ones it drew
+    /// itself, seen as it drew them) — the newest <see cref="App.BotChat.MaxVisionPictures"/>, with a caption saying whose.
+    /// Only for models that read images: a text-only server fails the turn (in <c>multi</c> mode every bot's own model
+    /// counts). Not kept for <c>/botchat --resume</c> or the stored session. Off (the default), the bots see text alone.
+    /// Read per reply. The Botchat tab of <c>/settings</c>, its last row. No variable.
+    /// </summary>
+    public bool BotChatVision { get; set; }
+
     // ─── Skills─────────────────────────────────────────────────────────────────
 
     /// <summary>
