@@ -6,8 +6,12 @@ using NeonSidekick.Diagnostics;
 
 namespace NeonSidekick.Web;
 
-/// <summary>What one fetch is told: the engine (the setting <c>Web browser mode</c>), the browser path, where it may reach (the setting <c>Web browser network mode</c>), and the page it is coming from.</summary>
-public sealed record FetchOptions(FetchEngine Engine, string BrowserPath, NetworkReach Reach, Uri? Referer = null);
+/// <summary>
+/// What one fetch is told: the engine (the setting <c>Web browser mode</c>), the browser path, where it may reach (the setting
+/// <c>Web browser network mode</c>), the page it is coming from, and an <c>Accept</c> in place of Chrome's (2026-09-26: the GitHub
+/// API's media types for <c>/skills add</c>; null keeps <see cref="BrowserHeaders.Accept"/>).
+/// </summary>
+public sealed record FetchOptions(FetchEngine Engine, string BrowserPath, NetworkReach Reach, Uri? Referer = null, string? Accept = null);
 
 /// <summary>
 /// A fetched page or the reason there is none. <see cref="Page"/> is the converted HTML;
@@ -326,6 +330,12 @@ public sealed class WebFetcher
                 budget.CancelAfter(FetchTimeout);
                 using var request = new HttpRequestMessage(HttpMethod.Get, current);
                 BrowserHeaders.Apply(request, referer);
+                if (options.Accept is { } accept)
+                {
+                    request.Headers.Remove("Accept");
+                    request.Headers.TryAddWithoutValidation("Accept", accept);
+                }
+
                 response = await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, budget.Token).ConfigureAwait(false);
                 int status = (int)response.StatusCode;
                 if (status is >= 300 and < 400 && response.Headers.Location is { } location)

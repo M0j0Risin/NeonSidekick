@@ -43,7 +43,10 @@ public static class SkillZip
     }
 
     /// <summary>A repository with the Anthropic layout: <c>skills/&lt;name&gt;/SKILL.md</c> for each name, and a README.</summary>
-    public static byte[] Repo(params string[] names) =>
-        Build(names.SelectMany(n => new[] { ($"skills/{n}/SKILL.md", SkillMd(n)), ($"skills/{n}/scripts/run.py", "print('hi')\n") })
-            .Append(("README.md", "# Skills\n")));
+    public static byte[] Repo(params string[] names) => Build(RepoFiles(names));
+
+    /// <summary>The files of <see cref="Repo"/>, for <see cref="SkillTree"/>.</summary>
+    public static IReadOnlyList<(string Path, string Content)> RepoFiles(params string[] names) =>
+        names.SelectMany(n => new[] { ($"skills/{n}/SKILL.md", SkillMd(n)), ($"skills/{n}/scripts/run.py", "print('hi')\n") })
+            .Append(("README.md", "# Skills\n")).ToList();
 }

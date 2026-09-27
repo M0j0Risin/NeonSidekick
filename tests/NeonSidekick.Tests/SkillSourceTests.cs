@@ -44,6 +44,20 @@ public class SkillSourceTests
     }
 
     [Fact]
+    public void TheListingsUrls_AreTheApisAndRaws_AndTheFolderUrlReadsBack()
+    {
+        const string sha = "33375500bcea98d610eb30ce10ac4e59b89c390d";
+        var tree = Parse("https://github.com/anthropics/skills/tree/main/skills/pdf");
+        Assert.Equal("https://api.github.com/repos/anthropics/skills/commits/main", tree.CommitUrl.AbsoluteUri);
+        Assert.Equal("https://api.github.com/repos/anthropics/skills/git/trees/" + sha + "?recursive=1", tree.TreeUrl(sha).AbsoluteUri);
+        Assert.Equal("https://raw.githubusercontent.com/anthropics/skills/" + sha + "/skills/my%20pdf/a%23b.md", tree.RawUrl(sha, "skills/my pdf/a#b.md").AbsoluteUri);
+        Assert.Equal("https://github.com/anthropics/skills/tree/" + sha, tree.FolderUrl(sha, "").AbsoluteUri);
+
+        var back = Parse(tree.FolderUrl(sha, "skills/pdf").AbsoluteUri);
+        Assert.Equal((sha, "skills/pdf"), (back.Ref, back.SubPath));
+    }
+
+    [Fact]
     public void GitHubUrls_TakeTheRefAndThePath()
     {
         var root = Parse("https://github.com/anthropics/skills");

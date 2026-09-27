@@ -20,10 +20,12 @@ public enum SkillSourceKind
 /// there are several; <c>owner/repo/skill</c> — one of them, skills.sh's own id form, so a search
 /// result can be typed back; a github.com URL (<c>/tree/&lt;ref&gt;/&lt;path&gt;</c> narrows it to a
 /// folder, <c>/blob/&lt;ref&gt;/&lt;path&gt;/SKILL.md</c> to one skill); and an https URL of a <c>.zip</c>.
-/// The repository is always downloaded whole — codeload's zip of the ref, one request, no API and
-/// no rate limit — and the path only narrows where the archive is searched; a branch name with a
-/// <c>/</c> in it cannot be told from the path after it and is not supported (the first segment
-/// after <c>tree</c> is the ref). Pure.
+/// A repository was at first downloaded whole — codeload's zip of the ref, one request, no API and
+/// no rate limit; later on 2026-09-26 (the user's call: repositories can be large) it is listed
+/// through the GitHub API and only what is needed fetched from <see cref="RawBase"/>, the zip kept as
+/// the fallback (<see cref="SkillHub.OpenAsync"/>). The path only narrows where the repository is
+/// searched; a branch name with a <c>/</c> in it cannot be told from the path after it and is not
+/// supported (the first segment after <c>tree</c> is the ref). Pure.
 /// </summary>
 public sealed record SkillSource(SkillSourceKind Kind, string? Query = null, string? Owner = null, string? Repo = null, string Ref = SkillSource.DefaultRef, string? SubPath = null, string? SkillId = null, Uri? ZipUrl = null)
 {
@@ -32,6 +34,26 @@ public sealed record SkillSource(SkillSourceKind Kind, string? Query = null, str
 
     public const string GitHubHost = "github.com";
     public const string CodeloadBase = "https://codeload.github.com/";
+
+    /// <summary>The REST API: the commit a ref names, and the commit's tree.</summary>
+    public const string ApiBase = "https://api.github.com/";
+
+    /// <summary>One file's bytes at a commit, off the API's rate limit.</summary>
+    public const string RawBase = "https://raw.githubusercontent.com/";
+
+    /// <summary>The commit <see cref="Ref"/> names, as the API answers it (<c>application/vnd.github.sha</c>: the 40 hex digits alone).</summary>
+    public Uri CommitUrl => new(ApiBase + "repos/" + Owner + "/" + Repo + "/commits/" + Uri.EscapeDataString(Ref));
+
+    /// <summary>The listing of every path at <paramref name="commit"/>.</summary>
+    public Uri TreeUrl(string commit) => new(ApiBase + "repos/" + Owner + "/" + Repo + "/git/trees/" + commit + "?recursive=1");
+
+    /// <summary>The bytes of <paramref name="path"/> (forward slashes) at <paramref name="commit"/>, each segment escaped.</summary>
+    public Uri RawUrl(string commit, string path) =>
+        new(RawBase + Owner + "/" + Repo + "/" + commit + "/" + string.Join('/', path.Split('/').Select(Uri.EscapeDataString)));
+
+    /// <summary>The folder on github.com at <paramref name="commit"/> (the repository's root for <c>""</c>): what the provenance records for a skill fetched from the listing, and a URL <c>/skills add</c> reads back.</summary>
+    public Uri FolderUrl(string commit, string folder) =>
+        new("https://" + GitHubHost + "/" + Owner + "/" + Repo + "/tree/" + commit + (folder.Length == 0 ? "" : "/" + string.Join('/', folder.Split('/').Select(Uri.EscapeDataString))));
 
     /// <summary>The flags, pinned: <c>--global</c> / <c>--profile</c> move the pane's first cursor, <c>--yes</c> is headless's consent.</summary>
     public const string GlobalFlag = "--global";

@@ -58,6 +58,27 @@ public static class SkillInstallText
 
     public static string DownloadingLabel(string label) => $"Downloading {label}";
 
+    /// <summary>A listing's SKILL.md files being fetched.</summary>
+    public static string ReadingSkillsLabel(string label) => $"Reading the skills of {label}";
+
+    /// <summary>A listing's one skill being fetched, after the yes.</summary>
+    public static string FetchingSkillLabel(string name) => $"Downloading {name}";
+
+    /// <summary>A GitHub source neither the API nor codeload has: the repository gone or private, or — when one was named — the branch.</summary>
+    public static string RepoNotFoundError(SkillSource source)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        return source.Ref == SkillSource.DefaultRef
+            ? $"{source.RepoName} is not on GitHub: the repository was deleted or made private"
+            : $"{source.Label} is not on GitHub: the repository or the ref '{source.Ref}' is gone, or the repository is private";
+    }
+
+    /// <summary>Added to <see cref="RepoNotFoundError"/> when the source came from a search.</summary>
+    public const string StaleSearchHitNote = " (skills.sh still lists it; pick another result)";
+
+    public static string TooManySkillsError(int count, int max) =>
+        $"The repository holds {Count(count)} skills, more than the {Count(max)} listed; name one (owner/repo/skill) or give its folder's URL";
+
     public static string NoResultsError(string query) => $"skills.sh found no skill for '{query}'";
 
     public static string NoSkillsError(string label) => $"{label} holds no SKILL.md";

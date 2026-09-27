@@ -50,12 +50,13 @@ public interface ISkillInstallHost
 /// (2026-09-26, the user's ask: search and download Agent Skills into the app, preview and confirm
 /// before anything is written). The steps: the argument read (<see cref="SkillSource"/>); words
 /// searched on skills.sh — none is an error, one goes straight on, several are a pick (headless:
-/// listed as ids to type back); the archive downloaded under a spinner (<see cref="SkillHub"/>); its
-/// skills found (<see cref="SkillArchive"/>) and the one named or picked; the preview printed; the
-/// collision rule (<see cref="SkillInstaller.Check"/>); the scope asked on a pane with the cursor on
-/// Cancel (headless: <c>--yes</c> is the consent, <c>--global</c> the scope, the profile's otherwise);
-/// the folder installed and the catalog rescanned. Shared by the screen and headless so both say
-/// the same; tested over a fake host.
+/// listed as ids to type back); the repository listed and its SKILL.md files fetched, or the archive
+/// downloaded, under a spinner (<see cref="SkillHub"/>); its skills found (<see cref="SkillArchive"/>)
+/// and the one named or picked; the preview printed; the collision rule
+/// (<see cref="SkillInstaller.Check"/>); the scope asked on a pane with the cursor on Cancel
+/// (headless: <c>--yes</c> is the consent, <c>--global</c> the scope, the profile's otherwise); a
+/// listed skill's files fetched after the yes; the folder installed and the catalog rescanned.
+/// Shared by the screen and headless so both say the same; tested over a fake host.
 /// </summary>
 public sealed class SkillInstallFlow
 {
@@ -122,15 +123,22 @@ public sealed class SkillInstallFlow
             SkillSource.TryParse(hit.Id, out source, out _);
         }
 
-        var (archive, failed) = await host.SpinAsync(SkillInstallText.DownloadingLabel(source!.Label), () => _hub.DownloadAsync(source, host.FetchOptions, cancellationToken)).ConfigureAwait(false);
+        var (archive, failed) = await host.SpinAsync(SkillInstallText.DownloadingLabel(source!.Label), () => _hub.OpenAsync(source, host.FetchOptions, cancellationToken)).ConfigureAwait(false);
         if (archive is null)
         {
-            host.Error(failed!);
+            host.Error(skillsShId is not null && failed == SkillInstallText.RepoNotFoundError(source) ? failed + SkillInstallText.StaleSearchHitNote : failed!);
             return false;
         }
 
         using (archive)
         {
+            if (archive.Remote
+                && await host.SpinAsync(SkillInstallText.ReadingSkillsLabel(source.Label), () => archive.FetchSkillMdsAsync(source.SubPath, source.SkillId, cancellationToken)).ConfigureAwait(false) is { } unread)
+            {
+                host.Error(unread);
+                return false;
+            }
+
             var candidates = archive.Candidates(source.SubPath);
             if (candidates.Count == 0)
             {
@@ -187,7 +195,7 @@ public sealed class SkillInstallFlow
                 Ref = source.Kind == SkillSourceKind.Zip ? "" : source.Ref,
                 Commit = archive.Commit,
                 Path = candidate.Folder,
-                Url = source.ArchiveUrl!.AbsoluteUri,
+                Url = (archive.Remote ? source.FolderUrl(archive.Commit!, candidate.Folder) : archive.Url ?? source.ArchiveUrl!).AbsoluteUri,
                 SkillsShId = skillsShId,
                 InstalledAt = host.Time.GetUtcNow(),
                 Files = candidate.Files.Count,
@@ -224,6 +232,14 @@ public sealed class SkillInstallFlow
             else
             {
                 host.Notice(SkillInstallText.KeptNotice(candidate.Name));
+                return false;
+            }
+
+            // A listing's files are fetched only now, after the yes: a cancelled install downloads nothing but its SKILL.md.
+            if (archive.Remote
+                && await host.SpinAsync(SkillInstallText.FetchingSkillLabel(candidate.Name), () => archive.FetchAsync(candidate, cancellationToken)).ConfigureAwait(false) is { } unfetched)
+            {
+                host.Error(SkillInstallText.FailedError(candidate.Name, unfetched));
                 return false;
             }
 

@@ -39,26 +39,114 @@ public class SkillInstallFlowTests : IDisposable
 
     private Task<bool> Run(string args) => Flow().RunAsync(args, _host, CancellationToken.None);
 
+    private const string Api = "https://api.github.com/repos/";
+    private const string Raw = "https://raw.githubusercontent.com/";
+
+    private List<string> Urls() => _http.Requests.Select(r => r.Uri.AbsoluteUri).ToList();
+
     [Fact]
-    public async Task OneHit_DownloadsPreviewsAsks_AndInstalls()
+    public async Task OneHit_ListsTheRepository_FetchesOnlyThatSkill_AndInstalls()
     {
         Search(Hits(("anthropics/skills/pdf", 201532)));
-        Archive("anthropics/skills", SkillZip.Repo("pdf", "docx"));
+        SkillTree.Map(_http, "anthropics/skills", SkillZip.RepoFiles("pdf", "docx"));
         _host.Answer = SkillScope.Global;
 
         Assert.True(await Run("pdf document"));
 
-        Assert.Equal(SkillHub.SearchUrl + "?q=pdf%20document&limit=25", _http.Requests[0].Uri.AbsoluteUri);
-        Assert.Equal("https://codeload.github.com/anthropics/skills/zip/HEAD", _http.Requests[1].Uri.AbsoluteUri);
-        Assert.Equal([SkillInstallText.SearchingLabel("pdf document"), SkillInstallText.DownloadingLabel("anthropics/skills")], _host.Spins);
+        // Later on 2026-09-26: the commit, its listing, the named skill's SKILL.md, then — after the yes — its other file. No zip, nothing of docx.
+        string at = Raw + "anthropics/skills/" + SkillZip.Commit + "/skills/pdf/";
+        Assert.Equal(
+            [SkillHub.SearchUrl + "?q=pdf%20document&limit=25", Api + "anthropics/skills/commits/HEAD", Api + "anthropics/skills/git/trees/" + SkillZip.Commit + "?recursive=1", at + "SKILL.md", at + "scripts/run.py"],
+            Urls());
+        Assert.Equal(
+            [SkillInstallText.SearchingLabel("pdf document"), SkillInstallText.DownloadingLabel("anthropics/skills"), SkillInstallText.ReadingSkillsLabel("anthropics/skills"), SkillInstallText.FetchingSkillLabel("pdf")],
+            _host.Spins);
         Assert.StartsWith("**pdf** — Does a thing.", _host.Previews.Single(), StringComparison.Ordinal);
         Assert.Equal(SkillInstallOption.New, _host.Asked.Single().Option);
         string folder = Path.Combine(Path.GetFullPath(_host.Roots.Global), "pdf");
         Assert.Equal(SkillInstallText.InstalledNotice("pdf", SkillScope.Global, folder), _host.Notices.Single());
-        Assert.Equal("anthropics/skills/pdf", SkillProvenance.Read(folder)!.SkillsShId);
-        Assert.Equal(SkillZip.Commit, SkillProvenance.Read(folder)!.Commit);
+        Assert.Equal("print('hi')\n", File.ReadAllText(Path.Combine(folder, "scripts", "run.py")));
+        var sidecar = SkillProvenance.Read(folder)!;
+        Assert.Equal("anthropics/skills/pdf", sidecar.SkillsShId);
+        Assert.Equal((SkillZip.Commit, "skills/pdf", "https://github.com/anthropics/skills/tree/" + SkillZip.Commit + "/skills/pdf"), (sidecar.Commit, sidecar.Path, sidecar.Url));
         Assert.Equal(1, _host.Rescans);
         Assert.Empty(_host.Errors);
+    }
+
+    [Fact]
+    public async Task AListedRepository_IsPickedFromItsSkillMds_AndACancelFetchesNothingMore()
+    {
+        SkillTree.Map(_http, "anthropics/skills", SkillZip.RepoFiles("pdf", "docx"), links: ["skills/pdf/link"]);
+        _host.Picks.Enqueue(1);
+        _host.Answer = null;
+
+        Assert.False(await Run("anthropics/skills"));
+
+        Assert.Equal(["docx  skills/docx", "pdf   skills/pdf"], _host.PickRows.Single());
+        Assert.Contains("link (a symbolic link, left out)", _host.Previews.Single(), StringComparison.Ordinal);
+        Assert.Equal(SkillInstallText.KeptNotice("pdf"), _host.Notices.Single());
+        Assert.DoesNotContain(Urls(), u => u.EndsWith(".py", StringComparison.Ordinal) || u.StartsWith(SkillSource.CodeloadBase, StringComparison.Ordinal));
+        Assert.Equal(2, Urls().Count(u => u.EndsWith("/SKILL.md", StringComparison.Ordinal)));
+    }
+
+    [Fact]
+    public async Task TheListing_FallsBackToTheZip_WhenTheApiSaysNo_OrCutsItShort()
+    {
+        _http.Map(Api + "limited/r/", HttpStatusCode.Forbidden, "{\"message\":\"API rate limit exceeded\"}");
+        Archive("limited/r", SkillZip.Repo("pdf"));
+        _host.Answer = SkillScope.Profile;
+        Assert.True(await Run("limited/r"));
+        Assert.Equal(SkillProvenance.GitHubKind, SkillProvenance.Read(Path.Combine(_host.Roots.Profile, "pdf"))!.Source);
+        Assert.Equal("https://codeload.github.com/limited/r/zip/HEAD", SkillProvenance.Read(Path.Combine(_host.Roots.Profile, "pdf"))!.Url);
+
+        SkillTree.Map(_http, "big/r", SkillZip.RepoFiles("docx"), truncated: true);
+        Archive("big/r", SkillZip.Repo("docx"));
+        Assert.True(await Run("big/r"));
+        Assert.Contains(SkillSource.CodeloadBase + "big/r/zip/HEAD", Urls());
+        Assert.DoesNotContain(Urls(), u => u.StartsWith(Raw + "big/", StringComparison.Ordinal));
+        Assert.Empty(_host.Errors);
+    }
+
+    [Fact]
+    public async Task AListedFile_LongerThanTheListingSaid_WritesNothing()
+    {
+        SkillTree.Map(_http, "o/lying", SkillZip.RepoFiles("pdf"), sizes: new Dictionary<string, long> { ["skills/pdf/scripts/run.py"] = 3 });
+        _host.Answer = SkillScope.Profile;
+
+        Assert.False(await Run("o/lying"));
+        Assert.Equal(SkillInstallText.FileTooBigRefusal("scripts/run.py", 3, SkillArchive.MaxSkillFileBytes), _host.Errors[^1]);
+        Assert.False(Directory.Exists(Path.Combine(_host.Roots.Profile, "pdf")));
+    }
+
+    [Fact]
+    public async Task ARawFailure_IsAnError_AndWritesNothing()
+    {
+        // A raw host that answers the SKILL.md but not the script: mapped ahead of the tree's own route, so it wins.
+        _http.Map(Raw + "o/r/" + SkillZip.Commit + "/skills/pdf/scripts/", HttpStatusCode.TooManyRequests, "slow down", "text/plain");
+        SkillTree.Map(_http, "o/r", SkillZip.RepoFiles("pdf"));
+        _host.Answer = SkillScope.Profile;
+
+        Assert.False(await Run("o/r"));
+
+        Assert.StartsWith(SkillInstallText.FailedError("pdf", ""), _host.Errors.Single(), StringComparison.Ordinal);
+        Assert.Contains("429", _host.Errors.Single(), StringComparison.Ordinal);
+        Assert.False(Directory.Exists(Path.Combine(_host.Roots.Profile, "pdf")));
+        Assert.DoesNotContain(Urls(), u => u.StartsWith(SkillSource.CodeloadBase, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task AListingOfTooManySkills_IsAnError_UnlessOneIsNamed()
+    {
+        var names = Enumerable.Range(0, SkillArchive.MaxListedSkills + 1).Select(i => "s" + i.ToString(System.Globalization.CultureInfo.InvariantCulture)).ToArray();
+        SkillTree.Map(_http, "o/many", SkillZip.RepoFiles(names));
+        _host.Answer = SkillScope.Profile;
+
+        Assert.False(await Run("o/many"));
+        Assert.Equal(SkillInstallText.TooManySkillsError(names.Length, SkillArchive.MaxListedSkills), _host.Errors.Single());
+        Assert.DoesNotContain(Urls(), u => u.StartsWith(Raw, StringComparison.Ordinal));
+
+        Assert.True(await Run("o/many/s7"));
+        Assert.Single(Urls(), u => u.EndsWith("/SKILL.md", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -142,14 +230,30 @@ public class SkillInstallFlowTests : IDisposable
         Assert.False(await Run("o/html"));
         Assert.Equal(SkillInstallText.NotZipError, _host.Errors[^1]);
 
+        _http.Map(Api + "o/missing/", HttpStatusCode.NotFound, "{\"message\":\"Not Found\"}");
         _http.Map(Codeload + "o/missing/", HttpStatusCode.NotFound, "Not Found", "text/plain");
         Assert.False(await Run("o/missing"));
-        Assert.Contains("404", _host.Errors[^1], StringComparison.Ordinal);
+        Assert.Equal("o/missing is not on GitHub: the repository was deleted or made private", _host.Errors[^1]);
+        Assert.False(await Run("https://github.com/o/missing/tree/gone/skills"));
+        Assert.Equal("o/missing@gone is not on GitHub: the repository or the ref 'gone' is gone, or the repository is private", _host.Errors[^1]);
 
         Archive("o/bad", SkillZip.Build([("s/SKILL.md", SkillZip.SkillMd("s")), ("s/nul.txt", "x")]));
         Assert.False(await Run("o/bad"));
         Assert.Equal(SkillInstallText.CannotInstallError("s", SkillInstallText.UnsafePathRefusal("nul.txt")), _host.Errors[^1]);
         Assert.Empty(_host.Asked);
+    }
+
+    [Fact]
+    public async Task ASearchHitWhoseRepositoryIsGone_SaysTheListingIsStale()
+    {
+        // 2026-09-27, the user's report: skills.sh still listed mhagrelius/dotfiles after the repository was deleted.
+        Search(Hits(("o/missing/pdf", 3)));
+        _http.Map(Api + "o/missing/", HttpStatusCode.NotFound, "{\"message\":\"Not Found\"}");
+        _http.Map(Codeload + "o/missing/", HttpStatusCode.NotFound, "Not Found", "text/plain");
+
+        Assert.False(await Run("pdf"));
+
+        Assert.Equal("o/missing is not on GitHub: the repository was deleted or made private" + SkillInstallText.StaleSearchHitNote, _host.Errors.Single());
     }
 
     [Fact]

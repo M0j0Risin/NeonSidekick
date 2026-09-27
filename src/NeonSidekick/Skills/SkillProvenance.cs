@@ -38,7 +38,7 @@ public sealed class SkillProvenance
     [JsonPropertyName("path")]
     public string Path { get; set; } = "";
 
-    /// <summary>The archive downloaded.</summary>
+    /// <summary>The archive downloaded, or — fetched file by file from the listing — the skill's folder on github.com at the commit.</summary>
     [JsonPropertyName("url")]
     public string Url { get; set; } = "";
 
@@ -111,8 +111,35 @@ public sealed class SkillsShSearchResponse
     public List<SkillsShSkill>? Skills { get; set; }
 }
 
+/// <summary>One entry of the Git Trees API's listing (<see cref="SkillHub.OpenAsync"/>): a <c>blob</c> (a file; mode <c>120000</c> a symbolic link), a <c>tree</c> or a <c>commit</c> (a submodule). The fields not read are ignored.</summary>
+public sealed class GitHubTreeEntry
+{
+    [JsonPropertyName("path")]
+    public string Path { get; set; } = "";
+
+    [JsonPropertyName("mode")]
+    public string Mode { get; set; } = "";
+
+    [JsonPropertyName("type")]
+    public string Type { get; set; } = "";
+
+    [JsonPropertyName("size")]
+    public long Size { get; set; }
+}
+
+/// <summary>The Git Trees API's answer; <see cref="Truncated"/> when the listing was cut (100,000 entries or 7 MB).</summary>
+public sealed class GitHubTree
+{
+    [JsonPropertyName("truncated")]
+    public bool Truncated { get; set; }
+
+    [JsonPropertyName("tree")]
+    public List<GitHubTreeEntry>? Tree { get; set; }
+}
+
 /// <summary>AOT-safe JSON context for the skill installer's types, a sibling of <see cref="Speech.SpeechJsonContext"/>. Reflection serialisation is off project-wide.</summary>
 [JsonSourceGenerationOptions(WriteIndented = true)]
 [JsonSerializable(typeof(SkillProvenance))]
 [JsonSerializable(typeof(SkillsShSearchResponse))]
+[JsonSerializable(typeof(GitHubTree))]
 internal sealed partial class SkillsJsonContext : JsonSerializerContext;
