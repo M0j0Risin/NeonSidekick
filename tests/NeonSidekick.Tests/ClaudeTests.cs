@@ -256,8 +256,8 @@ public class ClaudeTests
         var data = new AppSettingsData();
         int tab = ToolsText.TabTitles.ToList().IndexOf(ToolsText.ClaudeTabTitle);
 
-        // On /tools since later on 2026-09-27 (the user's call), after ComfyUI, before Options; gone from /settings.
-        Assert.Equal(ToolsText.TabTitles.Count - 2, tab);
+        // On /tools since later on 2026-09-27 (the user's call), after Ask, before Obsidian since later still that day (the user's order; after ComfyUI, before Options, before); gone from /settings.
+        Assert.Equal(ToolsText.TabTitles.ToList().IndexOf(ToolsText.AskTabTitle) + 1, tab);
         Assert.DoesNotContain("Claude", SettingsMenu.TabTitles);
         Assert.Equal(
             [SettingsField.ClaudeExecutable, SettingsField.ClaudePermissions, SettingsField.ClaudeModel, SettingsField.ClaudeEffort,

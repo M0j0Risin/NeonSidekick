@@ -37,20 +37,20 @@ public static class ToolsText
     public const string ShellTabTitle = "Shell";
     public const string WebTabTitle = "Web";
 
-    /// <summary>The vault tools' tab and group (2026-09-22), the last but one in the strip, before Options.</summary>
+    /// <summary>The vault tools' tab and group (2026-09-22), after Claude, before ComfyUI (the user's order, 2026-09-27).</summary>
     public const string ObsidianTabTitle = "Obsidian";
 
-    /// <summary>The SQL tools' tab and group (2026-09-23), after Obsidian, before Options.</summary>
+    /// <summary>The SQL tools' tab and group (2026-09-23), after ComfyUI, before Git (native) (the user's order, 2026-09-27).</summary>
     public const string SqlTabTitle = "SQL";
 
-    /// <summary>The image tools' tab and group (2026-09-24), after SQL, before Options; "Images" until later that day (the user's call: it is ComfyUI's tab).</summary>
+    /// <summary>The image tools' tab and group (2026-09-24), after Obsidian, before SQL (the user's order, 2026-09-27); "Images" until later on 2026-09-24 (the user's call: it is ComfyUI's tab).</summary>
     public const string ComfyTabTitle = "ComfyUI";
 
-    /// <summary>The Claude tab and the advisor's group (2026-09-27): <c>/claude</c>'s rows (off <c>/settings</c>, the user's call) and <c>claude_advisor</c>'s, after ComfyUI, before Options.</summary>
+    /// <summary>The Claude tab and the advisor's group (2026-09-27): <c>/claude</c>'s rows (off <c>/settings</c>, the user's call) and <c>claude_advisor</c>'s, after Ask, before Obsidian (the user's order, later that day; after ComfyUI before).</summary>
     public const string ClaudeTabTitle = "Claude";
 
-    /// <summary>The nine tabs in strip order: Offered, Web, Files, Shell, Ask, Git (native), Obsidian, SQL (2026-09-23), Options — Options last since later on 2026-09-22 (the user's ask; second, after Offered, before), Obsidian added that day; the user's order of the rest since later on 2026-09-21 (alphabetical before: Ask, Files, Git, Shell, Web); the last eight index <see cref="SettingsMenu.ToolsTabFields"/> one down.</summary>
-    public static readonly IReadOnlyList<string> TabTitles = [OfferedTabTitle, WebTabTitle, FilesTabTitle, ShellTabTitle, AskTabTitle, GitTabTitle, ObsidianTabTitle, SqlTabTitle, ComfyTabTitle, ClaudeTabTitle, OptionsTabTitle];
+    /// <summary>The eleven tabs in strip order: Offered, Web, Files, Shell, Ask, Claude, Obsidian, ComfyUI, SQL, Git (native), Options — the user's order since 2026-09-27 (Ask, Git (native), Obsidian, SQL, ComfyUI, Claude before); Options last since later on 2026-09-22 (the user's ask; second, after Offered, before); alphabetical before 2026-09-21; the last ten index <see cref="SettingsMenu.ToolsTabFields"/> one down.</summary>
+    public static readonly IReadOnlyList<string> TabTitles = [OfferedTabTitle, WebTabTitle, FilesTabTitle, ShellTabTitle, AskTabTitle, ClaudeTabTitle, ObsidianTabTitle, ComfyTabTitle, SqlTabTitle, GitTabTitle, OptionsTabTitle];
 
     /// <summary>The Offered tab's hint row. Pinned.</summary>
     public const string OfferedKeys = "Enter / Space = on or off · ←/→ tabs · ESC = close";
