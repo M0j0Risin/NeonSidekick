@@ -2650,6 +2650,29 @@ public partial class ChatScreenTests : IDisposable
 
     private int ToolbarUnderPane() => 100 + OverlayRowsDrawn() + 2;
 
+    /// <summary>
+    /// <see cref="ToolbarUnderPane"/> once the pane titled <paramref name="title"/> is the one drawn last (2026-09-26):
+    /// a mid-turn script steps off the model's stream, not the pane's draw, and cold (the test run alone) the row
+    /// was measured off the pane before — the click landed on the wrong row.
+    /// </summary>
+    private int ToolbarUnder(string title)
+    {
+        SpinWait.SpinUntil(() =>
+        {
+            var lines = Output.Split('\n');
+            int last = Array.FindLastIndex(lines, l => l.EndsWith(ScreenPane.CloseGlyph, StringComparison.Ordinal));
+            return last >= 0 && lines[last].StartsWith(title, StringComparison.Ordinal);
+        }, 10_000);
+        return ToolbarUnderPane();
+    }
+
+    /// <summary>Two clicks on one cell, pushed to the scripted input.</summary>
+    private void PushDoubleClick(int x, int y)
+    {
+        Scripted().PushClick(x, y);
+        Scripted().PushClick(x, y);
+    }
+
     /// <summary>The queue pane's title row since 2026-09-21: the label, then its clear-all button as a dim tab (a space either side), two spaces between.</summary>
     private const string QueueStrip = QueueMenu.Title + "   ⊠ clear all ";
 
@@ -2731,6 +2754,25 @@ public partial class ChatScreenTests : IDisposable
                 await Task.Delay(10, CancellationToken.None);
             }
         }
+    }
+
+    /// <summary>
+    /// The held tail "heard" all but its last 50 ms, once the speaker has written <paramref name="written"/> bytes
+    /// (2026-09-26, the two out-of-earshot tests' flake): a bare <see cref="FakeAudioPlayback.Release()"/> left the
+    /// device owing nothing, <see cref="SpeechOutput"/>'s 20 ms drain poll ended the tail and disarmed its listener,
+    /// and the user's hit raced it — lost about two runs in five. With a slice still owed the tail stays armed
+    /// until the interruption stops it. The wait reads the speaker's own count, the one the echo guard's play head
+    /// is built from; the fake's <c>Writes</c> is bumped a moment before it, when the first sentence would still
+    /// sit inside the look-back.
+    /// </summary>
+    private async Task ReleaseAllButTheLastSliceAsync(long written)
+    {
+        for (int i = 0; i < 500 && (_speech.Playing?.WrittenBytes ?? 0) < written; i++)
+        {
+            await Task.Delay(10, CancellationToken.None);
+        }
+
+        _playback.Release(_playback.BufferedBytes - NeonSidekick.Audio.PcmFormat.Kokoro.BytesFor(50));
     }
 
     /// <summary>The follow-up listen (a Start with the phrase listener disarmed: the pipeline's, never a listener's) hears two buffers and the VAD ends it.</summary>
@@ -2944,12 +2986,7 @@ public partial class ChatScreenTests : IDisposable
             {
                 _ = Task.Run(async () =>
                 {
-                    while (_playback.Writes.Count < 2)
-                    {
-                        await Task.Delay(10);
-                    }
-
-                    _playback.Release();                          // both sentences have been heard; the name is out of earshot
+                    await ReleaseAllButTheLastSliceAsync(2L * _synth.PcmBytesPerChunk);   // both sentences have been heard; the name is out of earshot
                     await DeliverHeardAsync(); // now the user says it
                 });
             }
@@ -2990,12 +3027,7 @@ public partial class ChatScreenTests : IDisposable
             {
                 _ = Task.Run(async () =>
                 {
-                    while (_playback.Writes.Count < 2)
-                    {
-                        await Task.Delay(10);
-                    }
-
-                    _playback.Release();                          // both sentences have been heard; the near-match is out of earshot
+                    await ReleaseAllButTheLastSliceAsync(2L * _synth.PcmBytesPerChunk);   // both sentences have been heard; the near-match is out of earshot
                     await DeliverHeardAsync(); // now the user says it
                 });
             }
@@ -10661,22 +10693,18 @@ public partial class ChatScreenTests : IDisposable
                     Scripted().PushClick(3, 103);                    // 🛠️: the Tools pane under the reply
                     Scripted().PushClick(3, 103);
                     break;
+                // Each row waits for the pane the step before opened (2026-09-26): the steps run off the stream, not the pane's draw.
                 case 1:
-                    Scripted().PushClick(12, ToolbarUnderPane());    // 🎭 under it: Tools closed, the system prompt opened
-                    Scripted().PushClick(12, ToolbarUnderPane());
+                    PushDoubleClick(12, ToolbarUnder(ToolsText.Label));                // 🎭 under it: Tools closed, the system prompt opened
                     break;
                 case 2:
-                    Scripted().PushClick(21, ToolbarUnderPane());    // 🔒 under it (later still on 2026-09-21; at 21 behind the disk since 2026-09-22): closed, the allowed-commands list opened
-                    Scripted().PushClick(21, ToolbarUnderPane());
+                    PushDoubleClick(21, ToolbarUnder(SystemPromptSummary.Label));      // 🔒 under it (later still on 2026-09-21; at 21 behind the disk since 2026-09-22): closed, the allowed-commands list opened
                     break;
                 case 3:
-                    SpinWait.SpinUntil(() => Output.Contains(AllowedCommandsTitle, StringComparison.Ordinal), 2000);   // the list drawn: its toolbar row sits higher than the system prompt's
-                    Scripted().PushClick(15, ToolbarUnderPane());    // 💬 under it (later on 2026-09-21): closed, the Sessions opened
-                    Scripted().PushClick(15, ToolbarUnderPane());
+                    PushDoubleClick(15, ToolbarUnder(AllowedCommandsTitle));           // 💬 under it (later on 2026-09-21): closed, the Sessions opened
                     break;
                 case 4:
-                    Scripted().PushClick(238, ToolbarUnderPane());   // the path under it: closed, nothing opened
-                    Scripted().PushClick(238, ToolbarUnderPane());
+                    PushDoubleClick(238, ToolbarUnder(SessionsMenu.Title));            // the path under it: closed, nothing opened
                     break;
                 case 5:
                     Scripted().PushClick(120, 103);                  // the blanks at the busy row: the settings
