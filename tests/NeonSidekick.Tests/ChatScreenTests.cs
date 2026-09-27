@@ -9363,7 +9363,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.StartsWith(HelpRow("/sessions", "list, restore and purge sessions: /sessions [<id> | purge <id> | purge older <age> | purge all | title <text>]"), lines[2]);   // under /profile since later on 2026-09-18
         Assert.StartsWith(HelpRow("/tools", "switch the model's tools on or off and edit the Options, Ask, Files and Web settings on a pane"), lines[3]);   // 2026-09-19; the alias /// came and went on 2026-09-21
         Assert.StartsWith(HelpRow("/mcp", "connect external MCP servers and switch their tools on or off on a pane"), lines[4]);   // 2026-09-20
-        Assert.StartsWith(HelpRow("/skills", "list the skills (Enter on one moves, renames, edits or deletes it), edit the skill settings and the project file on a pane"), lines[5]);   // edit 2026-09-21, the scope page's edit row in its place 2026-09-23 (the alias //// came and went that day);   // under /sessions since later on 2026-09-19 (/ask /files /web ahead of it until 2026-09-18)
+        Assert.StartsWith(HelpRow("/skills", SlashCommands.HelpEntries[5].Summary), lines[5]);   // edit 2026-09-21, the scope page's edit row in its place 2026-09-23 (the alias //// came and went that day);   // under /sessions since later on 2026-09-19 (/ask /files /web ahead of it until 2026-09-18)
         Assert.StartsWith(HelpRow("/learn", "write or improve a skill from the last turn or the stored sessions, in the background: /learn [what to keep] | sessions [N | what to search]"), lines[6]);   // 2026-09-17; the sessions form 2026-09-19
         Assert.True(string.IsNullOrWhiteSpace(lines[7]));
         Assert.StartsWith(HelpRow("/server", "pick an LLM server found on the usual ports, or /server <url>"), lines[8]);
@@ -10529,6 +10529,7 @@ public partial class ChatScreenTests : IDisposable
     [InlineData(SlashCommand.Operata, false, MidTurnClass.Refused)]
     [InlineData(SlashCommand.Vocalia, false, MidTurnClass.Refused)]
     [InlineData(SlashCommand.Skills, false, MidTurnClass.Pane)]
+    [InlineData(SlashCommand.Skills, true, MidTurnClass.Refused)]   // /skills add, 2026-09-26
     [InlineData(SlashCommand.Loop, false, MidTurnClass.Refused)]    // 2026-09-21
     [InlineData(SlashCommand.Loop, true, MidTurnClass.Refused)]
     [InlineData(SlashCommand.Expand, false, MidTurnClass.Quick)]     // later on 2026-09-22
@@ -14751,26 +14752,34 @@ public partial class ChatScreenTests : IDisposable
     }
 
     [Fact]
-    public async Task Skills_WithAnArgument_IsTheNoArgumentLine_NothingSeeded_NothingOpened()
+    public async Task Skills_WithAnArgumentOtherThanAdd_IsTheUsageError_NothingSeeded_NothingOpened()
     {
         // /skill <name> [message] loaded the skill into the next reply from 2026-09-16 until later on
         // 2026-09-18 (the user's call: the #-mention covers it); /skills edit <name> opened a SKILL.md from
-        // 2026-09-21 until 2026-09-23 (the scope page's edit row since): any argument is the no-argument line now.
+        // 2026-09-21 until 2026-09-23 (the scope page's edit row since); an argument was the no-argument
+        // line from then until 2026-09-26, when /skills add came — any other word is its usage error.
         _settings.Update(d => d.TtsOutput = false);
         PutSkill(ProfileSkills, "haiku");
         PushLine("/skills haiku");
         PushLine("/skills haiku one about rain");
         PushLine("/skills edit");
-        PushLine("/skills edit haiku extra");
+        PushLine("/skills add");
         PushLine("/exit");
 
         string output = await RunAsync();
 
-        Assert.Equal(4, CountOf(output, "  ✗ " + ChatScreen.NoArgumentError("/skills")));
+        Assert.Equal(4, CountOf(output, "  ✗ " + SkillInstallText.UsageError));
         Assert.DoesNotContain("Offered", output);   // no pane either
         Assert.DoesNotContain("loaded skill", output);
         Assert.Empty(_chat.Requests);
         Assert.Empty(_openedFiles);
+    }
+
+    [Fact]
+    public void SkillsArgumentItems_OfferAdd_AndNothingAfterIt()
+    {
+        Assert.Equal([new CompletionItem(SkillInstallText.AddWord, SkillInstallText.AddNote)], ChatScreen.ArgumentItems("/skills", "a", Sources()));
+        Assert.Empty(ChatScreen.ArgumentItems("/skills", "add pd", Sources()));
     }
 
     [Fact]
@@ -14782,15 +14791,16 @@ public partial class ChatScreenTests : IDisposable
     }
 
     [Fact]
-    public void MidTurn_SkillsIsAPane_WithAnArgumentItIsOverloaded()
+    public void MidTurn_SkillsIsAPane_WithAnArgumentItIsRefused()
     {
         // A pane (later on 2026-09-18; with a name it was refused until the name form went later that
-        // day; /skill x was Overloaded, quick, until 2026-09-21, and is again since 2026-09-23): /skills edit
-        // <name> launched an editor in between, refused mid-turn like /profile edit.
+        // day; /skill x was Overloaded, quick, until 2026-09-21, and again from 2026-09-23 until /skills add
+        // came on 2026-09-26): /skills edit <name> launched an editor in between, refused mid-turn like
+        // /profile edit, and /skills add is refused the same way — it writes the roots load_skill reads.
         Assert.Equal(MidTurnClass.Pane, ChatScreen.MidTurnPolicy(SlashCommand.Skills, hasArgs: false));
-        var (command, args) = SlashCommands.Parse("/skills edit x");
-        Assert.Equal((SlashCommand.Overloaded, "edit x"), (command, args));
-        Assert.Equal(MidTurnClass.Quick, ChatScreen.MidTurnPolicy(command, args.Length > 0));
+        var (command, args) = SlashCommands.Parse("/skills add pdf");
+        Assert.Equal((SlashCommand.Skills, "add pdf"), (command, args));
+        Assert.Equal(MidTurnClass.Refused, ChatScreen.MidTurnPolicy(command, args.Length > 0));
     }
 
     // ── Reflection (auto-learn) + /learn (2026-09-17) ─────────────────────────────
@@ -17057,8 +17067,8 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal([new CompletionItem("copy work force", ChatScreen.PromptFileCopyForceNote("operata.md"))], ChatScreen.ArgumentItems("/operata", "copy WORK f", sources));
         Assert.Empty(ChatScreen.ArgumentItems("/persona", "copy ghost ", sources));
         // /skill took nothing from later on 2026-09-18 (the catalog listed under it from 2026-09-16 until then); edit, then the catalog after it, from 2026-09-21
-        // until 2026-09-23 (the scope page's edit row since): nothing again.
-        Assert.Empty(ChatScreen.ArgumentItems("/skills", "", sources));
+        // until 2026-09-23 (the scope page's edit row since): nothing again until add came on 2026-09-26, the one word.
+        Assert.Equal([new CompletionItem(SkillInstallText.AddWord, SkillInstallText.AddNote)], ChatScreen.ArgumentItems("/skills", "", sources));
         Assert.Empty(ChatScreen.ArgumentItems("/skills", "h", sources));
 
         // Free text and the rest: nothing.

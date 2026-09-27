@@ -361,7 +361,8 @@ public sealed class SkillCatalog
     {
         foreach (var file in Directory.EnumerateFiles(directory))
         {
-            if (depth == 0 && string.Equals(Path.GetFileName(file), FileName, StringComparison.OrdinalIgnoreCase))
+            // The SKILL.md itself, and the sidecar /skills add writes (2026-09-26): the app's, never the skill's.
+            if (depth == 0 && (string.Equals(Path.GetFileName(file), FileName, StringComparison.OrdinalIgnoreCase) || string.Equals(Path.GetFileName(file), SkillProvenance.FileName, StringComparison.OrdinalIgnoreCase)))
             {
                 continue;
             }

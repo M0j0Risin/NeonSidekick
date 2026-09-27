@@ -103,9 +103,10 @@ public class SlashCommandsTests
         // 2026-09-21, when /skills edit <name> came, and is again since 2026-09-23, when the scope page's edit row took its place.
         Assert.Equal((SlashCommand.Skills, ""), SlashCommands.Parse("/skills"));
         Assert.Equal((SlashCommand.Skills, ""), SlashCommands.Parse("  /SKILLS  "));
-        Assert.Equal((SlashCommand.Overloaded, "edit haiku"), SlashCommands.Parse("/skills edit haiku"));
-        Assert.Equal((SlashCommand.Overloaded, "haiku write one about rain"), SlashCommands.Parse("/SKILLS  haiku write one about rain "));
-        Assert.Equal((SlashCommand.Overloaded, "list"), SlashCommands.Parse("/skills list"));   // /skill list was the pane for part of 2026-09-18
+        // Since 2026-09-26 the argument is the handler's again: /skills add <source> installs, any other word is its usage error.
+        Assert.Equal((SlashCommand.Skills, "add anthropics/skills/pdf --yes"), SlashCommands.Parse("/skills add anthropics/skills/pdf --yes"));
+        Assert.Equal((SlashCommand.Skills, "haiku write one about rain"), SlashCommands.Parse("/SKILLS  haiku write one about rain "));
+        Assert.Equal((SlashCommand.Skills, "list"), SlashCommands.Parse("/skills list"));   // /skill list was the pane for part of 2026-09-18
         Assert.Equal((SlashCommand.Loop, "3 hi there"), SlashCommands.Parse("/loop 3 hi there"));   // 2026-09-21: the count and the message are the handler's
         Assert.Equal((SlashCommand.Loop, ""), SlashCommands.Parse("/loop"));
     }
@@ -366,7 +367,7 @@ public class SlashCommandsTests
             SlashCommand.Persona, SlashCommand.Operata, SlashCommand.Vocalia,
             SlashCommand.Remember, SlashCommand.Memory, SlashCommand.CmdCopy, SlashCommand.Profile, SlashCommand.Timer,   // /cmdcopy 2026-09-21; /memory 2026-09-22 (forget, then copy <profile> [overwrite], the folded /memcopy)
             SlashCommand.Cwd, SlashCommand.Tree, SlashCommand.Vault, SlashCommand.Explore, SlashCommand.Copy, SlashCommand.Session, SlashCommand.Git,   // /vault [path] 2026-09-23
-            SlashCommand.Loop, SlashCommand.Plan, SlashCommand.BotChat, SlashCommand.Queue,   // /plan 2026-09-26; /botchat 2026-09-24; 2026-09-21 (/queue clear later that day; /skills with edit <name> from then until 2026-09-23); /tools off the list later on 2026-09-22, its expand and collapse root words
+            SlashCommand.Loop, SlashCommand.Plan, SlashCommand.BotChat, SlashCommand.Queue, SlashCommand.Skills,   // /skills add 2026-09-26; /plan 2026-09-26; /botchat 2026-09-24; 2026-09-21 (/queue clear later that day; /skills with edit <name> from then until 2026-09-23); /tools off the list later on 2026-09-22, its expand and collapse root words
         ];
         foreach (var command in Enum.GetValues<SlashCommand>())
         {
@@ -617,7 +618,7 @@ public class SlashCommandsTests
         Assert.Equal("/mcp", SlashCommands.HelpEntries[4].Command);   // under /tools since 2026-09-20
         Assert.Equal("connect external MCP servers and switch their tools on or off on a pane", SlashCommands.HelpEntries[4].Summary);
         Assert.Equal("/skills", SlashCommands.HelpEntries[5].Command);
-        Assert.Equal("list the skills (Enter on one moves, renames, edits or deletes it), edit the skill settings and the project file on a pane", SlashCommands.HelpEntries[5].Summary);   // edit 2026-09-21, the scope page's edit row in its place 2026-09-23   // the /skill <name> [message] form went later on 2026-09-18; the Roots tab later on 2026-09-19
+        Assert.Equal("list the skills (Enter on one moves, renames, edits or deletes it), edit the skill settings and the project file on a pane; /skills add <search words | owner/repo[/skill] | url> installs one from skills.sh or GitHub", SlashCommands.HelpEntries[5].Summary);   // add 2026-09-26; edit 2026-09-21, the scope page's edit row in its place 2026-09-23   // the /skill <name> [message] form went later on 2026-09-18; the Roots tab later on 2026-09-19
         Assert.Equal("/learn", SlashCommands.HelpEntries[6].Command);
         Assert.Equal("write or improve a skill from the last turn or the stored sessions, in the background: /learn [what to keep] | sessions [N | what to search]", SlashCommands.HelpEntries[6].Summary);   // the sessions form 2026-09-19
         Assert.Equal("/server", SlashCommands.HelpEntries[7].Command);

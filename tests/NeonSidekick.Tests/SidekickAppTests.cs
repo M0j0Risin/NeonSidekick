@@ -91,7 +91,9 @@ public partial class SidekickAppTests : IDisposable
             new ManualTimeProvider(),
             setTitle: _titles.Add,
             externalSkills: Path.Combine(_dir, "agents-skills"),
-            mcpTransport: _mcpServers.Transport);
+            mcpTransport: _mcpServers.Transport,
+            // The web over the same stub (2026-09-26, /skills add headless): every host public, nothing reaches the network.
+            web: new NeonSidekick.Web.WebAccess(new HttpClient(_http), new FakeHeadlessBrowser(), new ManualTimeProvider(), (_, _) => Task.FromResult(new[] { IPAddress.Parse("140.82.112.9") })));
 
     /// <summary>The MCP seam (2026-09-20): in-process pipe servers behind every session the app builds; nothing configured in the temp home, so nothing connects unless a test writes an mcp.json.</summary>
     private readonly InProcessMcpServers _mcpServers = new();
@@ -313,6 +315,29 @@ public partial class SidekickAppTests : IDisposable
         Assert.Equal(new[] { ChatRole.System, ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.User }, _chat.Requests[1].Select(m => m.Role));
         Assert.Equal(SkilledPrompt(false, Array.Empty<string>(), web: true), _chat.Requests[1][0].Text);
         Assert.True(_chat.Disposed);
+    }
+
+    /// <summary>
+    /// <c>/skills add</c> headless (2026-09-26): no server needed; without <c>--yes</c> the preview and the hint, nothing
+    /// written; with it the skill installed where <c>--global</c> says; several skills listed as ids; the rest's usage error.
+    /// </summary>
+    [Fact]
+    public async Task Headless_SkillsAdd_PreviewsWithoutYes_InstallsWithIt_AndNeedsNoServer()
+    {
+        _http.Map("https://codeload.github.com/anthropics/skills/zip/", (_, _) => Task.FromResult(StubHttpMessageHandler.Bytes(HttpStatusCode.OK, SkillZip.Repo("pdf", "docx"), "application/zip")));
+
+        string output = await Headless("/skills add anthropics/skills/pdf\n/skills add anthropics/skills/pdf --global --yes\n/skills add anthropics/skills\n/skills add\n");
+
+        Assert.Contains("**pdf** — Does a thing. Use when asked.", output);
+        Assert.Contains("[notice] " + SkillInstallText.HeadlessNeedsYes("pdf"), output);
+        string folder = Path.Combine(Path.GetFullPath(_settings.GlobalSkillsDirectory), "pdf");
+        Assert.Contains("[notice] " + SkillInstallText.InstalledNotice("pdf", SkillScope.Global, folder), output);
+        Assert.True(File.Exists(Path.Combine(folder, "scripts", "run.py")));
+        Assert.False(Directory.Exists(Path.Combine(_settings.ProfileSkillsDirectory, "pdf")));
+        Assert.Contains("[notice]   anthropics/skills/docx", output);
+        Assert.Contains("[error] " + SkillInstallText.UsageError, output);
+        Assert.DoesNotContain(SidekickApp.HeadlessNoAssistantReply, output);
+        Assert.Empty(_chat.Requests);
     }
 
     /// <summary>The model's thinking is the TUI's to show (2026-09-26): headless prints the reply alone, whatever LLM show thinking says.</summary>

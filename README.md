@@ -209,6 +209,27 @@ One row, **Project file**: whether `NEON.md` (or `AGENTS.md`) in the working dir
 | Skill compact mode | `protected` keeps a loaded skill's instructions through a prune; `unprotected` prunes them like any tool result. | `protected` |
 | #-mention enabled | `#` and part of a name on the input line lists the loaded skills; a pick writes `#name` as text. | on |
 
+#### Installing skills
+
+`/skills add` brings in skills written in the [Agent Skills](https://agentskills.io) format, the same folders other agents use.
+
+- **What it takes:**
+  - Search words (`/skills add pdf`) look the skill up on [skills.sh](https://skills.sh), the public directory. agentskills.io itself hosts only the specification.
+  - `owner/repo` offers every skill in a GitHub repository.
+  - `owner/repo/skill` names one skill. This is the id a search shows, so a result can be typed back.
+  - A `github.com/…/tree/<branch>/<path>` or `…/blob/<branch>/<path>/SKILL.md` link narrows the search to a folder.
+  - Any `https://…/*.zip` link is downloaded as it is.
+- **Where it comes from:** a repository is downloaded whole as GitHub's zip of the branch, and every `SKILL.md` inside it is found wherever it sits (`skills/`, `.claude/skills/`, `.agents/skills/`, the root).
+- **Network rules:** the download goes through the web tools' client, so *Web browser network mode* applies. Under `local_area_network` nothing is fetched. The *Web tools* switch is not consulted, because you typed the command, not the model.
+- **Before anything is written:** the skill is previewed — its description, source and commit, other frontmatter such as `allowed-tools`, the file list, any scripts, and the start of its instructions. The install is refused when:
+  - a path could escape the folder, or is not a valid Windows path;
+  - two files differ only by case;
+  - it has more than 200 files, over 20 MB in total, or any file over 5 MB.
+
+  Symbolic links are left out.
+- **Where it goes:** the folder lands under the profile's or the global `skills` folder, named after the skill, with a `.neon-source.json` beside its `SKILL.md` recording the repository, path, commit and date. Bundled scripts run only through `run_command` and its approval, like any other command.
+- **Name collisions:** a name already in use is refused; rename or delete the existing skill on `/skills` first. The exception is a skill installed earlier from the same repository and path — adding it again replaces it where it is (an update).
+
 </details>
 
 <details>
@@ -408,6 +429,7 @@ Type `/` and the list opens with every command and its summary; after the comman
 | `/sessions [id \| purge <id> \| purge older <age> \| purge all \| title <text>]` | List, restore, rename and purge the stored sessions. An age is days as a bare number (`30`, `0`), or a duration with units: `12h`, `90m`, `2 hours`, `1d 6h`. |
 | `/settings`, `//` | Edit and save the settings. |
 | `/skills` | List the skills (Enter on one moves, renames, opens its `SKILL.md` in your editor, or deletes it) and edit the skill, reflection and project-file settings. |
+| `/skills add <search words \| owner/repo[/skill] \| github url \| zip url> [--global \| --profile]` | Install an [Agent Skill](https://agentskills.io) from the web: words search [skills.sh](https://skills.sh) (several hits are a pick), a repository or URL downloads from GitHub. The skill is previewed, then a pane asks where it goes — this profile, the global skills, or Cancel (the cursor starts on Cancel). See [Installing skills](#installing-skills). Refused while a reply runs. |
 | `/speak [file [n] \| n]` | Read a text file from the working directory aloud as a reply; alone resumes, a number starts from that sentence. |
 | `/splash` | Start a new conversation and show the splash screen. |
 | `/stt [on\|off]` | Toggle speech input. |

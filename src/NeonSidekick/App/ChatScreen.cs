@@ -565,6 +565,8 @@ internal sealed partial class ChatScreen
     // Plan mode (2026-09-26): the state, its approval pane and the tool that presents the plan (ChatScreen.Plan.cs).
     private readonly PlanSession _plan = new();
     private readonly PlanApprovalMenu _planMenu;
+    private readonly SkillInstallMenu _skillInstallMenu;
+    private readonly SkillInstallFlow _skillInstall;
     private readonly PresentPlanTool _presentPlan;
     private readonly IReadOnlyList<AIFunction> _askTools;
     private readonly SkillCatalog _catalog;
@@ -987,6 +989,9 @@ internal sealed partial class ChatScreen
         _approvalMenu = new CommandApprovalMenu(_menuPane);
         _askTools = AskTools(AskUserAsync, _effective);
         _planMenu = new PlanApprovalMenu(_menuPane, _input);
+        // /skills add (2026-09-26): its picks and install question on the same pane, the network through the web tools' fetcher.
+        _skillInstallMenu = new SkillInstallMenu(_menuPane);
+        _skillInstall = new SkillInstallFlow(new SkillHub(_web.Fetcher));
         _presentPlan = new PresentPlanTool(_plan, _files, time, PresentPlanAsync);
         // Menus read console.Input themselves; over the key source they also see type-ahead.
         _flow = new FlowSink(this);
@@ -2998,6 +3003,10 @@ internal sealed partial class ChatScreen
 
             case SlashCommand.Learn:
                 return MentionCompleter.Matches([new(LearnSessionsWord, LearnSessionsNote)], argText);
+
+            case SlashCommand.Skills:
+                // add alone (2026-09-26): the source after it is free text — a search, a repository, a URL — never looked up per keystroke.
+                return argText.Contains(' ', StringComparison.Ordinal) ? [] : MentionCompleter.Matches([new(SkillInstallText.AddWord, SkillInstallText.AddNote)], argText);
 
             case SlashCommand.Loop:
                 // The one word; a count and the message are free text (2026-09-21).
@@ -8098,7 +8107,14 @@ internal sealed partial class ChatScreen
                 // pair ahead of the reply; the #-mention is the way now. /skills edit <name> opened
                 // the skill's SKILL.md from 2026-09-21 until 2026-09-23, when the scope page's edit row
                 // took over (the user's call); /skills takes no argument since, so one is the
-                // Overloaded line, as for /tools.
+                // Overloaded line, as for /tools. /skills add <source> (2026-09-26, the user's ask) installs
+                // a skill from skills.sh or GitHub (HandleSkillsAddAsync); any other word is its usage error.
+                if (args.Length > 0)
+                {
+                    await HandleSkillsArgumentAsync(args, cancellationToken).ConfigureAwait(false);
+                    return false;
+                }
+
                 await _skillsMenu.ShowAsync(cancellationToken).ConfigureAwait(false);
                 return false;
 

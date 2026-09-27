@@ -31,7 +31,7 @@ public sealed class SidekickApp
     public const string Name = "NeonSidekick";
 
     /// <summary>The second line of headless output.</summary>
-    public const string HeadlessHint = "Headless mode. Type a message; /clear or /new forgets the conversation; /compact [focus] shrinks it; /plan <requirement> plans before doing (/plan approve [--fresh] | cancel | show | save [name] | open [name]); /exit or EOF exits.";
+    public const string HeadlessHint = "Headless mode. Type a message; /clear or /new forgets the conversation; /compact [focus] shrinks it; /plan <requirement> plans before doing (/plan approve [--fresh] | cancel | show | save [name] | open [name]); /skills add <source> [--global] [--yes] installs a skill; /exit or EOF exits.";
 
     /// <summary>Printed once when discovery under <paramref name="scope"/> found nothing. Pinned by tests; shared with the chat screen.</summary>
     public static string HeadlessNoServerLine(ScanScope scope) => LlmSession.NoServerLine(scope);
@@ -567,6 +567,15 @@ public sealed class SidekickApp
                     continue;
                 }
 
+                // /skills add (2026-09-26): ahead of the server check, since an install needs no LLM; the screen's flow,
+                // several hits listed as ids and nothing written without --yes. A bare /skills still goes to the model.
+                if (SlashCommands.Parse(text) is (SlashCommand.Skills, var skillArgs)
+                    && skillArgs.Split(' ', 2)[0].Equals(Skills.SkillInstallText.AddWord, StringComparison.OrdinalIgnoreCase))
+                {
+                    await HeadlessSkillsAddAsync(skillArgs, cancellationToken).ConfigureAwait(false);
+                    continue;
+                }
+
                 if (assistant is null)
                 {
                     await HeadlessLineAsync(HeadlessReplyPrefix + HeadlessNoAssistantReply).ConfigureAwait(false);
@@ -1028,6 +1037,67 @@ public sealed class SidekickApp
     {
         await _headlessOutput.WriteAsync(HeadlessReplyPrefix).ConfigureAwait(false);
         _headlessAtLineStart = false;
+    }
+
+    /// <summary>
+    /// <c>/skills add &lt;source&gt; [--global] [--yes]</c> headless (2026-09-26): <see cref="Skills.SkillInstallFlow"/>
+    /// over lines — the preview as plain lines, the rest as <c>[notice]</c> / <c>[warning]</c> / <c>[error]</c>.
+    /// </summary>
+    private async Task HeadlessSkillsAddAsync(string args, CancellationToken cancellationToken)
+    {
+        string rest = args.Split(' ', 2, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries) is { Length: 2 } parts ? parts[1] : "";
+        var host = new HeadlessSkillHost(this);
+        if (rest.Length == 0)
+        {
+            host.Error(Skills.SkillInstallText.UsageError);
+        }
+        else
+        {
+            await new Skills.SkillInstallFlow(new Skills.SkillHub(_web.Fetcher)).RunAsync(rest, host, cancellationToken).ConfigureAwait(false);
+        }
+
+        foreach (string line in host.Lines)
+        {
+            await HeadlessNoticeLineAsync(line).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>The install flow's host headless: every line kept, written once the flow is done.</summary>
+    private sealed class HeadlessSkillHost(SidekickApp app) : Skills.ISkillInstallHost
+    {
+        public List<string> Lines { get; } = [];
+
+        public bool Headless => true;
+
+        public SkillRoots Roots => SkillRoots.For(app._settings, app._externalSkills);
+
+        public bool External => app.EffectiveSettings.ExternalSkills;
+
+        public bool SkillsEnabled => app.EffectiveSettings.AgentSkills;
+
+        public Web.FetchOptions FetchOptions => WebAccess.Options(app.EffectiveSettings);
+
+        public TimeProvider Time => app._time;
+
+        public void Notice(string text) => Lines.Add("[notice] " + text);
+
+        public void Warning(string text) => Lines.Add("[warning] " + text);
+
+        public void Error(string text) => Lines.Add("[error] " + text);
+
+        public void Preview(string markdown) => Lines.AddRange(markdown.Split('\n'));
+
+        public Task<T> SpinAsync<T>(string label, Func<Task<T>> work) => work();
+
+        public Task<int?> PickAsync(string title, IReadOnlyList<string> rows, CancellationToken cancellationToken) => Task.FromResult<int?>(null);
+
+        public Task<Skills.SkillScope?> ConfirmAsync(Skills.SkillCandidate candidate, Skills.SkillSource source, Skills.SkillInstallCheck check, Skills.SkillScope? preselect, CancellationToken cancellationToken) =>
+            Task.FromResult<Skills.SkillScope?>(null);
+
+        // Nothing to rescan: headless's catalog is scanned at every turn.
+        public void Rescan()
+        {
+        }
     }
 
     private async Task HeadlessLineAsync(string line)
