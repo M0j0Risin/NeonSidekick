@@ -109,7 +109,7 @@ internal sealed partial class ChatScreen
     /// <c>/forget</c> was a pane too, and <c>/memcopy</c> was refused until the word folded in),
     /// <c>/emptytrash</c>'s and <c>/cmdclear</c>'s (2026-09-25) confirmations and the <c>/reasoning</c>
     /// picker and <c>/queue</c> (2026-09-18) are <see cref="MidTurnClass.Pane"/> (<c>/expand</c> and <c>/collapse</c>, 2026-09-22 — <c>/tools expand|collapse</c> until later that day — quick like <c>/queue clear</c>), as is <c>/cmdlist</c> (2026-09-21: the <c>Shell allowed commands</c> row, which <c>/tools</c> edits under a reply too) and <c>/police</c> (2026-09-22, its <c>Shell police outside paths</c> row the same way); the four speech switches, <c>/reasoning</c>
-    /// with a level, <c>/queue</c> with a word (<c>clear</c>, 2026-09-21: the drop on the turn task, or the usage error), <c>/copy</c>, <c>/remember</c>, <c>/explore</c>, <c>/log</c> (2026-09-22: an editor launch like <c>/explore</c>'s), <c>/timer</c> and an unknown
+    /// with a level, <c>/queue</c> with a word (<c>clear</c>, 2026-09-21: the drop on the turn task, or the usage error), <c>/copy</c>, <c>/remember</c>, <c>/explore</c>, <c>/log</c> (2026-09-22: an editor launch like <c>/explore</c>'s), <c>/timer</c>, <c>/comfy view</c> (2026-09-27, the string form of this policy) and an unknown
     /// command are <see cref="MidTurnClass.Quick"/>; <c>/clear</c>, <c>/new</c>, <c>/splash</c> (2026-09-19) and <c>/exit</c> cancel; the rest
     /// (<c>/profile</c>, <c>/theme</c> (2026-09-23, the user's call: a theme change waits for the reply to end, like its <c>Theme</c> row on the settings pane — it cancelled the reply as <c>/splash</c> does until later that day), <c>/server</c>, <c>/model</c>, <c>/compact</c>, <c>/cwd</c>, <c>/tree</c>, <c>/vault</c> (2026-09-22, as <c>/tree</c>),
     /// <c>/learn</c>, <c>/window</c>, <c>/cmdcopy</c> (2026-09-21), <c>/gituser</c> (2026-09-21), <c>/speak</c> — the turn owns the transcript and the speaker —, <c>/draft</c> (2026-09-19: it would send a message the turn cannot take), <c>/loop</c> (2026-09-21, the same reason), <c>/botchat</c> (2026-09-24, the same again), <c>/plan</c> (2026-09-26: it sends a message too, and flips the tools the running turn was prepared with), the three prompt files) are refused; <c>/skills</c> is a pane (2026-09-16 as <c>/skills</c>, <c>/skill list</c> then the bare <c>/skill</c> on 2026-09-18, the plural again since 2026-09-19; <c>/skill</c> with a name was refused until later on 2026-09-18, when the name form went — an argument was <see cref="SlashCommand.Overloaded"/>, quick like an unknown command, until <c>/skills edit &lt;name&gt;</c> came on 2026-09-21: an editor launch, refused like <c>/profile edit</c>; since it went on 2026-09-23 <c>/skills</c> took none, an argument was <see cref="SlashCommand.Overloaded"/> again, and the bare word is the pane; <c>/skills add</c> is refused since 2026-09-26 — an install writes the roots a running <c>load_skill</c> reads, and its panes would sit over the reply). Pure.
@@ -127,6 +127,18 @@ internal sealed partial class ChatScreen
         SlashCommand.Clear or SlashCommand.New or SlashCommand.Splash or SlashCommand.Exit => MidTurnClass.Cancel,
         _ => MidTurnClass.Refused,
     };
+
+    /// <summary>
+    /// <see cref="MidTurnPolicy(SlashCommand, bool)"/> with the argument read where the word decides the class
+    /// (2026-09-27, the user's ask): <c>/comfy view</c> is <see cref="MidTurnClass.Quick"/> — the twin of the picture
+    /// strip's button, which opens the viewer under a reply already; the window is its own thread and holds nothing
+    /// the turn does. The bare <c>/comfy</c> (a spinner over the server check), <c>/comfy purge</c> (a confirmation,
+    /// and it deletes what a running <c>generate_image</c> may be writing) and <c>/comfy edit</c> still wait. Pure.
+    /// </summary>
+    public static MidTurnClass MidTurnPolicy(SlashCommand command, string args) =>
+        command == SlashCommand.Comfy && string.Equals(args.Trim(), Viewer.ViewerText.ViewWord, StringComparison.OrdinalIgnoreCase)
+            ? MidTurnClass.Quick
+            : MidTurnPolicy(command, args.Length > 0);
 
     /// <summary>The first word of a typed line, for the notices that name a command.</summary>
     private static string CommandWord(string text) => text.Trim().Split(' ', 2)[0];
@@ -151,7 +163,7 @@ internal sealed partial class ChatScreen
         }
 
         var (command, args) = ParseLine(text);
-        var policy = MidTurnPolicy(command, args.Length > 0);
+        var policy = MidTurnPolicy(command, args);
         if (policy != MidTurnClass.Message)
         {
             DiagnosticLog.Debug(AppCategory, MidTurnCommandLogLine(CommandWord(text), policy));
@@ -259,7 +271,7 @@ internal sealed partial class ChatScreen
             }
 
             var (nextCommand, nextArgs) = ParseLine(next);
-            if (nextCommand == command || MidTurnPolicy(nextCommand, nextArgs.Length > 0) != MidTurnClass.Pane)
+            if (nextCommand == command || MidTurnPolicy(nextCommand, nextArgs) != MidTurnClass.Pane)
             {
                 return;
             }
@@ -376,6 +388,10 @@ internal sealed partial class ChatScreen
                 break;
             case SlashCommand.Timer:
                 HandleTimer(args);
+                break;
+            case SlashCommand.Comfy:
+                // /comfy view alone reaches here (2026-09-27, MidTurnPolicy's string form); the notice lands in the reply.
+                OpenViewer(notice: true);
                 break;
             case SlashCommand.Unknown:
                 _transcript.Error(UnknownCommandError(CommandWord(text)));

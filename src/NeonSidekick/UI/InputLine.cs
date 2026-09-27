@@ -297,6 +297,9 @@ public sealed partial class InputLine
     /// <summary>What a double-click on a transcript picture does with its id (later on 2026-09-24): the screen's opener; null = nothing.</summary>
     public Action<int>? OpenPicture { get; set; }
 
+    /// <summary>What a click on the picture strip's button does (2026-09-27, <see cref="ScreenPane.StripButton"/>): the screen's picture viewer; null = nothing.</summary>
+    public Action? OpenViewer { get; set; }
+
     public static string SubmittedMarkup(string text)
     {
         ArgumentNullException.ThrowIfNull(text);

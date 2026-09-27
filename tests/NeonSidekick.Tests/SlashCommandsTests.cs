@@ -590,6 +590,17 @@ public class SlashCommandsTests
     }
 
     [Fact]
+    public void BasicCommands_AreRealCommands_AndTheTabTitlesArePinned()
+    {
+        // The basic tab's list (later on 2026-09-27, the user's): a rename or a typo would drop a row silently.
+        Assert.Equal(21, SlashCommands.BasicCommands.Count);
+        Assert.All(SlashCommands.BasicCommands, c => Assert.Contains(SlashCommands.HelpEntries, e => e.Command == c));
+        Assert.False(SlashCommands.IsBasic(SlashCommands.LogEntry));
+        Assert.Equal("Commands (basic)", SlashCommands.BasicTabTitle);
+        Assert.Equal("Commands (advanced)", SlashCommands.AdvancedTabTitle);
+    }
+
+    [Fact]
     public void HelpEntries_AreTheCommandLines_AToZ()
     {
         // One list, A to Z by the command (ordinal), no groups (2026-09-27, the user's call: the Commands tab had grown

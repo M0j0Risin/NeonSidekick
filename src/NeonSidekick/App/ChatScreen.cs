@@ -21,6 +21,7 @@ using NeonSidekick.Skills;
 using NeonSidekick.Speech;
 using NeonSidekick.Timers;
 using NeonSidekick.UI;
+using NeonSidekick.Viewer;
 using NeonSidekick.Web;
 using Spectre.Console;
 using Spectre.Console.Rendering;
@@ -577,6 +578,9 @@ internal sealed partial class ChatScreen
     private readonly InputLine _input;
     private readonly Action<string, string> _openImage;
 
+    /// <summary>The picture viewer's opener (2026-09-27, <see cref="Viewer.PictureWindow.Open"/>), handed the output folder's full path; null where there is none.</summary>
+    private readonly Action<string>? _openViewer;
+
     /// <summary>
     /// A picture drawn in the transcript, for a double-click to open (later on 2026-09-24): its name, the file it came from
     /// when there is one, and its bytes for when there is none. An open prints nothing; only an error does (2026-09-24, the user's call).
@@ -847,7 +851,8 @@ internal sealed partial class ChatScreen
         string? logFile = null,
         Func<Uri, ComfyClient>? comfyClient = null,
         Action<string, string>? openImage = null,
-        IClaudeCli? claude = null)
+        IClaudeCli? claude = null,
+        Action<string>? openViewer = null)
     {
         _logFile = logFile;
         ArgumentNullException.ThrowIfNull(time);
@@ -868,6 +873,8 @@ internal sealed partial class ChatScreen
         _editDraft = editDraft;
         // A double-clicked picture's opener (later on 2026-09-24): the image editor in the app; without one, the plain opener (the command unused).
         _openImage = openImage ?? ((path, _) => _openFile(path));
+        // The picture viewer (2026-09-27): PictureWindow.Open in the app on Windows; null = no strip button, /comfy view refused.
+        _openViewer = openViewer;
         _ownsMcp = mcp is null;
         _mcp = mcp ?? new McpSession(settings, McpSession.DefaultTransport, time);
         _clockTools = ClockTools(time);
@@ -959,6 +966,8 @@ internal sealed partial class ChatScreen
             // The picture strip over the upper rule (later still on 2026-09-24): while ComfyUI picture strip is on;
             // read per draw and on the tick, so a flip shows at once.
             PictureStrip = () => _effective().ComfyPictureStrip ? _pictureStrip : null,
+            // The picture viewer's button on the strip's rule (2026-09-27), while there is a viewer to open.
+            StripButton = () => _openViewer is null ? null : ViewerText.StripButton,
             Placeholder = InputPlaceholder,
         };
         _keys.Mirror = _pane;
@@ -975,6 +984,7 @@ internal sealed partial class ChatScreen
         _input = new InputLine(_pane, keys, clipboard, _transcript, clipboardImage, query => _files.Complete(query), CommandChoices, ArgumentChoices, HashChoices, DollarChoices, _copy, PercentChoices, CaretChoices);
         _input.Remembered = StoreCommand;
         _input.OpenPicture = OpenPicture;
+        _input.OpenViewer = () => OpenViewer();
         _mouse = mouse;
         _holdWheel = holdWheel;
         // The screen holds the mouse and the wheel from its start (RunAsync; the user's call,
@@ -1355,6 +1365,7 @@ internal sealed partial class ChatScreen
     /// later on 2026-09-20, the user's list; six rows reworded shorter the same day, the user's words.
     /// Ctrl+Enter after Enter (2026-09-22): a line break in the draft (<see cref="Keys.IsLineBreak"/>).
     /// Ctrl+O after Ctrl+End (later that day): the tool runs unfolded or folded (<see cref="Keys.IsToolToggle"/>).
+    /// Alt+V moved up ahead of Ctrl+Home on 2026-09-27 (the user's order; it sat after Ctrl+O until then).
     /// </summary>
     public static (string Key, string Meaning)[] KeyRows(bool voiceOn, ConsoleKey pushToTalk, bool wakeReady, string wakePhrase)
     {
@@ -1378,32 +1389,38 @@ internal sealed partial class ChatScreen
             rows.Add(($"say \"{wakePhrase}\"", "talk without a key; during a spoken reply, cut it short (/interrupt)"));
         }
 
+        rows.Add(("Alt+V", "paste content (text or images)"));
         rows.Add(("Ctrl+Home", "scroll to top of the chat pane"));
         rows.Add(("Ctrl+End", "scroll to bottom of the chat pane"));
         rows.Add(("Ctrl+O", "expand or collapse the tool calls, code blocks and thinking (or click a summary line)"));
-        rows.Add(("Alt+V", "paste content (text or images)"));
         rows.Add(("Ctrl+A", "select all text on the line"));
         rows.Add(("Ctrl+X", "cut the selected text"));
         rows.Add(("Ctrl+C", "copy the selected text · stop the speech · cancel the reply · twice to exit"));
         return rows.ToArray();
     }
 
-    /// <summary>The tabs <c>/help</c> opens; each builds its content when shown, from the live state.</summary>
+    /// <summary>The tabs <c>/help</c> opens; each builds its content when shown, from the live state. The one Commands tab split in two on 2026-09-27 (the user's call).</summary>
     private IReadOnlyList<InfoTab> HelpTabs() =>
     [
-        new("Commands", () => CommandsTab(log: _logFile is not null)),
+        new(SlashCommands.BasicTabTitle, () => CommandsTab(advanced: false, log: _logFile is not null)),
+        new(SlashCommands.AdvancedTabTitle, () => CommandsTab(advanced: true, log: _logFile is not null)),
         new("Keys", KeysTab),
     ];
 
     /// <summary>
-    /// The Commands tab: <see cref="SlashCommands.HelpEntries"/> as two columns, A to Z with no blank rows (2026-09-27,
+    /// A Commands tab: <see cref="SlashCommands.HelpEntries"/> as two columns, A to Z with no blank rows (2026-09-27,
     /// the user's call; the groups with a blank row between them until then) — <see cref="SlashCommands.HelpEntriesWithLog"/>
-    /// under <paramref name="log"/>, the app started with <c>--log</c> (2026-09-22).
+    /// under <paramref name="log"/>, the app started with <c>--log</c> (2026-09-22). Since later on 2026-09-27 the entries are
+    /// split over two tabs: <see cref="SlashCommands.BasicCommands"/>, or every other one under <paramref name="advanced"/>
+    /// (<c>/log</c> among them). The label column is <see cref="SlashCommands.LabelWidth"/> on both, so switching tabs never
+    /// moves the summaries.
     /// </summary>
-    public static IRenderable CommandsTab(bool log = false)
+    public static IRenderable CommandsTab(bool advanced, bool log = false)
     {
-        var grid = TwoColumns();
-        foreach (var entry in SlashCommands.HelpEntriesFor(log))
+        var grid = new Grid()
+            .AddColumn(new GridColumn().NoWrap().Width(SlashCommands.LabelWidth).PadRight(SlashCommands.HelpColumnGap))
+            .AddColumn(new GridColumn().PadRight(0));
+        foreach (var entry in SlashCommands.HelpEntriesFor(log).Where(entry => SlashCommands.IsBasic(entry) != advanced))
         {
             grid.AddRow(new Text(entry.Label, Theme.AccentSecondary), new Text(entry.Summary, Theme.Body));
         }
@@ -1571,6 +1588,14 @@ internal sealed partial class ChatScreen
             {
                 // A tool run's summary (2026-09-22): one click unfolds or folds it, nothing answered.
                 _queuedClicks.Reset();
+                return null;
+            }
+
+            if (_pane.TryHitStripButton(click.X, click.Y))
+            {
+                // The picture strip's button (2026-09-27): one click opens the picture viewer, under a reply as at idle.
+                _queuedClicks.Reset();
+                OpenViewer();
                 return null;
             }
 
@@ -2820,7 +2845,7 @@ internal sealed partial class ChatScreen
                     return MentionCompleter.Matches([new(ComfyEditWord + " " + ComfyJsonWord, ComfyJsonNote), new(ComfyEditWord + " " + ComfyMarkdownWord, ComfyMarkdownNote)], argText);
                 }
 
-                return MentionCompleter.Matches([new(ComfyEditWord, ComfyEditNote), new(ComfyPurgeWord, ComfyPurgeNote)], argText);
+                return MentionCompleter.Matches([new(ComfyEditWord, ComfyEditNote), new(ComfyPurgeWord, ComfyPurgeNote), new(ViewerText.ViewWord, ViewerText.ViewNote)], argText);
             }
 
             case SlashCommand.Imagine:
@@ -5730,7 +5755,7 @@ internal sealed partial class ChatScreen
     public const string ComfyMarkdownNote = "open a workflow's .md (its settings and tips) in your editor";
 
     /// <summary>A <c>/comfy</c> argument that is not <c>edit json|markdown &lt;workflow&gt;</c>. Pinned.</summary>
-    public const string ComfyUsageError = "Usage: /comfy, /comfy purge, or /comfy edit json|markdown <workflow>";
+    public const string ComfyUsageError = "Usage: /comfy, /comfy purge, /comfy view, or /comfy edit json|markdown <workflow>";
 
     /// <summary>The line after <c>/comfy edit</c> opened a workflow's file; <paramref name="created"/> when an <c>.md</c> had to be made first. Pinned.</summary>
     public static string ComfyEditNotice(string name, string path, bool json, bool created) =>
@@ -8066,6 +8091,12 @@ internal sealed partial class ChatScreen
                 if (string.Equals(args.Trim(), ComfyPurgeWord, StringComparison.OrdinalIgnoreCase))
                 {
                     await PurgeComfyAsync(cancellationToken).ConfigureAwait(false);
+                    return false;
+                }
+
+                if (string.Equals(args.Trim(), ViewerText.ViewWord, StringComparison.OrdinalIgnoreCase))
+                {
+                    OpenViewer(notice: true);
                     return false;
                 }
 
@@ -10687,6 +10718,43 @@ internal sealed partial class ChatScreen
         {
             _pictures.Add(new PictureSource(name.Length > 0 ? name : "picture.png", full, image.Bytes));
             return _pictures.Count - 1;
+        }
+    }
+
+    /// <summary>
+    /// The picture viewer on the ComfyUI output folder (2026-09-27, the user's ask): the strip's button and <c>/comfy view</c>.
+    /// The folder resolves in the sandbox as <c>/comfy purge</c>'s does and is made when it is not there yet, so the window
+    /// can watch it before the first picture. A click opens it silently, as a picture's double-click does; the typed
+    /// command says so (<paramref name="notice"/>). Errors go through the flow sink, so they wait for a running reply. Any thread.
+    /// </summary>
+    private void OpenViewer(bool notice = false)
+    {
+        if (_openViewer is null)
+        {
+            _flow.Error(ViewerText.Unavailable);
+            return;
+        }
+
+        string folder = ComfyStudio.OutputFolder(_effective().ComfyOutputFolder);
+        var outcome = _files.Resolve(folder, forWrite: true, out string full);
+        if (outcome != FileOutcome.Ok)
+        {
+            _flow.Error(FileText.Error(outcome, folder, "watch"));
+            return;
+        }
+
+        try
+        {
+            Directory.CreateDirectory(full);
+            _openViewer(full);
+            if (notice)
+            {
+                _flow.Notice(ViewerText.Opened(full));
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or PlatformNotSupportedException)
+        {
+            _flow.Error(ViewerText.Failed(full, ex.Message));
         }
     }
 

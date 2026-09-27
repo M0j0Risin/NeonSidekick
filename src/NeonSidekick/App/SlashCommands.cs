@@ -204,7 +204,7 @@ public static class SlashCommands
             new("/cmdcopy", "copy this profile's allowed shell commands into another, or with --history its command history: /cmdcopy <profile> [--history] [overwrite]"),
             new("/cmdlist", "list this profile's allowed shell commands on a pane, Enter removes one"),
             new("/collapse", "collapse all items in the transcript"),
-            new("/comfy", "show the ComfyUI server's status and the workflows the image tools can run, /comfy edit json|markdown <workflow> to open its file in your editor, or /comfy purge to empty the output folder"),
+            new("/comfy", "show the ComfyUI server's status and the workflows the image tools can run, /comfy edit json|markdown <workflow> to open its file in your editor, /comfy view to watch the output folder, or /comfy purge to empty it"),
             new("/compact", "shrink the current context, or /compact <focus> to steer the summary"),
             new("/copy", "copy the last reply to the clipboard as markdown, or /copy <n> | all; --thinking for the model's thinking too"),
             new("/cwd", "show or change the working directory, or /cwd <path> | ~ | browse"),
@@ -266,6 +266,27 @@ public static class SlashCommands
 
     /// <summary><see cref="HelpEntriesWithLog"/> when <paramref name="log"/> (the app started with <c>--log</c>), else <see cref="HelpEntries"/>.</summary>
     public static IReadOnlyList<HelpEntry> HelpEntriesFor(bool log) => log ? HelpEntriesWithLog : HelpEntries;
+
+    /// <summary>
+    /// The commands on <c>/help</c>'s <see cref="BasicTabTitle"/> tab (2026-09-27, the user's list): the everyday ones, so the
+    /// first tab fits without scrolling. Every other command — and <c>/log</c> under <c>--log</c> — is on
+    /// <see cref="AdvancedTabTitle"/>. Only the pane is split: <see cref="HelpText"/>, <see cref="Completions"/> and
+    /// <see cref="LabelWidth"/> stay the one A-to-Z list. Pinned.
+    /// </summary>
+    public static readonly IReadOnlySet<string> BasicCommands = new HashSet<string>(StringComparer.Ordinal)
+    {
+        "/clear", "/compact", "/copy", "/cwd", "/draft", "/exit", "/help", "/memory", "/model", "/new", "/profile",
+        "/queue", "/reasoning", "/remember", "/server", "/sessions", "/settings", "/skills", "/sys", "/tools", "/tree",
+    };
+
+    /// <summary>Whether <paramref name="entry"/> is on the <see cref="BasicTabTitle"/> tab (<see cref="BasicCommands"/>).</summary>
+    public static bool IsBasic(HelpEntry entry) => BasicCommands.Contains(entry.Command);
+
+    /// <summary>The title of <c>/help</c>'s first tab, <see cref="BasicCommands"/> (2026-09-27; one <c>Commands</c> tab until then). Pinned.</summary>
+    public const string BasicTabTitle = "Commands (basic)";
+
+    /// <summary>The title of <c>/help</c>'s second tab, every command not in <see cref="BasicCommands"/> (2026-09-27). Pinned.</summary>
+    public const string AdvancedTabTitle = "Commands (advanced)";
 
     /// <summary>
     /// The input line's command list (<see cref="UI.MentionCompleter.TryFindCommand"/>): every base

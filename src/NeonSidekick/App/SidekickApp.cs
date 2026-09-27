@@ -70,6 +70,7 @@ public sealed class SidekickApp
     private readonly Func<Mcp.McpServerConfig, string, ModelContextProtocol.Client.IClientTransport> _mcpTransport;
     private readonly Func<Uri, Comfy.ComfyClient>? _comfyClient;
     private readonly Claude.IClaudeCli? _claude;
+    private readonly Action<string>? _openViewer;
     private readonly string _externalSkills;
     private readonly Func<int> _inputDeviceCount;
     private readonly Func<string, string, IWakeWordDetector> _wakeDetectorFactory;
@@ -140,8 +141,11 @@ public sealed class SidekickApp
         string? externalSkills = null,
         Func<Mcp.McpServerConfig, string, ModelContextProtocol.Client.IClientTransport>? mcpTransport = null,
         Func<Uri, Comfy.ComfyClient>? comfyClient = null,
-        Claude.IClaudeCli? claude = null)
+        Claude.IClaudeCli? claude = null,
+        Action<string>? openViewer = null)
     {
+        // The picture viewer (2026-09-27): PictureWindow.Open in the app on Windows, null in tests and elsewhere.
+        _openViewer = openViewer;
         // The ComfyUI client (2026-09-24): over its own transport in the app, a stub handler in tests.
         _comfyClient = comfyClient;
         // Claude Code headless for /claude (2026-09-27): the real CLI when null, a fake in tests.
@@ -1356,7 +1360,7 @@ public sealed class SidekickApp
         // on the row and hands it back to the terminal otherwise, so the terminal's own selection
         // and right-click copy work whenever there is nothing to click into.
         var mouse = _input as WindowsConsoleInput;
-        var screen = new ChatScreen(_console, _settings, () => EffectiveSettings, OverriddenBy, session, speech, new KeySource(_input ?? _console.Input), voice, PersonaFile.OpenInEditor, RenderScreen, _time, _geometry, _clipboard, mouse is null ? null : mouse.Capture, _copyToClipboard, clipboardImage: _clipboardImage, web: _web, setTitle: _setTitle, externalSkills: _externalSkills, holdWheel: mouse is null ? null : mouse.HoldWheel, splash: SplashImages.Source, editDraft: PersonaFile.EditAndWaitAsync, mcp: mcp, environment: _environment.System, logFile: _options.LogPath is { } logPath ? Path.GetFullPath(logPath) : null, comfyClient: _comfyClient, openImage: PersonaFile.OpenImage, claude: _claude);
+        var screen = new ChatScreen(_console, _settings, () => EffectiveSettings, OverriddenBy, session, speech, new KeySource(_input ?? _console.Input), voice, PersonaFile.OpenInEditor, RenderScreen, _time, _geometry, _clipboard, mouse is null ? null : mouse.Capture, _copyToClipboard, clipboardImage: _clipboardImage, web: _web, setTitle: _setTitle, externalSkills: _externalSkills, holdWheel: mouse is null ? null : mouse.HoldWheel, splash: SplashImages.Source, editDraft: PersonaFile.EditAndWaitAsync, mcp: mcp, environment: _environment.System, logFile: _options.LogPath is { } logPath ? Path.GetFullPath(logPath) : null, comfyClient: _comfyClient, openImage: PersonaFile.OpenImage, claude: _claude, openViewer: _openViewer);
         if (mouse is not null)
         {
             mouse.ModeChanged = screen.FlushConsole;

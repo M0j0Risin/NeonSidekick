@@ -234,6 +234,12 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     private bool _drawnStripHighlight;
     private List<PictureSpan> _stripSpans = [];
 
+    // The button on the strip's rule (2026-09-27, the picture viewer): its label's provider, and the columns the last
+    // draw put the label at (-1 = none drawn), for TryHitStripButton.
+    private Func<string?> _stripButton = static () => null;
+    private int _stripButtonColumn = -1;
+    private int _stripButtonCells;
+
     private sealed record Overlay(IRenderable Content, string Hint, bool Input, bool Close);
 
     // Where the last dismissing double-click landed (Dismiss(x, y)), until TakeDismissHit.
@@ -588,6 +594,42 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     {
         get => _pictureStrip;
         set => _pictureStrip = value ?? throw new ArgumentNullException(nameof(value));
+    }
+
+    /// <summary>
+    /// The label of the button on the picture strip's own rule (2026-09-27, the user's ask: the ComfyUI picture viewer opened
+    /// from the strip): drawn at the rule's right edge as the upper rule draws its title (<see cref="RuleWithTitle"/>), in
+    /// <see cref="Theme.AccentSecondary"/> so it reads as something to click; null or empty = the bare rule (the default).
+    /// Read at each draw; a click on it is <see cref="TryHitStripButton"/>.
+    /// </summary>
+    public Func<string?> StripButton
+    {
+        get => _stripButton;
+        set => _stripButton = value ?? throw new ArgumentNullException(nameof(value));
+    }
+
+    /// <summary>
+    /// Whether a click at buffer cell (<paramref name="x"/>, <paramref name="y"/>) landed on <see cref="StripButton"/>'s
+    /// label on the drawn strip's rule. False with no strip or no button drawn, the pane lifted or disabled, or no geometry.
+    /// </summary>
+    public bool TryHitStripButton(int x, int y)
+    {
+        if (!Enabled)
+        {
+            return false;
+        }
+
+        lock (_gate)
+        {
+            if (!_drawn || _drawnOverlay || _stripRows == 0 || _stripButtonColumn < 0 || _batch > 0 || _modal > 0 || _geometry?.CursorTop() is not int top)
+            {
+                return false;
+            }
+
+            // The strip's own rule is its first row, _stripRows over the upper rule.
+            int rule = top - CursorDepth - 1;
+            return y == rule - _stripRows && x >= _stripButtonColumn && x < _stripButtonColumn + _stripButtonCells;
+        }
     }
 
     /// <summary>The transcript rows the window must keep over the strip and the smallest pane for the strip to be drawn.</summary>
@@ -3122,6 +3164,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         {
             stripRows = 0;
             _stripSpans = [];
+            _stripButtonColumn = -1;
         }
 
         _drawnStripHighlight = stripHighlight;
@@ -3298,8 +3341,8 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
 
         if (stripLines is not null)
         {
-            // Its rule first (2026-09-25), the input rows' own.
-            WriteRule(w);
+            // Its rule first (2026-09-25), the input rows' own, with the viewer's button at its edge (2026-09-27).
+            WriteStripRule(w);
             foreach (var line in stripLines)
             {
                 _inner.Write(new SegmentList(line));
@@ -3742,6 +3785,35 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     private void WriteRule(int width)
     {
         _inner.Write(new RawText(new string(RuleGlyph, width), Theme.PaneRule));
+        _inner.WriteLine();
+    }
+
+    /// <summary>
+    /// The picture strip's rule: bare, or with <see cref="StripButton"/>'s label at its right edge laid out as
+    /// <see cref="RuleWithTitle"/> lays a title out, the label in its own style; where it landed is kept for the hit test.
+    /// </summary>
+    private void WriteStripRule(int width)
+    {
+        _stripButtonColumn = -1;
+        _stripButtonCells = 0;
+        string label = _stripButton() ?? "";
+        string rule = RuleWithTitle(label, width);
+        int at = label.Length == 0 ? -1 : rule.LastIndexOf(' ', rule.Length - 2);
+        int start = label.Length == 0 ? -1 : rule.IndexOf(' ');
+        if (start < 0 || at <= start)
+        {
+            _inner.Write(new RawText(rule, Theme.PaneRule));
+            _inner.WriteLine();
+            return;
+        }
+
+        // RuleWithTitle is "───── label ─": the rule to the first space, the label between the two spaces.
+        string fitted = rule[(start + 1)..at];
+        _stripButtonColumn = TextCells.Width(rule[..(start + 1)]);
+        _stripButtonCells = TextCells.Width(fitted);
+        _inner.Write(new RawText(rule[..(start + 1)], Theme.PaneRule));
+        _inner.Write(new RawText(fitted, Theme.AccentSecondary));
+        _inner.Write(new RawText(rule[at..], Theme.PaneRule));
         _inner.WriteLine();
     }
 

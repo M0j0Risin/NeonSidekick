@@ -11,6 +11,9 @@
     smoke (audio:winmm, audio:winmm-in) and by the audio and voice checks on the published exe,
     not by line coverage. (No double hyphen in this comment: XML forbids it, and dotnet test
     rejects the whole file.)
+  - NeonSidekick.Viewer.PictureWindow* and ViewerNative (2026-09-27): the picture viewer's Win32 window, its thread
+    and imports; a window, a message loop and a folder watcher prove themselves by hand and by the published-exe smoke
+    (viewer:window). ViewerState and ViewerImage, where its decisions and its decode live, stay covered.
   - Program: the composition root; the smoke run on the published exe covers it.
   - GeneratedCodeAttribute / ExcludeFromCodeCoverageAttribute: source-generated JSON contexts,
     LibraryImport stubs and GeneratedRegex bodies. CompilerGeneratedAttribute is deliberately
@@ -22,7 +25,7 @@
       <DataCollector friendlyName="XPlat Code Coverage">
         <Configuration>
           <Format>cobertura</Format>
-          <Exclude>[NeonSidekick]NeonSidekick.Audio.WinMm*,[NeonSidekick]Program</Exclude>
+          <Exclude>[NeonSidekick]NeonSidekick.Audio.WinMm*,[NeonSidekick]NeonSidekick.Viewer.PictureWindow*,[NeonSidekick]NeonSidekick.Viewer.ViewerNative,[NeonSidekick]Program</Exclude>
           <ExcludeByAttribute>GeneratedCodeAttribute,ExcludeFromCodeCoverageAttribute</ExcludeByAttribute>
           <SkipAutoProps>true</SkipAutoProps>
           <IncludeTestAssembly>false</IncludeTestAssembly>

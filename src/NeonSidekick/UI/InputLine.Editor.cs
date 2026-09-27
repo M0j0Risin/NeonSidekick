@@ -837,6 +837,13 @@ public sealed partial class InputLine
                     return new EditOutcome.End(new InputResult.ToolbarRow(_text.ToString(), tool));
                 }
             }
+            else if (pane.TryHitStripButton(click.X, click.Y))
+            {
+                // The picture strip's button (2026-09-27): one click opens the picture viewer, as a button does.
+                _anchor = -1;
+                hintClicks.Reset();
+                _line.OpenViewer?.Invoke();
+            }
             else if (pane.PictureAt(click.X, click.Y) is int picture)
             {
                 // A picture in the transcript (later on 2026-09-24, the user's ask): a double-click

@@ -70,6 +70,7 @@ public partial class ChatScreenTests : IDisposable
     /// <summary>What /draft opens its temporary file with (2026-09-19): a lambda that writes the file and returns, or waits on the token; null = the screen has no editor.</summary>
     private Func<string, string, CancellationToken, Task>? _editDraft;
     private Func<Uri, NeonSidekick.Comfy.ComfyClient>? _comfyClient;
+    private Action<string>? _openViewer;   // the picture viewer (2026-09-27): null = none, as off Windows
     private Action<string, string>? _openImage;   // a double-clicked picture (later on 2026-09-24): null = the plain opener, _openedFiles   // /imagine and the image tools (2026-09-24): a client over a stub server
     private string? _logFile;   // /log (2026-09-22): the --log file the screen is handed; null = started without --log
     private Action<bool>? _mouse;
@@ -256,7 +257,7 @@ public partial class ChatScreenTests : IDisposable
     private async Task<string> RunAsync(IAnsiConsoleInput input, CancellationToken cancellationToken = default)
     {
         _keys = new KeySource(input, TimeSpan.FromMilliseconds(1));
-        var screen = new ChatScreen(_console, _settings, () => _settings.Current, _overriddenBy, _session, _speech, _keys, _voice, _openFile ?? _openedFiles.Add, RenderScreen, _time, _geometry, mouse: _mouse, copyToClipboard: CopyToClipboard, random: _random, clipboardImage: _clipboardImage, web: _web, setTitle: _titles.Add, externalSkills: Path.Combine(_dir, "agents-skills"), holdWheel: _holdWheel, splash: _splash, editDraft: _editDraft, mcp: _mcp, logFile: _logFile, comfyClient: _comfyClient, openImage: _openImage, claude: _claudeCli);
+        var screen = new ChatScreen(_console, _settings, () => _settings.Current, _overriddenBy, _session, _speech, _keys, _voice, _openFile ?? _openedFiles.Add, RenderScreen, _time, _geometry, mouse: _mouse, copyToClipboard: CopyToClipboard, random: _random, clipboardImage: _clipboardImage, web: _web, setTitle: _titles.Add, externalSkills: Path.Combine(_dir, "agents-skills"), holdWheel: _holdWheel, splash: _splash, editDraft: _editDraft, mcp: _mcp, logFile: _logFile, comfyClient: _comfyClient, openImage: _openImage, claude: _claudeCli, openViewer: _openViewer);
         int code = await screen.RunAsync(cancellationToken);
         Assert.Equal(0, code);
         return Output;
@@ -8466,10 +8467,11 @@ public partial class ChatScreenTests : IDisposable
     public async Task WithGeometry_HelpOpensTheInfoPane_AndEscClosesIt()
     {
         _settings.Update(d => d.TtsOutput = false);
-        _console.Profile.Height = 58;   // the Commands tab's 54 rows, A to Z with no blank rows since 2026-09-27 (62 rows in nine groups, height 66, the day before), and the pane's four; the pane scrolls past 40
+        _console.Profile.Height = 58;   // the advanced tab's 34 rows (the one Commands tab's 54 until later on 2026-09-27) and the pane's four; the pane scrolls past 40
         _geometry = new ScreenGeometry(() => null);
         PushLine("/help");
-        _console.Input.PushKey(Keys.Right);
+        _console.Input.PushKey(Keys.Right);   // Commands (advanced), since later on 2026-09-27
+        _console.Input.PushKey(Keys.Right);   // Keys
         _console.Input.PushKey(Keys.Escape);
         PushLine("/exit");
 
@@ -8478,16 +8480,19 @@ public partial class ChatScreenTests : IDisposable
         // Nothing in the transcript: the list is in the pane, under the rule, with its own hint.
         Assert.DoesNotContain("  · Commands:", output);
         string rule = new(ScreenPane.RuleGlyph, 240);
-        Assert.Contains(rule + "\n" + Titled("Help   Commands    Keys ") + "\n \n/about ", output);   // A to Z since 2026-09-27 (/settings, // led until then)
-        Assert.Contains(HelpRow("/timer", "list timers, or /timer <duration> [name] (10m, 90s, 1h30m) | stop <name> | stop all"), output);   // the column follows the widest label; the cell is padded out to the longest summary
+        Assert.Contains(rule + "\n" + Titled("Help   Commands (basic)    Commands (advanced)    Keys ") + "\n \n/clear ", output);   // the basic tab first, A to Z (later on 2026-09-27; one Commands tab from /about until then)
+        Assert.Contains(HelpRow("/sessions", SlashCommands.HelpEntries.Single(e => e.Command == "/sessions").Summary), output);   // the column is the widest label of all; the cell is padded out to the longest summary
+        // → the advanced tab: the rest, A to Z, in the same label column.
+        Assert.Contains(rule + "\n" + Titled("Help   Commands (basic)    Commands (advanced)    Keys ") + "\n \n/about ", output);
+        Assert.Contains(HelpRow("/timer", "list timers, or /timer <duration> [name] (10m, 90s, 1h30m) | stop <name> | stop all"), output);
         Assert.Contains(rule + "\n" + Row(InfoPane.HintText) + "\n", output);
         // → showed the Keys tab, with the keys that apply (voice off: no push-to-talk row).
-        Assert.Contains(rule + "\n" + Titled("Help   Commands    Keys ") + "\n \nEnter", output);
+        Assert.Contains(rule + "\n" + Titled("Help   Commands (basic)    Commands (advanced)    Keys ") + "\n \nEnter", output);
         // The label column follows the widest key ("Left / Right", 12 cells) + the gap of 2.
         Assert.Contains("Ctrl+Home     scroll to top of the chat pane", output);
         Assert.Contains("Ctrl+End      scroll to bottom of the chat pane", output);
         Assert.Contains("Ctrl+C        copy the selected text · stop the speech · cancel the reply · twice to exit", output);
-        Assert.DoesNotContain("F4", output[output.IndexOf("Help   Commands    Keys", StringComparison.Ordinal)..]);
+        Assert.DoesNotContain("F4", output[output.IndexOf("Help   Commands (basic)    Commands (advanced)    Keys", StringComparison.Ordinal)..]);
         // ESC: the normal pane again, and the next line is read as usual.
         Assert.EndsWith(rule + "\n" + InputLine.PromptGlyph + ChatScreen.InputPlaceholder + "\n" + rule + "\n" + Row(ChatScreen.HintLine(null)) + "\n", output);
     }
@@ -9006,7 +9011,7 @@ public partial class ChatScreenTests : IDisposable
 
         string settings = "\n" + Titled(SettingsMenu.Title + "   General    Sessions    LLM    TTS    STT    Claude (API)    Botchat ") + "\n";
         string tools = "\n" + Titled(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude (CLI)    Obsidian    ComfyUI    SQL    Git (native)    Options ") + "\n";
-        string help = "\n" + Titled(InfoPane.Title + "   Commands    Keys ") + "\n";
+        string help = "\n" + Titled(InfoPane.Title + "   Commands (basic)    Commands (advanced)    Keys ") + "\n";
         string sys = "\n" + Titled(SystemPromptSummary.Label + "   Prompt    Tools ") + "\n";
         string sessions = "\n" + Titled(SessionsMenu.Title) + "\n";
         string skills = "\n" + Titled(SkillsText.Label + "   Offered    Reflection    Project    Options ") + "\n";
@@ -9330,7 +9335,7 @@ public partial class ChatScreenTests : IDisposable
     {
         var rows = ChatScreen.KeyRows(voiceOn, ConsoleKey.F8, wakeReady, "hey neon");
 
-        // The user's rows (2026-09-16), the PgUp/PgDn row after Home/End (the transcript scroll, 2026-09-17); the Mouse, Drag, Drop, @, # and $ rows went and Ctrl+Home / Ctrl+End came above Alt+V later on 2026-09-20 (the user's list); the push-to-talk key and the wake phrase between PgUp/PgDn and Ctrl+Home while they apply.
+        // The user's rows (2026-09-16), the PgUp/PgDn row after Home/End (the transcript scroll, 2026-09-17); the Mouse, Drag, Drop, @, # and $ rows went and Ctrl+Home / Ctrl+End came above Alt+V later on 2026-09-20 (the user's list); the push-to-talk key and the wake phrase between PgUp/PgDn and Alt+V (Ctrl+Home until 2026-09-27) while they apply.
         Assert.Equal(count, rows.Length);
         Assert.Equal(("Enter", "send the line · change/update a setting"), rows[0]);
         Assert.Equal(("Ctrl+Enter", "new line in the message"), rows[1]);   // 2026-09-22
@@ -9340,10 +9345,10 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(("Home / End", "hold Shift to select text to the beginning or end of the line starting from the cursor"), rows[5]);
         Assert.Equal(("PgUp / PgDn", "scroll the transcript a page at a time"), rows[6]);
         Assert.DoesNotContain(rows, r => r.Key is "Mouse" or "Drag" or "Drop" or "@" or "#" or "$");
-        Assert.Equal(("Ctrl+Home", "scroll to top of the chat pane"), rows[^7]);
-        Assert.Equal(("Ctrl+End", "scroll to bottom of the chat pane"), rows[^6]);
-        Assert.Equal(("Ctrl+O", "expand or collapse the tool calls, code blocks and thinking (or click a summary line)"), rows[^5]);   // 2026-09-22
-        Assert.Equal(("Alt+V", "paste content (text or images)"), rows[^4]);
+        Assert.Equal(("Alt+V", "paste content (text or images)"), rows[^7]);   // ahead of Ctrl+Home since 2026-09-27 (the user's order)
+        Assert.Equal(("Ctrl+Home", "scroll to top of the chat pane"), rows[^6]);
+        Assert.Equal(("Ctrl+End", "scroll to bottom of the chat pane"), rows[^5]);
+        Assert.Equal(("Ctrl+O", "expand or collapse the tool calls, code blocks and thinking (or click a summary line)"), rows[^4]);   // 2026-09-22
         Assert.Equal(("Ctrl+A", "select all text on the line"), rows[^3]);
         Assert.Equal(("Ctrl+X", "cut the selected text"), rows[^2]);   // 2026-09-25
         Assert.Equal(("Ctrl+C", "copy the selected text · stop the speech · cancel the reply · twice to exit"), rows[^1]);
@@ -9362,32 +9367,55 @@ public partial class ChatScreenTests : IDisposable
     }
 
     [Fact]
-    public void CommandsTab_IsTheEntries_InTwoColumns_AToZ()
+    public void CommandsTabs_SplitTheEntries_BasicAndAdvanced_EachAToZ()
     {
-        _console.Profile.Width = 240;   // wide enough that no summary wraps (the /profile row is the longest, 125 cells with its label)
-        _console.Write(ChatScreen.CommandsTab());
-
-        // One row per command, A to Z, no blank rows (2026-09-27, the user's call; nine groups with a blank row between
-        // them until then). The label column is the grid's own measure of the widest label, and it lands on the same
-        // width HelpText pads to — one column, two hosts.
-        string[] lines = Output.TrimEnd('\n').Split('\n');
-        Assert.Equal(SlashCommands.HelpEntries.Count, lines.Length);
-        for (var i = 0; i < lines.Length; i++)
+        // The one Commands tab split in two later on 2026-09-27 (the user's list): the basic commands, and the rest.
+        // Together they are every entry once, each A to Z with no blank rows.
+        string[] basic = CommandsTabLines(advanced: false);
+        string[] advanced = CommandsTabLines(advanced: true);
+        var basicEntries = SlashCommands.HelpEntries.Where(SlashCommands.IsBasic).ToArray();
+        var advancedEntries = SlashCommands.HelpEntries.Where(e => !SlashCommands.IsBasic(e)).ToArray();
+        Assert.Equal(21, basicEntries.Length);
+        Assert.Equal(SlashCommands.HelpEntries.Count, basicEntries.Length + advancedEntries.Length);
+        Assert.Equal(basicEntries.Length, basic.Length);
+        Assert.Equal(advancedEntries.Length, advanced.Length);
+        for (var i = 0; i < basic.Length; i++)
         {
-            Assert.StartsWith(HelpRow(SlashCommands.HelpEntries[i].Label, SlashCommands.HelpEntries[i].Summary), lines[i]);
+            Assert.StartsWith(HelpRow(basicEntries[i].Label, basicEntries[i].Summary), basic[i]);
         }
 
-        Assert.DoesNotContain(lines, string.IsNullOrWhiteSpace);
-        Assert.StartsWith(HelpRow("/about", "show general information about the app and profile"), lines[0]);
-        Assert.StartsWith(HelpRow("/botchat", "let the profiles talk to each other, each in its own persona, until ESC: /botchat [profile ...] [[--] topic]"), lines[1]);
-        Assert.StartsWith(HelpRow("/claude", "send a message to Claude Code and add its reply to the conversation"), lines[2]);   // 2026-09-27
-        Assert.StartsWith(HelpRow("/settings, //", "edit and save settings"), lines[38]);   // sorted by the command, not the label
-        Assert.StartsWith(HelpRow("/window", "show the terminal window's width and height"), lines[^1]);
-        Assert.DoesNotContain("/windowsize", Output);
-        Assert.DoesNotContain("(also", Output);
-        Assert.DoesNotContain("/ask", Output);
-        Assert.DoesNotContain("/files", Output);
-        Assert.DoesNotContain("/web", Output);
+        for (var i = 0; i < advanced.Length; i++)
+        {
+            Assert.StartsWith(HelpRow(advancedEntries[i].Label, advancedEntries[i].Summary), advanced[i]);
+        }
+
+        Assert.Equal(
+        [
+            "/clear", "/compact", "/copy", "/cwd", "/draft", "/exit", "/help", "/memory", "/model", "/new", "/profile",
+            "/queue", "/reasoning", "/remember", "/server", "/sessions", "/settings", "/skills", "/sys", "/tools", "/tree",
+        ], basicEntries.Select(e => e.Command));
+        Assert.DoesNotContain(basic, string.IsNullOrWhiteSpace);
+        Assert.DoesNotContain(advanced, string.IsNullOrWhiteSpace);
+        Assert.StartsWith(HelpRow("/settings, //", "edit and save settings"), basic[16]);   // sorted by the command, not the label
+        Assert.StartsWith(HelpRow("/about", "show general information about the app and profile"), advanced[0]);
+        Assert.StartsWith(HelpRow("/botchat", "let the profiles talk to each other, each in its own persona, until ESC: /botchat [profile ...] [[--] topic]"), advanced[1]);
+        Assert.StartsWith(HelpRow("/claude", "send a message to Claude Code and add its reply to the conversation"), advanced[2]);
+        Assert.StartsWith(HelpRow("/window", "show the terminal window's width and height"), advanced[^1]);
+        string all = string.Join("\n", basic.Concat(advanced));
+        Assert.DoesNotContain("/windowsize", all);
+        Assert.DoesNotContain("(also", all);
+        Assert.DoesNotContain("/ask", all);
+        Assert.DoesNotContain("/files", all);
+        Assert.DoesNotContain("/web", all);
+    }
+
+    /// <summary>A Commands tab's rows, drawn wide enough that no summary wraps (the /profile row is the longest, 125 cells with its label).</summary>
+    private string[] CommandsTabLines(bool advanced, bool log = false)
+    {
+        var console = new TestConsole();
+        console.Profile.Width = 240;
+        console.Write(ChatScreen.CommandsTab(advanced, log));
+        return console.Output.TrimEnd('\n').Split('\n');
     }
 
     /// <summary>A row of the Commands tab as the pane lays it out: the label padded to the measured column, then the summary.</summary>
@@ -10556,6 +10584,18 @@ public partial class ChatScreenTests : IDisposable
     public void MidTurnPolicy_IsPinned(SlashCommand command, bool hasArgs, MidTurnClass expected) =>
         Assert.Equal(expected, ChatScreen.MidTurnPolicy(command, hasArgs));
 
+    /// <summary>The string form (2026-09-27): <c>/comfy view</c> alone is quick; the other /comfy forms wait, and the rest follow the bool form.</summary>
+    [Theory]
+    [InlineData(SlashCommand.Comfy, "view", MidTurnClass.Quick)]
+    [InlineData(SlashCommand.Comfy, " VIEW ", MidTurnClass.Quick)]
+    [InlineData(SlashCommand.Comfy, "", MidTurnClass.Refused)]
+    [InlineData(SlashCommand.Comfy, "purge", MidTurnClass.Refused)]
+    [InlineData(SlashCommand.Comfy, "edit json x", MidTurnClass.Refused)]
+    [InlineData(SlashCommand.Tools, "", MidTurnClass.Pane)]
+    [InlineData(SlashCommand.Queue, "clear", MidTurnClass.Quick)]
+    public void MidTurnPolicy_ReadsTheComfyViewWord(SlashCommand command, string args, MidTurnClass expected) =>
+        Assert.Equal(expected, ChatScreen.MidTurnPolicy(command, args));
+
     [Fact]
     public void MidTurnStrings_ArePinned()
     {
@@ -10927,6 +10967,48 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("  · " + ChatScreen.MidTurnRefusedNotice("/profile"), output);
         Assert.Equal(Profiles.DefaultName, _settings.ProfileName);
         Assert.DoesNotContain(SettingsMenu.SwitchedNotice("work"), output);
+        Assert.Single(_chat.Requests);
+    }
+
+    /// <summary><c>/comfy view</c> under a reply (2026-09-27): the viewer opens on the output folder, its line lands in the reply, the reply runs on.</summary>
+    [Fact]
+    public async Task MidTurn_ComfyView_OpensTheViewer_TheReplyRunsOn()
+    {
+        var viewed = new List<string>();
+        _openViewer = viewed.Add;
+        MidTurnFixture(i =>
+        {
+            if (i == 1)
+            {
+                PushLine("/comfy view");
+            }
+        });
+
+        string output = await RunAsync();
+
+        string folder = Path.GetDirectoryName(ComfyPicture("x.png"))!;
+        Assert.Equal(folder, Assert.Single(viewed));
+        Assert.Contains(NeonSidekick.Viewer.ViewerText.Opened(folder), output);
+        Assert.DoesNotContain(ChatScreen.MidTurnRefusedNotice("/comfy"), output);
+        Assert.DoesNotContain(ChatScreen.CancelledNotice, output);
+        Assert.Single(_chat.Requests);
+    }
+
+    /// <summary>The other /comfy forms still wait for the reply: <c>/comfy purge</c> is refused and dropped.</summary>
+    [Fact]
+    public async Task MidTurn_ComfyPurge_IsStillRefused()
+    {
+        MidTurnFixture(i =>
+        {
+            if (i == 1)
+            {
+                PushLine("/comfy purge");
+            }
+        });
+
+        string output = await RunAsync();
+
+        Assert.Contains("  · " + ChatScreen.MidTurnRefusedNotice("/comfy"), output);
         Assert.Single(_chat.Requests);
     }
 
@@ -11624,7 +11706,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains("\n" + Titled(InfoPane.Title + "   Commands    Keys ") + "\n", output);
+        Assert.Contains("\n" + Titled(InfoPane.Title + "   Commands (basic)    Commands (advanced)    Keys ") + "\n", output);
         Assert.Contains("three.", output);
         Assert.DoesNotContain(ChatScreen.CancelledNotice, output);
         Assert.Single(_chat.Requests);
@@ -11954,11 +12036,10 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public void CommandsTab_UnderTheFlag_HasTheLogRow_InItsSortedPlace()
     {
-        _console.Profile.Width = 240;
-        _console.Write(ChatScreen.CommandsTab(log: true));
-
-        string[] lines = Output.TrimEnd('\n').Split('\n');
-        Assert.Equal(SlashCommands.HelpEntries.Count + 1, lines.Length);   // CommandsTab()'s rows and the /log row
+        // On the advanced tab since later on 2026-09-27 (the one Commands tab until then); never on the basic one.
+        string[] lines = CommandsTabLines(advanced: true, log: true);
+        Assert.Equal(SlashCommands.HelpEntries.Count(e => !SlashCommands.IsBasic(e)) + 1, lines.Length);   // the advanced rows and the /log row
+        Assert.DoesNotContain(CommandsTabLines(advanced: false, log: true), l => l.StartsWith("/log", StringComparison.Ordinal));
         int log = Array.FindIndex(lines, l => l.StartsWith(HelpRow("/log", SlashCommands.LogEntry.Summary), StringComparison.Ordinal));
         Assert.StartsWith(HelpRow("/learn", "write or improve a skill"), lines[log - 1]);   // A to Z since 2026-09-27 (directly above /help until then)
         Assert.StartsWith(HelpRow("/loop", "repeat a message"), lines[log + 1]);
@@ -12402,6 +12483,73 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(ComfyPicture("pony-5.png"), Assert.Single(opened).Path);
     }
 
+    /// <summary>
+    /// The picture viewer's button on the strip's own rule (2026-09-27): one click hands the ComfyUI output folder's full path
+    /// to the viewer. The input row at 100, the upper rule at 99, the strip's own rule with the
+    /// button's label at its right edge, <see cref="ScreenPane.StripPaneRows"/> over the upper rule.
+    /// </summary>
+    [Fact]
+    public async Task PictureStrip_TheViewerButton_OneClick_OpensTheOutputFolder()
+    {
+        ComfyServer();
+        PaneOf40Rows();
+        var viewed = new List<string>();
+        _openViewer = viewed.Add;
+        string rule = ScreenPane.RuleWithTitle(NeonSidekick.Viewer.ViewerText.StripButton, _console.Profile.Width);
+        int x = TextCells.Width(rule[..(rule.IndexOf(' ', StringComparison.Ordinal) + 1)]);
+        StepsWhenIdle(Line("/imagine a cat --seed 5"), input => input.PushClick(x + 1, 99 - ScreenPane.StripPaneRows), Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.Contains(NeonSidekick.Viewer.ViewerText.StripButton, output);
+        Assert.Equal(Path.GetDirectoryName(ComfyPicture("pony-5.png")), Assert.Single(viewed));
+        Assert.DoesNotContain(NeonSidekick.Viewer.ViewerText.Opened(viewed[0]), output);   // a click is silent
+    }
+
+    /// <summary>With no viewer to open (not Windows) the strip's rule is bare, and a click there opens nothing.</summary>
+    [Fact]
+    public async Task PictureStrip_WithoutAViewer_HasNoButton()
+    {
+        ComfyServer();
+        PaneOf40Rows();
+        StepsWhenIdle(Line("/imagine a cat --seed 5"), input => input.PushClick(_console.Profile.Width - 4, 99 - ScreenPane.StripPaneRows), Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.DoesNotContain(NeonSidekick.Viewer.ViewerText.StripButton, output);
+    }
+
+    /// <summary><c>/comfy view</c> opens the viewer on the output folder, made first when it is not there yet, and says so; with no viewer it is an error.</summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ComfyView_OpensTheViewer_OnTheOutputFolder(bool available)
+    {
+        _settings.Update(d => d.TtsOutput = false);
+        var viewed = new List<string>();
+        if (available)
+        {
+            _openViewer = viewed.Add;
+        }
+
+        PushLine("/comfy view");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        string folder = Path.GetDirectoryName(ComfyPicture("x.png"))!;
+        if (available)
+        {
+            Assert.Equal(folder, Assert.Single(viewed));
+            Assert.True(Directory.Exists(folder));
+            Assert.Contains("picture viewer on", output);
+        }
+        else
+        {
+            Assert.Contains(NeonSidekick.Viewer.ViewerText.Unavailable, output);
+        }
+    }
+
     /// <summary>Off, or after a /clear, there is no strip: the arrows and the Enter are the line's, nothing opens.</summary>
     [Theory]
     [InlineData(false)]
@@ -12575,7 +12723,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(@"🗑️ Delete everything in D:\x\comfy_images for good — 3 files, 1 folder, 1.2 KB?", ChatScreen.ComfyPurgePrompt(@"D:\x\comfy_images", 3, 1, 1_234, false));
         Assert.Equal(@"(🗑️ purged D:\x\comfy_images: 2 files, 1 folder, 8 B)", ChatScreen.ComfyPurgedNotice(@"D:\x\comfy_images", 2, 1, 8));
         Assert.Equal(@"(🗑️ nothing in D:\x\comfy_images)", ChatScreen.ComfyPurgeEmptyNotice(@"D:\x\comfy_images"));
-        Assert.Equal("Usage: /comfy, /comfy purge, or /comfy edit json|markdown <workflow>", ChatScreen.ComfyUsageError);
+        Assert.Equal("Usage: /comfy, /comfy purge, /comfy view, or /comfy edit json|markdown <workflow>", ChatScreen.ComfyUsageError);
     }
 
     [Fact]
@@ -12585,7 +12733,8 @@ public partial class ChatScreenTests : IDisposable
         var sources = new ChatScreen.ArgumentSources(() => [], "default", [], _ => [], None, None,
             Workflows: () => [new("juggernaut-xl", "juggernaut · text → image · 1024×1024"), new("pony-txt2img", "pony · text → image · 1024×1024")]);
 
-        Assert.Equal([ChatScreen.ComfyEditWord, ChatScreen.ComfyPurgeWord], ChatScreen.ArgumentItems("/comfy", "", sources).Select(i => i.Text));
+        Assert.Equal([ChatScreen.ComfyEditWord, ChatScreen.ComfyPurgeWord, NeonSidekick.Viewer.ViewerText.ViewWord], ChatScreen.ArgumentItems("/comfy", "", sources).Select(i => i.Text));
+        Assert.Equal(["view"], ChatScreen.ArgumentItems("/comfy", "v", sources).Select(i => i.Text));
         Assert.Equal(["purge"], ChatScreen.ArgumentItems("/comfy", "pu", sources).Select(i => i.Text));
         Assert.Equal(["edit"], ChatScreen.ArgumentItems("/comfy", "ed", sources).Select(i => i.Text));
         Assert.Equal(["edit json", "edit markdown"], ChatScreen.ArgumentItems("/comfy", "edit ", sources).Select(i => i.Text));

@@ -107,6 +107,7 @@ public static partial class SmokeChecks
         results.Add(ProbeWinMmIn());
         results.Add(ProbeConsoleInput());
         results.Add(ProbeImageResize());
+        results.Add(ProbeViewerWindow());
         results.Add(ProbeSplash());
         results.Add(ProbeWebMarkdown());
         results.Add(ProbeTranscriptMarkdown());
@@ -432,6 +433,33 @@ public static partial class SmokeChecks
             catch (IOException)
             {
             }
+        }
+    }
+
+    /// <summary>
+    /// <c>viewer:window</c> (2026-09-27): the picture viewer's Win32 layer in the published binary — the class registered, a
+    /// hidden window made, a private message answered through the <c>[UnmanagedCallersOnly]</c> window procedure, the window
+    /// destroyed (<see cref="Viewer.PictureWindow.Probe"/>) — and the decode it draws from: the fixture BMP through
+    /// <see cref="Viewer.ViewerImage.Decode"/> into GDI's 32-bit order. Nothing is shown.
+    /// </summary>
+    public static SmokeCheck ProbeViewerWindow()
+    {
+        const string name = "viewer:window";
+        try
+        {
+            var (ok, detail) = Viewer.PictureWindow.Probe();
+            if (!ok)
+            {
+                return new SmokeCheck(name, false, detail);
+            }
+
+            var bitmap = Viewer.ViewerImage.Decode(SolidBmp(8, 2), "smoke.bmp");
+            bool pink = bitmap is { Width: 8, Height: 2 } && bitmap.Bgrx[0] == 0xC8 && bitmap.Bgrx[1] == 0x40 && bitmap.Bgrx[2] == 0xFF;
+            return new SmokeCheck(name, pink, pink ? detail + "; an 8x2 BMP decoded to BGRX" : detail + $"; the BMP decoded to {(bitmap is null ? "nothing" : $"{bitmap.Width}x{bitmap.Height}, first pixel {bitmap.Bgrx[0]:X2}{bitmap.Bgrx[1]:X2}{bitmap.Bgrx[2]:X2}")}");
+        }
+        catch (Exception ex)
+        {
+            return new SmokeCheck(name, false, $"{ex.GetType().Name}: {ex.Message}");
         }
     }
 

@@ -142,7 +142,7 @@ Console.CancelKeyPress += (_, e) =>
 var geometry = ScreenGeometry.ForConsole();
 bool interactive = !options.Headless && !options.Smoke && !options.AudioCheck && !options.VoiceCheck;
 using var consoleInput = interactive && geometry is not null ? WindowsConsoleInput.TryCreate() : null;
-var app = new SidekickApp(console, settings, environment, geometry: geometry, input: consoleInput, clipboard: WindowsClipboard.TryReadText, copyToClipboard: WindowsClipboard.TrySetText, clipboardImage: WindowsClipboard.TryReadImage, setTitle: title => ConsoleTitle.TrySet(title));
+var app = new SidekickApp(console, settings, environment, geometry: geometry, input: consoleInput, clipboard: WindowsClipboard.TryReadText, copyToClipboard: WindowsClipboard.TrySetText, clipboardImage: WindowsClipboard.TryReadImage, setTitle: title => ConsoleTitle.TrySet(title), openViewer: NeonSidekick.Viewer.PictureWindow.IsAvailable ? NeonSidekick.Viewer.PictureWindow.Open : null);
 int exitCode;
 try
 {
@@ -159,6 +159,9 @@ catch (Exception ex) when (ex is not OperationCanceledException)
     console.WriteLine(CrashReport.Notice(crashPath, ex));
     exitCode = 1;
 }
+
+// The picture viewer (2026-09-27) closes with the app; its thread is a background one, this is the tidy way.
+NeonSidekick.Viewer.PictureWindow.CloseAll();
 
 // A change made in the last quarter-second before quitting must not be lost to the debounce.
 await settings.FlushAsync().ConfigureAwait(false);
