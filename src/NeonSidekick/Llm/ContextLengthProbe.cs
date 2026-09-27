@@ -34,6 +34,7 @@ public sealed class ContextLengthProbe
     // The source phrases, pinned: they sit dim beside the /usage pane's Context heading.
     public const string MaxModelLenSource = "max_model_len on /v1/models";
     public const string ContextLengthSource = "context_length on /v1/models";
+    public const string MaxInputTokensSource = "max_input_tokens on /v1/models";
     public const string LmStudioLoadedSource = "loaded_context_length on /api/v0/models";
     public const string LmStudioMaxSource = "max_context_length on /api/v0/models";
     public const string LlamaPropsSource = "n_ctx on /props";
@@ -157,6 +158,7 @@ public sealed class ContextLengthProbe
         ParseList(json, "data", modelId, entry =>
             Positive(entry, "context_length") is { } context ? new ContextLength(context, ContextLengthSource)
             : Positive(entry, "max_model_len") is { } max ? new ContextLength(max, MaxModelLenSource)
+            : Positive(entry, "max_input_tokens") is { } input ? new ContextLength(input, MaxInputTokensSource)
             : null);
 
     /// <summary>Tier 2, LM Studio native: the matching entry's <c>loaded_context_length</c>, else its <c>max_context_length</c>.</summary>

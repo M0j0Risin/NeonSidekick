@@ -164,7 +164,7 @@ public sealed class SidekickApp
         _smokeChecks = smokeChecks ?? (() => SmokeChecks.Run(AppContext.BaseDirectory, ModelsDirectory));
         _probe = probe ?? new LlmEndpointProbe(new HttpClient());
         _contextProbe = contextProbe ?? new ContextLengthProbe(new HttpClient());
-        _chatClientFactory = chatClientFactory ?? ((endpoint, timeouts) => new OpenAICompatibleChatClient(endpoint, timeouts.Request));
+        _chatClientFactory = chatClientFactory ?? DefaultChatClient;
         _playbackFactory = playbackFactory ?? (format => new WinMmAudioPlayback(format));
         _synthesizerFactory = synthesizerFactory ?? (request => request.Engine == TtsEngine.InProcess ? new KokoroInProcessSynthesizer(request.ModelPath!) : new KokoroHttpSynthesizer(request.Url!));
         _captureFactory = captureFactory ?? (format => new WinMmAudioCapture(format));
@@ -1428,6 +1428,23 @@ public sealed class SidekickApp
     /// <summary>The variables in force: <c>Overrides in force: NEONSIDEKICK_LLM_URL=…</c>.</summary>
     public static string EnvironmentLogLine(string overrides) => "Overrides in force: " + overrides;
 
+    /// <summary>
+    /// The production chat client for <paramref name="endpoint"/> (2026-09-27): the Claude API's own client on its host
+    /// (<see cref="Llm.Anthropic.ClaudeApi.IsClaudeApi(Uri?)"/>), with the output cap and caching the effective settings
+    /// hold at the connect, the OpenAI-compatible one everywhere else. Every connect and every <c>/botchat</c> link
+    /// comes through here, so the provider is the URL's wherever it came from.
+    /// </summary>
+    private IChatClient DefaultChatClient(LlmEndpoint endpoint, LlmTimeouts timeouts)
+    {
+        if (!Llm.Anthropic.ClaudeApi.IsClaudeApi(endpoint.BaseUrl))
+        {
+            return new OpenAICompatibleChatClient(endpoint, timeouts.Request);
+        }
+
+        var effective = EffectiveSettings;
+        return new Llm.Anthropic.AnthropicChatClient(endpoint, timeouts.Request, effective.ClaudeApiMaxTokens, effective.ClaudeApiPromptCaching, time: _time);
+    }
+
     public string? OverriddenBy(SettingsField field) => field switch
     {
         SettingsField.LlmUrl => _options.Url is not null ? SidekickOptions.UrlFlag : _environment.LlmUrl is not null ? EnvironmentOverrides.LlmUrlVariable : null,
@@ -1457,6 +1474,8 @@ public sealed class SidekickApp
         SettingsField.ClaudeExecutable => _environment.ClaudeExecutable is not null ? EnvironmentOverrides.ClaudeExeVariable : null,
         SettingsField.ClaudePermissions => _environment.ClaudePermissions is not null ? EnvironmentOverrides.ClaudePermissionsVariable : null,
         SettingsField.ClaudeAdvisor => _environment.ClaudeAdvisor is not null ? EnvironmentOverrides.ClaudeAdvisorVariable : null,
+        SettingsField.ClaudeApi => _environment.ClaudeApi is not null ? EnvironmentOverrides.ClaudeApiVariable : null,
+        SettingsField.ClaudeApiKey => _environment.ClaudeApiKey is not null ? EnvironmentOverrides.ClaudeApiKeyVariable : null,
         _ => null,
     };
 

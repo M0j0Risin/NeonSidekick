@@ -50,6 +50,7 @@ public static class UsageText
         "A server that sends no usage report is counted as a reply with no report, never as zeros.",
         "/clear and a profile switch start the conversation's figures and the context in use over; the launch total outlives them and every /server or /model change. Nothing is saved.",
         "After a compact (/compact, or LLM auto compact (%)) the context in use is measured again at the next reply; a summary's own request is counted in the conversation and launch totals, and its notice shows what the summariser read → wrote, not the new context.",
+        "On the Claude API the prompt figure includes what the prompt cache read and wrote (the Cache row), and Cost prices every request at the model's list price — input, cache writes at 1.25×, cache reads at the model's cached rate, completion — a local estimate, not the bill.",
     ];
 
     private const string Sep = " · ";
@@ -106,6 +107,16 @@ public static class UsageText
             ("Reasoning", usage.Reasoning is { } reasoning ? N0(reasoning) : NoReasoningReport),
             ("Requests", N0(usage.Requests)),
         };
+        if (CacheValue(usage) is { } cache)
+        {
+            rows.Add((CacheLabel, cache));
+        }
+
+        if (usage.CostUsd is { } cost)
+        {
+            rows.Add((CostLabel, global::NeonSidekick.Claude.ClaudeText.Dollars(cost)));
+        }
+
         if (Wait(usage, averaged) is { } wait)
         {
             rows.Add(("Time to first token", Seconds(wait)));
@@ -171,6 +182,16 @@ public static class UsageText
             grid.AddRow(new Text(ClaudeLabel, Theme.AccentSecondary), new Text(ClaudeValue(tally), Theme.Body));
         }
     }
+
+    /// <summary>The row of the prompt tokens the cache served and took (2026-09-27, the Claude API), shown once a request reported either. Pinned.</summary>
+    public const string CacheLabel = "Cache";
+
+    /// <summary>The row of what the scope cost (2026-09-27, the Claude API at its list price), shown once a request was priced. Pinned.</summary>
+    public const string CostLabel = "Cost";
+
+    /// <summary><c>12,000 read · 1,500 written</c>: the prompt tokens the cache served and took; null while no request reported either. Pinned.</summary>
+    public static string? CacheValue(TokenUsage usage) =>
+        usage.CacheRead is null && usage.CacheWrite is null ? null : N0(usage.CacheRead ?? 0) + " read" + Sep + N0(usage.CacheWrite ?? 0) + " written";
 
     /// <summary>The row that says what the <c>/claude</c> runs used since launch. Pinned.</summary>
     public const string ClaudeLabel = "Claude";
@@ -380,7 +401,12 @@ public static class UsageText
     private static string Line(string scope, TokenUsage usage, bool averaged)
     {
         string reasoning = usage.Reasoning is { } count ? N0(count) + " reasoning, " : "";
-        string line = $"Tokens — {scope}: {N0(usage.Total)} ({N0(usage.Input)} in, {N0(usage.Output)} out, {reasoning}{Plural(usage.Requests, "request", "requests")})";
+        string cached = usage.CacheRead is { } read ? N0(read) + " cached, " : "";
+        string line = $"Tokens — {scope}: {N0(usage.Total)} ({N0(usage.Input)} in, {cached}{N0(usage.Output)} out, {reasoning}{Plural(usage.Requests, "request", "requests")})";
+        if (usage.CostUsd is { } cost)
+        {
+            line += Sep + global::NeonSidekick.Claude.ClaudeText.Dollars(cost);
+        }
         if (Wait(usage, averaged) is { } wait)
         {
             line += Sep + Seconds(wait) + " to first token";

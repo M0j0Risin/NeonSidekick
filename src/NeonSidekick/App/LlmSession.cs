@@ -1,6 +1,7 @@
 using Microsoft.Extensions.AI;
 using NeonSidekick.Diagnostics;
 using NeonSidekick.Llm;
+using NeonSidekick.Llm.Anthropic;
 using NeonSidekick.Settings;
 using NeonSidekick.Skills;
 
@@ -34,6 +35,7 @@ internal sealed class LlmSession : IDisposable
     private readonly Func<LlmEndpoint, LlmTimeouts, IChatClient> _factory;
     private readonly TimeProvider _time;
     private IChatClient? _client;
+    private AppSettingsData _effective = new();
     private string _apiKey = LlmEndpoint.DefaultApiKey;
     private string _configuredUrl = "";
     private int _configuredContextLength;
@@ -114,7 +116,9 @@ internal sealed class LlmSession : IDisposable
         }
 
         DiagnosticLog.Info(Category, ConnectedLogLine(endpoint));
-        if (_configuredContextLength <= 0 && _detectedContextLength is null)
+
+        // The Claude API publishes its window on the model list or nowhere: none of the native tiers live on its host.
+        if (_configuredContextLength <= 0 && _detectedContextLength is null && !ClaudeApi.IsClaudeApi(endpoint.BaseUrl))
         {
             _detectedContextLength = await _contextProbe.DetectAsync(endpoint.BaseUrl, endpoint.ModelId, _apiKey, cancellationToken).ConfigureAwait(false);
         }
@@ -137,7 +141,7 @@ internal sealed class LlmSession : IDisposable
         Reconnecting();
         Endpoint = null;
         Remember(effective);
-        return _probe.DiscoverAllAsync(effective.LlmApiKey, extra: null, LlmScanMode.Resolve(effective), cancellationToken);
+        return WithClaudeApiAsync(effective, _probe.DiscoverAllAsync(effective.LlmApiKey, extra: null, LlmScanMode.Resolve(effective), cancellationToken), cancellationToken);
     }
 
     /// <summary>
@@ -148,7 +152,28 @@ internal sealed class LlmSession : IDisposable
     public Task<IReadOnlyList<LlmServer>> ProbeServersAsync(AppSettingsData effective, Uri? extra, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(effective);
-        return _probe.DiscoverAllAsync(effective.LlmApiKey, extra, LlmScanMode.Resolve(effective), cancellationToken);
+        return WithClaudeApiAsync(effective, _probe.DiscoverAllAsync(effective.LlmApiKey, extra, LlmScanMode.Resolve(effective), cancellationToken), cancellationToken);
+    }
+
+    /// <summary>
+    /// The scan's servers and, while the Claude API is offered (<see cref="ClaudeApi.Offered"/>, 2026-09-27), its row
+    /// last — asked for its model list with its own key alongside the scan, never scanned for, and listed whatever it
+    /// answered (the row's detail then says why), so the switch and the key are all it takes to see it. The scan mode
+    /// does not govern it: <c>disabled</c> still lists it.
+    /// </summary>
+    private async Task<IReadOnlyList<LlmServer>> WithClaudeApiAsync(AppSettingsData effective, Task<IReadOnlyList<LlmServer>> scan, CancellationToken cancellationToken)
+    {
+        if (!ClaudeApi.Offered(effective))
+        {
+            return await scan.ConfigureAwait(false);
+        }
+
+        var claude = _probe.ProbeAsync(ClaudeApi.BaseUrl, ClaudeApi.Key(effective), cancellationToken);
+        var servers = new List<LlmServer>(await scan.ConfigureAwait(false));
+        var result = await claude.ConfigureAwait(false);
+        DiagnosticLog.Info(Category, $"{ClaudeApi.ServerName}: {result.Detail}.");
+        servers.Add(LlmServer.From(ClaudeApi.BaseUrl, result));
+        return servers;
     }
 
     /// <summary>One server asked by URL (<c>/server &lt;url&gt;</c>); the result says whether it answered.</summary>
@@ -156,7 +181,7 @@ internal sealed class LlmSession : IDisposable
     {
         ArgumentNullException.ThrowIfNull(effective);
         var v1 = LlmEndpoint.NormalizeBaseUrl(baseUrl);
-        var result = await _probe.ProbeAsync(v1, effective.LlmApiKey, cancellationToken).ConfigureAwait(false);
+        var result = await _probe.ProbeAsync(v1, ClaudeApi.KeyFor(effective, v1), cancellationToken).ConfigureAwait(false);
         return LlmServer.From(v1, result);
     }
 
@@ -231,7 +256,9 @@ internal sealed class LlmSession : IDisposable
                 return (null, BotLinkNoServer);
             }
 
-            string key = string.IsNullOrWhiteSpace(profile.LlmApiKey) || profile.LlmApiKey == LlmEndpoint.DefaultApiKey ? _apiKey : profile.LlmApiKey;
+            // The Claude API's key goes with its endpoint (2026-09-27): a borrowed Claude API is borrowed with it.
+            string key = ClaudeApi.IsClaudeApi(starter.BaseUrl) ? starter.ApiKey
+                : string.IsNullOrWhiteSpace(profile.LlmApiKey) || profile.LlmApiKey == LlmEndpoint.DefaultApiKey ? _apiKey : profile.LlmApiKey;
             endpoint = starter with { ModelId = model ?? starter.ModelId, ApiKey = key, PublishedContextLength = null };
         }
         else
@@ -246,13 +273,14 @@ internal sealed class LlmSession : IDisposable
                 return (null, ex.Message);
             }
 
-            var result = await _probe.ProbeAsync(v1, profile.LlmApiKey, cancellationToken).ConfigureAwait(false);
+            string key = ClaudeApi.KeyFor(profile, v1);
+            var result = await _probe.ProbeAsync(v1, key, cancellationToken).ConfigureAwait(false);
             if (!result.Exists)
             {
                 return (null, $"{v1} did not answer ({result.Detail})");
             }
 
-            endpoint = LlmEndpointProbe.Endpoint(LlmServer.From(v1, result), profile.LlmApiKey, model, configured: true);
+            endpoint = LlmEndpointProbe.Endpoint(LlmServer.From(v1, result), key, model, configured: true);
         }
 
         var timeouts = LlmTimeouts.Resolve(profile);
@@ -273,6 +301,7 @@ internal sealed class LlmSession : IDisposable
     private void Remember(AppSettingsData effective)
     {
         Timeouts = LlmTimeouts.Resolve(effective);
+        _effective = effective;
         _apiKey = string.IsNullOrWhiteSpace(effective.LlmApiKey) ? LlmEndpoint.DefaultApiKey : effective.LlmApiKey;
         _configuredUrl = effective.LlmUrl ?? "";
         _configuredContextLength = effective.LlmContextLength;
@@ -301,7 +330,7 @@ internal sealed class LlmSession : IDisposable
     }
 
     private async Task<ProbeResult?> ProbeAsync(Uri url, CancellationToken cancellationToken) =>
-        await _probe.ProbeAsync(url, _apiKey, cancellationToken).ConfigureAwait(false);
+        await _probe.ProbeAsync(url, ClaudeApi.IsClaudeApi(url) ? ClaudeApi.Key(_effective) : _apiKey, cancellationToken).ConfigureAwait(false);
 
     /// <summary>The skill-learning reflection now running, if one is (<see cref="StartLearning"/>); the screen never awaits it here.</summary>
     public Task<SkillLearnResult>? Learning { get; private set; }

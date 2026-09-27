@@ -31,6 +31,7 @@ Neon Sidekick brings privacy-first, local LLM inference to your terminal. Powere
 
 ### AI Connectivity & Context Management
 * **Local AI Auto-Discovery:** Automatically detects and connects to most OpenAI-compatible servers on your local network (LM Studio, vLLM, SGLang, Ollama, Unsloth, etc.), while allowing full manual configuration for custom endpoints.
+* **Claude API (optional):** Anthropic's Claude models as one more `/server` choice, with your own API key (stored encrypted), thinking levels, prompt caching and the cost shown in `/usage`. Off until you turn it on in the *Claude (API)* tab of `/settings`.
 * **Smart Context Handling:** Configurable automatic context compaction to optimize token usage and prevent window overflow.
 * **Prompt Transparency:** Visually inspect exactly what is being fed into the system prompt and see detailed compaction summaries—no black boxes.
 * **Persistent Memory:** A UI-editable memory system that automatically injects essential, recurring details directly into context.
@@ -163,6 +164,19 @@ Neon Sidekick brings privacy-first, local LLM inference to your terminal. Powere
 | STT push-to-talk key | The key that records: `F1`–`F10`, `Insert`, `Home`, `End`, `PageUp` or `PageDown`. | `F4` |
 | STT whisper model | The Whisper model that transcribes: `ggml-tiny.en.bin`, `ggml-base.en.bin` or `ggml-small.en.bin` (downloaded on first use). | `ggml-base.en.bin` |
 | STT vosk model | The Vosk model the wake word and interrupt listen with: `vosk-model-small-en-us-0.15`, `vosk-model-en-us-0.22-lgraph` or `vosk-model-small-en-in-0.4`. | `vosk-model-small-en-us-0.15` |
+
+#### Claude (API)
+
+Anthropic's Claude API as a server. With the switch on and a key set, `/server` (and the startup picker) lists a **Claude API** row after the local servers; picking it saves `https://api.anthropic.com/v1` as the *LLM URL* and offers the account's Claude models, then the reasoning level. Every message is billed to the key's account. The local servers never see this key, and the Claude API never sees *LLM API key*.
+
+| Setting | What it does | Default |
+|---|---|---|
+| Claude API | Offers the Claude API on `/server` while a key is set. Off (or keyless) with the Claude API saved as the LLM URL, the app looks for a server as if the URL were blank. | off |
+| Claude API key | Your Anthropic API key (`sk-ant-…`). Saved encrypted for your Windows account (DPAPI) and shown as `(set, encrypted)`; typing replaces it, an empty entry clears it. `NEONSIDEKICK_CLAUDE_API_KEY` outranks it. | (none) |
+| Claude API max tokens | The output cap of every request, thinking included, 1,024–128,000. A reply that reaches it stops short, and the log says so. | 32,000 |
+| Claude API prompt caching | Marks the tools, the system prompt and the conversation for Anthropic's prompt cache, so each request reads what the last one sent at a fraction of the price. | on |
+
+*LLM reasoning* is shaped per model: `low`…`xhigh` turn on adaptive thinking at that effort (`xhigh` is `high` on the 4.6 models; Haiku 4.5 and older take a thinking budget instead). `none` turns thinking off where the model allows it. Opus 5.5 and Fable always think, so there `none` means the lowest effort. The context window is the model's `max_input_tokens`. `/usage` adds a *Cache* row and a *Cost* row priced at the model's list price. That is an estimate, not the bill.
 
 #### Botchat
 
@@ -339,7 +353,7 @@ Every tool the app has, grouped (Clock, Timers, Files, Git, Shell, Obsidian, SQL
 | ComfyUI picture strip | Keep the session's ComfyUI pictures (the model's and `/imagine`'s) as small thumbnails in a strip over the input line, the newest at the left. With the input line empty, ← / → highlight one, Enter opens it in the image viewer; a double-click opens any. `/clear`, `/new` and a session switch empty it; hidden while a menu is open or the window is too short. | on |
 | ComfyUI output folder | The folder under the working directory the pictures are saved in (`comfy_images\pony-txt2img-1234.png`, a number added when the name is taken); empty = the working directory itself. A profile saved with the earlier default, `images`, keeps it. | `comfy_images` |
 
-#### Claude
+#### Claude (CLI)
 
 The Claude Code CLI, for `/claude` (you send it a message) and for `claude_advisor` (the model asks it for advice on its own).
 
@@ -411,7 +425,7 @@ Type `/` and the list opens with every command and its summary; after the comman
 | Command | What it does |
 |---|---|
 | `/about` | Show the app's version, runtime, folders, components and licence. |
-| `/claude <message>` | Send the message to Claude Code (the `claude` CLI, run headless in the working directory) and stream its reply into the transcript under Claude's name, with each tool it uses on a dim line and a footer with the cost and tokens; with speech on, the reply is spoken. The question and the reply are added to the conversation, tagged `[to Claude]` and `[Claude]`, so the local model can build on them; Claude does not see the local conversation. Each session has one Claude conversation: the next `/claude` resumes it (after a restart too, once the session is restored), and `/claude new` starts another; `/clear`, `/new` and a profile switch start another too. What Claude may do is *Claude slash command permissions* (the Claude tab of `/tools`): anything past it is denied, never asked. ESC or Ctrl+C stops Claude (the reply so far is kept). Works with no LLM server; refused while a reply runs. Your own Claude Code setup applies: its sign-in, `CLAUDE.md`, skills, MCP servers and hooks. `/usage` shows what the runs cost. |
+| `/claude <message>` | Send the message to Claude Code (the `claude` CLI, run headless in the working directory) and stream its reply into the transcript under Claude's name, with each tool it uses on a dim line and a footer with the cost and tokens; with speech on, the reply is spoken. The question and the reply are added to the conversation, tagged `[to Claude]` and `[Claude]`, so the local model can build on them; Claude does not see the local conversation. Each session has one Claude conversation: the next `/claude` resumes it (after a restart too, once the session is restored), and `/claude new` starts another; `/clear`, `/new` and a profile switch start another too. What Claude may do is *Claude slash command permissions* (the Claude (CLI) tab of `/tools`): anything past it is denied, never asked. ESC or Ctrl+C stops Claude (the reply so far is kept). Works with no LLM server; refused while a reply runs. Your own Claude Code setup applies: its sign-in, `CLAUDE.md`, skills, MCP servers and hooks. `/usage` shows what the runs cost. |
 | `/clear` | Start a new conversation and clear the screen. |
 | `/cmdcopy <profile> [--history] [overwrite]` | Copy this profile's allowed shell commands (the *Shell allowed commands* prefixes) into another: added to its list, or in place of it. With `--history`, copy its stored command history into the other profile's `sessions.db` instead (refused while that profile has *Keep command history* off). |
 | `/cmdclear` | Clear this profile's command history, the stored lines and the ones ↑/↓ recalls now, after a confirmation. |
@@ -445,7 +459,7 @@ Type `/` and the list opens with every command and its summary; after the comman
 | `/queue [clear]` | List and prune the messages queued while a reply runs (the pane's `⊠ clear all` button, or `c`, drops them all); `/queue clear` drops them all without the pane. |
 | `/reasoning [level]` | Pick the reasoning effort (`none`, `low`, `medium`, `high`, `xhigh`). |
 | `/remember <text>` | Add a memory. |
-| `/server [url]` | Pick an LLM server found on the usual ports, or set one; the model picker and then the reasoning picker follow, and one reconnect carries all three. |
+| `/server [url]` | Pick an LLM server found on the usual ports (and the Claude API, when it is on and has a key), or set one; the model picker and then the reasoning picker follow, and one reconnect carries all three. |
 | `/sessions [id \| purge <id> \| purge older <age> \| purge all \| title <text>]` | List, restore, rename and purge the stored sessions. An age is days as a bare number (`30`, `0`), or a duration with units: `12h`, `90m`, `2 hours`, `1d 6h`. |
 | `/settings`, `//` | Edit and save the settings. |
 | `/skills` | List the skills (Enter on one moves, renames, opens its `SKILL.md` in your editor, or deletes it) and edit the skill, reflection and project-file settings. |
@@ -864,7 +878,7 @@ Every variable the app reads starts with `NEONSIDEKICK_`. They override a settin
 
 * **Precedence:** command-line flag > variable > the profile's saved setting > default. A settings row that a variable (or flag) overrides says so.
 * **Values:** blank means unset; values are trimmed and words match in any case. A value that doesn't parse is logged as a warning and ignored, and the launch goes on.
-* **Logging:** with `--log`, the startup lines list the variables in force; the API key shows only as `(set)`.
+* **Logging:** with `--log`, the startup lines list the variables in force; the API keys show only as `(set)`.
 
 [HEADLESS.md](HEADLESS.md) shows them in use for scripted runs.
 
@@ -902,6 +916,8 @@ Every variable the app reads starts with `NEONSIDEKICK_`. They override a settin
 | `NEONSIDEKICK_CLAUDE_EXE` | Claude executable | The full path of the Claude Code CLI. |
 | `NEONSIDEKICK_CLAUDE_PERMISSIONS` | Claude slash command permissions | `read-only`, `edit`, `full`. |
 | `NEONSIDEKICK_CLAUDE_ADVISOR` | Claude advisor tool | `on`/`off` (also `true`/`false`, `1`/`0`, `yes`/`no`). |
+| `NEONSIDEKICK_CLAUDE_API` | Claude API | `on`/`off` (also `true`/`false`, `1`/`0`, `yes`/`no`). |
+| `NEONSIDEKICK_CLAUDE_API_KEY` | Claude API key | The key, as issued (not encrypted). Never written to the log. |
 
 ### Speech
 
@@ -930,7 +946,7 @@ Every variable the app reads starts with `NEONSIDEKICK_`. They override a settin
 
 ### Test suite
 
-These only matter when running the test suite from source. Its live tests are skipped unless their resource is there. `NEONSIDEKICK_TEST_LLM_URL`, `NEONSIDEKICK_TEST_TTS_URL` and `NEONSIDEKICK_TEST_SQL_CONNECTION` point them at a server. `NEONSIDEKICK_TEST_WHISPER_MODEL`, `NEONSIDEKICK_TEST_SILERO_MODEL`, `NEONSIDEKICK_TEST_VOSK_MODEL` and `NEONSIDEKICK_TEST_KOKORO_MODEL` point at a model, when it isn't already under `%USERPROFILE%\.neonsidekick\models`. `NEONSIDEKICK_TEST_CLAUDE=1` runs the live Claude Code tests against your own sign-in (Haiku; each run costs a few cents).
+These only matter when running the test suite from source. Its live tests are skipped unless their resource is there. `NEONSIDEKICK_TEST_LLM_URL`, `NEONSIDEKICK_TEST_TTS_URL` and `NEONSIDEKICK_TEST_SQL_CONNECTION` point them at a server. `NEONSIDEKICK_TEST_WHISPER_MODEL`, `NEONSIDEKICK_TEST_SILERO_MODEL`, `NEONSIDEKICK_TEST_VOSK_MODEL` and `NEONSIDEKICK_TEST_KOKORO_MODEL` point at a model, when it isn't already under `%USERPROFILE%\.neonsidekick\models`. `NEONSIDEKICK_TEST_CLAUDE=1` runs the live Claude Code tests against your own sign-in (Haiku; each run costs a few cents). `NEONSIDEKICK_TEST_CLAUDE_API_KEY` runs the live Claude API tests with that key (Sonnet 5 and Opus 5.5; each run costs a few cents).
 
 ## Screenshots
 [↑ Back to top](#neon-sidekick)

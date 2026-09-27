@@ -46,6 +46,8 @@ public sealed class EnvironmentOverrides
     public const string ClaudeExeVariable = Prefix + "CLAUDE_EXE";
     public const string ClaudePermissionsVariable = Prefix + "CLAUDE_PERMISSIONS";
     public const string ClaudeAdvisorVariable = Prefix + "CLAUDE_ADVISOR";
+    public const string ClaudeApiVariable = Prefix + "CLAUDE_API";
+    public const string ClaudeApiKeyVariable = Prefix + "CLAUDE_API_KEY";
 
     /// <summary>Every variable this class reads, for documentation.</summary>
     public static readonly string[] AllVariables =
@@ -56,6 +58,7 @@ public sealed class EnvironmentOverrides
         InterruptEchoVariable, InterruptConfirmVariable, LlmContextVariable, SearxngUrlVariable,
         CommandPolicyVariable, ShellPoliceVariable, ObsidianVaultVariable, ComfyUrlVariable,
         ShellNativeVariable, ClaudeExeVariable, ClaudePermissionsVariable, ClaudeAdvisorVariable,
+        ClaudeApiVariable, ClaudeApiKeyVariable,
     };
 
     /// <summary>The log category of every environment line.</summary>
@@ -155,6 +158,12 @@ public sealed class EnvironmentOverrides
     /// <summary><c>Claude advisor tool</c> for this launch, or null when unset or not a switch word (2026-09-27): a scripted headless run offers <c>claude_advisor</c> without saving it.</summary>
     public bool? ClaudeAdvisor => ReadSwitch(ClaudeAdvisorVariable);
 
+    /// <summary><c>Claude API</c> for this launch, or null when unset or not a switch word (2026-09-27): a scripted run offers the Claude API without saving it.</summary>
+    public bool? ClaudeApi => ReadSwitch(ClaudeApiVariable);
+
+    /// <summary>The Claude API key for this launch, plain (2026-09-27); never logged (<see cref="Describe"/> shows <see cref="SecretSet"/>).</summary>
+    public string? ClaudeApiKey => Read(ClaudeApiKeyVariable);
+
     /// <summary>
     /// A variable that is not an override: <c>PATH</c>, <c>PATHEXT</c>, <c>ProgramFiles</c> — what the
     /// shell probe (<see cref="Shell.Interpreters"/>) walks (2026-09-21). The one door stays this class's:
@@ -187,6 +196,7 @@ public sealed class EnvironmentOverrides
                 ShellPoliceVariable => ShellPolice is not null,
                 ShellNativeVariable => ShellNative is not null,
                 ClaudeAdvisorVariable => ClaudeAdvisor is not null,
+                ClaudeApiVariable => ClaudeApi is not null,
                 _ => Read(name) is not null,
             };
             if (set)
@@ -217,7 +227,7 @@ public sealed class EnvironmentOverrides
         var parts = new List<string>(active.Count);
         foreach (var name in active)
         {
-            parts.Add(name + "=" + (name == LlmApiKeyVariable ? SecretSet : Read(name)));
+            parts.Add(name + "=" + (name is LlmApiKeyVariable or ClaudeApiKeyVariable ? SecretSet : Read(name)));
         }
 
         return string.Join(", ", parts);
@@ -257,6 +267,8 @@ public sealed class EnvironmentOverrides
         if (ClaudeExecutable is { } claude) effective.ClaudeExecutable = claude;
         if (ClaudePermissions is { } claudePermissions) effective.ClaudePermissions = claudePermissions;
         if (ClaudeAdvisor is { } advisor) effective.ClaudeAdvisor = advisor;
+        if (ClaudeApi is { } claudeApi) effective.ClaudeApi = claudeApi;
+        if (ClaudeApiKey is { } claudeApiKey) effective.ClaudeApiKey = claudeApiKey;
 
         return effective;
     }

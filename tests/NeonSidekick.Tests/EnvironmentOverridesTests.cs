@@ -57,7 +57,9 @@ public class EnvironmentOverridesTests
             (EnvironmentOverrides.ComfyUrlVariable, " http://gpu-box:8188 "),
             (EnvironmentOverrides.ClaudeExeVariable, @" D:\bin\claude.exe "),
             (EnvironmentOverrides.ClaudePermissionsVariable, " Full "),
-            (EnvironmentOverrides.ClaudeAdvisorVariable, " Yes "));
+            (EnvironmentOverrides.ClaudeAdvisorVariable, " Yes "),
+            (EnvironmentOverrides.ClaudeApiVariable, " on "),
+            (EnvironmentOverrides.ClaudeApiKeyVariable, " sk-ant-env "));
 
         var e = env.ApplyTo(new AppSettingsData());
 
@@ -85,6 +87,8 @@ public class EnvironmentOverridesTests
         Assert.Equal(@"D:\bin\claude.exe", e.ClaudeExecutable);   // trimmed (2026-09-27)
         Assert.Equal("full", e.ClaudePermissions);   // normalised to the saved word (2026-09-27)
         Assert.True(e.ClaudeAdvisor);   // a switch word, any case, trimmed (2026-09-27)
+        Assert.True(e.ClaudeApi);   // a switch word (2026-09-27)
+        Assert.Equal("sk-ant-env", e.ClaudeApiKey);   // trimmed (2026-09-27)
         Assert.Equal(EnvironmentOverrides.AllVariables.Length - 2, env.ActiveVariables().Count);   // everything but HOME and PROFILE
     }
 

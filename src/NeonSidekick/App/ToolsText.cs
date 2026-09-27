@@ -46,8 +46,8 @@ public static class ToolsText
     /// <summary>The image tools' tab and group (2026-09-24), after Obsidian, before SQL (the user's order, 2026-09-27); "Images" until later on 2026-09-24 (the user's call: it is ComfyUI's tab).</summary>
     public const string ComfyTabTitle = "ComfyUI";
 
-    /// <summary>The Claude tab and the advisor's group (2026-09-27): <c>/claude</c>'s rows (off <c>/settings</c>, the user's call) and <c>claude_advisor</c>'s, after Ask, before Obsidian (the user's order, later that day; after ComfyUI before).</summary>
-    public const string ClaudeTabTitle = "Claude";
+    /// <summary>The Claude tab and the advisor's group (2026-09-27): <c>/claude</c>'s rows (off <c>/settings</c>, the user's call) and <c>claude_advisor</c>'s, after Ask, before Obsidian (the user's order, later that day; after ComfyUI before). Titled "Claude (CLI)" since later on 2026-09-27 (the user's call: the pair of /settings' Claude (API) tab); "Claude" before.</summary>
+    public const string ClaudeTabTitle = "Claude (CLI)";
 
     /// <summary>The eleven tabs in strip order: Offered, Web, Files, Shell, Ask, Claude, Obsidian, ComfyUI, SQL, Git (native), Options — the user's order since 2026-09-27 (Ask, Git (native), Obsidian, SQL, ComfyUI, Claude before); Options last since later on 2026-09-22 (the user's ask; second, after Offered, before); alphabetical before 2026-09-21; the last ten index <see cref="SettingsMenu.ToolsTabFields"/> one down.</summary>
     public static readonly IReadOnlyList<string> TabTitles = [OfferedTabTitle, WebTabTitle, FilesTabTitle, ShellTabTitle, AskTabTitle, ClaudeTabTitle, ObsidianTabTitle, ComfyTabTitle, SqlTabTitle, GitTabTitle, OptionsTabTitle];

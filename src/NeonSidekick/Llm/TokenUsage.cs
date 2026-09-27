@@ -26,7 +26,13 @@ namespace NeonSidekick.Llm;
 /// all count it inside the completion). Null when the report carried no such field; <c>0</c> is a
 /// report too (thinking off). A sum stays null only while nothing reported one.
 /// </param>
-public readonly record struct TokenUsage(long Input, long Output, long Total, int Requests, TimeSpan ToFirstToken, TimeSpan Generating, long? Reasoning = null)
+/// <param name="CacheRead">
+/// The share of <see cref="Input"/> the server read from its prompt cache, when it said (2026-09-27: the Claude API's
+/// <c>cache_read_input_tokens</c>; the OpenAI adapter's cached count). Null as <see cref="Reasoning"/> is.
+/// </param>
+/// <param name="CacheWrite">The share of <see cref="Input"/> the server wrote to its prompt cache (the Claude API's <c>cache_creation_input_tokens</c>); null when not reported.</param>
+/// <param name="CostUsd">What the requests cost in US dollars, priced where the model's price is known (the Claude API, <see cref="Anthropic.ClaudePrice"/>); null for a local server.</param>
+public readonly record struct TokenUsage(long Input, long Output, long Total, int Requests, TimeSpan ToFirstToken, TimeSpan Generating, long? Reasoning = null, long? CacheRead = null, long? CacheWrite = null, decimal? CostUsd = null)
 {
     public static readonly TokenUsage Zero = default;
 
@@ -55,10 +61,12 @@ public readonly record struct TokenUsage(long Input, long Output, long Total, in
         ArgumentNullException.ThrowIfNull(details);
         long input = details.InputTokenCount ?? 0;
         long output = details.OutputTokenCount ?? 0;
-        return new TokenUsage(input, output, details.TotalTokenCount ?? input + output, 1, toFirstToken, generating, details.ReasoningTokenCount);
+        long? cacheWrite = details.AdditionalCounts is { } counts && counts.TryGetValue(Anthropic.AnthropicStream.CacheWriteKey, out long written) ? written : null;
+        decimal? cost = details.AdditionalCounts is { } more && more.TryGetValue(Anthropic.AnthropicStream.CostKey, out long nano) ? nano / 1_000_000_000m : null;
+        return new TokenUsage(input, output, details.TotalTokenCount ?? input + output, 1, toFirstToken, generating, details.ReasoningTokenCount, details.CachedInputTokenCount, cacheWrite, cost);
     }
 
-    /// <summary>Every count and span summed; the reasoning count is the sum of the reports that carried one, null when neither did.</summary>
+    /// <summary>Every count and span summed; the reasoning, cache and cost figures are the sums of the reports that carried one, null when neither did.</summary>
     public static TokenUsage operator +(TokenUsage a, TokenUsage b) =>
         new(
             a.Input + b.Input,
@@ -67,5 +75,10 @@ public readonly record struct TokenUsage(long Input, long Output, long Total, in
             a.Requests + b.Requests,
             a.ToFirstToken + b.ToFirstToken,
             a.Generating + b.Generating,
-            a.Reasoning is null && b.Reasoning is null ? null : (a.Reasoning ?? 0) + (b.Reasoning ?? 0));
+            Sum(a.Reasoning, b.Reasoning),
+            Sum(a.CacheRead, b.CacheRead),
+            Sum(a.CacheWrite, b.CacheWrite),
+            a.CostUsd is null && b.CostUsd is null ? null : (a.CostUsd ?? 0) + (b.CostUsd ?? 0));
+
+    private static long? Sum(long? a, long? b) => a is null && b is null ? null : (a ?? 0) + (b ?? 0);
 }

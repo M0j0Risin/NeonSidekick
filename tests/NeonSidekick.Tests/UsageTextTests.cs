@@ -325,7 +325,7 @@ public class UsageTextTests
             Assert.Equal(" ", lines[i * 2 + 1]);
         }
 
-        Assert.Equal(9, UsageText.Notes.Count);
+        Assert.Equal(10, UsageText.Notes.Count);   // the Claude API's cache and cost since 2026-09-27
         Assert.StartsWith("After a compact (/compact, or LLM auto compact (%)) the context in use is measured again at the next reply", UsageText.Notes[8]);
         Assert.StartsWith("The counts are the server's own usage report", UsageText.Notes[0]);
         Assert.Contains("the last request's prompt plus its completion is the context in use", UsageText.Notes[1]);

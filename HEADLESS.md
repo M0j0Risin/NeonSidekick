@@ -173,6 +173,14 @@ $env:NEONSIDEKICK_LLM_API_KEY = (Get-Secret NeonLlmKey -AsPlainText)
 "Ping." | NeonSidekick.exe --headless --url https://llm.internal.example/v1
 ```
 
+The Claude API: switch it on and give it its key for the run, then point `--url` at it. Name the model, or the run takes the first one the account lists. Without the switch and the key, the URL is ignored and the run looks for a local server instead (a warning says so).
+
+```powershell
+$env:NEONSIDEKICK_CLAUDE_API = "on"
+$env:NEONSIDEKICK_CLAUDE_API_KEY = (Get-Secret AnthropicKey -AsPlainText)
+"Summarise this repo's README." | NeonSidekick.exe --headless --url https://api.anthropic.com --model claude-sonnet-5
+```
+
 ---
 
 ## `--model <id>`: which model on that server
@@ -627,6 +635,7 @@ Flags beat variables; variables beat the profile's saved values.
 | `NEONSIDEKICK_HOME` | A whole separate home (its own `settings.json`, profiles, models, `mcp.json`, `sql.json`). |
 | `NEONSIDEKICK_LLM_URL` / `NEONSIDEKICK_LLM_MODEL` | Server and model, when there is no `--url` / `--model`. |
 | `NEONSIDEKICK_LLM_API_KEY` | The server's key; never put it on the command line. |
+| `NEONSIDEKICK_CLAUDE_API` / `NEONSIDEKICK_CLAUDE_API_KEY` | `on` and a key offer the Claude API for the run (`--url https://api.anthropic.com`). The key is never logged and never sent to a local server. Every request is billed to the key's account. |
 | `NEONSIDEKICK_LLM_TURN_TIMEOUT` / `NEONSIDEKICK_LLM_REQUEST_TIMEOUT` | Seconds; raise them for long agentic jobs. |
 | `NEONSIDEKICK_LLM_CONTEXT` | The context window in tokens, when the server doesn't report it. |
 | `NEONSIDEKICK_LLM_REASONING` | Reasoning effort for the run. |

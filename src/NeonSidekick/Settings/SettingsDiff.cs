@@ -7,8 +7,8 @@ namespace NeonSidekick.Settings;
 /// What changed between two settings snapshots, one line per property, for the diagnostic log:
 /// <c>TtsSpeed: 1 → 1.2</c>. The two are serialised through <see cref="SettingsJsonContext"/>
 /// (the same shape the file has, so the property names are the JSON keys) and compared property
-/// by property; a value that did not change gives no line. The one secret,
-/// <see cref="AppSettingsData.LlmApiKey"/>, is named but never shown (<see cref="Redacted"/>).
+/// by property; a value that did not change gives no line. The secrets,
+/// <see cref="AppSettingsData.LlmApiKey"/> and <see cref="AppSettingsData.ClaudeApiKey"/> (2026-09-27), are named but never shown (<see cref="Redacted"/>).
 /// </summary>
 public static class SettingsDiff
 {
@@ -19,7 +19,7 @@ public static class SettingsDiff
     public const string Arrow = " → ";
 
     /// <summary>The properties whose values are never written to a log.</summary>
-    public static readonly IReadOnlySet<string> Secrets = new HashSet<string>(StringComparer.Ordinal) { nameof(AppSettingsData.LlmApiKey) };
+    public static readonly IReadOnlySet<string> Secrets = new HashSet<string>(StringComparer.Ordinal) { nameof(AppSettingsData.LlmApiKey), nameof(AppSettingsData.ClaudeApiKey) };
 
     /// <summary>
     /// One <c>Name: old → new</c> line per property whose value differs, in the file's order;

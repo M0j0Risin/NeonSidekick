@@ -428,19 +428,19 @@ public enum SettingsField
     /// <summary>A toggle: whether the model's thinking streams into the transcript and folds when the answer starts (<see cref="Settings.AppSettingsData.LlmShowThinking"/>). The LLM tab's last row (2026-09-26, the user's ask); no reconnect (read at each turn). Last in the enum, as every newcomer.</summary>
     LlmShowThinking,
 
-    /// <summary>Typed: the Claude Code CLI <c>/claude</c> starts (<see cref="Settings.AppSettingsData.ClaudeExecutable"/>); empty = looked up. The <c>/tools</c> Claude tab's first row (2026-09-27; on <c>/settings</c> that morning); read at each <c>/claude</c> and advisor call.</summary>
+    /// <summary>Typed: the Claude Code CLI <c>/claude</c> starts (<see cref="Settings.AppSettingsData.ClaudeExecutable"/>); empty = looked up. The <c>/tools</c> Claude (CLI) tab's first row (2026-09-27; on <c>/settings</c> that morning); read at each <c>/claude</c> and advisor call.</summary>
     ClaudeExecutable,
 
-    /// <summary>A picker over <see cref="Claude.ClaudePermission.Names"/>: what the Claude Code child may do on its own (<see cref="Settings.AppSettingsData.ClaudePermissions"/>). The Claude tab's second row (2026-09-27).</summary>
+    /// <summary>A picker over <see cref="Claude.ClaudePermission.Names"/>: what the Claude Code child may do on its own (<see cref="Settings.AppSettingsData.ClaudePermissions"/>). The Claude (CLI) tab's second row (2026-09-27).</summary>
     ClaudePermissions,
 
-    /// <summary>Typed: the <c>--model</c> of a <c>/claude</c> run (<see cref="Settings.AppSettingsData.ClaudeModel"/>); empty = the CLI's own. The Claude tab's third row (2026-09-27).</summary>
+    /// <summary>Typed: the <c>--model</c> of a <c>/claude</c> run (<see cref="Settings.AppSettingsData.ClaudeModel"/>); empty = the CLI's own. The Claude (CLI) tab's third row (2026-09-27).</summary>
     ClaudeModel,
 
-    /// <summary>A picker over <see cref="Claude.ClaudeEffort.Names"/>: the <c>--effort</c> of a <c>/claude</c> run (<see cref="Settings.AppSettingsData.ClaudeEffort"/>). The Claude tab's last row (2026-09-27).</summary>
+    /// <summary>A picker over <see cref="Claude.ClaudeEffort.Names"/>: the <c>--effort</c> of a <c>/claude</c> run (<see cref="Settings.AppSettingsData.ClaudeEffort"/>). The Claude (CLI) tab's last row (2026-09-27).</summary>
     ClaudeEffort,
 
-    /// <summary>A toggle: whether the model is offered <c>claude_advisor</c> (<see cref="Settings.AppSettingsData.ClaudeAdvisor"/>). The <c>/tools</c> Claude tab, under the four Claude command rows (2026-09-27); the group's switch, no reconnect (read at each turn).</summary>
+    /// <summary>A toggle: whether the model is offered <c>claude_advisor</c> (<see cref="Settings.AppSettingsData.ClaudeAdvisor"/>). The <c>/tools</c> Claude (CLI) tab, under the four Claude command rows (2026-09-27); the group's switch, no reconnect (read at each turn).</summary>
     ClaudeAdvisor,
 
     /// <summary>A picker over <see cref="Claude.ClaudeAdvisorContext.Names"/>: what an advisor call sends besides the question (<see cref="Settings.AppSettingsData.ClaudeAdvisorContext"/>). Under the switch (2026-09-27).</summary>
@@ -455,8 +455,20 @@ public enum SettingsField
     /// <summary>A picker over <see cref="Claude.ClaudeEffort.Names"/>: the <c>--effort</c> of an advisor call (<see cref="Settings.AppSettingsData.ClaudeAdvisorEffort"/>); empty = the Claude slash command effort. Under the model (2026-09-27).</summary>
     ClaudeAdvisorEffort,
 
-    /// <summary>A toggle: whether each advisor call waits for the user's yes (<see cref="Settings.AppSettingsData.ClaudeAdvisorConfirm"/>). The Claude tab's last row (2026-09-27). Last in the enum, as every newcomer.</summary>
+    /// <summary>A toggle: whether each advisor call waits for the user's yes (<see cref="Settings.AppSettingsData.ClaudeAdvisorConfirm"/>). The Claude (CLI) tab's last row (2026-09-27).</summary>
     ClaudeAdvisorConfirm,
+
+    /// <summary>A toggle: whether the Claude API is offered as a server (<see cref="Settings.AppSettingsData.ClaudeApi"/>). The <c>/settings</c> Claude (API) tab's first row (2026-09-27); a reconnect.</summary>
+    ClaudeApi,
+
+    /// <summary>Typed: the Claude API key, saved DPAPI-encrypted and shown masked (<see cref="Settings.AppSettingsData.ClaudeApiKey"/>); empty clears it. Under the switch (2026-09-27); a reconnect.</summary>
+    ClaudeApiKey,
+
+    /// <summary>Typed: the <c>max_tokens</c> of every Claude API request (<see cref="Settings.AppSettingsData.ClaudeApiMaxTokens"/>). Under the key (2026-09-27); a reconnect.</summary>
+    ClaudeApiMaxTokens,
+
+    /// <summary>A toggle: whether Claude API requests carry prompt-cache breakpoints (<see cref="Settings.AppSettingsData.ClaudeApiPromptCaching"/>). The Claude (API) tab's last row (2026-09-27); a reconnect. Last in the enum, as every newcomer.</summary>
+    ClaudeApiPromptCaching,
 }
 
 /// <summary>The tabs of <c>/settings</c> on the pane, in strip order (Sessions right after General — the user's order, 2026-09-18; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
@@ -473,6 +485,9 @@ public enum SettingsTab
 
     /// <summary>The voice rows, last since 2026-09-19 (Ask, Files and Web after it until then) until the Botchat tab came after them.</summary>
     Stt,
+
+    /// <summary>The Claude API's four rows (2026-09-27, the user's ask and place: after STT, before Botchat) — the switch that offers it on <c>/server</c>, its key, its output cap and its prompt caching.</summary>
+    ClaudeApi,
 
     /// <summary>The <c>/botchat</c> picture rows (2026-09-25, the user's ask: a Botchat tab on <c>/settings</c>), last (a Claude tab followed it on 2026-09-27 until later that day, when its rows moved to <c>/tools</c>' Claude tab, the user's call).</summary>
     BotChat,
@@ -721,7 +736,10 @@ internal sealed partial class SettingsMenu
     private static readonly SettingsField[] Fields = Enum.GetValues<SettingsField>();
 
     /// <summary>The strip titles, one per <see cref="SettingsTab"/> (five since 2026-09-19: Ask, Files and Web are <c>/tools</c>' tabs, <see cref="ToolsText.TabTitles"/>, and Skills is <c>/skills</c>' Options tab, <see cref="SkillsText.OptionsTabTitle"/>). Pinned.</summary>
-    public static readonly IReadOnlyList<string> TabTitles = ["General", "Sessions", "LLM", "TTS", "STT", "Botchat"];
+    public static readonly IReadOnlyList<string> TabTitles = ["General", "Sessions", "LLM", "TTS", "STT", ClaudeApiTabTitle, "Botchat"];
+
+    /// <summary>The Claude API tab's strip title (2026-09-27, the user's name for it). Pinned.</summary>
+    public const string ClaudeApiTabTitle = "Claude (API)";
 
     /// <summary>
     /// The rows of each tab on the pane, indexed by <see cref="SettingsTab"/>, in the order shown
@@ -745,6 +763,7 @@ internal sealed partial class SettingsMenu
         [SettingsField.LlmScanMode, SettingsField.LlmUrl, SettingsField.LlmModel, SettingsField.LlmApiKey, SettingsField.LlmReasoning, SettingsField.LlmRequestTimeoutSeconds, SettingsField.LlmTurnTimeoutSeconds, SettingsField.LlmContextLength, SettingsField.LlmMidTurnUsage, SettingsField.LlmCompactType, SettingsField.LlmCompactKeepRecent, SettingsField.LlmCompactShowSummary, SettingsField.LlmAutoCompactPercent, SettingsField.LlmMaxTurns, SettingsField.LlmOfferTools, SettingsField.LlmToolCompactType, SettingsField.LlmMaxToolIterations, SettingsField.LlmUseFunVerbs, SettingsField.LlmShowThinking],
         [SettingsField.TtsOutput, SettingsField.TtsSource, SettingsField.TtsHttpUrl, SettingsField.TtsVoicePreview, SettingsField.TtsVoicePreset, SettingsField.TtsVoice, SettingsField.TtsVoice2, SettingsField.TtsVoiceMix, SettingsField.TtsSpeed],
         Fields.Where(IsVoiceField).ToArray(),
+        [SettingsField.ClaudeApi, SettingsField.ClaudeApiKey, SettingsField.ClaudeApiMaxTokens, SettingsField.ClaudeApiPromptCaching],
         [SettingsField.BotChatLlmMode, SettingsField.BotChatImages, SettingsField.BotChatImageMode, SettingsField.BotChatImageWorkflow, SettingsField.BotChatImageAsync, SettingsField.BotChatNonTtsDelaySeconds],
     ];
 
@@ -894,7 +913,8 @@ internal sealed partial class SettingsMenu
     /// <summary>Whether a change to <paramref name="field"/> needs the LLM session rebuilt.</summary>
     public static bool IsLlmField(SettingsField field) =>
         field is SettingsField.LlmUrl or SettingsField.LlmModel or SettingsField.LlmApiKey
-            or SettingsField.LlmRequestTimeoutSeconds or SettingsField.LlmTurnTimeoutSeconds or SettingsField.LlmContextLength or SettingsField.LlmReasoning;
+            or SettingsField.LlmRequestTimeoutSeconds or SettingsField.LlmTurnTimeoutSeconds or SettingsField.LlmContextLength or SettingsField.LlmReasoning
+            or SettingsField.ClaudeApi or SettingsField.ClaudeApiKey or SettingsField.ClaudeApiMaxTokens or SettingsField.ClaudeApiPromptCaching;
 
     /// <summary>Whether a change to <paramref name="field"/> needs the speech session re-probed.</summary>
     public static bool IsTtsField(SettingsField field) =>
@@ -1038,7 +1058,8 @@ internal sealed partial class SettingsMenu
             or SettingsField.ToolsDollarMention or SettingsField.ReflectionIncludesSessions or SettingsField.ReflectionYieldsToTurns or SettingsField.McpServers or SettingsField.GitNativeTools
             or SettingsField.LlmCompactShowSummary or SettingsField.ShellToolBridge or SettingsField.ShellPoliceOutsidePaths or SettingsField.ShellPreferNative
             or SettingsField.ObsidianTools or SettingsField.ObsidianAllowDelete or SettingsField.SqlTools or SettingsField.SqlPercentMention or SettingsField.ComfyTools or SettingsField.ComfyReinforceNegatives or SettingsField.ComfyShowPrompts or SettingsField.ComfyCaretMention or SettingsField.ComfyPictureStrip
-            or SettingsField.BotChatImages or SettingsField.BotChatImageAsync or SettingsField.ClaudeAdvisor or SettingsField.ClaudeAdvisorConfirm;
+            or SettingsField.BotChatImages or SettingsField.BotChatImageAsync or SettingsField.ClaudeAdvisor or SettingsField.ClaudeAdvisorConfirm
+            or SettingsField.ClaudeApi or SettingsField.ClaudeApiPromptCaching;
 
     public static string FieldName(SettingsField field) => field switch
     {
@@ -1158,6 +1179,10 @@ internal sealed partial class SettingsMenu
         SettingsField.TtsVoicePreview => "TTS voice preview",
         SettingsField.FileTools => "File tools",
         SettingsField.WebSearchMethod => "Web search method",
+        SettingsField.ClaudeApi => "Claude API",
+        SettingsField.ClaudeApiKey => "Claude API key",
+        SettingsField.ClaudeApiMaxTokens => "Claude API max tokens",
+        SettingsField.ClaudeApiPromptCaching => "Claude API prompt caching",
         SettingsField.AskUser => "Ask user",
         SettingsField.AskMaxQuestions => "Ask max questions",
         SettingsField.AskMaxChoices => "Ask max choices per question",
@@ -1276,6 +1301,10 @@ internal sealed partial class SettingsMenu
             SettingsField.ClaudeAdvisorModel => string.IsNullOrWhiteSpace(data.ClaudeAdvisorModel) ? ClaudeAdvisorModelLabel : data.ClaudeAdvisorModel,
             SettingsField.ClaudeAdvisorEffort => string.IsNullOrWhiteSpace(data.ClaudeAdvisorEffort) ? ClaudeAdvisorEffortLabel : data.ClaudeAdvisorEffort,
             SettingsField.ClaudeAdvisorConfirm => OnOff(data.ClaudeAdvisorConfirm),
+            SettingsField.ClaudeApi => OnOff(data.ClaudeApi),
+            SettingsField.ClaudeApiKey => ClaudeApiKeyLabel(data.ClaudeApiKey),
+            SettingsField.ClaudeApiMaxTokens => Tokens(data.ClaudeApiMaxTokens),
+            SettingsField.ClaudeApiPromptCaching => OnOff(data.ClaudeApiPromptCaching),
             SettingsField.LlmScanMode => data.LlmScanMode,
             SettingsField.TtsSource => data.TtsSource,
             SettingsField.WebTools => OnOff(data.WebTools),
@@ -1526,6 +1555,24 @@ internal sealed partial class SettingsMenu
     /// <summary>One row of the advisor-context picker: the word and its hint, padded to eight. Pinned.</summary>
     public static string ClaudeAdvisorContextLabel(string name) =>
         Markup.Escape(name.PadRight(8)) + Theme.DimMarkup(Claude.ClaudeAdvisorContext.Describe(name));
+
+    /// <summary>
+    /// How the menu shows <see cref="AppSettingsData.ClaudeApiKey"/> (2026-09-27): <c>(none)</c>, <see cref="ClaudeApiKeyEncryptedLabel"/>
+    /// for the DPAPI value the menu saves (its blob says nothing worth masking), else <see cref="Mask"/> of a plain one
+    /// (a variable, a hand edit). Pinned.
+    /// </summary>
+    public static string ClaudeApiKeyLabel(string? stored) =>
+        string.IsNullOrWhiteSpace(stored) ? "(none)" : Sql.WindowsCredentials.IsProtected(stored) ? ClaudeApiKeyEncryptedLabel : Mask(stored.Trim());
+
+    /// <summary>The Claude API key row's value while an encrypted key is saved. Pinned.</summary>
+    public const string ClaudeApiKeyEncryptedLabel = "(set, encrypted)";
+
+    /// <summary>The settings-menu wording for a bad <see cref="SettingsField.ClaudeApiMaxTokens"/>. Pinned.</summary>
+    public static readonly string ClaudeApiMaxTokensRangeError =
+        "must be " + AppSettingsData.MinClaudeApiMaxTokens.ToString(CultureInfo.InvariantCulture) + " to " + AppSettingsData.MaxClaudeApiMaxTokens.ToString(CultureInfo.InvariantCulture) + " tokens";
+
+    /// <summary>The warning when DPAPI could not encrypt the key and it was saved as typed. Pinned.</summary>
+    public static string ClaudeApiKeyPlainWarning(string reason) => $"Claude API key saved unencrypted: {reason}.";
 
     /// <summary>How the menu shows <see cref="AppSettingsData.ClaudeAdvisorCallsPerTurn"/>. Pinned.</summary>
     public static string ClaudeAdvisorCalls(int value) => value.ToString(CultureInfo.InvariantCulture) + (value == 1 ? " call" : " calls");
@@ -1809,6 +1856,10 @@ internal sealed partial class SettingsMenu
         SettingsField.ClaudeModel => data.ClaudeModel,
         SettingsField.ClaudeAdvisorModel => data.ClaudeAdvisorModel,
         SettingsField.ClaudeAdvisorCallsPerTurn => data.ClaudeAdvisorCallsPerTurn.ToString(CultureInfo.InvariantCulture),
+        SettingsField.ClaudeApiMaxTokens => data.ClaudeApiMaxTokens.ToString(CultureInfo.InvariantCulture),
+
+        // The key is never put back on the line: typing replaces it, empty clears it.
+        SettingsField.ClaudeApiKey => "",
         SettingsField.ComfyOutputFolder => data.ComfyOutputFolder,
         SettingsField.ComfyTimeoutSeconds => data.ComfyTimeoutSeconds.ToString(CultureInfo.InvariantCulture),
         SettingsField.ComfyMaxPicturesPerCall => data.ComfyMaxPicturesPerCall.ToString(CultureInfo.InvariantCulture),
@@ -2552,7 +2603,7 @@ internal sealed partial class SettingsMenu
             return await PickVoskModelAsync(saved, cancellationToken).ConfigureAwait(false);
         }
 
-        bool allowEmpty = field is SettingsField.LlmUrl or SettingsField.LlmModel or SettingsField.TtsVoice2 or SettingsField.WorkingDirectory or SettingsField.WebBrowserPath or SettingsField.WebSearxngUrl or SettingsField.DraftEditor or SettingsField.ImageEditor or SettingsField.GitNativeEmail or SettingsField.GitNativeName or SettingsField.ObsidianVault or SettingsField.ComfyUrl or SettingsField.ComfyOutputFolder or SettingsField.ClaudeExecutable or SettingsField.ClaudeModel or SettingsField.ClaudeAdvisorModel;
+        bool allowEmpty = field is SettingsField.LlmUrl or SettingsField.LlmModel or SettingsField.TtsVoice2 or SettingsField.WorkingDirectory or SettingsField.WebBrowserPath or SettingsField.WebSearxngUrl or SettingsField.DraftEditor or SettingsField.ImageEditor or SettingsField.GitNativeEmail or SettingsField.GitNativeName or SettingsField.ObsidianVault or SettingsField.ComfyUrl or SettingsField.ComfyOutputFolder or SettingsField.ClaudeExecutable or SettingsField.ClaudeModel or SettingsField.ClaudeAdvisorModel or SettingsField.ClaudeApiKey;
         var result = await EditTextAsync(field, page, row, EditableValue(field, saved), allowEmpty, cancellationToken).ConfigureAwait(false);
         if (result is not InputResult.Submitted submitted)
         {
@@ -2936,6 +2987,27 @@ internal sealed partial class SettingsMenu
                 }
 
                 Apply(field, d => d.ClaudeAdvisorCallsPerTurn = advisorCalls);
+                return true;
+
+            case SettingsField.ClaudeApiMaxTokens:
+                if (!int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out int claudeMax) || claudeMax < AppSettingsData.MinClaudeApiMaxTokens || claudeMax > AppSettingsData.MaxClaudeApiMaxTokens)
+                {
+                    Sink.Error($"{FieldName(field)} {ClaudeApiMaxTokensRangeError}; keeping {EditableValue(field, saved)}.");
+                    return false;
+                }
+
+                Apply(field, d => d.ClaudeApiMaxTokens = claudeMax);
+                return true;
+
+            case SettingsField.ClaudeApiKey:
+                // Encrypted for this Windows user before it reaches the file (2026-09-27); where DPAPI fails, kept as typed and said so.
+                string protectedKey = Llm.Anthropic.ClaudeApi.Protect(text, out string? protectError);
+                if (protectError is not null)
+                {
+                    Sink.Warning(ClaudeApiKeyPlainWarning(protectError));
+                }
+
+                Apply(field, d => d.ClaudeApiKey = protectedKey);
                 return true;
 
             case SettingsField.WebSearxngUrl:
@@ -3633,6 +3705,8 @@ internal sealed partial class SettingsMenu
             SettingsField.ComfyPictureStrip => data.ComfyPictureStrip,
             SettingsField.ClaudeAdvisor => data.ClaudeAdvisor,
             SettingsField.ClaudeAdvisorConfirm => data.ClaudeAdvisorConfirm,
+            SettingsField.ClaudeApi => data.ClaudeApi,
+            SettingsField.ClaudeApiPromptCaching => data.ClaudeApiPromptCaching,
             SettingsField.BotChatImages => data.BotChatImages,
             SettingsField.BotChatImageAsync => data.BotChatImageAsync,
             SettingsField.SqlPercentMention => data.SqlPercentMention,
@@ -3693,6 +3767,8 @@ internal sealed partial class SettingsMenu
             case SettingsField.ComfyPictureStrip: data.ComfyPictureStrip = on; break;
             case SettingsField.ClaudeAdvisor: data.ClaudeAdvisor = on; break;
             case SettingsField.ClaudeAdvisorConfirm: data.ClaudeAdvisorConfirm = on; break;
+            case SettingsField.ClaudeApi: data.ClaudeApi = on; break;
+            case SettingsField.ClaudeApiPromptCaching: data.ClaudeApiPromptCaching = on; break;
             case SettingsField.BotChatImages: data.BotChatImages = on; break;
             case SettingsField.BotChatImageAsync: data.BotChatImageAsync = on; break;
             case SettingsField.SqlPercentMention: data.SqlPercentMention = on; break;
@@ -3762,6 +3838,8 @@ internal sealed partial class SettingsMenu
         SettingsField.ComfyPictureStrip => on ? "the session's pictures in a strip above the line" : "no strip",
         SettingsField.ClaudeAdvisor => on ? "the model may ask Claude for advice (claude_advisor, read-only)" : "no claude_advisor",
         SettingsField.ClaudeAdvisorConfirm => on ? "each claude_advisor call waits for your yes" : "claude_advisor runs without asking",
+        SettingsField.ClaudeApi => on ? "/server offers the Claude API while a key is set (billed per message)" : "the Claude API is not offered",
+        SettingsField.ClaudeApiPromptCaching => on ? "the prompt and conversation are cached between requests (cheaper)" : "every request is billed in full",
         SettingsField.BotChatImages => on ? "/botchat draws pictures while the ComfyUI tools are offered" : "/botchat is talk alone",
         SettingsField.BotChatImageAsync => on ? "the next bot answers while the picture renders" : "the chat waits for each picture",
         SettingsField.SqlPercentMention => on ? "% and part of a name lists the SQL connections on the line" : "% is ordinary text",

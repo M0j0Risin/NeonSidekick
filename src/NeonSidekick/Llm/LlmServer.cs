@@ -42,6 +42,11 @@ public sealed record LlmServer(Uri BaseUrl, string Name, ProbeResult Result)
     public static string NameFor(Uri baseUrl, string? ownedBy)
     {
         ArgumentNullException.ThrowIfNull(baseUrl);
+        if (Anthropic.ClaudeApi.IsClaudeApi(baseUrl))
+        {
+            return Anthropic.ClaudeApi.ServerName;
+        }
+
         if (ownedBy is not null && OwnerNames.TryGetValue(ownedBy.Trim(), out var byOwner))
         {
             return byOwner;

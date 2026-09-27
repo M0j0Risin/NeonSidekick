@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Net;
 using System.Text.Json;
 using NeonSidekick.Diagnostics;
+using NeonSidekick.Llm.Anthropic;
 using NeonSidekick.Settings;
 
 namespace NeonSidekick.Llm;
@@ -75,6 +76,9 @@ public sealed class LlmEndpointProbe
     /// <summary>The per-call ceiling in force.</summary>
     public TimeSpan Timeout { get; }
 
+    /// <summary>The Claude API's model-list ceiling when <see cref="Timeout"/> is shorter (2026-09-27): a hosted API over the internet, not a local port.</summary>
+    public static readonly TimeSpan ClaudeApiTimeout = TimeSpan.FromSeconds(10);
+
     /// <summary>The comma-separated port list, for the "nothing found" message.</summary>
     public static string CandidatePortList =>
         string.Join(", ", CandidatePorts.Select(p => p.ToString(CultureInfo.InvariantCulture)));
@@ -136,17 +140,25 @@ public sealed class LlmEndpointProbe
     {
         ArgumentNullException.ThrowIfNull(baseUrl);
         var v1 = LlmEndpoint.NormalizeBaseUrl(baseUrl);
-        var modelsUrl = LlmEndpoint.ModelsUrl(v1);
+
+        // The Claude API (2026-09-27): its own key headers and a page size that lists every model at once, and a
+        // longer ceiling — it is across the internet, not on a port of this network.
+        bool claude = ClaudeApi.IsClaudeApi(v1);
+        var modelsUrl = claude ? ClaudeApi.ModelsUrl(v1) : LlmEndpoint.ModelsUrl(v1);
 
         try
         {
             // A per-call ceiling on a startup probe, not the turn budget; the linked-CTS rule
             // is about the turn path, where cancellation means barge-in.
             using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            budget.CancelAfter(Timeout);
+            budget.CancelAfter(claude && Timeout < ClaudeApiTimeout ? ClaudeApiTimeout : Timeout);
 
             using var request = new HttpRequestMessage(HttpMethod.Get, modelsUrl);
-            if (!string.IsNullOrWhiteSpace(apiKey))
+            if (claude)
+            {
+                ClaudeApi.AddHeaders(request, apiKey);
+            }
+            else if (!string.IsNullOrWhiteSpace(apiKey))
             {
                 // TryAddWithoutValidation: a key with characters HttpHeaders would reject is the
                 // server's problem, not a reason to skip the probe.
@@ -164,7 +176,9 @@ public sealed class LlmEndpointProbe
 
             if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
             {
-                return new ProbeResult(true, Array.Empty<string>(), $"{(int)response.StatusCode} on /v1/models; the server wants a key");
+                return new ProbeResult(true, Array.Empty<string>(), claude
+                    ? $"{(int)response.StatusCode} on /v1/models; check Claude API key"
+                    : $"{(int)response.StatusCode} on /v1/models; the server wants a key");
             }
 
             return ProbeResult.Missing($"{(int)response.StatusCode} on /v1/models; not an OpenAI-compatible server");
@@ -225,7 +239,9 @@ public sealed class LlmEndpointProbe
         if (extra is not null)
         {
             var v1 = LlmEndpoint.NormalizeBaseUrl(extra);
-            if (!urls.Contains(v1) && !(scope == ScanScope.Remote && v1.IsLoopback)) urls.Add(v1);
+
+            // The Claude API is never scanned for: its row is the session's to add, with its own key (2026-09-27).
+            if (!urls.Contains(v1) && !(scope == ScanScope.Remote && v1.IsLoopback) && !ClaudeApi.IsClaudeApi(v1)) urls.Add(v1);
         }
 
         var tasks = urls.Select(u => ProbeAsync(u, apiKey, cancellationToken)).ToArray();
@@ -295,7 +311,13 @@ public sealed class LlmEndpointProbe
         ArgumentNullException.ThrowIfNull(effective);
         string? configuredModel = string.IsNullOrWhiteSpace(effective.LlmModel) ? null : effective.LlmModel.Trim();
 
-        if (!string.IsNullOrWhiteSpace(effective.LlmUrl))
+        if (ClaudeApi.IsClaudeApi(effective.LlmUrl) && !ClaudeApi.Offered(effective))
+        {
+            // Saved while the Claude API was on (2026-09-27); with it off or keyless the URL stands for nothing, and the
+            // settings' scan finds a server as a blank URL would.
+            DiagnosticLog.Warn(Category, ClaudeApiText.NotOfferedWarning);
+        }
+        else if (!string.IsNullOrWhiteSpace(effective.LlmUrl))
         {
             Uri v1;
             try
@@ -308,13 +330,14 @@ public sealed class LlmEndpointProbe
                 return null;
             }
 
-            var result = await ProbeAsync(v1, effective.LlmApiKey, cancellationToken).ConfigureAwait(false);
+            string key = ClaudeApi.KeyFor(effective, v1);
+            var result = await ProbeAsync(v1, key, cancellationToken).ConfigureAwait(false);
             if (!result.Exists)
             {
                 DiagnosticLog.Warn(Category, $"{v1} did not answer /v1/models ({result.Detail}); using it anyway because it was configured.");
             }
 
-            return Endpoint(LlmServer.From(v1, result), effective.LlmApiKey, configuredModel, configured: true);
+            return Endpoint(LlmServer.From(v1, result), key, configuredModel, configured: true);
         }
 
         var servers = await DiscoverAllAsync(effective.LlmApiKey, extra: null, LlmScanMode.Resolve(effective), cancellationToken).ConfigureAwait(false);

@@ -7351,8 +7351,11 @@ internal sealed partial class ChatScreen
     private async Task ConnectLlmAsync(CancellationToken cancellationToken, bool quiet = false, bool startup = false)
     {
         var effective = _effective();
-        bool blankUrl = string.IsNullOrWhiteSpace(effective.LlmUrl);
-        if (blankUrl && !Llm.LlmScanMode.Scans(Llm.LlmScanMode.Resolve(effective)))
+
+        // A saved Claude API URL with the Claude API off or keyless stands for nothing (2026-09-27): found as a blank one.
+        bool blankUrl = string.IsNullOrWhiteSpace(effective.LlmUrl)
+            || (Llm.Anthropic.ClaudeApi.IsClaudeApi(effective.LlmUrl) && !Llm.Anthropic.ClaudeApi.Offered(effective));
+        if (blankUrl && !Llm.LlmScanMode.Scans(Llm.LlmScanMode.Resolve(effective)) && !Llm.Anthropic.ClaudeApi.Offered(effective))
         {
             await _session.ConnectAsync(effective, cancellationToken).ConfigureAwait(false);
             DrainDiagnostics();
@@ -7385,7 +7388,7 @@ internal sealed partial class ChatScreen
             LlmEndpoint endpoint;
             if (picked is null)
             {
-                endpoint = LlmEndpointProbe.Endpoint(servers[0], effective.LlmApiKey, ConfiguredModel(effective), configured: false);
+                endpoint = LlmEndpointProbe.Endpoint(servers[0], Llm.Anthropic.ClaudeApi.KeyFor(effective, servers[0].BaseUrl), ConfiguredModel(effective), configured: false);
             }
             else
             {
@@ -7395,7 +7398,7 @@ internal sealed partial class ChatScreen
                 await _menu.PickModelFromListAsync(picked.Result, _settings.Current.LlmModel, cancellationToken).ConfigureAwait(false);
                 await _menu.PickReasoningAsync("", _effective().LlmReasoning, cancellationToken).ConfigureAwait(false);
                 effective = _effective();
-                endpoint = LlmEndpointProbe.Endpoint(picked, effective.LlmApiKey, ConfiguredModel(effective), configured: true);
+                endpoint = LlmEndpointProbe.Endpoint(picked, Llm.Anthropic.ClaudeApi.KeyFor(effective, picked.BaseUrl), ConfiguredModel(effective), configured: true);
             }
 
             // The connect itself is instant; the spinner covers the context-window probe that follows it.
@@ -7505,7 +7508,7 @@ internal sealed partial class ChatScreen
         if (string.IsNullOrWhiteSpace(args))
         {
             var scope = Llm.LlmScanMode.Resolve(effective);
-            if (!Llm.LlmScanMode.Scans(scope))
+            if (!Llm.LlmScanMode.Scans(scope) && !Llm.Anthropic.ClaudeApi.Offered(effective))
             {
                 // Disabled entirely (the user's call, 2026-09-15): no spinner, no request, the session as it was.
                 _transcript.Error(LlmSession.NoServerLine(scope));
@@ -7540,6 +7543,12 @@ internal sealed partial class ChatScreen
             catch (ArgumentException ex)
             {
                 _transcript.Error(SettingsMenu.ServerUrlError(ex.Message));
+                return;
+            }
+
+            if (Llm.Anthropic.ClaudeApi.IsClaudeApi(url) && !Llm.Anthropic.ClaudeApi.Offered(effective))
+            {
+                _transcript.Error(Llm.Anthropic.ClaudeApiText.NotOfferedError);
                 return;
             }
 
