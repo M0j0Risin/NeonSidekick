@@ -35,7 +35,7 @@ public partial class ToolsMenuTests : IDisposable
 
     public ToolsMenuTests()
     {
-        _console.Profile.Width = 130;   // 120 until later on 2026-09-27, when "Claude (CLI)" took the strip to 124 cells (the user's call: it wraps below 125 columns); 100 until 2026-09-24, when the Images tab took the ten-tab strip to 107 cells
+        _console.Profile.Width = 130;   // 120 until later on 2026-09-27, when "Claude (CLI)" took the strip to 124 cells (the user's call: it takes a second strip row, lined up under Offered, below 128 columns since the tab strip's own layout on the same day); 100 until 2026-09-24, when the Images tab took the ten-tab strip to 107 cells
         _settings = new AppSettings(_dir);
         _settings.Update(d => { d.TtsOutput = true; d.TtsSource = "http"; d.ToolsDisabled = []; d.GitNativeTools = true; });   // delete off by default (2026-09-20), Git native tools off by default (2026-09-21): the Offered-tab scripts start from every tool on
         _speech = new SpeechSession(_ => _synth, _ => new FakeAudioPlayback(), new ModelStore(Path.Combine(_dir, "models"), new HttpClient(new StubHttpMessageHandler())));

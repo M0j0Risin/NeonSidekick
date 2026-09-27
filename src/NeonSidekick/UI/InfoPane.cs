@@ -40,7 +40,7 @@ public sealed class InfoPane
     /// <summary>The hint row under the pane. Pinned.</summary>
     public const string HintText = "ESC closes · ←/→ tabs · ↑/↓ scroll";
 
-    /// <summary>The rows above the content: the strip and the spacer.</summary>
+    /// <summary>The rows above the content when the strip fits one row: the strip and the spacer; a strip that takes more rows (<see cref="TabStripLayout"/>) adds them.</summary>
     public const int HeaderRows = 2;
 
     /// <summary>Content lines one wheel notch scrolls (Windows' own lines-per-notch default); a notch lands anywhere, the pane is modal.</summary>
@@ -56,6 +56,8 @@ public sealed class InfoPane
     private int _first;
     private int _shown;
     private int _count;
+    private int _stripRows = 1;
+    private int _width = int.MaxValue;
 
     /// <param name="mouse">Takes (true) or hands back (false) the console's mouse; null when the screen has none to take.</param>
     public InfoPane(ScreenPane pane, KeySource keys, Action<bool>? mouse = null)
@@ -85,25 +87,100 @@ public sealed class InfoPane
     }
 
     /// <summary>
+    /// Where each title of the strip sits at <paramref name="width"/> columns: its row and the column
+    /// its highlight starts in. A strip wider than the row's budget breaks between titles, and every
+    /// row after the first starts at the column of the first title, so a title that does not fit lines
+    /// up under the one above instead of dropping to column 0 under the label (2026-09-27, the user's
+    /// ask: Spectre's word-wrap had put /tools' Options under the 🛠️ label, where no click reached it).
+    /// The budget is the one <see cref="ScreenPane"/> tests before drawing the
+    /// <see cref="ScreenPane.CloseGlyph"/>, so the first row always keeps the ×; the later rows take the
+    /// same budget so the columns stay even. A title too wide for any row sits alone on its own. Pure.
+    /// </summary>
+    public static (int Rows, (int Row, int Column)[] Places) TabStripLayout(string label, IReadOnlyList<string> titles, int width)
+    {
+        ArgumentNullException.ThrowIfNull(label);
+        ArgumentNullException.ThrowIfNull(titles);
+        int budget = width - 1 - ScreenPane.TrailerGap - TextCells.Width(ScreenPane.CloseGlyph);
+        int indent = TextCells.Width(label) + 2;
+        var places = new (int Row, int Column)[titles.Count];
+        int row = 0;
+        int column = indent;
+        bool first = true;
+        for (int i = 0; i < titles.Count; i++)
+        {
+            int cells = TextCells.Width(titles[i]) + 2;
+            if (!first && column + cells > budget)
+            {
+                row++;
+                column = indent;
+            }
+
+            places[i] = (row, column);
+            column += cells + 2;
+            first = false;
+        }
+
+        return (row + 1, places);
+    }
+
+    /// <summary>
+    /// The strip laid out for <paramref name="width"/> columns (<see cref="TabStripLayout"/>): one markup
+    /// line per row, the first as <see cref="TabStripMarkup"/> draws it, the later ones indented to the
+    /// first title's column with the same gaps and styles.
+    /// </summary>
+    public static IReadOnlyList<string> TabStripRows(string label, IReadOnlyList<string> titles, int active, int width)
+    {
+        ArgumentNullException.ThrowIfNull(label);
+        ArgumentNullException.ThrowIfNull(titles);
+        var (rows, places) = TabStripLayout(label, titles, width);
+        var parts = new List<string>[rows];
+        for (int r = 0; r < rows; r++)
+        {
+            parts[r] = [];
+        }
+
+        parts[0].Add($"[{Theme.Label.ToMarkup()}]{Markup.Escape(label)}[/]");
+        for (int i = 0; i < titles.Count; i++)
+        {
+            var style = i == active ? Theme.MenuHighlight : Theme.DimText;
+            parts[places[i].Row].Add($"[{style.ToMarkup()}] {Markup.Escape(titles[i])} [/]");
+        }
+
+        string pad = new(' ', TextCells.Width(label));
+        var lines = new string[rows];
+        for (int r = 0; r < rows; r++)
+        {
+            // A later row's first title is joined to the label's width of spaces by the same two-cell
+            // gap, so it lands in the first title's column.
+            lines[r] = r == 0 ? string.Join("  ", parts[r]) : pad + "  " + string.Join("  ", parts[r]);
+        }
+
+        return lines;
+    }
+
+    /// <summary>
     /// Which tab a click at column <paramref name="x"/> of the strip lands on: the title's
     /// highlighted cells (the title and its one space either side), laid out as
     /// <see cref="TabStripMarkup"/> draws them from column 0; null on the label, a gap, past the
     /// end or before the start. Shared with the <see cref="MenuPane"/>. Pure.
     /// </summary>
-    public static int? TabAt(string label, IReadOnlyList<string> titles, int x)
+    public static int? TabAt(string label, IReadOnlyList<string> titles, int x) => TabAt(label, titles, int.MaxValue, x, 0);
+
+    /// <summary>
+    /// <see cref="TabAt(string, IReadOnlyList{string}, int)"/> on the strip laid out for
+    /// <paramref name="width"/> columns (<see cref="TabStripLayout"/>): the click's
+    /// <paramref name="row"/> of the strip as well as its column; null on the indent of a later row. Pure.
+    /// </summary>
+    public static int? TabAt(string label, IReadOnlyList<string> titles, int width, int x, int row)
     {
-        ArgumentNullException.ThrowIfNull(label);
-        ArgumentNullException.ThrowIfNull(titles);
-        int start = TextCells.Width(label) + 2;
+        var (_, places) = TabStripLayout(label, titles, width);
         for (int i = 0; i < titles.Count; i++)
         {
             int cells = TextCells.Width(titles[i]) + 2;
-            if (x >= start && x < start + cells)
+            if (places[i].Row == row && x >= places[i].Column && x < places[i].Column + cells)
             {
                 return i;
             }
-
-            start += cells + 2;
         }
 
         return null;
@@ -203,8 +280,8 @@ public sealed class InfoPane
                     }
 
                     _clicks.Reset();
-                    if (click.Button == MouseButton.Left && _pane.TryHitOverlay(click.X, click.Y, out int at) && at == 0
-                        && TabAt(label, Titles(tabs), click.X) is int hit)
+                    if (click.Button == MouseButton.Left && _pane.TryHitOverlay(click.X, click.Y, out int at) && at < _stripRows
+                        && TabAt(label, Titles(tabs), _width, click.X, at) is int hit)
                     {
                         next = hit;
                     }
@@ -295,14 +372,23 @@ public sealed class InfoPane
         var titles = Titles(tabs);
         int width = Math.Max(1, _pane.Profile.Width);
         int height = _pane.Profile.Height > 0 ? _pane.LayoutHeight : DefaultHeight;   // less the toolbar's row (2026-09-21)
-        int capacity = ScreenPane.MaxOverlayRows(height, 0) - HeaderRows;
+        var strip = TabStripRows(label, titles, active, width);
+        _width = width;
+        _stripRows = strip.Count;
+        int capacity = ScreenPane.MaxOverlayRows(height, 0) - HeaderRows - (_stripRows - 1);
         var content = ScreenPane.RenderLines(tabs[active].Content(), _pane, width);
         _count = content.Count;
         (_first, _shown) = Viewport(_count, capacity, _first);
 
         // The spacer is a space, not an empty Text: Rows adds a line break only after a child that
         // rendered something, so an empty one would collapse the blank line.
-        var lines = new List<IRenderable>(HeaderRows + _shown + 1) { new Markup(TabStripMarkup(label, titles, active)), new Text(" ") };
+        var lines = new List<IRenderable>(HeaderRows + _stripRows + _shown);
+        foreach (var row in strip)
+        {
+            lines.Add(new Markup(row).Overflow(Overflow.Ellipsis));
+        }
+
+        lines.Add(new Text(" "));
         for (int i = 0; i < _shown; i++)
         {
             lines.Add(new SegmentLines(content[_first + i]));

@@ -338,6 +338,64 @@ public class InfoPaneTests : IDisposable
         Assert.Null(InfoPane.TabAt("H", ["日本", "b"], 9));
     }
 
+    /// <summary>
+    /// A strip wider than the window takes a second row lined up under the first title (2026-09-27): at 30
+    /// columns the budget is 26 (the × and its gap kept clear), so "Help   One    Two " fits and Three moves
+    /// down to column 6, Four after it.
+    /// </summary>
+    [Fact]
+    public void TabStripLayout_BreaksBetweenTitles_AndLinesTheNextRowUpUnderTheFirstTitle()
+    {
+        string[] titles = ["One", "Two", "Three", "Four"];
+        var (rows, places) = InfoPane.TabStripLayout("Help", titles, 30);
+        Assert.Equal(2, rows);
+        Assert.Equal([(0, 6), (0, 13), (1, 6), (1, 15)], places);
+        Assert.Equal(
+            ["Help   One    Two ", "       Three    Four "],
+            InfoPane.TabStripRows("Help", titles, 2, 30).Select(Markup.Remove));
+
+        // Wide enough: one row, exactly TabStripMarkup's.
+        Assert.Equal(1, InfoPane.TabStripLayout("Help", titles, 80).Rows);
+        Assert.Equal([InfoPane.TabStripMarkup("Help", titles, 1)], InfoPane.TabStripRows("Help", titles, 1, 80));
+
+        // The label is counted in cells: a two-cell glyph moves the whole column.
+        Assert.Equal((1, 10), InfoPane.TabStripLayout("🛠️ Tools", titles, 30).Places[2]);
+
+        // A title too wide for any row sits alone on its own row, never on an empty one before it.
+        var lone = InfoPane.TabStripLayout("H", ["a", "much too long for this", "b"], 20);
+        Assert.Equal([(0, 3), (1, 3), (2, 3)], lone.Places);
+    }
+
+    [Fact]
+    public void TabAt_OnALaterRow_HitsTheTitleThere_AndMissesTheIndent()
+    {
+        string[] titles = ["One", "Two", "Three", "Four"];
+        Assert.Equal(2, InfoPane.TabAt("Help", titles, 30, 6, 1));
+        Assert.Equal(2, InfoPane.TabAt("Help", titles, 30, 12, 1));
+        Assert.Equal(3, InfoPane.TabAt("Help", titles, 30, 15, 1));
+        Assert.Null(InfoPane.TabAt("Help", titles, 30, 3, 1));      // the indent under the label
+        Assert.Null(InfoPane.TabAt("Help", titles, 30, 6, 2));      // no third row
+        Assert.Equal(0, InfoPane.TabAt("Help", titles, 30, 6, 0));  // One, above Three
+        Assert.Null(InfoPane.TabAt("Help", titles, 30, 22, 0));     // where Three was on one row
+    }
+
+    /// <summary>At 30 columns the strip is two rows (buffer 100 and 101), the spacer 102, the content from 103; a click on the second row's title switches to it.</summary>
+    [Fact]
+    public async Task AStripOnTwoRows_DrawsTheSecondUnderTheFirstTitle_AndAClickThereSwitches()
+    {
+        _console.Profile.Width = 30;
+        var (pane, input, keys) = ClickablePane(cursorTop: 100);
+        using var _ = pane;
+        pane.Show();
+        input.PushClick(8, 101);                         // "Three" on the second row
+        input.Push(Keys.Escape);
+
+        await new InfoPane(pane, keys).ShowAsync(InfoPane.Title, [Tab("One", "first"), Tab("Two", "second"), Tab("Three", "third"), Tab("Four", "fourth")], 0, CancellationToken.None);
+
+        Assert.Equal(["One", "Three"], _built);
+        Assert.Contains("\n" + Titled("Help   One    Two ", 30) + "\n       Three    Four \n \nthird\n" + Rule(30), Output);
+    }
+
     /// <summary>The overlay's first row is the cursor's (buffer row 100): the strip 100, the spacer 101, the content from 102.</summary>
     [Fact]
     public async Task AClickOnATabTitle_SwitchesToIt_AndStartsAtTheTop()

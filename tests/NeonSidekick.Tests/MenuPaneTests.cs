@@ -470,6 +470,34 @@ public class MenuPaneTests : IDisposable
         menu.Close();
     }
 
+    /// <summary>
+    /// At 30 columns "Settings   One    Two    Three " does not fit (2026-09-27): Three takes a second strip
+    /// row at column 10, under One; the × stays on the first; the spacer moves to 102 and the rows start at
+    /// 103, where a click still lands on the row it shows.
+    /// </summary>
+    [Fact]
+    public async Task AStripOnTwoRows_LinesUpUnderTheFirstTitle_AndBothRowsAndTheListTakeClicks()
+    {
+        _console.Profile.Width = 30;
+        var (pane, input, keys) = ClickablePane(cursorTop: 100);
+        using var _ = pane;
+        pane.Show();
+        var menu = new MenuPane(pane, keys);
+        input.PushClick(4, 101);                         // the indent under the label: nothing
+        input.PushClick(12, 101);                        // Three
+        input.PushClick(0, 104);                         // "e"
+        input.Push(Keys.Enter);
+
+        int mark = Output.Length;
+        Assert.Equal(new MenuPick(2, 1), await menu.PickAsync(Tabbed(), 0, CancellationToken.None));
+
+        string strip = "\n" + Titled("Settings   One    Two ", 30) + "\n           Three \n \n";
+        Assert.Equal(3, CountOf(Output[mark..], strip));     // the open, Three, the row click
+        Assert.Contains(strip + "▸ d\n  e\n  f\n", Output);
+        Assert.Contains(strip + "  d\n▸ e\n  f\n", Output);
+        menu.Close();
+    }
+
     [Fact]
     public async Task AClickOnAFlatPagesTitle_ChangesNothing()
     {

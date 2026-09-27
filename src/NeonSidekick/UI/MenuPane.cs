@@ -189,6 +189,7 @@ public sealed class MenuPane : INoticeSink
     private int _first;
     private int _shown;
     private int _captionRows;
+    private int _stripRows = 1;
     private int _inputRows;
     private bool _open;
 
@@ -403,14 +404,15 @@ public sealed class MenuPane : INoticeSink
                         return null;
                     }
 
-                    if (at == 0)
+                    if (at < _stripRows)
                     {
+                        // Any row of the strip (2026-09-27): a strip wider than the window takes more than one.
                         _clicks.Reset();
-                        if (page.Tabs is { Count: > 1 } strip && InfoPane.TabAt(page.Title, Titles(strip), click.X) is int hit && hit != page.Tab)
+                        if (page.Tabs is { Count: > 1 } strip && InfoPane.TabAt(page.Title, Titles(strip), Width, click.X, at) is int hit && hit != page.Tab)
                         {
                             count = SwitchTab(page, strip, hit);
                         }
-                        else if (page.Tabs is null && page.Buttons is { Count: > 0 } buttons && InfoPane.TabAt(page.Title, Titles(buttons), click.X) is int button)
+                        else if (page.Tabs is null && page.Buttons is { Count: > 0 } buttons && InfoPane.TabAt(page.Title, Titles(buttons), Width, click.X, at) is int button)
                         {
                             _status.Clear();
                             return new MenuPick(page.Tab, _cursor, Button: button);
@@ -659,8 +661,8 @@ public sealed class MenuPane : INoticeSink
     /// <summary>The window less the toolbar's row (<see cref="ScreenPane.LayoutHeight"/>, 2026-09-21): what the pane's caps are counted over.</summary>
     private int Height => _pane.Profile.Height > 0 ? _pane.LayoutHeight : DefaultHeight;
 
-    /// <summary>The overlay rows above the first list row: the title (or the tab strip), the caption's rows, then the status lines or the one spacer.</summary>
-    private int Header => 1 + _captionRows + Math.Max(1, _status.Count);
+    /// <summary>The overlay rows above the first list row: the title (or the tab strip's rows), the caption's rows, then the status lines or the one spacer.</summary>
+    private int Header => _stripRows + _captionRows + Math.Max(1, _status.Count);
 
     /// <summary>The title row of <paramref name="page"/>: the tab strip on a tabbed page, the title with its buttons as a strip nobody is on (2026-09-21), else the title alone. Pinned.</summary>
     public static string TopMarkup(MenuPage page)
@@ -671,17 +673,37 @@ public sealed class MenuPane : INoticeSink
             : TitleMarkup(page.Title);
     }
 
+    /// <summary>
+    /// <see cref="TopMarkup"/> laid out for <paramref name="width"/> columns: a tab or button strip wider
+    /// than the window takes more rows, each later one lined up under the first title
+    /// (<see cref="InfoPane.TabStripLayout"/>, 2026-09-27); the title alone is one row.
+    /// </summary>
+    public static IReadOnlyList<string> TopRows(MenuPage page, int width)
+    {
+        ArgumentNullException.ThrowIfNull(page);
+        return page.Tabs is { } tabs ? InfoPane.TabStripRows(page.Title, Titles(tabs), page.Tab, width)
+            : page.Buttons is { Count: > 0 } buttons ? InfoPane.TabStripRows(page.Title, Titles(buttons), -1, width)
+            : [TitleMarkup(page.Title)];
+    }
+
     /// <summary>The page laid out for the window: the title or the tab strip, the caption, the status (or a spacer row), the rows in view, the more row.</summary>
     private void Show()
     {
         var page = _page!;
         IReadOnlyList<string> caption = page.Caption is { } captionText ? CaptionRows(captionText, Width, CaptionMaxRows) : [];
         _captionRows = caption.Count;
+        var top = TopRows(page, Width);
+        _stripRows = top.Count;
         int header = Header;
         int capacity = ScreenPane.MaxOverlayRows(Height, _inputRows) - header;
         (_first, _shown) = Viewport(page.Rows.Count, _cursor, capacity, _first);
 
-        var lines = new List<IRenderable>(header + _shown + 1) { new Markup(TopMarkup(page)) };
+        var lines = new List<IRenderable>(header + _shown + 1);
+        foreach (var row in top)
+        {
+            lines.Add(new Markup(row).Overflow(Overflow.Ellipsis));
+        }
+
         foreach (var row in caption)
         {
             lines.Add(new Markup(Markup.Escape(row), Theme.Body).Overflow(Overflow.Ellipsis));
