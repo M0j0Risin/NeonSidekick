@@ -3088,6 +3088,14 @@ internal sealed partial class ChatScreen
             return null;
         }
 
+        // /view --chat <path> (2026-09-27): the path after the flag completes, and a pick keeps the flag (a pick replaces the whole argument).
+        string flag = "";
+        if (kind == SlashCommand.View && argText.StartsWith(ViewChatFlag + " ", StringComparison.OrdinalIgnoreCase))
+        {
+            flag = argText[..(ViewChatFlag.Length + 1)];
+            argText = argText[flag.Length..].TrimStart();
+        }
+
         if (argText.Length > 0 && char.IsWhiteSpace(argText[^1]))
         {
             return new MentionResult(FileOutcome.Ok, [], false);
@@ -3099,7 +3107,7 @@ internal sealed partial class ChatScreen
             return new MentionResult(FileOutcome.Ok, [], false);
         }
 
-        return found;
+        return flag.Length == 0 ? found : found with { Paths = [.. found.Paths.Select(p => flag + p)] };
     }
 
     /// <summary>The argument list's live sources: the profiles on disk, the board's timers, the sandbox's folders, its text files and its image files.</summary>
@@ -5579,31 +5587,129 @@ internal sealed partial class ChatScreen
 
     // ── /view (2026-09-17) ──────────────────────────────────────────────────
 
-    /// <summary>A bare <c>/view</c>. Pinned.</summary>
-    public const string ViewUsageError = "Usage: /view <image>";
+    /// <summary>A bare <c>/view</c> (or <c>--chat</c> alone). Pinned.</summary>
+    public const string ViewUsageError = "Usage: /view <image or folder> [--chat]";
+
+    /// <summary><c>/view</c>'s word for drawing the picture in the transcript rather than opening the viewer (2026-09-27). Matched ignoring case. Pinned.</summary>
+    public const string ViewChatFlag = "--chat";
 
     /// <summary>The codecs read the file for the model but refused it for the screen. Pinned.</summary>
     public static string ViewNotDrawnError(string relative) => $"Could not draw '{relative}'";
 
     /// <summary>
-    /// <c>/view &lt;image&gt;</c>: one picture under the working directory drawn in the transcript
+    /// <c>/view</c>'s argument split into the path and <see cref="ViewChatFlag"/> (2026-09-27): the flag counts as the first or
+    /// the last word, any case, and the path between keeps its inner spaces. Pure.
+    /// </summary>
+    public static (string Path, bool Chat) ParseViewArgs(string args)
+    {
+        ArgumentNullException.ThrowIfNull(args);
+        string text = args.Trim();
+        if (string.Equals(text, ViewChatFlag, StringComparison.OrdinalIgnoreCase))
+        {
+            return ("", true);
+        }
+
+        if (text.StartsWith(ViewChatFlag, StringComparison.OrdinalIgnoreCase) && text.Length > ViewChatFlag.Length && char.IsWhiteSpace(text[ViewChatFlag.Length]))
+        {
+            return (text[ViewChatFlag.Length..].Trim(), true);
+        }
+
+        if (text.EndsWith(ViewChatFlag, StringComparison.OrdinalIgnoreCase) && text.Length > ViewChatFlag.Length && char.IsWhiteSpace(text[^(ViewChatFlag.Length + 1)]))
+        {
+            return (text[..^ViewChatFlag.Length].Trim(), true);
+        }
+
+        return (text, false);
+    }
+
+    /// <summary>
+    /// <c>/view &lt;image or folder&gt; [--chat]</c> (2026-09-27, the user's ask: now that there is a built-in viewer, <c>/view</c>
+    /// opens it): a picture opens the viewer on its folder, held on it, a folder opens the viewer on the folder (its newest
+    /// picture, new ones followed) — <see cref="OpenInViewer"/>. With <see cref="ViewChatFlag"/> the picture is drawn in the
+    /// transcript as before (<see cref="DrawView"/>), and so is a picture where there is no viewer (not Windows). Sandbox
+    /// paths only, either way. The window form works under a reply too (<see cref="MidTurnPolicy(SlashCommand, string)"/>);
+    /// <c>--chat</c> waits. Not headless.
+    /// </summary>
+    private void HandleView(string args)
+    {
+        var (path, chat) = ParseViewArgs(args);
+        if (path.Length == 0)
+        {
+            _transcript.Error(ViewUsageError);
+            return;
+        }
+
+        if (chat || (_viewPicture is null && !IsSandboxFolder(path)))
+        {
+            DrawView(path);
+            return;
+        }
+
+        OpenInViewer(path);
+    }
+
+    /// <summary>Whether <paramref name="path"/> is a folder inside the sandbox, for <see cref="HandleView"/>'s no-viewer fallback.</summary>
+    private bool IsSandboxFolder(string path) => _files.Resolve(path, forWrite: false, out string full) == FileOutcome.Ok && Directory.Exists(full);
+
+    /// <summary>
+    /// The window form of <c>/view</c> (2026-09-27): <paramref name="path"/> resolved in the sandbox, a folder handed to
+    /// <c>openViewer</c>, a picture (by extension, as the viewer lists them) to <c>viewPicture</c>, then the
+    /// <see cref="ViewerText.Opened"/> notice. A bad path is <c>view_image</c>'s <c>Error:</c> line. Everything goes through the
+    /// flow sink, so it is safe under a reply. Any thread.
+    /// </summary>
+    private void OpenInViewer(string path)
+    {
+        var outcome = _files.Resolve(path, forWrite: false, out string full);
+        if (outcome != FileOutcome.Ok)
+        {
+            _flow.Error(FileText.Error(outcome, path, "view"));
+            return;
+        }
+
+        bool folder = Directory.Exists(full);
+        if (!folder && !File.Exists(full))
+        {
+            _flow.Error(FileText.Error(FileOutcome.Missing, _files.Relative(full), "view"));
+            return;
+        }
+
+        if (!folder && !ImageFile.IsImagePath(full))
+        {
+            _flow.Error(FileText.Error(FileOutcome.NotAnImage, _files.Relative(full), "view"));
+            return;
+        }
+
+        var open = folder ? _openViewer : _viewPicture;
+        if (open is null)
+        {
+            _flow.Error(ViewerText.Unavailable);
+            return;
+        }
+
+        try
+        {
+            open(full);
+            _flow.Notice(ViewerText.Opened(folder ? full : Path.GetDirectoryName(full) ?? full));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or PlatformNotSupportedException or ArgumentException)
+        {
+            _flow.Error(ViewerText.Failed(full, ex.Message));
+        }
+    }
+
+    /// <summary>
+    /// <c>/view --chat &lt;image&gt;</c> (the whole of <c>/view</c> from 2026-09-17 until the viewer took the bare form): one picture under the working directory drawn in the transcript
     /// as large as the window allows — <see cref="ThumbnailSize.Fit"/> over the console's size less
     /// the pane's rows, <see cref="ImageThumbnail.Read"/> scaling to fit and never enlarging, so a
     /// small picture stays small — centred in the window, the picture alone, nothing above or below it (the user's picks).
     /// The file goes through <see cref="WorkingDirectory.ReadImage"/> as <c>view_image</c>'s do (the
     /// sandbox rule, the bytes deciding, the model's downscale), and a bad path is the same
     /// <c>Error:</c> line. The model never sees it, and <c>Show image thumbnails</c> is not
-    /// consulted: the command is the ask. Refused mid-turn; not headless.
+    /// consulted: the command is the ask. Refused mid-turn.
     /// </summary>
-    private void HandleView(string args)
+    private void DrawView(string path)
     {
-        if (args.Length == 0)
-        {
-            _transcript.Error(ViewUsageError);
-            return;
-        }
-
-        var result = _files.ReadImage(args);
+        var result = _files.ReadImage(path);
         if (result.Outcome != FileOutcome.Ok || result.Image is not { } image)
         {
             _transcript.Error(FileText.Error(result.Outcome, result.Relative, "view", result.Detail));

@@ -10594,6 +10594,12 @@ public partial class ChatScreenTests : IDisposable
     [InlineData(SlashCommand.Comfy, "edit json x", MidTurnClass.Refused)]
     [InlineData(SlashCommand.Tools, "", MidTurnClass.Pane)]
     [InlineData(SlashCommand.Queue, "clear", MidTurnClass.Quick)]
+    [InlineData(SlashCommand.View, "a.png", MidTurnClass.Quick)]   // /view's window form (later on 2026-09-27)
+    [InlineData(SlashCommand.View, "pics", MidTurnClass.Quick)]
+    [InlineData(SlashCommand.View, "--chat a.png", MidTurnClass.Refused)]
+    [InlineData(SlashCommand.View, "a.png --CHAT", MidTurnClass.Refused)]
+    [InlineData(SlashCommand.View, "--chat", MidTurnClass.Refused)]
+    [InlineData(SlashCommand.View, "", MidTurnClass.Refused)]
     public void MidTurnPolicy_ReadsTheComfyViewWord(SlashCommand command, string args, MidTurnClass expected) =>
         Assert.Equal(expected, ChatScreen.MidTurnPolicy(command, args));
 
@@ -10991,6 +10997,32 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(folder, Assert.Single(viewed));
         Assert.Contains(NeonSidekick.Viewer.ViewerText.Opened(folder), output);
         Assert.DoesNotContain(ChatScreen.MidTurnRefusedNotice("/comfy"), output);
+        Assert.DoesNotContain(ChatScreen.CancelledNotice, output);
+        Assert.Single(_chat.Requests);
+    }
+
+    /// <summary><c>/view &lt;image&gt;</c> under a reply (later on 2026-09-27): the viewer opens held on the picture, its line lands in the reply, the reply runs on.</summary>
+    [Fact]
+    public async Task MidTurn_View_OpensTheViewer_TheReplyRunsOn()
+    {
+        string files = Path.Combine(_settings.ProfileDirectory, WorkingDirectory.DefaultFolderName);
+        Directory.CreateDirectory(Path.Combine(files, "docs"));
+        File.WriteAllBytes(Path.Combine(files, "docs", "square.bmp"), SmokeChecks.SolidBmp(4, 4));
+        var viewed = new List<string>();
+        _viewPicture = viewed.Add;
+        MidTurnFixture(i =>
+        {
+            if (i == 1)
+            {
+                PushLine("/view docs/square.bmp");
+            }
+        });
+
+        string output = await RunAsync();
+
+        Assert.Equal(Path.Combine(files, "docs", "square.bmp"), Assert.Single(viewed));
+        Assert.Contains(NeonSidekick.Viewer.ViewerText.Opened(Path.Combine(files, "docs")), output);
+        Assert.DoesNotContain(ChatScreen.MidTurnRefusedNotice("/view"), output);
         Assert.DoesNotContain(ChatScreen.CancelledNotice, output);
         Assert.Single(_chat.Requests);
     }
@@ -12342,11 +12374,11 @@ public partial class ChatScreenTests : IDisposable
         File.WriteAllBytes(Path.Combine(files, "docs", "square.bmp"), SmokeChecks.SolidBmp(4, 4));
         File.WriteAllText(Path.Combine(files, "notes.txt"), "text");
         PushLine("/view");
-        PushLine("/view docs/square.bmp");
-        PushLine("/view nope.png");
-        PushLine("/view docs");
-        PushLine("/view notes.txt");
-        PushLine(@"/view ..\x.png");
+        PushLine("/view --chat docs/square.bmp");
+        PushLine("/view --chat nope.png");
+        PushLine("/view docs --chat");
+        PushLine("/view --chat notes.txt");
+        PushLine(@"/view --chat ..\x.png");
         PushLine("/exit");
 
         string output = await RunAsync();
@@ -12357,7 +12389,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(2, Count(output, lead + "▀▀▀▀"));
         Assert.DoesNotContain("\n▀▀▀▀", output);
         Assert.Contains("  ✗ " + ChatScreen.ViewUsageError, output);
-        Assert.Equal("Usage: /view <image>", ChatScreen.ViewUsageError);
+        Assert.Equal("Usage: /view <image or folder> [--chat]", ChatScreen.ViewUsageError);
         Assert.Contains("  ✗ " + FileText.Missing("nope.png"), output);
         Assert.Contains("  ✗ " + FileText.IsDirectory(@"docs\"), output);
         Assert.Contains("  ✗ " + FileText.NotAnImage("notes.txt"), output);
@@ -12365,6 +12397,71 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("Could not draw 'a.png'", ChatScreen.ViewNotDrawnError("a.png"));
         Assert.Empty(_chat.Requests);
     }
+
+    /// <summary>
+    /// <c>/view</c> without <c>--chat</c> (later on 2026-09-27): a picture opens the viewer held on it, a folder (the root too)
+    /// opens the viewer on the folder, each with the notice; nothing is drawn, and a bad path is the same error line.
+    /// </summary>
+    [Fact]
+    public async Task View_OpensTheViewer_OnAPictureOrAFolder_AndTheErrors()
+    {
+        _settings.Update(d => d.TtsOutput = false);
+        string files = Path.Combine(_settings.ProfileDirectory, WorkingDirectory.DefaultFolderName);
+        Directory.CreateDirectory(Path.Combine(files, "docs"));
+        File.WriteAllBytes(Path.Combine(files, "docs", "square.bmp"), SmokeChecks.SolidBmp(4, 4));
+        File.WriteAllText(Path.Combine(files, "notes.txt"), "text");
+        var pictures = new List<string>();
+        var folders = new List<string>();
+        _viewPicture = pictures.Add;
+        _openViewer = folders.Add;
+        PushLine("/view docs/square.bmp");
+        PushLine("/view docs");
+        PushLine("/view .");
+        PushLine("/view nope.png");
+        PushLine("/view notes.txt");
+        PushLine(@"/view ..\x.png");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Equal([Path.Combine(files, "docs", "square.bmp")], pictures);
+        Assert.Equal([Path.Combine(files, "docs"), files], folders);
+        Assert.Equal(2, Count(output, NeonSidekick.Viewer.ViewerText.Opened(Path.Combine(files, "docs"))));
+        Assert.DoesNotContain("▀▀▀▀", output);
+        Assert.Contains("  ✗ " + FileText.Missing("nope.png"), output);
+        Assert.Contains("  ✗ " + FileText.NotAnImage("notes.txt"), output);
+        Assert.Contains("  ✗ " + FileText.OutsideRoot(@"..\x.png"), output);
+    }
+
+    /// <summary>With no viewer (not Windows) a picture is drawn in the transcript as <c>--chat</c> draws it, and a folder is an error.</summary>
+    [Fact]
+    public async Task View_WithoutAViewer_DrawsThePicture_AndAFolderIsAnError()
+    {
+        _settings.Update(d => d.TtsOutput = false);
+        string files = Path.Combine(_settings.ProfileDirectory, WorkingDirectory.DefaultFolderName);
+        Directory.CreateDirectory(Path.Combine(files, "docs"));
+        File.WriteAllBytes(Path.Combine(files, "docs", "square.bmp"), SmokeChecks.SolidBmp(4, 4));
+        PushLine("/view docs/square.bmp");
+        PushLine("/view docs");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains("\n" + new string(' ', 118) + "▀▀▀▀", output);
+        Assert.Contains("  ✗ " + NeonSidekick.Viewer.ViewerText.Unavailable, output);
+    }
+
+    [Theory]
+    [InlineData("a.png", "a.png", false)]
+    [InlineData("--chat a.png", "a.png", true)]
+    [InlineData("a.png --chat", "a.png", true)]
+    [InlineData("  --CHAT  my pics/a b.png  ", "my pics/a b.png", true)]
+    [InlineData("--chat", "", true)]
+    [InlineData("--chatty.png", "--chatty.png", false)]
+    [InlineData("my --chat pics", "my --chat pics", false)]
+    [InlineData("", "", false)]
+    public void ParseViewArgs_ReadsTheFlagFirstOrLast(string args, string path, bool chat) =>
+        Assert.Equal((path, chat), ChatScreen.ParseViewArgs(args));
 
     // ── /imagine and /comfy (2026-09-24) ────────────────────────────────────
 
@@ -17266,6 +17363,10 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(["pic.png"], ChatScreen.ArgumentPaths("/VIEW", "p", sources)!.Paths);
         Assert.Empty(ChatScreen.ArgumentPaths("/view", "pic.png", sources)!.Paths);
         Assert.Empty(ChatScreen.ArgumentPaths("/view", "docs/ ", sources)!.Paths);
+        // /view --chat (2026-09-27): the path after the flag completes, each pick carrying the flag back.
+        Assert.Equal(["--chat docs/", "--chat pic.png", "--chat shot.jpg"], ChatScreen.ArgumentPaths("/view", "--chat ", sources)!.Paths);
+        Assert.Equal(["--chat pic.png"], ChatScreen.ArgumentPaths("/view", "--chat p", sources)!.Paths);
+        Assert.Empty(ChatScreen.ArgumentPaths("/view", "--chat pic.png", sources)!.Paths);
         Assert.Null(ChatScreen.ArgumentPaths("/tree", "", sources));
         Assert.Null(ChatScreen.ArgumentPaths("/tts", "o", sources));
         Assert.Null(ChatScreen.ArgumentPaths("/bogus", "", sources));
@@ -17460,7 +17561,7 @@ public partial class ChatScreenTests : IDisposable
         File.WriteAllBytes(Path.Combine(files, "docs", "square.bmp"), SmokeChecks.SolidBmp(4, 4));
         var opened = new List<(string Path, string Editor)>();
         _openImage = (path, editor) => opened.Add((path, editor));
-        StepsWhenIdle(Line("/view docs/square.bmp"), DoubleClickDown(119), DoubleClickDown(10), Line("/exit"));
+        StepsWhenIdle(Line("/view --chat docs/square.bmp"), DoubleClickDown(119), DoubleClickDown(10), Line("/exit"));
 
         string output = await RunAsync();
 
@@ -17499,7 +17600,7 @@ public partial class ChatScreenTests : IDisposable
             }
         };
         _openImage = (path, editor) => opened.Add((path, editor));
-        StepsWhenIdle(Line("/view docs/square.bmp"), DoubleClickDown(119), Line("/exit"));
+        StepsWhenIdle(Line("/view --chat docs/square.bmp"), DoubleClickDown(119), Line("/exit"));
 
         string output = await RunAsync();
 
@@ -17536,7 +17637,7 @@ public partial class ChatScreenTests : IDisposable
         _chat.EnqueueText("One.");
         _chat.EnqueueText("never");
         var input = Scripted();
-        StepsWhenIdle(Line("/view docs/square.bmp"), Line("/loop 2 1m hi"), Line("/exit"));
+        StepsWhenIdle(Line("/view --chat docs/square.bmp"), Line("/loop 2 1m hi"), Line("/exit"));
         using var done = new CancellationTokenSource();
         var clicks = Task.Run(async () =>
         {
@@ -17570,7 +17671,7 @@ public partial class ChatScreenTests : IDisposable
             Line("/splash"),
             DoubleClickDown(119),
             Line("/clear"),
-            Line("/view gone.bmp"),
+            Line("/view --chat gone.bmp"),
             input => { File.Delete(Path.Combine(files, "gone.bmp")); DoubleClickDown(119)(input); },
             Line("/exit"));
 

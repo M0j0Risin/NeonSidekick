@@ -639,7 +639,7 @@ public class SlashCommandsTests
         Assert.Equal("print a tree of the Obsidian vault's folders and notes, or /vault <path>", Summary("/vault"));   // the path since 2026-09-23
         Assert.Equal("read a text file from the working directory aloud, as a reply: /speak <file> [n], or /speak to resume, or /speak <n> from sentence n", Summary("/speak"));
         Assert.Equal("print a line as a reply and read it aloud when speech is on: /echo <text>", Summary("/echo"));
-        Assert.Equal("show an image from the working directory in the transcript, as large as the window allows: /view <image>", Summary("/view"));
+        Assert.Equal("open an image, or a folder of images, from the working directory in the picture viewer; --chat draws the image in the transcript instead: /view <image or folder> [--chat]", Summary("/view"));
         Assert.Equal("show the terminal window's width and height", Summary("/window"));
         Assert.Equal("write the Git native email and Git native name into the working directory's repository", Summary("/gituser"));   // /git until 2026-09-26
         Assert.Equal("let the profiles talk to each other, each in its own persona, until ESC: /botchat [profile ...] [[--] topic], or /botchat --resume [line] to carry on the last one", Summary("/botchat"));   // --resume 2026-09-25

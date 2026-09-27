@@ -133,12 +133,16 @@ internal sealed partial class ChatScreen
     /// (2026-09-27, the user's ask): <c>/comfy view</c> is <see cref="MidTurnClass.Quick"/> — the twin of the picture
     /// strip's button, which opens the viewer under a reply already; the window is its own thread and holds nothing
     /// the turn does. The bare <c>/comfy</c> (a spinner over the server check), <c>/comfy purge</c> (a confirmation,
-    /// and it deletes what a running <c>generate_image</c> may be writing) and <c>/comfy edit</c> still wait. Pure.
+    /// and it deletes what a running <c>generate_image</c> may be writing) and <c>/comfy edit</c> still wait. <c>/view</c> with a
+    /// path and no <c>--chat</c> (later on 2026-09-27, when <c>/view</c> took to the viewer) is quick for the same reason;
+    /// <c>/view --chat</c> draws in the transcript the turn owns, and the bare <c>/view</c> is refused as before. Pure.
     /// </summary>
-    public static MidTurnClass MidTurnPolicy(SlashCommand command, string args) =>
-        command == SlashCommand.Comfy && string.Equals(args.Trim(), Viewer.ViewerText.ViewWord, StringComparison.OrdinalIgnoreCase)
-            ? MidTurnClass.Quick
-            : MidTurnPolicy(command, args.Length > 0);
+    public static MidTurnClass MidTurnPolicy(SlashCommand command, string args) => command switch
+    {
+        SlashCommand.Comfy when string.Equals(args.Trim(), Viewer.ViewerText.ViewWord, StringComparison.OrdinalIgnoreCase) => MidTurnClass.Quick,
+        SlashCommand.View when ParseViewArgs(args) is { Chat: false, Path.Length: > 0 } => MidTurnClass.Quick,
+        _ => MidTurnPolicy(command, args.Length > 0),
+    };
 
     /// <summary>The first word of a typed line, for the notices that name a command.</summary>
     private static string CommandWord(string text) => text.Trim().Split(' ', 2)[0];
@@ -392,6 +396,10 @@ internal sealed partial class ChatScreen
             case SlashCommand.Comfy:
                 // /comfy view alone reaches here (2026-09-27, MidTurnPolicy's string form); the notice lands in the reply.
                 OpenViewer(notice: true);
+                break;
+            case SlashCommand.View:
+                // /view <path> alone reaches here (later on 2026-09-27): the window, never the transcript the turn owns.
+                OpenInViewer(ParseViewArgs(args).Path);
                 break;
             case SlashCommand.Unknown:
                 _transcript.Error(UnknownCommandError(CommandWord(text)));
