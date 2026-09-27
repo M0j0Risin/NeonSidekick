@@ -440,10 +440,10 @@ public enum SettingsField
     /// <summary>Typed: the most advisor calls a turn, 1 to 10 (<see cref="Settings.AppSettingsData.ClaudeAdvisorCallsPerTurn"/>). Under the context (2026-09-27).</summary>
     ClaudeAdvisorCallsPerTurn,
 
-    /// <summary>Typed: the <c>--model</c> of an advisor call (<see cref="Settings.AppSettingsData.ClaudeAdvisorModel"/>); empty = the Claude command model. Under the cap (2026-09-27).</summary>
+    /// <summary>Typed: the <c>--model</c> of an advisor call (<see cref="Settings.AppSettingsData.ClaudeAdvisorModel"/>); empty = the Claude slash command model. Under the cap (2026-09-27).</summary>
     ClaudeAdvisorModel,
 
-    /// <summary>A picker over <see cref="Claude.ClaudeEffort.Names"/>: the <c>--effort</c> of an advisor call (<see cref="Settings.AppSettingsData.ClaudeAdvisorEffort"/>); empty = the Claude command effort. Under the model (2026-09-27).</summary>
+    /// <summary>A picker over <see cref="Claude.ClaudeEffort.Names"/>: the <c>--effort</c> of an advisor call (<see cref="Settings.AppSettingsData.ClaudeAdvisorEffort"/>); empty = the Claude slash command effort. Under the model (2026-09-27).</summary>
     ClaudeAdvisorEffort,
 
     /// <summary>A toggle: whether each advisor call waits for the user's yes (<see cref="Settings.AppSettingsData.ClaudeAdvisorConfirm"/>). The Claude tab's last row (2026-09-27). Last in the enum, as every newcomer.</summary>
@@ -1029,16 +1029,16 @@ internal sealed partial class SettingsMenu
         SettingsField.LlmOfferTools => "LLM offer tools",
         SettingsField.LlmUseFunVerbs => "LLM use fun verbs",
         SettingsField.LlmShowThinking => "LLM show thinking",
-        SettingsField.ClaudeExecutable => "Claude command executable",
-        SettingsField.ClaudePermissions => "Claude command permissions",
-        SettingsField.ClaudeModel => "Claude command model",
-        SettingsField.ClaudeEffort => "Claude command effort",
-        SettingsField.ClaudeAdvisor => "Claude advisor",
-        SettingsField.ClaudeAdvisorContext => "Claude advisor context",
-        SettingsField.ClaudeAdvisorCallsPerTurn => "Claude advisor calls per turn",
-        SettingsField.ClaudeAdvisorModel => "Claude advisor model",
-        SettingsField.ClaudeAdvisorEffort => "Claude advisor effort",
-        SettingsField.ClaudeAdvisorConfirm => "Claude advisor confirm",
+        SettingsField.ClaudeExecutable => "Claude executable",
+        SettingsField.ClaudePermissions => "Claude slash command permissions",
+        SettingsField.ClaudeModel => "Claude slash command model",
+        SettingsField.ClaudeEffort => "Claude slash command effort",
+        SettingsField.ClaudeAdvisor => "Claude advisor tool",
+        SettingsField.ClaudeAdvisorContext => "Claude advisor tool context",
+        SettingsField.ClaudeAdvisorCallsPerTurn => "Claude advisor tool calls per turn",
+        SettingsField.ClaudeAdvisorModel => "Claude advisor tool model",
+        SettingsField.ClaudeAdvisorEffort => "Claude advisor tool effort",
+        SettingsField.ClaudeAdvisorConfirm => "Claude advisor tool confirm",
         SettingsField.LlmScanMode => "LLM scan mode",
         SettingsField.WebTools => "Web tools",
         SettingsField.GitNativeTools => "Git native tools",
@@ -1442,11 +1442,23 @@ internal sealed partial class SettingsMenu
     /// <summary>One row of the Claude-effort picker: the word, or <paramref name="blank"/> (<see cref="ClaudeDefaultLabel"/>, the advisor's <see cref="ClaudeAdvisorEffortLabel"/>) for the blank first row. Pinned.</summary>
     public static string ClaudeEffortLabel(string name, string blank = ClaudeDefaultLabel) => Markup.Escape(name.Length == 0 ? blank : name);
 
-    /// <summary>How the menu shows an empty <see cref="AppSettingsData.ClaudeAdvisorModel"/> (2026-09-27): the Claude command model's. Pinned.</summary>
-    public const string ClaudeAdvisorModelLabel = "(as Claude command model)";
+    /// <summary>One alias row of a Claude-model picker: the alias padded to eight and its hint, or <paramref name="blank"/> for the blank first row. Pinned.</summary>
+    public static string ClaudeModelLabel(string name, string blank = ClaudeDefaultLabel) =>
+        name.Length == 0 ? Markup.Escape(blank) : Markup.Escape(name.PadRight(8)) + Theme.DimMarkup(Claude.ClaudeModels.Describe(name));
 
-    /// <summary>How the menu shows an empty <see cref="AppSettingsData.ClaudeAdvisorEffort"/> (2026-09-27): the Claude command effort's. Pinned.</summary>
-    public const string ClaudeAdvisorEffortLabel = "(as Claude command effort)";
+    /// <summary>A Claude-model picker's last row: <c>Other…</c>, the saved full name after it when there is one, else what the row does. Pinned.</summary>
+    public static string ClaudeModelOtherLabel(string? saved) =>
+        Markup.Escape(ClaudeModelOtherWord.PadRight(8)) + Theme.DimMarkup(
+            !string.IsNullOrWhiteSpace(saved) && Claude.ClaudeModels.AliasOf(saved) is null ? "(" + saved.Trim() + ")" : "type a full model name");
+
+    /// <summary>The Claude-model pickers' typed row. Pinned.</summary>
+    public const string ClaudeModelOtherWord = "Other…";
+
+    /// <summary>How the menu shows an empty <see cref="AppSettingsData.ClaudeAdvisorModel"/> (2026-09-27): the Claude slash command model's. Pinned.</summary>
+    public const string ClaudeAdvisorModelLabel = "(as Claude slash command model)";
+
+    /// <summary>How the menu shows an empty <see cref="AppSettingsData.ClaudeAdvisorEffort"/> (2026-09-27): the Claude slash command effort's. Pinned.</summary>
+    public const string ClaudeAdvisorEffortLabel = "(as Claude slash command effort)";
 
     /// <summary>One row of the advisor-context picker: the word and its hint, padded to eight. Pinned.</summary>
     public static string ClaudeAdvisorContextLabel(string name) =>
@@ -2258,6 +2270,13 @@ internal sealed partial class SettingsMenu
             return await PickClaudeEffortAsync(field, saved.ClaudeAdvisorEffort, ClaudeAdvisorEffortLabel, cancellationToken).ConfigureAwait(false);
         }
 
+        if (field is SettingsField.ClaudeModel or SettingsField.ClaudeAdvisorModel
+            && await PickClaudeModelAsync(field, saved, cancellationToken).ConfigureAwait(false) is { } pickedModel)
+        {
+            // Null: Other… — the typed edit below, pre-filled with the saved name.
+            return pickedModel;
+        }
+
         if (field == SettingsField.ClaudeAdvisorContext)
         {
             return await PickClaudeAdvisorContextAsync(saved, cancellationToken).ConfigureAwait(false);
@@ -2824,7 +2843,7 @@ internal sealed partial class SettingsMenu
                 return true;
 
             case SettingsField.ClaudeAdvisorModel:
-                // The same, for the advisor; empty follows the Claude command model.
+                // The same, for the advisor; empty follows the Claude slash command model.
                 Apply(field, d => d.ClaudeAdvisorModel = text);
                 return true;
 
@@ -3188,7 +3207,7 @@ internal sealed partial class SettingsMenu
     }
 
     /// <summary>
-    /// A Claude-effort picker under the settings list (<c>Claude command effort</c>, <c>Claude advisor effort</c>): <paramref name="blank"/>
+    /// A Claude-effort picker under the settings list (<c>Claude slash command effort</c>, <c>Claude advisor tool effort</c>): <paramref name="blank"/>
     /// first (the CLI's default, or the command's for the advisor), then <c>--effort</c>'s words; the saved one under the cursor.
     /// </summary>
     private async Task<bool> PickClaudeEffortAsync(SettingsField field, string saved, string blank, CancellationToken cancellationToken)
@@ -3202,6 +3221,41 @@ internal sealed partial class SettingsMenu
 
         string name = Claude.ClaudeEffort.Names[index];
         Apply(field, field == SettingsField.ClaudeAdvisorEffort ? d => d.ClaudeAdvisorEffort = name : d => d.ClaudeEffort = name);
+        return true;
+    }
+
+    /// <summary>
+    /// A Claude-model picker under the settings list (2026-09-27, the user's ask: pick, don't type): <paramref name="field"/>'s
+    /// blank row first (the CLI's default, or the command's for the advisor), then <see cref="Claude.ClaudeModels.Aliases"/>, then
+    /// <c>Other…</c>; the cursor on the saved alias, the blank row for none, <c>Other…</c> for a full name. True/false as any
+    /// picker (saved, or ESC); null for <c>Other…</c>, which the caller turns into the typed edit.
+    /// </summary>
+    private async Task<bool?> PickClaudeModelAsync(SettingsField field, AppSettingsData saved, CancellationToken cancellationToken)
+    {
+        bool advisor = field == SettingsField.ClaudeAdvisorModel;
+        string current = advisor ? saved.ClaudeAdvisorModel : saved.ClaudeModel;
+        string blank = advisor ? ClaudeAdvisorModelLabel : ClaudeDefaultLabel;
+        var rows = new List<string> { ClaudeModelLabel("", blank) };
+        rows.AddRange(Claude.ClaudeModels.Aliases.Select(alias => ClaudeModelLabel(alias, blank)));
+        rows.Add(ClaudeModelOtherLabel(current));
+        int other = rows.Count - 1;
+        int cursor = string.IsNullOrWhiteSpace(current) ? 0
+            : Claude.ClaudeModels.AliasOf(current) is { } alias ? 1 + Array.IndexOf(Claude.ClaudeModels.Aliases, alias)
+            : other;
+        var page = new MenuPage(Crumb(FieldName(field)), rows, PickKeys);
+        int? picked = await PickAsync(page, cursor, cancellationToken).ConfigureAwait(false);
+        if (picked is not { } index)
+        {
+            return Unchanged();
+        }
+
+        if (index == other)
+        {
+            return null;
+        }
+
+        string name = index == 0 ? "" : Claude.ClaudeModels.Aliases[index - 1];
+        Apply(field, advisor ? d => d.ClaudeAdvisorModel = name : d => d.ClaudeModel = name);
         return true;
     }
 

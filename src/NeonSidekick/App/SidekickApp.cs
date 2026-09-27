@@ -484,7 +484,7 @@ public sealed class SidekickApp
         string? claudeSessionId = null;
         var claude = _claude ?? new Claude.ClaudeProcess(_environment.System);
         // claude_advisor (2026-09-27): its own thread, as the screen keeps it; no one to confirm with, so a call under
-        // Claude advisor confirm is refused; Claude's tools and the footer as [tool] / [notice] lines, the answer the result's line.
+        // Claude advisor tool confirm is refused; Claude's tools and the footer as [tool] / [notice] lines, the answer the result's line.
         var advisorThread = new Claude.ClaudeAdvisorThread();
         var advisorTools = ChatScreen.ClaudeAdvisorTools(claude, () => EffectiveSettings, () => files.Root, advisorThread, (usage, usd) => session.Usage.AddClaude(usage, usd), () => session.History.Messages, null, new HeadlessAdvisorView(this));
         var sessionTools = ChatScreen.SessionTools(sessions, () => EffectiveSettings, () => sessionId, _time);

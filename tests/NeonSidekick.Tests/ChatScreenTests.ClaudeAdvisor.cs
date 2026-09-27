@@ -118,7 +118,7 @@ public partial class ChatScreenTests
         Assert.Contains("🛠️ Error: claude_advisor needs the user's yes", output);
     }
 
-    /// <summary>The model calls the advisor under <c>Claude advisor confirm</c>, the pane is answered with <paramref name="keys"/>, then the reply.</summary>
+    /// <summary>The model calls the advisor under <c>Claude advisor tool confirm</c>, the pane is answered with <paramref name="keys"/>, then the reply.</summary>
     private void AdvisorConfirmFixture(ConsoleKeyInfo[] keys)
     {
         _settings.Update(d => { d.TtsOutput = false; d.ClaudeAdvisor = true; d.ClaudeAdvisorConfirm = true; });

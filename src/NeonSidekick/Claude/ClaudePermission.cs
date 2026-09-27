@@ -105,3 +105,32 @@ public static class ClaudeEffort
         return null;
     }
 }
+
+/// <summary>
+/// The <c>Claude slash command model</c> / <c>Claude advisor tool model</c> pickers' words (2026-09-27, the user's ask: pick, don't type):
+/// the aliases <c>claude --model</c> takes for the latest of each family (its help names <c>fable</c>, <c>opus</c> and
+/// <c>sonnet</c>; <c>haiku</c> is the live tests'). A full model name is still typed, through the picker's <c>Other…</c> row;
+/// whatever is saved goes to <c>--model</c> as it is. Pure.
+/// </summary>
+public static class ClaudeModels
+{
+    /// <summary>The picker's alias rows, between the blank row and <c>Other…</c>.</summary>
+    public static readonly string[] Aliases = { "fable", "opus", "sonnet", "haiku" };
+
+    /// <summary>What each alias picks, for the picker's hint. Pinned.</summary>
+    public static string Describe(string alias) => alias switch
+    {
+        "fable" => "the latest Fable",
+        "opus" => "the latest Opus",
+        "sonnet" => "the latest Sonnet",
+        "haiku" => "the latest Haiku: fast, the cheapest",
+        _ => "",
+    };
+
+    /// <summary>The alias <paramref name="saved"/> names (any case, trimmed), or null for a blank or a full name.</summary>
+    public static string? AliasOf(string? saved)
+    {
+        string word = saved?.Trim().ToLowerInvariant() ?? "";
+        return Array.IndexOf(Aliases, word) >= 0 ? word : null;
+    }
+}

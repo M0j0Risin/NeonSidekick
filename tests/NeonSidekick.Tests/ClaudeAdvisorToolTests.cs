@@ -153,7 +153,7 @@ public class ClaudeAdvisorToolTests
         _cli.EnqueueReply("s-1", "unasked").EnqueueReply("s-1", "yes");
         var tool = Tool(Confirm);
 
-        Assert.Equal("unasked", await Ask(tool, "first"));   // Claude advisor confirm off: the seam is never called
+        Assert.Equal("unasked", await Ask(tool, "first"));   // Claude advisor tool confirm off: the seam is never called
         Assert.Empty(asked);
         _settings.ClaudeAdvisorConfirm = true;
         _settings.ClaudeAdvisorCallsPerTurn = 10;

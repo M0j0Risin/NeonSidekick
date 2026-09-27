@@ -31,12 +31,12 @@ internal sealed partial class ChatScreen
     /// </summary>
     private readonly ClaudeAdvisorThread _advisorThread = new();
 
-    /// <summary>The advisor's group (one tool), built once over <see cref="_claude"/>; offered while <c>Claude advisor</c> is on.</summary>
+    /// <summary>The advisor's group (one tool), built once over <see cref="_claude"/>; offered while <c>Claude advisor tool</c> is on.</summary>
     private readonly IReadOnlyList<AIFunction> _advisorTools;
 
     /// <summary>
     /// The advisor's group (2026-09-27): <see cref="ClaudeAdvisorTool"/> over the CLI, the settings, the sandbox's root, its thread,
-    /// where the cost goes, the conversation (for <c>Claude advisor context: recent</c>), the confirm seam and the view. Shared with headless.
+    /// where the cost goes, the conversation (for <c>Claude advisor tool context: recent</c>), the confirm seam and the view. Shared with headless.
     /// </summary>
     public static IReadOnlyList<AIFunction> ClaudeAdvisorTools(IClaudeCli claude, Func<AppSettingsData> effective, Func<string> workingDirectory, ClaudeAdvisorThread thread, Action<Llm.TokenUsage, decimal> spent, Func<IReadOnlyList<ChatMessage>> history, Func<string, CancellationToken, Task<bool?>>? confirm, IClaudeAdvisorView? view) =>
     [
@@ -44,7 +44,7 @@ internal sealed partial class ChatScreen
     ];
 
     /// <summary>
-    /// <c>Claude advisor confirm</c>'s question, on the turn task: the yes/no pane through the watcher — the
+    /// <c>Claude advisor tool confirm</c>'s question, on the turn task: the yes/no pane through the watcher — the
     /// <see cref="ApproveCommandAsync"/> shape, the cursor on No, ESC a no. Null (never asked) without the pane or a watcher to run it.
     /// </summary>
     private async Task<bool?> ConfirmAdvisorAsync(string question, CancellationToken turnToken)

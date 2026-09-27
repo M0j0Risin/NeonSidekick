@@ -3783,7 +3783,7 @@ internal sealed partial class ChatScreen
         // The image tools after the SQL tools (2026-09-24): ComfyUI tools, a URL and a workflow are the group's switch; no rule — the description carries the workflows and the prompt styles.
         bool comfy = comfyEnabled && comfyTools is { Count: > 0 };
         offered = comfy ? [.. offered, .. comfyTools!] : offered;
-        // The advisor after the image tools (2026-09-27): the setting Claude advisor is the group's switch; its sentence after the SQL one.
+        // The advisor after the image tools (2026-09-27): the setting Claude advisor tool is the group's switch; its sentence after the SQL one.
         bool advisor = advisorEnabled && advisorTools is { Count: > 0 };
         offered = advisor ? [.. offered, .. advisorTools!] : offered;
         // … and its per-turn cap starts over.

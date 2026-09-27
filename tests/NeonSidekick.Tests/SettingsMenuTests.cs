@@ -1357,7 +1357,7 @@ public class SettingsMenuTests : IDisposable
         Assert.Equal(19, SettingsMenu.TabLabelWidth(SettingsTab.Tts));       // "TTS voice preview"
         Assert.Equal(26, SettingsMenu.TabLabelWidth(SettingsTab.Stt));       // "STT interrupt echo guard"
         Assert.Equal(24, SettingsMenu.TabLabelWidth(SettingsTab.BotChat));   // "Botchat images enabled" (2026-09-25)
-        Assert.Equal(31, SettingsMenu.LabelWidthOf(SettingsMenu.ToolsTabFields[8]));   // the Claude tab (2026-09-27): "Claude advisor calls per turn"
+        Assert.Equal(36, SettingsMenu.LabelWidthOf(SettingsMenu.ToolsTabFields[8]));   // the Claude tab (2026-09-27): "Claude advisor tool calls per turn"
         Assert.Equal(21, SettingsMenu.LabelWidthOf(SettingsMenu.ToolsTabFields[9]));   // the Options tab (index 7 since SQL, 2026-09-23): "Tool collapse count" (2026-09-22; "$-mention enabled", 19, the Options tab's one row from later on 2026-09-19)
         Assert.Equal(26, SettingsMenu.LabelWidthOf(SettingsMenu.ToolsTabFields[0]));   // "Web browser network mode" (the Web-prefixed labels, later still on 2026-09-19; "Web search max results", 24, before)
         Assert.Equal(32, SettingsMenu.LabelWidthOf(SettingsMenu.ToolsTabFields[1]));   // "File view image max (per call)" (the File-prefixed labels, later still on 2026-09-19; "Stale line number guard", 25, that morning; "Always return line numbers", 28, from 2026-09-17 until it went; "Tree max length", 17, before)

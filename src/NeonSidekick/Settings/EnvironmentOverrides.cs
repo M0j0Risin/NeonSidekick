@@ -152,7 +152,7 @@ public sealed class EnvironmentOverrides
     /// </summary>
     public bool? ShellNative => ReadSwitch(ShellNativeVariable);
 
-    /// <summary><c>Claude advisor</c> for this launch, or null when unset or not a switch word (2026-09-27): a scripted headless run offers <c>claude_advisor</c> without saving it.</summary>
+    /// <summary><c>Claude advisor tool</c> for this launch, or null when unset or not a switch word (2026-09-27): a scripted headless run offers <c>claude_advisor</c> without saving it.</summary>
     public bool? ClaudeAdvisor => ReadSwitch(ClaudeAdvisorVariable);
 
     /// <summary>

@@ -21,7 +21,7 @@ public partial class SidekickAppTests
 
         Assert.Contains("[tool] " + ClaudeText.ToolNote("Read", "a.txt"), output);
         Assert.Contains(SidekickApp.HeadlessClaudePrefix + "It says hi.", output);
-        Assert.Contains("[notice] Claude was denied Bash (Claude command permissions: read-only).", output);
+        Assert.Contains("[notice] Claude was denied Bash (Claude slash command permissions: read-only).", output);
         Assert.Contains("[notice] " + ClaudeText.Footer(0.02m, FakeClaudeCli.Ok("s").Usage), output);
         Assert.Contains(SidekickApp.HeadlessClaudePrefix + "Again.", output);
         Assert.Contains("[notice] " + ClaudeText.NewThreadNotice, output);

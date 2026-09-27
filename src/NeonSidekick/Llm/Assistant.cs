@@ -337,7 +337,7 @@ public sealed class Assistant
         "The user restores, renames or removes a session with /sessions, not you.";
 
     /// <summary>
-    /// The sentence the default rules gain while <c>claude_advisor</c> is offered (the setting <c>Claude advisor</c> on,
+    /// The sentence the default rules gain while <c>claude_advisor</c> is offered (the setting <c>Claude advisor tool</c> on,
     /// 2026-09-27): appended after the SQL sentence by <see cref="DefaultRules"/>. It says when (stuck, unsure of the best
     /// course — not for what a tool can look up), how (a self-contained question, the brief in context) and what to do with
     /// the answer (weigh it, decide, and never just relay it). Pinned.

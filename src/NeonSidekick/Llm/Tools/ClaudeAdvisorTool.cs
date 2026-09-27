@@ -10,16 +10,16 @@ namespace NeonSidekick.Llm.Tools;
 /// <summary>
 /// <c>claude_advisor(question, context?)</c> (2026-09-27, the user's ask): the local model asks Claude Code for advice on
 /// its own when it is stuck — the <c>/claude</c> machinery (<see cref="IClaudeCli"/>, one <c>claude -p</c> child per call)
-/// turned into a tool, always <see cref="ClaudePermissionLevel.ReadOnly"/> whatever <c>Claude command permissions</c> says:
+/// turned into a tool, always <see cref="ClaudePermissionLevel.ReadOnly"/> whatever <c>Claude slash command permissions</c> says:
 /// an advisor reads, it never acts. The answer is the tool's result. The decisions, the user's:
 /// <list type="bullet">
 /// <item>its own Claude thread (<see cref="ClaudeAdvisorThread"/>), apart from <c>/claude</c>'s, resumed call to call and
 /// dropped with the session; a lost resume is tried once anew, as <c>/claude</c> does;</item>
-/// <item>what Claude sees is <c>Claude advisor context</c>: the model's brief alone, or with the last messages;</item>
-/// <item>at most <c>Claude advisor calls per turn</c> calls a turn (<see cref="BeginTurn"/> resets the count), past it an
+/// <item>what Claude sees is <c>Claude advisor tool context</c>: the model's brief alone, or with the last messages;</item>
+/// <item>at most <c>Claude advisor tool calls per turn</c> calls a turn (<see cref="BeginTurn"/> resets the count), past it an
 /// error the model reads as "carry on alone";</item>
-/// <item><c>Claude advisor model</c> / <c>effort</c>, blank for <c>/claude</c>'s own;</item>
-/// <item>with <c>Claude advisor confirm</c> on (off by default) each call waits for the user's yes; nothing to ask (headless)
+/// <item><c>Claude advisor tool model</c> / <c>effort</c>, blank for <c>/claude</c>'s own;</item>
+/// <item>with <c>Claude advisor tool confirm</c> on (off by default) each call waits for the user's yes; nothing to ask (headless)
 /// is a no.</item>
 /// </list>
 /// The cost joins <c>/usage</c>'s Claude row through <paramref name="spent"/>. A failure is an <c>Error:</c> sentence, never a
@@ -58,7 +58,7 @@ public sealed class ClaudeAdvisorTool : AIFunction
     /// <param name="workingDirectory">The folder Claude starts in: the sandbox's root as it is now.</param>
     /// <param name="thread">The advisor's Claude conversation, the screen's (or headless's) to store and drop.</param>
     /// <param name="spent">Where a run's tokens and dollars go (<see cref="TokenTally.AddClaude"/>).</param>
-    /// <param name="history">The conversation, for <c>Claude advisor context: recent</c>.</param>
+    /// <param name="history">The conversation, for <c>Claude advisor tool context: recent</c>.</param>
     /// <param name="confirm">Asks the user (the question, the turn's token): true for yes, false for no, null when nothing could ask (no pane); the seam itself null where nothing ever can (headless).</param>
     /// <param name="view">Shows the call as it runs; null shows nothing.</param>
     public ClaudeAdvisorTool(IClaudeCli claude, Func<AppSettingsData> effective, Func<string> workingDirectory, ClaudeAdvisorThread thread, Action<TokenUsage, decimal> spent, Func<IReadOnlyList<ChatMessage>> history, Func<string, CancellationToken, Task<bool?>>? confirm = null, IClaudeAdvisorView? view = null)

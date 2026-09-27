@@ -3,7 +3,7 @@ using NeonSidekick.Diagnostics;
 namespace NeonSidekick.Claude;
 
 /// <summary>
-/// The <c>Claude advisor context</c> setting (2026-09-27, the user's call: a setting, not a fixed choice): what an
+/// The <c>Claude advisor tool context</c> setting (2026-09-27, the user's call: a setting, not a fixed choice): what an
 /// advisor call sends Claude besides the model's question. <c>brief</c> — the question and the model's own
 /// <c>context</c> argument, nothing else; <c>recent</c> — those and the last <see cref="ClaudeText.AdvisorRecentMessages"/>
 /// messages of the conversation. Pure; an unknown saved word reads as <see cref="Default"/> with a warning.

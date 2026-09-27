@@ -343,16 +343,16 @@ The Claude Code CLI, for `/claude` (you send it a message) and for `claude_advis
 
 | Setting | What it does | Default |
 |---|---|---|
-| Claude command executable | The Claude Code CLI `/claude` and the advisor run. Blank looks for `claude.exe` on the PATH, then npm's `claude.cmd`, then `%USERPROFILE%\.local\bin\claude.exe` (where the native installer puts it). A path you set must exist; it is never swapped for another. `NEONSIDEKICK_CLAUDE_EXE` outranks it. | (looked up) |
-| Claude command permissions | What Claude may do on its own during a `/claude` run. `read-only`: read, search and fetch (`Read`, `Grep`, `Glob`, `WebSearch`, `WebFetch`), nothing else. `edit`: its usual tools, with file edits accepted without asking; commands are denied. `full`: everything, commands included, without asking (`bypassPermissions`). Nothing is ever asked about: whatever the level does not allow is denied on the spot, and the reply says which tools were denied. Claude works in the working directory, but it runs outside the app's own sandbox, the shell policy and the approval pane. The advisor is always `read-only`, whatever this says. `NEONSIDEKICK_CLAUDE_PERMISSIONS` outranks it. | `read-only` |
-| Claude command model | The `--model` for `/claude`: an alias (`opus`, `sonnet`, `haiku`) or a full model name. Blank uses Claude Code's own default. | (Claude Code's default) |
-| Claude command effort | The `--effort` for `/claude`: `low`, `medium`, `high`, `xhigh` or `max`. Blank uses Claude Code's own default. | (Claude Code's default) |
-| Claude advisor | Offers the model `claude_advisor`: when it is stuck or unsure of the best course, it can ask Claude Code for advice on its own, read-only. Each call costs money on your Claude account, so it is off until you turn it on. `NEONSIDEKICK_CLAUDE_ADVISOR` outranks it. | off |
-| Claude advisor context | What an advisor call sends Claude. `brief`: the model's question and the context it writes. `recent`: those and the conversation's last 10 messages (tool results cut to 500 characters). Claude can read the working directory itself either way. | `brief` |
-| Claude advisor calls per turn | The most advisor calls one reply may make (1–10); a call past it is refused and the model carries on alone. | 2 |
-| Claude advisor model | The `--model` for the advisor. Blank uses *Claude command model*. | (as Claude command model) |
-| Claude advisor effort | The `--effort` for the advisor. Blank uses *Claude command effort*. | (as Claude command effort) |
-| Claude advisor confirm | Each advisor call waits for your yes on the pane first (the cursor starts on No; ESC is a no). A no tells the model to carry on without it. Headless has no one to ask, so a call there is refused. | off |
+| Claude executable | The Claude Code CLI `/claude` and the advisor run. Blank looks for `claude.exe` on the PATH, then npm's `claude.cmd`, then `%USERPROFILE%\.local\bin\claude.exe` (where the native installer puts it). A path you set must exist; it is never swapped for another. `NEONSIDEKICK_CLAUDE_EXE` outranks it. | (looked up) |
+| Claude slash command permissions | What Claude may do on its own during a `/claude` run. `read-only`: read, search and fetch (`Read`, `Grep`, `Glob`, `WebSearch`, `WebFetch`), nothing else. `edit`: its usual tools, with file edits accepted without asking; commands are denied. `full`: everything, commands included, without asking (`bypassPermissions`). Nothing is ever asked about: whatever the level does not allow is denied on the spot, and the reply says which tools were denied. Claude works in the working directory, but it runs outside the app's own sandbox, the shell policy and the approval pane. The advisor is always `read-only`, whatever this says. `NEONSIDEKICK_CLAUDE_PERMISSIONS` outranks it. | `read-only` |
+| Claude slash command model | The `--model` for `/claude`, picked from a list: Claude Code's own default, the aliases `fable`, `opus`, `sonnet` and `haiku` (the latest model of each), or *Other…* to type a full model name. | (Claude Code's default) |
+| Claude slash command effort | The `--effort` for `/claude`, picked from Claude Code's own default, `low`, `medium`, `high`, `xhigh` or `max`. | (Claude Code's default) |
+| Claude advisor tool | Offers the model `claude_advisor`: when it is stuck or unsure of the best course, it can ask Claude Code for advice on its own, read-only. Each call costs money on your Claude account, so it is off until you turn it on. `NEONSIDEKICK_CLAUDE_ADVISOR` outranks it. | off |
+| Claude advisor tool context | What an advisor call sends Claude. `brief`: the model's question and the context it writes. `recent`: those and the conversation's last 10 messages (tool results cut to 500 characters). Claude can read the working directory itself either way. | `brief` |
+| Claude advisor tool calls per turn | The most advisor calls one reply may make (1–10); a call past it is refused and the model carries on alone. | 2 |
+| Claude advisor tool model | The `--model` for the advisor, picked from the same list; its first row follows *Claude slash command model*. | (as Claude slash command model) |
+| Claude advisor tool effort | The `--effort` for the advisor, picked from the same list; its first row follows *Claude slash command effort*. | (as Claude slash command effort) |
+| Claude advisor tool confirm | Each advisor call waits for your yes on the pane first (the cursor starts on No; ESC is a no). A no tells the model to carry on without it. Headless has no one to ask, so a call there is refused. | off |
 
 #### Options
 
@@ -409,7 +409,7 @@ Type `/` and the list opens with every command and its summary; after the comman
 | Command | What it does |
 |---|---|
 | `/about` | Show the app's version, runtime, folders, components and licence. |
-| `/claude <message>` | Send the message to Claude Code (the `claude` CLI, run headless in the working directory) and stream its reply into the transcript under Claude's name, with each tool it uses on a dim line and a footer with the cost and tokens; with speech on, the reply is spoken. The question and the reply are added to the conversation, tagged `[to Claude]` and `[Claude]`, so the local model can build on them; Claude does not see the local conversation. Each session has one Claude conversation: the next `/claude` resumes it (after a restart too, once the session is restored), and `/claude new` starts another; `/clear`, `/new` and a profile switch start another too. What Claude may do is *Claude command permissions* (the Claude tab of `/tools`): anything past it is denied, never asked. ESC or Ctrl+C stops Claude (the reply so far is kept). Works with no LLM server; refused while a reply runs. Your own Claude Code setup applies: its sign-in, `CLAUDE.md`, skills, MCP servers and hooks. `/usage` shows what the runs cost. |
+| `/claude <message>` | Send the message to Claude Code (the `claude` CLI, run headless in the working directory) and stream its reply into the transcript under Claude's name, with each tool it uses on a dim line and a footer with the cost and tokens; with speech on, the reply is spoken. The question and the reply are added to the conversation, tagged `[to Claude]` and `[Claude]`, so the local model can build on them; Claude does not see the local conversation. Each session has one Claude conversation: the next `/claude` resumes it (after a restart too, once the session is restored), and `/claude new` starts another; `/clear`, `/new` and a profile switch start another too. What Claude may do is *Claude slash command permissions* (the Claude tab of `/tools`): anything past it is denied, never asked. ESC or Ctrl+C stops Claude (the reply so far is kept). Works with no LLM server; refused while a reply runs. Your own Claude Code setup applies: its sign-in, `CLAUDE.md`, skills, MCP servers and hooks. `/usage` shows what the runs cost. |
 | `/clear` | Start a new conversation and clear the screen. |
 | `/cmdcopy <profile> [--history] [overwrite]` | Copy this profile's allowed shell commands (the *Shell allowed commands* prefixes) into another: added to its list, or in place of it. With `--history`, copy its stored command history into the other profile's `sessions.db` instead (refused while that profile has *Keep command history* off). |
 | `/cmdclear` | Clear this profile's command history, the stored lines and the ones ↑/↓ recalls now, after a confirmation. |
@@ -471,7 +471,7 @@ Type `/` and the list opens with every command and its summary; after the comman
 ## Tools
 [↑ Back to top](#neon-sidekick)
 
-What the model can call, in the groups `/tools` and `/sys` show. A group's switch (`File tools`, `Git native tools`, `Shell command policy`, `Obsidian tools`, `SQL tools`, `ComfyUI tools`, `Claude advisor`, `Web tools`, `Memory`, `Agent skills`, `Session tool`, `Ask user`, `MCP servers`) offers or withholds the whole group; a single tool can be switched on or off on `/tools`' Offered tab.
+What the model can call, in the groups `/tools` and `/sys` show. A group's switch (`File tools`, `Git native tools`, `Shell command policy`, `Obsidian tools`, `SQL tools`, `ComfyUI tools`, `Claude advisor tool`, `Web tools`, `Memory`, `Agent skills`, `Session tool`, `Ask user`, `MCP servers`) offers or withholds the whole group; a single tool can be switched on or off on `/tools`' Offered tab.
 
 <details>
 <summary><b>🕒 Clock & Timers</b></summary>
@@ -822,7 +822,7 @@ A headless run loads `default`, never whichever profile the TUI was last switche
 
 | Tool | Arguments | What it does |
 |---|---|---|
-| `claude_advisor` | `question, context?` | Offered while *Claude advisor* is on. Asks Claude Code for advice, read-only (it can read and search the working directory and the web, never change anything), and returns its answer. The transcript shows the question, each tool Claude uses, the answer in Claude's colour and a footer with the cost. The advisor has its own Claude conversation per session, apart from `/claude`'s: the next call resumes it, and `/new`, `/clear` and a profile switch start another. At most *Claude advisor calls per turn* calls a reply; with *Claude advisor confirm* on, each waits for your yes. ESC stops it with the reply. `/usage`'s Claude row counts it. |
+| `claude_advisor` | `question, context?` | Offered while *Claude advisor tool* is on. Asks Claude Code for advice, read-only (it can read and search the working directory and the web, never change anything), and returns its answer. The transcript shows the question, each tool Claude uses, the answer in Claude's colour and a footer with the cost. The advisor has its own Claude conversation per session, apart from `/claude`'s: the next call resumes it, and `/new`, `/clear` and a profile switch start another. At most *Claude advisor tool calls per turn* calls a reply; with *Claude advisor tool confirm* on, each waits for your yes. ESC stops it with the reply. `/usage`'s Claude row counts it. |
 
 ### Questions
 
@@ -897,9 +897,9 @@ Every variable the app reads starts with `NEONSIDEKICK_`. They override a settin
 
 | Variable | Overrides | Accepts |
 |---|---|---|
-| `NEONSIDEKICK_CLAUDE_EXE` | Claude command executable | The full path of the Claude Code CLI. |
-| `NEONSIDEKICK_CLAUDE_PERMISSIONS` | Claude command permissions | `read-only`, `edit`, `full`. |
-| `NEONSIDEKICK_CLAUDE_ADVISOR` | Claude advisor | `on`/`off` (also `true`/`false`, `1`/`0`, `yes`/`no`). |
+| `NEONSIDEKICK_CLAUDE_EXE` | Claude executable | The full path of the Claude Code CLI. |
+| `NEONSIDEKICK_CLAUDE_PERMISSIONS` | Claude slash command permissions | `read-only`, `edit`, `full`. |
+| `NEONSIDEKICK_CLAUDE_ADVISOR` | Claude advisor tool | `on`/`off` (also `true`/`false`, `1`/`0`, `yes`/`no`). |
 
 ### Speech
 
