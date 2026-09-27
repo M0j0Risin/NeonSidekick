@@ -31,7 +31,7 @@ public sealed class SidekickApp
     public const string Name = "NeonSidekick";
 
     /// <summary>The second line of headless output.</summary>
-    public const string HeadlessHint = "Headless mode. Type a message; /clear or /new forgets the conversation; /compact [focus] shrinks it; /plan <requirement> plans before doing (/plan approve [--fresh] | cancel | show); /exit or EOF exits.";
+    public const string HeadlessHint = "Headless mode. Type a message; /clear or /new forgets the conversation; /compact [focus] shrinks it; /plan <requirement> plans before doing (/plan approve [--fresh] | cancel | show | save [name] | open [name]); /exit or EOF exits.";
 
     /// <summary>Printed once when discovery under <paramref name="scope"/> found nothing. Pinned by tests; shared with the chat screen.</summary>
     public static string HeadlessNoServerLine(ScanScope scope) => LlmSession.NoServerLine(scope);
@@ -481,7 +481,7 @@ public sealed class SidekickApp
         // /plan approve; the saved line is printed once the turn is over, never inside the streamed reply.
         var plan = new Plans.PlanSession();
         var presentPlan = new Llm.Tools.PresentPlanTool(plan, files, _time, (_, _) => Task.FromResult(new Plans.PlanVerdict(Plans.PlanChoice.Saved)));
-        int planRevisionShown = 0;
+        var planState = new HeadlessPlanState();
         try
         {
             await HeadlessLineAsync(VersionLine).ConfigureAwait(false);
@@ -555,6 +555,8 @@ public sealed class SidekickApp
                     assistant?.History.Clear();
                     session.Usage.ResetConversation();
                     sessionId = null;
+                    planState.Executing = null;
+                    planState.Draft = null;
                     if (plan.Active)
                     {
                         await HeadlessNoticeLineAsync("[notice] " + Plans.PlanText.LeftOnResetNotice(plan.Path)).ConfigureAwait(false);
@@ -588,18 +590,18 @@ public sealed class SidekickApp
                 {
                     // /plan headless (2026-09-26): the screen's words, the approval typed; a line that starts a turn comes back as its text.
                     Assistant live = assistant;
-                    if (await HeadlessPlanAsync(plan, files, args, () => { live.History.Clear(); session.Usage.ResetConversation(); sessionId = null; }).ConfigureAwait(false) is not { } planned)
+                    if (await HeadlessPlanAsync(plan, planState, files, args, () => { live.History.Clear(); session.Usage.ResetConversation(); sessionId = null; }).ConfigureAwait(false) is not { } planned)
                     {
                         if (sessionId is { } planSession)
                         {
-                            sessions.SaveHistory(planSession, Sessions.SessionHistory.ToJson(assistant.History.Messages, plan.ToStored()));
+                            sessions.SaveHistory(planSession, Sessions.SessionHistory.ToJson(assistant.History.Messages, plan.ToStored(), planState.Executing));
                         }
 
                         continue;
                     }
 
                     text = planned;
-                    planRevisionShown = plan.Revision;
+                    planState.RevisionShown = plan.Revision;
                 }
 
                 // As the screen does before a message: the last reply's context past the LLM auto compact (%) share compacts first.
@@ -621,10 +623,17 @@ public sealed class SidekickApp
                 // Per turn, as the screen does: a memory saved in this turn is in the next one's prompt.
                 ChatScreen.PrepareTurn(assistant, memory, memoryTools, standingTools, persona, operata, vocalia, EffectiveSettings.Memory, speechOutput: false, EffectiveSettings.LlmMaxToolIterations, EffectiveSettings.LlmOfferTools, webTools, EffectiveSettings.WebTools, ChatScreen.ContextGuardFor(EffectiveSettings, session.ContextLength), fileTools, EffectiveSettings.FileTools, skills: skills with { Enabled = EffectiveSettings.AgentSkills, External = EffectiveSettings.AgentSkills && EffectiveSettings.ExternalSkills }, sessionTools: sessionTools, sessionsEnabled: EffectiveSettings.SessionTool, disabledTools: ToolsText.DisabledSet(EffectiveSettings.ToolsDisabled), mcpTools: mcp.Tools, mcpEnabled: EffectiveSettings.McpServers, safeEdits: EffectiveSettings.FileSafeEdits, gitTools: gitTools, gitEnabled: EffectiveSettings.GitNativeTools, shellTools: shellTools, shellEnabled: ChatScreen.ShellOffered(EffectiveSettings), processes: processes, shellBridge: EffectiveSettings.ShellToolBridge, shellPolice: EffectiveSettings.ShellPoliceOutsidePaths, obsidianTools: ChatScreen.ObsidianToolsFor(vaultTools, EffectiveSettings), obsidianEnabled: ChatScreen.ObsidianOffered(EffectiveSettings), sqlTools: sqlTools, sqlEnabled: ChatScreen.SqlOffered(EffectiveSettings, sql), comfyTools: comfyTools, comfyEnabled: ChatScreen.ComfyOffered(EffectiveSettings, comfy), shellNative: EffectiveSettings.ShellPreferNative, plan: plan.Turn(presentPlan));
                 var turn = await RunHeadlessTurnAsync(session, assistant, text, cancellationToken).ConfigureAwait(false);
-                if (plan.Active && plan.Path is { } planPath && plan.Revision > planRevisionShown)
+                if (plan.Active && plan.Path is { } planPath && plan.Revision > planState.RevisionShown)
                 {
-                    planRevisionShown = plan.Revision;
+                    planState.RevisionShown = plan.Revision;
                     await HeadlessNoticeLineAsync("[notice] " + Plans.PlanText.SavedNotice(planPath, plan.Revision) + " — /plan approve [--fresh] starts it").ConfigureAwait(false);
+                }
+
+                // Round two (2026-09-26), as the screen does after a turn: a plan being carried out marked done or incomplete,
+                // and a planning reply that reads as a plan the model never presented hinted (/plan save keeps it).
+                foreach (string planLine in HeadlessPlanAfterTurn(plan, planState, files, turn.Reply, turn.Trace.ToolNames, turn.Cancelled))
+                {
+                    await HeadlessNoticeLineAsync("[notice] " + planLine).ConfigureAwait(false);
                 }
 
                 if (EffectiveSettings.SessionLogging)
@@ -634,7 +643,7 @@ public sealed class SidekickApp
                     {
                         var usage = session.Usage.LastRequest;
                         sessions.AppendTurn(id, text, turn.Reply, turn.Trace.ToolCalls, turn.Trace.ToolNames, turn.Trace.LoadedSkills, turn.Trace.Errors, usage.Input, usage.Output, turn.Cancelled);
-                        sessions.SaveHistory(id, Sessions.SessionHistory.ToJson(assistant.History.Messages, plan.ToStored()));
+                        sessions.SaveHistory(id, Sessions.SessionHistory.ToJson(assistant.History.Messages, plan.ToStored(), planState.Executing));
                     }
                 }
             }
@@ -666,10 +675,85 @@ public sealed class SidekickApp
     /// <c>[notice]</c> / <c>[error]</c>. Returns the text to send as a turn — the requirement, more detail, or the
     /// approved plan's message (after <paramref name="forget"/> for <c>--fresh</c>) — or null when the line is done.
     /// </summary>
-    private async Task<string?> HeadlessPlanAsync(Plans.PlanSession plan, WorkingDirectory files, string args, Action forget)
+    private async Task<string?> HeadlessPlanAsync(Plans.PlanSession plan, HeadlessPlanState state, WorkingDirectory files, string args, Action forget)
     {
-        switch (ChatScreen.ParsePlanArgs(args, plan.Active))
+        var command = ChatScreen.ParsePlanArgs(args, plan.Active, out string rest);
+        string? found = command == ChatScreen.PlanCommand.Open ? Plans.PlanFiles.Resolve(files, rest) : null;
+        if (command == ChatScreen.PlanCommand.Open && found is null)
         {
+            if (!rest.Any(char.IsWhiteSpace))
+            {
+                await HeadlessLineAsync(HeadlessReplyPrefix + "[error] " + Plans.PlanText.NoSuchPlanError(rest)).ConfigureAwait(false);
+                await HeadlessListPlansAsync(files).ConfigureAwait(false);
+                return null;
+            }
+
+            command = plan.Active ? ChatScreen.PlanCommand.Detail : ChatScreen.PlanCommand.Enter;
+        }
+
+        switch (command)
+        {
+            case ChatScreen.PlanCommand.List:
+                await HeadlessListPlansAsync(files).ConfigureAwait(false);
+                return null;
+            case ChatScreen.PlanCommand.Open:
+            {
+                if (!EffectiveSettings.LlmOfferTools)
+                {
+                    await HeadlessLineAsync(HeadlessReplyPrefix + "[error] " + Plans.PlanText.NeedsToolsError).ConfigureAwait(false);
+                    return null;
+                }
+
+                if (Plans.PlanFiles.ReadWhole(files, found!) is not { } opened)
+                {
+                    await HeadlessLineAsync(HeadlessReplyPrefix + "[error] " + Plans.PlanText.PlanUnreadableError(found!)).ConfigureAwait(false);
+                    return null;
+                }
+
+                var header = Plans.PlanDocument.TryParse(opened);
+                string body = Plans.PlanDocument.Body(opened);
+                var (done, total) = Plans.PlanDocument.Progress(body);
+                string title = Plans.PlanDocument.FirstHeading(body) ?? Path.GetFileNameWithoutExtension(found!);
+                string requirement = header is { Requirement.Length: > 0 } ? header.Requirement : title;
+                if (plan.Active && !string.Equals(plan.Path, found, StringComparison.Ordinal))
+                {
+                    await HeadlessNoticeLineAsync("[notice] " + Plans.PlanText.SwitchedNotice(plan.Path)).ConfigureAwait(false);
+                }
+
+                state.Executing = null;
+                state.Draft = null;
+                plan.Open(found!, title, requirement, header?.Revision ?? 1, header is { Created: var created } && created != DateTimeOffset.MinValue ? created : null);
+                state.RevisionShown = plan.Revision;
+                if (Plans.PlanFiles.MarkFile(files, found!, Plans.PlanStatus.Draft, _time.GetLocalNow(), requirement) is { } problem)
+                {
+                    await HeadlessNoticeLineAsync("[notice] " + problem).ConfigureAwait(false);
+                }
+
+                await HeadlessNoticeLineAsync("[notice] " + Plans.PlanText.OpenedNotice(found!, header?.Status, done, total)).ConfigureAwait(false);
+                return Plans.PlanText.OpenMessage(found!, done, total);
+            }
+
+            case ChatScreen.PlanCommand.Save:
+            {
+                if (state.Draft is not { } reply)
+                {
+                    await HeadlessLineAsync(HeadlessReplyPrefix + "[error] " + Plans.PlanText.NothingToSaveError).ConfigureAwait(false);
+                    return null;
+                }
+
+                var (saved, error) = Plans.PlanFiles.Save(plan, files, _time, Plans.PlanDocument.FirstHeading(reply) ?? plan.Requirement, reply, rest.Length == 0 ? null : rest);
+                if (saved is null)
+                {
+                    await HeadlessLineAsync(HeadlessReplyPrefix + "[error] " + Plans.PlanText.CouldNotSaveResult(error ?? "")).ConfigureAwait(false);
+                    return null;
+                }
+
+                state.Draft = null;
+                state.RevisionShown = saved.Revision;
+                await HeadlessNoticeLineAsync("[notice] " + Plans.PlanText.SavedNotice(saved.Path, saved.Revision) + " — /plan approve [--fresh] starts it").ConfigureAwait(false);
+                return null;
+            }
+
             case ChatScreen.PlanCommand.Usage:
                 await HeadlessLineAsync(HeadlessReplyPrefix + "[error] " + Plans.PlanText.UsageError).ConfigureAwait(false);
                 return null;
@@ -686,7 +770,7 @@ public sealed class SidekickApp
             case ChatScreen.PlanCommand.Cancel:
             {
                 string? path = plan.Path;
-                if (path is not null && Llm.Tools.PresentPlanTool.MarkFile(files, path, Plans.PlanStatus.Cancelled, _time.GetLocalNow(), plan.Requirement) is { } problem)
+                if (path is not null && Plans.PlanFiles.MarkFile(files, path, Plans.PlanStatus.Cancelled, _time.GetLocalNow(), plan.Requirement) is { } problem)
                 {
                     await HeadlessNoticeLineAsync("[notice] " + problem).ConfigureAwait(false);
                 }
@@ -704,18 +788,22 @@ public sealed class SidekickApp
                     return null;
                 }
 
-                if (Llm.Tools.PresentPlanTool.ReadWhole(files, path) is not { } text)
+                if (Plans.PlanFiles.ReadWhole(files, path) is not { } text)
                 {
                     await HeadlessLineAsync(HeadlessReplyPrefix + "[error] " + Plans.PlanText.PlanUnreadableError(path)).ConfigureAwait(false);
                     return null;
                 }
 
-                if (Llm.Tools.PresentPlanTool.MarkFile(files, path, Plans.PlanStatus.Approved, _time.GetLocalNow(), plan.Requirement) is { } problem)
+                if (Plans.PlanFiles.MarkFile(files, path, Plans.PlanStatus.Approved, _time.GetLocalNow(), plan.Requirement) is { } problem)
                 {
                     await HeadlessNoticeLineAsync("[notice] " + problem).ConfigureAwait(false);
                 }
 
                 bool fresh = ChatScreen.ParsePlanArgs(args, planning: true) == ChatScreen.PlanCommand.ApproveFresh;
+                // Tracked until every step is ticked (round two): HeadlessPlanAfterTurn marks it done or incomplete.
+                state.Executing = new Sessions.StoredPlan { Path = path, Requirement = plan.Requirement };
+                state.Shown = null;
+                state.Draft = null;
                 plan.Exit();
                 await HeadlessNoticeLineAsync("[notice] " + Plans.PlanText.ApprovedNotice(path, fresh)).ConfigureAwait(false);
                 if (!fresh)
@@ -735,12 +823,89 @@ public sealed class SidekickApp
                 }
 
                 plan.Enter(args);
+                state.Executing = null;
+                state.Draft = null;
                 await HeadlessNoticeLineAsync("[notice] " + Plans.PlanText.EnteredNotice).ConfigureAwait(false);
                 return plan.Requirement;
 
             default:
                 return args;
         }
+    }
+
+    /// <summary>Headless plan mode's own state beside the session (2026-09-26, round two): the plan being carried out, the ticked count last said, an unpresented plan reply and the revision last announced.</summary>
+    private sealed class HeadlessPlanState
+    {
+        public Sessions.StoredPlan? Executing { get; set; }
+        public (int Done, int Total)? Shown { get; set; }
+        public string? Draft { get; set; }
+        public int RevisionShown { get; set; }
+    }
+
+    /// <summary><c>/plan open</c> alone headless: one <c>[notice]</c> line per plan, or that there are none.</summary>
+    private async Task HeadlessListPlansAsync(WorkingDirectory files)
+    {
+        var plans = Plans.PlanFiles.List(files);
+        if (plans.Count == 0)
+        {
+            await HeadlessNoticeLineAsync("[notice] " + Plans.PlanText.NoPlansNotice).ConfigureAwait(false);
+            return;
+        }
+
+        foreach (var listed in plans)
+        {
+            await HeadlessNoticeLineAsync("[notice] " + Plans.PlanText.ListLine(listed).Trim()).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    /// The screen's after-turn checks, headless (round two): the plan being carried out counted and marked — done ends
+    /// the tracking, incomplete is said when the count moves or the turn was cut — and a planning reply that reads as
+    /// a plan from a turn without <c>present_plan</c> kept for <c>/plan save</c> with the hint. The lines to print.
+    /// </summary>
+    private List<string> HeadlessPlanAfterTurn(Plans.PlanSession plan, HeadlessPlanState state, WorkingDirectory files, string reply, IReadOnlyList<string> tools, bool cancelled)
+    {
+        var lines = new List<string>(2);
+        if (state.Executing is { Path: { } path } executing)
+        {
+            if (Plans.PlanFiles.ReadWhole(files, path) is not { } text)
+            {
+                state.Executing = null;
+            }
+            else
+            {
+                var progress = Plans.PlanDocument.Progress(Plans.PlanDocument.Body(text));
+                if (progress.Total == 0)
+                {
+                    state.Executing = null;
+                }
+                else if (progress.Done == progress.Total)
+                {
+                    Plans.PlanFiles.MarkFile(files, path, Plans.PlanStatus.Done, _time.GetLocalNow(), executing.Requirement, progress);
+                    lines.Add(Plans.PlanText.DoneNotice(path));
+                    state.Executing = null;
+                    state.Shown = null;
+                }
+                else
+                {
+                    Plans.PlanFiles.MarkFile(files, path, Plans.PlanStatus.Incomplete, _time.GetLocalNow(), executing.Requirement, progress);
+                    if (cancelled || state.Shown != progress)
+                    {
+                        lines.Add(Plans.PlanText.IncompleteNotice(path, progress.Done, progress.Total));
+                        state.Shown = progress;
+                    }
+                }
+            }
+        }
+
+        state.Draft = null;
+        if (plan.Active && !cancelled && !tools.Contains(Llm.Tools.PresentPlanTool.ToolName, StringComparer.Ordinal) && Plans.PlanDocument.LooksLikePlan(reply))
+        {
+            state.Draft = reply.Trim();
+            lines.Add(Plans.PlanText.UnpresentedHint);
+        }
+
+        return lines;
     }
 
     /// <summary>

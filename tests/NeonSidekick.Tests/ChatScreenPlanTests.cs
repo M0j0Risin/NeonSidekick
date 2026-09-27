@@ -16,9 +16,9 @@ namespace NeonSidekick.Tests;
 public partial class ChatScreenTests
 {
     private const string PlanMarkdown = "# Guide\n\n## Steps\n- [ ] Write it\n";
-    private const string PlanPath = "plans/add-guide.md";
+    private const string PlanPath = ".neon/plans/add-guide.md";
 
-    private string PlanFile => Path.Combine(_settings.ProfileDirectory, WorkingDirectory.DefaultFolderName, "plans", "add-guide.md");
+    private string PlanFile => Path.Combine(_settings.ProfileDirectory, WorkingDirectory.DefaultFolderName, ".neon", "plans", "add-guide.md");
 
     private static ChatResponseUpdate PresentPlanCall(string id = "p1") =>
         FakeChatClient.Call(id, PresentPlanTool.ToolName, new Dictionary<string, object?>
@@ -74,6 +74,10 @@ public partial class ChatScreenTests
     public async Task Plan_ApprovedOnThePane_RunsThePlan_WithEveryToolAgain()
     {
         PlanFixture([[Keys.Char('a'), Keys.Enter]], "/plan Add a guide", "/exit");
+        // A plans folder of the user's own (2026-09-26): the app's plans live under .neon/plans and never touch it.
+        string mine = Path.Combine(_settings.ProfileDirectory, WorkingDirectory.DefaultFolderName, "plans", "add-guide.md");
+        Directory.CreateDirectory(Path.GetDirectoryName(mine)!);
+        File.WriteAllText(mine, "the user's own");
         _chat.Enqueue(PresentPlanCall());
         _chat.EnqueueText("Approved, starting.");
         _chat.EnqueueText("Done: wrote it.");
@@ -97,8 +101,12 @@ public partial class ChatScreenTests
         Assert.DoesNotContain(PresentPlanTool.ToolName, doing);
         Assert.DoesNotContain("PLAN MODE", _chat.Requests[2][0].Text);
         Assert.Equal(PlanText.ExecuteMessage(PlanPath), LastUserText(_chat.Requests[2]));
-        Assert.Equal(PlanStatus.Approved, PlanFileStatus);
+        // Carried out without ticking its one step (the fake never writes the file): tracked, and marked incomplete after the turn.
+        Assert.Equal(PlanStatus.Incomplete, PlanFileStatus);
+        Assert.Contains(PlanText.IncompleteNotice(PlanPath, 0, 1), Output);
         Assert.Contains("Write it", File.ReadAllText(PlanFile));
+        Assert.Equal("the user's own", File.ReadAllText(mine));
+        Assert.Equal(".neon/plans/add-guide.md", PlanPath);
         // The screen: the notices, the pane with its rows, the plan printed, the glyph while planning, the placeholder back after.
         Assert.Contains(PlanText.EnteredNotice, output);
         Assert.Contains(PlanText.SavedNotice(PlanPath, 1), output);
@@ -186,7 +194,9 @@ public partial class ChatScreenTests
         Assert.DoesNotContain(_chat.Requests[2], m => m.Text == "Add a guide");
         Assert.Contains(ChatScreen.NewConversationNotice, output);
         Assert.Contains(PlanText.ApprovedNotice(PlanPath, fresh: true), output);
-        Assert.Equal(PlanStatus.Approved, PlanFileStatus);
+        // Carried out without ticking its one step (the fake never writes the file): tracked, and marked incomplete after the turn.
+        Assert.Equal(PlanStatus.Incomplete, PlanFileStatus);
+        Assert.Contains(PlanText.IncompleteNotice(PlanPath, 0, 1), Output);
     }
 
     [Fact]
@@ -202,7 +212,9 @@ public partial class ChatScreenTests
         Assert.Equal(3, _chat.Requests.Count);
         Assert.Equal(PlanText.ExecuteMessage(PlanPath), LastUserText(_chat.Requests[2]));
         Assert.Contains(WriteFileTool.ToolName, OfferedNames(_chat.Options[2]));
-        Assert.Equal(PlanStatus.Approved, PlanFileStatus);
+        // Carried out without ticking its one step (the fake never writes the file): tracked, and marked incomplete after the turn.
+        Assert.Equal(PlanStatus.Incomplete, PlanFileStatus);
+        Assert.Contains(PlanText.IncompleteNotice(PlanPath, 0, 1), Output);
     }
 
     [Fact]
@@ -261,7 +273,9 @@ public partial class ChatScreenTests
         Assert.Contains(ChatScreen.PlanGroupName + " (1)", output);
         Assert.Equal(3, _chat.Requests.Count);
         Assert.StartsWith(PlanText.ExecuteMessage(PlanPath), LastUserText(_chat.Requests[2]));
-        Assert.Equal(PlanStatus.Approved, PlanFileStatus);
+        // Carried out without ticking its one step (the fake never writes the file): tracked, and marked incomplete after the turn.
+        Assert.Equal(PlanStatus.Incomplete, PlanFileStatus);
+        Assert.Contains(PlanText.IncompleteNotice(PlanPath, 0, 1), Output);
     }
 
     [Fact]

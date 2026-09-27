@@ -66,6 +66,24 @@ public sealed class PlanSession
         Requirement = requirement.Trim();
     }
 
+    /// <summary>
+    /// Plan mode on over a plan file already on disk (<c>/plan open</c>, 2026-09-26): the path fixed, so the next
+    /// <c>present_plan</c> overwrites it as revision <paramref name="revision"/> + 1 and <c>/plan approve</c> works at once.
+    /// </summary>
+    public void Open(string path, string title, string requirement, int revision, DateTimeOffset? created)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        ArgumentNullException.ThrowIfNull(title);
+        ArgumentException.ThrowIfNullOrWhiteSpace(requirement);
+        Exit();
+        Active = true;
+        Requirement = requirement.Trim();
+        Path = path;
+        Title = title;
+        Revision = Math.Max(1, revision);
+        Created = created;
+    }
+
     /// <summary>A revision saved to <paramref name="path"/>.</summary>
     public void Presented(string path, string title, int revision, DateTimeOffset created)
     {

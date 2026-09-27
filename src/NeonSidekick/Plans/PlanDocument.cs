@@ -9,10 +9,19 @@ public enum PlanStatus
     Draft,
     Approved,
     Cancelled,
+
+    /// <summary>Carried out with every step ticked (2026-09-26, round two).</summary>
+    Done,
+
+    /// <summary>Carried out with steps still unticked: <c>/plan open</c> picks it up.</summary>
+    Incomplete,
 }
 
-/// <summary>A plan file's front matter: its status, revision, when it was written and rewritten, and the requirement it answers.</summary>
-public sealed record PlanHeader(PlanStatus Status, int Revision, DateTimeOffset Created, DateTimeOffset Updated, string Requirement);
+/// <summary>
+/// A plan file's front matter: its status, revision, when it was written and rewritten, the requirement it answers,
+/// and — once it has been carried out (2026-09-26) — how many of its steps are ticked (<c>progress: 5/7</c>).
+/// </summary>
+public sealed record PlanHeader(PlanStatus Status, int Revision, DateTimeOffset Created, DateTimeOffset Updated, string Requirement, int? StepsDone = null, int? StepsTotal = null);
 
 /// <summary>
 /// A plan file (2026-09-26): a small front-matter block the app owns — <c>status</c>, <c>revision</c>,
@@ -31,6 +40,8 @@ public static class PlanDocument
     {
         PlanStatus.Approved => "approved",
         PlanStatus.Cancelled => "cancelled",
+        PlanStatus.Done => "done",
+        PlanStatus.Incomplete => "incomplete",
         _ => "draft",
     };
 
@@ -60,9 +71,135 @@ public static class PlanDocument
             .Append("created: ").Append(header.Created.ToString(TimeFormat, CultureInfo.InvariantCulture)).Append('\n')
             .Append("updated: ").Append(header.Updated.ToString(TimeFormat, CultureInfo.InvariantCulture)).Append('\n')
             .Append("requirement: ").Append(Quote(header.Requirement)).Append('\n')
+            .Append(header is { StepsDone: { } done, StepsTotal: { } total } ? "progress: " + N(done) + "/" + N(total) + "\n" : "")
             .Append(Fence).Append('\n')
             .ToString();
     }
+
+    /// <summary>
+    /// How many of <paramref name="markdown"/>'s task lines are ticked (2026-09-26): a list item opening with <c>[ ]</c>
+    /// or <c>[x]</c> / <c>[X]</c> — after <c>-</c>, <c>*</c>, <c>+</c> or a number with <c>.</c> or <c>)</c> — outside
+    /// fenced code blocks. Pure.
+    /// </summary>
+    public static (int Done, int Total) Progress(string markdown)
+    {
+        ArgumentNullException.ThrowIfNull(markdown);
+        int done = 0;
+        int total = 0;
+        foreach (var box in TaskBoxes(markdown))
+        {
+            total++;
+            done += box ? 1 : 0;
+        }
+
+        return (done, total);
+    }
+
+    /// <summary>
+    /// Whether a reply reads as a plan (2026-09-26: the hint that <c>/plan save</c> can keep one the model never
+    /// presented): two task lines or more, or a Markdown heading and three list items or more. Pure.
+    /// </summary>
+    public static bool LooksLikePlan(string reply)
+    {
+        ArgumentNullException.ThrowIfNull(reply);
+        if (Progress(reply).Total >= 2)
+        {
+            return true;
+        }
+
+        bool heading = false;
+        int items = 0;
+        foreach (var line in Lines(reply))
+        {
+            string trimmed = line.TrimStart();
+            heading |= trimmed.StartsWith('#');
+            items += ListMarker(trimmed) > 0 ? 1 : 0;
+        }
+
+        return heading && items >= 3;
+    }
+
+    /// <summary>The first Markdown heading's text in <paramref name="markdown"/>, or null.</summary>
+    public static string? FirstHeading(string markdown)
+    {
+        ArgumentNullException.ThrowIfNull(markdown);
+        foreach (var line in Lines(markdown))
+        {
+            string trimmed = line.TrimStart();
+            if (trimmed.StartsWith('#') && trimmed.TrimStart('#').Trim() is { Length: > 0 } text)
+            {
+                return text;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>Each task line's box outside code fences, true when ticked.</summary>
+    private static IEnumerable<bool> TaskBoxes(string markdown)
+    {
+        foreach (var line in Lines(markdown))
+        {
+            string trimmed = line.TrimStart();
+            int marker = ListMarker(trimmed);
+            if (marker == 0)
+            {
+                continue;
+            }
+
+            string rest = trimmed[marker..];
+            if (rest.Length >= 3 && rest[0] == '[' && rest[2] == ']' && (rest.Length == 3 || char.IsWhiteSpace(rest[3])))
+            {
+                if (rest[1] == ' ')
+                {
+                    yield return false;
+                }
+                else if (rest[1] is 'x' or 'X')
+                {
+                    yield return true;
+                }
+            }
+        }
+    }
+
+    /// <summary>The lines of <paramref name="markdown"/> outside fenced code blocks (<c>```</c> or <c>~~~</c>).</summary>
+    private static IEnumerable<string> Lines(string markdown)
+    {
+        bool fenced = false;
+        foreach (var line in markdown.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n'))
+        {
+            string trimmed = line.TrimStart();
+            if (trimmed.StartsWith("```", StringComparison.Ordinal) || trimmed.StartsWith("~~~", StringComparison.Ordinal))
+            {
+                fenced = !fenced;
+                continue;
+            }
+
+            if (!fenced)
+            {
+                yield return line;
+            }
+        }
+    }
+
+    /// <summary>The length of a list marker with its space (<c>- </c>, <c>12. </c>) at the start of <paramref name="trimmed"/>, or 0.</summary>
+    private static int ListMarker(string trimmed)
+    {
+        if (trimmed.Length >= 2 && trimmed[0] is '-' or '*' or '+' && trimmed[1] == ' ')
+        {
+            return 2;
+        }
+
+        int digits = 0;
+        while (digits < trimmed.Length && digits < 9 && char.IsAsciiDigit(trimmed[digits]))
+        {
+            digits++;
+        }
+
+        return digits > 0 && digits + 1 < trimmed.Length && trimmed[digits] is '.' or ')' && trimmed[digits + 1] == ' ' ? digits + 2 : 0;
+    }
+
+    private static string N(int value) => value.ToString(CultureInfo.InvariantCulture);
 
     /// <summary><paramref name="markdown"/> with its newlines made <c>\n</c> and any leading front matter cut.</summary>
     public static string Body(string markdown)
@@ -99,23 +236,38 @@ public static class PlanDocument
         int revision = fields.TryGetValue("revision", out var r) && int.TryParse(r, NumberStyles.Integer, CultureInfo.InvariantCulture, out int n) ? n : 1;
         var created = Time(fields.GetValueOrDefault("created"));
         var updated = Time(fields.GetValueOrDefault("updated")) ?? created;
-        return new PlanHeader(status, revision, created ?? DateTimeOffset.MinValue, updated ?? DateTimeOffset.MinValue, Unquote(fields.GetValueOrDefault("requirement") ?? ""));
+        int? done = null;
+        int? total = null;
+        if (fields.TryGetValue("progress", out var progress) && progress.Split('/') is [var d, var t]
+            && int.TryParse(d, NumberStyles.Integer, CultureInfo.InvariantCulture, out int dn) && int.TryParse(t, NumberStyles.Integer, CultureInfo.InvariantCulture, out int tn))
+        {
+            (done, total) = (dn, tn);
+        }
+
+        return new PlanHeader(status, revision, created ?? DateTimeOffset.MinValue, updated ?? DateTimeOffset.MinValue, Unquote(fields.GetValueOrDefault("requirement") ?? ""), done, total);
     }
 
     /// <summary>
     /// <paramref name="text"/> with its status set and <c>updated</c> stamped, the body untouched; a file
-    /// with no header the app wrote (edited by hand) gains one over the whole text.
+    /// with no header the app wrote (edited by hand) gains one over the whole text. <paramref name="progress"/>,
+    /// when given, is written as the <c>progress:</c> line (2026-09-26); otherwise the file's own is kept.
     /// </summary>
-    public static string WithStatus(string text, PlanStatus status, DateTimeOffset now, string requirement)
+    public static string WithStatus(string text, PlanStatus status, DateTimeOffset now, string requirement, (int Done, int Total)? progress = null)
     {
         ArgumentNullException.ThrowIfNull(text);
         string normalized = text.Replace("\r\n", "\n", StringComparison.Ordinal);
         if (TryParse(normalized) is { } header && Split(normalized, out _) is { } body)
         {
-            return HeaderText(header with { Status = status, Updated = now }) + body;
+            var next = header with { Status = status, Updated = now };
+            if (progress is { } p)
+            {
+                next = next with { StepsDone = p.Done, StepsTotal = p.Total };
+            }
+
+            return HeaderText(next) + body;
         }
 
-        return HeaderText(new PlanHeader(status, 1, now, now, requirement)) + "\n" + normalized.TrimStart('﻿');
+        return HeaderText(new PlanHeader(status, 1, now, now, requirement, progress?.Done, progress?.Total)) + "\n" + normalized.TrimStart('﻿');
     }
 
     /// <summary>The text after the leading front matter (its lines in <paramref name="block"/>), or null when it does not open with one.</summary>
@@ -156,6 +308,8 @@ public static class PlanDocument
         "draft" => PlanStatus.Draft,
         "approved" => PlanStatus.Approved,
         "cancelled" => PlanStatus.Cancelled,
+        "done" => PlanStatus.Done,
+        "incomplete" => PlanStatus.Incomplete,
         _ => null,
     };
 

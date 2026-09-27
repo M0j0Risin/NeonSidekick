@@ -4,7 +4,7 @@ using System.Text;
 namespace NeonSidekick.Plans;
 
 /// <summary>
-/// A plan's file name (2026-09-26): <c>plans/&lt;kebab-name&gt;.md</c> under the working directory,
+/// A plan's file name (2026-09-26): <c>.neon/plans/&lt;kebab-name&gt;.md</c> under the working directory,
 /// the name a short description of what the plan does. <see cref="From"/> makes the kebab case out
 /// of whatever the model sent — accents folded to their letters, everything else but ASCII letters
 /// and digits a single hyphen, at most <see cref="MaxLength"/> characters cut back to a word, never a
@@ -14,8 +14,14 @@ namespace NeonSidekick.Plans;
 /// </summary>
 public static class PlanSlug
 {
-    /// <summary>The folder under the working directory the plans go in.</summary>
-    public const string Folder = "plans";
+    /// <summary>
+    /// The app's own folder under the working directory (2026-09-26, the user's call: plans in a folder of their own
+    /// kept clear of any <c>plans</c> the user has; other files the app owns there may follow).
+    /// </summary>
+    public const string AppFolder = ".neon";
+
+    /// <summary>The folder under the working directory the plans go in: <c>.neon/plans</c>.</summary>
+    public const string Folder = AppFolder + "/plans";
 
     public const string Extension = ".md";
 
@@ -92,7 +98,7 @@ public static class PlanSlug
     }
 
     /// <summary>
-    /// The first of <c>plans/&lt;slug&gt;.md</c>, <c>plans/&lt;slug&gt;-2.md</c> … that <paramref name="taken"/>
+    /// The first of <c>.neon/plans/&lt;slug&gt;.md</c>, <c>.neon/plans/&lt;slug&gt;-2.md</c> … that <paramref name="taken"/>
     /// says is free; past <see cref="MaxSuffix"/>, the name gains <paramref name="stamp"/>.
     /// </summary>
     public static string Choose(string slug, Func<string, bool> taken, string stamp)

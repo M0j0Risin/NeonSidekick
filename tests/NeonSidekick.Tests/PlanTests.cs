@@ -96,11 +96,11 @@ public class PlanTests : IDisposable
     [Fact]
     public void Choose_NumbersPastTakenNames()
     {
-        var taken = new HashSet<string> { "plans/x.md", "plans/x-2.md" };
+        var taken = new HashSet<string> { ".neon/plans/x.md", ".neon/plans/x-2.md" };
 
-        Assert.Equal("plans/x-3.md", PlanSlug.Choose("x", taken.Contains, "stamp"));
-        Assert.Equal("plans/y.md", PlanSlug.Choose("y", taken.Contains, "stamp"));
-        Assert.Equal("plans/z-stamp.md", PlanSlug.Choose("z", _ => true, "stamp"));
+        Assert.Equal(".neon/plans/x-3.md", PlanSlug.Choose("x", taken.Contains, "stamp"));
+        Assert.Equal(".neon/plans/y.md", PlanSlug.Choose("y", taken.Contains, "stamp"));
+        Assert.Equal(".neon/plans/z-stamp.md", PlanSlug.Choose("z", _ => true, "stamp"));
     }
 
     // ── PlanDocument ────────────────────────────────────────────────────────
@@ -229,7 +229,7 @@ public class PlanTests : IDisposable
     public void Session_RoundTripsThroughTheStoredHistory_ApprovalNever()
     {
         _session.Enter("  Add a guide ");
-        _session.Presented("plans/g.md", "Guide", 2, T0);
+        _session.Presented(".neon/plans/g.md", "Guide", 2, T0);
         _session.Approve(fresh: true);
 
         string json = SessionHistory.ToJson([new ChatMessage(ChatRole.User, "hi")], _session.ToStored());
@@ -240,7 +240,7 @@ public class PlanTests : IDisposable
         Assert.Single(messages);
         Assert.True(back.Active);
         Assert.Equal("Add a guide", back.Requirement);
-        Assert.Equal("plans/g.md", back.Path);
+        Assert.Equal(".neon/plans/g.md", back.Path);
         Assert.Equal(2, back.Revision);
         Assert.Equal(T0, back.Created);
         Assert.Null(back.Approved);
@@ -328,10 +328,10 @@ public class PlanTests : IDisposable
 
         object? first = await _tool.InvokeAsync(Args("Contributing guide", Plan, name: "Add Contributing Guide"));
 
-        Assert.Equal(PlanText.RefineResult("plans/add-contributing-guide.md", "Mention tests"), first);
+        Assert.Equal(PlanText.RefineResult(".neon/plans/add-contributing-guide.md", "Mention tests"), first);
         var presented = Assert.Single(_presented);
-        Assert.Equal(new PlanPresentation("Contributing guide", "plans/add-contributing-guide.md", 1, Plan.TrimEnd()), presented);
-        var header = PlanDocument.TryParse(Read("plans/add-contributing-guide.md"))!;
+        Assert.Equal(new PlanPresentation("Contributing guide", ".neon/plans/add-contributing-guide.md", 1, Plan.TrimEnd()), presented);
+        var header = PlanDocument.TryParse(Read(".neon/plans/add-contributing-guide.md"))!;
         Assert.Equal((PlanStatus.Draft, 1, "Add a guide"), (header.Status, header.Revision, header.Requirement));
 
         // The second revision: another name is ignored, the file is the same.
@@ -339,27 +339,27 @@ public class PlanTests : IDisposable
         _verdict = new PlanVerdict(PlanChoice.Refine);
         object? second = await _tool.InvokeAsync(Args("Contributing guide", Plan + "- [ ] Test it\n", name: "other"));
 
-        Assert.Equal(PlanText.RefineResult("plans/add-contributing-guide.md", null), second);
-        Assert.False(File.Exists(Path.Combine(_dir, "plans", "other.md")));
-        var revised = PlanDocument.TryParse(Read("plans/add-contributing-guide.md"))!;
+        Assert.Equal(PlanText.RefineResult(".neon/plans/add-contributing-guide.md", null), second);
+        Assert.False(File.Exists(Path.Combine(_dir, ".neon", "plans", "other.md")));
+        var revised = PlanDocument.TryParse(Read(".neon/plans/add-contributing-guide.md"))!;
         Assert.Equal(2, revised.Revision);
         Assert.Equal(header.Created, revised.Created);
         Assert.True(revised.Updated > revised.Created);
-        Assert.Contains("- [ ] Test it", Read("plans/add-contributing-guide.md"));
+        Assert.Contains("- [ ] Test it", Read(".neon/plans/add-contributing-guide.md"));
         Assert.Equal(2, _session.Revision);
     }
 
     [Fact]
     public async Task Tool_ANewPlan_DoesNotOverwriteAnOldOneOfTheSameName()
     {
-        Directory.CreateDirectory(Path.Combine(_dir, "plans"));
-        File.WriteAllText(Path.Combine(_dir, "plans", "guide.md"), "old");
+        Directory.CreateDirectory(Path.Combine(_dir, ".neon", "plans"));
+        File.WriteAllText(Path.Combine(_dir, ".neon", "plans", "guide.md"), "old");
         _session.Enter("x");
 
         await _tool.InvokeAsync(Args("Guide", Plan));
 
-        Assert.Equal("old", Read("plans/guide.md"));
-        Assert.Equal("plans/guide-2.md", _session.Path);
+        Assert.Equal("old", Read(".neon/plans/guide.md"));
+        Assert.Equal(".neon/plans/guide-2.md", _session.Path);
     }
 
     [Theory]
@@ -370,7 +370,7 @@ public class PlanTests : IDisposable
         _session.Enter("x");
         _verdict = new PlanVerdict(choice);
 
-        Assert.Equal(PlanText.ApprovedResult("plans/guide.md"), await _tool.InvokeAsync(Args("Guide", Plan)));
+        Assert.Equal(PlanText.ApprovedResult(".neon/plans/guide.md"), await _tool.InvokeAsync(Args("Guide", Plan)));
         Assert.Equal(choice, _session.Approved);
         Assert.True(_session.Active);
         Assert.Equal(PlanText.AlreadyApprovedResult, await _tool.InvokeAsync(Args("Guide", Plan)));
@@ -383,9 +383,9 @@ public class PlanTests : IDisposable
         _session.Enter("x");
         _verdict = new PlanVerdict(PlanChoice.Cancel);
 
-        Assert.Equal(PlanText.CancelledResult("plans/guide.md"), await _tool.InvokeAsync(Args("Guide", Plan)));
+        Assert.Equal(PlanText.CancelledResult(".neon/plans/guide.md"), await _tool.InvokeAsync(Args("Guide", Plan)));
         Assert.False(_session.Active);
-        Assert.Equal(PlanStatus.Cancelled, PlanDocument.TryParse(Read("plans/guide.md"))!.Status);
+        Assert.Equal(PlanStatus.Cancelled, PlanDocument.TryParse(Read(".neon/plans/guide.md"))!.Status);
     }
 
     [Fact]
@@ -394,7 +394,7 @@ public class PlanTests : IDisposable
         _session.Enter("x");
         _verdict = new PlanVerdict(PlanChoice.Saved);
 
-        Assert.Equal(PlanText.SavedResult("plans/guide.md"), await _tool.InvokeAsync(Args("Guide", Plan)));
+        Assert.Equal(PlanText.SavedResult(".neon/plans/guide.md"), await _tool.InvokeAsync(Args("Guide", Plan)));
         Assert.Null(_session.Approved);
         Assert.True(_session.Active);
     }
@@ -402,18 +402,18 @@ public class PlanTests : IDisposable
     [Fact]
     public async Task Tool_AFolderInTheWay_IsNotWrittenOver()
     {
-        Directory.CreateDirectory(Path.Combine(_dir, "plans", "guide.md"));
+        Directory.CreateDirectory(Path.Combine(_dir, ".neon", "plans", "guide.md"));
         _session.Enter("x");
 
         await _tool.InvokeAsync(Args("Guide", Plan));
 
-        Assert.Equal("plans/guide-2.md", _session.Path);
+        Assert.Equal(".neon/plans/guide-2.md", _session.Path);
     }
 
     [Fact]
     public void MarkFile_AMissingFile_IsAnError()
     {
-        Assert.Equal(FileText.Missing("plans/none.md"), PresentPlanTool.MarkFile(_files, "plans/none.md", PlanStatus.Approved, T0, "r"));
+        Assert.Equal(FileText.Missing(".neon/plans/none.md"), PlanFiles.MarkFile(_files, ".neon/plans/none.md", PlanStatus.Approved, T0, "r"));
     }
 
     /// <summary>A named tool that does nothing, for the allow-list's pure parts.</summary>

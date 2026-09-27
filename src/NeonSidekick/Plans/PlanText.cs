@@ -22,6 +22,10 @@ public static class PlanText
     public const string ApproveWord = "approve";
     public const string CancelWord = "cancel";
 
+    /// <summary><c>/plan open [name]</c> and <c>/plan save [name]</c> (2026-09-26, round two): a word and what follows it.</summary>
+    public const string OpenWord = "open";
+    public const string SaveWord = "save";
+
     /// <summary><c>/plan approve --fresh</c>: the conversation cleared before the plan is carried out, the plan's text sent with the message.</summary>
     public const string FreshSwitch = "--fresh";
 
@@ -32,6 +36,9 @@ public static class PlanText
     public const string NeedsToolsError = "Plan mode needs the model's tools: switch LLM offer tools on (/settings) and try again";
     public const string NothingPresentedError = "No plan has been presented yet: ask for it (\"present the plan\") and approve it on the pane, or /plan cancel";
     public static string PlanUnreadableError(string path) => $"The plan file {path} could not be read; plan mode stays on — present it again, or /plan cancel";
+    public static string NoSuchPlanError(string name) => $"No plan named '{name}' under {PlanSlug.Folder}/ — /plan open lists them";
+    public const string NoPlansNotice = Glyph + " No plans yet under " + PlanSlug.Folder + "/.";
+    public const string NothingToSaveError = "No reply to save as the plan: ask the model for the plan first";
     public const string NotPlanningError ="Plan mode is not on: /plan <what you want done> starts it";
 
     public static string EnteredNotice => $"{Glyph} Plan mode: the model can read and research but not change anything until you approve the plan. Add details as messages; /plan cancel leaves.";
@@ -49,6 +56,41 @@ public static class PlanText
 
     public static string ApprovedNotice(string path, bool fresh) =>
         fresh ? $"{Glyph} Plan approved: {path}. Starting it in a new conversation." : $"{Glyph} Plan approved: {path}. Starting it.";
+
+    /// <summary>The plan in progress left as it stands when <c>/plan open</c> picks up another.</summary>
+    public static string SwitchedNotice(string? path) => path is null
+        ? $"{Glyph} The plan in progress was not presented; it is left."
+        : $"{Glyph} {path} is left as a draft.";
+
+    /// <summary>What <c>/plan open</c> says before its turn (2026-09-26): the file, what it was, and how far it got.</summary>
+    public static string OpenedNotice(string path, PlanStatus? was, int done, int total) =>
+        $"{Glyph} Plan mode on {path}" + (was is { } status ? $" (was {PlanDocument.Word(status)}" + (total > 0 ? $", {N(done)} of {N(total)} steps done)" : ")") : total > 0 ? $" ({N(done)} of {N(total)} steps done)" : "") + ".";
+
+    /// <summary>One row of the <c>/plan open</c> list: the name, the status, the steps ticked and the last update.</summary>
+    public static string ListLine(PlanListing plan)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+        string status = plan.Status is { } s ? PlanDocument.Word(s) : "no header";
+        string steps = plan.Total > 0 ? $" · {N(plan.Done)}/{N(plan.Total)}" : "";
+        string when = plan.Updated is { } u && u != DateTimeOffset.MinValue ? " · " + u.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture) : "";
+        return $"  {plan.Name} — {plan.Title} ({status}{steps}{when})";
+    }
+
+    /// <summary>The note beside a plan on the <c>/plan open</c> completion list.</summary>
+    public static string CompletionNote(PlanListing plan)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+        string status = plan.Status is { } s ? PlanDocument.Word(s) : "no header";
+        return plan.Total > 0 ? $"{status} · {N(plan.Done)}/{N(plan.Total)} · {plan.Title}" : $"{status} · {plan.Title}";
+    }
+
+    public static string DoneNotice(string path) => $"{Glyph} Every step of {path} is ticked: marked done.";
+
+    public static string IncompleteNotice(string path, int done, int total) =>
+        $"{Glyph} {path}: {N(done)} of {N(total)} steps done, marked incomplete — /plan open {System.IO.Path.GetFileNameWithoutExtension(path)} picks it up.";
+
+    /// <summary>The hint after a planning reply that reads as a plan the model never presented (2026-09-26).</summary>
+    public const string UnpresentedHint = Glyph + " That reply looks like a plan but was not presented: /plan save [name] keeps it as the plan, or ask for it to be presented.";
 
     public const string ApprovalInterruptedNotice = Glyph + " The plan was approved but the reply was stopped: /plan approve starts it.";
 
@@ -100,12 +142,13 @@ public static class PlanText
             "- Ask what you need to know, a few questions at a time (with ask_user when it is offered), and fold the user's answers and later messages into the plan.\n" +
             "- Never claim anything was done: nothing is carried out until the user approves.\n" +
             "- When no open question is left, call present_plan with the whole plan as Markdown: a # title, then ## Goal, ## Context, ## Steps (as - [ ] checkboxes, in order), ## Files and areas, ## Risks, ## Verification.\n" +
+            "- Never write the plan only in your reply: call present_plan with it.\n" +
             "- present_plan shows the plan to the user for approval; follow its result.\n" +
             state;
     }
 
     public const string ToolDescription =
-        "Saves the plan as a Markdown file under plans/ in the working directory and asks the user to approve it. " +
+        "Saves the plan as a Markdown file under .neon/plans/ in the working directory and asks the user to approve it. " +
         "Call it only in plan mode, with the whole plan each time (it replaces the previous revision). " +
         "The result says whether the user approved, wants changes (with their feedback), or cancelled.";
 
@@ -131,7 +174,15 @@ public static class PlanText
 
     /// <summary>The message that starts an approved plan in the same conversation. Pinned.</summary>
     public static string ExecuteMessage(string path) =>
-        $"The plan in {path} is approved. Carry it out step by step, ticking each checkbox in {path} as you finish the step, and tell me when it is done or if something blocks you.";
+        $"The plan in {path} is approved. Carry out its steps that are not ticked yet, in order, ticking each checkbox in {path} as you finish the step, and tell me when it is done or if something blocks you.";
+
+    /// <summary>The turn <c>/plan open</c> sends (2026-09-26, the user's call: the model reads the plan and asks). Pinned.</summary>
+    public static string OpenMessage(string path, int done, int total) =>
+        $"I've reopened the plan in {path}" + (total > 0 ? $" ({N(done)} of {N(total)} steps done)" : "") + ". Read it, then ask me what should change, or tell me it is ready to approve.";
+
+    /// <summary>The turn <c>/plan save</c> sends when the pane asked for changes (2026-09-26). Pinned.</summary>
+    public static string SavedFeedbackMessage(string path, string feedback) =>
+        $"I saved your plan to {path}. Please change: \"{Flatten(feedback)}\" — then call present_plan with the revised plan.";
 
     /// <summary>The message that starts an approved plan in a fresh conversation: the plan's text inline, since nothing of the planning is left. Pinned.</summary>
     public static string ExecuteFreshMessage(string path, string plan) =>

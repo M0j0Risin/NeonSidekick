@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Text.Json;
 using Microsoft.Extensions.AI;
 using NeonSidekick.Files;
@@ -8,7 +7,7 @@ namespace NeonSidekick.Llm.Tools;
 
 /// <summary>
 /// The model's way out of plan mode (2026-09-26): <c>present_plan(title, markdown, name?)</c> saves the
-/// whole plan as <c>plans/&lt;name&gt;.md</c> under the working directory (<see cref="PlanSlug"/>; the first
+/// whole plan as <c>.neon/plans/&lt;name&gt;.md</c> under the working directory (<see cref="PlanSlug"/>; the first
 /// save picks the path, every revision after overwrites it) with the header the app owns
 /// (<see cref="PlanDocument"/>), then asks the user through the seam it is built over — the screen's
 /// approval pane, headless's "saved" — and answers with what they chose (<see cref="PlanText"/>). An
@@ -84,18 +83,14 @@ public sealed class PresentPlanTool : AIFunction
             return PlanText.TitleRequired;
         }
 
-        var now = _time.GetLocalNow();
-        string path = _session.Path ?? PlanSlug.Choose(PlanSlug.From(Named(arguments) ?? title), Taken, now.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture));
-        int revision = _session.Path is null ? 1 : _session.Revision + 1;
-        var header = new PlanHeader(PlanStatus.Draft, revision, _session.Created ?? now, now, _session.Requirement);
-        var written = _files.WriteText(path, PlanDocument.Render(header, title, markdown), overwrite: true);
-        if (written.Outcome != FileOutcome.Ok)
+        var (saved, error) = PlanFiles.Save(_session, _files, _time, title, markdown, Named(arguments));
+        if (saved is null)
         {
-            return PlanText.CouldNotSaveResult(FileText.Error(written.Outcome, path, "write", written.Detail));
+            return PlanText.CouldNotSaveResult(error ?? "");
         }
 
-        _session.Presented(path, title, revision, now);
-        var verdict = await _review(new PlanPresentation(title, path, revision, PlanDocument.Body(markdown)), cancellationToken).ConfigureAwait(false);
+        string path = saved.Path;
+        var verdict = await _review(saved, cancellationToken).ConfigureAwait(false);
         switch (verdict.Choice)
         {
             case PlanChoice.Approve:
@@ -103,7 +98,7 @@ public sealed class PresentPlanTool : AIFunction
                 _session.Approve(verdict.Choice == PlanChoice.ApproveFresh);
                 return PlanText.ApprovedResult(path);
             case PlanChoice.Cancel:
-                MarkFile(_files, path, PlanStatus.Cancelled, _time.GetLocalNow(), _session.Requirement);
+                PlanFiles.MarkFile(_files, path, PlanStatus.Cancelled, _time.GetLocalNow(), _session.Requirement);
                 _session.Exit();
                 return PlanText.CancelledResult(path);
             case PlanChoice.Saved:
@@ -112,34 +107,6 @@ public sealed class PresentPlanTool : AIFunction
                 return PlanText.RefineResult(path, verdict.Feedback);
         }
     }
-
-    /// <summary>
-    /// The plan file's status rewritten (<see cref="PlanDocument.WithStatus"/>), the body untouched: approval
-    /// and cancellation, from the tool and from <c>/plan</c>. Null when done, else the error sentence.
-    /// </summary>
-    public static string? MarkFile(WorkingDirectory files, string path, PlanStatus status, DateTimeOffset now, string requirement)
-    {
-        ArgumentNullException.ThrowIfNull(files);
-        ArgumentNullException.ThrowIfNull(path);
-        if (ReadWhole(files, path) is not { } text)
-        {
-            return FileText.Missing(path);
-        }
-
-        var written = files.WriteText(path, PlanDocument.WithStatus(text, status, now, requirement), overwrite: true);
-        return written.Outcome == FileOutcome.Ok ? null : FileText.Error(written.Outcome, path, "write", written.Detail);
-    }
-
-    /// <summary>The plan file's whole text, or null when it cannot be read whole.</summary>
-    public static string? ReadWhole(WorkingDirectory files, string path)
-    {
-        ArgumentNullException.ThrowIfNull(files);
-        var read = files.ReadText(path, null, null);
-        return read.Outcome == FileOutcome.Ok && !read.Truncated ? read.Text : null;
-    }
-
-    private bool Taken(string path) =>
-        _files.Resolve(path, forWrite: false, out string full) != FileOutcome.Ok || File.Exists(full) || Directory.Exists(full);
 
     private static string? Named(AIFunctionArguments arguments)
     {

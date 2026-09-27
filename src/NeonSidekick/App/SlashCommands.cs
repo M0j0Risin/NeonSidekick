@@ -102,7 +102,7 @@ public enum SlashCommand
     /// <summary><c>/botchat [profile …] [topic]</c> (2026-09-24, the user's ask): the profiles talk to each other — the named ones, or every profile when none is named — each reply in the speaker's own persona and voice, all on this profile's LLM server and model, one turn after another, a random speaker each time but never the same one twice running, until ESC or Ctrl+C. No tools. A line typed meanwhile joins the chat as the user's; the chat is saved as a session. Refused mid-turn like <see cref="Loop"/>.</summary>
     BotChat,
 
-    /// <summary><c>/plan &lt;requirement&gt;</c> (2026-09-26, the user's ask): plan mode — the model researches with read-only tools, asks what it needs and presents a plan saved as <c>plans/&lt;name&gt;.md</c>; nothing changes until the user approves it on the pane or with <c>/plan approve [--fresh]</c>. While planning, <c>/plan</c> or <c>/plan show</c> says where it stands, <c>/plan cancel</c> leaves, anything else is more detail. Refused mid-turn like <see cref="Loop"/>.</summary>
+    /// <summary><c>/plan &lt;requirement&gt;</c> (2026-09-26, the user's ask): plan mode — the model researches with read-only tools, asks what it needs and presents a plan saved as <c>.neon/plans/&lt;name&gt;.md</c>; nothing changes until the user approves it on the pane or with <c>/plan approve [--fresh]</c>. While planning, <c>/plan</c> or <c>/plan show</c> says where it stands, <c>/plan cancel</c> leaves, anything else is more detail. Refused mid-turn like <see cref="Loop"/>.</summary>
     Plan,
 
     /// <summary><c>/expand</c>: every folded tool run, code block and thinking block in the transcript unfolded, and the ones to come (2026-09-22, the user's ask: what <c>/tools expand</c> did that morning, as a root word). No argument; Ctrl+O flips the same state.</summary>
@@ -217,7 +217,7 @@ public static class SlashCommands
             new("/copy", "copy the last reply to the clipboard as markdown, or /copy <n> | all; --thinking for the model's thinking too"),
             new("/draft", "write the next message in your editor: a temporary file, sent when it is saved and closed"),
             new("/loop", "repeat a message, each reply waited for: /loop <count> [delay] <message> | infinite [delay] <message> (ESC ends it)"),
-            new("/plan", "plan before doing: /plan <requirement> — read-only research and questions until you approve the plan (saved under plans/); then /plan approve [--fresh] | cancel | show"),
+            new("/plan", "plan before doing: /plan <requirement> — read-only research and questions until you approve the plan (saved under .neon/plans/); then /plan approve [--fresh] | cancel | show | save [name]; /plan open [name] picks one up"),
             new("/botchat", "let the profiles talk to each other, each in its own persona, until ESC: /botchat [profile ...] [[--] topic], or /botchat --resume [line] to carry on the last one"),
             new("/expand", "show every line of the folded tool runs, code blocks and thinking in the transcript (Ctrl+O flips)"),
             new("/collapse", "fold the tool runs, code blocks and thinking in the transcript again"),

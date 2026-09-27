@@ -640,7 +640,7 @@ public class SlashCommandsTests
         Assert.Equal("/loop", SlashCommands.HelpEntries[20].Command);   // 2026-09-21
         Assert.Equal("repeat a message, each reply waited for: /loop <count> [delay] <message> | infinite [delay] <message> (ESC ends it)", SlashCommands.HelpEntries[20].Summary);
         Assert.Equal("/plan", SlashCommands.HelpEntries[21].Command);   // 2026-09-26: every row under it one down
-        Assert.Equal("plan before doing: /plan <requirement> — read-only research and questions until you approve the plan (saved under plans/); then /plan approve [--fresh] | cancel | show", SlashCommands.HelpEntries[21].Summary);
+        Assert.Equal("plan before doing: /plan <requirement> — read-only research and questions until you approve the plan (saved under .neon/plans/); then /plan approve [--fresh] | cancel | show | save [name]; /plan open [name] picks one up", SlashCommands.HelpEntries[21].Summary);
         Assert.Equal("/botchat", SlashCommands.HelpEntries[22].Command);   // 2026-09-24: every row under it one down
         Assert.Equal("let the profiles talk to each other, each in its own persona, until ESC: /botchat [profile ...] [[--] topic], or /botchat --resume [line] to carry on the last one", SlashCommands.HelpEntries[22].Summary);   // --resume 2026-09-25
         Assert.Equal("/expand", SlashCommands.HelpEntries[23].Command);   // under /loop since later on 2026-09-22: every row under it two down

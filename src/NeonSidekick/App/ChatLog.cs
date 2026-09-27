@@ -61,6 +61,9 @@ public sealed class ChatLog
 
     public int Count => _exchanges.Count;
 
+    /// <summary>The last recorded reply, trimmed; null when nothing is logged (2026-09-26: what <c>/plan save</c> keeps).</summary>
+    public string? LastReply => _exchanges.Count == 0 ? null : _exchanges[^1].Reply;
+
     /// <summary>
     /// Records a turn. Both texts are trimmed (the renderer skips a reply's leading whitespace
     /// too); a turn whose reply is blank — an error, tool lines only — records nothing, its

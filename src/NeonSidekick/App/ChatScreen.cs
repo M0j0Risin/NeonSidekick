@@ -2680,7 +2680,7 @@ internal sealed partial class ChatScreen
     /// (<c>Complete(query, ImageFile.IsImagePath)</c>, for <c>/view</c>) — <see cref="ArgumentPaths"/> —
     /// the disk reads behind a function each, so <c>/tts o</c> scans no catalog.
     /// </summary>
-    public sealed record ArgumentSources(Func<IReadOnlyList<string>> Profiles, string LoadedProfile, IReadOnlyList<string> Timers, Func<string, IReadOnlyList<string>> Folders, Func<string, MentionResult> TextFiles, Func<string, MentionResult> ImageFiles, Func<IReadOnlyList<CompletionItem>>? Sessions = null, Func<IReadOnlyList<CompletionItem>>? Skills = null, Func<string, IReadOnlyList<string>>? VaultFolders = null, Func<IReadOnlyList<CompletionItem>>? Workflows = null, bool Planning = false);
+    public sealed record ArgumentSources(Func<IReadOnlyList<string>> Profiles, string LoadedProfile, IReadOnlyList<string> Timers, Func<string, IReadOnlyList<string>> Folders, Func<string, MentionResult> TextFiles, Func<string, MentionResult> ImageFiles, Func<IReadOnlyList<CompletionItem>>? Sessions = null, Func<IReadOnlyList<CompletionItem>>? Skills = null, Func<string, IReadOnlyList<string>>? VaultFolders = null, Func<IReadOnlyList<CompletionItem>>? Workflows = null, bool Planning = false, Func<IReadOnlyList<CompletionItem>>? Plans = null);
 
     /// <summary>The note beside <c>on</c> / <c>off</c> on a switch's list: what the switch is. Pinned.</summary>
     public static string SwitchSubject(SlashCommand command) => command switch
@@ -3007,8 +3007,17 @@ internal sealed partial class ChatScreen
                 return BotChatChoices(argText, sources);
 
             case SlashCommand.Plan:
-                // The subcommands only while planning (2026-09-26): before, the argument is the requirement, free text.
-                return sources.Planning ? MentionCompleter.Matches(PlanVerbs, argText) : [];
+            {
+                // /plan open <name> (2026-09-26, round two): the plans under .neon/plans/ once the word is typed, in or out of plan mode.
+                string openHead = PlanText.OpenWord + " ";
+                if (argText.StartsWith(openHead, StringComparison.OrdinalIgnoreCase) && sources.Plans is { } plans)
+                {
+                    return MentionCompleter.Matches(plans().Select(p => new CompletionItem(openHead + p.Text, p.Note)).ToList(), argText);
+                }
+
+                // The subcommands while planning; before, only open — the rest of the argument is the requirement, free text.
+                return MentionCompleter.Matches(sources.Planning ? PlanVerbs : PlanVerbsIdle, argText);
+            }
 
             default:
                 return [];
@@ -3070,7 +3079,8 @@ internal sealed partial class ChatScreen
             SkillChoices,
             VaultFolderChoices,
             WorkflowChoices,
-            _plan.Active);
+            _plan.Active,
+            PlanChoices);
         return ArgumentPaths(command, argText, sources) is { } paths
             ? new ArgumentList([], paths.Paths, paths.Truncated)
             : new ArgumentList(ArgumentItems(command, argText, sources));
@@ -4383,9 +4393,10 @@ internal sealed partial class ChatScreen
 
         List<ChatMessage> messages;
         StoredPlan? plan;
+        StoredPlan? executing;
         try
         {
-            messages = SessionHistory.FromJson(record.HistoryJson, out plan);
+            messages = SessionHistory.FromJson(record.HistoryJson, out plan, out executing);
         }
         catch (Exception ex) when (ex is System.Text.Json.JsonException or FormatException)
         {
@@ -4409,7 +4420,7 @@ internal sealed partial class ChatScreen
             _sessionId = id;
             _sessionTitle = record.Summary;
             _transcript.Notice(SessionRestoredNotice(record.Summary, _time.LocalTimeZone));
-            RestorePlan(plan);
+            RestorePlan(plan, executing);
             DiagnosticLog.Info(SessionsCategory, SessionRestoredLogLine(record.Summary.Id, record.Summary.Turns));
             foreach (var turn in record.Turns)
             {
@@ -9717,6 +9728,9 @@ internal sealed partial class ChatScreen
             // Plan mode after the turn (2026-09-26): an approval given on the pane is carried out below once the reply
             // ended on its own, dropped with a notice otherwise; a cancel on the pane has ended plan mode already.
             bool planApproved = TakePlanApproval(outcome, out bool planFresh);
+            // Round two (2026-09-26): a plan being carried out marked done or incomplete, and a plan the model never presented hinted.
+            CheckPlanProgress(interrupted: _lastTurnCancelled || _lastTurnFailed);
+            CheckUnpresentedPlan(outcome);
             if (_lastTurnCancelled)
             {
                 // What a cancelled reply does to the queue (2026-09-18): the setting's word, here
@@ -10460,7 +10474,7 @@ internal sealed partial class ChatScreen
         if (_sessionId is { } id)
         {
             var messages = assistant.History.Messages;
-            _sessions.SaveHistory(id, SessionHistory.ToJson(messages, _plan.ToStored()));
+            _sessions.SaveHistory(id, SessionHistory.ToJson(messages, _plan.ToStored(), _executingPlan));
         }
     }
 
