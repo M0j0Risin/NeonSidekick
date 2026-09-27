@@ -2064,12 +2064,12 @@ public partial class ChatScreenTests : IDisposable
         VoiceOn();
         FakeModelFiles.WriteBoth(ModelsDir, "ggml-tiny.en.bin");
         PushLine("/settings");
-        for (int i = 0; i < 21; i++)
+        for (int i = 0; i < 22; i++)
         {
             _console.Input.PushKey(Keys.Down);
         }
 
-        _console.Input.PushKey(Keys.Enter);     // Whisper model "ggml-base.en.bin" (row 23): the picker opens on base.en
+        _console.Input.PushKey(Keys.Enter);     // Whisper model "ggml-base.en.bin" (row 24 since the TTS voice preset, 2026-09-27): the picker opens on base.en
         _console.Input.PushKey(Keys.Up);        // ggml-tiny.en.bin
         _console.Input.PushKey(Keys.Enter);
         _console.Input.PushKey(Keys.Escape);
@@ -2092,12 +2092,12 @@ public partial class ChatScreenTests : IDisposable
         WakeOn();
         FakeModelFiles.WriteVoskModelUnder(ModelsDir, "vosk-model-en-us-0.22-lgraph");
         PushLine("/settings");
-        for (int i = 0; i < 51; i++)
+        for (int i = 0; i < 52; i++)
         {
             _console.Input.PushKey(Keys.Down);
         }
 
-        _console.Input.PushKey(Keys.Enter);     // Vosk model (row 52 since Mouse in menus went on 2026-09-21; 53 before): the picker opens on the default
+        _console.Input.PushKey(Keys.Enter);     // Vosk model (row 53 since the TTS voice preset, 2026-09-27; 52 since Mouse in menus went on 2026-09-21): the picker opens on the default
         _console.Input.PushKey(Keys.Down);      // the lgraph model
         _console.Input.PushKey(Keys.Enter);
         _console.Input.PushKey(Keys.Escape);

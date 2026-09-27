@@ -142,7 +142,8 @@ Neon Sidekick brings privacy-first, local LLM inference to your terminal. Powere
 | TTS output | Reads replies aloud (`/tts`). Fenced code blocks and tables are shown but never read aloud (nor by `/speak`). | off |
 | TTS source | `in-process` runs Kokoro in this process over ONNX Runtime (the model downloads on first use); `http` uses a Kokoro-FastAPI server. | `in-process` |
 | TTS HTTP URL | The Kokoro-FastAPI base URL, read while the source is `http`. | `http://localhost:8880/v1` |
-| TTS voice preview | The voice pickers speak the highlighted voice as you move through them. | on |
+| TTS voice preview | The voice pickers (and the preset picker) speak the highlighted voice as you move through them. | on |
+| TTS voice preset | Picks a named blend and sets TTS voice, TTS voice 2, TTS voice mix and TTS speed in one go. It isn't saved on its own: the row shows the preset those four match, or `(custom)` once you change one by hand. Built in: `amanda`, `neon`, `richard`, `hunter`, `larry`, `jack`, `willow`. A `voice_presets.json` in the home folder replaces the list (same shape as `assets/voices/voice_presets.json`: `{ "name": { "TtsVoice": "af_heart", "TtsVoice2": "am_eric", "TtsVoiceMix": 80, "TtsSpeed": 1.2 } }`; entries out of range are skipped). | `neon` |
 | TTS voice | The Kokoro voice. | `af_heart` |
 | TTS voice 2 | A second voice blended in; `(none)` for the primary voice alone. | `am_eric` |
 | TTS voice mix | The primary voice's share of the blend, 0–100 %. | 80 |

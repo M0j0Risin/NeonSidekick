@@ -1438,6 +1438,8 @@ public sealed class SidekickApp
         SettingsField.TtsHttpUrl => _environment.TtsHttpUrl is not null ? EnvironmentOverrides.TtsUrlVariable : null,
         SettingsField.TtsVoice => _environment.TtsVoice is not null ? EnvironmentOverrides.TtsVoiceVariable : null,
         SettingsField.TtsSpeed => _environment.TtsSpeed is not null ? EnvironmentOverrides.TtsSpeedVariable : null,
+        // The preset row writes the four below it (2026-09-27): the first of their variables that is set shadows a pick.
+        SettingsField.TtsVoicePreset => OverriddenBy(SettingsField.TtsVoice) ?? OverriddenBy(SettingsField.TtsVoice2) ?? OverriddenBy(SettingsField.TtsVoiceMix) ?? OverriddenBy(SettingsField.TtsSpeed),
         SettingsField.SttInterruptEchoGuard => _environment.SttInterruptEchoGuard is not null ? EnvironmentOverrides.InterruptEchoVariable : null,
         SettingsField.SttInterruptConfirmMs => _environment.SttInterruptConfirmMs is not null ? EnvironmentOverrides.InterruptConfirmVariable : null,
         SettingsField.TtsVoice2 => _environment.TtsVoice2 is not null ? EnvironmentOverrides.TtsVoice2Variable : null,

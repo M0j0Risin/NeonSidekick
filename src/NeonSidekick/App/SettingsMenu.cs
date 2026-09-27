@@ -36,6 +36,13 @@ public enum SettingsField
     /// <summary>The speech-output switch; first of the TTS rows so the block reads top-down.</summary>
     TtsOutput,
     TtsHttpUrl,
+
+    /// <summary>
+    /// A picker over <see cref="Speech.VoicePresets"/> (2026-09-27, the user's ask): one pick writes <see cref="TtsVoice"/>,
+    /// <see cref="TtsVoice2"/>, <see cref="TtsVoiceMix"/> and <see cref="TtsSpeed"/>. Nothing of its own is saved: the row shows
+    /// the preset those four match, or <see cref="SettingsMenu.CustomPreset"/>.
+    /// </summary>
+    TtsVoicePreset,
     TtsVoice,
 
     /// <summary>The optional second voice of a Kokoro mix; the picker offers "(none)" first.</summary>
@@ -645,6 +652,47 @@ internal sealed partial class SettingsMenu
     /// <summary>The first row of the secondary-voice picker, and how the menu shows an empty secondary voice.</summary>
     public const string NoSecondaryVoice = "(none)";
 
+    /// <summary>The <see cref="SettingsField.TtsVoicePreset"/> row's value when the four TTS voice settings match no preset (2026-09-27).</summary>
+    public const string CustomPreset = "(custom)";
+
+    /// <summary>The notice when there is no preset to pick (a home <c>voice_presets.json</c> with none that passes).</summary>
+    public static readonly string NoVoicePresetsNotice = $"{NoticeGlyphs.Tts}No voice presets to pick; see the log for the skipped entries.";
+
+    /// <summary>The <see cref="SettingsField.TtsVoicePreset"/> row's value: the preset the saved four match (<see cref="Speech.VoicePresets.Match"/>), or <see cref="CustomPreset"/>.</summary>
+    private static string PresetValue(AppSettingsData data, string profileDirectory) =>
+        Speech.VoicePresets.Match(Speech.VoicePresets.Load(Profiles.HomeOf(profileDirectory)), data)?.Name ?? CustomPreset;
+
+    /// <summary>The status line after a preset is picked: <c>TTS voice preset: neon · af_heart + am_eric · 80 % / 20 % · 1.2</c>.</summary>
+    public static string PresetSavedNotice(Speech.VoicePreset preset) => $"{FieldName(SettingsField.TtsVoicePreset)}: {PresetLabel(preset)}";
+
+    /// <summary>One preset picker row: <c>neon · af_heart + am_eric · 80 % / 20 % · 1.2</c> (the second voice and the mix left out when there is none).</summary>
+    public static string PresetLabel(Speech.VoicePreset preset)
+    {
+        ArgumentNullException.ThrowIfNull(preset);
+        string voices = preset.Voice2.Length == 0 ? preset.Voice : $"{preset.Voice} + {preset.Voice2} · {Mix(preset.Mix)}";
+        return $"{preset.Name} · {voices} · {Speed(preset.Speed)}";
+    }
+
+    /// <summary>
+    /// The picker's rows as a table (2026-09-27, the user's ask: the <see cref="PresetLabel"/> rows did not line up):
+    /// name, voice, <c>+ voice 2</c>, mix and speed, each column padded to its widest cell and two spaces apart; a preset
+    /// with no second voice leaves that column and the mix blank. Trailing blanks trimmed.
+    /// </summary>
+    public static IReadOnlyList<string> PresetRows(IReadOnlyList<Speech.VoicePreset> presets)
+    {
+        ArgumentNullException.ThrowIfNull(presets);
+        var cells = presets.Select(p => new[]
+        {
+            p.Name,
+            p.Voice,
+            p.Voice2.Length == 0 ? "" : "+ " + p.Voice2,
+            p.Voice2.Length == 0 ? "" : Mix(p.Mix),
+            Speed(p.Speed),
+        }).ToList();
+        var widths = Enumerable.Range(0, 5).Select(c => cells.Count == 0 ? 0 : cells.Max(r => TextCells.Width(r[c]))).ToArray();
+        return cells.Select(r => string.Join("  ", r.Select((cell, c) => cell + new string(' ', widths[c] - TextCells.Width(cell)))).TrimEnd()).ToList();
+    }
+
     /// <summary>What the voice pickers speak in the highlighted voice, and the mix and speed rows in the saved blend at the saved speed, while <see cref="SettingsField.TtsVoicePreview"/> is on. Pinned.</summary>
     public const string VoicePreviewText = "Hello. I am Neon, your friendly and concise terminal sidekick.";
 
@@ -675,7 +723,7 @@ internal sealed partial class SettingsMenu
     /// <see cref="IsLlmField"/> rows, the compact rows, then <see cref="SettingsField.LlmOfferTools"/> ABOVE
     /// <see cref="SettingsField.LlmToolCompactType"/> (the user's order, 2026-09-15), the round-trip cap and the fun
     /// verbs last (none of those a reconnect); TTS is spelled out (the user's order, 2026-09-16): the switch, the
-    /// source, the server's URL, the preview toggle (no reconnect), then the voices, the mix and the speed; STT is the <see cref="IsVoiceField"/>
+    /// source, the server's URL, the preview toggle (no reconnect), then the voice preset (2026-09-27, just above the voice), the voices, the mix and the speed; STT is the <see cref="IsVoiceField"/>
     /// fields in enum order; Sessions (2026-09-18, last that morning, second since) is the
     /// logging switch, the retention days, the naming mode, the show-name picker under it (later that day), the tool switch and the search cap (the user's order, 2026-09-18). With <see cref="SkillsTabFields"/> and <see cref="ToolsTabFields"/> they are every <see cref="SettingsField"/> once (pinned).
     /// </summary>
@@ -684,7 +732,7 @@ internal sealed partial class SettingsMenu
         [SettingsField.Profile, SettingsField.NewProfileMode, SettingsField.WorkingDirectory, SettingsField.QueueMessages, SettingsField.QueueCancelMode, SettingsField.Memory, SettingsField.CopyUserPrompt, SettingsField.ShowImageThumbnails, SettingsField.ImageThumbnailSize, SettingsField.TranscriptMarkdown, SettingsField.PastePreviewLines, SettingsField.HideExitAutocomplete, SettingsField.CommandTypoIntercept, SettingsField.KeepCommandHistory, SettingsField.WelcomeSplash, SettingsField.ShowWorkingDirectory, SettingsField.ShowToolbar, SettingsField.DraftEditor, SettingsField.ImageEditor, SettingsField.Theme],
         [SettingsField.SessionLogging, SettingsField.SessionRetentionDays, SettingsField.SessionNamingMode, SettingsField.SessionShowName, SettingsField.SessionTool, SettingsField.SessionSearchMaxResults],
         [SettingsField.LlmScanMode, SettingsField.LlmUrl, SettingsField.LlmModel, SettingsField.LlmApiKey, SettingsField.LlmReasoning, SettingsField.LlmRequestTimeoutSeconds, SettingsField.LlmTurnTimeoutSeconds, SettingsField.LlmContextLength, SettingsField.LlmMidTurnUsage, SettingsField.LlmCompactType, SettingsField.LlmCompactKeepRecent, SettingsField.LlmCompactShowSummary, SettingsField.LlmAutoCompactPercent, SettingsField.LlmOfferTools, SettingsField.LlmToolCompactType, SettingsField.LlmMaxToolIterations, SettingsField.LlmUseFunVerbs, SettingsField.LlmShowThinking],
-        [SettingsField.TtsOutput, SettingsField.TtsSource, SettingsField.TtsHttpUrl, SettingsField.TtsVoicePreview, SettingsField.TtsVoice, SettingsField.TtsVoice2, SettingsField.TtsVoiceMix, SettingsField.TtsSpeed],
+        [SettingsField.TtsOutput, SettingsField.TtsSource, SettingsField.TtsHttpUrl, SettingsField.TtsVoicePreview, SettingsField.TtsVoicePreset, SettingsField.TtsVoice, SettingsField.TtsVoice2, SettingsField.TtsVoiceMix, SettingsField.TtsSpeed],
         Fields.Where(IsVoiceField).ToArray(),
         [SettingsField.BotChatLlmMode, SettingsField.BotChatImages, SettingsField.BotChatImageMode, SettingsField.BotChatImageWorkflow, SettingsField.BotChatImageAsync, SettingsField.BotChatNonTtsDelaySeconds],
     ];
@@ -840,7 +888,7 @@ internal sealed partial class SettingsMenu
     /// <summary>Whether a change to <paramref name="field"/> needs the speech session re-probed.</summary>
     public static bool IsTtsField(SettingsField field) =>
         field is SettingsField.TtsHttpUrl or SettingsField.TtsVoice or SettingsField.TtsOutput or SettingsField.TtsSpeed
-            or SettingsField.TtsVoice2 or SettingsField.TtsVoiceMix or SettingsField.TtsSource;
+            or SettingsField.TtsVoice2 or SettingsField.TtsVoiceMix or SettingsField.TtsSource or SettingsField.TtsVoicePreset;
 
     /// <summary>Whether a change to <paramref name="field"/> needs the voice session re-probed (the wake word is part of it).</summary>
     public static bool IsVoiceField(SettingsField field) =>
@@ -993,6 +1041,7 @@ internal sealed partial class SettingsMenu
         SettingsField.TtsHttpUrl => "TTS HTTP URL",
         SettingsField.TtsSource => "TTS source",
         SettingsField.TtsVoice => "TTS voice",
+        SettingsField.TtsVoicePreset => "TTS voice preset",
         SettingsField.TtsOutput => "TTS output",
         SettingsField.SttInput => "STT input",
         SettingsField.SttWake => "STT wake",
@@ -1172,6 +1221,7 @@ internal sealed partial class SettingsMenu
             SettingsField.LlmContextLength => data.LlmContextLength > 0 ? Tokens(data.LlmContextLength) : DetectedContextLengthLabel,
             SettingsField.TtsHttpUrl => data.TtsHttpUrl,
             SettingsField.TtsVoice => data.TtsVoice,
+            SettingsField.TtsVoicePreset => PresetValue(data, profileDirectory),
             SettingsField.TtsOutput => OnOff(data.TtsOutput),
             SettingsField.SttInput => OnOff(data.SttInput),
             SettingsField.SttWake => OnOff(data.SttWake),
@@ -2250,6 +2300,11 @@ internal sealed partial class SettingsMenu
             return pickedVoice;
         }
 
+        if (field == SettingsField.TtsVoicePreset)
+        {
+            return await PickVoicePresetAsync(saved, cancellationToken).ConfigureAwait(false);
+        }
+
         if (field == SettingsField.LlmReasoning)
         {
             return await PickReasoningAsync(saved, cancellationToken).ConfigureAwait(false);
@@ -3090,6 +3145,68 @@ internal sealed partial class SettingsMenu
 
     /// <summary>The preview's gate: the toggle, <c>TTS output</c> as saved (a flip in the same visit counts) and the session as of the last connect.</summary>
     private bool PreviewWanted(AppSettingsData saved) => !_midTurn && saved.TtsVoicePreview && saved.TtsOutput && _speech.IsReady;
+
+    /// <summary>
+    /// The <see cref="SettingsField.TtsVoicePreset"/> picker (2026-09-27, the user's ask): one <see cref="PresetRows"/> row per
+    /// <see cref="Speech.VoicePresets.Load"/> entry, the cursor on the preset the saved four match (the first row when they match
+    /// none). While <see cref="PreviewWanted"/>, the highlighted row speaks <see cref="VoicePreviewText"/> in its blend at its speed,
+    /// the voice pickers' way (<see cref="TryPickVoiceAsync"/>). A pick writes the four settings in one save; the saved notice
+    /// names the preset, and every variable that still overrides one of the four is warned about.
+    /// </summary>
+    private async Task<bool> PickVoicePresetAsync(AppSettingsData saved, CancellationToken cancellationToken)
+    {
+        var presets = Speech.VoicePresets.Load(_settings.StorageDirectory);
+        if (presets.Count == 0)
+        {
+            Sink.Notice(NoVoicePresetsNotice);
+            return false;
+        }
+
+        var matched = Speech.VoicePresets.Match(presets, saved);
+        int start = matched is null ? 0 : IndexOf(presets, matched);
+        var page = new MenuPage(Crumb(FieldName(SettingsField.TtsVoicePreset)), PresetRows(presets).Select(Markup.Escape).ToList(), PickKeys);
+        Action<int>? highlighted = PreviewWanted(saved)
+            ? row => QueuePreview(_speech.RequestFor(saved), VoiceMix.Spec(presets[row].Voice, presets[row].Voice2, presets[row].Mix), presets[row].Speed, cancellationToken)
+            : null;
+        int? picked;
+        try
+        {
+            picked = await PickAsync(page, start, cancellationToken, highlighted).ConfigureAwait(false);
+        }
+        finally
+        {
+            await FinishPreviewAsync().ConfigureAwait(false);
+        }
+
+        if (picked is not { } index)
+        {
+            return Unchanged();
+        }
+
+        var preset = presets[index];
+        _settings.Update(d => Speech.VoicePresets.ApplyTo(preset, d));
+        Sink.Notice(PresetSavedNotice(preset));
+        foreach (var overriddenBy in new[] { SettingsField.TtsVoice, SettingsField.TtsVoice2, SettingsField.TtsVoiceMix, SettingsField.TtsSpeed }
+                     .Select(_overriddenBy).OfType<string>().Distinct(StringComparer.Ordinal))
+        {
+            Sink.Warning(OverrideNotice(overriddenBy));
+        }
+
+        return true;
+
+        static int IndexOf(IReadOnlyList<Speech.VoicePreset> list, Speech.VoicePreset item)
+        {
+            for (int i = 0; i < list.Count; i++)
+            {
+                if (ReferenceEquals(list[i], item))
+                {
+                    return i;
+                }
+            }
+
+            return 0;
+        }
+    }
 
     /// <summary>
     /// The mix and speed rows' preview, when wanted: the blend as the next reply will send it
