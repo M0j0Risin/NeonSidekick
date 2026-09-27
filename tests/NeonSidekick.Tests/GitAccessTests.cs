@@ -646,7 +646,7 @@ public sealed class GitAccessTests : IDisposable
         }
     }
 
-    // ---- identity (/git user, 2026-09-21) ----
+    // ---- identity (/gituser, 2026-09-21) ----
 
     [Fact]
     public void SetLocalIdentity_WritesTheTwoKeys_KeepsASectionAlreadyThere_UnlessForced_AndNeedsARepository()

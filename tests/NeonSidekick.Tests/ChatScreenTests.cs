@@ -6050,14 +6050,12 @@ public partial class ChatScreenTests : IDisposable
     }
 
     [Theory]
-    [InlineData("user", GitActionKind.User, false)]
-    [InlineData("USER", GitActionKind.User, false)]
-    [InlineData("user force", GitActionKind.User, true)]
-    [InlineData("User\tFORCE", GitActionKind.User, true)]
-    [InlineData("", GitActionKind.Invalid, false)]
-    [InlineData("force", GitActionKind.Invalid, false)]
-    [InlineData("user now", GitActionKind.Invalid, false)]
-    [InlineData("user force now", GitActionKind.Invalid, false)]
+    [InlineData("", GitActionKind.User, false)]
+    [InlineData("force", GitActionKind.User, true)]
+    [InlineData("\tFORCE ", GitActionKind.User, true)]
+    [InlineData("user", GitActionKind.Invalid, false)]         // /git user's verb until 2026-09-26
+    [InlineData("user force", GitActionKind.Invalid, false)]
+    [InlineData("force now", GitActionKind.Invalid, false)]
     [InlineData("init", GitActionKind.Invalid, false)]
     public void ParseGitArgs_IsPinned(string args, GitActionKind kind, bool force)
     {
@@ -6070,29 +6068,27 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("Git native email and Git native name are not set; set them on the Git (native) tab of /tools.", ChatScreen.GitIdentityUnsetError(true, true));
         Assert.Equal("Git native email is not set; set it on the Git (native) tab of /tools.", ChatScreen.GitIdentityUnsetError(true, false));
         Assert.Equal("Git native name is not set; set it on the Git (native) tab of /tools.", ChatScreen.GitIdentityUnsetError(false, true));
-        Assert.Equal("Git native tools is off; /git user does nothing until it is on (the Git (native) tab of /tools).", ChatScreen.GitNativeToolsOffError);
+        Assert.Equal("Git native tools is off; /gituser does nothing until it is on (the Git (native) tab of /tools).", ChatScreen.GitNativeToolsOffError);
         Assert.Equal("(🛠️ git user set for this repository: Some User <user@email.com>)", ChatScreen.GitIdentityWrittenNotice("Some User", "user@email.com"));   // the tools' glyph since 2026-09-22
-        Assert.Equal("Git repository already has a [user] section: Old <old@x>; /git user force replaces it.", ChatScreen.GitIdentityPresentError("Old", "old@x"));   // an error since 2026-09-22
+        Assert.Equal("Git repository already has a [user] section: Old <old@x>; /gituser force replaces it.", ChatScreen.GitIdentityPresentError("Old", "old@x"));   // an error since 2026-09-22
         Assert.Equal(@"'D:\x' is not inside a git repository; /cwd into one first.", ChatScreen.GitNoRepositoryError(@"D:\x"));
         Assert.Equal("Could not write the git identity: why", ChatScreen.GitIdentityFailedError("why"));
-        Assert.Equal(["user", "user force"], ChatScreen.GitVerbs.Select(v => v.Text));
-        Assert.Equal(["user"], ChatScreen.ArgumentItems("/git", "", Sources()).Select(i => i.Text));
-        Assert.Equal(["user"], ChatScreen.ArgumentItems("/git", "us", Sources()).Select(i => i.Text));
-        Assert.Equal(["user force"], ChatScreen.ArgumentItems("/git", "user ", Sources()).Select(i => i.Text));
-        Assert.Equal(["user force"], ChatScreen.ArgumentItems("/git", "user f", Sources()).Select(i => i.Text));
-        Assert.Empty(ChatScreen.ArgumentItems("/git", "x", Sources()));
+        Assert.Equal(["force"], ChatScreen.GitVerbs.Select(v => v.Text));   // the one switch since 2026-09-26 (/git's user and user force until then)
+        Assert.Equal(["force"], ChatScreen.ArgumentItems("/gituser", "", Sources()).Select(i => i.Text));
+        Assert.Equal(["force"], ChatScreen.ArgumentItems("/gituser", "f", Sources()).Select(i => i.Text));
+        Assert.Empty(ChatScreen.ArgumentItems("/gituser", "x", Sources()));
     }
 
     [Fact]
     public async Task GitUser_WritesTheIdentity_KeepsOneAlreadyThere_UnlessForced()
     {
-        // /git user (2026-09-21): the two settings into the sandbox repository's .git/config; a second run finds the section and says so; force replaces it.
+        // /gituser (2026-09-21; /git user until 2026-09-26): the two settings into the sandbox repository's .git/config; a second run finds the section and says so; force replaces it.
         _settings.Update(d => { d.TtsOutput = false; d.GitNativeEmail = "user@email.com"; d.GitNativeName = "Some User"; });
         string files = Path.Combine(_settings.ProfileDirectory, "files");
         Directory.CreateDirectory(files);
         Repository.Init(files);   // not GitAccessTests.Init: that one writes a local identity already
-        PushLine("/git user");
-        PushLine("/git user");
+        PushLine("/gituser");
+        PushLine("/gituser");
         PushLine("/exit");
 
         string output = await RunAsync();
@@ -6112,7 +6108,7 @@ public partial class ChatScreenTests : IDisposable
 
         // Forced: the new pair over the old.
         _settings.Update(d => { d.GitNativeEmail = "new@email.com"; d.GitNativeName = "New User"; });
-        PushLine("/git user force");
+        PushLine("/gituser force");
         PushLine("/exit");
         output = await RunAsync();
         Assert.Contains("  · " + ChatScreen.GitIdentityWrittenNotice("New User", "new@email.com"), output);
@@ -6127,9 +6123,9 @@ public partial class ChatScreenTests : IDisposable
         _settings.Update(d => d.TtsOutput = false);
         string files = Path.Combine(_settings.ProfileDirectory, "files");
         Directory.CreateDirectory(files);
-        PushLine("/git user");                  // neither set
-        PushLine("/git");                       // no word
-        PushLine("/git init");                  // the wrong word
+        PushLine("/gituser");                  // neither set
+        PushLine("/gituser now");               // the wrong word
+        PushLine("/gituser init");              // another
         PushLine("/exit");
 
         string output = await RunAsync();
@@ -6140,14 +6136,14 @@ public partial class ChatScreenTests : IDisposable
 
         // One set: named alone (the settings are read when the line runs, so one run per state).
         _settings.Update(d => d.GitNativeEmail = "user@email.com");
-        PushLine("/git user");
+        PushLine("/gituser");
         PushLine("/exit");
         output = await RunAsync();
         Assert.Contains("  ✗ " + ChatScreen.GitIdentityUnsetError(false, true), output);
 
         // Both set, no repository: the root named, and never an init.
         _settings.Update(d => d.GitNativeName = "Some User");
-        PushLine("/git user");
+        PushLine("/gituser");
         PushLine("/exit");
         output = await RunAsync();
         Assert.Contains("  ✗ " + ChatScreen.GitNoRepositoryError(files), output);
@@ -6156,8 +6152,8 @@ public partial class ChatScreenTests : IDisposable
         // Git native tools off (later on 2026-09-21): the error names the switch before anything else — the identity set and a repository there, nothing is written.
         Repository.Init(files);
         _settings.Update(d => d.GitNativeTools = false);
-        PushLine("/git user");
-        PushLine("/git user force");
+        PushLine("/gituser");
+        PushLine("/gituser force");
         PushLine("/exit");
         output = await RunAsync();
         Assert.Equal(2, output.Split("  ✗ " + ChatScreen.GitNativeToolsOffError).Length - 1);
@@ -9404,41 +9400,42 @@ public partial class ChatScreenTests : IDisposable
         Assert.True(string.IsNullOrWhiteSpace(lines[14]));
         Assert.StartsWith(HelpRow("/clear", "start a new conversation and clear the screen"), lines[15]);
         Assert.StartsWith(HelpRow("/new", "start a new conversation but do not clear the screen"), lines[16]);   // its own row since 2026-09-16
-        Assert.StartsWith(HelpRow("/splash", "start a new conversation and show the splash screen"), lines[17]);   // under /new since later still on 2026-09-19
+        Assert.StartsWith(HelpRow("/splash", "start a new conversation, clear and show the splash screen"), lines[17]);   // under /new since later still on 2026-09-19; this wording since 2026-09-26
         Assert.StartsWith(HelpRow("/theme", "switch the colour theme, starting a new conversation with the splash screen, or /theme <name>"), lines[18]);   // under /splash since 2026-09-23
         Assert.StartsWith(HelpRow("/queue", "list and prune the messages queued while a reply runs"), lines[19]);   // 2026-09-18
         Assert.StartsWith(HelpRow("/copy", "copy the last reply to the clipboard as markdown, or /copy <n> | all; --thinking for the model's thinking too"), lines[20]);   // under /queue since later on 2026-09-18
         Assert.StartsWith(HelpRow("/draft", "write the next message in your editor: a temporary file, sent when it is saved and closed"), lines[21]);   // under /copy since 2026-09-19
         Assert.StartsWith(HelpRow("/loop", "repeat a message, each reply waited for: /loop <count> [delay] <message> | infinite [delay] <message> (ESC ends it)"), lines[22]);   // under /draft since 2026-09-21
-        Assert.StartsWith(HelpRow("/plan", "plan before doing: /plan <requirement>"), lines[23]);   // under /loop since 2026-09-26: every row under it one down
-        Assert.StartsWith(HelpRow("/botchat", "let the profiles talk to each other, each in its own persona, until ESC: /botchat [profile ...] [[--] topic]"), lines[24]);   // under /loop since 2026-09-24
-        Assert.StartsWith(HelpRow("/expand", "show every line of the folded tool runs, code blocks and thinking in the transcript (Ctrl+O flips)"), lines[25]);   // under /loop since 2026-09-22 (/tools expand until then)
-        Assert.StartsWith(HelpRow("/collapse", "fold the tool runs, code blocks and thinking in the transcript again"), lines[26]);
-        Assert.True(string.IsNullOrWhiteSpace(lines[27]));
-        Assert.StartsWith(HelpRow("/interrupt", "toggle the speech input wake word interrupt, or /interrupt on|off"), lines[31]);
-        Assert.True(string.IsNullOrWhiteSpace(lines[32]));
-        Assert.StartsWith(HelpRow("/memory", "list and prune memory items, or /memory forget | edit | copy <profile> [overwrite]"), lines[33]);   // the copy word folded in later on 2026-09-22 and /memcopy's row went, every row under it one up
-        Assert.StartsWith(HelpRow("/remember", "add a memory: /remember <text>"), lines[34]);
-        Assert.StartsWith(HelpRow("/cmdcopy", "copy this profile's allowed shell commands into another, or with --history its command history: /cmdcopy <profile> [--history] [overwrite]"), lines[35]);   // 2026-09-21; --history 2026-09-25
-        Assert.StartsWith(HelpRow("/cmdclear", "clear this profile's command history (the Up/Down recall), stored and in memory (asks first)"), lines[36]);   // 2026-09-25: every row under it one down
-        Assert.StartsWith(HelpRow("/cmdlist", "list this profile's allowed shell commands on a pane, Enter removes one"), lines[37]);   // later on 2026-09-21
-        Assert.StartsWith(HelpRow("/police", "switch Shell police outside paths on or off on a pane: whether a shell command may name paths outside the working directory"), lines[38]);   // later still on 2026-09-22
-        Assert.StartsWith(HelpRow("/tree", "print a tree of the working directory's folders and files, or /tree <path>"), lines[41]);
-        Assert.StartsWith(HelpRow("/vault", "print a tree of the Obsidian vault's folders and notes, or /vault <path>"), lines[42]);   // under /tree since later still on 2026-09-22
-        Assert.StartsWith(HelpRow("/emptytrash", "empty the working directory's .trash for good (asks first)"), lines[44]);
-        Assert.StartsWith(HelpRow("/git", "write the Git native email and Git native name settings into the working directory's repository: /git user [force]"), lines[45]);   // 2026-09-21
-        Assert.True(string.IsNullOrWhiteSpace(lines[46]));
+        Assert.StartsWith(HelpRow("/plan", "plan before doing: /plan <requirement>"), lines[23]);   // under /loop since 2026-09-26
+        Assert.StartsWith(HelpRow("/expand", "expand all items in the transcript"), lines[24]);   // under /loop since 2026-09-22 (/tools expand until then); this wording since 2026-09-26, /botchat gone from above it
+        Assert.StartsWith(HelpRow("/collapse", "collapse all items in the transcript"), lines[25]);
+        Assert.True(string.IsNullOrWhiteSpace(lines[26]));
+        Assert.StartsWith(HelpRow("/interrupt", "toggle the speech input wake word interrupt, or /interrupt on|off"), lines[30]);
+        Assert.True(string.IsNullOrWhiteSpace(lines[31]));
+        Assert.StartsWith(HelpRow("/memory", "list and prune memory items, or /memory forget | edit | copy <profile> [overwrite]"), lines[32]);   // the copy word folded in later on 2026-09-22 and /memcopy's row went, every row under it one up
+        Assert.StartsWith(HelpRow("/remember", "add a memory: /remember <text>"), lines[33]);
+        Assert.StartsWith(HelpRow("/cmdcopy", "copy this profile's allowed shell commands into another, or with --history its command history: /cmdcopy <profile> [--history] [overwrite]"), lines[34]);   // 2026-09-21; --history 2026-09-25
+        Assert.StartsWith(HelpRow("/cmdclear", "clear this profile's command history (the Up/Down recall), stored and in memory (asks first)"), lines[35]);   // 2026-09-25
+        Assert.StartsWith(HelpRow("/cmdlist", "list this profile's allowed shell commands on a pane, Enter removes one"), lines[36]);   // later on 2026-09-21
+        Assert.StartsWith(HelpRow("/police", "switch shell police on or off"), lines[37]);   // later still on 2026-09-22; this wording since 2026-09-26
+        Assert.True(string.IsNullOrWhiteSpace(lines[38]));
+        Assert.StartsWith(HelpRow("/tree", "print a tree of the working directory's folders and files, or /tree <path>"), lines[40]);
+        Assert.StartsWith(HelpRow("/vault", "print a tree of the Obsidian vault's folders and notes, or /vault <path>"), lines[41]);   // under /tree since later still on 2026-09-22
+        Assert.StartsWith(HelpRow("/emptytrash", "empty the working directory's .trash for good (asks first)"), lines[43]);   // the group's last row since 2026-09-26 (/git under it until then)
+        Assert.True(string.IsNullOrWhiteSpace(lines[44]));
         // /speak and /view: a group of their own (the user's call, 2026-09-17); /window (/windowsize until then) under /view since later on 2026-09-19.
-        Assert.StartsWith(HelpRow("/speak", "read a text file from the working directory aloud, as a reply: /speak <file> [n], or /speak to resume, or /speak <n> from sentence n"), lines[47]);
-        Assert.StartsWith(HelpRow("/echo", "print a line as a reply and read it aloud when speech is on: /echo <text>"), lines[48]);
-        Assert.StartsWith(HelpRow("/view", "show an image from the working directory in the transcript, as large as the window allows: /view <image>"), lines[49]);
-        Assert.StartsWith(HelpRow("/imagine", "generate a picture on ComfyUI from your own prompt, sent as typed: /imagine [workflow] <prompt> [-- <negative>] [--seed N] [--size WxH]"), lines[50]);   // 2026-09-24
-        Assert.StartsWith(HelpRow("/comfy", "show the ComfyUI server's status and the workflows the image tools can run, /comfy edit json|markdown <workflow> to open its file in your editor, or /comfy purge to empty the output folder"), lines[51]);
-        Assert.StartsWith(HelpRow("/window", "show the terminal window's width and height"), lines[52]);
-        Assert.True(string.IsNullOrWhiteSpace(lines[53]));
-        Assert.StartsWith(HelpRow("/persona", "export and manage persona.md (the personality) in your editor, or /persona reset to go back to the default, or /persona copy <profile> [force] to copy it into another profile"), lines[54]);   // copy 2026-09-21
-        Assert.True(string.IsNullOrWhiteSpace(lines[57]));
-        Assert.StartsWith(HelpRow("/timer", "list timers, or /timer <duration> [name] (10m, 90s, 1h30m) | stop <name> | stop all"), lines[58]);   // the bottom group's first row since later still on 2026-09-19 (under /help from earlier that day)
+        Assert.StartsWith(HelpRow("/speak", "read a text file from the working directory aloud, as a reply: /speak <file> [n], or /speak to resume, or /speak <n> from sentence n"), lines[45]);
+        Assert.StartsWith(HelpRow("/echo", "print a line as a reply and read it aloud when speech is on: /echo <text>"), lines[46]);
+        Assert.StartsWith(HelpRow("/view", "show an image from the working directory in the transcript, as large as the window allows: /view <image>"), lines[47]);
+        Assert.StartsWith(HelpRow("/imagine", "generate a picture on ComfyUI from your own prompt, sent as typed: /imagine [workflow] <prompt> [-- <negative>] [--seed N] [--size WxH]"), lines[48]);   // 2026-09-24
+        Assert.StartsWith(HelpRow("/comfy", "show the ComfyUI server's status and the workflows the image tools can run, /comfy edit json|markdown <workflow> to open its file in your editor, or /comfy purge to empty the output folder"), lines[49]);
+        Assert.StartsWith(HelpRow("/window", "show the terminal window's width and height"), lines[50]);
+        Assert.True(string.IsNullOrWhiteSpace(lines[51]));
+        Assert.StartsWith(HelpRow("/persona", "export and manage persona.md (the personality) in your editor, or /persona reset to go back to the default, or /persona copy <profile> [force] to copy it into another profile"), lines[52]);   // copy 2026-09-21
+        Assert.True(string.IsNullOrWhiteSpace(lines[55]));
+        Assert.StartsWith(HelpRow("/gituser", "write the Git native email and Git native name into the working directory's repository"), lines[56]);   // the bottom group above /botchat since 2026-09-26 (/git until then)
+        Assert.StartsWith(HelpRow("/botchat", "let the profiles talk to each other, each in its own persona, until ESC: /botchat [profile ...] [[--] topic]"), lines[57]);   // above /timer since 2026-09-26 (under /loop from 2026-09-24)
+        Assert.StartsWith(HelpRow("/timer", "list timers, or /timer <duration> [name] (10m, 90s, 1h30m) | stop <name> | stop all"), lines[58]);   // the bottom group's first row from later still on 2026-09-19 (under /help from earlier that day) until 2026-09-26
         Assert.StartsWith(HelpRow("/help", "show help"), lines[59]);   // the bottom group since 2026-09-16, above /about; under /timer since later still on 2026-09-19
         Assert.StartsWith(HelpRow("/about", "show general information about the app and profile"), lines[60]);
         Assert.StartsWith(HelpRow("/exit", "exit/quit the application"), lines[^1]);   // the very last row since 2026-09-16
@@ -10530,7 +10527,7 @@ public partial class ChatScreenTests : IDisposable
     [InlineData(SlashCommand.Usage, false, MidTurnClass.Pane)]
     [InlineData(SlashCommand.About, false, MidTurnClass.Pane)]
     [InlineData(SlashCommand.EmptyTrash, false, MidTurnClass.Pane)]
-    [InlineData(SlashCommand.Git, true, MidTurnClass.Refused)]
+    [InlineData(SlashCommand.GitUser, true, MidTurnClass.Refused)]
     [InlineData(SlashCommand.Queue, false, MidTurnClass.Pane)]
     [InlineData(SlashCommand.Queue, true, MidTurnClass.Quick)]   // /queue clear, 2026-09-21
     [InlineData(SlashCommand.Reasoning, false, MidTurnClass.Pane)]

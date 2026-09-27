@@ -284,10 +284,10 @@ public enum SettingsField
     /// <summary>A toggle: whether a compact's summary, or its pruned results, follow the compact notice in the transcript (<see cref="Settings.AppSettingsData.LlmCompactShowSummary"/>). The LLM tab, right under <see cref="LlmCompactKeepRecent"/> (2026-09-21); no reconnect (read at each compact).</summary>
     LlmCompactShowSummary,
 
-    /// <summary>Typed: the <c>user.email</c> <c>/git user</c> writes into the working directory's repository (<see cref="Settings.AppSettingsData.GitNativeEmail"/>); empty = not set. The Git (native) tab's fourth row (2026-09-21); no reconnect (read at each <c>/git user</c>).</summary>
+    /// <summary>Typed: the <c>user.email</c> <c>/gituser</c> writes into the working directory's repository (<see cref="Settings.AppSettingsData.GitNativeEmail"/>); empty = not set. The Git (native) tab's fourth row (2026-09-21); no reconnect (read at each <c>/gituser</c>).</summary>
     GitNativeEmail,
 
-    /// <summary>Typed: the <c>user.name</c> <c>/git user</c> writes beside the email (<see cref="Settings.AppSettingsData.GitNativeName"/>); empty = not set. The Git (native) tab's last row (2026-09-21); no reconnect.</summary>
+    /// <summary>Typed: the <c>user.name</c> <c>/gituser</c> writes beside the email (<see cref="Settings.AppSettingsData.GitNativeName"/>); empty = not set. The Git (native) tab's last row (2026-09-21); no reconnect.</summary>
     GitNativeName,
 
     /// <summary>A toggle: whether an <c>execute_code</c> script may call the app's other tools through its <c>neon_tools</c> module (<see cref="Settings.AppSettingsData.ShellToolBridge"/>). The Shell tab, right above the tool-call cap it governs (later on 2026-09-21); no reconnect (read at each call and each turn).</summary>
@@ -1280,7 +1280,7 @@ internal sealed partial class SettingsMenu
     /// <summary>How the menu shows an empty <see cref="AppSettingsData.WebSearxngUrl"/> (the engine is <see cref="SettingsField.WebSearchMethod"/>'s row, not this one's). Pinned.</summary>
     public const string NoSearxngUrlLabel = "(not set)";
 
-    /// <summary>How the menu shows an empty <see cref="AppSettingsData.GitNativeEmail"/> or <see cref="AppSettingsData.GitNativeName"/> (2026-09-21): <c>/git user</c> refuses until both are set (and while <see cref="AppSettingsData.GitNativeTools"/> is off). Pinned.</summary>
+    /// <summary>How the menu shows an empty <see cref="AppSettingsData.GitNativeEmail"/> or <see cref="AppSettingsData.GitNativeName"/> (2026-09-21): <c>/gituser</c> refuses until both are set (and while <see cref="AppSettingsData.GitNativeTools"/> is off). Pinned.</summary>
     public const string NoGitIdentityLabel = "(not set)";
 
     /// <summary>How the menu shows an empty <see cref="AppSettingsData.ObsidianVault"/> (2026-09-22): no vault, so no vault tool is offered. Pinned.</summary>

@@ -118,7 +118,7 @@ public sealed record GitRefsReport(GitOutcome Outcome, string Detail, string? Cu
 }
 
 /// <summary>
-/// What <c>/git user</c> did (2026-09-21): <c>Written</c> = the two keys were set at the repository's
+/// What <c>/gituser</c> did (2026-09-21): <c>Written</c> = the two keys were set at the repository's
 /// local level, <c>Email</c> / <c>Name</c> what they hold now; not written (and Ok) = a <c>[user]</c>
 /// section was there already and <c>force</c> was not given, <c>Email</c> / <c>Name</c> the values found
 /// (either may be empty when only the other was set).

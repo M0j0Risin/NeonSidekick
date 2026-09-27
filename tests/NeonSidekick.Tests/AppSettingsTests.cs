@@ -1127,7 +1127,7 @@ public class AppSettingsTests : IDisposable
         Assert.False(s.GitNativeTools);   // off by default since later on 2026-09-21 (on from 2026-09-20): the model reaches git through the shell unless the profile opts in
         Assert.Equal(500, s.GitNativeDiffMaxLines);
         Assert.Equal(20, s.GitNativeLogMaxCommits);
-        Assert.Equal("", s.GitNativeEmail);   // the /git user pair (2026-09-21): not set until typed
+        Assert.Equal("", s.GitNativeEmail);   // the /gituser pair (2026-09-21): not set until typed
         Assert.Equal("", s.GitNativeName);
         // The shell tools (2026-09-21): ask before anything runs, nothing allowed for good, PowerShell, 180 s (1–3600) under a 600 s cap (10–3600), 30,000 chars of output (2000–500000).
         Assert.Equal("ask", s.ShellCommandPolicy);

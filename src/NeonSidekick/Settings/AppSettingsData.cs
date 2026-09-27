@@ -946,20 +946,20 @@ public sealed class AppSettingsData
     /// directory (2026-09-20; <c>Git native tools</c> since 2026-09-21); read at each turn like <see cref="WebTools"/>, no reconnect.
     /// Off — the default since 2026-09-21 (the user's call, like <see cref="McpServers"/>): the model reaches git
     /// through the shell unless the profile opts in — the default rules lose their git sentence and
-    /// <c>/git user</c> refuses. <c>git_delete</c> is off by name in a fresh profile's <see cref="ToolsDisabled"/>
+    /// <c>/gituser</c> refuses. <c>git_delete</c> is off by name in a fresh profile's <see cref="ToolsDisabled"/>
     /// besides (<c>git_discard</c> was too until 2026-09-23). No variable.
     /// </summary>
     public bool GitNativeTools { get; set; }
 
     /// <summary>
-    /// The <c>user.email</c> that <c>/git user</c> writes into the working directory's repository config
+    /// The <c>user.email</c> that <c>/gituser</c> writes into the working directory's repository config
     /// (2026-09-21), with <see cref="GitNativeName"/>; empty = not set, and the command refuses — as it does
     /// while <see cref="GitNativeTools"/> is off (later that day). Never read by the git tools — a commit signs
     /// with whatever git's own config holds. The Git (native) tab of <c>/tools</c>, fourth row. No variable.
     /// </summary>
     public string GitNativeEmail { get; set; } = "";
 
-    /// <summary>The <c>user.name</c> <c>/git user</c> writes beside <see cref="GitNativeEmail"/> (2026-09-21); empty = not set. The Git (native) tab's last row. No variable.</summary>
+    /// <summary>The <c>user.name</c> <c>/gituser</c> writes beside <see cref="GitNativeEmail"/> (2026-09-21); empty = not set. The Git (native) tab's last row. No variable.</summary>
     public string GitNativeName { get; set; } = "";
 
     // ─── Obsidian ───────────────────────────────────────────────────────────────

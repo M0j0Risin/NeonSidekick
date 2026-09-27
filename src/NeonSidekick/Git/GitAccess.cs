@@ -929,7 +929,7 @@ public sealed class GitAccess
     }
 
     /// <summary>
-    /// <c>/git user [force]</c> (2026-09-21): <c>user.email</c> and <c>user.name</c> written into the
+    /// <c>/gituser [force]</c> (2026-09-21): <c>user.email</c> and <c>user.name</c> written into the
     /// repository at the working directory's root — its <c>.git/config</c>, <see cref="ConfigurationLevel.Local"/>,
     /// never the global file. Either key already set there and no <paramref name="force"/> is left as it
     /// is (<c>Written</c> false, the values found carried back for the notice); <paramref name="force"/>

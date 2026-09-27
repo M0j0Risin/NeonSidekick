@@ -70,17 +70,17 @@ public enum ProfileActionKind
 /// <summary>The parsed <c>/profile</c> argument; <paramref name="NewName"/> is set by <see cref="ProfileActionKind.Rename"/> alone.</summary>
 public readonly record struct ProfileAction(ProfileActionKind Kind, string Name, string NewName = "");
 
-/// <summary>What a <c>/git</c> argument asks for (2026-09-21). Top-level like <see cref="ProfileActionKind"/>, so the test project can pin the grammar.</summary>
+/// <summary>What a <c>/gituser</c> argument asks for (2026-09-21; <c>/git</c>'s until 2026-09-26). Top-level like <see cref="ProfileActionKind"/>, so the test project can pin the grammar.</summary>
 public enum GitActionKind
 {
-    /// <summary><c>user</c> or <c>user force</c>: the identity settings into the repository's config.</summary>
+    /// <summary>Nothing or <c>force</c>: the identity settings into the repository's config.</summary>
     User,
 
-    /// <summary>Anything else, a bare <c>/git</c> included; <c>ChatScreen.GitUsageError</c>.</summary>
+    /// <summary>Anything else; <c>ChatScreen.GitUsageError</c>.</summary>
     Invalid,
 }
 
-/// <summary>The parsed <c>/git</c> argument; <paramref name="Force"/> is the <c>force</c> word after <c>user</c>.</summary>
+/// <summary>The parsed <c>/gituser</c> argument; <paramref name="Force"/> is the <c>force</c> word.</summary>
 public readonly record struct GitAction(GitActionKind Kind, bool Force = false);
 
 /// <summary>What a <c>/sessions</c> argument asks for (2026-09-18). Top-level like <see cref="ProfileAction"/>, so the test project can pin the grammar.</summary>
@@ -419,14 +419,12 @@ internal sealed partial class ChatScreen
         return true;
     }
 
-    // The /git words (2026-09-21). Pinned.
-    public const string GitUserWord = "user";
+    // The /gituser word (2026-09-21; /git user until 2026-09-26, the user's call). Pinned.
     public const string GitForceWord = ForceWord;
 
-    /// <summary>The <c>force</c> word: <c>/git user force</c> (2026-09-21) and, later that day, <c>/persona copy &lt;profile&gt; force</c> and its siblings. Pinned.</summary>
+    /// <summary>The <c>force</c> word: <c>/gituser force</c> (2026-09-21) and, later that day, <c>/persona copy &lt;profile&gt; force</c> and its siblings. Pinned.</summary>
     public const string ForceWord = "force";
-    public const string GitUsageError = "/git takes user [force].";
-    public const string GitUserNote = "write the Git native email and Git native name settings into this repository's .git/config";
+    public const string GitUsageError = "/gituser takes nothing or force.";
     public const string GitUserForceNote = "the same, replacing a [user] section already there";
     public const string TimerUsageError = "/timer takes nothing (list), <duration> [name], stop <name> or stop all; a duration is 10m, 90s, 1h30m, or minutes as a number.";
     public const string NoTimersNotice = "(" + NoticeGlyphs.Timer + "no timers)";
@@ -2697,11 +2695,10 @@ internal sealed partial class ChatScreen
         _ => "",
     };
 
-    /// <summary>The <c>/git</c> list (2026-09-21): <c>user</c>, and <c>user force</c> once the word is typed. Pinned.</summary>
+    /// <summary>The <c>/gituser</c> list: <c>force</c> alone (2026-09-26; <c>/git</c>'s <c>user</c> and <c>user force</c> from 2026-09-21 until then). Pinned.</summary>
     public static readonly IReadOnlyList<CompletionItem> GitVerbs =
     [
-        new(GitUserWord, GitUserNote),
-        new(GitUserWord + " " + GitForceWord, GitUserForceNote),
+        new(GitForceWord, GitUserForceNote),
     ];
 
     /// <summary>The <c>/profile</c> verbs on its list, each with its note (<c>edit</c> and <c>reload</c> since 2026-09-21). Pinned.</summary>
@@ -2863,9 +2860,9 @@ internal sealed partial class ChatScreen
                 return MentionCompleter.Matches(items, argText);
             }
 
-            case SlashCommand.Git:
-                // The one verb, its force form once "user " is typed (2026-09-21).
-                return MentionCompleter.Matches(argText.StartsWith(GitUserWord + " ", StringComparison.OrdinalIgnoreCase) ? [GitVerbs[1]] : [GitVerbs[0]], argText);
+            case SlashCommand.GitUser:
+                // The one switch (2026-09-26).
+                return MentionCompleter.Matches(GitVerbs, argText);
 
             case SlashCommand.Session:
             {
@@ -5229,16 +5226,16 @@ internal sealed partial class ChatScreen
             .ToList();
     }
 
-    // ── /git ────────────────────────────────────────────────────────────────
+    // ── /gituser ────────────────────────────────────────────────────────────
 
-    /// <summary>The <c>/git</c> grammar (2026-09-21): <c>user</c>, <c>user force</c> (either case), anything else invalid. Pure.</summary>
+    /// <summary>The <c>/gituser</c> grammar (2026-09-26; <c>/git user [force]</c> before): nothing, or <c>force</c> (either case), anything else invalid. Pure.</summary>
     public static GitAction ParseGitArgs(string args)
     {
         var tokens = (args ?? "").Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
         return tokens switch
         {
-            [var user] when user.Equals(GitUserWord, StringComparison.OrdinalIgnoreCase) => new(GitActionKind.User),
-            [var user, var force] when user.Equals(GitUserWord, StringComparison.OrdinalIgnoreCase) && force.Equals(GitForceWord, StringComparison.OrdinalIgnoreCase) => new(GitActionKind.User, Force: true),
+            [] => new(GitActionKind.User),
+            [var force] when force.Equals(GitForceWord, StringComparison.OrdinalIgnoreCase) => new(GitActionKind.User, Force: true),
             _ => new(GitActionKind.Invalid),
         };
     }
@@ -5247,21 +5244,21 @@ internal sealed partial class ChatScreen
     public static string GitIdentityUnsetError(bool email, bool name) =>
         (email && name ? "Git native email and Git native name are" : email ? "Git native email is" : "Git native name is") + " not set; set " + (email && name ? "them" : "it") + " on the Git (native) tab of /tools.";
 
-    /// <summary>The setting <c>Git native tools</c> is off (later on 2026-09-21, the user's call): <c>/git user</c> writes nothing and says why. Pinned.</summary>
-    public const string GitNativeToolsOffError = "Git native tools is off; /git user does nothing until it is on (the Git (native) tab of /tools).";
+    /// <summary>The setting <c>Git native tools</c> is off (later on 2026-09-21, the user's call): <c>/gituser</c> writes nothing and says why. Pinned.</summary>
+    public const string GitNativeToolsOffError = "Git native tools is off; /gituser does nothing until it is on (the Git (native) tab of /tools).";
 
     public static string GitIdentityWrittenNotice(string name, string email) => $"({NoticeGlyphs.Git}git user set for this repository: {name} <{email}>)";
 
     /// <summary>A <c>[user]</c> section was there and <c>force</c> was not given: what it holds, and the way past it.</summary>
     /// <remarks>An error since 2026-09-22 (the user's call; a notice before): nothing was written.</remarks>
-    public static string GitIdentityPresentError(string name, string email) => $"Git repository already has a [user] section: {name} <{email}>; /git user force replaces it.";
+    public static string GitIdentityPresentError(string name, string email) => $"Git repository already has a [user] section: {name} <{email}>; /gituser force replaces it.";
 
     public static string GitNoRepositoryError(string root) => $"'{root}' is not inside a git repository; /cwd into one first.";
 
     public static string GitIdentityFailedError(string detail) => $"Could not write the git identity: {detail}";
 
     /// <summary>
-    /// <c>/git user [force]</c> (2026-09-21): the <c>Git native email</c> and <c>Git native name</c> settings into the
+    /// <c>/gituser [force]</c> (2026-09-21; <c>/git user [force]</c> until 2026-09-26): the <c>Git native email</c> and <c>Git native name</c> settings into the
     /// working directory's repository config (<see cref="GitAccess.SetLocalIdentity"/>). <c>Git native tools</c> off
     /// is an error before anything else (later that day: the switch gates the command as it gates the tools);
     /// either setting empty is an error naming it; no repository at the root is an error; a <c>[user]</c> section already
@@ -8007,7 +8004,7 @@ internal sealed partial class ChatScreen
                 HandleExplore(args);
                 return false;
 
-            case SlashCommand.Git:
+            case SlashCommand.GitUser:
                 HandleGit(args);
                 return false;
 

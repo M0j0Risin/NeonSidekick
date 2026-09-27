@@ -55,7 +55,7 @@ public static class NoticeGlyphs
     /// <summary>The working directory: <c>/cwd</c>, <c>/explore</c>.</summary>
     public const string Folder = "📂 ";
 
-    /// <summary><c>/git user</c>'s written identity (the toolbar's tools).</summary>
+    /// <summary><c>/gituser</c>'s written identity (the toolbar's tools).</summary>
     public const string Git = ChatScreen.ToolsToolGlyph + " ";
 
     /// <summary>The terminal window's size.</summary>

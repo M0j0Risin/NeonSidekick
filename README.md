@@ -292,11 +292,11 @@ Every tool the app has, grouped (Clock, Timers, Files, Git, Shell, Obsidian, SQL
 
 | Setting | What it does | Default |
 |---|---|---|
-| Git native tools | Offers the git tools (status, log, show, diff, blame, branch, stage, commit, stash, discard, delete) over the repository in the working directory — in-process, no `git.exe`. Off, the model reaches git through the shell only, and `/git user` does nothing. | off |
+| Git native tools | Offers the git tools (status, log, show, diff, blame, branch, stage, commit, stash, discard, delete) over the repository in the working directory — in-process, no `git.exe`. Off, the model reaches git through the shell only, and `/gituser` does nothing. | off |
 | Git native diff max lines | Where a `git_diff` patch is cut (20–5000). | 500 |
 | Git native log max commits | How many commits `git_log` returns unless the call says otherwise (1–200). | 20 |
-| Git native email | The `user.email` that `/git user` writes into the working directory's repository config while *Git native tools* is on. Never read by the git tools. | (not set) |
-| Git native name | The `user.name` that `/git user` writes beside it. | (not set) |
+| Git native email | The `user.email` that `/gituser` writes into the working directory's repository config while *Git native tools* is on. Never read by the git tools. | (not set) |
+| Git native name | The `user.name` that `/gituser` writes beside it. | (not set) |
 
 #### Obsidian
 
@@ -405,7 +405,7 @@ Type `/` and the list opens with every command and its summary; after the comman
 | `/emptytrash` | Empty the working directory's `.trash` for good (asks first). |
 | `/exit` | Exit the app. |
 | `/explore [path]` | Open the working directory in your file browser. |
-| `/git user [force]` | Write the *Git native email* and *Git native name* settings into the working directory's repository config as `user.email` / `user.name`; a `[user]` section already there is kept unless `force`. Does nothing while *Git native tools* is off. |
+| `/gituser [force]` | Write the *Git native email* and *Git native name* settings into the working directory's repository config as `user.email` / `user.name`; a `[user]` section already there is kept unless `force`. Does nothing while *Git native tools* is off. |
 | `/help` | Show the commands and the keys. |
 | `/interrupt [on\|off]` | Toggle the wake-word interrupt during a spoken reply. |
 | `/learn [note \| sessions [N \| text]]` | Write or improve a skill in the background from the last turn, or from the stored sessions. |
@@ -515,7 +515,7 @@ A native, in-process Git integration (powered by LibGit2Sharp) designed specific
 Because commits require an author identity, you must set one up before committing:
 1. Navigate to the **Git (native)** tab under the `/tools` menu.
 2. Set your **Git native email** and **Git native name**.
-3. Run the `/git user` command to write these details into the repository's configuration.
+3. Run the `/gituser` command to write these details into the repository's configuration.
 
 #### 3. Managing the Tools
 If you prefer to use your system's standard Git via shell tools instead, simply toggle off **Git native tools** in the settings. This will completely remove the built-in Git group from the model's available tool list.
