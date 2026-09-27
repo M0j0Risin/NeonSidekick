@@ -377,7 +377,7 @@ public enum SettingsField
     /// <summary>An action row, no setting behind it (later on 2026-09-24, the user's ask): Enter walks a new workflow — built from the server's models, or imported from a ComfyUI export — through every choice, tests it and saves it into a comfy folder (<c>SettingsMenu.ComfyWizard.cs</c>). The ComfyUI tab's fourth row. Last in the enum, as every newcomer.</summary>
     ComfyAddWorkflow,
 
-    /// <summary>Typed (the <c>Image viewer</c> row, <c>Image editor</c> until later still on 2026-09-24): the command line a double-clicked picture opens in, or empty for the app Windows registers (<see cref="Settings.AppSettingsData.ImageEditor"/>). The General tab, under <see cref="DraftEditor"/> (later on 2026-09-24); no reconnect (read at each double-click). Last in the enum, as every newcomer.</summary>
+    /// <summary>Typed (the <c>Image viewer</c> row, <c>Image editor</c> until later still on 2026-09-24): where a double-clicked picture opens: empty for the built-in viewer (later on 2026-09-27; the app Windows registers before), <c>system</c> for that app, else a command line (<see cref="Settings.AppSettingsData.ImageEditor"/>). The General tab, under <see cref="DraftEditor"/> (later on 2026-09-24); no reconnect (read at each double-click). Last in the enum, as every newcomer.</summary>
     ImageEditor,
 
     /// <summary>Typed: the most pictures one <c>generate_image</c> call or <c>/imagine --count</c> makes, 1 to 16 (<see cref="Settings.AppSettingsData.ComfyMaxPicturesPerCall"/>). The ComfyUI tab, under the timeout (later on 2026-09-24); no reconnect. Last in the enum, as every newcomer.</summary>
@@ -1519,8 +1519,8 @@ internal sealed partial class SettingsMenu
     /// <summary>How the menu shows an empty <see cref="AppSettingsData.DraftEditor"/>: <c>/draft</c> hands the file to whatever Windows opens a <c>.txt</c> with. Pinned.</summary>
     public const string DefaultDraftEditorLabel = "(default .txt editor)";
 
-    /// <summary>How the menu shows an empty <see cref="AppSettingsData.ImageEditor"/>: a double-clicked picture opens in the app Windows registers (later on 2026-09-24; "viewer" since later still that day). Pinned.</summary>
-    public const string DefaultImageEditorLabel = "(default image viewer)";
+    /// <summary>How the menu shows an empty <see cref="AppSettingsData.ImageEditor"/>: a double-clicked picture opens in the built-in viewer (later on 2026-09-27, the user's call; "(default image viewer)", the app Windows registers, before). Pinned.</summary>
+    public const string DefaultImageEditorLabel = "(built-in viewer)";
 
     /// <summary>The settings-menu wording for a bad <see cref="SettingsField.WebBrowserPath"/>. Pinned.</summary>
     public const string BrowserPathError = "must be the full path of an existing executable, or empty to find Edge, Chrome or Brave";

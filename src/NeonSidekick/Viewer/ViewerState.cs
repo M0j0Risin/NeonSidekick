@@ -136,6 +136,28 @@ public sealed class ViewerState
         return to != from || wasLive != Live;
     }
 
+    /// <summary>
+    /// A picture shown on request (2026-09-27, the user's call: a double-clicked picture opens the viewer on its folder, held
+    /// on that picture): <paramref name="path"/> held, or live when it is the newest. A path not in the list yet (written a
+    /// moment ago, its watcher event not drained) is added first as the newest, from <paramref name="createdUtc"/>. True when
+    /// the shown picture or the live state changed.
+    /// </summary>
+    public bool Select(string path, DateTime createdUtc)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        string? before = Current;
+        bool wasLive = Live;
+        int index = IndexOf(path);
+        if (index < 0)
+        {
+            _pictures.Add(new ViewerEntry(path, createdUtc));
+            index = _pictures.Count - 1;
+        }
+
+        _held = index == _pictures.Count - 1 ? null : index;
+        return !string.Equals(before, Current, StringComparison.OrdinalIgnoreCase) || wasLive != Live;
+    }
+
     /// <summary>The window's title as things stand (<see cref="ViewerText.Title"/>).</summary>
     public string Title() =>
         Index is int index

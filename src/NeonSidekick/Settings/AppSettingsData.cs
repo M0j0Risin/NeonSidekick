@@ -71,8 +71,10 @@ public sealed class AppSettingsData
     /// The command line a double-clicked picture in the transcript opens in (later on 2026-09-24, the user's ask; the menu's
     /// <c>Image viewer</c> row since later still that day, <c>Image editor</c> before, the name kept so saved profiles read), the
     /// file's path appended, run through <c>cmd.exe</c> as <see cref="DraftEditor"/> is (<c>mspaint</c>,
-    /// <c>"C:\Program Files\GIMP 3\bin\gimp-3.exe"</c>); empty = the image editor Windows registers for the type
-    /// (Paint), else its viewer. Read at each double-click, no reconnect. No variable.
+    /// <c>"C:\Program Files\GIMP 3\bin\gimp-3.exe"</c>); empty = the built-in picture viewer on the picture's folder (later
+    /// on 2026-09-27, the user's call; the registered app off Windows), <c>system</c> (<see cref="Viewer.ViewerText.SystemViewerWord"/>)
+    /// = the image editor Windows registers for the type (Paint), else its viewer — what empty meant before. Read at each
+    /// double-click, no reconnect. No variable.
     /// </summary>
     public string ImageEditor { get; set; } = "";
 

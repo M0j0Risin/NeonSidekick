@@ -71,6 +71,7 @@ public partial class ChatScreenTests : IDisposable
     private Func<string, string, CancellationToken, Task>? _editDraft;
     private Func<Uri, NeonSidekick.Comfy.ComfyClient>? _comfyClient;
     private Action<string>? _openViewer;   // the picture viewer (2026-09-27): null = none, as off Windows
+    private Action<string>? _viewPicture;   // a double-clicked picture in that viewer (later on 2026-09-27): null = none, the registered app
     private Action<string, string>? _openImage;   // a double-clicked picture (later on 2026-09-24): null = the plain opener, _openedFiles   // /imagine and the image tools (2026-09-24): a client over a stub server
     private string? _logFile;   // /log (2026-09-22): the --log file the screen is handed; null = started without --log
     private Action<bool>? _mouse;
@@ -257,7 +258,7 @@ public partial class ChatScreenTests : IDisposable
     private async Task<string> RunAsync(IAnsiConsoleInput input, CancellationToken cancellationToken = default)
     {
         _keys = new KeySource(input, TimeSpan.FromMilliseconds(1));
-        var screen = new ChatScreen(_console, _settings, () => _settings.Current, _overriddenBy, _session, _speech, _keys, _voice, _openFile ?? _openedFiles.Add, RenderScreen, _time, _geometry, mouse: _mouse, copyToClipboard: CopyToClipboard, random: _random, clipboardImage: _clipboardImage, web: _web, setTitle: _titles.Add, externalSkills: Path.Combine(_dir, "agents-skills"), holdWheel: _holdWheel, splash: _splash, editDraft: _editDraft, mcp: _mcp, logFile: _logFile, comfyClient: _comfyClient, openImage: _openImage, claude: _claudeCli, openViewer: _openViewer);
+        var screen = new ChatScreen(_console, _settings, () => _settings.Current, _overriddenBy, _session, _speech, _keys, _voice, _openFile ?? _openedFiles.Add, RenderScreen, _time, _geometry, mouse: _mouse, copyToClipboard: CopyToClipboard, random: _random, clipboardImage: _clipboardImage, web: _web, setTitle: _titles.Add, externalSkills: Path.Combine(_dir, "agents-skills"), holdWheel: _holdWheel, splash: _splash, editDraft: _editDraft, mcp: _mcp, logFile: _logFile, comfyClient: _comfyClient, openImage: _openImage, claude: _claudeCli, openViewer: _openViewer, viewPicture: _viewPicture);
         int code = await screen.RunAsync(cancellationToken);
         Assert.Equal(0, code);
         return Output;
@@ -17468,6 +17469,54 @@ public partial class ChatScreenTests : IDisposable
         Assert.All(opened, o => Assert.Equal((Path.Combine(files, "docs", "square.bmp"), "mspaint"), o));
         Assert.DoesNotContain("🖼️ opened", output);
         Assert.Empty(_chat.Requests);
+    }
+
+    /// <summary>
+    /// The built-in viewer takes a double-clicked picture (later on 2026-09-27, the user's call): with the <c>Image viewer</c>
+    /// setting empty and a viewer to open, the picture's full path goes to it and the registered app is not started;
+    /// <c>system</c> sends it to the registered app (the old empty); a viewer that will not start falls back to that app.
+    /// </summary>
+    [Theory]
+    [InlineData("", false, true)]
+    [InlineData("System", false, false)]
+    [InlineData("", true, false)]
+    public async Task APictureDoubleClicked_OpensInTheBuiltInViewer_UnlessSystem_OrTheViewerFails(string setting, bool viewerFails, bool expectViewer)
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.ImageEditor = setting; });
+        PaneOf40Rows();
+        string files = Path.Combine(_settings.ProfileDirectory, WorkingDirectory.DefaultFolderName);
+        Directory.CreateDirectory(Path.Combine(files, "docs"));
+        string picture = Path.Combine(files, "docs", "square.bmp");
+        File.WriteAllBytes(picture, SmokeChecks.SolidBmp(4, 4));
+        var viewed = new List<string>();
+        var opened = new List<(string Path, string Editor)>();
+        _viewPicture = path =>
+        {
+            viewed.Add(path);
+            if (viewerFails)
+            {
+                throw new InvalidOperationException("no window");
+            }
+        };
+        _openImage = (path, editor) => opened.Add((path, editor));
+        StepsWhenIdle(Line("/view docs/square.bmp"), DoubleClickDown(119), Line("/exit"));
+
+        string output = await RunAsync();
+
+        if (expectViewer)
+        {
+            Assert.NotEmpty(viewed);
+            Assert.All(viewed, v => Assert.Equal(picture, v));
+            Assert.Empty(opened);
+        }
+        else
+        {
+            Assert.NotEmpty(opened);
+            Assert.All(opened, o => Assert.Equal((picture, ""), o));
+            Assert.Equal(viewerFails, viewed.Count > 0);
+        }
+
+        Assert.DoesNotContain("Could not open", output);
     }
 
     /// <summary>

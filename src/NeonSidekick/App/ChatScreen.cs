@@ -581,6 +581,9 @@ internal sealed partial class ChatScreen
     /// <summary>The picture viewer's opener (2026-09-27, <see cref="Viewer.PictureWindow.Open"/>), handed the output folder's full path; null where there is none.</summary>
     private readonly Action<string>? _openViewer;
 
+    /// <summary>A double-clicked picture's viewer (later on 2026-09-27, <see cref="Viewer.PictureWindow.OpenAt"/>), handed the picture's full path; null where there is none (the registered app then).</summary>
+    private readonly Action<string>? _viewPicture;
+
     /// <summary>
     /// A picture drawn in the transcript, for a double-click to open (later on 2026-09-24): its name, the file it came from
     /// when there is one, and its bytes for when there is none. An open prints nothing; only an error does (2026-09-24, the user's call).
@@ -852,7 +855,8 @@ internal sealed partial class ChatScreen
         Func<Uri, ComfyClient>? comfyClient = null,
         Action<string, string>? openImage = null,
         IClaudeCli? claude = null,
-        Action<string>? openViewer = null)
+        Action<string>? openViewer = null,
+        Action<string>? viewPicture = null)
     {
         _logFile = logFile;
         ArgumentNullException.ThrowIfNull(time);
@@ -875,6 +879,8 @@ internal sealed partial class ChatScreen
         _openImage = openImage ?? ((path, _) => _openFile(path));
         // The picture viewer (2026-09-27): PictureWindow.Open in the app on Windows; null = no strip button, /comfy view refused.
         _openViewer = openViewer;
+        // A double-clicked picture in that viewer (later on 2026-09-27): PictureWindow.OpenAt in the app on Windows; null = the registered app, as before.
+        _viewPicture = viewPicture;
         _ownsMcp = mcp is null;
         _mcp = mcp ?? new McpSession(settings, McpSession.DefaultTransport, time);
         _clockTools = ClockTools(time);
@@ -1601,7 +1607,7 @@ internal sealed partial class ChatScreen
 
             if (_pane.PictureAt(click.X, click.Y) is int picture)
             {
-                // A picture in the transcript (later on 2026-09-24): a double-click opens it in the image editor.
+                // A picture in the transcript (later on 2026-09-24): a double-click opens it (the built-in viewer since later on 2026-09-27, PictureOpenerFor).
                 if (_queuedClicks.Second(InputLine.PicturePairKey(picture)))
                 {
                     OpenPicture(picture);
@@ -10833,10 +10839,42 @@ internal sealed partial class ChatScreen
         }
     }
 
+    /// <summary>Where a double-clicked picture opens (<see cref="PictureOpenerFor"/>).</summary>
+    public enum PictureOpener
+    {
+        /// <summary>The built-in viewer, on the picture's folder, held on it.</summary>
+        Viewer,
+
+        /// <summary>The editor Windows registers for the type, or its viewer (the <c>Image viewer</c> setting's command left blank for <see cref="PersonaFile.OpenImage"/>).</summary>
+        System,
+
+        /// <summary>The <c>Image viewer</c> setting's command line.</summary>
+        Command,
+    }
+
+    /// <summary>
+    /// Where a double-clicked picture opens (later on 2026-09-27, the user's call: "now that we have a built-in viewer",
+    /// clicks open it): an empty <c>Image viewer</c> setting is the built-in viewer — the registered app where there is
+    /// none (<paramref name="viewerAvailable"/> false, not Windows) — <see cref="Viewer.ViewerText.SystemViewerWord"/>
+    /// (any case) the registered app as an empty setting was before, anything else its command. Pure; pinned.
+    /// </summary>
+    public static PictureOpener PictureOpenerFor(string imageEditor, bool viewerAvailable)
+    {
+        string command = (imageEditor ?? "").Trim();
+        if (command.Length == 0)
+        {
+            return viewerAvailable ? PictureOpener.Viewer : PictureOpener.System;
+        }
+
+        return string.Equals(command, Viewer.ViewerText.SystemViewerWord, StringComparison.OrdinalIgnoreCase) ? PictureOpener.System : PictureOpener.Command;
+    }
+
     /// <summary>
     /// A double-click on picture <paramref name="id"/>: its file (one without, written into <see cref="PictureTempFolder"/> first)
-    /// handed to the <c>Image viewer</c> setting's command, or the one Windows registers. An open prints nothing (2026-09-24,
-    /// the user's call); only an error does, through the flow sink, so it waits for a running reply. Any thread.
+    /// opened where <see cref="PictureOpenerFor"/> says — the built-in viewer on its folder, held on it (later on 2026-09-27),
+    /// the <c>Image viewer</c> setting's command, or the app Windows registers. A viewer that will not start falls back to
+    /// the registered app, logged. An open prints nothing (2026-09-24, the user's call); only an error does, through the flow
+    /// sink, so it waits for a running reply. Any thread.
     /// </summary>
     private void OpenPicture(int id)
     {
@@ -10872,7 +10910,27 @@ internal sealed partial class ChatScreen
                 File.WriteAllBytes(path, source.Bytes);
             }
 
-            _openImage(path, editor);
+            switch (PictureOpenerFor(editor, _viewPicture is not null))
+            {
+                case PictureOpener.Command:
+                    _openImage(path, editor);
+                    break;
+                case PictureOpener.Viewer:
+                    try
+                    {
+                        _viewPicture!(path);
+                    }
+                    catch (Exception ex) when (ex is InvalidOperationException or PlatformNotSupportedException or ArgumentException)
+                    {
+                        DiagnosticLog.Warn("Viewer", $"The picture viewer would not open {path} ({ex.Message}); opening it in the registered app instead.");
+                        _openImage(path, "");
+                    }
+
+                    break;
+                default:
+                    _openImage(path, "");
+                    break;
+            }
         }
         catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException or IOException or UnauthorizedAccessException)
         {

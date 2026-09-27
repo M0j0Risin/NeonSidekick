@@ -29,7 +29,21 @@ public static class PictureWindow
     /// The window on <paramref name="folder"/> (a full path that exists): opened, or the open one pointed at it and brought
     /// forward. Throws <see cref="InvalidOperationException"/> with the reason when no window could be made.
     /// </summary>
-    public static void Open(string folder)
+    public static void Open(string folder) => OpenOn(folder, null);
+
+    /// <summary>
+    /// The window on the folder of <paramref name="picture"/> (a full path to a file that exists), held on that picture — a
+    /// double-clicked one (2026-09-27, the user's call: clicks open the built-in viewer, not the app Windows registers).
+    /// Opened, or the open one pointed at it and brought forward. Throws as <see cref="Open(string)"/> does.
+    /// </summary>
+    public static void OpenAt(string picture)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(picture);
+        string folder = Path.GetDirectoryName(picture) ?? throw new ArgumentException($"{picture} has no folder", nameof(picture));
+        OpenOn(folder, picture);
+    }
+
+    private static void OpenOn(string folder, string? select)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(folder);
         if (!IsAvailable)
@@ -39,12 +53,12 @@ public static class PictureWindow
 
         lock (s_gate)
         {
-            if (s_open is { Alive: true } open && open.Retarget(folder))
+            if (s_open is { Alive: true } open && open.Retarget(folder, select))
             {
                 return;
             }
 
-            var window = new PictureWindowThread(folder);
+            var window = new PictureWindowThread(folder, select);
             window.Start();
             s_open = window;
         }
@@ -105,11 +119,13 @@ internal sealed unsafe class PictureWindowThread
     private readonly ManualResetEventSlim _ready = new();
     private readonly Lock _gate = new();
     private readonly string _startFolder;
+    private readonly string? _startSelect;
     private Thread? _thread;
     private IntPtr _hwnd;
     private string? _failure;
     private volatile bool _alive = true;
     private string? _pendingFolder;
+    private string? _pendingSelect;
     private FileSystemWatcher? _watcher;
     private int _generation;
     private ViewerBitmap? _bitmap;
@@ -130,7 +146,11 @@ internal sealed unsafe class PictureWindowThread
 
     private sealed record Change(int Generation, ChangeKind Kind, string Path, string? OldPath);
 
-    public PictureWindowThread(string folder) => _startFolder = folder;
+    public PictureWindowThread(string folder, string? select = null)
+    {
+        _startFolder = folder;
+        _startSelect = select;
+    }
 
     public bool Alive => _alive;
 
@@ -145,12 +165,13 @@ internal sealed unsafe class PictureWindowThread
         }
     }
 
-    /// <summary>Points the live window at <paramref name="folder"/> and brings it forward; false when the window is gone.</summary>
-    public bool Retarget(string folder)
+    /// <summary>Points the live window at <paramref name="folder"/> (held on <paramref name="select"/> when one is given) and brings it forward; false when the window is gone.</summary>
+    public bool Retarget(string folder, string? select = null)
     {
         lock (_gate)
         {
             _pendingFolder = folder;
+            _pendingSelect = select;
         }
 
         return _alive && PostMessageW(_hwnd, RetargetMessage, IntPtr.Zero, IntPtr.Zero);
@@ -291,6 +312,7 @@ internal sealed unsafe class PictureWindowThread
             uint dpi = Math.Max(96u, GetDpiForWindow(_hwnd));
             SetWindowPos(_hwnd, HwndTop, 0, 0, (int)(DefaultWidth * dpi / 96), (int)(DefaultHeight * dpi / 96), SwpNoMove | SwpNoZOrder | SwpNoActivate);
             Show(_startFolder);
+            Select(_startSelect);
             ShowWindow(_hwnd, SwShow);
             BringForward();
             DiagnosticLog.Info("Viewer", $"Picture viewer opened on {_startFolder}.");
@@ -355,16 +377,22 @@ internal sealed unsafe class PictureWindowThread
             case RetargetMessage:
             {
                 string? folder;
+                string? select;
                 lock (_gate)
                 {
                     folder = _pendingFolder;
+                    select = _pendingSelect;
                     _pendingFolder = null;
+                    _pendingSelect = null;
                 }
 
                 if (folder is not null && !string.Equals(folder, _state.Folder, StringComparison.OrdinalIgnoreCase))
                 {
                     Show(folder);
                 }
+
+                // The same folder still moves to the clicked picture (2026-09-27): a double-click on an older one jumps to it.
+                Select(select);
 
                 BringForward();
                 return IntPtr.Zero;
@@ -453,6 +481,31 @@ internal sealed unsafe class PictureWindowThread
 
         UpdateTitle();
         LoadCurrent();
+    }
+
+    // A double-clicked picture shown (2026-09-27): held on it, or live on the newest; nothing without one.
+    private void Select(string? path)
+    {
+        if (path is null)
+        {
+            return;
+        }
+
+        DateTime created;
+        try
+        {
+            created = File.GetCreationTimeUtc(path);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            created = DateTime.UtcNow;
+        }
+
+        if (_state.Select(path, created))
+        {
+            UpdateTitle();
+            LoadCurrent();
+        }
     }
 
     // From the watcher's thread: queued, and the window told (the state is only touched on the window's thread).

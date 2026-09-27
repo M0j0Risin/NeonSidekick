@@ -46,6 +46,13 @@ public static class ViewerText
     /// <summary>The transcript's line after the window opened (or was brought forward). Pinned.</summary>
     public static string Opened(string folder) => $"(🖼 picture viewer on {folder}: ← → browse, Home/End, F11 or a double-click for full screen, Esc to close)";
 
+    /// <summary>
+    /// The <c>Image viewer</c> setting's word for the app Windows registers (2026-09-27, the user's call): an empty setting
+    /// opens a double-clicked picture in this viewer, this word in the registered editor or viewer as before, any other text
+    /// runs as a command. Matched ignoring case. Pinned.
+    /// </summary>
+    public const string SystemViewerWord = "system";
+
     /// <summary>The transcript's error when there is no window to open (not Windows). Pinned.</summary>
     public const string Unavailable = "The picture viewer needs Windows.";
 

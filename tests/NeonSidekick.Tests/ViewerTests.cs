@@ -162,6 +162,49 @@ public sealed class ViewerTests : IDisposable
         Assert.False(state.Browse(ViewerAction.ToggleFullScreen));
     }
 
+    /// <summary>A double-clicked picture (later on 2026-09-27): an older one held, the newest live, and browsing goes on from there.</summary>
+    [Fact]
+    public void Select_HoldsAnOlderPicture_GoesLiveOnTheNewest_AndBrowsingGoesOnFromIt()
+    {
+        var state = ThreePictures();
+
+        Assert.True(state.Select(@"D:\PICS\A.PNG", T0));   // the case ignored
+        Assert.Equal(0, state.Index);
+        Assert.False(state.Live);
+        Assert.False(state.Select(@"D:\pics\a.png", T0));   // already shown
+        Assert.True(state.Browse(ViewerAction.Next));
+        Assert.Equal(@"D:\pics\b.png", state.Current);
+        Assert.True(state.Select(@"D:\pics\c.png", T0));
+        Assert.True(state.Live);
+        Assert.Equal(2, state.Index);
+    }
+
+    /// <summary>A picture not listed yet (written a moment ago, its watcher event still queued) is added as the newest and shown, live.</summary>
+    [Fact]
+    public void Select_OfAPictureNotListedYet_AddsIt_AsTheNewest()
+    {
+        var state = ThreePictures();
+        state.Browse(ViewerAction.First);
+
+        Assert.True(state.Select(@"D:\pics\d.png", T0.AddMinutes(4)));
+
+        Assert.Equal(4, state.Count);
+        Assert.Equal(@"D:\pics\d.png", state.Current);
+        Assert.True(state.Live);
+    }
+
+    /// <summary>Where a double-clicked picture opens (later on 2026-09-27): empty is the built-in viewer where there is one, <c>system</c> (any case) the registered app, else the command.</summary>
+    [Theory]
+    [InlineData("", true, "Viewer")]
+    [InlineData("   ", true, "Viewer")]
+    [InlineData("", false, "System")]
+    [InlineData("system", true, "System")]
+    [InlineData(" SYSTEM ", false, "System")]
+    [InlineData("mspaint", true, "Command")]
+    [InlineData("mspaint", false, "Command")]
+    public void PictureOpenerFor_Decides(string setting, bool viewerAvailable, string expected) =>   // a name: ChatScreen is internal
+        Assert.Equal(expected, ChatScreen.PictureOpenerFor(setting, viewerAvailable).ToString());
+
     [Theory]
     [InlineData(ViewerState.VkLeft, false, ViewerAction.Previous)]
     [InlineData(ViewerState.VkRight, false, ViewerAction.Next)]
@@ -187,6 +230,7 @@ public sealed class ViewerTests : IDisposable
     {
         Assert.Equal("🖼  viewer", ViewerText.StripButton);
         Assert.Equal("view", ViewerText.ViewWord);
+        Assert.Equal("system", ViewerText.SystemViewerWord);
         Assert.Equal(@"Waiting for pictures in D:\p", ViewerText.Waiting(@"D:\p"));
         Assert.Equal("x.png could not be read as a picture", ViewerText.Unreadable("x.png"));
         Assert.Equal(@"Could not open the picture viewer on D:\p: denied", ViewerText.Failed(@"D:\p", "denied"));
