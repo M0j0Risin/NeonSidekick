@@ -274,7 +274,16 @@ public sealed class AppSettingsData
     /// </summary>
     public int LlmAutoCompactPercent { get; set; } = 85;
 
-    /// <summary>How many of the most recent user turns a compact keeps word for word (0 to <see cref="Llm.ConversationHistory.MaxTurns"/>). No variable.</summary>
+    /// <summary>
+    /// How many user turns the model sees before the oldest drop off (2026-09-27, the user's call; a fixed 24
+    /// before): 0 is <c>auto</c> — no cap while <see cref="LlmAutoCompactPercent"/> can act (above 0, a known
+    /// window), else <see cref="Llm.ConversationHistory.DefaultMaxTurns"/> — and 1 to
+    /// <see cref="App.SettingsMenu.LlmMaxTurnsLimit"/> a fixed cap. Resolved before every message
+    /// (<see cref="App.ChatScreen.TurnCapFor"/>); the LLM tab, under <see cref="LlmAutoCompactPercent"/>. No variable.
+    /// </summary>
+    public int LlmMaxTurns { get; set; }
+
+    /// <summary>How many of the most recent user turns a compact keeps word for word (0 to <see cref="Llm.ConversationHistory.DefaultMaxTurns"/>). No variable.</summary>
     public int LlmCompactKeepRecent { get; set; } = 2;
 
     /// <summary>

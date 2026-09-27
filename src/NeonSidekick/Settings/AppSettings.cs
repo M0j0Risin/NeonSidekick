@@ -586,6 +586,7 @@ public sealed class AppSettings : IDisposable
         SessionTool = source.SessionTool,
         LlmApiKey = source.LlmApiKey,
         LlmAutoCompactPercent = source.LlmAutoCompactPercent,
+        LlmMaxTurns = source.LlmMaxTurns,
         LlmCompactKeepRecent = source.LlmCompactKeepRecent,
         LlmCompactShowSummary = source.LlmCompactShowSummary,
         LlmCompactType = source.LlmCompactType,

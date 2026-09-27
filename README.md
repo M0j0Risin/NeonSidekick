@@ -129,6 +129,7 @@ Neon Sidekick brings privacy-first, local LLM inference to your terminal. Powere
 | LLM compact keep recent | How many recent user turns a compact keeps word for word (0–24). | 2 |
 | LLM compact show summary | After a compact, shows what it did under the notice: the summary's text as dim lines, or one line per pruned tool result (tool and size), then how many messages were protected at the start (the opening call pairs) and at the end (the recent turns kept). | off |
 | LLM auto compact (%) | The share of the context window at which the next message compacts first (1–100; 0 = off). | 85 |
+| LLM max turns | How many user turns the model sees before the oldest drop off (1–500). `auto` keeps every turn while LLM auto compact can run (a known context window, a share above 0) and falls back to 24 when it cannot. | `auto` |
 | LLM offer tools | Whether the model gets any tools at all. Off makes every turn tool-free, for chat templates with no tool role; flipping it starts a new conversation. | on |
 | LLM tool compact type | What happens when a single turn's tool calls approach the window: `prune` stubs this turn's older results and carries on, `stop` ends the turn with a notice, `nothing`. | `prune` |
 | LLM max tool iterations | How many tool round trips one message may make before the turn stops (1–10000). | 10000 |

@@ -81,11 +81,13 @@ public enum SettingsField
 
     /// <summary>A picker over <see cref="Llm.CompactType.Names"/>: what <c>/compact</c> does. On the LLM tab; no reconnect (read at each compact).</summary>
     LlmCompactType,
-    /// <summary>How many recent user turns a compact keeps verbatim (0 to <see cref="Llm.ConversationHistory.MaxTurns"/>). On the LLM tab; no reconnect.</summary>
+    /// <summary>How many recent user turns a compact keeps verbatim (0 to <see cref="Llm.ConversationHistory.DefaultMaxTurns"/>). On the LLM tab; no reconnect.</summary>
     LlmCompactKeepRecent,
 
     /// <summary>The share of the window at which the next message compacts first; 0 = off. On the LLM tab; no reconnect.</summary>
     LlmAutoCompactPercent,
+    /// <summary>How many user turns the model sees (<see cref="Settings.AppSettingsData.LlmMaxTurns"/>): 0 = auto. On the LLM tab under <see cref="LlmAutoCompactPercent"/> (2026-09-27); no reconnect (resolved before each message).</summary>
+    LlmMaxTurns,
     /// <summary>A picker over <see cref="Llm.ToolCompactType.Names"/>: what the tool loop does at the <see cref="CompactAt"/> share mid-turn. On the LLM tab under <see cref="CompactAt"/>; no reconnect (read at each turn).</summary>
     LlmToolCompactType,
     /// <summary>Whether a turn offers the model its tools at all (<see cref="Settings.AppSettingsData.LlmOfferTools"/>). On the LLM tab above <see cref="MaxToolIterations"/>; no reconnect (read at each turn), but a change clears the conversation (<see cref="SettingsChanges.Conversation"/>).</summary>
@@ -597,10 +599,19 @@ internal sealed partial class SettingsMenu
     public static readonly string ReflectionWindowRangeError = "must be " + AppSettingsData.MinReflectionWindow.ToString(CultureInfo.InvariantCulture) + " to " + AppSettingsData.MaxReflectionWindow.ToString(CultureInfo.InvariantCulture) + " turns";
 
     /// <summary>The settings-menu wording for a bad <see cref="SettingsField.LlmCompactKeepRecent"/>. Pinned.</summary>
-    public static readonly string LlmCompactKeepRecentRangeError = "must be 0 to " + Llm.ConversationHistory.MaxTurns.ToString(CultureInfo.InvariantCulture) + " turns";
+    public static readonly string LlmCompactKeepRecentRangeError = "must be 0 to " + Llm.ConversationHistory.DefaultMaxTurns.ToString(CultureInfo.InvariantCulture) + " turns";
 
     /// <summary>The settings-menu wording for a bad <see cref="SettingsField.LlmAutoCompactPercent"/>. Pinned.</summary>
     public const string LlmAutoCompactPercentRangeError = "must be 0 (off) or 1 to 100 percent";
+
+    /// <summary>The highest fixed <see cref="SettingsField.LlmMaxTurns"/>.</summary>
+    public const int LlmMaxTurnsLimit = 500;
+
+    /// <summary>The settings-menu wording for a bad <see cref="SettingsField.LlmMaxTurns"/>. Pinned.</summary>
+    public static readonly string LlmMaxTurnsRangeError = "must be " + LlmMaxTurnsAutoLabel + " (0) or 1 to " + LlmMaxTurnsLimit.ToString(CultureInfo.InvariantCulture) + " turns";
+
+    /// <summary>How the menu shows <see cref="AppSettingsData.LlmMaxTurns"/> at 0, and the word its edit accepts for it.</summary>
+    public const string LlmMaxTurnsAutoLabel = "auto";
 
     /// <summary>The settings-menu wording for a bad <see cref="SettingsField.BotChatNonTtsDelaySeconds"/>. Pinned.</summary>
     public static readonly string BotChatNonTtsDelayRangeError = "must be 0 (off) or 1 to " + AppSettingsData.MaxBotChatNonTtsDelaySeconds.ToString(CultureInfo.InvariantCulture) + " seconds";
@@ -731,7 +742,7 @@ internal sealed partial class SettingsMenu
     [
         [SettingsField.Profile, SettingsField.NewProfileMode, SettingsField.WorkingDirectory, SettingsField.QueueMessages, SettingsField.QueueCancelMode, SettingsField.Memory, SettingsField.CopyUserPrompt, SettingsField.ShowImageThumbnails, SettingsField.ImageThumbnailSize, SettingsField.TranscriptMarkdown, SettingsField.PastePreviewLines, SettingsField.HideExitAutocomplete, SettingsField.CommandTypoIntercept, SettingsField.KeepCommandHistory, SettingsField.WelcomeSplash, SettingsField.ShowWorkingDirectory, SettingsField.ShowToolbar, SettingsField.DraftEditor, SettingsField.ImageEditor, SettingsField.Theme],
         [SettingsField.SessionLogging, SettingsField.SessionRetentionDays, SettingsField.SessionNamingMode, SettingsField.SessionShowName, SettingsField.SessionTool, SettingsField.SessionSearchMaxResults],
-        [SettingsField.LlmScanMode, SettingsField.LlmUrl, SettingsField.LlmModel, SettingsField.LlmApiKey, SettingsField.LlmReasoning, SettingsField.LlmRequestTimeoutSeconds, SettingsField.LlmTurnTimeoutSeconds, SettingsField.LlmContextLength, SettingsField.LlmMidTurnUsage, SettingsField.LlmCompactType, SettingsField.LlmCompactKeepRecent, SettingsField.LlmCompactShowSummary, SettingsField.LlmAutoCompactPercent, SettingsField.LlmOfferTools, SettingsField.LlmToolCompactType, SettingsField.LlmMaxToolIterations, SettingsField.LlmUseFunVerbs, SettingsField.LlmShowThinking],
+        [SettingsField.LlmScanMode, SettingsField.LlmUrl, SettingsField.LlmModel, SettingsField.LlmApiKey, SettingsField.LlmReasoning, SettingsField.LlmRequestTimeoutSeconds, SettingsField.LlmTurnTimeoutSeconds, SettingsField.LlmContextLength, SettingsField.LlmMidTurnUsage, SettingsField.LlmCompactType, SettingsField.LlmCompactKeepRecent, SettingsField.LlmCompactShowSummary, SettingsField.LlmAutoCompactPercent, SettingsField.LlmMaxTurns, SettingsField.LlmOfferTools, SettingsField.LlmToolCompactType, SettingsField.LlmMaxToolIterations, SettingsField.LlmUseFunVerbs, SettingsField.LlmShowThinking],
         [SettingsField.TtsOutput, SettingsField.TtsSource, SettingsField.TtsHttpUrl, SettingsField.TtsVoicePreview, SettingsField.TtsVoicePreset, SettingsField.TtsVoice, SettingsField.TtsVoice2, SettingsField.TtsVoiceMix, SettingsField.TtsSpeed],
         Fields.Where(IsVoiceField).ToArray(),
         [SettingsField.BotChatLlmMode, SettingsField.BotChatImages, SettingsField.BotChatImageMode, SettingsField.BotChatImageWorkflow, SettingsField.BotChatImageAsync, SettingsField.BotChatNonTtsDelaySeconds],
@@ -1069,6 +1080,7 @@ internal sealed partial class SettingsMenu
         SettingsField.LlmCompactKeepRecent => "LLM compact keep recent",
         SettingsField.LlmCompactShowSummary => "LLM compact show summary",
         SettingsField.LlmAutoCompactPercent => "LLM auto compact (%)",
+        SettingsField.LlmMaxTurns => "LLM max turns",
         SettingsField.LlmToolCompactType => "LLM tool compact type",
         SettingsField.LlmMaxToolIterations => "LLM max tool iterations",
         SettingsField.ImageThumbnailSize => "Image thumbnail size",
@@ -1244,6 +1256,7 @@ internal sealed partial class SettingsMenu
             SettingsField.LlmCompactKeepRecent => Turns(data.LlmCompactKeepRecent),
             SettingsField.LlmCompactShowSummary => OnOff(data.LlmCompactShowSummary),
             SettingsField.LlmAutoCompactPercent => data.LlmAutoCompactPercent > 0 ? Percent(data.LlmAutoCompactPercent) : CompactAtOffLabel,
+            SettingsField.LlmMaxTurns => data.LlmMaxTurns > 0 ? Turns(data.LlmMaxTurns) : LlmMaxTurnsAutoLabel,
             SettingsField.LlmToolCompactType => data.LlmToolCompactType,
             SettingsField.LlmMaxToolIterations => RoundTrips(data.LlmMaxToolIterations),
             SettingsField.ImageThumbnailSize => data.ImageThumbnailSize,
@@ -1785,6 +1798,7 @@ internal sealed partial class SettingsMenu
         SettingsField.ReflectionMaxRequests => data.ReflectionMaxRequests.ToString(CultureInfo.InvariantCulture),
         SettingsField.ReflectionCooldownMinutes => data.ReflectionCooldownMinutes.ToString(CultureInfo.InvariantCulture),
         SettingsField.LlmAutoCompactPercent => data.LlmAutoCompactPercent.ToString(CultureInfo.InvariantCulture),
+        SettingsField.LlmMaxTurns => data.LlmMaxTurns > 0 ? data.LlmMaxTurns.ToString(CultureInfo.InvariantCulture) : LlmMaxTurnsAutoLabel,
         SettingsField.LlmMaxToolIterations => data.LlmMaxToolIterations.ToString(CultureInfo.InvariantCulture),
         SettingsField.FileTreeMaxLength => data.FileTreeMaxLength.ToString(CultureInfo.InvariantCulture),
         SettingsField.WorkingDirectory => data.WorkingDirectory,
@@ -2572,7 +2586,7 @@ internal sealed partial class SettingsMenu
                 return true;
 
             case SettingsField.LlmCompactKeepRecent:
-                if (!int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out int keep) || keep < 0 || keep > Llm.ConversationHistory.MaxTurns)
+                if (!int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out int keep) || keep < 0 || keep > Llm.ConversationHistory.DefaultMaxTurns)
                 {
                     Sink.Error($"{FieldName(field)} {LlmCompactKeepRecentRangeError}; keeping {EditableValue(field, saved)}.");
                     return false;
@@ -2639,6 +2653,18 @@ internal sealed partial class SettingsMenu
                 }
 
                 Apply(field, d => d.LlmAutoCompactPercent = share);
+                return true;
+
+            case SettingsField.LlmMaxTurns:
+                int cap = 0;
+                if (!string.Equals(text.Trim(), LlmMaxTurnsAutoLabel, StringComparison.OrdinalIgnoreCase)
+                    && (!int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out cap) || cap < 0 || cap > LlmMaxTurnsLimit))
+                {
+                    Sink.Error($"{FieldName(field)} {LlmMaxTurnsRangeError}; keeping {EditableValue(field, saved)}.");
+                    return false;
+                }
+
+                Apply(field, d => d.LlmMaxTurns = cap);
                 return true;
 
             case SettingsField.LlmMaxToolIterations:

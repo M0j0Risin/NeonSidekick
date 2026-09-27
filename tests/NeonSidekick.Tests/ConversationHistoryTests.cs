@@ -59,10 +59,43 @@ public class ConversationHistoryTests
     }
 
     [Fact]
+    public void NoCap_KeepsEveryTurn()
+    {
+        var history = new ConversationHistory("s") { MaxTurns = null };
+        for (int i = 1; i <= ConversationHistory.DefaultMaxTurns + 6; i++)
+        {
+            history.AddUser($"u{i}");
+            history.AddAssistant($"a{i}");
+        }
+
+        Assert.Equal(ConversationHistory.DefaultMaxTurns + 6, history.TurnCount);
+        Assert.Equal("u1", history.Messages[0].Text);
+    }
+
+    [Fact]
+    public void LoweringTheCap_TrimsOnTheNextUserMessage()
+    {
+        var history = new ConversationHistory("s") { MaxTurns = null };
+        for (int i = 1; i <= 10; i++)
+        {
+            history.AddUser($"u{i}");
+            history.AddAssistant($"a{i}");
+        }
+
+        history.MaxTurns = 4;
+        Assert.Equal(10, history.TurnCount);
+
+        history.AddUser("u11");
+
+        Assert.Equal(4, history.TurnCount);
+        Assert.Equal("u8", history.Messages[0].Text);
+    }
+
+    [Fact]
     public void Trimming_DropsWholeTurns_NeverSeparatingACallFromItsResult()
     {
         var history = new ConversationHistory("s");
-        for (int i = 1; i <= ConversationHistory.MaxTurns + 3; i++)
+        for (int i = 1; i <= ConversationHistory.DefaultMaxTurns + 3; i++)
         {
             history.AddUser($"u{i}");
             history.AddMessage(new ChatMessage(ChatRole.Assistant, new List<AIContent> { new FunctionCallContent($"call{i}", "echo") }));
@@ -70,7 +103,7 @@ public class ConversationHistoryTests
             history.AddAssistant($"a{i}");
         }
 
-        Assert.Equal(ConversationHistory.MaxTurns, history.TurnCount);
+        Assert.Equal(ConversationHistory.DefaultMaxTurns, history.TurnCount);
         Assert.Equal(ChatRole.User, history.Messages[0].Role);
         Assert.Equal("u4", history.Messages[0].Text);
 
@@ -164,7 +197,7 @@ public class ConversationHistoryTests
         Assert.Equal("s", history.SystemPrompt);
 
         var many = new List<ChatMessage>();
-        for (int i = 0; i < ConversationHistory.MaxTurns + 2; i++)
+        for (int i = 0; i < ConversationHistory.DefaultMaxTurns + 2; i++)
         {
             many.Add(new ChatMessage(ChatRole.User, "u" + i));
             many.Add(new ChatMessage(ChatRole.Assistant, "a" + i));
@@ -172,7 +205,7 @@ public class ConversationHistoryTests
 
         history.Replace(many);
 
-        Assert.Equal(ConversationHistory.MaxTurns, history.TurnCount);
+        Assert.Equal(ConversationHistory.DefaultMaxTurns, history.TurnCount);
         Assert.Equal("u2", history.Messages[0].Text);
     }
 
@@ -211,7 +244,7 @@ public class ConversationHistoryTests
     public void Trimming_KeepsACarrierWithItsTurn_AndDropsItWithIt()
     {
         var history = new ConversationHistory("s");
-        for (int i = 1; i <= ConversationHistory.MaxTurns + 1; i++)
+        for (int i = 1; i <= ConversationHistory.DefaultMaxTurns + 1; i++)
         {
             history.AddUser($"u{i}");
             if (i is 1 or 2)
@@ -225,7 +258,7 @@ public class ConversationHistoryTests
         }
 
         // Turn 1 and its carrier went together; turn 2's carrier still sits between its result and its reply.
-        Assert.Equal(ConversationHistory.MaxTurns, history.TurnCount);
+        Assert.Equal(ConversationHistory.DefaultMaxTurns, history.TurnCount);
         Assert.Equal("u2", history.Messages[0].Text);
         Assert.True(ConversationHistory.IsImageCarrier(history.Messages[3]));
         Assert.Equal("a2", history.Messages[4].Text);

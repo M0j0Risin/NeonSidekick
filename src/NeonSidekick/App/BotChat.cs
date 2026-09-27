@@ -35,8 +35,8 @@ namespace NeonSidekick.App;
 /// </summary>
 public static partial class BotChat
 {
-    /// <summary>How many of the latest lines a speaker is shown: <see cref="ConversationHistory.MaxTurns"/>, the main chat's own memory.</summary>
-    public const int MaxLines = ConversationHistory.MaxTurns;
+    /// <summary>How many of the latest lines a speaker is shown: <see cref="ConversationHistory.DefaultMaxTurns"/>, the main chat's default memory.</summary>
+    public const int MaxLines = ConversationHistory.DefaultMaxTurns;
 
     /// <summary>The word that ends the names: what follows it is the topic, whatever its first word (later on 2026-09-24). Pinned.</summary>
     public const string TopicSeparator = "--";

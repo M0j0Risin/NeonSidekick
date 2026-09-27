@@ -3908,6 +3908,23 @@ internal sealed partial class ChatScreen
         return window is { Tokens: > 0 } w ? new Assistant.TurnContextGuard(w.Tokens, effective.LlmAutoCompactPercent, ToolCompactType.Resolve(effective), SkillCompactMode.Resolve(effective)) : null;
     }
 
+    /// <summary>
+    /// The history's turn cap for the next message (<see cref="ConversationHistory.MaxTurns"/>, 2026-09-27):
+    /// <c>LLM max turns</c> when it is fixed; on <c>auto</c> none while the auto compact can act (a
+    /// share above 0 of a known <paramref name="window"/>, the test <see cref="ConversationCompactor.ShouldAutoCompact"/>
+    /// makes), else <see cref="ConversationHistory.DefaultMaxTurns"/>, the backstop against an overflow nothing else would catch.
+    /// </summary>
+    public static int? TurnCapFor(AppSettingsData effective, ContextLength? window)
+    {
+        ArgumentNullException.ThrowIfNull(effective);
+        if (effective.LlmMaxTurns > 0)
+        {
+            return effective.LlmMaxTurns;
+        }
+
+        return effective.LlmAutoCompactPercent > 0 && window is { Tokens: > 0 } ? null : ConversationHistory.DefaultMaxTurns;
+    }
+
     public static string RememberedNotice(string text) => $"({NoticeGlyphs.Memory}remembered: {text})";
 
     /// <summary>After <c>/settings</c> flipped <c>LLM offer tools</c>: the conversation went with it. Pinned.</summary>
@@ -9742,6 +9759,7 @@ internal sealed partial class ChatScreen
         // at share of a known window compacts first. A failed compact is reported and the turn
         // still runs; a compact leaves the context in use zeroed, so it cannot fire twice in a row.
         int share = _effective().LlmAutoCompactPercent;
+        assistant.History.MaxTurns = TurnCapFor(_effective(), _session.ContextLength);
         if (ConversationCompactor.ShouldAutoCompact(_session.Usage.LastRequest, _session.ContextLength, share))
         {
             int percent = UsageText.Percent(_session.Usage.LastRequest.Total, _session.ContextLength) ?? share;

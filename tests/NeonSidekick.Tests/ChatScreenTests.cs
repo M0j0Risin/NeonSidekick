@@ -2092,12 +2092,12 @@ public partial class ChatScreenTests : IDisposable
         WakeOn();
         FakeModelFiles.WriteVoskModelUnder(ModelsDir, "vosk-model-en-us-0.22-lgraph");
         PushLine("/settings");
-        for (int i = 0; i < 52; i++)
+        for (int i = 0; i < 53; i++)
         {
             _console.Input.PushKey(Keys.Down);
         }
 
-        _console.Input.PushKey(Keys.Enter);     // Vosk model (row 53 since the TTS voice preset, 2026-09-27; 52 since Mouse in menus went on 2026-09-21): the picker opens on the default
+        _console.Input.PushKey(Keys.Enter);     // Vosk model (row 54 since LLM max turns, later on 2026-09-27; 53 since the TTS voice preset that day; 52 since Mouse in menus went on 2026-09-21): the picker opens on the default
         _console.Input.PushKey(Keys.Down);      // the lgraph model
         _console.Input.PushKey(Keys.Enter);
         _console.Input.PushKey(Keys.Escape);
@@ -5627,7 +5627,7 @@ public partial class ChatScreenTests : IDisposable
                 case 1: PushLine(input, "/settings"); break;
                 case 2:
                     input.Push(Keys.Right, Keys.Right);   // the LLM tab (third since 2026-09-19; fourth from 2026-09-18 until then)
-                    input.Push(Enumerable.Repeat(Keys.Down, 13).ToArray());   // LLM offer tools, the fourteenth LLM row (the mid-turn usage picker under the context length since 2026-09-25, the scan mode first, the show-summary toggle above it since 2026-09-21, the tool compact type just under it since 2026-09-15)
+                    input.Push(Enumerable.Repeat(Keys.Down, 14).ToArray());   // LLM offer tools, the fifteenth LLM row (LLM max turns above it since 2026-09-27, the mid-turn usage picker under the context length since 2026-09-25, the scan mode first, the show-summary toggle above it since 2026-09-21, the tool compact type just under it since 2026-09-15)
                     input.Push(Keys.Enter, Keys.Down, Keys.Enter, Keys.Escape);   // the on/off page, off picked, closed
                     break;
                 case 3: PushLine(input, "hi again"); break;
@@ -10212,6 +10212,40 @@ public partial class ChatScreenTests : IDisposable
     }
 
     [Fact]
+    public async Task LlmMaxTurns_AFixedCap_TrimsTheOldestTurnsOffTheRequest()
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.LlmMaxTurns = 2; });
+        _chat.EnqueueText("one").EnqueueText("two").EnqueueText("three");
+        PushLine("a");
+        PushLine("b");
+        PushLine("c");
+        PushLine("/exit");
+
+        await RunAsync();
+
+        var users = _chat.Requests[^1].Where(ConversationHistory.IsTurnStart).Select(m => m.Text).ToList();
+        Assert.Equal(new[] { "b", "c" }, users);
+    }
+
+    [Fact]
+    public async Task LlmMaxTurns_Auto_WithAKnownWindow_KeepsTurnsPastTheDefault()
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.LlmContextLength = 1_000_000; });
+        int turns = ConversationHistory.DefaultMaxTurns + 2;
+        for (int i = 1; i <= turns; i++)
+        {
+            _chat.EnqueueText("r" + i.ToString(CultureInfo.InvariantCulture));
+            PushLine("m" + i.ToString(CultureInfo.InvariantCulture));
+        }
+
+        PushLine("/exit");
+
+        await RunAsync();
+
+        Assert.Equal(turns, _chat.Requests[^1].Count(ConversationHistory.IsTurnStart));
+    }
+
+    [Fact]
     public async Task AutoCompact_NothingOlder_IsSilent()
     {
         // The share fires on the first reply, but with two turns kept and one held there is nothing older: no line, no request.
@@ -10386,6 +10420,18 @@ public partial class ChatScreenTests : IDisposable
         Assert.Null(ChatScreen.ContextGuardFor(data, new ContextLength(0, "x")));
         Assert.Equal(ToolCompactMode.Prune, ChatScreen.ContextGuardFor(new AppSettingsData(), new ContextLength(100, "x"))!.Mode);
         Assert.Equal(85, ChatScreen.ContextGuardFor(new AppSettingsData(), new ContextLength(100, "x"))!.Percent);   // the default share
+    }
+
+    [Fact]
+    public void TurnCapFor_AutoIsNoCapWhileAutoCompactCanAct_ElseTheDefault_AFixedCapAlways()
+    {
+        var window = new ContextLength(32_768, "x");
+        Assert.Null(ChatScreen.TurnCapFor(new AppSettingsData(), window));
+        Assert.Equal(ConversationHistory.DefaultMaxTurns, ChatScreen.TurnCapFor(new AppSettingsData(), null));
+        Assert.Equal(ConversationHistory.DefaultMaxTurns, ChatScreen.TurnCapFor(new AppSettingsData(), new ContextLength(0, "x")));
+        Assert.Equal(ConversationHistory.DefaultMaxTurns, ChatScreen.TurnCapFor(new AppSettingsData { LlmAutoCompactPercent = 0 }, window));
+        Assert.Equal(50, ChatScreen.TurnCapFor(new AppSettingsData { LlmMaxTurns = 50 }, window));
+        Assert.Equal(50, ChatScreen.TurnCapFor(new AppSettingsData { LlmMaxTurns = 50 }, null));
     }
 
     [Fact]

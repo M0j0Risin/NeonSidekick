@@ -650,6 +650,7 @@ public sealed class SidekickApp
 
                 // As the screen does before a message: the last reply's context past the LLM auto compact (%) share compacts first.
                 int share = EffectiveSettings.LlmAutoCompactPercent;
+                assistant.History.MaxTurns = ChatScreen.TurnCapFor(EffectiveSettings, session.ContextLength);
                 if (ConversationCompactor.ShouldAutoCompact(session.Usage.LastRequest, session.ContextLength, share))
                 {
                     int percent = UsageText.Percent(session.Usage.LastRequest.Total, session.ContextLength) ?? share;

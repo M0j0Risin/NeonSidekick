@@ -49,6 +49,7 @@ public class AppSettingsTests : IDisposable
         WorkingDirectory = @"D:\elsewhere\files",
         LlmApiKey = "sk-test",
         LlmAutoCompactPercent = 65,
+        LlmMaxTurns = 40,
         LlmCompactKeepRecent = 4,
         LlmCompactShowSummary = true,
         GitNativeEmail = "me@example.invalid",
@@ -152,6 +153,7 @@ public class AppSettingsTests : IDisposable
         Assert.Equal(expected.WorkingDirectory, actual.WorkingDirectory);
         Assert.Equal(expected.LlmApiKey, actual.LlmApiKey);
         Assert.Equal(expected.LlmAutoCompactPercent, actual.LlmAutoCompactPercent);
+        Assert.Equal(expected.LlmMaxTurns, actual.LlmMaxTurns);
         Assert.Equal(expected.LlmCompactKeepRecent, actual.LlmCompactKeepRecent);
         Assert.Equal(expected.LlmCompactShowSummary, actual.LlmCompactShowSummary);
         Assert.Equal(expected.GitNativeEmail, actual.GitNativeEmail);
@@ -267,6 +269,7 @@ public class AppSettingsTests : IDisposable
             d.WorkingDirectory = full.WorkingDirectory;
             d.LlmApiKey = full.LlmApiKey;
             d.LlmAutoCompactPercent = full.LlmAutoCompactPercent;
+            d.LlmMaxTurns = full.LlmMaxTurns;
             d.LlmCompactKeepRecent = full.LlmCompactKeepRecent;
             d.LlmCompactShowSummary = full.LlmCompactShowSummary;
             d.GitNativeEmail = full.GitNativeEmail;
@@ -378,6 +381,7 @@ public class AppSettingsTests : IDisposable
                 d.WorkingDirectory = full.WorkingDirectory;
                 d.LlmApiKey = full.LlmApiKey;
                 d.LlmAutoCompactPercent = full.LlmAutoCompactPercent;
+                d.LlmMaxTurns = full.LlmMaxTurns;
                 d.LlmCompactKeepRecent = full.LlmCompactKeepRecent;
                 d.LlmCompactShowSummary = full.LlmCompactShowSummary;
                 d.GitNativeEmail = full.GitNativeEmail;
@@ -1064,6 +1068,7 @@ public class AppSettingsTests : IDisposable
         Assert.Equal(2, s.LlmCompactKeepRecent);
         Assert.False(s.LlmCompactShowSummary);   // 2026-09-21: the one notice line unless asked
         Assert.Equal(85, s.LlmAutoCompactPercent);
+        Assert.Equal(0, s.LlmMaxTurns);
         Assert.Equal(10000, s.LlmMaxToolIterations);
         Assert.Equal("small", s.ImageThumbnailSize);
         Assert.Equal("synthwave", s.Theme);

@@ -1,4 +1,6 @@
+using System.Globalization;
 using Microsoft.Extensions.AI;
+using NeonSidekick.Diagnostics;
 using NeonSidekick.Files;
 
 namespace NeonSidekick.Llm;
@@ -21,8 +23,19 @@ namespace NeonSidekick.Llm;
 /// </summary>
 public sealed class ConversationHistory
 {
-    /// <summary>How many user turns are kept. Older turns fall off the front.</summary>
-    public const int MaxTurns = 24;
+    /// <summary>The cap a fresh history starts with, and <c>LLM max turns</c>' fallback when auto compact cannot run.</summary>
+    public const int DefaultMaxTurns = 24;
+
+    /// <summary>
+    /// How many user turns are kept; older turns fall off the front on the next <see cref="AddUser(string)"/>.
+    /// Null keeps every turn. A fixed 24 until 2026-09-27, when it became <c>LLM max turns</c> (the user's
+    /// call): a turn count is the wrong unit for the context — two dozen short voice turns are a few
+    /// thousand tokens, and every turn past the cap dropped the oldest for good (the opening pairs with
+    /// turn 1, and from the saved session too) and changed the prompt's prefix, so a local server
+    /// reprocessed the whole prompt each message. <c>auto</c> (<see cref="App.ChatScreen.TurnCapFor"/>)
+    /// sets null while the token-based auto compact can act and <see cref="DefaultMaxTurns"/> when it cannot.
+    /// </summary>
+    public int? MaxTurns { get; set; } = DefaultMaxTurns;
 
     /// <summary>The <see cref="ChatMessage.AdditionalProperties"/> key that marks a carrier message (value <c>true</c>).</summary>
     public const string CarrierKey = "neon.imageCarrier";
@@ -33,6 +46,8 @@ public sealed class ConversationHistory
     /// what the compactor's protection keeps (<c>Skill compact mode</c>). Never on the wire.
     /// </summary>
     public const string SkillResultKey = "neon.skillResult";
+
+    private const string Category = "Llm";
 
     private readonly List<ChatMessage> _messages = new();
     // Kept by Recount after every write that can change it, so a reader on another task (the
@@ -318,8 +333,14 @@ public sealed class ConversationHistory
     private void Trim()
     {
         Recount();
+        if (MaxTurns is not { } cap)
+        {
+            return;
+        }
+
         int turns = TurnCount;
-        while (turns > MaxTurns)
+        int before = turns;
+        while (turns > cap)
         {
             int firstUser = _messages.FindIndex(IsTurnStart);
             int nextUser = _messages.FindIndex(firstUser + 1, IsTurnStart);
@@ -335,5 +356,11 @@ public sealed class ConversationHistory
         }
 
         Recount();
+        // One turn per message is the steady state at the cap; more at once means the cap just
+        // came down (the window lost on a reconnect, the setting lowered), worth a line in the log.
+        if (before - TurnCount > 1)
+        {
+            DiagnosticLog.Info(Category, "trimmed " + (before - TurnCount).ToString(CultureInfo.InvariantCulture) + " turns to the cap of " + cap.ToString(CultureInfo.InvariantCulture));
+        }
     }
 }
