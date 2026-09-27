@@ -30,8 +30,8 @@ public sealed class SkillHub
 {
     public const string SearchUrl = "https://skills.sh/api/search";
 
-    /// <summary>Hits asked for.</summary>
-    public const int SearchLimit = 10;
+    /// <summary>Hits asked for: 25 since later on 2026-09-26 (the user's call; 10 at first) — the pane scrolls, and past that the fuzzy matches wander off the query.</summary>
+    public const int SearchLimit = 25;
 
     private readonly WebFetcher _fetcher;
 

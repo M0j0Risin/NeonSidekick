@@ -48,7 +48,7 @@ public class SkillInstallFlowTests : IDisposable
 
         Assert.True(await Run("pdf document"));
 
-        Assert.Equal(SkillHub.SearchUrl + "?q=pdf%20document&limit=10", _http.Requests[0].Uri.AbsoluteUri);
+        Assert.Equal(SkillHub.SearchUrl + "?q=pdf%20document&limit=25", _http.Requests[0].Uri.AbsoluteUri);
         Assert.Equal("https://codeload.github.com/anthropics/skills/zip/HEAD", _http.Requests[1].Uri.AbsoluteUri);
         Assert.Equal([SkillInstallText.SearchingLabel("pdf document"), SkillInstallText.DownloadingLabel("anthropics/skills")], _host.Spins);
         Assert.StartsWith("**pdf** — Does a thing.", _host.Previews.Single(), StringComparison.Ordinal);
