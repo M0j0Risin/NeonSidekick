@@ -1388,26 +1388,16 @@ internal sealed partial class ChatScreen
     ];
 
     /// <summary>
-    /// The Commands tab: <see cref="SlashCommands.HelpGroups"/> as two columns, a blank row between the groups
-    /// (<see cref="SlashCommands.HelpGroupsWithLog"/> under <paramref name="log"/>, the app started with <c>--log</c>, 2026-09-22).
-    /// One grid for every group, so the label column is measured once across them all.
+    /// The Commands tab: <see cref="SlashCommands.HelpEntries"/> as two columns, A to Z with no blank rows (2026-09-27,
+    /// the user's call; the groups with a blank row between them until then) — <see cref="SlashCommands.HelpEntriesWithLog"/>
+    /// under <paramref name="log"/>, the app started with <c>--log</c> (2026-09-22).
     /// </summary>
     public static IRenderable CommandsTab(bool log = false)
     {
-        var groups = SlashCommands.HelpGroupsFor(log);
         var grid = TwoColumns();
-        for (var i = 0; i < groups.Count; i++)
+        foreach (var entry in SlashCommands.HelpEntriesFor(log))
         {
-            if (i > 0)
-            {
-                // A one-space cell: an empty one renders no line and the row would collapse.
-                grid.AddRow(new Text(" "), Text.Empty);
-            }
-
-            foreach (var entry in groups[i])
-            {
-                grid.AddRow(new Text(entry.Label, Theme.AccentSecondary), new Text(entry.Summary, Theme.Body));
-            }
+            grid.AddRow(new Text(entry.Label, Theme.AccentSecondary), new Text(entry.Summary, Theme.Body));
         }
 
         return grid;
