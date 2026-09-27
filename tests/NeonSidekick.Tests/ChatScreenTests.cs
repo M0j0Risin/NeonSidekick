@@ -5668,7 +5668,7 @@ public partial class ChatScreenTests : IDisposable
     public void QuietTools_AreTheMemoryClockTimerAndFileTools()
     {
         Assert.Equal(ShellToolNames.All.Order(), ChatScreen.ShellToolNames.Order());
-        string[] expected = [SaveMemoryTool.ToolName, RecallMemoryTool.ToolName, AskUserTool.ToolName, WebSearchTool.ToolName, WebFetchTool.ToolName, OpenUrlTool.ToolName, DownloadFileTool.ToolName, SessionManagerTool.ToolName, GetCurrentTimeTool.ToolName, ShiftDateTool.ToolName, DaysBetweenTool.ToolName, StartTimerTool.ToolName, StopTimerTool.ToolName, ListTimersTool.ToolName, .. FileToolNames.All, GenerateImageTool.ToolName, SetSplashImageTool.ToolName, LoadSkillTool.ToolName, SkillEditorTool.ToolName, .. GitToolNames.All, .. ShellToolNames.All];   // the image tools since 2026-09-24
+        string[] expected = [SaveMemoryTool.ToolName, RecallMemoryTool.ToolName, AskUserTool.ToolName, WebSearchTool.ToolName, WebFetchTool.ToolName, OpenUrlTool.ToolName, DownloadFileTool.ToolName, SessionManagerTool.ToolName, GetCurrentTimeTool.ToolName, ShiftDateTool.ToolName, DaysBetweenTool.ToolName, StartTimerTool.ToolName, StopTimerTool.ToolName, ListTimersTool.ToolName, .. FileToolNames.All, GenerateImageTool.ToolName, SetSplashImageTool.ToolName, LoadSkillTool.ToolName, SkillEditorTool.ToolName, PresentPlanTool.ToolName, .. GitToolNames.All, .. ShellToolNames.All];   // the image tools since 2026-09-24; present_plan 2026-09-26 (the plan is printed as it runs)
         Assert.Equal(GitToolNames.All.Order(), ChatScreen.GitToolNames.Order());
         Assert.Equal(expected.Order(), ChatScreen.QuietTools.Order());
     }
@@ -8436,7 +8436,7 @@ public partial class ChatScreenTests : IDisposable
     public async Task WithGeometry_HelpOpensTheInfoPane_AndEscClosesIt()
     {
         _settings.Update(d => d.TtsOutput = false);
-        _console.Profile.Height = 65;   // 65 with /cmdclear (2026-09-25), 64 with /botchat (2026-09-24), 63 with /imagine and /comfy (2026-09-24), 61 with /theme (2026-09-23); the Commands tab is 48 rows (38 commands + 10 blanks) since the three tool switches went (2026-09-18); the pane scrolls past 40
+        _console.Profile.Height = 66;   // 66 with /plan (2026-09-26), 65 with /cmdclear (2026-09-25), 64 with /botchat (2026-09-24), 63 with /imagine and /comfy (2026-09-24), 61 with /theme (2026-09-23); the Commands tab is 48 rows (38 commands + 10 blanks) since the three tool switches went (2026-09-18); the pane scrolls past 40
         _geometry = new ScreenGeometry(() => null);
         PushLine("/help");
         _console.Input.PushKey(Keys.Right);
@@ -9378,36 +9378,37 @@ public partial class ChatScreenTests : IDisposable
         Assert.StartsWith(HelpRow("/copy", "copy the last reply to the clipboard as markdown, or /copy <n> | all; --thinking for the model's thinking too"), lines[20]);   // under /queue since later on 2026-09-18
         Assert.StartsWith(HelpRow("/draft", "write the next message in your editor: a temporary file, sent when it is saved and closed"), lines[21]);   // under /copy since 2026-09-19
         Assert.StartsWith(HelpRow("/loop", "repeat a message, each reply waited for: /loop <count> [delay] <message> | infinite [delay] <message> (ESC ends it)"), lines[22]);   // under /draft since 2026-09-21
-        Assert.StartsWith(HelpRow("/botchat", "let the profiles talk to each other, each in its own persona, until ESC: /botchat [profile ...] [[--] topic]"), lines[23]);   // under /loop since 2026-09-24
-        Assert.StartsWith(HelpRow("/expand", "show every line of the folded tool runs, code blocks and thinking in the transcript (Ctrl+O flips)"), lines[24]);   // under /loop since 2026-09-22 (/tools expand until then)
-        Assert.StartsWith(HelpRow("/collapse", "fold the tool runs, code blocks and thinking in the transcript again"), lines[25]);
-        Assert.True(string.IsNullOrWhiteSpace(lines[26]));
-        Assert.StartsWith(HelpRow("/interrupt", "toggle the speech input wake word interrupt, or /interrupt on|off"), lines[30]);
-        Assert.True(string.IsNullOrWhiteSpace(lines[31]));
-        Assert.StartsWith(HelpRow("/memory", "list and prune memory items, or /memory forget | edit | copy <profile> [overwrite]"), lines[32]);   // the copy word folded in later on 2026-09-22 and /memcopy's row went, every row under it one up
-        Assert.StartsWith(HelpRow("/remember", "add a memory: /remember <text>"), lines[33]);
-        Assert.StartsWith(HelpRow("/cmdcopy", "copy this profile's allowed shell commands into another, or with --history its command history: /cmdcopy <profile> [--history] [overwrite]"), lines[34]);   // 2026-09-21; --history 2026-09-25
-        Assert.StartsWith(HelpRow("/cmdclear", "clear this profile's command history (the Up/Down recall), stored and in memory (asks first)"), lines[35]);   // 2026-09-25: every row under it one down
-        Assert.StartsWith(HelpRow("/cmdlist", "list this profile's allowed shell commands on a pane, Enter removes one"), lines[36]);   // later on 2026-09-21
-        Assert.StartsWith(HelpRow("/police", "switch Shell police outside paths on or off on a pane: whether a shell command may name paths outside the working directory"), lines[37]);   // later still on 2026-09-22
-        Assert.StartsWith(HelpRow("/tree", "print a tree of the working directory's folders and files, or /tree <path>"), lines[40]);
-        Assert.StartsWith(HelpRow("/vault", "print a tree of the Obsidian vault's folders and notes, or /vault <path>"), lines[41]);   // under /tree since later still on 2026-09-22
-        Assert.StartsWith(HelpRow("/emptytrash", "empty the working directory's .trash for good (asks first)"), lines[43]);
-        Assert.StartsWith(HelpRow("/git", "write the Git native email and Git native name settings into the working directory's repository: /git user [force]"), lines[44]);   // 2026-09-21
-        Assert.True(string.IsNullOrWhiteSpace(lines[45]));
+        Assert.StartsWith(HelpRow("/plan", "plan before doing: /plan <requirement>"), lines[23]);   // under /loop since 2026-09-26: every row under it one down
+        Assert.StartsWith(HelpRow("/botchat", "let the profiles talk to each other, each in its own persona, until ESC: /botchat [profile ...] [[--] topic]"), lines[24]);   // under /loop since 2026-09-24
+        Assert.StartsWith(HelpRow("/expand", "show every line of the folded tool runs, code blocks and thinking in the transcript (Ctrl+O flips)"), lines[25]);   // under /loop since 2026-09-22 (/tools expand until then)
+        Assert.StartsWith(HelpRow("/collapse", "fold the tool runs, code blocks and thinking in the transcript again"), lines[26]);
+        Assert.True(string.IsNullOrWhiteSpace(lines[27]));
+        Assert.StartsWith(HelpRow("/interrupt", "toggle the speech input wake word interrupt, or /interrupt on|off"), lines[31]);
+        Assert.True(string.IsNullOrWhiteSpace(lines[32]));
+        Assert.StartsWith(HelpRow("/memory", "list and prune memory items, or /memory forget | edit | copy <profile> [overwrite]"), lines[33]);   // the copy word folded in later on 2026-09-22 and /memcopy's row went, every row under it one up
+        Assert.StartsWith(HelpRow("/remember", "add a memory: /remember <text>"), lines[34]);
+        Assert.StartsWith(HelpRow("/cmdcopy", "copy this profile's allowed shell commands into another, or with --history its command history: /cmdcopy <profile> [--history] [overwrite]"), lines[35]);   // 2026-09-21; --history 2026-09-25
+        Assert.StartsWith(HelpRow("/cmdclear", "clear this profile's command history (the Up/Down recall), stored and in memory (asks first)"), lines[36]);   // 2026-09-25: every row under it one down
+        Assert.StartsWith(HelpRow("/cmdlist", "list this profile's allowed shell commands on a pane, Enter removes one"), lines[37]);   // later on 2026-09-21
+        Assert.StartsWith(HelpRow("/police", "switch Shell police outside paths on or off on a pane: whether a shell command may name paths outside the working directory"), lines[38]);   // later still on 2026-09-22
+        Assert.StartsWith(HelpRow("/tree", "print a tree of the working directory's folders and files, or /tree <path>"), lines[41]);
+        Assert.StartsWith(HelpRow("/vault", "print a tree of the Obsidian vault's folders and notes, or /vault <path>"), lines[42]);   // under /tree since later still on 2026-09-22
+        Assert.StartsWith(HelpRow("/emptytrash", "empty the working directory's .trash for good (asks first)"), lines[44]);
+        Assert.StartsWith(HelpRow("/git", "write the Git native email and Git native name settings into the working directory's repository: /git user [force]"), lines[45]);   // 2026-09-21
+        Assert.True(string.IsNullOrWhiteSpace(lines[46]));
         // /speak and /view: a group of their own (the user's call, 2026-09-17); /window (/windowsize until then) under /view since later on 2026-09-19.
-        Assert.StartsWith(HelpRow("/speak", "read a text file from the working directory aloud, as a reply: /speak <file> [n], or /speak to resume, or /speak <n> from sentence n"), lines[46]);
-        Assert.StartsWith(HelpRow("/echo", "print a line as a reply and read it aloud when speech is on: /echo <text>"), lines[47]);
-        Assert.StartsWith(HelpRow("/view", "show an image from the working directory in the transcript, as large as the window allows: /view <image>"), lines[48]);
-        Assert.StartsWith(HelpRow("/imagine", "generate a picture on ComfyUI from your own prompt, sent as typed: /imagine [workflow] <prompt> [-- <negative>] [--seed N] [--size WxH]"), lines[49]);   // 2026-09-24
-        Assert.StartsWith(HelpRow("/comfy", "show the ComfyUI server's status and the workflows the image tools can run, /comfy edit json|markdown <workflow> to open its file in your editor, or /comfy purge to empty the output folder"), lines[50]);
-        Assert.StartsWith(HelpRow("/window", "show the terminal window's width and height"), lines[51]);
-        Assert.True(string.IsNullOrWhiteSpace(lines[52]));
-        Assert.StartsWith(HelpRow("/persona", "export and manage persona.md (the personality) in your editor, or /persona reset to go back to the default, or /persona copy <profile> [force] to copy it into another profile"), lines[53]);   // copy 2026-09-21
-        Assert.True(string.IsNullOrWhiteSpace(lines[56]));
-        Assert.StartsWith(HelpRow("/timer", "list timers, or /timer <duration> [name] (10m, 90s, 1h30m) | stop <name> | stop all"), lines[57]);   // the bottom group's first row since later still on 2026-09-19 (under /help from earlier that day)
-        Assert.StartsWith(HelpRow("/help", "show help"), lines[58]);   // the bottom group since 2026-09-16, above /about; under /timer since later still on 2026-09-19
-        Assert.StartsWith(HelpRow("/about", "show general information about the app and profile"), lines[59]);
+        Assert.StartsWith(HelpRow("/speak", "read a text file from the working directory aloud, as a reply: /speak <file> [n], or /speak to resume, or /speak <n> from sentence n"), lines[47]);
+        Assert.StartsWith(HelpRow("/echo", "print a line as a reply and read it aloud when speech is on: /echo <text>"), lines[48]);
+        Assert.StartsWith(HelpRow("/view", "show an image from the working directory in the transcript, as large as the window allows: /view <image>"), lines[49]);
+        Assert.StartsWith(HelpRow("/imagine", "generate a picture on ComfyUI from your own prompt, sent as typed: /imagine [workflow] <prompt> [-- <negative>] [--seed N] [--size WxH]"), lines[50]);   // 2026-09-24
+        Assert.StartsWith(HelpRow("/comfy", "show the ComfyUI server's status and the workflows the image tools can run, /comfy edit json|markdown <workflow> to open its file in your editor, or /comfy purge to empty the output folder"), lines[51]);
+        Assert.StartsWith(HelpRow("/window", "show the terminal window's width and height"), lines[52]);
+        Assert.True(string.IsNullOrWhiteSpace(lines[53]));
+        Assert.StartsWith(HelpRow("/persona", "export and manage persona.md (the personality) in your editor, or /persona reset to go back to the default, or /persona copy <profile> [force] to copy it into another profile"), lines[54]);   // copy 2026-09-21
+        Assert.True(string.IsNullOrWhiteSpace(lines[57]));
+        Assert.StartsWith(HelpRow("/timer", "list timers, or /timer <duration> [name] (10m, 90s, 1h30m) | stop <name> | stop all"), lines[58]);   // the bottom group's first row since later still on 2026-09-19 (under /help from earlier that day)
+        Assert.StartsWith(HelpRow("/help", "show help"), lines[59]);   // the bottom group since 2026-09-16, above /about; under /timer since later still on 2026-09-19
+        Assert.StartsWith(HelpRow("/about", "show general information about the app and profile"), lines[60]);
         Assert.StartsWith(HelpRow("/exit", "exit/quit the application"), lines[^1]);   // the very last row since 2026-09-16
         Assert.DoesNotContain("/windowsize", Output);
         Assert.DoesNotContain("(also", Output);
@@ -11941,7 +11942,7 @@ public partial class ChatScreenTests : IDisposable
         _console.Write(ChatScreen.CommandsTab(log: true));
 
         string[] lines = Output.TrimEnd('\n').Split('\n');
-        Assert.Equal(62, lines.Length);   // CommandsTab()'s 61 (/cmdclear, 2026-09-25; 60 with /botchat, 2026-09-24) and the /log row
+        Assert.Equal(63, lines.Length);   // CommandsTab()'s 62 (/plan, 2026-09-26; 61 with /cmdclear, 2026-09-25; 60 with /botchat, 2026-09-24) and the /log row
         int help = Array.FindIndex(lines, l => l.StartsWith(HelpRow("/help", "show help"), StringComparison.Ordinal));
         Assert.StartsWith(HelpRow("/log", SlashCommands.LogEntry.Summary), lines[help - 1]);
         Assert.StartsWith(HelpRow("/timer", "list timers, or /timer <duration> [name] (10m, 90s, 1h30m) | stop <name> | stop all"), lines[help - 2]);

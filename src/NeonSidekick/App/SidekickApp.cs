@@ -31,7 +31,7 @@ public sealed class SidekickApp
     public const string Name = "NeonSidekick";
 
     /// <summary>The second line of headless output.</summary>
-    public const string HeadlessHint = "Headless mode. Type a message; /clear or /new forgets the conversation; /compact [focus] shrinks it; /exit or EOF exits.";
+    public const string HeadlessHint = "Headless mode. Type a message; /clear or /new forgets the conversation; /compact [focus] shrinks it; /plan <requirement> plans before doing (/plan approve [--fresh] | cancel | show); /exit or EOF exits.";
 
     /// <summary>Printed once when discovery under <paramref name="scope"/> found nothing. Pinned by tests; shared with the chat screen.</summary>
     public static string HeadlessNoServerLine(ScanScope scope) => LlmSession.NoServerLine(scope);
@@ -477,6 +477,11 @@ public sealed class SidekickApp
         using var sessions = new Sessions.SessionStore(_settings.ProfileDirectory, _time);
         long? sessionId = null;
         var sessionTools = ChatScreen.SessionTools(sessions, () => EffectiveSettings, () => sessionId, _time);
+        // Plan mode (2026-09-26): no pane to approve on, so a presented plan is saved and the user approves it with
+        // /plan approve; the saved line is printed once the turn is over, never inside the streamed reply.
+        var plan = new Plans.PlanSession();
+        var presentPlan = new Llm.Tools.PresentPlanTool(plan, files, _time, (_, _) => Task.FromResult(new Plans.PlanVerdict(Plans.PlanChoice.Saved)));
+        int planRevisionShown = 0;
         try
         {
             await HeadlessLineAsync(VersionLine).ConfigureAwait(false);
@@ -550,6 +555,12 @@ public sealed class SidekickApp
                     assistant?.History.Clear();
                     session.Usage.ResetConversation();
                     sessionId = null;
+                    if (plan.Active)
+                    {
+                        await HeadlessNoticeLineAsync("[notice] " + Plans.PlanText.LeftOnResetNotice(plan.Path)).ConfigureAwait(false);
+                        plan.Exit();
+                    }
+
                     await HeadlessLineAsync(HeadlessReplyPrefix + (isClear ? "(conversation cleared)" : ChatScreen.NewConversationNotice)).ConfigureAwait(false);
                     continue;
                 }
@@ -573,6 +584,24 @@ public sealed class SidekickApp
                     continue;
                 }
 
+                if (command == SlashCommand.Plan)
+                {
+                    // /plan headless (2026-09-26): the screen's words, the approval typed; a line that starts a turn comes back as its text.
+                    Assistant live = assistant;
+                    if (await HeadlessPlanAsync(plan, files, args, () => { live.History.Clear(); session.Usage.ResetConversation(); sessionId = null; }).ConfigureAwait(false) is not { } planned)
+                    {
+                        if (sessionId is { } planSession)
+                        {
+                            sessions.SaveHistory(planSession, Sessions.SessionHistory.ToJson(assistant.History.Messages, plan.ToStored()));
+                        }
+
+                        continue;
+                    }
+
+                    text = planned;
+                    planRevisionShown = plan.Revision;
+                }
+
                 // As the screen does before a message: the last reply's context past the LLM auto compact (%) share compacts first.
                 int share = EffectiveSettings.LlmAutoCompactPercent;
                 if (ConversationCompactor.ShouldAutoCompact(session.Usage.LastRequest, session.ContextLength, share))
@@ -590,8 +619,14 @@ public sealed class SidekickApp
                 }
 
                 // Per turn, as the screen does: a memory saved in this turn is in the next one's prompt.
-                ChatScreen.PrepareTurn(assistant, memory, memoryTools, standingTools, persona, operata, vocalia, EffectiveSettings.Memory, speechOutput: false, EffectiveSettings.LlmMaxToolIterations, EffectiveSettings.LlmOfferTools, webTools, EffectiveSettings.WebTools, ChatScreen.ContextGuardFor(EffectiveSettings, session.ContextLength), fileTools, EffectiveSettings.FileTools, skills: skills with { Enabled = EffectiveSettings.AgentSkills, External = EffectiveSettings.AgentSkills && EffectiveSettings.ExternalSkills }, sessionTools: sessionTools, sessionsEnabled: EffectiveSettings.SessionTool, disabledTools: ToolsText.DisabledSet(EffectiveSettings.ToolsDisabled), mcpTools: mcp.Tools, mcpEnabled: EffectiveSettings.McpServers, safeEdits: EffectiveSettings.FileSafeEdits, gitTools: gitTools, gitEnabled: EffectiveSettings.GitNativeTools, shellTools: shellTools, shellEnabled: ChatScreen.ShellOffered(EffectiveSettings), processes: processes, shellBridge: EffectiveSettings.ShellToolBridge, shellPolice: EffectiveSettings.ShellPoliceOutsidePaths, obsidianTools: ChatScreen.ObsidianToolsFor(vaultTools, EffectiveSettings), obsidianEnabled: ChatScreen.ObsidianOffered(EffectiveSettings), sqlTools: sqlTools, sqlEnabled: ChatScreen.SqlOffered(EffectiveSettings, sql), comfyTools: comfyTools, comfyEnabled: ChatScreen.ComfyOffered(EffectiveSettings, comfy), shellNative: EffectiveSettings.ShellPreferNative);
+                ChatScreen.PrepareTurn(assistant, memory, memoryTools, standingTools, persona, operata, vocalia, EffectiveSettings.Memory, speechOutput: false, EffectiveSettings.LlmMaxToolIterations, EffectiveSettings.LlmOfferTools, webTools, EffectiveSettings.WebTools, ChatScreen.ContextGuardFor(EffectiveSettings, session.ContextLength), fileTools, EffectiveSettings.FileTools, skills: skills with { Enabled = EffectiveSettings.AgentSkills, External = EffectiveSettings.AgentSkills && EffectiveSettings.ExternalSkills }, sessionTools: sessionTools, sessionsEnabled: EffectiveSettings.SessionTool, disabledTools: ToolsText.DisabledSet(EffectiveSettings.ToolsDisabled), mcpTools: mcp.Tools, mcpEnabled: EffectiveSettings.McpServers, safeEdits: EffectiveSettings.FileSafeEdits, gitTools: gitTools, gitEnabled: EffectiveSettings.GitNativeTools, shellTools: shellTools, shellEnabled: ChatScreen.ShellOffered(EffectiveSettings), processes: processes, shellBridge: EffectiveSettings.ShellToolBridge, shellPolice: EffectiveSettings.ShellPoliceOutsidePaths, obsidianTools: ChatScreen.ObsidianToolsFor(vaultTools, EffectiveSettings), obsidianEnabled: ChatScreen.ObsidianOffered(EffectiveSettings), sqlTools: sqlTools, sqlEnabled: ChatScreen.SqlOffered(EffectiveSettings, sql), comfyTools: comfyTools, comfyEnabled: ChatScreen.ComfyOffered(EffectiveSettings, comfy), shellNative: EffectiveSettings.ShellPreferNative, plan: plan.Turn(presentPlan));
                 var turn = await RunHeadlessTurnAsync(session, assistant, text, cancellationToken).ConfigureAwait(false);
+                if (plan.Active && plan.Path is { } planPath && plan.Revision > planRevisionShown)
+                {
+                    planRevisionShown = plan.Revision;
+                    await HeadlessNoticeLineAsync("[notice] " + Plans.PlanText.SavedNotice(planPath, plan.Revision) + " — /plan approve [--fresh] starts it").ConfigureAwait(false);
+                }
+
                 if (EffectiveSettings.SessionLogging)
                 {
                     sessionId ??= sessions.Begin(Sessions.SessionText.FirstLineTitle(text), session.Endpoint?.ModelId ?? "");
@@ -599,7 +634,7 @@ public sealed class SidekickApp
                     {
                         var usage = session.Usage.LastRequest;
                         sessions.AppendTurn(id, text, turn.Reply, turn.Trace.ToolCalls, turn.Trace.ToolNames, turn.Trace.LoadedSkills, turn.Trace.Errors, usage.Input, usage.Output, turn.Cancelled);
-                        sessions.SaveHistory(id, Sessions.SessionHistory.ToJson(assistant.History.Messages));
+                        sessions.SaveHistory(id, Sessions.SessionHistory.ToJson(assistant.History.Messages, plan.ToStored()));
                     }
                 }
             }
@@ -623,6 +658,88 @@ public sealed class SidekickApp
             await mcp.DisposeAsync().ConfigureAwait(false);
             DiagnosticLog.Emitted -= forward;
             DiagnosticLog.EchoToConsole = previousEcho;
+        }
+    }
+
+    /// <summary>
+    /// <c>/plan</c> headless (2026-09-26): <see cref="ChatScreen.ParsePlanArgs"/> as on the screen, its lines as
+    /// <c>[notice]</c> / <c>[error]</c>. Returns the text to send as a turn — the requirement, more detail, or the
+    /// approved plan's message (after <paramref name="forget"/> for <c>--fresh</c>) — or null when the line is done.
+    /// </summary>
+    private async Task<string?> HeadlessPlanAsync(Plans.PlanSession plan, WorkingDirectory files, string args, Action forget)
+    {
+        switch (ChatScreen.ParsePlanArgs(args, plan.Active))
+        {
+            case ChatScreen.PlanCommand.Usage:
+                await HeadlessLineAsync(HeadlessReplyPrefix + "[error] " + Plans.PlanText.UsageError).ConfigureAwait(false);
+                return null;
+            case ChatScreen.PlanCommand.NotPlanning:
+                await HeadlessLineAsync(HeadlessReplyPrefix + "[error] " + Plans.PlanText.NotPlanningError).ConfigureAwait(false);
+                return null;
+            case ChatScreen.PlanCommand.Show:
+                foreach (string line in Plans.PlanText.ShowLines(plan))
+                {
+                    await HeadlessNoticeLineAsync("[notice] " + line.Trim()).ConfigureAwait(false);
+                }
+
+                return null;
+            case ChatScreen.PlanCommand.Cancel:
+            {
+                string? path = plan.Path;
+                if (path is not null && Llm.Tools.PresentPlanTool.MarkFile(files, path, Plans.PlanStatus.Cancelled, _time.GetLocalNow(), plan.Requirement) is { } problem)
+                {
+                    await HeadlessNoticeLineAsync("[notice] " + problem).ConfigureAwait(false);
+                }
+
+                plan.Exit();
+                await HeadlessNoticeLineAsync("[notice] " + Plans.PlanText.CancelledNotice(path)).ConfigureAwait(false);
+                return null;
+            }
+
+            case ChatScreen.PlanCommand.Approve or ChatScreen.PlanCommand.ApproveFresh:
+            {
+                if (plan.Path is not { } path)
+                {
+                    await HeadlessLineAsync(HeadlessReplyPrefix + "[error] " + Plans.PlanText.NothingPresentedError).ConfigureAwait(false);
+                    return null;
+                }
+
+                if (Llm.Tools.PresentPlanTool.ReadWhole(files, path) is not { } text)
+                {
+                    await HeadlessLineAsync(HeadlessReplyPrefix + "[error] " + Plans.PlanText.PlanUnreadableError(path)).ConfigureAwait(false);
+                    return null;
+                }
+
+                if (Llm.Tools.PresentPlanTool.MarkFile(files, path, Plans.PlanStatus.Approved, _time.GetLocalNow(), plan.Requirement) is { } problem)
+                {
+                    await HeadlessNoticeLineAsync("[notice] " + problem).ConfigureAwait(false);
+                }
+
+                bool fresh = ChatScreen.ParsePlanArgs(args, planning: true) == ChatScreen.PlanCommand.ApproveFresh;
+                plan.Exit();
+                await HeadlessNoticeLineAsync("[notice] " + Plans.PlanText.ApprovedNotice(path, fresh)).ConfigureAwait(false);
+                if (!fresh)
+                {
+                    return Plans.PlanText.ExecuteMessage(path);
+                }
+
+                forget();
+                return Plans.PlanText.ExecuteFreshMessage(path, Plans.PlanDocument.Body(text));
+            }
+
+            case ChatScreen.PlanCommand.Enter:
+                if (!EffectiveSettings.LlmOfferTools)
+                {
+                    await HeadlessLineAsync(HeadlessReplyPrefix + "[error] " + Plans.PlanText.NeedsToolsError).ConfigureAwait(false);
+                    return null;
+                }
+
+                plan.Enter(args);
+                await HeadlessNoticeLineAsync("[notice] " + Plans.PlanText.EnteredNotice).ConfigureAwait(false);
+                return plan.Requirement;
+
+            default:
+                return args;
         }
     }
 

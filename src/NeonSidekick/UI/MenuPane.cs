@@ -128,6 +128,9 @@ public readonly record struct MenuPick(int Tab, int Row, bool Toggle = false, in
 /// the status line while it is open — drawn with the next page, which always follows (the settings
 /// loop shows the list again, a typed fallback its slot), so a save never shows on a stale row.
 ///
+/// <para>The wheel over the list moves the cursor a row a notch (never wrapping); over the transcript
+/// above the pane it scrolls the transcript (2026-09-26), the cursor left where it was.</para>
+///
 /// <para>Keys: Up/Down move (wrapping), Home/End, PageUp/PageDown by a page, Enter picks (and
 /// clears the status — the action's result fills it), ESC backs out; on a tabbed page ←/→ and
 /// Tab/Shift+Tab switch tabs (wrapping, the cursor back on the first row, the status dropped —
@@ -442,9 +445,17 @@ public sealed class MenuPane : INoticeSink
                 _clicks.Reset();
                 if (input is InputEvent.Wheel wheel)
                 {
-                    // A notch is the arrow key's move — a row per notch, away from the user is up —
-                    // that never wraps: the list's end is where the wheel stops. Anywhere on the
-                    // screen, the pane is modal.
+                    if (_pane.TryHitOutside(wheel.X, wheel.Y))
+                    {
+                        // Off the pane (2026-09-26, the user's ask: scroll back through the chat while the plan's
+                        // approval waits): the transcript scrolls as it does at the idle line and under a reply;
+                        // the list keeps its cursor.
+                        _pane.ScrollWheel(wheel.Notches);
+                        continue;
+                    }
+
+                    // On the pane (or where the console cannot say): the arrow key's move — a row per
+                    // notch, away from the user is up — that never wraps: the list's end is where the wheel stops.
                     if (count > 0)
                     {
                         MoveTo(Math.Clamp(_cursor - wheel.Notches, 0, count - 1));

@@ -45,6 +45,7 @@ namespace NeonSidekick.App;
 /// <param name="SqlEnabled">Whether the SQL tools may be offered (2026-09-23): the setting <c>SQL tools</c> on and a usable connection in <c>sql.json</c> — the group's switch (<see cref="ChatScreen.SqlOffered"/>).</param>
 /// <param name="SqlTools">How many SQL tools the next turn offers (the ones switched off on <c>/tools</c> left out); the rules carry <see cref="Assistant.SqlRule"/> while any is.</param>
 /// <param name="ShellNative">The setting <c>Shell prefer native tools</c> (2026-09-26): on, with a shell rule, the rules gain <see cref="Assistant.ShellNativeRule"/> after it.</param>
+/// <param name="PlanDirective">Plan mode's directive while planning (2026-09-26, <see cref="Plans.PlanText.Directive"/>), else null: its own section, after the skills.</param>
 public sealed record SystemPromptFacts(
     string? Persona,
     string? OperatingRules,
@@ -76,7 +77,8 @@ public sealed record SystemPromptFacts(
     bool ObsidianAllowDelete = false,
     bool SqlEnabled = false,
     int SqlTools = 0,
-    bool ShellNative = false)
+    bool ShellNative = false,
+    string? PlanDirective = null)
 {
     /// <summary>Whether the rules carry <see cref="Assistant.McpRule"/>: tools on, the MCP switch on and at least one MCP tool offered.</summary>
     public bool Mcp => ToolsEnabled && McpEnabled && McpTools > 0;
@@ -317,6 +319,12 @@ public static class SystemPromptSummary
             sections.Add(new($"Skills — on, {count}", SkillsPrompt.Section(skills)));
         }
 
+        // Plan mode's directive only while planning (2026-09-26), where the prompt carries it: after the skills, ahead of the voice.
+        if (facts.ToolsEnabled && !string.IsNullOrWhiteSpace(facts.PlanDirective))
+        {
+            sections.Add(new(PlanModeHeading, facts.PlanDirective.Trim()));
+        }
+
         // The voice directive only while it is in the prompt (2026-09-26): a "not included" heading on every silent turn was noise.
         if (facts.TtsOutput && facts.SpeechReady)
         {
@@ -356,8 +364,12 @@ public static class SystemPromptSummary
             obsidian: facts.Obsidian,
             obsidianDelete: facts.ObsidianDelete,
             sql: facts.Sql,
-            native: facts.Native);
+            native: facts.Native,
+            plan: facts.ToolsEnabled ? facts.PlanDirective : null);
     }
+
+    /// <summary>The Prompt tab's heading over plan mode's directive (2026-09-26). Pinned.</summary>
+    public const string PlanModeHeading = "Plan mode — on, read-only tools until the plan is approved";
 
     /// <summary>The Prompt tab: every section's heading and, when it has one, its text.</summary>
     public static IRenderable PromptTab(SystemPromptFacts facts)

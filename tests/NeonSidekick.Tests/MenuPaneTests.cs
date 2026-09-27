@@ -862,7 +862,7 @@ public class MenuPaneTests : IDisposable
         menu.Close();
     }
 
-    /// <summary>A notch is the arrow's move — down a row for a notch towards the user — reported like one, and it never wraps; Enter picks where it stopped.</summary>
+    /// <summary>A notch on the list is the arrow's move — down a row for a notch towards the user — reported like one, and it never wraps; Enter picks where it stopped.</summary>
     [Fact]
     public async Task TheWheel_MovesTheCursorARowANotch_AndStopsAtTheEnds()
     {
@@ -871,11 +871,12 @@ public class MenuPaneTests : IDisposable
         pane.Show();
         var menu = new MenuPane(pane, keys);
         var highlighted = new List<int>();
-        input.PushWheel(1);             // at the top: nothing, no wrap
-        input.PushWheel(-1, 30, 50);    // "two", from anywhere on the screen
-        input.PushWheel(-3);            // three notches, clamped at "three"
-        input.PushWheel(-1);            // at the end: nothing
-        input.PushWheel(1);             // back to "two"
+        // The overlay's rows are 100 (the title) to 104; a notch anywhere on them is the list's (2026-09-26: off them it scrolls the transcript).
+        input.PushWheel(1, 0, 102);     // at the top: nothing, no wrap
+        input.PushWheel(-1, 30, 100);   // "two", from the title row too
+        input.PushWheel(-3, 0, 104);    // three notches, clamped at "three"
+        input.PushWheel(-1, 0, 102);    // at the end: nothing
+        input.PushWheel(1, 0, 103);     // back to "two"
         input.Push(Keys.Enter);
 
         Assert.Equal(new MenuPick(0, 1), await menu.PickAsync(Page("one", "two", "three"), 0, CancellationToken.None, highlighted.Add));
@@ -884,9 +885,47 @@ public class MenuPaneTests : IDisposable
         menu.Close();
 
         // An empty page: a notch is nothing, and ESC still leaves.
-        input.PushWheel(-1).Push(Keys.Escape);
+        input.PushWheel(-1, 0, 100).Push(Keys.Escape);
         Assert.Null(await menu.PickAsync(Page(), 0, CancellationToken.None, highlighted.Add));
         Assert.Equal([1, 2, 1], highlighted);
+        menu.Close();
+    }
+
+    /// <summary>
+    /// A notch off the pane — over the transcript above it (2026-09-26, the user's ask: the chat read back while the
+    /// plan's approval waits) — scrolls the transcript, never the list: no row move is reported, and Enter picks the opening row.
+    /// </summary>
+    [Fact]
+    public async Task TheWheel_OffThePane_ScrollsTheTranscript_AndLeavesTheCursor()
+    {
+        _console.Profile.Height = 20;
+        var (pane, input, keys) = ClickablePane(cursorTop: 100);
+        using var _ = pane;
+        pane.Open();
+        pane.Show();
+        for (int i = 1; i <= 40; i++)
+        {
+            pane.Write(new Markup("L" + i.ToString("00", System.Globalization.CultureInfo.InvariantCulture) + Environment.NewLine));
+        }
+
+        var menu = new MenuPane(pane, keys);
+        var highlighted = new List<int>();
+        int below = -1;
+        input.PushWheel(2, 5, 90);      // two notches away from the user, over the transcript: up six rows
+        input.OnWait = () =>
+        {
+            if (below < 0)
+            {
+                below = pane.RowsBelow;
+                input.PushWheel(-2, 5, 99);   // back down, from the upper rule: the bottom again
+                input.OnWait = () => input.Push(Keys.Enter);
+            }
+        };
+
+        Assert.Equal(new MenuPick(0, 1), await menu.PickAsync(Page("one", "two", "three"), 1, CancellationToken.None, highlighted.Add));
+        Assert.Equal(2 * ScreenPane.WheelRows, below);
+        Assert.False(pane.Scrolled);
+        Assert.Empty(highlighted);
         menu.Close();
     }
 

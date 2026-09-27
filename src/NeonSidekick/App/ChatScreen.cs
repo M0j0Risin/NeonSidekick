@@ -10,6 +10,7 @@ using NeonSidekick.Llm.Tools;
 using NeonSidekick.Mcp;
 using NeonSidekick.Memory;
 using NeonSidekick.Obsidian;
+using NeonSidekick.Plans;
 using NeonSidekick.Sessions;
 using NeonSidekick.Settings;
 using NeonSidekick.Shell;
@@ -560,6 +561,11 @@ internal sealed partial class ChatScreen
     private readonly CommandGate _gate;
     private readonly IReadOnlyList<AIFunction> _shellTools;
     private readonly CommandApprovalMenu _approvalMenu;
+
+    // Plan mode (2026-09-26): the state, its approval pane and the tool that presents the plan (ChatScreen.Plan.cs).
+    private readonly PlanSession _plan = new();
+    private readonly PlanApprovalMenu _planMenu;
+    private readonly PresentPlanTool _presentPlan;
     private readonly IReadOnlyList<AIFunction> _askTools;
     private readonly SkillCatalog _catalog;
     private readonly IReadOnlyList<AIFunction> _skillTools;
@@ -913,7 +919,7 @@ internal sealed partial class ChatScreen
             // then the speech switches as of the last connect, the wake word and the interrupt
             // once ready. The tick re-reads it, so the brain and the tag come and go with their
             // jobs (LlmSession.IsLearning / IsTitling), nothing pushed.
-            Strip = () => StripGlyphs(_session.IsLearning, _session.IsTitling, _speech.Enabled, _voice.Enabled, _voice.WakeReady, _voice.InterruptReady),
+            Strip = () => PlanStrip(_plan.Active, StripGlyphs(_session.IsLearning, _session.IsTitling, _speech.Enabled, _voice.Enabled, _voice.WakeReady, _voice.InterruptReady)),
             // The model at the row's right edge, from the live connection: empty until one lands;
             // the reasoning glyph after it in its own colour, none with the model.
             // The session's name at the right edge of the rule above the input row (2026-09-18, the user's
@@ -980,6 +986,8 @@ internal sealed partial class ChatScreen
         _questionMenu = new QuestionMenu(_menuPane, _input);
         _approvalMenu = new CommandApprovalMenu(_menuPane);
         _askTools = AskTools(AskUserAsync, _effective);
+        _planMenu = new PlanApprovalMenu(_menuPane, _input);
+        _presentPlan = new PresentPlanTool(_plan, _files, time, PresentPlanAsync);
         // Menus read console.Input themselves; over the key source they also see type-ahead.
         _flow = new FlowSink(this);
         _queueMenu = new QueueMenu(_queue, _flow, _menuPane);
@@ -2378,7 +2386,7 @@ internal sealed partial class ChatScreen
     private SystemPromptFacts SystemPromptFacts()
     {
         var effective = _effective();
-        var disabled = ToolsText.DisabledSet(effective.ToolsDisabled);
+        var disabled = TurnDisabled(effective);
         return new SystemPromptFacts(
             _persona.Read(),
             _operata.Read(),
@@ -2410,7 +2418,8 @@ internal sealed partial class ChatScreen
             effective.ObsidianAllowDelete,
             SqlOffered(effective, _sql),
             Without(_sqlTools, disabled).Count,
-            effective.ShellPreferNative);
+            effective.ShellPreferNative,
+            _plan.Turn(_presentPlan)?.Directive);
     }
 
     /// <summary>
@@ -2671,7 +2680,7 @@ internal sealed partial class ChatScreen
     /// (<c>Complete(query, ImageFile.IsImagePath)</c>, for <c>/view</c>) — <see cref="ArgumentPaths"/> —
     /// the disk reads behind a function each, so <c>/tts o</c> scans no catalog.
     /// </summary>
-    public sealed record ArgumentSources(Func<IReadOnlyList<string>> Profiles, string LoadedProfile, IReadOnlyList<string> Timers, Func<string, IReadOnlyList<string>> Folders, Func<string, MentionResult> TextFiles, Func<string, MentionResult> ImageFiles, Func<IReadOnlyList<CompletionItem>>? Sessions = null, Func<IReadOnlyList<CompletionItem>>? Skills = null, Func<string, IReadOnlyList<string>>? VaultFolders = null, Func<IReadOnlyList<CompletionItem>>? Workflows = null);
+    public sealed record ArgumentSources(Func<IReadOnlyList<string>> Profiles, string LoadedProfile, IReadOnlyList<string> Timers, Func<string, IReadOnlyList<string>> Folders, Func<string, MentionResult> TextFiles, Func<string, MentionResult> ImageFiles, Func<IReadOnlyList<CompletionItem>>? Sessions = null, Func<IReadOnlyList<CompletionItem>>? Skills = null, Func<string, IReadOnlyList<string>>? VaultFolders = null, Func<IReadOnlyList<CompletionItem>>? Workflows = null, bool Planning = false);
 
     /// <summary>The note beside <c>on</c> / <c>off</c> on a switch's list: what the switch is. Pinned.</summary>
     public static string SwitchSubject(SlashCommand command) => command switch
@@ -2997,6 +3006,10 @@ internal sealed partial class ChatScreen
             case SlashCommand.BotChat:
                 return BotChatChoices(argText, sources);
 
+            case SlashCommand.Plan:
+                // The subcommands only while planning (2026-09-26): before, the argument is the requirement, free text.
+                return sources.Planning ? MentionCompleter.Matches(PlanVerbs, argText) : [];
+
             default:
                 return [];
         }
@@ -3056,7 +3069,8 @@ internal sealed partial class ChatScreen
             SessionChoices,
             SkillChoices,
             VaultFolderChoices,
-            WorkflowChoices);
+            WorkflowChoices,
+            _plan.Active);
         return ArgumentPaths(command, argText, sources) is { } paths
             ? new ArgumentList([], paths.Paths, paths.Truncated)
             : new ArgumentList(ArgumentItems(command, argText, sources));
@@ -3078,10 +3092,10 @@ internal sealed partial class ChatScreen
     private IReadOnlyList<ToolGroup> ToolGroups()
     {
         var effective = _effective();
-        var disabled = ToolsText.DisabledSet(effective.ToolsDisabled);
+        var disabled = TurnDisabled(effective);
         var fileTools = FileToolsFor(_fileTools, effective.FileSafeEdits);   // restore only with File safe edits on (later still on 2026-09-20): /sys shows the list cut, Files (14)
         bool files = effective.FileTools && Without(fileTools, disabled).Count > 0;   // the turn's rule (PrepareTurn): an emptied file group is the switch off
-        return SystemPromptSummary.OfferedOnly(SystemPromptSummary.ToolGroups(_clockTools, _timerTools, fileTools, _memoryTools, effective.Memory, effective.LlmOfferTools, WebToolsFor(_webTools, files), effective.WebTools, effective.FileTools, _askTools, effective.AskUser, _pane.Enabled, _skillTools, effective.AgentSkills, _sessionTools, effective.SessionTool, disabled, mcp: _mcp.ServerTools, mcpEnabled: effective.McpServers, git: _gitTools, gitEnabled: effective.GitNativeTools, shell: _shellTools, shellEnabled: ShellOffered(effective), codeAvailable: CodeAvailable(), obsidian: ObsidianOffered(effective) ? ObsidianToolsFor(_vaultTools, effective) : null, sql: SqlOffered(effective, _sql) ? _sqlTools : null, comfy: ComfyOffered(effective, _comfy) ? _comfyTools : null));   // the vault group only with a vault (2026-09-22): /sys stays as it was for a profile that never names one
+        return WithPlanGroup(SystemPromptSummary.OfferedOnly(SystemPromptSummary.ToolGroups(_clockTools, _timerTools, fileTools, _memoryTools, effective.Memory, effective.LlmOfferTools, WebToolsFor(_webTools, files), effective.WebTools, effective.FileTools, _askTools, effective.AskUser, _pane.Enabled, _skillTools, effective.AgentSkills, _sessionTools, effective.SessionTool, disabled, mcp: _mcp.ServerTools, mcpEnabled: effective.McpServers, git: _gitTools, gitEnabled: effective.GitNativeTools, shell: _shellTools, shellEnabled: ShellOffered(effective), codeAvailable: CodeAvailable(), obsidian: ObsidianOffered(effective) ? ObsidianToolsFor(_vaultTools, effective) : null, sql: SqlOffered(effective, _sql) ? _sqlTools : null, comfy: ComfyOffered(effective, _comfy) ? _comfyTools : null)));   // the vault group only with a vault (2026-09-22): /sys stays as it was for a profile that never names one
     }
 
     /// <summary>Whether <c>execute_code</c> has a language to run (2026-09-21): the setting's languages, one of them installed.</summary>
@@ -3597,6 +3611,7 @@ internal sealed partial class ChatScreen
         OpenTool.ToolName,
         LoadSkillTool.ToolName,
         SkillEditorTool.ToolName,
+        PresentPlanTool.ToolName,
         GitStatusTool.ToolName,
         GitLogTool.ToolName,
         GitShowTool.ToolName,
@@ -3663,7 +3678,7 @@ internal sealed partial class ChatScreen
     /// <c>run_command</c> is told the turn's tool names (<see cref="RunCommandTool.BeginTurn"/>, 2026-09-26) and, with <paramref name="shellNative"/>
     /// (the setting <c>Shell prefer native tools</c>), the rules gain <see cref="Assistant.ShellNativeRule"/> after the shell sentence. Shared with headless.
     /// </summary>
-    public static void PrepareTurn(Assistant assistant, MemoryStore memory, IReadOnlyList<AIFunction> memoryTools, IReadOnlyList<AIFunction> standingTools, PersonaFile persona, OperataFile operata, VocaliaFile vocalia, bool memoryEnabled, bool speechOutput, int maxToolIterations = Assistant.DefaultMaxToolIterations, bool toolsEnabled = true, IReadOnlyList<AIFunction>? webTools = null, bool webEnabled = false, Assistant.TurnContextGuard? contextGuard = null, IReadOnlyList<AIFunction>? fileTools = null, bool filesEnabled = false, IReadOnlyList<AIFunction>? askTools = null, SkillsForTurn? skills = null, bool markdown = false, IReadOnlyList<AIFunction>? sessionTools = null, bool sessionsEnabled = false, IReadOnlySet<string>? disabledTools = null, IReadOnlyList<AIFunction>? mcpTools = null, bool mcpEnabled = false, bool safeEdits = true, IReadOnlyList<AIFunction>? gitTools = null, bool gitEnabled = false, IReadOnlyList<AIFunction>? shellTools = null, bool shellEnabled = false, ProcessRegistry? processes = null, bool shellBridge = false, bool shellPolice = true, IReadOnlyList<AIFunction>? obsidianTools = null, bool obsidianEnabled = false, IReadOnlyList<AIFunction>? sqlTools = null, bool sqlEnabled = false, IReadOnlyList<AIFunction>? comfyTools = null, bool comfyEnabled = false, bool shellNative = false)
+    public static void PrepareTurn(Assistant assistant, MemoryStore memory, IReadOnlyList<AIFunction> memoryTools, IReadOnlyList<AIFunction> standingTools, PersonaFile persona, OperataFile operata, VocaliaFile vocalia, bool memoryEnabled, bool speechOutput, int maxToolIterations = Assistant.DefaultMaxToolIterations, bool toolsEnabled = true, IReadOnlyList<AIFunction>? webTools = null, bool webEnabled = false, Assistant.TurnContextGuard? contextGuard = null, IReadOnlyList<AIFunction>? fileTools = null, bool filesEnabled = false, IReadOnlyList<AIFunction>? askTools = null, SkillsForTurn? skills = null, bool markdown = false, IReadOnlyList<AIFunction>? sessionTools = null, bool sessionsEnabled = false, IReadOnlySet<string>? disabledTools = null, IReadOnlyList<AIFunction>? mcpTools = null, bool mcpEnabled = false, bool safeEdits = true, IReadOnlyList<AIFunction>? gitTools = null, bool gitEnabled = false, IReadOnlyList<AIFunction>? shellTools = null, bool shellEnabled = false, ProcessRegistry? processes = null, bool shellBridge = false, bool shellPolice = true, IReadOnlyList<AIFunction>? obsidianTools = null, bool obsidianEnabled = false, IReadOnlyList<AIFunction>? sqlTools = null, bool sqlEnabled = false, IReadOnlyList<AIFunction>? comfyTools = null, bool comfyEnabled = false, bool shellNative = false, PlanTurn? plan = null)
     {
         ArgumentNullException.ThrowIfNull(assistant);
         ArgumentNullException.ThrowIfNull(memory);
@@ -3691,6 +3706,13 @@ internal sealed partial class ChatScreen
             assistant.OpeningCalls = [];
             assistant.History.SystemPrompt = Assistant.SystemPrompt(speechOutput, memoryEnabled ? memory.Snapshot() : null, persona.Read(), operata.Read(), vocalia.Read(), tools: false, project: project, markdown: markdown);
             return;
+        }
+
+        if (plan is not null)
+        {
+            // Plan mode (2026-09-26): every tool it does not allow joins the /tools list for this turn, so a group
+            // loses them as it loses a tool switched off, and a group left empty takes its rule with it.
+            disabledTools = PlanTools.Widen(disabledTools, standingTools, fileTools, webTools, gitTools, shellTools, obsidianTools, sqlTools, comfyTools, memoryTools, skillTools, sessionTools, askTools, mcpTools);
         }
 
         if (disabledTools is { Count: > 0 })
@@ -3762,6 +3784,8 @@ internal sealed partial class ChatScreen
         // The MCP servers' tools after the session tool (2026-09-20): the setting MCP servers, a per-group offer over what is connected.
         bool mcp = mcpEnabled && mcpTools is { Count: > 0 };
         tools = mcp ? [.. tools, .. mcpTools!] : tools;
+        // present_plan while planning (2026-09-26): after everything else, ahead of the question tool, which stays last.
+        tools = plan is not null ? [.. tools, plan.Tool] : tools;
         assistant.Tools = ask is not null ? [.. tools, .. askTools!] : tools;
         // run_command learns the turn's offer (Shell prefer native tools, 2026-09-26): what it may send a line back to, and the once-a-turn rule starts over.
         (shell ? shellTools!.OfType<RunCommandTool>().FirstOrDefault() : null)?.BeginTurn(assistant.Tools.Select(t => t.Name));
@@ -3802,7 +3826,7 @@ internal sealed partial class ChatScreen
         assistant.OpeningCalls = opening;
         // The notified exits since the last turn ride in as seeded polls (2026-09-21), on every turn, while process is offered.
         assistant.PendingCalls = processes is null ? [] : PendingProcessPolls(processes, assistant.Tools);
-        assistant.History.SystemPrompt = Assistant.SystemPrompt(speechOutput, memoryEnabled ? memory.Snapshot() : null, persona.Read(), operata.Read(), vocalia.Read(), web: web, files: files, ask: ask, project: project, skills: catalog, markdown: markdown, sessions: sessions, download: download, recall: recall is not null, delete: delete, mcp: mcp, safeEdits: safeEdits, timers: timers, git: git, shell: shell, bridge: bridge, police: police, obsidian: obsidian, obsidianDelete: obsidianDelete, sql: sql, native: native);
+        assistant.History.SystemPrompt = Assistant.SystemPrompt(speechOutput, memoryEnabled ? memory.Snapshot() : null, persona.Read(), operata.Read(), vocalia.Read(), web: web, files: files, ask: ask, project: project, skills: catalog, markdown: markdown, sessions: sessions, download: download, recall: recall is not null, delete: delete, mcp: mcp, safeEdits: safeEdits, timers: timers, git: git, shell: shell, bridge: bridge, police: police, obsidian: obsidian, obsidianDelete: obsidianDelete, sql: sql, native: native, plan: plan?.Directive);
     }
 
     /// <summary>
@@ -4358,9 +4382,10 @@ internal sealed partial class ChatScreen
         }
 
         List<ChatMessage> messages;
+        StoredPlan? plan;
         try
         {
-            messages = SessionHistory.FromJson(record.HistoryJson);
+            messages = SessionHistory.FromJson(record.HistoryJson, out plan);
         }
         catch (Exception ex) when (ex is System.Text.Json.JsonException or FormatException)
         {
@@ -4384,6 +4409,7 @@ internal sealed partial class ChatScreen
             _sessionId = id;
             _sessionTitle = record.Summary;
             _transcript.Notice(SessionRestoredNotice(record.Summary, _time.LocalTimeZone));
+            RestorePlan(plan);
             DiagnosticLog.Info(SessionsCategory, SessionRestoredLogLine(record.Summary.Id, record.Summary.Turns));
             foreach (var turn in record.Turns)
             {
@@ -6430,6 +6456,14 @@ internal sealed partial class ChatScreen
                             _session.CancelLearning();
                             _transcript.Notice(LearnCancelledNotice);
                         }
+                        else if (hint.Hit.Zone == ScreenPane.HintZone.Strip && hint.Hit.Glyph == PlanText.Glyph)
+                        {
+                            // Plan mode's glyph (2026-09-26): where the plan stands, as /plan typed.
+                            if (await HandleAsync(PlanText.Word, [], cancellationToken).ConfigureAwait(false))
+                            {
+                                return 0;
+                            }
+                        }
                         else if (hint.Hit.Zone == ScreenPane.HintZone.Strip && SwitchForGlyph(hint.Hit.Glyph) is { } glyphSwitch)
                         {
                             await HandleSwitchAsync(glyphSwitch, "off", midTurn: false, cancellationToken).ConfigureAwait(false);
@@ -6846,6 +6880,7 @@ internal sealed partial class ChatScreen
             _log.Clear();
             ForgetReading();
             ForgetSession();
+            LeavePlanOnReset();
         }
     }
 
@@ -7215,6 +7250,7 @@ internal sealed partial class ChatScreen
         _pictureStrip.Clear();
         ForgetReading();
         ForgetSession();
+        LeavePlanOnReset();
     }
 
     /// <summary>The <c>/speak</c> reading and its hint part dropped: the conversation, the profile or the working directory changed under it.</summary>
@@ -7752,6 +7788,7 @@ internal sealed partial class ChatScreen
             _pictureStrip.Clear();
             _log.Clear();
             ForgetSession();
+            LeavePlanOnReset();
             _transcript.Notice(ToolsChangedNotice(_effective().LlmOfferTools));
         }
     }
@@ -8056,6 +8093,9 @@ internal sealed partial class ChatScreen
 
             case SlashCommand.Loop:
                 return await HandleLoopAsync(args, images, cancellationToken).ConfigureAwait(false);
+
+            case SlashCommand.Plan:
+                return await HandlePlanAsync(args, images, cancellationToken).ConfigureAwait(false);
 
             case SlashCommand.BotChat:
                 return await HandleBotChatAsync(args, cancellationToken).ConfigureAwait(false);
@@ -8506,6 +8546,7 @@ internal sealed partial class ChatScreen
     private async Task AfterProfileSwitchAsync(CancellationToken cancellationToken, string? preface = null, string? notice = null)
     {
         ForgetSession();
+        LeavePlanOnReset();
         BindProfile();
         DiagnosticLog.Debug(AppSettings.Category, AppSettings.NotDefaultLogLine(SettingsDiff.NotDefault(_effective())));
         // The new profile's theme (2026-09-23) before the wipe below, so the fresh screen wears it.
@@ -9673,6 +9714,9 @@ internal sealed partial class ChatScreen
             // A pane opened mid-turn is closed when the keys are needed now (the listen below, the
             // exit) and left to the user otherwise; then the acts and the owed reconnects.
             await EndTurnAsync(closePane: outcome is not (TurnOutcome.Continue or TurnOutcome.Withdrawn), cancellationToken).ConfigureAwait(false);
+            // Plan mode after the turn (2026-09-26): an approval given on the pane is carried out below once the reply
+            // ended on its own, dropped with a notice otherwise; a cancel on the pane has ended plan mode already.
+            bool planApproved = TakePlanApproval(outcome, out bool planFresh);
             if (_lastTurnCancelled)
             {
                 // What a cancelled reply does to the queue (2026-09-18): the setting's word, here
@@ -9705,7 +9749,7 @@ internal sealed partial class ChatScreen
             if (outcome == TurnOutcome.Continue)
             {
                 MaybeLearn(focus: null, forced: false, cancellationToken);
-                return false;
+                return planApproved && await CarryOutPlanAsync(planFresh, cancellationToken).ConfigureAwait(false);
             }
 
             var (exit, request) = await InterruptFollowUpAsync(cancellationToken).ConfigureAwait(false);
@@ -10056,7 +10100,7 @@ internal sealed partial class ChatScreen
         if (bot is null)
         {
             _interpreters.Refresh();
-            PrepareTurn(assistant, _memory, _memoryTools, [.. _clockTools, .. _timerTools], _persona, _operata, _vocalia, effective.Memory, speaker is not null, effective.LlmMaxToolIterations, effective.LlmOfferTools, _webTools, effective.WebTools, ContextGuardFor(effective, _session.ContextLength), _fileTools, effective.FileTools, _pane.Enabled && effective.AskUser ? _askTools : null, SkillsFor(effective), markdown, _sessionTools, effective.SessionTool, ToolsText.DisabledSet(effective.ToolsDisabled), _mcp.Tools, effective.McpServers, effective.FileSafeEdits, _gitTools, effective.GitNativeTools, _shellTools, ShellOffered(effective), _processes, effective.ShellToolBridge, effective.ShellPoliceOutsidePaths, ObsidianToolsFor(_vaultTools, effective), ObsidianOffered(effective), _sqlTools, SqlOffered(effective, _sql), _comfyTools, ComfyOffered(effective, _comfy), effective.ShellPreferNative);
+            PrepareTurn(assistant, _memory, _memoryTools, [.. _clockTools, .. _timerTools], _persona, _operata, _vocalia, effective.Memory, speaker is not null, effective.LlmMaxToolIterations, effective.LlmOfferTools, _webTools, effective.WebTools, ContextGuardFor(effective, _session.ContextLength), _fileTools, effective.FileTools, _pane.Enabled && effective.AskUser ? _askTools : null, SkillsFor(effective), markdown, _sessionTools, effective.SessionTool, ToolsText.DisabledSet(effective.ToolsDisabled), _mcp.Tools, effective.McpServers, effective.FileSafeEdits, _gitTools, effective.GitNativeTools, _shellTools, ShellOffered(effective), _processes, effective.ShellToolBridge, effective.ShellPoliceOutsidePaths, ObsidianToolsFor(_vaultTools, effective), ObsidianOffered(effective), _sqlTools, SqlOffered(effective, _sql), _comfyTools, ComfyOffered(effective, _comfy), effective.ShellPreferNative, _plan.Turn(_presentPlan));
         }
 
         bool armed = false;
@@ -10416,7 +10460,7 @@ internal sealed partial class ChatScreen
         if (_sessionId is { } id)
         {
             var messages = assistant.History.Messages;
-            _sessions.SaveHistory(id, SessionHistory.ToJson(messages));
+            _sessions.SaveHistory(id, SessionHistory.ToJson(messages, _plan.ToStored()));
         }
     }
 
@@ -10708,6 +10752,14 @@ internal sealed partial class ChatScreen
                 if (result.Images is { Count: > 0 } made)
                 {
                     AddToPictureStrip(made);
+                }
+
+                break;
+            case TurnEvent.ToolResult result when string.Equals(result.Name, PresentPlanTool.ToolName, StringComparison.Ordinal):
+                // The plan and the verdict were printed as it ran (PresentPlanAsync); only a refusal has a line of its own.
+                if (result.Text.StartsWith("Error:", StringComparison.Ordinal))
+                {
+                    _transcript.ToolNote(result.Text);
                 }
 
                 break;

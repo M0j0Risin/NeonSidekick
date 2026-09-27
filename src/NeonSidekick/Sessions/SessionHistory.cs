@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.Extensions.AI;
 using NeonSidekick.Llm;
 
@@ -43,6 +44,20 @@ public sealed class StoredHistory
 {
     public int SchemaVersion { get; set; } = 1;
     public List<StoredMessage> Messages { get; set; } = new();
+
+    /// <summary>Plan mode as the session left it (2026-09-26, <see cref="Plans.PlanSession"/>); absent while it was off, so a row written without plan mode reads the same as ever.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public StoredPlan? Plan { get; set; }
+}
+
+/// <summary>A session's plan mode (2026-09-26): the requirement, and the plan's file, title, revision and first save once presented.</summary>
+public sealed class StoredPlan
+{
+    public string Requirement { get; set; } = "";
+    public string? Path { get; set; }
+    public string? Title { get; set; }
+    public int Revision { get; set; }
+    public DateTimeOffset? Created { get; set; }
 }
 
 /// <summary>
@@ -60,10 +75,10 @@ public sealed class StoredHistory
 public static class SessionHistory
 {
     /// <summary>The stored form of <paramref name="messages"/>, compact JSON.</summary>
-    public static string ToJson(IReadOnlyList<ChatMessage> messages)
+    public static string ToJson(IReadOnlyList<ChatMessage> messages, StoredPlan? plan = null)
     {
         ArgumentNullException.ThrowIfNull(messages);
-        var document = new StoredHistory();
+        var document = new StoredHistory { Plan = plan };
         foreach (var message in messages)
         {
             document.Messages.Add(Store(message));
@@ -73,10 +88,14 @@ public static class SessionHistory
     }
 
     /// <summary>The messages of <paramref name="json"/>; a message with no readable part is dropped. Throws <see cref="JsonException"/> on a document that is not one.</summary>
-    public static List<ChatMessage> FromJson(string json)
+    public static List<ChatMessage> FromJson(string json) => FromJson(json, out _);
+
+    /// <summary><see cref="FromJson(string)"/>, with the plan mode the session left (null when it was off, 2026-09-26).</summary>
+    public static List<ChatMessage> FromJson(string json, out StoredPlan? plan)
     {
         ArgumentNullException.ThrowIfNull(json);
         var document = JsonSerializer.Deserialize(json, SessionJsonContext.Default.StoredHistory) ?? throw new JsonException("The stored history is empty.");
+        plan = document.Plan;
         var messages = new List<ChatMessage>(document.Messages.Count);
         foreach (var stored in document.Messages)
         {

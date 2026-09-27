@@ -17,7 +17,7 @@ using Spectre.Console.Testing;
 
 namespace NeonSidekick.Tests;
 
-public class SidekickAppTests : IDisposable
+public partial class SidekickAppTests : IDisposable
 {
     private const string LmStudioModels = "http://127.0.0.1:1234/v1/models";
 

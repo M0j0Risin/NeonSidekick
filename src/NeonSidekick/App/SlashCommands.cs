@@ -102,6 +102,9 @@ public enum SlashCommand
     /// <summary><c>/botchat [profile …] [topic]</c> (2026-09-24, the user's ask): the profiles talk to each other — the named ones, or every profile when none is named — each reply in the speaker's own persona and voice, all on this profile's LLM server and model, one turn after another, a random speaker each time but never the same one twice running, until ESC or Ctrl+C. No tools. A line typed meanwhile joins the chat as the user's; the chat is saved as a session. Refused mid-turn like <see cref="Loop"/>.</summary>
     BotChat,
 
+    /// <summary><c>/plan &lt;requirement&gt;</c> (2026-09-26, the user's ask): plan mode — the model researches with read-only tools, asks what it needs and presents a plan saved as <c>plans/&lt;name&gt;.md</c>; nothing changes until the user approves it on the pane or with <c>/plan approve [--fresh]</c>. While planning, <c>/plan</c> or <c>/plan show</c> says where it stands, <c>/plan cancel</c> leaves, anything else is more detail. Refused mid-turn like <see cref="Loop"/>.</summary>
+    Plan,
+
     /// <summary><c>/expand</c>: every folded tool run, code block and thinking block in the transcript unfolded, and the ones to come (2026-09-22, the user's ask: what <c>/tools expand</c> did that morning, as a root word). No argument; Ctrl+O flips the same state.</summary>
     Expand,
 
@@ -214,6 +217,7 @@ public static class SlashCommands
             new("/copy", "copy the last reply to the clipboard as markdown, or /copy <n> | all; --thinking for the model's thinking too"),
             new("/draft", "write the next message in your editor: a temporary file, sent when it is saved and closed"),
             new("/loop", "repeat a message, each reply waited for: /loop <count> [delay] <message> | infinite [delay] <message> (ESC ends it)"),
+            new("/plan", "plan before doing: /plan <requirement> — read-only research and questions until you approve the plan (saved under plans/); then /plan approve [--fresh] | cancel | show"),
             new("/botchat", "let the profiles talk to each other, each in its own persona, until ESC: /botchat [profile ...] [[--] topic], or /botchat --resume [line] to carry on the last one"),
             new("/expand", "show every line of the folded tool runs, code blocks and thinking in the transcript (Ctrl+O flips)"),
             new("/collapse", "fold the tool runs, code blocks and thinking in the transcript again"),
@@ -345,7 +349,7 @@ public static class SlashCommands
     }
 
     /// <summary>Every command word, for help and completion.</summary>
-    public static readonly string[] Words = { "/help", "/clear", "/new", "/splash", "/theme", "/queue", "/sessions", "/compact", "/server", "/model", "/reasoning", "/settings", "//", "/tools", "/mcp", "/tts", "/stt", "/wake", "/interrupt", "/speak", "/remember", "/memory", "/cmdcopy", "/cmdclear", "/cmdlist", "/police", "/persona", "/operata", "/vocalia", "/sys", "/usage", "/profile", "/timer", "/cwd", "/tree", "/vault", "/explore", "/view", "/imagine", "/comfy", "/echo", "/emptytrash", "/git", "/copy", "/draft", "/loop", "/botchat", "/expand", "/collapse", "/window", "/skills", "/learn", "/about", "/exit" };
+    public static readonly string[] Words = { "/help", "/clear", "/new", "/splash", "/theme", "/queue", "/sessions", "/compact", "/server", "/model", "/reasoning", "/settings", "//", "/tools", "/mcp", "/tts", "/stt", "/wake", "/interrupt", "/speak", "/remember", "/memory", "/cmdcopy", "/cmdclear", "/cmdlist", "/police", "/persona", "/operata", "/vocalia", "/sys", "/usage", "/profile", "/timer", "/cwd", "/tree", "/vault", "/explore", "/view", "/imagine", "/comfy", "/echo", "/emptytrash", "/git", "/copy", "/draft", "/loop", "/plan", "/botchat", "/expand", "/collapse", "/window", "/skills", "/learn", "/about", "/exit" };
 
     /// <summary>The <c>/queue</c> word: what a double-click on the hint row's queued part sends through the mid-turn line hook, so the pane opens exactly as the typed command's does (2026-09-18). Pinned.</summary>
     public const string QueueWord = "/queue";
@@ -431,6 +435,7 @@ public static class SlashCommands
             "/copy" => SlashCommand.Copy,
             "/draft" => SlashCommand.Draft,
             "/loop" => SlashCommand.Loop,
+            "/plan" => SlashCommand.Plan,
             "/botchat" => SlashCommand.BotChat,
             "/expand" => SlashCommand.Expand,
             "/collapse" => SlashCommand.Collapse,
@@ -465,5 +470,5 @@ public static class SlashCommands
         or SlashCommand.Persona or SlashCommand.Operata or SlashCommand.Vocalia
         or SlashCommand.Remember or SlashCommand.Memory or SlashCommand.CmdCopy or SlashCommand.Profile or SlashCommand.Timer
         or SlashCommand.Cwd or SlashCommand.Tree or SlashCommand.Vault or SlashCommand.Explore or SlashCommand.Copy or SlashCommand.Session or SlashCommand.Git
-        or SlashCommand.Loop or SlashCommand.BotChat or SlashCommand.Queue;
+        or SlashCommand.Loop or SlashCommand.Plan or SlashCommand.BotChat or SlashCommand.Queue;
 }
