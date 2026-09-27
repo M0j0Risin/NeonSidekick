@@ -69,7 +69,9 @@ internal sealed class TurnStages
                 return Word(WritingLabel);
             case TurnEvent.ToolCall call:
                 _stage = Stage.Tool;
-                return string.Equals(call.Name, GenerateImageTool.ToolName, StringComparison.Ordinal) ? ComfyText.GeneratingLabelFor(InputImages(call.ArgumentsJson)) : call.Name;
+                return string.Equals(call.Name, GenerateImageTool.ToolName, StringComparison.Ordinal) ? ComfyText.GeneratingLabelFor(InputImages(call.ArgumentsJson))
+                    : string.Equals(call.Name, ClaudeAdvisorTool.ToolName, StringComparison.Ordinal) ? Claude.ClaudeText.AskingLabel
+                    : call.Name;
             case TurnEvent.ToolResult:
                 _stage = Stage.Thinking;
                 return Word(ChatScreen.ThinkingLabel);

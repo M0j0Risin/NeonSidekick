@@ -129,7 +129,7 @@ public class BotChatPicturesTests
         var data = new AppSettingsData();
 
         Assert.Equal("Botchat", SettingsMenu.TabTitles[(int)SettingsTab.BotChat]);
-        Assert.Equal((int)SettingsTab.BotChat, SettingsMenu.TabTitles.Count - 2);   // the Claude tab after it since 2026-09-27
+        Assert.Equal((int)SettingsTab.BotChat, SettingsMenu.TabTitles.Count - 1);   // last again since later on 2026-09-27 (the Claude tab moved to /tools)
         Assert.Equal([SettingsField.BotChatLlmMode, SettingsField.BotChatImages, SettingsField.BotChatImageMode, SettingsField.BotChatImageWorkflow, SettingsField.BotChatImageAsync, SettingsField.BotChatNonTtsDelaySeconds], SettingsMenu.TabFields[(int)SettingsTab.BotChat]);
         Assert.Equal(["Botchat LLM mode", "Botchat images enabled", "Botchat image mode", "Botchat image workflow", "Botchat image async", "Botchat non-TTS delay"], SettingsMenu.TabFields[(int)SettingsTab.BotChat].Select(SettingsMenu.FieldName));
         Assert.False(SettingsMenu.IsToggle(SettingsField.BotChatLlmMode));

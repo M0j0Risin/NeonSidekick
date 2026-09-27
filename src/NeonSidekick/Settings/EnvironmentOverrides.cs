@@ -45,6 +45,7 @@ public sealed class EnvironmentOverrides
     public const string ShellNativeVariable = Prefix + "SHELL_NATIVE";
     public const string ClaudeExeVariable = Prefix + "CLAUDE_EXE";
     public const string ClaudePermissionsVariable = Prefix + "CLAUDE_PERMISSIONS";
+    public const string ClaudeAdvisorVariable = Prefix + "CLAUDE_ADVISOR";
 
     /// <summary>Every variable this class reads, for documentation.</summary>
     public static readonly string[] AllVariables =
@@ -54,7 +55,7 @@ public sealed class EnvironmentOverrides
         WhisperModelVariable, LlmReasoningVariable, TtsVoice2Variable, TtsMixVariable,
         InterruptEchoVariable, InterruptConfirmVariable, LlmContextVariable, SearxngUrlVariable,
         CommandPolicyVariable, ShellPoliceVariable, ObsidianVaultVariable, ComfyUrlVariable,
-        ShellNativeVariable, ClaudeExeVariable, ClaudePermissionsVariable,
+        ShellNativeVariable, ClaudeExeVariable, ClaudePermissionsVariable, ClaudeAdvisorVariable,
     };
 
     /// <summary>The log category of every environment line.</summary>
@@ -151,6 +152,9 @@ public sealed class EnvironmentOverrides
     /// </summary>
     public bool? ShellNative => ReadSwitch(ShellNativeVariable);
 
+    /// <summary><c>Claude advisor</c> for this launch, or null when unset or not a switch word (2026-09-27): a scripted headless run offers <c>claude_advisor</c> without saving it.</summary>
+    public bool? ClaudeAdvisor => ReadSwitch(ClaudeAdvisorVariable);
+
     /// <summary>
     /// A variable that is not an override: <c>PATH</c>, <c>PATHEXT</c>, <c>ProgramFiles</c> — what the
     /// shell probe (<see cref="Shell.Interpreters"/>) walks (2026-09-21). The one door stays this class's:
@@ -182,6 +186,7 @@ public sealed class EnvironmentOverrides
                 CommandPolicyVariable => ShellCommandPolicy is not null,
                 ShellPoliceVariable => ShellPolice is not null,
                 ShellNativeVariable => ShellNative is not null,
+                ClaudeAdvisorVariable => ClaudeAdvisor is not null,
                 _ => Read(name) is not null,
             };
             if (set)
@@ -251,6 +256,7 @@ public sealed class EnvironmentOverrides
         if (ComfyUrl is { } comfy) effective.ComfyUrl = comfy;
         if (ClaudeExecutable is { } claude) effective.ClaudeExecutable = claude;
         if (ClaudePermissions is { } claudePermissions) effective.ClaudePermissions = claudePermissions;
+        if (ClaudeAdvisor is { } advisor) effective.ClaudeAdvisor = advisor;
 
         return effective;
     }

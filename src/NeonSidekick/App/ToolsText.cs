@@ -46,8 +46,11 @@ public static class ToolsText
     /// <summary>The image tools' tab and group (2026-09-24), after SQL, before Options; "Images" until later that day (the user's call: it is ComfyUI's tab).</summary>
     public const string ComfyTabTitle = "ComfyUI";
 
+    /// <summary>The Claude tab and the advisor's group (2026-09-27): <c>/claude</c>'s rows (off <c>/settings</c>, the user's call) and <c>claude_advisor</c>'s, after ComfyUI, before Options.</summary>
+    public const string ClaudeTabTitle = "Claude";
+
     /// <summary>The nine tabs in strip order: Offered, Web, Files, Shell, Ask, Git (native), Obsidian, SQL (2026-09-23), Options — Options last since later on 2026-09-22 (the user's ask; second, after Offered, before), Obsidian added that day; the user's order of the rest since later on 2026-09-21 (alphabetical before: Ask, Files, Git, Shell, Web); the last eight index <see cref="SettingsMenu.ToolsTabFields"/> one down.</summary>
-    public static readonly IReadOnlyList<string> TabTitles = [OfferedTabTitle, WebTabTitle, FilesTabTitle, ShellTabTitle, AskTabTitle, GitTabTitle, ObsidianTabTitle, SqlTabTitle, ComfyTabTitle, OptionsTabTitle];
+    public static readonly IReadOnlyList<string> TabTitles = [OfferedTabTitle, WebTabTitle, FilesTabTitle, ShellTabTitle, AskTabTitle, GitTabTitle, ObsidianTabTitle, SqlTabTitle, ComfyTabTitle, ClaudeTabTitle, OptionsTabTitle];
 
     /// <summary>The Offered tab's hint row. Pinned.</summary>
     public const string OfferedKeys = "Enter / Space = on or off · ←/→ tabs · ESC = close";

@@ -47,4 +47,29 @@ public class LiveClaudeTests
             try { Directory.Delete(folder, recursive: true); } catch { /* best effort */ }
         }
     }
+
+    /// <summary><c>claude_advisor</c> for real (2026-09-27): read-only, Claude reads a file in the working directory to answer.</summary>
+    [LiveClaudeFact]
+    public async Task RealCli_TheAdvisor_ReadsTheWorkingDirectory_AndAnswers()
+    {
+        string folder = Directory.CreateTempSubdirectory("neon-advisor-").FullName;
+        try
+        {
+            await File.WriteAllTextAsync(Path.Combine(folder, "answer.txt"), "The code word is HERON.");
+            var settings = new AppSettingsData { ClaudeAdvisor = true, ClaudeAdvisorModel = "haiku" };
+            decimal spent = 0m;
+            var tool = new Llm.Tools.ClaudeAdvisorTool(new ClaudeProcess(Environment.GetEnvironmentVariable), () => settings, () => folder, new ClaudeAdvisorThread(), (_, usd) => spent += usd, () => []);
+            using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(3));
+
+            var answer = await tool.InvokeAsync(new Microsoft.Extensions.AI.AIFunctionArguments { ["question"] = "What is the code word in answer.txt? Reply with the word alone." }, timeout.Token);
+
+            string text = Assert.IsType<string>(answer);
+            Assert.True(text.Contains("HERON", StringComparison.OrdinalIgnoreCase), text);
+            Assert.True(spent > 0m);
+        }
+        finally
+        {
+            try { Directory.Delete(folder, recursive: true); } catch { /* best effort */ }
+        }
+    }
 }

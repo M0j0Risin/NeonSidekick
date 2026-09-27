@@ -302,6 +302,26 @@ public sealed class TranscriptRenderer : INoticeSink
         ToolLine(Theme.ColorMarkup(Theme.Dim, ToolGlyph + flat), Theme.ColorMarkup(Theme.Dim, ToolGlyph.TrimStart() + flat));
     }
 
+    /// <summary>
+    /// An advisor's answer under its tool line (<c>claude_advisor</c>, 2026-09-27): each line whole — wrapped by the window,
+    /// never cut — in the speaker's <paramref name="color"/>, indented under the tools' glyph; blank lines skipped. Part of
+    /// the tool run, so a run folded by <c>Tool collapse count</c> folds it too.
+    /// </summary>
+    public void ToolAnswer(string text, Color color)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        foreach (var line in text.ReplaceLineEndings("\n").Split('\n'))
+        {
+            if (!string.IsNullOrWhiteSpace(line))
+            {
+                ToolLine(Theme.ColorMarkup(color, ToolAnswerIndent + line.TrimEnd()), Theme.ColorMarkup(color, line.Trim()));
+            }
+        }
+    }
+
+    /// <summary>What stands before each line of a <see cref="ToolAnswer"/>: the width of <see cref="ToolGlyph"/>, blank.</summary>
+    public const string ToolAnswerIndent = "     ";
+
     /// <summary><see cref="ToolNote"/> for a skill tool's result: the same dim line behind <see cref="SkillGlyph"/>.</summary>
     public void SkillNote(string text) => ToolLine(SkillNoteMarkup(text), Theme.ColorMarkup(Theme.Dim, SkillGlyph.TrimStart() + Truncate(text, ToolTextLimit)));
 

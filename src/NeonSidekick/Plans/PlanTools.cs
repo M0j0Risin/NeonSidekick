@@ -30,6 +30,8 @@ public static class PlanTools
         "vault_search", "vault_list", "vault_read", "vault_links",
         // memory, skills, sessions, questions
         "recall_memory", "load_skill", "session_manager", "ask_user",
+        // the advisor: Claude reads and answers, read-only whatever Claude command permissions says (2026-09-27)
+        "claude_advisor",
     };
 
     /// <summary>The tools plan mode drops because they change something or start something: named, so the classification test can hold every tool to one list.</summary>

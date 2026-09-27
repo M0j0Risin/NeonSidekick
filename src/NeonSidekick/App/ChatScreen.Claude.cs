@@ -1,5 +1,7 @@
 using System.Text;
+using Microsoft.Extensions.AI;
 using NeonSidekick.Claude;
+using NeonSidekick.Llm.Tools;
 using NeonSidekick.Diagnostics;
 using NeonSidekick.Settings;
 using NeonSidekick.Sessions;
@@ -22,6 +24,80 @@ internal sealed partial class ChatScreen
     /// and with the session itself (<see cref="ForgetSession"/>: <c>/clear</c>, <c>/new</c>, a profile switch).
     /// </summary>
     private string? _claudeSessionId;
+
+    /// <summary>
+    /// <c>claude_advisor</c>'s own Claude conversation (2026-09-27, the user's call: apart from <c>/claude</c>'s): stored with the
+    /// session's history beside <see cref="_claudeSessionId"/>, read back by a restore, dropped by <see cref="ForgetSession"/>.
+    /// </summary>
+    private readonly ClaudeAdvisorThread _advisorThread = new();
+
+    /// <summary>The advisor's group (one tool), built once over <see cref="_claude"/>; offered while <c>Claude advisor</c> is on.</summary>
+    private readonly IReadOnlyList<AIFunction> _advisorTools;
+
+    /// <summary>
+    /// The advisor's group (2026-09-27): <see cref="ClaudeAdvisorTool"/> over the CLI, the settings, the sandbox's root, its thread,
+    /// where the cost goes, the conversation (for <c>Claude advisor context: recent</c>), the confirm seam and the view. Shared with headless.
+    /// </summary>
+    public static IReadOnlyList<AIFunction> ClaudeAdvisorTools(IClaudeCli claude, Func<AppSettingsData> effective, Func<string> workingDirectory, ClaudeAdvisorThread thread, Action<Llm.TokenUsage, decimal> spent, Func<IReadOnlyList<ChatMessage>> history, Func<string, CancellationToken, Task<bool?>>? confirm, IClaudeAdvisorView? view) =>
+    [
+        new ClaudeAdvisorTool(claude, effective, workingDirectory, thread, spent, history, confirm, view),
+    ];
+
+    /// <summary>
+    /// <c>Claude advisor confirm</c>'s question, on the turn task: the yes/no pane through the watcher — the
+    /// <see cref="ApproveCommandAsync"/> shape, the cursor on No, ESC a no. Null (never asked) without the pane or a watcher to run it.
+    /// </summary>
+    private async Task<bool?> ConfirmAdvisorAsync(string question, CancellationToken turnToken)
+    {
+        if (!_pane.Enabled)
+        {
+            return null;
+        }
+
+        var paneToken = _paneClose?.Token ?? CancellationToken.None;
+        bool? yes = null;
+        var pending = _keys.RequestPaneAsync(async () =>
+        {
+            using var linked = CancellationTokenSource.CreateLinkedTokenSource(paneToken, turnToken);
+            try
+            {
+                yes = await _menu.ConfirmAsync(ClaudeText.AdvisorConfirmQuestion(question), linked.Token).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is not OutOfMemoryException && !linked.IsCancellationRequested)
+            {
+                DiagnosticLog.Error(UI.ScreenPane.Category, "The advisor's confirm pane failed: " + Llm.Assistant.Explain(ex), ex);
+            }
+        });
+        try
+        {
+            await pending.WaitAsync(turnToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (!turnToken.IsCancellationRequested)
+        {
+            // No watcher to run the pane: never asked.
+            return null;
+        }
+
+        return yes ?? false;
+    }
+
+    /// <summary>
+    /// The advisor on the transcript as it runs (2026-09-27), on the turn task between the call and its result: the question
+    /// as a tool note, each tool Claude uses as a dim <c>Claude ›</c> line, then the answer in Claude's colour under them and the
+    /// footer with the cost. The result's own line is left to <see cref="Render"/>, which prints only a refusal or a failure.
+    /// </summary>
+    private sealed class AdvisorView(ChatScreen screen) : IClaudeAdvisorView
+    {
+        public void Began(string question) => screen._transcript.ToolNote(ClaudeText.AdvisorQuestionNote(question));
+
+        public void Tool(string name, string detail) => screen._transcript.ToolNote(ClaudeText.ToolNote(name, detail));
+
+        public void Answered(string answer, ClaudeEvent.Result result)
+        {
+            screen._transcript.ToolAnswer(answer, ClaudeColor);
+            screen._transcript.ToolNote(ClaudeText.Footer(result.CostUsd, result.Usage, ClaudeText.AdvisorName));
+        }
+    }
 
     /// <summary>
     /// <c>/claude &lt;message&gt;</c>: the message to Claude Code, the reply streamed under Claude's name, spoken when speech
@@ -243,7 +319,7 @@ internal sealed partial class ChatScreen
     {
         if (_sessionId is { } id)
         {
-            _sessions.SaveHistory(id, SessionHistory.ToJson(_session.History.Messages, _plan.ToStored(), _executingPlan, _claudeSessionId));
+            _sessions.SaveHistory(id, SessionHistory.ToJson(_session.History.Messages, _plan.ToStored(), _executingPlan, _claudeSessionId, _advisorThread.SessionId));
         }
     }
 }

@@ -56,7 +56,8 @@ public class EnvironmentOverridesTests
             (EnvironmentOverrides.ObsidianVaultVariable, @" D:\Notes "),
             (EnvironmentOverrides.ComfyUrlVariable, " http://gpu-box:8188 "),
             (EnvironmentOverrides.ClaudeExeVariable, @" D:\bin\claude.exe "),
-            (EnvironmentOverrides.ClaudePermissionsVariable, " Full "));
+            (EnvironmentOverrides.ClaudePermissionsVariable, " Full "),
+            (EnvironmentOverrides.ClaudeAdvisorVariable, " Yes "));
 
         var e = env.ApplyTo(new AppSettingsData());
 
@@ -83,6 +84,7 @@ public class EnvironmentOverridesTests
         Assert.False(e.ShellPreferNative);   // the police's switch words (later on 2026-09-26)
         Assert.Equal(@"D:\bin\claude.exe", e.ClaudeExecutable);   // trimmed (2026-09-27)
         Assert.Equal("full", e.ClaudePermissions);   // normalised to the saved word (2026-09-27)
+        Assert.True(e.ClaudeAdvisor);   // a switch word, any case, trimmed (2026-09-27)
         Assert.Equal(EnvironmentOverrides.AllVariables.Length - 2, env.ActiveVariables().Count);   // everything but HOME and PROFILE
     }
 

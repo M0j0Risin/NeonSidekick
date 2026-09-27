@@ -45,6 +45,8 @@ namespace NeonSidekick.App;
 /// <param name="SqlEnabled">Whether the SQL tools may be offered (2026-09-23): the setting <c>SQL tools</c> on and a usable connection in <c>sql.json</c> — the group's switch (<see cref="ChatScreen.SqlOffered"/>).</param>
 /// <param name="SqlTools">How many SQL tools the next turn offers (the ones switched off on <c>/tools</c> left out); the rules carry <see cref="Assistant.SqlRule"/> while any is.</param>
 /// <param name="ShellNative">The setting <c>Shell prefer native tools</c> (2026-09-26): on, with a shell rule, the rules gain <see cref="Assistant.ShellNativeRule"/> after it.</param>
+/// <param name="ClaudeAdvisorEnabled">The setting <c>Claude advisor</c> (2026-09-27): the group's switch.</param>
+/// <param name="ClaudeAdvisorTools">How many advisor tools the next turn offers (0 while switched off on <c>/tools</c>); the rules carry <see cref="Assistant.ClaudeAdvisorRule"/> while it is.</param>
 /// <param name="PlanDirective">Plan mode's directive while planning (2026-09-26, <see cref="Plans.PlanText.Directive"/>), else null: its own section, after the skills.</param>
 public sealed record SystemPromptFacts(
     string? Persona,
@@ -78,8 +80,13 @@ public sealed record SystemPromptFacts(
     bool SqlEnabled = false,
     int SqlTools = 0,
     bool ShellNative = false,
-    string? PlanDirective = null)
+    string? PlanDirective = null,
+    bool ClaudeAdvisorEnabled = false,
+    int ClaudeAdvisorTools = 0)
 {
+    /// <summary>Whether the rules carry <see cref="Assistant.ClaudeAdvisorRule"/>: tools on, the switch on and the tool offered (2026-09-27).</summary>
+    public bool Advisor => ToolsEnabled && ClaudeAdvisorEnabled && ClaudeAdvisorTools > 0;
+
     /// <summary>Whether the rules carry <see cref="Assistant.McpRule"/>: tools on, the MCP switch on and at least one MCP tool offered.</summary>
     public bool Mcp => ToolsEnabled && McpEnabled && McpTools > 0;
 
@@ -219,6 +226,9 @@ public static class SystemPromptSummary
     public const string SqlOffSuffix = "SQL tools is off or no connection is set in sql.json";
 
     /// <summary>The tail of the ComfyUI group while the image tools cannot be offered (2026-09-24). Pinned.</summary>
+    /// <summary>Why the advisor group is not offered (2026-09-27). Pinned.</summary>
+    public const string ClaudeAdvisorOffSuffix = "Claude advisor is off";
+
     public const string ComfyOffSuffix = "ComfyUI tools is off, no ComfyUI URL is set or no workflow is in a comfy folder";
 
     /// <summary>The note on <c>execute_code</c> while none of the languages <c>Shell code languages</c> names is installed (2026-09-21). Pinned.</summary>
@@ -258,7 +268,7 @@ public static class SystemPromptSummary
 
         bool customRules = !string.IsNullOrWhiteSpace(facts.OperatingRules);
         string defaultLabel = !facts.ToolsEnabled ? $"default ({ToolsOffSuffix})" : !facts.FilesEnabled ? $"default ({FilesOffSuffix})" : "default";
-        string rules = customRules ? facts.OperatingRules!.Trim() : Assistant.DefaultRules(facts.Markdown, facts.ToolsEnabled, facts.FilesEnabled, delete: !facts.Off(DeleteTool.ToolName), mcp: facts.Mcp, safeEdits: facts.FileSafeEdits, timers: facts.Timers, git: facts.Git, shell: facts.Shell, bridge: facts.Bridge, police: facts.Police, obsidian: facts.Obsidian, obsidianDelete: facts.ObsidianDelete, sql: facts.Sql, native: facts.Native);
+        string rules = customRules ? facts.OperatingRules!.Trim() : Assistant.DefaultRules(facts.Markdown, facts.ToolsEnabled, facts.FilesEnabled, delete: !facts.Off(DeleteTool.ToolName), mcp: facts.Mcp, safeEdits: facts.FileSafeEdits, timers: facts.Timers, git: facts.Git, shell: facts.Shell, bridge: facts.Bridge, police: facts.Police, obsidian: facts.Obsidian, obsidianDelete: facts.ObsidianDelete, sql: facts.Sql, native: facts.Native, advisor: facts.Advisor);
         sections.Add(new(
             customRules ? $"Operating rules — {OperataFile.FileName} ({rules.Length.ToString(CultureInfo.InvariantCulture)} chars)" : $"Operating rules — {defaultLabel}",
             rules));
@@ -365,7 +375,8 @@ public static class SystemPromptSummary
             obsidianDelete: facts.ObsidianDelete,
             sql: facts.Sql,
             native: facts.Native,
-            plan: facts.ToolsEnabled ? facts.PlanDirective : null);
+            plan: facts.ToolsEnabled ? facts.PlanDirective : null,
+            advisor: facts.Advisor);
     }
 
     /// <summary>The Prompt tab's heading over plan mode's directive (2026-09-26). Pinned.</summary>
@@ -451,7 +462,9 @@ public static class SystemPromptSummary
         IReadOnlyList<AIFunction>? sql = null,
         bool sqlEnabled = true,
         IReadOnlyList<AIFunction>? comfy = null,
-        bool comfyEnabled = true)
+        bool comfyEnabled = true,
+        IReadOnlyList<AIFunction>? advisor = null,
+        bool advisorEnabled = true)
     {
         ArgumentNullException.ThrowIfNull(clock);
         ArgumentNullException.ThrowIfNull(timers);
@@ -505,6 +518,13 @@ public static class SystemPromptSummary
             // The image tools (2026-09-24): after the SQL tools; offered while ComfyUI tools is on, a URL is set and a workflow is installed.
             string comfyNote = !comfyEnabled ? NotOffered(ComfyOffSuffix) : standing;
             groups.Add(Group(ToolsText.ComfyTabTitle, comfy, comfyNote, comfyEnabled && toolsEnabled, SettingsField.ComfyTools, disabled));
+        }
+
+        if (advisor is not null)
+        {
+            // The advisor (2026-09-27): after the image tools; offered while the setting Claude advisor is on.
+            string advisorNote = !advisorEnabled ? NotOffered(ClaudeAdvisorOffSuffix) : standing;
+            groups.Add(Group(ToolsText.ClaudeTabTitle, advisor, advisorNote, advisorEnabled && toolsEnabled, SettingsField.ClaudeAdvisor, disabled));
         }
 
         if (web is not null)

@@ -483,6 +483,10 @@ public sealed class SidekickApp
         // The Claude conversation /claude resumes (2026-09-27), as the screen keeps it; dropped with the session.
         string? claudeSessionId = null;
         var claude = _claude ?? new Claude.ClaudeProcess(_environment.System);
+        // claude_advisor (2026-09-27): its own thread, as the screen keeps it; no one to confirm with, so a call under
+        // Claude advisor confirm is refused; Claude's tools and the footer as [tool] / [notice] lines, the answer the result's line.
+        var advisorThread = new Claude.ClaudeAdvisorThread();
+        var advisorTools = ChatScreen.ClaudeAdvisorTools(claude, () => EffectiveSettings, () => files.Root, advisorThread, (usage, usd) => session.Usage.AddClaude(usage, usd), () => session.History.Messages, null, new HeadlessAdvisorView(this));
         var sessionTools = ChatScreen.SessionTools(sessions, () => EffectiveSettings, () => sessionId, _time);
         // Plan mode (2026-09-26): no pane to approve on, so a presented plan is saved and the user approves it with
         // /plan approve; the saved line is printed once the turn is over, never inside the streamed reply.
@@ -563,6 +567,7 @@ public sealed class SidekickApp
                     session.Usage.ResetConversation();
                     sessionId = null;
                     claudeSessionId = null;
+                    advisorThread.SessionId = null;
                     planState.Executing = null;
                     planState.Draft = null;
                     if (plan.Active)
@@ -600,7 +605,7 @@ public sealed class SidekickApp
 
                     if (sessionId is { } claudeSaved)
                     {
-                        sessions.SaveHistory(claudeSaved, Sessions.SessionHistory.ToJson(session.History.Messages, plan.ToStored(), planState.Executing, claudeSessionId));
+                        sessions.SaveHistory(claudeSaved, Sessions.SessionHistory.ToJson(session.History.Messages, plan.ToStored(), planState.Executing, claudeSessionId, advisorThread.SessionId));
                     }
 
                     continue;
@@ -633,7 +638,7 @@ public sealed class SidekickApp
                     {
                         if (sessionId is { } planSession)
                         {
-                            sessions.SaveHistory(planSession, Sessions.SessionHistory.ToJson(assistant.History.Messages, plan.ToStored(), planState.Executing, claudeSessionId));
+                            sessions.SaveHistory(planSession, Sessions.SessionHistory.ToJson(assistant.History.Messages, plan.ToStored(), planState.Executing, claudeSessionId, advisorThread.SessionId));
                         }
 
                         continue;
@@ -660,7 +665,7 @@ public sealed class SidekickApp
                 }
 
                 // Per turn, as the screen does: a memory saved in this turn is in the next one's prompt.
-                ChatScreen.PrepareTurn(assistant, memory, memoryTools, standingTools, persona, operata, vocalia, EffectiveSettings.Memory, speechOutput: false, EffectiveSettings.LlmMaxToolIterations, EffectiveSettings.LlmOfferTools, webTools, EffectiveSettings.WebTools, ChatScreen.ContextGuardFor(EffectiveSettings, session.ContextLength), fileTools, EffectiveSettings.FileTools, skills: skills with { Enabled = EffectiveSettings.AgentSkills, External = EffectiveSettings.AgentSkills && EffectiveSettings.ExternalSkills }, sessionTools: sessionTools, sessionsEnabled: EffectiveSettings.SessionTool, disabledTools: ToolsText.DisabledSet(EffectiveSettings.ToolsDisabled), mcpTools: mcp.Tools, mcpEnabled: EffectiveSettings.McpServers, safeEdits: EffectiveSettings.FileSafeEdits, gitTools: gitTools, gitEnabled: EffectiveSettings.GitNativeTools, shellTools: shellTools, shellEnabled: ChatScreen.ShellOffered(EffectiveSettings), processes: processes, shellBridge: EffectiveSettings.ShellToolBridge, shellPolice: EffectiveSettings.ShellPoliceOutsidePaths, obsidianTools: ChatScreen.ObsidianToolsFor(vaultTools, EffectiveSettings), obsidianEnabled: ChatScreen.ObsidianOffered(EffectiveSettings), sqlTools: sqlTools, sqlEnabled: ChatScreen.SqlOffered(EffectiveSettings, sql), comfyTools: comfyTools, comfyEnabled: ChatScreen.ComfyOffered(EffectiveSettings, comfy), shellNative: EffectiveSettings.ShellPreferNative, plan: plan.Turn(presentPlan));
+                ChatScreen.PrepareTurn(assistant, memory, memoryTools, standingTools, persona, operata, vocalia, EffectiveSettings.Memory, speechOutput: false, EffectiveSettings.LlmMaxToolIterations, EffectiveSettings.LlmOfferTools, webTools, EffectiveSettings.WebTools, ChatScreen.ContextGuardFor(EffectiveSettings, session.ContextLength), fileTools, EffectiveSettings.FileTools, skills: skills with { Enabled = EffectiveSettings.AgentSkills, External = EffectiveSettings.AgentSkills && EffectiveSettings.ExternalSkills }, sessionTools: sessionTools, sessionsEnabled: EffectiveSettings.SessionTool, disabledTools: ToolsText.DisabledSet(EffectiveSettings.ToolsDisabled), mcpTools: mcp.Tools, mcpEnabled: EffectiveSettings.McpServers, safeEdits: EffectiveSettings.FileSafeEdits, gitTools: gitTools, gitEnabled: EffectiveSettings.GitNativeTools, shellTools: shellTools, shellEnabled: ChatScreen.ShellOffered(EffectiveSettings), processes: processes, shellBridge: EffectiveSettings.ShellToolBridge, shellPolice: EffectiveSettings.ShellPoliceOutsidePaths, obsidianTools: ChatScreen.ObsidianToolsFor(vaultTools, EffectiveSettings), obsidianEnabled: ChatScreen.ObsidianOffered(EffectiveSettings), sqlTools: sqlTools, sqlEnabled: ChatScreen.SqlOffered(EffectiveSettings, sql), comfyTools: comfyTools, comfyEnabled: ChatScreen.ComfyOffered(EffectiveSettings, comfy), shellNative: EffectiveSettings.ShellPreferNative, plan: plan.Turn(presentPlan), advisorTools: advisorTools, advisorEnabled: EffectiveSettings.ClaudeAdvisor);
                 var turn = await RunHeadlessTurnAsync(session, assistant, text, cancellationToken).ConfigureAwait(false);
                 if (plan.Active && plan.Path is { } planPath && plan.Revision > planState.RevisionShown)
                 {
@@ -682,7 +687,7 @@ public sealed class SidekickApp
                     {
                         var usage = session.Usage.LastRequest;
                         sessions.AppendTurn(id, text, turn.Reply, turn.Trace.ToolCalls, turn.Trace.ToolNames, turn.Trace.LoadedSkills, turn.Trace.Errors, usage.Input, usage.Output, turn.Cancelled);
-                        sessions.SaveHistory(id, Sessions.SessionHistory.ToJson(assistant.History.Messages, plan.ToStored(), planState.Executing, claudeSessionId));
+                        sessions.SaveHistory(id, Sessions.SessionHistory.ToJson(assistant.History.Messages, plan.ToStored(), planState.Executing, claudeSessionId, advisorThread.SessionId));
                     }
                 }
             }
@@ -1258,6 +1263,36 @@ public sealed class SidekickApp
         }
     }
 
+    /// <summary>
+    /// <c>claude_advisor</c> headless (2026-09-27): each tool Claude uses as a <c>[tool] Claude › …</c> line and the footer as a
+    /// <c>[notice]</c>; the question and the answer are the generic call and result lines. Synchronous, as
+    /// <see cref="OnHeadlessDiagnostic"/> is: the tool runs between the turn loop's awaited writes, never mid-line.
+    /// </summary>
+    private sealed class HeadlessAdvisorView(SidekickApp app) : Claude.IClaudeAdvisorView
+    {
+        public void Began(string question)
+        {
+        }
+
+        public void Tool(string name, string detail) => app.HeadlessSyncLine("[tool] " + Claude.ClaudeText.ToolNote(name, detail));
+
+        public void Answered(string answer, Claude.ClaudeEvent.Result result) =>
+            app.HeadlessSyncLine("[notice] " + Claude.ClaudeText.Footer(result.CostUsd, result.Usage, Claude.ClaudeText.AdvisorName));
+    }
+
+    /// <summary>One line written at once, on a line of its own (the advisor's view).</summary>
+    private void HeadlessSyncLine(string line)
+    {
+        if (!_headlessAtLineStart)
+        {
+            _headlessOutput.WriteLine();
+        }
+
+        _headlessOutput.WriteLine(line);
+        _headlessOutput.Flush();
+        _headlessAtLineStart = true;
+    }
+
     private async Task HeadlessLineAsync(string line)
     {
         await _headlessOutput.WriteLineAsync(line).ConfigureAwait(false);
@@ -1418,6 +1453,7 @@ public sealed class SidekickApp
         SettingsField.ComfyUrl => _environment.ComfyUrl is not null ? EnvironmentOverrides.ComfyUrlVariable : null,
         SettingsField.ClaudeExecutable => _environment.ClaudeExecutable is not null ? EnvironmentOverrides.ClaudeExeVariable : null,
         SettingsField.ClaudePermissions => _environment.ClaudePermissions is not null ? EnvironmentOverrides.ClaudePermissionsVariable : null,
+        SettingsField.ClaudeAdvisor => _environment.ClaudeAdvisor is not null ? EnvironmentOverrides.ClaudeAdvisorVariable : null,
         _ => null,
     };
 

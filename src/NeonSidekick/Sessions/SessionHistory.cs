@@ -56,6 +56,10 @@ public sealed class StoredHistory
     /// <summary>The Claude Code conversation <c>/claude</c> resumes (2026-09-27): the id this app minted for it; absent until the first <c>/claude</c>, so older rows read the same as ever — no schema bump.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? ClaudeSessionId { get; set; }
+
+    /// <summary>The Claude Code conversation <c>claude_advisor</c> resumes (2026-09-27, its own thread): absent until the first call.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? ClaudeAdvisorSessionId { get; set; }
 }
 
 /// <summary>A session's plan mode (2026-09-26): the requirement, and the plan's file, title, revision and first save once presented.</summary>
@@ -83,10 +87,10 @@ public sealed class StoredPlan
 public static class SessionHistory
 {
     /// <summary>The stored form of <paramref name="messages"/>, compact JSON.</summary>
-    public static string ToJson(IReadOnlyList<ChatMessage> messages, StoredPlan? plan = null, StoredPlan? executing = null, string? claudeSessionId = null)
+    public static string ToJson(IReadOnlyList<ChatMessage> messages, StoredPlan? plan = null, StoredPlan? executing = null, string? claudeSessionId = null, string? claudeAdvisorSessionId = null)
     {
         ArgumentNullException.ThrowIfNull(messages);
-        var document = new StoredHistory { Plan = plan, Executing = executing, ClaudeSessionId = claudeSessionId };
+        var document = new StoredHistory { Plan = plan, Executing = executing, ClaudeSessionId = claudeSessionId, ClaudeAdvisorSessionId = claudeAdvisorSessionId };
         foreach (var message in messages)
         {
             document.Messages.Add(Store(message));
@@ -105,13 +109,17 @@ public static class SessionHistory
     public static List<ChatMessage> FromJson(string json, out StoredPlan? plan, out StoredPlan? executing) => FromJson(json, out plan, out executing, out _);
 
     /// <summary><see cref="FromJson(string, out StoredPlan, out StoredPlan)"/>, with the Claude conversation <c>/claude</c> resumes (null before the first, 2026-09-27).</summary>
-    public static List<ChatMessage> FromJson(string json, out StoredPlan? plan, out StoredPlan? executing, out string? claudeSessionId)
+    public static List<ChatMessage> FromJson(string json, out StoredPlan? plan, out StoredPlan? executing, out string? claudeSessionId) => FromJson(json, out plan, out executing, out claudeSessionId, out _);
+
+    /// <summary><see cref="FromJson(string, out StoredPlan, out StoredPlan, out string)"/>, with the advisor's own Claude conversation (null before its first call, 2026-09-27).</summary>
+    public static List<ChatMessage> FromJson(string json, out StoredPlan? plan, out StoredPlan? executing, out string? claudeSessionId, out string? claudeAdvisorSessionId)
     {
         ArgumentNullException.ThrowIfNull(json);
         var document = JsonSerializer.Deserialize(json, SessionJsonContext.Default.StoredHistory) ?? throw new JsonException("The stored history is empty.");
         plan = document.Plan;
         executing = document.Executing;
         claudeSessionId = document.ClaudeSessionId;
+        claudeAdvisorSessionId = document.ClaudeAdvisorSessionId;
         var messages = new List<ChatMessage>(document.Messages.Count);
         foreach (var stored in document.Messages)
         {

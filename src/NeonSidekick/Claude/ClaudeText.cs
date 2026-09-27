@@ -34,10 +34,10 @@ public static class ClaudeText
     public const string ResumeLostNotice = "The Claude conversation could not be resumed; starting a new one.";
 
     /// <summary>The CLI is on no path this app looks at. Pinned.</summary>
-    public const string NotFound = "Claude Code was not found on the PATH or in %USERPROFILE%\\.local\\bin. Install it, or set Claude executable in /settings.";
+    public const string NotFound = "Claude Code was not found on the PATH or in %USERPROFILE%\\.local\\bin. Install it, or set Claude command executable on the Claude tab of /tools.";
 
-    /// <summary>The <c>Claude executable</c> setting names no file. Pinned.</summary>
-    public static string ConfiguredNotFound(string path) => $"Claude executable '{path}' does not exist. Fix it in /settings, or clear it to look on the PATH.";
+    /// <summary>The <c>Claude command executable</c> setting names no file. Pinned.</summary>
+    public static string ConfiguredNotFound(string path) => $"Claude command executable '{path}' does not exist. Fix it on the Claude tab of /tools, or clear it to look on the PATH.";
 
     /// <summary>The OS refused the start. Pinned.</summary>
     public static string CouldNotStart(string executable, string why) => $"Could not start Claude Code ({Path.GetFileName(executable)}): {why}";
@@ -54,11 +54,11 @@ public static class ClaudeText
 
     /// <summary>The tools the permission level turned away, once under the reply. Pinned.</summary>
     public static string DeniedNotice(IReadOnlyList<string> tools, string level) =>
-        $"Claude was denied {string.Join(", ", tools.Distinct(StringComparer.Ordinal))} (Claude permissions: {level}).";
+        $"Claude was denied {string.Join(", ", tools.Distinct(StringComparer.Ordinal))} (Claude command permissions: {level}).";
 
-    /// <summary>The reply's footer: <c>Claude · $0.0256 · 6,254 in · 5 out</c>. Pinned.</summary>
-    public static string Footer(decimal costUsd, Llm.TokenUsage usage) =>
-        $"{SpeakerName} · {Dollars(costUsd)} · {usage.Input.ToString("N0", CultureInfo.InvariantCulture)} in · {usage.Output.ToString("N0", CultureInfo.InvariantCulture)} out";
+    /// <summary>The reply's footer: <c>Claude · $0.0256 · 6,254 in · 5 out</c>; the advisor's says <see cref="AdvisorName"/>. Pinned.</summary>
+    public static string Footer(decimal costUsd, Llm.TokenUsage usage, string name = SpeakerName) =>
+        $"{name} · {Dollars(costUsd)} · {usage.Input.ToString("N0", CultureInfo.InvariantCulture)} in · {usage.Output.ToString("N0", CultureInfo.InvariantCulture)} out";
 
     /// <summary>A cost as the footer and <c>/usage</c> say it: <c>$0.0256</c>, four places under a dollar, two from one up. Pinned.</summary>
     public static string Dollars(decimal usd) =>
@@ -76,6 +76,98 @@ public static class ClaudeText
     /// <summary>Whether a stored turn's line was a <c>/claude</c> message — a restore puts the speaker's name back over its reply.</summary>
     public static bool IsClaudeLine(string userText) =>
         userText.StartsWith("/claude ", StringComparison.OrdinalIgnoreCase) && !string.Equals(userText.Trim(), "/claude " + NewWord, StringComparison.OrdinalIgnoreCase);
+
+    // ── claude_advisor (2026-09-27) ─────────────────────────────────────────
+
+    /// <summary>The advisor's name on its lines and footer. Pinned.</summary>
+    public const string AdvisorName = "Claude advisor";
+
+    /// <summary>How many of the conversation's last messages <c>Claude advisor context: recent</c> sends. Pinned.</summary>
+    public const int AdvisorRecentMessages = 10;
+
+    /// <summary>A tool result among those messages is cut to this many characters: the gist, not a whole file again.</summary>
+    public const int AdvisorToolResultChars = 500;
+
+    /// <summary>
+    /// The first message of an advisor thread opens with this: who is asking, and why, and what Claude can and cannot do —
+    /// so it answers as an advisor (a recommendation first) and never offers edits it may not make. Pinned.
+    /// </summary>
+    public const string AdvisorFraming =
+        "You are advising another AI assistant: a local model working for its user in this directory, which asked for your view because it is unsure how to proceed. " +
+        "Answer its question directly and concisely — your recommendation first, then the reasons. " +
+        "You can read and search the files here and the web, but you cannot change anything, so do not offer to.";
+
+    /// <summary>The message an advisor call sends: the framing (a new thread only), the question, the model's brief, and the recent messages when asked for. Pinned.</summary>
+    public static string AdvisorPrompt(string question, string context, IReadOnlyList<string>? recent, bool first)
+    {
+        var sb = new System.Text.StringBuilder();
+        if (first)
+        {
+            sb.Append(AdvisorFraming).Append("\n\n");
+        }
+
+        sb.Append("Question: ").Append(question.Trim());
+        if (!string.IsNullOrWhiteSpace(context))
+        {
+            sb.Append("\n\nContext from the assistant:\n").Append(context.Trim());
+        }
+
+        if (recent is { Count: > 0 })
+        {
+            sb.Append("\n\nThe conversation so far (its last ").Append(recent.Count.ToString(CultureInfo.InvariantCulture)).Append(" messages):");
+            foreach (var line in recent)
+            {
+                sb.Append('\n').Append(line);
+            }
+        }
+
+        return sb.ToString();
+    }
+
+    /// <summary>One of the recent messages as the advisor reads it: <c>user: …</c>, <c>tool read_file: …</c>. Pinned.</summary>
+    public static string AdvisorRecentLine(string role, string text) => role + ": " + text.Trim();
+
+    /// <summary>The call's line in the transcript: <c>Claude advisor › Which parser should I use?</c>. Pinned.</summary>
+    public static string AdvisorQuestionNote(string question) => AdvisorName + " › " + question.ReplaceLineEndings(" ").Trim();
+
+    /// <summary>The confirm pane's title (<c>Claude advisor confirm</c> on). Pinned.</summary>
+    public static string AdvisorConfirmQuestion(string question)
+    {
+        string flat = question.ReplaceLineEndings(" ").Trim();
+        return "Let the model ask Claude: " + (flat.Length > 80 ? flat[..79] + "…" : flat) + "?";
+    }
+
+    /// <summary>A call with no question. Pinned.</summary>
+    public const string AdvisorNoQuestionError = "Error: question is required — what you want Claude's advice on.";
+
+    /// <summary>A call past <c>Claude advisor calls per turn</c>. Pinned.</summary>
+    public static string AdvisorCapError(int cap) =>
+        $"Error: claude_advisor was already called {cap.ToString(CultureInfo.InvariantCulture)} time{(cap == 1 ? "" : "s")} this turn, the most allowed. Carry on without it.";
+
+    /// <summary>The user said no on the confirm pane. Pinned.</summary>
+    public const string AdvisorDeclinedError = "Error: the user declined to let you ask Claude. Carry on without it, and do not call claude_advisor again this turn.";
+
+    /// <summary>Confirmation is on and nothing can ask (headless, no pane). Pinned.</summary>
+    public const string AdvisorNotAskedError = "Error: claude_advisor needs the user's yes (Claude advisor confirm is on) and there is no one to ask here. Carry on without it.";
+
+    /// <summary>A run that failed: the CLI missing, a refusal, a result with an error. Pinned.</summary>
+    public static string AdvisorFailedError(string error) => "Error: Claude advisor failed: " + error.ReplaceLineEndings(" ").Trim();
+
+    /// <summary>A run that ended well with no words. Pinned.</summary>
+    public const string AdvisorNoAnswer = "(Claude gave no answer)";
+
+    /// <summary>The tool's description. Pinned.</summary>
+    public const string AdvisorDescription =
+        "Asks Claude (Claude Code, a stronger model) for advice when you are stuck or unsure of the best course: a design choice, a bug you cannot explain, a plan to check. " +
+        "Claude can read and search the files in the working directory and the web, but cannot change anything. " +
+        "Send a self-contained question; put what Claude needs to know in context (what you tried, what you found). " +
+        "It remembers earlier questions in this conversation. It is slow and costs money: use it sparingly, never for what you can look up yourself.";
+
+    /// <summary>The <c>question</c> argument's description. Pinned.</summary>
+    public const string AdvisorQuestionDescription = "What you want Claude's advice on, as one self-contained question.";
+
+    /// <summary>The <c>context</c> argument's description. Pinned.</summary>
+    public const string AdvisorContextDescription = "What Claude needs to know to answer: the goal, what you tried, what you found, the files involved. Optional.";
 
     // ── the log ─────────────────────────────────────────────────────────────
 

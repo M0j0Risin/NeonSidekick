@@ -624,6 +624,7 @@ internal sealed partial class ChatScreen
         _sessionId = null;
         _sessionTitle = null;
         _claudeSessionId = null;
+        _advisorThread.SessionId = null;
     }
 
     /// <summary>The saved <c>Session show name</c> word last resolved and what it meant: the pane reads the setting on every draw and tick, and <see cref="SessionShowName.Resolve"/> warns on a hand-edited value — once per value this way, not once per tick.</summary>
@@ -899,6 +900,8 @@ internal sealed partial class ChatScreen
         _interpreters = new Interpreters(environment ?? (_ => null));
         // /claude (2026-09-27): the CLI found through the same PATH door as the shells.
         _claude = claude ?? new ClaudeProcess(environment ?? (_ => null));
+        // claude_advisor (2026-09-27): the same CLI, its own thread, the cost into /usage's Claude row, the pane for a confirm.
+        _advisorTools = ClaudeAdvisorTools(_claude, _effective, () => _files.Root, _advisorThread, (usage, usd) => _session.Usage.AddClaude(usage, usd), () => _session.History.Messages, ConfirmAdvisorAsync, new AdvisorView(this));
         _runner = new ShellRunner(time);
         // The background processes (phase B): the board signals the idle read like the timers, and is killed off with the screen.
         _processes = new ProcessRegistry(_runner, _random, SignalAlert);
@@ -2417,7 +2420,9 @@ internal sealed partial class ChatScreen
             SqlOffered(effective, _sql),
             Without(_sqlTools, disabled).Count,
             effective.ShellPreferNative,
-            _plan.Turn(_presentPlan)?.Directive);
+            _plan.Turn(_presentPlan)?.Directive,
+            effective.ClaudeAdvisor,
+            Without(_advisorTools, disabled).Count);
     }
 
     /// <summary>
@@ -2464,7 +2469,7 @@ internal sealed partial class ChatScreen
         var disabled = ToolsText.DisabledSet(effective.ToolsDisabled);
         var fileTools = FileToolsFor(_fileTools, effective.FileSafeEdits);   // restore only with File safe edits on (later still on 2026-09-20)
         bool files = effective.FileTools && Without(fileTools, disabled).Count > 0;
-        var groups = SystemPromptSummary.ToolGroups(_clockTools, _timerTools, fileTools, _memoryTools, effective.Memory, effective.LlmOfferTools, WebToolsFor(_webTools, files), effective.WebTools, effective.FileTools, _askTools, effective.AskUser, _pane.Enabled, _skillTools, effective.AgentSkills, _sessionTools, effective.SessionTool, disabled, skillInstalled: Catalog(effective).Count > 0, mcp: _mcp.ServerTools, mcpEnabled: effective.McpServers, git: _gitTools, gitEnabled: effective.GitNativeTools, shell: _shellTools, shellEnabled: ShellOffered(effective), codeAvailable: CodeAvailable(), obsidian: ObsidianToolsFor(_vaultTools, effective), obsidianEnabled: ObsidianOffered(effective), sql: _sqlTools, sqlEnabled: SqlOffered(effective, _sql), comfy: _comfyTools, comfyEnabled: ComfyOffered(effective, _comfy));
+        var groups = SystemPromptSummary.ToolGroups(_clockTools, _timerTools, fileTools, _memoryTools, effective.Memory, effective.LlmOfferTools, WebToolsFor(_webTools, files), effective.WebTools, effective.FileTools, _askTools, effective.AskUser, _pane.Enabled, _skillTools, effective.AgentSkills, _sessionTools, effective.SessionTool, disabled, skillInstalled: Catalog(effective).Count > 0, mcp: _mcp.ServerTools, mcpEnabled: effective.McpServers, git: _gitTools, gitEnabled: effective.GitNativeTools, shell: _shellTools, shellEnabled: ShellOffered(effective), codeAvailable: CodeAvailable(), obsidian: ObsidianToolsFor(_vaultTools, effective), obsidianEnabled: ObsidianOffered(effective), sql: _sqlTools, sqlEnabled: SqlOffered(effective, _sql), comfy: _comfyTools, comfyEnabled: ComfyOffered(effective, _comfy), advisor: _advisorTools, advisorEnabled: effective.ClaudeAdvisor);
         return groups.SelectMany(g => g.Tools.Where(t => g.Offers(t.Name)).Select(t => new CompletionItem(t.Name, t.Description))).ToList();
     }
 
@@ -3106,7 +3111,7 @@ internal sealed partial class ChatScreen
         var disabled = TurnDisabled(effective);
         var fileTools = FileToolsFor(_fileTools, effective.FileSafeEdits);   // restore only with File safe edits on (later still on 2026-09-20): /sys shows the list cut, Files (14)
         bool files = effective.FileTools && Without(fileTools, disabled).Count > 0;   // the turn's rule (PrepareTurn): an emptied file group is the switch off
-        return WithPlanGroup(SystemPromptSummary.OfferedOnly(SystemPromptSummary.ToolGroups(_clockTools, _timerTools, fileTools, _memoryTools, effective.Memory, effective.LlmOfferTools, WebToolsFor(_webTools, files), effective.WebTools, effective.FileTools, _askTools, effective.AskUser, _pane.Enabled, _skillTools, effective.AgentSkills, _sessionTools, effective.SessionTool, disabled, mcp: _mcp.ServerTools, mcpEnabled: effective.McpServers, git: _gitTools, gitEnabled: effective.GitNativeTools, shell: _shellTools, shellEnabled: ShellOffered(effective), codeAvailable: CodeAvailable(), obsidian: ObsidianOffered(effective) ? ObsidianToolsFor(_vaultTools, effective) : null, sql: SqlOffered(effective, _sql) ? _sqlTools : null, comfy: ComfyOffered(effective, _comfy) ? _comfyTools : null)));   // the vault group only with a vault (2026-09-22): /sys stays as it was for a profile that never names one
+        return WithPlanGroup(SystemPromptSummary.OfferedOnly(SystemPromptSummary.ToolGroups(_clockTools, _timerTools, fileTools, _memoryTools, effective.Memory, effective.LlmOfferTools, WebToolsFor(_webTools, files), effective.WebTools, effective.FileTools, _askTools, effective.AskUser, _pane.Enabled, _skillTools, effective.AgentSkills, _sessionTools, effective.SessionTool, disabled, mcp: _mcp.ServerTools, mcpEnabled: effective.McpServers, git: _gitTools, gitEnabled: effective.GitNativeTools, shell: _shellTools, shellEnabled: ShellOffered(effective), codeAvailable: CodeAvailable(), obsidian: ObsidianOffered(effective) ? ObsidianToolsFor(_vaultTools, effective) : null, sql: SqlOffered(effective, _sql) ? _sqlTools : null, comfy: ComfyOffered(effective, _comfy) ? _comfyTools : null, advisor: _advisorTools, advisorEnabled: effective.ClaudeAdvisor)));   // the vault group only with a vault (2026-09-22): /sys stays as it was for a profile that never names one
     }
 
     /// <summary>Whether <c>execute_code</c> has a language to run (2026-09-21): the setting's languages, one of them installed.</summary>
@@ -3134,7 +3139,7 @@ internal sealed partial class ChatScreen
         var disabled = ToolsText.DisabledSet(effective.ToolsDisabled);
         // The whole file list, restore noted under File safe edits off (later still on 2026-09-20): the row stays, dim, with its reason — the download_file shape.
         _interpreters.Refresh();
-        var groups = SystemPromptSummary.ToolGroups(_clockTools, _timerTools, _fileTools, _memoryTools, effective.Memory, effective.LlmOfferTools, _webTools, effective.WebTools, effective.FileTools, _askTools, effective.AskUser, _pane.Enabled, _skillTools, effective.AgentSkills, _sessionTools, effective.SessionTool, disabled, skillInstalled: Catalog(effective).Count > 0, git: _gitTools, gitEnabled: effective.GitNativeTools, safeEdits: effective.FileSafeEdits, shell: _shellTools, shellEnabled: ShellOffered(effective), codeAvailable: CodeAvailable(), obsidian: ObsidianToolsFor(_vaultTools, effective), obsidianEnabled: ObsidianOffered(effective), sql: _sqlTools, sqlEnabled: SqlOffered(effective, _sql), comfy: _comfyTools, comfyEnabled: ComfyOffered(effective, _comfy));
+        var groups = SystemPromptSummary.ToolGroups(_clockTools, _timerTools, _fileTools, _memoryTools, effective.Memory, effective.LlmOfferTools, _webTools, effective.WebTools, effective.FileTools, _askTools, effective.AskUser, _pane.Enabled, _skillTools, effective.AgentSkills, _sessionTools, effective.SessionTool, disabled, skillInstalled: Catalog(effective).Count > 0, git: _gitTools, gitEnabled: effective.GitNativeTools, safeEdits: effective.FileSafeEdits, shell: _shellTools, shellEnabled: ShellOffered(effective), codeAvailable: CodeAvailable(), obsidian: ObsidianToolsFor(_vaultTools, effective), obsidianEnabled: ObsidianOffered(effective), sql: _sqlTools, sqlEnabled: SqlOffered(effective, _sql), comfy: _comfyTools, comfyEnabled: ComfyOffered(effective, _comfy), advisor: _advisorTools, advisorEnabled: effective.ClaudeAdvisor);
         return new ToolsFacts(groups, effective.LlmOfferTools, disabled);
     }
 
@@ -3689,7 +3694,7 @@ internal sealed partial class ChatScreen
     /// <c>run_command</c> is told the turn's tool names (<see cref="RunCommandTool.BeginTurn"/>, 2026-09-26) and, with <paramref name="shellNative"/>
     /// (the setting <c>Shell prefer native tools</c>), the rules gain <see cref="Assistant.ShellNativeRule"/> after the shell sentence. Shared with headless.
     /// </summary>
-    public static void PrepareTurn(Assistant assistant, MemoryStore memory, IReadOnlyList<AIFunction> memoryTools, IReadOnlyList<AIFunction> standingTools, PersonaFile persona, OperataFile operata, VocaliaFile vocalia, bool memoryEnabled, bool speechOutput, int maxToolIterations = Assistant.DefaultMaxToolIterations, bool toolsEnabled = true, IReadOnlyList<AIFunction>? webTools = null, bool webEnabled = false, Assistant.TurnContextGuard? contextGuard = null, IReadOnlyList<AIFunction>? fileTools = null, bool filesEnabled = false, IReadOnlyList<AIFunction>? askTools = null, SkillsForTurn? skills = null, bool markdown = false, IReadOnlyList<AIFunction>? sessionTools = null, bool sessionsEnabled = false, IReadOnlySet<string>? disabledTools = null, IReadOnlyList<AIFunction>? mcpTools = null, bool mcpEnabled = false, bool safeEdits = true, IReadOnlyList<AIFunction>? gitTools = null, bool gitEnabled = false, IReadOnlyList<AIFunction>? shellTools = null, bool shellEnabled = false, ProcessRegistry? processes = null, bool shellBridge = false, bool shellPolice = true, IReadOnlyList<AIFunction>? obsidianTools = null, bool obsidianEnabled = false, IReadOnlyList<AIFunction>? sqlTools = null, bool sqlEnabled = false, IReadOnlyList<AIFunction>? comfyTools = null, bool comfyEnabled = false, bool shellNative = false, PlanTurn? plan = null)
+    public static void PrepareTurn(Assistant assistant, MemoryStore memory, IReadOnlyList<AIFunction> memoryTools, IReadOnlyList<AIFunction> standingTools, PersonaFile persona, OperataFile operata, VocaliaFile vocalia, bool memoryEnabled, bool speechOutput, int maxToolIterations = Assistant.DefaultMaxToolIterations, bool toolsEnabled = true, IReadOnlyList<AIFunction>? webTools = null, bool webEnabled = false, Assistant.TurnContextGuard? contextGuard = null, IReadOnlyList<AIFunction>? fileTools = null, bool filesEnabled = false, IReadOnlyList<AIFunction>? askTools = null, SkillsForTurn? skills = null, bool markdown = false, IReadOnlyList<AIFunction>? sessionTools = null, bool sessionsEnabled = false, IReadOnlySet<string>? disabledTools = null, IReadOnlyList<AIFunction>? mcpTools = null, bool mcpEnabled = false, bool safeEdits = true, IReadOnlyList<AIFunction>? gitTools = null, bool gitEnabled = false, IReadOnlyList<AIFunction>? shellTools = null, bool shellEnabled = false, ProcessRegistry? processes = null, bool shellBridge = false, bool shellPolice = true, IReadOnlyList<AIFunction>? obsidianTools = null, bool obsidianEnabled = false, IReadOnlyList<AIFunction>? sqlTools = null, bool sqlEnabled = false, IReadOnlyList<AIFunction>? comfyTools = null, bool comfyEnabled = false, bool shellNative = false, PlanTurn? plan = null, IReadOnlyList<AIFunction>? advisorTools = null, bool advisorEnabled = false)
     {
         ArgumentNullException.ThrowIfNull(assistant);
         ArgumentNullException.ThrowIfNull(memory);
@@ -3723,7 +3728,7 @@ internal sealed partial class ChatScreen
         {
             // Plan mode (2026-09-26): every tool it does not allow joins the /tools list for this turn, so a group
             // loses them as it loses a tool switched off, and a group left empty takes its rule with it.
-            disabledTools = PlanTools.Widen(disabledTools, standingTools, fileTools, webTools, gitTools, shellTools, obsidianTools, sqlTools, comfyTools, memoryTools, skillTools, sessionTools, askTools, mcpTools);
+            disabledTools = PlanTools.Widen(disabledTools, standingTools, fileTools, webTools, gitTools, shellTools, obsidianTools, sqlTools, comfyTools, memoryTools, skillTools, sessionTools, askTools, mcpTools, advisorTools);
         }
 
         if (disabledTools is { Count: > 0 })
@@ -3742,6 +3747,7 @@ internal sealed partial class ChatScreen
             sessionTools = sessionTools is null ? null : Without(sessionTools, disabledTools);
             askTools = askTools is null ? null : Without(askTools, disabledTools);
             mcpTools = mcpTools is null ? null : Without(mcpTools, disabledTools);
+            advisorTools = advisorTools is null ? null : Without(advisorTools, disabledTools);
         }
 
         // restore rides only with File safe edits on (later still on 2026-09-20): cut ahead of the group decision, so restore alone left on reads as the group emptied.
@@ -3777,6 +3783,11 @@ internal sealed partial class ChatScreen
         // The image tools after the SQL tools (2026-09-24): ComfyUI tools, a URL and a workflow are the group's switch; no rule — the description carries the workflows and the prompt styles.
         bool comfy = comfyEnabled && comfyTools is { Count: > 0 };
         offered = comfy ? [.. offered, .. comfyTools!] : offered;
+        // The advisor after the image tools (2026-09-27): the setting Claude advisor is the group's switch; its sentence after the SQL one.
+        bool advisor = advisorEnabled && advisorTools is { Count: > 0 };
+        offered = advisor ? [.. offered, .. advisorTools!] : offered;
+        // … and its per-turn cap starts over.
+        (advisor ? advisorTools!.OfType<ClaudeAdvisorTool>().FirstOrDefault() : null)?.BeginTurn();
         // The shell rule's execute_code sentence promises neon_tools only while the setting Shell tool bridge is on (later on 2026-09-21).
         bool bridge = shell && shellBridge;
         // … and its head says the shell stays under the working directory only while the setting Shell police outside paths is on (2026-09-22); off, it says a command starts there and no more.
@@ -3837,7 +3848,7 @@ internal sealed partial class ChatScreen
         assistant.OpeningCalls = opening;
         // The notified exits since the last turn ride in as seeded polls (2026-09-21), on every turn, while process is offered.
         assistant.PendingCalls = processes is null ? [] : PendingProcessPolls(processes, assistant.Tools);
-        assistant.History.SystemPrompt = Assistant.SystemPrompt(speechOutput, memoryEnabled ? memory.Snapshot() : null, persona.Read(), operata.Read(), vocalia.Read(), web: web, files: files, ask: ask, project: project, skills: catalog, markdown: markdown, sessions: sessions, download: download, recall: recall is not null, delete: delete, mcp: mcp, safeEdits: safeEdits, timers: timers, git: git, shell: shell, bridge: bridge, police: police, obsidian: obsidian, obsidianDelete: obsidianDelete, sql: sql, native: native, plan: plan?.Directive);
+        assistant.History.SystemPrompt = Assistant.SystemPrompt(speechOutput, memoryEnabled ? memory.Snapshot() : null, persona.Read(), operata.Read(), vocalia.Read(), web: web, files: files, ask: ask, project: project, skills: catalog, markdown: markdown, sessions: sessions, download: download, recall: recall is not null, delete: delete, mcp: mcp, safeEdits: safeEdits, timers: timers, git: git, shell: shell, bridge: bridge, police: police, obsidian: obsidian, obsidianDelete: obsidianDelete, sql: sql, native: native, plan: plan?.Directive, advisor: advisor);
     }
 
     /// <summary>
@@ -4396,9 +4407,10 @@ internal sealed partial class ChatScreen
         StoredPlan? plan;
         StoredPlan? executing;
         string? claudeSessionId;
+        string? advisorSessionId;
         try
         {
-            messages = SessionHistory.FromJson(record.HistoryJson, out plan, out executing, out claudeSessionId);
+            messages = SessionHistory.FromJson(record.HistoryJson, out plan, out executing, out claudeSessionId, out advisorSessionId);
         }
         catch (Exception ex) when (ex is System.Text.Json.JsonException or FormatException)
         {
@@ -4422,6 +4434,7 @@ internal sealed partial class ChatScreen
             _sessionId = id;
             _sessionTitle = record.Summary;
             _claudeSessionId = claudeSessionId;
+            _advisorThread.SessionId = advisorSessionId;
             _transcript.Notice(SessionRestoredNotice(record.Summary, _time.LocalTimeZone));
             RestorePlan(plan, executing);
             DiagnosticLog.Info(SessionsCategory, SessionRestoredLogLine(record.Summary.Id, record.Summary.Turns));
@@ -10134,7 +10147,7 @@ internal sealed partial class ChatScreen
         if (bot is null)
         {
             _interpreters.Refresh();
-            PrepareTurn(assistant, _memory, _memoryTools, [.. _clockTools, .. _timerTools], _persona, _operata, _vocalia, effective.Memory, speaker is not null, effective.LlmMaxToolIterations, effective.LlmOfferTools, _webTools, effective.WebTools, ContextGuardFor(effective, _session.ContextLength), _fileTools, effective.FileTools, _pane.Enabled && effective.AskUser ? _askTools : null, SkillsFor(effective), markdown, _sessionTools, effective.SessionTool, ToolsText.DisabledSet(effective.ToolsDisabled), _mcp.Tools, effective.McpServers, effective.FileSafeEdits, _gitTools, effective.GitNativeTools, _shellTools, ShellOffered(effective), _processes, effective.ShellToolBridge, effective.ShellPoliceOutsidePaths, ObsidianToolsFor(_vaultTools, effective), ObsidianOffered(effective), _sqlTools, SqlOffered(effective, _sql), _comfyTools, ComfyOffered(effective, _comfy), effective.ShellPreferNative, _plan.Turn(_presentPlan));
+            PrepareTurn(assistant, _memory, _memoryTools, [.. _clockTools, .. _timerTools], _persona, _operata, _vocalia, effective.Memory, speaker is not null, effective.LlmMaxToolIterations, effective.LlmOfferTools, _webTools, effective.WebTools, ContextGuardFor(effective, _session.ContextLength), _fileTools, effective.FileTools, _pane.Enabled && effective.AskUser ? _askTools : null, SkillsFor(effective), markdown, _sessionTools, effective.SessionTool, ToolsText.DisabledSet(effective.ToolsDisabled), _mcp.Tools, effective.McpServers, effective.FileSafeEdits, _gitTools, effective.GitNativeTools, _shellTools, ShellOffered(effective), _processes, effective.ShellToolBridge, effective.ShellPoliceOutsidePaths, ObsidianToolsFor(_vaultTools, effective), ObsidianOffered(effective), _sqlTools, SqlOffered(effective, _sql), _comfyTools, ComfyOffered(effective, _comfy), effective.ShellPreferNative, _plan.Turn(_presentPlan), _advisorTools, effective.ClaudeAdvisor);
         }
 
         bool armed = false;
@@ -10494,7 +10507,7 @@ internal sealed partial class ChatScreen
         if (_sessionId is { } id)
         {
             var messages = assistant.History.Messages;
-            _sessions.SaveHistory(id, SessionHistory.ToJson(messages, _plan.ToStored(), _executingPlan, _claudeSessionId));
+            _sessions.SaveHistory(id, SessionHistory.ToJson(messages, _plan.ToStored(), _executingPlan, _claudeSessionId, _advisorThread.SessionId));
         }
     }
 
@@ -10733,6 +10746,9 @@ internal sealed partial class ChatScreen
                 speaker?.Feed(delta.Text);
                 reply.Append(delta.Text);
                 break;
+            case TurnEvent.ToolCall call when string.Equals(call.Name, ClaudeAdvisorTool.ToolName, StringComparison.Ordinal):
+                // The advisor's lines are the view's, as it runs (AdvisorView): the question, Claude's tools, the answer.
+                break;
             case TurnEvent.ToolCall call when QuietTools.Contains(call.Name):
                 // The result line says it all (🛠️ remembered: …, 🛠️ Friday 11 September 2026, …).
                 break;
@@ -10791,6 +10807,14 @@ internal sealed partial class ChatScreen
                 break;
             case TurnEvent.ToolResult result when string.Equals(result.Name, PresentPlanTool.ToolName, StringComparison.Ordinal):
                 // The plan and the verdict were printed as it ran (PresentPlanAsync); only a refusal has a line of its own.
+                if (result.Text.StartsWith("Error:", StringComparison.Ordinal))
+                {
+                    _transcript.ToolNote(result.Text);
+                }
+
+                break;
+            case TurnEvent.ToolResult result when string.Equals(result.Name, ClaudeAdvisorTool.ToolName, StringComparison.Ordinal):
+                // The answer was printed as it came (AdvisorView.Answered); only a refusal or a failure has a line of its own.
                 if (result.Text.StartsWith("Error:", StringComparison.Ordinal))
                 {
                     _transcript.ToolNote(result.Text);

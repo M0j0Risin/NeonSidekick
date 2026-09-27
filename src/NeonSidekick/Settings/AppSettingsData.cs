@@ -1414,4 +1414,36 @@ public sealed class AppSettingsData
 
     /// <summary>The <c>--effort</c> of a <c>/claude</c> run (2026-09-27): one of <see cref="Claude.ClaudeEffort.Names"/>; empty = the CLI's own. No variable.</summary>
     public string ClaudeEffort { get; set; } = Claude.ClaudeEffort.Default;
+
+    /// <summary>
+    /// Whether the model is offered <c>claude_advisor</c> (2026-09-27, the user's ask: the local model asks Claude Code
+    /// for advice on its own, read-only, when it is stuck): the tool group's switch, the <c>/tools</c> Claude tab's
+    /// first advisor row. Off by default — every call costs money on the user's Claude account. Variable
+    /// <see cref="EnvironmentOverrides.ClaudeAdvisorVariable"/>.
+    /// </summary>
+    public bool ClaudeAdvisor { get; set; }
+
+    /// <summary>
+    /// What an advisor call sends Claude besides the model's question (2026-09-27, the user's call: a setting): one of
+    /// <see cref="Claude.ClaudeAdvisorContext.Names"/> — <c>brief</c>, the question and the model's own context argument
+    /// alone; <c>recent</c>, those and the last <see cref="Claude.ClaudeText.AdvisorRecentMessages"/> messages of the
+    /// conversation. Anything else reads as <c>brief</c>. No variable.
+    /// </summary>
+    public string ClaudeAdvisorContext { get; set; } = Claude.ClaudeAdvisorContext.Default;
+
+    /// <summary>The most <c>claude_advisor</c> calls one turn may make (2026-09-27), <see cref="MinClaudeAdvisorCallsPerTurn"/> to <see cref="MaxClaudeAdvisorCallsPerTurn"/>; a call past it is refused, and the model carries on alone. No variable.</summary>
+    public int ClaudeAdvisorCallsPerTurn { get; set; } = DefaultClaudeAdvisorCallsPerTurn;
+
+    public const int MinClaudeAdvisorCallsPerTurn = 1;
+    public const int MaxClaudeAdvisorCallsPerTurn = 10;
+    public const int DefaultClaudeAdvisorCallsPerTurn = 2;
+
+    /// <summary>The <c>--model</c> of an advisor call (2026-09-27); empty = <see cref="ClaudeModel"/> (and, that empty too, the CLI's own). No variable.</summary>
+    public string ClaudeAdvisorModel { get; set; } = "";
+
+    /// <summary>The <c>--effort</c> of an advisor call (2026-09-27): one of <see cref="Claude.ClaudeEffort.Names"/>; empty = <see cref="ClaudeEffort"/>. No variable.</summary>
+    public string ClaudeAdvisorEffort { get; set; } = "";
+
+    /// <summary>Whether each advisor call waits for the user's yes on the approval pane (2026-09-27, the user's call: opt-in, off by default); headless has no one to ask, so a call there is refused. No variable.</summary>
+    public bool ClaudeAdvisorConfirm { get; set; }
 }
