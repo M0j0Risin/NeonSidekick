@@ -43,6 +43,8 @@ public sealed class EnvironmentOverrides
     public const string ProfileVariable = Prefix + "PROFILE";
     public const string ShellPoliceVariable = Prefix + "SHELL_POLICE";
     public const string ShellNativeVariable = Prefix + "SHELL_NATIVE";
+    public const string ClaudeExeVariable = Prefix + "CLAUDE_EXE";
+    public const string ClaudePermissionsVariable = Prefix + "CLAUDE_PERMISSIONS";
 
     /// <summary>Every variable this class reads, for documentation.</summary>
     public static readonly string[] AllVariables =
@@ -52,7 +54,7 @@ public sealed class EnvironmentOverrides
         WhisperModelVariable, LlmReasoningVariable, TtsVoice2Variable, TtsMixVariable,
         InterruptEchoVariable, InterruptConfirmVariable, LlmContextVariable, SearxngUrlVariable,
         CommandPolicyVariable, ShellPoliceVariable, ObsidianVaultVariable, ComfyUrlVariable,
-        ShellNativeVariable,
+        ShellNativeVariable, ClaudeExeVariable, ClaudePermissionsVariable,
     };
 
     /// <summary>The log category of every environment line.</summary>
@@ -92,6 +94,12 @@ public sealed class EnvironmentOverrides
 
     /// <summary>The ComfyUI server's URL, or null (2026-09-24). Checked where it is used (a non-http(s) value offers no image tool), not here.</summary>
     public string? ComfyUrl => Read(ComfyUrlVariable);
+
+    /// <summary>The Claude Code CLI's path for <c>/claude</c>, or null (2026-09-27). Checked where it is used (a path that is no file is <c>/claude</c>'s error), not here.</summary>
+    public string? ClaudeExecutable => Read(ClaudeExeVariable);
+
+    /// <summary><c>Claude permissions</c> for this launch as one of <see cref="Claude.ClaudePermission.Names"/> (lowercased), or null when unset or not a level (2026-09-27: a scripted headless run says <c>edit</c> without saving it).</summary>
+    public string? ClaudePermissions => ReadClaudePermissions(ClaudePermissionsVariable);
 
     /// <summary>Whisper model name or path, or null. Validated where it is used, not here.</summary>
     public string? SttWhisperModel => Read(WhisperModelVariable);
@@ -241,8 +249,27 @@ public sealed class EnvironmentOverrides
         if (ShellNative is { } native) effective.ShellPreferNative = native;
         if (ObsidianVault is { } vault) effective.ObsidianVault = vault;
         if (ComfyUrl is { } comfy) effective.ComfyUrl = comfy;
+        if (ClaudeExecutable is { } claude) effective.ClaudeExecutable = claude;
+        if (ClaudePermissions is { } claudePermissions) effective.ClaudePermissions = claudePermissions;
 
         return effective;
+    }
+
+    private string? ReadClaudePermissions(string name)
+    {
+        var raw = Read(name);
+        if (raw is null)
+        {
+            return null;
+        }
+
+        if (!Claude.ClaudePermission.TryParse(raw, out var level))
+        {
+            DiagnosticLog.Warn(Category, $"{name}='{raw}' is not one of {string.Join(", ", Claude.ClaudePermission.Names)}; ignoring it.");
+            return null;
+        }
+
+        return Claude.ClaudePermission.Name(level);
     }
 
     private string? ReadCommandPolicy(string name)

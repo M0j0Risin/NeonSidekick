@@ -93,7 +93,9 @@ public partial class SidekickAppTests : IDisposable
             externalSkills: Path.Combine(_dir, "agents-skills"),
             mcpTransport: _mcpServers.Transport,
             // The web over the same stub (2026-09-26, /skills add headless): every host public, nothing reaches the network.
-            web: new NeonSidekick.Web.WebAccess(new HttpClient(_http), new FakeHeadlessBrowser(), new ManualTimeProvider(), (_, _) => Task.FromResult(new[] { IPAddress.Parse("140.82.112.9") })));
+            web: new NeonSidekick.Web.WebAccess(new HttpClient(_http), new FakeHeadlessBrowser(), new ManualTimeProvider(), (_, _) => Task.FromResult(new[] { IPAddress.Parse("140.82.112.9") })),
+            // /claude over a script (2026-09-27): no test starts the real CLI.
+            claude: _claudeCli);
 
     /// <summary>The MCP seam (2026-09-20): in-process pipe servers behind every session the app builds; nothing configured in the temp home, so nothing connects unless a test writes an mcp.json.</summary>
     private readonly InProcessMcpServers _mcpServers = new();

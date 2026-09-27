@@ -128,7 +128,7 @@ public static class UsageText
     public static IRenderable TokensTab(TokenTally tally, ContextLength? window)
     {
         ArgumentNullException.ThrowIfNull(tally);
-        if (tally.Session.IsEmpty && window is null)
+        if (tally.Session.IsEmpty && window is null && tally.ClaudeRuns == 0)
         {
             return new Text(NothingCounted, Theme.DimText);
         }
@@ -147,6 +147,7 @@ public static class UsageText
         if (tally.Session.IsEmpty)
         {
             grid.AddRow(new Text(NothingCounted, Theme.DimText), new Text(""));
+            ClaudeRow(grid, tally);
             return grid;
         }
 
@@ -158,7 +159,28 @@ public static class UsageText
             grid.AddRow(new Text(LearningLabel, Theme.AccentSecondary), new Text(LearningValue(tally), Theme.Body));
         }
 
+        ClaudeRow(grid, tally);
         return grid;
+    }
+
+    /// <summary>The <c>/claude</c> row, once a run reported (2026-09-27): its own figures, never part of the local model's sections above.</summary>
+    private static void ClaudeRow(Grid grid, TokenTally tally)
+    {
+        if (tally.ClaudeRuns > 0)
+        {
+            grid.AddRow(new Text(ClaudeLabel, Theme.AccentSecondary), new Text(ClaudeValue(tally), Theme.Body));
+        }
+    }
+
+    /// <summary>The row that says what the <c>/claude</c> runs used since launch. Pinned.</summary>
+    public const string ClaudeLabel = "Claude";
+
+    /// <summary><c>2 runs · 12,506 in · 250 out · $0.0512</c>: the runs, their tokens and their cost as the CLI reported it. Pinned.</summary>
+    public static string ClaudeValue(TokenTally tally)
+    {
+        ArgumentNullException.ThrowIfNull(tally);
+        var usage = tally.Claude;
+        return Plural(tally.ClaudeRuns, "run", "runs") + Sep + N0(usage.Input) + " in" + Sep + N0(usage.Output) + " out" + Sep + global::NeonSidekick.Claude.ClaudeText.Dollars(tally.ClaudeCostUsd);
     }
 
     /// <summary>The row under the launch section that says what the skill-learning reflections cost, shown only once one ran. Pinned.</summary>
@@ -297,7 +319,13 @@ public static class UsageText
         ArgumentNullException.ThrowIfNull(tally);
         if (tally.Session.IsEmpty)
         {
-            return window is null ? [NothingCounted] : [ContextLine(tally, window), NothingCounted];
+            var nothing = window is null ? new List<string> { NothingCounted } : [ContextLine(tally, window), NothingCounted];
+            if (tally.ClaudeRuns > 0)
+            {
+                nothing.Add("claude: " + ClaudeValue(tally));
+            }
+
+            return nothing;
         }
 
         var lines = new List<string>(5)
@@ -315,6 +343,11 @@ public static class UsageText
         if (tally.LearningRequests > 0)
         {
             lines.Add("skill learning: " + LearningValue(tally));
+        }
+
+        if (tally.ClaudeRuns > 0)
+        {
+            lines.Add("claude: " + ClaudeValue(tally));
         }
 
         return lines;

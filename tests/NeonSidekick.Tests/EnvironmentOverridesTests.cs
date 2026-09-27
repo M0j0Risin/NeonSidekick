@@ -54,7 +54,9 @@ public class EnvironmentOverridesTests
             (EnvironmentOverrides.ShellPoliceVariable, " OFF "),
             (EnvironmentOverrides.ShellNativeVariable, "no"),
             (EnvironmentOverrides.ObsidianVaultVariable, @" D:\Notes "),
-            (EnvironmentOverrides.ComfyUrlVariable, " http://gpu-box:8188 "));
+            (EnvironmentOverrides.ComfyUrlVariable, " http://gpu-box:8188 "),
+            (EnvironmentOverrides.ClaudeExeVariable, @" D:\bin\claude.exe "),
+            (EnvironmentOverrides.ClaudePermissionsVariable, " Full "));
 
         var e = env.ApplyTo(new AppSettingsData());
 
@@ -79,6 +81,8 @@ public class EnvironmentOverridesTests
         Assert.Equal("http://gpu-box:8188", e.ComfyUrl);   // trimmed (2026-09-24)
         Assert.False(e.ShellPoliceOutsidePaths);   // any case, trimmed (2026-09-26)
         Assert.False(e.ShellPreferNative);   // the police's switch words (later on 2026-09-26)
+        Assert.Equal(@"D:\bin\claude.exe", e.ClaudeExecutable);   // trimmed (2026-09-27)
+        Assert.Equal("full", e.ClaudePermissions);   // normalised to the saved word (2026-09-27)
         Assert.Equal(EnvironmentOverrides.AllVariables.Length - 2, env.ActiveVariables().Count);   // everything but HOME and PROFILE
     }
 

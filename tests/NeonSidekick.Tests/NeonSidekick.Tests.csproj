@@ -44,6 +44,10 @@
     <!-- A DuckDuckGo HTML results page captured 2026-09-15 (html.duckduckgo.com/html/?q=rust+async+traits&kl=us-en):
          ten result__a anchors with the uddg= redirect, a result__snippet under each. The DuckDuckGo parser is pinned to it. -->
     <None Include="Fixtures\web\ddg-results.html" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Claude Code 2.1.283's stream-json captured 2026-09-27 (claude -p, output format stream-json with the partial messages):
+         a text reply, a Read then text, a resume of a missing session. Paths scrubbed to C:\work, the init line trimmed,
+         the partial tool-input pieces dropped. ClaudeStreamParser is pinned to them. -->
+    <None Include="Fixtures\claude\*.jsonl" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

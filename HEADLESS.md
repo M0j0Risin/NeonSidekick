@@ -11,7 +11,7 @@ at `/exit` or at the end of input: code 0, or 3 if a shell command was refused a
 
 ```
 NeonSidekick 0.3.4
-Headless mode. Type a message; /clear or /new forgets the conversation; /compact [focus] shrinks it; /plan <requirement> plans before doing (/plan approve [--fresh] | cancel | show | save [name] | open [name]); /skills add <source> [--global] [--yes] installs a skill; /exit or EOF exits.
+Headless mode. Type a message; /clear or /new forgets the conversation; /compact [focus] shrinks it; /plan <requirement> plans before doing (/plan approve [--fresh] | cancel | show | save [name] | open [name]); /skills add <source> [--global] [--yes] installs a skill; /claude <message> asks Claude Code; /exit or EOF exits.
 LLM: http://127.0.0.1:1234/v1 model=qwen3-30b-a3b (configured)
 You: Neon: Here is what I found…
 [tool] web_search {"query":"…"}
@@ -26,7 +26,7 @@ You:
   and `[category] message` lines are notices and diagnostics (warnings and errors only; use `--log`
   for the rest).
 - Each **line** of input is one message. A multi-line prompt has to be joined into one line.
-- Headless understands only seven slash commands; any other `/…` line goes to the model as ordinary
+- Headless understands only eight slash commands; any other `/…` line goes to the model as ordinary
   text. See the next section.
 
 ---
@@ -43,6 +43,7 @@ You:
 | `/splash` | Same as `/clear` (there is no splash picture to show). |
 | `/compact [focus]` | Shrinks the conversation now; a focus steers the summary. Prints the outcome, plus `[notice]` detail lines. Needs a connected server. |
 | `/plan <requirement>` | Starts plan mode and sends the requirement: the model gets only the read-only tools and `present_plan`. There is no approval pane, so a presented plan is saved as `.neon/plans/<name>.md` under the working directory and a `[notice]` line names it once the reply ends. While planning: `/plan` or `/plan show` prints where it stands; `/plan approve` marks the file approved and sends the turn that carries it out, with every tool; `/plan approve --fresh` forgets the conversation first and sends the plan's text with that message; `/plan cancel` leaves (the file is kept, marked cancelled); any other `/plan <text>` is sent as more detail. A planning reply that looks like a plan but was never presented gets a `[notice]` hint, and `/plan save [name]` saves it (approve with `/plan approve`). After approval, a `[notice]` line says when every step is ticked (the file marked `done`) or how many are left (`incomplete`, with `progress: d/t`). `/plan open <name>` picks up a plan under `.neon/plans/` and sends a turn asking the model to read it; `/plan open` alone lists them. `/new` and `/clear` leave plan mode. A misused word prints `Neon: [error] …`. Needs *LLM offer tools* on and a connected server. |
+| `/claude <message>` | Sends the message to Claude Code, as in the TUI (see the README's `/claude`). The reply streams after `Claude: `; each tool Claude uses is a `[tool] Claude › Read …` line; a `[notice]` says which tools *Claude permissions* denied, and a last `[notice]` gives the cost and tokens. The exchange joins the conversation, so the next message to the local model can build on it, and the next `/claude` resumes the same Claude conversation. `/claude new` starts another (so do `/new` and `/clear`). Nothing is ever asked: whatever the level does not allow is denied (`NEONSIDEKICK_CLAUDE_PERMISSIONS=edit` for a run that may edit files). A missing CLI or a failed run prints `[error] …`. Works with no LLM server. |
 | `/skills add <source> [--global \| --profile] [--yes]` | Installs an Agent Skill, as in the TUI (see the README's *Installing skills*). The source is search words (skills.sh), `owner/repo`, `owner/repo/skill`, a github.com link or an https `.zip` link. A GitHub repository is listed through the GitHub API and only the needed files fetched (the whole zip only as a fallback), so large repositories work; a repository of more than 100 skills needs one named. Several search hits, or several skills in one repository, are printed as `[notice]` lines of ids to type back (`/skills add anthropics/skills/pdf`). One skill is previewed as plain lines. Without `--yes` nothing is written and a `[notice]` says so; with it the skill goes to the profile's skills, or the global ones with `--global`, and a `[notice]` names the folder. Reinstalling from the same source updates it where it is. Errors print as `[error] …`. Works with no LLM server. |
 
 Automatic compaction also runs headless: before a message, if the last reply used more of the
@@ -632,6 +633,7 @@ Flags beat variables; variables beat the profile's saved values.
 | `NEONSIDEKICK_COMMAND_POLICY` | `ask` (default: only allow-listed commands run, since nothing can ask), or `yolo` (every command runs; use only when you trust the job and the folder). `--yolo` outranks it. |
 | `NEONSIDEKICK_SHELL_POLICE` | `off` lets shell commands name paths outside the working directory for the run; `on` turns the police back on over a saved `off`. `--no-police` outranks it. |
 | `NEONSIDEKICK_SHELL_NATIVE` | `off` lets a single `cat`, `dir`, `git status`, `curl`… go to the shell as written for the run, instead of being sent back once a turn to the native tool that does it (*Shell prefer native tools*, on by default); `on` turns it back on over a saved `off`. A line sent back is not a refusal: it never makes the run exit 3. |
+| `NEONSIDEKICK_CLAUDE_EXE` / `NEONSIDEKICK_CLAUDE_PERMISSIONS` | The Claude Code CLI for `/claude`, and what it may do on its own for the run: `read-only` (default), `edit` or `full`. |
 | `NEONSIDEKICK_SEARXNG_URL`, `NEONSIDEKICK_OBSIDIAN_VAULT`, `NEONSIDEKICK_COMFY_URL` | The web search instance, notes vault and image server for the run. |
 
 ## Flags that don't combine with `--headless`

@@ -1392,4 +1392,26 @@ public sealed class AppSettingsData
     /// harmless. No variable, no clear.
     /// </summary>
     public List<string> McpServersDisabled { get; set; } = [];
+
+    /// <summary>
+    /// The Claude Code CLI <c>/claude</c> starts (2026-09-27): a full path, or empty to look for <c>claude.exe</c> on the
+    /// PATH, then npm's <c>claude.cmd</c>, then <c>%USERPROFILE%\.local\bin</c> (<see cref="Claude.ClaudeExecutable"/>).
+    /// The Claude tab's first row; read at each <c>/claude</c>. Variable <see cref="EnvironmentOverrides.ClaudeExeVariable"/>.
+    /// </summary>
+    public string ClaudeExecutable { get; set; } = "";
+
+    /// <summary>
+    /// What the Claude Code child may do on its own (2026-09-27): one of <see cref="Claude.ClaudePermission.Names"/> —
+    /// <c>read-only</c> (read, search, fetch), <c>edit</c> (file edits accepted, commands denied), <c>full</c> (everything,
+    /// unasked). Nothing past the level is asked about: it is denied (<c>--permission-prompts none</c>) and the reply says
+    /// so. Anything else reads as <see cref="Claude.ClaudePermission.Default"/>. Read at each <c>/claude</c>. Variable
+    /// <see cref="EnvironmentOverrides.ClaudePermissionsVariable"/>.
+    /// </summary>
+    public string ClaudePermissions { get; set; } = Claude.ClaudePermission.Default;
+
+    /// <summary>The <c>--model</c> of a <c>/claude</c> run (2026-09-27): an alias (<c>opus</c>, <c>sonnet</c>) or a full name; empty = the CLI's own. No variable.</summary>
+    public string ClaudeModel { get; set; } = "";
+
+    /// <summary>The <c>--effort</c> of a <c>/claude</c> run (2026-09-27): one of <see cref="Claude.ClaudeEffort.Names"/>; empty = the CLI's own. No variable.</summary>
+    public string ClaudeEffort { get; set; } = Claude.ClaudeEffort.Default;
 }

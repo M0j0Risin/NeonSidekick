@@ -66,7 +66,7 @@ Neon Sidekick brings privacy-first, local LLM inference to your terminal. Powere
 * **Hint Row:** Model name → `/server` (server, then model, then reasoning) | Reasoning glyph → `/reasoning` | Tokens/spinner → `/usage` | Queued count → `/queue` | Blank space → `/settings`.
 
 **Available Panes**
-* `/settings`: App, sessions, LLM, voice stack, and `/botchat` pictures
+* `/settings`: App, sessions, LLM, voice stack, `/botchat` pictures, and `/claude`
 * `/skills`: Agent skills and self-reflection
 * `/tools`: Callable model tools
 * `/mcp`: External MCP servers
@@ -172,6 +172,15 @@ Neon Sidekick brings privacy-first, local LLM inference to your terminal. Powere
 | Botchat image workflow | The text → image workflow for the `automatic` pictures, picked from the offered workflows that take no input picture. Blank means the first one. | (the first) |
 | Botchat image async | On: the next bot speaks while the picture renders, and the picture appears, labelled with whose reply it shows, when nothing is streaming. Off: the reply is written first but held back; its picture is drawn, then the reply appears (and is spoken) under it. ESC while the reply is held back cuts that bot short, as over a streaming reply; ESC under the picture's spinner skips just that picture. The image prompt is always written before the next turn. With async on and no voice (`TTS output` off), the pictures go to ComfyUI one at a time, each sent a second after the one before it was made. | on |
 | Botchat non-TTS delay | Seconds the chat waits after each reply when no voice is playing (`TTS output` off), so the replies can be read before the next bot answers. A line you type meanwhile joins the chat; ESC during the pause ends the chat. 0 to 30; 0 turns the pause off. | 5 |
+
+#### Claude
+
+| Setting | What it does | Default |
+|---|---|---|
+| Claude executable | The Claude Code CLI `/claude` runs. Blank looks for `claude.exe` on the PATH, then npm's `claude.cmd`, then `%USERPROFILE%\.local\bin\claude.exe` (where the native installer puts it). A path you set must exist; it is never swapped for another. `NEONSIDEKICK_CLAUDE_EXE` outranks it. | (looked up) |
+| Claude permissions | What Claude may do on its own during a `/claude` run. `read-only`: read, search and fetch (`Read`, `Grep`, `Glob`, `WebSearch`, `WebFetch`), nothing else. `edit`: its usual tools, with file edits accepted without asking; commands are denied. `full`: everything, commands included, without asking (`bypassPermissions`). Nothing is ever asked about: whatever the level does not allow is denied on the spot, and the reply says which tools were denied. Claude works in the working directory, but it runs outside the app's own sandbox, the shell policy and the approval pane. `NEONSIDEKICK_CLAUDE_PERMISSIONS` outranks it. | `read-only` |
+| Claude model | The `--model` for `/claude`: an alias (`opus`, `sonnet`, `haiku`) or a full model name. Blank uses Claude Code's own default. | (Claude Code's default) |
+| Claude effort | The `--effort` for `/claude`: `low`, `medium`, `high`, `xhigh` or `max`. Blank uses Claude Code's own default. | (Claude Code's default) |
 
 </details>
 
@@ -392,6 +401,7 @@ Type `/` and the list opens with every command and its summary; after the comman
 | Command | What it does |
 |---|---|
 | `/about` | Show the app's version, runtime, folders, components and licence. |
+| `/claude <message>` | Send the message to Claude Code (the `claude` CLI, run headless in the working directory) and stream its reply into the transcript under Claude's name, with each tool it uses on a dim line and a footer with the cost and tokens; with speech on, the reply is spoken. The question and the reply are added to the conversation, tagged `[to Claude]` and `[Claude]`, so the local model can build on them; Claude does not see the local conversation. Each session has one Claude conversation: the next `/claude` resumes it (after a restart too, once the session is restored), and `/claude new` starts another; `/clear`, `/new` and a profile switch start another too. What Claude may do is *Claude permissions* (the Claude tab of `/settings`): anything past it is denied, never asked. ESC or Ctrl+C stops Claude (the reply so far is kept). Works with no LLM server; refused while a reply runs. Your own Claude Code setup applies: its sign-in, `CLAUDE.md`, skills, MCP servers and hooks. `/usage` shows what the runs cost. |
 | `/clear` | Start a new conversation and clear the screen. |
 | `/cmdcopy <profile> [--history] [overwrite]` | Copy this profile's allowed shell commands (the *Shell allowed commands* prefixes) into another: added to its list, or in place of it. With `--history`, copy its stored command history into the other profile's `sessions.db` instead (refused while that profile has *Keep command history* off). |
 | `/cmdclear` | Clear this profile's command history, the stored lines and the ones ↑/↓ recalls now, after a confirmation. |
@@ -868,6 +878,13 @@ Every variable the app reads starts with `NEONSIDEKICK_`. They override a settin
 | `NEONSIDEKICK_COMMAND_POLICY` | Shell command policy (`--yolo` wins) | `off`, `ask`, `yolo`. Under `ask` with no screen (headless), only allow-listed commands run. |
 | `NEONSIDEKICK_SHELL_POLICE` | Shell police outside paths (`--no-police` wins) | `on`/`off` (also `true`/`false`, `1`/`0`, `yes`/`no`). |
 | `NEONSIDEKICK_SHELL_NATIVE` | Shell prefer native tools | `on`/`off` (also `true`/`false`, `1`/`0`, `yes`/`no`). |
+
+### Claude
+
+| Variable | Overrides | Accepts |
+|---|---|---|
+| `NEONSIDEKICK_CLAUDE_EXE` | Claude executable | The full path of the Claude Code CLI. |
+| `NEONSIDEKICK_CLAUDE_PERMISSIONS` | Claude permissions | `read-only`, `edit`, `full`. |
 
 ### Speech
 

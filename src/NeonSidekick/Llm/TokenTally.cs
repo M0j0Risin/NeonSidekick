@@ -22,6 +22,9 @@ public sealed class TokenTally
     private TokenUsage _lastRequest;
     private TokenUsage _learning;
     private int _learningRequests;
+    private TokenUsage _claude;
+    private int _claudeRuns;
+    private decimal _claudeCost;
     private int _unreportedReplies;
 
     /// <summary>The turn in progress, or the last one that ran. Zero until the first reply.</summary>
@@ -134,6 +137,30 @@ public sealed class TokenTally
 
     /// <summary>The model requests the reflections made since launch.</summary>
     public int LearningRequests { get { lock (_gate) { return _learningRequests; } } }
+
+    /// <summary>
+    /// A <c>/claude</c> run ended (2026-09-27): its tokens and its dollars into their own bucket, since launch, and nowhere
+    /// else — they are another model's, on another bill: summed into the conversation they would mislead the context
+    /// figures and the auto-compact, which are the local model's.
+    /// </summary>
+    public void AddClaude(TokenUsage usage, decimal costUsd)
+    {
+        lock (_gate)
+        {
+            _claude += usage;
+            _claudeRuns++;
+            _claudeCost += costUsd;
+        }
+    }
+
+    /// <summary>What the <c>/claude</c> runs used since launch; zero until one ran.</summary>
+    public TokenUsage Claude { get { lock (_gate) { return _claude; } } }
+
+    /// <summary>The <c>/claude</c> runs since launch that reported a result.</summary>
+    public int ClaudeRuns { get { lock (_gate) { return _claudeRuns; } } }
+
+    /// <summary>What the <c>/claude</c> runs cost since launch, in US dollars, as the CLI reported it.</summary>
+    public decimal ClaudeCostUsd { get { lock (_gate) { return _claudeCost; } } }
 
     /// <summary>The conversation was cleared: its scope and the context in use start over; the session's and the last reply's stay.</summary>
     public void ResetConversation()

@@ -418,6 +418,18 @@ public enum SettingsField
 
     /// <summary>A toggle: whether the model's thinking streams into the transcript and folds when the answer starts (<see cref="Settings.AppSettingsData.LlmShowThinking"/>). The LLM tab's last row (2026-09-26, the user's ask); no reconnect (read at each turn). Last in the enum, as every newcomer.</summary>
     LlmShowThinking,
+
+    /// <summary>Typed: the Claude Code CLI <c>/claude</c> starts (<see cref="Settings.AppSettingsData.ClaudeExecutable"/>); empty = looked up. The Claude tab's first row (2026-09-27); read at each <c>/claude</c>.</summary>
+    ClaudeExecutable,
+
+    /// <summary>A picker over <see cref="Claude.ClaudePermission.Names"/>: what the Claude Code child may do on its own (<see cref="Settings.AppSettingsData.ClaudePermissions"/>). The Claude tab's second row (2026-09-27).</summary>
+    ClaudePermissions,
+
+    /// <summary>Typed: the <c>--model</c> of a <c>/claude</c> run (<see cref="Settings.AppSettingsData.ClaudeModel"/>); empty = the CLI's own. The Claude tab's third row (2026-09-27).</summary>
+    ClaudeModel,
+
+    /// <summary>A picker over <see cref="Claude.ClaudeEffort.Names"/>: the <c>--effort</c> of a <c>/claude</c> run (<see cref="Settings.AppSettingsData.ClaudeEffort"/>). The Claude tab's last row (2026-09-27).</summary>
+    ClaudeEffort,
 }
 
 /// <summary>The tabs of <c>/settings</c> on the pane, in strip order (Sessions right after General — the user's order, 2026-09-18; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
@@ -437,6 +449,9 @@ public enum SettingsTab
 
     /// <summary>The <c>/botchat</c> picture rows (2026-09-25, the user's ask: a Botchat tab on <c>/settings</c>), last.</summary>
     BotChat,
+
+    /// <summary>The <c>/claude</c> rows (2026-09-27): the CLI, its permission level, its model and effort. Last.</summary>
+    Claude,
 }
 
 /// <summary>What <see cref="SettingsMenu.ShowAsync"/> changed, so the screen rebuilds only what depends on it.</summary>
@@ -632,7 +647,7 @@ internal sealed partial class SettingsMenu
     private static readonly SettingsField[] Fields = Enum.GetValues<SettingsField>();
 
     /// <summary>The strip titles, one per <see cref="SettingsTab"/> (five since 2026-09-19: Ask, Files and Web are <c>/tools</c>' tabs, <see cref="ToolsText.TabTitles"/>, and Skills is <c>/skills</c>' Options tab, <see cref="SkillsText.OptionsTabTitle"/>). Pinned.</summary>
-    public static readonly IReadOnlyList<string> TabTitles = ["General", "Sessions", "LLM", "TTS", "STT", "Botchat"];
+    public static readonly IReadOnlyList<string> TabTitles = ["General", "Sessions", "LLM", "TTS", "STT", "Botchat", "Claude"];
 
     /// <summary>
     /// The rows of each tab on the pane, indexed by <see cref="SettingsTab"/>, in the order shown
@@ -657,6 +672,7 @@ internal sealed partial class SettingsMenu
         [SettingsField.TtsOutput, SettingsField.TtsSource, SettingsField.TtsHttpUrl, SettingsField.TtsVoicePreview, SettingsField.TtsVoice, SettingsField.TtsVoice2, SettingsField.TtsVoiceMix, SettingsField.TtsSpeed],
         Fields.Where(IsVoiceField).ToArray(),
         [SettingsField.BotChatLlmMode, SettingsField.BotChatImages, SettingsField.BotChatImageMode, SettingsField.BotChatImageWorkflow, SettingsField.BotChatImageAsync, SettingsField.BotChatNonTtsDelaySeconds],
+        [SettingsField.ClaudeExecutable, SettingsField.ClaudePermissions, SettingsField.ClaudeModel, SettingsField.ClaudeEffort],
     ];
 
     /// <summary>
@@ -996,6 +1012,10 @@ internal sealed partial class SettingsMenu
         SettingsField.LlmOfferTools => "LLM offer tools",
         SettingsField.LlmUseFunVerbs => "LLM use fun verbs",
         SettingsField.LlmShowThinking => "LLM show thinking",
+        SettingsField.ClaudeExecutable => "Claude executable",
+        SettingsField.ClaudePermissions => "Claude permissions",
+        SettingsField.ClaudeModel => "Claude model",
+        SettingsField.ClaudeEffort => "Claude effort",
         SettingsField.LlmScanMode => "LLM scan mode",
         SettingsField.WebTools => "Web tools",
         SettingsField.GitNativeTools => "Git native tools",
@@ -1160,6 +1180,10 @@ internal sealed partial class SettingsMenu
             SettingsField.LlmOfferTools => OnOff(data.LlmOfferTools),
             SettingsField.LlmUseFunVerbs => OnOff(data.LlmUseFunVerbs),
             SettingsField.LlmShowThinking => OnOff(data.LlmShowThinking),
+            SettingsField.ClaudeExecutable => string.IsNullOrWhiteSpace(data.ClaudeExecutable) ? ClaudeLookedUpLabel : data.ClaudeExecutable,
+            SettingsField.ClaudePermissions => data.ClaudePermissions,
+            SettingsField.ClaudeModel => string.IsNullOrWhiteSpace(data.ClaudeModel) ? ClaudeDefaultLabel : data.ClaudeModel,
+            SettingsField.ClaudeEffort => string.IsNullOrWhiteSpace(data.ClaudeEffort) ? ClaudeDefaultLabel : data.ClaudeEffort,
             SettingsField.LlmScanMode => data.LlmScanMode,
             SettingsField.TtsSource => data.TtsSource,
             SettingsField.WebTools => OnOff(data.WebTools),
@@ -1372,6 +1396,22 @@ internal sealed partial class SettingsMenu
 
     /// <summary>The settings-menu wording for a bad <see cref="SettingsField.WebSearxngUrl"/>. Pinned.</summary>
     public const string SearxngUrlError = "must be an http or https URL, or empty";
+
+    /// <summary>How the menu shows an empty <see cref="AppSettingsData.ClaudeExecutable"/> (2026-09-27): looked for on the PATH and in the installer's folder. Pinned.</summary>
+    public const string ClaudeLookedUpLabel = "(looked up)";
+
+    /// <summary>How the menu shows an empty <see cref="AppSettingsData.ClaudeModel"/> or <see cref="AppSettingsData.ClaudeEffort"/> (2026-09-27): the CLI decides. Pinned.</summary>
+    public const string ClaudeDefaultLabel = "(Claude Code's default)";
+
+    /// <summary>The settings-menu wording for a bad <see cref="SettingsField.ClaudeExecutable"/>. Pinned.</summary>
+    public const string ClaudeExecutableError = "must be the full path of an existing file, or empty to look for Claude Code";
+
+    /// <summary>One row of the Claude-permissions picker: the level and its hint, padded to eleven (<c>read-only</c> is nine). Pinned.</summary>
+    public static string ClaudePermissionLabel(string name) =>
+        Markup.Escape(name.PadRight(11)) + Theme.DimMarkup(Claude.ClaudePermission.Describe(name));
+
+    /// <summary>One row of the Claude-effort picker: the word, or <see cref="ClaudeDefaultLabel"/> for the blank first row. Pinned.</summary>
+    public static string ClaudeEffortLabel(string name) => Markup.Escape(name.Length == 0 ? ClaudeDefaultLabel : name);
 
     /// <summary>How the menu shows an empty <see cref="AppSettingsData.ComfyUrl"/> (2026-09-24): no server, so no image tool. Pinned.</summary>
     public const string NoComfyUrlLabel = "(not set)";
@@ -1643,6 +1683,8 @@ internal sealed partial class SettingsMenu
         SettingsField.WebBrowserPath => data.WebBrowserPath,
         SettingsField.WebSearxngUrl => data.WebSearxngUrl,
         SettingsField.ComfyUrl => data.ComfyUrl,
+        SettingsField.ClaudeExecutable => data.ClaudeExecutable,
+        SettingsField.ClaudeModel => data.ClaudeModel,
         SettingsField.ComfyOutputFolder => data.ComfyOutputFolder,
         SettingsField.ComfyTimeoutSeconds => data.ComfyTimeoutSeconds.ToString(CultureInfo.InvariantCulture),
         SettingsField.ComfyMaxPicturesPerCall => data.ComfyMaxPicturesPerCall.ToString(CultureInfo.InvariantCulture),
@@ -2153,6 +2195,16 @@ internal sealed partial class SettingsMenu
             return await PickReasoningAsync(saved, cancellationToken).ConfigureAwait(false);
         }
 
+        if (field == SettingsField.ClaudePermissions)
+        {
+            return await PickClaudePermissionsAsync(saved, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (field == SettingsField.ClaudeEffort)
+        {
+            return await PickClaudeEffortAsync(saved, cancellationToken).ConfigureAwait(false);
+        }
+
         if (field == SettingsField.LlmCompactType)
         {
             return await PickCompactTypeAsync(saved, cancellationToken).ConfigureAwait(false);
@@ -2354,7 +2406,7 @@ internal sealed partial class SettingsMenu
             return await PickVoskModelAsync(saved, cancellationToken).ConfigureAwait(false);
         }
 
-        bool allowEmpty = field is SettingsField.LlmUrl or SettingsField.LlmModel or SettingsField.TtsVoice2 or SettingsField.WorkingDirectory or SettingsField.WebBrowserPath or SettingsField.WebSearxngUrl or SettingsField.DraftEditor or SettingsField.ImageEditor or SettingsField.GitNativeEmail or SettingsField.GitNativeName or SettingsField.ObsidianVault or SettingsField.ComfyUrl or SettingsField.ComfyOutputFolder;
+        bool allowEmpty = field is SettingsField.LlmUrl or SettingsField.LlmModel or SettingsField.TtsVoice2 or SettingsField.WorkingDirectory or SettingsField.WebBrowserPath or SettingsField.WebSearxngUrl or SettingsField.DraftEditor or SettingsField.ImageEditor or SettingsField.GitNativeEmail or SettingsField.GitNativeName or SettingsField.ObsidianVault or SettingsField.ComfyUrl or SettingsField.ComfyOutputFolder or SettingsField.ClaudeExecutable or SettingsField.ClaudeModel;
         var result = await EditTextAsync(field, page, row, EditableValue(field, saved), allowEmpty, cancellationToken).ConfigureAwait(false);
         if (result is not InputResult.Submitted submitted)
         {
@@ -2697,6 +2749,22 @@ internal sealed partial class SettingsMenu
                 Apply(field, d => d.WebBrowserPath = text.Length == 0 ? "" : Path.GetFullPath(text));
                 return true;
 
+            case SettingsField.ClaudeExecutable:
+                text = text.Trim('"');
+                if (text.Length > 0 && !File.Exists(text))
+                {
+                    Sink.Error($"{FieldName(field)} {ClaudeExecutableError}; keeping {FieldValue(field, saved, _settings.ProfileDirectory)}.");
+                    return false;
+                }
+
+                Apply(field, d => d.ClaudeExecutable = text.Length == 0 ? "" : Path.GetFullPath(text));
+                return true;
+
+            case SettingsField.ClaudeModel:
+                // An alias or a full name: whatever the CLI takes, checked by the CLI at the next /claude.
+                Apply(field, d => d.ClaudeModel = text);
+                return true;
+
             case SettingsField.WebSearxngUrl:
                 if (text.Length > 0 && !(Uri.TryCreate(text, UriKind.Absolute, out var searxng) && Web.WebFetcher.IsHttp(searxng)))
                 {
@@ -3030,6 +3098,36 @@ internal sealed partial class SettingsMenu
 
     /// <summary>One <see cref="ReasoningLabel"/> row per level, in <see cref="Llm.ReasoningLevel.Levels"/> order.</summary>
     private static List<string> ReasoningRows() => Llm.ReasoningLevel.Levels.Select(ReasoningLabel).ToList();
+
+    /// <summary>The Claude-permissions picker under the settings list: one <see cref="ClaudePermissionLabel"/> row per <see cref="Claude.ClaudePermission.Names"/> entry, the saved one under the cursor.</summary>
+    private async Task<bool> PickClaudePermissionsAsync(AppSettingsData saved, CancellationToken cancellationToken)
+    {
+        var page = new MenuPage(Crumb(FieldName(SettingsField.ClaudePermissions)), Claude.ClaudePermission.Names.Select(ClaudePermissionLabel).ToList(), PickKeys);
+        int? picked = await PickAsync(page, Array.IndexOf(Claude.ClaudePermission.Names, saved.ClaudePermissions), cancellationToken).ConfigureAwait(false);
+        if (picked is not { } index)
+        {
+            return Unchanged();
+        }
+
+        string name = Claude.ClaudePermission.Names[index];
+        Apply(SettingsField.ClaudePermissions, d => d.ClaudePermissions = name);
+        return true;
+    }
+
+    /// <summary>The Claude-effort picker under the settings list: the CLI's default first, then <c>--effort</c>'s words; the saved one under the cursor.</summary>
+    private async Task<bool> PickClaudeEffortAsync(AppSettingsData saved, CancellationToken cancellationToken)
+    {
+        var page = new MenuPage(Crumb(FieldName(SettingsField.ClaudeEffort)), Claude.ClaudeEffort.Names.Select(ClaudeEffortLabel).ToList(), PickKeys);
+        int? picked = await PickAsync(page, Math.Max(0, Array.IndexOf(Claude.ClaudeEffort.Names, saved.ClaudeEffort.Trim().ToLowerInvariant())), cancellationToken).ConfigureAwait(false);
+        if (picked is not { } index)
+        {
+            return Unchanged();
+        }
+
+        string name = Claude.ClaudeEffort.Names[index];
+        Apply(SettingsField.ClaudeEffort, d => d.ClaudeEffort = name);
+        return true;
+    }
 
     /// <summary>The compact-type picker under the settings list: one <see cref="CompactTypeLabel"/> row per <see cref="Llm.CompactType.Names"/> entry, the saved one under the cursor.</summary>
     private async Task<bool> PickCompactTypeAsync(AppSettingsData saved, CancellationToken cancellationToken)

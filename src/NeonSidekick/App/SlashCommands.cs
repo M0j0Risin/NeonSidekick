@@ -152,6 +152,14 @@ public enum SlashCommand
     /// <summary><c>/sessions</c>: this profile's stored sessions on a pane (restore, rename, purge), or <c>/sessions &lt;id&gt; | purge &lt;id&gt; | purge older &lt;age&gt; | purge all | title &lt;text&gt;</c> typed (2026-09-18; <c>/session</c> until later on 2026-09-21, the user's call — the singular reads as an unknown command now).</summary>
     Session,
 
+    /// <summary>
+    /// <c>/claude &lt;message&gt;</c> (2026-09-27, the user's ask): the message sent to Claude Code, run headless as a child
+    /// (<see cref="Claude.ClaudeProcess"/>), the reply streamed into the transcript under Claude's name, spoken when speech
+    /// is on, and the pair added to the local model's history, tagged. One Claude conversation per session, resumed by the id
+    /// the session stores; <c>/claude new</c> starts another. Refused mid-turn.
+    /// </summary>
+    Claude,
+
     /// <summary><c>/exit</c>: leave the app (<c>/quit</c> until 2026-09-17, the user's call; the old word is unknown now, as the aliases are).</summary>
     Exit,
     /// <summary>A command we know, given an argument it does not take (<c>/about me</c>): <c>Args</c> carries it. Since 2026-09-17 its own case, so the error names the command rather than calling it unknown.</summary>
@@ -190,6 +198,7 @@ public static class SlashCommands
         {
             new("/about", "show general information about the app and profile"),
             new("/botchat", "let the profiles talk to each other, each in its own persona, until ESC: /botchat [profile ...] [[--] topic], or /botchat --resume [line] to carry on the last one"),
+            new("/claude", "send a message to Claude Code and add its reply to the conversation: /claude <message>, or /claude new to start a new Claude conversation"),
             new("/clear", "start a new conversation and clear the screen"),
             new("/cmdclear", "clear this profile's command history (the Up/Down recall), stored and in memory (asks first)"),
             new("/cmdcopy", "copy this profile's allowed shell commands into another, or with --history its command history: /cmdcopy <profile> [--history] [overwrite]"),
@@ -313,7 +322,7 @@ public static class SlashCommands
     }
 
     /// <summary>Every command word, for help and completion.</summary>
-    public static readonly string[] Words = { "/help", "/clear", "/new", "/splash", "/theme", "/queue", "/sessions", "/compact", "/server", "/model", "/reasoning", "/settings", "//", "/tools", "/mcp", "/tts", "/stt", "/wake", "/interrupt", "/speak", "/remember", "/memory", "/cmdcopy", "/cmdclear", "/cmdlist", "/police", "/persona", "/operata", "/vocalia", "/sys", "/usage", "/profile", "/timer", "/cwd", "/tree", "/vault", "/explore", "/view", "/imagine", "/comfy", "/echo", "/emptytrash", "/gituser", "/copy", "/draft", "/loop", "/plan", "/botchat", "/expand", "/collapse", "/window", "/skills", "/learn", "/about", "/exit" };
+    public static readonly string[] Words = { "/help", "/clear", "/new", "/splash", "/theme", "/queue", "/sessions", "/compact", "/server", "/model", "/reasoning", "/settings", "//", "/tools", "/mcp", "/tts", "/stt", "/wake", "/interrupt", "/speak", "/remember", "/memory", "/cmdcopy", "/cmdclear", "/cmdlist", "/police", "/persona", "/operata", "/vocalia", "/sys", "/usage", "/profile", "/timer", "/cwd", "/tree", "/vault", "/explore", "/view", "/imagine", "/comfy", "/echo", "/emptytrash", "/gituser", "/copy", "/draft", "/loop", "/plan", "/botchat", "/claude", "/expand", "/collapse", "/window", "/skills", "/learn", "/about", "/exit" };
 
     /// <summary>The <c>/queue</c> word: what a double-click on the hint row's queued part sends through the mid-turn line hook, so the pane opens exactly as the typed command's does (2026-09-18). Pinned.</summary>
     public const string QueueWord = "/queue";
@@ -401,6 +410,7 @@ public static class SlashCommands
             "/loop" => SlashCommand.Loop,
             "/plan" => SlashCommand.Plan,
             "/botchat" => SlashCommand.BotChat,
+            "/claude" => SlashCommand.Claude,
             "/expand" => SlashCommand.Expand,
             "/collapse" => SlashCommand.Collapse,
             "/emptytrash" => SlashCommand.EmptyTrash,
@@ -434,5 +444,5 @@ public static class SlashCommands
         or SlashCommand.Persona or SlashCommand.Operata or SlashCommand.Vocalia
         or SlashCommand.Remember or SlashCommand.Memory or SlashCommand.CmdCopy or SlashCommand.Profile or SlashCommand.Timer
         or SlashCommand.Cwd or SlashCommand.Tree or SlashCommand.Vault or SlashCommand.Explore or SlashCommand.Copy or SlashCommand.Session or SlashCommand.GitUser
-        or SlashCommand.Loop or SlashCommand.Plan or SlashCommand.BotChat or SlashCommand.Queue or SlashCommand.Skills;
+        or SlashCommand.Loop or SlashCommand.Plan or SlashCommand.BotChat or SlashCommand.Claude or SlashCommand.Queue or SlashCommand.Skills;
 }

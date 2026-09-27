@@ -367,7 +367,7 @@ public class SlashCommandsTests
             SlashCommand.Persona, SlashCommand.Operata, SlashCommand.Vocalia,
             SlashCommand.Remember, SlashCommand.Memory, SlashCommand.CmdCopy, SlashCommand.Profile, SlashCommand.Timer,   // /cmdcopy 2026-09-21; /memory 2026-09-22 (forget, then copy <profile> [overwrite], the folded /memcopy)
             SlashCommand.Cwd, SlashCommand.Tree, SlashCommand.Vault, SlashCommand.Explore, SlashCommand.Copy, SlashCommand.Session, SlashCommand.GitUser,   // /vault [path] 2026-09-23
-            SlashCommand.Loop, SlashCommand.Plan, SlashCommand.BotChat, SlashCommand.Queue, SlashCommand.Skills,   // /skills add 2026-09-26; /plan 2026-09-26; /botchat 2026-09-24; 2026-09-21 (/queue clear later that day; /skills with edit <name> from then until 2026-09-23); /tools off the list later on 2026-09-22, its expand and collapse root words
+            SlashCommand.Loop, SlashCommand.Plan, SlashCommand.BotChat, SlashCommand.Claude, SlashCommand.Queue, SlashCommand.Skills,   // /claude 2026-09-27; /skills add 2026-09-26; /plan 2026-09-26; /botchat 2026-09-24; 2026-09-21 (/queue clear later that day; /skills with edit <name> from then until 2026-09-23); /tools off the list later on 2026-09-22, its expand and collapse root words
         ];
         foreach (var command in Enum.GetValues<SlashCommand>())
         {
@@ -594,10 +594,10 @@ public class SlashCommandsTests
     {
         // One list, A to Z by the command (ordinal), no groups (2026-09-27, the user's call: the Commands tab had grown
         // cramped; nine hand-ordered groups until then — their history is in git).
-        Assert.Equal(54, SlashCommands.HelpEntries.Count);
+        Assert.Equal(55, SlashCommands.HelpEntries.Count);   // /claude since 2026-09-27
         Assert.Equal(
         [
-            "/about", "/botchat", "/clear", "/cmdclear", "/cmdcopy", "/cmdlist", "/collapse", "/comfy", "/compact", "/copy", "/cwd",
+            "/about", "/botchat", "/claude", "/clear", "/cmdclear", "/cmdcopy", "/cmdlist", "/collapse", "/comfy", "/compact", "/copy", "/cwd",
             "/draft", "/echo", "/emptytrash", "/exit", "/expand", "/explore", "/gituser", "/help", "/imagine", "/interrupt", "/learn",
             "/loop", "/mcp", "/memory", "/model", "/new", "/operata", "/persona", "/plan", "/police", "/profile", "/queue", "/reasoning",
             "/remember", "/server", "/sessions", "/settings", "/skills", "/speak", "/splash", "/stt", "/sys", "/theme", "/timer", "/tools",
@@ -633,6 +633,7 @@ public class SlashCommandsTests
         Assert.Equal("write the Git native email and Git native name into the working directory's repository", Summary("/gituser"));   // /git until 2026-09-26
         Assert.Equal("let the profiles talk to each other, each in its own persona, until ESC: /botchat [profile ...] [[--] topic], or /botchat --resume [line] to carry on the last one", Summary("/botchat"));   // --resume 2026-09-25
         Assert.Equal("list timers, or /timer <duration> [name] (10m, 90s, 1h30m) | stop <name> | stop all", Summary("/timer"));
+        Assert.Equal("send a message to Claude Code and add its reply to the conversation: /claude <message>, or /claude new to start a new Claude conversation", Summary("/claude"));   // 2026-09-27
 
         // Every word is one entry's command or one of its aliases — never in a summary.
         var labels = SlashCommands.HelpEntries.SelectMany(e => e.Aliases.Prepend(e.Command)).ToList();

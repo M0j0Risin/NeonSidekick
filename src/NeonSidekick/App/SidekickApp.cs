@@ -31,7 +31,7 @@ public sealed class SidekickApp
     public const string Name = "NeonSidekick";
 
     /// <summary>The second line of headless output.</summary>
-    public const string HeadlessHint = "Headless mode. Type a message; /clear or /new forgets the conversation; /compact [focus] shrinks it; /plan <requirement> plans before doing (/plan approve [--fresh] | cancel | show | save [name] | open [name]); /skills add <source> [--global] [--yes] installs a skill; /exit or EOF exits.";
+    public const string HeadlessHint = "Headless mode. Type a message; /clear or /new forgets the conversation; /compact [focus] shrinks it; /plan <requirement> plans before doing (/plan approve [--fresh] | cancel | show | save [name] | open [name]); /skills add <source> [--global] [--yes] installs a skill; /claude <message> asks Claude Code; /exit or EOF exits.";
 
     /// <summary>Printed once when discovery under <paramref name="scope"/> found nothing. Pinned by tests; shared with the chat screen.</summary>
     public static string HeadlessNoServerLine(ScanScope scope) => LlmSession.NoServerLine(scope);
@@ -69,6 +69,7 @@ public sealed class SidekickApp
     private readonly WebAccess _web;
     private readonly Func<Mcp.McpServerConfig, string, ModelContextProtocol.Client.IClientTransport> _mcpTransport;
     private readonly Func<Uri, Comfy.ComfyClient>? _comfyClient;
+    private readonly Claude.IClaudeCli? _claude;
     private readonly string _externalSkills;
     private readonly Func<int> _inputDeviceCount;
     private readonly Func<string, string, IWakeWordDetector> _wakeDetectorFactory;
@@ -138,10 +139,13 @@ public sealed class SidekickApp
         Action<string>? setTitle = null,
         string? externalSkills = null,
         Func<Mcp.McpServerConfig, string, ModelContextProtocol.Client.IClientTransport>? mcpTransport = null,
-        Func<Uri, Comfy.ComfyClient>? comfyClient = null)
+        Func<Uri, Comfy.ComfyClient>? comfyClient = null,
+        Claude.IClaudeCli? claude = null)
     {
         // The ComfyUI client (2026-09-24): over its own transport in the app, a stub handler in tests.
         _comfyClient = comfyClient;
+        // Claude Code headless for /claude (2026-09-27): the real CLI when null, a fake in tests.
+        _claude = claude;
         _console = console ?? throw new ArgumentNullException(nameof(console));
         // The MCP servers' transport (2026-09-20): the SDK's stdio child or streamable HTTP in the app, a pipe to an in-process server in tests.
         _mcpTransport = mcpTransport ?? McpSession.DefaultTransport;
@@ -476,6 +480,9 @@ public sealed class SidekickApp
         // screen; no /sessions, no restore, the first line always the title.
         using var sessions = new Sessions.SessionStore(_settings.ProfileDirectory, _time);
         long? sessionId = null;
+        // The Claude conversation /claude resumes (2026-09-27), as the screen keeps it; dropped with the session.
+        string? claudeSessionId = null;
+        var claude = _claude ?? new Claude.ClaudeProcess(_environment.System);
         var sessionTools = ChatScreen.SessionTools(sessions, () => EffectiveSettings, () => sessionId, _time);
         // Plan mode (2026-09-26): no pane to approve on, so a presented plan is saved and the user approves it with
         // /plan approve; the saved line is printed once the turn is over, never inside the streamed reply.
@@ -555,6 +562,7 @@ public sealed class SidekickApp
                     assistant?.History.Clear();
                     session.Usage.ResetConversation();
                     sessionId = null;
+                    claudeSessionId = null;
                     planState.Executing = null;
                     planState.Draft = null;
                     if (plan.Active)
@@ -573,6 +581,28 @@ public sealed class SidekickApp
                     && skillArgs.Split(' ', 2)[0].Equals(Skills.SkillInstallText.AddWord, StringComparison.OrdinalIgnoreCase))
                 {
                     await HeadlessSkillsAddAsync(skillArgs, cancellationToken).ConfigureAwait(false);
+                    continue;
+                }
+
+                // /claude (2026-09-27): ahead of the server check too — Claude Code is its own model; the history it joins is the session's.
+                if (SlashCommands.Parse(text) is (SlashCommand.Claude, var claudeArgs))
+                {
+                    var claudeTurn = await HeadlessClaudeAsync(claude, session, claudeArgs, claudeSessionId, files.Root, cancellationToken).ConfigureAwait(false);
+                    claudeSessionId = claudeTurn.SessionId;
+                    if (claudeTurn.Reply is { } claudeReply && EffectiveSettings.SessionLogging)
+                    {
+                        sessionId ??= sessions.Begin(Sessions.SessionText.FirstLineTitle(text), session.Endpoint?.ModelId ?? "");
+                        if (sessionId is { } claudeRow)
+                        {
+                            sessions.AppendTurn(claudeRow, text, claudeReply, 0, [], [], 0, claudeTurn.Usage.Input, claudeTurn.Usage.Output, claudeTurn.Cancelled);
+                        }
+                    }
+
+                    if (sessionId is { } claudeSaved)
+                    {
+                        sessions.SaveHistory(claudeSaved, Sessions.SessionHistory.ToJson(session.History.Messages, plan.ToStored(), planState.Executing, claudeSessionId));
+                    }
+
                     continue;
                 }
 
@@ -603,7 +633,7 @@ public sealed class SidekickApp
                     {
                         if (sessionId is { } planSession)
                         {
-                            sessions.SaveHistory(planSession, Sessions.SessionHistory.ToJson(assistant.History.Messages, plan.ToStored(), planState.Executing));
+                            sessions.SaveHistory(planSession, Sessions.SessionHistory.ToJson(assistant.History.Messages, plan.ToStored(), planState.Executing, claudeSessionId));
                         }
 
                         continue;
@@ -652,7 +682,7 @@ public sealed class SidekickApp
                     {
                         var usage = session.Usage.LastRequest;
                         sessions.AppendTurn(id, text, turn.Reply, turn.Trace.ToolCalls, turn.Trace.ToolNames, turn.Trace.LoadedSkills, turn.Trace.Errors, usage.Input, usage.Output, turn.Cancelled);
-                        sessions.SaveHistory(id, Sessions.SessionHistory.ToJson(assistant.History.Messages, plan.ToStored(), planState.Executing));
+                        sessions.SaveHistory(id, Sessions.SessionHistory.ToJson(assistant.History.Messages, plan.ToStored(), planState.Executing, claudeSessionId));
                     }
                 }
             }
@@ -1033,6 +1063,134 @@ public sealed class SidekickApp
         return new HeadlessTurn(reply.ToString(), trace, cancelled);
     }
 
+    /// <summary>How a headless <c>/claude</c> ended: the thread to resume next (null for none), the reply to log (null for none), its tokens.</summary>
+    private readonly record struct HeadlessClaudeTurn(string? SessionId, string? Reply, TokenUsage Usage, bool Cancelled);
+
+    /// <summary><c>Claude: </c>, ahead of a <c>/claude</c> reply on stdout, as <see cref="HeadlessReplyPrefix"/> is ahead of the local model's. Pinned.</summary>
+    public const string HeadlessClaudePrefix = "Claude: ";
+
+    /// <summary>
+    /// <c>/claude</c> headless (2026-09-27): the screen's run over lines — the reply streamed after <see cref="HeadlessClaudePrefix"/>,
+    /// each tool Claude used a <c>[tool]</c> line, the footer, a denial and a failure <c>[notice]</c> / <c>[error]</c> lines; the pair
+    /// into the session's history, tagged; a lost resume tried once anew. <c>/claude new</c> drops the thread.
+    /// </summary>
+    private async Task<HeadlessClaudeTurn> HeadlessClaudeAsync(Claude.IClaudeCli claude, LlmSession session, string args, string? claudeSessionId, string root, CancellationToken cancellationToken)
+    {
+        if (args.Length == 0)
+        {
+            await HeadlessNoticeLineAsync("[error] " + Claude.ClaudeText.UsageError).ConfigureAwait(false);
+            return new HeadlessClaudeTurn(claudeSessionId, null, default, false);
+        }
+
+        if (string.Equals(args, Claude.ClaudeText.NewWord, StringComparison.OrdinalIgnoreCase))
+        {
+            await HeadlessNoticeLineAsync("[notice] " + Claude.ClaudeText.NewThreadNotice).ConfigureAwait(false);
+            return new HeadlessClaudeTurn(null, null, default, false);
+        }
+
+        var effective = EffectiveSettings;
+        bool resume = claudeSessionId is not null;
+        string id = claudeSessionId ?? Guid.NewGuid().ToString("D");
+        for (int attempt = 0; ; attempt++)
+        {
+            var level = Claude.ClaudePermission.Resolve(effective);
+            var request = new Claude.ClaudeRequest(args, id, resume, root, level, effective.ClaudeExecutable,
+                string.IsNullOrWhiteSpace(effective.ClaudeModel) ? null : effective.ClaudeModel.Trim(), Claude.ClaudeEffort.Resolve(effective.ClaudeEffort));
+            var reply = new StringBuilder();
+            Claude.ClaudeEvent.Result? result = null;
+            bool prefixed = false;
+            try
+            {
+                await foreach (var evt in claude.RunAsync(request, cancellationToken).WithCancellation(cancellationToken).ConfigureAwait(false))
+                {
+                    switch (evt)
+                    {
+                        case Claude.ClaudeEvent.TextDelta delta:
+                            reply.Append(delta.Text);
+                            string shown = delta.Text;
+                            if (!prefixed)
+                            {
+                                // A block after a tool line starts with the parser's paragraph break: the prefix is the break here.
+                                shown = shown.TrimStart('\r', '\n');
+                                await EnsureHeadlessLineStartAsync().ConfigureAwait(false);
+                                await _headlessOutput.WriteAsync(HeadlessClaudePrefix).ConfigureAwait(false);
+                                prefixed = true;
+                            }
+
+                            await _headlessOutput.WriteAsync(shown).ConfigureAwait(false);
+                            await _headlessOutput.FlushAsync(CancellationToken.None).ConfigureAwait(false);
+                            _headlessAtLineStart = shown.EndsWith('\n');
+                            break;
+                        case Claude.ClaudeEvent.ToolActivity tool:
+                            await HeadlessNoticeLineAsync("[tool] " + Claude.ClaudeText.ToolNote(tool.Name, tool.Detail)).ConfigureAwait(false);
+                            prefixed = false;
+                            break;
+                        case Claude.ClaudeEvent.Result end:
+                            result = end;
+                            break;
+                    }
+                }
+            }
+            catch (Claude.ClaudeStartException ex)
+            {
+                await HeadlessNoticeLineAsync("[error] " + ex.Message).ConfigureAwait(false);
+                return new HeadlessClaudeTurn(claudeSessionId, null, default, false);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                await HeadlessNoticeLineAsync("(cancelled)").ConfigureAwait(false);
+                AddClaudeExchange(session, args, reply);
+                return new HeadlessClaudeTurn(claudeSessionId, reply.Length > 0 ? reply.ToString() : null, default, true);
+            }
+
+            await EnsureHeadlessLineStartAsync().ConfigureAwait(false);
+            if (result is { } done)
+            {
+                session.Usage.AddClaude(done.Usage, done.CostUsd);
+            }
+
+            if (result is null or { IsError: true })
+            {
+                string error = result?.Error ?? Claude.ClaudeText.UnknownFailure;
+                if (resume && attempt == 0 && reply.Length == 0 && error.Contains("No conversation found", StringComparison.OrdinalIgnoreCase))
+                {
+                    await HeadlessNoticeLineAsync("[notice] " + Claude.ClaudeText.ResumeLostNotice).ConfigureAwait(false);
+                    resume = false;
+                    id = Guid.NewGuid().ToString("D");
+                    continue;
+                }
+
+                await HeadlessNoticeLineAsync("[error] " + Claude.ClaudeText.Failed(error)).ConfigureAwait(false);
+                return new HeadlessClaudeTurn(resume ? claudeSessionId : null, null, default, false);
+            }
+
+            if (reply.Length == 0 && result.Text.Length > 0)
+            {
+                reply.Append(result.Text);
+                await HeadlessLineAsync(HeadlessClaudePrefix + result.Text).ConfigureAwait(false);
+            }
+
+            if (result.Denied.Count > 0)
+            {
+                await HeadlessNoticeLineAsync("[notice] " + Claude.ClaudeText.DeniedNotice(result.Denied, Claude.ClaudePermission.Name(level))).ConfigureAwait(false);
+            }
+
+            await HeadlessNoticeLineAsync("[notice] " + Claude.ClaudeText.Footer(result.CostUsd, result.Usage)).ConfigureAwait(false);
+            AddClaudeExchange(session, args, reply);
+            return new HeadlessClaudeTurn(result.SessionId ?? id, reply.Length > 0 ? reply.ToString() : null, result.Usage, false);
+        }
+    }
+
+    /// <summary>The pair into the session's history, tagged as the screen tags it; nothing for an empty reply.</summary>
+    private static void AddClaudeExchange(LlmSession session, string prompt, StringBuilder reply)
+    {
+        if (reply.Length > 0)
+        {
+            session.History.AddUser(Claude.ClaudeText.HistoryUser(prompt));
+            session.History.AddAssistant(Claude.ClaudeText.HistoryReply(reply.ToString()));
+        }
+    }
+
     private async Task WriteHeadlessPrefixAsync()
     {
         await _headlessOutput.WriteAsync(HeadlessReplyPrefix).ConfigureAwait(false);
@@ -1162,7 +1320,7 @@ public sealed class SidekickApp
         // on the row and hands it back to the terminal otherwise, so the terminal's own selection
         // and right-click copy work whenever there is nothing to click into.
         var mouse = _input as WindowsConsoleInput;
-        var screen = new ChatScreen(_console, _settings, () => EffectiveSettings, OverriddenBy, session, speech, new KeySource(_input ?? _console.Input), voice, PersonaFile.OpenInEditor, RenderScreen, _time, _geometry, _clipboard, mouse is null ? null : mouse.Capture, _copyToClipboard, clipboardImage: _clipboardImage, web: _web, setTitle: _setTitle, externalSkills: _externalSkills, holdWheel: mouse is null ? null : mouse.HoldWheel, splash: SplashImages.Source, editDraft: PersonaFile.EditAndWaitAsync, mcp: mcp, environment: _environment.System, logFile: _options.LogPath is { } logPath ? Path.GetFullPath(logPath) : null, comfyClient: _comfyClient, openImage: PersonaFile.OpenImage);
+        var screen = new ChatScreen(_console, _settings, () => EffectiveSettings, OverriddenBy, session, speech, new KeySource(_input ?? _console.Input), voice, PersonaFile.OpenInEditor, RenderScreen, _time, _geometry, _clipboard, mouse is null ? null : mouse.Capture, _copyToClipboard, clipboardImage: _clipboardImage, web: _web, setTitle: _setTitle, externalSkills: _externalSkills, holdWheel: mouse is null ? null : mouse.HoldWheel, splash: SplashImages.Source, editDraft: PersonaFile.EditAndWaitAsync, mcp: mcp, environment: _environment.System, logFile: _options.LogPath is { } logPath ? Path.GetFullPath(logPath) : null, comfyClient: _comfyClient, openImage: PersonaFile.OpenImage, claude: _claude);
         if (mouse is not null)
         {
             mouse.ModeChanged = screen.FlushConsole;
@@ -1258,6 +1416,8 @@ public sealed class SidekickApp
         SettingsField.ShellPreferNative => _environment.ShellNative is not null ? EnvironmentOverrides.ShellNativeVariable : null,
         SettingsField.ObsidianVault => _environment.ObsidianVault is not null ? EnvironmentOverrides.ObsidianVaultVariable : null,
         SettingsField.ComfyUrl => _environment.ComfyUrl is not null ? EnvironmentOverrides.ComfyUrlVariable : null,
+        SettingsField.ClaudeExecutable => _environment.ClaudeExecutable is not null ? EnvironmentOverrides.ClaudeExeVariable : null,
+        SettingsField.ClaudePermissions => _environment.ClaudePermissions is not null ? EnvironmentOverrides.ClaudePermissionsVariable : null,
         _ => null,
     };
 

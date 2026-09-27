@@ -137,7 +137,7 @@ public class ToolsMenuTests : IDisposable
     {
         // The three tabs that left /settings (2026-09-19): their rows unchanged, every field on exactly one tab of the three panes (Skills left for /skills later that day);
         // the Options tab ahead of them (later on 2026-09-19): the pane's own $-mention switch.
-        Assert.Equal(6, SettingsMenu.TabFields.Count);   // Botchat since 2026-09-25
+        Assert.Equal(7, SettingsMenu.TabFields.Count);   // Claude since 2026-09-27; Botchat since 2026-09-25
         Assert.Equal(9, SettingsMenu.ToolsTabFields.Count);   // Images since 2026-09-24; SQL since 2026-09-23   // Obsidian since 2026-09-22   // Git since 2026-09-20, Shell since 2026-09-21; the user's order (Web, Files, Shell, Ask, Git (native)) since later on 2026-09-21, alphabetical before
         Assert.Equal(["Offered", "Web", "Files", "Shell", "Ask", "Git (native)", "Obsidian", "SQL", "ComfyUI", "Options"], ToolsText.TabTitles);
         Assert.Equal([SettingsField.ToolsDollarMention, SettingsField.ToolCollapseCount, SettingsField.CodeCollapseCount], SettingsMenu.ToolsTabFields[8]);   // the fold's count under the switch (2026-09-22, the user's place), the code fold's under it

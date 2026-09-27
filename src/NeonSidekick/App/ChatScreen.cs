@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Globalization;
 using System.Text;
 using Microsoft.Extensions.AI;
+using NeonSidekick.Claude;
 using NeonSidekick.Diagnostics;
 using NeonSidekick.Files;
 using NeonSidekick.Git;
@@ -622,6 +623,7 @@ internal sealed partial class ChatScreen
     {
         _sessionId = null;
         _sessionTitle = null;
+        _claudeSessionId = null;
     }
 
     /// <summary>The saved <c>Session show name</c> word last resolved and what it meant: the pane reads the setting on every draw and tick, and <see cref="SessionShowName.Resolve"/> warns on a hand-edited value — once per value this way, not once per tick.</summary>
@@ -843,7 +845,8 @@ internal sealed partial class ChatScreen
         Func<string, string?>? environment = null,
         string? logFile = null,
         Func<Uri, ComfyClient>? comfyClient = null,
-        Action<string, string>? openImage = null)
+        Action<string, string>? openImage = null,
+        IClaudeCli? claude = null)
     {
         _logFile = logFile;
         ArgumentNullException.ThrowIfNull(time);
@@ -894,6 +897,8 @@ internal sealed partial class ChatScreen
         // list lives for the process (a /clear or a profile switch keeps the session's allows, the permanent
         // ones are the loaded profile's); the gate asks through the approval pane (ApproveCommandAsync).
         _interpreters = new Interpreters(environment ?? (_ => null));
+        // /claude (2026-09-27): the CLI found through the same PATH door as the shells.
+        _claude = claude ?? new ClaudeProcess(environment ?? (_ => null));
         _runner = new ShellRunner(time);
         // The background processes (phase B): the board signals the idle read like the timers, and is killed off with the screen.
         _processes = new ProcessRegistry(_runner, _random, SignalAlert);
@@ -4390,9 +4395,10 @@ internal sealed partial class ChatScreen
         List<ChatMessage> messages;
         StoredPlan? plan;
         StoredPlan? executing;
+        string? claudeSessionId;
         try
         {
-            messages = SessionHistory.FromJson(record.HistoryJson, out plan, out executing);
+            messages = SessionHistory.FromJson(record.HistoryJson, out plan, out executing, out claudeSessionId);
         }
         catch (Exception ex) when (ex is System.Text.Json.JsonException or FormatException)
         {
@@ -4415,6 +4421,7 @@ internal sealed partial class ChatScreen
             ForgetReading();
             _sessionId = id;
             _sessionTitle = record.Summary;
+            _claudeSessionId = claudeSessionId;
             _transcript.Notice(SessionRestoredNotice(record.Summary, _time.LocalTimeZone));
             RestorePlan(plan, executing);
             DiagnosticLog.Info(SessionsCategory, SessionRestoredLogLine(record.Summary.Id, record.Summary.Turns));
@@ -4428,6 +4435,12 @@ internal sealed partial class ChatScreen
 
                 if (turn.ReplyText.Length > 0)
                 {
+                    if (ClaudeText.IsClaudeLine(turn.UserText))
+                    {
+                        // A /claude exchange (2026-09-27): its reply under Claude's name, as it was shown.
+                        _transcript.Speaker(ClaudeText.SpeakerName, ClaudeColor);
+                    }
+
                     _transcript.BeginAssistant(styled);
                     _transcript.AppendDelta(turn.ReplyText);
                     _transcript.EndAssistant();
@@ -8030,6 +8043,10 @@ internal sealed partial class ChatScreen
                 HandleEcho(args, cancellationToken);
                 return false;
 
+            case SlashCommand.Claude:
+                await HandleClaudeAsync(args, cancellationToken).ConfigureAwait(false);
+                return false;
+
             case SlashCommand.Copy:
                 HandleCopy(args);
                 return false;
@@ -10477,7 +10494,7 @@ internal sealed partial class ChatScreen
         if (_sessionId is { } id)
         {
             var messages = assistant.History.Messages;
-            _sessions.SaveHistory(id, SessionHistory.ToJson(messages, _plan.ToStored(), _executingPlan));
+            _sessions.SaveHistory(id, SessionHistory.ToJson(messages, _plan.ToStored(), _executingPlan, _claudeSessionId));
         }
     }
 
