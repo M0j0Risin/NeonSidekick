@@ -26,7 +26,7 @@ You:
   and `[category] message` lines are notices and diagnostics (warnings and errors only; use `--log`
   for the rest).
 - Each **line** of input is one message. A multi-line prompt has to be joined into one line.
-- Headless understands only eight slash commands; any other `/…` line goes to the model as ordinary
+- Headless understands only nine slash commands; any other `/…` line goes to the model as ordinary
   text. See the next section.
 
 ---
@@ -44,6 +44,7 @@ You:
 | `/compact [focus]` | Shrinks the conversation now; a focus steers the summary. Prints the outcome, plus `[notice]` detail lines. Needs a connected server. |
 | `/plan <requirement>` | Starts plan mode and sends the requirement: the model gets only the read-only tools and `present_plan`. There is no approval pane, so a presented plan is saved as `.neon/plans/<name>.md` under the working directory and a `[notice]` line names it once the reply ends. While planning: `/plan` or `/plan show` prints where it stands; `/plan approve` marks the file approved and sends the turn that carries it out, with every tool; `/plan approve --fresh` forgets the conversation first and sends the plan's text with that message; `/plan cancel` leaves (the file is kept, marked cancelled); any other `/plan <text>` is sent as more detail. A planning reply that looks like a plan but was never presented gets a `[notice]` hint, and `/plan save [name]` saves it (approve with `/plan approve`). After approval, a `[notice]` line says when every step is ticked (the file marked `done`) or how many are left (`incomplete`, with `progress: d/t`). `/plan open <name>` picks up a plan under `.neon/plans/` and sends a turn asking the model to read it; `/plan open` alone lists them. `/new` and `/clear` leave plan mode. A misused word prints `Neon: [error] …`. Needs *LLM offer tools* on and a connected server. |
 | `/claude <message>` | Sends the message to Claude Code, as in the TUI (see the README's `/claude`). The reply streams after `Claude: `; each tool Claude uses is a `[tool] Claude › Read …` line; a `[notice]` says which tools *Claude slash command permissions* denied, and a last `[notice]` gives the cost and tokens. The exchange joins the conversation, so the next message to the local model can build on it, and the next `/claude` resumes the same Claude conversation. `/claude new` starts another (so do `/new` and `/clear`). Nothing is ever asked: whatever the level does not allow is denied (`NEONSIDEKICK_CLAUDE_PERMISSIONS=edit` for a run that may edit files). A missing CLI or a failed run prints `[error] …`. Works with no LLM server. |
+| `/test [id \| reasoning \| structured \| long \| all \| history]` | Runs the benchmark tests against the connected model, as in the TUI (see the README's *Benchmark tests*): a `[notice]` line per test as it finishes (a failure's answer on a second `[notice]` line), then the results table as markdown after `Neon: `. The run is saved in the profile's `tests.json`. Alone it prints the tests with their last verdicts for the connected model; `history` prints the saved runs. An unknown name prints `[error] …`. The listing and `history` work with no LLM server; a run needs one. |
 | `/skills add <source> [--global \| --profile] [--yes]` | Installs an Agent Skill, as in the TUI (see the README's *Installing skills*). The source is search words (skills.sh), `owner/repo`, `owner/repo/skill`, a github.com link or an https `.zip` link. A GitHub repository is listed through the GitHub API and only the needed files fetched (the whole zip only as a fallback), so large repositories work; a repository of more than 100 skills needs one named. Several search hits, or several skills in one repository, are printed as `[notice]` lines of ids to type back (`/skills add anthropics/skills/pdf`). One skill is previewed as plain lines. Without `--yes` nothing is written and a `[notice]` says so; with it the skill goes to the profile's skills, or the global ones with `--global`, and a `[notice]` names the folder. Reinstalling from the same source updates it where it is. Errors print as `[error] …`. Works with no LLM server. |
 
 Automatic compaction also runs headless: before a message, if the last reply used more of the
@@ -51,16 +52,16 @@ context than the *LLM auto compact (%)* setting allows, the conversation is comp
 `[notice]` lines say so. The mid-reply guard (*LLM tool compact type*) runs too: a prune or a
 summary during a reply is a `[notice]` line of its own.
 
-Rules for the seven:
+Rules for these commands:
 - Case doesn't matter (`/EXIT` works). Spaces around the line are ignored.
 - `/exit`, `/new`, `/clear` and `/splash` must be alone on the line. `/exit now` or `/new please` is not
   recognised, so it goes to the model as a message.
-- With no server connected, `/exit`, `/new`, `/clear`, `/splash` and `/skills add` still work. `/compact`, `/plan` and every
+- With no server connected, `/exit`, `/new`, `/clear`, `/splash`, `/claude`, `/skills add` and `/test`'s listing and `history` still work. `/compact`, `/plan` and every
   message get the "no assistant" reply instead.
 
 ### Everything else goes to the model as text
 
-No other command runs. Headless has no command parser beyond the seven above, so a line like
+No other command runs. Headless has no command parser beyond the ones above, so a line like
 `/model gemma` or `/tts on` is sent to the model as a message. The model sees the text and may
 answer about it or try to help with its tools, but nothing is switched. Avoid them in scripts.
 

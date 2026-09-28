@@ -1544,16 +1544,19 @@ public sealed class Assistant
     /// The primitive behind a side loop that runs beside a turn (<see cref="Skills.SkillLearner"/>):
     /// one streamed request, the history untouched, nothing of this instance read but the client,
     /// the clock and the <see cref="Sampling"/> reference — so it is safe while <see cref="RunTurnAsync"/> streams. The transport's
-    /// failures and cancellation propagate; the caller explains them.
+    /// failures and cancellation propagate; the caller explains them. A null <paramref name="effort"/> sends none, as the turn
+    /// does for a reasoning left unset, and <paramref name="format"/> is the request's <c>response_format</c> (2026-09-28, for
+    /// <c>/test</c>'s structured-output tests: a JSON schema the adapter writes as <c>json_schema</c>); null asks for none.
     /// </summary>
-    public async Task<SideResponse> RequestAsync(IReadOnlyList<ChatMessage> request, IReadOnlyList<AIFunction> tools, ReasoningEffort effort, CancellationToken cancellationToken)
+    public async Task<SideResponse> RequestAsync(IReadOnlyList<ChatMessage> request, IReadOnlyList<AIFunction> tools, ReasoningEffort? effort, CancellationToken cancellationToken, ChatResponseFormat? format = null)
     {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(tools);
         var options = new ChatOptions
         {
             Tools = tools.Count > 0 ? new List<AITool>(tools) : null,
-            Reasoning = new ReasoningOptions { Effort = effort },
+            Reasoning = effort is { } level ? new ReasoningOptions { Effort = level } : null,
+            ResponseFormat = format,
         };
         Sampling?.ApplyTo(options);
 

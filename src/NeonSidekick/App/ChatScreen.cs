@@ -3118,6 +3118,10 @@ internal sealed partial class ChatScreen
                 // add alone (2026-09-26): the source after it is free text — a search, a repository, a URL — never looked up per keystroke.
                 return argText.Contains(' ', StringComparison.Ordinal) ? [] : MentionCompleter.Matches([new(SkillInstallText.AddWord, SkillInstallText.AddNote)], argText);
 
+            case SlashCommand.Test:
+                // The test ids, the group words, all and history (2026-09-28): one word, nothing after it.
+                return argText.Contains(' ', StringComparison.Ordinal) ? [] : MentionCompleter.Matches(TestChoices(), argText);
+
             case SlashCommand.Loop:
                 // The one word; a count and the message are free text (2026-09-21).
                 return MentionCompleter.Matches([new(LoopInfiniteWord, LoopInfiniteNote)], argText);
@@ -8489,6 +8493,10 @@ internal sealed partial class ChatScreen
 
             case SlashCommand.Claude:
                 await HandleClaudeAsync(args, cancellationToken).ConfigureAwait(false);
+                return false;
+
+            case SlashCommand.Test:
+                await HandleTestAsync(args, cancellationToken).ConfigureAwait(false);
                 return false;
 
             case SlashCommand.Copy:

@@ -237,6 +237,9 @@ public sealed class OpenAICompatibleChatClient : IChatClient
     /// </summary>
     public const string SamplingKey = "neonsidekick.sampling";
 
+    /// <summary>The request field a JSON-schema <see cref="ChatOptions.ResponseFormat"/> is written under (<see cref="RawFieldsJson"/>, 2026-09-28).</summary>
+    public const string ResponseFormatField = "response_format";
+
     /// <summary>The request field the template switches go under, and the one extra-body field merged rather than written as it is.</summary>
     public const string TemplateKwargsField = "chat_template_kwargs";
 
@@ -253,9 +256,12 @@ public sealed class OpenAICompatibleChatClient : IChatClient
     /// (2026-09-28) adds <c>preserve_thinking=true</c> (Qwen3.6: the template renders the thinking of earlier turns too,
     /// where it drops them by default) and <c>clear_thinking=false</c> (GLM's name for the same switch) to the same object.
     /// <see cref="SamplingKey"/> (later on 2026-09-28, <c>LLM sampling</c>) adds top_k, min_p, the repetition penalty and
-    /// the extra body (<see cref="RawFieldsJson"/>). Servers and templates that know none of these ignore them. A
-    /// caller-supplied factory is left alone; with nothing to add, the options pass through as they came, the keys only
-    /// taken off.
+    /// the extra body (<see cref="RawFieldsJson"/>). A JSON-schema <see cref="ChatOptions.ResponseFormat"/> (2026-09-28,
+    /// <c>/test</c>'s structured-output tests) goes the same way, written as it came: the adapter's own mapping reshapes the
+    /// schema for OpenAI's strict mode (<c>minimum</c> moved into a <c>description</c>, found on the published exe) and sends
+    /// no <c>strict</c>, where llama.cpp, vLLM and SGLang compile the schema's keywords into their grammar and LLMTester
+    /// sends it verbatim. Servers and templates that know none of these ignore them. A caller-supplied factory is left
+    /// alone; with nothing to add, the options pass through as they came, the keys only taken off.
     /// </summary>
     internal static ChatOptions? WithRawFields(ChatOptions? options)
     {
@@ -268,7 +274,8 @@ public sealed class OpenAICompatibleChatClient : IChatClient
         bool off = options.Reasoning?.Effort == ReasoningEffort.None;
         var sampling = SamplingOf(options);
         bool keyed = options.AdditionalProperties is { } properties && (properties.ContainsKey(PreserveThinkingKey) || properties.ContainsKey(SamplingKey));
-        bool raw = (off || preserve || sampling is { HasRawFields: true }) && options.RawRepresentationFactory is null;
+        var schema = options.ResponseFormat is ChatResponseFormatJson { Schema: not null } requested ? requested : null;
+        bool raw = (off || preserve || sampling is { HasRawFields: true } || schema is not null) && options.RawRepresentationFactory is null;
         if (!keyed && !raw)
         {
             return options;
@@ -291,7 +298,12 @@ public sealed class OpenAICompatibleChatClient : IChatClient
 
         if (raw)
         {
-            byte[] json = RawFieldsJson(off, preserve, sampling);
+            byte[] json = RawFieldsJson(off, preserve, sampling, schema);
+            if (schema is not null)
+            {
+                shaped.ResponseFormat = null;   // written above as it came; the adapter would reshape it
+            }
+
             shaped.RawRepresentationFactory = _ =>
             {
                 var reader = new Utf8JsonReader(json);
@@ -313,7 +325,7 @@ public sealed class OpenAICompatibleChatClient : IChatClient
     /// accessor would say the same thing, but it is gated behind an experimental diagnostic and this project suppresses
     /// nothing. Pinned by the wire tests.
     /// </summary>
-    internal static byte[] RawFieldsJson(bool thinkingOff, bool preserve, LlmSampling? sampling)
+    internal static byte[] RawFieldsJson(bool thinkingOff, bool preserve, LlmSampling? sampling, ChatResponseFormatJson? format = null)
     {
         var buffer = new ArrayBufferWriter<byte>();
         using (var writer = new Utf8JsonWriter(buffer))
@@ -328,6 +340,11 @@ public sealed class OpenAICompatibleChatClient : IChatClient
                     {
                         extraKwargs = value;
                         continue;
+                    }
+
+                    if (format is not null && name == ResponseFormatField)
+                    {
+                        continue;   // the request's own schema wins
                     }
 
                     writer.WritePropertyName(name);
@@ -349,6 +366,25 @@ public sealed class OpenAICompatibleChatClient : IChatClient
                     writer.WriteNumber("repetition_penalty"u8, repetition);
                     writer.WriteNumber("repeat_penalty"u8, repetition);
                 }
+            }
+
+            if (format is { Schema: { } schema })
+            {
+                // {"type":"json_schema","json_schema":{"name":…,"strict":true,"schema":…}}: LLMTester's shape, strict as it sends it.
+                writer.WriteStartObject(ResponseFormatField);
+                writer.WriteString("type"u8, "json_schema"u8);
+                writer.WriteStartObject("json_schema"u8);
+                writer.WriteString("name"u8, format.SchemaName ?? "response");
+                if (format.SchemaDescription is { } description)
+                {
+                    writer.WriteString("description"u8, description);
+                }
+
+                writer.WriteBoolean("strict"u8, true);
+                writer.WritePropertyName("schema"u8);
+                schema.WriteTo(writer);
+                writer.WriteEndObject();
+                writer.WriteEndObject();
             }
 
             if (thinkingOff || preserve || extraKwargs is not null)

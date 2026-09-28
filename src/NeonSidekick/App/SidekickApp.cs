@@ -623,6 +623,13 @@ public sealed class SidekickApp
                     continue;
                 }
 
+                // /test (2026-09-28): ahead of the server check, since the listing and the saved runs need no LLM; a run refuses without one.
+                if (SlashCommands.Parse(text) is (SlashCommand.Test, var testArgs))
+                {
+                    await HeadlessTestAsync(session, testArgs, cancellationToken).ConfigureAwait(false);
+                    continue;
+                }
+
                 if (assistant is null)
                 {
                     await HeadlessLineAsync(HeadlessReplyPrefix + HeadlessNoAssistantReply).ConfigureAwait(false);
@@ -972,6 +979,81 @@ public sealed class SidekickApp
     /// summary</c> (2026-09-21) — the detail lines the screen prints under its notice
     /// (<see cref="CompactionText.DetailLines"/>), empty otherwise.
     /// </summary>
+    /// <summary>
+    /// <c>/test</c> headless (2026-09-28): the screen's words — the listing, the saved runs, or a run with a <c>[notice]</c>
+    /// line per test as it finishes (a fail's answer under it) and the table after as plain markdown — saved to the
+    /// profile's <c>tests.json</c> as the screen saves it. Ctrl+C stops a run; what finished is shown and saved.
+    /// </summary>
+    private async Task HeadlessTestAsync(LlmSession session, string args, CancellationToken cancellationToken)
+    {
+        var history = new Bench.BenchHistory(_settings.ProfileDirectory);
+        if (args.Length == 0)
+        {
+            string? model = session.Endpoint?.ModelId;
+            await HeadlessLineAsync(Bench.BenchText.Listing(model is null ? new Dictionary<string, (Bench.BenchResult, DateTimeOffset)>() : history.Latest(model), model)).ConfigureAwait(false);
+            return;
+        }
+
+        if (args.Equals(Bench.BenchCatalog.HistoryWord, StringComparison.OrdinalIgnoreCase))
+        {
+            var runs = history.Runs();
+            await HeadlessLineAsync(runs.Count == 0 ? "[notice] " + Bench.BenchText.NoRuns : Bench.BenchText.History(runs, history.FilePath)).ConfigureAwait(false);
+            return;
+        }
+
+        var tests = Bench.BenchCatalog.Resolve(args);
+        if (tests.Count == 0)
+        {
+            await HeadlessLineAsync("[error] " + Bench.BenchText.UnknownTest(args)).ConfigureAwait(false);
+            return;
+        }
+
+        if (session.Assistant is not { } assistant || session.Endpoint is not { } endpoint)
+        {
+            await HeadlessLineAsync(HeadlessReplyPrefix + HeadlessNoAssistantReply).ConfigureAwait(false);
+            return;
+        }
+
+        var context = new Bench.BenchContext(session.ContextLength?.Tokens);
+        bool claudeApi = Llm.Anthropic.ClaudeApi.IsClaudeApi(endpoint.BaseUrl);
+        if (tests.Any(t => t.Category == Bench.BenchCategory.LongContext))
+        {
+            await HeadlessNoticeLineAsync("[notice] " + Bench.BenchText.ContextLine(context)).ConfigureAwait(false);
+        }
+
+        var run = Bench.BenchRunner.NewRun(assistant, endpoint, context, _time);
+        try
+        {
+            foreach (var test in tests)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var result = await Bench.BenchRunner.RunOneAsync(assistant, test, context, claudeApi, _time, cancellationToken).ConfigureAwait(false);
+                run.Results.Add(result);
+                await HeadlessNoticeLineAsync("[notice] " + Bench.BenchText.ResultLine(result)).ConfigureAwait(false);
+                if (Bench.BenchText.AnswerLine(result) is { } answer)
+                {
+                    await HeadlessNoticeLineAsync("[notice] " + answer).ConfigureAwait(false);
+                }
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            run.Cancelled = true;
+            await HeadlessNoticeLineAsync("[notice] " + Bench.BenchText.Cancelled(run.Results.Count, tests.Count)).ConfigureAwait(false);
+        }
+
+        if (run.Results.Count > 0)
+        {
+            await HeadlessLineAsync(HeadlessReplyPrefix + Bench.BenchText.Summary(run)).ConfigureAwait(false);
+            if (!history.Append(run))
+            {
+                await HeadlessNoticeLineAsync("[notice] " + Bench.BenchText.NotSaved).ConfigureAwait(false);
+            }
+        }
+
+        DiagnosticLog.Info("Test", $"/test {args}: {run.Passed}/{run.Counted} passed on {run.Model}{(run.Cancelled ? ", cancelled" : "")}.");
+    }
+
     private async Task<(string Outcome, IReadOnlyList<string> Details)> CompactHeadlessAsync(LlmSession session, Assistant assistant, string? focus, int? autoPercent, CancellationToken cancellationToken)
     {
         string outcome;

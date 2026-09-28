@@ -565,6 +565,7 @@ Type `/` to list every command with its summary; after a command and a space, it
 | `/splash` | Start a new conversation and show the splash screen. |
 | `/stt [on\|off]` | Toggle speech input. |
 | `/sys` | Show the system prompt and the tools sent to the model. |
+| `/test [id \| reasoning \| structured \| long \| all \| history]` | Run benchmark tests against the connected model and save the results; alone it lists the tests with their last verdicts. See [Benchmark tests](#benchmark-tests). |
 | `/theme [name]` | Switch the colour theme (the *Theme* setting). Mid-reply, it runs when the reply ends. |
 | `/timer [duration [name] \| stop <name> \| stop all]` | List the timers, start one (`10m`, `90s`, `1h30m`), or stop one. |
 | `/tools` | Switch the model's tools on or off and edit their settings (Web, Files, Shell, Ask, Claude, Obsidian, ComfyUI, SQL, Git). |
@@ -640,6 +641,29 @@ Type `/` to list every command with its summary; after a command and a space, it
 * A cancelled, withdrawn or failed turn ends the loop.
 * The message may be `/imagine …` or `/speak …`, which the loop runs itself with no model in between: `/loop infinite 5s /imagine score_9, 1girl`. A failed generation, a bad path or ESC ends it; `/speak` waits for each reading to be heard. Only the last pass's pictures go with your next message.
 * No other commands can be looped.
+
+#### Benchmark tests
+
+`/test <name>` runs the nine tests of the companion LLMTester project against the connected model: one request each, graded in code, no model judging another.
+
+| Id | Test | Passes when |
+|---|---|---|
+| `grid` | Complex Grid (Reasoning) | a 15-clue Einstein riddle is answered `German` |
+| `rule` | Synthetic Rule (Reasoning) | a made-up operator learned from two examples gives `20` (the answer's last number) |
+| `mind` | Theory of Mind (Reasoning) | a Sally–Anne false belief is answered `drawer` |
+| `sycophancy` | Sycophancy (Reasoning) | an authority's false claim (17 is not prime) is answered `DISAGREE` |
+| `json` | Nested JSON Extraction (Structured Output) | three invoices come back as a JSON array with the right totals |
+| `state` | State Tracking (Structured Output) | four inventory steps come back as a JSON object with the right counts |
+| `needle` | Needle in a Haystack (Long Context) | a password hidden mid-way through a long context is found |
+| `multihop` | Multi-Hop Synthesis (Long Context) | two facts at 10% and 90% depth are combined into `mangoes1998` |
+| `saturation` | Context Saturation (Long Context) | the server accepts a prompt that fills the whole context window |
+
+* `/test reasoning`, `/test structured` and `/test long` run a group; `/test all` runs every test, context saturation last as the heaviest.
+* Each test sends only its own messages: no system prompt, no history, no tools. Sampling and reasoning are the connected model's own (`/sampling`, `/reasoning`), as in chat.
+* The structured tests send their schema as `response_format` (`json_schema`, `strict: true`, the schema exactly as written); a reply in a code fence fails. The invoice schema's root is an array, which llama.cpp, vLLM and SGLang accept. Over the Claude API these two are skipped.
+* The long-context tests are sized from the context window (settings or server): the retrieval haystack takes up to half of it (at most ~66k tokens), and saturation fills it. With the window unknown they use ~66k tokens. The *LLM request timeout* applies, and a refused or timed-out request is an error.
+* A line per test (a failure shows what the model answered) then a table with the time, tokens and tok/s. ESC stops the run and keeps what finished.
+* Runs are saved in the profile's `tests.json` (the last 50), each with the reasoning level and sampling it ran with, shown under its table and in `/test history`. `/test history` lists them, and a bare `/test` shows each test's last verdict for the connected model. Nothing enters the conversation.
 
 #### Imagine options
 

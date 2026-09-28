@@ -43,6 +43,7 @@ public class SlashCommandsTests
     [InlineData("/VOCALIA", SlashCommand.Vocalia)]
     [InlineData("/sys", SlashCommand.Sys)]   // the name since 2026-09-21; /sysprompt before
     [InlineData("/SYS", SlashCommand.Sys)]
+    [InlineData("/test", SlashCommand.Test)]   // 2026-09-28
     [InlineData("/window", SlashCommand.Window)]
     [InlineData("/sessions", SlashCommand.Session)]   // the plural since later on 2026-09-21
     [InlineData("/SESSIONS", SlashCommand.Session)]
@@ -371,7 +372,7 @@ public class SlashCommandsTests
             SlashCommand.Persona, SlashCommand.Operata, SlashCommand.Vocalia,
             SlashCommand.Remember, SlashCommand.Memory, SlashCommand.CmdCopy, SlashCommand.KeyCopy, SlashCommand.Profile, SlashCommand.Timer,   // /cmdcopy 2026-09-21; /keycopy 2026-09-28; /memory 2026-09-22 (forget, then copy <profile> [overwrite], the folded /memcopy)
             SlashCommand.Cwd, SlashCommand.Tree, SlashCommand.Vault, SlashCommand.Explore, SlashCommand.Copy, SlashCommand.Session, SlashCommand.GitUser,   // /vault [path] 2026-09-23
-            SlashCommand.Loop, SlashCommand.Plan, SlashCommand.BotChat, SlashCommand.Claude, SlashCommand.Queue, SlashCommand.Skills,   // /claude 2026-09-27; /skills add 2026-09-26; /plan 2026-09-26; /botchat 2026-09-24; 2026-09-21 (/queue clear later that day; /skills with edit <name> from then until 2026-09-23); /tools off the list later on 2026-09-22, its expand and collapse root words
+            SlashCommand.Loop, SlashCommand.Plan, SlashCommand.BotChat, SlashCommand.Claude, SlashCommand.Queue, SlashCommand.Skills, SlashCommand.Test,   // /test 2026-09-28; /claude 2026-09-27; /skills add 2026-09-26; /plan 2026-09-26; /botchat 2026-09-24; 2026-09-21 (/queue clear later that day; /skills with edit <name> from then until 2026-09-23); /tools off the list later on 2026-09-22, its expand and collapse root words
         ];
         foreach (var command in Enum.GetValues<SlashCommand>())
         {
@@ -408,7 +409,7 @@ public class SlashCommandsTests
         Assert.Contains(items, i => i.Text == "/loop");   // 2026-09-21
         Assert.All(SlashCommands.HelpEntries, e => Assert.Contains(new NeonSidekick.UI.CompletionItem(e.Command, e.Summary), items));
         Assert.Equal(["/sampling", "/server", "/sessions", "/settings", "/skills", "/speak", "/splash", "/stt", "/sys"], items.Where(i => i.Text.StartsWith("/s", StringComparison.Ordinal)).Select(i => i.Text));
-        Assert.Equal(["/theme", "/timer", "/tools", "/tree", "/tts"], items.Where(i => i.Text.StartsWith("/t", StringComparison.Ordinal)).Select(i => i.Text));   // /tools among them since 2026-09-19
+        Assert.Equal(["/test", "/theme", "/timer", "/tools", "/tree", "/tts"], items.Where(i => i.Text.StartsWith("/t", StringComparison.Ordinal)).Select(i => i.Text));   // /tools among them since 2026-09-19
     }
 
     [Fact]
@@ -609,13 +610,13 @@ public class SlashCommandsTests
     {
         // One list, A to Z by the command (ordinal), no groups (2026-09-27, the user's call: the Commands tab had grown
         // cramped; nine hand-ordered groups until then — their history is in git).
-        Assert.Equal(57, SlashCommands.HelpEntries.Count);   // /keycopy, then /sampling, since 2026-09-28
+        Assert.Equal(58, SlashCommands.HelpEntries.Count);   // /keycopy, then /sampling, then /test, since 2026-09-28
         Assert.Equal(
         [
             "/about", "/botchat", "/claude", "/clear", "/cmdclear", "/cmdcopy", "/cmdlist", "/collapse", "/comfy", "/compact", "/copy", "/cwd",
             "/draft", "/echo", "/emptytrash", "/exit", "/expand", "/explore", "/gituser", "/help", "/imagine", "/interrupt", "/keycopy", "/learn",
             "/loop", "/mcp", "/memory", "/model", "/new", "/operata", "/persona", "/plan", "/police", "/profile", "/queue", "/reasoning",
-            "/remember", "/sampling", "/server", "/sessions", "/settings", "/skills", "/speak", "/splash", "/stt", "/sys", "/theme", "/timer", "/tools",
+            "/remember", "/sampling", "/server", "/sessions", "/settings", "/skills", "/speak", "/splash", "/stt", "/sys", "/test", "/theme", "/timer", "/tools",
             "/tree", "/tts", "/usage", "/vault", "/view", "/vocalia", "/wake", "/window",
         ], SlashCommands.HelpEntries.Select(e => e.Command));
         Assert.Equal(SlashCommands.HelpEntries.Select(e => e.Command).OrderBy(c => c, StringComparer.Ordinal), SlashCommands.HelpEntries.Select(e => e.Command));
@@ -649,6 +650,7 @@ public class SlashCommandsTests
         Assert.Equal("let the profiles talk to each other, each in its own persona, until ESC: /botchat [profile ...] [[--] topic], or /botchat --resume [line] to carry on the last one", Summary("/botchat"));   // --resume 2026-09-25
         Assert.Equal("list timers, or /timer <duration> [name] (10m, 90s, 1h30m) | stop <name> | stop all", Summary("/timer"));
         Assert.Equal("send a message to Claude Code and add its reply to the conversation: /claude <message>, or /claude new to start a new Claude conversation", Summary("/claude"));   // 2026-09-27
+        Assert.Equal("run LLM benchmark tests against the connected model and save the results: /test <id | reasoning | structured | long | all> | history, or /test to list them", Summary("/test"));   // 2026-09-28
 
         // Every word is one entry's command or one of its aliases — never in a summary.
         var labels = SlashCommands.HelpEntries.SelectMany(e => e.Aliases.Prepend(e.Command)).ToList();

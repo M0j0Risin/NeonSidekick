@@ -78,4 +78,23 @@ public class LiveLlmTests
             File.Delete(path);
         }
     }
+
+    /// <summary>
+    /// <c>/test</c>'s reasoning and structured-output tests against the real server (2026-09-28): every one asked and
+    /// judged, none an error — the verdicts are the model's, so not asserted — and the schema tests' <c>response_format</c>
+    /// taken by the server.
+    /// </summary>
+    [LiveLlmFact]
+    public async Task RealServer_RunsTheShortBenchTests_WithoutAnError()
+    {
+        var endpoint = LiveLlmServer.Endpoint!;
+        using var client = new OpenAICompatibleChatClient(endpoint, TimeSpan.FromSeconds(180));
+        var assistant = new Assistant(client, new ConversationHistory(Assistant.DefaultSystemPrompt), new LlmTimeouts(TimeSpan.FromSeconds(180), TimeSpan.FromSeconds(240)));
+        var tests = Bench.BenchCatalog.All.Where(t => t.Category != Bench.BenchCategory.LongContext).ToList();
+
+        var results = await Bench.BenchRunner.RunAsync(assistant, tests, new Bench.BenchContext(null), claudeApi: false, TimeProvider.System, null, null, CancellationToken.None);
+
+        Assert.Equal(tests.Count, results.Count);
+        Assert.All(results, r => Assert.True(r.Verdict is Bench.BenchVerdict.Pass or Bench.BenchVerdict.Fail, r.Test + ": " + r.Reason));
+    }
 }
