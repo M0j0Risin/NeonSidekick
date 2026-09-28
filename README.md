@@ -31,7 +31,6 @@ Neon Sidekick brings privacy-first, local LLM inference to your terminal. Powere
 
 ### AI Connectivity & Context Management
 * **Local AI Auto-Discovery:** Automatically detects and connects to most OpenAI-compatible servers on your local network (LM Studio, vLLM, SGLang, Ollama, Unsloth, etc.), while allowing full manual configuration for custom endpoints.
-* **Claude API (optional):** Anthropic's Claude models as one more `/server` choice, with your own API key (stored encrypted), thinking levels, prompt caching and the cost shown in `/usage`. Off until you turn it on in the *Claude (API)* tab of `/settings`.
 * **Smart Context Handling:** Configurable automatic context compaction to optimize token usage and prevent window overflow.
 * **Prompt Transparency:** Visually inspect exactly what is being fed into the system prompt and see detailed compaction summaries—no black boxes.
 * **Persistent Memory:** A UI-editable memory system that automatically injects essential, recurring details directly into context.
@@ -45,10 +44,18 @@ Neon Sidekick brings privacy-first, local LLM inference to your terminal. Powere
 * **Self-Learning:** A background reflection writes new skills and improves existing ones from your interactions and tool outcomes.
 
 ### Built-In Tooling & Voice
-* **Essential Tools:** Sandboxed file I/O, shell integration (powershell/cmd/bash), scripting (powershell/python/node), Git management, read-only SQL Server queries, web search (DuckDuckGo/SearXNG), web browsing (httpClient/Chromium), graphical clarification prompts, and clock/timers.
+* **Essential Tools:** Sandboxed file I/O, shell integration (powershell/cmd/bash), scripting (powershell/python/node), Git management, web search (DuckDuckGo/SearXNG), web browsing (httpClient/Chromium), graphical clarification prompts, and clock/timers.
 * **MCP Server Support:** Connect Model Context Protocol (MCP) servers for more tools and external data sources.
 * **Native Voice Stack:** In-process Whisper STT, push-to-talk, and a Vosk wake word.
 * **Text-to-Speech:** In-process Kokoro TTS, or an external Kokoro HTTP server.
+
+### Integrations
+* **Obsidian:** Search, read, write and link notes directly in your vault's files: no plugin, and Obsidian needn't be running. Wikilinks, aliases, tags, properties and daily notes all work.
+* **SQL Server:** Read-only queries over named connections, plus schema, relationship and index discovery. Every query is parsed down to a single `SELECT` and run in a transaction that is always rolled back. SQL, Windows or run-as sign-in, with passwords encrypted (DPAPI) or in Windows Credential Manager.
+* **ComfyUI:** Pictures from your own ComfyUI workflows (text-to-image, image-to-image, face swaps). The model writes prompts in each model family's style, or `/imagine` sends yours as typed. A wizard builds or imports workflows.
+* **Claude API:** Anthropic's Claude models as one more `/server` choice, on your own API key (stored encrypted), with thinking levels, prompt caching and cost in `/usage`. Off until you turn it on in the *Claude (API)* tab of `/settings`.
+* **Claude Code:** `/claude` sends a message to the Claude Code CLI and brings its reply into the conversation. With `claude_advisor`, the local model can ask Claude for read-only advice when it's stuck. Both are optional and run on your own Claude Code sign-in.
+* **Bot Chat:** `/botchat` lets your profiles talk to each other in their own personas and voices, optionally illustrated by ComfyUI.
 
 ## Settings & menus
 [↑ Back to top](#neon-sidekick)
@@ -485,7 +492,7 @@ Every tool the reply may call, grouped (Clock, Timers, Files, Git, Shell, Obsidi
 Type `/` to list every command with its summary; after a command and a space, its arguments are listed where they can be. `//` is an unlisted alias for `/settings`.
 
 <details>
-<summary><b>Click to expand all Slash Commands</b></summary>
+<summary><b>⌨️ Click to expand all Slash Commands</b></summary>
 
 | Command | What it does |
 |---|---|
@@ -555,7 +562,7 @@ Type `/` to list every command with its summary; after a command and a space, it
 ### Command details
 
 <details>
-<summary><b>Click to expand the longer commands</b></summary>
+<summary><b>📖 Click to expand the longer commands</b></summary>
 
 #### Plan mode
 
@@ -1052,6 +1059,9 @@ Every variable the app reads starts with `NEONSIDEKICK_`. They override a settin
 
 [HEADLESS.md](HEADLESS.md) shows them in use for scripted runs.
 
+<details>
+<summary><b>🔧 Click to expand all Environment Variables</b></summary>
+
 ### Where and who
 
 | Variable | What it does | Accepts |
@@ -1122,6 +1132,8 @@ These only matter when running the test suite from source; each live test is ski
 * `NEONSIDEKICK_TEST_WHISPER_MODEL`, `NEONSIDEKICK_TEST_SILERO_MODEL`, `NEONSIDEKICK_TEST_VOSK_MODEL`, `NEONSIDEKICK_TEST_KOKORO_MODEL`: a model, when it isn't already under `%USERPROFILE%\.neonsidekick\models`.
 * `NEONSIDEKICK_TEST_CLAUDE=1`: the live Claude Code tests, on your own sign-in (Haiku; a few cents a run).
 * `NEONSIDEKICK_TEST_CLAUDE_API_KEY`: the live Claude API tests, with that key (Sonnet 5 and Opus 5.5; a few cents a run).
+
+</details>
 
 ## Screenshots
 [↑ Back to top](#neon-sidekick)
