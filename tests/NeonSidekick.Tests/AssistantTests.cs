@@ -1565,10 +1565,79 @@ public class AssistantTests
         Assert.Null(usage);
         Assert.Equal(ConversationCompactor.SummaryRequestLine, client.Requests[0][^1].Text);
 
-        client.Enqueue(FakeChatClient.Usage(3, 0));
-        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => assistant.SummarizeAsync([new ChatMessage(ChatRole.User, "hi")], null, CancellationToken.None));
+        client.Enqueue(FakeChatClient.Usage(3, 0)).Enqueue(FakeChatClient.Usage(3, 0));
+        var ex = await Assert.ThrowsAsync<EmptySummaryException>(() => assistant.SummarizeAsync([new ChatMessage(ChatRole.User, "hi")], null, CancellationToken.None));
         Assert.Equal(Assistant.EmptySummaryError, ex.Message);
+        Assert.Equal(3, client.Requests.Count);   // the empty answer was asked for twice
     }
+
+    /// <summary>2026-09-28: an empty answer is asked for once more over the lean transcript, and the two requests' usage is summed.</summary>
+    [Fact]
+    public async Task Summarize_AnEmptyAnswer_IsAskedAgainOverTheLeanTranscript_TheUsageSummed()
+    {
+        var (client, _, assistant) = Build();
+        client.Enqueue(new ChatResponseUpdate(ChatRole.Assistant, (string?)null) { FinishReason = ChatFinishReason.Length }, FakeChatClient.Usage(100, 5));
+        client.Enqueue(FakeChatClient.Text("The user read a.txt."), FakeChatClient.Usage(40, 6));
+        var transcript = new List<ChatMessage>
+        {
+            new(ChatRole.User, "read it"),
+            new(ChatRole.Assistant, [new FunctionCallContent("c1", "read_file", new Dictionary<string, object?> { ["path"] = "a.txt" })]),
+            new(ChatRole.Tool, [new FunctionResultContent("c1", new string('x', ConversationCompactor.LeanResultChars + 500))]),
+            new(ChatRole.Assistant, "done"),
+        };
+
+        var (text, usage) = await assistant.SummarizeAsync(transcript, null, CancellationToken.None);
+
+        Assert.Equal("The user read a.txt.", text);
+        Assert.Equal((140L, 11L, 2), (usage!.Value.Input, usage.Value.Output, usage.Value.Requests));
+        Assert.Equal(2, client.Requests.Count);
+        var lean = client.Requests[1];
+        Assert.Equal(new[] { ChatRole.System, ChatRole.User, ChatRole.Assistant, ChatRole.User, ChatRole.Assistant, ChatRole.User }, lean.Select(m => m.Role));
+        Assert.Equal(ConversationCompactor.SummaryInstruction, lean[0].Text);
+        Assert.DoesNotContain(lean, m => m.Contents.Any(c => c is FunctionCallContent or FunctionResultContent));
+        Assert.StartsWith("[called read_file ", lean[2].Text);
+        Assert.EndsWith(ConversationCompactor.LeanCut(500), lean[3].Text);
+        Assert.Equal(ConversationCompactor.SummaryRequestLine, lean[5].Text);
+    }
+
+    /// <summary>2026-09-28: a second empty answer says why — the length limit, thinking alone, a tool call.</summary>
+    [Fact]
+    public async Task Summarize_TwoEmptyAnswers_SayWhy()
+    {
+        static ChatResponseUpdate Stopped() => new(ChatRole.Assistant, (string?)null) { FinishReason = ChatFinishReason.Length };
+        static ChatResponseUpdate Thought() => new(ChatRole.Assistant, [new TextReasoningContent("hmm, hmm")]);
+
+        async Task<string> Fails(Func<ChatResponseUpdate> update)
+        {
+            var (client, _, assistant) = Build();
+            client.Enqueue(update()).Enqueue(update());
+            var ex = await Assert.ThrowsAsync<EmptySummaryException>(() => assistant.SummarizeAsync([new ChatMessage(ChatRole.User, "hi")], null, CancellationToken.None));
+            Assert.Equal(2, client.Requests.Count);
+            return ex.Message;
+        }
+
+        Assert.Equal(Assistant.EmptySummaryLengthError, await Fails(Stopped));
+        Assert.Equal(Assistant.EmptySummaryThinkingError(8), await Fails(Thought));
+        Assert.Equal(Assistant.EmptySummaryToolError("read_file"), await Fails(() => FakeChatClient.Call("c9", "read_file")));
+        Assert.Equal(Assistant.EmptySummaryThinkingError(18), await Fails(() => FakeChatClient.Text("<think>hmm</think>")));   // a <think> block streamed as text
+        Assert.Contains("(1,234 characters)", Assistant.EmptySummaryThinkingError(1234));
+    }
+
+    [Fact]
+    public async Task Summarize_ATransportFailure_IsNotAskedAgain()
+    {
+        var (client, _, assistant) = Build();
+        client.EnqueueText("never");
+        client.ThrowAt = 0;
+
+        await Assert.ThrowsAsync<HttpRequestException>(() => assistant.SummarizeAsync([new ChatMessage(ChatRole.User, "hi")], null, CancellationToken.None));
+
+        Assert.Single(client.Requests);
+    }
+
+    [Fact]
+    public void Explain_AnEmptySummary_IsItsMessageAlone() =>
+        Assert.Equal(Assistant.EmptySummaryLengthError, Assistant.Explain(new EmptySummaryException(Assistant.EmptySummaryLengthError)));
 
     [Fact]
     public void IsOpeningCallId_IsTheThreeIds()

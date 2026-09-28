@@ -468,6 +468,75 @@ public static class ConversationCompactor
         return pruned;
     }
 
+    /// <summary>The longest one tool result runs in <see cref="LeanTranscript"/> (2026-09-28); the rest is cut, and <see cref="LeanCut"/> says how much.</summary>
+    public const int LeanResultChars = 1500;
+
+    /// <summary>What a picture becomes in <see cref="LeanTranscript"/>. Pinned.</summary>
+    public const string LeanPicture = "(a picture, left out)";
+
+    /// <summary>The tail of a result <see cref="LeanTranscript"/> cut: <c>… (4,312 more characters cut)</c>. Pinned.</summary>
+    public static string LeanCut(int cut) =>
+        "… (" + cut.ToString("N0", CultureInfo.InvariantCulture) + " more characters cut)";
+
+    /// <summary>
+    /// <paramref name="messages"/> as a plain dialogue, for the summariser's second try after an empty reply
+    /// (2026-09-28, <see cref="Assistant.SummarizeAsync(IReadOnlyList{ChatMessage}, string?, CancellationToken)"/>):
+    /// a call becomes the assistant's line <c>[called read_file {"path":"a.txt"}]</c>, a result the user's
+    /// <c>[read_file returned] …</c> cut at <paramref name="maxResultChars"/> (<see cref="LeanCut"/>), a picture
+    /// <see cref="LeanPicture"/>, thinking dropped, a message left with nothing dropped too; messages of one role in a
+    /// row are joined, so the roles alternate as every chat template accepts. No call is left for a tool-primed model
+    /// to carry on from, and the request is smaller, so there is room to write. Pure.
+    /// </summary>
+    public static List<ChatMessage> LeanTranscript(IReadOnlyList<ChatMessage> messages, int maxResultChars = LeanResultChars)
+    {
+        ArgumentNullException.ThrowIfNull(messages);
+        ArgumentOutOfRangeException.ThrowIfNegative(maxResultChars);
+        var names = CallNames(messages);
+        var lean = new List<ChatMessage>(messages.Count);
+        foreach (var message in messages)
+        {
+            var parts = new List<string>();
+            foreach (var content in message.Contents)
+            {
+                switch (content)
+                {
+                    case TextContent { Text: { } text } when !string.IsNullOrWhiteSpace(text):
+                        parts.Add(text);
+                        break;
+                    case FunctionCallContent call:
+                        parts.Add("[called " + call.Name + " " + Assistant.SerializeArguments(call.Arguments) + "]");
+                        break;
+                    case FunctionResultContent result:
+                        string name = result.CallId is { } id && names.TryGetValue(id, out var found) ? found : UnknownTool;
+                        string output = result.Result?.ToString() ?? "";
+                        parts.Add("[" + name + " returned] " + (output.Length <= maxResultChars ? output : output[..maxResultChars] + LeanCut(output.Length - maxResultChars)));
+                        break;
+                    case DataContent:
+                        parts.Add(LeanPicture);
+                        break;
+                }
+            }
+
+            if (parts.Count == 0)
+            {
+                continue;
+            }
+
+            var role = message.Role == ChatRole.Tool ? ChatRole.User : message.Role;
+            string joined = string.Join("\n", parts);
+            if (lean.Count > 0 && lean[^1].Role == role)
+            {
+                lean[^1] = new ChatMessage(role, lean[^1].Text + "\n\n" + joined);
+            }
+            else
+            {
+                lean.Add(new ChatMessage(role, joined));
+            }
+        }
+
+        return lean;
+    }
+
     /// <summary>
     /// Every tool call's id → the tool's name, over the assistant messages of <paramref name="messages"/>
     /// (2026-09-21): what a stubbed result is named by in its <see cref="PrunedEntry"/>, since a result

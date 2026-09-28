@@ -789,8 +789,19 @@ public sealed class Assistant
         return explained.Contains("roles are supported", StringComparison.OrdinalIgnoreCase);
     }
 
-    /// <summary>What <see cref="SummarizeAsync"/> throws when the server answered with no text. Pinned.</summary>
+    /// <summary>What <see cref="SummarizeAsync"/> throws when the server answered with no text and no clue why. Pinned.</summary>
     public const string EmptySummaryError = "The server returned an empty summary.";
+
+    /// <summary>The empty summary's message when the stream ended on the length limit (2026-09-28): the context or <c>max_tokens</c> ran out before any text. Pinned.</summary>
+    public const string EmptySummaryLengthError = "The server stopped before writing a summary: the context or the output limit ran out.";
+
+    /// <summary>The empty summary's message when the reply was thinking alone (2026-09-28): a template that ignores <c>enable_thinking=false</c> thinks anyway. Pinned.</summary>
+    public static string EmptySummaryThinkingError(int chars) =>
+        "The model only thought (" + chars.ToString("N0", CultureInfo.InvariantCulture) + " characters) and wrote no summary; its chat template may ignore enable_thinking=false.";
+
+    /// <summary>The empty summary's message when the reply was a tool call (2026-09-28): a model primed by a tool loop calls on though no tool is offered. Pinned.</summary>
+    public static string EmptySummaryToolError(string tool) =>
+        "The model asked for a tool (" + tool + ") instead of writing a summary.";
 
     /// <summary>
     /// One opening call: the tool and the fixed id its call/result pair carries; the arguments are
@@ -1400,7 +1411,9 @@ public sealed class Assistant
     /// thinking off (the adapter turns <see cref="ReasoningEffort.None"/> into the wire fields),
     /// the history untouched. Streamed like a turn so the usage carries the same two spans. A
     /// leaked <c>&lt;think&gt;</c> is filtered like a reply's. The transport's failures and
-    /// cancellation propagate; an empty answer is <see cref="EmptySummaryError"/>.
+    /// cancellation propagate. An empty answer is asked for once more over
+    /// <see cref="ConversationCompactor.LeanTranscript"/> (2026-09-28), the two requests' usage summed;
+    /// a second empty one is an <see cref="EmptySummaryException"/> saying why.
     /// </summary>
     public Task<(string Text, TokenUsage? Usage)> SummarizeAsync(IReadOnlyList<ChatMessage> transcript, string? focus, CancellationToken cancellationToken)
     {
@@ -1418,11 +1431,55 @@ public sealed class Assistant
         var request = new List<ChatMessage>(transcript.Count + 2) { new(ChatRole.System, instruction) };
         request.AddRange(transcript);
         request.Add(new ChatMessage(ChatRole.User, requestLine));
-        var options = new ChatOptions { Reasoning = new ReasoningOptions { Effort = ReasoningEffort.None } };
+        var attempt = await RequestSummaryAsync(request, cancellationToken).ConfigureAwait(false);
+        var usage = attempt.Usage;
+        if (attempt.Text.Length == 0)
+        {
+            // The second try (2026-09-28): the same ask over a plain dialogue — no call for a tool-primed model
+            // to carry on from, the results cut, so a request that filled the context leaves room to write.
+            DiagnosticLog.Debug(Category, EmptySummaryLogLine(attempt) + " Asking again over the lean transcript.");
+            var lean = new List<ChatMessage> { new(ChatRole.System, instruction) };
+            lean.AddRange(ConversationCompactor.LeanTranscript([.. transcript, new ChatMessage(ChatRole.User, requestLine)]));
+            attempt = await RequestSummaryAsync(lean, cancellationToken).ConfigureAwait(false);
+            usage = usage is { } before && attempt.Usage is { } after ? before + after : usage ?? attempt.Usage;
+            if (attempt.Text.Length == 0)
+            {
+                DiagnosticLog.Debug(Category, EmptySummaryLogLine(attempt));
+                throw new EmptySummaryException(EmptySummaryReason(attempt));
+            }
+        }
 
+        // --log only: what the model kept is the first thing a field report needs.
+        DiagnosticLog.Debug(Category, "Summary: " + attempt.Text);
+        if (usage is not { } total)
+        {
+            DiagnosticLog.Debug(Category, "No usage reported by the server for the summary request.");
+            return (attempt.Text, null);
+        }
+
+        DiagnosticLog.Debug(Category, string.Create(CultureInfo.InvariantCulture,
+            $"Summary usage: {total.Input} in, {total.Output} out, {total.Total} total; first token after {total.ToFirstToken.TotalSeconds:F2}s, streamed {total.Generating.TotalSeconds:F2}s."));
+        return (attempt.Text, total);
+    }
+
+    /// <summary>
+    /// One summariser request's outcome (2026-09-28): its text (trimmed, a leaked <c>&lt;think&gt;</c> filtered; empty
+    /// for none), its usage stamped with the two spans (null when the server reported none), and what an empty reply is
+    /// explained by — the last finish reason, the thinking's characters (streamed as thinking or filtered from the text)
+    /// and the first tool call's name.
+    /// </summary>
+    private sealed record SummaryAttempt(string Text, TokenUsage? Usage, ChatFinishReason? Finish, int ThinkingChars, string? ToolCall);
+
+    private async Task<SummaryAttempt> RequestSummaryAsync(List<ChatMessage> request, CancellationToken cancellationToken)
+    {
+        var options = new ChatOptions { Reasoning = new ReasoningOptions { Effort = ReasoningEffort.None } };
         var filter = new ThinkTagFilter();
         var text = new StringBuilder();
         var usage = TokenUsage.Zero;
+        ChatFinishReason? finish = null;
+        int raw = 0;
+        int thinking = 0;
+        string? toolCall = null;
         long sent = _time.GetTimestamp();
         long? first = null;
         await foreach (var update in _client.GetStreamingResponseAsync(request, options, cancellationToken).ConfigureAwait(false))
@@ -1432,7 +1489,12 @@ public sealed class Assistant
                 first = _time.GetTimestamp();
             }
 
-            text.Append(filter.Push(update.Text));
+            string delta = update.Text;
+            raw += delta.Length;
+            text.Append(filter.Push(delta));
+            thinking += ReasoningText(update).Length;
+            toolCall ??= update.Contents.OfType<FunctionCallContent>().FirstOrDefault()?.Name;
+            finish = update.FinishReason ?? finish;
             foreach (var reported in update.Contents.OfType<UsageContent>())
             {
                 usage += TokenUsage.From(reported.Details, TimeSpan.Zero, TimeSpan.Zero);
@@ -1441,27 +1503,23 @@ public sealed class Assistant
 
         long ended = _time.GetTimestamp();
         text.Append(filter.Flush());
-        string summary = text.ToString().Trim();
-        if (summary.Length == 0)
-        {
-            throw new InvalidOperationException(EmptySummaryError);
-        }
-
-        // --log only: what the model kept is the first thing a field report needs.
-        DiagnosticLog.Debug(Category, "Summary: " + summary);
-
-        if (usage.IsEmpty)
-        {
-            DiagnosticLog.Debug(Category, "No usage reported by the server for the summary request.");
-            return (summary, null);
-        }
-
+        thinking += raw - text.Length;   // what the filter took out of the text: a <think> block streamed as content
         long firstAt = first ?? ended;
-        var timed = usage with { ToFirstToken = _time.GetElapsedTime(sent, firstAt), Generating = _time.GetElapsedTime(firstAt, ended) };
-        DiagnosticLog.Debug(Category, string.Create(CultureInfo.InvariantCulture,
-            $"Summary usage: {timed.Input} in, {timed.Output} out, {timed.Total} total; first token after {timed.ToFirstToken.TotalSeconds:F2}s, streamed {timed.Generating.TotalSeconds:F2}s."));
-        return (summary, timed);
+        TokenUsage? timed = usage.IsEmpty ? null : usage with { ToFirstToken = _time.GetElapsedTime(sent, firstAt), Generating = _time.GetElapsedTime(firstAt, ended) };
+        return new SummaryAttempt(text.ToString().Trim(), timed, finish, thinking, toolCall);
     }
+
+    /// <summary>Why an attempt came back empty, most telling first: a tool call, the length limit, thinking alone, else no clue.</summary>
+    private static string EmptySummaryReason(SummaryAttempt attempt) =>
+        attempt.ToolCall is { } tool ? EmptySummaryToolError(tool)
+        : attempt.Finish == ChatFinishReason.Length ? EmptySummaryLengthError
+        : attempt.ThinkingChars > 0 ? EmptySummaryThinkingError(attempt.ThinkingChars)
+        : EmptySummaryError;
+
+    /// <summary>The <c>--log</c> line for an empty attempt: <c>Empty summary: finish length, 1,234 characters of thinking, no tool call, 812 tokens out.</c></summary>
+    private static string EmptySummaryLogLine(SummaryAttempt attempt) =>
+        string.Create(CultureInfo.InvariantCulture,
+            $"Empty summary: finish {(attempt.Finish is { } finish ? finish.Value : "none")}, {attempt.ThinkingChars:N0} characters of thinking, {(attempt.ToolCall is { } tool ? "a call of " + tool : "no tool call")}, {(attempt.Usage is { } usage ? usage.Output.ToString(CultureInfo.InvariantCulture) : "no")} tokens out.");
 
     /// <summary>
     /// One model request over <paramref name="request"/> as given (its own system message first),
@@ -1744,7 +1802,13 @@ public sealed class Assistant
                 continue;
             }
 
-            if (current is ClientResultException failed && ServerDetail(failed) is { } detail)
+            if (current is EmptySummaryException)
+            {
+                // Our own sentence, whole: the type's name adds nothing to it (2026-09-28).
+                parts.Add(current.Message);
+                previousMessage = current.Message;
+            }
+            else if (current is ClientResultException failed && ServerDetail(failed) is { } detail)
             {
                 // The SDK's own message is "Service request failed." over two lines; the server's
                 // reason (a rejected reasoning level, an unknown model) is in the body it dropped.

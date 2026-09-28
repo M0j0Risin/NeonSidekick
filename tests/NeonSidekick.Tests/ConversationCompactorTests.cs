@@ -436,12 +436,41 @@ public class ConversationCompactorTests
     public async Task RunAsync_Summary_EmptyAnswer_Throws_TheHistoryUntouched()
     {
         var (client, assistant, tally) = Build(ThreeTurns());
-        client.Enqueue(FakeChatClient.Text("<think>hmm</think>"), FakeChatClient.Text("  "));
+        client.Enqueue(FakeChatClient.Text("  ")).Enqueue(FakeChatClient.Text("  "));   // asked for twice (2026-09-28)
 
-        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => ConversationCompactor.RunAsync(assistant, tally, CompactMode.Summary, keepRecent: 1, focus: null, CancellationToken.None));
+        var ex = await Assert.ThrowsAsync<EmptySummaryException>(() => ConversationCompactor.RunAsync(assistant, tally, CompactMode.Summary, keepRecent: 1, focus: null, CancellationToken.None));
 
-        Assert.Equal("The server returned an empty summary.", ex.Message);
+        Assert.Equal(NeonSidekick.Llm.Assistant.EmptySummaryError, ex.Message);
         Assert.Equal(12, assistant.History.Messages.Count);
+    }
+
+    // ── LeanTranscript: the summariser's second try (2026-09-28) ──
+
+    [Fact]
+    public void LeanTranscript_IsAPlainDialogue_TheResultsCut_TheRolesAlternating()
+    {
+        var messages = new List<ChatMessage>
+        {
+            new(ChatRole.User, "look at these"),
+            new(ChatRole.Assistant, [new TextReasoningContent("which first?"), new TextContent("Reading both."), new FunctionCallContent("c1", "read_file"), new FunctionCallContent("c2", "view_image")]),
+            new(ChatRole.Tool, [new FunctionResultContent("c1", "short")]),
+            new(ChatRole.Tool, [new FunctionResultContent("c2", "abcdefghij")]),
+            new(ChatRole.User, [new DataContent(new byte[] { 1, 2, 3 }, "image/png")]),
+            new(ChatRole.Tool, [new FunctionResultContent("gone", "orphan")]),
+            new(ChatRole.Assistant, [new TextReasoningContent("only thinking")]),
+            new(ChatRole.Assistant, "Both read."),
+        };
+
+        var lean = ConversationCompactor.LeanTranscript(messages, maxResultChars: 5);
+
+        Assert.Equal(new[] { ChatRole.User, ChatRole.Assistant, ChatRole.User, ChatRole.Assistant }, lean.Select(m => m.Role));
+        Assert.Equal("look at these", lean[0].Text);
+        Assert.Equal("Reading both.\n[called read_file {}]\n[called view_image {}]", lean[1].Text);
+        Assert.Equal(
+            "[read_file returned] short\n\n[view_image returned] abcde" + ConversationCompactor.LeanCut(5) + "\n\n" + ConversationCompactor.LeanPicture + "\n\n[" + ConversationCompactor.UnknownTool + " returned] orpha" + ConversationCompactor.LeanCut(1),
+            lean[2].Text);
+        Assert.Equal("Both read.", lean[3].Text);   // the thinking-only message dropped, its neighbour kept
+        Assert.All(lean, m => Assert.IsType<TextContent>(Assert.Single(m.Contents)));
     }
 
     // ── PruneRecent: the last turn's older iterations (the mid-turn guard, the automatic compact) ──
