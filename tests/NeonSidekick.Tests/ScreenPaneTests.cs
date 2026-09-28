@@ -1358,6 +1358,9 @@ public class ScreenPaneTests : IDisposable
     [InlineData("idle", "qwen3-30b-a3b-instruct", 20, "idle      qwen3-30b…")] // the trailer at most half the row
     [InlineData("🔊 🎤", "llama", 12, "🔊 🎤  llama")]                        // two-cell glyphs counted as such
     [InlineData("idle", "llama", 1, "…")]
+    [InlineData("idle", "qwen3-30b-a3b-instruct-q8", 40, "idle                qwen3-30b-a3b-instr…")] // a short left: the half, as before
+    [InlineData("work · a longer hint", "qwen3-30b-a3b-instruct-q8", 40, "work · a longer hint  qwen3-30b-a3b-ins…")] // the name gives way to a left that fits
+    [InlineData("Enter = edit · ESC = close", "qwen3-30b-a3b-instruct-q8", 40, "Enter = edit · ESC = …  qwen3-30b-a3b-i…")] // TrailerMinCells, then the left is cut
     public void PinRight_IsPinned(string left, string trailer, int cells, string expected) =>
         Assert.Equal(expected, ScreenPane.PinRight(left, trailer, cells));
 
@@ -1367,6 +1370,8 @@ public class ScreenPaneTests : IDisposable
     [InlineData("idle", "qwen3-30b-a3b-instruct", "◕", 20, "idle      qwen3-3… ◕")] // half the row = 10: the text cut to 8, the mark whole
     [InlineData("", "", "◕", 10, "         ◕")]                              // a mark alone
     [InlineData("idle", "llama", "◕", 5, "i…  ◕")]                           // half = 2: the text gone, the mark stands
+    [InlineData("work · a longer hint", "qwen3-30b-a3b-instruct-q8", "◕", 40, "work · a longer hint  qwen3-30b-a3b-i… ◕")] // the name gives way, the left whole
+    [InlineData("Enter = edit · ESC = close", "qwen3-30b-a3b-instruct-q8", "◕", 40, "Enter = edit · ESC …  qwen3-30b-a3b-i… ◕")] // the name at its floor, then the left is cut
     public void PinRight_WithAMark_IsPinned(string left, string trailer, string mark, int cells, string expected) =>
         Assert.Equal(expected, ScreenPane.PinRight(left, trailer, mark, cells));
 
@@ -1381,6 +1386,18 @@ public class ScreenPaneTests : IDisposable
     [InlineData("", "", 20, "")]
     public void Trail_IsPinned(string trailer, string mark, int cells, string expected) =>
         Assert.Equal(expected, ScreenPane.Trail(trailer, mark, cells));
+
+    [Theory]
+    [InlineData("qwen3-30b-a3b-instruct-q8", "", 40, 0, "qwen3-30b-a3b-instr…")]    // nothing on the left: the half
+    [InlineData("qwen3-30b-a3b-instruct-q8", "", 40, 4, "qwen3-30b-a3b-instr…")]    // a short left: still the half
+    [InlineData("qwen3-30b-a3b-instruct-q8", "", 40, 20, "qwen3-30b-a3b-ins…")]     // 40 − 20 − the gap = 18: the name gives way
+    [InlineData("qwen3-30b-a3b-instruct-q8", "", 40, 30, "qwen3-30b-a3b-i…")]       // no further than TrailerMinCells
+    [InlineData("qwen3-30b-a3b-instruct-q8", "◕", 40, 20, "qwen3-30b-a3b-i… ◕")]   // the mark and its blank come off too
+    [InlineData("llama", "", 40, 38, "llama")]                                       // a short name is never cut for the left
+    [InlineData("qwen3-30b-a3b-instruct", "", 20, 30, "qwen3-30b…")]               // the half wins over the floor on a narrow row
+    [InlineData("qwen3-30b-a3b-instruct", "◕", 20, 30, "qwen3-3… ◕")]
+    public void Trail_GivesWayToTheLeft_IsPinned(string trailer, string mark, int cells, int leftCells, string expected) =>
+        Assert.Equal(expected, ScreenPane.Trail(trailer, mark, cells, leftCells));
 
     [Theory]
     [InlineData("llama", "◕", "llama ◕")]
@@ -1414,6 +1431,30 @@ public class ScreenPaneTests : IDisposable
         Assert.EndsWith("Enter = save" + new string(' ', 20) + "llama ◕", Output);
         pane.CloseOverlay();
         Assert.EndsWith("idle" + new string(' ', 28) + "llama ◕", Output);
+    }
+
+    [Fact]
+    public void ALongTrailer_GivesWayToTheLeft_InEveryState()
+    {
+        // 80 columns: 79 cells, the half-row cap 39 — 37 for the name ahead of the mark (the user's picture, 2026-09-28).
+        _console.Profile.Width = 80;
+        using var pane = Pane();
+        pane.Hint = () => "idle";
+        pane.Trailer = () => "Qwen3.8-27B-Uncensored-HauhauCS-Aggressive-MTP-GGUF-Q8";
+        pane.TrailerMark = () => "◕";
+        pane.Show();
+        Assert.EndsWith("idle" + new string(' ', 36) + "Qwen3.8-27B-Uncensored-HauhauCS-Aggr… ◕", Output);
+
+        // A 50-cell overlay hint stays whole; the name takes the 25 left after the gap and the mark.
+        pane.ShowOverlay(new Markup("a"), "Enter = move, rename, edit or delete · ESC = close");
+        Assert.EndsWith("Enter = move, rename, edit or delete · ESC = close  Qwen3.8-27B-Uncensored-H… ◕", Output);
+        pane.CloseOverlay();
+
+        // So does a 50-cell spinner row.
+        using (pane.BeginBusy("reading every file in the repository first"))
+        {
+            Assert.EndsWith(Theme.SpinnerFrames[0] + " reading every file in the repository first 00:00  Qwen3.8-27B-Uncensored-H… ◕", Output);
+        }
     }
 
     [Fact]

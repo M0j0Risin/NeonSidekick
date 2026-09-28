@@ -787,6 +787,13 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     /// <summary>Between the trailer's text and its mark.</summary>
     public const string MarkSeparator = " ";
 
+    /// <summary>
+    /// The least cells the trailer's text gives way to (2026-09-28, the user's call): below the
+    /// half-row cap the model name shrinks for the text on its left, down to this, and only then is
+    /// the left cut — sixteen keeps <c>Qwen3.8-27B-Unc…</c> readable and a target for the click.
+    /// </summary>
+    public const int TrailerMinCells = 16;
+
     /// <summary>The least blanks between the toolbar's strip and its path.</summary>
     public const int ToolbarGap = 2;
 
@@ -824,7 +831,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     public static string PinRight(string left, string trailer, string mark, int cells)
     {
         ArgumentNullException.ThrowIfNull(left);
-        string right = Trail(trailer, mark, cells);
+        string right = Trail(trailer, mark, cells, TextCells.Width(left));
         if (right.Length == 0)
         {
             return Fit(left, cells);
@@ -839,18 +846,19 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     /// The right part of a hint row of <paramref name="cells"/>: <paramref name="trailer"/> cut to
     /// half the row at most; with a <paramref name="mark"/>, the text cut to what the mark and its
     /// separator leave of that half and the mark whole behind it — at an absurd width the text
-    /// goes to an ellipsis, then to nothing, and the mark stands alone. Pinned.
+    /// goes to an ellipsis, then to nothing, and the mark stands alone. Since 2026-09-28 (the user's
+    /// picture: an overlay's hint cut while a long model name kept its half) the text also gives way
+    /// to <paramref name="leftCells"/>, the uncut width of what stands on its left: it takes what that
+    /// and <see cref="TrailerGap"/> leave, never under <see cref="TrailerMinCells"/> nor over the half.
+    /// None on the left (the default) is the half as before. Pinned.
     /// </summary>
-    public static string Trail(string trailer, string mark, int cells)
+    public static string Trail(string trailer, string mark, int cells, int leftCells = 0)
     {
         ArgumentNullException.ThrowIfNull(trailer);
         ArgumentNullException.ThrowIfNull(mark);
-        if (mark.Length == 0)
-        {
-            return Fit(trailer, cells / 2);
-        }
-
-        return TrailerText(Fit(trailer, cells / 2 - TextCells.Width(mark) - MarkSeparator.Length), mark);
+        int markCells = mark.Length == 0 ? 0 : TextCells.Width(mark) + MarkSeparator.Length;
+        int room = Math.Min(cells / 2 - markCells, Math.Max(TrailerMinCells, cells - leftCells - TrailerGap - markCells));
+        return mark.Length == 0 ? Fit(trailer, room) : TrailerText(Fit(trailer, room), mark);
     }
 
     /// <summary>
@@ -3936,11 +3944,9 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         if (_busyLabel is { } label)
         {
             // The strip, then the frame in its own style, then the label and its count in what is
-            // left ahead of the trailer — the same cut PinRight makes, in four styles.
-            string right = Trail(_trailer(), mark, max);
-            int leftMax = right.Length == 0 ? max : max - TextCells.Width(right) - TrailerGap;
+            // left ahead of the trailer — the same cut PinRight makes, in four styles; the trailer
+            // gives way to the uncut left as PinRight's does (2026-09-28).
             string frame = Theme.SpinnerFrames[_frame % Theme.SpinnerFrames.Length];
-            string prefix = Fit(StripPrefix(_strip()), leftMax - TextCells.Width(frame));
             string queued = StandingQueued();
             // The tally beside the label (2026-09-25), where the standing row would have it: not under an overlay's hint or the scroll's.
             string usage = _overlay is null && _top < 0 ? _busyUsage() : "";
@@ -3949,6 +3955,10 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
             bool after = usage.Length > 0 && _labelAfterUsage(label);
             string unfitted = " " + BusyRow(label, elapsed, _overlay?.Hint ?? (_top >= 0 ? ScrolledHint(RowsBelowLocked()) : ""), queued, usage, after);
             string labelled = " " + Labelled(BusyText(label, elapsed), usage, after);
+            string strip = StripPrefix(_strip());
+            string right = Trail(_trailer(), mark, max, TextCells.Width(strip) + TextCells.Width(frame) + TextCells.Width(unfitted));
+            int leftMax = right.Length == 0 ? max : max - TextCells.Width(right) - TrailerGap;
+            string prefix = Fit(strip, leftMax - TextCells.Width(frame));
             int restMax = leftMax - TextCells.Width(prefix) - TextCells.Width(frame);
             string rest = Fit(unfitted, restMax);
             string left = prefix + frame + rest;
@@ -3970,8 +3980,8 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         }
         else
         {
-            string right = Trail(_trailer(), mark, max);
             string row = StandingRow();
+            string right = Trail(_trailer(), mark, max, TextCells.Width(row));
             string hint = PinRight(row, _trailer(), mark, max);
             WriteTrailed(hint, mark);
             _shownHint = hint;
