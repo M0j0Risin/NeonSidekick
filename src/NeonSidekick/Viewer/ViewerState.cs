@@ -234,6 +234,10 @@ public sealed class ViewerState
     /// <summary>
     /// A picture that arrived (created, or renamed into the folder): the newest now, the same path taken out first. True
     /// when the shown picture changed — live, or the held one was the path that moved.
+    ///
+    /// <para>The path taken out is not <see cref="RemoveAt"/>'s (2026-09-28, code review): that one goes live when the held
+    /// index becomes the last, so holding the second newest while the newest was written again pulled the view to it. Here the
+    /// path goes straight back on the end, so the held index only shifts down past it and never becomes the last.</para>
     /// </summary>
     public bool Add(string path, DateTime createdUtc)
     {
@@ -242,7 +246,11 @@ public sealed class ViewerState
         int existing = IndexOf(path);
         if (existing >= 0)
         {
-            RemoveAt(existing);
+            _pictures.RemoveAt(existing);
+            if (_held is int held && existing < held)
+            {
+                _held = held - 1;
+            }
         }
 
         _pictures.Add(new ViewerEntry(path, createdUtc));

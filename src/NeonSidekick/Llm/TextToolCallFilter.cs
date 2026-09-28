@@ -23,6 +23,12 @@ namespace NeonSidekick.Llm;
 /// become a call's start is held back until the next delta completes or disproves it. A call still open when the stream
 /// ends is dropped (<see cref="SawBroken"/>): half a call is no reply either. Everything else passes through in order.</para>
 ///
+/// <para>A quote opens a string only where a value or key starts — right after the <c>(</c>, or after <c>=</c>, <c>:</c>,
+/// <c>,</c>, <c>(</c>, <c>[</c> or <c>{</c> and any spaces (2026-09-28, code review): before, the apostrophe in
+/// <c>generate_image(prompt=a dog's party) Look!</c> opened a string that never closed, so the call swallowed the rest of the
+/// reply and the end of the stream dropped it all, text included. A quote mid-word (<c>dog's</c>, <c>12" vinyl</c>) is now
+/// just a character. What is still misread: an apostrophe that starts a word after a comma (<c>prompt=dogs, 'tis fine</c>).</para>
+///
 /// <para>The line form (later on 2026-09-25, the user's report: <c>generate_image prompt: score_9, …, messy background    width: 1024
 /// height: 1024</c> reached a <c>/botchat</c> transcript, spoken, no picture made): given the tools' parameter names, a line that
 /// starts with a tool's name (spaces or one backtick before it) and goes on, after an optional <c>:</c>, with one of that tool's
@@ -462,7 +468,7 @@ public sealed class TextToolCallFilter
                     _quote = '\0';
                 }
             }
-            else if (c is '"' or '\'')
+            else if (c is '"' or '\'' && AtValueStart())
             {
                 _quote = c;
             }
@@ -491,6 +497,18 @@ public sealed class TextToolCallFilter
         }
 
         return pos;
+    }
+
+    /// <summary>Whether a quote here would open a value or a key: nothing but spaces so far, or <c>= : , ( [ {</c> just before.</summary>
+    private bool AtValueStart()
+    {
+        int i = _arguments.Length - 1;
+        while (i >= 0 && char.IsWhiteSpace(_arguments[i]))
+        {
+            i--;
+        }
+
+        return i < 0 || _arguments[i] is '=' or ':' or ',' or '(' or '[' or '{';
     }
 
     /// <summary>
@@ -583,6 +601,11 @@ public sealed class TextToolCallFilter
     /// A written call's arguments as the tool reads them (2026-09-25): <c>key="value"</c> or <c>key: 'value'</c> pairs split by commas —
     /// quoted strings (<c>\" \' \\ \n</c> escapes), whole numbers, numbers, <c>true</c>/<c>false</c>, <c>null</c>/<c>None</c> (left out),
     /// or a bare word as a string — or one JSON object. Empty text is a call with no arguments. Null when it does not parse. Pure.
+    ///
+    /// <para>A bare value keeps its commas up to the next key (2026-09-28, code review): a comma ends it only when a key and the
+    /// same separator its own key used follow (<see cref="NextIsKey"/>), so <c>prompt=score_9, masterpiece, a castle, seed=7</c> is
+    /// a prompt and a seed. Before, the value stopped at the first comma, <c>masterpiece</c> was read as a key with no <c>=</c>,
+    /// and a call whose text was already cut from the reply was not run.</para>
     /// </summary>
     public static AIFunctionArguments? ParseArguments(string text)
     {
@@ -638,7 +661,7 @@ public sealed class TextToolCallFilter
                 return null;
             }
 
-            pos++;
+            char separator = t[pos++];
             SkipSpace(t, ref pos);
             if (pos < t.Length && t[pos] is '"' or '\'')
             {
@@ -651,8 +674,19 @@ public sealed class TextToolCallFilter
             }
             else
             {
-                int end = t.IndexOf(',', pos);
-                end = end < 0 ? t.Length : end;
+                int end = pos;
+                while (true)
+                {
+                    int comma = t.IndexOf(',', end);
+                    if (comma < 0 || NextIsKey(t, comma + 1, separator))
+                    {
+                        end = comma < 0 ? t.Length : comma;
+                        break;
+                    }
+
+                    end = comma + 1;
+                }
+
                 string raw = t[pos..end].Trim();
                 pos = end;
                 if (raw.Length == 0)
@@ -710,6 +744,25 @@ public sealed class TextToolCallFilter
         }
 
         return raw;
+    }
+
+    /// <summary>Whether a key (a word, or a quoted one) and then <paramref name="separator"/> follow <paramref name="pos"/>, spaces allowed.</summary>
+    private static bool NextIsKey(string t, int pos, char separator)
+    {
+        SkipSpace(t, ref pos);
+        if (pos == t.Length)
+        {
+            return false;
+        }
+
+        string? key = t[pos] is '"' or '\'' ? ReadQuoted(t, ref pos) : ReadIdentifier(t, ref pos);
+        if (string.IsNullOrEmpty(key))
+        {
+            return false;
+        }
+
+        SkipSpace(t, ref pos);
+        return pos < t.Length && t[pos] == separator;
     }
 
     private static void SkipSpace(string t, ref int pos)

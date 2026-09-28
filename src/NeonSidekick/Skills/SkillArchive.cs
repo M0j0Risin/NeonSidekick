@@ -226,12 +226,13 @@ public sealed class SkillArchive : IDisposable
     /// <summary>
     /// Every folder holding a <c>SKILL.md</c>, by folder path, under <paramref name="subPath"/> when
     /// one is given (the folder itself or below it). A candidate's files are those under its folder
-    /// less any nested skill's; each is vetted (<see cref="SkillCandidate.Refusal"/>).
+    /// less any nested skill's; each is vetted (<see cref="SkillCandidate.Refusal"/>). With <paramref name="exact"/>, only
+    /// <paramref name="subPath"/> itself (<c>""</c> the root): <see cref="SkillSource.OneSkill"/>'s link.
     /// </summary>
     /// <remarks>A listing offers only the folders whose SKILL.md was fetched (<see cref="FetchSkillMdsAsync"/>), or is over the cap and refused unread.</remarks>
-    public IReadOnlyList<SkillCandidate> Candidates(string? subPath = null)
+    public IReadOnlyList<SkillCandidate> Candidates(string? subPath = null, bool exact = false)
     {
-        var folders = SkillFolders(subPath).Where(f => _entries[SkillMdOf(f)] is var md && (md.Readable || md.Length > MaxSkillMdBytes)).ToList();
+        var folders = SkillFolders(subPath, exact).Where(f => _entries[SkillMdOf(f)] is var md && (md.Readable || md.Length > MaxSkillMdBytes)).ToList();
         var all = _entries.Keys.Where(k => k.EndsWith("/" + SkillCatalog.FileName, StringComparison.Ordinal) || k == SkillCatalog.FileName)
             .Select(k => k.Length == SkillCatalog.FileName.Length ? "" : k[..^(SkillCatalog.FileName.Length + 1)])
             .ToList();
@@ -242,16 +243,17 @@ public sealed class SkillArchive : IDisposable
     /// A listing's SKILL.md files under <paramref name="subPath"/>, fetched so <see cref="Candidates"/>
     /// can read them; with <paramref name="skillId"/>, only the folders of that name when there are
     /// any (a named skill costs one request, not one per skill). Null when done (always, for a zip),
-    /// else the error: a fetch that failed, or more than <see cref="MaxListedSkills"/> to fetch.
+    /// else the error: a fetch that failed, or more than <see cref="MaxListedSkills"/> to fetch. <paramref name="exact"/> is
+    /// <see cref="Candidates"/>'s.
     /// </summary>
-    public async Task<string?> FetchSkillMdsAsync(string? subPath, string? skillId, CancellationToken cancellationToken)
+    public async Task<string?> FetchSkillMdsAsync(string? subPath, string? skillId, CancellationToken cancellationToken, bool exact = false)
     {
         if (_fetch is null)
         {
             return null;
         }
 
-        var folders = SkillFolders(subPath);
+        var folders = SkillFolders(subPath, exact);
         if (skillId is not null && folders.Where(f => f[(f.LastIndexOf('/') + 1)..] == skillId).ToList() is { Count: > 0 } named)
         {
             folders = named;
@@ -300,10 +302,10 @@ public sealed class SkillArchive : IDisposable
 
     private static string SkillMdOf(string folder) => folder.Length == 0 ? SkillCatalog.FileName : folder + "/" + SkillCatalog.FileName;
 
-    /// <summary>Every folder holding a <c>SKILL.md</c> within <see cref="MaxDepth"/>, outside the skipped folders, under <paramref name="subPath"/> when one is given; sorted.</summary>
-    private List<string> SkillFolders(string? subPath)
+    /// <summary>Every folder holding a <c>SKILL.md</c> within <see cref="MaxDepth"/>, outside the skipped folders, under <paramref name="subPath"/> when one is given (only it, <paramref name="exact"/>); sorted.</summary>
+    private List<string> SkillFolders(string? subPath, bool exact = false)
     {
-        string? under = string.IsNullOrWhiteSpace(subPath) ? null : subPath.Trim('/');
+        string? under = exact ? subPath?.Trim('/') ?? "" : string.IsNullOrWhiteSpace(subPath) ? null : subPath.Trim('/');
         var folders = new List<string>();
         foreach (string name in _entries.Keys)
         {
@@ -314,7 +316,7 @@ public sealed class SkillArchive : IDisposable
             }
 
             string folder = string.Join('/', segments[..^1]);
-            if (under is not null && !(folder == under || folder.StartsWith(under + "/", StringComparison.Ordinal)))
+            if (under is not null && !(folder == under || (!exact && folder.StartsWith(under + "/", StringComparison.Ordinal))))
             {
                 continue;
             }

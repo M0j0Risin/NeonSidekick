@@ -147,6 +147,53 @@ public partial class ChatScreenTests
     }
 
     /// <summary>
+    /// A <c>/botchat</c> and a <c>/profile</c> typed under a reply, both queued (2026-09-28, code review): the chat's first
+    /// interjection read took the <c>/profile</c> as the user's words — echoed, sent to the bots — and it never ran. Now it
+    /// waits for the idle line and runs when the chat ends.
+    /// </summary>
+    [Fact]
+    public async Task BotChat_ACommandQueuedBehindIt_RunsWhenTheChatEnds_NeverSentToTheBots()
+    {
+        BotChatFixture();
+        WorkProfile();
+        MidTurnFixture(_ => { });
+        _chat.EnqueueText("Hello from Neon.");
+        _chat.EnqueueText("Hello from Ada.");
+        _chat.EnqueueText("Neon ", "again.");
+        _chat.BeforeUpdate = async (i, ct) =>
+        {
+            if (_chat.Requests.Count == 1 && i == 1)
+            {
+                PushLine("/botchat ada the best pizza");
+                PushLine("/profile work");
+                // Both queued before the reply ends: a line still being typed then is typed under the chat, a path that was right.
+                for (int wait = 0; wait < 1000 && !Output.Contains(ChatScreen.QueuedHintPart(2), StringComparison.Ordinal); wait++)
+                {
+                    await Task.Delay(10, CancellationToken.None);
+                }
+            }
+            else if (_chat.Requests.Count == 4 && i == 1)
+            {
+                // The chat's stop, as EscDuringRequest's.
+                _scripted!.Push(Keys.Escape, Keys.Escape);
+                while (!ct.IsCancellationRequested)
+                {
+                    await Task.Delay(5, CancellationToken.None);
+                }
+            }
+        };
+
+        string output = await RunAsync();
+
+        Assert.Equal(4, _chat.Requests.Count);
+        Assert.Equal(BotChat.OpeningText(["ada"], "the best pizza"), _chat.Requests[1][^1].Text);
+        Assert.DoesNotContain(_chat.Requests.Skip(1), request => request.Any(m => m.Text.Contains("/profile", StringComparison.Ordinal)));
+        Assert.True(output.IndexOf(BotChat.StartNotice(["default", "ada"], "the best pizza"), StringComparison.Ordinal)
+            < output.IndexOf(SettingsMenu.SwitchedNotice("work"), StringComparison.Ordinal));
+        Assert.Equal("work", _settings.ProfileName);
+    }
+
+    /// <summary>
     /// Speech on, the pane up: the first bot's reply is still being heard (its first sentence held in the synthesizer)
     /// when a line is sent. The user's report (later on 2026-09-24): it stayed type-ahead until ESC, then went to the main
     /// chat. Now it shows at once and the next bot answers it; the bot speaking was let finish.

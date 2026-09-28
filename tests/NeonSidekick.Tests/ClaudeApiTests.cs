@@ -423,6 +423,32 @@ public class ClaudeApiTests
         }
     }
 
+    /// <summary>2026-09-28, code review: the busy retry was the first attempt's alone, so a 529 after the stripped resend failed.</summary>
+    [Fact]
+    public async Task Client_ABusyApi_AfterTheThinkingWasDropped_IsStillTriedOnceMore()
+    {
+        var refused = () => StubHttpMessageHandler.Json(HttpStatusCode.BadRequest, "{\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"thinking block signature does not match the conversation prefix\"}}");
+        var busy = () =>
+        {
+            var response = StubHttpMessageHandler.Json((HttpStatusCode)529, "{\"type\":\"error\",\"error\":{\"type\":\"overloaded_error\",\"message\":\"Overloaded\"}}");
+            response.Headers.RetryAfter = new System.Net.Http.Headers.RetryConditionHeaderValue(TimeSpan.Zero);
+            return response;
+        };
+        var (client, stub) = Client(refused, busy, () => Stream(Sse(MessageStart, Stop("end_turn"), MessageStop)));
+        using var _client = client;
+        ChatMessage[] history =
+        [
+            new(ChatRole.User, "go"),
+            new(ChatRole.Assistant, [new TextReasoningContent("hm"), new TextReasoningContent("") { ProtectedData = "SIG" }, new FunctionCallContent("toolu_1", "clock")]),
+            new(ChatRole.Tool, [new FunctionResultContent("toolu_1", "(pruned)")]),
+        ];
+
+        await client.GetResponseAsync(history);
+
+        Assert.Equal(3, stub.Requests.Count);
+        Assert.DoesNotContain("\"signature\"", stub.Requests[2].Body);
+    }
+
     // ── The probe and the session ───────────────────────────────────────────
 
     private const string ModelsList = "{\"data\":[{\"type\":\"model\",\"id\":\"claude-opus-5-5\",\"display_name\":\"Claude Opus 5.5\",\"max_input_tokens\":1000000,\"max_tokens\":128000},{\"type\":\"model\",\"id\":\"claude-haiku-4-5\",\"display_name\":\"Claude Haiku 4.5\",\"max_input_tokens\":200000}],\"has_more\":false}";

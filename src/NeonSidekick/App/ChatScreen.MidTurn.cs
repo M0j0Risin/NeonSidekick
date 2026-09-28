@@ -212,13 +212,18 @@ internal sealed partial class ChatScreen
             case MidTurnClass.Deferred:
                 // Runs when the reply ends (later on 2026-09-27; dropped before): queued as a message is, so it keeps its place
                 // behind lines typed before it; pending under /botchat, whose queue is read as the user's interjections.
-                Post(() => _transcript.Notice(MidTurnDeferredNotice(CommandWord(text))));
-                if (line.Line is { } deferred)
+                // A line with no live row behind it is left where it was, as QueueLine leaves a message (2026-09-28, code
+                // review: the notice promised a run and nothing held the line). No such line reaches here today — the clicked
+                // words are all panes, and every watch in the app hands the editor in.
+                if (line.Line is not { } deferred)
                 {
-                    if (_botChatRunning || !QueueLine(line))
-                    {
-                        Pend(deferred);
-                    }
+                    return false;
+                }
+
+                Post(() => _transcript.Notice(MidTurnDeferredNotice(CommandWord(text))));
+                if (_botChatRunning || !QueueLine(line))
+                {
+                    Pend(deferred);
                 }
 
                 return true;

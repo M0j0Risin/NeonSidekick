@@ -65,6 +65,11 @@ public class SkillArchiveTests
         Assert.Equal(["notes.md", "SKILL.md"], outer.Files.Select(f => f.Path));
         Assert.Equal(["inner"], archive.Candidates("inner/").Select(c => c.Folder));
         Assert.Empty(archive.Candidates("nowhere"));
+
+        // A /blob/…/SKILL.md link (2026-09-28): that folder alone, the root's too.
+        Assert.Equal([""], archive.Candidates("", exact: true).Select(c => c.Folder));
+        Assert.Equal([""], archive.Candidates(null, exact: true).Select(c => c.Folder));
+        Assert.Equal(["inner"], archive.Candidates("inner", exact: true).Select(c => c.Folder));
     }
 
     [Fact]

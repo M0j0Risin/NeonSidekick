@@ -75,6 +75,21 @@ public class TextToolCallFilterTests
         Assert.True(filter.SawBroken);
     }
 
+    /// <summary>2026-09-28, code review: a quote mid-word opened a string that never closed, and the rest of the reply was lost.</summary>
+    [Theory]
+    [InlineData("Look! generate_image(prompt=a dog's birthday party) Isn't it nice?", "prompt=a dog's birthday party")]
+    [InlineData("Look! generate_image(prompt=a 12\" vinyl, seed=7) Isn't it nice?", "prompt=a 12\" vinyl, seed=7")]
+    public void AQuoteMidWord_OpensNoString_WholeOrSplitAnywhere(string reply, string arguments)
+    {
+        for (int i = 0; i < reply.Length; i++)
+        {
+            var (text, filter) = i == 0 ? Run(reply) : Run(reply[..i], reply[i..]);
+            Assert.Equal("Look! Isn't it nice?", text);
+            Assert.Equal([(Tool, arguments)], filter.Calls);
+            Assert.False(filter.SawBroken);
+        }
+    }
+
     [Fact]
     public void ParseArguments_ReadsKeyValuePairs()
     {
@@ -109,6 +124,23 @@ public class TextToolCallFilterTests
     public void ParseArguments_IsNull_ForWhatDoesNotParse(string text)
     {
         Assert.Null(TextToolCallFilter.ParseArguments(text));
+    }
+
+    /// <summary>2026-09-28, code review: a bare prompt's commas ended it, and the call was not run.</summary>
+    [Fact]
+    public void ParseArguments_ABareValue_KeepsItsCommas_UntilTheNextKey()
+    {
+        var alone = TextToolCallFilter.ParseArguments("prompt=score_9, masterpiece, a castle")!;
+        Assert.Equal("score_9, masterpiece, a castle", alone["prompt"]);
+
+        var then = TextToolCallFilter.ParseArguments("prompt=score_9, masterpiece, a castle, seed = 7, 'negative'=blur")!;
+        Assert.Equal("score_9, masterpiece, a castle", then["prompt"]);
+        Assert.Equal(7L, then["seed"]);
+        Assert.Equal("blur", then["negative"]);
+
+        var colons = TextToolCallFilter.ParseArguments("prompt: a castle, at dusk, seed: 7")!;
+        Assert.Equal("a castle, at dusk", colons["prompt"]);
+        Assert.Equal(7L, colons["seed"]);
     }
 
     // ── The line form (later on 2026-09-25, the user's report from /botchat) ──

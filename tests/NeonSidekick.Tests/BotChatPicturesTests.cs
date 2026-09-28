@@ -94,6 +94,8 @@ public class BotChatPicturesTests
     [InlineData("REWORK 9\na red fox", true, "a red fox", "b.png")]  // a number naming none: the latest
     [InlineData("```\nREWORK 2\n\"a red fox\"\n```", true, "a red fox", "b.png")]
     [InlineData("REWORKED foxes", true, "REWORKED foxes", null)]    // a word, not the line
+    [InlineData("Rework of an old castle at dusk", true, "Rework of an old castle at dusk", null)]  // a fresh prompt's first word
+    [InlineData("rework: a red fox", true, "a red fox", "b.png")]   // any case with a mark after it
     public void ParseImagePrompt_ReadsTheReworkLine(string text, bool fresh, string prompt, string? path)
     {
         var (read, rework) = BotChat.ParseImagePrompt(text, Two, fresh);

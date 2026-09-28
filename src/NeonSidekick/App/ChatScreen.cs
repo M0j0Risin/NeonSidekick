@@ -9353,6 +9353,7 @@ internal sealed partial class ChatScreen
                 // Preloaded skills (2026-09-27, the user's ask): read by the app, no load_skill needed; the bots get them under prompt-writer-and-bots.
                 var skillMode = BotChatSkillMode.Resolve(effective);
                 var (preloadedNames, preloaded) = BotPreloadedSkills(effective, topic);
+                var botSkills = new BotSkillSet(skills, skillTool, preloaded);
                 string preloadedNotice = preloadedNames.Count == 0 ? "" : BotChat.PreloadedNotice(preloadedNames, skillMode);
                 if (preloadedNotice.Length > 0 && !string.Equals(preloadedNotice, preloadedTold, StringComparison.Ordinal))
                 {
@@ -9437,7 +9438,7 @@ internal sealed partial class ChatScreen
                     string written = BotChat.ReplyText(collected);
                     if (written.Length > 0 && !collected.Any(e => e is TurnEvent.Notice { IsError: true }))
                     {
-                        picture = await PaintBotPictureAsync(assistant, bot, written, topic, effective, pictureCts.Token).ConfigureAwait(false);
+                        picture = await PaintBotPictureAsync(assistant, bot, written, topic, effective, botSkills, pictureCts.Token).ConfigureAwait(false);
                         if (cancellationToken.IsCancellationRequested)
                         {
                             break;
@@ -9487,7 +9488,7 @@ internal sealed partial class ChatScreen
 
                 if (pictured && BotChatImageMode.Draws(imageMode) && !held && reply.Length > 0)
                 {
-                    await DrawBotPictureAsync(assistant, bot, reply, topic, effective, pictures, pacer, pictureCts.Token).ConfigureAwait(false);
+                    await DrawBotPictureAsync(assistant, bot, reply, topic, effective, botSkills, pictures, pacer, pictureCts.Token).ConfigureAwait(false);
                     if (cancellationToken.IsCancellationRequested)
                     {
                         break;
@@ -9503,9 +9504,9 @@ internal sealed partial class ChatScreen
                 {
                     if (effective.BotChatImageAsync)
                     {
-                        await DrawBotPictureAsync(assistant, bot, reply, topic, effective, pictures, pacer, pictureCts.Token, promised: true).ConfigureAwait(false);
+                        await DrawBotPictureAsync(assistant, bot, reply, topic, effective, botSkills, pictures, pacer, pictureCts.Token, promised: true).ConfigureAwait(false);
                     }
-                    else if (await PaintBotPictureAsync(assistant, bot, reply, topic, effective, pictureCts.Token, promised: true).ConfigureAwait(false) is { } promised)
+                    else if (await PaintBotPictureAsync(assistant, bot, reply, topic, effective, botSkills, pictureCts.Token, promised: true).ConfigureAwait(false) is { } promised)
                     {
                         // The reply has streamed already: its picture goes under it.
                         ShowBotPicture(bot, promised, late: false);
@@ -9704,6 +9705,13 @@ internal sealed partial class ChatScreen
         return (names, BotChat.PreloadedSkillsSection(contents));
     }
 
+    /// <summary>
+    /// One <c>/botchat</c> reply's skills (2026-09-28, code review): <see cref="BotSkills"/>' and <see cref="BotPreloadedSkills"/>'
+    /// section, read once per reply and handed to the picture's prompt writer. Before, the writer read them again — the catalog
+    /// scanned twice more and every preloaded skill's files read twice per reply, and a skill that could not be read logged twice.
+    /// </summary>
+    private sealed record BotSkillSet(IReadOnlyList<Skill>? Skills, AIFunction? Tool, string Preloaded);
+
     /// <summary>Whether <see cref="BotChat.NoWorkflowNotice"/> was shown this chat: once is enough.</summary>
     private bool _botNoWorkflowTold;
 
@@ -9746,9 +9754,9 @@ internal sealed partial class ChatScreen
     /// <see cref="BotPicturePacer.Applies"/>, read at the send) the generation goes through <paramref name="pacer"/>: after
     /// the one before it, and a second after that one was made.
     /// </summary>
-    private async Task DrawBotPictureAsync(Assistant assistant, BotParticipant bot, string reply, string topic, AppSettingsData effective, List<(BotParticipant Bot, Task<ComfyGeneration?> Job)> pictures, BotPicturePacer pacer, CancellationToken pictureToken, bool promised = false)
+    private async Task DrawBotPictureAsync(Assistant assistant, BotParticipant bot, string reply, string topic, AppSettingsData effective, BotSkillSet botSkills, List<(BotParticipant Bot, Task<ComfyGeneration?> Job)> pictures, BotPicturePacer pacer, CancellationToken pictureToken, bool promised = false)
     {
-        if (await WriteBotPictureAsync(assistant, bot, reply, topic, effective, pictureToken, promised).ConfigureAwait(false) is { } job)
+        if (await WriteBotPictureAsync(assistant, bot, reply, topic, effective, botSkills, pictureToken, promised).ConfigureAwait(false) is { } job)
         {
             bool paced = BotPicturePacer.Applies(_effective(), _speech.IsReady);
             // Counted on the strip from the send to its end (2026-09-27): the chat goes on meanwhile, with no spinner of its own.
@@ -9761,9 +9769,9 @@ internal sealed partial class ChatScreen
     /// (<see cref="WriteBotPictureAsync"/>), then the generation under a spinner, not drawn — <see cref="RunTurnAsync"/> draws
     /// it under the speaker's name, above the reply. Null when there is no picture; ESC skips it alone, the reply still shows.
     /// </summary>
-    private async Task<ComfyGeneration?> PaintBotPictureAsync(Assistant assistant, BotParticipant bot, string reply, string topic, AppSettingsData effective, CancellationToken pictureToken, bool promised = false)
+    private async Task<ComfyGeneration?> PaintBotPictureAsync(Assistant assistant, BotParticipant bot, string reply, string topic, AppSettingsData effective, BotSkillSet botSkills, CancellationToken pictureToken, bool promised = false)
     {
-        if (await WriteBotPictureAsync(assistant, bot, reply, topic, effective, pictureToken, promised).ConfigureAwait(false) is not { } job)
+        if (await WriteBotPictureAsync(assistant, bot, reply, topic, effective, botSkills, pictureToken, promised).ConfigureAwait(false) is not { } job)
         {
             return null;
         }
@@ -9787,8 +9795,9 @@ internal sealed partial class ChatScreen
     /// with its notice, when there is no workflow, no prompt came back, or ESC skipped it; the chat goes on.
     /// <paramref name="promised"/> (2026-09-25, <c>autonomous</c>: a picture the bot talked about but did not draw) asks the
     /// promised-picture form instead, and its <see cref="BotChat.NoPictureAnswer"/> is no picture, quietly.
+    /// <paramref name="botSkills"/> is the reply's own (2026-09-28, code review): read once by the loop, not scanned again here.
     /// </summary>
-    private async Task<ComfyRequest?> WriteBotPictureAsync(Assistant assistant, BotParticipant bot, string reply, string topic, AppSettingsData effective, CancellationToken pictureToken, bool promised = false)
+    private async Task<ComfyRequest?> WriteBotPictureAsync(Assistant assistant, BotParticipant bot, string reply, string topic, AppSettingsData effective, BotSkillSet botSkills, CancellationToken pictureToken, bool promised = false)
     {
         // A fresh picture, or (2026-09-27, the user's ask) a rework of one of the chat's pictures: the prompt writer's choice.
         var (fresh, rework, candidates) = BotWorkflows(effective);
@@ -9804,10 +9813,9 @@ internal sealed partial class ChatScreen
         }
 
         // Skills (2026-09-27, the user's report: the first picture was prompted before any skill could be loaded): the bots'
-        // own gate and catalog, so a topic naming the skill for pictures is obeyed before the prompt is written.
-        var (skills, skillTool) = BotSkills(effective);
-        // The preloaded skills (2026-09-27) in either Botchat skill mode: the writer always gets them.
-        var (_, preloaded) = BotPreloadedSkills(effective, topic);
+        // own gate and catalog, so a topic naming the skill for pictures is obeyed before the prompt is written. The preloaded
+        // skills (2026-09-27) in either Botchat skill mode: the writer always gets them. Both the reply's, read by the loop.
+        var (skills, skillTool, preloaded) = botSkills;
         string system = BotChat.PictureInstruction(promised, fresh, rework, candidates) + (preloaded.Length == 0 ? "" : "\n\n" + preloaded);
         var request = new List<ChatMessage>
         {
@@ -10123,11 +10131,23 @@ internal sealed partial class ChatScreen
         return ended;
     }
 
-    /// <summary>The lines queued under a <c>/botchat</c> reply or its speech: each echoed as the user's row and added to the chat, in order.</summary>
+    /// <summary>
+    /// The lines queued under a <c>/botchat</c> reply or its speech: each echoed as the user's row and added to the chat, in order.
+    ///
+    /// <para>A command is no interjection (2026-09-28, code review): one queued under the reply before the chat began — a
+    /// <c>/profile</c> typed after the <c>/botchat</c> — was echoed and sent to the bots as the user's words, and never ran. It
+    /// waits for the idle line as a command typed under the chat does; the lines after it are still taken.</para>
+    /// </summary>
     private void TakeInterjections(List<BotChatLine> lines)
     {
         while (!_queue.Held && _queue.TryDequeue(out var queued))
         {
+            if (queued.Line.CommandText is { } command && ParseLine(command).Command != SlashCommand.None)
+            {
+                Pend(queued.Line);
+                continue;
+            }
+
             _transcript.User(queued.Label);
             lines.Add(new BotChatLine(BotChat.UserName, queued.Label, IsUser: true));
         }

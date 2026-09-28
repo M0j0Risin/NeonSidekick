@@ -26,8 +26,12 @@ public enum SkillSourceKind
 /// the fallback (<see cref="SkillHub.OpenAsync"/>). The path only narrows where the repository is
 /// searched; a branch name with a <c>/</c> in it cannot be told from the path after it and is not
 /// supported (the first segment after <c>tree</c> is the ref). Pure.
+///
+/// <para><see cref="OneSkill"/> (2026-09-28, code review): a <c>/blob/…/SKILL.md</c> link is that one folder, not the folder
+/// and below it — and at the repository's root, <see cref="SubPath"/> <c>""</c>, not the whole repository. Before, a root
+/// SKILL.md's link left the path unset, so every skill in the repository was offered, or a large one refused as too many.</para>
 /// </summary>
-public sealed record SkillSource(SkillSourceKind Kind, string? Query = null, string? Owner = null, string? Repo = null, string Ref = SkillSource.DefaultRef, string? SubPath = null, string? SkillId = null, Uri? ZipUrl = null)
+public sealed record SkillSource(SkillSourceKind Kind, string? Query = null, string? Owner = null, string? Repo = null, string Ref = SkillSource.DefaultRef, string? SubPath = null, string? SkillId = null, Uri? ZipUrl = null, bool OneSkill = false)
 {
     /// <summary>The ref codeload resolves to the default branch.</summary>
     public const string DefaultRef = "HEAD";
@@ -188,7 +192,9 @@ public sealed record SkillSource(SkillSourceKind Kind, string? Query = null, str
                 return false;
             }
 
-            source = new SkillSource(SkillSourceKind.GitHub, Owner: owner, Repo: repo, Ref: parts[3], SubPath: rest.Count == 0 ? null : string.Join('/', rest));
+            source = parts[2] == "blob"
+                ? new SkillSource(SkillSourceKind.GitHub, Owner: owner, Repo: repo, Ref: parts[3], SubPath: string.Join('/', rest), OneSkill: true)
+                : new SkillSource(SkillSourceKind.GitHub, Owner: owner, Repo: repo, Ref: parts[3], SubPath: rest.Count == 0 ? null : string.Join('/', rest));
             return true;
         }
 

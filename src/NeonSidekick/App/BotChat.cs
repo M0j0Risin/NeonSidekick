@@ -554,10 +554,14 @@ public static partial class BotChat
     }
 
     /// <summary>
-    /// An image-prompt answer read (2026-09-27): a first line <see cref="ReworkAnswer"/> (any case, a number after it, stray
-    /// marks around it) takes that candidate — a number that names none takes the latest — and the rest is the prompt; no such
-    /// line is a fresh picture when <paramref name="fresh"/>, else a rework of the latest. No candidate, no rework. The prompt
-    /// is <see cref="CleanImagePrompt"/>'s. Pure.
+    /// An image-prompt answer read (2026-09-27): a first line <see cref="ReworkAnswer"/> (a number after it, stray marks around
+    /// it) takes that candidate — a number that names none takes the latest — and the rest is the prompt; no such line is a fresh
+    /// picture when <paramref name="fresh"/>, else a rework of the latest. No candidate, no rework. The prompt is
+    /// <see cref="CleanImagePrompt"/>'s. Pure.
+    ///
+    /// <para>The word is <c>REWORK</c> in capitals, as the request spells it, or in any case only with a number, a <c>#</c>, a mark
+    /// or the line's end after it (2026-09-28, code review): with the case ignored, a fresh prompt such as <c>Rework of an old
+    /// castle at dusk</c> reworked the latest picture and lost its first word. <c>**Rework #1:**</c> is still read.</para>
     /// </summary>
     public static (string Prompt, ReworkPicture? Rework) ParseImagePrompt(string? text, IReadOnlyList<ReworkPicture> candidates, bool fresh)
     {
@@ -578,7 +582,7 @@ public static partial class BotChat
         return (CleanImagePrompt(rest), chosen);
     }
 
-    [GeneratedRegex(@"^\W*REWORK\b[\s#:*.\-–—]*(?<n>\d+)?[\s:*.\-–—]*(?<rest>.*)$", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"^\W*(?:REWORK\b|(?i:rework)(?=\s*(?:[#:*.\-–—\d]|$)))[\s#:*.\-–—]*(?<n>\d+)?[\s:*.\-–—]*(?<rest>.*)$", RegexOptions.CultureInvariant)]
     private static partial Regex ReworkFirstLine();
 
     /// <summary>

@@ -133,16 +133,16 @@ public sealed class SkillInstallFlow
         using (archive)
         {
             if (archive.Remote
-                && await host.SpinAsync(SkillInstallText.ReadingSkillsLabel(source.Label), () => archive.FetchSkillMdsAsync(source.SubPath, source.SkillId, cancellationToken)).ConfigureAwait(false) is { } unread)
+                && await host.SpinAsync(SkillInstallText.ReadingSkillsLabel(source.Label), () => archive.FetchSkillMdsAsync(source.SubPath, source.SkillId, cancellationToken, source.OneSkill)).ConfigureAwait(false) is { } unread)
             {
                 host.Error(unread);
                 return false;
             }
 
-            var candidates = archive.Candidates(source.SubPath);
+            var candidates = archive.Candidates(source.SubPath, source.OneSkill);
             if (candidates.Count == 0)
             {
-                host.Error(SkillInstallText.NoSkillsError(source.Label + (source.SubPath is null ? "" : "/" + source.SubPath)));
+                host.Error(SkillInstallText.NoSkillsError(source.Label + (string.IsNullOrEmpty(source.SubPath) ? "" : "/" + source.SubPath)));
                 return false;
             }
 

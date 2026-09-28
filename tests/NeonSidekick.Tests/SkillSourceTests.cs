@@ -72,10 +72,15 @@ public class SkillSourceTests
         Assert.Equal("anthropics/skills@main", tree.Label);
 
         var blob = Parse("https://github.com/anthropics/skills/blob/v2/skills/pdf/SKILL.md");
-        Assert.Equal(("v2", "skills/pdf"), (blob.Ref, blob.SubPath));
+        Assert.Equal(("v2", "skills/pdf", true), (blob.Ref, blob.SubPath, blob.OneSkill));
+
+        // 2026-09-28, code review: a root SKILL.md's link is that skill, not the whole repository.
+        var blobRoot = Parse("https://github.com/o/r/blob/main/SKILL.md");
+        Assert.Equal(("main", "", true), (blobRoot.Ref, blobRoot.SubPath, blobRoot.OneSkill));
 
         var treeRoot = Parse("https://github.com/o/r/tree/dev");
-        Assert.Equal(("dev", (string?)null), (treeRoot.Ref, treeRoot.SubPath));
+        Assert.Equal(("dev", (string?)null, false), (treeRoot.Ref, treeRoot.SubPath, treeRoot.OneSkill));
+        Assert.False(tree.OneSkill);
     }
 
     [Fact]

@@ -104,6 +104,29 @@ public sealed class ViewerTests : IDisposable
         Assert.Equal(@"D:\pics\b.png", state.Current);
     }
 
+    /// <summary>2026-09-28, code review: holding the second newest, the newest written again pulled the view to it.</summary>
+    [Fact]
+    public void Add_OfTheNewestAgain_WhileHeld_KeepsTheHeldPicture()
+    {
+        var state = ThreePictures();
+        Assert.True(state.Browse(ViewerAction.Previous));
+
+        Assert.False(state.Add(@"D:\pics\c.png", T0.AddMinutes(9)));
+        Assert.Equal(@"D:\pics\b.png", state.Current);
+        Assert.False(state.Live);
+    }
+
+    [Fact]
+    public void Add_OfTheHeldSecondNewest_ShowsTheOneAfter_StillHeld()
+    {
+        var state = ThreePictures();
+        Assert.True(state.Browse(ViewerAction.Previous));
+
+        Assert.True(state.Add(@"D:\pics\b.png", T0.AddMinutes(9)));
+        Assert.Equal(@"D:\pics\c.png", state.Current);
+        Assert.False(state.Live);
+    }
+
     [Fact]
     public void Remove_KeepsTheHeldPicture_WhenAnOlderOneGoes()
     {

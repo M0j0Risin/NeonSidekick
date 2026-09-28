@@ -25,6 +25,10 @@ namespace NeonSidekick.Llm.Anthropic;
 /// <c>withoutThinking</c>). The request normally sends back only the turn in flight's blocks, which nothing edits —
 /// except the mid-turn prune (<c>LLM tool compact type</c>), which rewrites that turn's tool results under them; the
 /// model then carries on without the reasoning of the calls so far, which beats a failed turn.</para>
+///
+/// <para>The two are independent (2026-09-28, code review): the busy retry was the first attempt's alone, so a 429 or 529
+/// answering the stripped resend failed the turn. Each now happens at most once whichever comes first, three requests at
+/// most.</para>
 /// </summary>
 public sealed class AnthropicChatClient : IChatClient
 {
@@ -173,8 +177,9 @@ public sealed class AnthropicChatClient : IChatClient
 
     private async Task<HttpResponseMessage> SendAsync(byte[] body, Func<byte[]> withoutThinking, CancellationToken cancellationToken)
     {
+        bool retriedBusy = false;
         bool stripped = false;
-        for (int attempt = 0; ; attempt++)
+        while (true)
         {
             using var request = new HttpRequestMessage(HttpMethod.Post, _messagesUrl) { Content = new ByteArrayContent(body) };
             request.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
@@ -194,8 +199,9 @@ public sealed class AnthropicChatClient : IChatClient
                 delay = RetryDelay(response);
             }
 
-            if (attempt == 0 && IsRetryable((HttpStatusCode)status))
+            if (!retriedBusy && IsRetryable((HttpStatusCode)status))
             {
+                retriedBusy = true;
                 DiagnosticLog.Warn(Category, $"The Claude API answered {status.ToString(CultureInfo.InvariantCulture)}; retrying once in {delay.TotalSeconds.ToString("0.#", CultureInfo.InvariantCulture)} s.");
                 await Task.Delay(delay, _time, cancellationToken).ConfigureAwait(false);
                 continue;
@@ -220,7 +226,14 @@ public sealed class AnthropicChatClient : IChatClient
     /// <summary>The log line of the thinking recovery. Pinned.</summary>
     public const string ThinkingDroppedWarning = "The Claude API refused the thinking sent back (the turn was edited under it); retrying once without it.";
 
-    /// <summary>A 400 whose message names thinking or a signature: the one the stripped retry answers.</summary>
+    /// <summary>
+    /// A 400 whose message names thinking or a signature: the one the stripped retry answers.
+    ///
+    /// <para>Left this wide on purpose (2026-09-28, code review, which asked for "signature" alone): the API's refusal of an
+    /// edited turn does not always name the signature ("thinking blocks … cannot be modified"), and a failed turn costs more
+    /// than the one wasted resend a 400 about something else gets — only when there was thinking to strip, since
+    /// <see cref="SendAsync"/> resends nothing that would be the same body.</para>
+    /// </summary>
     internal static bool IsThinkingRefusal(int status, string body) =>
         status == 400 && (body.Contains("thinking", StringComparison.OrdinalIgnoreCase) || body.Contains("signature", StringComparison.OrdinalIgnoreCase));
 

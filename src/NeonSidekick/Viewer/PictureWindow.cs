@@ -132,6 +132,7 @@ internal sealed unsafe class PictureWindowThread
     private Thread? _thread;
     private IntPtr _hwnd;
     private string? _failure;
+    private bool _started;
     private volatile bool _alive = true;
     private string? _pendingFolder;
     private string? _pendingSelect;
@@ -165,12 +166,19 @@ internal sealed unsafe class PictureWindowThread
 
     public bool Alive => _alive;
 
-    /// <summary>The thread started and the window made; throws with the reason when it could not be.</summary>
+    /// <summary>
+    /// The thread started and the window made; throws with the reason when it could not be.
+    ///
+    /// <para>Success is <c>_started</c>, set as the window's setup's last step, not a window handle (2026-09-28, code review): a
+    /// failure after the window was made (the first folder's listing throwing, say) ended the thread with the handle still set,
+    /// so this returned, the dead window was kept and the chat said it had opened. <c>_ready</c>'s set and wait carry the flag
+    /// across the threads.</para>
+    /// </summary>
     public void Start()
     {
         _thread = new Thread(Run) { IsBackground = true, Name = "Picture viewer" };
         _thread.Start();
-        if (!_ready.Wait(TimeSpan.FromSeconds(10)) || _hwnd == IntPtr.Zero)
+        if (!_ready.Wait(TimeSpan.FromSeconds(10)) || !_started)
         {
             throw new InvalidOperationException(_failure ?? "the window did not start");
         }
@@ -334,6 +342,7 @@ internal sealed unsafe class PictureWindowThread
             ShowWindow(_hwnd, SwShow);
             BringForward();
             DiagnosticLog.Info("Viewer", $"Picture viewer opened on {_startFolder}.");
+            _started = true;
             _ready.Set();
 
             Msg msg;
@@ -351,6 +360,12 @@ internal sealed unsafe class PictureWindowThread
         finally
         {
             _alive = false;
+            if (!_started && _hwnd != IntPtr.Zero)
+            {
+                // Made but never set up: gone before the handle its procedure reads is freed.
+                DestroyWindow(_hwnd);
+            }
+
             _watcher?.Dispose();
             _load?.Cancel();
             if (_background != IntPtr.Zero)
