@@ -73,8 +73,8 @@ Commands typed while a reply runs:
 
 | Behaviour | Commands |
 |---|---|
-| Open their pane over the reply | `/help`, `/settings`, `/tools`, `/mcp`, `/sys`, `/usage`, `/about`, `/memory`, `/queue`, `/sessions`, `/skills`, `/reasoning`, `/cmdlist`, `/police`, `/emptytrash`, `/cmdclear`, `/tree`, `/vault`, `/cmdcopy`, `/keycopy`, `/persona`, `/operata`, `/vocalia` |
-| Run at once | `/tts`, `/stt`, `/wake`, `/interrupt`, `/reasoning <level>`, `/queue clear`, `/copy`, `/remember`, `/explore`, `/log`, `/timer`, `/expand`, `/collapse`, `/window`, `/cwd`, `/comfy view`, `/view <path>` |
+| Open their pane over the reply | `/help`, `/settings`, `/tools`, `/mcp`, `/sys`, `/usage`, `/about`, `/memory`, `/queue`, `/sessions`, `/skills`, `/reasoning`, `/sampling`, `/cmdlist`, `/police`, `/emptytrash`, `/cmdclear`, `/tree`, `/vault`, `/cmdcopy`, `/keycopy`, `/persona`, `/operata`, `/vocalia` |
+| Run at once | `/tts`, `/stt`, `/wake`, `/interrupt`, `/reasoning <level>`, `/sampling <field> <value>`, `/queue clear`, `/copy`, `/remember`, `/explore`, `/log`, `/timer`, `/expand`, `/collapse`, `/window`, `/cwd`, `/comfy view`, `/view <path>` |
 | Stop the reply first | `/clear`, `/new`, `/splash`, `/exit` |
 | Everything else | Waits for the reply to end, queued behind any earlier messages (so *Queue cancel mode* applies) |
 
@@ -173,6 +173,24 @@ Settings that an environment variable or flag can override for one launch are li
 | LLM use fun verbs | The thinking spinner reads a random verb instead of `thinking` / `writing`. | off |
 | LLM show thinking | Streams a reasoning model's thinking as a dim block (its last five lines), folded to `▸ 💭 thought for 4.2s` when the answer starts; needs Transcript markdown. Click the line, press Ctrl+O or use `/expand` to see it again. Thinking is never spoken or logged, and copied only by `/copy --thinking`. | on |
 | LLM preserve thinking | Sends the model's thinking from earlier turns back to a local server, as `reasoning_content`, and asks the chat template to keep it (`chat_template_kwargs`: `preserve_thinking` for Qwen3.6, `clear_thinking: false` for GLM). The current turn's thinking always goes back, so a model keeps its reasoning between tool calls. Costs context; a `/compact` prune drops older thinking first. The Claude API is not affected. | off |
+| LLM sampling | Sampling overrides per model (temperature, top_p, top_k, min_p, the penalties, an extra body); the row lists the models that have some, and Enter opens the `/sampling` pane. See [Sampling per model](#sampling-per-model). | (server defaults) |
+
+#### Sampling per model
+
+Every request leaves sampling to the server and the model's own defaults until you override it. `/sampling` (or the *LLM sampling* row) opens a pane with one tab per model: the connected model first, then **any model (`*`)**, then every other model you have set something for. A field comes from the model's own tab, else from `*`, else it is not sent at all. Switching `/model` picks up the other model's values by itself. Everything is read at the next turn, so nothing reconnects, and the pane also opens while a reply runs. Blank clears a field; a value out of range is refused, never clamped.
+
+| Field | Accepts | Sent as | Servers that honour it |
+|---|---|---|---|
+| temperature | 0 to 5 | `temperature` | all |
+| top_p | above 0, up to 1 | `top_p` | all |
+| top_k | a whole number from -1 (0 or -1 is off, depending on the server) | `top_k` | vLLM, SGLang, llama.cpp, LM Studio |
+| min_p | 0 to 1 | `min_p` | vLLM, SGLang, llama.cpp |
+| presence_penalty | -2 to 2 | `presence_penalty` | all |
+| frequency_penalty | -2 to 2 | `frequency_penalty` | all |
+| repetition_penalty | above 0, up to 2 (1 is none) | `repetition_penalty` **and** `repeat_penalty` | vLLM and SGLang read the first, llama.cpp and LM Studio the second |
+| extra body | a JSON object | its fields, top level | whatever the server knows: `{"typical_p":0.9,"dry_multiplier":0.8,"seed":42}` |
+
+A server ignores the fields it does not know; Ollama's `/v1` endpoint takes only the four OpenAI ones. The extra body may not set the fields the app writes itself (`model`, `messages`, `tools`, `stream`, `reasoning_effort`, …) or a named field. Its `chat_template_kwargs` is merged with the app's own, and the app's `enable_thinking` and `preserve_thinking` win. The Claude API is not affected. Without the pane: `/sampling temperature 0.6`, `/sampling top_k clear`, `/sampling extra {"seed":42}` and `/sampling clear` change the connected model's values. `NEONSIDEKICK_LLM_SAMPLING` overrides every model for one run. The log's connect line is followed by `Sampling: …` whenever something is set.
 
 #### TTS
 
@@ -534,6 +552,7 @@ Type `/` to list every command with its summary; after a command and a space, it
 | `/queue [clear]` | List and prune the messages queued during a reply (`⊠ clear all` or `c` drops them all); `/queue clear` drops them without the pane. |
 | `/reasoning [level]` | Pick the reasoning effort (`none`, `low`, `medium`, `high`, `xhigh`). |
 | `/remember <text>` | Add a memory. |
+| `/sampling [field value]` | Edit the sampling overrides per model on a pane; `/sampling <field> <value>`, `<field> clear`, `extra <json>` or `clear` change the connected model's (see [Sampling per model](#sampling-per-model)). |
 | `/server [url]` | Pick an LLM server found on the usual ports (or the Claude API, when it's on and has a key), or set one. The model and reasoning pickers follow, and one reconnect applies all three. |
 | `/sessions [id \| purge <id> \| purge older <age> \| purge all \| title <text>]` | List, restore, rename and purge stored sessions. An age is a number of days (`30`) or a duration (`12h`, `90m`, `2 hours`, `1d 6h`). |
 | `/settings`, `//` | Edit and save the settings. |
@@ -1083,6 +1102,7 @@ Every variable the app reads starts with `NEONSIDEKICK_`. They override a settin
 | `NEONSIDEKICK_LLM_REQUEST_TIMEOUT` | LLM request timeout (s) | Seconds, above 0 and up to 3600. |
 | `NEONSIDEKICK_LLM_TURN_TIMEOUT` | LLM turn timeout (s) | Seconds, above 0 and up to 21600. |
 | `NEONSIDEKICK_LLM_CONTEXT` | LLM context length | Tokens, a positive whole number. For servers that don't report their context window. |
+| `NEONSIDEKICK_LLM_SAMPLING` | LLM sampling, for every model | A JSON object in wire names, e.g. `{"temperature":0.6,"top_k":20,"typical_p":0.9}`: the named fields within their ranges; any other key goes into the extra body. It overrides those fields for every model, and the saved values stand for the rest. |
 
 ### Shell
 

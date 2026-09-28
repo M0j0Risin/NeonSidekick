@@ -365,7 +365,7 @@ public class SlashCommandsTests
     {
         SlashCommand[] withArgument =
         [
-            SlashCommand.Compact, SlashCommand.Server, SlashCommand.Model, SlashCommand.Reasoning, SlashCommand.Theme,   // /theme [name] 2026-09-23
+            SlashCommand.Compact, SlashCommand.Server, SlashCommand.Model, SlashCommand.Reasoning, SlashCommand.Sampling, SlashCommand.Theme,   // /theme [name] 2026-09-23; /sampling [field value] 2026-09-28
             SlashCommand.Tts, SlashCommand.Voice, SlashCommand.Wake, SlashCommand.Interrupt, SlashCommand.Speak, SlashCommand.View, SlashCommand.Imagine, SlashCommand.Comfy, SlashCommand.Echo,   // /imagine 2026-09-24
             SlashCommand.Learn,
             SlashCommand.Persona, SlashCommand.Operata, SlashCommand.Vocalia,
@@ -407,7 +407,7 @@ public class SlashCommandsTests
         Assert.DoesNotContain(items, i => i.Text is "//" or "///" or "////");   // the alias is never a row (nor the two that came and went on 2026-09-21)
         Assert.Contains(items, i => i.Text == "/loop");   // 2026-09-21
         Assert.All(SlashCommands.HelpEntries, e => Assert.Contains(new NeonSidekick.UI.CompletionItem(e.Command, e.Summary), items));
-        Assert.Equal(["/server", "/sessions", "/settings", "/skills", "/speak", "/splash", "/stt", "/sys"], items.Where(i => i.Text.StartsWith("/s", StringComparison.Ordinal)).Select(i => i.Text));
+        Assert.Equal(["/sampling", "/server", "/sessions", "/settings", "/skills", "/speak", "/splash", "/stt", "/sys"], items.Where(i => i.Text.StartsWith("/s", StringComparison.Ordinal)).Select(i => i.Text));
         Assert.Equal(["/theme", "/timer", "/tools", "/tree", "/tts"], items.Where(i => i.Text.StartsWith("/t", StringComparison.Ordinal)).Select(i => i.Text));   // /tools among them since 2026-09-19
     }
 
@@ -609,13 +609,13 @@ public class SlashCommandsTests
     {
         // One list, A to Z by the command (ordinal), no groups (2026-09-27, the user's call: the Commands tab had grown
         // cramped; nine hand-ordered groups until then — their history is in git).
-        Assert.Equal(56, SlashCommands.HelpEntries.Count);   // /keycopy since 2026-09-28
+        Assert.Equal(57, SlashCommands.HelpEntries.Count);   // /keycopy, then /sampling, since 2026-09-28
         Assert.Equal(
         [
             "/about", "/botchat", "/claude", "/clear", "/cmdclear", "/cmdcopy", "/cmdlist", "/collapse", "/comfy", "/compact", "/copy", "/cwd",
             "/draft", "/echo", "/emptytrash", "/exit", "/expand", "/explore", "/gituser", "/help", "/imagine", "/interrupt", "/keycopy", "/learn",
             "/loop", "/mcp", "/memory", "/model", "/new", "/operata", "/persona", "/plan", "/police", "/profile", "/queue", "/reasoning",
-            "/remember", "/server", "/sessions", "/settings", "/skills", "/speak", "/splash", "/stt", "/sys", "/theme", "/timer", "/tools",
+            "/remember", "/sampling", "/server", "/sessions", "/settings", "/skills", "/speak", "/splash", "/stt", "/sys", "/theme", "/timer", "/tools",
             "/tree", "/tts", "/usage", "/vault", "/view", "/vocalia", "/wake", "/window",
         ], SlashCommands.HelpEntries.Select(e => e.Command));
         Assert.Equal(SlashCommands.HelpEntries.Select(e => e.Command).OrderBy(c => c, StringComparer.Ordinal), SlashCommands.HelpEntries.Select(e => e.Command));

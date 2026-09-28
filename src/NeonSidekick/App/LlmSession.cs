@@ -116,6 +116,10 @@ internal sealed class LlmSession : IDisposable
         }
 
         DiagnosticLog.Info(Category, ConnectedLogLine(endpoint));
+        if (Assistant?.Sampling is { IsEmpty: false } sampling)
+        {
+            DiagnosticLog.Info(Category, SamplingLogLine(sampling));
+        }
 
         // The Claude API publishes its window on the model list or nowhere: none of the native tiers live on its host.
         if (_configuredContextLength <= 0 && _detectedContextLength is null && !ClaudeApi.IsClaudeApi(endpoint.BaseUrl))
@@ -203,7 +207,7 @@ internal sealed class LlmSession : IDisposable
         try
         {
             _client = _factory(Endpoint, Timeouts);
-            Assistant = new Assistant(_client, History, Timeouts, time: _time, reasoning: ReasoningLevel.Resolve(effective)) { Meter = Meter };
+            Assistant = new Assistant(_client, History, Timeouts, time: _time, reasoning: ReasoningLevel.Resolve(effective)) { Meter = Meter, Sampling = LlmSampling.Resolve(effective, endpoint.ModelId) };
             return true;
         }
         catch (Exception ex)
@@ -224,16 +228,16 @@ internal sealed class LlmSession : IDisposable
     {
         ArgumentNullException.ThrowIfNull(history);
         return _client is { } client && Assistant is { } main
-            ? new Assistant(client, history, Timeouts, time: _time, reasoning: main.Reasoning)
+            ? new Assistant(client, history, Timeouts, time: _time, reasoning: main.Reasoning) { Sampling = main.Sampling }
             : null;
     }
 
-    /// <summary>An assistant over a bot's own <paramref name="link"/> (<see cref="LinkAsync"/>): its client, timeouts and reasoning effort, no tools.</summary>
+    /// <summary>An assistant over a bot's own <paramref name="link"/> (<see cref="LinkAsync"/>): its client, timeouts, reasoning effort and sampling, no tools.</summary>
     public Assistant CreateAssistant(ConversationHistory history, BotLink link)
     {
         ArgumentNullException.ThrowIfNull(history);
         ArgumentNullException.ThrowIfNull(link);
-        return new Assistant(link.Client, history, link.Timeouts, time: _time, reasoning: link.Reasoning);
+        return new Assistant(link.Client, history, link.Timeouts, time: _time, reasoning: link.Reasoning) { Sampling = link.Sampling };
     }
 
     /// <summary>
@@ -286,7 +290,7 @@ internal sealed class LlmSession : IDisposable
         var timeouts = LlmTimeouts.Resolve(profile);
         try
         {
-            return (new BotLink(_factory(endpoint, timeouts), endpoint, timeouts, ReasoningLevel.Resolve(profile)), null);
+            return (new BotLink(_factory(endpoint, timeouts), endpoint, timeouts, ReasoningLevel.Resolve(profile), LlmSampling.Resolve(profile, endpoint.ModelId)), null);
         }
         catch (Exception ex)
         {
@@ -434,6 +438,13 @@ internal sealed class LlmSession : IDisposable
     /// <summary>The connect's line in the log: <c>Connected: LLM: http://… model=… (probed)</c> — <see cref="ConnectedLine"/> after the word. Pinned.</summary>
     public static string ConnectedLogLine(LlmEndpoint endpoint) => "Connected: " + ConnectedLine(endpoint);
 
+    /// <summary>The log line after <see cref="ConnectedLogLine"/> when the connected model has sampling set (2026-09-28): <c>Sampling: temperature 0.6 · top_k 20</c>.</summary>
+    public static string SamplingLogLine(LlmSampling sampling)
+    {
+        ArgumentNullException.ThrowIfNull(sampling);
+        return "Sampling: " + sampling.Describe();
+    }
+
     /// <summary>The client a reconnect drops (a profile switch, <c>/server</c>, a switch that reconnects): <c>Disconnected from http://… model=…</c>; the exit's dispose says nothing. Pinned.</summary>
     public static string DisconnectedLogLine(LlmEndpoint endpoint) => $"Disconnected from {endpoint.BaseUrl} model={endpoint.ModelId}";
 
@@ -449,9 +460,10 @@ internal sealed class LlmSession : IDisposable
 
 /// <summary>
 /// A <c>/botchat</c> bot's own LLM (<see cref="LlmSession.LinkAsync"/>, 2026-09-25): the client over its endpoint, and the
-/// timeouts and reasoning effort of its profile. Owned by the chat that made it, disposed when that chat ends.
+/// timeouts, reasoning effort and sampling of its profile (the sampling for the bot's own model, 2026-09-28). Owned by
+/// the chat that made it, disposed when that chat ends.
 /// </summary>
-internal sealed class BotLink(IChatClient client, LlmEndpoint endpoint, LlmTimeouts timeouts, ReasoningEffort reasoning) : IDisposable
+internal sealed class BotLink(IChatClient client, LlmEndpoint endpoint, LlmTimeouts timeouts, ReasoningEffort reasoning, LlmSampling? sampling = null) : IDisposable
 {
     public IChatClient Client { get; } = client;
 
@@ -460,6 +472,8 @@ internal sealed class BotLink(IChatClient client, LlmEndpoint endpoint, LlmTimeo
     public LlmTimeouts Timeouts { get; } = timeouts;
 
     public ReasoningEffort Reasoning { get; } = reasoning;
+
+    public LlmSampling? Sampling { get; } = sampling;
 
     public void Dispose() => Client.Dispose();
 }

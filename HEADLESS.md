@@ -71,6 +71,7 @@ What to use instead:
 | `/server [url]` | `--url <url>` or `NEONSIDEKICK_LLM_URL` |
 | `/model [id]` | `--model <id>` or `NEONSIDEKICK_LLM_MODEL` |
 | `/reasoning [level]` | `NEONSIDEKICK_LLM_REASONING` |
+| `/sampling [field value]` | `NEONSIDEKICK_LLM_SAMPLING`; the profile's saved sampling for the model applies too. |
 | `/cwd [path]` | `--cwd <path>` |
 | `/profile [name]` | `--profile <name>` or `NEONSIDEKICK_PROFILE`; with neither, `default`. `add`/`delete`/`rename`/`reset` need the TUI, or the files under `<home>\profiles`. |
 | `/settings`, `//`, `/tools`, `/skills` (the pane; `/skills add` works headless), `/mcp` | Set things up in the TUI beforehand, or edit the profile's `profile.json` / `mcp.json`. Environment variables override some values for one run. |
@@ -641,6 +642,7 @@ Flags beat variables; variables beat the profile's saved values.
 | `NEONSIDEKICK_LLM_TURN_TIMEOUT` / `NEONSIDEKICK_LLM_REQUEST_TIMEOUT` | Seconds; raise them for long agentic jobs. |
 | `NEONSIDEKICK_LLM_CONTEXT` | The context window in tokens, when the server doesn't report it. |
 | `NEONSIDEKICK_LLM_REASONING` | Reasoning effort for the run. |
+| `NEONSIDEKICK_LLM_SAMPLING` | Sampling for the run, a JSON object in wire names: `{"temperature":0.2,"top_k":20,"seed":42}`. It is laid over the profile's saved values for every model; a bad value is logged and the variable ignored. |
 | `NEONSIDEKICK_COMMAND_POLICY` | `ask` (default: only allow-listed commands run, since nothing can ask), or `yolo` (every command runs; use only when you trust the job and the folder). `--yolo` outranks it. |
 | `NEONSIDEKICK_SHELL_POLICE` | `off` lets shell commands name paths outside the working directory for the run; `on` turns the police back on over a saved `off`. `--no-police` outranks it. |
 | `NEONSIDEKICK_SHELL_NATIVE` | `off` lets a single `cat`, `dir`, `git status`, `curl`… go to the shell as written for the run, instead of being sent back once a turn to the native tool that does it (*Shell prefer native tools*, on by default); `on` turns it back on over a saved `off`. A line sent back is not a refusal: it never makes the run exit 3. |

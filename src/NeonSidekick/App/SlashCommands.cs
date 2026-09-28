@@ -27,6 +27,9 @@ public enum SlashCommand
 
     /// <summary><c>/reasoning</c>: pick the LLM reasoning effort from a list, or <c>/reasoning &lt;level&gt;</c>.</summary>
     Reasoning,
+
+    /// <summary><c>/sampling</c> (2026-09-28, the user's ask): the sampling overrides per model on a pane, or <c>/sampling &lt;field&gt; &lt;value|clear&gt;</c>, <c>/sampling extra {…}</c> and <c>/sampling clear</c> for the connected model's.</summary>
+    Sampling,
     Settings,
 
     /// <summary><c>/tools</c>: the Tools pane (2026-09-19, the user's ask) — every tool the model can be offered, on or off one by one (the Offered tab), then its Options tab (the <c>$</c>-mention switch, later that day) and the Ask, Files and Web settings rows that sat on <c>/settings</c> until then. No argument: bare like <see cref="Skills"/>. <c>///</c> is its alias (2026-09-21, the user's ask, beside <c>//</c>).</summary>
@@ -236,6 +239,7 @@ public static class SlashCommands
             new("/queue", "list and prune the messages queued while a reply runs, or /queue clear"),
             new("/reasoning", "pick the LLM reasoning effort, or /reasoning <level>"),
             new("/remember", "add a memory: /remember <text>"),
+            new("/sampling", "edit the LLM sampling overrides per model on a pane (temperature, top_p, top_k, min_p, penalties, extra body), or /sampling <field> <value|clear> | extra <json> | clear for the connected model"),
             new("/server", "pick an LLM server found on the usual ports, or /server <url>"),
             new("/sessions", "list, restore and purge sessions: /sessions [<id> | purge <id> | purge older <age> | purge all | title <text>]"),
             new("/settings", "edit and save settings", "//"),
@@ -347,7 +351,7 @@ public static class SlashCommands
     }
 
     /// <summary>Every command word, for help and completion.</summary>
-    public static readonly string[] Words = { "/help", "/clear", "/new", "/splash", "/theme", "/queue", "/sessions", "/compact", "/server", "/model", "/reasoning", "/settings", "//", "/tools", "/mcp", "/tts", "/stt", "/wake", "/interrupt", "/speak", "/remember", "/memory", "/cmdcopy", "/keycopy", "/cmdclear", "/cmdlist", "/police", "/persona", "/operata", "/vocalia", "/sys", "/usage", "/profile", "/timer", "/cwd", "/tree", "/vault", "/explore", "/view", "/imagine", "/comfy", "/echo", "/emptytrash", "/gituser", "/copy", "/draft", "/loop", "/plan", "/botchat", "/claude", "/expand", "/collapse", "/window", "/skills", "/learn", "/about", "/exit" };
+    public static readonly string[] Words = { "/help", "/clear", "/new", "/splash", "/theme", "/queue", "/sessions", "/compact", "/server", "/model", "/reasoning", "/sampling", "/settings", "//", "/tools", "/mcp", "/tts", "/stt", "/wake", "/interrupt", "/speak", "/remember", "/memory", "/cmdcopy", "/keycopy", "/cmdclear", "/cmdlist", "/police", "/persona", "/operata", "/vocalia", "/sys", "/usage", "/profile", "/timer", "/cwd", "/tree", "/vault", "/explore", "/view", "/imagine", "/comfy", "/echo", "/emptytrash", "/gituser", "/copy", "/draft", "/loop", "/plan", "/botchat", "/claude", "/expand", "/collapse", "/window", "/skills", "/learn", "/about", "/exit" };
 
     /// <summary>The <c>/queue</c> word: what a double-click on the hint row's queued part sends through the mid-turn line hook, so the pane opens exactly as the typed command's does (2026-09-18). Pinned.</summary>
     public const string QueueWord = "/queue";
@@ -399,6 +403,7 @@ public static class SlashCommands
             "/server" => SlashCommand.Server,
             "/model" => SlashCommand.Model,
             "/reasoning" => SlashCommand.Reasoning,
+            "/sampling" => SlashCommand.Sampling,
             "/settings" or "//" => SlashCommand.Settings,
             "/tools" => SlashCommand.Tools,
             "/mcp" => SlashCommand.Mcp,
@@ -464,7 +469,7 @@ public static class SlashCommands
     /// <see cref="SlashCommand.Unknown"/> and <see cref="SlashCommand.Overloaded"/> take nothing.
     /// </summary>
     public static bool TakesArgument(SlashCommand command) => command is
-        SlashCommand.Compact or SlashCommand.Server or SlashCommand.Model or SlashCommand.Reasoning or SlashCommand.Theme
+        SlashCommand.Compact or SlashCommand.Server or SlashCommand.Model or SlashCommand.Reasoning or SlashCommand.Sampling or SlashCommand.Theme
         or SlashCommand.Tts or SlashCommand.Voice or SlashCommand.Wake or SlashCommand.Interrupt or SlashCommand.Speak or SlashCommand.View or SlashCommand.Imagine or SlashCommand.Comfy or SlashCommand.Echo
         or SlashCommand.Learn
         or SlashCommand.Persona or SlashCommand.Operata or SlashCommand.Vocalia

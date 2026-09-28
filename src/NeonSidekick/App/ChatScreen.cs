@@ -673,6 +673,7 @@ internal sealed partial class ChatScreen
     private readonly QueueMenu _queueMenu;
     private readonly SkillsMenu _skillsMenu;
     private readonly ToolsMenu _toolsMenu;
+    private readonly SamplingMenu _samplingMenu;
     private readonly McpMenu _mcpMenu;
 
     /// <summary>Set by <see cref="RunTurnAsync"/>'s end: the reply was cancelled, interrupted or withdrawn, so <see cref="RunMessageAsync"/> applies <c>Queue cancel mode</c> instead of releasing a hold.</summary>
@@ -1032,7 +1033,22 @@ internal sealed partial class ChatScreen
         _toolsMenu = new ToolsMenu(ToolsFacts, settings, _menu, _flow, _menuPane);
         // The /mcp pane (2026-09-20): the servers and their tools over the session's snapshot, the Options rows through the settings menu.
         _mcpMenu = new McpMenu(McpFacts, _mcp, settings, _menu, _flow, _menuPane, _openFile, _effective);
+        // The /sampling pane (2026-09-28): the per-model overrides; a save resolves the connected assistant's sampling again.
+        _samplingMenu = new SamplingMenu(settings, _menu, _flow, _menuPane, _input, () => _session.Endpoint, () => overriddenBy(SettingsField.LlmSampling), RefreshSampling);
+        _menu.SamplingPane = _samplingMenu.ShowAsync;
         BindProfile();
+    }
+
+    /// <summary>
+    /// The connected assistant's sampling resolved again from the effective settings (2026-09-28): after a <c>/sampling</c>
+    /// save, so a summary or a title asked before the next turn carries it too; the turn resolves it again anyway.
+    /// </summary>
+    private void RefreshSampling()
+    {
+        if (_session.Assistant is { } assistant)
+        {
+            assistant.Sampling = LlmSampling.Resolve(_effective(), _session.Endpoint?.ModelId);
+        }
     }
 
     /// <summary>
@@ -2860,6 +2876,12 @@ internal sealed partial class ChatScreen
             case SlashCommand.Reasoning:
                 return MentionCompleter.Matches(ReasoningLevel.Levels.Select(level => new CompletionItem(level, ReasoningLevel.Describe(level))).ToList(), argText);
 
+            case SlashCommand.Sampling:
+                // The field names, then extra and clear (2026-09-28): the value is the user's to type.
+                return MentionCompleter.Matches(SamplingField.All.Select(f => new CompletionItem(f.Wire, SamplingText.CompletionNote(f)))
+                    .Append(new CompletionItem(SamplingText.ExtraWord, SamplingText.ExtraCompletionNote))
+                    .Append(new CompletionItem(SamplingText.ClearWord, SamplingText.ClearCompletionNote)).ToList(), argText);
+
             case SlashCommand.Comfy:
             {
                 // /comfy edit json|markdown <workflow> (later still on 2026-09-24): the verb, the kind, then every installed workflow.
@@ -3781,9 +3803,10 @@ internal sealed partial class ChatScreen
     /// (<see cref="Assistant.TimerRule"/>, 2026-09-20) rides only while a timer tool is among <paramref name="standingTools"/>:
     /// headless passes the clock alone (nothing could ring the alert), and the pane loses the three on <c>/tools</c>. With the shell offered,
     /// <c>run_command</c> is told the turn's tool names (<see cref="RunCommandTool.BeginTurn"/>, 2026-09-26) and, with <paramref name="shellNative"/>
-    /// (the setting <c>Shell prefer native tools</c>), the rules gain <see cref="Assistant.ShellNativeRule"/> after the shell sentence. Shared with headless.
+    /// (the setting <c>Shell prefer native tools</c>), the rules gain <see cref="Assistant.ShellNativeRule"/> after the shell sentence. <paramref name="sampling"/>
+    /// (2026-09-28, the setting <c>LLM sampling</c>, resolved for the connected model) replaces the assistant's when given. Shared with headless.
     /// </summary>
-    public static void PrepareTurn(Assistant assistant, MemoryStore memory, IReadOnlyList<AIFunction> memoryTools, IReadOnlyList<AIFunction> standingTools, PersonaFile persona, OperataFile operata, VocaliaFile vocalia, bool memoryEnabled, bool speechOutput, int maxToolIterations = Assistant.DefaultMaxToolIterations, bool toolsEnabled = true, IReadOnlyList<AIFunction>? webTools = null, bool webEnabled = false, Assistant.TurnContextGuard? contextGuard = null, IReadOnlyList<AIFunction>? fileTools = null, bool filesEnabled = false, IReadOnlyList<AIFunction>? askTools = null, SkillsForTurn? skills = null, bool markdown = false, IReadOnlyList<AIFunction>? sessionTools = null, bool sessionsEnabled = false, IReadOnlySet<string>? disabledTools = null, IReadOnlyList<AIFunction>? mcpTools = null, bool mcpEnabled = false, bool safeEdits = true, IReadOnlyList<AIFunction>? gitTools = null, bool gitEnabled = false, IReadOnlyList<AIFunction>? shellTools = null, bool shellEnabled = false, ProcessRegistry? processes = null, bool shellBridge = false, bool shellPolice = true, IReadOnlyList<AIFunction>? obsidianTools = null, bool obsidianEnabled = false, IReadOnlyList<AIFunction>? sqlTools = null, bool sqlEnabled = false, IReadOnlyList<AIFunction>? comfyTools = null, bool comfyEnabled = false, bool shellNative = false, PlanTurn? plan = null, IReadOnlyList<AIFunction>? advisorTools = null, bool advisorEnabled = false, bool preserveThinking = false)
+    public static void PrepareTurn(Assistant assistant, MemoryStore memory, IReadOnlyList<AIFunction> memoryTools, IReadOnlyList<AIFunction> standingTools, PersonaFile persona, OperataFile operata, VocaliaFile vocalia, bool memoryEnabled, bool speechOutput, int maxToolIterations = Assistant.DefaultMaxToolIterations, bool toolsEnabled = true, IReadOnlyList<AIFunction>? webTools = null, bool webEnabled = false, Assistant.TurnContextGuard? contextGuard = null, IReadOnlyList<AIFunction>? fileTools = null, bool filesEnabled = false, IReadOnlyList<AIFunction>? askTools = null, SkillsForTurn? skills = null, bool markdown = false, IReadOnlyList<AIFunction>? sessionTools = null, bool sessionsEnabled = false, IReadOnlySet<string>? disabledTools = null, IReadOnlyList<AIFunction>? mcpTools = null, bool mcpEnabled = false, bool safeEdits = true, IReadOnlyList<AIFunction>? gitTools = null, bool gitEnabled = false, IReadOnlyList<AIFunction>? shellTools = null, bool shellEnabled = false, ProcessRegistry? processes = null, bool shellBridge = false, bool shellPolice = true, IReadOnlyList<AIFunction>? obsidianTools = null, bool obsidianEnabled = false, IReadOnlyList<AIFunction>? sqlTools = null, bool sqlEnabled = false, IReadOnlyList<AIFunction>? comfyTools = null, bool comfyEnabled = false, bool shellNative = false, PlanTurn? plan = null, IReadOnlyList<AIFunction>? advisorTools = null, bool advisorEnabled = false, bool preserveThinking = false, LlmSampling? sampling = null)
     {
         ArgumentNullException.ThrowIfNull(assistant);
         ArgumentNullException.ThrowIfNull(memory);
@@ -3806,6 +3829,12 @@ internal sealed partial class ChatScreen
         assistant.MaxToolIterations = maxToolIterations;
         assistant.ContextGuard = contextGuard;
         assistant.PreserveThinking = preserveThinking;
+        if (sampling is not null)
+        {
+            // Resolved again each turn (2026-09-28), so a /sampling edit or a /model switch lands at the next one.
+            assistant.Sampling = sampling;
+        }
+
         if (!toolsEnabled)
         {
             assistant.Tools = [];
@@ -8283,6 +8312,19 @@ internal sealed partial class ChatScreen
                 await PickReasoningAsync(args, cancellationToken).ConfigureAwait(false);
                 return false;
 
+            case SlashCommand.Sampling:
+                // Sampling per model (2026-09-28): the pane, or the connected model's field set; read at the next turn, nothing reconnects.
+                if (args.Length == 0)
+                {
+                    await _samplingMenu.ShowAsync(cancellationToken).ConfigureAwait(false);
+                }
+                else
+                {
+                    _samplingMenu.Quick(args);
+                }
+
+                return false;
+
             case SlashCommand.Settings:
                 await OpenSettingsAsync(cancellationToken).ConfigureAwait(false);
                 return false;
@@ -10752,7 +10794,7 @@ internal sealed partial class ChatScreen
         if (bot is null)
         {
             _interpreters.Refresh();
-            PrepareTurn(assistant, _memory, _memoryTools, [.. _clockTools, .. _timerTools], _persona, _operata, _vocalia, effective.Memory, speaker is not null, effective.LlmMaxToolIterations, effective.LlmOfferTools, _webTools, effective.WebTools, ContextGuardFor(effective, _session.ContextLength), _fileTools, effective.FileTools, _pane.Enabled && effective.AskUser ? _askTools : null, SkillsFor(effective), markdown, _sessionTools, effective.SessionTool, ToolsText.DisabledSet(effective.ToolsDisabled), _mcp.Tools, effective.McpServers, effective.FileSafeEdits, _gitTools, effective.GitNativeTools, _shellTools, ShellOffered(effective), _processes, effective.ShellToolBridge, effective.ShellPoliceOutsidePaths, ObsidianToolsFor(_vaultTools, effective), ObsidianOffered(effective), _sqlTools, SqlOffered(effective, _sql), _comfyTools, ComfyOffered(effective, _comfy), effective.ShellPreferNative, _plan.Turn(_presentPlan), _advisorTools, effective.ClaudeAdvisor, effective.LlmPreserveThinking);
+            PrepareTurn(assistant, _memory, _memoryTools, [.. _clockTools, .. _timerTools], _persona, _operata, _vocalia, effective.Memory, speaker is not null, effective.LlmMaxToolIterations, effective.LlmOfferTools, _webTools, effective.WebTools, ContextGuardFor(effective, _session.ContextLength), _fileTools, effective.FileTools, _pane.Enabled && effective.AskUser ? _askTools : null, SkillsFor(effective), markdown, _sessionTools, effective.SessionTool, ToolsText.DisabledSet(effective.ToolsDisabled), _mcp.Tools, effective.McpServers, effective.FileSafeEdits, _gitTools, effective.GitNativeTools, _shellTools, ShellOffered(effective), _processes, effective.ShellToolBridge, effective.ShellPoliceOutsidePaths, ObsidianToolsFor(_vaultTools, effective), ObsidianOffered(effective), _sqlTools, SqlOffered(effective, _sql), _comfyTools, ComfyOffered(effective, _comfy), effective.ShellPreferNative, _plan.Turn(_presentPlan), _advisorTools, effective.ClaudeAdvisor, effective.LlmPreserveThinking, LlmSampling.Resolve(effective, _session.Endpoint?.ModelId));
         }
 
         bool armed = false;

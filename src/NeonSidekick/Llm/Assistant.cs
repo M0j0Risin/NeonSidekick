@@ -581,6 +581,14 @@ public sealed class Assistant
     public bool PreserveThinking { get; set; }
 
     /// <summary>
+    /// The sampling every request of this assistant carries (2026-09-28, the setting <c>LLM sampling</c>): the turn's, the
+    /// summariser's and a side request's (<see cref="RequestAsync"/>: the session's title, the skill learner), resolved for
+    /// the connected model (<see cref="LlmSampling.Resolve"/>) at the connect and again before each turn, so an edit lands
+    /// at the next turn. Null or <see cref="LlmSampling.None"/> sends nothing and leaves the server's defaults.
+    /// </summary>
+    public LlmSampling? Sampling { get; set; }
+
+    /// <summary>
     /// Counts each request as it streams (2026-09-25): begun when the request goes out, a chunk per update with
     /// content other than the usage report, ended when the stream does — completed, cancelled or failed — so the
     /// busy row's <c>estimate</c> never outlives its request. Null (a botchat bot's assistant, a test) counts nothing.
@@ -966,6 +974,7 @@ public sealed class Assistant
             // Every turn's thinking back, and the template asked to keep it (2026-09-28); the client takes the key off.
             AdditionalProperties = PreserveThinking ? new AdditionalPropertiesDictionary { [OpenAICompatibleChatClient.PreserveThinkingKey] = true } : null,
         };
+        Sampling?.ApplyTo(options);
 
         long started = _time.GetTimestamp();
 
@@ -1473,6 +1482,7 @@ public sealed class Assistant
     private async Task<SummaryAttempt> RequestSummaryAsync(List<ChatMessage> request, CancellationToken cancellationToken)
     {
         var options = new ChatOptions { Reasoning = new ReasoningOptions { Effort = ReasoningEffort.None } };
+        Sampling?.ApplyTo(options);
         var filter = new ThinkTagFilter();
         var text = new StringBuilder();
         var usage = TokenUsage.Zero;
@@ -1532,8 +1542,8 @@ public sealed class Assistant
 
     /// <summary>
     /// The primitive behind a side loop that runs beside a turn (<see cref="Skills.SkillLearner"/>):
-    /// one streamed request, the history untouched, nothing of this instance read but the client
-    /// and the clock — so it is safe while <see cref="RunTurnAsync"/> streams. The transport's
+    /// one streamed request, the history untouched, nothing of this instance read but the client,
+    /// the clock and the <see cref="Sampling"/> reference — so it is safe while <see cref="RunTurnAsync"/> streams. The transport's
     /// failures and cancellation propagate; the caller explains them.
     /// </summary>
     public async Task<SideResponse> RequestAsync(IReadOnlyList<ChatMessage> request, IReadOnlyList<AIFunction> tools, ReasoningEffort effort, CancellationToken cancellationToken)
@@ -1545,6 +1555,7 @@ public sealed class Assistant
             Tools = tools.Count > 0 ? new List<AITool>(tools) : null,
             Reasoning = new ReasoningOptions { Effort = effort },
         };
+        Sampling?.ApplyTo(options);
 
         var updates = new List<ChatResponseUpdate>();
         var filter = new ThinkTagFilter();

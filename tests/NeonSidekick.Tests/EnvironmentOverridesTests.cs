@@ -59,7 +59,8 @@ public class EnvironmentOverridesTests
             (EnvironmentOverrides.ClaudePermissionsVariable, " Full "),
             (EnvironmentOverrides.ClaudeAdvisorVariable, " Yes "),
             (EnvironmentOverrides.ClaudeApiVariable, " on "),
-            (EnvironmentOverrides.ClaudeApiKeyVariable, " sk-ant-env "));
+            (EnvironmentOverrides.ClaudeApiKeyVariable, " sk-ant-env "),
+            (EnvironmentOverrides.LlmSamplingVariable, " {\"temperature\":0.3} "));
 
         var e = env.ApplyTo(new AppSettingsData());
 
@@ -89,6 +90,7 @@ public class EnvironmentOverridesTests
         Assert.True(e.ClaudeAdvisor);   // a switch word, any case, trimmed (2026-09-27)
         Assert.True(e.ClaudeApi);   // a switch word (2026-09-27)
         Assert.Equal("sk-ant-env", e.ClaudeApiKey);   // trimmed (2026-09-27)
+        Assert.Equal(0.3, e.LlmSampling!["*"].Temperature);   // laid over every model (2026-09-28)
         Assert.Equal(EnvironmentOverrides.AllVariables.Length - 2, env.ActiveVariables().Count);   // everything but HOME and PROFILE
     }
 

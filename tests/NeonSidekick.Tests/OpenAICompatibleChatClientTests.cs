@@ -235,22 +235,22 @@ public class OpenAICompatibleChatClientTests
     }
 
     [Fact]
-    public void WithTemplateKwargs_LeavesEveryOtherCaseAlone()
+    public void WithRawFields_LeavesEveryOtherCaseAlone()
     {
-        Assert.Null(OpenAICompatibleChatClient.WithTemplateKwargs(null));
+        Assert.Null(OpenAICompatibleChatClient.WithRawFields(null));
 
         var plain = new ChatOptions();
-        Assert.Same(plain, OpenAICompatibleChatClient.WithTemplateKwargs(plain));
+        Assert.Same(plain, OpenAICompatibleChatClient.WithRawFields(plain));
 
         var high = new ChatOptions { Reasoning = new ReasoningOptions { Effort = ReasoningEffort.High } };
-        Assert.Same(high, OpenAICompatibleChatClient.WithTemplateKwargs(high));
+        Assert.Same(high, OpenAICompatibleChatClient.WithRawFields(high));
 
         Func<IChatClient, object?> mine = _ => null;
         var supplied = new ChatOptions { Reasoning = new ReasoningOptions { Effort = ReasoningEffort.None }, RawRepresentationFactory = mine };
-        Assert.Same(supplied, OpenAICompatibleChatClient.WithTemplateKwargs(supplied));   // a caller's factory wins
+        Assert.Same(supplied, OpenAICompatibleChatClient.WithRawFields(supplied));   // a caller's factory wins
 
         var none = new ChatOptions { Reasoning = new ReasoningOptions { Effort = ReasoningEffort.None }, Tools = new List<AITool>() };
-        var shaped = OpenAICompatibleChatClient.WithTemplateKwargs(none)!;
+        var shaped = OpenAICompatibleChatClient.WithRawFields(none)!;
         Assert.NotSame(none, shaped);
         Assert.Null(none.RawRepresentationFactory);              // the caller's instance is not mutated
         Assert.NotNull(shaped.RawRepresentationFactory);
@@ -260,10 +260,10 @@ public class OpenAICompatibleChatClientTests
 
     /// <summary>The preserve key is taken off the options, the caller's instance and its other properties left alone; a caller's factory still wins.</summary>
     [Fact]
-    public void WithTemplateKwargs_TakesThePreserveKeyOff()
+    public void WithRawFields_TakesThePreserveKeyOff()
     {
         var options = new ChatOptions { AdditionalProperties = new AdditionalPropertiesDictionary { [OpenAICompatibleChatClient.PreserveThinkingKey] = true, ["other"] = 1 } };
-        var shaped = OpenAICompatibleChatClient.WithTemplateKwargs(options)!;
+        var shaped = OpenAICompatibleChatClient.WithRawFields(options)!;
         Assert.False(shaped.AdditionalProperties!.ContainsKey(OpenAICompatibleChatClient.PreserveThinkingKey));
         Assert.Equal(1, shaped.AdditionalProperties["other"]);
         Assert.True(options.AdditionalProperties.ContainsKey(OpenAICompatibleChatClient.PreserveThinkingKey));
@@ -271,12 +271,12 @@ public class OpenAICompatibleChatClientTests
 
         Func<IChatClient, object?> mine = _ => null;
         var supplied = new ChatOptions { RawRepresentationFactory = mine, AdditionalProperties = new AdditionalPropertiesDictionary { [OpenAICompatibleChatClient.PreserveThinkingKey] = true } };
-        var kept = OpenAICompatibleChatClient.WithTemplateKwargs(supplied)!;
+        var kept = OpenAICompatibleChatClient.WithRawFields(supplied)!;
         Assert.Same(mine, kept.RawRepresentationFactory);
         Assert.Null(kept.AdditionalProperties);
 
         var offKey = new ChatOptions { AdditionalProperties = new AdditionalPropertiesDictionary { [OpenAICompatibleChatClient.PreserveThinkingKey] = false } };
-        var plain = OpenAICompatibleChatClient.WithTemplateKwargs(offKey)!;
+        var plain = OpenAICompatibleChatClient.WithRawFields(offKey)!;
         Assert.Null(plain.RawRepresentationFactory);
         Assert.Null(plain.AdditionalProperties);
     }

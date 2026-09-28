@@ -48,6 +48,7 @@ public sealed class EnvironmentOverrides
     public const string ClaudeAdvisorVariable = Prefix + "CLAUDE_ADVISOR";
     public const string ClaudeApiVariable = Prefix + "CLAUDE_API";
     public const string ClaudeApiKeyVariable = Prefix + "CLAUDE_API_KEY";
+    public const string LlmSamplingVariable = Prefix + "LLM_SAMPLING";
 
     /// <summary>Every variable this class reads, for documentation.</summary>
     public static readonly string[] AllVariables =
@@ -58,7 +59,7 @@ public sealed class EnvironmentOverrides
         InterruptEchoVariable, InterruptConfirmVariable, LlmContextVariable, SearxngUrlVariable,
         CommandPolicyVariable, ShellPoliceVariable, ObsidianVaultVariable, ComfyUrlVariable,
         ShellNativeVariable, ClaudeExeVariable, ClaudePermissionsVariable, ClaudeAdvisorVariable,
-        ClaudeApiVariable, ClaudeApiKeyVariable,
+        ClaudeApiVariable, ClaudeApiKeyVariable, LlmSamplingVariable,
     };
 
     /// <summary>The log category of every environment line.</summary>
@@ -165,6 +166,14 @@ public sealed class EnvironmentOverrides
     public string? ClaudeApiKey => Read(ClaudeApiKeyVariable);
 
     /// <summary>
+    /// Sampling for this launch, or null when unset or refused (2026-09-28, the setting <c>LLM sampling</c>): a JSON object
+    /// in wire names, <c>{"temperature":0.6,"top_k":20,"typical_p":0.9}</c> — the named fields in their ranges, any other
+    /// key the extra body (<see cref="Llm.LlmSampling.TryParseEntry"/>). <see cref="ApplyTo"/> lays it over every model's
+    /// entry and <c>*</c>, so it wins for whatever model is connected; a field it does not name keeps the saved value.
+    /// </summary>
+    public LlmSamplingEntry? LlmSampling => ReadSampling(LlmSamplingVariable);
+
+    /// <summary>
     /// A variable that is not an override: <c>PATH</c>, <c>PATHEXT</c>, <c>ProgramFiles</c> — what the
     /// shell probe (<see cref="Shell.Interpreters"/>) walks (2026-09-21). The one door stays this class's:
     /// nothing else calls <c>Environment.GetEnvironmentVariable</c>, and tests hand a dictionary here too.
@@ -197,6 +206,7 @@ public sealed class EnvironmentOverrides
                 ShellNativeVariable => ShellNative is not null,
                 ClaudeAdvisorVariable => ClaudeAdvisor is not null,
                 ClaudeApiVariable => ClaudeApi is not null,
+                LlmSamplingVariable => LlmSampling is not null,
                 _ => Read(name) is not null,
             };
             if (set)
@@ -269,8 +279,61 @@ public sealed class EnvironmentOverrides
         if (ClaudeAdvisor is { } advisor) effective.ClaudeAdvisor = advisor;
         if (ClaudeApi is { } claudeApi) effective.ClaudeApi = claudeApi;
         if (ClaudeApiKey is { } claudeApiKey) effective.ClaudeApiKey = claudeApiKey;
+        if (LlmSampling is { } sampling) effective.LlmSampling = Overlay(effective.LlmSampling, sampling);
 
         return effective;
+    }
+
+    /// <summary>
+    /// <paramref name="saved"/> (already the effective copy's own) with <paramref name="over"/>'s fields set on every
+    /// entry and on <see cref="Llm.LlmSampling.AnyModel"/>, made if absent; its extra fields join each entry's, winning a key.
+    /// </summary>
+    private static Dictionary<string, LlmSamplingEntry> Overlay(Dictionary<string, LlmSamplingEntry>? saved, LlmSamplingEntry over)
+    {
+        var map = saved ?? new Dictionary<string, LlmSamplingEntry>(StringComparer.Ordinal);
+        if (Llm.LlmSampling.KeyFor(map, Llm.LlmSampling.AnyModel) is null)
+        {
+            map[Llm.LlmSampling.AnyModel] = new LlmSamplingEntry();
+        }
+
+        foreach (var entry in map.Values)
+        {
+            foreach (var field in SamplingField.All)
+            {
+                if (field.Get(over) is { } value)
+                {
+                    field.Set(entry, value);
+                }
+            }
+
+            if (over.Extra is { Count: > 0 } extra)
+            {
+                entry.Extra ??= new Dictionary<string, System.Text.Json.JsonElement>(StringComparer.Ordinal);
+                foreach (var (name, value) in extra)
+                {
+                    entry.Extra[name] = value;
+                }
+            }
+        }
+
+        return map;
+    }
+
+    private LlmSamplingEntry? ReadSampling(string name)
+    {
+        var raw = Read(name);
+        if (raw is null)
+        {
+            return null;
+        }
+
+        if (!Llm.LlmSampling.TryParseEntry(raw, out var entry, out var problem))
+        {
+            DiagnosticLog.Warn(Category, $"{name}: {problem}; ignoring it.");
+            return null;
+        }
+
+        return entry;
     }
 
     private string? ReadClaudePermissions(string name)

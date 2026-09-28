@@ -101,7 +101,7 @@ public sealed class OpenAICompatibleChatClient : IChatClient
         IEnumerable<ChatMessage> messages,
         ChatOptions? options = null,
         CancellationToken cancellationToken = default)
-        => _wrapped.GetResponseAsync(WithReasoningBack(messages, PreservesThinking(options)), WithTemplateKwargs(options), cancellationToken);
+        => _wrapped.GetResponseAsync(WithReasoningBack(messages, PreservesThinking(options)), WithRawFields(options), cancellationToken);
 
     /// <inheritdoc/>
     public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(
@@ -109,7 +109,7 @@ public sealed class OpenAICompatibleChatClient : IChatClient
         ChatOptions? options = null,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
-        await foreach (var update in _wrapped.GetStreamingResponseAsync(WithReasoningBack(messages, PreservesThinking(options)), WithTemplateKwargs(options), cancellationToken).ConfigureAwait(false))
+        await foreach (var update in _wrapped.GetStreamingResponseAsync(WithReasoningBack(messages, PreservesThinking(options)), WithRawFields(options), cancellationToken).ConfigureAwait(false))
         {
             FillTopLevelReasoningTokens(update);
             FillReasoningField(update);
@@ -220,7 +220,7 @@ public sealed class OpenAICompatibleChatClient : IChatClient
     /// <summary>
     /// The <see cref="ChatOptions.AdditionalProperties"/> key <see cref="Assistant.PreserveThinking"/> sets (2026-09-28,
     /// the setting <c>LLM preserve thinking</c>): send every turn's thinking back, not only the turn in flight's, and ask
-    /// the chat template to keep it (<see cref="WithTemplateKwargs"/>). Read here and taken off the options before the
+    /// the chat template to keep it (<see cref="WithRawFields"/>). Read here and taken off the options before the
     /// adapter sees them; the Claude API client ignores it.
     /// </summary>
     public const string PreserveThinkingKey = "neonsidekick.preserve_thinking";
@@ -230,17 +230,34 @@ public sealed class OpenAICompatibleChatClient : IChatClient
         options?.AdditionalProperties is { } properties && properties.TryGetValue(PreserveThinkingKey, out object? on) && on is true;
 
     /// <summary>
-    /// The one piece of server-specific request shaping, the template switches. <see cref="ChatOptions.Reasoning"/>
+    /// The <see cref="ChatOptions.AdditionalProperties"/> key <see cref="LlmSampling.ApplyTo"/> sets (2026-09-28, the setting
+    /// <c>LLM sampling</c>): the request's <see cref="LlmSampling"/>, whose top_k, min_p, repetition penalty and extra body
+    /// have no slot in the OpenAI schema and go out as raw fields (<see cref="WithRawFields"/>). Read here and taken off
+    /// the options before the adapter sees them; the Claude API client ignores it.
+    /// </summary>
+    public const string SamplingKey = "neonsidekick.sampling";
+
+    /// <summary>The request field the template switches go under, and the one extra-body field merged rather than written as it is.</summary>
+    public const string TemplateKwargsField = "chat_template_kwargs";
+
+    /// <summary>The <see cref="LlmSampling"/> <paramref name="options"/> carries under <see cref="SamplingKey"/>, or null.</summary>
+    internal static LlmSampling? SamplingOf(ChatOptions? options) =>
+        options?.AdditionalProperties is { } properties && properties.TryGetValue(SamplingKey, out object? sampling) ? sampling as LlmSampling : null;
+
+    /// <summary>
+    /// The server-specific request shaping, the fields the adapter has no slot for. <see cref="ChatOptions.Reasoning"/>
     /// goes out as <c>reasoning_effort</c> through the adapter on its own; but a Qwen-style chat template (vLLM, SGLang,
     /// llama.cpp) ignores that field and switches thinking off only through <c>chat_template_kwargs.enable_thinking=false</c>.
     /// So <see cref="ReasoningEffort.None"/> hands the adapter a pre-built <see cref="ChatCompletionOptions"/> carrying the
-    /// kwarg (the adapter overlays tools and the effort on it afterwards). <see cref="PreserveThinkingKey"/> (2026-09-28)
-    /// adds <c>preserve_thinking=true</c> (Qwen3.6: the template renders the thinking of earlier turns too, where it drops
-    /// them by default) and <c>clear_thinking=false</c> (GLM's name for the same switch) to the same object. Servers and
-    /// templates that know none of these ignore them. A caller-supplied factory is left alone; with neither switch, the
-    /// options pass through as they came, the key only taken off.
+    /// kwarg (the adapter overlays tools, the effort and the standard sampling fields on it afterwards). <see cref="PreserveThinkingKey"/>
+    /// (2026-09-28) adds <c>preserve_thinking=true</c> (Qwen3.6: the template renders the thinking of earlier turns too,
+    /// where it drops them by default) and <c>clear_thinking=false</c> (GLM's name for the same switch) to the same object.
+    /// <see cref="SamplingKey"/> (later on 2026-09-28, <c>LLM sampling</c>) adds top_k, min_p, the repetition penalty and
+    /// the extra body (<see cref="RawFieldsJson"/>). Servers and templates that know none of these ignore them. A
+    /// caller-supplied factory is left alone; with nothing to add, the options pass through as they came, the keys only
+    /// taken off.
     /// </summary>
-    internal static ChatOptions? WithTemplateKwargs(ChatOptions? options)
+    internal static ChatOptions? WithRawFields(ChatOptions? options)
     {
         if (options is null)
         {
@@ -249,9 +266,10 @@ public sealed class OpenAICompatibleChatClient : IChatClient
 
         bool preserve = PreservesThinking(options);
         bool off = options.Reasoning?.Effort == ReasoningEffort.None;
-        bool keyed = options.AdditionalProperties?.ContainsKey(PreserveThinkingKey) == true;
-        bool kwargs = (off || preserve) && options.RawRepresentationFactory is null;
-        if (!keyed && !kwargs)
+        var sampling = SamplingOf(options);
+        bool keyed = options.AdditionalProperties is { } properties && (properties.ContainsKey(PreserveThinkingKey) || properties.ContainsKey(SamplingKey));
+        bool raw = (off || preserve || sampling is { HasRawFields: true }) && options.RawRepresentationFactory is null;
+        if (!keyed && !raw)
         {
             return options;
         }
@@ -262,7 +280,7 @@ public sealed class OpenAICompatibleChatClient : IChatClient
             var rest = new AdditionalPropertiesDictionary();
             foreach (var (key, value) in options.AdditionalProperties!)
             {
-                if (key != PreserveThinkingKey)
+                if (key is not PreserveThinkingKey and not SamplingKey)
                 {
                     rest[key] = value;
                 }
@@ -271,9 +289,9 @@ public sealed class OpenAICompatibleChatClient : IChatClient
             shaped.AdditionalProperties = rest.Count > 0 ? rest : null;
         }
 
-        if (kwargs)
+        if (raw)
         {
-            byte[] json = TemplateKwargsJson(off, preserve);
+            byte[] json = RawFieldsJson(off, preserve, sampling);
             shaped.RawRepresentationFactory = _ =>
             {
                 var reader = new Utf8JsonReader(json);
@@ -285,31 +303,84 @@ public sealed class OpenAICompatibleChatClient : IChatClient
     }
 
     /// <summary>
-    /// The pre-built request's JSON: <c>{"chat_template_kwargs":{…}}</c> with <c>enable_thinking=false</c> for
-    /// <paramref name="thinkingOff"/> and <c>preserve_thinking=true, clear_thinking=false</c> for <paramref name="preserve"/>.
-    /// Read through the SDK's own <see cref="IJsonModel{T}"/> contract: a property the model does not know is kept and
-    /// written back on the request. The SDK's <c>Patch</c> accessor would say the same thing, but it is gated behind an
-    /// experimental diagnostic and this project suppresses nothing. Pinned by the wire tests.
+    /// The pre-built request's JSON. The extra body's fields first, as they are; then <c>top_k</c>, <c>min_p</c> and the
+    /// repetition penalty under both its names (<c>repetition_penalty</c> for vLLM and SGLang, <c>repeat_penalty</c> for
+    /// llama.cpp and LM Studio: each server ignores the name it does not know, so no server is told apart); then
+    /// <c>{"chat_template_kwargs":{…}}</c> with the extra body's own kwargs, then <c>enable_thinking=false</c> for
+    /// <paramref name="thinkingOff"/> and <c>preserve_thinking=true, clear_thinking=false</c> for <paramref name="preserve"/>
+    /// — the app's switches win a key the extra body names too. Read through the SDK's own <see cref="IJsonModel{T}"/>
+    /// contract: a property the model does not know is kept and written back on the request. The SDK's <c>Patch</c>
+    /// accessor would say the same thing, but it is gated behind an experimental diagnostic and this project suppresses
+    /// nothing. Pinned by the wire tests.
     /// </summary>
-    internal static byte[] TemplateKwargsJson(bool thinkingOff, bool preserve)
+    internal static byte[] RawFieldsJson(bool thinkingOff, bool preserve, LlmSampling? sampling)
     {
         var buffer = new ArrayBufferWriter<byte>();
         using (var writer = new Utf8JsonWriter(buffer))
         {
             writer.WriteStartObject();
-            writer.WriteStartObject("chat_template_kwargs"u8);
-            if (thinkingOff)
+            JsonElement? extraKwargs = null;
+            if (sampling is not null)
             {
-                writer.WriteBoolean("enable_thinking"u8, false);
+                foreach (var (name, value) in sampling.Extra)
+                {
+                    if (name == TemplateKwargsField)
+                    {
+                        extraKwargs = value;
+                        continue;
+                    }
+
+                    writer.WritePropertyName(name);
+                    value.WriteTo(writer);
+                }
+
+                if (sampling.TopK is { } topK)
+                {
+                    writer.WriteNumber("top_k"u8, topK);
+                }
+
+                if (sampling.MinP is { } minP)
+                {
+                    writer.WriteNumber("min_p"u8, minP);
+                }
+
+                if (sampling.RepetitionPenalty is { } repetition)
+                {
+                    writer.WriteNumber("repetition_penalty"u8, repetition);
+                    writer.WriteNumber("repeat_penalty"u8, repetition);
+                }
             }
 
-            if (preserve)
+            if (thinkingOff || preserve || extraKwargs is not null)
             {
-                writer.WriteBoolean("preserve_thinking"u8, true);
-                writer.WriteBoolean("clear_thinking"u8, false);
+                writer.WriteStartObject(TemplateKwargsField);
+                if (extraKwargs is { } kwargs)
+                {
+                    foreach (var property in kwargs.EnumerateObject())
+                    {
+                        bool ours = (thinkingOff && property.NameEquals("enable_thinking"u8))
+                            || (preserve && (property.NameEquals("preserve_thinking"u8) || property.NameEquals("clear_thinking"u8)));
+                        if (!ours)
+                        {
+                            property.WriteTo(writer);
+                        }
+                    }
+                }
+
+                if (thinkingOff)
+                {
+                    writer.WriteBoolean("enable_thinking"u8, false);
+                }
+
+                if (preserve)
+                {
+                    writer.WriteBoolean("preserve_thinking"u8, true);
+                    writer.WriteBoolean("clear_thinking"u8, false);
+                }
+
+                writer.WriteEndObject();
             }
 
-            writer.WriteEndObject();
             writer.WriteEndObject();
         }
 

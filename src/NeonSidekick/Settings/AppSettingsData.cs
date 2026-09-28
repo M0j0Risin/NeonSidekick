@@ -444,6 +444,22 @@ public sealed class AppSettingsData
     /// </summary>
     public bool LlmPreserveThinking { get; set; }
 
+    /// <summary>
+    /// Sampling overrides per model (2026-09-28, the user's ask: temperature, top_p, top_k, min_p, presence_penalty and
+    /// repetition_penalty over the model's defaults, "dynamic enough to handle different LLM servers, models"; per model
+    /// inside the profile and a free-form extra body, the user's calls). Keyed by the model id as the server reports it
+    /// (compared ignoring case), or <see cref="Llm.LlmSampling.AnyModel"/> (<c>*</c>) for every model without a value
+    /// of its own: a field resolves from the model's entry, then <c>*</c>, else it is not sent and the server's own
+    /// default stands (<see cref="Llm.LlmSampling.Resolve"/>). So a <c>/model</c> switch picks up the other model's
+    /// values by itself. temperature, top_p and the two OpenAI penalties go out as the standard fields; top_k, min_p,
+    /// the repetition penalty (as <c>repetition_penalty</c> for vLLM and SGLang and <c>repeat_penalty</c> for llama.cpp
+    /// and LM Studio, both every time) and the extra body as extra top-level fields a server that does not know them
+    /// ignores (Ollama's <c>/v1</c> takes none of them). The Claude API is not affected. Null or empty (the default)
+    /// is the server's defaults everywhere. Edited on <c>/sampling</c>; <c>NEONSIDEKICK_LLM_SAMPLING</c> overlays every
+    /// entry. Read at each turn, no reconnect.
+    /// </summary>
+    public Dictionary<string, LlmSamplingEntry>? LlmSampling { get; set; }
+
     // ─── TTS ────────────────────────────────────────────────────────────────────
 
     /// <summary>Base URL of the Kokoro-FastAPI server (OpenAI-compatible <c>/v1/audio/speech</c>).</summary>

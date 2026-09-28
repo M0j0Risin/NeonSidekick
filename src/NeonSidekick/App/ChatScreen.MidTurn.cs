@@ -130,7 +130,7 @@ internal sealed partial class ChatScreen
         SlashCommand.Help or SlashCommand.Settings or SlashCommand.Sys or SlashCommand.Memory
             or SlashCommand.Usage or SlashCommand.About or SlashCommand.EmptyTrash or SlashCommand.CmdClear or SlashCommand.Mcp or SlashCommand.CmdList or SlashCommand.Police or SlashCommand.Tools
             or SlashCommand.Tree or SlashCommand.Vault or SlashCommand.CmdCopy or SlashCommand.KeyCopy or SlashCommand.Persona or SlashCommand.Operata or SlashCommand.Vocalia => MidTurnClass.Pane,
-        SlashCommand.Reasoning or SlashCommand.Queue => hasArgs ? MidTurnClass.Quick : MidTurnClass.Pane,
+        SlashCommand.Reasoning or SlashCommand.Queue or SlashCommand.Sampling => hasArgs ? MidTurnClass.Quick : MidTurnClass.Pane,
         SlashCommand.Session => hasArgs ? MidTurnClass.Deferred : MidTurnClass.Pane,
         SlashCommand.Skills => hasArgs ? MidTurnClass.Deferred : MidTurnClass.Pane,
         SlashCommand.Cwd => hasArgs ? MidTurnClass.Deferred : MidTurnClass.Quick,
@@ -337,6 +337,10 @@ internal sealed partial class ChatScreen
                 // /tools (2026-09-19): a flip saves and is read at the next turn; the settings rows edit as on /settings mid-turn (none reconnects).
                 await _toolsMenu.ShowAsync(cancellationToken, midTurn: true).ConfigureAwait(false);
                 break;
+            case SlashCommand.Sampling:
+                // /sampling (2026-09-28): an edit saves and is read at the next turn; nothing reconnects.
+                await _samplingMenu.ShowAsync(cancellationToken).ConfigureAwait(false);
+                break;
             case SlashCommand.Police:
                 // /police (2026-09-22): the Shell police outside paths row alone, which /tools edits under a reply already; a flip is read at the next call.
                 await _toolsMenu.ShowPoliceAsync(cancellationToken).ConfigureAwait(false);
@@ -426,6 +430,10 @@ internal sealed partial class ChatScreen
                 break;
             case SlashCommand.Queue:
                 HandleQueueArgs(args);
+                break;
+            case SlashCommand.Sampling:
+                // /sampling <field> <value> (2026-09-28): the connected model's entry, read at the next turn.
+                _samplingMenu.Quick(args);
                 break;
             case SlashCommand.Expand or SlashCommand.Collapse:
                 // The tool runs and code blocks above the reply fold or unfold as it streams (2026-09-22).

@@ -19,6 +19,11 @@ public class AppSettingsTests : IDisposable
     /// Every field set to a non-default value. If a field is added to AppSettingsData but not to
     /// AppSettings.Copy, this object stops surviving Update → Current and the test fails.
     /// </summary>
+    /// <summary>The sampling map flattened for a comparison: each key with its set fields and its extra body's JSON.</summary>
+    private static string Sampling(Dictionary<string, LlmSamplingEntry>? map) =>
+        map is null ? "null" : string.Join(";", map.OrderBy(p => p.Key, StringComparer.Ordinal).Select(p =>
+            p.Key + "=" + string.Join(",", NeonSidekick.Llm.SamplingField.All.Select(f => f.Wire + ":" + f.Get(p.Value))) + SamplingText.ExtraJson(p.Value.Extra)));
+
     private static AppSettingsData FullyNonDefault() => new()
     {
         SchemaVersion = 7,
@@ -78,6 +83,11 @@ public class AppSettingsTests : IDisposable
         LlmUseFunVerbs = true,
         LlmShowThinking = false,
         LlmPreserveThinking = true,
+        LlmSampling = new()
+        {
+            ["qwen3"] = new() { Temperature = 0.6, TopK = 20, RepetitionPenalty = 1.05, Extra = new() { ["typical_p"] = JsonDocument.Parse("0.9").RootElement.Clone() } },
+            ["*"] = new() { MinP = 0.05, PresencePenalty = -0.5 },
+        },
         TtsHttpUrl = "http://box:8880/v1",
         TtsOutput = true,
         TtsSource = "http",
@@ -186,6 +196,7 @@ public class AppSettingsTests : IDisposable
         Assert.Equal(expected.LlmUseFunVerbs, actual.LlmUseFunVerbs);
         Assert.Equal(expected.LlmShowThinking, actual.LlmShowThinking);
         Assert.Equal(expected.LlmPreserveThinking, actual.LlmPreserveThinking);
+        Assert.Equal(Sampling(expected.LlmSampling), Sampling(actual.LlmSampling));
         Assert.Equal(expected.TtsHttpUrl, actual.TtsHttpUrl);
         Assert.Equal(expected.TtsOutput, actual.TtsOutput);
         Assert.Equal(expected.TtsSource, actual.TtsSource);
@@ -303,7 +314,7 @@ public class AppSettingsTests : IDisposable
             d.LlmOfferTools = full.LlmOfferTools;
             d.LlmTurnTimeoutSeconds = full.LlmTurnTimeoutSeconds;
             d.LlmUrl = full.LlmUrl;
-            d.LlmUseFunVerbs = full.LlmUseFunVerbs; d.LlmShowThinking = full.LlmShowThinking; d.LlmPreserveThinking = full.LlmPreserveThinking;
+            d.LlmUseFunVerbs = full.LlmUseFunVerbs; d.LlmShowThinking = full.LlmShowThinking; d.LlmPreserveThinking = full.LlmPreserveThinking; d.LlmSampling = LlmSamplingEntry.CopyAll(full.LlmSampling);
             d.TtsHttpUrl = full.TtsHttpUrl;
             d.TtsOutput = full.TtsOutput;
             d.TtsSource = full.TtsSource;
@@ -418,7 +429,7 @@ public class AppSettingsTests : IDisposable
                 d.LlmOfferTools = full.LlmOfferTools;
                 d.LlmTurnTimeoutSeconds = full.LlmTurnTimeoutSeconds;
                 d.LlmUrl = full.LlmUrl;
-                d.LlmUseFunVerbs = full.LlmUseFunVerbs; d.LlmShowThinking = full.LlmShowThinking; d.LlmPreserveThinking = full.LlmPreserveThinking;
+                d.LlmUseFunVerbs = full.LlmUseFunVerbs; d.LlmShowThinking = full.LlmShowThinking; d.LlmPreserveThinking = full.LlmPreserveThinking; d.LlmSampling = LlmSamplingEntry.CopyAll(full.LlmSampling);
                 d.TtsHttpUrl = full.TtsHttpUrl;
                 d.TtsOutput = full.TtsOutput;
                 d.TtsSource = full.TtsSource;
@@ -1123,6 +1134,7 @@ public class AppSettingsTests : IDisposable
         Assert.False(s.LlmUseFunVerbs);
         Assert.True(s.LlmShowThinking);
         Assert.False(s.LlmPreserveThinking);
+        Assert.Null(s.LlmSampling);
         Assert.Equal("local", s.LlmScanMode);
         Assert.True(s.WebTools);
         Assert.Equal("default", s.WebBrowserMode);

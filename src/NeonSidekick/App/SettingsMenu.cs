@@ -499,6 +499,9 @@ public enum SettingsField
 
     /// <summary>A toggle: whether a reply's thinking is saved with the session (<see cref="Settings.AppSettingsData.SessionSaveThinking"/>). The Sessions tab's last row (2026-09-28, the user's ask); no reconnect (read at each save). Last in the enum, as every newcomer.</summary>
     SessionSaveThinking,
+
+    /// <summary>A door: the models with sampling overrides (<see cref="Settings.AppSettingsData.LlmSampling"/>); Enter opens the <c>/sampling</c> pane (<see cref="SettingsMenu.SamplingPane"/>). The LLM tab's last row (2026-09-28, the user's ask); no reconnect (read at each turn). Last in the enum, as every newcomer.</summary>
+    LlmSampling,
 }
 
 /// <summary>The tabs of <c>/settings</c> on the pane, in strip order (Sessions right after General — the user's order, 2026-09-18; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
@@ -790,7 +793,7 @@ internal sealed partial class SettingsMenu
     [
         [SettingsField.Profile, SettingsField.NewProfileMode, SettingsField.WorkingDirectory, SettingsField.QueueMessages, SettingsField.QueueCancelMode, SettingsField.Memory, SettingsField.CopyUserPrompt, SettingsField.ShowImageThumbnails, SettingsField.ImageThumbnailSize, SettingsField.TranscriptMarkdown, SettingsField.PastePreviewLines, SettingsField.HideExitAutocomplete, SettingsField.CommandTypoIntercept, SettingsField.KeepCommandHistory, SettingsField.WelcomeSplash, SettingsField.ShowWorkingDirectory, SettingsField.ShowToolbar, SettingsField.Theme, SettingsField.DraftEditor, SettingsField.ImageEditor, SettingsField.ThemedViewer],
         [SettingsField.SessionLogging, SettingsField.SessionRetentionDays, SettingsField.SessionNamingMode, SettingsField.SessionShowName, SettingsField.SessionTool, SettingsField.SessionSearchMaxResults, SettingsField.SessionSaveThinking],
-        [SettingsField.LlmScanMode, SettingsField.LlmUrl, SettingsField.LlmModel, SettingsField.LlmApiKey, SettingsField.LlmReasoning, SettingsField.LlmRequestTimeoutSeconds, SettingsField.LlmTurnTimeoutSeconds, SettingsField.LlmContextLength, SettingsField.LlmMidTurnUsage, SettingsField.LlmCompactType, SettingsField.LlmCompactKeepRecent, SettingsField.LlmCompactShowSummary, SettingsField.LlmAutoCompactPercent, SettingsField.LlmMaxTurns, SettingsField.LlmOfferTools, SettingsField.LlmToolCompactType, SettingsField.LlmMaxToolIterations, SettingsField.LlmUseFunVerbs, SettingsField.LlmShowThinking, SettingsField.LlmPreserveThinking],
+        [SettingsField.LlmScanMode, SettingsField.LlmUrl, SettingsField.LlmModel, SettingsField.LlmApiKey, SettingsField.LlmReasoning, SettingsField.LlmRequestTimeoutSeconds, SettingsField.LlmTurnTimeoutSeconds, SettingsField.LlmContextLength, SettingsField.LlmMidTurnUsage, SettingsField.LlmCompactType, SettingsField.LlmCompactKeepRecent, SettingsField.LlmCompactShowSummary, SettingsField.LlmAutoCompactPercent, SettingsField.LlmMaxTurns, SettingsField.LlmOfferTools, SettingsField.LlmToolCompactType, SettingsField.LlmMaxToolIterations, SettingsField.LlmUseFunVerbs, SettingsField.LlmShowThinking, SettingsField.LlmPreserveThinking, SettingsField.LlmSampling],
         [SettingsField.TtsOutput, SettingsField.TtsSource, SettingsField.TtsHttpUrl, SettingsField.TtsVoicePreview, SettingsField.TtsVoicePreset, SettingsField.TtsVoice, SettingsField.TtsVoice2, SettingsField.TtsVoiceMix, SettingsField.TtsSpeed],
         Fields.Where(IsVoiceField).ToArray(),
         [SettingsField.ClaudeApi, SettingsField.ClaudeApiKey, SettingsField.ClaudeApiMaxTokens, SettingsField.ClaudeApiPromptCaching],
@@ -939,6 +942,12 @@ internal sealed partial class SettingsMenu
     /// Ask / Files / Web rows (<c>Tools › Web browser mode</c>, 2026-09-19); that host sets it for its run and restores it.
     /// </summary>
     public string Root { get; set; } = Title;
+
+    /// <summary>
+    /// What Enter on the <c>LLM sampling</c> row opens (2026-09-28): the screen's <see cref="SamplingMenu.ShowAsync"/>, set
+    /// once the screen has built it; null (a test's menu) opens nothing.
+    /// </summary>
+    public Func<CancellationToken, Task>? SamplingPane { get; set; }
 
     /// <summary><see cref="Breadcrumb"/> under <see cref="Root"/>.</summary>
     private string Crumb(string label) => Root + " › " + label;
@@ -1145,6 +1154,7 @@ internal sealed partial class SettingsMenu
         SettingsField.LlmUseFunVerbs => "LLM use fun verbs",
         SettingsField.LlmShowThinking => "LLM show thinking",
         SettingsField.LlmPreserveThinking => "LLM preserve thinking",
+        SettingsField.LlmSampling => "LLM sampling",
         SettingsField.SessionSaveThinking => "Session save thinking",
         SettingsField.ClaudeExecutable => "Claude executable",
         SettingsField.ClaudePermissions => "Claude slash command permissions",
@@ -1335,6 +1345,7 @@ internal sealed partial class SettingsMenu
             SettingsField.LlmUseFunVerbs => OnOff(data.LlmUseFunVerbs),
             SettingsField.LlmShowThinking => OnOff(data.LlmShowThinking),
             SettingsField.LlmPreserveThinking => OnOff(data.LlmPreserveThinking),
+            SettingsField.LlmSampling => SamplingText.Summary(data.LlmSampling),
             SettingsField.SessionSaveThinking => OnOff(data.SessionSaveThinking),
             SettingsField.ClaudeExecutable => string.IsNullOrWhiteSpace(data.ClaudeExecutable) ? ClaudeLookedUpLabel : data.ClaudeExecutable,
             SettingsField.ClaudePermissions => data.ClaudePermissions,
@@ -2433,6 +2444,17 @@ internal sealed partial class SettingsMenu
     /// </summary>
     internal async Task<bool> EditAsync(SettingsField field, AppSettingsData saved, MenuPage page, int row, CancellationToken cancellationToken)
     {
+        if (field == SettingsField.LlmSampling)
+        {
+            // A door, not a value (2026-09-28): the /sampling pane saves its own edits, so this row reports nothing changed.
+            if (SamplingPane is { } open)
+            {
+                await open(cancellationToken).ConfigureAwait(false);
+            }
+
+            return false;
+        }
+
         if (IsToggle(field))
         {
             return await PickToggleAsync(field, saved, cancellationToken).ConfigureAwait(false);
