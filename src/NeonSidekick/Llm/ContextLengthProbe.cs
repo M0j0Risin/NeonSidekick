@@ -88,54 +88,25 @@ public sealed class ContextLengthProbe
         return found;
     }
 
-    /// <summary>One request; the parser's answer on a 200, null on anything else (logged at Debug). A body makes it a POST.</summary>
+    /// <summary>One request (<see cref="NativeRequest"/>); the parser's answer on a 2xx, null on anything else (logged at Debug). A body makes it a POST.</summary>
     private async Task<ContextLength?> TierAsync(Uri url, string? apiKey, Func<string, ContextLength?> parse, CancellationToken cancellationToken, string? body = null)
     {
-        try
-        {
-            // A per-call ceiling on a connect-time probe, not the turn budget (the linked-CTS rule is about the turn path).
-            using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            budget.CancelAfter(Timeout);
-
-            using var request = new HttpRequestMessage(body is null ? HttpMethod.Get : HttpMethod.Post, url);
-            if (body is not null)
-            {
-                request.Content = new StringContent(body, System.Text.Encoding.UTF8, "application/json");
-            }
-
-            if (!string.IsNullOrWhiteSpace(apiKey))
-            {
-                request.Headers.TryAddWithoutValidation("Authorization", "Bearer " + apiKey.Trim());
-            }
-
-            using var response = await _http.SendAsync(request, HttpCompletionOption.ResponseContentRead, budget.Token).ConfigureAwait(false);
-            if (!response.IsSuccessStatusCode)
-            {
-                DiagnosticLog.Debug(Category, $"{url.AbsolutePath}: {(int)response.StatusCode}; no context length there.");
-                return null;
-            }
-
-            string text = await response.Content.ReadAsStringAsync(budget.Token).ConfigureAwait(false);
-            var parsed = parse(text);
-            if (parsed is null)
-            {
-                DiagnosticLog.Debug(Category, $"{url.AbsolutePath}: answered without a context length.");
-            }
-
-            return parsed;
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        if (await NativeRequest.TextAsync(_http, url, apiKey, Timeout, Category, cancellationToken, body).ConfigureAwait(false) is not { } text)
         {
             return null;
         }
-        catch (Exception ex)
+
+        var parsed = parse(text);
+        if (parsed is null)
         {
-            DiagnosticLog.Debug(Category, $"{url.AbsolutePath}: {ex.Message}");
-            return null;
+            DiagnosticLog.Debug(Category, $"{url.AbsolutePath}: answered without a context length.");
         }
+
+        return parsed;
     }
 
-    private static Uri Under(Uri root, string path) => new(root.AbsoluteUri.TrimEnd('/') + "/" + path);
+    /// <summary><paramref name="path"/> under the server's root (<see cref="LlmEndpoint.RootUrl"/>); shared with <see cref="ServerSamplingProbe"/>.</summary>
+    internal static Uri Under(Uri root, string path) => new(root.AbsoluteUri.TrimEnd('/') + "/" + path);
 
     /// <summary>The <c>/api/show</c> request body, <c>{"model":"…"}</c>, written by the JSON writer so any id is escaped correctly.</summary>
     public static string ShowBody(string modelId)

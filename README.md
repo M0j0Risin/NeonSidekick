@@ -174,6 +174,7 @@ Settings that an environment variable or flag can override for one launch are li
 | LLM show thinking | Streams a reasoning model's thinking as a dim block (its last five lines), folded to `▸ 💭 thought for 4.2s` when the answer starts; needs Transcript markdown. Click the line, press Ctrl+O or use `/expand` to see it again. Thinking is never spoken or logged, and copied only by `/copy --thinking`. | on |
 | LLM preserve thinking | Sends the model's thinking from earlier turns back to a local server, as `reasoning_content`, and asks the chat template to keep it (`chat_template_kwargs`: `preserve_thinking` for Qwen3.6, `clear_thinking: false` for GLM). The current turn's thinking always goes back, so a model keeps its reasoning between tool calls. Costs context; a `/compact` prune drops older thinking first. The Claude API is not affected. | off |
 | LLM sampling | Sampling overrides per model (temperature, top_p, top_k, min_p, the penalties, an extra body); the row lists the models that have some, and Enter opens the `/sampling` pane. See [Sampling per model](#sampling-per-model). | (server defaults) |
+| LLM sampling from Hugging Face | When the server doesn't report its sampling defaults (vLLM, SGLang, LM Studio) and the model id is a Hugging Face repo (`Qwen/Qwen3-8B`), the `/sampling` pane reads the model card's `generation_config.json` and shows its values as `(Hugging Face)`. vLLM and SGLang use that file unless started otherwise. One request to huggingface.co per model and connect, never with your API key; display only. | off |
 
 #### Sampling per model
 
@@ -189,6 +190,8 @@ Every request leaves sampling to the server and the model's own defaults until y
 | frequency_penalty | -2 to 2 | `frequency_penalty` | all |
 | repetition_penalty | above 0, up to 2 (1 is none) | `repetition_penalty` **and** `repeat_penalty` | vLLM and SGLang read the first, llama.cpp and LM Studio the second |
 | extra body | a JSON object | its fields, top level | whatever the server knows: `{"typical_p":0.9,"dry_multiplier":0.8,"seed":42}` |
+
+Where the server says what it applies by default, the connected model's tab shows it dim: `0.8 (server)`, with the source in the tab's caption. llama.cpp reports its defaults on `/props` and Ollama its Modelfile's on `/api/show`. vLLM, SGLang and LM Studio report none; for vLLM and SGLang, *LLM sampling from Hugging Face* reads the model card's `generation_config.json` instead (`0.6 (Hugging Face)`). They are asked once when the pane first opens after a connect.
 
 A server ignores the fields it does not know; Ollama's `/v1` endpoint takes only the four OpenAI ones. The extra body may not set the fields the app writes itself (`model`, `messages`, `tools`, `stream`, `reasoning_effort`, …) or a named field. Its `chat_template_kwargs` is merged with the app's own, and the app's `enable_thinking` and `preserve_thinking` win. The Claude API is not affected. Without the pane: `/sampling temperature 0.6`, `/sampling top_k clear`, `/sampling extra {"seed":42}` and `/sampling clear` change the connected model's values. `NEONSIDEKICK_LLM_SAMPLING` overrides every model for one run. The log's connect line is followed by `Sampling: …` whenever something is set.
 

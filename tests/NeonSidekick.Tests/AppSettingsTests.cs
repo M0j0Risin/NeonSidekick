@@ -83,6 +83,7 @@ public class AppSettingsTests : IDisposable
         LlmUseFunVerbs = true,
         LlmShowThinking = false,
         LlmPreserveThinking = true,
+        LlmSamplingFromHuggingFace = true,
         LlmSampling = new()
         {
             ["qwen3"] = new() { Temperature = 0.6, TopK = 20, RepetitionPenalty = 1.05, Extra = new() { ["typical_p"] = JsonDocument.Parse("0.9").RootElement.Clone() } },
@@ -196,6 +197,7 @@ public class AppSettingsTests : IDisposable
         Assert.Equal(expected.LlmUseFunVerbs, actual.LlmUseFunVerbs);
         Assert.Equal(expected.LlmShowThinking, actual.LlmShowThinking);
         Assert.Equal(expected.LlmPreserveThinking, actual.LlmPreserveThinking);
+        Assert.Equal(expected.LlmSamplingFromHuggingFace, actual.LlmSamplingFromHuggingFace);
         Assert.Equal(Sampling(expected.LlmSampling), Sampling(actual.LlmSampling));
         Assert.Equal(expected.TtsHttpUrl, actual.TtsHttpUrl);
         Assert.Equal(expected.TtsOutput, actual.TtsOutput);
@@ -314,7 +316,7 @@ public class AppSettingsTests : IDisposable
             d.LlmOfferTools = full.LlmOfferTools;
             d.LlmTurnTimeoutSeconds = full.LlmTurnTimeoutSeconds;
             d.LlmUrl = full.LlmUrl;
-            d.LlmUseFunVerbs = full.LlmUseFunVerbs; d.LlmShowThinking = full.LlmShowThinking; d.LlmPreserveThinking = full.LlmPreserveThinking; d.LlmSampling = LlmSamplingEntry.CopyAll(full.LlmSampling);
+            d.LlmUseFunVerbs = full.LlmUseFunVerbs; d.LlmShowThinking = full.LlmShowThinking; d.LlmPreserveThinking = full.LlmPreserveThinking; d.LlmSampling = LlmSamplingEntry.CopyAll(full.LlmSampling); d.LlmSamplingFromHuggingFace = full.LlmSamplingFromHuggingFace;
             d.TtsHttpUrl = full.TtsHttpUrl;
             d.TtsOutput = full.TtsOutput;
             d.TtsSource = full.TtsSource;
@@ -429,7 +431,7 @@ public class AppSettingsTests : IDisposable
                 d.LlmOfferTools = full.LlmOfferTools;
                 d.LlmTurnTimeoutSeconds = full.LlmTurnTimeoutSeconds;
                 d.LlmUrl = full.LlmUrl;
-                d.LlmUseFunVerbs = full.LlmUseFunVerbs; d.LlmShowThinking = full.LlmShowThinking; d.LlmPreserveThinking = full.LlmPreserveThinking; d.LlmSampling = LlmSamplingEntry.CopyAll(full.LlmSampling);
+                d.LlmUseFunVerbs = full.LlmUseFunVerbs; d.LlmShowThinking = full.LlmShowThinking; d.LlmPreserveThinking = full.LlmPreserveThinking; d.LlmSampling = LlmSamplingEntry.CopyAll(full.LlmSampling); d.LlmSamplingFromHuggingFace = full.LlmSamplingFromHuggingFace;
                 d.TtsHttpUrl = full.TtsHttpUrl;
                 d.TtsOutput = full.TtsOutput;
                 d.TtsSource = full.TtsSource;
@@ -1135,6 +1137,7 @@ public class AppSettingsTests : IDisposable
         Assert.True(s.LlmShowThinking);
         Assert.False(s.LlmPreserveThinking);
         Assert.Null(s.LlmSampling);
+        Assert.False(s.LlmSamplingFromHuggingFace);
         Assert.Equal("local", s.LlmScanMode);
         Assert.True(s.WebTools);
         Assert.Equal("default", s.WebBrowserMode);

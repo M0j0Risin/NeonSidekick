@@ -59,6 +59,7 @@ public sealed class SidekickApp
     private readonly Func<IReadOnlyList<SmokeCheck>> _smokeChecks;
     private readonly LlmEndpointProbe _probe;
     private readonly ContextLengthProbe _contextProbe;
+    private readonly ServerSamplingProbe _samplingProbe;
     private readonly Func<LlmEndpoint, LlmTimeouts, IChatClient> _chatClientFactory;
     private readonly Func<PcmFormat, IAudioPlayback> _playbackFactory;
     private readonly Func<SynthesizerRequest, ISpeechSynthesizer> _synthesizerFactory;
@@ -144,8 +145,11 @@ public sealed class SidekickApp
         Func<Uri, Comfy.ComfyClient>? comfyClient = null,
         Claude.IClaudeCli? claude = null,
         Action<string>? openViewer = null,
-        Action<string>? viewPicture = null)
+        Action<string>? viewPicture = null,
+        ServerSamplingProbe? samplingProbe = null)
     {
+        // The /sampling pane's server defaults (2026-09-28): a real HttpClient in the app, like the context probe; tests pass one over a stub.
+        _samplingProbe = samplingProbe ?? new ServerSamplingProbe(new HttpClient());
         // The picture viewer (2026-09-27): PictureWindow.Open in the app on Windows, null in tests and elsewhere.
         _openViewer = openViewer;
         // A double-clicked picture in that viewer (later on 2026-09-27): PictureWindow.OpenAt in the app on Windows, null in tests and elsewhere.
@@ -447,7 +451,7 @@ public sealed class SidekickApp
         DiagnosticLog.Emitted += forward;
         LogStartup();
         EncryptSqlPasswords();
-        using var session = new LlmSession(_probe, _contextProbe, _chatClientFactory, _time);
+        using var session = new LlmSession(_probe, _contextProbe, _chatClientFactory, _time, _samplingProbe);
         // The MCP servers (2026-09-20): connected after the LLM, their tools offered per turn like the screen's; disposed after the loop.
         await using var mcp = new McpSession(_settings, _mcpTransport, _time);
         var memory = BuildMemoryStore();
@@ -1358,7 +1362,7 @@ public sealed class SidekickApp
     /// </summary>
     private async Task<int> RunInteractiveAsync(CancellationToken cancellationToken)
     {
-        using var session = new LlmSession(_probe, _contextProbe, _chatClientFactory, _time);
+        using var session = new LlmSession(_probe, _contextProbe, _chatClientFactory, _time, _samplingProbe);
         using var speech = new SpeechSession(_synthesizerFactory, _playbackFactory, new ModelStore(ModelsDirectory, _modelHttpClient));
         using var voice = BuildVoiceSession();
         // The MCP servers' session (2026-09-20), disposed after the screen: its stdio children end once the alternate buffer is left.

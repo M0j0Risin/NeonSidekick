@@ -29,6 +29,7 @@ internal sealed class SamplingMenu
     private readonly Func<LlmEndpoint?> _endpoint;
     private readonly Func<string?> _overriddenBy;
     private readonly Action _changed;
+    private readonly Func<CancellationToken, Task<ServerSampling?>> _serverDefaults;
 
     /// <param name="settings">The store the edits write to.</param>
     /// <param name="menu">The settings menu, for its yes/no pane.</param>
@@ -38,8 +39,10 @@ internal sealed class SamplingMenu
     /// <param name="endpoint">The connected endpoint, whose model the first tab and <see cref="Quick"/> are for; null while nothing is.</param>
     /// <param name="overriddenBy">The variable overriding the sampling for this launch, or null (<c>NEONSIDEKICK_LLM_SAMPLING</c>).</param>
     /// <param name="changed">Called after every save: the screen resolves the connected assistant's sampling again.</param>
-    public SamplingMenu(AppSettings settings, SettingsMenu menu, INoticeSink transcript, MenuPane pane, InputLine input, Func<LlmEndpoint?> endpoint, Func<string?> overriddenBy, Action changed)
+    /// <param name="serverDefaults">What the connected server says it applies (<see cref="LlmSession.ServerSamplingAsync"/>), asked once each time the pane opens; null asks nothing.</param>
+    public SamplingMenu(AppSettings settings, SettingsMenu menu, INoticeSink transcript, MenuPane pane, InputLine input, Func<LlmEndpoint?> endpoint, Func<string?> overriddenBy, Action changed, Func<CancellationToken, Task<ServerSampling?>>? serverDefaults = null)
     {
+        _serverDefaults = serverDefaults ?? (_ => Task.FromResult<ServerSampling?>(null));
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));
         _menu = menu ?? throw new ArgumentNullException(nameof(menu));
         _transcript = transcript ?? throw new ArgumentNullException(nameof(transcript));
@@ -80,8 +83,11 @@ internal sealed class SamplingMenu
         return keys;
     }
 
-    /// <summary>One tab's rows as markup: each field padded to <see cref="SamplingText.LabelWidth"/>, a value it sets in ink, an inherited one or a default dim.</summary>
-    public static IReadOnlyList<string> Rows(Dictionary<string, LlmSamplingEntry>? map, string key)
+    /// <summary>
+    /// One tab's rows as markup: each field padded to <see cref="SamplingText.LabelWidth"/>, a value it sets in ink, an
+    /// inherited one, the server's (<paramref name="server"/>: the connected model's tab alone) or a default dim.
+    /// </summary>
+    public static IReadOnlyList<string> Rows(Dictionary<string, LlmSamplingEntry>? map, string key, ServerSampling? server = null)
     {
         ArgumentNullException.ThrowIfNull(key);
         bool anyTab = key == LlmSampling.AnyModel;
@@ -90,7 +96,7 @@ internal sealed class SamplingMenu
         var rows = new List<string>(ClearRow + 1);
         foreach (var field in SamplingField.All)
         {
-            rows.Add(Row(field.Wire, SamplingText.FieldValue(field, entry, any, anyTab), own: field.Get(entry) is not null));
+            rows.Add(Row(field.Wire, SamplingText.FieldValue(field, entry, any, anyTab, server), own: field.Get(entry) is not null));
         }
 
         rows.Add(Row(SamplingText.ExtraRowName, SamplingText.ExtraValue(entry, any, anyTab), own: entry?.Extra is { Count: > 0 }));
@@ -101,26 +107,43 @@ internal sealed class SamplingMenu
     private static string Row(string name, string value, bool own) =>
         Markup.Escape(name.PadRight(SamplingText.LabelWidth)) + (own ? Theme.ColorMarkup(Theme.Ink, value) : Theme.DimMarkup(value));
 
-    /// <summary>The tabbed page over <paramref name="keys"/>, on <paramref name="tab"/>; every tab captioned <see cref="SamplingText.ClaudeApiCaption"/> while <paramref name="claudeApi"/>.</summary>
-    public static MenuPage Page(Dictionary<string, LlmSamplingEntry>? map, IReadOnlyList<string> keys, int tab, bool claudeApi)
+    /// <summary>
+    /// The tabbed page over <paramref name="keys"/>, on <paramref name="tab"/>; every tab captioned
+    /// <see cref="SamplingText.ClaudeApiCaption"/> while <paramref name="claudeApi"/>, else the connected model's tab (the
+    /// first, when <paramref name="server"/> is known) captioned with where the server's values came from.
+    /// </summary>
+    public static MenuPage Page(Dictionary<string, LlmSamplingEntry>? map, IReadOnlyList<string> keys, int tab, bool claudeApi, ServerSampling? server = null)
     {
         ArgumentNullException.ThrowIfNull(keys);
-        var tabs = keys.Select(k => new MenuTab(SamplingText.TabTitle(k), Rows(map, k)) { Caption = claudeApi ? SamplingText.ClaudeApiCaption : null }).ToList();
+        var tabs = keys.Select((k, i) =>
+        {
+            var reported = i == 0 && k != LlmSampling.AnyModel ? server : null;
+            string? caption = claudeApi ? SamplingText.ClaudeApiCaption : reported is null ? null : SamplingText.SourceCaption(reported);
+            return new MenuTab(SamplingText.TabTitle(k), Rows(map, k, reported)) { Caption = caption };
+        }).ToList();
         return MenuPage.Tabbed(SamplingText.Label, tabs, tab, SamplingText.Keys);
     }
 
-    /// <summary>The tabs as plain lines, for a console without the pane: each tab's title as a heading, its rows indented.</summary>
-    public static IEnumerable<string> Lines(Dictionary<string, LlmSamplingEntry>? map, string? connectedModel)
+    /// <summary>The tabs as plain lines, for a console without the pane: each tab's title as a heading, its rows indented; the connected model's with the server's values and their source.</summary>
+    public static IEnumerable<string> Lines(Dictionary<string, LlmSamplingEntry>? map, string? connectedModel, ServerSampling? server = null)
     {
-        foreach (var key in TabKeys(map, connectedModel))
+        var keys = TabKeys(map, connectedModel);
+        for (int i = 0; i < keys.Count; i++)
         {
+            string key = keys[i];
             bool anyTab = key == LlmSampling.AnyModel;
+            var reported = i == 0 && !anyTab ? server : null;
             var entry = Entry(map, key);
             var any = anyTab ? null : Entry(map, LlmSampling.AnyModel);
             yield return SamplingText.TabTitle(key);
+            if (reported is not null)
+            {
+                yield return "  " + SamplingText.SourceCaption(reported);
+            }
+
             foreach (var field in SamplingField.All)
             {
-                yield return "  " + field.Wire.PadRight(SamplingText.LabelWidth) + SamplingText.FieldValue(field, entry, any, anyTab);
+                yield return "  " + field.Wire.PadRight(SamplingText.LabelWidth) + SamplingText.FieldValue(field, entry, any, anyTab, reported);
             }
 
             yield return "  " + SamplingText.ExtraRowName.PadRight(SamplingText.LabelWidth) + SamplingText.ExtraValue(entry, any, anyTab);
@@ -278,9 +301,10 @@ internal sealed class SamplingMenu
     {
         var endpoint = _endpoint();
         string? model = endpoint?.ModelId;
+        var server = await _serverDefaults(cancellationToken).ConfigureAwait(false);
         if (!_pane.Enabled)
         {
-            foreach (var line in Lines(_settings.Current.LlmSampling, model))
+            foreach (var line in Lines(_settings.Current.LlmSampling, model, server))
             {
                 _transcript.Notice(line);
             }
@@ -298,7 +322,7 @@ internal sealed class SamplingMenu
                 var map = _settings.Current.LlmSampling;
                 var keys = TabKeys(map, model);
                 tab = Math.Clamp(tab, 0, keys.Count - 1);
-                var page = Page(map, keys, tab, claudeApi);
+                var page = Page(map, keys, tab, claudeApi, server);
                 if (await _pane.PickAsync(page, cursor, cancellationToken).ConfigureAwait(false) is not { } pick)
                 {
                     return;
@@ -307,7 +331,7 @@ internal sealed class SamplingMenu
                 tab = pick.Tab;
                 cursor = pick.Row;
                 string key = keys[tab];
-                var shown = pick.Tab == page.Tab ? page : Page(map, keys, tab, claudeApi);
+                var shown = pick.Tab == page.Tab ? page : Page(map, keys, tab, claudeApi, server);
                 if (cursor == ClearRow)
                 {
                     if (Entry(map, key) is { IsEmpty: false } && await _menu.ConfirmAsync(SamplingText.ClearQuestion(key), cancellationToken).ConfigureAwait(false))

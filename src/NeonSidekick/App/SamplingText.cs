@@ -44,9 +44,10 @@ public static class SamplingText
 
     /// <summary>
     /// What a named field's row shows for <paramref name="key"/>'s tab: its own value; else, on a model's tab, the
-    /// <c>*</c> value it inherits (<c>0.7 (from *)</c>); else <see cref="ServerDefault"/>.
+    /// <c>*</c> value it inherits (<c>0.7 (from *)</c>); else, on the connected model's tab, what the server said it
+    /// applies (<paramref name="server"/>, 2026-09-28: <see cref="ServerValue"/>); else <see cref="ServerDefault"/>.
     /// </summary>
-    public static string FieldValue(SamplingField field, LlmSamplingEntry? entry, LlmSamplingEntry? any, bool anyTab)
+    public static string FieldValue(SamplingField field, LlmSamplingEntry? entry, LlmSamplingEntry? any, bool anyTab, ServerSampling? server = null)
     {
         ArgumentNullException.ThrowIfNull(field);
         if (field.Get(entry) is { } own)
@@ -54,7 +55,28 @@ public static class SamplingText
             return SamplingField.Format(own);
         }
 
-        return !anyTab && field.Get(any) is { } inherited ? SamplingField.Format(inherited) + " (from *)" : ServerDefault;
+        if (!anyTab && field.Get(any) is { } inherited)
+        {
+            return SamplingField.Format(inherited) + " (from *)";
+        }
+
+        return server?.Value(field.Key) is { } reported ? ServerValue(reported, server.Source) : ServerDefault;
+    }
+
+    /// <summary>A value the server reported: <c>0.8 (server)</c>, or <c>0.6 (Hugging Face)</c> from the model card. Pinned.</summary>
+    public static string ServerValue(double value, ServerSamplingSource source) =>
+        SamplingField.Format(value) + (source == ServerSamplingSource.HuggingFace ? " (Hugging Face)" : " (server)");
+
+    /// <summary>The connected model's tab caption: where its <see cref="ServerValue"/>s were read. Pinned.</summary>
+    public static string SourceCaption(ServerSampling server)
+    {
+        ArgumentNullException.ThrowIfNull(server);
+        return server.Source switch
+        {
+            ServerSamplingSource.LlamaProps => "Defaults from llama.cpp's /props.",
+            ServerSamplingSource.OllamaShow => "Defaults from Ollama's /api/show (the Modelfile's parameters).",
+            _ => $"Defaults from huggingface.co/{server.Detail} (generation_config.json).",
+        };
     }
 
     /// <summary>The extra body as its row shows it and its edit starts from: compact JSON, or empty for none.</summary>

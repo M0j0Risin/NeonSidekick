@@ -502,6 +502,9 @@ public enum SettingsField
 
     /// <summary>A door: the models with sampling overrides (<see cref="Settings.AppSettingsData.LlmSampling"/>); Enter opens the <c>/sampling</c> pane (<see cref="SettingsMenu.SamplingPane"/>). The LLM tab's last row (2026-09-28, the user's ask); no reconnect (read at each turn). Last in the enum, as every newcomer.</summary>
     LlmSampling,
+
+    /// <summary>A toggle: whether the <c>/sampling</c> pane reads a model's defaults from its Hugging Face card when the server says nothing (<see cref="Settings.AppSettingsData.LlmSamplingFromHuggingFace"/>). The LLM tab, under LLM sampling (2026-09-28, the user's call); no reconnect (read when the pane opens). Last in the enum, as every newcomer.</summary>
+    LlmSamplingFromHuggingFace,
 }
 
 /// <summary>The tabs of <c>/settings</c> on the pane, in strip order (Sessions right after General — the user's order, 2026-09-18; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
@@ -793,7 +796,7 @@ internal sealed partial class SettingsMenu
     [
         [SettingsField.Profile, SettingsField.NewProfileMode, SettingsField.WorkingDirectory, SettingsField.QueueMessages, SettingsField.QueueCancelMode, SettingsField.Memory, SettingsField.CopyUserPrompt, SettingsField.ShowImageThumbnails, SettingsField.ImageThumbnailSize, SettingsField.TranscriptMarkdown, SettingsField.PastePreviewLines, SettingsField.HideExitAutocomplete, SettingsField.CommandTypoIntercept, SettingsField.KeepCommandHistory, SettingsField.WelcomeSplash, SettingsField.ShowWorkingDirectory, SettingsField.ShowToolbar, SettingsField.Theme, SettingsField.DraftEditor, SettingsField.ImageEditor, SettingsField.ThemedViewer],
         [SettingsField.SessionLogging, SettingsField.SessionRetentionDays, SettingsField.SessionNamingMode, SettingsField.SessionShowName, SettingsField.SessionTool, SettingsField.SessionSearchMaxResults, SettingsField.SessionSaveThinking],
-        [SettingsField.LlmScanMode, SettingsField.LlmUrl, SettingsField.LlmModel, SettingsField.LlmApiKey, SettingsField.LlmReasoning, SettingsField.LlmRequestTimeoutSeconds, SettingsField.LlmTurnTimeoutSeconds, SettingsField.LlmContextLength, SettingsField.LlmMidTurnUsage, SettingsField.LlmCompactType, SettingsField.LlmCompactKeepRecent, SettingsField.LlmCompactShowSummary, SettingsField.LlmAutoCompactPercent, SettingsField.LlmMaxTurns, SettingsField.LlmOfferTools, SettingsField.LlmToolCompactType, SettingsField.LlmMaxToolIterations, SettingsField.LlmUseFunVerbs, SettingsField.LlmShowThinking, SettingsField.LlmPreserveThinking, SettingsField.LlmSampling],
+        [SettingsField.LlmScanMode, SettingsField.LlmUrl, SettingsField.LlmModel, SettingsField.LlmApiKey, SettingsField.LlmReasoning, SettingsField.LlmRequestTimeoutSeconds, SettingsField.LlmTurnTimeoutSeconds, SettingsField.LlmContextLength, SettingsField.LlmMidTurnUsage, SettingsField.LlmCompactType, SettingsField.LlmCompactKeepRecent, SettingsField.LlmCompactShowSummary, SettingsField.LlmAutoCompactPercent, SettingsField.LlmMaxTurns, SettingsField.LlmOfferTools, SettingsField.LlmToolCompactType, SettingsField.LlmMaxToolIterations, SettingsField.LlmUseFunVerbs, SettingsField.LlmShowThinking, SettingsField.LlmPreserveThinking, SettingsField.LlmSampling, SettingsField.LlmSamplingFromHuggingFace],
         [SettingsField.TtsOutput, SettingsField.TtsSource, SettingsField.TtsHttpUrl, SettingsField.TtsVoicePreview, SettingsField.TtsVoicePreset, SettingsField.TtsVoice, SettingsField.TtsVoice2, SettingsField.TtsVoiceMix, SettingsField.TtsSpeed],
         Fields.Where(IsVoiceField).ToArray(),
         [SettingsField.ClaudeApi, SettingsField.ClaudeApiKey, SettingsField.ClaudeApiMaxTokens, SettingsField.ClaudeApiPromptCaching],
@@ -1090,7 +1093,7 @@ internal sealed partial class SettingsMenu
     public static bool IsToggle(SettingsField field) =>
         field is SettingsField.TtsOutput or SettingsField.SttInput or SettingsField.SttWake or SettingsField.SttInterrupt
             or SettingsField.Memory or SettingsField.CopyUserPrompt or SettingsField.ShowImageThumbnails
-            or SettingsField.FileTreeShowSizes or SettingsField.LlmOfferTools or SettingsField.LlmUseFunVerbs or SettingsField.LlmShowThinking or SettingsField.LlmPreserveThinking
+            or SettingsField.FileTreeShowSizes or SettingsField.LlmOfferTools or SettingsField.LlmUseFunVerbs or SettingsField.LlmShowThinking or SettingsField.LlmPreserveThinking or SettingsField.LlmSamplingFromHuggingFace
             or SettingsField.WebTools or SettingsField.TtsVoicePreview or SettingsField.FileTools or SettingsField.AskUser
             or SettingsField.AgentSkills or SettingsField.ExternalSkills or SettingsField.TranscriptMarkdown
             or SettingsField.FileSafeEdits
@@ -1155,6 +1158,7 @@ internal sealed partial class SettingsMenu
         SettingsField.LlmShowThinking => "LLM show thinking",
         SettingsField.LlmPreserveThinking => "LLM preserve thinking",
         SettingsField.LlmSampling => "LLM sampling",
+        SettingsField.LlmSamplingFromHuggingFace => "LLM sampling from Hugging Face",
         SettingsField.SessionSaveThinking => "Session save thinking",
         SettingsField.ClaudeExecutable => "Claude executable",
         SettingsField.ClaudePermissions => "Claude slash command permissions",
@@ -1346,6 +1350,7 @@ internal sealed partial class SettingsMenu
             SettingsField.LlmShowThinking => OnOff(data.LlmShowThinking),
             SettingsField.LlmPreserveThinking => OnOff(data.LlmPreserveThinking),
             SettingsField.LlmSampling => SamplingText.Summary(data.LlmSampling),
+            SettingsField.LlmSamplingFromHuggingFace => OnOff(data.LlmSamplingFromHuggingFace),
             SettingsField.SessionSaveThinking => OnOff(data.SessionSaveThinking),
             SettingsField.ClaudeExecutable => string.IsNullOrWhiteSpace(data.ClaudeExecutable) ? ClaudeLookedUpLabel : data.ClaudeExecutable,
             SettingsField.ClaudePermissions => data.ClaudePermissions,
@@ -3810,6 +3815,7 @@ internal sealed partial class SettingsMenu
             SettingsField.LlmUseFunVerbs => data.LlmUseFunVerbs,
             SettingsField.LlmShowThinking => data.LlmShowThinking,
             SettingsField.LlmPreserveThinking => data.LlmPreserveThinking,
+            SettingsField.LlmSamplingFromHuggingFace => data.LlmSamplingFromHuggingFace,
             SettingsField.SessionSaveThinking => data.SessionSaveThinking,
             SettingsField.WebTools => data.WebTools,
             SettingsField.GitNativeTools => data.GitNativeTools,
@@ -3878,6 +3884,7 @@ internal sealed partial class SettingsMenu
             case SettingsField.LlmUseFunVerbs: data.LlmUseFunVerbs = on; break;
             case SettingsField.LlmShowThinking: data.LlmShowThinking = on; break;
             case SettingsField.LlmPreserveThinking: data.LlmPreserveThinking = on; break;
+            case SettingsField.LlmSamplingFromHuggingFace: data.LlmSamplingFromHuggingFace = on; break;
             case SettingsField.SessionSaveThinking: data.SessionSaveThinking = on; break;
             case SettingsField.WebTools: data.WebTools = on; break;
             case SettingsField.GitNativeTools: data.GitNativeTools = on; break;
@@ -3946,6 +3953,7 @@ internal sealed partial class SettingsMenu
         SettingsField.LlmUseFunVerbs => on ? "the thinking spinner reads a random verb" : "the spinner reads thinking",
         SettingsField.LlmShowThinking => on ? "thinking shown in chat" : "thinking not shown in chat",
         SettingsField.LlmPreserveThinking => on ? "every turn's thinking goes back to the server" : "only the current turn's thinking goes back to the server",
+        SettingsField.LlmSamplingFromHuggingFace => on ? "the model card's defaults when the server names none (huggingface.co)" : "only the server's own defaults, nothing fetched",
         SettingsField.SessionSaveThinking => on ? "thinking is saved with the session" : "thinking is not saved with the session",
         SettingsField.TtsOutput => on ? "replies are read aloud" : "replies are text only",
         SettingsField.TtsVoicePreview => on ? "the voice pickers speak the highlighted voice" : "the voice pickers are silent",

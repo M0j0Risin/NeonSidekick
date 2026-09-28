@@ -1034,7 +1034,7 @@ internal sealed partial class ChatScreen
         // The /mcp pane (2026-09-20): the servers and their tools over the session's snapshot, the Options rows through the settings menu.
         _mcpMenu = new McpMenu(McpFacts, _mcp, settings, _menu, _flow, _menuPane, _openFile, _effective);
         // The /sampling pane (2026-09-28): the per-model overrides; a save resolves the connected assistant's sampling again.
-        _samplingMenu = new SamplingMenu(settings, _menu, _flow, _menuPane, _input, () => _session.Endpoint, () => overriddenBy(SettingsField.LlmSampling), RefreshSampling);
+        _samplingMenu = new SamplingMenu(settings, _menu, _flow, _menuPane, _input, () => _session.Endpoint, () => overriddenBy(SettingsField.LlmSampling), RefreshSampling, token => _session.ServerSamplingAsync(_effective(), token));
         _menu.SamplingPane = _samplingMenu.ShowAsync;
         BindProfile();
     }

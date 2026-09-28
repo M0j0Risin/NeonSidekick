@@ -32,6 +32,8 @@ internal sealed class LlmSession : IDisposable
 
     private readonly LlmEndpointProbe _probe;
     private readonly ContextLengthProbe _contextProbe;
+    private readonly ServerSamplingProbe? _samplingProbe;
+    private (string Key, ServerSampling? Found)? _serverSampling;
     private readonly Func<LlmEndpoint, LlmTimeouts, IChatClient> _factory;
     private readonly TimeProvider _time;
     private IChatClient? _client;
@@ -45,10 +47,12 @@ internal sealed class LlmSession : IDisposable
 
     /// <param name="contextProbe">Asks the connected server for the loaded model's context window after each connect.</param>
     /// <param name="time">The clock behind the assistant's turn deadline and its usage timings; tests pass a manual one.</param>
-    public LlmSession(LlmEndpointProbe probe, ContextLengthProbe contextProbe, Func<LlmEndpoint, LlmTimeouts, IChatClient> factory, TimeProvider? time = null)
+    /// <param name="samplingProbe">Asks the connected server for its sampling defaults when the <c>/sampling</c> pane wants them (<see cref="ServerSamplingAsync"/>); null asks nothing.</param>
+    public LlmSession(LlmEndpointProbe probe, ContextLengthProbe contextProbe, Func<LlmEndpoint, LlmTimeouts, IChatClient> factory, TimeProvider? time = null, ServerSamplingProbe? samplingProbe = null)
     {
         _probe = probe ?? throw new ArgumentNullException(nameof(probe));
         _contextProbe = contextProbe ?? throw new ArgumentNullException(nameof(contextProbe));
+        _samplingProbe = samplingProbe;
         _factory = factory ?? throw new ArgumentNullException(nameof(factory));
         _time = time ?? TimeProvider.System;
         Meter = new StreamMeter(_time);
@@ -433,6 +437,37 @@ internal sealed class LlmSession : IDisposable
         _client?.Dispose();
         _client = null;
         _detectedContextLength = null;
+        _serverSampling = null;
+    }
+
+    /// <summary>
+    /// The connected model's sampling defaults as the server reports them (2026-09-28, for the <c>/sampling</c> pane's
+    /// <c>(server)</c> values): asked once per endpoint, model and <c>LLM sampling from Hugging Face</c> value and kept
+    /// until a reconnect (<see cref="ServerSamplingProbe"/>) — so a flip of the setting asks again at the next pane. Null
+    /// while nothing is connected, over the Claude API (no sampling goes there), with no probe, or when the server said
+    /// nothing.
+    /// </summary>
+    public async Task<ServerSampling?> ServerSamplingAsync(AppSettingsData effective, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(effective);
+        if (_samplingProbe is null || Endpoint is not { } endpoint || ClaudeApi.IsClaudeApi(endpoint.BaseUrl))
+        {
+            return null;
+        }
+
+        string key = string.Join('|', endpoint.BaseUrl.AbsoluteUri, endpoint.ModelId, effective.LlmSamplingFromHuggingFace ? "hf" : "");
+        if (_serverSampling is { } cached && cached.Key == key)
+        {
+            return cached.Found;
+        }
+
+        var found = await _samplingProbe.DetectAsync(endpoint.BaseUrl, endpoint.ModelId, _apiKey, effective.LlmSamplingFromHuggingFace, cancellationToken).ConfigureAwait(false);
+        if (!cancellationToken.IsCancellationRequested)
+        {
+            _serverSampling = (key, found);
+        }
+
+        return found;
     }
 
     /// <summary>The connect's line in the log: <c>Connected: LLM: http://… model=… (probed)</c> — <see cref="ConnectedLine"/> after the word. Pinned.</summary>

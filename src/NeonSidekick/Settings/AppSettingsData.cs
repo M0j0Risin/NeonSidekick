@@ -460,6 +460,16 @@ public sealed class AppSettingsData
     /// </summary>
     public Dictionary<string, LlmSamplingEntry>? LlmSampling { get; set; }
 
+    /// <summary>
+    /// Whether the <c>/sampling</c> pane may read a model's sampling defaults from its Hugging Face model card
+    /// (2026-09-28, the user's call, off by default): when the server itself says nothing (vLLM, SGLang and LM Studio
+    /// expose none; llama.cpp's <c>/props</c> and Ollama's <c>/api/show</c> do) and the model id reads as a repo
+    /// (<c>Qwen/Qwen3-8B</c>), <c>generation_config.json</c> is fetched from huggingface.co — the file vLLM and SGLang
+    /// take their defaults from unless started otherwise — and its values shown as <c>(Hugging Face)</c>. One request per
+    /// model and connect, never with the LLM's key; display only. Read when the pane opens. No variable.
+    /// </summary>
+    public bool LlmSamplingFromHuggingFace { get; set; }
+
     // ─── TTS ────────────────────────────────────────────────────────────────────
 
     /// <summary>Base URL of the Kokoro-FastAPI server (OpenAI-compatible <c>/v1/audio/speech</c>).</summary>

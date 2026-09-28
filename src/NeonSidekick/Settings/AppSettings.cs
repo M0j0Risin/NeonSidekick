@@ -609,6 +609,7 @@ public sealed class AppSettings : IDisposable
         LlmShowThinking = source.LlmShowThinking,
         LlmPreserveThinking = source.LlmPreserveThinking,
         LlmSampling = LlmSamplingEntry.CopyAll(source.LlmSampling),
+        LlmSamplingFromHuggingFace = source.LlmSamplingFromHuggingFace,
         TtsHttpUrl = source.TtsHttpUrl,
         TtsOutput = source.TtsOutput,
         TtsSource = source.TtsSource,
