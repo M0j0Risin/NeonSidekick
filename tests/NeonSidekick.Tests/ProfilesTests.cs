@@ -292,7 +292,7 @@ public class ProfilesTests : IDisposable
     [Fact]
     public void Reset_KeepsTheUrlsPathsAndKeys_UnlessAll()
     {
-        // 2026-09-27, the user's call: the ten settings that describe this machine survive a plain reset; --all takes them too.
+        // 2026-09-27, the user's call: the eleven settings that describe this machine survive a plain reset; --all takes them too.
         var mine = new AppSettingsData
         {
             LlmUrl = "http://llm:1234/v1",
@@ -305,7 +305,7 @@ public class ProfilesTests : IDisposable
             ClaudeExecutable = @"C:\bin\claude.exe",
             ObsidianVault = @"D:\Vault",
             ComfyUrl = "http://comfy:8188",
-            LlmApiKey = "not-kept",
+            LlmApiKey = "dpapi:llm",
             TtsOutput = !new AppSettingsData().TtsOutput,
             WorkingDirectory = @"C:\elsewhere",
         };
@@ -320,9 +320,9 @@ public class ProfilesTests : IDisposable
         Assert.Equal(JsonSerializer.Serialize(expected, SettingsJsonContext.Default.AppSettingsData), JsonSerializer.Serialize(kept, SettingsJsonContext.Default.AppSettingsData));
         Assert.Equal("http://comfy:8188", kept.ComfyUrl);
         Assert.Equal("dpapi:abc", kept.ClaudeApiKey);   // as stored
-        Assert.Equal(new AppSettingsData().LlmApiKey, kept.LlmApiKey);   // not on the list
+        Assert.Equal("dpapi:llm", kept.LlmApiKey);      // joined the list later that day
         Assert.Equal("", kept.WorkingDirectory);
-        Assert.Equal(10, Profiles.ResetKeptSettings.Length);
+        Assert.Equal(11, Profiles.ResetKeptSettings.Length);
 
         Profiles.Create(_dir, "home", mine);
         Profiles.Reset(_dir, "home", all: true);

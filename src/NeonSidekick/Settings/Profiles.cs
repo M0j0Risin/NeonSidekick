@@ -373,13 +373,15 @@ public static class Profiles
     /// <summary>
     /// What a plain <c>/profile reset</c> keeps (2026-09-27, the user's call): the servers, paths and
     /// key that describe this machine rather than a taste — a reset that took the LLM's URL and model
-    /// back to empty left the sidekick unable to answer. <c>--all</c> resets them too. The property
+    /// back to empty left the sidekick unable to answer (the LLM's API key joined them later that day,
+    /// the user's call). <c>--all</c> resets them too. The property
     /// names, in <see cref="KeepOnReset"/>'s order.
     /// </summary>
     public static readonly string[] ResetKeptSettings =
     {
         nameof(AppSettingsData.LlmUrl),
         nameof(AppSettingsData.LlmModel),
+        nameof(AppSettingsData.LlmApiKey),
         nameof(AppSettingsData.TtsHttpUrl),
         nameof(AppSettingsData.ClaudeApiKey),
         nameof(AppSettingsData.WebBrowserPath),
@@ -390,11 +392,12 @@ public static class Profiles
         nameof(AppSettingsData.ComfyUrl),
     };
 
-    /// <summary>Copies <see cref="ResetKeptSettings"/> from <paramref name="from"/> onto <paramref name="to"/>, one by one (no reflection under AOT). The Claude key goes as stored, protected or not.</summary>
+    /// <summary>Copies <see cref="ResetKeptSettings"/> from <paramref name="from"/> onto <paramref name="to"/>, one by one (no reflection under AOT). The keys go as stored, protected or not.</summary>
     internal static void KeepOnReset(AppSettingsData from, AppSettingsData to)
     {
         to.LlmUrl = from.LlmUrl;
         to.LlmModel = from.LlmModel;
+        to.LlmApiKey = from.LlmApiKey;
         to.TtsHttpUrl = from.TtsHttpUrl;
         to.ClaudeApiKey = from.ClaudeApiKey;
         to.WebBrowserPath = from.WebBrowserPath;
