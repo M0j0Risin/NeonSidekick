@@ -58,6 +58,29 @@ public partial class ChatScreenTests
         Assert.DoesNotContain(new string('▀', columns + 1), output);
     }
 
+    /// <summary>
+    /// Show image thumbnails off (2026-09-28, the user's report: botchat drew its pictures whatever the toggle said): the
+    /// transcript gets the picture's result line alone; the picture is still made and gathered in the strip.
+    /// </summary>
+    [Fact]
+    public async Task BotChat_ThumbnailsOff_TheAppsPictureIsNotDrawn()
+    {
+        var stub = BotPicturesFixture(width: 512, height: 4);
+        _settings.Update(d => { d.ImageThumbnailSize = "tiny"; d.ShowImageThumbnails = false; });
+        _chat.EnqueueText(DogReply);
+        _chat.EnqueueText("a dog surfing a wave");
+        _chat.EnqueueText("Ada ", "answers.");
+        EscDuringRequest(3);
+        PushLine("/botchat");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains(stub.Requests, r => r.Uri.AbsolutePath == "/view");
+        Assert.Contains(ComfyText.TextToImageGlyph, output);
+        Assert.DoesNotContain(new string('▀', 32), output);
+    }
+
     private static int ImagesIn(ChatMessage message) => message.Contents.OfType<DataContent>().Count();
 
     /// <summary>

@@ -991,6 +991,8 @@ internal sealed partial class ChatScreen
         _input.Remembered = StoreCommand;
         _input.OpenPicture = OpenPicture;
         _input.OpenViewer = () => OpenViewer();
+        // The picture strip's keys under a reply too (2026-09-28, the user's report); the splash is gone before any turn.
+        _input.Chat.SetLiveHooks(StepPictureStrip, OpenStripPicture);
         _mouse = mouse;
         _holdWheel = holdWheel;
         // The screen holds the mouse and the wheel from its start (RunAsync; the user's call,
@@ -10023,7 +10025,9 @@ internal sealed partial class ChatScreen
     /// result lines, the strip, the picture. <paramref name="late"/> (drawn after later lines, <c>Botchat image async</c>) heads it
     /// with <see cref="BotChat.PictureNotice"/>, whose reply it pictures. Drawn at <c>Image thumbnail size</c> (later on
     /// 2026-09-25, the user's report: <see cref="ShowPictures"/>, <c>/imagine</c>'s drawer, filled the window whatever the
-    /// setting said), as a bot's own <c>generate_image</c> result is; <c>fullsize</c> is the window's box.
+    /// setting said), as a bot's own <c>generate_image</c> result is; <c>fullsize</c> is the window's box. With <c>Show image
+    /// thumbnails</c> off (2026-09-28, the user's report: botchat drew its pictures whatever the toggle said) the transcript gets
+    /// the result lines alone, as a bot's own <c>generate_image</c> result does; the strip still gathers it (its own setting).
     /// </summary>
     private void ShowBotPicture(BotParticipant bot, ComfyGeneration generation, bool late)
     {
@@ -10043,7 +10047,13 @@ internal sealed partial class ChatScreen
         LogBotPicture(bot.Name, drawn: false, generation.Images);
         // The strip first: a fullsize box then leaves its rows.
         AddToPictureStrip(generation.Images);
-        var (tiles, ids) = ReadThumbnails(generation.Images, ThumbnailSize.Resolve(_effective(), WindowBox()), sandbox: true);
+        var effective = _effective();
+        if (!effective.ShowImageThumbnails)
+        {
+            return;
+        }
+
+        var (tiles, ids) = ReadThumbnails(generation.Images, ThumbnailSize.Resolve(effective, WindowBox()), sandbox: true);
         _transcript.Images(tiles, ids);
     }
 
@@ -11076,7 +11086,8 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// Left or Right at an empty idle line with the strip on the screen and the splash declining the key (the input line's
-    /// <c>emptyArrow</c> hook, after <see cref="CycleSplash"/>): the highlight moves (<see cref="PictureStrip.Step"/>) and the
+    /// <c>emptyArrow</c> hook, after <see cref="CycleSplash"/>), or at an empty line under a reply (2026-09-28, the chat
+    /// editor's live hook, on the watcher's thread): the highlight moves (<see cref="PictureStrip.Step"/>) and the
     /// pane follows at once. False — the key is the line's — without the strip.
     /// </summary>
     private bool StepPictureStrip(int step)

@@ -115,7 +115,7 @@ Settings that an environment variable or flag can override for one launch are li
 | Queue cancel mode | What a cancelled reply does with the queue: `hold` keeps it until your next message, `drain` sends the next message at once, `empty` drops them all. | `empty` |
 | Memory | Offers the model `save_memory` / `recall_memory` and opens every conversation with what it remembers. | on |
 | Copy user prompt | `/copy` includes your prompt above the reply; off copies the reply alone. | on |
-| Show image thumbnails | Draws a small colour block of each picture you send under your line. | on |
+| Show image thumbnails | Draws a small colour block of each picture you send under your line, of each picture a tool fetches or makes, and of each `/botchat` picture. `/view` and `/imagine` draw theirs either way. | on |
 | Image thumbnail size | `tiny` (32×8), `small` (48×12), `medium` (64×16), `large` (80×20) or `xlarge` (96×24) columns × rows, or `fullsize`: each picture as large as the transcript allows, stacked. | `small` |
 | Transcript markdown | Renders replies as Markdown instead of plain text. Code fences in C#, JavaScript/TypeScript, Python, Bash, PowerShell, JSON, YAML, TOML/INI, SQL, C/C++, Java, Kotlin, Go, Rust, CSS, XML/HTML and diff are syntax-highlighted. | on |
 | Paste preview lines | How many lines of a long paste show dimmed under its `[Pasted text #n]` placeholder (0–200; 0 = placeholder only). | 25 |
@@ -412,7 +412,7 @@ The Claude Code CLI, for `/claude` (you send it a message) and `claude_advisor` 
 | ComfyUI max pictures per call | The most pictures one `generate_image` call or `/imagine --count` makes (1–16). Each is a full job, and all of them go to the model in the next request, where a local vision server has its own limit. | 5 |
 | ComfyUI reinforce negatives | When the model writes the prompt, it also adds a few opposite tags where the image model tends to drift (a solo figure → `multiple girls`, night → `daylight`) to the workflow's negative. Skipped for a verbatim prompt, a negative set for the call, `/imagine`, families without a negative (Flux, FLUX.2, Klein, Krea 2, Z-Image, Ernie Turbo, Boogu, Ideogram 4) and a workflow whose `.md` says `reinforce: false`. | on |
 | ComfyUI show prompts | Shows what was sent under each picture: the `prompt:`, the `negative:` and a `params:` line (size, steps, cfg, denoise, seed, sampler, scheduler). Off, only the picture's line. The model sees the same either way. | on |
-| ComfyUI picture strip | Keeps the session's ComfyUI pictures as thumbnails in a strip over the input line, newest at the left. With the input line empty, ←/→ highlight one and Enter opens it; a double-click opens any. The strip's **🖼 viewer** button opens the [picture viewer](#picture-viewer) on the output folder. `/clear`, `/new` and a session switch empty it; it hides while a menu is open or the window is too short. | on |
+| ComfyUI picture strip | Keeps the session's ComfyUI pictures as thumbnails in a strip over the input line, newest at the left. With the input line empty, ←/→ highlight one and Enter opens it, a reply running or not; a double-click opens any. The strip's **🖼 viewer** button opens the [picture viewer](#picture-viewer) on the output folder. `/clear`, `/new` and a session switch empty it; it hides while a menu is open or the window is too short. | on |
 | ComfyUI output folder | The folder under the working directory the pictures are saved in (`comfy_images\pony-txt2img-1234.png`); empty = the working directory itself. | `comfy_images` |
 
 #### SQL

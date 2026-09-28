@@ -105,6 +105,9 @@ public sealed partial class InputLine
         private MentionList? _list;
         private (int Start, string Query)? _dismissed;
         private ReadOptions _o = new();
+        // The empty-line hooks a live read keeps (2026-09-28, SetLiveHooks): the picture strip's keys under a reply.
+        private Func<int, bool>? _liveEmptyArrow;
+        private Func<bool>? _liveEmptyEnter;
         private bool _completing, _commanding, _arguing, _hashing, _dollaring, _percenting, _careting;
 
         internal Editor(InputLine line, string initialText)
@@ -151,17 +154,29 @@ public sealed partial class InputLine
 
         /// <summary>
         /// The watcher takes the keys (2026-09-25): the last idle read's line options (the paste rule, the lists, the
-        /// preview, the history) with every idle-only hook off — no push-to-talk, no splash or strip keys, no intercept,
-        /// no hint or toolbar results — and Enter handing the line back. A draft is drawn again at once: the sent line's
-        /// commit emptied the row it stands on.
+        /// preview, the history) with every idle-only hook off — no push-to-talk, no splash keys, no intercept, no hint or
+        /// toolbar results — and Enter handing the line back. The <see cref="SetLiveHooks"/> pair is kept (2026-09-28, the
+        /// user's report: the picture strip's arrows did nothing under a reply). A draft is drawn again at once: the sent
+        /// line's commit emptied the row it stands on.
         /// </summary>
         public void BeginLive()
         {
-            Begin(new ReadOptions(Live: true, Remember: _o.Remember, Multiline: true, Mentions: _o.Mentions, PastePreview: _o.PastePreview));
+            Begin(new ReadOptions(Live: true, Remember: _o.Remember, Multiline: true, Mentions: _o.Mentions, PastePreview: _o.PastePreview,
+                EmptyArrow: _liveEmptyArrow, EmptyEnter: _liveEmptyEnter));
             if (_text.Length > 0)
             {
                 Redraw();
             }
+        }
+
+        /// <summary>
+        /// The empty-line hooks <see cref="BeginLive"/> keeps (2026-09-28): a plain Left or Right, and an Enter, over an empty
+        /// draft while a reply runs — the chat line's picture strip. Called on the watcher's thread, as the editor's keys are.
+        /// </summary>
+        public void SetLiveHooks(Func<int, bool>? emptyArrow, Func<bool>? emptyEnter)
+        {
+            _liveEmptyArrow = emptyArrow;
+            _liveEmptyEnter = emptyEnter;
         }
 
         /// <summary>Ctrl+C under a reply (2026-09-25): the selection copied, as at idle — true when there was one (a failed copy says so); false with none.</summary>

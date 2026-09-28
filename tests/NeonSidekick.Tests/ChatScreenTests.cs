@@ -12809,6 +12809,40 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(2, _chat.Requests.Count);   // the tool call and its answer; the Enter sent nothing
     }
 
+    /// <summary>
+    /// The strip's keys under a reply (2026-09-28, the user's report: the arrows did nothing until the turn ended): → at the
+    /// empty line highlights the picture and Enter opens it, the reply running on, and nothing is sent.
+    /// </summary>
+    [Fact]
+    public async Task PictureStrip_TheArrowsAndEnter_WorkUnderAReply()
+    {
+        ComfyServer();
+        PaneOf40Rows();
+        var opened = new List<(string Path, string Editor)>();
+        _openImage = (path, editor) => { lock (opened) { opened.Add((path, editor)); } };
+        int Opened() { lock (opened) { return opened.Count; } }
+        _chat.EnqueueText("Hello ", "there.");
+        _chat.BeforeUpdate = async (i, ct) =>
+        {
+            if (i == 1 && _chat.Requests.Count == 1)
+            {
+                // Mid-reply: one update is on the screen, the second held until the picture has opened.
+                _scripted!.Push(Keys.Right, Keys.Enter);
+                for (int tries = 0; tries < 500 && Opened() == 0; tries++)
+                {
+                    await Task.Delay(10, CancellationToken.None);
+                }
+            }
+        };
+        StepsWhenIdle(Line("/imagine a cat --seed 5"), Line("hi"), Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.Equal(ComfyPicture("pony-5.png"), Assert.Single(opened).Path);
+        Assert.Contains(PictureStrip.LeftBar + "▀▀▀▀" + PictureStrip.RightBar, output);
+        Assert.Single(_chat.Requests);   // the Enter sent nothing
+    }
+
     /// <summary>A double-click on a strip tile opens it, as one on a transcript picture does: the tile sits on the strip's bottom rows, over the upper rule.</summary>
     [Fact]
     public async Task PictureStrip_ATileDoubleClicked_Opens()
