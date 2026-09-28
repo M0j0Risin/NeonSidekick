@@ -9508,19 +9508,21 @@ public partial class ChatScreenTests : IDisposable
     public void SpeechGlyphs_IsPinned(bool ttsOn, bool sttOn, bool wakeReady, bool interruptReady, string expected) =>
         Assert.Equal(expected, ChatScreen.SpeechGlyphs(ttsOn, sttOn, wakeReady, interruptReady));
 
-    /// <summary>The strip (2026-09-18): the brain while a reflection runs, the tag while the model writes a session title (the user's place: right after the brain), then the speech glyphs; each only while on.</summary>
+    /// <summary>The strip (2026-09-18): the brain while a reflection runs, the tag while the model writes a session title (the user's place: right after the brain), the botchat pictures still rendering (2026-09-27), then the speech glyphs; each only while on.</summary>
     [Theory]
-    [InlineData(false, false, false, false, false, false, "")]
-    [InlineData(true, false, false, false, false, false, "🧠")]
-    [InlineData(false, true, false, false, false, false, "🏷️")]
-    [InlineData(true, true, false, false, false, false, "🧠 🏷️")]
-    [InlineData(true, false, true, false, false, false, "🧠 🔊")]
-    [InlineData(false, true, true, false, false, false, "🏷️ 🔊")]
-    [InlineData(true, true, true, true, false, false, "🧠 🏷️ 🔊 🎤")]
-    [InlineData(true, false, false, true, true, true, "🧠 🎤 👂 ✋")]
-    [InlineData(false, false, true, true, false, false, "🔊 🎤")]
-    public void StripGlyphs_IsPinned(bool learning, bool titling, bool ttsOn, bool sttOn, bool wakeReady, bool interruptReady, string expected) =>
-        Assert.Equal(expected, ChatScreen.StripGlyphs(learning, titling, ttsOn, sttOn, wakeReady, interruptReady));
+    [InlineData(false, false, "", false, false, false, false, "")]
+    [InlineData(true, false, "", false, false, false, false, "🧠")]
+    [InlineData(false, true, "", false, false, false, false, "🏷️")]
+    [InlineData(true, true, "", false, false, false, false, "🧠 🏷️")]
+    [InlineData(true, false, "", true, false, false, false, "🧠 🔊")]
+    [InlineData(false, true, "", true, false, false, false, "🏷️ 🔊")]
+    [InlineData(true, true, "", true, true, false, false, "🧠 🏷️ 🔊 🎤")]
+    [InlineData(true, false, "", false, true, true, true, "🧠 🎤 👂 ✋")]
+    [InlineData(false, false, "", true, true, false, false, "🔊 🎤")]
+    [InlineData(false, false, "🖼️", false, false, false, false, "🖼️")]
+    [InlineData(true, true, "🎨2", true, false, false, false, "🧠 🏷️ 🎨2 🔊")]   // after the jobs, before the speech
+    public void StripGlyphs_IsPinned(bool learning, bool titling, string pictures, bool ttsOn, bool sttOn, bool wakeReady, bool interruptReady, string expected) =>
+        Assert.Equal(expected, ChatScreen.StripGlyphs(learning, titling, pictures, ttsOn, sttOn, wakeReady, interruptReady));
 
     /// <summary>The rule above the input row (2026-09-18): every title under all-names, a model-written or typed one alone under model-written, nothing under none or without a session.</summary>
     [Fact]

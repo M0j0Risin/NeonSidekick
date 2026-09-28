@@ -1,3 +1,4 @@
+using System.Net;
 using Microsoft.Extensions.AI;
 using NeonSidekick.App;
 using NeonSidekick.Comfy;
@@ -230,6 +231,65 @@ public partial class ChatScreenTests
         Assert.True(label >= 0);
         Assert.True(output.IndexOf(ComfyText.TextToImageGlyph + "generated 1 picture with pony", label, StringComparison.Ordinal) > label);
         Assert.Contains(BotChat.NoPromptNotice, output);
+    }
+
+    /// <summary>
+    /// Botchat image async (2026-09-27, the user's ask: nothing said a generation ran while the next bot answered): the strip
+    /// shows the picture's glyph from its send until it is made, and not after the chat stops.
+    /// </summary>
+    [Fact]
+    public async Task BotChat_Async_ThePictureRendering_IsOnTheStrip_UntilItIsMade()
+    {
+        _console.Profile.Height = 40;
+        _geometry = new ScreenGeometry(() => null);
+        BotPicturesFixture(async: true);
+        // The picture's download held until ada's reply has been seen with the glyph on the strip.
+        var view = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var stub = new StubHttpMessageHandler()
+            .Map("http://comfy.lan:8188/prompt", HttpStatusCode.OK, "{\"prompt_id\":\"p-1\"}")
+            .Map("http://comfy.lan:8188/history/", HttpStatusCode.OK, "{\"p-1\":{\"outputs\":{\"9\":{\"images\":[{\"filename\":\"x.png\",\"subfolder\":\"\",\"type\":\"output\"}]}}}}")
+            .Map("http://comfy.lan:8188/view", async (_, ct) =>
+            {
+                await view.Task.WaitAsync(ct);
+                return StubHttpMessageHandler.Bytes(HttpStatusCode.OK, SmokeChecks.SolidBmp(4, 4), "image/png");
+            })
+            .Map("http://comfy.lan:8188/system_stats", HttpStatusCode.OK, "{\"system\":{\"comfyui_version\":\"0.3.40\"},\"devices\":[]}");
+        _comfyClient = url => new NeonSidekick.Comfy.ComfyClient(url, new HttpClient(stub), TimeSpan.FromMilliseconds(1));
+        _chat.EnqueueText(DogReply);
+        _chat.EnqueueText("a dog surfing a wave");
+        _chat.EnqueueText("Ada ", "answers.");
+        string rule = new(ScreenPane.RuleGlyph, 240);
+        string? rendering = null;
+        _chat.BeforeUpdate = async (i, ct) =>
+        {
+            if (_chat.Requests.Count == 3 && i == 0)
+            {
+                // Ada answers while the picture renders: the tick's redraw carries the strip.
+                for (int tries = 0; tries < 500 && !stub.Requests.Any(r => r.Uri.AbsolutePath == "/view"); tries++)
+                {
+                    await Task.Delay(10, CancellationToken.None);
+                }
+
+                _time.Advance(ScreenPane.Tick);
+                rendering = Output[(Output.LastIndexOf(rule + "\n", StringComparison.Ordinal) + rule.Length + 1)..];
+                view.SetResult();
+                _console.Input.PushKey(Keys.Escape);
+                _console.Input.PushKey(Keys.Escape);
+                while (!ct.IsCancellationRequested)
+                {
+                    await Task.Delay(5, CancellationToken.None);
+                }
+            }
+        };
+        PushLine("/botchat");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.NotNull(rendering);
+        Assert.Contains(ComfyText.TextToImageLabel, rendering);
+        string lastIdle = output[(output.LastIndexOf(rule + "\n", StringComparison.Ordinal) + rule.Length + 1)..];
+        Assert.DoesNotContain(ComfyText.TextToImageLabel, lastIdle);
     }
 
     [Fact]

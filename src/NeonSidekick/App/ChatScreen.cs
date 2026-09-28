@@ -940,7 +940,7 @@ internal sealed partial class ChatScreen
             // then the speech switches as of the last connect, the wake word and the interrupt
             // once ready. The tick re-reads it, so the brain and the tag come and go with their
             // jobs (LlmSession.IsLearning / IsTitling), nothing pushed.
-            Strip = () => PlanStrip(_plan.Active, StripGlyphs(_session.IsLearning, _session.IsTitling, _speech.Enabled, _voice.Enabled, _voice.WakeReady, _voice.InterruptReady)),
+            Strip = () => PlanStrip(_plan.Active, StripGlyphs(_session.IsLearning, _session.IsTitling, _pendingPictures.Glyph, _speech.Enabled, _voice.Enabled, _voice.WakeReady, _voice.InterruptReady)),
             // The model at the row's right edge, from the live connection: empty until one lands;
             // the reasoning glyph after it in its own colour, none with the model.
             // The session's name at the right edge of the rule above the input row (2026-09-18, the user's
@@ -1265,13 +1265,16 @@ internal sealed partial class ChatScreen
     /// <summary>
     /// The hint row's strip (2026-09-18): 🧠 while a reflection runs, 🏷️ while the model writes
     /// the session's title (later that day, the user's place: right after the brain), then
-    /// <see cref="SpeechGlyphs"/> — each part only while its job or switch is on, joined by
+    /// <paramref name="pictures"/> — <c>/botchat</c>'s pictures still rendering with <c>Botchat image async</c> on
+    /// (<see cref="PendingPictures.Glyph"/>, 2026-09-27, the user's ask: nothing said a generation ran while the next bot
+    /// answered), empty with none — then <see cref="SpeechGlyphs"/> — each part only while its job or switch is on, joined by
     /// <see cref="GlyphSeparator"/>, empty with nothing. The speech status lines keep
     /// <see cref="SpeechGlyphs"/> (no brain, no tag there). Pinned.
     /// </summary>
-    public static string StripGlyphs(bool learning, bool titling, bool ttsOn, bool sttOn, bool wakeReady, bool interruptReady)
+    public static string StripGlyphs(bool learning, bool titling, string pictures, bool ttsOn, bool sttOn, bool wakeReady, bool interruptReady)
     {
-        var parts = new List<string>(3);
+        ArgumentNullException.ThrowIfNull(pictures);
+        var parts = new List<string>(4);
         if (learning)
         {
             parts.Add(LearnStripGlyph);
@@ -1280,6 +1283,11 @@ internal sealed partial class ChatScreen
         if (titling)
         {
             parts.Add(TitleStripGlyph);
+        }
+
+        if (pictures.Length != 0)
+        {
+            parts.Add(pictures);
         }
 
         string speech = SpeechGlyphs(ttsOn, sttOn, wakeReady, interruptReady);
@@ -9530,6 +9538,9 @@ internal sealed partial class ChatScreen
         return false;
     }
 
+    /// <summary><c>/botchat</c>'s pictures still rendering with <c>Botchat image async</c> on (2026-09-27): the strip's <see cref="PendingPictures.Glyph"/>.</summary>
+    private readonly PendingPictures _pendingPictures = new();
+
     /// <summary>The last <c>/botchat</c> of this run, kept when it stopped, for <see cref="BotChat.ResumeSwitch"/> (2026-09-25); null before the first.</summary>
     private BotChatState? _lastBotChat;
 
@@ -9654,7 +9665,8 @@ internal sealed partial class ChatScreen
         if (await WriteBotPictureAsync(assistant, bot, reply, topic, effective, pictureToken, promised).ConfigureAwait(false) is { } job)
         {
             bool paced = BotPicturePacer.Applies(_effective(), _speech.IsReady);
-            pictures.Add((bot, GenerateBotPictureAsync(job, pictureToken, paced ? pacer : null)));
+            // Counted on the strip from the send to its end (2026-09-27): the chat goes on meanwhile, with no spinner of its own.
+            pictures.Add((bot, _pendingPictures.TrackAsync(job.ImageCount, () => GenerateBotPictureAsync(job, pictureToken, paced ? pacer : null))));
         }
     }
 
