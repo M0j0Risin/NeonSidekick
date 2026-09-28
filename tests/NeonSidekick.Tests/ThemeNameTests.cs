@@ -10,7 +10,7 @@ public class ThemeNameTests
     [Fact]
     public void Names_ArePinned_InMenuOrder_SynthwaveFirstAndTheDefault()
     {
-        Assert.Equal(new[] { "synthwave", "netrunner", "nostromo", "noir", "cyberpunk", "vaporwave" }, ThemeName.Names);
+        Assert.Equal(new[] { "synthwave", "netrunner", "nostromo", "noir", "cyberpunk", "vaporwave", "mainframe", "grid", "replicant", "abyssal" }, ThemeName.Names);
         Assert.Equal("synthwave", ThemeName.Default);
         Assert.Equal(ThemeName.Default, new AppSettingsData().Theme);
         Assert.Equal(ThemePalette.All.Select(p => p.Name), ThemeName.Names);
@@ -45,6 +45,10 @@ public class ThemeNameTests
         Assert.Equal("greyscale", ThemeName.Describe("noir"));
         Assert.Equal("colorful", ThemeName.Describe("cyberpunk"));
         Assert.Equal("pastel", ThemeName.Describe("vaporwave"));
+        Assert.Equal("blue phosphor", ThemeName.Describe("mainframe"));
+        Assert.Equal("light cycle", ThemeName.Describe("grid"));
+        Assert.Equal("smog and sodium", ThemeName.Describe("replicant"));
+        Assert.Equal("bioluminescent", ThemeName.Describe("abyssal"));
         Assert.Equal("", ThemeName.Describe("matrix"));
     }
 
@@ -71,7 +75,7 @@ public class ThemeNameTests
         }
 
         var warning = Assert.Single(warnings);
-        Assert.Contains("Theme='matrix' is not one of synthwave, netrunner, nostromo, noir, cyberpunk, vaporwave. Using synthwave.", warning.Message);
+        Assert.Contains("Theme='matrix' is not one of synthwave, netrunner, nostromo, noir, cyberpunk, vaporwave, mainframe, grid, replicant, abyssal. Using synthwave.", warning.Message);
     }
 
     [Fact]

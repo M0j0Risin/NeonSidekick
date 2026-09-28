@@ -174,7 +174,8 @@ public sealed class AppSettingsData
 
     /// <summary>
     /// The look (2026-09-23, the user's ask): <c>synthwave</c> (the default), <c>netrunner</c>,
-    /// <c>nostromo</c>, <c>noir</c>, <c>cyberpunk</c> or <c>vaporwave</c> — one of
+    /// <c>nostromo</c>, <c>noir</c>, <c>cyberpunk</c>, <c>vaporwave</c>, <c>mainframe</c>, <c>grid</c>,
+    /// <c>replicant</c> or <c>abyssal</c> (the last four 2026-09-27) — one of
     /// <see cref="UI.ThemeName.Names"/>; anything else reads as <see cref="UI.ThemeName.Default"/>.
     /// Put in force at startup; a change on the row or with <c>/theme</c> starts over the way
     /// <c>/splash</c> does (the user's call: a fresh session and the splash in the new colours,
