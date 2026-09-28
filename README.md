@@ -73,7 +73,7 @@ Commands typed while a reply runs:
 
 | Behaviour | Commands |
 |---|---|
-| Open their pane over the reply | `/help`, `/settings`, `/tools`, `/mcp`, `/sys`, `/usage`, `/about`, `/memory`, `/queue`, `/sessions`, `/skills`, `/reasoning`, `/cmdlist`, `/police`, `/emptytrash`, `/cmdclear`, `/tree`, `/vault`, `/cmdcopy`, `/persona`, `/operata`, `/vocalia` |
+| Open their pane over the reply | `/help`, `/settings`, `/tools`, `/mcp`, `/sys`, `/usage`, `/about`, `/memory`, `/queue`, `/sessions`, `/skills`, `/reasoning`, `/cmdlist`, `/police`, `/emptytrash`, `/cmdclear`, `/tree`, `/vault`, `/cmdcopy`, `/keycopy`, `/persona`, `/operata`, `/vocalia` |
 | Run at once | `/tts`, `/stt`, `/wake`, `/interrupt`, `/reasoning <level>`, `/queue clear`, `/copy`, `/remember`, `/explore`, `/log`, `/timer`, `/expand`, `/collapse`, `/window`, `/cwd`, `/comfy view`, `/view <path>` |
 | Stop the reply first | `/clear`, `/new`, `/splash`, `/exit` |
 | Everything else | Waits for the reply to end, queued behind any earlier messages (so *Queue cancel mode* applies) |
@@ -502,6 +502,7 @@ Type `/` to list every command with its summary; after a command and a space, it
 | `/claude <message>` | Send the message to Claude Code (the `claude` CLI) and stream its reply into the transcript. See [Claude Code from the chat](#claude-code-from-the-chat). |
 | `/clear` | Start a new conversation and clear the screen. |
 | `/cmdcopy <profile> [--history] [overwrite]` | Copy this profile's *Shell allowed commands* into another profile, added to its list or (`overwrite`) replacing it. `--history` copies the command history instead (refused while that profile has *Keep command history* off). |
+| `/keycopy <profile>` | Copy this profile's *LLM API key* and *Claude API key* into another profile after a confirmation, replacing its own. Both are mirrored: a key not set here clears that profile's. The saved keys are copied (a key set only by `NEONSIDEKICK_LLM_API_KEY` or `NEONSIDEKICK_CLAUDE_API_KEY` is not), the encrypted Claude key as it is. |
 | `/cmdclear` | Clear this profile's command history, stored and in memory, after a confirmation. |
 | `/cmdlist` | Open the *Shell allowed commands* list: Enter removes a prefix, ESC closes. |
 | `/police` | Open the *Shell police outside paths* on/off page. |

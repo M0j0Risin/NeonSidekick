@@ -7596,6 +7596,151 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("Could not write the profile's settings: x", ChatScreen.CmdCopyFailedError("x"));
     }
 
+    // ── /keycopy (2026-09-28) ───────────────────────────────────────────────
+
+    [Fact]
+    public async Task KeyCopy_Yes_WritesBothKeysIntoTheOtherProfile()
+    {
+        Profiles.Create(_dir, "work", new AppSettingsData { LlmModel = "work-model", LlmApiKey = "work-llm", ClaudeApiKey = "work-claude" });
+        _settings.Update(d => { d.LlmApiKey = "my-llm"; d.ClaudeApiKey = "dpapi:AQAAAN"; });
+        PushLine("/keycopy work");
+        PickYes();
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains(SettingsMenu.PromptTitle(ChatScreen.KeyCopyPrompt("work", llmSet: true, claudeSet: true), SettingsMenu.ConfirmKeys), output);
+        Assert.Contains("  · " + ChatScreen.KeyCopiedNotice("work", llmSet: true, claudeSet: true), output);
+        var work = ReadProfile(Profiles.ProfileFile(_dir, "work"));
+        Assert.Equal("my-llm", work.LlmApiKey);
+        Assert.Equal("dpapi:AQAAAN", work.ClaudeApiKey);   // as stored: never decrypted on the way
+        Assert.Equal("work-model", work.LlmModel);         // the rest of the file round-trips
+        Assert.DoesNotContain("my-llm", output);           // the values are never shown
+        Assert.Equal(Profiles.DefaultName, _settings.ProfileName);
+        Assert.Empty(_chat.Requests);
+    }
+
+    [Fact]
+    public async Task KeyCopy_Mirrors_AKeyNotSetHereClearsTheTargets()
+    {
+        // The user's call: the target ends with exactly this profile's two keys; the question says which one goes.
+        Profiles.Create(_dir, "work", new AppSettingsData { LlmApiKey = "work-llm", ClaudeApiKey = "work-claude" });
+        _settings.Update(d => { d.LlmApiKey = "my-llm"; d.ClaudeApiKey = ""; });
+        PushLine("/keycopy work");
+        PickYes();
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains(SettingsMenu.PromptTitle(ChatScreen.KeyCopyPrompt("work", llmSet: true, claudeSet: false), SettingsMenu.ConfirmKeys), output);
+        Assert.Contains("  · " + ChatScreen.KeyCopiedNotice("work", llmSet: true, claudeSet: false), output);
+        var work = ReadProfile(Profiles.ProfileFile(_dir, "work"));
+        Assert.Equal("my-llm", work.LlmApiKey);
+        Assert.Equal("", work.ClaudeApiKey);
+    }
+
+    [Fact]
+    public async Task KeyCopy_IntoTheDefault_FromAnotherProfile_CreatesItsFile()
+    {
+        Profiles.Create(_dir, "work", new AppSettingsData { LlmApiKey = "work-llm", ClaudeApiKey = "work-claude" });
+        PushLine("/profile work");
+        PushLine("/keycopy default");
+        PickYes();
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains("  · " + ChatScreen.KeyCopiedNotice("default", llmSet: true, claudeSet: true), output);
+        var data = ReadProfile(Profiles.ProfileFile(_dir, Profiles.DefaultName));
+        Assert.Equal("work-llm", data.LlmApiKey);
+        Assert.Equal("work-claude", data.ClaudeApiKey);
+        Assert.Equal(new AppSettingsData().LlmModel, data.LlmModel);
+    }
+
+    [Fact]
+    public async Task KeyCopy_No_Keeps()
+    {
+        Profiles.Create(_dir, "work", new AppSettingsData { LlmApiKey = "work-llm" });
+        _settings.Update(d => d.LlmApiKey = "my-llm");
+        PushLine("/keycopy work");
+        _console.Input.PushKey(Keys.Enter);   // No is on the cursor
+        PushLine("/keycopy work");
+        _console.Input.PushKey(Keys.Escape);
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Equal(2, output.Split("  · " + ChatScreen.KeptNotice).Length - 1);
+        Assert.Equal("work-llm", ReadProfile(Profiles.ProfileFile(_dir, "work")).LlmApiKey);
+    }
+
+    [Fact]
+    public async Task KeyCopy_Refusals_AreOneLineEach_AndAskNothing()
+    {
+        Profiles.Create(_dir, "work", new AppSettingsData { LlmApiKey = "work-llm" });
+        _settings.Update(d => d.LlmApiKey = "my-llm");
+        PushLine("/keycopy");
+        PushLine("/keycopy work overwrite");   // no switches: that is /cmdcopy's
+        PushLine("/keycopy ghost");
+        PushLine("/keycopy default");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Equal(2, output.Split("  ✗ " + ChatScreen.KeyCopyUsageError).Length - 1);
+        Assert.Contains("  ✗ " + ChatScreen.ProfileMissingError("ghost"), output);
+        Assert.Contains("  ✗ " + ChatScreen.KeyCopySelfError, output);
+        Assert.DoesNotContain("Copy ", output);
+        Assert.Equal("work-llm", ReadProfile(Profiles.ProfileFile(_dir, "work")).LlmApiKey);
+    }
+
+    [Fact]
+    public async Task KeyCopy_CorruptTarget_IsAnError_AndTheFileIsLeftAlone()
+    {
+        Profiles.Create(_dir, "work", new AppSettingsData());
+        File.WriteAllText(Profiles.ProfileFile(_dir, "work"), "{ not json");
+        _settings.Update(d => d.LlmApiKey = "my-llm");
+        PushLine("/keycopy work");
+        PickYes();
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains("  ✗ " + ChatScreen.CmdCopyFailedError(""), output);
+        Assert.Equal("{ not json", File.ReadAllText(Profiles.ProfileFile(_dir, "work")));
+    }
+
+    [Fact]
+    public void KeyCopyText_IsPinned()
+    {
+        // The question's wording is the contract (the clearing clause is what makes the mirror safe to say yes to).
+        Assert.Equal("Copy the LLM API key and the Claude API key into \"work\"?", ChatScreen.KeyCopyPrompt("work", llmSet: true, claudeSet: true));
+        Assert.Equal("Copy the LLM API key and the Claude API key into \"work\"? \"work\"'s Claude API key is cleared: none here.", ChatScreen.KeyCopyPrompt("work", llmSet: true, claudeSet: false));
+        Assert.Equal("Copy the LLM API key and the Claude API key into \"work\"? \"work\"'s LLM API key is cleared: none here.", ChatScreen.KeyCopyPrompt("work", llmSet: false, claudeSet: true));
+        Assert.Equal("Copy the LLM API key and the Claude API key into \"work\"? \"work\"'s LLM API key and Claude API key are cleared: none here.", ChatScreen.KeyCopyPrompt("work", llmSet: false, claudeSet: false));
+        Assert.Equal("(copied the LLM API key and the Claude API key into \"work\")", ChatScreen.KeyCopiedNotice("work", llmSet: true, claudeSet: true));
+        Assert.Equal("(copied the Claude API key into \"work\"; its LLM API key cleared)", ChatScreen.KeyCopiedNotice("work", llmSet: false, claudeSet: true));
+        Assert.Equal("(cleared \"work\"'s LLM API key and Claude API key)", ChatScreen.KeyCopiedNotice("work", llmSet: false, claudeSet: false));
+    }
+
+    [Fact]
+    public async Task KeyCopy_TheDefaultLlmKey_CountsAsNotSet()
+    {
+        // LlmEndpoint.DefaultApiKey ("empty") is the placeholder a local server ignores: mirrored as it is, and said to clear.
+        Profiles.Create(_dir, "work", new AppSettingsData { LlmApiKey = "work-llm", ClaudeApiKey = "work-claude" });
+        _settings.Update(d => { d.LlmApiKey = LlmEndpoint.DefaultApiKey; d.ClaudeApiKey = "sk-ant-x"; });
+        PushLine("/keycopy work");
+        PickYes();
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains(SettingsMenu.PromptTitle(ChatScreen.KeyCopyPrompt("work", llmSet: false, claudeSet: true), SettingsMenu.ConfirmKeys), output);
+        var work = ReadProfile(Profiles.ProfileFile(_dir, "work"));
+        Assert.Equal(LlmEndpoint.DefaultApiKey, work.LlmApiKey);
+        Assert.Equal("sk-ant-x", work.ClaudeApiKey);
+    }
+
     // ── Keep command history, /cmdclear and /cmdcopy --history (2026-09-25) ──
 
     private string[] StoredHistory(string profileDirectory)
@@ -10654,6 +10799,7 @@ public partial class ChatScreenTests : IDisposable
     [InlineData(SlashCommand.Exit, false, MidTurnClass.Cancel)]
     [InlineData(SlashCommand.Profile, true, MidTurnClass.Deferred)]
     [InlineData(SlashCommand.CmdCopy, true, MidTurnClass.Pane)]   // a pane since later on 2026-09-27 (refused from 2026-09-21): another profile's file, its yes/no on the pane
+    [InlineData(SlashCommand.KeyCopy, true, MidTurnClass.Pane)]   // 2026-09-28, /cmdcopy's reason
     [InlineData(SlashCommand.Server, false, MidTurnClass.Deferred)]
     [InlineData(SlashCommand.Model, false, MidTurnClass.Deferred)]
     [InlineData(SlashCommand.Compact, false, MidTurnClass.Deferred)]
@@ -11248,6 +11394,35 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("\n" + Titled(ChatScreen.CmdCopyPrompt(1, "work", overwrite: false)) + "\n \n▸ No\n  Yes\n", output);
         Assert.Contains("  · " + ChatScreen.CmdCopiedNotice(1, 0, "work", overwrite: false), output);
         Assert.Equal(["git status"], Profiles.ReadProfileFile(Profiles.ProfileFile(_dir, "work")).ShellCommandAllowed);
+        Assert.DoesNotContain(ChatScreen.CancelledNotice, output);
+        Assert.Single(_chat.Requests);
+    }
+
+    /// <summary><c>/keycopy</c> under a reply (2026-09-28): <c>/cmdcopy</c>'s pane, the target profile written after the answer.</summary>
+    [Fact]
+    public async Task MidTurn_KeyCopy_AsksOnThePane_YesWritesTheOtherProfile()
+    {
+        WorkProfile();
+        _settings.Update(d => { d.LlmApiKey = "my-llm"; d.ClaudeApiKey = "sk-ant-x"; });
+        MidTurnFixture(i =>
+        {
+            if (i == 1)
+            {
+                PushLine("/keycopy work");
+            }
+            else if (i == 2)
+            {
+                Scripted().Push(Keys.Down, Keys.Enter);
+            }
+        });
+
+        string output = await RunAsync();
+
+        Assert.Contains("\n" + Titled(ChatScreen.KeyCopyPrompt("work", llmSet: true, claudeSet: true)) + "\n \n▸ No\n  Yes\n", output);
+        Assert.Contains("  · " + ChatScreen.KeyCopiedNotice("work", llmSet: true, claudeSet: true), output);
+        var work = Profiles.ReadProfileFile(Profiles.ProfileFile(_dir, "work"));
+        Assert.Equal("my-llm", work.LlmApiKey);
+        Assert.Equal("sk-ant-x", work.ClaudeApiKey);
         Assert.DoesNotContain(ChatScreen.CancelledNotice, output);
         Assert.Single(_chat.Requests);
     }
@@ -17603,6 +17778,11 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("copy this profile's command history into it instead", ChatScreen.CmdCopyHistoryNote);
         Assert.Equal("replace its command history instead of adding to it", ChatScreen.CmdCopyHistoryOverwriteNote);
         Assert.Empty(ChatScreen.ArgumentItems("/cmdcopy", "default ", sources));
+
+        // /keycopy (2026-09-28): the targets alone, nothing after a name.
+        Assert.Equal([new CompletionItem("chef", ChatScreen.KeyCopyTargetNote), new CompletionItem("work", ChatScreen.KeyCopyTargetNote)], ChatScreen.ArgumentItems("/keycopy", "", sources));
+        Assert.Equal(["work"], Texts(ChatScreen.ArgumentItems("/keycopy", "w", sources)));
+        Assert.Empty(ChatScreen.ArgumentItems("/keycopy", "work ", sources));
 
         // /timer: stop, then stop all | <name> with the names whole.
         Assert.Equal([new CompletionItem("stop", ChatScreen.TimerStopNote)], ChatScreen.ArgumentItems("/timer", "", sources));

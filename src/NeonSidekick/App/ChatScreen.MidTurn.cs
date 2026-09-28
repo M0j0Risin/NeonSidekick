@@ -121,14 +121,15 @@ internal sealed partial class ChatScreen
     /// reply ends instead of being dropped (so <c>/learn</c> reflects on the reply it waited for); <c>/window</c> and the bare
     /// <c>/cwd</c> are quick notices; <c>/tree</c> and <c>/vault</c> are panes (the info pane, never the transcript the turn
     /// owns); <c>/cmdcopy</c> and the three prompt files' words are panes — they write another profile or a file the running
-    /// turn's prompt was built from already, and ask their yes/no on the pane.</para>
+    /// turn's prompt was built from already, and ask their yes/no on the pane. <c>/keycopy</c> (2026-09-28) is one the same
+    /// way: another profile's file, its yes/no on the pane.</para>
     /// </summary>
     public static MidTurnClass MidTurnPolicy(SlashCommand command, bool hasArgs) => command switch
     {
         SlashCommand.None => MidTurnClass.Message,
         SlashCommand.Help or SlashCommand.Settings or SlashCommand.Sys or SlashCommand.Memory
             or SlashCommand.Usage or SlashCommand.About or SlashCommand.EmptyTrash or SlashCommand.CmdClear or SlashCommand.Mcp or SlashCommand.CmdList or SlashCommand.Police or SlashCommand.Tools
-            or SlashCommand.Tree or SlashCommand.Vault or SlashCommand.CmdCopy or SlashCommand.Persona or SlashCommand.Operata or SlashCommand.Vocalia => MidTurnClass.Pane,
+            or SlashCommand.Tree or SlashCommand.Vault or SlashCommand.CmdCopy or SlashCommand.KeyCopy or SlashCommand.Persona or SlashCommand.Operata or SlashCommand.Vocalia => MidTurnClass.Pane,
         SlashCommand.Reasoning or SlashCommand.Queue => hasArgs ? MidTurnClass.Quick : MidTurnClass.Pane,
         SlashCommand.Session => hasArgs ? MidTurnClass.Deferred : MidTurnClass.Pane,
         SlashCommand.Skills => hasArgs ? MidTurnClass.Deferred : MidTurnClass.Pane,
@@ -384,6 +385,10 @@ internal sealed partial class ChatScreen
                 // /cmdcopy and the prompt files (later on 2026-09-27): another profile's file, or one the running turn's prompt
                 // was read from already; the yes/no is a pane and every line goes through the flow sink.
                 await HandleCmdCopyAsync(args, cancellationToken).ConfigureAwait(false);
+                break;
+            case SlashCommand.KeyCopy:
+                // /keycopy (2026-09-28): /cmdcopy's reason — another profile's file, the yes/no on the pane.
+                await HandleKeyCopyAsync(args, cancellationToken).ConfigureAwait(false);
                 break;
             case SlashCommand.Persona:
                 await HandlePromptFileAsync(_persona, "/persona", args, PersonaCreatedNotice, PersonaOpenedNotice, PersonaOpenFailedError, spoken: false, cancellationToken).ConfigureAwait(false);

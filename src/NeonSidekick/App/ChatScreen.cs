@@ -2804,6 +2804,9 @@ internal sealed partial class ChatScreen
     public const string CmdCopyHistoryNote = "copy this profile's command history into it instead";
     public const string CmdCopyHistoryOverwriteNote = "replace its command history instead of adding to it";
 
+    /// <summary>The <c>/keycopy</c> target's note (2026-09-28).</summary>
+    public const string KeyCopyTargetNote = "copy this profile's API keys into it";
+
     /// <summary>The <c>/timer</c> list's entries. Pinned.</summary>
     public const string TimerStopNote = "stop a timer: /timer stop <name> | all";
     public const string TimerStopAllNote = "stop every timer";
@@ -2981,6 +2984,18 @@ internal sealed partial class ChatScreen
                 }
 
                 return MentionCompleter.Matches(targets.Select(name => new CompletionItem(name, CmdCopyTargetNote)).ToList(), argText);
+            }
+
+            case SlashCommand.KeyCopy:
+            {
+                // /keycopy (2026-09-28): every profile but the loaded one; nothing after a name.
+                if (argText.Contains(' ', StringComparison.Ordinal))
+                {
+                    return [];
+                }
+
+                var targets = sources.Profiles().Where(name => !Profiles.NameEquals(name, sources.LoadedProfile));
+                return MentionCompleter.Matches(targets.Select(name => new CompletionItem(name, KeyCopyTargetNote)).ToList(), argText);
             }
 
             case SlashCommand.Cwd:
@@ -4910,6 +4925,105 @@ internal sealed partial class ChatScreen
         }
 
         RunOrPost(DrainDiagnostics);
+    }
+
+    // ── /keycopy (2026-09-28) ───────────────────────────────────────────────
+
+    public const string KeyCopyUsageError = "/keycopy takes a profile name: /keycopy <profile>";
+
+    public const string KeyCopySelfError = "/keycopy copies into another profile; that one is loaded.";
+
+    /// <summary>The two keys' names, as the settings pane's rows read.</summary>
+    private const string LlmKeyName = "LLM API key";
+    private const string ClaudeKeyName = "Claude API key";
+
+    /// <summary>
+    /// The question before a key copy (the yes/no pane's title; <see cref="TypedConfirm"/> where menus cannot open):
+    /// <c>Copy the LLM API key and the Claude API key into "work"?</c>, and when a key is not set here what the mirror
+    /// does to the target's — <c> "work"'s Claude API key is cleared: none here.</c> — so the clearing is never a surprise. Pinned.
+    /// </summary>
+    public static string KeyCopyPrompt(string profile, bool llmSet, bool claudeSet)
+    {
+        string question = $"Copy the {LlmKeyName} and the {ClaudeKeyName} into \"{profile}\"?";
+        return (llmSet, claudeSet) switch
+        {
+            (true, true) => question,
+            (false, false) => $"{question} \"{profile}\"'s {LlmKeyName} and {ClaudeKeyName} are cleared: none here.",
+            _ => $"{question} \"{profile}\"'s {(llmSet ? ClaudeKeyName : LlmKeyName)} is cleared: none here.",
+        };
+    }
+
+    /// <summary>
+    /// <c>(copied the LLM API key and the Claude API key into "work")</c>; one not set here reads
+    /// <c>(copied the LLM API key into "work"; its Claude API key cleared)</c>, neither <c>(cleared "work"'s LLM API key and Claude API key)</c>. Pinned.
+    /// </summary>
+    public static string KeyCopiedNotice(string profile, bool llmSet, bool claudeSet) => (llmSet, claudeSet) switch
+    {
+        (true, true) => $"(copied the {LlmKeyName} and the {ClaudeKeyName} into \"{profile}\")",
+        (false, false) => $"(cleared \"{profile}\"'s {LlmKeyName} and {ClaudeKeyName})",
+        _ => $"(copied the {(llmSet ? LlmKeyName : ClaudeKeyName)} into \"{profile}\"; its {(llmSet ? ClaudeKeyName : LlmKeyName)} cleared)",
+    };
+
+    /// <summary>
+    /// <c>/keycopy &lt;profile&gt;</c> (2026-09-28, the user's ask): this profile's <c>LLM API key</c> and <c>Claude API
+    /// key</c> into another's, after a confirmation — <c>/cmdcopy</c>'s read-edit-write of the target's <c>profile.json</c>
+    /// (<see cref="Profiles.ReadProfileFile"/>: a corrupt one is an error, never overwritten) without its switches. Both are
+    /// mirrored (the user's call): a key not set here clears the target's, so it ends with exactly this profile's two, and the
+    /// question says so. The stored values (<c>_settings.Current</c>, not the effective ones: a key that comes only from
+    /// <c>NEONSIDEKICK_LLM_API_KEY</c>/<c>NEONSIDEKICK_CLAUDE_API_KEY</c> is a per-run override and stays out of the file),
+    /// copied as stored: a <c>dpapi:</c> Claude key reads the same in any profile of this Windows user on this machine, as
+    /// <see cref="Profiles.KeepOnReset"/> already relies on. The values are never shown or logged.
+    /// </summary>
+    private async Task HandleKeyCopyAsync(string args, CancellationToken cancellationToken)
+    {
+        string[] words = args.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+        if (words.Length != 1)
+        {
+            _flow.Error(KeyCopyUsageError);
+            return;
+        }
+
+        string home = _settings.StorageDirectory;
+        if (Profiles.Resolve(home, words[0]) is not { } target)
+        {
+            _flow.Error(ProfileMissingError(words[0]));
+            return;
+        }
+
+        if (Profiles.NameEquals(target, _settings.ProfileName))
+        {
+            _flow.Error(KeyCopySelfError);
+            return;
+        }
+
+        var current = _settings.Current;
+        string llmKey = current.LlmApiKey;
+        string claudeKey = current.ClaudeApiKey;
+        bool llmSet = !string.IsNullOrWhiteSpace(llmKey) && llmKey.Trim() != LlmEndpoint.DefaultApiKey;
+        bool claudeSet = !string.IsNullOrWhiteSpace(claudeKey);
+        if (!await ConfirmAsync(KeyCopyPrompt(target, llmSet, claudeSet), cancellationToken).ConfigureAwait(false))
+        {
+            _flow.Notice(KeptNotice);
+            return;
+        }
+
+        try
+        {
+            string path = Profiles.ProfileFile(home, target);
+            var data = Profiles.ReadProfileFile(path);
+            data.LlmApiKey = llmKey;
+            data.ClaudeApiKey = claudeKey;
+            Profiles.WriteProfileFile(path, data);
+            _flow.Notice(KeyCopiedNotice(target, llmSet, claudeSet));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.Json.JsonException)
+        {
+            _flow.Error(CmdCopyFailedError(ex.Message));
+        }
+        finally
+        {
+            RunOrPost(DrainDiagnostics);
+        }
     }
 
     /// <summary>
@@ -8230,6 +8344,10 @@ internal sealed partial class ChatScreen
 
             case SlashCommand.CmdCopy:
                 await HandleCmdCopyAsync(args, cancellationToken).ConfigureAwait(false);
+                return false;
+
+            case SlashCommand.KeyCopy:
+                await HandleKeyCopyAsync(args, cancellationToken).ConfigureAwait(false);
                 return false;
 
             case SlashCommand.Timer:
