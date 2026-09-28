@@ -48,4 +48,18 @@ public abstract record TurnEvent
     /// several and a host sums them. A cancelled or failed request raises none.
     /// </summary>
     public sealed record Usage(TokenUsage Tokens) : TurnEvent;
+
+    /// <summary>
+    /// The mid-turn guard is about to summarise (<see cref="ToolCompactMode.Compact"/>, 2026-09-28): raised before each
+    /// summariser request, so a host can say what the wait is. <paramref name="Percent"/> is the estimated share that fired.
+    /// Always followed by <see cref="Compacted"/>, unless the summary failed (a <see cref="Notice"/>) or was cancelled.
+    /// </summary>
+    public sealed record Compacting(int Percent) : TurnEvent;
+
+    /// <summary>
+    /// The mid-turn guard summarised (2026-09-28) and the history is the new one: the turns before this one
+    /// (<paramref name="ThisTurn"/> false) or this turn's earlier iterations (true). The host bills
+    /// <see cref="ConversationCompactor.Result.Usage"/> the way <c>/compact</c>'s is billed and shows the notice.
+    /// </summary>
+    public sealed record Compacted(ConversationCompactor.Result Result, int Percent, bool ThisTurn) : TurnEvent;
 }

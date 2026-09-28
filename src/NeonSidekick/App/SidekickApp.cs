@@ -1052,6 +1052,11 @@ public sealed class SidekickApp
                         // Tallied for the automatic compact's share; nothing is printed.
                         session.Usage.Add(usage.Tokens);
                         break;
+                    case TurnEvent.Compacted compacted:
+                        // The mid-turn guard summarised (2026-09-28): billed like the automatic compact, one notice line.
+                        session.Usage.AddCompaction(compacted.Result.Usage);
+                        await HeadlessNoticeLineAsync("[notice] " + (compacted.ThisTurn ? CompactionText.TurnNotice(compacted.Result, compacted.Percent) : CompactionText.Notice(compacted.Result, compacted.Percent))).ConfigureAwait(false);
+                        break;
                 }
             }
 

@@ -35,6 +35,14 @@ public class CompactionTextTests
     }
 
     [Fact]
+    public void TurnNotice_TheMidTurnCompactsSecondStage_SaysThisTurn()
+    {
+        // 2026-09-28: this turn's earlier iterations became a progress note.
+        Assert.Equal("(🗜️ compacted this turn at 91%: 24 messages → 5 · 41.2k → 3.1k tokens)", CompactionText.TurnNotice(new ConversationCompactor.Result(24, 5, 0, Usage, Summarised: true), 91));
+        Assert.Equal("(🗜️ compacted this turn at 62%: 5 messages → 3)", CompactionText.TurnNotice(new ConversationCompactor.Result(5, 3, 0, null, Summarised: true), 62));
+    }
+
+    [Fact]
     public void Notice_APruneAlone_WearsTheScissors()
     {
         Assert.Equal("(✂️ compacted: 12 tool results pruned)", CompactionText.Notice(new ConversationCompactor.Result(38, 38, 12, null), null));

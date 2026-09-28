@@ -386,7 +386,8 @@ public sealed class AppSettingsData
 
     /// <summary>
     /// What the tool loop does when a request's usage reaches <see cref="LlmAutoCompactPercent"/> of the
-    /// window mid-turn: <c>prune</c> (this turn's older tool results become stubs), <c>stop</c> (the
+    /// window mid-turn: <c>compact</c> (a prune, then a summary when that was not enough — the default
+    /// since 2026-09-28), <c>prune</c> (this turn's older tool results become stubs), <c>stop</c> (the
     /// turn ends with a notice) or <c>nothing</c>. One of <see cref="Llm.ToolCompactType.Names"/>;
     /// anything else reads as <see cref="Llm.ToolCompactType.Default"/>. No variable.
     /// </summary>

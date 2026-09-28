@@ -1586,7 +1586,10 @@ public class AssistantTests
 
     private static string LongText(int length) => new('x', length);
 
-    /// <summary>Two echo round trips over a 1,000-token window, the second's usage at 90 %: what the guard sees before the third request.</summary>
+    /// <summary>
+    /// Two echo round trips over a 1,000-token window, the second's usage at 90 %: what the guard sees before the third request —
+    /// 97 % since 2026-09-28, the reported 900 plus the 306-character result just appended (76 tokens at four characters each).
+    /// </summary>
     private static (FakeChatClient Client, ConversationHistory History, Assistant Assistant) GuardedLoop(Assistant.TurnContextGuard? guard, bool secondReportsUsage = true)
     {
         var (client, history, assistant) = Build(new AIFunction[] { new EchoTool() });
@@ -1616,7 +1619,7 @@ public class AssistantTests
         Assert.Equal(new[] { "done" }, Deltas(events));
         var notice = Assert.Single(events.OfType<TurnEvent.Notice>());
         Assert.False(notice.IsError);
-        Assert.Equal("(✂️ context at 90%: pruned 1 tool result from this turn)", notice.Text);
+        Assert.Equal("(✂️ context at 97%: pruned 1 tool result from this turn)", notice.Text);
         // The events: the second request's usage, its call and result, then the notice, then the reply.
         Assert.Equal(
             new[] { typeof(TurnEvent.Usage), typeof(TurnEvent.ToolCall), typeof(TurnEvent.ToolResult), typeof(TurnEvent.Usage), typeof(TurnEvent.ToolCall), typeof(TurnEvent.ToolResult), typeof(TurnEvent.Notice), typeof(TurnEvent.TextDelta) },
@@ -1640,7 +1643,7 @@ public class AssistantTests
         Assert.Empty(Deltas(events));
         var notice = Assert.IsType<TurnEvent.Notice>(events[^1]);
         Assert.True(notice.IsError);
-        Assert.Equal("🛑 Stopped at 90% of the context window (LLM tool compact type is stop); /compact or /clear before continuing.", notice.Text);
+        Assert.Equal("🛑 Stopped at 97% of the context window (LLM tool compact type is stop); /compact or /clear before continuing.", notice.Text);
         Assert.Equal(2, client.Requests.Count);
         // No call left unanswered: the history ends with the second iteration's result, verbatim.
         Assert.Equal(new[] { ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool }, history.Messages.Select(m => m.Role));
@@ -1651,7 +1654,8 @@ public class AssistantTests
     [Theory]
     [InlineData(ToolCompactMode.Nothing, 80)]
     [InlineData(ToolCompactMode.Prune, 0)]
-    [InlineData(ToolCompactMode.Prune, 95)]
+    [InlineData(ToolCompactMode.Prune, 98)]
+    [InlineData(ToolCompactMode.Compact, 98)]
     public async Task Guard_NothingOrOffOrUnderTheShare_LeavesTheTurnAlone(ToolCompactMode mode, int percent)
     {
         var (client, _, assistant) = GuardedLoop(new Assistant.TurnContextGuard(1000, percent, mode));
@@ -1706,6 +1710,194 @@ public class AssistantTests
         Assert.Equal("(✂️ context at 85%: pruned 23 tool results from this turn)", Assistant.TurnPrunedNotice(85, 23));
         Assert.Equal("(✂️ context at 85%: pruned 1 tool result from this turn)", Assistant.TurnPrunedNotice(85, 1));
         Assert.Equal("🛑 Stopped at 85% of the context window (LLM tool compact type is stop); /compact or /clear before continuing.", Assistant.TurnStoppedNotice(85));
+    }
+
+    // ── The mid-turn compact (LLM tool compact type: compact, 2026-09-28) ───
+
+    private static Dictionary<string, object?> EchoArgs(string text) => new() { ["text"] = text };
+
+    [Fact]
+    public async Task Guard_Projects_TheResultsJustAppended_TripsBeforeTheNextRequest()
+    {
+        // Reported 70 % of the window, but the 2,006-character result just appended (501 tokens) takes the next request past it.
+        var (client, _, assistant) = Build(new AIFunction[] { new EchoTool() });
+        assistant.ContextGuard = new Assistant.TurnContextGuard(1000, 80, ToolCompactMode.Stop);
+        client.Enqueue(FakeChatClient.Call("c1", "echo", EchoArgs(LongText(2000))), FakeChatClient.Usage(690, 10));
+        client.EnqueueText("never asked");
+
+        var events = await Run(assistant, "go");
+
+        Assert.Equal("🛑 Stopped at 120% of the context window (LLM tool compact type is stop); /compact or /clear before continuing.", Assert.IsType<TurnEvent.Notice>(events[^1]).Text);
+        Assert.Single(client.Requests);
+    }
+
+    [Fact]
+    public async Task Guard_Compact_PruneNotEnough_SummarisesTheOlderTurns_ThisTurnKept()
+    {
+        var (client, history, assistant) = Build(new AIFunction[] { new EchoTool() });
+        client.EnqueueText("noted");
+        await Run(assistant, LongText(2000));                                           // an older turn of about 500 tokens
+
+        assistant.ContextGuard = new Assistant.TurnContextGuard(1000, 50, ToolCompactMode.Compact);
+        client.Enqueue(FakeChatClient.Call("c1", "echo", EchoArgs(LongText(300))), FakeChatClient.Usage(600, 50));   // 650 + the 306-character result's 76: 72 %
+        client.Enqueue(FakeChatClient.Text("The user sent a long line of x."), FakeChatClient.Usage(560, 8));          // the summariser
+        client.EnqueueText("done");
+
+        var events = await Run(assistant, "go");
+
+        // Nothing for the prune (one iteration, the last), so the summary: the older turn went, about 500 tokens with it.
+        Assert.Empty(events.OfType<TurnEvent.Notice>());
+        Assert.Equal(72, Assert.Single(events.OfType<TurnEvent.Compacting>()).Percent);
+        var compacted = Assert.Single(events.OfType<TurnEvent.Compacted>());
+        Assert.False(compacted.ThisTurn);
+        Assert.Equal(72, compacted.Percent);
+        Assert.True(compacted.Result.Summarised);
+        Assert.Equal("The user sent a long line of x.", compacted.Result.Summary);
+        Assert.Equal((560L, 8L), (compacted.Result.Usage!.Value.Input, compacted.Result.Usage.Value.Output));
+        Assert.Equal((5, 4), (compacted.Result.MessagesBefore, compacted.Result.MessagesAfter));
+        Assert.Equal(new[] { typeof(TurnEvent.Usage), typeof(TurnEvent.ToolCall), typeof(TurnEvent.ToolResult), typeof(TurnEvent.Compacting), typeof(TurnEvent.Compacted), typeof(TurnEvent.TextDelta) }, events.Select(e => e.GetType()));
+
+        Assert.Equal(4, client.Requests.Count);
+        var summariser = client.Requests[2];
+        Assert.Equal(ConversationCompactor.SummaryInstruction, summariser[0].Text);
+        Assert.Equal(new[] { ChatRole.System, ChatRole.User, ChatRole.Assistant, ChatRole.User }, summariser.Select(m => m.Role));   // the older turn alone
+        var next = client.Requests[3];
+        Assert.Equal(new[] { ChatRole.System, ChatRole.User, ChatRole.User, ChatRole.Assistant, ChatRole.Tool }, next.Select(m => m.Role));
+        Assert.Equal(ConversationCompactor.SummaryPreamble + "The user sent a long line of x.", next[1].Text);
+        Assert.Equal("go", next[2].Text);
+        Assert.Equal("echo: " + LongText(300), Assert.Single(next[4].Contents.OfType<FunctionResultContent>()).Result);   // this turn untouched
+        Assert.Equal("done", history.Messages[^1].Text);
+    }
+
+    /// <summary>
+    /// One turn whose first call carries 1,200 characters of arguments (the model's own words: no prune touches them) and
+    /// whose second request reports 91 % of a 1,000-token window: the prune stubs the first result and it is not enough.
+    /// </summary>
+    private static (FakeChatClient Client, ConversationHistory History, Assistant Assistant) HeavyArguments()
+    {
+        var (client, history, assistant) = Build(new AIFunction[] { new EchoTool() });
+        assistant.ContextGuard = new Assistant.TurnContextGuard(1000, 50, ToolCompactMode.Compact);
+        client.Enqueue(FakeChatClient.Call("c1", "echo", EchoArgs(LongText(1200))), FakeChatClient.Usage(100, 10));   // 110 + 301: 41 %
+        client.Enqueue(FakeChatClient.Call("c2", "echo", EchoArgs("b")), FakeChatClient.Usage(900, 10));               // 911 before the prune
+        return (client, history, assistant);
+    }
+
+    [Fact]
+    public async Task Guard_Compact_NoOlderTurns_SummarisesThisTurnsEarlierIterations_IntoTheUserMessage()
+    {
+        var (client, history, assistant) = HeavyArguments();
+        client.Enqueue(FakeChatClient.Text("Echoed 1,200 x once."), FakeChatClient.Usage(700, 6));
+        client.EnqueueText("done");
+
+        var events = await Run(assistant, "go");
+
+        Assert.Equal("(✂️ context at 91%: pruned 1 tool result from this turn)", Assert.Single(events.OfType<TurnEvent.Notice>()).Text);
+        var compacting = Assert.Single(events.OfType<TurnEvent.Compacting>());
+        Assert.InRange(compacting.Percent, 50, 90);                                     // the estimate after the prune, still past the share
+        var compacted = Assert.Single(events.OfType<TurnEvent.Compacted>());
+        Assert.True(compacted.ThisTurn);
+        Assert.Equal(compacting.Percent, compacted.Percent);
+        Assert.Equal((5, 3), (compacted.Result.MessagesBefore, compacted.Result.MessagesAfter));
+        Assert.Equal((1, 2), (compacted.Result.OpeningKept, compacted.Result.RecentKept));
+
+        Assert.Equal(4, client.Requests.Count);
+        var summariser = client.Requests[2];
+        Assert.Equal(ConversationCompactor.TurnProgressInstruction, summariser[0].Text);
+        Assert.Equal(ConversationCompactor.TurnProgressRequest, summariser[^1].Text);
+        // Everything ahead of the last iteration: the user's message and the first call with its stubbed result.
+        Assert.Equal(new[] { ChatRole.System, ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.User }, summariser.Select(m => m.Role));
+
+        var next = client.Requests[3];
+        Assert.Equal(new[] { ChatRole.System, ChatRole.User, ChatRole.Assistant, ChatRole.Tool }, next.Select(m => m.Role));
+        Assert.Equal(new[] { "go", ConversationCompactor.TurnProgressPreamble + "Echoed 1,200 x once." }, next[1].Contents.OfType<TextContent>().Select(t => t.Text));
+        Assert.Equal("c2", Assert.Single(next[2].Contents.OfType<FunctionCallContent>()).CallId);
+        Assert.Equal("echo: b", Assert.Single(next[3].Contents.OfType<FunctionResultContent>()).Result);
+        Assert.Equal("done", history.Messages[^1].Text);
+        Assert.Equal(1, history.TurnCount);
+    }
+
+    [Fact]
+    public async Task Guard_Compact_SummarisesOncePerClimb_ARequestUnderTheShareArmsItAgain_TheNoteReplaced()
+    {
+        var (client, _, assistant) = HeavyArguments();
+        client.Enqueue(FakeChatClient.Text("First note."), FakeChatClient.Usage(700, 6));
+        client.Enqueue(FakeChatClient.Call("c3", "echo", EchoArgs("c")), FakeChatClient.Usage(900, 10));                 // still 91 %: no second summary
+        client.Enqueue(FakeChatClient.Call("c4", "echo", EchoArgs(LongText(1200))), FakeChatClient.Usage(100, 10));      // 11 % reported (41 % with its result): armed again
+        client.Enqueue(FakeChatClient.Call("c5", "echo", EchoArgs("e")), FakeChatClient.Usage(900, 10));                 // past it again: the second summary
+        client.Enqueue(FakeChatClient.Text("Second note."), FakeChatClient.Usage(700, 6));
+        client.EnqueueText("done");
+
+        var events = await Run(assistant, "go");
+
+        Assert.Equal(2, events.OfType<TurnEvent.Compacted>().Count());
+        Assert.All(events.OfType<TurnEvent.Compacted>(), c => Assert.True(c.ThisTurn));
+        Assert.Equal(8, client.Requests.Count);
+        Assert.Equal(ConversationCompactor.TurnProgressInstruction, client.Requests[2][0].Text);
+        Assert.Equal(ConversationCompactor.TurnProgressInstruction, client.Requests[6][0].Text);
+        // One note on the user's message, the second: a compact of the same turn replaces the note it made before.
+        var user = client.Requests[7][1];
+        Assert.Equal(new[] { "go", ConversationCompactor.TurnProgressPreamble + "Second note." }, user.Contents.OfType<TextContent>().Select(t => t.Text));
+        Assert.Equal(new[] { ChatRole.System, ChatRole.User, ChatRole.Assistant, ChatRole.Tool }, client.Requests[7].Select(m => m.Role));
+    }
+
+    [Fact]
+    public async Task Guard_Compact_ASummariserFailure_IsAnErrorNotice_AndTheTurnCarriesOn()
+    {
+        var (client, history, assistant) = HeavyArguments();
+        client.Enqueue(FakeChatClient.Text("unused"));
+        client.EnqueueText("done");
+        client.BeforeUpdateOf = (request, _, _) => request == 2 ? Task.FromException(new HttpRequestException("summariser down")) : Task.CompletedTask;
+
+        var events = await Run(assistant, "go");
+
+        var failure = events.OfType<TurnEvent.Notice>().Single(n => n.IsError);
+        Assert.StartsWith(Assistant.CompactFailedPrefix, failure.Text);
+        Assert.Contains("summariser down", failure.Text);
+        Assert.Empty(events.OfType<TurnEvent.Compacted>());
+        Assert.Equal(new[] { "done" }, Deltas(events));
+        // The history as the prune left it: the first call still there, no note on the user's message.
+        Assert.Equal(4, client.Requests.Count);
+        Assert.Equal(new[] { ChatRole.System, ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool }, client.Requests[3].Select(m => m.Role));
+        Assert.Equal("go", client.Requests[3][1].Text);
+        Assert.Equal("done", history.Messages[^1].Text);
+    }
+
+    [Fact]
+    public async Task Guard_Compact_CancelledDuringTheSummary_Propagates_TheHistoryUntouched()
+    {
+        var (client, history, assistant) = HeavyArguments();
+        client.Enqueue(FakeChatClient.Text("never"));
+        using var cts = new CancellationTokenSource();
+        client.BeforeUpdateOf = (request, _, _) =>
+        {
+            if (request == 2)
+            {
+                cts.Cancel();
+            }
+
+            return Task.CompletedTask;
+        };
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => Run(assistant, "go", cts.Token));
+
+        Assert.Equal(new[] { ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool }, history.Messages.Select(m => m.Role));
+        Assert.Equal("go", history.Messages[0].Text);
+        Assert.Equal("c1", Assert.Single(history.Messages[1].Contents.OfType<FunctionCallContent>()).CallId);
+    }
+
+    [Fact]
+    public void Guard_Arithmetic_OverTokens_IsTheUsagesOwn()
+    {
+        var guard = new Assistant.TurnContextGuard(1000, 80, ToolCompactMode.Compact);
+        Assert.True(guard.Acts);
+        Assert.Equal(97, guard.PercentOf(976L));
+        Assert.True(guard.Tripped(800L));
+        Assert.False(guard.Tripped(799L));
+        Assert.False(guard.Tripped(0L));
+        Assert.False(guard.Tripped(-5L));
+        Assert.Equal(guard.PercentOf(new TokenUsage(900, 50, 950, 1, TimeSpan.Zero, TimeSpan.Zero)), guard.PercentOf(950L));
+        Assert.Equal("🗜️ Compact failed: ", Assistant.CompactFailedPrefix);
+        Assert.Equal(Assistant.CompactGlyph, App.CompactionText.CompactGlyph);
     }
 
     [Fact]

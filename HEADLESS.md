@@ -48,7 +48,8 @@ You:
 
 Automatic compaction also runs headless: before a message, if the last reply used more of the
 context than the *LLM auto compact (%)* setting allows, the conversation is compacted first and
-`[notice]` lines say so.
+`[notice]` lines say so. The mid-reply guard (*LLM tool compact type*) runs too: a prune or a
+summary during a reply is a `[notice]` line of its own.
 
 Rules for the seven:
 - Case doesn't matter (`/EXIT` works). Spaces around the line are ignored.

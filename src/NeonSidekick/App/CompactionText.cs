@@ -15,15 +15,16 @@ public static class CompactionText
     /// What every line of <c>/compact</c> or the automatic compact opens with, inside its parentheses
     /// (2026-09-19, the user's pick; <c>ChatScreen.TrashGlyph</c>'s shape): the clamp U+1F5DC with
     /// its variation selector — bare it is text-presentation — and a space. A line where only tool
-    /// results were pruned wears <see cref="Assistant.PruneGlyph"/> instead. Pinned.
+    /// results were pruned wears <see cref="Assistant.PruneGlyph"/> instead. <see cref="Assistant.CompactGlyph"/>
+    /// since 2026-09-28, the mid-turn compact's lines being the tool loop's. Pinned.
     /// </summary>
-    public const string CompactGlyph = "🗜️ ";
+    public const string CompactGlyph = Assistant.CompactGlyph;
 
     public const string NothingToCompact = "(" + CompactGlyph + "nothing to compact)";
     public const string Cancelled = "(" + CompactGlyph + "compact cancelled)";
 
-    /// <summary>The prefix of a failure's error line: <c>🗜️ Compact failed: </c> + <c>Assistant.Explain</c>.</summary>
-    public const string FailedPrefix = CompactGlyph + "Compact failed: ";
+    /// <summary>The prefix of a failure's error line: <c>🗜️ Compact failed: </c> + <c>Assistant.Explain</c> (<see cref="Assistant.CompactFailedPrefix"/>, the mid-turn guard's too).</summary>
+    public const string FailedPrefix = Assistant.CompactFailedPrefix;
 
     /// <summary>The spinner's label while the summariser runs.</summary>
     public const string CompactingLabel = "compacting the conversation";
@@ -38,8 +39,23 @@ public static class CompactionText
     public static string Notice(ConversationCompactor.Result result, int? autoPercent)
     {
         ArgumentNullException.ThrowIfNull(result);
+        return Line(result, autoPercent is { } percent ? "auto-compacted at " + UsageText.PercentText(percent) : "compacted");
+    }
+
+    /// <summary>
+    /// The mid-turn compact's second stage (2026-09-28): <c>(🗜️ compacted this turn at 91%: 24 messages → 5 · 60.1k → 1.2k tokens)</c>,
+    /// this turn's earlier iterations having become a progress note. The first stage, the turns before this one, is
+    /// <see cref="Notice"/>'s automatic line. Pinned.
+    /// </summary>
+    public static string TurnNotice(ConversationCompactor.Result result, int percent)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+        return Line(result, "compacted this turn at " + UsageText.PercentText(percent));
+    }
+
+    private static string Line(ConversationCompactor.Result result, string head)
+    {
         string glyph = result.Summarised ? CompactGlyph : Assistant.PruneGlyph;
-        string head = autoPercent is { } percent ? "auto-compacted at " + UsageText.PercentText(percent) : "compacted";
         string pruned = UsageText.Plural(result.Pruned, "tool result", "tool results") + " pruned";
         string body;
         if (!result.Summarised)

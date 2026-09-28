@@ -3974,7 +3974,8 @@ internal sealed partial class ChatScreen
     /// <summary>
     /// The tool loop's guard for a turn (<see cref="Assistant.ContextGuard"/>): the window
     /// (<see cref="LlmSession.ContextLength"/> — the LLM tab's figure else the server's), the share
-    /// <c>LLM auto compact (%)</c> and the mode <c>LLM tool compact type</c>; null while the window is unknown.
+    /// <c>LLM auto compact (%)</c> and the mode <c>LLM tool compact type</c> (<c>compact</c>, the default since 2026-09-28,
+    /// <c>prune</c>, <c>stop</c> or <c>nothing</c>); null while the window is unknown.
     /// </summary>
     public static Assistant.TurnContextGuard? ContextGuardFor(AppSettingsData effective, ContextLength? window)
     {
@@ -11421,6 +11422,33 @@ internal sealed partial class ChatScreen
             case TurnEvent.Usage usage when !_botTurnRunning:
                 _session.Usage.Add(usage.Tokens);
                 break;
+            case TurnEvent.Compacted compacted when !_botTurnRunning:
+                MidTurnCompacted(compacted);
+                break;
+        }
+    }
+
+    /// <summary>
+    /// The mid-turn guard summarised (2026-09-28, <c>LLM tool compact type: compact</c>): billed and shown the way the
+    /// automatic compact is (<see cref="CompactAsync"/>) — the summariser's request on the tally, the notice, the detail
+    /// under it with <c>LLM compact show summary</c>, the store following the rewritten history — while the turn runs on.
+    /// </summary>
+    private void MidTurnCompacted(TurnEvent.Compacted compacted)
+    {
+        _session.Usage.AddCompaction(compacted.Result.Usage);
+        string notice = compacted.ThisTurn ? CompactionText.TurnNotice(compacted.Result, compacted.Percent) : CompactionText.Notice(compacted.Result, compacted.Percent);
+        _transcript.Notice(notice);
+        if (_effective().LlmCompactShowSummary)
+        {
+            foreach (string line in CompactionText.DetailLines(compacted.Result))
+            {
+                _transcript.Notice(line);
+            }
+        }
+
+        if (_session.Assistant is { } assistant)
+        {
+            SaveSessionHistory(assistant);
         }
     }
 

@@ -693,4 +693,85 @@ public class ConversationCompactorTests
             Assert.Equal(Long(500), results[2].Result);
         }
     }
+
+    // ── The mid-turn compact's helpers (2026-09-28) ───────────────────────────
+
+    [Fact]
+    public void EstimateTokens_CountsText_CallsAsTheirJson_Results_AndPictures_OverFour()
+    {
+        Assert.Equal(0, ConversationCompactor.EstimateTokens([]));
+        Assert.Equal(2, ConversationCompactor.EstimateTokens([User(Long(8)), Assistant("x")]));            // 9 characters: 2
+        // A call: its name and its arguments as the wire's JSON — echo + {"text":"abcd"} = 4 + 15.
+        var call = new ChatMessage(ChatRole.Assistant, [new FunctionCallContent("c1", "echo", new Dictionary<string, object?> { ["text"] = "abcd" })]);
+        Assert.Equal(19 / 4, ConversationCompactor.EstimateTokens([call]));
+        Assert.Equal(100, ConversationCompactor.EstimateTokens([Result("c1", Long(400))]));
+        var picture = new ChatMessage(ChatRole.User, [new TextContent(Long(40)), new DataContent(new byte[] { 1, 2, 3 }, "image/png"), new DataContent(new byte[] { 4 }, "image/png")]);
+        Assert.Equal(10 + 2 * ConversationCompactor.PictureTokens, ConversationCompactor.EstimateTokens([picture]));
+        Assert.Equal((4, 1000), (ConversationCompactor.CharsPerToken, ConversationCompactor.PictureTokens));
+    }
+
+    [Fact]
+    public void SplitTurn_TheLastTurn_ItsOpeningPairs_EarlierIterations_AndTheLastIteration()
+    {
+        var messages = new List<ChatMessage>
+        {
+            User("earlier"), Assistant("sure"),
+            User("go"),
+            Call(NeonSidekick.Llm.Assistant.OpeningClockCallId, "get_time"), Result(NeonSidekick.Llm.Assistant.OpeningClockCallId, "noon"),
+            Call("c1", "read_file"), Result("c1", Long(300)),
+            Call("c2", "read_file"), Result("c2", Long(300)),
+        };
+
+        var plan = ConversationCompactor.SplitTurn(messages)!;
+
+        Assert.Equal(["earlier", "sure"], plan.Before.Select(m => m.Text));
+        Assert.Equal("go", plan.Start.Text);
+        Assert.Equal(2, plan.Opening.Count);
+        Assert.Equal(["assistant", "tool"], Roles(plan.Earlier));
+        Assert.Equal("c1", Assert.Single(plan.Earlier[0].Contents.OfType<FunctionCallContent>()).CallId);
+        Assert.Equal("c2", Assert.Single(plan.Last[0].Contents.OfType<FunctionCallContent>()).CallId);
+        Assert.Equal(2, plan.Last.Count);
+        Assert.Equal(7, plan.Transcript.Count);                                          // everything ahead of c2
+        Assert.True(plan.HasEarlierIterations);
+
+        // One iteration only: nothing earlier. No call of the model's, or no turn: no plan.
+        Assert.False(ConversationCompactor.SplitTurn([User("go"), Call("c1", "x"), Result("c1", "y")])!.HasEarlierIterations);
+        Assert.Null(ConversationCompactor.SplitTurn([User("go"), Assistant("hi")]));
+        Assert.Null(ConversationCompactor.SplitTurn([User("go"), Call(NeonSidekick.Llm.Assistant.OpeningCwdCallId, "cwd"), Result(NeonSidekick.Llm.Assistant.OpeningCwdCallId, "D:")]));
+        Assert.Null(ConversationCompactor.SplitTurn([]));
+    }
+
+    [Fact]
+    public void SummarisedTurn_TheNoteRidesTheUsersMessage_ReplacingAnEarlierOne_TheLastIterationUntouched()
+    {
+        var messages = new List<ChatMessage>
+        {
+            User("earlier"),
+            User("go"),
+            Call(NeonSidekick.Llm.Assistant.OpeningClockCallId, "get_time"), Result(NeonSidekick.Llm.Assistant.OpeningClockCallId, "noon"),
+            Call("c1", "read_file"), Result("c1", Long(300)),
+            Call("c2", "read_file"), Result("c2", Long(300)),
+        };
+
+        var once = ConversationCompactor.SummarisedTurn("  Read the first file.  ", ConversationCompactor.SplitTurn(messages)!);
+
+        Assert.Equal(["user", "user", "assistant", "tool", "assistant", "tool"], Roles(once));
+        Assert.Equal("earlier", once[0].Text);
+        var parts = once[1].Contents.OfType<TextContent>().ToList();
+        Assert.Equal(["go", ConversationCompactor.TurnProgressPreamble + "Read the first file."], parts.Select(t => t.Text));
+        Assert.False(ConversationCompactor.IsTurnProgress(parts[0]));
+        Assert.True(ConversationCompactor.IsTurnProgress(parts[1]));
+        Assert.Same(messages[2], once[2]);                                               // the opening pair in place
+        Assert.Same(messages[6], once[4]);                                               // the last iteration as it was
+        Assert.Same(messages[7], once[5]);
+        Assert.Equal("go", messages[1].Text);                                            // the held message untouched
+
+        // A second compact of the same turn: the note replaced, not added.
+        once.Add(Call("c3", "read_file"));
+        once.Add(Result("c3", "short"));
+        var twice = ConversationCompactor.SummarisedTurn("Read two files.", ConversationCompactor.SplitTurn(once)!);
+        Assert.Equal(["go", ConversationCompactor.TurnProgressPreamble + "Read two files."], twice[1].Contents.OfType<TextContent>().Select(t => t.Text));
+        Assert.Equal(["user", "user", "assistant", "tool", "assistant", "tool"], Roles(twice));
+        Assert.Equal("\n\n(The work on this request so far was compacted into this progress note; carry on from it:)\n\n", ConversationCompactor.TurnProgressPreamble);
+    }
 }

@@ -542,10 +542,16 @@ public sealed class Assistant
         public bool Acts => Percent > 0 && Mode != ToolCompactMode.Nothing;
 
         /// <summary>The whole-number share of the window <paramref name="usage"/> takes.</summary>
-        public int PercentOf(TokenUsage usage) => (int)(usage.Total * 100L / WindowTokens);
+        public int PercentOf(TokenUsage usage) => PercentOf(usage.Total);
+
+        /// <summary>The whole-number share of the window <paramref name="tokens"/> take (2026-09-28: the loop's estimate of the next request).</summary>
+        public int PercentOf(long tokens) => (int)(tokens * 100L / WindowTokens);
 
         /// <summary>Whether <paramref name="usage"/> is at or past the share.</summary>
-        public bool Tripped(TokenUsage usage) => Acts && usage.Total > 0 && usage.Total * 100L >= (long)WindowTokens * Percent;
+        public bool Tripped(TokenUsage usage) => Tripped(usage.Total);
+
+        /// <summary>Whether <paramref name="tokens"/> are at or past the share.</summary>
+        public bool Tripped(long tokens) => Acts && tokens > 0 && tokens * 100L >= (long)WindowTokens * Percent;
     }
 
     /// <summary>
@@ -553,11 +559,16 @@ public sealed class Assistant
     /// null while the window is unknown. The automatic compact checks only at the top of a message,
     /// and one message can walk the context to the ceiling by itself (sixty tool round trips took
     /// a chef's five-recipe request from 7k to 129k tokens of a 151k window, 2026-09-15). After
-    /// each request that reported usage at or past the share: <see cref="ToolCompactMode.Prune"/>
-    /// stubs this turn's older tool results (<see cref="ConversationCompactor.PruneRecent"/>) and
-    /// carries on; <see cref="ToolCompactMode.Stop"/> ends the turn with <see cref="TurnStoppedNotice"/>
-    /// after the iteration's results are in, so no call is left unanswered. Kept non-null under
-    /// <see cref="ToolCompactMode.Nothing"/> too, so a timeout can name the share.
+    /// each iteration whose request reported usage, the next request is estimated — that usage plus
+    /// the results just appended (<see cref="ConversationCompactor.EstimateTokens"/>; since 2026-09-28,
+    /// the report alone was one request late: a big fetch took the next request past the share unseen) —
+    /// and at or past the share: <see cref="ToolCompactMode.Prune"/> stubs this turn's older tool
+    /// results (<see cref="ConversationCompactor.PruneRecent"/>) and carries on;
+    /// <see cref="ToolCompactMode.Compact"/> prunes the same way and, when the estimate is still at or
+    /// past the share, summarises (<see cref="CompactMidTurnAsync"/>); <see cref="ToolCompactMode.Stop"/>
+    /// ends the turn with <see cref="TurnStoppedNotice"/> after the iteration's results are in, so no
+    /// call is left unanswered. Kept non-null under <see cref="ToolCompactMode.Nothing"/> too, so a
+    /// timeout can name the share.
     /// </summary>
     public TurnContextGuard? ContextGuard { get; set; }
 
@@ -581,6 +592,16 @@ public sealed class Assistant
     /// <summary>What the guard's stop line opens with (2026-09-19, the user's pick): the stop sign U+1F6D1, emoji-presentation by itself, and a space. Pinned.</summary>
     public const string StopGlyph = "🛑 ";
 
+    /// <summary>
+    /// What a line where something was summarised opens with (2026-09-19, the user's pick; here since 2026-09-28,
+    /// when the mid-turn compact's failure line needed it): the clamp U+1F5DC with its variation selector — bare
+    /// it is text-presentation — and a space. <c>App.CompactionText.CompactGlyph</c> is this one. Pinned.
+    /// </summary>
+    public const string CompactGlyph = "🗜️ ";
+
+    /// <summary>The prefix of a failed compact's error line, <c>/compact</c>'s and the mid-turn guard's: <c>🗜️ Compact failed: </c> + <see cref="Explain"/>.</summary>
+    public const string CompactFailedPrefix = CompactGlyph + "Compact failed: ";
+
     /// <summary>The transcript line after the guard pruned: <c>(✂️ context at 85%: pruned 23 tool results from this turn)</c>. Pinned.</summary>
     public static string TurnPrunedNotice(int percent, int pruned) =>
         "(" + PruneGlyph + "context at " + percent.ToString(CultureInfo.InvariantCulture) + "%: pruned " + pruned.ToString(CultureInfo.InvariantCulture) + (pruned == 1 ? " tool result" : " tool results") + " from this turn)";
@@ -588,6 +609,67 @@ public sealed class Assistant
     /// <summary>The error line when the guard stopped the turn: <c>🛑 Stopped at 85% …</c>. Pinned.</summary>
     public static string TurnStoppedNotice(int percent) =>
         StopGlyph + "Stopped at " + percent.ToString(CultureInfo.InvariantCulture) + "% of the context window (LLM tool compact type is stop); /compact or /clear before continuing.";
+
+    /// <summary>
+    /// One summary the mid-turn guard may make (2026-09-28): what the summariser reads, its prompt and closing line,
+    /// how the new history is built from the summary, and the two protected counts <c>LLM compact show summary</c> names.
+    /// </summary>
+    private sealed record MidTurnCompact(IReadOnlyList<ChatMessage> Transcript, string Instruction, string RequestLine, Func<string, List<ChatMessage>> Rebuild, int OpeningKept, int RecentKept);
+
+    /// <summary>What a mid-turn summary did: its result and the tokens it is estimated to have saved, or the failure's explanation.</summary>
+    private sealed record MidTurnCompactDone(ConversationCompactor.Result? Result, long Saved, string? Failure);
+
+    /// <summary>
+    /// The first stage: the turns before this one become one summary (<see cref="ConversationCompactor.Summarised"/>),
+    /// this turn kept whole — <c>LLM compact keep recent</c> is the between-turn compact's, and mid-turn the context is
+    /// over the share already. Null when there is no older turn.
+    /// </summary>
+    private MidTurnCompact? PlanOlderCompact()
+    {
+        var plan = ConversationCompactor.Split(_history.Messages, 1);
+        return plan.HasOlderTurns
+            ? new MidTurnCompact(plan.Older, ConversationCompactor.SummaryInstruction, ConversationCompactor.SummaryRequest(null), summary => ConversationCompactor.Summarised(summary, plan), plan.Opening.Count, plan.Recent.Count)
+            : null;
+    }
+
+    /// <summary>
+    /// The second stage: this turn's earlier iterations become a progress note on its user message
+    /// (<see cref="ConversationCompactor.SummarisedTurn"/>), the last iteration kept. Null when there is no earlier iteration.
+    /// </summary>
+    private MidTurnCompact? PlanTurnCompact()
+    {
+        var plan = ConversationCompactor.SplitTurn(_history.Messages);
+        return plan is { HasEarlierIterations: true }
+            ? new MidTurnCompact(plan.Transcript, ConversationCompactor.TurnProgressInstruction, ConversationCompactor.TurnProgressRequest, summary => ConversationCompactor.SummarisedTurn(summary, plan), plan.Before.Count + 1 + plan.Opening.Count, plan.Last.Count)
+            : null;
+    }
+
+    /// <summary>
+    /// One mid-turn summary (2026-09-28): the summariser's request, then the history swapped for the rebuilt one. Out of
+    /// the iterator because C# allows no <c>yield</c> inside a try with a catch. Cancellation propagates with the history
+    /// untouched, as <c>/compact</c>'s does; any other failure is its explanation, the history untouched too, and the turn carries on.
+    /// </summary>
+    private async Task<MidTurnCompactDone> CompactMidTurnAsync(MidTurnCompact step, CancellationToken cancellationToken)
+    {
+        int before = _history.Messages.Count;
+        try
+        {
+            var (summary, usage) = await SummarizeAsync(step.Instruction, step.Transcript, step.RequestLine, cancellationToken).ConfigureAwait(false);
+            var messages = step.Rebuild(summary);
+            long saved = ConversationCompactor.EstimateTokens(_history.Messages) - ConversationCompactor.EstimateTokens(messages);
+            _history.Replace(messages);
+            return new MidTurnCompactDone(new ConversationCompactor.Result(before, messages.Count, 0, usage, Summarised: true)
+            {
+                Summary = summary.Trim(),
+                OpeningKept = step.OpeningKept,
+                RecentKept = step.RecentKept,
+            }, saved, null);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+        {
+            return new MidTurnCompactDone(null, 0, ExplainFailure(ex));
+        }
+    }
 
     /// <summary>The stable part of System.ClientModel's network-timeout message, the one the SDK's <c>NetworkTimeout</c> (the request timeout) throws with.</summary>
     public const string NetworkTimeoutMarker = "exceeded the configured timeout";
@@ -868,6 +950,11 @@ public sealed class Assistant
         // The last request that reported usage, for the guard and for a timeout's context share.
         TokenUsage? lastUsage = null;
 
+        // Whether the guard may summarise (ToolCompactMode.Compact, 2026-09-28): once per climb. A summary disarms
+        // it; a request that reports usage under the share arms it again, so a very long turn can compact more
+        // than once but a turn hovering over the share does not pay for a summariser request every iteration.
+        bool compactArmed = true;
+
         for (int iteration = 1; iteration <= MaxToolIterations; iteration++)
         {
             if (_time.GetElapsedTime(started) >= _timeouts.Turn)
@@ -1072,6 +1159,11 @@ public sealed class Assistant
             {
                 DiagnosticLog.Debug(Category, UsageLogLine(usage));
                 lastUsage = usage;
+                if (ContextGuard is { } measured && !measured.Tripped(usage))
+                {
+                    compactArmed = true;
+                }
+
                 yield return new TurnEvent.Usage(usage);
             }
             else
@@ -1120,10 +1212,12 @@ public sealed class Assistant
             _history.AddToolImages(fetched, string.Join(" and ", fetchers));
 
             // The mid-turn guard, after the iteration's results are in: they are the last
-            // iteration a prune keeps, and a stop leaves no call unanswered.
-            if (ContextGuard is { } guard && guard.Tripped(usage))
+            // iteration a prune keeps, and a stop leaves no call unanswered. It judges the next request —
+            // the reported usage (the reply's own tokens among it) plus the results and pictures just appended.
+            long projected = ContextGuard is null || usage.IsEmpty ? 0 : usage.Total + ConversationCompactor.EstimateTokens([new ChatMessage(ChatRole.Tool, [.. results])]) + (long)fetched.Count * ConversationCompactor.PictureTokens;
+            if (ContextGuard is { } guard && guard.Tripped(projected))
             {
-                int percent = guard.PercentOf(usage);
+                int percent = guard.PercentOf(projected);
                 if (guard.Mode == ToolCompactMode.Stop)
                 {
                     DiagnosticLog.Info(Category, $"Context at {percent}% of {guard.WindowTokens} tokens after {iteration} tool iteration(s); stopping the turn (LLM tool compact type is stop).");
@@ -1135,6 +1229,7 @@ public sealed class Assistant
                 var (shrunk, pruned) = ConversationCompactor.PruneRecent(_history.Messages, guard.ProtectSkills);
                 if (pruned > 0)
                 {
+                    projected -= ConversationCompactor.EstimateTokens(_history.Messages) - ConversationCompactor.EstimateTokens(shrunk);
                     _history.Replace(shrunk);
                     DiagnosticLog.Info(Category, $"Context at {percent}% of {guard.WindowTokens} tokens after {iteration} tool iteration(s); pruned {pruned} tool result(s) from this turn.");
                     yield return new TurnEvent.Notice(TurnPrunedNotice(percent, pruned), IsError: false);
@@ -1142,6 +1237,48 @@ public sealed class Assistant
                 else
                 {
                     DiagnosticLog.Debug(Category, $"Context at {percent}% of {guard.WindowTokens} tokens after {iteration} tool iteration(s); nothing in this turn to prune.");
+                }
+
+                // Compact: the prune was not enough — the turns before this one first, then this turn's earlier iterations.
+                if (guard.Mode == ToolCompactMode.Compact && guard.Tripped(projected))
+                {
+                    if (!compactArmed)
+                    {
+                        DiagnosticLog.Debug(Category, $"Context still near {guard.PercentOf(projected)}% after a mid-turn compact; the next summary waits for a request under {guard.Percent}%.");
+                    }
+                    else
+                    {
+                        compactArmed = false;
+                        for (int stage = 1; stage <= 2 && guard.Tripped(projected); stage++)
+                        {
+                            bool thisTurn = stage == 2;
+                            var step = thisTurn ? PlanTurnCompact() : PlanOlderCompact();
+                            if (step is null)
+                            {
+                                continue;
+                            }
+
+                            int at = guard.PercentOf(projected);
+                            yield return new TurnEvent.Compacting(at);
+                            var done = await CompactMidTurnAsync(step, cancellationToken).ConfigureAwait(false);
+                            if (done.Result is not { } compacted)
+                            {
+                                DiagnosticLog.Info(Category, CompactFailedPrefix + done.Failure);
+                                yield return new TurnEvent.Notice(CompactFailedPrefix + done.Failure, IsError: true);
+                                break;
+                            }
+
+                            projected -= done.Saved;
+                            DiagnosticLog.Info(Category, string.Create(CultureInfo.InvariantCulture,
+                                $"Context at {at}% of {guard.WindowTokens} tokens after {iteration} tool iteration(s); summarised {(thisTurn ? "this turn's earlier iterations" : "the turns before this one")}: {compacted.MessagesBefore} messages → {compacted.MessagesAfter}, about {guard.PercentOf(Math.Max(projected, 0))}% now."));
+                            yield return new TurnEvent.Compacted(compacted, at, thisTurn);
+                        }
+
+                        if (guard.Tripped(projected))
+                        {
+                            DiagnosticLog.Info(Category, $"Context still near {guard.PercentOf(projected)}% after the mid-turn compact: nothing more to summarise; the server's limit answers.");
+                        }
+                    }
                 }
             }
         }
@@ -1244,12 +1381,22 @@ public sealed class Assistant
     /// leaked <c>&lt;think&gt;</c> is filtered like a reply's. The transport's failures and
     /// cancellation propagate; an empty answer is <see cref="EmptySummaryError"/>.
     /// </summary>
-    public async Task<(string Text, TokenUsage? Usage)> SummarizeAsync(IReadOnlyList<ChatMessage> transcript, string? focus, CancellationToken cancellationToken)
+    public Task<(string Text, TokenUsage? Usage)> SummarizeAsync(IReadOnlyList<ChatMessage> transcript, string? focus, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(transcript);
-        var request = new List<ChatMessage>(transcript.Count + 2) { new(ChatRole.System, ConversationCompactor.SummaryInstruction) };
+        return SummarizeAsync(ConversationCompactor.SummaryInstruction, transcript, ConversationCompactor.SummaryRequest(focus), cancellationToken);
+    }
+
+    /// <summary>
+    /// <see cref="SummarizeAsync(IReadOnlyList{ChatMessage}, string?, CancellationToken)"/> with its own system prompt and
+    /// closing line (2026-09-28): the mid-turn compact's second stage asks for a progress note
+    /// (<see cref="ConversationCompactor.TurnProgressInstruction"/>) rather than a conversation's summary.
+    /// </summary>
+    private async Task<(string Text, TokenUsage? Usage)> SummarizeAsync(string instruction, IReadOnlyList<ChatMessage> transcript, string requestLine, CancellationToken cancellationToken)
+    {
+        var request = new List<ChatMessage>(transcript.Count + 2) { new(ChatRole.System, instruction) };
         request.AddRange(transcript);
-        request.Add(new ChatMessage(ChatRole.User, ConversationCompactor.SummaryRequest(focus)));
+        request.Add(new ChatMessage(ChatRole.User, requestLine));
         var options = new ChatOptions { Reasoning = new ReasoningOptions { Effort = ReasoningEffort.None } };
 
         var filter = new ThinkTagFilter();

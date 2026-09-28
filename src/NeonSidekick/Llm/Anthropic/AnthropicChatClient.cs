@@ -23,7 +23,7 @@ namespace NeonSidekick.Llm.Anthropic;
 /// <para>And one more, the API's documented recovery for signed thinking it will not take back (a 400 that names
 /// thinking): the same request with every thinking block stripped (<see cref="AnthropicRequest.Write"/>'s
 /// <c>withoutThinking</c>). The request normally sends back only the turn in flight's blocks, which nothing edits —
-/// except the mid-turn prune (<c>LLM tool compact type</c>), which rewrites that turn's tool results under them; the
+/// except the mid-turn prune or compact (<c>LLM tool compact type</c>), which rewrites that turn's tool results under them; the
 /// model then carries on without the reasoning of the calls so far, which beats a failed turn.</para>
 ///
 /// <para>The two are independent (2026-09-28, code review): the busy retry was the first attempt's alone, so a 429 or 529

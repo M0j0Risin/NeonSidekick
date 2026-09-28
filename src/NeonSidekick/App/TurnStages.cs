@@ -57,7 +57,8 @@ internal sealed class TurnStages
     /// <summary>
     /// The label after <paramref name="evt"/>, null when the stage did not change: the first text
     /// of a stretch is <see cref="WritingLabel"/>, a tool call its name, a tool result the thinking
-    /// stage again (the next request's wait starts there), usage and notices nothing.
+    /// stage again (the next request's wait starts there), a mid-turn compact
+    /// <see cref="CompactionText.CompactingLabel"/> and the thinking stage once it is done (2026-09-28), usage and notices nothing.
     /// </summary>
     public string? Advance(TurnEvent evt)
     {
@@ -73,8 +74,12 @@ internal sealed class TurnStages
                     : string.Equals(call.Name, ClaudeAdvisorTool.ToolName, StringComparison.Ordinal) ? Claude.ClaudeText.AskingLabel
                     : call.Name;
             case TurnEvent.ToolResult:
+            case TurnEvent.Compacted:
                 _stage = Stage.Thinking;
                 return Word(ChatScreen.ThinkingLabel);
+            case TurnEvent.Compacting:
+                _stage = Stage.Tool;
+                return CompactionText.CompactingLabel;
             default:
                 return null;
         }

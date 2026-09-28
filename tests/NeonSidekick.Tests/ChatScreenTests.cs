@@ -10365,16 +10365,18 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public async Task ToolCompact_Prune_MidTurn_StubsTheTurnsOlderResults_AndNoticesInTheTranscript()
     {
-        _settings.Update(d => { d.TtsOutput = false; d.LlmAutoCompactPercent = 20; });   // the default type: prune
-        LmStudioWindow();
-        TwoReadsInOneTurn();                                                     // 15 tokens after the first read, 35 after the second: past 20 %
+        _settings.Update(d => { d.TtsOutput = false; d.LlmAutoCompactPercent = 20; d.LlmToolCompactType = "prune"; });
+        // A 1,000-token window since 2026-09-28: the guard judges the next request, the report plus the 618-character
+        // result just appended (154 tokens) — 169 after the first read (16 %), 454 after the second (45 %, past 20 %).
+        LmStudioWindow(1000);
+        TwoReadsInOneTurn(secondInput: 295);
         _chat.EnqueueText("read twice");
         PushLine("a");
         PushLine("/exit");
 
         string output = await RunAsync();
 
-        Assert.Contains("  · (✂️ context at 35%: pruned 1 tool result from this turn)\n", output);
+        Assert.Contains("  · (✂️ context at 45%: pruned 1 tool result from this turn)\n", output);
         Assert.Equal(3, _chat.Requests.Count);
         var third = _chat.Requests[2];
         Assert.Equal("(a 618-character result, pruned by /compact)", ResultOf(third, "c1").Result);
@@ -10382,27 +10384,58 @@ public partial class ChatScreenTests : IDisposable
         Assert.DoesNotContain("pruned by /compact", (string)ResultOf(third, Assistant.OpeningCwdCallId).Result!);
         Assert.Contains("read twice", output);
         // The notice sits between the second read and the reply.
-        Assert.True(output.IndexOf("context at 35%", StringComparison.Ordinal) < output.IndexOf("read twice", StringComparison.Ordinal));
+        Assert.True(output.IndexOf("context at 45%", StringComparison.Ordinal) < output.IndexOf("read twice", StringComparison.Ordinal));
     }
 
     [Fact]
-    public async Task ToolCompact_Stop_EndsTheTurn_AndTheNextMessageCarriesOn()
+    public async Task ToolCompact_Compact_MidTurn_SummarisesTheOlderTurns_AndNoticesInTheTranscript()
     {
-        _settings.Update(d => { d.TtsOutput = false; d.LlmAutoCompactPercent = 20; d.LlmToolCompactType = "stop"; });
-        LmStudioWindow();
-        TwoReadsInOneTurn();
-        _chat.EnqueueText("later");                                              // b's reply; the automatic compact before it (35 % in use) stubs c1, the turn's older result
+        // The default type since 2026-09-28: nothing to prune (one iteration, the last), so the turns before this one become a summary.
+        _settings.Update(d => { d.TtsOutput = false; d.LlmAutoCompactPercent = 50; d.LlmCompactShowSummary = true; });
+        LmStudioWindow(1000);
+        string files = Path.Combine(_settings.ProfileDirectory, WorkingDirectory.DefaultFolderName);
+        Directory.CreateDirectory(files);
+        File.WriteAllText(Path.Combine(files, "big.txt"), new string('x', 600));
+        _chat.EnqueueText("noted");                                                                          // a
+        _chat.Enqueue(FakeChatClient.Call("c1", ReadFileTool.ToolName, new Dictionary<string, object?> { ["path"] = "big.txt" }), FakeChatClient.Usage(600, 5));   // b: 605 + the result's 154: 75 %
+        _chat.Enqueue(FakeChatClient.Text("The user said a."), FakeChatClient.Usage(40, 3));                // the summariser
+        _chat.EnqueueText("read it");
         PushLine("a");
         PushLine("b");
         PushLine("/exit");
 
         string output = await RunAsync();
 
-        Assert.Contains("  ✗ 🛑 Stopped at 35% of the context window (LLM tool compact type is stop); /compact or /clear before continuing.\n", output);
+        Assert.Contains("  · (🗜️ auto-compacted at 75%: ", output);
+        Assert.Contains(" · 40 → 3 tokens)\n", output);
+        Assert.Contains("  · The user said a.\n", output);                                                 // LLM compact show summary
+        Assert.Equal(4, _chat.Requests.Count);
+        Assert.Equal(ConversationCompactor.SummaryInstruction, _chat.Requests[2][0].Text);
+        var next = _chat.Requests[3];
+        Assert.Equal(ConversationCompactor.SummaryPreamble + "The user said a.", next[1].Text);
+        Assert.EndsWith(new string('x', 600), (string)ResultOf(next, "c1").Result!);
+        Assert.Contains("read it", output);
+        Assert.True(output.IndexOf("auto-compacted at 75%", StringComparison.Ordinal) < output.IndexOf("read it", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task ToolCompact_Stop_EndsTheTurn_AndTheNextMessageCarriesOn()
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.LlmAutoCompactPercent = 20; d.LlmToolCompactType = "stop"; });
+        LmStudioWindow(1000);                                                    // the prune test's window and figures: stopped at 45 %
+        TwoReadsInOneTurn(secondInput: 295);
+        _chat.EnqueueText("later");                                              // b's reply; the automatic compact before it (30 % in use, the last report) stubs c1, the turn's older result
+        PushLine("a");
+        PushLine("b");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains("  ✗ 🛑 Stopped at 45% of the context window (LLM tool compact type is stop); /compact or /clear before continuing.\n", output);
         Assert.Equal(3, _chat.Requests.Count);                                   // a's two, b's one: no third request for a
         Assert.DoesNotContain("● read twice", output);
         Assert.Equal("b", _chat.Requests[2][^1].Text);
-        Assert.Contains("  · (✂️ auto-compacted at 35%: 1 tool result pruned)", output);
+        Assert.Contains("  · (✂️ auto-compacted at 30%: 1 tool result pruned)", output);
         Assert.Equal("(a 618-character result, pruned by /compact)", ResultOf(_chat.Requests[2], "c1").Result);
         Assert.EndsWith(new string('x', 600), (string)ResultOf(_chat.Requests[2], "c2").Result!);
     }
@@ -10501,7 +10534,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal((151_427, 75, ToolCompactMode.Stop), (guard.WindowTokens, guard.Percent, guard.Mode));
         Assert.Null(ChatScreen.ContextGuardFor(data, null));
         Assert.Null(ChatScreen.ContextGuardFor(data, new ContextLength(0, "x")));
-        Assert.Equal(ToolCompactMode.Prune, ChatScreen.ContextGuardFor(new AppSettingsData(), new ContextLength(100, "x"))!.Mode);
+        Assert.Equal(ToolCompactMode.Compact, ChatScreen.ContextGuardFor(new AppSettingsData(), new ContextLength(100, "x"))!.Mode);   // the default type since 2026-09-28
         Assert.Equal(85, ChatScreen.ContextGuardFor(new AppSettingsData(), new ContextLength(100, "x"))!.Percent);   // the default share
     }
 

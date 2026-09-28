@@ -806,7 +806,8 @@ public class SettingsMenuTests : IDisposable
         Assert.False(SettingsMenu.IsLlmField(SettingsField.LlmToolCompactType));
         Assert.False(SettingsMenu.IsToggle(SettingsField.LlmToolCompactType));
         Assert.Equal("LLM tool compact type", SettingsMenu.FieldName(SettingsField.LlmToolCompactType));
-        Assert.Equal("prune", SettingsMenu.FieldValue(SettingsField.LlmToolCompactType, data, _settings.ProfileDirectory));
+        Assert.Equal("compact", SettingsMenu.FieldValue(SettingsField.LlmToolCompactType, data, _settings.ProfileDirectory));
+        Assert.Equal("compact [#9A8BB8]prune, then summarise if the turn is still over the share[/]", SettingsMenu.ToolCompactTypeLabel("compact"));
         Assert.Equal("stop", SettingsMenu.FieldValue(SettingsField.LlmToolCompactType, new AppSettingsData { LlmToolCompactType = "stop" }, _settings.ProfileDirectory));
         Assert.Equal("prune   [#9A8BB8]stub this turn's older tool results and carry on[/]", SettingsMenu.ToolCompactTypeLabel("prune"));
         Assert.Equal("stop    [#9A8BB8]end the turn with a notice; /compact or /clear first[/]", SettingsMenu.ToolCompactTypeLabel("stop"));
@@ -1943,8 +1944,8 @@ public class SettingsMenuTests : IDisposable
     public async Task ToolCompactType_IsRow32_APicker_NoReconnect()
     {
         Down(31);
-        Push(Keys.Enter);                           // LLM tool compact type: the picker opens on prune (the first row)
-        Push(Keys.Down, Keys.Enter);                // stop
+        Push(Keys.Enter);                           // LLM tool compact type: the picker opens on compact (the first row, the default since 2026-09-28)
+        Push(Keys.Down, Keys.Down, Keys.Enter);     // prune, then stop
         Push(Keys.Escape);
 
         Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));
@@ -1954,6 +1955,7 @@ public class SettingsMenuTests : IDisposable
         Assert.Contains("  · 🖥️ LLM tool compact type: stop", _console.Output);
         Assert.Contains("end the turn with a notice; /compact or /clear first", _console.Output);
         Assert.Contains("no check; the server's own limit answers", _console.Output);
+        Assert.Contains("prune, then summarise if the turn is still over the share", _console.Output);
     }
 
     [Fact]
@@ -2866,7 +2868,7 @@ public class SettingsMenuTests : IDisposable
         // Each tab under the strip, padded to its own column (28, 26, 19, 26), the whole tab in view, nothing of another tab on it.
         Assert.Contains("\n \n▸ Session logging             on\n  Session retention (days)    forever\n  Session naming mode         model-written\n  Session show name           all-names\n  Session tool                on\n  Session search max results  10 results\n" + Rule(100), _console.Output);
         Assert.Contains("\n \n▸ LLM scan mode             local\n  LLM URL                   (probe local ports)\n  LLM model                 (first listed)\n  LLM API key               ", _console.Output);
-        Assert.Contains("\n  LLM reasoning             none\n  LLM request timeout (s)   3600\n  LLM turn timeout (s)      21600\n  LLM context length        (from the server)\n  LLM mid-turn usage        last-known\n  LLM compact type          summary\n  LLM compact keep recent   2 turns\n  LLM compact show summary  off\n  LLM auto compact (%)      85 %\n  LLM max turns             auto\n  LLM offer tools           on\n  LLM tool compact type     prune\n  LLM max tool iterations   10000 round trips\n  LLM use fun verbs         off\n  LLM show thinking         on\n" + Rule(100), _console.Output);
+        Assert.Contains("\n  LLM reasoning             none\n  LLM request timeout (s)   3600\n  LLM turn timeout (s)      21600\n  LLM context length        (from the server)\n  LLM mid-turn usage        last-known\n  LLM compact type          summary\n  LLM compact keep recent   2 turns\n  LLM compact show summary  off\n  LLM auto compact (%)      85 %\n  LLM max turns             auto\n  LLM offer tools           on\n  LLM tool compact type     compact\n  LLM max tool iterations   10000 round trips\n  LLM use fun verbs         off\n  LLM show thinking         on\n" + Rule(100), _console.Output);
         Assert.Contains("\n \n▸ TTS output         on\n  TTS source         http\n  TTS HTTP URL       http://localhost:8880/v1\n  TTS voice preview  on\n  TTS voice preset   neon\n  TTS voice          af_heart\n  TTS voice 2        am_eric\n  TTS voice mix      80 % / 20 %\n  TTS speed          1.2\n" + Rule(100), _console.Output);
         Assert.Contains("\n \n▸ STT input                 off\n  STT wake                  off\n  STT wake phrase           hey neon\n  STT interrupt             off\n  STT interrupt echo guard  100 %\n  STT interrupt confirm     200 ms\n  STT push-to-talk key      F4\n  STT whisper model         ggml-base.en.bin\n  STT vosk model            vosk-model-small-en-us-0.15\n" + Rule(100), _console.Output);
         Assert.DoesNotContain("Ask user", _console.Output);   // /tools' since 2026-09-19

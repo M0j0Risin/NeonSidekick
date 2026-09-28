@@ -124,4 +124,17 @@ public sealed class TurnStagesTests
         Assert.Throws<ArgumentNullException>(() => new TurnStages(false, null!));
         Assert.Throws<ArgumentNullException>(() => new TurnStages(false, new Random(1)).Advance(null!));
     }
+
+    [Fact]
+    public void AMidTurnCompact_ReadsAsTheCompactsSpinner_ThenThinkingAgain()
+    {
+        // 2026-09-28: the summariser's wait is named; the next request's wait after it is the thinking stage.
+        var stages = new TurnStages(funVerbs: false, new Random(7));
+        stages.Start();
+        Assert.Equal("read_file", stages.Advance(Call("read_file")));
+        Assert.Equal("thinking", stages.Advance(Result("read_file")));
+        Assert.Equal(CompactionText.CompactingLabel, stages.Advance(new TurnEvent.Compacting(91)));
+        Assert.Equal("thinking", stages.Advance(new TurnEvent.Compacted(new ConversationCompactor.Result(5, 3, 0, null, Summarised: true), 91, ThisTurn: true)));
+        Assert.Equal("writing", stages.Advance(Text));
+    }
 }

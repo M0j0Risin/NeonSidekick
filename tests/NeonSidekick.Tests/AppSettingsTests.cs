@@ -1127,7 +1127,7 @@ public class AppSettingsTests : IDisposable
         Assert.Equal(20, AppSettingsData.MaxWebSearchMaxResults);
         Assert.Equal(20, AppSettingsData.DefaultWebSearchMaxResults);
         Assert.True(s.TtsVoicePreview);
-        Assert.Equal("prune", s.LlmToolCompactType);
+        Assert.Equal("compact", s.LlmToolCompactType);
         Assert.True(s.FileTools);
         Assert.Equal("duckduckgo", s.WebSearchMethod);
         // The Ask tab (2026-09-15): the tool on, ten questions of ten choices; a choice needs two, so the choices floor is 2.

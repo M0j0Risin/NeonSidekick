@@ -82,6 +82,184 @@ public static class ConversationCompactor
     /// <summary>The tool name an entry carries when the result's call is not in the history (a hand-built list). Pinned.</summary>
     public const string UnknownTool = "tool";
 
+    /// <summary>
+    /// The summariser's system prompt for this turn's earlier iterations (2026-09-28, the mid-turn compact's second
+    /// stage, <see cref="SummarisedTurn"/>): the model is in the middle of a request and must carry on from the note. Pinned.
+    /// </summary>
+    public const string TurnProgressInstruction =
+        "You are compacting the work in progress of Neon, a terminal sidekick with tools, in the middle of answering the user's latest request. " +
+        "Write a progress note Neon can continue the request from as if it remembered every step: what the user asked for, " +
+        "each tool call made so far and what it found (file names, paths, values, names, dates, errors — every concrete fact), " +
+        "what has been done or changed, and what is still left to do. Be specific and concise, in plain text without markdown. " +
+        "Do not answer the user, do not add commentary, and do not mention that this is a summary.";
+
+    /// <summary>The line that asks for the progress note, closing the second stage's request. Pinned.</summary>
+    public const string TurnProgressRequest = "Write the progress note for the latest request above.";
+
+    /// <summary>What goes before the progress note, appended to the turn's user message. Pinned.</summary>
+    public const string TurnProgressPreamble = "\n\n(The work on this request so far was compacted into this progress note; carry on from it:)\n\n";
+
+    /// <summary>
+    /// The <see cref="AIContent.AdditionalProperties"/> key that marks the progress note's text part on a user message
+    /// (value <c>true</c>), so a second compact of the same turn replaces the note rather than adding another. Never on the wire.
+    /// </summary>
+    public const string TurnProgressKey = "neon.turnProgress";
+
+    /// <summary>
+    /// The characters one token is estimated at by <see cref="EstimateTokens"/>: the usual rule of thumb for English
+    /// text and code under the common tokenisers; JSON runs more tokens per character, which errs toward compacting.
+    /// </summary>
+    public const int CharsPerToken = 4;
+
+    /// <summary>
+    /// The tokens one picture is estimated at by <see cref="EstimateTokens"/>: what a vision model charges varies by
+    /// model and size (a few hundred to a few thousand), and a picture is stubbed or summarised long before the figure matters.
+    /// </summary>
+    public const int PictureTokens = 1000;
+
+    /// <summary>
+    /// A rough token count for <paramref name="messages"/> (2026-09-28): the characters of their text, thinking,
+    /// call names and arguments (as the wire's JSON) and results over <see cref="CharsPerToken"/>, plus
+    /// <see cref="PictureTokens"/> per picture. A gate's heuristic, never a count: the mid-turn guard adds it to the
+    /// last reported usage for what was appended since (<see cref="Assistant.ContextGuard"/>), and subtracts what a
+    /// prune or a summary took away, so a request is judged before it goes out rather than after.
+    /// </summary>
+    public static long EstimateTokens(IEnumerable<ChatMessage> messages)
+    {
+        ArgumentNullException.ThrowIfNull(messages);
+        long chars = 0;
+        long pictures = 0;
+        foreach (var message in messages)
+        {
+            foreach (var content in message.Contents)
+            {
+                switch (content)
+                {
+                    case TextContent text:
+                        chars += text.Text?.Length ?? 0;
+                        break;
+                    case TextReasoningContent reasoning:
+                        chars += reasoning.Text?.Length ?? 0;
+                        break;
+                    case FunctionCallContent call:
+                        chars += call.Name.Length + Assistant.SerializeArguments(call.Arguments).Length;
+                        break;
+                    case FunctionResultContent { Result: string result }:
+                        chars += result.Length;
+                        break;
+                    case FunctionResultContent { Result: { } other }:
+                        chars += other.ToString()?.Length ?? 0;
+                        break;
+                    case DataContent:
+                        pictures++;
+                        break;
+                }
+            }
+        }
+
+        return chars / CharsPerToken + pictures * PictureTokens;
+    }
+
+    /// <summary>
+    /// The last turn split for the mid-turn compact's second stage (2026-09-28): the messages before it, its user
+    /// message, the opening and pending call pairs seeded inside it (kept in place, as <see cref="Split"/> keeps them),
+    /// the earlier iterations the progress note replaces, and the last iteration — the last assistant message with a
+    /// call and everything after it: its results and carrier, which the model has not read yet.
+    /// <see cref="Transcript"/> is everything ahead of the last iteration, in order: what the summariser reads.
+    /// </summary>
+    public sealed record TurnPlan(IReadOnlyList<ChatMessage> Before, ChatMessage Start, IReadOnlyList<ChatMessage> Opening, IReadOnlyList<ChatMessage> Earlier, IReadOnlyList<ChatMessage> Last, IReadOnlyList<ChatMessage> Transcript)
+    {
+        /// <summary>Whether there is an earlier iteration to summarise: a call of the model's before the last one.</summary>
+        public bool HasEarlierIterations => Earlier.Any(m => m.Role == ChatRole.Assistant && m.Contents.OfType<FunctionCallContent>().Any());
+    }
+
+    /// <summary>
+    /// <see cref="TurnPlan"/> over <paramref name="messages"/>; null with no turn or no call of the model's in the last one.
+    /// </summary>
+    public static TurnPlan? SplitTurn(IReadOnlyList<ChatMessage> messages)
+    {
+        ArgumentNullException.ThrowIfNull(messages);
+        int start = -1;
+        for (int i = messages.Count - 1; i >= 0; i--)
+        {
+            if (ConversationHistory.IsTurnStart(messages[i]))
+            {
+                start = i;
+                break;
+            }
+        }
+
+        if (start < 0)
+        {
+            return null;
+        }
+
+        int last = -1;
+        for (int i = messages.Count - 1; i > start; i--)
+        {
+            if (messages[i].Role == ChatRole.Assistant && messages[i].Contents.OfType<FunctionCallContent>().Any(c => !Assistant.IsOpeningCallId(c.CallId)))
+            {
+                last = i;
+                break;
+            }
+        }
+
+        if (last < 0)
+        {
+            return null;
+        }
+
+        var opening = new List<ChatMessage>(4);
+        var earlier = new List<ChatMessage>(last - start);
+        for (int i = start + 1; i < last; i++)
+        {
+            if (OpeningCallId(messages[i]) is { } callId && i + 1 < last && HasResult(messages[i + 1], callId))
+            {
+                opening.Add(messages[i]);
+                opening.Add(messages[++i]);
+                continue;
+            }
+
+            earlier.Add(messages[i]);
+        }
+
+        return new TurnPlan([.. messages.Take(start)], messages[start], opening, earlier, [.. messages.Skip(last)], [.. messages.Take(last)]);
+    }
+
+    /// <summary>
+    /// The list after the second stage (2026-09-28): the messages before the turn, the turn's user message with
+    /// <see cref="TurnProgressPreamble"/> + <paramref name="summary"/> appended as a text part of its own (tagged
+    /// <see cref="TurnProgressKey"/>, replacing an earlier note), the opening pairs, then the last iteration untouched.
+    /// The note rides the user message rather than a message of its own because the templates that demand strict
+    /// user/assistant alternation (the Mistral family) refuse a second user message, and the last assistant message
+    /// may carry the Anthropic API's signed thinking, which has to go back first and unedited.
+    /// </summary>
+    public static List<ChatMessage> SummarisedTurn(string summary, TurnPlan plan)
+    {
+        ArgumentNullException.ThrowIfNull(summary);
+        ArgumentNullException.ThrowIfNull(plan);
+        var contents = new List<AIContent>(plan.Start.Contents.Count + 1);
+        foreach (var content in plan.Start.Contents)
+        {
+            if (!IsTurnProgress(content))
+            {
+                contents.Add(content);
+            }
+        }
+
+        contents.Add(new TextContent(TurnProgressPreamble + summary.Trim()) { AdditionalProperties = new AdditionalPropertiesDictionary { [TurnProgressKey] = true } });
+        var messages = new List<ChatMessage>(plan.Before.Count + 1 + plan.Opening.Count + plan.Last.Count);
+        messages.AddRange(plan.Before);
+        messages.Add(new ChatMessage(ChatRole.User, contents) { AdditionalProperties = plan.Start.AdditionalProperties });
+        messages.AddRange(plan.Opening);
+        messages.AddRange(plan.Last);
+        return messages;
+    }
+
+    /// <summary>Whether <paramref name="content"/> is a progress note's text part (<see cref="TurnProgressKey"/>).</summary>
+    public static bool IsTurnProgress(AIContent content) =>
+        content is TextContent { AdditionalProperties: { } properties } && properties.TryGetValue(TurnProgressKey, out object? tag) && tag is true;
+
     /// <summary>The summariser's closing user message: <see cref="SummaryRequestLine"/>, the focus appended when given. Pinned.</summary>
     public static string SummaryRequest(string? focus) =>
         string.IsNullOrWhiteSpace(focus) ? SummaryRequestLine : SummaryRequestLine + " Pay particular attention to: " + focus.Trim();

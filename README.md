@@ -164,10 +164,10 @@ Settings that an environment variable or flag can override for one launch are li
 | LLM compact type | What `/compact` does: `summary` folds the older turns into one model-written summary; `prune` stubs their bulky tool results and keeps every turn. | `summary` |
 | LLM compact keep recent | How many recent user turns a compact keeps word for word (0–24). | 2 |
 | LLM compact show summary | After a compact, shows what it did: the summary as dim lines, or one line per pruned tool result, then how many messages were kept at the start and end. | off |
-| LLM auto compact (%) | The share of the context window at which the next message compacts first (1–100; 0 = off). | 85 |
+| LLM auto compact (%) | The share of the context window at which the next message compacts first (1–100; 0 = off). Also the share *LLM tool compact type* acts at during a reply, judged on the next request: the last reported usage plus an estimate of the tool results added since. | 85 |
 | LLM max turns | How many user turns the model sees before the oldest drop off (1–500). `auto` keeps them all while auto compact can run (a known context window and a share above 0), otherwise 24. | `auto` |
 | LLM offer tools | Whether the model gets any tools. Off suits chat templates with no tool role; flipping it starts a new conversation. | on |
-| LLM tool compact type | What happens when a single turn's tool calls approach the window: `prune` stubs this turn's older results and carries on, `stop` ends the turn with a notice, `nothing`. | `prune` |
+| LLM tool compact type | What happens when a single turn's tool calls approach the window: `compact` prunes, and if the context is still over the share, summarises the turns before this one and then, if needed, this turn's earlier tool calls into a progress note (always a summary, whatever *LLM compact type* says); `prune` stubs this turn's older results and carries on; `stop` ends the turn with a notice; `nothing`. | `compact` |
 | LLM max tool iterations | How many tool round trips one message may make before the turn stops (1–10000). | 10000 |
 | LLM use fun verbs | The thinking spinner reads a random verb instead of `thinking` / `writing`. | off |
 | LLM show thinking | Streams a reasoning model's thinking as a dim block (its last five lines), folded to `▸ 💭 thought for 4.2s` when the answer starts; needs Transcript markdown. Click the line, press Ctrl+O or use `/expand` to see it again. Thinking is never spoken or logged, and copied only by `/copy --thinking`. | on |
