@@ -91,8 +91,9 @@ public sealed class ViewerState
     /// <summary>The slide show in random order (F10) rather than the folder's.</summary>
     public bool Shuffle { get; private set; }
 
-    /// <summary>How long the first Del stays armed: a second Del within it deletes the picture.</summary>
-    public const uint DeleteArmMilliseconds = 3000;
+    /// <summary>How long the first Del stays armed: a second Del within it deletes the picture. 3 s at first, 2 s since
+    /// 2026-09-28 (the user's call).</summary>
+    public const uint DeleteArmMilliseconds = 2000;
 
     /// <summary>Whether a Del armed the shown picture (the title shows the hint). Moving off the picture drops it.</summary>
     public bool DeleteArmed => _armedPath is not null && string.Equals(_armedPath, Current, StringComparison.OrdinalIgnoreCase);

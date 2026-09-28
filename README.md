@@ -646,7 +646,7 @@ A picture window (Windows only; elsewhere the app registered for the file opens 
 | ← / → | Browse; reaching the newest follows new pictures again |
 | Home / End | First / newest picture |
 | F11 or double-click | Toggle full screen |
-| Del, Del (within 3 s) | Permanently delete the shown picture (the title says "Del again to delete" after the first) |
+| Del, Del (within 2 s) | Permanently delete the shown picture (the title says "Del again to delete" after the first) |
 | F9 | Start or stop a looping slide show (5 s a slide; the title shows `▶ 5 s`) |
 | ↑ / ↓ | Slide show: a second more or less per slide (1–60) |
 | F10 | Slide show: switch between the folder's order and a random one |
