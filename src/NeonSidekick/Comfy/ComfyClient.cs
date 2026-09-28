@@ -314,7 +314,13 @@ public sealed class ComfyClient : IDisposable
         }
     }
 
-    /// <summary>A queued job's cancellation, best effort: <c>POST /interrupt</c> (the running job) — a stopped turn should not leave the GPU busy for minutes.</summary>
+    /// <summary>
+    /// A queued job's cancellation, best effort — a stopped turn should not leave the GPU busy for minutes. Since 2026-09-28 (the
+    /// hint row's double-click cancelling the pictures, which may still be waiting in ComfyUI's queue): <c>POST /queue</c>
+    /// <c>{"delete":[id]}</c> first, so a prompt not started yet never runs, then <c>POST /interrupt</c> <c>{"prompt_id":id}</c>,
+    /// which a current ComfyUI applies to that prompt alone (an older one ignores the body and stops whatever runs, as the bare
+    /// <c>{}</c> before did). One budget for both.
+    /// </summary>
     private async Task InterruptQuietlyAsync(string promptId)
     {
         if (promptId.Length == 0)
@@ -325,7 +331,12 @@ public sealed class ComfyClient : IDisposable
         try
         {
             using var budget = new CancellationTokenSource(DefaultStatusTimeout);
-            using var content = new StringContent("{}", Encoding.UTF8, "application/json");
+            using (var queued = new StringContent(new JsonObject { ["delete"] = new JsonArray(promptId) }.ToJsonString(), Encoding.UTF8, "application/json"))
+            using (await _http.PostAsync(Url("/queue"), queued, budget.Token).ConfigureAwait(false))
+            {
+            }
+
+            using var content = new StringContent(new JsonObject { ["prompt_id"] = promptId }.ToJsonString(), Encoding.UTF8, "application/json");
             using var _ = await _http.PostAsync(Url("/interrupt"), content, budget.Token).ConfigureAwait(false);
             DiagnosticLog.Debug(Category, $"Interrupted prompt {promptId}.");
         }

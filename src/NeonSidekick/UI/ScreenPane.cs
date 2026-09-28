@@ -212,6 +212,10 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     private int _usageColumn = -1;
     private int _usageCells;
 
+    // The busy row's label when LabelAfterUsage takes it (2026-09-28, HintZone.Label): −1 for none.
+    private int _labelColumn = -1;
+    private int _labelCells;
+
     // Whether the hint row as last drawn (either row) carried the scroll's hint (ScrolledHint):
     // then every hit that is neither a strip glyph nor the trailer is Scrolled, not the row.
     private bool _hintScrolled;
@@ -282,6 +286,13 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         /// Last, for the same reason.
         /// </summary>
         Mark,
+
+        /// <summary>
+        /// The busy row's label and its time when <see cref="LabelAfterUsage"/> takes it — the ComfyUI generation's
+        /// <c>🖼️ 00:12</c> / <c>🎨 00:12</c> (2026-09-28, the user's ask: a double-click there cancels the pictures) — ahead
+        /// of <see cref="Usage"/>, which keeps the spinner and the tally. After <see cref="Mark"/>, for the same reason.
+        /// </summary>
+        Label,
     }
 
     /// <summary>Where on the hint row a click landed: the zone, the strip glyph under it (<c>""</c> elsewhere) and the zone's first column (−1 for the row).</summary>
@@ -2768,7 +2779,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
                 return false;
             }
 
-            hit = HintHitAt(_hintStrip, _trailerColumn, _markColumn, _busyLabel is null ? _queuedColumn : -1, _queuedCells, _usageColumn, _usageCells, x, _hintScrolled);
+            hit = HintHitAt(_hintStrip, _trailerColumn, _markColumn, _busyLabel is null ? _queuedColumn : -1, _queuedCells, _usageColumn, _usageCells, _labelColumn, _labelCells, x, _hintScrolled);
             return true;
         }
     }
@@ -2829,7 +2840,15 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     /// <see cref="HintZone.Mark"/>, its first column the hit's, ahead of the trailer — which is
     /// then the name and the separator before the mark. Pinned.
     /// </summary>
-    public static HintHit HintHitAt(string strip, int trailerColumn, int markColumn, int queuedColumn, int queuedCells, int usageColumn, int usageCells, int x, bool scrolled = false)
+    public static HintHit HintHitAt(string strip, int trailerColumn, int markColumn, int queuedColumn, int queuedCells, int usageColumn, int usageCells, int x, bool scrolled = false) =>
+        HintHitAt(strip, trailerColumn, markColumn, queuedColumn, queuedCells, usageColumn, usageCells, -1, 0, x, scrolled);
+
+    /// <summary>
+    /// <see cref="HintHitAt(string, int, int, int, int, int, int, int, bool)"/> with the label's place (2026-09-28): the
+    /// <paramref name="labelCells"/> from <paramref name="labelColumn"/> (−1 for none) are <see cref="HintZone.Label"/>, its
+    /// first column the hit's — inside the usage zone on the busy row, so ahead of it. Pinned.
+    /// </summary>
+    public static HintHit HintHitAt(string strip, int trailerColumn, int markColumn, int queuedColumn, int queuedCells, int usageColumn, int usageCells, int labelColumn, int labelCells, int x, bool scrolled = false)
     {
         ArgumentNullException.ThrowIfNull(strip);
         if (markColumn >= 0 && x >= markColumn)
@@ -2845,6 +2864,11 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         if (queuedColumn >= 0 && x >= queuedColumn && x < queuedColumn + queuedCells)
         {
             return new HintHit(HintZone.Queued, "", queuedColumn);
+        }
+
+        if (labelColumn >= 0 && x >= labelColumn && x < labelColumn + labelCells)
+        {
+            return new HintHit(HintZone.Label, "", labelColumn);
         }
 
         if (usageColumn >= 0 && x >= usageColumn && x < usageColumn + usageCells)
@@ -3977,6 +4001,14 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
             int zoneCells = restMax + TextCells.Width(frame);
             string zone = TextCells.Width(frame + unfitted) <= zoneCells || TextCells.Width(frame + labelled) < zoneCells ? frame + labelled : frame + " " + (after ? usage : BusyText(label, elapsed));
             RecordUsage(_top < 0 ? zone : "", TextCells.Width(prefix), 0, frame + unfitted, zoneCells);
+            // The label's own place (2026-09-28, HintZone.Label): a label LabelAfterUsage takes — after the tally and its
+            // separator, or right after the frame's blank with none — when the fit kept it whole, and not while scrolled.
+            string busyText = BusyText(label, elapsed);
+            int labelAhead = after ? TextCells.Width(" " + usage + HintSeparator) : 1;
+            int labelWidth = TextCells.Width(busyText);
+            bool labelWhole = _top < 0 && _labelAfterUsage(label) && (TextCells.Width(unfitted) <= restMax || labelAhead + labelWidth <= restMax);
+            _labelColumn = labelWhole ? TextCells.Width(prefix) + TextCells.Width(frame) + labelAhead : -1;
+            _labelCells = labelWhole ? labelWidth : 0;
         }
         else
         {
@@ -3997,6 +4029,8 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
             string usage = _overlay is null && _top < 0 ? _usage() : "";
             int at = usage.Length == 0 ? -1 : row.IndexOf(usage, StringComparison.Ordinal);
             RecordUsage(at < 0 ? "" : usage, 0, at < 0 ? 0 : TextCells.Width(row[..at]), row, cells);
+            _labelColumn = -1;
+            _labelCells = 0;
         }
 
         if (_busyLabel is not null)

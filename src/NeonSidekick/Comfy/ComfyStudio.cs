@@ -80,6 +80,11 @@ public sealed class ComfyStudio : IDisposable
     // A pasted picture already written for an input (later still on 2026-09-24): its number → the saved relative path,
     // so the same paste used twice is one file. Under _gate.
     private readonly Dictionary<int, string> _pastedSaved = new();
+
+    // The drain (2026-09-28, the hint row's double-click on the 🖼️ / 🎨): every generation's token is linked to the one in
+    // force when it starts; Drain cancels it and puts a fresh one in, so what starts later runs. Both under _gate.
+    private CancellationTokenSource _drain = new();
+    private int _inFlight;
     private ComfyClient? _client;
     private string? _clientUrl;
 
@@ -189,6 +194,68 @@ public sealed class ComfyStudio : IDisposable
     public async Task<ComfyGeneration> GenerateAsync(ComfyRequest request, CancellationToken cancellationToken, Func<IReadOnlyList<ComfyWorkflow>, IReadOnlyList<ComfyWorkflow>>? narrow = null)
     {
         ArgumentNullException.ThrowIfNull(request);
+        CancellationToken drain;
+        lock (_gate)
+        {
+            drain = _drain.Token;
+            _inFlight++;
+        }
+
+        try
+        {
+            using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, drain);
+            return await GenerateCoreAsync(request, linked.Token, narrow).ConfigureAwait(false);
+        }
+        finally
+        {
+            lock (_gate)
+            {
+                _inFlight--;
+            }
+        }
+    }
+
+    /// <summary>Whether a generation is running (<see cref="GenerateAsync"/> entered and not left).</summary>
+    public bool Busy
+    {
+        get { lock (_gate) { return _inFlight > 0; } }
+    }
+
+    /// <summary>
+    /// The token a generation's work is linked to until the next <see cref="Drain"/> (2026-09-28): what waits to be sent — a
+    /// <c>/botchat</c> picture in <c>BotPicturePacer</c> — links to it too, so a drain takes it with the running ones.
+    /// </summary>
+    public CancellationToken DrainToken
+    {
+        get { lock (_gate) { return _drain.Token; } }
+    }
+
+    /// <summary>
+    /// Every generation running now cancelled (2026-09-28, the user's ask: a double-click on the hint row's 🖼️ / 🎨 cancels
+    /// the ComfyUI requests): its token cancelled — each <see cref="ComfyClient.RunAsync"/> takes its prompt out of ComfyUI's
+    /// queue and interrupts it — and a fresh one in force, so a generation started after runs. Its caller's own token is
+    /// untouched: <see cref="GenerateAsync"/> throws <see cref="OperationCanceledException"/> while it is still live, which is
+    /// how a caller tells a drain from its own cancel. Returns how many were running.
+    /// </summary>
+    public int Drain()
+    {
+        CancellationTokenSource drained;
+        int running;
+        lock (_gate)
+        {
+            drained = _drain;
+            _drain = new CancellationTokenSource();
+            running = _inFlight;
+        }
+
+        // Not disposed: a generation may still be linking to its token. Nothing on it needs freeing (no timer).
+        drained.Cancel();
+        DiagnosticLog.Info(Category, $"Drained {running.ToString(CultureInfo.InvariantCulture)} generation(s).");
+        return running;
+    }
+
+    private async Task<ComfyGeneration> GenerateCoreAsync(ComfyRequest request, CancellationToken cancellationToken, Func<IReadOnlyList<ComfyWorkflow>, IReadOnlyList<ComfyWorkflow>>? narrow)
+    {
         var effective = _effective();
         if (Client() is not { } client)
         {

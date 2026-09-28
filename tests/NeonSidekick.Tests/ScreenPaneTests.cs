@@ -2793,6 +2793,57 @@ public class ScreenPaneTests : IDisposable
         Assert.Equal(new ScreenPane.HintHit(ScreenPane.HintZone.Usage, "", 5), hit);
     }
 
+    /// <summary>
+    /// The ComfyUI generation's label (2026-09-28, the user's ask: a double-click there cancels the pictures): a label
+    /// <see cref="ScreenPane.LabelAfterUsage"/> takes is its own zone, <see cref="ScreenPane.HintZone.Label"/>, after the tally
+    /// and its separator, or right after the frame's blank with no tally; the spinner and the tally stay Usage.
+    /// </summary>
+    [Fact]
+    public void TryHitHint_NamesLabel_OnTheGenerationsGlyphAndTime_AfterTheTallyOrWithout()
+    {
+        _cursorTop = 100;
+        using var pane = Pane();
+        string tally = "1.2k";
+        pane.Strip = () => "🔊";
+        pane.BusyUsage = () => tally;
+        pane.LabelAfterUsage = label => label == "🎨";
+        pane.Show();
+        pane.ShowInput("", 0);
+
+        // "🔊 · " (five cells), the frame at 5, a blank, "1.2k" at 7, " · ", then "🎨 00:00" from 14, eight cells.
+        using (pane.BeginBusy("🎨"))
+        {
+            Assert.True(pane.TryHitHint(5, 102, out var hit));
+            Assert.Equal(new ScreenPane.HintHit(ScreenPane.HintZone.Usage, "", 5), hit);
+            Assert.True(pane.TryHitHint(8, 102, out hit));
+            Assert.Equal(ScreenPane.HintZone.Usage, hit.Zone);
+            Assert.True(pane.TryHitHint(14, 102, out hit));
+            Assert.Equal(new ScreenPane.HintHit(ScreenPane.HintZone.Label, "", 14), hit);
+            Assert.True(pane.TryHitHint(21, 102, out hit));   // the time's last digit
+            Assert.Equal(ScreenPane.HintZone.Label, hit.Zone);
+            Assert.True(pane.TryHitHint(22, 102, out hit));
+            Assert.Equal(ScreenPane.HintZone.Row, hit.Zone);
+
+            // No tally (a /botchat turn): the label right after the frame's blank.
+            tally = "";
+            _time.Advance(ScreenPane.Tick);   // the busy row redrawn on the tick
+            Assert.True(pane.TryHitHint(7, 102, out hit));
+            Assert.Equal(new ScreenPane.HintHit(ScreenPane.HintZone.Label, "", 7), hit);
+            Assert.True(pane.TryHitHint(5, 102, out hit));
+            Assert.Equal(ScreenPane.HintZone.Usage, hit.Zone);
+        }
+
+        // Any other label is no Label zone.
+        using (pane.BeginBusy("thinking"))
+        {
+            Assert.True(pane.TryHitHint(7, 102, out var hit));
+            Assert.Equal(ScreenPane.HintZone.Usage, hit.Zone);
+        }
+
+        Assert.Equal(new ScreenPane.HintHit(ScreenPane.HintZone.Label, "", 9), ScreenPane.HintHitAt("", -1, -1, -1, 0, 5, 12, 9, 4, 10));
+        Assert.Equal(ScreenPane.HintZone.Usage, ScreenPane.HintHitAt("", -1, -1, -1, 0, 5, 12, 9, 4, 8).Zone);
+    }
+
     /// <summary>The busy row's strip (2026-09-24): a zone only when drawn whole — a strip the fit cut is no button.</summary>
     [Fact]
     public void TryHitHint_OnTheBusyRow_AStripCutByTheFit_IsNoZone()

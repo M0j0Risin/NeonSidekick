@@ -212,7 +212,17 @@ public sealed class GenerateImageTool : AIFunction
             return error;
         }
 
-        var generation = await _studio.GenerateAsync(request, cancellationToken, _narrow).ConfigureAwait(false);
+        ComfyGeneration generation;
+        try
+        {
+            generation = await _studio.GenerateAsync(request, cancellationToken, _narrow).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            // The hint row's double-click (2026-09-28, ComfyStudio.Drain): the pictures stop, the turn goes on, and the model is told.
+            return ComfyText.CancelledByUser;
+        }
+
         return generation.Images.Count > 0 ? new ToolImageResult(generation.Text, generation.Images) : generation.Text;
     }
 }

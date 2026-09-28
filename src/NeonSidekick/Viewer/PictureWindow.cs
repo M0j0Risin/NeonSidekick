@@ -29,6 +29,14 @@ public static class PictureWindow
     /// </summary>
     public static Func<bool> Themed { get; set; } = static () => true;
 
+    /// <summary>
+    /// The picture the user's own keys moved to (2026-09-28, <c>ComfyUI picture strip sync</c>: the strip highlights it): ← / →,
+    /// Home / End, and the picture shown after a double-Del — never a slide, an arriving picture, a retarget or a
+    /// <see cref="Follow"/>, so the strip and the window cannot chase each other. Called on the window's thread with the full
+    /// path; it must not block. The app supplies it (<c>Program</c>); nothing until then.
+    /// </summary>
+    public static Action<string>? Browsed { get; set; }
+
     /// <summary>Whether a window can be opened here at all: Windows only.</summary>
     public static bool IsAvailable => OperatingSystem.IsWindows();
 
@@ -71,6 +79,23 @@ public static class PictureWindow
         }
     }
 
+    /// <summary>
+    /// The open window moved to <paramref name="picture"/> (a full path) without being brought forward (2026-09-28, the strip's
+    /// arrows under <c>ComfyUI picture strip sync</c>'s <c>both-ways</c>): only a window on that picture's folder, and only a
+    /// file that exists. Nothing without a window — this never opens one.
+    /// </summary>
+    public static void Follow(string picture)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(picture);
+        lock (s_gate)
+        {
+            if (s_open is { Alive: true } open)
+            {
+                open.Follow(picture);
+            }
+        }
+    }
+
     /// <summary>The open window closed, waited for briefly; nothing without one.</summary>
     public static void CloseAll()
     {
@@ -106,6 +131,7 @@ internal sealed unsafe class PictureWindowThread
     private const uint ChangedMessage = WmApp + 1;
     private const uint LoadedMessage = WmApp + 2;
     private const uint RetargetMessage = WmApp + 3;
+    private const uint FollowMessage = WmApp + 4;
     private const uint ProbeMessage = WmApp + 9;
     private static readonly IntPtr ProbeAnswer = new(0x5EE);
     private static readonly IntPtr DebounceTimer = new(1);
@@ -136,6 +162,7 @@ internal sealed unsafe class PictureWindowThread
     private volatile bool _alive = true;
     private string? _pendingFolder;
     private string? _pendingSelect;
+    private string? _pendingFollow;
     private FileSystemWatcher? _watcher;
     private int _generation;
     private ViewerBitmap? _bitmap;
@@ -194,6 +221,17 @@ internal sealed unsafe class PictureWindowThread
         }
 
         return _alive && PostMessageW(_hwnd, RetargetMessage, IntPtr.Zero, IntPtr.Zero);
+    }
+
+    /// <summary>Moves the live window to <paramref name="picture"/> quietly (<see cref="PictureWindow.Follow"/>); false when the window is gone.</summary>
+    public bool Follow(string picture)
+    {
+        lock (_gate)
+        {
+            _pendingFollow = picture;
+        }
+
+        return _alive && PostMessageW(_hwnd, FollowMessage, IntPtr.Zero, IntPtr.Zero);
     }
 
     /// <summary>The window asked to close, and its thread waited for a moment.</summary>
@@ -451,6 +489,27 @@ internal sealed unsafe class PictureWindowThread
                 return IntPtr.Zero;
             }
 
+            case FollowMessage:
+            {
+                string? follow;
+                lock (_gate)
+                {
+                    follow = _pendingFollow;
+                    _pendingFollow = null;
+                }
+
+                // The strip's picture (2026-09-28): on this folder only, never a retarget and never brought forward.
+                if (follow is not null
+                    && string.Equals(Path.GetDirectoryName(follow), _state.Folder, StringComparison.OrdinalIgnoreCase)
+                    && File.Exists(follow))
+                {
+                    Select(follow);
+                    RestartSlides();
+                }
+
+                return IntPtr.Zero;
+            }
+
             case WmTimer when wParam == DebounceTimer:
                 KillTimer(hwnd, DebounceTimer);
                 LoadCurrent();
@@ -509,6 +568,7 @@ internal sealed unsafe class PictureWindowThread
                 {
                     UpdateTitle();
                     LoadCurrent();
+                    NotifyBrowsed();
 
                     // A picture browsed to during the show gets a whole slide's time.
                     RestartSlides();
@@ -566,6 +626,25 @@ internal sealed unsafe class PictureWindowThread
         UpdateTitle();
         LoadCurrent();
         RestartSlides();
+        NotifyBrowsed();
+    }
+
+    // The picture the user's keys moved to, told to the app (PictureWindow.Browsed, 2026-09-28); its failure only logged.
+    private void NotifyBrowsed()
+    {
+        if (_state.Current is not { } path || PictureWindow.Browsed is not { } browsed)
+        {
+            return;
+        }
+
+        try
+        {
+            browsed(path);
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Warn("Viewer", $"Could not tell the strip about {Path.GetFileName(path)}: {ex.Message}");
+        }
     }
 
     // A folder's pictures listed and watched, the newest shown; the old watcher's events are dropped by generation.

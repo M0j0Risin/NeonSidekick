@@ -817,6 +817,7 @@ public class SettingsMenuTests : IDisposable
                 SettingsField.BotChatPreloadedSkills, SettingsField.BotChatSkillMode,
                 SettingsField.LlmPreserveThinking, SettingsField.SessionSaveThinking, SettingsField.LlmSampling, SettingsField.LlmSamplingFromHuggingFace,
                 SettingsField.HomeAssistantTools, SettingsField.HomeAssistantUrl, SettingsField.HomeAssistantToken, SettingsField.HomeAssistantTest, SettingsField.HomeAssistantActionPolicy, SettingsField.HomeAssistantAssistAgent, SettingsField.HomeAssistantTimeoutSeconds,
+                SettingsField.ComfyPictureStripSync,
             },
             Enum.GetValues<SettingsField>());
         // The compact rows: on the LLM tab after the context length but no reconnect; the type a picker, the two others typed.

@@ -528,6 +528,9 @@ public enum SettingsField
 
     /// <summary>Typed: seconds one Home Assistant request may take, 2 to 60 (<see cref="Settings.AppSettingsData.HomeAssistantTimeoutSeconds"/>). The Home Assistant tab's last row (2026-09-28); no reconnect.</summary>
     HomeAssistantTimeoutSeconds,
+
+    /// <summary>A picker over <see cref="Comfy.StripSync.Names"/>: whether the picture strip and the picture viewer follow each other (<see cref="Settings.AppSettingsData.ComfyPictureStripSync"/>). The ComfyUI tab, under the strip (2026-09-28, the user's ask and name); no reconnect (read at each move). Last in the enum, as every newcomer.</summary>
+    ComfyPictureStripSync,
 }
 
 /// <summary>The tabs of <c>/settings</c> on the pane, in strip order (Sessions right after General — the user's order, 2026-09-18; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
@@ -869,7 +872,7 @@ internal sealed partial class SettingsMenu
         [SettingsField.ClaudeExecutable, SettingsField.ClaudePermissions, SettingsField.ClaudeModel, SettingsField.ClaudeEffort, SettingsField.ClaudeAdvisor, SettingsField.ClaudeAdvisorContext, SettingsField.ClaudeAdvisorCallsPerTurn, SettingsField.ClaudeAdvisorModel, SettingsField.ClaudeAdvisorEffort, SettingsField.ClaudeAdvisorConfirm],
         [SettingsField.HomeAssistantTools, SettingsField.HomeAssistantUrl, SettingsField.HomeAssistantToken, SettingsField.HomeAssistantTest, SettingsField.HomeAssistantActionPolicy, SettingsField.HomeAssistantAssistAgent, SettingsField.HomeAssistantTimeoutSeconds],
         [SettingsField.ObsidianTools, SettingsField.ObsidianVault, SettingsField.ObsidianAllowDelete],
-        [SettingsField.ComfyTools, SettingsField.ComfyUrl, SettingsField.ComfyWorkflowsOffered, SettingsField.ComfyAddWorkflow, SettingsField.ComfyCaretMention, SettingsField.ComfyTimeoutSeconds, SettingsField.ComfyMaxPicturesPerCall, SettingsField.ComfyReinforceNegatives, SettingsField.ComfyShowPrompts, SettingsField.ComfyPictureStrip, SettingsField.ComfyOutputFolder],
+        [SettingsField.ComfyTools, SettingsField.ComfyUrl, SettingsField.ComfyWorkflowsOffered, SettingsField.ComfyAddWorkflow, SettingsField.ComfyCaretMention, SettingsField.ComfyTimeoutSeconds, SettingsField.ComfyMaxPicturesPerCall, SettingsField.ComfyReinforceNegatives, SettingsField.ComfyShowPrompts, SettingsField.ComfyPictureStrip, SettingsField.ComfyPictureStripSync, SettingsField.ComfyOutputFolder],
         [SettingsField.SqlTools, SettingsField.SqlConnectionsOffered, SettingsField.SqlDefaultConnection, SettingsField.SqlSetPassword, SettingsField.SqlAddConnection, SettingsField.SqlPercentMention, SettingsField.SqlQueryMaxRows, SettingsField.SqlQueryTimeoutSeconds, SettingsField.SqlConnectionsProfile, SettingsField.SqlConnectionsGlobal],
         [SettingsField.GitNativeTools, SettingsField.GitNativeDiffMaxLines, SettingsField.GitNativeLogMaxCommits, SettingsField.GitNativeEmail, SettingsField.GitNativeName],
         [SettingsField.ToolsDollarMention, SettingsField.ToolCollapseCount, SettingsField.CodeCollapseCount],
@@ -1235,6 +1238,7 @@ internal sealed partial class SettingsMenu
         SettingsField.ComfyShowPrompts => "ComfyUI show prompts",
         SettingsField.ComfyCaretMention => "ComfyUI ^-mention enabled",
         SettingsField.ComfyPictureStrip => "ComfyUI picture strip",
+        SettingsField.ComfyPictureStripSync => "ComfyUI picture strip sync",   // the user's name (2026-09-28)
         SettingsField.BotChatLlmMode => "Botchat LLM mode",
         SettingsField.LlmMidTurnUsage => "LLM mid-turn usage",
         SettingsField.BotChatImages => "Botchat images enabled",
@@ -1439,6 +1443,7 @@ internal sealed partial class SettingsMenu
             SettingsField.ComfyShowPrompts => OnOff(data.ComfyShowPrompts),
             SettingsField.ComfyCaretMention => OnOff(data.ComfyCaretMention),
             SettingsField.ComfyPictureStrip => OnOff(data.ComfyPictureStrip),
+            SettingsField.ComfyPictureStripSync => Comfy.StripSync.Resolve(data.ComfyPictureStripSync),
             SettingsField.BotChatLlmMode => data.BotChatLlmMode,
             SettingsField.LlmMidTurnUsage => data.LlmMidTurnUsage,
             SettingsField.BotChatImages => OnOff(data.BotChatImages),
@@ -1735,6 +1740,10 @@ internal sealed partial class SettingsMenu
     /// <summary>A row of the action-policy picker: the name padded, what it does dim (2026-09-28).</summary>
     public static string HomeAssistantPolicyLabel(string name) =>
         Markup.Escape(name.PadRight(8)) + Theme.DimMarkup(HomeAssistant.HaPolicy.Describe(name));
+
+    /// <summary>A row of the strip-sync picker: the name padded, what it does dim (2026-09-28).</summary>
+    public static string StripSyncLabel(string name) =>
+        Markup.Escape(name.PadRight(12)) + Theme.DimMarkup(Comfy.StripSync.Describe(name));
 
     /// <summary>How the menu shows an empty <see cref="AppSettingsData.ComfyUrl"/> (2026-09-24): no server, so no image tool. Pinned.</summary>
     public const string NoComfyUrlLabel = "(not set)";
@@ -2583,6 +2592,11 @@ internal sealed partial class SettingsMenu
         if (field == SettingsField.HomeAssistantActionPolicy)
         {
             return await PickHomeAssistantPolicyAsync(saved, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (field == SettingsField.ComfyPictureStripSync)
+        {
+            return await PickStripSyncAsync(saved, cancellationToken).ConfigureAwait(false);
         }
 
         if (field == SettingsField.HomeAssistantTest)
@@ -3755,6 +3769,22 @@ internal sealed partial class SettingsMenu
 
         string name = names[index];
         Apply(SettingsField.HomeAssistantActionPolicy, d => d.HomeAssistantActionPolicy = name);
+        return true;
+    }
+
+    /// <summary>The strip-sync picker under the settings list (2026-09-28): one <see cref="StripSyncLabel"/> row per <see cref="Comfy.StripSync.Names"/> entry, the saved one under the cursor.</summary>
+    private async Task<bool> PickStripSyncAsync(AppSettingsData saved, CancellationToken cancellationToken)
+    {
+        var names = Comfy.StripSync.Names;
+        var page = new MenuPage(Crumb(FieldName(SettingsField.ComfyPictureStripSync)), names.Select(StripSyncLabel).ToList(), PickKeys);
+        int? picked = await PickAsync(page, Math.Max(0, Array.IndexOf(names, Comfy.StripSync.Resolve(saved.ComfyPictureStripSync))), cancellationToken).ConfigureAwait(false);
+        if (picked is not { } index)
+        {
+            return Unchanged();
+        }
+
+        string name = names[index];
+        Apply(SettingsField.ComfyPictureStripSync, d => d.ComfyPictureStripSync = name);
         return true;
     }
 

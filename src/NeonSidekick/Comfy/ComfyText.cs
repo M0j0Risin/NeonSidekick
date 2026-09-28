@@ -314,6 +314,16 @@ public static class ComfyText
     /// <summary>A generation the user stopped (ESC). Pinned.</summary>
     public const string Cancelled = "(image generation cancelled)";
 
+    /// <summary>The notice after the hint row's double-click on the 🖼️ / 🎨 (2026-09-28): <see cref="Cancelled"/> for one, the count for more. Pinned.</summary>
+    public static string Drained(int count) =>
+        count <= 1 ? Cancelled : $"({count.ToString(CultureInfo.InvariantCulture)} image generations cancelled)";
+
+    /// <summary>
+    /// <c>generate_image</c>'s answer when the user cancelled the pictures from the hint row (2026-09-28, the user's call: the
+    /// pictures stop, the reply goes on), so the model neither retries nor says it failed. Pinned.
+    /// </summary>
+    public const string CancelledByUser = "Error: the user cancelled this image generation. Do not generate it again unless the user asks.";
+
     /// <summary><c>/imagine</c> with both a negative after <c>--</c> and <c>--no-negative</c> (later on 2026-09-24). Pinned.</summary>
     public const string NegativeAndNoNegative = "give a negative after -- or --no-negative, not both";
 

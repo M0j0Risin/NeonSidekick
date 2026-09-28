@@ -72,6 +72,8 @@ public partial class ChatScreenTests : IDisposable
     private Func<Uri, NeonSidekick.Comfy.ComfyClient>? _comfyClient;
     private Action<string>? _openViewer;   // the picture viewer (2026-09-27): null = none, as off Windows
     private Action<string>? _viewPicture;   // a double-clicked picture in that viewer (later on 2026-09-27): null = none, the registered app
+    private Action<string>? _followViewer;   // the strip's arrows moving an open viewer (2026-09-28): null = none
+    private ChatScreen? _running;   // the screen RunAsync built, for a step that plays the viewer (2026-09-28)
     private Action<string, string>? _openImage;   // a double-clicked picture (later on 2026-09-24): null = the plain opener, _openedFiles   // /imagine and the image tools (2026-09-24): a client over a stub server
     private string? _logFile;   // /log (2026-09-22): the --log file the screen is handed; null = started without --log
     private Action<bool>? _mouse;
@@ -258,7 +260,8 @@ public partial class ChatScreenTests : IDisposable
     private async Task<string> RunAsync(IAnsiConsoleInput input, CancellationToken cancellationToken = default)
     {
         _keys = new KeySource(input, TimeSpan.FromMilliseconds(1));
-        var screen = new ChatScreen(_console, _settings, () => _settings.Current, _overriddenBy, _session, _speech, _keys, _voice, _openFile ?? _openedFiles.Add, RenderScreen, _time, _geometry, mouse: _mouse, copyToClipboard: CopyToClipboard, random: _random, clipboardImage: _clipboardImage, web: _web, setTitle: _titles.Add, externalSkills: Path.Combine(_dir, "agents-skills"), holdWheel: _holdWheel, splash: _splash, editDraft: _editDraft, mcp: _mcp, logFile: _logFile, comfyClient: _comfyClient, openImage: _openImage, claude: _claudeCli, openViewer: _openViewer, viewPicture: _viewPicture);
+        var screen = new ChatScreen(_console, _settings, () => _settings.Current, _overriddenBy, _session, _speech, _keys, _voice, _openFile ?? _openedFiles.Add, RenderScreen, _time, _geometry, mouse: _mouse, copyToClipboard: CopyToClipboard, random: _random, clipboardImage: _clipboardImage, web: _web, setTitle: _titles.Add, externalSkills: Path.Combine(_dir, "agents-skills"), holdWheel: _holdWheel, splash: _splash, editDraft: _editDraft, mcp: _mcp, logFile: _logFile, comfyClient: _comfyClient, openImage: _openImage, claude: _claudeCli, openViewer: _openViewer, viewPicture: _viewPicture, followViewer: _followViewer);
+        _running = screen;
         int code = await screen.RunAsync(cancellationToken);
         Assert.Equal(0, code);
         return Output;
@@ -4207,7 +4210,7 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         Assert.Contains(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude (CLI)    Home Assistant    Obsidian    ComfyUI    SQL    Git (native)    Options ", output);
-        Assert.Contains("\n▸ ComfyUI tools                  on\n  ComfyUI URL                    (not set)\n  ComfyUI workflows offered      all (not narrowed)\n  ComfyUI add workflow           Enter to start workflow wizard\n  ComfyUI ^-mention enabled      on\n  ComfyUI timeout (s)            300\n  ComfyUI max pictures per call  5 pictures\n  ComfyUI reinforce negatives    on\n  ComfyUI show prompts           on\n  ComfyUI picture strip          on\n  ComfyUI output folder          comfy_images\n", output);   // 2026-09-24; the offered checklist and the wizard later that day, the ^-mention switch later still
+        Assert.Contains("\n▸ ComfyUI tools                  on\n  ComfyUI URL                    (not set)\n  ComfyUI workflows offered      all (not narrowed)\n  ComfyUI add workflow           Enter to start workflow wizard\n  ComfyUI ^-mention enabled      on\n  ComfyUI timeout (s)            300\n  ComfyUI max pictures per call  5 pictures\n  ComfyUI reinforce negatives    on\n  ComfyUI show prompts           on\n  ComfyUI picture strip          on\n  ComfyUI picture strip sync     viewer-only\n  ComfyUI output folder          comfy_images\n", output);   // 2026-09-24; the offered checklist and the wizard later that day, the ^-mention switch later still
         Assert.Contains("\n▸ Claude executable                   (looked up)\n  Claude slash command permissions    read-only\n  Claude slash command model          (Claude Code's default)\n  Claude slash command effort         (Claude Code's default)\n  Claude advisor tool                 off\n  Claude advisor tool context         brief\n  Claude advisor tool calls per turn  2 calls\n  Claude advisor tool model           (as Claude slash command model)\n  Claude advisor tool effort          (as Claude slash command effort)\n  Claude advisor tool confirm         off\n", output);   // 2026-09-27: /claude's rows off /settings, then the advisor's
         Assert.Contains("\n  Clock (3)\n▸ get_current_time      on   ", output);
         Assert.Contains("\n  · get_current_time: off\n  Clock (2 of 3)\n▸ get_current_time      off  ", output);
@@ -13096,6 +13099,116 @@ public partial class ChatScreenTests : IDisposable
         return stub;
     }
 
+    /// <summary>
+    /// A stub ComfyUI whose job never finishes (2026-09-28, the drain): <paramref name="polled"/> is set on the first history
+    /// read, and <c>/queue</c> and <c>/interrupt</c> answer, recorded.
+    /// </summary>
+    private StubHttpMessageHandler HeldComfyServer(TaskCompletionSource polled)
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.ComfyUrl = "http://comfy.lan:8188"; });
+        File.WriteAllText(Path.Combine(_settings.ProfileComfyDirectory, "pony.json"),
+            "{\"3\":{\"class_type\":\"KSampler\",\"inputs\":{\"seed\":\"{{seed}}\"}},\"6\":{\"class_type\":\"CLIPTextEncode\",\"inputs\":{\"text\":\"{{prompt}}\"}},\"7\":{\"class_type\":\"CLIPTextEncode\",\"inputs\":{\"text\":\"{{negative}}\"}}}");
+        var stub = new StubHttpMessageHandler()
+            .Map("http://comfy.lan:8188/prompt", HttpStatusCode.OK, "{\"prompt_id\":\"p-1\"}")
+            .Map("http://comfy.lan:8188/history/", (_, _) =>
+            {
+                polled.TrySetResult();
+                return Task.FromResult(StubHttpMessageHandler.Json(HttpStatusCode.OK, "{}"));
+            })
+            .Map("http://comfy.lan:8188/queue", HttpStatusCode.OK, "{}")
+            .Map("http://comfy.lan:8188/interrupt", HttpStatusCode.OK, "{}")
+            .Map("http://comfy.lan:8188/system_stats", HttpStatusCode.OK, "{\"system\":{\"comfyui_version\":\"0.3.40\"},\"devices\":[]}");
+        _comfyClient = url => new NeonSidekick.Comfy.ComfyClient(url, new HttpClient(stub), TimeSpan.FromMilliseconds(1));
+        return stub;
+    }
+
+    /// <summary>
+    /// The cell column <paramref name="text"/> was last drawn at on a busy row with no strip: counted from the spinner's frame
+    /// before it, which is then the row's column 0. Not from the line's start — the console's output runs the pane's rows
+    /// together (the trailer of one is followed by the next).
+    /// </summary>
+    private int BusyColumnOf(string text)
+    {
+        string output = Output;
+        int at = output.LastIndexOf(text, StringComparison.Ordinal);
+        Assert.True(at >= 0, output);
+        int frame = output.LastIndexOfAny(string.Concat(Theme.SpinnerFrames).ToCharArray(), at);
+        Assert.True(frame >= 0, output);
+        return TextCells.Width(output[frame..at]);
+    }
+
+    /// <summary>
+    /// The ComfyUI generation's label on the busy row (2026-09-28, the user's ask): a double-click on 🖼️ and its time cancels
+    /// the picture alone — its prompt deleted from ComfyUI's queue and interrupted, the model told the user cancelled it, the
+    /// reply going on to its end, and the notice after it. A single click does nothing.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ADoubleClickOnTheGenerationsLabel_MidTurn_CancelsThePicture_AndTheReplyGoesOn(bool twice)
+    {
+        _console.Profile.Height = 40;
+        _console.Profile.Width = 240;
+        _geometry = new ScreenGeometry(() => null, () => 100);   // the hint row at 102
+        var polled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var stub = HeldComfyServer(polled);
+        _chat.Enqueue(FakeChatClient.Call("g1", GenerateImageTool.ToolName, new Dictionary<string, object?> { ["prompt"] = "a cat" }));
+        _chat.EnqueueText("No picture, then.");
+        var input = Scripted();
+        int step = 0;
+        input.OnWait = () =>
+        {
+            switch (step)
+            {
+                case 0: step++; PushLine(input, "draw a cat"); break;
+                case 1:
+                    // The watcher's reads come here too: /exit waits for the turn's end.
+                    if (Output.Contains(twice ? "No picture, then." : ChatScreen.CancelledNotice, StringComparison.Ordinal))
+                    {
+                        step++;
+                        PushLine(input, "/exit");
+                    }
+
+                    break;
+            }
+        };
+        var clicked = polled.Task.ContinueWith(_ =>
+        {
+            // The generation is running: the busy row redrawn on the tick, then the label clicked.
+            _time.Advance(ScreenPane.Tick);
+            int x = BusyColumnOf(NeonSidekick.Comfy.ComfyText.TextToImageLabel + " 00:");
+            input.PushClick(x + 1, 102);
+            if (twice)
+            {
+                input.PushClick(x + 3, 102);   // the time: the same zone, so the pair
+            }
+            else
+            {
+                // A lone click spends nothing; Esc ends the turn so the test does.
+                Thread.Sleep(200);
+                input.Push(Keys.Escape);
+            }
+        }, TaskScheduler.Default);
+
+        string output = await RunAsync();
+        await clicked;
+
+        if (twice)
+        {
+            var results = _chat.Requests[1].SelectMany(m => m.Contents.OfType<FunctionResultContent>()).Select(r => r.Result?.ToString());
+            Assert.Contains(NeonSidekick.Comfy.ComfyText.CancelledByUser, results);
+            Assert.Contains("No picture, then.", output);
+            Assert.Contains(NeonSidekick.Comfy.ComfyText.Drained(1), output);
+            Assert.DoesNotContain(ChatScreen.CancelledNotice, output);   // the reply ran on
+            Assert.Contains(stub.Requests, r => r.Uri.AbsolutePath == "/queue" && r.Body == "{\"delete\":[\"p-1\"]}");
+        }
+        else
+        {
+            Assert.Single(_chat.Requests);
+            Assert.DoesNotContain(NeonSidekick.Comfy.ComfyText.Drained(1), output);
+        }
+    }
+
     [Fact]
     public async Task Imagine_SendsThePromptAsTyped_DrawsThePicture_AndTheNextMessageCarriesIt()
     {
@@ -13326,6 +13439,75 @@ public partial class ChatScreenTests : IDisposable
         Assert.Empty(opened);
         Assert.DoesNotContain(NeonSidekick.Comfy.ComfyText.StripSelectedHint(1, 1), output);
         Assert.DoesNotContain(PictureStrip.LeftBar, output);
+    }
+
+    /// <summary>
+    /// The viewer's keys move the strip (2026-09-28, the user's ask, <c>ComfyUI picture strip sync</c>): the older picture shown
+    /// in the viewer is highlighted in the strip under viewer-only and both-ways, then a picture the strip does not hold is
+    /// ignored — the highlight stays, so → (which would take the newest from nothing) stays on the oldest. Disabled, nothing.
+    /// </summary>
+    [Theory]
+    [InlineData(NeonSidekick.Comfy.StripSync.ViewerOnly, true)]
+    [InlineData(NeonSidekick.Comfy.StripSync.BothWays, true)]
+    [InlineData(NeonSidekick.Comfy.StripSync.Disabled, false)]
+    public async Task PictureStrip_TheViewersKeys_HighlightTheSamePicture(string sync, bool follows)
+    {
+        ComfyServer();
+        PaneOf40Rows();
+        _settings.Update(d => d.ComfyPictureStripSync = sync);
+        StepsWhenIdle(
+            Line("/imagine a cat --seed 5"),
+            Line("/imagine a dog --seed 6"),
+            input =>
+            {
+                // The viewer's thread, as it were: the older picture, then one the strip does not hold; then → on the line.
+                _running!.ViewerBrowsed(ComfyPicture("pony-5.png"));
+                _running!.ViewerBrowsed(Path.Combine(_dir, "elsewhere.png"));
+                input.Push(Keys.Right);
+            },
+            Line("/exit"));
+
+        string output = await RunAsync();
+
+        if (follows)
+        {
+            Assert.Contains(NeonSidekick.Comfy.ComfyText.StripSelectedHint(2, 2), output);
+            Assert.DoesNotContain(NeonSidekick.Comfy.ComfyText.StripSelectedHint(1, 2), output);
+        }
+        else
+        {
+            Assert.DoesNotContain(NeonSidekick.Comfy.ComfyText.StripSelectedHint(2, 2), output);
+            Assert.Contains(NeonSidekick.Comfy.ComfyText.StripSelectedHint(1, 2), output);   // the → alone
+        }
+    }
+
+    /// <summary>
+    /// The strip's arrows move an open viewer only under both-ways (2026-09-28): → hands the highlighted picture's full path
+    /// over; ← off the newest lets go and hands nothing.
+    /// </summary>
+    [Theory]
+    [InlineData(NeonSidekick.Comfy.StripSync.ViewerOnly, false)]
+    [InlineData(NeonSidekick.Comfy.StripSync.BothWays, true)]
+    [InlineData(NeonSidekick.Comfy.StripSync.Disabled, false)]
+    public async Task PictureStrip_TheArrows_MoveTheViewer_OnlyBothWays(string sync, bool follows)
+    {
+        ComfyServer();
+        PaneOf40Rows();
+        _settings.Update(d => d.ComfyPictureStripSync = sync);
+        var followed = new List<string>();
+        _followViewer = followed.Add;
+        StepsWhenIdle(Line("/imagine a cat --seed 5"), Key(Keys.Right), Key(Keys.Left), Line("/exit"));
+
+        await RunAsync();
+
+        if (follows)
+        {
+            Assert.Equal(ComfyPicture("pony-5.png"), Assert.Single(followed));
+        }
+        else
+        {
+            Assert.Empty(followed);
+        }
     }
 
     [Fact]

@@ -735,6 +735,7 @@ public sealed class AppSettings : IDisposable
         ComfyReinforceNegatives = source.ComfyReinforceNegatives,
         ComfyShowPrompts = source.ComfyShowPrompts,
         ComfyPictureStrip = source.ComfyPictureStrip,
+        ComfyPictureStripSync = source.ComfyPictureStripSync,
         ComfyOutputFolder = source.ComfyOutputFolder,
         BotChatLlmMode = source.BotChatLlmMode,
         BotChatImages = source.BotChatImages,

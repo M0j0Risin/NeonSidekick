@@ -591,6 +591,9 @@ internal sealed partial class ChatScreen
     /// <summary>A double-clicked picture's viewer (later on 2026-09-27, <see cref="Viewer.PictureWindow.OpenAt"/>), handed the picture's full path; null where there is none (the registered app then).</summary>
     private readonly Action<string>? _viewPicture;
 
+    /// <summary>An open viewer moved to a picture quietly (2026-09-28, <see cref="Viewer.PictureWindow.Follow"/>), for the strip's arrows under <c>both-ways</c>; null where there is none.</summary>
+    private readonly Action<string>? _followViewer;
+
     /// <summary>
     /// A picture drawn in the transcript, for a double-click to open (later on 2026-09-24): its name, the file it came from
     /// when there is one, and its bytes for when there is none. An open prints nothing; only an error does (2026-09-24, the user's call).
@@ -865,7 +868,8 @@ internal sealed partial class ChatScreen
         IClaudeCli? claude = null,
         Action<string>? openViewer = null,
         Action<string>? viewPicture = null,
-        Func<Uri, string, HaClient>? haClient = null)
+        Func<Uri, string, HaClient>? haClient = null,
+        Action<string>? followViewer = null)
     {
         _logFile = logFile;
         ArgumentNullException.ThrowIfNull(time);
@@ -890,6 +894,8 @@ internal sealed partial class ChatScreen
         _openViewer = openViewer;
         // A double-clicked picture in that viewer (later on 2026-09-27): PictureWindow.OpenAt in the app on Windows; null = the registered app, as before.
         _viewPicture = viewPicture;
+        // The strip's arrows moving an open viewer (2026-09-28): PictureWindow.Follow in the app on Windows; null = the strip keeps to itself.
+        _followViewer = followViewer;
         _ownsMcp = mcp is null;
         _mcp = mcp ?? new McpSession(settings, McpSession.DefaultTransport, time);
         _clockTools = ClockTools(time);
@@ -1687,6 +1693,18 @@ internal sealed partial class ChatScreen
                 return null;
             }
 
+            if (hit.Zone == ScreenPane.HintZone.Label || (hit.Zone == ScreenPane.HintZone.Strip && ComfyText.IsGeneratingLabel(hit.Glyph)))
+            {
+                // The ComfyUI generation's 🖼️ / 🎨 and its time on the busy row, or a /botchat picture's on the strip
+                // (2026-09-28, the user's ask): the pair cancels the pictures alone — the reply goes on, Esc still ends it.
+                if (_queuedClicks.Second(InputLine.HintPairKey(hit)))
+                {
+                    DrainPictures();
+                }
+
+                return null;
+            }
+
             if (hit.Zone == ScreenPane.HintZone.Usage)
             {
                 return _queuedClicks.Second(2) ? SlashCommands.UsageWord : null;
@@ -1710,6 +1728,26 @@ internal sealed partial class ChatScreen
 
         _queuedClicks.Reset();
         return null;
+    }
+
+    /// <summary>
+    /// The ComfyUI pictures being made cancelled (2026-09-28, the user's ask: a double-click on the hint row's 🖼️ / 🎨 or its
+    /// time cancels the image requests): <see cref="ComfyStudio.Drain"/> — the model's <c>generate_image</c> answers
+    /// <see cref="ComfyText.CancelledByUser"/> and its reply goes on, <c>/imagine</c> ends, a <c>/botchat</c> picture is
+    /// dropped, running or waiting its turn — and <see cref="ComfyText.Drained"/> through the flow sink, so it waits for a
+    /// running reply. False, and nothing said, with nothing to cancel. Any thread.
+    /// </summary>
+    private bool DrainPictures()
+    {
+        int pending = _pendingPictures.Count;
+        if (!_comfy.Busy && pending == 0)
+        {
+            return false;
+        }
+
+        int drained = Math.Max(_comfy.Drain(), pending);
+        _flow.Notice(ComfyText.Drained(drained));
+        return true;
     }
 
     /// <summary>
@@ -6006,13 +6044,16 @@ internal sealed partial class ChatScreen
         var watcher = _keys.WatchAsync(cts, stop.Token, null, null, LiveLineHook, spend: e => { _queuedClicks.Reset(); return ScrollInput(e); }, onClick: _pane.Enabled ? HintClickLine : null, editor: LiveEditor);
         ComfyGeneration? generation = null;
         bool cancelled = false;
+        bool drained = false;
         try
         {
             generation = await _transcript.WithSpinnerAsync(ComfyText.GeneratingLabelFor(request.ImageCount), () => _comfy.GenerateAsync(request, cts.Token)).ConfigureAwait(false);
         }
-        catch (OperationCanceledException) when (cts.IsCancellationRequested)
+        catch (OperationCanceledException)
         {
+            // Esc (cts), or the hint row's double-click (2026-09-28, ComfyStudio.Drain), whose own notice says so.
             cancelled = true;
+            drained = !cts.IsCancellationRequested;
         }
         finally
         {
@@ -6023,7 +6064,11 @@ internal sealed partial class ChatScreen
         LoopPass pass;
         if (cancelled || generation is null)
         {
-            _transcript.Notice(ComfyText.Cancelled);
+            if (!drained)
+            {
+                _transcript.Notice(ComfyText.Cancelled);
+            }
+
             pass = LoopPass.Cancelled;
         }
         else if (!generation.Ok)
@@ -6932,6 +6977,11 @@ internal sealed partial class ChatScreen
                             ForgetPausedLearn();
                             _session.CancelLearning();
                             _transcript.Notice(LearnCancelledNotice);
+                        }
+                        else if (hint.Hit.Zone == ScreenPane.HintZone.Strip && ComfyText.IsGeneratingLabel(hint.Hit.Glyph))
+                        {
+                            // A /botchat picture still rendering (2026-09-28): its cancel, as on the busy row; nothing when it just ended.
+                            DrainPictures();
                         }
                         else if (hint.Hit.Zone == ScreenPane.HintZone.Strip && hint.Hit.Glyph == PlanText.Glyph)
                         {
@@ -10067,7 +10117,16 @@ internal sealed partial class ChatScreen
         {
             bool paced = BotPicturePacer.Applies(_effective(), _speech.IsReady);
             // Counted on the strip from the send to its end (2026-09-27): the chat goes on meanwhile, with no spinner of its own.
-            pictures.Add((bot, _pendingPictures.TrackAsync(job.ImageCount, () => GenerateBotPictureAsync(job, pictureToken, paced ? pacer : null))));
+            // Linked to the studio's drain from the send (2026-09-28): the hint row's double-click takes it while it still
+            // waits its turn in the pacer, not only once it runs.
+            var drainable = CancellationTokenSource.CreateLinkedTokenSource(pictureToken, _comfy.DrainToken);
+            pictures.Add((bot, _pendingPictures.TrackAsync(job.ImageCount, async () =>
+            {
+                using (drainable)
+                {
+                    return await GenerateBotPictureAsync(job, drainable.Token, paced ? pacer : null).ConfigureAwait(false);
+                }
+            })));
         }
     }
 
@@ -10086,7 +10145,12 @@ internal sealed partial class ChatScreen
         var (generation, skipped) = await UnderWatchAsync(ComfyText.GeneratingLabelFor(job.ImageCount), token => GenerateBotPictureAsync(job, token), pictureToken).ConfigureAwait(false);
         if (skipped || generation is null)
         {
-            _transcript.Notice(ComfyText.Cancelled);
+            // A null not skipped is the hint row's drain (2026-09-28), whose own notice says so.
+            if (skipped)
+            {
+                _transcript.Notice(ComfyText.Cancelled);
+            }
+
             return null;
         }
 
@@ -11403,7 +11467,85 @@ internal sealed partial class ChatScreen
         }
 
         _pane.RedrawStrip();
+        FollowInViewer();
         return true;
+    }
+
+    /// <summary>
+    /// The strip's highlighted picture shown in an open viewer (2026-09-28, <c>ComfyUI picture strip sync</c>'s
+    /// <c>both-ways</c>): only a picture with a file of its own; nothing with the highlight let go, without a viewer, or under
+    /// the other two. The viewer takes it only on its own folder and never comes forward.
+    /// </summary>
+    private void FollowInViewer()
+    {
+        if (_followViewer is null || !StripSync.StripSyncs(_effective().ComfyPictureStripSync) || _pictureStrip.SelectedId is not { } id)
+        {
+            return;
+        }
+
+        string? path;
+        lock (_pictures)
+        {
+            path = id >= 0 && id < _pictures.Count ? _pictures[id].FullPath : null;
+        }
+
+        if (path is null)
+        {
+            return;
+        }
+
+        try
+        {
+            _followViewer(path);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or ArgumentException)
+        {
+            DiagnosticLog.Warn("Viewer", $"Could not move the viewer to {Path.GetFileName(path)}: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// The picture the viewer's keys moved to (2026-09-28, the user's ask: "if I push left or right arrow while in the viewer,
+    /// the selected image in the picture strip would change to that selection as well"): the strip's newest tile for that file
+    /// highlighted and the pane redrawn, under <c>ComfyUI picture strip sync</c>'s <c>viewer-only</c> and <c>both-ways</c>. A
+    /// picture the strip does not hold is ignored, the highlight kept (the user's call), as is everything with the strip off.
+    /// Any thread (the viewer's).
+    /// </summary>
+    public void ViewerBrowsed(string path)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        var effective = _effective();
+        if (!effective.ComfyPictureStrip || !StripSync.ViewerSyncs(effective.ComfyPictureStripSync))
+        {
+            return;
+        }
+
+        string full;
+        try
+        {
+            full = Path.GetFullPath(path);
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return;
+        }
+
+        var ids = new HashSet<int>();
+        lock (_pictures)
+        {
+            for (int id = 0; id < _pictures.Count; id++)
+            {
+                if (_pictures[id].FullPath is { } own && string.Equals(Path.GetFullPath(own), full, StringComparison.OrdinalIgnoreCase))
+                {
+                    ids.Add(id);
+                }
+            }
+        }
+
+        if (ids.Count > 0 && _pictureStrip.Highlight(ids.Contains))
+        {
+            _pane.RedrawStrip();
+        }
     }
 
     /// <summary>Enter with nothing to send (the input line's <c>emptyEnter</c> hook): the highlighted picture opened as a double-click opens it. False without the strip or a highlight.</summary>

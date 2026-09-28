@@ -293,6 +293,73 @@ public sealed class ComfyTests : IDisposable
         Assert.Contains("pony-txt2img · pony · text → image · 1024×1024", tool.Description);
     }
 
+    /// <summary>
+    /// The stub as a server whose job runs until <paramref name="release"/> says done: the history is empty until then, and
+    /// <paramref name="polled"/> is set on the first read. <c>/queue</c> and <c>/interrupt</c> answer, recorded.
+    /// </summary>
+    private void ServeAHeldPicture(Func<bool> release, TaskCompletionSource polled)
+    {
+        _stub.Map(Server + "/prompt", HttpStatusCode.OK, "{\"prompt_id\":\"p-1\",\"number\":1,\"node_errors\":{}}");
+        _stub.Map(Server + "/history/", (_, _) =>
+        {
+            polled.TrySetResult();
+            return Task.FromResult(StubHttpMessageHandler.Json(HttpStatusCode.OK,
+                release() ? "{\"p-1\":{\"outputs\":{\"9\":{\"images\":[{\"filename\":\"neon_00001_.png\",\"subfolder\":\"\",\"type\":\"output\"}]}},\"status\":{\"status_str\":\"success\",\"completed\":true}}}" : "{}"));
+        });
+        _stub.Map(Server + "/view", (_, _) => Task.FromResult(StubHttpMessageHandler.Bytes(HttpStatusCode.OK, Picture(), "image/png")));
+        _stub.Map(Server + "/queue", HttpStatusCode.OK, "{}");
+        _stub.Map(Server + "/interrupt", HttpStatusCode.OK, "{}");
+    }
+
+    /// <summary>
+    /// The hint row's double-click (2026-09-28, <see cref="ComfyStudio.Drain"/>): the running generation stops — its prompt
+    /// taken out of ComfyUI's queue and interrupted by id — the tool tells the model the user cancelled, and a generation
+    /// started after the drain runs.
+    /// </summary>
+    [Fact]
+    public async Task Drain_CancelsTheRunningGeneration_DeletesAndInterruptsItsPrompt_AndTheNextOneRuns()
+    {
+        Workflow("pony-txt2img", Txt2Img);
+        bool done = false;
+        var polled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        ServeAHeldPicture(() => Volatile.Read(ref done), polled);
+        Assert.Equal(0, _studio.Drain());   // nothing running: nothing to say
+
+        var running = new GenerateImageTool(_studio).InvokeAsync(Args(("prompt", "a cat")));
+        await polled.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.True(_studio.Busy);
+
+        Assert.Equal(1, _studio.Drain());
+
+        Assert.Equal(ComfyText.CancelledByUser, await running.AsTask().WaitAsync(TimeSpan.FromSeconds(10)));
+        Assert.False(_studio.Busy);
+        Assert.Equal("{\"delete\":[\"p-1\"]}", Assert.Single(_stub.Requests, r => r.Uri.AbsolutePath == "/queue").Body);
+        Assert.Equal("{\"prompt_id\":\"p-1\"}", Assert.Single(_stub.Requests, r => r.Uri.AbsolutePath == "/interrupt").Body);
+
+        Volatile.Write(ref done, true);
+        var next = await _studio.GenerateAsync(new ComfyRequest("a dog"), CancellationToken.None);
+        Assert.True(next.Ok, next.Text);
+    }
+
+    /// <summary>The caller's own cancel (Esc, the turn's end) is still rethrown, the drain's token untouched.</summary>
+    [Fact]
+    public async Task Drain_LeavesTheCallersOwnCancel_Rethrown()
+    {
+        Workflow("pony-txt2img", Txt2Img);
+        var polled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        ServeAHeldPicture(() => false, polled);
+        using var cts = new CancellationTokenSource();
+
+        var running = new GenerateImageTool(_studio).InvokeAsync(Args(("prompt", "a cat")), cts.Token).AsTask();
+        await polled.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        await cts.CancelAsync();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => running);
+        Assert.False(_studio.Busy);
+        Assert.Equal("(image generation cancelled)", ComfyText.Drained(1));
+        Assert.Equal("(3 image generations cancelled)", ComfyText.Drained(3));
+    }
+
     [Fact]
     public async Task GenerateImage_Verbatim_SendsTheUsersTextAsTyped_WithNoDefaultNegative_AndANewNameWhenTaken()
     {
@@ -698,6 +765,31 @@ public sealed class ComfyTests : IDisposable
         var tab = SettingsMenu.ToolsTabFields.Single(fields => fields.Contains(SettingsField.ComfyTools)).ToList();
         Assert.Equal(tab.IndexOf(SettingsField.ComfyShowPrompts) + 1, tab.IndexOf(SettingsField.ComfyPictureStrip));
         Assert.Equal("← → picture 2/7 · Enter opens", ComfyText.StripSelectedHint(2, 7));
+    }
+
+    /// <summary>
+    /// <c>ComfyUI picture strip sync</c> (2026-09-28, the user's name, choices and default): a picker under the strip,
+    /// viewer-only by default, any case read, an unknown name the default; the two directions per choice.
+    /// </summary>
+    [Fact]
+    public void StripSync_Setting_IsAPicker_ViewerOnlyByDefault_UnderTheStrip()
+    {
+        Assert.Equal(StripSync.ViewerOnly, new AppSettingsData().ComfyPictureStripSync);
+        Assert.Equal("viewer-only", SettingsMenu.FieldValue(SettingsField.ComfyPictureStripSync, new AppSettingsData(), ""));
+        Assert.Equal("both-ways", SettingsMenu.FieldValue(SettingsField.ComfyPictureStripSync, new AppSettingsData { ComfyPictureStripSync = " Both-Ways " }, ""));
+        Assert.False(SettingsMenu.IsToggle(SettingsField.ComfyPictureStripSync));
+        Assert.Equal("ComfyUI picture strip sync", SettingsMenu.FieldName(SettingsField.ComfyPictureStripSync));
+        var tab = SettingsMenu.ToolsTabFields.Single(fields => fields.Contains(SettingsField.ComfyTools)).ToList();
+        Assert.Equal(tab.IndexOf(SettingsField.ComfyPictureStrip) + 1, tab.IndexOf(SettingsField.ComfyPictureStripSync));
+
+        Assert.Equal(["viewer-only", "both-ways", "disabled"], StripSync.Names);
+        Assert.Equal(StripSync.ViewerOnly, StripSync.Resolve("sometimes"));
+        Assert.Equal(StripSync.ViewerOnly, StripSync.Resolve(null));
+        Assert.Equal(StripSync.Disabled, StripSync.Resolve("DISABLED"));
+        Assert.True(StripSync.ViewerSyncs(StripSync.ViewerOnly) && !StripSync.StripSyncs(StripSync.ViewerOnly));
+        Assert.True(StripSync.ViewerSyncs(StripSync.BothWays) && StripSync.StripSyncs(StripSync.BothWays));
+        Assert.False(StripSync.ViewerSyncs(StripSync.Disabled) || StripSync.StripSyncs(StripSync.Disabled));
+        Assert.All(StripSync.Names, name => Assert.Contains(StripSync.Describe(name), SettingsMenu.StripSyncLabel(name)));
     }
 
     /// <summary>Later still on 2026-09-24, the user's call: tips keep their lines, indented under the workflow, blank runs squeezed to one.</summary>

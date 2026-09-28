@@ -316,6 +316,55 @@ public partial class ChatScreenTests
         Assert.DoesNotContain(ComfyText.TextToImageLabel, lastIdle);
     }
 
+    /// <summary>
+    /// A double-click on the strip's 🖼️ while a picture renders (2026-09-28, the user's ask): the picture is cancelled — its
+    /// prompt deleted from ComfyUI's queue — the chat goes on, and the notice says so; nothing opens /settings.
+    /// </summary>
+    [Fact]
+    public async Task BotChat_Async_ADoubleClickOnTheRenderingGlyph_CancelsThePicture_AndTheChatGoesOn()
+    {
+        _console.Profile.Height = 40;
+        _console.Profile.Width = 240;
+        _geometry = new ScreenGeometry(() => null, () => 100);   // the hint row at 102
+        BotPicturesFixture(async: true);
+        var polled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var stub = HeldComfyServer(polled);
+        _chat.EnqueueText(DogReply);
+        _chat.EnqueueText("a dog surfing a wave");
+        _chat.EnqueueText("Ada ", "answers.");
+        bool drained = false;
+        _chat.BeforeUpdate = async (i, ct) =>
+        {
+            if (_chat.Requests.Count == 3 && i == 0)
+            {
+                // Ada answers while the picture renders: the strip's glyph double-clicked on the busy row.
+                await polled.Task.WaitAsync(TimeSpan.FromSeconds(10), CancellationToken.None);
+                _time.Advance(ScreenPane.Tick);
+                Scripted().PushClick(0, 102);         // 🖼️ at 0–1, the strip's only glyph
+                Scripted().PushClick(1, 102);
+                for (int tries = 0; tries < 500 && !drained; tries++)
+                {
+                    await Task.Delay(10, CancellationToken.None);
+                    drained = stub.Requests.ToArray().Any(r => r.Uri.AbsolutePath == "/queue");
+                }
+
+                Scripted().Push(Keys.Escape, Keys.Escape);
+                while (!ct.IsCancellationRequested)
+                {
+                    await Task.Delay(5, CancellationToken.None);
+                }
+            }
+        };
+        PushLine(Scripted(), "/botchat");
+        PushLine(Scripted(), "/exit");
+
+        string output = await RunAsync();
+
+        Assert.True(drained, "requests " + _chat.Requests.Count + "\n" + output);
+        Assert.Contains(ComfyText.Drained(1), output);
+        Assert.DoesNotContain(SettingsMenu.Title + "   General", output);   // the glyph's, never the row's /settings
+    }
+
     [Fact]
     public async Task BotChat_Autonomous_OffersTheBotsGenerateImageAlone_AndTheAppDrawsNothing()
     {

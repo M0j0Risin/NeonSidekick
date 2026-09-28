@@ -1292,6 +1292,16 @@ public sealed class AppSettingsData
     /// </summary>
     public bool ComfyPictureStrip { get; set; } = true;
 
+    /// <summary>
+    /// Whether the picture strip and the picture viewer follow each other (2026-09-28, the user's ask and name, and their
+    /// three choices): <c>viewer-only</c> (the default) — ← / →, Home / End and the picture after a double-Del in the viewer
+    /// highlight the same picture in the strip, one the strip does not hold ignored, the slide show and an arriving picture
+    /// left alone; <c>both-ways</c> — that, and ← / → on the strip move an open viewer on the strip's folder without bringing
+    /// it forward; <c>disabled</c> — neither (<see cref="Comfy.StripSync"/>). Read at each move, no reconnect. The ComfyUI
+    /// tab of <c>/tools</c>, under the strip. No variable.
+    /// </summary>
+    public string ComfyPictureStripSync { get; set; } = Comfy.StripSync.Default;
+
     public const int MinComfyMaxPicturesPerCall = 1;
     public const int MaxComfyMaxPicturesPerCall = 16;
     public const int DefaultComfyMaxPicturesPerCall = 5;

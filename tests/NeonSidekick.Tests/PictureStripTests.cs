@@ -80,6 +80,29 @@ public class PictureStripTests : IDisposable
         Assert.Equal([0, 1, 2, 2, 1, 0, -1, 0], seen);
     }
 
+    /// <summary>The viewer's keys (2026-09-28, ComfyUI picture strip sync): the newest tile with a matching id highlighted; a miss changes nothing.</summary>
+    [Fact]
+    public void Highlight_TakesTheNewestMatch_AndAMissKeepsTheHighlight()
+    {
+        Assert.False(new PictureStrip().Highlight(_ => true));
+
+        var strip = StripOf(4);   // newest first: ids 3, 2, 1, 0
+        int version = strip.Version;
+        Assert.True(strip.Highlight(id => id is 1 or 0));
+        Assert.Equal(1, strip.SelectedId);   // the newer of the two
+        Assert.Equal(2, strip.Selected);
+        Assert.True(strip.Version > version);
+
+        version = strip.Version;
+        Assert.False(strip.Highlight(id => id == 1));   // already there: no change, no redraw
+        Assert.False(strip.Highlight(id => id == 99));   // not in the strip: ignored
+        Assert.Equal(1, strip.SelectedId);
+        Assert.Equal(version, strip.Version);
+
+        Assert.True(strip.Highlight(id => id == 3));
+        Assert.Equal(0, strip.Selected);
+    }
+
     [Fact]
     public void Add_PastTheCap_DropsTheOldest()
     {

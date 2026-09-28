@@ -74,6 +74,10 @@ public sealed class SidekickApp
     private readonly Claude.IClaudeCli? _claude;
     private readonly Action<string>? _openViewer;
     private readonly Action<string>? _viewPicture;
+    private readonly Action<string>? _followViewer;
+
+    // The interactive screen while it runs (2026-09-28): the viewer's keys reach its strip through ViewerBrowsed.
+    private volatile ChatScreen? _screen;
     private readonly string _externalSkills;
     private readonly Func<int> _inputDeviceCount;
     private readonly Func<string, string, IWakeWordDetector> _wakeDetectorFactory;
@@ -148,7 +152,8 @@ public sealed class SidekickApp
         Action<string>? openViewer = null,
         Action<string>? viewPicture = null,
         ServerSamplingProbe? samplingProbe = null,
-        Func<Uri, string, HomeAssistant.HaClient>? haClient = null)
+        Func<Uri, string, HomeAssistant.HaClient>? haClient = null,
+        Action<string>? followViewer = null)
     {
         // The /sampling pane's server defaults (2026-09-28): a real HttpClient in the app, like the context probe; tests pass one over a stub.
         _samplingProbe = samplingProbe ?? new ServerSamplingProbe(new HttpClient());
@@ -156,6 +161,8 @@ public sealed class SidekickApp
         _openViewer = openViewer;
         // A double-clicked picture in that viewer (later on 2026-09-27): PictureWindow.OpenAt in the app on Windows, null in tests and elsewhere.
         _viewPicture = viewPicture;
+        // The strip's arrows moving an open viewer (2026-09-28, ComfyUI picture strip sync): PictureWindow.Follow in the app on Windows, null in tests and elsewhere.
+        _followViewer = followViewer;
         // The ComfyUI client (2026-09-24): over its own transport in the app, a stub handler in tests.
         _comfyClient = comfyClient;
         // The Home Assistant client (2026-09-28): over its own transport in the app, a stub handler in tests.
@@ -1474,24 +1481,33 @@ public sealed class SidekickApp
         // on the row and hands it back to the terminal otherwise, so the terminal's own selection
         // and right-click copy work whenever there is nothing to click into.
         var mouse = _input as WindowsConsoleInput;
-        var screen = new ChatScreen(_console, _settings, () => EffectiveSettings, OverriddenBy, session, speech, new KeySource(_input ?? _console.Input), voice, PersonaFile.OpenInEditor, RenderScreen, _time, _geometry, _clipboard, mouse is null ? null : mouse.Capture, _copyToClipboard, clipboardImage: _clipboardImage, web: _web, setTitle: _setTitle, externalSkills: _externalSkills, holdWheel: mouse is null ? null : mouse.HoldWheel, splash: SplashImages.Source, editDraft: PersonaFile.EditAndWaitAsync, mcp: mcp, environment: _environment.System, logFile: _options.LogPath is { } logPath ? Path.GetFullPath(logPath) : null, comfyClient: _comfyClient, openImage: PersonaFile.OpenImage, claude: _claude, openViewer: _openViewer, viewPicture: _viewPicture, haClient: _haClient);
+        var screen = new ChatScreen(_console, _settings, () => EffectiveSettings, OverriddenBy, session, speech, new KeySource(_input ?? _console.Input), voice, PersonaFile.OpenInEditor, RenderScreen, _time, _geometry, _clipboard, mouse is null ? null : mouse.Capture, _copyToClipboard, clipboardImage: _clipboardImage, web: _web, setTitle: _setTitle, externalSkills: _externalSkills, holdWheel: mouse is null ? null : mouse.HoldWheel, splash: SplashImages.Source, editDraft: PersonaFile.EditAndWaitAsync, mcp: mcp, environment: _environment.System, logFile: _options.LogPath is { } logPath ? Path.GetFullPath(logPath) : null, comfyClient: _comfyClient, openImage: PersonaFile.OpenImage, claude: _claude, openViewer: _openViewer, viewPicture: _viewPicture, followViewer: _followViewer, haClient: _haClient);
         if (mouse is not null)
         {
             mouse.ModeChanged = screen.FlushConsole;
         }
 
+        _screen = screen;
         try
         {
             return await screen.RunAsync(cancellationToken).ConfigureAwait(false);
         }
         finally
         {
+            _screen = null;
             if (mouse is not null)
             {
                 mouse.ModeChanged = null;
             }
         }
     }
+
+    /// <summary>
+    /// The picture the viewer's keys moved to (2026-09-28, <see cref="Viewer.PictureWindow.Browsed"/>, which <c>Program</c> points
+    /// here): handed to the running screen's strip (<see cref="ChatScreen.ViewerBrowsed"/>); nothing outside the interactive
+    /// screen. Any thread.
+    /// </summary>
+    public void ViewerBrowsed(string path) => _screen?.ViewerBrowsed(path);
 
     /// <summary>
     /// The flag or variable that outranks the saved value of <paramref name="field"/> this launch,

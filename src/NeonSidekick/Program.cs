@@ -142,10 +142,12 @@ Console.CancelKeyPress += (_, e) =>
 var geometry = ScreenGeometry.ForConsole();
 bool interactive = !options.Headless && !options.Smoke && !options.AudioCheck && !options.VoiceCheck;
 using var consoleInput = interactive && geometry is not null ? WindowsConsoleInput.TryCreate() : null;
-var app = new SidekickApp(console, settings, environment, geometry: geometry, input: consoleInput, clipboard: WindowsClipboard.TryReadText, copyToClipboard: WindowsClipboard.TrySetText, clipboardImage: WindowsClipboard.TryReadImage, setTitle: title => ConsoleTitle.TrySet(title), openViewer: NeonSidekick.Viewer.PictureWindow.IsAvailable ? NeonSidekick.Viewer.PictureWindow.Open : null, viewPicture: NeonSidekick.Viewer.PictureWindow.IsAvailable ? NeonSidekick.Viewer.PictureWindow.OpenAt : null);
+var app = new SidekickApp(console, settings, environment, geometry: geometry, input: consoleInput, clipboard: WindowsClipboard.TryReadText, copyToClipboard: WindowsClipboard.TrySetText, clipboardImage: WindowsClipboard.TryReadImage, setTitle: title => ConsoleTitle.TrySet(title), openViewer: NeonSidekick.Viewer.PictureWindow.IsAvailable ? NeonSidekick.Viewer.PictureWindow.Open : null, viewPicture: NeonSidekick.Viewer.PictureWindow.IsAvailable ? NeonSidekick.Viewer.PictureWindow.OpenAt : null, followViewer: NeonSidekick.Viewer.PictureWindow.IsAvailable ? NeonSidekick.Viewer.PictureWindow.Follow : null);
 
 // The viewer's Themed image viewer switch (later on 2026-09-27), read from the effective settings on the viewer's thread.
 NeonSidekick.Viewer.PictureWindow.Themed = () => app.EffectiveSettings.ThemedViewer;
+// The viewer's keys highlight the same picture in the strip (2026-09-28, ComfyUI picture strip sync).
+NeonSidekick.Viewer.PictureWindow.Browsed = app.ViewerBrowsed;
 int exitCode;
 try
 {

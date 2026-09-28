@@ -80,7 +80,7 @@ Commands typed while a reply runs:
 | Everything else | Waits for the reply to end, queued behind any earlier messages (so *Queue cancel mode* applies) |
 
 **Double-Click Shortcuts**
-* **Hint row:** model name → `/server` (server, then model, then reasoning) · reasoning glyph → `/reasoning` · tokens/spinner → `/usage` · queued count → `/queue` · blank space → `/settings`.
+* **Hint row:** model name → `/server` (server, then model, then reasoning) · reasoning glyph → `/reasoning` · tokens/spinner → `/usage` · 🖼️/🎨 and its timer while ComfyUI renders → cancel the pictures (the reply goes on; ESC still ends it) · queued count → `/queue` · blank space → `/settings`.
 * **Toolbar** (*Show toolbar*): a glyph toggles its pane, or switches to it from another pane.
 
 | Toolbar item | Shown | Opens |
@@ -451,6 +451,7 @@ The services that run without asking under `ask` can be changed in `profile.json
 | ComfyUI reinforce negatives | When the model writes the prompt, it also adds a few opposite tags where the image model tends to drift (a solo figure → `multiple girls`, night → `daylight`) to the workflow's negative. Skipped for a verbatim prompt, a negative set for the call, `/imagine`, families without a negative (Flux, FLUX.2, Klein, Krea 2, Z-Image, Ernie Turbo, Boogu, Ideogram 4) and a workflow whose `.md` says `reinforce: false`. | on |
 | ComfyUI show prompts | Shows what was sent under each picture: the `prompt:`, the `negative:` and a `params:` line (size, steps, cfg, denoise, seed, sampler, scheduler). Off, only the picture's line. The model sees the same either way. | on |
 | ComfyUI picture strip | Keeps the session's ComfyUI pictures as thumbnails in a strip over the input line, newest at the left. With the input line empty, ←/→ highlight one and Enter opens it, a reply running or not; a double-click opens any. The strip's **🖼 viewer** button opens the [picture viewer](#picture-viewer) on the output folder. `/clear`, `/new` and a session switch empty it; it hides while a menu is open or the window is too short. | on |
+| ComfyUI picture strip sync | Whether the strip and the [picture viewer](#picture-viewer) follow each other. `viewer-only`: browsing in the viewer (←/→, Home/End, the next picture after a delete) highlights the same picture in the strip; a picture the strip doesn't hold is ignored, and the slide show and newly arriving pictures leave the strip alone. `both-ways`: that, plus ←/→ on the strip move an open viewer on the strip's folder without bringing it to the front. `disabled`: neither. | `viewer-only` |
 | ComfyUI output folder | The folder under the working directory the pictures are saved in (`comfy_images\pony-txt2img-1234.png`); empty = the working directory itself. | `comfy_images` |
 
 #### SQL
@@ -723,6 +724,8 @@ A picture window (Windows only; elsewhere the app registered for the file opens 
 | Esc | Stop the slide show, then leave full screen, then close |
 
 The window follows the theme unless *Themed image viewer* is off: a dark title bar in the theme's colours with an accent edge on Windows 11 (Windows 10 gets a plain dark bar), and the theme's background. A `/theme` change reaches an open viewer the next time it is focused. There is one window per app, and it closes with the app.
+
+Browsing in the viewer highlights the same picture in the ComfyUI picture strip, and with `both-ways` the strip's arrows move the viewer too; see *ComfyUI picture strip sync*.
 
 #### Profiles
 

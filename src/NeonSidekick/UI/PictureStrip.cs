@@ -127,6 +127,29 @@ public sealed class PictureStrip
     }
 
     /// <summary>
+    /// The newest picture whose id <paramref name="isId"/> takes highlighted (2026-09-28, the viewer's keys under <c>ComfyUI
+    /// picture strip sync</c>: one file can be registered more than once, so the screen passes every id it has for it). True
+    /// when the highlight moved; with no match false and the highlight left where it was (the user's call: a picture the
+    /// strip does not hold is ignored).
+    /// </summary>
+    public bool Highlight(Func<int, bool> isId)
+    {
+        ArgumentNullException.ThrowIfNull(isId);
+        lock (_gate)
+        {
+            int index = _entries.FindIndex(e => isId(e.Id));
+            if (index < 0 || index == _selected)
+            {
+                return false;
+            }
+
+            _selected = index;
+            _version++;
+            return true;
+        }
+    }
+
+    /// <summary>
     /// The tiles drawn in <paramref name="cells"/>: the first index and how many, from a window that started at
     /// <paramref name="first"/>. The highlighted one (<paramref name="selected"/>, −1 for none) is kept whole, the window
     /// moving the least it must; a window whose tail would all fit from an earlier start moves back (a wider window, a
