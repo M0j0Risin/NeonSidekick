@@ -953,7 +953,7 @@ public class AppSettingsTests : IDisposable
     }
 
     [Fact]
-    public async Task ResetProfile_TheLoadedOne_FlushesThenLoadsTheDefaults_AndRaisesChanged()
+    public async Task ResetProfile_TheLoadedOne_All_FlushesThenLoadsTheDefaults_AndRaisesChanged()
     {
         Profiles.Create(_dir, "work", new AppSettingsData { LlmModel = "work-model" });
         using var settings = new AppSettings(_dir);
@@ -963,7 +963,7 @@ public class AppSettingsTests : IDisposable
         var seen = new List<AppSettingsData>();
         settings.Changed += seen.Add;
 
-        await settings.ResetProfileAsync("WORK");
+        await settings.ResetProfileAsync("WORK", all: true);
 
         Assert.Equal("work", settings.ProfileName);
         AssertSame(new AppSettingsData(), settings.Current);
@@ -1020,9 +1020,30 @@ public class AppSettingsTests : IDisposable
     }
 
     [Fact]
+    public async Task ResetProfile_TheLoadedOne_KeepsItsCurrentUrlsPathsAndKeys()
+    {
+        // 2026-09-27: a plain reset keeps Profiles.ResetKeptSettings — the pending save's values, since the flush comes first.
+        Profiles.Create(_dir, "work", new AppSettingsData { LlmModel = "work-model", TtsSpeed = 1.4 });
+        using var settings = new AppSettings(_dir);
+        await settings.SwitchProfileAsync("work");
+        settings.Update(d => { d.LlmModel = "work-2"; d.LlmUrl = "http://llm:1234/v1"; d.ObsidianVault = @"D:\Vault"; });
+        var seen = new List<AppSettingsData>();
+        settings.Changed += seen.Add;
+
+        await settings.ResetProfileAsync("work");
+
+        Assert.Equal("work-2", settings.Current.LlmModel);
+        Assert.Equal("http://llm:1234/v1", settings.Current.LlmUrl);
+        Assert.Equal(@"D:\Vault", settings.Current.ObsidianVault);
+        Assert.Equal(new AppSettingsData().TtsSpeed, settings.Current.TtsSpeed);
+        Assert.Equal("work-2", Assert.Single(seen).LlmModel);
+        Assert.Equal("work-2", Profiles.ReadProfileFile(Profiles.ProfileFile(_dir, "work")).LlmModel);
+    }
+
+    [Fact]
     public async Task ResetProfile_AnotherOne_LeavesTheLoadedDataAlone()
     {
-        Profiles.Create(_dir, "work", new AppSettingsData { LlmModel = "work-model" });
+        Profiles.Create(_dir, "work", new AppSettingsData { LlmModel = "work-model", TtsSpeed = 1.4 });
         File.WriteAllText(Path.Combine(Profiles.Directory(_dir, "work"), "memory.json"), "[]");
         using var settings = new AppSettings(_dir);
         settings.Update(d => d.LlmModel = "default-model");
@@ -1035,7 +1056,9 @@ public class AppSettingsTests : IDisposable
         Assert.Equal(0, changes);
         Assert.Equal(Profiles.DefaultName, settings.ProfileName);
         Assert.Equal("default-model", settings.Current.LlmModel);
-        Assert.DoesNotContain("work-model", File.ReadAllText(Profiles.ProfileFile(_dir, "work")));
+        var work = Profiles.ReadProfileFile(Profiles.ProfileFile(_dir, "work"));
+        Assert.Equal("work-model", work.LlmModel);   // kept (2026-09-27)
+        Assert.Equal(new AppSettingsData().TtsSpeed, work.TtsSpeed);
         await settings.FlushAsync();
         Assert.Contains("default-model", File.ReadAllText(Profiles.ProfileFile(_dir, Profiles.DefaultName)));
     }

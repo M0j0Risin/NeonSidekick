@@ -6013,9 +6013,14 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("Could not delete the profile: why", ChatScreen.ProfileDeleteFailedError("why"));
         Assert.Equal("🪪 Delete profile \"x\" and everything in it (settings, memories, persona, operating rules, voice directive, MCP servers, sessions)?", ChatScreen.DeleteProfilePrompt("x"));
         // 2026-09-20, the user's wording: a reset takes the settings alone back, the notice names nothing else.
-        Assert.Equal("🪪 Reset profile \"x\" to the default settings?", ChatScreen.ResetProfilePrompt("x"));
-        Assert.Equal("(🪪 reset profile \"x\" to the defaults; conversation cleared)", ChatScreen.ProfileResetNotice("x", loaded: true));
-        Assert.Equal("(🪪 reset profile \"x\" to the defaults)", ChatScreen.ProfileResetNotice("x", loaded: false));
+        // 2026-09-27: a plain reset keeps the URLs, paths and keys and says so; --all is the old wording.
+        Assert.Equal("🪪 Reset profile \"x\" to the default settings (keeping its URLs, paths and keys)?", ChatScreen.ResetProfilePrompt("x"));
+        Assert.Equal("🪪 Reset profile \"x\" to the default settings?", ChatScreen.ResetProfilePrompt("x", all: true));
+        Assert.Equal("(🪪 reset profile \"x\" to the defaults; URLs, paths and keys kept; conversation cleared)", ChatScreen.ProfileResetNotice("x", loaded: true));
+        Assert.Equal("(🪪 reset profile \"x\" to the defaults; URLs, paths and keys kept)", ChatScreen.ProfileResetNotice("x", loaded: false));
+        Assert.Equal("(🪪 reset profile \"x\" to the defaults; conversation cleared)", ChatScreen.ProfileResetNotice("x", loaded: true, all: true));
+        Assert.Equal("(🪪 reset profile \"x\" to the defaults)", ChatScreen.ProfileResetNotice("x", loaded: false, all: true));
+        Assert.Equal("--all", ChatScreen.ResetAllFlag);
         Assert.Equal("Could not reset the profile: why", ChatScreen.ProfileResetFailedError("why"));
         Assert.Equal("(🪪 renamed profile \"x\" to \"y\")", ChatScreen.ProfileRenamedNotice("x", "y"));
         Assert.Equal("Could not rename the profile: why", ChatScreen.ProfileRenameFailedError("why"));
@@ -6051,6 +6056,24 @@ public partial class ChatScreenTests : IDisposable
     public void ParseProfileArgs_IsPinned(string args, ProfileActionKind kind, string name, string newName = "")
     {
         Assert.Equal(new ProfileAction(kind, name, newName), ChatScreen.ParseProfileArgs(args));
+    }
+
+    [Theory]
+    [InlineData("reset --all", ProfileActionKind.Reset, "", true)]
+    [InlineData("reset work --all", ProfileActionKind.Reset, "work", true)]
+    [InlineData("reset --all work", ProfileActionKind.Reset, "work", true)]
+    [InlineData("RESET\tWORK --ALL", ProfileActionKind.Reset, "WORK", true)]
+    [InlineData("--all reset", ProfileActionKind.Reset, "", true)]
+    [InlineData("reset --all --all", ProfileActionKind.Invalid, "", false)]
+    [InlineData("reset a b --all", ProfileActionKind.Invalid, "", false)]
+    [InlineData("add x --all", ProfileActionKind.Invalid, "", false)]
+    [InlineData("delete work --all", ProfileActionKind.Invalid, "", false)]
+    [InlineData("--all", ProfileActionKind.Invalid, "", false)]
+    [InlineData("work --all", ProfileActionKind.Invalid, "", false)]
+    public void ParseProfileArgs_ResetAll_IsPinned(string args, ProfileActionKind kind, string name, bool all)
+    {
+        // --all belongs to reset alone (2026-09-27).
+        Assert.Equal(new ProfileAction(kind, name, All: all), ChatScreen.ParseProfileArgs(args));
     }
 
     [Theory]
@@ -7216,8 +7239,9 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("  · " + ChatScreen.ProfileResetNotice("work", loaded: true), output);
         Assert.Equal(1, output.Split("  · " + SettingsMenu.SwitchedNotice("work")).Length - 1);   // the switch's line, not the reset's
         Assert.Equal("work", _settings.ProfileName);
-        // The profile is at the defaults on disk and in the store; the sandbox untouched.
-        Assert.Equal("", _settings.Current.LlmModel);
+        // The profile is at the defaults on disk and in the store — but the model, one of the kept settings (2026-09-27); the sandbox untouched.
+        Assert.Equal("work-model", _settings.Current.LlmModel);
+        Assert.Equal("work-model", Profiles.ReadProfileFile(Profiles.ProfileFile(_dir, "work")).LlmModel);
         Assert.True(_settings.Current.TtsOutput == new AppSettingsData().TtsOutput);
         Assert.Equal(new[] { McpConfigFile.FileName, MemoryStore.FileName, OperataFile.FileName, PersonaFile.FileName, Profiles.FileName, SessionStore.FileName, VocaliaFile.FileName }, Directory.GetFiles(ProfileDir("work")).Select(Path.GetFileName).Order(StringComparer.Ordinal));   // the session store stays through a reset (2026-09-18), every sidekick file too (2026-09-20)
         Assert.Equal(new[] { "They like tea." }, new MemoryStore(ProfileDir("work")).Snapshot());
@@ -7262,7 +7286,9 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(Profiles.SidekickFiles.Append(Profiles.FileName).Order(StringComparer.Ordinal), Directory.GetFiles(ProfileDir("work")).Select(Path.GetFileName).Order(StringComparer.Ordinal));   // every sidekick file stays (2026-09-20)
         Assert.Equal("You are Rex.", File.ReadAllText(Path.Combine(ProfileDir("work"), PersonaFile.FileName)));
         Assert.Equal(new[] { "They like tea." }, new MemoryStore(ProfileDir("work")).Snapshot());
-        Assert.DoesNotContain("work-model", File.ReadAllText(Profiles.ProfileFile(_dir, "work")));
+        var reset = Profiles.ReadProfileFile(Profiles.ProfileFile(_dir, "work"));
+        Assert.Equal("work-model", reset.LlmModel);   // kept (2026-09-27)
+        Assert.Equal(new AppSettingsData().SessionNamingMode, reset.SessionNamingMode);   // the rest back to the defaults
         // The conversation carried on: the second request still holds the first exchange.
         Assert.Equal(2, _chat.Requests.Count);
         Assert.Contains(_chat.Requests[1], m => m.Role == ChatRole.User && m.Text == "hi");
@@ -7303,7 +7329,32 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains(SettingsMenu.PromptTitle(ChatScreen.ResetProfilePrompt(Profiles.DefaultName), SettingsMenu.ConfirmKeys), output);
         Assert.Contains("  · " + ChatScreen.ProfileResetNotice(Profiles.DefaultName, loaded: true), output);
         Assert.Equal(Profiles.DefaultName, _settings.ProfileName);
-        Assert.Equal("", _settings.Current.LlmModel);
+        Assert.Equal("default-model", _settings.Current.LlmModel);   // kept by a plain reset (2026-09-27)
+    }
+
+    [Fact]
+    public async Task Profile_Reset_All_ResetsTheKeptSettingsToo()
+    {
+        _settings.Update(d => { d.LlmModel = "default-model"; d.LlmUrl = "http://llm:1234/v1"; d.ComfyUrl = "http://comfy:8188"; d.ShowToolbar = !new AppSettingsData().ShowToolbar; });
+        WorkProfile();
+        PushLine("/profile reset work --all");   // another profile, disk only
+        PickYes();
+        PushLine("/profile reset --all");        // the loaded one
+        PickYes();
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains(SettingsMenu.PromptTitle(ChatScreen.ResetProfilePrompt("work", all: true), SettingsMenu.ConfirmKeys), output);
+        Assert.Contains("  · " + ChatScreen.ProfileResetNotice("work", loaded: false, all: true), output);
+        Assert.Contains(SettingsMenu.PromptTitle(ChatScreen.ResetProfilePrompt(Profiles.DefaultName, all: true), SettingsMenu.ConfirmKeys), output);
+        Assert.Contains("  · " + ChatScreen.ProfileResetNotice(Profiles.DefaultName, loaded: true, all: true), output);
+        Assert.Equal("", Profiles.ReadProfileFile(Profiles.ProfileFile(_dir, "work")).LlmModel);
+        var defaults = new AppSettingsData();
+        Assert.Equal(defaults.LlmModel, _settings.Current.LlmModel);
+        Assert.Equal(defaults.LlmUrl, _settings.Current.LlmUrl);
+        Assert.Equal(defaults.ComfyUrl, _settings.Current.ComfyUrl);
+        Assert.Equal(defaults.ShowToolbar, _settings.Current.ShowToolbar);
     }
 
     // ── /memory copy (2026-09-17 as /memcopy, the word folded in 2026-09-22) ─
@@ -17454,8 +17505,11 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(["rename chef", "rename work"], Texts(ChatScreen.ArgumentItems("/profile", "rename ", Sources(loaded: "work"))));
         Assert.Empty(ChatScreen.ArgumentItems("/profile", "rename d", sources));
         Assert.Equal(["reset chef"], Texts(ChatScreen.ArgumentItems("/profile", "reset c", sources)));
-        Assert.Equal(["reset chef", "reset default", "reset work"], Texts(ChatScreen.ArgumentItems("/profile", "reset ", sources)));   // default loaded: it may reset itself
-        Assert.Equal(["reset chef", "reset work"], Texts(ChatScreen.ArgumentItems("/profile", "reset ", Sources(loaded: "work"))));   // but not from another profile (2026-09-22)
+        Assert.Equal(["reset --all", "reset chef", "reset default", "reset work"], Texts(ChatScreen.ArgumentItems("/profile", "reset ", sources)));   // default loaded: it may reset itself; --all first (2026-09-27)
+        Assert.Equal(["reset --all", "reset chef", "reset work"], Texts(ChatScreen.ArgumentItems("/profile", "reset ", Sources(loaded: "work"))));   // but not from another profile (2026-09-22)
+        Assert.Equal([new CompletionItem("reset --all", ChatScreen.ResetAllNote)], ChatScreen.ArgumentItems("/profile", "reset -", sources));
+        Assert.Equal(["reset chef --all"], Texts(ChatScreen.ArgumentItems("/profile", "reset chef ", sources)));   // after a name once it is typed with its space
+        Assert.Empty(ChatScreen.ArgumentItems("/profile", "reset default ", Sources(loaded: "work")));
         Assert.Equal(["delete chef", "delete work"], Texts(ChatScreen.ArgumentItems("/profile", "delete ", Sources(loaded: "work"))));   // delete never lists it (2026-09-22)
         Assert.Empty(ChatScreen.ArgumentItems("/profile", "add ", sources));          // a new name is free text
         Assert.Empty(ChatScreen.ArgumentItems("/profile", "edit ", sources));         // edit and reload take nothing

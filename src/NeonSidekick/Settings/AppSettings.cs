@@ -312,9 +312,11 @@ public sealed class AppSettings : IDisposable
     /// bring the old values back — and the defaults then replace the data in place, with
     /// <see cref="Changed"/> firing on the new snapshot; another profile is disk only. The pointer
     /// is untouched. <paramref name="name"/> must be a listed profile (<see cref="Profiles.Resolve"/>);
-    /// an unknown one throws <see cref="ArgumentException"/>.
+    /// an unknown one throws <see cref="ArgumentException"/>. <paramref name="all"/> resets
+    /// <see cref="Profiles.ResetKeptSettings"/> too (2026-09-27; the flush first is what lets a plain
+    /// reset keep the loaded profile's current values).
     /// </summary>
-    public async Task ResetProfileAsync(string name)
+    public async Task ResetProfileAsync(string name, bool all = false)
     {
         string resolved = Profiles.Resolve(StorageDirectory, name)
             ?? throw new ArgumentException($"No profile named \"{name}\".", nameof(name));
@@ -325,7 +327,7 @@ public sealed class AppSettings : IDisposable
             await FlushAsync().ConfigureAwait(false);
         }
 
-        Profiles.Reset(StorageDirectory, resolved);
+        Profiles.Reset(StorageDirectory, resolved, all);
         if (!loaded)
         {
             DiagnosticLog.Info(Category, $"Reset profile \"{resolved}\".");

@@ -1,3 +1,4 @@
+using System.Text.Json;
 using NeonSidekick.Llm;
 using NeonSidekick.Mcp;
 using NeonSidekick.Memory;
@@ -260,7 +261,7 @@ public class ProfilesTests : IDisposable
     [Fact]
     public void Reset_WritesTheDefaults_KeepsEverySidekickFile_AndTheSandbox()
     {
-        Profiles.Create(_dir, "work", new AppSettingsData { LlmModel = "work-model", WorkingDirectory = @"C:\elsewhere", TtsOutput = true });
+        Profiles.Create(_dir, "work", new AppSettingsData { WorkingDirectory = @"C:\elsewhere", TtsOutput = true });
         string dir = Profiles.Directory(_dir, "work");
         new MemoryStore(dir).Add("They like tea.");
         File.WriteAllText(Path.Combine(dir, PersonaFile.FileName), "You are Rex.");
@@ -286,6 +287,57 @@ public class ProfilesTests : IDisposable
         Assert.Contains("\"TtsOutput\": false", json);
         Assert.Equal("kept", File.ReadAllText(Path.Combine(dir, "files", "notes.txt")));
         Assert.Equal("kept too", File.ReadAllText(Path.Combine(dir, "files", ".trash", "old.txt")));
+    }
+
+    [Fact]
+    public void Reset_KeepsTheUrlsPathsAndKeys_UnlessAll()
+    {
+        // 2026-09-27, the user's call: the ten settings that describe this machine survive a plain reset; --all takes them too.
+        var mine = new AppSettingsData
+        {
+            LlmUrl = "http://llm:1234/v1",
+            LlmModel = "work-model",
+            TtsHttpUrl = "http://tts:8880/v1",
+            ClaudeApiKey = "dpapi:abc",
+            WebBrowserPath = @"C:\Chrome\chrome.exe",
+            WebSearchMethod = "searxng",
+            WebSearxngUrl = "http://searx:8080",
+            ClaudeExecutable = @"C:\bin\claude.exe",
+            ObsidianVault = @"D:\Vault",
+            ComfyUrl = "http://comfy:8188",
+            LlmApiKey = "not-kept",
+            TtsOutput = !new AppSettingsData().TtsOutput,
+            WorkingDirectory = @"C:\elsewhere",
+        };
+        Profiles.Create(_dir, "work", mine);
+        string file = Profiles.ProfileFile(_dir, "work");
+
+        Profiles.Reset(_dir, "work");
+
+        var kept = Profiles.ReadProfileFile(file);
+        var expected = new AppSettingsData();
+        Profiles.KeepOnReset(mine, expected);
+        Assert.Equal(JsonSerializer.Serialize(expected, SettingsJsonContext.Default.AppSettingsData), JsonSerializer.Serialize(kept, SettingsJsonContext.Default.AppSettingsData));
+        Assert.Equal("http://comfy:8188", kept.ComfyUrl);
+        Assert.Equal("dpapi:abc", kept.ClaudeApiKey);   // as stored
+        Assert.Equal(new AppSettingsData().LlmApiKey, kept.LlmApiKey);   // not on the list
+        Assert.Equal("", kept.WorkingDirectory);
+        Assert.Equal(10, Profiles.ResetKeptSettings.Length);
+
+        Profiles.Create(_dir, "home", mine);
+        Profiles.Reset(_dir, "home", all: true);
+        Assert.Equal(JsonSerializer.Serialize(new AppSettingsData(), SettingsJsonContext.Default.AppSettingsData), File.ReadAllText(Profiles.ProfileFile(_dir, "home")));
+    }
+
+    [Fact]
+    public void Reset_ACorruptFile_GoesToTheDefaultsWhole()
+    {
+        Directory.CreateDirectory(Profiles.Directory(_dir, "work"));
+        File.WriteAllText(Profiles.ProfileFile(_dir, "work"), "{ not json");
+
+        Profiles.Reset(_dir, "work");
+
+        Assert.Equal(JsonSerializer.Serialize(new AppSettingsData(), SettingsJsonContext.Default.AppSettingsData), File.ReadAllText(Profiles.ProfileFile(_dir, "work")));
     }
 
     [Fact]

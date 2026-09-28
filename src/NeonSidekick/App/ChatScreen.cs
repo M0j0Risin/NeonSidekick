@@ -69,8 +69,8 @@ public enum ProfileActionKind
     Invalid,
 }
 
-/// <summary>The parsed <c>/profile</c> argument; <paramref name="NewName"/> is set by <see cref="ProfileActionKind.Rename"/> alone.</summary>
-public readonly record struct ProfileAction(ProfileActionKind Kind, string Name, string NewName = "");
+/// <summary>The parsed <c>/profile</c> argument; <paramref name="NewName"/> is set by <see cref="ProfileActionKind.Rename"/> alone, <paramref name="All"/> by <c>reset --all</c> alone (2026-09-27).</summary>
+public readonly record struct ProfileAction(ProfileActionKind Kind, string Name, string NewName = "", bool All = false);
 
 /// <summary>What a <c>/gituser</c> argument asks for (2026-09-21; <c>/git</c>'s until 2026-09-26). Top-level like <see cref="ProfileActionKind"/>, so the test project can pin the grammar.</summary>
 public enum GitActionKind
@@ -2754,7 +2754,7 @@ internal sealed partial class ChatScreen
         new("edit", "open this profile's profile.json in your editor: /profile edit"),
         new("reload", "read this profile's profile.json back from disk: /profile reload"),
         new("rename", "rename a profile: /profile rename <name> <new-name>"),
-        new("reset", "reset a profile to the defaults: /profile reset [name]"),
+        new("reset", "reset a profile to the defaults, keeping URLs, paths and keys: /profile reset [name] [--all]"),
     ];
 
     /// <summary>The notes on a profile name on the <c>/profile</c> list. Pinned.</summary>
@@ -2896,8 +2896,19 @@ internal sealed partial class ChatScreen
                             ResetWord => Profiles.ResetRefusal(name, sources.LoadedProfile) is null,
                             "delete" or "rename" => !Profiles.IsDefault(name),
                             _ => true,
-                        });
-                        return MentionCompleter.Matches(names.Select(name => new CompletionItem(verb.Text + " " + name, ProfileNote(name, sources.LoadedProfile))).ToList(), argText);
+                        }).ToList();
+                        var choices = names.Select(name => new CompletionItem(verb.Text + " " + name, ProfileNote(name, sources.LoadedProfile))).ToList();
+                        if (verb.Text == ResetWord)
+                        {
+                            // --all (2026-09-27): first, on its own, for the loaded profile; after a name once
+                            // that name is typed with its space, so the names' list is not doubled.
+                            choices.Insert(0, new(ResetWord + " " + ResetAllFlag, ResetAllNote));
+                            choices.AddRange(names
+                                .Where(name => argText.StartsWith(ResetWord + " " + name + " ", StringComparison.OrdinalIgnoreCase))
+                                .Select(name => new CompletionItem(ResetWord + " " + name + " " + ResetAllFlag, ResetAllNote)));
+                        }
+
+                        return MentionCompleter.Matches(choices, argText);
                     }
                 }
 
@@ -6232,11 +6243,22 @@ internal sealed partial class ChatScreen
     /// profile (an empty name); <c>rename &lt;name&gt; &lt;new-name&gt;</c> ⇒ rename (the only three-token
     /// form; <c>rename</c> with fewer is invalid, never a switch — it is a reserved word); one other
     /// token ⇒ switch; anything else ⇒ invalid. The names are not validated here (the handler says
-    /// why one is refused).
+    /// why one is refused). <see cref="ResetAllFlag"/> (any case, before or after the name) belongs to
+    /// <c>reset</c> alone (2026-09-27): it sets <see cref="ProfileAction.All"/>; after any other verb,
+    /// or twice, the line is invalid.
     /// </summary>
     public static ProfileAction ParseProfileArgs(string args)
     {
         var tokens = (args ?? "").Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
+        int flags = tokens.Count(token => token.Equals(ResetAllFlag, StringComparison.OrdinalIgnoreCase));
+        if (flags > 0)
+        {
+            var rest = tokens.Where(token => !token.Equals(ResetAllFlag, StringComparison.OrdinalIgnoreCase)).ToArray();
+            return flags == 1 && rest.Length is 1 or 2 && rest[0].Equals("reset", StringComparison.OrdinalIgnoreCase)
+                ? new(ProfileActionKind.Reset, rest.Length == 2 ? rest[1] : "", All: true)
+                : new(ProfileActionKind.Invalid, "");
+        }
+
         switch (tokens.Length)
         {
             case 0:
@@ -6360,15 +6382,20 @@ internal sealed partial class ChatScreen
     /// rules and voice directive stay, and the line no longer lists them); <c>y</c> or <c>yes</c>
     /// resets, anything else keeps. Pinned.
     /// </summary>
-    public static string ResetProfilePrompt(string name) =>
-        $"{NoticeGlyphs.Profile}Reset profile \"{name}\" to the default settings?";
+    /// <remarks>2026-09-27: a plain reset says what it keeps (<see cref="Profiles.ResetKeptSettings"/>); <c>--all</c> asks the old line.</remarks>
+    public static string ResetProfilePrompt(string name, bool all = false) =>
+        $"{NoticeGlyphs.Profile}Reset profile \"{name}\" to the default settings{(all ? "" : " (keeping its URLs, paths and keys)")}?";
 
     /// <summary>
     /// The notice after a reset, the user's wording (2026-09-20): <c>; conversation cleared</c> when it
     /// was the loaded profile (the reset is a switch in all but the name). Pinned.
     /// </summary>
-    public static string ProfileResetNotice(string name, bool loaded) =>
-        $"({NoticeGlyphs.Profile}reset profile \"{name}\" to the defaults{(loaded ? "; conversation cleared" : "")})";
+    public static string ProfileResetNotice(string name, bool loaded, bool all = false) =>
+        $"({NoticeGlyphs.Profile}reset profile \"{name}\" to the defaults{(all ? "" : "; URLs, paths and keys kept")}{(loaded ? "; conversation cleared" : "")})";
+
+    /// <summary><c>/profile reset --all</c> (2026-09-27): the flag, and its note on the argument list. Pinned.</summary>
+    public const string ResetAllFlag = "--all";
+    public const string ResetAllNote = "reset the URLs, paths and keys too";
 
     public static string ProfileResetFailedError(string detail) => $"Could not reset the profile: {detail}";
 
@@ -8585,7 +8612,7 @@ internal sealed partial class ChatScreen
                     return;
 
                 case ProfileActionKind.Reset:
-                    await ResetProfileAsync(action.Name, cancellationToken).ConfigureAwait(false);
+                    await ResetProfileAsync(action.Name, action.All, cancellationToken).ConfigureAwait(false);
                     return;
 
                 case ProfileActionKind.Rename:
@@ -8724,9 +8751,11 @@ internal sealed partial class ChatScreen
     /// through the store (<see cref="AppSettings.ResetProfileAsync"/>: the pending save flushed first
     /// when it is the loaded one, then the defaults reloaded). The loaded profile then takes the
     /// switch's tail — rebind, a cleared conversation, a fresh screen, the reconnects — under the
-    /// reset notice; another profile is disk only, its notice alone.
+    /// reset notice; another profile is disk only, its notice alone. <paramref name="all"/>
+    /// (<c>--all</c>, 2026-09-27) resets <see cref="Profiles.ResetKeptSettings"/> too; the prompt and
+    /// the notice say which it was.
     /// </summary>
-    private async Task ResetProfileAsync(string name, CancellationToken cancellationToken)
+    private async Task ResetProfileAsync(string name, bool all, CancellationToken cancellationToken)
     {
         string home = _settings.StorageDirectory;
         string target;
@@ -8750,7 +8779,7 @@ internal sealed partial class ChatScreen
             return;
         }
 
-        if (!await ConfirmAsync(ResetProfilePrompt(target), cancellationToken).ConfigureAwait(false))
+        if (!await ConfirmAsync(ResetProfilePrompt(target, all), cancellationToken).ConfigureAwait(false))
         {
             _transcript.Notice(KeptNotice);
             return;
@@ -8758,7 +8787,7 @@ internal sealed partial class ChatScreen
 
         try
         {
-            await _settings.ResetProfileAsync(target).ConfigureAwait(false);
+            await _settings.ResetProfileAsync(target, all).ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -8769,11 +8798,11 @@ internal sealed partial class ChatScreen
         bool loaded = Profiles.NameEquals(target, _settings.ProfileName);
         if (loaded)
         {
-            await AfterProfileSwitchAsync(cancellationToken, notice: ProfileResetNotice(target, loaded: true)).ConfigureAwait(false);
+            await AfterProfileSwitchAsync(cancellationToken, notice: ProfileResetNotice(target, loaded: true, all)).ConfigureAwait(false);
         }
         else
         {
-            _transcript.Notice(ProfileResetNotice(target, loaded: false));
+            _transcript.Notice(ProfileResetNotice(target, loaded: false, all));
         }
     }
 

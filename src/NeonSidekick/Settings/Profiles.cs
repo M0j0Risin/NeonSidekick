@@ -338,9 +338,12 @@ public static class Profiles
     /// of <see cref="SidekickFiles"/> went until then). No guard: <c>default</c> may be reset, and the
     /// caller asks the user first. The loaded profile is reset through
     /// <c>AppSettings.ResetProfileAsync</c>, which flushes its pending save first and reloads.
+    /// Since 2026-09-27 (the user's call) the settings that name the user's own setup —
+    /// <see cref="ResetKeptSettings"/>, read back from the file there — survive it unless
+    /// <paramref name="all"/> (<c>/profile reset --all</c>) asks for everything.
     /// Throws <see cref="IOException"/> / <see cref="UnauthorizedAccessException"/>; the caller reports.
     /// </summary>
-    public static void Reset(string home, string name)
+    public static void Reset(string home, string name, bool all = false)
     {
         if (!IsValidName(name))
         {
@@ -349,7 +352,57 @@ public static class Profiles
 
         string dir = Directory(home, name);
         System.IO.Directory.CreateDirectory(dir);
-        WriteProfileFile(ProfileFile(home, name), new AppSettingsData());
+        string path = ProfileFile(home, name);
+        var data = new AppSettingsData();
+        if (!all)
+        {
+            try
+            {
+                KeepOnReset(ReadProfileFile(path), data);
+            }
+            catch (JsonException ex)
+            {
+                // A file that will not parse is what a reset cures: nothing to keep, the defaults whole.
+                DiagnosticLog.Warn(Category, $"Reset profile \"{name}\": profile.json did not parse ({ex.Message}); nothing kept.");
+            }
+        }
+
+        WriteProfileFile(path, data);
+    }
+
+    /// <summary>
+    /// What a plain <c>/profile reset</c> keeps (2026-09-27, the user's call): the servers, paths and
+    /// key that describe this machine rather than a taste — a reset that took the LLM's URL and model
+    /// back to empty left the sidekick unable to answer. <c>--all</c> resets them too. The property
+    /// names, in <see cref="KeepOnReset"/>'s order.
+    /// </summary>
+    public static readonly string[] ResetKeptSettings =
+    {
+        nameof(AppSettingsData.LlmUrl),
+        nameof(AppSettingsData.LlmModel),
+        nameof(AppSettingsData.TtsHttpUrl),
+        nameof(AppSettingsData.ClaudeApiKey),
+        nameof(AppSettingsData.WebBrowserPath),
+        nameof(AppSettingsData.WebSearchMethod),
+        nameof(AppSettingsData.WebSearxngUrl),
+        nameof(AppSettingsData.ClaudeExecutable),
+        nameof(AppSettingsData.ObsidianVault),
+        nameof(AppSettingsData.ComfyUrl),
+    };
+
+    /// <summary>Copies <see cref="ResetKeptSettings"/> from <paramref name="from"/> onto <paramref name="to"/>, one by one (no reflection under AOT). The Claude key goes as stored, protected or not.</summary>
+    internal static void KeepOnReset(AppSettingsData from, AppSettingsData to)
+    {
+        to.LlmUrl = from.LlmUrl;
+        to.LlmModel = from.LlmModel;
+        to.TtsHttpUrl = from.TtsHttpUrl;
+        to.ClaudeApiKey = from.ClaudeApiKey;
+        to.WebBrowserPath = from.WebBrowserPath;
+        to.WebSearchMethod = from.WebSearchMethod;
+        to.WebSearxngUrl = from.WebSearxngUrl;
+        to.ClaudeExecutable = from.ClaudeExecutable;
+        to.ObsidianVault = from.ObsidianVault;
+        to.ComfyUrl = from.ComfyUrl;
     }
 
     /// <summary>
