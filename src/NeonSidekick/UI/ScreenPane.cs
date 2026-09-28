@@ -519,7 +519,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     /// on the standing row, behind the spinner's label on the busy row, <see cref="HintSeparator"/>
     /// between, read like <see cref="Strip"/>; empty = nothing drawn. Hidden under an overlay's
     /// hint and the scroll's, like the screen's own hint; ahead of that hint so a long usage part
-    /// is what a narrow row cuts. The screen puts <c>📨 2 queued</c> there; the pane records where
+    /// is what a narrow row cuts. The screen puts <c>📤 2 queued</c> there; the pane records where
     /// (<see cref="TryHitQueued"/>, <see cref="HintZone.Queued"/>) for the double-click that opens <c>/queue</c>.
     /// </summary>
     public Func<string> Queued
@@ -2111,20 +2111,20 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
 
     /// <summary>
     /// <see cref="BusyRow(string, TimeSpan, string)"/> with the <paramref name="queued"/> part between the
-    /// label and the overlay's hint (<c>thinking 00:12 · 📨 2 queued</c>, 2026-09-18); empty = the row as before. Pinned.
+    /// label and the overlay's hint (<c>thinking 00:12 · 📤 2 queued</c>, 2026-09-18); empty = the row as before. Pinned.
     /// </summary>
     public static string BusyRow(string label, TimeSpan elapsed, string overlayHint, string queued) => BusyRow(label, elapsed, overlayHint, queued, "");
 
     /// <summary>
     /// <see cref="BusyRow(string, TimeSpan, string, string)"/> with the token tally right after the label (2026-09-25,
-    /// <see cref="BusyUsage"/>): <c>thinking 00:12 · ~5.1k / 151.4k · ~3% · ~41 tok/s · 📨 2 queued</c> — beside the
+    /// <see cref="BusyUsage"/>): <c>thinking 00:12 · ~5.1k / 151.4k · ~3% · ~41 tok/s · 📤 2 queued</c> — beside the
     /// spinner, so the two make one zone; empty = the row as before. Pinned.
     /// </summary>
     public static string BusyRow(string label, TimeSpan elapsed, string overlayHint, string queued, string usage) => BusyRow(label, elapsed, overlayHint, queued, usage, labelAfterUsage: false);
 
     /// <summary>
     /// <see cref="BusyRow(string, TimeSpan, string, string, string)"/> with the label and its count after the tally when
-    /// <paramref name="labelAfterUsage"/> (<see cref="LabelAfterUsage"/>, 2026-09-25): <c>1.2k / 4.1k · 30% · 🎨 00:12 · 📨 2 queued</c>. Pinned.
+    /// <paramref name="labelAfterUsage"/> (<see cref="LabelAfterUsage"/>, 2026-09-25): <c>1.2k / 4.1k · 30% · 🎨 00:12 · 📤 2 queued</c>. Pinned.
     /// </summary>
     public static string BusyRow(string label, TimeSpan elapsed, string overlayHint, string queued, string usage, bool labelAfterUsage)
     {

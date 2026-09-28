@@ -1594,10 +1594,10 @@ internal sealed partial class ChatScreen
     /// <summary>What every reflection line opens with, inside its parentheses (2026-09-18): the brain (<see cref="LearnStripGlyph"/>, the strip's) and a space. U+1F9E0 is two cells wide, so no trailing-space fix as the gear needs. Pinned.</summary>
     public const string LearnGlyph = LearnStripGlyph + " ";
 
-    /// <summary>What the hint row's queued part opens with (2026-09-18): the incoming envelope. U+1F4E8 is two cells wide, a surrogate pair with no variation selector. Pinned.</summary>
-    public const string QueueGlyph = "📨";
+    /// <summary>What the hint row's queued part opens with (2026-09-18): the outbox tray (the incoming envelope 📨 until 2026-09-28, the user's call). U+1F4E4 is two cells wide, a surrogate pair with no variation selector. Pinned.</summary>
+    public const string QueueGlyph = "📤";
 
-    /// <summary>The hint row's queued part, after the speech strip at idle and after the spinner's label under a turn: <c>📨 2 queued</c>. Pinned.</summary>
+    /// <summary>The hint row's queued part, after the speech strip at idle and after the spinner's label under a turn: <c>📤 2 queued</c>. Pinned.</summary>
     public static string QueuedHintPart(int count) => $"{QueueGlyph} {count.ToString(CultureInfo.InvariantCulture)} queued";
 
     /// <summary>The transcript's notice when the queue is dropped — a cancelled reply under <c>Queue cancel mode</c> <c>empty</c>, or a conversation forgotten. Pinned.</summary>

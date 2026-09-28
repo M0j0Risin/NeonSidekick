@@ -872,15 +872,15 @@ public class ScreenPaneTests : IDisposable
         Assert.Equal("thinking 00:12", ScreenPane.BusyRow("thinking", TimeSpan.FromSeconds(12), ""));
         Assert.Equal("thinking 00:12 · ESC closes · ←/→ tabs · ↑/↓ scroll", ScreenPane.BusyRow("thinking", TimeSpan.FromSeconds(12), "ESC closes · ←/→ tabs · ↑/↓ scroll"));
         // The queued part between the label and the overlay's hint (2026-09-18); empty, the row as before.
-        Assert.Equal("thinking 00:12 · 📨 2 queued", ScreenPane.BusyRow("thinking", TimeSpan.FromSeconds(12), "", "📨 2 queued"));
-        Assert.Equal("thinking 00:12 · 📨 2 queued · ESC closes", ScreenPane.BusyRow("thinking", TimeSpan.FromSeconds(12), "ESC closes", "📨 2 queued"));
+        Assert.Equal("thinking 00:12 · 📤 2 queued", ScreenPane.BusyRow("thinking", TimeSpan.FromSeconds(12), "", "📤 2 queued"));
+        Assert.Equal("thinking 00:12 · 📤 2 queued · ESC closes", ScreenPane.BusyRow("thinking", TimeSpan.FromSeconds(12), "ESC closes", "📤 2 queued"));
         Assert.Equal(ScreenPane.BusyRow("thinking", TimeSpan.FromSeconds(12), "ESC closes"), ScreenPane.BusyRow("thinking", TimeSpan.FromSeconds(12), "ESC closes", ""));
         // The tally right after the label (2026-09-25), ahead of the queued part; empty, the row as before.
-        Assert.Equal("thinking 00:12 · ~1.7k / 4.1k · ~42% · 📨 2 queued · ESC closes", ScreenPane.BusyRow("thinking", TimeSpan.FromSeconds(12), "ESC closes", "📨 2 queued", "~1.7k / 4.1k · ~42%"));
-        Assert.Equal(ScreenPane.BusyRow("thinking", TimeSpan.FromSeconds(12), "ESC closes", "📨 2 queued"), ScreenPane.BusyRow("thinking", TimeSpan.FromSeconds(12), "ESC closes", "📨 2 queued", ""));
+        Assert.Equal("thinking 00:12 · ~1.7k / 4.1k · ~42% · 📤 2 queued · ESC closes", ScreenPane.BusyRow("thinking", TimeSpan.FromSeconds(12), "ESC closes", "📤 2 queued", "~1.7k / 4.1k · ~42%"));
+        Assert.Equal(ScreenPane.BusyRow("thinking", TimeSpan.FromSeconds(12), "ESC closes", "📤 2 queued"), ScreenPane.BusyRow("thinking", TimeSpan.FromSeconds(12), "ESC closes", "📤 2 queued", ""));
         // A label after the tally (the ComfyUI generation's, 2026-09-25): the two swap, nothing else moves; no tally, the row as before.
-        Assert.Equal("1.2k / 4.1k · 30% · 🎨 00:12 · 📨 2 queued · ESC closes", ScreenPane.BusyRow("🎨", TimeSpan.FromSeconds(12), "ESC closes", "📨 2 queued", "1.2k / 4.1k · 30%", labelAfterUsage: true));
-        Assert.Equal(ScreenPane.BusyRow("🎨", TimeSpan.FromSeconds(12), "ESC closes", "📨 2 queued"), ScreenPane.BusyRow("🎨", TimeSpan.FromSeconds(12), "ESC closes", "📨 2 queued", "", labelAfterUsage: true));
+        Assert.Equal("1.2k / 4.1k · 30% · 🎨 00:12 · 📤 2 queued · ESC closes", ScreenPane.BusyRow("🎨", TimeSpan.FromSeconds(12), "ESC closes", "📤 2 queued", "1.2k / 4.1k · 30%", labelAfterUsage: true));
+        Assert.Equal(ScreenPane.BusyRow("🎨", TimeSpan.FromSeconds(12), "ESC closes", "📤 2 queued"), ScreenPane.BusyRow("🎨", TimeSpan.FromSeconds(12), "ESC closes", "📤 2 queued", "", labelAfterUsage: true));
     }
 
     /// <summary>
@@ -1095,7 +1095,7 @@ public class ScreenPaneTests : IDisposable
     public void Queued_LeadsBothRows_AndTryHitQueued_AnswersInBoth_NotUnderAnOverlay()
     {
         _cursorTop = 100;
-        string queued = "📨 2 queued";
+        string queued = "📤 2 queued";
         using var pane = Pane();
         pane.Hint = () => "idle";
         pane.Strip = () => "🔊";
@@ -1103,8 +1103,8 @@ public class ScreenPaneTests : IDisposable
         pane.Show();
         pane.ShowInput("abc", 3);   // rule 99, row 100, rule 101, hint 102
 
-        // Standing: "🔊 · 📨 2 queued · idle" — the part at columns 5..15 (the strip's two cells and the separator ahead).
-        Assert.Contains("\n🔊 · 📨 2 queued · idle", Output);
+        // Standing: "🔊 · 📤 2 queued · idle" — the part at columns 5..15 (the strip's two cells and the separator ahead).
+        Assert.Contains("\n🔊 · 📤 2 queued · idle", Output);
         Assert.False(pane.TryHitQueued(4, 102));
         Assert.True(pane.TryHitQueued(5, 102));
         Assert.True(pane.TryHitQueued(15, 102));
@@ -1117,10 +1117,10 @@ public class ScreenPaneTests : IDisposable
         Assert.True(pane.TryHitHint(0, 102, out hit));
         Assert.Equal(ScreenPane.HintZone.Strip, hit.Zone);
 
-        // Busy: "🔊 · ⠋ thinking 00:00 · 📨 2 queued" — the part after the strip (3), the frame (1), the blank, the label and a separator.
+        // Busy: "🔊 · ⠋ thinking 00:00 · 📤 2 queued" — the part after the strip (3), the frame (1), the blank, the label and a separator.
         using (pane.BeginBusy("thinking"))
         {
-            Assert.Contains("🔊 · " + Theme.SpinnerFrames[0] + " thinking 00:00 · 📨 2 queued", Output);
+            Assert.Contains("🔊 · " + Theme.SpinnerFrames[0] + " thinking 00:00 · 📤 2 queued", Output);
             int column = TextCells.Width("🔊 · " + Theme.SpinnerFrames[0] + " thinking 00:00 · ");
             Assert.False(pane.TryHitQueued(column - 1, 102));
             Assert.True(pane.TryHitQueued(column, 102));
@@ -1152,10 +1152,10 @@ public class ScreenPaneTests : IDisposable
 
         // No strip: the part leads the row from column 0.
         pane.Strip = () => "";
-        queued = "📨 1 queued";
+        queued = "📤 1 queued";
         after = Output.Length;
         pane.RefreshHint();
-        Assert.Contains("📨 1 queued · idle", Output[after..]);
+        Assert.Contains("📤 1 queued · idle", Output[after..]);
         Assert.True(pane.TryHitQueued(0, 102));
         Assert.True(pane.TryHitQueued(10, 102));
         Assert.False(pane.TryHitQueued(11, 102));
@@ -1169,12 +1169,12 @@ public class ScreenPaneTests : IDisposable
         _console.Profile.Width = 20;
         using var pane = Pane();
         pane.Hint = () => "a rather long standing hint";
-        pane.Queued = () => "📨 12 queued";
+        pane.Queued = () => "📤 12 queued";
         pane.Trailer = () => "llama";
         pane.Show();
         pane.ShowInput("abc", 3);
 
-        // 19 cells, "llama" (5) pinned right with a gap of 2: 12 cells for the left, "📨 12 queued" is 12 — cut to 11 + the ellipsis.
+        // 19 cells, "llama" (5) pinned right with a gap of 2: 12 cells for the left, "📤 12 queued" is 12 — cut to 11 + the ellipsis.
         Assert.False(pane.TryHitQueued(0, 102));
         Assert.True(pane.TryHitHint(0, 102, out var hit));
         Assert.Equal(ScreenPane.HintZone.Row, hit.Zone);

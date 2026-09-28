@@ -11975,7 +11975,7 @@ public partial class ChatScreenTests : IDisposable
             Line("hi"),
             input =>
             {
-                // No strip (speech off): "📨 1 queued" leads the row from column 0.
+                // No strip (speech off): "📤 1 queued" leads the row from column 0.
                 input.PushClick(3, 102);
                 input.PushClick(4, 102);
             },
@@ -12177,10 +12177,10 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public void QueueStrings_ArePinned()
     {
-        Assert.Equal("📨", ChatScreen.QueueGlyph);
+        Assert.Equal("📤", ChatScreen.QueueGlyph);
         Assert.Equal(2, TextCells.Width(ChatScreen.QueueGlyph));
-        Assert.Equal("📨 1 queued", ChatScreen.QueuedHintPart(1));
-        Assert.Equal("📨 12 queued", ChatScreen.QueuedHintPart(12));
+        Assert.Equal("📤 1 queued", ChatScreen.QueuedHintPart(1));
+        Assert.Equal("📤 12 queued", ChatScreen.QueuedHintPart(12));
         Assert.Equal("(⏳ 1 queued message dropped)", ChatScreen.QueueDroppedNotice(1));
         Assert.Equal("(⏳ 3 queued messages dropped)", ChatScreen.QueueDroppedNotice(3));
     }

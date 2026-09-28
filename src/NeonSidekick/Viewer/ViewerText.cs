@@ -65,7 +65,7 @@ public static class ViewerText
     public static string Opened(string folder) => $"(🖼️ picture viewer on {folder})";
 
     /// <summary>The viewer's keys, the line under <see cref="Opened"/> (later on 2026-09-27). Pinned.</summary>
-    public const string Keys = "(← → browse · Home/End · F9 slide show · F10 random · ↑ ↓ slide time · F11 full screen · Del twice delete · Esc close)";
+    public const string Keys = "(← → browse · Home/End · F9 slide show · F10 random · ↑ ↓ slide time · F11 full screen · DEL twice delete · ESC close)";
 
     /// <summary>
     /// The <c>Image viewer</c> setting's word for the app Windows registers (2026-09-27, the user's call): an empty setting
