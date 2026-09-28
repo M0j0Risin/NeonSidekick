@@ -68,6 +68,8 @@ public class ProfilesTests : IDisposable
         Assert.Equal("neon", Profiles.SidekickName);
         Assert.False(Profiles.IsValidName("edit"));
         Assert.False(Profiles.IsValidName("Reload"));
+        Assert.False(Profiles.IsValidName("push"));   // 2026-09-28
+        Assert.False(Profiles.IsValidName("PULL"));
         Assert.Equal("\"work\" is the current profile; switch to another (/profile <name>) before deleting it.", Profiles.CurrentUndeletable("work"));
         Assert.Equal("\"work\" is the current profile; switch to another (/profile <name>) before renaming it.", Profiles.CurrentUnrenamable("work"));
     }
@@ -355,6 +357,83 @@ public class ProfilesTests : IDisposable
     public void Reset_RefusesABadName()
     {
         Assert.Throws<ArgumentException>(() => Profiles.Reset(_dir, "reset"));
+        Assert.False(Directory.Exists(Profiles.Root(_dir)));
+    }
+
+    // ── CopySettings (2026-09-28, /profile push and pull) ───────────────────
+
+    [Fact]
+    public void CopySettings_CopiesEverySetting_ButTheTargetsWorkingDirectory_AndNoSidekickFile()
+    {
+        Profiles.Create(_dir, "home", new AppSettingsData { LlmModel = "home-model", LlmApiKey = "dpapi:AQA", SessionNamingMode = "first-line", WorkingDirectory = @"C:\home-sandbox" });
+        Profiles.Create(_dir, "work", new AppSettingsData { LlmModel = "work-model", WorkingDirectory = @"C:\work-sandbox" });
+        File.WriteAllText(Path.Combine(Profiles.Directory(_dir, "home"), PersonaFile.FileName), "You are Rex.");
+
+        Profiles.CopySettings(_dir, "home", "work");
+
+        var work = Profiles.ReadProfileFile(Profiles.ProfileFile(_dir, "work"));
+        Assert.Equal("home-model", work.LlmModel);
+        Assert.Equal("dpapi:AQA", work.LlmApiKey);   // as stored
+        Assert.Equal("first-line", work.SessionNamingMode);
+        Assert.Equal(@"C:\work-sandbox", work.WorkingDirectory);
+        Assert.Equal(new[] { Profiles.FileName }, Directory.GetFiles(Profiles.Directory(_dir, "work")).Select(Path.GetFileName));
+        Assert.Equal("home-model", Profiles.ReadProfileFile(Profiles.ProfileFile(_dir, "home")).LlmModel);   // the source untouched
+    }
+
+    [Fact]
+    public void CopySettings_AMissingSource_IsTheDefaults()
+    {
+        Profiles.Create(_dir, "work", new AppSettingsData { LlmModel = "work-model", WorkingDirectory = @"C:\work-sandbox" });
+
+        Profiles.CopySettings(_dir, "default", "work");
+
+        var work = Profiles.ReadProfileFile(Profiles.ProfileFile(_dir, "work"));
+        Assert.Equal(new AppSettingsData().LlmModel, work.LlmModel);
+        Assert.Equal(@"C:\work-sandbox", work.WorkingDirectory);
+    }
+
+    [Fact]
+    public void CopySettings_ACorruptSource_Throws_AndTheTargetIsLeftAlone()
+    {
+        Profiles.Create(_dir, "home", new AppSettingsData());
+        File.WriteAllText(Profiles.ProfileFile(_dir, "home"), "{ not json");
+        Profiles.Create(_dir, "work", new AppSettingsData { LlmModel = "work-model" });
+        string before = File.ReadAllText(Profiles.ProfileFile(_dir, "work"));
+
+        Assert.ThrowsAny<JsonException>(() => Profiles.CopySettings(_dir, "home", "work"));
+
+        Assert.Equal(before, File.ReadAllText(Profiles.ProfileFile(_dir, "work")));
+    }
+
+    [Fact]
+    public void CopySettings_ACorruptTarget_IsOverwritten_NothingKept()
+    {
+        Profiles.Create(_dir, "home", new AppSettingsData { LlmModel = "home-model", WorkingDirectory = @"C:\home-sandbox" });
+        Directory.CreateDirectory(Profiles.Directory(_dir, "work"));
+        File.WriteAllText(Profiles.ProfileFile(_dir, "work"), "{ not json");
+
+        Profiles.CopySettings(_dir, "home", "work");
+
+        var work = Profiles.ReadProfileFile(Profiles.ProfileFile(_dir, "work"));
+        Assert.Equal("home-model", work.LlmModel);
+        Assert.Equal("", work.WorkingDirectory);
+    }
+
+    [Fact]
+    public void CopySettings_IntoALogicalDefault_CreatesItsFolderAndFile()
+    {
+        Profiles.Create(_dir, "work", new AppSettingsData { LlmModel = "work-model" });
+
+        Profiles.CopySettings(_dir, "work", "default");
+
+        Assert.Equal("work-model", Profiles.ReadProfileFile(Profiles.ProfileFile(_dir, "default")).LlmModel);
+    }
+
+    [Fact]
+    public void CopySettings_RefusesABadName()
+    {
+        Assert.Throws<ArgumentException>(() => Profiles.CopySettings(_dir, "push", "work"));
+        Assert.Throws<ArgumentException>(() => Profiles.CopySettings(_dir, "work", "../x"));
         Assert.False(Directory.Exists(Profiles.Root(_dir)));
     }
 

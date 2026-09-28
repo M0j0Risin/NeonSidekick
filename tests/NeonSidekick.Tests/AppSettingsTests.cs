@@ -949,6 +949,54 @@ public class AppSettingsTests : IDisposable
     }
 
     [Fact]
+    public async Task CopyProfileSettings_IntoTheLoadedOne_ReplacesTheData_AndNoPendingSaveLandsAfter()
+    {
+        // /profile pull (2026-09-28): the loaded profile's pending save is flushed first, so it cannot bring the old values back.
+        Profiles.Create(_dir, "work", new AppSettingsData { LlmModel = "work-model", WorkingDirectory = @"C:\work-sandbox" });
+        using var settings = new AppSettings(_dir);
+        settings.Update(d => { d.LlmModel = "mine"; d.WorkingDirectory = @"C:\mine"; });
+        AppSettingsData? raised = null;
+        settings.Changed += data => raised = data;
+
+        await settings.CopyProfileSettingsAsync("work", Profiles.DefaultName);
+        await Task.Delay(400);   // past the debounce: a save scheduled by the Update would have landed by now
+
+        Assert.Equal("work-model", settings.Current.LlmModel);
+        Assert.Equal(@"C:\mine", settings.Current.WorkingDirectory);   // the loaded profile's own, kept
+        Assert.Equal("work-model", raised?.LlmModel);
+        var file = Profiles.ReadProfileFile(settings.FilePath);
+        Assert.Equal("work-model", file.LlmModel);
+        Assert.Equal(@"C:\mine", file.WorkingDirectory);
+        Assert.Equal(Profiles.DefaultName, settings.ProfileName);
+    }
+
+    [Fact]
+    public async Task CopyProfileSettings_FromTheLoadedOne_TakesItsUnsavedValues_AndLeavesItAlone()
+    {
+        // /profile push (2026-09-28): an edit still inside its debounce goes along.
+        Profiles.Create(_dir, "work", new AppSettingsData { LlmModel = "work-model" });
+        using var settings = new AppSettings(_dir);
+        settings.Update(d => d.LlmModel = "mine");
+        bool raised = false;
+        settings.Changed += _ => raised = true;
+
+        await settings.CopyProfileSettingsAsync(Profiles.DefaultName, "work");
+
+        Assert.Equal("mine", Profiles.ReadProfileFile(Profiles.ProfileFile(_dir, "work")).LlmModel);
+        Assert.Equal("mine", settings.Current.LlmModel);
+        Assert.False(raised);
+    }
+
+    [Fact]
+    public async Task CopyProfileSettings_AnUnknownName_Throws()
+    {
+        using var settings = new AppSettings(_dir);
+
+        await Assert.ThrowsAsync<ArgumentException>(() => settings.CopyProfileSettingsAsync("ghost", Profiles.DefaultName));
+        await Assert.ThrowsAsync<ArgumentException>(() => settings.CopyProfileSettingsAsync(Profiles.DefaultName, "ghost"));
+    }
+
+    [Fact]
     public void Reload_RemakesTheProfileFolders()
     {
         using var settings = new AppSettings(_dir);

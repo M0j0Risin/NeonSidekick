@@ -551,7 +551,7 @@ Type `/` to list every command with its summary; after a command and a space, it
 | `/new` | Start a new conversation without clearing the screen. |
 | `/operata [reset \| copy <profile> [force]]` | Edit `operata.md` (the operating rules) in your editor, reset it to the default, or copy it to another profile (`force` replaces theirs). |
 | `/persona [reset \| copy <profile> [force]]` | The same for `persona.md` (the personality). |
-| `/profile [name \| add <name> \| delete <name> \| rename <name> <new> \| reset [name] [--all] \| edit \| reload]` | Switch, create, delete, rename or reset a profile. `edit` opens `profile.json` in your editor; `reload` reads it back, reconnecting only what changed. See [Profiles](#profiles). |
+| `/profile [name \| add <name> \| delete <name> \| rename <name> <new> \| reset [name] [--all] \| push <name> \| pull <name> \| edit \| reload]` | Switch, create, delete, rename or reset a profile, or copy its settings to (`push`) or from (`pull`) another. `edit` opens `profile.json` in your editor; `reload` reads it back, reconnecting only what changed. See [Profiles](#profiles). |
 | `/queue [clear]` | List and prune the messages queued during a reply (`⊠ clear all` or `c` drops them all); `/queue clear` drops them without the pane. |
 | `/reasoning [level]` | Pick the reasoning effort (`none`, `low`, `medium`, `high`, `xhigh`). |
 | `/remember <text>` | Add a memory. |
@@ -685,6 +685,7 @@ The window follows the theme unless *Themed image viewer* is off: a dark title b
 * A name starting with `_` is temporary: it loads as usual, but the next launch opens `default` (the profile is kept).
 * `--profile <name>` (or `NEONSIDEKICK_PROFILE`) opens a profile for one launch, temporary ones included, without changing which one the next launch opens. An unknown name exits with code 2. A `--headless` run with neither opens `default`.
 * A reset keeps LLM URL, LLM model, LLM API key, TTS HTTP URL, Claude API key, Web browser path, Web search method, Web SearXNG URL, Claude executable, Obsidian vault and ComfyUI URL; `--all` resets those too. `default` can only be reset while it is loaded.
+* `push <name>` copies the loaded profile's settings over another's, `pull <name>` another's over the loaded one's, after a confirmation. Only `profile.json` is copied, and the target keeps its own working directory; memories, persona, operating rules, voice directive and MCP servers stay as they are. Any profile can be overwritten, `default` included. A pull clears the conversation, as a reset does.
 
 </details>
 

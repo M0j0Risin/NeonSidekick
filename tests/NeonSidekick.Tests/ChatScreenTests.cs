@@ -5994,7 +5994,7 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public void ProfileStrings_ArePinned()
     {
-        Assert.Equal("Profile name must be 1 to 32 letters, digits, - or _ (and not neon, add, delete, edit, reload, rename or reset).", ChatScreen.ProfileNameError);
+        Assert.Equal("Profile name must be 1 to 32 letters, digits, - or _ (and not neon, add, delete, edit, pull, push, reload, rename or reset).", ChatScreen.ProfileNameError);
         // /profile edit and /profile reload (2026-09-21).
         Assert.Equal("(🪪 opened profile \"x\"'s profile.json in your editor; /profile reload reads it back)", ChatScreen.ProfileEditOpenedNotice("x"));
         Assert.Equal("(🪪 created and opened profile \"x\"'s profile.json in your editor; /profile reload reads it back)", ChatScreen.ProfileEditCreatedNotice("x"));
@@ -6024,6 +6024,14 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("Could not reset the profile: why", ChatScreen.ProfileResetFailedError("why"));
         Assert.Equal("(🪪 renamed profile \"x\" to \"y\")", ChatScreen.ProfileRenamedNotice("x", "y"));
         Assert.Equal("Could not rename the profile: why", ChatScreen.ProfileRenameFailedError("why"));
+        // /profile push and pull (2026-09-28): the question says what stays, and a pull that the conversation goes.
+        Assert.Equal("🪪 Overwrite profile \"work\"'s settings with \"default\"'s (keeping its working directory, memories and prompt files)?", ChatScreen.CopyProfilePrompt("default", "work", pull: false));
+        Assert.Equal("🪪 Overwrite profile \"default\"'s settings with \"work\"'s (keeping its working directory, memories and prompt files)? The conversation is cleared.", ChatScreen.CopyProfilePrompt("work", "default", pull: true));
+        Assert.Equal("(🪪 copied profile \"default\"'s settings to \"work\")", ChatScreen.ProfilePushedNotice("default", "work"));
+        Assert.Equal("(🪪 copied profile \"work\"'s settings into \"default\"; conversation cleared)", ChatScreen.ProfilePulledNotice("work", "default"));
+        Assert.Equal("/profile push copies into another profile; \"x\" is the loaded one.", ChatScreen.ProfilePushSelfError("x"));
+        Assert.Equal("/profile pull copies from another profile; \"x\" is the loaded one.", ChatScreen.ProfilePullSelfError("x"));
+        Assert.Equal("Could not copy the profile's settings: why", ChatScreen.ProfileCopyFailedError("why"));
     }
 
     [Theory]
@@ -6053,6 +6061,13 @@ public partial class ChatScreenTests : IDisposable
     [InlineData("Reload", ProfileActionKind.Reload, "")]
     [InlineData("edit x", ProfileActionKind.Invalid, "")]
     [InlineData("reload now", ProfileActionKind.Invalid, "")]
+    [InlineData("push work", ProfileActionKind.Push, "work")]   // push and pull 2026-09-28
+    [InlineData("PUSH\tdefault", ProfileActionKind.Push, "default")]
+    [InlineData("pull work", ProfileActionKind.Pull, "work")]
+    [InlineData("Pull  work", ProfileActionKind.Pull, "work")]
+    [InlineData("push", ProfileActionKind.Invalid, "")]
+    [InlineData("pull", ProfileActionKind.Invalid, "")]
+    [InlineData("push a b", ProfileActionKind.Invalid, "")]
     public void ParseProfileArgs_IsPinned(string args, ProfileActionKind kind, string name, string newName = "")
     {
         Assert.Equal(new ProfileAction(kind, name, newName), ChatScreen.ParseProfileArgs(args));
@@ -6068,6 +6083,8 @@ public partial class ChatScreenTests : IDisposable
     [InlineData("reset a b --all", ProfileActionKind.Invalid, "", false)]
     [InlineData("add x --all", ProfileActionKind.Invalid, "", false)]
     [InlineData("delete work --all", ProfileActionKind.Invalid, "", false)]
+    [InlineData("push work --all", ProfileActionKind.Invalid, "", false)]
+    [InlineData("pull work --all", ProfileActionKind.Invalid, "", false)]
     [InlineData("--all", ProfileActionKind.Invalid, "", false)]
     [InlineData("work --all", ProfileActionKind.Invalid, "", false)]
     public void ParseProfileArgs_ResetAll_IsPinned(string args, ProfileActionKind kind, string name, bool all)
@@ -7594,6 +7611,145 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("(0 allowed commands copied into \"work\", 3 already there)", ChatScreen.CmdCopiedNotice(0, 3, "work", overwrite: false));
         Assert.Equal("(replaced \"work\"'s allowed commands with 3 allowed commands)", ChatScreen.CmdCopiedNotice(3, 0, "work", overwrite: true));
         Assert.Equal("Could not write the profile's settings: x", ChatScreen.CmdCopyFailedError("x"));
+    }
+
+    // ── /profile push and pull (2026-09-28) ─────────────────────────────────
+
+    [Fact]
+    public async Task Profile_Push_Y_CopiesTheSettings_KeepingTheTargetsSandbox_AndItsFiles()
+    {
+        WorkProfile();
+        string workFile = Profiles.ProfileFile(_dir, "work");
+        var seeded = Profiles.ReadProfileFile(workFile);
+        seeded.WorkingDirectory = @"C:\work-sandbox";
+        Profiles.WriteProfileFile(workFile, seeded);
+        _settings.Update(d => d.LlmModel = "default-model");   // still inside its debounce: the push flushes it first
+        _memory.Add("Their name is Chris.");
+        _chat.EnqueueText("Hello.");
+        _chat.EnqueueText("Still here.");
+        PushLine("hi");
+        PushLine("/profile push work");
+        PickYes();
+        PushLine("hi again");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains(SettingsMenu.PromptTitle(ChatScreen.CopyProfilePrompt("default", "work", pull: false), SettingsMenu.ConfirmKeys), output);
+        Assert.Contains("  · " + ChatScreen.ProfilePushedNotice("default", "work"), output);
+        var work = ReadProfile(workFile);
+        Assert.Equal("default-model", work.LlmModel);
+        Assert.Equal(_settings.Current.SessionNamingMode, work.SessionNamingMode);
+        Assert.Equal(@"C:\work-sandbox", work.WorkingDirectory);
+        Assert.Equal("You are Rex.", File.ReadAllText(Path.Combine(ProfileDir("work"), PersonaFile.FileName)));
+        Assert.Equal(new[] { "They like tea." }, new MemoryStore(ProfileDir("work")).Snapshot());
+        // The loaded profile did not change, and the conversation carried on.
+        Assert.Equal(Profiles.DefaultName, _settings.ProfileName);
+        Assert.Equal("default-model", _settings.Current.LlmModel);
+        Assert.Equal(2, _chat.Requests.Count);
+        Assert.Contains(_chat.Requests[1], m => m.Role == ChatRole.User && m.Text == "hi");
+    }
+
+    [Fact]
+    public async Task Profile_Push_IntoTheDefault_FromAnotherProfile()
+    {
+        WorkProfile();
+        PushLine("/profile work");
+        PushLine("/profile push default");
+        PickYes();
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains("  · " + ChatScreen.ProfilePushedNotice("work", "default"), output);
+        Assert.Equal("work-model", ReadProfile(Profiles.ProfileFile(_dir, Profiles.DefaultName)).LlmModel);
+        Assert.Equal("work", _settings.ProfileName);
+    }
+
+    [Fact]
+    public async Task Profile_PushAndPull_No_Keeps()
+    {
+        WorkProfile();
+        _settings.Update(d => d.LlmModel = "default-model");
+        PushLine("/profile push work");
+        _console.Input.PushKey(Keys.Enter);   // No is on the cursor
+        PushLine("/profile pull work");
+        _console.Input.PushKey(Keys.Escape);
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Equal(2, output.Split("  · " + ChatScreen.KeptNotice).Length - 1);
+        Assert.Equal("work-model", ReadProfile(Profiles.ProfileFile(_dir, "work")).LlmModel);
+        Assert.Equal("default-model", _settings.Current.LlmModel);
+    }
+
+    [Fact]
+    public async Task Profile_PushAndPull_Refusals_AreOneLineEach_AndAskNothing()
+    {
+        WorkProfile();
+        PushLine("/profile push");
+        PushLine("/profile pull work now");
+        PushLine("/profile push ghost");
+        PushLine("/profile pull default");
+        PushLine("/profile push DEFAULT");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Equal(2, output.Split("  ✗ " + ChatScreen.ProfileUsageError).Length - 1);
+        Assert.Contains("  ✗ " + ChatScreen.ProfileMissingError("ghost"), output);
+        Assert.Contains("  ✗ " + ChatScreen.ProfilePullSelfError("default"), output);
+        Assert.Contains("  ✗ " + ChatScreen.ProfilePushSelfError("default"), output);
+        Assert.DoesNotContain("Overwrite profile", output);
+        Assert.Equal("work-model", ReadProfile(Profiles.ProfileFile(_dir, "work")).LlmModel);
+    }
+
+    [Fact]
+    public async Task Profile_Pull_Y_ReplacesTheLoadedSettings_AndClearsTheConversation()
+    {
+        WorkProfile();
+        _settings.Update(d => d.LlmModel = "default-model");
+        _memory.Add("Their name is Chris.");
+        _chat.EnqueueText("Hello.");
+        _chat.EnqueueText("Hi.");
+        PushLine("hi");
+        PushLine("/profile pull work");
+        PickYes();
+        PushLine("hi again");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains(SettingsMenu.PromptTitle(ChatScreen.CopyProfilePrompt("work", "default", pull: true), SettingsMenu.ConfirmKeys), output);
+        Assert.Contains("  · " + ChatScreen.ProfilePulledNotice("work", "default"), output);
+        Assert.Equal(Profiles.DefaultName, _settings.ProfileName);
+        Assert.Equal("work-model", _settings.Current.LlmModel);
+        Assert.Equal("work-model", ReadProfile(Profiles.ProfileFile(_dir, Profiles.DefaultName)).LlmModel);
+        // The settings alone: this profile's memories and prompt stay its own; the conversation starts over.
+        Assert.Equal(new[] { "Their name is Chris." }, _memory.Snapshot());
+        Assert.Equal(2, _chat.Requests.Count);
+        Assert.DoesNotContain(_chat.Requests[1], m => m.Role == ChatRole.User && m.Text == "hi");
+        Assert.Contains(_chat.Requests[1], m => m.Role == ChatRole.User && m.Text == "hi again");
+        Assert.DoesNotContain("You are Rex.", _chat.Requests[1][0].Text);
+    }
+
+    [Fact]
+    public async Task Profile_Pull_ACorruptSource_IsAnError_AndNothingChanges()
+    {
+        Profiles.Create(_dir, "work", new AppSettingsData());
+        File.WriteAllText(Profiles.ProfileFile(_dir, "work"), "{ not json");
+        _settings.Update(d => d.LlmModel = "default-model");
+        PushLine("/profile pull work");
+        PickYes();
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains("  ✗ " + ChatScreen.ProfileCopyFailedError(""), output);
+        Assert.DoesNotContain(ChatScreen.ProfilePulledNotice("work", "default"), output);
+        Assert.Equal("default-model", _settings.Current.LlmModel);
+        Assert.Equal("{ not json", File.ReadAllText(Profiles.ProfileFile(_dir, "work")));
     }
 
     // ── /keycopy (2026-09-28) ───────────────────────────────────────────────
@@ -17739,7 +17895,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal([new CompletionItem("netrunner", "green phosphor")], ChatScreen.ArgumentItems("/theme", "ne", sources));
 
         // /profile: the names (the loaded one marked) then the verbs; a verb typed opens the names behind it.
-        Assert.Equal(["chef", "default", "work", "add", "delete", "edit", "reload", "rename", "reset"], Texts(ChatScreen.ArgumentItems("/profile", "", sources)));   // edit and reload 2026-09-21
+        Assert.Equal(["chef", "default", "work", "add", "delete", "edit", "pull", "push", "reload", "rename", "reset"], Texts(ChatScreen.ArgumentItems("/profile", "", sources)));   // edit and reload 2026-09-21, pull and push 2026-09-28
         Assert.Equal(ChatScreen.LoadedProfileNote, ChatScreen.ArgumentItems("/profile", "", sources)[1].Note);
         Assert.Equal(ChatScreen.SwitchToProfileNote, ChatScreen.ArgumentItems("/profile", "", sources)[2].Note);
         Assert.Equal(ChatScreen.ProfileVerbs[1], ChatScreen.ArgumentItems("/profile", "del", sources)[0]);
@@ -17759,6 +17915,12 @@ public partial class ChatScreenTests : IDisposable
         Assert.Empty(ChatScreen.ArgumentItems("/profile", "edit ", sources));         // edit and reload take nothing
         Assert.Empty(ChatScreen.ArgumentItems("/profile", "reload ", sources));
         Assert.Empty(ChatScreen.ArgumentItems("/profile", "rename work ", sources));  // so is the new name
+        // push and pull (2026-09-28): every profile but the loaded one, default included (the user's call); nothing after the name.
+        Assert.Equal(["pull", "push"], Texts(ChatScreen.ArgumentItems("/profile", "pu", sources)));
+        Assert.Equal(["push chef", "push work"], Texts(ChatScreen.ArgumentItems("/profile", "push ", sources)));
+        Assert.Equal(["pull chef", "pull default"], Texts(ChatScreen.ArgumentItems("/profile", "pull ", Sources(loaded: "work"))));
+        Assert.Equal(["push default"], Texts(ChatScreen.ArgumentItems("/profile", "PUSH d", Sources(loaded: "work"))));
+        Assert.Empty(ChatScreen.ArgumentItems("/profile", "push work ", sources));
         Assert.Empty(ChatScreen.ArgumentItems("/profile", "work", sources));
 
         // /memory copy: every profile but the loaded one (the source), then copy <name> overwrite (2026-09-17 as /memcopy, the word folded in 2026-09-22).
@@ -17884,10 +18046,10 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("copy persona.md into another profile", ChatScreen.PromptFileCopyNote("persona.md"));   // 2026-09-21
         Assert.Equal("copy operata.md into it", ChatScreen.PromptFileCopyTargetNote("operata.md"));
         Assert.Equal("replace its vocalia.md if it has one", ChatScreen.PromptFileCopyForceNote("vocalia.md"));
-        Assert.Equal(["add", "delete", "edit", "reload", "rename", "reset"], ChatScreen.ProfileVerbs.Select(v => v.Text));
+        Assert.Equal(["add", "delete", "edit", "pull", "push", "reload", "rename", "reset"], ChatScreen.ProfileVerbs.Select(v => v.Text));
         Assert.Equal("add a profile: /profile add <name>", ChatScreen.ProfileVerbs[0].Note);
         Assert.Equal("open this profile's profile.json in your editor: /profile edit", ChatScreen.ProfileVerbs[2].Note);
-        Assert.Equal("read this profile's profile.json back from disk: /profile reload", ChatScreen.ProfileVerbs[3].Note);
+        Assert.Equal("read this profile's profile.json back from disk: /profile reload", ChatScreen.ProfileVerbs[5].Note);
         Assert.Equal("", ChatScreen.SwitchSubject(SlashCommand.Help));
     }
 

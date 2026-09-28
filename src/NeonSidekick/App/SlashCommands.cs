@@ -235,7 +235,7 @@ public static class SlashCommands
             new("/persona", "export and manage persona.md (the personality) in your editor, or /persona reset to go back to the default, or /persona copy <profile> [force] to copy it into another profile"),
             new("/plan", "plan before doing: /plan <requirement> — read-only research and questions until you approve the plan (saved under .neon/plans/); then /plan approve [--fresh] | cancel | show | save [name]; /plan open [name] picks one up"),
             new("/police", "switch shell police on or off"),
-            new("/profile", "switch profiles, or /profile <name> | add <name> | delete <name> | rename <name> <new-name> | reset [name] | edit | reload"),
+            new("/profile", "switch profiles, or /profile <name> | add <name> | delete <name> | rename <name> <new-name> | reset [name] | push <name> | pull <name> | edit | reload"),
             new("/queue", "list and prune the messages queued while a reply runs, or /queue clear"),
             new("/reasoning", "pick the LLM reasoning effort, or /reasoning <level>"),
             new("/remember", "add a memory: /remember <text>"),

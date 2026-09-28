@@ -347,6 +347,46 @@ public sealed class AppSettings : IDisposable
     }
 
     /// <summary>
+    /// Copies <paramref name="from"/>'s settings over <paramref name="to"/>'s (2026-09-28, <c>/profile push</c> and
+    /// <c>/profile pull</c>; <see cref="Profiles.CopySettings"/>: every setting but the target's working directory). When
+    /// either is the loaded profile the pending save is written first — a push then copies the values on screen, and a
+    /// pull leaves no debounced write to bring the old values back over the copy. When <paramref name="to"/> is the loaded
+    /// one the copy replaces the data in place and <see cref="Changed"/> fires on the new snapshot, as a reset does;
+    /// otherwise it is disk only. The pointer is untouched. Both must be listed profiles (<see cref="Profiles.Resolve"/>);
+    /// an unknown one throws <see cref="ArgumentException"/>. A corrupt source throws <see cref="JsonException"/>, nothing written.
+    /// </summary>
+    public async Task CopyProfileSettingsAsync(string from, string to)
+    {
+        string source = Profiles.Resolve(StorageDirectory, from)
+            ?? throw new ArgumentException($"No profile named \"{from}\".", nameof(from));
+        string target = Profiles.Resolve(StorageDirectory, to)
+            ?? throw new ArgumentException($"No profile named \"{to}\".", nameof(to));
+
+        string loadedName = ProfileName;
+        bool intoLoaded = Profiles.NameEquals(target, loadedName);
+        if (intoLoaded || Profiles.NameEquals(source, loadedName))
+        {
+            await FlushAsync().ConfigureAwait(false);
+        }
+
+        Profiles.CopySettings(StorageDirectory, source, target);
+        if (!intoLoaded)
+        {
+            return;
+        }
+
+        AppSettingsData snapshot;
+        lock (_gate)
+        {
+            _data = Load(Profiles.ProfileFile(StorageDirectory, target));
+            snapshot = Copy(_data);
+        }
+
+        EnsureProfileDirectories();
+        RaiseChanged(snapshot);
+    }
+
+    /// <summary>
     /// Re-reads the loaded profile's <c>profile.json</c> from disk (2026-09-21, <c>/profile reload</c>,
     /// the way back in after <c>/profile edit</c>): the pending debounced save is cancelled — the
     /// hand-edited file is what the user wants, not what the menu last saved —, the data replaced in

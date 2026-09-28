@@ -65,6 +65,12 @@ public enum ProfileActionKind
     /// <summary><c>reload</c> (2026-09-21): the loaded profile's <c>profile.json</c> read back from disk, the sessions whose settings changed reconnected.</summary>
     Reload,
 
+    /// <summary><c>push &lt;name&gt;</c> (2026-09-28): the loaded profile's settings copied over the named one's, its working directory kept.</summary>
+    Push,
+
+    /// <summary><c>pull &lt;name&gt;</c> (2026-09-28): the named profile's settings copied over the loaded one's, its working directory kept, the conversation cleared.</summary>
+    Pull,
+
     /// <summary>Anything the grammar does not cover; <c>ChatScreen.ProfileUsageError</c>.</summary>
     Invalid,
 }
@@ -331,7 +337,7 @@ internal sealed partial class ChatScreen
     public const string MemoryFailedError = "Could not save the memory; the log has the reason.";
     public const string NothingToForgetNotice = "(" + NoticeGlyphs.Memory + "nothing to forget)";
     public const string KeptNotice = "(kept)";
-    public const string ProfileUsageError = "/profile takes nothing (pick), a name, add <name>, delete <name>, rename <name> <new-name>, reset [name], edit or reload.";
+    public const string ProfileUsageError = "/profile takes nothing (pick), a name, add <name>, delete <name>, rename <name> <new-name>, reset [name], push <name>, pull <name>, edit or reload.";
 
     // The /loop words and lines (2026-09-21, the user's ask). Pinned.
     public const string LoopInfiniteWord = "infinite";
@@ -2778,6 +2784,8 @@ internal sealed partial class ChatScreen
         new("add", "add a profile: /profile add <name>"),
         new("delete", "delete a profile: /profile delete <name>"),
         new("edit", "open this profile's profile.json in your editor: /profile edit"),
+        new(PullWord, "copy another profile's settings into this one: /profile pull <name>"),
+        new(PushWord, "copy this profile's settings into another: /profile push <name>"),
         new("reload", "read this profile's profile.json back from disk: /profile reload"),
         new("rename", "rename a profile: /profile rename <name> <new-name>"),
         new("reset", "reset a profile to the defaults, keeping URLs, paths and keys: /profile reset [name] [--all]"),
@@ -2926,10 +2934,12 @@ internal sealed partial class ChatScreen
                         // reset leaves default out unless it is the loaded one (2026-09-22, Profiles.ResetRefusal);
                         // delete leaves it out always (later that day, the user's call: it can never be deleted),
                         // and so does rename (later still, the user's call: Profiles.RenameRefusal refuses it from any profile).
+                        // push and pull (2026-09-28) offer every profile but the loaded one, default included (the user's call).
                         var names = sources.Profiles().Where(name => verb.Text switch
                         {
                             ResetWord => Profiles.ResetRefusal(name, sources.LoadedProfile) is null,
                             "delete" or "rename" => !Profiles.IsDefault(name),
+                            PushWord or PullWord => !Profiles.NameEquals(name, sources.LoadedProfile),
                             _ => true,
                         }).ToList();
                         var choices = names.Select(name => new CompletionItem(verb.Text + " " + name, ProfileNote(name, sources.LoadedProfile))).ToList();
@@ -6397,7 +6407,8 @@ internal sealed partial class ChatScreen
     /// / <c>reset &lt;name&gt;</c> (the word ignoring case) ⇒ that; <c>reset</c> alone ⇒ reset the loaded
     /// profile (an empty name); <c>rename &lt;name&gt; &lt;new-name&gt;</c> ⇒ rename (the only three-token
     /// form; <c>rename</c> with fewer is invalid, never a switch — it is a reserved word); one other
-    /// token ⇒ switch; anything else ⇒ invalid. The names are not validated here (the handler says
+    /// token ⇒ switch; <c>push &lt;name&gt;</c> / <c>pull &lt;name&gt;</c> (2026-09-28) ⇒ that, the name
+    /// required; anything else ⇒ invalid. The names are not validated here (the handler says
     /// why one is refused). <see cref="ResetAllFlag"/> (any case, before or after the name) belongs to
     /// <c>reset</c> alone (2026-09-27): it sets <see cref="ProfileAction.All"/>; after any other verb,
     /// or twice, the line is invalid.
@@ -6434,6 +6445,10 @@ internal sealed partial class ChatScreen
                 return new(ProfileActionKind.Delete, tokens[1]);
             case 2 when tokens[0].Equals("reset", StringComparison.OrdinalIgnoreCase):
                 return new(ProfileActionKind.Reset, tokens[1]);
+            case 2 when tokens[0].Equals(PushWord, StringComparison.OrdinalIgnoreCase):
+                return new(ProfileActionKind.Push, tokens[1]);
+            case 2 when tokens[0].Equals(PullWord, StringComparison.OrdinalIgnoreCase):
+                return new(ProfileActionKind.Pull, tokens[1]);
             case 3 when tokens[0].Equals("rename", StringComparison.OrdinalIgnoreCase):
                 return new(ProfileActionKind.Rename, tokens[1], tokens[2]);
             default:
@@ -6558,6 +6573,24 @@ internal sealed partial class ChatScreen
     public static string ProfileRenamedNotice(string name, string newName) => $"({NoticeGlyphs.Profile}renamed profile \"{name}\" to \"{newName}\")";
 
     public static string ProfileRenameFailedError(string detail) => $"Could not rename the profile: {detail}";
+
+    // /profile push and /profile pull (2026-09-28, the user's ask): the settings alone, the target's working directory kept. Pinned.
+    public const string PushWord = "push";
+    public const string PullWord = "pull";
+
+    public static string ProfilePushSelfError(string loaded) => $"/profile push copies into another profile; \"{loaded}\" is the loaded one.";
+
+    public static string ProfilePullSelfError(string loaded) => $"/profile pull copies from another profile; \"{loaded}\" is the loaded one.";
+
+    /// <summary>The confirmation line before a push or a pull; <c>y</c> or <c>yes</c> copies, anything else keeps. A pull says the conversation goes (it takes the reset's tail). Pinned.</summary>
+    public static string CopyProfilePrompt(string from, string to, bool pull) =>
+        $"{NoticeGlyphs.Profile}Overwrite profile \"{to}\"'s settings with \"{from}\"'s (keeping its working directory, memories and prompt files)?{(pull ? " The conversation is cleared." : "")}";
+
+    public static string ProfilePushedNotice(string from, string to) => $"({NoticeGlyphs.Profile}copied profile \"{from}\"'s settings to \"{to}\")";
+
+    public static string ProfilePulledNotice(string from, string to) => $"({NoticeGlyphs.Profile}copied profile \"{from}\"'s settings into \"{to}\"; conversation cleared)";
+
+    public static string ProfileCopyFailedError(string detail) => $"Could not copy the profile's settings: {detail}";
 
     /// <summary><c>settings</c>, then each file's word: the created notice's list and the reset prompt's.</summary>
     private static string SidekickWords(IReadOnlyList<string> files)
@@ -8791,6 +8824,10 @@ internal sealed partial class ChatScreen
                     RenameProfile(action.Name, action.NewName);
                     return;
 
+                case ProfileActionKind.Push or ProfileActionKind.Pull:
+                    await CopyProfileSettingsAsync(action.Name, pull: action.Kind == ProfileActionKind.Pull, cancellationToken).ConfigureAwait(false);
+                    return;
+
                 case ProfileActionKind.Edit:
                 {
                     // The pending save written first, so the editor opens the current values; a file
@@ -8913,6 +8950,58 @@ internal sealed partial class ChatScreen
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             _transcript.Error(ProfileRenameFailedError(ex.Message));
+        }
+    }
+
+    /// <summary>
+    /// <c>/profile push &lt;name&gt;</c> and <c>/profile pull &lt;name&gt;</c> (2026-09-28, the user's ask): the loaded
+    /// profile's settings over the named one's, or the named one's over the loaded one's — <c>profile.json</c> alone, the
+    /// target's working directory kept (<see cref="Profiles.CopySettings"/>, the user's calls). Any profile may overwrite any
+    /// other, <c>default</c> included; the loaded one with itself is refused. The checks, then a confirmation, then the copy
+    /// through the store (<see cref="AppSettings.CopyProfileSettingsAsync"/>: the pending save flushed first). A push is disk
+    /// only, its notice alone; a pull changed the loaded profile and takes the reset's tail — rebind, a cleared conversation,
+    /// a fresh screen, the reconnects (the user's call) — under its notice. A corrupt source is an error, nothing written.
+    /// </summary>
+    private async Task CopyProfileSettingsAsync(string name, bool pull, CancellationToken cancellationToken)
+    {
+        string home = _settings.StorageDirectory;
+        if (Profiles.Resolve(home, name) is not { } other)
+        {
+            _transcript.Error(ProfileMissingError(name));
+            return;
+        }
+
+        string loaded = _settings.ProfileName;
+        if (Profiles.NameEquals(other, loaded))
+        {
+            _transcript.Error(pull ? ProfilePullSelfError(loaded) : ProfilePushSelfError(loaded));
+            return;
+        }
+
+        (string from, string to) = pull ? (other, loaded) : (loaded, other);
+        if (!await ConfirmAsync(CopyProfilePrompt(from, to, pull), cancellationToken).ConfigureAwait(false))
+        {
+            _transcript.Notice(KeptNotice);
+            return;
+        }
+
+        try
+        {
+            await _settings.CopyProfileSettingsAsync(from, to).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.Json.JsonException)
+        {
+            _transcript.Error(ProfileCopyFailedError(ex.Message));
+            return;
+        }
+
+        if (pull)
+        {
+            await AfterProfileSwitchAsync(cancellationToken, notice: ProfilePulledNotice(from, to)).ConfigureAwait(false);
+        }
+        else
+        {
+            _transcript.Notice(ProfilePushedNotice(from, to));
         }
     }
 

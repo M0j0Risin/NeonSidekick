@@ -73,7 +73,7 @@ What to use instead:
 | `/reasoning [level]` | `NEONSIDEKICK_LLM_REASONING` |
 | `/sampling [field value]` | `NEONSIDEKICK_LLM_SAMPLING`; the profile's saved sampling for the model applies too. |
 | `/cwd [path]` | `--cwd <path>` |
-| `/profile [name]` | `--profile <name>` or `NEONSIDEKICK_PROFILE`; with neither, `default`. `add`/`delete`/`rename`/`reset` need the TUI, or the files under `<home>\profiles`. |
+| `/profile [name]` | `--profile <name>` or `NEONSIDEKICK_PROFILE`; with neither, `default`. `add`/`delete`/`rename`/`reset`/`push`/`pull` need the TUI, or the files under `<home>\profiles`. |
 | `/settings`, `//`, `/tools`, `/skills` (the pane; `/skills add` works headless), `/mcp` | Set things up in the TUI beforehand, or edit the profile's `profile.json` / `mcp.json`. Environment variables override some values for one run. |
 | `/remember <text>` | Ask in a message ("Remember that …"); the model has the `save_memory` tool. |
 | `/memory` | Ask the model to recall; to prune or edit, use the TUI or edit `memory.json`. |

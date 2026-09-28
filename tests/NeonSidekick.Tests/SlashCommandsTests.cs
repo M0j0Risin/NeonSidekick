@@ -546,7 +546,7 @@ public class SlashCommandsTests
         Assert.StartsWith("Commands:\n" + Row("/about", "show general information about the app and profile") + Row("/botchat", SlashCommands.HelpEntries.Single(e => e.Command == "/botchat").Summary), SlashCommands.HelpText);   // A to Z since 2026-09-27 (the user's call); /settings led the grouped list until then
         Assert.Contains(Row("/gituser", "write the Git native email and Git native name into the working directory's repository") + Row("/help", "show help") + Row("/imagine", SlashCommands.HelpEntries.Single(e => e.Command == "/imagine").Summary), SlashCommands.HelpText);   // neighbours by the alphabet since 2026-09-27
         Assert.Contains(Row("/settings, //", "edit and save settings"), SlashCommands.HelpText);
-        Assert.Contains(Row("/profile", "switch profiles, or /profile <name> | add <name> | delete <name> | rename <name> <new-name> | reset [name] | edit | reload"), SlashCommands.HelpText);   // edit and reload 2026-09-21
+        Assert.Contains(Row("/profile", "switch profiles, or /profile <name> | add <name> | delete <name> | rename <name> <new-name> | reset [name] | push <name> | pull <name> | edit | reload"), SlashCommands.HelpText);   // edit and reload 2026-09-21, push and pull 2026-09-28
         Assert.Contains(Row("/exit", "exit/quit the application"), SlashCommands.HelpText);
         Assert.Contains(Row("/server", "pick an LLM server found on the usual ports, or /server <url>"), SlashCommands.HelpText);
         Assert.Contains(Row("/model", "pick a model from the LLM server, or /model <id>"), SlashCommands.HelpText);

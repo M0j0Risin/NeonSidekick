@@ -39,8 +39,8 @@ public static class Profiles
     /// </summary>
     public static readonly string[] BasicSidekickFiles = { "memory.json" };
 
-    /// <summary>The <c>/profile</c> subcommand words (<c>edit</c> and <c>reload</c> since 2026-09-21); a profile cannot be called any of them, so <c>/profile add</c> is never a switch and <c>/profile reset</c> is always the loaded one.</summary>
-    public static readonly string[] ReservedNames = { "add", "delete", "edit", "reload", "rename", "reset" };
+    /// <summary>The <c>/profile</c> subcommand words (<c>edit</c> and <c>reload</c> since 2026-09-21, <c>push</c> and <c>pull</c> since 2026-09-28); a profile cannot be called any of them, so <c>/profile add</c> is never a switch and <c>/profile reset</c> is always the loaded one.</summary>
+    public static readonly string[] ReservedNames = { "add", "delete", "edit", "pull", "push", "reload", "rename", "reset" };
 
     /// <summary>
     /// The sidekick's own name, never a profile's (2026-09-21, the user's call): it is the default
@@ -52,7 +52,7 @@ public static class Profiles
     public const string SidekickName = "neon";
 
     /// <summary>The wording for a name <see cref="IsValidName"/> refuses. Pinned.</summary>
-    public const string NameError = "must be 1 to 32 letters, digits, - or _ (and not neon, add, delete, edit, reload, rename or reset)";
+    public const string NameError = "must be 1 to 32 letters, digits, - or _ (and not neon, add, delete, edit, pull, push, reload, rename or reset)";
 
     /// <summary>Why <c>default</c> cannot be deleted. Pinned.</summary>
     public const string DefaultUndeletable = "The default profile cannot be deleted.";
@@ -368,6 +368,50 @@ public static class Profiles
         }
 
         WriteProfileFile(path, data);
+    }
+
+    /// <summary>
+    /// Copies one profile's settings over another's (2026-09-28, <c>/profile push</c> and <c>/profile pull</c>, the
+    /// user's ask): <paramref name="from"/>'s <c>profile.json</c> written as <paramref name="to"/>'s, every setting but
+    /// <see cref="AppSettingsData.WorkingDirectory"/>, which the target keeps (the user's call: a sandbox is the
+    /// sidekick's own, as <c>/profile add</c> already says by clearing it). The settings alone — the memories, the prompt
+    /// files and <c>mcp.json</c> stay as they are, <c>/memory copy</c> and the prompt files' <c>copy</c> being the way to
+    /// move those. The keys go as stored, protected or not (<see cref="KeepOnReset"/>'s reasoning). A missing source is the
+    /// compiled defaults, as loading it would give; a corrupt one <b>throws</b> <see cref="JsonException"/> before anything
+    /// is written (<see cref="ReadProfileFile"/>). A corrupt target is what the copy cures: nothing kept from it, logged.
+    /// The target's folder is created when it is only logical, as <c>default</c>'s can be. No guard, like <see cref="Reset"/>:
+    /// any profile may overwrite any other, <c>default</c> included (the user's call); the caller asks first. The loaded
+    /// profile goes through <c>AppSettings.CopyProfileSettingsAsync</c>, which flushes its pending save first.
+    /// Throws <see cref="IOException"/> / <see cref="UnauthorizedAccessException"/>; the caller reports.
+    /// </summary>
+    public static void CopySettings(string home, string from, string to)
+    {
+        if (!IsValidName(from))
+        {
+            throw new ArgumentException(NameError, nameof(from));
+        }
+
+        if (!IsValidName(to))
+        {
+            throw new ArgumentException(NameError, nameof(to));
+        }
+
+        var data = ReadProfileFile(ProfileFile(home, from));
+        string path = ProfileFile(home, to);
+        string keptDirectory = "";
+        try
+        {
+            keptDirectory = ReadProfileFile(path).WorkingDirectory;
+        }
+        catch (JsonException ex)
+        {
+            DiagnosticLog.Warn(Category, $"Copy into profile \"{to}\": profile.json did not parse ({ex.Message}); nothing kept.");
+        }
+
+        data.WorkingDirectory = keptDirectory;
+        System.IO.Directory.CreateDirectory(Directory(home, to));
+        WriteProfileFile(path, data);
+        DiagnosticLog.Info(Category, $"Copied profile \"{from}\"'s settings to \"{to}\".");
     }
 
     /// <summary>
