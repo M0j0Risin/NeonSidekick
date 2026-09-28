@@ -51,7 +51,7 @@ public class InfoPaneTests : IDisposable
         await new InfoPane(pane, Source()).ShowAsync(InfoPane.Title, Tabs(), 0, CancellationToken.None);
 
         Assert.Equal(["One"], _built);
-        Assert.Contains(Rule(40) + "\n" + Titled("Help   One    Two    Three ") + "\n \nfirst\n" + Rule(40) + "\n" + InfoPane.HintText + "\n", Output);
+        Assert.Contains(Rule(40) + "\n" + Titled(InfoPane.Title + "   One    Two    Three ") + "\n \nfirst\n" + Rule(40) + "\n" + InfoPane.HintText + "\n", Output);
         Assert.False(pane.OverlayOpen);
         Assert.EndsWith(Rule(40) + "\n› \n" + Rule(40) + "\nidle", Output);
     }
@@ -185,11 +185,19 @@ public class InfoPaneTests : IDisposable
         string strip = InfoPane.TabStripMarkup(InfoPane.Title, ["Commands", "Keys"], 0);
 
         Assert.Equal(
-            $"[{Theme.Label.ToMarkup()}]Help[/]  [{Theme.MenuHighlight.ToMarkup()}] Commands [/]  [{Theme.DimText.ToMarkup()}] Keys [/]",
+            $"[{Theme.Label.ToMarkup()}]❓ Help[/]  [{Theme.MenuHighlight.ToMarkup()}] Commands [/]  [{Theme.DimText.ToMarkup()}] Keys [/]",
             strip);
-        Assert.Equal("Help   Commands    Keys ", Markup.Remove(strip));
+        Assert.Equal("❓ Help   Commands    Keys ", Markup.Remove(strip));
         // A title with brackets is escaped, not parsed.
         Assert.Equal("Help   a[b] ", Markup.Remove(InfoPane.TabStripMarkup("Help", ["a[b]"], 0)));
+    }
+
+    /// <summary>The label's ❓ is two cells, as Windows Terminal draws it (2026-09-28): the strip's indent and its click columns count from it.</summary>
+    [Fact]
+    public void TheTitlesGlyph_IsTwoCellsWide()
+    {
+        Assert.Equal(2, TextCells.Width("❓"));
+        Assert.Equal(7, TextCells.Width(InfoPane.Title));
     }
 
     /// <summary>The one tab-key definition, shared with the menu pane.</summary>
@@ -289,7 +297,7 @@ public class InfoPaneTests : IDisposable
         await new InfoPane(pane, Source()).ShowAsync(InfoPane.Title, [Tab("Long", Numbered(20)), Tab("Short", "brief")], 0, CancellationToken.None);
 
         Assert.Equal(["Long", "Long", "Short"], _built);
-        Assert.Contains(Titled("Help   Long    Short ") + "\n \nbrief\n" + Rule(40) + "\n" + InfoPane.HintText + "\n", Output);
+        Assert.Contains(Titled(InfoPane.Title + "   Long    Short ") + "\n \nbrief\n" + Rule(40) + "\n" + InfoPane.HintText + "\n", Output);
         Assert.EndsWith(Rule(40) + "\n› \n" + Rule(40) + "\nidle", Output);
     }
 
@@ -387,13 +395,13 @@ public class InfoPaneTests : IDisposable
         var (pane, input, keys) = ClickablePane(cursorTop: 100);
         using var _ = pane;
         pane.Show();
-        input.PushClick(8, 101);                         // "Three" on the second row
+        input.PushClick(11, 101);                        // "Three" on the second row
         input.Push(Keys.Escape);
 
         await new InfoPane(pane, keys).ShowAsync(InfoPane.Title, [Tab("One", "first"), Tab("Two", "second"), Tab("Three", "third"), Tab("Four", "fourth")], 0, CancellationToken.None);
 
         Assert.Equal(["One", "Three"], _built);
-        Assert.Contains("\n" + Titled("Help   One    Two ", 30) + "\n       Three    Four \n \nthird\n" + Rule(30), Output);
+        Assert.Contains("\n" + Titled(InfoPane.Title + "   One    Two ", 30) + "\n          Three    Four \n \nthird\n" + Rule(30), Output);
     }
 
     /// <summary>The overlay's first row is the cursor's (buffer row 100): the strip 100, the spacer 101, the content from 102.</summary>
@@ -404,15 +412,15 @@ public class InfoPaneTests : IDisposable
         using var _ = pane;
         pane.Show();
         input.Push(Keys.Right, Keys.End);                // Two, scrolled to its end
-        input.PushClick(22, 100);                        // "Three" on the strip
-        input.PushClick(22, 100);                        // again: the active tab, nothing to draw
-        input.PushClick(7, 100);                         // "One"
+        input.PushClick(25, 100);                        // "Three" on the strip
+        input.PushClick(25, 100);                        // again: the active tab, nothing to draw
+        input.PushClick(10, 100);                        // "One"
         input.Push(Keys.Escape);
 
         await new InfoPane(pane, keys).ShowAsync(InfoPane.Title, [Tab("One", "first"), Tab("Two", Numbered(20)), Tab("Three", "third")], 0, CancellationToken.None);
 
         Assert.Equal(["One", "Two", "Two", "Three", "One"], _built);
-        Assert.Contains("\n" + Titled("Help   One    Two    Three ") + "\n \nthird\n" + Rule(40), Output);
+        Assert.Contains("\n" + Titled(InfoPane.Title + "   One    Two    Three ") + "\n \nthird\n" + Rule(40), Output);
         Assert.EndsWith(Rule(40) + "\n› \n" + Rule(40) + "\nidle", Output);
     }
 

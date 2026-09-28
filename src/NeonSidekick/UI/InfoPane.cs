@@ -34,8 +34,8 @@ public sealed record InfoTab(string Title, Func<IRenderable> Content);
 /// </summary>
 public sealed class InfoPane
 {
-    /// <summary>The strip's label for <c>/help</c>.</summary>
-    public const string Title = "Help";
+    /// <summary>The strip's label for <c>/help</c> (the glyph since 2026-09-28, the user's ask: every other pane's label wore one).</summary>
+    public const string Title = "❓ Help";
 
     /// <summary>The hint row under the pane. Pinned.</summary>
     public const string HintText = "ESC closes · ←/→ tabs · ↑/↓ scroll";

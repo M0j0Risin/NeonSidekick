@@ -8678,14 +8678,14 @@ public partial class ChatScreenTests : IDisposable
         // Nothing in the transcript: the list is in the pane, under the rule, with its own hint.
         Assert.DoesNotContain("  · Commands:", output);
         string rule = new(ScreenPane.RuleGlyph, 240);
-        Assert.Contains(rule + "\n" + Titled("Help   Commands (basic)    Commands (advanced)    Keys ") + "\n \n/clear ", output);   // the basic tab first, A to Z (later on 2026-09-27; one Commands tab from /about until then)
+        Assert.Contains(rule + "\n" + Titled(InfoPane.Title + "   Commands (basic)    Commands (advanced)    Keys ") + "\n \n/clear ", output);   // the basic tab first, A to Z (later on 2026-09-27; one Commands tab from /about until then)
         Assert.Contains(HelpRow("/sessions", SlashCommands.HelpEntries.Single(e => e.Command == "/sessions").Summary), output);   // the column is the widest label of all; the cell is padded out to the longest summary
         // → the advanced tab: the rest, A to Z, in the same label column.
-        Assert.Contains(rule + "\n" + Titled("Help   Commands (basic)    Commands (advanced)    Keys ") + "\n \n/about ", output);
+        Assert.Contains(rule + "\n" + Titled(InfoPane.Title + "   Commands (basic)    Commands (advanced)    Keys ") + "\n \n/about ", output);
         Assert.Contains(HelpRow("/timer", "list timers, or /timer <duration> [name] (10m, 90s, 1h30m) | stop <name> | stop all"), output);
         Assert.Contains(rule + "\n" + Row(InfoPane.HintText) + "\n", output);
         // → showed the Keys tab, with the keys that apply (voice off: no push-to-talk row).
-        Assert.Contains(rule + "\n" + Titled("Help   Commands (basic)    Commands (advanced)    Keys ") + "\n \nEnter", output);
+        Assert.Contains(rule + "\n" + Titled(InfoPane.Title + "   Commands (basic)    Commands (advanced)    Keys ") + "\n \nEnter", output);
         // The label column follows the widest key ("Left / Right", 12 cells) + the gap of 2.
         Assert.Contains("Ctrl+Home     scroll to top of the chat pane", output);
         Assert.Contains("Ctrl+End      scroll to bottom of the chat pane", output);
