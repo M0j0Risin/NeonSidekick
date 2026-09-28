@@ -215,6 +215,7 @@ The loaded skills, one row each with its scope (`profile`, `global` or `external
 | Reflection cooldown mode | `last-written-skill` makes only a turn that used the skill just written wait; `all-skills` makes every automatic reflection wait. | `last-written-skill` |
 | Reflection includes sessions | The reflection opens with the earlier sessions that match the turn, and can search them. | on |
 | Reflection yields to turns | A message sent while a reflection runs pauses it, so the reply gets the server; the same reflection runs again once the reply and any queued messages are done. Turn off if your server serves requests in parallel. | on |
+| Reflection edit supporting files | A reflection may also change a skill's supporting files (the data, examples or scripts beside its `SKILL.md`) with `skill_editor`'s `write_file` and `edit_file`. Off, a reflection writes the `SKILL.md` alone; the main chat may always write them. | off |
 
 #### Project
 
@@ -830,7 +831,7 @@ A headless run loads `default`, never whichever profile the TUI was last switche
 | Tool | Arguments | What it does |
 |---|---|---|
 | `load_skill` | `name, file?` | Loads a skill's full instructions by name (the catalog is in the system prompt), or one of the files bundled with it. Offered only while a skill is installed. |
-| `skill_editor` | `action, scope?, name, description?, instructions?, summary?` | `create` or `update` a skill under the `profile` (the default) or `global` root — a named folder of instructions kept for later sessions. Never deletes. |
+| `skill_editor` | `action, scope?, name, description?, instructions?, path?, content?, old_text?, new_text?, replace_all?, summary?` | `create` or `update` a skill under the `profile` (the default) or `global` root — a named folder of instructions kept for later sessions. `write_file` (the whole file, `content`) and `edit_file` (`old_text` → `new_text`, as `patch_file` matches) keep an existing skill's supporting files current, `path` relative to the skill folder; never the `SKILL.md` itself, the app's `.neon-source.json`, or anything in `.git`, `node_modules` or `.trash`. With *File safe edits* on, the previous version goes to the skill's own `.trash`. External skills are read-only. Never deletes. |
 
 ### Sessions
 

@@ -139,6 +139,14 @@ public static class SkillLearner
         "Create a new skill (action create, scope profile) only when no listed skill covers the topic. " +
         "Call skill_editor at most once, with a summary: one or two sentences saying what you changed and why, for the user to read. A turn that was a simple question, a chat, or a task any session could do without notes teaches nothing: then answer with the single word " + NothingWord + " and no tool call.";
 
+    /// <summary>
+    /// Appended to the instruction when the reflection may write a skill's supporting files
+    /// (<c>Reflection edit supporting files</c>, 2026-09-27): what the file actions are for. Pinned.
+    /// </summary>
+    public const string SupportingFilesInstruction =
+        "A skill may keep supporting files beside its instructions (data, examples, a script; load_skill lists them): when the turns corrected or extended one, keep it current with skill_editor action edit_file (old_text to new_text) or write_file (the whole file), a path relative to the skill folder. " +
+        "That call counts as your one skill_editor call; never write the SKILL.md that way.";
+
     /// <summary>The catalog's stand-in when no skill is installed. Pinned.</summary>
     public const string NoSkillsLine = "No skills are installed yet.";
 
@@ -235,12 +243,13 @@ public static class SkillLearner
     /// (<see cref="SessionText.Read(SessionRecord, int, int, TimeZoneInfo, int)"/> at <see cref="MaxSessionChars"/>),
     /// then <see cref="SessionsRequest"/>.
     /// </summary>
-    public static List<ChatMessage> Build(ReflectionMaterial material, IReadOnlyList<Skill> catalog, IReadOnlyDictionary<string, string>? usage, TimeZoneInfo zone)
+    /// <param name="files">Whether the reflection may write supporting files: <see cref="SupportingFilesInstruction"/> joins the instruction (2026-09-27).</param>
+    public static List<ChatMessage> Build(ReflectionMaterial material, IReadOnlyList<Skill> catalog, IReadOnlyDictionary<string, string>? usage, TimeZoneInfo zone, bool files = false)
     {
         ArgumentNullException.ThrowIfNull(material);
         ArgumentNullException.ThrowIfNull(catalog);
         ArgumentNullException.ThrowIfNull(zone);
-        string catalogBlock = catalog.Count == 0 ? NoSkillsLine : SkillsPrompt.Catalog(catalog, usage);
+        string catalogBlock = (files ? SupportingFilesInstruction + "\n\n" : "") + (catalog.Count == 0 ? NoSkillsLine : SkillsPrompt.Catalog(catalog, usage));
         switch (material)
         {
             case ReflectionMaterial.Turn turn:
@@ -350,8 +359,11 @@ public static class SkillLearner
     /// <see cref="Assistant.RequestAsync"/> (<see cref="DefaultMaxRequests"/> unless the host passes the setting).
     /// Never throws: cancellation is <see cref="SkillLearnOutcome.Cancelled"/>, anything else
     /// <see cref="SkillLearnOutcome.Failed"/> with <see cref="Assistant.Explain"/>'s sentence.
+    /// <paramref name="files"/> (2026-09-27, <c>Reflection edit supporting files</c> on): the editor offers
+    /// <c>write_file</c> / <c>edit_file</c> too, the instruction says so, and a file written ends the pass
+    /// as a SKILL.md write does; null keeps the reflection to the SKILL.md.
     /// </summary>
-    public static async Task<SkillLearnResult> RunAsync(Assistant assistant, ReflectionMaterial material, SkillRoots roots, bool external, ReasoningEffort effort, CancellationToken cancellationToken, int maxRequests, SessionEvidence? sessions)
+    public static async Task<SkillLearnResult> RunAsync(Assistant assistant, ReflectionMaterial material, SkillRoots roots, bool external, ReasoningEffort effort, CancellationToken cancellationToken, int maxRequests, SessionEvidence? sessions, SkillFileAccess? files = null)
     {
         ArgumentNullException.ThrowIfNull(assistant);
         ArgumentNullException.ThrowIfNull(material);
@@ -360,7 +372,7 @@ public static class SkillLearner
 
         var catalog = new SkillCatalog(() => roots);
         catalog.Scan(external);
-        var editor = new SkillEditorTool(() => roots, () => external);
+        var editor = new SkillEditorTool(() => roots, () => external, files);
         var tools = new List<AIFunction>(3);
         if (catalog.Skills.Count > 0)
         {
@@ -374,7 +386,7 @@ public static class SkillLearner
         }
 
         var usage0 = sessions is null ? null : UsageLines(sessions, catalog.Skills);
-        var messages = Build(material, catalog.Skills, usage0, sessions?.Time.LocalTimeZone ?? TimeZoneInfo.Utc);
+        var messages = Build(material, catalog.Skills, usage0, sessions?.Time.LocalTimeZone ?? TimeZoneInfo.Utc, files is not null);
         var usage = TokenUsage.Zero;
         int requests = 0;
         try
@@ -405,7 +417,7 @@ public static class SkillLearner
                     var (text, _) = await Assistant.InvokeToolAsync(tools, call, cancellationToken).ConfigureAwait(false);
                     results.Add(Assistant.ResultContent(call, text));
                     if (string.Equals(call.Name, SkillEditorTool.ToolName, StringComparison.Ordinal)
-                        && editor.LastResult is { Outcome: SkillEditOutcome.Created or SkillEditOutcome.Updated } written)
+                        && editor.LastResult is { Outcome: SkillEditOutcome.Created or SkillEditOutcome.Updated or SkillEditOutcome.FileWritten or SkillEditOutcome.FileEdited } written)
                     {
                         edit ??= written;
                     }

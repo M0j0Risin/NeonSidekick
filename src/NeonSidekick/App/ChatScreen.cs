@@ -926,7 +926,7 @@ internal sealed partial class ChatScreen
         string external = externalSkills ?? SkillRoots.DefaultExternalDirectory();
         Func<SkillRoots> roots = () => SkillRoots.For(_settings, external);
         _catalog = new SkillCatalog(roots);
-        _skillTools = SkillTools(_catalog, roots, () => { var e = _effective(); return e.AgentSkills && e.ExternalSkills; });
+        _skillTools = SkillTools(_catalog, roots, () => { var e = _effective(); return e.AgentSkills && e.ExternalSkills; }, new SkillFileAccess(() => _effective().FileSafeEdits, _time));
         _project = new ProjectFile(() => _files.Root);
         _copy = copyToClipboard ?? (_ => false);
         // Everything the screen shows goes through the pane: the transcript flows above it, the
@@ -1945,14 +1945,19 @@ internal sealed partial class ChatScreen
         };
     }
 
+    /// <summary>The supporting-file actions a reflection decided now is offered: with <c>Reflection edit supporting files</c> on (2026-09-27), <c>File safe edits</c> read live at each write; null otherwise.</summary>
+    private SkillFileAccess? ReflectionFiles(AppSettingsData effective) =>
+        effective.ReflectionEditsSupportingFiles ? new SkillFileAccess(() => _effective().FileSafeEdits, _time) : null;
+
     /// <summary>
     /// Everything a reflection is started with, captured when it is decided (<see cref="MaybeLearn"/>):
     /// the last turn's messages as a copy, the focus, whether <c>/learn</c> asked for it, the roots
     /// of that moment (a profile switch later still writes the old profile, the rule a running
     /// reflection follows too), the external flag, the level, the request cap. The one pending slot holds one of these
-    /// while a reflection runs (<see cref="_pendingLearn"/>).
+    /// while a reflection runs (<see cref="_pendingLearn"/>). <c>Files</c>: the supporting-file actions when
+    /// <c>Reflection edit supporting files</c> was on at the decision (2026-09-27), null otherwise.
     /// </summary>
-    private sealed record PendingLearn(ReflectionMaterial Material, bool Forced, SkillRoots Roots, bool External, ReasoningEffort Effort, int MaxRequests, CancellationToken Token, SessionEvidence? Sessions, SessionStore? Store, long? SessionId, int TurnOrdinal)
+    private sealed record PendingLearn(ReflectionMaterial Material, bool Forced, SkillRoots Roots, bool External, ReasoningEffort Effort, int MaxRequests, CancellationToken Token, SessionEvidence? Sessions, SessionStore? Store, long? SessionId, int TurnOrdinal, SkillFileAccess? Files = null)
     {
         /// <summary>The queued line: the turn's or the pass's — the one progress line (a start prints nothing since later still on 2026-09-19).</summary>
         public string QueuedNotice => Material is ReflectionMaterial.Sessions ? LearnSessionsQueuedNotice : LearnQueuedNotice;
@@ -1979,7 +1984,7 @@ internal sealed partial class ChatScreen
         string action = result.Edit?.Outcome switch
         {
             SkillEditOutcome.Created => ReflectionRow.Created,
-            SkillEditOutcome.Updated => ReflectionRow.Updated,
+            SkillEditOutcome.Updated or SkillEditOutcome.FileWritten or SkillEditOutcome.FileEdited => ReflectionRow.Updated,   // a supporting file changed updates its skill (2026-09-27)
             _ => "",
         };
         return new ReflectionRow(sessionId, turnOrdinal, forced, outcome, skill, action, result.Requests, result.Usage.Input, result.Usage.Output);
@@ -1991,6 +1996,15 @@ internal sealed partial class ChatScreen
     /// by <see cref="DrainLearn"/> at the next safe point; cleared only by that or the exit.
     /// </summary>
     private PendingLearn? _pendingLearn;
+
+    /// <summary>A <c>skill_editor</c> result as its transcript line (2026-09-27): the first line, a trailing colon dropped — an <c>edit_file</c>'s <c>…(line 12):</c> header without the region under it.</summary>
+    public static string SkillNoteLine(string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        int end = text.IndexOf('\n', StringComparison.Ordinal);
+        string first = (end < 0 ? text : text[..end]).TrimEnd('\r');
+        return first.EndsWith(':') ? first[..^1] : first;
+    }
 
     /// <summary>
     /// The one decider of a skill-learning reflection (<see cref="SkillLearner"/>), on the turn task
@@ -2043,7 +2057,7 @@ internal sealed partial class ChatScreen
         var (query, result) = evidence is null ? (null, null) : SkillLearner.Evidence(evidence, LastUserLine(turn));
         var material = new ReflectionMaterial.Turn(turn, focus, query, result);
         var pending = new PendingLearn(material, forced, _catalog.Roots, effective.ExternalSkills, ReflectionReasoning.Resolve(effective), ReflectionMaxRequests.Resolve(effective), cancellationToken,
-            evidence, effective.SessionLogging ? _sessions : null, _sessionId, _sessionId is { } sessionId ? _sessions.Summary(sessionId)?.Turns ?? 0 : 0);
+            evidence, effective.SessionLogging ? _sessions : null, _sessionId, _sessionId is { } sessionId ? _sessions.Summary(sessionId)?.Turns ?? 0 : 0, ReflectionFiles(effective));
         string log = tally + (result is null ? "" : "; with the earlier sessions found for the turn");
         if (QueueOrStart(pending, log))
         {
@@ -2240,7 +2254,7 @@ internal sealed partial class ChatScreen
     /// </summary>
     private void StartLearn(PendingLearn pending)
     {
-        var job = _session.StartLearning((a, token) => SkillLearner.RunAsync(a, pending.Material, pending.Roots, pending.External, pending.Effort, token, pending.MaxRequests, pending.Sessions), pending.Token);
+        var job = _session.StartLearning((a, token) => SkillLearner.RunAsync(a, pending.Material, pending.Roots, pending.External, pending.Effort, token, pending.MaxRequests, pending.Sessions, pending.Files), pending.Token);
         if (job is null)
         {
             return;
@@ -2372,7 +2386,7 @@ internal sealed partial class ChatScreen
 
         var material = new ReflectionMaterial.Sessions(records, action.Query);
         var evidence = new SessionEvidence(_sessions, _effective, _sessionId, _time);
-        var pending = new PendingLearn(material, true, _catalog.Roots, effective.ExternalSkills, ReflectionReasoning.Resolve(effective), ReflectionMaxRequests.Resolve(effective), cancellationToken, evidence, _sessions, null, 0);
+        var pending = new PendingLearn(material, true, _catalog.Roots, effective.ExternalSkills, ReflectionReasoning.Resolve(effective), ReflectionMaxRequests.Resolve(effective), cancellationToken, evidence, _sessions, null, 0, ReflectionFiles(effective));
         QueueOrStart(pending, action.Query is null ? "the last " + SessionText.Sessions(records.Count) : SessionText.Sessions(records.Count) + " matching " + LogText.Quoted(action.Query));
     }
 
@@ -3929,11 +3943,11 @@ internal sealed partial class ChatScreen
     /// </summary>
     public sealed record SkillsForTurn(SkillCatalog Catalog, IReadOnlyList<AIFunction> Tools, ProjectFile Project, bool Enabled, bool External, bool ProjectFile = true);
 
-    /// <summary>The skill tools (2026-09-16): <c>load_skill</c> over the catalog and <c>skill_editor</c> over the live roots and the live external switch (whether <c>.agents\skills</c> is read, so a skill there blocks its name). Shared with headless.</summary>
-    public static IReadOnlyList<AIFunction> SkillTools(SkillCatalog catalog, Func<SkillRoots> roots, Func<bool> external) => new AIFunction[]
+    /// <summary>The skill tools (2026-09-16): <c>load_skill</c> over the catalog and <c>skill_editor</c> over the live roots and the live external switch (whether <c>.agents\skills</c> is read, so a skill there blocks its name); <paramref name="files"/> gives the editor its <c>write_file</c> / <c>edit_file</c> (2026-09-27). Shared with headless.</summary>
+    public static IReadOnlyList<AIFunction> SkillTools(SkillCatalog catalog, Func<SkillRoots> roots, Func<bool> external, SkillFileAccess? files = null) => new AIFunction[]
     {
         new LoadSkillTool(catalog),
-        new SkillEditorTool(roots, external),
+        new SkillEditorTool(roots, external, files),
     };
 
     /// <summary>
@@ -11115,8 +11129,9 @@ internal sealed partial class ChatScreen
                 _transcript.SkillNote(LoadSkillTool.Note(result.Text));
                 break;
             case TurnEvent.ToolResult result when string.Equals(result.Name, SkillEditorTool.ToolName, StringComparison.Ordinal):
-                // created / updated / renamed / deleted skill 'x' (SkillText): a quiet tool's one line, behind the skills' glyph too.
-                _transcript.SkillNote(result.Text);
+                // created / updated / renamed / deleted skill 'x' (SkillText): a quiet tool's one line, behind the skills' glyph too;
+                // an edit_file's numbered region (2026-09-27) is the model's to read, so the line is its header alone.
+                _transcript.SkillNote(SkillNoteLine(result.Text));
                 break;
             case TurnEvent.ToolResult result when string.Equals(result.Name, RecallMemoryTool.ToolName, StringComparison.Ordinal):
                 // The list is the model's to read (/memory shows it); the line says how many (RecallMemoryTool.Note).

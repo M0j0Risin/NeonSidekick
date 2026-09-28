@@ -33,14 +33,27 @@ public enum SkillEditOutcome
 
     /// <summary>The pane renamed the folder and rewrote the frontmatter's <c>name</c> line (<see cref="SkillEditor.Rename"/>, 2026-09-21); the result's name is the new one.</summary>
     Renamed,
+
+    /// <summary><c>write_file</c> wrote a supporting file beside the SKILL.md (2026-09-27); the result's detail is the file tools' sentence (<c>FileText.Wrote</c>).</summary>
+    FileWritten,
+
+    /// <summary><c>edit_file</c> changed a supporting file (2026-09-27); the detail is <c>FileText.Edited</c>'s sentence.</summary>
+    FileEdited,
+
+    /// <summary>A file action named the SKILL.md, the app's <c>.neon-source.json</c> or a path in a folder the skill never keeps (<see cref="SkillCatalog.SkippedFolders"/>); the result's path is what was named.</summary>
+    ProtectedFile,
+
+    /// <summary>A file action the file layer refused (outside the folder, too long, <c>old_text</c> not found…); the detail is its sentence.</summary>
+    FileRefused,
 }
 
 /// <summary>
 /// The outcome, the skill's name and scope, the bytes written, a detail for the failures; and
 /// <paramref name="Summary"/> — the model's own sentence on what changed, from the tool's
 /// <c>summary</c> argument (2026-09-19; empty when it gave none), never part of the skill.
+/// <paramref name="Path"/> is the supporting file a <c>write_file</c> / <c>edit_file</c> named (2026-09-27), relative to the skill folder.
 /// </summary>
-public sealed record SkillEditResult(SkillEditOutcome Outcome, string Name, SkillScope Scope, long Bytes = 0, string Detail = "", int Length = 0, string Summary = "");
+public sealed record SkillEditResult(SkillEditOutcome Outcome, string Name, SkillScope Scope, long Bytes = 0, string Detail = "", int Length = 0, string Summary = "", string Path = "");
 
 /// <summary>
 /// The write side of the skills, used by <c>skill_editor</c> (<see cref="Create"/>, <see cref="Update"/>)
@@ -48,7 +61,8 @@ public sealed record SkillEditResult(SkillEditOutcome Outcome, string Name, Skil
 /// <see cref="Create"/> makes <c>&lt;root&gt;\&lt;name&gt;\SKILL.md</c> from a description and the
 /// instructions, <see cref="Update"/> rewrites one or both in an existing file and carries its other
 /// frontmatter lines through, <see cref="Move"/> renames the folder under the other writable root and
-/// <see cref="Delete"/> removes it with everything in it. Only the profile and global roots are written
+/// <see cref="Delete"/> removes it with everything in it; <see cref="WriteFile"/> and <see cref="EditFile"/>
+/// (2026-09-27) write the files beside the <c>SKILL.md</c>, never it. Only the profile and global roots are written
 /// (<see cref="SkillScopes.Writable"/>); the external folder is other clients' and read-only here. The
 /// model's tool never deletes or moves a skill — the pane does, after a confirmation, and only a folder
 /// that sits right under its root (<see cref="Move"/> and <see cref="Delete"/> check before they act).
@@ -210,6 +224,112 @@ public static class SkillEditor
         }
 
         return Write(directory, name, scope, SkillFrontmatter.Write(name, flat ?? current, other, hasInstructions ? instructions! : body), SkillEditOutcome.Updated);
+    }
+
+    /// <summary>
+    /// <c>skill_editor</c>'s <c>write_file</c> (2026-09-27, the user's ask: a skill's data files — a
+    /// mapping, examples — were readable through <c>load_skill</c> and changeable by nothing): a file
+    /// beside the SKILL.md of an existing skill, created or replaced whole. The skill is found as
+    /// <see cref="Update"/> finds it (the other writable root when the named one has none; external
+    /// read-only); the write goes through a <see cref="WorkingDirectory"/> rooted at the skill folder,
+    /// so the sandbox's confinement, its <see cref="WorkingDirectory.MaxWriteChars"/> cap and its atomic
+    /// write are the file tools' own. Never the SKILL.md (<see cref="Create"/> and <see cref="Update"/>
+    /// write that, frontmatter checked), the app's sidecar or a folder the skill never keeps
+    /// (<see cref="SkillEditOutcome.ProtectedFile"/>). <paramref name="keepCopy"/> is <c>File safe edits</c>:
+    /// the previous version goes into the skill's own <c>.trash</c>, which <see cref="SkillCatalog.Resources"/> skips.
+    /// </summary>
+    public static SkillEditResult WriteFile(SkillRoots roots, SkillScope scope, string name, string path, string content, bool external, bool keepCopy, TimeProvider time)
+    {
+        ArgumentNullException.ThrowIfNull(content);
+        return InFile(roots, scope, name, path, external, time, (files, relative, where) =>
+        {
+            var written = files.WriteText(relative, content, overwrite: true, keepCopy);
+            return new SkillEditResult(written.Outcome == FileOutcome.Ok ? SkillEditOutcome.FileWritten : SkillEditOutcome.FileRefused, where.Name, where.Scope, written.Bytes, FileText.Wrote(written), Path: relative);
+        });
+    }
+
+    /// <summary>
+    /// <c>skill_editor</c>'s <c>edit_file</c> (2026-09-27): <paramref name="oldText"/> replaced with
+    /// <paramref name="newText"/> in a supporting file — <c>patch_file</c>'s <see cref="WorkingDirectory.EditText"/>
+    /// with its fuzzy match, line endings and BOM kept — under <see cref="WriteFile"/>'s rules.
+    /// </summary>
+    public static SkillEditResult EditFile(SkillRoots roots, SkillScope scope, string name, string path, string oldText, string newText, bool replaceAll, bool external, bool keepCopy, TimeProvider time)
+    {
+        ArgumentNullException.ThrowIfNull(oldText);
+        ArgumentNullException.ThrowIfNull(newText);
+        return InFile(roots, scope, name, path, external, time, (files, relative, where) =>
+        {
+            var edited = files.EditText(relative, oldText, newText, replaceAll, keepCopy);
+            return new SkillEditResult(edited.Outcome == FileOutcome.Ok ? SkillEditOutcome.FileEdited : SkillEditOutcome.FileRefused, where.Name, where.Scope, 0, FileText.Edited(edited), Path: relative);
+        });
+    }
+
+    /// <summary>The skill's folder found as <see cref="Update"/> finds it, the path checked, then <paramref name="act"/> over a <see cref="WorkingDirectory"/> rooted there.</summary>
+    private static SkillEditResult InFile(SkillRoots roots, SkillScope scope, string name, string path, bool external, TimeProvider time, Func<WorkingDirectory, string, (string Name, SkillScope Scope), SkillEditResult> act)
+    {
+        ArgumentNullException.ThrowIfNull(roots);
+        ArgumentNullException.ThrowIfNull(name);
+        ArgumentNullException.ThrowIfNull(path);
+        ArgumentNullException.ThrowIfNull(time);
+        name = name.Trim();
+        string relative = path.Trim();
+        if (!SkillFrontmatter.IsValidName(name))
+        {
+            return new SkillEditResult(SkillEditOutcome.BadName, name, scope);
+        }
+
+        if (!File.Exists(Path.Combine(roots.Of(scope), name, SkillCatalog.FileName)))
+        {
+            // Not here: where it lives, if anywhere — a file never makes a skill.
+            switch (Find(roots, name, external))
+            {
+                case SkillScope.External:
+                    return new SkillEditResult(SkillEditOutcome.ExternalReadOnly, name, SkillScope.External);
+                case { } found:
+                    scope = found;
+                    break;
+                default:
+                    return new SkillEditResult(SkillEditOutcome.Missing, name, scope);
+            }
+        }
+
+        string directory = Path.Combine(roots.Of(scope), name);
+        var files = new WorkingDirectory(() => directory, time);
+        var resolved = files.Resolve(relative, forWrite: true, out string full);
+        if (resolved != FileOutcome.Ok)
+        {
+            return new SkillEditResult(SkillEditOutcome.FileRefused, name, scope, Detail: FileText.Error(resolved, relative, "write"), Path: relative);
+        }
+
+        if (IsProtected(files.Root, full))
+        {
+            return new SkillEditResult(SkillEditOutcome.ProtectedFile, name, scope, Path: relative);
+        }
+
+        return act(files, relative, (name, scope));
+    }
+
+    /// <summary>
+    /// Whether <paramref name="full"/> is a file a file action never writes: the folder itself, the
+    /// SKILL.md or the sidecar right under it (any case — the disk's), or anything in a
+    /// <see cref="SkillCatalog.SkippedFolders"/> folder at any depth.
+    /// </summary>
+    private static bool IsProtected(string root, string full)
+    {
+        string relative = Path.GetRelativePath(root, full);
+        if (relative == ".")
+        {
+            return true;
+        }
+
+        var segments = relative.Split([Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar], StringSplitOptions.RemoveEmptyEntries);
+        if (segments.Length == 1
+            && (string.Equals(segments[0], SkillCatalog.FileName, StringComparison.OrdinalIgnoreCase) || string.Equals(segments[0], SkillProvenance.FileName, StringComparison.OrdinalIgnoreCase)))
+        {
+            return true;
+        }
+
+        return segments.Take(segments.Length - 1).Any(s => SkillCatalog.SkippedFolders.Contains(s, StringComparer.OrdinalIgnoreCase));
     }
 
     /// <summary>

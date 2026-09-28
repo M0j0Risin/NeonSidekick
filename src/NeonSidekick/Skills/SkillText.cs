@@ -119,7 +119,28 @@ public static class SkillText
 
     // ── skill_editor ────────────────────────────────────────────────────────
 
-    public static string BadAction(string raw) => $"Error: '{raw.Trim()}' is not an action; use {SkillEditorTool.CreateAction} or {SkillEditorTool.UpdateAction}";
+    /// <param name="files">Whether the tool offers the file actions (2026-09-27): a reflection with <c>Reflection edit supporting files</c> off is told create or update alone.</param>
+    public static string BadAction(string raw, bool files = false) => files
+        ? $"Error: '{raw.Trim()}' is not an action; use {SkillEditorTool.CreateAction}, {SkillEditorTool.UpdateAction}, {SkillEditorTool.WriteFileAction} or {SkillEditorTool.EditFileAction}"
+        : $"Error: '{raw.Trim()}' is not an action; use {SkillEditorTool.CreateAction} or {SkillEditorTool.UpdateAction}";
+
+    /// <summary>A file action with no <c>path</c> (2026-09-27).</summary>
+    public static string NoPath => $"Error: {SkillEditorTool.PathArgument} is empty; name the file, relative to the skill folder (data/mapping.json)";
+
+    /// <summary>A file action that named the SKILL.md, the app's sidecar or a folder the skill never keeps (2026-09-27).</summary>
+    public static string ProtectedFile(string name, string relative) =>
+        string.Equals(Path.GetFileName(relative.TrimEnd('/', '\\')), SkillCatalog.FileName, StringComparison.OrdinalIgnoreCase)
+            ? $"Error: '{relative}' is the skill itself; change skill '{name}' with action {SkillEditorTool.UpdateAction} (description, instructions)"
+            : $"Error: '{relative}' in skill '{name}' is the app's, not the skill's; pick another path";
+
+    /// <summary>A file action's outcome (2026-09-27): <c>skill 'x' (profile): </c> and the file tools' own sentence — <c>FileText.Wrote</c> / <c>FileText.Edited</c>, or their refusal.</summary>
+    public static string InSkill(SkillEditResult result)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+        return result.Detail.StartsWith("Error: ", StringComparison.Ordinal)
+            ? "Error: skill '" + result.Name + "' (" + SkillScopes.Name(result.Scope) + "): " + result.Detail["Error: ".Length..]
+            : "skill '" + result.Name + "' (" + SkillScopes.Name(result.Scope) + "): " + result.Detail;
+    }
 
     public static string BadScope(string raw) => $"Error: '{raw.Trim()}' is not a scope; use {SkillScopes.ProfileName} (this profile only) or {SkillScopes.GlobalName} (every profile)";
 
@@ -249,6 +270,8 @@ public static class SkillText
             SkillEditOutcome.InstructionsTooLong => InstructionsTooLong(result.Length),
             SkillEditOutcome.NothingToChange => NothingToChange,
             SkillEditOutcome.Unparseable => Unparseable(result.Name, result.Scope, result.Detail),
+            SkillEditOutcome.FileWritten or SkillEditOutcome.FileEdited or SkillEditOutcome.FileRefused => InSkill(result),
+            SkillEditOutcome.ProtectedFile => ProtectedFile(result.Name, result.Path),
             _ => CouldNot("write", result.Name, result.Detail),
         };
     }

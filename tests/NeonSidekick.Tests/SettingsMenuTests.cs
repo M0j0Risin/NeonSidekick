@@ -768,6 +768,7 @@ public class SettingsMenuTests : IDisposable
                 SettingsField.BotChatSkills,
                 SettingsField.BotChatVision,
                 SettingsField.ThemedViewer,
+                SettingsField.ReflectionEditsSupportingFiles,
             },
             Enum.GetValues<SettingsField>());
         // The compact rows: on the LLM tab after the context length but no reconnect; the type a picker, the two others typed.
@@ -858,7 +859,7 @@ public class SettingsMenuTests : IDisposable
         Assert.Equal(["General", "Sessions", "LLM", "TTS", "STT", "Claude (API)", "Botchat"], SettingsMenu.TabTitles);   // Claude (API) before Botchat since later on 2026-09-27; Claude last since 2026-09-27; Botchat last from 2026-09-25;   // Sessions right after General (2026-09-18); Web last until 2026-09-19, Skills third until later that day
         // The Options tab of /skills (2026-09-19; the Skills tab of /settings from 2026-09-16 until then): the skills switch, the external-folder switch and the compact-mode picker, then (2026-09-17) the #-mention switch, the delete switch, then the auto-learn switch and the reflection rows; none a reconnect.
         Assert.Equal([SettingsField.AgentSkills, SettingsField.ExternalSkills, SettingsField.SkillCompactMode, SettingsField.SkillHashMention], SettingsMenu.SkillsTabFields[0]);   // the Options tab; the reflection rows on their own tab since later on 2026-09-19
-        Assert.Equal([SettingsField.ReflectionAutoLearn, SettingsField.ReflectionReasoning, SettingsField.ReflectionWindow, SettingsField.ReflectionMinToolCalls, SettingsField.ReflectionMaxRequests, SettingsField.ReflectionCooldownMinutes, SettingsField.ReflectionCooldownMode, SettingsField.ReflectionIncludesSessions, SettingsField.ReflectionYieldsToTurns], SettingsMenu.SkillsTabFields[1]);   // the Reflection tab: the cooldown, its mode and the sessions switch (last, the user's place) since 2026-09-19
+        Assert.Equal([SettingsField.ReflectionAutoLearn, SettingsField.ReflectionReasoning, SettingsField.ReflectionWindow, SettingsField.ReflectionMinToolCalls, SettingsField.ReflectionMaxRequests, SettingsField.ReflectionCooldownMinutes, SettingsField.ReflectionCooldownMode, SettingsField.ReflectionIncludesSessions, SettingsField.ReflectionYieldsToTurns, SettingsField.ReflectionEditsSupportingFiles], SettingsMenu.SkillsTabFields[1]);   // the Reflection tab: the cooldown, its mode and the sessions switch (last, the user's place) since 2026-09-19
         // Reflection min tool calls (2026-09-17): the tab's last row and the enum's last member, typed 3–20; the error door stays one recovered error.
         Assert.False(SettingsMenu.IsToggle(SettingsField.ReflectionMinToolCalls));
         Assert.Equal("Reflection min tool calls", SettingsMenu.FieldName(SettingsField.ReflectionMinToolCalls));
@@ -904,6 +905,14 @@ public class SettingsMenuTests : IDisposable
         Assert.Equal("off", SettingsMenu.FieldValue(SettingsField.ReflectionYieldsToTurns, new AppSettingsData { ReflectionYieldsToTurns = false }, _settings.ProfileDirectory));
         Assert.Equal("a turn pauses a running reflection which may resume after the turn", SettingsMenu.ToggleDescribe(SettingsField.ReflectionYieldsToTurns, true));
         Assert.Equal("reflections run asynchronously (when the model allows)", SettingsMenu.ToggleDescribe(SettingsField.ReflectionYieldsToTurns, false));
+        // Reflection edit supporting files (2026-09-27): the tab's last row, a toggle, off by default, never refused mid-turn.
+        Assert.True(SettingsMenu.IsToggle(SettingsField.ReflectionEditsSupportingFiles));
+        Assert.False(SettingsMenu.RefusedMidTurn(SettingsField.ReflectionEditsSupportingFiles));
+        Assert.Equal("Reflection edit supporting files", SettingsMenu.FieldName(SettingsField.ReflectionEditsSupportingFiles));
+        Assert.Equal("off", SettingsMenu.FieldValue(SettingsField.ReflectionEditsSupportingFiles, data, _settings.ProfileDirectory));
+        Assert.Equal("on", SettingsMenu.FieldValue(SettingsField.ReflectionEditsSupportingFiles, new AppSettingsData { ReflectionEditsSupportingFiles = true }, _settings.ProfileDirectory));
+        Assert.Equal("a reflection may write a skill's supporting files", SettingsMenu.ToggleDescribe(SettingsField.ReflectionEditsSupportingFiles, true));
+        Assert.Equal("a reflection writes a skill's SKILL.md alone", SettingsMenu.ToggleDescribe(SettingsField.ReflectionEditsSupportingFiles, false));
         // Reflection window (2026-09-17): the tab's last row and the enum's last member, typed 1–5 like the compact keep-recent count.
         Assert.False(SettingsMenu.IsToggle(SettingsField.ReflectionWindow));
         Assert.Equal("Reflection window", SettingsMenu.FieldName(SettingsField.ReflectionWindow));
@@ -945,7 +954,7 @@ public class SettingsMenuTests : IDisposable
         Assert.Equal(7, SettingsMenu.TabFields.Count);   // Claude (API) since later on 2026-09-27; Claude on 2026-09-27 until later that day (to /tools); Botchat since 2026-09-25; 9 until 2026-09-19, when Ask, Files and Web moved to /tools (ToolsTabFields) and, later that day, Skills to /skills (SkillsTabFields)
         Assert.Equal(10, SettingsMenu.ToolsTabFields.Count);   // Claude since 2026-09-27; Images since 2026-09-24; SQL since 2026-09-23; Obsidian since 2026-09-22 and Options last later that day (first since later on 2026-09-19); Git between Files and Web since 2026-09-20; Shell between Git and Web since 2026-09-21
         Assert.Equal(2, SettingsMenu.SkillsTabFields.Count);   // Options and Reflection, since later on 2026-09-19 (one list of 11, then 14, before)
-        Assert.Equal(13, SettingsMenu.SkillsTabFields.Sum(t => t.Count));   // 12 until Reflection yields to turns came on 2026-09-24; 13 until Allow skill delete went on 2026-09-23; 14 until Reflection verbose went later still on 2026-09-19
+        Assert.Equal(14, SettingsMenu.SkillsTabFields.Sum(t => t.Count));   // 13 until Reflection edit supporting files came on 2026-09-27; 12 until Reflection yields to turns came on 2026-09-24; 13 until Allow skill delete went on 2026-09-23; 14 until Reflection verbose went later still on 2026-09-19
         Assert.Equal(new[] { SettingsField.Profile, SettingsField.NewProfileMode, SettingsField.WorkingDirectory, SettingsField.QueueMessages, SettingsField.QueueCancelMode, SettingsField.Memory, SettingsField.CopyUserPrompt, SettingsField.ShowImageThumbnails, SettingsField.ImageThumbnailSize, SettingsField.TranscriptMarkdown, SettingsField.PastePreviewLines, SettingsField.HideExitAutocomplete, SettingsField.CommandTypoIntercept, SettingsField.KeepCommandHistory, SettingsField.WelcomeSplash, SettingsField.ShowWorkingDirectory, SettingsField.ShowToolbar, SettingsField.Theme, SettingsField.DraftEditor, SettingsField.ImageEditor, SettingsField.ThemedViewer }, SettingsMenu.TabFields[(int)SettingsTab.General]);   // Image editor under Draft editor, later on 2026-09-24; Keep command history under the typo intercept, 2026-09-25; Theme under Show toolbar and Themed image viewer last, later on 2026-09-27
         // Draft editor (2026-09-19): typed, the General tab's last row, blank = the shell's default for .txt, no reconnect (read at each /draft).
         Assert.False(SettingsMenu.IsToggle(SettingsField.DraftEditor));
@@ -1297,7 +1306,7 @@ public class SettingsMenuTests : IDisposable
         Assert.Equal(["General", "Sessions", "LLM", "TTS", "STT", "Claude (API)", "Botchat"], SettingsMenu.TabTitles);   // Claude (API) before Botchat since later on 2026-09-27; Claude last since 2026-09-27; Botchat last from 2026-09-25;   // five since 2026-09-19
         // The Options tab of /skills (2026-09-19; the Skills tab of /settings from 2026-09-16 until then): the skills switch, the external-folder switch and the compact-mode picker, then (2026-09-17) the #-mention switch, the delete switch, then the auto-learn switch and the reflection rows; none a reconnect.
         Assert.Equal([SettingsField.AgentSkills, SettingsField.ExternalSkills, SettingsField.SkillCompactMode, SettingsField.SkillHashMention], SettingsMenu.SkillsTabFields[0]);   // the Options tab; the reflection rows on their own tab since later on 2026-09-19
-        Assert.Equal([SettingsField.ReflectionAutoLearn, SettingsField.ReflectionReasoning, SettingsField.ReflectionWindow, SettingsField.ReflectionMinToolCalls, SettingsField.ReflectionMaxRequests, SettingsField.ReflectionCooldownMinutes, SettingsField.ReflectionCooldownMode, SettingsField.ReflectionIncludesSessions, SettingsField.ReflectionYieldsToTurns], SettingsMenu.SkillsTabFields[1]);   // the Reflection tab: the cooldown, its mode and the sessions switch (last, the user's place) since 2026-09-19
+        Assert.Equal([SettingsField.ReflectionAutoLearn, SettingsField.ReflectionReasoning, SettingsField.ReflectionWindow, SettingsField.ReflectionMinToolCalls, SettingsField.ReflectionMaxRequests, SettingsField.ReflectionCooldownMinutes, SettingsField.ReflectionCooldownMode, SettingsField.ReflectionIncludesSessions, SettingsField.ReflectionYieldsToTurns, SettingsField.ReflectionEditsSupportingFiles], SettingsMenu.SkillsTabFields[1]);   // the Reflection tab: the cooldown, its mode and the sessions switch (last, the user's place) since 2026-09-19
         // Reflection min tool calls (2026-09-17): the tab's last row and the enum's last member, typed 3–20; the error door stays one recovered error.
         Assert.False(SettingsMenu.IsToggle(SettingsField.ReflectionMinToolCalls));
         Assert.Equal("Reflection min tool calls", SettingsMenu.FieldName(SettingsField.ReflectionMinToolCalls));
@@ -1383,7 +1392,7 @@ public class SettingsMenuTests : IDisposable
         Assert.Equal(30, SettingsMenu.LabelWidthOf(SettingsMenu.ToolsTabFields[3]));   // "Ask max choices per question"
         Assert.Equal(28, SettingsMenu.LabelWidthOf(SettingsMenu.ToolsTabFields[8]));   // "Git native log max commits" (later on 2026-09-21; "Git log max commits", 21, from 2026-09-20)
         Assert.Equal(38, SettingsMenu.LabelWidthOf(SettingsMenu.SkillsTabFields[0]));   // "Use external skills (.agents\\skills)"
-        Assert.Equal(31, SettingsMenu.LabelWidthOf(SettingsMenu.SkillsTabFields[1]));   // "Reflection cooldown (minutes)" (the Reflection tab, later on 2026-09-19)
+        Assert.Equal(34, SettingsMenu.LabelWidthOf(SettingsMenu.SkillsTabFields[1]));   // "Reflection edit supporting files" (2026-09-27; "Reflection cooldown (minutes)", 31, from later on 2026-09-19)
         Assert.Equal("TTS speed          [#EFE6FF]1.2[/]", SettingsMenu.FieldLabel(SettingsField.TtsSpeed, data, _settings.ProfileDirectory, null, SettingsMenu.TabLabelWidth(SettingsTab.Tts)));   // 1.0 until 2026-09-18
         Assert.Equal(@"Profile                      [#EFE6FF]work[/][#9A8BB8] (D:\home\profiles\work)[/]", SettingsMenu.ProfileLabel("work", @"D:\home\profiles\work", SettingsMenu.TabLabelWidth(SettingsTab.General)));
         Assert.False(SettingsMenu.IsToggle(SettingsField.WorkingDirectory));

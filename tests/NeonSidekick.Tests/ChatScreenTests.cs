@@ -8563,7 +8563,7 @@ public partial class ChatScreenTests : IDisposable
     public async Task WithGeometry_SysPromptOpensTheInfoPane_PromptThenTools_AndEscClosesIt()
     {
         _settings.Update(d => d.TtsOutput = false);
-        _console.Profile.Height = 110;   // the Git group (2026-09-20) makes the Tools tab eleven rows taller
+        _console.Profile.Height = 112;   // the Git group (2026-09-20) makes the Tools tab eleven rows taller; skill_editor's file-actions sentence (2026-09-27) a row more
         _geometry = new ScreenGeometry(() => null);
         PushLine("/sys");
         _console.Input.PushKey(Keys.Right);
@@ -15164,7 +15164,7 @@ public partial class ChatScreenTests : IDisposable
 
         Assert.Contains("  · Offered\n  ·   haiku  profile  Writes haiku. Use when asked for one.\n  · Reflection\n", output);   // Reflection right after Offered since 2026-09-22
         Assert.Contains("  · Options\n  ·   Agent skills: on\n  ·   Use external skills (.agents\\skills): off\n", output);   // the Options section last (2026-09-22; between Offered and Reflection from 2026-09-19)
-        Assert.Contains("  · Reflection\n  ·   Reflection (auto-learn): off\n  ·   Reflection reasoning: none\n  ·   Reflection window: 3 turns\n  ·   Reflection min tool calls: 4 tool calls\n  ·   Reflection max requests: 4 requests\n  ·   Reflection cooldown (minutes): off\n  ·   Reflection cooldown mode: last-written-skill\n  ·   Reflection includes sessions: off\n  ·   Reflection yields to turns: off\n  · Project\n", output);   // the fixture turns the auto-learn off, the verbose lines on, the cooldown and the sessions evidence off
+        Assert.Contains("  · Reflection\n  ·   Reflection (auto-learn): off\n  ·   Reflection reasoning: none\n  ·   Reflection window: 3 turns\n  ·   Reflection min tool calls: 4 tool calls\n  ·   Reflection max requests: 4 requests\n  ·   Reflection cooldown (minutes): off\n  ·   Reflection cooldown mode: last-written-skill\n  ·   Reflection includes sessions: off\n  ·   Reflection yields to turns: off\n  ·   Reflection edit supporting files: off\n  · Project\n", output);   // the fixture turns the auto-learn off, the verbose lines on, the cooldown and the sessions evidence off
         Assert.Contains("  · Project\n  ·   Project file  on   NEON.md (6 characters)\n", output);   // the toggle row alone since later on 2026-09-19 (the working directory over it, and a Roots section after, until then)
         Assert.DoesNotContain("Roots", output);
         Assert.DoesNotContain("Working directory", output);
@@ -15192,7 +15192,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains(SkillsText.Label + "   Offered    Reflection    Project    Options ", output);
         Assert.DoesNotContain("Roots", output);
         Assert.False(_settings.Current.ProjectFile);
-        Assert.Contains("\n▸ Reflection (auto-learn)        off\n  Reflection reasoning           none\n", output);   // the Reflection tab, padded to its own column (the fixture turns the auto-learn off)
+        Assert.Contains("\n▸ Reflection (auto-learn)           off\n  Reflection reasoning              none\n", output);   // the Reflection tab, padded to its own column (the fixture turns the auto-learn off)
         Assert.Contains("\n▸ Agent skills                          on\n  Use external skills (.agents\\skills)  off\n", output);   // the Options tab, the rows padded to its own column
         Assert.Contains("\n" + SettingsMenu.TabKeys, output);
         Assert.Contains("\n▸ haiku  profile  Writes haiku. Use when asked for one.\n", output);

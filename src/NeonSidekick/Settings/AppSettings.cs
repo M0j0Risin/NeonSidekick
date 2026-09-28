@@ -633,6 +633,7 @@ public sealed class AppSettings : IDisposable
         ReflectionReasoning = source.ReflectionReasoning,
         ReflectionWindow = source.ReflectionWindow,
         ReflectionYieldsToTurns = source.ReflectionYieldsToTurns,
+        ReflectionEditsSupportingFiles = source.ReflectionEditsSupportingFiles,
         SkillCompactMode = source.SkillCompactMode,
         SkillHashMention = source.SkillHashMention,
         ToolsDisabled = [.. source.ToolsDisabled],

@@ -478,6 +478,9 @@ public enum SettingsField
 
     /// <summary>A toggle (the <c>Themed image viewer</c> row): whether the built-in picture viewer wears the theme or stays black (<see cref="Settings.AppSettingsData.ThemedViewer"/>). The General tab's last row, under <see cref="ImageEditor"/> (later on 2026-09-27, the user's ask and name); no reconnect (read when the viewer opens or is focused). Last in the enum, as every newcomer.</summary>
     ThemedViewer,
+
+    /// <summary>A toggle: whether a reflection may write a skill's supporting files with <c>skill_editor</c>'s <c>write_file</c> / <c>edit_file</c> (<see cref="Settings.AppSettingsData.ReflectionEditsSupportingFiles"/>). The Reflection tab of <c>/skills</c>' last row (2026-09-27, the user's ask and name); no reconnect (read when a reflection is decided). Last in the enum, as every newcomer.</summary>
+    ReflectionEditsSupportingFiles,
 }
 
 /// <summary>The tabs of <c>/settings</c> on the pane, in strip order (Sessions right after General — the user's order, 2026-09-18; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
@@ -790,7 +793,7 @@ internal sealed partial class SettingsMenu
     public static readonly IReadOnlyList<IReadOnlyList<SettingsField>> SkillsTabFields =
     [
         [SettingsField.AgentSkills, SettingsField.ExternalSkills, SettingsField.SkillCompactMode, SettingsField.SkillHashMention],
-        [SettingsField.ReflectionAutoLearn, SettingsField.ReflectionReasoning, SettingsField.ReflectionWindow, SettingsField.ReflectionMinToolCalls, SettingsField.ReflectionMaxRequests, SettingsField.ReflectionCooldownMinutes, SettingsField.ReflectionCooldownMode, SettingsField.ReflectionIncludesSessions, SettingsField.ReflectionYieldsToTurns],
+        [SettingsField.ReflectionAutoLearn, SettingsField.ReflectionReasoning, SettingsField.ReflectionWindow, SettingsField.ReflectionMinToolCalls, SettingsField.ReflectionMaxRequests, SettingsField.ReflectionCooldownMinutes, SettingsField.ReflectionCooldownMode, SettingsField.ReflectionIncludesSessions, SettingsField.ReflectionYieldsToTurns, SettingsField.ReflectionEditsSupportingFiles],
     ];
 
     /// <summary>
@@ -1064,7 +1067,7 @@ internal sealed partial class SettingsMenu
             or SettingsField.SkillHashMention or SettingsField.ReflectionAutoLearn
             or SettingsField.HideExitAutocomplete or SettingsField.CommandTypoIntercept or SettingsField.KeepCommandHistory or SettingsField.ShowWorkingDirectory or SettingsField.ShowToolbar or SettingsField.ThemedViewer
             or SettingsField.QueueMessages or SettingsField.SessionLogging or SettingsField.SessionTool
-            or SettingsField.ToolsDollarMention or SettingsField.ReflectionIncludesSessions or SettingsField.ReflectionYieldsToTurns or SettingsField.McpServers or SettingsField.GitNativeTools
+            or SettingsField.ToolsDollarMention or SettingsField.ReflectionIncludesSessions or SettingsField.ReflectionYieldsToTurns or SettingsField.ReflectionEditsSupportingFiles or SettingsField.McpServers or SettingsField.GitNativeTools
             or SettingsField.LlmCompactShowSummary or SettingsField.ShellToolBridge or SettingsField.ShellPoliceOutsidePaths or SettingsField.ShellPreferNative
             or SettingsField.ObsidianTools or SettingsField.ObsidianAllowDelete or SettingsField.SqlTools or SettingsField.SqlPercentMention or SettingsField.ComfyTools or SettingsField.ComfyReinforceNegatives or SettingsField.ComfyShowPrompts or SettingsField.ComfyCaretMention or SettingsField.ComfyPictureStrip
             or SettingsField.BotChatImages or SettingsField.BotChatImageAsync or SettingsField.BotChatSkills or SettingsField.BotChatVision or SettingsField.ClaudeAdvisor or SettingsField.ClaudeAdvisorConfirm
@@ -1218,6 +1221,7 @@ internal sealed partial class SettingsMenu
         SettingsField.ReflectionCooldownMode => "Reflection cooldown mode",
         SettingsField.ReflectionIncludesSessions => "Reflection includes sessions",
         SettingsField.ReflectionYieldsToTurns => "Reflection yields to turns",
+        SettingsField.ReflectionEditsSupportingFiles => "Reflection edit supporting files",   // the user's name (2026-09-27)
         SettingsField.HideExitAutocomplete => "Hide /exit autocomplete",
         SettingsField.CommandTypoIntercept => "Command typo intercept",
         SettingsField.KeepCommandHistory => "Keep command history",
@@ -1407,6 +1411,7 @@ internal sealed partial class SettingsMenu
             SettingsField.ReflectionCooldownMode => data.ReflectionCooldownMode,
             SettingsField.ReflectionIncludesSessions => OnOff(data.ReflectionIncludesSessions),
             SettingsField.ReflectionYieldsToTurns => OnOff(data.ReflectionYieldsToTurns),
+            SettingsField.ReflectionEditsSupportingFiles => OnOff(data.ReflectionEditsSupportingFiles),
             SettingsField.HideExitAutocomplete => OnOff(data.HideExitAutocomplete),
             SettingsField.CommandTypoIntercept => OnOff(data.CommandTypoIntercept),
             SettingsField.KeepCommandHistory => OnOff(data.KeepCommandHistory),
@@ -3741,6 +3746,7 @@ internal sealed partial class SettingsMenu
             SettingsField.ReflectionAutoLearn => data.ReflectionAutoLearn,
             SettingsField.ReflectionIncludesSessions => data.ReflectionIncludesSessions,
             SettingsField.ReflectionYieldsToTurns => data.ReflectionYieldsToTurns,
+            SettingsField.ReflectionEditsSupportingFiles => data.ReflectionEditsSupportingFiles,
             SettingsField.HideExitAutocomplete => data.HideExitAutocomplete,
             SettingsField.CommandTypoIntercept => data.CommandTypoIntercept,
             SettingsField.KeepCommandHistory => data.KeepCommandHistory,
@@ -3806,6 +3812,7 @@ internal sealed partial class SettingsMenu
             case SettingsField.ReflectionAutoLearn: data.ReflectionAutoLearn = on; break;
             case SettingsField.ReflectionIncludesSessions: data.ReflectionIncludesSessions = on; break;
             case SettingsField.ReflectionYieldsToTurns: data.ReflectionYieldsToTurns = on; break;
+            case SettingsField.ReflectionEditsSupportingFiles: data.ReflectionEditsSupportingFiles = on; break;
             case SettingsField.HideExitAutocomplete: data.HideExitAutocomplete = on; break;
             case SettingsField.CommandTypoIntercept: data.CommandTypoIntercept = on; break;
             case SettingsField.KeepCommandHistory: data.KeepCommandHistory = on; break;
@@ -3875,6 +3882,7 @@ internal sealed partial class SettingsMenu
         SettingsField.ReflectionAutoLearn => on ? "automatic reflection enabled" : "automatic reflection disabled",
         SettingsField.ReflectionIncludesSessions => on ? "a reflection can read past sessions for insights" : "a reflection reads the conversation on screen alone",
         SettingsField.ReflectionYieldsToTurns => on ? "a turn pauses a running reflection which may resume after the turn" : "reflections run asynchronously (when the model allows)",
+        SettingsField.ReflectionEditsSupportingFiles => on ? "a reflection may write a skill's supporting files" : "a reflection writes a skill's SKILL.md alone",
         SettingsField.HideExitAutocomplete => on ? "hide '/exit' from the autocomplete list" : "show '/exit' in the autocomplete list",
         SettingsField.CommandTypoIntercept => on ? "a command typed without its slash or with extra ones offers the command" : "a command typed without its slash or with extra ones is sent as typed",
         SettingsField.KeepCommandHistory => on ? "command history enabled" : "command history disabled",

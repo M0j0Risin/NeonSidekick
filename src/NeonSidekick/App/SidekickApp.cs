@@ -204,7 +204,7 @@ public sealed class SidekickApp
     {
         Func<SkillRoots> roots = () => SkillRoots.For(_settings, _externalSkills);
         var catalog = new SkillCatalog(roots);
-        return new ChatScreen.SkillsForTurn(catalog, ChatScreen.SkillTools(catalog, roots, () => EffectiveSettings.AgentSkills && EffectiveSettings.ExternalSkills), new ProjectFile(() => files.Root), EffectiveSettings.AgentSkills, EffectiveSettings.AgentSkills && EffectiveSettings.ExternalSkills, EffectiveSettings.ProjectFile);
+        return new ChatScreen.SkillsForTurn(catalog, ChatScreen.SkillTools(catalog, roots, () => EffectiveSettings.AgentSkills && EffectiveSettings.ExternalSkills, new Llm.Tools.SkillFileAccess(() => EffectiveSettings.FileSafeEdits, _time)), new ProjectFile(() => files.Root), EffectiveSettings.AgentSkills, EffectiveSettings.AgentSkills && EffectiveSettings.ExternalSkills, EffectiveSettings.ProjectFile);
     }
 
     /// <summary>The file tools' sandbox over the live effective setting (flag &gt; saved) and the loaded profile's directory.</summary>

@@ -731,6 +731,16 @@ public sealed class AppSettingsData
     public bool ReflectionYieldsToTurns { get; set; } = true;
 
     /// <summary>
+    /// Whether a reflection's <c>skill_editor</c> may write a skill's supporting files — the
+    /// <c>write_file</c> / <c>edit_file</c> actions, beside the SKILL.md (2026-09-27, the user's call:
+    /// the main chat always may; a background pass rewriting a skill's data only when asked). On = the
+    /// reflection is offered them too, and a file written ends its pass as a SKILL.md write does. Off (the
+    /// default for now) = the reflection writes the SKILL.md alone. Read when a reflection is decided, no
+    /// reconnect; the Reflection tab of <c>/skills</c>, last row, labelled <c>Reflection edit supporting files</c>. No variable.
+    /// </summary>
+    public bool ReflectionEditsSupportingFiles { get; set; }
+
+    /// <summary>
     /// How many model requests one reflection may make before it is given up as exhausted
     /// (<c>Skills.ReflectionMaxRequests</c>; a load or two, then the write — the reflection's own
     /// cap, never <see cref="LlmMaxToolIterations"/>, the turn's). <see cref="MinReflectionMaxRequests"/>

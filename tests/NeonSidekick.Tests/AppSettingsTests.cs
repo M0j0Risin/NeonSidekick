@@ -120,6 +120,7 @@ public class AppSettingsTests : IDisposable
         ReflectionReasoning = "high",
         ReflectionWindow = 5,
         ReflectionYieldsToTurns = false,
+        ReflectionEditsSupportingFiles = true,
         SkillCompactMode = "unprotected",
         SkillHashMention = false,
         SessionLogging = false,
@@ -228,6 +229,7 @@ public class AppSettingsTests : IDisposable
         Assert.Equal(expected.ReflectionReasoning, actual.ReflectionReasoning);
         Assert.Equal(expected.ReflectionWindow, actual.ReflectionWindow);
         Assert.Equal(expected.ReflectionYieldsToTurns, actual.ReflectionYieldsToTurns);
+        Assert.Equal(expected.ReflectionEditsSupportingFiles, actual.ReflectionEditsSupportingFiles);
         Assert.Equal(expected.SkillCompactMode, actual.SkillCompactMode);
         Assert.Equal(expected.SkillHashMention, actual.SkillHashMention);
         Assert.Equal(expected.SessionLogging, actual.SessionLogging);
@@ -344,6 +346,7 @@ public class AppSettingsTests : IDisposable
             d.ReflectionReasoning = full.ReflectionReasoning;
             d.ReflectionWindow = full.ReflectionWindow;
             d.ReflectionYieldsToTurns = full.ReflectionYieldsToTurns;
+            d.ReflectionEditsSupportingFiles = full.ReflectionEditsSupportingFiles;
             d.SkillCompactMode = full.SkillCompactMode;
             d.SkillHashMention = full.SkillHashMention;
             d.SessionLogging = full.SessionLogging;
@@ -457,6 +460,7 @@ public class AppSettingsTests : IDisposable
                 d.ReflectionReasoning = full.ReflectionReasoning;
                 d.ReflectionWindow = full.ReflectionWindow;
                 d.ReflectionYieldsToTurns = full.ReflectionYieldsToTurns;
+                d.ReflectionEditsSupportingFiles = full.ReflectionEditsSupportingFiles;
                 d.SkillCompactMode = full.SkillCompactMode;
                 d.SkillHashMention = full.SkillHashMention;
                 d.SessionLogging = full.SessionLogging;
@@ -1195,6 +1199,7 @@ public class AppSettingsTests : IDisposable
         Assert.Equal(1440, AppSettingsData.MaxReflectionCooldownMinutes);
         Assert.True(s.ReflectionIncludesSessions);
         Assert.True(s.ReflectionYieldsToTurns);
+        Assert.False(s.ReflectionEditsSupportingFiles);   // 2026-09-27: off for now, the user's call
         Assert.Equal(1, AppSettingsData.MinAskMaxQuestions);
         Assert.Equal(10, AppSettingsData.MaxAskMaxQuestions);
         Assert.Equal(10, AppSettingsData.DefaultAskMaxQuestions);

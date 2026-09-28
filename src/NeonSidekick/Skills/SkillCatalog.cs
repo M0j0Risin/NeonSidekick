@@ -22,7 +22,8 @@ namespace NeonSidekick.Skills;
 /// model sees an edit made since the scan. <see cref="Resources"/> lists the files bundled beside
 /// the <c>SKILL.md</c> and <see cref="ReadResource"/> reads one, the way <c>load_skill</c> serves
 /// the specification's third tier — the file tools cannot reach a skill folder, which lies outside
-/// the working directory.</para>
+/// the working directory; <c>skill_editor</c>'s <c>write_file</c> / <c>edit_file</c> write those
+/// files (2026-09-27, <see cref="SkillEditor.WriteFile"/>).</para>
 /// </summary>
 public sealed class SkillCatalog
 {
@@ -40,8 +41,12 @@ public sealed class SkillCatalog
     /// <summary>How deep <see cref="Resources"/> walks under the skill folder.</summary>
     public const int MaxResourceDepth = 4;
 
-    /// <summary>Folders <see cref="Resources"/> never enters.</summary>
-    public static readonly string[] SkippedFolders = { ".git", "node_modules" };
+    /// <summary>
+    /// Folders <see cref="Resources"/> never enters, and <c>skill_editor</c>'s file actions never write
+    /// into. <c>.trash</c> since 2026-09-27: where a skill's previous file versions go under
+    /// <c>File safe edits</c> (<see cref="SkillEditor.WriteFile"/>), the app's, never the skill's.
+    /// </summary>
+    public static readonly string[] SkippedFolders = { ".git", "node_modules", WorkingDirectory.TrashFolderName };
 
     private sealed record Entry(DateTime LastWriteUtc, long Length, SkillFrontmatter? Frontmatter, string? Problem);
 
