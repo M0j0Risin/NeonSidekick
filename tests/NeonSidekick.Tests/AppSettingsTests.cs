@@ -39,6 +39,8 @@ public class AppSettingsTests : IDisposable
         BotChatImageAsync = false,
         BotChatNonTtsDelaySeconds = 12,
         BotChatSkills = true,
+        BotChatPreloadedSkills = ["pony-prompts", "haiku"],
+        BotChatSkillMode = "prompt-writer-only",
         BotChatVision = true,
         Memory = false,
         NewProfileMode = "advanced",

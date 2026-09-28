@@ -685,6 +685,8 @@ public sealed class AppSettings : IDisposable
         BotChatImageAsync = source.BotChatImageAsync,
         BotChatNonTtsDelaySeconds = source.BotChatNonTtsDelaySeconds,
         BotChatSkills = source.BotChatSkills,
+        BotChatPreloadedSkills = source.BotChatPreloadedSkills is null ? null : [.. source.BotChatPreloadedSkills],
+        BotChatSkillMode = source.BotChatSkillMode,
         BotChatVision = source.BotChatVision,
         ClaudeExecutable = source.ClaudeExecutable,
         ClaudePermissions = source.ClaudePermissions,

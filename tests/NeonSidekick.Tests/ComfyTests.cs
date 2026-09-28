@@ -344,6 +344,24 @@ public sealed class ComfyTests : IDisposable
         Assert.DoesNotContain(_stub.Requests, r => r.Uri.AbsolutePath == "/prompt");
     }
 
+    /// <summary>A narrowed tool chooses from every installed workflow (later on 2026-09-27): one not offered is described and run.</summary>
+    [Fact]
+    public async Task GenerateImage_Narrowed_UsesAnInstalledWorkflow_ThatIsNotOffered()
+    {
+        Workflow("pony-txt2img", Txt2Img);
+        Workflow("restyle", Img2Img);
+        ServeOnePicture();
+        _settings.ComfyWorkflowsOffered = ["restyle"];
+        var tool = new GenerateImageTool(_studio, workflows => workflows.Where(w => w.Name == "pony-txt2img").ToList());
+
+        Assert.Contains("\n- pony-txt2img ", tool.Description);
+        Assert.DoesNotContain("\n- pony-txt2img ", new GenerateImageTool(_studio).Description);   // the main chat's still follows the offered list
+        var result = await tool.InvokeAsync(Args(("prompt", "a red fox")));
+
+        Assert.IsType<ToolImageResult>(result);
+        Assert.Single(_stub.Requests, r => r.Uri.AbsolutePath == "/prompt");
+    }
+
     /// <summary>A ReActor face swap as exported (later still on 2026-09-24): two pictures in, no sampler, no prompt.</summary>
     private const string FaceSwapExport = """
         {

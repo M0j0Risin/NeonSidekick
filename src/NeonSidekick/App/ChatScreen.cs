@@ -1019,7 +1019,7 @@ internal sealed partial class ChatScreen
         _flow = new FlowSink(this);
         _queueMenu = new QueueMenu(_queue, _flow, _menuPane);
         _queuedClicks = new DoubleClick(_pane.Time);
-        _menu = new SettingsMenu(new ConsoleWithInput(_pane, keys), settings, overriddenBy, _input, _transcript, speech, _menuPane, _web.Browser.Locate, () => _interpreters.AvailableShells().Select(ShellKinds.Name).ToHashSet(StringComparer.Ordinal), () => _interpreters.AvailableLanguages([CodeLanguage.PowerShell, CodeLanguage.Python, CodeLanguage.Node]).Select(CodeLanguages.Name).ToHashSet(StringComparer.Ordinal), BrowseWorkingDirectoryAsync, BrowseVaultAsync, _openFile, comfyClient: _comfy.Client)
+        _menu = new SettingsMenu(new ConsoleWithInput(_pane, keys), settings, overriddenBy, _input, _transcript, speech, _menuPane, _web.Browser.Locate, () => _interpreters.AvailableShells().Select(ShellKinds.Name).ToHashSet(StringComparer.Ordinal), () => _interpreters.AvailableLanguages([CodeLanguage.PowerShell, CodeLanguage.Python, CodeLanguage.Node]).Select(CodeLanguages.Name).ToHashSet(StringComparer.Ordinal), BrowseWorkingDirectoryAsync, BrowseVaultAsync, _openFile, comfyClient: _comfy.Client, botChatSkills: () => { _catalog.Scan(_effective().ExternalSkills); return _catalog.Skills; })
         {
             // A picker opened mid-turn closes on the watcher task: its saved line waits for the turn task.
             Flow = _flow,
@@ -9314,6 +9314,8 @@ internal sealed partial class ChatScreen
         var pictures = new List<(BotParticipant Bot, Task<ComfyGeneration?> Job)>();
         // Their pace with no voice to wait for (2026-09-25): one at a time, a second's rest after each.
         var pacer = new BotPicturePacer(_time);
+        // The preloaded skills' notice as last shown (2026-09-27): shown again only when the set or the mode changes.
+        string preloadedTold = "";
         // ESC's ladder (2026-09-25): the voice, then the bot replying, then the chat.
         var ladder = new BotEscLadder();
         _botNoWorkflowTold = false;
@@ -9342,12 +9344,22 @@ internal sealed partial class ChatScreen
                 string pronouns = BotChat.PronounsLine(cast.Where(b => b != bot).Select(b => (b.Name, b.Gender)).ToList());
                 // Pictures (2026-09-25): read per reply, so a switch mid-chat holds from the next one.
                 var imageMode = BotChatImageMode.Resolve(effective);
-                bool pictured = effective.BotChatImages && ComfyOffered(effective, _comfy);
+                bool pictured = effective.BotChatImages && BotComfyReady(effective);
                 // The chat's two workflows and the pictures a rework may start from (2026-09-27): read per reply, as the rest.
                 var (fresh, rework, candidates) = BotWorkflows(effective);
                 var imageTool = pictured && BotChatImageMode.Offers(imageMode) ? BotImageTool(effective, fresh, rework, candidates.Count > 0) : null;
                 // Skills (2026-09-27): read per reply too — the main chat's catalog, so the starting profile's, never this bot's own.
                 var (skills, skillTool) = BotSkills(effective);
+                // Preloaded skills (2026-09-27, the user's ask): read by the app, no load_skill needed; the bots get them under prompt-writer-and-bots.
+                var skillMode = BotChatSkillMode.Resolve(effective);
+                var (preloadedNames, preloaded) = BotPreloadedSkills(effective, topic);
+                string preloadedNotice = preloadedNames.Count == 0 ? "" : BotChat.PreloadedNotice(preloadedNames, skillMode);
+                if (preloadedNotice.Length > 0 && !string.Equals(preloadedNotice, preloadedTold, StringComparison.Ordinal))
+                {
+                    _transcript.Notice(preloadedNotice);
+                }
+
+                preloadedTold = preloadedNotice;
                 // Vision (2026-09-27): the pictures shown since this bot last spoke ride its turn message, with a caption saying whose.
                 // The caption rides the sent text alone: the stored session keeps the line as it was.
                 string sentText = turnText;
@@ -9369,7 +9381,7 @@ internal sealed partial class ChatScreen
                     sentText += "\n\n" + BotChat.ReworkCaption(rework.Name, candidates);
                 }
 
-                var history = new ConversationHistory(BotChat.SystemPrompt(bot.Persona, bot.Name, others, topic, speaking, bot.VoiceDirective, markdown, pronouns, images: imageTool is not null, skills: skills));
+                var history = new ConversationHistory(BotChat.SystemPrompt(bot.Persona, bot.Name, others, topic, speaking, bot.VoiceDirective, markdown, pronouns, images: imageTool is not null, skills: skills, preloaded: skillMode == BotSkillMode.PromptWriterAndBots ? preloaded : null));
                 history.Replace(prior);
                 if ((links.Count > 0 && links[next] is { } own ? _session.CreateAssistant(history, own) : _session.CreateAssistant(history)) is not { } assistant)
                 {
@@ -9651,6 +9663,47 @@ internal sealed partial class ChatScreen
         return skills.Count == 0 ? (null, null) : (skills, tool);
     }
 
+    /// <summary>
+    /// Whether <c>/botchat</c> may have pictures at all (later on 2026-09-27, the user's call: its workflows are any installed
+    /// ones, so <see cref="ComfyOffered"/>'s offered-workflow test no longer applies): <c>ComfyUI tools</c> on and an http(s)
+    /// <c>ComfyUI URL</c>. Whether a picture can be made is <see cref="BotWorkflows"/>'s to say.
+    /// </summary>
+    private static bool BotComfyReady(AppSettingsData effective) => effective.ComfyTools && ComfyStudio.ServerOf(effective) is not null;
+
+    /// <summary>
+    /// The skills <c>/botchat</c> loads itself this reply (2026-09-27, the user's report: told to load a skill, the models mostly
+    /// did not): <see cref="BotChat.PreloadedSkills"/> over the catalog a botchat sees (scanned as <see cref="BotSkills"/> does),
+    /// each read exactly as <c>load_skill</c> returns it (<see cref="SkillCatalog.ReadBody"/>, <see cref="SkillText.Content"/>);
+    /// one that cannot be read is logged and left out. The names and the prompt section (<see cref="BotChat.PreloadedSkillsSection"/>);
+    /// none with <c>Agent skills</c> off. <c>Botchat skills enabled</c> has no say: it offers <c>load_skill</c>, this needs none.
+    /// </summary>
+    private (IReadOnlyList<string> Names, string Section) BotPreloadedSkills(AppSettingsData effective, string topic)
+    {
+        if (!effective.AgentSkills)
+        {
+            return ([], "");
+        }
+
+        _catalog.Scan(effective.ExternalSkills);
+        var names = new List<string>();
+        var contents = new List<string>();
+        foreach (var skill in BotChat.PreloadedSkills(_catalog.Skills, effective.BotChatPreloadedSkills, topic))
+        {
+            var body = SkillCatalog.ReadBody(skill);
+            if (body.Outcome != SkillCatalog.ReadOutcome.Ok)
+            {
+                DiagnosticLog.Warn(AppCategory, "Botchat could not preload skill '" + skill.Name + "': " + SkillText.ReadError(skill, null, body));
+                continue;
+            }
+
+            var resources = SkillCatalog.Resources(skill, out bool more);
+            contents.Add(SkillText.Content(skill.Name, body.Text, skill.Directory, resources, more, body.Truncated));
+            names.Add(skill.Name);
+        }
+
+        return (names, BotChat.PreloadedSkillsSection(contents));
+    }
+
     /// <summary>Whether <see cref="BotChat.NoWorkflowNotice"/> was shown this chat: once is enough.</summary>
     private bool _botNoWorkflowTold;
 
@@ -9673,14 +9726,15 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// <c>/botchat</c>'s workflows as the settings stand (2026-09-27): <c>Botchat txt2img workflow</c>, <c>Botchat img2img
-    /// workflow</c> (each null when blank or not offered) and, with the latter, the pictures a rework may start from under
-    /// <c>Botchat img2img mode</c> (<see cref="BotChat.ReworkCandidates"/>); none outside a chat.
+    /// workflow</c> (each null when blank or not installed; any installed one, <c>ComfyUI workflows offered</c> or not — later
+    /// that day, the user's call) and, with the latter, the pictures a rework may start from under <c>Botchat img2img mode</c>
+    /// (<see cref="BotChat.ReworkCandidates"/>); none outside a chat.
     /// </summary>
     private (ComfyWorkflow? Fresh, ComfyWorkflow? Rework, IReadOnlyList<ReworkPicture> Candidates) BotWorkflows(AppSettingsData effective)
     {
-        var offered = _comfy.OfferedWorkflows();
-        var fresh = BotChat.Txt2ImgWorkflow(offered, effective.BotChatTxt2ImgWorkflow);
-        var rework = BotChat.Img2ImgWorkflow(offered, effective.BotChatImg2ImgWorkflow);
+        var installed = _comfy.Catalog.Workflows;
+        var fresh = BotChat.Txt2ImgWorkflow(installed, effective.BotChatTxt2ImgWorkflow);
+        var rework = BotChat.Img2ImgWorkflow(installed, effective.BotChatImg2ImgWorkflow);
         IReadOnlyList<ReworkPicture> candidates = rework is not null && _botPictureLog is { } log ? BotChat.ReworkCandidates(log, BotChatImg2ImgMode.Resolve(effective)) : [];
         return (fresh, rework, candidates);
     }
@@ -9752,7 +9806,9 @@ internal sealed partial class ChatScreen
         // Skills (2026-09-27, the user's report: the first picture was prompted before any skill could be loaded): the bots'
         // own gate and catalog, so a topic naming the skill for pictures is obeyed before the prompt is written.
         var (skills, skillTool) = BotSkills(effective);
-        string system = BotChat.PictureInstruction(promised, fresh, rework, candidates);
+        // The preloaded skills (2026-09-27) in either Botchat skill mode: the writer always gets them.
+        var (_, preloaded) = BotPreloadedSkills(effective, topic);
+        string system = BotChat.PictureInstruction(promised, fresh, rework, candidates) + (preloaded.Length == 0 ? "" : "\n\n" + preloaded);
         var request = new List<ChatMessage>
         {
             new(ChatRole.System, skills is null ? system : system + "\n\n" + BotChat.ImagePromptSkills(skills)),
@@ -9782,7 +9838,8 @@ internal sealed partial class ChatScreen
         var (prompt, reworked) = candidates.Count == 0 ? (BotChat.CleanImagePrompt(written), null) : BotChat.ParseImagePrompt(written, candidates, fresh is not null);
         // No rework chosen means fresh is there: with none, ParseImagePrompt takes the latest candidate.
         string workflow = reworked is null ? fresh!.Name : rework!.Name;
-        var job = new ComfyRequest(prompt, Workflow: workflow, Images: reworked is null ? null : [reworked.Path]);
+        // AnyWorkflow: the named one out of every installed workflow, as /imagine's — the botchat workflows need not be offered.
+        var job = new ComfyRequest(prompt, Workflow: workflow, Images: reworked is null ? null : [reworked.Path], AnyWorkflow: true);
         if (promised)
         {
             if (BotChat.IsNoPicture(prompt))

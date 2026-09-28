@@ -178,6 +178,47 @@ public class BotChatPicturesTests
         Assert.Contains("answer exactly as instructed above", BotChat.ImagePromptSkillsDirective);
     }
 
+    private static Skills.Skill SkillNamed(string name) => new(name, "About " + name + ".", Skills.SkillScope.Profile, name);
+
+    [Theory]
+    [InlineData(null, "", "")]
+    [InlineData(new[] { "haiku" }, "", "haiku")]
+    [InlineData(new[] { "gone", "HAIKU" }, "", "haiku")]                                   // a name not installed is dropped
+    [InlineData(null, "Use the Pony-Prompts skill for pictures", "pony-prompts")]          // named in the topic, any case
+    [InlineData(null, "draw like a pony", "")]                                           // pony is not pony-prompts
+    [InlineData(null, "use pony-prompts-v2", "")]                                         // nor is a longer name
+    [InlineData(new[] { "pony-prompts" }, "pony-prompts and haiku please", "haiku, pony-prompts")]   // both, once each, catalog order
+    public void PreloadedSkills_AreTheSettingsAndTheTopicsNames(string[]? setting, string topic, string expected)
+    {
+        var catalog = new[] { SkillNamed("haiku"), SkillNamed("pony-prompts") };
+
+        Assert.Equal(expected, string.Join(", ", BotChat.PreloadedSkills(catalog, setting, topic).Select(s => s.Name)));
+    }
+
+    [Fact]
+    public void PreloadedSkillsSection_AndNotice_ArePinned()
+    {
+        Assert.Equal("", BotChat.PreloadedSkillsSection([]));
+        Assert.Equal(BotChat.PreloadedSkillsLead + "\n\nA\n\nB", BotChat.PreloadedSkillsSection(["A", "B"]));
+        Assert.Equal("(botchat: skills loaded for the picture prompts and the bots: a, b)", BotChat.PreloadedNotice(["a", "b"], BotSkillMode.PromptWriterAndBots));
+        Assert.Equal("(botchat: skills loaded for the picture prompts: a)", BotChat.PreloadedNotice(["a"], BotSkillMode.PromptWriterOnly));
+        // The bots' prompt: the section after the load-only block, before the rules; none, as before.
+        string prompt = BotChat.SystemPrompt(null, "ada", ["max"], "", false, null, false, preloaded: "PRELOADED");
+        Assert.True(prompt.IndexOf("PRELOADED", StringComparison.Ordinal) < prompt.IndexOf("You are ada", StringComparison.Ordinal));
+        Assert.Equal(BotChat.SystemPrompt(null, "ada", ["max"], "", false, null, false), BotChat.SystemPrompt(null, "ada", ["max"], "", false, null, false, preloaded: ""));
+    }
+
+    [Theory]
+    [InlineData("prompt-writer-only", BotSkillMode.PromptWriterOnly)]
+    [InlineData(" Prompt-Writer-And-Bots ", BotSkillMode.PromptWriterAndBots)]
+    [InlineData("prompt-writer", BotSkillMode.PromptWriterAndBots)]   // a hand-edited word: the default
+    public void SkillMode_ResolvesTheSavedWord(string saved, BotSkillMode mode)
+    {
+        Assert.Equal(mode, BotChatSkillMode.Resolve(new AppSettingsData { BotChatSkillMode = saved }));
+        Assert.Equal("prompt-writer-and-bots", new AppSettingsData().BotChatSkillMode);
+        Assert.All(BotChatSkillMode.Names, name => Assert.NotEmpty(BotChatSkillMode.Describe(name)));
+    }
+
     [Fact]
     public void ImagePromptRequest_NamesTheSpeaker_AndTheTopicWhenThereIsOne()
     {
@@ -235,14 +276,14 @@ public class BotChatPicturesTests
     }
 
     [Fact]
-    public void TheBotchatTab_IsLast_ItsTenRowsDefaultingToSingle_Off_Automatic_NoWorkflows_Latest_Async_AFiveSecondPause_NoSkills_AndNoVision()
+    public void TheBotchatTab_IsLast_ItsTwelveRowsDefaultingToSingle_Off_Automatic_NoWorkflows_Latest_Async_AFiveSecondPause_NoSkills_NonePreloaded_ToBoth_AndNoVision()
     {
         var data = new AppSettingsData();
 
         Assert.Equal("Botchat", SettingsMenu.TabTitles[(int)SettingsTab.BotChat]);
         Assert.Equal((int)SettingsTab.BotChat, SettingsMenu.TabTitles.Count - 1);   // last again since later on 2026-09-27 (the Claude tab moved to /tools)
-        Assert.Equal([SettingsField.BotChatLlmMode, SettingsField.BotChatImages, SettingsField.BotChatImageMode, SettingsField.BotChatTxt2ImgWorkflow, SettingsField.BotChatImg2ImgWorkflow, SettingsField.BotChatImg2ImgMode, SettingsField.BotChatImageAsync, SettingsField.BotChatNonTtsDelaySeconds, SettingsField.BotChatSkills, SettingsField.BotChatVision], SettingsMenu.TabFields[(int)SettingsTab.BotChat]);
-        Assert.Equal(["Botchat LLM mode", "Botchat images enabled", "Botchat image mode", "Botchat txt2img workflow", "Botchat img2img workflow", "Botchat img2img mode", "Botchat image async", "Botchat non-TTS delay", "Botchat skills enabled", "Botchat vision enabled"], SettingsMenu.TabFields[(int)SettingsTab.BotChat].Select(SettingsMenu.FieldName));
+        Assert.Equal([SettingsField.BotChatLlmMode, SettingsField.BotChatImages, SettingsField.BotChatImageMode, SettingsField.BotChatTxt2ImgWorkflow, SettingsField.BotChatImg2ImgWorkflow, SettingsField.BotChatImg2ImgMode, SettingsField.BotChatImageAsync, SettingsField.BotChatNonTtsDelaySeconds, SettingsField.BotChatSkills, SettingsField.BotChatPreloadedSkills, SettingsField.BotChatSkillMode, SettingsField.BotChatVision], SettingsMenu.TabFields[(int)SettingsTab.BotChat]);
+        Assert.Equal(["Botchat LLM mode", "Botchat images enabled", "Botchat image mode", "Botchat txt2img workflow", "Botchat img2img workflow", "Botchat img2img mode", "Botchat image async", "Botchat non-TTS delay", "Botchat skills enabled", "Botchat preloaded skills", "Botchat skill mode", "Botchat vision enabled"], SettingsMenu.TabFields[(int)SettingsTab.BotChat].Select(SettingsMenu.FieldName));
         Assert.False(SettingsMenu.IsToggle(SettingsField.BotChatLlmMode));
         Assert.Equal("single", SettingsMenu.FieldValue(SettingsField.BotChatLlmMode, data, "."));
         Assert.Equal("multi", SettingsMenu.FieldValue(SettingsField.BotChatLlmMode, new AppSettingsData { BotChatLlmMode = "multi" }, "."));
@@ -271,6 +312,12 @@ public class BotChatPicturesTests
         Assert.True(SettingsMenu.IsToggle(SettingsField.BotChatSkills));
         Assert.Equal("off", SettingsMenu.FieldValue(SettingsField.BotChatSkills, data, "."));
         Assert.Equal("on", SettingsMenu.FieldValue(SettingsField.BotChatSkills, new AppSettingsData { BotChatSkills = true }, "."));
+        // Preloaded skills and where they go (2026-09-27): a checklist, none by default; a picker, both by default.
+        Assert.False(SettingsMenu.IsToggle(SettingsField.BotChatPreloadedSkills));
+        Assert.False(SettingsMenu.IsToggle(SettingsField.BotChatSkillMode));
+        Assert.Equal(SettingsMenu.NoBotChatWorkflowLabel, SettingsMenu.FieldValue(SettingsField.BotChatPreloadedSkills, data, "."));
+        Assert.Equal("haiku, pony-prompts", SettingsMenu.FieldValue(SettingsField.BotChatPreloadedSkills, new AppSettingsData { BotChatPreloadedSkills = ["haiku", " pony-prompts ", ""] }, "."));
+        Assert.Equal("prompt-writer-and-bots", SettingsMenu.FieldValue(SettingsField.BotChatSkillMode, data, "."));
         // Vision (2026-09-27): a toggle, off by default.
         Assert.True(SettingsMenu.IsToggle(SettingsField.BotChatVision));
         Assert.Equal("off", SettingsMenu.FieldValue(SettingsField.BotChatVision, data, "."));

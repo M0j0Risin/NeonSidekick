@@ -77,9 +77,9 @@ public sealed class GenerateImageTool : AIFunction
 
     /// <param name="studio">The screen's ComfyUI studio.</param>
     /// <param name="narrow">
-    /// The workflows this tool may use out of the offered ones (2026-09-27, the user's ask: <c>/botchat</c>'s bots get
-    /// <c>Botchat txt2img workflow</c> and <c>Botchat img2img workflow</c> alone): read at every description and every call;
-    /// null is every offered workflow, the main chat's tool.
+    /// The workflows this tool may use out of every installed one (2026-09-27, the user's ask: <c>/botchat</c>'s bots get
+    /// <c>Botchat txt2img workflow</c> and <c>Botchat img2img workflow</c> alone, offered or not): read at every description
+    /// and every call; null is every offered workflow, the main chat's tool.
     /// </param>
     public GenerateImageTool(ComfyStudio studio, Func<IReadOnlyList<ComfyWorkflow>, IReadOnlyList<ComfyWorkflow>>? narrow = null)
     {
@@ -94,7 +94,7 @@ public sealed class GenerateImageTool : AIFunction
     {
         get
         {
-            var workflows = _narrow is null ? _studio.OfferedWorkflows() : _narrow(_studio.OfferedWorkflows());
+            var workflows = _narrow is null ? _studio.OfferedWorkflows() : _narrow(_studio.Catalog.Workflows);
             return workflows.Count == 0 ? ComfyText.DescribeEmpty : ComfyText.Describe(workflows, _studio.ReinforceNegatives);
         }
     }

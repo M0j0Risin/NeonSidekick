@@ -487,6 +487,12 @@ public enum SettingsField
 
     /// <summary>A picker: which pictures a <c>/botchat</c> rework may start from — <c>latest</c> / <c>chat-history</c> (<see cref="Settings.AppSettingsData.BotChatImg2ImgMode"/>). The Botchat tab, under the img2img row (2026-09-27, the user's ask); no reconnect (read per reply). Last in the enum, as every newcomer.</summary>
     BotChatImg2ImgMode,
+
+    /// <summary>A checklist: the skills <c>/botchat</c> loads itself (<see cref="Settings.AppSettingsData.BotChatPreloadedSkills"/>). The Botchat tab, under the skills switch (2026-09-27, the user's ask); no reconnect (read per reply). Last in the enum, as every newcomer.</summary>
+    BotChatPreloadedSkills,
+
+    /// <summary>A picker: where the preloaded skills go — <c>prompt-writer-only</c> / <c>prompt-writer-and-bots</c> (<see cref="Settings.AppSettingsData.BotChatSkillMode"/>). The Botchat tab, under the checklist (2026-09-27, the user's ask); no reconnect (read per reply). Last in the enum, as every newcomer.</summary>
+    BotChatSkillMode,
 }
 
 /// <summary>The tabs of <c>/settings</c> on the pane, in strip order (Sessions right after General — the user's order, 2026-09-18; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
@@ -782,7 +788,7 @@ internal sealed partial class SettingsMenu
         [SettingsField.TtsOutput, SettingsField.TtsSource, SettingsField.TtsHttpUrl, SettingsField.TtsVoicePreview, SettingsField.TtsVoicePreset, SettingsField.TtsVoice, SettingsField.TtsVoice2, SettingsField.TtsVoiceMix, SettingsField.TtsSpeed],
         Fields.Where(IsVoiceField).ToArray(),
         [SettingsField.ClaudeApi, SettingsField.ClaudeApiKey, SettingsField.ClaudeApiMaxTokens, SettingsField.ClaudeApiPromptCaching],
-        [SettingsField.BotChatLlmMode, SettingsField.BotChatImages, SettingsField.BotChatImageMode, SettingsField.BotChatTxt2ImgWorkflow, SettingsField.BotChatImg2ImgWorkflow, SettingsField.BotChatImg2ImgMode, SettingsField.BotChatImageAsync, SettingsField.BotChatNonTtsDelaySeconds, SettingsField.BotChatSkills, SettingsField.BotChatVision],
+        [SettingsField.BotChatLlmMode, SettingsField.BotChatImages, SettingsField.BotChatImageMode, SettingsField.BotChatTxt2ImgWorkflow, SettingsField.BotChatImg2ImgWorkflow, SettingsField.BotChatImg2ImgMode, SettingsField.BotChatImageAsync, SettingsField.BotChatNonTtsDelaySeconds, SettingsField.BotChatSkills, SettingsField.BotChatPreloadedSkills, SettingsField.BotChatSkillMode, SettingsField.BotChatVision],
     ];
 
     /// <summary>
@@ -856,6 +862,8 @@ internal sealed partial class SettingsMenu
     private readonly Action<string>? _openFile;
     private readonly Func<Sql.SqlNamedConnection, CancellationToken, Task<Sql.SqlRun>> _testSqlConnection;
     private readonly Func<Comfy.ComfyClient?> _comfyClient;
+    // The skills a botchat sees, for the preloaded-skills checklist (2026-09-27); none when the host gives no catalog.
+    private readonly Func<IReadOnlyList<Skills.Skill>> _botChatSkills;
     private readonly Func<string, string?> _locateBrowser;
     private readonly Func<IReadOnlySet<string>> _installedShells;
     private readonly Func<IReadOnlySet<string>> _installedLanguages;
@@ -879,10 +887,11 @@ internal sealed partial class SettingsMenu
     /// <param name="testSqlConnection">What the <c>SQL add connection</c> summary's test runs over the unsaved draft (later on 2026-09-23), its typed password in it as a plain <c>file</c> value; null = a real <see cref="Sql.SqlAccess"/> run of <see cref="SqlTestQuery"/>.</param>
     /// <param name="openFile">What the SQL tab's edit rows open <c>sql.json</c> with (2026-09-23): the screen's editor opener; null = the rows say there is none.</param>
     /// <param name="browseFolder">The folder picker the <c>Working directory (cwd)</c> row opens (2026-09-22, the user's ask): the screen's <c>/cwd browse</c> tree, returning what to save — <c>""</c> for the profile's folder, a full path, or null for nothing chosen. Null (and a console with no pane) falls back to the typed path the row asked for until then.</param>
-    public SettingsMenu(IAnsiConsole console, AppSettings settings, Func<SettingsField, string?> overriddenBy, InputLine input, TranscriptRenderer transcript, SpeechSession speech, MenuPane pane, Func<string, string?>? locateBrowser = null, Func<IReadOnlySet<string>>? installedShells = null, Func<IReadOnlySet<string>>? installedLanguages = null, Func<CancellationToken, Task<string?>>? browseFolder = null, Func<string, CancellationToken, Task<string?>>? browseVault = null, Action<string>? openFile = null, Func<Sql.SqlNamedConnection, CancellationToken, Task<Sql.SqlRun>>? testSqlConnection = null, Func<Comfy.ComfyClient?>? comfyClient = null)
+    public SettingsMenu(IAnsiConsole console, AppSettings settings, Func<SettingsField, string?> overriddenBy, InputLine input, TranscriptRenderer transcript, SpeechSession speech, MenuPane pane, Func<string, string?>? locateBrowser = null, Func<IReadOnlySet<string>>? installedShells = null, Func<IReadOnlySet<string>>? installedLanguages = null, Func<CancellationToken, Task<string?>>? browseFolder = null, Func<string, CancellationToken, Task<string?>>? browseVault = null, Action<string>? openFile = null, Func<Sql.SqlNamedConnection, CancellationToken, Task<Sql.SqlRun>>? testSqlConnection = null, Func<Comfy.ComfyClient?>? comfyClient = null, Func<IReadOnlyList<Skills.Skill>>? botChatSkills = null)
     {
         // The ComfyUI client the add-workflow wizard lists the server's models and runs its test with (later on 2026-09-24): the screen's, so a stub reaches it in tests; null = none, the wizard says there is no server.
         _comfyClient = comfyClient ?? (() => null);
+        _botChatSkills = botChatSkills ?? (() => []);
         _testSqlConnection = testSqlConnection ?? TestSqlConnectionAsync;
         _browseFolder = browseFolder;
         _openFile = openFile;
@@ -1180,6 +1189,8 @@ internal sealed partial class SettingsMenu
         SettingsField.BotChatNonTtsDelaySeconds => "Botchat non-TTS delay",
         SettingsField.BotChatSkills => "Botchat skills enabled",
         SettingsField.BotChatVision => "Botchat vision enabled",
+        SettingsField.BotChatPreloadedSkills => "Botchat preloaded skills",
+        SettingsField.BotChatSkillMode => "Botchat skill mode",
         SettingsField.ComfyOutputFolder => "ComfyUI output folder",
         SettingsField.ComfyWorkflowsOffered => "ComfyUI workflows offered",
         SettingsField.ComfyAddWorkflow => "ComfyUI add workflow",
@@ -1371,6 +1382,8 @@ internal sealed partial class SettingsMenu
             SettingsField.BotChatNonTtsDelaySeconds => SecondsLabel(data.BotChatNonTtsDelaySeconds),
             SettingsField.BotChatSkills => OnOff(data.BotChatSkills),
             SettingsField.BotChatVision => OnOff(data.BotChatVision),
+            SettingsField.BotChatPreloadedSkills => PreloadedSkillsValue(data.BotChatPreloadedSkills),
+            SettingsField.BotChatSkillMode => data.BotChatSkillMode,
             SettingsField.ComfyOutputFolder => string.IsNullOrWhiteSpace(data.ComfyOutputFolder) ? ComfyOutputHereLabel : data.ComfyOutputFolder,
             SettingsField.ComfyWorkflowsOffered => ComfyOfferedValue(data.ComfyWorkflowsOffered, InstalledComfyWorkflows(profileDirectory)),
             SettingsField.ComfyAddWorkflow => ComfyAddWorkflowLabel,
@@ -1466,6 +1479,24 @@ internal sealed partial class SettingsMenu
 
     /// <summary>The <c>Botchat txt2img workflow</c> / <c>Botchat img2img workflow</c> value and first picker row while none is named (2026-09-27: none is none, no longer the first). Pinned.</summary>
     public const string NoBotChatWorkflowLabel = "(none)";
+
+    /// <summary>The <c>Botchat preloaded skills</c> value (2026-09-27): <see cref="NoBotChatWorkflowLabel"/> with none, else the names, comma-joined. Pinned.</summary>
+    public static string PreloadedSkillsValue(IReadOnlyList<string>? names)
+    {
+        var kept = names?.Select(n => n.Trim()).Where(n => n.Length > 0).ToList() ?? [];
+        return kept.Count == 0 ? NoBotChatWorkflowLabel : string.Join(", ", kept);
+    }
+
+    /// <summary>When the <c>Botchat preloaded skills</c> checklist has nothing to list (2026-09-27). Pinned.</summary>
+    public const string NoSkillsToPreload = "No skills are installed for the botchat: add one to this profile's or the global skills folder.";
+
+    /// <summary>One <c>Botchat preloaded skills</c> checklist row: the mark, the name, the description cut short. Pinned.</summary>
+    public static string PreloadedSkillRow(Skills.Skill skill, bool chosen, int width)
+    {
+        ArgumentNullException.ThrowIfNull(skill);
+        string about = skill.Description.Length > 60 ? skill.Description[..59] + "…" : skill.Description;
+        return Markup.Escape((chosen ? "[x] " : "[ ] ") + skill.Name.PadRight(width)) + Theme.DimMarkup(about);
+    }
 
     /// <summary>
     /// The value of an edit row over one <c>sql.json</c> (2026-09-23): how many connections it holds and how many
@@ -1747,6 +1778,10 @@ internal sealed partial class SettingsMenu
     /// <summary>One row of the botchat-img2img-mode picker: the mode and its hint (padded to thirteen: <c>chat-history</c> is twelve). Pinned.</summary>
     public static string BotChatImg2ImgModeLabel(string name) =>
         Markup.Escape(name.PadRight(13)) + Theme.DimMarkup(App.BotChatImg2ImgMode.Describe(name));
+
+    /// <summary>One row of the botchat-skill-mode picker: the mode and its hint (padded to twenty-three: <c>prompt-writer-and-bots</c> is twenty-two). Pinned.</summary>
+    public static string BotChatSkillModeLabel(string name) =>
+        Markup.Escape(name.PadRight(23)) + Theme.DimMarkup(App.BotChatSkillMode.Describe(name));
 
     /// <summary>One row of the welcome-splash picker: the mode and its hint (padded to nine: <c>fullsize</c> and <c>disabled</c> are eight). Pinned.</summary>
     public static string WelcomeSplashModeLabel(string name) =>
@@ -2549,6 +2584,16 @@ internal sealed partial class SettingsMenu
         if (field == SettingsField.BotChatImg2ImgMode)
         {
             return await PickBotChatImg2ImgModeAsync(saved, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (field == SettingsField.BotChatPreloadedSkills)
+        {
+            return await EditBotChatPreloadedSkillsAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        if (field == SettingsField.BotChatSkillMode)
+        {
+            return await PickBotChatSkillModeAsync(saved, cancellationToken).ConfigureAwait(false);
         }
 
         if (field == SettingsField.WelcomeSplash)
@@ -4291,14 +4336,15 @@ internal sealed partial class SettingsMenu
 
     /// <summary>
     /// The <c>Botchat txt2img workflow</c> / <c>Botchat img2img workflow</c> pick (2026-09-25; both kinds 2026-09-27):
-    /// <see cref="NoBotChatWorkflowLabel"/>, then every offered workflow of the field's kind (<see cref="BotChat.Txt2ImgWorkflows"/>,
-    /// <see cref="BotChat.Img2ImgWorkflows"/>) with its family and size, the cursor on the one saved.
+    /// <see cref="NoBotChatWorkflowLabel"/>, then every installed workflow of the field's kind (<see cref="BotChat.Txt2ImgWorkflows"/>,
+    /// <see cref="BotChat.Img2ImgWorkflows"/>) with its family and size, the cursor on the one saved — <c>ComfyUI workflows
+    /// offered</c> has no say since later on 2026-09-27 (the user's call: it is the main chat's list alone).
     /// </summary>
     private async Task<bool> PickBotChatWorkflowAsync(SettingsField field, AppSettingsData saved, CancellationToken cancellationToken)
     {
         bool img2img = field == SettingsField.BotChatImg2ImgWorkflow;
-        var offered = Comfy.ComfyWorkflowCatalog.Offered(InstalledComfyWorkflows(_settings.ProfileDirectory), saved.ComfyWorkflowsOffered);
-        var workflows = img2img ? BotChat.Img2ImgWorkflows(offered) : BotChat.Txt2ImgWorkflows(offered);
+        var installed = InstalledComfyWorkflows(_settings.ProfileDirectory);
+        var workflows = img2img ? BotChat.Img2ImgWorkflows(installed) : BotChat.Txt2ImgWorkflows(installed);
         int width = workflows.Count == 0 ? 0 : workflows.Max(w => w.Name.Length) + 2;
         var rows = new List<string> { Markup.Escape(NoBotChatWorkflowLabel) };
         rows.AddRange(workflows.Select(w => Markup.Escape(w.Name.PadRight(width)) + Theme.DimMarkup(Comfy.ComfyFamilies.Name(w.Family) + " · " + Invariant(w.Defaults.Width) + "×" + Invariant(w.Defaults.Height))));
@@ -4324,6 +4370,63 @@ internal sealed partial class SettingsMenu
             }
         });
         return true;
+    }
+
+    /// <summary>The botchat-skill-mode picker under the settings list (2026-09-27): one <see cref="BotChatSkillModeLabel"/> row per <see cref="App.BotChatSkillMode.Names"/> entry, the saved one under the cursor.</summary>
+    private async Task<bool> PickBotChatSkillModeAsync(AppSettingsData saved, CancellationToken cancellationToken)
+    {
+        var names = App.BotChatSkillMode.Names;
+        var page = new MenuPage(Crumb(FieldName(SettingsField.BotChatSkillMode)), names.Select(BotChatSkillModeLabel).ToList(), PickKeys);
+        int? picked = await PickAsync(page, Math.Max(0, Array.IndexOf(names, saved.BotChatSkillMode)), cancellationToken).ConfigureAwait(false);
+        if (picked is not { } index)
+        {
+            return Unchanged();
+        }
+
+        string name = names[index];
+        Apply(SettingsField.BotChatSkillMode, d => d.BotChatSkillMode = name);
+        return true;
+    }
+
+    /// <summary>
+    /// The <c>Botchat preloaded skills</c> checklist (2026-09-27), <see cref="EditComfyOfferedAsync"/>'s loop over the skills a
+    /// botchat sees: Enter or Space flips one, saved at once; a name ticked before but no longer installed stays in the list.
+    /// </summary>
+    private async Task<bool> EditBotChatPreloadedSkillsAsync(CancellationToken cancellationToken)
+    {
+        bool changed = false;
+        int cursor = 0;
+        while (true)
+        {
+            var skills = _botChatSkills();
+            if (skills.Count == 0)
+            {
+                Sink.Error(NoSkillsToPreload);
+                return changed;
+            }
+
+            var chosen = _settings.Current.BotChatPreloadedSkills ?? [];
+            var on = chosen.Select(n => n.Trim()).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            int width = skills.Max(s => s.Name.Length) + 2;
+            var page = new MenuPage(Crumb(FieldName(SettingsField.BotChatPreloadedSkills)), skills.Select(s => PreloadedSkillRow(s, on.Contains(s.Name), width)).ToList(), ToggleKeys) { SpaceToggles = true };
+            int? picked = await PickAsync(page, Math.Min(cursor, skills.Count - 1), cancellationToken).ConfigureAwait(false);
+            if (picked is not { } index)
+            {
+                if (!changed)
+                {
+                    Sink.Notice(UnchangedNotice);
+                }
+
+                return changed;
+            }
+
+            cursor = index;
+            string name = skills[index].Name;
+            var next = skills.Select(s => s.Name).Where(n => on.Contains(n) != string.Equals(n, name, StringComparison.OrdinalIgnoreCase)).ToList();
+            next.AddRange(chosen.Where(n => !skills.Any(s => string.Equals(s.Name, n.Trim(), StringComparison.OrdinalIgnoreCase))));
+            Apply(SettingsField.BotChatPreloadedSkills, d => d.BotChatPreloadedSkills = next.Count == 0 ? null : next);
+            changed = true;
+        }
     }
 
     /// <summary>The botchat-img2img-mode picker under the settings list (2026-09-27): one <see cref="BotChatImg2ImgModeLabel"/> row per <see cref="App.BotChatImg2ImgMode.Names"/> entry, the saved one under the cursor.</summary>

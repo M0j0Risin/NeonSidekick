@@ -594,16 +594,17 @@ public sealed class AppSettingsData
     /// <summary>
     /// The text → image workflow of <c>/botchat</c>'s fresh pictures (2026-09-25 as <c>Botchat image workflow</c>, which blank
     /// meant the first of them; renamed 2026-09-27, the user's call, beside <see cref="BotChatImg2ImgWorkflow"/>): a name among
-    /// the offered workflows that take a prompt and no input picture. Both modes use it alone — the app's picture of a reply
+    /// the installed workflows that take a prompt and no input picture — offered or not: <c>ComfyUI workflows offered</c> is the
+    /// main chat's list alone (later on 2026-09-27, the user's call). Both modes use it alone — the app's picture of a reply
     /// and, since the same day, the bots' own <c>generate_image</c>. Blank (the default), or a name no longer offered of that
-    /// kind, is none: no fresh picture at all. The old key is not carried over (no migration, as ever): a profile that named one
+    /// kind, or no longer installed, is none: no fresh picture at all. The old key is not carried over (no migration, as ever): a profile that named one
     /// names none until it is picked again. The Botchat tab of <c>/settings</c>. No variable.
     /// </summary>
     public string? BotChatTxt2ImgWorkflow { get; set; }
 
     /// <summary>
     /// The image → image workflow <c>/botchat</c> may rework an earlier picture with (2026-09-27, the user's ask): a name among
-    /// the offered workflows that take a prompt and exactly one input picture. Once the chat has a picture, the prompt writer
+    /// the installed workflows that take a prompt and exactly one input picture, offered or not (later that day). Once the chat has a picture, the prompt writer
     /// (<c>automatic</c>) or the bot (<c>autonomous</c>) chooses between a fresh picture and a rework of one that
     /// <see cref="BotChatImg2ImgMode"/> allows. Blank (the default) is none: no rework. The Botchat tab of <c>/settings</c>. No variable.
     /// </summary>
@@ -652,6 +653,25 @@ public sealed class AppSettingsData
     /// The Botchat tab of <c>/settings</c>, its last row. No variable.
     /// </summary>
     public bool BotChatSkills { get; set; }
+
+    /// <summary>
+    /// The skills <c>/botchat</c> loads itself (2026-09-27, the user's report: told in the topic to load a skill for the picture
+    /// prompts, the models mostly did not call <c>load_skill</c>): names among the skills a botchat sees (the starting profile's,
+    /// the global and, with <see cref="ExternalSkills"/>, the external ones), their instructions put straight into the requests
+    /// <see cref="BotChatSkillMode"/> says — no tool call needed. A skill whose name the <c>/botchat</c> topic spells out is
+    /// loaded the same way. Needs <see cref="AgentSkills"/>, not <see cref="BotChatSkills"/> (which offers <c>load_skill</c>).
+    /// Null or empty (the default) is none; a name no longer installed is kept and skipped. Read per reply. The Botchat tab of
+    /// <c>/settings</c>, a checklist. No variable.
+    /// </summary>
+    public List<string>? BotChatPreloadedSkills { get; set; }
+
+    /// <summary>
+    /// Where <c>/botchat</c>'s preloaded skills go (2026-09-27, the user's words and default): one of
+    /// <see cref="App.BotChatSkillMode.Names"/> — <c>prompt-writer-and-bots</c> (the default: the picture prompt writer and every
+    /// bot's system prompt) or <c>prompt-writer-only</c> (the writer alone; the bots' replies are left as they were). Read per
+    /// reply. The Botchat tab of <c>/settings</c>. No variable.
+    /// </summary>
+    public string BotChatSkillMode { get; set; } = App.BotChatSkillMode.Default;
 
     /// <summary>
     /// Whether the <c>/botchat</c> bots see the chat's pictures (2026-09-27, the user's ask: they reacted to each other's

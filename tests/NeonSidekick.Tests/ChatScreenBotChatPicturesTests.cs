@@ -541,6 +541,104 @@ public partial class ChatScreenTests
         Assert.Equal(BotChat.ImagePromptInstruction(PonyWorkflow), SystemText(_chat.Requests[1]));
     }
 
+    /// <summary>
+    /// The botchat workflows are any installed ones (later on 2026-09-27, the user's call): with ComfyUI workflows offered ticking
+    /// none of them, automatic still draws with pony and reworks with the img2img one.
+    /// </summary>
+    [Fact]
+    public async Task BotChat_Automatic_UsesItsWorkflows_EvenWhenNotOffered()
+    {
+        var stub = BotPicturesFixture();
+        Img2ImgWorkflow(stub);
+        _settings.Update(d => { d.BotChatImg2ImgWorkflow = "hatter"; d.ComfyWorkflowsOffered = ["something-else"]; });
+        _chat.EnqueueText(DogReply);
+        _chat.EnqueueText("a dog surfing a wave");
+        _chat.EnqueueText("Ada ", "answers.");
+        _chat.EnqueueText("REWORK\nthe same dog, now in a top hat");
+        _chat.EnqueueText("Neon ", "again");
+        EscDuringRequest(5);
+        PushLine("/botchat");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        var prompts = stub.Requests.Where(r => r.Uri.AbsolutePath == "/prompt").ToList();
+        Assert.Equal(2, prompts.Count);
+        Assert.Contains("\"text\":\"a dog surfing a wave", prompts[0].Body!);
+        Assert.Contains("uploaded-input.png", prompts[1].Body!);
+        Assert.DoesNotContain(BotChat.NoWorkflowNotice, output);
+    }
+
+    /// <summary>Autonomous: the bots' tool lists the two workflows though neither is offered (later on 2026-09-27).</summary>
+    [Fact]
+    public async Task BotChat_Autonomous_TheBotsToolListsItsWorkflows_EvenWhenNotOffered()
+    {
+        var stub = BotPicturesFixture(mode: "autonomous");
+        Img2ImgWorkflow(stub);
+        _settings.Update(d => { d.BotChatImg2ImgWorkflow = "hatter"; d.ComfyWorkflowsOffered = ["something-else"]; });
+        _chat.Enqueue(FakeChatClient.Call("g1", GenerateImageTool.ToolName, new Dictionary<string, object?> { ["prompt"] = "a dog surfing", ["seed"] = 7, ["verbatim"] = true }));
+        _chat.EnqueueText("Here is my dog.");
+        _chat.EnqueueText("Ada ", "answers.");
+        EscDuringRequest(3);
+        PushLine("/botchat");
+        PushLine("/exit");
+
+        await RunAsync();
+
+        Assert.Contains("\n- pony ", Assert.Single(ToolsOf(_chat.Options[0])).Description!);
+        Assert.Single(stub.Requests, r => r.Uri.AbsolutePath == "/prompt");   // the bot's own call ran
+        Assert.Contains("\n- hatter ", Assert.Single(ToolsOf(_chat.Options[2])).Description!);
+    }
+
+    /// <summary>
+    /// Preloaded skills (2026-09-27, the user's ask): a skill the topic names is read by the app and put into the picture prompt
+    /// writer's request and, under prompt-writer-and-bots (the default), every bot's prompt — with Botchat skills enabled off,
+    /// so no load_skill is ever offered; the chat says so once.
+    /// </summary>
+    [Fact]
+    public async Task BotChat_ASkillTheTopicNames_IsPreloaded_ForTheWriterAndTheBots()
+    {
+        BotPicturesFixture();
+        PutSkill(ProfileSkills, "pony-prompts", "Writes Pony Diffusion prompts.", "# Pony prompts\n\nAlways start with score_9.");
+        _chat.EnqueueText(DogReply);
+        _chat.EnqueueText("score_9, a dog surfing a wave");
+        _chat.EnqueueText("Ada ", "answers.");
+        EscDuringRequest(3);
+        PushLine("/botchat use pony-prompts for the pictures");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Equal(3, _chat.Requests.Count);
+        Assert.All([0, 1, 2], i => Assert.Empty(ToolsOf(_chat.Options[i])));   // no load_skill anywhere
+        Assert.Contains("Always start with score_9.", SystemText(_chat.Requests[0]));   // neon
+        Assert.Contains("Always start with score_9.", SystemText(_chat.Requests[1]));   // the prompt writer
+        Assert.Contains("Always start with score_9.", SystemText(_chat.Requests[2]));   // ada
+        Assert.Equal(1, CountOf(output, BotChat.PreloadedNotice(["pony-prompts"], BotSkillMode.PromptWriterAndBots)));
+    }
+
+    /// <summary>prompt-writer-only: the setting's skill reaches the picture prompt writer, not the bots.</summary>
+    [Fact]
+    public async Task BotChat_PromptWriterOnly_ThePreloadedSkill_ReachesTheWriterAlone()
+    {
+        BotPicturesFixture();
+        PutSkill(ProfileSkills, "pony-prompts", "Writes Pony Diffusion prompts.", "# Pony prompts\n\nAlways start with score_9.");
+        _settings.Update(d => { d.BotChatPreloadedSkills = ["pony-prompts"]; d.BotChatSkillMode = "prompt-writer-only"; });
+        _chat.EnqueueText(DogReply);
+        _chat.EnqueueText("score_9, a dog surfing a wave");
+        _chat.EnqueueText("Ada ", "answers.");
+        EscDuringRequest(3);
+        PushLine("/botchat");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.DoesNotContain("Always start with score_9.", SystemText(_chat.Requests[0]));
+        Assert.Contains("Always start with score_9.", SystemText(_chat.Requests[1]));
+        Assert.DoesNotContain("Always start with score_9.", SystemText(_chat.Requests[2]));
+        Assert.Contains(BotChat.PreloadedNotice(["pony-prompts"], BotSkillMode.PromptWriterOnly), output);
+    }
+
     private const string SketchReply = "Here's a sketch I drew of a dog surfing.";
 
     private ComfyWorkflow PonyWorkflow => BotChat.Txt2ImgWorkflow([.. new ComfyWorkflowCatalog(() => [_settings.ProfileComfyDirectory]).Workflows], "pony")!;

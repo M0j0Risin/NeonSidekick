@@ -240,13 +240,56 @@ public static partial class BotChat
     /// <see cref="Rules"/>. Built afresh for every turn from that speaker's persona alone. With <paramref name="skills"/>
     /// (<c>Botchat skills enabled</c>, 2026-09-27: the main chat's catalog — the starting profile's, the global and the
     /// external skills, never the speaker's own profile's) the load-only skills block
-    /// (<see cref="Skills.SkillsPrompt.LoadOnlySection"/>) goes between the two; null or empty, the prompt is as before. Pure.
+    /// (<see cref="Skills.SkillsPrompt.LoadOnlySection"/>) goes between the two; null or empty, the prompt is as before.
+    /// <paramref name="preloaded"/> (<see cref="PreloadedSkillsSection"/>, 2026-09-27, <c>Botchat skill mode</c>
+    /// <c>prompt-writer-and-bots</c>) follows that block, before the rules. Pure.
     /// </summary>
-    public static string SystemPrompt(string? persona, string speaker, IReadOnlyList<string> others, string topic, bool speechOutput, string? voiceDirective, bool markdown, string? pronouns = null, bool images = false, IReadOnlyList<Skills.Skill>? skills = null) =>
+    public static string SystemPrompt(string? persona, string speaker, IReadOnlyList<string> others, string topic, bool speechOutput, string? voiceDirective, bool markdown, string? pronouns = null, bool images = false, IReadOnlyList<Skills.Skill>? skills = null, string? preloaded = null) =>
         Assistant.SystemPrompt(speechOutput, memories: null, persona: string.IsNullOrWhiteSpace(persona) ? null : persona, voiceDirective: voiceDirective,
             tools: false, files: false, timers: false, markdown: markdown)
         + (skills is { Count: > 0 } ? "\n\n" + Skills.SkillsPrompt.LoadOnlySection(skills) : "")
+        + (string.IsNullOrEmpty(preloaded) ? "" : "\n\n" + preloaded)
         + "\n\n" + Rules(speaker, others, topic, pronouns, images);
+
+    // ── Preloaded skills (2026-09-27) ───────────────────────────────────────
+
+    /// <summary>
+    /// The skills <c>/botchat</c> loads itself (2026-09-27, the user's report: told to load a skill, the models mostly did not):
+    /// those <paramref name="setting"/> (<c>Botchat preloaded skills</c>) names that are in <paramref name="catalog"/>, then any
+    /// catalog skill whose name <paramref name="topic"/> spells out as a whole word — any case, a hyphen part of the name, so
+    /// <c>pony</c> is not <c>pony-prompts</c> — each once, in the catalog's order. Pure.
+    /// </summary>
+    public static IReadOnlyList<Skills.Skill> PreloadedSkills(IReadOnlyList<Skills.Skill> catalog, IReadOnlyList<string>? setting, string topic)
+    {
+        ArgumentNullException.ThrowIfNull(catalog);
+        ArgumentNullException.ThrowIfNull(topic);
+        var named = (setting ?? []).Select(n => n.Trim()).Where(n => n.Length > 0).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return catalog.Where(s => named.Contains(s.Name) || NamedIn(topic, s.Name)).ToList();
+    }
+
+    private static bool NamedIn(string topic, string name) =>
+        name.Length > 0 && Regex.IsMatch(topic, @"(?<![\w-])" + Regex.Escape(name) + @"(?![\w-])", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
+
+    /// <summary>
+    /// The preloaded skills as prompt text (2026-09-27): a line saying they are loaded and to be followed, then each skill's
+    /// content as <c>load_skill</c> returns it. Empty for none. Pinned: it is prompt text.
+    /// </summary>
+    public static string PreloadedSkillsSection(IReadOnlyList<string> contents)
+    {
+        ArgumentNullException.ThrowIfNull(contents);
+        return contents.Count == 0 ? "" : PreloadedSkillsLead + "\n\n" + string.Join("\n\n", contents);
+    }
+
+    /// <summary>The first line of <see cref="PreloadedSkillsSection"/>. Pinned: it is prompt text.</summary>
+    public const string PreloadedSkillsLead = "These skills are loaded for you already; follow their instructions:";
+
+    /// <summary>The line the chat shows when its preloaded skills are first read, or change (2026-09-27). Pinned.</summary>
+    public static string PreloadedNotice(IReadOnlyList<string> names, BotSkillMode mode)
+    {
+        ArgumentNullException.ThrowIfNull(names);
+        string whom = mode == BotSkillMode.PromptWriterOnly ? "for the picture prompts" : "for the picture prompts and the bots";
+        return $"(botchat: skills loaded {whom}: {string.Join(", ", names)})";
+    }
 
     /// <summary>
     /// The group-chat rules after the persona (2026-09-24): who else is in the room, speak only as yourself,
@@ -381,13 +424,14 @@ public static partial class BotChat
 
     /// <summary>
     /// The workflow of a fresh <c>/botchat</c> picture (<c>Botchat txt2img workflow</c>): the one <paramref name="setting"/> names
-    /// (ignoring case) when it is among <see cref="Txt2ImgWorkflows"/>; null — none — when blank or not among them (2026-09-27, the
+    /// (ignoring case) when it is among <see cref="Txt2ImgWorkflows"/> of <paramref name="installed"/> — every installed workflow,
+    /// offered or not (later on 2026-09-27, the user's call); null — none — when blank or not among them (2026-09-27, the
     /// user's call: blank was the first of them until then). Pure.
     /// </summary>
-    public static ComfyWorkflow? Txt2ImgWorkflow(IReadOnlyList<ComfyWorkflow> offered, string? setting) => Named(Txt2ImgWorkflows(offered), setting);
+    public static ComfyWorkflow? Txt2ImgWorkflow(IReadOnlyList<ComfyWorkflow> installed, string? setting) => Named(Txt2ImgWorkflows(installed), setting);
 
     /// <summary>The workflow of a <c>/botchat</c> rework (<c>Botchat img2img workflow</c>, 2026-09-27): as <see cref="Txt2ImgWorkflow"/>, among <see cref="Img2ImgWorkflows"/>. Pure.</summary>
-    public static ComfyWorkflow? Img2ImgWorkflow(IReadOnlyList<ComfyWorkflow> offered, string? setting) => Named(Img2ImgWorkflows(offered), setting);
+    public static ComfyWorkflow? Img2ImgWorkflow(IReadOnlyList<ComfyWorkflow> installed, string? setting) => Named(Img2ImgWorkflows(installed), setting);
 
     private static ComfyWorkflow? Named(IReadOnlyList<ComfyWorkflow> usable, string? setting)
     {
@@ -397,12 +441,13 @@ public static partial class BotChat
 
     /// <summary>
     /// The workflows the bots' own <c>generate_image</c> sees (2026-09-27, the user's ask: <c>autonomous</c> limited as <c>automatic</c>
-    /// is): <paramref name="fresh"/> and, while there is a picture to rework, <paramref name="rework"/>, of those still offered. Pure.
+    /// is): <paramref name="fresh"/> and, while there is a picture to rework, <paramref name="rework"/>, of those still installed
+    /// (offered or not, later on 2026-09-27). Pure.
     /// </summary>
-    public static IReadOnlyList<ComfyWorkflow> BotWorkflows(IReadOnlyList<ComfyWorkflow> offered, ComfyWorkflow? fresh, ComfyWorkflow? rework, bool reworkable)
+    public static IReadOnlyList<ComfyWorkflow> BotWorkflows(IReadOnlyList<ComfyWorkflow> installed, ComfyWorkflow? fresh, ComfyWorkflow? rework, bool reworkable)
     {
-        ArgumentNullException.ThrowIfNull(offered);
-        return offered.Where(w => (fresh is not null && string.Equals(w.Name, fresh.Name, StringComparison.OrdinalIgnoreCase))
+        ArgumentNullException.ThrowIfNull(installed);
+        return installed.Where(w => (fresh is not null && string.Equals(w.Name, fresh.Name, StringComparison.OrdinalIgnoreCase))
             || (reworkable && rework is not null && string.Equals(w.Name, rework.Name, StringComparison.OrdinalIgnoreCase))).ToList();
     }
 
@@ -646,7 +691,7 @@ public static partial class BotChat
     public static string PictureNotice(string speaker) => $"(botchat: {speaker}'s picture)";
 
     /// <summary>Once per chat, when pictures are on but no picture can be made (2026-09-25; since 2026-09-27: no txt2img workflow set, nor an img2img one with a picture to rework). Pinned.</summary>
-    public const string NoWorkflowNotice = "(botchat: no Botchat txt2img workflow is set — or it is not offered — so there are no pictures of the replies)";
+    public const string NoWorkflowNotice = "(botchat: no Botchat txt2img workflow is set — or it is no longer installed — so there are no pictures of the replies)";
 
     /// <summary>When the model wrote no image prompt for a reply (2026-09-25). Pinned.</summary>
     public const string NoPromptNotice = "(botchat: no image prompt came back for that reply; no picture)";
