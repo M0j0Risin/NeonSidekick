@@ -324,12 +324,15 @@ public static class ConversationCompactor
     /// <see cref="PrunedImageStub"/> for its text and no image parts, each picture counted as one
     /// result — since a picture is the bulkiest result there is. The count is how many were.
     /// <paramref name="entries"/>, when given, receives one <see cref="PrunedEntry"/> per stub (2026-09-21).
+    /// The older turns' replies lose their thinking too (2026-09-28, with thinking sent back): the cheapest thing to drop,
+    /// and what <c>LLM preserve thinking</c> would otherwise carry to the window's end. Not counted: the count is the
+    /// results', and a prune with none to stub is none, the thinking kept.
     /// </summary>
     public static (List<ChatMessage> Messages, int Pruned) Prune(Plan plan, bool protectSkills = true, List<PrunedEntry>? entries = null)
     {
         ArgumentNullException.ThrowIfNull(plan);
         var messages = new List<ChatMessage>(plan.Older.Count + plan.Recent.Count);
-        int pruned = Stub(plan.Older, 0, plan.Older.Count, messages, protectSkills, entries, entries is null ? null : CallNames(plan.Older));
+        int pruned = Stub(plan.Older, 0, plan.Older.Count, messages, protectSkills, entries, entries is null ? null : CallNames(plan.Older), dropThinking: true);
         messages.AddRange(plan.Recent);
         return (messages, pruned);
     }
@@ -405,8 +408,9 @@ public static class ConversationCompactor
     /// The opening pairs' results never are; a loaded skill's (<see cref="ConversationHistory.IsSkillResult"/>)
     /// is not while <paramref name="protectSkills"/> — the <c>Skill compact mode</c> setting.
     /// With <paramref name="entries"/> each stub is logged there, its tool looked up in <paramref name="names"/> (<see cref="CallNames"/>).
+    /// With <paramref name="dropThinking"/> an assistant message goes without its <see cref="TextReasoningContent"/>, not counted.
     /// </summary>
-    private static int Stub(IReadOnlyList<ChatMessage> messages, int from, int to, List<ChatMessage> into, bool protectSkills, List<PrunedEntry>? entries, IReadOnlyDictionary<string, string>? names)
+    private static int Stub(IReadOnlyList<ChatMessage> messages, int from, int to, List<ChatMessage> into, bool protectSkills, List<PrunedEntry>? entries, IReadOnlyDictionary<string, string>? names, bool dropThinking = false)
     {
         int pruned = 0;
         for (int index = from; index < to; index++)
@@ -427,6 +431,14 @@ public static class ConversationCompactor
                 });
                 pruned += pictures;
                 entries?.Add(new PrunedEntry(Tools.ViewImageTool.ToolName, 0, pictures));
+                continue;
+            }
+
+            if (dropThinking && message.Role == ChatRole.Assistant && message.Contents.Any(c => c is TextReasoningContent))
+            {
+                var thoughtless = message.Clone();
+                thoughtless.Contents = message.Contents.Where(c => c is not TextReasoningContent).ToList();
+                into.Add(thoughtless);
                 continue;
             }
 

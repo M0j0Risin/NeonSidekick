@@ -319,7 +319,7 @@ internal sealed partial class ChatScreen
     {
         if (_sessionId is { } id)
         {
-            _sessions.SaveHistory(id, SessionHistory.ToJson(_session.History.Messages, _plan.ToStored(), _executingPlan, _claudeSessionId, _advisorThread.SessionId));
+            _sessions.SaveHistory(id, SessionHistory.ToJson(_session.History.Messages, _plan.ToStored(), _executingPlan, _claudeSessionId, _advisorThread.SessionId, _effective().SessionSaveThinking));
         }
     }
 }

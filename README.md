@@ -147,6 +147,7 @@ Settings that an environment variable or flag can override for one launch are li
 | Session show name | Which titles show on the rule above the input row: `all-names`, `model-written` (a model-written or typed name only) or `none`. | `all-names` |
 | Session tool | Offers the model `session_manager` to search, list and read this profile's earlier sessions (never restore or purge). | on |
 | Session search max results | How many sessions a `session_manager` search or list returns (1–20). | 10 |
+| Session save thinking | Saves each reply's thinking with the session, so a resumed session can send it back with *LLM preserve thinking* on. Off keeps `sessions.db` smaller; thinking saved earlier is still read back. | off |
 
 #### LLM
 
@@ -171,6 +172,7 @@ Settings that an environment variable or flag can override for one launch are li
 | LLM max tool iterations | How many tool round trips one message may make before the turn stops (1–10000). | 10000 |
 | LLM use fun verbs | The thinking spinner reads a random verb instead of `thinking` / `writing`. | off |
 | LLM show thinking | Streams a reasoning model's thinking as a dim block (its last five lines), folded to `▸ 💭 thought for 4.2s` when the answer starts; needs Transcript markdown. Click the line, press Ctrl+O or use `/expand` to see it again. Thinking is never spoken or logged, and copied only by `/copy --thinking`. | on |
+| LLM preserve thinking | Sends the model's thinking from earlier turns back to a local server, as `reasoning_content`, and asks the chat template to keep it (`chat_template_kwargs`: `preserve_thinking` for Qwen3.6, `clear_thinking: false` for GLM). The current turn's thinking always goes back, so a model keeps its reasoning between tool calls. Costs context; a `/compact` prune drops older thinking first. The Claude API is not affected. | off |
 
 #### TTS
 

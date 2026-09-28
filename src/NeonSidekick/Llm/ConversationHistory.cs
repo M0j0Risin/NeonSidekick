@@ -91,6 +91,27 @@ public sealed class ConversationHistory
     public static bool IsTurnStart(ChatMessage message) => message.Role == ChatRole.User && !IsImageCarrier(message);
 
     /// <summary>
+    /// The index of the first message of the turn in flight: the last user message that is neither a tool result nor an
+    /// image carrier — what the user typed — or 0 when there is none. Thinking is sent back after it: the Claude API's
+    /// signed blocks (<see cref="Anthropic.AnthropicRequest"/>) and, since 2026-09-28, a local server's
+    /// <c>reasoning_content</c> (<see cref="OpenAICompatibleChatClient.WithReasoningBack"/>).
+    /// </summary>
+    public static int InFlightStart(IReadOnlyList<ChatMessage> messages)
+    {
+        ArgumentNullException.ThrowIfNull(messages);
+        for (int i = messages.Count - 1; i >= 0; i--)
+        {
+            var message = messages[i];
+            if (message.Role == ChatRole.User && !IsImageCarrier(message) && !message.Contents.Any(c => c is FunctionResultContent))
+            {
+                return i;
+            }
+        }
+
+        return 0;
+    }
+
+    /// <summary>
     /// The carrier's text: names the source and disclaims the user, so a small model answers the
     /// question it was asked rather than this line. <c>(attached by view_image, not typed by the
     /// user: ladybug.png)</c>; several names joined by <c>, </c> after <c>the pictures:</c>. Since 2026-09-24

@@ -118,6 +118,23 @@ public class ConversationCompactorTests
         Assert.Same(messages[10], pruned[10]); // the recent turn as it was
     }
 
+    /// <summary>The older turns' replies lose their thinking with a prune (2026-09-28), uncounted; the kept turn keeps its own.</summary>
+    [Fact]
+    public void Prune_DropsTheOlderTurnsThinking_NotTheRecentOnes()
+    {
+        var messages = ThreeTurns();
+        messages[9] = new ChatMessage(ChatRole.Assistant, [new TextReasoningContent("old"), new TextContent("reply two")]);
+        messages[11] = new ChatMessage(ChatRole.Assistant, [new TextReasoningContent("new"), new TextContent("reply three")]);
+
+        var (pruned, count) = ConversationCompactor.Prune(ConversationCompactor.Split(messages, keepRecent: 1));
+
+        Assert.Equal(1, count);   // the long result alone
+        Assert.Empty(pruned[9].Contents.OfType<TextReasoningContent>());
+        Assert.Equal("reply two", pruned[9].Text);
+        Assert.Single(messages[9].Contents.OfType<TextReasoningContent>());   // the held message untouched
+        Assert.Same(messages[11], pruned[11]);
+    }
+
     [Fact]
     public void Prune_LogsAnEntryPerStub_NamedByItsCall_PicturesCounted()
     {

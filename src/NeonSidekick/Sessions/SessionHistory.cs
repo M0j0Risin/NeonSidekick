@@ -19,8 +19,9 @@ public sealed class StoredMessage
 /// <summary>
 /// One content part: <see cref="Kind"/> picks which fields are read — <c>text</c> (<see cref="Text"/>),
 /// <c>image</c> (<see cref="Bytes"/> base64 + <see cref="MediaType"/>), <c>call</c> (<see cref="CallId"/>,
-/// <see cref="Name"/>, <see cref="Arguments"/> as the arguments' JSON object) or <c>result</c>
-/// (<see cref="CallId"/>, <see cref="Text"/>, <see cref="SkillResult"/> for the compactor's tag).
+/// <see cref="Name"/>, <see cref="Arguments"/> as the arguments' JSON object), <c>result</c>
+/// (<see cref="CallId"/>, <see cref="Text"/>, <see cref="SkillResult"/> for the compactor's tag) or <c>reasoning</c>
+/// (<see cref="Text"/>, the model's thinking, 2026-09-28: only with <c>Sessions save thinking</c> on).
 /// </summary>
 public sealed class StoredPart
 {
@@ -28,6 +29,7 @@ public sealed class StoredPart
     public const string ImageKind = "image";
     public const string CallKind = "call";
     public const string ResultKind = "result";
+    public const string ReasoningKind = "reasoning";
 
     public string Kind { get; set; } = "";
     public string? Text { get; set; }
@@ -79,21 +81,24 @@ public sealed class StoredPlan
 /// (<see cref="ConversationHistory.CarrierKey"/>, <see cref="ConversationHistory.SkillResultKey"/>)
 /// would come back as <see cref="JsonElement"/>s, which <see cref="ConversationHistory.IsImageCarrier"/>
 /// does not read. So each message becomes a <see cref="StoredMessage"/> of typed parts — text, an
-/// image's bytes, a tool call's id + name + arguments, a tool result's id + text + skill tag — and
-/// nothing else (a usage or reasoning part is not conversation). Call arguments go out through
+/// image's bytes, a tool call's id + name + arguments, a tool result's id + text + skill tag, and — asked for
+/// (2026-09-28, the setting <c>Sessions save thinking</c>) — a reply's thinking as text, so a resumed session with
+/// <c>LLM preserve thinking</c> sends it back as the live one did; nothing else (a usage part is not conversation,
+/// and a Claude API block's signature is not kept: the API gets thinking back only inside the turn in flight, never
+/// a saved one). A reasoning part is read back whether or not the setting is on now. Call arguments go out through
 /// <see cref="Assistant.SerializeArguments"/> and come back as one <see cref="JsonElement"/> per
 /// property, the shape the server hands the adapter. Pure; the store owns the I/O.
 /// </summary>
 public static class SessionHistory
 {
     /// <summary>The stored form of <paramref name="messages"/>, compact JSON.</summary>
-    public static string ToJson(IReadOnlyList<ChatMessage> messages, StoredPlan? plan = null, StoredPlan? executing = null, string? claudeSessionId = null, string? claudeAdvisorSessionId = null)
+    public static string ToJson(IReadOnlyList<ChatMessage> messages, StoredPlan? plan = null, StoredPlan? executing = null, string? claudeSessionId = null, string? claudeAdvisorSessionId = null, bool withThinking = false)
     {
         ArgumentNullException.ThrowIfNull(messages);
         var document = new StoredHistory { Plan = plan, Executing = executing, ClaudeSessionId = claudeSessionId, ClaudeAdvisorSessionId = claudeAdvisorSessionId };
         foreach (var message in messages)
         {
-            document.Messages.Add(Store(message));
+            document.Messages.Add(Store(message, withThinking));
         }
 
         return JsonSerializer.Serialize(document, SessionJsonContext.Default.StoredHistory);
@@ -133,7 +138,7 @@ public static class SessionHistory
     }
 
 
-    internal static StoredMessage Store(ChatMessage message)
+    internal static StoredMessage Store(ChatMessage message, bool withThinking = false)
     {
         var stored = new StoredMessage { Role = message.Role.Value, Carrier = ConversationHistory.IsImageCarrier(message) };
         foreach (var content in message.Contents)
@@ -151,6 +156,9 @@ public static class SessionHistory
                     break;
                 case FunctionResultContent result:
                     stored.Parts.Add(new StoredPart { Kind = StoredPart.ResultKind, CallId = result.CallId, Text = result.Result as string ?? result.Result?.ToString() ?? "", SkillResult = ConversationHistory.IsSkillResult(result) });
+                    break;
+                case TextReasoningContent { Text.Length: > 0 } reasoning when withThinking:
+                    stored.Parts.Add(new StoredPart { Kind = StoredPart.ReasoningKind, Text = reasoning.Text });
                     break;
             }
         }
@@ -182,6 +190,9 @@ public static class SessionHistory
                     }
 
                     contents.Add(result);
+                    break;
+                case StoredPart.ReasoningKind when !string.IsNullOrEmpty(part.Text):
+                    contents.Add(new TextReasoningContent(part.Text));
                     break;
             }
         }

@@ -1970,6 +1970,35 @@ public class AssistantTests
             assistant.ExplainFailure(new TaskCanceledException(SdkTimeoutMessage), new TokenUsage(600, 50, 650, 1, TimeSpan.Zero, TimeSpan.Zero)));
     }
 
+    // ── Thinking kept for the wire (2026-09-28) ─────────────────────────────
+
+    [Fact]
+    public async Task AThinkBlockStreamedAsContent_StaysInTheHistoryAsThinking()
+    {
+        var (client, history, assistant) = Build();
+        client.Enqueue(FakeChatClient.Text("<think>hmm</think>"), FakeChatClient.Text("The answer."));
+
+        await foreach (var _ in assistant.RunTurnAsync("q")) { }
+
+        var reply = history.Messages[^1];
+        Assert.Equal("The answer.", reply.Text);
+        Assert.Equal("hmm", Assert.Single(reply.Contents.OfType<TextReasoningContent>()).Text);
+    }
+
+    [Fact]
+    public async Task PreserveThinking_RidesTheRequestsOptions()
+    {
+        var (client, _, assistant) = Build();
+        client.Enqueue(FakeChatClient.Text("one"));
+        await foreach (var _ in assistant.RunTurnAsync("q")) { }
+        Assert.Null(client.Options[^1]!.AdditionalProperties);
+
+        assistant.PreserveThinking = true;
+        client.Enqueue(FakeChatClient.Text("two"));
+        await foreach (var _ in assistant.RunTurnAsync("q2")) { }
+        Assert.True(OpenAICompatibleChatClient.PreservesThinking(client.Options[^1]));
+    }
+
     // ── RequestAsync (the side loop's primitive, 2026-09-17) ────────────────
 
     [Fact]

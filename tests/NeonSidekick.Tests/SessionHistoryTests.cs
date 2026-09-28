@@ -136,6 +136,26 @@ public class SessionHistoryTests
         Assert.Equal("kept", Assert.Single(back).Text);
     }
 
+    /// <summary>A reply's thinking (2026-09-28): saved only when asked (<c>Session save thinking</c>), read back whenever it is there.</summary>
+    [Fact]
+    public void Thinking_IsSavedOnlyWhenAsked_AndReadBackAsThinking()
+    {
+        var messages = new List<ChatMessage>
+        {
+            new(ChatRole.User, "q"),
+            new(ChatRole.Assistant, [new TextReasoningContent("musing"), new TextContent("answer")]),
+        };
+
+        var without = SessionHistory.FromJson(SessionHistory.ToJson(messages));
+        Assert.Empty(without[1].Contents.OfType<TextReasoningContent>());
+        Assert.Equal("answer", without[1].Text);
+
+        var with = SessionHistory.FromJson(SessionHistory.ToJson(messages, withThinking: true));
+        Assert.Equal("musing", Assert.Single(with[1].Contents.OfType<TextReasoningContent>()).Text);
+        Assert.Equal("answer", with[1].Text);
+        Assert.IsType<TextReasoningContent>(with[1].Contents[0]);   // in its place, ahead of the text
+    }
+
     [Fact]
     public void ADocumentThatIsNotAHistory_Throws()
     {

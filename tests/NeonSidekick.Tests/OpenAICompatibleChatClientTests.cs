@@ -235,26 +235,158 @@ public class OpenAICompatibleChatClientTests
     }
 
     [Fact]
-    public void WithThinkingOff_LeavesEveryOtherCaseAlone()
+    public void WithTemplateKwargs_LeavesEveryOtherCaseAlone()
     {
-        Assert.Null(OpenAICompatibleChatClient.WithThinkingOff(null));
+        Assert.Null(OpenAICompatibleChatClient.WithTemplateKwargs(null));
 
         var plain = new ChatOptions();
-        Assert.Same(plain, OpenAICompatibleChatClient.WithThinkingOff(plain));
+        Assert.Same(plain, OpenAICompatibleChatClient.WithTemplateKwargs(plain));
 
         var high = new ChatOptions { Reasoning = new ReasoningOptions { Effort = ReasoningEffort.High } };
-        Assert.Same(high, OpenAICompatibleChatClient.WithThinkingOff(high));
+        Assert.Same(high, OpenAICompatibleChatClient.WithTemplateKwargs(high));
 
         Func<IChatClient, object?> mine = _ => null;
         var supplied = new ChatOptions { Reasoning = new ReasoningOptions { Effort = ReasoningEffort.None }, RawRepresentationFactory = mine };
-        Assert.Same(supplied, OpenAICompatibleChatClient.WithThinkingOff(supplied));   // a caller's factory wins
+        Assert.Same(supplied, OpenAICompatibleChatClient.WithTemplateKwargs(supplied));   // a caller's factory wins
 
         var none = new ChatOptions { Reasoning = new ReasoningOptions { Effort = ReasoningEffort.None }, Tools = new List<AITool>() };
-        var shaped = OpenAICompatibleChatClient.WithThinkingOff(none)!;
+        var shaped = OpenAICompatibleChatClient.WithTemplateKwargs(none)!;
         Assert.NotSame(none, shaped);
         Assert.Null(none.RawRepresentationFactory);              // the caller's instance is not mutated
         Assert.NotNull(shaped.RawRepresentationFactory);
         Assert.Equal(ReasoningEffort.None, shaped.Reasoning!.Effort);
         Assert.NotNull(shaped.Tools);
+    }
+
+    /// <summary>The preserve key is taken off the options, the caller's instance and its other properties left alone; a caller's factory still wins.</summary>
+    [Fact]
+    public void WithTemplateKwargs_TakesThePreserveKeyOff()
+    {
+        var options = new ChatOptions { AdditionalProperties = new AdditionalPropertiesDictionary { [OpenAICompatibleChatClient.PreserveThinkingKey] = true, ["other"] = 1 } };
+        var shaped = OpenAICompatibleChatClient.WithTemplateKwargs(options)!;
+        Assert.False(shaped.AdditionalProperties!.ContainsKey(OpenAICompatibleChatClient.PreserveThinkingKey));
+        Assert.Equal(1, shaped.AdditionalProperties["other"]);
+        Assert.True(options.AdditionalProperties.ContainsKey(OpenAICompatibleChatClient.PreserveThinkingKey));
+        Assert.NotNull(shaped.RawRepresentationFactory);
+
+        Func<IChatClient, object?> mine = _ => null;
+        var supplied = new ChatOptions { RawRepresentationFactory = mine, AdditionalProperties = new AdditionalPropertiesDictionary { [OpenAICompatibleChatClient.PreserveThinkingKey] = true } };
+        var kept = OpenAICompatibleChatClient.WithTemplateKwargs(supplied)!;
+        Assert.Same(mine, kept.RawRepresentationFactory);
+        Assert.Null(kept.AdditionalProperties);
+
+        var offKey = new ChatOptions { AdditionalProperties = new AdditionalPropertiesDictionary { [OpenAICompatibleChatClient.PreserveThinkingKey] = false } };
+        var plain = OpenAICompatibleChatClient.WithTemplateKwargs(offKey)!;
+        Assert.Null(plain.RawRepresentationFactory);
+        Assert.Null(plain.AdditionalProperties);
+    }
+
+    // ── Thinking sent back (2026-09-28) ─────────────────────────────────────
+
+    private static ChatOptions Preserving(ReasoningEffort? effort = null) => new()
+    {
+        Reasoning = effort is { } e ? new ReasoningOptions { Effort = e } : null,
+        AdditionalProperties = new AdditionalPropertiesDictionary { [OpenAICompatibleChatClient.PreserveThinkingKey] = true },
+    };
+
+    private static async Task<string> BodyFor(IEnumerable<ChatMessage> messages, ChatOptions? options = null)
+    {
+        var stub = new StubHttpMessageHandler().Map("http://127.0.0.1:1234/v1/chat/completions", HttpStatusCode.OK, StubHttpMessageHandler.CompletionJson("pong", "my-model"));
+        using var http = new HttpClient(stub);
+        using var client = new OpenAICompatibleChatClient(Endpoint(), TimeSpan.FromSeconds(5), http);
+
+        await client.GetResponseAsync(messages, options);
+
+        return Assert.Single(stub.Requests).Body!;
+    }
+
+    /// <summary>An earlier turn (thinking + text) and the turn in flight (thinking + a call, its result).</summary>
+    private static List<ChatMessage> TwoTurns() =>
+    [
+        new(ChatRole.System, "sys"),
+        new(ChatRole.User, "first question"),
+        new(ChatRole.Assistant, [new TextReasoningContent("old musing"), new TextContent("first answer")]),
+        new(ChatRole.User, "second question"),
+        new(ChatRole.Assistant, [new TextReasoningContent("fresh musing"), new FunctionCallContent("c1", "echo", new Dictionary<string, object?> { ["text"] = "hi" })]),
+        new(ChatRole.Tool, [new FunctionResultContent("c1", "hi")]),
+    ];
+
+    [Fact]
+    public async Task TheTurnInFlight_SendsItsThinkingBack_WithItsCallsIntact()
+    {
+        var messages = TwoTurns();
+        string body = await BodyFor(messages);
+
+        using var document = System.Text.Json.JsonDocument.Parse(body);
+        var wire = document.RootElement.GetProperty("messages");
+        var inFlight = wire[4];
+        Assert.Equal("assistant", inFlight.GetProperty("role").GetString());
+        Assert.Equal("fresh musing", inFlight.GetProperty("reasoning_content").GetString());
+        var call = Assert.Single(inFlight.GetProperty("tool_calls").EnumerateArray());
+        Assert.Equal("c1", call.GetProperty("id").GetString());
+        Assert.Equal("echo", call.GetProperty("function").GetProperty("name").GetString());
+        Assert.Equal("{\"text\":\"hi\"}", call.GetProperty("function").GetProperty("arguments").GetString());
+        Assert.Equal("tool", wire[5].GetProperty("role").GetString());
+
+        // The earlier turn goes as it always did, and nothing asks the template to keep it.
+        Assert.False(wire[2].TryGetProperty("reasoning_content", out _));
+        Assert.DoesNotContain("old musing", body);
+        Assert.DoesNotContain("chat_template_kwargs", body);
+
+        // The history's own messages are not touched.
+        Assert.All(messages, m => Assert.Null(m.RawRepresentation));
+    }
+
+    [Fact]
+    public async Task PreserveThinking_SendsEveryTurnsThinking_AndAsksTheTemplateToKeepIt()
+    {
+        string body = await BodyFor(TwoTurns(), Preserving());
+
+        using var document = System.Text.Json.JsonDocument.Parse(body);
+        var wire = document.RootElement.GetProperty("messages");
+        Assert.Equal("old musing", wire[2].GetProperty("reasoning_content").GetString());
+        Assert.Equal("first answer", wire[2].GetProperty("content").GetString());
+        Assert.Equal("fresh musing", wire[4].GetProperty("reasoning_content").GetString());
+        Assert.Contains("\"chat_template_kwargs\":{\"preserve_thinking\":true,\"clear_thinking\":false}", body);
+        Assert.DoesNotContain(OpenAICompatibleChatClient.PreserveThinkingKey, body);
+    }
+
+    [Fact]
+    public async Task PreserveThinking_WithReasoningNone_SendsBothSwitchesInOneObject()
+    {
+        string body = await BodyFor([new ChatMessage(ChatRole.User, "ping")], Preserving(ReasoningEffort.None));
+
+        Assert.Contains("\"reasoning_effort\":\"none\"", body);
+        Assert.Contains("\"chat_template_kwargs\":{\"enable_thinking\":false,\"preserve_thinking\":true,\"clear_thinking\":false}", body);
+    }
+
+    /// <summary>A message with no thinking, or only the Claude API's signed thinking, goes through the adapter as before.</summary>
+    [Fact]
+    public void WithReasoningBack_LeavesMessagesWithoutThinkingAlone()
+    {
+        List<ChatMessage> messages =
+        [
+            new(ChatRole.User, "q"),
+            new(ChatRole.Assistant, [new TextContent("plain")]),
+            new(ChatRole.Assistant, [new TextReasoningContent("signed") { ProtectedData = "sig" }, new TextContent("claude")]),
+        ];
+
+        Assert.Same(messages, OpenAICompatibleChatClient.WithReasoningBack(messages, preserveAll: true));
+    }
+
+    [Fact]
+    public void AssistantWithThinking_TextOnly_HasNoToolCalls()
+    {
+        var raw = OpenAICompatibleChatClient.AssistantWithThinking(new ChatMessage(ChatRole.Assistant, [new TextReasoningContent("t"), new TextContent("answer")]), "t");
+        var buffer = new System.Buffers.ArrayBufferWriter<byte>();
+        using (var writer = new System.Text.Json.Utf8JsonWriter(buffer))
+        {
+            ((System.ClientModel.Primitives.IJsonModel<OpenAI.Chat.ChatMessage>)raw).Write(writer, System.ClientModel.Primitives.ModelReaderWriterOptions.Json);
+        }
+
+        string json = System.Text.Encoding.UTF8.GetString(buffer.WrittenSpan);
+        Assert.Contains("\"reasoning_content\":\"t\"", json);
+        Assert.Contains("answer", json);
+        Assert.DoesNotContain("tool_calls", json);
     }
 }

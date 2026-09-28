@@ -493,6 +493,12 @@ public enum SettingsField
 
     /// <summary>A picker: where the preloaded skills go — <c>prompt-writer-only</c> / <c>prompt-writer-and-bots</c> (<see cref="Settings.AppSettingsData.BotChatSkillMode"/>). The Botchat tab, under the checklist (2026-09-27, the user's ask); no reconnect (read per reply). Last in the enum, as every newcomer.</summary>
     BotChatSkillMode,
+
+    /// <summary>A toggle: whether every turn's thinking goes back to a local server and the chat template is asked to keep it (<see cref="Settings.AppSettingsData.LlmPreserveThinking"/>). The LLM tab, under Show thinking (2026-09-28, the user's question); no reconnect (read at each turn). Last in the enum, as every newcomer.</summary>
+    LlmPreserveThinking,
+
+    /// <summary>A toggle: whether a reply's thinking is saved with the session (<see cref="Settings.AppSettingsData.SessionSaveThinking"/>). The Sessions tab's last row (2026-09-28, the user's ask); no reconnect (read at each save). Last in the enum, as every newcomer.</summary>
+    SessionSaveThinking,
 }
 
 /// <summary>The tabs of <c>/settings</c> on the pane, in strip order (Sessions right after General — the user's order, 2026-09-18; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
@@ -783,8 +789,8 @@ internal sealed partial class SettingsMenu
     public static readonly IReadOnlyList<IReadOnlyList<SettingsField>> TabFields =
     [
         [SettingsField.Profile, SettingsField.NewProfileMode, SettingsField.WorkingDirectory, SettingsField.QueueMessages, SettingsField.QueueCancelMode, SettingsField.Memory, SettingsField.CopyUserPrompt, SettingsField.ShowImageThumbnails, SettingsField.ImageThumbnailSize, SettingsField.TranscriptMarkdown, SettingsField.PastePreviewLines, SettingsField.HideExitAutocomplete, SettingsField.CommandTypoIntercept, SettingsField.KeepCommandHistory, SettingsField.WelcomeSplash, SettingsField.ShowWorkingDirectory, SettingsField.ShowToolbar, SettingsField.Theme, SettingsField.DraftEditor, SettingsField.ImageEditor, SettingsField.ThemedViewer],
-        [SettingsField.SessionLogging, SettingsField.SessionRetentionDays, SettingsField.SessionNamingMode, SettingsField.SessionShowName, SettingsField.SessionTool, SettingsField.SessionSearchMaxResults],
-        [SettingsField.LlmScanMode, SettingsField.LlmUrl, SettingsField.LlmModel, SettingsField.LlmApiKey, SettingsField.LlmReasoning, SettingsField.LlmRequestTimeoutSeconds, SettingsField.LlmTurnTimeoutSeconds, SettingsField.LlmContextLength, SettingsField.LlmMidTurnUsage, SettingsField.LlmCompactType, SettingsField.LlmCompactKeepRecent, SettingsField.LlmCompactShowSummary, SettingsField.LlmAutoCompactPercent, SettingsField.LlmMaxTurns, SettingsField.LlmOfferTools, SettingsField.LlmToolCompactType, SettingsField.LlmMaxToolIterations, SettingsField.LlmUseFunVerbs, SettingsField.LlmShowThinking],
+        [SettingsField.SessionLogging, SettingsField.SessionRetentionDays, SettingsField.SessionNamingMode, SettingsField.SessionShowName, SettingsField.SessionTool, SettingsField.SessionSearchMaxResults, SettingsField.SessionSaveThinking],
+        [SettingsField.LlmScanMode, SettingsField.LlmUrl, SettingsField.LlmModel, SettingsField.LlmApiKey, SettingsField.LlmReasoning, SettingsField.LlmRequestTimeoutSeconds, SettingsField.LlmTurnTimeoutSeconds, SettingsField.LlmContextLength, SettingsField.LlmMidTurnUsage, SettingsField.LlmCompactType, SettingsField.LlmCompactKeepRecent, SettingsField.LlmCompactShowSummary, SettingsField.LlmAutoCompactPercent, SettingsField.LlmMaxTurns, SettingsField.LlmOfferTools, SettingsField.LlmToolCompactType, SettingsField.LlmMaxToolIterations, SettingsField.LlmUseFunVerbs, SettingsField.LlmShowThinking, SettingsField.LlmPreserveThinking],
         [SettingsField.TtsOutput, SettingsField.TtsSource, SettingsField.TtsHttpUrl, SettingsField.TtsVoicePreview, SettingsField.TtsVoicePreset, SettingsField.TtsVoice, SettingsField.TtsVoice2, SettingsField.TtsVoiceMix, SettingsField.TtsSpeed],
         Fields.Where(IsVoiceField).ToArray(),
         [SettingsField.ClaudeApi, SettingsField.ClaudeApiKey, SettingsField.ClaudeApiMaxTokens, SettingsField.ClaudeApiPromptCaching],
@@ -1075,13 +1081,13 @@ internal sealed partial class SettingsMenu
     public static bool IsToggle(SettingsField field) =>
         field is SettingsField.TtsOutput or SettingsField.SttInput or SettingsField.SttWake or SettingsField.SttInterrupt
             or SettingsField.Memory or SettingsField.CopyUserPrompt or SettingsField.ShowImageThumbnails
-            or SettingsField.FileTreeShowSizes or SettingsField.LlmOfferTools or SettingsField.LlmUseFunVerbs or SettingsField.LlmShowThinking
+            or SettingsField.FileTreeShowSizes or SettingsField.LlmOfferTools or SettingsField.LlmUseFunVerbs or SettingsField.LlmShowThinking or SettingsField.LlmPreserveThinking
             or SettingsField.WebTools or SettingsField.TtsVoicePreview or SettingsField.FileTools or SettingsField.AskUser
             or SettingsField.AgentSkills or SettingsField.ExternalSkills or SettingsField.TranscriptMarkdown
             or SettingsField.FileSafeEdits
             or SettingsField.SkillHashMention or SettingsField.ReflectionAutoLearn
             or SettingsField.HideExitAutocomplete or SettingsField.CommandTypoIntercept or SettingsField.KeepCommandHistory or SettingsField.ShowWorkingDirectory or SettingsField.ShowToolbar or SettingsField.ThemedViewer
-            or SettingsField.QueueMessages or SettingsField.SessionLogging or SettingsField.SessionTool
+            or SettingsField.QueueMessages or SettingsField.SessionLogging or SettingsField.SessionTool or SettingsField.SessionSaveThinking
             or SettingsField.ToolsDollarMention or SettingsField.ReflectionIncludesSessions or SettingsField.ReflectionYieldsToTurns or SettingsField.ReflectionEditsSupportingFiles or SettingsField.McpServers or SettingsField.GitNativeTools
             or SettingsField.LlmCompactShowSummary or SettingsField.ShellToolBridge or SettingsField.ShellPoliceOutsidePaths or SettingsField.ShellPreferNative
             or SettingsField.ObsidianTools or SettingsField.ObsidianAllowDelete or SettingsField.SqlTools or SettingsField.SqlPercentMention or SettingsField.ComfyTools or SettingsField.ComfyReinforceNegatives or SettingsField.ComfyShowPrompts or SettingsField.ComfyCaretMention or SettingsField.ComfyPictureStrip
@@ -1138,6 +1144,8 @@ internal sealed partial class SettingsMenu
         SettingsField.LlmOfferTools => "LLM offer tools",
         SettingsField.LlmUseFunVerbs => "LLM use fun verbs",
         SettingsField.LlmShowThinking => "LLM show thinking",
+        SettingsField.LlmPreserveThinking => "LLM preserve thinking",
+        SettingsField.SessionSaveThinking => "Session save thinking",
         SettingsField.ClaudeExecutable => "Claude executable",
         SettingsField.ClaudePermissions => "Claude slash command permissions",
         SettingsField.ClaudeModel => "Claude slash command model",
@@ -1326,6 +1334,8 @@ internal sealed partial class SettingsMenu
             SettingsField.LlmOfferTools => OnOff(data.LlmOfferTools),
             SettingsField.LlmUseFunVerbs => OnOff(data.LlmUseFunVerbs),
             SettingsField.LlmShowThinking => OnOff(data.LlmShowThinking),
+            SettingsField.LlmPreserveThinking => OnOff(data.LlmPreserveThinking),
+            SettingsField.SessionSaveThinking => OnOff(data.SessionSaveThinking),
             SettingsField.ClaudeExecutable => string.IsNullOrWhiteSpace(data.ClaudeExecutable) ? ClaudeLookedUpLabel : data.ClaudeExecutable,
             SettingsField.ClaudePermissions => data.ClaudePermissions,
             SettingsField.ClaudeModel => string.IsNullOrWhiteSpace(data.ClaudeModel) ? ClaudeDefaultLabel : data.ClaudeModel,
@@ -3777,6 +3787,8 @@ internal sealed partial class SettingsMenu
             SettingsField.LlmOfferTools => data.LlmOfferTools,
             SettingsField.LlmUseFunVerbs => data.LlmUseFunVerbs,
             SettingsField.LlmShowThinking => data.LlmShowThinking,
+            SettingsField.LlmPreserveThinking => data.LlmPreserveThinking,
+            SettingsField.SessionSaveThinking => data.SessionSaveThinking,
             SettingsField.WebTools => data.WebTools,
             SettingsField.GitNativeTools => data.GitNativeTools,
             SettingsField.ObsidianTools => data.ObsidianTools,
@@ -3843,6 +3855,8 @@ internal sealed partial class SettingsMenu
             case SettingsField.LlmOfferTools: data.LlmOfferTools = on; break;
             case SettingsField.LlmUseFunVerbs: data.LlmUseFunVerbs = on; break;
             case SettingsField.LlmShowThinking: data.LlmShowThinking = on; break;
+            case SettingsField.LlmPreserveThinking: data.LlmPreserveThinking = on; break;
+            case SettingsField.SessionSaveThinking: data.SessionSaveThinking = on; break;
             case SettingsField.WebTools: data.WebTools = on; break;
             case SettingsField.GitNativeTools: data.GitNativeTools = on; break;
             case SettingsField.ObsidianTools: data.ObsidianTools = on; break;
@@ -3909,6 +3923,8 @@ internal sealed partial class SettingsMenu
         SettingsField.LlmOfferTools => on ? "the model gets the tools; a change starts a new conversation" : "no tools at all; a change starts a new conversation",
         SettingsField.LlmUseFunVerbs => on ? "the thinking spinner reads a random verb" : "the spinner reads thinking",
         SettingsField.LlmShowThinking => on ? "thinking shown in chat" : "thinking not shown in chat",
+        SettingsField.LlmPreserveThinking => on ? "every turn's thinking goes back to the server" : "only the current turn's thinking goes back to the server",
+        SettingsField.SessionSaveThinking => on ? "thinking is saved with the session" : "thinking is not saved with the session",
         SettingsField.TtsOutput => on ? "replies are read aloud" : "replies are text only",
         SettingsField.TtsVoicePreview => on ? "the voice pickers speak the highlighted voice" : "the voice pickers are silent",
         SettingsField.SttInput => on ? "the push-to-talk key records a spoken message" : "the microphone is off",

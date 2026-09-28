@@ -573,6 +573,14 @@ public sealed class Assistant
     public TurnContextGuard? ContextGuard { get; set; }
 
     /// <summary>
+    /// Whether every turn's thinking goes back to the server, not only the turn in flight's (2026-09-28, the setting
+    /// <c>LLM preserve thinking</c>, off by default): the requests carry <see cref="OpenAICompatibleChatClient.PreserveThinkingKey"/>,
+    /// which sends the history's <see cref="TextReasoningContent"/> back as <c>reasoning_content</c> on every assistant
+    /// message and asks the chat template to keep it. The turn in flight's goes back either way. Read at each turn.
+    /// </summary>
+    public bool PreserveThinking { get; set; }
+
+    /// <summary>
     /// Counts each request as it streams (2026-09-25): begun when the request goes out, a chunk per update with
     /// content other than the usage report, ended when the stream does — completed, cancelled or failed — so the
     /// busy row's <c>estimate</c> never outlives its request. Null (a botchat bot's assistant, a test) counts nothing.
@@ -943,6 +951,9 @@ public sealed class Assistant
 
             // Abstract here; OpenAICompatibleChatClient turns it into the wire fields.
             Reasoning = _reasoning is { } effort ? new ReasoningOptions { Effort = effort } : null,
+
+            // Every turn's thinking back, and the template asked to keep it (2026-09-28); the client takes the key off.
+            AdditionalProperties = PreserveThinking ? new AdditionalPropertiesDictionary { [OpenAICompatibleChatClient.PreserveThinkingKey] = true } : null,
         };
 
         long started = _time.GetTimestamp();
@@ -968,6 +979,8 @@ public sealed class Assistant
             var updates = new List<ChatResponseUpdate>();
             var partial = new StringBuilder();
             var filter = new ThinkTagFilter();
+            // A <think> block streamed as content (2026-09-28): kept, so the history carries it as thinking like the server's own.
+            var tagThinking = new StringBuilder();
             // After the think filter: a call written as text, caught when the turn asks for it and offers tools.
             var written = TextToolCalls && _tools.Count > 0 ? new TextToolCallFilter(_tools.Select(t => (t.Name, ParameterNames(t.JsonSchema)))) : null;
             Exception? failure = null;
@@ -1041,6 +1054,7 @@ public sealed class Assistant
                         string tagged = filter.TakeThinking();
                         if (tagged.Length > 0)
                         {
+                            tagThinking.Append(tagged);
                             yield return new TurnEvent.ThinkingDelta(tagged);
                         }
 
@@ -1070,6 +1084,7 @@ public sealed class Assistant
             string unfinished = filter.TakeThinking();
             if (unfinished.Length > 0)
             {
+                tagThinking.Append(unfinished);
                 yield return new TurnEvent.ThinkingDelta(unfinished);
             }
 
@@ -1127,7 +1142,13 @@ public sealed class Assistant
             {
                 // The model produced the tags, but they go back as content next time and prime it
                 // to repeat the pattern (and a whole block would re-send the thinking as answer text).
+                // The thinking itself stays, as thinking (2026-09-28): the client sends it back as the
+                // server's own would be, in reasoning_content, where the template puts the tags itself.
                 ReplaceText(response.Messages, partial.ToString());
+                if (tagThinking.Length > 0 && response.Messages.Count > 0)
+                {
+                    response.Messages[0].Contents.Insert(0, new TextReasoningContent(tagThinking.ToString()));
+                }
             }
 
             if (written is not null && (written.Calls.Count > 0 || written.SawBroken))

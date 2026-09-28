@@ -273,6 +273,15 @@ public sealed class AppSettingsData
     /// </summary>
     public bool SessionTool { get; set; } = true;
 
+    /// <summary>
+    /// Whether a reply's thinking is saved with the session (2026-09-28, the user's ask, with thinking sent back): a
+    /// <c>reasoning</c> part beside the reply's text (<see cref="Sessions.SessionHistory"/>), so a resumed session with
+    /// <see cref="LlmPreserveThinking"/> sends it back as the live one did. Off, the thinking stays in memory for the
+    /// conversation and <c>sessions.db</c> stays as small as before; a part saved earlier is read back either way. Read at
+    /// each save, no reconnect. Off by default. No variable.
+    /// </summary>
+    public bool SessionSaveThinking { get; set; }
+
     // ─── LLM ────────────────────────────────────────────────────────────────────
 
     /// <summary>Bearer token. Keyless local servers are happy with the literal <c>empty</c>.</summary>
@@ -422,6 +431,18 @@ public sealed class AppSettingsData
     /// way. Off, nothing of it is shown. On by default. No variable.
     /// </summary>
     public bool LlmShowThinking { get; set; } = true;
+
+    /// <summary>
+    /// Whether every turn's thinking goes back to a local server, not only the turn in flight's (2026-09-28, the user's
+    /// question: "what about preserve thinking?"). The turn in flight's always does, as <c>reasoning_content</c> on the
+    /// model's own messages (a Qwen3 template renders it back between tool steps; DeepSeek and Kimi expect it). On, the
+    /// earlier turns' goes too and the request asks the chat template to keep it: <c>chat_template_kwargs</c>
+    /// <c>preserve_thinking=true</c> (Qwen3.6) and <c>clear_thinking=false</c> (GLM). A template that knows neither drops
+    /// or renders it by its own rule. Costs context: the prune of <c>/compact</c> and the automatic compact drop the older
+    /// turns' thinking first. The Claude API is not affected (it gets its signed thinking back inside the turn in flight
+    /// alone). Read at each turn, no reconnect. Off by default. No variable.
+    /// </summary>
+    public bool LlmPreserveThinking { get; set; }
 
     // ─── TTS ────────────────────────────────────────────────────────────────────
 

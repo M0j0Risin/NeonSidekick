@@ -20,7 +20,7 @@ namespace NeonSidekick.Llm.Anthropic;
 /// is not in the message before it is sent as text: either would 400 the whole request;</item>
 /// <item>thinking blocks go back only in the turn in flight (after the last message the user typed), signed, as the
 /// API requires within a tool loop; older turns go without them, so trimming and compacting the history never edit a
-/// signed block the API would check (<see cref="InFlightStart"/>);</item>
+/// signed block the API would check (<see cref="ConversationHistory.InFlightStart"/>);</item>
 /// <item>tool names the API refuses (it takes <c>[a-zA-Z0-9_-]{1,64}</c>; an MCP tool's may be longer or dotted) are
 /// sanitised, the same way every time (<see cref="ToolName"/>), and mapped back on the way in.</item>
 /// </list>
@@ -254,28 +254,10 @@ public static class AnthropicRequest
         return head + "_" + hash.ToString("x8", CultureInfo.InvariantCulture);
     }
 
-    /// <summary>
-    /// The index of the first message of the turn in flight: the last user message that is neither a tool result nor an
-    /// image carrier — what the user typed — or 0 when there is none. Thinking is sent back only after it.
-    /// </summary>
-    internal static int InFlightStart(IReadOnlyList<ChatMessage> messages)
-    {
-        for (int i = messages.Count - 1; i >= 0; i--)
-        {
-            var message = messages[i];
-            if (message.Role == ChatRole.User && !ConversationHistory.IsImageCarrier(message) && !message.Contents.Any(c => c is FunctionResultContent))
-            {
-                return i;
-            }
-        }
-
-        return 0;
-    }
-
     /// <summary>The conversation as the API's alternating user / assistant messages (the class summary's rules).</summary>
     internal static List<WireMessage> Shape(IReadOnlyList<ChatMessage> messages, bool withoutThinking = false)
     {
-        int inFlight = withoutThinking ? int.MaxValue : InFlightStart(messages);
+        int inFlight = withoutThinking ? int.MaxValue : ConversationHistory.InFlightStart(messages);
         var shaped = new List<WireMessage>(messages.Count);
         for (int i = 0; i < messages.Count; i++)
         {

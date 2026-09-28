@@ -77,6 +77,7 @@ public class AppSettingsTests : IDisposable
         LlmUrl = "http://box:8000/v1",
         LlmUseFunVerbs = true,
         LlmShowThinking = false,
+        LlmPreserveThinking = true,
         TtsHttpUrl = "http://box:8880/v1",
         TtsOutput = true,
         TtsSource = "http",
@@ -133,6 +134,7 @@ public class AppSettingsTests : IDisposable
         SessionSearchMaxResults = 3,
         SessionShowName = "none",
         SessionTool = false,
+        SessionSaveThinking = true,
         McpConnectTimeoutSeconds = 45,
         McpServers = true,
         McpServersDisabled = ["docker"],
@@ -183,6 +185,7 @@ public class AppSettingsTests : IDisposable
         Assert.Equal(expected.LlmUrl, actual.LlmUrl);
         Assert.Equal(expected.LlmUseFunVerbs, actual.LlmUseFunVerbs);
         Assert.Equal(expected.LlmShowThinking, actual.LlmShowThinking);
+        Assert.Equal(expected.LlmPreserveThinking, actual.LlmPreserveThinking);
         Assert.Equal(expected.TtsHttpUrl, actual.TtsHttpUrl);
         Assert.Equal(expected.TtsOutput, actual.TtsOutput);
         Assert.Equal(expected.TtsSource, actual.TtsSource);
@@ -242,6 +245,7 @@ public class AppSettingsTests : IDisposable
         Assert.Equal(expected.SessionSearchMaxResults, actual.SessionSearchMaxResults);
         Assert.Equal(expected.SessionShowName, actual.SessionShowName);
         Assert.Equal(expected.SessionTool, actual.SessionTool);
+        Assert.Equal(expected.SessionSaveThinking, actual.SessionSaveThinking);
     }
 
     [Fact]
@@ -299,7 +303,7 @@ public class AppSettingsTests : IDisposable
             d.LlmOfferTools = full.LlmOfferTools;
             d.LlmTurnTimeoutSeconds = full.LlmTurnTimeoutSeconds;
             d.LlmUrl = full.LlmUrl;
-            d.LlmUseFunVerbs = full.LlmUseFunVerbs; d.LlmShowThinking = full.LlmShowThinking;
+            d.LlmUseFunVerbs = full.LlmUseFunVerbs; d.LlmShowThinking = full.LlmShowThinking; d.LlmPreserveThinking = full.LlmPreserveThinking;
             d.TtsHttpUrl = full.TtsHttpUrl;
             d.TtsOutput = full.TtsOutput;
             d.TtsSource = full.TtsSource;
@@ -359,6 +363,7 @@ public class AppSettingsTests : IDisposable
             d.SessionSearchMaxResults = full.SessionSearchMaxResults;
             d.SessionShowName = full.SessionShowName;
             d.SessionTool = full.SessionTool;
+            d.SessionSaveThinking = full.SessionSaveThinking;
         });
 
         AssertSame(full, settings.Current);
@@ -413,7 +418,7 @@ public class AppSettingsTests : IDisposable
                 d.LlmOfferTools = full.LlmOfferTools;
                 d.LlmTurnTimeoutSeconds = full.LlmTurnTimeoutSeconds;
                 d.LlmUrl = full.LlmUrl;
-                d.LlmUseFunVerbs = full.LlmUseFunVerbs; d.LlmShowThinking = full.LlmShowThinking;
+                d.LlmUseFunVerbs = full.LlmUseFunVerbs; d.LlmShowThinking = full.LlmShowThinking; d.LlmPreserveThinking = full.LlmPreserveThinking;
                 d.TtsHttpUrl = full.TtsHttpUrl;
                 d.TtsOutput = full.TtsOutput;
                 d.TtsSource = full.TtsSource;
@@ -473,6 +478,7 @@ public class AppSettingsTests : IDisposable
                 d.SessionSearchMaxResults = full.SessionSearchMaxResults;
                 d.SessionShowName = full.SessionShowName;
                 d.SessionTool = full.SessionTool;
+                d.SessionSaveThinking = full.SessionSaveThinking;
             });
             await settings.FlushAsync();
         }
@@ -1116,6 +1122,7 @@ public class AppSettingsTests : IDisposable
         Assert.True(s.LlmOfferTools);
         Assert.False(s.LlmUseFunVerbs);
         Assert.True(s.LlmShowThinking);
+        Assert.False(s.LlmPreserveThinking);
         Assert.Equal("local", s.LlmScanMode);
         Assert.True(s.WebTools);
         Assert.Equal("default", s.WebBrowserMode);
@@ -1154,6 +1161,7 @@ public class AppSettingsTests : IDisposable
         Assert.Equal(10, s.SessionSearchMaxResults);
         Assert.Equal("all-names", s.SessionShowName);   // the rule above the input row names the session (later on 2026-09-18)
         Assert.True(s.SessionTool);
+        Assert.False(s.SessionSaveThinking);
         // The message queue (2026-09-18): on, a cancelled reply holds it.
         Assert.True(s.QueueMessages);
         Assert.Equal("empty", s.QueueCancelMode);   // hold until 2026-09-20

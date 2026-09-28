@@ -101,7 +101,7 @@ public sealed class OpenAICompatibleChatClient : IChatClient
         IEnumerable<ChatMessage> messages,
         ChatOptions? options = null,
         CancellationToken cancellationToken = default)
-        => _wrapped.GetResponseAsync(messages, WithThinkingOff(options), cancellationToken);
+        => _wrapped.GetResponseAsync(WithReasoningBack(messages, PreservesThinking(options)), WithTemplateKwargs(options), cancellationToken);
 
     /// <inheritdoc/>
     public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(
@@ -109,7 +109,7 @@ public sealed class OpenAICompatibleChatClient : IChatClient
         ChatOptions? options = null,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
-        await foreach (var update in _wrapped.GetStreamingResponseAsync(messages, WithThinkingOff(options), cancellationToken).ConfigureAwait(false))
+        await foreach (var update in _wrapped.GetStreamingResponseAsync(WithReasoningBack(messages, PreservesThinking(options)), WithTemplateKwargs(options), cancellationToken).ConfigureAwait(false))
         {
             FillTopLevelReasoningTokens(update);
             FillReasoningField(update);
@@ -218,40 +218,193 @@ public sealed class OpenAICompatibleChatClient : IChatClient
     internal static ReadOnlySpan<byte> ReasoningProperty => "reasoning"u8;
 
     /// <summary>
-    /// The one piece of server-specific request shaping. <see cref="ChatOptions.Reasoning"/> goes
-    /// out as <c>reasoning_effort</c> through the adapter on its own; but a Qwen-style chat
-    /// template (vLLM, SGLang, llama.cpp) ignores that field and switches thinking off only
-    /// through <c>chat_template_kwargs.enable_thinking=false</c>. So <see cref="ReasoningEffort.None"/>
-    /// also hands the adapter a pre-built <see cref="ChatCompletionOptions"/> carrying the kwarg
-    /// (the adapter overlays tools and the effort on it afterwards). Servers that know neither
-    /// field ignore both. A caller-supplied factory is left alone; every other level passes through.
+    /// The <see cref="ChatOptions.AdditionalProperties"/> key <see cref="Assistant.PreserveThinking"/> sets (2026-09-28,
+    /// the setting <c>LLM preserve thinking</c>): send every turn's thinking back, not only the turn in flight's, and ask
+    /// the chat template to keep it (<see cref="WithTemplateKwargs"/>). Read here and taken off the options before the
+    /// adapter sees them; the Claude API client ignores it.
     /// </summary>
-    internal static ChatOptions? WithThinkingOff(ChatOptions? options)
+    public const string PreserveThinkingKey = "neonsidekick.preserve_thinking";
+
+    /// <summary>Whether <paramref name="options"/> carries <see cref="PreserveThinkingKey"/> set to true.</summary>
+    internal static bool PreservesThinking(ChatOptions? options) =>
+        options?.AdditionalProperties is { } properties && properties.TryGetValue(PreserveThinkingKey, out object? on) && on is true;
+
+    /// <summary>
+    /// The one piece of server-specific request shaping, the template switches. <see cref="ChatOptions.Reasoning"/>
+    /// goes out as <c>reasoning_effort</c> through the adapter on its own; but a Qwen-style chat template (vLLM, SGLang,
+    /// llama.cpp) ignores that field and switches thinking off only through <c>chat_template_kwargs.enable_thinking=false</c>.
+    /// So <see cref="ReasoningEffort.None"/> hands the adapter a pre-built <see cref="ChatCompletionOptions"/> carrying the
+    /// kwarg (the adapter overlays tools and the effort on it afterwards). <see cref="PreserveThinkingKey"/> (2026-09-28)
+    /// adds <c>preserve_thinking=true</c> (Qwen3.6: the template renders the thinking of earlier turns too, where it drops
+    /// them by default) and <c>clear_thinking=false</c> (GLM's name for the same switch) to the same object. Servers and
+    /// templates that know none of these ignore them. A caller-supplied factory is left alone; with neither switch, the
+    /// options pass through as they came, the key only taken off.
+    /// </summary>
+    internal static ChatOptions? WithTemplateKwargs(ChatOptions? options)
     {
-        if (options?.Reasoning?.Effort != ReasoningEffort.None || options.RawRepresentationFactory is not null)
+        if (options is null)
+        {
+            return null;
+        }
+
+        bool preserve = PreservesThinking(options);
+        bool off = options.Reasoning?.Effort == ReasoningEffort.None;
+        bool keyed = options.AdditionalProperties?.ContainsKey(PreserveThinkingKey) == true;
+        bool kwargs = (off || preserve) && options.RawRepresentationFactory is null;
+        if (!keyed && !kwargs)
         {
             return options;
         }
 
         var shaped = options.Clone();
-        shaped.RawRepresentationFactory = ThinkingOffFactory;
+        if (keyed)
+        {
+            var rest = new AdditionalPropertiesDictionary();
+            foreach (var (key, value) in options.AdditionalProperties!)
+            {
+                if (key != PreserveThinkingKey)
+                {
+                    rest[key] = value;
+                }
+            }
+
+            shaped.AdditionalProperties = rest.Count > 0 ? rest : null;
+        }
+
+        if (kwargs)
+        {
+            byte[] json = TemplateKwargsJson(off, preserve);
+            shaped.RawRepresentationFactory = _ =>
+            {
+                var reader = new Utf8JsonReader(json);
+                return ((IJsonModel<ChatCompletionOptions>)new ChatCompletionOptions()).Create(ref reader, ModelReaderWriterOptions.Json);
+            };
+        }
+
         return shaped;
     }
 
     /// <summary>
-    /// Built by reading JSON through the SDK's own <see cref="IJsonModel{T}"/> contract: a
-    /// property the model does not know is kept and written back on the request. The SDK's
-    /// <c>Patch</c> accessor would say the same thing, but it is gated behind an experimental
-    /// diagnostic and this project suppresses nothing.
+    /// The pre-built request's JSON: <c>{"chat_template_kwargs":{…}}</c> with <c>enable_thinking=false</c> for
+    /// <paramref name="thinkingOff"/> and <c>preserve_thinking=true, clear_thinking=false</c> for <paramref name="preserve"/>.
+    /// Read through the SDK's own <see cref="IJsonModel{T}"/> contract: a property the model does not know is kept and
+    /// written back on the request. The SDK's <c>Patch</c> accessor would say the same thing, but it is gated behind an
+    /// experimental diagnostic and this project suppresses nothing. Pinned by the wire tests.
     /// </summary>
-    private static readonly Func<IChatClient, object?> ThinkingOffFactory = _ =>
+    internal static byte[] TemplateKwargsJson(bool thinkingOff, bool preserve)
     {
-        var reader = new Utf8JsonReader(ThinkingOffJson);
-        return ((IJsonModel<ChatCompletionOptions>)new ChatCompletionOptions()).Create(ref reader, ModelReaderWriterOptions.Json);
-    };
+        var buffer = new ArrayBufferWriter<byte>();
+        using (var writer = new Utf8JsonWriter(buffer))
+        {
+            writer.WriteStartObject();
+            writer.WriteStartObject("chat_template_kwargs"u8);
+            if (thinkingOff)
+            {
+                writer.WriteBoolean("enable_thinking"u8, false);
+            }
 
-    /// <summary>The Qwen-family switch. Pinned by the wire test.</summary>
-    internal static ReadOnlySpan<byte> ThinkingOffJson => "{\"chat_template_kwargs\":{\"enable_thinking\":false}}"u8;
+            if (preserve)
+            {
+                writer.WriteBoolean("preserve_thinking"u8, true);
+                writer.WriteBoolean("clear_thinking"u8, false);
+            }
+
+            writer.WriteEndObject();
+            writer.WriteEndObject();
+        }
+
+        return buffer.WrittenSpan.ToArray();
+    }
+
+    /// <summary>
+    /// The model's thinking back on its own messages (2026-09-28, the user's question: "what about preserve thinking?").
+    /// The history keeps a reply's thinking as <see cref="TextReasoningContent"/>, but the adapter writes no field for it,
+    /// so every request went out without it — the thinking of the turn's earlier tool steps included, which a Qwen3
+    /// template renders back by default and DeepSeek and Kimi expect. So an assistant message with thinking in the turn in
+    /// flight (after <see cref="ConversationHistory.InFlightStart"/>), or in any turn with <paramref name="preserveAll"/>,
+    /// goes out as a clone whose <see cref="ChatMessage.RawRepresentation"/> is the SDK's own message built here with
+    /// <c>reasoning_content</c> beside its text and calls: the adapter passes a raw message through as it is. A block
+    /// carrying <see cref="TextReasoningContent.ProtectedData"/> is the Claude API's and is not this wire's. Every other
+    /// message is untouched, and the history's own messages are never changed.
+    /// </summary>
+    internal static IEnumerable<ChatMessage> WithReasoningBack(IEnumerable<ChatMessage> messages, bool preserveAll)
+    {
+        ArgumentNullException.ThrowIfNull(messages);
+        var list = messages as IReadOnlyList<ChatMessage> ?? messages.ToList();
+        int inFlight = preserveAll ? -1 : ConversationHistory.InFlightStart(list);
+        List<ChatMessage>? shaped = null;
+        for (int i = 0; i < list.Count; i++)
+        {
+            var message = list[i];
+            if (i > inFlight && message.Role == ChatRole.Assistant && message.RawRepresentation is not OpenAI.Chat.ChatMessage
+                && ThinkingOf(message) is { Length: > 0 } thinking)
+            {
+                shaped ??= list.Take(i).ToList();
+                var clone = message.Clone();
+                clone.RawRepresentation = AssistantWithThinking(message, thinking);
+                shaped.Add(clone);
+            }
+            else
+            {
+                shaped?.Add(message);
+            }
+        }
+
+        return shaped ?? list;
+    }
+
+    /// <summary>The unsigned thinking of <paramref name="message"/>, joined; empty when it has none.</summary>
+    private static string ThinkingOf(ChatMessage message) =>
+        string.Concat(message.Contents.OfType<TextReasoningContent>().Where(r => r.ProtectedData is null).Select(r => r.Text));
+
+    /// <summary>
+    /// <paramref name="message"/> as the SDK's assistant message plus <c>reasoning_content</c>: its text as one string
+    /// (none when it has only calls), its calls as <c>tool_calls</c> with the arguments' JSON
+    /// (<see cref="Assistant.SerializeArguments"/>), the adapter's own shape for both.
+    /// </summary>
+    internal static OpenAI.Chat.ChatMessage AssistantWithThinking(ChatMessage message, string thinking)
+    {
+        var buffer = new ArrayBufferWriter<byte>();
+        using (var writer = new Utf8JsonWriter(buffer))
+        {
+            writer.WriteStartObject();
+            writer.WriteString("role"u8, "assistant"u8);
+            string text = string.Concat(message.Contents.OfType<TextContent>().Select(t => t.Text));
+            if (text.Length > 0)
+            {
+                writer.WriteString("content"u8, text);
+            }
+
+            var calls = message.Contents.OfType<FunctionCallContent>().ToList();
+            if (calls.Count > 0)
+            {
+                writer.WriteStartArray("tool_calls"u8);
+                foreach (var call in calls)
+                {
+                    writer.WriteStartObject();
+                    writer.WriteString("id"u8, call.CallId);
+                    writer.WriteString("type"u8, "function"u8);
+                    writer.WriteStartObject("function"u8);
+                    writer.WriteString("name"u8, call.Name);
+                    writer.WriteString("arguments"u8, Assistant.SerializeArguments(call.Arguments));
+                    writer.WriteEndObject();
+                    writer.WriteEndObject();
+                }
+
+                writer.WriteEndArray();
+            }
+
+            writer.WriteString(ReasoningContentProperty, thinking);
+            writer.WriteEndObject();
+        }
+
+        var reader = new Utf8JsonReader(buffer.WrittenSpan);
+        return ((IJsonModel<OpenAI.Chat.ChatMessage>)new AssistantChatMessage("")).Create(ref reader, ModelReaderWriterOptions.Json)
+            ?? throw new InvalidOperationException("The SDK read no assistant message back.");
+    }
+
+    /// <summary>The message field the thinking goes back under: what Qwen and GLM templates read, and what llama.cpp, SGLang and vLLM take.</summary>
+    internal static ReadOnlySpan<byte> ReasoningContentProperty => "reasoning_content"u8;
 
     /// <inheritdoc/>
     public object? GetService(Type serviceType, object? serviceKey = null)
