@@ -21,7 +21,7 @@ public class PendingPicturesTests
         using var first = pending.Begin(0);
         Assert.Equal(ComfyText.TextToImageLabel, pending.Glyph);
         using var second = pending.Begin(1);
-        Assert.Equal(ComfyText.TextToImageLabel + "2", pending.Glyph);
+        Assert.Equal(ComfyText.TextToImageLabel + " 2", pending.Glyph);
         first.Dispose();
         Assert.Equal(ComfyText.GeneratingLabel, pending.Glyph);   // the image-to-image one is the oldest now
     }

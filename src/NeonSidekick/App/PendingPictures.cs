@@ -18,8 +18,8 @@ public sealed class PendingPictures
 
     /// <summary>
     /// The strip's part: empty with nothing pending, else the oldest one's kind (<see cref="ComfyText.GeneratingLabelFor"/>:
-    /// 🖼️ text-to-image, 🎨 image-to-image) with the count straight after it when more than one — <c>🖼️2</c>, glued, so
-    /// the strip's separator never splits it. Pinned.
+    /// 🖼️ text-to-image, 🎨 image-to-image) with the count after a space when more than one — <c>🖼️ 2</c> (glued until later on
+    /// 2026-09-27, the user's call: it read as one blur). The strip hit-tests glyph by glyph, so the number is a cell of no click. Pinned.
     /// </summary>
     public string Glyph
     {
@@ -31,7 +31,7 @@ public sealed class PendingPictures
                 {
                     0 => "",
                     1 => ComfyText.GeneratingLabelFor(_pending[0].InputImages),
-                    var count => ComfyText.GeneratingLabelFor(_pending[0].InputImages) + count.ToString(CultureInfo.InvariantCulture),
+                    var count => ComfyText.GeneratingLabelFor(_pending[0].InputImages) + " " + count.ToString(CultureInfo.InvariantCulture),
                 };
             }
         }

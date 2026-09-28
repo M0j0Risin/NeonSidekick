@@ -9520,7 +9520,7 @@ public partial class ChatScreenTests : IDisposable
     [InlineData(true, false, "", false, true, true, true, "🧠 🎤 👂 ✋")]
     [InlineData(false, false, "", true, true, false, false, "🔊 🎤")]
     [InlineData(false, false, "🖼️", false, false, false, false, "🖼️")]
-    [InlineData(true, true, "🎨2", true, false, false, false, "🧠 🏷️ 🎨2 🔊")]   // after the jobs, before the speech
+    [InlineData(true, true, "🎨 2", true, false, false, false, "🧠 🏷️ 🎨 2 🔊")]   // after the jobs, before the speech
     public void StripGlyphs_IsPinned(bool learning, bool titling, string pictures, bool ttsOn, bool sttOn, bool wakeReady, bool interruptReady, string expected) =>
         Assert.Equal(expected, ChatScreen.StripGlyphs(learning, titling, pictures, ttsOn, sttOn, wakeReady, interruptReady));
 
