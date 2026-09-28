@@ -182,8 +182,10 @@ public sealed class ComfyStudio : IDisposable
     /// <summary>
     /// Runs <paramref name="request"/>: every refusal (no server, no workflow, a bad number, a bad input picture,
     /// ComfyUI's own) is an <c>Error:</c> text with no picture; the caller's cancellation is rethrown.
+    /// <paramref name="narrow"/> (2026-09-27, <c>/botchat</c>'s bots: their two workflows alone) cuts the offered list further
+    /// before the pick, so a name outside it is unknown as any other; never applied to <c>/imagine</c>'s any-by-name.
     /// </summary>
-    public async Task<ComfyGeneration> GenerateAsync(ComfyRequest request, CancellationToken cancellationToken)
+    public async Task<ComfyGeneration> GenerateAsync(ComfyRequest request, CancellationToken cancellationToken, Func<IReadOnlyList<ComfyWorkflow>, IReadOnlyList<ComfyWorkflow>>? narrow = null)
     {
         ArgumentNullException.ThrowIfNull(request);
         var effective = _effective();
@@ -201,6 +203,11 @@ public sealed class ComfyStudio : IDisposable
         // The model sees the offered ones only (later on 2026-09-24); /imagine may name any installed one.
         bool anyByName = request.AnyWorkflow && !string.IsNullOrWhiteSpace(request.Workflow);
         var workflows = anyByName ? installed : ComfyWorkflowCatalog.Offered(installed, effective.ComfyWorkflowsOffered);
+        if (!anyByName && narrow is not null)
+        {
+            workflows = narrow(workflows);
+        }
+
         if (workflows.Count == 0)
         {
             return Fail(ComfyText.NoneOffered);

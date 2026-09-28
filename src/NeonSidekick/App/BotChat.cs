@@ -359,25 +359,198 @@ public static partial class BotChat
     // ── The app's pictures (2026-09-25) ─────────────────────────────────────
 
     /// <summary>
-    /// The workflows a <c>/botchat</c> picture may use (2026-09-25): those of <paramref name="workflows"/> (the offered ones)
-    /// that take a prompt and no input picture — text → image — in the order given. Pure.
+    /// The workflows a fresh <c>/botchat</c> picture may use (2026-09-25; <c>Botchat txt2img workflow</c>'s list since
+    /// 2026-09-27): those of <paramref name="workflows"/> (the offered ones) that take a prompt and no input picture — text →
+    /// image — in the order given. Pure.
     /// </summary>
-    public static IReadOnlyList<ComfyWorkflow> ImageWorkflows(IReadOnlyList<ComfyWorkflow> workflows)
+    public static IReadOnlyList<ComfyWorkflow> Txt2ImgWorkflows(IReadOnlyList<ComfyWorkflow> workflows)
     {
         ArgumentNullException.ThrowIfNull(workflows);
         return workflows.Where(w => w.ImageCount == 0 && w.TakesPrompt).ToList();
     }
 
     /// <summary>
-    /// The workflow the app's picture uses (2026-09-25, <c>Botchat image workflow</c>): the one <paramref name="setting"/>
-    /// names (ignoring case) when it is among <see cref="ImageWorkflows"/>, else the first of those; null when there is none. Pure.
+    /// The workflows a <c>/botchat</c> rework may use (2026-09-27, <c>Botchat img2img workflow</c>'s list): those of
+    /// <paramref name="workflows"/> that take a prompt and exactly one input picture — image → image — in the order given. Pure.
     /// </summary>
-    public static ComfyWorkflow? ImageWorkflow(IReadOnlyList<ComfyWorkflow> offered, string? setting)
+    public static IReadOnlyList<ComfyWorkflow> Img2ImgWorkflows(IReadOnlyList<ComfyWorkflow> workflows)
     {
-        var usable = ImageWorkflows(offered);
+        ArgumentNullException.ThrowIfNull(workflows);
+        return workflows.Where(w => w.ImageCount == 1 && w.TakesPrompt).ToList();
+    }
+
+    /// <summary>
+    /// The workflow of a fresh <c>/botchat</c> picture (<c>Botchat txt2img workflow</c>): the one <paramref name="setting"/> names
+    /// (ignoring case) when it is among <see cref="Txt2ImgWorkflows"/>; null — none — when blank or not among them (2026-09-27, the
+    /// user's call: blank was the first of them until then). Pure.
+    /// </summary>
+    public static ComfyWorkflow? Txt2ImgWorkflow(IReadOnlyList<ComfyWorkflow> offered, string? setting) => Named(Txt2ImgWorkflows(offered), setting);
+
+    /// <summary>The workflow of a <c>/botchat</c> rework (<c>Botchat img2img workflow</c>, 2026-09-27): as <see cref="Txt2ImgWorkflow"/>, among <see cref="Img2ImgWorkflows"/>. Pure.</summary>
+    public static ComfyWorkflow? Img2ImgWorkflow(IReadOnlyList<ComfyWorkflow> offered, string? setting) => Named(Img2ImgWorkflows(offered), setting);
+
+    private static ComfyWorkflow? Named(IReadOnlyList<ComfyWorkflow> usable, string? setting)
+    {
         string name = setting?.Trim() ?? "";
-        return usable.FirstOrDefault(w => name.Length > 0 && string.Equals(w.Name, name, StringComparison.OrdinalIgnoreCase))
-            ?? usable.FirstOrDefault();
+        return name.Length == 0 ? null : usable.FirstOrDefault(w => string.Equals(w.Name, name, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// The workflows the bots' own <c>generate_image</c> sees (2026-09-27, the user's ask: <c>autonomous</c> limited as <c>automatic</c>
+    /// is): <paramref name="fresh"/> and, while there is a picture to rework, <paramref name="rework"/>, of those still offered. Pure.
+    /// </summary>
+    public static IReadOnlyList<ComfyWorkflow> BotWorkflows(IReadOnlyList<ComfyWorkflow> offered, ComfyWorkflow? fresh, ComfyWorkflow? rework, bool reworkable)
+    {
+        ArgumentNullException.ThrowIfNull(offered);
+        return offered.Where(w => (fresh is not null && string.Equals(w.Name, fresh.Name, StringComparison.OrdinalIgnoreCase))
+            || (reworkable && rework is not null && string.Equals(w.Name, rework.Name, StringComparison.OrdinalIgnoreCase))).ToList();
+    }
+
+    // ── Reworking a picture (2026-09-27) ────────────────────────────────────
+
+    /// <summary>The most pictures <c>chat-history</c> offers to rework (2026-09-27): the newest, numbered oldest first.</summary>
+    public const int MaxReworkPictures = 8;
+
+    /// <summary>
+    /// The pictures a rework may start from (2026-09-27, <c>Botchat img2img mode</c>): every picture of the chat's log (a
+    /// generation of several is several), the last one under <c>latest</c>, the last <see cref="MaxReworkPictures"/> under
+    /// <c>chat-history</c>, numbered from 1 oldest first. A picture still rendering is not in the log yet. Pure.
+    /// </summary>
+    public static IReadOnlyList<ReworkPicture> ReworkCandidates(IReadOnlyList<BotPicture> log, BotImg2ImgMode mode)
+    {
+        ArgumentNullException.ThrowIfNull(log);
+        var all = log.SelectMany(p => p.Images.Select(image => (p.Owner, p.Drawn, image.Path))).ToList();
+        int keep = mode == BotImg2ImgMode.Latest ? 1 : MaxReworkPictures;
+        return all.Skip(Math.Max(0, all.Count - keep)).Select((c, i) => new ReworkPicture(i + 1, c.Owner, c.Drawn, c.Path)).ToList();
+    }
+
+    /// <summary>What a rework candidate is, in prompt text: a bot's own drawing, or the app's picture of a reply. Pinned: it is prompt text.</summary>
+    public static string DescribePicture(ReworkPicture picture)
+    {
+        ArgumentNullException.ThrowIfNull(picture);
+        return picture.Drawn ? $"{picture.Owner}'s picture" : $"the picture of {picture.Owner}'s reply";
+    }
+
+    /// <summary>The first line of an image-prompt answer that reworks a picture (2026-09-27). Pinned: it is prompt text.</summary>
+    public const string ReworkAnswer = "REWORK";
+
+    /// <summary>The rework line as the instructions spell it: bare with one candidate, numbered with several. Pinned: it is prompt text.</summary>
+    private static string ReworkLine(IReadOnlyList<ReworkPicture> candidates) =>
+        candidates.Count == 1 ? ReworkAnswer : ReworkAnswer + " n (n the picture's number)";
+
+    private static string WhichPicture(IReadOnlyList<ReworkPicture> candidates) =>
+        candidates.Count == 1 ? "the chat's latest picture (" + DescribePicture(candidates[0]) + ")" : "one of the chat's pictures";
+
+    private static void AppendStyle(StringBuilder text, ComfyWorkflow workflow, string tipsLabel)
+    {
+        text.Append(ComfyFamilies.StyleGuide(workflow.Family));
+        if (!string.IsNullOrWhiteSpace(workflow.Tips))
+        {
+            text.Append("\n\n").Append(tipsLabel).Append(workflow.Tips.Trim());
+        }
+    }
+
+    /// <summary>
+    /// The image-prompt system message with a rework on offer (2026-09-27, the user's ask: after the first picture the prompt
+    /// writer chooses a fresh picture or a rework): <paramref name="fresh"/> null means the rework is the only way; without
+    /// <paramref name="rework"/> or a candidate it is <see cref="ImagePromptInstruction(ComfyWorkflow)"/> (or
+    /// <see cref="PromisedPictureInstruction(ComfyWorkflow)"/>) as before. <paramref name="promised"/> is the promised-picture
+    /// request's form, <see cref="NoPictureAnswer"/> kept. Pinned: it is prompt text.
+    /// </summary>
+    public static string PictureInstruction(bool promised, ComfyWorkflow? fresh, ComfyWorkflow? rework, IReadOnlyList<ReworkPicture> candidates)
+    {
+        ArgumentNullException.ThrowIfNull(candidates);
+        if (rework is null || candidates.Count == 0)
+        {
+            var only = fresh ?? throw new ArgumentException("Neither a fresh workflow nor a picture to rework.", nameof(fresh));
+            return promised ? PromisedPictureInstruction(only) : ImagePromptInstruction(only);
+        }
+
+        var text = new StringBuilder("You write prompts for an image generator. Given one line of a group chat, ");
+        if (promised)
+        {
+            text.Append("decide whether its speaker says they are drawing, painting, sketching, generating, making, sharing or showing " + PictureWords + " right now. ")
+                .Append(CultureInfo.InvariantCulture, $"If they do not, answer exactly {NoPictureAnswer}. If they do, ");
+        }
+
+        const string NoChat = "never the chat itself, no speech bubbles, no screens of text. ";
+        const string Keep = "keep what it shows where the line does not change it, and change what the line calls for";
+        if (fresh is not null)
+        {
+            text.Append(promised ? "write a single prompt for the picture they describe — what it shows, its mood — " : "write a single prompt for a picture that illustrates it: the scene, the things or ideas it talks about, its mood — ")
+                .Append(NoChat).Append("Write it in this style: ");
+            AppendStyle(text, fresh, "Tips for this workflow: ");
+            text.Append("\n\nYou may instead rework ").Append(WhichPicture(candidates))
+                .Append(" rather than make a new one, when the line talks about it, answers it or builds on it: ").Append(Keep).Append(". ");
+        }
+        else
+        {
+            text.Append("write a single prompt that reworks ").Append(WhichPicture(candidates))
+                .Append(promised ? " into the picture they describe: " : " so that it illustrates the line: ").Append(Keep).Append(" — ").Append(NoChat);
+        }
+
+        if (candidates.Count > 1)
+        {
+            text.Append("The pictures, oldest first:");
+            foreach (var picture in candidates)
+            {
+                text.Append(CultureInfo.InvariantCulture, $"\n{picture.Number}. {DescribePicture(picture)}");
+            }
+
+            text.Append("\n");
+        }
+
+        text.Append(fresh is not null ? "To rework it, put " : "Put ").Append(ReworkLine(candidates))
+            .Append(" alone on the first line of your answer and the prompt after it. Write the rework's prompt in this style: ");
+        AppendStyle(text, rework, "Tips for the rework workflow: ");
+        text.Append("\n\nAnswer with ").Append(fresh is not null ? "the prompt alone, or the " + ReworkAnswer + " line and then the prompt" : "the " + ReworkAnswer + " line and then the prompt")
+            .Append(promised ? ", or " + NoPictureAnswer : "").Append(": no preamble, no explanation, no quotes.");
+        return text.ToString();
+    }
+
+    /// <summary>
+    /// An image-prompt answer read (2026-09-27): a first line <see cref="ReworkAnswer"/> (any case, a number after it, stray
+    /// marks around it) takes that candidate — a number that names none takes the latest — and the rest is the prompt; no such
+    /// line is a fresh picture when <paramref name="fresh"/>, else a rework of the latest. No candidate, no rework. The prompt
+    /// is <see cref="CleanImagePrompt"/>'s. Pure.
+    /// </summary>
+    public static (string Prompt, ReworkPicture? Rework) ParseImagePrompt(string? text, IReadOnlyList<ReworkPicture> candidates, bool fresh)
+    {
+        ArgumentNullException.ThrowIfNull(candidates);
+        string cleaned = CleanImagePrompt(text);
+        int end = cleaned.IndexOf('\n', StringComparison.Ordinal);
+        string first = end < 0 ? cleaned : cleaned[..end];
+        var match = ReworkFirstLine().Match(first);
+        if (!match.Success)
+        {
+            return (cleaned, fresh ? null : candidates.LastOrDefault());
+        }
+
+        string rest = (match.Groups["rest"].Value + (end < 0 ? "" : cleaned[end..])).Trim();
+        var chosen = int.TryParse(match.Groups["n"].Value, NumberStyles.None, CultureInfo.InvariantCulture, out int n) && n >= 1 && n <= candidates.Count
+            ? candidates[n - 1]
+            : candidates.LastOrDefault();
+        return (CleanImagePrompt(rest), chosen);
+    }
+
+    [GeneratedRegex(@"^\W*REWORK\b[\s#:*.\-–—]*(?<n>\d+)?[\s:*.\-–—]*(?<rest>.*)$", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase)]
+    private static partial Regex ReworkFirstLine();
+
+    /// <summary>
+    /// The line a bot's turn text ends with while <c>generate_image</c> may rework (2026-09-27, <c>autonomous</c>): the pictures
+    /// it may start from, whose and their paths, and how to call it. The stored line stays as it was. Pinned: it is prompt text.
+    /// </summary>
+    public static string ReworkCaption(string workflow, IReadOnlyList<ReworkPicture> candidates)
+    {
+        ArgumentNullException.ThrowIfNull(candidates);
+        string how = $"call generate_image with workflow \"{workflow}\", its path as image, and a prompt for the reworked picture";
+        if (candidates.Count == 1)
+        {
+            return $"(You may rework the chat's latest picture, {DescribePicture(candidates[0])}, at \"{candidates[0].Path}\": {how}.)";
+        }
+
+        return $"(You may rework one of the chat's pictures — {how}. Oldest first: "
+            + string.Join("; ", candidates.Select(c => $"{DescribePicture(c)}, \"{c.Path}\"")) + ".)";
     }
 
     /// <summary>
@@ -399,6 +572,25 @@ public static partial class BotChat
         text.Append("\n\nAnswer with the prompt alone: no preamble, no explanation, no quotes.");
         return text.ToString();
     }
+
+    /// <summary>
+    /// What the image-prompt request's system text gains while skills are offered (2026-09-27, the user's report: in
+    /// <c>automatic</c> the first picture was prompted before any skill could be loaded, a topic saying which to load had no
+    /// way to be obeyed): the load-only catalog (<see cref="Skills.SkillsPrompt.LoadOnlySection"/>) and a directive to load
+    /// the skill the topic or the line asks for pictures — or one for writing image prompts — and a file it bundles, before
+    /// answering as the instruction above says. Pinned: it is prompt text.
+    /// </summary>
+    public static string ImagePromptSkills(IReadOnlyList<Skills.Skill> skills)
+    {
+        ArgumentNullException.ThrowIfNull(skills);
+        return Skills.SkillsPrompt.LoadOnlySection(skills) + "\n\n" + ImagePromptSkillsDirective;
+    }
+
+    /// <summary>The directive of <see cref="ImagePromptSkills"/>. Pinned: it is prompt text.</summary>
+    public const string ImagePromptSkillsDirective =
+        "Before you answer, load with load_skill any skill the chat's topic or the line asks to be used for pictures or image prompts, "
+        + "or one whose description covers writing image prompts for this workflow — and a file it bundles when the skill says to read one — "
+        + "and follow it. Then answer exactly as instructed above; never mention the skill in the answer.";
 
     /// <summary>The user message of the image-prompt request (2026-09-25): whose line, the topic when there is one, and the line. Pinned: it is prompt text.</summary>
     public static string ImagePromptRequest(string speaker, string reply, string topic)
@@ -453,14 +645,18 @@ public static partial class BotChat
     /// <summary>The line over an app's picture drawn after later lines (<c>Botchat image async</c>, 2026-09-25): whose reply it pictures. Pinned.</summary>
     public static string PictureNotice(string speaker) => $"(botchat: {speaker}'s picture)";
 
-    /// <summary>Once per chat, when pictures are on but no offered workflow is text → image (2026-09-25). Pinned.</summary>
-    public const string NoWorkflowNotice = "(botchat: no offered ComfyUI workflow makes a picture from text alone, so there are no pictures of the replies)";
+    /// <summary>Once per chat, when pictures are on but no picture can be made (2026-09-25; since 2026-09-27: no txt2img workflow set, nor an img2img one with a picture to rework). Pinned.</summary>
+    public const string NoWorkflowNotice = "(botchat: no Botchat txt2img workflow is set — or it is not offered — so there are no pictures of the replies)";
 
     /// <summary>When the model wrote no image prompt for a reply (2026-09-25). Pinned.</summary>
     public const string NoPromptNotice = "(botchat: no image prompt came back for that reply; no picture)";
 
     /// <summary>The <c>--log</c> line of an image prompt (2026-09-25).</summary>
     public static string ImagePromptLogLine(string speaker, string workflow, string prompt) => $"Botchat picture of {speaker}'s reply on {workflow}: {prompt}";
+
+    /// <summary>The <c>--log</c> line of a rework's prompt (2026-09-27).</summary>
+    public static string ReworkLogLine(string speaker, string workflow, ReworkPicture picture, string prompt) =>
+        $"Botchat picture of {speaker}'s reply on {workflow}, reworking {picture.Path}: {prompt}";
 
     /// <summary>
     /// A bot's gender from its profile's first TTS voice (2026-09-25, the user's ask: the bots were guessing each
@@ -647,6 +843,12 @@ public static partial class BotChat
 /// <c>generate_image</c>) — and the pictures.
 /// </summary>
 public sealed record BotPicture(int Seq, string Owner, bool Drawn, IReadOnlyList<Files.ImageAttachment> Images);
+
+/// <summary>
+/// A picture a <c>/botchat</c> rework may start from (2026-09-27, <see cref="BotChat.ReworkCandidates"/>): its number in the
+/// list the model is shown, whose it is (<see cref="BotPicture"/>'s owner and kind) and its path under the working directory.
+/// </summary>
+public sealed record ReworkPicture(int Number, string Owner, bool Drawn, string Path);
 
 /// <summary>One line of the shared botchat transcript: a bot's reply (<paramref name="Speaker"/> its profile) or the user's interjection.</summary>
 public sealed record BotChatLine(string Speaker, string Text, bool IsUser = false);

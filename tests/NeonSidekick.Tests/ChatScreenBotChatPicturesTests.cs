@@ -23,7 +23,8 @@ public partial class ChatScreenTests
     {
         BotChatFixture();
         var stub = ComfyServer(width, height);
-        _settings.Update(d => { d.BotChatImages = true; d.BotChatImageMode = mode; d.BotChatImageAsync = async; });
+        // The workflow named (2026-09-27): blank is none since, no longer the first.
+        _settings.Update(d => { d.BotChatImages = true; d.BotChatImageMode = mode; d.BotChatImageAsync = async; d.BotChatTxt2ImgWorkflow = "pony"; });
         return stub;
     }
 
@@ -168,7 +169,7 @@ public partial class ChatScreenTests
 
         // The second request is the image prompt's: the family's style and the reply, no tools; the bots get none either.
         Assert.Equal(3, _chat.Requests.Count);
-        var pony = BotChat.ImageWorkflow([.. new ComfyWorkflowCatalog(() => [_settings.ProfileComfyDirectory]).Workflows], null)!;
+        var pony = BotChat.Txt2ImgWorkflow([.. new ComfyWorkflowCatalog(() => [_settings.ProfileComfyDirectory]).Workflows], "pony")!;
         Assert.Equal(BotChat.ImagePromptInstruction(pony), SystemText(_chat.Requests[1]));
         Assert.Equal(BotChat.ImagePromptRequest("default", DogReply, ""), _chat.Requests[1][^1].Text);
         Assert.All(_chat.Options, options => Assert.Empty(ToolsOf(options)));
@@ -372,9 +373,177 @@ public partial class ChatScreenTests
         Assert.DoesNotContain(stub.Requests, r => r.Uri.AbsolutePath == "/prompt");
     }
 
+    /// <summary>An image → image workflow beside the fixture's pony (2026-09-27): a prompt and one picture in.</summary>
+    private void Img2ImgWorkflow(StubHttpMessageHandler stub, string name = "hatter")
+    {
+        File.WriteAllText(Path.Combine(_settings.ProfileComfyDirectory, name + ".json"),
+            "{\"3\":{\"class_type\":\"KSampler\",\"inputs\":{\"seed\":\"{{seed}}\"}},\"6\":{\"class_type\":\"CLIPTextEncode\",\"inputs\":{\"text\":\"{{prompt}}\"}},\"10\":{\"class_type\":\"LoadImage\",\"inputs\":{\"image\":\"{{image}}\"}}}");
+        stub.Map("http://comfy.lan:8188/upload/image", HttpStatusCode.OK, "{\"name\":\"uploaded-input.png\",\"subfolder\":\"\",\"type\":\"input\"}");
+    }
+
+    /// <summary>
+    /// Botchat img2img workflow (2026-09-27, the user's ask): the first picture is fresh, its prompt writer offered no rework;
+    /// the next reply's writer is offered the latest picture and answers REWORK, so that picture is uploaded and reworked.
+    /// </summary>
+    [Fact]
+    public async Task BotChat_Automatic_TheNextPicture_MayReworkTheLatest()
+    {
+        var stub = BotPicturesFixture();
+        Img2ImgWorkflow(stub);
+        _settings.Update(d => d.BotChatImg2ImgWorkflow = "hatter");
+        _chat.EnqueueText(DogReply);
+        _chat.EnqueueText("a dog surfing a wave");
+        _chat.EnqueueText("Ada ", "answers.");
+        _chat.EnqueueText("REWORK\nthe same dog, now in a top hat");
+        _chat.EnqueueText("Neon ", "again");
+        EscDuringRequest(5);
+        PushLine("/botchat");
+        PushLine("/exit");
+
+        await RunAsync();
+
+        Assert.Equal(5, _chat.Requests.Count);
+        Assert.Equal(BotChat.ImagePromptInstruction(PonyWorkflow), SystemText(_chat.Requests[1]));   // nothing to rework yet
+        Assert.Contains("You may instead rework the chat's latest picture (the picture of default's reply)", SystemText(_chat.Requests[3]));
+        var prompts = stub.Requests.Where(r => r.Uri.AbsolutePath == "/prompt").ToList();
+        Assert.Equal(2, prompts.Count);
+        Assert.Contains("\"text\":\"a dog surfing a wave", prompts[0].Body!);
+        Assert.Contains("\"text\":\"the same dog, now in a top hat", prompts[1].Body!);
+        Assert.Contains("uploaded-input.png", prompts[1].Body!);   // the first picture went up as the input
+        Assert.Single(stub.Requests, r => r.Uri.AbsolutePath == "/upload/image");
+    }
+
+    /// <summary>Botchat txt2img workflow blank (2026-09-27: none, no longer the first): no picture, and the notice once.</summary>
+    [Fact]
+    public async Task BotChat_NoTxt2ImgWorkflow_DrawsNothing_AndSaysSoOnce()
+    {
+        var stub = BotPicturesFixture();
+        _settings.Update(d => d.BotChatTxt2ImgWorkflow = null);
+        _chat.EnqueueText(DogReply);
+        _chat.EnqueueText("Ada ", "answers.");
+        EscDuringRequest(3);
+        PushLine("/botchat");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Equal(3, _chat.Requests.Count);   // no image-prompt request at all
+        Assert.DoesNotContain(stub.Requests, r => r.Uri.AbsolutePath == "/prompt");
+        Assert.Equal(1, CountOf(output, BotChat.NoWorkflowNotice));
+    }
+
+    /// <summary>
+    /// Autonomous with both workflows (2026-09-27, the user's ask: the bots limited as automatic is): generate_image lists the
+    /// txt2img workflow alone until there is a picture, then the img2img one too, and the next bot's turn names the picture's path.
+    /// </summary>
+    [Fact]
+    public async Task BotChat_Autonomous_TheBotsSeeTheTwoWorkflowsAlone_AndThePictureToRework()
+    {
+        var stub = BotPicturesFixture(mode: "autonomous");
+        Img2ImgWorkflow(stub);
+        File.WriteAllText(Path.Combine(_settings.ProfileComfyDirectory, "other-t2i.json"), File.ReadAllText(Path.Combine(_settings.ProfileComfyDirectory, "pony.json")));
+        _settings.Update(d => d.BotChatImg2ImgWorkflow = "hatter");
+        _chat.Enqueue(FakeChatClient.Call("g1", GenerateImageTool.ToolName, new Dictionary<string, object?> { ["prompt"] = "a dog surfing", ["seed"] = 7, ["verbatim"] = true }));
+        _chat.EnqueueText("Here is my dog.");
+        _chat.EnqueueText("Ada ", "answers.");
+        EscDuringRequest(3);
+        PushLine("/botchat");
+        PushLine("/exit");
+
+        await RunAsync();
+
+        Assert.Equal(3, _chat.Requests.Count);
+        string first = Assert.Single(ToolsOf(_chat.Options[0])).Description!;
+        Assert.Contains("pony", first);
+        Assert.DoesNotContain("hatter", first);     // nothing to rework yet
+        Assert.DoesNotContain("other-t2i", first);   // never a workflow the settings do not name
+        string next = Assert.Single(ToolsOf(_chat.Options[2])).Description!;
+        Assert.Contains("hatter", next);
+        Assert.DoesNotContain("other-t2i", next);
+        Assert.EndsWith(BotChat.ReworkCaption("hatter", [new ReworkPicture(1, "default", true, @"comfy_images\pony-7.png")]), _chat.Requests[2][^1].Text, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Botchat skills enabled in automatic (2026-09-27, the user's report: the first picture was prompted before any skill could
+    /// be loaded): the image-prompt writer sees the catalog and load_skill, loads the one the topic names, and its prompt follows.
+    /// </summary>
+    [Fact]
+    public async Task BotChat_Automatic_ThePromptWriter_LoadsTheSkillFirst()
+    {
+        var stub = BotPicturesFixture();
+        _settings.Update(d => d.BotChatSkills = true);
+        PutSkill(ProfileSkills, "pony-prompts", "Writes Pony Diffusion prompts.", "# Pony prompts\n\nAlways start with score_9.");
+        _chat.EnqueueText(DogReply);
+        _chat.Enqueue(FakeChatClient.Call("s1", LoadSkillTool.ToolName, new Dictionary<string, object?> { ["name"] = "pony-prompts" }));
+        _chat.EnqueueText("score_9, a dog surfing a wave");
+        _chat.EnqueueText("Ada ", "answers.");
+        EscDuringRequest(4);
+        PushLine("/botchat use the pony-prompts skill for pictures");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Equal(4, _chat.Requests.Count);
+        Assert.Equal([LoadSkillTool.ToolName], ToolsOf(_chat.Options[1]).Cast<AIFunction>().Select(t => t.Name));
+        string system = SystemText(_chat.Requests[1]);
+        Assert.StartsWith(BotChat.ImagePromptInstruction(PonyWorkflow), system);
+        Assert.Contains("<name>pony-prompts</name>", system);
+        Assert.EndsWith(BotChat.ImagePromptSkillsDirective, system);
+        Assert.Contains("use the pony-prompts skill for pictures", _chat.Requests[1][^1].Text);   // the topic
+        Assert.Contains(_chat.Requests[2].SelectMany(m => m.Contents).OfType<FunctionResultContent>(), r => (r.Result?.ToString() ?? "").Contains("Always start with score_9.", StringComparison.Ordinal));
+        Assert.Contains("\"text\":\"score_9, a dog surfing a wave", stub.Requests.Single(r => r.Uri.AbsolutePath == "/prompt").Body!);
+        Assert.Contains("pony-prompts", output);   // the skill line, as a bot's own load shows
+    }
+
+    /// <summary>The writer's round trips are capped (2026-09-27): three load_skill calls, then a request with no tool, whose text is the prompt.</summary>
+    [Fact]
+    public async Task BotChat_Automatic_ThePromptWriter_IsAskedForTheAnswer_AfterThreeLoads()
+    {
+        var stub = BotPicturesFixture();
+        _settings.Update(d => d.BotChatSkills = true);
+        PutSkill(ProfileSkills, "pony-prompts", "Writes Pony Diffusion prompts.");
+        _chat.EnqueueText(DogReply);
+        for (int i = 0; i < 3; i++)
+        {
+            _chat.Enqueue(FakeChatClient.Call("s" + i, LoadSkillTool.ToolName, new Dictionary<string, object?> { ["name"] = "pony-prompts" }));
+        }
+
+        _chat.EnqueueText("a dog surfing a wave");
+        _chat.EnqueueText("Ada ", "answers.");
+        EscDuringRequest(6);
+        PushLine("/botchat");
+        PushLine("/exit");
+
+        await RunAsync();
+
+        Assert.Equal(6, _chat.Requests.Count);
+        Assert.All([1, 2, 3], i => Assert.Single(ToolsOf(_chat.Options[i])));
+        Assert.Empty(ToolsOf(_chat.Options[4]));
+        Assert.Contains("\"text\":\"a dog surfing a wave", stub.Requests.Single(r => r.Uri.AbsolutePath == "/prompt").Body!);
+    }
+
+    /// <summary>Skills off (the default): the image-prompt request is as before — no tool, no catalog.</summary>
+    [Fact]
+    public async Task BotChat_Automatic_SkillsOff_ThePromptWriterGetsNoTool()
+    {
+        BotPicturesFixture();
+        PutSkill(ProfileSkills, "pony-prompts", "Writes Pony Diffusion prompts.");
+        _chat.EnqueueText(DogReply);
+        _chat.EnqueueText("a dog surfing a wave");
+        _chat.EnqueueText("Ada ", "answers.");
+        EscDuringRequest(3);
+        PushLine("/botchat");
+        PushLine("/exit");
+
+        await RunAsync();
+
+        Assert.Empty(ToolsOf(_chat.Options[1]));
+        Assert.Equal(BotChat.ImagePromptInstruction(PonyWorkflow), SystemText(_chat.Requests[1]));
+    }
+
     private const string SketchReply = "Here's a sketch I drew of a dog surfing.";
 
-    private ComfyWorkflow PonyWorkflow => BotChat.ImageWorkflow([.. new ComfyWorkflowCatalog(() => [_settings.ProfileComfyDirectory]).Workflows], null)!;
+    private ComfyWorkflow PonyWorkflow => BotChat.Txt2ImgWorkflow([.. new ComfyWorkflowCatalog(() => [_settings.ProfileComfyDirectory]).Workflows], "pony")!;
 
     [Fact]
     public async Task BotChat_Autonomous_APictureTheBotOnlyTalkedAbout_IsDrawnUnderTheReply()

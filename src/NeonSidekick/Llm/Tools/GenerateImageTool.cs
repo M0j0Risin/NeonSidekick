@@ -69,14 +69,22 @@ public sealed class GenerateImageTool : AIFunction
         """;
 
     private readonly ComfyStudio _studio;
+    private readonly Func<IReadOnlyList<ComfyWorkflow>, IReadOnlyList<ComfyWorkflow>>? _narrow;
 
     // The schema for the cap last asked for: rebuilt only when the row changes (ViewImageTool's shape).
     private int _schemaLimit;
     private JsonElement _schema;
 
-    public GenerateImageTool(ComfyStudio studio)
+    /// <param name="studio">The screen's ComfyUI studio.</param>
+    /// <param name="narrow">
+    /// The workflows this tool may use out of the offered ones (2026-09-27, the user's ask: <c>/botchat</c>'s bots get
+    /// <c>Botchat txt2img workflow</c> and <c>Botchat img2img workflow</c> alone): read at every description and every call;
+    /// null is every offered workflow, the main chat's tool.
+    /// </param>
+    public GenerateImageTool(ComfyStudio studio, Func<IReadOnlyList<ComfyWorkflow>, IReadOnlyList<ComfyWorkflow>>? narrow = null)
     {
         _studio = studio ?? throw new ArgumentNullException(nameof(studio));
+        _narrow = narrow;
     }
 
     public override string Name => ToolName;
@@ -86,7 +94,7 @@ public sealed class GenerateImageTool : AIFunction
     {
         get
         {
-            var workflows = _studio.OfferedWorkflows();
+            var workflows = _narrow is null ? _studio.OfferedWorkflows() : _narrow(_studio.OfferedWorkflows());
             return workflows.Count == 0 ? ComfyText.DescribeEmpty : ComfyText.Describe(workflows, _studio.ReinforceNegatives);
         }
     }
@@ -204,7 +212,7 @@ public sealed class GenerateImageTool : AIFunction
             return error;
         }
 
-        var generation = await _studio.GenerateAsync(request, cancellationToken).ConfigureAwait(false);
+        var generation = await _studio.GenerateAsync(request, cancellationToken, _narrow).ConfigureAwait(false);
         return generation.Images.Count > 0 ? new ToolImageResult(generation.Text, generation.Images) : generation.Text;
     }
 }

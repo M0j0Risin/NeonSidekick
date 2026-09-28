@@ -33,7 +33,9 @@ public class AppSettingsTests : IDisposable
         LlmMidTurnUsage = "estimate",   // last-known is the default since later on 2026-09-25
         BotChatImages = true,
         BotChatImageMode = "autonomous",
-        BotChatImageWorkflow = "flux",
+        BotChatTxt2ImgWorkflow = "flux",
+        BotChatImg2ImgWorkflow = "flux-edit",
+        BotChatImg2ImgMode = "chat-history",
         BotChatImageAsync = false,
         BotChatNonTtsDelaySeconds = 12,
         BotChatSkills = true,

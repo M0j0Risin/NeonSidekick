@@ -9199,7 +9199,7 @@ internal sealed partial class ChatScreen
     /// <para>Pictures (2026-09-25, the user's ask): with <c>Botchat images enabled</c> on and the ComfyUI tools offered
     /// (<see cref="ComfyOffered"/>), <c>Botchat image mode</c> says who draws. The bots, offered <c>generate_image</c> alone
     /// (<see cref="BotImageTool"/>), draw through the turn like the main chat's model; the app, after every reply, has the
-    /// model write an image prompt from it (<see cref="WriteBotPictureAsync"/>) and draws it with <c>Botchat image workflow</c>.
+    /// model write an image prompt from it (<see cref="WriteBotPictureAsync"/>) and draws it with <c>Botchat txt2img workflow</c> (or, since 2026-09-27, reworks a picture with <c>Botchat img2img workflow</c>).
     /// With <c>Botchat image async</c> off (later on 2026-09-25, the user's ask: the picture before the words) the reply is
     /// written unseen first (<see cref="CollectBotTurnAsync"/>), its picture made, and then the turn is replayed — the name,
     /// the picture, the reply shown and spoken; on, the reply streams as ever and its picture renders while the next bot
@@ -9343,7 +9343,9 @@ internal sealed partial class ChatScreen
                 // Pictures (2026-09-25): read per reply, so a switch mid-chat holds from the next one.
                 var imageMode = BotChatImageMode.Resolve(effective);
                 bool pictured = effective.BotChatImages && ComfyOffered(effective, _comfy);
-                var imageTool = pictured && BotChatImageMode.Offers(imageMode) ? BotImageTool(effective) : null;
+                // The chat's two workflows and the pictures a rework may start from (2026-09-27): read per reply, as the rest.
+                var (fresh, rework, candidates) = BotWorkflows(effective);
+                var imageTool = pictured && BotChatImageMode.Offers(imageMode) ? BotImageTool(effective, fresh, rework, candidates.Count > 0) : null;
                 // Skills (2026-09-27): read per reply too — the main chat's catalog, so the starting profile's, never this bot's own.
                 var (skills, skillTool) = BotSkills(effective);
                 // Vision (2026-09-27): the pictures shown since this bot last spoke ride its turn message, with a caption saying whose.
@@ -9361,6 +9363,12 @@ internal sealed partial class ChatScreen
                 }
 
                 picturesSeen[bot.Name] = _botPictureLog?.Count ?? 0;
+                if (imageTool is not null && rework is not null && candidates.Count > 0)
+                {
+                    // What the bot may rework and how (2026-09-27): on the sent text alone, as the vision caption.
+                    sentText += "\n\n" + BotChat.ReworkCaption(rework.Name, candidates);
+                }
+
                 var history = new ConversationHistory(BotChat.SystemPrompt(bot.Persona, bot.Name, others, topic, speaking, bot.VoiceDirective, markdown, pronouns, images: imageTool is not null, skills: skills));
                 history.Replace(prior);
                 if ((links.Count > 0 && links[next] is { } own ? _session.CreateAssistant(history, own) : _session.CreateAssistant(history)) is not { } assistant)
@@ -9647,11 +9655,35 @@ internal sealed partial class ChatScreen
     private bool _botNoWorkflowTold;
 
     /// <summary>
-    /// The one tool a bot is offered (2026-09-25, <c>Botchat image mode</c> <c>autonomous</c>): the screen's
-    /// <c>generate_image</c>, the one the main chat's model gets; null when it is switched off by name on <c>/tools</c>.
+    /// The one tool a bot is offered (2026-09-25, <c>Botchat image mode</c> <c>autonomous</c>): <c>generate_image</c> over the
+    /// screen's studio, narrowed since 2026-09-27 (the user's ask: the bots as limited as <c>automatic</c>) to
+    /// <c>Botchat txt2img workflow</c> and — while there is a picture to rework — <c>Botchat img2img workflow</c>
+    /// (<see cref="BotChat.BotWorkflows"/>). Null when it is switched off by name on <c>/tools</c>, or neither is usable.
     /// </summary>
-    private AIFunction? BotImageTool(AppSettingsData effective) =>
-        Without(_comfyTools, ToolsText.DisabledSet(effective.ToolsDisabled)).FirstOrDefault(tool => string.Equals(tool.Name, GenerateImageTool.ToolName, StringComparison.Ordinal));
+    private AIFunction? BotImageTool(AppSettingsData effective, ComfyWorkflow? fresh, ComfyWorkflow? rework, bool reworkable)
+    {
+        bool offered = Without(_comfyTools, ToolsText.DisabledSet(effective.ToolsDisabled)).Any(tool => string.Equals(tool.Name, GenerateImageTool.ToolName, StringComparison.Ordinal));
+        if (!offered || (fresh is null && !(rework is not null && reworkable)))
+        {
+            return null;
+        }
+
+        return new GenerateImageTool(_comfy, workflows => BotChat.BotWorkflows(workflows, fresh, rework, reworkable));
+    }
+
+    /// <summary>
+    /// <c>/botchat</c>'s workflows as the settings stand (2026-09-27): <c>Botchat txt2img workflow</c>, <c>Botchat img2img
+    /// workflow</c> (each null when blank or not offered) and, with the latter, the pictures a rework may start from under
+    /// <c>Botchat img2img mode</c> (<see cref="BotChat.ReworkCandidates"/>); none outside a chat.
+    /// </summary>
+    private (ComfyWorkflow? Fresh, ComfyWorkflow? Rework, IReadOnlyList<ReworkPicture> Candidates) BotWorkflows(AppSettingsData effective)
+    {
+        var offered = _comfy.OfferedWorkflows();
+        var fresh = BotChat.Txt2ImgWorkflow(offered, effective.BotChatTxt2ImgWorkflow);
+        var rework = BotChat.Img2ImgWorkflow(offered, effective.BotChatImg2ImgWorkflow);
+        IReadOnlyList<ReworkPicture> candidates = rework is not null && _botPictureLog is { } log ? BotChat.ReworkCandidates(log, BotChatImg2ImgMode.Resolve(effective)) : [];
+        return (fresh, rework, candidates);
+    }
 
     /// <summary>
     /// The app's picture of one <c>/botchat</c> reply with <c>Botchat image async</c> on (2026-09-25): the prompt
@@ -9693,16 +9725,20 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>
-    /// The request for the app's picture of one <c>/botchat</c> reply (2026-09-25): the workflow (<see cref="BotChat.ImageWorkflow"/>;
-    /// none → a notice, once), then the image prompt the model writes from the reply (<see cref="BotChat.ImagePromptInstruction"/>,
-    /// one side request under a spinner — always before the next turn, so the server is never asked two things at once). Null,
+    /// The request for the app's picture of one <c>/botchat</c> reply (2026-09-25): the workflows (<see cref="BotWorkflows"/>;
+    /// no txt2img and nothing to rework → a notice, once), then the image prompt the model writes from the reply
+    /// (<see cref="BotChat.PictureInstruction"/>, one side request under a spinner — always before the next turn, so the server
+    /// is never asked two things at once). Since 2026-09-27 (the user's ask) the writer may answer <see cref="BotChat.ReworkAnswer"/>
+    /// to rework one of the chat's pictures with the img2img workflow instead (<see cref="BotChat.ParseImagePrompt"/>). Null,
     /// with its notice, when there is no workflow, no prompt came back, or ESC skipped it; the chat goes on.
-    /// <paramref name="promised"/> (2026-09-25, <c>autonomous</c>: a picture the bot talked about but did not draw) asks with
-    /// <see cref="BotChat.PromisedPictureInstruction"/> instead, and its <see cref="BotChat.NoPictureAnswer"/> is no picture, quietly.
+    /// <paramref name="promised"/> (2026-09-25, <c>autonomous</c>: a picture the bot talked about but did not draw) asks the
+    /// promised-picture form instead, and its <see cref="BotChat.NoPictureAnswer"/> is no picture, quietly.
     /// </summary>
     private async Task<ComfyRequest?> WriteBotPictureAsync(Assistant assistant, BotParticipant bot, string reply, string topic, AppSettingsData effective, CancellationToken pictureToken, bool promised = false)
     {
-        if (BotChat.ImageWorkflow(_comfy.OfferedWorkflows(), effective.BotChatImageWorkflow) is not { } workflow)
+        // A fresh picture, or (2026-09-27, the user's ask) a rework of one of the chat's pictures: the prompt writer's choice.
+        var (fresh, rework, candidates) = BotWorkflows(effective);
+        if (fresh is null && candidates.Count == 0)
         {
             if (!_botNoWorkflowTold)
             {
@@ -9713,16 +9749,21 @@ internal sealed partial class ChatScreen
             return null;
         }
 
+        // Skills (2026-09-27, the user's report: the first picture was prompted before any skill could be loaded): the bots'
+        // own gate and catalog, so a topic naming the skill for pictures is obeyed before the prompt is written.
+        var (skills, skillTool) = BotSkills(effective);
+        string system = BotChat.PictureInstruction(promised, fresh, rework, candidates);
         var request = new List<ChatMessage>
         {
-            new(ChatRole.System, promised ? BotChat.PromisedPictureInstruction(workflow) : BotChat.ImagePromptInstruction(workflow)),
+            new(ChatRole.System, skills is null ? system : system + "\n\n" + BotChat.ImagePromptSkills(skills)),
             new(ChatRole.User, BotChat.ImagePromptRequest(bot.Name, reply, topic)),
         };
+        var loaded = new List<string>();
         var (written, cancelled) = await UnderWatchAsync(BotChat.PromptSpinner(bot.Name), async token =>
         {
             try
             {
-                return (await assistant.RequestAsync(request, [], ReasoningEffort.None, token).ConfigureAwait(false)).Text;
+                return await WriteBotPicturePromptAsync(assistant, request, skillTool, loaded, token).ConfigureAwait(false);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
@@ -9730,13 +9771,18 @@ internal sealed partial class ChatScreen
                 return null;
             }
         }, pictureToken).ConfigureAwait(false);
+        // The skills the writer loaded, as a bot's own load_skill shows: after the spinner, whatever came of it.
+        loaded.ForEach(note => _transcript.SkillNote(note));
         if (cancelled)
         {
             _transcript.Notice(ComfyText.Cancelled);
             return null;
         }
 
-        string prompt = BotChat.CleanImagePrompt(written);
+        var (prompt, reworked) = candidates.Count == 0 ? (BotChat.CleanImagePrompt(written), null) : BotChat.ParseImagePrompt(written, candidates, fresh is not null);
+        // No rework chosen means fresh is there: with none, ParseImagePrompt takes the latest candidate.
+        string workflow = reworked is null ? fresh!.Name : rework!.Name;
+        var job = new ComfyRequest(prompt, Workflow: workflow, Images: reworked is null ? null : [reworked.Path]);
         if (promised)
         {
             if (BotChat.IsNoPicture(prompt))
@@ -9745,8 +9791,8 @@ internal sealed partial class ChatScreen
                 return null;
             }
 
-            DiagnosticLog.Info(AppCategory, BotChat.PromisedPictureLogLine(bot.Name, workflow.Name, prompt));
-            return new ComfyRequest(prompt, Workflow: workflow.Name);
+            DiagnosticLog.Info(AppCategory, BotChat.PromisedPictureLogLine(bot.Name, workflow, prompt));
+            return job;
         }
 
         if (prompt.Length == 0)
@@ -9755,8 +9801,47 @@ internal sealed partial class ChatScreen
             return null;
         }
 
-        DiagnosticLog.Info(AppCategory, BotChat.ImagePromptLogLine(bot.Name, workflow.Name, prompt));
-        return new ComfyRequest(prompt, Workflow: workflow.Name);
+        DiagnosticLog.Info(AppCategory, reworked is null ? BotChat.ImagePromptLogLine(bot.Name, workflow, prompt) : BotChat.ReworkLogLine(bot.Name, workflow, reworked, prompt));
+        return job;
+    }
+
+    /// <summary>The image-prompt writer's round trips while it may load skills (2026-09-27): a skill and a file it bundles, then the prompt — the bots' own count.</summary>
+    private const int BotPromptSkillIterations = 3;
+
+    /// <summary>
+    /// The image prompt's side request (2026-09-25), with <paramref name="skillTool"/> (2026-09-27, <c>Botchat skills enabled</c>)
+    /// a short loop — SkillLearner's shape: up to <see cref="BotPromptSkillIterations"/> requests offering <c>load_skill</c>, each
+    /// call run and answered, then one with no tool at all should the cap be reached, so an answer always comes. The text of the
+    /// last response; each skill loaded is added to <paramref name="loaded"/> as its transcript line (<see cref="LoadSkillTool.Note"/>).
+    /// </summary>
+    private static async Task<string> WriteBotPicturePromptAsync(Assistant assistant, List<ChatMessage> request, AIFunction? skillTool, List<string> loaded, CancellationToken cancellationToken)
+    {
+        IReadOnlyList<AIFunction> tools = skillTool is null ? [] : [skillTool];
+        for (int iteration = 1; tools.Count > 0 && iteration <= BotPromptSkillIterations; iteration++)
+        {
+            var response = await assistant.RequestAsync(request, tools, ReasoningEffort.None, cancellationToken).ConfigureAwait(false);
+            if (response.Calls.Count == 0)
+            {
+                return response.Text;
+            }
+
+            request.AddRange(response.Messages);
+            var results = new List<AIContent>(response.Calls.Count);
+            foreach (var call in response.Calls)
+            {
+                DiagnosticLog.Debug(AppCategory, "Botchat image prompt " + Assistant.ToolCallLogLine(call.Name, Assistant.SerializeArguments(call.Arguments)));
+                var (text, _) = await Assistant.InvokeToolAsync(tools, call, cancellationToken).ConfigureAwait(false);
+                results.Add(Assistant.ResultContent(call, text));
+                if (string.Equals(call.Name, LoadSkillTool.ToolName, StringComparison.Ordinal))
+                {
+                    loaded.Add(LoadSkillTool.Note(text));
+                }
+            }
+
+            request.Add(new ChatMessage(ChatRole.Tool, results));
+        }
+
+        return (await assistant.RequestAsync(request, [], ReasoningEffort.None, cancellationToken).ConfigureAwait(false)).Text;
     }
 
     /// <summary>

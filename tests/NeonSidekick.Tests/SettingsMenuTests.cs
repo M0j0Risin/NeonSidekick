@@ -755,7 +755,7 @@ public class SettingsMenuTests : IDisposable
                 SettingsField.SqlTools, SettingsField.SqlDefaultConnection, SettingsField.SqlQueryMaxRows, SettingsField.SqlQueryTimeoutSeconds, SettingsField.SqlConnectionsProfile, SettingsField.SqlConnectionsGlobal, SettingsField.SqlSetPassword, SettingsField.SqlPercentMention, SettingsField.SqlConnectionsOffered, SettingsField.SqlAddConnection, SettingsField.Theme,
                 SettingsField.ComfyTools, SettingsField.ComfyUrl, SettingsField.ComfyTimeoutSeconds, SettingsField.ComfyOutputFolder, SettingsField.ComfyWorkflowsOffered, SettingsField.ComfyAddWorkflow, SettingsField.ImageEditor, SettingsField.ComfyMaxPicturesPerCall, SettingsField.ComfyReinforceNegatives, SettingsField.ComfyShowPrompts, SettingsField.ComfyCaretMention, SettingsField.ComfyPictureStrip,
                 SettingsField.ReflectionYieldsToTurns,
-                SettingsField.BotChatImages, SettingsField.BotChatImageMode, SettingsField.BotChatImageWorkflow, SettingsField.BotChatImageAsync,
+                SettingsField.BotChatImages, SettingsField.BotChatImageMode, SettingsField.BotChatTxt2ImgWorkflow, SettingsField.BotChatImageAsync,
                 SettingsField.BotChatLlmMode,
                 SettingsField.LlmMidTurnUsage,
                 SettingsField.KeepCommandHistory,
@@ -769,6 +769,7 @@ public class SettingsMenuTests : IDisposable
                 SettingsField.BotChatVision,
                 SettingsField.ThemedViewer,
                 SettingsField.ReflectionEditsSupportingFiles,
+                SettingsField.BotChatImg2ImgWorkflow, SettingsField.BotChatImg2ImgMode,
             },
             Enum.GetValues<SettingsField>());
         // The compact rows: on the LLM tab after the context length but no reconnect; the type a picker, the two others typed.
@@ -1383,7 +1384,7 @@ public class SettingsMenuTests : IDisposable
         Assert.Equal(26, SettingsMenu.TabLabelWidth(SettingsTab.Llm));       // "LLM compact show summary" (2026-09-21; "LLM request timeout (s)", 23, before)
         Assert.Equal(19, SettingsMenu.TabLabelWidth(SettingsTab.Tts));       // "TTS voice preview"
         Assert.Equal(26, SettingsMenu.TabLabelWidth(SettingsTab.Stt));       // "STT interrupt echo guard"
-        Assert.Equal(24, SettingsMenu.TabLabelWidth(SettingsTab.BotChat));   // "Botchat images enabled" (2026-09-25)
+        Assert.Equal(26, SettingsMenu.TabLabelWidth(SettingsTab.BotChat));   // "Botchat txt2img workflow" / "Botchat img2img workflow" (2026-09-27; "Botchat images enabled" before)
         Assert.Equal(36, SettingsMenu.LabelWidthOf(SettingsMenu.ToolsTabFields[4]));   // the Claude tab (2026-09-27): "Claude advisor tool calls per turn"
         Assert.Equal(21, SettingsMenu.LabelWidthOf(SettingsMenu.ToolsTabFields[9]));   // the Options tab (index 7 since SQL, 2026-09-23): "Tool collapse count" (2026-09-22; "$-mention enabled", 19, the Options tab's one row from later on 2026-09-19)
         Assert.Equal(26, SettingsMenu.LabelWidthOf(SettingsMenu.ToolsTabFields[0]));   // "Web browser network mode" (the Web-prefixed labels, later still on 2026-09-19; "Web search max results", 24, before)

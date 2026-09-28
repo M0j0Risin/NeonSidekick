@@ -327,6 +327,23 @@ public sealed class ComfyTests : IDisposable
         Assert.Equal(0.4, graph.GetProperty("3").GetProperty("inputs").GetProperty("denoise").GetDouble());
     }
 
+    /// <summary>A narrowed tool (2026-09-27, <c>/botchat</c>'s bots): only its workflows are described, and another is unknown, never sent.</summary>
+    [Fact]
+    public async Task GenerateImage_Narrowed_DescribesItsWorkflowsAlone_AndRefusesAnother()
+    {
+        Workflow("pony-txt2img", Txt2Img);
+        Workflow("restyle", Img2Img);
+        ServeOnePicture();
+        var tool = new GenerateImageTool(_studio, workflows => workflows.Where(w => w.Name == "pony-txt2img").ToList());
+
+        Assert.Contains("\n- pony-txt2img ", tool.Description);
+        Assert.DoesNotContain("\n- restyle ", tool.Description);
+        var result = await tool.InvokeAsync(Args(("prompt", "watercolor"), ("workflow", "restyle")));
+
+        Assert.StartsWith("Error", Assert.IsType<string>(result));
+        Assert.DoesNotContain(_stub.Requests, r => r.Uri.AbsolutePath == "/prompt");
+    }
+
     /// <summary>A ReActor face swap as exported (later still on 2026-09-24): two pictures in, no sampler, no prompt.</summary>
     private const string FaceSwapExport = """
         {

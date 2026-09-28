@@ -404,8 +404,8 @@ public enum SettingsField
     /// <summary>A picker: who draws a <c>/botchat</c> picture — <c>automatic</c> / <c>autonomous</c> (<see cref="Settings.AppSettingsData.BotChatImageMode"/>). The Botchat tab, under the switch (2026-09-25); no reconnect.</summary>
     BotChatImageMode,
 
-    /// <summary>A picker: the text → image workflow of the app's <c>/botchat</c> pictures, or the first (<see cref="Settings.AppSettingsData.BotChatImageWorkflow"/>). The Botchat tab, under the mode (2026-09-25); no reconnect.</summary>
-    BotChatImageWorkflow,
+    /// <summary>A picker: the text → image workflow of <c>/botchat</c>'s fresh pictures, or none (<see cref="Settings.AppSettingsData.BotChatTxt2ImgWorkflow"/>). The Botchat tab, under the mode (2026-09-25; renamed and none since 2026-09-27); no reconnect.</summary>
+    BotChatTxt2ImgWorkflow,
 
     /// <summary>A toggle: whether the next bot answers while the app's <c>/botchat</c> picture renders (<see cref="Settings.AppSettingsData.BotChatImageAsync"/>). The Botchat tab's last row (2026-09-25); no reconnect.</summary>
     BotChatImageAsync,
@@ -481,6 +481,12 @@ public enum SettingsField
 
     /// <summary>A toggle: whether a reflection may write a skill's supporting files with <c>skill_editor</c>'s <c>write_file</c> / <c>edit_file</c> (<see cref="Settings.AppSettingsData.ReflectionEditsSupportingFiles"/>). The Reflection tab of <c>/skills</c>' last row (2026-09-27, the user's ask and name); no reconnect (read when a reflection is decided). Last in the enum, as every newcomer.</summary>
     ReflectionEditsSupportingFiles,
+
+    /// <summary>A picker: the image → image workflow <c>/botchat</c> may rework a picture with, or none (<see cref="Settings.AppSettingsData.BotChatImg2ImgWorkflow"/>). The Botchat tab, under the txt2img row (2026-09-27, the user's ask); no reconnect (read per reply). Last in the enum, as every newcomer.</summary>
+    BotChatImg2ImgWorkflow,
+
+    /// <summary>A picker: which pictures a <c>/botchat</c> rework may start from — <c>latest</c> / <c>chat-history</c> (<see cref="Settings.AppSettingsData.BotChatImg2ImgMode"/>). The Botchat tab, under the img2img row (2026-09-27, the user's ask); no reconnect (read per reply). Last in the enum, as every newcomer.</summary>
+    BotChatImg2ImgMode,
 }
 
 /// <summary>The tabs of <c>/settings</c> on the pane, in strip order (Sessions right after General — the user's order, 2026-09-18; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
@@ -776,7 +782,7 @@ internal sealed partial class SettingsMenu
         [SettingsField.TtsOutput, SettingsField.TtsSource, SettingsField.TtsHttpUrl, SettingsField.TtsVoicePreview, SettingsField.TtsVoicePreset, SettingsField.TtsVoice, SettingsField.TtsVoice2, SettingsField.TtsVoiceMix, SettingsField.TtsSpeed],
         Fields.Where(IsVoiceField).ToArray(),
         [SettingsField.ClaudeApi, SettingsField.ClaudeApiKey, SettingsField.ClaudeApiMaxTokens, SettingsField.ClaudeApiPromptCaching],
-        [SettingsField.BotChatLlmMode, SettingsField.BotChatImages, SettingsField.BotChatImageMode, SettingsField.BotChatImageWorkflow, SettingsField.BotChatImageAsync, SettingsField.BotChatNonTtsDelaySeconds, SettingsField.BotChatSkills, SettingsField.BotChatVision],
+        [SettingsField.BotChatLlmMode, SettingsField.BotChatImages, SettingsField.BotChatImageMode, SettingsField.BotChatTxt2ImgWorkflow, SettingsField.BotChatImg2ImgWorkflow, SettingsField.BotChatImg2ImgMode, SettingsField.BotChatImageAsync, SettingsField.BotChatNonTtsDelaySeconds, SettingsField.BotChatSkills, SettingsField.BotChatVision],
     ];
 
     /// <summary>
@@ -1167,7 +1173,9 @@ internal sealed partial class SettingsMenu
         SettingsField.LlmMidTurnUsage => "LLM mid-turn usage",
         SettingsField.BotChatImages => "Botchat images enabled",
         SettingsField.BotChatImageMode => "Botchat image mode",
-        SettingsField.BotChatImageWorkflow => "Botchat image workflow",
+        SettingsField.BotChatTxt2ImgWorkflow => "Botchat txt2img workflow",
+        SettingsField.BotChatImg2ImgWorkflow => "Botchat img2img workflow",
+        SettingsField.BotChatImg2ImgMode => "Botchat img2img mode",
         SettingsField.BotChatImageAsync => "Botchat image async",
         SettingsField.BotChatNonTtsDelaySeconds => "Botchat non-TTS delay",
         SettingsField.BotChatSkills => "Botchat skills enabled",
@@ -1356,7 +1364,9 @@ internal sealed partial class SettingsMenu
             SettingsField.LlmMidTurnUsage => data.LlmMidTurnUsage,
             SettingsField.BotChatImages => OnOff(data.BotChatImages),
             SettingsField.BotChatImageMode => data.BotChatImageMode,
-            SettingsField.BotChatImageWorkflow => string.IsNullOrWhiteSpace(data.BotChatImageWorkflow) ? FirstBotChatWorkflowLabel : data.BotChatImageWorkflow,
+            SettingsField.BotChatTxt2ImgWorkflow => string.IsNullOrWhiteSpace(data.BotChatTxt2ImgWorkflow) ? NoBotChatWorkflowLabel : data.BotChatTxt2ImgWorkflow,
+            SettingsField.BotChatImg2ImgWorkflow => string.IsNullOrWhiteSpace(data.BotChatImg2ImgWorkflow) ? NoBotChatWorkflowLabel : data.BotChatImg2ImgWorkflow,
+            SettingsField.BotChatImg2ImgMode => data.BotChatImg2ImgMode,
             SettingsField.BotChatImageAsync => OnOff(data.BotChatImageAsync),
             SettingsField.BotChatNonTtsDelaySeconds => SecondsLabel(data.BotChatNonTtsDelaySeconds),
             SettingsField.BotChatSkills => OnOff(data.BotChatSkills),
@@ -1454,8 +1464,8 @@ internal sealed partial class SettingsMenu
     /// <summary>How the menu shows an empty <see cref="AppSettingsData.SqlDefaultConnection"/> (2026-09-23): a call naming no connection gets the first in <c>sql.json</c>. Pinned.</summary>
     public const string FirstSqlConnectionLabel = "(the first connection)";
 
-    /// <summary>The <c>Botchat image workflow</c> value and first picker row while none is named (2026-09-25). Pinned.</summary>
-    public const string FirstBotChatWorkflowLabel = "(the first text → image workflow)";
+    /// <summary>The <c>Botchat txt2img workflow</c> / <c>Botchat img2img workflow</c> value and first picker row while none is named (2026-09-27: none is none, no longer the first). Pinned.</summary>
+    public const string NoBotChatWorkflowLabel = "(none)";
 
     /// <summary>
     /// The value of an edit row over one <c>sql.json</c> (2026-09-23): how many connections it holds and how many
@@ -1733,6 +1743,10 @@ internal sealed partial class SettingsMenu
     /// <summary>One row of the botchat-image-mode picker: the mode and its hint (padded to eleven: <c>autonomous</c> is ten). Pinned.</summary>
     public static string BotChatImageModeLabel(string name) =>
         Markup.Escape(name.PadRight(11)) + Theme.DimMarkup(App.BotChatImageMode.Describe(name));
+
+    /// <summary>One row of the botchat-img2img-mode picker: the mode and its hint (padded to thirteen: <c>chat-history</c> is twelve). Pinned.</summary>
+    public static string BotChatImg2ImgModeLabel(string name) =>
+        Markup.Escape(name.PadRight(13)) + Theme.DimMarkup(App.BotChatImg2ImgMode.Describe(name));
 
     /// <summary>One row of the welcome-splash picker: the mode and its hint (padded to nine: <c>fullsize</c> and <c>disabled</c> are eight). Pinned.</summary>
     public static string WelcomeSplashModeLabel(string name) =>
@@ -2527,9 +2541,14 @@ internal sealed partial class SettingsMenu
             return await PickBotChatImageModeAsync(saved, cancellationToken).ConfigureAwait(false);
         }
 
-        if (field == SettingsField.BotChatImageWorkflow)
+        if (field is SettingsField.BotChatTxt2ImgWorkflow or SettingsField.BotChatImg2ImgWorkflow)
         {
-            return await PickBotChatImageWorkflowAsync(saved, cancellationToken).ConfigureAwait(false);
+            return await PickBotChatWorkflowAsync(field, saved, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (field == SettingsField.BotChatImg2ImgMode)
+        {
+            return await PickBotChatImg2ImgModeAsync(saved, cancellationToken).ConfigureAwait(false);
         }
 
         if (field == SettingsField.WelcomeSplash)
@@ -4271,17 +4290,21 @@ internal sealed partial class SettingsMenu
     }
 
     /// <summary>
-    /// The <c>Botchat image workflow</c> pick (2026-09-25): <see cref="FirstBotChatWorkflowLabel"/>, then every offered workflow
-    /// that takes a prompt and no input picture (<see cref="BotChat.ImageWorkflows"/>) with its family and size, the cursor on the one saved.
+    /// The <c>Botchat txt2img workflow</c> / <c>Botchat img2img workflow</c> pick (2026-09-25; both kinds 2026-09-27):
+    /// <see cref="NoBotChatWorkflowLabel"/>, then every offered workflow of the field's kind (<see cref="BotChat.Txt2ImgWorkflows"/>,
+    /// <see cref="BotChat.Img2ImgWorkflows"/>) with its family and size, the cursor on the one saved.
     /// </summary>
-    private async Task<bool> PickBotChatImageWorkflowAsync(AppSettingsData saved, CancellationToken cancellationToken)
+    private async Task<bool> PickBotChatWorkflowAsync(SettingsField field, AppSettingsData saved, CancellationToken cancellationToken)
     {
-        var workflows = BotChat.ImageWorkflows(Comfy.ComfyWorkflowCatalog.Offered(InstalledComfyWorkflows(_settings.ProfileDirectory), saved.ComfyWorkflowsOffered));
+        bool img2img = field == SettingsField.BotChatImg2ImgWorkflow;
+        var offered = Comfy.ComfyWorkflowCatalog.Offered(InstalledComfyWorkflows(_settings.ProfileDirectory), saved.ComfyWorkflowsOffered);
+        var workflows = img2img ? BotChat.Img2ImgWorkflows(offered) : BotChat.Txt2ImgWorkflows(offered);
         int width = workflows.Count == 0 ? 0 : workflows.Max(w => w.Name.Length) + 2;
-        var rows = new List<string> { Markup.Escape(FirstBotChatWorkflowLabel) };
+        var rows = new List<string> { Markup.Escape(NoBotChatWorkflowLabel) };
         rows.AddRange(workflows.Select(w => Markup.Escape(w.Name.PadRight(width)) + Theme.DimMarkup(Comfy.ComfyFamilies.Name(w.Family) + " · " + Invariant(w.Defaults.Width) + "×" + Invariant(w.Defaults.Height))));
-        int current = workflows.ToList().FindIndex(w => string.Equals(w.Name, saved.BotChatImageWorkflow?.Trim(), StringComparison.OrdinalIgnoreCase));
-        var page = new MenuPage(Crumb(FieldName(SettingsField.BotChatImageWorkflow)), rows, PickKeys);
+        string? savedName = (img2img ? saved.BotChatImg2ImgWorkflow : saved.BotChatTxt2ImgWorkflow)?.Trim();
+        int current = workflows.ToList().FindIndex(w => string.Equals(w.Name, savedName, StringComparison.OrdinalIgnoreCase));
+        var page = new MenuPage(Crumb(FieldName(field)), rows, PickKeys);
         int? picked = await PickAsync(page, current + 1, cancellationToken).ConfigureAwait(false);
         if (picked is not { } index)
         {
@@ -4289,7 +4312,33 @@ internal sealed partial class SettingsMenu
         }
 
         string? name = index == 0 ? null : workflows[index - 1].Name;
-        Apply(SettingsField.BotChatImageWorkflow, d => d.BotChatImageWorkflow = name);
+        Apply(field, d =>
+        {
+            if (img2img)
+            {
+                d.BotChatImg2ImgWorkflow = name;
+            }
+            else
+            {
+                d.BotChatTxt2ImgWorkflow = name;
+            }
+        });
+        return true;
+    }
+
+    /// <summary>The botchat-img2img-mode picker under the settings list (2026-09-27): one <see cref="BotChatImg2ImgModeLabel"/> row per <see cref="App.BotChatImg2ImgMode.Names"/> entry, the saved one under the cursor.</summary>
+    private async Task<bool> PickBotChatImg2ImgModeAsync(AppSettingsData saved, CancellationToken cancellationToken)
+    {
+        var names = App.BotChatImg2ImgMode.Names;
+        var page = new MenuPage(Crumb(FieldName(SettingsField.BotChatImg2ImgMode)), names.Select(BotChatImg2ImgModeLabel).ToList(), PickKeys);
+        int? picked = await PickAsync(page, Math.Max(0, Array.IndexOf(names, saved.BotChatImg2ImgMode)), cancellationToken).ConfigureAwait(false);
+        if (picked is not { } index)
+        {
+            return Unchanged();
+        }
+
+        string name = names[index];
+        Apply(SettingsField.BotChatImg2ImgMode, d => d.BotChatImg2ImgMode = name);
         return true;
     }
 

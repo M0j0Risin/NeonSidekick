@@ -29,31 +29,130 @@ public class BotChatPicturesTests
     }
 
     [Fact]
-    public void ImageWorkflows_AreTheTextToImageOnes_InOrder()
+    public void Txt2ImgWorkflows_AreTheTextToImageOnes_AndImg2ImgTheOnePictureOnes_InOrder()
     {
-        var offered = new[] { Workflow("edit", image: true), Workflow("upscale", prompt: false), Workflow("pony"), Workflow("flux", family: ComfyFamily.Flux) };
+        var offered = new[] { Workflow("edit", image: true), Workflow("upscale", prompt: false, image: true), Workflow("pony"), Workflow("flux", family: ComfyFamily.Flux), Workflow("restyle", image: true) };
 
-        Assert.Equal(["pony", "flux"], BotChat.ImageWorkflows(offered).Select(w => w.Name));
+        Assert.Equal(["pony", "flux"], BotChat.Txt2ImgWorkflows(offered).Select(w => w.Name));
+        Assert.Equal(["edit", "restyle"], BotChat.Img2ImgWorkflows(offered).Select(w => w.Name));   // the promptless upscale is neither
     }
 
+    /// <summary>2026-09-27 (the user's call): blank is none, no longer the first; a name of the wrong kind or no longer offered is none too.</summary>
     [Theory]
-    [InlineData(null, "pony")]         // blank: the first text → image one
-    [InlineData("", "pony")]
-    [InlineData(" FLUX ", "flux")]     // named, ignoring case and spaces
-    [InlineData("edit", "pony")]       // an image → image workflow is never the pick
-    [InlineData("gone", "pony")]       // a name no longer offered: the first
-    public void ImageWorkflow_IsTheNamedOne_OrTheFirst(string? setting, string expected)
+    [InlineData(null, null, null)]
+    [InlineData("", "  ", null)]
+    [InlineData(" FLUX ", " EDIT ", "flux")]   // named, ignoring case and spaces
+    [InlineData("edit", "pony", null)]         // each only of its own kind
+    [InlineData("gone", "gone", null)]
+    public void TheTwoWorkflows_AreTheNamedOnes_OrNone(string? txt2img, string? img2img, string? expected)
     {
         var offered = new[] { Workflow("edit", image: true), Workflow("pony"), Workflow("flux", family: ComfyFamily.Flux) };
 
-        Assert.Equal(expected, BotChat.ImageWorkflow(offered, setting)!.Name);
+        Assert.Equal(expected, BotChat.Txt2ImgWorkflow(offered, txt2img)?.Name);
+        Assert.Equal(expected is null ? null : "edit", BotChat.Img2ImgWorkflow(offered, img2img)?.Name);
     }
 
     [Fact]
-    public void ImageWorkflow_IsNull_WithNoTextToImageWorkflow()
+    public void BotWorkflows_AreTheTwo_TheReworkOneOnlyWithAPictureToRework()
     {
-        Assert.Null(BotChat.ImageWorkflow([Workflow("edit", image: true)], null));
-        Assert.Null(BotChat.ImageWorkflow([], "pony"));
+        var edit = Workflow("edit", image: true);
+        var pony = Workflow("pony");
+        var offered = new[] { edit, Workflow("flux", family: ComfyFamily.Flux), pony };
+
+        Assert.Equal(["edit", "pony"], BotChat.BotWorkflows(offered, pony, edit, reworkable: true).Select(w => w.Name));
+        Assert.Equal(["pony"], BotChat.BotWorkflows(offered, pony, edit, reworkable: false).Select(w => w.Name));
+        Assert.Equal(["edit"], BotChat.BotWorkflows(offered, null, edit, reworkable: true).Select(w => w.Name));
+        Assert.Empty(BotChat.BotWorkflows(offered, null, null, reworkable: true));
+    }
+
+    private static BotPicture Logged(int seq, string owner, bool drawn, params string[] paths) =>
+        new(seq, owner, drawn, paths.Select(p => new Files.ImageAttachment(p, [], "image/png", 4, 4)).ToList());
+
+    [Fact]
+    public void ReworkCandidates_AreTheLatest_OrTheLastEight_NumberedOldestFirst()
+    {
+        var log = new List<BotPicture> { Logged(1, "default", false, "a.png"), Logged(2, "ada", true, "b-1.png", "b-2.png") };
+        Assert.Empty(BotChat.ReworkCandidates([], BotImg2ImgMode.Latest));
+        Assert.Equal([new ReworkPicture(1, "ada", true, "b-2.png")], BotChat.ReworkCandidates(log, BotImg2ImgMode.Latest));
+        Assert.Equal([new ReworkPicture(1, "default", false, "a.png"), new ReworkPicture(2, "ada", true, "b-1.png"), new ReworkPicture(3, "ada", true, "b-2.png")],
+            BotChat.ReworkCandidates(log, BotImg2ImgMode.ChatHistory));
+        var many = Enumerable.Range(1, 10).Select(i => Logged(i, "ada", false, i + ".png")).ToList();
+        var kept = BotChat.ReworkCandidates(many, BotImg2ImgMode.ChatHistory);
+        Assert.Equal(BotChat.MaxReworkPictures, kept.Count);
+        Assert.Equal(("3.png", 1), (kept[0].Path, kept[0].Number));
+        Assert.Equal(("10.png", 8), (kept[^1].Path, kept[^1].Number));
+    }
+
+    private static readonly ReworkPicture[] Two = [new(1, "default", false, "a.png"), new(2, "ada", true, "b.png")];
+
+    [Theory]
+    [InlineData("a red fox", true, "a red fox", null)]              // no rework line: fresh
+    [InlineData("a red fox", false, "a red fox", "b.png")]          // no txt2img: the latest is reworked
+    [InlineData("REWORK 1\na red fox", true, "a red fox", "a.png")]
+    [InlineData("**Rework #1:** a red fox", true, "a red fox", "a.png")]
+    [InlineData("REWORK\na red fox", true, "a red fox", "b.png")]    // no number: the latest
+    [InlineData("REWORK 9\na red fox", true, "a red fox", "b.png")]  // a number naming none: the latest
+    [InlineData("```\nREWORK 2\n\"a red fox\"\n```", true, "a red fox", "b.png")]
+    [InlineData("REWORKED foxes", true, "REWORKED foxes", null)]    // a word, not the line
+    public void ParseImagePrompt_ReadsTheReworkLine(string text, bool fresh, string prompt, string? path)
+    {
+        var (read, rework) = BotChat.ParseImagePrompt(text, Two, fresh);
+
+        Assert.Equal(prompt, read);
+        Assert.Equal(path, rework?.Path);
+    }
+
+    [Fact]
+    public void PictureInstruction_WithNothingToRework_IsTheOldOne()
+    {
+        var pony = Workflow("pony");
+        Assert.Equal(BotChat.ImagePromptInstruction(pony), BotChat.PictureInstruction(false, pony, Workflow("edit", image: true), []));
+        Assert.Equal(BotChat.PromisedPictureInstruction(pony), BotChat.PictureInstruction(true, pony, null, Two));
+    }
+
+    [Fact]
+    public void PictureInstruction_OffersTheRework_WithItsStyle_AndTheNumberedList()
+    {
+        var pony = Workflow("pony");
+        var edit = Workflow("edit", image: true, family: ComfyFamily.Flux, tips: "Keep the faces.");
+
+        string both = BotChat.PictureInstruction(false, pony, edit, Two);
+        Assert.Contains(ComfyFamilies.StyleGuide(ComfyFamily.Pony), both);
+        Assert.Contains("You may instead rework one of the chat's pictures", both);
+        Assert.Contains("\n1. the picture of default's reply\n2. ada's picture\n", both);
+        Assert.Contains("put REWORK n (n the picture's number) alone on the first line", both);
+        Assert.Contains(ComfyFamilies.StyleGuide(ComfyFamily.Flux), both);
+        Assert.Contains("Tips for the rework workflow: Keep the faces.", both);
+        Assert.EndsWith("Answer with the prompt alone, or the REWORK line and then the prompt: no preamble, no explanation, no quotes.", both);
+
+        string latest = BotChat.PictureInstruction(false, null, edit, [Two[1]]);
+        Assert.Contains("write a single prompt that reworks the chat's latest picture (ada's picture) so that it illustrates the line", latest);
+        Assert.Contains("Put REWORK alone on the first line", latest);
+        Assert.DoesNotContain("1. ", latest);
+
+        string promised = BotChat.PictureInstruction(true, pony, edit, [Two[0]]);
+        Assert.Contains($"answer exactly {BotChat.NoPictureAnswer}", promised);
+        Assert.EndsWith($"the REWORK line and then the prompt, or {BotChat.NoPictureAnswer}: no preamble, no explanation, no quotes.", promised);
+    }
+
+    [Fact]
+    public void ReworkCaption_NamesThePictures_TheirPaths_AndTheCall()
+    {
+        Assert.Equal("(You may rework the chat's latest picture, ada's picture, at \"b.png\": call generate_image with workflow \"edit\", its path as image, and a prompt for the reworked picture.)",
+            BotChat.ReworkCaption("edit", [Two[1]]));
+        Assert.Equal("(You may rework one of the chat's pictures — call generate_image with workflow \"edit\", its path as image, and a prompt for the reworked picture. Oldest first: the picture of default's reply, \"a.png\"; ada's picture, \"b.png\".)",
+            BotChat.ReworkCaption("edit", Two));
+    }
+
+    [Theory]
+    [InlineData("latest", BotImg2ImgMode.Latest)]
+    [InlineData(" Chat-History ", BotImg2ImgMode.ChatHistory)]
+    [InlineData("all", BotImg2ImgMode.Latest)]   // a hand-edited word: the default
+    public void Img2ImgMode_ResolvesTheSavedWord(string saved, BotImg2ImgMode mode)
+    {
+        Assert.Equal(mode, BotChatImg2ImgMode.Resolve(new AppSettingsData { BotChatImg2ImgMode = saved }));
+        Assert.Equal("latest", new AppSettingsData().BotChatImg2ImgMode);
+        Assert.All(BotChatImg2ImgMode.Names, name => Assert.NotEmpty(BotChatImg2ImgMode.Describe(name)));
     }
 
     [Fact]
@@ -65,6 +164,18 @@ public class BotChatPicturesTests
         Assert.Contains("Tips for this workflow: Always golden hour.", flux);
         Assert.EndsWith("Answer with the prompt alone: no preamble, no explanation, no quotes.", flux);
         Assert.DoesNotContain("Tips for this workflow", BotChat.ImagePromptInstruction(Workflow("pony")));
+    }
+
+    [Fact]
+    public void ImagePromptSkills_IsTheLoadOnlyCatalog_ThenTheDirective()
+    {
+        var skill = new Skills.Skill("pony-prompts", "Writes Pony prompts.", Skills.SkillScope.Profile, "pony-prompts");
+        string text = BotChat.ImagePromptSkills([skill]);
+
+        Assert.StartsWith(Skills.SkillsPrompt.LoadOnlySection([skill]), text);
+        Assert.EndsWith("\n\n" + BotChat.ImagePromptSkillsDirective, text);
+        Assert.Contains("the chat's topic or the line asks", BotChat.ImagePromptSkillsDirective);
+        Assert.Contains("answer exactly as instructed above", BotChat.ImagePromptSkillsDirective);
     }
 
     [Fact]
@@ -124,25 +235,30 @@ public class BotChatPicturesTests
     }
 
     [Fact]
-    public void TheBotchatTab_IsLast_ItsEightRowsDefaultingToSingle_Off_Automatic_TheFirstWorkflow_Async_AFiveSecondPause_NoSkills_AndNoVision()
+    public void TheBotchatTab_IsLast_ItsTenRowsDefaultingToSingle_Off_Automatic_NoWorkflows_Latest_Async_AFiveSecondPause_NoSkills_AndNoVision()
     {
         var data = new AppSettingsData();
 
         Assert.Equal("Botchat", SettingsMenu.TabTitles[(int)SettingsTab.BotChat]);
         Assert.Equal((int)SettingsTab.BotChat, SettingsMenu.TabTitles.Count - 1);   // last again since later on 2026-09-27 (the Claude tab moved to /tools)
-        Assert.Equal([SettingsField.BotChatLlmMode, SettingsField.BotChatImages, SettingsField.BotChatImageMode, SettingsField.BotChatImageWorkflow, SettingsField.BotChatImageAsync, SettingsField.BotChatNonTtsDelaySeconds, SettingsField.BotChatSkills, SettingsField.BotChatVision], SettingsMenu.TabFields[(int)SettingsTab.BotChat]);
-        Assert.Equal(["Botchat LLM mode", "Botchat images enabled", "Botchat image mode", "Botchat image workflow", "Botchat image async", "Botchat non-TTS delay", "Botchat skills enabled", "Botchat vision enabled"], SettingsMenu.TabFields[(int)SettingsTab.BotChat].Select(SettingsMenu.FieldName));
+        Assert.Equal([SettingsField.BotChatLlmMode, SettingsField.BotChatImages, SettingsField.BotChatImageMode, SettingsField.BotChatTxt2ImgWorkflow, SettingsField.BotChatImg2ImgWorkflow, SettingsField.BotChatImg2ImgMode, SettingsField.BotChatImageAsync, SettingsField.BotChatNonTtsDelaySeconds, SettingsField.BotChatSkills, SettingsField.BotChatVision], SettingsMenu.TabFields[(int)SettingsTab.BotChat]);
+        Assert.Equal(["Botchat LLM mode", "Botchat images enabled", "Botchat image mode", "Botchat txt2img workflow", "Botchat img2img workflow", "Botchat img2img mode", "Botchat image async", "Botchat non-TTS delay", "Botchat skills enabled", "Botchat vision enabled"], SettingsMenu.TabFields[(int)SettingsTab.BotChat].Select(SettingsMenu.FieldName));
         Assert.False(SettingsMenu.IsToggle(SettingsField.BotChatLlmMode));
         Assert.Equal("single", SettingsMenu.FieldValue(SettingsField.BotChatLlmMode, data, "."));
         Assert.Equal("multi", SettingsMenu.FieldValue(SettingsField.BotChatLlmMode, new AppSettingsData { BotChatLlmMode = "multi" }, "."));
         Assert.True(SettingsMenu.IsToggle(SettingsField.BotChatImages));
         Assert.True(SettingsMenu.IsToggle(SettingsField.BotChatImageAsync));
         Assert.False(SettingsMenu.IsToggle(SettingsField.BotChatImageMode));
-        Assert.False(SettingsMenu.IsToggle(SettingsField.BotChatImageWorkflow));
+        Assert.False(SettingsMenu.IsToggle(SettingsField.BotChatTxt2ImgWorkflow));
+        Assert.False(SettingsMenu.IsToggle(SettingsField.BotChatImg2ImgWorkflow));
+        Assert.False(SettingsMenu.IsToggle(SettingsField.BotChatImg2ImgMode));
         Assert.Equal("off", SettingsMenu.FieldValue(SettingsField.BotChatImages, data, "."));
         Assert.Equal("automatic", SettingsMenu.FieldValue(SettingsField.BotChatImageMode, data, "."));
-        Assert.Equal(SettingsMenu.FirstBotChatWorkflowLabel, SettingsMenu.FieldValue(SettingsField.BotChatImageWorkflow, data, "."));
-        Assert.Equal("flux", SettingsMenu.FieldValue(SettingsField.BotChatImageWorkflow, new AppSettingsData { BotChatImageWorkflow = "flux" }, "."));
+        Assert.Equal(SettingsMenu.NoBotChatWorkflowLabel, SettingsMenu.FieldValue(SettingsField.BotChatTxt2ImgWorkflow, data, "."));
+        Assert.Equal(SettingsMenu.NoBotChatWorkflowLabel, SettingsMenu.FieldValue(SettingsField.BotChatImg2ImgWorkflow, data, "."));
+        Assert.Equal("flux", SettingsMenu.FieldValue(SettingsField.BotChatTxt2ImgWorkflow, new AppSettingsData { BotChatTxt2ImgWorkflow = "flux" }, "."));
+        Assert.Equal("edit", SettingsMenu.FieldValue(SettingsField.BotChatImg2ImgWorkflow, new AppSettingsData { BotChatImg2ImgWorkflow = "edit" }, "."));
+        Assert.Equal("latest", SettingsMenu.FieldValue(SettingsField.BotChatImg2ImgMode, data, "."));
         Assert.Equal("on", SettingsMenu.FieldValue(SettingsField.BotChatImageAsync, data, "."));
         // The pause with no voice (2026-09-26): typed seconds, 5 by default, 0 off.
         Assert.False(SettingsMenu.IsToggle(SettingsField.BotChatNonTtsDelaySeconds));

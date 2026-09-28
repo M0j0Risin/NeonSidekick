@@ -582,8 +582,9 @@ public sealed class AppSettingsData
     /// <summary>
     /// Who draws a <c>/botchat</c> picture (2026-09-25, the user's three words): one of <see cref="App.BotChatImageMode.Names"/> —
     /// <c>automatic</c> (the default: after every reply the model writes an image prompt from it, in the workflow's family
-    /// style, and <see cref="BotChatImageWorkflow"/> draws it; the bots are offered no tool), <c>autonomous</c> (the bots are
-    /// offered <c>generate_image</c> and draw when they choose; the app draws only a picture a bot talked about but did not
+    /// style, and <see cref="BotChatTxt2ImgWorkflow"/> draws it — or <see cref="BotChatImg2ImgWorkflow"/> reworks an earlier
+    /// picture, the prompt writer's choice; the bots are offered no tool), <c>autonomous</c> (the bots are
+    /// offered <c>generate_image</c> over those same two workflows alone and draw when they choose; the app draws only a picture a bot talked about but did not
     /// draw — a call that failed counts as not drawn, and a call written out as text runs as a real one — later on 2026-09-25,
     /// so the reply is true). Only while
     /// <see cref="BotChatImages"/> is on. The Botchat tab of <c>/settings</c>. No variable.
@@ -591,11 +592,30 @@ public sealed class AppSettingsData
     public string BotChatImageMode { get; set; } = App.BotChatImageMode.Default;
 
     /// <summary>
-    /// The text → image workflow the app's <c>/botchat</c> pictures use (2026-09-25): a name among the offered workflows
-    /// that take no input picture; blank (the default), or a name no longer offered, is the first of those. The bots'
-    /// own <c>generate_image</c> calls pick as they would in the main chat. The Botchat tab of <c>/settings</c>. No variable.
+    /// The text → image workflow of <c>/botchat</c>'s fresh pictures (2026-09-25 as <c>Botchat image workflow</c>, which blank
+    /// meant the first of them; renamed 2026-09-27, the user's call, beside <see cref="BotChatImg2ImgWorkflow"/>): a name among
+    /// the offered workflows that take a prompt and no input picture. Both modes use it alone — the app's picture of a reply
+    /// and, since the same day, the bots' own <c>generate_image</c>. Blank (the default), or a name no longer offered of that
+    /// kind, is none: no fresh picture at all. The old key is not carried over (no migration, as ever): a profile that named one
+    /// names none until it is picked again. The Botchat tab of <c>/settings</c>. No variable.
     /// </summary>
-    public string? BotChatImageWorkflow { get; set; }
+    public string? BotChatTxt2ImgWorkflow { get; set; }
+
+    /// <summary>
+    /// The image → image workflow <c>/botchat</c> may rework an earlier picture with (2026-09-27, the user's ask): a name among
+    /// the offered workflows that take a prompt and exactly one input picture. Once the chat has a picture, the prompt writer
+    /// (<c>automatic</c>) or the bot (<c>autonomous</c>) chooses between a fresh picture and a rework of one that
+    /// <see cref="BotChatImg2ImgMode"/> allows. Blank (the default) is none: no rework. The Botchat tab of <c>/settings</c>. No variable.
+    /// </summary>
+    public string? BotChatImg2ImgWorkflow { get; set; }
+
+    /// <summary>
+    /// Which pictures a <c>/botchat</c> rework may start from (2026-09-27, the user's words): one of
+    /// <see cref="App.BotChatImg2ImgMode.Names"/> — <c>latest</c> (the default: the chat's latest picture alone) or
+    /// <c>chat-history</c> (any of its pictures so far, the last few, numbered). A picture still rendering is none of them yet.
+    /// Only while <see cref="BotChatImg2ImgWorkflow"/> names one. The Botchat tab of <c>/settings</c>. No variable.
+    /// </summary>
+    public string BotChatImg2ImgMode { get; set; } = App.BotChatImg2ImgMode.Default;
 
     /// <summary>
     /// Whether the chat waits for the app's <c>/botchat</c> picture (2026-09-25, the user's call, on by default): on, the
