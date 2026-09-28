@@ -42,9 +42,13 @@ public static class BenchText
     /// <summary>The error for a word that names no test, group or verb.</summary>
     public static string UnknownTest(string word) => "No test named '" + word + "'. " + Usage;
 
-    /// <summary>The spinner while a test runs: <c>test 2/9 · Theory of Mind (Reasoning)</c>.</summary>
+    /// <summary>
+    /// The spinner while a test runs: <c>test 2/9 · mind</c>. The id, as <c>/test &lt;id&gt;</c> takes it, not the long
+    /// name (2026-09-28, the user's call: "Needle in a Haystack (Long Context)" crowded the hint row); the result lines
+    /// and the table keep the name.
+    /// </summary>
     public static string Label(int index, int count, BenchTest test) =>
-        string.Create(CultureInfo.InvariantCulture, $"test {index}/{count} · {test.Name}");
+        string.Create(CultureInfo.InvariantCulture, $"test {index}/{count} · {test.Id}");
 
     /// <summary>The mark before a verdict.</summary>
     public static string Mark(BenchVerdict verdict) => verdict switch

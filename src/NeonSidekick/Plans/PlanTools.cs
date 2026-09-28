@@ -26,6 +26,8 @@ public static class PlanTools
         "web_search", "web_fetch",
         // SQL: read-only by three layers already
         "sql_connections", "sql_databases", "sql_tables", "sql_columns", "sql_describe", "sql_indexes", "sql_relationships", "sql_query",
+        // Home Assistant: the reads (2026-09-28)
+        "ha_overview", "ha_states", "ha_history",
         // Obsidian
         "vault_search", "vault_list", "vault_read", "vault_links",
         // memory, skills, sessions, questions
@@ -45,6 +47,7 @@ public static class PlanTools
         "vault_write", "vault_properties", "vault_move", "vault_delete", "vault_daily",
         "save_memory", "skill_editor",
         "generate_image", "set_splash_image",
+        "ha_lights", "ha_scene", "ha_media", "ha_todo", "ha_call_service", "ha_assist",
     };
 
     /// <summary>Whether plan mode keeps <paramref name="tool"/>.</summary>

@@ -47,6 +47,8 @@ namespace NeonSidekick.App;
 /// <param name="ShellNative">The setting <c>Shell prefer native tools</c> (2026-09-26): on, with a shell rule, the rules gain <see cref="Assistant.ShellNativeRule"/> after it.</param>
 /// <param name="ClaudeAdvisorEnabled">The setting <c>Claude advisor tool</c> (2026-09-27): the group's switch.</param>
 /// <param name="ClaudeAdvisorTools">How many advisor tools the next turn offers (0 while switched off on <c>/tools</c>); the rules carry <see cref="Assistant.ClaudeAdvisorRule"/> while it is.</param>
+/// <param name="HomeAssistantEnabled">Whether the Home Assistant tools may be offered (2026-09-28): the setting <c>Home Assistant tools</c> on, a URL and a readable token — the group's switch (<see cref="ChatScreen.HomeAssistantOffered"/>).</param>
+/// <param name="HomeAssistantTools">How many Home Assistant tools the next turn offers (the ones switched off on <c>/tools</c> left out); the rules carry <see cref="Assistant.HomeAssistantRule"/> while any is.</param>
 /// <param name="PlanDirective">Plan mode's directive while planning (2026-09-26, <see cref="Plans.PlanText.Directive"/>), else null: its own section, after the skills.</param>
 public sealed record SystemPromptFacts(
     string? Persona,
@@ -82,8 +84,13 @@ public sealed record SystemPromptFacts(
     bool ShellNative = false,
     string? PlanDirective = null,
     bool ClaudeAdvisorEnabled = false,
-    int ClaudeAdvisorTools = 0)
+    int ClaudeAdvisorTools = 0,
+    bool HomeAssistantEnabled = false,
+    int HomeAssistantTools = 0)
 {
+    /// <summary>Whether the rules carry <see cref="Assistant.HomeAssistantRule"/>: tools on, the server set with the switch on, and at least one Home Assistant tool offered (2026-09-28).</summary>
+    public bool HomeAssistant => ToolsEnabled && HomeAssistantEnabled && HomeAssistantTools > 0;
+
     /// <summary>Whether the rules carry <see cref="Assistant.ClaudeAdvisorRule"/>: tools on, the switch on and the tool offered (2026-09-27).</summary>
     public bool Advisor => ToolsEnabled && ClaudeAdvisorEnabled && ClaudeAdvisorTools > 0;
 
@@ -231,6 +238,9 @@ public static class SystemPromptSummary
 
     public const string ComfyOffSuffix = "ComfyUI tools is off, no ComfyUI URL is set or no workflow is in a comfy folder";
 
+    /// <summary>The tail of the Home Assistant group while its tools cannot be offered (2026-09-28). Pinned.</summary>
+    public const string HomeAssistantOffSuffix = "Home Assistant tools is off, or no Home Assistant URL or API key is set";
+
     /// <summary>The note on <c>execute_code</c> while none of the languages <c>Shell code languages</c> names is installed (2026-09-21). Pinned.</summary>
     public const string NoInterpreterSuffix = "no interpreter found for the languages in Shell code languages";
 
@@ -268,7 +278,7 @@ public static class SystemPromptSummary
 
         bool customRules = !string.IsNullOrWhiteSpace(facts.OperatingRules);
         string defaultLabel = !facts.ToolsEnabled ? $"default ({ToolsOffSuffix})" : !facts.FilesEnabled ? $"default ({FilesOffSuffix})" : "default";
-        string rules = customRules ? facts.OperatingRules!.Trim() : Assistant.DefaultRules(facts.Markdown, facts.ToolsEnabled, facts.FilesEnabled, delete: !facts.Off(DeleteTool.ToolName), mcp: facts.Mcp, safeEdits: facts.FileSafeEdits, timers: facts.Timers, git: facts.Git, shell: facts.Shell, bridge: facts.Bridge, police: facts.Police, obsidian: facts.Obsidian, obsidianDelete: facts.ObsidianDelete, sql: facts.Sql, native: facts.Native, advisor: facts.Advisor);
+        string rules = customRules ? facts.OperatingRules!.Trim() : Assistant.DefaultRules(facts.Markdown, facts.ToolsEnabled, facts.FilesEnabled, delete: !facts.Off(DeleteTool.ToolName), mcp: facts.Mcp, safeEdits: facts.FileSafeEdits, timers: facts.Timers, git: facts.Git, shell: facts.Shell, bridge: facts.Bridge, police: facts.Police, obsidian: facts.Obsidian, obsidianDelete: facts.ObsidianDelete, sql: facts.Sql, native: facts.Native, advisor: facts.Advisor, homeAssistant: facts.HomeAssistant);
         sections.Add(new(
             customRules ? $"Operating rules — {OperataFile.FileName} ({rules.Length.ToString(CultureInfo.InvariantCulture)} chars)" : $"Operating rules — {defaultLabel}",
             rules));
@@ -376,7 +386,8 @@ public static class SystemPromptSummary
             sql: facts.Sql,
             native: facts.Native,
             plan: facts.ToolsEnabled ? facts.PlanDirective : null,
-            advisor: facts.Advisor);
+            advisor: facts.Advisor,
+            homeAssistant: facts.HomeAssistant);
     }
 
     /// <summary>The Prompt tab's heading over plan mode's directive (2026-09-26). Pinned.</summary>
@@ -464,7 +475,9 @@ public static class SystemPromptSummary
         IReadOnlyList<AIFunction>? comfy = null,
         bool comfyEnabled = true,
         IReadOnlyList<AIFunction>? advisor = null,
-        bool advisorEnabled = true)
+        bool advisorEnabled = true,
+        IReadOnlyList<AIFunction>? homeAssistant = null,
+        bool homeAssistantEnabled = true)
     {
         ArgumentNullException.ThrowIfNull(clock);
         ArgumentNullException.ThrowIfNull(timers);
@@ -518,6 +531,13 @@ public static class SystemPromptSummary
             // The image tools (2026-09-24): after the SQL tools; offered while ComfyUI tools is on, a URL is set and a workflow is installed.
             string comfyNote = !comfyEnabled ? NotOffered(ComfyOffSuffix) : standing;
             groups.Add(Group(ToolsText.ComfyTabTitle, comfy, comfyNote, comfyEnabled && toolsEnabled, SettingsField.ComfyTools, disabled));
+        }
+
+        if (homeAssistant is not null)
+        {
+            // The Home Assistant tools (2026-09-28): after the image tools; offered while Home Assistant tools is on and a URL and a token are set.
+            string homeNote = !homeAssistantEnabled ? NotOffered(HomeAssistantOffSuffix) : standing;
+            groups.Add(Group(ToolsText.HomeAssistantTabTitle, homeAssistant, homeNote, homeAssistantEnabled && toolsEnabled, SettingsField.HomeAssistantTools, disabled));
         }
 
         if (advisor is not null)

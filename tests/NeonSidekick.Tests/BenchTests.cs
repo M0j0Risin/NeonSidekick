@@ -213,6 +213,13 @@ public sealed class BenchTests : IDisposable
         Assert.Equal(BenchCatalog.All.Count, BenchCatalog.All.Select(t => t.Id).Distinct().Count());
     }
 
+    [Fact]
+    public void TheSpinnerLabel_NamesTheTestByItsId_NotItsLongName()
+    {
+        var needle = Assert.Single(BenchCatalog.Resolve("needle"));
+        Assert.Equal("test 7/9 · needle", BenchText.Label(7, 9, needle));
+    }
+
     // ── The runner ──────────────────────────────────────────────────────────
 
     private static Assistant AssistantOver(FakeChatClient client) =>

@@ -1,5 +1,4 @@
 using NeonSidekick.Settings;
-using NeonSidekick.Sql;
 
 namespace NeonSidekick.Llm.Anthropic;
 
@@ -66,19 +65,7 @@ public static class ClaudeApi
     public static string? Key(AppSettingsData effective)
     {
         ArgumentNullException.ThrowIfNull(effective);
-        string stored = effective.ClaudeApiKey?.Trim() ?? "";
-        if (stored.Length == 0)
-        {
-            return null;
-        }
-
-        if (!WindowsCredentials.IsProtected(stored))
-        {
-            return stored;
-        }
-
-        var result = WindowsCredentials.Unprotect(stored);
-        return string.IsNullOrWhiteSpace(result.Value) ? null : result.Value;
+        return SettingsSecrets.Reveal(effective.ClaudeApiKey);
     }
 
     /// <summary>Whether the Claude API is offered: the switch on and a key that reads.</summary>
@@ -95,31 +82,13 @@ public static class ClaudeApi
     public static string KeyFor(AppSettingsData effective, Uri? baseUrl)
     {
         ArgumentNullException.ThrowIfNull(effective);
-        return IsClaudeApi(baseUrl) ? Key(effective) ?? "" : effective.LlmApiKey;
+        return IsClaudeApi(baseUrl) ? Key(effective) ?? "" : LlmEndpoint.KeyOf(effective);
     }
 
     /// <summary>
     /// The key as the settings file keeps it: <paramref name="plain"/> encrypted with DPAPI for this Windows user
-    /// (<see cref="WindowsCredentials.Protect"/>); empty for empty. Where DPAPI is unavailable the plain key is kept and
+    /// (<see cref="SettingsSecrets.Protect"/>); empty for empty. Where DPAPI is unavailable the plain key is kept and
     /// <paramref name="error"/> says why, so the caller can warn.
     /// </summary>
-    public static string Protect(string plain, out string? error)
-    {
-        ArgumentNullException.ThrowIfNull(plain);
-        error = null;
-        string trimmed = plain.Trim();
-        if (trimmed.Length == 0 || WindowsCredentials.IsProtected(trimmed))
-        {
-            return trimmed;
-        }
-
-        var result = WindowsCredentials.Protect(trimmed);
-        if (result.Value is { } value)
-        {
-            return value;
-        }
-
-        error = result.Error;
-        return trimmed;
-    }
+    public static string Protect(string plain, out string? error) => SettingsSecrets.Protect(plain, out error);
 }

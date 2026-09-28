@@ -49,6 +49,8 @@ public sealed class EnvironmentOverrides
     public const string ClaudeApiVariable = Prefix + "CLAUDE_API";
     public const string ClaudeApiKeyVariable = Prefix + "CLAUDE_API_KEY";
     public const string LlmSamplingVariable = Prefix + "LLM_SAMPLING";
+    public const string HomeAssistantUrlVariable = Prefix + "HA_URL";
+    public const string HomeAssistantTokenVariable = Prefix + "HA_TOKEN";
 
     /// <summary>Every variable this class reads, for documentation.</summary>
     public static readonly string[] AllVariables =
@@ -59,7 +61,8 @@ public sealed class EnvironmentOverrides
         InterruptEchoVariable, InterruptConfirmVariable, LlmContextVariable, SearxngUrlVariable,
         CommandPolicyVariable, ShellPoliceVariable, ObsidianVaultVariable, ComfyUrlVariable,
         ShellNativeVariable, ClaudeExeVariable, ClaudePermissionsVariable, ClaudeAdvisorVariable,
-        ClaudeApiVariable, ClaudeApiKeyVariable, LlmSamplingVariable,
+        ClaudeApiVariable, ClaudeApiKeyVariable, LlmSamplingVariable, HomeAssistantUrlVariable,
+        HomeAssistantTokenVariable,
     };
 
     /// <summary>The log category of every environment line.</summary>
@@ -165,6 +168,12 @@ public sealed class EnvironmentOverrides
     /// <summary>The Claude API key for this launch, plain (2026-09-27); never logged (<see cref="Describe"/> shows <see cref="SecretSet"/>).</summary>
     public string? ClaudeApiKey => Read(ClaudeApiKeyVariable);
 
+    /// <summary>The Home Assistant server's URL, or null (2026-09-28). Checked where it is used (a non-http(s) value offers no Home Assistant tool), not here.</summary>
+    public string? HomeAssistantUrl => Read(HomeAssistantUrlVariable);
+
+    /// <summary>The Home Assistant long-lived access token for this launch, plain (2026-09-28); never logged (<see cref="Describe"/> shows <see cref="SecretSet"/>).</summary>
+    public string? HomeAssistantToken => Read(HomeAssistantTokenVariable);
+
     /// <summary>
     /// Sampling for this launch, or null when unset or refused (2026-09-28, the setting <c>LLM sampling</c>): a JSON object
     /// in wire names, <c>{"temperature":0.6,"top_k":20,"typical_p":0.9}</c> — the named fields in their ranges, any other
@@ -237,7 +246,7 @@ public sealed class EnvironmentOverrides
         var parts = new List<string>(active.Count);
         foreach (var name in active)
         {
-            parts.Add(name + "=" + (name is LlmApiKeyVariable or ClaudeApiKeyVariable ? SecretSet : Read(name)));
+            parts.Add(name + "=" + (name is LlmApiKeyVariable or ClaudeApiKeyVariable or HomeAssistantTokenVariable ? SecretSet : Read(name)));
         }
 
         return string.Join(", ", parts);
@@ -279,6 +288,8 @@ public sealed class EnvironmentOverrides
         if (ClaudeAdvisor is { } advisor) effective.ClaudeAdvisor = advisor;
         if (ClaudeApi is { } claudeApi) effective.ClaudeApi = claudeApi;
         if (ClaudeApiKey is { } claudeApiKey) effective.ClaudeApiKey = claudeApiKey;
+        if (HomeAssistantUrl is { } haUrl) effective.HomeAssistantUrl = haUrl;
+        if (HomeAssistantToken is { } haToken) effective.HomeAssistantToken = haToken;
         if (LlmSampling is { } sampling) effective.LlmSampling = Overlay(effective.LlmSampling, sampling);
 
         return effective;

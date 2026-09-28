@@ -572,6 +572,22 @@ public sealed class AppSettings : IDisposable
                         DiagnosticLog.Info(Category, "Interrupt switched off: it needs the wake word on.");
                     }
 
+                    // A plain key in the file — a hand edit, a file from before, the LLM API key before 2026-09-28 — is
+                    // encrypted as it loads and the file written back at once (the user's call: all three keys, no
+                    // retyping). A failed write keeps the encrypted values in memory for the next save to write.
+                    if (SettingsSecrets.ProtectAtRest(loaded))
+                    {
+                        try
+                        {
+                            Profiles.WriteProfileFile(filePath, loaded);
+                            DiagnosticLog.Info(Category, "Encrypted the profile's plain API keys (DPAPI).");
+                        }
+                        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                        {
+                            DiagnosticLog.Warn(Category, $"Could not write the encrypted API keys back ({ex.Message}); the next save will.");
+                        }
+                    }
+
                     return loaded;
                 }
 
@@ -746,6 +762,13 @@ public sealed class AppSettings : IDisposable
         ClaudeApiKey = source.ClaudeApiKey,
         ClaudeApiMaxTokens = source.ClaudeApiMaxTokens,
         ClaudeApiPromptCaching = source.ClaudeApiPromptCaching,
+        HomeAssistantTools = source.HomeAssistantTools,
+        HomeAssistantUrl = source.HomeAssistantUrl,
+        HomeAssistantToken = source.HomeAssistantToken,
+        HomeAssistantActionPolicy = source.HomeAssistantActionPolicy,
+        HomeAssistantSafeServices = source.HomeAssistantSafeServices is null ? null : [.. source.HomeAssistantSafeServices],
+        HomeAssistantAssistAgent = source.HomeAssistantAssistAgent,
+        HomeAssistantTimeoutSeconds = source.HomeAssistantTimeoutSeconds,
         ShellCodeLanguages = [.. source.ShellCodeLanguages],
         ShellCodeMaxToolCalls = source.ShellCodeMaxToolCalls,
         ShellCodeTimeoutSeconds = source.ShellCodeTimeoutSeconds,

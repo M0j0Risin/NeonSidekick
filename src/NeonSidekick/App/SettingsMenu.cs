@@ -27,6 +27,8 @@ public enum SettingsField
     Memory,
     LlmUrl,
     LlmModel,
+
+    /// <summary>Typed: the key an OpenAI-compatible server gets, saved DPAPI-encrypted and shown masked (<see cref="Settings.AppSettingsData.LlmApiKey"/>, 2026-09-28, like the Claude API key and the Home Assistant API key); the <c>empty</c> placeholder stays plain. Never put back on the edit line; empty is refused.</summary>
     LlmApiKey,
 
     /// <summary>A picker over <see cref="Llm.ReasoningLevel.Levels"/>.</summary>
@@ -505,6 +507,27 @@ public enum SettingsField
 
     /// <summary>A toggle: whether the <c>/sampling</c> pane reads a model's defaults from its Hugging Face card when the server says nothing (<see cref="Settings.AppSettingsData.LlmSamplingFromHuggingFace"/>). The LLM tab, under LLM sampling (2026-09-28, the user's call); no reconnect (read when the pane opens). Last in the enum, as every newcomer.</summary>
     LlmSamplingFromHuggingFace,
+
+    /// <summary>A toggle: whether a turn offers the Home Assistant tools (<see cref="Settings.AppSettingsData.HomeAssistantTools"/>). The Home Assistant tab of <c>/tools</c>' first row (2026-09-28); no reconnect (read at each turn). Last in the enum, as every newcomer.</summary>
+    HomeAssistantTools,
+
+    /// <summary>Typed: the Home Assistant server's URL, or empty (<see cref="Settings.AppSettingsData.HomeAssistantUrl"/>). The Home Assistant tab's second row (2026-09-28); no reconnect (read at each call).</summary>
+    HomeAssistantUrl,
+
+    /// <summary>Typed, masked: the long-lived access token, saved DPAPI-encrypted (<see cref="Settings.AppSettingsData.HomeAssistantToken"/>); empty clears it. The Home Assistant tab's third row (2026-09-28); no reconnect.</summary>
+    HomeAssistantToken,
+
+    /// <summary>An action row, no setting behind it: Enter asks the server for its version with the URL and token as saved, the answer as the status line (2026-09-28). The Home Assistant tab's fourth row.</summary>
+    HomeAssistantTest,
+
+    /// <summary>A picker over <see cref="HomeAssistant.HaPolicy.Names"/>: what the model may switch (<see cref="Settings.AppSettingsData.HomeAssistantActionPolicy"/>). The Home Assistant tab (2026-09-28); no reconnect.</summary>
+    HomeAssistantActionPolicy,
+
+    /// <summary>Typed: the conversation agent <c>ha_assist</c> and <c>/ha say</c> talk to, empty for Home Assistant's default (<see cref="Settings.AppSettingsData.HomeAssistantAssistAgent"/>). The Home Assistant tab (2026-09-28); no reconnect.</summary>
+    HomeAssistantAssistAgent,
+
+    /// <summary>Typed: seconds one Home Assistant request may take, 2 to 60 (<see cref="Settings.AppSettingsData.HomeAssistantTimeoutSeconds"/>). The Home Assistant tab's last row (2026-09-28); no reconnect.</summary>
+    HomeAssistantTimeoutSeconds,
 }
 
 /// <summary>The tabs of <c>/settings</c> on the pane, in strip order (Sessions right after General — the user's order, 2026-09-18; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
@@ -844,6 +867,7 @@ internal sealed partial class SettingsMenu
         [SettingsField.ShellCommandPolicy, SettingsField.ShellCommandAllowed, SettingsField.ShellPoliceOutsidePaths, SettingsField.ShellPreferNative, SettingsField.ShellDefault, SettingsField.ShellTimeoutSeconds, SettingsField.ShellForegroundCapSeconds, SettingsField.ShellOutputMaxChars, SettingsField.ShellCodeLanguages, SettingsField.ShellCodeTimeoutSeconds, SettingsField.ShellToolBridge, SettingsField.ShellCodeMaxToolCalls],
         [SettingsField.AskUser, SettingsField.AskMaxQuestions, SettingsField.AskMaxChoices],
         [SettingsField.ClaudeExecutable, SettingsField.ClaudePermissions, SettingsField.ClaudeModel, SettingsField.ClaudeEffort, SettingsField.ClaudeAdvisor, SettingsField.ClaudeAdvisorContext, SettingsField.ClaudeAdvisorCallsPerTurn, SettingsField.ClaudeAdvisorModel, SettingsField.ClaudeAdvisorEffort, SettingsField.ClaudeAdvisorConfirm],
+        [SettingsField.HomeAssistantTools, SettingsField.HomeAssistantUrl, SettingsField.HomeAssistantToken, SettingsField.HomeAssistantTest, SettingsField.HomeAssistantActionPolicy, SettingsField.HomeAssistantAssistAgent, SettingsField.HomeAssistantTimeoutSeconds],
         [SettingsField.ObsidianTools, SettingsField.ObsidianVault, SettingsField.ObsidianAllowDelete],
         [SettingsField.ComfyTools, SettingsField.ComfyUrl, SettingsField.ComfyWorkflowsOffered, SettingsField.ComfyAddWorkflow, SettingsField.ComfyCaretMention, SettingsField.ComfyTimeoutSeconds, SettingsField.ComfyMaxPicturesPerCall, SettingsField.ComfyReinforceNegatives, SettingsField.ComfyShowPrompts, SettingsField.ComfyPictureStrip, SettingsField.ComfyOutputFolder],
         [SettingsField.SqlTools, SettingsField.SqlConnectionsOffered, SettingsField.SqlDefaultConnection, SettingsField.SqlSetPassword, SettingsField.SqlAddConnection, SettingsField.SqlPercentMention, SettingsField.SqlQueryMaxRows, SettingsField.SqlQueryTimeoutSeconds, SettingsField.SqlConnectionsProfile, SettingsField.SqlConnectionsGlobal],
@@ -874,6 +898,7 @@ internal sealed partial class SettingsMenu
     private readonly Action<string>? _openFile;
     private readonly Func<Sql.SqlNamedConnection, CancellationToken, Task<Sql.SqlRun>> _testSqlConnection;
     private readonly Func<Comfy.ComfyClient?> _comfyClient;
+    private readonly Func<CancellationToken, Task<(bool Ok, string Text)>> _testHomeAssistant;
     // The skills a botchat sees, for the preloaded-skills checklist (2026-09-27); none when the host gives no catalog.
     private readonly Func<IReadOnlyList<Skills.Skill>> _botChatSkills;
     private readonly Func<string, string?> _locateBrowser;
@@ -899,10 +924,12 @@ internal sealed partial class SettingsMenu
     /// <param name="testSqlConnection">What the <c>SQL add connection</c> summary's test runs over the unsaved draft (later on 2026-09-23), its typed password in it as a plain <c>file</c> value; null = a real <see cref="Sql.SqlAccess"/> run of <see cref="SqlTestQuery"/>.</param>
     /// <param name="openFile">What the SQL tab's edit rows open <c>sql.json</c> with (2026-09-23): the screen's editor opener; null = the rows say there is none.</param>
     /// <param name="browseFolder">The folder picker the <c>Working directory (cwd)</c> row opens (2026-09-22, the user's ask): the screen's <c>/cwd browse</c> tree, returning what to save — <c>""</c> for the profile's folder, a full path, or null for nothing chosen. Null (and a console with no pane) falls back to the typed path the row asked for until then.</param>
-    public SettingsMenu(IAnsiConsole console, AppSettings settings, Func<SettingsField, string?> overriddenBy, InputLine input, TranscriptRenderer transcript, SpeechSession speech, MenuPane pane, Func<string, string?>? locateBrowser = null, Func<IReadOnlySet<string>>? installedShells = null, Func<IReadOnlySet<string>>? installedLanguages = null, Func<CancellationToken, Task<string?>>? browseFolder = null, Func<string, CancellationToken, Task<string?>>? browseVault = null, Action<string>? openFile = null, Func<Sql.SqlNamedConnection, CancellationToken, Task<Sql.SqlRun>>? testSqlConnection = null, Func<Comfy.ComfyClient?>? comfyClient = null, Func<IReadOnlyList<Skills.Skill>>? botChatSkills = null)
+    public SettingsMenu(IAnsiConsole console, AppSettings settings, Func<SettingsField, string?> overriddenBy, InputLine input, TranscriptRenderer transcript, SpeechSession speech, MenuPane pane, Func<string, string?>? locateBrowser = null, Func<IReadOnlySet<string>>? installedShells = null, Func<IReadOnlySet<string>>? installedLanguages = null, Func<CancellationToken, Task<string?>>? browseFolder = null, Func<string, CancellationToken, Task<string?>>? browseVault = null, Action<string>? openFile = null, Func<Sql.SqlNamedConnection, CancellationToken, Task<Sql.SqlRun>>? testSqlConnection = null, Func<Comfy.ComfyClient?>? comfyClient = null, Func<IReadOnlyList<Skills.Skill>>? botChatSkills = null, Func<CancellationToken, Task<(bool Ok, string Text)>>? testHomeAssistant = null)
     {
         // The ComfyUI client the add-workflow wizard lists the server's models and runs its test with (later on 2026-09-24): the screen's, so a stub reaches it in tests; null = none, the wizard says there is no server.
         _comfyClient = comfyClient ?? (() => null);
+        // Home Assistant test connection (2026-09-28): the screen's session in the app; a session over the saved settings otherwise.
+        _testHomeAssistant = testHomeAssistant ?? (token => HomeAssistant.HaSession.TestAsync(() => settings.Current, token));
         _botChatSkills = botChatSkills ?? (() => []);
         _testSqlConnection = testSqlConnection ?? TestSqlConnectionAsync;
         _browseFolder = browseFolder;
@@ -1104,7 +1131,8 @@ internal sealed partial class SettingsMenu
             or SettingsField.LlmCompactShowSummary or SettingsField.ShellToolBridge or SettingsField.ShellPoliceOutsidePaths or SettingsField.ShellPreferNative
             or SettingsField.ObsidianTools or SettingsField.ObsidianAllowDelete or SettingsField.SqlTools or SettingsField.SqlPercentMention or SettingsField.ComfyTools or SettingsField.ComfyReinforceNegatives or SettingsField.ComfyShowPrompts or SettingsField.ComfyCaretMention or SettingsField.ComfyPictureStrip
             or SettingsField.BotChatImages or SettingsField.BotChatImageAsync or SettingsField.BotChatSkills or SettingsField.BotChatVision or SettingsField.ClaudeAdvisor or SettingsField.ClaudeAdvisorConfirm
-            or SettingsField.ClaudeApi or SettingsField.ClaudeApiPromptCaching;
+            or SettingsField.ClaudeApi or SettingsField.ClaudeApiPromptCaching
+            or SettingsField.HomeAssistantTools;
 
     public static string FieldName(SettingsField field) => field switch
     {
@@ -1193,6 +1221,13 @@ internal sealed partial class SettingsMenu
         SettingsField.ObsidianVault => "Obsidian vault",
         SettingsField.SqlTools => "SQL tools",
         SettingsField.ComfyTools => "ComfyUI tools",
+        SettingsField.HomeAssistantTools => "Home Assistant tools",
+        SettingsField.HomeAssistantUrl => "Home Assistant URL",
+        SettingsField.HomeAssistantToken => "Home Assistant API key",
+        SettingsField.HomeAssistantTest => "Home Assistant test connection",
+        SettingsField.HomeAssistantActionPolicy => "Home Assistant action policy",
+        SettingsField.HomeAssistantAssistAgent => "Home Assistant Assist agent",
+        SettingsField.HomeAssistantTimeoutSeconds => "Home Assistant timeout (s)",
         SettingsField.ComfyUrl => "ComfyUI URL",
         SettingsField.ComfyTimeoutSeconds => "ComfyUI timeout (s)",
         SettingsField.ComfyMaxPicturesPerCall => "ComfyUI max pictures per call",
@@ -1309,7 +1344,7 @@ internal sealed partial class SettingsMenu
         {
             SettingsField.LlmUrl => string.IsNullOrWhiteSpace(data.LlmUrl) ? BlankUrlLabel(ScanScopeOf(data)) : data.LlmUrl,
             SettingsField.LlmModel => string.IsNullOrWhiteSpace(data.LlmModel) ? "(first listed)" : data.LlmModel,
-            SettingsField.LlmApiKey => Mask(data.LlmApiKey),
+            SettingsField.LlmApiKey => ClaudeApiKeyLabel(data.LlmApiKey),
             SettingsField.LlmRequestTimeoutSeconds => Seconds(data.LlmRequestTimeoutSeconds),
             SettingsField.LlmTurnTimeoutSeconds => Seconds(data.LlmTurnTimeoutSeconds),
             SettingsField.LlmContextLength => data.LlmContextLength > 0 ? Tokens(data.LlmContextLength) : DetectedContextLengthLabel,
@@ -1390,6 +1425,13 @@ internal sealed partial class SettingsMenu
             SettingsField.ObsidianAllowDelete => OnOff(data.ObsidianAllowDelete),
             SettingsField.SqlTools => OnOff(data.SqlTools),
             SettingsField.ComfyTools => OnOff(data.ComfyTools),
+            SettingsField.HomeAssistantTools => OnOff(data.HomeAssistantTools),
+            SettingsField.HomeAssistantUrl => string.IsNullOrWhiteSpace(data.HomeAssistantUrl) ? NoHomeAssistantUrlLabel : data.HomeAssistantUrl,
+            SettingsField.HomeAssistantToken => ClaudeApiKeyLabel(data.HomeAssistantToken),
+            SettingsField.HomeAssistantTest => HomeAssistantTestLabel,
+            SettingsField.HomeAssistantActionPolicy => HomeAssistant.HaPolicy.Resolve(data.HomeAssistantActionPolicy),
+            SettingsField.HomeAssistantAssistAgent => string.IsNullOrWhiteSpace(data.HomeAssistantAssistAgent) ? DefaultAssistAgentLabel : data.HomeAssistantAssistAgent,
+            SettingsField.HomeAssistantTimeoutSeconds => Seconds(data.HomeAssistantTimeoutSeconds),
             SettingsField.ComfyUrl => string.IsNullOrWhiteSpace(data.ComfyUrl) ? NoComfyUrlLabel : data.ComfyUrl,
             SettingsField.ComfyTimeoutSeconds => Seconds(data.ComfyTimeoutSeconds),
             SettingsField.ComfyMaxPicturesPerCall => ComfyPictures(data.ComfyMaxPicturesPerCall),
@@ -1661,12 +1703,38 @@ internal sealed partial class SettingsMenu
     /// <summary>The warning when DPAPI could not encrypt the key and it was saved as typed. Pinned.</summary>
     public static string ClaudeApiKeyPlainWarning(string reason) => $"Claude API key saved unencrypted: {reason}.";
 
+    /// <summary>The warning when DPAPI could not encrypt the LLM API key (2026-09-28): it is kept as typed. Pinned.</summary>
+    public static string LlmApiKeyPlainWarning(string reason) => $"LLM API key saved unencrypted: {reason}.";
+
     /// <summary>How the menu shows <see cref="AppSettingsData.ClaudeAdvisorCallsPerTurn"/>. Pinned.</summary>
     public static string ClaudeAdvisorCalls(int value) => value.ToString(CultureInfo.InvariantCulture) + (value == 1 ? " call" : " calls");
 
     /// <summary>The settings-menu wording for a bad <see cref="SettingsField.ClaudeAdvisorCallsPerTurn"/>. Pinned.</summary>
     public static readonly string ClaudeAdvisorCallsRangeError =
         "must be " + AppSettingsData.MinClaudeAdvisorCallsPerTurn.ToString(CultureInfo.InvariantCulture) + " to " + AppSettingsData.MaxClaudeAdvisorCallsPerTurn.ToString(CultureInfo.InvariantCulture) + " calls";
+
+    /// <summary>How the menu shows an empty <see cref="AppSettingsData.HomeAssistantUrl"/> (2026-09-28): no server, so no Home Assistant tool. Pinned.</summary>
+    public const string NoHomeAssistantUrlLabel = "(not set)";
+
+    /// <summary>The value column of the <c>Home Assistant test connection</c> action row (2026-09-28). Pinned.</summary>
+    public const string HomeAssistantTestLabel = "Enter to ask the server for its version";
+
+    /// <summary>How the menu shows an empty <see cref="AppSettingsData.HomeAssistantAssistAgent"/> (2026-09-28). Pinned.</summary>
+    public const string DefaultAssistAgentLabel = "(Home Assistant's default)";
+
+    /// <summary>The settings-menu wording for a bad <see cref="SettingsField.HomeAssistantUrl"/>. Pinned.</summary>
+    public const string HomeAssistantUrlError = "must be an http or https URL (http://localhost:8123), or empty";
+
+    /// <summary>The settings-menu wording for a bad <see cref="SettingsField.HomeAssistantTimeoutSeconds"/>. Pinned.</summary>
+    public static string HomeAssistantTimeoutRangeError =>
+        "must be " + AppSettingsData.MinHomeAssistantTimeoutSeconds.ToString(CultureInfo.InvariantCulture) + " to " + AppSettingsData.MaxHomeAssistantTimeoutSeconds.ToString(CultureInfo.InvariantCulture) + " seconds";
+
+    /// <summary>The warning when DPAPI could not encrypt the token (2026-09-28): it is kept as typed. Pinned.</summary>
+    public static string HomeAssistantTokenPlainWarning(string reason) => $"Home Assistant API key saved unencrypted: {reason}.";
+
+    /// <summary>A row of the action-policy picker: the name padded, what it does dim (2026-09-28).</summary>
+    public static string HomeAssistantPolicyLabel(string name) =>
+        Markup.Escape(name.PadRight(8)) + Theme.DimMarkup(HomeAssistant.HaPolicy.Describe(name));
 
     /// <summary>How the menu shows an empty <see cref="AppSettingsData.ComfyUrl"/> (2026-09-24): no server, so no image tool. Pinned.</summary>
     public const string NoComfyUrlLabel = "(not set)";
@@ -1919,7 +1987,6 @@ internal sealed partial class SettingsMenu
     {
         SettingsField.LlmUrl => data.LlmUrl,
         SettingsField.LlmModel => data.LlmModel,
-        SettingsField.LlmApiKey => data.LlmApiKey,
         SettingsField.LlmRequestTimeoutSeconds => Seconds(data.LlmRequestTimeoutSeconds),
         SettingsField.LlmTurnTimeoutSeconds => Seconds(data.LlmTurnTimeoutSeconds),
         SettingsField.LlmContextLength => data.LlmContextLength.ToString(CultureInfo.InvariantCulture),
@@ -1953,8 +2020,13 @@ internal sealed partial class SettingsMenu
         SettingsField.ClaudeAdvisorCallsPerTurn => data.ClaudeAdvisorCallsPerTurn.ToString(CultureInfo.InvariantCulture),
         SettingsField.ClaudeApiMaxTokens => data.ClaudeApiMaxTokens.ToString(CultureInfo.InvariantCulture),
 
-        // The key is never put back on the line: typing replaces it, empty clears it.
+        // The key is never put back on the line: typing replaces it, empty clears it (the LLM API key refuses empty).
+        SettingsField.LlmApiKey => "",
         SettingsField.ClaudeApiKey => "",
+        SettingsField.HomeAssistantToken => "",
+        SettingsField.HomeAssistantUrl => data.HomeAssistantUrl,
+        SettingsField.HomeAssistantAssistAgent => data.HomeAssistantAssistAgent,
+        SettingsField.HomeAssistantTimeoutSeconds => data.HomeAssistantTimeoutSeconds.ToString(CultureInfo.InvariantCulture),
         SettingsField.ComfyOutputFolder => data.ComfyOutputFolder,
         SettingsField.ComfyTimeoutSeconds => data.ComfyTimeoutSeconds.ToString(CultureInfo.InvariantCulture),
         SettingsField.ComfyMaxPicturesPerCall => data.ComfyMaxPicturesPerCall.ToString(CultureInfo.InvariantCulture),
@@ -2508,6 +2580,21 @@ internal sealed partial class SettingsMenu
             return await PickClaudeAdvisorContextAsync(saved, cancellationToken).ConfigureAwait(false);
         }
 
+        if (field == SettingsField.HomeAssistantActionPolicy)
+        {
+            return await PickHomeAssistantPolicyAsync(saved, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (field == SettingsField.HomeAssistantTest)
+        {
+            return await TestHomeAssistantAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        if (field == SettingsField.HomeAssistantToken)
+        {
+            return await SetHomeAssistantTokenAsync(page, row, cancellationToken).ConfigureAwait(false);
+        }
+
         if (field == SettingsField.LlmCompactType)
         {
             return await PickCompactTypeAsync(saved, cancellationToken).ConfigureAwait(false);
@@ -2724,7 +2811,8 @@ internal sealed partial class SettingsMenu
             return await PickVoskModelAsync(saved, cancellationToken).ConfigureAwait(false);
         }
 
-        bool allowEmpty = field is SettingsField.LlmUrl or SettingsField.LlmModel or SettingsField.TtsVoice2 or SettingsField.WorkingDirectory or SettingsField.WebBrowserPath or SettingsField.WebSearxngUrl or SettingsField.DraftEditor or SettingsField.ImageEditor or SettingsField.GitNativeEmail or SettingsField.GitNativeName or SettingsField.ObsidianVault or SettingsField.ComfyUrl or SettingsField.ComfyOutputFolder or SettingsField.ClaudeExecutable or SettingsField.ClaudeModel or SettingsField.ClaudeAdvisorModel or SettingsField.ClaudeApiKey;
+        bool allowEmpty = field is SettingsField.LlmUrl or SettingsField.LlmModel or SettingsField.TtsVoice2 or SettingsField.WorkingDirectory or SettingsField.WebBrowserPath or SettingsField.WebSearxngUrl or SettingsField.DraftEditor or SettingsField.ImageEditor or SettingsField.GitNativeEmail or SettingsField.GitNativeName or SettingsField.ObsidianVault or SettingsField.ComfyUrl or SettingsField.ComfyOutputFolder or SettingsField.ClaudeExecutable or SettingsField.ClaudeModel or SettingsField.ClaudeAdvisorModel or SettingsField.ClaudeApiKey
+            or SettingsField.HomeAssistantUrl or SettingsField.HomeAssistantAssistAgent;
         var result = await EditTextAsync(field, page, row, EditableValue(field, saved), allowEmpty, cancellationToken).ConfigureAwait(false);
         if (result is not InputResult.Submitted submitted)
         {
@@ -3141,6 +3229,30 @@ internal sealed partial class SettingsMenu
                 Apply(field, d => d.WebSearxngUrl = text);
                 return true;
 
+            case SettingsField.HomeAssistantUrl:
+                if (text.Length > 0 && !(Uri.TryCreate(text, UriKind.Absolute, out var home) && Web.WebFetcher.IsHttp(home)))
+                {
+                    Sink.Error($"{FieldName(field)} {HomeAssistantUrlError}; keeping {FieldValue(field, saved, _settings.ProfileDirectory)}.");
+                    return false;
+                }
+
+                Apply(field, d => d.HomeAssistantUrl = text);
+                return true;
+
+            case SettingsField.HomeAssistantAssistAgent:
+                Apply(field, d => d.HomeAssistantAssistAgent = text);
+                return true;
+
+            case SettingsField.HomeAssistantTimeoutSeconds:
+                if (!int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out int homeTimeout) || homeTimeout < AppSettingsData.MinHomeAssistantTimeoutSeconds || homeTimeout > AppSettingsData.MaxHomeAssistantTimeoutSeconds)
+                {
+                    Sink.Error($"{FieldName(field)} {HomeAssistantTimeoutRangeError}; keeping {EditableValue(field, saved)}.");
+                    return false;
+                }
+
+                Apply(field, d => d.HomeAssistantTimeoutSeconds = homeTimeout);
+                return true;
+
             case SettingsField.ComfyUrl:
                 if (text.Length > 0 && !(Uri.TryCreate(text, UriKind.Absolute, out var comfy) && Web.WebFetcher.IsHttp(comfy)))
                 {
@@ -3248,9 +3360,30 @@ internal sealed partial class SettingsMenu
                 Apply(field, d => d.SttWakePhrase = WakeWordMatch.NormalizePhrase(text));
                 return true;
 
+            case SettingsField.LlmApiKey:
+                if (text.Length == 0)
+                {
+                    Sink.Error($"{FieldName(field)} cannot be empty; keeping {FieldValue(field, saved, _settings.ProfileDirectory)}.");
+                    return false;
+                }
+
+                // Encrypted for this Windows user before it reaches the file (2026-09-28, as the Claude API key); the
+                // placeholder a keyless server takes is no secret and stays plain. Where DPAPI fails, kept as typed and said so.
+                string protectedLlmKey = text;
+                if (text != Llm.LlmEndpoint.DefaultApiKey)
+                {
+                    protectedLlmKey = Settings.SettingsSecrets.Protect(text, out string? llmProtectError);
+                    if (llmProtectError is not null)
+                    {
+                        Sink.Warning(LlmApiKeyPlainWarning(llmProtectError));
+                    }
+                }
+
+                Apply(field, d => d.LlmApiKey = protectedLlmKey);
+                return true;
+
             case SettingsField.TtsHttpUrl:
             case SettingsField.TtsVoice:
-            case SettingsField.LlmApiKey:
                 if (text.Length == 0)
                 {
                     Sink.Error($"{FieldName(field)} cannot be empty; keeping {FieldValue(field, saved, _settings.ProfileDirectory)}.");
@@ -3267,7 +3400,6 @@ internal sealed partial class SettingsMenu
                     {
                         case SettingsField.LlmUrl: d.LlmUrl = text; break;
                         case SettingsField.LlmModel: d.LlmModel = text; break;
-                        case SettingsField.LlmApiKey: d.LlmApiKey = text; break;
                         case SettingsField.TtsHttpUrl: d.TtsHttpUrl = text; break;
                         case SettingsField.TtsVoice: d.TtsVoice = text; break;
                     }
@@ -3610,6 +3742,74 @@ internal sealed partial class SettingsMenu
         return true;
     }
 
+    /// <summary>The action-policy picker under the settings list (2026-09-28): one <see cref="HomeAssistantPolicyLabel"/> row per <see cref="HomeAssistant.HaPolicy.Names"/> entry, the saved one under the cursor.</summary>
+    private async Task<bool> PickHomeAssistantPolicyAsync(AppSettingsData saved, CancellationToken cancellationToken)
+    {
+        var names = HomeAssistant.HaPolicy.Names;
+        var page = new MenuPage(Crumb(FieldName(SettingsField.HomeAssistantActionPolicy)), names.Select(HomeAssistantPolicyLabel).ToList(), PickKeys);
+        int? picked = await PickAsync(page, Math.Max(0, Array.IndexOf(names, HomeAssistant.HaPolicy.Resolve(saved.HomeAssistantActionPolicy))), cancellationToken).ConfigureAwait(false);
+        if (picked is not { } index)
+        {
+            return Unchanged();
+        }
+
+        string name = names[index];
+        Apply(SettingsField.HomeAssistantActionPolicy, d => d.HomeAssistantActionPolicy = name);
+        return true;
+    }
+
+    /// <summary>
+    /// <c>Home Assistant test connection</c> (2026-09-28): the server's version and place with the URL and token as saved, or
+    /// the failure, as the status line. Nothing is saved.
+    /// </summary>
+    private async Task<bool> TestHomeAssistantAsync(CancellationToken cancellationToken)
+    {
+        var (ok, text) = await _testHomeAssistant(cancellationToken).ConfigureAwait(false);
+        if (ok)
+        {
+            Sink.Notice(text);
+        }
+        else
+        {
+            Sink.Error(text);
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// <c>Home Assistant API key</c> (2026-09-28): a masked slot on the pane (<see cref="UI.InputLine"/>'s <c>mask</c>), the token
+    /// never put back on the line — typing replaces it, empty clears it — then encrypted for this Windows user before it reaches
+    /// the file (<see cref="HomeAssistant.HaSession.Protect"/>); where DPAPI fails, kept as typed and said so.
+    /// </summary>
+    private async Task<bool> SetHomeAssistantTokenAsync(MenuPage page, int row, CancellationToken cancellationToken)
+    {
+        InputResult result;
+        if (_pane.Enabled)
+        {
+            result = await _pane.EditAsync(page with { Hint = EditKeys }, row, _input, "", allowEmpty: true, cancellationToken, mask: true).ConfigureAwait(false);
+        }
+        else
+        {
+            Flow.Notice(PromptTitle(FieldName(SettingsField.HomeAssistantToken), EditKeys));
+            result = await _input.ReadAsync("", remember: false, allowEmpty: true, cancellationToken: cancellationToken, escapeCancels: true, mask: true).ConfigureAwait(false);
+        }
+
+        if (result is not InputResult.Submitted submitted)
+        {
+            return Unchanged();
+        }
+
+        string stored = HomeAssistant.HaSession.Protect(submitted.Text.Trim(), out string? protectError);
+        if (protectError is not null)
+        {
+            Sink.Warning(HomeAssistantTokenPlainWarning(protectError));
+        }
+
+        Apply(SettingsField.HomeAssistantToken, d => d.HomeAssistantToken = stored);
+        return true;
+    }
+
     /// <summary>The compact-type picker under the settings list: one <see cref="CompactTypeLabel"/> row per <see cref="Llm.CompactType.Names"/> entry, the saved one under the cursor.</summary>
     private async Task<bool> PickCompactTypeAsync(AppSettingsData saved, CancellationToken cancellationToken)
     {
@@ -3823,6 +4023,7 @@ internal sealed partial class SettingsMenu
             SettingsField.ObsidianAllowDelete => data.ObsidianAllowDelete,
             SettingsField.SqlTools => data.SqlTools,
             SettingsField.ComfyTools => data.ComfyTools,
+            SettingsField.HomeAssistantTools => data.HomeAssistantTools,
             SettingsField.ComfyReinforceNegatives => data.ComfyReinforceNegatives,
             SettingsField.ComfyShowPrompts => data.ComfyShowPrompts,
             SettingsField.ComfyCaretMention => data.ComfyCaretMention,
@@ -3892,6 +4093,7 @@ internal sealed partial class SettingsMenu
             case SettingsField.ObsidianAllowDelete: data.ObsidianAllowDelete = on; break;
             case SettingsField.SqlTools: data.SqlTools = on; break;
             case SettingsField.ComfyTools: data.ComfyTools = on; break;
+            case SettingsField.HomeAssistantTools: data.HomeAssistantTools = on; break;
             case SettingsField.ComfyReinforceNegatives: data.ComfyReinforceNegatives = on; break;
             case SettingsField.ComfyShowPrompts: data.ComfyShowPrompts = on; break;
             case SettingsField.ComfyCaretMention: data.ComfyCaretMention = on; break;
@@ -3970,6 +4172,7 @@ internal sealed partial class SettingsMenu
         SettingsField.ObsidianAllowDelete => on ? "vault_delete may move a note or attachment to the vault's .trash" : "vault_delete is disabled",
         SettingsField.SqlTools => on ? "the model reads the SQL Server connections of sql.json" : "no SQL tools",
         SettingsField.ComfyTools => on ? "ComfyUI tools enabled" : "ComfyUI tools disabled",
+        SettingsField.HomeAssistantTools => on ? "the model may read and switch Home Assistant, as the policy allows" : "no Home Assistant tools",
         SettingsField.ComfyReinforceNegatives => on ? "the model adds a few opposite tags to a workflow's negative" : "the workflow's negative as it is",
         SettingsField.ComfyShowPrompts => on ? "the prompts and params sent to ComfyUI under each picture's line" : "just the picture's line",
         SettingsField.ComfyCaretMention => on ? "^ and part of a name lists the offered workflows on the line" : "^ is ordinary text",

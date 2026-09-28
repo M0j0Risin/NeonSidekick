@@ -59,7 +59,7 @@ public class AppSettingsTests : IDisposable
         ShowToolbar = false,
         ThemedViewer = false,
         WorkingDirectory = @"D:\elsewhere\files",
-        LlmApiKey = "sk-test",
+        LlmApiKey = "dpapi:c2stdGVzdA==",   // stored encrypted: a plain key is encrypted as the file loads (2026-09-28), so the round trip would not be exact
         LlmAutoCompactPercent = 65,
         LlmMaxTurns = 40,
         LlmCompactKeepRecent = 4,
@@ -631,6 +631,59 @@ public class AppSettingsTests : IDisposable
         Assert.False(settings.Current.SttWake);
         Assert.True(settings.Current.SttInput);
         Assert.Contains("\"SttInterrupt\": true", File.ReadAllText(Profiles.ProfileFile(_dir, Profiles.DefaultName)));   // untouched until a save
+    }
+
+    // ── the keys encrypted on load (2026-09-28) ─────────────────────────────
+
+    [Fact]
+    public void ProfileFile_WithPlainKeys_IsEncryptedOnLoad_AndWrittenBack()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        Directory.CreateDirectory(Profiles.Directory(_dir, Profiles.DefaultName));
+        string path = Profiles.ProfileFile(_dir, Profiles.DefaultName);
+        File.WriteAllText(path, "{ \"SchemaVersion\": 2, \"LlmApiKey\": \"sk-llm\", \"ClaudeApiKey\": \"sk-ant-x\", \"HomeAssistantToken\": \"ha-y\" }");
+
+        using (var settings = new AppSettings(_dir))
+        {
+            var current = settings.Current;
+            Assert.True(NeonSidekick.Sql.WindowsCredentials.IsProtected(current.LlmApiKey));
+            Assert.True(NeonSidekick.Sql.WindowsCredentials.IsProtected(current.ClaudeApiKey));
+            Assert.True(NeonSidekick.Sql.WindowsCredentials.IsProtected(current.HomeAssistantToken));
+            Assert.Equal("sk-llm", SettingsSecrets.Reveal(current.LlmApiKey));
+            Assert.Equal("sk-ant-x", SettingsSecrets.Reveal(current.ClaudeApiKey));
+            Assert.Equal("ha-y", SettingsSecrets.Reveal(current.HomeAssistantToken));
+        }
+
+        // Written back at once, not at the next save: the plain values are gone from the file.
+        string json = File.ReadAllText(path);
+        Assert.DoesNotContain("sk-llm", json);
+        Assert.DoesNotContain("sk-ant-x", json);
+        Assert.DoesNotContain("ha-y", json);
+
+        // A second load has nothing to encrypt and leaves the file alone.
+        using (new AppSettings(_dir))
+        {
+        }
+
+        Assert.Equal(json, File.ReadAllText(path));
+    }
+
+    [Fact]
+    public void ProfileFile_WithThePlaceholderKey_IsLeftAlone()
+    {
+        Directory.CreateDirectory(Profiles.Directory(_dir, Profiles.DefaultName));
+        string path = Profiles.ProfileFile(_dir, Profiles.DefaultName);
+        const string Json = "{ \"SchemaVersion\": 2, \"LlmApiKey\": \"empty\", \"ClaudeApiKey\": \"\" }";
+        File.WriteAllText(path, Json);
+
+        using var settings = new AppSettings(_dir);
+
+        Assert.Equal(NeonSidekick.Llm.LlmEndpoint.DefaultApiKey, settings.Current.LlmApiKey);
+        Assert.Equal(Json, File.ReadAllText(path));   // nothing to encrypt: never rewritten
     }
 
     [Fact]

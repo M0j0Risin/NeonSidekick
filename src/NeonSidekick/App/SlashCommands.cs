@@ -51,7 +51,7 @@ public enum SlashCommand
     /// <summary><c>/cmdcopy &lt;profile&gt; [--history] [overwrite]</c>: copy this profile's allowed shell commands (the <c>Shell allowed commands</c> prefixes) into another's — appended, the duplicates skipped, or in place of them — after a confirmation (2026-09-21, the user's ask: what was <c>/memcopy</c> then — <c>/memory copy</c> since 2026-09-22 — for the approval pane's list); with <c>--history</c> (2026-09-25, the user's ask) its command history instead, into the other profile's <c>sessions.db</c>.</summary>
     CmdCopy,
 
-    /// <summary><c>/keycopy &lt;profile&gt;</c> (2026-09-28, the user's ask): this profile's <c>LLM API key</c> and <c>Claude API key</c> into another's <c>profile.json</c>, after a confirmation — <c>/cmdcopy</c>'s shape without its switches. Both mirrored (the user's call): a key not set here clears the target's, so the target ends with exactly this profile's two. The stored values, as stored (a <c>dpapi:</c> key stays one); a key that comes only from a variable is not copied.</summary>
+    /// <summary><c>/keycopy &lt;profile&gt;</c> (2026-09-28, the user's ask): this profile's <c>LLM API key</c>, <c>Claude API key</c> and <c>Home Assistant API key</c> (it joined the same day, the user's ask) into another's <c>profile.json</c>, after a confirmation — <c>/cmdcopy</c>'s shape without its switches. All mirrored (the user's call): a key not set here clears the target's, so the target ends with exactly this profile's keys. The stored values, as stored (a <c>dpapi:</c> key stays one); a key that comes only from a variable is not copied.</summary>
     KeyCopy,
 
     /// <summary><c>/cmdclear</c> (2026-09-25, the user's ask): this profile's command history — the input line's Up/Down recall, stored in <c>sessions.db</c> under <c>Keep command history</c> — emptied, stored and in memory, after a confirmation. No argument.</summary>
@@ -149,6 +149,13 @@ public enum SlashCommand
     /// <summary><c>/comfy</c> (2026-09-24): the ComfyUI server's status, the workflows found and the folders they go in; <c>/comfy edit json|markdown &lt;workflow&gt;</c> (later still that day, the user's ask) opens a workflow's <c>.json</c> or <c>.md</c> in the editor, its argument list completing the verb, the kind and the names.</summary>
     Comfy,
 
+    /// <summary>
+    /// <c>/ha</c> (2026-09-28, the user's call: a direct command beside the model's Home Assistant tools): the house driven
+    /// without the model — <c>/ha</c> the overview, <c>/ha on|off|toggle &lt;name&gt; [n%]</c>, <c>/ha scene &lt;name&gt;</c>,
+    /// <c>/ha tv …</c>, <c>/ha states [filter]</c>, <c>/ha say &lt;sentence&gt;</c> (<see cref="HomeAssistant.HaCommand"/>).
+    /// </summary>
+    HomeAssistant,
+
     /// <summary><c>/echo &lt;text&gt;</c>: the line printed as a reply and read aloud when speech is on — <c>/speak</c>'s block and voice over typed text, never resumed (2026-09-17).</summary>
     Echo,
 
@@ -229,10 +236,11 @@ public static class SlashCommands
             new("/expand", "expand all items in the transcript"),
             new("/explore", "open the working directory in your file browser, or /explore <path>"),
             new("/gituser", "write the Git native email and Git native name into the working directory's repository"),
+            new("/ha", "Home Assistant: /ha for the overview, /ha on|off|toggle <room or light> [brightness%], /ha scene <name>, /ha tv on|off|mute|unmute|up|down|vol <n>|source <name>, /ha states [filter], /ha say <sentence> (Assist)"),
             new("/help", "show help"),
             new("/imagine", "generate a picture on ComfyUI from your own prompt, sent as typed: /imagine [workflow] <prompt> [-- <negative>] [--seed N] [--size WxH]"),
             new("/interrupt", "toggle the speech input wake word interrupt, or /interrupt on|off"),
-            new("/keycopy", "copy this profile's LLM API key and Claude API key into another profile, replacing its own (asks first): /keycopy <profile>"),
+            new("/keycopy", "copy this profile's LLM API key, Claude API key and Home Assistant API key into another profile, replacing its own (asks first): /keycopy <profile>"),
             new("/learn", "write or improve a skill from the last turn or the stored sessions, in the background: /learn [what to keep] | sessions [N | what to search]"),
             new("/loop", "repeat a message, each reply waited for: /loop <count> [delay] <message> | infinite [delay] <message> (ESC ends it)"),
             new("/mcp", "connect external MCP servers and switch their tools on or off on a pane"),
@@ -360,7 +368,7 @@ public static class SlashCommands
     }
 
     /// <summary>Every command word, for help and completion.</summary>
-    public static readonly string[] Words = { "/help", "/clear", "/new", "/splash", "/theme", "/queue", "/sessions", "/compact", "/server", "/model", "/reasoning", "/sampling", "/settings", "//", "/tools", "/mcp", "/tts", "/stt", "/wake", "/interrupt", "/speak", "/remember", "/memory", "/cmdcopy", "/keycopy", "/cmdclear", "/cmdlist", "/police", "/persona", "/operata", "/vocalia", "/sys", "/usage", "/profile", "/timer", "/cwd", "/tree", "/vault", "/explore", "/view", "/imagine", "/comfy", "/echo", "/emptytrash", "/gituser", "/copy", "/draft", "/loop", "/plan", "/botchat", "/claude", "/test", "/expand", "/collapse", "/window", "/skills", "/learn", "/about", "/exit" };
+    public static readonly string[] Words = { "/help", "/clear", "/new", "/splash", "/theme", "/queue", "/sessions", "/compact", "/server", "/model", "/reasoning", "/sampling", "/settings", "//", "/tools", "/mcp", "/tts", "/stt", "/wake", "/interrupt", "/speak", "/remember", "/memory", "/cmdcopy", "/keycopy", "/cmdclear", "/cmdlist", "/police", "/persona", "/operata", "/vocalia", "/sys", "/usage", "/profile", "/timer", "/cwd", "/tree", "/vault", "/explore", "/view", "/imagine", "/comfy", "/ha", "/echo", "/emptytrash", "/gituser", "/copy", "/draft", "/loop", "/plan", "/botchat", "/claude", "/test", "/expand", "/collapse", "/window", "/skills", "/learn", "/about", "/exit" };
 
     /// <summary>The <c>/queue</c> word: what a double-click on the hint row's queued part sends through the mid-turn line hook, so the pane opens exactly as the typed command's does (2026-09-18). Pinned.</summary>
     public const string QueueWord = "/queue";
@@ -442,6 +450,7 @@ public static class SlashCommands
             "/view" => SlashCommand.View,
             "/imagine" => SlashCommand.Imagine,
             "/comfy" => SlashCommand.Comfy,
+            "/ha" => SlashCommand.HomeAssistant,
             "/echo" => SlashCommand.Echo,
             "/queue" => SlashCommand.Queue,
             "/sessions" => SlashCommand.Session,
@@ -485,5 +494,6 @@ public static class SlashCommands
         or SlashCommand.Persona or SlashCommand.Operata or SlashCommand.Vocalia
         or SlashCommand.Remember or SlashCommand.Memory or SlashCommand.CmdCopy or SlashCommand.KeyCopy or SlashCommand.Profile or SlashCommand.Timer
         or SlashCommand.Cwd or SlashCommand.Tree or SlashCommand.Vault or SlashCommand.Explore or SlashCommand.Copy or SlashCommand.Session or SlashCommand.GitUser
-        or SlashCommand.Loop or SlashCommand.Plan or SlashCommand.BotChat or SlashCommand.Claude or SlashCommand.Queue or SlashCommand.Skills or SlashCommand.Test;
+        or SlashCommand.Loop or SlashCommand.Plan or SlashCommand.BotChat or SlashCommand.Claude or SlashCommand.Queue or SlashCommand.Skills or SlashCommand.Test
+        or SlashCommand.HomeAssistant;
 }

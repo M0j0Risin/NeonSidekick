@@ -55,7 +55,7 @@ public class ToolsTextTests : IDisposable
     public void Labels_ArePinned()
     {
         Assert.Equal("🛠️ Tools", ToolsText.Label);
-        Assert.Equal(["Offered", "Web", "Files", "Shell", "Ask", "Claude (CLI)", "Obsidian", "ComfyUI", "SQL", "Git (native)", "Options"], ToolsText.TabTitles);   // the user's order since 2026-09-27 (Git (native), Obsidian, SQL, ComfyUI, Claude after Ask before); SQL 2026-09-23, Obsidian 2026-09-22, Options last later that day   // Options second since later on 2026-09-19; Git since 2026-09-20, Shell since 2026-09-21; the user's order and Git (native) since later on 2026-09-21 (alphabetical before)
+        Assert.Equal(["Offered", "Web", "Files", "Shell", "Ask", "Claude (CLI)", "Home Assistant", "Obsidian", "ComfyUI", "SQL", "Git (native)", "Options"], ToolsText.TabTitles);   // Home Assistant after Claude (CLI) since 2026-09-28; the user's order since 2026-09-27 (Git (native), Obsidian, SQL, ComfyUI, Claude after Ask before); SQL 2026-09-23, Obsidian 2026-09-22, Options last later that day   // Options second since later on 2026-09-19; Git since 2026-09-20, Shell since 2026-09-21; the user's order and Git (native) since later on 2026-09-21 (alphabetical before)
         Assert.Equal("(off: File tools is off)", ToolsText.GroupOffSuffix("File tools"));
         Assert.Equal("read_file: off", ToolsText.FlippedNotice("read_file", false));
         Assert.Equal("read_file: on", ToolsText.FlippedNotice("read_file", true));

@@ -340,8 +340,9 @@ public sealed class LlmEndpointProbe
             return Endpoint(LlmServer.From(v1, result), key, configuredModel, configured: true);
         }
 
-        var servers = await DiscoverAllAsync(effective.LlmApiKey, extra: null, LlmScanMode.Resolve(effective), cancellationToken).ConfigureAwait(false);
-        return servers.Count == 0 ? null : Endpoint(servers[0], effective.LlmApiKey, configuredModel, configured: false);
+        string apiKey = LlmEndpoint.KeyOf(effective);
+        var servers = await DiscoverAllAsync(apiKey, extra: null, LlmScanMode.Resolve(effective), cancellationToken).ConfigureAwait(false);
+        return servers.Count == 0 ? null : Endpoint(servers[0], apiKey, configuredModel, configured: false);
     }
 
     /// <summary>

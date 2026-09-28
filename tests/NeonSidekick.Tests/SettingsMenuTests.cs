@@ -174,6 +174,50 @@ public class SettingsMenuTests : IDisposable
     }
 
     [Fact]
+    public async Task EditApiKey_ByText_SavesItEncrypted()
+    {
+        // 2026-09-28 (the user's call): the LLM API key is kept DPAPI-encrypted like the Claude and Home Assistant API keys.
+        Down(4);
+        Push(Keys.Enter);                       // LLM API key
+        _console.Input.PushText("sk-typed");
+        Push(Keys.Enter, Keys.Escape);
+
+        Assert.Equal(SettingsChanges.Llm, await _menu.ShowAsync(CancellationToken.None));
+
+        string stored = _settings.Current.LlmApiKey;
+        Assert.Equal("sk-typed", SettingsSecrets.Reveal(stored));
+        if (OperatingSystem.IsWindows())
+        {
+            Assert.True(NeonSidekick.Sql.WindowsCredentials.IsProtected(stored));
+            Assert.Contains("  · 🖥️ LLM API key: " + SettingsMenu.ClaudeApiKeyEncryptedLabel, _console.Output);
+        }
+    }
+
+    [Fact]
+    public async Task EditApiKey_ThePlaceholder_StaysPlain()
+    {
+        _settings.Update(d => d.LlmApiKey = "sk-old");
+        Down(4);
+        Push(Keys.Enter);                       // LLM API key: the line starts empty, the key never put back on it
+        _console.Input.PushText(LlmEndpoint.DefaultApiKey);
+        Push(Keys.Enter, Keys.Escape);
+
+        Assert.Equal(SettingsChanges.Llm, await _menu.ShowAsync(CancellationToken.None));
+        Assert.Equal(LlmEndpoint.DefaultApiKey, _settings.Current.LlmApiKey);
+    }
+
+    [Fact]
+    public void ApiKeyRows_ArePinned()
+    {
+        Assert.Equal("", SettingsMenu.EditableValue(SettingsField.LlmApiKey, new AppSettingsData { LlmApiKey = "sk-secret" }));
+        Assert.Equal(SettingsMenu.ClaudeApiKeyEncryptedLabel, SettingsMenu.FieldValue(SettingsField.LlmApiKey, new AppSettingsData { LlmApiKey = "dpapi:AQAA" }, _settings.ProfileDirectory));
+        Assert.Equal("em•••", SettingsMenu.FieldValue(SettingsField.LlmApiKey, new AppSettingsData(), _settings.ProfileDirectory));
+        Assert.Equal("LLM API key saved unencrypted: no DPAPI.", SettingsMenu.LlmApiKeyPlainWarning("no DPAPI"));
+        Assert.Equal("Home Assistant API key", SettingsMenu.FieldName(SettingsField.HomeAssistantToken));   // "token" until 2026-09-28 (the user's call)
+        Assert.Equal("Home Assistant API key saved unencrypted: no DPAPI.", SettingsMenu.HomeAssistantTokenPlainWarning("no DPAPI"));
+    }
+
+    [Fact]
     public async Task EditUrl_EmptyIsAllowed_AndMeansProbe()
     {
         _settings.Update(d => d.LlmUrl = "http://old:1");
@@ -772,6 +816,7 @@ public class SettingsMenuTests : IDisposable
                 SettingsField.BotChatImg2ImgWorkflow, SettingsField.BotChatImg2ImgMode,
                 SettingsField.BotChatPreloadedSkills, SettingsField.BotChatSkillMode,
                 SettingsField.LlmPreserveThinking, SettingsField.SessionSaveThinking, SettingsField.LlmSampling, SettingsField.LlmSamplingFromHuggingFace,
+                SettingsField.HomeAssistantTools, SettingsField.HomeAssistantUrl, SettingsField.HomeAssistantToken, SettingsField.HomeAssistantTest, SettingsField.HomeAssistantActionPolicy, SettingsField.HomeAssistantAssistAgent, SettingsField.HomeAssistantTimeoutSeconds,
             },
             Enum.GetValues<SettingsField>());
         // The compact rows: on the LLM tab after the context length but no reconnect; the type a picker, the two others typed.
@@ -956,7 +1001,7 @@ public class SettingsMenuTests : IDisposable
         Assert.Equal("protected   [#9A8BB8]loaded skills survive a prune and the mid-turn guard[/]", SettingsMenu.SkillCompactModeLabel("protected"));
         Assert.Equal("unprotected [#9A8BB8]loaded skills prune like any tool result[/]", SettingsMenu.SkillCompactModeLabel("unprotected"));
         Assert.Equal(7, SettingsMenu.TabFields.Count);   // Claude (API) since later on 2026-09-27; Claude on 2026-09-27 until later that day (to /tools); Botchat since 2026-09-25; 9 until 2026-09-19, when Ask, Files and Web moved to /tools (ToolsTabFields) and, later that day, Skills to /skills (SkillsTabFields)
-        Assert.Equal(10, SettingsMenu.ToolsTabFields.Count);   // Claude since 2026-09-27; Images since 2026-09-24; SQL since 2026-09-23; Obsidian since 2026-09-22 and Options last later that day (first since later on 2026-09-19); Git between Files and Web since 2026-09-20; Shell between Git and Web since 2026-09-21
+        Assert.Equal(11, SettingsMenu.ToolsTabFields.Count);   // Home Assistant since 2026-09-28; Claude since 2026-09-27; Images since 2026-09-24; SQL since 2026-09-23; Obsidian since 2026-09-22 and Options last later that day (first since later on 2026-09-19); Git between Files and Web since 2026-09-20; Shell between Git and Web since 2026-09-21
         Assert.Equal(2, SettingsMenu.SkillsTabFields.Count);   // Options and Reflection, since later on 2026-09-19 (one list of 11, then 14, before)
         Assert.Equal(14, SettingsMenu.SkillsTabFields.Sum(t => t.Count));   // 13 until Reflection edit supporting files came on 2026-09-27; 12 until Reflection yields to turns came on 2026-09-24; 13 until Allow skill delete went on 2026-09-23; 14 until Reflection verbose went later still on 2026-09-19
         Assert.Equal(new[] { SettingsField.Profile, SettingsField.NewProfileMode, SettingsField.WorkingDirectory, SettingsField.QueueMessages, SettingsField.QueueCancelMode, SettingsField.Memory, SettingsField.CopyUserPrompt, SettingsField.ShowImageThumbnails, SettingsField.ImageThumbnailSize, SettingsField.TranscriptMarkdown, SettingsField.PastePreviewLines, SettingsField.HideExitAutocomplete, SettingsField.CommandTypoIntercept, SettingsField.KeepCommandHistory, SettingsField.WelcomeSplash, SettingsField.ShowWorkingDirectory, SettingsField.ShowToolbar, SettingsField.Theme, SettingsField.DraftEditor, SettingsField.ImageEditor, SettingsField.ThemedViewer }, SettingsMenu.TabFields[(int)SettingsTab.General]);   // Image editor under Draft editor, later on 2026-09-24; Keep command history under the typo intercept, 2026-09-25; Theme under Show toolbar and Themed image viewer last, later on 2026-09-27
@@ -1128,7 +1173,7 @@ public class SettingsMenuTests : IDisposable
         Assert.Equal("cmd        [#9A8BB8]cmd.exe: batch syntax[/]", SettingsMenu.ShellLabel("cmd", installed: true));
         Assert.Equal("Shell allowed commands: git push removed", SettingsMenu.PrefixRemovedNotice("git push"));
         // The git rows (2026-09-20): the Git tab (Git (native), the last, since later on 2026-09-21) — the switch, then the two caps alphabetically; typed, none a reconnect.
-        Assert.Equal(new[] { SettingsField.GitNativeTools, SettingsField.GitNativeDiffMaxLines, SettingsField.GitNativeLogMaxCommits, SettingsField.GitNativeEmail, SettingsField.GitNativeName }, SettingsMenu.ToolsTabFields[8]);
+        Assert.Equal(new[] { SettingsField.GitNativeTools, SettingsField.GitNativeDiffMaxLines, SettingsField.GitNativeLogMaxCommits, SettingsField.GitNativeEmail, SettingsField.GitNativeName }, SettingsMenu.ToolsTabFields[9]);
         // The identity pair (2026-09-21): typed, empty allowed and shown as (not set), no validation.
         Assert.Equal("Git native email", SettingsMenu.FieldName(SettingsField.GitNativeEmail));   // the Git native labels, later on 2026-09-21
         Assert.Equal("Git native name", SettingsMenu.FieldName(SettingsField.GitNativeName));
@@ -1162,7 +1207,7 @@ public class SettingsMenuTests : IDisposable
         Assert.Equal("searxng", SettingsMenu.FieldValue(SettingsField.WebSearchMethod, new AppSettingsData { WebSearchMethod = "searxng" }, _settings.ProfileDirectory));
         Assert.Equal("duckduckgo [#9A8BB8]the built-in DuckDuckGo scrape, no setup[/]", SettingsMenu.SearchMethodLabel("duckduckgo"));
         Assert.Equal("searxng    [#9A8BB8]the instance named in Web SearXNG URL; DuckDuckGo until one is set[/]", SettingsMenu.SearchMethodLabel("searxng"));
-        foreach (var f in SettingsMenu.ToolsTabFields[8])
+        foreach (var f in SettingsMenu.ToolsTabFields[9])
         {
             Assert.False(SettingsMenu.IsLlmField(f) || SettingsMenu.IsTtsField(f) || SettingsMenu.IsVoiceField(f));
         }
@@ -1373,7 +1418,7 @@ public class SettingsMenuTests : IDisposable
         Assert.Equal("unprotected", SettingsMenu.FieldValue(SettingsField.SkillCompactMode, new AppSettingsData { SkillCompactMode = "unprotected" }, _settings.ProfileDirectory));
         Assert.Equal("protected   [#9A8BB8]loaded skills survive a prune and the mid-turn guard[/]", SettingsMenu.SkillCompactModeLabel("protected"));
         Assert.Equal("unprotected [#9A8BB8]loaded skills prune like any tool result[/]", SettingsMenu.SkillCompactModeLabel("unprotected"));
-        Assert.Equal([SettingsField.ToolsDollarMention, SettingsField.ToolCollapseCount, SettingsField.CodeCollapseCount], SettingsMenu.ToolsTabFields[9]);   // the Options tab, later on 2026-09-19 (index 7 since the SQL tab, 2026-09-23, 9 since the Claude tab, 2026-09-27); the fold's count under the switch 2026-09-22, the code fold's under it later that day
+        Assert.Equal([SettingsField.ToolsDollarMention, SettingsField.ToolCollapseCount, SettingsField.CodeCollapseCount], SettingsMenu.ToolsTabFields[10]);   // the Options tab, later on 2026-09-19 (index 7 since the SQL tab, 2026-09-23, 9 since the Claude tab, 2026-09-27); the fold's count under the switch 2026-09-22, the code fold's under it later that day
         Assert.Equal([SettingsField.AskUser, SettingsField.AskMaxQuestions, SettingsField.AskMaxChoices], SettingsMenu.ToolsTabFields[3]);   // the Ask tab: second after Options until later on 2026-09-21, between Shell and Git (native) since
         Assert.True(SettingsMenu.IsToggle(SettingsField.AskUser));
         Assert.False(SettingsMenu.IsToggle(SettingsField.AskMaxQuestions) || SettingsMenu.IsToggle(SettingsField.AskMaxChoices));
@@ -1399,12 +1444,12 @@ public class SettingsMenuTests : IDisposable
         Assert.Equal(26, SettingsMenu.TabLabelWidth(SettingsTab.Stt));       // "STT interrupt echo guard"
         Assert.Equal(26, SettingsMenu.TabLabelWidth(SettingsTab.BotChat));   // "Botchat txt2img workflow" / "Botchat img2img workflow" (2026-09-27; "Botchat images enabled" before)
         Assert.Equal(36, SettingsMenu.LabelWidthOf(SettingsMenu.ToolsTabFields[4]));   // the Claude tab (2026-09-27): "Claude advisor tool calls per turn"
-        Assert.Equal(21, SettingsMenu.LabelWidthOf(SettingsMenu.ToolsTabFields[9]));   // the Options tab (index 7 since SQL, 2026-09-23): "Tool collapse count" (2026-09-22; "$-mention enabled", 19, the Options tab's one row from later on 2026-09-19)
+        Assert.Equal(21, SettingsMenu.LabelWidthOf(SettingsMenu.ToolsTabFields[10]));   // the Options tab (index 7 since SQL, 2026-09-23): "Tool collapse count" (2026-09-22; "$-mention enabled", 19, the Options tab's one row from later on 2026-09-19)
         Assert.Equal(26, SettingsMenu.LabelWidthOf(SettingsMenu.ToolsTabFields[0]));   // "Web browser network mode" (the Web-prefixed labels, later still on 2026-09-19; "Web search max results", 24, before)
         Assert.Equal(32, SettingsMenu.LabelWidthOf(SettingsMenu.ToolsTabFields[1]));   // "File view image max (per call)" (the File-prefixed labels, later still on 2026-09-19; "Stale line number guard", 25, that morning; "Always return line numbers", 28, from 2026-09-17 until it went; "Tree max length", 17, before)
         Assert.Equal(29, SettingsMenu.LabelWidthOf(SettingsMenu.ToolsTabFields[2]));   // "Shell tool bridge max calls" (the Shell tab, 2026-09-21; the row was "Shell code max tool calls", 27, until later that day)
         Assert.Equal(30, SettingsMenu.LabelWidthOf(SettingsMenu.ToolsTabFields[3]));   // "Ask max choices per question"
-        Assert.Equal(28, SettingsMenu.LabelWidthOf(SettingsMenu.ToolsTabFields[8]));   // "Git native log max commits" (later on 2026-09-21; "Git log max commits", 21, from 2026-09-20)
+        Assert.Equal(28, SettingsMenu.LabelWidthOf(SettingsMenu.ToolsTabFields[9]));   // "Git native log max commits" (later on 2026-09-21; "Git log max commits", 21, from 2026-09-20)
         Assert.Equal(38, SettingsMenu.LabelWidthOf(SettingsMenu.SkillsTabFields[0]));   // "Use external skills (.agents\\skills)"
         Assert.Equal(34, SettingsMenu.LabelWidthOf(SettingsMenu.SkillsTabFields[1]));   // "Reflection edit supporting files" (2026-09-27; "Reflection cooldown (minutes)", 31, from later on 2026-09-19)
         Assert.Equal("TTS speed          [#EFE6FF]1.2[/]", SettingsMenu.FieldLabel(SettingsField.TtsSpeed, data, _settings.ProfileDirectory, null, SettingsMenu.TabLabelWidth(SettingsTab.Tts)));   // 1.0 until 2026-09-18

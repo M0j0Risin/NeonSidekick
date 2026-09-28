@@ -4199,13 +4199,14 @@ public partial class ChatScreenTests : IDisposable
         _console.Input.PushKey(Keys.Right);     // SQL (2026-09-23)
         _console.Input.PushKey(Keys.Right);     // ComfyUI (2026-09-24; Images until later that day)
         _console.Input.PushKey(Keys.Right);     // Claude (2026-09-27)
+        _console.Input.PushKey(Keys.Right);     // Home Assistant (2026-09-28)
         _console.Input.PushKey(Keys.Right);     // Options (second until later on 2026-09-22, last since — the user's ask)
         _console.Input.PushKey(Keys.Escape);
         PushLine("/exit");
 
         string output = await RunAsync();
 
-        Assert.Contains(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude (CLI)    Obsidian    ComfyUI    SQL    Git (native)    Options ", output);
+        Assert.Contains(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude (CLI)    Home Assistant    Obsidian    ComfyUI    SQL    Git (native)    Options ", output);
         Assert.Contains("\n▸ ComfyUI tools                  on\n  ComfyUI URL                    (not set)\n  ComfyUI workflows offered      all (not narrowed)\n  ComfyUI add workflow           Enter to start workflow wizard\n  ComfyUI ^-mention enabled      on\n  ComfyUI timeout (s)            300\n  ComfyUI max pictures per call  5 pictures\n  ComfyUI reinforce negatives    on\n  ComfyUI show prompts           on\n  ComfyUI picture strip          on\n  ComfyUI output folder          comfy_images\n", output);   // 2026-09-24; the offered checklist and the wizard later that day, the ^-mention switch later still
         Assert.Contains("\n▸ Claude executable                   (looked up)\n  Claude slash command permissions    read-only\n  Claude slash command model          (Claude Code's default)\n  Claude slash command effort         (Claude Code's default)\n  Claude advisor tool                 off\n  Claude advisor tool context         brief\n  Claude advisor tool calls per turn  2 calls\n  Claude advisor tool model           (as Claude slash command model)\n  Claude advisor tool effort          (as Claude slash command effort)\n  Claude advisor tool confirm         off\n", output);   // 2026-09-27: /claude's rows off /settings, then the advisor's
         Assert.Contains("\n  Clock (3)\n▸ get_current_time      on   ", output);
@@ -4531,7 +4532,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude (CLI)    Obsidian    ComfyUI    SQL    Git (native)    Options ", output);
+        Assert.Contains(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude (CLI)    Home Assistant    Obsidian    ComfyUI    SQL    Git (native)    Options ", output);
         Assert.Contains("  · get_current_time: off", output);
         Assert.Equal(["get_current_time"], _settings.Current.ToolsDisabled);
         Assert.DoesNotContain(ChatScreen.MidTurnDeferredNotice("/tools"), output);
@@ -7755,21 +7756,22 @@ public partial class ChatScreenTests : IDisposable
     // ── /keycopy (2026-09-28) ───────────────────────────────────────────────
 
     [Fact]
-    public async Task KeyCopy_Yes_WritesBothKeysIntoTheOtherProfile()
+    public async Task KeyCopy_Yes_WritesEveryKeyIntoTheOtherProfile()
     {
-        Profiles.Create(_dir, "work", new AppSettingsData { LlmModel = "work-model", LlmApiKey = "work-llm", ClaudeApiKey = "work-claude" });
-        _settings.Update(d => { d.LlmApiKey = "my-llm"; d.ClaudeApiKey = "dpapi:AQAAAN"; });
+        Profiles.Create(_dir, "work", new AppSettingsData { LlmModel = "work-model", LlmApiKey = "work-llm", ClaudeApiKey = "work-claude", HomeAssistantToken = "work-ha" });
+        _settings.Update(d => { d.LlmApiKey = "my-llm"; d.ClaudeApiKey = "dpapi:AQAAAN"; d.HomeAssistantToken = "dpapi:AQAAHA"; });
         PushLine("/keycopy work");
         PickYes();
         PushLine("/exit");
 
         string output = await RunAsync();
 
-        Assert.Contains(SettingsMenu.PromptTitle(ChatScreen.KeyCopyPrompt("work", llmSet: true, claudeSet: true), SettingsMenu.ConfirmKeys), output);
-        Assert.Contains("  · " + ChatScreen.KeyCopiedNotice("work", llmSet: true, claudeSet: true), output);
+        Assert.Contains(SettingsMenu.PromptTitle(ChatScreen.KeyCopyPrompt("work", llmSet: true, claudeSet: true, haSet: true), SettingsMenu.ConfirmKeys), output);
+        Assert.Contains("  · " + ChatScreen.KeyCopiedNotice("work", llmSet: true, claudeSet: true, haSet: true), output);
         var work = ReadProfile(Profiles.ProfileFile(_dir, "work"));
         Assert.Equal("my-llm", work.LlmApiKey);
         Assert.Equal("dpapi:AQAAAN", work.ClaudeApiKey);   // as stored: never decrypted on the way
+        Assert.Equal("dpapi:AQAAHA", work.HomeAssistantToken);   // the Home Assistant API key too (2026-09-28)
         Assert.Equal("work-model", work.LlmModel);         // the rest of the file round-trips
         Assert.DoesNotContain("my-llm", output);           // the values are never shown
         Assert.Equal(Profiles.DefaultName, _settings.ProfileName);
@@ -7779,20 +7781,21 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public async Task KeyCopy_Mirrors_AKeyNotSetHereClearsTheTargets()
     {
-        // The user's call: the target ends with exactly this profile's two keys; the question says which one goes.
-        Profiles.Create(_dir, "work", new AppSettingsData { LlmApiKey = "work-llm", ClaudeApiKey = "work-claude" });
-        _settings.Update(d => { d.LlmApiKey = "my-llm"; d.ClaudeApiKey = ""; });
+        // The user's call: the target ends with exactly this profile's keys; the question says which ones go.
+        Profiles.Create(_dir, "work", new AppSettingsData { LlmApiKey = "work-llm", ClaudeApiKey = "work-claude", HomeAssistantToken = "work-ha" });
+        _settings.Update(d => { d.LlmApiKey = "my-llm"; d.ClaudeApiKey = ""; d.HomeAssistantToken = ""; });
         PushLine("/keycopy work");
         PickYes();
         PushLine("/exit");
 
         string output = await RunAsync();
 
-        Assert.Contains(SettingsMenu.PromptTitle(ChatScreen.KeyCopyPrompt("work", llmSet: true, claudeSet: false), SettingsMenu.ConfirmKeys), output);
-        Assert.Contains("  · " + ChatScreen.KeyCopiedNotice("work", llmSet: true, claudeSet: false), output);
+        Assert.Contains(SettingsMenu.PromptTitle(ChatScreen.KeyCopyPrompt("work", llmSet: true, claudeSet: false, haSet: false), SettingsMenu.ConfirmKeys), output);
+        Assert.Contains("  · " + ChatScreen.KeyCopiedNotice("work", llmSet: true, claudeSet: false, haSet: false), output);
         var work = ReadProfile(Profiles.ProfileFile(_dir, "work"));
         Assert.Equal("my-llm", work.LlmApiKey);
         Assert.Equal("", work.ClaudeApiKey);
+        Assert.Equal("", work.HomeAssistantToken);
     }
 
     [Fact]
@@ -7806,10 +7809,11 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains("  · " + ChatScreen.KeyCopiedNotice("default", llmSet: true, claudeSet: true), output);
+        Assert.Contains("  · " + ChatScreen.KeyCopiedNotice("default", llmSet: true, claudeSet: true, haSet: false), output);
         var data = ReadProfile(Profiles.ProfileFile(_dir, Profiles.DefaultName));
-        Assert.Equal("work-llm", data.LlmApiKey);
-        Assert.Equal("work-claude", data.ClaudeApiKey);
+        // "work"'s plain keys were encrypted as it loaded (2026-09-28) and copied as stored.
+        Assert.Equal("work-llm", SettingsSecrets.Reveal(data.LlmApiKey));
+        Assert.Equal("work-claude", SettingsSecrets.Reveal(data.ClaudeApiKey));
         Assert.Equal(new AppSettingsData().LlmModel, data.LlmModel);
     }
 
@@ -7870,13 +7874,16 @@ public partial class ChatScreenTests : IDisposable
     public void KeyCopyText_IsPinned()
     {
         // The question's wording is the contract (the clearing clause is what makes the mirror safe to say yes to).
-        Assert.Equal("Copy the LLM API key and the Claude API key into \"work\"?", ChatScreen.KeyCopyPrompt("work", llmSet: true, claudeSet: true));
-        Assert.Equal("Copy the LLM API key and the Claude API key into \"work\"? \"work\"'s Claude API key is cleared: none here.", ChatScreen.KeyCopyPrompt("work", llmSet: true, claudeSet: false));
-        Assert.Equal("Copy the LLM API key and the Claude API key into \"work\"? \"work\"'s LLM API key is cleared: none here.", ChatScreen.KeyCopyPrompt("work", llmSet: false, claudeSet: true));
-        Assert.Equal("Copy the LLM API key and the Claude API key into \"work\"? \"work\"'s LLM API key and Claude API key are cleared: none here.", ChatScreen.KeyCopyPrompt("work", llmSet: false, claudeSet: false));
-        Assert.Equal("(copied the LLM API key and the Claude API key into \"work\")", ChatScreen.KeyCopiedNotice("work", llmSet: true, claudeSet: true));
-        Assert.Equal("(copied the Claude API key into \"work\"; its LLM API key cleared)", ChatScreen.KeyCopiedNotice("work", llmSet: false, claudeSet: true));
-        Assert.Equal("(cleared \"work\"'s LLM API key and Claude API key)", ChatScreen.KeyCopiedNotice("work", llmSet: false, claudeSet: false));
+        const string Question = "Copy the LLM API key, the Claude API key and the Home Assistant API key into \"work\"?";
+        Assert.Equal(Question, ChatScreen.KeyCopyPrompt("work", llmSet: true, claudeSet: true, haSet: true));
+        Assert.Equal(Question + " \"work\"'s Claude API key is cleared: none here.", ChatScreen.KeyCopyPrompt("work", llmSet: true, claudeSet: false, haSet: true));
+        Assert.Equal(Question + " \"work\"'s Home Assistant API key is cleared: none here.", ChatScreen.KeyCopyPrompt("work", llmSet: true, claudeSet: true, haSet: false));
+        Assert.Equal(Question + " \"work\"'s LLM API key and Home Assistant API key are cleared: none here.", ChatScreen.KeyCopyPrompt("work", llmSet: false, claudeSet: true, haSet: false));
+        Assert.Equal(Question + " \"work\"'s LLM API key, Claude API key and Home Assistant API key are cleared: none here.", ChatScreen.KeyCopyPrompt("work", llmSet: false, claudeSet: false, haSet: false));
+        Assert.Equal("(copied the LLM API key, the Claude API key and the Home Assistant API key into \"work\")", ChatScreen.KeyCopiedNotice("work", llmSet: true, claudeSet: true, haSet: true));
+        Assert.Equal("(copied the LLM API key and the Claude API key into \"work\"; its Home Assistant API key cleared)", ChatScreen.KeyCopiedNotice("work", llmSet: true, claudeSet: true, haSet: false));
+        Assert.Equal("(copied the Home Assistant API key into \"work\"; its LLM API key and Claude API key cleared)", ChatScreen.KeyCopiedNotice("work", llmSet: false, claudeSet: false, haSet: true));
+        Assert.Equal("(cleared \"work\"'s LLM API key, Claude API key and Home Assistant API key)", ChatScreen.KeyCopiedNotice("work", llmSet: false, claudeSet: false, haSet: false));
     }
 
     [Fact]
@@ -7891,7 +7898,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains(SettingsMenu.PromptTitle(ChatScreen.KeyCopyPrompt("work", llmSet: false, claudeSet: true), SettingsMenu.ConfirmKeys), output);
+        Assert.Contains(SettingsMenu.PromptTitle(ChatScreen.KeyCopyPrompt("work", llmSet: false, claudeSet: true, haSet: false), SettingsMenu.ConfirmKeys), output);
         var work = ReadProfile(Profiles.ProfileFile(_dir, "work"));
         Assert.Equal(LlmEndpoint.DefaultApiKey, work.LlmApiKey);
         Assert.Equal("sk-ant-x", work.ClaudeApiKey);
@@ -8251,7 +8258,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.False(_settings.Current.ShellPoliceOutsidePaths);
         string memory = "\n" + Titled(MemoryMenu.Title) + "\n";
         string settings = "\n" + Titled(SettingsMenu.Title + "   General    Sessions    LLM    TTS    STT    Claude (API)    Botchat ") + "\n";
-        string tools = "\n" + Titled(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude (CLI)    Obsidian    ComfyUI    SQL    Git (native)    Options ") + "\n";
+        string tools = "\n" + Titled(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude (CLI)    Home Assistant    Obsidian    ComfyUI    SQL    Git (native)    Options ") + "\n";
         string allowed = "\n" + Titled(AllowedCommandsTitle) + "\n";
         Assert.Equal(1, output.Split(memory).Length - 1);
         Assert.Equal(1, output.Split(allowed).Length - 1);
@@ -9272,7 +9279,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("\n" + ScreenPane.ToolbarRow(ChatScreen.ToolbarStripFor(true, CommandPolicyMode.Ask, true), cwd, 239), output);
         Assert.DoesNotContain("\n" + ScreenPane.ToolbarRow(ChatScreen.ToolbarStrip, cwd, 239), output);   // never the six alone: memory, the policy and the police are on
         int settings = output.IndexOf("\n" + Titled(SettingsMenu.Title + "   General    Sessions    LLM    TTS    STT    Claude (API)    Botchat ") + "\n", StringComparison.Ordinal);
-        int tools = output.IndexOf(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude (CLI)    Obsidian    ComfyUI    SQL    Git (native)    Options ", StringComparison.Ordinal);
+        int tools = output.IndexOf(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude (CLI)    Home Assistant    Obsidian    ComfyUI    SQL    Git (native)    Options ", StringComparison.Ordinal);
         int mcp = output.IndexOf(McpText.Label + "   Servers    Tools    Options ", StringComparison.Ordinal);
         int skills = output.IndexOf(SkillsText.Label + "   Offered    Reflection    Project    Options ", StringComparison.Ordinal);
         int sys = output.IndexOf("\n" + Titled(SystemPromptSummary.Label + "   Prompt    Tools ") + "\n", StringComparison.Ordinal);
@@ -9364,7 +9371,7 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         string settings = "\n" + Titled(SettingsMenu.Title + "   General    Sessions    LLM    TTS    STT    Claude (API)    Botchat ") + "\n";
-        string tools = "\n" + Titled(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude (CLI)    Obsidian    ComfyUI    SQL    Git (native)    Options ") + "\n";
+        string tools = "\n" + Titled(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude (CLI)    Home Assistant    Obsidian    ComfyUI    SQL    Git (native)    Options ") + "\n";
         string help = "\n" + Titled(InfoPane.Title + "   Commands (basic)    Commands (advanced)    Keys ") + "\n";
         string sys = "\n" + Titled(SystemPromptSummary.Label + "   Prompt    Tools ") + "\n";
         string sessions = "\n" + Titled(SessionsMenu.Title) + "\n";
@@ -11150,7 +11157,7 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         output = string.Join("\n", output.Split('\n').Select(l => l.TrimEnd()));
-        string tools = "\n" + Titled(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude (CLI)    Obsidian    ComfyUI    SQL    Git (native)    Options ") + "\n";
+        string tools = "\n" + Titled(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude (CLI)    Home Assistant    Obsidian    ComfyUI    SQL    Git (native)    Options ") + "\n";
         string sys = "\n" + Titled(SystemPromptSummary.Label + "   Prompt    Tools ") + "\n";
         string sessions = "\n" + Titled(SessionsMenu.Title) + "\n";
         string settings = "\n" + Titled(SettingsMenu.Title + "   General    Sessions    LLM    TTS    STT    Claude (API)    Botchat ") + "\n";
@@ -11574,8 +11581,8 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains("\n" + Titled(ChatScreen.KeyCopyPrompt("work", llmSet: true, claudeSet: true)) + "\n \n▸ No\n  Yes\n", output);
-        Assert.Contains("  · " + ChatScreen.KeyCopiedNotice("work", llmSet: true, claudeSet: true), output);
+        Assert.Contains("\n" + Titled(ChatScreen.KeyCopyPrompt("work", llmSet: true, claudeSet: true, haSet: false)) + "\n \n▸ No\n  Yes\n", output);
+        Assert.Contains("  · " + ChatScreen.KeyCopiedNotice("work", llmSet: true, claudeSet: true, haSet: false), output);
         var work = Profiles.ReadProfileFile(Profiles.ProfileFile(_dir, "work"));
         Assert.Equal("my-llm", work.LlmApiKey);
         Assert.Equal("sk-ant-x", work.ClaudeApiKey);
@@ -17300,7 +17307,8 @@ public partial class ChatScreenTests : IDisposable
         PutSkill(ProfileSkills, "haiku");
         StepsWhenIdle([.. Typed("/h"), Key(Keys.Escape), Key(Keys.Escape), Line("/exit")]);
         string output = await RunAsync();
-        Assert.Contains(MenuPane.Pointer + "/help", output);
+        Assert.Contains(MenuPane.Pointer + "/ha ", output);   // /ha, A to Z ahead of /help since 2026-09-28
+        Assert.Contains("  /help", output);
         Assert.DoesNotContain("/haiku", output);
         Assert.Empty(_chat.Requests);
     }

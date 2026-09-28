@@ -52,6 +52,7 @@ Neon Sidekick brings privacy-first, local LLM inference to your terminal. Powere
 ### Integrations
 * **Obsidian:** Search, read, write and link notes directly in your vault's files: no plugin, and Obsidian needn't be running. Wikilinks, aliases, tags, properties and daily notes all work.
 * **SQL Server:** Read-only queries over named connections, plus schema, relationship and index discovery. Every query is parsed down to a single `SELECT` and run in a transaction that is always rolled back. SQL, Windows or run-as sign-in, with passwords encrypted (DPAPI) or in Windows Credential Manager.
+* **Home Assistant:** Lights, scenes, the TV, to-do lists and sensors through your own Home Assistant. The model finds devices by room or name ("dim the den to 30%"), and anything outside a safe list waits for your yes. `/ha` drives the house directly, without the model.
 * **ComfyUI:** Pictures from your own ComfyUI workflows (text-to-image, image-to-image, face swaps). The model writes prompts in each model family's style, or `/imagine` sends yours as typed. A wizard builds or imports workflows.
 * **Claude API:** Anthropic's Claude models as one more `/server` choice, on your own API key (stored encrypted), with thinking levels, prompt caching and cost in `/usage`. Off until you turn it on in the *Claude (API)* tab of `/settings`.
 * **Claude Code:** `/claude` sends a message to the Claude Code CLI and brings its reply into the conversation. With `claude_advisor`, the local model can ask Claude for read-only advice when it's stuck. Both are optional and run on your own Claude Code sign-in.
@@ -156,7 +157,7 @@ Settings that an environment variable or flag can override for one launch are li
 | LLM scan mode | Where a blank URL looks for a server: `local` (the usual ports on this machine), `remote` (the same ports across the local network), `both`, or `disabled` (no scan; set the URL by hand). | `local` |
 | LLM URL | The OpenAI-compatible base URL (`http://127.0.0.1:1234/v1`). Empty scans per *LLM scan mode* and, at startup, lets you pick a server, model and reasoning level, all saved (ESC takes the first server, unsaved). `/server` fills it in. | (scan) |
 | LLM model | The model id; empty takes the first the server lists. `/model` picks one. | (first listed) |
-| LLM API key | The bearer token; `empty` for keyless local servers. | `empty` |
+| LLM API key | The bearer token; `empty` for keyless local servers. A real key is saved encrypted for your Windows account (DPAPI) and shown as `(set, encrypted)`; typing replaces it (`empty` stays as it is). | `empty` |
 | LLM reasoning | The reasoning effort sent with every request: `none` (thinking off), `low`, `medium`, `high` or `xhigh`. `/reasoning` opens the same list. | `none` |
 | LLM request timeout (s) | The most one HTTP request may take (up to 3600). | 3600 |
 | LLM turn timeout (s) | The most one whole turn — every tool round trip included — may take (up to 21600). | 21600 |
@@ -414,6 +415,20 @@ The Claude Code CLI, for `/claude` (you send it a message) and `claude_advisor` 
 | Claude advisor tool effort | The `--effort` for the advisor; the first row follows *Claude slash command effort*. | (as Claude slash command effort) |
 | Claude advisor tool confirm | Each call waits for your yes on the pane (the cursor starts on No; ESC is no). A no tells the model to carry on without it. Headless, calls are refused. | off |
 
+#### Home Assistant
+
+| Setting | What it does | Default |
+|---|---|---|
+| Home Assistant tools | Offers the Home Assistant tools (`ha_overview`, `ha_states`, `ha_history`, `ha_lights`, `ha_scene`, `ha_media`, `ha_todo`, `ha_call_service`, `ha_assist`), once a URL and a token are set. | on |
+| Home Assistant URL | Your Home Assistant server (`http://localhost:8123`, or another machine on your LAN). Like the LLM server, the web tools' network mode never blocks it. | (not set) |
+| Home Assistant API key | A long-lived access token (in Home Assistant: your profile → Security → Long-lived access tokens). Typed into a masked slot and saved encrypted (DPAPI) for your Windows account; empty clears it. Never written to the log. | (none) |
+| Home Assistant test connection | Asks the server for its version with the URL and token as saved, and shows the answer. | — |
+| Home Assistant action policy | What the model may switch. `off`: it only reads. `ask`: lights, scenes, the TV's power, volume, source and playback, and to-do lists run; anything else (a remote key, a button, a switch, a script, an automation, a restart) waits for your yes on the pane. Headless, those calls are refused. `allow`: everything runs. `/ha` is never asked about. | `ask` |
+| Home Assistant Assist agent | The conversation agent `ha_assist` and `/ha say` talk to (e.g. `conversation.google_generative_ai`); empty = Home Assistant's default. | (Home Assistant's default) |
+| Home Assistant timeout (s) | How long one request may take (2–60). | 10 |
+
+The services that run without asking under `ask` can be changed in `profile.json` (`homeAssistantSafeServices`, entries like `light.*` or `remote.send_command`).
+
 #### Obsidian
 
 | Setting | What it does | Default |
@@ -523,7 +538,7 @@ Type `/` to list every command with its summary; after a command and a space, it
 | `/claude <message>` | Send the message to Claude Code (the `claude` CLI) and stream its reply into the transcript. See [Claude Code from the chat](#claude-code-from-the-chat). |
 | `/clear` | Start a new conversation and clear the screen. |
 | `/cmdcopy <profile> [--history] [overwrite]` | Copy this profile's *Shell allowed commands* into another profile, added to its list or (`overwrite`) replacing it. `--history` copies the command history instead (refused while that profile has *Keep command history* off). |
-| `/keycopy <profile>` | Copy this profile's *LLM API key* and *Claude API key* into another profile after a confirmation, replacing its own. Both are mirrored: a key not set here clears that profile's. The saved keys are copied (a key set only by `NEONSIDEKICK_LLM_API_KEY` or `NEONSIDEKICK_CLAUDE_API_KEY` is not), the encrypted Claude key as it is. |
+| `/keycopy <profile>` | Copy this profile's *LLM API key*, *Claude API key* and *Home Assistant API key* into another profile after a confirmation, replacing its own. All are mirrored: a key not set here clears that profile's. The saved keys are copied (a key set only by `NEONSIDEKICK_LLM_API_KEY`, `NEONSIDEKICK_CLAUDE_API_KEY` or `NEONSIDEKICK_HA_TOKEN` is not), the encrypted ones as they are. |
 | `/cmdclear` | Clear this profile's command history, stored and in memory, after a confirmation. |
 | `/cmdlist` | Open the *Shell allowed commands* list: Enter removes a prefix, ESC closes. |
 | `/police` | Open the *Shell police outside paths* on/off page. |
@@ -536,6 +551,12 @@ Type `/` to list every command with its summary; after a command and a space, it
 | `/exit` | Exit the app. |
 | `/explore [path]` | Open the working directory in your file browser. |
 | `/gituser [force]` | Write *Git native email* and *Git native name* into the repository's config as `user.email` / `user.name`. An existing `[user]` section is kept unless `force`. Does nothing while *Git native tools* is off. |
+| `/ha` | Home Assistant at a glance: the server, the lights on in each room, the TV, temperatures, motion, low batteries, to-do lists. |
+| `/ha on\|off\|toggle <room or name> [brightness%]` | Switch a room (its group light), a light, a switch or the TV (`/ha on den 40%`, `/ha off kitchen and hallway`). |
+| `/ha scene <name>` | Activate a scene (`/ha scene den relax`). |
+| `/ha tv on\|off\|mute\|unmute\|up\|down\|vol <0-100>\|source <name>` | Control the only media player (`/ha tv source hdmi 2`). |
+| `/ha states [domain \| words \| entity id]` | List entities with their ids and states; an id shows every attribute. |
+| `/ha say <sentence>` | Hand a sentence to Home Assistant's Assist agent. |
 | `/help` | Show the commands and keys: everyday commands on Commands (basic), the rest on Commands (advanced), then Keys. |
 | `/interrupt [on\|off]` | Toggle the wake-word interrupt during a spoken reply. |
 | `/learn [note \| sessions [N \| text]]` | Write or improve a skill in the background from the last turn, or from stored sessions. |
@@ -568,7 +589,7 @@ Type `/` to list every command with its summary; after a command and a space, it
 | `/test [id \| reasoning \| structured \| long \| all \| history]` | Run benchmark tests against the connected model and save the results; alone it lists the tests with their last verdicts. See [Benchmark tests](#benchmark-tests). |
 | `/theme [name]` | Switch the colour theme (the *Theme* setting). Mid-reply, it runs when the reply ends. |
 | `/timer [duration [name] \| stop <name> \| stop all]` | List the timers, start one (`10m`, `90s`, `1h30m`), or stop one. |
-| `/tools` | Switch the model's tools on or off and edit their settings (Web, Files, Shell, Ask, Claude, Obsidian, ComfyUI, SQL, Git). |
+| `/tools` | Switch the model's tools on or off and edit their settings (Web, Files, Shell, Ask, Claude, Home Assistant, Obsidian, ComfyUI, SQL, Git). |
 | `/tree [path]` | Print a tree of the working directory; hidden, system and dot entries only under *File browser/tree mode* `show-hidden`. |
 | `/tts [on\|off]` | Toggle speech output. |
 | `/usage` | Show token usage and performance statistics. |
@@ -708,15 +729,16 @@ The window follows the theme unless *Themed image viewer* is off: a dark title b
 * A name is 1 to 32 letters, digits, `-` or `_`, and not `neon` or one of the verbs.
 * A name starting with `_` is temporary: it loads as usual, but the next launch opens `default` (the profile is kept).
 * `--profile <name>` (or `NEONSIDEKICK_PROFILE`) opens a profile for one launch, temporary ones included, without changing which one the next launch opens. An unknown name exits with code 2. A `--headless` run with neither opens `default`.
-* A reset keeps LLM URL, LLM model, LLM API key, TTS HTTP URL, Claude API key, Web browser path, Web search method, Web SearXNG URL, Claude executable, Obsidian vault and ComfyUI URL; `--all` resets those too. `default` can only be reset while it is loaded.
+* A reset keeps LLM URL, LLM model, LLM API key, TTS HTTP URL, Claude API key, Web browser path, Web search method, Web SearXNG URL, Claude executable, Obsidian vault, ComfyUI URL, Home Assistant URL and Home Assistant API key; `--all` resets those too. `default` can only be reset while it is loaded.
 * `push <name>` copies the loaded profile's settings over another's, `pull <name>` another's over the loaded one's, after a confirmation. Only `profile.json` is copied, and the target keeps its own working directory; memories, persona, operating rules, voice directive and MCP servers stay as they are. Any profile can be overwritten, `default` included. A pull clears the conversation, as a reset does.
+* The *LLM API key*, *Claude API key* and *Home Assistant API key* are kept in `profile.json` encrypted for your Windows account (DPAPI, `dpapi:…`). A key typed into the file by hand is encrypted the next time the profile loads (the `empty` placeholder stays as it is). An encrypted key only reads for the same Windows user on the same machine.
 
 </details>
 
 ## Tools
 [↑ Back to top](#neon-sidekick)
 
-What the model can call, in the groups `/tools` and `/sys` show. A group's switch (`File tools`, `Git native tools`, `Shell command policy`, `Obsidian tools`, `SQL tools`, `ComfyUI tools`, `Claude advisor tool`, `Web tools`, `Memory`, `Agent skills`, `Session tool`, `Ask user`, `MCP servers`) offers or withholds the whole group; a single tool can be switched on or off on `/tools`' Offered tab.
+What the model can call, in the groups `/tools` and `/sys` show. A group's switch (`File tools`, `Git native tools`, `Shell command policy`, `Obsidian tools`, `SQL tools`, `ComfyUI tools`, `Home Assistant tools`, `Claude advisor tool`, `Web tools`, `Memory`, `Agent skills`, `Session tool`, `Ask user`, `MCP servers`) offers or withholds the whole group; a single tool can be switched on or off on `/tools`' Offered tab.
 
 <details>
 <summary><b>🕒 Clock & Timers</b></summary>
@@ -892,6 +914,31 @@ Read-only SQL Server queries over named connections, in-process (`Microsoft.Data
 | `sql_relationships` | `connection?, database?, table?` | The foreign-key join paths `from_table.from_column -> to_table.to_column`, every one or those touching a table. |
 | `sql_indexes` | `connection?, database?, table?, schema?, missing?` | The indexes of a table, a schema or the whole database: kind (clustered, PK, unique, unique constraint, disabled), key and included columns, filter and size, then seeks, scans, lookups and updates since the server started (an unread nonclustered index is marked *(no reads since restart)*). `missing: true` adds the optimizer's missing-index suggestions. Usage and suggestions need `VIEW SERVER STATE`; without it the indexes still list, with a line saying why the rest is missing. |
 | `sql_query` | `sql, connection?, database?, params?, max_rows?` | One read-only `SELECT`; `params` is an object (`{"id": 43659}` for `@id`), `max_rows` 1–1000 (*SQL max rows* by default). |
+
+</details>
+
+<details>
+<summary><b>🏠 Home Assistant</b></summary>
+
+### Home Assistant
+
+The Home Assistant tools reach your own Home Assistant over its REST API with a long-lived access token (*Home Assistant URL*, *Home Assistant API key*). Whatever Home Assistant has connected works: Hue lights and scenes, a TV, sensors, to-do lists.
+
+* **Names, not ids.** The model says "the den", "kitchen and hallway", "Den Corner Lamp" or "all"; a room goes to its group light (a Hue room) when it has one, else to every light in it. A name that fits several things comes back as a question listing them, and a miss lists what is near, so the model never guesses an id.
+* **The action policy.** Under `ask` (the default) the safe services run and anything else shows the pane first, with the service, the device and the data. A no tells the model not to retry. See *Home Assistant action policy*.
+* **Fresh states.** The states are read at most every 30 seconds, and again after any change, so "turn off the den, then tell me what's on" sees the new state.
+
+| Tool | Arguments | What it does |
+|---|---|---|
+| `ha_overview` | — | The lights on in each room (with the room's group light), light groups, media players, temperatures, motion, low batteries (under 20%), to-do lists, the scene count and unavailable lights. |
+| `ha_states` | `query?, domain?, area?` | Entities a line each: id, name, state and what matters for the domain (brightness, colour temperature, source, volume, unit), narrowed by words, a domain and a room (at most 80). An exact entity id gives every attribute, such as a TV's source list. |
+| `ha_history` | `entity, hours?` | One entity's states over the last 1–336 hours (24 by default), oldest first, in local time. |
+| `ha_lights` | `target, action?, brightness_pct?, color_name?, color_temp_kelvin?, transition?` | `on` (the default, also to change brightness or colour), `off` or `toggle`; a colour name or a white temperature (1500–9000 K), a fade of 0–300 s. |
+| `ha_scene` | `scene, transition?` | Activates one scene by name or id. |
+| `ha_media` | `action, target?, volume_pct?, source?` | `on`, `off`, `volume`, `volume_up`, `volume_down`, `mute`, `unmute`, `source`, `play`, `pause`, `play_pause`, `stop`, `next`, `previous`. The target may be left out when there is one media player; a source matches by name or its start (`hdmi 3` → `HDMI 3 (eARC/ARC)`). |
+| `ha_todo` | `action, item?, list?` | `list` (a read, allowed under every policy), `add`, `complete` or `remove` an item; the list may be left out when there is one. |
+| `ha_call_service` | `domain, service, entity?, data?` | Any other service, such as `remote.send_command` with `{"command": "Home"}`, `button.press` or `script.turn_on`; judged by the action policy. |
+| `ha_assist` | `text` | Hands one sentence to Home Assistant's Assist (*Home Assistant Assist agent*), which acts or answers; the model's last resort. Refused under policy `off`. Assist reaches only the entities exposed to it in Home Assistant. |
 
 </details>
 
@@ -1125,7 +1172,7 @@ Every variable the app reads starts with `NEONSIDEKICK_`. They override a settin
 |---|---|---|
 | `NEONSIDEKICK_LLM_URL` | LLM URL (`--url` wins) | A base URL, e.g. `http://127.0.0.1:1234/v1`. |
 | `NEONSIDEKICK_LLM_MODEL` | LLM model (`--model` wins) | A model id from the server. |
-| `NEONSIDEKICK_LLM_API_KEY` | LLM API key | The key. Never written to the log. |
+| `NEONSIDEKICK_LLM_API_KEY` | LLM API key | The key, as issued (not encrypted). Never written to the log. |
 | `NEONSIDEKICK_LLM_REASONING` | LLM reasoning | `none`, `low`, `medium`, `high`, `xhigh`. |
 | `NEONSIDEKICK_LLM_REQUEST_TIMEOUT` | LLM request timeout (s) | Seconds, above 0 and up to 3600. |
 | `NEONSIDEKICK_LLM_TURN_TIMEOUT` | LLM turn timeout (s) | Seconds, above 0 and up to 21600. |
@@ -1170,6 +1217,8 @@ Every variable the app reads starts with `NEONSIDEKICK_`. They override a settin
 | `NEONSIDEKICK_SEARXNG_URL` | Web SearXNG URL | The instance's URL. *Web search method* still picks the engine. |
 | `NEONSIDEKICK_OBSIDIAN_VAULT` | Obsidian vault | The folder holding `.obsidian`. |
 | `NEONSIDEKICK_COMFY_URL` | ComfyUI URL | The ComfyUI server's URL, e.g. `http://gpu-box:8188`. |
+| `NEONSIDEKICK_HA_URL` | Home Assistant URL | The Home Assistant server's URL, e.g. `http://localhost:8123`. |
+| `NEONSIDEKICK_HA_TOKEN` | Home Assistant API key | A long-lived access token, as issued (not encrypted). Never written to the log. |
 
 ### Set by the app
 
@@ -1180,6 +1229,7 @@ Every variable the app reads starts with `NEONSIDEKICK_`. They override a settin
 These only matter when running the test suite from source; each live test is skipped unless its resource is there.
 
 * `NEONSIDEKICK_TEST_LLM_URL`, `NEONSIDEKICK_TEST_TTS_URL`, `NEONSIDEKICK_TEST_SQL_CONNECTION`: a server to test against.
+* `NEONSIDEKICK_TEST_HA_URL` with `NEONSIDEKICK_TEST_HA_TOKEN`: a Home Assistant to read from (the live test never switches anything).
 * `NEONSIDEKICK_TEST_WHISPER_MODEL`, `NEONSIDEKICK_TEST_SILERO_MODEL`, `NEONSIDEKICK_TEST_VOSK_MODEL`, `NEONSIDEKICK_TEST_KOKORO_MODEL`: a model, when it isn't already under `%USERPROFILE%\.neonsidekick\models`.
 * `NEONSIDEKICK_TEST_CLAUDE=1`: the live Claude Code tests, on your own sign-in (Haiku; a few cents a run).
 * `NEONSIDEKICK_TEST_CLAUDE_API_KEY`: the live Claude API tests, with that key (Sonnet 5 and Opus 5.5; a few cents a run).

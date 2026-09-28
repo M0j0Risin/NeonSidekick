@@ -21,6 +21,30 @@ public sealed record LlmEndpoint(Uri BaseUrl, string ModelId, string ApiKey, str
     public const string DefaultApiKey = "empty";
 
     /// <summary>
+    /// The <c>LLM API key</c> a request carries (2026-09-28, the key kept DPAPI-encrypted in the profile like the other two,
+    /// the user's call): a <c>dpapi:</c> value decrypted (<see cref="Settings.SettingsSecrets.Reveal"/>), a plain one — a
+    /// variable, the <see cref="DefaultApiKey"/> placeholder, a machine where DPAPI failed — as it is. An encrypted key this
+    /// Windows user cannot read (another's profile) is <see cref="DefaultApiKey"/>, said in the log: the server's 401 then says the rest.
+    /// </summary>
+    public static string KeyOf(Settings.AppSettingsData effective)
+    {
+        ArgumentNullException.ThrowIfNull(effective);
+        string stored = effective.LlmApiKey ?? "";
+        if (!Sql.WindowsCredentials.IsProtected(stored.Trim()))
+        {
+            return stored;
+        }
+
+        if (Settings.SettingsSecrets.Reveal(stored) is { } key)
+        {
+            return key;
+        }
+
+        Diagnostics.DiagnosticLog.Warn("Llm", "The saved LLM API key could not be decrypted (another Windows user's or machine's profile?); sending none. Type it again in /settings.");
+        return DefaultApiKey;
+    }
+
+    /// <summary>
     /// Parses and normalises a user-supplied base URL. Requires an absolute http(s) URI:
     /// <c>UriBuilder</c> happily parses <c>localhost:8080</c> with <c>localhost</c> as the scheme
     /// and produces a nonsense endpoint. Throws <see cref="ArgumentException"/> on anything else.

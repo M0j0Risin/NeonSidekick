@@ -49,8 +49,11 @@ public static class ToolsText
     /// <summary>The Claude tab and the advisor's group (2026-09-27): <c>/claude</c>'s rows (off <c>/settings</c>, the user's call) and <c>claude_advisor</c>'s, after Ask, before Obsidian (the user's order, later that day; after ComfyUI before). Titled "Claude (CLI)" since later on 2026-09-27 (the user's call: the pair of /settings' Claude (API) tab); "Claude" before.</summary>
     public const string ClaudeTabTitle = "Claude (CLI)";
 
-    /// <summary>The eleven tabs in strip order: Offered, Web, Files, Shell, Ask, Claude, Obsidian, ComfyUI, SQL, Git (native), Options — the user's order since 2026-09-27 (Ask, Git (native), Obsidian, SQL, ComfyUI, Claude before); Options last since later on 2026-09-22 (the user's ask; second, after Offered, before); alphabetical before 2026-09-21; the last ten index <see cref="SettingsMenu.ToolsTabFields"/> one down.</summary>
-    public static readonly IReadOnlyList<string> TabTitles = [OfferedTabTitle, WebTabTitle, FilesTabTitle, ShellTabTitle, AskTabTitle, ClaudeTabTitle, ObsidianTabTitle, ComfyTabTitle, SqlTabTitle, GitTabTitle, OptionsTabTitle];
+    /// <summary>The Home Assistant tools' tab and group (2026-09-28), after Claude (CLI), before Obsidian: among the other integrations, so every tab either side keeps its place from its end of the strip.</summary>
+    public const string HomeAssistantTabTitle = "Home Assistant";
+
+    /// <summary>The twelve tabs in strip order (Home Assistant after Claude since 2026-09-28): Offered, Web, Files, Shell, Ask, Claude, Obsidian, ComfyUI, SQL, Git (native), Options — the user's order since 2026-09-27 (Ask, Git (native), Obsidian, SQL, ComfyUI, Claude before); Options last since later on 2026-09-22 (the user's ask; second, after Offered, before); alphabetical before 2026-09-21; the last ten index <see cref="SettingsMenu.ToolsTabFields"/> one down.</summary>
+    public static readonly IReadOnlyList<string> TabTitles = [OfferedTabTitle, WebTabTitle, FilesTabTitle, ShellTabTitle, AskTabTitle, ClaudeTabTitle, HomeAssistantTabTitle, ObsidianTabTitle, ComfyTabTitle, SqlTabTitle, GitTabTitle, OptionsTabTitle];
 
     /// <summary>The Offered tab's hint row. Pinned.</summary>
     public const string OfferedKeys = "Enter / Space = on or off · ←/→ tabs · ESC = close";
@@ -69,6 +72,9 @@ public static class ToolsText
 
     /// <summary>After the ComfyUI heading while the group is not offered: the switch is off, no ComfyUI URL is set or no workflow is in a comfy folder (2026-09-24). Pinned.</summary>
     public const string ComfyOffSuffix = "(off: ComfyUI tools is off, no ComfyUI URL is set or no workflow is in a comfy folder)";
+
+    /// <summary>After the Home Assistant heading while the group is not offered: the switch is off, or no URL or API key is set (2026-09-28). Pinned.</summary>
+    public const string HomeAssistantOffSuffix = "(off: Home Assistant tools is off, or no Home Assistant URL or API key is set)";
 
     /// <summary>The name column of a tool row: <see cref="SystemPromptSummary.ToolNameWidth"/>, the plain lines' column.</summary>
     public const int NameWidth = SystemPromptSummary.ToolNameWidth;
@@ -148,6 +154,12 @@ public static class ToolsText
         {
             // The SQL shape (2026-09-24): the switch, the server or the workflows.
             return ComfyOffSuffix;
+        }
+
+        if (group.Switch == SettingsField.HomeAssistantTools)
+        {
+            // The SQL shape (2026-09-28): the switch, the URL or the token.
+            return HomeAssistantOffSuffix;
         }
 
         if (group.Switch == SettingsField.SqlTools)

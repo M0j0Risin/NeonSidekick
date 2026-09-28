@@ -6,6 +6,7 @@ using NeonSidekick.Claude;
 using NeonSidekick.Diagnostics;
 using NeonSidekick.Files;
 using NeonSidekick.Git;
+using NeonSidekick.HomeAssistant;
 using NeonSidekick.Llm;
 using NeonSidekick.Llm.Tools;
 using NeonSidekick.Mcp;
@@ -863,7 +864,8 @@ internal sealed partial class ChatScreen
         Action<string, string>? openImage = null,
         IClaudeCli? claude = null,
         Action<string>? openViewer = null,
-        Action<string>? viewPicture = null)
+        Action<string>? viewPicture = null,
+        Func<Uri, string, HaClient>? haClient = null)
     {
         _logFile = logFile;
         ArgumentNullException.ThrowIfNull(time);
@@ -914,6 +916,9 @@ internal sealed partial class ChatScreen
         // call time — the input line is built below, so the lambda reads the field then, not now.
         _comfy = new ComfyStudio(ComfyCatalog(settings), _files, _effective, comfyClient, _random, pasted: n => _input?.Pastes.Original(n), time: _time);
         _comfyTools = ComfyTools(_comfy, _files, () => _settings.ProfileSplashDirectory);
+        // The Home Assistant tools (2026-09-28): the client made for the URL and token in force; an asked call waits on the pane.
+        _ha = new HaSession(_effective, haClient, _time);
+        _haTools = HomeAssistantTools(_ha, ConfirmHomeAsync);
         // The shell tools (2026-09-21): the runner is the one process-start site of the group; the allow
         // list lives for the process (a /clear or a profile switch keeps the session's allows, the permanent
         // ones are the loaded profile's); the gate asks through the approval pane (ApproveCommandAsync).
@@ -1028,7 +1033,7 @@ internal sealed partial class ChatScreen
         _flow = new FlowSink(this);
         _queueMenu = new QueueMenu(_queue, _flow, _menuPane);
         _queuedClicks = new DoubleClick(_pane.Time);
-        _menu = new SettingsMenu(new ConsoleWithInput(_pane, keys), settings, overriddenBy, _input, _transcript, speech, _menuPane, _web.Browser.Locate, () => _interpreters.AvailableShells().Select(ShellKinds.Name).ToHashSet(StringComparer.Ordinal), () => _interpreters.AvailableLanguages([CodeLanguage.PowerShell, CodeLanguage.Python, CodeLanguage.Node]).Select(CodeLanguages.Name).ToHashSet(StringComparer.Ordinal), BrowseWorkingDirectoryAsync, BrowseVaultAsync, _openFile, comfyClient: _comfy.Client, botChatSkills: () => { _catalog.Scan(_effective().ExternalSkills); return _catalog.Skills; })
+        _menu = new SettingsMenu(new ConsoleWithInput(_pane, keys), settings, overriddenBy, _input, _transcript, speech, _menuPane, _web.Browser.Locate, () => _interpreters.AvailableShells().Select(ShellKinds.Name).ToHashSet(StringComparer.Ordinal), () => _interpreters.AvailableLanguages([CodeLanguage.PowerShell, CodeLanguage.Python, CodeLanguage.Node]).Select(CodeLanguages.Name).ToHashSet(StringComparer.Ordinal), BrowseWorkingDirectoryAsync, BrowseVaultAsync, _openFile, comfyClient: _comfy.Client, botChatSkills: () => { _catalog.Scan(_effective().ExternalSkills); return _catalog.Skills; }, testHomeAssistant: _ha.TestAsync)
         {
             // A picker opened mid-turn closes on the watcher task: its saved line waits for the turn task.
             Flow = _flow,
@@ -2499,7 +2504,9 @@ internal sealed partial class ChatScreen
             effective.ShellPreferNative,
             _plan.Turn(_presentPlan)?.Directive,
             effective.ClaudeAdvisor,
-            Without(_advisorTools, disabled).Count);
+            Without(_advisorTools, disabled).Count,
+            HomeAssistantOffered(effective),
+            Without(_haTools, disabled).Count);
     }
 
     /// <summary>
@@ -2546,7 +2553,7 @@ internal sealed partial class ChatScreen
         var disabled = ToolsText.DisabledSet(effective.ToolsDisabled);
         var fileTools = FileToolsFor(_fileTools, effective.FileSafeEdits);   // restore only with File safe edits on (later still on 2026-09-20)
         bool files = effective.FileTools && Without(fileTools, disabled).Count > 0;
-        var groups = SystemPromptSummary.ToolGroups(_clockTools, _timerTools, fileTools, _memoryTools, effective.Memory, effective.LlmOfferTools, WebToolsFor(_webTools, files), effective.WebTools, effective.FileTools, _askTools, effective.AskUser, _pane.Enabled, _skillTools, effective.AgentSkills, _sessionTools, effective.SessionTool, disabled, skillInstalled: Catalog(effective).Count > 0, mcp: _mcp.ServerTools, mcpEnabled: effective.McpServers, git: _gitTools, gitEnabled: effective.GitNativeTools, shell: _shellTools, shellEnabled: ShellOffered(effective), codeAvailable: CodeAvailable(), obsidian: ObsidianToolsFor(_vaultTools, effective), obsidianEnabled: ObsidianOffered(effective), sql: _sqlTools, sqlEnabled: SqlOffered(effective, _sql), comfy: _comfyTools, comfyEnabled: ComfyOffered(effective, _comfy), advisor: _advisorTools, advisorEnabled: effective.ClaudeAdvisor);
+        var groups = SystemPromptSummary.ToolGroups(_clockTools, _timerTools, fileTools, _memoryTools, effective.Memory, effective.LlmOfferTools, WebToolsFor(_webTools, files), effective.WebTools, effective.FileTools, _askTools, effective.AskUser, _pane.Enabled, _skillTools, effective.AgentSkills, _sessionTools, effective.SessionTool, disabled, skillInstalled: Catalog(effective).Count > 0, mcp: _mcp.ServerTools, mcpEnabled: effective.McpServers, git: _gitTools, gitEnabled: effective.GitNativeTools, shell: _shellTools, shellEnabled: ShellOffered(effective), codeAvailable: CodeAvailable(), obsidian: ObsidianToolsFor(_vaultTools, effective), obsidianEnabled: ObsidianOffered(effective), sql: _sqlTools, sqlEnabled: SqlOffered(effective, _sql), comfy: _comfyTools, comfyEnabled: ComfyOffered(effective, _comfy), advisor: _advisorTools, advisorEnabled: effective.ClaudeAdvisor, homeAssistant: _haTools, homeAssistantEnabled: HomeAssistantOffered(effective));
         return groups.SelectMany(g => g.Tools.Where(t => g.Offers(t.Name)).Select(t => new CompletionItem(t.Name, t.Description))).ToList();
     }
 
@@ -2760,7 +2767,7 @@ internal sealed partial class ChatScreen
     /// (<c>Complete(query, ImageFile.IsImagePath)</c>, for <c>/view</c>) — <see cref="ArgumentPaths"/> —
     /// the disk reads behind a function each, so <c>/tts o</c> scans no catalog.
     /// </summary>
-    public sealed record ArgumentSources(Func<IReadOnlyList<string>> Profiles, string LoadedProfile, IReadOnlyList<string> Timers, Func<string, IReadOnlyList<string>> Folders, Func<string, MentionResult> TextFiles, Func<string, MentionResult> ImageFiles, Func<IReadOnlyList<CompletionItem>>? Sessions = null, Func<IReadOnlyList<CompletionItem>>? Skills = null, Func<string, IReadOnlyList<string>>? VaultFolders = null, Func<IReadOnlyList<CompletionItem>>? Workflows = null, bool Planning = false, Func<IReadOnlyList<CompletionItem>>? Plans = null);
+    public sealed record ArgumentSources(Func<IReadOnlyList<string>> Profiles, string LoadedProfile, IReadOnlyList<string> Timers, Func<string, IReadOnlyList<string>> Folders, Func<string, MentionResult> TextFiles, Func<string, MentionResult> ImageFiles, Func<IReadOnlyList<CompletionItem>>? Sessions = null, Func<IReadOnlyList<CompletionItem>>? Skills = null, Func<string, IReadOnlyList<string>>? VaultFolders = null, Func<IReadOnlyList<CompletionItem>>? Workflows = null, bool Planning = false, Func<IReadOnlyList<CompletionItem>>? Plans = null, Func<string, IReadOnlyList<CompletionItem>>? Home = null);
 
     /// <summary>The note beside <c>on</c> / <c>off</c> on a switch's list: what the switch is. Pinned.</summary>
     public static string SwitchSubject(SlashCommand command) => command switch
@@ -3118,6 +3125,10 @@ internal sealed partial class ChatScreen
                 // add alone (2026-09-26): the source after it is free text — a search, a repository, a URL — never looked up per keystroke.
                 return argText.Contains(' ', StringComparison.Ordinal) ? [] : MentionCompleter.Matches([new(SkillInstallText.AddWord, SkillInstallText.AddNote)], argText);
 
+            case SlashCommand.HomeAssistant:
+                // The verbs, then the rooms, names, scenes and TV words of the last snapshot (2026-09-28).
+                return sources.Home?.Invoke(argText) ?? HaCommand.Complete(null, argText);
+
             case SlashCommand.Test:
                 // The test ids, the group words, all and history (2026-09-28): one word, nothing after it.
                 return argText.Contains(' ', StringComparison.Ordinal) ? [] : MentionCompleter.Matches(TestChoices(), argText);
@@ -3211,7 +3222,8 @@ internal sealed partial class ChatScreen
             VaultFolderChoices,
             WorkflowChoices,
             _plan.Active,
-            PlanChoices);
+            PlanChoices,
+            HomeAssistantChoices);
         return ArgumentPaths(command, argText, sources) is { } paths
             ? new ArgumentList([], paths.Paths, paths.Truncated)
             : new ArgumentList(ArgumentItems(command, argText, sources));
@@ -3236,7 +3248,7 @@ internal sealed partial class ChatScreen
         var disabled = TurnDisabled(effective);
         var fileTools = FileToolsFor(_fileTools, effective.FileSafeEdits);   // restore only with File safe edits on (later still on 2026-09-20): /sys shows the list cut, Files (14)
         bool files = effective.FileTools && Without(fileTools, disabled).Count > 0;   // the turn's rule (PrepareTurn): an emptied file group is the switch off
-        return WithPlanGroup(SystemPromptSummary.OfferedOnly(SystemPromptSummary.ToolGroups(_clockTools, _timerTools, fileTools, _memoryTools, effective.Memory, effective.LlmOfferTools, WebToolsFor(_webTools, files), effective.WebTools, effective.FileTools, _askTools, effective.AskUser, _pane.Enabled, _skillTools, effective.AgentSkills, _sessionTools, effective.SessionTool, disabled, mcp: _mcp.ServerTools, mcpEnabled: effective.McpServers, git: _gitTools, gitEnabled: effective.GitNativeTools, shell: _shellTools, shellEnabled: ShellOffered(effective), codeAvailable: CodeAvailable(), obsidian: ObsidianOffered(effective) ? ObsidianToolsFor(_vaultTools, effective) : null, sql: SqlOffered(effective, _sql) ? _sqlTools : null, comfy: ComfyOffered(effective, _comfy) ? _comfyTools : null, advisor: _advisorTools, advisorEnabled: effective.ClaudeAdvisor)));   // the vault group only with a vault (2026-09-22): /sys stays as it was for a profile that never names one
+        return WithPlanGroup(SystemPromptSummary.OfferedOnly(SystemPromptSummary.ToolGroups(_clockTools, _timerTools, fileTools, _memoryTools, effective.Memory, effective.LlmOfferTools, WebToolsFor(_webTools, files), effective.WebTools, effective.FileTools, _askTools, effective.AskUser, _pane.Enabled, _skillTools, effective.AgentSkills, _sessionTools, effective.SessionTool, disabled, mcp: _mcp.ServerTools, mcpEnabled: effective.McpServers, git: _gitTools, gitEnabled: effective.GitNativeTools, shell: _shellTools, shellEnabled: ShellOffered(effective), codeAvailable: CodeAvailable(), obsidian: ObsidianOffered(effective) ? ObsidianToolsFor(_vaultTools, effective) : null, sql: SqlOffered(effective, _sql) ? _sqlTools : null, comfy: ComfyOffered(effective, _comfy) ? _comfyTools : null, advisor: _advisorTools, advisorEnabled: effective.ClaudeAdvisor, homeAssistant: HomeAssistantOffered(effective) ? _haTools : null)));   // the vault group only with a vault (2026-09-22): /sys stays as it was for a profile that never names one
     }
 
     /// <summary>Whether <c>execute_code</c> has a language to run (2026-09-21): the setting's languages, one of them installed.</summary>
@@ -3264,7 +3276,7 @@ internal sealed partial class ChatScreen
         var disabled = ToolsText.DisabledSet(effective.ToolsDisabled);
         // The whole file list, restore noted under File safe edits off (later still on 2026-09-20): the row stays, dim, with its reason — the download_file shape.
         _interpreters.Refresh();
-        var groups = SystemPromptSummary.ToolGroups(_clockTools, _timerTools, _fileTools, _memoryTools, effective.Memory, effective.LlmOfferTools, _webTools, effective.WebTools, effective.FileTools, _askTools, effective.AskUser, _pane.Enabled, _skillTools, effective.AgentSkills, _sessionTools, effective.SessionTool, disabled, skillInstalled: Catalog(effective).Count > 0, git: _gitTools, gitEnabled: effective.GitNativeTools, safeEdits: effective.FileSafeEdits, shell: _shellTools, shellEnabled: ShellOffered(effective), codeAvailable: CodeAvailable(), obsidian: ObsidianToolsFor(_vaultTools, effective), obsidianEnabled: ObsidianOffered(effective), sql: _sqlTools, sqlEnabled: SqlOffered(effective, _sql), comfy: _comfyTools, comfyEnabled: ComfyOffered(effective, _comfy), advisor: _advisorTools, advisorEnabled: effective.ClaudeAdvisor);
+        var groups = SystemPromptSummary.ToolGroups(_clockTools, _timerTools, _fileTools, _memoryTools, effective.Memory, effective.LlmOfferTools, _webTools, effective.WebTools, effective.FileTools, _askTools, effective.AskUser, _pane.Enabled, _skillTools, effective.AgentSkills, _sessionTools, effective.SessionTool, disabled, skillInstalled: Catalog(effective).Count > 0, git: _gitTools, gitEnabled: effective.GitNativeTools, safeEdits: effective.FileSafeEdits, shell: _shellTools, shellEnabled: ShellOffered(effective), codeAvailable: CodeAvailable(), obsidian: ObsidianToolsFor(_vaultTools, effective), obsidianEnabled: ObsidianOffered(effective), sql: _sqlTools, sqlEnabled: SqlOffered(effective, _sql), comfy: _comfyTools, comfyEnabled: ComfyOffered(effective, _comfy), advisor: _advisorTools, advisorEnabled: effective.ClaudeAdvisor, homeAssistant: _haTools, homeAssistantEnabled: HomeAssistantOffered(effective));
         return new ToolsFacts(groups, effective.LlmOfferTools, disabled);
     }
 
@@ -3820,7 +3832,7 @@ internal sealed partial class ChatScreen
     /// (the setting <c>Shell prefer native tools</c>), the rules gain <see cref="Assistant.ShellNativeRule"/> after the shell sentence. <paramref name="sampling"/>
     /// (2026-09-28, the setting <c>LLM sampling</c>, resolved for the connected model) replaces the assistant's when given. Shared with headless.
     /// </summary>
-    public static void PrepareTurn(Assistant assistant, MemoryStore memory, IReadOnlyList<AIFunction> memoryTools, IReadOnlyList<AIFunction> standingTools, PersonaFile persona, OperataFile operata, VocaliaFile vocalia, bool memoryEnabled, bool speechOutput, int maxToolIterations = Assistant.DefaultMaxToolIterations, bool toolsEnabled = true, IReadOnlyList<AIFunction>? webTools = null, bool webEnabled = false, Assistant.TurnContextGuard? contextGuard = null, IReadOnlyList<AIFunction>? fileTools = null, bool filesEnabled = false, IReadOnlyList<AIFunction>? askTools = null, SkillsForTurn? skills = null, bool markdown = false, IReadOnlyList<AIFunction>? sessionTools = null, bool sessionsEnabled = false, IReadOnlySet<string>? disabledTools = null, IReadOnlyList<AIFunction>? mcpTools = null, bool mcpEnabled = false, bool safeEdits = true, IReadOnlyList<AIFunction>? gitTools = null, bool gitEnabled = false, IReadOnlyList<AIFunction>? shellTools = null, bool shellEnabled = false, ProcessRegistry? processes = null, bool shellBridge = false, bool shellPolice = true, IReadOnlyList<AIFunction>? obsidianTools = null, bool obsidianEnabled = false, IReadOnlyList<AIFunction>? sqlTools = null, bool sqlEnabled = false, IReadOnlyList<AIFunction>? comfyTools = null, bool comfyEnabled = false, bool shellNative = false, PlanTurn? plan = null, IReadOnlyList<AIFunction>? advisorTools = null, bool advisorEnabled = false, bool preserveThinking = false, LlmSampling? sampling = null)
+    public static void PrepareTurn(Assistant assistant, MemoryStore memory, IReadOnlyList<AIFunction> memoryTools, IReadOnlyList<AIFunction> standingTools, PersonaFile persona, OperataFile operata, VocaliaFile vocalia, bool memoryEnabled, bool speechOutput, int maxToolIterations = Assistant.DefaultMaxToolIterations, bool toolsEnabled = true, IReadOnlyList<AIFunction>? webTools = null, bool webEnabled = false, Assistant.TurnContextGuard? contextGuard = null, IReadOnlyList<AIFunction>? fileTools = null, bool filesEnabled = false, IReadOnlyList<AIFunction>? askTools = null, SkillsForTurn? skills = null, bool markdown = false, IReadOnlyList<AIFunction>? sessionTools = null, bool sessionsEnabled = false, IReadOnlySet<string>? disabledTools = null, IReadOnlyList<AIFunction>? mcpTools = null, bool mcpEnabled = false, bool safeEdits = true, IReadOnlyList<AIFunction>? gitTools = null, bool gitEnabled = false, IReadOnlyList<AIFunction>? shellTools = null, bool shellEnabled = false, ProcessRegistry? processes = null, bool shellBridge = false, bool shellPolice = true, IReadOnlyList<AIFunction>? obsidianTools = null, bool obsidianEnabled = false, IReadOnlyList<AIFunction>? sqlTools = null, bool sqlEnabled = false, IReadOnlyList<AIFunction>? comfyTools = null, bool comfyEnabled = false, bool shellNative = false, PlanTurn? plan = null, IReadOnlyList<AIFunction>? advisorTools = null, bool advisorEnabled = false, bool preserveThinking = false, LlmSampling? sampling = null, IReadOnlyList<AIFunction>? homeTools = null, bool homeEnabled = false)
     {
         ArgumentNullException.ThrowIfNull(assistant);
         ArgumentNullException.ThrowIfNull(memory);
@@ -3861,7 +3873,7 @@ internal sealed partial class ChatScreen
         {
             // Plan mode (2026-09-26): every tool it does not allow joins the /tools list for this turn, so a group
             // loses them as it loses a tool switched off, and a group left empty takes its rule with it.
-            disabledTools = PlanTools.Widen(disabledTools, standingTools, fileTools, webTools, gitTools, shellTools, obsidianTools, sqlTools, comfyTools, memoryTools, skillTools, sessionTools, askTools, mcpTools, advisorTools);
+            disabledTools = PlanTools.Widen(disabledTools, standingTools, fileTools, webTools, gitTools, shellTools, obsidianTools, sqlTools, comfyTools, memoryTools, skillTools, sessionTools, askTools, mcpTools, advisorTools, homeTools);
         }
 
         if (disabledTools is { Count: > 0 })
@@ -3875,6 +3887,7 @@ internal sealed partial class ChatScreen
             obsidianTools = obsidianTools is null ? null : Without(obsidianTools, disabledTools);
             sqlTools = sqlTools is null ? null : Without(sqlTools, disabledTools);
             comfyTools = comfyTools is null ? null : Without(comfyTools, disabledTools);
+            homeTools = homeTools is null ? null : Without(homeTools, disabledTools);
             memoryTools = Without(memoryTools, disabledTools);
             skillTools = Without(skillTools, disabledTools);
             sessionTools = sessionTools is null ? null : Without(sessionTools, disabledTools);
@@ -3916,6 +3929,9 @@ internal sealed partial class ChatScreen
         // The image tools after the SQL tools (2026-09-24): ComfyUI tools, a URL and a workflow are the group's switch; no rule — the description carries the workflows and the prompt styles.
         bool comfy = comfyEnabled && comfyTools is { Count: > 0 };
         offered = comfy ? [.. offered, .. comfyTools!] : offered;
+        // The Home Assistant tools after the image tools (2026-09-28): Home Assistant tools, a URL and a token are the group's switch; its sentence after the SQL one.
+        bool home = homeEnabled && homeTools is { Count: > 0 };
+        offered = home ? [.. offered, .. homeTools!] : offered;
         // The advisor after the image tools (2026-09-27): the setting Claude advisor tool is the group's switch; its sentence after the SQL one.
         bool advisor = advisorEnabled && advisorTools is { Count: > 0 };
         offered = advisor ? [.. offered, .. advisorTools!] : offered;
@@ -3981,7 +3997,7 @@ internal sealed partial class ChatScreen
         assistant.OpeningCalls = opening;
         // The notified exits since the last turn ride in as seeded polls (2026-09-21), on every turn, while process is offered.
         assistant.PendingCalls = processes is null ? [] : PendingProcessPolls(processes, assistant.Tools);
-        assistant.History.SystemPrompt = Assistant.SystemPrompt(speechOutput, memoryEnabled ? memory.Snapshot() : null, persona.Read(), operata.Read(), vocalia.Read(), web: web, files: files, ask: ask, project: project, skills: catalog, markdown: markdown, sessions: sessions, download: download, recall: recall is not null, delete: delete, mcp: mcp, safeEdits: safeEdits, timers: timers, git: git, shell: shell, bridge: bridge, police: police, obsidian: obsidian, obsidianDelete: obsidianDelete, sql: sql, native: native, plan: plan?.Directive, advisor: advisor);
+        assistant.History.SystemPrompt = Assistant.SystemPrompt(speechOutput, memoryEnabled ? memory.Snapshot() : null, persona.Read(), operata.Read(), vocalia.Read(), web: web, files: files, ask: ask, project: project, skills: catalog, markdown: markdown, sessions: sessions, download: download, recall: recall is not null, delete: delete, mcp: mcp, safeEdits: safeEdits, timers: timers, git: git, shell: shell, bridge: bridge, police: police, obsidian: obsidian, obsidianDelete: obsidianDelete, sql: sql, native: native, plan: plan?.Directive, advisor: advisor, homeAssistant: home);
     }
 
     /// <summary>
@@ -4976,45 +4992,67 @@ internal sealed partial class ChatScreen
 
     public const string KeyCopySelfError = "/keycopy copies into another profile; that one is loaded.";
 
-    /// <summary>The two keys' names, as the settings pane's rows read.</summary>
+    /// <summary>The keys' names, as the settings pane's rows read; the Home Assistant API key joined them on 2026-09-28 (the user's ask; "API key", not "token", the user's call for one word across the three).</summary>
     private const string LlmKeyName = "LLM API key";
     private const string ClaudeKeyName = "Claude API key";
+    private const string HomeAssistantKeyName = "Home Assistant API key";
 
-    /// <summary>
-    /// The question before a key copy (the yes/no pane's title; <see cref="TypedConfirm"/> where menus cannot open):
-    /// <c>Copy the LLM API key and the Claude API key into "work"?</c>, and when a key is not set here what the mirror
-    /// does to the target's — <c> "work"'s Claude API key is cleared: none here.</c> — so the clearing is never a surprise. Pinned.
-    /// </summary>
-    public static string KeyCopyPrompt(string profile, bool llmSet, bool claudeSet)
+    /// <summary><c>a</c>, <c>a and b</c>, <c>a, b and c</c>.</summary>
+    private static string KeySeries(IReadOnlyList<string> items) =>
+        items.Count <= 1 ? string.Concat(items) : string.Join(", ", items.Take(items.Count - 1)) + " and " + items[^1];
+
+    /// <summary>The keys' names split by whether this profile has them set, in the settings pane's order.</summary>
+    private static (List<string> Set, List<string> Unset) KeyNames(bool llmSet, bool claudeSet, bool haSet)
     {
-        string question = $"Copy the {LlmKeyName} and the {ClaudeKeyName} into \"{profile}\"?";
-        return (llmSet, claudeSet) switch
-        {
-            (true, true) => question,
-            (false, false) => $"{question} \"{profile}\"'s {LlmKeyName} and {ClaudeKeyName} are cleared: none here.",
-            _ => $"{question} \"{profile}\"'s {(llmSet ? ClaudeKeyName : LlmKeyName)} is cleared: none here.",
-        };
+        var set = new List<string>();
+        var unset = new List<string>();
+        (llmSet ? set : unset).Add(LlmKeyName);
+        (claudeSet ? set : unset).Add(ClaudeKeyName);
+        (haSet ? set : unset).Add(HomeAssistantKeyName);
+        return (set, unset);
     }
 
     /// <summary>
-    /// <c>(copied the LLM API key and the Claude API key into "work")</c>; one not set here reads
-    /// <c>(copied the LLM API key into "work"; its Claude API key cleared)</c>, neither <c>(cleared "work"'s LLM API key and Claude API key)</c>. Pinned.
+    /// The question before a key copy (the yes/no pane's title; <see cref="TypedConfirm"/> where menus cannot open):
+    /// <c>Copy the LLM API key, the Claude API key and the Home Assistant API key into "work"?</c>, and when a key is not set
+    /// here what the mirror does to the target's — <c> "work"'s Claude API key is cleared: none here.</c> — so the clearing
+    /// is never a surprise. Pinned.
     /// </summary>
-    public static string KeyCopiedNotice(string profile, bool llmSet, bool claudeSet) => (llmSet, claudeSet) switch
+    public static string KeyCopyPrompt(string profile, bool llmSet, bool claudeSet, bool haSet)
     {
-        (true, true) => $"(copied the {LlmKeyName} and the {ClaudeKeyName} into \"{profile}\")",
-        (false, false) => $"(cleared \"{profile}\"'s {LlmKeyName} and {ClaudeKeyName})",
-        _ => $"(copied the {(llmSet ? LlmKeyName : ClaudeKeyName)} into \"{profile}\"; its {(llmSet ? ClaudeKeyName : LlmKeyName)} cleared)",
-    };
+        string question = $"Copy the {KeySeries([LlmKeyName, "the " + ClaudeKeyName, "the " + HomeAssistantKeyName])} into \"{profile}\"?";
+        var (_, unset) = KeyNames(llmSet, claudeSet, haSet);
+        return unset.Count == 0
+            ? question
+            : $"{question} \"{profile}\"'s {KeySeries(unset)} {(unset.Count == 1 ? "is" : "are")} cleared: none here.";
+    }
 
     /// <summary>
-    /// <c>/keycopy &lt;profile&gt;</c> (2026-09-28, the user's ask): this profile's <c>LLM API key</c> and <c>Claude API
-    /// key</c> into another's, after a confirmation — <c>/cmdcopy</c>'s read-edit-write of the target's <c>profile.json</c>
-    /// (<see cref="Profiles.ReadProfileFile"/>: a corrupt one is an error, never overwritten) without its switches. Both are
-    /// mirrored (the user's call): a key not set here clears the target's, so it ends with exactly this profile's two, and the
-    /// question says so. The stored values (<c>_settings.Current</c>, not the effective ones: a key that comes only from
-    /// <c>NEONSIDEKICK_LLM_API_KEY</c>/<c>NEONSIDEKICK_CLAUDE_API_KEY</c> is a per-run override and stays out of the file),
-    /// copied as stored: a <c>dpapi:</c> Claude key reads the same in any profile of this Windows user on this machine, as
+    /// <c>(copied the LLM API key, the Claude API key and the Home Assistant API key into "work")</c>; one not set here reads
+    /// <c>(copied the LLM API key and the Home Assistant API key into "work"; its Claude API key cleared)</c>, none
+    /// <c>(cleared "work"'s LLM API key, Claude API key and Home Assistant API key)</c>. Pinned.
+    /// </summary>
+    public static string KeyCopiedNotice(string profile, bool llmSet, bool claudeSet, bool haSet)
+    {
+        var (set, unset) = KeyNames(llmSet, claudeSet, haSet);
+        if (set.Count == 0)
+        {
+            return $"(cleared \"{profile}\"'s {KeySeries(unset)})";
+        }
+
+        string copied = $"copied {KeySeries(set.Select(name => "the " + name).ToList())} into \"{profile}\"";
+        return unset.Count == 0 ? $"({copied})" : $"({copied}; its {KeySeries(unset)} cleared)";
+    }
+
+    /// <summary>
+    /// <c>/keycopy &lt;profile&gt;</c> (2026-09-28, the user's ask): this profile's <c>LLM API key</c>, <c>Claude API
+    /// key</c> and <c>Home Assistant API key</c> (joined the same day, the user's ask) into another's, after a confirmation —
+    /// <c>/cmdcopy</c>'s read-edit-write of the target's <c>profile.json</c> (<see cref="Profiles.ReadProfileFile"/>: a corrupt
+    /// one is an error, never overwritten) without its switches. All are mirrored (the user's call): a key not set here clears
+    /// the target's, so it ends with exactly this profile's keys, and the question says so. The stored values
+    /// (<c>_settings.Current</c>, not the effective ones: a key that comes only from <c>NEONSIDEKICK_LLM_API_KEY</c>/
+    /// <c>NEONSIDEKICK_CLAUDE_API_KEY</c>/<c>NEONSIDEKICK_HA_TOKEN</c> is a per-run override and stays out of the file),
+    /// copied as stored: a <c>dpapi:</c> key or token reads the same in any profile of this Windows user on this machine, as
     /// <see cref="Profiles.KeepOnReset"/> already relies on. The values are never shown or logged.
     /// </summary>
     private async Task HandleKeyCopyAsync(string args, CancellationToken cancellationToken)
@@ -5042,9 +5080,11 @@ internal sealed partial class ChatScreen
         var current = _settings.Current;
         string llmKey = current.LlmApiKey;
         string claudeKey = current.ClaudeApiKey;
+        string haToken = current.HomeAssistantToken;
         bool llmSet = !string.IsNullOrWhiteSpace(llmKey) && llmKey.Trim() != LlmEndpoint.DefaultApiKey;
         bool claudeSet = !string.IsNullOrWhiteSpace(claudeKey);
-        if (!await ConfirmAsync(KeyCopyPrompt(target, llmSet, claudeSet), cancellationToken).ConfigureAwait(false))
+        bool haSet = !string.IsNullOrWhiteSpace(haToken);
+        if (!await ConfirmAsync(KeyCopyPrompt(target, llmSet, claudeSet, haSet), cancellationToken).ConfigureAwait(false))
         {
             _flow.Notice(KeptNotice);
             return;
@@ -5056,8 +5096,9 @@ internal sealed partial class ChatScreen
             var data = Profiles.ReadProfileFile(path);
             data.LlmApiKey = llmKey;
             data.ClaudeApiKey = claudeKey;
+            data.HomeAssistantToken = haToken;
             Profiles.WriteProfileFile(path, data);
-            _flow.Notice(KeyCopiedNotice(target, llmSet, claudeSet));
+            _flow.Notice(KeyCopiedNotice(target, llmSet, claudeSet, haSet));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.Json.JsonException)
         {
@@ -6980,6 +7021,7 @@ internal sealed partial class ChatScreen
             // The background processes go with the screen (2026-09-21): what still runs is killed, tree and all.
             _processes.Dispose();
             _comfy.Dispose();
+            _ha.Dispose();
             _sessions.Dispose();
             if (_ownsMcp)
             {
@@ -8497,6 +8539,10 @@ internal sealed partial class ChatScreen
 
             case SlashCommand.Test:
                 await HandleTestAsync(args, cancellationToken).ConfigureAwait(false);
+                return false;
+
+            case SlashCommand.HomeAssistant:
+                await HandleHomeAssistantAsync(args, cancellationToken).ConfigureAwait(false);
                 return false;
 
             case SlashCommand.Copy:
@@ -10891,7 +10937,7 @@ internal sealed partial class ChatScreen
         if (bot is null)
         {
             _interpreters.Refresh();
-            PrepareTurn(assistant, _memory, _memoryTools, [.. _clockTools, .. _timerTools], _persona, _operata, _vocalia, effective.Memory, speaker is not null, effective.LlmMaxToolIterations, effective.LlmOfferTools, _webTools, effective.WebTools, ContextGuardFor(effective, _session.ContextLength), _fileTools, effective.FileTools, _pane.Enabled && effective.AskUser ? _askTools : null, SkillsFor(effective), markdown, _sessionTools, effective.SessionTool, ToolsText.DisabledSet(effective.ToolsDisabled), _mcp.Tools, effective.McpServers, effective.FileSafeEdits, _gitTools, effective.GitNativeTools, _shellTools, ShellOffered(effective), _processes, effective.ShellToolBridge, effective.ShellPoliceOutsidePaths, ObsidianToolsFor(_vaultTools, effective), ObsidianOffered(effective), _sqlTools, SqlOffered(effective, _sql), _comfyTools, ComfyOffered(effective, _comfy), effective.ShellPreferNative, _plan.Turn(_presentPlan), _advisorTools, effective.ClaudeAdvisor, effective.LlmPreserveThinking, LlmSampling.Resolve(effective, _session.Endpoint?.ModelId));
+            PrepareTurn(assistant, _memory, _memoryTools, [.. _clockTools, .. _timerTools], _persona, _operata, _vocalia, effective.Memory, speaker is not null, effective.LlmMaxToolIterations, effective.LlmOfferTools, _webTools, effective.WebTools, ContextGuardFor(effective, _session.ContextLength), _fileTools, effective.FileTools, _pane.Enabled && effective.AskUser ? _askTools : null, SkillsFor(effective), markdown, _sessionTools, effective.SessionTool, ToolsText.DisabledSet(effective.ToolsDisabled), _mcp.Tools, effective.McpServers, effective.FileSafeEdits, _gitTools, effective.GitNativeTools, _shellTools, ShellOffered(effective), _processes, effective.ShellToolBridge, effective.ShellPoliceOutsidePaths, ObsidianToolsFor(_vaultTools, effective), ObsidianOffered(effective), _sqlTools, SqlOffered(effective, _sql), _comfyTools, ComfyOffered(effective, _comfy), effective.ShellPreferNative, _plan.Turn(_presentPlan), _advisorTools, effective.ClaudeAdvisor, effective.LlmPreserveThinking, LlmSampling.Resolve(effective, _session.Endpoint?.ModelId), _haTools, HomeAssistantOffered(effective));
         }
 
         bool armed = false;
@@ -11621,6 +11667,10 @@ internal sealed partial class ChatScreen
             case TurnEvent.ToolResult result when ObsidianToolNames.Contains(result.Name):
                 // A note, a search, a backlink list is the model's to read; the line is the result's header (ObsidianText.Note, 2026-09-22).
                 _transcript.ToolNote(ObsidianText.Note(result.Text));
+                break;
+            case TurnEvent.ToolResult result when HomeAssistantToolNames.Contains(result.Name):
+                // A state list, an overview is the model's to read; the line is the result's header (HaText.Note, 2026-09-28).
+                _transcript.ToolNote(HaText.Note(result.Text));
                 break;
             case TurnEvent.ToolResult result when SqlToolNames.Contains(result.Name):
                 // A table of rows is the model's to read; the line is the result's header (SqlText.Note, 2026-09-23).

@@ -48,6 +48,10 @@
          a text reply, a Read then text, a resume of a missing session. Paths scrubbed to C:\work, the init line trimmed,
          the partial tool-input pieces dropped. ClaudeStreamParser is pinned to them. -->
     <None Include="Fixtures\claude\*.jsonl" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Home Assistant 2026.9.4's /api/states and the areas template's answer (2026-09-28): a trimmed, hand-made copy of
+         a real Hue + Bravia instance's shapes — a room group and its lights, a zone group, an unavailable light, scenes,
+         the TV, a remote, a button, a switch, motion, temperature, a low battery, the shopping list. HaSnapshot is pinned to it. -->
+    <None Include="Fixtures\ha\*.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

@@ -284,7 +284,12 @@ public sealed class AppSettingsData
 
     // ─── LLM ────────────────────────────────────────────────────────────────────
 
-    /// <summary>Bearer token. Keyless local servers are happy with the literal <c>empty</c>.</summary>
+    /// <summary>
+    /// Bearer token. Keyless local servers are happy with the literal <c>empty</c>. Kept encrypted with DPAPI for this
+    /// Windows user on this machine since 2026-09-28 (<c>dpapi:</c> and the blob, as <see cref="ClaudeApiKey"/>; the user's
+    /// call), a plain one encrypted when the profile loads (<see cref="SettingsSecrets.ProtectAtRest"/>); the <c>empty</c>
+    /// placeholder stays plain. Read through <see cref="Llm.LlmEndpoint.KeyOf"/>. Never logged (<see cref="SettingsDiff.Secrets"/>).
+    /// </summary>
     public string LlmApiKey { get; set; } = "empty";
 
     /// <summary>
@@ -1624,4 +1629,59 @@ public sealed class AppSettingsData
     /// A reconnect. No variable.
     /// </summary>
     public bool ClaudeApiPromptCaching { get; set; } = true;
+
+    // ─── Home Assistant (2026-09-28) ────────────────────────────────────────────
+    // The ha_ tools and /ha (2026-09-28, the user's ask: "plan an integration for Home Assistant" — a Docker instance with
+    // Hue lights and a Bravia TV; read and act, the risky calls behind the pane; /ha for direct control; Assist as a fallback).
+
+    /// <summary>
+    /// Whether a turn offers the Home Assistant tools (<c>ha_overview</c>, <c>ha_lights</c>, …) over the server at
+    /// <see cref="HomeAssistantUrl"/> (2026-09-28); read at each turn like <see cref="ComfyTools"/>, no reconnect. On by
+    /// default for the same reason: it offers nothing until a URL and a token are set. The Home Assistant tab of
+    /// <c>/tools</c>. No variable.
+    /// </summary>
+    public bool HomeAssistantTools { get; set; } = true;
+
+    /// <summary>
+    /// The Home Assistant server (2026-09-28): <c>http://localhost:8123</c> or another machine on the LAN — the user's own
+    /// server like <see cref="ComfyUrl"/>, so never judged by the web tools' network mode. Empty = no Home Assistant tool.
+    /// Variable: <c>NEONSIDEKICK_HA_URL</c>.
+    /// </summary>
+    public string HomeAssistantUrl { get; set; } = "";
+
+    /// <summary>
+    /// The long-lived access token (2026-09-28; made in Home Assistant under the user's profile, Security): kept encrypted
+    /// with DPAPI for this Windows user on this machine (<c>dpapi:</c> and the blob, as <see cref="ClaudeApiKey"/>), so the
+    /// profile file never holds it in clear; a plain value (a hand edit) is used as it is and encrypted at the next save from
+    /// the menu. Never logged (<see cref="SettingsDiff.Secrets"/>). Variable <c>NEONSIDEKICK_HA_TOKEN</c> (plain).
+    /// </summary>
+    public string HomeAssistantToken { get; set; } = "";
+
+    /// <summary>
+    /// What the model may switch (2026-09-28, the user's call: "read + act, ask for risky"): one of
+    /// <see cref="HomeAssistant.HaPolicy.Names"/> — <c>off</c> (reads only), <c>ask</c> (the default: the services in
+    /// <see cref="HomeAssistantSafeServices"/> run, anything else waits for the user's yes on the pane; headless refuses
+    /// it), <c>allow</c> (everything runs). Anything else reads as <c>ask</c>. <c>/ha</c> is never judged. No variable.
+    /// </summary>
+    public string HomeAssistantActionPolicy { get; set; } = HomeAssistant.HaPolicy.Default;
+
+    /// <summary>
+    /// The services that run without asking under <c>ask</c> (2026-09-28): <c>domain.service</c> entries, <c>domain.*</c>
+    /// for a whole domain. Null = <see cref="HomeAssistant.HaPolicy.DefaultSafeServices"/> (the lights, a scene, the TV's
+    /// power, volume, source and playback, the to-do lists). profile.json only, no row. No variable.
+    /// </summary>
+    public List<string>? HomeAssistantSafeServices { get; set; }
+
+    /// <summary>
+    /// The conversation agent <c>ha_assist</c> and <c>/ha say</c> talk to (2026-09-28): an agent's id
+    /// (<c>conversation.google_generative_ai</c>); empty = Home Assistant's default. No variable.
+    /// </summary>
+    public string HomeAssistantAssistAgent { get; set; } = "";
+
+    /// <summary>Seconds one Home Assistant request may take (2026-09-28): <see cref="MinHomeAssistantTimeoutSeconds"/> to <see cref="MaxHomeAssistantTimeoutSeconds"/>. No variable.</summary>
+    public int HomeAssistantTimeoutSeconds { get; set; } = DefaultHomeAssistantTimeoutSeconds;
+
+    public const int MinHomeAssistantTimeoutSeconds = 2;
+    public const int MaxHomeAssistantTimeoutSeconds = 60;
+    public const int DefaultHomeAssistantTimeoutSeconds = 10;
 }

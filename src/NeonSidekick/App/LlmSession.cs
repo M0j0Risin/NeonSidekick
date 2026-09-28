@@ -149,7 +149,7 @@ internal sealed class LlmSession : IDisposable
         Reconnecting();
         Endpoint = null;
         Remember(effective);
-        return WithClaudeApiAsync(effective, _probe.DiscoverAllAsync(effective.LlmApiKey, extra: null, LlmScanMode.Resolve(effective), cancellationToken), cancellationToken);
+        return WithClaudeApiAsync(effective, _probe.DiscoverAllAsync(LlmEndpoint.KeyOf(effective), extra: null, LlmScanMode.Resolve(effective), cancellationToken), cancellationToken);
     }
 
     /// <summary>
@@ -160,7 +160,7 @@ internal sealed class LlmSession : IDisposable
     public Task<IReadOnlyList<LlmServer>> ProbeServersAsync(AppSettingsData effective, Uri? extra, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(effective);
-        return WithClaudeApiAsync(effective, _probe.DiscoverAllAsync(effective.LlmApiKey, extra, LlmScanMode.Resolve(effective), cancellationToken), cancellationToken);
+        return WithClaudeApiAsync(effective, _probe.DiscoverAllAsync(LlmEndpoint.KeyOf(effective), extra, LlmScanMode.Resolve(effective), cancellationToken), cancellationToken);
     }
 
     /// <summary>
@@ -265,8 +265,10 @@ internal sealed class LlmSession : IDisposable
             }
 
             // The Claude API's key goes with its endpoint (2026-09-27): a borrowed Claude API is borrowed with it.
+            // The profile's key decrypted first (2026-09-28): the file keeps it DPAPI-encrypted like the other two.
+            string own = LlmEndpoint.KeyOf(profile);
             string key = ClaudeApi.IsClaudeApi(starter.BaseUrl) ? starter.ApiKey
-                : string.IsNullOrWhiteSpace(profile.LlmApiKey) || profile.LlmApiKey == LlmEndpoint.DefaultApiKey ? _apiKey : profile.LlmApiKey;
+                : string.IsNullOrWhiteSpace(own) || own == LlmEndpoint.DefaultApiKey ? _apiKey : own;
             endpoint = starter with { ModelId = model ?? starter.ModelId, ApiKey = key, PublishedContextLength = null };
         }
         else
@@ -310,7 +312,8 @@ internal sealed class LlmSession : IDisposable
     {
         Timeouts = LlmTimeouts.Resolve(effective);
         _effective = effective;
-        _apiKey = string.IsNullOrWhiteSpace(effective.LlmApiKey) ? LlmEndpoint.DefaultApiKey : effective.LlmApiKey;
+        string apiKey = LlmEndpoint.KeyOf(effective);
+        _apiKey = string.IsNullOrWhiteSpace(apiKey) ? LlmEndpoint.DefaultApiKey : apiKey;
         _configuredUrl = effective.LlmUrl ?? "";
         _configuredContextLength = effective.LlmContextLength;
     }

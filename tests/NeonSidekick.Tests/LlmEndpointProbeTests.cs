@@ -298,6 +298,27 @@ public class LlmEndpointProbeTests
     }
 
     [Fact]
+    public async Task Resolve_AnEncryptedKey_IsSentDecrypted()
+    {
+        // 2026-09-28: the profile keeps the LLM API key DPAPI-encrypted; the server gets the key itself, configured or discovered.
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        string stored = NeonSidekick.Settings.SettingsSecrets.Protect("sk-real", out _);
+        var (stub, probe) = Probe();
+        stub.Map(LmStudio, HttpStatusCode.OK, StubHttpMessageHandler.ModelsJson("m"));
+        stub.Map("http://myhost:5000/v1/models", HttpStatusCode.OK, StubHttpMessageHandler.ModelsJson("m"));
+
+        var discovered = await probe.ResolveAsync(new AppSettingsData { LlmApiKey = stored }, CancellationToken.None);
+        var configured = await probe.ResolveAsync(new AppSettingsData { LlmUrl = "http://myhost:5000", LlmApiKey = stored }, CancellationToken.None);
+
+        Assert.Equal("sk-real", discovered!.ApiKey);
+        Assert.Equal("sk-real", configured!.ApiKey);
+    }
+
+    [Fact]
     public async Task Resolve_UnusableConfiguredUrl_ReturnsNull_WithoutProbing()
     {
         var (stub, probe) = Probe();
