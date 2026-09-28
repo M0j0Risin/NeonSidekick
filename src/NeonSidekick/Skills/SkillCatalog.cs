@@ -35,6 +35,14 @@ public sealed class SkillCatalog
     /// <summary>Characters of a body handed to the model at most; a longer one is cut with a note.</summary>
     public const int MaxBodyChars = 48_000;
 
+    /// <summary>
+    /// Characters of a bundled file <see cref="ReadResource"/> hands the model at most (2026-09-27, the user's
+    /// call): its own cap, twice the file tools' <see cref="WorkingDirectory.MaxReadChars"/>, since
+    /// <c>load_skill</c>'s <c>file</c> has no paging — past the cap a file's tail was unreachable (a 51,000-character
+    /// mapping lost its phrases and grammar). The shared cap stays where it is for <c>read_file</c>, the web and SQL.
+    /// </summary>
+    public const int MaxResourceChars = 64_000;
+
     /// <summary>Bundled files listed with a body at most.</summary>
     public const int MaxResources = 50;
 
@@ -394,7 +402,7 @@ public sealed class SkillCatalog
     /// <summary>
     /// One bundled text file, <paramref name="relative"/> to the skill folder and inside it by
     /// spelling (the sandbox rule; <c>..</c> out of it is <see cref="ReadOutcome.Outside"/>),
-    /// cut at <see cref="WorkingDirectory.MaxReadChars"/>.
+    /// cut at <see cref="MaxResourceChars"/> (<see cref="WorkingDirectory.MaxReadChars"/> until 2026-09-27).
     /// </summary>
     public static ReadResult ReadResource(Skill skill, string relative)
     {
@@ -430,7 +438,7 @@ public sealed class SkillCatalog
                 return new ReadResult(ReadOutcome.NotText, "", false);
             }
 
-            return Cut(WorkingDirectory.Decode(bytes, out _).Replace("\r\n", "\n", StringComparison.Ordinal), WorkingDirectory.MaxReadChars);
+            return Cut(WorkingDirectory.Decode(bytes, out _).Replace("\r\n", "\n", StringComparison.Ordinal), MaxResourceChars);
         }
         catch (Exception ex) when (IsFileFailure(ex))
         {

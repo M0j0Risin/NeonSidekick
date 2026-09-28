@@ -257,4 +257,25 @@ public class SkillCatalogTests : IDisposable
         Assert.Equal(SkillCatalog.ReadOutcome.Missing, SkillCatalog.ReadResource(skill, "references/gone.md").Outcome);
         Assert.Equal(SkillCatalog.ReadOutcome.NotText, SkillCatalog.ReadResource(skill, "references/blob.bin").Outcome);
     }
+
+    /// <summary>A bundled file's own cap (2026-09-27): 64,000 characters, twice read_file's, since load_skill cannot page.</summary>
+    [Fact]
+    public void ReadResource_ReadsUpToItsOwnCap_ThenCutsWithTheNote()
+    {
+        Assert.Equal(64_000, SkillCatalog.MaxResourceChars);
+        string directory = Put(SkillScope.Global, "emojese", Skill("emojese"));
+        File.WriteAllText(Path.Combine(directory, "mapping.json"), new string('x', 50_000));
+        File.WriteAllText(Path.Combine(directory, "huge.json"), new string('y', 70_000));
+        _catalog.Scan(external: false);
+        var skill = _catalog.Skills[0];
+
+        var whole = SkillCatalog.ReadResource(skill, "mapping.json");
+        Assert.Equal(50_000, whole.Text.Length);
+        Assert.False(whole.Truncated);
+
+        var cut = SkillCatalog.ReadResource(skill, "huge.json");
+        Assert.Equal(SkillCatalog.MaxResourceChars, cut.Text.Length);
+        Assert.True(cut.Truncated);
+        Assert.EndsWith("\n\n(cut at 64,000 characters)\n</skill_file>", SkillText.File("emojese", "huge.json", cut.Text, cut.Truncated), StringComparison.Ordinal);
+    }
 }

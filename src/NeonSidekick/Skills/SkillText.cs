@@ -71,7 +71,7 @@ public static class SkillText
         ArgumentNullException.ThrowIfNull(relative);
         ArgumentNullException.ThrowIfNull(text);
         return "<skill_file skill=\"" + name + "\" path=\"" + relative + "\">\n" + text
-            + (truncated ? "\n\n(cut at " + Files.WorkingDirectory.MaxReadChars.ToString("N0", CultureInfo.InvariantCulture) + " characters)" : "")
+            + (truncated ? "\n\n(cut at " + SkillCatalog.MaxResourceChars.ToString("N0", CultureInfo.InvariantCulture) + " characters)" : "")
             + "\n</skill_file>";
     }
 

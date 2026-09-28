@@ -830,7 +830,7 @@ A headless run loads `default`, never whichever profile the TUI was last switche
 
 | Tool | Arguments | What it does |
 |---|---|---|
-| `load_skill` | `name, file?` | Loads a skill's full instructions by name (the catalog is in the system prompt), or one of the files bundled with it. Offered only while a skill is installed. |
+| `load_skill` | `name, file?` | Loads a skill's full instructions by name (the catalog is in the system prompt), or one of the files bundled with it (up to 64,000 characters, twice what `read_file` returns at once, since it cannot page). Offered only while a skill is installed. |
 | `skill_editor` | `action, scope?, name, description?, instructions?, path?, content?, old_text?, new_text?, replace_all?, summary?` | `create` or `update` a skill under the `profile` (the default) or `global` root — a named folder of instructions kept for later sessions. `write_file` (the whole file, `content`) and `edit_file` (`old_text` → `new_text`, as `patch_file` matches) keep an existing skill's supporting files current, `path` relative to the skill folder; never the `SKILL.md` itself, the app's `.neon-source.json`, or anything in `.git`, `node_modules` or `.trash`. With *File safe edits* on, the previous version goes to the skill's own `.trash`. External skills are read-only. Never deletes. |
 
 ### Sessions
