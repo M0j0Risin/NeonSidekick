@@ -49,7 +49,8 @@ public class LiveWebTests
 
         Assert.True(page.Ok, page.Error);
         Assert.Equal("Example Domain", page.Page!.Title);
-        Assert.Contains("# Example Domain", page.Page.Markdown);
+        // The body's paragraph, not a heading: the page has had no <h1> since its 2026 rewrite (seen 2026-09-28).
+        Assert.Contains("This domain is for use in documentation examples", page.Page.Markdown);
         Assert.Equal(WebText.HttpEngine, page.Engine);
 
         // The socket policy: loopback refused at the connect, the request never made.
