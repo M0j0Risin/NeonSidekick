@@ -278,8 +278,8 @@ public class PlanTests : IDisposable
     [Fact]
     public void Plan_IsRefusedMidTurn_WithOrWithoutAnArgument()
     {
-        Assert.Equal(MidTurnClass.Refused, ChatScreen.MidTurnPolicy(SlashCommand.Plan, hasArgs: true));
-        Assert.Equal(MidTurnClass.Refused, ChatScreen.MidTurnPolicy(SlashCommand.Plan, hasArgs: false));
+        Assert.Equal(MidTurnClass.Deferred, ChatScreen.MidTurnPolicy(SlashCommand.Plan, hasArgs: true));
+        Assert.Equal(MidTurnClass.Deferred, ChatScreen.MidTurnPolicy(SlashCommand.Plan, hasArgs: false));
         Assert.Equal((SlashCommand.Plan, "approve --fresh"), SlashCommands.Parse("/PLAN  approve --fresh "));
     }
 

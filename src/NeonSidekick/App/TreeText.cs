@@ -28,6 +28,13 @@ public static class TreeText
     public static string CutLine(int cap) =>
         "… only the first " + cap.ToString(CultureInfo.InvariantCulture) + " entries are shown (File /tree max length)";
 
+    /// <summary>
+    /// The info pane's label and tab title for <c>/tree</c> or <c>/vault</c> under a reply (later on 2026-09-27): the command
+    /// and its path, <c>/tree docs</c>; the command alone for the root. Pinned.
+    /// </summary>
+    public static string PaneLabel(string command, string args) =>
+        string.IsNullOrWhiteSpace(args) ? command : command + " " + args.Trim();
+
     /// <summary>The error sentence for a walk that did not reach the folder.</summary>
     public static string Error(FileTreeResult result)
     {

@@ -79,6 +79,14 @@ public sealed class AppSettingsData
     public string ImageEditor { get; set; } = "";
 
     /// <summary>
+    /// Whether the built-in picture viewer wears the theme (later on 2026-09-27, the user's ask; the menu's <c>Themed image
+    /// viewer</c> row): on (the default), a dark title bar in the theme's colours and its background round the picture
+    /// (<see cref="Viewer.ViewerStyle"/>); off, a black bar and black round the picture, the look before the theme reached it.
+    /// Read each time the viewer opens or is focused, no reconnect. No variable.
+    /// </summary>
+    public bool ThemedViewer { get; set; } = true;
+
+    /// <summary>
     /// Whether the <c>/</c> completion list leaves <c>/exit</c> out (on by default, 2026-09-18) so a
     /// pick never ends the app by mistake; typed in full it exits as ever. Read at each keystroke. No variable.
     /// </summary>
@@ -838,9 +846,11 @@ public sealed class AppSettingsData
 
     /// <summary>
     /// How many lines a code block in a styled reply may have before it folds (2026-09-22, the
-    /// user's ask, the tool runs' fold for code): the block streams at full height, and once the
-    /// reply moves on one with more source lines than this shrinks to its label line
-    /// (<c>▸ 📜 csharp · 57 lines</c>) — a click on it, Ctrl+O or <c>/expand</c> shows it again.
+    /// user's ask, the tool runs' fold for code): one with more source lines than this shrinks to
+    /// its label line (<c>▸ 📜 csharp · 57 lines</c>) the moment its fence closes — a click on it,
+    /// Ctrl+O or <c>/expand</c> shows it again. While it streams, the block shows its label and its
+    /// last this many rows only, as the thinking shows its tail (2026-09-27, the user's ask: a long
+    /// block scrolled the screen and flickered as it came; it streamed at full height before).
     /// Top-level blocks only (not one inside a list item or a quote). <see cref="MinCodeCollapseCount"/>
     /// to <see cref="MaxCodeCollapseCount"/>; 0 = never fold. Read when a reply opens, no reconnect;
     /// the Options tab of <c>/tools</c>, under <see cref="ToolCollapseCount"/>. Only on the screen's

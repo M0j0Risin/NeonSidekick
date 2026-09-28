@@ -213,9 +213,252 @@ public sealed class ViewerTests : IDisposable
     [InlineData(ViewerState.VkF11, false, ViewerAction.ToggleFullScreen)]
     [InlineData(ViewerState.VkEscape, false, ViewerAction.Close)]
     [InlineData(ViewerState.VkEscape, true, ViewerAction.LeaveFullScreen)]
-    [InlineData(0x2E, false, ViewerAction.None)]   // Del: deliberately nothing
+    [InlineData(ViewerState.VkDelete, false, ViewerAction.Delete)]
+    [InlineData(ViewerState.VkDelete, true, ViewerAction.Delete)]
+    [InlineData(ViewerState.VkF9, false, ViewerAction.ToggleSlideShow)]
+    [InlineData(ViewerState.VkF10, false, ViewerAction.ToggleShuffle)]
+    [InlineData(0x7B, false, ViewerAction.None)]   // F12: nothing since later on 2026-09-27 (random moved to F10)
+    [InlineData(ViewerState.VkUp, false, ViewerAction.LongerSlides)]
+    [InlineData(ViewerState.VkDown, false, ViewerAction.ShorterSlides)]
+    [InlineData(0x41, false, ViewerAction.None)]   // A: nothing
     public void ActionFor_MapsTheKeys(int key, bool fullScreen, ViewerAction expected) =>
         Assert.Equal(expected, ViewerState.ActionFor(key, fullScreen));
+
+    /// <summary>Esc during the slide show stops it first (later on 2026-09-27); the window and full screen stay.</summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ActionFor_EscDuringTheSlideShow_StopsIt(bool fullScreen)
+    {
+        Assert.Equal(ViewerAction.StopSlideShow, ViewerState.ActionFor(ViewerState.VkEscape, fullScreen, slideShow: true));
+        Assert.Equal(ViewerAction.ToggleSlideShow, ViewerState.ActionFor(ViewerState.VkF9, fullScreen, slideShow: true));
+    }
+
+    [Fact]
+    public void Slides_F10Toggles_UpDownStepAndClamp_OnlyWhileRunning()
+    {
+        var state = ThreePictures();
+
+        Assert.False(state.Slides(ViewerAction.LongerSlides));   // the show off: nothing
+        Assert.Equal(ViewerState.DefaultSlideSeconds, state.SlideSeconds);
+        Assert.False(state.Slides(ViewerAction.StopSlideShow));
+
+        Assert.True(state.Slides(ViewerAction.ToggleSlideShow));
+        Assert.True(state.SlideShow);
+        Assert.Equal("c.png — 3/3 (live) · ▶ 5 s", state.Title());
+
+        Assert.True(state.Slides(ViewerAction.LongerSlides));
+        Assert.Equal(6, state.SlideSeconds);
+        for (int i = 0; i < 10; i++)
+        {
+            state.Slides(ViewerAction.ShorterSlides);
+        }
+
+        Assert.Equal(ViewerState.MinSlideSeconds, state.SlideSeconds);
+        Assert.False(state.Slides(ViewerAction.ShorterSlides));
+        for (int i = 0; i < 100; i++)
+        {
+            state.Slides(ViewerAction.LongerSlides);
+        }
+
+        Assert.Equal(ViewerState.MaxSlideSeconds, state.SlideSeconds);
+
+        Assert.True(state.Slides(ViewerAction.ToggleShuffle));
+        Assert.Equal("c.png — 3/3 (live) · ▶ 60 s · random", state.Title());
+        Assert.True(state.Slides(ViewerAction.StopSlideShow));
+        Assert.False(state.SlideShow);
+        Assert.True(state.Shuffle);   // remembered
+        Assert.Equal("c.png — 3/3 (live) · NeonSidekick pictures", state.Title());
+    }
+
+    [Fact]
+    public void Slides_TheDelHint_WinsOverTheSlideShowTail()
+    {
+        var state = ThreePictures();
+        state.Slides(ViewerAction.ToggleSlideShow);
+        state.PressDelete(1_000);
+
+        Assert.Equal("c.png — 3/3 (live) · Del again to delete", state.Title());
+    }
+
+    [Fact]
+    public void NextSlide_InOrder_WrapsFromTheNewestToTheOldest()
+    {
+        var state = ThreePictures();
+        state.Slides(ViewerAction.ToggleSlideShow);
+
+        Assert.True(state.NextSlide(new Random(1)));
+        Assert.Equal(@"D:\pics\a.png", state.Current);
+        Assert.False(state.Live);
+        Assert.True(state.NextSlide(new Random(1)));
+        Assert.Equal(@"D:\pics\b.png", state.Current);
+        Assert.True(state.NextSlide(new Random(1)));
+        Assert.Equal(@"D:\pics\c.png", state.Current);
+        Assert.True(state.Live);   // on the newest: a picture that arrives is the next slide
+        Assert.True(state.Add(@"D:\pics\d.png", T0.AddMinutes(4)));
+        Assert.Equal(@"D:\pics\d.png", state.Current);
+    }
+
+    [Fact]
+    public void NextSlide_Shuffled_ShowsEveryPictureOnceARound_NeverTheSameTwice()
+    {
+        var state = new ViewerState();
+        state.Reset(@"D:\p", Enumerable.Range(0, 6).Select(i => new ViewerEntry($@"D:\p\{i}.png", T0.AddMinutes(i))));
+        state.Slides(ViewerAction.ToggleShuffle);
+        state.Slides(ViewerAction.ToggleSlideShow);
+        var random = new Random(42);
+
+        var round = new List<string>();
+        for (int i = 0; i < 5; i++)
+        {
+            string before = state.Current!;
+            Assert.True(state.NextSlide(random));
+            Assert.NotEqual(before, state.Current);
+            round.Add(state.Current!);
+        }
+
+        // The first round is everything but the picture the show started on, each once.
+        Assert.Equal(5, round.Distinct().Count());
+        Assert.DoesNotContain(@"D:\p\5.png", round);
+
+        for (int i = 0; i < 20; i++)
+        {
+            string before = state.Current!;
+            Assert.True(state.NextSlide(random));
+            Assert.NotEqual(before, state.Current);
+        }
+    }
+
+    [Fact]
+    public void NextSlide_Shuffled_SkipsAPictureThatLeft()
+    {
+        var state = ThreePictures();
+        state.Slides(ViewerAction.ToggleShuffle);
+        state.Slides(ViewerAction.ToggleSlideShow);
+        state.NextSlide(new Random(7));   // the bag now holds the one not shown
+        string left = state.Pictures.Select(p => p.Path).Single(p => p != state.Current && p != @"D:\pics\c.png");
+        state.Remove(left);
+
+        Assert.True(state.NextSlide(new Random(7)));
+        Assert.NotEqual(left, state.Current);
+        Assert.Contains(state.Current, state.Pictures.Select(p => p.Path));
+    }
+
+    [Fact]
+    public void NextSlide_WithOnePicture_IsNothing_AndResetStopsTheShow()
+    {
+        var state = new ViewerState();
+        state.Reset(@"D:\p", [new(@"D:\p\a.png", T0)]);
+        state.Slides(ViewerAction.ToggleSlideShow);
+
+        Assert.False(state.NextSlide(new Random(1)));
+        state.Reset(@"D:\q", []);
+        Assert.False(state.SlideShow);
+    }
+
+    /// <summary>The viewer's colours from the theme (later on 2026-09-27) as COLORREFs, red in the low byte.</summary>
+    [Fact]
+    public void ViewerStyle_Synthwave_IsTheThemesColours()
+    {
+        var style = ViewerStyle.For(NeonSidekick.UI.ThemePalette.Synthwave);
+
+        Assert.Equal(0x0016040Bu, style.Caption);
+        Assert.Equal(0x00FFE6EFu, style.CaptionText);
+        Assert.Equal(0x00972EFFu, style.Border);
+        Assert.Equal(0x0016040Bu, style.Background);
+        Assert.Equal(0x00B88B9Au, style.Text);
+        Assert.Equal(0x00030201u, ViewerStyle.ColorRef(new Spectre.Console.Color(1, 2, 3)));
+    }
+
+    /// <summary>Themed image viewer off (later on 2026-09-27): black whatever the theme; the default stays themed.</summary>
+    [Fact]
+    public void ViewerStyle_Unthemed_IsBlack()
+    {
+        var black = ViewerStyle.For(NeonSidekick.UI.ThemePalette.Synthwave, themed: false);
+
+        Assert.Equal(ViewerStyle.Black, black);
+        Assert.Equal((0u, 0x00FFFFFFu, 0u, 0u), (black.Caption, black.CaptionText, black.Border, black.Background));
+        Assert.NotEqual(ViewerStyle.Black, ViewerStyle.For(NeonSidekick.UI.ThemePalette.Synthwave));
+    }
+
+    [Fact]
+    public void ViewerStyle_EveryTheme_HasReadableCaptionText()
+    {
+        foreach (var palette in NeonSidekick.UI.ThemePalette.All)
+        {
+            var style = ViewerStyle.For(palette);
+            Assert.NotEqual(style.Caption, style.CaptionText);
+        }
+    }
+
+    /// <summary>Del twice (later on 2026-09-27, the user's call): the first arms with the title's hint, the second in time gives the path to delete.</summary>
+    [Fact]
+    public void PressDelete_FirstArms_TheSecondInTimeGivesThePath()
+    {
+        var state = ThreePictures();
+
+        Assert.Null(state.PressDelete(1_000));
+        Assert.True(state.DeleteArmed);
+        Assert.Equal("c.png — 3/3 (live) · Del again to delete", state.Title());
+
+        Assert.Equal(@"D:\pics\c.png", state.PressDelete(1_000 + ViewerState.DeleteArmMilliseconds));
+        Assert.False(state.DeleteArmed);
+        Assert.Equal("c.png — 3/3 (live) · NeonSidekick pictures", state.Title());
+    }
+
+    [Fact]
+    public void PressDelete_TooLate_ArmsAgain()
+    {
+        var state = ThreePictures();
+
+        Assert.Null(state.PressDelete(1_000));
+        Assert.Null(state.PressDelete(1_001 + ViewerState.DeleteArmMilliseconds));
+        Assert.True(state.DeleteArmed);
+        Assert.Equal(@"D:\pics\c.png", state.PressDelete(1_002 + ViewerState.DeleteArmMilliseconds));
+    }
+
+    /// <summary>Moving off the armed picture — browsing, or a new one arriving while live — drops the arming; the next Del arms, never deletes.</summary>
+    [Fact]
+    public void PressDelete_AfterTheShownPictureChanged_ArmsTheNewOne()
+    {
+        var state = ThreePictures();
+
+        Assert.Null(state.PressDelete(1_000));
+        state.Browse(ViewerAction.Previous);
+        Assert.False(state.DeleteArmed);
+        Assert.Null(state.PressDelete(1_100));
+        Assert.True(state.DeleteArmed);
+
+        state.Browse(ViewerAction.Last);
+        Assert.Null(state.PressDelete(1_200));
+        state.Add(@"D:\pics\d.png", T0.AddMinutes(4));   // live: d is shown now
+        Assert.False(state.DeleteArmed);
+        Assert.Null(state.PressDelete(1_300));
+        Assert.Equal(@"D:\pics\d.png", state.PressDelete(1_400));
+    }
+
+    [Fact]
+    public void Disarm_DropsTheArming_AndSaysWhetherThereWasOne()
+    {
+        var state = ThreePictures();
+
+        Assert.False(state.Disarm());
+        state.PressDelete(1_000);
+        Assert.True(state.Disarm());
+        Assert.False(state.DeleteArmed);
+        Assert.Null(state.PressDelete(1_100));   // arms again, not deletes
+    }
+
+    [Fact]
+    public void PressDelete_WithNoPicture_IsNothing()
+    {
+        var state = new ViewerState();
+        state.Reset(@"D:\empty", []);
+
+        Assert.Null(state.PressDelete(1_000));
+        Assert.Null(state.PressDelete(1_100));
+        Assert.False(state.DeleteArmed);
+    }
 
     [Theory]
     [InlineData(100, 50, 400, 400, 0, 100, 400, 200)]    // wide: fills the width, centred down
@@ -234,6 +477,12 @@ public sealed class ViewerTests : IDisposable
         Assert.Equal(@"Waiting for pictures in D:\p", ViewerText.Waiting(@"D:\p"));
         Assert.Equal("x.png could not be read as a picture", ViewerText.Unreadable("x.png"));
         Assert.Equal(@"Could not open the picture viewer on D:\p: denied", ViewerText.Failed(@"D:\p", "denied"));
+        Assert.Equal("Could not delete x.png: in use", ViewerText.DeleteFailed("x.png", "in use"));
+        Assert.Equal("(\U0001F5BC\uFE0F picture viewer on D:\\p)", ViewerText.Opened(@"D:\p"));   // the selector: two cells, one space
+        Assert.Contains("F9 slide show", ViewerText.Keys);
+        Assert.Contains("F10 random", ViewerText.Keys);
+        Assert.Equal("▶ 5 s", ViewerText.SlideShowTail(5, false));
+        Assert.Equal("▶ 5 s · random", ViewerText.SlideShowTail(5, true));
     }
 
     [Fact]

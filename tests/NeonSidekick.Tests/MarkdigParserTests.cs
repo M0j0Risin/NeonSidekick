@@ -122,6 +122,15 @@ public class MarkdigParserTests
         var code = Assert.IsType<CodeBlock>(Assert.Single(Parse("```python\ndef f():\n    pass").Blocks));
         Assert.Equal("python", code.Language);
         Assert.Equal(new[] { "def f():", "    pass" }, code.Lines);
+        Assert.True(code.Open);
+    }
+
+    [Fact]
+    public void ClosedFence_AndIndentedBlock_AreNotOpen()
+    {
+        Assert.False(Assert.IsType<CodeBlock>(Assert.Single(Parse("```python\nx\n```").Blocks)).Open);
+        Assert.False(Assert.IsType<CodeBlock>(Assert.Single(Parse("```python\nx\n```\n").Blocks)).Open);
+        Assert.False(Assert.IsType<CodeBlock>(Assert.Single(Parse("    x = 1").Blocks)).Open);
     }
 
     [Fact]

@@ -118,7 +118,9 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     // flow and the padding, its rows lifted with the pane's; repainted on the tick when dirty, never
     // per token. A block taller than the screen leaves over the pane commits its top rows into the
     // flow (written and tracked like any flow write) and _liveCommitted skips that many lines of the
-    // next layout — the content is the whole document every time, the pane shows the tail.
+    // next layout — the content is the whole document every time, the pane shows the tail. A code block
+    // still streaming is the exception (2026-09-27): its label and last Code collapse count rows only,
+    // none of it committed until its fence closes (ReplyLayout), as a thinking block streams.
     private IRenderable? _live;
     private int _liveRows;
     private int _liveCommitted;
@@ -3277,9 +3279,15 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
             }
             else if (_live is not null)
             {
-                var lines = RenderLines(_live, _inner, w);
+                var lines = ReplyLayout(w, out var open, out int through, out int folding);
+                _liveFolded = folding;
                 int skip = Math.Min(_liveCommitted, lines.Count);
-                int excess = lines.Count - skip - region;
+
+                // A code block still streaming keeps its label in the slot with its window (2026-09-27):
+                // the excess commit stops at it, as a thinking block keeps its header. A closed one past
+                // its keep goes in whole at once (through), and folds.
+                int hold = open?.LabelRow ?? lines.Count;
+                int excess = Math.Max(Math.Min(lines.Count - skip - region, hold - skip), through - skip);
                 if (excess > 0)
                 {
                     if (_overpaint)
@@ -3290,6 +3298,13 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
 
                     EndFlowRow();
                     CommitLiveRows(lines, skip, skip + excess, w, final: false);
+                    if (skip + excess == through && _liveCodeSpan >= 0)
+                    {
+                        // The closed block is over: it folds now, not when the reply speaks again.
+                        _store.EndGroup();
+                        _liveCodeSpan = -1;
+                    }
+
                     _liveCommitted += excess;
                     skip += excess;
                     if (_store.TakeReshaped())
@@ -3305,6 +3320,20 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
                 }
 
                 live = lines.GetRange(skip, lines.Count - skip);
+                if (open is not null && live.Count > region)
+                {
+                    // A region under the label and the window: the window's top rows go, the label stays
+                    // while there is room for it and one row more.
+                    int label = Math.Max(0, open.BodyRow - skip);
+                    if (region >= label + 1)
+                    {
+                        live.RemoveRange(label, live.Count - region);
+                    }
+                    else
+                    {
+                        live = live.GetRange(live.Count - region, region);
+                    }
+                }
             }
 
             liveRows = live?.Count ?? 0;
@@ -3590,7 +3619,45 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     {
         return _live is ThinkingBlock { Streaming: true } thinking
             ? ThinkingBlock.Tail(RenderLines(thinking.LiveView(), _inner, width), region)
-            : RenderLines(_live!, _inner, width);
+            : ReplyLayout(width, out _, out _, out _);
+    }
+
+    /// <summary>
+    /// The live block laid out at <paramref name="width"/> for the slot (the thinking aside). A reply
+    /// streaming a code block past its keep (2026-09-27, the user's ask: a long block scrolled the screen
+    /// and flickered as it came) is laid out over its <see cref="ReplyBlock.LiveView"/> and cut to its
+    /// <see cref="ReplyBlock.Tail"/>, <paramref name="open"/> that block's span; the rows above it are
+    /// the whole reply's rows. <paramref name="through"/>: the end of the last closed code block past
+    /// its keep not yet counted — to be committed whole this draw so it folds — or 0; <paramref name="folding"/>
+    /// how many such blocks the reply has, the count the draw that commits them keeps.
+    /// </summary>
+    private List<SegmentLine> ReplyLayout(int width, out CodeSpan? open, out int through, out int folding)
+    {
+        open = null;
+        through = 0;
+        folding = _liveFolded;
+        if (_live is not ReplyBlock { CodeKeep: > 0 } reply)
+        {
+            return RenderLines(_live!, _inner, width);
+        }
+
+        var view = reply.LiveView();
+        var lines = RenderLines(view, _inner, width);
+        var options = RenderOptions.Create(_inner, _inner.Profile.Capabilities);
+        folding = reply.FoldingCode;
+        if (folding > _liveFolded)
+        {
+            // Only the draw a block closes lays the blocks out again for their spans.
+            var closed = view.CodeSpans(options, width).Where(s => !s.Open && s.SourceLines > reply.CodeKeep).ToList();
+            if (closed.Count > 0)
+            {
+                through = Math.Min(closed[^1].End, lines.Count);
+            }
+
+        }
+
+        open = view.OpenCodeSpan(options, width, lines.Count);
+        return open is null ? lines : ReplyBlock.Tail(lines, open, reply.CodeKeep);
     }
 
     private void ForgetLive()
@@ -3600,7 +3667,11 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         _liveDirty = false;
         _liveCount = 0;
         _liveCodeSpan = -1;
+        _liveFolded = 0;
     }
+
+    // The live reply's closed code blocks past their keep already committed whole (ReplyLayout).
+    private int _liveFolded;
 
     // The live block's code block whose group is open in the store (its label row), −1 for none: a
     // block the excess commit cut in two carries on in its group at the next commit.
@@ -3628,7 +3699,8 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         if (_live is ReplyBlock { CodeKeep: > 0 } reply)
         {
             keep = reply.CodeKeep;
-            spans = reply.CodeSpans(RenderOptions.Create(_inner, _inner.Profile.Capabilities), width);
+            // Short of the end, the rows above a streaming code block: its window's spans are theirs, and cheaper.
+            spans = (final ? reply : reply.LiveView()).CodeSpans(RenderOptions.Create(_inner, _inner.Profile.Capabilities), width);
         }
 
         for (int i = from; i < to; i++)

@@ -28,6 +28,24 @@ public enum ViewerAction
 
     /// <summary>Esc in a window: the window closed.</summary>
     Close,
+
+    /// <summary>Del: the first arms (<see cref="ViewerState.PressDelete"/>), a second within <see cref="ViewerState.DeleteArmMilliseconds"/> on the same picture deletes it.</summary>
+    Delete,
+
+    /// <summary>F9: the slide show started or stopped.</summary>
+    ToggleSlideShow,
+
+    /// <summary>F10: the slide show's order, the folder's or random.</summary>
+    ToggleShuffle,
+
+    /// <summary>↑ during the slide show: a second more per slide.</summary>
+    LongerSlides,
+
+    /// <summary>↓ during the slide show: a second less per slide.</summary>
+    ShorterSlides,
+
+    /// <summary>Esc during the slide show: the show stopped (the window stays).</summary>
+    StopSlideShow,
 }
 
 /// <summary>
@@ -36,9 +54,14 @@ public enum ViewerAction
 /// shown — <see cref="Live"/> (the newest, and whichever arrives next) or a held index once ← or Home moved off it. A
 /// new picture while live is shown; while held it is only counted, so browsing older pictures is never yanked away. A
 /// picture written again (ComfyUI never does, a hand copy may) moves to the newest. A deleted one leaves the list, the
-/// shown index kept on the same picture where it can be. FolderPictureViewer's double-Del delete is deliberately not
-/// here: a viewer does not destroy the user's pictures. Everything <see cref="PictureWindow"/> decides is decided
-/// here, so it is tested without a window. Pure; one thread (the window's).
+/// shown index kept on the same picture where it can be. FolderPictureViewer's double-Del delete, first left out, is
+/// here since later on 2026-09-27 (the user's call): Del twice deletes the shown picture — permanently, not to the
+/// Recycle Bin — the first Del arming it for <see cref="DeleteArmMilliseconds"/> with a hint in the title, and any other
+/// key, the shown picture changing or the time running out disarming it. Everything <see cref="PictureWindow"/> decides
+/// is decided here, so it is tested without a window. The slide show (later on 2026-09-27, the user's ask): F9 starts
+/// and stops it, it loops until stopped, <see cref="DefaultSlideSeconds"/> a slide with ↑ / ↓ a second more or less, the
+/// folder's order or, after F10, a random one that shows every picture once a round; Esc stops it before it leaves full
+/// screen or closes. Pure; one thread (the window's).
 /// </summary>
 public sealed class ViewerState
 {
@@ -46,6 +69,33 @@ public sealed class ViewerState
 
     // null = live (following the newest), else the held index.
     private int? _held;
+
+    // The picture the first Del armed, and when (milliseconds on the caller's clock); null = not armed.
+    private string? _armedPath;
+    private long _armedAt;
+
+    // The pictures the shuffled slide show has not shown yet this round.
+    private readonly List<string> _bag = [];
+
+    /// <summary>A slide's time before ↑ / ↓, and its bounds.</summary>
+    public const int DefaultSlideSeconds = 5;
+    public const int MinSlideSeconds = 1;
+    public const int MaxSlideSeconds = 60;
+
+    /// <summary>Whether the slide show is running.</summary>
+    public bool SlideShow { get; private set; }
+
+    /// <summary>How long each slide is shown.</summary>
+    public int SlideSeconds { get; private set; } = DefaultSlideSeconds;
+
+    /// <summary>The slide show in random order (F10) rather than the folder's.</summary>
+    public bool Shuffle { get; private set; }
+
+    /// <summary>How long the first Del stays armed: a second Del within it deletes the picture.</summary>
+    public const uint DeleteArmMilliseconds = 3000;
+
+    /// <summary>Whether a Del armed the shown picture (the title shows the hint). Moving off the picture drops it.</summary>
+    public bool DeleteArmed => _armedPath is not null && string.Equals(_armedPath, Current, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>The folder the pictures are in, as shown in the title.</summary>
     public string Folder { get; private set; } = "";
@@ -77,6 +127,108 @@ public sealed class ViewerState
             .OrderBy(p => p.CreatedUtc)
             .ThenBy(p => p.Path, StringComparer.OrdinalIgnoreCase));
         _held = null;
+        _armedPath = null;
+        SlideShow = false;
+        _bag.Clear();
+    }
+
+    /// <summary>
+    /// A slide-show action: <see cref="ViewerAction.ToggleSlideShow"/>, <see cref="ViewerAction.StopSlideShow"/>,
+    /// <see cref="ViewerAction.ToggleShuffle"/> (remembered with the show off too), <see cref="ViewerAction.LongerSlides"/> and
+    /// <see cref="ViewerAction.ShorterSlides"/> (only while it runs, clamped). True when anything changed.
+    /// </summary>
+    public bool Slides(ViewerAction action)
+    {
+        switch (action)
+        {
+            case ViewerAction.ToggleSlideShow:
+                SlideShow = !SlideShow;
+                _bag.Clear();
+                return true;
+            case ViewerAction.StopSlideShow:
+                bool was = SlideShow;
+                SlideShow = false;
+                return was;
+            case ViewerAction.ToggleShuffle:
+                Shuffle = !Shuffle;
+                _bag.Clear();
+                return true;
+            case ViewerAction.LongerSlides or ViewerAction.ShorterSlides when SlideShow:
+                int before = SlideSeconds;
+                SlideSeconds = Math.Clamp(SlideSeconds + (action == ViewerAction.LongerSlides ? 1 : -1), MinSlideSeconds, MaxSlideSeconds);
+                return SlideSeconds != before;
+            default:
+                return false;
+        }
+    }
+
+    /// <summary>
+    /// The slide show's next picture: in order the one after the shown one, the newest wrapping to the oldest (live on the
+    /// newest, as <see cref="Browse"/> is, so a picture that just arrived is the next slide); shuffled a random one not shown
+    /// yet this round and never the shown one, the round refilled when it runs out. False with fewer than two pictures.
+    /// </summary>
+    public bool NextSlide(Random random)
+    {
+        ArgumentNullException.ThrowIfNull(random);
+        if (_pictures.Count < 2 || Index is not int from)
+        {
+            return false;
+        }
+
+        int to;
+        if (Shuffle)
+        {
+            string current = _pictures[from].Path;
+            _bag.RemoveAll(p => IndexOf(p) < 0 || string.Equals(p, current, StringComparison.OrdinalIgnoreCase));
+            if (_bag.Count == 0)
+            {
+                _bag.AddRange(_pictures.Select(p => p.Path).Where(p => !string.Equals(p, current, StringComparison.OrdinalIgnoreCase)));
+            }
+
+            int pick = random.Next(_bag.Count);
+            to = IndexOf(_bag[pick]);
+            _bag.RemoveAt(pick);
+        }
+        else
+        {
+            to = from == _pictures.Count - 1 ? 0 : from + 1;
+        }
+
+        _held = to == _pictures.Count - 1 ? null : to;
+        return true;
+    }
+
+    /// <summary>
+    /// A Del pressed at <paramref name="nowMilliseconds"/>: the shown picture's path when a Del armed that same picture no
+    /// more than <see cref="DeleteArmMilliseconds"/> before (disarmed; the caller deletes it), else null with the shown
+    /// picture armed from now. Null with no picture.
+    /// </summary>
+    public string? PressDelete(long nowMilliseconds)
+    {
+        string? current = Current;
+        if (current is null)
+        {
+            _armedPath = null;
+            return null;
+        }
+
+        if (DeleteArmed && nowMilliseconds - _armedAt <= DeleteArmMilliseconds)
+        {
+            _armedPath = null;
+            return current;
+        }
+
+        _armedPath = current;
+        _armedAt = nowMilliseconds;
+        return null;
+    }
+
+    /// <summary>Any arming dropped; true when the shown picture was armed (the title changes).</summary>
+    public bool Disarm()
+    {
+        bool was = DeleteArmed;
+        _armedPath = null;
+        return was;
     }
 
     /// <summary>
@@ -161,7 +313,7 @@ public sealed class ViewerState
     /// <summary>The window's title as things stand (<see cref="ViewerText.Title"/>).</summary>
     public string Title() =>
         Index is int index
-            ? ViewerText.Title(System.IO.Path.GetFileName(_pictures[index].Path), index + 1, _pictures.Count, Live, Folder)
+            ? ViewerText.Title(System.IO.Path.GetFileName(_pictures[index].Path), index + 1, _pictures.Count, Live, Folder, DeleteArmed, SlideShow ? SlideSeconds : null, Shuffle)
             : ViewerText.Title(null, 0, 0, true, Folder);
 
     // Virtual-key codes (winuser.h), the only keys the window answers.
@@ -170,16 +322,27 @@ public sealed class ViewerState
     public const int VkHome = 0x24;
     public const int VkLeft = 0x25;
     public const int VkRight = 0x27;
+    public const int VkUp = 0x26;
+    public const int VkDown = 0x28;
+    public const int VkDelete = 0x2E;
+    public const int VkF9 = 0x78;
+    public const int VkF10 = 0x79;
     public const int VkF11 = 0x7A;
 
-    /// <summary>What a key does: ←/→, Home/End, F11, and Esc — out of full screen first, then the window closed. Pure.</summary>
-    public static ViewerAction ActionFor(int virtualKey, bool fullScreen) => virtualKey switch
+    /// <summary>What a key does: ←/→, Home/End, F9–F11, ↑/↓, Del, and Esc — the slide show stopped first, then out of full screen, then the window closed. Pure.</summary>
+    public static ViewerAction ActionFor(int virtualKey, bool fullScreen, bool slideShow = false) => virtualKey switch
     {
+        VkEscape when slideShow => ViewerAction.StopSlideShow,
+        VkF9 => ViewerAction.ToggleSlideShow,
+        VkF10 => ViewerAction.ToggleShuffle,
+        VkUp => ViewerAction.LongerSlides,
+        VkDown => ViewerAction.ShorterSlides,
         VkLeft => ViewerAction.Previous,
         VkRight => ViewerAction.Next,
         VkHome => ViewerAction.First,
         VkEnd => ViewerAction.Last,
         VkF11 => ViewerAction.ToggleFullScreen,
+        VkDelete => ViewerAction.Delete,
         VkEscape => fullScreen ? ViewerAction.LeaveFullScreen : ViewerAction.Close,
         _ => ViewerAction.None,
     };

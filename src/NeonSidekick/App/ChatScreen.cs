@@ -4064,30 +4064,30 @@ internal sealed partial class ChatScreen
 
         if (words.Length != 1 || !words[0].Equals(ResetWord, StringComparison.OrdinalIgnoreCase))
         {
-            _transcript.Error(PromptFileUsageError(command, fileName));
+            _flow.Error(PromptFileUsageError(command, fileName));
             return;
         }
 
         if (!File.Exists(file.FilePath))
         {
-            _transcript.Notice(PromptFileAbsentNotice(fileName, file.DefaultLabel));
+            _flow.Notice(PromptFileAbsentNotice(fileName, file.DefaultLabel));
             return;
         }
 
         if (!await ConfirmAsync(PromptFileResetPrompt(fileName, file.DefaultLabel), cancellationToken).ConfigureAwait(false))
         {
-            _transcript.Notice(KeptNotice);
+            _flow.Notice(KeptNotice);
             return;
         }
 
         try
         {
             file.Delete();
-            _transcript.Notice(PromptFileResetNotice(fileName, file.DefaultLabel, spoken));
+            _flow.Notice(PromptFileResetNotice(fileName, file.DefaultLabel, spoken));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            _transcript.Error(PromptFileResetFailedError(fileName, ex.Message));
+            _flow.Error(PromptFileResetFailedError(fileName, ex.Message));
         }
     }
 
@@ -4105,19 +4105,19 @@ internal sealed partial class ChatScreen
         string home = _settings.StorageDirectory;
         if (Profiles.Resolve(home, typed) is not { } target)
         {
-            _transcript.Error(ProfileMissingError(typed));
+            _flow.Error(ProfileMissingError(typed));
             return;
         }
 
         if (Profiles.NameEquals(target, _settings.ProfileName))
         {
-            _transcript.Error(PromptFileCopySelfError(command));
+            _flow.Error(PromptFileCopySelfError(command));
             return;
         }
 
         if (!File.Exists(file.FilePath))
         {
-            _transcript.Notice(PromptFileNothingToCopyNotice(fileName, file.DefaultLabel));
+            _flow.Notice(PromptFileNothingToCopyNotice(fileName, file.DefaultLabel));
             return;
         }
 
@@ -4125,24 +4125,24 @@ internal sealed partial class ChatScreen
         bool replacing = File.Exists(Path.Combine(directory, fileName));
         if (replacing && !force)
         {
-            _transcript.Error(PromptFileTargetExistsError(command, fileName, target));
+            _flow.Error(PromptFileTargetExistsError(command, fileName, target));
             return;
         }
 
         if (!await ConfirmAsync(PromptFileCopyPrompt(fileName, target, replacing), cancellationToken).ConfigureAwait(false))
         {
-            _transcript.Notice(KeptNotice);
+            _flow.Notice(KeptNotice);
             return;
         }
 
         try
         {
             file.CopyTo(directory);
-            _transcript.Notice(PromptFileCopiedNotice(fileName, target, replacing));
+            _flow.Notice(PromptFileCopiedNotice(fileName, target, replacing));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            _transcript.Error(PromptFileCopyFailedError(fileName, ex.Message));
+            _flow.Error(PromptFileCopyFailedError(fileName, ex.Message));
         }
     }
 
@@ -4156,11 +4156,11 @@ internal sealed partial class ChatScreen
         {
             bool created = file.EnsureExists();
             _openFile(file.FilePath);
-            _transcript.Notice(created ? createdNotice : openedNotice);
+            _flow.Notice(created ? createdNotice : openedNotice);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.ComponentModel.Win32Exception or InvalidOperationException)
         {
-            _transcript.Error(openFailedError(ex.Message));
+            _flow.Error(openFailedError(ex.Message));
         }
     }
 
@@ -4739,20 +4739,20 @@ internal sealed partial class ChatScreen
         bool misplaced = history && (all.Length - words.Length > 1 || string.Equals(all[0], HistorySwitch, StringComparison.OrdinalIgnoreCase));
         if (misplaced || words.Length == 0 || words.Length > 2 || (words.Length == 2 && !overwrite))
         {
-            _transcript.Error(CmdCopyUsageError);
+            _flow.Error(CmdCopyUsageError);
             return;
         }
 
         string home = _settings.StorageDirectory;
         if (Profiles.Resolve(home, words[0]) is not { } target)
         {
-            _transcript.Error(ProfileMissingError(words[0]));
+            _flow.Error(ProfileMissingError(words[0]));
             return;
         }
 
         if (Profiles.NameEquals(target, _settings.ProfileName))
         {
-            _transcript.Error(CmdCopySelfError);
+            _flow.Error(CmdCopySelfError);
             return;
         }
 
@@ -4782,15 +4782,15 @@ internal sealed partial class ChatScreen
             int duplicates = overwrite ? 0 : source.Count(prefix => CommandAllowList.Contains(data.ShellCommandAllowed, prefix));
             data.ShellCommandAllowed = overwrite ? source : CommandAllowList.Merge(data.ShellCommandAllowed, source);
             Profiles.WriteProfileFile(path, data);
-            _transcript.Notice(CmdCopiedNotice(source.Count - duplicates, duplicates, target, overwrite));
+            _flow.Notice(CmdCopiedNotice(source.Count - duplicates, duplicates, target, overwrite));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.Json.JsonException)
         {
-            _transcript.Error(CmdCopyFailedError(ex.Message));
+            _flow.Error(CmdCopyFailedError(ex.Message));
         }
         finally
         {
-            DrainDiagnostics();
+            RunOrPost(DrainDiagnostics);
         }
     }
 
@@ -4844,13 +4844,13 @@ internal sealed partial class ChatScreen
         {
             if (!Profiles.ReadProfileFile(Profiles.ProfileFile(home, target)).KeepCommandHistory)
             {
-                _transcript.Error(CmdCopyHistoryOffError(target));
+                _flow.Error(CmdCopyHistoryOffError(target));
                 return;
             }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.Json.JsonException)
         {
-            _transcript.Error(CmdCopyFailedError(ex.Message));
+            _flow.Error(CmdCopyFailedError(ex.Message));
             return;
         }
 
@@ -4864,15 +4864,15 @@ internal sealed partial class ChatScreen
         {
             if (store.Available)
             {
-                _transcript.Notice(CmdHistoryCopiedNotice(store.AddCommandHistory(lines, overwrite), target, overwrite));
+                _flow.Notice(CmdHistoryCopiedNotice(store.AddCommandHistory(lines, overwrite), target, overwrite));
             }
             else
             {
-                _transcript.Error(CmdCopyHistoryFailedError(target));
+                _flow.Error(CmdCopyHistoryFailedError(target));
             }
         }
 
-        DrainDiagnostics();
+        RunOrPost(DrainDiagnostics);
     }
 
     /// <summary>
@@ -5157,19 +5157,35 @@ internal sealed partial class ChatScreen
     /// <c>default</c> leaves out hidden and system entries and every dot-file and dot-folder, <c>show-hidden</c> lists
     /// them all (<c>.git</c> too). A path outside the root, missing or a file is the usual file error.
     /// </summary>
-    private void HandleTree(string args)
+    private void HandleTree(string args) => WriteTree(TreeLines(args, out string? error), error);
+
+    /// <summary><c>/tree</c>'s walk as its lines; null with the error line (later on 2026-09-27: split out so a reply's info pane shows the same).</summary>
+    private IReadOnlyList<string>? TreeLines(string args, out string? error)
     {
+        error = null;
         var effective = _effective();
         int cap = Math.Clamp(effective.FileTreeMaxLength, WorkingDirectory.MinTreeLength, WorkingDirectory.MaxTreeLength);
         bool showHidden = FileBrowserMode.Resolve(effective) == FileBrowserVisibility.ShowHidden;
         var result = _files.FileTree(args, cap, hideDotEntries: !showHidden, showHidden: showHidden);
         if (result.Outcome != FileOutcome.Ok)
         {
-            _transcript.Error(TreeText.Error(result));
+            error = TreeText.Error(result);
+            return null;
+        }
+
+        return TreeText.Lines(result, effective.FileTreeShowSizes, cap);
+    }
+
+    // A walk's lines as notices at the idle line, or its error line.
+    private void WriteTree(IReadOnlyList<string>? lines, string? error)
+    {
+        if (lines is null)
+        {
+            _transcript.Error(error ?? "");
             return;
         }
 
-        foreach (var line in TreeText.Lines(result, effective.FileTreeShowSizes, cap))
+        foreach (var line in lines)
         {
             _transcript.Notice(line);
         }
@@ -5201,33 +5217,32 @@ internal sealed partial class ChatScreen
     /// <c>/tree</c>'s error line — and a path through a dot-folder (<c>.obsidian</c>, <c>.trash/…</c>) is the
     /// missing one, since the vault tools never show those.
     /// </summary>
-    private void HandleVault(string args)
+    private void HandleVault(string args) => WriteTree(VaultLines(args, out string? error), error);
+
+    /// <summary><c>/vault</c>'s walk as its lines; null with the error line (later on 2026-09-27, as <see cref="TreeLines"/>).</summary>
+    private IReadOnlyList<string>? VaultLines(string args, out string? error)
     {
         var effective = _effective();
-        if (VaultRoot(effective, out string? error) is not { } root)
+        if (VaultRoot(effective, out error) is not { } root)
         {
-            _transcript.Error(error!);
-            return;
+            return null;
         }
 
         if (NamesADotFolder(args))
         {
-            _transcript.Error(TreeText.Error(new FileTreeResult(FileOutcome.Missing, args, "", [], false)));
-            return;
+            error = TreeText.Error(new FileTreeResult(FileOutcome.Missing, args, "", [], false));
+            return null;
         }
 
         int cap = Math.Clamp(effective.FileTreeMaxLength, WorkingDirectory.MinTreeLength, WorkingDirectory.MaxTreeLength);
         var result = new WorkingDirectory(() => root, _time).FileTree(args, cap, hideDotEntries: true);
         if (result.Outcome != FileOutcome.Ok)
         {
-            _transcript.Error(TreeText.Error(result));
-            return;
+            error = TreeText.Error(result);
+            return null;
         }
 
-        foreach (var line in TreeText.Lines(result, effective.FileTreeShowSizes, cap))
-        {
-            _transcript.Notice(line);
-        }
+        return TreeText.Lines(result, effective.FileTreeShowSizes, cap);
     }
 
     /// <summary>
@@ -5690,6 +5705,7 @@ internal sealed partial class ChatScreen
         {
             open(full);
             _flow.Notice(ViewerText.Opened(folder ? full : Path.GetDirectoryName(full) ?? full));
+            _flow.Notice(ViewerText.Keys);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or PlatformNotSupportedException or ArgumentException)
         {
@@ -10937,6 +10953,7 @@ internal sealed partial class ChatScreen
             if (notice)
             {
                 _flow.Notice(ViewerText.Opened(full));
+                _flow.Notice(ViewerText.Keys);
             }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or PlatformNotSupportedException)

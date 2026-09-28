@@ -86,7 +86,7 @@ public sealed class MarkdownView : IRenderable
             {
                 string label = code.Language ?? CodeLabel;
                 int labelRows = Segment.SplitLines(((IRenderable)new Text(CodeHeading(code.Language), Theme.MarkdownCodeLabel)).Render(options, maxWidth)).Count;
-                spans.Add(new CodeSpan(row, labelRows, rows - labelRows, label, code.Lines.Count));
+                spans.Add(new CodeSpan(row, labelRows, rows - labelRows, label, code.Lines.Count, code.Open));
             }
 
             row += rows;
@@ -94,6 +94,24 @@ public sealed class MarkdownView : IRenderable
 
         _spansWidth = maxWidth;
         return _spans = spans;
+    }
+
+    /// <summary>
+    /// The last top-level block's rows at <paramref name="maxWidth"/> when it is a code block (2026-09-27,
+    /// the streaming code window): its label's and its body's, the block alone laid out — what
+    /// <see cref="CodeSpans"/> finds for it, without laying out every block above. Null otherwise.
+    /// </summary>
+    public (int LabelRows, int BodyRows)? LastCodeRows(RenderOptions options, int maxWidth)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        if (_document.Blocks is not [.., CodeBlock code])
+        {
+            return null;
+        }
+
+        int rows = Segment.SplitLines(Code(code).Render(options, maxWidth)).Count;
+        int labelRows = Segment.SplitLines(((IRenderable)new Text(CodeHeading(code.Language), Theme.MarkdownCodeLabel)).Render(options, maxWidth)).Count;
+        return (labelRows, rows - labelRows);
     }
 
     /// <summary>The blocks stacked, a blank row between them unless <paramref name="tight"/> (a list item's).</summary>

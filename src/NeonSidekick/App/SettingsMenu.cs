@@ -475,6 +475,9 @@ public enum SettingsField
 
     /// <summary>A toggle: whether the <c>/botchat</c> bots are shown the chat's pictures (<see cref="Settings.AppSettingsData.BotChatVision"/>). The Botchat tab's last row (2026-09-27, the user's ask); no reconnect (read per reply). Last in the enum, as every newcomer.</summary>
     BotChatVision,
+
+    /// <summary>A toggle (the <c>Themed image viewer</c> row): whether the built-in picture viewer wears the theme or stays black (<see cref="Settings.AppSettingsData.ThemedViewer"/>). The General tab's last row, under <see cref="ImageEditor"/> (later on 2026-09-27, the user's ask and name); no reconnect (read when the viewer opens or is focused). Last in the enum, as every newcomer.</summary>
+    ThemedViewer,
 }
 
 /// <summary>The tabs of <c>/settings</c> on the pane, in strip order (Sessions right after General — the user's order, 2026-09-18; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
@@ -753,7 +756,7 @@ internal sealed partial class SettingsMenu
     /// Files and Web tabs are <c>/tools</c>' since 2026-09-19, <see cref="ToolsTabFields"/>, and the Skills tab
     /// <c>/skills</c>' Options tab since later that day, <see cref="SkillsTabFields"/>).
     /// General is spelled out (the profile and what a new one copies, then where its files live, then the message queue's switch and its cancel mode (2026-09-18, the user's place: right under the working directory), then the switches and pickers (<c>Mouse in menus</c> sat among them until 2026-09-21, when the mouse became the pane's for good), the
-    /// transcript's Markdown and the paste preview, then the two line conveniences of 2026-09-18 — the hidden <c>/exit</c>, the typo intercept —, the command history's switch (2026-09-25), the welcome splash (the user's order, later that day), the banner's working directory, the draft editor (2026-09-19) and the theme last (2026-09-23)); LLM
+    /// transcript's Markdown and the paste preview, then the two line conveniences of 2026-09-18 — the hidden <c>/exit</c>, the typo intercept —, the command history's switch (2026-09-25), the welcome splash (the user's order, later that day), the banner's working directory, the theme (2026-09-23; last until later on 2026-09-27, when the user moved it under the toolbar's switch), the draft editor (2026-09-19), the image viewer and the themed-viewer switch last (later on 2026-09-27)); LLM
     /// is spelled out too: the scan mode (where a blank URL looks, so it sits above the URL), the
     /// <see cref="IsLlmField"/> rows, the compact rows, then <see cref="SettingsField.LlmOfferTools"/> ABOVE
     /// <see cref="SettingsField.LlmToolCompactType"/> (the user's order, 2026-09-15), the round-trip cap and the fun
@@ -764,7 +767,7 @@ internal sealed partial class SettingsMenu
     /// </summary>
     public static readonly IReadOnlyList<IReadOnlyList<SettingsField>> TabFields =
     [
-        [SettingsField.Profile, SettingsField.NewProfileMode, SettingsField.WorkingDirectory, SettingsField.QueueMessages, SettingsField.QueueCancelMode, SettingsField.Memory, SettingsField.CopyUserPrompt, SettingsField.ShowImageThumbnails, SettingsField.ImageThumbnailSize, SettingsField.TranscriptMarkdown, SettingsField.PastePreviewLines, SettingsField.HideExitAutocomplete, SettingsField.CommandTypoIntercept, SettingsField.KeepCommandHistory, SettingsField.WelcomeSplash, SettingsField.ShowWorkingDirectory, SettingsField.ShowToolbar, SettingsField.DraftEditor, SettingsField.ImageEditor, SettingsField.Theme],
+        [SettingsField.Profile, SettingsField.NewProfileMode, SettingsField.WorkingDirectory, SettingsField.QueueMessages, SettingsField.QueueCancelMode, SettingsField.Memory, SettingsField.CopyUserPrompt, SettingsField.ShowImageThumbnails, SettingsField.ImageThumbnailSize, SettingsField.TranscriptMarkdown, SettingsField.PastePreviewLines, SettingsField.HideExitAutocomplete, SettingsField.CommandTypoIntercept, SettingsField.KeepCommandHistory, SettingsField.WelcomeSplash, SettingsField.ShowWorkingDirectory, SettingsField.ShowToolbar, SettingsField.Theme, SettingsField.DraftEditor, SettingsField.ImageEditor, SettingsField.ThemedViewer],
         [SettingsField.SessionLogging, SettingsField.SessionRetentionDays, SettingsField.SessionNamingMode, SettingsField.SessionShowName, SettingsField.SessionTool, SettingsField.SessionSearchMaxResults],
         [SettingsField.LlmScanMode, SettingsField.LlmUrl, SettingsField.LlmModel, SettingsField.LlmApiKey, SettingsField.LlmReasoning, SettingsField.LlmRequestTimeoutSeconds, SettingsField.LlmTurnTimeoutSeconds, SettingsField.LlmContextLength, SettingsField.LlmMidTurnUsage, SettingsField.LlmCompactType, SettingsField.LlmCompactKeepRecent, SettingsField.LlmCompactShowSummary, SettingsField.LlmAutoCompactPercent, SettingsField.LlmMaxTurns, SettingsField.LlmOfferTools, SettingsField.LlmToolCompactType, SettingsField.LlmMaxToolIterations, SettingsField.LlmUseFunVerbs, SettingsField.LlmShowThinking],
         [SettingsField.TtsOutput, SettingsField.TtsSource, SettingsField.TtsHttpUrl, SettingsField.TtsVoicePreview, SettingsField.TtsVoicePreset, SettingsField.TtsVoice, SettingsField.TtsVoice2, SettingsField.TtsVoiceMix, SettingsField.TtsSpeed],
@@ -1059,7 +1062,7 @@ internal sealed partial class SettingsMenu
             or SettingsField.AgentSkills or SettingsField.ExternalSkills or SettingsField.TranscriptMarkdown
             or SettingsField.FileSafeEdits
             or SettingsField.SkillHashMention or SettingsField.ReflectionAutoLearn
-            or SettingsField.HideExitAutocomplete or SettingsField.CommandTypoIntercept or SettingsField.KeepCommandHistory or SettingsField.ShowWorkingDirectory or SettingsField.ShowToolbar
+            or SettingsField.HideExitAutocomplete or SettingsField.CommandTypoIntercept or SettingsField.KeepCommandHistory or SettingsField.ShowWorkingDirectory or SettingsField.ShowToolbar or SettingsField.ThemedViewer
             or SettingsField.QueueMessages or SettingsField.SessionLogging or SettingsField.SessionTool
             or SettingsField.ToolsDollarMention or SettingsField.ReflectionIncludesSessions or SettingsField.ReflectionYieldsToTurns or SettingsField.McpServers or SettingsField.GitNativeTools
             or SettingsField.LlmCompactShowSummary or SettingsField.ShellToolBridge or SettingsField.ShellPoliceOutsidePaths or SettingsField.ShellPreferNative
@@ -1222,6 +1225,7 @@ internal sealed partial class SettingsMenu
         SettingsField.ShowWorkingDirectory => "Working directory in header",
         SettingsField.ShowToolbar => "Show toolbar",
         SettingsField.Theme => "Theme",
+        SettingsField.ThemedViewer => "Themed image viewer",   // the user's name, beside "Image viewer" (later on 2026-09-27)
         SettingsField.QueueMessages => "Queue messages",
         SettingsField.QueueCancelMode => "Queue cancel mode",
         SettingsField.SessionLogging => "Session logging",
@@ -1415,6 +1419,7 @@ internal sealed partial class SettingsMenu
             SettingsField.SessionTool => OnOff(data.SessionTool),
             SettingsField.ShowWorkingDirectory => OnOff(data.ShowWorkingDirectory),
             SettingsField.ShowToolbar => OnOff(data.ShowToolbar),
+            SettingsField.ThemedViewer => OnOff(data.ThemedViewer),
             SettingsField.Theme => data.Theme,
             SettingsField.QueueMessages => OnOff(data.QueueMessages),
             SettingsField.QueueCancelMode => data.QueueCancelMode,
@@ -3741,6 +3746,7 @@ internal sealed partial class SettingsMenu
             SettingsField.KeepCommandHistory => data.KeepCommandHistory,
             SettingsField.ShowWorkingDirectory => data.ShowWorkingDirectory,
             SettingsField.ShowToolbar => data.ShowToolbar,
+            SettingsField.ThemedViewer => data.ThemedViewer,
             SettingsField.QueueMessages => data.QueueMessages,
             SettingsField.SessionLogging => data.SessionLogging,
             SettingsField.SessionTool => data.SessionTool,
@@ -3805,6 +3811,7 @@ internal sealed partial class SettingsMenu
             case SettingsField.KeepCommandHistory: data.KeepCommandHistory = on; break;
             case SettingsField.ShowWorkingDirectory: data.ShowWorkingDirectory = on; break;
             case SettingsField.ShowToolbar: data.ShowToolbar = on; break;
+            case SettingsField.ThemedViewer: data.ThemedViewer = on; break;
             case SettingsField.QueueMessages: data.QueueMessages = on; break;
             case SettingsField.SessionLogging: data.SessionLogging = on; break;
             case SettingsField.SessionTool: data.SessionTool = on; break;
@@ -3873,6 +3880,7 @@ internal sealed partial class SettingsMenu
         SettingsField.KeepCommandHistory => on ? "command history enabled" : "command history disabled",
         SettingsField.ShowWorkingDirectory => on ? "show the working directory in the header" : "hide the working directory in the header",
         SettingsField.ShowToolbar => on ? "show the toolbar" : "hide the toolbar",
+        SettingsField.ThemedViewer => on ? "theme the picture viewer" : "keep the picture viewer black",
         SettingsField.QueueMessages => on ? "a message sent while a reply runs is queued and sent when the reply ends" : "a message sent during a reply goes when it ends, unlisted; no /queue",
         SettingsField.SessionLogging => on ? "every completed turn is written to this profile's session store" : "nothing is written; what is stored still lists, restores and purges",
         SettingsField.SessionTool => on ? "the model can search, list and read this profile's earlier sessions" : "the model never sees an earlier session",

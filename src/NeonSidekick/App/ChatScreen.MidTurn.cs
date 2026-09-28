@@ -21,8 +21,12 @@ public enum MidTurnClass
     /// <summary>Cancels the turn like ESC and runs at the idle line that follows (<c>/clear</c>, <c>/new</c>, <c>/exit</c>).</summary>
     Cancel,
 
-    /// <summary>Dropped with a notice: it waits for the reply to end (<c>/profile</c>, <c>/server</c>, <c>/compact</c> …).</summary>
-    Refused,
+    /// <summary>
+    /// Waits for the reply to end, then runs as if typed at the idle line (<c>/profile</c>, <c>/server</c>, <c>/compact</c> …).
+    /// Dropped with a notice until later on 2026-09-27 (the user's call): now the line joins the queue as a message does
+    /// (the pending lines with <c>Queue messages</c> off or under <c>/botchat</c>), so it follows <c>Queue cancel mode</c> too.
+    /// </summary>
+    Deferred,
 }
 
 /// <summary>
@@ -68,8 +72,8 @@ internal sealed partial class ChatScreen
     // The transcript for the menus' flow lines and the confirmations' pre-checks (see FlowSink).
     private readonly INoticeSink _flow;
 
-    /// <summary>The notice for a never-mid-turn command typed while a reply runs: the line is dropped. Pinned.</summary>
-    public static string MidTurnRefusedNotice(string word) => $"({word} waits for the reply to end)";
+    /// <summary>The notice for a command typed while a reply runs that has to wait for it: the line runs when the reply ends (later on 2026-09-27; it was dropped before). Pinned.</summary>
+    public static string MidTurnDeferredNotice(string word) => $"({word} runs when the reply ends)";
 
     /// <summary>The notice after a switch saved mid-turn: the reconnect it needs follows the reply. Pinned.</summary>
     public static string MidTurnSwitchNotice(string what, bool on)
@@ -113,19 +117,27 @@ internal sealed partial class ChatScreen
     /// command are <see cref="MidTurnClass.Quick"/>; <c>/clear</c>, <c>/new</c>, <c>/splash</c> (2026-09-19) and <c>/exit</c> cancel; the rest
     /// (<c>/profile</c>, <c>/theme</c> (2026-09-23, the user's call: a theme change waits for the reply to end, like its <c>Theme</c> row on the settings pane — it cancelled the reply as <c>/splash</c> does until later that day), <c>/server</c>, <c>/model</c>, <c>/compact</c>, <c>/cwd</c>, <c>/tree</c>, <c>/vault</c> (2026-09-22, as <c>/tree</c>),
     /// <c>/learn</c>, <c>/window</c>, <c>/cmdcopy</c> (2026-09-21), <c>/gituser</c> (2026-09-21), <c>/speak</c> — the turn owns the transcript and the speaker —, <c>/draft</c> (2026-09-19: it would send a message the turn cannot take), <c>/loop</c> (2026-09-21, the same reason), <c>/botchat</c> (2026-09-24, the same again), <c>/plan</c> (2026-09-26: it sends a message too, and flips the tools the running turn was prepared with), the three prompt files) are refused; <c>/skills</c> is a pane (2026-09-16 as <c>/skills</c>, <c>/skill list</c> then the bare <c>/skill</c> on 2026-09-18, the plural again since 2026-09-19; <c>/skill</c> with a name was refused until later on 2026-09-18, when the name form went — an argument was <see cref="SlashCommand.Overloaded"/>, quick like an unknown command, until <c>/skills edit &lt;name&gt;</c> came on 2026-09-21: an editor launch, refused like <c>/profile edit</c>; since it went on 2026-09-23 <c>/skills</c> took none, an argument was <see cref="SlashCommand.Overloaded"/> again, and the bare word is the pane; <c>/skills add</c> is refused since 2026-09-26 — an install writes the roots a running <c>load_skill</c> reads, and its panes would sit over the reply). Pure.
+    /// <para>Later on 2026-09-27 (the user's picks): "refused" became <see cref="MidTurnClass.Deferred"/> — the line runs when the
+    /// reply ends instead of being dropped (so <c>/learn</c> reflects on the reply it waited for); <c>/window</c> and the bare
+    /// <c>/cwd</c> are quick notices; <c>/tree</c> and <c>/vault</c> are panes (the info pane, never the transcript the turn
+    /// owns); <c>/cmdcopy</c> and the three prompt files' words are panes — they write another profile or a file the running
+    /// turn's prompt was built from already, and ask their yes/no on the pane.</para>
     /// </summary>
     public static MidTurnClass MidTurnPolicy(SlashCommand command, bool hasArgs) => command switch
     {
         SlashCommand.None => MidTurnClass.Message,
         SlashCommand.Help or SlashCommand.Settings or SlashCommand.Sys or SlashCommand.Memory
-            or SlashCommand.Usage or SlashCommand.About or SlashCommand.EmptyTrash or SlashCommand.CmdClear or SlashCommand.Mcp or SlashCommand.CmdList or SlashCommand.Police or SlashCommand.Tools => MidTurnClass.Pane,
+            or SlashCommand.Usage or SlashCommand.About or SlashCommand.EmptyTrash or SlashCommand.CmdClear or SlashCommand.Mcp or SlashCommand.CmdList or SlashCommand.Police or SlashCommand.Tools
+            or SlashCommand.Tree or SlashCommand.Vault or SlashCommand.CmdCopy or SlashCommand.Persona or SlashCommand.Operata or SlashCommand.Vocalia => MidTurnClass.Pane,
         SlashCommand.Reasoning or SlashCommand.Queue => hasArgs ? MidTurnClass.Quick : MidTurnClass.Pane,
-        SlashCommand.Session => hasArgs ? MidTurnClass.Refused : MidTurnClass.Pane,
-        SlashCommand.Skills => hasArgs ? MidTurnClass.Refused : MidTurnClass.Pane,
+        SlashCommand.Session => hasArgs ? MidTurnClass.Deferred : MidTurnClass.Pane,
+        SlashCommand.Skills => hasArgs ? MidTurnClass.Deferred : MidTurnClass.Pane,
+        SlashCommand.Cwd => hasArgs ? MidTurnClass.Deferred : MidTurnClass.Quick,
         SlashCommand.Tts or SlashCommand.Voice or SlashCommand.Wake or SlashCommand.Interrupt or SlashCommand.Copy
-            or SlashCommand.Remember or SlashCommand.Explore or SlashCommand.Log or SlashCommand.Timer or SlashCommand.Expand or SlashCommand.Collapse or SlashCommand.Unknown or SlashCommand.Overloaded => MidTurnClass.Quick,
+            or SlashCommand.Remember or SlashCommand.Explore or SlashCommand.Log or SlashCommand.Timer or SlashCommand.Expand or SlashCommand.Collapse or SlashCommand.Window
+            or SlashCommand.Unknown or SlashCommand.Overloaded => MidTurnClass.Quick,
         SlashCommand.Clear or SlashCommand.New or SlashCommand.Splash or SlashCommand.Exit => MidTurnClass.Cancel,
-        _ => MidTurnClass.Refused,
+        _ => MidTurnClass.Deferred,
     };
 
     /// <summary>
@@ -197,8 +209,18 @@ internal sealed partial class ChatScreen
                 bool pended = line.Line is { } cancelLine && Pend(cancelLine);
                 VoiceSession.SafeCancel(turnCts);
                 return pended;
-            case MidTurnClass.Refused:
-                Post(() => _transcript.Notice(MidTurnRefusedNotice(CommandWord(text))));
+            case MidTurnClass.Deferred:
+                // Runs when the reply ends (later on 2026-09-27; dropped before): queued as a message is, so it keeps its place
+                // behind lines typed before it; pending under /botchat, whose queue is read as the user's interjections.
+                Post(() => _transcript.Notice(MidTurnDeferredNotice(CommandWord(text))));
+                if (line.Line is { } deferred)
+                {
+                    if (_botChatRunning || !QueueLine(line))
+                    {
+                        Pend(deferred);
+                    }
+                }
+
                 return true;
             case MidTurnClass.Quick:
                 Post(() => HandleQuickAsync(command, args, text, paneToken));
@@ -346,6 +368,27 @@ internal sealed partial class ChatScreen
                 // /cmdclear (2026-09-25): the confirmation is a pane; the wipe is posted to the turn task.
                 await CmdClearAsync(cancellationToken).ConfigureAwait(false);
                 break;
+            case SlashCommand.Tree:
+                // /tree and /vault under a reply (later on 2026-09-27): the walk on the info pane, not in the reply.
+                await ShowTreePaneAsync(TreeLines(args, out string? treeError), treeError, TreeText.PaneLabel("/tree", args), cancellationToken).ConfigureAwait(false);
+                break;
+            case SlashCommand.Vault:
+                await ShowTreePaneAsync(VaultLines(args, out string? vaultError), vaultError, TreeText.PaneLabel("/vault", args), cancellationToken).ConfigureAwait(false);
+                break;
+            case SlashCommand.CmdCopy:
+                // /cmdcopy and the prompt files (later on 2026-09-27): another profile's file, or one the running turn's prompt
+                // was read from already; the yes/no is a pane and every line goes through the flow sink.
+                await HandleCmdCopyAsync(args, cancellationToken).ConfigureAwait(false);
+                break;
+            case SlashCommand.Persona:
+                await HandlePromptFileAsync(_persona, "/persona", args, PersonaCreatedNotice, PersonaOpenedNotice, PersonaOpenFailedError, spoken: false, cancellationToken).ConfigureAwait(false);
+                break;
+            case SlashCommand.Operata:
+                await HandlePromptFileAsync(_operata, "/operata", args, OperataCreatedNotice, OperataOpenedNotice, OperataOpenFailedError, spoken: false, cancellationToken).ConfigureAwait(false);
+                break;
+            case SlashCommand.Vocalia:
+                await HandlePromptFileAsync(_vocalia, "/vocalia", args, VocaliaCreatedNotice, VocaliaOpenedNotice, VocaliaOpenFailedError, spoken: true, cancellationToken).ConfigureAwait(false);
+                break;
             case SlashCommand.Reasoning:
                 if (await _menu.PickReasoningAsync("", _effective().LlmReasoning, cancellationToken).ConfigureAwait(false))
                 {
@@ -393,6 +436,14 @@ internal sealed partial class ChatScreen
             case SlashCommand.Timer:
                 HandleTimer(args);
                 break;
+            case SlashCommand.Window:
+                // The window's size in the reply (later on 2026-09-27): read-only.
+                _transcript.Notice(WindowNotice(_pane.Profile.Width, _pane.Profile.Height));
+                break;
+            case SlashCommand.Cwd:
+                // The bare /cwd alone reaches here (later on 2026-09-27): the path in force, read-only.
+                await HandleCwdAsync("", cancellationToken).ConfigureAwait(false);
+                break;
             case SlashCommand.Comfy:
                 // /comfy view alone reaches here (2026-09-27, MidTurnPolicy's string form); the notice lands in the reply.
                 OpenViewer(notice: true);
@@ -408,6 +459,19 @@ internal sealed partial class ChatScreen
                 _transcript.Error(NoArgumentError(CommandWord(text)));
                 break;
         }
+    }
+
+    /// <summary><c>/tree</c> or <c>/vault</c> under a reply (later on 2026-09-27): the walk's lines on the info pane, or its error line through the flow sink.</summary>
+    private async Task ShowTreePaneAsync(IReadOnlyList<string>? lines, string? error, string label, CancellationToken cancellationToken)
+    {
+        if (lines is null)
+        {
+            _flow.Error(error ?? "");
+            return;
+        }
+
+        string text = string.Join('\n', lines);
+        await _info.ShowAsync(label, [new InfoTab(label, () => new Spectre.Console.Text(text))], 0, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>A switch saved mid-turn: the reconnect it needs is owed to the turn's end, and the line says so.</summary>

@@ -45,7 +45,7 @@ public sealed class MarkdigParser : IMarkdownParser
                     blocks.Add(new ParagraphBlock(Inlines(paragraph.Inline)));
                     break;
                 case FencedCodeBlock fenced:
-                    blocks.Add(new CodeBlock(Language(fenced.Info), Lines(fenced)));
+                    blocks.Add(new CodeBlock(Language(fenced.Info), Lines(fenced), fenced.ClosingFencedCharCount == 0));
                     break;
                 case Markdig.Syntax.CodeBlock indented:
                     blocks.Add(new CodeBlock(null, Lines(indented)));

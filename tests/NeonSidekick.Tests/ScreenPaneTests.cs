@@ -3545,29 +3545,189 @@ public class ScreenPaneTests : IDisposable
         Assert.DoesNotContain("l3", Output[mark..]);
     }
 
+    private static string CodeLines(int from, int to) =>
+        string.Join("\n", Enumerable.Range(from, to - from + 1).Select(i => "c" + i.ToString(CultureInfo.InvariantCulture)));
+
     [Fact]
-    public void ACodeBlockCommittedInParts_FoldsWhole_WhenTheSlotEmpties()
+    public void AStreamingCodeBlock_ShowsItsLabelAndLastKeepRows_AndFoldsWhole()
     {
-        // Later on 2026-09-22 (the code fold): twelve lines on a 10-row window — the label and the top
-        // rows go into the flow while the block streams (its group open, every row shown), the rest at
-        // the commit, and the block, past its keep of 3, folds to its label once the slot empties.
+        // 2026-09-27 (the user's ask: a long block scrolled and flickered as it streamed): twelve lines,
+        // a keep of 3 — the slot shows the label and c10–c12, nothing is committed while the fence is
+        // open; the whole block goes in at the commit, folded to its label, "after" under it.
         using var pane = Pane();
         pane.Show();
-        string body = string.Join("\n", Enumerable.Range(1, 12).Select(i => "c" + i.ToString(CultureInfo.InvariantCulture)));
-        pane.SetLive(new ReplyBlock("```text\n" + body, glyph: false, codeKeep: 3));
+        int mark = Output.Length;
+        pane.SetLive(new ReplyBlock("```text\n" + CodeLines(1, 12), glyph: false, codeKeep: 3));
         _time.Advance(ScreenPane.Tick);
-        Assert.Equal(7, pane.LiveCommitted);
+        Assert.Equal(0, pane.LiveCommitted);
+        Assert.Equal(4, pane.LiveRows);
+        Assert.Contains(MarkdownView.CodeHeading("text") + "\n  c10\n  c11\n  c12\n", Output[mark..]);
+        Assert.DoesNotContain("  c9\n", Output[mark..]);
         Assert.DoesNotContain(CodeFoldText.Summary("text", 12, expanded: false), Output);
 
-        int mark = Output.Length;
-        pane.SetLive(new ReplyBlock("```text\n" + body + "\n```\n\nafter", glyph: false, codeKeep: 3));
+        // One line more: the window moves, still nothing committed.
+        mark = Output.Length;
+        pane.SetLive(new ReplyBlock("```text\n" + CodeLines(1, 13), glyph: false, codeKeep: 3));
+        _time.Advance(ScreenPane.Tick);
+        Assert.Equal(0, pane.LiveCommitted);
+        Assert.Contains(MarkdownView.CodeHeading("text") + "\n  c11\n  c12\n  c13\n", Output[mark..]);
+
+        mark = Output.Length;
+        pane.SetLive(new ReplyBlock("```text\n" + CodeLines(1, 13) + "\n```\n\nafter", glyph: false, codeKeep: 3));
         pane.CommitLive();
 
         string tail = Output[mark..];
-        int summary = tail.LastIndexOf(CodeFoldText.Summary("text", 12, expanded: false), StringComparison.Ordinal);
+        int summary = tail.LastIndexOf(CodeFoldText.Summary("text", 13, expanded: false), StringComparison.Ordinal);
         Assert.True(summary >= 0, tail);
         Assert.Contains("after", tail[summary..]);
         Assert.DoesNotContain("  c", tail[summary..]);
+
+        // Unfolded, every line is there.
+        pane.SetToolGroupsExpanded(true);
+        Assert.True(pane.StoredRows >= 15);
+    }
+
+    [Fact]
+    public void AClosedCodeBlockPastItsKeep_FoldsOnTheTickItCloses()
+    {
+        // The fence closed and nothing after it yet: the block goes in whole on the tick, folded — not
+        // drawn at full height until the reply speaks again.
+        _cursorTop = 100;
+        using var pane = Pane();
+        pane.Show();
+        pane.SetLive(new ReplyBlock("```text\n" + CodeLines(1, 12), glyph: false, codeKeep: 3));
+        _time.Advance(ScreenPane.Tick);
+
+        int mark = Output.Length;
+        pane.SetLive(new ReplyBlock("```text\n" + CodeLines(1, 12) + "\n```", glyph: false, codeKeep: 3));
+        _time.Advance(ScreenPane.Tick);
+        Assert.Equal(13, pane.LiveCommitted);
+        Assert.Equal(0, pane.LiveRows);
+        Assert.Equal(1, pane.StoredRows);
+        Assert.Contains(CodeFoldText.Summary("text", 12, expanded: false), Output[mark..]);
+
+        // The reply goes on under it; the block stays one row.
+        pane.SetLive(new ReplyBlock("```text\n" + CodeLines(1, 12) + "\n```\n\nafter", glyph: false, codeKeep: 3));
+        _time.Advance(ScreenPane.Tick);
+        pane.CommitLive();
+        Assert.Equal(3, pane.StoredRows);
+    }
+
+    [Fact]
+    public void TextAboveAStreamingCodeBlock_CommitsUpToItsLabel()
+    {
+        // Eight lines of prose, then an open block: the prose that does not fit goes into the flow, the
+        // label never does while the block streams — the slot keeps it over the window.
+        using var pane = Pane();
+        pane.Show();
+        string prose = string.Join("\n\n", Enumerable.Range(1, 8).Select(i => "p" + i.ToString(CultureInfo.InvariantCulture)));
+        string text = prose + "\n\n```text\n" + CodeLines(1, 12);
+        pane.SetLive(new ReplyBlock(text, glyph: false, codeKeep: 3));
+        _time.Advance(ScreenPane.Tick);
+
+        // p1..p8 with their spacers are 15 rows, the spacer 1, the label at row 16: 20 rows in the
+        // window's view, the six the region holds are p8's spacer rows, the label and c10–c12.
+        Assert.Equal(14, pane.LiveCommitted);
+        Assert.Equal(6, pane.LiveRows);
+
+        // Growing, the prose above goes in up to the label, never the label itself.
+        var tall = _console.Profile.Height;
+        _console.Profile.Height = 7;
+        pane.SetLive(new ReplyBlock(text + "\nc13", glyph: false, codeKeep: 3));
+        _time.Advance(ScreenPane.Tick);
+        Assert.Equal(16, pane.LiveCommitted);
+        _console.Profile.Height = tall;
+
+        pane.CommitLive();
+        pane.Write(new Markup("next\n"));
+        Assert.Contains(CodeFoldText.Summary("text", 13, expanded: false), Output);
+    }
+
+    [Fact]
+    public void AStreamingCodeBlock_OnARegionUnderItsWindow_KeepsTheLabel()
+    {
+        _console.Profile.Height = 7;   // three region rows over the pane's four
+        using var pane = Pane();
+        pane.Show();
+        int mark = Output.Length;
+        pane.SetLive(new ReplyBlock("```text\n" + CodeLines(1, 12), glyph: false, codeKeep: 5));
+        _time.Advance(ScreenPane.Tick);
+        Assert.Equal(0, pane.LiveCommitted);
+        Assert.Equal(3, pane.LiveRows);
+        Assert.Contains(MarkdownView.CodeHeading("text") + "\n  c11\n  c12\n", Output[mark..]);
+    }
+
+    [Fact]
+    public void AStreamingCodeBlock_WithinItsKeep_IsItsWholeRows()
+    {
+        using var pane = Pane();
+        pane.Show();
+        int mark = Output.Length;
+        pane.SetLive(new ReplyBlock("```text\n" + CodeLines(1, 3), glyph: false, codeKeep: 5));
+        _time.Advance(ScreenPane.Tick);
+        Assert.Equal(4, pane.LiveRows);
+        Assert.Contains(MarkdownView.CodeHeading("text") + "\n  c1\n  c2\n  c3\n", Output[mark..]);
+    }
+
+    [Fact]
+    public void AStreamingCodeBlock_WithoutACodeKeep_StreamsAtFullHeight()
+    {
+        using var pane = Pane();
+        pane.Show();
+        pane.SetLive(new ReplyBlock("```text\n" + CodeLines(1, 12), glyph: false));
+        _time.Advance(ScreenPane.Tick);
+        Assert.Equal(7, pane.LiveCommitted);
+        Assert.Equal(6, pane.LiveRows);
+    }
+
+    [Fact]
+    public void AReplyEndingMidFence_FoldsTheWholeBlock()
+    {
+        using var pane = Pane();
+        pane.Show();
+        pane.SetLive(new ReplyBlock("```text\n" + CodeLines(1, 12), glyph: false, codeKeep: 3));
+        _time.Advance(ScreenPane.Tick);
+        pane.CommitLive();
+        pane.Write(new Markup("next\n"));
+        Assert.Equal(2, pane.StoredRows);
+        pane.SetToolGroupsExpanded(true);
+        Assert.Equal(14, pane.StoredRows);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ReplyLiveView_TailsAsTheWholeReplyDoes(bool glyph)
+    {
+        static string Rows(List<SegmentLine> lines) =>
+            string.Join("\n", lines.Select(l => string.Concat(l.Select(s => s.Text))));
+
+        string text = "Some **prose** here.\n\n```text\n" + CodeLines(1, 40) + "\n" + new string('w', 90) + "\nz";
+        var reply = new ReplyBlock(text, glyph, codeKeep: 4);
+        var options = RenderOptions.Create(_console, _console.Profile.Capabilities);
+        var wholeLines = ScreenPane.RenderLines(reply, _console, 40);
+        var wholeOpen = reply.CodeSpans(options, 40)[^1];
+        var view = reply.LiveView();
+        var viewLines = ScreenPane.RenderLines(view, _console, 40);
+        var viewOpen = view.OpenCodeSpan(options, 40, viewLines.Count)!;
+
+        Assert.True(wholeOpen.Open);
+        Assert.Equal(wholeOpen.LabelRow, viewOpen.LabelRow);
+        Assert.Equal(Rows(ReplyBlock.Tail(wholeLines, wholeOpen, 4)), Rows(ReplyBlock.Tail(viewLines, viewOpen, 4)));
+        Assert.Equal(4, view.OpenCode!.Lines.Count);
+    }
+
+    [Fact]
+    public void ReplyOpenCode_OnlyAnUnclosedFence_WithAKeep()
+    {
+        Assert.NotNull(new ReplyBlock("```cs\nx", glyph: false, codeKeep: 3).OpenCode);
+        Assert.Null(new ReplyBlock("```cs\nx", glyph: false).OpenCode);
+        Assert.Null(new ReplyBlock("```cs\nx\n```", glyph: false, codeKeep: 3).OpenCode);
+        Assert.Null(new ReplyBlock("text\n\n    indented", glyph: false, codeKeep: 3).OpenCode);
+        Assert.Null(new ReplyBlock("```cs\nx\n```\n\nafter", glyph: false, codeKeep: 3).OpenCode);
+        var block = new ReplyBlock("```cs\nx\n```\n\n```cs\n" + CodeLines(1, 5) + "\n```", glyph: false, codeKeep: 3);
+        Assert.Equal(1, block.FoldingCode);
+        Assert.Same(block, block.LiveView());
     }
 
     [Fact]

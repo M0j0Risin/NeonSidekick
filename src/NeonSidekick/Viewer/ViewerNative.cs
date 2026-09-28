@@ -3,22 +3,25 @@ using System.Runtime.InteropServices;
 namespace NeonSidekick.Viewer;
 
 /// <summary>
-/// The user32/gdi32/kernel32 imports behind <see cref="PictureWindow"/> (2026-09-27). One of the Windows-only layers, like
+/// The user32/gdi32/kernel32/dwmapi imports behind <see cref="PictureWindow"/> (2026-09-27; dwmapi later that day, for the
+/// themed title bar). One of the Windows-only layers, like
 /// <c>Audio/WinMm*</c>: source-generated <see cref="LibraryImportAttribute"/> over blittable structs only, every pointer an
 /// <see cref="IntPtr"/> or a typed pointer, and the window procedure an <c>[UnmanagedCallersOnly]</c> function pointer — no
 /// delegate is marshalled, so nothing here behaves differently once published (the smoke's <c>viewer:window</c> proves it).
-/// All three are system libraries: nothing joins <c>SmokeChecks.RequiredNativeLibraries</c>.
+/// All four are system libraries: nothing joins <c>SmokeChecks.RequiredNativeLibraries</c>.
 /// </summary>
 internal static unsafe partial class ViewerNative
 {
     public const uint WmCreate = 0x0001;
     public const uint WmDestroy = 0x0002;
     public const uint WmSize = 0x0005;
+    public const uint WmActivate = 0x0006;
     public const uint WmPaint = 0x000F;
     public const uint WmClose = 0x0010;
     public const uint WmEraseBackground = 0x0014;
     public const uint WmNcCreate = 0x0081;
     public const uint WmKeyDown = 0x0100;
+    public const uint WmSysKeyDown = 0x0104;
     public const uint WmTimer = 0x0113;
     public const uint WmLeftButtonDoubleClick = 0x0203;
     public const uint WmApp = 0x8000;
@@ -342,4 +345,21 @@ internal static unsafe partial class ViewerNative
 
     [LibraryImport("gdi32.dll")]
     public static partial int SetBkMode(IntPtr hdc, int mode);
+
+    [LibraryImport("gdi32.dll")]
+    public static partial IntPtr CreateSolidBrush(uint color);
+
+    [LibraryImport("gdi32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool DeleteObject(IntPtr ho);
+
+    // DWMWINDOWATTRIBUTE (dwmapi.h): the dark bar from Windows 10 20H1, the colours from Windows 11 (22000); older
+    // builds answer E_INVALIDARG and keep their bar.
+    public const uint DwmwaUseImmersiveDarkMode = 20;
+    public const uint DwmwaBorderColor = 34;
+    public const uint DwmwaCaptionColor = 35;
+    public const uint DwmwaTextColor = 36;
+
+    [LibraryImport("dwmapi.dll")]
+    public static partial int DwmSetWindowAttribute(IntPtr hwnd, uint dwAttribute, void* pvAttribute, uint cbAttribute);
 }

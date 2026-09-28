@@ -171,6 +171,6 @@ public partial class ChatScreenTests
     [Fact]
     public void MidTurn_ClaudeIsRefused()
     {
-        Assert.Equal(MidTurnClass.Refused, ChatScreen.MidTurnPolicy(SlashCommand.Claude, hasArgs: true));
+        Assert.Equal(MidTurnClass.Deferred, ChatScreen.MidTurnPolicy(SlashCommand.Claude, hasArgs: true));
     }
 }

@@ -767,6 +767,7 @@ public class SettingsMenuTests : IDisposable
                 SettingsField.ClaudeApi, SettingsField.ClaudeApiKey, SettingsField.ClaudeApiMaxTokens, SettingsField.ClaudeApiPromptCaching,
                 SettingsField.BotChatSkills,
                 SettingsField.BotChatVision,
+                SettingsField.ThemedViewer,
             },
             Enum.GetValues<SettingsField>());
         // The compact rows: on the LLM tab after the context length but no reconnect; the type a picker, the two others typed.
@@ -945,7 +946,7 @@ public class SettingsMenuTests : IDisposable
         Assert.Equal(10, SettingsMenu.ToolsTabFields.Count);   // Claude since 2026-09-27; Images since 2026-09-24; SQL since 2026-09-23; Obsidian since 2026-09-22 and Options last later that day (first since later on 2026-09-19); Git between Files and Web since 2026-09-20; Shell between Git and Web since 2026-09-21
         Assert.Equal(2, SettingsMenu.SkillsTabFields.Count);   // Options and Reflection, since later on 2026-09-19 (one list of 11, then 14, before)
         Assert.Equal(13, SettingsMenu.SkillsTabFields.Sum(t => t.Count));   // 12 until Reflection yields to turns came on 2026-09-24; 13 until Allow skill delete went on 2026-09-23; 14 until Reflection verbose went later still on 2026-09-19
-        Assert.Equal(new[] { SettingsField.Profile, SettingsField.NewProfileMode, SettingsField.WorkingDirectory, SettingsField.QueueMessages, SettingsField.QueueCancelMode, SettingsField.Memory, SettingsField.CopyUserPrompt, SettingsField.ShowImageThumbnails, SettingsField.ImageThumbnailSize, SettingsField.TranscriptMarkdown, SettingsField.PastePreviewLines, SettingsField.HideExitAutocomplete, SettingsField.CommandTypoIntercept, SettingsField.KeepCommandHistory, SettingsField.WelcomeSplash, SettingsField.ShowWorkingDirectory, SettingsField.ShowToolbar, SettingsField.DraftEditor, SettingsField.ImageEditor, SettingsField.Theme }, SettingsMenu.TabFields[(int)SettingsTab.General]);   // Image editor under Draft editor, later on 2026-09-24; Keep command history under the typo intercept, 2026-09-25
+        Assert.Equal(new[] { SettingsField.Profile, SettingsField.NewProfileMode, SettingsField.WorkingDirectory, SettingsField.QueueMessages, SettingsField.QueueCancelMode, SettingsField.Memory, SettingsField.CopyUserPrompt, SettingsField.ShowImageThumbnails, SettingsField.ImageThumbnailSize, SettingsField.TranscriptMarkdown, SettingsField.PastePreviewLines, SettingsField.HideExitAutocomplete, SettingsField.CommandTypoIntercept, SettingsField.KeepCommandHistory, SettingsField.WelcomeSplash, SettingsField.ShowWorkingDirectory, SettingsField.ShowToolbar, SettingsField.Theme, SettingsField.DraftEditor, SettingsField.ImageEditor, SettingsField.ThemedViewer }, SettingsMenu.TabFields[(int)SettingsTab.General]);   // Image editor under Draft editor, later on 2026-09-24; Keep command history under the typo intercept, 2026-09-25; Theme under Show toolbar and Themed image viewer last, later on 2026-09-27
         // Draft editor (2026-09-19): typed, the General tab's last row, blank = the shell's default for .txt, no reconnect (read at each /draft).
         Assert.False(SettingsMenu.IsToggle(SettingsField.DraftEditor));
         Assert.Equal("Draft editor", SettingsMenu.FieldName(SettingsField.DraftEditor));
@@ -973,6 +974,12 @@ public class SettingsMenuTests : IDisposable
         Assert.Equal("off", SettingsMenu.FieldValue(SettingsField.ShowWorkingDirectory, data, _settings.ProfileDirectory));   // off by default since 2026-09-21
         Assert.Equal("on", SettingsMenu.FieldValue(SettingsField.ShowWorkingDirectory, new AppSettingsData { ShowWorkingDirectory = true }, _settings.ProfileDirectory));
         Assert.False(SettingsMenu.RefusedMidTurn(SettingsField.ShowWorkingDirectory) || SettingsMenu.IsLlmField(SettingsField.ShowWorkingDirectory) || SettingsMenu.IsTtsField(SettingsField.ShowWorkingDirectory) || SettingsMenu.IsVoiceField(SettingsField.ShowWorkingDirectory));
+        // Themed image viewer (later on 2026-09-27): a toggle, the General tab's last row, on by default, no reconnect.
+        Assert.True(SettingsMenu.IsToggle(SettingsField.ThemedViewer));
+        Assert.Equal("Themed image viewer", SettingsMenu.FieldName(SettingsField.ThemedViewer));
+        Assert.Equal("on", SettingsMenu.FieldValue(SettingsField.ThemedViewer, data, _settings.ProfileDirectory));
+        Assert.Equal("off", SettingsMenu.FieldValue(SettingsField.ThemedViewer, new AppSettingsData { ThemedViewer = false }, _settings.ProfileDirectory));
+        Assert.False(SettingsMenu.RefusedMidTurn(SettingsField.ThemedViewer) || SettingsMenu.IsLlmField(SettingsField.ThemedViewer) || SettingsMenu.IsTtsField(SettingsField.ThemedViewer) || SettingsMenu.IsVoiceField(SettingsField.ThemedViewer));
         // Show toolbar (2026-09-21): the General row after it, a toggle, no reconnect (the pane reads it at each draw).
         Assert.True(SettingsMenu.IsToggle(SettingsField.ShowToolbar));
         Assert.Equal("Show toolbar", SettingsMenu.FieldName(SettingsField.ShowToolbar));
@@ -2828,7 +2835,7 @@ public class SettingsMenuTests : IDisposable
         string cwd = SettingsMenu.DefaultWorkingDirectoryLabel(_settings.ProfileDirectory);
         Assert.StartsWith("(", cwd);
         Assert.EndsWith(@"\profiles\default\files)", cwd);
-        Assert.Contains(Rule(240) + "\n" + Titled(Strip) + "\n \n▸ Profile                      default (" + _settings.ProfileDirectory + ")\n  New profile mode             basic\n  Working directory (cwd)      " + cwd + "\n  Queue messages               on\n  Queue cancel mode            empty\n  Memory                       on\n  Copy user prompt             on\n  Show image thumbnails        on\n  Image thumbnail size         small\n  Transcript markdown          on\n  Paste preview lines          25 lines\n  Hide /exit autocomplete      on\n  Command typo intercept       on\n  Keep command history         on\n  Welcome splash               fullsize\n  Working directory in header  off\n  Show toolbar                 on\n  Draft editor                 (default .txt editor)\n  Image viewer                 (built-in viewer)\n  Theme                        synthwave\n" + Rule(240) + "\n" + SettingsMenu.TabKeys + "\n", _console.Output);
+        Assert.Contains(Rule(240) + "\n" + Titled(Strip) + "\n \n▸ Profile                      default (" + _settings.ProfileDirectory + ")\n  New profile mode             basic\n  Working directory (cwd)      " + cwd + "\n  Queue messages               on\n  Queue cancel mode            empty\n  Memory                       on\n  Copy user prompt             on\n  Show image thumbnails        on\n  Image thumbnail size         small\n  Transcript markdown          on\n  Paste preview lines          25 lines\n  Hide /exit autocomplete      on\n  Command typo intercept       on\n  Keep command history         on\n  Welcome splash               fullsize\n  Working directory in header  off\n  Show toolbar                 on\n  Theme                        synthwave\n  Draft editor                 (default .txt editor)\n  Image viewer                 (built-in viewer)\n  Themed image viewer          on\n" + Rule(240) + "\n" + SettingsMenu.TabKeys + "\n", _console.Output);
         Assert.DoesNotContain("File /tree max length", _console.Output);   // the Files tab's since 2026-09-15
         Assert.DoesNotContain("LLM URL", _console.Output);
         Assert.False(pane.OverlayOpen);
@@ -3997,6 +4004,8 @@ public class SettingsMenuTests : IDisposable
         Assert.Equal("a command typed without its slash or with extra ones is sent as typed", SettingsMenu.ToggleDescribe(SettingsField.CommandTypoIntercept, false));
         Assert.Equal("show the working directory in the header", SettingsMenu.ToggleDescribe(SettingsField.ShowWorkingDirectory, true));   // the user's words, 2026-09-21
         Assert.Equal("hide the working directory in the header", SettingsMenu.ToggleDescribe(SettingsField.ShowWorkingDirectory, false));
+        Assert.Equal("theme the picture viewer", SettingsMenu.ToggleDescribe(SettingsField.ThemedViewer, true));   // later on 2026-09-27
+        Assert.Equal("keep the picture viewer black", SettingsMenu.ToggleDescribe(SettingsField.ThemedViewer, false));
         Assert.Equal("vault_delete may move a note or attachment to the vault's .trash", SettingsMenu.ToggleDescribe(SettingsField.ObsidianAllowDelete, true));   // later on 2026-09-22
         Assert.Equal("vault_delete is disabled", SettingsMenu.ToggleDescribe(SettingsField.ObsidianAllowDelete, false));
         Assert.Equal("show the toolbar", SettingsMenu.ToggleDescribe(SettingsField.ShowToolbar, true));

@@ -4138,7 +4138,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("  · 🔌 pipe__echo: off", output);
         Assert.Equal(["pipe__echo"], _settings.Current.ToolsDisabled);
         Assert.Empty(_settings.Current.McpServersDisabled);
-        Assert.DoesNotContain(ChatScreen.MidTurnRefusedNotice("/mcp"), output);
+        Assert.DoesNotContain(ChatScreen.MidTurnDeferredNotice("/mcp"), output);
         Assert.Single(_chat.Requests);
     }
 
@@ -4534,7 +4534,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude (CLI)    Obsidian    ComfyUI    SQL    Git (native)    Options ", output);
         Assert.Contains("  · get_current_time: off", output);
         Assert.Equal(["get_current_time"], _settings.Current.ToolsDisabled);
-        Assert.DoesNotContain(ChatScreen.MidTurnRefusedNotice("/tools"), output);
+        Assert.DoesNotContain(ChatScreen.MidTurnDeferredNotice("/tools"), output);
         Assert.DoesNotContain(ChatScreen.CancelledNotice, output);
         Assert.Single(_chat.Requests);
     }
@@ -6716,8 +6716,9 @@ public partial class ChatScreenTests : IDisposable
     }
 
     [Fact]
-    public async Task MidTurn_Loop_IsRefusedWithANotice_AndDropped()
+    public async Task MidTurn_Loop_RunsWhenTheReplyEnds()
     {
+        // Dropped with the notice until later on 2026-09-27 (the user's call): now it runs once the reply is done.
         MidTurnFixture(i =>
         {
             if (i == 1)
@@ -6728,8 +6729,8 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains("  · " + ChatScreen.MidTurnRefusedNotice("/loop"), output);
-        Assert.Single(_chat.Requests);
+        Assert.Contains("  · " + ChatScreen.MidTurnDeferredNotice("/loop"), output);
+        Assert.True(_chat.Requests.Count >= 2);   // the reply, then the loop's first run (the fixture scripts one reply, so the loop may stop there)
     }
 
     // ── /loop over a command (2026-09-25) ───────────────────────────────────
@@ -10546,7 +10547,7 @@ public partial class ChatScreenTests : IDisposable
     [InlineData(SlashCommand.Usage, false, MidTurnClass.Pane)]
     [InlineData(SlashCommand.About, false, MidTurnClass.Pane)]
     [InlineData(SlashCommand.EmptyTrash, false, MidTurnClass.Pane)]
-    [InlineData(SlashCommand.GitUser, true, MidTurnClass.Refused)]
+    [InlineData(SlashCommand.GitUser, true, MidTurnClass.Deferred)]
     [InlineData(SlashCommand.Queue, false, MidTurnClass.Pane)]
     [InlineData(SlashCommand.Queue, true, MidTurnClass.Quick)]   // /queue clear, 2026-09-21
     [InlineData(SlashCommand.Reasoning, false, MidTurnClass.Pane)]
@@ -10565,21 +10566,25 @@ public partial class ChatScreenTests : IDisposable
     [InlineData(SlashCommand.New, false, MidTurnClass.Cancel)]
     [InlineData(SlashCommand.Splash, false, MidTurnClass.Cancel)]   // 2026-09-19
     [InlineData(SlashCommand.Exit, false, MidTurnClass.Cancel)]
-    [InlineData(SlashCommand.Profile, true, MidTurnClass.Refused)]
-    [InlineData(SlashCommand.CmdCopy, true, MidTurnClass.Refused)]   // 2026-09-21
-    [InlineData(SlashCommand.Server, false, MidTurnClass.Refused)]
-    [InlineData(SlashCommand.Model, false, MidTurnClass.Refused)]
-    [InlineData(SlashCommand.Compact, false, MidTurnClass.Refused)]
-    [InlineData(SlashCommand.Cwd, false, MidTurnClass.Refused)]
-    [InlineData(SlashCommand.Tree, false, MidTurnClass.Refused)]
-    [InlineData(SlashCommand.Window, false, MidTurnClass.Refused)]
-    [InlineData(SlashCommand.Persona, false, MidTurnClass.Refused)]
-    [InlineData(SlashCommand.Operata, false, MidTurnClass.Refused)]
-    [InlineData(SlashCommand.Vocalia, false, MidTurnClass.Refused)]
+    [InlineData(SlashCommand.Profile, true, MidTurnClass.Deferred)]
+    [InlineData(SlashCommand.CmdCopy, true, MidTurnClass.Pane)]   // a pane since later on 2026-09-27 (refused from 2026-09-21): another profile's file, its yes/no on the pane
+    [InlineData(SlashCommand.Server, false, MidTurnClass.Deferred)]
+    [InlineData(SlashCommand.Model, false, MidTurnClass.Deferred)]
+    [InlineData(SlashCommand.Compact, false, MidTurnClass.Deferred)]
+    [InlineData(SlashCommand.Cwd, false, MidTurnClass.Quick)]   // the bare /cwd, later on 2026-09-27
+    [InlineData(SlashCommand.Cwd, true, MidTurnClass.Deferred)]
+    [InlineData(SlashCommand.Tree, false, MidTurnClass.Pane)]   // the info pane, later on 2026-09-27
+    [InlineData(SlashCommand.Vault, true, MidTurnClass.Pane)]
+    [InlineData(SlashCommand.Window, false, MidTurnClass.Quick)]   // later on 2026-09-27
+    [InlineData(SlashCommand.Persona, false, MidTurnClass.Pane)]   // later on 2026-09-27: the prompt was built at the turn's start
+    [InlineData(SlashCommand.Persona, true, MidTurnClass.Pane)]
+    [InlineData(SlashCommand.Operata, false, MidTurnClass.Pane)]
+    [InlineData(SlashCommand.Vocalia, false, MidTurnClass.Pane)]
+    [InlineData(SlashCommand.Learn, false, MidTurnClass.Deferred)]   // runs after the reply, over it
     [InlineData(SlashCommand.Skills, false, MidTurnClass.Pane)]
-    [InlineData(SlashCommand.Skills, true, MidTurnClass.Refused)]   // /skills add, 2026-09-26
-    [InlineData(SlashCommand.Loop, false, MidTurnClass.Refused)]    // 2026-09-21
-    [InlineData(SlashCommand.Loop, true, MidTurnClass.Refused)]
+    [InlineData(SlashCommand.Skills, true, MidTurnClass.Deferred)]   // /skills add, 2026-09-26
+    [InlineData(SlashCommand.Loop, false, MidTurnClass.Deferred)]    // 2026-09-21
+    [InlineData(SlashCommand.Loop, true, MidTurnClass.Deferred)]
     [InlineData(SlashCommand.Expand, false, MidTurnClass.Quick)]     // later on 2026-09-22
     [InlineData(SlashCommand.Collapse, false, MidTurnClass.Quick)]
     public void MidTurnPolicy_IsPinned(SlashCommand command, bool hasArgs, MidTurnClass expected) =>
@@ -10589,24 +10594,24 @@ public partial class ChatScreenTests : IDisposable
     [Theory]
     [InlineData(SlashCommand.Comfy, "view", MidTurnClass.Quick)]
     [InlineData(SlashCommand.Comfy, " VIEW ", MidTurnClass.Quick)]
-    [InlineData(SlashCommand.Comfy, "", MidTurnClass.Refused)]
-    [InlineData(SlashCommand.Comfy, "purge", MidTurnClass.Refused)]
-    [InlineData(SlashCommand.Comfy, "edit json x", MidTurnClass.Refused)]
+    [InlineData(SlashCommand.Comfy, "", MidTurnClass.Deferred)]
+    [InlineData(SlashCommand.Comfy, "purge", MidTurnClass.Deferred)]
+    [InlineData(SlashCommand.Comfy, "edit json x", MidTurnClass.Deferred)]
     [InlineData(SlashCommand.Tools, "", MidTurnClass.Pane)]
     [InlineData(SlashCommand.Queue, "clear", MidTurnClass.Quick)]
     [InlineData(SlashCommand.View, "a.png", MidTurnClass.Quick)]   // /view's window form (later on 2026-09-27)
     [InlineData(SlashCommand.View, "pics", MidTurnClass.Quick)]
-    [InlineData(SlashCommand.View, "--chat a.png", MidTurnClass.Refused)]
-    [InlineData(SlashCommand.View, "a.png --CHAT", MidTurnClass.Refused)]
-    [InlineData(SlashCommand.View, "--chat", MidTurnClass.Refused)]
-    [InlineData(SlashCommand.View, "", MidTurnClass.Refused)]
+    [InlineData(SlashCommand.View, "--chat a.png", MidTurnClass.Deferred)]
+    [InlineData(SlashCommand.View, "a.png --CHAT", MidTurnClass.Deferred)]
+    [InlineData(SlashCommand.View, "--chat", MidTurnClass.Deferred)]
+    [InlineData(SlashCommand.View, "", MidTurnClass.Deferred)]
     public void MidTurnPolicy_ReadsTheComfyViewWord(SlashCommand command, string args, MidTurnClass expected) =>
         Assert.Equal(expected, ChatScreen.MidTurnPolicy(command, args));
 
     [Fact]
     public void MidTurnStrings_ArePinned()
     {
-        Assert.Equal("(/profile waits for the reply to end)", ChatScreen.MidTurnRefusedNotice("/profile"));
+        Assert.Equal("(/profile runs when the reply ends)", ChatScreen.MidTurnDeferredNotice("/profile"));
         Assert.Equal("(🔊 speech output on — connecting when this reply ends)", ChatScreen.MidTurnSwitchNotice(ChatScreen.SpeechOutputWord, true));
         Assert.Equal("(🎤 voice input off — applies when this reply ends)", ChatScreen.MidTurnSwitchNotice(ChatScreen.VoiceInputWord, false));
         Assert.Equal("wake word", ChatScreen.WakeWordWord);
@@ -10769,7 +10774,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.True(output.IndexOf(sessions, StringComparison.Ordinal) > output.IndexOf(allowed, StringComparison.Ordinal), output);
         Assert.True(output.IndexOf(settings, StringComparison.Ordinal) > output.IndexOf(sessions, StringComparison.Ordinal), output);
         Assert.DoesNotContain(FolderText.Title + "   ", output);
-        Assert.DoesNotContain(ChatScreen.MidTurnRefusedNotice("/cwd"), output);
+        Assert.DoesNotContain(ChatScreen.MidTurnDeferredNotice("/cwd"), output);
         Assert.Contains("eight.", output);
         Assert.All(new[] { "/tools", "/sys", "/sessions", "/cmdlist", "/settings", "/cwd" }, word => Assert.DoesNotContain("› " + word, output));
         Assert.Single(_chat.Requests);
@@ -10958,8 +10963,9 @@ public partial class ChatScreenTests : IDisposable
     }
 
     [Fact]
-    public async Task MidTurn_ANeverListCommand_IsRefusedWithANotice_AndDropped()
+    public async Task MidTurn_AWaitingCommand_RunsWhenTheReplyEnds()
     {
+        // Dropped with the notice until later on 2026-09-27 (the user's call): the switch follows the reply now.
         WorkProfile();
         MidTurnFixture(i =>
         {
@@ -10971,9 +10977,192 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains("  · " + ChatScreen.MidTurnRefusedNotice("/profile"), output);
-        Assert.Equal(Profiles.DefaultName, _settings.ProfileName);
-        Assert.DoesNotContain(SettingsMenu.SwitchedNotice("work"), output);
+        Assert.Contains("  · " + ChatScreen.MidTurnDeferredNotice("/profile"), output);
+        Assert.Equal("work", _settings.ProfileName);
+        Assert.True(output.IndexOf(ChatScreen.MidTurnDeferredNotice("/profile"), StringComparison.Ordinal) < output.IndexOf(SettingsMenu.SwitchedNotice("work"), StringComparison.Ordinal));
+        Assert.Single(_chat.Requests);
+    }
+
+    /// <summary>A waiting command keeps its place (later on 2026-09-27): queued behind a message typed before it, it runs after that message's reply.</summary>
+    [Fact]
+    public async Task MidTurn_AWaitingCommand_IsQueued_BehindAMessageTypedBeforeIt()
+    {
+        WorkProfile();
+        MidTurnFixture(i =>
+        {
+            if (i == 1)
+            {
+                PushLine("and then?");
+                PushLine("/profile work");
+            }
+        });
+        _chat.EnqueueText("Second.");
+
+        string output = await RunAsync();
+
+        Assert.Equal(2, _chat.Requests.Count);
+        Assert.Equal("and then?", _chat.Requests[1][^1].Text);
+        Assert.Contains(ChatScreen.QueuedHintPart(2), output);   // the command counted in the queue with the message
+        Assert.True(output.IndexOf("Second.", StringComparison.Ordinal) < output.IndexOf(SettingsMenu.SwitchedNotice("work"), StringComparison.Ordinal));
+        Assert.Equal("work", _settings.ProfileName);
+    }
+
+    /// <summary>With <c>Queue messages</c> off a waiting command waits for the idle line all the same (later on 2026-09-27).</summary>
+    [Fact]
+    public async Task MidTurn_AWaitingCommand_WithTheQueueOff_RunsAtTheIdleLine()
+    {
+        _settings.Update(d => d.QueueMessages = false);
+        WorkProfile();
+        MidTurnFixture(i =>
+        {
+            if (i == 1)
+            {
+                PushLine("/profile work");
+            }
+        });
+
+        string output = await RunAsync();
+
+        Assert.Contains("  · " + ChatScreen.MidTurnDeferredNotice("/profile"), output);
+        Assert.DoesNotContain(ChatScreen.QueuedHintPart(1), output);
+        Assert.Equal("work", _settings.ProfileName);
+    }
+
+    /// <summary><c>/window</c> and the bare <c>/cwd</c> under a reply (later on 2026-09-27): their lines in the reply, which runs on.</summary>
+    [Fact]
+    public async Task MidTurn_WindowAndCwd_AreNoticesInTheReply()
+    {
+        MidTurnFixture(i =>
+        {
+            if (i == 1)
+            {
+                PushLine("/window");
+                PushLine("/cwd");
+            }
+        });
+
+        string output = await RunAsync();
+
+        Assert.Contains("  · " + ChatScreen.WindowNotice(_console.Profile.Width, _console.Profile.Height), output);
+        Assert.Contains(ChatScreen.CwdNotice(WorkingDirectory.Resolve("", _settings.ProfileDirectory), isDefault: true, null), output);
+        Assert.DoesNotContain(ChatScreen.MidTurnDeferredNotice("/window"), output);
+        Assert.DoesNotContain(ChatScreen.MidTurnDeferredNotice("/cwd"), output);
+        Assert.DoesNotContain(ChatScreen.CancelledNotice, output);
+        Assert.Single(_chat.Requests);
+    }
+
+    /// <summary><c>/cwd</c> with a path still waits: it moves the sandbox the running tools resolve in.</summary>
+    [Fact]
+    public async Task MidTurn_CwdWithAPath_WaitsForTheReply()
+    {
+        MidTurnFixture(i =>
+        {
+            if (i == 1)
+            {
+                PushLine("/cwd ~");
+            }
+        });
+
+        string output = await RunAsync();
+
+        Assert.Contains("  · " + ChatScreen.MidTurnDeferredNotice("/cwd"), output);
+        Assert.Single(_chat.Requests);
+    }
+
+    /// <summary><c>/tree</c> under a reply (later on 2026-09-27): the walk on the info pane, not in the reply; ESC closes it.</summary>
+    [Fact]
+    public async Task MidTurn_Tree_OpensTheInfoPane_NotTheTranscript()
+    {
+        string files = Path.Combine(_settings.ProfileDirectory, WorkingDirectory.DefaultFolderName);
+        Directory.CreateDirectory(Path.Combine(files, "docs"));
+        File.WriteAllText(Path.Combine(files, "docs", "zebra-notes.txt"), "x");
+        MidTurnFixture(i =>
+        {
+            if (i == 1)
+            {
+                PushLine("/tree");
+            }
+            else if (i == 2)
+            {
+                Scripted().Push(Keys.Escape);
+            }
+        });
+
+        string output = await RunAsync();
+
+        output = string.Join("\n", output.Split('\n').Select(l => l.TrimEnd()));
+        Assert.Contains("\n" + Titled("/tree   /tree ") + "\n", output);
+        Assert.Contains("zebra-notes.txt", output);
+        Assert.DoesNotContain("  · " + TreeText.LastBranch + "docs", output);   // no tree lines as notices
+        Assert.DoesNotContain(ChatScreen.MidTurnDeferredNotice("/tree"), output);
+        Assert.DoesNotContain(ChatScreen.CancelledNotice, output);
+        Assert.Single(_chat.Requests);
+    }
+
+    /// <summary><c>/vault</c> under a reply with Obsidian tools off: its error line in the reply (later on 2026-09-27).</summary>
+    [Fact]
+    public async Task MidTurn_Vault_WithObsidianOff_IsItsErrorLine()
+    {
+        _settings.Update(d => d.ObsidianTools = false);
+        MidTurnFixture(i =>
+        {
+            if (i == 1)
+            {
+                PushLine("/vault");
+            }
+        });
+
+        string output = await RunAsync();
+
+        Assert.Contains(ChatScreen.VaultToolsOffError, output);
+        Assert.Single(_chat.Requests);
+    }
+
+    /// <summary><c>/persona</c> under a reply (later on 2026-09-27): the editor opens and its line lands in the reply; the running turn's prompt was built already.</summary>
+    [Fact]
+    public async Task MidTurn_Persona_OpensTheEditor_ItsLineInTheReply()
+    {
+        MidTurnFixture(i =>
+        {
+            if (i == 1)
+            {
+                PushLine("/persona");
+            }
+        });
+
+        string output = await RunAsync();
+
+        Assert.Contains(Path.Combine(_settings.ProfileDirectory, PersonaFile.FileName), _openedFiles);
+        Assert.Contains("  · " + ChatScreen.PersonaCreatedNotice, output);
+        Assert.DoesNotContain(ChatScreen.MidTurnDeferredNotice("/persona"), output);
+        Assert.DoesNotContain(ChatScreen.CancelledNotice, output);
+        Assert.Single(_chat.Requests);
+    }
+
+    /// <summary><c>/cmdcopy</c> under a reply (later on 2026-09-27): the yes/no on the pane, the target profile written after the answer.</summary>
+    [Fact]
+    public async Task MidTurn_CmdCopy_AsksOnThePane_YesWritesTheOtherProfile()
+    {
+        WorkProfile();
+        _settings.Update(d => d.ShellCommandAllowed = ["git status"]);
+        MidTurnFixture(i =>
+        {
+            if (i == 1)
+            {
+                PushLine("/cmdcopy work");
+            }
+            else if (i == 2)
+            {
+                Scripted().Push(Keys.Down, Keys.Enter);
+            }
+        });
+
+        string output = await RunAsync();
+
+        Assert.Contains("\n" + Titled(ChatScreen.CmdCopyPrompt(1, "work", overwrite: false)) + "\n \n▸ No\n  Yes\n", output);
+        Assert.Contains("  · " + ChatScreen.CmdCopiedNotice(1, 0, "work", overwrite: false), output);
+        Assert.Equal(["git status"], Profiles.ReadProfileFile(Profiles.ProfileFile(_dir, "work")).ShellCommandAllowed);
+        Assert.DoesNotContain(ChatScreen.CancelledNotice, output);
         Assert.Single(_chat.Requests);
     }
 
@@ -10996,7 +11185,8 @@ public partial class ChatScreenTests : IDisposable
         string folder = Path.GetDirectoryName(ComfyPicture("x.png"))!;
         Assert.Equal(folder, Assert.Single(viewed));
         Assert.Contains(NeonSidekick.Viewer.ViewerText.Opened(folder), output);
-        Assert.DoesNotContain(ChatScreen.MidTurnRefusedNotice("/comfy"), output);
+        Assert.Contains(NeonSidekick.Viewer.ViewerText.Keys, output);
+        Assert.DoesNotContain(ChatScreen.MidTurnDeferredNotice("/comfy"), output);
         Assert.DoesNotContain(ChatScreen.CancelledNotice, output);
         Assert.Single(_chat.Requests);
     }
@@ -11022,14 +11212,15 @@ public partial class ChatScreenTests : IDisposable
 
         Assert.Equal(Path.Combine(files, "docs", "square.bmp"), Assert.Single(viewed));
         Assert.Contains(NeonSidekick.Viewer.ViewerText.Opened(Path.Combine(files, "docs")), output);
-        Assert.DoesNotContain(ChatScreen.MidTurnRefusedNotice("/view"), output);
+        Assert.Contains(NeonSidekick.Viewer.ViewerText.Keys, output);
+        Assert.DoesNotContain(ChatScreen.MidTurnDeferredNotice("/view"), output);
         Assert.DoesNotContain(ChatScreen.CancelledNotice, output);
         Assert.Single(_chat.Requests);
     }
 
     /// <summary>The other /comfy forms still wait for the reply: <c>/comfy purge</c> is refused and dropped.</summary>
     [Fact]
-    public async Task MidTurn_ComfyPurge_IsStillRefused()
+    public async Task MidTurn_ComfyPurge_StillWaitsForTheReply()
     {
         MidTurnFixture(i =>
         {
@@ -11041,7 +11232,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains("  · " + ChatScreen.MidTurnRefusedNotice("/comfy"), output);
+        Assert.Contains("  · " + ChatScreen.MidTurnDeferredNotice("/comfy"), output);
         Assert.Single(_chat.Requests);
     }
 
@@ -11670,7 +11861,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("\n" + Titled("💾 Copy 1 memory into \"work\"?") + "\n \n▸ No\n  Yes\n", output);
         Assert.Contains("  · " + ChatScreen.MemoryCopiedNotice(new MemoryImportResult(1, 0, 0), "work", overwrite: false), output);
         Assert.Equal(new[] { "They like tea.", "Their name is Chris." }, new MemoryStore(ProfileDir("work")).Snapshot());
-        Assert.DoesNotContain(ChatScreen.MidTurnRefusedNotice("/memory"), output);
+        Assert.DoesNotContain(ChatScreen.MidTurnDeferredNotice("/memory"), output);
         Assert.DoesNotContain(ChatScreen.CancelledNotice, output);
         Assert.Single(_chat.Requests);
     }
@@ -11869,7 +12060,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("No Obsidian vault is set; set Obsidian vault on the Obsidian tab of /tools.", ChatScreen.VaultNotSetError);
         Assert.Equal(@"The Obsidian vault D:\Notes cannot be reached.", ChatScreen.VaultUnreachableError(@"D:\Notes"));
         Assert.Equal(@"D:\Notes is not an Obsidian vault (it has no .obsidian folder).", ChatScreen.VaultNotAVaultError(@"D:\Notes"));
-        Assert.Equal(MidTurnClass.Refused, ChatScreen.MidTurnPolicy(SlashCommand.Vault, hasArgs: false));   // as /tree: the turn owns the transcript
+        Assert.Equal(MidTurnClass.Pane, ChatScreen.MidTurnPolicy(SlashCommand.Vault, hasArgs: false));   // as /tree: the info pane under a reply (later on 2026-09-27), the turn owning the transcript
     }
 
     /// <summary>vault_delete (later on 2026-09-22): not offered, nor its sentence in the rules, until Obsidian allow delete is on — then both ride the next turn.</summary>
@@ -12359,8 +12550,8 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public void MidTurn_SpeakIsRefused()
     {
-        Assert.Equal(MidTurnClass.Refused, ChatScreen.MidTurnPolicy(SlashCommand.Speak, hasArgs: true));
-        Assert.Equal(MidTurnClass.Refused, ChatScreen.MidTurnPolicy(SlashCommand.Speak, hasArgs: false));
+        Assert.Equal(MidTurnClass.Deferred, ChatScreen.MidTurnPolicy(SlashCommand.Speak, hasArgs: true));
+        Assert.Equal(MidTurnClass.Deferred, ChatScreen.MidTurnPolicy(SlashCommand.Speak, hasArgs: false));
     }
 
     // ── /view (2026-09-17) ──────────────────────────────────────────────────
@@ -13710,7 +13901,7 @@ public partial class ChatScreenTests : IDisposable
     }
 
     [Fact]
-    public async Task MidTurn_Theme_IsRefused_AndTheReplyRunsOn()
+    public async Task MidTurn_Theme_WaitsForTheReply_ThenApplies()
     {
         // 2026-09-23, the user's call: a theme change waits for the reply to end, as its Settings row does.
         using var theme = new ThemeScope();
@@ -13727,18 +13918,18 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         Assert.Single(_chat.Requests);
-        Assert.Contains(ChatScreen.MidTurnRefusedNotice("/theme"), output);
+        Assert.Contains(ChatScreen.MidTurnDeferredNotice("/theme"), output);
         Assert.DoesNotContain(ChatScreen.CancelledNotice, output);
-        Assert.Same(ThemePalette.Synthwave, Theme.Current);
-        Assert.Equal("synthwave", _settings.Current.Theme);
-        Assert.Empty(_splashLoads);
+        // Applied once the reply is done (later on 2026-09-27; dropped before).
+        Assert.Same(ThemePalette.Noir, Theme.Current);
+        Assert.Equal("noir", _settings.Current.Theme);
     }
 
     [Fact]
     public void MidTurnPolicy_Theme_IsRefused()
     {
-        Assert.Equal(MidTurnClass.Refused, ChatScreen.MidTurnPolicy(SlashCommand.Theme, hasArgs: false));
-        Assert.Equal(MidTurnClass.Refused, ChatScreen.MidTurnPolicy(SlashCommand.Theme, hasArgs: true));
+        Assert.Equal(MidTurnClass.Deferred, ChatScreen.MidTurnPolicy(SlashCommand.Theme, hasArgs: false));
+        Assert.Equal(MidTurnClass.Deferred, ChatScreen.MidTurnPolicy(SlashCommand.Theme, hasArgs: true));
     }
 
     [Fact]
@@ -13809,15 +14000,15 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public void MidTurn_EchoIsRefused()
     {
-        Assert.Equal(MidTurnClass.Refused, ChatScreen.MidTurnPolicy(SlashCommand.Echo, hasArgs: true));
-        Assert.Equal(MidTurnClass.Refused, ChatScreen.MidTurnPolicy(SlashCommand.Echo, hasArgs: false));
+        Assert.Equal(MidTurnClass.Deferred, ChatScreen.MidTurnPolicy(SlashCommand.Echo, hasArgs: true));
+        Assert.Equal(MidTurnClass.Deferred, ChatScreen.MidTurnPolicy(SlashCommand.Echo, hasArgs: false));
     }
 
     [Fact]
     public void MidTurn_ViewIsRefused()
     {
-        Assert.Equal(MidTurnClass.Refused, ChatScreen.MidTurnPolicy(SlashCommand.View, hasArgs: true));
-        Assert.Equal(MidTurnClass.Refused, ChatScreen.MidTurnPolicy(SlashCommand.View, hasArgs: false));
+        Assert.Equal(MidTurnClass.Deferred, ChatScreen.MidTurnPolicy(SlashCommand.View, hasArgs: true));
+        Assert.Equal(MidTurnClass.Deferred, ChatScreen.MidTurnPolicy(SlashCommand.View, hasArgs: false));
     }
 
     [Fact]
@@ -14242,7 +14433,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("Draft dropped: neon-draft-1.txt (empty)", ChatScreen.DraftDroppedLogLine("neon-draft-1.txt", ChatScreen.DraftEmptyReason));
         Assert.Equal("Draft dropped: neon-draft-1.txt (cancelled)", ChatScreen.DraftDroppedLogLine("neon-draft-1.txt", ChatScreen.DraftCancelledReason));
         // Never mid-turn: it would send a message the running turn cannot take.
-        Assert.Equal(MidTurnClass.Refused, ChatScreen.MidTurnPolicy(SlashCommand.Draft, hasArgs: false));
+        Assert.Equal(MidTurnClass.Deferred, ChatScreen.MidTurnPolicy(SlashCommand.Draft, hasArgs: false));
     }
 
     /// <summary>The editor writes one line: it is the next message, shown on the › row, remembered, and the temp file is gone.</summary>
@@ -14402,9 +14593,9 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("  ✗ " + ChatScreen.NoArgumentError("/draft"), output);
     }
 
-    /// <summary>Typed while a reply runs: refused with the notice, the reply untouched.</summary>
+    /// <summary>Typed while a reply runs: the notice, the reply untouched, then the draft once it is done (later on 2026-09-27; dropped before).</summary>
     [Fact]
-    public async Task Draft_MidTurn_IsRefused()
+    public async Task Draft_MidTurn_RunsWhenTheReplyEnds()
     {
         bool opened = false;
         _editDraft = (path, _, _) => { opened = true; File.WriteAllText(path, "late"); return Task.CompletedTask; };
@@ -14418,9 +14609,9 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains("  · " + ChatScreen.MidTurnRefusedNotice("/draft"), output);
-        Assert.False(opened);
-        Assert.Single(_chat.Requests);
+        Assert.Contains("  · " + ChatScreen.MidTurnDeferredNotice("/draft"), output);
+        Assert.True(opened);
+        Assert.Equal(2, _chat.Requests.Count);   // the reply, then the draft's "late"
     }
 
     // ── /copy ───────────────────────────────────────────────────────────────
@@ -15062,7 +15253,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(MidTurnClass.Pane, ChatScreen.MidTurnPolicy(SlashCommand.Skills, hasArgs: false));
         var (command, args) = SlashCommands.Parse("/skills add pdf");
         Assert.Equal((SlashCommand.Skills, "add pdf"), (command, args));
-        Assert.Equal(MidTurnClass.Refused, ChatScreen.MidTurnPolicy(command, args.Length > 0));
+        Assert.Equal(MidTurnClass.Deferred, ChatScreen.MidTurnPolicy(command, args.Length > 0));
     }
 
     // ── Reflection (auto-learn) + /learn (2026-09-17) ─────────────────────────────
@@ -16352,8 +16543,8 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public void MidTurn_LearnIsRefused_AndTheNoticesArePinned()
     {
-        Assert.Equal(MidTurnClass.Refused, ChatScreen.MidTurnPolicy(SlashCommand.Learn, hasArgs: true));
-        Assert.Equal(MidTurnClass.Refused, ChatScreen.MidTurnPolicy(SlashCommand.Learn, hasArgs: false));
+        Assert.Equal(MidTurnClass.Deferred, ChatScreen.MidTurnPolicy(SlashCommand.Learn, hasArgs: true));
+        Assert.Equal(MidTurnClass.Deferred, ChatScreen.MidTurnPolicy(SlashCommand.Learn, hasArgs: false));
         Assert.Equal("(🧠 learned: created skill 'x' (profile, 1,234 bytes))", ChatScreen.LearnedNotice(new SkillEditResult(SkillEditOutcome.Created, "x", SkillScope.Profile, 1234)));
         Assert.Equal("(🧠 learned: updated skill 'x' (global, 12 bytes))", ChatScreen.LearnedNotice(new SkillEditResult(SkillEditOutcome.Updated, "x", SkillScope.Global, 12)));
         Assert.Equal("(🧠 summary: Added the retry after a 429.)", ChatScreen.LearnSummaryNotice("Added the retry after a 429."));
@@ -16414,7 +16605,7 @@ public partial class ChatScreenTests : IDisposable
 
         Assert.Contains(SkillsText.Label + "   Offered    Reflection    Project    Options ", output);   // no Roots tab since later on 2026-09-19
         Assert.Contains("▸ haiku  profile  Writes haiku. Use when asked for one.", output);
-        Assert.DoesNotContain(ChatScreen.MidTurnRefusedNotice("/skills"), output);
+        Assert.DoesNotContain(ChatScreen.MidTurnDeferredNotice("/skills"), output);
         Assert.DoesNotContain(ChatScreen.CancelledNotice, output);
         Assert.Single(_chat.Requests);
     }
@@ -16915,7 +17106,7 @@ public partial class ChatScreenTests : IDisposable
 
         Assert.Contains("  · " + SessionsMenu.EmptyNotice, output);
         Assert.Equal(MidTurnClass.Pane, ChatScreen.MidTurnPolicy(SlashCommand.Session, hasArgs: false));
-        Assert.Equal(MidTurnClass.Refused, ChatScreen.MidTurnPolicy(SlashCommand.Session, hasArgs: true));
+        Assert.Equal(MidTurnClass.Deferred, ChatScreen.MidTurnPolicy(SlashCommand.Session, hasArgs: true));
     }
 
     [Fact]
@@ -17529,7 +17720,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("Command /about (overloaded): me", ChatScreen.CommandLogLine(SlashCommand.Overloaded, "/about me"));
         Assert.Equal("Command /remember: " + new string('x', 79) + "…", ChatScreen.CommandLogLine(SlashCommand.Remember, "/remember " + new string('x', 100)));
         Assert.Equal(80, ChatScreen.CommandArgumentChars);
-        Assert.Equal("Mid-turn command /compact: Refused", ChatScreen.MidTurnCommandLogLine("/compact", MidTurnClass.Refused));
+        Assert.Equal("Mid-turn command /compact: Deferred", ChatScreen.MidTurnCommandLogLine("/compact", MidTurnClass.Deferred));
         Assert.Equal("Session 12 restored: 6 turns", ChatScreen.SessionRestoredLogLine(12, 6));
         Assert.Equal("Session 3 restored: 1 turn", ChatScreen.SessionRestoredLogLine(3, 1));
         Assert.Equal("Queue cancel mode hold applied after a cancelled reply (2 waiting)", ChatScreen.QueueCancelLogLine(QueueCancel.Hold, 2));

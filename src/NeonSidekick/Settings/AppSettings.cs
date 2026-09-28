@@ -564,6 +564,7 @@ public sealed class AppSettings : IDisposable
         CopyUserPrompt = source.CopyUserPrompt,
         DraftEditor = source.DraftEditor,
         ImageEditor = source.ImageEditor,
+        ThemedViewer = source.ThemedViewer,
         HideExitAutocomplete = source.HideExitAutocomplete,
         ImageThumbnailSize = source.ImageThumbnailSize,
         Memory = source.Memory,

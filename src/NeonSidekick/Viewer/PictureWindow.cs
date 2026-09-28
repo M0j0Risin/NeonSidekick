@@ -22,6 +22,13 @@ public static class PictureWindow
     private static readonly Lock s_gate = new();
     private static PictureWindowThread? s_open;
 
+    /// <summary>
+    /// Whether the window wears the theme (later on 2026-09-27, the <c>Themed image viewer</c> setting): asked on the window's
+    /// thread each time it opens or is focused. The app supplies it (<c>Program</c>, over the effective settings) — the viewer
+    /// never reads settings itself; on until then.
+    /// </summary>
+    public static Func<bool> Themed { get; set; } = static () => true;
+
     /// <summary>Whether a window can be opened here at all: Windows only.</summary>
     public static bool IsAvailable => OperatingSystem.IsWindows();
 
@@ -102,6 +109,8 @@ internal sealed unsafe class PictureWindowThread
     private const uint ProbeMessage = WmApp + 9;
     private static readonly IntPtr ProbeAnswer = new(0x5EE);
     private static readonly IntPtr DebounceTimer = new(1);
+    private static readonly IntPtr DeleteArmTimer = new(2);
+    private static readonly IntPtr SlideTimer = new(3);
 
     /// <summary>The wait after a folder change before the picture is read: a burst of events is one load (FolderPictureViewer's 250 ms).</summary>
     public const uint DebounceMilliseconds = 250;
@@ -134,6 +143,8 @@ internal sealed unsafe class PictureWindowThread
     private CancellationTokenSource? _load;
     private (int Version, string Path, ViewerBitmap? Bitmap)? _loaded;
     private bool _fullScreen;
+    private ViewerStyle? _style;
+    private IntPtr _background;
     private IntPtr _savedStyle;
     private WindowPlacement _savedPlacement;
 
@@ -205,9 +216,15 @@ internal sealed unsafe class PictureWindowThread
             try
             {
                 IntPtr answer = SendMessageW(hwnd, ProbeMessage, IntPtr.Zero, IntPtr.Zero);
-                return answer == ProbeAnswer
-                    ? (true, "user32/gdi32 bound; a hidden window answered through the window procedure")
-                    : (false, $"the window procedure answered 0x{answer:X}");
+                if (answer != ProbeAnswer)
+                {
+                    return (false, $"the window procedure answered 0x{answer:X}");
+                }
+
+                // dwmapi bound (the themed bar): a refusal on an old Windows is reported, not a failure.
+                int dark = 1;
+                int hr = DwmSetWindowAttribute(hwnd, DwmwaUseImmersiveDarkMode, &dark, sizeof(int));
+                return (true, $"user32/gdi32/dwmapi bound; a hidden window answered through the window procedure; dark bar 0x{hr:X8}");
             }
             finally
             {
@@ -311,6 +328,7 @@ internal sealed unsafe class PictureWindowThread
 
             uint dpi = Math.Max(96u, GetDpiForWindow(_hwnd));
             SetWindowPos(_hwnd, HwndTop, 0, 0, (int)(DefaultWidth * dpi / 96), (int)(DefaultHeight * dpi / 96), SwpNoMove | SwpNoZOrder | SwpNoActivate);
+            ApplyStyle();   // before it is shown: the bar is never light first
             Show(_startFolder);
             Select(_startSelect);
             ShowWindow(_hwnd, SwShow);
@@ -335,6 +353,11 @@ internal sealed unsafe class PictureWindowThread
             _alive = false;
             _watcher?.Dispose();
             _load?.Cancel();
+            if (_background != IntPtr.Zero)
+            {
+                DeleteObject(_background);
+            }
+
             self.Free();
             _ready.Set();
             DiagnosticLog.Info("Viewer", "Picture viewer closed.");
@@ -353,9 +376,22 @@ internal sealed unsafe class PictureWindowThread
             case WmSize:
                 InvalidateRect(hwnd, null, false);
                 return IntPtr.Zero;
+            case WmActivate:
+                // A /theme change reaches an open window the next time it is focused.
+                ApplyStyle();
+                break;
             case WmKeyDown:
+            case WmSysKeyDown when (int)wParam == ViewerState.VkF10:   // F10 (random order) is the menu key: a system key, its menu mode not wanted
             {
-                var action = ViewerState.ActionFor((int)wParam, _fullScreen);
+                var action = ViewerState.ActionFor((int)wParam, _fullScreen, _state.SlideShow);
+
+                // Any key but Del disarms a first Del (2026-09-27), mapped or not.
+                if (action != ViewerAction.Delete && _state.Disarm())
+                {
+                    KillTimer(hwnd, DeleteArmTimer);
+                    UpdateTitle();
+                }
+
                 if (action == ViewerAction.None)
                 {
                     break;
@@ -394,6 +430,8 @@ internal sealed unsafe class PictureWindowThread
                 // The same folder still moves to the clicked picture (2026-09-27): a double-click on an older one jumps to it.
                 Select(select);
 
+                ApplyStyle();
+
                 BringForward();
                 return IntPtr.Zero;
             }
@@ -401,6 +439,20 @@ internal sealed unsafe class PictureWindowThread
             case WmTimer when wParam == DebounceTimer:
                 KillTimer(hwnd, DebounceTimer);
                 LoadCurrent();
+                return IntPtr.Zero;
+            case WmTimer when wParam == DeleteArmTimer:
+                KillTimer(hwnd, DeleteArmTimer);
+                _state.Disarm();
+                UpdateTitle();
+                return IntPtr.Zero;
+            case WmTimer when wParam == SlideTimer:
+                // A picture armed for deleting holds the show until it is deleted or disarmed.
+                if (!_state.DeleteArmed && _state.NextSlide(Random.Shared))
+                {
+                    UpdateTitle();
+                    LoadCurrent();
+                }
+
                 return IntPtr.Zero;
             case WmClose:
                 DestroyWindow(hwnd);
@@ -426,15 +478,79 @@ internal sealed unsafe class PictureWindowThread
             case ViewerAction.Close:
                 PostMessageW(_hwnd, WmClose, IntPtr.Zero, IntPtr.Zero);
                 break;
+            case ViewerAction.Delete:
+                DeleteShown();
+                break;
+            case ViewerAction.ToggleSlideShow or ViewerAction.StopSlideShow or ViewerAction.ToggleShuffle or ViewerAction.LongerSlides or ViewerAction.ShorterSlides:
+                if (_state.Slides(action))
+                {
+                    UpdateTitle();
+                    RestartSlides();
+                }
+
+                break;
             default:
                 if (_state.Browse(action))
                 {
                     UpdateTitle();
                     LoadCurrent();
+
+                    // A picture browsed to during the show gets a whole slide's time.
+                    RestartSlides();
                 }
 
                 break;
         }
+    }
+
+    // The slide show's timer (later on 2026-09-27): a slide's time from now while the show runs, else stopped. Starting the
+    // show leaves the shown picture up for a whole slide first.
+    private void RestartSlides()
+    {
+        if (_state.SlideShow)
+        {
+            SetTimer(_hwnd, SlideTimer, (uint)(_state.SlideSeconds * 1000), IntPtr.Zero);
+        }
+        else
+        {
+            KillTimer(_hwnd, SlideTimer);
+        }
+    }
+
+    // Del (2026-09-27, the user's call): the first arms the shown picture, the title says so and a timer disarms it; a
+    // second on the same picture in time deletes it for good, and the next one is shown without waiting for the watcher
+    // (whose Deleted then finds nothing to remove).
+    private void DeleteShown()
+    {
+        string? path = _state.PressDelete(Environment.TickCount64);
+        if (path is null)
+        {
+            UpdateTitle();
+            if (_state.DeleteArmed)
+            {
+                SetTimer(_hwnd, DeleteArmTimer, ViewerState.DeleteArmMilliseconds, IntPtr.Zero);
+            }
+
+            return;
+        }
+
+        KillTimer(_hwnd, DeleteArmTimer);
+        try
+        {
+            File.Delete(path);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            DiagnosticLog.Warn("Viewer", ViewerText.DeleteFailed(Path.GetFileName(path), ex.Message));
+            UpdateTitle();
+            return;
+        }
+
+        DiagnosticLog.Info("Viewer", $"Deleted {path}.");
+        _state.Remove(path);
+        UpdateTitle();
+        LoadCurrent();
+        RestartSlides();
     }
 
     // A folder's pictures listed and watched, the newest shown; the old watcher's events are dropped by generation.
@@ -460,6 +576,7 @@ internal sealed unsafe class PictureWindowThread
         }
 
         _state.Reset(folder, pictures);
+        RestartSlides();   // a new folder stops the show
         try
         {
             var watcher = new FileSystemWatcher(folder)
@@ -619,16 +736,16 @@ internal sealed unsafe class PictureWindowThread
         {
             Rect client;
             GetClientRect(hwnd, &client);
-            IntPtr black = GetStockObject(BlackBrush);
+            IntPtr fill = _background != IntPtr.Zero ? _background : GetStockObject(BlackBrush);
             var bitmap = _bitmap;
             if (bitmap is null)
             {
-                FillRect(hdc, &client, black);
+                FillRect(hdc, &client, fill);
                 string text = _unreadable is { } name ? ViewerText.Unreadable(name) : _state.Count == 0 ? ViewerText.Waiting(_state.Folder) : "";
                 if (text.Length > 0)
                 {
                     SelectObject(hdc, GetStockObject(DefaultGuiFont));
-                    SetTextColor(hdc, 0x00A0A0A0);
+                    SetTextColor(hdc, _style?.Text ?? 0x00A0A0A0);
                     SetBkMode(hdc, Transparent);
                     DrawTextW(hdc, text, -1, &client, DtCenter | DtVCenter | DtSingleLine | DtNoPrefix);
                 }
@@ -643,10 +760,10 @@ internal sealed unsafe class PictureWindowThread
             var bottom = new Rect { Left = 0, Top = y + h, Right = client.Right, Bottom = client.Bottom };
             var left = new Rect { Left = 0, Top = y, Right = x, Bottom = y + h };
             var right = new Rect { Left = x + w, Top = y, Right = client.Right, Bottom = y + h };
-            FillRect(hdc, &top, black);
-            FillRect(hdc, &bottom, black);
-            FillRect(hdc, &left, black);
-            FillRect(hdc, &right, black);
+            FillRect(hdc, &top, fill);
+            FillRect(hdc, &bottom, fill);
+            FillRect(hdc, &left, fill);
+            FillRect(hdc, &right, fill);
 
             SetStretchBltMode(hdc, Halftone);
             SetBrushOrgEx(hdc, 0, 0, null);
@@ -667,6 +784,45 @@ internal sealed unsafe class PictureWindowThread
         {
             EndPaint(hwnd, &ps);
         }
+    }
+
+    // The theme in force on the bar (DWM) and round the picture (later on 2026-09-27, ViewerStyle); nothing when it has not
+    // changed. The HRESULTs are ignored: an older Windows refuses the colours and keeps its bar.
+    private void ApplyStyle()
+    {
+        bool themed;
+        try
+        {
+            themed = PictureWindow.Themed();
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Warn("Viewer", $"Could not read Themed image viewer: {ex.Message}");
+            themed = true;
+        }
+
+        var style = ViewerStyle.For(NeonSidekick.UI.Theme.Current, themed);
+        if (_style == style)
+        {
+            return;
+        }
+
+        _style = style;
+        int dark = 1;
+        uint caption = style.Caption, text = style.CaptionText, border = style.Border;
+        DwmSetWindowAttribute(_hwnd, DwmwaUseImmersiveDarkMode, &dark, sizeof(int));
+        DwmSetWindowAttribute(_hwnd, DwmwaCaptionColor, &caption, sizeof(uint));
+        DwmSetWindowAttribute(_hwnd, DwmwaTextColor, &text, sizeof(uint));
+        DwmSetWindowAttribute(_hwnd, DwmwaBorderColor, &border, sizeof(uint));
+
+        IntPtr old = _background;
+        _background = CreateSolidBrush(style.Background);
+        if (old != IntPtr.Zero)
+        {
+            DeleteObject(old);
+        }
+
+        InvalidateRect(_hwnd, null, false);
     }
 
     // Borderless over the whole monitor and back to the placement it had (FolderPictureViewer's F11).

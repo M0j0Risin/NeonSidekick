@@ -18,8 +18,12 @@ public sealed record ParagraphBlock(IReadOnlyList<MarkdownInline> Inlines) : Mar
 /// <summary>An ATX heading, <paramref name="Level"/> 1–6.</summary>
 public sealed record HeadingBlock(int Level, IReadOnlyList<MarkdownInline> Inlines) : MarkdownBlock;
 
-/// <summary>A fenced or indented code block; <paramref name="Language"/> is the fence's info string, null when none.</summary>
-public sealed record CodeBlock(string? Language, IReadOnlyList<string> Lines) : MarkdownBlock;
+/// <summary>
+/// A fenced or indented code block; <paramref name="Language"/> is the fence's info string, null when none.
+/// <paramref name="Open"/>: a fenced block whose closing fence has not come yet — a reply still streaming it
+/// (2026-09-27, the streaming code window: <see cref="ReplyBlock.LiveView"/>). An indented block never is.
+/// </summary>
+public sealed record CodeBlock(string? Language, IReadOnlyList<string> Lines, bool Open = false) : MarkdownBlock;
 
 /// <summary>A bulleted (<paramref name="Ordered"/> false) or numbered list; <paramref name="Start"/> is the first number.</summary>
 public sealed record ListBlock(bool Ordered, int Start, IReadOnlyList<ListItem> Items) : MarkdownBlock;
