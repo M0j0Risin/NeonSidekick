@@ -789,7 +789,7 @@ Read-only SQL Server queries over named connections, in-process (`Microsoft.Data
 * **SQL set password** updates a connection's password.
 * Or edit the files directly (comments and trailing commas are allowed): `%USERPROFILE%\.neonsidekick\sql.json` (global) and `%USERPROFILE%\.neonsidekick\profiles\<profile>\sql.json`.
 
-```jsonc
+```json
 {
   "connections": {
     // SQL Auth: Password encrypted in-place by DPAPI after first read
