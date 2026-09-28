@@ -11,8 +11,8 @@ public static class ClaudeText
     /// <summary>The name over a Claude reply in the transcript, as a <c>/botchat</c> speaker's is. Pinned.</summary>
     public const string SpeakerName = "Claude";
 
-    /// <summary>The spinner's label while the child starts and Claude thinks. Pinned.</summary>
-    public const string AskingLabel = "asking Claude";
+    /// <summary>The spinner's label while the child starts and Claude thinks (<c>asking Claude</c> until 2026-09-28, the user's call). Pinned.</summary>
+    public const string AskingLabel = "claude";
 
     /// <summary>The spinner's label while Claude uses a tool: <c>Claude: Read</c>. Pinned.</summary>
     public static string ToolLabel(string name) => "Claude: " + name;

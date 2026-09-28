@@ -1237,7 +1237,7 @@ public class ScreenPaneTests : IDisposable
     [Theory]
     [InlineData("thinking", 0, "thinking 00:00")]
     [InlineData("thinking", 12, "thinking 00:12")]
-    [InlineData("compacting the conversation", 62, "compacting the conversation 01:02")]
+    [InlineData("compacting", 62, "compacting 01:02")]
     [InlineData("listening", 3661, "listening 01:01:01")]
     public void BusyText_IsPinned(string label, int seconds, string expected) =>
         Assert.Equal(expected, ScreenPane.BusyText(label, TimeSpan.FromSeconds(seconds)));

@@ -26,8 +26,8 @@ public static class CompactionText
     /// <summary>The prefix of a failure's error line: <c>🗜️ Compact failed: </c> + <c>Assistant.Explain</c> (<see cref="Assistant.CompactFailedPrefix"/>, the mid-turn guard's too).</summary>
     public const string FailedPrefix = Assistant.CompactFailedPrefix;
 
-    /// <summary>The spinner's label while the summariser runs.</summary>
-    public const string CompactingLabel = "compacting the conversation";
+    /// <summary>The spinner's label while the summariser runs (<c>compacting the conversation</c> until 2026-09-28, the user's call).</summary>
+    public const string CompactingLabel = "compacting";
 
     /// <summary>
     /// <c>(🗜️ compacted: 38 messages → 7 · 41.2k → 3.1k tokens)</c> for a summary with a usage report,
