@@ -622,7 +622,7 @@ public class SlashCommandsTests
         Assert.Equal(SlashCommands.HelpEntries.Select(e => e.Command).OrderBy(c => c, StringComparer.Ordinal), SlashCommands.HelpEntries.Select(e => e.Command));
 
         string Summary(string command) => SlashCommands.HelpEntries.Single(e => e.Command == command).Summary;
-        Assert.Equal("list, restore and purge sessions: /sessions [<id> | purge <id> | purge older <age> | purge all | title <text>]", Summary("/sessions"));
+        Assert.Equal("list, restore, rename and purge sessions: /sessions [<id> | purge <id> | purge older <age> | purge all | title [<text>]]", Summary("/sessions"));
         Assert.Equal("switch the model's tools on or off and edit the Options, Ask, Files and Web settings on a pane", Summary("/tools"));   // expand | collapse came and went on 2026-09-22 (the root /expand and /collapse now)
         Assert.Equal("connect external MCP servers and switch their tools on or off on a pane", Summary("/mcp"));
         Assert.Equal("list the skills (Enter on one moves, renames, edits or deletes it), edit the skill settings and the project file on a pane; /skills add <search words | owner/repo[/skill] | url> installs one from skills.sh or GitHub", Summary("/skills"));   // add 2026-09-26; edit 2026-09-21, the scope page's edit row in its place 2026-09-23

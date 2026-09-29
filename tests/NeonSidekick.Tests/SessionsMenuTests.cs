@@ -192,6 +192,59 @@ public class SessionsMenuTests : IDisposable
         pane.Dispose();
     }
 
+    /// <summary>
+    /// The rename box alone (2026-09-28, the upper rule's session name double-clicked): the row page's rename row on its own,
+    /// the title in the slot; a new one is stored as the user's, the pane closes and the notice lands in the transcript.
+    /// </summary>
+    [Fact]
+    public async Task Rename_Alone_ReadsTheTitleInTheSlot_AndClosesThePane()
+    {
+        long a = Seed("first");
+        var (menu, pane) = PaneMenu();
+        Push(Keys.Backspace, Keys.Backspace, Keys.Backspace, Keys.Backspace, Keys.Backspace);
+        _console.Input.PushText("Vosk notes");
+        Push(Keys.Enter);
+
+        Assert.True(await menu.RenameAsync(a, CancellationToken.None));
+
+        Assert.Contains("\n" + Titled(SessionsMenu.RowTitle(new SessionSummary(a, default, default, "first", TitleSource.FirstLine, "llama", 1))) + "\n \n▸ rename   give it a new title\n› \n" + Rule(100) + "\n" + SettingsMenu.EditKeys, _console.Output);
+        Assert.DoesNotContain("restore  load it", _console.Output);
+        Assert.Contains("  · " + SessionsMenu.RenamedNotice("Vosk notes"), _console.Output);
+        Assert.False(pane.OverlayOpen);
+        var summary = _store.Load(a)!.Summary;
+        Assert.Equal(("Vosk notes", TitleSource.User), (summary.Title, summary.TitleSource));
+        pane.Dispose();
+    }
+
+    [Fact]
+    public async Task Rename_Alone_EscKeepsTheTitle_AndClosesThePane()
+    {
+        long a = Seed("first");
+        var (menu, pane) = PaneMenu();
+        Push(Keys.Escape);
+
+        Assert.False(await menu.RenameAsync(a, CancellationToken.None));
+
+        Assert.Equal(("first", TitleSource.FirstLine), (_store.Load(a)!.Summary.Title, _store.Load(a)!.Summary.TitleSource));
+        Assert.DoesNotContain("(renamed:", _console.Output);
+        Assert.False(pane.OverlayOpen);
+        pane.Dispose();
+    }
+
+    [Fact]
+    public async Task Rename_Alone_OfASessionGone_IsTheError_AndOpensNothing()
+    {
+        long a = Seed("first");
+        Assert.True(_store.Purge(a));
+        var (menu, pane) = PaneMenu();
+
+        Assert.False(await menu.RenameAsync(a, CancellationToken.None));
+
+        Assert.Contains("  ✗ " + SessionsMenu.RenameFailedError(a), _console.Output);
+        Assert.False(pane.OverlayOpen);
+        pane.Dispose();
+    }
+
     [Fact]
     public async Task OnThePane_PurgeAsksUnderTheList_YesRemoves_TheScreenIsTold()
     {

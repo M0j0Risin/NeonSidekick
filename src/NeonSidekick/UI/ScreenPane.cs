@@ -167,6 +167,10 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     private int _foldExpandColumn = -1;
     private int _foldCollapseColumn = -1;
 
+    // The upper rule's title (2026-09-28): the column it landed at (-1 = none drawn) and its cells, for TryHitRuleTitle.
+    private int _ruleTitleColumn = -1;
+    private int _ruleTitleCells;
+
     // The hint row.
     private Func<string> _hint = static () => "";
     private Func<string> _strip = static () => "";
@@ -709,6 +713,29 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
             }
 
             return x >= _foldCollapseColumn && x <= _foldCollapseColumn + TextCells.Width(CollapseGlyph);
+        }
+    }
+
+    /// <summary>
+    /// Whether a click at buffer cell (<paramref name="x"/>, <paramref name="y"/>) landed on the session's name at the upper
+    /// rule's right edge (2026-09-28, the user's ask: a double-click there renames the session, <see cref="UpperRuleParts.TitleColumn"/>),
+    /// the space either side of it included. False with no title drawn, an overlay drawn, the pane lifted or disabled, or no geometry.
+    /// </summary>
+    public bool TryHitRuleTitle(int x, int y)
+    {
+        if (!Enabled)
+        {
+            return false;
+        }
+
+        lock (_gate)
+        {
+            if (!_drawn || _drawnOverlay || _ruleTitleColumn < 0 || _batch > 0 || _modal > 0 || _geometry?.CursorTop() is not int top)
+            {
+                return false;
+            }
+
+            return y == top - CursorDepth - 1 && x >= _ruleTitleColumn - 1 && x <= _ruleTitleColumn + _ruleTitleCells;
         }
     }
 
@@ -4068,6 +4095,8 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         var parts = UpperRule(_drawnRuleTitle, _drawnFolds, width);
         _foldExpandColumn = parts.ExpandColumn;
         _foldCollapseColumn = parts.CollapseColumn;
+        _ruleTitleColumn = parts.TitleColumn;
+        _ruleTitleCells = parts.TitleCells;
         foreach (var (text, style) in new[] { (parts.Lead, Theme.PaneRule), (parts.Buttons, Theme.AccentSecondary), (parts.Rest, Theme.PaneRule) })
         {
             if (text.Length > 0)
@@ -4088,9 +4117,10 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     /// <summary>
     /// The upper rule cut in the pieces <see cref="UpperRule"/> draws in their own styles, left to right — the rule's
     /// <see cref="Lead"/>, the <see cref="Buttons"/> (↘️↖️) and the <see cref="Rest"/> (<see cref="RuleWithTitle"/>'s) — and
-    /// the columns ↘️ and ↖️ start at (−1 = not drawn).
+    /// the columns ↘️ and ↖️ start at (−1 = not drawn); the column the title starts at (−1 = none drawn) and its cells
+    /// (2026-09-28, for <see cref="TryHitRuleTitle"/>).
     /// </summary>
-    public readonly record struct UpperRuleParts(string Lead, string Buttons, string Rest, int ExpandColumn, int CollapseColumn)
+    public readonly record struct UpperRuleParts(string Lead, string Buttons, string Rest, int ExpandColumn, int CollapseColumn, int TitleColumn = -1, int TitleCells = 0)
     {
         /// <summary>The whole rule as one string.</summary>
         public string Text => Lead + Buttons + Rest;
@@ -4114,11 +4144,33 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         int used = TextCells.Width(lead) + expandCells + TextCells.Width(CollapseGlyph);
         if (!folds || width - used < RuleTitleMinRule)
         {
-            return new UpperRuleParts("", "", RuleWithTitle(title, width), -1, -1);
+            var (plainColumn, plainCells) = TitleSpan(title, width, 0);
+            return new UpperRuleParts("", "", RuleWithTitle(title, width), -1, -1, plainColumn, plainCells);
         }
 
         int expandColumn = TextCells.Width(lead);
-        return new UpperRuleParts(lead, ExpandGlyph + CollapseGlyph, RuleWithTitle(title, width - used), expandColumn, expandColumn + expandCells);
+        var (titleColumn, titleCells) = TitleSpan(title, width - used, used);
+        return new UpperRuleParts(lead, ExpandGlyph + CollapseGlyph, RuleWithTitle(title, width - used), expandColumn, expandColumn + expandCells, titleColumn, titleCells);
+    }
+
+    /// <summary>Where <see cref="RuleWithTitle"/> of <paramref name="width"/> cells, drawn from column <paramref name="offset"/>, puts its title: the column and the cells, (−1, 0) with none.</summary>
+    private static (int Column, int Cells) TitleSpan(string title, int width, int offset) =>
+        FitRuleTitle(title, width) is var (fitted, left) ? (offset + left + 1, TextCells.Width(fitted)) : (-1, 0);
+
+    /// <summary>
+    /// <see cref="RuleWithTitle"/>'s fit: the title cut to the room left after <see cref="RuleTitleMinRule"/> glyphs, and the rule
+    /// glyphs at its left; null for an empty title or a width with no room for a one-cell title.
+    /// </summary>
+    private static (string Fitted, int Left)? FitRuleTitle(string title, int width)
+    {
+        int room = width - RuleTitleMinRule - 3;   // the space either side and the last glyph
+        if (title.Length == 0 || room < 1)
+        {
+            return null;
+        }
+
+        string fitted = Fit(title, room);
+        return (fitted, width - TextCells.Width(fitted) - 3);
     }
 
     /// <summary>The least rule glyphs kept at the left of a titled upper rule; a title that would leave fewer is cut, a width that cannot hold even a cut title gets the bare rule.</summary>
@@ -4134,20 +4186,9 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     public static string RuleWithTitle(string title, int width)
     {
         ArgumentNullException.ThrowIfNull(title);
-        if (title.Length == 0 || width <= 0)
-        {
-            return new string(RuleGlyph, Math.Max(0, width));
-        }
-
-        int room = width - RuleTitleMinRule - 3;   // the space either side and the last glyph
-        if (room < 1)
-        {
-            return new string(RuleGlyph, width);
-        }
-
-        string fitted = Fit(title, room);
-        int left = width - TextCells.Width(fitted) - 3;
-        return new string(RuleGlyph, left) + " " + fitted + " " + RuleGlyph;
+        return FitRuleTitle(title, width) is var (fitted, left)
+            ? new string(RuleGlyph, left) + " " + fitted + " " + RuleGlyph
+            : new string(RuleGlyph, Math.Max(0, width));
     }
 
     /// <summary>The title <see cref="RuleTitle"/> answers now is not the one on the drawn upper rule.</summary>

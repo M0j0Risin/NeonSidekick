@@ -176,6 +176,68 @@ public class ScreenPaneTests : IDisposable
     }
 
     /// <summary>
+    /// Where the upper rule's title lands (2026-09-28, for the double-click that renames the session): the column after
+    /// <see cref="ScreenPane.RuleWithTitle"/>'s space, the same with the fold buttons or without (the title keeps to the
+    /// right edge), the cut title's cells; none for an empty title or a width with no room for one.
+    /// </summary>
+    [Fact]
+    public void UpperRule_PlacesTheTitle()
+    {
+        var plain = ScreenPane.UpperRule("notes", folds: false, 40);
+        Assert.Equal((33, 5), (plain.TitleColumn, plain.TitleCells));
+        Assert.Equal("notes", plain.Text.Substring(plain.TitleColumn, plain.TitleCells));
+
+        var folded = ScreenPane.UpperRule("notes", folds: true, 40);
+        Assert.Equal((33, 5), (folded.TitleColumn, folded.TitleCells));
+
+        var cut = ScreenPane.UpperRule("a-title-longer-than-the-rule-can-hold", folds: false, 40);
+        Assert.Equal((ScreenPane.RuleTitleMinRule + 1, 29), (cut.TitleColumn, cut.TitleCells));
+
+        var wide = ScreenPane.UpperRule("日本", folds: false, 15);   // two-cell characters count as cells
+        Assert.Equal((ScreenPane.RuleTitleMinRule + 1, 4), (wide.TitleColumn, wide.TitleCells));
+
+        Assert.Equal((-1, 0), (ScreenPane.UpperRule("", folds: false, 40).TitleColumn, ScreenPane.UpperRule("", folds: false, 40).TitleCells));
+        Assert.Equal(-1, ScreenPane.UpperRule("", folds: true, 40).TitleColumn);
+        Assert.Equal(-1, ScreenPane.UpperRule("notes", folds: false, 11).TitleColumn);   // the bare rule: no room
+    }
+
+    /// <summary>
+    /// The session's name on the upper rule takes a click (2026-09-28): on its cells and the space either side, nothing
+    /// past them or on another row; nothing with no title drawn, and nothing under an overlay.
+    /// </summary>
+    [Fact]
+    public void RuleTitle_TakesAClick_OnItsCellsAndTheSpaceEitherSide()
+    {
+        _cursorTop = 100;   // the upper rule at 99
+        string title = "";
+        using var pane = Pane();
+        pane.RuleTitle = () => title;
+        pane.Show();
+        Assert.False(pane.TryHitRuleTitle(35, 99));   // no title yet
+
+        title = "notes";   // columns 33..37 at 40 wide
+        _time.Advance(ScreenPane.Tick);
+        foreach (int x in new[] { 32, 33, 37, 38 })
+        {
+            Assert.True(pane.TryHitRuleTitle(x, 99));
+        }
+
+        Assert.False(pane.TryHitRuleTitle(31, 99));
+        Assert.False(pane.TryHitRuleTitle(39, 99));
+        Assert.False(pane.TryHitRuleTitle(35, 98));
+        Assert.False(pane.TryHitRuleTitle(35, 100));
+
+        pane.ShowOverlay(new Markup("a"), "ESC closes");
+        Assert.False(pane.TryHitRuleTitle(35, 99));
+        pane.CloseOverlay();
+        Assert.True(pane.TryHitRuleTitle(35, 99));
+
+        title = "";   // gone (a /clear in the app)
+        _time.Advance(ScreenPane.Tick);
+        Assert.False(pane.TryHitRuleTitle(35, 99));
+    }
+
+    /// <summary>
     /// The upper rule's ↘️↖️ (2026-09-28): drawn once a run folds, not before; ↘️ (with the space at its left) unfolds
     /// and ↖️ (with the rule glyph at its right) folds; under an overlay they go, and they come back when it closes.
     /// </summary>

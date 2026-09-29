@@ -66,6 +66,7 @@ Neon Sidekick brings privacy-first, local LLM inference to your terminal. Powere
 * **Keyboard:** ←/→ (switch tabs), ↑/↓ (move), Enter (edit/toggle), ESC (close).
 * **Mouse:** Click moves the cursor; double-click selects rows and tabs. The top-right × acts as ESC, and double-clicking outside an open pane closes it. Double-clicking a picture in the transcript opens it in the picture viewer. Clicking a picture in the ComfyUI picture strip highlights it and moves an open viewer to it; double-clicking it also opens it. To copy a picture out of the app (to the desktop or a folder), open it in the picture viewer and drag it from there.
 * **Fold buttons:** while the transcript holds a tool run, code block or thinking block that folds, **↘️↖️** sit at the left of the rule over the input row. ↘️ unfolds everything and ↖️ folds it again, as `/expand` and `/collapse` do but without a notice. They work while a reply runs too.
+* **Session name:** double-click the session's name at the right end of the rule over the input row to rename it, as `/sessions title` does. The box opens with the current name in it, and it works while a reply runs too.
 
 **Input line**
 * The input row is always a full editor, even while a reply streams or `/botchat` runs: ←/→, Home/End, Delete, Shift+arrows or Ctrl+A to select, Ctrl+C / Ctrl+X to copy / cut, right-click or Alt+V to paste, click to place the cursor, ↑/↓ for history, and the `/`, `@`, `#`, `$`, `%` and `^` lists.
@@ -77,13 +78,14 @@ Commands typed while a reply runs:
 
 | Behaviour | Commands |
 |---|---|
-| Open their pane over the reply | `/help`, `/settings`, `/tools`, `/mcp`, `/sys`, `/usage`, `/about`, `/memory`, `/queue`, `/sessions`, `/skills`, `/reasoning`, `/sampling`, `/cmdlist`, `/police`, `/emptytrash`, `/cmdclear`, `/tree`, `/vault`, `/cmdcopy`, `/keycopy`, `/persona`, `/operata`, `/vocalia` |
+| Open their pane over the reply | `/help`, `/settings`, `/tools`, `/mcp`, `/sys`, `/usage`, `/about`, `/memory`, `/queue`, `/sessions`, `/sessions title`, `/skills`, `/reasoning`, `/sampling`, `/cmdlist`, `/police`, `/emptytrash`, `/cmdclear`, `/tree`, `/vault`, `/cmdcopy`, `/keycopy`, `/persona`, `/operata`, `/vocalia` |
 | Run at once | `/tts`, `/stt`, `/wake`, `/interrupt`, `/reasoning <level>`, `/sampling <field> <value>`, `/queue clear`, `/copy`, `/remember`, `/explore`, `/log`, `/timer`, `/expand`, `/collapse`, `/window`, `/cwd`, `/comfy view`, `/view <path>` |
 | Stop the reply first | `/clear`, `/new`, `/splash`, `/exit` |
 | Everything else | Waits for the reply to end, queued behind any earlier messages (so *Queue cancel mode* applies) |
 
 **Double-Click Shortcuts**
 * **Hint row:** model name → `/server` (server, then model, then reasoning) · reasoning glyph → `/reasoning` · tokens/spinner → `/usage` · 🖼️/🎨 and its timer while ComfyUI renders → cancel the pictures (the reply goes on; ESC still ends it) · queued count → `/queue` · blank space → `/settings`.
+* **Rule over the input row:** the session's name → `/sessions title` (rename it).
 * **Toolbar** (*Show toolbar*): a glyph toggles its pane, or switches to it from another pane.
 
 | Toolbar item | Shown | Opens |
@@ -593,7 +595,7 @@ Type `/` to list every command with its summary; after a command and a space, it
 | `/remember <text>` | Add a memory. |
 | `/sampling [field value]` | Edit the sampling overrides per model on a pane; `/sampling <field> <value>`, `<field> clear`, `extra <json>` or `clear` change the connected model's (see Sampling per model). |
 | `/server [url]` | Pick an LLM server found on the usual ports (or the Claude API, when it's on and has a key), or set one. The model and reasoning pickers follow, and one reconnect applies all three. |
-| `/sessions [id \| purge <id> \| purge older <age> \| purge all \| title <text>]` | List, restore, rename and purge stored sessions. An age is a number of days (`30`) or a duration (`12h`, `90m`, `2 hours`, `1d 6h`). |
+| `/sessions [id \| purge <id> \| purge older <age> \| purge all \| title [<text>]]` | List, restore, rename and purge stored sessions. An age is a number of days (`30`) or a duration (`12h`, `90m`, `2 hours`, `1d 6h`). `title` alone opens a box with the current name in it (as double-clicking the name on the rule does), and works while a reply runs. |
 | `/settings`, `//` | Edit and save the settings. |
 | `/skills` | List the skills (Enter moves, renames, edits or deletes one) and edit the skill, reflection and project-file settings. |
 | `/skills add <search words \| owner/repo[/skill] \| github url \| zip url> [--global \| --profile]` | Install an [Agent Skill](https://agentskills.io) from the web, previewed first; a pane asks where it goes (the cursor starts on Cancel). See Installing skills. Refused while a reply runs. |

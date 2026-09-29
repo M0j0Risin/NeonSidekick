@@ -16,6 +16,9 @@ namespace NeonSidekick.App;
 /// (<see cref="SettingsMenu.NotWhileReplyRunsNotice"/>). Every notice goes to the pane's status line
 /// while it is open, else to the transcript. Without the pane the list prints as numbered lines and
 /// nothing else (<see cref="MemoryMenu"/>'s fallback); the typed forms of <c>/sessions</c> do the rest.
+/// <para>The rename box stands alone too (<see cref="RenameAsync"/>, 2026-09-28, the user's ask): a double-click on the
+/// session's name at the upper rule's right edge, or the bare <c>/sessions title</c>, opens the <c>rename</c> row on its
+/// own with the title in the slot — under a reply as at idle.</para>
 /// </summary>
 internal sealed class SessionsMenu
 {
@@ -210,6 +213,62 @@ internal sealed class SessionsMenu
         }
     }
 
+    /// <summary>
+    /// The rename box alone (2026-09-28, the user's ask: a double-click on the upper rule's session name, or the bare
+    /// <c>/sessions title</c>): the row page's <c>rename</c> row with the title of session <paramref name="id"/> in the
+    /// pane's input slot, then the pane closed. True when the title changed. The caller checks the pane is enabled;
+    /// mid-turn is fine, the store holding its own lock.
+    /// </summary>
+    public async Task<bool> RenameAsync(long id, CancellationToken cancellationToken)
+    {
+        if (_store.Summary(id) is not { } session)
+        {
+            _transcript.Error(RenameFailedError(id));
+            return false;
+        }
+
+        try
+        {
+            var page = new MenuPage(RowTitle(session), [RowPageRow(RenameWord)], RowKeys);
+            return await EditTitleAsync(page, 0, session, cancellationToken, closeFirst: true).ConfigureAwait(false) == true;
+        }
+        finally
+        {
+            _pane.Close();
+        }
+    }
+
+    /// <summary>
+    /// Reads a new title for <paramref name="session"/> on row <paramref name="row"/> of <paramref name="page"/>, its old
+    /// one in the slot, and stores it as the user's: null when nothing was submitted (ESC, a blank), true when it landed,
+    /// false when the store refused it (the session gone) — the notice or the error said so. With
+    /// <paramref name="closeFirst"/> the pane closes before the store is asked, so the line lands in the transcript, not on
+    /// a status line about to go.
+    /// </summary>
+    private async Task<bool?> EditTitleAsync(MenuPage page, int row, SessionSummary session, CancellationToken cancellationToken, bool closeFirst = false)
+    {
+        var typed = await _pane.EditAsync(page with { Hint = SettingsMenu.EditKeys }, row, _input, session.Title, allowEmpty: false, cancellationToken).ConfigureAwait(false);
+        if (closeFirst)
+        {
+            _pane.Close();
+        }
+
+        if (typed is not InputResult.Submitted { Text: var text } || string.IsNullOrWhiteSpace(text))
+        {
+            return null;
+        }
+
+        string title = SessionText.FirstLineTitle(text);
+        if (_store.SetTitle(session.Id, title, TitleSource.User))
+        {
+            Sink.Notice(RenamedNotice(title));
+            return true;
+        }
+
+        Sink.Error(RenameFailedError(session.Id));
+        return false;
+    }
+
     private enum RowOutcome
     {
         Nothing,
@@ -239,23 +298,7 @@ internal sealed class SessionsMenu
                 return RowOutcome.Restore;
 
             case RenameWord:
-            {
-                var typed = await _pane.EditAsync(page with { Hint = SettingsMenu.EditKeys }, row, _input, session.Title, allowEmpty: false, cancellationToken).ConfigureAwait(false);
-                if (typed is not InputResult.Submitted { Text: var text } || string.IsNullOrWhiteSpace(text))
-                {
-                    return RowOutcome.Nothing;
-                }
-
-                string title = SessionText.FirstLineTitle(text);
-                if (_store.SetTitle(session.Id, title, TitleSource.User))
-                {
-                    Sink.Notice(RenamedNotice(title));
-                    return RowOutcome.Changed;
-                }
-
-                Sink.Error(RenameFailedError(session.Id));
-                return RowOutcome.Changed;
-            }
+                return await EditTitleAsync(page, row, session, cancellationToken).ConfigureAwait(false) is null ? RowOutcome.Nothing : RowOutcome.Changed;
 
             default:
                 if (!await ConfirmAsync(PurgePrompt(session), cancellationToken).ConfigureAwait(false))

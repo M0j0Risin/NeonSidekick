@@ -58,6 +58,12 @@ public abstract record InputResult
     /// day); <see cref="Draft"/> as <see cref="HintRow"/>'s.
     /// </summary>
     public sealed record ToolbarRow(string Draft, ScreenPane.ToolbarHit Hit) : InputResult;
+
+    /// <summary>
+    /// A double-click on the session's name at the upper rule's right edge (2026-09-28, the user's ask): the screen opens
+    /// the rename box, as a bare <c>/sessions title</c> does; <see cref="Draft"/> as <see cref="HintRow"/>'s.
+    /// </summary>
+    public sealed record RuleTitle(string Draft) : InputResult;
 }
 
 /// <summary>
@@ -304,6 +310,12 @@ public sealed partial class InputLine
     /// toolbar key (<see cref="ToolbarPairKey"/> goes down one per column), so no two parts ever share one. Pinned.
     /// </summary>
     public static int PicturePairKey(int id) => -1_000_000 - id;
+
+    /// <summary>
+    /// What two clicks on the upper rule's session name must share to pair (2026-09-28): between the toolbar's keys (a column
+    /// each, down from −5) and the pictures' (<see cref="PicturePairKey"/>, from −1 000 000 down), so it is no other part's. Pinned.
+    /// </summary>
+    public const int RuleTitlePairKey = -500_000;
 
     /// <summary>What a double-click on a transcript picture does with its id (later on 2026-09-24): the screen's opener; null = nothing.</summary>
     public Action<int>? OpenPicture { get; set; }

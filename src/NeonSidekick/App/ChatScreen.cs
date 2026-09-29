@@ -114,6 +114,9 @@ public enum SessionActionKind
     /// <summary><c>title &lt;text&gt;</c>: <c>Text</c> the new title of the session on screen.</summary>
     Title,
 
+    /// <summary><c>title</c> alone (2026-09-28): the rename box on the pane, the current title in it — what a double-click on the upper rule's session name runs.</summary>
+    TitlePane,
+
     /// <summary>Anything the grammar does not cover; <c>ChatScreen.SessionUsageError</c>.</summary>
     Invalid,
 }
@@ -1673,6 +1676,13 @@ internal sealed partial class ChatScreen
                 return null;
             }
 
+            if (_pane.TryHitRuleTitle(click.X, click.Y))
+            {
+                // The session's name on the upper rule (2026-09-28, the user's ask): two clicks answer the bare /sessions title,
+                // the rename box under the reply as at idle.
+                return _queuedClicks.Second(InputLine.RuleTitlePairKey) ? SessionTitleLine : null;
+            }
+
             if (_pane.PictureAt(click.X, click.Y) is int picture)
             {
                 // A picture in the transcript (later on 2026-09-24): a double-click opens it (the built-in viewer since later on 2026-09-27, PictureOpenerFor).
@@ -2882,8 +2892,11 @@ internal sealed partial class ChatScreen
     public static readonly IReadOnlyList<CompletionItem> SessionVerbs =
     [
         new(SessionPurgeWord, "purge a session: /sessions purge <id> | older <days> | all"),
-        new(SessionTitleWord, "rename this session: /sessions title <text>"),
+        new(SessionTitleWord, "rename this session: /sessions title [<text>] (alone: a box with the title in it)"),
     ];
+
+    /// <summary>The line a double-click on the upper rule's session name runs (2026-09-28): the bare <c>/sessions title</c>, the rename box. Pinned.</summary>
+    public const string SessionTitleLine = SlashCommands.SessionsWord + " " + SessionTitleWord;
 
     /// <summary>The note beside a session's id on the list: its title, and <see cref="SessionsMenu.CurrentNote"/> for the one on screen.</summary>
     public static string SessionNote(SessionSummary session, long? current) => session.Id == current ? session.Title + " (" + SessionsMenu.CurrentNote + ")" : session.Title;
@@ -4588,7 +4601,8 @@ internal sealed partial class ChatScreen
     /// The <c>/sessions</c> grammar: nothing = the pane; <c>12</c> or <c>#12</c> = restore; <c>purge 12</c>,
     /// <c>purge older 30</c> (or <c>12h</c>, <c>90m</c>, <c>1d 6h</c>: the rest of the line is one
     /// <see cref="SessionText.TryParseAge"/> age, 2026-09-21), <c>purge all</c>; <c>title</c> and the
-    /// rest of the line. Case-insensitive words; an id is a positive whole number. Pure; pinned by tests.
+    /// rest of the line, or <c>title</c> alone for the rename box (2026-09-28; the usage error until then).
+    /// Case-insensitive words; an id is a positive whole number. Pure; pinned by tests.
     /// </summary>
     public static SessionAction ParseSessionArgs(string args)
     {
@@ -4601,6 +4615,11 @@ internal sealed partial class ChatScreen
 
         if (tokens[0].Equals(SessionTitleWord, StringComparison.OrdinalIgnoreCase))
         {
+            if (tokens.Length == 1)
+            {
+                return new(SessionActionKind.TitlePane);
+            }
+
             string title = text[SessionTitleWord.Length..].Trim();
             return title.Length > 0 ? new(SessionActionKind.Title, Text: title) : new(SessionActionKind.Invalid);
         }
@@ -4669,12 +4688,42 @@ internal sealed partial class ChatScreen
             case SessionActionKind.Title:
                 TitleSession(action.Text);
                 break;
+            case SessionActionKind.TitlePane:
+                await RenameSessionAsync(cancellationToken).ConfigureAwait(false);
+                break;
             default:
                 _transcript.Error(SessionUsageError);
                 break;
         }
 
         DrainDiagnostics();
+    }
+
+    /// <summary>
+    /// The bare <c>/sessions title</c> (2026-09-28), which a double-click on the upper rule's session name runs (the user's
+    /// ask): the rename box on the pane with the title in it (<see cref="SessionsMenu.RenameAsync"/>), at the idle line and
+    /// under a reply alike — <see cref="SessionStore.SetTitle"/> holds its own lock, and a typed title is one the model's
+    /// never overwrites. Nothing to rename before the first turn; without menus (headless) the usage error, as before.
+    /// The lines go through <see cref="_flow"/>, since a reply may own the transcript.
+    /// </summary>
+    private async Task RenameSessionAsync(CancellationToken cancellationToken)
+    {
+        if (!_menuPane.Enabled)
+        {
+            _flow.Error(SessionUsageError);
+            return;
+        }
+
+        if (_sessionId is not { } id)
+        {
+            _flow.Notice(SessionNoneYetNotice);
+            return;
+        }
+
+        if (await _sessionsMenu.RenameAsync(id, cancellationToken).ConfigureAwait(false))
+        {
+            RefreshSessionTitle();
+        }
     }
 
     /// <summary>
@@ -7122,6 +7171,18 @@ internal sealed partial class ChatScreen
                             _ => ToolbarWord(tool.Hit.Glyph),
                         };
                         if (toolbarLine is not null && await HandleAsync(toolbarLine, [], cancellationToken).ConfigureAwait(false))
+                        {
+                            return 0;
+                        }
+
+                        break;
+                    case InputResult.RuleTitle:
+                        // A double-click on the session's name on the upper rule (2026-09-28, the user's ask): the bare
+                        // /sessions title through the dispatch, the rename box — no transcript row, the draft back after.
+                        _timers.Acknowledge();
+                        DisarmExit();
+                        await _speech.StopAsync().ConfigureAwait(false);
+                        if (await HandleAsync(SessionTitleLine, [], cancellationToken).ConfigureAwait(false))
                         {
                             return 0;
                         }

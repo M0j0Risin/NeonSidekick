@@ -914,6 +914,17 @@ public sealed partial class InputLine
                 hintClicks.Reset();
                 pane.SetToolGroupsExpanded(expand);
             }
+            else if (pane.TryHitRuleTitle(click.X, click.Y))
+            {
+                // The session's name on the upper rule (2026-09-28, the user's ask): a double-click opens the rename box,
+                // as a bare /sessions title does; the draft comes back after, as the toolbar's.
+                _anchor = -1;
+                if (hintClicks.Second(RuleTitlePairKey))
+                {
+                    EndRow();
+                    return new EditOutcome.End(new InputResult.RuleTitle(_text.ToString()));
+                }
+            }
             else if (pane.PictureAt(click.X, click.Y) is int picture)
             {
                 // A picture in the transcript (later on 2026-09-24, the user's ask): a double-click

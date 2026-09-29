@@ -148,12 +148,16 @@ internal sealed partial class ChatScreen
     /// the turn does. The bare <c>/comfy</c> (a spinner over the server check), <c>/comfy purge</c> (a confirmation,
     /// and it deletes what a running <c>generate_image</c> may be writing) and <c>/comfy edit</c> still wait. <c>/view</c> with a
     /// path and no <c>--chat</c> (later on 2026-09-27, when <c>/view</c> took to the viewer) is quick for the same reason;
-    /// <c>/view --chat</c> draws in the transcript the turn owns, and the bare <c>/view</c> is refused as before. Pure.
+    /// <c>/view --chat</c> draws in the transcript the turn owns, and the bare <c>/view</c> is refused as before. The bare
+    /// <c>/sessions title</c> (2026-09-28, the rename box a double-click on the upper rule's session name opens) is a
+    /// <see cref="MidTurnClass.Pane"/>: the store holds its own lock and the model's title never lands over a typed one;
+    /// <c>/sessions title &lt;text&gt;</c> still waits. Pure.
     /// </summary>
     public static MidTurnClass MidTurnPolicy(SlashCommand command, string args) => command switch
     {
         SlashCommand.Comfy when string.Equals(args.Trim(), Viewer.ViewerText.ViewWord, StringComparison.OrdinalIgnoreCase) => MidTurnClass.Quick,
         SlashCommand.View when ParseViewArgs(args) is { Chat: false, Path.Length: > 0 } => MidTurnClass.Quick,
+        SlashCommand.Session when ParseSessionArgs(args).Kind == SessionActionKind.TitlePane => MidTurnClass.Pane,
         _ => MidTurnPolicy(command, args.Length > 0),
     };
 
@@ -366,6 +370,10 @@ internal sealed partial class ChatScreen
                 break;
             case SlashCommand.Queue:
                 await _queueMenu.ShowAsync(cancellationToken).ConfigureAwait(false);
+                break;
+            case SlashCommand.Session when ParseSessionArgs(args).Kind == SessionActionKind.TitlePane:
+                // The rename box (2026-09-28): the upper rule's session name double-clicked, or the bare /sessions title typed.
+                await RenameSessionAsync(cancellationToken).ConfigureAwait(false);
                 break;
             case SlashCommand.Session:
                 // The list alone: every pick is refused there, so nothing comes back to restore.

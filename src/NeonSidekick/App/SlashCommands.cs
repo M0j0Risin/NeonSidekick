@@ -265,7 +265,7 @@ public static class SlashCommands
             new("/remember", "add a memory: /remember <text>"),
             new("/sampling", "edit the LLM sampling overrides per model on a pane (temperature, top_p, top_k, min_p, penalties, extra body), or /sampling <field> <value|clear> | extra <json> | clear for the connected model"),
             new("/server", "pick an LLM server found on the usual ports, or /server <url>"),
-            new("/sessions", "list, restore and purge sessions: /sessions [<id> | purge <id> | purge older <age> | purge all | title <text>]"),
+            new("/sessions", "list, restore, rename and purge sessions: /sessions [<id> | purge <id> | purge older <age> | purge all | title [<text>]]"),
             new("/settings", "edit and save settings", "//"),
             new("/skills", "list the skills (Enter on one moves, renames, edits or deletes it), edit the skill settings and the project file on a pane; /skills add <search words | owner/repo[/skill] | url> installs one from skills.sh or GitHub"),
             new("/speak", "read a text file from the working directory aloud, as a reply: /speak <file> [n], or /speak to resume, or /speak <n> from sentence n"),

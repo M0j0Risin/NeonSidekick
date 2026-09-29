@@ -16501,6 +16501,163 @@ public partial class ChatScreenTests : IDisposable
         Assert.EndsWith(TitledRule("Wiring notes") + "\n" + InputLine.PromptGlyph + ChatScreen.InputPlaceholder + "\n" + new string(ScreenPane.RuleGlyph, 240) + "\n" + Row(ChatScreen.HintLine(null)) + "\n", output);   // the typed one in its place
     }
 
+    private static void PushText(ScriptedInput input, string text)
+    {
+        foreach (char c in text)
+        {
+            input.Push(Keys.Char(c));
+        }
+    }
+
+    private static void PushBackspaces(ScriptedInput input, int count)
+    {
+        for (int i = 0; i < count; i++)
+        {
+            input.Push(Keys.Backspace);
+        }
+    }
+
+    /// <summary>
+    /// A double-click on the session's name at the upper rule's right edge (2026-09-28, the user's ask) opens the rename box
+    /// with the title in it; the typed one is stored as the user's and replaces it on the rule, and the draft on the line
+    /// comes back after, as the toolbar's. The input row at 100, the upper rule at 99.
+    /// </summary>
+    [Fact]
+    public async Task ADoubleClickOnTheSessionName_OpensTheRenameBox_AndTheTypedTitleReplacesIt()
+    {
+        _settings.Update(d => d.TtsOutput = false);
+        _console.Profile.Height = 40;
+        _geometry = new ScreenGeometry(() => null, () => 100);
+        long id = SeedSession();
+        using (var seeded = OpenSessions())
+        {
+            Assert.True(seeded.SetTitle(id, "vosk-model-wiring", TitleSource.Model));
+        }
+
+        _chat.EnqueueText("Fine.");
+        int x = ScreenPane.UpperRule("vosk-model-wiring", folds: false, _console.Profile.Width).TitleColumn + 3;
+        StepsWhenIdle(
+            Line("/sessions " + id),
+            input =>
+            {
+                PushText(input, "ok");
+                input.PushClick(x, 99);
+                input.PushClick(x, 99);
+                PushBackspaces(input, "vosk-model-wiring".Length);
+                PushText(input, "Wiring notes");
+                input.Push(Keys.Enter);   // the box's
+                input.Push(Keys.Enter);   // the draft's: "ok" sent
+            },
+            Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.Contains("\n" + Titled(SessionsMenu.RowTitle(new SessionSummary(id, default, default, "vosk-model-wiring", TitleSource.Model, "llama", 1))) + "\n \n▸ rename   give it a new title\n", output);
+        Assert.Contains("  · " + SessionsMenu.RenamedNotice("Wiring notes"), output);
+        Assert.Contains(TitledRule("Wiring notes") + "\n" + InputLine.PromptGlyph, output);
+        Assert.DoesNotContain("› " + ChatScreen.SessionTitleLine, output);   // no transcript row for the click
+        using var store = OpenSessions();
+        var summary = store.Load(id)!.Summary;
+        Assert.Equal(("Wiring notes", TitleSource.User), (summary.Title, summary.TitleSource));
+        Assert.Equal("ok", _chat.Requests[^1].Last(m => m.Role == ChatRole.User).Text);
+    }
+
+    /// <summary>One click on the session's name is nothing (a double-click is the gesture, the user's call); ESC in the box keeps the title.</summary>
+    [Fact]
+    public async Task OneClickOnTheSessionName_IsNothing_AndEscInTheBoxKeepsTheTitle()
+    {
+        _settings.Update(d => d.TtsOutput = false);
+        _console.Profile.Height = 40;
+        _geometry = new ScreenGeometry(() => null, () => 100);
+        long id = SeedSession();
+        using (var seeded = OpenSessions())
+        {
+            Assert.True(seeded.SetTitle(id, "vosk-model-wiring", TitleSource.Model));
+        }
+
+        int x = ScreenPane.UpperRule("vosk-model-wiring", folds: false, _console.Profile.Width).TitleColumn;
+        StepsWhenIdle(
+            Line("/sessions " + id),
+            input => input.PushClick(x, 99).PushClick(x, 98),   // the second click elsewhere: no pair
+            input => input.PushClick(x, 99).PushClick(x, 99).Push(Keys.Escape),
+            Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.Single(output.Split("\n▸ rename   give it a new title\n").Skip(1));   // the ESC'd box alone
+        Assert.DoesNotContain("(" + NoticeGlyphs.Session + "renamed:", output);
+        using var store = OpenSessions();
+        Assert.Equal(("vosk-model-wiring", TitleSource.Model), (store.Load(id)!.Summary.Title, store.Load(id)!.Summary.TitleSource));
+    }
+
+    /// <summary>The bare <c>/sessions title</c> with the pane (2026-09-28): the rename box, and before a first turn the notice that there is nothing to rename.</summary>
+    [Fact]
+    public async Task Session_BareTitle_OnThePane_IsTheBox_NothingBeforeAFirstTurn()
+    {
+        _settings.Update(d => d.TtsOutput = false);
+        _console.Profile.Height = 40;
+        _geometry = new ScreenGeometry(() => null);
+        _chat.EnqueueText("Hello.");
+        StepsWhenIdle(
+            Line("/sessions title"),
+            Line("hi"),
+            input =>
+            {
+                PushLine(input, "/sessions title");
+                PushBackspaces(input, 2);
+                PushText(input, "Greeting");
+                input.Push(Keys.Enter);
+            },
+            Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.Contains("  · " + ChatScreen.SessionNoneYetNotice, output);
+        Assert.DoesNotContain(ChatScreen.SessionUsageError, output);
+        Assert.Contains("  · " + SessionsMenu.RenamedNotice("Greeting"), output);
+        using var store = OpenSessions();
+        var summary = Assert.Single(store.List(0));
+        Assert.Equal(("Greeting", TitleSource.User), (summary.Title, summary.TitleSource));
+    }
+
+    /// <summary>
+    /// The same double-click under a reply (2026-09-28, the user's call): the watcher's click hook answers the bare
+    /// <c>/sessions title</c>, a pane under the reply, and the typed title lands while the answer streams.
+    /// </summary>
+    [Fact]
+    public async Task ADoubleClickOnTheSessionName_UnderAReply_Renames()
+    {
+        _settings.Update(d => d.TtsOutput = false);
+        PaneOf40Rows();
+        _chat.EnqueueText("Hello.");
+        _chat.EnqueueText("It is ", "noon.");
+        int x = ScreenPane.UpperRule("hi", folds: false, _console.Profile.Width).TitleColumn;
+        _chat.BeforeUpdate = async (i, ct) =>
+        {
+            if (i == 1 && _chat.Requests.Count == 2)
+            {
+                // Mid-answer: the second update held until the watcher has read the clicks and the box's keys.
+                _scripted!.PushClick(x, 99).PushClick(x, 99);
+                PushBackspaces(_scripted, 2);
+                PushText(_scripted, "Greeting");
+                _scripted.Push(Keys.Enter);
+                for (int tries = 0; tries < 500 && _scripted.IsAvailable; tries++)
+                {
+                    await Task.Delay(10, CancellationToken.None);
+                }
+            }
+        };
+        StepsWhenIdle(Line("hi"), Line("what time is it?"), Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.Contains("  · " + SessionsMenu.RenamedNotice("Greeting"), output);
+        Assert.Contains(TitledRule("Greeting") + "\n" + InputLine.PromptGlyph, output);
+        using var store = OpenSessions();
+        var summary = Assert.Single(store.List(0));
+        Assert.Equal(("Greeting", TitleSource.User), (summary.Title, summary.TitleSource));
+    }
+
     [Fact]
     public async Task ADoubleClickOnTheBrain_CancelsTheReflection()
     {
@@ -18021,6 +18178,11 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("  · " + SessionsMenu.EmptyNotice, output);
         Assert.Equal(MidTurnClass.Pane, ChatScreen.MidTurnPolicy(SlashCommand.Session, hasArgs: false));
         Assert.Equal(MidTurnClass.Deferred, ChatScreen.MidTurnPolicy(SlashCommand.Session, hasArgs: true));
+        // The bare title (2026-09-28): the rename box is a pane under a reply; a typed title still waits for the reply's end.
+        Assert.Equal(MidTurnClass.Pane, ChatScreen.MidTurnPolicy(SlashCommand.Session, "title"));
+        Assert.Equal(MidTurnClass.Deferred, ChatScreen.MidTurnPolicy(SlashCommand.Session, "title Notes"));
+        Assert.Equal(MidTurnClass.Pane, ChatScreen.MidTurnPolicy(SlashCommand.Session, ""));
+        Assert.Equal("/sessions title", ChatScreen.SessionTitleLine);
     }
 
     [Fact]
@@ -18244,7 +18406,8 @@ public partial class ChatScreenTests : IDisposable
     [InlineData("purge all", SessionActionKind.PurgeAll, 0, 0, "")]
     [InlineData("title My notes  here", SessionActionKind.Title, 0, 0, "My notes  here")]
     [InlineData("TITLE x", SessionActionKind.Title, 0, 0, "x")]
-    [InlineData("title", SessionActionKind.Invalid, 0, 0, "")]
+    [InlineData("title", SessionActionKind.TitlePane, 0, 0, "")]    // alone: the rename box (2026-09-28; the usage error before)
+    [InlineData(" Title ", SessionActionKind.TitlePane, 0, 0, "")]
     [InlineData("0", SessionActionKind.Invalid, 0, 0, "")]
     [InlineData("-3", SessionActionKind.Invalid, 0, 0, "")]
     [InlineData("twelve", SessionActionKind.Invalid, 0, 0, "")]
