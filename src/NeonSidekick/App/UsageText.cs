@@ -7,19 +7,19 @@ using Spectre.Console.Rendering;
 namespace NeonSidekick.App;
 
 /// <summary>
-/// The words for the token tally: the <c>/usage</c> info pane (a Tokens tab, three sections of
-/// two-column rows, and a Notes tab on how the figures are measured), the same as plain lines for
-/// a console without the pane, and the hint-row part. Pure statics, every string pinned;
-/// invariant culture throughout. <c>Text</c> cells, never <c>Markup</c>, as the other panes.
+/// The words for the token tally: the <c>/usage</c> info pane (a Statistics tab, three sections of
+/// two-column rows), the same as plain lines for a console without the pane, and the hint-row part.
+/// Pure statics, every string pinned; invariant culture throughout. <c>Text</c> cells, never
+/// <c>Markup</c>, as the other panes. 2026-09-28, the user's call: the Notes tab (how the figures
+/// are measured) is gone and the Tokens tab is named Statistics, the pane's one tab.
 /// </summary>
 public static class UsageText
 {
     /// <summary>The info pane's strip label (the glyph since later on 2026-09-21).</summary>
     public const string Label = "📊 Usage";
 
-    /// <summary>The tab titles.</summary>
-    public const string TokensTabTitle = "Tokens";
-    public const string NotesTabTitle = "Notes";
+    /// <summary>The tab's title.</summary>
+    public const string StatisticsTabTitle = "Statistics";
 
     public const string NothingCounted = "(no tokens counted yet)";
     public const string LastReplyUnreported = "(last reply: no usage reported)";
@@ -38,24 +38,9 @@ public static class UsageText
     /// <summary>Beside the Context heading, and the Window row's value, when no server tier and no setting named the window.</summary>
     public const string WindowUnknown = "unknown";
 
-    /// <summary>The Notes tab, one paragraph per row. Pinned.</summary>
-    public static readonly IReadOnlyList<string> Notes =
-    [
-        "The counts are the server's own usage report on each streamed reply. A reply that called tools took several requests; their counts and times are summed.",
-        "Prompt is the whole context the request carried — every request re-sends the conversation, so the last request's prompt plus its completion is the context in use, growing turn by turn until the history trims. That is the Context section's In use row and the hint row's count and share; the conversation and launch totals sum every request (the re-sent history counted each time — a cost figure) and are not.",
-        "Completion is what the model produced, a reasoning model's thinking included. A picture in the conversation is tokenised by the server and counted in the prompt figure — a large one costs hundreds to thousands of tokens on every request until /clear; nothing is added on this side.",
-        "Reasoning is the thinking's share of the completion, as the server counts it — vLLM and LM Studio under completion_tokens_details, SGLang at the top of usage; Ollama counts none, its thinking is in Completion alone — and — when the report carries no such field (a server that does not count them, or a model with no thinking to count); 0 is a report too. The conversation and launch rows sum the requests that reported one.",
-        "Time to first token is the wait while the server read the prompt (the prefill). Speed is completion tokens over the time the reply streamed (the decode), the figure servers print as tok/s. The conversation and launch rows carry the averages: the wait per request, the speed over every request's streaming.",
-        "The window is what the server publishes for the loaded model, asked once per connect: max_model_len or context_length on /v1/models (vLLM, SGLang), LM Studio's loaded_context_length on /api/v0/models, llama.cpp's n_ctx on /props, Ollama's context_length on /api/ps or num_ctx on /api/show (else the model's ceiling, which can exceed the runtime's window). The LLM context length setting, or NEONSIDEKICK_LLM_CONTEXT, names it instead when a server publishes none or the wrong one.",
-        "A server that sends no usage report is counted as a reply with no report, never as zeros.",
-        "/clear and a profile switch start the conversation's figures and the context in use over; the launch total outlives them and every /server or /model change. Nothing is saved.",
-        "After a compact (/compact, or LLM auto compact (%)) the context in use is measured again at the next reply; a summary's own request is counted in the conversation and launch totals, and its notice shows what the summariser read → wrote, not the new context.",
-        "On the Claude API the prompt figure includes what the prompt cache read and wrote (the Cache row), and Cost prices every request at the model's list price — input, cache writes at 1.25×, cache reads at the model's cached rate, completion — a local estimate, not the bill.",
-    ];
-
     private const string Sep = " · ";
 
-    // ── The Tokens tab ──────────────────────────────────────────────────────
+    // ── The Statistics tab ──────────────────────────────────────────────────
 
     /// <summary>
     /// The share of the window in use, rounded to a whole percent; null without a window or with
@@ -93,7 +78,7 @@ public static class UsageText
     public const string NoReasoningReport = "—";
 
     /// <summary>
-    /// One scope's rows for the Tokens tab: label and value. The last reply's wait is the sum over its
+    /// One scope's rows for the Statistics tab: label and value. The last reply's wait is the sum over its
     /// requests; an aggregate (<paramref name="averaged"/>) shows the wait per request, the way its
     /// speed is over every request's streaming (2026-09-17). Pinned.
     /// </summary>
@@ -131,12 +116,12 @@ public static class UsageText
     }
 
     /// <summary>
-    /// The Tokens tab: a heading per scope over its rows. One grid for all three, so the value
+    /// The Statistics tab: a heading per scope over its rows. One grid for all three, so the value
     /// column sits at the same place under every heading (a grid per section sized each label
     /// column to its own widest label and the values jumped between sections). The heading in the
     /// section style, the rows in the label style: two tiers, not one cyan column.
     /// </summary>
-    public static IRenderable TokensTab(TokenTally tally, ContextLength? window)
+    public static IRenderable StatisticsTab(TokenTally tally, ContextLength? window)
     {
         ArgumentNullException.ThrowIfNull(tally);
         if (tally.Session.IsEmpty && window is null && tally.ClaudeRuns == 0)
@@ -239,19 +224,6 @@ public static class UsageText
 
         // A space, not an empty cell: the grid keeps a row only when something in it rendered.
         grid.AddRow(new Text(" "), new Text(""));
-    }
-
-    /// <summary>The Notes tab: the paragraphs, a blank row between.</summary>
-    public static IRenderable NotesTab()
-    {
-        var rows = new List<IRenderable>(Notes.Count * 2);
-        foreach (var note in Notes)
-        {
-            rows.Add(new Text(note, Theme.Body));
-            rows.Add(new Text(" "));
-        }
-
-        return new Rows(rows);
     }
 
     // ── Plain lines and the hint row ────────────────────────────────────────

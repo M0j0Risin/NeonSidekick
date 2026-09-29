@@ -9297,7 +9297,7 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         Assert.StartsWith("25 tokens", UsageText.HintPart(_session.Usage, _session.ContextLength));
-        int usage = output.IndexOf("\n" + Titled(UsageText.Label + "   Tokens    Notes ") + "\n", StringComparison.Ordinal);
+        int usage = output.IndexOf("\n" + Titled(UsageText.Label + "   Statistics ") + "\n", StringComparison.Ordinal);
         int settings = output.IndexOf("\n" + Titled(SettingsMenu.Title + "   General    Sessions    LLM    TTS    STT    Claude (API)    Botchat ") + "\n", StringComparison.Ordinal);
         Assert.True(usage > 0 && settings > usage, output);
         Assert.DoesNotContain("› /usage", output);
@@ -10253,30 +10253,28 @@ public partial class ChatScreenTests : IDisposable
     }
 
     [Fact]
-    public async Task WithGeometry_UsageOpensTheInfoPane_TokensThenNotes_AndEscClosesIt()
+    public async Task WithGeometry_UsageOpensTheInfoPane_Statistics_AndEscClosesIt()
     {
         _settings.Update(d => d.TtsOutput = false);
         _console.Profile.Height = 60;
         _geometry = new ScreenGeometry(() => null);
         ReplyWithUsage();
-        // /usage before any reply (the empty tally), ESC, the reply, /usage again once it is in, → the Notes tab, ESC.
-        StepsWhenIdle(Line("/usage"), Key(Keys.Escape), Line("hi"), Line("/usage"), Key(Keys.Right), Key(Keys.Escape), Line("/exit"));
+        // /usage before any reply (the empty tally), ESC, the reply, /usage again once it is in, ESC.
+        StepsWhenIdle(Line("/usage"), Key(Keys.Escape), Line("hi"), Line("/usage"), Key(Keys.Escape), Line("/exit"));
 
         string output = await RunAsync();
 
         string rule = new(ScreenPane.RuleGlyph, 240);
-        string strip = rule + "\n" + Titled(UsageText.Label + "   Tokens    Notes ") + "\n\n";
+        string strip = rule + "\n" + Titled(UsageText.Label + "   Statistics ") + "\n\n";
         // The grid pads its cells to the widest value: compare with the row ends trimmed.
         output = string.Join("\n", output.Split('\n').Select(l => l.TrimEnd()));
         Assert.Contains(strip + UsageText.NothingCounted + "\n", output);
         // After the reply the upper rule names the session (2026-09-18), the pane's title row under it.
-        strip = TitledRule("hi") + "\n" + Titled(UsageText.Label + "   Tokens    Notes ") + "\n\n";
-        // The Tokens tab after the reply: the Context section (no window from the stub's server), then the three scopes, the last reply's with its timings.
+        strip = TitledRule("hi") + "\n" + Titled(UsageText.Label + "   Statistics ") + "\n\n";
+        // The Statistics tab after the reply: the Context section (no window from the stub's server), then the three scopes, the last reply's with its timings.
         Assert.Contains(strip + "Context              unknown\nWindow               unknown\nIn use               25\n\nLast reply\nTotal                25\nPrompt               10\nCompletion           15\nReasoning            —\nRequests             1\nTime to first token  0.5 s\nSpeed                3.0 tok/s\n\nThis conversation    every request summed\nTotal                25\n", output);
         Assert.Contains("\nSince launch         every request summed\nTotal                25\nPrompt               10\nCompletion           15\nReasoning            —\nRequests             1\nTime to first token  0.5 s\nSpeed                3.0 tok/s\n", output);
         Assert.Contains(rule + "\n" + Row(InfoPane.HintText) + "\n", output);
-        // → the Notes tab.
-        Assert.Contains(strip + UsageText.Notes[0] + "\n\n" + UsageText.Notes[1][..120], output);   // the second note wraps at 240 columns
         // Nothing went to the transcript: the pane held it all.
         Assert.DoesNotContain("  · Tokens —", output);
         Assert.DoesNotContain("  · " + UsageText.NothingCounted, output);
@@ -10378,7 +10376,7 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         string rule = new(ScreenPane.RuleGlyph, 240);
-        string strip = rule + "\n" + Titled(UsageText.Label + "   Tokens    Notes ") + "\n\n";
+        string strip = rule + "\n" + Titled(UsageText.Label + "   Statistics ") + "\n\n";
         output = string.Join("\n", output.Split('\n').Select(l => l.TrimEnd()));
         // Before the reply: the Context section over the empty note (the label column sized to that note).
         Assert.Contains(strip + "Context                  loaded_context_length on /api/v0/models\nWindow                   100\n\n" + UsageText.NothingCounted + "\n", output);
@@ -11116,7 +11114,7 @@ public partial class ChatScreenTests : IDisposable
 
         // The pane under the busy row, its keys named after the spinner's count; the reply whole and uncancelled.
         output = string.Join("\n", output.Split('\n').Select(l => l.TrimEnd()));
-        int pane = output.IndexOf("\n" + Titled(UsageText.Label + "   Tokens    Notes ") + "\n", StringComparison.Ordinal);
+        int pane = output.IndexOf("\n" + Titled(UsageText.Label + "   Statistics ") + "\n", StringComparison.Ordinal);
         Assert.True(pane > 0);
         // The first delta has streamed by then: the row reads the writing stage.
         Assert.Contains(" " + ScreenPane.BusyRow(TurnStages.WritingLabel, TimeSpan.Zero, InfoPane.HintText), output);
@@ -11147,7 +11145,7 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         output = string.Join("\n", output.Split('\n').Select(l => l.TrimEnd()));
-        int pane = output.IndexOf("\n" + Titled(UsageText.Label + "   Tokens    Notes ") + "\n", StringComparison.Ordinal);
+        int pane = output.IndexOf("\n" + Titled(UsageText.Label + "   Statistics ") + "\n", StringComparison.Ordinal);
         Assert.True(pane > 0, output);
         Assert.True(pane < output.LastIndexOf("three.", StringComparison.Ordinal));
         Assert.DoesNotContain("› /usage", output);

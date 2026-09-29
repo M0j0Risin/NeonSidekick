@@ -1511,11 +1511,10 @@ internal sealed partial class ChatScreen
         new(SystemPromptSummary.ToolsTabTitle, () => SystemPromptSummary.ToolsTab(ToolGroups(), _effective().LlmOfferTools)),
     ];
 
-    /// <summary>The tabs <c>/usage</c> opens: the tally as it stands when shown, and the notes on how it is measured.</summary>
+    /// <summary>The tab <c>/usage</c> opens: the tally as it stands when shown (the Notes tab gone since 2026-09-28).</summary>
     private IReadOnlyList<InfoTab> UsageTabs() =>
     [
-        new(UsageText.TokensTabTitle, () => UsageText.TokensTab(_session.Usage, _session.ContextLength)),
-        new(UsageText.NotesTabTitle, UsageText.NotesTab),
+        new(UsageText.StatisticsTabTitle, () => UsageText.StatisticsTab(_session.Usage, _session.ContextLength)),
     ];
 
     /// <summary>

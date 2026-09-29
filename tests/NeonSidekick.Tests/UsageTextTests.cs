@@ -175,7 +175,7 @@ public class UsageTextTests
 
         using var console = new TestConsole();
         console.Profile.Width = 2000;
-        console.Write(UsageText.TokensTab(tally, null));
+        console.Write(UsageText.StatisticsTab(tally, null));
         string[] lines = Lines(console);
         Assert.Equal("Skill learning       2 requests · 3,120 tokens", lines[^2]);   // under the launch section's blank row
 
@@ -227,11 +227,11 @@ public class UsageTextTests
     }
 
     [Fact]
-    public void TokensTab_RendersAHeadingPerScope_OverItsRows()
+    public void StatisticsTab_RendersAHeadingPerScope_OverItsRows()
     {
         using var console = new TestConsole();
         console.Profile.Width = 2000;
-        console.Write(UsageText.TokensTab(Filled(), Window));
+        console.Write(UsageText.StatisticsTab(Filled(), Window));
 
         string[] lines = Lines(console);
         // The Context section first, its source dim in the value column.
@@ -265,16 +265,16 @@ public class UsageTextTests
     }
 
     [Fact]
-    public void TokensTab_NamesTheRepliesWithoutAReport_AndTheEmptyTally()
+    public void StatisticsTab_NamesTheRepliesWithoutAReport_AndTheEmptyTally()
     {
         using var empty = new TestConsole();
-        empty.Write(UsageText.TokensTab(new TokenTally(), null));
+        empty.Write(UsageText.StatisticsTab(new TokenTally(), null));
         Assert.Equal(UsageText.NothingCounted, empty.Output);
 
         // A known window before the first reply: the Context section, then the empty note.
         using var known = new TestConsole();
         known.Profile.Width = 2000;
-        known.Write(UsageText.TokensTab(new TokenTally(), Window));
+        known.Write(UsageText.StatisticsTab(new TokenTally(), Window));
         string[] before = Lines(known);
         Assert.Equal("Context                  max_model_len on /v1/models", before[0]);
         Assert.Equal("Window                   4,096", before[1]);
@@ -290,7 +290,7 @@ public class UsageTextTests
 
         using var console = new TestConsole();
         console.Profile.Width = 2000;
-        console.Write(UsageText.TokensTab(tally, null));
+        console.Write(UsageText.StatisticsTab(tally, null));
 
         string[] lines = Lines(console);
         // The aggregates carry the Time to first token row now (2026-09-17), the widest label of the grid.
@@ -309,40 +309,6 @@ public class UsageTextTests
 
     /// <summary>The rendered rows with the grid's column padding trimmed off.</summary>
     private static string[] Lines(TestConsole console) => console.Output.Split('\n').Select(l => l.TrimEnd()).ToArray();
-
-    [Fact]
-    public void NotesTab_IsEveryNote_ABlankRowBetween()
-    {
-        using var console = new TestConsole();
-        console.Profile.Width = 2000;
-        console.Write(UsageText.NotesTab());
-
-        string[] lines = console.Output.Split('\n');
-        Assert.Equal(UsageText.Notes.Count * 2 + 1, lines.Length);
-        for (int i = 0; i < UsageText.Notes.Count; i++)
-        {
-            Assert.Equal(UsageText.Notes[i], lines[i * 2]);
-            Assert.Equal(" ", lines[i * 2 + 1]);
-        }
-
-        Assert.Equal(10, UsageText.Notes.Count);   // the Claude API's cache and cost since 2026-09-27
-        Assert.StartsWith("After a compact (/compact, or LLM auto compact (%)) the context in use is measured again at the next reply", UsageText.Notes[8]);
-        Assert.StartsWith("The counts are the server's own usage report", UsageText.Notes[0]);
-        Assert.Contains("the last request's prompt plus its completion is the context in use", UsageText.Notes[1]);
-        Assert.Contains("the conversation and launch totals sum every request", UsageText.Notes[1]);
-        Assert.Contains("thinking included", UsageText.Notes[2]);
-        Assert.Contains("A picture in the conversation is tokenised by the server and counted in the prompt figure", UsageText.Notes[2]);
-        Assert.StartsWith("Reasoning is the thinking's share of the completion", UsageText.Notes[3]);
-        Assert.Contains("SGLang at the top of usage", UsageText.Notes[3]);
-        Assert.Contains("Ollama counts none", UsageText.Notes[3]);
-        Assert.Contains("0 is a report too", UsageText.Notes[3]);
-        Assert.Contains("the prefill", UsageText.Notes[4]);
-        Assert.Contains("the wait per request", UsageText.Notes[4]);
-        Assert.Contains("max_model_len or context_length on /v1/models", UsageText.Notes[5]);
-        Assert.Contains("NEONSIDEKICK_LLM_CONTEXT", UsageText.Notes[5]);
-        Assert.Contains("never as zeros", UsageText.Notes[6]);
-        Assert.Contains("Nothing is saved", UsageText.Notes[7]);
-    }
 
     [Fact]
     public void Lines_DropTheSpeed_WhenNothingWasGenerated()
