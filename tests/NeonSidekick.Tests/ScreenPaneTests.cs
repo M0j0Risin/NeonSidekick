@@ -151,28 +151,29 @@ public class ScreenPaneTests : IDisposable
     }
 
     /// <summary>
-    /// The upper rule's ↘️↖️ (2026-09-28, the user's layout): after the rule's first glyph and a space, side by side, then
-    /// the titled rule over the rest with no space (the space moved to their left later that day, the user's screenshot);
-    /// without folds, or too narrow to keep the title's least rule after them, the rule as before.
+    /// The upper rule's ⤡ (2026-09-29, the user's glyph, in place of the ↘️↖️ pair): after the rule's first glyph with a
+    /// space either side, then the titled rule over the rest; without folds, or too narrow to keep the title's least rule
+    /// after it, the rule as before.
     /// </summary>
     [Fact]
     public void UpperRule_IsPinned()
     {
-        const string buttons = "↘️↖️";
+        Assert.Equal("⤡", ScreenPane.FoldGlyph);
+        Assert.Equal(1, TextCells.Width(ScreenPane.FoldGlyph));
         var parts = ScreenPane.UpperRule("", folds: true, 40);
-        Assert.Equal("─ " + buttons + Rule(34), parts.Text);
+        Assert.Equal("─ ⤡ " + Rule(36), parts.Text);
         Assert.Equal(40, TextCells.Width(parts.Text));
-        Assert.Equal(("─ ", buttons), (parts.Lead, parts.Buttons));
-        Assert.Equal((2, 4), (parts.ExpandColumn, parts.CollapseColumn));
+        Assert.Equal(("─ ", "⤡ "), (parts.Lead, parts.Button));
+        Assert.Equal(2, parts.FoldColumn);
 
-        Assert.Equal("─ " + buttons + ScreenPane.RuleWithTitle("notes", 34), ScreenPane.UpperRule("notes", folds: true, 40).Text);
+        Assert.Equal("─ ⤡ " + ScreenPane.RuleWithTitle("notes", 36), ScreenPane.UpperRule("notes", folds: true, 40).Text);
 
         var plain = ScreenPane.UpperRule("notes", folds: false, 40);
-        Assert.Equal((ScreenPane.RuleWithTitle("notes", 40), -1, -1), (plain.Text, plain.ExpandColumn, plain.CollapseColumn));
+        Assert.Equal((ScreenPane.RuleWithTitle("notes", 40), -1), (plain.Text, plain.FoldColumn));
 
-        Assert.Equal("─ " + buttons + Rule(ScreenPane.RuleTitleMinRule), ScreenPane.UpperRule("", folds: true, 6 + ScreenPane.RuleTitleMinRule).Text);
-        var narrow = ScreenPane.UpperRule("", folds: true, 5 + ScreenPane.RuleTitleMinRule);   // the buttons go
-        Assert.Equal((Rule(5 + ScreenPane.RuleTitleMinRule), -1), (narrow.Text, narrow.ExpandColumn));
+        Assert.Equal("─ ⤡ " + Rule(ScreenPane.RuleTitleMinRule), ScreenPane.UpperRule("", folds: true, 4 + ScreenPane.RuleTitleMinRule).Text);
+        var narrow = ScreenPane.UpperRule("", folds: true, 3 + ScreenPane.RuleTitleMinRule);   // the button goes
+        Assert.Equal((Rule(3 + ScreenPane.RuleTitleMinRule), -1), (narrow.Text, narrow.FoldColumn));
     }
 
     /// <summary>
@@ -238,20 +239,20 @@ public class ScreenPaneTests : IDisposable
     }
 
     /// <summary>
-    /// The upper rule's ↘️↖️ (2026-09-28): drawn once a run folds, not before; ↘️ (with the space at its left) unfolds
-    /// and ↖️ (with the rule glyph at its right) folds; under an overlay they go, and they come back when it closes.
+    /// The upper rule's ⤡ (2026-09-28 as ↘️↖️, one button since 2026-09-29): drawn once a run folds, not before; it takes a
+    /// click on itself and the space either side; under an overlay it goes, and it comes back when it closes.
     /// </summary>
     [Fact]
-    public void FoldButtons_ShowOnceARunFolds_AndHitTheirOwnHalves()
+    public void FoldButton_ShowsOnceARunFolds_AndTakesAClickOnItselfAndItsSpaces()
     {
         _cursorTop = 100;   // the upper rule at 99
         using var pane = Pane();
         pane.Show();
-        Assert.False(pane.TryHitFoldButton(1, 99, out _));   // nothing folds yet
+        Assert.False(pane.TryHitFoldButton(1, 99));   // nothing folds yet
         pane.BeginToolGroup(1);
         pane.SetToolGroupSummary(new Markup("S"), new Markup("E"));
         pane.WriteToolLine(new Markup("m1\n"));
-        Assert.False(pane.TryHitFoldButton(1, 99, out _));   // one line: under the keep, drawn as it is
+        Assert.False(pane.TryHitFoldButton(1, 99));   // one line: under the keep, drawn as it is
 
         int mark = Output.Length;
         pane.WriteToolLine(new Markup("m2\n"));   // past the keep: the run folds, and the rule shows it (the redraw, or the tick)
@@ -259,21 +260,14 @@ public class ScreenPaneTests : IDisposable
         _time.Advance(ScreenPane.Tick);
         Assert.Contains(ScreenPane.UpperRule("", folds: true, 40).Text + "\n" + InputLine.PromptGlyph, Output[mark..]);
 
-        foreach (int x in new[] { 1, 2, 3 })
+        foreach (int x in new[] { 1, 2, 3 })   // the space, ⤡, the space
         {
-            Assert.True(pane.TryHitFoldButton(x, 99, out bool expand));
-            Assert.True(expand);
+            Assert.True(pane.TryHitFoldButton(x, 99));
         }
 
-        foreach (int x in new[] { 4, 5, 6 })
-        {
-            Assert.True(pane.TryHitFoldButton(x, 99, out bool expand));
-            Assert.False(expand);
-        }
-
-        Assert.False(pane.TryHitFoldButton(0, 99, out _));
-        Assert.False(pane.TryHitFoldButton(7, 99, out _));
-        Assert.False(pane.TryHitFoldButton(2, 98, out _));
+        Assert.False(pane.TryHitFoldButton(0, 99));
+        Assert.False(pane.TryHitFoldButton(4, 99));
+        Assert.False(pane.TryHitFoldButton(2, 98));
 
         // Unchanged: the tick leaves the rule alone.
         mark = Output.Length;
@@ -281,9 +275,9 @@ public class ScreenPaneTests : IDisposable
         Assert.Equal("", Output[mark..]);
 
         pane.ShowOverlay(new Markup("a"), "ESC closes");
-        Assert.False(pane.TryHitFoldButton(2, 99, out _));
+        Assert.False(pane.TryHitFoldButton(2, 99));
         pane.CloseOverlay();
-        Assert.True(pane.TryHitFoldButton(2, 99, out _));
+        Assert.True(pane.TryHitFoldButton(2, 99));
     }
 
     [Fact]

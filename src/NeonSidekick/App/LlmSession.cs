@@ -2,7 +2,7 @@ using Microsoft.Extensions.AI;
 using NeonSidekick.Diagnostics;
 using NeonSidekick.Llm;
 using NeonSidekick.Llm.Anthropic;
-using NeonSidekick.LocalLlm;
+using NeonSidekick.EmbeddedLlm;
 using NeonSidekick.Settings;
 using NeonSidekick.Skills;
 
@@ -37,7 +37,7 @@ internal sealed class LlmSession : IDisposable
     private (string Key, ServerSampling? Found)? _serverSampling;
     private readonly Func<LlmEndpoint, LlmTimeouts, IChatClient> _factory;
     private readonly TimeProvider _time;
-    private readonly ILocalLlm? _local;
+    private readonly IEmbeddedLlm? _embedded;
     private IChatClient? _client;
     private AppSettingsData _effective = new();
     private string _apiKey = LlmEndpoint.DefaultApiKey;
@@ -50,10 +50,10 @@ internal sealed class LlmSession : IDisposable
     /// <param name="contextProbe">Asks the connected server for the loaded model's context window after each connect.</param>
     /// <param name="time">The clock behind the assistant's turn deadline and its usage timings; tests pass a manual one.</param>
     /// <param name="samplingProbe">Asks the connected server for its sampling defaults when the <c>/sampling</c> pane wants them (<see cref="ServerSamplingAsync"/>); null asks nothing.</param>
-    /// <param name="local">The local model (2026-09-29): its catalog's <c>/server</c> rows and the server a local URL starts; null offers none.</param>
-    public LlmSession(LlmEndpointProbe probe, ContextLengthProbe contextProbe, Func<LlmEndpoint, LlmTimeouts, IChatClient> factory, TimeProvider? time = null, ServerSamplingProbe? samplingProbe = null, ILocalLlm? local = null)
+    /// <param name="embedded">The embedded model (2026-09-29): its catalog's <c>/server</c> rows and the server an embedded URL starts; null offers none.</param>
+    public LlmSession(LlmEndpointProbe probe, ContextLengthProbe contextProbe, Func<LlmEndpoint, LlmTimeouts, IChatClient> factory, TimeProvider? time = null, ServerSamplingProbe? samplingProbe = null, IEmbeddedLlm? embedded = null)
     {
-        _local = local;
+        _embedded = embedded;
         _probe = probe ?? throw new ArgumentNullException(nameof(probe));
         _contextProbe = contextProbe ?? throw new ArgumentNullException(nameof(contextProbe));
         _samplingProbe = samplingProbe;
@@ -77,11 +77,11 @@ internal sealed class LlmSession : IDisposable
     /// <summary>Non-null when a chat client exists.</summary>
     public Assistant? Assistant { get; private set; }
 
-    /// <summary>The local model's catalog, installs and server (2026-09-29); null when this session offers none.</summary>
-    public ILocalLlm? Local => _local;
+    /// <summary>The embedded model's catalog, installs and server (2026-09-29); null when this session offers none.</summary>
+    public IEmbeddedLlm? Embedded => _embedded;
 
-    /// <summary>The local server the current endpoint runs on (2026-09-29); null for any other endpoint or when it did not start.</summary>
-    public LocalServerInfo? LocalServer { get; private set; }
+    /// <summary>The embedded server the current endpoint runs on (2026-09-29); null for any other endpoint or when it did not start.</summary>
+    public EmbeddedServerInfo? EmbeddedServer { get; private set; }
 
     public LlmTimeouts Timeouts { get; private set; } = LlmTimeouts.Default;
 
@@ -111,9 +111,9 @@ internal sealed class LlmSession : IDisposable
         ConnectAsync(effective, phase: null, cancellationToken);
 
     /// <summary>
-    /// <see cref="ConnectAsync(AppSettingsData, CancellationToken)"/> with a word for the spinner (2026-09-29): a local
-    /// URL starts the local server (<see cref="ResolveLocalAsync"/>) — the llama.cpp runtime downloaded first when
-    /// missing, then the model loaded — and <paramref name="phase"/> is told each step. Any other URL stops a local
+    /// <see cref="ConnectAsync(AppSettingsData, CancellationToken)"/> with a word for the spinner (2026-09-29): an embedded
+    /// URL starts the embedded server (<see cref="ResolveEmbeddedAsync"/>) — the llama.cpp runtime downloaded first when
+    /// missing, then the model loaded — and <paramref name="phase"/> is told each step. Any other URL stops an embedded
     /// server this session had running, so its memory is free for whatever runs next.
     /// </summary>
     public async Task<bool> ConnectAsync(AppSettingsData effective, Action<string>? phase, CancellationToken cancellationToken)
@@ -122,16 +122,16 @@ internal sealed class LlmSession : IDisposable
         Reconnecting();
         Remember(effective);
 
-        if (LocalEndpoint.IsLocal(effective.LlmUrl))
+        if (EmbeddedEndpoint.IsEmbedded(effective.LlmUrl))
         {
-            Endpoint = await ResolveLocalAsync(effective, phase, cancellationToken).ConfigureAwait(false);
+            Endpoint = await ResolveEmbeddedAsync(effective, phase, cancellationToken).ConfigureAwait(false);
             return Endpoint is { LiveUrl: not null } && await ConnectAsync(effective, Endpoint, cancellationToken).ConfigureAwait(false);
         }
 
-        LocalServer = null;
-        if (_local?.Running is not null)
+        EmbeddedServer = null;
+        if (_embedded?.Running is not null)
         {
-            _local.Stop();
+            _embedded.Stop();
         }
 
         Endpoint = await _probe.ResolveAsync(effective, cancellationToken).ConfigureAwait(false);
@@ -139,85 +139,85 @@ internal sealed class LlmSession : IDisposable
     }
 
     /// <summary>
-    /// The local model's endpoint (2026-09-29): the catalog model <c>LLM model</c> names, else the first installed one,
-    /// started on the local server. The endpoint's base is the sentinel (<see cref="LocalEndpoint.BaseUrl"/>, what the
+    /// The embedded model's endpoint (2026-09-29): the catalog model <c>LLM model</c> names, else the first installed one,
+    /// started on the embedded server. The endpoint's base is the sentinel (<see cref="EmbeddedEndpoint.BaseUrl"/>, what the
     /// user sees), its <see cref="LlmEndpoint.LiveUrl"/> the loopback port it listens on and its key the start's own.
     /// A start that fails is logged as an error and leaves an endpoint with no live URL — the screen then knows which
-    /// model was meant, and no client is built. Null when there is no local model to start at all.
+    /// model was meant, and no client is built. Null when there is no embedded model to start at all.
     /// </summary>
-    private async Task<LlmEndpoint?> ResolveLocalAsync(AppSettingsData effective, Action<string>? phase, CancellationToken cancellationToken)
+    private async Task<LlmEndpoint?> ResolveEmbeddedAsync(AppSettingsData effective, Action<string>? phase, CancellationToken cancellationToken)
     {
-        LocalServer = null;
-        if (_local is null || !LocalEndpoint.Offered)
+        EmbeddedServer = null;
+        if (_embedded is null || !EmbeddedEndpoint.Offered)
         {
-            DiagnosticLog.Error(Category, LocalUnavailable);
+            DiagnosticLog.Error(Category, EmbeddedUnavailable);
             return null;
         }
 
-        var model = LocalModelFor(effective.LlmModel);
+        var model = EmbeddedModelFor(effective.LlmModel);
         if (model is null)
         {
             string id = (effective.LlmModel ?? "").Trim();
-            DiagnosticLog.Error(Category, id.Length == 0 ? LocalLlmText.NoneInstalled
-                : LocalModelCatalog.Find(id, _local.Catalog) is { } known ? LocalLlmText.NotInstalled(known)
-                : LocalLlmText.UnknownModel(id));
+            DiagnosticLog.Error(Category, id.Length == 0 ? EmbeddedLlmText.NoneInstalled
+                : EmbeddedModelCatalog.Find(id, _embedded.Catalog) is { } known ? EmbeddedLlmText.NotInstalled(known)
+                : EmbeddedLlmText.UnknownModel(id));
             return null;
         }
 
         try
         {
-            var info = await _local.StartAsync(model, effective, phase, cancellationToken).ConfigureAwait(false);
-            LocalServer = info;
-            return LocalEndpointOf(info);
+            var info = await _embedded.StartAsync(model, effective, phase, cancellationToken).ConfigureAwait(false);
+            EmbeddedServer = info;
+            return EmbeddedEndpointOf(info);
         }
-        catch (LocalLlmException ex)
+        catch (EmbeddedLlmException ex)
         {
             DiagnosticLog.Error(Category, ex.Message);
-            return new LlmEndpoint(LocalEndpoint.BaseUrl, model.Id, LlmEndpoint.DefaultApiKey, LocalNotRunningSource);
+            return new LlmEndpoint(EmbeddedEndpoint.BaseUrl, model.Id, LlmEndpoint.DefaultApiKey, EmbeddedNotRunningSource);
         }
     }
 
     /// <summary>
     /// The catalog model <paramref name="id"/> names when it is installed; with no id, the first installed one (so
-    /// <c>--url local</c> alone runs something). Null when neither: an unknown id, a named model not installed, nothing installed.
+    /// <c>--url embedded</c> alone runs something). Null when neither: an unknown id, a named model not installed, nothing installed.
     /// </summary>
-    public LocalModel? LocalModelFor(string? id)
+    public EmbeddedModel? EmbeddedModelFor(string? id)
     {
-        if (_local is null)
+        if (_embedded is null)
         {
             return null;
         }
 
         if (!string.IsNullOrWhiteSpace(id))
         {
-            return LocalModelCatalog.Find(id, _local.Catalog) is { } named && _local.State(named).IsInstalled ? named : null;
+            return EmbeddedModelCatalog.Find(id, _embedded.Catalog) is { } named && _embedded.State(named).IsInstalled ? named : null;
         }
 
-        return _local.Catalog.FirstOrDefault(m => _local.State(m).IsInstalled);
+        return _embedded.Catalog.FirstOrDefault(m => _embedded.State(m).IsInstalled);
     }
 
-    /// <summary>The source phrase of a local endpoint whose server did not start. Pinned.</summary>
-    public const string LocalNotRunningSource = "local, not running";
+    /// <summary>The source phrase of an embedded endpoint whose server did not start. Pinned.</summary>
+    public const string EmbeddedNotRunningSource = "embedded, not running";
 
-    /// <summary>The error when a local URL is set where no local model can run (another OS, a session without one). Pinned.</summary>
-    public const string LocalUnavailable = "The LLM URL names the local model, which is not available here (llama.cpp's Windows x64 builds only).";
+    /// <summary>The error when an embedded URL is set where no embedded model can run (another OS, a session without one). Pinned.</summary>
+    public const string EmbeddedUnavailable = "The LLM URL names the embedded model, which is not available here (llama.cpp's Windows x64 builds only).";
 
     /// <summary>
-    /// The <c>/server</c> rows of the local model (2026-09-29): one per catalog model, installed or not, asked nothing —
-    /// the row's detail says installed, how far a paused download got, or what it costs. None when no local model is offered.
+    /// The <c>/server</c> rows of the embedded model (2026-09-29): one per catalog model, installed or not, asked nothing —
+    /// the row's detail says installed, how far a paused download got, or what it costs. None when no embedded model is offered.
     /// </summary>
-    public IReadOnlyList<LlmServer> LocalRows()
+    public IReadOnlyList<LlmServer> EmbeddedRows()
     {
-        if (_local is not { } local || !LocalEndpoint.Offered)
+        if (_embedded is not { } embedded || !EmbeddedEndpoint.Offered)
         {
             return [];
         }
 
-        return local.Catalog.Select(model =>
+        return embedded.Catalog.Select(model =>
         {
-            var state = local.State(model);
-            var result = new ProbeResult(state.IsInstalled, [model.Id], LocalLlmText.RowDetail(state, LocalModelCatalog.TotalBytes(model)));
-            return new LlmServer(LocalEndpoint.BaseUrl, LocalEndpoint.ServerName, result);
+            var state = embedded.State(model);
+            var result = new ProbeResult(state.IsInstalled, [model.Id], EmbeddedLlmText.ModelDetail(model, state));
+            return new LlmServer(EmbeddedEndpoint.BaseUrl, EmbeddedEndpoint.ServerName, result);
         }).ToList();
     }
 
@@ -278,7 +278,7 @@ internal sealed class LlmSession : IDisposable
     }
 
     /// <summary>
-    /// The scan's servers, then the local model's rows (<see cref="LocalRows"/>, 2026-09-29), then — while the Claude
+    /// The scan's servers, then the embedded model's rows (<see cref="EmbeddedRows"/>, 2026-09-29), then — while the Claude
     /// API is offered (<see cref="ClaudeApi.Offered"/>, 2026-09-27) — its row last: asked for its model list with its own
     /// key alongside the scan, never scanned for, and listed whatever it answered (the row's detail then says why), so
     /// the switch and the key are all it takes to see it. The scan mode governs neither: <c>disabled</c> still lists them.
@@ -287,7 +287,7 @@ internal sealed class LlmSession : IDisposable
     {
         Task<ProbeResult>? claude = ClaudeApi.Offered(effective) ? _probe.ProbeAsync(ClaudeApi.BaseUrl, ClaudeApi.Key(effective), cancellationToken) : null;
         var servers = new List<LlmServer>(await scan.ConfigureAwait(false));
-        servers.AddRange(LocalRows());
+        servers.AddRange(EmbeddedRows());
         if (claude is not null)
         {
             var result = await claude.ConfigureAwait(false);
@@ -321,13 +321,13 @@ internal sealed class LlmSession : IDisposable
         Remember(effective);
         Endpoint = endpoint;
         _detectedContextLength = endpoint.PublishedContextLength;
-        if (!LocalEndpoint.IsLocal(endpoint.BaseUrl))
+        if (!EmbeddedEndpoint.IsEmbedded(endpoint.BaseUrl))
         {
-            // Another server picked (2026-09-29): the local one's memory is free again.
-            LocalServer = null;
-            if (_local?.Running is not null)
+            // Another server picked (2026-09-29): the embedded one's memory is free again.
+            EmbeddedServer = null;
+            if (_embedded?.Running is not null)
             {
-                _local.Stop();
+                _embedded.Stop();
             }
         }
 
@@ -389,27 +389,27 @@ internal sealed class LlmSession : IDisposable
 
             // The Claude API's key goes with its endpoint (2026-09-27): a borrowed Claude API is borrowed with it.
             // The profile's key decrypted first (2026-09-28): the file keeps it DPAPI-encrypted like the other two.
-            // The local server's per-start key and its one model go with it too (2026-09-29).
+            // The embedded server's per-start key and its one model go with it too (2026-09-29).
             string own = LlmEndpoint.KeyOf(profile);
-            bool local = LocalEndpoint.IsLocal(starter.BaseUrl);
-            if (local && starter.LiveUrl is null)
+            bool embedded = EmbeddedEndpoint.IsEmbedded(starter.BaseUrl);
+            if (embedded && starter.LiveUrl is null)
             {
                 return (null, BotLinkNoServer);
             }
 
-            string key = ClaudeApi.IsClaudeApi(starter.BaseUrl) || local ? starter.ApiKey
+            string key = ClaudeApi.IsClaudeApi(starter.BaseUrl) || embedded ? starter.ApiKey
                 : string.IsNullOrWhiteSpace(own) || own == LlmEndpoint.DefaultApiKey ? _apiKey : own;
-            endpoint = starter with { ModelId = local ? starter.ModelId : model ?? starter.ModelId, ApiKey = key, PublishedContextLength = null };
+            endpoint = starter with { ModelId = embedded ? starter.ModelId : model ?? starter.ModelId, ApiKey = key, PublishedContextLength = null };
         }
-        else if (LocalEndpoint.IsLocal(profile.LlmUrl))
+        else if (EmbeddedEndpoint.IsEmbedded(profile.LlmUrl))
         {
-            var (local, problem) = await LinkLocalAsync(profile, model, cancellationToken).ConfigureAwait(false);
-            if (local is null)
+            var (embedded, problem) = await LinkEmbeddedAsync(profile, model, cancellationToken).ConfigureAwait(false);
+            if (embedded is null)
             {
                 return (null, problem);
             }
 
-            endpoint = local;
+            endpoint = embedded;
         }
         else
         {
@@ -445,49 +445,49 @@ internal sealed class LlmSession : IDisposable
     }
 
     /// <summary>
-    /// A bot's link to the local server (2026-09-29): one local server at a time, so a bot whose profile names the local
+    /// A bot's link to the embedded server (2026-09-29): one embedded server at a time, so a bot whose profile names the embedded
     /// model uses the one running — refused when that is a different model — or, with none running, starts the model its
     /// profile names (installed only: a botchat never downloads) and uses that.
     /// </summary>
-    private async Task<(LlmEndpoint? Endpoint, string? Problem)> LinkLocalAsync(AppSettingsData profile, string? model, CancellationToken cancellationToken)
+    private async Task<(LlmEndpoint? Endpoint, string? Problem)> LinkEmbeddedAsync(AppSettingsData profile, string? model, CancellationToken cancellationToken)
     {
-        if (_local is null || !LocalEndpoint.Offered)
+        if (_embedded is null || !EmbeddedEndpoint.Offered)
         {
-            return (null, LocalUnavailable);
+            return (null, EmbeddedUnavailable);
         }
 
-        if (_local.Running is { } running)
+        if (_embedded.Running is { } running)
         {
             if (model is not null && !string.Equals(model, running.ModelId, StringComparison.OrdinalIgnoreCase))
             {
-                string display = LocalModelCatalog.Find(running.ModelId, _local.Catalog)?.Display ?? running.ModelId;
-                return (null, LocalLlmText.OneModelAtATime(display));
+                string display = EmbeddedModelCatalog.Find(running.ModelId, _embedded.Catalog)?.Display ?? running.ModelId;
+                return (null, EmbeddedLlmText.OneModelAtATime(display));
             }
 
-            return (LocalEndpointOf(running), null);
+            return (EmbeddedEndpointOf(running), null);
         }
 
-        var wanted = LocalModelFor(model);
+        var wanted = EmbeddedModelFor(model);
         if (wanted is null)
         {
-            return (null, model is not null && LocalModelCatalog.Find(model, _local.Catalog) is { } known ? LocalLlmText.NotInstalled(known) : LocalLlmText.NoneInstalled);
+            return (null, model is not null && EmbeddedModelCatalog.Find(model, _embedded.Catalog) is { } known ? EmbeddedLlmText.NotInstalled(known) : EmbeddedLlmText.NoneInstalled);
         }
 
         try
         {
-            return (LocalEndpointOf(await _local.StartAsync(wanted, profile, null, cancellationToken).ConfigureAwait(false)), null);
+            return (EmbeddedEndpointOf(await _embedded.StartAsync(wanted, profile, null, cancellationToken).ConfigureAwait(false)), null);
         }
-        catch (LocalLlmException ex)
+        catch (EmbeddedLlmException ex)
         {
             return (null, ex.Message);
         }
     }
 
-    private static LlmEndpoint LocalEndpointOf(LocalServerInfo info) =>
-        new(LocalEndpoint.BaseUrl, info.ModelId, info.ApiKey, LocalLlmText.Source(info)) { LiveUrl = info.BaseUrl };
+    private static LlmEndpoint EmbeddedEndpointOf(EmbeddedServerInfo info) =>
+        new(EmbeddedEndpoint.BaseUrl, info.ModelId, info.ApiKey, EmbeddedLlmText.Source(info)) { LiveUrl = info.BaseUrl };
 
-    /// <summary>The key a probe of <paramref name="endpoint"/> carries: a local server's own per-start key, else the settings'.</summary>
-    private string KeyFor(LlmEndpoint endpoint) => LocalEndpoint.IsLocal(endpoint.BaseUrl) ? endpoint.ApiKey : _apiKey;
+    /// <summary>The key a probe of <paramref name="endpoint"/> carries: an embedded server's own per-start key, else the settings'.</summary>
+    private string KeyFor(LlmEndpoint endpoint) => EmbeddedEndpoint.IsEmbedded(endpoint.BaseUrl) ? endpoint.ApiKey : _apiKey;
 
     /// <summary><see cref="LinkAsync"/>'s problem for a borrowed server while this session has none. Pinned.</summary>
     public const string BotLinkNoServer = "no LLM URL of its own and no server connected to borrow";
@@ -509,17 +509,17 @@ internal sealed class LlmSession : IDisposable
     /// </summary>
     public Task<ProbeResult?> ListModelsAsync(CancellationToken cancellationToken)
     {
-        if (LocalEndpoint.IsLocal(Endpoint?.BaseUrl) || (Endpoint is null && LocalEndpoint.IsLocal(_configuredUrl)))
+        if (EmbeddedEndpoint.IsEmbedded(Endpoint?.BaseUrl) || (Endpoint is null && EmbeddedEndpoint.IsEmbedded(_configuredUrl)))
         {
-            // The local model (2026-09-29): its list is the installed catalog models, asked of no server — a pick restarts
+            // The embedded model (2026-09-29): its list is the installed catalog models, asked of no server — a pick restarts
             // the one server with the other model.
-            if (_local is not { } local)
+            if (_embedded is not { } embedded)
             {
                 return Task.FromResult<ProbeResult?>(null);
             }
 
-            var installed = local.Catalog.Where(m => local.State(m).IsInstalled).Select(m => m.Id).ToList();
-            string detail = installed.Count == 1 ? "1 local model" : $"{installed.Count.ToString(System.Globalization.CultureInfo.InvariantCulture)} local models";
+            var installed = embedded.Catalog.Where(m => embedded.State(m).IsInstalled).Select(m => m.Id).ToList();
+            string detail = installed.Count == 1 ? "1 embedded model" : $"{installed.Count.ToString(System.Globalization.CultureInfo.InvariantCulture)} embedded models";
             return Task.FromResult<ProbeResult?>(new ProbeResult(installed.Count > 0, installed, detail));
         }
 

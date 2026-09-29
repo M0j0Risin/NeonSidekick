@@ -63,8 +63,8 @@ public class EnvironmentOverridesTests
             (EnvironmentOverrides.LlmSamplingVariable, " {\"temperature\":0.3} "),
             (EnvironmentOverrides.HomeAssistantUrlVariable, " http://localhost:8123 "),
             (EnvironmentOverrides.HomeAssistantTokenVariable, " ha-token "),
-            (EnvironmentOverrides.LocalBackendVariable, " Vulkan "),
-            (EnvironmentOverrides.LocalContextVariable, "16384"));
+            (EnvironmentOverrides.EmbeddedBackendVariable, " Vulkan "),
+            (EnvironmentOverrides.EmbeddedContextVariable, "16384"));
 
         var e = env.ApplyTo(new AppSettingsData());
 
@@ -97,8 +97,8 @@ public class EnvironmentOverridesTests
         Assert.Equal(0.3, e.LlmSampling!["*"].Temperature);   // laid over every model (2026-09-28)
         Assert.Equal("http://localhost:8123", e.HomeAssistantUrl);   // trimmed (2026-09-28)
         Assert.Equal("ha-token", e.HomeAssistantToken);   // trimmed (2026-09-28)
-        Assert.Equal("vulkan", e.LocalBackend);   // any case, trimmed, the saved word (2026-09-29)
-        Assert.Equal(16_384, e.LocalContextSize);   // (2026-09-29)
+        Assert.Equal("vulkan", e.EmbeddedBackend);   // any case, trimmed, the saved word (2026-09-29)
+        Assert.Equal(16_384, e.EmbeddedContextSize);   // (2026-09-29)
         Assert.Equal(EnvironmentOverrides.AllVariables.Length - 2, env.ActiveVariables().Count);   // everything but HOME and PROFILE
     }
 

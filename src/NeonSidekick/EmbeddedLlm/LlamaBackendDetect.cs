@@ -1,15 +1,15 @@
 using System.Diagnostics;
 using System.Globalization;
 
-namespace NeonSidekick.LocalLlm;
+namespace NeonSidekick.EmbeddedLlm;
 
-/// <summary>The backend a start will use, and why — the <c>Local backend</c> row and the log both say it.</summary>
+/// <summary>The backend a start will use, and why — the <c>Embedded backend</c> row and the log both say it.</summary>
 public sealed record BackendChoice(LlamaBackend Backend, string Reason);
 
 /// <summary>
-/// The <c>Local backend</c> setting's values (2026-09-29): <c>auto</c> (the default) or one backend forced.
+/// The <c>Embedded backend</c> setting's values (2026-09-29): <c>auto</c> (the default) or one backend forced.
 /// </summary>
-public static class LocalBackends
+public static class EmbeddedBackends
 {
     public const string Auto = "auto";
 
@@ -60,7 +60,7 @@ public static class LlamaBackendDetect
         ArgumentNullException.ThrowIfNull(fileVersion);
         ArgumentNullException.ThrowIfNull(systemDirectory);
 
-        if (LocalBackends.Forced(setting) is { } forced)
+        if (EmbeddedBackends.Forced(setting) is { } forced)
         {
             return new BackendChoice(forced, "forced in settings");
         }

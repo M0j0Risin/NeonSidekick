@@ -114,7 +114,7 @@ public sealed class Scrollback
 
     /// <summary>
     /// Some tool run, code block or thinking block in the store folds (<see cref="Group.Folds"/>): what the upper rule's
-    /// ↘️↖️ are drawn for (2026-09-28, the user's ask: the buttons only while there is something to unfold or fold). A run
+    /// ⤡ is drawn for (2026-09-28, the user's ask: the button only while there is something to unfold or fold). A run
     /// under its keep count and a block still streaming do not count. Read on the tick, so a plain loop.
     /// </summary>
     public bool AnyFolds

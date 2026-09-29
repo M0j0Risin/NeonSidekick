@@ -18,7 +18,7 @@ public enum ReasoningEstimate
 
 /// <summary>
 /// The setting <c>LLM reasoning estimate</c> (2026-09-29, the user's ask: llama.cpp streams a model's thinking but
-/// reports no reasoning count, so <c>/usage</c> read <c>—</c> for Gemma 4 on the local LLM; "make it a setting to choose
+/// reports no reasoning count, so <c>/usage</c> read <c>—</c> for Gemma 4 on the embedded LLM; "make it a setting to choose
 /// between" the heuristic and the tokenizer). <c>chars</c> (the default) divides the thinking's characters by four,
 /// <c>tokenize</c> asks the server's <c>/tokenize</c> for the exact count, <c>off</c> leaves the count unreported. An
 /// estimate is marked <c>~</c> wherever it shows, and a server's own count — <c>0</c> included — is never replaced.

@@ -21,8 +21,8 @@ public sealed record LlmEndpoint(Uri BaseUrl, string ModelId, string ApiKey, str
     public const string DefaultApiKey = "empty";
 
     /// <summary>
-    /// Where requests really go when <see cref="BaseUrl"/> is a sentinel (2026-09-29, the local model: its base URL is
-    /// <see cref="LocalLlm.LocalEndpoint.BaseUrl"/>, which names it everywhere the user sees it, while the server runs on
+    /// Where requests really go when <see cref="BaseUrl"/> is a sentinel (2026-09-29, the embedded model: its base URL is
+    /// <see cref="EmbeddedLlm.EmbeddedEndpoint.BaseUrl"/>, which names it everywhere the user sees it, while the server runs on
     /// a loopback port chosen at each start). Null for every other server.
     /// </summary>
     public Uri? LiveUrl { get; init; }
@@ -67,10 +67,10 @@ public sealed record LlmEndpoint(Uri BaseUrl, string ModelId, string ApiKey, str
         }
 
         var trimmed = raw.Trim();
-        if (string.Equals(trimmed, LocalLlm.LocalEndpoint.Alias, StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(trimmed, EmbeddedLlm.EmbeddedEndpoint.Alias, StringComparison.OrdinalIgnoreCase))
         {
-            // The local model (2026-09-29): "local" wherever a URL is typed stands for its sentinel.
-            return LocalLlm.LocalEndpoint.BaseUrl;
+            // The embedded model (2026-09-29): "embedded" wherever a URL is typed stands for its sentinel.
+            return EmbeddedLlm.EmbeddedEndpoint.BaseUrl;
         }
 
         if (!Uri.TryCreate(trimmed, UriKind.Absolute, out var parsed)

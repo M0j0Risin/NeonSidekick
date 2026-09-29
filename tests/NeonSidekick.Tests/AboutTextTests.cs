@@ -114,7 +114,7 @@ public class AboutTextTests
         Assert.DoesNotContain(AboutText.Components, c => c.Name.StartsWith("CLDR", StringComparison.Ordinal) || c.Name.Contains("Kokoro-FastAPI", StringComparison.Ordinal));
         Assert.Equal("MCP client", Assert.Single(AboutText.Components, c => c.Name == "ModelContextProtocol.Core").Role);
         Assert.Equal(
-            ["Spectre.Console", "Microsoft.Extensions.AI (+ .OpenAI)", "OpenAI (.NET SDK)", "Microsoft.ML.OnnxRuntime", "Microsoft.Data.Sqlite", "ModelContextProtocol.Core", "LibGit2Sharp", "LibGit2Sharp.NativeBinaries", "Microsoft.Data.SqlClient", "SqlServer.TransactSql.ScriptDom", "KokoroSharp", "Kokoro-82M in-process", "Whisper.net", "Whisper ggml models", "Vosk", "Vosk models", "Silero VAD", "PhotoSauce.MagicScaler", "Markdig", "llama.cpp (llama-server)", "Gemma 4 E2B / E4B (GGUF)"],
+            ["Spectre.Console", "Microsoft.Extensions.AI (+ .OpenAI)", "OpenAI (.NET SDK)", "Microsoft.ML.OnnxRuntime", "Microsoft.Data.Sqlite", "ModelContextProtocol.Core", "LibGit2Sharp", "LibGit2Sharp.NativeBinaries", "Microsoft.Data.SqlClient", "SqlServer.TransactSql.ScriptDom", "KokoroSharp", "Kokoro-82M in-process", "Whisper.net", "Whisper ggml models", "Vosk", "Vosk models", "Silero VAD", "PhotoSauce.MagicScaler", "Markdig", "llama.cpp (llama-server)", "Gemma 4 (GGUF)"],
             AboutText.Components.Select(c => c.Name));
         Assert.Equal(21, AboutText.Components.Count);   // llama.cpp and the Gemma 4 models since 2026-09-29; SqlClient and ScriptDom since 2026-09-23
         Assert.Equal("b11258", Assert.Single(AboutText.Components, c => c.Name == "llama.cpp (llama-server)").Version);
@@ -164,7 +164,7 @@ public class AboutTextTests
     public void AboutRows_InOrder_UnknownExecutableNamed()
     {
         var rows = AboutText.AboutRows(Facts);
-        Assert.Equal(["Runtime", "OS", "Executable", "Home", "Profile", "Models", "LLM servers", "Local LLM", "Speech"], rows.Select(r => r.Label));
+        Assert.Equal(["Runtime", "OS", "Executable", "Home", "Profile", "Models", "LLM servers", "Embedded", "Speech"], rows.Select(r => r.Label));
         Assert.Equal(@"D:\Apps\NeonSidekick\NeonSidekick.exe", rows[2].Value);
         Assert.Equal(@"C:\Users\chris\.neonsidekick\profiles\default", rows[4].Value);
         Assert.Equal("llama.cpp b11258 · runtimes in " + Path.Combine(Facts.HomeDirectory, "llama") + " · models in " + Path.Combine(Facts.ModelsDirectory, "llm"), rows[7].Value);   // 2026-09-29
@@ -181,7 +181,7 @@ public class AboutTextTests
         Assert.Equal("  " + AboutText.CopyrightLine, lines[2]);
         Assert.Equal("  Runtime      .NET 10.0.0 · native AOT · x64", lines[3]);
         Assert.Equal(@"  Executable   D:\Apps\NeonSidekick\NeonSidekick.exe", lines[5]);
-        Assert.Equal("  Local LLM    " + AboutText.LocalLine(Facts), lines[10]);
+        Assert.Equal("  Embedded     " + AboutText.EmbeddedLine(Facts), lines[10]);
         Assert.Equal("  Speech       " + AboutText.SpeechLine, lines[11]);
         Assert.Equal("Components", lines[12]);
         Assert.Equal("  Spectre.Console 0.57.2 · MIT · the terminal UI: the transcript, the panes, the thumbnails", lines[13]);

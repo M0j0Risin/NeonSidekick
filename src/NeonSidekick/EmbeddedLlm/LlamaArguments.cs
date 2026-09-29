@@ -1,6 +1,6 @@
 using System.Globalization;
 
-namespace NeonSidekick.LocalLlm;
+namespace NeonSidekick.EmbeddedLlm;
 
 /// <summary>
 /// Everything one <c>llama-server</c> start depends on (2026-09-29). Its equality is the host's reuse test: a
@@ -17,7 +17,7 @@ public sealed record LlamaLaunch(
     string Alias,
     int ContextSize,
     string GpuLayers,
-    LocalSampling Sampling,
+    EmbeddedSampling Sampling,
     bool MayFallBack = false)
 {
     /// <summary>The runtime folder: the process's working directory, where its DLLs are found.</summary>
@@ -81,8 +81,8 @@ public static class LlamaArguments
     private static string Number(double value) => value.ToString("0.###", CultureInfo.InvariantCulture);
 }
 
-/// <summary>The <c>Local GPU layers</c> setting's values (2026-09-29): <c>auto</c> (llama.cpp fits what VRAM holds), <c>all</c>, or a count.</summary>
-public static class LocalGpuLayers
+/// <summary>The <c>Embedded GPU layers</c> setting's values (2026-09-29): <c>auto</c> (llama.cpp fits what VRAM holds), <c>all</c>, or a count.</summary>
+public static class EmbeddedGpuLayers
 {
     public const string Auto = "auto";
     public const string All = "all";
@@ -109,8 +109,8 @@ public static class LocalGpuLayers
     public static string Effective(string? setting) => Normalize(setting) ?? Auto;
 }
 
-/// <summary>The <c>Local context size</c> setting's range (2026-09-29): 0 for the model's own window, else 512 to 262144 tokens.</summary>
-public static class LocalContextSize
+/// <summary>The <c>Embedded context size</c> setting's range (2026-09-29): 0 for the model's own window, else 512 to 262144 tokens.</summary>
+public static class EmbeddedContextSize
 {
     public const int Default = 32_768;
     public const int Min = 512;

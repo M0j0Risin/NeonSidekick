@@ -4,10 +4,10 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using NeonSidekick.Diagnostics;
 
-namespace NeonSidekick.LocalLlm;
+namespace NeonSidekick.EmbeddedLlm;
 
 /// <summary>
-/// Ties a child process's life to the app's (2026-09-29, the local model's <c>llama-server</c>: gigabytes of VRAM that
+/// Ties a child process's life to the app's (2026-09-29, the embedded model's <c>llama-server</c>: gigabytes of VRAM that
 /// must not outlive a crash). The app's other children rely on <c>Kill(entireProcessTree)</c> at dispose, which a
 /// crashed, killed or <c>Environment.FailFast</c>ed process never reaches; a Windows job object with
 /// <c>KILL_ON_JOB_CLOSE</c> does not need the app's help — the kernel closes the job's one handle when the process
@@ -19,7 +19,7 @@ namespace NeonSidekick.LocalLlm;
 /// </summary>
 public static class ChildJob
 {
-    private const string Category = "LocalLlm";
+    private const string Category = "EmbeddedLlm";
     private static readonly Lock Gate = new();
     private static nint _job;
 

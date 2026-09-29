@@ -288,7 +288,7 @@ public class ScrollbackTests
     }
 
     /// <summary>
-    /// What the upper rule's ↘️↖️ are drawn for (2026-09-28): a run past its keep folds, one under it does not, a code block
+    /// What the upper rule's ⤡ is drawn for (2026-09-28): a run past its keep folds, one under it does not, a code block
     /// folds only once it ends, and a clear takes every fold with it.
     /// </summary>
     [Fact]

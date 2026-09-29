@@ -6,15 +6,15 @@ using System.Security.Cryptography;
 using System.Text;
 using NeonSidekick.Diagnostics;
 
-namespace NeonSidekick.LocalLlm;
+namespace NeonSidekick.EmbeddedLlm;
 
-/// <summary>A running local server: its <c>/v1</c> base on loopback, port, per-start key, backend, model id, and whether it reads images.</summary>
-public sealed record LocalServerInfo(Uri BaseUrl, int Port, string ApiKey, LlamaBackend Backend, string ModelId, bool Vision);
+/// <summary>A running embedded server: its <c>/v1</c> base on loopback, port, per-start key, backend, model id, and whether it reads images.</summary>
+public sealed record EmbeddedServerInfo(Uri BaseUrl, int Port, string ApiKey, LlamaBackend Backend, string ModelId, bool Vision);
 
-/// <summary>A local-model failure the user reads as it is (a start that failed, a runtime that would not install, a model not installed).</summary>
-public sealed class LocalLlmException : Exception
+/// <summary>An embedded-model failure the user reads as it is (a start that failed, a runtime that would not install, a model not installed).</summary>
+public sealed class EmbeddedLlmException : Exception
 {
-    public LocalLlmException(string message, bool portInUse = false, bool runtimeMissing = false)
+    public EmbeddedLlmException(string message, bool portInUse = false, bool runtimeMissing = false)
         : base(message)
     {
         PortInUse = portInUse;
@@ -32,20 +32,20 @@ public sealed class LocalLlmException : Exception
 public interface ILlamaServerHost : IAsyncDisposable
 {
     /// <summary>The server while one is up and ready; null otherwise.</summary>
-    LocalServerInfo? Running { get; }
+    EmbeddedServerInfo? Running { get; }
 
     /// <summary>
     /// The server for <paramref name="launch"/>: the running one when its launch is equal and it is alive, else the old
-    /// one stopped and a new one started and waited for. Throws <see cref="LocalLlmException"/> when it does not start.
+    /// one stopped and a new one started and waited for. Throws <see cref="EmbeddedLlmException"/> when it does not start.
     /// </summary>
-    Task<LocalServerInfo> EnsureRunningAsync(LlamaLaunch launch, LocalModel model, Action<string>? phase, CancellationToken cancellationToken);
+    Task<EmbeddedServerInfo> EnsureRunningAsync(LlamaLaunch launch, EmbeddedModel model, Action<string>? phase, CancellationToken cancellationToken);
 
     /// <summary>Stops the server, if any, and waits briefly for it to go (its model files are memory-mapped until then).</summary>
     void Stop();
 }
 
 /// <summary>
-/// Runs llama.cpp's <c>llama-server</c> as the app's child (2026-09-29, the local model; one of the counted
+/// Runs llama.cpp's <c>llama-server</c> as the app's child (2026-09-29, the embedded model; one of the counted
 /// process-start sites). One process at a time, behind a gate:
 /// <list type="bullet">
 /// <item>a free loopback port per start (the OS picks it), a random API key, the arguments from
@@ -64,7 +64,7 @@ public interface ILlamaServerHost : IAsyncDisposable
 /// </summary>
 public sealed class LlamaServerHost : ILlamaServerHost
 {
-    private const string Category = "LocalLlm";
+    private const string Category = "EmbeddedLlm";
     private const int TailLines = 40;
     private const int PortRetries = 2;
 
@@ -75,7 +75,7 @@ public sealed class LlamaServerHost : ILlamaServerHost
 
     private Process? _process;
     private LlamaLaunch? _launch;
-    private LocalServerInfo? _info;
+    private EmbeddedServerInfo? _info;
 
     /// <param name="http">The client <c>/health</c> is asked through; each request carries its own short deadline.</param>
     public LlamaServerHost(HttpClient? http = null)
@@ -86,7 +86,7 @@ public sealed class LlamaServerHost : ILlamaServerHost
     /// <summary>How long a start may take to answer <c>/health</c> with 200: loading 5 GB from a cold disk and a first scan of the CUDA DLLs by an antivirus take their time.</summary>
     public TimeSpan ReadyTimeout { get; init; } = TimeSpan.FromMinutes(5);
 
-    public LocalServerInfo? Running
+    public EmbeddedServerInfo? Running
     {
         get
         {
@@ -97,7 +97,7 @@ public sealed class LlamaServerHost : ILlamaServerHost
         }
     }
 
-    public async Task<LocalServerInfo> EnsureRunningAsync(LlamaLaunch launch, LocalModel model, Action<string>? phase, CancellationToken cancellationToken)
+    public async Task<EmbeddedServerInfo> EnsureRunningAsync(LlamaLaunch launch, EmbeddedModel model, Action<string>? phase, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(launch);
         ArgumentNullException.ThrowIfNull(model);
@@ -119,7 +119,7 @@ public sealed class LlamaServerHost : ILlamaServerHost
                 {
                     return await StartAsync(launch, model, phase, cancellationToken).ConfigureAwait(false);
                 }
-                catch (LocalLlmException ex) when (ex.PortInUse && attempt < PortRetries)
+                catch (EmbeddedLlmException ex) when (ex.PortInUse && attempt < PortRetries)
                 {
                     DiagnosticLog.Info(Category, "The port was taken before llama-server bound it; trying another.");
                 }
@@ -151,7 +151,7 @@ public sealed class LlamaServerHost : ILlamaServerHost
         return ValueTask.CompletedTask;
     }
 
-    private async Task<LocalServerInfo> StartAsync(LlamaLaunch launch, LocalModel model, Action<string>? phase, CancellationToken cancellationToken)
+    private async Task<EmbeddedServerInfo> StartAsync(LlamaLaunch launch, EmbeddedModel model, Action<string>? phase, CancellationToken cancellationToken)
     {
         int port = FreeLoopbackPort();
         string key = RandomNumberGenerator.GetHexString(32, lowercase: true);
@@ -185,13 +185,13 @@ public sealed class LlamaServerHost : ILlamaServerHost
         {
             if (!process.Start())
             {
-                throw new LocalLlmException(LocalLlmText.StartFailed("llama-server.exe did not start"));
+                throw new EmbeddedLlmException(EmbeddedLlmText.StartFailed("llama-server.exe did not start"));
             }
         }
         catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
         {
             process.Dispose();
-            throw new LocalLlmException(LocalLlmText.StartFailed(ex.Message));
+            throw new EmbeddedLlmException(EmbeddedLlmText.StartFailed(ex.Message));
         }
 
         ChildJob.Assign(process);
@@ -213,7 +213,7 @@ public sealed class LlamaServerHost : ILlamaServerHost
             throw;
         }
 
-        var info = new LocalServerInfo(new Uri(string.Create(CultureInfo.InvariantCulture, $"http://127.0.0.1:{port}/v1")), port, key, launch.Backend, model.Id, launch.Vision);
+        var info = new EmbeddedServerInfo(new Uri(string.Create(CultureInfo.InvariantCulture, $"http://127.0.0.1:{port}/v1")), port, key, launch.Backend, model.Id, launch.Vision);
         lock (_state)
         {
             _info = info;
@@ -223,7 +223,7 @@ public sealed class LlamaServerHost : ILlamaServerHost
         return info;
     }
 
-    private async Task WaitReadyAsync(Process process, int port, LocalModel model, Action<string>? phase, CancellationToken cancellationToken)
+    private async Task WaitReadyAsync(Process process, int port, EmbeddedModel model, Action<string>? phase, CancellationToken cancellationToken)
     {
         var health = new Uri(string.Create(CultureInfo.InvariantCulture, $"http://127.0.0.1:{port}/health"));
         var watch = Stopwatch.StartNew();
@@ -237,7 +237,7 @@ public sealed class LlamaServerHost : ILlamaServerHost
                 await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
                 string tail = ErrorTail();
                 bool portInUse = tail.Contains("bind", StringComparison.OrdinalIgnoreCase);
-                throw new LocalLlmException(LocalLlmText.StartFailed(LocalLlmText.ExitedEarly(process.ExitCode, tail)), portInUse);
+                throw new EmbeddedLlmException(EmbeddedLlmText.StartFailed(EmbeddedLlmText.ExitedEarly(process.ExitCode, tail)), portInUse);
             }
 
             try
@@ -253,7 +253,7 @@ public sealed class LlamaServerHost : ILlamaServerHost
                 if (response.StatusCode == HttpStatusCode.ServiceUnavailable && !loadingSaid)
                 {
                     loadingSaid = true;
-                    phase?.Invoke(LocalLlmText.LoadingLabel(model));
+                    phase?.Invoke(EmbeddedLlmText.LoadingLabel(model));
                 }
             }
             catch (HttpRequestException)
@@ -267,7 +267,7 @@ public sealed class LlamaServerHost : ILlamaServerHost
 
             if (watch.Elapsed > ReadyTimeout)
             {
-                throw new LocalLlmException(LocalLlmText.StartFailed(LocalLlmText.StartTimeout(ReadyTimeout)));
+                throw new EmbeddedLlmException(EmbeddedLlmText.StartFailed(EmbeddedLlmText.StartTimeout(ReadyTimeout)));
             }
 
             await Task.Delay(TimeSpan.FromMilliseconds(250), cancellationToken).ConfigureAwait(false);
@@ -329,7 +329,7 @@ public sealed class LlamaServerHost : ILlamaServerHost
 
     private void OnExited(Process process)
     {
-        LocalServerInfo? lost;
+        EmbeddedServerInfo? lost;
         lock (_state)
         {
             if (!ReferenceEquals(process, _process) || _info is null)
@@ -352,7 +352,7 @@ public sealed class LlamaServerHost : ILlamaServerHost
             code = -1;
         }
 
-        DiagnosticLog.Error(Category, LocalLlmText.Exited(code, ErrorTail()) + $" ({lost.ModelId})");
+        DiagnosticLog.Error(Category, EmbeddedLlmText.Exited(code, ErrorTail()) + $" ({lost.ModelId})");
     }
 
     /// <summary>The lines that say what went wrong: those mentioning an error or failure among the last kept, else the last three.</summary>

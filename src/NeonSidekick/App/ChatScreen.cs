@@ -316,11 +316,6 @@ internal sealed partial class ChatScreen
 
     /// <summary>The spinner over a scan that reaches the network (<see cref="ScanScope.Remote"/> / <see cref="ScanScope.Both"/>): a wave of a /24 × six ports takes a few seconds, and the row should say why.</summary>
     public const string ScanningLabel = "scanning the local network for LLM servers";
-    public const string SpeechConnectingLabel = "looking for the TTS server";
-
-    /// <summary>The spinner's first label under <c>TTS source</c> = <c>in-process</c>; the session renames it while the model downloads and loads.</summary>
-    public const string SpeechLoadingLabel = "preparing in-process Kokoro";
-    public const string VoiceConnectingLabel = "preparing voice input";
     public const string TurnFailedPrefix = "Turn failed: ";
     public const string TtsUsageError = "/tts takes on or off, or nothing to toggle.";
     public const string VoiceUsageError = "/stt takes on or off, or nothing to toggle.";
@@ -702,6 +697,17 @@ internal sealed partial class ChatScreen
     private readonly ConcurrentQueue<DiagnosticEvent> _pending = new();
     private readonly InterruptTracker _interrupts = new();
     private readonly TimerBoard _timers;
+
+    // The long connects behind the input line (2026-09-29, the user's ask): the embedded download, the MCP wave, the
+    // voice and speech setups. Their ends are drained at the loop top.
+    private readonly BackgroundJobs _jobs;
+
+    // Bumped by every LLM connect (and so by a profile switch): an embedded download that ends after another server was
+    // connected installs without switching to its model.
+    private long _llmGeneration;
+
+    // The model the embedded download slot holds, for "already downloading". The loop's alone.
+    private EmbeddedLlm.EmbeddedModel? _downloading;
     private readonly ChatLog _log = new();
     private readonly Func<string, bool> _copy;
     private readonly Action<string>? _setTitle;
@@ -909,6 +915,7 @@ internal sealed partial class ChatScreen
         _files = new WorkingDirectory(() => WorkingDirectory.Resolve(_effective().WorkingDirectory, _settings.ProfileDirectory), time);
         _fileTools = FileTools(_files, () => WorkingDirectory.IsDefault(_effective().WorkingDirectory), _openFile, _effective);
         _timers = new TimerBoard(time, SignalAlert);
+        _jobs = new BackgroundJobs(SignalAlert, time);
         _timerTools = TimerTools(_timers);
         _web = web ?? WebAccess.Create(() => Web.NetworkMode.Resolve(_effective()), time);
         _webTools = WebTools(_web, _files, _effective);
@@ -967,7 +974,9 @@ internal sealed partial class ChatScreen
             // then the speech switches as of the last connect, the wake word and the interrupt
             // once ready. The tick re-reads it, so the brain and the tag come and go with their
             // jobs (LlmSession.IsLearning / IsTitling), nothing pushed.
-            Strip = () => PlanStrip(_plan.Active, StripGlyphs(_session.IsLearning, _session.IsTitling, _pendingPictures.Glyph, _speech.Enabled, _voice.Enabled, _voice.WakeReady, _voice.InterruptReady)),
+            // The jobs behind the line (2026-09-29) after the pictures; a switch whose setup runs shows its job's glyph, not
+            // its own (a click on 🎤 or 🔊 turns it off).
+            Strip = () => PlanStrip(_plan.Active, StripGlyphs(_session.IsLearning, _session.IsTitling, _pendingPictures.Glyph, _speech.Enabled && !_jobs.Running(BackgroundJobKind.Speech), _voice.Enabled && !_jobs.Running(BackgroundJobKind.Voice), _voice.WakeReady, _voice.InterruptReady, _jobs.Strip())),
             // The model at the row's right edge, from the live connection: empty until one lands;
             // the reasoning glyph after it in its own colour, none with the model.
             // The session's name at the right edge of the rule above the input row (2026-09-18, the user's
@@ -991,11 +1000,11 @@ internal sealed partial class ChatScreen
             LabelAfterUsage = ComfyText.IsGeneratingLabel,
             // The toolbar under the hint row (2026-09-21): the pane glyphs, the working directory in
             // force (the resolved path, what /cwd prints and the banner shows) and the folder; read
-            // per draw and on the tick, so a /cwd change or a flipped Show toolbar shows at once —
+            // per draw and on the tick, so a /cwd change or a changed Show toolbar shows at once —
             // and the lock (later still that day) follows Shell command policy the same way; TryParse,
             // not Resolve: the draw must not warn on a hand-edited word, the turn does. The disk and
             // the officer (2026-09-22) follow Memory and Shell police outside paths the same way.
-            Toolbar = () => _effective() is { ShowToolbar: true } shown ? new ScreenPane.ToolbarParts(ToolbarStripFor(shown.Memory, ToolbarPolicy(shown), shown.ShellPoliceOutsidePaths), WorkingDirectory.Resolve(shown.WorkingDirectory, _settings.ProfileDirectory)) : null,
+            Toolbar = ToolbarParts,
             // The picture strip over the upper rule (later still on 2026-09-24): while ComfyUI picture strip is on;
             // read per draw and on the tick, so a flip shows at once. Not while its × has put it away (2026-09-28), until the next picture.
             PictureStrip = () => _effective().ComfyPictureStrip && !_pictureStrip.Closed ? _pictureStrip : null,
@@ -1061,12 +1070,15 @@ internal sealed partial class ChatScreen
         // The /tools pane (2026-09-19): the tool list over the live facts, the Ask / Files / Web rows through the settings menu.
         _toolsMenu = new ToolsMenu(ToolsFacts, settings, _menu, _flow, _menuPane);
         // The /mcp pane (2026-09-20): the servers and their tools over the session's snapshot, the Options rows through the settings menu.
-        _mcpMenu = new McpMenu(McpFacts, _mcp, settings, _menu, _flow, _menuPane, _openFile, _effective);
+        _mcpMenu = new McpMenu(McpFacts, _mcp, settings, _menu, _flow, _menuPane, _openFile, _effective)
+        {
+            Connecting = () => _jobs.Running(BackgroundJobKind.Mcp),
+        };
         // The /sampling pane (2026-09-28): the per-model overrides; a save resolves the connected assistant's sampling again.
         _samplingMenu = new SamplingMenu(settings, _menu, _flow, _menuPane, _input, () => _session.Endpoint, () => overriddenBy(SettingsField.LlmSampling), RefreshSampling, token => _session.ServerSamplingAsync(_effective(), token));
         _menu.SamplingPane = _samplingMenu.ShowAsync;
-        // The local model's tab (2026-09-29): its catalog and live rows over the session's service, the backend under the effective settings.
-        _menu.LocalLlm = _session.Local;
+        // The embedded model's tab (2026-09-29): its catalog and live rows over the session's service, the backend under the effective settings.
+        _menu.EmbeddedLlm = _session.Embedded;
         _menu.Effective = _effective;
         BindProfile();
     }
@@ -1167,7 +1179,10 @@ internal sealed partial class ChatScreen
     /// <c>/police</c> (later on 2026-09-22, the user's ask: no click of its own until then), that row's
     /// on/off page opened straight. Both follow their switch at each draw, so a flip on its pane shows
     /// as the pane closes; the columns after the balloon move with the disk, which the hit-test walk
-    /// and the column-keyed pairing take as they come.
+    /// and the column-keyed pairing take as they come. A seventh fixed glyph since 2026-09-29 (the
+    /// user's ask): the chart the Usage pane's label already wore, between the balloon and the disk,
+    /// whose double-click is <c>/usage</c> — the hint row's tally in a place that does not move; every
+    /// column after it moved by three.
     /// </summary>
     public const string SettingsToolGlyph = "⚙️";
     public const string ToolsToolGlyph = "🛠️";
@@ -1175,43 +1190,78 @@ internal sealed partial class ChatScreen
     public const string SkillsToolGlyph = "🎓";
     public const string SysToolGlyph = "🎭";
     public const string SessionsToolGlyph = "💬";
+    public const string UsageToolGlyph = "📊";
     public const string MemoryToolGlyph = "💾";
     public const string CmdAskToolGlyph = "🔒";
     public const string CmdYoloToolGlyph = "🔓";
     public const string PoliceToolGlyph = "👮";
-    public static readonly string ToolbarStrip = string.Join(GlyphSeparator, SettingsToolGlyph, ToolsToolGlyph, McpToolGlyph, SkillsToolGlyph, SysToolGlyph, SessionsToolGlyph);
+    public static readonly string ToolbarStrip = string.Join(GlyphSeparator, SettingsToolGlyph, ToolsToolGlyph, McpToolGlyph, SkillsToolGlyph, SysToolGlyph, SessionsToolGlyph, UsageToolGlyph);
 
     /// <summary>
     /// The strip drawn for the switches, in the strip's order: <see cref="ToolbarStrip"/>, the disk
     /// while <paramref name="memory"/> is on, the closed lock under <c>ask</c> or the open one under
     /// <c>yolo</c> (neither under <c>off</c>), the officer while <paramref name="police"/> is on and the policy is not <c>off</c>
     /// (later on 2026-09-22, the user's ask: with no shell tool offered there is nothing to police).
-    /// The six alone with everything off. Pinned.
+    /// The seven alone with everything off. Pinned.
     /// </summary>
-    public static string ToolbarStripFor(bool memory, Shell.CommandPolicyMode policy, bool police)
+    public static string ToolbarStripFor(bool memory, Shell.CommandPolicyMode policy, bool police) =>
+        ToolbarStripFor(ToolbarItems.Resolve(null), memory, policy, police);
+
+    /// <summary>
+    /// The strip for the items Show toolbar checks (2026-09-29, the user's ask): each checked fixed glyph in strip order,
+    /// then the disk, the lock and the officer where they are checked and their switches allow them; empty when none is.
+    /// Pinned.
+    /// </summary>
+    public static string ToolbarStripFor(IReadOnlySet<string> items, bool memory, Shell.CommandPolicyMode policy, bool police)
     {
-        var strip = new StringBuilder(ToolbarStrip);
-        if (memory)
+        ArgumentNullException.ThrowIfNull(items);
+        var glyphs = new List<string>();
+        foreach (string id in new[] { ToolbarItems.Settings, ToolbarItems.Tools, ToolbarItems.Mcp, ToolbarItems.Skills, ToolbarItems.Sys, ToolbarItems.Sessions, ToolbarItems.Usage })
         {
-            strip.Append(GlyphSeparator).Append(MemoryToolGlyph);
+            if (items.Contains(id))
+            {
+                glyphs.Add(ToolbarItems.Glyph(id));
+            }
         }
 
-        switch (policy)
+        if (memory && items.Contains(ToolbarItems.Memory))
         {
-            case Shell.CommandPolicyMode.Ask:
-                strip.Append(GlyphSeparator).Append(CmdAskToolGlyph);
-                break;
-            case Shell.CommandPolicyMode.Yolo:
-                strip.Append(GlyphSeparator).Append(CmdYoloToolGlyph);
-                break;
+            glyphs.Add(MemoryToolGlyph);
         }
 
-        if (police && policy != Shell.CommandPolicyMode.Off)
+        if (items.Contains(ToolbarItems.CmdList))
         {
-            strip.Append(GlyphSeparator).Append(PoliceToolGlyph);
+            switch (policy)
+            {
+                case Shell.CommandPolicyMode.Ask:
+                    glyphs.Add(CmdAskToolGlyph);
+                    break;
+                case Shell.CommandPolicyMode.Yolo:
+                    glyphs.Add(CmdYoloToolGlyph);
+                    break;
+            }
         }
 
-        return strip.ToString();
+        if (police && policy != Shell.CommandPolicyMode.Off && items.Contains(ToolbarItems.Police))
+        {
+            glyphs.Add(PoliceToolGlyph);
+        }
+
+        return string.Join(GlyphSeparator, glyphs);
+    }
+
+    /// <summary>
+    /// The toolbar row for the settings in force: the items Show toolbar checks (2026-09-29, the user's ask: a checklist),
+    /// the glyphs among them their switches allow and the path when it is checked; null — no row — when nothing is checked,
+    /// or when what is checked draws nothing (the disk alone with Memory off).
+    /// </summary>
+    private ScreenPane.ToolbarParts? ToolbarParts()
+    {
+        var shown = _effective();
+        var items = ToolbarItems.Resolve(shown.ToolbarItems);
+        string strip = ToolbarStripFor(items, shown.Memory, ToolbarPolicy(shown), shown.ShellPoliceOutsidePaths);
+        string path = items.Contains(ToolbarItems.Path) ? WorkingDirectory.Resolve(shown.WorkingDirectory, _settings.ProfileDirectory) : "";
+        return strip.Length == 0 && path.Length == 0 ? null : new ScreenPane.ToolbarParts(strip, path);
     }
 
     /// <summary>The policy the toolbar's lock shows for <paramref name="shown"/>: the saved word parsed, a hand-edited one read as <c>ask</c> without a warning (<see cref="Shell.CommandPolicy.Resolve"/> warns once, at the turn).</summary>
@@ -1260,6 +1310,7 @@ internal sealed partial class ChatScreen
         McpToolGlyph => SlashCommands.McpWord,
         SysToolGlyph => SlashCommands.SysWord,
         SessionsToolGlyph => SlashCommands.SessionsWord,
+        UsageToolGlyph => SlashCommands.UsageWord,
         MemoryToolGlyph => SlashCommands.MemoryWord,
         CmdAskToolGlyph or CmdYoloToolGlyph => SlashCommands.CmdListWord,
         PoliceToolGlyph => SlashCommands.PoliceWord,
@@ -1317,13 +1368,15 @@ internal sealed partial class ChatScreen
     /// the session's title (later that day, the user's place: right after the brain), then
     /// <paramref name="pictures"/> — <c>/botchat</c>'s pictures still rendering with <c>Botchat image async</c> on
     /// (<see cref="PendingPictures.Glyph"/>, 2026-09-27, the user's ask: nothing said a generation ran while the next bot
-    /// answered), empty with none — then <see cref="SpeechGlyphs"/> — each part only while its job or switch is on, joined by
+    /// answered), empty with none — then <paramref name="jobs"/>, the jobs behind the input line (<see cref="BackgroundJobs.Strip"/>,
+    /// 2026-09-29), then <see cref="SpeechGlyphs"/> — each part only while its job or switch is on, joined by
     /// <see cref="GlyphSeparator"/>, empty with nothing. The speech status lines keep
     /// <see cref="SpeechGlyphs"/> (no brain, no tag there). Pinned.
     /// </summary>
-    public static string StripGlyphs(bool learning, bool titling, string pictures, bool ttsOn, bool sttOn, bool wakeReady, bool interruptReady)
+    public static string StripGlyphs(bool learning, bool titling, string pictures, bool ttsOn, bool sttOn, bool wakeReady, bool interruptReady, string jobs = "")
     {
         ArgumentNullException.ThrowIfNull(pictures);
+        ArgumentNullException.ThrowIfNull(jobs);
         var parts = new List<string>(4);
         if (learning)
         {
@@ -1338,6 +1391,11 @@ internal sealed partial class ChatScreen
         if (pictures.Length != 0)
         {
             parts.Add(pictures);
+        }
+
+        if (jobs.Length != 0)
+        {
+            parts.Add(jobs);
         }
 
         string speech = SpeechGlyphs(ttsOn, sttOn, wakeReady, interruptReady);
@@ -1670,11 +1728,11 @@ internal sealed partial class ChatScreen
                 return null;
             }
 
-            if (_pane.TryHitFoldButton(click.X, click.Y, out bool expand))
+            if (_pane.TryHitFoldButton(click.X, click.Y))
             {
-                // The upper rule's ↘️ / ↖️ (2026-09-28): everything unfolded or folded, silent as Ctrl+O, under a reply as at idle.
+                // The upper rule's ⤡ (one button since 2026-09-29): Ctrl+O's toggle, under a reply as at idle.
                 _queuedClicks.Reset();
-                _pane.SetToolGroupsExpanded(expand);
+                _pane.ToggleToolGroups();
                 return null;
             }
 
@@ -1751,6 +1809,17 @@ internal sealed partial class ChatScreen
             if (hit.Zone == ScreenPane.HintZone.Usage)
             {
                 return _queuedClicks.Second(2) ? SlashCommands.UsageWord : null;
+            }
+
+            if (hit.Zone == ScreenPane.HintZone.Strip && BackgroundJobs.KindOfGlyph(hit.Glyph) is { } job)
+            {
+                // A job behind the line (2026-09-29): the pair cancels it; its end is said at the loop top, after the reply.
+                if (_queuedClicks.Second(InputLine.HintPairKey(hit)))
+                {
+                    _jobs.Cancel(job);
+                }
+
+                return null;
             }
 
             if (hit.Zone == ScreenPane.HintZone.Strip && hit.Glyph == LearnStripGlyph)
@@ -6978,13 +7047,16 @@ internal sealed partial class ChatScreen
             await ConnectSpeechAsync(cancellationToken, quiet: true).ConfigureAwait(false);
             await ConnectVoiceAsync(cancellationToken, quiet: true).ConfigureAwait(false);
             await ConnectMcpAsync(cancellationToken).ConfigureAwait(false);
-            // After the connects: a failed probe's line sits under the banner and the picture
-            // fills what is left, and no picture write lands under a spinner.
+            // After the LLM's connect: a failed probe's line sits under the banner and the picture fills what is left, and no
+            // picture write lands under a spinner. Speech, voice and MCP run behind the line since 2026-09-29; their lines
+            // follow the picture as each finishes.
             ShowSplash();
 
             while (!cancellationToken.IsCancellationRequested)
             {
                 DrainDiagnostics();
+                // The jobs behind the line that ended (2026-09-29): their lines, an embedded model's connect — here, never under a reply.
+                await _jobs.DrainAsync().ConfigureAwait(false);
                 if (await AnnounceAlertsAsync(cancellationToken).ConfigureAwait(false))
                 {
                     return 0;
@@ -7128,6 +7200,11 @@ internal sealed partial class ChatScreen
                             // A /botchat picture still rendering (2026-09-28): its cancel, as on the busy row; nothing when it just ended.
                             DrainPictures();
                         }
+                        else if (hint.Hit.Zone == ScreenPane.HintZone.Strip && BackgroundJobs.KindOfGlyph(hint.Hit.Glyph) is { } job)
+                        {
+                            // A job behind the line (2026-09-29): its cancel; its end is said by the drain that follows at once.
+                            _jobs.Cancel(job);
+                        }
                         else if (hint.Hit.Zone == ScreenPane.HintZone.Strip && hint.Hit.Glyph == PlanText.Glyph)
                         {
                             // Plan mode's glyph (2026-09-26): where the plan stands, as /plan typed.
@@ -7224,6 +7301,8 @@ internal sealed partial class ChatScreen
             _pendingLearn = null;
             ForgetPausedLearn();
             _session.CancelLearning();
+            // The jobs behind the line cancelled and awaited first (2026-09-29): nothing still touches MCP, voice or speech as they go.
+            await _jobs.CancelAllAsync().ConfigureAwait(false);
             _timers.Dispose();
             // The background processes go with the screen (2026-09-21): what still runs is killed, tree and all.
             _processes.Dispose();
@@ -7297,7 +7376,7 @@ internal sealed partial class ChatScreen
         }
 
         Volatile.Write(ref _alertSignal, alert);
-        if (_timers.HasAlerts || _processes.HasAlerts || LearnPending)
+        if (_timers.HasAlerts || _processes.HasAlerts || LearnPending || _jobs.HasCompletions)
         {
             // Queued between the loop's drain and this arm: the read returns at once.
             alert.Cancel();
@@ -7985,17 +8064,18 @@ internal sealed partial class ChatScreen
     /// <param name="startup">The app's first connect (<see cref="RunAsync"/>): the server picker opens for a single answer too.</param>
     private async Task ConnectLlmAsync(CancellationToken cancellationToken, bool quiet = false, bool startup = false)
     {
+        _llmGeneration++;
         var effective = _effective();
-        if (LocalLlm.LocalEndpoint.IsLocal(effective.LlmUrl))
+        if (EmbeddedLlm.EmbeddedEndpoint.IsEmbedded(effective.LlmUrl))
         {
-            await ConnectLocalAsync(effective, quiet, cancellationToken).ConfigureAwait(false);
+            await ConnectEmbeddedAsync(effective, quiet, cancellationToken).ConfigureAwait(false);
             return;
         }
 
         // A saved Claude API URL with the Claude API off or keyless stands for nothing (2026-09-27): found as a blank one.
         bool blankUrl = string.IsNullOrWhiteSpace(effective.LlmUrl)
             || (Llm.Anthropic.ClaudeApi.IsClaudeApi(effective.LlmUrl) && !Llm.Anthropic.ClaudeApi.Offered(effective));
-        if (blankUrl && !Llm.LlmScanMode.Scans(Llm.LlmScanMode.Resolve(effective)) && !Llm.Anthropic.ClaudeApi.Offered(effective) && !LocalOffered)
+        if (blankUrl && !Llm.LlmScanMode.Scans(Llm.LlmScanMode.Resolve(effective)) && !Llm.Anthropic.ClaudeApi.Offered(effective) && !EmbeddedOffered)
         {
             await _session.ConnectAsync(effective, cancellationToken).ConfigureAwait(false);
             DrainDiagnostics();
@@ -8022,16 +8102,16 @@ internal sealed partial class ChatScreen
 
         if (servers.Count > 0)
         {
-            // The local model's rows (2026-09-29) are always listed and never answered a scan: the picker opens as it did
-            // for the servers that did, or when only local rows stand; ESC takes the first server that answered, never a
-            // local model — starting one loads gigabytes, which only a pick should do.
-            var answered = servers.Where(s => !LocalLlm.LocalEndpoint.IsLocal(s.BaseUrl)).ToList();
+            // The embedded model's rows (2026-09-29) are always listed and never answered a scan: the picker opens as it did
+            // for the servers that did, or when only embedded rows stand; ESC takes the first server that answered, never a
+            // embedded model — starting one loads gigabytes, which only a pick should do.
+            var answered = servers.Where(s => !EmbeddedLlm.EmbeddedEndpoint.IsEmbedded(s.BaseUrl)).ToList();
             var picked = answered.Count > 1 || startup || answered.Count == 0
                 ? await _menu.PickServerAsync(servers, null, SettingsMenu.StartupServerTitle, cancellationToken).ConfigureAwait(false)
                 : null;
-            if (picked is not null && LocalLlm.LocalEndpoint.IsLocal(picked.BaseUrl))
+            if (picked is not null && EmbeddedLlm.EmbeddedEndpoint.IsEmbedded(picked.BaseUrl))
             {
-                await UseLocalRowAsync(picked, cancellationToken).ConfigureAwait(false);
+                await UseEmbeddedRowAsync(picked, cancellationToken).ConfigureAwait(false);
                 return;
             }
 
@@ -8067,24 +8147,25 @@ internal sealed partial class ChatScreen
         ReportLlm(quiet);
     }
 
-    /// <summary>Whether this screen offers the local model (2026-09-29): a session with one, on llama.cpp's Windows x64 builds.</summary>
-    private bool LocalOffered => _session.Local is not null && LocalLlm.LocalEndpoint.Offered;
+    /// <summary>Whether this screen offers the embedded model (2026-09-29): a session with one, on llama.cpp's Windows x64 builds.</summary>
+    private bool EmbeddedOffered => _session.Embedded is not null && EmbeddedLlm.EmbeddedEndpoint.Offered;
 
     /// <summary>
-    /// The local model's connect (2026-09-29): a model named but not installed is offered for install first (a yes
-    /// downloads it under the spinner; no, or no menus, and the session's connect says it is missing), then the server
+    /// The embedded model's connect (2026-09-29): a model named but not installed is offered for install first (a yes
+    /// downloads it behind the input line — later that day — and this connect waits for it; no, or no menus, and the session's
+    /// connect says it is missing), then the server
     /// is started under a spinner whose label follows the runtime's download, the start and the model's load — Ctrl+C
     /// cancels it and the app stays. A start that failed has drained its error; only a connected one is reported.
     /// </summary>
-    private async Task ConnectLocalAsync(AppSettingsData effective, bool quiet, CancellationToken cancellationToken)
+    private async Task ConnectEmbeddedAsync(AppSettingsData effective, bool quiet, CancellationToken cancellationToken)
     {
-        if (_session.Local is { } local
-            && LocalLlm.LocalModelCatalog.Find(effective.LlmModel, local.Catalog) is { } named
-            && !local.State(named).IsInstalled
+        if (_session.Embedded is { } embedded
+            && EmbeddedLlm.EmbeddedModelCatalog.Find(effective.LlmModel, embedded.Catalog) is { } named
+            && !embedded.State(named).IsInstalled
             && _menu.CanShowMenus()
-            && await _menu.ConfirmAsync(LocalLlm.LocalLlmText.InstallQuestion(named, local.RuntimeBytesToDownload(effective)), cancellationToken).ConfigureAwait(false)
-            && !await InstallLocalAsync(named, cancellationToken).ConfigureAwait(false))
+            && await _menu.ConfirmAsync(EmbeddedLlm.EmbeddedLlmText.InstallQuestion(named, embedded.RuntimeBytesToDownload(effective)), cancellationToken).ConfigureAwait(false))
         {
+            await StartEmbeddedDownloadAsync(named, () => ConnectLlmAsync(cancellationToken), cancellationToken).ConfigureAwait(false);
             return;
         }
 
@@ -8104,67 +8185,105 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>
-    /// Downloads <paramref name="model"/> (and the llama.cpp runtime its backend needs) under the spinner, labelled with
-    /// each file's progress (2026-09-29). Ctrl+C pauses it — what arrived stays for the next try, and the notice says so.
-    /// True when it is installed.
+    /// Downloads <paramref name="model"/> (and the llama.cpp runtime its backend needs) behind the input line (2026-09-29, the
+    /// user's ask: it ran under a spinner that held every key but Ctrl+C for minutes). <see cref="BackgroundJobText.DownloadGlyph"/>
+    /// and its percentage sit on the hint row's strip, and a double-click there pauses it — what arrived stays for the next try.
+    /// Its end is said at the loop top: installed, then <paramref name="installed"/> (the switch to it) when no LLM connect
+    /// happened meanwhile — otherwise it only says so; a failure's error; a pause's notice. The same model picked again while
+    /// it downloads says so; another one takes its place, the first paused.
     /// </summary>
-    private async Task<bool> InstallLocalAsync(LocalLlm.LocalModel model, CancellationToken cancellationToken)
+    private async Task StartEmbeddedDownloadAsync(EmbeddedLlm.EmbeddedModel model, Func<Task> installed, CancellationToken cancellationToken)
     {
-        if (_session.Local is not { } local)
+        if (_session.Embedded is not { } embedded)
         {
-            return false;
+            return;
+        }
+
+        if (_jobs.Running(BackgroundJobKind.EmbeddedDownload) && string.Equals(_downloading?.Id, model.Id, StringComparison.Ordinal))
+        {
+            _transcript.Notice(BackgroundJobText.AlreadyDownloading(model));
+            return;
         }
 
         var effective = _effective();
+        long generation = _llmGeneration;
         Speech.ModelResult result = default;
-        if (await ConnectUnderWatchAsync(NoticeGlyphs.Llm, token => _transcript.WithSpinnerAsync(LocalLlm.LocalLlmText.PreparingLabel(model), async setLabel =>
-        {
-            result = await local.InstallAsync(model, effective, setLabel, token).ConfigureAwait(false);
-            return true;
-        }), cancellationToken).ConfigureAwait(false))
-        {
-            _transcript.Notice(LocalLlm.LocalLlmText.PausedNotice);
-            return false;
-        }
+        _downloading = model;
+        _transcript.Notice(BackgroundJobText.DownloadStarted(model));
+        await _jobs.StartAsync(
+            BackgroundJobKind.EmbeddedDownload,
+            async (phase, token) => result = await embedded.InstallAsync(model, effective, phase, token).ConfigureAwait(false),
+            async outcome =>
+            {
+                _downloading = null;
+                DrainDiagnostics();
+                if (outcome.End == JobEnd.Cancelled)
+                {
+                    _transcript.Notice(EmbeddedLlm.EmbeddedLlmText.PausedNotice);
+                    return;
+                }
 
-        if (!result.Ok)
-        {
-            _transcript.Error(result.Detail);
-            return false;
-        }
+                if (outcome.End == JobEnd.Failed || !result.Ok)
+                {
+                    _transcript.Error(outcome.Error?.Message ?? result.Detail);
+                    return;
+                }
 
-        _transcript.Notice(NoticeGlyphs.Llm + LocalLlm.LocalLlmText.Installed(model));
-        return true;
+                _transcript.Notice(NoticeGlyphs.Llm + EmbeddedLlm.EmbeddedLlmText.Installed(model));
+                if (generation != _llmGeneration)
+                {
+                    _transcript.Notice(BackgroundJobText.InstalledNotSwitched(model));
+                    return;
+                }
+
+                await installed().ConfigureAwait(false);
+            },
+            cancellationToken).ConfigureAwait(false);
     }
 
-    /// <summary><see cref="UseLocalModelAsync"/> for a picked <c>/server</c> row: the row carries the catalog id as its one model.</summary>
-    private async Task UseLocalRowAsync(LlmServer row, CancellationToken cancellationToken, bool reasoning = true)
+    /// <summary><see cref="UseEmbeddedModelAsync"/> for a picked <c>/server</c> row: the row carries the catalog id as its one model.</summary>
+    private async Task UseEmbeddedRowAsync(LlmServer row, CancellationToken cancellationToken, bool reasoning = true)
     {
-        if (_session.Local is { } local && row.Result.ModelIds.Count > 0 && LocalLlm.LocalModelCatalog.Find(row.Result.ModelIds[0], local.Catalog) is { } model)
+        if (_session.Embedded is { } embedded && row.Result.ModelIds.Count > 0 && EmbeddedLlm.EmbeddedModelCatalog.Find(row.Result.ModelIds[0], embedded.Catalog) is { } model)
         {
-            await UseLocalModelAsync(model, reasoning, cancellationToken).ConfigureAwait(false);
+            await UseEmbeddedModelAsync(model, reasoning, cancellationToken).ConfigureAwait(false);
         }
     }
 
     /// <summary>
-    /// Switches to the local <paramref name="model"/> (2026-09-29; a <c>/server</c> row, <c>/server local</c>, the
+    /// Switches to the embedded <paramref name="model"/> (2026-09-29; a <c>/server</c> row, <c>/server embedded</c>, the
     /// settings' catalog): installed first when it is not — before anything is saved, so a paused download never leaves
     /// the profile pointing at a model that is not there — then saved as the LLM URL and model in one write, the
-    /// reasoning picker offered (<paramref name="reasoning"/>, <c>/server</c>'s walk), and one connect.
+    /// reasoning picker offered (<paramref name="reasoning"/>, <c>/server</c>'s walk), and one connect. The download runs
+    /// behind the input line since later that day (<see cref="StartEmbeddedDownloadAsync"/>): the reasoning picker comes
+    /// first, while the walk is still on screen, and the save and the connect wait for the download's end.
     /// </summary>
-    private async Task UseLocalModelAsync(LocalLlm.LocalModel model, bool reasoning, CancellationToken cancellationToken)
+    private async Task UseEmbeddedModelAsync(EmbeddedLlm.EmbeddedModel model, bool reasoning, CancellationToken cancellationToken)
     {
-        if (_session.Local is not { } local)
+        if (_session.Embedded is not { } embedded)
         {
             return;
         }
 
-        if (!local.State(model).IsInstalled && !await InstallLocalAsync(model, cancellationToken).ConfigureAwait(false))
+        if (!embedded.State(model).IsInstalled)
         {
+            if (!(_jobs.Running(BackgroundJobKind.EmbeddedDownload) && string.Equals(_downloading?.Id, model.Id, StringComparison.Ordinal))
+                && reasoning && _overriddenBy(SettingsField.LlmUrl) is null)
+            {
+                await _menu.PickReasoningAsync("", _effective().LlmReasoning, cancellationToken).ConfigureAwait(false);
+            }
+
+            await StartEmbeddedDownloadAsync(model, () => SwitchToEmbeddedAsync(model, reasoning: false, cancellationToken), cancellationToken).ConfigureAwait(false);
             return;
         }
 
-        _menu.SaveLocalModel(model.Id);
+        await SwitchToEmbeddedAsync(model, reasoning, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary><see cref="UseEmbeddedModelAsync"/>'s tail for an installed model: the save, the reasoning picker when asked, the connect.</summary>
+    private async Task SwitchToEmbeddedAsync(EmbeddedLlm.EmbeddedModel model, bool reasoning, CancellationToken cancellationToken)
+    {
+        _menu.SaveEmbeddedModel(model.Id);
         if (_overriddenBy(SettingsField.LlmUrl) is not null)
         {
             return;
@@ -8275,7 +8394,7 @@ internal sealed partial class ChatScreen
         if (string.IsNullOrWhiteSpace(args))
         {
             var scope = Llm.LlmScanMode.Resolve(effective);
-            if (!Llm.LlmScanMode.Scans(scope) && !Llm.Anthropic.ClaudeApi.Offered(effective) && !LocalOffered)
+            if (!Llm.LlmScanMode.Scans(scope) && !Llm.Anthropic.ClaudeApi.Offered(effective) && !EmbeddedOffered)
             {
                 // Disabled entirely (the user's call, 2026-09-15): no spinner, no request, the session as it was.
                 _transcript.Error(LlmSession.NoServerLine(scope));
@@ -8298,9 +8417,9 @@ internal sealed partial class ChatScreen
                 return;
             }
 
-            if (LocalLlm.LocalEndpoint.IsLocal(choice.BaseUrl))
+            if (EmbeddedLlm.EmbeddedEndpoint.IsEmbedded(choice.BaseUrl))
             {
-                await UseLocalRowAsync(choice, cancellationToken).ConfigureAwait(false);
+                await UseEmbeddedRowAsync(choice, cancellationToken).ConfigureAwait(false);
                 return;
             }
 
@@ -8325,18 +8444,18 @@ internal sealed partial class ChatScreen
                 return;
             }
 
-            if (LocalLlm.LocalEndpoint.IsLocal(url))
+            if (EmbeddedLlm.EmbeddedEndpoint.IsEmbedded(url))
             {
-                // /server local (2026-09-29): the local rows alone, the running model under the cursor.
-                if (!LocalOffered)
+                // /server embedded (2026-09-29): the embedded rows alone, the running model under the cursor.
+                if (!EmbeddedOffered)
                 {
-                    _transcript.Error(LlmSession.LocalUnavailable);
+                    _transcript.Error(LlmSession.EmbeddedUnavailable);
                     return;
                 }
 
-                if (await _menu.PickServerAsync(_session.LocalRows(), _session.Endpoint?.BaseUrl, SettingsMenu.ServerTitle, cancellationToken, _session.Endpoint?.ModelId).ConfigureAwait(false) is { } row)
+                if (await _menu.PickServerAsync(_session.EmbeddedRows(), _session.Endpoint?.BaseUrl, SettingsMenu.ServerTitle, cancellationToken, _session.Endpoint?.ModelId).ConfigureAwait(false) is { } row)
                 {
-                    await UseLocalRowAsync(row, cancellationToken).ConfigureAwait(false);
+                    await UseEmbeddedRowAsync(row, cancellationToken).ConfigureAwait(false);
                 }
 
                 return;
@@ -8382,10 +8501,10 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>
-    /// Readies speech output (under a spinner, only when speech is on: the server probed, or the
-    /// in-process model downloaded — the label following the download and load as the voice
-    /// connect's does — and loaded) and prints the <c>TTS:</c> line. Cancelling a download is
-    /// Ctrl+C under the spinner (<see cref="ConnectUnderWatchAsync"/>); the app stays.
+    /// Readies speech output (only when speech is on: the server probed, or the in-process model downloaded and loaded) and
+    /// prints the <c>TTS:</c> line. Behind the input line since 2026-09-29 (the user's ask: a first run's Kokoro download held
+    /// the line under a spinner): <see cref="BackgroundJobText.SpeechGlyph"/> sits on the strip until it ends, a double-click
+    /// there cancels it, and the line is printed at the loop top. Replies meanwhile are text only, as with speech not ready.
     /// </summary>
     /// <param name="quiet">The banner was just drawn above, or the settings pane just closed: only a warning is printed.</param>
     private async Task ConnectSpeechAsync(CancellationToken cancellationToken, bool quiet = false)
@@ -8393,28 +8512,49 @@ internal sealed partial class ChatScreen
         var effective = _effective();
         if (effective.TtsOutput)
         {
-            string label = TtsSource.Resolve(effective) == TtsEngine.InProcess ? SpeechLoadingLabel : SpeechConnectingLabel;
-            if (await ConnectUnderWatchAsync(NoticeGlyphs.Tts, token => _transcript.WithSpinnerAsync(label, async setLabel =>
-            {
-                await _speech.ConnectAsync(effective, setLabel, token).ConfigureAwait(false);
-                return true;
-            }), cancellationToken).ConfigureAwait(false))
-            {
-                return;
-            }
-        }
-        else
-        {
-            await _speech.ConnectAsync(effective, null, cancellationToken).ConfigureAwait(false);
-            DrainDiagnostics();
+            await _jobs.StartAsync(
+                BackgroundJobKind.Speech,
+                (phase, token) => _speech.ConnectAsync(effective, phase, token),
+                outcome =>
+                {
+                    DrainDiagnostics();
+                    ReportJobEnd(outcome, NoticeGlyphs.Tts, () => ReportSpeech(quiet));
+                    return Task.CompletedTask;
+                },
+                cancellationToken).ConfigureAwait(false);
+            return;
         }
 
+        await _jobs.StopAsync(BackgroundJobKind.Speech).ConfigureAwait(false);
+        await _speech.ConnectAsync(effective, null, cancellationToken).ConfigureAwait(false);
+        DrainDiagnostics();
         ReportSpeech(quiet);
     }
 
-    /// <summary>The <c>TTS:</c> line for the speech session as it stands; quiet, only when it is a warning (the settings tabs show the rest).</summary>
+    /// <summary>A job's end said: its cancel as the connect's cancelled line, its failure as an error, else <paramref name="report"/>.</summary>
+    private void ReportJobEnd(JobOutcome outcome, string glyph, Action report)
+    {
+        switch (outcome.End)
+        {
+            case JobEnd.Cancelled:
+                _transcript.Notice(ConnectCancelledNotice(glyph));
+                return;
+            case JobEnd.Failed:
+                _transcript.Error(outcome.Error?.Message ?? "");
+                break;
+        }
+
+        report();
+    }
+
+    /// <summary>The <c>TTS:</c> line for the speech session as it stands; quiet, only when it is a warning (the settings tabs show the rest). Nothing while its setup runs: the job's end says it (2026-09-29).</summary>
     private void ReportSpeech(bool quiet = false)
     {
+        if (_jobs.Running(BackgroundJobKind.Speech))
+        {
+            return;
+        }
+
         if (_speech.StatusIsWarning)
         {
             _transcript.Warning(_speech.StatusLine());
@@ -8426,9 +8566,11 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>
-    /// Prepares voice input (under a spinner whose label follows the model download and load,
-    /// only when voice input is on) and prints the <c>Voice:</c> line. Cancelling a download is
-    /// Ctrl+C under the spinner (<see cref="ConnectUnderWatchAsync"/>); the app stays.
+    /// Prepares voice input (only when voice input is on: the models downloaded and loaded) and prints the <c>Voice:</c> line.
+    /// Behind the input line since 2026-09-29 (the user's ask: a first run's Whisper download held the line under a spinner):
+    /// <see cref="BackgroundJobText.VoiceGlyph"/> sits on the strip until it ends, a double-click there cancels it, and the line
+    /// is printed at the loop top — whose next read arms the wake word and the push-to-talk key against the ready session.
+    /// The job starts on the loop, so the session's unload still runs with the microphone disarmed.
     /// </summary>
     /// <param name="quiet">The banner was just drawn above, or the settings pane just closed: only the warnings are printed.</param>
     private async Task ConnectVoiceAsync(CancellationToken cancellationToken, bool quiet = false)
@@ -8436,29 +8578,35 @@ internal sealed partial class ChatScreen
         var effective = _effective();
         if (effective.SttInput)
         {
-            if (await ConnectUnderWatchAsync(NoticeGlyphs.Stt, token => _transcript.WithSpinnerAsync(VoiceConnectingLabel, async setLabel =>
-            {
-                await _voice.ConnectAsync(effective, setLabel, token).ConfigureAwait(false);
-                return true;
-            }), cancellationToken).ConfigureAwait(false))
-            {
-                _interrupts.Reset();
-                return;
-            }
-        }
-        else
-        {
-            await _voice.ConnectAsync(effective, null, cancellationToken).ConfigureAwait(false);
-            DrainDiagnostics();
+            await _jobs.StartAsync(
+                BackgroundJobKind.Voice,
+                (phase, token) => _voice.ConnectAsync(effective, phase, token),
+                outcome =>
+                {
+                    DrainDiagnostics();
+                    _interrupts.Reset();   // a probe is the operator's "try again"
+                    ReportJobEnd(outcome, NoticeGlyphs.Stt, () => ReportVoice(quiet));
+                    return Task.CompletedTask;
+                },
+                cancellationToken).ConfigureAwait(false);
+            return;
         }
 
-        _interrupts.Reset();   // a probe is the operator's "try again"
+        await _jobs.StopAsync(BackgroundJobKind.Voice).ConfigureAwait(false);
+        await _voice.ConnectAsync(effective, null, cancellationToken).ConfigureAwait(false);
+        DrainDiagnostics();
+        _interrupts.Reset();
         ReportVoice(quiet);
     }
 
-    /// <summary>The <c>Voice:</c> line (and the wake / interrupt warnings) for the voice session as it stands; quiet, the warnings alone.</summary>
+    /// <summary>The <c>Voice:</c> line (and the wake / interrupt warnings) for the voice session as it stands; quiet, the warnings alone. Nothing while its setup runs: the job's end says it (2026-09-29).</summary>
     private void ReportVoice(bool quiet = false)
     {
+        if (_jobs.Running(BackgroundJobKind.Voice))
+        {
+            return;
+        }
+
         if (_voice.StatusIsWarning)
         {
             _transcript.Warning(_voice.StatusLine());
@@ -8480,11 +8628,12 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>
-    /// Readies the MCP servers (2026-09-20): every server that is on started under a spinner
-    /// (<see cref="McpText.ConnectingLabel"/>, the label following the count), the fourth startup
-    /// connect after the LLM, TTS and STT ones and the same after a profile switch, a master-switch
-    /// flip or a <c>/mcp</c> edit that asks for it. Ctrl+C under the spinner cancels the wave
-    /// (<see cref="ConnectUnderWatchAsync"/>): the app stays, the rows read <c>failed: cancelled</c>.
+    /// Readies the MCP servers (2026-09-20): every server that is on started (<see cref="McpText.ConnectingLabel"/>, the
+    /// label following the count), the fourth startup connect after the LLM, TTS and STT ones and the same after a profile
+    /// switch, a master-switch flip or a <c>/mcp</c> edit that asks for it. Behind the input line since 2026-09-29 (the user's
+    /// ask): <see cref="BackgroundJobText.McpGlyph"/> and the count sit on the strip, a double-click there cancels the wave
+    /// (the rows read <c>failed: cancelled</c>), and the <c>MCP:</c> line is printed at the loop top. A turn meanwhile gets
+    /// the servers that are up. A wave only starts from the loop, never under a reply, so none disposes a client a turn holds.
     /// With nothing on (the switch off, no server named, every one disabled or shadowed) the
     /// session still runs its connect — it drops whatever ran — and nothing is printed.
     /// </summary>
@@ -8496,17 +8645,21 @@ internal sealed partial class ChatScreen
         bool any = effective.McpServers && merged.Entries.Any(e => e.Startable && !disabled.Contains(e.Name));
         if (any)
         {
-            if (await ConnectUnderWatchAsync(NoticeGlyphs.Mcp, token => _transcript.WithSpinnerAsync(McpText.ConnectingLabel, async setLabel =>
-            {
-                await _mcp.ConnectAllAsync(effective, setLabel, token).ConfigureAwait(false);
-                return true;
-            }), cancellationToken).ConfigureAwait(false))
-            {
-                return;
-            }
+            await _jobs.StartAsync(
+                BackgroundJobKind.Mcp,
+                (phase, token) => _mcp.ConnectAllAsync(effective, phase, token),
+                outcome =>
+                {
+                    DrainDiagnostics();
+                    ReportJobEnd(outcome, NoticeGlyphs.Mcp, ReportMcp);
+                    return Task.CompletedTask;
+                },
+                cancellationToken).ConfigureAwait(false);
+            return;
         }
         else
         {
+            await _jobs.StopAsync(BackgroundJobKind.Mcp).ConfigureAwait(false);
             try
             {
                 await _mcp.ConnectAllAsync(effective, null, cancellationToken).ConfigureAwait(false);
@@ -8576,10 +8729,10 @@ internal sealed partial class ChatScreen
     {
         var changes = await _menu.ShowAsync(cancellationToken).ConfigureAwait(false);
 
-        // A local model used or installed from the catalog (2026-09-29): its own install and connect below stand for
+        // An embedded model used or installed from the catalog (2026-09-29): its own install and connect below stand for
         // the LLM reconnect any other change on the tab asked for.
-        var localPick = _menu.TakePendingLocalModel();
-        if (localPick is not null)
+        var embeddedPick = _menu.TakePendingEmbeddedModel();
+        if (embeddedPick is not null)
         {
             changes &= ~SettingsChanges.Llm;
         }
@@ -8595,9 +8748,9 @@ internal sealed partial class ChatScreen
         }
 
         await ApplySettingsChangesAsync(changes, cancellationToken).ConfigureAwait(false);
-        if (localPick is not null)
+        if (embeddedPick is not null)
         {
-            await UseLocalModelAsync(localPick, reasoning: false, cancellationToken).ConfigureAwait(false);
+            await UseEmbeddedModelAsync(embeddedPick, reasoning: false, cancellationToken).ConfigureAwait(false);
         }
     }
 
@@ -9510,6 +9663,8 @@ internal sealed partial class ChatScreen
     /// </summary>
     private async Task AfterProfileSwitchAsync(CancellationToken cancellationToken, string? preface = null, string? notice = null)
     {
+        // An embedded download is the old profile's (2026-09-29): paused, so its end never saves into the new one.
+        _jobs.Cancel(BackgroundJobKind.EmbeddedDownload);
         ForgetSession();
         LeavePlanOnReset();
         BindProfile();
@@ -10919,10 +11074,10 @@ internal sealed partial class ChatScreen
             return false;
         }
 
-        if (images.Count > 0 && _session.LocalServer is { Vision: false })
+        if (images.Count > 0 && _session.EmbeddedServer is { Vision: false } blind)
         {
-            // The local model without its vision projector (2026-09-29): llama-server would refuse the image anyway.
-            _transcript.Error(LocalLlm.LocalLlmText.NoVisionError);
+            // The embedded model without its vision projector (2026-09-29): llama-server would refuse the image anyway.
+            _transcript.Error(EmbeddedLlm.EmbeddedLlmText.NoVisionError);
             return false;
         }
 
@@ -11095,6 +11250,13 @@ internal sealed partial class ChatScreen
     /// </summary>
     private async Task<bool> HandlePushToTalkAsync(CancellationToken cancellationToken)
     {
+        if (_jobs.Running(BackgroundJobKind.Voice))
+        {
+            // Its setup still runs behind the line (2026-09-29): the status line would read "off" until it ends.
+            _transcript.Notice(BackgroundJobText.VoiceSettingUp(BackgroundJobs.Progress(_jobs.Label(BackgroundJobKind.Voice))));
+            return false;
+        }
+
         if (!_voice.Enabled)
         {
             _transcript.Notice(VoiceOffHint);

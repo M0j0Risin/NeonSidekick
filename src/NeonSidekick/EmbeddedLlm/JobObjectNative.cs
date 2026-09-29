@@ -1,7 +1,7 @@
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 
-namespace NeonSidekick.LocalLlm;
+namespace NeonSidekick.EmbeddedLlm;
 
 /// <summary>
 /// The kernel32 job-object calls <see cref="ChildJob"/> needs (2026-09-29): a job whose last handle closing kills every

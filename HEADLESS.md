@@ -187,12 +187,12 @@ $env:NEONSIDEKICK_CLAUDE_API_KEY = (Get-Secret AnthropicKey -AsPlainText)
 "Summarise this repo's README." | NeonSidekick.exe --headless --url https://api.anthropic.com --model claude-sonnet-5
 ```
 
-The local LLM: `--url local` runs a model the app downloaded, on its own llama.cpp server, with no other server needed. `--model` names the model's id (`gemma-4-e4b-qat`, `gemma-4-e2b`, `gemma-4-e4b-uncensored`, `gemma-4-e2b-uncensored`); without it, the first one installed runs. A headless run never downloads a model: install it once in the app (pick its **Local** row in `/server`), or the run ends with an error saying it isn't installed. It does download the llama.cpp runtime on a first run (577 MB for CUDA, 33 MB for Vulkan), and loading the model takes a few seconds before the first answer. The server stops when the run ends.
+The embedded LLM: `--url embedded` runs a model the app downloaded, on its own llama.cpp server, with no other server needed. `--model` names the model's id (`gemma-4-12b`, `gemma-4-12b-q5`, `gemma-4-12b-q6`, `gemma-4-12b-bf16`, `gemma-4-12b-qat`, `gemma-4-12b-qat-uncensored`, `gemma-4-e2b`, `gemma-4-e2b-uncensored`, `gemma-4-e4b`, `gemma-4-e4b-qat`, `gemma-4-e4b-uncensored`); without it, the first one installed runs, in that order. A headless run never downloads a model: install it once in the app (pick its **Embedded** row in `/server`), or the run ends with an error saying it isn't installed. It does download the llama.cpp runtime on a first run (577 MB for CUDA, 33 MB for Vulkan), and loading the model takes a few seconds before the first answer. The server stops when the run ends.
 
 ```powershell
-Get-Content job.txt | NeonSidekick.exe --headless --url local --model gemma-4-e2b
-$env:NEONSIDEKICK_LOCAL_BACKEND = "cpu"   # no GPU on this box
-"Ping." | NeonSidekick.exe --headless --url local
+Get-Content job.txt | NeonSidekick.exe --headless --url embedded --model gemma-4-e2b
+$env:NEONSIDEKICK_EMBEDDED_BACKEND = "cpu"   # no GPU on this box
+"Ping." | NeonSidekick.exe --headless --url embedded
 ```
 
 ---
@@ -647,8 +647,8 @@ Flags beat variables; variables beat the profile's saved values.
 |---|---|
 | `NEONSIDEKICK_PROFILE` | The profile, when there is no `--profile`; with neither, `default`. |
 | `NEONSIDEKICK_HOME` | A whole separate home (its own `settings.json`, profiles, models, llama.cpp runtimes, `mcp.json`, `sql.json`). |
-| `NEONSIDEKICK_LLM_URL` / `NEONSIDEKICK_LLM_MODEL` | Server and model, when there is no `--url` / `--model`. `local` and a local model's id run the local LLM. |
-| `NEONSIDEKICK_LOCAL_BACKEND` / `NEONSIDEKICK_LOCAL_CONTEXT` | The local LLM's llama.cpp build (`auto`, `cuda`, `vulkan`, `cpu`) and context window in tokens (0 for the model's own, or 512–262144) for the run. |
+| `NEONSIDEKICK_LLM_URL` / `NEONSIDEKICK_LLM_MODEL` | Server and model, when there is no `--url` / `--model`. `embedded` and an embedded model's id run the embedded LLM. |
+| `NEONSIDEKICK_EMBEDDED_BACKEND` / `NEONSIDEKICK_EMBEDDED_CONTEXT` | The embedded LLM's llama.cpp build (`auto`, `cuda`, `vulkan`, `cpu`) and context window in tokens (0 for the model's own, or 512–262144) for the run. |
 | `NEONSIDEKICK_LLM_API_KEY` | The server's key; never put it on the command line. |
 | `NEONSIDEKICK_CLAUDE_API` / `NEONSIDEKICK_CLAUDE_API_KEY` | `on` and a key offer the Claude API for the run (`--url https://api.anthropic.com`). The key is never logged and never sent to a local server. Every request is billed to the key's account. |
 | `NEONSIDEKICK_LLM_TURN_TIMEOUT` / `NEONSIDEKICK_LLM_REQUEST_TIMEOUT` | Seconds; raise them for long agentic jobs. |

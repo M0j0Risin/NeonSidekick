@@ -38,6 +38,9 @@ internal sealed class McpMenu
     /// <summary>The Options tab's index into <see cref="McpText.TabTitles"/>.</summary>
     public const int OptionsTab = 2;
 
+    /// <summary>Whether the MCP wave still runs behind the input line (2026-09-29): the rows that take the session's gate are refused meanwhile.</summary>
+    public Func<bool> Connecting { get; init; } = static () => false;
+
     public McpMenu(Func<McpFacts> facts, McpSession session, AppSettings settings, SettingsMenu menu, INoticeSink transcript, MenuPane pane, Action<string> openFile, Func<AppSettingsData> effective)
     {
         _facts = facts ?? throw new ArgumentNullException(nameof(facts));
@@ -216,6 +219,13 @@ internal sealed class McpMenu
         if (midTurn)
         {
             Sink.Notice(SettingsMenu.NotWhileReplyRunsNotice);
+            return;
+        }
+
+        if (Connecting())
+        {
+            // The wave still runs behind the line (2026-09-29): a reload, connect or disconnect would wait for all of it.
+            Sink.Notice(BackgroundJobText.McpStillConnecting);
             return;
         }
 

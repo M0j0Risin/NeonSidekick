@@ -241,8 +241,8 @@ public sealed class LlmEndpointProbe
             var v1 = LlmEndpoint.NormalizeBaseUrl(extra);
 
             // The Claude API is never scanned for: its row is the session's to add, with its own key (2026-09-27). Nor is the
-            // local model's sentinel (2026-09-29): its rows are the session's too, and the sentinel is no place to ask.
-            if (!urls.Contains(v1) && !(scope == ScanScope.Remote && v1.IsLoopback) && !ClaudeApi.IsClaudeApi(v1) && !LocalLlm.LocalEndpoint.IsLocal(v1)) urls.Add(v1);
+            // embedded model's sentinel (2026-09-29): its rows are the session's too, and the sentinel is no place to ask.
+            if (!urls.Contains(v1) && !(scope == ScanScope.Remote && v1.IsLoopback) && !ClaudeApi.IsClaudeApi(v1) && !EmbeddedLlm.EmbeddedEndpoint.IsEmbedded(v1)) urls.Add(v1);
         }
 
         var tasks = urls.Select(u => ProbeAsync(u, apiKey, cancellationToken)).ToArray();
@@ -312,10 +312,10 @@ public sealed class LlmEndpointProbe
         ArgumentNullException.ThrowIfNull(effective);
         string? configuredModel = string.IsNullOrWhiteSpace(effective.LlmModel) ? null : effective.LlmModel.Trim();
 
-        if (LocalLlm.LocalEndpoint.IsLocal(effective.LlmUrl))
+        if (EmbeddedLlm.EmbeddedEndpoint.IsEmbedded(effective.LlmUrl))
         {
-            // The local model's sentinel (2026-09-29) is started, not probed: LlmSession does that before it gets here.
-            DiagnosticLog.Error(Category, "The LLM URL names the local model, which this mode cannot start.");
+            // The embedded model's sentinel (2026-09-29) is started, not probed: LlmSession does that before it gets here.
+            DiagnosticLog.Error(Category, "The LLM URL names the embedded model, which this mode cannot start.");
             return null;
         }
 

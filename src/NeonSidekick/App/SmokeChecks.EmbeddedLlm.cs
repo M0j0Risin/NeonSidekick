@@ -1,12 +1,12 @@
 using System.Globalization;
-using NeonSidekick.LocalLlm;
+using NeonSidekick.EmbeddedLlm;
 
 namespace NeonSidekick.App;
 
 public static partial class SmokeChecks
 {
     /// <summary>
-    /// <c>llm:job-object</c> (2026-09-29): the local model's kill-on-close job in the published binary — a job created,
+    /// <c>llm:job-object</c> (2026-09-29): the embedded model's kill-on-close job in the published binary — a job created,
     /// <c>KILL_ON_JOB_CLOSE</c> set through the extended-limit struct, the flags read back through the same struct (which
     /// proves the source-generated marshalling kept its layout under AOT), and the job closed. No process is put in it.
     /// </summary>

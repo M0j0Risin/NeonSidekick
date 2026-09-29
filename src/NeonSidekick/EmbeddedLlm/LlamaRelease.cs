@@ -1,8 +1,8 @@
 using NeonSidekick.Speech;
 
-namespace NeonSidekick.LocalLlm;
+namespace NeonSidekick.EmbeddedLlm;
 
-/// <summary>Which llama.cpp build runs the local model: NVIDIA's CUDA, any GPU's Vulkan, or the CPU alone.</summary>
+/// <summary>Which llama.cpp build runs the embedded model: NVIDIA's CUDA, any GPU's Vulkan, or the CPU alone.</summary>
 public enum LlamaBackend
 {
     Cpu,
@@ -14,7 +14,7 @@ public enum LlamaBackend
 public sealed record LlamaAsset(string Name, long Bytes, string Sha256);
 
 /// <summary>
-/// The llama.cpp build the local model runs on (2026-09-29), pinned by tag, asset name, size and SHA-256 and downloaded
+/// The llama.cpp build the embedded model runs on (2026-09-29), pinned by tag, asset name, size and SHA-256 and downloaded
 /// on first use into <c>&lt;home&gt;/llama/&lt;tag&gt;-&lt;backend&gt;/</c> — never shipped beside the exe (the CUDA
 /// runtime alone is 420 MB). Pinning, not "latest", because the numbered builds are llama.cpp's pre-releases (its
 /// <c>/releases/latest</c> is a tag with no zips at all) and because flags and asset names do drift.
@@ -23,9 +23,9 @@ public sealed record LlamaAsset(string Name, long Bytes, string Sha256);
 /// <c>.assets[]</c> with <c>name</c>, <c>size</c> and <c>digest</c> (<c>sha256:…</c>); update <see cref="Tag"/> and
 /// the three assets per backend below, check the zips still hold <see cref="RequiredFiles"/> (the CUDA major version is
 /// in the runtime's DLL names), and run the gated live test. The previous build's folder is pruned after the new one
-/// installs (<see cref="LocalModels.PruneOldRuntimes"/>).</para>
+/// installs (<see cref="EmbeddedModels.PruneOldRuntimes"/>).</para>
 ///
-/// <para>Windows x64 only (<see cref="LocalEndpoint.Offered"/>). CUDA is the 13.x build: its kernels cover Blackwell
+/// <para>Windows x64 only (<see cref="EmbeddedEndpoint.Offered"/>). CUDA is the 13.x build: its kernels cover Blackwell
 /// (the 12.4 build predates sm_120), and it needs driver 580 or newer (<see cref="LlamaBackendDetect.MinimumCudaDriver"/>).
 /// Its runtime DLLs come in a second zip without a build number in its name, unpacked into the same folder. Every zip
 /// is flat.</para>
@@ -91,7 +91,7 @@ public static class LlamaRelease
 
     /// <summary>The runtime as a <see cref="ModelStore"/> archive set.</summary>
     public static ArchiveSetSpec Spec(string llamaDirectory, LlamaBackend backend) => new(
-        LocalLlmText.RuntimeDisplay(backend),
+        EmbeddedLlmText.RuntimeDisplay(backend),
         Folder(llamaDirectory, backend),
         Assets(backend).Select(a => new ArchivePart(a.Name, Url(a), a.Bytes, a.Sha256)).ToList(),
         RequiredFiles(backend));

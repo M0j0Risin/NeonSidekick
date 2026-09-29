@@ -43,7 +43,7 @@ During early development, I was experimenting with synthwave-style themes in Spe
 
 ### AI Connectivity & Context Management
 * **Local AI Auto-Discovery:** Automatically detects and connects to most OpenAI-compatible servers on your local network (LM Studio, vLLM, SGLang, Ollama, Unsloth, etc.), while allowing full manual configuration for custom endpoints.
-* **Built-In Local LLM:** No server? Pick a Gemma 4 model in `/server` and the app downloads it from Hugging Face (with its vision projector) and runs it on its own llama.cpp server: CUDA, Vulkan or CPU, chosen for your machine. See the *Local LLM* tab of `/settings`.
+* **Embedded LLM:** No server? Pick a Gemma 4 model in `/server` and the app downloads it from Hugging Face (with its vision projector) and runs it on its own llama.cpp server: CUDA, Vulkan or CPU, chosen for your machine. See the *Embedded* tab of `/settings`.
 * **Smart Context Handling:** Configurable automatic context compaction to optimize token usage and prevent window overflow.
 * **Prompt Transparency:** Visually inspect exactly what is being fed into the system prompt and see detailed compaction summaries—no black boxes.
 * **Persistent Memory:** A UI-editable memory system that automatically injects essential, recurring details directly into context.
@@ -77,7 +77,7 @@ During early development, I was experimenting with synthwave-style themes in Spe
 **Navigation**
 * **Keyboard:** ←/→ (switch tabs), ↑/↓ (move), Enter (edit/toggle), ESC (close).
 * **Mouse:** Click moves the cursor; double-click selects rows and tabs. The top-right × acts as ESC, and double-clicking outside an open pane closes it. Double-clicking a picture in the transcript opens it in the picture viewer. Clicking a picture in the ComfyUI picture strip highlights it and moves an open viewer to it; double-clicking it also opens it. To copy a picture out of the app (to the desktop or a folder), open it in the picture viewer and drag it from there.
-* **Fold buttons:** while the transcript holds a tool run, code block or thinking block that folds, **↘️↖️** sit at the left of the rule over the input row. ↘️ unfolds everything and ↖️ folds it again, as `/expand` and `/collapse` do but without a notice. They work while a reply runs too.
+* **Fold button:** while the transcript holds a tool run, code block or thinking block that folds, **⤡** sits at the left of the rule over the input row. A click does what Ctrl+O does: it unfolds everything when anything is folded, and folds everything otherwise, without a notice. It works while a reply runs too.
 * **Session name:** double-click the session's name at the right end of the rule over the input row to rename it, as `/sessions title` does. The box opens with the current name in it, and it works while a reply runs too.
 
 **Input line**
@@ -96,13 +96,14 @@ Commands typed while a reply runs:
 | Everything else | Waits for the reply to end, queued behind any earlier messages (so *Queue cancel mode* applies) |
 
 **Double-Click Shortcuts**
-* **Hint row:** model name → `/server` (server, then model, then reasoning) · reasoning glyph → `/reasoning` · tokens/spinner → `/usage` · 🖼️/🎨 and its timer while ComfyUI renders → cancel the pictures (the reply goes on; ESC still ends it) · queued count → `/queue` · blank space → `/settings`.
+* **Hint row:** model name → `/server` (server, then model, then reasoning) · reasoning glyph → `/reasoning` · tokens/spinner → `/usage` · 🖼️/🎨 and its timer while ComfyUI renders → cancel the pictures (the reply goes on; ESC still ends it) · 📥 / 🔌 / 🎧 / 🔈 while an embedded download, the MCP servers, voice input or speech output set up → cancel that one · queued count → `/queue` · blank space → `/settings`.
+* **Long setups run in the background:** an embedded model's download, the MCP servers connecting, and the first-use downloads and loads of voice input and speech output. One that takes longer than half a second leaves the input line to you: its glyph (📥, 🔌, 🎧 or 🔈) sits on the hint row with its progress, menus, commands and chat keep working, and its status line prints when it finishes.
 * **Rule over the input row:** the session's name → `/sessions title` (rename it).
-* **Toolbar** (*Show toolbar*): a glyph toggles its pane, or switches to it from another pane.
+* **Toolbar** (*Show toolbar*): a glyph toggles its pane, or switches to it from another pane. *Show toolbar* is a checklist: uncheck any glyph or the working directory to leave it off the row, or everything to hide the row.
 
 | Toolbar item | Shown | Opens |
 |---|---|---|
-| ⚙️ 🛠️ 🔌 🎓 🎭 💬 | always | `/settings`, `/tools`, `/mcp`, `/skills`, `/sys`, `/sessions` |
+| ⚙️ 🛠️ 🔌 🎓 🎭 💬 📊 | always | `/settings`, `/tools`, `/mcp`, `/skills`, `/sys`, `/sessions`, `/usage` |
 | 💾 | while *Memory* is on | `/memory` |
 | 🔒 / 🔓 | *Shell command policy* is `ask` / `yolo` (none under `off`) | `/cmdlist` |
 | 👮 | *Shell police outside paths* is on and the policy isn't `off` | `/police` |
@@ -142,7 +143,7 @@ Settings that an environment variable or flag can override for one launch are li
 | Keep command history | Saves the ↑/↓ history (newest 1,000 lines) in the profile's `sessions.db`, so it survives restarts and profile switches. Lines holding a collapsed paste or a picture aren't saved. Off, the saved lines are deleted at the next profile load. `/cmdclear` empties it either way. | on |
 | Welcome splash | Pictures under the banner at startup, until the first line is sent: `fullsize`, `tiled` or `disabled`. See Welcome splash below. | `fullsize` |
 | Working directory in header | Prints the working directory at the right of the banner's title line. | off |
-| Show toolbar | Draws the toolbar under the hint row (see *Double-Click Shortcuts* above). | on |
+| Show toolbar | Which items the toolbar under the hint row shows (see *Double-Click Shortcuts* above): a checklist of every glyph and the working-directory path, Enter or Space to flip one. Nothing checked hides the row; the row reads `all`, `off` or how many are checked. 💾, the lock and 👮 still need their own settings on. | all |
 | Theme | `synthwave`, `netrunner` (green phosphor), `nostromo` (amber phosphor), `noir` (greyscale), `cyberpunk` (colourful), `vaporwave` (pastel), `mainframe` (blue phosphor), `grid` (light cycle), `replicant` (smog and sodium) or `abyssal` (bioluminescent). | `synthwave` |
 | Draft editor | What `/draft` opens its temporary file with (`code --wait`, `notepad`…); empty uses the app Windows opens `.txt` files with. | (default .txt editor) |
 | Image viewer | Where a double-clicked picture opens. Empty: the built-in picture viewer. `system`: the app Windows registers for the file type (Paint for png, jpg and bmp). Anything else is a command, with the file's path appended (`mspaint`, `"C:\Program Files\GIMP 3\bin\gimp-3.exe"`). | (built-in viewer) |
@@ -172,7 +173,7 @@ Settings that an environment variable or flag can override for one launch are li
 | Setting | What it does | Default |
 |---|---|---|
 | LLM scan mode | Where a blank URL looks for a server: `local` (the usual ports on this machine), `remote` (the same ports across the local network), `both`, or `disabled` (no scan; set the URL by hand). | `local` |
-| LLM URL | The OpenAI-compatible base URL (`http://127.0.0.1:1234/v1`), or `local` for the built-in local LLM (see *Local LLM*). Empty scans per *LLM scan mode* and, at startup, lets you pick a server, model and reasoning level, all saved (ESC takes the first server, unsaved). `/server` fills it in. | (scan) |
+| LLM URL | The OpenAI-compatible base URL (`http://127.0.0.1:1234/v1`), or `embedded` for the app's own embedded LLM (see *Embedded*). Empty scans per *LLM scan mode* and, at startup, lets you pick a server, model and reasoning level, all saved (ESC takes the first server, unsaved). `/server` fills it in. | (scan) |
 | LLM model | The model id; empty takes the first the server lists. `/model` picks one. | (first listed) |
 | LLM API key | The bearer token; `empty` for keyless local servers. A real key is saved encrypted for your Windows account (DPAPI) and shown as `(set, encrypted)`; typing replaces it (`empty` stays as it is). | `empty` |
 | LLM reasoning | The reasoning effort sent with every request: `none` (thinking off), `low`, `medium`, `high` or `xhigh`. `/reasoning` opens the same list. | `none` |
@@ -191,7 +192,7 @@ Settings that an environment variable or flag can override for one launch are li
 | LLM use fun verbs | The thinking spinner reads a random verb instead of `thinking` / `writing`. | off |
 | LLM show thinking | Streams a reasoning model's thinking as a dim block (its last five lines), folded to `▸ 💭 thought for 4.2s` when the answer starts; needs Transcript markdown. Click the line, press Ctrl+O or use `/expand` to see it again. Thinking is never spoken or logged, and copied only by `/copy --thinking`. | on |
 | LLM preserve thinking | Sends the model's thinking from earlier turns back to a local server, as `reasoning_content`, and asks the chat template to keep it (`chat_template_kwargs`: `preserve_thinking` for Qwen3.6, `clear_thinking: false` for GLM). The current turn's thinking always goes back, so a model keeps its reasoning between tool calls. Costs context; a `/compact` prune drops older thinking first. The Claude API is not affected. | off |
-| LLM reasoning estimate | How the *Reasoning* count in `/usage` is filled in when the server streams the model's thinking but doesn't count it (llama.cpp, including the local LLM, and Ollama): `chars` divides the thinking's characters by 4; `tokenize` asks llama.cpp's `/tokenize` for the exact count (one short request after each reply) and falls back to `chars` where that isn't available; `off` shows `—`. An estimate shows as `~1,234`. A server's own count is always used as it is. | `chars` |
+| LLM reasoning estimate | How the *Reasoning* count in `/usage` is filled in when the server streams the model's thinking but doesn't count it (llama.cpp, including the embedded LLM, and Ollama): `chars` divides the thinking's characters by 4; `tokenize` asks llama.cpp's `/tokenize` for the exact count (one short request after each reply) and falls back to `chars` where that isn't available; `off` shows `—`. An estimate shows as `~1,234`. A server's own count is always used as it is. | `chars` |
 | LLM sampling | Sampling overrides per model (temperature, top_p, top_k, min_p, the penalties, an extra body); the row lists the models that have some, and Enter opens the `/sampling` pane. See Sampling per model. | (server defaults) |
 | LLM sampling from Hugging Face | When the server doesn't report its sampling defaults (vLLM, SGLang, LM Studio) and the model id is a Hugging Face repo (`Qwen/Qwen3-8B`), the `/sampling` pane reads the model card's `generation_config.json` and shows its values as `(Hugging Face)`. vLLM and SGLang use that file unless started otherwise. One request to huggingface.co per model and connect, never with your API key; display only. | off |
 
@@ -216,6 +217,8 @@ A server ignores the fields it does not know; Ollama's `/v1` endpoint takes only
 
 #### TTS
 
+Speech output sets up in the background (🔈 on the hint row), so a first-use Kokoro download doesn't hold the input line; replies are text-only until it's ready.
+
 | Setting | What it does | Default |
 |---|---|---|
 | TTS output | Reads replies aloud (`/tts`). Fenced code blocks and tables are shown but never read aloud (nor by `/speak`). | off |
@@ -229,6 +232,8 @@ A server ignores the fields it does not know; Ollama's `/v1` endpoint takes only
 | TTS speed | The speech rate multiplier, 0.5–2.0. | 1.2 |
 
 #### STT
+
+Voice input sets up in the background (🎧 on the hint row), so a first-use Whisper download doesn't hold the input line; push-to-talk says it's still setting up until it's ready.
 
 | Setting | What it does | Default |
 |---|---|---|
@@ -257,30 +262,39 @@ Anthropic's Claude API as a server. With the switch on and a key set, `/server` 
 * The context window is the model's `max_input_tokens`.
 * `/usage` adds *Cache* and *Cost* rows. Cost is an estimate at list price, not the bill.
 
-#### Local LLM
+#### Embedded
 
-A small model the app downloads and runs itself, on llama.cpp's `llama-server`, for when no other server is around. `/server` (and the startup picker) lists one **Local** row per model after the servers it found: an installed model says `installed · 4.2 GB`, one not yet downloaded says `download 4.2 GB`, and a paused download says how far it got. Picking a row that isn't installed downloads it first, under the spinner, then starts it. `/server local` lists the local rows alone.
+A small model the app downloads and runs itself, on llama.cpp's `llama-server`, for when no other server is around. `/server` (and the startup picker) lists one **Embedded** row per model after the servers it found: an installed model says `installed · 4.2 GB`, one not yet downloaded says `download  · 4.2 GB`, and a paused download says how far it got. The 12B's builds share one name, so each row shows its quantisation too. Picking a row that isn't installed asks for the reasoning level, then downloads it in the background (📥 and its percentage on the hint row; double-click 📥 to pause), and switches to it when it's done — unless you picked another server meanwhile. `/server embedded` lists the embedded rows alone.
 
-| Model | Quantisation | Download |
-|---|---|---|
-| Gemma 4 E4B QAT (`gemma-4-e4b-qat`, Unsloth) | UD-Q4_K_XL | 5.2 GB |
-| Gemma 4 E2B (`gemma-4-e2b`, Unsloth) | UD-Q4_K_XL | 4.2 GB |
-| Gemma 4 E4B Uncensored (`gemma-4-e4b-uncensored`, HauhauCS) | Q4_K_P | 6.4 GB |
-| Gemma 4 E2B Uncensored (`gemma-4-e2b-uncensored`, HauhauCS) | Q4_K_P | 4.4 GB |
+| Model | Quantisation | Download | Images |
+|---|---|---|---|
+| Gemma 4 12B (`gemma-4-12b`, Unsloth) | UD-Q4_K_XL | 7.5 GB | yes |
+| Gemma 4 12B (`gemma-4-12b-q5`, Unsloth) | UD-Q5_K_XL | 8.8 GB | yes |
+| Gemma 4 12B (`gemma-4-12b-q6`, Unsloth) | UD-Q6_K_XL | 10.9 GB | yes |
+| Gemma 4 12B (`gemma-4-12b-bf16`, Unsloth) | BF16 | 24 GB | yes |
+| Gemma 4 12B QAT (`gemma-4-12b-qat`, Unsloth) | UD-Q4_K_XL | 6.9 GB | yes |
+| Gemma 4 12B QAT Uncensored (`gemma-4-12b-qat-uncensored`, HauhauCS Balanced) | Q4_K_M | 7.6 GB | yes |
+| Gemma 4 E2B (`gemma-4-e2b`, Unsloth) | UD-Q4_K_XL | 4.2 GB | yes |
+| Gemma 4 E2B Uncensored (`gemma-4-e2b-uncensored`, HauhauCS Aggressive) | Q4_K_P | 4.4 GB | yes |
+| Gemma 4 E4B (`gemma-4-e4b`, Unsloth) | UD-Q4_K_XL | 6.1 GB | yes |
+| Gemma 4 E4B QAT (`gemma-4-e4b-qat`, Unsloth) | UD-Q4_K_XL | 5.2 GB | yes |
+| Gemma 4 E4B Uncensored (`gemma-4-e4b-uncensored`, HauhauCS Aggressive) | Q4_K_P | 6.4 GB | yes |
 
 | Setting | What it does | Default |
 |---|---|---|
-| Local models | The catalog: each model with its size and state. Enter on an installed one offers *Use now* and *Remove*; on any other, *Install*. Using or installing closes the settings and connects. | |
-| Local backend | Which llama.cpp build runs the model: `auto` (CUDA with an NVIDIA driver 580 or newer, else Vulkan, else the CPU), `cuda`, `vulkan` or `cpu`. The row shows what `auto` picked and why. | `auto` |
-| Local context size | The server's context window in tokens: 0 for the model's own (128K for Gemma 4 E2B/E4B, which needs a lot of memory), else 512–262,144. | 32,768 |
-| Local GPU layers | How many of the model's layers go on the GPU: `auto` (as many as the free VRAM holds), `all`, or a number (0 runs on the CPU). | `auto` |
-| Local vision | Loads the model's vision projector so it can read images (about 1 GB more memory). Off, an image sent to the local model is refused. | on |
+| Embedded models | The catalog: each model with its size and state. Enter on an installed one offers *Use now* and *Remove*; on any other, *Install*. Using or installing closes the settings and connects. | |
+| Embedded backend | Which llama.cpp build runs the model: `auto` (CUDA with an NVIDIA driver 580 or newer, else Vulkan, else the CPU), `cuda`, `vulkan` or `cpu`. The row shows what `auto` picked and why. | `auto` |
+| Embedded context size | The server's context window in tokens: 0 for the model's own (128K for Gemma 4 E2B/E4B, 256K for the 12Bs, which needs a lot of memory), else 512–262,144. | 32,768 |
+| Embedded GPU layers | How many of the model's layers go on the GPU: `auto` (as many as the free VRAM holds), `all`, or a number (0 runs on the CPU). | `auto` |
+| Embedded vision | Loads the model's vision projector so it can read images (about 1 GB more memory for E2B/E4B, under 200 MB for the 12Bs). Off, an image sent to the embedded model is refused. | on |
 
-* Each file is checked against the SHA-256 Hugging Face publishes for it. A download that's cancelled (Ctrl+C) or cut keeps what arrived, and picking the model again resumes it. The drive must have the rest plus 1 GB to spare.
+* Each file is checked against the SHA-256 Hugging Face publishes for it. A download that's paused (double-click 📥) or cut keeps what arrived, and picking the model again resumes it. The drive must have the rest plus 1 GB to spare.
 * The first start downloads llama.cpp itself (build `b11258`: 577 MB for CUDA with its runtime, 33 MB for Vulkan, 19 MB for the CPU). If `auto` picked CUDA and it doesn't start, the app says so and tries Vulkan.
 * The server listens on a random port on `127.0.0.1` only, with a key made at each start. It keeps running while you switch reasoning or change a setting it doesn't depend on, restarts when one it does changes, and stops when you pick another server or quit. If the app crashes, Windows stops it too.
 * Models live in `models\llm\<id>\` and llama.cpp in `llama\` under the home folder. `/about` shows both.
-* `/model` on the local server lists the installed local models; one server runs at a time. A `/botchat multi` bot whose profile points at `local` shares the running model.
+* `/model` on the embedded server lists the installed embedded models; one server runs at a time. A `/botchat multi` bot whose profile points at `embedded` shares the running model.
+* Each model runs with the sampling its card recommends (Gemma 4: temperature 1.0, top-p 0.95, top-k 64; HauhauCS's 12B: 0.6, 0.9, 64); `/sampling` overrides them as for any server.
+* The 12B models at Q4 want about 8 GB of VRAM plus the context, at Q5 and Q6 about 10 and 12 GB, and BF16 about 25 GB (or a partial offload through *Embedded GPU layers*); E2B and E4B fit in less.
 * Windows x64 only. These are small models: tool calls work, but less reliably than on bigger ones.
 
 #### Botchat
@@ -539,7 +553,7 @@ The services that run without asking under `ask` can be changed in `profile.json
 | Tool collapse count | A run of more tool calls than this folds under one summary line (`▸ 🛠️ 7 tool calls — read_file ×3, …`): only its last lines show while it runs, and only the summary afterwards (0–100; 0 = never fold). | 2 |
 | Code collapse count | A top-level code block longer than this folds to its label (`▸ 📜 csharp · 57 lines`) once its closing fence arrives; while streaming, only its last this-many lines show (0–100; 0 = never fold). Needs Transcript markdown. | 20 |
 
-Click a folded line, press Ctrl+O, click **↘️** on the rule over the input row or use `/expand` to see it in full.
+Click a folded line, press Ctrl+O, click **⤡** on the rule over the input row or use `/expand` to see it in full.
 
 </details>
 
@@ -617,11 +631,11 @@ Type `/` to list every command with its summary; after a command and a space, it
 | `/loop <count> [delay] <message>`, `/loop infinite [delay] <message>` | Send the message that many times, or until ESC or Ctrl+C, waiting for each reply. See Loops. |
 | `/plan <requirement>` | Have the model research with read-only tools and present a plan before anything changes. See Plan mode. |
 | `/botchat [profile ...] [topic]` | Let profiles talk to each other until you stop them. See Bot conversations. |
-| `/expand` | Unfold every folded tool run, code block and thinking block, now and from here on (Ctrl+O toggles this and `/collapse`; ↘️ / ↖️ on the rule over the input row do the same silently). |
+| `/expand` | Unfold every folded tool run, code block and thinking block, now and from here on (Ctrl+O toggles this and `/collapse`, and so does ⤡ on the rule over the input row, silently). |
 | `/collapse` | Fold the tool runs, code blocks and thinking again. |
 | `/mcp` | Connect external MCP servers and switch their tools on or off. |
 | `/memory [forget \| edit \| copy <profile> [overwrite]]` | List memories on a pane (Enter removes one). `forget` forgets them all. `edit` opens `memory.json` in your editor (invalid JSON is ignored with a warning). `copy` appends them to another profile's memory, skipping duplicates, or replaces it with `overwrite`. `forget` and `copy` ask first. |
-| `/model [id]` | Pick a model from the server's list, or set one. On the local LLM, the installed local models. |
+| `/model [id]` | Pick a model from the server's list, or set one. On the embedded LLM, the installed embedded models. |
 | `/new` | Start a new conversation without clearing the screen. |
 | `/operata [reset \| copy <profile> [force]]` | Edit `operata.md` (the operating rules) in your editor, reset it to the default, or copy it to another profile (`force` replaces theirs). |
 | `/persona [reset \| copy <profile> [force]]` | The same for `persona.md` (the personality). |
@@ -633,7 +647,7 @@ Type `/` to list every command with its summary; after a command and a space, it
 | `/reasoning [level]` | Pick the reasoning effort (`none`, `low`, `medium`, `high`, `xhigh`). |
 | `/remember <text>` | Add a memory. |
 | `/sampling [field value]` | Edit the sampling overrides per model on a pane; `/sampling <field> <value>`, `<field> clear`, `extra <json>` or `clear` change the connected model's (see Sampling per model). |
-| `/server [url \| local]` | Pick an LLM server found on the usual ports (or the Claude API, when it's on and has a key, or a local LLM model), or set one. The model and reasoning pickers follow, and one reconnect applies all three. A local model not yet installed downloads first. `local` lists the local models alone (see Local LLM). |
+| `/server [url \| embedded]` | Pick an LLM server found on the usual ports (or the Claude API, when it's on and has a key, or an embedded model), or set one. The model and reasoning pickers follow, and one reconnect applies all three. An embedded model not yet installed downloads first. `embedded` lists the embedded models alone (see Embedded). |
 | `/sessions [id \| purge <id> \| purge older <age> \| purge all \| title [<text>]]` | List, restore, rename and purge stored sessions. An age is a number of days (`30`) or a duration (`12h`, `90m`, `2 hours`, `1d 6h`). `title` alone opens a box with the current name in it (as double-clicking the name on the rule does), and works while a reply runs. |
 | `/settings`, `//` | Edit and save the settings. |
 | `/skills` | List the skills (Enter moves, renames, edits or deletes one) and edit the skill, reflection and project-file settings. |
@@ -1216,7 +1230,7 @@ Get-Content job.txt | NeonSidekick.exe --headless --profile work
 
 ### MCP servers
 
-Each connected server is its own tool group.
+Each connected server is its own tool group. The servers connect in the background (🔌 and a count on the hint row); a reply started meanwhile gets the ones already up, and `/mcp`'s connect, disconnect and reload rows wait until they're done.
 
 * Its tools are named `<server>__<tool>` (`gateway__get_current_time`), so they never collide with the app's own tools.
 * Each keeps the description its server gives.
@@ -1249,8 +1263,8 @@ Every variable the app reads starts with `NEONSIDEKICK_`. They override a settin
 
 | Variable | Overrides | Accepts |
 |---|---|---|
-| `NEONSIDEKICK_LLM_URL` | LLM URL (`--url` wins) | A base URL, e.g. `http://127.0.0.1:1234/v1`, or `local` for the local LLM. |
-| `NEONSIDEKICK_LLM_MODEL` | LLM model (`--model` wins) | A model id from the server, or a local LLM model's id (`gemma-4-e2b`). |
+| `NEONSIDEKICK_LLM_URL` | LLM URL (`--url` wins) | A base URL, e.g. `http://127.0.0.1:1234/v1`, or `embedded` for the embedded LLM. |
+| `NEONSIDEKICK_LLM_MODEL` | LLM model (`--model` wins) | A model id from the server, or an embedded model's id (`gemma-4-e2b`). |
 | `NEONSIDEKICK_LLM_API_KEY` | LLM API key | The key, as issued (not encrypted). Never written to the log. |
 | `NEONSIDEKICK_LLM_REASONING` | LLM reasoning | `none`, `low`, `medium`, `high`, `xhigh`. |
 | `NEONSIDEKICK_LLM_REQUEST_TIMEOUT` | LLM request timeout (s) | Seconds, above 0 and up to 3600. |
@@ -1258,12 +1272,12 @@ Every variable the app reads starts with `NEONSIDEKICK_`. They override a settin
 | `NEONSIDEKICK_LLM_CONTEXT` | LLM context length | Tokens, a positive whole number. For servers that don't report their context window. |
 | `NEONSIDEKICK_LLM_SAMPLING` | LLM sampling, for every model | A JSON object in wire names, e.g. `{"temperature":0.6,"top_k":20,"typical_p":0.9}`: the named fields within their ranges; any other key goes into the extra body. It overrides those fields for every model, and the saved values stand for the rest. |
 
-### Local LLM
+### Embedded LLM
 
 | Variable | Overrides | Accepts |
 |---|---|---|
-| `NEONSIDEKICK_LOCAL_BACKEND` | Local backend | `auto`, `cuda`, `vulkan`, `cpu`. |
-| `NEONSIDEKICK_LOCAL_CONTEXT` | Local context size | Tokens: 0 (the model's own) or 512–262144. |
+| `NEONSIDEKICK_EMBEDDED_BACKEND` | Embedded backend | `auto`, `cuda`, `vulkan`, `cpu`. |
+| `NEONSIDEKICK_EMBEDDED_CONTEXT` | Embedded context size | Tokens: 0 (the model's own) or 512–262144. |
 
 ### Shell
 
@@ -1319,7 +1333,7 @@ These only matter when running the test suite from source; each live test is ski
 * `NEONSIDEKICK_TEST_WHISPER_MODEL`, `NEONSIDEKICK_TEST_SILERO_MODEL`, `NEONSIDEKICK_TEST_VOSK_MODEL`, `NEONSIDEKICK_TEST_KOKORO_MODEL`: a model, when it isn't already under `%USERPROFILE%\.neonsidekick\models`.
 * `NEONSIDEKICK_TEST_CLAUDE=1`: the live Claude Code tests, on your own sign-in (Haiku; a few cents a run).
 * `NEONSIDEKICK_TEST_CLAUDE_API_KEY`: the live Claude API tests, with that key (Sonnet 5 and Opus 5.5; a few cents a run).
-* `NEONSIDEKICK_TEST_LOCAL_MODEL`: the local LLM model the live test runs (a catalog id); without it, the first one installed under the home. The test needs a llama.cpp runtime and a model already installed.
+* `NEONSIDEKICK_TEST_EMBEDDED_MODEL`: the embedded model the live test runs (a catalog id); without it, the first one installed under the home. The test needs a llama.cpp runtime and a model already installed.
 * `NEONSIDEKICK_TEST_LLAMA_EXE` with `NEONSIDEKICK_TEST_TINY_GGUF`: any `llama-server.exe` and any small GGUF (`stories15M-q4_0.gguf`, 19 MB), for the process host's own test.
 
 </details>
@@ -1342,4 +1356,4 @@ These only matter when running the test suite from source; each live test is ski
 * `PhotoSauce.MagicScaler`
 * `Markdig`
 * `LibGit2Sharp`
-* `llama.cpp` (`llama-server`, downloaded on first use of the local LLM)
+* `llama.cpp` (`llama-server`, downloaded on first use of the embedded LLM)

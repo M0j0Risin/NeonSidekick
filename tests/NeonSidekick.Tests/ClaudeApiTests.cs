@@ -573,7 +573,7 @@ public class ClaudeApiTests
     {
         int tab = SettingsMenu.TabTitles.ToList().IndexOf(SettingsMenu.ClaudeApiTabTitle);
         Assert.Equal("STT", SettingsMenu.TabTitles[tab - 1]);
-        Assert.Equal(SettingsMenu.LocalModelTabTitle, SettingsMenu.TabTitles[tab + 1]);   // the other server of the app's own (2026-09-29); Botchat until then
+        Assert.Equal(SettingsMenu.EmbeddedTabTitle, SettingsMenu.TabTitles[tab + 1]);   // the other server of the app's own (2026-09-29); Botchat until then
         Assert.Equal((int)SettingsTab.ClaudeApi, tab);
         Assert.Equal([SettingsField.ClaudeApi, SettingsField.ClaudeApiKey, SettingsField.ClaudeApiMaxTokens, SettingsField.ClaudeApiPromptCaching], SettingsMenu.TabFields[tab]);
 

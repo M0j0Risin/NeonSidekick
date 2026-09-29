@@ -3,54 +3,54 @@ using Microsoft.Extensions.AI;
 using NeonSidekick.App;
 using NeonSidekick.Files;
 using NeonSidekick.Llm;
-using NeonSidekick.LocalLlm;
+using NeonSidekick.EmbeddedLlm;
 using NeonSidekick.Settings;
 
 namespace NeonSidekick.Tests;
 
 /// <summary>
 /// Finds an installed llama.cpp runtime and catalog model under the app's home (2026-09-29), once per assembly:
-/// <c>NEONSIDEKICK_TEST_LOCAL_MODEL</c> names the catalog model to prefer; otherwise the first installed. Install one by
+/// <c>NEONSIDEKICK_TEST_EMBEDDED_MODEL</c> names the catalog model to prefer; otherwise the first installed. Install one by
 /// picking it in <c>/server</c> once; nothing here downloads.
 /// </summary>
-internal static class LocalLlmTestModels
+internal static class EmbeddedLlmTestModels
 {
-    public const string ModelVariable = "NEONSIDEKICK_TEST_LOCAL_MODEL";
+    public const string ModelVariable = "NEONSIDEKICK_TEST_EMBEDDED_MODEL";
 
-    public static readonly string LocalModelsDirectory;
+    public static readonly string EmbeddedModelsDirectory;
     public static readonly string LlamaDirectory;
-    public static readonly LocalModel? Model;
+    public static readonly EmbeddedModel? Model;
     public static readonly string Unavailable;
 
-    static LocalLlmTestModels()
+    static EmbeddedLlmTestModels()
     {
         string home = AppSettings.ResolveStorageDirectory(Environment.GetEnvironmentVariable(EnvironmentOverrides.HomeVariable));
-        LocalModelsDirectory = Path.Combine(home, "models", "llm");
+        EmbeddedModelsDirectory = Path.Combine(home, "models", "llm");
         LlamaDirectory = Path.Combine(home, "llama");
-        var files = new LocalModels(LocalModelsDirectory, LlamaDirectory, new HttpClient());
+        var files = new EmbeddedModels(EmbeddedModelsDirectory, LlamaDirectory, new HttpClient());
         bool runtime = Enum.GetValues<LlamaBackend>().Any(files.RuntimeInstalled);
-        var wanted = LocalModelCatalog.Find(Environment.GetEnvironmentVariable(ModelVariable));
+        var wanted = EmbeddedModelCatalog.Find(Environment.GetEnvironmentVariable(ModelVariable));
         Model = runtime ? (wanted is not null && files.State(wanted).IsInstalled ? wanted : files.Installed().FirstOrDefault()) : null;
         Unavailable = Model is null
-            ? $"No llama.cpp {LlamaRelease.Tag} runtime and installed local model under {home}; pick a Local row in /server once."
+            ? $"No llama.cpp {LlamaRelease.Tag} runtime and installed embedded model under {home}; pick an Embedded row in /server once."
             : "";
     }
 }
 
-/// <summary>A fact that runs only with a local runtime and model installed (<see cref="LocalLlmTestModels"/>): a local gate, never CI's.</summary>
-public sealed class LocalLlmFactAttribute : FactAttribute
+/// <summary>A fact that runs only with an embedded runtime and model installed (<see cref="EmbeddedLlmTestModels"/>): an embedded gate, never CI's.</summary>
+public sealed class EmbeddedLlmFactAttribute : FactAttribute
 {
-    public LocalLlmFactAttribute()
+    public EmbeddedLlmFactAttribute()
     {
-        if (LocalLlmTestModels.Model is null)
+        if (EmbeddedLlmTestModels.Model is null)
         {
-            Skip = LocalLlmTestModels.Unavailable;
+            Skip = EmbeddedLlmTestModels.Unavailable;
         }
     }
 }
 
-/// <summary>The local model for real (2026-09-29): llama-server started, asked, shown a picture, swapped, stopped; and the job object's promise.</summary>
-public class LocalLlmLiveTests
+/// <summary>The embedded model for real (2026-09-29): llama-server started, asked, shown a picture, swapped, stopped; and the job object's promise.</summary>
+public class EmbeddedLlmLiveTests
 {
     [Fact]
     public void ClosingTheJob_KillsWhatIsInIt()
@@ -136,10 +136,10 @@ public class LocalLlmLiveTests
         string? gguf = Environment.GetEnvironmentVariable("NEONSIDEKICK_TEST_TINY_GGUF");
         if (!File.Exists(exe) || !File.Exists(gguf))
         {
-            return;   // a local gate: set both variables to run it
+            return;   // an embedded gate: set both variables to run it
         }
 
-        var model = LocalModelCatalog.Models[0] with { Id = "tiny" };
+        var model = EmbeddedModelCatalog.Models[0] with { Id = "tiny" };
         var launch = new LlamaLaunch(exe, LlamaBackend.Cpu, gguf, null, "tiny", 512, "0", model.Sampling);
         await using var host = new LlamaServerHost();
         var labels = new List<string>();
@@ -161,7 +161,7 @@ public class LocalLlmLiveTests
         }
 
         // The reasoning estimate's /tokenize (2026-09-29): this build answers it with the per-start key.
-        using (var tokenizing = new OpenAICompatibleChatClient(new LlmEndpoint(LocalEndpoint.BaseUrl, info.ModelId, info.ApiKey, "test") { LiveUrl = info.BaseUrl }, TimeSpan.FromSeconds(30), new HttpClient()))
+        using (var tokenizing = new OpenAICompatibleChatClient(new LlmEndpoint(EmbeddedEndpoint.BaseUrl, info.ModelId, info.ApiKey, "test") { LiveUrl = info.BaseUrl }, TimeSpan.FromSeconds(30), new HttpClient()))
         {
             long counted = await tokenizing.EstimateReasoningAsync("Once upon a time, there was a little dog named Spot.", ReasoningEstimate.Tokenize, CancellationToken.None);
             Assert.InRange(counted, 5, 30);
@@ -187,31 +187,31 @@ public class LocalLlmLiveTests
             return;
         }
 
-        var model = LocalModelCatalog.Models[0];
+        var model = EmbeddedModelCatalog.Models[0];
         await using var host = new LlamaServerHost();
 
-        var ex = await Assert.ThrowsAsync<LocalLlmException>(() => host.EnsureRunningAsync(
+        var ex = await Assert.ThrowsAsync<EmbeddedLlmException>(() => host.EnsureRunningAsync(
             new LlamaLaunch(exe, LlamaBackend.Cpu, Path.Combine(Path.GetTempPath(), "no-such-model.gguf"), null, "x", 512, "0", model.Sampling), model, null, CancellationToken.None));
 
-        Assert.StartsWith("the local model did not start: llama-server exited with code ", ex.Message);
+        Assert.StartsWith("the embedded model did not start: llama-server exited with code ", ex.Message);
         Assert.Null(host.Running);
     }
 
-    private static LocalLlmService Service(out LlamaServerHost host)
+    private static EmbeddedLlmService Service(out LlamaServerHost host)
     {
         host = new LlamaServerHost();
-        return new LocalLlmService(new LocalModels(LocalLlmTestModels.LocalModelsDirectory, LocalLlmTestModels.LlamaDirectory, new HttpClient()), host);
+        return new EmbeddedLlmService(new EmbeddedModels(EmbeddedLlmTestModels.EmbeddedModelsDirectory, EmbeddedLlmTestModels.LlamaDirectory, new HttpClient()), host);
     }
 
-    private static OpenAICompatibleChatClient Client(LocalServerInfo info) =>
-        new(new LlmEndpoint(LocalEndpoint.BaseUrl, info.ModelId, info.ApiKey, LocalLlmText.Source(info)) { LiveUrl = info.BaseUrl }, TimeSpan.FromMinutes(2), reasoningEstimate: () => ReasoningEstimate.Tokenize);
+    private static OpenAICompatibleChatClient Client(EmbeddedServerInfo info) =>
+        new(new LlmEndpoint(EmbeddedEndpoint.BaseUrl, info.ModelId, info.ApiKey, EmbeddedLlmText.Source(info)) { LiveUrl = info.BaseUrl }, TimeSpan.FromMinutes(2), reasoningEstimate: () => ReasoningEstimate.Tokenize);
 
-    [LocalLlmFact]
+    [EmbeddedLlmFact]
     public async Task TheServer_Starts_Answers_ReadsAPicture_IsReused_AndStops()
     {
-        var model = LocalLlmTestModels.Model!;
+        var model = EmbeddedLlmTestModels.Model!;
         await using var service = Service(out var host);
-        var settings = new AppSettingsData { LocalContextSize = 8192 };
+        var settings = new AppSettingsData { EmbeddedContextSize = 8192 };
 
         var info = await service.StartAsync(model, settings, null, CancellationToken.None);
 
@@ -244,7 +244,7 @@ public class LocalLlmLiveTests
         Assert.Equal(info, again);
 
         // Another context size: a restart on another port.
-        var restarted = await service.StartAsync(model, new AppSettingsData { LocalContextSize = 4096, LocalVision = false }, null, CancellationToken.None);
+        var restarted = await service.StartAsync(model, new AppSettingsData { EmbeddedContextSize = 4096, EmbeddedVision = false }, null, CancellationToken.None);
         Assert.NotEqual(info.Port, restarted.Port);
         Assert.False(restarted.Vision);
 

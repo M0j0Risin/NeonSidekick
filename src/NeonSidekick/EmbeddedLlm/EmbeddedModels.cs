@@ -2,10 +2,10 @@ using NeonSidekick.App;
 using NeonSidekick.Diagnostics;
 using NeonSidekick.Speech;
 
-namespace NeonSidekick.LocalLlm;
+namespace NeonSidekick.EmbeddedLlm;
 
 /// <summary>Where a catalog model stands on disk.</summary>
-public enum LocalModelStateKind
+public enum EmbeddedModelStateKind
 {
     Absent,
     Partial,
@@ -13,44 +13,44 @@ public enum LocalModelStateKind
 }
 
 /// <summary>A model's state and, when part-way, how far its download got (whole percent of both files).</summary>
-public readonly record struct LocalModelState(LocalModelStateKind Kind, int Percent = 0)
+public readonly record struct EmbeddedModelState(EmbeddedModelStateKind Kind, int Percent = 0)
 {
-    public static readonly LocalModelState Absent = new(LocalModelStateKind.Absent);
-    public static readonly LocalModelState Installed = new(LocalModelStateKind.Installed, 100);
+    public static readonly EmbeddedModelState Absent = new(EmbeddedModelStateKind.Absent);
+    public static readonly EmbeddedModelState Installed = new(EmbeddedModelStateKind.Installed, 100);
 
-    public bool IsInstalled => Kind == LocalModelStateKind.Installed;
+    public bool IsInstalled => Kind == EmbeddedModelStateKind.Installed;
 }
 
 /// <summary>
-/// The local model's files (2026-09-29): which catalog models are installed, installing one (its weights, then its
+/// The embedded model's files (2026-09-29): which catalog models are installed, installing one (its weights, then its
 /// vision projector — both resumable and SHA-256-checked through <see cref="ModelStore"/>), installing the llama.cpp
 /// runtime a backend needs, removing a model, and pruning runtimes of builds no longer pinned. Knows nothing of
-/// processes; <see cref="LocalLlmService"/> puts this and <see cref="ILlamaServerHost"/> together.
+/// processes; <see cref="EmbeddedLlmService"/> puts this and <see cref="ILlamaServerHost"/> together.
 ///
 /// <para>The catalog and the runtime specs are constructor inputs so the tests can install tiny fake files with real
-/// checksums from a stubbed HTTP handler; the app passes <see cref="LocalModelCatalog.Models"/> and
+/// checksums from a stubbed HTTP handler; the app passes <see cref="EmbeddedModelCatalog.Models"/> and
 /// <see cref="LlamaRelease.Spec"/>.</para>
 /// </summary>
-public sealed class LocalModels
+public sealed class EmbeddedModels
 {
-    private const string Category = "LocalLlm";
+    private const string Category = "EmbeddedLlm";
 
     private readonly ModelStore _store;
     private readonly Func<LlamaBackend, ArchiveSetSpec> _runtime;
 
-    /// <param name="localModelsDirectory"><c>&lt;home&gt;/models/llm</c>: one folder per model.</param>
+    /// <param name="embeddedModelsDirectory"><c>&lt;home&gt;/models/llm</c>: one folder per model.</param>
     /// <param name="llamaDirectory"><c>&lt;home&gt;/llama</c>: one folder per build and backend.</param>
     /// <param name="http">The download client (no timeout; a stub in tests).</param>
-    /// <param name="catalog">The models offered; the app's <see cref="LocalModelCatalog.Models"/> when null.</param>
+    /// <param name="catalog">The models offered; the app's <see cref="EmbeddedModelCatalog.Models"/> when null.</param>
     /// <param name="runtime">A backend's runtime spec; <see cref="LlamaRelease.Spec"/> over <paramref name="llamaDirectory"/> when null.</param>
-    public LocalModels(string localModelsDirectory, string llamaDirectory, HttpClient http, IReadOnlyList<LocalModel>? catalog = null, Func<LlamaBackend, ArchiveSetSpec>? runtime = null)
+    public EmbeddedModels(string embeddedModelsDirectory, string llamaDirectory, HttpClient http, IReadOnlyList<EmbeddedModel>? catalog = null, Func<LlamaBackend, ArchiveSetSpec>? runtime = null)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(localModelsDirectory);
+        ArgumentException.ThrowIfNullOrWhiteSpace(embeddedModelsDirectory);
         ArgumentException.ThrowIfNullOrWhiteSpace(llamaDirectory);
-        ModelsDirectory = localModelsDirectory;
+        ModelsDirectory = embeddedModelsDirectory;
         LlamaDirectory = llamaDirectory;
-        _store = new ModelStore(localModelsDirectory, http, Category);
-        Catalog = catalog ?? LocalModelCatalog.Models;
+        _store = new ModelStore(embeddedModelsDirectory, http, Category);
+        Catalog = catalog ?? EmbeddedModelCatalog.Models;
         _runtime = runtime ?? (backend => LlamaRelease.Spec(llamaDirectory, backend));
     }
 
@@ -58,36 +58,39 @@ public sealed class LocalModels
 
     public string LlamaDirectory { get; }
 
-    public IReadOnlyList<LocalModel> Catalog { get; }
+    public IReadOnlyList<EmbeddedModel> Catalog { get; }
 
     /// <summary>The model's weights on disk (present or not).</summary>
-    public string WeightsPath(LocalModel model) => LocalModelCatalog.WeightsSpec(ModelsDirectory, model).Path;
+    public string WeightsPath(EmbeddedModel model) => EmbeddedModelCatalog.WeightsSpec(ModelsDirectory, model).Path;
 
     /// <summary>The model's vision projector on disk (present or not).</summary>
-    public string MmprojPath(LocalModel model) => LocalModelCatalog.MmprojSpec(ModelsDirectory, model).Path;
+    public string MmprojPath(EmbeddedModel model) => EmbeddedModelCatalog.MmprojSpec(ModelsDirectory, model).Path;
 
-    /// <summary>Where <paramref name="model"/> stands: both files whole is installed; any bytes of either on disk is partial (with how far); nothing is absent.</summary>
-    public LocalModelState State(LocalModel model)
+    /// <summary>
+    /// Where <paramref name="model"/> stands: both files whole is installed; any bytes of either on disk is partial (with
+    /// how far); nothing is absent.
+    /// </summary>
+    public EmbeddedModelState State(EmbeddedModel model)
     {
         ArgumentNullException.ThrowIfNull(model);
         long weights = HeldBytes(WeightsPath(model), model.Model.Bytes);
         long mmproj = HeldBytes(MmprojPath(model), model.Mmproj.Bytes);
         if (weights == model.Model.Bytes && mmproj == model.Mmproj.Bytes)
         {
-            return LocalModelState.Installed;
+            return EmbeddedModelState.Installed;
         }
 
         long held = weights + mmproj;
         return held == 0
-            ? LocalModelState.Absent
-            : new LocalModelState(LocalModelStateKind.Partial, (int)Math.Min(99, held * 100 / LocalModelCatalog.TotalBytes(model)));
+            ? EmbeddedModelState.Absent
+            : new EmbeddedModelState(EmbeddedModelStateKind.Partial, (int)Math.Min(99, held * 100 / EmbeddedModelCatalog.TotalBytes(model)));
     }
 
     /// <summary>The catalog models that are installed, in catalog order.</summary>
-    public IReadOnlyList<LocalModel> Installed() => Catalog.Where(m => State(m).IsInstalled).ToList();
+    public IReadOnlyList<EmbeddedModel> Installed() => Catalog.Where(m => State(m).IsInstalled).ToList();
 
     /// <summary>What the installed models take on disk.</summary>
-    public long InstalledBytes() => Installed().Sum(LocalModelCatalog.TotalBytes);
+    public long InstalledBytes() => Installed().Sum(EmbeddedModelCatalog.TotalBytes);
 
     /// <summary>Whether <paramref name="backend"/>'s runtime is installed and complete.</summary>
     public bool RuntimeInstalled(LlamaBackend backend)
@@ -110,8 +113,8 @@ public sealed class LocalModels
         var result = await _store.EnsureArchiveSetAsync(
             spec,
             VoiceSession.Progress(phase, spec.Display, spec.Parts.Sum(p => p.Bytes)),
-            () => phase?.Invoke(LocalLlmText.VerifyingLabel(spec.Display)),
-            () => phase?.Invoke(LocalLlmText.UnpackingLabel(spec.Display)),
+            () => phase?.Invoke(EmbeddedLlmText.VerifyingLabel(spec.Display)),
+            () => phase?.Invoke(EmbeddedLlmText.UnpackingLabel(spec.Display)),
             cancellationToken).ConfigureAwait(false);
         if (result.Ok && result.Detail != "present")
         {
@@ -122,18 +125,18 @@ public sealed class LocalModels
     }
 
     /// <summary>
-    /// Installs <paramref name="model"/>: the weights, then the vision projector, each resumable and checked. A
-    /// cancel keeps what arrived; the next install resumes it.
+    /// Installs <paramref name="model"/>: the weights, then the vision projector, each resumable and checked. A cancel
+    /// keeps what arrived; the next install resumes it.
     /// </summary>
-    public async Task<ModelResult> InstallAsync(LocalModel model, Action<string>? phase, CancellationToken cancellationToken)
+    public async Task<ModelResult> InstallAsync(EmbeddedModel model, Action<string>? phase, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(model);
-        foreach (var spec in new[] { LocalModelCatalog.WeightsSpec(ModelsDirectory, model), LocalModelCatalog.MmprojSpec(ModelsDirectory, model) })
+        foreach (var spec in new[] { EmbeddedModelCatalog.WeightsSpec(ModelsDirectory, model), EmbeddedModelCatalog.MmprojSpec(ModelsDirectory, model) })
         {
             var result = await _store.EnsureAsync(
                 spec,
                 VoiceSession.Progress(phase, spec.Display, spec.ApproxBytes),
-                () => phase?.Invoke(LocalLlmText.VerifyingLabel(spec.Display)),
+                () => phase?.Invoke(EmbeddedLlmText.VerifyingLabel(spec.Display)),
                 cancellationToken).ConfigureAwait(false);
             if (!result.Ok)
             {
@@ -141,17 +144,17 @@ public sealed class LocalModels
             }
         }
 
-        return new ModelResult(true, LocalModelCatalog.Folder(ModelsDirectory, model), LocalLlmText.Installed(model));
+        return new ModelResult(true, EmbeddedModelCatalog.Folder(ModelsDirectory, model), EmbeddedLlmText.Installed(model));
     }
 
     /// <summary>
     /// Deletes <paramref name="model"/>'s folder, partial downloads and all. The caller stops a server that has it
     /// loaded first: Windows keeps a memory-mapped file open, and the delete would fail. Null on success, else why not.
     /// </summary>
-    public string? Remove(LocalModel model)
+    public string? Remove(EmbeddedModel model)
     {
         ArgumentNullException.ThrowIfNull(model);
-        string folder = LocalModelCatalog.Folder(ModelsDirectory, model);
+        string folder = EmbeddedModelCatalog.Folder(ModelsDirectory, model);
         try
         {
             if (Directory.Exists(folder))

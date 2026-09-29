@@ -1,6 +1,6 @@
 using System.Net;
 using System.Net.Http.Headers;
-using NeonSidekick.LocalLlm;
+using NeonSidekick.EmbeddedLlm;
 using NeonSidekick.Settings;
 using NeonSidekick.Speech;
 using NeonSidekick.Tests.Fakes;
@@ -8,10 +8,10 @@ using NeonSidekick.Tests.Fakes;
 namespace NeonSidekick.Tests;
 
 /// <summary>
-/// <see cref="LocalModels"/> over a tiny catalog of fake GGUF files with real checksums, served by a stub handler, and
-/// <see cref="LocalLlmService"/> over it and a <see cref="FakeLlamaServerHost"/> (2026-09-29).
+/// <see cref="EmbeddedModels"/> over a tiny catalog of fake GGUF files with real checksums, served by a stub handler, and
+/// <see cref="EmbeddedLlmService"/> over it and a <see cref="FakeLlamaServerHost"/> (2026-09-29).
 /// </summary>
-public class LocalModelsTests : IDisposable
+public class EmbeddedModelsTests : IDisposable
 {
     private readonly string _home = Path.Combine(Path.GetTempPath(), "NeonSidekick.Tests", Guid.NewGuid().ToString("N"));
     private readonly StubHttpMessageHandler _http = new();
@@ -19,23 +19,23 @@ public class LocalModelsTests : IDisposable
     private readonly byte[] _mmproj = FakeModelFiles.GgufBytes(10_000)[..9_000];
     private readonly byte[] _runtimeZip = FakeModelFiles.Zip(("llama-server.exe", "server"), ("ggml-cuda.dll", "cuda"));
     private readonly byte[] _vulkanZip = FakeModelFiles.Zip(("llama-server.exe", "server"), ("ggml-vulkan.dll", "vulkan"));
-    private readonly LocalModel _model;
-    private readonly LocalModels _files;
+    private readonly EmbeddedModel _model;
+    private readonly EmbeddedModels _files;
 
-    public LocalModelsTests()
+    public EmbeddedModelsTests()
     {
-        _model = new LocalModel(
+        _model = new EmbeddedModel(
             "tiny-model",
             "Tiny Model",
             "Q4",
             "test/tiny",
             "abc",
-            new LocalFile("tiny.gguf", _weights.Length, FakeModelFiles.Sha256(_weights)),
-            new LocalFile("mmproj-tiny.gguf", _mmproj.Length, FakeModelFiles.Sha256(_mmproj)),
-            new LocalSampling(1.0, 0.95, 64));
-        _files = new LocalModels(ModelsDir, LlamaDir, new HttpClient(_http), [_model], Runtime);
-        Serve(LocalModelCatalog.Url(_model, _model.Model).AbsoluteUri, _weights);
-        Serve(LocalModelCatalog.Url(_model, _model.Mmproj).AbsoluteUri, _mmproj);
+            new EmbeddedFile("tiny.gguf", _weights.Length, FakeModelFiles.Sha256(_weights)),
+            new EmbeddedFile("mmproj-tiny.gguf", _mmproj.Length, FakeModelFiles.Sha256(_mmproj)),
+            new EmbeddedSampling(1.0, 0.95, 64));
+        _files = new EmbeddedModels(ModelsDir, LlamaDir, new HttpClient(_http), [_model], Runtime);
+        Serve(EmbeddedModelCatalog.Url(_model, _model.Model).AbsoluteUri, _weights);
+        Serve(EmbeddedModelCatalog.Url(_model, _model.Mmproj!).AbsoluteUri, _mmproj);
         Serve("https://example.test/cuda.zip", _runtimeZip);
         Serve("https://example.test/vulkan.zip", _vulkanZip);
     }
@@ -54,7 +54,7 @@ public class LocalModelsTests : IDisposable
         var zip = backend == LlamaBackend.Vulkan ? _vulkanZip : _runtimeZip;
         string name = backend == LlamaBackend.Vulkan ? "vulkan.zip" : "cuda.zip";
         return new ArchiveSetSpec(
-            LocalLlmText.RuntimeDisplay(backend),
+            EmbeddedLlmText.RuntimeDisplay(backend),
             LlamaRelease.Folder(LlamaDir, backend),
             [new ArchivePart(name, new Uri("https://example.test/" + name), zip.Length, FakeModelFiles.Sha256(zip))],
             [LlamaRelease.ServerExecutable]);
@@ -73,22 +73,22 @@ public class LocalModelsTests : IDisposable
             return Task.FromResult(StubHttpMessageHandler.Bytes(HttpStatusCode.OK, body, "application/octet-stream"));
         });
 
-    // ── LocalModels ─────────────────────────────────────────────────────────
+    // ── EmbeddedModels ─────────────────────────────────────────────────────────
 
     [Fact]
     public void State_IsAbsent_ThenPartial_ThenInstalled()
     {
-        Assert.Equal(LocalModelState.Absent, _files.State(_model));
+        Assert.Equal(EmbeddedModelState.Absent, _files.State(_model));
 
         string partial = ModelStore.PartialPath(_files.WeightsPath(_model));
         Directory.CreateDirectory(Path.GetDirectoryName(partial)!);
         File.WriteAllBytes(partial, _weights[..19_500]);
-        Assert.Equal(new LocalModelState(LocalModelStateKind.Partial, 50), _files.State(_model));   // 19500 of 39000
+        Assert.Equal(new EmbeddedModelState(EmbeddedModelStateKind.Partial, 50), _files.State(_model));   // 19500 of 39000
 
         File.WriteAllBytes(_files.WeightsPath(_model), _weights);
         File.Delete(partial);
-        File.WriteAllBytes(_files.MmprojPath(_model), _mmproj);
-        Assert.Equal(LocalModelState.Installed, _files.State(_model));
+        File.WriteAllBytes(_files.MmprojPath(_model)!, _mmproj);
+        Assert.Equal(EmbeddedModelState.Installed, _files.State(_model));
         Assert.Equal([_model], _files.Installed());
         Assert.Equal(39_000, _files.InstalledBytes());
     }
@@ -101,7 +101,7 @@ public class LocalModelsTests : IDisposable
         var result = await _files.InstallAsync(_model, labels.Add, CancellationToken.None);
 
         Assert.True(result.Ok, result.Detail);
-        Assert.Equal(LocalLlmText.Installed(_model), result.Detail);
+        Assert.Equal(EmbeddedLlmText.Installed(_model), result.Detail);
         Assert.Equal(_weights, File.ReadAllBytes(Path.Combine(ModelsDir, "tiny-model", "tiny.gguf")));
         Assert.Equal(_mmproj, File.ReadAllBytes(Path.Combine(ModelsDir, "tiny-model", "mmproj-tiny.gguf")));
         Assert.True(_files.State(_model).IsInstalled);
@@ -113,14 +113,14 @@ public class LocalModelsTests : IDisposable
     [Fact]
     public async Task Install_AProjectorThatFailsItsChecksum_LeavesTheModelUninstalled()
     {
-        var bad = _model with { Mmproj = _model.Mmproj with { Sha256 = new string('1', 64) } };
-        var files = new LocalModels(ModelsDir, LlamaDir, new HttpClient(_http), [bad], Runtime);
+        var bad = _model with { Mmproj = _model.Mmproj! with { Sha256 = new string('1', 64) } };
+        var files = new EmbeddedModels(ModelsDir, LlamaDir, new HttpClient(_http), [bad], Runtime);
 
         var result = await files.InstallAsync(bad, null, CancellationToken.None);
 
         Assert.False(result.Ok);
         Assert.Equal(ModelStore.ChecksumError("Tiny Model vision"), result.Detail);
-        Assert.Equal(LocalModelStateKind.Partial, files.State(bad).Kind);   // the weights are whole; the projector is not
+        Assert.Equal(EmbeddedModelStateKind.Partial, files.State(bad).Kind);   // the weights are whole; the projector is not
     }
 
     [Fact]
@@ -163,13 +163,13 @@ public class LocalModelsTests : IDisposable
         Assert.Equal(["b11258-cuda", "bx-cpu", "notes"], Directory.EnumerateDirectories(LlamaDir).Select(Path.GetFileName).Order(StringComparer.Ordinal));
     }
 
-    // ── LocalLlmService ─────────────────────────────────────────────────────
+    // ── EmbeddedLlmService ─────────────────────────────────────────────────────
 
     private void InstallByHand()
     {
         Directory.CreateDirectory(Path.Combine(ModelsDir, "tiny-model"));
         File.WriteAllBytes(_files.WeightsPath(_model), _weights);
-        File.WriteAllBytes(_files.MmprojPath(_model), _mmproj);
+        File.WriteAllBytes(_files.MmprojPath(_model)!, _mmproj);
     }
 
     private static BackendChoice Cuda(string? _) => new(LlamaBackend.Cuda, "test driver");
@@ -179,8 +179,8 @@ public class LocalModelsTests : IDisposable
     {
         InstallByHand();
         var host = new FakeLlamaServerHost();
-        await using var service = new LocalLlmService(_files, host, Cuda);
-        var settings = new AppSettingsData { LocalContextSize = 8192, LocalGpuLayers = "all" };
+        await using var service = new EmbeddedLlmService(_files, host, Cuda);
+        var settings = new AppSettingsData { EmbeddedContextSize = 8192, EmbeddedGpuLayers = "all" };
 
         var info = await service.StartAsync(_model, settings, null, CancellationToken.None);
 
@@ -205,9 +205,9 @@ public class LocalModelsTests : IDisposable
     {
         InstallByHand();
         var host = new FakeLlamaServerHost();
-        await using var service = new LocalLlmService(_files, host, Cuda);
+        await using var service = new EmbeddedLlmService(_files, host, Cuda);
 
-        var info = await service.StartAsync(_model, new AppSettingsData { LocalVision = false }, null, CancellationToken.None);
+        var info = await service.StartAsync(_model, new AppSettingsData { EmbeddedVision = false }, null, CancellationToken.None);
 
         Assert.Null(host.Launches[0].MmprojPath);
         Assert.False(info.Vision);
@@ -216,19 +216,19 @@ public class LocalModelsTests : IDisposable
     [Fact]
     public async Task Start_OfAModelNotInstalled_IsRefused()
     {
-        await using var service = new LocalLlmService(_files, new FakeLlamaServerHost(), Cuda);
+        await using var service = new EmbeddedLlmService(_files, new FakeLlamaServerHost(), Cuda);
 
-        var ex = await Assert.ThrowsAsync<LocalLlmException>(() => service.StartAsync(_model, new AppSettingsData(), null, CancellationToken.None));
+        var ex = await Assert.ThrowsAsync<EmbeddedLlmException>(() => service.StartAsync(_model, new AppSettingsData(), null, CancellationToken.None));
 
-        Assert.Equal(LocalLlmText.NotInstalled(_model), ex.Message);
+        Assert.Equal(EmbeddedLlmText.NotInstalled(_model), ex.Message);
     }
 
     [Fact]
     public async Task AutoCuda_ThatFailsToStart_FallsBackToVulkan_AndRemembers()
     {
         InstallByHand();
-        var host = new FakeLlamaServerHost { Fail = l => l.Backend == LlamaBackend.Cuda ? new LocalLlmException("no CUDA device") : null };
-        await using var service = new LocalLlmService(_files, host, Cuda);
+        var host = new FakeLlamaServerHost { Fail = l => l.Backend == LlamaBackend.Cuda ? new EmbeddedLlmException("no CUDA device") : null };
+        await using var service = new EmbeddedLlmService(_files, host, Cuda);
 
         var info = await service.StartAsync(_model, new AppSettingsData(), null, CancellationToken.None);
 
@@ -246,13 +246,13 @@ public class LocalModelsTests : IDisposable
     public async Task ACudaRuntimeThatWillNotDownload_IsNoReasonToFallBack()
     {
         InstallByHand();
-        var files = new LocalModels(ModelsDir, LlamaDir, new HttpClient(_http), [_model], b => b == LlamaBackend.Cuda
+        var files = new EmbeddedModels(ModelsDir, LlamaDir, new HttpClient(_http), [_model], b => b == LlamaBackend.Cuda
             ? Runtime(b) with { Parts = [new ArchivePart("cuda.zip", new Uri("https://example.test/gone.zip"), 10, new string('0', 64))] }
             : Runtime(b));
         var host = new FakeLlamaServerHost();
-        await using var service = new LocalLlmService(files, host, Cuda);
+        await using var service = new EmbeddedLlmService(files, host, Cuda);
 
-        var ex = await Assert.ThrowsAsync<LocalLlmException>(() => service.StartAsync(_model, new AppSettingsData(), null, CancellationToken.None));
+        var ex = await Assert.ThrowsAsync<EmbeddedLlmException>(() => service.StartAsync(_model, new AppSettingsData(), null, CancellationToken.None));
 
         Assert.True(ex.RuntimeMissing);
         Assert.StartsWith("the llama.cpp runtime could not be installed: ", ex.Message);
@@ -265,10 +265,10 @@ public class LocalModelsTests : IDisposable
     public async Task ForcedCuda_ThatFailsToStart_Fails()
     {
         InstallByHand();
-        var host = new FakeLlamaServerHost { Fail = _ => new LocalLlmException("no CUDA device") };
-        await using var service = new LocalLlmService(_files, host, s => new BackendChoice(LlamaBackend.Cuda, "forced in settings"));
+        var host = new FakeLlamaServerHost { Fail = _ => new EmbeddedLlmException("no CUDA device") };
+        await using var service = new EmbeddedLlmService(_files, host, s => new BackendChoice(LlamaBackend.Cuda, "forced in settings"));
 
-        var ex = await Assert.ThrowsAsync<LocalLlmException>(() => service.StartAsync(_model, new AppSettingsData { LocalBackend = "cuda" }, null, CancellationToken.None));
+        var ex = await Assert.ThrowsAsync<EmbeddedLlmException>(() => service.StartAsync(_model, new AppSettingsData { EmbeddedBackend = "cuda" }, null, CancellationToken.None));
 
         Assert.Equal("no CUDA device", ex.Message);
         Assert.Single(host.Launches);
@@ -278,7 +278,7 @@ public class LocalModelsTests : IDisposable
     public async Task Install_PutsTheRuntimeInFirst_ThenTheModel()
     {
         var host = new FakeLlamaServerHost();
-        await using var service = new LocalLlmService(_files, host, Cuda);
+        await using var service = new EmbeddedLlmService(_files, host, Cuda);
         Assert.Equal(_runtimeZip.Length, service.RuntimeBytesToDownload(new AppSettingsData()));
 
         var result = await service.InstallAsync(_model, new AppSettingsData(), null, CancellationToken.None);
@@ -294,7 +294,7 @@ public class LocalModelsTests : IDisposable
     {
         InstallByHand();
         var host = new FakeLlamaServerHost();
-        await using var service = new LocalLlmService(_files, host, Cuda);
+        await using var service = new EmbeddedLlmService(_files, host, Cuda);
         await service.StartAsync(_model, new AppSettingsData(), null, CancellationToken.None);
 
         Assert.Null(service.Remove(_model));

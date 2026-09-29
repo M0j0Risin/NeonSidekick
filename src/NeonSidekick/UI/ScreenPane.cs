@@ -72,11 +72,12 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     /// </summary>
     public const string CloseGlyph = "×";
 
-    /// <summary>The upper rule's expand button (2026-09-28, the user's glyph): <c>/expand</c> under the mouse, silent as Ctrl+O. Two cells, the selector making it an emoji.</summary>
-    public const string ExpandGlyph = "↘️";
-
-    /// <summary>The upper rule's collapse button, right after <see cref="ExpandGlyph"/> with nothing between (2026-09-28, the user's layout): <c>/collapse</c> under the mouse.</summary>
-    public const string CollapseGlyph = "↖️";
+    /// <summary>
+    /// The upper rule's fold button (2026-09-29, the user's glyph, in place of the ↘️ ↖️ pair of 2026-09-28): one click is
+    /// Ctrl+O — everything unfolded when anything is folded, else everything folded (<see cref="ToggleToolGroups"/>). One
+    /// cell, a plain arrow with no emoji selector, so it takes a space either side like the rule's title.
+    /// </summary>
+    public const string FoldGlyph = "⤡";
     public const string Category = "Screen";
 
     /// <summary>The tick that advances the spinner and polls the window size.</summary>
@@ -161,11 +162,10 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     private Func<string> _ruleTitle = static () => "";
     private string _drawnRuleTitle = "";
 
-    // The upper rule's ↘️↖️ (2026-09-28): whether the last draw put them there, and the columns they landed at (-1 = none
-    // drawn), for TryHitFoldButton and the tick.
+    // The upper rule's ⤡ (2026-09-28 as ↘️↖️, one glyph since 2026-09-29): whether the last draw put it there, and the column
+    // it landed at (-1 = none drawn), for TryHitFoldButton and the tick.
     private bool _drawnFolds;
-    private int _foldExpandColumn = -1;
-    private int _foldCollapseColumn = -1;
+    private int _foldColumn = -1;
 
     // The upper rule's title (2026-09-28): the column it landed at (-1 = none drawn) and its cells, for TryHitRuleTitle.
     private int _ruleTitleColumn = -1;
@@ -680,15 +680,13 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     }
 
     /// <summary>
-    /// Whether a click at buffer cell (<paramref name="x"/>, <paramref name="y"/>) landed on the upper rule's ↘️ or ↖️
-    /// (2026-09-28, <see cref="UpperRule"/>): <paramref name="expand"/> true for ↘️ and the space at its left, false for
-    /// ↖️ and the rule glyph at its right — a cell of slack on the outer side of each, none between them. The caller
-    /// unfolds or folds everything (<see cref="SetToolGroupsExpanded"/>). False with no buttons drawn, an overlay drawn,
-    /// the pane lifted or disabled, or no geometry.
+    /// Whether a click at buffer cell (<paramref name="x"/>, <paramref name="y"/>) landed on the upper rule's
+    /// <see cref="FoldGlyph"/> (<see cref="UpperRule"/>) or the space either side of it. The caller does what Ctrl+O does
+    /// (<see cref="ToggleToolGroups"/>, 2026-09-29; one button for the unfold and the fold ↘️ ↖️ were until then). False with
+    /// no button drawn, an overlay drawn, the pane lifted or disabled, or no geometry.
     /// </summary>
-    public bool TryHitFoldButton(int x, int y, out bool expand)
+    public bool TryHitFoldButton(int x, int y)
     {
-        expand = false;
         if (!Enabled)
         {
             return false;
@@ -696,7 +694,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
 
         lock (_gate)
         {
-            if (!_drawn || _drawnOverlay || _foldExpandColumn < 0 || _batch > 0 || _modal > 0 || _geometry?.CursorTop() is not int top)
+            if (!_drawn || _drawnOverlay || _foldColumn < 0 || _batch > 0 || _modal > 0 || _geometry?.CursorTop() is not int top)
             {
                 return false;
             }
@@ -706,13 +704,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
                 return false;
             }
 
-            if (x >= _foldExpandColumn - 1 && x < _foldCollapseColumn)
-            {
-                expand = true;
-                return true;
-            }
-
-            return x >= _foldCollapseColumn && x <= _foldCollapseColumn + TextCells.Width(CollapseGlyph);
+            return x >= _foldColumn - 1 && x <= _foldColumn + TextCells.Width(FoldGlyph);
         }
     }
 
@@ -4085,19 +4077,18 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
 
     /// <summary>
     /// The upper rule with <see cref="RuleTitle"/> at its right edge and, while something in the transcript folds and no
-    /// overlay is up, ↘️↖️ at its left (<see cref="UpperRule"/>) in the strip button's style; the title, whether the buttons
-    /// were wanted and where they landed are remembered for the tick and <see cref="TryHitFoldButton"/>.
+    /// overlay is up, ⤡ at its left (<see cref="UpperRule"/>) in the strip button's style; the title, whether the button
+    /// was wanted and where it landed are remembered for the tick and <see cref="TryHitFoldButton"/>.
     /// </summary>
     private void WriteUpperRule(int width)
     {
         _drawnRuleTitle = _ruleTitle();
         _drawnFolds = FoldsWanted();
         var parts = UpperRule(_drawnRuleTitle, _drawnFolds, width);
-        _foldExpandColumn = parts.ExpandColumn;
-        _foldCollapseColumn = parts.CollapseColumn;
+        _foldColumn = parts.FoldColumn;
         _ruleTitleColumn = parts.TitleColumn;
         _ruleTitleCells = parts.TitleCells;
-        foreach (var (text, style) in new[] { (parts.Lead, Theme.PaneRule), (parts.Buttons, Theme.AccentSecondary), (parts.Rest, Theme.PaneRule) })
+        foreach (var (text, style) in new[] { (parts.Lead, Theme.PaneRule), (parts.Button, Theme.AccentSecondary), (parts.Rest, Theme.PaneRule) })
         {
             if (text.Length > 0)
             {
@@ -4108,49 +4099,47 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         _inner.WriteLine();
     }
 
-    /// <summary>The upper rule's ↘️↖️ are wanted: something in the store folds (<see cref="Scrollback.AnyFolds"/>) and no overlay is up — under one they go, as the strip does.</summary>
+    /// <summary>The upper rule's ⤡ is wanted: something in the store folds (<see cref="Scrollback.AnyFolds"/>) and no overlay is up — under one they go, as the strip does.</summary>
     private bool FoldsWanted() => _overlay is null && _store.AnyFolds;
 
-    /// <summary>Whether the upper rule's buttons are wanted now is not what the drawn rule shows: a run came to fold, or the last fold went.</summary>
+    /// <summary>Whether the upper rule's button is wanted now is not what the drawn rule shows: a run came to fold, or the last fold went.</summary>
     private bool FoldsChanged() => FoldsWanted() != _drawnFolds;
 
     /// <summary>
     /// The upper rule cut in the pieces <see cref="UpperRule"/> draws in their own styles, left to right — the rule's
-    /// <see cref="Lead"/>, the <see cref="Buttons"/> (↘️↖️) and the <see cref="Rest"/> (<see cref="RuleWithTitle"/>'s) — and
-    /// the columns ↘️ and ↖️ start at (−1 = not drawn); the column the title starts at (−1 = none drawn) and its cells
-    /// (2026-09-28, for <see cref="TryHitRuleTitle"/>).
+    /// <see cref="Lead"/>, the <see cref="Button"/> (⤡ and the space after it) and the <see cref="Rest"/>
+    /// (<see cref="RuleWithTitle"/>'s) — and the column ⤡ is at (−1 = not drawn); the column the title starts at (−1 = none
+    /// drawn) and its cells (2026-09-28, for <see cref="TryHitRuleTitle"/>).
     /// </summary>
-    public readonly record struct UpperRuleParts(string Lead, string Buttons, string Rest, int ExpandColumn, int CollapseColumn, int TitleColumn = -1, int TitleCells = 0)
+    public readonly record struct UpperRuleParts(string Lead, string Button, string Rest, int FoldColumn, int TitleColumn = -1, int TitleCells = 0)
     {
         /// <summary>The whole rule as one string.</summary>
-        public string Text => Lead + Buttons + Rest;
+        public string Text => Lead + Button + Rest;
     }
 
     /// <summary>
     /// The upper rule of <paramref name="width"/> cells (2026-09-28, the user's ask): with <paramref name="folds"/>,
-    /// <see cref="ExpandGlyph"/> and <see cref="CollapseGlyph"/> side by side after the rule's first glyph and a space, then
-    /// <see cref="RuleWithTitle"/> over the rest with no space — <c>─ ↘️↖️──────── title ─</c>. The space moved from the
-    /// glyphs' right to their left later that day (the user's screenshot: Windows Terminal draws each with room of its own
-    /// at its right, so the gap after them read as two and none before them). A width that cannot keep
-    /// <see cref="RuleTitleMinRule"/> glyphs after them drops the buttons; without <paramref name="folds"/> it is
-    /// <see cref="RuleWithTitle"/> alone. Pure, pinned.
+    /// <see cref="FoldGlyph"/> after the rule's first glyph with a space either side, then <see cref="RuleWithTitle"/> over the
+    /// rest — <c>─ ⤡ ──────── title ─</c>. Until 2026-09-29 it was the ↘️ ↖️ pair with the space at their left alone (Windows
+    /// Terminal drew each emoji with room of its own at its right); the one-cell ⤡ has no such room, so it is spaced as the
+    /// title is. A width that cannot keep <see cref="RuleTitleMinRule"/> glyphs after it drops the button; without
+    /// <paramref name="folds"/> it is <see cref="RuleWithTitle"/> alone. Pure, pinned.
     /// </summary>
     public static UpperRuleParts UpperRule(string title, bool folds, int width)
     {
         ArgumentNullException.ThrowIfNull(title);
         width = Math.Max(0, width);
         string lead = RuleGlyph + " ";
-        int expandCells = TextCells.Width(ExpandGlyph);
-        int used = TextCells.Width(lead) + expandCells + TextCells.Width(CollapseGlyph);
+        string button = FoldGlyph + " ";
+        int used = TextCells.Width(lead) + TextCells.Width(button);
         if (!folds || width - used < RuleTitleMinRule)
         {
             var (plainColumn, plainCells) = TitleSpan(title, width, 0);
-            return new UpperRuleParts("", "", RuleWithTitle(title, width), -1, -1, plainColumn, plainCells);
+            return new UpperRuleParts("", "", RuleWithTitle(title, width), -1, plainColumn, plainCells);
         }
 
-        int expandColumn = TextCells.Width(lead);
         var (titleColumn, titleCells) = TitleSpan(title, width - used, used);
-        return new UpperRuleParts(lead, ExpandGlyph + CollapseGlyph, RuleWithTitle(title, width - used), expandColumn, expandColumn + expandCells, titleColumn, titleCells);
+        return new UpperRuleParts(lead, button, RuleWithTitle(title, width - used), TextCells.Width(lead), titleColumn, titleCells);
     }
 
     /// <summary>Where <see cref="RuleWithTitle"/> of <paramref name="width"/> cells, drawn from column <paramref name="offset"/>, puts its title: the column and the cells, (−1, 0) with none.</summary>
@@ -4476,7 +4465,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
             if (RuleTitleChanged() || FoldsChanged())
             {
                 // The session's name landed or went (the model's title arrives off-thread), or the
-                // rule's ↘️↖️ came or went (a run came to fold, the last fold went; 2026-09-28): the
+                // rule's ⤡ came or went (a run came to fold, the last fold went; 2026-09-28): the
                 // whole pane again, as a grown reply gets — the rule is drawn in every state.
                 if (_busyLabel is not null)
                 {

@@ -793,7 +793,7 @@ public partial class SettingsMenuTests : IDisposable
                 SettingsField.McpServers, SettingsField.McpConnectTimeoutSeconds, SettingsField.GitNativeTools, SettingsField.GitNativeDiffMaxLines, SettingsField.GitNativeLogMaxCommits,
                 SettingsField.ShellCommandPolicy, SettingsField.ShellCommandAllowed, SettingsField.ShellDefault, SettingsField.ShellTimeoutSeconds, SettingsField.ShellForegroundCapSeconds, SettingsField.ShellOutputMaxChars,
                 SettingsField.ShellCodeLanguages, SettingsField.ShellCodeTimeoutSeconds, SettingsField.ShellCodeMaxToolCalls,
-                SettingsField.LlmCompactShowSummary, SettingsField.GitNativeEmail, SettingsField.GitNativeName, SettingsField.ShellToolBridge, SettingsField.FileBrowserMode, SettingsField.ShowToolbar, SettingsField.ShellPoliceOutsidePaths,
+                SettingsField.LlmCompactShowSummary, SettingsField.GitNativeEmail, SettingsField.GitNativeName, SettingsField.ShellToolBridge, SettingsField.FileBrowserMode, SettingsField.ToolbarItems, SettingsField.ShellPoliceOutsidePaths,
                 SettingsField.ToolCollapseCount, SettingsField.CodeCollapseCount,
                 SettingsField.ObsidianTools, SettingsField.ObsidianVault, SettingsField.ObsidianAllowDelete,
                 SettingsField.SqlTools, SettingsField.SqlDefaultConnection, SettingsField.SqlQueryMaxRows, SettingsField.SqlQueryTimeoutSeconds, SettingsField.SqlConnectionsProfile, SettingsField.SqlConnectionsGlobal, SettingsField.SqlSetPassword, SettingsField.SqlPercentMention, SettingsField.SqlConnectionsOffered, SettingsField.SqlAddConnection, SettingsField.Theme,
@@ -818,7 +818,7 @@ public partial class SettingsMenuTests : IDisposable
                 SettingsField.LlmPreserveThinking, SettingsField.SessionSaveThinking, SettingsField.LlmSampling, SettingsField.LlmSamplingFromHuggingFace,
                 SettingsField.HomeAssistantTools, SettingsField.HomeAssistantUrl, SettingsField.HomeAssistantToken, SettingsField.HomeAssistantTest, SettingsField.HomeAssistantActionPolicy, SettingsField.HomeAssistantAssistAgent, SettingsField.HomeAssistantTimeoutSeconds,
                 SettingsField.PrintTools, SettingsField.PrintActionPolicy, SettingsField.PrintDefaultPrinter, SettingsField.PrintFontSize,
-                SettingsField.LocalModels, SettingsField.LocalBackend, SettingsField.LocalContextSize, SettingsField.LocalGpuLayers, SettingsField.LocalVision,
+                SettingsField.EmbeddedModels, SettingsField.EmbeddedBackend, SettingsField.EmbeddedContextSize, SettingsField.EmbeddedGpuLayers, SettingsField.EmbeddedVision,
                 SettingsField.LlmReasoningEstimate,
             },
             Enum.GetValues<SettingsField>());
@@ -908,7 +908,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("32768", SettingsMenu.EditableValue(SettingsField.LlmContextLength, new AppSettingsData { LlmContextLength = 32_768 }));
         Assert.Equal(SettingsField.LlmContextLength, SettingsMenu.TabFields[(int)SettingsTab.Llm][^16]);   // the reasoning estimate since 2026-09-29; the mid-turn usage picker, the four compact rows, the turn cap, the tools, the tool-compact picker, the cap, the fun verbs, show thinking, preserve thinking, sampling and sampling from Hugging Face follow it
         // The pane's tabs (five since 2026-09-19: Ask, Files and Web are /tools' tabs, Skills is /skills' Options tab): General, Sessions, LLM in their own order, TTS / STT the enum order of their session's fields; every field on exactly one tab of the three panes.
-        Assert.Equal(["General", "Sessions", "LLM", "TTS", "STT", "Claude (API)", "Local LLM", "Botchat"], SettingsMenu.TabTitles);   // Local LLM since 2026-09-29; Claude (API) before Botchat since later on 2026-09-27; Claude last since 2026-09-27; Botchat last from 2026-09-25;   // Sessions right after General (2026-09-18); Web last until 2026-09-19, Skills third until later that day
+        Assert.Equal(["General", "Sessions", "LLM", "TTS", "STT", "Claude (API)", "Embedded", "Botchat"], SettingsMenu.TabTitles);   // Embedded LLM since 2026-09-29; Claude (API) before Botchat since later on 2026-09-27; Claude last since 2026-09-27; Botchat last from 2026-09-25;   // Sessions right after General (2026-09-18); Web last until 2026-09-19, Skills third until later that day
         // The Options tab of /skills (2026-09-19; the Skills tab of /settings from 2026-09-16 until then): the skills switch, the external-folder switch and the compact-mode picker, then (2026-09-17) the #-mention switch, the delete switch, then the auto-learn switch and the reflection rows; none a reconnect.
         Assert.Equal([SettingsField.AgentSkills, SettingsField.ExternalSkills, SettingsField.SkillCompactMode, SettingsField.SkillHashMention], SettingsMenu.SkillsTabFields[0]);   // the Options tab; the reflection rows on their own tab since later on 2026-09-19
         Assert.Equal([SettingsField.ReflectionAutoLearn, SettingsField.ReflectionReasoning, SettingsField.ReflectionWindow, SettingsField.ReflectionMinToolCalls, SettingsField.ReflectionMaxRequests, SettingsField.ReflectionCooldownMinutes, SettingsField.ReflectionCooldownMode, SettingsField.ReflectionIncludesSessions, SettingsField.ReflectionYieldsToTurns, SettingsField.ReflectionEditsSupportingFiles], SettingsMenu.SkillsTabFields[1]);   // the Reflection tab: the cooldown, its mode and the sessions switch (last, the user's place) since 2026-09-19
@@ -1003,11 +1003,11 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("unprotected", SettingsMenu.FieldValue(SettingsField.SkillCompactMode, new AppSettingsData { SkillCompactMode = "unprotected" }, _settings.ProfileDirectory));
         Assert.Equal("protected   [#9A8BB8]loaded skills survive a prune and the mid-turn guard[/]", SettingsMenu.SkillCompactModeLabel("protected"));
         Assert.Equal("unprotected [#9A8BB8]loaded skills prune like any tool result[/]", SettingsMenu.SkillCompactModeLabel("unprotected"));
-        Assert.Equal(8, SettingsMenu.TabFields.Count);   // Local LLM since 2026-09-29; Claude (API) since later on 2026-09-27; Claude on 2026-09-27 until later that day (to /tools); Botchat since 2026-09-25; 9 until 2026-09-19, when Ask, Files and Web moved to /tools (ToolsTabFields) and, later that day, Skills to /skills (SkillsTabFields)
+        Assert.Equal(8, SettingsMenu.TabFields.Count);   // Embedded LLM since 2026-09-29; Claude (API) since later on 2026-09-27; Claude on 2026-09-27 until later that day (to /tools); Botchat since 2026-09-25; 9 until 2026-09-19, when Ask, Files and Web moved to /tools (ToolsTabFields) and, later that day, Skills to /skills (SkillsTabFields)
         Assert.Equal(12, SettingsMenu.ToolsTabFields.Count);   // Print since later on 2026-09-28; Home Assistant since 2026-09-28; Claude since 2026-09-27; Images since 2026-09-24; SQL since 2026-09-23; Obsidian since 2026-09-22 and Options last later that day (first since later on 2026-09-19); Git between Files and Web since 2026-09-20; Shell between Git and Web since 2026-09-21
         Assert.Equal(2, SettingsMenu.SkillsTabFields.Count);   // Options and Reflection, since later on 2026-09-19 (one list of 11, then 14, before)
         Assert.Equal(14, SettingsMenu.SkillsTabFields.Sum(t => t.Count));   // 13 until Reflection edit supporting files came on 2026-09-27; 12 until Reflection yields to turns came on 2026-09-24; 13 until Allow skill delete went on 2026-09-23; 14 until Reflection verbose went later still on 2026-09-19
-        Assert.Equal(new[] { SettingsField.Profile, SettingsField.NewProfileMode, SettingsField.WorkingDirectory, SettingsField.QueueMessages, SettingsField.QueueCancelMode, SettingsField.Memory, SettingsField.CopyUserPrompt, SettingsField.ShowImageThumbnails, SettingsField.ImageThumbnailSize, SettingsField.TranscriptMarkdown, SettingsField.PastePreviewLines, SettingsField.HideExitAutocomplete, SettingsField.CommandTypoIntercept, SettingsField.KeepCommandHistory, SettingsField.WelcomeSplash, SettingsField.ShowWorkingDirectory, SettingsField.ShowToolbar, SettingsField.Theme, SettingsField.DraftEditor, SettingsField.ImageEditor, SettingsField.ThemedViewer }, SettingsMenu.TabFields[(int)SettingsTab.General]);   // Image editor under Draft editor, later on 2026-09-24; Keep command history under the typo intercept, 2026-09-25; Theme under Show toolbar and Themed image viewer last, later on 2026-09-27
+        Assert.Equal(new[] { SettingsField.Profile, SettingsField.NewProfileMode, SettingsField.WorkingDirectory, SettingsField.QueueMessages, SettingsField.QueueCancelMode, SettingsField.Memory, SettingsField.CopyUserPrompt, SettingsField.ShowImageThumbnails, SettingsField.ImageThumbnailSize, SettingsField.TranscriptMarkdown, SettingsField.PastePreviewLines, SettingsField.HideExitAutocomplete, SettingsField.CommandTypoIntercept, SettingsField.KeepCommandHistory, SettingsField.WelcomeSplash, SettingsField.ShowWorkingDirectory, SettingsField.ToolbarItems, SettingsField.Theme, SettingsField.DraftEditor, SettingsField.ImageEditor, SettingsField.ThemedViewer }, SettingsMenu.TabFields[(int)SettingsTab.General]);   // Image editor under Draft editor, later on 2026-09-24; Keep command history under the typo intercept, 2026-09-25; Theme under Show toolbar and Themed image viewer last, later on 2026-09-27
         // Draft editor (2026-09-19): typed, the General tab's last row, blank = the shell's default for .txt, no reconnect (read at each /draft).
         Assert.False(SettingsMenu.IsToggle(SettingsField.DraftEditor));
         Assert.Equal("Draft editor", SettingsMenu.FieldName(SettingsField.DraftEditor));
@@ -1042,11 +1042,13 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("off", SettingsMenu.FieldValue(SettingsField.ThemedViewer, new AppSettingsData { ThemedViewer = false }, _settings.ProfileDirectory));
         Assert.False(SettingsMenu.RefusedMidTurn(SettingsField.ThemedViewer) || SettingsMenu.IsLlmField(SettingsField.ThemedViewer) || SettingsMenu.IsTtsField(SettingsField.ThemedViewer) || SettingsMenu.IsVoiceField(SettingsField.ThemedViewer));
         // Show toolbar (2026-09-21): the General row after it, a toggle, no reconnect (the pane reads it at each draw).
-        Assert.True(SettingsMenu.IsToggle(SettingsField.ShowToolbar));
-        Assert.Equal("Show toolbar", SettingsMenu.FieldName(SettingsField.ShowToolbar));
-        Assert.Equal("on", SettingsMenu.FieldValue(SettingsField.ShowToolbar, data, _settings.ProfileDirectory));
-        Assert.Equal("off", SettingsMenu.FieldValue(SettingsField.ShowToolbar, new AppSettingsData { ShowToolbar = false }, _settings.ProfileDirectory));
-        Assert.False(SettingsMenu.RefusedMidTurn(SettingsField.ShowToolbar) || SettingsMenu.IsLlmField(SettingsField.ShowToolbar) || SettingsMenu.IsTtsField(SettingsField.ShowToolbar) || SettingsMenu.IsVoiceField(SettingsField.ShowToolbar));
+        Assert.False(SettingsMenu.IsToggle(SettingsField.ToolbarItems));   // a checklist since 2026-09-29, the user's ask
+        Assert.Equal("Show toolbar", SettingsMenu.FieldName(SettingsField.ToolbarItems));
+        Assert.Equal("all", SettingsMenu.FieldValue(SettingsField.ToolbarItems, data, _settings.ProfileDirectory));
+        Assert.Equal("off", SettingsMenu.FieldValue(SettingsField.ToolbarItems, new AppSettingsData { ToolbarItems = [] }, _settings.ProfileDirectory));
+        Assert.Equal("3 of 11", SettingsMenu.FieldValue(SettingsField.ToolbarItems, new AppSettingsData { ToolbarItems = ["usage", "PATH", " tools ", "nonsense"] }, _settings.ProfileDirectory));
+        Assert.Equal("all", SettingsMenu.FieldValue(SettingsField.ToolbarItems, new AppSettingsData { ToolbarItems = [.. ToolbarItems.Names] }, _settings.ProfileDirectory));
+        Assert.False(SettingsMenu.RefusedMidTurn(SettingsField.ToolbarItems) || SettingsMenu.IsLlmField(SettingsField.ToolbarItems) || SettingsMenu.IsTtsField(SettingsField.ToolbarItems) || SettingsMenu.IsVoiceField(SettingsField.ToolbarItems));
         // Welcome splash (2026-09-18): the General tab's row before Show working directory (the user's order), no reconnect; a picker since 2026-09-24.
         Assert.False(SettingsMenu.IsToggle(SettingsField.WelcomeSplash));
         Assert.Equal("Welcome splash", SettingsMenu.FieldName(SettingsField.WelcomeSplash));
@@ -1325,7 +1327,7 @@ public partial class SettingsMenuTests : IDisposable
         // The LLM tab: the scan mode first (where a blank URL looks, so above the URL; a picker, no reconnect), then the reconnecting LLM fields in enum order, the compact rows, the turn-loop rows and the fun verbs.
         Assert.Equal(new[] { SettingsField.LlmScanMode, SettingsField.LlmUrl, SettingsField.LlmModel, SettingsField.LlmApiKey, SettingsField.LlmReasoning, SettingsField.LlmRequestTimeoutSeconds, SettingsField.LlmTurnTimeoutSeconds, SettingsField.LlmContextLength, SettingsField.LlmMidTurnUsage, SettingsField.LlmCompactType, SettingsField.LlmCompactKeepRecent, SettingsField.LlmCompactShowSummary, SettingsField.LlmAutoCompactPercent, SettingsField.LlmMaxTurns, SettingsField.LlmOfferTools, SettingsField.LlmToolCompactType, SettingsField.LlmMaxToolIterations, SettingsField.LlmUseFunVerbs, SettingsField.LlmShowThinking, SettingsField.LlmPreserveThinking, SettingsField.LlmReasoningEstimate, SettingsField.LlmSampling, SettingsField.LlmSamplingFromHuggingFace }, SettingsMenu.TabFields[(int)SettingsTab.Llm]);
         // The reconnecting rows: the LLM tab's seven, then the Claude (API) tab's four (2026-09-27).
-        Assert.Equal(Enum.GetValues<SettingsField>().Where(SettingsMenu.IsLlmField), SettingsMenu.TabFields[(int)SettingsTab.Llm].Skip(1).Take(7).Concat(SettingsMenu.TabFields[(int)SettingsTab.ClaudeApi]).Concat(SettingsMenu.TabFields[(int)SettingsTab.LocalModel]));   // the Local LLM tab's rows all reconnect (2026-09-29)
+        Assert.Equal(Enum.GetValues<SettingsField>().Where(SettingsMenu.IsLlmField), SettingsMenu.TabFields[(int)SettingsTab.Llm].Skip(1).Take(7).Concat(SettingsMenu.TabFields[(int)SettingsTab.ClaudeApi]).Concat(SettingsMenu.TabFields[(int)SettingsTab.Embedded]));   // the Embedded LLM tab's rows all reconnect (2026-09-29)
         Assert.False(SettingsMenu.IsLlmField(SettingsField.LlmScanMode) || SettingsMenu.IsTtsField(SettingsField.LlmScanMode) || SettingsMenu.IsVoiceField(SettingsField.LlmScanMode));
         Assert.False(SettingsMenu.IsToggle(SettingsField.LlmScanMode));
         Assert.Equal("LLM scan mode", SettingsMenu.FieldName(SettingsField.LlmScanMode));
@@ -1366,7 +1368,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(PreviewSentences, new List<string>([.. chunker.Append(SettingsMenu.VoicePreviewText), chunker.Flush()]));
         Assert.Equal(Enum.GetValues<SettingsField>().Where(SettingsMenu.IsVoiceField), SettingsMenu.TabFields[(int)SettingsTab.Stt]);
         // The Ask tab (2026-09-15; /tools' first settings tab since 2026-09-19): the question tool's switch and its two caps, none a reconnect.
-        Assert.Equal(["General", "Sessions", "LLM", "TTS", "STT", "Claude (API)", "Local LLM", "Botchat"], SettingsMenu.TabTitles);   // Local LLM since 2026-09-29; Claude (API) before Botchat since later on 2026-09-27; Claude last since 2026-09-27; Botchat last from 2026-09-25;   // five since 2026-09-19
+        Assert.Equal(["General", "Sessions", "LLM", "TTS", "STT", "Claude (API)", "Embedded", "Botchat"], SettingsMenu.TabTitles);   // Embedded LLM since 2026-09-29; Claude (API) before Botchat since later on 2026-09-27; Claude last since 2026-09-27; Botchat last from 2026-09-25;   // five since 2026-09-19
         // The Options tab of /skills (2026-09-19; the Skills tab of /settings from 2026-09-16 until then): the skills switch, the external-folder switch and the compact-mode picker, then (2026-09-17) the #-mention switch, the delete switch, then the auto-learn switch and the reflection rows; none a reconnect.
         Assert.Equal([SettingsField.AgentSkills, SettingsField.ExternalSkills, SettingsField.SkillCompactMode, SettingsField.SkillHashMention], SettingsMenu.SkillsTabFields[0]);   // the Options tab; the reflection rows on their own tab since later on 2026-09-19
         Assert.Equal([SettingsField.ReflectionAutoLearn, SettingsField.ReflectionReasoning, SettingsField.ReflectionWindow, SettingsField.ReflectionMinToolCalls, SettingsField.ReflectionMaxRequests, SettingsField.ReflectionCooldownMinutes, SettingsField.ReflectionCooldownMode, SettingsField.ReflectionIncludesSessions, SettingsField.ReflectionYieldsToTurns, SettingsField.ReflectionEditsSupportingFiles], SettingsMenu.SkillsTabFields[1]);   // the Reflection tab: the cooldown, its mode and the sessions switch (last, the user's place) since 2026-09-19
@@ -2577,7 +2579,7 @@ public partial class SettingsMenuTests : IDisposable
 
         Assert.Same(servers[0], picked);
         Assert.Contains(SettingsMenu.ServerTitle, _console.Output);
-        Assert.Contains("LM Studio  http://127.0.0.1:1234/v1  1 chat model", _console.Output);
+        Assert.Contains("LM Studio  http://127.0.0.1:1234/v1   1 chat model", _console.Output);   // the URLs padded to one column (2026-09-29)
         Assert.Contains("Ollama     http://127.0.0.1:11434/v1  2 chat models", _console.Output);
         Assert.Empty(_settings.Current.LlmUrl);   // picking saves nothing; the caller does
     }
@@ -2892,7 +2894,7 @@ public partial class SettingsMenuTests : IDisposable
     private string Titled(string row) => row + new string(' ', _console.Profile.Width - 2 - TextCells.Width(row)) + ScreenPane.CloseGlyph;
 
     /// <summary>The strip as the pane prints it: the label, then every tab title with a space either side, two spaces between. Pinned.</summary>
-    private const string Strip = SettingsMenu.Title + "   General    Sessions    LLM    TTS    STT    Claude (API)    Local LLM    Botchat ";   // six since 2026-09-25 (Botchat); five tabs since 2026-09-19: Ask, Files and Web are /tools' (ToolsMenuTests), Skills is /skills' Options tab (SkillsMenuTests)
+    private const string Strip = SettingsMenu.Title + "   General    Sessions    LLM    TTS    STT    Claude (API)    Embedded    Botchat ";   // six since 2026-09-25 (Botchat); five tabs since 2026-09-19: Ask, Files and Web are /tools' (ToolsMenuTests), Skills is /skills' Options tab (SkillsMenuTests)
 
     [Fact]
     public async Task OnThePane_TheListOpensOnTheGeneralTab_AndEscClosesIt()
@@ -2908,7 +2910,7 @@ public partial class SettingsMenuTests : IDisposable
         string cwd = SettingsMenu.DefaultWorkingDirectoryLabel(_settings.ProfileDirectory);
         Assert.StartsWith("(", cwd);
         Assert.EndsWith(@"\profiles\default\files)", cwd);
-        Assert.Contains(Rule(240) + "\n" + Titled(Strip) + "\n \n▸ Profile                      default (" + _settings.ProfileDirectory + ")\n  New profile mode             basic\n  Working directory (cwd)      " + cwd + "\n  Queue messages               on\n  Queue cancel mode            empty\n  Memory                       on\n  Copy user prompt             on\n  Show image thumbnails        on\n  Image thumbnail size         small\n  Transcript markdown          on\n  Paste preview lines          25 lines\n  Hide /exit autocomplete      on\n  Command typo intercept       on\n  Keep command history         on\n  Welcome splash               fullsize\n  Working directory in header  off\n  Show toolbar                 on\n  Theme                        synthwave\n  Draft editor                 (default .txt editor)\n  Image viewer                 (built-in viewer)\n  Themed image viewer          on\n" + Rule(240) + "\n" + SettingsMenu.TabKeys + "\n", _console.Output);
+        Assert.Contains(Rule(240) + "\n" + Titled(Strip) + "\n \n▸ Profile                      default (" + _settings.ProfileDirectory + ")\n  New profile mode             basic\n  Working directory (cwd)      " + cwd + "\n  Queue messages               on\n  Queue cancel mode            empty\n  Memory                       on\n  Copy user prompt             on\n  Show image thumbnails        on\n  Image thumbnail size         small\n  Transcript markdown          on\n  Paste preview lines          25 lines\n  Hide /exit autocomplete      on\n  Command typo intercept       on\n  Keep command history         on\n  Welcome splash               fullsize\n  Working directory in header  off\n  Show toolbar                 all\n  Theme                        synthwave\n  Draft editor                 (default .txt editor)\n  Image viewer                 (built-in viewer)\n  Themed image viewer          on\n" + Rule(240) + "\n" + SettingsMenu.TabKeys + "\n", _console.Output);
         Assert.DoesNotContain("File /tree max length", _console.Output);   // the Files tab's since 2026-09-15
         Assert.DoesNotContain("LLM URL", _console.Output);
         Assert.False(pane.OverlayOpen);
@@ -4085,8 +4087,6 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("keep the picture viewer black", SettingsMenu.ToggleDescribe(SettingsField.ThemedViewer, false));
         Assert.Equal("vault_delete may move a note or attachment to the vault's .trash", SettingsMenu.ToggleDescribe(SettingsField.ObsidianAllowDelete, true));   // later on 2026-09-22
         Assert.Equal("vault_delete is disabled", SettingsMenu.ToggleDescribe(SettingsField.ObsidianAllowDelete, false));
-        Assert.Equal("show the toolbar", SettingsMenu.ToggleDescribe(SettingsField.ShowToolbar, true));
-        Assert.Equal("hide the toolbar", SettingsMenu.ToggleDescribe(SettingsField.ShowToolbar, false));
         Assert.Equal("a message sent while a reply runs is queued and sent when the reply ends", SettingsMenu.ToggleDescribe(SettingsField.QueueMessages, true));
         Assert.Equal("a message sent during a reply goes when it ends, unlisted; no /queue", SettingsMenu.ToggleDescribe(SettingsField.QueueMessages, false));
     }
@@ -4155,19 +4155,71 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(0, _synth.ListCalls);
     }
 
+    /// <summary>
+    /// Show toolbar is a checklist (2026-09-29, the user's ask; a switch at row 105 until then): every item checked at
+    /// first, Enter or Space flipping one and saving at once in strip order, ESC back; the row reads how many are checked.
+    /// </summary>
     [Fact]
-    public async Task Toggle_ShowToolbar_IsRow105_OnByDefault_PersistsAndNeedsNoReconnect()
+    public async Task OnThePane_ShowToolbar_IsAChecklist_SavedInStripOrder_NeedingNoReconnect()
     {
-        // 2026-09-21: the enum's last member (the General tab's row after Show working directory); the pane reads it at its next draw.
-        Assert.True(_settings.Current.ShowToolbar);
-        Down(104);   // one row up since Allow skill delete went, 2026-09-23
-        Push(Keys.Enter, Keys.Down, Keys.Enter, Keys.Escape);
+        Assert.Null(_settings.Current.ToolbarItems);
+        var (menu, pane) = PaneMenu();
+        Down(SettingsMenu.TabFields[(int)SettingsTab.General].ToList().IndexOf(SettingsField.ToolbarItems));
+        Push(Keys.Enter);                       // the checklist, on Settings
+        Push(Keys.Char(' '));                   // Settings off
+        Down(10);
+        Push(Keys.Enter);                       // the path off
+        Push(Keys.Escape, Keys.Escape);
 
-        Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));
+        Assert.Equal(SettingsChanges.None, await menu.ShowAsync(CancellationToken.None));
 
-        Assert.False(_settings.Current.ShowToolbar);
+        Assert.Equal(["tools", "mcp", "skills", "sys", "sessions", "usage", "memory", "cmdlist", "police"], _settings.Current.ToolbarItems);
+        Assert.Contains("[x] ⚙️  Settings", _console.Output);
+        Assert.Contains("[ ] ⚙️  Settings", _console.Output);
+        Assert.Contains("[ ]     Working directory path", _console.Output);
+        Assert.Contains("  · Show toolbar: 10 of 11", _console.Output);
+        Assert.Contains("  · Show toolbar: 9 of 11", _console.Output);
+        pane.Dispose();
+    }
+
+    /// <summary>Every item flipped off (2026-09-29): an empty list — no toolbar — and nothing refused.</summary>
+    [Fact]
+    public async Task OnThePane_ShowToolbar_AllOff_IsAnEmptyList()
+    {
+        var (menu, pane) = PaneMenu();
+        Down(SettingsMenu.TabFields[(int)SettingsTab.General].ToList().IndexOf(SettingsField.ToolbarItems));
+        Push(Keys.Enter);
+        for (int i = 0; i < ToolbarItems.Names.Length; i++)
+        {
+            Push(Keys.Enter, Keys.Down);
+        }
+
+        Push(Keys.Escape, Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Equal([], _settings.Current.ToolbarItems);
         Assert.Contains("  · Show toolbar: off", _console.Output);
-        Assert.Equal(0, _synth.ListCalls);
+        pane.Dispose();
+    }
+
+    /// <summary>The last unchecked item checked again (2026-09-29): every item saves as null, so one added later joins.</summary>
+    [Fact]
+    public async Task OnThePane_ShowToolbar_AllOn_SavesNull()
+    {
+        _settings.Update(d => d.ToolbarItems = [.. ToolbarItems.Names.Where(n => n != "police")]);
+        var (menu, pane) = PaneMenu();
+        Down(SettingsMenu.TabFields[(int)SettingsTab.General].ToList().IndexOf(SettingsField.ToolbarItems));
+        Push(Keys.Enter);
+        Down(9);
+        Push(Keys.Char(' '));                   // the officer back: every item
+        Push(Keys.Escape, Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Null(_settings.Current.ToolbarItems);
+        Assert.Contains("  · Show toolbar: all", _console.Output);
+        pane.Dispose();
     }
 
     [Fact]

@@ -906,13 +906,13 @@ public sealed partial class InputLine
                 hintClicks.Reset();
                 _line.CloseStrip?.Invoke();
             }
-            else if (pane.TryHitFoldButton(click.X, click.Y, out bool expand))
+            else if (pane.TryHitFoldButton(click.X, click.Y))
             {
-                // The upper rule's ↘️ / ↖️ (2026-09-28): one click unfolds or folds everything, as /expand and /collapse
-                // do but silent, as Ctrl+O is (the user's call).
+                // The upper rule's ⤡ (2026-09-28 as ↘️ / ↖️; one button since 2026-09-29, the user's call): one click is
+                // Ctrl+O — everything unfolded when anything is folded, else everything folded.
                 _anchor = -1;
                 hintClicks.Reset();
-                pane.SetToolGroupsExpanded(expand);
+                pane.ToggleToolGroups();
             }
             else if (pane.TryHitRuleTitle(click.X, click.Y))
             {

@@ -6,7 +6,7 @@ using NeonSidekick.Tests.Fakes;
 namespace NeonSidekick.Tests;
 
 /// <summary>
-/// The resumable, pinned downloads and archive sets <see cref="ModelStore"/> gained for the local LLM (2026-09-29):
+/// The resumable, pinned downloads and archive sets <see cref="ModelStore"/> gained for the embedded LLM (2026-09-29):
 /// Range resume (206 appends, 200 restarts, 416 is whole), the SHA-256 check, the disk-space refusal, cancellation
 /// keeping the partial file, and several zips unpacked into one folder.
 /// </summary>
@@ -21,7 +21,7 @@ public class ModelStoreResumeTests : IDisposable
 
     public ModelStoreResumeTests()
     {
-        _store = new ModelStore(_dir, new HttpClient(_http), "LocalLlm") { AvailableBytes = _ => null };
+        _store = new ModelStore(_dir, new HttpClient(_http), "EmbeddedLlm") { AvailableBytes = _ => null };
     }
 
     public void Dispose()
@@ -236,7 +236,7 @@ public class ModelStoreResumeTests : IDisposable
     public async Task Resumable_AFullDisk_IsRefusedWithoutARequest()
     {
         var body = FakeModelFiles.GgufBytes(10_000);
-        var store = new ModelStore(_dir, new HttpClient(_http), "LocalLlm") { AvailableBytes = _ => 5_000 };
+        var store = new ModelStore(_dir, new HttpClient(_http), "EmbeddedLlm") { AvailableBytes = _ => 5_000 };
 
         var result = await store.EnsureAsync(Pinned(body), null, CancellationToken.None);
 
@@ -299,7 +299,7 @@ public class ModelStoreResumeTests : IDisposable
         Assert.All(progress, p => Assert.Equal(bin.Length + rt.Length, p.Total));
         Assert.Equal(bin.Length + rt.Length, progress[^1].Received);
 
-        var fresh = new ModelStore(_dir, new HttpClient(new StubHttpMessageHandler()), "LocalLlm");
+        var fresh = new ModelStore(_dir, new HttpClient(new StubHttpMessageHandler()), "EmbeddedLlm");
         var again = await fresh.EnsureArchiveSetAsync(RuntimeSpec(bin, rt), null, null, null, CancellationToken.None);
         Assert.True(again.Ok);
         Assert.Equal("present", again.Detail);

@@ -27,10 +27,10 @@ public class AppSettingsTests : IDisposable
     private static AppSettingsData FullyNonDefault() => new()
     {
         SchemaVersion = 7,
-        LocalBackend = "vulkan",
-        LocalContextSize = 8192,
-        LocalGpuLayers = "20",
-        LocalVision = false,
+        EmbeddedBackend = "vulkan",
+        EmbeddedContextSize = 8192,
+        EmbeddedGpuLayers = "20",
+        EmbeddedVision = false,
         CommandTypoIntercept = false,
         KeepCommandHistory = false,
         CopyUserPrompt = false,
@@ -60,7 +60,7 @@ public class AppSettingsTests : IDisposable
         TranscriptMarkdown = false,
         WelcomeSplashMode = "tiled",
         ShowWorkingDirectory = false,
-        ShowToolbar = false,
+        ToolbarItems = ["usage", "path"],
         ThemedViewer = false,
         ViewerLeft = -1200,
         ViewerTop = 140,
@@ -176,7 +176,7 @@ public class AppSettingsTests : IDisposable
         Assert.Equal(expected.TranscriptMarkdown, actual.TranscriptMarkdown);
         Assert.Equal(expected.WelcomeSplashMode, actual.WelcomeSplashMode);
         Assert.Equal(expected.ShowWorkingDirectory, actual.ShowWorkingDirectory);
-        Assert.Equal(expected.ShowToolbar, actual.ShowToolbar);
+        Assert.Equal(expected.ToolbarItems, actual.ToolbarItems);
         Assert.Equal(expected.ThemedViewer, actual.ThemedViewer);
         Assert.Equal(expected.ViewerLeft, actual.ViewerLeft);
         Assert.Equal(expected.ViewerTop, actual.ViewerTop);
@@ -267,10 +267,10 @@ public class AppSettingsTests : IDisposable
         Assert.Equal(expected.SessionShowName, actual.SessionShowName);
         Assert.Equal(expected.SessionTool, actual.SessionTool);
         Assert.Equal(expected.SessionSaveThinking, actual.SessionSaveThinking);
-        Assert.Equal(expected.LocalBackend, actual.LocalBackend);
-        Assert.Equal(expected.LocalContextSize, actual.LocalContextSize);
-        Assert.Equal(expected.LocalGpuLayers, actual.LocalGpuLayers);
-        Assert.Equal(expected.LocalVision, actual.LocalVision);
+        Assert.Equal(expected.EmbeddedBackend, actual.EmbeddedBackend);
+        Assert.Equal(expected.EmbeddedContextSize, actual.EmbeddedContextSize);
+        Assert.Equal(expected.EmbeddedGpuLayers, actual.EmbeddedGpuLayers);
+        Assert.Equal(expected.EmbeddedVision, actual.EmbeddedVision);
     }
 
     [Fact]
@@ -288,10 +288,10 @@ public class AppSettingsTests : IDisposable
         settings.Update(d =>
         {
             d.SchemaVersion = full.SchemaVersion;
-            d.LocalBackend = full.LocalBackend;
-            d.LocalContextSize = full.LocalContextSize;
-            d.LocalGpuLayers = full.LocalGpuLayers;
-            d.LocalVision = full.LocalVision;
+            d.EmbeddedBackend = full.EmbeddedBackend;
+            d.EmbeddedContextSize = full.EmbeddedContextSize;
+            d.EmbeddedGpuLayers = full.EmbeddedGpuLayers;
+            d.EmbeddedVision = full.EmbeddedVision;
             d.CommandTypoIntercept = full.CommandTypoIntercept;
             d.KeepCommandHistory = full.KeepCommandHistory;
             d.CopyUserPrompt = full.CopyUserPrompt;
@@ -308,7 +308,7 @@ public class AppSettingsTests : IDisposable
             d.TranscriptMarkdown = full.TranscriptMarkdown;
             d.WelcomeSplashMode = full.WelcomeSplashMode;
             d.ShowWorkingDirectory = full.ShowWorkingDirectory;
-            d.ShowToolbar = full.ShowToolbar;
+            d.ToolbarItems = full.ToolbarItems;
             d.ThemedViewer = full.ThemedViewer;
             d.ViewerLeft = full.ViewerLeft;
             d.ViewerTop = full.ViewerTop;
@@ -409,10 +409,10 @@ public class AppSettingsTests : IDisposable
             settings.Update(d =>
             {
                 d.SchemaVersion = full.SchemaVersion;
-                d.LocalBackend = full.LocalBackend;
-                d.LocalContextSize = full.LocalContextSize;
-                d.LocalGpuLayers = full.LocalGpuLayers;
-                d.LocalVision = full.LocalVision;
+                d.EmbeddedBackend = full.EmbeddedBackend;
+                d.EmbeddedContextSize = full.EmbeddedContextSize;
+                d.EmbeddedGpuLayers = full.EmbeddedGpuLayers;
+                d.EmbeddedVision = full.EmbeddedVision;
                 d.CommandTypoIntercept = full.CommandTypoIntercept;
                 d.KeepCommandHistory = full.KeepCommandHistory;
                 d.CopyUserPrompt = full.CopyUserPrompt;
@@ -429,7 +429,7 @@ public class AppSettingsTests : IDisposable
                 d.TranscriptMarkdown = full.TranscriptMarkdown;
                 d.WelcomeSplashMode = full.WelcomeSplashMode;
                 d.ShowWorkingDirectory = full.ShowWorkingDirectory;
-                d.ShowToolbar = full.ShowToolbar;
+                d.ToolbarItems = full.ToolbarItems;
                 d.ThemedViewer = full.ThemedViewer;
                 d.ViewerLeft = full.ViewerLeft;
                 d.ViewerTop = full.ViewerTop;
@@ -544,6 +544,23 @@ public class AppSettingsTests : IDisposable
         }
 
         Assert.Null(new AppSettingsData().SqlConnectionsOffered);   // every profile starts not narrowed
+    }
+
+    /// <summary><c>Show toolbar</c> (2026-09-29, a checklist): every item (null), none ([]) and a list each survive a save and a reload as themselves.</summary>
+    [Fact]
+    public async Task ToolbarItems_KeepsNullEmptyAndAList_ApartAcrossAReload()
+    {
+        foreach (var items in new List<string>?[] { null, [], ["usage", "path"] })
+        {
+            using (var settings = new AppSettings(_dir))
+            {
+                settings.Update(d => d.ToolbarItems = items is null ? null : [.. items]);
+                await settings.FlushAsync();
+            }
+
+            using var reloaded = new AppSettings(_dir);
+            Assert.Equal(items, reloaded.Current.ToolbarItems);
+        }
     }
 
     [Fact]
@@ -1293,7 +1310,7 @@ public class AppSettingsTests : IDisposable
         Assert.True(s.TranscriptMarkdown);
         Assert.Equal("fullsize", s.WelcomeSplashMode);   // 2026-09-18; a pick since 2026-09-24 (on was fullsize)
         Assert.False(s.ShowWorkingDirectory);   // 2026-09-18; off by default since 2026-09-21
-        Assert.True(s.ShowToolbar);   // 2026-09-21
+        Assert.Null(s.ToolbarItems);   // 2026-09-21 as a switch, on; every item since the checklist, 2026-09-29
         Assert.True(s.ThemedViewer);   // later on 2026-09-27
         Assert.Null(s.ViewerLeft);   // 2026-09-28: Windows' own place until the viewer first closes
         Assert.Null(s.ViewerTop);

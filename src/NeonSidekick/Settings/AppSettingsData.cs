@@ -172,17 +172,17 @@ public sealed class AppSettingsData
     public bool ShowWorkingDirectory { get; set; }
 
     /// <summary>
-    /// Whether the toolbar is drawn under the hint row (2026-09-21, the user's ask): the pane
-    /// glyphs at its left (a double-click opens <c>/settings</c>, <c>/tools</c>, <c>/mcp</c>,
-    /// <c>/skills</c>, <c>/sys</c>, <c>/sessions</c>, then 💾 <c>/memory</c> while
-    /// <see cref="Memory"/> is on, the lock <c>/cmdlist</c> that follows
-    /// <see cref="ShellCommandPolicy"/>, and 👮 while <see cref="ShellPoliceOutsidePaths"/> is on —
-    /// the lock since later that day, the disk and the officer since 2026-09-22), the working
-    /// directory in force (<c>/cwd browse</c>) at its
-    /// right. Read on every pane draw and on its tick, so a flip shows when the settings pane
-    /// closes. No variable.
+    /// What the toolbar under the hint row shows (2026-09-21, the user's ask; a checklist since 2026-09-29, the user's
+    /// ask, in place of the <c>ShowToolbar</c> switch — a saved <c>false</c> there is dropped as any retired key, so the
+    /// row comes back once): ids from <see cref="App.ToolbarItems.Names"/>. The pane glyphs sit at its left (a
+    /// double-click opens <c>/settings</c>, <c>/tools</c>, <c>/mcp</c>, <c>/skills</c>, <c>/sys</c>, <c>/sessions</c>,
+    /// <c>/usage</c> (📊, since 2026-09-29), then 💾 <c>/memory</c> while <see cref="Memory"/> is on, the lock
+    /// <c>/cmdlist</c> that follows <see cref="ShellCommandPolicy"/>, and 👮 while <see cref="ShellPoliceOutsidePaths"/>
+    /// is on — the lock since later that day, the disk and the officer since 2026-09-22), the working directory in force
+    /// (<c>/cwd browse</c>) at its right. Null is every item, one added later too; an empty list draws no row at all.
+    /// Read on every pane draw and on its tick, so a change shows when the settings pane closes. No variable.
     /// </summary>
-    public bool ShowToolbar { get; set; } = true;
+    public List<string>? ToolbarItems { get; set; }
 
     /// <summary>
     /// The look (2026-09-23, the user's ask): <c>synthwave</c> (the default), <c>netrunner</c>,
@@ -463,7 +463,7 @@ public sealed class AppSettingsData
 
     /// <summary>
     /// How <c>/usage</c> counts the thinking a server streamed but did not count (2026-09-29, the user's ask: llama.cpp, the
-    /// local LLM's server and Ollama report no reasoning count, so the Reasoning row read <c>—</c>): one of
+    /// embedded LLM's server and Ollama report no reasoning count, so the Reasoning row read <c>—</c>): one of
     /// <see cref="Llm.ReasoningEstimates.Names"/> — <c>chars</c> (the default: the thinking's characters over four),
     /// <c>tokenize</c> (llama.cpp's <c>/tokenize</c> counts it exactly, one short request after each reply; the characters
     /// where it does not answer) or <c>off</c>. An estimate shows as <c>~</c>; a server's own count always wins. The Claude
@@ -1652,39 +1652,39 @@ public sealed class AppSettingsData
     /// </summary>
     public bool ClaudeApiPromptCaching { get; set; } = true;
 
-    // ─── Local model (2026-09-29) ───────────────────────────────────────────────
-    // The local model (2026-09-29, the user's ask: a small model the app downloads from Hugging Face and runs itself on
-    // llama.cpp's llama-server, a /server choice like any other). Which model runs is the LLM URL (LocalLlm.LocalEndpoint)
-    // and the LLM model (a LocalLlm.LocalModelCatalog id); these four say how it runs. Each is a reconnect, and the
-    // server restarts only when what it was started with changed (LocalLlm.LlamaLaunch).
+    // ─── Embedded model (2026-09-29) ───────────────────────────────────────────────
+    // The embedded model (2026-09-29, the user's ask: a small model the app downloads from Hugging Face and runs itself on
+    // llama.cpp's llama-server, a /server choice like any other). Which model runs is the LLM URL (EmbeddedLlm.EmbeddedEndpoint)
+    // and the LLM model (a EmbeddedLlm.EmbeddedModelCatalog id); these four say how it runs. Each is a reconnect, and the
+    // server restarts only when what it was started with changed (EmbeddedLlm.LlamaLaunch).
 
     /// <summary>
-    /// Which llama.cpp build runs the local model (2026-09-29): one of <see cref="LocalLlm.LocalBackends.Names"/> —
+    /// Which llama.cpp build runs the embedded model (2026-09-29): one of <see cref="EmbeddedLlm.EmbeddedBackends.Names"/> —
     /// <c>auto</c> (the default: CUDA with an NVIDIA driver new enough, else Vulkan, else the CPU;
-    /// <see cref="LocalLlm.LlamaBackendDetect"/>), <c>cuda</c>, <c>vulkan</c> or <c>cpu</c>. Anything else reads as
-    /// <c>auto</c>. Each build is downloaded on first use. Variable <see cref="EnvironmentOverrides.LocalBackendVariable"/>.
+    /// <see cref="EmbeddedLlm.LlamaBackendDetect"/>), <c>cuda</c>, <c>vulkan</c> or <c>cpu</c>. Anything else reads as
+    /// <c>auto</c>. Each build is downloaded on first use. Variable <see cref="EnvironmentOverrides.EmbeddedBackendVariable"/>.
     /// </summary>
-    public string LocalBackend { get; set; } = LocalLlm.LocalBackends.Auto;
+    public string EmbeddedBackend { get; set; } = EmbeddedLlm.EmbeddedBackends.Auto;
 
     /// <summary>
-    /// The local server's context window in tokens (2026-09-29): 0 for the model's own (Gemma 4 E2B/E4B: 128K, a lot of
-    /// memory), else <see cref="LocalLlm.LocalContextSize.Min"/> to <see cref="LocalLlm.LocalContextSize.Max"/>; 32768
-    /// by default, which fits beside the model on an 8 GB GPU. Variable <see cref="EnvironmentOverrides.LocalContextVariable"/>.
+    /// The embedded server's context window in tokens (2026-09-29): 0 for the model's own (Gemma 4 E2B/E4B: 128K, a lot of
+    /// memory), else <see cref="EmbeddedLlm.EmbeddedContextSize.Min"/> to <see cref="EmbeddedLlm.EmbeddedContextSize.Max"/>; 32768
+    /// by default, which fits beside the model on an 8 GB GPU. Variable <see cref="EnvironmentOverrides.EmbeddedContextVariable"/>.
     /// </summary>
-    public int LocalContextSize { get; set; } = LocalLlm.LocalContextSize.Default;
+    public int EmbeddedContextSize { get; set; } = EmbeddedLlm.EmbeddedContextSize.Default;
 
     /// <summary>
-    /// How many of the model's layers the local server puts on the GPU (2026-09-29): <c>auto</c> (the default: llama.cpp
+    /// How many of the model's layers the embedded server puts on the GPU (2026-09-29): <c>auto</c> (the default: llama.cpp
     /// fits what the free VRAM holds), <c>all</c>, or a count from 0 (CPU only) to 999. No variable.
     /// </summary>
-    public string LocalGpuLayers { get; set; } = LocalLlm.LocalGpuLayers.Auto;
+    public string EmbeddedGpuLayers { get; set; } = EmbeddedLlm.EmbeddedGpuLayers.Auto;
 
     /// <summary>
-    /// Whether the local server loads the model's vision projector (2026-09-29, on by default): images can then be sent
+    /// Whether the embedded server loads the model's vision projector (2026-09-29, on by default): images can then be sent
     /// to it. Off saves about 1 GB of memory; an image sent then is refused with a word. Every install downloads the
     /// projector either way. No variable.
     /// </summary>
-    public bool LocalVision { get; set; } = true;
+    public bool EmbeddedVision { get; set; } = true;
 
     // ─── Home Assistant (2026-09-28) ────────────────────────────────────────────
     // The ha_ tools and /ha (2026-09-28, the user's ask: "plan an integration for Home Assistant" — a Docker instance with

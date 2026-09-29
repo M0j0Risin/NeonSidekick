@@ -15,8 +15,8 @@ namespace NeonSidekick.App;
 /// </summary>
 public static class UsageText
 {
-    /// <summary>The info pane's strip label (the glyph since later on 2026-09-21).</summary>
-    public const string Label = "📊 Usage";
+    /// <summary>The info pane's strip label (the glyph since later on 2026-09-21; the toolbar wears it for the pane too since 2026-09-29).</summary>
+    public const string Label = ChatScreen.UsageToolGlyph + " Usage";
 
     /// <summary>The tab's title.</summary>
     public const string StatisticsTabTitle = "Statistics";

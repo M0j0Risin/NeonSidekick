@@ -170,16 +170,16 @@ public class ReasoningEstimateTests
     }
 
     [Fact]
-    public async Task Tokenize_OnTheLocalLlm_GoesToItsLivePort()
+    public async Task Tokenize_OnTheEmbeddedLlm_GoesToItsLivePort()
     {
         _http.Map("http://127.0.0.1:5555/v1/chat/completions", HttpStatusCode.OK, Stream(), "text/event-stream");
         _http.Map("http://127.0.0.1:5555/tokenize", HttpStatusCode.OK, "{\"tokens\":[7,8,9,10,11]}");
-        var local = new LlmEndpoint(LocalLlm.LocalEndpoint.BaseUrl, "gemma-4-e2b", "per-start-key", "local") { LiveUrl = new Uri("http://127.0.0.1:5555/v1") };
-        using var client = Client(ReasoningEstimate.Tokenize, local);
+        var embedded = new LlmEndpoint(EmbeddedLlm.EmbeddedEndpoint.BaseUrl, "gemma-4-e2b", "per-start-key", "embedded") { LiveUrl = new Uri("http://127.0.0.1:5555/v1") };
+        using var client = Client(ReasoningEstimate.Tokenize, embedded);
 
         Assert.Equal(5, (await Turn(client)).Reasoning);
         Assert.Equal("Bearer per-start-key", Assert.Single(_http.Requests, r => r.Uri.AbsolutePath == "/tokenize").Authorization);
-        Assert.DoesNotContain(_http.Requests, r => r.Uri.Host == LocalLlm.LocalEndpoint.Host);
+        Assert.DoesNotContain(_http.Requests, r => r.Uri.Host == EmbeddedLlm.EmbeddedEndpoint.Host);
     }
 
     [Fact]

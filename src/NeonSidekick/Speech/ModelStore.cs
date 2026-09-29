@@ -17,17 +17,17 @@ public enum ModelFormat
     /// <summary>An ONNX file (Kokoro): a protobuf whose first fields are <c>ir_version</c> and <c>producer_name</c>.</summary>
     Onnx,
 
-    /// <summary>A GGUF file (the local LLM's weights and vision projector, 2026-09-29): the four-byte magic <c>GGUF</c>.</summary>
+    /// <summary>A GGUF file (the embedded LLM's weights and vision projector, 2026-09-29): the four-byte magic <c>GGUF</c>.</summary>
     Gguf,
 
-    /// <summary>A zip archive (one part of an <see cref="ArchiveSetSpec"/>, 2026-09-29): the local-header magic.</summary>
+    /// <summary>A zip archive (one part of an <see cref="ArchiveSetSpec"/>, 2026-09-29): the embedded-header magic.</summary>
     Zip,
 }
 
 /// <summary>
 /// One model file: what to call it, where it lives, where to fetch it from (null = must already exist), roughly how
 /// big it is, and how to recognise it. <paramref name="Sha256"/> and <paramref name="Resumable"/> (2026-09-29, the
-/// local LLM's multi-gigabyte files) pin the file's digest — <paramref name="ApproxBytes"/> is then its exact size —
+/// embedded LLM's multi-gigabyte files) pin the file's digest — <paramref name="ApproxBytes"/> is then its exact size —
 /// and download it through a stable <c>.partial</c> file that a cancelled or broken download keeps, so the next
 /// ensure asks for the rest with a <c>Range</c> header instead of starting over. The voice models leave both off
 /// and keep the throwaway <c>.tmp</c> of before.
@@ -99,7 +99,7 @@ public sealed class ModelStore
 
     /// <param name="modelsDirectory">Where named models are stored; created on first download.</param>
     /// <param name="http">The client downloads go through; the app's default has no timeout, a stub in tests.</param>
-    /// <param name="category">The <see cref="DiagnosticLog"/> category its lines go under: <c>Voice</c> for the speech models, <c>LocalLlm</c> for the local LLM's (2026-09-29).</param>
+    /// <param name="category">The <see cref="DiagnosticLog"/> category its lines go under: <c>Voice</c> for the speech models, <c>EmbeddedLlm</c> for the embedded LLM's (2026-09-29).</param>
     public ModelStore(string modelsDirectory, HttpClient http, string category = "Voice")
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelsDirectory);
@@ -287,7 +287,7 @@ public sealed class ModelStore
 
     /// <summary>
     /// The resumable half of <see cref="EnsureAsync(ModelSpec, IProgress{ValueTuple{long, Nullable{long}}}?, Action?, CancellationToken)"/>
-    /// (2026-09-29, the local LLM's 3–5 GB files): the bytes land on <see cref="PartialPath"/>, which a cancel or a
+    /// (2026-09-29, the embedded LLM's 3–5 GB files): the bytes land on <see cref="PartialPath"/>, which a cancel or a
     /// broken connection keeps, and the next ensure asks for the rest with <c>Range: bytes=&lt;held&gt;-</c> — a 206
     /// appends, a 200 (a server that ignores ranges) starts over, a 416 means the partial file is already whole.
     /// Before a byte is fetched the drive must hold what is left plus <see cref="DiskHeadroomBytes"/>. The finished
@@ -883,7 +883,7 @@ public sealed class ModelStore
 
     /// <summary>
     /// A size as people read it: <c>4.2 GB</c>, <c>148 MB</c>, <c>1 MB</c>, <c>512 KB</c>. Invariant. The gigabyte step
-    /// (one decimal, dropped when it is zero) arrived with the local LLM's files (2026-09-29); "4216 MB" read badly.
+    /// (one decimal, dropped when it is zero) arrived with the embedded LLM's files (2026-09-29); "4216 MB" read badly.
     /// </summary>
     public static string SizeLabel(long bytes)
     {

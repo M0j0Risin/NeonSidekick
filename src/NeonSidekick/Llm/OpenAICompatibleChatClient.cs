@@ -74,7 +74,7 @@ public sealed class OpenAICompatibleChatClient : IChatClient
             throw new ArgumentOutOfRangeException(nameof(requestTimeout), requestTimeout, "The request timeout must be positive.");
         }
 
-        // The wire URL (2026-09-29): the local model's sentinel base names it, its loopback LiveUrl is where it listens.
+        // The wire URL (2026-09-29): the embedded model's sentinel base names it, its loopback LiveUrl is where it listens.
         var v1 = LlmEndpoint.NormalizeBaseUrl(endpoint.WireUrl);
         var key = string.IsNullOrWhiteSpace(endpoint.ApiKey) ? LlmEndpoint.DefaultApiKey : endpoint.ApiKey.Trim();
         Endpoint = endpoint.LiveUrl is null ? endpoint with { BaseUrl = v1, ApiKey = key } : endpoint with { LiveUrl = v1, ApiKey = key };
@@ -211,7 +211,7 @@ public sealed class OpenAICompatibleChatClient : IChatClient
 
     /// <summary>
     /// The token count of <paramref name="thinking"/>: under <see cref="ReasoningEstimate.Tokenize"/> llama.cpp's
-    /// <c>POST /tokenize</c> on the server's root (the live URL for the local LLM, with the endpoint's key), without the
+    /// <c>POST /tokenize</c> on the server's root (the live URL for the embedded LLM, with the endpoint's key), without the
     /// special tokens; else, or when that does not answer, the characters over <see cref="ConversationCompactor.CharsPerToken"/>,
     /// rounded up. A <c>/tokenize</c> that failed once is not asked again by this client.
     /// </summary>

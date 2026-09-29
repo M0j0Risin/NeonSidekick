@@ -164,6 +164,10 @@ internal sealed class SpeechSession : IDisposable
 
     private async Task ConnectCoreAsync(AppSettingsData effective, Action<string>? phase, CancellationToken cancellationToken)
     {
+        // Not ready before the first await (2026-09-29): the connect runs behind the input line now, and a reply or an alert
+        // must not begin a speaker on the synthesizer disposed below while the stop is awaited.
+        Available = false;
+
         // A tail still playing would be speaking through the client disposed next.
         await StopAsync().ConfigureAwait(false);
         _synth?.Dispose();
