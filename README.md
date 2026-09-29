@@ -3,11 +3,25 @@
 ![.NET 10](https://img.shields.io/badge/.NET-10.0-512bd4?logo=dotnet)
 ![Windows](https://img.shields.io/badge/Windows-0078D6?style=flat&logo=windows&logoColor=white)
 
-Neon Sidekick brings privacy-first, local LLM inference to your terminal. Powered by .NET 10 and inspired by tools like Claude Code, Hermes Agent, and Cline, this lightweight agentic TUI harness pairs many of my favorite features from those tools with my own toolsets for a 100% locally executed workflow.
 
-**Current Status:** A stable, Windows-first foundation for agentic tool development.
+Neon Sidekick is an agentic terminal client for local LLMs. It's built on .NET 10 and draws inspiration from tools like Claude Code, Hermes Agent and Cline. It brings together many of my favorite features from those tools and adds some unique toolsets of my own. It's Windows-first and is meant as a stable base for building agentic tools. Next on the roadmap: stronger coding capabilities and official macOS and Linux support.
 
-**Roadmap:** Expanding core coding capabilities and delivering official macOS/Linux support.
+<div align="center">
+  <table>
+    <tr>
+      <td style="padding: 10px;">
+        <img src="assets/screenshots/screen_splash.png" alt="First Image" width="800">
+      </td>
+      <td style="padding: 10px;">
+        <img src="assets/screenshots/screen_markdown.png" alt="Second Image" width="800">
+      </td>
+    </tr>
+  </table>
+</div>
+
+## Why "Neon"
+
+During early development, I was experimenting with synthwave-style themes in Spectre.Console while simultaneously testing the Vosk voice integration. I needed a short, punchy wake word, and "Neon" fit the aesthetic perfectly. The name stuck for the project. Today, while the default profile is still "Neon," the system is completely configurable—allowing you to create as many custom profiles, personas, and wake words as you like.
 
 ## Contents
 
@@ -16,9 +30,7 @@ Neon Sidekick brings privacy-first, local LLM inference to your terminal. Powere
 - [Slash commands](#slash-commands)
 - [Tools](#tools-2)
 - [Environment variables](#environment-variables)
-- [Screenshots](#screenshots)
 - [Components & Libraries](#components--libraries)
-- [Why "Neon"](#why-neon)
 
 ## Features
 [↑ Back to top](#neon-sidekick)
@@ -35,7 +47,6 @@ Neon Sidekick brings privacy-first, local LLM inference to your terminal. Powere
 * **Prompt Transparency:** Visually inspect exactly what is being fed into the system prompt and see detailed compaction summaries—no black boxes.
 * **Persistent Memory:** A UI-editable memory system that automatically injects essential, recurring details directly into context.
 * **Message Queue:** Built-in queue for stacking and executing sequential messages.
-* **Plan Mode:** `/plan <requirement>` has the model research with read-only tools, ask what it needs and present a plan, saved as `.neon/plans/<name>.md` in the working directory; nothing is changed until you approve it.
 
 ### Profiles, Sessions & Skills
 * **Multi-Profile Support:** Switch between configurations, each with its own working directory, settings, persona, memory and sessions. A name starting with `_` (`_test`) makes a temporary profile; `--profile <name>` opens one for a single launch.
@@ -48,12 +59,12 @@ Neon Sidekick brings privacy-first, local LLM inference to your terminal. Powere
 * **MCP Server Support:** Connect Model Context Protocol (MCP) servers for more tools and external data sources.
 * **Native Voice Stack:** In-process Whisper STT, push-to-talk, and a Vosk wake word.
 * **Text-to-Speech:** In-process Kokoro TTS, or an external Kokoro HTTP server.
+* **Plan Mode:** `/plan <requirement>` has the model research with read-only tools, ask what it needs and present a plan, saved as `.neon/plans/<name>.md` in the working directory; nothing is changed until you approve it.
 
 ### Integrations
 * **Obsidian:** Search, read, write and link notes directly in your vault's files: no plugin, and Obsidian needn't be running. Wikilinks, aliases, tags, properties and daily notes all work.
 * **SQL Server:** Read-only queries over named connections, plus schema, relationship and index discovery. Every query is parsed down to a single `SELECT` and run in a transaction that is always rolled back. SQL, Windows or run-as sign-in, with passwords encrypted (DPAPI) or in Windows Credential Manager.
 * **Home Assistant:** Lights, scenes, the TV, to-do lists and sensors through your own Home Assistant. The model finds devices by room or name ("dim the den to 30%"), and anything outside a safe list waits for your yes. `/ha` drives the house directly, without the model.
-* **Printing:** `/print` sends a file (or the last reply) to any installed printer: text and code as a listing, markdown formatted, a picture fitted to the page, a PDF or an Office file through the program Windows has for it. With *Print tools* on, the model can print too, after your yes.
 * **ComfyUI:** Pictures from your own ComfyUI workflows (text-to-image, image-to-image, face swaps). The model writes prompts in each model family's style, or `/imagine` sends yours as typed. A wizard builds or imports workflows.
 * **Claude API:** Anthropic's Claude models as one more `/server` choice, on your own API key (stored encrypted), with thinking levels, prompt caching and cost in `/usage`. Off until you turn it on in the *Claude (API)* tab of `/settings`.
 * **Claude Code:** `/claude` sends a message to the Claude Code CLI and brings its reply into the conversation. With `claude_advisor`, the local model can ask Claude for read-only advice when it's stuck. Both are optional and run on your own Claude Code sign-in.
@@ -1276,29 +1287,6 @@ These only matter when running the test suite from source; each live test is ski
 
 </details>
 
-## Screenshots
-[↑ Back to top](#neon-sidekick)
-
-Explore the UI and features of Neon Sidekick by expanding the panel below.
-
-<details>
-<summary><b>✨ Interface Examples</b></summary><br>
-<table>
-  <tr>
-    <td><img src="./assets/screenshots/screen_markdown.png" alt="Markdown rendering"><br><center><b>Markdown rendering</b></center></td>
-    <td><img src="./assets/screenshots/screen_vision.png" alt="Vision support"><br><center><b>Vision support</b></center></td>
-  </tr>
-  <tr>
-    <td><img src="./assets/screenshots/screen_code.png" alt="Tool calls and code blocks"><br><center><b>Tool calls and code blocks</b></center></td>
-    <td><img src="./assets/screenshots/screen_splash.png" alt="Welcome splash screen"><br><center><b>Welcome splash screen</b></center></td>
-  </tr>
-  <tr>
-    <td><img src="./assets/screenshots/screen_ask.png" alt="Ask user"><br><center><b>Ask user</b></center></td>
-    <td><img src="./assets/screenshots/screen_menus.png" alt="Intuitive menu panes"><br><center><b>Intuitive menu panes</b></center></td>
-  </tr>
-</table>
-</details>
-
 ## Components & Libraries
 [↑ Back to top](#neon-sidekick)
 
@@ -1317,8 +1305,3 @@ Explore the UI and features of Neon Sidekick by expanding the panel below.
 * `PhotoSauce.MagicScaler`
 * `Markdig`
 * `LibGit2Sharp`
-
-## Why "Neon"
-[↑ Back to top](#neon-sidekick)
-
-During early development, I was experimenting with synthwave-style themes in Spectre.Console while simultaneously testing the Vosk voice integration. I needed a short, punchy wake word, and "Neon" fit the aesthetic perfectly. The name stuck for the project. Today, while the default profile is still named "Neon," the system is completely configurable—allowing you to create as many custom profiles, personas, and wake words as you like.
