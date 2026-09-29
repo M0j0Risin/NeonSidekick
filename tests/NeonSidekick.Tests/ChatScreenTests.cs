@@ -4475,6 +4475,85 @@ public partial class ChatScreenTests : IDisposable
         Assert.DoesNotContain(ToolGroupText.ExpandedNotice(true), output);   // the key is silent; the command says so
     }
 
+    /// <summary>
+    /// The upper rule's ↘️↖️ (2026-09-28, the user's ask): drawn once the run folds; a click on ↘️ unfolds it and one on ↖️
+    /// folds it again, silent as Ctrl+O (the user's call). The input row at 100, the upper rule at 99.
+    /// </summary>
+    [Fact]
+    public async Task FoldButtons_OnTheUpperRule_UnfoldAndFold_Silently()
+    {
+        FoldingTurn();
+        _geometry = new ScreenGeometry(() => null, () => 100);
+        var rule = ScreenPane.UpperRule("", folds: true, _console.Profile.Width);
+        StepsWhenIdle(
+            Line("what time is it?"),
+            input => input.PushClick(rule.ExpandColumn, 99),
+            input => input.PushClick(rule.CollapseColumn + 1, 99),
+            Line("/exit"));
+
+        string output = await RunAsync();
+
+        int reply = output.IndexOf("It is noon.", StringComparison.Ordinal);
+        Assert.Contains(ScreenPane.ExpandGlyph + ScreenPane.CollapseGlyph, output[reply..]);
+        string unfolded = ToolGroupText.ExpandedGlyph + " 🛠️ ";
+        int at = output.IndexOf(unfolded, reply, StringComparison.Ordinal);
+        Assert.True(at > reply, output);
+        Assert.Contains(ToolGroupText.CollapsedGlyph + " 🛠️ ", output[at..]);
+        Assert.DoesNotContain(ToolGroupText.ExpandedNotice(true), output);
+        Assert.DoesNotContain(ToolGroupText.ExpandedNotice(false), output);
+    }
+
+    /// <summary>The same ↘️ under a reply (2026-09-28): the watcher's click hook unfolds the run while the answer streams, silent.</summary>
+    [Fact]
+    public async Task FoldButtons_UnderAReply_Unfold()
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.ToolCollapseCount = 2; });
+        PaneOf40Rows();
+        for (int i = 1; i <= 4; i++)
+        {
+            _chat.Enqueue(FakeChatClient.Call("c" + i.ToString(CultureInfo.InvariantCulture), GetCurrentTimeTool.ToolName));
+        }
+
+        _chat.EnqueueText("It is ", "noon.");
+        var rule = ScreenPane.UpperRule("", folds: true, _console.Profile.Width);
+        _chat.BeforeUpdate = async (i, ct) =>
+        {
+            if (i == 1 && _chat.Requests.Count == 5)
+            {
+                // Mid-answer, the run folded over it: the second update held until the watcher has read the click.
+                _scripted!.PushClick(rule.ExpandColumn, 99);
+                for (int tries = 0; tries < 500 && _scripted.IsAvailable; tries++)
+                {
+                    await Task.Delay(10, CancellationToken.None);
+                }
+            }
+        };
+        StepsWhenIdle(Line("what time is it?"), Line("/exit"));
+
+        string output = await RunAsync();
+
+        // Unfolded, the flow is written again from the store: the run's lines over the answer so far.
+        int shown = output.IndexOf(ScreenPane.ExpandGlyph + ScreenPane.CollapseGlyph, StringComparison.Ordinal);
+        Assert.True(shown > 0, output);
+        Assert.Contains(ToolGroupText.ExpandedGlyph + " 🛠️ 4 tool calls", output[shown..]);
+        Assert.DoesNotContain(ToolGroupText.ExpandedNotice(true), output);
+    }
+
+    /// <summary>With nothing that folds the upper rule has no ↘️↖️, and a click where they would be unfolds nothing.</summary>
+    [Fact]
+    public async Task FoldButtons_WithNothingFolded_AreNotDrawn()
+    {
+        _settings.Update(d => d.TtsOutput = false);
+        PaneOf40Rows();
+        _chat.EnqueueText("Hello.");
+        StepsWhenIdle(Line("hi"), input => input.PushClick(1, 99), Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.DoesNotContain(ScreenPane.ExpandGlyph, output);
+        Assert.Contains("Hello.", output);
+    }
+
     [Fact]
     public void ExpandAndCollapse_AreQuickUnderAReply_AndToolsTakesNoArgument()
     {
@@ -13374,6 +13453,85 @@ public partial class ChatScreenTests : IDisposable
         await RunAsync();
 
         Assert.Equal(ComfyPicture("pony-5.png"), Assert.Single(opened).Path);
+    }
+
+    /// <summary>
+    /// One click on a strip tile highlights it (2026-09-28, the user's ask) and moves an open viewer to it under every
+    /// <c>ComfyUI picture strip sync</c> (the user's call: the arrows keep to the setting, a click does not); nothing opens.
+    /// </summary>
+    [Theory]
+    [InlineData(NeonSidekick.Comfy.StripSync.ViewerOnly)]
+    [InlineData(NeonSidekick.Comfy.StripSync.BothWays)]
+    [InlineData(NeonSidekick.Comfy.StripSync.Disabled)]
+    public async Task PictureStrip_ATileClickedOnce_IsHighlighted_AndTheViewerFollows(string sync)
+    {
+        ComfyServer();
+        PaneOf40Rows();
+        _settings.Update(d => d.ComfyPictureStripSync = sync);
+        var opened = new List<(string Path, string Editor)>();
+        _openImage = (path, editor) => opened.Add((path, editor));
+        var followed = new List<string>();
+        _followViewer = followed.Add;
+        StepsWhenIdle(Line("/imagine a cat --seed 5"), input => input.PushClick(2, 98), Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.Contains(NeonSidekick.Comfy.ComfyText.StripSelectedHint(1, 1), output);
+        Assert.Equal(ComfyPicture("pony-5.png"), Assert.Single(followed));
+        Assert.Empty(opened);
+    }
+
+    /// <summary>A double-click on a strip tile highlights it at the first click and opens it at the second (2026-09-28).</summary>
+    [Fact]
+    public async Task PictureStrip_ATileDoubleClicked_IsHighlighted_AndOpened()
+    {
+        ComfyServer();
+        PaneOf40Rows();
+        var opened = new List<(string Path, string Editor)>();
+        _openImage = (path, editor) => opened.Add((path, editor));
+        var followed = new List<string>();
+        _followViewer = followed.Add;
+        StepsWhenIdle(Line("/imagine a cat --seed 5"), input => { input.PushClick(2, 98); input.PushClick(2, 98); }, Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.Contains(NeonSidekick.Comfy.ComfyText.StripSelectedHint(1, 1), output);
+        Assert.Equal(ComfyPicture("pony-5.png"), Assert.Single(followed));   // the second click found it highlighted
+        Assert.Equal(ComfyPicture("pony-5.png"), Assert.Single(opened).Path);
+    }
+
+    /// <summary>The same under a reply (2026-09-28): the watcher's click hook highlights the tile at the first click and opens it at the second, the reply running on.</summary>
+    [Fact]
+    public async Task PictureStrip_ATileDoubleClicked_UnderAReply_IsHighlighted_AndOpened()
+    {
+        ComfyServer();
+        PaneOf40Rows();
+        var opened = new List<(string Path, string Editor)>();
+        _openImage = (path, editor) => { lock (opened) { opened.Add((path, editor)); } };
+        int Opened() { lock (opened) { return opened.Count; } }
+        var followed = new List<string>();
+        _followViewer = path => { lock (followed) { followed.Add(path); } };
+        _chat.EnqueueText("Hello ", "there.");
+        _chat.BeforeUpdate = async (i, ct) =>
+        {
+            if (i == 1 && _chat.Requests.Count == 1)
+            {
+                _scripted!.PushClick(2, 98).PushClick(2, 98);
+                for (int tries = 0; tries < 500 && Opened() == 0; tries++)
+                {
+                    await Task.Delay(10, CancellationToken.None);
+                }
+            }
+        };
+        StepsWhenIdle(Line("/imagine a cat --seed 5"), Line("hi"), Line("/exit"));
+
+        await RunAsync();
+
+        Assert.Equal(ComfyPicture("pony-5.png"), Assert.Single(opened).Path);
+        lock (followed)
+        {
+            Assert.Equal(ComfyPicture("pony-5.png"), Assert.Single(followed));
+        }
     }
 
     /// <summary>

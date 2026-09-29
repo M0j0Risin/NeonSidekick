@@ -64,7 +64,8 @@ Neon Sidekick brings privacy-first, local LLM inference to your terminal. Powere
 
 **Navigation**
 * **Keyboard:** ←/→ (switch tabs), ↑/↓ (move), Enter (edit/toggle), ESC (close).
-* **Mouse:** Click moves the cursor; double-click selects rows and tabs. The top-right × acts as ESC, and double-clicking outside an open pane closes it. Double-clicking a picture in the transcript opens it in the picture viewer.
+* **Mouse:** Click moves the cursor; double-click selects rows and tabs. The top-right × acts as ESC, and double-clicking outside an open pane closes it. Double-clicking a picture in the transcript opens it in the picture viewer. Clicking a picture in the ComfyUI picture strip highlights it and moves an open viewer to it; double-clicking it also opens it.
+* **Fold buttons:** while the transcript holds a tool run, code block or thinking block that folds, **↘️↖️** sit at the left of the rule over the input row. ↘️ unfolds everything and ↖️ folds it again, as `/expand` and `/collapse` do but without a notice. They work while a reply runs too.
 
 **Input line**
 * The input row is always a full editor, even while a reply streams or `/botchat` runs: ←/→, Home/End, Delete, Shift+arrows or Ctrl+A to select, Ctrl+C / Ctrl+X to copy / cut, right-click or Alt+V to paste, click to place the cursor, ↑/↓ for history, and the `/`, `@`, `#`, `$`, `%` and `^` lists.
@@ -462,7 +463,7 @@ The services that run without asking under `ask` can be changed in `profile.json
 | ComfyUI reinforce negatives | When the model writes the prompt, it also adds a few opposite tags where the image model tends to drift (a solo figure → `multiple girls`, night → `daylight`) to the workflow's negative. Skipped for a verbatim prompt, a negative set for the call, `/imagine`, families without a negative (Flux, FLUX.2, Klein, Krea 2, Z-Image, Ernie Turbo, Boogu, Ideogram 4) and a workflow whose `.md` says `reinforce: false`. | on |
 | ComfyUI show prompts | Shows what was sent under each picture: the `prompt:`, the `negative:` and a `params:` line (size, steps, cfg, denoise, seed, sampler, scheduler). Off, only the picture's line. The model sees the same either way. | on |
 | ComfyUI picture strip | Keeps the session's ComfyUI pictures as thumbnails in a strip over the input line, newest at the left. With the input line empty, ←/→ highlight one and Enter opens it, a reply running or not; a double-click opens any, and dragging one onto the input row attaches it to your message. The **🎞️** at the left of the strip's rule opens the picture viewer on the output folder; the **×** at its right hides the strip until the next picture (turn this setting off to keep it hidden). `/clear`, `/new` and a session switch empty it; it hides while a menu is open or the window is too short. | on |
-| ComfyUI picture strip sync | Whether the strip and the picture viewer follow each other. `viewer-only`: browsing in the viewer (←/→, Home/End, the next picture after a delete) highlights the same picture in the strip; a picture the strip doesn't hold is ignored, and the slide show and newly arriving pictures leave the strip alone. `both-ways`: that, plus ←/→ on the strip move an open viewer on the strip's folder without bringing it to the front. `disabled`: neither. | `viewer-only` |
+| ComfyUI picture strip sync | Whether the strip and the picture viewer follow each other. `viewer-only`: browsing in the viewer (←/→, Home/End, the next picture after a delete) highlights the same picture in the strip; a picture the strip doesn't hold is ignored, and the slide show and newly arriving pictures leave the strip alone. `both-ways`: that, plus ←/→ on the strip move an open viewer on the strip's folder without bringing it to the front. `disabled`: neither. A click on a strip picture moves an open viewer under every setting. | `viewer-only` |
 | ComfyUI output folder | The folder under the working directory the pictures are saved in (`comfy_images\pony-txt2img-1234.png`); empty = the working directory itself. | `comfy_images` |
 
 #### SQL
@@ -498,7 +499,7 @@ The services that run without asking under `ask` can be changed in `profile.json
 | Tool collapse count | A run of more tool calls than this folds under one summary line (`▸ 🛠️ 7 tool calls — read_file ×3, …`): only its last lines show while it runs, and only the summary afterwards (0–100; 0 = never fold). | 2 |
 | Code collapse count | A top-level code block longer than this folds to its label (`▸ 📜 csharp · 57 lines`) once its closing fence arrives; while streaming, only its last this-many lines show (0–100; 0 = never fold). Needs Transcript markdown. | 20 |
 
-Click a folded line, press Ctrl+O or use `/expand` to see it in full.
+Click a folded line, press Ctrl+O, click **↘️** on the rule over the input row or use `/expand` to see it in full.
 
 </details>
 
@@ -576,7 +577,7 @@ Type `/` to list every command with its summary; after a command and a space, it
 | `/loop <count> [delay] <message>`, `/loop infinite [delay] <message>` | Send the message that many times, or until ESC or Ctrl+C, waiting for each reply. See Loops. |
 | `/plan <requirement>` | Have the model research with read-only tools and present a plan before anything changes. See Plan mode. |
 | `/botchat [profile ...] [topic]` | Let profiles talk to each other until you stop them. See Bot conversations. |
-| `/expand` | Unfold every folded tool run, code block and thinking block, now and from here on (Ctrl+O toggles this and `/collapse`). |
+| `/expand` | Unfold every folded tool run, code block and thinking block, now and from here on (Ctrl+O toggles this and `/collapse`; ↘️ / ↖️ on the rule over the input row do the same silently). |
 | `/collapse` | Fold the tool runs, code blocks and thinking again. |
 | `/mcp` | Connect external MCP servers and switch their tools on or off. |
 | `/memory [forget \| edit \| copy <profile> [overwrite]]` | List memories on a pane (Enter removes one). `forget` forgets them all. `edit` opens `memory.json` in your editor (invalid JSON is ignored with a warning). `copy` appends them to another profile's memory, skipping duplicates, or replaces it with `overwrite`. `forget` and `copy` ask first. |

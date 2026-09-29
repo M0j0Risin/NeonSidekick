@@ -906,11 +906,25 @@ public sealed partial class InputLine
                 hintClicks.Reset();
                 _line.CloseStrip?.Invoke();
             }
+            else if (pane.TryHitFoldButton(click.X, click.Y, out bool expand))
+            {
+                // The upper rule's ↘️ / ↖️ (2026-09-28): one click unfolds or folds everything, as /expand and /collapse
+                // do but silent, as Ctrl+O is (the user's call).
+                _anchor = -1;
+                hintClicks.Reset();
+                pane.SetToolGroupsExpanded(expand);
+            }
             else if (pane.PictureAt(click.X, click.Y) is int picture)
             {
                 // A picture in the transcript (later on 2026-09-24, the user's ask): a double-click
-                // opens it in the image editor; the draft is untouched.
+                // opens it in the image editor; the draft is untouched. One on the strip is highlighted
+                // at the first click too (2026-09-28, SelectPicture), so a double-click highlights and opens.
                 _anchor = -1;
+                if (pane.TryHitStrip(click.X, click.Y, out _))
+                {
+                    _line.SelectPicture?.Invoke(picture);
+                }
+
                 if (hintClicks.Second(PicturePairKey(picture)))
                 {
                     _line.OpenPicture?.Invoke(picture);

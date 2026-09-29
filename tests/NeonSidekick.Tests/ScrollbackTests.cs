@@ -287,6 +287,28 @@ public class ScrollbackTests
         Assert.Null(store.GroupAtRow(0));
     }
 
+    /// <summary>
+    /// What the upper rule's ↘️↖️ are drawn for (2026-09-28): a run past its keep folds, one under it does not, a code block
+    /// folds only once it ends, and a clear takes every fold with it.
+    /// </summary>
+    [Fact]
+    public void AnyFolds_CountsOnlyWhatFolds()
+    {
+        Assert.False(new Scrollback().AnyFolds);
+        Assert.False(Run(keep: 2, members: 2, end: true).AnyFolds);   // under its keep: drawn as it is
+        Assert.False(Run(keep: 0, members: 3, end: true).AnyFolds);   // keeps everything
+
+        var run = Run(keep: 1, members: 2);
+        Assert.True(run.AnyFolds);   // past its keep while it runs, too
+        run.Clear();
+        Assert.False(run.AnyFolds);
+
+        var code = Code(keep: 2, size: 3, rows: 3);
+        Assert.False(code.AnyFolds);   // still streaming
+        code.EndGroup();
+        Assert.True(code.AnyFolds);
+    }
+
     [Fact]
     public void ToolRun_Clear_ForgetsTheRuns_ButNotExpandAll()
     {

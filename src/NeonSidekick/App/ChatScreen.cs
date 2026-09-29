@@ -1014,6 +1014,7 @@ internal sealed partial class ChatScreen
         _input = new InputLine(_pane, keys, clipboard, _transcript, clipboardImage, query => _files.Complete(query), CommandChoices, ArgumentChoices, HashChoices, DollarChoices, _copy, PercentChoices, CaretChoices);
         _input.Remembered = StoreCommand;
         _input.OpenPicture = OpenPicture;
+        _input.SelectPicture = SelectStripPicture;
         _input.OpenViewer = () => OpenViewer();
         _input.CloseStrip = ClosePictureStrip;
         _input.PictureFile = DroppedPictureOf;
@@ -1664,9 +1665,23 @@ internal sealed partial class ChatScreen
                 return null;
             }
 
+            if (_pane.TryHitFoldButton(click.X, click.Y, out bool expand))
+            {
+                // The upper rule's ↘️ / ↖️ (2026-09-28): everything unfolded or folded, silent as Ctrl+O, under a reply as at idle.
+                _queuedClicks.Reset();
+                _pane.SetToolGroupsExpanded(expand);
+                return null;
+            }
+
             if (_pane.PictureAt(click.X, click.Y) is int picture)
             {
                 // A picture in the transcript (later on 2026-09-24): a double-click opens it (the built-in viewer since later on 2026-09-27, PictureOpenerFor).
+                // A strip tile is highlighted at the first click too (2026-09-28, SelectStripPicture).
+                if (_pane.TryHitStrip(click.X, click.Y, out _))
+                {
+                    SelectStripPicture(picture);
+                }
+
                 if (_queuedClicks.Second(InputLine.PicturePairKey(picture)))
                 {
                     OpenPicture(picture);
@@ -11566,13 +11581,32 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>
-    /// The strip's highlighted picture shown in an open viewer (2026-09-28, <c>ComfyUI picture strip sync</c>'s
-    /// <c>both-ways</c>): only a picture with a file of its own; nothing with the highlight let go, without a viewer, or under
-    /// the other two. The viewer takes it only on its own folder and never comes forward.
+    /// A click on a strip tile (2026-09-28, the user's ask: "clicking a picture here selects it (which would switch to that
+    /// image in the viewer if the viewer is open)"): the tile highlighted, the pane following at once, and an open viewer
+    /// moved to it under every <c>ComfyUI picture strip sync</c> (the user's call — the arrows keep to the setting). The
+    /// first click of a double-click does it too, so the second finds the tile highlighted and opens it. One already
+    /// highlighted moves nothing.
     /// </summary>
-    private void FollowInViewer()
+    private void SelectStripPicture(int id)
     {
-        if (_followViewer is null || !StripSync.StripSyncs(_effective().ComfyPictureStripSync) || _pictureStrip.SelectedId is not { } id)
+        if (!_pictureStrip.Highlight(entry => entry == id))
+        {
+            return;
+        }
+
+        _pane.RedrawStrip();
+        FollowInViewer(always: true);
+    }
+
+    /// <summary>
+    /// The strip's highlighted picture shown in an open viewer (2026-09-28, <c>ComfyUI picture strip sync</c>'s
+    /// <c>both-ways</c>, or <paramref name="always"/> for a click on a tile): only a picture with a file of its own; nothing
+    /// with the highlight let go, without a viewer, or — not <paramref name="always"/> — under the other two. The viewer
+    /// takes it only on its own folder and never comes forward.
+    /// </summary>
+    private void FollowInViewer(bool always = false)
+    {
+        if (_followViewer is null || (!always && !StripSync.StripSyncs(_effective().ComfyPictureStripSync)) || _pictureStrip.SelectedId is not { } id)
         {
             return;
         }
@@ -11649,6 +11683,9 @@ internal sealed partial class ChatScreen
     /// </summary>
     private DroppedPicture? DroppedPictureOf(int id)
     {
+        // Asked only for a drop on the line: the press that started the drag was a first click, and under a reply the
+        // watcher's pair holds it (2026-09-28) — a drop is no half of a double-click there either. Same thread as the pair.
+        _queuedClicks.Reset();
         lock (_pictures)
         {
             return id >= 0 && id < _pictures.Count && _pictures[id] is var source ? new DroppedPicture(source.Name, source.FullPath, source.Bytes) : null;

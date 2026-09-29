@@ -151,6 +151,79 @@ public class ScreenPaneTests : IDisposable
         Assert.EndsWith(Rule(40) + "\n" + InputLine.PromptGlyph + "\n" + Rule(40) + "\n", Output);
     }
 
+    /// <summary>
+    /// The upper rule's ↘️↖️ (2026-09-28, the user's layout): right after the rule's first glyph, side by side, a space, then
+    /// the titled rule over the rest; without folds, or too narrow to keep the title's least rule after them, the rule as
+    /// before.
+    /// </summary>
+    [Fact]
+    public void UpperRule_IsPinned()
+    {
+        const string buttons = "↘️↖️";
+        var parts = ScreenPane.UpperRule("", folds: true, 40);
+        Assert.Equal("─" + buttons + " " + Rule(34), parts.Text);
+        Assert.Equal(40, TextCells.Width(parts.Text));
+        Assert.Equal(("─", buttons), (parts.Lead, parts.Buttons));
+        Assert.Equal((1, 3), (parts.ExpandColumn, parts.CollapseColumn));
+
+        Assert.Equal("─" + buttons + " " + ScreenPane.RuleWithTitle("notes", 34), ScreenPane.UpperRule("notes", folds: true, 40).Text);
+
+        var plain = ScreenPane.UpperRule("notes", folds: false, 40);
+        Assert.Equal((ScreenPane.RuleWithTitle("notes", 40), -1, -1), (plain.Text, plain.ExpandColumn, plain.CollapseColumn));
+
+        Assert.Equal("─" + buttons + " " + Rule(ScreenPane.RuleTitleMinRule), ScreenPane.UpperRule("", folds: true, 6 + ScreenPane.RuleTitleMinRule).Text);
+        var narrow = ScreenPane.UpperRule("", folds: true, 5 + ScreenPane.RuleTitleMinRule);   // the buttons go
+        Assert.Equal((Rule(5 + ScreenPane.RuleTitleMinRule), -1), (narrow.Text, narrow.ExpandColumn));
+    }
+
+    /// <summary>
+    /// The upper rule's ↘️↖️ (2026-09-28): drawn once a run folds, not before; ↘️ (with the rule glyph at its left) unfolds
+    /// and ↖️ (with the space at its right) folds; under an overlay they go, and they come back when it closes.
+    /// </summary>
+    [Fact]
+    public void FoldButtons_ShowOnceARunFolds_AndHitTheirOwnHalves()
+    {
+        _cursorTop = 100;   // the upper rule at 99
+        using var pane = Pane();
+        pane.Show();
+        Assert.False(pane.TryHitFoldButton(1, 99, out _));   // nothing folds yet
+        pane.BeginToolGroup(1);
+        pane.SetToolGroupSummary(new Markup("S"), new Markup("E"));
+        pane.WriteToolLine(new Markup("m1\n"));
+        Assert.False(pane.TryHitFoldButton(1, 99, out _));   // one line: under the keep, drawn as it is
+
+        int mark = Output.Length;
+        pane.WriteToolLine(new Markup("m2\n"));   // past the keep: the run folds, and the rule shows it (the redraw, or the tick)
+        pane.EndToolGroup();
+        _time.Advance(ScreenPane.Tick);
+        Assert.Contains(ScreenPane.UpperRule("", folds: true, 40).Text + "\n" + InputLine.PromptGlyph, Output[mark..]);
+
+        foreach (int x in new[] { 0, 1, 2 })
+        {
+            Assert.True(pane.TryHitFoldButton(x, 99, out bool expand));
+            Assert.True(expand);
+        }
+
+        foreach (int x in new[] { 3, 4, 5 })
+        {
+            Assert.True(pane.TryHitFoldButton(x, 99, out bool expand));
+            Assert.False(expand);
+        }
+
+        Assert.False(pane.TryHitFoldButton(6, 99, out _));
+        Assert.False(pane.TryHitFoldButton(1, 98, out _));
+
+        // Unchanged: the tick leaves the rule alone.
+        mark = Output.Length;
+        _time.Advance(ScreenPane.Tick);
+        Assert.Equal("", Output[mark..]);
+
+        pane.ShowOverlay(new Markup("a"), "ESC closes");
+        Assert.False(pane.TryHitFoldButton(1, 99, out _));
+        pane.CloseOverlay();
+        Assert.True(pane.TryHitFoldButton(1, 99, out _));
+    }
+
     [Fact]
     public void ALine_MovesTheFlowDown_AndShrinksThePadding()
     {
