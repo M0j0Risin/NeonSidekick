@@ -859,6 +859,13 @@ public sealed partial class InputLine
                 hintClicks.Reset();
                 _line.OpenViewer?.Invoke();
             }
+            else if (pane.TryHitStripClose(click.X, click.Y))
+            {
+                // The strip's close × (2026-09-28): one click puts the strip away until the next picture.
+                _anchor = -1;
+                hintClicks.Reset();
+                _line.CloseStrip?.Invoke();
+            }
             else if (pane.PictureAt(click.X, click.Y) is int picture)
             {
                 // A picture in the transcript (later on 2026-09-24, the user's ask): a double-click

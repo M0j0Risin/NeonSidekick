@@ -300,6 +300,9 @@ public sealed partial class InputLine
     /// <summary>What a click on the picture strip's button does (2026-09-27, <see cref="ScreenPane.StripButton"/>): the screen's picture viewer; null = nothing.</summary>
     public Action? OpenViewer { get; set; }
 
+    /// <summary>What a click on the picture strip's close × does (2026-09-28, <see cref="ScreenPane.TryHitStripClose"/>): the screen puts the strip away until the next picture; null = nothing.</summary>
+    public Action? CloseStrip { get; set; }
+
     public static string SubmittedMarkup(string text)
     {
         ArgumentNullException.ThrowIfNull(text);

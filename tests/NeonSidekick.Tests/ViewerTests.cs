@@ -494,7 +494,8 @@ public sealed class ViewerTests : IDisposable
     [Fact]
     public void Wording_IsPinned()
     {
-        Assert.Equal("🖼  viewer", ViewerText.StripButton);
+        Assert.Equal("\U0001F39E️", ViewerText.StripButton);   // 🎞️ with its emoji selector, no word (2026-09-28)
+        Assert.Equal(2, NeonSidekick.UI.TextCells.Width(ViewerText.StripButton));
         Assert.Equal("view", ViewerText.ViewWord);
         Assert.Equal("system", ViewerText.SystemViewerWord);
         Assert.Equal(@"Waiting for pictures in D:\p", ViewerText.Waiting(@"D:\p"));

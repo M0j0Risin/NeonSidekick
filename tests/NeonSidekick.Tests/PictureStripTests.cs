@@ -133,6 +133,37 @@ public class PictureStripTests : IDisposable
         Assert.True(strip.Version > version);
     }
 
+    /// <summary>The rule's × (2026-09-28): the strip put away with its highlight let go, until the next picture or a clear; nothing to close when empty.</summary>
+    [Fact]
+    public void Close_PutsItAway_UntilTheNextPictureOrAClear()
+    {
+        var empty = new PictureStrip();
+        int version = empty.Version;
+        empty.Close();
+        Assert.False(empty.Closed);
+        Assert.Equal(version, empty.Version);
+
+        var strip = StripOf(3);
+        strip.Step(+1);
+        version = strip.Version;
+        strip.Close();
+        Assert.True(strip.Closed);
+        Assert.Null(strip.SelectedId);
+        Assert.Equal(3, strip.Count);   // the pictures are kept
+        Assert.True(strip.Version > version);
+
+        version = strip.Version;
+        strip.Close();   // already closed: no change
+        Assert.Equal(version, strip.Version);
+
+        strip.Add(Tile(12, 12), 9);
+        Assert.False(strip.Closed);
+
+        strip.Close();
+        strip.Clear();
+        Assert.False(strip.Closed);
+    }
+
     // ── The window ──────────────────────────────────────────────────────────
 
     [Fact]
@@ -231,12 +262,31 @@ public class PictureStripTests : IDisposable
         using var pane = Pane(strip);
         pane.Show();
 
-        // 20 rows, the flow at row 0: nine empty rows, the strip's rule (2026-09-25) and its six, then rule / input / rule / hint.
+        // 20 rows, the flow at row 0: nine empty rows, the strip's rule (2026-09-25, its close × since 2026-09-28) and its
+        // six, then rule / input / rule / hint.
         Assert.Equal(ScreenPane.StripPaneRows, pane.StripRows);
         Assert.Equal(9, pane.Padding);
         string row = " " + Blocks(12) + "  " + Blocks(12) + " ";
         Assert.EndsWith(row + "\n" + Rule(40) + "\n" + InputLine.PromptGlyph + "\n" + Rule(40) + "\nidle", Output);
-        Assert.StartsWith(new string('\n', 9) + Rule(40) + "\n" + row + "\n", Output);
+        Assert.StartsWith(new string('\n', 9) + Rule(36) + " " + ScreenPane.CloseGlyph + " ─\n" + row + "\n", Output);
+    }
+
+    /// <summary>A click on the strip rule's × or the cell either side hits it (2026-09-28); the button's with none drawn misses.</summary>
+    [Fact]
+    public void Pane_HitsTheStripsClose_OnItsRule()
+    {
+        _cursorTop = 100;
+        var strip = StripOf(2, 12, 12);
+        using var pane = Pane(strip);
+        pane.Show();
+
+        // The input row at 100, the upper rule at 99, the strip on 93–98, its own rule at 92; the × at column 37 of 40.
+        Assert.True(pane.TryHitStripClose(37, 92));
+        Assert.True(pane.TryHitStripClose(36, 92));
+        Assert.True(pane.TryHitStripClose(38, 92));
+        Assert.False(pane.TryHitStripClose(35, 92));
+        Assert.False(pane.TryHitStripClose(37, 93));
+        Assert.False(pane.TryHitStripButton(2, 92));
     }
 
     [Fact]

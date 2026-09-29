@@ -94,6 +94,35 @@ public class ScreenPaneTests : IDisposable
         Assert.Equal(40, TextCells.Width(ScreenPane.RuleWithTitle("a-title-longer-than-the-rule-can-hold", 40)));
     }
 
+    /// <summary>
+    /// The picture strip's rule (2026-09-28, the user's layout): the viewer's button at the left and the close × at the
+    /// right, a space cell either side of each; no button, the × alone; too narrow, the button goes, then the ×.
+    /// </summary>
+    [Fact]
+    public void StripRule_IsPinned()
+    {
+        const string film = "\U0001F39E️";
+        var parts = ScreenPane.StripRule(film, 40);
+        Assert.Equal("─ " + film + " " + Rule(31) + " × ─", parts.Text);
+        Assert.Equal(40, TextCells.Width(parts.Text));
+        Assert.Equal((2, 37), (parts.ButtonColumn, parts.CloseColumn));
+        Assert.Equal((film, "×"), (parts.Button, parts.Close));
+        Assert.EndsWith(" ", parts.Lead);        // a space cell left of the glyph…
+        Assert.StartsWith(" ", parts.Fill);      // …and right of it
+        Assert.EndsWith(" ", parts.Fill);        // a space either side of the ×
+        Assert.StartsWith(" ", parts.Tail);
+
+        Assert.Equal(Rule(36) + " × ─", ScreenPane.StripRule(null, 40).Text);
+        Assert.Equal(-1, ScreenPane.StripRule("", 40).ButtonColumn);
+        Assert.Equal(36 + 1, ScreenPane.StripRule("", 40).CloseColumn);
+
+        Assert.Equal("─ " + film + " ─ × ─", ScreenPane.StripRule(film, 10).Text);   // one rule glyph between: the least
+        Assert.Equal(Rule(5) + " × ─", ScreenPane.StripRule(film, 9).Text);         // none: the button goes
+        Assert.Equal("─ × ─", ScreenPane.StripRule(film, 5).Text);
+        var bare = ScreenPane.StripRule(film, 4);
+        Assert.Equal((Rule(4), -1, -1), (bare.Text, bare.ButtonColumn, bare.CloseColumn));
+    }
+
     [Fact]
     public void RuleTitle_IsDrawnOnTheUpperRule_AndFollowsOnTheTick()
     {

@@ -11,9 +11,10 @@ public static class ViewerText
     /// <summary>What the window's title opens with, and its whole title before the folder has a picture. Pinned.</summary>
     public const string AppTitle = "NeonSidekick pictures";
 
-    /// <summary>The label on the picture strip's rule, the button that opens the window (the ComfyUI output folder). Two spaces after
-    /// the glyph (later on 2026-09-27, the user's call): Windows Terminal draws 🖼 wider than it counts, and one space let it touch the word. Pinned.</summary>
-    public const string StripButton = "🖼  viewer";
+    /// <summary>The button at the left of the picture strip's rule that opens the window (the ComfyUI output folder). The glyph
+    /// alone since 2026-09-28 (the user's call: 🎞️, no word, at the rule's left with the close × at its right); it carries
+    /// U+FE0F so Windows Terminal draws it as the two-cell emoji <c>TextCells</c> counts. Pinned.</summary>
+    public const string StripButton = "🎞️";
 
     /// <summary>The <c>/comfy</c> argument that opens the window, as the strip's button does. Pinned.</summary>
     public const string ViewWord = "view";

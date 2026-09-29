@@ -46,6 +46,7 @@ public sealed class PictureStrip
     private int _selected = -1;
     private int _first;
     private int _version;
+    private bool _closed;
 
     /// <summary>The pictures held.</summary>
     public int Count
@@ -71,7 +72,33 @@ public sealed class PictureStrip
         get { lock (_gate) { return _version; } }
     }
 
-    /// <summary>A picture at the left, the others one along; the highlight is let go and the window goes back to the start.</summary>
+    /// <summary>
+    /// Whether the × on the strip's rule put it away (2026-09-28, the user's ask: "the X to close is just until the next
+    /// generation"): the screen shows no strip while it is, and the next <see cref="Add"/> — or a <see cref="Clear"/> — opens
+    /// it again. Not the <c>ComfyUI picture strip</c> setting, which hides it for good; the pictures are kept either way.
+    /// </summary>
+    public bool Closed
+    {
+        get { lock (_gate) { return _closed; } }
+    }
+
+    /// <summary>The strip put away until the next picture (<see cref="Closed"/>), the highlight let go. Nothing with no pictures or already closed.</summary>
+    public void Close()
+    {
+        lock (_gate)
+        {
+            if (_entries.Count == 0 || _closed)
+            {
+                return;
+            }
+
+            _closed = true;
+            _selected = -1;
+            _version++;
+        }
+    }
+
+    /// <summary>A picture at the left, the others one along; the highlight is let go, the window goes back to the start and a closed strip opens again.</summary>
     public void Add(ImageThumbnail tile, int id)
     {
         ArgumentNullException.ThrowIfNull(tile);
@@ -85,11 +112,12 @@ public sealed class PictureStrip
 
             _selected = -1;
             _first = 0;
+            _closed = false;
             _version++;
         }
     }
 
-    /// <summary>Every picture gone (a new session).</summary>
+    /// <summary>Every picture gone (a new session), and the strip no longer closed.</summary>
     public void Clear()
     {
         lock (_gate)
@@ -102,6 +130,7 @@ public sealed class PictureStrip
             _entries.Clear();
             _selected = -1;
             _first = 0;
+            _closed = false;
             _version++;
         }
     }

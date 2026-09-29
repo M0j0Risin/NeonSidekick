@@ -13379,7 +13379,7 @@ public partial class ChatScreenTests : IDisposable
     /// <summary>
     /// The picture viewer's button on the strip's own rule (2026-09-27): one click hands the ComfyUI output folder's full path
     /// to the viewer. The input row at 100, the upper rule at 99, the strip's own rule with the
-    /// button's label at its right edge, <see cref="ScreenPane.StripPaneRows"/> over the upper rule.
+    /// button at its left edge (2026-09-28), <see cref="ScreenPane.StripPaneRows"/> over the upper rule.
     /// </summary>
     [Fact]
     public async Task PictureStrip_TheViewerButton_OneClick_OpensTheOutputFolder()
@@ -13388,13 +13388,12 @@ public partial class ChatScreenTests : IDisposable
         PaneOf40Rows();
         var viewed = new List<string>();
         _openViewer = viewed.Add;
-        string rule = ScreenPane.RuleWithTitle(NeonSidekick.Viewer.ViewerText.StripButton, _console.Profile.Width);
-        int x = TextCells.Width(rule[..(rule.IndexOf(' ', StringComparison.Ordinal) + 1)]);
-        StepsWhenIdle(Line("/imagine a cat --seed 5"), input => input.PushClick(x + 1, 99 - ScreenPane.StripPaneRows), Line("/exit"));
+        var rule = ScreenPane.StripRule(NeonSidekick.Viewer.ViewerText.StripButton, _console.Profile.Width);
+        StepsWhenIdle(Line("/imagine a cat --seed 5"), input => input.PushClick(rule.ButtonColumn + 1, 99 - ScreenPane.StripPaneRows), Line("/exit"));
 
         string output = await RunAsync();
 
-        Assert.Contains(NeonSidekick.Viewer.ViewerText.StripButton, output);
+        Assert.Contains(rule.Text, output);
         Assert.Equal(Path.GetDirectoryName(ComfyPicture("pony-5.png")), Assert.Single(viewed));
         Assert.DoesNotContain(NeonSidekick.Viewer.ViewerText.Opened(viewed[0]), output);   // a click is silent
     }
@@ -13410,6 +13409,35 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         Assert.DoesNotContain(NeonSidekick.Viewer.ViewerText.StripButton, output);
+        Assert.Contains(ScreenPane.StripRule(null, _console.Profile.Width).Text, output);   // the × stays
+    }
+
+    /// <summary>
+    /// The close × at the right of the strip's rule (2026-09-28, the user's ask): one click puts the strip away — the arrows
+    /// and the Enter are the line's again, nothing opens — until the next picture, which brings it back with both.
+    /// </summary>
+    [Fact]
+    public async Task PictureStrip_TheCloseX_OneClick_HidesItUntilTheNextPicture()
+    {
+        ComfyServer();
+        PaneOf40Rows();
+        var opened = new List<(string Path, string Editor)>();
+        _openImage = (path, editor) => opened.Add((path, editor));
+        var rule = ScreenPane.StripRule(null, _console.Profile.Width);
+        StepsWhenIdle(
+            Line("/imagine a cat --seed 5"),
+            input => input.PushClick(rule.CloseColumn, 99 - ScreenPane.StripPaneRows),
+            Key(Keys.Right), Key(Keys.Enter),
+            Line("/imagine a cat --seed 6"),
+            Key(Keys.Right), Key(Keys.Right), Key(Keys.Enter),
+            Line("/exit"));
+
+        string output = await RunAsync();
+
+        // Closed, the first → and Enter opened nothing; back with the next picture, → → reached the older one.
+        Assert.Equal(ComfyPicture("pony-5.png"), Assert.Single(opened).Path);
+        Assert.Contains(NeonSidekick.Comfy.ComfyText.StripSelectedHint(2, 2), output);
+        Assert.True(_settings.Current.ComfyPictureStrip);   // the setting untouched
     }
 
     /// <summary><c>/comfy view</c> opens the viewer on the output folder, made first when it is not there yet, and says so; with no viewer it is an error.</summary>

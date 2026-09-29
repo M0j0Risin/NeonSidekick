@@ -241,10 +241,12 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     private List<PictureSpan> _stripSpans = [];
 
     // The button on the strip's rule (2026-09-27, the picture viewer): its label's provider, and the columns the last
-    // draw put the label at (-1 = none drawn), for TryHitStripButton.
+    // draw put the label at (-1 = none drawn), for TryHitStripButton; the close × at the rule's right (2026-09-28), for
+    // TryHitStripClose.
     private Func<string?> _stripButton = static () => null;
     private int _stripButtonColumn = -1;
     private int _stripButtonCells;
+    private int _stripCloseColumn = -1;
 
     private sealed record Overlay(IRenderable Content, string Hint, bool Input, bool Close);
 
@@ -611,9 +613,9 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
 
     /// <summary>
     /// The label of the button on the picture strip's own rule (2026-09-27, the user's ask: the ComfyUI picture viewer opened
-    /// from the strip): drawn at the rule's right edge as the upper rule draws its title (<see cref="RuleWithTitle"/>), in
-    /// <see cref="Theme.AccentSecondary"/> so it reads as something to click; null or empty = the bare rule (the default).
-    /// Read at each draw; a click on it is <see cref="TryHitStripButton"/>.
+    /// from the strip): drawn at the rule's left edge since 2026-09-28 (the user's call, the close × took the right;
+    /// <see cref="StripRule"/>), in <see cref="Theme.AccentSecondary"/> so it reads as something to click; null or empty = no
+    /// button (the default), the × stays. Read at each draw; a click on it is <see cref="TryHitStripButton"/>.
     /// </summary>
     public Func<string?> StripButton
     {
@@ -623,9 +625,21 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
 
     /// <summary>
     /// Whether a click at buffer cell (<paramref name="x"/>, <paramref name="y"/>) landed on <see cref="StripButton"/>'s
-    /// label on the drawn strip's rule. False with no strip or no button drawn, the pane lifted or disabled, or no geometry.
+    /// label on the drawn strip's rule, or the space either side of it (2026-09-28: the glyph alone is a small target).
+    /// False with no strip or no button drawn, the pane lifted or disabled, or no geometry.
     /// </summary>
-    public bool TryHitStripButton(int x, int y)
+    public bool TryHitStripButton(int x, int y) => HitStripRule(x, y, close: false);
+
+    /// <summary>
+    /// Whether a click at buffer cell (<paramref name="x"/>, <paramref name="y"/>) landed on the close × at the right of the
+    /// drawn strip's rule (2026-09-28), or the cell either side — three cells, as <see cref="TryHitClose"/> gives an
+    /// overlay's. The screen puts the strip away until the next picture (<see cref="UI.PictureStrip.Close"/>). False as
+    /// <see cref="TryHitStripButton"/> is.
+    /// </summary>
+    public bool TryHitStripClose(int x, int y) => HitStripRule(x, y, close: true);
+
+    /// <summary>Whether (<paramref name="x"/>, <paramref name="y"/>) is on the drawn strip rule's button or its ×, with the cell either side.</summary>
+    private bool HitStripRule(int x, int y, bool close)
     {
         if (!Enabled)
         {
@@ -634,14 +648,16 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
 
         lock (_gate)
         {
-            if (!_drawn || _drawnOverlay || _stripRows == 0 || _stripButtonColumn < 0 || _batch > 0 || _modal > 0 || _geometry?.CursorTop() is not int top)
+            int column = close ? _stripCloseColumn : _stripButtonColumn;
+            if (!_drawn || _drawnOverlay || _stripRows == 0 || column < 0 || _batch > 0 || _modal > 0 || _geometry?.CursorTop() is not int top)
             {
                 return false;
             }
 
             // The strip's own rule is its first row, _stripRows over the upper rule.
             int rule = top - CursorDepth - 1;
-            return y == rule - _stripRows && x >= _stripButtonColumn && x < _stripButtonColumn + _stripButtonCells;
+            int cells = close ? TextCells.Width(CloseGlyph) : _stripButtonCells;
+            return y == rule - _stripRows && x >= column - 1 && x <= column + cells;
         }
     }
 
@@ -3199,6 +3215,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
             stripRows = 0;
             _stripSpans = [];
             _stripButtonColumn = -1;
+            _stripCloseColumn = -1;
         }
 
         _drawnStripHighlight = stripHighlight;
@@ -3893,32 +3910,66 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     }
 
     /// <summary>
-    /// The picture strip's rule: bare, or with <see cref="StripButton"/>'s label at its right edge laid out as
-    /// <see cref="RuleWithTitle"/> lays a title out, the label in its own style; where it landed is kept for the hit test.
+    /// The picture strip's rule (<see cref="StripRule"/>): <see cref="StripButton"/>'s label at its left in its own style,
+    /// the close × at its right in <see cref="Theme.DimText"/> as an overlay's; where each landed is kept for the hit tests.
     /// </summary>
     private void WriteStripRule(int width)
     {
-        _stripButtonColumn = -1;
-        _stripButtonCells = 0;
-        string label = _stripButton() ?? "";
-        string rule = RuleWithTitle(label, width);
-        int at = label.Length == 0 ? -1 : rule.LastIndexOf(' ', rule.Length - 2);
-        int start = label.Length == 0 ? -1 : rule.IndexOf(' ');
-        if (start < 0 || at <= start)
+        var parts = StripRule(_stripButton(), width);
+        _stripButtonColumn = parts.ButtonColumn;
+        _stripButtonCells = TextCells.Width(parts.Button);
+        _stripCloseColumn = parts.CloseColumn;
+        foreach (var (text, style) in new[] { (parts.Lead, Theme.PaneRule), (parts.Button, Theme.AccentSecondary), (parts.Fill, Theme.PaneRule), (parts.Close, Theme.DimText), (parts.Tail, Theme.PaneRule) })
         {
-            _inner.Write(new RawText(rule, Theme.PaneRule));
-            _inner.WriteLine();
-            return;
+            if (text.Length > 0)
+            {
+                _inner.Write(new RawText(text, style));
+            }
         }
 
-        // RuleWithTitle is "───── label ─": the rule to the first space, the label between the two spaces.
-        string fitted = rule[(start + 1)..at];
-        _stripButtonColumn = TextCells.Width(rule[..(start + 1)]);
-        _stripButtonCells = TextCells.Width(fitted);
-        _inner.Write(new RawText(rule[..(start + 1)], Theme.PaneRule));
-        _inner.Write(new RawText(fitted, Theme.AccentSecondary));
-        _inner.Write(new RawText(rule[at..], Theme.PaneRule));
         _inner.WriteLine();
+    }
+
+    /// <summary>
+    /// The picture strip's rule cut in the pieces <see cref="StripRule"/> draws in their own styles, left to right — the
+    /// rule's <see cref="Lead"/>, the <see cref="Button"/>, the rule's <see cref="Fill"/>, the <see cref="Close"/> glyph and
+    /// the rule's <see cref="Tail"/> — and the columns the button and the × start at (−1 = not drawn).
+    /// </summary>
+    public readonly record struct StripRuleParts(string Lead, string Button, string Fill, string Close, string Tail, int ButtonColumn, int CloseColumn)
+    {
+        /// <summary>The whole rule as one string.</summary>
+        public string Text => Lead + Button + Fill + Close + Tail;
+    }
+
+    /// <summary>
+    /// The picture strip's rule of <paramref name="width"/> cells (2026-09-28, the user's layout): the viewer's
+    /// <paramref name="button"/> at the left and the close × (<see cref="CloseGlyph"/>) at the right, each with a space either
+    /// side — <c>─ 🎞️ ────────── × ─</c>. With no button, <c>────── × ─</c>; a width that leaves no rule between them drops
+    /// the button, one that cannot hold even the × is the bare rule. Pure, pinned.
+    /// </summary>
+    public static StripRuleParts StripRule(string? button, int width)
+    {
+        width = Math.Max(0, width);
+        string rule = RuleGlyph.ToString();
+        string tail = " " + rule;
+        int closeCells = TextCells.Width(CloseGlyph);
+        int right = 1 + closeCells + TextCells.Width(tail);   // " × ─"
+        button ??= "";
+        int buttonCells = TextCells.Width(button);
+        if (button.Length > 0 && width - (1 + 1 + buttonCells + 1) - right >= 1)
+        {
+            // "─ " + button + " " + the rule + " × ─"
+            string lead = rule + " ";
+            int fill = width - TextCells.Width(lead) - buttonCells - 1 - right;
+            return new StripRuleParts(lead, button, " " + new string(RuleGlyph, fill) + " ", CloseGlyph, tail, TextCells.Width(lead), width - closeCells - TextCells.Width(tail));
+        }
+
+        if (width - right >= 1)
+        {
+            return new StripRuleParts("", "", new string(RuleGlyph, width - right) + " ", CloseGlyph, tail, -1, width - closeCells - TextCells.Width(tail));
+        }
+
+        return new StripRuleParts("", "", new string(RuleGlyph, width), "", "", -1, -1);
     }
 
     /// <summary>The upper rule with <see cref="RuleTitle"/> at its right edge, remembered for the tick's comparison.</summary>
