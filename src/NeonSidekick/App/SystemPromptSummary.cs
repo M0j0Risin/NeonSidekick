@@ -241,6 +241,9 @@ public static class SystemPromptSummary
     /// <summary>The tail of the Home Assistant group while its tools cannot be offered (2026-09-28). Pinned.</summary>
     public const string HomeAssistantOffSuffix = "Home Assistant tools is off, or no Home Assistant URL or API key is set";
 
+    /// <summary>Why the print group is not offered (2026-09-28).</summary>
+    public const string PrintOffSuffix = "Print tools is off";
+
     /// <summary>The note on <c>execute_code</c> while none of the languages <c>Shell code languages</c> names is installed (2026-09-21). Pinned.</summary>
     public const string NoInterpreterSuffix = "no interpreter found for the languages in Shell code languages";
 
@@ -477,7 +480,9 @@ public static class SystemPromptSummary
         IReadOnlyList<AIFunction>? advisor = null,
         bool advisorEnabled = true,
         IReadOnlyList<AIFunction>? homeAssistant = null,
-        bool homeAssistantEnabled = true)
+        bool homeAssistantEnabled = true,
+        IReadOnlyList<AIFunction>? print = null,
+        bool printEnabled = true)
     {
         ArgumentNullException.ThrowIfNull(clock);
         ArgumentNullException.ThrowIfNull(timers);
@@ -538,6 +543,13 @@ public static class SystemPromptSummary
             // The Home Assistant tools (2026-09-28): after the image tools; offered while Home Assistant tools is on and a URL and a token are set.
             string homeNote = !homeAssistantEnabled ? NotOffered(HomeAssistantOffSuffix) : standing;
             groups.Add(Group(ToolsText.HomeAssistantTabTitle, homeAssistant, homeNote, homeAssistantEnabled && toolsEnabled, SettingsField.HomeAssistantTools, disabled));
+        }
+
+        if (print is not null)
+        {
+            // The print tools (2026-09-28): after the Home Assistant tools; offered while Print tools is on.
+            string printNote = !printEnabled ? NotOffered(PrintOffSuffix) : standing;
+            groups.Add(Group(ToolsText.PrintTabTitle, print, printNote, printEnabled && toolsEnabled, SettingsField.PrintTools, disabled));
         }
 
         if (advisor is not null)

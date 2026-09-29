@@ -284,6 +284,25 @@ public partial class SidekickAppTests : IDisposable
         Assert.Equal(2, NeonSidekick.Sessions.SessionHistory.FromJson(record.HistoryJson).Count(ConversationHistory.IsTurnStart));
     }
 
+    /// <summary><c>/print</c> headless (2026-09-28): no spooler handed in, so no printers; a failure is an <c>[error]</c> line, and it needs no server.</summary>
+    [Fact]
+    public async Task Headless_Print_ListsThePrinters_AndSaysWhy()
+    {
+        string output = await Headless("/print printers\n/print nope.txt\n/print reply\n");
+
+        Assert.Contains(NeonSidekick.Printing.PrintText.NoPrinters + Environment.NewLine, output);
+        Assert.Contains("[error] " + FileText.Missing("nope.txt"), output);
+        Assert.Contains("[error] " + NeonSidekick.Printing.PrintText.NoReply, output);
+    }
+
+    [Fact]
+    public void LastReplyText_IsTheNewestAssistantText()
+    {
+        Assert.Null(SidekickApp.LastReplyText(null));
+        Assert.Equal("second", SidekickApp.LastReplyText([new(ChatRole.User, "q"), new(ChatRole.Assistant, "first"), new(ChatRole.Assistant, "second"), new(ChatRole.User, "again")]));
+        Assert.Null(SidekickApp.LastReplyText([new(ChatRole.User, "q")]));
+    }
+
     /// <summary><c>/test</c> headless (2026-09-28): a line per test as it finishes, the table as the reply, the run saved; the listing without a server.</summary>
     [Fact]
     public async Task Headless_Test_RunsPrintsAndSaves()

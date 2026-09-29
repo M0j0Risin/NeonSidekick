@@ -73,6 +73,7 @@ public partial class ChatScreenTests : IDisposable
     private Action<string>? _openViewer;   // the picture viewer (2026-09-27): null = none, as off Windows
     private Action<string>? _viewPicture;   // a double-clicked picture in that viewer (later on 2026-09-27): null = none, the registered app
     private Action<string>? _followViewer;   // the strip's arrows moving an open viewer (2026-09-28): null = none
+    private readonly FakePrintSpooler _printSpooler = new();   // /print and the print tools (2026-09-28): three fake printers, every job recorded
     private ChatScreen? _running;   // the screen RunAsync built, for a step that plays the viewer (2026-09-28)
     private Action<string, string>? _openImage;   // a double-clicked picture (later on 2026-09-24): null = the plain opener, _openedFiles   // /imagine and the image tools (2026-09-24): a client over a stub server
     private string? _logFile;   // /log (2026-09-22): the --log file the screen is handed; null = started without --log
@@ -260,7 +261,7 @@ public partial class ChatScreenTests : IDisposable
     private async Task<string> RunAsync(IAnsiConsoleInput input, CancellationToken cancellationToken = default)
     {
         _keys = new KeySource(input, TimeSpan.FromMilliseconds(1));
-        var screen = new ChatScreen(_console, _settings, () => _settings.Current, _overriddenBy, _session, _speech, _keys, _voice, _openFile ?? _openedFiles.Add, RenderScreen, _time, _geometry, mouse: _mouse, copyToClipboard: CopyToClipboard, random: _random, clipboardImage: _clipboardImage, web: _web, setTitle: _titles.Add, externalSkills: Path.Combine(_dir, "agents-skills"), holdWheel: _holdWheel, splash: _splash, editDraft: _editDraft, mcp: _mcp, logFile: _logFile, comfyClient: _comfyClient, openImage: _openImage, claude: _claudeCli, openViewer: _openViewer, viewPicture: _viewPicture, followViewer: _followViewer);
+        var screen = new ChatScreen(_console, _settings, () => _settings.Current, _overriddenBy, _session, _speech, _keys, _voice, _openFile ?? _openedFiles.Add, RenderScreen, _time, _geometry, mouse: _mouse, copyToClipboard: CopyToClipboard, random: _random, clipboardImage: _clipboardImage, web: _web, setTitle: _titles.Add, externalSkills: Path.Combine(_dir, "agents-skills"), holdWheel: _holdWheel, splash: _splash, editDraft: _editDraft, mcp: _mcp, logFile: _logFile, comfyClient: _comfyClient, openImage: _openImage, claude: _claudeCli, openViewer: _openViewer, viewPicture: _viewPicture, followViewer: _followViewer, printSpooler: _printSpooler);
         _running = screen;
         int code = await screen.RunAsync(cancellationToken);
         Assert.Equal(0, code);
@@ -4203,13 +4204,14 @@ public partial class ChatScreenTests : IDisposable
         _console.Input.PushKey(Keys.Right);     // ComfyUI (2026-09-24; Images until later that day)
         _console.Input.PushKey(Keys.Right);     // Claude (2026-09-27)
         _console.Input.PushKey(Keys.Right);     // Home Assistant (2026-09-28)
+        _console.Input.PushKey(Keys.Right);     // Print (later on 2026-09-28)
         _console.Input.PushKey(Keys.Right);     // Options (second until later on 2026-09-22, last since — the user's ask)
         _console.Input.PushKey(Keys.Escape);
         PushLine("/exit");
 
         string output = await RunAsync();
 
-        Assert.Contains(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude (CLI)    Home Assistant    Obsidian    ComfyUI    SQL    Git (native)    Options ", output);
+        Assert.Contains(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude (CLI)    Home Assistant    Print    Obsidian    ComfyUI    SQL    Git (native)    Options ", output);
         Assert.Contains("\n▸ ComfyUI tools                  on\n  ComfyUI URL                    (not set)\n  ComfyUI workflows offered      all (not narrowed)\n  ComfyUI add workflow           Enter to start workflow wizard\n  ComfyUI ^-mention enabled      on\n  ComfyUI timeout (s)            300\n  ComfyUI max pictures per call  5 pictures\n  ComfyUI reinforce negatives    on\n  ComfyUI show prompts           on\n  ComfyUI picture strip          on\n  ComfyUI picture strip sync     viewer-only\n  ComfyUI output folder          comfy_images\n", output);   // 2026-09-24; the offered checklist and the wizard later that day, the ^-mention switch later still
         Assert.Contains("\n▸ Claude executable                   (looked up)\n  Claude slash command permissions    read-only\n  Claude slash command model          (Claude Code's default)\n  Claude slash command effort         (Claude Code's default)\n  Claude advisor tool                 off\n  Claude advisor tool context         brief\n  Claude advisor tool calls per turn  2 calls\n  Claude advisor tool model           (as Claude slash command model)\n  Claude advisor tool effort          (as Claude slash command effort)\n  Claude advisor tool confirm         off\n", output);   // 2026-09-27: /claude's rows off /settings, then the advisor's
         Assert.Contains("\n  Clock (3)\n▸ get_current_time      on   ", output);
@@ -4535,7 +4537,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude (CLI)    Home Assistant    Obsidian    ComfyUI    SQL    Git (native)    Options ", output);
+        Assert.Contains(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude (CLI)    Home Assistant    Print    Obsidian    ComfyUI    SQL    Git (native)    Options ", output);
         Assert.Contains("  · get_current_time: off", output);
         Assert.Equal(["get_current_time"], _settings.Current.ToolsDisabled);
         Assert.DoesNotContain(ChatScreen.MidTurnDeferredNotice("/tools"), output);
@@ -8261,7 +8263,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.False(_settings.Current.ShellPoliceOutsidePaths);
         string memory = "\n" + Titled(MemoryMenu.Title) + "\n";
         string settings = "\n" + Titled(SettingsMenu.Title + "   General    Sessions    LLM    TTS    STT    Claude (API)    Botchat ") + "\n";
-        string tools = "\n" + Titled(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude (CLI)    Home Assistant    Obsidian    ComfyUI    SQL    Git (native)    Options ") + "\n";
+        string tools = "\n" + Titled(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude (CLI)    Home Assistant    Print    Obsidian    ComfyUI    SQL    Git (native)    Options ") + "\n";
         string allowed = "\n" + Titled(AllowedCommandsTitle) + "\n";
         Assert.Equal(1, output.Split(memory).Length - 1);
         Assert.Equal(1, output.Split(allowed).Length - 1);
@@ -9282,7 +9284,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("\n" + ScreenPane.ToolbarRow(ChatScreen.ToolbarStripFor(true, CommandPolicyMode.Ask, true), cwd, 239), output);
         Assert.DoesNotContain("\n" + ScreenPane.ToolbarRow(ChatScreen.ToolbarStrip, cwd, 239), output);   // never the six alone: memory, the policy and the police are on
         int settings = output.IndexOf("\n" + Titled(SettingsMenu.Title + "   General    Sessions    LLM    TTS    STT    Claude (API)    Botchat ") + "\n", StringComparison.Ordinal);
-        int tools = output.IndexOf(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude (CLI)    Home Assistant    Obsidian    ComfyUI    SQL    Git (native)    Options ", StringComparison.Ordinal);
+        int tools = output.IndexOf(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude (CLI)    Home Assistant    Print    Obsidian    ComfyUI    SQL    Git (native)    Options ", StringComparison.Ordinal);
         int mcp = output.IndexOf(McpText.Label + "   Servers    Tools    Options ", StringComparison.Ordinal);
         int skills = output.IndexOf(SkillsText.Label + "   Offered    Reflection    Project    Options ", StringComparison.Ordinal);
         int sys = output.IndexOf("\n" + Titled(SystemPromptSummary.Label + "   Prompt    Tools ") + "\n", StringComparison.Ordinal);
@@ -9374,7 +9376,7 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         string settings = "\n" + Titled(SettingsMenu.Title + "   General    Sessions    LLM    TTS    STT    Claude (API)    Botchat ") + "\n";
-        string tools = "\n" + Titled(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude (CLI)    Home Assistant    Obsidian    ComfyUI    SQL    Git (native)    Options ") + "\n";
+        string tools = "\n" + Titled(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude (CLI)    Home Assistant    Print    Obsidian    ComfyUI    SQL    Git (native)    Options ") + "\n";
         string help = "\n" + Titled(InfoPane.Title + "   Commands (basic)    Commands (advanced)    Keys ") + "\n";
         string sys = "\n" + Titled(SystemPromptSummary.Label + "   Prompt    Tools ") + "\n";
         string sessions = "\n" + Titled(SessionsMenu.Title) + "\n";
@@ -11160,7 +11162,7 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         output = string.Join("\n", output.Split('\n').Select(l => l.TrimEnd()));
-        string tools = "\n" + Titled(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude (CLI)    Home Assistant    Obsidian    ComfyUI    SQL    Git (native)    Options ") + "\n";
+        string tools = "\n" + Titled(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude (CLI)    Home Assistant    Print    Obsidian    ComfyUI    SQL    Git (native)    Options ") + "\n";
         string sys = "\n" + Titled(SystemPromptSummary.Label + "   Prompt    Tools ") + "\n";
         string sessions = "\n" + Titled(SessionsMenu.Title) + "\n";
         string settings = "\n" + Titled(SettingsMenu.Title + "   General    Sessions    LLM    TTS    STT    Claude (API)    Botchat ") + "\n";
@@ -13049,6 +13051,37 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("  ✗ " + FileText.Missing("nope.png"), output);
         Assert.Contains("  ✗ " + FileText.NotAnImage("notes.txt"), output);
         Assert.Contains("  ✗ " + FileText.OutsideRoot(@"..\x.png"), output);
+    }
+
+    /// <summary>
+    /// <c>/print</c> (2026-09-28): a file of the working directory to the default printer and to a named one sideways, the
+    /// printers listed, and a missing file, a bad option and a reply not yet there as error lines; nothing reaches the model.
+    /// </summary>
+    [Fact]
+    public async Task Print_SendsAFile_ListsThePrinters_AndSaysWhy()
+    {
+        _settings.Update(d => d.TtsOutput = false);
+        string files = Path.Combine(_settings.ProfileDirectory, WorkingDirectory.DefaultFolderName);
+        Directory.CreateDirectory(files);
+        File.WriteAllText(Path.Combine(files, "notes.txt"), "hello");
+        PushLine("/print notes.txt");
+        PushLine("/print notes.txt printer=color landscape copies=2");
+        PushLine("/print printers");
+        PushLine("/print nope.txt");
+        PushLine("/print notes.txt copies=99");
+        PushLine("/print reply");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Equal([(FakePrintSpooler.Laser, false, 1), (FakePrintSpooler.Color, true, 2)], _printSpooler.Jobs.Select(j => (j.Printer, j.Landscape, j.Copies)));
+        Assert.Contains("Printed notes.txt: 1 page to Office Laser", output);
+        Assert.Contains("Printed notes.txt: 1 page × 2 copies, landscape to Office Color", output);
+        Assert.Contains("- Office Laser (Windows default)", output);
+        Assert.Contains("  ✗ " + FileText.Missing("nope.txt"), output);
+        Assert.Contains("  ✗ " + NeonSidekick.Printing.PrintText.BadCopies("99"), output);
+        Assert.Contains("  ✗ " + NeonSidekick.Printing.PrintText.NoReply, output);
+        Assert.Empty(_chat.Requests);
     }
 
     /// <summary>With no viewer (not Windows) a picture is drawn in the transcript as <c>--chat</c> draws it, and a folder is an error.</summary>

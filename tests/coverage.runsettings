@@ -14,6 +14,9 @@
   - NeonSidekick.Viewer.PictureWindow* and ViewerNative (2026-09-27): the picture viewer's Win32 window, its thread
     and imports; a window, a message loop and a folder watcher prove themselves by hand and by the published-exe smoke
     (viewer:window). ViewerState and ViewerImage, where its decisions and its decode live, stay covered.
+  - NeonSidekick.Printing.WindowsPrintSpooler* and PrintNative (2026-09-28): the printers, a printer's device context and the
+    shell's print verb; they need a real spooler and prove themselves in the published-exe smoke (print:spooler, a job to
+    Microsoft Print to PDF) and a live fact. PrintLayout, PrintService and PrintCommand, where the decisions live, stay covered.
   - Program: the composition root; the smoke run on the published exe covers it.
   - GeneratedCodeAttribute / ExcludeFromCodeCoverageAttribute: source-generated JSON contexts,
     LibraryImport stubs and GeneratedRegex bodies. CompilerGeneratedAttribute is deliberately
@@ -25,7 +28,7 @@
       <DataCollector friendlyName="XPlat Code Coverage">
         <Configuration>
           <Format>cobertura</Format>
-          <Exclude>[NeonSidekick]NeonSidekick.Audio.WinMm*,[NeonSidekick]NeonSidekick.Viewer.PictureWindow*,[NeonSidekick]NeonSidekick.Viewer.ViewerNative,[NeonSidekick]Program</Exclude>
+          <Exclude>[NeonSidekick]NeonSidekick.Audio.WinMm*,[NeonSidekick]NeonSidekick.Viewer.PictureWindow*,[NeonSidekick]NeonSidekick.Viewer.ViewerNative,[NeonSidekick]NeonSidekick.Printing.WindowsPrintSpooler*,[NeonSidekick]NeonSidekick.Printing.PrintNative,[NeonSidekick]Program</Exclude>
           <ExcludeByAttribute>GeneratedCodeAttribute,ExcludeFromCodeCoverageAttribute</ExcludeByAttribute>
           <SkipAutoProps>true</SkipAutoProps>
           <IncludeTestAssembly>false</IncludeTestAssembly>

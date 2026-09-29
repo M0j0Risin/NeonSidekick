@@ -52,8 +52,11 @@ public static class ToolsText
     /// <summary>The Home Assistant tools' tab and group (2026-09-28), after Claude (CLI), before Obsidian: among the other integrations, so every tab either side keeps its place from its end of the strip.</summary>
     public const string HomeAssistantTabTitle = "Home Assistant";
 
-    /// <summary>The twelve tabs in strip order (Home Assistant after Claude since 2026-09-28): Offered, Web, Files, Shell, Ask, Claude, Obsidian, ComfyUI, SQL, Git (native), Options — the user's order since 2026-09-27 (Ask, Git (native), Obsidian, SQL, ComfyUI, Claude before); Options last since later on 2026-09-22 (the user's ask; second, after Offered, before); alphabetical before 2026-09-21; the last ten index <see cref="SettingsMenu.ToolsTabFields"/> one down.</summary>
-    public static readonly IReadOnlyList<string> TabTitles = [OfferedTabTitle, WebTabTitle, FilesTabTitle, ShellTabTitle, AskTabTitle, ClaudeTabTitle, HomeAssistantTabTitle, ObsidianTabTitle, ComfyTabTitle, SqlTabTitle, GitTabTitle, OptionsTabTitle];
+    /// <summary>The print tools' tab and group (2026-09-28), after Home Assistant, before Obsidian: beside the other integration that acts in the room.</summary>
+    public const string PrintTabTitle = "Print";
+
+    /// <summary>The thirteen tabs in strip order (Home Assistant after Claude since 2026-09-28, Print after Home Assistant later that day): Offered, Web, Files, Shell, Ask, Claude, Obsidian, ComfyUI, SQL, Git (native), Options — the user's order since 2026-09-27 (Ask, Git (native), Obsidian, SQL, ComfyUI, Claude before); Options last since later on 2026-09-22 (the user's ask; second, after Offered, before); alphabetical before 2026-09-21; the last ten index <see cref="SettingsMenu.ToolsTabFields"/> one down.</summary>
+    public static readonly IReadOnlyList<string> TabTitles = [OfferedTabTitle, WebTabTitle, FilesTabTitle, ShellTabTitle, AskTabTitle, ClaudeTabTitle, HomeAssistantTabTitle, PrintTabTitle, ObsidianTabTitle, ComfyTabTitle, SqlTabTitle, GitTabTitle, OptionsTabTitle];
 
     /// <summary>The Offered tab's hint row. Pinned.</summary>
     public const string OfferedKeys = "Enter / Space = on or off · ←/→ tabs · ESC = close";

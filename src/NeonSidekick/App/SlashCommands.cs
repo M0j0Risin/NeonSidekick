@@ -156,6 +156,13 @@ public enum SlashCommand
     /// </summary>
     HomeAssistant,
 
+    /// <summary>
+    /// <c>/print</c> (2026-09-28, the user's ask): a file of the working directory on paper — <c>/print &lt;file&gt;
+    /// [printer=&lt;name&gt;] [copies=N] [pages=1-3] [landscape]</c>, <c>/print reply</c> for the last reply, <c>/print printers</c>
+    /// (<see cref="Printing.PrintCommand"/>). The user's own hand: never judged by <c>Print action policy</c>.
+    /// </summary>
+    Print,
+
     /// <summary><c>/echo &lt;text&gt;</c>: the line printed as a reply and read aloud when speech is on — <c>/speak</c>'s block and voice over typed text, never resumed (2026-09-17).</summary>
     Echo,
 
@@ -251,6 +258,7 @@ public static class SlashCommands
             new("/persona", "export and manage persona.md (the personality) in your editor, or /persona reset to go back to the default, or /persona copy <profile> [force] to copy it into another profile"),
             new("/plan", "plan before doing: /plan <requirement> — read-only research and questions until you approve the plan (saved under .neon/plans/); then /plan approve [--fresh] | cancel | show | save [name]; /plan open [name] picks one up"),
             new("/police", "switch shell police on or off"),
+            new("/print", "print a file of the working directory: /print <file> [printer=<name>] [copies=N] [pages=1-3] [landscape], /print reply for the last reply, /print printers"),
             new("/profile", "switch profiles, or /profile <name> | add <name> | delete <name> | rename <name> <new-name> | reset [name] | push <name> | pull <name> | edit | reload"),
             new("/queue", "list and prune the messages queued while a reply runs, or /queue clear"),
             new("/reasoning", "pick the LLM reasoning effort, or /reasoning <level>"),
@@ -368,7 +376,7 @@ public static class SlashCommands
     }
 
     /// <summary>Every command word, for help and completion.</summary>
-    public static readonly string[] Words = { "/help", "/clear", "/new", "/splash", "/theme", "/queue", "/sessions", "/compact", "/server", "/model", "/reasoning", "/sampling", "/settings", "//", "/tools", "/mcp", "/tts", "/stt", "/wake", "/interrupt", "/speak", "/remember", "/memory", "/cmdcopy", "/keycopy", "/cmdclear", "/cmdlist", "/police", "/persona", "/operata", "/vocalia", "/sys", "/usage", "/profile", "/timer", "/cwd", "/tree", "/vault", "/explore", "/view", "/imagine", "/comfy", "/ha", "/echo", "/emptytrash", "/gituser", "/copy", "/draft", "/loop", "/plan", "/botchat", "/claude", "/test", "/expand", "/collapse", "/window", "/skills", "/learn", "/about", "/exit" };
+    public static readonly string[] Words = { "/help", "/clear", "/new", "/splash", "/theme", "/queue", "/sessions", "/compact", "/server", "/model", "/reasoning", "/sampling", "/settings", "//", "/tools", "/mcp", "/tts", "/stt", "/wake", "/interrupt", "/speak", "/remember", "/memory", "/cmdcopy", "/keycopy", "/cmdclear", "/cmdlist", "/police", "/persona", "/operata", "/vocalia", "/sys", "/usage", "/profile", "/timer", "/cwd", "/tree", "/vault", "/explore", "/view", "/imagine", "/comfy", "/ha", "/print", "/echo", "/emptytrash", "/gituser", "/copy", "/draft", "/loop", "/plan", "/botchat", "/claude", "/test", "/expand", "/collapse", "/window", "/skills", "/learn", "/about", "/exit" };
 
     /// <summary>The <c>/queue</c> word: what a double-click on the hint row's queued part sends through the mid-turn line hook, so the pane opens exactly as the typed command's does (2026-09-18). Pinned.</summary>
     public const string QueueWord = "/queue";
@@ -451,6 +459,7 @@ public static class SlashCommands
             "/imagine" => SlashCommand.Imagine,
             "/comfy" => SlashCommand.Comfy,
             "/ha" => SlashCommand.HomeAssistant,
+            "/print" => SlashCommand.Print,
             "/echo" => SlashCommand.Echo,
             "/queue" => SlashCommand.Queue,
             "/sessions" => SlashCommand.Session,
@@ -495,5 +504,5 @@ public static class SlashCommands
         or SlashCommand.Remember or SlashCommand.Memory or SlashCommand.CmdCopy or SlashCommand.KeyCopy or SlashCommand.Profile or SlashCommand.Timer
         or SlashCommand.Cwd or SlashCommand.Tree or SlashCommand.Vault or SlashCommand.Explore or SlashCommand.Copy or SlashCommand.Session or SlashCommand.GitUser
         or SlashCommand.Loop or SlashCommand.Plan or SlashCommand.BotChat or SlashCommand.Claude or SlashCommand.Queue or SlashCommand.Skills or SlashCommand.Test
-        or SlashCommand.HomeAssistant;
+        or SlashCommand.HomeAssistant or SlashCommand.Print;
 }

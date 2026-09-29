@@ -13,6 +13,7 @@ using NeonSidekick.Mcp;
 using NeonSidekick.Memory;
 using NeonSidekick.Obsidian;
 using NeonSidekick.Plans;
+using NeonSidekick.Printing;
 using NeonSidekick.Sessions;
 using NeonSidekick.Settings;
 using NeonSidekick.Shell;
@@ -869,7 +870,8 @@ internal sealed partial class ChatScreen
         Action<string>? openViewer = null,
         Action<string>? viewPicture = null,
         Func<Uri, string, HaClient>? haClient = null,
-        Action<string>? followViewer = null)
+        Action<string>? followViewer = null,
+        IPrintSpooler? printSpooler = null)
     {
         _logFile = logFile;
         ArgumentNullException.ThrowIfNull(time);
@@ -925,6 +927,10 @@ internal sealed partial class ChatScreen
         // The Home Assistant tools (2026-09-28): the client made for the URL and token in force; an asked call waits on the pane.
         _ha = new HaSession(_effective, haClient, _time);
         _haTools = HomeAssistantTools(_ha, ConfirmHomeAsync);
+        // The print tools and /print (2026-09-28): the spooler the composition root hands in (none in tests); a model's print waits on the pane under ask.
+        _print = new PrintService(printSpooler ?? NullPrintSpooler.Instance, _files, _effective, _time);
+        _printTools = PrintTools(_print, ConfirmPrintAsync);
+        _printerNames = new PrinterNameCache(_print, _time);
         // The shell tools (2026-09-21): the runner is the one process-start site of the group; the allow
         // list lives for the process (a /clear or a profile switch keeps the session's allows, the permanent
         // ones are the loaded profile's); the gate asks through the approval pane (ApproveCommandAsync).
@@ -1039,7 +1045,7 @@ internal sealed partial class ChatScreen
         _flow = new FlowSink(this);
         _queueMenu = new QueueMenu(_queue, _flow, _menuPane);
         _queuedClicks = new DoubleClick(_pane.Time);
-        _menu = new SettingsMenu(new ConsoleWithInput(_pane, keys), settings, overriddenBy, _input, _transcript, speech, _menuPane, _web.Browser.Locate, () => _interpreters.AvailableShells().Select(ShellKinds.Name).ToHashSet(StringComparer.Ordinal), () => _interpreters.AvailableLanguages([CodeLanguage.PowerShell, CodeLanguage.Python, CodeLanguage.Node]).Select(CodeLanguages.Name).ToHashSet(StringComparer.Ordinal), BrowseWorkingDirectoryAsync, BrowseVaultAsync, _openFile, comfyClient: _comfy.Client, botChatSkills: () => { _catalog.Scan(_effective().ExternalSkills); return _catalog.Skills; }, testHomeAssistant: _ha.TestAsync)
+        _menu = new SettingsMenu(new ConsoleWithInput(_pane, keys), settings, overriddenBy, _input, _transcript, speech, _menuPane, _web.Browser.Locate, () => _interpreters.AvailableShells().Select(ShellKinds.Name).ToHashSet(StringComparer.Ordinal), () => _interpreters.AvailableLanguages([CodeLanguage.PowerShell, CodeLanguage.Python, CodeLanguage.Node]).Select(CodeLanguages.Name).ToHashSet(StringComparer.Ordinal), BrowseWorkingDirectoryAsync, BrowseVaultAsync, _openFile, comfyClient: _comfy.Client, botChatSkills: () => { _catalog.Scan(_effective().ExternalSkills); return _catalog.Skills; }, testHomeAssistant: _ha.TestAsync, printers: _print.Printers)
         {
             // A picker opened mid-turn closes on the watcher task: its saved line waits for the turn task.
             Flow = _flow,
@@ -2591,7 +2597,7 @@ internal sealed partial class ChatScreen
         var disabled = ToolsText.DisabledSet(effective.ToolsDisabled);
         var fileTools = FileToolsFor(_fileTools, effective.FileSafeEdits);   // restore only with File safe edits on (later still on 2026-09-20)
         bool files = effective.FileTools && Without(fileTools, disabled).Count > 0;
-        var groups = SystemPromptSummary.ToolGroups(_clockTools, _timerTools, fileTools, _memoryTools, effective.Memory, effective.LlmOfferTools, WebToolsFor(_webTools, files), effective.WebTools, effective.FileTools, _askTools, effective.AskUser, _pane.Enabled, _skillTools, effective.AgentSkills, _sessionTools, effective.SessionTool, disabled, skillInstalled: Catalog(effective).Count > 0, mcp: _mcp.ServerTools, mcpEnabled: effective.McpServers, git: _gitTools, gitEnabled: effective.GitNativeTools, shell: _shellTools, shellEnabled: ShellOffered(effective), codeAvailable: CodeAvailable(), obsidian: ObsidianToolsFor(_vaultTools, effective), obsidianEnabled: ObsidianOffered(effective), sql: _sqlTools, sqlEnabled: SqlOffered(effective, _sql), comfy: _comfyTools, comfyEnabled: ComfyOffered(effective, _comfy), advisor: _advisorTools, advisorEnabled: effective.ClaudeAdvisor, homeAssistant: _haTools, homeAssistantEnabled: HomeAssistantOffered(effective));
+        var groups = SystemPromptSummary.ToolGroups(_clockTools, _timerTools, fileTools, _memoryTools, effective.Memory, effective.LlmOfferTools, WebToolsFor(_webTools, files), effective.WebTools, effective.FileTools, _askTools, effective.AskUser, _pane.Enabled, _skillTools, effective.AgentSkills, _sessionTools, effective.SessionTool, disabled, skillInstalled: Catalog(effective).Count > 0, mcp: _mcp.ServerTools, mcpEnabled: effective.McpServers, git: _gitTools, gitEnabled: effective.GitNativeTools, shell: _shellTools, shellEnabled: ShellOffered(effective), codeAvailable: CodeAvailable(), obsidian: ObsidianToolsFor(_vaultTools, effective), obsidianEnabled: ObsidianOffered(effective), sql: _sqlTools, sqlEnabled: SqlOffered(effective, _sql), comfy: _comfyTools, comfyEnabled: ComfyOffered(effective, _comfy), advisor: _advisorTools, advisorEnabled: effective.ClaudeAdvisor, homeAssistant: _haTools, homeAssistantEnabled: HomeAssistantOffered(effective), print: _printTools, printEnabled: PrintOffered(effective));
         return groups.SelectMany(g => g.Tools.Where(t => g.Offers(t.Name)).Select(t => new CompletionItem(t.Name, t.Description))).ToList();
     }
 
@@ -2805,7 +2811,7 @@ internal sealed partial class ChatScreen
     /// (<c>Complete(query, ImageFile.IsImagePath)</c>, for <c>/view</c>) — <see cref="ArgumentPaths"/> —
     /// the disk reads behind a function each, so <c>/tts o</c> scans no catalog.
     /// </summary>
-    public sealed record ArgumentSources(Func<IReadOnlyList<string>> Profiles, string LoadedProfile, IReadOnlyList<string> Timers, Func<string, IReadOnlyList<string>> Folders, Func<string, MentionResult> TextFiles, Func<string, MentionResult> ImageFiles, Func<IReadOnlyList<CompletionItem>>? Sessions = null, Func<IReadOnlyList<CompletionItem>>? Skills = null, Func<string, IReadOnlyList<string>>? VaultFolders = null, Func<IReadOnlyList<CompletionItem>>? Workflows = null, bool Planning = false, Func<IReadOnlyList<CompletionItem>>? Plans = null, Func<string, IReadOnlyList<CompletionItem>>? Home = null);
+    public sealed record ArgumentSources(Func<IReadOnlyList<string>> Profiles, string LoadedProfile, IReadOnlyList<string> Timers, Func<string, IReadOnlyList<string>> Folders, Func<string, MentionResult> TextFiles, Func<string, MentionResult> ImageFiles, Func<IReadOnlyList<CompletionItem>>? Sessions = null, Func<IReadOnlyList<CompletionItem>>? Skills = null, Func<string, IReadOnlyList<string>>? VaultFolders = null, Func<IReadOnlyList<CompletionItem>>? Workflows = null, bool Planning = false, Func<IReadOnlyList<CompletionItem>>? Plans = null, Func<string, IReadOnlyList<CompletionItem>>? Home = null, Func<string, MentionResult>? AnyFiles = null, Func<string, IReadOnlyList<CompletionItem>>? Print = null);
 
     /// <summary>The note beside <c>on</c> / <c>off</c> on a switch's list: what the switch is. Pinned.</summary>
     public static string SwitchSubject(SlashCommand command) => command switch
@@ -3167,6 +3173,10 @@ internal sealed partial class ChatScreen
                 // The verbs, then the rooms, names, scenes and TV words of the last snapshot (2026-09-28).
                 return sources.Home?.Invoke(argText) ?? HaCommand.Complete(null, argText);
 
+            case SlashCommand.Print:
+                // reply and printers for the first word, the options and the printers' names after a target (2026-09-28); the path itself is ArgumentPaths'.
+                return sources.Print?.Invoke(argText) ?? PrintCommand.Complete(argText, []);
+
             case SlashCommand.Test:
                 // The test ids, the group words, all and history (2026-09-28): one word, nothing after it.
                 return argText.Contains(' ', StringComparison.Ordinal) ? [] : MentionCompleter.Matches(TestChoices(), argText);
@@ -3218,6 +3228,11 @@ internal sealed partial class ChatScreen
         ArgumentNullException.ThrowIfNull(argText);
         ArgumentNullException.ThrowIfNull(sources);
         var kind = SlashCommands.Parse(command).Command;
+        if (kind == SlashCommand.Print)
+        {
+            return PrintPaths(argText, sources);
+        }
+
         if (kind is not (SlashCommand.Speak or SlashCommand.View))
         {
             return null;
@@ -3245,6 +3260,54 @@ internal sealed partial class ChatScreen
         return flag.Length == 0 ? found : found with { Paths = [.. found.Paths.Select(p => flag + p)] };
     }
 
+    /// <summary>
+    /// <c>/print</c>'s path list (2026-09-28): any file of the working directory, since the command prints text and pictures
+    /// itself and hands the rest to its own program. Null — the word list instead (<see cref="PrintCommand.Complete"/>) — once a
+    /// whole path, <c>reply</c> or <c>printers</c> is followed by a space (the options come next), and for a first word no file
+    /// starts with that <c>reply</c> or <c>printers</c> does. Pure over <paramref name="sources"/>.
+    /// </summary>
+    public static MentionResult? PrintPaths(string argText, ArgumentSources sources)
+    {
+        ArgumentNullException.ThrowIfNull(argText);
+        ArgumentNullException.ThrowIfNull(sources);
+        if (sources.AnyFiles is not { } files)
+        {
+            return null;
+        }
+
+        int space = argText.LastIndexOf(' ');
+        if (space >= 0)
+        {
+            string head = argText[..space].Trim();
+            if (string.Equals(head.Split(' ')[0], PrintText.ReplyWord, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(head, PrintText.PrintersWord, StringComparison.OrdinalIgnoreCase)
+                || head.Contains('=', StringComparison.Ordinal))
+            {
+                return null;
+            }
+
+            var whole = files(head);
+            if (whole.Paths.Any(p => string.Equals(p, head.Replace('\\', '/'), StringComparison.OrdinalIgnoreCase)))
+            {
+                return null;
+            }
+        }
+
+        var found = files(argText);
+        if (found.Paths.Count == 0 && argText.Length > 0 && !argText.Contains(' ', StringComparison.Ordinal)
+            && (PrintText.ReplyWord.StartsWith(argText, StringComparison.OrdinalIgnoreCase) || PrintText.PrintersWord.StartsWith(argText, StringComparison.OrdinalIgnoreCase)))
+        {
+            return null;
+        }
+
+        if (found.Paths.Count == 1 && string.Equals(found.Paths[0], argText, StringComparison.OrdinalIgnoreCase))
+        {
+            return new MentionResult(FileOutcome.Ok, [], false);
+        }
+
+        return found;
+    }
+
     /// <summary>The argument list's live sources: the profiles on disk, the board's timers, the sandbox's folders, its text files and its image files.</summary>
     private ArgumentList ArgumentChoices(string command, string argText)
     {
@@ -3261,7 +3324,9 @@ internal sealed partial class ChatScreen
             WorkflowChoices,
             _plan.Active,
             PlanChoices,
-            HomeAssistantChoices);
+            HomeAssistantChoices,
+            prefix => _files.Complete(prefix),
+            PrintChoices);
         return ArgumentPaths(command, argText, sources) is { } paths
             ? new ArgumentList([], paths.Paths, paths.Truncated)
             : new ArgumentList(ArgumentItems(command, argText, sources));
@@ -3314,7 +3379,7 @@ internal sealed partial class ChatScreen
         var disabled = ToolsText.DisabledSet(effective.ToolsDisabled);
         // The whole file list, restore noted under File safe edits off (later still on 2026-09-20): the row stays, dim, with its reason — the download_file shape.
         _interpreters.Refresh();
-        var groups = SystemPromptSummary.ToolGroups(_clockTools, _timerTools, _fileTools, _memoryTools, effective.Memory, effective.LlmOfferTools, _webTools, effective.WebTools, effective.FileTools, _askTools, effective.AskUser, _pane.Enabled, _skillTools, effective.AgentSkills, _sessionTools, effective.SessionTool, disabled, skillInstalled: Catalog(effective).Count > 0, git: _gitTools, gitEnabled: effective.GitNativeTools, safeEdits: effective.FileSafeEdits, shell: _shellTools, shellEnabled: ShellOffered(effective), codeAvailable: CodeAvailable(), obsidian: ObsidianToolsFor(_vaultTools, effective), obsidianEnabled: ObsidianOffered(effective), sql: _sqlTools, sqlEnabled: SqlOffered(effective, _sql), comfy: _comfyTools, comfyEnabled: ComfyOffered(effective, _comfy), advisor: _advisorTools, advisorEnabled: effective.ClaudeAdvisor, homeAssistant: _haTools, homeAssistantEnabled: HomeAssistantOffered(effective));
+        var groups = SystemPromptSummary.ToolGroups(_clockTools, _timerTools, _fileTools, _memoryTools, effective.Memory, effective.LlmOfferTools, _webTools, effective.WebTools, effective.FileTools, _askTools, effective.AskUser, _pane.Enabled, _skillTools, effective.AgentSkills, _sessionTools, effective.SessionTool, disabled, skillInstalled: Catalog(effective).Count > 0, git: _gitTools, gitEnabled: effective.GitNativeTools, safeEdits: effective.FileSafeEdits, shell: _shellTools, shellEnabled: ShellOffered(effective), codeAvailable: CodeAvailable(), obsidian: ObsidianToolsFor(_vaultTools, effective), obsidianEnabled: ObsidianOffered(effective), sql: _sqlTools, sqlEnabled: SqlOffered(effective, _sql), comfy: _comfyTools, comfyEnabled: ComfyOffered(effective, _comfy), advisor: _advisorTools, advisorEnabled: effective.ClaudeAdvisor, homeAssistant: _haTools, homeAssistantEnabled: HomeAssistantOffered(effective), print: _printTools, printEnabled: PrintOffered(effective));
         return new ToolsFacts(groups, effective.LlmOfferTools, disabled);
     }
 
@@ -3870,7 +3935,7 @@ internal sealed partial class ChatScreen
     /// (the setting <c>Shell prefer native tools</c>), the rules gain <see cref="Assistant.ShellNativeRule"/> after the shell sentence. <paramref name="sampling"/>
     /// (2026-09-28, the setting <c>LLM sampling</c>, resolved for the connected model) replaces the assistant's when given. Shared with headless.
     /// </summary>
-    public static void PrepareTurn(Assistant assistant, MemoryStore memory, IReadOnlyList<AIFunction> memoryTools, IReadOnlyList<AIFunction> standingTools, PersonaFile persona, OperataFile operata, VocaliaFile vocalia, bool memoryEnabled, bool speechOutput, int maxToolIterations = Assistant.DefaultMaxToolIterations, bool toolsEnabled = true, IReadOnlyList<AIFunction>? webTools = null, bool webEnabled = false, Assistant.TurnContextGuard? contextGuard = null, IReadOnlyList<AIFunction>? fileTools = null, bool filesEnabled = false, IReadOnlyList<AIFunction>? askTools = null, SkillsForTurn? skills = null, bool markdown = false, IReadOnlyList<AIFunction>? sessionTools = null, bool sessionsEnabled = false, IReadOnlySet<string>? disabledTools = null, IReadOnlyList<AIFunction>? mcpTools = null, bool mcpEnabled = false, bool safeEdits = true, IReadOnlyList<AIFunction>? gitTools = null, bool gitEnabled = false, IReadOnlyList<AIFunction>? shellTools = null, bool shellEnabled = false, ProcessRegistry? processes = null, bool shellBridge = false, bool shellPolice = true, IReadOnlyList<AIFunction>? obsidianTools = null, bool obsidianEnabled = false, IReadOnlyList<AIFunction>? sqlTools = null, bool sqlEnabled = false, IReadOnlyList<AIFunction>? comfyTools = null, bool comfyEnabled = false, bool shellNative = false, PlanTurn? plan = null, IReadOnlyList<AIFunction>? advisorTools = null, bool advisorEnabled = false, bool preserveThinking = false, LlmSampling? sampling = null, IReadOnlyList<AIFunction>? homeTools = null, bool homeEnabled = false)
+    public static void PrepareTurn(Assistant assistant, MemoryStore memory, IReadOnlyList<AIFunction> memoryTools, IReadOnlyList<AIFunction> standingTools, PersonaFile persona, OperataFile operata, VocaliaFile vocalia, bool memoryEnabled, bool speechOutput, int maxToolIterations = Assistant.DefaultMaxToolIterations, bool toolsEnabled = true, IReadOnlyList<AIFunction>? webTools = null, bool webEnabled = false, Assistant.TurnContextGuard? contextGuard = null, IReadOnlyList<AIFunction>? fileTools = null, bool filesEnabled = false, IReadOnlyList<AIFunction>? askTools = null, SkillsForTurn? skills = null, bool markdown = false, IReadOnlyList<AIFunction>? sessionTools = null, bool sessionsEnabled = false, IReadOnlySet<string>? disabledTools = null, IReadOnlyList<AIFunction>? mcpTools = null, bool mcpEnabled = false, bool safeEdits = true, IReadOnlyList<AIFunction>? gitTools = null, bool gitEnabled = false, IReadOnlyList<AIFunction>? shellTools = null, bool shellEnabled = false, ProcessRegistry? processes = null, bool shellBridge = false, bool shellPolice = true, IReadOnlyList<AIFunction>? obsidianTools = null, bool obsidianEnabled = false, IReadOnlyList<AIFunction>? sqlTools = null, bool sqlEnabled = false, IReadOnlyList<AIFunction>? comfyTools = null, bool comfyEnabled = false, bool shellNative = false, PlanTurn? plan = null, IReadOnlyList<AIFunction>? advisorTools = null, bool advisorEnabled = false, bool preserveThinking = false, LlmSampling? sampling = null, IReadOnlyList<AIFunction>? homeTools = null, bool homeEnabled = false, IReadOnlyList<AIFunction>? printTools = null, bool printEnabled = false)
     {
         ArgumentNullException.ThrowIfNull(assistant);
         ArgumentNullException.ThrowIfNull(memory);
@@ -3911,7 +3976,7 @@ internal sealed partial class ChatScreen
         {
             // Plan mode (2026-09-26): every tool it does not allow joins the /tools list for this turn, so a group
             // loses them as it loses a tool switched off, and a group left empty takes its rule with it.
-            disabledTools = PlanTools.Widen(disabledTools, standingTools, fileTools, webTools, gitTools, shellTools, obsidianTools, sqlTools, comfyTools, memoryTools, skillTools, sessionTools, askTools, mcpTools, advisorTools, homeTools);
+            disabledTools = PlanTools.Widen(disabledTools, standingTools, fileTools, webTools, gitTools, shellTools, obsidianTools, sqlTools, comfyTools, memoryTools, skillTools, sessionTools, askTools, mcpTools, advisorTools, homeTools, printTools);
         }
 
         if (disabledTools is { Count: > 0 })
@@ -3926,6 +3991,7 @@ internal sealed partial class ChatScreen
             sqlTools = sqlTools is null ? null : Without(sqlTools, disabledTools);
             comfyTools = comfyTools is null ? null : Without(comfyTools, disabledTools);
             homeTools = homeTools is null ? null : Without(homeTools, disabledTools);
+            printTools = printTools is null ? null : Without(printTools, disabledTools);
             memoryTools = Without(memoryTools, disabledTools);
             skillTools = Without(skillTools, disabledTools);
             sessionTools = sessionTools is null ? null : Without(sessionTools, disabledTools);
@@ -3970,6 +4036,9 @@ internal sealed partial class ChatScreen
         // The Home Assistant tools after the image tools (2026-09-28): Home Assistant tools, a URL and a token are the group's switch; its sentence after the SQL one.
         bool home = homeEnabled && homeTools is { Count: > 0 };
         offered = home ? [.. offered, .. homeTools!] : offered;
+        // The print tools after the Home Assistant tools (2026-09-28): Print tools is the group's switch; no rule — the descriptions say to print only when asked.
+        bool print = printEnabled && printTools is { Count: > 0 };
+        offered = print ? [.. offered, .. printTools!] : offered;
         // The advisor after the image tools (2026-09-27): the setting Claude advisor tool is the group's switch; its sentence after the SQL one.
         bool advisor = advisorEnabled && advisorTools is { Count: > 0 };
         offered = advisor ? [.. offered, .. advisorTools!] : offered;
@@ -8595,6 +8664,10 @@ internal sealed partial class ChatScreen
                 await HandleHomeAssistantAsync(args, cancellationToken).ConfigureAwait(false);
                 return false;
 
+            case SlashCommand.Print:
+                await HandlePrintAsync(args, cancellationToken).ConfigureAwait(false);
+                return false;
+
             case SlashCommand.Copy:
                 HandleCopy(args);
                 return false;
@@ -11001,7 +11074,7 @@ internal sealed partial class ChatScreen
         if (bot is null)
         {
             _interpreters.Refresh();
-            PrepareTurn(assistant, _memory, _memoryTools, [.. _clockTools, .. _timerTools], _persona, _operata, _vocalia, effective.Memory, speaker is not null, effective.LlmMaxToolIterations, effective.LlmOfferTools, _webTools, effective.WebTools, ContextGuardFor(effective, _session.ContextLength), _fileTools, effective.FileTools, _pane.Enabled && effective.AskUser ? _askTools : null, SkillsFor(effective), markdown, _sessionTools, effective.SessionTool, ToolsText.DisabledSet(effective.ToolsDisabled), _mcp.Tools, effective.McpServers, effective.FileSafeEdits, _gitTools, effective.GitNativeTools, _shellTools, ShellOffered(effective), _processes, effective.ShellToolBridge, effective.ShellPoliceOutsidePaths, ObsidianToolsFor(_vaultTools, effective), ObsidianOffered(effective), _sqlTools, SqlOffered(effective, _sql), _comfyTools, ComfyOffered(effective, _comfy), effective.ShellPreferNative, _plan.Turn(_presentPlan), _advisorTools, effective.ClaudeAdvisor, effective.LlmPreserveThinking, LlmSampling.Resolve(effective, _session.Endpoint?.ModelId), _haTools, HomeAssistantOffered(effective));
+            PrepareTurn(assistant, _memory, _memoryTools, [.. _clockTools, .. _timerTools], _persona, _operata, _vocalia, effective.Memory, speaker is not null, effective.LlmMaxToolIterations, effective.LlmOfferTools, _webTools, effective.WebTools, ContextGuardFor(effective, _session.ContextLength), _fileTools, effective.FileTools, _pane.Enabled && effective.AskUser ? _askTools : null, SkillsFor(effective), markdown, _sessionTools, effective.SessionTool, ToolsText.DisabledSet(effective.ToolsDisabled), _mcp.Tools, effective.McpServers, effective.FileSafeEdits, _gitTools, effective.GitNativeTools, _shellTools, ShellOffered(effective), _processes, effective.ShellToolBridge, effective.ShellPoliceOutsidePaths, ObsidianToolsFor(_vaultTools, effective), ObsidianOffered(effective), _sqlTools, SqlOffered(effective, _sql), _comfyTools, ComfyOffered(effective, _comfy), effective.ShellPreferNative, _plan.Turn(_presentPlan), _advisorTools, effective.ClaudeAdvisor, effective.LlmPreserveThinking, LlmSampling.Resolve(effective, _session.Endpoint?.ModelId), _haTools, HomeAssistantOffered(effective), _printTools, PrintOffered(effective));
         }
 
         bool armed = false;
@@ -11813,6 +11886,10 @@ internal sealed partial class ChatScreen
             case TurnEvent.ToolResult result when HomeAssistantToolNames.Contains(result.Name):
                 // A state list, an overview is the model's to read; the line is the result's header (HaText.Note, 2026-09-28).
                 _transcript.ToolNote(HaText.Note(result.Text));
+                break;
+            case TurnEvent.ToolResult result when PrintToolNames.Contains(result.Name):
+                // The printer list is the model's to read; the line is the result's header (PrintText.Note, 2026-09-28).
+                _transcript.ToolNote(PrintText.Note(result.Text));
                 break;
             case TurnEvent.ToolResult result when SqlToolNames.Contains(result.Name):
                 // A table of rows is the model's to read; the line is the result's header (SqlText.Note, 2026-09-23).

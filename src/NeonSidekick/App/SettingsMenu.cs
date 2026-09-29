@@ -531,6 +531,18 @@ public enum SettingsField
 
     /// <summary>A picker over <see cref="Comfy.StripSync.Names"/>: whether the picture strip and the picture viewer follow each other (<see cref="Settings.AppSettingsData.ComfyPictureStripSync"/>). The ComfyUI tab, under the strip (2026-09-28, the user's ask and name); no reconnect (read at each move). Last in the enum, as every newcomer.</summary>
     ComfyPictureStripSync,
+
+    /// <summary>A toggle: whether a turn offers <c>print_file</c> and <c>list_printers</c> (<see cref="Settings.AppSettingsData.PrintTools"/>). The Print tab of <c>/tools</c>' first row (2026-09-28, the user's ask); no reconnect (read at each turn). Last in the enum, as every newcomer.</summary>
+    PrintTools,
+
+    /// <summary>A picker over <see cref="Printing.PrintPolicy.Names"/>: what the model may print (<see cref="Settings.AppSettingsData.PrintActionPolicy"/>). The Print tab (2026-09-28); no reconnect.</summary>
+    PrintActionPolicy,
+
+    /// <summary>A picker over the installed printers and the Windows default (<see cref="Settings.AppSettingsData.PrintDefaultPrinter"/>). The Print tab (2026-09-28); no reconnect (read at each print).</summary>
+    PrintDefaultPrinter,
+
+    /// <summary>Typed: the body size in points a listing or markdown prints at, 6 to 24 (<see cref="Settings.AppSettingsData.PrintFontSize"/>). The Print tab's last row (2026-09-28); no reconnect.</summary>
+    PrintFontSize,
 }
 
 /// <summary>The tabs of <c>/settings</c> on the pane, in strip order (Sessions right after General — the user's order, 2026-09-18; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
@@ -871,6 +883,7 @@ internal sealed partial class SettingsMenu
         [SettingsField.AskUser, SettingsField.AskMaxQuestions, SettingsField.AskMaxChoices],
         [SettingsField.ClaudeExecutable, SettingsField.ClaudePermissions, SettingsField.ClaudeModel, SettingsField.ClaudeEffort, SettingsField.ClaudeAdvisor, SettingsField.ClaudeAdvisorContext, SettingsField.ClaudeAdvisorCallsPerTurn, SettingsField.ClaudeAdvisorModel, SettingsField.ClaudeAdvisorEffort, SettingsField.ClaudeAdvisorConfirm],
         [SettingsField.HomeAssistantTools, SettingsField.HomeAssistantUrl, SettingsField.HomeAssistantToken, SettingsField.HomeAssistantTest, SettingsField.HomeAssistantActionPolicy, SettingsField.HomeAssistantAssistAgent, SettingsField.HomeAssistantTimeoutSeconds],
+        [SettingsField.PrintTools, SettingsField.PrintActionPolicy, SettingsField.PrintDefaultPrinter, SettingsField.PrintFontSize],
         [SettingsField.ObsidianTools, SettingsField.ObsidianVault, SettingsField.ObsidianAllowDelete],
         [SettingsField.ComfyTools, SettingsField.ComfyUrl, SettingsField.ComfyWorkflowsOffered, SettingsField.ComfyAddWorkflow, SettingsField.ComfyCaretMention, SettingsField.ComfyTimeoutSeconds, SettingsField.ComfyMaxPicturesPerCall, SettingsField.ComfyReinforceNegatives, SettingsField.ComfyShowPrompts, SettingsField.ComfyPictureStrip, SettingsField.ComfyPictureStripSync, SettingsField.ComfyOutputFolder],
         [SettingsField.SqlTools, SettingsField.SqlConnectionsOffered, SettingsField.SqlDefaultConnection, SettingsField.SqlSetPassword, SettingsField.SqlAddConnection, SettingsField.SqlPercentMention, SettingsField.SqlQueryMaxRows, SettingsField.SqlQueryTimeoutSeconds, SettingsField.SqlConnectionsProfile, SettingsField.SqlConnectionsGlobal],
@@ -902,6 +915,7 @@ internal sealed partial class SettingsMenu
     private readonly Func<Sql.SqlNamedConnection, CancellationToken, Task<Sql.SqlRun>> _testSqlConnection;
     private readonly Func<Comfy.ComfyClient?> _comfyClient;
     private readonly Func<CancellationToken, Task<(bool Ok, string Text)>> _testHomeAssistant;
+    private readonly Func<IReadOnlyList<Printing.PrinterInfo>> _printers;
     // The skills a botchat sees, for the preloaded-skills checklist (2026-09-27); none when the host gives no catalog.
     private readonly Func<IReadOnlyList<Skills.Skill>> _botChatSkills;
     private readonly Func<string, string?> _locateBrowser;
@@ -927,8 +941,10 @@ internal sealed partial class SettingsMenu
     /// <param name="testSqlConnection">What the <c>SQL add connection</c> summary's test runs over the unsaved draft (later on 2026-09-23), its typed password in it as a plain <c>file</c> value; null = a real <see cref="Sql.SqlAccess"/> run of <see cref="SqlTestQuery"/>.</param>
     /// <param name="openFile">What the SQL tab's edit rows open <c>sql.json</c> with (2026-09-23): the screen's editor opener; null = the rows say there is none.</param>
     /// <param name="browseFolder">The folder picker the <c>Working directory (cwd)</c> row opens (2026-09-22, the user's ask): the screen's <c>/cwd browse</c> tree, returning what to save — <c>""</c> for the profile's folder, a full path, or null for nothing chosen. Null (and a console with no pane) falls back to the typed path the row asked for until then.</param>
-    public SettingsMenu(IAnsiConsole console, AppSettings settings, Func<SettingsField, string?> overriddenBy, InputLine input, TranscriptRenderer transcript, SpeechSession speech, MenuPane pane, Func<string, string?>? locateBrowser = null, Func<IReadOnlySet<string>>? installedShells = null, Func<IReadOnlySet<string>>? installedLanguages = null, Func<CancellationToken, Task<string?>>? browseFolder = null, Func<string, CancellationToken, Task<string?>>? browseVault = null, Action<string>? openFile = null, Func<Sql.SqlNamedConnection, CancellationToken, Task<Sql.SqlRun>>? testSqlConnection = null, Func<Comfy.ComfyClient?>? comfyClient = null, Func<IReadOnlyList<Skills.Skill>>? botChatSkills = null, Func<CancellationToken, Task<(bool Ok, string Text)>>? testHomeAssistant = null)
+    public SettingsMenu(IAnsiConsole console, AppSettings settings, Func<SettingsField, string?> overriddenBy, InputLine input, TranscriptRenderer transcript, SpeechSession speech, MenuPane pane, Func<string, string?>? locateBrowser = null, Func<IReadOnlySet<string>>? installedShells = null, Func<IReadOnlySet<string>>? installedLanguages = null, Func<CancellationToken, Task<string?>>? browseFolder = null, Func<string, CancellationToken, Task<string?>>? browseVault = null, Action<string>? openFile = null, Func<Sql.SqlNamedConnection, CancellationToken, Task<Sql.SqlRun>>? testSqlConnection = null, Func<Comfy.ComfyClient?>? comfyClient = null, Func<IReadOnlyList<Skills.Skill>>? botChatSkills = null, Func<CancellationToken, Task<(bool Ok, string Text)>>? testHomeAssistant = null, Func<IReadOnlyList<Printing.PrinterInfo>>? printers = null)
     {
+        // Print default printer's picker (2026-09-28): the screen's spooler in the app; none otherwise, so a test never lists the machine's.
+        _printers = printers ?? (() => []);
         // The ComfyUI client the add-workflow wizard lists the server's models and runs its test with (later on 2026-09-24): the screen's, so a stub reaches it in tests; null = none, the wizard says there is no server.
         _comfyClient = comfyClient ?? (() => null);
         // Home Assistant test connection (2026-09-28): the screen's session in the app; a session over the saved settings otherwise.
@@ -1135,7 +1151,7 @@ internal sealed partial class SettingsMenu
             or SettingsField.ObsidianTools or SettingsField.ObsidianAllowDelete or SettingsField.SqlTools or SettingsField.SqlPercentMention or SettingsField.ComfyTools or SettingsField.ComfyReinforceNegatives or SettingsField.ComfyShowPrompts or SettingsField.ComfyCaretMention or SettingsField.ComfyPictureStrip
             or SettingsField.BotChatImages or SettingsField.BotChatImageAsync or SettingsField.BotChatSkills or SettingsField.BotChatVision or SettingsField.ClaudeAdvisor or SettingsField.ClaudeAdvisorConfirm
             or SettingsField.ClaudeApi or SettingsField.ClaudeApiPromptCaching
-            or SettingsField.HomeAssistantTools;
+            or SettingsField.HomeAssistantTools or SettingsField.PrintTools;
 
     public static string FieldName(SettingsField field) => field switch
     {
@@ -1231,6 +1247,10 @@ internal sealed partial class SettingsMenu
         SettingsField.HomeAssistantActionPolicy => "Home Assistant action policy",
         SettingsField.HomeAssistantAssistAgent => "Home Assistant Assist agent",
         SettingsField.HomeAssistantTimeoutSeconds => "Home Assistant timeout (s)",
+        SettingsField.PrintTools => "Print tools",
+        SettingsField.PrintActionPolicy => "Print action policy",
+        SettingsField.PrintDefaultPrinter => "Print default printer",
+        SettingsField.PrintFontSize => "Print font size (pt)",
         SettingsField.ComfyUrl => "ComfyUI URL",
         SettingsField.ComfyTimeoutSeconds => "ComfyUI timeout (s)",
         SettingsField.ComfyMaxPicturesPerCall => "ComfyUI max pictures per call",
@@ -1436,6 +1456,10 @@ internal sealed partial class SettingsMenu
             SettingsField.HomeAssistantActionPolicy => HomeAssistant.HaPolicy.Resolve(data.HomeAssistantActionPolicy),
             SettingsField.HomeAssistantAssistAgent => string.IsNullOrWhiteSpace(data.HomeAssistantAssistAgent) ? DefaultAssistAgentLabel : data.HomeAssistantAssistAgent,
             SettingsField.HomeAssistantTimeoutSeconds => Seconds(data.HomeAssistantTimeoutSeconds),
+            SettingsField.PrintTools => OnOff(data.PrintTools),
+            SettingsField.PrintActionPolicy => Printing.PrintPolicy.Resolve(data.PrintActionPolicy),
+            SettingsField.PrintDefaultPrinter => string.IsNullOrWhiteSpace(data.PrintDefaultPrinter) ? WindowsDefaultPrinterLabel : data.PrintDefaultPrinter,
+            SettingsField.PrintFontSize => data.PrintFontSize.ToString(CultureInfo.InvariantCulture) + " pt",
             SettingsField.ComfyUrl => string.IsNullOrWhiteSpace(data.ComfyUrl) ? NoComfyUrlLabel : data.ComfyUrl,
             SettingsField.ComfyTimeoutSeconds => Seconds(data.ComfyTimeoutSeconds),
             SettingsField.ComfyMaxPicturesPerCall => ComfyPictures(data.ComfyMaxPicturesPerCall),
@@ -1741,6 +1765,17 @@ internal sealed partial class SettingsMenu
     public static string HomeAssistantPolicyLabel(string name) =>
         Markup.Escape(name.PadRight(8)) + Theme.DimMarkup(HomeAssistant.HaPolicy.Describe(name));
 
+    /// <summary>A row of the print-policy picker: the name padded, what it does dim (2026-09-28).</summary>
+    public static string PrintPolicyLabel(string name) =>
+        Markup.Escape(name.PadRight(8)) + Theme.DimMarkup(Printing.PrintPolicy.Describe(name));
+
+    /// <summary>How the menu shows an empty <see cref="AppSettingsData.PrintDefaultPrinter"/> (2026-09-28), and the picker's first row.</summary>
+    public const string WindowsDefaultPrinterLabel = "(Windows default)";
+
+    /// <summary>The settings-menu wording for a bad <see cref="SettingsField.PrintFontSize"/>.</summary>
+    public static string PrintFontSizeRangeError =>
+        "must be " + Printing.PrintLayout.MinFontSize.ToString(CultureInfo.InvariantCulture) + " to " + Printing.PrintLayout.MaxFontSize.ToString(CultureInfo.InvariantCulture) + " points";
+
     /// <summary>A row of the strip-sync picker: the name padded, what it does dim (2026-09-28).</summary>
     public static string StripSyncLabel(string name) =>
         Markup.Escape(name.PadRight(12)) + Theme.DimMarkup(Comfy.StripSync.Describe(name));
@@ -2036,6 +2071,7 @@ internal sealed partial class SettingsMenu
         SettingsField.HomeAssistantUrl => data.HomeAssistantUrl,
         SettingsField.HomeAssistantAssistAgent => data.HomeAssistantAssistAgent,
         SettingsField.HomeAssistantTimeoutSeconds => data.HomeAssistantTimeoutSeconds.ToString(CultureInfo.InvariantCulture),
+        SettingsField.PrintFontSize => data.PrintFontSize.ToString(CultureInfo.InvariantCulture),
         SettingsField.ComfyOutputFolder => data.ComfyOutputFolder,
         SettingsField.ComfyTimeoutSeconds => data.ComfyTimeoutSeconds.ToString(CultureInfo.InvariantCulture),
         SettingsField.ComfyMaxPicturesPerCall => data.ComfyMaxPicturesPerCall.ToString(CultureInfo.InvariantCulture),
@@ -2592,6 +2628,16 @@ internal sealed partial class SettingsMenu
         if (field == SettingsField.HomeAssistantActionPolicy)
         {
             return await PickHomeAssistantPolicyAsync(saved, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (field == SettingsField.PrintActionPolicy)
+        {
+            return await PickPrintPolicyAsync(saved, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (field == SettingsField.PrintDefaultPrinter)
+        {
+            return await PickDefaultPrinterAsync(saved, cancellationToken).ConfigureAwait(false);
         }
 
         if (field == SettingsField.ComfyPictureStripSync)
@@ -3267,6 +3313,16 @@ internal sealed partial class SettingsMenu
                 Apply(field, d => d.HomeAssistantTimeoutSeconds = homeTimeout);
                 return true;
 
+            case SettingsField.PrintFontSize:
+                if (!int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out int printSize) || printSize < Printing.PrintLayout.MinFontSize || printSize > Printing.PrintLayout.MaxFontSize)
+                {
+                    Sink.Error($"{FieldName(field)} {PrintFontSizeRangeError}; keeping {EditableValue(field, saved)}.");
+                    return false;
+                }
+
+                Apply(field, d => d.PrintFontSize = printSize);
+                return true;
+
             case SettingsField.ComfyUrl:
                 if (text.Length > 0 && !(Uri.TryCreate(text, UriKind.Absolute, out var comfy) && Web.WebFetcher.IsHttp(comfy)))
                 {
@@ -3772,6 +3828,67 @@ internal sealed partial class SettingsMenu
         return true;
     }
 
+    /// <summary>The print-policy picker under the settings list (2026-09-28): one <see cref="PrintPolicyLabel"/> row per <see cref="Printing.PrintPolicy.Names"/> entry, the saved one under the cursor.</summary>
+    private async Task<bool> PickPrintPolicyAsync(AppSettingsData saved, CancellationToken cancellationToken)
+    {
+        var names = Printing.PrintPolicy.Names;
+        var page = new MenuPage(Crumb(FieldName(SettingsField.PrintActionPolicy)), names.Select(PrintPolicyLabel).ToList(), PickKeys);
+        int? picked = await PickAsync(page, Math.Max(0, Array.IndexOf(names, Printing.PrintPolicy.Resolve(saved.PrintActionPolicy))), cancellationToken).ConfigureAwait(false);
+        if (picked is not { } index)
+        {
+            return Unchanged();
+        }
+
+        string name = names[index];
+        Apply(SettingsField.PrintActionPolicy, d => d.PrintActionPolicy = name);
+        return true;
+    }
+
+    /// <summary>
+    /// The default-printer picker (2026-09-28): <see cref="WindowsDefaultPrinterLabel"/> first, then every installed printer (the
+    /// Windows default marked), the saved one under the cursor; a saved printer no longer installed stays as a row of its own, so
+    /// the picker never drops it silently.
+    /// </summary>
+    private async Task<bool> PickDefaultPrinterAsync(AppSettingsData saved, CancellationToken cancellationToken)
+    {
+        var printers = _printers();
+        var names = new List<string> { "" };
+        names.AddRange(printers.Select(p => p.Name));
+        string current = (saved.PrintDefaultPrinter ?? "").Trim();
+        if (current.Length > 0 && !names.Contains(current, StringComparer.OrdinalIgnoreCase))
+        {
+            names.Add(current);
+        }
+
+        var rows = names.Select(name => PrinterRow(name, printers)).ToList();
+        var page = new MenuPage(Crumb(FieldName(SettingsField.PrintDefaultPrinter)), rows, PickKeys);
+        int at = Math.Max(0, names.FindIndex(n => string.Equals(n, current, StringComparison.OrdinalIgnoreCase)));
+        int? picked = await PickAsync(page, at, cancellationToken).ConfigureAwait(false);
+        if (picked is not { } index)
+        {
+            return Unchanged();
+        }
+
+        string chosen = names[index];
+        Apply(SettingsField.PrintDefaultPrinter, d => d.PrintDefaultPrinter = chosen);
+        return true;
+    }
+
+    /// <summary>A row of the default-printer picker: the name, with a dim note for the Windows default or one not installed (2026-09-28).</summary>
+    public static string PrinterRow(string name, IReadOnlyList<Printing.PrinterInfo> printers)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+        ArgumentNullException.ThrowIfNull(printers);
+        if (name.Length == 0)
+        {
+            return Markup.Escape(WindowsDefaultPrinterLabel);
+        }
+
+        var found = printers.FirstOrDefault(p => string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase));
+        string note = found is null ? "  not installed" : found.IsDefault ? "  Windows default" : "";
+        return Markup.Escape(name) + (note.Length > 0 ? Theme.DimMarkup(note) : "");
+    }
+
     /// <summary>The strip-sync picker under the settings list (2026-09-28): one <see cref="StripSyncLabel"/> row per <see cref="Comfy.StripSync.Names"/> entry, the saved one under the cursor.</summary>
     private async Task<bool> PickStripSyncAsync(AppSettingsData saved, CancellationToken cancellationToken)
     {
@@ -4054,6 +4171,7 @@ internal sealed partial class SettingsMenu
             SettingsField.SqlTools => data.SqlTools,
             SettingsField.ComfyTools => data.ComfyTools,
             SettingsField.HomeAssistantTools => data.HomeAssistantTools,
+            SettingsField.PrintTools => data.PrintTools,
             SettingsField.ComfyReinforceNegatives => data.ComfyReinforceNegatives,
             SettingsField.ComfyShowPrompts => data.ComfyShowPrompts,
             SettingsField.ComfyCaretMention => data.ComfyCaretMention,
@@ -4124,6 +4242,7 @@ internal sealed partial class SettingsMenu
             case SettingsField.SqlTools: data.SqlTools = on; break;
             case SettingsField.ComfyTools: data.ComfyTools = on; break;
             case SettingsField.HomeAssistantTools: data.HomeAssistantTools = on; break;
+            case SettingsField.PrintTools: data.PrintTools = on; break;
             case SettingsField.ComfyReinforceNegatives: data.ComfyReinforceNegatives = on; break;
             case SettingsField.ComfyShowPrompts: data.ComfyShowPrompts = on; break;
             case SettingsField.ComfyCaretMention: data.ComfyCaretMention = on; break;
@@ -4203,6 +4322,7 @@ internal sealed partial class SettingsMenu
         SettingsField.SqlTools => on ? "the model reads the SQL Server connections of sql.json" : "no SQL tools",
         SettingsField.ComfyTools => on ? "ComfyUI tools enabled" : "ComfyUI tools disabled",
         SettingsField.HomeAssistantTools => on ? "the model may read and switch Home Assistant, as the policy allows" : "no Home Assistant tools",
+        SettingsField.PrintTools => on ? "the model may list the printers and print, as the policy allows" : "no print tools; /print still prints",
         SettingsField.ComfyReinforceNegatives => on ? "the model adds a few opposite tags to a workflow's negative" : "the workflow's negative as it is",
         SettingsField.ComfyShowPrompts => on ? "the prompts and params sent to ComfyUI under each picture's line" : "just the picture's line",
         SettingsField.ComfyCaretMention => on ? "^ and part of a name lists the offered workflows on the line" : "^ is ordinary text",

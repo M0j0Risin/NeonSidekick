@@ -108,6 +108,7 @@ public static partial class SmokeChecks
         results.Add(ProbeConsoleInput());
         results.Add(ProbeImageResize());
         results.Add(ProbeViewerWindow());
+        results.Add(ProbePrintSpooler());
         results.Add(ProbeSplash());
         results.Add(ProbeWebMarkdown());
         results.Add(ProbeTranscriptMarkdown());

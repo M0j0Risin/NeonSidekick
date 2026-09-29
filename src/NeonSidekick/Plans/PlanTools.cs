@@ -28,6 +28,8 @@ public static class PlanTools
         "sql_connections", "sql_databases", "sql_tables", "sql_columns", "sql_describe", "sql_indexes", "sql_relationships", "sql_query",
         // Home Assistant: the reads (2026-09-28)
         "ha_overview", "ha_states", "ha_history",
+        // printing: the list only (2026-09-28)
+        "list_printers",
         // Obsidian
         "vault_search", "vault_list", "vault_read", "vault_links",
         // memory, skills, sessions, questions
@@ -48,6 +50,7 @@ public static class PlanTools
         "save_memory", "skill_editor",
         "generate_image", "set_splash_image",
         "ha_lights", "ha_scene", "ha_media", "ha_todo", "ha_call_service", "ha_assist",
+        "print_file",
     };
 
     /// <summary>Whether plan mode keeps <paramref name="tool"/>.</summary>

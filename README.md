@@ -53,6 +53,7 @@ Neon Sidekick brings privacy-first, local LLM inference to your terminal. Powere
 * **Obsidian:** Search, read, write and link notes directly in your vault's files: no plugin, and Obsidian needn't be running. Wikilinks, aliases, tags, properties and daily notes all work.
 * **SQL Server:** Read-only queries over named connections, plus schema, relationship and index discovery. Every query is parsed down to a single `SELECT` and run in a transaction that is always rolled back. SQL, Windows or run-as sign-in, with passwords encrypted (DPAPI) or in Windows Credential Manager.
 * **Home Assistant:** Lights, scenes, the TV, to-do lists and sensors through your own Home Assistant. The model finds devices by room or name ("dim the den to 30%"), and anything outside a safe list waits for your yes. `/ha` drives the house directly, without the model.
+* **Printing:** `/print` sends a file (or the last reply) to any installed printer: text and code as a listing, markdown formatted, a picture fitted to the page, a PDF or an Office file through the program Windows has for it. With *Print tools* on, the model can print too, after your yes.
 * **ComfyUI:** Pictures from your own ComfyUI workflows (text-to-image, image-to-image, face swaps). The model writes prompts in each model family's style, or `/imagine` sends yours as typed. A wizard builds or imports workflows.
 * **Claude API:** Anthropic's Claude models as one more `/server` choice, on your own API key (stored encrypted), with thinking levels, prompt caching and cost in `/usage`. Off until you turn it on in the *Claude (API)* tab of `/settings`.
 * **Claude Code:** `/claude` sends a message to the Claude Code CLI and brings its reply into the conversation. With `claude_advisor`, the local model can ask Claude for read-only advice when it's stuck. Both are optional and run on your own Claude Code sign-in.
@@ -63,7 +64,7 @@ Neon Sidekick brings privacy-first, local LLM inference to your terminal. Powere
 
 **Navigation**
 * **Keyboard:** ←/→ (switch tabs), ↑/↓ (move), Enter (edit/toggle), ESC (close).
-* **Mouse:** Click moves the cursor; double-click selects rows and tabs. The top-right × acts as ESC, and double-clicking outside an open pane closes it. Double-clicking a picture in the transcript opens it in the [picture viewer](#picture-viewer).
+* **Mouse:** Click moves the cursor; double-click selects rows and tabs. The top-right × acts as ESC, and double-clicking outside an open pane closes it. Double-clicking a picture in the transcript opens it in the picture viewer.
 
 **Input line**
 * The input row is always a full editor, even while a reply streams or `/botchat` runs: ←/→, Home/End, Delete, Shift+arrows or Ctrl+A to select, Ctrl+C / Ctrl+X to copy / cut, right-click or Alt+V to paste, click to place the cursor, ↑/↓ for history, and the `/`, `@`, `#`, `$`, `%` and `^` lists.
@@ -123,12 +124,12 @@ Settings that an environment variable or flag can override for one launch are li
 | Hide /exit autocomplete | Leaves `/exit` out of the `/` list so a stray pick can't close the app; typing it in full still works. | on |
 | Command typo intercept | A command name without its slash (`clear`) or with extra slashes (`//profile work`) asks *Did you mean /clear?* before sending it as text. A bare `//` is still `/settings`. | on |
 | Keep command history | Saves the ↑/↓ history (newest 1,000 lines) in the profile's `sessions.db`, so it survives restarts and profile switches. Lines holding a collapsed paste or a picture aren't saved. Off, the saved lines are deleted at the next profile load. `/cmdclear` empties it either way. | on |
-| Welcome splash | Pictures under the banner at startup, until the first line is sent: `fullsize`, `tiled` or `disabled`. See [below](#welcome-splash). | `fullsize` |
+| Welcome splash | Pictures under the banner at startup, until the first line is sent: `fullsize`, `tiled` or `disabled`. See Welcome splash below. | `fullsize` |
 | Working directory in header | Prints the working directory at the right of the banner's title line. | off |
 | Show toolbar | Draws the toolbar under the hint row (see *Double-Click Shortcuts* above). | on |
 | Theme | `synthwave`, `netrunner` (green phosphor), `nostromo` (amber phosphor), `noir` (greyscale), `cyberpunk` (colourful), `vaporwave` (pastel), `mainframe` (blue phosphor), `grid` (light cycle), `replicant` (smog and sodium) or `abyssal` (bioluminescent). | `synthwave` |
 | Draft editor | What `/draft` opens its temporary file with (`code --wait`, `notepad`…); empty uses the app Windows opens `.txt` files with. | (default .txt editor) |
-| Image viewer | Where a double-clicked picture opens. Empty: the built-in [picture viewer](#picture-viewer). `system`: the app Windows registers for the file type (Paint for png, jpg and bmp). Anything else is a command, with the file's path appended (`mspaint`, `"C:\Program Files\GIMP 3\bin\gimp-3.exe"`). | (built-in viewer) |
+| Image viewer | Where a double-clicked picture opens. Empty: the built-in picture viewer. `system`: the app Windows registers for the file type (Paint for png, jpg and bmp). Anything else is a command, with the file's path appended (`mspaint`, `"C:\Program Files\GIMP 3\bin\gimp-3.exe"`). | (built-in viewer) |
 | Themed image viewer | The built-in viewer wears the theme: a themed dark title bar (Windows 11; Windows 10 gets a plain dark one) and the theme's background. Off keeps it black. | on |
 
 ##### Welcome splash
@@ -174,7 +175,7 @@ Settings that an environment variable or flag can override for one launch are li
 | LLM use fun verbs | The thinking spinner reads a random verb instead of `thinking` / `writing`. | off |
 | LLM show thinking | Streams a reasoning model's thinking as a dim block (its last five lines), folded to `▸ 💭 thought for 4.2s` when the answer starts; needs Transcript markdown. Click the line, press Ctrl+O or use `/expand` to see it again. Thinking is never spoken or logged, and copied only by `/copy --thinking`. | on |
 | LLM preserve thinking | Sends the model's thinking from earlier turns back to a local server, as `reasoning_content`, and asks the chat template to keep it (`chat_template_kwargs`: `preserve_thinking` for Qwen3.6, `clear_thinking: false` for GLM). The current turn's thinking always goes back, so a model keeps its reasoning between tool calls. Costs context; a `/compact` prune drops older thinking first. The Claude API is not affected. | off |
-| LLM sampling | Sampling overrides per model (temperature, top_p, top_k, min_p, the penalties, an extra body); the row lists the models that have some, and Enter opens the `/sampling` pane. See [Sampling per model](#sampling-per-model). | (server defaults) |
+| LLM sampling | Sampling overrides per model (temperature, top_p, top_k, min_p, the penalties, an extra body); the row lists the models that have some, and Enter opens the `/sampling` pane. See Sampling per model. | (server defaults) |
 | LLM sampling from Hugging Face | When the server doesn't report its sampling defaults (vLLM, SGLang, LM Studio) and the model id is a Hugging Face repo (`Qwen/Qwen3-8B`), the `/sampling` pane reads the model card's `generation_config.json` and shows its values as `(Hugging Face)`. vLLM and SGLang use that file unless started otherwise. One request to huggingface.co per model and connect, never with your API key; display only. | off |
 
 #### Sampling per model
@@ -245,7 +246,7 @@ Anthropic's Claude API as a server. With the switch on and a key set, `/server` 
 |---|---|---|
 | Botchat LLM mode | Whose LLM the bots use. `single`: every bot uses this profile's server, model and reasoning. `multi`: each bot uses its own profile's URL, model, API key, timeouts and reasoning (a blank URL borrows this profile's server). A bot whose server doesn't answer at the start sits the chat out, with a notice. Read when a chat starts or resumes. | `single` |
 | Botchat images enabled | Adds pictures to `/botchat`; needs *ComfyUI tools* on and a *ComfyUI URL*. Off, the chat is talk only, with no tools (except `load_skill` under *Botchat skills enabled*). | off |
-| Botchat image mode | Who draws. `automatic`: the app writes a prompt from each reply and draws it. `autonomous`: the bots get `generate_image` and draw when they choose. See [Botchat pictures](#botchat-pictures). | `automatic` |
+| Botchat image mode | Who draws. `automatic`: the app writes a prompt from each reply and draws it. `autonomous`: the bots get `generate_image` and draw when they choose. See Botchat pictures. | `automatic` |
 | Botchat txt2img workflow | The text → image workflow for new pictures. Blank means no new pictures. | (none) |
 | Botchat img2img workflow | The image → image workflow for reworking one of the chat's pictures. Blank means no reworks. | (none) |
 | Botchat img2img mode | Which pictures a rework may start from: `latest`, or any in `chat-history` (the last 8, numbered). | `latest` |
@@ -366,10 +367,10 @@ Every tool, grouped (Clock, Timers, Files, Git, Shell, Obsidian, SQL, ComfyUI, C
 
 | Setting | What it does | Default |
 |---|---|---|
-| Shell command policy | What stands between `run_command` and the shell: `off` (no shell tools offered), `ask` (a command not on the allowed list goes to the approval pane first; with no pane it is refused) or `yolo` (everything runs, nothing is asked). See [Shell guards](#shell-guards). | `ask` |
+| Shell command policy | What stands between `run_command` and the shell: `off` (no shell tools offered), `ask` (a command not on the allowed list goes to the approval pane first; with no pane it is refused) or `yolo` (everything runs, nothing is asked). See Shell guards. | `ask` |
 | Shell allowed commands | The prefixes allowed for good (`git status`, `dotnet build`, `python`). Enter on one removes it; the pane's *Allow … always* adds one. `/cmdlist` opens the list; `/cmdcopy` copies it to another profile. | none |
-| Shell police outside paths | Refuses a shell command, script or background-process input that names a path outside the working directory, before it runs or the pane asks. `/police` opens this row. See [Shell guards](#shell-guards). | on |
-| Shell prefer native tools | Steers the model to the app's own tools, and sends back a single shell command that one of them covers (once a turn). See [Shell guards](#shell-guards). | on |
+| Shell police outside paths | Refuses a shell command, script or background-process input that names a path outside the working directory, before it runs or the pane asks. `/police` opens this row. See Shell guards. | on |
+| Shell prefer native tools | Steers the model to the app's own tools, and sends back a single shell command that one of them covers (once a turn). See Shell guards. | on |
 | Shell default | The shell a `run_command` without `shell` runs in: `powershell` (pwsh when installed, else Windows PowerShell 5.1), `cmd`, or `bash` (Git Bash, when found). | `powershell` |
 | Shell timeout (s) | How long a foreground command without `timeout` may run before it is killed (1–3600). | 180 |
 | Shell foreground cap (s) | The most a foreground command may wait, whatever its `timeout` says (10–3600). | 600 |
@@ -429,6 +430,15 @@ The Claude Code CLI, for `/claude` (you send it a message) and `claude_advisor` 
 
 The services that run without asking under `ask` can be changed in `profile.json` (`homeAssistantSafeServices`, entries like `light.*` or `remote.send_command`).
 
+#### Print
+
+| Setting | What it does | Default |
+|---|---|---|
+| Print tools | Offers `list_printers` and `print_file` to the model. `/print` works either way. | off |
+| Print action policy | What the model may print. `off`: it may list the printers but never print. `ask`: every print waits for your yes on the pane, which names the file, the printer, the pages and the copies; headless, it is refused. `allow`: it prints without asking. `/print` is never asked about. | `ask` |
+| Print default printer | The printer a print goes to when none is named: a picker over the installed printers. | (Windows default) |
+| Print font size (pt) | The body size a listing or a markdown file prints at (6–24); headings scale from it. | 10 |
+
 #### Obsidian
 
 | Setting | What it does | Default |
@@ -444,14 +454,14 @@ The services that run without asking under `ask` can be changed in `profile.json
 | ComfyUI tools | Offers the image tools (`generate_image`, `set_splash_image`), once *ComfyUI URL* is set and a workflow is in a `comfy` folder. | on |
 | ComfyUI URL | The ComfyUI server, often another machine on your LAN (`http://gpu-box:8188`). Like the LLM server, the web tools' network mode never blocks it. | (not set) |
 | ComfyUI workflows offered | A checklist of the installed workflows the model is offered. Until you narrow it, all are, new ones included; after that only ticked ones are. With one ticked, every plain request and a plain `/imagine` go to it. `/imagine <name>` can still use a hidden one. | all (not narrowed) |
-| ComfyUI add workflow | A wizard that **builds** a standard workflow from your server's checkpoints, or **imports** one you exported from ComfyUI. See [Adding a workflow](#adding-a-workflow). | — |
+| ComfyUI add workflow | A wizard that **builds** a standard workflow from your server's checkpoints, or **imports** one you exported from ComfyUI. See Adding a workflow. | — |
 | ComfyUI ^-mention enabled | `^` and part of a name on the input line lists the offered workflows (family, shape, size); a pick writes `^name`, which `generate_image` reads as the workflow to use. | on |
 | ComfyUI timeout (s) | How long the tool waits for one generation, queue included (10–3600); the job may still finish in ComfyUI. | 300 |
 | ComfyUI max pictures per call | The most pictures one `generate_image` call or `/imagine --count` makes (1–16). Each is a full job, and all of them go to the model in the next request, where a local vision server has its own limit. | 5 |
 | ComfyUI reinforce negatives | When the model writes the prompt, it also adds a few opposite tags where the image model tends to drift (a solo figure → `multiple girls`, night → `daylight`) to the workflow's negative. Skipped for a verbatim prompt, a negative set for the call, `/imagine`, families without a negative (Flux, FLUX.2, Klein, Krea 2, Z-Image, Ernie Turbo, Boogu, Ideogram 4) and a workflow whose `.md` says `reinforce: false`. | on |
 | ComfyUI show prompts | Shows what was sent under each picture: the `prompt:`, the `negative:` and a `params:` line (size, steps, cfg, denoise, seed, sampler, scheduler). Off, only the picture's line. The model sees the same either way. | on |
-| ComfyUI picture strip | Keeps the session's ComfyUI pictures as thumbnails in a strip over the input line, newest at the left. With the input line empty, ←/→ highlight one and Enter opens it, a reply running or not; a double-click opens any. The strip's **🖼 viewer** button opens the [picture viewer](#picture-viewer) on the output folder. `/clear`, `/new` and a session switch empty it; it hides while a menu is open or the window is too short. | on |
-| ComfyUI picture strip sync | Whether the strip and the [picture viewer](#picture-viewer) follow each other. `viewer-only`: browsing in the viewer (←/→, Home/End, the next picture after a delete) highlights the same picture in the strip; a picture the strip doesn't hold is ignored, and the slide show and newly arriving pictures leave the strip alone. `both-ways`: that, plus ←/→ on the strip move an open viewer on the strip's folder without bringing it to the front. `disabled`: neither. | `viewer-only` |
+| ComfyUI picture strip | Keeps the session's ComfyUI pictures as thumbnails in a strip over the input line, newest at the left. With the input line empty, ←/→ highlight one and Enter opens it, a reply running or not; a double-click opens any. The strip's **🖼 viewer** button opens the picture viewer on the output folder. `/clear`, `/new` and a session switch empty it; it hides while a menu is open or the window is too short. | on |
+| ComfyUI picture strip sync | Whether the strip and the picture viewer follow each other. `viewer-only`: browsing in the viewer (←/→, Home/End, the next picture after a delete) highlights the same picture in the strip; a picture the strip doesn't hold is ignored, and the slide show and newly arriving pictures leave the strip alone. `both-ways`: that, plus ←/→ on the strip move an open viewer on the strip's folder without bringing it to the front. `disabled`: neither. | `viewer-only` |
 | ComfyUI output folder | The folder under the working directory the pictures are saved in (`comfy_images\pony-txt2img-1234.png`); empty = the working directory itself. | `comfy_images` |
 
 #### SQL
@@ -462,7 +472,7 @@ The services that run without asking under `ask` can be changed in `profile.json
 | SQL connections offered | A checklist of the connections in both `sql.json` files. Until you narrow it, all are offered, new ones included; after that only ticked ones are, and new ones stay hidden until ticked. A hidden connection is invisible to every SQL tool, the rules, the `%`-mention and the default (`sql_connections` says how many are hidden, never which). | all (not narrowed) |
 | SQL default connection | The connection used when a call names none: one of the offered connections, or the first. A call can still name another offered connection, and `database` can open other databases on the same server. | (the first connection) |
 | SQL set password | Pick a connection that takes a password (`sql` or `runas`) and type it, masked. It is saved to that connection's store: encrypted in its `sql.json`, or in Windows Credential Manager. | — |
-| SQL add connection | A wizard for a new connection, one page per choice, which can **test** the draft (`SELECT @@VERSION`) before saving it. See [Managing connections](#managing-connections). | — |
+| SQL add connection | A wizard for a new connection, one page per choice, which can **test** the draft (`SELECT @@VERSION`) before saving it. See Managing connections. | — |
 | SQL %-mention enabled | `%` and part of a name on the input line lists the connections (server, database, description); a pick writes `%name` as text. | on |
 | SQL max rows | How many rows `sql_query` returns unless the call says otherwise (1–1000); past it the header says more exist. | 100 |
 | SQL query timeout (s) | How long one SQL tool's batch may run on the server (1–600). | 30 |
@@ -536,7 +546,7 @@ Type `/` to list every command with its summary; after a command and a space, it
 | Command | What it does |
 |---|---|
 | `/about` | Show the app's version, runtime, folders, components and licence. |
-| `/claude <message>` | Send the message to Claude Code (the `claude` CLI) and stream its reply into the transcript. See [Claude Code from the chat](#claude-code-from-the-chat). |
+| `/claude <message>` | Send the message to Claude Code (the `claude` CLI) and stream its reply into the transcript. See Claude Code from the chat. |
 | `/clear` | Start a new conversation and clear the screen. |
 | `/cmdcopy <profile> [--history] [overwrite]` | Copy this profile's *Shell allowed commands* into another profile, added to its list or (`overwrite`) replacing it. `--history` copies the command history instead (refused while that profile has *Keep command history* off). |
 | `/keycopy <profile>` | Copy this profile's *LLM API key*, *Claude API key* and *Home Assistant API key* into another profile after a confirmation, replacing its own. All are mirrored: a key not set here clears that profile's. The saved keys are copied (a key set only by `NEONSIDEKICK_LLM_API_KEY`, `NEONSIDEKICK_CLAUDE_API_KEY` or `NEONSIDEKICK_HA_TOKEN` is not), the encrypted ones as they are. |
@@ -545,7 +555,7 @@ Type `/` to list every command with its summary; after a command and a space, it
 | `/police` | Open the *Shell police outside paths* on/off page. |
 | `/compact [focus]` | Shrink the current context; a focus steers the summary. |
 | `/copy [n \| all] [--thinking]` | Copy the last reply (or the last *n*, or the whole transcript) to the clipboard as Markdown. `--thinking` includes the model's thinking, quoted under `💭 **Thinking**` where it happened. |
-| `/cwd [path \| ~ \| browse]` | Show or change the working directory. `~` returns to the profile's `files\` folder; `browse` opens the [folder picker](#folder-picker). |
+| `/cwd [path \| ~ \| browse]` | Show or change the working directory. `~` returns to the profile's `files\` folder; `browse` opens the folder picker. |
 | `/draft` | Write the next message in your editor; it is sent when the file is saved and closed. |
 | `/echo <text>` | Print a line as a reply, and read it aloud when speech is on. |
 | `/emptytrash` | Empty the working directory's `.trash` permanently (asks first). |
@@ -562,9 +572,9 @@ Type `/` to list every command with its summary; after a command and a space, it
 | `/interrupt [on\|off]` | Toggle the wake-word interrupt during a spoken reply. |
 | `/learn [note \| sessions [N \| text]]` | Write or improve a skill in the background from the last turn, or from stored sessions. |
 | `/log` | Open the diagnostic log in your editor. Exists only when the app was started with `--log <path>`. |
-| `/loop <count> [delay] <message>`, `/loop infinite [delay] <message>` | Send the message that many times, or until ESC or Ctrl+C, waiting for each reply. See [Loops](#loops). |
-| `/plan <requirement>` | Have the model research with read-only tools and present a plan before anything changes. See [Plan mode](#plan-mode). |
-| `/botchat [profile ...] [topic]` | Let profiles talk to each other until you stop them. See [Bot conversations](#bot-conversations). |
+| `/loop <count> [delay] <message>`, `/loop infinite [delay] <message>` | Send the message that many times, or until ESC or Ctrl+C, waiting for each reply. See Loops. |
+| `/plan <requirement>` | Have the model research with read-only tools and present a plan before anything changes. See Plan mode. |
+| `/botchat [profile ...] [topic]` | Let profiles talk to each other until you stop them. See Bot conversations. |
 | `/expand` | Unfold every folded tool run, code block and thinking block, now and from here on (Ctrl+O toggles this and `/collapse`). |
 | `/collapse` | Fold the tool runs, code blocks and thinking again. |
 | `/mcp` | Connect external MCP servers and switch their tools on or off. |
@@ -573,33 +583,36 @@ Type `/` to list every command with its summary; after a command and a space, it
 | `/new` | Start a new conversation without clearing the screen. |
 | `/operata [reset \| copy <profile> [force]]` | Edit `operata.md` (the operating rules) in your editor, reset it to the default, or copy it to another profile (`force` replaces theirs). |
 | `/persona [reset \| copy <profile> [force]]` | The same for `persona.md` (the personality). |
-| `/profile [name \| add <name> \| delete <name> \| rename <name> <new> \| reset [name] [--all] \| push <name> \| pull <name> \| edit \| reload]` | Switch, create, delete, rename or reset a profile, or copy its settings to (`push`) or from (`pull`) another. `edit` opens `profile.json` in your editor; `reload` reads it back, reconnecting only what changed. See [Profiles](#profiles). |
+| `/print <file> [printer=<name>] [copies=N] [pages=1-3] [landscape]` | Print a file of the working directory. Text and code print as a listing, markdown formatted, a picture fitted to one page, each page headed with the file's name, the time and *page N of M*; anything else (a PDF, a Word or Excel file) goes to the program Windows has for it, on the default printer. The printer is matched by its name or part of it (`printer=color`); a name with spaces goes in quotes. Never judged by *Print action policy*. See Printing. |
+| `/print reply [options]` | Print the last reply, formatted as markdown. |
+| `/print printers` | List the installed printers, marking the Windows default and *Print default printer*. |
+| `/profile [name \| add <name> \| delete <name> \| rename <name> <new> \| reset [name] [--all] \| push <name> \| pull <name> \| edit \| reload]` | Switch, create, delete, rename or reset a profile, or copy its settings to (`push`) or from (`pull`) another. `edit` opens `profile.json` in your editor; `reload` reads it back, reconnecting only what changed. See Profiles. |
 | `/queue [clear]` | List and prune the messages queued during a reply (`⊠ clear all` or `c` drops them all); `/queue clear` drops them without the pane. |
 | `/reasoning [level]` | Pick the reasoning effort (`none`, `low`, `medium`, `high`, `xhigh`). |
 | `/remember <text>` | Add a memory. |
-| `/sampling [field value]` | Edit the sampling overrides per model on a pane; `/sampling <field> <value>`, `<field> clear`, `extra <json>` or `clear` change the connected model's (see [Sampling per model](#sampling-per-model)). |
+| `/sampling [field value]` | Edit the sampling overrides per model on a pane; `/sampling <field> <value>`, `<field> clear`, `extra <json>` or `clear` change the connected model's (see Sampling per model). |
 | `/server [url]` | Pick an LLM server found on the usual ports (or the Claude API, when it's on and has a key), or set one. The model and reasoning pickers follow, and one reconnect applies all three. |
 | `/sessions [id \| purge <id> \| purge older <age> \| purge all \| title <text>]` | List, restore, rename and purge stored sessions. An age is a number of days (`30`) or a duration (`12h`, `90m`, `2 hours`, `1d 6h`). |
 | `/settings`, `//` | Edit and save the settings. |
 | `/skills` | List the skills (Enter moves, renames, edits or deletes one) and edit the skill, reflection and project-file settings. |
-| `/skills add <search words \| owner/repo[/skill] \| github url \| zip url> [--global \| --profile]` | Install an [Agent Skill](https://agentskills.io) from the web, previewed first; a pane asks where it goes (the cursor starts on Cancel). See [Installing skills](#installing-skills). Refused while a reply runs. |
+| `/skills add <search words \| owner/repo[/skill] \| github url \| zip url> [--global \| --profile]` | Install an [Agent Skill](https://agentskills.io) from the web, previewed first; a pane asks where it goes (the cursor starts on Cancel). See Installing skills. Refused while a reply runs. |
 | `/speak [file [n] \| n]` | Read a text file from the working directory aloud as a reply; alone it resumes, a number starts from that sentence. |
 | `/splash` | Start a new conversation and show the splash screen. |
 | `/stt [on\|off]` | Toggle speech input. |
 | `/sys` | Show the system prompt and the tools sent to the model. |
-| `/test [id \| reasoning \| structured \| long \| all \| history]` | Run benchmark tests against the connected model and save the results; alone it lists the tests with their last verdicts. See [Benchmark tests](#benchmark-tests). |
+| `/test [id \| reasoning \| structured \| long \| all \| history]` | Run benchmark tests against the connected model and save the results; alone it lists the tests with their last verdicts. See Benchmark tests. |
 | `/theme [name]` | Switch the colour theme (the *Theme* setting). Mid-reply, it runs when the reply ends. |
 | `/timer [duration [name] \| stop <name> \| stop all]` | List the timers, start one (`10m`, `90s`, `1h30m`), or stop one. |
-| `/tools` | Switch the model's tools on or off and edit their settings (Web, Files, Shell, Ask, Claude, Home Assistant, Obsidian, ComfyUI, SQL, Git). |
+| `/tools` | Switch the model's tools on or off and edit their settings (Web, Files, Shell, Ask, Claude, Home Assistant, Print, Obsidian, ComfyUI, SQL, Git). |
 | `/tree [path]` | Print a tree of the working directory; hidden, system and dot entries only under *File browser/tree mode* `show-hidden`. |
 | `/tts [on\|off]` | Toggle speech output. |
 | `/usage` | Show token usage and performance statistics. |
 | `/vault [path]` | Print a tree of the *Obsidian vault* (or a folder in it), like `/tree`: dot-folders left out, capped by *File /tree max length*, sizes per *File /tree show sizes*. Fails if *Obsidian tools* is off, no vault is set, or the folder is unreachable or has no `.obsidian`. |
-| `/view <image or folder> [--chat]` | Open an image from the working directory in the [picture viewer](#picture-viewer), or a folder there on its newest picture. `--chat` (first or last word) draws it in the transcript instead. Works while a reply runs. |
-| `/imagine [workflow] <prompt> [-- <negative> \| --no-negative] [--seed N] [--size WxH] [--steps N] [--cfg X] [--denoise X] [--image <path>] [--image2 <path>] [--image3 <path>] [--count N]` | Generate a picture on ComfyUI from your own prompt, sent exactly as typed, with no model in between. See [Imagine options](#imagine-options). |
+| `/view <image or folder> [--chat]` | Open an image from the working directory in the picture viewer, or a folder there on its newest picture. `--chat` (first or last word) draws it in the transcript instead. Works while a reply runs. |
+| `/imagine [workflow] <prompt> [-- <negative> \| --no-negative] [--seed N] [--size WxH] [--steps N] [--cfg X] [--denoise X] [--image <path>] [--image2 <path>] [--image3 <path>] [--count N]` | Generate a picture on ComfyUI from your own prompt, sent exactly as typed, with no model in between. See Imagine options. |
 | `/comfy` | Show the ComfyUI server's status, the workflows found (family, input, size, placeholders), skipped files and where workflows go. |
 | `/comfy edit json <workflow>`, `/comfy edit markdown <workflow>` | Open a workflow's graph, or its `.md` (`md` works too; one is created with the family filled in), in your editor. |
-| `/comfy view` | Open the [picture viewer](#picture-viewer) on the output folder. Works while a reply runs. |
+| `/comfy view` | Open the picture viewer on the output folder. Works while a reply runs. |
 | `/comfy purge` | Permanently delete everything in the output folder, `.pasted` inputs included, after a yes/no (refused when it is the working directory). |
 | `/vocalia [reset \| copy <profile> [force]]` | The same as `/operata` for `vocalia.md` (the spoken-reply directive). |
 | `/wake [on\|off]` | Toggle the speech-input wake word. |
@@ -639,7 +652,7 @@ Type `/` to list every command with its summary; after a command and a space, it
 * **Cast**: the profiles named, or every profile when none is. This one always joins and speaks first.
 * **Topic**: a leading word that isn't a profile starts the topic (`/botchat ada max the best pizza`); after `--` the rest is always the topic (`/botchat ada -- max speed of light`). Without one, the bots pick their own.
 * **Turns**: each reply is in the speaker's persona (`persona.md`) and, with speech on, its own voice. A bot named in the last line (yours or the last reply) speaks next; otherwise the next speaker is random, but never the one who just spoke. All bots run on this profile's LLM, or each on its own under *Botchat LLM mode* `multi`.
-* **Tools**: none, except pictures (see [Botchat pictures](#botchat-pictures)) and `load_skill` (*Botchat skills enabled*).
+* **Tools**: none, except pictures (see Botchat pictures) and `load_skill` (*Botchat skills enabled*).
 * **Joining in**: a line you type joins the chat before the next reply.
 * **ESC**: the first press stops the speaking bot's voice (with speech on). The next cuts the replying bot short (its words so far stay) and the next bot answers. One more, before that bot has shown or said anything, ends the chat; a further ESC at the idle line clears your draft. `/exit`, `/clear` and `/new` end the chat, then run.
 * **Resume**: `/botchat --resume [line]` continues this run's last chat (same cast, topic, lines and session row); a line after it joins as yours.
@@ -741,7 +754,7 @@ Browsing in the viewer highlights the same picture in the ComfyUI picture strip,
 ## Tools
 [↑ Back to top](#neon-sidekick)
 
-What the model can call, in the groups `/tools` and `/sys` show. A group's switch (`File tools`, `Git native tools`, `Shell command policy`, `Obsidian tools`, `SQL tools`, `ComfyUI tools`, `Home Assistant tools`, `Claude advisor tool`, `Web tools`, `Memory`, `Agent skills`, `Session tool`, `Ask user`, `MCP servers`) offers or withholds the whole group; a single tool can be switched on or off on `/tools`' Offered tab.
+What the model can call, in the groups `/tools` and `/sys` show. A group's switch (`File tools`, `Git native tools`, `Shell command policy`, `Obsidian tools`, `SQL tools`, `ComfyUI tools`, `Home Assistant tools`, `Print tools`, `Claude advisor tool`, `Web tools`, `Memory`, `Agent skills`, `Session tool`, `Ask user`, `MCP servers`) offers or withholds the whole group; a single tool can be switched on or off on `/tools`' Offered tab.
 
 <details>
 <summary><b>🕒 Clock & Timers</b></summary>
@@ -946,6 +959,24 @@ The Home Assistant tools reach your own Home Assistant over its REST API with a 
 </details>
 
 <details>
+<summary><b>🖨️ Printing</b></summary>
+
+### Printing
+
+`/print` and the two print tools send work to any printer Windows has installed, local or shared.
+
+* **Drawn by the app.** Text and code files print as a monospace listing (tabs to four columns, long lines wrapped, a form feed starts a new page). Markdown (`.md`) prints formatted: headings bold and stepped in size, bold, italic and code runs, lists, quotes, code blocks, rules, links with their address, and tables cut to fit. A picture (PNG, JPEG, GIF, WebP, BMP) is fitted to one page, never enlarged past its own size. Every page carries the file's name, the time and *page N of M*, and keeps a 0.6-inch margin. The paper size, tray and quality are the printer's own settings.
+* **Anything else** (a PDF, a Word or Excel file) goes to the program Windows has registered to print it, on the Windows default printer only. A printer, copies, pages or landscape given with such a file is refused rather than ignored, and a type no program prints is refused.
+* **The policy.** Under `ask` (the default) the model's `print_file` shows the pane first with the file, the printer and the sheets; a no tells the model not to retry. See *Print action policy*.
+
+| Tool | Arguments | What it does |
+|---|---|---|
+| `list_printers` | — | The installed printers, marking the Windows default and *Print default printer*. Read-only: kept in plan mode. |
+| `print_file` | `path, printer?, copies?, pages?, landscape?` | Prints a file of the working directory as above: a printer by name (else *Print default printer*, else the Windows default), 1–10 copies, a page range such as `1-3`, `4-` or `1,3,5`, turned sideways. Dropped in plan mode. |
+
+</details>
+
+<details>
 <summary><b>🎨 Images (ComfyUI)</b></summary>
 
 ### Images (ComfyUI)
@@ -1055,7 +1086,7 @@ Import still expects a `CLIPTextEncode` prompt when there is a sampler. A Qwen-I
 
 ### Shell
 
-Runs commands on your machine, starting in the working directory (`workdir` picks a folder under it). *Shell command policy* and *Shell police outside paths* guard it (see [Shell guards](#shell-guards)). A denied command returns an error telling the model not to work around it.
+Runs commands on your machine, starting in the working directory (`workdir` picks a folder under it). *Shell command policy* and *Shell police outside paths* guard it (see Shell guards). A denied command returns an error telling the model not to work around it.
 
 * Child processes run hidden, with no window. Output is read as UTF-8, with colours and pagers turned off.
 * stdin is closed, except for background processes, which keep it open for `process` to write to.
@@ -1131,7 +1162,7 @@ Get-Content job.txt | NeonSidekick.exe --headless --profile work
 
 | Tool | Arguments | What it does |
 |---|---|---|
-| `present_plan` | `title, markdown, name?` | Offered only in [plan mode](#plan-mode). Saves the plan as `.neon/plans/<name>.md` (kebab-cased; the first presentation fixes the file, revisions overwrite it) with a `status` / `revision` / `requirement` header, prints it and asks for approval. The result is your verdict: approved, changes wanted (with your words), or cancelled. Headless, it is saved and `/plan approve` starts it. `status` is `draft`, `approved`, `cancelled`, `done` or `incomplete`. |
+| `present_plan` | `title, markdown, name?` | Offered only in plan mode. Saves the plan as `.neon/plans/<name>.md` (kebab-cased; the first presentation fixes the file, revisions overwrite it) with a `status` / `revision` / `requirement` header, prints it and asks for approval. The result is your verdict: approved, changes wanted (with your words), or cancelled. Headless, it is saved and `/plan approve` starts it. `status` is `draft`, `approved`, `cancelled`, `done` or `incomplete`. |
 
 </details>
 

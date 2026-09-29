@@ -40,6 +40,10 @@ public sealed class SidekickApp
     public static readonly string HeadlessNoAssistantReply =
         $"[error] No LLM endpoint. Set {EnvironmentOverrides.LlmUrlVariable} and restart.";
 
+    /// <summary>The last reply in <paramref name="messages"/> (headless <c>/print reply</c>, 2026-09-28): the newest assistant message with text, or null.</summary>
+    public static string? LastReplyText(IEnumerable<ChatMessage>? messages) =>
+        messages?.LastOrDefault(m => m.Role == ChatRole.Assistant && !string.IsNullOrWhiteSpace(m.Text))?.Text;
+
     private const string Category = "App";
     private const string HeadlessReplyPrefix = "Neon: ";
 
@@ -71,6 +75,7 @@ public sealed class SidekickApp
     private readonly Func<Mcp.McpServerConfig, string, ModelContextProtocol.Client.IClientTransport> _mcpTransport;
     private readonly Func<Uri, Comfy.ComfyClient>? _comfyClient;
     private readonly Func<Uri, string, HomeAssistant.HaClient>? _haClient;
+    private readonly Printing.IPrintSpooler _printSpooler;
     private readonly Claude.IClaudeCli? _claude;
     private readonly Action<string>? _openViewer;
     private readonly Action<string>? _viewPicture;
@@ -153,8 +158,11 @@ public sealed class SidekickApp
         Action<string>? viewPicture = null,
         ServerSamplingProbe? samplingProbe = null,
         Func<Uri, string, HomeAssistant.HaClient>? haClient = null,
-        Action<string>? followViewer = null)
+        Action<string>? followViewer = null,
+        Printing.IPrintSpooler? printSpooler = null)
     {
+        // The printers (2026-09-28): winspool and GDI in the app on Windows; none in tests, so nothing reaches a real printer.
+        _printSpooler = printSpooler ?? Printing.NullPrintSpooler.Instance;
         // The /sampling pane's server defaults (2026-09-28): a real HttpClient in the app, like the context probe; tests pass one over a stub.
         _samplingProbe = samplingProbe ?? new ServerSamplingProbe(new HttpClient());
         // The picture viewer (2026-09-27): PictureWindow.Open in the app on Windows, null in tests and elsewhere.
@@ -489,6 +497,9 @@ public sealed class SidekickApp
         // The Home Assistant tools (2026-09-28): no pane to ask on, so an asked call is refused; the policy's safe list runs.
         using var ha = new HomeAssistant.HaSession(() => EffectiveSettings, _haClient, _time);
         var haTools = ChatScreen.HomeAssistantTools(ha, confirm: null);
+        // The print tools (2026-09-28): no pane to ask on, so under ask (the default) the model's print is refused; /print works.
+        var print = new Printing.PrintService(_printSpooler, files, () => EffectiveSettings, _time);
+        var printTools = ChatScreen.PrintTools(print, confirm: null);
         // The shell tools (2026-09-21): headless has no pane to ask on, so the gate has no asker — under ask the
         // allow list alone decides, and NEONSIDEKICK_COMMAND_POLICY=yolo is how a scripted run says yes.
         var interpreters = new Shell.Interpreters(_environment.System);
@@ -649,6 +660,18 @@ public sealed class SidekickApp
                     continue;
                 }
 
+                // /print (2026-09-28): ahead of the server check too — only /print reply needs a reply to print.
+                if (SlashCommands.Parse(text) is (SlashCommand.Print, var printArgs))
+                {
+                    var printResult = await Printing.PrintCommand.RunAsync(print, printArgs, () => LastReplyText(assistant?.History.Messages), cancellationToken).ConfigureAwait(false);
+                    foreach (string printLine in printResult.Lines)
+                    {
+                        await HeadlessLineAsync((printResult.Failed ? "[error] " : "") + printLine).ConfigureAwait(false);
+                    }
+
+                    continue;
+                }
+
                 // /test (2026-09-28): ahead of the server check, since the listing and the saved runs need no LLM; a run refuses without one.
                 if (SlashCommands.Parse(text) is (SlashCommand.Test, var testArgs))
                 {
@@ -711,7 +734,7 @@ public sealed class SidekickApp
                 }
 
                 // Per turn, as the screen does: a memory saved in this turn is in the next one's prompt.
-                ChatScreen.PrepareTurn(assistant, memory, memoryTools, standingTools, persona, operata, vocalia, EffectiveSettings.Memory, speechOutput: false, EffectiveSettings.LlmMaxToolIterations, EffectiveSettings.LlmOfferTools, webTools, EffectiveSettings.WebTools, ChatScreen.ContextGuardFor(EffectiveSettings, session.ContextLength), fileTools, EffectiveSettings.FileTools, skills: skills with { Enabled = EffectiveSettings.AgentSkills, External = EffectiveSettings.AgentSkills && EffectiveSettings.ExternalSkills }, sessionTools: sessionTools, sessionsEnabled: EffectiveSettings.SessionTool, disabledTools: ToolsText.DisabledSet(EffectiveSettings.ToolsDisabled), mcpTools: mcp.Tools, mcpEnabled: EffectiveSettings.McpServers, safeEdits: EffectiveSettings.FileSafeEdits, gitTools: gitTools, gitEnabled: EffectiveSettings.GitNativeTools, shellTools: shellTools, shellEnabled: ChatScreen.ShellOffered(EffectiveSettings), processes: processes, shellBridge: EffectiveSettings.ShellToolBridge, shellPolice: EffectiveSettings.ShellPoliceOutsidePaths, obsidianTools: ChatScreen.ObsidianToolsFor(vaultTools, EffectiveSettings), obsidianEnabled: ChatScreen.ObsidianOffered(EffectiveSettings), sqlTools: sqlTools, sqlEnabled: ChatScreen.SqlOffered(EffectiveSettings, sql), comfyTools: comfyTools, comfyEnabled: ChatScreen.ComfyOffered(EffectiveSettings, comfy), shellNative: EffectiveSettings.ShellPreferNative, plan: plan.Turn(presentPlan), advisorTools: advisorTools, advisorEnabled: EffectiveSettings.ClaudeAdvisor, preserveThinking: EffectiveSettings.LlmPreserveThinking, sampling: LlmSampling.Resolve(EffectiveSettings, session.Endpoint?.ModelId), homeTools: haTools, homeEnabled: ChatScreen.HomeAssistantOffered(EffectiveSettings));
+                ChatScreen.PrepareTurn(assistant, memory, memoryTools, standingTools, persona, operata, vocalia, EffectiveSettings.Memory, speechOutput: false, EffectiveSettings.LlmMaxToolIterations, EffectiveSettings.LlmOfferTools, webTools, EffectiveSettings.WebTools, ChatScreen.ContextGuardFor(EffectiveSettings, session.ContextLength), fileTools, EffectiveSettings.FileTools, skills: skills with { Enabled = EffectiveSettings.AgentSkills, External = EffectiveSettings.AgentSkills && EffectiveSettings.ExternalSkills }, sessionTools: sessionTools, sessionsEnabled: EffectiveSettings.SessionTool, disabledTools: ToolsText.DisabledSet(EffectiveSettings.ToolsDisabled), mcpTools: mcp.Tools, mcpEnabled: EffectiveSettings.McpServers, safeEdits: EffectiveSettings.FileSafeEdits, gitTools: gitTools, gitEnabled: EffectiveSettings.GitNativeTools, shellTools: shellTools, shellEnabled: ChatScreen.ShellOffered(EffectiveSettings), processes: processes, shellBridge: EffectiveSettings.ShellToolBridge, shellPolice: EffectiveSettings.ShellPoliceOutsidePaths, obsidianTools: ChatScreen.ObsidianToolsFor(vaultTools, EffectiveSettings), obsidianEnabled: ChatScreen.ObsidianOffered(EffectiveSettings), sqlTools: sqlTools, sqlEnabled: ChatScreen.SqlOffered(EffectiveSettings, sql), comfyTools: comfyTools, comfyEnabled: ChatScreen.ComfyOffered(EffectiveSettings, comfy), shellNative: EffectiveSettings.ShellPreferNative, plan: plan.Turn(presentPlan), advisorTools: advisorTools, advisorEnabled: EffectiveSettings.ClaudeAdvisor, preserveThinking: EffectiveSettings.LlmPreserveThinking, sampling: LlmSampling.Resolve(EffectiveSettings, session.Endpoint?.ModelId), homeTools: haTools, homeEnabled: ChatScreen.HomeAssistantOffered(EffectiveSettings), printTools: printTools, printEnabled: ChatScreen.PrintOffered(EffectiveSettings));
                 var turn = await RunHeadlessTurnAsync(session, assistant, text, cancellationToken).ConfigureAwait(false);
                 if (plan.Active && plan.Path is { } planPath && plan.Revision > planState.RevisionShown)
                 {
@@ -1481,7 +1504,7 @@ public sealed class SidekickApp
         // on the row and hands it back to the terminal otherwise, so the terminal's own selection
         // and right-click copy work whenever there is nothing to click into.
         var mouse = _input as WindowsConsoleInput;
-        var screen = new ChatScreen(_console, _settings, () => EffectiveSettings, OverriddenBy, session, speech, new KeySource(_input ?? _console.Input), voice, PersonaFile.OpenInEditor, RenderScreen, _time, _geometry, _clipboard, mouse is null ? null : mouse.Capture, _copyToClipboard, clipboardImage: _clipboardImage, web: _web, setTitle: _setTitle, externalSkills: _externalSkills, holdWheel: mouse is null ? null : mouse.HoldWheel, splash: SplashImages.Source, editDraft: PersonaFile.EditAndWaitAsync, mcp: mcp, environment: _environment.System, logFile: _options.LogPath is { } logPath ? Path.GetFullPath(logPath) : null, comfyClient: _comfyClient, openImage: PersonaFile.OpenImage, claude: _claude, openViewer: _openViewer, viewPicture: _viewPicture, followViewer: _followViewer, haClient: _haClient);
+        var screen = new ChatScreen(_console, _settings, () => EffectiveSettings, OverriddenBy, session, speech, new KeySource(_input ?? _console.Input), voice, PersonaFile.OpenInEditor, RenderScreen, _time, _geometry, _clipboard, mouse is null ? null : mouse.Capture, _copyToClipboard, clipboardImage: _clipboardImage, web: _web, setTitle: _setTitle, externalSkills: _externalSkills, holdWheel: mouse is null ? null : mouse.HoldWheel, splash: SplashImages.Source, editDraft: PersonaFile.EditAndWaitAsync, mcp: mcp, environment: _environment.System, logFile: _options.LogPath is { } logPath ? Path.GetFullPath(logPath) : null, comfyClient: _comfyClient, openImage: PersonaFile.OpenImage, claude: _claude, openViewer: _openViewer, viewPicture: _viewPicture, followViewer: _followViewer, haClient: _haClient, printSpooler: _printSpooler);
         if (mouse is not null)
         {
             mouse.ModeChanged = screen.FlushConsole;

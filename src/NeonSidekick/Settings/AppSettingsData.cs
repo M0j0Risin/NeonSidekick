@@ -1694,4 +1694,30 @@ public sealed class AppSettingsData
     public const int MinHomeAssistantTimeoutSeconds = 2;
     public const int MaxHomeAssistantTimeoutSeconds = 60;
     public const int DefaultHomeAssistantTimeoutSeconds = 10;
+
+    // ─── Printing (2026-09-28) ──────────────────────────────────────────────────
+    // /print and print_file (2026-09-28, the user's ask: send a file to a printer; the app draws text, markdown and pictures
+    // itself, anything else goes to its own program; the model's prints ask first).
+
+    /// <summary>
+    /// Whether a turn offers <c>print_file</c> and <c>list_printers</c> (2026-09-28). Off by default: printing spends paper, and a
+    /// profile opts in. <c>/print</c> works either way. The Print tab of <c>/tools</c>. No variable.
+    /// </summary>
+    public bool PrintTools { get; set; }
+
+    /// <summary>
+    /// What the model may print (2026-09-28, the user's call): one of <see cref="Printing.PrintPolicy.Names"/> — <c>off</c> (list
+    /// the printers only), <c>ask</c> (the default: every print waits for the user's yes on the pane; headless refuses it),
+    /// <c>allow</c> (it prints). Anything else reads as <c>ask</c>. <c>/print</c> is never judged. No variable.
+    /// </summary>
+    public string PrintActionPolicy { get; set; } = Printing.PrintPolicy.Default;
+
+    /// <summary>The printer a print goes to when none is named (2026-09-28); empty = the Windows default. No variable.</summary>
+    public string PrintDefaultPrinter { get; set; } = "";
+
+    /// <summary>
+    /// The body size in points a listing or a markdown file prints at (2026-09-28): <see cref="Printing.PrintLayout.MinFontSize"/>
+    /// to <see cref="Printing.PrintLayout.MaxFontSize"/>; headings scale from it. No variable.
+    /// </summary>
+    public int PrintFontSize { get; set; } = Printing.PrintLayout.DefaultFontSize;
 }
