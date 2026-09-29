@@ -159,7 +159,7 @@ public sealed class WindowsConsoleInput : IAnsiConsoleInput, IInputEvents, IDisp
         }
     }
 
-    public bool NextIsMouse => _events.Reader.TryPeek(out var e) && e is InputEvent.Click or InputEvent.Drag or InputEvent.Wheel;
+    public bool NextIsMouse => _events.Reader.TryPeek(out var e) && e is InputEvent.Click or InputEvent.Drag or InputEvent.Release or InputEvent.Wheel;
 
     public InputEvent? Read() => _events.Reader.TryRead(out var e) ? e : null;
 

@@ -100,6 +100,11 @@ public sealed partial class InputLine
         private bool _walking;
         // The last event was an empty Delete that emptyDelete spent (2026-09-24): the next one's repeat flag.
         private bool _deleteSpent;
+        // A picture dragged toward the line (2026-09-28): the id a left press on a picture caught (−1 = none), the cell
+        // it was pressed at, and whether a drag has left that cell yet (the hint row says so while it has).
+        private int _pressedPicture = -1;
+        private (int X, int Y) _pressedAt;
+        private bool _draggingPicture;
         // The completion list (@-mention, command, argument, #skill, $tool, %connection, ^workflow): open while `_list` is
         // set; `_dismissed` is the word ESC closed it on, so a cursor move over the same word does not bring it straight back.
         private MentionList? _list;
@@ -284,6 +289,19 @@ public sealed partial class InputLine
             ArgumentNullException.ThrowIfNull(input);
             var pane = _line._pane;
             var hintClicks = _line._hintClicks;
+            if (input is InputEvent.Release release)
+            {
+                // The left button let go (2026-09-28): the drop of a picture dragged here, else nothing. It ends no pair
+                // and moves no cursor — it falls between the two presses of every double-click.
+                return await DropAsync(release).ConfigureAwait(false);
+            }
+
+            if (input is not (InputEvent.Drag or InputEvent.Click))
+            {
+                // A key, a paste or a wheel notch ends a picture's drag whose release never came (the pointer left the window).
+                EndPictureDrag();
+            }
+
             if (input is not InputEvent.Key)
             {
                 _goalCol = -1;
@@ -333,6 +351,19 @@ public sealed partial class InputLine
 
             if (input is InputEvent.Drag drag)
             {
+                if (_pressedPicture >= 0)
+                {
+                    // A picture on its way to the line (2026-09-28): the first move off the pressed cell puts the hint
+                    // up; the draft, the cursor and the pairs are left alone until the release.
+                    if (!_draggingPicture && (drag.X, drag.Y) != _pressedAt)
+                    {
+                        _draggingPicture = true;
+                        pane.SetDragHint(DropOnLineHint);
+                    }
+
+                    return EditOutcome.Handled;
+                }
+
                 // The button is still down from a click on the area: the cursor follows, the anchor
                 // stays. Off the rows, or after a click that missed, the drag is nothing.
                 if (_anchor >= 0 && pane.TryHitInput(drag.X, drag.Y, out int to))
@@ -794,6 +825,7 @@ public sealed partial class InputLine
         {
             var pane = _line._pane;
             var hintClicks = _line._hintClicks;
+            EndPictureDrag();
             // A left click on the area puts the cursor under it and anchors a selection there
             // (a drag extends it); a right click pastes there, over the selection if any.
             // Neither is typing: the draft, the history and the push-to-talk rule see nothing.
@@ -812,6 +844,14 @@ public sealed partial class InputLine
                 _anchor = _cursor;
                 Redraw();
                 return EditOutcome.Handled;
+            }
+
+            if (_o.Multiline && !_o.Mask && _line.PictureFile is not null && pane.PictureAt(click.X, click.Y) is int pressed)
+            {
+                // A press on a picture — a strip tile or one in the transcript — may start a drag onto the line
+                // (2026-09-28); the click itself goes on to its pairing below (or the watcher's, under a reply) as ever.
+                _pressedPicture = pressed;
+                _pressedAt = (click.X, click.Y);
             }
 
             if (_o.Live)
@@ -946,15 +986,21 @@ public sealed partial class InputLine
         // A picture off the clipboard becomes one image token at the cursor, read like a dropped
         // file (off the thread, the hint row busy) and numbered with them; one that cannot be
         // attached is one notice and nothing on the line — there is no path to leave behind.
-        private async Task InsertClipboardImageAsync(byte[] picture)
+        private Task InsertClipboardImageAsync(byte[] picture) =>
+            InsertImageAsync(null, picture, ImageFile.ClipboardName(_line._pastes.ImageCount + 1));
+
+        // One picture as one image token at the cursor, read off the thread with the hint row busy: a file as a dropped
+        // one is read and kept by its path, else bytes as a clipboard picture's are, kept beside it (later still on
+        // 2026-09-24: generate_image's input at full size). One that cannot be attached is one notice and nothing on the
+        // line. The clipboard's picture and a picture dragged off the screen (2026-09-28) share it.
+        private async Task InsertImageAsync(string? path, byte[] bytes, string name)
         {
             var pastes = _line._pastes;
             string? error = null;
-            string name = ImageFile.ClipboardName(pastes.ImageCount + 1);
             ImageAttachment? image;
             using (_line._pane.BeginBusy(ReadingImage))
             {
-                image = await Task.Run(() => ImageFile.Load(picture, name, out error)).ConfigureAwait(false);
+                image = await Task.Run(() => path is not null ? ImageFile.Load(path, out error) : ImageFile.Load(bytes, name, out error)).ConfigureAwait(false);
             }
 
             if (image is null)
@@ -967,8 +1013,37 @@ public sealed partial class InputLine
                 return;
             }
 
-            // The clipboard's own bytes kept beside it (later still on 2026-09-24): generate_image's input at full size.
-            Insert(pastes.AddImage(image, original: picture).ToString());
+            Insert((path is not null ? pastes.AddImage(image, sourcePath: path) : pastes.AddImage(image, original: bytes)).ToString());
+        }
+
+        // The left button let go (2026-09-28): a picture dragged off the strip or the transcript and let go on the input
+        // rows lands at the cursor as if its file had been dropped on the window (or, with no file, as a clipboard
+        // picture); let go anywhere else, or with no drag under way, it is nothing. The drag ends either way.
+        private async ValueTask<EditOutcome> DropAsync(InputEvent.Release release)
+        {
+            int id = _pressedPicture;
+            bool dragging = _draggingPicture;
+            EndPictureDrag();
+            if (!dragging || !_line._pane.TryHitInput(release.X, release.Y, out _) || _line.PictureFile?.Invoke(id) is not { } picture)
+            {
+                return EditOutcome.Handled;
+            }
+
+            // The press that started the drag was a first click on the picture: a drop is no half of a double-click.
+            _line._hintClicks.Reset();
+            await InsertImageAsync(picture.Path, picture.Bytes, picture.Name).ConfigureAwait(false);
+            return EditOutcome.Handled;
+        }
+
+        // A picture's drag over: the press forgotten and the hint row given back.
+        private void EndPictureDrag()
+        {
+            _pressedPicture = -1;
+            if (_draggingPicture)
+            {
+                _draggingPicture = false;
+                _line._pane.SetDragHint(null);
+            }
         }
 
         // What a paste becomes on the line, in place of the selection: the chat line keeps the

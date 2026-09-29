@@ -436,10 +436,11 @@ public sealed class MenuPane : INoticeSink
                     continue;
                 }
 
-                if (input is InputEvent.Drag or InputEvent.Paste)
+                if (input is InputEvent.Drag or InputEvent.Release or InputEvent.Paste)
                 {
                     // A drag is the line's business (a jiggle between the two presses of a
-                    // double-click keeps the pair), a paste has no slot to land in here.
+                    // double-click keeps the pair, as does the release between them — an event
+                    // since 2026-09-28), a paste has no slot to land in here.
                     continue;
                 }
 

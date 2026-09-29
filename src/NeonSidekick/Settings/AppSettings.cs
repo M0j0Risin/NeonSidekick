@@ -623,6 +623,8 @@ public sealed class AppSettings : IDisposable
         DraftEditor = source.DraftEditor,
         ImageEditor = source.ImageEditor,
         ThemedViewer = source.ThemedViewer,
+        ViewerLeft = source.ViewerLeft,
+        ViewerTop = source.ViewerTop,
         HideExitAutocomplete = source.HideExitAutocomplete,
         ImageThumbnailSize = source.ImageThumbnailSize,
         Memory = source.Memory,

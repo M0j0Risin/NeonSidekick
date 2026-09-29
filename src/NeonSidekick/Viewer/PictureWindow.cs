@@ -37,6 +37,24 @@ public static class PictureWindow
     /// </summary>
     public static Action<string>? Browsed { get; set; }
 
+    /// <summary>
+    /// Where the window was when it last closed (2026-09-28, the user's ask: "remember the screen position where it was last
+    /// closed so it opens there the next time"; position only, the size stays <see cref="DefaultWidth"/> ×
+    /// <see cref="DefaultHeight"/>): the top-left corner of its restored placement, in workspace coordinates — the pair
+    /// <c>GetWindowPlacement</c> / <c>SetWindowPlacement</c> keeps, so the round trip is exact and Windows itself brings a
+    /// corner left on a monitor that is gone back onto one. Asked on the window's thread as a new window is made; null
+    /// (or nothing supplied) is Windows' own default place. The app supplies it (<c>Program</c>, over the settings).
+    /// </summary>
+    public static Func<(int X, int Y)?>? Position { get; set; }
+
+    /// <summary>
+    /// Told the corner <see cref="Position"/> will answer next, on the window's thread as it closes (Esc, the ×, Alt+F4, the
+    /// app's own <see cref="CloseAll"/>): the restored placement's even when it closes maximized, minimized or full screen
+    /// (then the window it was before F11). It must not block. The app supplies it (<c>Program</c>: the profile's
+    /// <c>ViewerLeft</c> / <c>ViewerTop</c>); nothing until then.
+    /// </summary>
+    public static Action<int, int>? Placed { get; set; }
+
     /// <summary>Whether a window can be opened here at all: Windows only.</summary>
     public static bool IsAvailable => OperatingSystem.IsWindows();
 
@@ -372,6 +390,8 @@ internal sealed unsafe class PictureWindowThread
                 return;
             }
 
+            // Where it last closed first (2026-09-28), so the size below is the DPI of the monitor it opens on.
+            RestorePosition();
             uint dpi = Math.Max(96u, GetDpiForWindow(_hwnd));
             SetWindowPos(_hwnd, HwndTop, 0, 0, (int)(DefaultWidth * dpi / 96), (int)(DefaultHeight * dpi / 96), SwpNoMove | SwpNoZOrder | SwpNoActivate);
             ApplyStyle();   // before it is shown: the bar is never light first
@@ -529,6 +549,7 @@ internal sealed unsafe class PictureWindowThread
 
                 return IntPtr.Zero;
             case WmClose:
+                RememberPosition();
                 DestroyWindow(hwnd);
                 return IntPtr.Zero;
             case WmDestroy:
@@ -917,6 +938,65 @@ internal sealed unsafe class PictureWindowThread
         }
 
         InvalidateRect(_hwnd, null, false);
+    }
+
+    // The window, not yet shown, moved to where the last one closed (PictureWindow.Position): its placement's restored
+    // rectangle carried to the corner at its own size, the show state left hidden for the ShowWindow that follows.
+    // SetWindowPlacement keeps a window that would land off every monitor on one, so a corner saved on a monitor since
+    // unplugged still opens in view.
+    private void RestorePosition()
+    {
+        (int X, int Y)? at;
+        try
+        {
+            at = PictureWindow.Position?.Invoke();
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            DiagnosticLog.Warn("Viewer", $"Could not read the viewer's last position: {ex.Message}");
+            return;
+        }
+
+        var placement = new WindowPlacement { length = (uint)sizeof(WindowPlacement) };
+        if (at is not { } corner || !GetWindowPlacement(_hwnd, &placement))
+        {
+            return;
+        }
+
+        var r = placement.rcNormalPosition;
+        placement.rcNormalPosition = new Rect { Left = corner.X, Top = corner.Y, Right = corner.X + (r.Right - r.Left), Bottom = corner.Y + (r.Bottom - r.Top) };
+        placement.flags = 0;
+        placement.showCmd = (uint)SwHide;
+        SetWindowPlacement(_hwnd, &placement);
+    }
+
+    // Where the window is as it closes, for the next one (PictureWindow.Placed): the restored placement's corner — the one
+    // saved before F11 when it is full screen — never the maximized or minimized frame.
+    private void RememberPosition()
+    {
+        if (PictureWindow.Placed is not { } placed)
+        {
+            return;
+        }
+
+        var placement = _savedPlacement;
+        if (!_fullScreen)
+        {
+            placement = new WindowPlacement { length = (uint)sizeof(WindowPlacement) };
+            if (!GetWindowPlacement(_hwnd, &placement))
+            {
+                return;
+            }
+        }
+
+        try
+        {
+            placed(placement.rcNormalPosition.Left, placement.rcNormalPosition.Top);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            DiagnosticLog.Warn("Viewer", $"Could not keep the viewer's position: {ex.Message}");
+        }
     }
 
     // Borderless over the whole monitor and back to the placement it had (FolderPictureViewer's F11).

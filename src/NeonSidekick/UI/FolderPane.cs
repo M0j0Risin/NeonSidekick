@@ -156,9 +156,10 @@ public sealed class FolderPane
                     continue;
                 }
 
-                if (input is InputEvent.Drag or InputEvent.Paste)
+                if (input is InputEvent.Drag or InputEvent.Release or InputEvent.Paste)
                 {
-                    // A jiggle between the two presses of a double-click keeps the pair; a paste has nowhere to land.
+                    // A jiggle between the two presses of a double-click keeps the pair, as does the release between
+                    // them (2026-09-28, the button's release became an event); a paste has nowhere to land.
                     continue;
                 }
 

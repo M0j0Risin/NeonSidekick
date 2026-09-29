@@ -96,19 +96,21 @@ public class ScreenPaneTests : IDisposable
 
     /// <summary>
     /// The picture strip's rule (2026-09-28, the user's layout): the viewer's button at the left and the close × at the
-    /// right, a space cell either side of each; no button, the × alone; too narrow, the button goes, then the ×.
+    /// right, the button right after the rule's first glyph with a space cell at its right (the space at its left went
+    /// later that day, the user's screenshot), a space cell either side of the ×; no button, the × alone; too narrow, the
+    /// button goes, then the ×.
     /// </summary>
     [Fact]
     public void StripRule_IsPinned()
     {
         const string film = "\U0001F39E️";
         var parts = ScreenPane.StripRule(film, 40);
-        Assert.Equal("─ " + film + " " + Rule(31) + " × ─", parts.Text);
+        Assert.Equal("─" + film + " " + Rule(32) + " × ─", parts.Text);
         Assert.Equal(40, TextCells.Width(parts.Text));
-        Assert.Equal((2, 37), (parts.ButtonColumn, parts.CloseColumn));
+        Assert.Equal((1, 37), (parts.ButtonColumn, parts.CloseColumn));
         Assert.Equal((film, "×"), (parts.Button, parts.Close));
-        Assert.EndsWith(" ", parts.Lead);        // a space cell left of the glyph…
-        Assert.StartsWith(" ", parts.Fill);      // …and right of it
+        Assert.Equal("─", parts.Lead);           // no space cell left of the glyph…
+        Assert.StartsWith(" ", parts.Fill);      // …one right of it
         Assert.EndsWith(" ", parts.Fill);        // a space either side of the ×
         Assert.StartsWith(" ", parts.Tail);
 
@@ -116,8 +118,8 @@ public class ScreenPaneTests : IDisposable
         Assert.Equal(-1, ScreenPane.StripRule("", 40).ButtonColumn);
         Assert.Equal(36 + 1, ScreenPane.StripRule("", 40).CloseColumn);
 
-        Assert.Equal("─ " + film + " ─ × ─", ScreenPane.StripRule(film, 10).Text);   // one rule glyph between: the least
-        Assert.Equal(Rule(5) + " × ─", ScreenPane.StripRule(film, 9).Text);         // none: the button goes
+        Assert.Equal("─" + film + " ─ × ─", ScreenPane.StripRule(film, 9).Text);    // one rule glyph between: the least
+        Assert.Equal(Rule(4) + " × ─", ScreenPane.StripRule(film, 8).Text);         // none: the button goes
         Assert.Equal("─ × ─", ScreenPane.StripRule(film, 5).Text);
         var bare = ScreenPane.StripRule(film, 4);
         Assert.Equal((Rule(4), -1, -1), (bare.Text, bare.ButtonColumn, bare.CloseColumn));

@@ -87,6 +87,18 @@ public sealed class AppSettingsData
     public bool ThemedViewer { get; set; } = true;
 
     /// <summary>
+    /// Where the built-in picture viewer last closed (2026-09-28, the user's ask: it opens there the next time; position
+    /// only, always on — the user's calls): the top-left corner of its restored placement in workspace coordinates, set by
+    /// the viewer itself as it closes (<see cref="Viewer.PictureWindow.Placed"/>), never by a menu row. Null, as until the
+    /// first close, is Windows' own default place; a corner on a monitor since unplugged is brought back into view by
+    /// Windows as the window opens. No variable.
+    /// </summary>
+    public int? ViewerLeft { get; set; }
+
+    /// <summary>The top of that corner; see <see cref="ViewerLeft"/>. Either one null and the viewer opens where Windows puts it.</summary>
+    public int? ViewerTop { get; set; }
+
+    /// <summary>
     /// Whether the <c>/</c> completion list leaves <c>/exit</c> out (on by default, 2026-09-18) so a
     /// pick never ends the app by mistake; typed in full it exits as ever. Read at each keystroke. No variable.
     /// </summary>

@@ -286,9 +286,9 @@ public sealed class InfoPane
                         next = hit;
                     }
                 }
-                else if (input is InputEvent.Drag)
+                else if (input is InputEvent.Drag or InputEvent.Release)
                 {
-                    // A jiggle between the two presses of a double-click keeps the pair.
+                    // A jiggle between the two presses of a double-click keeps the pair, as does the release between them.
                     continue;
                 }
                 else if (input is InputEvent.Wheel wheel)

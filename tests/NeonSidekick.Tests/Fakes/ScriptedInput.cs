@@ -81,6 +81,13 @@ public sealed class ScriptedInput : IAnsiConsoleInput, IInputEvents
         return this;
     }
 
+    /// <summary>The left button let go at buffer cell (<paramref name="x"/>, <paramref name="y"/>) (2026-09-28, a drop), queued in order with the keys.</summary>
+    public ScriptedInput PushRelease(int x, int y)
+    {
+        _events.Enqueue(new InputEvent.Release(x, y));
+        return this;
+    }
+
     /// <summary>The wheel turned <paramref name="notches"/> (positive = up, away from the user) at buffer cell (<paramref name="x"/>, <paramref name="y"/>), queued in order with the keys.</summary>
     public ScriptedInput PushWheel(int notches, int x = 0, int y = 0)
     {
@@ -104,7 +111,7 @@ public sealed class ScriptedInput : IAnsiConsoleInput, IInputEvents
         }
     }
 
-    public bool NextIsMouse => _events.Count > 0 && _events.Peek() is InputEvent.Click or InputEvent.Drag or InputEvent.Wheel;
+    public bool NextIsMouse => _events.Count > 0 && _events.Peek() is InputEvent.Click or InputEvent.Drag or InputEvent.Release or InputEvent.Wheel;
 
     public InputEvent? Read()
     {

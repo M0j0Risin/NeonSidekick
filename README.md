@@ -68,6 +68,7 @@ Neon Sidekick brings privacy-first, local LLM inference to your terminal. Powere
 
 **Input line**
 * The input row is always a full editor, even while a reply streams or `/botchat` runs: ←/→, Home/End, Delete, Shift+arrows or Ctrl+A to select, Ctrl+C / Ctrl+X to copy / cut, right-click or Alt+V to paste, click to place the cursor, ↑/↓ for history, and the `/`, `@`, `#`, `$`, `%` and `^` lists.
+* Drag a picture from the ComfyUI picture strip or the transcript onto the input row to attach it, as if you had dropped its file from the desktop (a picture with no file goes in as a pasted one). The hint row reads **🖼️ drop on line** while you drag, and letting go anywhere else attaches nothing. It works while a reply runs too.
 * Enter while a reply runs queues the message. Nothing typed is lost, and a draft left on the row stays there after the reply ends.
 * ESC while a reply runs stops the speech first, then closes an open list, then cancels the reply. It never clears your draft; ESC at the idle line does.
 
@@ -460,7 +461,7 @@ The services that run without asking under `ask` can be changed in `profile.json
 | ComfyUI max pictures per call | The most pictures one `generate_image` call or `/imagine --count` makes (1–16). Each is a full job, and all of them go to the model in the next request, where a local vision server has its own limit. | 5 |
 | ComfyUI reinforce negatives | When the model writes the prompt, it also adds a few opposite tags where the image model tends to drift (a solo figure → `multiple girls`, night → `daylight`) to the workflow's negative. Skipped for a verbatim prompt, a negative set for the call, `/imagine`, families without a negative (Flux, FLUX.2, Klein, Krea 2, Z-Image, Ernie Turbo, Boogu, Ideogram 4) and a workflow whose `.md` says `reinforce: false`. | on |
 | ComfyUI show prompts | Shows what was sent under each picture: the `prompt:`, the `negative:` and a `params:` line (size, steps, cfg, denoise, seed, sampler, scheduler). Off, only the picture's line. The model sees the same either way. | on |
-| ComfyUI picture strip | Keeps the session's ComfyUI pictures as thumbnails in a strip over the input line, newest at the left. With the input line empty, ←/→ highlight one and Enter opens it, a reply running or not; a double-click opens any. The **🎞️** at the left of the strip's rule opens the picture viewer on the output folder; the **×** at its right hides the strip until the next picture (turn this setting off to keep it hidden). `/clear`, `/new` and a session switch empty it; it hides while a menu is open or the window is too short. | on |
+| ComfyUI picture strip | Keeps the session's ComfyUI pictures as thumbnails in a strip over the input line, newest at the left. With the input line empty, ←/→ highlight one and Enter opens it, a reply running or not; a double-click opens any, and dragging one onto the input row attaches it to your message. The **🎞️** at the left of the strip's rule opens the picture viewer on the output folder; the **×** at its right hides the strip until the next picture (turn this setting off to keep it hidden). `/clear`, `/new` and a session switch empty it; it hides while a menu is open or the window is too short. | on |
 | ComfyUI picture strip sync | Whether the strip and the picture viewer follow each other. `viewer-only`: browsing in the viewer (←/→, Home/End, the next picture after a delete) highlights the same picture in the strip; a picture the strip doesn't hold is ignored, and the slide show and newly arriving pictures leave the strip alone. `both-ways`: that, plus ←/→ on the strip move an open viewer on the strip's folder without bringing it to the front. `disabled`: neither. | `viewer-only` |
 | ComfyUI output folder | The folder under the working directory the pictures are saved in (`comfy_images\pony-txt2img-1234.png`); empty = the working directory itself. | `comfy_images` |
 
@@ -737,6 +738,8 @@ A picture window (Windows only; elsewhere the app registered for the file opens 
 | Esc | Stop the slide show, then leave full screen, then close |
 
 The window follows the theme unless *Themed image viewer* is off: a dark title bar in the theme's colours with an accent edge on Windows 11 (Windows 10 gets a plain dark bar), and the theme's background. A `/theme` change reaches an open viewer the next time it is focused. There is one window per app, and it closes with the app.
+
+The viewer opens where it was last closed; the size is always the default. It remembers the window's normal position even when you close it maximized or in full screen. The position is saved in the profile. If that spot is no longer on any monitor, Windows moves the window back into view.
 
 Browsing in the viewer highlights the same picture in the ComfyUI picture strip, and with `both-ways` the strip's arrows move the viewer too; see *ComfyUI picture strip sync*.
 

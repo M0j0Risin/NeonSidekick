@@ -9,7 +9,7 @@ public enum MouseButton
     Right,
 }
 
-/// <summary>One thing the user did at the console: a key, a paste, a click, a drag, or a wheel notch.</summary>
+/// <summary>One thing the user did at the console: a key, a paste, a click, a drag, a release, or a wheel notch.</summary>
 public abstract record InputEvent
 {
     private InputEvent()
@@ -37,6 +37,13 @@ public abstract record InputEvent
     public sealed record Drag(int X, int Y) : InputEvent;
 
     /// <summary>
+    /// The left button let go at a cell (2026-09-28, for a picture dragged onto the chat line: the drop); the same
+    /// coordinates as <see cref="Click"/>. The right button's release is nothing. Every reader that has no use for one
+    /// lets it pass as nothing, as it lets a <see cref="Drag"/> pass.
+    /// </summary>
+    public sealed record Release(int X, int Y) : InputEvent;
+
+    /// <summary>
     /// The wheel turned at a cell; <see cref="Notches"/> is signed, positive away from the user
     /// (up), one record's worth (a plain wheel is ±1; a fine-resolution one may report more or, for
     /// a fraction of a notch, still 1). Reaches the app only while a pane holds the wheel
@@ -46,7 +53,7 @@ public abstract record InputEvent
 }
 
 /// <summary>
-/// The stream <see cref="KeySource"/> reads: keys, clicks, drags and wheel notches in the order they happened. The
+/// The stream <see cref="KeySource"/> reads: keys, clicks, drags, releases and wheel notches in the order they happened. The
 /// contracts every source keeps: <see cref="ReadAsync"/> returns null <em>only</em> on cancellation
 /// (a Spectre prompt loops on a null and would spin on one from a dead source), and both
 /// <see cref="IsAvailable"/> and <see cref="ReadAsync"/> throw <see cref="InvalidOperationException"/>
@@ -57,7 +64,7 @@ public interface IInputEvents
     /// <summary>An event is queued and <see cref="Read"/> will return it at once.</summary>
     bool IsAvailable { get; }
 
-    /// <summary>The queued event <see cref="Read"/> would return next is a mouse event — a click, a drag or a wheel notch, never a key or a paste (false when none is queued).</summary>
+    /// <summary>The queued event <see cref="Read"/> would return next is a mouse event — a click, a drag, a release or a wheel notch, never a key or a paste (false when none is queued).</summary>
     bool NextIsMouse { get; }
 
     /// <summary>The next queued event, or null when none is queued. Never blocks.</summary>

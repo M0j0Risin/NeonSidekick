@@ -386,7 +386,7 @@ public sealed class KeySource : IAnsiConsoleInput
     /// spent inside it — the bottom again, a pane repaint on this task, <paramref name="spend"/>'s
     /// class — and answers nothing. It never throws.</para>
     ///
-    /// <para><paramref name="editor"/> (2026-09-25) is the live row: set, the keys, pastes and drags that are not a cancel,
+    /// <para><paramref name="editor"/> (2026-09-25) is the live row: set, the keys, pastes, drags and releases that are not a cancel,
     /// an accept or spent go to it instead of the buffer, a click to it first (the input rows' caret and selection, a
     /// right-click paste) and to <paramref name="onClick"/> when it declines; a line it hands back is offered to
     /// <paramref name="onLine"/> as a <see cref="WatchedLine"/> with its <see cref="SubmittedLine"/> — taken, the row empties;
@@ -505,7 +505,7 @@ public sealed class KeySource : IAnsiConsoleInput
 
                     if (editor is not null && e is not (null or InputEvent.Wheel or InputEvent.Click))
                     {
-                        // The live row (2026-09-25): a key, a paste or a drag edits the draft as at the idle line.
+                        // The live row (2026-09-25): a key, a paste, a drag or a release (2026-09-28) edits the draft as at the idle line.
                         if (!await FeedAsync(editor, e, onLine, stop).ConfigureAwait(false))
                         {
                             return accepted ? Interrupt.Accept : Interrupt.None;

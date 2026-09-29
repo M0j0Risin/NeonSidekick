@@ -60,8 +60,10 @@ public static class ConsoleInputRecords
     /// <summary>
     /// The mouse event a record is, if any: an <see cref="InputEvent.Click"/> for a button bit
     /// going from up to down (<paramref name="buttons"/> is the previous record's button state and
-    /// is updated here; a release also arrives with no event flag and is nothing; a double-click
-    /// record is a click too), an <see cref="InputEvent.Drag"/> for a move with the left button
+    /// is updated here; a double-click record is a click too), an <see cref="InputEvent.Release"/> for the left button
+    /// going from down to up (2026-09-28, the drop of a picture dragged onto the chat line; it arrives with no event
+    /// flag, and the right button's release is still nothing — as is the left's in a record that also presses the
+    /// right, which is the right's click), an <see cref="InputEvent.Drag"/> for a move with the left button
     /// held (a move with nothing or only the right button held is nothing), an <see cref="InputEvent.Wheel"/>
     /// for a vertical wheel record with a delta (the signed high word of the button state, +120 per
     /// notch away from the user; a smaller delta still counts one notch). <paramref name="wheel"/> is
@@ -95,10 +97,24 @@ public static class ConsoleInputRecords
                 return true;
             }
 
+            // A move that finds the left button up after it was down is its release, whatever flag it came with.
+            if ((previous & FromLeft1stButtonPressed) != 0)
+            {
+                mouse = new InputEvent.Release(record.X, record.Y);
+                return true;
+            }
+
             return false;
         }
 
         uint pressed = buttons & ~previous;
+        uint released = previous & ~buttons;
+        if ((released & FromLeft1stButtonPressed) != 0 && (pressed & RightmostButtonPressed) == 0)
+        {
+            mouse = new InputEvent.Release(record.X, record.Y);
+            return true;
+        }
+
         if ((pressed & FromLeft1stButtonPressed) != 0)
         {
             mouse = new InputEvent.Click(record.X, record.Y, MouseButton.Left);

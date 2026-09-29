@@ -167,6 +167,8 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     private long _busySince;
     private int _frame;
     private string _shownHint = "";
+    // The row's whole text while a picture is dragged toward the chat line (2026-09-28, SetDragHint); null for none.
+    private string? _dragHint;
     private Func<string> _queued = () => "";
     private Func<string> _usage = () => "";
     private Func<string> _busyUsage = () => "";
@@ -2165,6 +2167,37 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     private static string Labelled(string busyText, string usage, bool labelAfterUsage) =>
         labelAfterUsage ? HintRow(usage, busyText) : HintRow(busyText, usage);
 
+    /// <summary>
+    /// The hint row's whole text while a picture is dragged off the strip or the transcript toward the chat line
+    /// (2026-09-28, the user's ask and wording, <see cref="InputLine.DropOnLineHint"/>): it stands in for the standing row
+    /// and the busy row alike, spinner and tally included — a drag lasts a moment — until null takes it back. No zone of the
+    /// row answers a click meanwhile. Any thread; disabled: nothing.
+    /// </summary>
+    public void SetDragHint(string? text)
+    {
+        if (!Enabled)
+        {
+            return;
+        }
+
+        lock (_gate)
+        {
+            if (string.Equals(text, _dragHint, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            _dragHint = text;
+            RedrawHint();
+        }
+    }
+
+    /// <summary>The text <see cref="SetDragHint"/> put on the hint row, or null.</summary>
+    public string? DragHint
+    {
+        get { lock (_gate) { return _dragHint; } }
+    }
+
     /// <summary>Redraws the hint row if the standing hint changed (a state change with no transcript line).</summary>
     public void RefreshHint()
     {
@@ -3943,9 +3976,11 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
 
     /// <summary>
     /// The picture strip's rule of <paramref name="width"/> cells (2026-09-28, the user's layout): the viewer's
-    /// <paramref name="button"/> at the left and the close × (<see cref="CloseGlyph"/>) at the right, each with a space either
-    /// side — <c>─ 🎞️ ────────── × ─</c>. With no button, <c>────── × ─</c>; a width that leaves no rule between them drops
-    /// the button, one that cannot hold even the × is the bare rule. Pure, pinned.
+    /// <paramref name="button"/> at the left, right after the rule's first glyph with a space at its right, and the close ×
+    /// (<see cref="CloseGlyph"/>) at the right with a space either side — <c>─🎞️ ────────── × ─</c>. The space that stood
+    /// left of the button went later that day (the user's screenshot: Windows Terminal draws the 🎞️ with room of its own
+    /// at its left, so the gap read as two). With no button, <c>────── × ─</c>; a width that leaves no rule between them
+    /// drops the button, one that cannot hold even the × is the bare rule. Pure, pinned.
     /// </summary>
     public static StripRuleParts StripRule(string? button, int width)
     {
@@ -3956,10 +3991,10 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         int right = 1 + closeCells + TextCells.Width(tail);   // " × ─"
         button ??= "";
         int buttonCells = TextCells.Width(button);
-        if (button.Length > 0 && width - (1 + 1 + buttonCells + 1) - right >= 1)
+        if (button.Length > 0 && width - (1 + buttonCells + 1) - right >= 1)
         {
-            // "─ " + button + " " + the rule + " × ─"
-            string lead = rule + " ";
+            // "─" + button + " " + the rule + " × ─"
+            string lead = rule;
             int fill = width - TextCells.Width(lead) - buttonCells - 1 - right;
             return new StripRuleParts(lead, button, " " + new string(RuleGlyph, fill) + " ", CloseGlyph, tail, TextCells.Width(lead), width - closeCells - TextCells.Width(tail));
         }
@@ -4015,6 +4050,26 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     private void WriteHintRow()
     {
         int max = Math.Max(1, Width - 1);
+        if (_dragHint is { } drag)
+        {
+            // A picture on its way to the line (2026-09-28): the row is the drag's alone, in the strip button's style, no zones.
+            string shown = Fit(drag, max);
+            _inner.Write(new RawText(shown, Theme.AccentSecondary));
+            _inner.Write(EraseLineEnd);
+            _shownHint = shown;
+            _hintStrip = "";
+            _trailerColumn = -1;
+            _markColumn = -1;
+            _queuedColumn = -1;
+            _queuedCells = 0;
+            _usageColumn = -1;
+            _usageCells = 0;
+            _labelColumn = -1;
+            _labelCells = 0;
+            _hintScrolled = false;
+            return;
+        }
+
         string mark = _trailerMark();
         if (_busyLabel is { } label)
         {
@@ -4343,7 +4398,8 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     private bool ToolbarChanged() => _toolbarRows > 0 && _toolbar() is { } toolbar && !string.Equals(ToolbarRow(toolbar.Strip, toolbar.Path, Math.Max(1, Width - 1)), _shownToolbar, StringComparison.Ordinal);
 
     /// <summary>The standing hint (the overlay's while one is open) with the trailer is not what the hint row shows.</summary>
-    private bool HintChanged() => !string.Equals(PinRight(StandingRow(), _trailer(), _trailerMark(), Math.Max(1, Width - 1)), _shownHint, StringComparison.Ordinal);
+    private bool HintChanged() =>
+        !string.Equals(_dragHint is { } drag ? Fit(drag, Math.Max(1, Width - 1)) : PinRight(StandingRow(), _trailer(), _trailerMark(), Math.Max(1, Width - 1)), _shownHint, StringComparison.Ordinal);
 
     private void ColumnZero() => _inner.Cursor.Move(CursorDirection.Left, Width);
 

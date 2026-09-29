@@ -122,17 +122,32 @@ public class ConsoleInputRecordsTests
     }
 
     [Fact]
-    public void ALeftPress_IsAClick_ItsReleaseIsNot()
+    public void ALeftPress_IsAClick_ItsReleaseARelease()
     {
         uint buttons = 0;
         Assert.True(ConsoleInputRecords.TryTranslateMouse(Mouse(7, 12, FromLeft1stButtonPressed), ref buttons, out var click, out bool wheel));
         Assert.Equal(new InputEvent.Click(7, 12, MouseButton.Left), click);
         Assert.False(wheel);
 
-        // The release: flags 0, buttons 0 — not a click.
-        Assert.False(ConsoleInputRecords.TryTranslateMouse(Mouse(7, 12, 0), ref buttons, out _, out wheel));
+        // The release: flags 0, buttons 0 — not a click but a release (2026-09-28, the drop of a dragged picture).
+        Assert.True(ConsoleInputRecords.TryTranslateMouse(Mouse(7, 12, 0), ref buttons, out var release, out wheel));
+        Assert.Equal(new InputEvent.Release(7, 12), release);
         Assert.False(wheel);
         Assert.Equal(0u, buttons);
+
+        // Up already: another record with nothing held is nothing.
+        Assert.False(ConsoleInputRecords.TryTranslateMouse(Mouse(7, 12, 0), ref buttons, out _, out _));
+    }
+
+    /// <summary>A move record that finds the left button up after it was down is the release too, at the cell it moved to.</summary>
+    [Fact]
+    public void AMove_ThatLetsGoOfTheLeftButton_IsARelease()
+    {
+        uint buttons = 0;
+        Assert.True(ConsoleInputRecords.TryTranslateMouse(Mouse(1, 1, FromLeft1stButtonPressed), ref buttons, out _, out _));
+        Assert.True(ConsoleInputRecords.TryTranslateMouse(Mouse(4, 9, 0, MouseMoved), ref buttons, out var release, out _));
+        Assert.Equal(new InputEvent.Release(4, 9), release);
+        Assert.False(ConsoleInputRecords.TryTranslateMouse(Mouse(5, 9, 0, MouseMoved), ref buttons, out _, out _));
     }
 
     [Fact]
@@ -144,7 +159,7 @@ public class ConsoleInputRecordsTests
     }
 
     [Fact]
-    public void ADrag_IsADrag_ItsReleaseNothing_AndADoubleClickAClick()
+    public void ADrag_IsADrag_ItsEndARelease_AndADoubleClickAClick()
     {
         uint buttons = 0;
         Assert.True(ConsoleInputRecords.TryTranslateMouse(Mouse(1, 1, FromLeft1stButtonPressed), ref buttons, out _, out _));
@@ -154,9 +169,10 @@ public class ConsoleInputRecordsTests
         Assert.False(wheel);
         Assert.True(ConsoleInputRecords.TryTranslateMouse(Mouse(3, 2, FromLeft1stButtonPressed, MouseMoved), ref buttons, out drag, out _));
         Assert.Equal(new InputEvent.Drag(3, 2), drag);
-        // The same bit still down without a move flag, and the release: nothing.
+        // The same bit still down without a move flag: nothing; the release: a release.
         Assert.False(ConsoleInputRecords.TryTranslateMouse(Mouse(3, 1, FromLeft1stButtonPressed), ref buttons, out _, out _));
-        Assert.False(ConsoleInputRecords.TryTranslateMouse(Mouse(3, 1, 0), ref buttons, out _, out _));
+        Assert.True(ConsoleInputRecords.TryTranslateMouse(Mouse(3, 1, 0), ref buttons, out var release, out _));
+        Assert.Equal(new InputEvent.Release(3, 1), release);
         // A double-click record is a press again.
         Assert.True(ConsoleInputRecords.TryTranslateMouse(Mouse(3, 1, FromLeft1stButtonPressed, ConsoleInputNative.DoubleClick), ref buttons, out var click, out _));
         Assert.Equal(new InputEvent.Click(3, 1, MouseButton.Left), click);
@@ -174,7 +190,7 @@ public class ConsoleInputRecordsTests
     [Fact]
     public void AMove_IsNothing_AndAWheelIsAWheel()
     {
-        uint buttons = FromLeft1stButtonPressed;
+        uint buttons = 0;
         Assert.False(ConsoleInputRecords.TryTranslateMouse(Mouse(5, 5, 0, MouseMoved), ref buttons, out _, out bool wheel));
         Assert.False(wheel);
         buttons = FromLeft1stButtonPressed;
@@ -191,7 +207,8 @@ public class ConsoleInputRecordsTests
         Assert.True(wheel);
         Assert.False(ConsoleInputRecords.TryTranslateMouse(Mouse(5, 5, 0x00780000, MouseHWheeled), ref buttons, out _, out wheel));
         Assert.True(wheel);
-        // The middle button is nobody's.
+        // The middle button is nobody's (pressed from nothing held: with the left one down before, the record is its release).
+        buttons = 0;
         Assert.False(ConsoleInputRecords.TryTranslateMouse(Mouse(5, 5, 0x0004), ref buttons, out _, out wheel));
         Assert.False(wheel);
     }

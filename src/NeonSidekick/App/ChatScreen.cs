@@ -1016,6 +1016,7 @@ internal sealed partial class ChatScreen
         _input.OpenPicture = OpenPicture;
         _input.OpenViewer = () => OpenViewer();
         _input.CloseStrip = ClosePictureStrip;
+        _input.PictureFile = DroppedPictureOf;
         // The picture strip's keys under a reply too (2026-09-28, the user's report); the splash is gone before any turn.
         _input.Chat.SetLiveHooks(StepPictureStrip, OpenStripPicture);
         _mouse = mouse;
@@ -11638,6 +11639,19 @@ internal sealed partial class ChatScreen
         if (ids.Count > 0 && _pictureStrip.Highlight(ids.Contains))
         {
             _pane.RedrawStrip();
+        }
+    }
+
+    /// <summary>
+    /// A picture of the strip or the transcript dragged onto the chat line (2026-09-28, the user's ask; the input line's
+    /// <see cref="InputLine.PictureFile"/>): its name, its file when it has one, its bytes; null for an id not registered.
+    /// Any thread.
+    /// </summary>
+    private DroppedPicture? DroppedPictureOf(int id)
+    {
+        lock (_pictures)
+        {
+            return id >= 0 && id < _pictures.Count && _pictures[id] is var source ? new DroppedPicture(source.Name, source.FullPath, source.Bytes) : null;
         }
     }
 

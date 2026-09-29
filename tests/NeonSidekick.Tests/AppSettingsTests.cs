@@ -58,6 +58,8 @@ public class AppSettingsTests : IDisposable
         ShowWorkingDirectory = false,
         ShowToolbar = false,
         ThemedViewer = false,
+        ViewerLeft = -1200,
+        ViewerTop = 140,
         WorkingDirectory = @"D:\elsewhere\files",
         LlmApiKey = "dpapi:c2stdGVzdA==",   // stored encrypted: a plain key is encrypted as the file loads (2026-09-28), so the round trip would not be exact
         LlmAutoCompactPercent = 65,
@@ -172,6 +174,8 @@ public class AppSettingsTests : IDisposable
         Assert.Equal(expected.ShowWorkingDirectory, actual.ShowWorkingDirectory);
         Assert.Equal(expected.ShowToolbar, actual.ShowToolbar);
         Assert.Equal(expected.ThemedViewer, actual.ThemedViewer);
+        Assert.Equal(expected.ViewerLeft, actual.ViewerLeft);
+        Assert.Equal(expected.ViewerTop, actual.ViewerTop);
         Assert.Equal(expected.WorkingDirectory, actual.WorkingDirectory);
         Assert.Equal(expected.LlmApiKey, actual.LlmApiKey);
         Assert.Equal(expected.LlmAutoCompactPercent, actual.LlmAutoCompactPercent);
@@ -294,6 +298,8 @@ public class AppSettingsTests : IDisposable
             d.ShowWorkingDirectory = full.ShowWorkingDirectory;
             d.ShowToolbar = full.ShowToolbar;
             d.ThemedViewer = full.ThemedViewer;
+            d.ViewerLeft = full.ViewerLeft;
+            d.ViewerTop = full.ViewerTop;
             d.WorkingDirectory = full.WorkingDirectory;
             d.LlmApiKey = full.LlmApiKey;
             d.LlmAutoCompactPercent = full.LlmAutoCompactPercent;
@@ -409,6 +415,8 @@ public class AppSettingsTests : IDisposable
                 d.ShowWorkingDirectory = full.ShowWorkingDirectory;
                 d.ShowToolbar = full.ShowToolbar;
                 d.ThemedViewer = full.ThemedViewer;
+                d.ViewerLeft = full.ViewerLeft;
+                d.ViewerTop = full.ViewerTop;
                 d.WorkingDirectory = full.WorkingDirectory;
                 d.LlmApiKey = full.LlmApiKey;
                 d.LlmAutoCompactPercent = full.LlmAutoCompactPercent;
@@ -1269,6 +1277,8 @@ public class AppSettingsTests : IDisposable
         Assert.False(s.ShowWorkingDirectory);   // 2026-09-18; off by default since 2026-09-21
         Assert.True(s.ShowToolbar);   // 2026-09-21
         Assert.True(s.ThemedViewer);   // later on 2026-09-27
+        Assert.Null(s.ViewerLeft);   // 2026-09-28: Windows' own place until the viewer first closes
+        Assert.Null(s.ViewerTop);
         Assert.Equal("", s.DraftEditor);   // 2026-09-19: the shell's default for .txt
         // The Sessions tab (2026-09-18): logging and the tool on, the model writes the title (the first line until later that day), kept forever, ten hits.
         Assert.True(s.SessionLogging);

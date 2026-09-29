@@ -13377,6 +13377,88 @@ public partial class ChatScreenTests : IDisposable
     }
 
     /// <summary>
+    /// A strip tile dragged onto the chat line and let go there (2026-09-28, the user's ask): the picture lands at the cursor
+    /// as a dropped file does — an <c>[Image #1]</c> token, the picture beside the message — and the hint row said
+    /// <see cref="InputLine.DropOnLineHint"/> while the drag lasted. The input row at 100, the tile at (1–4, 97–98).
+    /// </summary>
+    [Fact]
+    public async Task PictureStrip_ATileDraggedOntoTheLine_IsAttached()
+    {
+        ComfyServer();
+        PaneOf40Rows();
+        _chat.EnqueueText("A black square.");
+        StepsWhenIdle(
+            Line("/imagine a cat --seed 5"),
+            input => input.PushClick(2, 98).PushDrag(3, 98).PushDrag(3, 99).PushDrag(5, 100).PushRelease(5, 100),
+            Line("look"),
+            Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.Contains(InputLine.DropOnLineHint, output);
+        var user = _chat.Requests[0].Last(m => m.Role == ChatRole.User);
+        Assert.EndsWith("[Image #1]look", user.Text);
+        // The /imagine note's picture and the dropped one.
+        Assert.Equal(2, user.Contents.OfType<DataContent>().Count());
+    }
+
+    /// <summary>A tile dragged and let go anywhere but the input rows is nothing: no token, only the /imagine note's picture; a press and a release in place is no drag either.</summary>
+    [Fact]
+    public async Task PictureStrip_ATileLetGoOffTheLine_IsNothing()
+    {
+        ComfyServer();
+        PaneOf40Rows();
+        _chat.EnqueueText("A black square.");
+        StepsWhenIdle(
+            Line("/imagine a cat --seed 5"),
+            input => input.PushClick(2, 98).PushDrag(3, 98).PushDrag(20, 80).PushRelease(20, 80),
+            input => input.PushClick(2, 98).PushRelease(2, 98),
+            Line("look"),
+            Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.Contains(InputLine.DropOnLineHint, output);
+        var user = _chat.Requests[0].Last(m => m.Role == ChatRole.User);
+        Assert.EndsWith("look", user.Text);
+        Assert.DoesNotContain("[Image #1]", user.Text);
+        Assert.Single(user.Contents.OfType<DataContent>());
+    }
+
+    /// <summary>
+    /// The same drag under a reply (2026-09-28): the live row takes the press, the drag and the drop, the picture waits on
+    /// the draft, and the line sends it once the reply is done.
+    /// </summary>
+    [Fact]
+    public async Task PictureStrip_ATileDraggedOntoTheLine_UnderAReply_IsAttached()
+    {
+        ComfyServer();
+        PaneOf40Rows();
+        _chat.EnqueueText("Hello ", "there.");
+        _chat.EnqueueText("A black square.");
+        _chat.BeforeUpdate = async (i, ct) =>
+        {
+            if (i == 1 && _chat.Requests.Count == 1)
+            {
+                // Mid-reply: the second update held until the watcher has read every event pushed.
+                _scripted!.PushClick(2, 98).PushDrag(3, 98).PushDrag(5, 100).PushRelease(5, 100);
+                for (int tries = 0; tries < 500 && _scripted.IsAvailable; tries++)
+                {
+                    await Task.Delay(10, CancellationToken.None);
+                }
+            }
+        };
+        StepsWhenIdle(Line("/imagine a cat --seed 5"), Line("hi"), Line("look"), Line("/exit"));
+
+        await RunAsync();
+
+        Assert.Equal(2, _chat.Requests.Count);
+        var user = _chat.Requests[1].Last(m => m.Role == ChatRole.User);
+        Assert.Equal("[Image #1]look", user.Text);
+        Assert.Single(user.Contents.OfType<DataContent>());
+    }
+
+    /// <summary>
     /// The picture viewer's button on the strip's own rule (2026-09-27): one click hands the ComfyUI output folder's full path
     /// to the viewer. The input row at 100, the upper rule at 99, the strip's own rule with the
     /// button at its left edge (2026-09-28), <see cref="ScreenPane.StripPaneRows"/> over the upper rule.

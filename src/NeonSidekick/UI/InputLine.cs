@@ -123,7 +123,11 @@ public abstract record InputResult
 /// a right click, Ctrl+V where the terminal lets the chord through (Windows Terminal keeps it and
 /// pastes text only), Alt+V — which takes the picture first (<c>clipboardImage</c>, named
 /// <see cref="ImageFile.ClipboardName"/>) and the text otherwise; a settings field never takes a
-/// picture. An Alt-only chord is never a typed character, so Alt+V does not type a <c>v</c>.</para>
+/// picture. An Alt-only chord is never a typed character, so Alt+V does not type a <c>v</c>. A picture on the screen
+/// — a tile of the ComfyUI picture strip, a picture in the transcript — dragged with the left button and let go on the
+/// input rows comes the same way too (2026-09-28): its file as a dropped one, or its bytes as a clipboard picture when
+/// it has no file (<see cref="PictureFile"/>), at the cursor; the hint row says <see cref="DropOnLineHint"/> while the
+/// drag lasts, and a release anywhere else is nothing.</para>
 /// </summary>
 public sealed partial class InputLine
 {
@@ -223,6 +227,13 @@ public sealed partial class InputLine
     /// <summary>The hint row while several dropped files are read.</summary>
     public static string ReadingImages(int count) => $"reading {count} images…";
 
+    /// <summary>
+    /// The hint row while a picture is dragged off the strip or the transcript (2026-09-28, the user's wording: "🖼 drop on
+    /// line", a space between the glyph and the words). The glyph carries U+FE0F so Windows Terminal draws it as the two
+    /// cells <see cref="TextCells"/> counts, as the strip's 🎞️ does.
+    /// </summary>
+    public const string DropOnLineHint = "🖼️ drop on line";
+
     /// <summary>Submitted lines this session, oldest first; consecutive duplicates collapsed. A collapsed paste is its token here (the block is in <see cref="Pastes"/>).</summary>
     public IReadOnlyList<string> History => _history;
 
@@ -302,6 +313,14 @@ public sealed partial class InputLine
 
     /// <summary>What a click on the picture strip's close × does (2026-09-28, <see cref="ScreenPane.TryHitStripClose"/>): the screen puts the strip away until the next picture; null = nothing.</summary>
     public Action? CloseStrip { get; set; }
+
+    /// <summary>
+    /// The picture behind an id (<see cref="ScreenPane.PictureAt"/>'s, the strip's and the transcript's alike) for a drag
+    /// that ends on the input rows (2026-09-28, the user's ask: "drag one of the images from the ComfyUI picture strip on to
+    /// the chat line to include the image in the prompt just like if we dragged it from the desktop or pasted it"): its
+    /// file when it has one, its bytes when not. Null — no hook, or an id the screen does not know — and the drop is nothing.
+    /// </summary>
+    public Func<int, DroppedPicture?>? PictureFile { get; set; }
 
     public static string SubmittedMarkup(string text)
     {
@@ -623,3 +642,10 @@ public sealed partial class InputLine
         return (text[start..end], TextCells.Width(text[start..cursor]));
     }
 }
+
+/// <summary>
+/// A picture on the screen as a drop on the chat line reads it (2026-09-28, <see cref="InputLine.PictureFile"/>): its
+/// <paramref name="Name"/>, the file it came from when there is one — read as a dropped file is — and its
+/// <paramref name="Bytes"/> for when there is none, read as a clipboard picture is.
+/// </summary>
+public sealed record DroppedPicture(string Name, string? Path, byte[] Bytes);
