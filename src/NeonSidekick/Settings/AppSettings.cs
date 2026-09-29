@@ -112,6 +112,12 @@ public sealed class AppSettings : IDisposable
     /// <summary>The models directory: <c>models</c> under the home, so <c>NEONSIDEKICK_HOME</c> moves both; shared by every profile.</summary>
     public string ModelsDirectory => Path.Combine(StorageDirectory, "models");
 
+    /// <summary>The local model's downloads (2026-09-29): <c>models/llm</c> under the home, one folder per catalog model, every profile's.</summary>
+    public string LocalModelsDirectory => Path.Combine(ModelsDirectory, "llm");
+
+    /// <summary>The llama.cpp runtimes the local model runs on (2026-09-29): <c>llama</c> under the home, one folder per build and backend.</summary>
+    public string LlamaDirectory => Path.Combine(StorageDirectory, "llama");
+
     /// <summary>The global skills folder: <c>skills</c> under the home, every profile's (<c>Skills.SkillRoots</c>).</summary>
     public string GlobalSkillsDirectory => Path.Combine(StorageDirectory, Skills.SkillRoots.DirectoryName);
 
@@ -666,6 +672,7 @@ public sealed class AppSettings : IDisposable
         LlmUseFunVerbs = source.LlmUseFunVerbs,
         LlmShowThinking = source.LlmShowThinking,
         LlmPreserveThinking = source.LlmPreserveThinking,
+        LlmReasoningEstimate = source.LlmReasoningEstimate,
         LlmSampling = LlmSamplingEntry.CopyAll(source.LlmSampling),
         LlmSamplingFromHuggingFace = source.LlmSamplingFromHuggingFace,
         TtsHttpUrl = source.TtsHttpUrl,
@@ -764,6 +771,10 @@ public sealed class AppSettings : IDisposable
         ClaudeApiKey = source.ClaudeApiKey,
         ClaudeApiMaxTokens = source.ClaudeApiMaxTokens,
         ClaudeApiPromptCaching = source.ClaudeApiPromptCaching,
+        LocalBackend = source.LocalBackend,
+        LocalContextSize = source.LocalContextSize,
+        LocalGpuLayers = source.LocalGpuLayers,
+        LocalVision = source.LocalVision,
         HomeAssistantTools = source.HomeAssistantTools,
         HomeAssistantUrl = source.HomeAssistantUrl,
         HomeAssistantToken = source.HomeAssistantToken,

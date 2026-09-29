@@ -2,7 +2,9 @@ using System.Buffers;
 using System.ClientModel;
 using System.ClientModel.Primitives;
 using System.Runtime.CompilerServices;
+using System.Text;
 using System.Text.Json;
+using NeonSidekick.Diagnostics;
 using Microsoft.Extensions.AI;
 using OpenAI;
 using OpenAI.Chat;
@@ -25,6 +27,15 @@ public sealed class OpenAICompatibleChatClient : IChatClient
 
     private readonly TimeSpan _requestTimeout;
     private readonly ChatClient _innerClient;
+
+    /// <summary>The transport, the caller's or the owned one: the <c>/tokenize</c> request of a reasoning estimate goes over it too.</summary>
+    private readonly HttpClient _http;
+
+    /// <summary>The setting <c>LLM reasoning estimate</c>, read at each request (2026-09-29); null estimates nothing.</summary>
+    private readonly Func<ReasoningEstimate>? _reasoningEstimate;
+
+    /// <summary>Set once <c>/tokenize</c> failed: this client estimates by the characters from then on, asking no more.</summary>
+    private bool _tokenizeUnavailable;
 
     // The MEAI wrapper is allocated once. AsIChatClient() returns a new wrapper on every call, so
     // caching it is what makes Dispose() and GetService() refer to the object this class owns.
@@ -49,7 +60,8 @@ public sealed class OpenAICompatibleChatClient : IChatClient
     /// <param name="endpoint">Where to post; the base URL is normalised to <c>/v1</c>.</param>
     /// <param name="requestTimeout">Per-request ceiling, already interlocked by <see cref="LlmTimeouts.Resolve"/>.</param>
     /// <param name="httpClient">Optional transport. Tests pass one over a stub handler; it stays the caller's to dispose.</param>
-    public OpenAICompatibleChatClient(LlmEndpoint endpoint, TimeSpan requestTimeout, HttpClient? httpClient = null)
+    /// <param name="reasoningEstimate">How a reasoning count the server did not report is estimated (<see cref="ReasoningEstimates"/>), read at each request; null estimates nothing.</param>
+    public OpenAICompatibleChatClient(LlmEndpoint endpoint, TimeSpan requestTimeout, HttpClient? httpClient = null, Func<ReasoningEstimate>? reasoningEstimate = null)
     {
         ArgumentNullException.ThrowIfNull(endpoint);
         if (string.IsNullOrWhiteSpace(endpoint.ModelId))
@@ -62,9 +74,10 @@ public sealed class OpenAICompatibleChatClient : IChatClient
             throw new ArgumentOutOfRangeException(nameof(requestTimeout), requestTimeout, "The request timeout must be positive.");
         }
 
-        var v1 = LlmEndpoint.NormalizeBaseUrl(endpoint.BaseUrl);
+        // The wire URL (2026-09-29): the local model's sentinel base names it, its loopback LiveUrl is where it listens.
+        var v1 = LlmEndpoint.NormalizeBaseUrl(endpoint.WireUrl);
         var key = string.IsNullOrWhiteSpace(endpoint.ApiKey) ? LlmEndpoint.DefaultApiKey : endpoint.ApiKey.Trim();
-        Endpoint = endpoint with { BaseUrl = v1, ApiKey = key };
+        Endpoint = endpoint.LiveUrl is null ? endpoint with { BaseUrl = v1, ApiKey = key } : endpoint with { LiveUrl = v1, ApiKey = key };
         _requestTimeout = requestTimeout;
 
         var options = new OpenAIClientOptions
@@ -94,14 +107,39 @@ public sealed class OpenAICompatibleChatClient : IChatClient
 
         _innerClient = new ChatClient(Endpoint.ModelId, new ApiKeyCredential(key), options);
         _wrapped = _innerClient.AsIChatClient();
+        _http = httpClient ?? _ownedHttpClient!;
+        _reasoningEstimate = reasoningEstimate;
     }
 
     /// <inheritdoc/>
-    public Task<ChatResponse> GetResponseAsync(
+    public async Task<ChatResponse> GetResponseAsync(
         IEnumerable<ChatMessage> messages,
         ChatOptions? options = null,
         CancellationToken cancellationToken = default)
-        => _wrapped.GetResponseAsync(WithReasoningBack(messages, PreservesThinking(options)), WithRawFields(options), cancellationToken);
+    {
+        var response = await _wrapped.GetResponseAsync(WithReasoningBack(messages, PreservesThinking(options)), WithRawFields(options), cancellationToken).ConfigureAwait(false);
+        if (response.Usage is { } usage)
+        {
+            var thinking = new StringBuilder();
+            var tags = new ThinkTagFilter();
+            foreach (var content in response.Messages.SelectMany(m => m.Contents))
+            {
+                if (content is TextReasoningContent reasoning)
+                {
+                    thinking.Append(reasoning.Text);
+                }
+                else if (content is TextContent { Text.Length: > 0 } text)
+                {
+                    tags.Push(text.Text);
+                    thinking.Append(tags.TakeThinking());
+                }
+            }
+
+            await FillReasoningEstimateAsync(usage, thinking, cancellationToken).ConfigureAwait(false);
+        }
+
+        return response;
+    }
 
     /// <inheritdoc/>
     public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(
@@ -109,11 +147,135 @@ public sealed class OpenAICompatibleChatClient : IChatClient
         ChatOptions? options = null,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
+        // This request's thinking (2026-09-29), for a reasoning count the server leaves out: the reasoning field's text,
+        // and what a server left in <think> tags (a filter of its own that only watches; the update goes on unchanged).
+        var thinking = new StringBuilder();
+        ThinkTagFilter? tags = null;
         await foreach (var update in _wrapped.GetStreamingResponseAsync(WithReasoningBack(messages, PreservesThinking(options)), WithRawFields(options), cancellationToken).ConfigureAwait(false))
         {
             FillTopLevelReasoningTokens(update);
             FillReasoningField(update);
+            foreach (var content in update.Contents)
+            {
+                if (content is TextReasoningContent reasoning)
+                {
+                    thinking.Append(reasoning.Text);
+                }
+                else if (content is TextContent { Text.Length: > 0 } text)
+                {
+                    tags ??= new ThinkTagFilter();
+                    tags.Push(text.Text);
+                    thinking.Append(tags.TakeThinking());
+                }
+            }
+
+            foreach (var content in update.Contents)
+            {
+                if (content is UsageContent usage)
+                {
+                    await FillReasoningEstimateAsync(usage.Details, thinking, cancellationToken).ConfigureAwait(false);
+                }
+            }
+
             yield return update;
+        }
+    }
+
+    /// <summary>
+    /// The <see cref="UsageDetails.AdditionalCounts"/> key that marks <see cref="UsageDetails.ReasoningTokenCount"/> as this
+    /// client's estimate, not the server's count (2026-09-29); <see cref="TokenUsage.From"/> reads it into
+    /// <see cref="TokenUsage.ReasoningEstimated"/>.
+    /// </summary>
+    public const string ReasoningEstimatedKey = "neon.reasoning_estimated";
+
+    /// <summary>How long the <c>/tokenize</c> request of a reasoning estimate may take before the characters stand in.</summary>
+    internal static readonly TimeSpan TokenizeTimeout = TimeSpan.FromSeconds(5);
+
+    /// <summary>
+    /// The reasoning count of <paramref name="details"/> estimated from <paramref name="thinking"/> (2026-09-29, the setting
+    /// <c>LLM reasoning estimate</c>) when the server reported none — llama.cpp and Ollama stream the thinking but do not
+    /// count it — and marked with <see cref="ReasoningEstimatedKey"/>. A reported count, <c>0</c> included, is left alone,
+    /// and so is a request that streamed no thinking.
+    /// </summary>
+    private async Task FillReasoningEstimateAsync(UsageDetails details, StringBuilder thinking, CancellationToken cancellationToken)
+    {
+        if (details.ReasoningTokenCount is not null || thinking.Length == 0 || _reasoningEstimate?.Invoke() is not { } mode || mode == ReasoningEstimate.Off)
+        {
+            return;
+        }
+
+        details.ReasoningTokenCount = await EstimateReasoningAsync(thinking.ToString(), mode, cancellationToken).ConfigureAwait(false);
+        details.AdditionalCounts ??= new AdditionalPropertiesDictionary<long>();
+        details.AdditionalCounts[ReasoningEstimatedKey] = 1;
+    }
+
+    /// <summary>
+    /// The token count of <paramref name="thinking"/>: under <see cref="ReasoningEstimate.Tokenize"/> llama.cpp's
+    /// <c>POST /tokenize</c> on the server's root (the live URL for the local LLM, with the endpoint's key), without the
+    /// special tokens; else, or when that does not answer, the characters over <see cref="ConversationCompactor.CharsPerToken"/>,
+    /// rounded up. A <c>/tokenize</c> that failed once is not asked again by this client.
+    /// </summary>
+    internal async Task<long> EstimateReasoningAsync(string thinking, ReasoningEstimate mode, CancellationToken cancellationToken)
+    {
+        if (mode == ReasoningEstimate.Tokenize && !_tokenizeUnavailable)
+        {
+            var url = ContextLengthProbe.Under(LlmEndpoint.RootUrl(Endpoint.WireUrl), "tokenize");
+            string? answer = await NativeRequest.TextAsync(_http, url, Endpoint.ApiKey, TokenizeTimeout, "Llm", cancellationToken, TokenizeBody(thinking)).ConfigureAwait(false);
+            if (TokenCount(answer) is { } counted)
+            {
+                return counted;
+            }
+
+            if (!cancellationToken.IsCancellationRequested)
+            {
+                _tokenizeUnavailable = true;
+                DiagnosticLog.Debug("Llm", $"{url} did not count the thinking; estimating it by its characters from now on.");
+            }
+        }
+
+        return CharacterEstimate(thinking);
+    }
+
+    /// <summary>The characters' estimate: the length over <see cref="ConversationCompactor.CharsPerToken"/>, rounded up.</summary>
+    internal static long CharacterEstimate(string thinking) =>
+        (thinking.Length + ConversationCompactor.CharsPerToken - 1) / ConversationCompactor.CharsPerToken;
+
+    /// <summary><c>{"content":…,"add_special":false,"parse_special":false}</c>: the text alone, no BOS, its tags as plain text.</summary>
+    internal static string TokenizeBody(string text)
+    {
+        var buffer = new ArrayBufferWriter<byte>();
+        using (var writer = new Utf8JsonWriter(buffer))
+        {
+            writer.WriteStartObject();
+            writer.WriteString("content"u8, text);
+            writer.WriteBoolean("add_special"u8, false);
+            writer.WriteBoolean("parse_special"u8, false);
+            writer.WriteEndObject();
+        }
+
+        return Encoding.UTF8.GetString(buffer.WrittenSpan);
+    }
+
+    /// <summary>The length of <c>tokens</c> in a <c>/tokenize</c> answer, or null for anything else.</summary>
+    internal static long? TokenCount(string? answer)
+    {
+        if (string.IsNullOrWhiteSpace(answer))
+        {
+            return null;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(answer);
+            return document.RootElement.ValueKind == JsonValueKind.Object
+                && document.RootElement.TryGetProperty("tokens"u8, out var tokens)
+                && tokens.ValueKind == JsonValueKind.Array
+                    ? tokens.GetArrayLength()
+                    : null;
+        }
+        catch (JsonException)
+        {
+            return null;
         }
     }
 

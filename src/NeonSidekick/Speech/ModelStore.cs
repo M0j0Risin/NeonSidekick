@@ -1,5 +1,8 @@
 using System.Globalization;
 using System.IO.Compression;
+using System.Net;
+using System.Net.Http.Headers;
+using System.Security.Cryptography;
 using NeonSidekick.Diagnostics;
 using NeonSidekick.Llm;
 
@@ -13,10 +16,33 @@ public enum ModelFormat
 
     /// <summary>An ONNX file (Kokoro): a protobuf whose first fields are <c>ir_version</c> and <c>producer_name</c>.</summary>
     Onnx,
+
+    /// <summary>A GGUF file (the local LLM's weights and vision projector, 2026-09-29): the four-byte magic <c>GGUF</c>.</summary>
+    Gguf,
+
+    /// <summary>A zip archive (one part of an <see cref="ArchiveSetSpec"/>, 2026-09-29): the local-header magic.</summary>
+    Zip,
 }
 
-/// <summary>One model file: what to call it, where it lives, where to fetch it from (null = must already exist), roughly how big it is, and how to recognise it.</summary>
-public sealed record ModelSpec(string Display, string Path, Uri? DownloadUrl, long ApproxBytes, ModelFormat Format = ModelFormat.Ggml);
+/// <summary>
+/// One model file: what to call it, where it lives, where to fetch it from (null = must already exist), roughly how
+/// big it is, and how to recognise it. <paramref name="Sha256"/> and <paramref name="Resumable"/> (2026-09-29, the
+/// local LLM's multi-gigabyte files) pin the file's digest — <paramref name="ApproxBytes"/> is then its exact size —
+/// and download it through a stable <c>.partial</c> file that a cancelled or broken download keeps, so the next
+/// ensure asks for the rest with a <c>Range</c> header instead of starting over. The voice models leave both off
+/// and keep the throwaway <c>.tmp</c> of before.
+/// </summary>
+public sealed record ModelSpec(string Display, string Path, Uri? DownloadUrl, long ApproxBytes, ModelFormat Format = ModelFormat.Ggml, string? Sha256 = null, bool Resumable = false);
+
+/// <summary>One archive of an <see cref="ArchiveSetSpec"/>: its file name, where to fetch it, its exact size and SHA-256.</summary>
+public sealed record ArchivePart(string Name, Uri Url, long Bytes, string Sha256);
+
+/// <summary>
+/// A directory unpacked from several zip archives into one folder (2026-09-29: llama.cpp's CUDA build ships its
+/// runtime DLLs in a second zip): what to call it, the directory it must end up in, the archives, and the relative
+/// files whose presence means the directory is complete.
+/// </summary>
+public sealed record ArchiveSetSpec(string Display, string Path, IReadOnlyList<ArchivePart> Parts, IReadOnlyList<string> RequiredFiles);
 
 /// <summary>
 /// One model shipped as a zipped directory (Vosk): what to call it, the directory it must end up
@@ -54,27 +80,42 @@ public readonly record struct ModelResult(bool Ok, string Path, string Detail)
 /// </summary>
 public sealed class ModelStore
 {
-    private const string Category = "Voice";
     private const int CopyBufferBytes = 64 * 1024;
+
+    /// <summary>What a resumable download leaves free on its drive beyond the file itself (2026-09-29): a model that fills the disk to the last byte leaves Windows and the app no room to breathe.</summary>
+    public const long DiskHeadroomBytes = 1_000_000_000;
 
     /// <summary>Every ggml file starts with these four bytes ("lmgg", i.e. "ggml" little-endian).</summary>
     private static readonly byte[] GgmlMagic = { 0x6C, 0x6D, 0x67, 0x67 };
+
+    /// <summary>Every GGUF file starts with these four bytes: "GGUF".</summary>
+    private static readonly byte[] GgufMagic = { 0x47, 0x47, 0x55, 0x46 };
 
     /// <summary>Every zip archive starts with a local file header: "PK\x03\x04".</summary>
     private static readonly byte[] ZipMagic = { 0x50, 0x4B, 0x03, 0x04 };
 
     private readonly HttpClient _http;
+    private readonly string _category;
 
     /// <param name="modelsDirectory">Where named models are stored; created on first download.</param>
     /// <param name="http">The client downloads go through; the app's default has no timeout, a stub in tests.</param>
-    public ModelStore(string modelsDirectory, HttpClient http)
+    /// <param name="category">The <see cref="DiagnosticLog"/> category its lines go under: <c>Voice</c> for the speech models, <c>LocalLlm</c> for the local LLM's (2026-09-29).</param>
+    public ModelStore(string modelsDirectory, HttpClient http, string category = "Voice")
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelsDirectory);
+        ArgumentException.ThrowIfNullOrWhiteSpace(category);
         Directory = modelsDirectory;
         _http = http ?? throw new ArgumentNullException(nameof(http));
+        _category = category;
     }
 
     public string Directory { get; }
+
+    /// <summary>
+    /// The free bytes on the drive holding a directory, or null when that cannot be told (a UNC path, a drive gone
+    /// away). A seam so the tests can fake a full disk; the default asks <see cref="DriveInfo"/>.
+    /// </summary>
+    internal Func<string, long?> AvailableBytes { get; init; } = FreeBytesOn;
 
     /// <summary><see cref="ResolveWhisper(string, string)"/> over this store's directory.</summary>
     public ModelSpec? Whisper(string setting) => ResolveWhisper(setting, Directory);
@@ -90,21 +131,31 @@ public sealed class ModelStore
     /// missing (or invalid) one is downloaded when the spec has a URL. Returns a result, never
     /// throws, except the caller's own cancellation (the temporary file is removed first).
     /// </summary>
-    public async Task<ModelResult> EnsureAsync(ModelSpec spec, IProgress<(long Received, long? Total)>? progress, CancellationToken cancellationToken)
+    public Task<ModelResult> EnsureAsync(ModelSpec spec, IProgress<(long Received, long? Total)>? progress, CancellationToken cancellationToken) =>
+        EnsureAsync(spec, progress, verifying: null, cancellationToken);
+
+    /// <summary>
+    /// <see cref="EnsureAsync(ModelSpec, IProgress{ValueTuple{long, Nullable{long}}}?, CancellationToken)"/> with a
+    /// word for the pause after a pinned download (<see cref="ModelSpec.Sha256"/>): <paramref name="verifying"/> is
+    /// told before the file is hashed, which takes seconds for a few gigabytes.
+    /// </summary>
+    public async Task<ModelResult> EnsureAsync(ModelSpec spec, IProgress<(long Received, long? Total)>? progress, Action? verifying, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(spec);
         string path = spec.Path;
 
         if (File.Exists(path))
         {
-            if (LooksLike(path, spec.Format))
+            // A pinned file is only ever moved into place after its hash matched, so its length and magic are proof
+            // enough; re-hashing gigabytes on every launch is not worth it (2026-09-29).
+            if (LooksLike(path, spec.Format) && (spec.Sha256 is null || new FileInfo(path).Length == spec.ApproxBytes))
             {
                 return new ModelResult(true, path, "present");
             }
 
             // A zero-length or foreign file is the fingerprint of an interrupted download or a
             // wrong drop-in; clearing it beats honouring it.
-            DiagnosticLog.Warn(Category, $"Discarding {path}: not {FormatName(spec.Format)} model.");
+            DiagnosticLog.Warn(_category, $"Discarding {path}: not {FormatName(spec.Format)} model.");
             try
             {
                 File.Delete(path);
@@ -118,6 +169,11 @@ public sealed class ModelStore
         if (spec.DownloadUrl is not { } url)
         {
             return ModelResult.Failed(path, $"not found: {path}");
+        }
+
+        if (spec.Resumable)
+        {
+            return await EnsureResumableAsync(spec, url, progress, verifying, cancellationToken).ConfigureAwait(false);
         }
 
         string tempPath = $"{path}.{Guid.NewGuid():N}.tmp";
@@ -135,7 +191,7 @@ public sealed class ModelStore
             }
 
             File.Move(tempPath, path, overwrite: true);
-            DiagnosticLog.Info(Category, $"Downloaded {spec.Display} ({SizeLabel(download.Received)}) to {path}.");
+            DiagnosticLog.Info(_category, $"Downloaded {spec.Display} ({SizeLabel(download.Received)}) to {path}.");
             return new ModelResult(true, path, $"downloaded {SizeLabel(download.Received)}");
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -172,7 +228,7 @@ public sealed class ModelStore
             }
 
             // Half a model is the fingerprint of an interrupted unpack or a wrong drop-in.
-            DiagnosticLog.Warn(Category, $"Discarding {path}: not a complete {spec.Display}.");
+            DiagnosticLog.Warn(_category, $"Discarding {path}: not a complete {spec.Display}.");
             try
             {
                 System.IO.Directory.Delete(path, recursive: true);
@@ -200,7 +256,7 @@ public sealed class ModelStore
             }
 
             unpacking?.Invoke();
-            DiagnosticLog.Info(Category, $"Unpacking {spec.Display} into {extractPath}.");
+            DiagnosticLog.Info(_category, $"Unpacking {spec.Display} into {extractPath}.");
             await Task.Run(() => ZipFile.ExtractToDirectory(tempPath, extractPath), cancellationToken).ConfigureAwait(false);
             cancellationToken.ThrowIfCancellationRequested();
 
@@ -211,7 +267,7 @@ public sealed class ModelStore
             }
 
             System.IO.Directory.Move(root, path);
-            DiagnosticLog.Info(Category, $"Downloaded {spec.Display} ({SizeLabel(download.Received)}) to {path}.");
+            DiagnosticLog.Info(_category, $"Downloaded {spec.Display} ({SizeLabel(download.Received)}) to {path}.");
             return new ModelResult(true, path, $"downloaded {SizeLabel(download.Received)}");
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -227,6 +283,288 @@ public sealed class ModelStore
             DeleteFileQuietly(tempPath);
             DeleteDirectoryQuietly(extractPath);
         }
+    }
+
+    /// <summary>
+    /// The resumable half of <see cref="EnsureAsync(ModelSpec, IProgress{ValueTuple{long, Nullable{long}}}?, Action?, CancellationToken)"/>
+    /// (2026-09-29, the local LLM's 3–5 GB files): the bytes land on <see cref="PartialPath"/>, which a cancel or a
+    /// broken connection keeps, and the next ensure asks for the rest with <c>Range: bytes=&lt;held&gt;-</c> — a 206
+    /// appends, a 200 (a server that ignores ranges) starts over, a 416 means the partial file is already whole.
+    /// Before a byte is fetched the drive must hold what is left plus <see cref="DiskHeadroomBytes"/>. The finished
+    /// file is checked for its exact length, its magic and — when pinned — its SHA-256 (<paramref name="verifying"/>
+    /// is told first), and only then moved into place; a file that fails a check is deleted, since resuming it could
+    /// only fail again.
+    /// </summary>
+    private async Task<ModelResult> EnsureResumableAsync(ModelSpec spec, Uri url, IProgress<(long Received, long? Total)>? progress, Action? verifying, CancellationToken cancellationToken)
+    {
+        string path = spec.Path;
+        string partial = PartialPath(path);
+        try
+        {
+            string directory = System.IO.Path.GetDirectoryName(System.IO.Path.GetFullPath(path))!;
+            System.IO.Directory.CreateDirectory(directory);
+
+            long have = File.Exists(partial) ? new FileInfo(partial).Length : 0;
+            if (spec.ApproxBytes > 0 && have > spec.ApproxBytes)
+            {
+                DiagnosticLog.Warn(_category, $"Discarding {partial}: longer than {spec.Display}.");
+                File.Delete(partial);
+                have = 0;
+            }
+
+            if (spec.ApproxBytes <= 0 || have < spec.ApproxBytes)
+            {
+                long needed = Math.Max(0, spec.ApproxBytes - have);
+                if (AvailableBytes(directory) is { } free && free < needed + DiskHeadroomBytes)
+                {
+                    return ModelResult.Failed(path, DiskSpaceError(spec.Display, needed, free, directory));
+                }
+
+                var download = await DownloadRangeAsync(spec.Display, url, partial, have, spec.ApproxBytes, progress, cancellationToken).ConfigureAwait(false);
+                if (!download.Ok)
+                {
+                    return ModelResult.Failed(path, download.Detail);
+                }
+            }
+
+            long length = new FileInfo(partial).Length;
+            if (spec.Sha256 is not null && spec.ApproxBytes > 0 && length != spec.ApproxBytes)
+            {
+                DeleteFileQuietly(partial);
+                return ModelResult.Failed(path, string.Create(CultureInfo.InvariantCulture, $"the download of {spec.Display} is {length} bytes, not {spec.ApproxBytes}; deleted, try again"));
+            }
+
+            if (!LooksLike(partial, spec.Format))
+            {
+                DeleteFileQuietly(partial);
+                return ModelResult.Failed(path, $"the download from {url} is not {FormatName(spec.Format)} {(spec.Format == ModelFormat.Zip ? "archive" : "model")}");
+            }
+
+            if (spec.Sha256 is { } pinned)
+            {
+                verifying?.Invoke();
+                string actual = await Sha256Async(partial, cancellationToken).ConfigureAwait(false);
+                if (!string.Equals(actual, pinned, StringComparison.OrdinalIgnoreCase))
+                {
+                    DeleteFileQuietly(partial);
+                    DiagnosticLog.Warn(_category, $"{spec.Display}: SHA-256 {actual}, expected {pinned}.");
+                    return ModelResult.Failed(path, ChecksumError(spec.Display));
+                }
+            }
+
+            File.Move(partial, path, overwrite: true);
+            DiagnosticLog.Info(_category, $"Downloaded {spec.Display} ({SizeLabel(length)}) to {path}.");
+            return new ModelResult(true, path, $"downloaded {SizeLabel(length)}");
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // The partial file stays: the next ensure resumes it.
+            DiagnosticLog.Info(_category, $"Download of {spec.Display} paused at {(File.Exists(partial) ? SizeLabel(new FileInfo(partial).Length) : "0 B")}.");
+            throw;
+        }
+        catch (Exception ex)
+        {
+            return ModelResult.Failed(path, Assistant.Explain(ex));
+        }
+    }
+
+    /// <summary>
+    /// Fetches <paramref name="url"/> onto <paramref name="partial"/>, from byte <paramref name="have"/> when it holds
+    /// some. A body whose size is not <paramref name="expected"/> (when known) is refused before a byte is written: the
+    /// file behind the URL changed, and downloading gigabytes to fail the checksum helps no one.
+    /// </summary>
+    private async Task<(bool Ok, long Received, string Detail)> DownloadRangeAsync(string display, Uri url, string partial, long have, long expected, IProgress<(long Received, long? Total)>? progress, CancellationToken cancellationToken)
+    {
+        DiagnosticLog.Info(_category, have > 0
+            ? string.Create(CultureInfo.InvariantCulture, $"Resuming {display} from {url} at byte {have}.")
+            : $"Downloading {display} from {url} to {partial}.");
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, url);
+        if (have > 0)
+        {
+            request.Headers.Range = new RangeHeaderValue(have, null);
+        }
+
+        using var response = await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
+        if (have > 0 && response.StatusCode == HttpStatusCode.RequestedRangeNotSatisfiable)
+        {
+            // Nothing past what is held: the partial file is the whole file (the checks after decide).
+            return (true, have, "");
+        }
+
+        if (!response.IsSuccessStatusCode)
+        {
+            return (false, have, $"HTTP {(int)response.StatusCode} from {url}");
+        }
+
+        long start = 0;
+        long? total = response.Content.Headers.ContentLength;
+        if (response.StatusCode == HttpStatusCode.PartialContent)
+        {
+            if (have == 0 || response.Content.Headers.ContentRange is not { From: { } from } range || from != have)
+            {
+                DeleteFileQuietly(partial);
+                return (false, 0, $"{url} resumed at the wrong byte; the partial download was deleted, try again");
+            }
+
+            start = have;
+            total = range.Length ?? (total is { } rest ? have + rest : null);
+        }
+        else if (have > 0)
+        {
+            DiagnosticLog.Info(_category, $"{url} did not resume; downloading {display} from the start.");
+        }
+
+        if (expected > 0 && total is { } offered && offered != expected)
+        {
+            return (false, start, string.Create(CultureInfo.InvariantCulture, $"{url} offers {offered} bytes, not the {expected} expected; the file behind it changed"));
+        }
+
+        long received = start;
+        progress?.Report((received, total));
+        using (var source = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false))
+        using (var target = new FileStream(partial, start > 0 ? FileMode.Append : FileMode.Create, FileAccess.Write, FileShare.None, CopyBufferBytes, useAsync: true))
+        {
+            var buffer = new byte[CopyBufferBytes];
+            int read;
+            while ((read = await source.ReadAsync(buffer, cancellationToken).ConfigureAwait(false)) > 0)
+            {
+                await target.WriteAsync(buffer.AsMemory(0, read), cancellationToken).ConfigureAwait(false);
+                received += read;
+                progress?.Report((received, total));
+            }
+        }
+
+        if (total is { } whole && received != whole)
+        {
+            return (false, received, string.Create(CultureInfo.InvariantCulture, $"download incomplete: {received} of {whole} bytes; try again to resume"));
+        }
+
+        return (true, received, "");
+    }
+
+    /// <summary>
+    /// Makes sure the directory <paramref name="spec"/> unpacks to is on disk and complete (2026-09-29, the llama.cpp
+    /// runtime): a present directory holding every required file costs nothing; otherwise each archive is ensured as a
+    /// resumable, pinned download under <c>&lt;path&gt;.parts</c> (progress runs across all of them), every archive is
+    /// unpacked into one folder (<paramref name="unpacking"/> is told first), the folder is checked and moved into
+    /// place, and the archives are deleted. Returns a result, never throws, except the caller's own cancellation — the
+    /// downloaded parts stay for the next try.
+    /// </summary>
+    public async Task<ModelResult> EnsureArchiveSetAsync(ArchiveSetSpec spec, IProgress<(long Received, long? Total)>? progress, Action? verifying, Action? unpacking, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(spec);
+        string path = spec.Path;
+
+        if (System.IO.Directory.Exists(path))
+        {
+            if (IsCompleteModelDirectory(path, spec.RequiredFiles))
+            {
+                return new ModelResult(true, path, "present");
+            }
+
+            DiagnosticLog.Warn(_category, $"Discarding {path}: not a complete {spec.Display}.");
+            try
+            {
+                System.IO.Directory.Delete(path, recursive: true);
+            }
+            catch (Exception ex)
+            {
+                return ModelResult.Failed(path, $"cannot replace {path}: {ex.Message}");
+            }
+        }
+
+        string partsPath = path + ".parts";
+        string extractPath = $"{path}.{Guid.NewGuid():N}.extracting";
+        long total = spec.Parts.Sum(p => p.Bytes);
+        try
+        {
+            var archives = new List<string>(spec.Parts.Count);
+            long done = 0;
+            foreach (var part in spec.Parts)
+            {
+                var partSpec = new ModelSpec(part.Name, System.IO.Path.Combine(partsPath, part.Name), part.Url, part.Bytes, ModelFormat.Zip, part.Sha256, Resumable: true);
+                var partProgress = progress is null ? null : new OffsetProgress(progress, done, total);
+                var result = await EnsureAsync(partSpec, partProgress, verifying, cancellationToken).ConfigureAwait(false);
+                if (!result.Ok)
+                {
+                    return ModelResult.Failed(path, result.Detail);
+                }
+
+                archives.Add(result.Path);
+                done += part.Bytes;
+            }
+
+            unpacking?.Invoke();
+            DiagnosticLog.Info(_category, $"Unpacking {spec.Display} into {extractPath}.");
+            await Task.Run(() =>
+            {
+                foreach (var archive in archives)
+                {
+                    ZipFile.ExtractToDirectory(archive, extractPath, overwriteFiles: true);
+                }
+            }, cancellationToken).ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
+
+            string? root = FindModelRoot(extractPath, spec.RequiredFiles);
+            if (root is null)
+            {
+                return ModelResult.Failed(path, $"the archives of {spec.Display} do not contain it (no {MissingFileHint(extractPath, spec.RequiredFiles)})");
+            }
+
+            System.IO.Directory.Move(root, path);
+            DeleteDirectoryQuietly(partsPath);
+            DiagnosticLog.Info(_category, $"Downloaded {spec.Display} ({SizeLabel(total)}) to {path}.");
+            return new ModelResult(true, path, $"downloaded {SizeLabel(total)}");
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            return ModelResult.Failed(path, Assistant.Explain(ex));
+        }
+        finally
+        {
+            DeleteDirectoryQuietly(extractPath);
+        }
+    }
+
+    /// <summary>Where a resumable download of <paramref name="path"/> collects its bytes until verified.</summary>
+    public static string PartialPath(string path) => path + ".partial";
+
+    /// <summary>The refusal when a pinned download's SHA-256 does not match (the file is deleted). Pinned.</summary>
+    public static string ChecksumError(string display) => $"the download of {display} does not match its published checksum; deleted, try again";
+
+    /// <summary>The refusal when the drive cannot hold what a resumable download still needs plus <see cref="DiskHeadroomBytes"/>. Pinned.</summary>
+    public static string DiskSpaceError(string display, long needed, long free, string directory) =>
+        $"not enough disk space for {display}: it needs {SizeLabel(needed)} more and {SizeLabel(DiskHeadroomBytes)} to spare, {System.IO.Path.GetPathRoot(directory)} has {SizeLabel(free)} free";
+
+    private static async Task<string> Sha256Async(string path, CancellationToken cancellationToken)
+    {
+        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 1 << 20, useAsync: true);
+        byte[] hash = await SHA256.HashDataAsync(stream, cancellationToken).ConfigureAwait(false);
+        return Convert.ToHexStringLower(hash);
+    }
+
+    private static long? FreeBytesOn(string directory)
+    {
+        try
+        {
+            string? root = System.IO.Path.GetPathRoot(System.IO.Path.GetFullPath(directory));
+            return string.IsNullOrEmpty(root) ? null : new DriveInfo(root).AvailableFreeSpace;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    /// <summary>One archive's progress reported as a share of the whole set's bytes.</summary>
+    private sealed class OffsetProgress(IProgress<(long Received, long? Total)> inner, long offset, long total) : IProgress<(long Received, long? Total)>
+    {
+        public void Report((long Received, long? Total) value) => inner.Report((offset + value.Received, total));
     }
 
     /// <summary>Whether <paramref name="directory"/> holds every file in <paramref name="requiredFiles"/> (relative, forward or back slashes).</summary>
@@ -303,7 +641,7 @@ public sealed class ModelStore
             System.IO.Directory.CreateDirectory(directory);
         }
 
-        DiagnosticLog.Info(Category, $"Downloading {display} from {url} to {path}.");
+        DiagnosticLog.Info(_category, $"Downloading {display} from {url} to {path}.");
         using var response = await _http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
         if (!response.IsSuccessStatusCode)
         {
@@ -391,11 +729,25 @@ public sealed class ModelStore
     }
 
     /// <summary>The check for <paramref name="format"/>.</summary>
-    public static bool LooksLike(string path, ModelFormat format) =>
-        format == ModelFormat.Onnx ? LooksLikeOnnx(path) : LooksLikeGgml(path);
+    public static bool LooksLike(string path, ModelFormat format) => format switch
+    {
+        ModelFormat.Onnx => LooksLikeOnnx(path),
+        ModelFormat.Gguf => LooksLikeGguf(path),
+        ModelFormat.Zip => LooksLikeZip(path),
+        _ => LooksLikeGgml(path),
+    };
 
-    /// <summary>The words after "not" in the discard / refusal lines: <c>a ggml</c> or <c>an ONNX</c>.</summary>
-    public static string FormatName(ModelFormat format) => format == ModelFormat.Onnx ? "an ONNX" : "a ggml";
+    /// <summary>The words after "not" in the discard / refusal lines: <c>a ggml</c>, <c>an ONNX</c>, <c>a GGUF</c> or <c>a zip</c>.</summary>
+    public static string FormatName(ModelFormat format) => format switch
+    {
+        ModelFormat.Onnx => "an ONNX",
+        ModelFormat.Gguf => "a GGUF",
+        ModelFormat.Zip => "a zip",
+        _ => "a ggml",
+    };
+
+    /// <summary>Whether the file at <paramref name="path"/> starts with the GGUF magic. False for a missing, short or unreadable file.</summary>
+    public static bool LooksLikeGguf(string path) => StartsWith(path, GgufMagic);
 
     private static bool StartsWith(string path, byte[] magic)
     {
@@ -529,9 +881,17 @@ public sealed class ModelStore
         return null;
     }
 
-    /// <summary>A size as people read it: <c>148 MB</c>, <c>1 MB</c>, <c>512 KB</c>. Invariant.</summary>
+    /// <summary>
+    /// A size as people read it: <c>4.2 GB</c>, <c>148 MB</c>, <c>1 MB</c>, <c>512 KB</c>. Invariant. The gigabyte step
+    /// (one decimal, dropped when it is zero) arrived with the local LLM's files (2026-09-29); "4216 MB" read badly.
+    /// </summary>
     public static string SizeLabel(long bytes)
     {
+        if (bytes >= 1_000_000_000)
+        {
+            return (bytes / 1_000_000_000.0).ToString("0.#", CultureInfo.InvariantCulture) + " GB";
+        }
+
         if (Math.Round(bytes / 1_000_000.0) >= 1)
         {
             return string.Create(CultureInfo.InvariantCulture, $"{Math.Round(bytes / 1_000_000.0)} MB");

@@ -27,6 +27,10 @@ public class AppSettingsTests : IDisposable
     private static AppSettingsData FullyNonDefault() => new()
     {
         SchemaVersion = 7,
+        LocalBackend = "vulkan",
+        LocalContextSize = 8192,
+        LocalGpuLayers = "20",
+        LocalVision = false,
         CommandTypoIntercept = false,
         KeepCommandHistory = false,
         CopyUserPrompt = false,
@@ -263,6 +267,10 @@ public class AppSettingsTests : IDisposable
         Assert.Equal(expected.SessionShowName, actual.SessionShowName);
         Assert.Equal(expected.SessionTool, actual.SessionTool);
         Assert.Equal(expected.SessionSaveThinking, actual.SessionSaveThinking);
+        Assert.Equal(expected.LocalBackend, actual.LocalBackend);
+        Assert.Equal(expected.LocalContextSize, actual.LocalContextSize);
+        Assert.Equal(expected.LocalGpuLayers, actual.LocalGpuLayers);
+        Assert.Equal(expected.LocalVision, actual.LocalVision);
     }
 
     [Fact]
@@ -280,6 +288,10 @@ public class AppSettingsTests : IDisposable
         settings.Update(d =>
         {
             d.SchemaVersion = full.SchemaVersion;
+            d.LocalBackend = full.LocalBackend;
+            d.LocalContextSize = full.LocalContextSize;
+            d.LocalGpuLayers = full.LocalGpuLayers;
+            d.LocalVision = full.LocalVision;
             d.CommandTypoIntercept = full.CommandTypoIntercept;
             d.KeepCommandHistory = full.KeepCommandHistory;
             d.CopyUserPrompt = full.CopyUserPrompt;
@@ -397,6 +409,10 @@ public class AppSettingsTests : IDisposable
             settings.Update(d =>
             {
                 d.SchemaVersion = full.SchemaVersion;
+                d.LocalBackend = full.LocalBackend;
+                d.LocalContextSize = full.LocalContextSize;
+                d.LocalGpuLayers = full.LocalGpuLayers;
+                d.LocalVision = full.LocalVision;
                 d.CommandTypoIntercept = full.CommandTypoIntercept;
                 d.KeepCommandHistory = full.KeepCommandHistory;
                 d.CopyUserPrompt = full.CopyUserPrompt;

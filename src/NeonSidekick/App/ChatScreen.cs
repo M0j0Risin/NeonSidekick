@@ -1065,6 +1065,9 @@ internal sealed partial class ChatScreen
         // The /sampling pane (2026-09-28): the per-model overrides; a save resolves the connected assistant's sampling again.
         _samplingMenu = new SamplingMenu(settings, _menu, _flow, _menuPane, _input, () => _session.Endpoint, () => overriddenBy(SettingsField.LlmSampling), RefreshSampling, token => _session.ServerSamplingAsync(_effective(), token));
         _menu.SamplingPane = _samplingMenu.ShowAsync;
+        // The local model's tab (2026-09-29): its catalog and live rows over the session's service, the backend under the effective settings.
+        _menu.LocalLlm = _session.Local;
+        _menu.Effective = _effective;
         BindProfile();
     }
 
@@ -7983,11 +7986,16 @@ internal sealed partial class ChatScreen
     private async Task ConnectLlmAsync(CancellationToken cancellationToken, bool quiet = false, bool startup = false)
     {
         var effective = _effective();
+        if (LocalLlm.LocalEndpoint.IsLocal(effective.LlmUrl))
+        {
+            await ConnectLocalAsync(effective, quiet, cancellationToken).ConfigureAwait(false);
+            return;
+        }
 
         // A saved Claude API URL with the Claude API off or keyless stands for nothing (2026-09-27): found as a blank one.
         bool blankUrl = string.IsNullOrWhiteSpace(effective.LlmUrl)
             || (Llm.Anthropic.ClaudeApi.IsClaudeApi(effective.LlmUrl) && !Llm.Anthropic.ClaudeApi.Offered(effective));
-        if (blankUrl && !Llm.LlmScanMode.Scans(Llm.LlmScanMode.Resolve(effective)) && !Llm.Anthropic.ClaudeApi.Offered(effective))
+        if (blankUrl && !Llm.LlmScanMode.Scans(Llm.LlmScanMode.Resolve(effective)) && !Llm.Anthropic.ClaudeApi.Offered(effective) && !LocalOffered)
         {
             await _session.ConnectAsync(effective, cancellationToken).ConfigureAwait(false);
             DrainDiagnostics();
@@ -8014,13 +8022,29 @@ internal sealed partial class ChatScreen
 
         if (servers.Count > 0)
         {
-            var picked = servers.Count > 1 || startup
+            // The local model's rows (2026-09-29) are always listed and never answered a scan: the picker opens as it did
+            // for the servers that did, or when only local rows stand; ESC takes the first server that answered, never a
+            // local model — starting one loads gigabytes, which only a pick should do.
+            var answered = servers.Where(s => !LocalLlm.LocalEndpoint.IsLocal(s.BaseUrl)).ToList();
+            var picked = answered.Count > 1 || startup || answered.Count == 0
                 ? await _menu.PickServerAsync(servers, null, SettingsMenu.StartupServerTitle, cancellationToken).ConfigureAwait(false)
                 : null;
+            if (picked is not null && LocalLlm.LocalEndpoint.IsLocal(picked.BaseUrl))
+            {
+                await UseLocalRowAsync(picked, cancellationToken).ConfigureAwait(false);
+                return;
+            }
+
+            if (picked is null && answered.Count == 0)
+            {
+                ReportLlm(quiet);
+                return;
+            }
+
             LlmEndpoint endpoint;
             if (picked is null)
             {
-                endpoint = LlmEndpointProbe.Endpoint(servers[0], Llm.Anthropic.ClaudeApi.KeyFor(effective, servers[0].BaseUrl), ConfiguredModel(effective), configured: false);
+                endpoint = LlmEndpointProbe.Endpoint(answered[0], Llm.Anthropic.ClaudeApi.KeyFor(effective, answered[0].BaseUrl), ConfiguredModel(effective), configured: false);
             }
             else
             {
@@ -8041,6 +8065,117 @@ internal sealed partial class ChatScreen
         }
 
         ReportLlm(quiet);
+    }
+
+    /// <summary>Whether this screen offers the local model (2026-09-29): a session with one, on llama.cpp's Windows x64 builds.</summary>
+    private bool LocalOffered => _session.Local is not null && LocalLlm.LocalEndpoint.Offered;
+
+    /// <summary>
+    /// The local model's connect (2026-09-29): a model named but not installed is offered for install first (a yes
+    /// downloads it under the spinner; no, or no menus, and the session's connect says it is missing), then the server
+    /// is started under a spinner whose label follows the runtime's download, the start and the model's load — Ctrl+C
+    /// cancels it and the app stays. A start that failed has drained its error; only a connected one is reported.
+    /// </summary>
+    private async Task ConnectLocalAsync(AppSettingsData effective, bool quiet, CancellationToken cancellationToken)
+    {
+        if (_session.Local is { } local
+            && LocalLlm.LocalModelCatalog.Find(effective.LlmModel, local.Catalog) is { } named
+            && !local.State(named).IsInstalled
+            && _menu.CanShowMenus()
+            && await _menu.ConfirmAsync(LocalLlm.LocalLlmText.InstallQuestion(named, local.RuntimeBytesToDownload(effective)), cancellationToken).ConfigureAwait(false)
+            && !await InstallLocalAsync(named, cancellationToken).ConfigureAwait(false))
+        {
+            return;
+        }
+
+        if (await ConnectUnderWatchAsync(NoticeGlyphs.Llm, token => _transcript.WithSpinnerAsync(ConnectingLabel, async setLabel =>
+        {
+            await _session.ConnectAsync(effective, setLabel, token).ConfigureAwait(false);
+            return true;
+        }), cancellationToken).ConfigureAwait(false))
+        {
+            return;
+        }
+
+        if (_session.Assistant is not null)
+        {
+            ReportLlm(quiet);
+        }
+    }
+
+    /// <summary>
+    /// Downloads <paramref name="model"/> (and the llama.cpp runtime its backend needs) under the spinner, labelled with
+    /// each file's progress (2026-09-29). Ctrl+C pauses it — what arrived stays for the next try, and the notice says so.
+    /// True when it is installed.
+    /// </summary>
+    private async Task<bool> InstallLocalAsync(LocalLlm.LocalModel model, CancellationToken cancellationToken)
+    {
+        if (_session.Local is not { } local)
+        {
+            return false;
+        }
+
+        var effective = _effective();
+        Speech.ModelResult result = default;
+        if (await ConnectUnderWatchAsync(NoticeGlyphs.Llm, token => _transcript.WithSpinnerAsync(LocalLlm.LocalLlmText.PreparingLabel(model), async setLabel =>
+        {
+            result = await local.InstallAsync(model, effective, setLabel, token).ConfigureAwait(false);
+            return true;
+        }), cancellationToken).ConfigureAwait(false))
+        {
+            _transcript.Notice(LocalLlm.LocalLlmText.PausedNotice);
+            return false;
+        }
+
+        if (!result.Ok)
+        {
+            _transcript.Error(result.Detail);
+            return false;
+        }
+
+        _transcript.Notice(NoticeGlyphs.Llm + LocalLlm.LocalLlmText.Installed(model));
+        return true;
+    }
+
+    /// <summary><see cref="UseLocalModelAsync"/> for a picked <c>/server</c> row: the row carries the catalog id as its one model.</summary>
+    private async Task UseLocalRowAsync(LlmServer row, CancellationToken cancellationToken, bool reasoning = true)
+    {
+        if (_session.Local is { } local && row.Result.ModelIds.Count > 0 && LocalLlm.LocalModelCatalog.Find(row.Result.ModelIds[0], local.Catalog) is { } model)
+        {
+            await UseLocalModelAsync(model, reasoning, cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    /// Switches to the local <paramref name="model"/> (2026-09-29; a <c>/server</c> row, <c>/server local</c>, the
+    /// settings' catalog): installed first when it is not — before anything is saved, so a paused download never leaves
+    /// the profile pointing at a model that is not there — then saved as the LLM URL and model in one write, the
+    /// reasoning picker offered (<paramref name="reasoning"/>, <c>/server</c>'s walk), and one connect.
+    /// </summary>
+    private async Task UseLocalModelAsync(LocalLlm.LocalModel model, bool reasoning, CancellationToken cancellationToken)
+    {
+        if (_session.Local is not { } local)
+        {
+            return;
+        }
+
+        if (!local.State(model).IsInstalled && !await InstallLocalAsync(model, cancellationToken).ConfigureAwait(false))
+        {
+            return;
+        }
+
+        _menu.SaveLocalModel(model.Id);
+        if (_overriddenBy(SettingsField.LlmUrl) is not null)
+        {
+            return;
+        }
+
+        if (reasoning)
+        {
+            await _menu.PickReasoningAsync("", _effective().LlmReasoning, cancellationToken).ConfigureAwait(false);
+        }
+
+        await ConnectLlmAsync(cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -8140,7 +8275,7 @@ internal sealed partial class ChatScreen
         if (string.IsNullOrWhiteSpace(args))
         {
             var scope = Llm.LlmScanMode.Resolve(effective);
-            if (!Llm.LlmScanMode.Scans(scope) && !Llm.Anthropic.ClaudeApi.Offered(effective))
+            if (!Llm.LlmScanMode.Scans(scope) && !Llm.Anthropic.ClaudeApi.Offered(effective) && !LocalOffered)
             {
                 // Disabled entirely (the user's call, 2026-09-15): no spinner, no request, the session as it was.
                 _transcript.Error(LlmSession.NoServerLine(scope));
@@ -8157,9 +8292,15 @@ internal sealed partial class ChatScreen
                 return;
             }
 
-            var choice = await _menu.PickServerAsync(servers, _session.Endpoint?.BaseUrl, SettingsMenu.ServerTitle, cancellationToken).ConfigureAwait(false);
+            var choice = await _menu.PickServerAsync(servers, _session.Endpoint?.BaseUrl, SettingsMenu.ServerTitle, cancellationToken, _session.Endpoint?.ModelId).ConfigureAwait(false);
             if (choice is null)
             {
+                return;
+            }
+
+            if (LocalLlm.LocalEndpoint.IsLocal(choice.BaseUrl))
+            {
+                await UseLocalRowAsync(choice, cancellationToken).ConfigureAwait(false);
                 return;
             }
 
@@ -8181,6 +8322,23 @@ internal sealed partial class ChatScreen
             if (Llm.Anthropic.ClaudeApi.IsClaudeApi(url) && !Llm.Anthropic.ClaudeApi.Offered(effective))
             {
                 _transcript.Error(Llm.Anthropic.ClaudeApiText.NotOfferedError);
+                return;
+            }
+
+            if (LocalLlm.LocalEndpoint.IsLocal(url))
+            {
+                // /server local (2026-09-29): the local rows alone, the running model under the cursor.
+                if (!LocalOffered)
+                {
+                    _transcript.Error(LlmSession.LocalUnavailable);
+                    return;
+                }
+
+                if (await _menu.PickServerAsync(_session.LocalRows(), _session.Endpoint?.BaseUrl, SettingsMenu.ServerTitle, cancellationToken, _session.Endpoint?.ModelId).ConfigureAwait(false) is { } row)
+                {
+                    await UseLocalRowAsync(row, cancellationToken).ConfigureAwait(false);
+                }
+
                 return;
             }
 
@@ -8418,6 +8576,14 @@ internal sealed partial class ChatScreen
     {
         var changes = await _menu.ShowAsync(cancellationToken).ConfigureAwait(false);
 
+        // A local model used or installed from the catalog (2026-09-29): its own install and connect below stand for
+        // the LLM reconnect any other change on the tab asked for.
+        var localPick = _menu.TakePendingLocalModel();
+        if (localPick is not null)
+        {
+            changes &= ~SettingsChanges.Llm;
+        }
+
         // The command's line silenced any reply tail, so a speaker still playing here is
         // the voice picker's preview: a tail without the turn's interrupt, like an alert.
         _tailInterrupt = false;
@@ -8429,6 +8595,10 @@ internal sealed partial class ChatScreen
         }
 
         await ApplySettingsChangesAsync(changes, cancellationToken).ConfigureAwait(false);
+        if (localPick is not null)
+        {
+            await UseLocalModelAsync(localPick, reasoning: false, cancellationToken).ConfigureAwait(false);
+        }
     }
 
     /// <summary>
@@ -10746,6 +10916,13 @@ internal sealed partial class ChatScreen
         if (_session.Assistant is not { } assistant)
         {
             _transcript.Error(NoAssistantError);
+            return false;
+        }
+
+        if (images.Count > 0 && _session.LocalServer is { Vision: false })
+        {
+            // The local model without its vision projector (2026-09-29): llama-server would refuse the image anyway.
+            _transcript.Error(LocalLlm.LocalLlmText.NoVisionError);
             return false;
         }
 

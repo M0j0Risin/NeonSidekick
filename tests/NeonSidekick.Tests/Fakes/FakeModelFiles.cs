@@ -82,6 +82,40 @@ public static class FakeModelFiles
         return bytes;
     }
 
+    /// <summary>The GGUF magic followed by <paramref name="length"/> − 4 bytes of a counting pattern (so a truncated or reordered copy never matches the whole).</summary>
+    public static byte[] GgufBytes(int length = 4096)
+    {
+        var bytes = new byte[Math.Max(4, length)];
+        for (int i = 4; i < bytes.Length; i++)
+        {
+            bytes[i] = (byte)(i * 31 + 7);
+        }
+
+        bytes[0] = (byte)'G';
+        bytes[1] = (byte)'G';
+        bytes[2] = (byte)'U';
+        bytes[3] = (byte)'F';
+        return bytes;
+    }
+
+    /// <summary>A zip archive holding <paramref name="entries"/> (relative name → text) at its root.</summary>
+    public static byte[] Zip(params (string Name, string Content)[] entries)
+    {
+        using var stream = new MemoryStream();
+        using (var zip = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            foreach (var (name, content) in entries)
+            {
+                AddEntry(zip, name, content);
+            }
+        }
+
+        return stream.ToArray();
+    }
+
+    /// <summary>The lowercase hex SHA-256 of <paramref name="bytes"/>, as a pinned spec carries it.</summary>
+    public static string Sha256(byte[] bytes) => Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(bytes));
+
     /// <summary>Writes <see cref="OnnxBytes"/> at <paramref name="path"/>.</summary>
     public static string WriteOnnx(string path)
     {

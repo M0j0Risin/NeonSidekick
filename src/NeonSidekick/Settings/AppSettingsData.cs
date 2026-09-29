@@ -462,6 +462,16 @@ public sealed class AppSettingsData
     public bool LlmPreserveThinking { get; set; }
 
     /// <summary>
+    /// How <c>/usage</c> counts the thinking a server streamed but did not count (2026-09-29, the user's ask: llama.cpp, the
+    /// local LLM's server and Ollama report no reasoning count, so the Reasoning row read <c>—</c>): one of
+    /// <see cref="Llm.ReasoningEstimates.Names"/> — <c>chars</c> (the default: the thinking's characters over four),
+    /// <c>tokenize</c> (llama.cpp's <c>/tokenize</c> counts it exactly, one short request after each reply; the characters
+    /// where it does not answer) or <c>off</c>. An estimate shows as <c>~</c>; a server's own count always wins. The Claude
+    /// API is not affected. Read at each request, no reconnect. The LLM tab, under <see cref="LlmPreserveThinking"/>. No variable.
+    /// </summary>
+    public string LlmReasoningEstimate { get; set; } = Llm.ReasoningEstimates.Default;
+
+    /// <summary>
     /// Sampling overrides per model (2026-09-28, the user's ask: temperature, top_p, top_k, min_p, presence_penalty and
     /// repetition_penalty over the model's defaults, "dynamic enough to handle different LLM servers, models"; per model
     /// inside the profile and a free-form extra body, the user's calls). Keyed by the model id as the server reports it
@@ -1641,6 +1651,40 @@ public sealed class AppSettingsData
     /// A reconnect. No variable.
     /// </summary>
     public bool ClaudeApiPromptCaching { get; set; } = true;
+
+    // ─── Local model (2026-09-29) ───────────────────────────────────────────────
+    // The local model (2026-09-29, the user's ask: a small model the app downloads from Hugging Face and runs itself on
+    // llama.cpp's llama-server, a /server choice like any other). Which model runs is the LLM URL (LocalLlm.LocalEndpoint)
+    // and the LLM model (a LocalLlm.LocalModelCatalog id); these four say how it runs. Each is a reconnect, and the
+    // server restarts only when what it was started with changed (LocalLlm.LlamaLaunch).
+
+    /// <summary>
+    /// Which llama.cpp build runs the local model (2026-09-29): one of <see cref="LocalLlm.LocalBackends.Names"/> —
+    /// <c>auto</c> (the default: CUDA with an NVIDIA driver new enough, else Vulkan, else the CPU;
+    /// <see cref="LocalLlm.LlamaBackendDetect"/>), <c>cuda</c>, <c>vulkan</c> or <c>cpu</c>. Anything else reads as
+    /// <c>auto</c>. Each build is downloaded on first use. Variable <see cref="EnvironmentOverrides.LocalBackendVariable"/>.
+    /// </summary>
+    public string LocalBackend { get; set; } = LocalLlm.LocalBackends.Auto;
+
+    /// <summary>
+    /// The local server's context window in tokens (2026-09-29): 0 for the model's own (Gemma 4 E2B/E4B: 128K, a lot of
+    /// memory), else <see cref="LocalLlm.LocalContextSize.Min"/> to <see cref="LocalLlm.LocalContextSize.Max"/>; 32768
+    /// by default, which fits beside the model on an 8 GB GPU. Variable <see cref="EnvironmentOverrides.LocalContextVariable"/>.
+    /// </summary>
+    public int LocalContextSize { get; set; } = LocalLlm.LocalContextSize.Default;
+
+    /// <summary>
+    /// How many of the model's layers the local server puts on the GPU (2026-09-29): <c>auto</c> (the default: llama.cpp
+    /// fits what the free VRAM holds), <c>all</c>, or a count from 0 (CPU only) to 999. No variable.
+    /// </summary>
+    public string LocalGpuLayers { get; set; } = LocalLlm.LocalGpuLayers.Auto;
+
+    /// <summary>
+    /// Whether the local server loads the model's vision projector (2026-09-29, on by default): images can then be sent
+    /// to it. Off saves about 1 GB of memory; an image sent then is refused with a word. Every install downloads the
+    /// projector either way. No variable.
+    /// </summary>
+    public bool LocalVision { get; set; } = true;
 
     // ─── Home Assistant (2026-09-28) ────────────────────────────────────────────
     // The ha_ tools and /ha (2026-09-28, the user's ask: "plan an integration for Home Assistant" — a Docker instance with

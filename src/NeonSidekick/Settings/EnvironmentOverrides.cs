@@ -51,6 +51,8 @@ public sealed class EnvironmentOverrides
     public const string LlmSamplingVariable = Prefix + "LLM_SAMPLING";
     public const string HomeAssistantUrlVariable = Prefix + "HA_URL";
     public const string HomeAssistantTokenVariable = Prefix + "HA_TOKEN";
+    public const string LocalBackendVariable = Prefix + "LOCAL_BACKEND";
+    public const string LocalContextVariable = Prefix + "LOCAL_CONTEXT";
 
     /// <summary>Every variable this class reads, for documentation.</summary>
     public static readonly string[] AllVariables =
@@ -62,7 +64,7 @@ public sealed class EnvironmentOverrides
         CommandPolicyVariable, ShellPoliceVariable, ObsidianVaultVariable, ComfyUrlVariable,
         ShellNativeVariable, ClaudeExeVariable, ClaudePermissionsVariable, ClaudeAdvisorVariable,
         ClaudeApiVariable, ClaudeApiKeyVariable, LlmSamplingVariable, HomeAssistantUrlVariable,
-        HomeAssistantTokenVariable,
+        HomeAssistantTokenVariable, LocalBackendVariable, LocalContextVariable,
     };
 
     /// <summary>The log category of every environment line.</summary>
@@ -183,6 +185,51 @@ public sealed class EnvironmentOverrides
     public LlmSamplingEntry? LlmSampling => ReadSampling(LlmSamplingVariable);
 
     /// <summary>
+    /// <c>Local backend</c> for this launch, or null when unset or not one of <see cref="LocalLlm.LocalBackends.Names"/>
+    /// (2026-09-29, warned): a scripted run forces the CPU or Vulkan build without saving it.
+    /// </summary>
+    public string? LocalBackend
+    {
+        get
+        {
+            var raw = Read(LocalBackendVariable);
+            if (raw is null)
+            {
+                return null;
+            }
+
+            if (LocalLlm.LocalBackends.IsValid(raw))
+            {
+                return raw.Trim().ToLowerInvariant();
+            }
+
+            DiagnosticLog.Warn(Category, $"{LocalBackendVariable}='{raw}' {LocalLlm.LocalBackends.Error}; ignoring it.");
+            return null;
+        }
+    }
+
+    /// <summary><c>Local context size</c> for this launch, or null when unset or out of range (2026-09-29, warned): 0 or 512 to 262144 tokens.</summary>
+    public int? LocalContextSize
+    {
+        get
+        {
+            var raw = Read(LocalContextVariable);
+            if (raw is null)
+            {
+                return null;
+            }
+
+            if (int.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out var tokens) && LocalLlm.LocalContextSize.IsValid(tokens))
+            {
+                return tokens;
+            }
+
+            DiagnosticLog.Warn(Category, $"{LocalContextVariable}='{raw}' {LocalLlm.LocalContextSize.Error}; ignoring it.");
+            return null;
+        }
+    }
+
+    /// <summary>
     /// A variable that is not an override: <c>PATH</c>, <c>PATHEXT</c>, <c>ProgramFiles</c> — what the
     /// shell probe (<see cref="Shell.Interpreters"/>) walks (2026-09-21). The one door stays this class's:
     /// nothing else calls <c>Environment.GetEnvironmentVariable</c>, and tests hand a dictionary here too.
@@ -216,6 +263,8 @@ public sealed class EnvironmentOverrides
                 ClaudeAdvisorVariable => ClaudeAdvisor is not null,
                 ClaudeApiVariable => ClaudeApi is not null,
                 LlmSamplingVariable => LlmSampling is not null,
+                LocalBackendVariable => LocalBackend is not null,
+                LocalContextVariable => LocalContextSize is not null,
                 _ => Read(name) is not null,
             };
             if (set)
@@ -291,6 +340,8 @@ public sealed class EnvironmentOverrides
         if (HomeAssistantUrl is { } haUrl) effective.HomeAssistantUrl = haUrl;
         if (HomeAssistantToken is { } haToken) effective.HomeAssistantToken = haToken;
         if (LlmSampling is { } sampling) effective.LlmSampling = Overlay(effective.LlmSampling, sampling);
+        if (LocalBackend is { } localBackend) effective.LocalBackend = localBackend;
+        if (LocalContextSize is { } localContext) effective.LocalContextSize = localContext;
 
         return effective;
     }

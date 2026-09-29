@@ -74,6 +74,13 @@ public static class UsageText
         return rows;
     }
 
+    /// <summary>
+    /// The reasoning count as shown: <c>1,234</c> when the server counted it, <c>~1,234</c> when the app estimated it or a
+    /// part of the sum (2026-09-29, <c>LLM reasoning estimate</c>, the busy row's <see cref="EstimateMark"/>), null when neither.
+    /// </summary>
+    public static string? ReasoningValue(TokenUsage usage) =>
+        usage.Reasoning is { } count ? (usage.ReasoningEstimated ? EstimateMark : "") + N0(count) : null;
+
     /// <summary>The Reasoning row's value when no request in the scope reported a count — the row is always there (the user's call 2026-09-14).</summary>
     public const string NoReasoningReport = "—";
 
@@ -89,7 +96,7 @@ public static class UsageText
             ("Total", N0(usage.Total)),
             ("Prompt", N0(usage.Input)),
             ("Completion", N0(usage.Output)),
-            ("Reasoning", usage.Reasoning is { } reasoning ? N0(reasoning) : NoReasoningReport),
+            ("Reasoning", ReasoningValue(usage) ?? NoReasoningReport),
             ("Requests", N0(usage.Requests)),
         };
         if (CacheValue(usage) is { } cache)
@@ -372,7 +379,7 @@ public static class UsageText
     /// </summary>
     private static string Line(string scope, TokenUsage usage, bool averaged)
     {
-        string reasoning = usage.Reasoning is { } count ? N0(count) + " reasoning, " : "";
+        string reasoning = ReasoningValue(usage) is { } count ? count + " reasoning, " : "";
         string cached = usage.CacheRead is { } read ? N0(read) + " cached, " : "";
         string line = $"Tokens — {scope}: {N0(usage.Total)} ({N0(usage.Input)} in, {cached}{N0(usage.Output)} out, {reasoning}{Plural(usage.Requests, "request", "requests")})";
         if (usage.CostUsd is { } cost)

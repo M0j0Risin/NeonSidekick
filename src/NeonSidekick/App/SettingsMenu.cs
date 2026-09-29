@@ -540,6 +540,32 @@ public enum SettingsField
 
     /// <summary>Typed: the body size in points a listing or markdown prints at, 6 to 24 (<see cref="Settings.AppSettingsData.PrintFontSize"/>). The Print tab's last row (2026-09-28); no reconnect.</summary>
     PrintFontSize,
+
+    /// <summary>
+    /// A door: the local model's catalog (2026-09-29) — each model installed, part-way or not, Enter for use / install /
+    /// remove (<see cref="SettingsMenu.PickLocalModelAsync"/>). No stored value; the Local model tab's first row. A use
+    /// or an install closes the pane and hands the model to the screen (<see cref="SettingsMenu.TakePendingLocalModel"/>).
+    /// </summary>
+    LocalModels,
+
+    /// <summary>A picker: which llama.cpp build runs the local model (<see cref="Settings.AppSettingsData.LocalBackend"/>, 2026-09-29); a reconnect.</summary>
+    LocalBackend,
+
+    /// <summary>Typed: the local server's context window, 0 or 512 to 262144 tokens (<see cref="Settings.AppSettingsData.LocalContextSize"/>, 2026-09-29); a reconnect.</summary>
+    LocalContextSize,
+
+    /// <summary>Typed: the model layers the local server puts on the GPU — auto, all or a count (<see cref="Settings.AppSettingsData.LocalGpuLayers"/>, 2026-09-29); a reconnect.</summary>
+    LocalGpuLayers,
+
+    /// <summary>A toggle: whether the local server loads the vision projector (<see cref="Settings.AppSettingsData.LocalVision"/>, 2026-09-29); a reconnect.</summary>
+    LocalVision,
+
+    /// <summary>
+    /// A picker: how a reasoning count the server did not report is estimated — <c>off</c>, <c>chars</c>, <c>tokenize</c>
+    /// (<see cref="Settings.AppSettingsData.LlmReasoningEstimate"/>, 2026-09-29). The LLM tab, under <c>LLM preserve
+    /// thinking</c>; no reconnect (read at each request). Last in the enum, as every newcomer.
+    /// </summary>
+    LlmReasoningEstimate,
 }
 
 /// <summary>The tabs of <c>/settings</c> on the pane, in strip order (Sessions right after General — the user's order, 2026-09-18; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
@@ -559,6 +585,9 @@ public enum SettingsTab
 
     /// <summary>The Claude API's four rows (2026-09-27, the user's ask and place: after STT, before Botchat) — the switch that offers it on <c>/server</c>, its key, its output cap and its prompt caching.</summary>
     ClaudeApi,
+
+    /// <summary>The local model's five rows (2026-09-29): the catalog door, the backend, the context size, the GPU layers and the vision switch — beside the Claude API's, the other server of the app's own.</summary>
+    LocalModel,
 
     /// <summary>The <c>/botchat</c> picture rows (2026-09-25, the user's ask: a Botchat tab on <c>/settings</c>), last (a Claude tab followed it on 2026-09-27 until later that day, when its rows moved to <c>/tools</c>' Claude tab, the user's call).</summary>
     BotChat,
@@ -807,7 +836,10 @@ internal sealed partial class SettingsMenu
     private static readonly SettingsField[] Fields = Enum.GetValues<SettingsField>();
 
     /// <summary>The strip titles, one per <see cref="SettingsTab"/> (five since 2026-09-19: Ask, Files and Web are <c>/tools</c>' tabs, <see cref="ToolsText.TabTitles"/>, and Skills is <c>/skills</c>' Options tab, <see cref="SkillsText.OptionsTabTitle"/>). Pinned.</summary>
-    public static readonly IReadOnlyList<string> TabTitles = ["General", "Sessions", "LLM", "TTS", "STT", ClaudeApiTabTitle, "Botchat"];
+    public static readonly IReadOnlyList<string> TabTitles = ["General", "Sessions", "LLM", "TTS", "STT", ClaudeApiTabTitle, LocalModelTabTitle, "Botchat"];
+
+    /// <summary>The local model tab's strip title (2026-09-29). Pinned.</summary>
+    public const string LocalModelTabTitle = "Local LLM";
 
     /// <summary>The Claude API tab's strip title (2026-09-27, the user's name for it). Pinned.</summary>
     public const string ClaudeApiTabTitle = "Claude (API)";
@@ -831,10 +863,11 @@ internal sealed partial class SettingsMenu
     [
         [SettingsField.Profile, SettingsField.NewProfileMode, SettingsField.WorkingDirectory, SettingsField.QueueMessages, SettingsField.QueueCancelMode, SettingsField.Memory, SettingsField.CopyUserPrompt, SettingsField.ShowImageThumbnails, SettingsField.ImageThumbnailSize, SettingsField.TranscriptMarkdown, SettingsField.PastePreviewLines, SettingsField.HideExitAutocomplete, SettingsField.CommandTypoIntercept, SettingsField.KeepCommandHistory, SettingsField.WelcomeSplash, SettingsField.ShowWorkingDirectory, SettingsField.ShowToolbar, SettingsField.Theme, SettingsField.DraftEditor, SettingsField.ImageEditor, SettingsField.ThemedViewer],
         [SettingsField.SessionLogging, SettingsField.SessionRetentionDays, SettingsField.SessionNamingMode, SettingsField.SessionShowName, SettingsField.SessionTool, SettingsField.SessionSearchMaxResults, SettingsField.SessionSaveThinking],
-        [SettingsField.LlmScanMode, SettingsField.LlmUrl, SettingsField.LlmModel, SettingsField.LlmApiKey, SettingsField.LlmReasoning, SettingsField.LlmRequestTimeoutSeconds, SettingsField.LlmTurnTimeoutSeconds, SettingsField.LlmContextLength, SettingsField.LlmMidTurnUsage, SettingsField.LlmCompactType, SettingsField.LlmCompactKeepRecent, SettingsField.LlmCompactShowSummary, SettingsField.LlmAutoCompactPercent, SettingsField.LlmMaxTurns, SettingsField.LlmOfferTools, SettingsField.LlmToolCompactType, SettingsField.LlmMaxToolIterations, SettingsField.LlmUseFunVerbs, SettingsField.LlmShowThinking, SettingsField.LlmPreserveThinking, SettingsField.LlmSampling, SettingsField.LlmSamplingFromHuggingFace],
+        [SettingsField.LlmScanMode, SettingsField.LlmUrl, SettingsField.LlmModel, SettingsField.LlmApiKey, SettingsField.LlmReasoning, SettingsField.LlmRequestTimeoutSeconds, SettingsField.LlmTurnTimeoutSeconds, SettingsField.LlmContextLength, SettingsField.LlmMidTurnUsage, SettingsField.LlmCompactType, SettingsField.LlmCompactKeepRecent, SettingsField.LlmCompactShowSummary, SettingsField.LlmAutoCompactPercent, SettingsField.LlmMaxTurns, SettingsField.LlmOfferTools, SettingsField.LlmToolCompactType, SettingsField.LlmMaxToolIterations, SettingsField.LlmUseFunVerbs, SettingsField.LlmShowThinking, SettingsField.LlmPreserveThinking, SettingsField.LlmReasoningEstimate, SettingsField.LlmSampling, SettingsField.LlmSamplingFromHuggingFace],
         [SettingsField.TtsOutput, SettingsField.TtsSource, SettingsField.TtsHttpUrl, SettingsField.TtsVoicePreview, SettingsField.TtsVoicePreset, SettingsField.TtsVoice, SettingsField.TtsVoice2, SettingsField.TtsVoiceMix, SettingsField.TtsSpeed],
         Fields.Where(IsVoiceField).ToArray(),
         [SettingsField.ClaudeApi, SettingsField.ClaudeApiKey, SettingsField.ClaudeApiMaxTokens, SettingsField.ClaudeApiPromptCaching],
+        [SettingsField.LocalModels, SettingsField.LocalBackend, SettingsField.LocalContextSize, SettingsField.LocalGpuLayers, SettingsField.LocalVision],
         [SettingsField.BotChatLlmMode, SettingsField.BotChatImages, SettingsField.BotChatImageMode, SettingsField.BotChatTxt2ImgWorkflow, SettingsField.BotChatImg2ImgWorkflow, SettingsField.BotChatImg2ImgMode, SettingsField.BotChatImageAsync, SettingsField.BotChatNonTtsDelaySeconds, SettingsField.BotChatSkills, SettingsField.BotChatPreloadedSkills, SettingsField.BotChatSkillMode, SettingsField.BotChatVision],
     ];
 
@@ -995,6 +1028,39 @@ internal sealed partial class SettingsMenu
     /// </summary>
     public Func<CancellationToken, Task>? SamplingPane { get; set; }
 
+    /// <summary>
+    /// The local model's catalog and installs (2026-09-29), set by the screen: the Local model tab's live rows and the
+    /// catalog picker read it. Null offers the picker nothing (headless, tests without one).
+    /// </summary>
+    public NeonSidekick.LocalLlm.ILocalLlm? LocalLlm { get; set; }
+
+    /// <summary>The effective settings (saved plus this launch's overrides), set by the screen; the saved ones when unset. What the local rows resolve the backend under.</summary>
+    public Func<AppSettingsData>? Effective { get; set; }
+
+    private AppSettingsData EffectiveNow() => Effective?.Invoke() ?? _settings.Current;
+
+    /// <summary>The model a use or an install on the catalog picker chose, for the screen to download and connect once the pane is closed.</summary>
+    private NeonSidekick.LocalLlm.LocalModel? _pendingLocalModel;
+
+    /// <summary>The model the catalog picker handed over (and forgets it), or null: the screen installs it when need be and connects to it.</summary>
+    public NeonSidekick.LocalLlm.LocalModel? TakePendingLocalModel()
+    {
+        var pending = _pendingLocalModel;
+        _pendingLocalModel = null;
+        return pending;
+    }
+
+    /// <summary>The <c>Local models</c> row with no local model offered, or before the catalog is read. Pinned.</summary>
+    public const string LocalModelsDoorLabel = "(Enter to install, use or remove)";
+
+    /// <summary>How a <c>Local context size</c> of 0 shows. Pinned.</summary>
+    public const string LocalContextOwnLabel = "the model's own";
+
+    /// <summary>The catalog picker's title and keys (2026-09-29).</summary>
+    public const string LocalModelsKeys = "Enter = choose · ESC = back";
+    public const string UseNowRow = "Use now";
+    public const string BackRow = "Back";
+
     /// <summary><see cref="Breadcrumb"/> under <see cref="Root"/>.</summary>
     private string Crumb(string label) => Root + " › " + label;
 
@@ -1002,7 +1068,8 @@ internal sealed partial class SettingsMenu
     public static bool IsLlmField(SettingsField field) =>
         field is SettingsField.LlmUrl or SettingsField.LlmModel or SettingsField.LlmApiKey
             or SettingsField.LlmRequestTimeoutSeconds or SettingsField.LlmTurnTimeoutSeconds or SettingsField.LlmContextLength or SettingsField.LlmReasoning
-            or SettingsField.ClaudeApi or SettingsField.ClaudeApiKey or SettingsField.ClaudeApiMaxTokens or SettingsField.ClaudeApiPromptCaching;
+            or SettingsField.ClaudeApi or SettingsField.ClaudeApiKey or SettingsField.ClaudeApiMaxTokens or SettingsField.ClaudeApiPromptCaching
+            or SettingsField.LocalModels or SettingsField.LocalBackend or SettingsField.LocalContextSize or SettingsField.LocalGpuLayers or SettingsField.LocalVision;
 
     /// <summary>Whether a change to <paramref name="field"/> needs the speech session re-probed.</summary>
     public static bool IsTtsField(SettingsField field) =>
@@ -1113,6 +1180,13 @@ internal sealed partial class SettingsMenu
     public static string ServerLabel(LlmServer server)
     {
         ArgumentNullException.ThrowIfNull(server);
+        if (NeonSidekick.LocalLlm.LocalEndpoint.IsLocal(server.BaseUrl))
+        {
+            // A local model's row (2026-09-29): the model's name where a URL would be — the sentinel names no place.
+            return Markup.Escape(server.Name.PadRight(ServerNameWidth)) + Theme.ColorMarkup(Theme.Ink, Markup.Escape(LocalRowName(server)))
+                + Theme.DimMarkup("  " + Markup.Escape(server.Result.Detail));
+        }
+
         return Markup.Escape(server.Name.PadRight(ServerNameWidth)) + Theme.ColorMarkup(Theme.Ink, Markup.Escape(server.BaseUrl.ToString()))
             + Theme.DimMarkup("  " + Markup.Escape(server.Result.Detail));
     }
@@ -1121,7 +1195,14 @@ internal sealed partial class SettingsMenu
     public static string ServerListLine(IReadOnlyList<LlmServer> servers)
     {
         ArgumentNullException.ThrowIfNull(servers);
-        return "LLM servers: " + string.Join(", ", servers.Select(s => s.Name + " " + s.BaseUrl));
+        return "LLM servers: " + string.Join(", ", servers.Select(s => s.Name + " " + (NeonSidekick.LocalLlm.LocalEndpoint.IsLocal(s.BaseUrl) ? LocalRowName(s) : s.BaseUrl.ToString())));
+    }
+
+    /// <summary>A local row's model: its display name from the catalog, else its id.</summary>
+    private static string LocalRowName(LlmServer server)
+    {
+        string id = server.Result.ModelIds.Count > 0 ? server.Result.ModelIds[0] : "";
+        return NeonSidekick.LocalLlm.LocalModelCatalog.Find(id)?.Display ?? id;
     }
 
     /// <summary><c>/server &lt;url&gt;</c> with something that is not an absolute http(s) URL. Pinned.</summary>
@@ -1147,7 +1228,7 @@ internal sealed partial class SettingsMenu
             or SettingsField.LlmCompactShowSummary or SettingsField.ShellToolBridge or SettingsField.ShellPoliceOutsidePaths or SettingsField.ShellPreferNative
             or SettingsField.ObsidianTools or SettingsField.ObsidianAllowDelete or SettingsField.SqlTools or SettingsField.SqlPercentMention or SettingsField.ComfyTools or SettingsField.ComfyReinforceNegatives or SettingsField.ComfyShowPrompts or SettingsField.ComfyCaretMention or SettingsField.ComfyPictureStrip
             or SettingsField.BotChatImages or SettingsField.BotChatImageAsync or SettingsField.BotChatSkills or SettingsField.BotChatVision or SettingsField.ClaudeAdvisor or SettingsField.ClaudeAdvisorConfirm
-            or SettingsField.ClaudeApi or SettingsField.ClaudeApiPromptCaching
+            or SettingsField.ClaudeApi or SettingsField.ClaudeApiPromptCaching or SettingsField.LocalVision
             or SettingsField.HomeAssistantTools or SettingsField.PrintTools;
 
     public static string FieldName(SettingsField field) => field switch
@@ -1201,6 +1282,7 @@ internal sealed partial class SettingsMenu
         SettingsField.LlmUseFunVerbs => "LLM use fun verbs",
         SettingsField.LlmShowThinking => "LLM show thinking",
         SettingsField.LlmPreserveThinking => "LLM preserve thinking",
+        SettingsField.LlmReasoningEstimate => "LLM reasoning estimate",
         SettingsField.LlmSampling => "LLM sampling",
         SettingsField.LlmSamplingFromHuggingFace => "LLM sampling from Hugging Face",
         SettingsField.SessionSaveThinking => "Session save thinking",
@@ -1293,6 +1375,11 @@ internal sealed partial class SettingsMenu
         SettingsField.ClaudeApiKey => "Claude API key",
         SettingsField.ClaudeApiMaxTokens => "Claude API max tokens",
         SettingsField.ClaudeApiPromptCaching => "Claude API prompt caching",
+        SettingsField.LocalModels => "Local models",
+        SettingsField.LocalBackend => "Local backend",
+        SettingsField.LocalContextSize => "Local context size",
+        SettingsField.LocalGpuLayers => "Local GPU layers",
+        SettingsField.LocalVision => "Local vision",
         SettingsField.AskUser => "Ask user",
         SettingsField.AskMaxQuestions => "Ask max questions",
         SettingsField.AskMaxChoices => "Ask max choices per question",
@@ -1362,7 +1449,7 @@ internal sealed partial class SettingsMenu
         ArgumentNullException.ThrowIfNull(profileDirectory);
         return field switch
         {
-            SettingsField.LlmUrl => string.IsNullOrWhiteSpace(data.LlmUrl) ? BlankUrlLabel(ScanScopeOf(data)) : data.LlmUrl,
+            SettingsField.LlmUrl => string.IsNullOrWhiteSpace(data.LlmUrl) ? BlankUrlLabel(ScanScopeOf(data)) : NeonSidekick.LocalLlm.LocalEndpoint.IsLocal(data.LlmUrl) ? NeonSidekick.LocalLlm.LocalLlmText.UrlDisplay : data.LlmUrl,
             SettingsField.LlmModel => string.IsNullOrWhiteSpace(data.LlmModel) ? "(first listed)" : data.LlmModel,
             SettingsField.LlmApiKey => ClaudeApiKeyLabel(data.LlmApiKey),
             SettingsField.LlmRequestTimeoutSeconds => Seconds(data.LlmRequestTimeoutSeconds),
@@ -1404,6 +1491,7 @@ internal sealed partial class SettingsMenu
             SettingsField.LlmUseFunVerbs => OnOff(data.LlmUseFunVerbs),
             SettingsField.LlmShowThinking => OnOff(data.LlmShowThinking),
             SettingsField.LlmPreserveThinking => OnOff(data.LlmPreserveThinking),
+            SettingsField.LlmReasoningEstimate => data.LlmReasoningEstimate,
             SettingsField.LlmSampling => SamplingText.Summary(data.LlmSampling),
             SettingsField.LlmSamplingFromHuggingFace => OnOff(data.LlmSamplingFromHuggingFace),
             SettingsField.SessionSaveThinking => OnOff(data.SessionSaveThinking),
@@ -1421,6 +1509,11 @@ internal sealed partial class SettingsMenu
             SettingsField.ClaudeApiKey => ClaudeApiKeyLabel(data.ClaudeApiKey),
             SettingsField.ClaudeApiMaxTokens => Tokens(data.ClaudeApiMaxTokens),
             SettingsField.ClaudeApiPromptCaching => OnOff(data.ClaudeApiPromptCaching),
+            SettingsField.LocalModels => LocalModelsDoorLabel,
+            SettingsField.LocalBackend => data.LocalBackend,
+            SettingsField.LocalContextSize => data.LocalContextSize == 0 ? LocalContextOwnLabel : Tokens(data.LocalContextSize),
+            SettingsField.LocalGpuLayers => data.LocalGpuLayers,
+            SettingsField.LocalVision => OnOff(data.LocalVision),
             SettingsField.LlmScanMode => data.LlmScanMode,
             SettingsField.TtsSource => data.TtsSource,
             SettingsField.WebTools => OnOff(data.WebTools),
@@ -1896,6 +1989,10 @@ internal sealed partial class SettingsMenu
     public static string BotChatLlmModeLabel(string name) =>
         Markup.Escape(name.PadRight(7)) + Theme.DimMarkup(App.BotChatLlmMode.Describe(name));
 
+    /// <summary>One row of the reasoning-estimate picker (2026-09-29): the mode and its hint (padded to ten: <c>tokenize</c> is eight). Pinned.</summary>
+    public static string ReasoningEstimateLabel(string name) =>
+        Markup.Escape(name.PadRight(10)) + Theme.DimMarkup(Markup.Escape(Llm.ReasoningEstimates.Describe(name)));
+
     /// <summary>One row of the mid-turn-usage picker: the mode and its hint (padded to eleven: <c>last-known</c> is ten). Pinned.</summary>
     public static string MidTurnUsageLabel(string name) =>
         Markup.Escape(name.PadRight(11)) + Theme.DimMarkup(MidTurnUsageMode.Describe(name));
@@ -2054,6 +2151,8 @@ internal sealed partial class SettingsMenu
         SettingsField.ClaudeAdvisorModel => data.ClaudeAdvisorModel,
         SettingsField.ClaudeAdvisorCallsPerTurn => data.ClaudeAdvisorCallsPerTurn.ToString(CultureInfo.InvariantCulture),
         SettingsField.ClaudeApiMaxTokens => data.ClaudeApiMaxTokens.ToString(CultureInfo.InvariantCulture),
+        SettingsField.LocalContextSize => data.LocalContextSize.ToString(CultureInfo.InvariantCulture),
+        SettingsField.LocalGpuLayers => data.LocalGpuLayers,
 
         // The key is never put back on the line: typing replaces it, empty clears it (the LLM API key refuses empty).
         SettingsField.LlmApiKey => "",
@@ -2181,6 +2280,13 @@ internal sealed partial class SettingsMenu
 
                 if (await EditAsync(field, saved, page, row, cancellationToken).ConfigureAwait(false))
                 {
+                    if (field == SettingsField.LocalModels)
+                    {
+                        // A use or an install (2026-09-29): the pane closes and the screen takes the model from here —
+                        // a download wants the transcript's spinner, not a pane.
+                        return ReferenceEquals(Theme.Current, themeBefore) ? changes : changes | SettingsChanges.Theme;
+                    }
+
                     if (IsLlmField(field))
                     {
                         changes |= SettingsChanges.Llm;
@@ -2274,7 +2380,7 @@ internal sealed partial class SettingsMenu
         for (int i = 0; i < Fields.Length; i++)
         {
             var f = Fields[i];
-            rows[i] = f == SettingsField.Profile ? ProfileLabel(profile, _settings.ProfileDirectory) : FieldLabel(f, saved, _settings.ProfileDirectory, _overriddenBy(f), LabelWidth, located);
+            rows[i] = f == SettingsField.Profile ? ProfileLabel(profile, _settings.ProfileDirectory) : LiveLabel(f, saved, LabelWidth, located);
         }
 
         return new MenuPage(Title, rows, TitleKeys);
@@ -2305,7 +2411,7 @@ internal sealed partial class SettingsMenu
         for (int i = 0; i < rows.Length; i++)
         {
             var f = fields[i];
-            rows[i] = f == SettingsField.Profile ? ProfileLabel(profile ?? _settings.ProfileName, _settings.ProfileDirectory, width) : FieldLabel(f, saved, _settings.ProfileDirectory, _overriddenBy(f), width, located);
+            rows[i] = f == SettingsField.Profile ? ProfileLabel(profile ?? _settings.ProfileName, _settings.ProfileDirectory, width) : LiveLabel(f, saved, width, located);
         }
 
         return new MenuTab(title, rows);
@@ -2313,7 +2419,48 @@ internal sealed partial class SettingsMenu
 
     /// <summary>A row as a plain line, for a console without the pane: <c>Web browser mode: chromium</c> (the <see cref="SavedNotice"/> shape). The seam <see cref="ToolsMenu"/> prints its settings tabs through.</summary>
     internal string PlainRow(SettingsField field, AppSettingsData saved) =>
-        FieldName(field) + ": " + FieldValue(field, saved, _settings.ProfileDirectory, field == SettingsField.WebBrowserPath ? _locateBrowser("") : null);
+        FieldName(field) + ": " + (LocalValue(field, saved) is { } local ? Markup.Remove(local) : FieldValue(field, saved, _settings.ProfileDirectory, field == SettingsField.WebBrowserPath ? _locateBrowser("") : null));
+
+    /// <summary>
+    /// A row as <see cref="FieldLabel(SettingsField, AppSettingsData, string, string?, int, string?)"/> draws it, except the
+    /// local model's two rows that read the disk and the machine (2026-09-29, <see cref="LocalValue"/>) when a local
+    /// model is offered.
+    /// </summary>
+    private string LiveLabel(SettingsField field, AppSettingsData saved, int width, string? located)
+    {
+        if (LocalValue(field, saved) is not { } local)
+        {
+            return FieldLabel(field, saved, _settings.ProfileDirectory, _overriddenBy(field), width, located);
+        }
+
+        string row = Markup.Escape(FieldName(field).PadRight(width)) + Theme.ColorMarkup(Theme.Ink, Markup.Escape(local));
+        return _overriddenBy(field) is { } by ? row + Theme.DimMarkup($"  (overridden by {by})") : row;
+    }
+
+    /// <summary>
+    /// The live value of the <c>Local models</c> row (<c>2 of 4 installed (9.4 GB)</c>) and the <c>Local backend</c> row
+    /// (<c>auto (cuda: NVIDIA driver 610.88)</c>), from <see cref="LocalLlm"/>; null for every other row, or with none.
+    /// </summary>
+    private string? LocalValue(SettingsField field, AppSettingsData saved)
+    {
+        if (LocalLlm is not { } local)
+        {
+            return null;
+        }
+
+        return field switch
+        {
+            SettingsField.LocalModels => LocalModelsSummary(local),
+            SettingsField.LocalBackend => NeonSidekick.LocalLlm.LocalLlmText.BackendRowValue(saved.LocalBackend, local.Backend(EffectiveNow())),
+            _ => null,
+        };
+    }
+
+    private static string LocalModelsSummary(NeonSidekick.LocalLlm.ILocalLlm local)
+    {
+        var installed = local.Catalog.Where(m => local.State(m).IsInstalled).ToList();
+        return NeonSidekick.LocalLlm.LocalLlmText.ModelsRowValue(installed.Count, local.Catalog.Count, installed.Sum(NeonSidekick.LocalLlm.LocalModelCatalog.TotalBytes));
+    }
 
     // ── The hosts ───────────────────────────────────────────────────────────
 
@@ -2444,7 +2591,8 @@ internal sealed partial class SettingsMenu
     /// Without menus the list is printed and nothing is picked. Saving is the caller's
     /// (<see cref="SaveServer"/>): the startup path and <c>/server</c> connect differently.
     /// </summary>
-    public async Task<LlmServer?> PickServerAsync(IReadOnlyList<LlmServer> servers, Uri? current, string title, CancellationToken cancellationToken)
+    /// <param name="currentModel">The model in use: every local row shares one URL, so the cursor finds the local model by its id (2026-09-29).</param>
+    public async Task<LlmServer?> PickServerAsync(IReadOnlyList<LlmServer> servers, Uri? current, string title, CancellationToken cancellationToken, string? currentModel = null)
     {
         ArgumentNullException.ThrowIfNull(servers);
         ArgumentNullException.ThrowIfNull(title);
@@ -2457,7 +2605,8 @@ internal sealed partial class SettingsMenu
         int cursor = -1;
         for (int i = 0; i < servers.Count && cursor < 0; i++)
         {
-            if (current is not null && servers[i].BaseUrl == current)
+            if (current is not null && servers[i].BaseUrl == current
+                && (!NeonSidekick.LocalLlm.LocalEndpoint.IsLocal(current) || (servers[i].Result.ModelIds.Count > 0 && string.Equals(servers[i].Result.ModelIds[0], currentModel, StringComparison.OrdinalIgnoreCase))))
             {
                 cursor = i;
             }
@@ -2494,6 +2643,20 @@ internal sealed partial class SettingsMenu
             if (changed) d.LlmModel = "";
         });
         return changed;
+    }
+
+    /// <summary>
+    /// Saves the local model <paramref name="id"/> as the LLM URL (the sentinel) and model in one write (2026-09-29): the
+    /// URL's notice, then the override reminder when one stands. <see cref="SaveServer"/> would clear the model.
+    /// </summary>
+    public void SaveLocalModel(string id)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(id);
+        Apply(SettingsField.LlmUrl, d =>
+        {
+            d.LlmUrl = NeonSidekick.LocalLlm.LocalEndpoint.BaseUrl.ToString();
+            d.LlmModel = id;
+        });
     }
 
     /// <summary>
@@ -2566,6 +2729,16 @@ internal sealed partial class SettingsMenu
             }
 
             return false;
+        }
+
+        if (field == SettingsField.LocalModels)
+        {
+            return await PickLocalModelAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        if (field == SettingsField.LocalBackend)
+        {
+            return await PickLocalBackendAsync(saved, cancellationToken).ConfigureAwait(false);
         }
 
         if (IsToggle(field))
@@ -2734,6 +2907,11 @@ internal sealed partial class SettingsMenu
         if (field == SettingsField.BotChatLlmMode)
         {
             return await PickBotChatLlmModeAsync(saved, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (field == SettingsField.LlmReasoningEstimate)
+        {
+            return await PickReasoningEstimateAsync(saved, cancellationToken).ConfigureAwait(false);
         }
 
         if (field == SettingsField.LlmMidTurnUsage)
@@ -3242,6 +3420,26 @@ internal sealed partial class SettingsMenu
                 }
 
                 Apply(field, d => d.ClaudeAdvisorCallsPerTurn = advisorCalls);
+                return true;
+
+            case SettingsField.LocalContextSize:
+                if (!int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out int localContext) || !NeonSidekick.LocalLlm.LocalContextSize.IsValid(localContext))
+                {
+                    Sink.Error($"{FieldName(field)} {NeonSidekick.LocalLlm.LocalContextSize.Error}; keeping {EditableValue(field, saved)}.");
+                    return false;
+                }
+
+                Apply(field, d => d.LocalContextSize = localContext);
+                return true;
+
+            case SettingsField.LocalGpuLayers:
+                if (NeonSidekick.LocalLlm.LocalGpuLayers.Normalize(text) is not { } layers)
+                {
+                    Sink.Error($"{FieldName(field)} {NeonSidekick.LocalLlm.LocalGpuLayers.Error}; keeping {EditableValue(field, saved)}.");
+                    return false;
+                }
+
+                Apply(field, d => d.LocalGpuLayers = layers);
                 return true;
 
             case SettingsField.ClaudeApiMaxTokens:
@@ -4150,6 +4348,7 @@ internal sealed partial class SettingsMenu
             SettingsField.ClaudeAdvisorConfirm => data.ClaudeAdvisorConfirm,
             SettingsField.ClaudeApi => data.ClaudeApi,
             SettingsField.ClaudeApiPromptCaching => data.ClaudeApiPromptCaching,
+            SettingsField.LocalVision => data.LocalVision,
             SettingsField.BotChatImages => data.BotChatImages,
             SettingsField.BotChatImageAsync => data.BotChatImageAsync,
             SettingsField.BotChatSkills => data.BotChatSkills,
@@ -4221,6 +4420,7 @@ internal sealed partial class SettingsMenu
             case SettingsField.ClaudeAdvisorConfirm: data.ClaudeAdvisorConfirm = on; break;
             case SettingsField.ClaudeApi: data.ClaudeApi = on; break;
             case SettingsField.ClaudeApiPromptCaching: data.ClaudeApiPromptCaching = on; break;
+            case SettingsField.LocalVision: data.LocalVision = on; break;
             case SettingsField.BotChatImages: data.BotChatImages = on; break;
             case SettingsField.BotChatImageAsync: data.BotChatImageAsync = on; break;
             case SettingsField.BotChatSkills: data.BotChatSkills = on; break;
@@ -4301,6 +4501,7 @@ internal sealed partial class SettingsMenu
         SettingsField.ClaudeAdvisorConfirm => on ? "each claude_advisor call waits for your yes" : "claude_advisor runs without asking",
         SettingsField.ClaudeApi => on ? "/server offers the Claude API while a key is set (billed per message)" : "the Claude API is not offered",
         SettingsField.ClaudeApiPromptCaching => on ? "the prompt and conversation are cached between requests (cheaper)" : "every request is billed in full",
+        SettingsField.LocalVision => on ? "the local model loads its vision projector and reads images" : "the local model reads text alone; about 1 GB less memory",
         SettingsField.BotChatImages => on ? "/botchat draws pictures while the ComfyUI tools are offered" : "/botchat is talk alone",
         SettingsField.BotChatImageAsync => on ? "the next bot answers while the picture renders" : "the chat waits for each picture",
         SettingsField.BotChatSkills => on ? "the bots get load_skill over this profile's and the global skills" : "/botchat bots get no skills",
@@ -4345,6 +4546,106 @@ internal sealed partial class SettingsMenu
         Apply(SettingsField.TtsSource, d => d.TtsSource = name);
         return true;
     }
+
+    /// <summary>The backend picker under the settings list (2026-09-29): one row per <see cref="NeonSidekick.LocalLlm.LocalBackends.Names"/> entry, the saved one under the cursor.</summary>
+    private async Task<bool> PickLocalBackendAsync(AppSettingsData saved, CancellationToken cancellationToken)
+    {
+        var names = NeonSidekick.LocalLlm.LocalBackends.Names;
+        var page = new MenuPage(Crumb(FieldName(SettingsField.LocalBackend)), names.Select(LocalBackendLabel).ToList(), PickKeys);
+        int? picked = await PickAsync(page, Math.Max(0, Array.FindIndex(names, n => string.Equals(n, saved.LocalBackend, StringComparison.OrdinalIgnoreCase))), cancellationToken).ConfigureAwait(false);
+        if (picked is not { } index)
+        {
+            return Unchanged();
+        }
+
+        string name = names[index];
+        Apply(SettingsField.LocalBackend, d => d.LocalBackend = name);
+        return true;
+    }
+
+    /// <summary>A backend picker row: the name padded, then what it means, dim. Pinned.</summary>
+    public static string LocalBackendLabel(string name) => Markup.Escape(name.PadRight(8)) + Theme.DimMarkup(name switch
+    {
+        "cuda" => "NVIDIA GPUs (driver 580 or newer)",
+        "vulkan" => "any GPU: NVIDIA, AMD, Intel",
+        "cpu" => "no GPU; slow",
+        _ => "CUDA with an NVIDIA driver, else Vulkan, else the CPU",
+    });
+
+    /// <summary>
+    /// The local model's catalog (2026-09-29): one row per model with its size and state. An installed one offers Use now,
+    /// Remove (after a yes) and Back; any other, Install with what it downloads, and Back. Use now and Install hand the
+    /// model to the screen (<see cref="TakePendingLocalModel"/>) and return true, which closes the pane; a removal stays.
+    /// </summary>
+    internal async Task<bool> PickLocalModelAsync(CancellationToken cancellationToken)
+    {
+        if (LocalLlm is not { } local || local.Catalog.Count == 0)
+        {
+            Sink.Notice(NoLocalModelNotice);
+            return Unchanged();
+        }
+
+        int cursor = 0;
+        while (true)
+        {
+            var rows = local.Catalog.Select(m => LocalModelLabel(m, local.State(m))).ToList();
+            var page = new MenuPage(Crumb(FieldName(SettingsField.LocalModels)), rows, LocalModelsKeys);
+            if (await PickAsync(page, cursor, cancellationToken).ConfigureAwait(false) is not { } index)
+            {
+                return Unchanged();
+            }
+
+            cursor = index;
+            var model = local.Catalog[index];
+            var state = local.State(model);
+            string crumb = Crumb(FieldName(SettingsField.LocalModels)) + " › " + model.Display;
+            if (state.IsInstalled)
+            {
+                var actions = new[] { UseNowRow, RemoveRow(model), BackRow };
+                int? action = await PickAsync(new MenuPage(crumb, actions.Select(Markup.Escape).ToList(), PickKeys), 0, cancellationToken).ConfigureAwait(false);
+                if (action == 0)
+                {
+                    _pendingLocalModel = model;
+                    return true;
+                }
+
+                if (action == 1 && await ConfirmAsync(NeonSidekick.LocalLlm.LocalLlmText.RemoveQuestion(model), cancellationToken).ConfigureAwait(false))
+                {
+                    if (local.Remove(model) is { } error)
+                    {
+                        Sink.Error(NeonSidekick.LocalLlm.LocalLlmText.InstallFailed(model, error));
+                    }
+                    else
+                    {
+                        Sink.Notice(NeonSidekick.LocalLlm.LocalLlmText.Removed(model));
+                    }
+                }
+
+                continue;
+            }
+
+            string install = InstallRow(model, local.RuntimeBytesToDownload(EffectiveNow()));
+            int? choice = await PickAsync(new MenuPage(crumb, [Markup.Escape(install), BackRow], PickKeys), 0, cancellationToken).ConfigureAwait(false);
+            if (choice == 0)
+            {
+                _pendingLocalModel = model;
+                return true;
+            }
+        }
+    }
+
+    /// <summary>The notice when the catalog is opened where no local model is offered. Pinned.</summary>
+    public const string NoLocalModelNotice = "No local model is offered here (llama.cpp's Windows x64 builds only).";
+
+    /// <summary>A catalog row: the model's name padded, its quantisation, then its state and size, dim. Pinned.</summary>
+    public static string LocalModelLabel(NeonSidekick.LocalLlm.LocalModel model, NeonSidekick.LocalLlm.LocalModelState state) =>
+        Markup.Escape(model.Display.PadRight(24)) + Theme.DimMarkup(model.Quant.PadRight(12) + NeonSidekick.LocalLlm.LocalLlmText.RowDetail(state, NeonSidekick.LocalLlm.LocalModelCatalog.TotalBytes(model)));
+
+    /// <summary>The installed model's removal row: <c>Remove (5.2 GB)</c>. Pinned.</summary>
+    public static string RemoveRow(NeonSidekick.LocalLlm.LocalModel model) => $"Remove ({Speech.ModelStore.SizeLabel(NeonSidekick.LocalLlm.LocalModelCatalog.TotalBytes(model))})";
+
+    /// <summary>The install row: <c>Install (download 5.2 GB + llama.cpp runtime 577 MB)</c>. Pinned.</summary>
+    public static string InstallRow(NeonSidekick.LocalLlm.LocalModel model, long runtimeBytes) => $"Install ({NeonSidekick.LocalLlm.LocalLlmText.InstallCost(model, runtimeBytes)})";
 
     /// <summary>The scan-mode picker under the settings list: one <see cref="LlmScanModeLabel"/> row per <see cref="Llm.LlmScanMode.Names"/> entry, the saved one under the cursor.</summary>
     private async Task<bool> PickLlmScanModeAsync(AppSettingsData saved, CancellationToken cancellationToken)
@@ -4668,6 +4969,22 @@ internal sealed partial class SettingsMenu
 
         string name = names[index];
         Apply(SettingsField.BotChatLlmMode, d => d.BotChatLlmMode = name);
+        return true;
+    }
+
+    /// <summary>The reasoning-estimate picker under the settings list (2026-09-29): one <see cref="ReasoningEstimateLabel"/> row per <see cref="Llm.ReasoningEstimates.Names"/> entry, the saved one under the cursor.</summary>
+    private async Task<bool> PickReasoningEstimateAsync(AppSettingsData saved, CancellationToken cancellationToken)
+    {
+        var names = Llm.ReasoningEstimates.Names;
+        var page = new MenuPage(Crumb(FieldName(SettingsField.LlmReasoningEstimate)), names.Select(ReasoningEstimateLabel).ToList(), PickKeys);
+        int? picked = await PickAsync(page, Math.Max(0, Array.FindIndex(names, n => string.Equals(n, saved.LlmReasoningEstimate?.Trim(), StringComparison.OrdinalIgnoreCase))), cancellationToken).ConfigureAwait(false);
+        if (picked is not { } index)
+        {
+            return Unchanged();
+        }
+
+        string name = names[index];
+        Apply(SettingsField.LlmReasoningEstimate, d => d.LlmReasoningEstimate = name);
         return true;
     }
 

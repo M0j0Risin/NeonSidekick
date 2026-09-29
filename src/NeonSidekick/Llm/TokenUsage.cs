@@ -32,7 +32,11 @@ namespace NeonSidekick.Llm;
 /// </param>
 /// <param name="CacheWrite">The share of <see cref="Input"/> the server wrote to its prompt cache (the Claude API's <c>cache_creation_input_tokens</c>); null when not reported.</param>
 /// <param name="CostUsd">What the requests cost in US dollars, priced where the model's price is known (the Claude API, <see cref="Anthropic.ClaudePrice"/>); null for a local server.</param>
-public readonly record struct TokenUsage(long Input, long Output, long Total, int Requests, TimeSpan ToFirstToken, TimeSpan Generating, long? Reasoning = null, long? CacheRead = null, long? CacheWrite = null, decimal? CostUsd = null)
+/// <param name="ReasoningEstimated">
+/// Whether <see cref="Reasoning"/> is (or, in a sum, includes) the app's estimate rather than the server's count (2026-09-29,
+/// <c>LLM reasoning estimate</c>: llama.cpp and Ollama stream the thinking but do not count it). Shown as <c>~</c>.
+/// </param>
+public readonly record struct TokenUsage(long Input, long Output, long Total, int Requests, TimeSpan ToFirstToken, TimeSpan Generating, long? Reasoning = null, long? CacheRead = null, long? CacheWrite = null, decimal? CostUsd = null, bool ReasoningEstimated = false)
 {
     public static readonly TokenUsage Zero = default;
 
@@ -63,10 +67,11 @@ public readonly record struct TokenUsage(long Input, long Output, long Total, in
         long output = details.OutputTokenCount ?? 0;
         long? cacheWrite = details.AdditionalCounts is { } counts && counts.TryGetValue(Anthropic.AnthropicStream.CacheWriteKey, out long written) ? written : null;
         decimal? cost = details.AdditionalCounts is { } more && more.TryGetValue(Anthropic.AnthropicStream.CostKey, out long nano) ? nano / 1_000_000_000m : null;
-        return new TokenUsage(input, output, details.TotalTokenCount ?? input + output, 1, toFirstToken, generating, details.ReasoningTokenCount, details.CachedInputTokenCount, cacheWrite, cost);
+        bool estimated = details.ReasoningTokenCount is not null && details.AdditionalCounts is { } flags && flags.TryGetValue(OpenAICompatibleChatClient.ReasoningEstimatedKey, out long mark) && mark != 0;
+        return new TokenUsage(input, output, details.TotalTokenCount ?? input + output, 1, toFirstToken, generating, details.ReasoningTokenCount, details.CachedInputTokenCount, cacheWrite, cost, estimated);
     }
 
-    /// <summary>Every count and span summed; the reasoning, cache and cost figures are the sums of the reports that carried one, null when neither did.</summary>
+    /// <summary>Every count and span summed; the reasoning, cache and cost figures are the sums of the reports that carried one, null when neither did. A reasoning sum with an estimate in it is an estimate.</summary>
     public static TokenUsage operator +(TokenUsage a, TokenUsage b) =>
         new(
             a.Input + b.Input,
@@ -78,7 +83,8 @@ public readonly record struct TokenUsage(long Input, long Output, long Total, in
             Sum(a.Reasoning, b.Reasoning),
             Sum(a.CacheRead, b.CacheRead),
             Sum(a.CacheWrite, b.CacheWrite),
-            a.CostUsd is null && b.CostUsd is null ? null : (a.CostUsd ?? 0) + (b.CostUsd ?? 0));
+            a.CostUsd is null && b.CostUsd is null ? null : (a.CostUsd ?? 0) + (b.CostUsd ?? 0),
+            a.ReasoningEstimated || b.ReasoningEstimated);
 
     private static long? Sum(long? a, long? b) => a is null && b is null ? null : (a ?? 0) + (b ?? 0);
 }

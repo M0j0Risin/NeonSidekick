@@ -21,6 +21,16 @@ public sealed record LlmEndpoint(Uri BaseUrl, string ModelId, string ApiKey, str
     public const string DefaultApiKey = "empty";
 
     /// <summary>
+    /// Where requests really go when <see cref="BaseUrl"/> is a sentinel (2026-09-29, the local model: its base URL is
+    /// <see cref="LocalLlm.LocalEndpoint.BaseUrl"/>, which names it everywhere the user sees it, while the server runs on
+    /// a loopback port chosen at each start). Null for every other server.
+    /// </summary>
+    public Uri? LiveUrl { get; init; }
+
+    /// <summary>The base URL requests are posted to: <see cref="LiveUrl"/> when set, else <see cref="BaseUrl"/>.</summary>
+    public Uri WireUrl => LiveUrl ?? BaseUrl;
+
+    /// <summary>
     /// The <c>LLM API key</c> a request carries (2026-09-28, the key kept DPAPI-encrypted in the profile like the other two,
     /// the user's call): a <c>dpapi:</c> value decrypted (<see cref="Settings.SettingsSecrets.Reveal"/>), a plain one — a
     /// variable, the <see cref="DefaultApiKey"/> placeholder, a machine where DPAPI failed — as it is. An encrypted key this
@@ -57,6 +67,12 @@ public sealed record LlmEndpoint(Uri BaseUrl, string ModelId, string ApiKey, str
         }
 
         var trimmed = raw.Trim();
+        if (string.Equals(trimmed, LocalLlm.LocalEndpoint.Alias, StringComparison.OrdinalIgnoreCase))
+        {
+            // The local model (2026-09-29): "local" wherever a URL is typed stands for its sentinel.
+            return LocalLlm.LocalEndpoint.BaseUrl;
+        }
+
         if (!Uri.TryCreate(trimmed, UriKind.Absolute, out var parsed)
             || (parsed.Scheme != Uri.UriSchemeHttp && parsed.Scheme != Uri.UriSchemeHttps))
         {

@@ -26,6 +26,9 @@ public sealed class BenchResult
 
     public long? ReasoningTokens { get; set; }
 
+    /// <summary>Whether <see cref="ReasoningTokens"/> is the app's estimate, not the server's count (2026-09-29, <c>LLM reasoning estimate</c>).</summary>
+    public bool ReasoningEstimated { get; set; }
+
     /// <summary>Completion tokens per second of streaming (<see cref="Llm.TokenUsage.TokensPerSecond"/>): the decode speed, not LLMTester's end-to-end rate.</summary>
     public double? TokensPerSecond { get; set; }
 }

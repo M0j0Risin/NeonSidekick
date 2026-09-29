@@ -83,6 +83,7 @@ public static class AboutText
     public const string ProfileLabel = "Profile";
     public const string ModelsLabel = "Models";
     public const string ServersLabel = "LLM servers";
+    public const string LocalLabel = "Local LLM";
     public const string SpeechLabel = "Speech";
 
     /// <summary>The Executable row when the runtime cannot name the process.</summary>
@@ -137,6 +138,8 @@ public static class AboutText
         new("Silero VAD", "6.2.0", "MIT", "the voice-activity model, downloaded on first use"),
         new("PhotoSauce.MagicScaler", "0.15.0", "MIT", "image decode and downscale through Windows' WIC codecs"),
         new("Markdig", "1.3.2", "BSD-2-Clause", "the Markdown reader behind the styled transcript"),
+        new("llama.cpp (llama-server)", LocalLlm.LlamaRelease.Tag, "MIT", "the local model's server, downloaded on first use (2026-09-29)"),
+        new("Gemma 4 E2B / E4B (GGUF)", Unversioned, "Apache-2.0 / Gemma", "the local models (Unsloth's and HauhauCS's quantisations), downloaded when picked"),
     ];
 
     /// <summary>The manifest resource the project file embeds the repository's <c>LICENSE</c> as.</summary>
@@ -199,6 +202,16 @@ public static class AboutText
         return ServersLead + string.Join(", ", parts);
     }
 
+    /// <summary>
+    /// The Local LLM row (2026-09-29): the pinned llama.cpp build and where its runtimes and the models live —
+    /// <c>llama.cpp b11258 · runtimes in &lt;home&gt;\llama · models in &lt;models&gt;\llm</c>.
+    /// </summary>
+    public static string LocalLine(AboutFacts facts)
+    {
+        ArgumentNullException.ThrowIfNull(facts);
+        return "llama.cpp " + LocalLlm.LlamaRelease.Tag + Sep + "runtimes in " + Path.Combine(facts.HomeDirectory, "llama") + Sep + "models in " + Path.Combine(facts.ModelsDirectory, "llm");
+    }
+
     /// <summary>The About tab's labelled rows, in order: the label and its value.</summary>
     public static IReadOnlyList<(string Label, string Value)> AboutRows(AboutFacts facts)
     {
@@ -212,6 +225,7 @@ public static class AboutText
             (ProfileLabel, facts.ProfileDirectory),
             (ModelsLabel, facts.ModelsDirectory),
             (ServersLabel, ServersLine()),
+            (LocalLabel, LocalLine(facts)),
             (SpeechLabel, SpeechLine),
         ];
     }

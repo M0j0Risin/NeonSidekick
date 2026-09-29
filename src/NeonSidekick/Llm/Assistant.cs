@@ -1799,11 +1799,11 @@ public sealed class Assistant
 
     /// <summary>
     /// The <c>--log</c> line for one request's report: <c>Usage: 22 in, 139 out (135 reasoning), 161 total; first token after 0.80s, streamed 2.10s.</c>
-    /// — the parenthesis only when the server counted the thinking. Pinned.
+    /// — the parenthesis only when the thinking was counted, <c>(~135 reasoning)</c> when the app estimated it (2026-09-29). Pinned.
     /// </summary>
     internal static string UsageLogLine(TokenUsage usage)
     {
-        string reasoning = usage.Reasoning is { } count ? string.Create(CultureInfo.InvariantCulture, $" ({count} reasoning)") : "";
+        string reasoning = usage.Reasoning is { } count ? string.Create(CultureInfo.InvariantCulture, $" ({(usage.ReasoningEstimated ? "~" : "")}{count} reasoning)") : "";
         return string.Create(CultureInfo.InvariantCulture,
             $"Usage: {usage.Input} in, {usage.Output} out{reasoning}, {usage.Total} total; first token after {usage.ToFirstToken.TotalSeconds:F2}s, streamed {usage.Generating.TotalSeconds:F2}s.");
     }

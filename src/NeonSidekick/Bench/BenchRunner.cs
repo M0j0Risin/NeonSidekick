@@ -112,6 +112,7 @@ public static class BenchRunner
             PromptTokens = usage?.Input,
             CompletionTokens = usage?.Output,
             ReasoningTokens = usage?.Reasoning,
+            ReasoningEstimated = usage?.ReasoningEstimated ?? false,
             TokensPerSecond = usage?.TokensPerSecond,
         };
     }

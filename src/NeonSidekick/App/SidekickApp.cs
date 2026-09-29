@@ -71,6 +71,7 @@ public sealed class SidekickApp
     private readonly Func<string, ISpeechRecognizer> _recognizerFactory;
     private readonly Func<string, VadOptions, IVoiceActivityDetector> _vadFactory;
     private readonly HttpClient _modelHttpClient;
+    private readonly Func<LocalLlm.ILocalLlm>? _localLlm;
     private readonly WebAccess _web;
     private readonly Func<Mcp.McpServerConfig, string, ModelContextProtocol.Client.IClientTransport> _mcpTransport;
     private readonly Func<Uri, Comfy.ComfyClient>? _comfyClient;
@@ -124,6 +125,7 @@ public sealed class SidekickApp
     /// <param name="clipboardImage">The picture the same paste takes ahead of the text, as an image file's bytes; <c>Program.cs</c> passes <see cref="WindowsClipboard.TryReadImage"/>; null = never.</param>
     /// <param name="setTitle">What the interactive screen sets the terminal window's title with (the loaded profile's name, <see cref="ChatScreen.WindowTitle"/>); <c>Program.cs</c> passes <see cref="ConsoleTitle.TrySet"/>, tests a recorder; null = never. Headless and the checks never set one.</param>
     /// <param name="mcpTransport">What an MCP server's config becomes on the wire (<see cref="McpSession.DefaultTransport"/> in the app; tests a pipe into an in-process server); null = the app's.</param>
+    /// <param name="localLlm">Makes the local model's service for one run (2026-09-29): <c>Program.cs</c> passes <see cref="LocalLlm.LocalLlmService.Create"/> on Windows x64, tests a fake; null offers no local model.</param>
     public SidekickApp(
         IAnsiConsole console,
         AppSettings settings,
@@ -159,8 +161,11 @@ public sealed class SidekickApp
         ServerSamplingProbe? samplingProbe = null,
         Func<Uri, string, HomeAssistant.HaClient>? haClient = null,
         Action<string>? followViewer = null,
-        Printing.IPrintSpooler? printSpooler = null)
+        Printing.IPrintSpooler? printSpooler = null,
+        Func<LocalLlm.ILocalLlm>? localLlm = null)
     {
+        // The local model (2026-09-29): llama-server under the app's own job in the app, a fake in tests, none by default.
+        _localLlm = localLlm;
         // The printers (2026-09-28): winspool and GDI in the app on Windows; none in tests, so nothing reaches a real printer.
         _printSpooler = printSpooler ?? Printing.NullPrintSpooler.Instance;
         // The /sampling pane's server defaults (2026-09-28): a real HttpClient in the app, like the context probe; tests pass one over a stub.
@@ -470,7 +475,8 @@ public sealed class SidekickApp
         DiagnosticLog.Emitted += forward;
         LogStartup();
         EncryptSqlPasswords();
-        using var session = new LlmSession(_probe, _contextProbe, _chatClientFactory, _time, _samplingProbe);
+        await using var local = _localLlm?.Invoke();
+        using var session = new LlmSession(_probe, _contextProbe, _chatClientFactory, _time, _samplingProbe, local);
         // The MCP servers (2026-09-20): connected after the LLM, their tools offered per turn like the screen's; disposed after the loop.
         await using var mcp = new McpSession(_settings, _mcpTransport, _time);
         var memory = BuildMemoryStore();
@@ -1493,7 +1499,8 @@ public sealed class SidekickApp
     /// </summary>
     private async Task<int> RunInteractiveAsync(CancellationToken cancellationToken)
     {
-        using var session = new LlmSession(_probe, _contextProbe, _chatClientFactory, _time, _samplingProbe);
+        await using var local = _localLlm?.Invoke();
+        using var session = new LlmSession(_probe, _contextProbe, _chatClientFactory, _time, _samplingProbe, local);
         using var speech = new SpeechSession(_synthesizerFactory, _playbackFactory, new ModelStore(ModelsDirectory, _modelHttpClient));
         using var voice = BuildVoiceSession();
         // The MCP servers' session (2026-09-20), disposed after the screen: its stdio children end once the alternate buffer is left.
@@ -1595,7 +1602,8 @@ public sealed class SidekickApp
     {
         if (!Llm.Anthropic.ClaudeApi.IsClaudeApi(endpoint.BaseUrl))
         {
-            return new OpenAICompatibleChatClient(endpoint, timeouts.Request);
+            // The reasoning estimate is read at each request (2026-09-29): a change of the setting needs no reconnect.
+            return new OpenAICompatibleChatClient(endpoint, timeouts.Request, reasoningEstimate: () => ReasoningEstimates.Resolve(EffectiveSettings));
         }
 
         var effective = EffectiveSettings;
