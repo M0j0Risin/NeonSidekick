@@ -38,6 +38,9 @@ jobs:
         env:
           DOTNET_NOLOGO: 1
           DOTNET_CLI_TELEMETRY_OPTOUT: 1
+          # The live-model tests are a local gate, never CI's: a dead URL makes them skip outright
+          # instead of scanning the runner's ports, where anything that answers (even a 401) would run them.
+          NEONSIDEKICK_TEST_LLM_URL: http://127.0.0.1:9/v1
 
       - name: Upload package
         uses: actions/upload-artifact@v7
