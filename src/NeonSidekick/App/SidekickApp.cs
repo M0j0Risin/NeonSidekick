@@ -169,7 +169,7 @@ public sealed class SidekickApp
         _openViewer = openViewer;
         // A double-clicked picture in that viewer (later on 2026-09-27): PictureWindow.OpenAt in the app on Windows, null in tests and elsewhere.
         _viewPicture = viewPicture;
-        // The strip's arrows moving an open viewer (2026-09-28, ComfyUI picture strip sync): PictureWindow.Follow in the app on Windows, null in tests and elsewhere.
+        // The strip's arrows or a click on a tile moving an open viewer (2026-09-28): PictureWindow.Follow in the app on Windows, null in tests and elsewhere.
         _followViewer = followViewer;
         // The ComfyUI client (2026-09-24): over its own transport in the app, a stub handler in tests.
         _comfyClient = comfyClient;

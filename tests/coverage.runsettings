@@ -13,7 +13,8 @@
     rejects the whole file.)
   - NeonSidekick.Viewer.PictureWindow* and ViewerNative (2026-09-27): the picture viewer's Win32 window, its thread
     and imports; a window, a message loop and a folder watcher prove themselves by hand and by the published-exe smoke
-    (viewer:window). ViewerState and ViewerImage, where its decisions and its decode live, stay covered.
+    (viewer:window; viewer:drag for PictureWindowDrag, 2026-09-28, the shell's data object behind the drag out). ViewerState
+    and ViewerImage, where its decisions and its decode live, stay covered.
   - NeonSidekick.Printing.WindowsPrintSpooler* and PrintNative (2026-09-28): the printers, a printer's device context and the
     shell's print verb; they need a real spooler and prove themselves in the published-exe smoke (print:spooler, a job to
     Microsoft Print to PDF) and a live fact. PrintLayout, PrintService and PrintCommand, where the decisions live, stay covered.

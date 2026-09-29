@@ -96,20 +96,19 @@ public class ScreenPaneTests : IDisposable
 
     /// <summary>
     /// The picture strip's rule (2026-09-28, the user's layout): the viewer's button at the left and the close × at the
-    /// right, the button right after the rule's first glyph with a space cell at its right (the space at its left went
-    /// later that day, the user's screenshot), a space cell either side of the ×; no button, the × alone; too narrow, the
-    /// button goes, then the ×.
+    /// right, a space cell either side of each (the space at the button's left went later that day and came back later
+    /// still, the user's call); no button, the × alone; too narrow, the button goes, then the ×.
     /// </summary>
     [Fact]
     public void StripRule_IsPinned()
     {
         const string film = "\U0001F39E️";
         var parts = ScreenPane.StripRule(film, 40);
-        Assert.Equal("─" + film + " " + Rule(32) + " × ─", parts.Text);
+        Assert.Equal("─ " + film + " " + Rule(31) + " × ─", parts.Text);
         Assert.Equal(40, TextCells.Width(parts.Text));
-        Assert.Equal((1, 37), (parts.ButtonColumn, parts.CloseColumn));
+        Assert.Equal((2, 37), (parts.ButtonColumn, parts.CloseColumn));
         Assert.Equal((film, "×"), (parts.Button, parts.Close));
-        Assert.Equal("─", parts.Lead);           // no space cell left of the glyph…
+        Assert.Equal("─ ", parts.Lead);          // a space cell left of the glyph…
         Assert.StartsWith(" ", parts.Fill);      // …one right of it
         Assert.EndsWith(" ", parts.Fill);        // a space either side of the ×
         Assert.StartsWith(" ", parts.Tail);
@@ -118,8 +117,8 @@ public class ScreenPaneTests : IDisposable
         Assert.Equal(-1, ScreenPane.StripRule("", 40).ButtonColumn);
         Assert.Equal(36 + 1, ScreenPane.StripRule("", 40).CloseColumn);
 
-        Assert.Equal("─" + film + " ─ × ─", ScreenPane.StripRule(film, 9).Text);    // one rule glyph between: the least
-        Assert.Equal(Rule(4) + " × ─", ScreenPane.StripRule(film, 8).Text);         // none: the button goes
+        Assert.Equal("─ " + film + " ─ × ─", ScreenPane.StripRule(film, 10).Text);   // one rule glyph between: the least
+        Assert.Equal(Rule(5) + " × ─", ScreenPane.StripRule(film, 9).Text);         // none: the button goes
         Assert.Equal("─ × ─", ScreenPane.StripRule(film, 5).Text);
         var bare = ScreenPane.StripRule(film, 4);
         Assert.Equal((Rule(4), -1, -1), (bare.Text, bare.ButtonColumn, bare.CloseColumn));
@@ -152,33 +151,33 @@ public class ScreenPaneTests : IDisposable
     }
 
     /// <summary>
-    /// The upper rule's ↘️↖️ (2026-09-28, the user's layout): right after the rule's first glyph, side by side, a space, then
-    /// the titled rule over the rest; without folds, or too narrow to keep the title's least rule after them, the rule as
-    /// before.
+    /// The upper rule's ↘️↖️ (2026-09-28, the user's layout): after the rule's first glyph and a space, side by side, then
+    /// the titled rule over the rest with no space (the space moved to their left later that day, the user's screenshot);
+    /// without folds, or too narrow to keep the title's least rule after them, the rule as before.
     /// </summary>
     [Fact]
     public void UpperRule_IsPinned()
     {
         const string buttons = "↘️↖️";
         var parts = ScreenPane.UpperRule("", folds: true, 40);
-        Assert.Equal("─" + buttons + " " + Rule(34), parts.Text);
+        Assert.Equal("─ " + buttons + Rule(34), parts.Text);
         Assert.Equal(40, TextCells.Width(parts.Text));
-        Assert.Equal(("─", buttons), (parts.Lead, parts.Buttons));
-        Assert.Equal((1, 3), (parts.ExpandColumn, parts.CollapseColumn));
+        Assert.Equal(("─ ", buttons), (parts.Lead, parts.Buttons));
+        Assert.Equal((2, 4), (parts.ExpandColumn, parts.CollapseColumn));
 
-        Assert.Equal("─" + buttons + " " + ScreenPane.RuleWithTitle("notes", 34), ScreenPane.UpperRule("notes", folds: true, 40).Text);
+        Assert.Equal("─ " + buttons + ScreenPane.RuleWithTitle("notes", 34), ScreenPane.UpperRule("notes", folds: true, 40).Text);
 
         var plain = ScreenPane.UpperRule("notes", folds: false, 40);
         Assert.Equal((ScreenPane.RuleWithTitle("notes", 40), -1, -1), (plain.Text, plain.ExpandColumn, plain.CollapseColumn));
 
-        Assert.Equal("─" + buttons + " " + Rule(ScreenPane.RuleTitleMinRule), ScreenPane.UpperRule("", folds: true, 6 + ScreenPane.RuleTitleMinRule).Text);
+        Assert.Equal("─ " + buttons + Rule(ScreenPane.RuleTitleMinRule), ScreenPane.UpperRule("", folds: true, 6 + ScreenPane.RuleTitleMinRule).Text);
         var narrow = ScreenPane.UpperRule("", folds: true, 5 + ScreenPane.RuleTitleMinRule);   // the buttons go
         Assert.Equal((Rule(5 + ScreenPane.RuleTitleMinRule), -1), (narrow.Text, narrow.ExpandColumn));
     }
 
     /// <summary>
-    /// The upper rule's ↘️↖️ (2026-09-28): drawn once a run folds, not before; ↘️ (with the rule glyph at its left) unfolds
-    /// and ↖️ (with the space at its right) folds; under an overlay they go, and they come back when it closes.
+    /// The upper rule's ↘️↖️ (2026-09-28): drawn once a run folds, not before; ↘️ (with the space at its left) unfolds
+    /// and ↖️ (with the rule glyph at its right) folds; under an overlay they go, and they come back when it closes.
     /// </summary>
     [Fact]
     public void FoldButtons_ShowOnceARunFolds_AndHitTheirOwnHalves()
@@ -198,20 +197,21 @@ public class ScreenPaneTests : IDisposable
         _time.Advance(ScreenPane.Tick);
         Assert.Contains(ScreenPane.UpperRule("", folds: true, 40).Text + "\n" + InputLine.PromptGlyph, Output[mark..]);
 
-        foreach (int x in new[] { 0, 1, 2 })
+        foreach (int x in new[] { 1, 2, 3 })
         {
             Assert.True(pane.TryHitFoldButton(x, 99, out bool expand));
             Assert.True(expand);
         }
 
-        foreach (int x in new[] { 3, 4, 5 })
+        foreach (int x in new[] { 4, 5, 6 })
         {
             Assert.True(pane.TryHitFoldButton(x, 99, out bool expand));
             Assert.False(expand);
         }
 
-        Assert.False(pane.TryHitFoldButton(6, 99, out _));
-        Assert.False(pane.TryHitFoldButton(1, 98, out _));
+        Assert.False(pane.TryHitFoldButton(0, 99, out _));
+        Assert.False(pane.TryHitFoldButton(7, 99, out _));
+        Assert.False(pane.TryHitFoldButton(2, 98, out _));
 
         // Unchanged: the tick leaves the rule alone.
         mark = Output.Length;
@@ -219,9 +219,9 @@ public class ScreenPaneTests : IDisposable
         Assert.Equal("", Output[mark..]);
 
         pane.ShowOverlay(new Markup("a"), "ESC closes");
-        Assert.False(pane.TryHitFoldButton(1, 99, out _));
+        Assert.False(pane.TryHitFoldButton(2, 99, out _));
         pane.CloseOverlay();
-        Assert.True(pane.TryHitFoldButton(1, 99, out _));
+        Assert.True(pane.TryHitFoldButton(2, 99, out _));
     }
 
     [Fact]

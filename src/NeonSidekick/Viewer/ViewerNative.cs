@@ -4,11 +4,13 @@ namespace NeonSidekick.Viewer;
 
 /// <summary>
 /// The user32/gdi32/kernel32/dwmapi imports behind <see cref="PictureWindow"/> (2026-09-27; dwmapi later that day, for the
-/// themed title bar). One of the Windows-only layers, like
+/// themed title bar; ole32/shell32 on 2026-09-28, for <see cref="PictureWindowDrag"/>). One of the Windows-only layers, like
 /// <c>Audio/WinMm*</c>: source-generated <see cref="LibraryImportAttribute"/> over blittable structs only, every pointer an
 /// <see cref="IntPtr"/> or a typed pointer, and the window procedure an <c>[UnmanagedCallersOnly]</c> function pointer — no
 /// delegate is marshalled, so nothing here behaves differently once published (the smoke's <c>viewer:window</c> proves it).
-/// All four are system libraries: nothing joins <c>SmokeChecks.RequiredNativeLibraries</c>.
+/// All six are system libraries: nothing joins <c>SmokeChecks.RequiredNativeLibraries</c>. The drag's one COM object is the
+/// shell's own, held as an <see cref="IntPtr"/> and called through its vtable (<see cref="PictureWindowDrag"/>): no COM
+/// class of ours, no <c>ComWrappers</c>.
 /// </summary>
 internal static unsafe partial class ViewerNative
 {
@@ -23,7 +25,11 @@ internal static unsafe partial class ViewerNative
     public const uint WmKeyDown = 0x0100;
     public const uint WmSysKeyDown = 0x0104;
     public const uint WmTimer = 0x0113;
+    public const uint WmMouseMove = 0x0200;
+    public const uint WmLeftButtonDown = 0x0201;
+    public const uint WmLeftButtonUp = 0x0202;
     public const uint WmLeftButtonDoubleClick = 0x0203;
+    public const uint WmCaptureChanged = 0x0215;
     public const uint WmApp = 0x8000;
 
     public const uint CsVRedraw = 0x0001;
@@ -74,6 +80,31 @@ internal static unsafe partial class ViewerNative
 
     /// <summary>The idc arrow cursor.</summary>
     public const int IdcArrow = 32512;
+
+    /// <summary>MK_LBUTTON: the left button is down, in a mouse message's wParam.</summary>
+    public const int MkLeftButton = 0x0001;
+
+    /// <summary>SM_CXDRAG / SM_CYDRAG: the rectangle, centred on a press, a move must leave before it is a drag.</summary>
+    public const int SmCxDrag = 68;
+    public const int SmCyDrag = 69;
+
+    /// <summary>DROPEFFECT_COPY: the only effect the viewer's drag offers (2026-09-28, the user's ask: copied, never moved).</summary>
+    public const uint DropEffectCopy = 1;
+
+    /// <summary>DRAGDROP_S_DROP / DRAGDROP_S_CANCEL: how a drag ended.</summary>
+    public const int DragDropDropped = 0x00040100;
+    public const int DragDropCancelled = 0x00040101;
+
+    /// <summary>CF_HDROP, DVASPECT_CONTENT, TYMED_HGLOBAL: the file list a drop target reads, as <see cref="FormatEtc"/> asks for it.</summary>
+    public const ushort CfHDrop = 15;
+    public const uint DvAspectContent = 1;
+    public const uint TymedHGlobal = 1;
+
+    /// <summary>E_FAIL.</summary>
+    public const int EFail = unchecked((int)0x80004005);
+
+    /// <summary>IID_IDataObject.</summary>
+    public static readonly Guid IidDataObject = new("0000010e-0000-0000-C000-000000000046");
 
     /// <summary>DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2.</summary>
     public static readonly IntPtr PerMonitorAwareV2 = new(-4);
@@ -174,6 +205,16 @@ internal static unsafe partial class ViewerNative
         public Rect rcMonitor;
         public Rect rcWork;
         public uint dwFlags;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct FormatEtc
+    {
+        public ushort cfFormat;
+        public IntPtr ptd;
+        public uint dwAspect;
+        public int lindex;
+        public uint tymed;
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -352,6 +393,44 @@ internal static unsafe partial class ViewerNative
     [LibraryImport("gdi32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool DeleteObject(IntPtr ho);
+
+    [LibraryImport("user32.dll")]
+    public static partial IntPtr SetCapture(IntPtr hWnd);
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool ReleaseCapture();
+
+    [LibraryImport("user32.dll")]
+    public static partial int GetSystemMetrics(int nIndex);
+
+    [LibraryImport("ole32.dll")]
+    public static partial int OleInitialize(IntPtr pvReserved);
+
+    [LibraryImport("ole32.dll")]
+    public static partial void OleUninitialize();
+
+    [LibraryImport("shell32.dll", StringMarshalling = StringMarshalling.Utf16)]
+    public static partial int SHParseDisplayName(string pszName, IntPtr pbc, IntPtr* ppidl, uint sfgaoIn, uint* psfgaoOut);
+
+    [LibraryImport("shell32.dll")]
+    public static partial int SHCreateDataObject(IntPtr pidlFolder, uint cidl, IntPtr* apidl, IntPtr pdtInner, Guid* riid, IntPtr* ppv);
+
+    [LibraryImport("shell32.dll")]
+    public static partial int SHDoDragDrop(IntPtr hwnd, IntPtr pdata, IntPtr pdsrc, uint dwEffect, uint* pdwEffect);
+
+    [LibraryImport("shell32.dll")]
+    public static partial IntPtr ILClone(IntPtr pidl);
+
+    [LibraryImport("shell32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool ILRemoveLastID(IntPtr pidl);
+
+    [LibraryImport("shell32.dll")]
+    public static partial IntPtr ILFindLastID(IntPtr pidl);
+
+    [LibraryImport("shell32.dll")]
+    public static partial void ILFree(IntPtr pidl);
 
     // DWMWINDOWATTRIBUTE (dwmapi.h): the dark bar from Windows 10 20H1, the colours from Windows 11 (22000); older
     // builds answer E_INVALIDARG and keep their bar.

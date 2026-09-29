@@ -597,4 +597,29 @@ public sealed class ViewerTests : IDisposable
         Assert.True(check.Passed, check.Detail);
         Assert.Equal("viewer:window", check.Name);
     }
+
+    /// <summary>The drag out's shell data object (2026-09-28): made for a real file on an STA thread, it offers CF_HDROP.</summary>
+    [Fact]
+    public void ProbeDrag_TheShellsDataObject_OffersTheFile()
+    {
+        var check = SmokeChecks.ProbeViewerDrag();
+
+        Assert.True(check.Passed, check.Detail);
+        Assert.Equal("viewer:drag", check.Name);
+    }
+
+    /// <summary>The drag out starts past the system's drag rectangle centred on the press (2026-09-28), either way on either axis.</summary>
+    [Theory]
+    [InlineData(0, 0, false)]
+    [InlineData(2, 2, false)]
+    [InlineData(-2, -2, false)]
+    [InlineData(3, 0, true)]
+    [InlineData(-3, 0, true)]
+    [InlineData(0, 3, true)]
+    [InlineData(0, -3, true)]
+    public void PastDragThreshold_IsTheDragRectangle(int dx, int dy, bool past)
+    {
+        Assert.Equal(past, ViewerState.PastDragThreshold(dx, dy, 4, 4));
+        Assert.Equal(past, ViewerState.PastDragThreshold(dx, dy, 5, 5));   // an odd side rounds down, as DragDetect's
+    }
 }

@@ -51,6 +51,9 @@ public static class ViewerText
     /// <summary>The log's line when a double-Del'd picture could not be deleted.</summary>
     public static string DeleteFailed(string name, string detail) => $"Could not delete {name}: {detail}";
 
+    /// <summary>The log's line when the shown picture could not be dragged out of the viewer (2026-09-28).</summary>
+    public static string DragFailed(string name, string detail) => $"Could not drag {name} out: {detail}";
+
     /// <summary>What the window says in its middle while the folder has no picture. Pinned.</summary>
     public static string Waiting(string folder) => $"Waiting for pictures in {folder}";
 

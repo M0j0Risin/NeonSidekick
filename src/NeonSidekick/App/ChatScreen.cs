@@ -592,7 +592,7 @@ internal sealed partial class ChatScreen
     /// <summary>A double-clicked picture's viewer (later on 2026-09-27, <see cref="Viewer.PictureWindow.OpenAt"/>), handed the picture's full path; null where there is none (the registered app then).</summary>
     private readonly Action<string>? _viewPicture;
 
-    /// <summary>An open viewer moved to a picture quietly (2026-09-28, <see cref="Viewer.PictureWindow.Follow"/>), for the strip's arrows under <c>both-ways</c>; null where there is none.</summary>
+    /// <summary>An open viewer moved to a picture quietly (2026-09-28, <see cref="Viewer.PictureWindow.Follow"/>), for the strip's arrows and a click on a tile; null where there is none.</summary>
     private readonly Action<string>? _followViewer;
 
     /// <summary>
@@ -11583,9 +11583,8 @@ internal sealed partial class ChatScreen
     /// <summary>
     /// A click on a strip tile (2026-09-28, the user's ask: "clicking a picture here selects it (which would switch to that
     /// image in the viewer if the viewer is open)"): the tile highlighted, the pane following at once, and an open viewer
-    /// moved to it under every <c>ComfyUI picture strip sync</c> (the user's call — the arrows keep to the setting). The
-    /// first click of a double-click does it too, so the second finds the tile highlighted and opens it. One already
-    /// highlighted moves nothing.
+    /// moved to it, as the arrows move it. The first click of a double-click does it too, so the second finds the tile
+    /// highlighted and opens it. One already highlighted moves nothing.
     /// </summary>
     private void SelectStripPicture(int id)
     {
@@ -11595,18 +11594,19 @@ internal sealed partial class ChatScreen
         }
 
         _pane.RedrawStrip();
-        FollowInViewer(always: true);
+        FollowInViewer();
     }
 
     /// <summary>
-    /// The strip's highlighted picture shown in an open viewer (2026-09-28, <c>ComfyUI picture strip sync</c>'s
-    /// <c>both-ways</c>, or <paramref name="always"/> for a click on a tile): only a picture with a file of its own; nothing
-    /// with the highlight let go, without a viewer, or — not <paramref name="always"/> — under the other two. The viewer
-    /// takes it only on its own folder and never comes forward.
+    /// The strip's highlighted picture shown in an open viewer (2026-09-28), after the strip's arrows or a click on a tile:
+    /// only a picture with a file of its own; nothing with the highlight let go or without a viewer. The viewer takes it
+    /// only on its own folder and never comes forward. Always, since later that day: the <c>ComfyUI picture strip sync</c>
+    /// setting that chose between this, the viewer's keys alone and neither went (the user's call: "use the both-ways
+    /// functionality always").
     /// </summary>
-    private void FollowInViewer(bool always = false)
+    private void FollowInViewer()
     {
-        if (_followViewer is null || (!always && !StripSync.StripSyncs(_effective().ComfyPictureStripSync)) || _pictureStrip.SelectedId is not { } id)
+        if (_followViewer is null || _pictureStrip.SelectedId is not { } id)
         {
             return;
         }
@@ -11635,15 +11635,14 @@ internal sealed partial class ChatScreen
     /// <summary>
     /// The picture the viewer's keys moved to (2026-09-28, the user's ask: "if I push left or right arrow while in the viewer,
     /// the selected image in the picture strip would change to that selection as well"): the strip's newest tile for that file
-    /// highlighted and the pane redrawn, under <c>ComfyUI picture strip sync</c>'s <c>viewer-only</c> and <c>both-ways</c>. A
+    /// highlighted and the pane redrawn, always (the strip sync setting went later that day, <see cref="FollowInViewer"/>). A
     /// picture the strip does not hold is ignored, the highlight kept (the user's call), as is everything with the strip off.
     /// Any thread (the viewer's).
     /// </summary>
     public void ViewerBrowsed(string path)
     {
         ArgumentNullException.ThrowIfNull(path);
-        var effective = _effective();
-        if (!effective.ComfyPictureStrip || !StripSync.ViewerSyncs(effective.ComfyPictureStripSync))
+        if (!_effective().ComfyPictureStrip)
         {
             return;
         }

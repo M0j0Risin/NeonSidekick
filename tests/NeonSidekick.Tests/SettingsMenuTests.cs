@@ -817,7 +817,6 @@ public class SettingsMenuTests : IDisposable
                 SettingsField.BotChatPreloadedSkills, SettingsField.BotChatSkillMode,
                 SettingsField.LlmPreserveThinking, SettingsField.SessionSaveThinking, SettingsField.LlmSampling, SettingsField.LlmSamplingFromHuggingFace,
                 SettingsField.HomeAssistantTools, SettingsField.HomeAssistantUrl, SettingsField.HomeAssistantToken, SettingsField.HomeAssistantTest, SettingsField.HomeAssistantActionPolicy, SettingsField.HomeAssistantAssistAgent, SettingsField.HomeAssistantTimeoutSeconds,
-                SettingsField.ComfyPictureStripSync,
                 SettingsField.PrintTools, SettingsField.PrintActionPolicy, SettingsField.PrintDefaultPrinter, SettingsField.PrintFontSize,
             },
             Enum.GetValues<SettingsField>());

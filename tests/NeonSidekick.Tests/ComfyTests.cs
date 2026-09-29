@@ -767,31 +767,6 @@ public sealed class ComfyTests : IDisposable
         Assert.Equal("← → picture 2/7 · Enter opens", ComfyText.StripSelectedHint(2, 7));
     }
 
-    /// <summary>
-    /// <c>ComfyUI picture strip sync</c> (2026-09-28, the user's name, choices and default): a picker under the strip,
-    /// viewer-only by default, any case read, an unknown name the default; the two directions per choice.
-    /// </summary>
-    [Fact]
-    public void StripSync_Setting_IsAPicker_ViewerOnlyByDefault_UnderTheStrip()
-    {
-        Assert.Equal(StripSync.ViewerOnly, new AppSettingsData().ComfyPictureStripSync);
-        Assert.Equal("viewer-only", SettingsMenu.FieldValue(SettingsField.ComfyPictureStripSync, new AppSettingsData(), ""));
-        Assert.Equal("both-ways", SettingsMenu.FieldValue(SettingsField.ComfyPictureStripSync, new AppSettingsData { ComfyPictureStripSync = " Both-Ways " }, ""));
-        Assert.False(SettingsMenu.IsToggle(SettingsField.ComfyPictureStripSync));
-        Assert.Equal("ComfyUI picture strip sync", SettingsMenu.FieldName(SettingsField.ComfyPictureStripSync));
-        var tab = SettingsMenu.ToolsTabFields.Single(fields => fields.Contains(SettingsField.ComfyTools)).ToList();
-        Assert.Equal(tab.IndexOf(SettingsField.ComfyPictureStrip) + 1, tab.IndexOf(SettingsField.ComfyPictureStripSync));
-
-        Assert.Equal(["viewer-only", "both-ways", "disabled"], StripSync.Names);
-        Assert.Equal(StripSync.ViewerOnly, StripSync.Resolve("sometimes"));
-        Assert.Equal(StripSync.ViewerOnly, StripSync.Resolve(null));
-        Assert.Equal(StripSync.Disabled, StripSync.Resolve("DISABLED"));
-        Assert.True(StripSync.ViewerSyncs(StripSync.ViewerOnly) && !StripSync.StripSyncs(StripSync.ViewerOnly));
-        Assert.True(StripSync.ViewerSyncs(StripSync.BothWays) && StripSync.StripSyncs(StripSync.BothWays));
-        Assert.False(StripSync.ViewerSyncs(StripSync.Disabled) || StripSync.StripSyncs(StripSync.Disabled));
-        Assert.All(StripSync.Names, name => Assert.Contains(StripSync.Describe(name), SettingsMenu.StripSyncLabel(name)));
-    }
-
     /// <summary>Later still on 2026-09-24, the user's call: tips keep their lines, indented under the workflow, blank runs squeezed to one.</summary>
     [Fact]
     public void Describe_KeepsTheTipsLines_IndentedUnderTheWorkflow()

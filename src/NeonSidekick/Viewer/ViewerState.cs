@@ -374,6 +374,14 @@ public sealed class ViewerState
         return ((clientWidth - w) / 2, (clientHeight - h) / 2, w, h);
     }
 
+    /// <summary>
+    /// Whether a move of (<paramref name="dx"/>, <paramref name="dy"/>) pixels from a press has left the system's drag
+    /// rectangle of <paramref name="dragWidth"/> × <paramref name="dragHeight"/> (SM_CXDRAG / SM_CYDRAG) centred on it, as
+    /// <c>DragDetect</c> judges it: the viewer's drag out starts there (2026-09-28). Pure.
+    /// </summary>
+    public static bool PastDragThreshold(int dx, int dy, int dragWidth, int dragHeight) =>
+        Math.Abs(dx) > dragWidth / 2 || Math.Abs(dy) > dragHeight / 2;
+
     private int IndexOf(string path) => _pictures.FindIndex(p => string.Equals(p.Path, path, StringComparison.OrdinalIgnoreCase));
 
     // Takes a picture out, the held index kept on the same picture (or the one that took its place, the last one live).

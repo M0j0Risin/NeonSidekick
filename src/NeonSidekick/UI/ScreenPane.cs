@@ -677,8 +677,8 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
 
     /// <summary>
     /// Whether a click at buffer cell (<paramref name="x"/>, <paramref name="y"/>) landed on the upper rule's ↘️ or ↖️
-    /// (2026-09-28, <see cref="UpperRule"/>): <paramref name="expand"/> true for ↘️ and the rule glyph at its left, false
-    /// for ↖️ and the space at its right — a cell of slack on the outer side of each, none between them. The caller
+    /// (2026-09-28, <see cref="UpperRule"/>): <paramref name="expand"/> true for ↘️ and the space at its left, false for
+    /// ↖️ and the rule glyph at its right — a cell of slack on the outer side of each, none between them. The caller
     /// unfolds or folds everything (<see cref="SetToolGroupsExpanded"/>). False with no buttons drawn, an overlay drawn,
     /// the pane lifted or disabled, or no geometry.
     /// </summary>
@@ -4026,10 +4026,10 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     /// <summary>
     /// The picture strip's rule of <paramref name="width"/> cells (2026-09-28, the user's layout): the viewer's
     /// <paramref name="button"/> at the left, right after the rule's first glyph with a space at its right, and the close ×
-    /// (<see cref="CloseGlyph"/>) at the right with a space either side — <c>─🎞️ ────────── × ─</c>. The space that stood
-    /// left of the button went later that day (the user's screenshot: Windows Terminal draws the 🎞️ with room of its own
-    /// at its left, so the gap read as two). With no button, <c>────── × ─</c>; a width that leaves no rule between them
-    /// drops the button, one that cannot hold even the × is the bare rule. Pure, pinned.
+    /// (<see cref="CloseGlyph"/>) at the right with a space either side — <c>─ 🎞️ ────────── × ─</c>. The space left of
+    /// the button went later that day (a screenshot read the gap as two) and came back later still (the user's call: "I
+    /// was wrong about this"). With no button, <c>────── × ─</c>; a width that leaves no rule between them drops the
+    /// button, one that cannot hold even the × is the bare rule. Pure, pinned.
     /// </summary>
     public static StripRuleParts StripRule(string? button, int width)
     {
@@ -4040,10 +4040,10 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         int right = 1 + closeCells + TextCells.Width(tail);   // " × ─"
         button ??= "";
         int buttonCells = TextCells.Width(button);
-        if (button.Length > 0 && width - (1 + buttonCells + 1) - right >= 1)
+        if (button.Length > 0 && width - (2 + buttonCells + 1) - right >= 1)
         {
-            // "─" + button + " " + the rule + " × ─"
-            string lead = rule;
+            // "─ " + button + " " + the rule + " × ─"
+            string lead = rule + " ";
             int fill = width - TextCells.Width(lead) - buttonCells - 1 - right;
             return new StripRuleParts(lead, button, " " + new string(RuleGlyph, fill) + " ", CloseGlyph, tail, TextCells.Width(lead), width - closeCells - TextCells.Width(tail));
         }
@@ -4098,25 +4098,27 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
 
     /// <summary>
     /// The upper rule of <paramref name="width"/> cells (2026-09-28, the user's ask): with <paramref name="folds"/>,
-    /// <see cref="ExpandGlyph"/> and <see cref="CollapseGlyph"/> side by side right after the rule's first glyph, a space,
-    /// then <see cref="RuleWithTitle"/> over the rest — <c>─↘️↖️ ──────── title ─</c>, laid out as the strip rule's 🎞️ is (no
-    /// space at the glyphs' left). A width that cannot keep <see cref="RuleTitleMinRule"/> glyphs after them drops the
-    /// buttons; without <paramref name="folds"/> it is <see cref="RuleWithTitle"/> alone. Pure, pinned.
+    /// <see cref="ExpandGlyph"/> and <see cref="CollapseGlyph"/> side by side after the rule's first glyph and a space, then
+    /// <see cref="RuleWithTitle"/> over the rest with no space — <c>─ ↘️↖️──────── title ─</c>. The space moved from the
+    /// glyphs' right to their left later that day (the user's screenshot: Windows Terminal draws each with room of its own
+    /// at its right, so the gap after them read as two and none before them). A width that cannot keep
+    /// <see cref="RuleTitleMinRule"/> glyphs after them drops the buttons; without <paramref name="folds"/> it is
+    /// <see cref="RuleWithTitle"/> alone. Pure, pinned.
     /// </summary>
     public static UpperRuleParts UpperRule(string title, bool folds, int width)
     {
         ArgumentNullException.ThrowIfNull(title);
         width = Math.Max(0, width);
-        string lead = RuleGlyph.ToString();
+        string lead = RuleGlyph + " ";
         int expandCells = TextCells.Width(ExpandGlyph);
-        int used = TextCells.Width(lead) + expandCells + TextCells.Width(CollapseGlyph) + 1;
+        int used = TextCells.Width(lead) + expandCells + TextCells.Width(CollapseGlyph);
         if (!folds || width - used < RuleTitleMinRule)
         {
             return new UpperRuleParts("", "", RuleWithTitle(title, width), -1, -1);
         }
 
         int expandColumn = TextCells.Width(lead);
-        return new UpperRuleParts(lead, ExpandGlyph + CollapseGlyph, " " + RuleWithTitle(title, width - used), expandColumn, expandColumn + expandCells);
+        return new UpperRuleParts(lead, ExpandGlyph + CollapseGlyph, RuleWithTitle(title, width - used), expandColumn, expandColumn + expandCells);
     }
 
     /// <summary>The least rule glyphs kept at the left of a titled upper rule; a title that would leave fewer is cut, a width that cannot hold even a cut title gets the bare rule.</summary>

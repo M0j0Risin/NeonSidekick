@@ -108,6 +108,7 @@ public static partial class SmokeChecks
         results.Add(ProbeConsoleInput());
         results.Add(ProbeImageResize());
         results.Add(ProbeViewerWindow());
+        results.Add(ProbeViewerDrag());
         results.Add(ProbePrintSpooler());
         results.Add(ProbeSplash());
         results.Add(ProbeWebMarkdown());
@@ -461,6 +462,43 @@ public static partial class SmokeChecks
         catch (Exception ex)
         {
             return new SmokeCheck(name, false, $"{ex.GetType().Name}: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// <c>viewer:drag</c> (2026-09-28): the viewer's drag out in the published binary, short of the drag — OLE started on an
+    /// STA thread, the shell's data object made for a fixture BMP written to the temp folder and asked for CF_HDROP, released
+    /// through its vtable (<see cref="Viewer.PictureWindowDrag.Probe"/>). Nothing is dragged; the file is deleted.
+    /// </summary>
+    public static SmokeCheck ProbeViewerDrag()
+    {
+        const string name = "viewer:drag";
+        if (!OperatingSystem.IsWindows())
+        {
+            return new SmokeCheck(name, true, "skipped: not Windows");
+        }
+
+        string path = Path.Combine(Path.GetTempPath(), "neonsidekick-drag-" + Guid.NewGuid().ToString("N") + ".bmp");
+        try
+        {
+            File.WriteAllBytes(path, SolidBmp(2, 2));
+            var (ok, detail) = Viewer.PictureWindowDrag.Probe(path);
+            return new SmokeCheck(name, ok, detail);
+        }
+        catch (Exception ex)
+        {
+            return new SmokeCheck(name, false, $"{ex.GetType().Name}: {ex.Message}");
+        }
+        finally
+        {
+            try
+            {
+                File.Delete(path);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // A temp file left behind is harmless.
+            }
         }
     }
 

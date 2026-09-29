@@ -156,8 +156,7 @@ public sealed class PictureStrip
     }
 
     /// <summary>
-    /// The newest picture whose id <paramref name="isId"/> takes highlighted (2026-09-28, the viewer's keys under <c>ComfyUI
-    /// picture strip sync</c>: one file can be registered more than once, so the screen passes every id it has for it). True
+    /// The newest picture whose id <paramref name="isId"/> takes highlighted (2026-09-28, the viewer's keys: one file can be registered more than once, so the screen passes every id it has for it). True
     /// when the highlight moved; with no match false and the highlight left where it was (the user's call: a picture the
     /// strip does not hold is ignored).
     /// </summary>

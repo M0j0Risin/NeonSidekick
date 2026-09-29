@@ -146,7 +146,7 @@ var app = new SidekickApp(console, settings, environment, geometry: geometry, in
 
 // The viewer's Themed image viewer switch (later on 2026-09-27), read from the effective settings on the viewer's thread.
 NeonSidekick.Viewer.PictureWindow.Themed = () => app.EffectiveSettings.ThemedViewer;
-// The viewer's keys highlight the same picture in the strip (2026-09-28, ComfyUI picture strip sync).
+// The viewer's keys highlight the same picture in the strip (2026-09-28).
 NeonSidekick.Viewer.PictureWindow.Browsed = app.ViewerBrowsed;
 // The viewer opens where it last closed (2026-09-28): the profile keeps the corner, written only when it moved, so a close
 // in place logs no change. On the viewer's thread; Update is locked and nothing listens to Changed.

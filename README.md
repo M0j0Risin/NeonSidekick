@@ -64,7 +64,7 @@ Neon Sidekick brings privacy-first, local LLM inference to your terminal. Powere
 
 **Navigation**
 * **Keyboard:** ←/→ (switch tabs), ↑/↓ (move), Enter (edit/toggle), ESC (close).
-* **Mouse:** Click moves the cursor; double-click selects rows and tabs. The top-right × acts as ESC, and double-clicking outside an open pane closes it. Double-clicking a picture in the transcript opens it in the picture viewer. Clicking a picture in the ComfyUI picture strip highlights it and moves an open viewer to it; double-clicking it also opens it.
+* **Mouse:** Click moves the cursor; double-click selects rows and tabs. The top-right × acts as ESC, and double-clicking outside an open pane closes it. Double-clicking a picture in the transcript opens it in the picture viewer. Clicking a picture in the ComfyUI picture strip highlights it and moves an open viewer to it; double-clicking it also opens it. To copy a picture out of the app (to the desktop or a folder), open it in the picture viewer and drag it from there.
 * **Fold buttons:** while the transcript holds a tool run, code block or thinking block that folds, **↘️↖️** sit at the left of the rule over the input row. ↘️ unfolds everything and ↖️ folds it again, as `/expand` and `/collapse` do but without a notice. They work while a reply runs too.
 
 **Input line**
@@ -463,7 +463,6 @@ The services that run without asking under `ask` can be changed in `profile.json
 | ComfyUI reinforce negatives | When the model writes the prompt, it also adds a few opposite tags where the image model tends to drift (a solo figure → `multiple girls`, night → `daylight`) to the workflow's negative. Skipped for a verbatim prompt, a negative set for the call, `/imagine`, families without a negative (Flux, FLUX.2, Klein, Krea 2, Z-Image, Ernie Turbo, Boogu, Ideogram 4) and a workflow whose `.md` says `reinforce: false`. | on |
 | ComfyUI show prompts | Shows what was sent under each picture: the `prompt:`, the `negative:` and a `params:` line (size, steps, cfg, denoise, seed, sampler, scheduler). Off, only the picture's line. The model sees the same either way. | on |
 | ComfyUI picture strip | Keeps the session's ComfyUI pictures as thumbnails in a strip over the input line, newest at the left. With the input line empty, ←/→ highlight one and Enter opens it, a reply running or not; a double-click opens any, and dragging one onto the input row attaches it to your message. The **🎞️** at the left of the strip's rule opens the picture viewer on the output folder; the **×** at its right hides the strip until the next picture (turn this setting off to keep it hidden). `/clear`, `/new` and a session switch empty it; it hides while a menu is open or the window is too short. | on |
-| ComfyUI picture strip sync | Whether the strip and the picture viewer follow each other. `viewer-only`: browsing in the viewer (←/→, Home/End, the next picture after a delete) highlights the same picture in the strip; a picture the strip doesn't hold is ignored, and the slide show and newly arriving pictures leave the strip alone. `both-ways`: that, plus ←/→ on the strip move an open viewer on the strip's folder without bringing it to the front. `disabled`: neither. A click on a strip picture moves an open viewer under every setting. | `viewer-only` |
 | ComfyUI output folder | The folder under the working directory the pictures are saved in (`comfy_images\pony-txt2img-1234.png`); empty = the working directory itself. | `comfy_images` |
 
 #### SQL
@@ -732,6 +731,7 @@ A picture window (Windows only; elsewhere the app registered for the file opens 
 | ← / → | Browse; reaching the newest follows new pictures again |
 | Home / End | First / newest picture |
 | F11 or double-click | Toggle full screen |
+| Drag the picture | Copy it to wherever you drop it: the desktop, an Explorer folder, or any app that takes a dropped file (never a move) |
 | Del, Del (within 2 s) | Permanently delete the shown picture (the title says "Del again to delete" after the first) |
 | F9 | Start or stop a looping slide show (5 s a slide; the title shows `▶ 5 s`) |
 | ↑ / ↓ | Slide show: a second more or less per slide (1–60) |
@@ -742,7 +742,7 @@ The window follows the theme unless *Themed image viewer* is off: a dark title b
 
 The viewer opens where it was last closed; the size is always the default. It remembers the window's normal position even when you close it maximized or in full screen. The position is saved in the profile. If that spot is no longer on any monitor, Windows moves the window back into view.
 
-Browsing in the viewer highlights the same picture in the ComfyUI picture strip, and with `both-ways` the strip's arrows move the viewer too; see *ComfyUI picture strip sync*.
+The viewer and the ComfyUI picture strip follow each other. Browsing in the viewer (←/→, Home/End, the next picture after a delete) highlights the same picture in the strip; a picture the strip doesn't hold is ignored, and the slide show and newly arriving pictures leave the strip alone. ←/→ on the strip, or a click on one of its pictures, moves an open viewer on the strip's folder to that picture without bringing it to the front.
 
 #### Profiles
 

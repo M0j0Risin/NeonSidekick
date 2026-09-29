@@ -15,7 +15,8 @@ namespace NeonSidekick.Viewer;
 /// WIC codecs the app already links (<see cref="ViewerImage"/>). One window per process: a second
 /// <see cref="Open"/> points it at the folder and brings it forward. It dies with the app (<see cref="CloseAll"/>, and
 /// its thread is a background one). Everything it decides is <see cref="ViewerState"/>'s, tested without a window; this
-/// is the Windows layer, proven by the smoke's <c>viewer:window</c> (<see cref="Probe"/>) and by hand.
+/// is the Windows layer, proven by the smoke's <c>viewer:window</c> (<see cref="Probe"/>) and by hand. The shown picture
+/// drags out of it and is copied where it is dropped (2026-09-28, <see cref="PictureWindowDrag"/>, <c>viewer:drag</c>).
 /// </summary>
 public static class PictureWindow
 {
@@ -30,7 +31,7 @@ public static class PictureWindow
     public static Func<bool> Themed { get; set; } = static () => true;
 
     /// <summary>
-    /// The picture the user's own keys moved to (2026-09-28, <c>ComfyUI picture strip sync</c>: the strip highlights it): ← / →,
+    /// The picture the user's own keys moved to (2026-09-28: the strip highlights it): ← / →,
     /// Home / End, and the picture shown after a double-Del — never a slide, an arriving picture, a retarget or a
     /// <see cref="Follow"/>, so the strip and the window cannot chase each other. Called on the window's thread with the full
     /// path; it must not block. The app supplies it (<c>Program</c>); nothing until then.
@@ -99,7 +100,7 @@ public static class PictureWindow
 
     /// <summary>
     /// The open window moved to <paramref name="picture"/> (a full path) without being brought forward (2026-09-28, the strip's
-    /// arrows under <c>ComfyUI picture strip sync</c>'s <c>both-ways</c>): only a window on that picture's folder, and only a
+    /// arrows and a click on one of its tiles): only a window on that picture's folder, and only a
     /// file that exists. Nothing without a window — this never opens one.
     /// </summary>
     public static void Follow(string picture)
@@ -193,6 +194,8 @@ internal sealed unsafe class PictureWindowThread
     private IntPtr _background;
     private IntPtr _savedStyle;
     private WindowPlacement _savedPlacement;
+    private bool _ole;
+    private (int X, int Y)? _press;
 
     private enum ChangeKind
     {
@@ -222,6 +225,12 @@ internal sealed unsafe class PictureWindowThread
     public void Start()
     {
         _thread = new Thread(Run) { IsBackground = true, Name = "Picture viewer" };
+        if (OperatingSystem.IsWindows())
+        {
+            // An STA (2026-09-28): the drag out (PictureWindowDrag) wants OLE on the window's thread.
+            _thread.SetApartmentState(ApartmentState.STA);
+        }
+
         _thread.Start();
         if (!_ready.Wait(TimeSpan.FromSeconds(10)) || !_started)
         {
@@ -377,6 +386,15 @@ internal sealed unsafe class PictureWindowThread
         try
         {
             SetThreadDpiAwarenessContext(PerMonitorAwareV2);
+
+            // OLE for the drag out (2026-09-28); without it the viewer still works, and a drag does nothing.
+            int ole = OleInitialize(IntPtr.Zero);
+            _ole = ole >= 0;
+            if (!_ole)
+            {
+                DiagnosticLog.Warn("Viewer", $"OLE did not start on the picture viewer's thread (0x{ole:X8}): no picture can be dragged out of it.");
+            }
+
             IntPtr instance = GetModuleHandle(IntPtr.Zero);
             if (!EnsureClass(instance, out _failure))
             {
@@ -431,6 +449,11 @@ internal sealed unsafe class PictureWindowThread
                 DeleteObject(_background);
             }
 
+            if (_ole)
+            {
+                OleUninitialize();
+            }
+
             self.Free();
             _ready.Set();
             DiagnosticLog.Info("Viewer", "Picture viewer closed.");
@@ -476,6 +499,37 @@ internal sealed unsafe class PictureWindowThread
 
             case WmLeftButtonDoubleClick:
                 Do(ViewerAction.ToggleFullScreen);
+                return IntPtr.Zero;
+
+            // The drag out (2026-09-28): a press remembered and the mouse captured; the first move past the system's drag
+            // rectangle starts it. A double-click never moves, so it stays full screen's.
+            case WmLeftButtonDown:
+                _press = PointOf(lParam);
+                SetCapture(hwnd);
+                return IntPtr.Zero;
+            case WmMouseMove when _press is { } press:
+            {
+                if (((int)wParam & MkLeftButton) == 0)
+                {
+                    EndPress();
+                    return IntPtr.Zero;
+                }
+
+                var (x, y) = PointOf(lParam);
+                if (ViewerState.PastDragThreshold(x - press.X, y - press.Y, GetSystemMetrics(SmCxDrag), GetSystemMetrics(SmCyDrag)))
+                {
+                    EndPress();
+                    DragOut(hwnd);
+                }
+
+                return IntPtr.Zero;
+            }
+
+            case WmLeftButtonUp:
+                EndPress();
+                return IntPtr.Zero;
+            case WmCaptureChanged:
+                _press = null;
                 return IntPtr.Zero;
             case ChangedMessage:
                 Drain();
@@ -597,6 +651,36 @@ internal sealed unsafe class PictureWindowThread
 
                 break;
         }
+    }
+
+    // A mouse message's client point: GET_X_LPARAM / GET_Y_LPARAM, signed (a captured mouse left of or above the window).
+    private static (int X, int Y) PointOf(IntPtr lParam) => ((short)((long)lParam & 0xFFFF), (short)(((long)lParam >> 16) & 0xFFFF));
+
+    private void EndPress()
+    {
+        _press = null;
+        ReleaseCapture();
+    }
+
+    // The shown picture dragged out and copied where it is dropped (2026-09-28, the user's ask; PictureWindowDrag). Nothing
+    // without OLE, a picture, or its file; a failure only logged, as a delete's is. The slide show's timer may move the
+    // window on meanwhile: the drag carries the picture it started with.
+    private void DragOut(IntPtr hwnd)
+    {
+        if (!_ole || _state.Current is not { } path || !File.Exists(path))
+        {
+            return;
+        }
+
+        string name = Path.GetFileName(path);
+        var (hr, effect) = PictureWindowDrag.Start(hwnd, path);
+        if (hr < 0)
+        {
+            DiagnosticLog.Warn("Viewer", ViewerText.DragFailed(name, $"0x{hr:X8}"));
+            return;
+        }
+
+        DiagnosticLog.Info("Viewer", hr == DragDropDropped && (effect & DropEffectCopy) != 0 ? $"Dragged {name} out: copied." : $"Dragged {name} out: nothing dropped.");
     }
 
     // The slide show's timer (later on 2026-09-27): a slide's time from now while the show runs, else stopped. Starting the

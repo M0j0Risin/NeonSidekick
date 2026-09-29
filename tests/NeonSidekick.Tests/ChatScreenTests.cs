@@ -4212,7 +4212,7 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         Assert.Contains(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude (CLI)    Home Assistant    Print    Obsidian    ComfyUI    SQL    Git (native)    Options ", output);
-        Assert.Contains("\n▸ ComfyUI tools                  on\n  ComfyUI URL                    (not set)\n  ComfyUI workflows offered      all (not narrowed)\n  ComfyUI add workflow           Enter to start workflow wizard\n  ComfyUI ^-mention enabled      on\n  ComfyUI timeout (s)            300\n  ComfyUI max pictures per call  5 pictures\n  ComfyUI reinforce negatives    on\n  ComfyUI show prompts           on\n  ComfyUI picture strip          on\n  ComfyUI picture strip sync     viewer-only\n  ComfyUI output folder          comfy_images\n", output);   // 2026-09-24; the offered checklist and the wizard later that day, the ^-mention switch later still
+        Assert.Contains("\n▸ ComfyUI tools                  on\n  ComfyUI URL                    (not set)\n  ComfyUI workflows offered      all (not narrowed)\n  ComfyUI add workflow           Enter to start workflow wizard\n  ComfyUI ^-mention enabled      on\n  ComfyUI timeout (s)            300\n  ComfyUI max pictures per call  5 pictures\n  ComfyUI reinforce negatives    on\n  ComfyUI show prompts           on\n  ComfyUI picture strip          on\n  ComfyUI output folder          comfy_images\n", output);   // 2026-09-24; the offered checklist and the wizard later that day, the ^-mention switch later still
         Assert.Contains("\n▸ Claude executable                   (looked up)\n  Claude slash command permissions    read-only\n  Claude slash command model          (Claude Code's default)\n  Claude slash command effort         (Claude Code's default)\n  Claude advisor tool                 off\n  Claude advisor tool context         brief\n  Claude advisor tool calls per turn  2 calls\n  Claude advisor tool model           (as Claude slash command model)\n  Claude advisor tool effort          (as Claude slash command effort)\n  Claude advisor tool confirm         off\n", output);   // 2026-09-27: /claude's rows off /settings, then the advisor's
         Assert.Contains("\n  Clock (3)\n▸ get_current_time      on   ", output);
         Assert.Contains("\n  · get_current_time: off\n  Clock (2 of 3)\n▸ get_current_time      off  ", output);
@@ -13456,18 +13456,13 @@ public partial class ChatScreenTests : IDisposable
     }
 
     /// <summary>
-    /// One click on a strip tile highlights it (2026-09-28, the user's ask) and moves an open viewer to it under every
-    /// <c>ComfyUI picture strip sync</c> (the user's call: the arrows keep to the setting, a click does not); nothing opens.
+    /// One click on a strip tile highlights it (2026-09-28, the user's ask) and moves an open viewer to it; nothing opens.
     /// </summary>
-    [Theory]
-    [InlineData(NeonSidekick.Comfy.StripSync.ViewerOnly)]
-    [InlineData(NeonSidekick.Comfy.StripSync.BothWays)]
-    [InlineData(NeonSidekick.Comfy.StripSync.Disabled)]
-    public async Task PictureStrip_ATileClickedOnce_IsHighlighted_AndTheViewerFollows(string sync)
+    [Fact]
+    public async Task PictureStrip_ATileClickedOnce_IsHighlighted_AndTheViewerFollows()
     {
         ComfyServer();
         PaneOf40Rows();
-        _settings.Update(d => d.ComfyPictureStripSync = sync);
         var opened = new List<(string Path, string Editor)>();
         _openImage = (path, editor) => opened.Add((path, editor));
         var followed = new List<string>();
@@ -13743,19 +13738,15 @@ public partial class ChatScreenTests : IDisposable
     }
 
     /// <summary>
-    /// The viewer's keys move the strip (2026-09-28, the user's ask, <c>ComfyUI picture strip sync</c>): the older picture shown
-    /// in the viewer is highlighted in the strip under viewer-only and both-ways, then a picture the strip does not hold is
-    /// ignored — the highlight stays, so → (which would take the newest from nothing) stays on the oldest. Disabled, nothing.
+    /// The viewer's keys move the strip (2026-09-28, the user's ask): the older picture shown in the viewer is highlighted in
+    /// the strip, then a picture the strip does not hold is ignored — the highlight stays, so → (which would take the newest
+    /// from nothing) stays on the oldest. Always, since the strip sync setting went (later that day, the user's call).
     /// </summary>
-    [Theory]
-    [InlineData(NeonSidekick.Comfy.StripSync.ViewerOnly, true)]
-    [InlineData(NeonSidekick.Comfy.StripSync.BothWays, true)]
-    [InlineData(NeonSidekick.Comfy.StripSync.Disabled, false)]
-    public async Task PictureStrip_TheViewersKeys_HighlightTheSamePicture(string sync, bool follows)
+    [Fact]
+    public async Task PictureStrip_TheViewersKeys_HighlightTheSamePicture()
     {
         ComfyServer();
         PaneOf40Rows();
-        _settings.Update(d => d.ComfyPictureStripSync = sync);
         StepsWhenIdle(
             Line("/imagine a cat --seed 5"),
             Line("/imagine a dog --seed 6"),
@@ -13770,45 +13761,26 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        if (follows)
-        {
-            Assert.Contains(NeonSidekick.Comfy.ComfyText.StripSelectedHint(2, 2), output);
-            Assert.DoesNotContain(NeonSidekick.Comfy.ComfyText.StripSelectedHint(1, 2), output);
-        }
-        else
-        {
-            Assert.DoesNotContain(NeonSidekick.Comfy.ComfyText.StripSelectedHint(2, 2), output);
-            Assert.Contains(NeonSidekick.Comfy.ComfyText.StripSelectedHint(1, 2), output);   // the → alone
-        }
+        Assert.Contains(NeonSidekick.Comfy.ComfyText.StripSelectedHint(2, 2), output);
+        Assert.DoesNotContain(NeonSidekick.Comfy.ComfyText.StripSelectedHint(1, 2), output);
     }
 
     /// <summary>
-    /// The strip's arrows move an open viewer only under both-ways (2026-09-28): → hands the highlighted picture's full path
-    /// over; ← off the newest lets go and hands nothing.
+    /// The strip's arrows move an open viewer (2026-09-28; always since the strip sync setting went later that day): →
+    /// hands the highlighted picture's full path over; ← off the newest lets go and hands nothing.
     /// </summary>
-    [Theory]
-    [InlineData(NeonSidekick.Comfy.StripSync.ViewerOnly, false)]
-    [InlineData(NeonSidekick.Comfy.StripSync.BothWays, true)]
-    [InlineData(NeonSidekick.Comfy.StripSync.Disabled, false)]
-    public async Task PictureStrip_TheArrows_MoveTheViewer_OnlyBothWays(string sync, bool follows)
+    [Fact]
+    public async Task PictureStrip_TheArrows_MoveTheViewer()
     {
         ComfyServer();
         PaneOf40Rows();
-        _settings.Update(d => d.ComfyPictureStripSync = sync);
         var followed = new List<string>();
         _followViewer = followed.Add;
         StepsWhenIdle(Line("/imagine a cat --seed 5"), Key(Keys.Right), Key(Keys.Left), Line("/exit"));
 
         await RunAsync();
 
-        if (follows)
-        {
-            Assert.Equal(ComfyPicture("pony-5.png"), Assert.Single(followed));
-        }
-        else
-        {
-            Assert.Empty(followed);
-        }
+        Assert.Equal(ComfyPicture("pony-5.png"), Assert.Single(followed));
     }
 
     [Fact]
