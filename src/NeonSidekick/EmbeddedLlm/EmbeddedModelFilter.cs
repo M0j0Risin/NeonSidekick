@@ -81,9 +81,12 @@ public static class EmbeddedFilterTypes
 /// sizes and uncensored, a radio pair of their own (<see cref="Installed"/>; <c>/server</c> lists installed models only).
 /// <c>sort size</c> (2026-09-30, the user's ask) is last on every list and no filter: lit, <see cref="Arrange"/> orders the
 /// embedded rows smallest first by the same bytes the sizes measure; dark, they keep the catalog's order. Not saved either.
+/// <c>drafter</c> (later on 2026-09-30, the user's ask) sits between uncensored and sort size on every list, a switch of its
+/// own like uncensored: lit, it keeps the models that can draft ahead (<see cref="EmbeddedModel.HasMtp"/>: a drafter file, MTP
+/// or DFlash, or a head built into the weights — README's Drafter column, <c>drafter</c> or <c>built in</c>).
 /// Pure: the tests drive it.
 /// </summary>
-public sealed record EmbeddedModelFilter(int? MaxGb, bool Uncensored, bool? Installed = null, bool SortSize = false)
+public sealed record EmbeddedModelFilter(int? MaxGb, bool Uncensored, bool? Installed = null, bool SortSize = false, bool Drafter = false)
 {
     /// <summary>No button lit: every model.</summary>
     public static readonly EmbeddedModelFilter None = new(null, false);
@@ -116,28 +119,41 @@ public sealed record EmbeddedModelFilter(int? MaxGb, bool Uncensored, bool? Inst
     /// <summary>The sort size button's key.</summary>
     public const char SortSizeKey = 's';
 
-    /// <summary>The sort size button's index: after uncensored.</summary>
-    public static int SortSizeIndex(bool withInstalled = false) => UncensoredIndex(withInstalled) + 1;
+    /// <summary>The drafter button's title (later on 2026-09-30). Pinned.</summary>
+    public const string DrafterButton = "drafter";
 
-    /// <summary>The filters' part of <c>/server</c>'s hint row. Pinned.</summary>
-    public const string Keys = "1 / 2 / 3 = 8 / 16 / 32 GB · U = uncensored · S = sort by size";
+    /// <summary>The drafter button's key.</summary>
+    public const char DrafterKey = 'd';
+
+    /// <summary>The drafter button's index: after uncensored.</summary>
+    public static int DrafterIndex(bool withInstalled = false) => UncensoredIndex(withInstalled) + 1;
+
+    /// <summary>The sort size button's index: after drafter, last.</summary>
+    public static int SortSizeIndex(bool withInstalled = false) => DrafterIndex(withInstalled) + 1;
+
+    /// <summary>
+    /// The filters' part of <c>/server</c>'s hint row. Pinned. Shortened later on 2026-09-30 (the user's ask): the sizes are
+    /// on their buttons, so <c>1 / 2 / 3 = GB</c>, and sort size is <c>S = sort</c>.
+    /// </summary>
+    public const string Keys = "1 / 2 / 3 = GB · U = uncensored · D = drafter · S = sort";
 
     /// <summary>The filters' part of the catalog's hint row, with installed and uninstalled (later on 2026-09-29). Pinned.</summary>
-    public const string CatalogKeys = "1 / 2 / 3 = 8 / 16 / 32 GB · I / N = installed / uninstalled · U = uncensored · S = sort by size";
+    public const string CatalogKeys = "1 / 2 / 3 = GB · I / N = installed / uninstalled · U = uncensored · D = drafter · S = sort";
 
     /// <summary>A size button's title: <c>8GB</c>. Pinned.</summary>
     public static string SizeButton(int gb) => gb.ToString(System.Globalization.CultureInfo.InvariantCulture) + "GB";
 
     /// <summary>Whether any filter button is lit (sort size thins nothing, so it is not one).</summary>
-    public bool Active => MaxGb is not null || Uncensored || Installed is not null;
+    public bool Active => MaxGb is not null || Uncensored || Installed is not null || Drafter;
 
     /// <summary>
     /// The buttons, the lit ones <see cref="MenuButton.On"/>: the sizes on the keys 1, 2 and 3, then — <paramref name="withInstalled"/>,
-    /// the catalog's — installed on I and uninstalled on N, then uncensored on U, then sort size on S. <see cref="Press"/> reads the same layout.
+    /// the catalog's — installed on I and uninstalled on N, then uncensored on U, drafter on D, then sort size on S. <see cref="Press"/>
+    /// reads the same layout.
     /// </summary>
     public IReadOnlyList<MenuButton> Buttons(bool withInstalled = false)
     {
-        var buttons = new List<MenuButton>(Sizes.Length + 4);
+        var buttons = new List<MenuButton>(Sizes.Length + 5);
         for (int i = 0; i < Sizes.Length; i++)
         {
             buttons.Add(new MenuButton(SizeButton(Sizes[i]), (char)('1' + i), MaxGb == Sizes[i]));
@@ -150,14 +166,15 @@ public sealed record EmbeddedModelFilter(int? MaxGb, bool Uncensored, bool? Inst
         }
 
         buttons.Add(new MenuButton(UncensoredButton, UncensoredKey, Uncensored));
+        buttons.Add(new MenuButton(DrafterButton, DrafterKey, Drafter));
         buttons.Add(new MenuButton(SortSizeButton, SortSizeKey, SortSize));
         return buttons;
     }
 
     /// <summary>
     /// The filter after the button at <paramref name="index"/> of <see cref="Buttons"/> is pressed: a size lights alone, or goes
-    /// dark when it was the lit one; installed and uninstalled the same between themselves; uncensored and sort size flip. Each group leaves
-    /// the others be; any other index changes nothing.
+    /// dark when it was the lit one; installed and uninstalled the same between themselves; uncensored, drafter and sort size flip. Each
+    /// group leaves the others be; any other index changes nothing.
     /// </summary>
     public EmbeddedModelFilter Press(int index, bool withInstalled = false)
     {
@@ -170,6 +187,11 @@ public sealed record EmbeddedModelFilter(int? MaxGb, bool Uncensored, bool? Inst
         {
             bool wanted = index == Sizes.Length;
             return this with { Installed = Installed == wanted ? null : wanted };
+        }
+
+        if (index == DrafterIndex(withInstalled))
+        {
+            return this with { Drafter = !Drafter };
         }
 
         if (index == SortSizeIndex(withInstalled))
@@ -189,6 +211,11 @@ public sealed record EmbeddedModelFilter(int? MaxGb, bool Uncensored, bool? Inst
     {
         ArgumentNullException.ThrowIfNull(model);
         if (Uncensored && !model.Uncensored)
+        {
+            return false;
+        }
+
+        if (Drafter && !model.HasMtp)
         {
             return false;
         }

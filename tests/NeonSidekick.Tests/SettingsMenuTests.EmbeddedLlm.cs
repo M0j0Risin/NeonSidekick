@@ -59,7 +59,8 @@ public partial class SettingsMenuTests
         Assert.Equal("fit", SettingsMenu.EmbeddedContextFitLabel);
         Assert.Equal(SettingsMenu.EmbeddedContextFitLabel, SettingsMenu.FieldValue(SettingsField.EmbeddedContextSize, data, "C:\\p"));
         Assert.Equal("32,768 tokens", SettingsMenu.FieldValue(SettingsField.EmbeddedContextSize, new AppSettingsData { EmbeddedContextSize = 32_768 }, "C:\\p"));
-        Assert.Equal("off", SettingsMenu.FieldValue(SettingsField.EmbeddedVramBudget, data, "C:\\p"));
+        Assert.Equal("91 %", SettingsMenu.FieldValue(SettingsField.EmbeddedVramBudget, data, "C:\\p"));   // 91 by default since 2026-09-30 (the user's call)
+        Assert.Equal("off", SettingsMenu.FieldValue(SettingsField.EmbeddedVramBudget, new AppSettingsData { EmbeddedVramBudget = 0 }, "C:\\p"));
         Assert.Equal("92 %", SettingsMenu.FieldValue(SettingsField.EmbeddedVramBudget, new AppSettingsData { EmbeddedVramBudget = 92 }, "C:\\p"));
         Assert.Equal("file", SettingsMenu.FieldValue(SettingsField.EmbeddedFilterType, data, "C:\\p"));
         Assert.Equal("gguf  " + Theme.DimMarkup("the weights' GGUF alone"), SettingsMenu.EmbeddedFilterTypeLabel("gguf"));
@@ -186,7 +187,28 @@ public partial class SettingsMenuTests
 
         Assert.Equal(big.Id, menu.TakePendingEmbeddedModel()!.Id);
         Assert.Contains(" › " + small.Display, _console.Output);   // the sorted top row's page came first
-        Assert.Contains(" uncensored    sort size ", _console.Output);
+        Assert.Contains(" uncensored    drafter    sort size ", _console.Output);   // drafter between (later on 2026-09-30)
+        pane.Dispose();
+    }
+
+    [Fact]
+    public async Task OnThePane_Drafter_KeepsTheModelsThatDraft()
+    {
+        // Later on 2026-09-30 (the user's ask): D lights drafter, and HauhauCS's E2B, which has none, goes.
+        var plain = EmbeddedModelCatalog.Find("gemma-4-e2b-uncensored")!;
+        var drafted = EmbeddedModelCatalog.Find("gemma-4-e2b")!;
+        Assert.False(plain.HasMtp);
+        Assert.True(drafted.HasMtp);
+        var (menu, pane, _) = EmbeddedPane(new FakeEmbeddedLlm { Catalog = [plain, drafted] });
+        GoTo(SettingsTab.Embedded);
+        Push(Keys.Down, Keys.Enter);            // the catalog: the uncensored E2B, then Unsloth's
+        Push(Keys.Char('d'), Keys.Home);        // drafter: Unsloth's alone; the top row
+        Push(Keys.Enter);                       // its page
+        Push(Keys.Enter);                       // Install
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Equal(drafted.Id, menu.TakePendingEmbeddedModel()!.Id);
         pane.Dispose();
     }
 
@@ -408,7 +430,7 @@ public partial class SettingsMenuTests
         Assert.Equal("all", _settings.Current.EmbeddedGpuLayers);
         Assert.Equal(92, _settings.Current.EmbeddedVramBudget);
         Assert.Contains("Embedded context size " + EmbeddedContextSize.Error + "; keeping 0.", _console.Output);   // fit, the default since later on 2026-09-29
-        Assert.Contains("Embedded VRAM budget " + EmbeddedVramBudget.Error + "; keeping off.", _console.Output);
+        Assert.Contains("Embedded VRAM budget " + EmbeddedVramBudget.Error + "; keeping 91.", _console.Output);   // the default since 2026-09-30
         pane.Dispose();
     }
 

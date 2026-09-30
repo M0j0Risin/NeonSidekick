@@ -1351,7 +1351,7 @@ public class AppSettingsTests : IDisposable
         Assert.Null(s.ToolbarItems);   // 2026-09-21 as a switch, on; every item since the checklist, 2026-09-29
         Assert.Equal("off", s.ShowPerformanceBar);   // the performance bar (2026-09-29): off, the user's call
         Assert.Equal("text", s.PerformanceBarLook);   // what a bare /perf turns on first (later on 2026-09-29)
-        Assert.Equal(0, s.EmbeddedVramBudget);        // off (later on 2026-09-29, the user's call)
+        Assert.Equal(91, s.EmbeddedVramBudget);       // 91 since 2026-09-30 (the user's call; off from later on 2026-09-29)
         Assert.Equal("file", s.EmbeddedFilterType);   // the user's pick "for now"
         Assert.Equal("parallel", s.EmbeddedHfDownloadType);   // 2026-09-30, the user's pick
         Assert.Equal(0, s.EmbeddedContextSize);       // fit (later on 2026-09-29; 32768 until then)

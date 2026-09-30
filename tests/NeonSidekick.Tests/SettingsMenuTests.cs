@@ -2620,7 +2620,7 @@ public partial class SettingsMenuTests : IDisposable
         Push(Keys.Char('1'));                   // 8GB: the 31B goes, LM Studio stays
         Push(Keys.Down, Keys.Enter);            // the second row left: E2B
         Assert.Same(servers[2], await menu.PickServerAsync(servers, null, SettingsMenu.StartupServerTitle, CancellationToken.None));
-        Assert.Contains(" 8GB    16GB    32GB    uncensored    sort size ", _console.Output);
+        Assert.Contains(" 8GB    16GB    32GB    uncensored    drafter    sort size ", _console.Output);
         Assert.Contains("ESC = the first listed", _console.Output);
 
         Push(Keys.Char('u'), Keys.Enter);       // uncensored: no embedded row passes, LM Studio is still there to pick
