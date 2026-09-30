@@ -1752,6 +1752,14 @@ public sealed class AppSettingsData
     public string EmbeddedFilterType { get; set; } = EmbeddedLlm.EmbeddedFilterTypes.Default;
 
     /// <summary>
+    /// How the embedded models' files come down from Hugging Face (2026-09-30, the user's ask and names): <c>parallel</c> (the
+    /// default: each file over <see cref="Speech.ModelStore.ParallelConnections"/> ranged connections, about twice one stream's
+    /// speed as measured that day) or <c>single</c> (one connection per file, as before), <see cref="EmbeddedLlm.EmbeddedHfDownloadTypes.Names"/>.
+    /// Read as each download starts: no reconnect, no variable. A download already begun resumes in the form it began in.
+    /// </summary>
+    public string EmbeddedHfDownloadType { get; set; } = EmbeddedLlm.EmbeddedHfDownloadTypes.Default;
+
+    /// <summary>
     /// Whether the embedded server loads the model's vision projector (2026-09-29, on by default): images can then be sent
     /// to it. Off saves about 1 GB of memory; an image sent then is refused with a word. Every install downloads the
     /// projector either way. No variable.

@@ -496,6 +496,9 @@ internal sealed partial class ChatScreen
     /// <summary>Under the no-server line when <c>LLM scan mode</c> is <c>disabled</c> (2026-09-15): the two ways out. Pinned.</summary>
     public static readonly string ScanDisabledHint = $"{NoticeGlyphs.Llm}Set the URL with /settings (LLM URL, or /server <url>) or {EnvironmentOverrides.LlmUrlVariable}, or set LLM scan mode to local, remote or both.";
 
+    /// <summary><see cref="ScanDisabledHint"/> under <see cref="LlmSession.NoEmbeddedLine"/> (2026-09-30, the user's wording): with no embedded model downloaded, the catalog is the third way out.</summary>
+    public static readonly string ScanDisabledNoEmbeddedHint = $"{NoticeGlyphs.Llm}Set the URL with /settings (LLM URL, or /server <url>) or {EnvironmentOverrides.LlmUrlVariable}, or set LLM scan mode to local, remote or both. Alternatively, download an embedded model.";
+
     /// <summary>The hint under <see cref="LlmSession.NoServerLine"/> for <paramref name="scope"/>: <see cref="ScanDisabledHint"/> when nothing was looked for, else <see cref="NoServerHint"/>.</summary>
     public static string NoServerHintFor(ScanScope scope) => Llm.LlmScanMode.Scans(scope) ? NoServerHint : ScanDisabledHint;
 
@@ -8232,6 +8235,12 @@ internal sealed partial class ChatScreen
         }
 
         ReportLlm(quiet);
+        if (startup && _session.Endpoint is null && NoEmbeddedDownloaded(effective))
+        {
+            // Nothing to connect to but a model to download (2026-09-30, the user's ask): the app's start opens Settings ›
+            // Embedded models, where the startup picker would have stood. ESC leaves it on the settings list, a second closes it.
+            await OpenSettingsAsync(cancellationToken, SettingsField.EmbeddedModels).ConfigureAwait(false);
+        }
     }
 
     /// <summary>
@@ -8519,6 +8528,12 @@ internal sealed partial class ChatScreen
             DrainDiagnostics();
             if (servers.Count == 0)
             {
+                if (NoEmbeddedDownloaded(effective))
+                {
+                    ReportNoEmbedded();
+                    return;
+                }
+
                 _transcript.Error(LlmSession.NoServerLine(scope));
                 _transcript.Notice(NoServerHint);
                 return;
@@ -8611,7 +8626,14 @@ internal sealed partial class ChatScreen
     {
         if (_session.Endpoint is null)
         {
-            var scope = Llm.LlmScanMode.Resolve(_effective());
+            var effective = _effective();
+            if (NoEmbeddedDownloaded(effective))
+            {
+                ReportNoEmbedded();
+                return;
+            }
+
+            var scope = Llm.LlmScanMode.Resolve(effective);
             _transcript.Error(LlmSession.NoServerLine(scope));
             _transcript.Notice(NoServerHintFor(scope));
         }
@@ -8620,6 +8642,24 @@ internal sealed partial class ChatScreen
             _transcript.Notice(NoticeGlyphs.Llm + LlmSession.ConnectedLine(_session.Endpoint));   // the screen's glyph (2026-09-22); the log and headless keep the bare line
         }
     }
+
+    /// <summary>The no-server pair when nothing was looked for and no embedded model is downloaded (2026-09-30, the user's wording).</summary>
+    private void ReportNoEmbedded()
+    {
+        _transcript.Error(LlmSession.NoEmbeddedLine);
+        _transcript.Notice(ScanDisabledNoEmbeddedHint);
+    }
+
+    /// <summary>
+    /// Whether the LLM has nowhere to come from but the embedded catalog (2026-09-30, the user's ask): the embedded models are
+    /// offered, <c>LLM scan mode</c> looks for nothing, and not one catalog model is downloaded. Then the no-server lines name
+    /// the catalog, and the app's start opens it (<see cref="ConnectLlmAsync"/>).
+    /// </summary>
+    private bool NoEmbeddedDownloaded(AppSettingsData effective) =>
+        EmbeddedOffered
+        && !Llm.LlmScanMode.Scans(Llm.LlmScanMode.Resolve(effective))
+        && _session.Embedded is { } embedded
+        && !embedded.Catalog.Any(m => embedded.State(m).IsInstalled);
 
     /// <summary>
     /// Readies speech output (only when speech is on: the server probed, or the in-process model downloaded and loaded) and
@@ -8846,9 +8886,10 @@ internal sealed partial class ChatScreen
     /// The settings menu (<c>/settings</c>, or a double-click on the hint row, 2026-09-18) and what its changes ask for afterwards: a profile switch reconnects everything,
     /// an LLM / TTS / STT change its own session quietly, the tools switch forgets the conversation.
     /// </summary>
-    private async Task OpenSettingsAsync(CancellationToken cancellationToken)
+    /// <param name="open">A row whose edit runs as the pane opens (2026-09-30: the app's start opens Embedded models with it).</param>
+    private async Task OpenSettingsAsync(CancellationToken cancellationToken, SettingsField? open = null)
     {
-        var changes = await _menu.ShowAsync(cancellationToken).ConfigureAwait(false);
+        var changes = await _menu.ShowAsync(cancellationToken, midTurn: false, open).ConfigureAwait(false);
 
         // An embedded model used or installed from the catalog (2026-09-29): its own install and connect below stand for
         // the LLM reconnect any other change on the tab asked for.

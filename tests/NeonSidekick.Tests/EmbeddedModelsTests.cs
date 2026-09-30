@@ -95,6 +95,18 @@ public class EmbeddedModelsTests : IDisposable
     }
 
     [Fact]
+    public void State_CountsTheParts_OfAParallelDownload()
+    {
+        // 2026-09-30 (Embedded HF download type parallel): a download cut short leaves parts, not a .partial.
+        string weights = _files.WeightsPath(_model);
+        Directory.CreateDirectory(Path.GetDirectoryName(weights)!);
+        File.WriteAllBytes(ParallelDownload.PartPath(weights, 0, 8), new byte[9_000]);
+        File.WriteAllBytes(ParallelDownload.PartPath(weights, 5, 8), new byte[10_500]);
+
+        Assert.Equal(new EmbeddedModelState(EmbeddedModelStateKind.Partial, 50), _files.State(_model));   // 19500 of 39000
+    }
+
+    [Fact]
     public async Task Install_FetchesTheWeightsThenTheProjector_Checked()
     {
         var labels = new List<string>();

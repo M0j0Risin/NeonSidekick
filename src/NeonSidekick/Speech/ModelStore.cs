@@ -30,9 +30,11 @@ public enum ModelFormat
 /// embedded LLM's multi-gigabyte files) pin the file's digest — <paramref name="ApproxBytes"/> is then its exact size —
 /// and download it through a stable <c>.partial</c> file that a cancelled or broken download keeps, so the next
 /// ensure asks for the rest with a <c>Range</c> header instead of starting over. The voice models leave both off
-/// and keep the throwaway <c>.tmp</c> of before.
+/// and keep the throwaway <c>.tmp</c> of before. <paramref name="Connections"/> (2026-09-30, Embedded HF download type) above 1
+/// fetches a pinned, resumable file of at least <see cref="ModelStore.ParallelMinimumBytes"/> over that many ranged
+/// connections (<see cref="ParallelDownload"/>); 1, the default, is one stream.
 /// </summary>
-public sealed record ModelSpec(string Display, string Path, Uri? DownloadUrl, long ApproxBytes, ModelFormat Format = ModelFormat.Ggml, string? Sha256 = null, bool Resumable = false);
+public sealed record ModelSpec(string Display, string Path, Uri? DownloadUrl, long ApproxBytes, ModelFormat Format = ModelFormat.Ggml, string? Sha256 = null, bool Resumable = false, int Connections = 1);
 
 /// <summary>One archive of an <see cref="ArchiveSetSpec"/>: its file name, where to fetch it, its exact size and SHA-256.</summary>
 public sealed record ArchivePart(string Name, Uri Url, long Bytes, string Sha256);
@@ -85,6 +87,12 @@ public sealed class ModelStore
     /// <summary>What a resumable download leaves free on its drive beyond the file itself (2026-09-29): a model that fills the disk to the last byte leaves Windows and the app no room to breathe.</summary>
     public const long DiskHeadroomBytes = 1_000_000_000;
 
+    /// <summary>
+    /// The ranged connections a parallel download uses (2026-09-30): eight took a 1 GB catalog file from ~112 MB/s on one stream
+    /// to ~206 MB/s on the user's line, close to <c>hf download</c>'s ~217 MB/s.
+    /// </summary>
+    public const int ParallelConnections = 8;
+
     /// <summary>Every ggml file starts with these four bytes ("lmgg", i.e. "ggml" little-endian).</summary>
     private static readonly byte[] GgmlMagic = { 0x6C, 0x6D, 0x67, 0x67 };
 
@@ -116,6 +124,12 @@ public sealed class ModelStore
     /// away). A seam so the tests can fake a full disk; the default asks <see cref="DriveInfo"/>.
     /// </summary>
     internal Func<string, long?> AvailableBytes { get; init; } = FreeBytesOn;
+
+    /// <summary>
+    /// The smallest file a parallel download splits (2026-09-30): below it, the extra requests cost more than they save. A seam
+    /// so the tests can split a small body.
+    /// </summary>
+    internal long ParallelMinimumBytes { get; init; } = 64_000_000;
 
     /// <summary><see cref="ResolveWhisper(string, string)"/> over this store's directory.</summary>
     public ModelSpec? Whisper(string setting) => ResolveWhisper(setting, Directory);
@@ -294,6 +308,11 @@ public sealed class ModelStore
     /// file is checked for its exact length, its magic and — when pinned — its SHA-256 (<paramref name="verifying"/>
     /// is told first), and only then moved into place; a file that fails a check is deleted, since resuming it could
     /// only fail again.
+    ///
+    /// <para>A spec asking for <see cref="ModelSpec.Connections"/> above 1 (2026-09-30) is fetched in parts by
+    /// <see cref="ParallelDownload"/>, which leaves the whole file on <see cref="PartialPath"/> for the same checks. A download
+    /// resumes in the form it began in, so a change of the setting midway loses nothing: parts on disk go on as parts, a
+    /// <c>.partial</c> of one stream goes on as one stream. A server that ignores ranges sends the parts back to one stream.</para>
     /// </summary>
     private async Task<ModelResult> EnsureResumableAsync(ModelSpec spec, Uri url, IProgress<(long Received, long? Total)>? progress, Action? verifying, CancellationToken cancellationToken)
     {
@@ -312,7 +331,34 @@ public sealed class ModelStore
                 have = 0;
             }
 
-            if (spec.ApproxBytes <= 0 || have < spec.ApproxBytes)
+            int? begun = ParallelDownload.BegunConnections(path);
+            bool parallel = begun is not null
+                || (spec.Connections > 1 && spec.Sha256 is not null && spec.ApproxBytes >= ParallelMinimumBytes && have == 0);
+            if (parallel)
+            {
+                var parts = new ParallelDownload(_http, _category, spec.Display, url, path, spec.ApproxBytes, begun ?? spec.Connections);
+                long needed = Math.Max(0, spec.ApproxBytes - parts.HeldBytes()) + parts.LargestPartBytes;
+                if (AvailableBytes(directory) is { } free && free < needed + DiskHeadroomBytes)
+                {
+                    return ModelResult.Failed(path, DiskSpaceError(spec.Display, needed, free, directory));
+                }
+
+                var fetched = await parts.RunAsync(progress, cancellationToken).ConfigureAwait(false);
+                if (fetched.RangesIgnored)
+                {
+                    DiagnosticLog.Info(_category, $"{url} ignored the ranges; downloading {spec.Display} over one connection.");
+                    ParallelDownload.DeleteParts(path);
+                    DeleteFileQuietly(partial);
+                    have = 0;
+                    parallel = false;
+                }
+                else if (!fetched.Ok)
+                {
+                    return ModelResult.Failed(path, fetched.Detail);
+                }
+            }
+
+            if (!parallel && (spec.ApproxBytes <= 0 || have < spec.ApproxBytes))
             {
                 long needed = Math.Max(0, spec.ApproxBytes - have);
                 if (AvailableBytes(directory) is { } free && free < needed + DiskHeadroomBytes)
@@ -359,7 +405,7 @@ public sealed class ModelStore
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             // The partial file stays: the next ensure resumes it.
-            DiagnosticLog.Info(_category, $"Download of {spec.Display} paused at {(File.Exists(partial) ? SizeLabel(new FileInfo(partial).Length) : "0 B")}.");
+            DiagnosticLog.Info(_category, $"Download of {spec.Display} paused at {SizeLabel(PartialBytes(path))}.");
             throw;
         }
         catch (Exception ex)
@@ -533,6 +579,24 @@ public sealed class ModelStore
 
     /// <summary>Where a resumable download of <paramref name="path"/> collects its bytes until verified.</summary>
     public static string PartialPath(string path) => path + ".partial";
+
+    /// <summary>
+    /// The bytes a resumable download of <paramref name="path"/> holds so far: its <see cref="PartialPath"/> and, for a parallel
+    /// one (2026-09-30), its parts. 0 when there is none or it cannot be read.
+    /// </summary>
+    public static long PartialBytes(string path)
+    {
+        try
+        {
+            string partial = PartialPath(path);
+            long held = File.Exists(partial) ? new FileInfo(partial).Length : 0;
+            return held + ParallelDownload.PartBytes(path);
+        }
+        catch (IOException)
+        {
+            return 0;
+        }
+    }
 
     /// <summary>The refusal when a pinned download's SHA-256 does not match (the file is deleted). Pinned.</summary>
     public static string ChecksumError(string display) => $"the download of {display} does not match its published checksum; deleted, try again";

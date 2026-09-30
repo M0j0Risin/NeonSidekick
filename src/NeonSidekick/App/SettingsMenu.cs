@@ -601,6 +601,13 @@ public enum SettingsField
     EmbeddedFilterType,
 
     /// <summary>
+    /// A picker: <c>single</c> / <c>parallel</c>, how the embedded models' files come down from Hugging Face
+    /// (<see cref="Settings.AppSettingsData.EmbeddedHfDownloadType"/>, 2026-09-30, the user's ask). The Embedded tab's row
+    /// after Embedded filter type; no reconnect (read as each download starts).
+    /// </summary>
+    EmbeddedHfDownloadType,
+
+    /// <summary>
     /// A picker: <c>parent-server</c> / <c>multi-server</c>, what a multi-mode botchat's bot naming another embedded model gets
     /// (<see cref="Settings.AppSettingsData.BotChatMultiEmbedded"/>, later on 2026-09-29, the user's ask). The Botchat tab, under
     /// Botchat LLM mode; no reconnect (read at a chat's start).
@@ -907,7 +914,7 @@ internal sealed partial class SettingsMenu
     public static readonly IReadOnlyList<IReadOnlyList<SettingsField>> TabFields =
     [
         [SettingsField.Profile, SettingsField.NewProfileMode, SettingsField.WorkingDirectory, SettingsField.QueueMessages, SettingsField.QueueCancelMode, SettingsField.Memory, SettingsField.CopyUserPrompt, SettingsField.ShowImageThumbnails, SettingsField.ImageThumbnailSize, SettingsField.TranscriptMarkdown, SettingsField.PastePreviewLines, SettingsField.HideExitAutocomplete, SettingsField.CommandTypoIntercept, SettingsField.KeepCommandHistory, SettingsField.WelcomeSplash, SettingsField.ShowWorkingDirectory, SettingsField.ToolbarItems, SettingsField.ShowPerformanceBar, SettingsField.Theme, SettingsField.DraftEditor, SettingsField.ImageEditor, SettingsField.ThemedViewer],
-        [SettingsField.EmbeddedLlmServer, SettingsField.EmbeddedModels, SettingsField.EmbeddedFilterType, SettingsField.EmbeddedBackend, SettingsField.EmbeddedContextSize, SettingsField.EmbeddedGpuLayers, SettingsField.EmbeddedVramBudget, SettingsField.EmbeddedVision, SettingsField.EmbeddedDrafter],
+        [SettingsField.EmbeddedLlmServer, SettingsField.EmbeddedModels, SettingsField.EmbeddedFilterType, SettingsField.EmbeddedHfDownloadType, SettingsField.EmbeddedBackend, SettingsField.EmbeddedContextSize, SettingsField.EmbeddedGpuLayers, SettingsField.EmbeddedVramBudget, SettingsField.EmbeddedVision, SettingsField.EmbeddedDrafter],
         [SettingsField.LlmScanMode, SettingsField.LlmUrl, SettingsField.LlmModel, SettingsField.LlmApiKey, SettingsField.LlmReasoning, SettingsField.LlmRequestTimeoutSeconds, SettingsField.LlmTurnTimeoutSeconds, SettingsField.LlmContextLength, SettingsField.LlmMidTurnUsage, SettingsField.LlmCompactType, SettingsField.LlmCompactKeepRecent, SettingsField.LlmCompactShowSummary, SettingsField.LlmAutoCompactPercent, SettingsField.LlmMaxTurns, SettingsField.LlmOfferTools, SettingsField.LlmToolCompactType, SettingsField.LlmMaxToolIterations, SettingsField.LlmUseFunVerbs, SettingsField.LlmShowThinking, SettingsField.LlmPreserveThinking, SettingsField.LlmReasoningEstimate, SettingsField.LlmSampling, SettingsField.LlmSamplingFromHuggingFace],
         [SettingsField.TtsOutput, SettingsField.TtsSource, SettingsField.TtsHttpUrl, SettingsField.TtsVoicePreview, SettingsField.TtsVoicePreset, SettingsField.TtsVoice, SettingsField.TtsVoice2, SettingsField.TtsVoiceMix, SettingsField.TtsSpeed],
         Fields.Where(IsVoiceField).ToArray(),
@@ -1475,6 +1482,7 @@ internal sealed partial class SettingsMenu
         SettingsField.EmbeddedGpuLayers => "Embedded GPU layers",
         SettingsField.EmbeddedVramBudget => "Embedded VRAM budget",
         SettingsField.EmbeddedFilterType => "Embedded filter type",
+        SettingsField.EmbeddedHfDownloadType => "Embedded HF download type",
         SettingsField.EmbeddedVision => "Embedded vision",
         SettingsField.EmbeddedLlmServer => "Embedded LLM server enabled",
         SettingsField.EmbeddedDrafter => "Embedded drafter",
@@ -1614,6 +1622,7 @@ internal sealed partial class SettingsMenu
             SettingsField.EmbeddedGpuLayers => data.EmbeddedGpuLayers,
             SettingsField.EmbeddedVramBudget => data.EmbeddedVramBudget == NeonSidekick.EmbeddedLlm.EmbeddedVramBudget.Off ? NeonSidekick.EmbeddedLlm.EmbeddedVramBudget.OffWord : Percent(data.EmbeddedVramBudget),
             SettingsField.EmbeddedFilterType => data.EmbeddedFilterType,
+            SettingsField.EmbeddedHfDownloadType => data.EmbeddedHfDownloadType,
             SettingsField.EmbeddedVision => OnOff(data.EmbeddedVision),
             SettingsField.EmbeddedLlmServer => OnOff(data.EmbeddedLlmServer),
             SettingsField.EmbeddedDrafter => OnOff(data.EmbeddedDrafter),
@@ -2387,8 +2396,10 @@ internal sealed partial class SettingsMenu
     /// STT), switch the profile, move the working directory or reshape the history (<c>LLM offer tools</c>)
     /// are refused with <see cref="NotWhileReplyRunsNotice"/> on the status line (<see cref="RefusedMidTurn"/>),
     /// so the result never carries a flag the screen would act on mid-turn; the other rows edit as ever.
+    /// <paramref name="open"/> (2026-09-30) starts on that row's tab with the cursor on it and runs its edit at once, as Enter
+    /// would: the app's start opens Embedded models so. ESC from the edit leaves the pane on the settings list at that row.
     /// </summary>
-    public async Task<SettingsChanges> ShowAsync(CancellationToken cancellationToken, bool midTurn)
+    public async Task<SettingsChanges> ShowAsync(CancellationToken cancellationToken, bool midTurn, SettingsField? open = null)
     {
         if (!CanShowMenus())
         {
@@ -2408,7 +2419,10 @@ internal sealed partial class SettingsMenu
             while (true)
             {
                 var saved = _settings.Current;
-                var picked = await PickSettingAsync(saved, tab, cursor, cancellationToken).ConfigureAwait(false);
+                var picked = open is { } first && Locate(first, saved) is { } located
+                    ? located
+                    : await PickSettingAsync(saved, tab, cursor, cancellationToken).ConfigureAwait(false);
+                open = null;
                 if (picked is not var (field, page, row))
                 {
                     return ReferenceEquals(Theme.Current, themeBefore) ? changes : changes | SettingsChanges.Theme;
@@ -2532,6 +2546,32 @@ internal sealed partial class SettingsMenu
         }
 
         return (Fields[row], page, row);
+    }
+
+    /// <summary>
+    /// Where <paramref name="field"/> sits as <see cref="PickSettingAsync"/> would hand it back — the pane's tab page and the row in it,
+    /// or the prompt host's list and the row there — or null for a field neither shows (2026-09-30, <see cref="ShowAsync(CancellationToken, bool, SettingsField?)"/>'s open).
+    /// </summary>
+    private (SettingsField Field, MenuPage Page, int Row)? Locate(SettingsField field, AppSettingsData saved)
+    {
+        if (_pane.Enabled)
+        {
+            for (int tab = 0; tab < TabFields.Count; tab++)
+            {
+                for (int row = 0; row < TabFields[tab].Count; row++)
+                {
+                    if (TabFields[tab][row] == field)
+                    {
+                        return (field, SettingsTabs(saved, _settings.ProfileName, tab), row);
+                    }
+                }
+            }
+
+            return null;
+        }
+
+        int index = Array.IndexOf(Fields, field);
+        return index < 0 ? null : (field, SettingsPage(saved, _settings.ProfileName), index);
     }
 
     /// <summary>The settings list as the prompt host shows it: one row per field from <paramref name="saved"/>, the profile row from the loaded name.</summary>
@@ -3144,6 +3184,11 @@ internal sealed partial class SettingsMenu
         if (field == SettingsField.EmbeddedFilterType)
         {
             return await PickEmbeddedFilterTypeAsync(saved, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (field == SettingsField.EmbeddedHfDownloadType)
+        {
+            return await PickEmbeddedHfDownloadTypeAsync(saved, cancellationToken).ConfigureAwait(false);
         }
 
         if (field == SettingsField.BotChatLlmMode)
@@ -5428,6 +5473,26 @@ internal sealed partial class SettingsMenu
     /// <summary>A filter-type picker row: the name padded, then what it measures, dim. Pinned.</summary>
     public static string EmbeddedFilterTypeLabel(string name) =>
         Markup.Escape(name.PadRight(6)) + Theme.DimMarkup(NeonSidekick.EmbeddedLlm.EmbeddedFilterTypes.Describe(name));
+
+    /// <summary>The HF download type picker under the settings list (2026-09-30): one <see cref="EmbeddedHfDownloadTypeLabel"/> row per <see cref="NeonSidekick.EmbeddedLlm.EmbeddedHfDownloadTypes.Names"/> entry, the saved one under the cursor.</summary>
+    private async Task<bool> PickEmbeddedHfDownloadTypeAsync(AppSettingsData saved, CancellationToken cancellationToken)
+    {
+        var names = NeonSidekick.EmbeddedLlm.EmbeddedHfDownloadTypes.Names;
+        var page = new MenuPage(Crumb(FieldName(SettingsField.EmbeddedHfDownloadType)), names.Select(EmbeddedHfDownloadTypeLabel).ToList(), PickKeys);
+        int? picked = await PickAsync(page, Math.Max(0, Array.FindIndex(names, n => string.Equals(n, saved.EmbeddedHfDownloadType, StringComparison.OrdinalIgnoreCase))), cancellationToken).ConfigureAwait(false);
+        if (picked is not { } index)
+        {
+            return Unchanged();
+        }
+
+        string name = names[index];
+        Apply(SettingsField.EmbeddedHfDownloadType, d => d.EmbeddedHfDownloadType = name);
+        return true;
+    }
+
+    /// <summary>An HF download type picker row: the name padded, then what it does, dim.</summary>
+    public static string EmbeddedHfDownloadTypeLabel(string name) =>
+        Markup.Escape(name.PadRight(10)) + Theme.DimMarkup(NeonSidekick.EmbeddedLlm.EmbeddedHfDownloadTypes.Describe(name));
 
     /// <summary>The Botchat multi-embedded picker (later on 2026-09-29): one <see cref="BotChatMultiEmbeddedLabel"/> row per <see cref="App.BotChatMultiEmbedded.Names"/> entry, the saved one under the cursor.</summary>
     private async Task<bool> PickBotChatMultiEmbeddedAsync(AppSettingsData saved, CancellationToken cancellationToken)

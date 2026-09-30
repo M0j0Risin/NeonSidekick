@@ -779,6 +779,7 @@ public sealed class AppSettings : IDisposable
         EmbeddedContextSize = source.EmbeddedContextSize,
         EmbeddedVramBudget = source.EmbeddedVramBudget,
         EmbeddedFilterType = source.EmbeddedFilterType,
+        EmbeddedHfDownloadType = source.EmbeddedHfDownloadType,
         EmbeddedGpuLayers = source.EmbeddedGpuLayers,
         EmbeddedVision = source.EmbeddedVision,
         EmbeddedLlmServer = source.EmbeddedLlmServer,

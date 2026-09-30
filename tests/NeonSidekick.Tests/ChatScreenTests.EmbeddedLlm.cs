@@ -441,4 +441,83 @@ public partial class ChatScreenTests
         Assert.Contains(EmbeddedLlmText.NoVisionError, output);
         Assert.Empty(_chat.Requests);
     }
+
+    // ── The start with nothing to connect to (2026-09-30, the user's ask) ─────────────────────────────
+
+    [Fact]
+    public async Task Startup_ScanDisabled_NoModelDownloaded_OpensTheCatalog_WhoseInstallStartsIt()
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.LlmScanMode = "disabled"; d.LlmUrl = ""; });
+        UsePane();
+        var embedded = UseEmbedded(new FakeEmbeddedLlm());
+        var model = EmbeddedModelCatalog.Models[0];
+        var input = new ScriptedInput();
+        input.Push(Keys.Enter);                           // the catalog, open by itself: the first model's page
+        input.Push(Keys.Enter);                           // Install: the pane closes, the screen downloads
+        PushLine(input, "/exit");
+
+        string output = await RunAsync(input);
+
+        Assert.Contains("✗ " + LlmSession.NoEmbeddedLine, output);
+        Assert.Contains("  · " + ChatScreen.ScanDisabledNoEmbeddedHint, output);
+        Assert.DoesNotContain(LlmSession.NoServerLine(ScanScope.Disabled), output);
+        Assert.Equal(0, ModelProbes);                     // nothing was looked for
+        Assert.Equal([model.Id], embedded.Installs);
+        Assert.Equal([model.Id], embedded.Starts);
+        Assert.Equal(model.Id, _settings.Current.LlmModel);
+    }
+
+    [Fact]
+    public async Task Startup_ScanDisabled_NoModelDownloaded_EscapeTwice_LeavesTheLine_AndServerSaysTheSame()
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.LlmScanMode = "disabled"; d.LlmUrl = ""; });
+        UsePane();
+        var embedded = UseEmbedded(new FakeEmbeddedLlm());
+        var input = new ScriptedInput();
+        input.Push(Keys.Escape);                          // out of the catalog: the settings list
+        input.Push(Keys.Escape);                          // the pane closes
+        PushLine(input, "/server");                       // never opens the catalog itself
+        PushLine(input, "/exit");
+
+        string output = await RunAsync(input);
+
+        Assert.Contains(EmbeddedModelCatalog.Models[0].Display, output);   // the catalog's rows were shown
+        Assert.Equal(2, Count(output, "✗ " + LlmSession.NoEmbeddedLine));   // the launch, then /server
+        Assert.Equal(2, Count(output, "  · " + ChatScreen.ScanDisabledNoEmbeddedHint));
+        Assert.Empty(embedded.Installs);
+        Assert.Empty(embedded.Starts);
+        Assert.Null(_session.Endpoint);
+    }
+
+    [Fact]
+    public async Task Startup_ScanDisabled_AModelDownloaded_OffersThePicker_NotTheCatalog()
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.LlmScanMode = "disabled"; d.LlmUrl = ""; });
+        var embedded = UseEmbedded(new FakeEmbeddedLlm().Installed("gemma-4-e2b"));
+        _console.Input.PushKey(Keys.Escape);              // the startup picker, its one embedded row: ESC never starts it
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains(SettingsMenu.StartupServerTitle, output);
+        Assert.Contains("✗ " + LlmSession.NoServerLine(ScanScope.Disabled), output);
+        Assert.DoesNotContain(LlmSession.NoEmbeddedLine, output);
+        Assert.Empty(embedded.Starts);
+    }
+
+    [Fact]
+    public async Task Startup_EmbeddedSwitchedOff_KeepsTheOldLines()
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.LlmScanMode = "disabled"; d.LlmUrl = ""; d.EmbeddedLlmServer = false; });
+        UsePane();
+        UseEmbedded(new FakeEmbeddedLlm());
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains("✗ " + LlmSession.NoServerLine(ScanScope.Disabled), output);
+        Assert.Contains("  · " + ChatScreen.ScanDisabledHint, output);
+        Assert.DoesNotContain(LlmSession.NoEmbeddedLine, output);
+        Assert.DoesNotContain(EmbeddedModelCatalog.Models[0].Display, output);
+    }
 }

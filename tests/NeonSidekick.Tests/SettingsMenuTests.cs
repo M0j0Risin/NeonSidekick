@@ -830,6 +830,7 @@ public partial class SettingsMenuTests : IDisposable
                 SettingsField.EmbeddedLlmServer, SettingsField.EmbeddedDrafter,   // 2026-09-29, the Embedded tab's switch and MTP
                 SettingsField.ShowPerformanceBar,   // later on 2026-09-29, the performance bar
                 SettingsField.EmbeddedVramBudget, SettingsField.EmbeddedFilterType,   // later still on 2026-09-29, the VRAM budget and the model lists' filter type
+                SettingsField.EmbeddedHfDownloadType,   // 2026-09-30, single or parallel Hugging Face downloads
                 SettingsField.BotChatMultiEmbedded, SettingsField.BotChatMultiEmbeddedKill,   // and the botchat's embedded bots
             },
             Enum.GetValues<SettingsField>());
@@ -1344,7 +1345,7 @@ public partial class SettingsMenuTests : IDisposable
         // The LLM tab: the scan mode first (where a blank URL looks, so above the URL; a picker, no reconnect), then the reconnecting LLM fields in enum order, the compact rows, the turn-loop rows and the fun verbs.
         Assert.Equal(new[] { SettingsField.LlmScanMode, SettingsField.LlmUrl, SettingsField.LlmModel, SettingsField.LlmApiKey, SettingsField.LlmReasoning, SettingsField.LlmRequestTimeoutSeconds, SettingsField.LlmTurnTimeoutSeconds, SettingsField.LlmContextLength, SettingsField.LlmMidTurnUsage, SettingsField.LlmCompactType, SettingsField.LlmCompactKeepRecent, SettingsField.LlmCompactShowSummary, SettingsField.LlmAutoCompactPercent, SettingsField.LlmMaxTurns, SettingsField.LlmOfferTools, SettingsField.LlmToolCompactType, SettingsField.LlmMaxToolIterations, SettingsField.LlmUseFunVerbs, SettingsField.LlmShowThinking, SettingsField.LlmPreserveThinking, SettingsField.LlmReasoningEstimate, SettingsField.LlmSampling, SettingsField.LlmSamplingFromHuggingFace }, SettingsMenu.TabFields[(int)SettingsTab.Llm]);
         // The reconnecting rows: the LLM tab's seven, then the Claude API's four (2026-09-27; /tools' Claude tab's last four since 2026-09-29).
-        Assert.Equal(Enum.GetValues<SettingsField>().Where(SettingsMenu.IsLlmField), SettingsMenu.TabFields[(int)SettingsTab.Llm].Skip(1).Take(7).Concat(SettingsMenu.ToolsTabFields[4].TakeLast(4)).Concat(SettingsMenu.TabFields[(int)SettingsTab.Embedded].Where(f => f != SettingsField.EmbeddedFilterType).OrderBy(f => f)));   // the Embedded LLM tab's rows all reconnect (2026-09-29) but the filter type, display only (later that day)
+        Assert.Equal(Enum.GetValues<SettingsField>().Where(SettingsMenu.IsLlmField), SettingsMenu.TabFields[(int)SettingsTab.Llm].Skip(1).Take(7).Concat(SettingsMenu.ToolsTabFields[4].TakeLast(4)).Concat(SettingsMenu.TabFields[(int)SettingsTab.Embedded].Where(f => f is not (SettingsField.EmbeddedFilterType or SettingsField.EmbeddedHfDownloadType)).OrderBy(f => f)));   // the Embedded LLM tab's rows all reconnect (2026-09-29) but the filter type, display only (later that day), and the HF download type (2026-09-30)
         Assert.False(SettingsMenu.IsLlmField(SettingsField.LlmScanMode) || SettingsMenu.IsTtsField(SettingsField.LlmScanMode) || SettingsMenu.IsVoiceField(SettingsField.LlmScanMode));
         Assert.False(SettingsMenu.IsToggle(SettingsField.LlmScanMode));
         Assert.Equal("LLM scan mode", SettingsMenu.FieldName(SettingsField.LlmScanMode));

@@ -55,7 +55,11 @@ public sealed class StubHttpMessageHandler : HttpMessageHandler
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
         string? body = request.Content is null ? null : await request.Content.ReadAsStringAsync(cancellationToken);
-        Requests.Add(new RecordedRequest(request.Method, request.RequestUri!, request.Headers.Authorization?.ToString(), body));
+        lock (Requests)
+        {
+            // A parallel download (2026-09-30) sends its ranged requests at once.
+            Requests.Add(new RecordedRequest(request.Method, request.RequestUri!, request.Headers.Authorization?.ToString(), body));
+        }
 
         string url = request.RequestUri!.AbsoluteUri;
         foreach (var (prefix, handler) in _routes)

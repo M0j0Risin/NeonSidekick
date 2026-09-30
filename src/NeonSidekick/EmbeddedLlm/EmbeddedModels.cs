@@ -133,9 +133,10 @@ public sealed class EmbeddedModels
     /// <summary>
     /// Installs <paramref name="model"/>: the weights, then the vision projector, then the MTP drafter when it has one and
     /// <paramref name="drafter"/> is on (Embedded drafter; off, a later start with it on fetches it), each resumable and
-    /// checked. A cancel keeps what arrived; the next install resumes it.
+    /// checked. A cancel keeps what arrived; the next install resumes it. <paramref name="connections"/> (2026-09-30, Embedded HF
+    /// download type) is how many ranged connections each file comes down over; 1 is one stream.
     /// </summary>
-    public async Task<ModelResult> InstallAsync(EmbeddedModel model, Action<string>? phase, CancellationToken cancellationToken, bool drafter = true)
+    public async Task<ModelResult> InstallAsync(EmbeddedModel model, Action<string>? phase, CancellationToken cancellationToken, bool drafter = true, int connections = 1)
     {
         ArgumentNullException.ThrowIfNull(model);
         var specs = new List<ModelSpec> { EmbeddedModelCatalog.WeightsSpec(ModelsDirectory, model), EmbeddedModelCatalog.MmprojSpec(ModelsDirectory, model) };
@@ -146,7 +147,7 @@ public sealed class EmbeddedModels
 
         foreach (var spec in specs)
         {
-            var result = await EnsureAsync(spec, phase, cancellationToken).ConfigureAwait(false);
+            var result = await EnsureAsync(spec with { Connections = connections }, phase, cancellationToken).ConfigureAwait(false);
             if (!result.Ok)
             {
                 return result;
@@ -160,11 +161,11 @@ public sealed class EmbeddedModels
     /// Makes sure <paramref name="model"/>'s MTP drafter is on disk (2026-09-29): a model installed before its drafter
     /// joined the catalog fetches it here, at its next start with Embedded drafter on. Null for a model without a drafter.
     /// </summary>
-    public async Task<ModelResult?> EnsureDrafterAsync(EmbeddedModel model, Action<string>? phase, CancellationToken cancellationToken)
+    public async Task<ModelResult?> EnsureDrafterAsync(EmbeddedModel model, Action<string>? phase, CancellationToken cancellationToken, int connections = 1)
     {
         ArgumentNullException.ThrowIfNull(model);
         return EmbeddedModelCatalog.DrafterSpec(ModelsDirectory, model) is { } spec
-            ? await EnsureAsync(spec, phase, cancellationToken).ConfigureAwait(false)
+            ? await EnsureAsync(spec with { Connections = connections }, phase, cancellationToken).ConfigureAwait(false)
             : null;
     }
 
@@ -232,7 +233,7 @@ public sealed class EmbeddedModels
         }
     }
 
-    /// <summary>The bytes of a file on disk: the whole file when its length is exact, else what its partial download holds.</summary>
+    /// <summary>The bytes of a file on disk: the whole file when its length is exact, else what its partial download holds (one stream's or a parallel one's parts, <see cref="ModelStore.PartialBytes"/>).</summary>
     private static long HeldBytes(string path, long exact)
     {
         try
@@ -242,8 +243,7 @@ public sealed class EmbeddedModels
                 return exact;
             }
 
-            string partial = ModelStore.PartialPath(path);
-            return File.Exists(partial) ? Math.Min(exact, new FileInfo(partial).Length) : 0;
+            return Math.Min(exact, ModelStore.PartialBytes(path));
         }
         catch (IOException)
         {

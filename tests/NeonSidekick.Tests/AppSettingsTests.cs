@@ -32,6 +32,7 @@ public class AppSettingsTests : IDisposable
         EmbeddedGpuLayers = "20",
         EmbeddedVramBudget = 92,
         EmbeddedFilterType = "gguf",
+        EmbeddedHfDownloadType = "single",
         EmbeddedVision = false,
         EmbeddedLlmServer = false,
         EmbeddedDrafter = false,
@@ -284,6 +285,7 @@ public class AppSettingsTests : IDisposable
         Assert.Equal(expected.EmbeddedGpuLayers, actual.EmbeddedGpuLayers);
         Assert.Equal(expected.EmbeddedVramBudget, actual.EmbeddedVramBudget);
         Assert.Equal(expected.EmbeddedFilterType, actual.EmbeddedFilterType);
+        Assert.Equal(expected.EmbeddedHfDownloadType, actual.EmbeddedHfDownloadType);
         Assert.Equal(expected.EmbeddedVision, actual.EmbeddedVision);
         Assert.Equal(expected.EmbeddedLlmServer, actual.EmbeddedLlmServer);
         Assert.Equal(expected.EmbeddedDrafter, actual.EmbeddedDrafter);
@@ -309,6 +311,7 @@ public class AppSettingsTests : IDisposable
             d.EmbeddedGpuLayers = full.EmbeddedGpuLayers;
             d.EmbeddedVramBudget = full.EmbeddedVramBudget;
             d.EmbeddedFilterType = full.EmbeddedFilterType;
+            d.EmbeddedHfDownloadType = full.EmbeddedHfDownloadType;
             d.EmbeddedVision = full.EmbeddedVision;
             d.EmbeddedLlmServer = full.EmbeddedLlmServer;
             d.EmbeddedDrafter = full.EmbeddedDrafter;
@@ -438,6 +441,7 @@ public class AppSettingsTests : IDisposable
                 d.EmbeddedGpuLayers = full.EmbeddedGpuLayers;
                 d.EmbeddedVramBudget = full.EmbeddedVramBudget;
                 d.EmbeddedFilterType = full.EmbeddedFilterType;
+                d.EmbeddedHfDownloadType = full.EmbeddedHfDownloadType;
                 d.EmbeddedVision = full.EmbeddedVision;
                 d.EmbeddedLlmServer = full.EmbeddedLlmServer;
                 d.EmbeddedDrafter = full.EmbeddedDrafter;
@@ -1349,6 +1353,7 @@ public class AppSettingsTests : IDisposable
         Assert.Equal("text", s.PerformanceBarLook);   // what a bare /perf turns on first (later on 2026-09-29)
         Assert.Equal(0, s.EmbeddedVramBudget);        // off (later on 2026-09-29, the user's call)
         Assert.Equal("file", s.EmbeddedFilterType);   // the user's pick "for now"
+        Assert.Equal("parallel", s.EmbeddedHfDownloadType);   // 2026-09-30, the user's pick
         Assert.Equal(0, s.EmbeddedContextSize);       // fit (later on 2026-09-29; 32768 until then)
         Assert.True(s.ThemedViewer);   // later on 2026-09-27
         Assert.Null(s.ViewerLeft);   // 2026-09-28: Windows' own place until the viewer first closes

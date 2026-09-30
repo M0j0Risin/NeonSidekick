@@ -31,6 +31,13 @@ internal sealed class LlmSession : IDisposable
         _ => $"LLM: no server found on 127.0.0.1 ports {LlmEndpointProbe.CandidatePortList}; set {EnvironmentOverrides.LlmUrlVariable}.",
     };
 
+    /// <summary>
+    /// <see cref="NoServerLine"/> for <see cref="ScanScope.Disabled"/> when the embedded models are offered and none is downloaded
+    /// (2026-09-30, the user's wording): the embedded catalog is the third way out. The screen's alone; headless keeps the line above.
+    /// </summary>
+    public static readonly string NoEmbeddedLine =
+        $"LLM: no URL is set, LLM scan mode is disabled and no embedded models are downloaded; set {EnvironmentOverrides.LlmUrlVariable}, or the URL or the scan mode in /settings. Alternatively, download an embedded model.";
+
     private readonly LlmEndpointProbe _probe;
     private readonly ContextLengthProbe _contextProbe;
     private readonly ServerSamplingProbe? _samplingProbe;

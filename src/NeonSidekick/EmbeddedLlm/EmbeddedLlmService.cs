@@ -129,7 +129,7 @@ public sealed class EmbeddedLlmService : IEmbeddedLlm
             return ModelResult.Failed(runtime.Path, EmbeddedLlmText.RuntimeFailed(runtime.Detail));
         }
 
-        var installed = await _files.InstallAsync(model, phase, cancellationToken, drafter: effective.EmbeddedDrafter).ConfigureAwait(false);
+        var installed = await _files.InstallAsync(model, phase, cancellationToken, drafter: effective.EmbeddedDrafter, connections: EmbeddedHfDownloadTypes.Connections(effective)).ConfigureAwait(false);
         return installed.Ok ? installed : ModelResult.Failed(installed.Path, EmbeddedLlmText.InstallFailed(model, installed.Detail));
     }
 
@@ -356,7 +356,7 @@ public sealed class EmbeddedLlmService : IEmbeddedLlm
 
         if (!File.Exists(drafter))
         {
-            var fetched = await _files.EnsureDrafterAsync(model, phase, cancellationToken).ConfigureAwait(false);
+            var fetched = await _files.EnsureDrafterAsync(model, phase, cancellationToken, EmbeddedHfDownloadTypes.Connections(effective)).ConfigureAwait(false);
             if (fetched is not { Ok: true })
             {
                 DiagnosticLog.Warn(Category, EmbeddedLlmText.DrafterFailed(model, fetched?.Detail ?? ""));

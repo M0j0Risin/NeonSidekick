@@ -26,16 +26,18 @@ public partial class SettingsMenuTests
         Assert.Equal("General", SettingsMenu.TabTitles[tab - 1]);   // second since later on 2026-09-29 (the user's order); after STT until then, the Claude (API) tab between until it went to /tools
         Assert.Equal("LLM", SettingsMenu.TabTitles[tab + 1]);
         // The switch first and MTP last (2026-09-29, the user's asks); the filter type under the catalog, the VRAM budget under
-        // the GPU layers (later that day).
-        Assert.Equal([SettingsField.EmbeddedLlmServer, SettingsField.EmbeddedModels, SettingsField.EmbeddedFilterType, SettingsField.EmbeddedBackend, SettingsField.EmbeddedContextSize, SettingsField.EmbeddedGpuLayers, SettingsField.EmbeddedVramBudget, SettingsField.EmbeddedVision, SettingsField.EmbeddedDrafter], SettingsMenu.TabFields[tab]);
-        var reconnecting = SettingsMenu.TabFields[tab].Where(f => f != SettingsField.EmbeddedFilterType).ToList();
+        // the GPU layers (later that day), the HF download type under the filter type (2026-09-30).
+        Assert.Equal([SettingsField.EmbeddedLlmServer, SettingsField.EmbeddedModels, SettingsField.EmbeddedFilterType, SettingsField.EmbeddedHfDownloadType, SettingsField.EmbeddedBackend, SettingsField.EmbeddedContextSize, SettingsField.EmbeddedGpuLayers, SettingsField.EmbeddedVramBudget, SettingsField.EmbeddedVision, SettingsField.EmbeddedDrafter], SettingsMenu.TabFields[tab]);
+        var reconnecting = SettingsMenu.TabFields[tab].Where(f => f is not (SettingsField.EmbeddedFilterType or SettingsField.EmbeddedHfDownloadType)).ToList();
         Assert.All(reconnecting, f => Assert.True(SettingsMenu.IsLlmField(f), f.ToString()));
         Assert.All(reconnecting, f => Assert.True(SettingsMenu.RefusedMidTurn(f), f.ToString()));
         Assert.False(SettingsMenu.IsLlmField(SettingsField.EmbeddedFilterType));   // display only: the lists read it as they open
         Assert.False(SettingsMenu.RefusedMidTurn(SettingsField.EmbeddedFilterType));
+        Assert.False(SettingsMenu.IsLlmField(SettingsField.EmbeddedHfDownloadType));   // read as each download starts
+        Assert.False(SettingsMenu.RefusedMidTurn(SettingsField.EmbeddedHfDownloadType));
         Assert.True(SettingsMenu.IsToggle(SettingsField.EmbeddedVision) && SettingsMenu.IsToggle(SettingsField.EmbeddedLlmServer) && SettingsMenu.IsToggle(SettingsField.EmbeddedDrafter));
         Assert.False(SettingsMenu.IsToggle(SettingsField.EmbeddedBackend));
-        Assert.Equal(["Embedded LLM server enabled", "Embedded models", "Embedded filter type", "Embedded backend", "Embedded context size", "Embedded GPU layers", "Embedded VRAM budget", "Embedded vision", "Embedded drafter"], SettingsMenu.TabFields[tab].Select(SettingsMenu.FieldName));
+        Assert.Equal(["Embedded LLM server enabled", "Embedded models", "Embedded filter type", "Embedded HF download type", "Embedded backend", "Embedded context size", "Embedded GPU layers", "Embedded VRAM budget", "Embedded vision", "Embedded drafter"], SettingsMenu.TabFields[tab].Select(SettingsMenu.FieldName));
         var data = new AppSettingsData();
         Assert.True(data.EmbeddedLlmServer && data.EmbeddedDrafter);   // both on by default
         Assert.Equal(("on", "on"), (SettingsMenu.FieldValue(SettingsField.EmbeddedLlmServer, data, "C:\\p"), SettingsMenu.FieldValue(SettingsField.EmbeddedDrafter, data, "C:\\p")));
@@ -378,7 +380,7 @@ public partial class SettingsMenuTests
     {
         var (menu, pane, _) = EmbeddedPane();
         GoTo(SettingsTab.Embedded);
-        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter); // Embedded context size (the switch first since 2026-09-29, the filter type above since later that day)
+        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter); // Embedded context size (the switch first since 2026-09-29, the filter type above since later that day, the HF download type since 2026-09-30)
         Backspace(10);
         _console.Input.PushText("100");
         Push(Keys.Enter);                       // refused
@@ -415,7 +417,7 @@ public partial class SettingsMenuTests
     {
         var (menu, pane, _) = EmbeddedPane();
         GoTo(SettingsTab.Embedded);
-        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Enter); // Embedded backend: the page opens on auto
+        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter); // Embedded backend: the page opens on auto
         Push(Keys.Down, Keys.Down, Keys.Enter); // vulkan
         Push(Keys.Escape);
 
@@ -439,6 +441,54 @@ public partial class SettingsMenuTests
 
         Assert.Equal("gguf", _settings.Current.EmbeddedFilterType);
         Assert.Contains("file  the size the row shows: weights, vision projector and drafter", _console.Output);
+        pane.Dispose();
+    }
+
+    [Fact]
+    public async Task OnThePane_TheHfDownloadTypeRow_IsAPicker_NeedingNoReconnect()
+    {
+        // 2026-09-30 (the user's ask): single or parallel, under the filter type; read as each download starts.
+        var (menu, pane, _) = EmbeddedPane();
+        GoTo(SettingsTab.Embedded);
+        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Enter); // Embedded HF download type: the page opens on parallel
+        Push(Keys.Up, Keys.Enter);              // single
+        Push(Keys.Escape);
+
+        Assert.Equal(SettingsChanges.None, await menu.ShowAsync(CancellationToken.None));
+
+        Assert.Equal("single", _settings.Current.EmbeddedHfDownloadType);
+        Assert.Contains("parallel  " + NeonSidekick.EmbeddedLlm.EmbeddedHfDownloadTypes.Describe("parallel"), _console.Output);
+        Assert.Equal("single", SettingsMenu.FieldValue(SettingsField.EmbeddedHfDownloadType, _settings.Current, "C:\\p"));
+        pane.Dispose();
+    }
+
+    [Fact]
+    public async Task Open_EmbeddedModels_StartsInTheCatalog_AnInstallClosingThePane()
+    {
+        // 2026-09-30 (the user's ask): the app's start with nothing to connect to opens the catalog itself.
+        var (menu, pane, _) = EmbeddedPane();
+        Push(Keys.Enter);                       // the catalog's first row: its page
+        Push(Keys.Enter);                       // Install
+
+        await menu.ShowAsync(CancellationToken.None, midTurn: false, SettingsField.EmbeddedModels);
+
+        Assert.Equal(EmbeddedModelCatalog.Models[0].Id, menu.TakePendingEmbeddedModel()!.Id);
+        pane.Dispose();
+    }
+
+    [Fact]
+    public async Task Open_EmbeddedModels_Escape_LandsOnItsRow_OnTheEmbeddedTab()
+    {
+        var (menu, pane, _) = EmbeddedPane();
+        Push(Keys.Escape);                      // out of the catalog: the settings list, on Embedded models
+        Push(Keys.Down, Keys.Enter);            // Embedded filter type, the row under it
+        Push(Keys.Down, Keys.Enter);            // gguf
+        Push(Keys.Escape);
+
+        Assert.Equal(SettingsChanges.None, await menu.ShowAsync(CancellationToken.None, midTurn: false, SettingsField.EmbeddedModels));
+
+        Assert.Equal("gguf", _settings.Current.EmbeddedFilterType);
+        Assert.Null(menu.TakePendingEmbeddedModel());
         pane.Dispose();
     }
 
