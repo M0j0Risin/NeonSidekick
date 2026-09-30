@@ -679,6 +679,15 @@ internal sealed partial class ChatScreen
         _ => session.Title,
     };
 
+    /// <summary>
+    /// What the upper rule shows (2026-09-30, the user's ask): while <c>/botchat</c> runs, its cast as its session row is
+    /// titled (<see cref="BotChat.SessionTitle"/>, <c>Botchat: neon, ada and max</c>) — the chat never sets
+    /// <see cref="_sessionTitle"/>, so the rule was blank or named the conversation from before it; the cast written
+    /// by the app, <c>model-written</c> shows it too, <c>none</c> still nothing. Otherwise <see cref="SessionRuleTitle"/>. Pinned.
+    /// </summary>
+    public static string UpperRuleTitle(IReadOnlyList<string>? botCast, SessionSummary? session, SessionNameDisplay display) =>
+        botCast is not null && display != SessionNameDisplay.None ? BotChat.SessionTitle(botCast) : SessionRuleTitle(session, display);
+
     // The messages queued while a reply runs (2026-09-18): the screen's, never a profile's, so a
     // switch drops rather than rebinds it. Enqueued on the watcher task, drained by the idle loop.
     private readonly MessageQueue _queue = new();
@@ -991,8 +1000,8 @@ internal sealed partial class ChatScreen
             // the reasoning glyph after it in its own colour, none with the model.
             // The session's name at the right edge of the rule above the input row (2026-09-18, the user's
             // ask), as Session show name allows; read per draw and on the tick, so the model's title lands
-            // from the pool and a flipped setting shows at once.
-            RuleTitle = () => SessionRuleTitle(_sessionTitle, ShowNameDisplay(_effective())),
+            // from the pool and a flipped setting shows at once. A /botchat shows its cast there instead (2026-09-30).
+            RuleTitle = () => UpperRuleTitle(_botChatCast, _sessionTitle, ShowNameDisplay(_effective())),
             Trailer = () => ModelLabel(_session.Endpoint?.ModelId),
             TrailerMark = () => ModelMark(_session.Endpoint?.ModelId, _effective().LlmReasoning),
             // The queued count after the row's lead in both states (2026-09-18): the pane draws it
@@ -1810,7 +1819,14 @@ internal sealed partial class ChatScreen
             if (_pane.TryHitRuleTitle(click.X, click.Y))
             {
                 // The session's name on the upper rule (2026-09-28, the user's ask): two clicks answer the bare /sessions title,
-                // the rename box under the reply as at idle.
+                // the rename box under the reply as at idle. A /botchat's cast there (2026-09-30) takes no click: the rename
+                // would land on the conversation from before the chat, not on the chat.
+                if (_botChatCast is not null)
+                {
+                    _queuedClicks.Reset();
+                    return null;
+                }
+
                 return _queuedClicks.Second(InputLine.RuleTitlePairKey) ? SessionTitleLine : null;
             }
 
@@ -10168,6 +10184,9 @@ internal sealed partial class ChatScreen
     /// <summary><c>/botchat</c> is running (2026-09-24): a line typed under a reply is queued whatever <c>Queue messages</c> says (<c>QueueLine</c>). Read on the watcher task.</summary>
     private volatile bool _botChatRunning;
 
+    /// <summary>The running <c>/botchat</c>'s cast (2026-09-30, the user's ask), for the upper rule (<see cref="UpperRuleTitle"/>): set with <see cref="_botChatRunning"/> once the cast is final, null otherwise. Read on the pane's tick.</summary>
+    private volatile IReadOnlyList<string>? _botChatCast;
+
     /// <summary>
     /// The pictures shown in the running <c>/botchat</c>, in order (2026-09-27, <c>Botchat vision enabled</c>): the app's
     /// (<see cref="ShowBotPicture"/>) and the bots' own <c>generate_image</c> results (<see cref="Render"/>, while
@@ -10358,6 +10377,7 @@ internal sealed partial class ChatScreen
         var ladder = new BotEscLadder();
         _botNoWorkflowTold = false;
         _botChatRunning = true;
+        _botChatCast = castNames;
         // Vision (2026-09-27): the pictures shown in this chat, and the last one each bot was shown, by name.
         _botPictureLog = [];
         var picturesSeen = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
@@ -10581,6 +10601,7 @@ internal sealed partial class ChatScreen
         finally
         {
             _botChatRunning = false;
+            _botChatCast = null;
             _botPictureLog = null;
             // Kept for /botchat --resume (2026-09-25), however the chat ended; one with nothing said has nothing to carry on.
             if (lines.Count > 0)

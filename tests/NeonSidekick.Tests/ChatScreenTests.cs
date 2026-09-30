@@ -10076,6 +10076,20 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("", ChatScreen.SessionRuleTitle(model, SessionNameDisplay.None));
     }
 
+    /// <summary>The upper rule under a /botchat (2026-09-30): the chat's cast over any session's title, under model-written too, never under none.</summary>
+    [Fact]
+    public void UpperRuleTitle_ShowsTheBotchatCast_UnlessNone()
+    {
+        var firstLine = new SessionSummary(1, DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch, "hi there", TitleSource.FirstLine, "llama", 1);
+        string[] cast = ["neon", "ada", "max"];
+        Assert.Equal(BotChat.SessionTitle(cast), ChatScreen.UpperRuleTitle(cast, firstLine, SessionNameDisplay.AllNames));
+        Assert.Equal(BotChat.SessionTitle(cast), ChatScreen.UpperRuleTitle(cast, null, SessionNameDisplay.ModelWritten));
+        Assert.Equal("", ChatScreen.UpperRuleTitle(cast, firstLine, SessionNameDisplay.None));
+        Assert.Equal("hi there", ChatScreen.UpperRuleTitle(null, firstLine, SessionNameDisplay.AllNames));
+        Assert.Equal("", ChatScreen.UpperRuleTitle(null, firstLine, SessionNameDisplay.ModelWritten));
+        Assert.Equal("", ChatScreen.UpperRuleTitle(null, null, SessionNameDisplay.AllNames));
+    }
+
     [Fact]
     public void TitleStripGlyph_IsTheLabelWithItsSelector_AtTwoCells()
     {
