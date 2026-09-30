@@ -127,6 +127,10 @@ public class TextCellsTests
     [InlineData("\U0001F6D1", 2)]                // 🛑: the stop line's sign, a pair alone
     [InlineData("️", 0)]                    // a selector with nothing before it
     [InlineData("️️", 0)]              // two selectors: the second follows a selector, not a character
+    [InlineData("⛓️‍\U0001F4A5", 2)]   // ⛓️‍💥 (later on 2026-09-29, the uncensored column): a ZWJ sequence, one glyph as wide as its first part
+    [InlineData("⛓️‍\U0001F4A5 x", 4)]
+    [InlineData("\U0001F468‍\U0001F469‍\U0001F467", 2)]   // 👨‍👩‍👧: the family, three pairs joined, two cells
+    [InlineData("\U0001F4A2", 2)]                // 💢: the aggressive build's, a pair alone
     public void Width_CountsCells(string text, int cells)
     {
         Assert.Equal(cells, TextCells.Width(text));

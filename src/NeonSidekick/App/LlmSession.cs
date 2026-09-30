@@ -46,6 +46,10 @@ internal sealed class LlmSession : IDisposable
 
     // The loaded profile's Embedded LLM server enabled at the last connect (2026-09-29): a bot's embedded link honours it.
     private bool _embeddedEnabled = true;
+
+    // One embedded link at a time (later on 2026-09-29): the bots link in parallel, and each once saw no server running and
+    // started its own model, stopping the one before — the earlier bots left on a dead port.
+    private readonly SemaphoreSlim _embeddedLinks = new(1, 1);
     private ContextLength? _detectedContextLength;
     private CancellationTokenSource? _learningCts;
     private CancellationTokenSource? _titlingCts;
@@ -135,6 +139,11 @@ internal sealed class LlmSession : IDisposable
         if (_embedded?.Running is not null)
         {
             _embedded.Stop();
+        }
+
+        if (!effective.EmbeddedLlmServer)
+        {
+            _embedded?.StopExtras();   // the switch off (later on 2026-09-29): a multi-server botchat's extras go too
         }
 
         Endpoint = await _probe.ResolveAsync(effective, cancellationToken).ConfigureAwait(false);
@@ -381,9 +390,18 @@ internal sealed class LlmSession : IDisposable
     /// of its own is asked for its model list once; one that does not answer (or is no URL) is a problem, and the bot sits
     /// the chat out (the user's call). Its model is the profile's, else the first its server lists. The caller disposes the link.
     /// </summary>
-    public async Task<(BotLink? Link, string? Problem)> LinkAsync(AppSettingsData profile, CancellationToken cancellationToken)
+    public Task<(BotLink? Link, string? Problem)> LinkAsync(AppSettingsData profile, CancellationToken cancellationToken) =>
+        LinkAsync(profile, BotEmbeddedMode.ParentServer, cancellationToken);
+
+    /// <summary>
+    /// <see cref="LinkAsync(AppSettingsData, CancellationToken)"/> under <c>Botchat multi-embedded</c> (later on 2026-09-29, the
+    /// user's ask): <paramref name="embeddedMode"/> says what a bot naming another embedded model than the running one gets —
+    /// the running one, with <see cref="BotLink.SharedEmbedded"/> set for the warning, or an extra server of its own.
+    /// </summary>
+    public async Task<(BotLink? Link, string? Problem)> LinkAsync(AppSettingsData profile, BotEmbeddedMode embeddedMode, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(profile);
+        (string Wanted, string Running)? shared = null;
         string? model = string.IsNullOrWhiteSpace(profile.LlmModel) ? null : profile.LlmModel.Trim();
         LlmEndpoint endpoint;
         if (string.IsNullOrWhiteSpace(profile.LlmUrl))
@@ -409,13 +427,14 @@ internal sealed class LlmSession : IDisposable
         }
         else if (EmbeddedEndpoint.IsEmbedded(profile.LlmUrl))
         {
-            var (embedded, problem) = await LinkEmbeddedAsync(profile, model, cancellationToken).ConfigureAwait(false);
+            var (embedded, problem, sharing) = await LinkEmbeddedAsync(profile, model, embeddedMode, cancellationToken).ConfigureAwait(false);
             if (embedded is null)
             {
                 return (null, problem);
             }
 
             endpoint = embedded;
+            shared = sharing;
         }
         else
         {
@@ -442,7 +461,7 @@ internal sealed class LlmSession : IDisposable
         var timeouts = LlmTimeouts.Resolve(profile);
         try
         {
-            return (new BotLink(_factory(endpoint, timeouts), endpoint, timeouts, ReasoningLevel.Resolve(profile), LlmSampling.Resolve(profile, endpoint.ModelId)), null);
+            return (new BotLink(_factory(endpoint, timeouts), endpoint, timeouts, ReasoningLevel.Resolve(profile), LlmSampling.Resolve(profile, endpoint.ModelId)) { SharedEmbedded = shared }, null);
         }
         catch (Exception ex)
         {
@@ -451,48 +470,66 @@ internal sealed class LlmSession : IDisposable
     }
 
     /// <summary>
-    /// A bot's link to the embedded server (2026-09-29): one embedded server at a time, so a bot whose profile names the embedded
-    /// model uses the one running — refused when that is a different model — or, with none running, starts the model its
-    /// profile names (installed only: a botchat never downloads) and uses that.
+    /// A bot's link to the embedded server (2026-09-29): a bot whose profile names the running model, or none, uses the one
+    /// running; with none running it starts the model its profile names (installed only: a botchat never downloads). A bot
+    /// naming another model (refused until later on 2026-09-29, the user's ask) is <paramref name="mode"/>'s:
+    /// <see cref="BotEmbeddedMode.ParentServer"/> gives it the running one and the pair for the warning,
+    /// <see cref="BotEmbeddedMode.MultiServer"/> an extra server of its own (<see cref="IEmbeddedLlm.StartExtraAsync"/>). One
+    /// link at a time (<see cref="_embeddedLinks"/>), so under parent-server the first embedded bot's model is the one that starts.
     /// </summary>
-    private async Task<(LlmEndpoint? Endpoint, string? Problem)> LinkEmbeddedAsync(AppSettingsData profile, string? model, CancellationToken cancellationToken)
+    private async Task<(LlmEndpoint? Endpoint, string? Problem, (string Wanted, string Running)? Shared)> LinkEmbeddedAsync(AppSettingsData profile, string? model, BotEmbeddedMode mode, CancellationToken cancellationToken)
     {
         if (_embedded is null || !EmbeddedEndpoint.Offered)
         {
-            return (null, EmbeddedUnavailable);
+            return (null, EmbeddedUnavailable, null);
         }
 
         if (!_embeddedEnabled)
         {
             // The loaded profile's switch governs the one server, whichever profile a bot comes from (2026-09-29).
-            return (null, EmbeddedLlmText.SwitchedOffError);
+            return (null, EmbeddedLlmText.SwitchedOffError, null);
         }
 
-        if (_embedded.Running is { } running)
-        {
-            if (model is not null && !string.Equals(model, running.ModelId, StringComparison.OrdinalIgnoreCase))
-            {
-                string display = EmbeddedModelCatalog.Find(running.ModelId, _embedded.Catalog)?.Display ?? running.ModelId;
-                return (null, EmbeddedLlmText.OneModelAtATime(display));
-            }
-
-            return (EmbeddedEndpointOf(running), null);
-        }
-
-        var wanted = EmbeddedModelFor(model);
-        if (wanted is null)
-        {
-            return (null, model is not null && EmbeddedModelCatalog.Find(model, _embedded.Catalog) is { } known ? EmbeddedLlmText.NotInstalled(known) : EmbeddedLlmText.NoneInstalled);
-        }
-
+        await _embeddedLinks.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            return (EmbeddedEndpointOf(await _embedded.StartAsync(wanted, profile, null, cancellationToken).ConfigureAwait(false)), null);
+            if (_embedded.Running is { } running)
+            {
+                if (model is null || string.Equals(model, running.ModelId, StringComparison.OrdinalIgnoreCase))
+                {
+                    return (EmbeddedEndpointOf(running), null, null);
+                }
+
+                if (mode == BotEmbeddedMode.ParentServer)
+                {
+                    return (EmbeddedEndpointOf(running), null, (DisplayOf(model), DisplayOf(running.ModelId)));
+                }
+            }
+
+            var wanted = EmbeddedModelFor(model);
+            if (wanted is null)
+            {
+                return (null, model is not null && EmbeddedModelCatalog.Find(model, _embedded.Catalog) is { } known ? EmbeddedLlmText.NotInstalled(known) : EmbeddedLlmText.NoneInstalled, null);
+            }
+
+            try
+            {
+                var info = mode == BotEmbeddedMode.MultiServer
+                    ? await _embedded.StartExtraAsync(wanted, profile, null, cancellationToken).ConfigureAwait(false)
+                    : await _embedded.StartAsync(wanted, profile, null, cancellationToken).ConfigureAwait(false);
+                return (EmbeddedEndpointOf(info), null, null);
+            }
+            catch (EmbeddedLlmException ex)
+            {
+                return (null, ex.Message, null);
+            }
         }
-        catch (EmbeddedLlmException ex)
+        finally
         {
-            return (null, ex.Message);
+            _embeddedLinks.Release();
         }
+
+        string DisplayOf(string id) => EmbeddedModelCatalog.Find(id, _embedded.Catalog)?.Display ?? id;
     }
 
     private static LlmEndpoint EmbeddedEndpointOf(EmbeddedServerInfo info) =>
@@ -701,6 +738,7 @@ internal sealed class LlmSession : IDisposable
     public void Dispose()
     {
         Disconnect();
+        _embeddedLinks.Dispose();
         _learningCts?.Dispose();
         _learningCts = null;
         _titlingCts?.Dispose();
@@ -724,6 +762,12 @@ internal sealed class BotLink(IChatClient client, LlmEndpoint endpoint, LlmTimeo
     public ReasoningEffort Reasoning { get; } = reasoning;
 
     public LlmSampling? Sampling { get; } = sampling;
+
+    /// <summary>
+    /// The embedded model the bot's profile named and the one it got instead (later on 2026-09-29, <c>Botchat multi-embedded</c>
+    /// <c>parent-server</c>): for the warning; null when it got its own.
+    /// </summary>
+    public (string Wanted, string Running)? SharedEmbedded { get; init; }
 
     public void Dispose() => Client.Dispose();
 }

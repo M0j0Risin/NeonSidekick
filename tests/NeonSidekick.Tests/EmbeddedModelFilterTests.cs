@@ -47,6 +47,32 @@ public class EmbeddedModelFilterTests
     }
 
     [Fact]
+    public void TheCatalogsButtons_PutInstalledAndUninstalled_BetweenTheSizesAndUncensored_ARadioPair()
+    {
+        // Later on 2026-09-29 (the user's ask): the catalog alone; /server keeps the four.
+        var buttons = EmbeddedModelFilter.None.Buttons(withInstalled: true);
+        Assert.Equal(["8GB", "16GB", "32GB", "installed", "uninstalled", "uncensored"], buttons.Select(b => b.Title));
+        Assert.Equal(new char?[] { '1', '2', '3', 'i', 'n', 'u' }, buttons.Select(b => b.Key));
+        Assert.Equal(4, EmbeddedModelFilter.None.Buttons().Count);
+        Assert.Equal("1 / 2 / 3 = 8 / 16 / 32 GB · I / N = installed / uninstalled · U = uncensored", EmbeddedModelFilter.CatalogKeys);
+
+        var installed = EmbeddedModelFilter.None.Press(3, withInstalled: true);
+        Assert.Equal(new EmbeddedModelFilter(null, false, true), installed);
+        Assert.Equal([false, false, false, true, false, false], installed.Buttons(withInstalled: true).Select(b => b.On));
+        var uninstalled = installed.Press(4, withInstalled: true);
+        Assert.Equal(new EmbeddedModelFilter(null, false, false), uninstalled);
+        Assert.Equal(EmbeddedModelFilter.None, uninstalled.Press(4, withInstalled: true));   // the lit one again: none
+        Assert.Equal(new EmbeddedModelFilter(16, true, false), uninstalled.Press(1, withInstalled: true).Press(5, withInstalled: true));   // the others left be
+        Assert.True(uninstalled.Active);
+
+        var small = new EmbeddedModelFilter(8, false, true);
+        Assert.True(small.Matches(Model("A", 5_000_000_000), EmbeddedFilterType.File, installed: true));
+        Assert.False(small.Matches(Model("A", 5_000_000_000), EmbeddedFilterType.File, installed: false));
+        Assert.False(small.Matches(Model("A", 9_000_000_000), EmbeddedFilterType.File, installed: true));
+        Assert.True(new EmbeddedModelFilter(null, false, false).Matches(Model("A", 5_000_000_000), EmbeddedFilterType.File, installed: false));
+    }
+
+    [Fact]
     public void ASize_KeepsTheModelsAtMostThatBig_AsTheRowReadsThem()
     {
         var filter = new EmbeddedModelFilter(8, false);
@@ -83,6 +109,13 @@ public class EmbeddedModelFilterTests
         Assert.NotEmpty(uncensored);
         Assert.All(uncensored, m => Assert.Contains("HauhauCS", m.Repository, StringComparison.Ordinal));   // every one is a HauhauCS build
         Assert.All(EmbeddedModelCatalog.Models.Where(m => m.Repository.StartsWith("HauhauCS/", StringComparison.Ordinal)), m => Assert.True(m.Uncensored, m.Id));
+
+        // Aggressive exactly where the repository's own name says so (later on 2026-09-29): HauhauCS's E2B/E4B, Qwen3.6 35B A3B and Qwen3.8 27B.
+        Assert.Equal(
+            ["gemma-4-e2b-uncensored", "gemma-4-e4b-uncensored", "qwen3.6-35b-a3b-uncensored", "qwen3.8-27b-uncensored", "qwen3.8-27b-uncensored-q5"],
+            EmbeddedModelCatalog.Models.Where(m => m.UncensoredKind == UncensoredKind.Aggressive).Select(m => m.Id).Order(StringComparer.Ordinal));
+        Assert.All(uncensored.Where(m => m.UncensoredKind != UncensoredKind.Aggressive), m => Assert.Equal(UncensoredKind.Uncensored, m.UncensoredKind));
+        Assert.All(EmbeddedModelCatalog.Models.Where(m => !m.Uncensored), m => Assert.Equal(UncensoredKind.None, m.UncensoredKind));
 
         var filter = new EmbeddedModelFilter(null, true);
         Assert.True(filter.Matches(Model("B Uncensored", 1_000_000_000), EmbeddedFilterType.File));

@@ -66,6 +66,8 @@ public class AppSettingsTests : IDisposable
         ShowWorkingDirectory = false,
         ToolbarItems = ["usage", "path"],
         ShowPerformanceBar = "spark",
+        BotChatMultiEmbedded = "multi-server",
+        BotChatMultiEmbeddedKill = false,
         PerformanceBarLook = "led",
         ThemedViewer = false,
         ViewerLeft = -1200,
@@ -184,6 +186,8 @@ public class AppSettingsTests : IDisposable
         Assert.Equal(expected.ShowWorkingDirectory, actual.ShowWorkingDirectory);
         Assert.Equal(expected.ToolbarItems, actual.ToolbarItems);
         Assert.Equal(expected.ShowPerformanceBar, actual.ShowPerformanceBar);
+        Assert.Equal(expected.BotChatMultiEmbedded, actual.BotChatMultiEmbedded);
+        Assert.Equal(expected.BotChatMultiEmbeddedKill, actual.BotChatMultiEmbeddedKill);
         Assert.Equal(expected.PerformanceBarLook, actual.PerformanceBarLook);
         Assert.Equal(expected.ThemedViewer, actual.ThemedViewer);
         Assert.Equal(expected.ViewerLeft, actual.ViewerLeft);
@@ -326,6 +330,8 @@ public class AppSettingsTests : IDisposable
             d.ShowWorkingDirectory = full.ShowWorkingDirectory;
             d.ToolbarItems = full.ToolbarItems;
             d.ShowPerformanceBar = full.ShowPerformanceBar;
+            d.BotChatMultiEmbedded = full.BotChatMultiEmbedded;
+            d.BotChatMultiEmbeddedKill = full.BotChatMultiEmbeddedKill;
             d.PerformanceBarLook = full.PerformanceBarLook;
             d.ThemedViewer = full.ThemedViewer;
             d.ViewerLeft = full.ViewerLeft;
@@ -453,6 +459,8 @@ public class AppSettingsTests : IDisposable
                 d.ShowWorkingDirectory = full.ShowWorkingDirectory;
                 d.ToolbarItems = full.ToolbarItems;
                 d.ShowPerformanceBar = full.ShowPerformanceBar;
+                d.BotChatMultiEmbedded = full.BotChatMultiEmbedded;
+                d.BotChatMultiEmbeddedKill = full.BotChatMultiEmbeddedKill;
                 d.PerformanceBarLook = full.PerformanceBarLook;
                 d.ThemedViewer = full.ThemedViewer;
                 d.ViewerLeft = full.ViewerLeft;

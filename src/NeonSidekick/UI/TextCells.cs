@@ -9,8 +9,9 @@ namespace NeonSidekick.UI;
 /// terminal draws inside the pair's two cells — 2026-09-18) — except a U+FE0F after a one-cell
 /// character, which counts one: the selector makes an emoji-presentation sequence, and Windows
 /// Terminal (1.22+, grapheme clusters) draws <c>✂️</c> or <c>⚙️</c> two cells wide where the bare
-/// character is one (2026-09-19, the scissors of the prune lines). Combining marks are otherwise out
-/// of scope.
+/// character is one (2026-09-19, the scissors of the prune lines). A zero-width joiner (U+200D) and the element right after
+/// it count nothing (later on 2026-09-29, the uncensored column's broken chain <c>⛓️‍💥</c>): Windows Terminal draws a ZWJ
+/// sequence as one glyph, as wide as its first part. Combining marks are otherwise out of scope.
 /// </summary>
 public static class TextCells
 {
@@ -18,7 +19,7 @@ public static class TextCells
     public static int Width(char c)
     {
         int code = c;
-        if (code is 0xFE0E or 0xFE0F)             // variation selectors: zero, they pick the presentation of the character before
+        if (code is 0xFE0E or 0xFE0F or 0x200D)   // variation selectors: zero, they pick the presentation of the character before; the ZWJ joins
         {
             return 0;
         }
@@ -64,14 +65,22 @@ public static class TextCells
     /// <summary>
     /// Width of the text element starting at <paramref name="index"/> and its length in UTF-16
     /// units (2 for a surrogate pair, else 1). A U+FE0F stays an element of its own (the stepping
-    /// rules never change), one cell wide after a one-cell character and zero after a wide one.
+    /// rules never change), one cell wide after a one-cell character and zero after a wide one. An element right after a
+    /// U+200D is zero wide: the joiner makes it part of the glyph before (later on 2026-09-29).
     /// </summary>
     public static int ElementWidth(string text, int index, out int length)
     {
+        bool joined = index > 0 && text[index - 1] == '\u200D';
         if (char.IsHighSurrogate(text[index]) && index + 1 < text.Length && char.IsLowSurrogate(text[index + 1]))
         {
             length = 2;
-            return 2;
+            return joined ? 0 : 2;
+        }
+
+        if (joined)
+        {
+            length = 1;
+            return 0;
         }
 
         length = 1;

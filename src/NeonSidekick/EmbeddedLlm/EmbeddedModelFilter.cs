@@ -77,12 +77,24 @@ public static class EmbeddedFilterTypes
 /// radio buttons (one at a time; the lit one pressed again goes dark), <c>uncensored</c> on its own. A size keeps the models
 /// at most that big (<see cref="EmbeddedFilterTypes"/> says which bytes), uncensored the <see cref="EmbeddedModel.Uncensored"/>
 /// ones; both together, both. Nothing is saved: every visit to a pane starts at <see cref="None"/>, every model shown.
+/// The catalog alone (later still on 2026-09-29, the user's ask) carries <c>installed</c> and <c>uninstalled</c> between the
+/// sizes and uncensored, a radio pair of their own (<see cref="Installed"/>; <c>/server</c> lists installed models only).
 /// Pure: the tests drive it.
 /// </summary>
-public sealed record EmbeddedModelFilter(int? MaxGb, bool Uncensored)
+public sealed record EmbeddedModelFilter(int? MaxGb, bool Uncensored, bool? Installed = null)
 {
     /// <summary>No button lit: every model.</summary>
     public static readonly EmbeddedModelFilter None = new(null, false);
+
+    /// <summary>The installed and uninstalled buttons' titles (the catalog's, later on 2026-09-29). Pinned.</summary>
+    public const string InstalledButton = "installed";
+
+    public const string UninstalledButton = "uninstalled";
+
+    /// <summary>Their keys: I, and N for not installed.</summary>
+    public const char InstalledKey = 'i';
+
+    public const char UninstalledKey = 'n';
 
     /// <summary>The size buttons' gigabytes, in button order. Pinned.</summary>
     public static readonly int[] Sizes = [8, 16, 32];
@@ -93,25 +105,37 @@ public sealed record EmbeddedModelFilter(int? MaxGb, bool Uncensored)
     /// <summary>The uncensored button's key.</summary>
     public const char UncensoredKey = 'u';
 
-    /// <summary>The uncensored button's index, after the sizes.</summary>
-    public static int UncensoredIndex => Sizes.Length;
+    /// <summary>The uncensored button's index: after the sizes, and after installed and uninstalled <paramref name="withInstalled"/>.</summary>
+    public static int UncensoredIndex(bool withInstalled = false) => Sizes.Length + (withInstalled ? 2 : 0);
 
-    /// <summary>The filters' part of a hint row. Pinned.</summary>
+    /// <summary>The filters' part of <c>/server</c>'s hint row. Pinned.</summary>
     public const string Keys = "1 / 2 / 3 = 8 / 16 / 32 GB · U = uncensored";
+
+    /// <summary>The filters' part of the catalog's hint row, with installed and uninstalled (later on 2026-09-29). Pinned.</summary>
+    public const string CatalogKeys = "1 / 2 / 3 = 8 / 16 / 32 GB · I / N = installed / uninstalled · U = uncensored";
 
     /// <summary>A size button's title: <c>8GB</c>. Pinned.</summary>
     public static string SizeButton(int gb) => gb.ToString(System.Globalization.CultureInfo.InvariantCulture) + "GB";
 
     /// <summary>Whether any button is lit.</summary>
-    public bool Active => MaxGb is not null || Uncensored;
+    public bool Active => MaxGb is not null || Uncensored || Installed is not null;
 
-    /// <summary>The four buttons, the lit ones <see cref="MenuButton.On"/>: the sizes on the keys 1, 2 and 3, then uncensored on U.</summary>
-    public IReadOnlyList<MenuButton> Buttons()
+    /// <summary>
+    /// The buttons, the lit ones <see cref="MenuButton.On"/>: the sizes on the keys 1, 2 and 3, then — <paramref name="withInstalled"/>,
+    /// the catalog's — installed on I and uninstalled on N, then uncensored on U. <see cref="Press"/> reads the same layout.
+    /// </summary>
+    public IReadOnlyList<MenuButton> Buttons(bool withInstalled = false)
     {
-        var buttons = new List<MenuButton>(Sizes.Length + 1);
+        var buttons = new List<MenuButton>(Sizes.Length + 3);
         for (int i = 0; i < Sizes.Length; i++)
         {
             buttons.Add(new MenuButton(SizeButton(Sizes[i]), (char)('1' + i), MaxGb == Sizes[i]));
+        }
+
+        if (withInstalled)
+        {
+            buttons.Add(new MenuButton(InstalledButton, InstalledKey, Installed == true));
+            buttons.Add(new MenuButton(UninstalledButton, UninstalledKey, Installed == false));
         }
 
         buttons.Add(new MenuButton(UncensoredButton, UncensoredKey, Uncensored));
@@ -119,27 +143,40 @@ public sealed record EmbeddedModelFilter(int? MaxGb, bool Uncensored)
     }
 
     /// <summary>
-    /// The filter after the button at <paramref name="index"/> is pressed: a size lights alone, or goes dark when it was the
-    /// lit one; uncensored flips and leaves the size be. Any other index changes nothing.
+    /// The filter after the button at <paramref name="index"/> of <see cref="Buttons"/> is pressed: a size lights alone, or goes
+    /// dark when it was the lit one; installed and uninstalled the same between themselves; uncensored flips. Each group leaves
+    /// the others be; any other index changes nothing.
     /// </summary>
-    public EmbeddedModelFilter Press(int index)
+    public EmbeddedModelFilter Press(int index, bool withInstalled = false)
     {
         if (index >= 0 && index < Sizes.Length)
         {
             return this with { MaxGb = MaxGb == Sizes[index] ? null : Sizes[index] };
         }
 
-        return index == UncensoredIndex ? this with { Uncensored = !Uncensored } : this;
+        if (withInstalled && (index == Sizes.Length || index == Sizes.Length + 1))
+        {
+            bool wanted = index == Sizes.Length;
+            return this with { Installed = Installed == wanted ? null : wanted };
+        }
+
+        return index == UncensoredIndex(withInstalled) ? this with { Uncensored = !Uncensored } : this;
     }
 
     /// <summary>
     /// Whether <paramref name="model"/> passes. The size is compared as a row shows it — gigabytes of 10⁹ to one decimal, as
-    /// <c>ModelStore.SizeLabel</c> writes them — so a row that reads "8 GB" passes 8GB.
+    /// <c>ModelStore.SizeLabel</c> writes them — so a row that reads "8 GB" passes 8GB. <paramref name="installed"/> is the
+    /// model's state on disk (a paused download is not installed); <c>/server</c>'s rows are all installed.
     /// </summary>
-    public bool Matches(EmbeddedModel model, EmbeddedFilterType type)
+    public bool Matches(EmbeddedModel model, EmbeddedFilterType type, bool installed = true)
     {
         ArgumentNullException.ThrowIfNull(model);
         if (Uncensored && !model.Uncensored)
+        {
+            return false;
+        }
+
+        if (Installed is { } wanted && wanted != installed)
         {
             return false;
         }

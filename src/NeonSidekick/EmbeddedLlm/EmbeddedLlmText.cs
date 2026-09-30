@@ -52,11 +52,21 @@ public static class EmbeddedLlmText
     public const string ToolsGlyph = "🛠️";
 
     /// <summary>
+    /// The uncensored column's mark for an uncensored build (later on 2026-09-29, the user's pick; <see cref="UncensoredKind.Uncensored"/>):
+    /// the broken chain, a ZWJ sequence Windows Terminal draws as one glyph in two cells (<see cref="UI.TextCells"/> counts it so).
+    /// </summary>
+    public const string UncensoredGlyph = "⛓️‍💥";
+
+    /// <summary>The uncensored column's mark for an aggressive build (later on 2026-09-29, the user's pick; <see cref="UncensoredKind.Aggressive"/>). Two cells.</summary>
+    public const string AggressiveGlyph = "💢";
+
+    /// <summary>
     /// The capability columns that follow <paramref name="detail"/> (the drafter's, 2026-09-29; vision's and tools' later
-    /// that day, the user's ask): the padding to <paramref name="detailWidth"/> cells, then a slot each for
-    /// <see cref="DrafterGlyph"/>, <see cref="VisionGlyph"/> and <see cref="ToolsGlyph"/> — two blanks and the glyph, or four
-    /// blanks, so each mark keeps its column down the list — with the trailing blanks cut; empty for a row that is no
-    /// embedded model (a scanned server's) or one that has none of them.
+    /// that day, the user's ask; the uncensored one later still): the padding to <paramref name="detailWidth"/> cells, then a
+    /// slot each for <see cref="DrafterGlyph"/>, <see cref="VisionGlyph"/>, <see cref="ToolsGlyph"/> and
+    /// <see cref="UncensoredGlyph"/> or <see cref="AggressiveGlyph"/> — two blanks and the glyph, or four blanks, so each mark
+    /// keeps its column down the list — with the trailing blanks cut; empty for a row that is no embedded model (a scanned
+    /// server's) or one that has none of them.
     /// </summary>
     public static string CapabilityColumns(EmbeddedModel? model, string detail, int detailWidth)
     {
@@ -65,7 +75,13 @@ public static class EmbeddedLlmText
             return "";
         }
 
-        string slots = Slot(model.HasMtp, DrafterGlyph) + Slot(model.Vision, VisionGlyph) + Slot(model.ToolCalls, ToolsGlyph);
+        string uncensored = model.UncensoredKind switch
+        {
+            UncensoredKind.Aggressive => AggressiveGlyph,
+            UncensoredKind.Uncensored => UncensoredGlyph,
+            _ => "",
+        };
+        string slots = Slot(model.HasMtp, DrafterGlyph) + Slot(model.Vision, VisionGlyph) + Slot(model.ToolCalls, ToolsGlyph) + Slot(uncensored.Length > 0, uncensored);
         slots = slots.TrimEnd(' ');
         return slots.Length == 0 ? "" : new string(' ', Math.Max(0, detailWidth - UI.TextCells.Width(detail ?? ""))) + slots;
 
@@ -160,9 +176,6 @@ public static class EmbeddedLlmText
         string.Create(CultureInfo.InvariantCulture, $"llama-server was not ready after {waited.TotalSeconds:0} s");
 
     public static string CudaFallback(string detail) => $"CUDA did not start ({detail}); trying Vulkan";
-
-    /// <summary><c>/botchat multi</c>'s refusal when a bot wants a different embedded model than the one loaded: one embedded server at a time.</summary>
-    public static string OneModelAtATime(string running) => $"the embedded server is running {running}; one embedded model at a time, so a bot on the embedded server must use it too";
 
     private static string Tail(string tail) => string.IsNullOrWhiteSpace(tail) ? "" : ": " + tail.Trim();
 }

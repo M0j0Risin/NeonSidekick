@@ -215,6 +215,61 @@ public class EmbeddedModelsTests : IDisposable
     }
 
     [Fact]
+    public async Task StartExtra_RunsOnAHostOfItsOwn_UnderTheBotsSettings_TheMainUntouched()
+    {
+        // A multi-server botchat's extra (later on 2026-09-29): its own host, the bot's profile's launch, reused while it runs.
+        InstallByHand();
+        var main = new FakeLlamaServerHost();
+        var hosts = new List<FakeLlamaServerHost>();
+        await using var service = new EmbeddedLlmService(_files, main, Cuda, () => 8L << 30, () =>
+        {
+            var host = new FakeLlamaServerHost { Port = 59990 - hosts.Count };
+            hosts.Add(host);
+            return host;
+        });
+        await service.StartAsync(_model, new AppSettingsData(), null, CancellationToken.None);
+
+        var extra = await service.StartExtraAsync(_model, new AppSettingsData { EmbeddedContextSize = 4096, EmbeddedVramBudget = 90 }, null, CancellationToken.None);
+        var again = await service.StartExtraAsync(_model, new AppSettingsData { EmbeddedContextSize = 8192 }, null, CancellationToken.None);
+
+        var host = Assert.Single(hosts);
+        Assert.Equal(59990, extra.Port);
+        Assert.Same(extra, again);   // the running extra, whatever the second bot's settings
+        var launch = Assert.Single(host.Launches);
+        Assert.Equal(4096, launch.ContextSize);
+        Assert.Equal(819, launch.FitTargetMiB);   // the bot's own VRAM budget
+        Assert.Equal(0, main.Stops);
+        Assert.Equal("tiny-model", Assert.Single(service.Extras).ModelId);
+        Assert.NotNull(service.Running);
+
+        // Stopping the extras leaves the main server; a model's removal stops an extra that has it loaded.
+        Assert.Equal("tiny-model", Assert.Single(service.StopExtras()).ModelId);
+        Assert.Empty(service.Extras);
+        Assert.Empty(service.StopExtras());
+        Assert.NotNull(service.Running);
+        await service.StartExtraAsync(_model, new AppSettingsData(), null, CancellationToken.None);
+        Assert.Single(hosts);   // the stopped host is started again, not a new one
+        service.Remove(_model);
+        Assert.Empty(service.Extras);
+        await service.DisposeAsync();
+        Assert.True(host.Disposed);
+    }
+
+    [Fact]
+    public async Task StartExtra_OfAModelNotInstalled_Throws_AndMakesNoHost()
+    {
+        int made = 0;
+        await using var service = new EmbeddedLlmService(_files, new FakeLlamaServerHost(), Cuda, () => null, () =>
+        {
+            made++;
+            return new FakeLlamaServerHost();
+        });
+
+        await Assert.ThrowsAsync<EmbeddedLlmException>(() => service.StartExtraAsync(_model, new AppSettingsData(), null, CancellationToken.None));
+        Assert.Equal(0, made);
+    }
+
+    [Fact]
     public async Task Start_WithAVramBudget_LeavesTheRestFree_OnAGpuBackendOnly()
     {
         // Later on 2026-09-29 (the user's ask): 90 % of an 8 GiB card leaves 819 MiB to --fit-target.

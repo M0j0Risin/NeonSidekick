@@ -668,6 +668,22 @@ public sealed class AppSettingsData
     public string BotChatLlmMode { get; set; } = App.BotChatLlmMode.Default;
 
     /// <summary>
+    /// What a <c>/botchat</c> bot naming another embedded model than the running one gets, under <see cref="BotChatLlmMode"/>
+    /// <c>multi</c> (later on 2026-09-29, the user's ask and name): one of <see cref="App.BotChatMultiEmbedded.Names"/> —
+    /// <c>parent-server</c> (the default: the one embedded server, the running model — this profile's, or with none running
+    /// the first embedded bot's — with a warning; the bot sat the chat out until then) or <c>multi-server</c> (an extra
+    /// <c>llama-server</c> per other model, under that bot's profile's Embedded settings). Read when a chat starts. No variable.
+    /// </summary>
+    public string BotChatMultiEmbedded { get; set; } = App.BotChatMultiEmbedded.Default;
+
+    /// <summary>
+    /// Whether a multi-server botchat's extra embedded servers stop when the chat ends, however it ends (later on 2026-09-29,
+    /// the user's ask and name; on by default); off, they keep running — a later botchat naming the same models reuses them —
+    /// until <c>/botchat --kill</c> or the app's exit. Read when the chat ends. No variable.
+    /// </summary>
+    public bool BotChatMultiEmbeddedKill { get; set; } = true;
+
+    /// <summary>
     /// Whether <c>/botchat</c> has pictures (2026-09-25, the user's ask): while on and the ComfyUI image tools are offered
     /// (<c>ChatScreen.ComfyOffered</c>), <see cref="BotChatImageMode"/> says who draws — the app a picture of every reply,
     /// the bots with <c>generate_image</c>, or both. Off (the default), the chat is talk alone, no tool at all. Read per

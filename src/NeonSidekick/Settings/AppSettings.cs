@@ -748,6 +748,8 @@ public sealed class AppSettings : IDisposable
         ComfyPictureStrip = source.ComfyPictureStrip,
         ComfyOutputFolder = source.ComfyOutputFolder,
         BotChatLlmMode = source.BotChatLlmMode,
+        BotChatMultiEmbedded = source.BotChatMultiEmbedded,
+        BotChatMultiEmbeddedKill = source.BotChatMultiEmbeddedKill,
         BotChatImages = source.BotChatImages,
         BotChatImageMode = source.BotChatImageMode,
         BotChatTxt2ImgWorkflow = source.BotChatTxt2ImgWorkflow,

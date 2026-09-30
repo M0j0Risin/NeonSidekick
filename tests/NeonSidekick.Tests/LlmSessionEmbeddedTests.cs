@@ -305,36 +305,105 @@ public class LlmSessionEmbeddedTests
     }
 
     [Fact]
-    public async Task ABotOnTheEmbeddedUrl_SharesTheRunningModel_OrIsRefusedAnother()
+    public async Task ABotOnTheEmbeddedUrl_SharesTheRunningModel_EvenForAnother_UnderParentServer()
     {
+        // A bot naming another model uses the running one with a warning (later on 2026-09-29, the user's ask; refused until then).
         _embedded.Installed("gemma-4-e2b", "gemma-4-e4b-qat");
         using var session = Session();
         await session.ConnectAsync(Embedded("gemma-4-e2b"), CancellationToken.None);
 
         var (same, _) = await session.LinkAsync(Embedded("gemma-4-e2b"), CancellationToken.None);
-        var (none, problem) = await session.LinkAsync(Embedded("gemma-4-e4b-qat"), CancellationToken.None);
+        var (other, problem) = await session.LinkAsync(Embedded("gemma-4-e4b-qat"), CancellationToken.None);
 
         Assert.Equal(FakeEmbeddedLlm.LiveUrl, same!.Endpoint.LiveUrl);
-        Assert.Null(none);
-        Assert.Equal(EmbeddedLlmText.OneModelAtATime("Gemma 4 E2B"), problem);
+        Assert.Null(same.SharedEmbedded);
+        Assert.Null(problem);
+        Assert.Equal(FakeEmbeddedLlm.LiveUrl, other!.Endpoint.LiveUrl);
+        Assert.Equal("gemma-4-e2b", other.Endpoint.ModelId);
+        Assert.Equal(("Gemma 4 E4B QAT", "Gemma 4 E2B"), other.SharedEmbedded);
         Assert.Single(_embedded.Starts);
+        Assert.Empty(_embedded.ExtraStarts);
         same.Dispose();
+        other.Dispose();
     }
 
     [Fact]
-    public async Task ABotOnTheEmbeddedUrl_WithNothingRunning_StartsItsInstalledModel()
+    public async Task ABotOnTheEmbeddedUrl_WithNothingRunning_StartsItsInstalledModel_TheNextShares()
     {
         _embedded.Installed("gemma-4-e2b");
         using var session = Session();
 
         var (link, problem) = await session.LinkAsync(Embedded("gemma-4-e2b"), CancellationToken.None);
-        var (missing, why) = await session.LinkAsync(Embedded("gemma-4-e4b-qat"), CancellationToken.None);
+        var (next, why) = await session.LinkAsync(Embedded("gemma-4-e4b-qat"), CancellationToken.None);
 
         Assert.Null(problem);
         Assert.Equal(FakeEmbeddedLlm.LiveUrl, link!.Endpoint.LiveUrl);
+        Assert.Null(why);
+        Assert.Equal(("Gemma 4 E4B QAT", "Gemma 4 E2B"), next!.SharedEmbedded);   // the first bot's start is the one running now, even for a model not on disk
         link.Dispose();
-        Assert.Null(missing);
-        Assert.Equal(EmbeddedLlmText.OneModelAtATime("Gemma 4 E2B"), why);   // the first bot's start is the one running now
+        next.Dispose();
+    }
+
+    [Fact]
+    public async Task ParallelLinks_WithNothingRunning_StartTheFirstBotsModelOnly()
+    {
+        // The race of before later on 2026-09-29: each link saw nothing running and started its own model, stopping the one
+        // before. One at a time now: the first in order starts, the second shares it.
+        _embedded.Installed("gemma-4-e2b", "gemma-4-e4b-qat");
+        _embedded.StartGate = async _ => await Task.Yield();
+        using var session = Session();
+
+        var links = await Task.WhenAll(session.LinkAsync(Embedded("gemma-4-e2b"), CancellationToken.None), session.LinkAsync(Embedded("gemma-4-e4b-qat"), CancellationToken.None));
+
+        Assert.Equal(["gemma-4-e2b"], _embedded.Starts);
+        Assert.All(links, l => Assert.Equal("gemma-4-e2b", l.Link!.Endpoint.ModelId));
+        Assert.Equal(("Gemma 4 E4B QAT", "Gemma 4 E2B"), links[1].Link!.SharedEmbedded);
+        Assert.All(links, l => l.Link!.Dispose());
+    }
+
+    [Fact]
+    public async Task MultiServer_AnotherModel_GetsAnExtra_TheParentsKept_AndTwoBotsShareIt()
+    {
+        _embedded.Installed("gemma-4-e2b", "gemma-4-e4b-qat");
+        _embedded.StartGate = async _ => await Task.Yield();
+        using var session = Session();
+        await session.ConnectAsync(Embedded("gemma-4-e2b"), CancellationToken.None);
+
+        var links = await Task.WhenAll(
+            session.LinkAsync(Embedded("gemma-4-e4b-qat"), BotEmbeddedMode.MultiServer, CancellationToken.None),
+            session.LinkAsync(Embedded("gemma-4-e4b-qat"), BotEmbeddedMode.MultiServer, CancellationToken.None),
+            session.LinkAsync(Embedded("gemma-4-e2b"), BotEmbeddedMode.MultiServer, CancellationToken.None));
+
+        Assert.Equal(["gemma-4-e4b-qat"], _embedded.ExtraStarts);   // one extra for the two bots on it
+        Assert.Equal(FakeEmbeddedLlm.ExtraUrl(1), links[0].Link!.Endpoint.LiveUrl);
+        Assert.Equal(FakeEmbeddedLlm.ExtraUrl(1), links[1].Link!.Endpoint.LiveUrl);
+        Assert.Equal("extra-key-1", links[0].Link!.Endpoint.ApiKey);
+        Assert.Equal(FakeEmbeddedLlm.LiveUrl, links[2].Link!.Endpoint.LiveUrl);   // the parent's model: the parent's server
+        Assert.All(links, l => Assert.Null(l.Link!.SharedEmbedded));
+        Assert.Equal("gemma-4-e2b", _embedded.Running!.ModelId);
+        Assert.Single(_embedded.Starts);
+        Assert.All(links, l => l.Link!.Dispose());
+    }
+
+    [Fact]
+    public async Task MultiServer_AnExtraThatFails_IsTheBotsProblem_AndTheSwitchOffStopsTheExtras()
+    {
+        _embedded.Installed("gemma-4-e2b", "gemma-4-e4b-qat", "gemma-4-e4b");
+        using var session = Session();
+        await session.ConnectAsync(Embedded("gemma-4-e2b"), CancellationToken.None);
+
+        var (good, _) = await session.LinkAsync(Embedded("gemma-4-e4b"), BotEmbeddedMode.MultiServer, CancellationToken.None);
+        _embedded.ExtraStartFailure = "out of memory";
+        var (none, problem) = await session.LinkAsync(Embedded("gemma-4-e4b-qat"), BotEmbeddedMode.MultiServer, CancellationToken.None);
+
+        Assert.NotNull(good);
+        Assert.Null(none);
+        Assert.Equal(EmbeddedLlmText.StartFailed("out of memory"), problem);
+        Assert.Single(_embedded.Extras);
+
+        await session.ConnectAsync(new AppSettingsData { EmbeddedLlmServer = false }, CancellationToken.None);
+        Assert.Empty(_embedded.Extras);
+        good!.Dispose();
     }
 
     /// <summary>The Error lines logged while it lives.</summary>

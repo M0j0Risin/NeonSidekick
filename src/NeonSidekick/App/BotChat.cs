@@ -790,6 +790,43 @@ public static partial class BotChat
     public static string LinkNotice(string name, Uri server, string model, string reasoning) =>
         $"(botchat: {name} on {server} model={model} reasoning={reasoning})";
 
+    // ── Embedded bots (later on 2026-09-29) ────────────────────────────────
+
+    /// <summary>
+    /// The warning for a bot whose profile names another embedded model than the one running (<c>Botchat multi-embedded</c>
+    /// <c>parent-server</c>, later on 2026-09-29, the user's ask): it talks through the running one. Pinned.
+    /// </summary>
+    public static string SharedEmbeddedWarning(string name, string wanted, string running) =>
+        $"(botchat: {name} wanted {wanted}, but one embedded server runs {running}, so {name} uses it; Botchat multi-embedded multi-server gives it its own)";
+
+    /// <summary>The first word that stops a multi-server botchat's extra embedded servers (later on 2026-09-29, the user's ask). A whole word, as <see cref="ResumeSwitch"/>. Pinned.</summary>
+    public const string KillSwitch = "--kill";
+
+    /// <summary>The argument list's note beside <see cref="KillSwitch"/>.</summary>
+    public const string KillNote = "stop the extra embedded servers of multi-server botchats";
+
+    /// <summary>Whether <paramref name="args"/> ask for the kill: <see cref="KillSwitch"/> as the first word, ignoring case; <c>After</c> is what follows (the usage error when not empty). Pure.</summary>
+    public static (bool Kill, string After) ParseKill(string args)
+    {
+        ArgumentNullException.ThrowIfNull(args);
+        string rest = args.Trim();
+        int split = rest.IndexOfAny([' ', '\t']);
+        string word = split < 0 ? rest : rest[..split];
+        return string.Equals(word, KillSwitch, StringComparison.OrdinalIgnoreCase)
+            ? (true, split < 0 ? "" : rest[(split + 1)..].Trim())
+            : (false, "");
+    }
+
+    /// <summary><c>/botchat --kill</c> with more words after it. Pinned.</summary>
+    public const string KillUsageError = "Usage: /botchat --kill, alone: it stops the extra embedded servers a multi-server botchat left running.";
+
+    /// <summary>The extra servers stopped, at a chat's end (Botchat multi-embedded kill on) or by <c>/botchat --kill</c>: how many, and their models. Pinned.</summary>
+    public static string ExtrasStoppedNotice(IReadOnlyList<string> models) =>
+        $"(botchat: stopped {UsageText.Plural(models.Count, "extra embedded server", "extra embedded servers")}: {JoinNames(models)})";
+
+    /// <summary><c>/botchat --kill</c> with none running. Pinned.</summary>
+    public const string NoExtrasNotice = "(botchat: no extra embedded server is running)";
+
     // ── Resuming (2026-09-25) ───────────────────────────────────────────────
 
     /// <summary>

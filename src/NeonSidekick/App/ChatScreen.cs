@@ -10173,6 +10173,23 @@ internal sealed partial class ChatScreen
     /// </summary>
     private async Task<bool> HandleBotChatAsync(string args, CancellationToken cancellationToken)
     {
+        // --kill (later on 2026-09-29, the user's ask): the extra embedded servers a multi-server botchat left running. Typed
+        // during a chat it waits for the chat's end, as every /botchat does (Deferred), so it never meets one running.
+        var (kill, killRest) = BotChat.ParseKill(args);
+        if (kill)
+        {
+            if (killRest.Length > 0)
+            {
+                _transcript.Error(BotChat.KillUsageError);
+            }
+            else
+            {
+                StopBotExtras(asked: true);
+            }
+
+            return false;
+        }
+
         string starter = _settings.ProfileName;
         var (resume, resumeLine) = BotChat.ParseResume(args);
         var saved = resume ? _lastBotChat : null;
@@ -10206,11 +10223,13 @@ internal sealed partial class ChatScreen
         // Multi (later on 2026-09-25): the bots' own LLMs, one per bot but the starter (null), aligned with the cast; read at
         // the start, so a resume re-reads the mode and reaches them afresh. Disposed with the chat.
         var links = new List<BotLink?>();
-        if (BotChatLlmMode.Resolve(effective) == BotLlmMode.Multi)
+        bool multi = BotChatLlmMode.Resolve(effective) == BotLlmMode.Multi;
+        if (multi)
         {
-            var (linked, linkCancelled) = await LinkBotsAsync(cast, cancellationToken).ConfigureAwait(false);
+            var (linked, linkCancelled) = await LinkBotsAsync(cast, BotChatMultiEmbedded.Resolve(effective), cancellationToken).ConfigureAwait(false);
             if (linkCancelled || linked is null)
             {
+                EndBotExtras();
                 _transcript.Notice(CancelledNotice);
                 return false;
             }
@@ -10228,6 +10247,10 @@ internal sealed partial class ChatScreen
                 if (link is not null)
                 {
                     _transcript.Notice(BotChat.LinkNotice(cast[i].Name, link.Endpoint.BaseUrl, link.Endpoint.ModelId, ReasoningLevel.Name(link.Reasoning)));
+                    if (link.SharedEmbedded is { } shared)
+                    {
+                        _transcript.Warning(BotChat.SharedEmbeddedWarning(cast[i].Name, shared.Wanted, shared.Running));
+                    }
                 }
 
                 kept.Add(cast[i]);
@@ -10238,6 +10261,7 @@ internal sealed partial class ChatScreen
             if (cast.Count < 2)
             {
                 links.ForEach(link => link?.Dispose());
+                EndBotExtras();
                 _transcript.Error(BotChat.TooFewError);
                 return false;
             }
@@ -10509,11 +10533,42 @@ internal sealed partial class ChatScreen
             await Task.WhenAll(pictures.Select(p => p.Job)).ConfigureAwait(false);
             // The bots' own LLMs (multi) go with the chat, after the last picture prompt that could use one.
             links.ForEach(link => link?.Dispose());
+            if (multi)
+            {
+                EndBotExtras();
+            }
         }
 
         ShowReadyBotPictures(pictures);
         _transcript.Notice(BotChat.StoppedNotice(replies));
         return false;
+    }
+
+    /// <summary>A multi-mode chat's end (later on 2026-09-29): its extra embedded servers stop while <c>Botchat multi-embedded kill</c> is on, read now.</summary>
+    private void EndBotExtras()
+    {
+        if (_effective().BotChatMultiEmbeddedKill)
+        {
+            StopBotExtras(asked: false);
+        }
+    }
+
+    /// <summary>
+    /// The extra embedded servers stopped (later on 2026-09-29): the notice naming their models when any ran; with none, a word
+    /// only when <paramref name="asked"/> (<c>/botchat --kill</c>). The main server is never among them.
+    /// </summary>
+    private void StopBotExtras(bool asked)
+    {
+        var stopped = _session.Embedded?.StopExtras() ?? [];
+        if (stopped.Count > 0)
+        {
+            var catalog = _session.Embedded!.Catalog;
+            _transcript.Notice(BotChat.ExtrasStoppedNotice(stopped.Select(s => NeonSidekick.EmbeddedLlm.EmbeddedModelCatalog.Find(s.ModelId, catalog)?.Display ?? s.ModelId).ToList()));
+        }
+        else if (asked)
+        {
+            _transcript.Notice(BotChat.NoExtrasNotice);
+        }
     }
 
     /// <summary><c>/botchat</c>'s pictures still rendering with <c>Botchat image async</c> on (2026-09-27): the strip's <see cref="PendingPictures.Glyph"/>.</summary>
@@ -10576,12 +10631,13 @@ internal sealed partial class ChatScreen
     /// <see cref="BotParticipant.Profile"/> (all but the starter) reached through <see cref="LlmSession.LinkAsync"/>, together,
     /// under a spinner ESC cancels; one result per bot, in cast order — the starter's empty. Cancelled, the links made are disposed.
     /// </summary>
-    private async Task<((BotLink? Link, string? Problem)[]? Results, bool Cancelled)> LinkBotsAsync(List<BotParticipant> cast, CancellationToken cancellationToken)
+    private async Task<((BotLink? Link, string? Problem)[]? Results, bool Cancelled)> LinkBotsAsync(List<BotParticipant> cast, BotEmbeddedMode embeddedMode, CancellationToken cancellationToken)
     {
         Task<(BotLink? Link, string? Problem)>[] jobs = [];
         var (results, cancelled) = await UnderWatchAsync(BotChat.LinkingSpinner, token =>
         {
-            jobs = cast.Select(bot => bot.Profile is { } profile ? _session.LinkAsync(profile, token) : Task.FromResult<(BotLink?, string?)>((null, null))).ToArray();
+            // Made in cast order, so the first embedded bot is the first at the session's embedded gate (later on 2026-09-29).
+            jobs = cast.Select(bot => bot.Profile is { } profile ? _session.LinkAsync(profile, embeddedMode, token) : Task.FromResult<(BotLink?, string?)>((null, null))).ToArray();
             return Task.WhenAll(jobs);
         }, cancellationToken).ConfigureAwait(false);
         if (cancelled)
@@ -11166,8 +11222,9 @@ internal sealed partial class ChatScreen
             .ToList();
         if (typed.Count == 0)
         {
-            // Only as the first word (2026-09-25): after a name it would be the topic's.
+            // Only as the first word (2026-09-25): after a name it would be the topic's. --kill the same (later on 2026-09-29).
             offered.Add(new CompletionItem(BotChat.ResumeSwitch, BotChat.ResumeNote));
+            offered.Add(new CompletionItem(BotChat.KillSwitch, BotChat.KillNote));
         }
 
         return MentionCompleter.Matches(offered, argText);

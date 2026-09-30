@@ -232,7 +232,7 @@ public static class SlashCommands
         new HelpEntry[]
         {
             new("/about", "show general information about the app and profile"),
-            new("/botchat", "let the profiles talk to each other, each in its own persona, until ESC: /botchat [profile ...] [[--] topic], or /botchat --resume [line] to carry on the last one"),
+            new("/botchat", "let the profiles talk to each other, each in its own persona, until ESC: /botchat [profile ...] [[--] topic], or /botchat --resume [line] to carry on the last one, or /botchat --kill to stop the extra embedded servers"),
             new("/claude", "send a message to Claude Code and add its reply to the conversation: /claude <message>, or /claude new to start a new Claude conversation"),
             new("/clear", "start a new conversation and clear the screen"),
             new("/cmdclear", "clear this profile's command history (the Up/Down recall), stored and in memory (asks first)"),

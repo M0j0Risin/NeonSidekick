@@ -160,9 +160,45 @@ public partial class SettingsMenuTests
         var first = EmbeddedModelCatalog.Models.First(m => filter.Matches(m, EmbeddedFilterType.File));
         Assert.True(first.Uncensored);
         Assert.Equal(first.Id, menu.TakePendingEmbeddedModel()!.Id);
-        Assert.Contains(" 8GB    16GB    32GB    uncensored ", _console.Output);
-        Assert.Contains(EmbeddedModelFilter.Keys, _console.Output);
+        Assert.Contains(" 8GB    16GB    32GB    installed    uninstalled    uncensored ", _console.Output);   // the catalog's pair between (later on 2026-09-29)
+        Assert.Contains(EmbeddedModelFilter.CatalogKeys, _console.Output);
         pane.Dispose();
+    }
+
+    [Fact]
+    public async Task OnThePane_InstalledAndUninstalled_AreARadioPair_OnTheDisksState()
+    {
+        // Later on 2026-09-29 (the user's ask): I keeps the installed models, N the others, N again every one.
+        var (menu, pane, _) = EmbeddedPane(new FakeEmbeddedLlm().Installed("gemma-4-e2b"));
+        GoTo(SettingsTab.Embedded);
+        Push(Keys.Down, Keys.Enter);            // the catalog
+        Push(Keys.Char('i'));                   // installed: E2B alone, the cursor on it
+        Push(Keys.Enter, Keys.Escape);          // its page (Use now, Remove, Back), closed
+        Push(Keys.Char('n'));                   // uninstalled: E2B gone, the first row the catalog's first
+        Push(Keys.Enter);                       // Gemma 4 12B's page
+        Push(Keys.Enter);                       // Install
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Equal("gemma-4-12b", menu.TakePendingEmbeddedModel()!.Id);
+        Assert.Contains(SettingsMenu.UseNowRow, _console.Output);   // the installed one's page came first
+        pane.Dispose();
+    }
+
+    [Fact]
+    public void TheUncensoredColumn_MarksEachKind_ANormalModelBlank()
+    {
+        // Later on 2026-09-29 (the user's picks): ⛓️‍💥 an uncensored build, 💢 an aggressive one, after 🛠️.
+        Assert.Equal("⛓️‍💥", EmbeddedLlmText.UncensoredGlyph);
+        Assert.Equal("💢", EmbeddedLlmText.AggressiveGlyph);
+        Assert.Equal(2, TextCells.Width(EmbeddedLlmText.UncensoredGlyph));   // one glyph in two cells, as Windows Terminal draws the ZWJ sequence
+        var balanced = EmbeddedModelCatalog.Find("gemma-4-12b-qat-uncensored")!;
+        var aggressive = EmbeddedModelCatalog.Find("gemma-4-e2b-uncensored")!;
+        var normal = EmbeddedModelCatalog.Find("gemma-4-12b")!;
+        Assert.Equal(Marks + "  ⛓️‍💥", EmbeddedLlmText.CapabilityColumns(balanced, "", 0));
+        Assert.EndsWith("  👁️  🛠️  💢", EmbeddedLlmText.CapabilityColumns(aggressive, "", 0));
+        Assert.Equal(Marks, EmbeddedLlmText.CapabilityColumns(normal, "", 0));
+        Assert.EndsWith("  💢", SettingsMenu.EmbeddedModelLabel(aggressive, EmbeddedModelState.Absent));
     }
 
     [Fact]

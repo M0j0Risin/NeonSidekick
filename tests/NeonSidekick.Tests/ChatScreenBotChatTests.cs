@@ -428,7 +428,7 @@ public partial class ChatScreenTests
     {
         var sources = new ChatScreen.ArgumentSources(() => ["default", "ada", "max"], "default", [], _ => [], _ => new Files.MentionResult(Files.FileOutcome.Ok, [], false), _ => new Files.MentionResult(Files.FileOutcome.Ok, [], false));
 
-        Assert.Equal(new[] { "ada", "max", BotChat.ResumeSwitch }, ChatScreen.BotChatChoices("", sources).Select(i => i.Text));
+        Assert.Equal(new[] { "ada", "max", BotChat.ResumeSwitch, BotChat.KillSwitch }, ChatScreen.BotChatChoices("", sources).Select(i => i.Text));   // --kill later on 2026-09-29
         Assert.Equal(new[] { "ada max" }, ChatScreen.BotChatChoices("ada ", sources).Select(i => i.Text));   // --resume only first
         Assert.Empty(ChatScreen.BotChatChoices("pizza ", sources));
         Assert.Empty(ChatScreen.BotChatChoices("ada -- ", sources));   // after the separator the topic is free text

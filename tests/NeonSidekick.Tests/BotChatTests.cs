@@ -42,6 +42,42 @@ public class BotChatTests
         Assert.Equal((resume, line), BotChat.ParseResume(args));
     }
 
+    [Theory]
+    [InlineData("--kill", true, "")]
+    [InlineData("  --KILL  ", true, "")]
+    [InlineData("--kill now", true, "now")]           // the usage error's
+    [InlineData("ada --kill", false, "")]             // only as the first word
+    [InlineData("--killer", false, "")]               // a whole word
+    [InlineData("", false, "")]
+    public void ParseKill_IsTheFirstWord(string args, bool kill, string after)
+    {
+        // Later on 2026-09-29 (the user's ask): /botchat --kill stops a multi-server botchat's extra embedded servers.
+        Assert.Equal((kill, after), BotChat.ParseKill(args));
+    }
+
+    [Fact]
+    public void TheEmbeddedBotsWording_IsPinned()
+    {
+        Assert.Equal("--kill", BotChat.KillSwitch);
+        Assert.Equal("stop the extra embedded servers of multi-server botchats", BotChat.KillNote);
+        Assert.Equal("Usage: /botchat --kill, alone: it stops the extra embedded servers a multi-server botchat left running.", BotChat.KillUsageError);
+        Assert.Equal("(botchat: bob wanted Gemma 4 E4B QAT, but one embedded server runs Gemma 4 E2B, so bob uses it; Botchat multi-embedded multi-server gives it its own)",
+            BotChat.SharedEmbeddedWarning("bob", "Gemma 4 E4B QAT", "Gemma 4 E2B"));
+        Assert.Equal("(botchat: stopped 1 extra embedded server: Gemma 4 E2B)", BotChat.ExtrasStoppedNotice(["Gemma 4 E2B"]));
+        Assert.Equal("(botchat: stopped 2 extra embedded servers: Gemma 4 E2B and Gemma 4 E4B QAT)", BotChat.ExtrasStoppedNotice(["Gemma 4 E2B", "Gemma 4 E4B QAT"]));
+        Assert.Equal("(botchat: no extra embedded server is running)", BotChat.NoExtrasNotice);
+        Assert.Equal("parent-server", BotChatMultiEmbedded.Default);
+        Assert.Equal(["parent-server", "multi-server"], BotChatMultiEmbedded.Names);
+        Assert.Equal(BotEmbeddedMode.MultiServer, BotChatMultiEmbedded.Resolve(new Settings.AppSettingsData { BotChatMultiEmbedded = " Multi-Server " }));
+        Assert.Equal(BotEmbeddedMode.ParentServer, BotChatMultiEmbedded.Resolve(new Settings.AppSettingsData { BotChatMultiEmbedded = "both" }));   // warns, the default
+        Assert.Equal("one embedded server: a bot naming another embedded model uses the one running, with a warning", BotChatMultiEmbedded.Describe("parent-server"));
+        Assert.Equal("an extra llama-server for each other embedded model the bots name; the running one is kept (more VRAM)", BotChatMultiEmbedded.Describe("multi-server"));
+        var data = new Settings.AppSettingsData();
+        Assert.Equal(("parent-server", true), (data.BotChatMultiEmbedded, data.BotChatMultiEmbeddedKill));
+        var copy = Settings.AppSettings.Copy(new Settings.AppSettingsData { BotChatMultiEmbedded = "multi-server", BotChatMultiEmbeddedKill = false });
+        Assert.Equal(("multi-server", false), (copy.BotChatMultiEmbedded, copy.BotChatMultiEmbeddedKill));
+    }
+
     [Fact]
     public void ParseArgs_NamingOnlyTheStarter_LeavesACastOfOne()
     {

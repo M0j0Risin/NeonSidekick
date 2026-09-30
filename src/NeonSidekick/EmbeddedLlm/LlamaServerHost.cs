@@ -28,7 +28,10 @@ public sealed class EmbeddedLlmException : Exception
     public bool PortInUse { get; }
 }
 
-/// <summary>The one <c>llama-server</c> process the app runs (2026-09-29); faked in the tests.</summary>
+/// <summary>
+/// One <c>llama-server</c> process (2026-09-29): the service's main one, or since later that day one of a multi-server
+/// botchat's extras, each host its own process, port and key; faked in the tests.
+/// </summary>
 public interface ILlamaServerHost : IAsyncDisposable
 {
     /// <summary>The server while one is up and ready; null otherwise.</summary>

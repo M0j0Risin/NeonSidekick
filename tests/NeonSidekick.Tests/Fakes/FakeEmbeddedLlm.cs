@@ -8,7 +8,9 @@ namespace NeonSidekick.Tests.Fakes;
 /// An <see cref="IEmbeddedLlm"/> with no files and no process (2026-09-29): the real catalog by default, the installed set
 /// as the test says, a "server" on <see cref="LiveUrl"/> (map its <c>/props</c> on a stub handler for the context
 /// probe), and a record of every install, start, stop and removal. <see cref="InstallGate"/> holds an install open so a
-/// test can cancel it; <see cref="StartFailure"/> and <see cref="InstallFailure"/> make them fail.
+/// test can cancel it; <see cref="StartFailure"/> and <see cref="InstallFailure"/> make them fail. <see cref="StartGate"/>
+/// (later on 2026-09-29) is awaited inside every start before it lands, so parallel links interleave as the real ones do;
+/// the extras (multi-server botchats) answer on ports under <see cref="Port"/>, each with its own key.
 /// </summary>
 public sealed class FakeEmbeddedLlm : IEmbeddedLlm
 {
@@ -46,6 +48,24 @@ public sealed class FakeEmbeddedLlm : IEmbeddedLlm
 
     /// <summary>Awaited inside an install after its first label, before it lands: a test holds it open to cancel it.</summary>
     public Func<CancellationToken, Task>? InstallGate { get; set; }
+
+    /// <summary>Awaited inside a start, main or extra, before it lands (later on 2026-09-29): the race the links once had.</summary>
+    public Func<CancellationToken, Task>? StartGate { get; set; }
+
+    private readonly List<EmbeddedServerInfo> _extras = new();
+
+    public IReadOnlyList<EmbeddedServerInfo> Extras => _extras.ToList();
+
+    public List<string> ExtraStarts { get; } = new();
+
+    public List<AppSettingsData> ExtraStartSettings { get; } = new();
+
+    public string? ExtraStartFailure { get; set; }
+
+    public int ExtraStops { get; private set; }
+
+    /// <summary>The address of the <paramref name="n"/>th extra (1-based): port 59999 − n.</summary>
+    public static Uri ExtraUrl(int n) => new($"http://127.0.0.1:{Port - n}/v1");
 
     public FakeEmbeddedLlm Installed(params string[] ids)
     {
@@ -88,11 +108,16 @@ public sealed class FakeEmbeddedLlm : IEmbeddedLlm
         return new ModelResult(true, "", EmbeddedLlmText.Installed(model));
     }
 
-    public Task<EmbeddedServerInfo> StartAsync(EmbeddedModel model, AppSettingsData effective, Action<string>? phase, CancellationToken cancellationToken)
+    public async Task<EmbeddedServerInfo> StartAsync(EmbeddedModel model, AppSettingsData effective, Action<string>? phase, CancellationToken cancellationToken)
     {
         Starts.Add(model.Id);
         StartSettings.Add(effective);
         phase?.Invoke(EmbeddedLlmText.StartingLabel(model));
+        if (StartGate is { } gate)
+        {
+            await gate(cancellationToken);
+        }
+
         if (StartFailure is { } failure)
         {
             throw new EmbeddedLlmException(EmbeddedLlmText.StartFailed(failure));
@@ -104,7 +129,45 @@ public sealed class FakeEmbeddedLlm : IEmbeddedLlm
         }
 
         Running = new EmbeddedServerInfo(LiveUrl, Port, Key, LlamaBackend.Cuda, model.Id, effective.EmbeddedVision);
-        return Task.FromResult(Running);
+        return Running;
+    }
+
+    public async Task<EmbeddedServerInfo> StartExtraAsync(EmbeddedModel model, AppSettingsData effective, Action<string>? phase, CancellationToken cancellationToken)
+    {
+        if (!State(model).IsInstalled)
+        {
+            throw new EmbeddedLlmException(EmbeddedLlmText.NotInstalled(model));
+        }
+
+        if (_extras.FirstOrDefault(e => string.Equals(e.ModelId, model.Id, StringComparison.OrdinalIgnoreCase)) is { } up)
+        {
+            return up;
+        }
+
+        ExtraStarts.Add(model.Id);
+        ExtraStartSettings.Add(effective);
+        if (StartGate is { } gate)
+        {
+            await gate(cancellationToken);
+        }
+
+        if (ExtraStartFailure is { } failure)
+        {
+            throw new EmbeddedLlmException(EmbeddedLlmText.StartFailed(failure));
+        }
+
+        int n = ExtraStarts.Count;
+        var info = new EmbeddedServerInfo(ExtraUrl(n), Port - n, "extra-key-" + n, LlamaBackend.Cuda, model.Id, effective.EmbeddedVision);
+        _extras.Add(info);
+        return info;
+    }
+
+    public IReadOnlyList<EmbeddedServerInfo> StopExtras()
+    {
+        var stopped = _extras.ToList();
+        ExtraStops += stopped.Count;
+        _extras.Clear();
+        return stopped;
     }
 
     public string? Remove(EmbeddedModel model)
@@ -115,6 +178,7 @@ public sealed class FakeEmbeddedLlm : IEmbeddedLlm
             Stop();
         }
 
+        _extras.RemoveAll(e => e.ModelId == model.Id);
         _states.Remove(model.Id);
         return null;
     }
@@ -129,6 +193,7 @@ public sealed class FakeEmbeddedLlm : IEmbeddedLlm
     {
         Disposed = true;
         Running = null;
+        _extras.Clear();
         return ValueTask.CompletedTask;
     }
 }
@@ -146,6 +211,9 @@ public sealed class FakeLlamaServerHost : ILlamaServerHost
 
     public EmbeddedServerInfo? Running { get; private set; }
 
+    /// <summary>The port it answers on (later on 2026-09-29: a multi-server botchat's extra hosts each their own).</summary>
+    public int Port { get; init; } = 59998;
+
     public Task<EmbeddedServerInfo> EnsureRunningAsync(LlamaLaunch launch, EmbeddedModel model, Action<string>? phase, CancellationToken cancellationToken)
     {
         Launches.Add(launch);
@@ -154,7 +222,7 @@ public sealed class FakeLlamaServerHost : ILlamaServerHost
             return Task.FromException<EmbeddedServerInfo>(failure);
         }
 
-        Running = new EmbeddedServerInfo(new Uri("http://127.0.0.1:59998/v1"), 59998, "host-key", launch.Backend, model.Id, launch.Vision);
+        Running = new EmbeddedServerInfo(new Uri($"http://127.0.0.1:{Port}/v1"), Port, "host-key", launch.Backend, model.Id, launch.Vision);
         return Task.FromResult(Running);
     }
 

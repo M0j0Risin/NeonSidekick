@@ -830,6 +830,7 @@ public partial class SettingsMenuTests : IDisposable
                 SettingsField.EmbeddedLlmServer, SettingsField.EmbeddedDrafter,   // 2026-09-29, the Embedded tab's switch and MTP
                 SettingsField.ShowPerformanceBar,   // later on 2026-09-29, the performance bar
                 SettingsField.EmbeddedVramBudget, SettingsField.EmbeddedFilterType,   // later still on 2026-09-29, the VRAM budget and the model lists' filter type
+                SettingsField.BotChatMultiEmbedded, SettingsField.BotChatMultiEmbeddedKill,   // and the botchat's embedded bots
             },
             Enum.GetValues<SettingsField>());
         // The compact rows: on the LLM tab after the context length but no reconnect; the type a picker, the two others typed.
@@ -1465,7 +1466,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(32, SettingsMenu.TabLabelWidth(SettingsTab.Llm));       // "LLM sampling from Hugging Face" (2026-09-28; "LLM compact show summary", 24, from 2026-09-21; "LLM request timeout (s)", 23, before)
         Assert.Equal(19, SettingsMenu.TabLabelWidth(SettingsTab.Tts));       // "TTS voice preview"
         Assert.Equal(26, SettingsMenu.TabLabelWidth(SettingsTab.Stt));       // "STT interrupt echo guard"
-        Assert.Equal(26, SettingsMenu.TabLabelWidth(SettingsTab.BotChat));   // "Botchat txt2img workflow" / "Botchat img2img workflow" (2026-09-27; "Botchat images enabled" before)
+        Assert.Equal(29, SettingsMenu.TabLabelWidth(SettingsTab.BotChat));   // "Botchat multi-embedded kill" (later on 2026-09-29; "Botchat txt2img workflow" from 2026-09-27, "Botchat images enabled" before)
         Assert.Equal(36, SettingsMenu.LabelWidthOf(SettingsMenu.ToolsTabFields[4]));   // the Claude tab (2026-09-27): "Claude advisor tool calls per turn"
         Assert.Equal(21, SettingsMenu.LabelWidthOf(SettingsMenu.ToolsTabFields[11]));   // the Options tab (index 7 since SQL, 2026-09-23): "Tool collapse count" (2026-09-22; "$-mention enabled", 19, the Options tab's one row from later on 2026-09-19)
         Assert.Equal(26, SettingsMenu.LabelWidthOf(SettingsMenu.ToolsTabFields[0]));   // "Web browser network mode" (the Web-prefixed labels, later still on 2026-09-19; "Web search max results", 24, before)

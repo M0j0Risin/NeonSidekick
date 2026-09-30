@@ -278,15 +278,23 @@ public class BotChatPicturesTests
     }
 
     [Fact]
-    public void TheBotchatTab_IsLast_ItsTwelveRowsDefaultingToSingle_Off_Automatic_NoWorkflows_Latest_Async_AFiveSecondPause_NoSkills_NonePreloaded_ToBoth_AndNoVision()
+    public void TheBotchatTab_IsLast_ItsFourteenRowsDefaultingToSingle_ParentServer_KillOn_Off_Automatic_NoWorkflows_Latest_Async_AFiveSecondPause_NoSkills_NonePreloaded_ToBoth_AndNoVision()
     {
         var data = new AppSettingsData();
 
         Assert.Equal("Botchat", SettingsMenu.TabTitles[(int)SettingsTab.BotChat]);
         Assert.Equal((int)SettingsTab.BotChat, SettingsMenu.TabTitles.Count - 1);   // last again since later on 2026-09-27 (the Claude tab moved to /tools)
-        Assert.Equal([SettingsField.BotChatLlmMode, SettingsField.BotChatImages, SettingsField.BotChatImageMode, SettingsField.BotChatTxt2ImgWorkflow, SettingsField.BotChatImg2ImgWorkflow, SettingsField.BotChatImg2ImgMode, SettingsField.BotChatImageAsync, SettingsField.BotChatNonTtsDelaySeconds, SettingsField.BotChatSkills, SettingsField.BotChatPreloadedSkills, SettingsField.BotChatSkillMode, SettingsField.BotChatVision], SettingsMenu.TabFields[(int)SettingsTab.BotChat]);
-        Assert.Equal(["Botchat LLM mode", "Botchat images enabled", "Botchat image mode", "Botchat txt2img workflow", "Botchat img2img workflow", "Botchat img2img mode", "Botchat image async", "Botchat non-TTS delay", "Botchat skills enabled", "Botchat preloaded skills", "Botchat skill mode", "Botchat vision enabled"], SettingsMenu.TabFields[(int)SettingsTab.BotChat].Select(SettingsMenu.FieldName));
+        Assert.Equal([SettingsField.BotChatLlmMode, SettingsField.BotChatMultiEmbedded, SettingsField.BotChatMultiEmbeddedKill, SettingsField.BotChatImages, SettingsField.BotChatImageMode, SettingsField.BotChatTxt2ImgWorkflow, SettingsField.BotChatImg2ImgWorkflow, SettingsField.BotChatImg2ImgMode, SettingsField.BotChatImageAsync, SettingsField.BotChatNonTtsDelaySeconds, SettingsField.BotChatSkills, SettingsField.BotChatPreloadedSkills, SettingsField.BotChatSkillMode, SettingsField.BotChatVision], SettingsMenu.TabFields[(int)SettingsTab.BotChat]);
+        Assert.Equal(["Botchat LLM mode", "Botchat multi-embedded", "Botchat multi-embedded kill", "Botchat images enabled", "Botchat image mode", "Botchat txt2img workflow", "Botchat img2img workflow", "Botchat img2img mode", "Botchat image async", "Botchat non-TTS delay", "Botchat skills enabled", "Botchat preloaded skills", "Botchat skill mode", "Botchat vision enabled"], SettingsMenu.TabFields[(int)SettingsTab.BotChat].Select(SettingsMenu.FieldName));
         Assert.False(SettingsMenu.IsToggle(SettingsField.BotChatLlmMode));
+        // Botchat multi-embedded and its kill switch under the mode (later on 2026-09-29, the user's asks).
+        Assert.False(SettingsMenu.IsToggle(SettingsField.BotChatMultiEmbedded));
+        Assert.True(SettingsMenu.IsToggle(SettingsField.BotChatMultiEmbeddedKill));
+        Assert.Equal("parent-server", SettingsMenu.FieldValue(SettingsField.BotChatMultiEmbedded, data, "."));
+        Assert.Equal("on", SettingsMenu.FieldValue(SettingsField.BotChatMultiEmbeddedKill, data, "."));
+        Assert.Equal("parent-server " + NeonSidekick.UI.Theme.DimMarkup(BotChatMultiEmbedded.Describe("parent-server")), SettingsMenu.BotChatMultiEmbeddedLabel("parent-server"));
+        Assert.Equal("the extra servers stop when the botchat ends", SettingsMenu.ToggleDescribe(SettingsField.BotChatMultiEmbeddedKill, true));
+        Assert.Equal("extra servers stay up for later botchats until /botchat --kill or exit", SettingsMenu.ToggleDescribe(SettingsField.BotChatMultiEmbeddedKill, false));
         Assert.Equal("single", SettingsMenu.FieldValue(SettingsField.BotChatLlmMode, data, "."));
         Assert.Equal("multi", SettingsMenu.FieldValue(SettingsField.BotChatLlmMode, new AppSettingsData { BotChatLlmMode = "multi" }, "."));
         Assert.True(SettingsMenu.IsToggle(SettingsField.BotChatImages));

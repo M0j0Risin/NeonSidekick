@@ -596,9 +596,23 @@ public enum SettingsField
     /// <summary>
     /// A picker: <c>file</c> / <c>gguf</c>, which size the embedded model lists' filter buttons measure
     /// (<see cref="Settings.AppSettingsData.EmbeddedFilterType"/>, later on 2026-09-29, the user's ask). The Embedded tab's
-    /// row after Embedded models; no reconnect (read when a list opens). Last in the enum, as every newcomer.
+    /// row after Embedded models; no reconnect (read when a list opens).
     /// </summary>
     EmbeddedFilterType,
+
+    /// <summary>
+    /// A picker: <c>parent-server</c> / <c>multi-server</c>, what a multi-mode botchat's bot naming another embedded model gets
+    /// (<see cref="Settings.AppSettingsData.BotChatMultiEmbedded"/>, later on 2026-09-29, the user's ask). The Botchat tab, under
+    /// Botchat LLM mode; no reconnect (read at a chat's start).
+    /// </summary>
+    BotChatMultiEmbedded,
+
+    /// <summary>
+    /// A toggle: whether a multi-server botchat's extra embedded servers stop when it ends
+    /// (<see cref="Settings.AppSettingsData.BotChatMultiEmbeddedKill"/>, later on 2026-09-29, the user's ask). The Botchat tab,
+    /// under Botchat multi-embedded; no reconnect (read at a chat's end). Last in the enum, as every newcomer.
+    /// </summary>
+    BotChatMultiEmbeddedKill,
 }
 
 /// <summary>The tabs of <c>/settings</c> on the pane, in strip order (General, Embedded, LLM, TTS, STT, Sessions, Botchat — the user's order, 2026-09-29; Sessions right after General — the user's order, 2026-09-18 — until then; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
@@ -898,7 +912,7 @@ internal sealed partial class SettingsMenu
         [SettingsField.TtsOutput, SettingsField.TtsSource, SettingsField.TtsHttpUrl, SettingsField.TtsVoicePreview, SettingsField.TtsVoicePreset, SettingsField.TtsVoice, SettingsField.TtsVoice2, SettingsField.TtsVoiceMix, SettingsField.TtsSpeed],
         Fields.Where(IsVoiceField).ToArray(),
         [SettingsField.SessionLogging, SettingsField.SessionRetentionDays, SettingsField.SessionNamingMode, SettingsField.SessionShowName, SettingsField.SessionTool, SettingsField.SessionSearchMaxResults, SettingsField.SessionSaveThinking],
-        [SettingsField.BotChatLlmMode, SettingsField.BotChatImages, SettingsField.BotChatImageMode, SettingsField.BotChatTxt2ImgWorkflow, SettingsField.BotChatImg2ImgWorkflow, SettingsField.BotChatImg2ImgMode, SettingsField.BotChatImageAsync, SettingsField.BotChatNonTtsDelaySeconds, SettingsField.BotChatSkills, SettingsField.BotChatPreloadedSkills, SettingsField.BotChatSkillMode, SettingsField.BotChatVision],
+        [SettingsField.BotChatLlmMode, SettingsField.BotChatMultiEmbedded, SettingsField.BotChatMultiEmbeddedKill, SettingsField.BotChatImages, SettingsField.BotChatImageMode, SettingsField.BotChatTxt2ImgWorkflow, SettingsField.BotChatImg2ImgWorkflow, SettingsField.BotChatImg2ImgMode, SettingsField.BotChatImageAsync, SettingsField.BotChatNonTtsDelaySeconds, SettingsField.BotChatSkills, SettingsField.BotChatPreloadedSkills, SettingsField.BotChatSkillMode, SettingsField.BotChatVision],
     ];
 
     /// <summary>
@@ -1101,7 +1115,7 @@ internal sealed partial class SettingsMenu
     public const string EmbeddedContextFitLabel = "fit";
 
     /// <summary>The catalog picker's title and keys (2026-09-29).</summary>
-    public const string EmbeddedModelsKeys = "Enter = choose · " + NeonSidekick.EmbeddedLlm.EmbeddedModelFilter.Keys + " · ESC = back";
+    public const string EmbeddedModelsKeys = "Enter = choose · " + NeonSidekick.EmbeddedLlm.EmbeddedModelFilter.CatalogKeys + " · ESC = back";
     public const string UseNowRow = "Use now";
     public const string BackRow = "Back";
 
@@ -1305,7 +1319,7 @@ internal sealed partial class SettingsMenu
             or SettingsField.ToolsDollarMention or SettingsField.ReflectionIncludesSessions or SettingsField.ReflectionYieldsToTurns or SettingsField.ReflectionEditsSupportingFiles or SettingsField.McpServers or SettingsField.GitNativeTools
             or SettingsField.LlmCompactShowSummary or SettingsField.ShellToolBridge or SettingsField.ShellPoliceOutsidePaths or SettingsField.ShellPreferNative
             or SettingsField.ObsidianTools or SettingsField.ObsidianAllowDelete or SettingsField.SqlTools or SettingsField.SqlPercentMention or SettingsField.ComfyTools or SettingsField.ComfyReinforceNegatives or SettingsField.ComfyShowPrompts or SettingsField.ComfyCaretMention or SettingsField.ComfyPictureStrip
-            or SettingsField.BotChatImages or SettingsField.BotChatImageAsync or SettingsField.BotChatSkills or SettingsField.BotChatVision or SettingsField.ClaudeAdvisor or SettingsField.ClaudeAdvisorConfirm
+            or SettingsField.BotChatImages or SettingsField.BotChatImageAsync or SettingsField.BotChatSkills or SettingsField.BotChatVision or SettingsField.BotChatMultiEmbeddedKill or SettingsField.ClaudeAdvisor or SettingsField.ClaudeAdvisorConfirm
             or SettingsField.ClaudeApi or SettingsField.ClaudeApiPromptCaching or SettingsField.EmbeddedVision or SettingsField.EmbeddedLlmServer or SettingsField.EmbeddedDrafter
             or SettingsField.HomeAssistantTools or SettingsField.PrintTools;
 
@@ -1416,6 +1430,8 @@ internal sealed partial class SettingsMenu
         SettingsField.ComfyCaretMention => "ComfyUI ^-mention enabled",
         SettingsField.ComfyPictureStrip => "ComfyUI picture strip",
         SettingsField.BotChatLlmMode => "Botchat LLM mode",
+        SettingsField.BotChatMultiEmbedded => "Botchat multi-embedded",
+        SettingsField.BotChatMultiEmbeddedKill => "Botchat multi-embedded kill",
         SettingsField.LlmMidTurnUsage => "LLM mid-turn usage",
         SettingsField.BotChatImages => "Botchat images enabled",
         SettingsField.BotChatImageMode => "Botchat image mode",
@@ -1644,6 +1660,8 @@ internal sealed partial class SettingsMenu
             SettingsField.ComfyCaretMention => OnOff(data.ComfyCaretMention),
             SettingsField.ComfyPictureStrip => OnOff(data.ComfyPictureStrip),
             SettingsField.BotChatLlmMode => data.BotChatLlmMode,
+            SettingsField.BotChatMultiEmbedded => data.BotChatMultiEmbedded,
+            SettingsField.BotChatMultiEmbeddedKill => OnOff(data.BotChatMultiEmbeddedKill),
             SettingsField.LlmMidTurnUsage => data.LlmMidTurnUsage,
             SettingsField.BotChatImages => OnOff(data.BotChatImages),
             SettingsField.BotChatImageMode => data.BotChatImageMode,
@@ -2119,6 +2137,10 @@ internal sealed partial class SettingsMenu
     /// <summary>One row of the botchat-LLM-mode picker: the mode and its hint (padded to seven: <c>single</c> is six). Pinned.</summary>
     public static string BotChatLlmModeLabel(string name) =>
         Markup.Escape(name.PadRight(7)) + Theme.DimMarkup(App.BotChatLlmMode.Describe(name));
+
+    /// <summary>One row of the Botchat multi-embedded picker (later on 2026-09-29): the mode padded to fourteen (<c>parent-server</c> is thirteen), then its hint, dim. Pinned.</summary>
+    public static string BotChatMultiEmbeddedLabel(string name) =>
+        Markup.Escape(name.PadRight(14)) + Theme.DimMarkup(App.BotChatMultiEmbedded.Describe(name));
 
     /// <summary>One row of the reasoning-estimate picker (2026-09-29): the mode and its hint (padded to ten: <c>tokenize</c> is eight). Pinned.</summary>
     public static string ReasoningEstimateLabel(string name) =>
@@ -3126,6 +3148,11 @@ internal sealed partial class SettingsMenu
         if (field == SettingsField.BotChatLlmMode)
         {
             return await PickBotChatLlmModeAsync(saved, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (field == SettingsField.BotChatMultiEmbedded)
+        {
+            return await PickBotChatMultiEmbeddedAsync(saved, cancellationToken).ConfigureAwait(false);
         }
 
         if (field == SettingsField.LlmReasoningEstimate)
@@ -4584,6 +4611,7 @@ internal sealed partial class SettingsMenu
             SettingsField.BotChatImageAsync => data.BotChatImageAsync,
             SettingsField.BotChatSkills => data.BotChatSkills,
             SettingsField.BotChatVision => data.BotChatVision,
+            SettingsField.BotChatMultiEmbeddedKill => data.BotChatMultiEmbeddedKill,
             SettingsField.SqlPercentMention => data.SqlPercentMention,
             SettingsField.LlmCompactShowSummary => data.LlmCompactShowSummary,
             SettingsField.TtsVoicePreview => data.TtsVoicePreview,
@@ -4657,6 +4685,7 @@ internal sealed partial class SettingsMenu
             case SettingsField.BotChatImageAsync: data.BotChatImageAsync = on; break;
             case SettingsField.BotChatSkills: data.BotChatSkills = on; break;
             case SettingsField.BotChatVision: data.BotChatVision = on; break;
+            case SettingsField.BotChatMultiEmbeddedKill: data.BotChatMultiEmbeddedKill = on; break;
             case SettingsField.SqlPercentMention: data.SqlPercentMention = on; break;
             case SettingsField.LlmCompactShowSummary: data.LlmCompactShowSummary = on; break;
             case SettingsField.TtsVoicePreview: data.TtsVoicePreview = on; break;
@@ -4739,6 +4768,7 @@ internal sealed partial class SettingsMenu
         SettingsField.BotChatImageAsync => on ? "the next bot answers while the picture renders" : "the chat waits for each picture",
         SettingsField.BotChatSkills => on ? "the bots get load_skill over this profile's and the global skills" : "/botchat bots get no skills",
         SettingsField.BotChatVision => on ? "each bot sees the pictures shown since it last spoke (vision models)" : "the bots see text alone",
+        SettingsField.BotChatMultiEmbeddedKill => on ? "the extra servers stop when the botchat ends" : "extra servers stay up for later botchats until /botchat --kill or exit",
         SettingsField.SqlPercentMention => on ? "% and part of a name lists the SQL connections on the line" : "% is ordinary text",
         SettingsField.LlmCompactShowSummary => on ? "the summary's lines or the pruned results, then the protected counts" : "the one compact notice alone",
         SettingsField.AgentSkills => on ? "the skills catalog, load_skill and skill_editor are offered" : "no skills, no project notes",
@@ -4828,9 +4858,9 @@ internal sealed partial class SettingsMenu
         {
             // Every row laid out over the whole catalog, so a filter does not move the columns.
             var labels = EmbeddedModelLabels(embedded.Catalog, embedded.State);
-            var shown = Enumerable.Range(0, embedded.Catalog.Count).Where(i => filter.Matches(embedded.Catalog[i], type)).ToList();
+            var shown = Enumerable.Range(0, embedded.Catalog.Count).Where(i => filter.Matches(embedded.Catalog[i], type, embedded.State(embedded.Catalog[i]).IsInstalled)).ToList();
             var page = new MenuPage(Crumb(FieldName(SettingsField.EmbeddedModels)), FilteredRows(labels, shown), EmbeddedModelsKeys);
-            if (await PickChecklistAsync(page, Math.Max(0, shown.IndexOf(cursor)), cancellationToken, filter.Buttons()).ConfigureAwait(false) is not { } pick)
+            if (await PickChecklistAsync(page, Math.Max(0, shown.IndexOf(cursor)), cancellationToken, filter.Buttons(withInstalled: true)).ConfigureAwait(false) is not { } pick)
             {
                 return Unchanged();
             }
@@ -4842,7 +4872,7 @@ internal sealed partial class SettingsMenu
 
             if (pick.Button >= 0)
             {
-                filter = filter.Press(pick.Button);
+                filter = filter.Press(pick.Button, withInstalled: true);
                 continue;
             }
 
@@ -4901,7 +4931,8 @@ internal sealed partial class SettingsMenu
     {
         var saved = _settings.Current;
         bool named = NeonSidekick.EmbeddedLlm.EmbeddedEndpoint.IsEmbedded(saved.LlmUrl) && string.Equals(saved.LlmModel.Trim(), model.Id, StringComparison.OrdinalIgnoreCase);
-        if (_midTurn && (named || string.Equals(embedded.Running?.ModelId, model.Id, StringComparison.Ordinal)))
+        if (_midTurn && (named || string.Equals(embedded.Running?.ModelId, model.Id, StringComparison.Ordinal)
+            || embedded.Extras.Any(e => string.Equals(e.ModelId, model.Id, StringComparison.OrdinalIgnoreCase))))   // an extra server's too (later on 2026-09-29)
         {
             Sink.Notice(NotWhileReplyRunsNotice);
             return;
@@ -5396,6 +5427,22 @@ internal sealed partial class SettingsMenu
     /// <summary>A filter-type picker row: the name padded, then what it measures, dim. Pinned.</summary>
     public static string EmbeddedFilterTypeLabel(string name) =>
         Markup.Escape(name.PadRight(6)) + Theme.DimMarkup(NeonSidekick.EmbeddedLlm.EmbeddedFilterTypes.Describe(name));
+
+    /// <summary>The Botchat multi-embedded picker (later on 2026-09-29): one <see cref="BotChatMultiEmbeddedLabel"/> row per <see cref="App.BotChatMultiEmbedded.Names"/> entry, the saved one under the cursor.</summary>
+    private async Task<bool> PickBotChatMultiEmbeddedAsync(AppSettingsData saved, CancellationToken cancellationToken)
+    {
+        var names = App.BotChatMultiEmbedded.Names;
+        var page = new MenuPage(Crumb(FieldName(SettingsField.BotChatMultiEmbedded)), names.Select(BotChatMultiEmbeddedLabel).ToList(), PickKeys);
+        int? picked = await PickAsync(page, Math.Max(0, Array.FindIndex(names, n => string.Equals(n, saved.BotChatMultiEmbedded, StringComparison.OrdinalIgnoreCase))), cancellationToken).ConfigureAwait(false);
+        if (picked is not { } index)
+        {
+            return Unchanged();
+        }
+
+        string name = names[index];
+        Apply(SettingsField.BotChatMultiEmbedded, d => d.BotChatMultiEmbedded = name);
+        return true;
+    }
 
     /// <summary>The botchat-LLM-mode picker under the settings list (later on 2026-09-25): one <see cref="BotChatLlmModeLabel"/> row per <see cref="App.BotChatLlmMode.Names"/> entry, the saved one under the cursor.</summary>
     private async Task<bool> PickBotChatLlmModeAsync(AppSettingsData saved, CancellationToken cancellationToken)

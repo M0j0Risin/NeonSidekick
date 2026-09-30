@@ -23,9 +23,9 @@ public sealed record PerfRow(IReadOnlyList<PerfSegment> Segments)
 /// separators and unlit cells are dim. Spectre's own charts (<c>BarChart</c>, <c>BreakdownChart</c>) are several rows of
 /// the transcript's flow and have no one-row form, so the glyphs are drawn here in the theme's colours. A meter the machine
 /// cannot read is left out. Too narrow a window shrinks the meters, then falls back to the text look, then cuts the row.
-/// Later on 2026-09-29 (the user's asks) every look sits at the row's right, a blank run ahead of it filling the row
-/// (<see cref="Justified"/>), and the text look's values keep four cells as the drawn looks' do (<c>  8%</c>, <c>100%</c>),
-/// so nothing shifts as a value gains a digit; a cut row stays at the left. Pure: the tests drive it.
+/// Later on 2026-09-29 (the user's asks) every look is centred on its row (<see cref="Centered"/>; at the row's right for a
+/// few hours before), and the text look's values keep four cells as the drawn looks' do (<c>  8%</c>, <c>100%</c>), so
+/// nothing shifts as a value gains a digit; a cut row stays at the left. Pure: the tests drive it.
 /// </summary>
 public static class PerfBar
 {
@@ -57,13 +57,13 @@ public static class PerfBar
                 var drawn = Drawn(style, meters, history, width);
                 if (Width(drawn) <= cells)
                 {
-                    return Justified(drawn, cells);
+                    return Centered(drawn, cells);
                 }
             }
         }
 
         var text = Text(meters);
-        return Width(text) <= cells ? Justified(text, cells) : new PerfRow(Cut(text, cells));
+        return Width(text) <= cells ? Centered(text, cells) : new PerfRow(Cut(text, cells));
     }
 
     /// <summary>The load's colour: <see cref="Theme.Good"/> under <see cref="GoodBelow"/>, <see cref="Theme.Warn"/> under <see cref="WarnBelow"/>, else <see cref="Theme.Bad"/>.</summary>
@@ -174,10 +174,13 @@ public static class PerfBar
         return row;
     }
 
-    /// <summary>The row pushed to the right of <paramref name="cells"/> by a blank run ahead of it; an empty row stays empty.</summary>
-    private static PerfRow Justified(List<PerfSegment> row, int cells)
+    /// <summary>
+    /// The row centred in <paramref name="cells"/> by a blank run ahead of it — half the room, the odd cell at the right, where
+    /// the pane's erase blanks the rest; an empty row stays empty.
+    /// </summary>
+    private static PerfRow Centered(List<PerfSegment> row, int cells)
     {
-        int pad = cells - Width(row);
+        int pad = (cells - Width(row)) / 2;
         if (row.Count > 0 && pad > 0)
         {
             row.Insert(0, new PerfSegment(new string(' ', pad), Style.Plain));

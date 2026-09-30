@@ -648,7 +648,7 @@ public class SlashCommandsTests
         Assert.Equal("open an image, or a folder of images, from the working directory in the picture viewer; --chat draws the image in the transcript instead: /view <image or folder> [--chat]", Summary("/view"));
         Assert.Equal("show the terminal window's width and height", Summary("/window"));
         Assert.Equal("write the Git native email and Git native name into the working directory's repository", Summary("/gituser"));   // /git until 2026-09-26
-        Assert.Equal("let the profiles talk to each other, each in its own persona, until ESC: /botchat [profile ...] [[--] topic], or /botchat --resume [line] to carry on the last one", Summary("/botchat"));   // --resume 2026-09-25
+        Assert.Equal("let the profiles talk to each other, each in its own persona, until ESC: /botchat [profile ...] [[--] topic], or /botchat --resume [line] to carry on the last one, or /botchat --kill to stop the extra embedded servers", Summary("/botchat"));   // --resume 2026-09-25, --kill later on 2026-09-29
         Assert.Equal("list timers, or /timer <duration> [name] (10m, 90s, 1h30m) | stop <name> | stop all", Summary("/timer"));
         Assert.Equal("send a message to Claude Code and add its reply to the conversation: /claude <message>, or /claude new to start a new Claude conversation", Summary("/claude"));   // 2026-09-27
         Assert.Equal("run LLM benchmark tests against the connected model and save the results: /test <id | reasoning | structured | long | all> | history, or /test to list them", Summary("/test"));   // 2026-09-28

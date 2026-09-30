@@ -219,8 +219,8 @@ public class PerfBarTests
 
     private static readonly PerfSnapshot Reading = new(34, 62, 18, 91);
 
-    // A row as it sits at the right of `cells` (later on 2026-09-29): the blanks ahead of it, then the text.
-    private static string Right(string text, int cells) => new string(' ', cells - TextCells.Width(text)) + text;
+    // A row as it sits centred in `cells` (later on 2026-09-29; at the right for a few hours before): half the room ahead of it.
+    private static string Centered(string text, int cells) => new string(' ', (cells - TextCells.Width(text)) / 2) + text;
 
     [Fact]
     public void Off_DrawsNoRow()
@@ -232,14 +232,14 @@ public class PerfBarTests
     public void Text_IsTheLabelsAndValues_TheValuesInTheLoadsColour()
     {
         var row = PerfBar.Render(PerfBarStyle.Text, Reading, [], 120)!;
-        Assert.Equal(Right("CPU  34% · RAM  62% · GPU  18% · VRAM  91%", 120), row.Text);
+        Assert.Equal(Centered("CPU  34% · RAM  62% · GPU  18% · VRAM  91%", 120), row.Text);
         Assert.Equal(new Style(Theme.Good), row.Segments.Single(s => s.Text == " 34%").Style);
         Assert.Equal(new Style(Theme.Warn), row.Segments.Single(s => s.Text == " 62%").Style);
         Assert.Equal(new Style(Theme.Bad), row.Segments.Single(s => s.Text == " 91%").Style);
         Assert.Equal(Theme.DimText, row.Segments.Single(s => s.Text == "CPU ").Style);
 
         // No GPU reader: its meters left out. Nothing read yet: an empty row, still a row.
-        Assert.Equal(Right("CPU  34% · RAM  62%", 120), PerfBar.Render(PerfBarStyle.Text, Reading with { Gpu = null, Vram = null }, [], 120)!.Text);
+        Assert.Equal(Centered("CPU  34% · RAM  62%", 120), PerfBar.Render(PerfBarStyle.Text, Reading with { Gpu = null, Vram = null }, [], 120)!.Text);
         Assert.Equal("", PerfBar.Render(PerfBarStyle.Text, PerfSnapshot.None, [], 120)!.Text);
 
         // Too narrow: cut at the edge, at the row's left.
@@ -255,7 +255,7 @@ public class PerfBarTests
         Assert.Equal(("▏", "░░░░░░░░░"), PerfBar.Gauge(1.25, 10));
 
         var row = PerfBar.Render(PerfBarStyle.Gauge, Reading, [], 120)!;
-        Assert.Equal(Right("CPU ███▍░░░░░░  34%   RAM ██████▎░░░  62%   GPU █▊░░░░░░░░  18%   VRAM █████████▏  91%", 120), row.Text);
+        Assert.Equal(Centered("CPU ███▍░░░░░░  34%   RAM ██████▎░░░  62%   GPU █▊░░░░░░░░  18%   VRAM █████████▏  91%", 120), row.Text);
         Assert.Equal(new Style(Theme.Bad), row.Segments.Single(s => s.Text == "█████████▏").Style);
         Assert.Equal(Theme.DimText, row.Segments.Single(s => s.Text == "░░░░░░").Style);
     }
@@ -269,7 +269,7 @@ public class PerfBarTests
 
         var history = new[] { 0.0, 20, 40, 60, 90 }.Select(v => new PerfSnapshot(v, 50, null, null)).ToList();
         var row = PerfBar.Render(PerfBarStyle.Spark, history[^1], history, 120)!;
-        Assert.Equal(Right("CPU      ▁▂▄▅█  90%   RAM      ▅▅▅▅▅  50%", 120), row.Text);   // five readings: five blanks ahead of them
+        Assert.Equal(Centered("CPU      ▁▂▄▅█  90%   RAM      ▅▅▅▅▅  50%", 120), row.Text);   // five readings: five blanks ahead of them
         Assert.Equal(new Style(Theme.Bad), row.Segments.First(s => s.Text == "█").Style);
         Assert.Equal(new Style(Theme.Good), row.Segments.First(s => s.Text == "▁").Style);
     }
@@ -283,7 +283,7 @@ public class PerfBarTests
         Assert.Equal(3, PerfBar.LedsLit(30, 10));   // exactly three, not a fourth started
 
         var row = PerfBar.Render(PerfBarStyle.Led, new PerfSnapshot(34, null, null, null), [], 120)!;
-        Assert.Equal(Right("CPU ▰▰▰▰▱▱▱▱▱▱  34%", 120), row.Text);
+        Assert.Equal(Centered("CPU ▰▰▰▰▱▱▱▱▱▱  34%", 120), row.Text);
         var lit = row.Segments.Where(s => s.Text == PerfText.LedOn).ToList();
         Assert.Equal(new Style(Theme.GradientStops[0]), lit[0].Style);
         Assert.Equal(Theme.DimText, row.Segments.First(s => s.Text == PerfText.LedOff).Style);
@@ -299,17 +299,19 @@ public class PerfBarTests
         Assert.Equal(meter * 4, row.Text.Count(c => c is '▰' or '▱'));
 
         var text = PerfBar.Render(PerfBarStyle.Gauge, Reading, [], 45)!;
-        Assert.Equal(Right("CPU  34% · RAM  62% · GPU  18% · VRAM  91%", 45), text.Text);   // no meter width fits: the text look
+        Assert.Equal(Centered("CPU  34% · RAM  62% · GPU  18% · VRAM  91%", 45), text.Text);   // no meter width fits: the text look
     }
 
     [Fact]
-    public void EveryLook_SitsAtTheRowsRight_ACutRowAtItsLeft()
+    public void EveryLook_IsCentred_ACutRowAtItsLeft()
     {
         foreach (var style in new[] { PerfBarStyle.Text, PerfBarStyle.Gauge, PerfBarStyle.Spark, PerfBarStyle.Led })
         {
             var row = PerfBar.Render(style, Reading, [Reading], 120)!;
-            Assert.Equal(120, TextCells.Width(row.Text));
-            Assert.True(row.Segments[0].Text.Length > 0 && row.Segments[0].Text.All(c => c == ' '), style.ToString());
+            int pad = row.Segments[0].Text.Length;
+            int drawn = TextCells.Width(row.Text) - pad;
+            Assert.True(pad > 0 && row.Segments[0].Text.All(c => c == ' '), style.ToString());
+            Assert.Equal((120 - drawn) / 2, pad);   // the odd cell, if any, at the right
         }
 
         Assert.NotEqual(' ', PerfBar.Render(PerfBarStyle.Text, Reading, [], 12)!.Text[0]);
