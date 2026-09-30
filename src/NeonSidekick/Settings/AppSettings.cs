@@ -31,9 +31,11 @@ public sealed class AppSettings : IDisposable
     /// <summary>
     /// How long a burst of edits coalesces. Long enough that a menu that touches six fields
     /// writes once; short enough that a user who changes something and immediately kills the
-    /// process still keeps it.
+    /// process still keeps it. Settable (2026-09-30) so a test can hold a save in the debounce: the v0.3.6 CI
+    /// run's screen started slower than 250 ms, and the fixture's save landed before <c>/profile edit</c> looked.
+    /// Read when a save is scheduled.
     /// </summary>
-    private static readonly TimeSpan SaveDebounce = TimeSpan.FromMilliseconds(250);
+    internal TimeSpan SaveDebounce { get; set; } = TimeSpan.FromMilliseconds(250);
 
     private readonly object _gate = new();
     private AppSettingsData _data;
@@ -454,6 +456,7 @@ public sealed class AppSettings : IDisposable
     private void ScheduleSave(AppSettingsData snapshot, string path)
     {
         CancellationTokenSource cts;
+        TimeSpan debounce;
         lock (_gate)
         {
             if (_disposed)
@@ -464,6 +467,7 @@ public sealed class AppSettings : IDisposable
             _pendingSave?.Cancel();
             _pendingSave?.Dispose();
             _pendingSave = cts = new CancellationTokenSource();
+            debounce = SaveDebounce;
         }
 
         // Fire-and-forget, deliberately: a menu submission must not block on the disk. The
@@ -473,7 +477,7 @@ public sealed class AppSettings : IDisposable
         {
             try
             {
-                await Task.Delay(SaveDebounce, cts.Token).ConfigureAwait(false);
+                await Task.Delay(debounce, cts.Token).ConfigureAwait(false);
                 await SaveAsync(snapshot, path).ConfigureAwait(false);
             }
             catch (OperationCanceledException)

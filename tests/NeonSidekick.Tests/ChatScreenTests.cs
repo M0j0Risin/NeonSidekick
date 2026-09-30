@@ -7162,8 +7162,9 @@ public partial class ChatScreenTests : IDisposable
     public async Task Profile_Edit_FlushesThenOpensTheFile_AndAFailedEditorIsTheError()
     {
         // /profile edit (2026-09-21): the pending save lands first, then the editor gets profile.json — created by that save when it was not there yet.
+        _settings.SaveDebounce = Timeout.InfiniteTimeSpan;
         _settings.Update(d => { d.TtsOutput = false; d.LlmModel = "just-typed"; });
-        Assert.False(File.Exists(_settings.FilePath));   // the fixture's edits sit in the debounce
+        Assert.False(File.Exists(_settings.FilePath));   // held in the debounce (infinite here, so a slow start cannot land it first)
         PushLine("/profile edit");
         PushLine("/exit");
 
