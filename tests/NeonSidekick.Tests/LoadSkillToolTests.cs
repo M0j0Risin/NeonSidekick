@@ -96,6 +96,20 @@ public class LoadSkillToolTests : IDisposable
         Assert.Equal("loaded skill 'haiku' (" + result.Length.ToString("N0", System.Globalization.CultureInfo.InvariantCulture) + " characters)", LoadSkillTool.Note(result));
     }
 
+    /// <summary>The preloaded form (2026-09-30, /botchat): its files follow it, so the note says so rather than pointing at load_skill; with no file, the plain note.</summary>
+    [Fact]
+    public void Content_FilesFollow_SaysSo_IsPinned()
+    {
+        Assert.Equal(
+            "<skill_content name=\"haiku\">\nbody\n\nSkill directory: d\n"
+            + "Relative paths in this skill are relative to the skill directory; its bundled files follow.\n"
+            + "<skill_resources>\n  <file>a.md</file>\n</skill_resources>\n</skill_content>",
+            SkillText.Content("haiku", "body", "d", ["a.md"], false, false, filesFollow: true));
+        Assert.Equal(
+            "<skill_content name=\"haiku\">\nbody\n\nSkill directory: d\nRelative paths in this skill are relative to the skill directory.\n</skill_content>",
+            SkillText.Content("haiku", "body", "d", [], false, false, filesFollow: true));
+    }
+
     [Fact]
     public async Task ByName_WithNoBundledFile_NoResourcesBlock()
     {

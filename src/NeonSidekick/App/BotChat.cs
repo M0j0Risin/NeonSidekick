@@ -267,6 +267,17 @@ public static partial class BotChat
         return catalog.Where(s => named.Contains(s.Name) || NamedIn(topic, s.Name)).ToList();
     }
 
+    /// <summary>
+    /// <paramref name="catalog"/> without the skills <paramref name="preloaded"/> names (2026-09-30, the user's question: both
+    /// <c>Botchat preloaded skills</c> and <c>Botchat skills enabled</c> on): a skill whose content a prompt already carries is
+    /// not listed there to load again. Null for no catalog or none left. Pure.
+    /// </summary>
+    public static IReadOnlyList<Skills.Skill>? WithoutPreloaded(IReadOnlyList<Skills.Skill>? catalog, IReadOnlyList<string> preloaded)
+    {
+        ArgumentNullException.ThrowIfNull(preloaded);
+        return catalog?.Where(s => !preloaded.Contains(s.Name, StringComparer.OrdinalIgnoreCase)).ToList() is { Count: > 0 } kept ? kept : null;
+    }
+
     private static bool NamedIn(string topic, string name) =>
         name.Length > 0 && Regex.IsMatch(topic, @"(?<![\w-])" + Regex.Escape(name) + @"(?![\w-])", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
 
@@ -279,6 +290,17 @@ public static partial class BotChat
         ArgumentNullException.ThrowIfNull(contents);
         return contents.Count == 0 ? "" : PreloadedSkillsLead + "\n\n" + string.Join("\n\n", contents);
     }
+
+    /// <summary>
+    /// How much of a preloaded skill's bundled text files goes in with it (2026-09-30, the user's ask: all the files, not the
+    /// SKILL.md alone): one <c>load_skill</c> file's worth for all of them together, so a skill of fifty files cannot fill a
+    /// local model's context in every bot's prompt. A file past it is left out; the skill's file list still names it.
+    /// </summary>
+    public const int MaxPreloadedFileChars = Skills.SkillCatalog.MaxResourceChars;
+
+    /// <summary>The <c>--log</c> line for the files a preloaded skill left out past <see cref="MaxPreloadedFileChars"/> (2026-09-30).</summary>
+    public static string PreloadedFilesLeftOutLogLine(string skill, IReadOnlyList<string> files) =>
+        $"Botchat preloaded skill '{skill}' left out {string.Join(", ", files)}: its files are capped at {MaxPreloadedFileChars.ToString("N0", CultureInfo.InvariantCulture)} characters together.";
 
     /// <summary>The first line of <see cref="PreloadedSkillsSection"/>. Pinned: it is prompt text.</summary>
     public const string PreloadedSkillsLead = "These skills are loaded for you already; follow their instructions:";

@@ -10407,11 +10407,17 @@ internal sealed partial class ChatScreen
                 var (fresh, rework, candidates) = BotWorkflows(effective);
                 var imageTool = pictured && BotChatImageMode.Offers(imageMode) ? BotImageTool(effective, fresh, rework, candidates.Count > 0) : null;
                 // Skills (2026-09-27): read per reply too — the main chat's catalog, so the starting profile's, never this bot's own.
-                var (skills, skillTool) = BotSkills(effective);
+                var (catalog, loadTool) = BotSkills(effective);
                 // Preloaded skills (2026-09-27, the user's ask): read by the app, no load_skill needed; the bots get them under prompt-writer-and-bots.
                 var skillMode = BotChatSkillMode.Resolve(effective);
                 var (preloadedNames, preloaded) = BotPreloadedSkills(effective, topic);
-                var botSkills = new BotSkillSet(skills, skillTool, preloaded);
+                // Both switches on (2026-09-30, the user's question): a skill whose content is already given is not offered to load
+                // again — the writer always has it, the bots under prompt-writer-and-bots — or the model spends its round trips
+                // reloading it and meets the no-tools last round sooner. A side left with no skill gets neither the list nor load_skill.
+                var writerSkills = BotChat.WithoutPreloaded(catalog, preloadedNames);
+                var botSkills = new BotSkillSet(writerSkills, writerSkills is null ? null : loadTool, preloaded);
+                var skills = skillMode == BotSkillMode.PromptWriterAndBots ? writerSkills : catalog;
+                var skillTool = skills is null ? null : loadTool;
                 string preloadedNotice = preloadedNames.Count == 0 ? "" : BotChat.PreloadedNotice(preloadedNames, skillMode);
                 if (preloadedNotice.Length > 0 && !string.Equals(preloadedNotice, preloadedTold, StringComparison.Ordinal))
                 {
@@ -10466,6 +10472,9 @@ internal sealed partial class ChatScreen
                 // The last of those round trips asks for the bot's words without the tools (2026-09-30, the user's report: a bot
                 // a few turns in spent all three on pictures and its line came out as "Stopped after 3 tool iterations").
                 assistant.LastRoundAnswers = imageTool is not null || skillTool is not null;
+                // A call written out as text is caught with load_skill alone too (2026-09-30): that last round, asked without the
+                // tools, is where a model writes one, and a skills-only bot's would otherwise reach the transcript.
+                assistant.TextToolCalls = assistant.LastRoundAnswers;
 
                 DiagnosticLog.Info(AppCategory, BotChat.TurnLogLine(replies + 1, bot.Name));
                 int turnId = ladder.BeginBot();
@@ -10772,6 +10781,9 @@ internal sealed partial class ChatScreen
     /// each read exactly as <c>load_skill</c> returns it (<see cref="SkillCatalog.ReadBody"/>, <see cref="SkillText.Content"/>);
     /// one that cannot be read is logged and left out. The names and the prompt section (<see cref="BotChat.PreloadedSkillsSection"/>);
     /// none with <c>Agent skills</c> off. <c>Botchat skills enabled</c> has no say: it offers <c>load_skill</c>, this needs none.
+    /// Since 2026-09-30 (the user's ask) each skill's bundled text files follow its content, each as <c>load_skill</c>'s
+    /// <c>file</c> returns it (<see cref="SkillText.File"/>), up to <see cref="BotChat.MaxPreloadedFileChars"/> of them together in
+    /// file-list order; a file that is not text, cannot be read or would pass the cap is left out, the list still naming it.
     /// </summary>
     private (IReadOnlyList<string> Names, string Section) BotPreloadedSkills(AppSettingsData effective, string topic)
     {
@@ -10793,7 +10805,34 @@ internal sealed partial class ChatScreen
             }
 
             var resources = SkillCatalog.Resources(skill, out bool more);
-            contents.Add(SkillText.Content(skill.Name, body.Text, skill.Directory, resources, more, body.Truncated));
+            var content = new StringBuilder(SkillText.Content(skill.Name, body.Text, skill.Directory, resources, more, body.Truncated, filesFollow: true));
+            int room = BotChat.MaxPreloadedFileChars;
+            var leftOut = new List<string>();
+            foreach (string relative in resources)
+            {
+                var file = SkillCatalog.ReadResource(skill, relative);
+                if (file.Outcome != SkillCatalog.ReadOutcome.Ok)
+                {
+                    DiagnosticLog.Debug(AppCategory, "Botchat preloaded skill '" + skill.Name + "' skips a file: " + SkillText.ReadError(skill, relative, file));
+                    continue;
+                }
+
+                if (file.Text.Length > room)
+                {
+                    leftOut.Add(relative);
+                    continue;
+                }
+
+                room -= file.Text.Length;
+                content.Append("\n\n").Append(SkillText.File(skill.Name, relative, file.Text, file.Truncated));
+            }
+
+            if (leftOut.Count > 0)
+            {
+                DiagnosticLog.Info(AppCategory, BotChat.PreloadedFilesLeftOutLogLine(skill.Name, leftOut));
+            }
+
+            contents.Add(content.ToString());
             names.Add(skill.Name);
         }
 
@@ -10986,7 +11025,8 @@ internal sealed partial class ChatScreen
     /// The image prompt's side request (2026-09-25), with <paramref name="skillTool"/> (2026-09-27, <c>Botchat skills enabled</c>)
     /// a short loop — SkillLearner's shape: up to <see cref="BotPromptSkillIterations"/> requests offering <c>load_skill</c>, each
     /// call run and answered, then one with no tool at all should the cap be reached, so an answer always comes. The text of the
-    /// last response; each skill loaded is added to <paramref name="loaded"/> as its transcript line (<see cref="LoadSkillTool.Note"/>).
+    /// last response, a call written in it taken out (<see cref="WithoutWrittenCalls"/>); each skill loaded is added to
+    /// <paramref name="loaded"/> as its transcript line (<see cref="LoadSkillTool.Note"/>).
     /// </summary>
     private static async Task<string> WriteBotPicturePromptAsync(Assistant assistant, List<ChatMessage> request, AIFunction? skillTool, List<string> loaded, CancellationToken cancellationToken)
     {
@@ -10996,7 +11036,7 @@ internal sealed partial class ChatScreen
             var response = await assistant.RequestAsync(request, tools, ReasoningEffort.None, cancellationToken).ConfigureAwait(false);
             if (response.Calls.Count == 0)
             {
-                return response.Text;
+                return WithoutWrittenCalls(response.Text);
             }
 
             request.AddRange(response.Messages);
@@ -11015,7 +11055,18 @@ internal sealed partial class ChatScreen
             request.Add(new ChatMessage(ChatRole.Tool, results));
         }
 
-        return (await assistant.RequestAsync(request, [], ReasoningEffort.None, cancellationToken).ConfigureAwait(false)).Text;
+        return WithoutWrittenCalls((await assistant.RequestAsync(request, [], ReasoningEffort.None, cancellationToken).ConfigureAwait(false)).Text);
+    }
+
+    /// <summary>
+    /// The image prompt writer's text less any call written out in it (2026-09-30): its last request goes without tools, and a
+    /// Qwen-style model still writes <c>&lt;tool_call&gt;</c> markup there, which the server leaves as text — before, that markup
+    /// became the ComfyUI prompt. Neither run nor kept; with nothing else written the prompt is empty (no picture, its notice).
+    /// </summary>
+    internal static string WithoutWrittenCalls(string text)
+    {
+        var filter = new TextToolCallFilter([LoadSkillTool.ToolName]);
+        return filter.Push(text) + filter.Flush();
     }
 
     /// <summary>

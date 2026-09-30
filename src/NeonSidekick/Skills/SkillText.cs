@@ -17,9 +17,10 @@ public static class SkillText
     /// <summary>
     /// A loaded skill the specification's way: the body wrapped in a tag that names the skill, the
     /// folder the body's relative paths resolve against, and the bundled files listed (not read —
-    /// <c>load_skill</c> with <c>file</c> reads one).
+    /// <c>load_skill</c> with <c>file</c> reads one). <paramref name="filesFollow"/> (2026-09-30, <c>/botchat</c>'s preloaded skills,
+    /// whose bundled files come after the content): the note says so instead of pointing at <c>load_skill</c>.
     /// </summary>
-    public static string Content(string name, string body, string directory, IReadOnlyList<string> resources, bool more, bool truncated)
+    public static string Content(string name, string body, string directory, IReadOnlyList<string> resources, bool more, bool truncated, bool filesFollow = false)
     {
         ArgumentNullException.ThrowIfNull(name);
         ArgumentNullException.ThrowIfNull(body);
@@ -34,7 +35,7 @@ public static class SkillText
         }
 
         sb.Append("\n\nSkill directory: ").Append(directory);
-        sb.Append('\n').Append(RelativePathsNote(resources.Count > 0));
+        sb.Append('\n').Append(filesFollow && resources.Count > 0 ? FilesFollowNote : RelativePathsNote(resources.Count > 0));
         if (resources.Count > 0)
         {
             sb.Append("\n<skill_resources>");
@@ -60,6 +61,9 @@ public static class SkillText
 
     public static string RelativePathsNote(bool withFiles) =>
         "Relative paths in this skill are relative to the skill directory" + (withFiles ? "; read a bundled file with " + LoadSkillTool.ToolName + " and its " + LoadSkillTool.FileArgument + " argument." : ".");
+
+    /// <summary>The note of a <see cref="Content"/> whose bundled files follow it (2026-09-30). Pinned: it is prompt text.</summary>
+    public const string FilesFollowNote = "Relative paths in this skill are relative to the skill directory; its bundled files follow.";
 
     public static string MoreResourcesNote =>
         "(and more: the first " + SkillCatalog.MaxResources.ToString(CultureInfo.InvariantCulture) + " files are listed)";
