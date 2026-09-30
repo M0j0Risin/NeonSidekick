@@ -88,17 +88,19 @@ public static class SkillText
 
     /// <summary>
     /// <c>load_skill</c>'s answer for a skill whose content the prompt already carries (2026-09-30, code review: a <c>/botchat</c>
-    /// preloaded skill, <see cref="Llm.Tools.LoadSkillTool"/>'s <c>preloaded</c>): no content again, a sentence saying where it is.
+    /// preloaded skill, <see cref="Llm.Tools.LoadSkillTool"/>'s <c>preloaded</c>): no content again, a sentence saying where it is,
+    /// and (later that day, code review) that a bundled file is still read with <c>file</c> — a file past the preload's cap is
+    /// listed by name only, and told just "follow them from there" the model never asked for it.
     /// </summary>
     public static string AlreadyLoaded(string name) => AlreadyLoadedOpen + name.Trim() + AlreadyLoadedClose;
 
     private const string AlreadyLoadedOpen = "Skill '";
-    private const string AlreadyLoadedClose = "' is already loaded: its instructions are in your system prompt; follow them from there.";
+    private const string AlreadyLoadedClose = "' is already loaded: its instructions are in your system prompt; follow them from there. A file it bundles is still read with load_skill and file.";
 
     /// <summary>
     /// Whether <paramref name="result"/> is an <see cref="AlreadyLoaded"/> answer, and for which skill (2026-09-30, code review):
-    /// the sentence is the model's, so the transcript shows <see cref="AlreadyLoadedNote"/> instead, and the picture writer knows
-    /// a call of it brought nothing new.
+    /// the sentence is the model's, so the transcript shows <see cref="AlreadyLoadedNote"/> instead. Display only: nothing decides
+    /// on it (later that day, code review: the picture writer's loop did, and a rewording would have changed it silently).
     /// </summary>
     public static bool IsAlreadyLoaded(string result, out string name)
     {

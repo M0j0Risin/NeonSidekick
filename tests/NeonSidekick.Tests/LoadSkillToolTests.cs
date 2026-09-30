@@ -194,10 +194,11 @@ public class LoadSkillToolTests : IDisposable
         Assert.Equal(SkillText.AlreadyLoaded("haiku"), again);
         Assert.Contains("already loaded", again);
         Assert.Contains("in your system prompt", again);
+        Assert.Contains("load_skill and file", again);   // a file past the preload's cap is still wanted (2026-09-30, code review)
         Assert.DoesNotContain("Five, seven, five.", again);
         // The sentence is the model's; the transcript's line is short (2026-09-30, code review).
         Assert.Equal("skill 'haiku' already loaded (preloaded)", LoadSkillTool.Note(again));
-        Assert.False(SkillText.IsAlreadyLoaded("Skill '' is already loaded", out _));
+        Assert.False(SkillText.IsAlreadyLoaded(SkillText.AlreadyLoaded(""), out _));
         Assert.Equal("<skill_file skill=\"haiku\" path=\"forms.md\">\n5-7-5\n</skill_file>", await Call(("name", "haiku"), ("file", "forms.md")));
         Assert.StartsWith("<skill_content name=\"pdf\">", await Call(("name", "pdf")));
         Assert.Contains("\"haiku\"", tool.JsonSchema.GetProperty("properties").GetProperty("name").GetProperty("enum").GetRawText());

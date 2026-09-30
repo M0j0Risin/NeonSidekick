@@ -1722,7 +1722,9 @@ public sealed class Assistant
     /// <summary>
     /// The calls <see cref="TextToolCallFilter"/> caught, added to the response's last message as real
     /// <see cref="FunctionCallContent"/>s (2026-09-25) with ids of their own (<c>text-call-{iteration}-{n}</c>), so the loop runs them
-    /// as it runs native ones. A call whose arguments do not parse is logged and left out.
+    /// as it runs native ones. A call whose arguments do not parse is logged and left out, and so is one the response already
+    /// carries as a native call, same name and arguments (2026-09-30, code review: a server that parses the calls but leaves the
+    /// markup in the content would otherwise have each run twice — two pictures started, a skill's content sent twice).
     /// </summary>
     internal static void AddWrittenCalls(IList<ChatMessage> messages, IReadOnlyList<(string Name, string Arguments)> calls, int iteration)
     {
@@ -1741,10 +1743,29 @@ public sealed class Assistant
                 continue;
             }
 
+            if (messages.SelectMany(m => m.Contents).OfType<FunctionCallContent>().Any(native => SameCall(native, name, arguments)))
+            {
+                DiagnosticLog.Info(Category, "The " + name + " call written as text is also a native call; it runs once.");
+                continue;
+            }
+
             n++;
             string id = "text-call-" + iteration.ToString(CultureInfo.InvariantCulture) + "-" + n.ToString(CultureInfo.InvariantCulture);
             messages[^1].Contents.Add(new FunctionCallContent(id, name, arguments));
         }
+    }
+
+    /// <summary>
+    /// Whether <paramref name="call"/> is <paramref name="name"/> with <paramref name="arguments"/> (2026-09-30): the same keys, each
+    /// value the same as text — a native call's values are JSON elements, a written one's often strings, so <c>3</c> and
+    /// <c>"3"</c> are one call.
+    /// </summary>
+    private static bool SameCall(FunctionCallContent call, string name, AIFunctionArguments arguments)
+    {
+        var mine = call.Arguments ?? new Dictionary<string, object?>();
+        return string.Equals(call.Name, name, StringComparison.Ordinal) && mine.Count == arguments.Count
+            && arguments.All(pair => mine.TryGetValue(pair.Key, out var value)
+                && string.Equals(Convert.ToString(value, CultureInfo.InvariantCulture), Convert.ToString(pair.Value, CultureInfo.InvariantCulture), StringComparison.Ordinal));
     }
 
     internal static void ReplaceText(IList<ChatMessage> messages, string text)

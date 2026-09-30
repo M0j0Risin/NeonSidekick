@@ -10373,10 +10373,6 @@ internal sealed partial class ChatScreen
         var pacer = new BotPicturePacer(_time);
         // The preloaded skills' notice as last shown (2026-09-27): shown again only when the set or the mode changes.
         string preloadedTold = "";
-        // The load_skill that knows the preloaded skills (2026-09-30, code review): kept while the preloaded set is unchanged, so a
-        // reply does not build a tool and parse its schema again; built only once a side is offered it.
-        LoadSkillTool? preloadedLoader = null;
-        IReadOnlyList<string> preloadedLoaderNames = [];
         // ESC's ladder (2026-09-25): the voice, then the bot replying, then the chat.
         var ladder = new BotEscLadder();
         _botNoWorkflowTold = false;
@@ -10421,15 +10417,9 @@ internal sealed partial class ChatScreen
                 // Asked for it anyway (2026-09-30, code review: the writer's directive names the skill the topic names, the one
                 // preloaded), that side's load_skill answers it is loaded already; prompt-writer-only's bots, without it, load it.
                 var writerSkills = BotChat.WithoutPreloaded(catalog, preloadedNames);
-                // Only a side left with a skill to load is offered the tool, and with none preloaded the plain one does.
-                if (writerSkills is not null && loadTool is not null && preloadedNames.Count > 0
-                    && (preloadedLoader is null || !preloadedLoaderNames.SequenceEqual(preloadedNames, StringComparer.OrdinalIgnoreCase)))
-                {
-                    preloadedLoader = new LoadSkillTool(_catalog, preloadedNames);
-                    preloadedLoaderNames = preloadedNames;
-                }
-
-                var preloadedTool = loadTool is null || preloadedNames.Count == 0 ? loadTool : preloadedLoader;
+                // Only a side left with a skill to load is offered the tool, and with none preloaded the plain one does. Built per
+                // reply (2026-09-30, code review: a cache of it across replies was state for a small set and a schema parsed once).
+                var preloadedTool = writerSkills is null || loadTool is null || preloadedNames.Count == 0 ? loadTool : new LoadSkillTool(_catalog, preloadedNames);
                 var botSkills = new BotSkillSet(writerSkills, writerSkills is null ? null : preloadedTool, preloaded);
                 bool botsPreloaded = skillMode == BotSkillMode.PromptWriterAndBots;
                 var skills = botsPreloaded ? writerSkills : catalog;
@@ -10992,7 +10982,7 @@ internal sealed partial class ChatScreen
         {
             try
             {
-                return await WriteBotPicturePromptAsync(assistant, request, skillTool, loaded, token).ConfigureAwait(false);
+                return await WriteBotPicturePromptAsync(assistant, request, skillTool, skillTool ?? PlainLoadSkill, loaded, token).ConfigureAwait(false);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
@@ -11050,12 +11040,15 @@ internal sealed partial class ChatScreen
     /// <c>&lt;tool_call&gt;</c> markup a Qwen-style model writes there is never the ComfyUI prompt. A call to a tool the writer is
     /// not offered runs too, and is answered <c>Error: unknown tool</c>, as a native one is: taken out instead, a writer whose
     /// only answer was markup would have an empty prompt at once, where told the tool is not there it may still write one.</para>
-    /// <para>Words beside calls that loaded nothing new (2026-09-30, code review: a preloaded skill asked for again is answered
-    /// <see cref="SkillText.AlreadyLoaded"/>) are the prompt: they were written with the skill already in the prompt, and asking
-    /// again only costs a round trip and risks an empty answer. Words beside a load that brought content are a guess made before
-    /// it, so the writer is asked again.</para>
+    /// <para>Words beside a call are never the prompt (2026-09-30, code review: taken as the prompt when every call answered
+    /// <see cref="SkillText.AlreadyLoaded"/>, a lead-in — "I'll load the pony-prompts skill first." — was sent to ComfyUI, and in
+    /// the promised form drew a picture no reply promised): the writer is asked again, the tool's answer in front of it.</para>
+    /// <para><paramref name="writtenLoad"/> (2026-09-30, code review) is the <c>load_skill</c> whose written calls are caught when
+    /// <paramref name="skillTool"/> is null: the writer is offered no tool then, but a preloaded skill's content can still name
+    /// <c>load_skill</c>, and the line form (<c>load_skill name: …</c>) is caught only with its parameter names — without them it
+    /// was the ComfyUI prompt, where the copy before the review always took it out.</para>
     /// </summary>
-    private static async Task<string> WriteBotPicturePromptAsync(Assistant assistant, List<ChatMessage> request, AIFunction? skillTool, List<string> loaded, CancellationToken cancellationToken)
+    private static async Task<string> WriteBotPicturePromptAsync(Assistant assistant, List<ChatMessage> request, AIFunction? skillTool, AIFunction writtenLoad, List<string> loaded, CancellationToken cancellationToken)
     {
         IReadOnlyList<AIFunction> tools = skillTool is null ? [] : [skillTool];
         for (int iteration = 1; tools.Count > 0 && iteration <= BotPromptSkillIterations; iteration++)
@@ -11068,13 +11061,11 @@ internal sealed partial class ChatScreen
 
             request.AddRange(response.Messages);
             var results = new List<AIContent>(response.Calls.Count);
-            bool nothingNew = true;
             foreach (var call in response.Calls)
             {
                 DiagnosticLog.Debug(AppCategory, "Botchat image prompt " + Assistant.ToolCallLogLine(call.Name, Assistant.SerializeArguments(call.Arguments)));
                 var (text, _) = await Assistant.InvokeToolAsync(tools, call, cancellationToken).ConfigureAwait(false);
                 results.Add(Assistant.ResultContent(call, text));
-                nothingNew &= SkillText.IsAlreadyLoaded(text, out _);
                 if (string.Equals(call.Name, LoadSkillTool.ToolName, StringComparison.Ordinal))
                 {
                     loaded.Add(LoadSkillTool.Note(text));
@@ -11082,14 +11073,13 @@ internal sealed partial class ChatScreen
             }
 
             request.Add(new ChatMessage(ChatRole.Tool, results));
-            if (nothingNew && response.Text.Length > 0)
-            {
-                return response.Text;
-            }
         }
 
-        return (await assistant.RequestAsync(request, [], ReasoningEffort.None, cancellationToken, textToolCalls: tools).ConfigureAwait(false)).Text;
+        return (await assistant.RequestAsync(request, [], ReasoningEffort.None, cancellationToken, textToolCalls: [writtenLoad]).ConfigureAwait(false)).Text;
     }
+
+    /// <summary>The main chat's <c>load_skill</c>, whatever its switches (2026-09-30, code review): read for its parameter names, never run.</summary>
+    private AIFunction PlainLoadSkill => _skillTools.First(tool => string.Equals(tool.Name, LoadSkillTool.ToolName, StringComparison.Ordinal));
 
     /// <summary>
     /// A bot's turn run unseen (later on 2026-09-25, <c>Botchat image async</c> off): every event the assistant yields, kept for

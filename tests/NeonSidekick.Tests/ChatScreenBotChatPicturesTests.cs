@@ -854,30 +854,56 @@ public partial class ChatScreenTests
     }
 
     /// <summary>
-    /// Words beside a written load of a preloaded skill (2026-09-30, code review): the load brings nothing new — answered
-    /// "already loaded" — so the words, written with the skill in the prompt, are the prompt; the writer is not asked again. The
-    /// transcript's line is the short one, not the sentence written to the model.
+    /// Words beside a written load of a preloaded skill (2026-09-30, code review): never the prompt, even though the load brings
+    /// nothing new — they are as often a lead-in to the call as a prompt — so the writer is asked again, "already loaded" in
+    /// front of it. The transcript's line is the short one, not the sentence written to the model.
     /// </summary>
     [Fact]
-    public async Task BotChat_SkillsEnabled_WordsBesideAPreloadedSkillsLoad_AreThePrompt()
+    public async Task BotChat_SkillsEnabled_WordsBesideAPreloadedSkillsLoad_AreNotThePrompt()
     {
         var stub = BotPicturesFixture();
         _settings.Update(d => d.BotChatSkills = true);
         PutSkill(ProfileSkills, "pony-prompts", "Writes Pony Diffusion prompts.", "# Pony prompts\n\nAlways start with score_9.");
         PutSkill(ProfileSkills, "haiku");
         _chat.EnqueueText(DogReply);
-        _chat.EnqueueText("score_9, a dog surfing a wave\n<tool_call>\n<function=load_skill>\n<parameter=name>\npony-prompts\n</parameter>\n</function>\n</tool_call>");
+        _chat.EnqueueText("I'll load the pony-prompts skill first.\n<tool_call>\n<function=load_skill>\n<parameter=name>\npony-prompts\n</parameter>\n</function>\n</tool_call>");
+        _chat.EnqueueText("score_9, a dog surfing a wave");
         _chat.EnqueueText("Ada ", "answers.");
-        EscDuringRequest(3);
+        EscDuringRequest(4);
         PushLine("/botchat use pony-prompts for the pictures");
         PushLine("/exit");
 
         string output = await RunAsync();
 
-        Assert.Equal(3, _chat.Requests.Count);
-        Assert.Contains("\"text\":\"score_9, a dog surfing a wave\"", stub.Requests.Single(r => r.Uri.AbsolutePath == "/prompt").Body!);
+        Assert.Equal(4, _chat.Requests.Count);
+        string body = stub.Requests.Single(r => r.Uri.AbsolutePath == "/prompt").Body!;
+        Assert.Contains("\"text\":\"score_9, a dog surfing a wave\"", body);
+        Assert.DoesNotContain("I'll load", body);
         Assert.Contains(Skills.SkillText.AlreadyLoadedNote("pony-prompts"), output);
         Assert.DoesNotContain("in your system prompt", output);
+    }
+
+    /// <summary>
+    /// A load_skill line written by a writer offered no tool (2026-09-30, code review: Botchat skills enabled off, a preloaded skill
+    /// in the prompt): taken out of the prompt, the line form too — caught only with load_skill's parameter names.
+    /// </summary>
+    [Fact]
+    public async Task BotChat_NoSkillTool_AWrittenLoadSkillLine_IsTakenOutOfThePrompt()
+    {
+        var stub = BotPicturesFixture();
+        PutSkill(ProfileSkills, "pony-prompts", "Writes Pony Diffusion prompts.", "# Pony prompts\n\nAlways start with score_9.");
+        _chat.EnqueueText(DogReply);
+        _chat.EnqueueText("load_skill name: pony-prompts file: references/tags.md\nscore_9, a dog surfing a wave");
+        _chat.EnqueueText("Ada ", "answers.");
+        EscDuringRequest(3);
+        PushLine("/botchat use pony-prompts for the pictures");
+        PushLine("/exit");
+
+        await RunAsync();
+
+        Assert.Equal(3, _chat.Requests.Count);
+        Assert.Empty(ToolsOf(_chat.Options[1]));
+        Assert.Contains("\"text\":\"score_9, a dog surfing a wave\"", stub.Requests.Single(r => r.Uri.AbsolutePath == "/prompt").Body!);
     }
 
     /// <summary>

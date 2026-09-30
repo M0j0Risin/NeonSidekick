@@ -2253,6 +2253,25 @@ public class AssistantTests
         Assert.Empty(off.Calls);
     }
 
+    /// <summary>
+    /// A written call the response also carries as a native one, same name and arguments (2026-09-30, code review: a server that
+    /// parses the call but leaves the markup in the content): one call, not two; the markup still goes.
+    /// </summary>
+    [Fact]
+    public async Task RequestAsync_TextToolCalls_TheSameCallWrittenAndNative_IsOneCall()
+    {
+        var (client, _, assistant) = Build();
+        var echo = new EchoTool();
+        client.Enqueue(
+            FakeChatClient.Text("<tool_call>\n<function=echo>\n<parameter=text>\na\n</parameter>\n</function>\n</tool_call>"),
+            FakeChatClient.Call("c1", "echo", new Dictionary<string, object?> { ["text"] = "a" }));
+
+        var response = await assistant.RequestAsync([new ChatMessage(ChatRole.User, "go")], [echo], ReasoningEffort.None, CancellationToken.None, textToolCalls: [echo]);
+
+        Assert.Equal("c1", Assert.Single(response.Calls).CallId);
+        Assert.Equal("", response.Text);
+    }
+
     /// <summary>In a request that offers no tool, the answer round, a written call is taken out of the text and not made a call.</summary>
     [Fact]
     public async Task RequestAsync_TextToolCalls_NoToolOffered_TheCallIsOnlyTakenOut()
