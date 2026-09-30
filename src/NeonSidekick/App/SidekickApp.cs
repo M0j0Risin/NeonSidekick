@@ -77,6 +77,7 @@ public sealed class SidekickApp
     private readonly Func<Uri, Comfy.ComfyClient>? _comfyClient;
     private readonly Func<Uri, string, HomeAssistant.HaClient>? _haClient;
     private readonly Printing.IPrintSpooler _printSpooler;
+    private readonly Func<Perf.IPerfSource>? _perfSource;
     private readonly Claude.IClaudeCli? _claude;
     private readonly Action<string>? _openViewer;
     private readonly Action<string>? _viewPicture;
@@ -162,8 +163,11 @@ public sealed class SidekickApp
         Func<Uri, string, HomeAssistant.HaClient>? haClient = null,
         Action<string>? followViewer = null,
         Printing.IPrintSpooler? printSpooler = null,
-        Func<EmbeddedLlm.IEmbeddedLlm>? embeddedLlm = null)
+        Func<EmbeddedLlm.IEmbeddedLlm>? embeddedLlm = null,
+        Func<Perf.IPerfSource>? perfSource = null)
     {
+        // The performance bar's readings (2026-09-29): kernel32, NVML or PDH/DXGI in the app on Windows; none in tests.
+        _perfSource = perfSource;
         // The embedded model (2026-09-29): llama-server under the app's own job in the app, a fake in tests, none by default.
         _embeddedLlm = embeddedLlm;
         // The printers (2026-09-28): winspool and GDI in the app on Windows; none in tests, so nothing reaches a real printer.
@@ -1511,7 +1515,7 @@ public sealed class SidekickApp
         // on the row and hands it back to the terminal otherwise, so the terminal's own selection
         // and right-click copy work whenever there is nothing to click into.
         var mouse = _input as WindowsConsoleInput;
-        var screen = new ChatScreen(_console, _settings, () => EffectiveSettings, OverriddenBy, session, speech, new KeySource(_input ?? _console.Input), voice, PersonaFile.OpenInEditor, RenderScreen, _time, _geometry, _clipboard, mouse is null ? null : mouse.Capture, _copyToClipboard, clipboardImage: _clipboardImage, web: _web, setTitle: _setTitle, externalSkills: _externalSkills, holdWheel: mouse is null ? null : mouse.HoldWheel, splash: SplashImages.Source, editDraft: PersonaFile.EditAndWaitAsync, mcp: mcp, environment: _environment.System, logFile: _options.LogPath is { } logPath ? Path.GetFullPath(logPath) : null, comfyClient: _comfyClient, openImage: PersonaFile.OpenImage, claude: _claude, openViewer: _openViewer, viewPicture: _viewPicture, followViewer: _followViewer, haClient: _haClient, printSpooler: _printSpooler);
+        var screen = new ChatScreen(_console, _settings, () => EffectiveSettings, OverriddenBy, session, speech, new KeySource(_input ?? _console.Input), voice, PersonaFile.OpenInEditor, RenderScreen, _time, _geometry, _clipboard, mouse is null ? null : mouse.Capture, _copyToClipboard, clipboardImage: _clipboardImage, web: _web, setTitle: _setTitle, externalSkills: _externalSkills, holdWheel: mouse is null ? null : mouse.HoldWheel, splash: SplashImages.Source, editDraft: PersonaFile.EditAndWaitAsync, mcp: mcp, environment: _environment.System, logFile: _options.LogPath is { } logPath ? Path.GetFullPath(logPath) : null, comfyClient: _comfyClient, openImage: PersonaFile.OpenImage, claude: _claude, openViewer: _openViewer, viewPicture: _viewPicture, followViewer: _followViewer, haClient: _haClient, printSpooler: _printSpooler, perfSource: _perfSource);
         if (mouse is not null)
         {
             mouse.ModeChanged = screen.FlushConsole;

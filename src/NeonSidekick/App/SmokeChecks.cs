@@ -124,6 +124,9 @@ public static partial class SmokeChecks
         results.Add(ProbeKokoroPhonemizer());
         results.Add(ProbeKokoroSynthesis(nativeDirectory, modelsDirectory));
         results.Add(ProbeJobObject());
+        results.Add(ProbePerfKernel32());
+        results.Add(ProbePerfNvml());
+        results.Add(ProbePerfPdhDxgi());
         results.Add(ProbeLlamaServer(modelsDirectory));
         return results;
     }

@@ -31,7 +31,7 @@ public class AppSettingsTests : IDisposable
         EmbeddedContextSize = 8192,
         EmbeddedGpuLayers = "20",
         EmbeddedVision = false,
-        EmbeddedLlmEnabled = false,
+        EmbeddedLlmServer = false,
         EmbeddedDrafter = false,
         CommandTypoIntercept = false,
         KeepCommandHistory = false,
@@ -63,6 +63,7 @@ public class AppSettingsTests : IDisposable
         WelcomeSplashMode = "tiled",
         ShowWorkingDirectory = false,
         ToolbarItems = ["usage", "path"],
+        ShowPerformanceBar = "spark",
         ThemedViewer = false,
         ViewerLeft = -1200,
         ViewerTop = 140,
@@ -179,6 +180,7 @@ public class AppSettingsTests : IDisposable
         Assert.Equal(expected.WelcomeSplashMode, actual.WelcomeSplashMode);
         Assert.Equal(expected.ShowWorkingDirectory, actual.ShowWorkingDirectory);
         Assert.Equal(expected.ToolbarItems, actual.ToolbarItems);
+        Assert.Equal(expected.ShowPerformanceBar, actual.ShowPerformanceBar);
         Assert.Equal(expected.ThemedViewer, actual.ThemedViewer);
         Assert.Equal(expected.ViewerLeft, actual.ViewerLeft);
         Assert.Equal(expected.ViewerTop, actual.ViewerTop);
@@ -273,7 +275,7 @@ public class AppSettingsTests : IDisposable
         Assert.Equal(expected.EmbeddedContextSize, actual.EmbeddedContextSize);
         Assert.Equal(expected.EmbeddedGpuLayers, actual.EmbeddedGpuLayers);
         Assert.Equal(expected.EmbeddedVision, actual.EmbeddedVision);
-        Assert.Equal(expected.EmbeddedLlmEnabled, actual.EmbeddedLlmEnabled);
+        Assert.Equal(expected.EmbeddedLlmServer, actual.EmbeddedLlmServer);
         Assert.Equal(expected.EmbeddedDrafter, actual.EmbeddedDrafter);
     }
 
@@ -296,7 +298,7 @@ public class AppSettingsTests : IDisposable
             d.EmbeddedContextSize = full.EmbeddedContextSize;
             d.EmbeddedGpuLayers = full.EmbeddedGpuLayers;
             d.EmbeddedVision = full.EmbeddedVision;
-            d.EmbeddedLlmEnabled = full.EmbeddedLlmEnabled;
+            d.EmbeddedLlmServer = full.EmbeddedLlmServer;
             d.EmbeddedDrafter = full.EmbeddedDrafter;
             d.CommandTypoIntercept = full.CommandTypoIntercept;
             d.KeepCommandHistory = full.KeepCommandHistory;
@@ -315,6 +317,7 @@ public class AppSettingsTests : IDisposable
             d.WelcomeSplashMode = full.WelcomeSplashMode;
             d.ShowWorkingDirectory = full.ShowWorkingDirectory;
             d.ToolbarItems = full.ToolbarItems;
+            d.ShowPerformanceBar = full.ShowPerformanceBar;
             d.ThemedViewer = full.ThemedViewer;
             d.ViewerLeft = full.ViewerLeft;
             d.ViewerTop = full.ViewerTop;
@@ -419,7 +422,7 @@ public class AppSettingsTests : IDisposable
                 d.EmbeddedContextSize = full.EmbeddedContextSize;
                 d.EmbeddedGpuLayers = full.EmbeddedGpuLayers;
                 d.EmbeddedVision = full.EmbeddedVision;
-                d.EmbeddedLlmEnabled = full.EmbeddedLlmEnabled;
+                d.EmbeddedLlmServer = full.EmbeddedLlmServer;
                 d.EmbeddedDrafter = full.EmbeddedDrafter;
                 d.CommandTypoIntercept = full.CommandTypoIntercept;
                 d.KeepCommandHistory = full.KeepCommandHistory;
@@ -438,6 +441,7 @@ public class AppSettingsTests : IDisposable
                 d.WelcomeSplashMode = full.WelcomeSplashMode;
                 d.ShowWorkingDirectory = full.ShowWorkingDirectory;
                 d.ToolbarItems = full.ToolbarItems;
+                d.ShowPerformanceBar = full.ShowPerformanceBar;
                 d.ThemedViewer = full.ThemedViewer;
                 d.ViewerLeft = full.ViewerLeft;
                 d.ViewerTop = full.ViewerTop;
@@ -1304,7 +1308,7 @@ public class AppSettingsTests : IDisposable
         Assert.Equal("compact", s.LlmToolCompactType);
         Assert.False(s.FileTools);   // on until 2026-09-29, with the web tools
         Assert.False(s.ObsidianTools || s.SqlTools || s.ComfyTools || s.HomeAssistantTools);   // the four integrations too, the same day
-        Assert.True(s.EmbeddedLlmEnabled && s.EmbeddedDrafter);   // the embedded model's switch and MTP (2026-09-29): on
+        Assert.True(s.EmbeddedLlmServer && s.EmbeddedDrafter);   // the embedded model's switch and MTP (2026-09-29): on
         Assert.Equal("duckduckgo", s.WebSearchMethod);
         // The Ask tab (2026-09-15): the tool on, ten questions of ten choices; a choice needs two, so the choices floor is 2.
         Assert.True(s.AskUser);
@@ -1321,6 +1325,7 @@ public class AppSettingsTests : IDisposable
         Assert.Equal("fullsize", s.WelcomeSplashMode);   // 2026-09-18; a pick since 2026-09-24 (on was fullsize)
         Assert.False(s.ShowWorkingDirectory);   // 2026-09-18; off by default since 2026-09-21
         Assert.Null(s.ToolbarItems);   // 2026-09-21 as a switch, on; every item since the checklist, 2026-09-29
+        Assert.Equal("off", s.ShowPerformanceBar);   // the performance bar (2026-09-29): off, the user's call
         Assert.True(s.ThemedViewer);   // later on 2026-09-27
         Assert.Null(s.ViewerLeft);   // 2026-09-28: Windows' own place until the viewer first closes
         Assert.Null(s.ViewerTop);

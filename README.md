@@ -144,6 +144,7 @@ Settings that an environment variable or flag can override for one launch are li
 | Welcome splash | Pictures under the banner at startup, until the first line is sent: `fullsize`, `tiled` or `disabled`. See Welcome splash below. | `fullsize` |
 | Working directory in header | Prints the working directory at the right of the banner's title line. | off |
 | Show toolbar | Which items the toolbar under the hint row shows (see *Double-Click Shortcuts* above): a checklist of every glyph and the working-directory path (📂), Enter or Space to flip one, **A** / **N** (or the *select all* / *select none* buttons) for all or none. Nothing checked hides the row; the row reads `all`, `off` or how many are checked. 💾, the lock and 👮 still need their own settings on. | Settings, Tools, Skills, Sessions, path (5 of 11) |
+| Show performance bar | A bar under the toolbar with CPU %, RAM %, GPU % and VRAM %, read once a second: `off`, `text` (the numbers), `gauge` (a bar per meter), `spark` (the last ten seconds as a sparkline) or `led` (ten segments in the theme's colours). The values turn amber from 60 % and red from 85 %. An NVIDIA GPU is read through its driver (NVML); any other through Windows' own GPU counters, for the card with the most memory. Without a GPU the bar shows CPU and RAM. | `off` |
 | Theme | `synthwave`, `netrunner` (green phosphor), `nostromo` (amber phosphor), `noir` (greyscale), `cyberpunk` (colourful), `vaporwave` (pastel), `mainframe` (blue phosphor), `grid` (light cycle), `replicant` (smog and sodium) or `abyssal` (bioluminescent). | `synthwave` |
 | Draft editor | What `/draft` opens its temporary file with (`code --wait`, `notepad`…); empty uses the app Windows opens `.txt` files with. | (default .txt editor) |
 | Image viewer | Where a double-clicked picture opens. Empty: the built-in picture viewer. `system`: the app Windows registers for the file type (Paint for png, jpg and bmp). Anything else is a command, with the file's path appended (`mspaint`, `"C:\Program Files\GIMP 3\bin\gimp-3.exe"`). | (built-in viewer) |
@@ -249,7 +250,7 @@ Voice input sets up in the background (🎧 on the hint row), so a first-use Whi
 
 #### Embedded
 
-A model the app downloads and runs itself, on llama.cpp's `llama-server`, for when no other server is around: Gemma 4 from the small E2B to the 31B, and Qwen3.6 35B A3B and Qwen3.8 27B. `/server` (and the startup picker) lists one **Embedded** row per model after the servers it found: an installed model says `installed · 4.2 GB`, one not yet downloaded says `download  · 4.2 GB`, and a paused download says how far it got. Builds of one model share its name, so each row shows its quantisation too. Every model reads images (its vision projector is part of the download). Picking a row that isn't installed asks for the reasoning level, then downloads it in the background (📥 and its percentage on the hint row; double-click 📥 to pause), and switches to it when it's done — unless you picked another server meanwhile. `/server embedded` lists the embedded rows alone.
+A model the app downloads and runs itself, on llama.cpp's `llama-server`, for when no other server is around: Gemma 4 from the small E2B to the 31B, Qwen3.6 35B A3B, and Qwen3.8 27B (also in NVFP4 for Blackwell GPUs). `/server` (and the startup picker) lists one **Embedded** row per model after the servers it found: an installed model says `installed · 4.2 GB`, one not yet downloaded says `download  · 4.2 GB`, and a paused download says how far it got. Builds of one model share its name, so each row shows its quantisation too, and a ⚡ in the last column marks a model with a drafter (the MTP column below). Every model reads images (its vision projector is part of the download). Picking a row that isn't installed asks for the reasoning level, then downloads it in the background (📥 and its percentage on the hint row; double-click 📥 to pause), and switches to it when it's done — unless you picked another server meanwhile. `/server embedded` lists the embedded rows alone.
 
 | Model | Quantisation | Download | MTP |
 |---|---|---|---|
@@ -282,12 +283,20 @@ A model the app downloads and runs itself, on llama.cpp's `llama-server`, for wh
 | Qwen3.8 27B (`qwen3.8-27b`, Unsloth) | UD-Q4_K_XL | 18.5 GB | built in |
 | Qwen3.8 27B (`qwen3.8-27b-q5`, Unsloth) | UD-Q5_K_XL | 21.8 GB | built in |
 | Qwen3.8 27B (`qwen3.8-27b-q6`, Unsloth) | UD-Q6_K_XL | 26.2 GB | built in |
+| Qwen3.8 27B NVFP4 (`qwen3.8-27b-nvfp4-very-low`, esatapedico) | VERY-LOW | 15.8 GB | built in |
+| Qwen3.8 27B NVFP4 (`qwen3.8-27b-nvfp4-compact-low`, esatapedico) | COMPACT-LOW | 16.1 GB | built in |
+| Qwen3.8 27B NVFP4 (`qwen3.8-27b-nvfp4-low`, esatapedico) | LOW | 16.5 GB | built in |
+| Qwen3.8 27B NVFP4 (`qwen3.8-27b-nvfp4-medium`, esatapedico) | MEDIUM | 17.3 GB | built in |
+| Qwen3.8 27B NVFP4 (`qwen3.8-27b-nvfp4-mid-high`, esatapedico) | MID-HIGH | 17.8 GB | built in |
+| Qwen3.8 27B NVFP4 (`qwen3.8-27b-nvfp4-high`, esatapedico) | HIGH | 18.5 GB | built in |
+| Qwen3.8 27B NVFP4 (`qwen3.8-27b-nvfp4-very-high`, esatapedico) | VERY-HIGH | 20.6 GB | built in |
+| Qwen3.8 27B NVFP4 (`qwen3.8-27b-nvfp4-highest`, esatapedico) | HIGHEST | 24.1 GB | built in |
 | Qwen3.8 27B Uncensored (`qwen3.8-27b-uncensored`, HauhauCS Aggressive) | Q4_K_P | 18.9 GB | built in |
 | Qwen3.8 27B Uncensored (`qwen3.8-27b-uncensored-q5`, HauhauCS Aggressive) | Q5_K_P | 21.1 GB | built in |
 
 | Setting | What it does | Default |
 |---|---|---|
-| Embedded LLM enabled | Offers the embedded models. Off, `/server` lists none, `/server embedded` refuses, a saved embedded URL counts as none (the app looks for a server as if it were blank), and a running embedded server stops. Installed models stay on disk. | on |
+| Embedded LLM server enabled | Offers the embedded models. Off, `/server` lists none, `/server embedded` refuses, a saved embedded URL counts as none (the app looks for a server as if it were blank), and a running embedded server stops. Installed models stay on disk. | on |
 | Embedded models | The catalog: each model with its size and state. Enter on an installed one offers *Use now* and *Remove*; on any other, *Install*, plus *Remove* for a partly downloaded one. Remove asks first, stops a download of that model and a server running it, and deletes its folder; when it was the saved LLM, the LLM URL and model are cleared. Using or installing closes the settings and connects. | |
 | Embedded backend | Which llama.cpp build runs the model: `auto` (CUDA with an NVIDIA driver 580 or newer, else Vulkan, else the CPU), `cuda`, `vulkan` or `cpu`. The row shows what `auto` picked and why. | `auto` |
 | Embedded context size | The server's context window in tokens: 0 for the model's own (128K for Gemma 4 E2B/E4B, 256K for the larger models, which needs a lot of memory), else 512–262,144. | 32,768 |
@@ -295,9 +304,10 @@ A model the app downloads and runs itself, on llama.cpp's `llama-server`, for wh
 | Embedded vision | Loads the model's vision projector so it can read images (about 1 GB more memory for most models, under 200 MB for the 12Bs). Off, an image sent to the embedded model is refused. | on |
 | Embedded drafter | Multi-token prediction (MTP): the model drafts a few tokens ahead and checks them, so replies come faster with the same text. Gemma 4 models use a small drafter file (downloaded with the model, or at its next start for a model installed before); Qwen3.8 has the drafter built in; the MTP column above says which. Off, no drafter is loaded (nor downloaded with a new install) and the model decodes one token at a time; turn it off if a model misbehaves with it. | on |
 
+* The Qwen3.8 27B NVFP4 builds keep most weights in NVFP4, which needs the CUDA backend on an NVIDIA Blackwell GPU (RTX 50 series or newer); elsewhere they are slow or don't load. Their tiers (VERY-LOW to HIGHEST) share one NVFP4 body and differ in the output head, the token embedding and the MTP head, except HIGHEST, which keeps more in Q8_0/BF16.
 * Each file is checked against the SHA-256 Hugging Face publishes for it. A download that's paused (double-click 📥) or cut keeps what arrived, and picking the model again resumes it. The drive must have the rest plus 1 GB to spare.
 * The first start downloads llama.cpp itself (build `b11258`: 577 MB for CUDA with its runtime, 33 MB for Vulkan, 19 MB for the CPU). If `auto` picked CUDA and it doesn't start, the app says so and tries Vulkan.
-* The server listens on a random port on `127.0.0.1` only, with a key made at each start. It keeps running while you switch reasoning or change a setting it doesn't depend on, restarts when one it does changes, and stops when you pick another server, turn *Embedded LLM enabled* off, or quit. If the app crashes, Windows stops it too.
+* The server listens on a random port on `127.0.0.1` only, with a key made at each start. It keeps running while you switch reasoning or change a setting it doesn't depend on, restarts when one it does changes, and stops when you pick another server, turn *Embedded LLM server enabled* off, or quit. If the app crashes, Windows stops it too.
 * Models live in `models\llm\<id>\` and llama.cpp in `llama\` under the home folder. `/about` shows both.
 * `/model` on the embedded server lists the installed embedded models; one server runs at a time. A `/botchat multi` bot whose profile points at `embedded` shares the running model.
 * Each model runs with the sampling its card recommends (Gemma 4: temperature 1.0, top-p 0.95, top-k 64; HauhauCS's QAT Balanced builds: 0.6, 0.9, 64; Qwen: 1.0, 0.95, 20); `/sampling` overrides them as for any server.

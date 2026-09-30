@@ -249,6 +249,13 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     private int _toolbarPathColumn = -1;
     private int _toolbarPathCells;
 
+    // The performance bar (2026-09-29): the provider (asked with the row's cells; null = no row), the rows the last draw
+    // gave it (0 or 1, Draw the only writer) and the row's text as drawn (null = no row; the tick's comparison). It is the
+    // pane's last row when drawn, under the toolbar.
+    private Func<int, UI.PerfRow?> _perf = static _ => null;
+    private int _perfRows;
+    private string? _shownPerf;
+
     // The picture strip (later still on 2026-09-24): the provider, the rows the last draw gave it (0 or
     // PictureStrip.Rows — Draw is the only writer), the strip's version and highlight as drawn (the tick's
     // comparison), and where its tiles landed (TryHitStrip).
@@ -464,7 +471,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
                 return null;
             }
 
-            if (_toolbarRows > 0 && y == top + LastRowBelowCursor)
+            if (_toolbarRows > 0 && y == top + ToolbarRowBelowCursor)
             {
                 return new OffPaneHit(null, ToolbarHitAt(_toolbarStrip, _toolbarPathColumn, _toolbarPathCells, x));
             }
@@ -616,6 +623,24 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     }
 
     /// <summary>
+    /// The performance bar (2026-09-29, the user's ask: a third bar): asked with the cells the row has on every draw and on
+    /// the tick; null draws no row. It takes the screen's last row, under the toolbar, when the window keeps a transcript
+    /// row over the smallest pane and the toolbar; the tick rewrites it in place when its text changes and repaints the pane
+    /// when it comes or goes (the screen's <c>Show performance bar</c> setting).
+    /// </summary>
+    public Func<int, UI.PerfRow?> Perf
+    {
+        get => _perf;
+        set => _perf = value ?? throw new ArgumentNullException(nameof(value));
+    }
+
+    /// <summary>The rows the performance bar took in the last draw: 1 while drawn, else 0 (the thumbnail sizing adds it, as <see cref="ToolbarRows"/>).</summary>
+    public int PerfRows
+    {
+        get { lock (_gate) { return _perfRows; } }
+    }
+
+    /// <summary>
     /// The session's picture strip (later still on 2026-09-24): drawn <see cref="UI.PictureStrip.Rows"/> tall under a rule of
     /// its own (<see cref="StripRuleRows"/>, 2026-09-25) and over the upper rule while this answers one with pictures in it, no overlay is open, the window keeps
     /// <see cref="StripTranscriptRows"/> transcript rows over the strip and the pane, and is at least
@@ -759,8 +784,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     /// <summary>The strip the provider answers now is not the drawn one: it came or went, changed, or its highlight did.</summary>
     private bool StripChanged()
     {
-        int toolbarRows = ToolbarRowsFor(Height);
-        if (StripRowsFor(Width, Height, toolbarRows) != _stripRows)
+        if (StripRowsFor(Width, Height, BarRowsFor(Height)) != _stripRows)
         {
             return true;
         }
@@ -835,10 +859,19 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     /// since <see cref="MaxOverlayRows"/> and <see cref="MaxInputRows"/> are counted over the rows
     /// the toolbar leaves. The provider, not the drawn count: the host lays out BEFORE the draw.
     /// </summary>
-    public int LayoutHeight => Height - ToolbarRowsFor(Height);
+    public int LayoutHeight => Height - BarRowsFor(Height);
 
     /// <summary>The rows the toolbar takes in a window of <paramref name="height"/>: one when <see cref="Toolbar"/> answers and the window keeps a transcript row over the smallest pane, else none.</summary>
     private int ToolbarRowsFor(int height) => _toolbar() is not null && height >= PaneRows + 2 ? 1 : 0;
+
+    /// <summary>The rows the performance bar takes in a window of <paramref name="height"/>: one when <see cref="Perf"/> answers and the window keeps a transcript row over the smallest pane and the toolbar, else none.</summary>
+    private int PerfRowsFor(int height) => _perf(Math.Max(1, Width - 1)) is not null && height >= PaneRows + 2 + ToolbarRowsFor(height) ? 1 : 0;
+
+    /// <summary>The rows under the hint row in a window of <paramref name="height"/>: the toolbar's and the performance bar's.</summary>
+    private int BarRowsFor(int height) => ToolbarRowsFor(height) + PerfRowsFor(height);
+
+    /// <summary>The rows under the hint row as last drawn.</summary>
+    private int BarRows => _toolbarRows + _perfRows;
 
     /// <summary>
     /// A short glyph after the trailer, <see cref="MarkSeparator"/> between, drawn in
@@ -2170,7 +2203,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
             return;
         }
 
-        var shown = LayoutInput(Width, Height - _toolbarRows - _stripRows);
+        var shown = LayoutInput(Width, Height - BarRows - _stripRows);
         if (shown.Rows.Count == _inputRows)
         {
             RewriteInputRows(shown);
@@ -2284,6 +2317,11 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
             if (ToolbarChanged())
             {
                 RedrawToolbar();
+            }
+
+            if (PerfChanged())
+            {
+                RedrawPerf();
             }
         }
     }
@@ -2537,7 +2575,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         }
 
         int firstRow = _firstRow;
-        var shown = LayoutInput(Width, Height - _toolbarRows - _stripRows);
+        var shown = LayoutInput(Width, Height - BarRows - _stripRows);
         if (_stripRows > 0 && (text.Length == 0) != _drawnStripHighlight)
         {
             // The draft emptied or filled under a highlighted strip: the highlight follows it, the whole pane again.
@@ -3062,7 +3100,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
                 return false;
             }
 
-            if (y != top + LastRowBelowCursor)
+            if (y != top + ToolbarRowBelowCursor)
             {
                 return false;
             }
@@ -3297,10 +3335,16 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         var toolbar = _toolbar();
         int toolbarRows = toolbar is not null && h >= PaneRows + 2 ? 1 : 0;
 
+        // The performance bar (2026-09-29) under the toolbar, the last row, when the window keeps a transcript row over
+        // the smallest pane and the toolbar; from here on the bars count as one (barRows) wherever the toolbar did alone.
+        var perf = _perf(Math.Max(1, w - 1));
+        int perfRows = perf is not null && h >= PaneRows + 2 + toolbarRows ? 1 : 0;
+        int barRows = toolbarRows + perfRows;
+
         // The picture strip (later still on 2026-09-24) over the upper rule, under a rule of its own (2026-09-25): its rows,
         // the rule's with them, count into the pane's, so the
         // padding, the lift and the region leave room for it; the input rows are capped over what it leaves.
-        int stripRows = StripRowsFor(w, h, toolbarRows);
+        int stripRows = StripRowsFor(w, h, barRows);
         var strip = stripRows > 0 ? _pictureStrip() : null;
         List<SegmentLine>? stripLines = null;
         bool stripHighlight = _text.Length == 0;
@@ -3326,14 +3370,14 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         ShownInput? shown = null;
         if (_overlay is null || _overlay.Input)
         {
-            shown = LayoutInput(w, h - toolbarRows - stripRows);
+            shown = LayoutInput(w, h - barRows - stripRows);
         }
 
         int closeColumn = -1;
         if (_overlay is { } overlay)
         {
             overlayLines = Segment.SplitLines(overlay.Content.GetSegments(_inner), w);
-            overlayRows = Math.Clamp(overlayLines.Count, 0, MaxOverlayRows(h - toolbarRows, shown?.Rows.Count ?? 0));
+            overlayRows = Math.Clamp(overlayLines.Count, 0, MaxOverlayRows(h - barRows, shown?.Rows.Count ?? 0));
             if (overlay.Close && overlayRows > 0)
             {
                 // The close glyph in column w − 2 of the first row, TrailerGap cells clear of the
@@ -3352,8 +3396,9 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
             }
         }
 
-        _paneRows = 3 + overlayRows + (shown?.Rows.Count ?? 0) + toolbarRows + stripRows;
+        _paneRows = 3 + overlayRows + (shown?.Rows.Count ?? 0) + barRows + stripRows;
         _toolbarRows = toolbarRows;
+        _perfRows = perfRows;
         _stripRows = stripRows;
 
         // Scrolled: the anchor against the region this pane leaves; at or past the last window it
@@ -3573,6 +3618,16 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
             ForgetToolbar();
         }
 
+        if (perfRows > 0)
+        {
+            EndRow();
+            WritePerfRow(perf!);
+        }
+        else
+        {
+            _shownPerf = null;
+        }
+
         if (_overpaint)
         {
             // Whatever a taller old frame left under the pane's last row.
@@ -3588,13 +3643,13 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         if (shown is null)
         {
             _cursorRow = 0;
-            _inner.Cursor.Move(CursorDirection.Up, overlayRows + 1 + toolbarRows);
+            _inner.Cursor.Move(CursorDirection.Up, overlayRows + 1 + barRows);
             ColumnZero();
         }
         else
         {
             SetShown(shown, ghostCells);
-            _inner.Cursor.Move(CursorDirection.Up, _inputRows - _cursorRow + 1 + toolbarRows);
+            _inner.Cursor.Move(CursorDirection.Up, _inputRows - _cursorRow + 1 + barRows);
             ColumnZero();
             _inner.Cursor.Move(CursorDirection.Right, TextCells.Width(InputLine.PromptGlyph) + _cursorCell);
             _inner.Cursor.Show(true);
@@ -3999,10 +4054,13 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     private int CursorDepth => !_drawnOverlay ? _cursorRow : _drawnInput ? _overlayRows + _cursorRow : 0;
 
     /// <summary>How many rows under the terminal's cursor the hint row sits, as last drawn: over the rows under the cursor and the lower rule; the toolbar, when drawn, is one further.</summary>
-    private int HintRowBelowCursor => _paneRows - 2 - _toolbarRows - _stripRows - CursorDepth;
+    private int HintRowBelowCursor => _paneRows - 2 - _toolbarRows - _perfRows - _stripRows - CursorDepth;
 
-    /// <summary>How many rows under the terminal's cursor the pane's last row sits, as last drawn: the hint row, or the toolbar under it (2026-09-21).</summary>
+    /// <summary>How many rows under the terminal's cursor the pane's last row sits, as last drawn: the hint row, or the toolbar under it (2026-09-21), or the performance bar under that (2026-09-29).</summary>
     private int LastRowBelowCursor => _paneRows - 2 - _stripRows - CursorDepth;
+
+    /// <summary>How many rows under the terminal's cursor the toolbar sits, as last drawn: the last row, or the one over the performance bar.</summary>
+    private int ToolbarRowBelowCursor => LastRowBelowCursor - _perfRows;
 
     private void WriteRule(int width)
     {
@@ -4387,7 +4445,30 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
             return;
         }
 
-        RedrawRow(LastRowBelowCursor, () => WriteToolbarRow(toolbar, Width));
+        RedrawRow(ToolbarRowBelowCursor, () => WriteToolbarRow(toolbar, Width));
+    }
+
+    /// <summary><see cref="RedrawHint"/> for the performance bar (2026-09-29): its row again, in place, the pane's last; nothing while none is drawn.</summary>
+    private void RedrawPerf()
+    {
+        if (!_drawn || _batch > 0 || _modal > 0 || _perfRows == 0 || _perf(Math.Max(1, Width - 1)) is not { } row)
+        {
+            return;
+        }
+
+        RedrawRow(LastRowBelowCursor, () => WritePerfRow(row));
+    }
+
+    /// <summary>The performance bar's row on the cursor's row: its runs in their styles, the rest of the row erased; the text remembered for the tick.</summary>
+    private void WritePerfRow(UI.PerfRow row)
+    {
+        foreach (var segment in row.Segments)
+        {
+            _inner.Write(new RawText(segment.Text, segment.Style));
+        }
+
+        _inner.Write(EraseLineEnd);
+        _shownPerf = row.Text;
     }
 
     /// <summary>The row <paramref name="down"/> rows under the cursor's written again by <paramref name="write"/>, the cursor back where it was.</summary>
@@ -4479,10 +4560,10 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
                 return;
             }
 
-            if (ToolbarRowsFor(h) != _toolbarRows)
+            if (ToolbarRowsFor(h) != _toolbarRows || PerfRowsFor(h) != _perfRows)
             {
-                // The toolbar came or went (the screen's switch, a window at the edge): the whole
-                // pane again — its shape changed.
+                // The toolbar or the performance bar came or went (the screen's settings, a window at the
+                // edge): the whole pane again — its shape changed.
                 if (_busyLabel is not null)
                 {
                     _frame++;
@@ -4517,6 +4598,12 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
                 RedrawToolbar();
             }
 
+            if (PerfChanged())
+            {
+                // A new reading: the row again, in place.
+                RedrawPerf();
+            }
+
             if (_busyLabel is not null)
             {
                 _frame++;
@@ -4533,6 +4620,9 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
 
     /// <summary>The toolbar <see cref="Toolbar"/> answers now is not the drawn one (its text — a presence change is <see cref="ToolbarRowsFor"/> against the drawn rows).</summary>
     private bool ToolbarChanged() => _toolbarRows > 0 && _toolbar() is { } toolbar && !string.Equals(ToolbarRow(toolbar.Strip, toolbar.Path, Math.Max(1, Width - 1)), _shownToolbar, StringComparison.Ordinal);
+
+    /// <summary>The performance bar <see cref="Perf"/> answers now is not the drawn one (its text — a presence change is <see cref="PerfRowsFor"/> against the drawn rows).</summary>
+    private bool PerfChanged() => _perfRows > 0 && _perf(Math.Max(1, Width - 1)) is { } row && !string.Equals(row.Text, _shownPerf, StringComparison.Ordinal);
 
     /// <summary>The standing hint (the overlay's while one is open) with the trailer is not what the hint row shows.</summary>
     private bool HintChanged() =>

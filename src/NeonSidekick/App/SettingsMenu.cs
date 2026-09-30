@@ -568,17 +568,23 @@ public enum SettingsField
     LlmReasoningEstimate,
 
     /// <summary>
-    /// A toggle: whether the embedded model is offered at all (<see cref="Settings.AppSettingsData.EmbeddedLlmEnabled"/>,
+    /// A toggle: whether the embedded model is offered at all (<see cref="Settings.AppSettingsData.EmbeddedLlmServer"/>,
     /// 2026-09-29, the user's ask); a reconnect, which stops a running embedded server when it goes off. The Embedded tab's first row.
     /// </summary>
-    EmbeddedLlmEnabled,
+    EmbeddedLlmServer,
 
     /// <summary>
     /// A toggle: whether the embedded server drafts ahead with its drafter (<see cref="Settings.AppSettingsData.EmbeddedDrafter"/>,
     /// 2026-09-29; <c>Embedded MTP</c> until later that day, the user's name); a reconnect. The Embedded tab's last row.
-    /// Last in the enum, as every newcomer.
     /// </summary>
     EmbeddedDrafter,
+
+    /// <summary>
+    /// A picker: the performance bar's look — <c>off</c> / <c>text</c> / <c>gauge</c> / <c>spark</c> / <c>led</c>
+    /// (<see cref="Settings.AppSettingsData.ShowPerformanceBar"/>, 2026-09-29, the user's ask). The General tab's row after
+    /// Show toolbar; no reconnect (the pane reads it at every tick). Last in the enum, as every newcomer.
+    /// </summary>
+    ShowPerformanceBar,
 }
 
 /// <summary>The tabs of <c>/settings</c> on the pane, in strip order (Sessions right after General — the user's order, 2026-09-18; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
@@ -597,7 +603,7 @@ public enum SettingsTab
     Stt,
 
     /// <summary>
-    /// The embedded model's rows (2026-09-29): the <c>Embedded LLM enabled</c> switch, the catalog door, the backend, the
+    /// The embedded model's rows (2026-09-29): the <c>Embedded LLM server enabled</c> switch, the catalog door, the backend, the
     /// context size, the GPU layers, the vision switch and the MTP switch — after STT, where the Claude API's tab stood until
     /// later that day, when its four rows went to <c>/tools</c>' Claude tab (the user's call).
     /// </summary>
@@ -872,12 +878,12 @@ internal sealed partial class SettingsMenu
     /// </summary>
     public static readonly IReadOnlyList<IReadOnlyList<SettingsField>> TabFields =
     [
-        [SettingsField.Profile, SettingsField.NewProfileMode, SettingsField.WorkingDirectory, SettingsField.QueueMessages, SettingsField.QueueCancelMode, SettingsField.Memory, SettingsField.CopyUserPrompt, SettingsField.ShowImageThumbnails, SettingsField.ImageThumbnailSize, SettingsField.TranscriptMarkdown, SettingsField.PastePreviewLines, SettingsField.HideExitAutocomplete, SettingsField.CommandTypoIntercept, SettingsField.KeepCommandHistory, SettingsField.WelcomeSplash, SettingsField.ShowWorkingDirectory, SettingsField.ToolbarItems, SettingsField.Theme, SettingsField.DraftEditor, SettingsField.ImageEditor, SettingsField.ThemedViewer],
+        [SettingsField.Profile, SettingsField.NewProfileMode, SettingsField.WorkingDirectory, SettingsField.QueueMessages, SettingsField.QueueCancelMode, SettingsField.Memory, SettingsField.CopyUserPrompt, SettingsField.ShowImageThumbnails, SettingsField.ImageThumbnailSize, SettingsField.TranscriptMarkdown, SettingsField.PastePreviewLines, SettingsField.HideExitAutocomplete, SettingsField.CommandTypoIntercept, SettingsField.KeepCommandHistory, SettingsField.WelcomeSplash, SettingsField.ShowWorkingDirectory, SettingsField.ToolbarItems, SettingsField.ShowPerformanceBar, SettingsField.Theme, SettingsField.DraftEditor, SettingsField.ImageEditor, SettingsField.ThemedViewer],
         [SettingsField.SessionLogging, SettingsField.SessionRetentionDays, SettingsField.SessionNamingMode, SettingsField.SessionShowName, SettingsField.SessionTool, SettingsField.SessionSearchMaxResults, SettingsField.SessionSaveThinking],
         [SettingsField.LlmScanMode, SettingsField.LlmUrl, SettingsField.LlmModel, SettingsField.LlmApiKey, SettingsField.LlmReasoning, SettingsField.LlmRequestTimeoutSeconds, SettingsField.LlmTurnTimeoutSeconds, SettingsField.LlmContextLength, SettingsField.LlmMidTurnUsage, SettingsField.LlmCompactType, SettingsField.LlmCompactKeepRecent, SettingsField.LlmCompactShowSummary, SettingsField.LlmAutoCompactPercent, SettingsField.LlmMaxTurns, SettingsField.LlmOfferTools, SettingsField.LlmToolCompactType, SettingsField.LlmMaxToolIterations, SettingsField.LlmUseFunVerbs, SettingsField.LlmShowThinking, SettingsField.LlmPreserveThinking, SettingsField.LlmReasoningEstimate, SettingsField.LlmSampling, SettingsField.LlmSamplingFromHuggingFace],
         [SettingsField.TtsOutput, SettingsField.TtsSource, SettingsField.TtsHttpUrl, SettingsField.TtsVoicePreview, SettingsField.TtsVoicePreset, SettingsField.TtsVoice, SettingsField.TtsVoice2, SettingsField.TtsVoiceMix, SettingsField.TtsSpeed],
         Fields.Where(IsVoiceField).ToArray(),
-        [SettingsField.EmbeddedLlmEnabled, SettingsField.EmbeddedModels, SettingsField.EmbeddedBackend, SettingsField.EmbeddedContextSize, SettingsField.EmbeddedGpuLayers, SettingsField.EmbeddedVision, SettingsField.EmbeddedDrafter],
+        [SettingsField.EmbeddedLlmServer, SettingsField.EmbeddedModels, SettingsField.EmbeddedBackend, SettingsField.EmbeddedContextSize, SettingsField.EmbeddedGpuLayers, SettingsField.EmbeddedVision, SettingsField.EmbeddedDrafter],
         [SettingsField.BotChatLlmMode, SettingsField.BotChatImages, SettingsField.BotChatImageMode, SettingsField.BotChatTxt2ImgWorkflow, SettingsField.BotChatImg2ImgWorkflow, SettingsField.BotChatImg2ImgMode, SettingsField.BotChatImageAsync, SettingsField.BotChatNonTtsDelaySeconds, SettingsField.BotChatSkills, SettingsField.BotChatPreloadedSkills, SettingsField.BotChatSkillMode, SettingsField.BotChatVision],
     ];
 
@@ -1090,7 +1096,7 @@ internal sealed partial class SettingsMenu
         field is SettingsField.LlmUrl or SettingsField.LlmModel or SettingsField.LlmApiKey
             or SettingsField.LlmRequestTimeoutSeconds or SettingsField.LlmTurnTimeoutSeconds or SettingsField.LlmContextLength or SettingsField.LlmReasoning
             or SettingsField.ClaudeApi or SettingsField.ClaudeApiKey or SettingsField.ClaudeApiMaxTokens or SettingsField.ClaudeApiPromptCaching
-            or SettingsField.EmbeddedLlmEnabled or SettingsField.EmbeddedModels or SettingsField.EmbeddedBackend or SettingsField.EmbeddedContextSize or SettingsField.EmbeddedGpuLayers or SettingsField.EmbeddedVision
+            or SettingsField.EmbeddedLlmServer or SettingsField.EmbeddedModels or SettingsField.EmbeddedBackend or SettingsField.EmbeddedContextSize or SettingsField.EmbeddedGpuLayers or SettingsField.EmbeddedVision
             or SettingsField.EmbeddedDrafter;
 
     /// <summary>Whether a change to <paramref name="field"/> needs the speech session re-probed.</summary>
@@ -1199,28 +1205,33 @@ internal sealed partial class SettingsMenu
     public const int ServerNameWidth = 11;
 
     /// <summary>A server picker row on its own: the name padded, the URL in ink, the probe's detail dimmed. Pinned.</summary>
-    public static string ServerLabel(LlmServer server) => ServerLabel(server, whereWidth: 0);
+    public static string ServerLabel(LlmServer server) => ServerLabel(server, whereWidth: 0, detailWidth: 0);
 
     /// <summary>
     /// A server picker row whose URL (or, for an embedded model, the model's name) is padded to
     /// <paramref name="whereWidth"/> cells, so every row's detail starts in one column (2026-09-29, the user's ask: the
-    /// embedded rows' names and the servers' URLs made the details ragged). Pinned.
+    /// embedded rows' names and the servers' URLs made the details ragged), and whose detail is padded to
+    /// <paramref name="detailWidth"/> ahead of the drafter column an embedded model with one carries
+    /// (<see cref="NeonSidekick.EmbeddedLlm.EmbeddedLlmText.DrafterGlyph"/>, later that day, the user's ask). Pinned.
     /// </summary>
-    public static string ServerLabel(LlmServer server, int whereWidth)
+    public static string ServerLabel(LlmServer server, int whereWidth, int detailWidth)
     {
         ArgumentNullException.ThrowIfNull(server);
         var (where, quant) = ServerWhereParts(server);
         string pad = new(' ', Math.Max(0, whereWidth - TextCells.Width(where + quant)));
+        var model = NeonSidekick.EmbeddedLlm.EmbeddedEndpoint.IsEmbedded(server.BaseUrl) ? EmbeddedRowModel(server) : null;
         return Markup.Escape(server.Name.PadRight(ServerNameWidth)) + Theme.ColorMarkup(Theme.Ink, Markup.Escape(where))
-            + Theme.DimMarkup(Markup.Escape(quant) + pad + "  " + Markup.Escape(server.Result.Detail));
+            + Theme.DimMarkup(Markup.Escape(quant) + pad + "  " + Markup.Escape(server.Result.Detail))
+            + Markup.Escape(NeonSidekick.EmbeddedLlm.EmbeddedLlmText.DrafterColumn(model, server.Result.Detail, detailWidth));
     }
 
-    /// <summary>The picker's rows with the URL-or-model column as wide as its widest entry.</summary>
+    /// <summary>The picker's rows with the URL-or-model column as wide as its widest entry, and the details as wide as the widest one.</summary>
     public static IReadOnlyList<string> ServerLabels(IReadOnlyList<LlmServer> servers)
     {
         ArgumentNullException.ThrowIfNull(servers);
         int width = servers.Count == 0 ? 0 : servers.Max(s => ServerWhereParts(s) is var (where, quant) ? TextCells.Width(where + quant) : 0);
-        return servers.Select(s => ServerLabel(s, width)).ToList();
+        int detailWidth = servers.Count == 0 ? 0 : servers.Max(s => TextCells.Width(s.Result.Detail));
+        return servers.Select(s => ServerLabel(s, width, detailWidth)).ToList();
     }
 
     /// <summary>
@@ -1278,7 +1289,7 @@ internal sealed partial class SettingsMenu
             or SettingsField.LlmCompactShowSummary or SettingsField.ShellToolBridge or SettingsField.ShellPoliceOutsidePaths or SettingsField.ShellPreferNative
             or SettingsField.ObsidianTools or SettingsField.ObsidianAllowDelete or SettingsField.SqlTools or SettingsField.SqlPercentMention or SettingsField.ComfyTools or SettingsField.ComfyReinforceNegatives or SettingsField.ComfyShowPrompts or SettingsField.ComfyCaretMention or SettingsField.ComfyPictureStrip
             or SettingsField.BotChatImages or SettingsField.BotChatImageAsync or SettingsField.BotChatSkills or SettingsField.BotChatVision or SettingsField.ClaudeAdvisor or SettingsField.ClaudeAdvisorConfirm
-            or SettingsField.ClaudeApi or SettingsField.ClaudeApiPromptCaching or SettingsField.EmbeddedVision or SettingsField.EmbeddedLlmEnabled or SettingsField.EmbeddedDrafter
+            or SettingsField.ClaudeApi or SettingsField.ClaudeApiPromptCaching or SettingsField.EmbeddedVision or SettingsField.EmbeddedLlmServer or SettingsField.EmbeddedDrafter
             or SettingsField.HomeAssistantTools or SettingsField.PrintTools;
 
     public static string FieldName(SettingsField field) => field switch
@@ -1430,7 +1441,7 @@ internal sealed partial class SettingsMenu
         SettingsField.EmbeddedContextSize => "Embedded context size",
         SettingsField.EmbeddedGpuLayers => "Embedded GPU layers",
         SettingsField.EmbeddedVision => "Embedded vision",
-        SettingsField.EmbeddedLlmEnabled => "Embedded LLM enabled",
+        SettingsField.EmbeddedLlmServer => "Embedded LLM server enabled",
         SettingsField.EmbeddedDrafter => "Embedded drafter",
         SettingsField.AskUser => "Ask user",
         SettingsField.AskMaxQuestions => "Ask max questions",
@@ -1463,6 +1474,7 @@ internal sealed partial class SettingsMenu
         SettingsField.WelcomeSplash => "Welcome splash",
         SettingsField.ShowWorkingDirectory => "Working directory in header",
         SettingsField.ToolbarItems => "Show toolbar",
+        SettingsField.ShowPerformanceBar => "Show performance bar",
         SettingsField.Theme => "Theme",
         SettingsField.ThemedViewer => "Themed image viewer",   // the user's name, beside "Image viewer" (later on 2026-09-27)
         SettingsField.QueueMessages => "Queue messages",
@@ -1566,7 +1578,7 @@ internal sealed partial class SettingsMenu
             SettingsField.EmbeddedContextSize => data.EmbeddedContextSize == 0 ? EmbeddedContextOwnLabel : Tokens(data.EmbeddedContextSize),
             SettingsField.EmbeddedGpuLayers => data.EmbeddedGpuLayers,
             SettingsField.EmbeddedVision => OnOff(data.EmbeddedVision),
-            SettingsField.EmbeddedLlmEnabled => OnOff(data.EmbeddedLlmEnabled),
+            SettingsField.EmbeddedLlmServer => OnOff(data.EmbeddedLlmServer),
             SettingsField.EmbeddedDrafter => OnOff(data.EmbeddedDrafter),
             SettingsField.LlmScanMode => data.LlmScanMode,
             SettingsField.TtsSource => data.TtsSource,
@@ -1686,6 +1698,7 @@ internal sealed partial class SettingsMenu
             SettingsField.SessionTool => OnOff(data.SessionTool),
             SettingsField.ShowWorkingDirectory => OnOff(data.ShowWorkingDirectory),
             SettingsField.ToolbarItems => App.ToolbarItems.Value(data.ToolbarItems),
+            SettingsField.ShowPerformanceBar => data.ShowPerformanceBar,
             SettingsField.ThemedViewer => OnOff(data.ThemedViewer),
             SettingsField.Theme => data.Theme,
             SettingsField.QueueMessages => OnOff(data.QueueMessages),
@@ -2060,6 +2073,10 @@ internal sealed partial class SettingsMenu
     /// <summary>One row of the queue-cancel-mode picker: the mode and its hint (padded to six: <c>drain</c> and <c>empty</c> are five). Pinned.</summary>
     public static string QueueCancelModeLabel(string name) =>
         Markup.Escape(name.PadRight(6)) + Theme.DimMarkup(QueueCancelMode.Describe(name));
+
+    /// <summary>One row of the performance-bar picker (2026-09-29): the mode and its hint (padded to six: <c>gauge</c> and <c>spark</c> are five). Pinned.</summary>
+    public static string PerfBarModeLabel(string name) =>
+        Markup.Escape(name.PadRight(6)) + Theme.DimMarkup(PerfBarMode.Describe(name));
 
     /// <summary>One row of the botchat-LLM-mode picker: the mode and its hint (padded to seven: <c>single</c> is six). Pinned.</summary>
     public static string BotChatLlmModeLabel(string name) =>
@@ -3008,6 +3025,11 @@ internal sealed partial class SettingsMenu
         if (field == SettingsField.QueueCancelMode)
         {
             return await PickQueueCancelModeAsync(saved, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (field == SettingsField.ShowPerformanceBar)
+        {
+            return await PickPerfBarModeAsync(saved, cancellationToken).ConfigureAwait(false);
         }
 
         if (field == SettingsField.BotChatLlmMode)
@@ -4455,7 +4477,7 @@ internal sealed partial class SettingsMenu
             SettingsField.ClaudeApi => data.ClaudeApi,
             SettingsField.ClaudeApiPromptCaching => data.ClaudeApiPromptCaching,
             SettingsField.EmbeddedVision => data.EmbeddedVision,
-            SettingsField.EmbeddedLlmEnabled => data.EmbeddedLlmEnabled,
+            SettingsField.EmbeddedLlmServer => data.EmbeddedLlmServer,
             SettingsField.EmbeddedDrafter => data.EmbeddedDrafter,
             SettingsField.BotChatImages => data.BotChatImages,
             SettingsField.BotChatImageAsync => data.BotChatImageAsync,
@@ -4528,7 +4550,7 @@ internal sealed partial class SettingsMenu
             case SettingsField.ClaudeApi: data.ClaudeApi = on; break;
             case SettingsField.ClaudeApiPromptCaching: data.ClaudeApiPromptCaching = on; break;
             case SettingsField.EmbeddedVision: data.EmbeddedVision = on; break;
-            case SettingsField.EmbeddedLlmEnabled: data.EmbeddedLlmEnabled = on; break;
+            case SettingsField.EmbeddedLlmServer: data.EmbeddedLlmServer = on; break;
             case SettingsField.EmbeddedDrafter: data.EmbeddedDrafter = on; break;
             case SettingsField.BotChatImages: data.BotChatImages = on; break;
             case SettingsField.BotChatImageAsync: data.BotChatImageAsync = on; break;
@@ -4610,7 +4632,7 @@ internal sealed partial class SettingsMenu
         SettingsField.ClaudeApi => on ? "/server offers the Claude API while a key is set (billed per message)" : "the Claude API is not offered",
         SettingsField.ClaudeApiPromptCaching => on ? "the prompt and conversation are cached between requests (cheaper)" : "every request is billed in full",
         SettingsField.EmbeddedVision => on ? "the embedded model loads its vision projector and reads images" : "the embedded model reads text alone; about 1 GB less memory",
-        SettingsField.EmbeddedLlmEnabled => on ? "/server offers the embedded models" : "no embedded models in /server; a running one stops",
+        SettingsField.EmbeddedLlmServer => on ? "/server offers the embedded models" : "no embedded models in /server; a running one stops",
         SettingsField.EmbeddedDrafter => on ? "the embedded model drafts ahead with its drafter (faster, same answers)" : "the embedded model decodes one token at a time, no drafter loaded",
         SettingsField.BotChatImages => on ? "/botchat draws pictures while the ComfyUI tools are offered" : "/botchat is talk alone",
         SettingsField.BotChatImageAsync => on ? "the next bot answers while the picture renders" : "the chat waits for each picture",
@@ -4698,7 +4720,7 @@ internal sealed partial class SettingsMenu
         int cursor = 0;
         while (true)
         {
-            var rows = embedded.Catalog.Select(m => EmbeddedModelLabel(m, embedded.State(m))).ToList();
+            var rows = EmbeddedModelLabels(embedded.Catalog, embedded.State);
             var page = new MenuPage(Crumb(FieldName(SettingsField.EmbeddedModels)), rows, EmbeddedModelsKeys);
             if (await PickAsync(page, cursor, cancellationToken).ConfigureAwait(false) is not { } index)
             {
@@ -4799,10 +4821,34 @@ internal sealed partial class SettingsMenu
     /// <summary>The notice when the catalog is opened where no embedded model is offered. Pinned.</summary>
     public const string NoEmbeddedModelNotice = "No embedded model is offered here (llama.cpp's Windows x64 builds only).";
 
-    /// <summary>A catalog row: the model's name padded, its quantisation, then its state and size, dim. Pinned.</summary>
+    /// <summary>A catalog row on its own: the model's name padded, its quantisation, then its state and size, dim, and the drafter column. Pinned.</summary>
     public static string EmbeddedModelLabel(NeonSidekick.EmbeddedLlm.EmbeddedModel model, NeonSidekick.EmbeddedLlm.EmbeddedModelState state) =>
-        Markup.Escape(model.Display.PadRight(EmbeddedModelNameWidth)) + Theme.DimMarkup(model.Quant.PadRight(12)
-            + NeonSidekick.EmbeddedLlm.EmbeddedLlmText.ModelDetail(model, state));
+        EmbeddedModelLabel(model, state, detailWidth: 0);
+
+    /// <summary>
+    /// A catalog row whose state-and-size detail is padded to <paramref name="detailWidth"/> cells, so the drafter column
+    /// (<see cref="NeonSidekick.EmbeddedLlm.EmbeddedLlmText.DrafterGlyph"/>, 2026-09-29, the user's ask) lines up down the list. Pinned.
+    /// </summary>
+    public static string EmbeddedModelLabel(NeonSidekick.EmbeddedLlm.EmbeddedModel model, NeonSidekick.EmbeddedLlm.EmbeddedModelState state, int detailWidth)
+    {
+        ArgumentNullException.ThrowIfNull(model);
+        string detail = NeonSidekick.EmbeddedLlm.EmbeddedLlmText.ModelDetail(model, state);
+        return Markup.Escape(model.Display.PadRight(EmbeddedModelNameWidth)) + Theme.DimMarkup(Markup.Escape(model.Quant.PadRight(EmbeddedModelQuantWidth) + detail))
+            + Markup.Escape(NeonSidekick.EmbeddedLlm.EmbeddedLlmText.DrafterColumn(model, detail, detailWidth));
+    }
+
+    /// <summary>The catalog's rows, the details as wide as the widest one so the drafter column is one column.</summary>
+    public static IReadOnlyList<string> EmbeddedModelLabels(IReadOnlyList<NeonSidekick.EmbeddedLlm.EmbeddedModel> models, Func<NeonSidekick.EmbeddedLlm.EmbeddedModel, NeonSidekick.EmbeddedLlm.EmbeddedModelState> state)
+    {
+        ArgumentNullException.ThrowIfNull(models);
+        ArgumentNullException.ThrowIfNull(state);
+        var states = models.Select(state).ToList();
+        int width = models.Count == 0 ? 0 : models.Select((m, i) => TextCells.Width(NeonSidekick.EmbeddedLlm.EmbeddedLlmText.ModelDetail(m, states[i]))).Max();
+        return models.Select((m, i) => EmbeddedModelLabel(m, states[i], width)).ToList();
+    }
+
+    /// <summary>The catalog's quantisation column: "COMPACT-LOW" (11, esatapedico's NVFP4 tier word, later on 2026-09-29) plus two; 12 before.</summary>
+    public const int EmbeddedModelQuantWidth = 13;
 
     /// <summary>The catalog picker's name column: "Gemma 4 26B A4B QAT Uncensored" (30) plus two (later on 2026-09-29, when the 26B A4B builds joined; 28 for "Gemma 4 12B QAT Uncensored" before, 24 while the longest was 22).</summary>
     public const int EmbeddedModelNameWidth = 32;
@@ -5173,6 +5219,21 @@ internal sealed partial class SettingsMenu
 
         string name = QueueCancelMode.Names[index];
         Apply(SettingsField.QueueCancelMode, d => d.QueueCancelMode = name);
+        return true;
+    }
+
+    /// <summary>The performance-bar picker under the settings list (2026-09-29): one <see cref="PerfBarModeLabel"/> row per <see cref="PerfBarMode.Names"/> entry, the saved one under the cursor.</summary>
+    private async Task<bool> PickPerfBarModeAsync(AppSettingsData saved, CancellationToken cancellationToken)
+    {
+        var page = new MenuPage(Crumb(FieldName(SettingsField.ShowPerformanceBar)), PerfBarMode.Names.Select(PerfBarModeLabel).ToList(), PickKeys);
+        int? picked = await PickAsync(page, Math.Max(0, Array.IndexOf(PerfBarMode.Names, saved.ShowPerformanceBar)), cancellationToken).ConfigureAwait(false);
+        if (picked is not { } index)
+        {
+            return Unchanged();
+        }
+
+        string name = PerfBarMode.Names[index];
+        Apply(SettingsField.ShowPerformanceBar, d => d.ShowPerformanceBar = name);
         return true;
     }
 

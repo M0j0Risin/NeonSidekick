@@ -27,6 +27,7 @@ public static class TextCells
             or >= 0x231A and <= 0x231B            // ⌚ ⌛ (East Asian Wide emoji in the BMP)
             or >= 0x23E9 and <= 0x23EC            // ⏩ .. ⏬
             or 0x23F0 or 0x23F3                   // ⏰ ⏳
+            or 0x26A1                             // ⚡ (Wide; the drafter column of the embedded rows, 2026-09-29)
             or >= 0x270A and <= 0x270B            // ✊ ✋ (Wide since Unicode 9; the interrupt glyph, 2026-09-18)
             or >= 0x2753 and <= 0x2755 or 0x2757  // ❓ ❔ ❕ ❗ (Wide; ❓ is the Help pane's glyph, 2026-09-28)
             or >= 0x2E80 and <= 0x303E            // CJK radicals .. CJK punctuation

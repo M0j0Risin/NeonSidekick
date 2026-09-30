@@ -1,0 +1,270 @@
+using NeonSidekick.App;
+using NeonSidekick.Perf;
+using NeonSidekick.Settings;
+using NeonSidekick.Tests.Fakes;
+using NeonSidekick.UI;
+using Spectre.Console;
+
+namespace NeonSidekick.Tests;
+
+/// <summary>The performance bar (2026-09-29): its setting's words, its arithmetic, its sampler and its four looks.</summary>
+public class PerfBarTests
+{
+    // ── The setting ─────────────────────────────────────────────────────────
+
+    [Fact]
+    public void TheModes_ArePinned_OffByDefault()
+    {
+        Assert.Equal(["off", "text", "gauge", "spark", "led"], PerfBarMode.Names);
+        Assert.Equal("off", PerfBarMode.Default);
+        Assert.Equal("off", new AppSettingsData().ShowPerformanceBar);
+        foreach (string name in PerfBarMode.Names)
+        {
+            Assert.True(PerfBarMode.TryParse(" " + name.ToUpperInvariant() + " ", out var style));
+            Assert.Equal(name, PerfBarMode.Name(style));
+            Assert.NotEqual("", PerfBarMode.Describe(name));
+        }
+
+        Assert.False(PerfBarMode.TryParse("bars", out var none));
+        Assert.Equal(PerfBarStyle.Off, none);
+        Assert.Equal("", PerfBarMode.Describe("bars"));
+        Assert.Equal(PerfBarStyle.Gauge, PerfBarMode.Resolve(new AppSettingsData { ShowPerformanceBar = "gauge" }));
+        Assert.Equal(PerfBarStyle.Off, PerfBarMode.Resolve(new AppSettingsData { ShowPerformanceBar = "bars" }));   // warns, once
+        Assert.Equal(PerfBarStyle.Off, PerfBarMode.Resolve(new AppSettingsData { ShowPerformanceBar = "bars" }));
+    }
+
+    // ── The arithmetic ──────────────────────────────────────────────────────
+
+    [Fact]
+    public void Cpu_IsKernelPlusUserLessIdle_OverKernelPlusUser()
+    {
+        // Kernel +600 (the idle +250 inside it) and user +400: 1000 ticks, 750 of them busy.
+        Assert.Equal(75, PerfMath.CpuPercent(1_000, 2_000, 3_000, 1_250, 2_600, 3_400));
+        Assert.Equal(0, PerfMath.CpuPercent(0, 0, 0, 100, 100, 0));     // all idle
+        Assert.Equal(100, PerfMath.CpuPercent(0, 0, 0, 0, 50, 50));    // none idle
+        Assert.Null(PerfMath.CpuPercent(5, 5, 5, 5, 5, 5));            // no time passed
+        Assert.Null(PerfMath.CpuPercent(9, 5, 5, 5, 6, 6));            // a counter went backwards
+    }
+
+    [Fact]
+    public void Percent_AndClamp_KeepInsideTheRange()
+    {
+        Assert.Equal(25, PerfMath.Percent(8, 32));
+        Assert.Null(PerfMath.Percent(8, 0));
+        Assert.Equal(100, PerfMath.Percent(40, 32));
+        Assert.Equal(0, PerfMath.Clamp(double.NaN));
+        Assert.Equal(0, PerfMath.Clamp(-3));
+    }
+
+    [Theory]
+    [InlineData("pid_4_luid_0x00000000_0x0000D1B5_phys_0_eng_3_engtype_Copy", 0x0000_0000_0000_D1B5L)]
+    [InlineData("luid_0x00000001_0x0000d1b5_phys_0", 0x0000_0001_0000_D1B5L)]
+    public void TheLuid_IsReadFromACounterInstance(string instance, long luid)
+    {
+        Assert.True(PerfMath.TryParseLuid(instance, out long read));
+        Assert.Equal(luid, read);
+        Assert.Equal(luid, PerfMath.Luid((uint)(luid >> 32), (uint)luid));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("pid_4_phys_0")]
+    [InlineData("luid_0x0000")]
+    [InlineData("luid_0x00000000-0x0000D1B5")]
+    [InlineData("luid_0xZZZZZZZZ_0x0000D1B5")]
+    [InlineData("luid_0x00000000_0xGGGGGGGG")]
+    public void ALuidThatIsNotThere_IsNotRead(string? instance)
+    {
+        Assert.False(PerfMath.TryParseLuid(instance, out _));
+    }
+
+    [Fact]
+    public void TheGpuLoad_IsTheBusiestEngine_SummedOverTheProcesses_OfTheOneAdapter()
+    {
+        const string gpu = "luid_0x00000000_0x0000D1B5";
+        const string igpu = "luid_0x00000000_0x0000AAAA";
+        var engines = new List<(string, double)>
+        {
+            ($"pid_1_{gpu}_phys_0_eng_0_engtype_3D", 30),
+            ($"pid_2_{gpu}_phys_0_eng_0_engtype_3D", 25),        // the same engine, another process: 55
+            ($"pid_2_{gpu}_phys_0_eng_5_engtype_Compute_0", 70),  // the busiest engine
+            ($"pid_3_{gpu}_phys_0_eng_2_engtype_Copy", -1),       // a counter's negative glitch counts as none
+            ($"pid_1_{igpu}_phys_0_eng_0_engtype_3D", 99),        // the integrated GPU is not the one read
+            ("pid_1_no_luid_here", 99),
+        };
+
+        Assert.Equal(70, PerfMath.GpuEnginePercent(engines, PerfMath.Luid(0, 0xD1B5)));
+        Assert.Equal(99, PerfMath.GpuEnginePercent(engines, PerfMath.Luid(0, 0xAAAA)));
+        Assert.Null(PerfMath.GpuEnginePercent(engines, PerfMath.Luid(0, 0xBBBB)));
+        Assert.Equal(100, PerfMath.GpuEnginePercent([($"pid_1_{gpu}_phys_0_eng_0_engtype_3D", 80), ($"pid_2_{gpu}_phys_0_eng_0_engtype_3D", 80)], PerfMath.Luid(0, 0xD1B5)));   // clamped
+    }
+
+    // ── The sampler ─────────────────────────────────────────────────────────
+
+    [Fact]
+    public void TheSampler_ReadsOnceASecond_WhileOn_AndKeepsTheLastTen()
+    {
+        var time = new ManualTimeProvider();
+        var sources = new List<FakePerfSource>();
+        using var sampler = new PerfSampler(() => { var s = new FakePerfSource(); sources.Add(s); return s; }, time);
+        Assert.False(sampler.Running);
+        Assert.Equal(PerfSnapshot.None, sampler.Read().Latest);
+
+        sampler.Ensure(true);
+        sampler.Ensure(true);   // the same state: nothing new
+        Assert.True(sampler.Running);
+        Assert.Single(sources);
+        var source = sources[0];
+        for (int i = 1; i <= 12; i++)
+        {
+            source.Next = new PerfSnapshot(i, 50, null, null);
+            time.Advance(i == 1 ? TimeSpan.Zero : PerfSampler.Interval);
+        }
+
+        var (latest, history, version) = sampler.Read();
+        Assert.Equal(12, source.Samples);
+        Assert.Equal(new PerfSnapshot(12, 50, null, null), latest);
+        Assert.Equal(PerfSampler.HistoryLength, history.Count);
+        Assert.Equal(Enumerable.Range(3, 10).Select(i => (double?)i), history.Select(h => h.Cpu));
+        Assert.Equal(12, version);
+
+        // Off: the timer stops, the source is disposed, the readings forgotten.
+        sampler.Ensure(false);
+        Assert.False(sampler.Running);
+        Assert.True(source.Disposed);
+        Assert.Equal(PerfSnapshot.None, sampler.Read().Latest);
+        Assert.Empty(sampler.Read().History);
+        time.Advance(PerfSampler.Interval * 3);
+        Assert.Equal(12, source.Samples);
+
+        // On again: a new source.
+        sampler.Ensure(true);
+        Assert.Equal(2, sources.Count);
+    }
+
+    [Fact]
+    public void TheSampler_SurvivesASourceThatThrows_OrDoesNotOpen()
+    {
+        var time = new ManualTimeProvider();
+        var source = new FakePerfSource { Next = new PerfSnapshot(10, 20, 30, 40), Throw = new InvalidOperationException("no counters") };
+        using (var sampler = new PerfSampler(() => source, time))
+        {
+            sampler.Ensure(true);
+            time.Advance(TimeSpan.Zero);
+            Assert.Equal(PerfSnapshot.None, sampler.Read().Latest);   // the throw reads as nothing
+            time.Advance(PerfSampler.Interval);
+            Assert.Equal(new PerfSnapshot(10, 20, 30, 40), sampler.Read().Latest);
+        }
+
+        Assert.True(source.Disposed);   // Dispose stops it
+
+        using var broken = new PerfSampler(() => throw new DllNotFoundException("pdh.dll"), time);
+        broken.Ensure(true);
+        time.Advance(TimeSpan.Zero);
+        Assert.True(broken.Running);
+        Assert.Equal(PerfSnapshot.None, broken.Read().Latest);
+        Assert.Throws<ArgumentNullException>(() => new PerfSampler(null!, time));
+        Assert.Throws<ArgumentNullException>(() => new PerfSampler(() => new NullPerfSource(), null!));
+    }
+
+    [Fact]
+    public void TheNullSource_ReadsNothing()
+    {
+        using var source = new NullPerfSource();
+        Assert.Equal(PerfSnapshot.None, source.Sample());
+    }
+
+    // ── The looks ───────────────────────────────────────────────────────────
+
+    private static readonly PerfSnapshot Reading = new(34, 62, 18, 91);
+
+    [Fact]
+    public void Off_DrawsNoRow()
+    {
+        Assert.Null(PerfBar.Render(PerfBarStyle.Off, Reading, [], 120));
+    }
+
+    [Fact]
+    public void Text_IsTheLabelsAndValues_TheValuesInTheLoadsColour()
+    {
+        var row = PerfBar.Render(PerfBarStyle.Text, Reading, [], 120)!;
+        Assert.Equal("CPU 34% · RAM 62% · GPU 18% · VRAM 91%", row.Text);
+        Assert.Equal(new Style(Theme.Good), row.Segments.Single(s => s.Text == "34%").Style);
+        Assert.Equal(new Style(Theme.Warn), row.Segments.Single(s => s.Text == "62%").Style);
+        Assert.Equal(new Style(Theme.Bad), row.Segments.Single(s => s.Text == "91%").Style);
+        Assert.Equal(Theme.DimText, row.Segments.Single(s => s.Text == "CPU ").Style);
+
+        // No GPU reader: its meters left out. Nothing read yet: an empty row, still a row.
+        Assert.Equal("CPU 34% · RAM 62%", PerfBar.Render(PerfBarStyle.Text, Reading with { Gpu = null, Vram = null }, [], 120)!.Text);
+        Assert.Equal("", PerfBar.Render(PerfBarStyle.Text, PerfSnapshot.None, [], 120)!.Text);
+
+        // Too narrow: cut at the edge.
+        Assert.Equal("CPU 34% · RA", PerfBar.Render(PerfBarStyle.Text, Reading, [], 12)!.Text);
+    }
+
+    [Fact]
+    public void Gauge_FillsInEighths_TheTrackDim()
+    {
+        Assert.Equal(("███▍", "░░░░░░"), PerfBar.Gauge(34, 10));
+        Assert.Equal(("", "░░░░░░░░░░"), PerfBar.Gauge(0, 10));
+        Assert.Equal(("██████████", ""), PerfBar.Gauge(100, 10));
+        Assert.Equal(("▏", "░░░░░░░░░"), PerfBar.Gauge(1.25, 10));
+
+        var row = PerfBar.Render(PerfBarStyle.Gauge, Reading, [], 120)!;
+        Assert.Equal("CPU ███▍░░░░░░  34%   RAM ██████▎░░░  62%   GPU █▊░░░░░░░░  18%   VRAM █████████▏  91%", row.Text);
+        Assert.Equal(new Style(Theme.Bad), row.Segments.Single(s => s.Text == "█████████▏").Style);
+        Assert.Equal(Theme.DimText, row.Segments.Single(s => s.Text == "░░░░░░").Style);
+    }
+
+    [Fact]
+    public void Spark_DrawsTheLastReadings_NewestAtTheRight()
+    {
+        Assert.Equal("▁", PerfBar.SparkLevel(0));
+        Assert.Equal("▄", PerfBar.SparkLevel(45));
+        Assert.Equal("█", PerfBar.SparkLevel(100));
+
+        var history = new[] { 0.0, 20, 40, 60, 90 }.Select(v => new PerfSnapshot(v, 50, null, null)).ToList();
+        var row = PerfBar.Render(PerfBarStyle.Spark, history[^1], history, 120)!;
+        Assert.Equal("CPU      ▁▂▄▅█  90%   RAM      ▅▅▅▅▅  50%", row.Text);   // five readings: five blanks ahead of them
+        Assert.Equal(new Style(Theme.Bad), row.Segments.First(s => s.Text == "█").Style);
+        Assert.Equal(new Style(Theme.Good), row.Segments.First(s => s.Text == "▁").Style);
+    }
+
+    [Fact]
+    public void Led_LightsAStartedSegment_AlongTheGradient()
+    {
+        Assert.Equal(4, PerfBar.LedsLit(34, 10));
+        Assert.Equal(0, PerfBar.LedsLit(0, 10));
+        Assert.Equal(10, PerfBar.LedsLit(100, 10));
+        Assert.Equal(3, PerfBar.LedsLit(30, 10));   // exactly three, not a fourth started
+
+        var row = PerfBar.Render(PerfBarStyle.Led, new PerfSnapshot(34, null, null, null), [], 120)!;
+        Assert.Equal("CPU ▰▰▰▰▱▱▱▱▱▱  34%", row.Text);
+        var lit = row.Segments.Where(s => s.Text == PerfText.LedOn).ToList();
+        Assert.Equal(new Style(Theme.GradientStops[0]), lit[0].Style);
+        Assert.Equal(Theme.DimText, row.Segments.First(s => s.Text == PerfText.LedOff).Style);
+    }
+
+    [Theory]
+    [InlineData(80, 8)]   // four meters of ten are 81 cells: eight each fit
+    [InlineData(62, 4)]   // four each: 62 cells exactly
+    public void ANarrowWindow_ShrinksTheMeters_ThenFallsBackToText(int cells, int meter)
+    {
+        var row = PerfBar.Render(PerfBarStyle.Led, Reading, [], cells)!;
+        Assert.True(TextCells.Width(row.Text) <= cells);
+        Assert.Equal(meter * 4, row.Text.Count(c => c is '▰' or '▱'));
+
+        var text = PerfBar.Render(PerfBarStyle.Gauge, Reading, [], 45)!;
+        Assert.Equal("CPU 34% · RAM 62% · GPU 18% · VRAM 91%", text.Text);   // no meter width fits: the text look
+    }
+
+    [Theory]
+    [InlineData(34.0, " 34%")]
+    [InlineData(7.49, "  7%")]
+    [InlineData(99.5, "100%")]
+    [InlineData(250.0, "100%")]
+    public void TheValue_IsFourCellsWide(double value, string shown)
+    {
+        Assert.Equal(shown, PerfText.Percent(value));
+    }
+}

@@ -15,11 +15,13 @@ public class EmbeddedLlmCoreTests
     [Theory]
     [InlineData("embedded", true)]
     [InlineData(" EMBEDDED ", true)]
-    [InlineData("http://embedded-llm.invalid/v1", true)]
-    [InlineData("http://EMBEDDED-LLM.INVALID/v1/", true)]
+    [InlineData("http://embedded.localhost/v1", true)]
+    [InlineData("http://EMBEDDED.LOCALHOST/v1/", true)]
     [InlineData("http://127.0.0.1:8080/v1", false)]
     [InlineData("local", false)]                        // the name of 2026-09-29 before the rename, no synonym kept
     [InlineData("http://local-llm.invalid/v1", false)]
+    [InlineData("http://embedded-llm.invalid/v1", false)]  // the sentinel until later on 2026-09-29, no synonym kept either
+    [InlineData("http://localhost/v1", false)]
     [InlineData("localhost", false)]
     [InlineData("", false)]
     [InlineData(null, false)]
@@ -31,7 +33,7 @@ public class EmbeddedLlmCoreTests
     [Fact]
     public void TheSentinel_IsPinned_AndTheAliasNormalisesToIt()
     {
-        Assert.Equal("http://embedded-llm.invalid/v1", EmbeddedEndpoint.BaseUrl.AbsoluteUri);
+        Assert.Equal("http://embedded.localhost/v1", EmbeddedEndpoint.BaseUrl.AbsoluteUri);
         Assert.Equal(EmbeddedEndpoint.BaseUrl, LlmEndpoint.NormalizeBaseUrl("embedded"));
         Assert.Equal(EmbeddedEndpoint.BaseUrl, LlmEndpoint.NormalizeBaseUrl(" Embedded "));
         Assert.Equal("Embedded", EmbeddedEndpoint.ServerName);
@@ -57,10 +59,11 @@ public class EmbeddedLlmCoreTests
     // ── The catalog ─────────────────────────────────────────────────────────
 
     [Fact]
-    public void TheCatalog_IsTheUsersThirtyOne_InOrder_PinnedToACommit()
+    public void TheCatalog_IsTheUsersThirtyNine_InOrder_PinnedToACommit()
     {
         // Alphabetical by name, so each model's builds sit together (2026-09-29, the user's call); one name's builds by size.
-        // The eleven of the morning, then the 26B A4B and 31B builds and the Qwens of later that day (the user's picks).
+        // The eleven of the morning, then the 26B A4B and 31B builds and the Qwens of later that day (the user's picks), then
+        // esatapedico's NVFP4 tiers, in their size order (which is their tiers' order).
         Assert.Equal(
             ["gemma-4-12b", "gemma-4-12b-q5", "gemma-4-12b-q6", "gemma-4-12b-bf16", "gemma-4-12b-qat", "gemma-4-12b-qat-uncensored",
              "gemma-4-26b-a4b", "gemma-4-26b-a4b-q5", "gemma-4-26b-a4b-q6", "gemma-4-26b-a4b-qat", "gemma-4-26b-a4b-qat-uncensored",
@@ -68,7 +71,9 @@ public class EmbeddedLlmCoreTests
              "gemma-4-31b", "gemma-4-31b-q5", "gemma-4-31b-qat", "gemma-4-31b-qat-uncensored",
              "gemma-4-e2b", "gemma-4-e2b-uncensored", "gemma-4-e4b", "gemma-4-e4b-qat", "gemma-4-e4b-uncensored",
              "qwen3.6-35b-a3b", "qwen3.6-35b-a3b-q5", "qwen3.6-35b-a3b-uncensored",
-             "qwen3.8-27b", "qwen3.8-27b-q5", "qwen3.8-27b-q6", "qwen3.8-27b-uncensored", "qwen3.8-27b-uncensored-q5"],
+             "qwen3.8-27b", "qwen3.8-27b-q5", "qwen3.8-27b-q6",
+             "qwen3.8-27b-nvfp4-very-low", "qwen3.8-27b-nvfp4-compact-low", "qwen3.8-27b-nvfp4-low", "qwen3.8-27b-nvfp4-medium", "qwen3.8-27b-nvfp4-mid-high", "qwen3.8-27b-nvfp4-high", "qwen3.8-27b-nvfp4-very-high", "qwen3.8-27b-nvfp4-highest",
+             "qwen3.8-27b-uncensored", "qwen3.8-27b-uncensored-q5"],
             EmbeddedModelCatalog.Models.Select(m => m.Id));
         foreach (var name in EmbeddedModelCatalog.Models.GroupBy(m => m.Display))
         {
@@ -101,7 +106,7 @@ public class EmbeddedLlmCoreTests
         Assert.Equal(
             ["gemma-4-26b-a4b-uncensored", "gemma-4-26b-a4b-uncensored-q5", "gemma-4-26b-a4b-uncensored-q6", "gemma-4-e2b-uncensored", "gemma-4-e4b-uncensored", "qwen3.6-35b-a3b", "qwen3.6-35b-a3b-q5", "qwen3.6-35b-a3b-uncensored"],
             EmbeddedModelCatalog.Models.Where(m => !m.HasMtp).Select(m => m.Id));
-        Assert.Equal(["qwen3.8-27b", "qwen3.8-27b-q5", "qwen3.8-27b-q6", "qwen3.8-27b-uncensored", "qwen3.8-27b-uncensored-q5"], EmbeddedModelCatalog.Models.Where(m => m.MtpHead).Select(m => m.Id));
+        Assert.Equal(["qwen3.8-27b", "qwen3.8-27b-q5", "qwen3.8-27b-q6", "qwen3.8-27b-nvfp4-very-low", "qwen3.8-27b-nvfp4-compact-low", "qwen3.8-27b-nvfp4-low", "qwen3.8-27b-nvfp4-medium", "qwen3.8-27b-nvfp4-mid-high", "qwen3.8-27b-nvfp4-high", "qwen3.8-27b-nvfp4-very-high", "qwen3.8-27b-nvfp4-highest", "qwen3.8-27b-uncensored", "qwen3.8-27b-uncensored-q5"], EmbeddedModelCatalog.Models.Where(m => m.MtpHead).Select(m => m.Id));
         Assert.All(EmbeddedModelCatalog.Models.Where(m => m.MtpHead), m => Assert.Null(m.Drafter));   // one or the other
         foreach (var model in EmbeddedModelCatalog.Models.Where(m => m.Drafter is not null))
         {
@@ -137,6 +142,14 @@ public class EmbeddedLlmCoreTests
             new[] { "gemma-4-26b-a4b", "gemma-4-26b-a4b-qat", "gemma-4-26b-a4b-qat-uncensored", "gemma-4-26b-a4b-uncensored", "gemma-4-31b", "gemma-4-31b-qat-uncensored", "qwen3.6-35b-a3b", "qwen3.6-35b-a3b-uncensored", "qwen3.8-27b", "qwen3.8-27b-uncensored" }.Select(id => ModelStore.SizeLabel(EmbeddedModelCatalog.TotalBytes(EmbeddedModelCatalog.Find(id)!))));
         var qwen = EmbeddedModelCatalog.Find("qwen3.8-27b-uncensored")!;
         Assert.Equal("https://huggingface.co/HauhauCS/Qwen3.8-27B-Uncensored-HauhauCS-Aggressive-MTP-GGUF/resolve/993a5971fda8f30dd1b7eb2654792ba4415c7460/Qwen3.8-27B-Uncensored-HauhauCS-Aggressive-Q4_K_P.gguf", EmbeddedModelCatalog.Url(qwen, qwen.Model).AbsoluteUri);
+        // esatapedico's NVFP4 tiers (later still): the repository's tier word as the quant, one shared BF16 projector.
+        Assert.Equal(["15.8 GB", "17.3 GB", "24.1 GB"],
+            new[] { "qwen3.8-27b-nvfp4-very-low", "qwen3.8-27b-nvfp4-medium", "qwen3.8-27b-nvfp4-highest" }.Select(id => ModelStore.SizeLabel(EmbeddedModelCatalog.TotalBytes(EmbeddedModelCatalog.Find(id)!))));
+        var nvfp4 = EmbeddedModelCatalog.Find("qwen3.8-27b-nvfp4-compact-low")!;
+        Assert.Equal(("Qwen3.8 27B NVFP4", "COMPACT-LOW"), (nvfp4.Display, nvfp4.Quant));
+        Assert.Equal("https://huggingface.co/esatapedico/Qwen3.8-27B-NVFP4-MTP-GGUF/resolve/bcd7a7d3e251d4ec0fd15c72584b5eb9e0981383/Qwen3.8-27B-NVFP4-MTP-COMPACT-LOW.gguf", EmbeddedModelCatalog.Url(nvfp4, nvfp4.Model).AbsoluteUri);
+        Assert.Equal("https://huggingface.co/esatapedico/Qwen3.8-27B-NVFP4-MTP-GGUF/resolve/bcd7a7d3e251d4ec0fd15c72584b5eb9e0981383/mmproj-BF16.gguf", EmbeddedModelCatalog.Url(nvfp4, nvfp4.Mmproj).AbsoluteUri);
+        Assert.All(EmbeddedModelCatalog.Models.Where(m => m.Repository == nvfp4.Repository), m => Assert.Equal(nvfp4.Mmproj, m.Mmproj));
         var gemma31 = EmbeddedModelCatalog.Find("gemma-4-31b-qat-uncensored")!;
         Assert.Equal("https://huggingface.co/HauhauCS/Gemma4-31B-QAT-Uncensored-HauhauCS-Balanced-MTP/resolve/9654466e82d83f5ebfe1518a369bc5900873abb1/mtp-gemma-4-31B-it.gguf", EmbeddedModelCatalog.Url(gemma31, gemma31.Drafter!).AbsoluteUri);
         Assert.All(EmbeddedModelCatalog.Models.Where(m => m.Repository == "unsloth/gemma-4-26B-A4B-it-GGUF"), m => Assert.Equal(EmbeddedModelCatalog.Find("gemma-4-26b-a4b")!.Drafter, m.Drafter));   // one repository, one drafter
@@ -153,7 +166,7 @@ public class EmbeddedLlmCoreTests
     {
         string dir = Path.Combine("C:", "home", "models", "llm");
         var paths = EmbeddedModelCatalog.Models.SelectMany(m => new[] { EmbeddedModelCatalog.WeightsSpec(dir, m).Path, EmbeddedModelCatalog.MmprojSpec(dir, m).Path, EmbeddedModelCatalog.DrafterSpec(dir, m)?.Path }).OfType<string>().ToList();
-        Assert.Equal(31 + 31 + 18, paths.Count);   // weights, projectors and the eighteen drafters (one repository's builds share one projector's and drafter's name and bytes, each in its own folder)
+        Assert.Equal(39 + 39 + 18, paths.Count);   // weights, projectors and the eighteen drafters (one repository's builds share one projector's and drafter's name and bytes, each in its own folder)
         Assert.Equal(paths.Count, paths.Distinct(StringComparer.OrdinalIgnoreCase).Count());
 
         var e2b = EmbeddedModelCatalog.Find("gemma-4-e2b")!;
@@ -367,7 +380,7 @@ public class EmbeddedLlmCoreTests
         Assert.Equal("Gemma 4 E2B is not installed. Install it now (download 4.3 GB + llama.cpp runtime 577 MB)?", EmbeddedLlmText.InstallQuestion(e2b, LlamaRelease.Bytes(LlamaBackend.Cuda)));   // its MTP drafter counts since 2026-09-29
         Assert.Equal("download 4.3 GB", EmbeddedLlmText.InstallCost(e2b, 0));
         Assert.Equal("Gemma 4 E2B's MTP drafter could not be downloaded, so it starts without MTP: timed out", EmbeddedLlmText.DrafterFailed(e2b, "timed out"));
-        Assert.Equal("the embedded LLM is off; turn Embedded LLM enabled on in /settings › Embedded to use it", EmbeddedLlmText.SwitchedOffError);
+        Assert.Equal("the embedded LLM is off; turn Embedded LLM server enabled on in /settings › Embedded to use it", EmbeddedLlmText.SwitchedOffError);
         Assert.Equal("2 of 4 installed (9.4 GB)", EmbeddedLlmText.ModelsRowValue(2, 4, 9_400_000_000));
         Assert.Equal("none of 4 installed", EmbeddedLlmText.ModelsRowValue(0, 4, 0));
         Assert.Equal("auto (cuda: NVIDIA driver 610.88)", EmbeddedLlmText.BackendRowValue("auto", new BackendChoice(LlamaBackend.Cuda, "NVIDIA driver 610.88")));

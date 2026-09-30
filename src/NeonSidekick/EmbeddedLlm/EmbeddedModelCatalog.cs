@@ -12,7 +12,8 @@ public sealed record EmbeddedSampling(double Temperature, double TopP, int TopK)
 /// One model the app can download and run itself: its catalog <paramref name="Id"/> (what <c>LLM model</c> saves and
 /// <c>llama-server</c> is told to call itself), a <paramref name="Display"/> name, the quantisation, the Hugging Face
 /// repository pinned to a commit, the weights, the vision projector (<c>mmproj</c>: every model has one — a text-only
-/// model was allowed for a few hours on 2026-09-29, until Qwen3.8 left the catalog) and the recommended sampling.
+/// model was allowed for a few hours on 2026-09-29, until empero-ai's Qwen3.8 9B distill left the catalog) and the
+/// recommended sampling.
 /// Its MTP (multi-token prediction, speculative decoding; 2026-09-29, the user's ask: "using the drafters where
 /// available") comes one of two ways: a separate small <paramref name="Drafter"/> GGUF (Gemma 4's <c>gemma4-assistant</c>
 /// heads, passed as <c>-md</c>), or an <paramref name="MtpHead"/> the weights carry themselves (Qwen3.8's NextN layer,
@@ -67,6 +68,15 @@ public sealed record EmbeddedModel(
 /// and HauhauCS's <c>…-FastMTP-32K.gguf</c> (its card says it needs HauhauCS's own llama.cpp patch; the card's
 /// "embedded MTP" path is the one an upstream build runs). Qwen3.6 35B A3B has neither head nor drafter.</para>
 ///
+/// <para>Still later that day (the user's pick) esatapedico's Qwen3.8 27B NVFP4 joined in eight of its nine tiers,
+/// VERY-LOW to HIGHEST (the Quant column carries the repository's own tier word; ORIG, 33 GB of mostly BF16, left out).
+/// The tiers are not whole-model quantisations: VERY-LOW to VERY-HIGH share one NVFP4 backbone (GGML type 40, every
+/// block's attention and MLP) and differ only in the output head, the token embedding and the NextN head
+/// (<see cref="EmbeddedModel.MtpHead"/>, in the weights like Unsloth's); HIGHEST keeps the MLP of layers 0–55 in NVFP4 and
+/// the rest in Q8_0/BF16. NVFP4 wants the CUDA build on a Blackwell GPU (sm_120; the pinned CUDA 13.4 build covers it,
+/// <see cref="LlamaRelease"/>) — nothing gates the rows by GPU, the README says so. Its projector is Unsloth's BF16 one,
+/// byte for byte. Sampling as Qwen's card (the repository's card repeats it).</para>
+///
 /// <para>Sampling, from each card: Google's Gemma 4 temperature 1.0, top-p 0.95, top-k 64 (HauhauCS's E2B/E4B and 26B A4B
 /// Balanced the same); HauhauCS's 12B/26B/31B QAT Balanced 0.6, 0.9, 64 (their min-p 0.05 is llama.cpp's default; their
 /// repeat penalty 1.1 is not carried); Qwen's "thinking, general" line 1.0, 0.95, 20 (its presence penalty is not
@@ -89,6 +99,7 @@ public static class EmbeddedModelCatalog
     private static readonly EmbeddedFile Gemma31bDrafter = new("mtp-gemma-4-31B-it.gguf", 514_687_104, "5ae8b0117bed601e8924c6305bd5b0585de361d51f0e77091bcb4252cf1f27de");
     private static readonly EmbeddedFile Qwen36Mmproj = new("mmproj-F16.gguf", 899_283_680, "8971ee4f331ff0a4c609374f32984b3d4e6dc086c0aa35f1d637fad1829e887f");
     private static readonly EmbeddedFile Qwen38Mmproj = new("mmproj-F16.gguf", 927_607_488, "cbb841a9ee0636b2ec172f5bb8df2ea8dfeb01e90fe7c6126581d662a0b4e43e");
+    private static readonly EmbeddedFile Nvfp4Mmproj = new("mmproj-BF16.gguf", 931_146_432, "83ee4f4f205fa514161778c41df1ea14144faa0f713510893b63c2395f5c2d53");
     private static readonly EmbeddedFile Hauhau38Mmproj = new("mmproj-Qwen3.8-27B-Uncensored-HauhauCS-Aggressive-BF16.gguf", 931_146_624, "5681b690bcb8eb10cd28d62d078cb4e01521a3ea4880a3fc7d54de72de2dd142");
 
     public static readonly IReadOnlyList<EmbeddedModel> Models =
@@ -373,6 +384,86 @@ public static class EmbeddedModelCatalog
             "4ca720788d1e01f1bff70c033e0d0028fd02e502",
             new EmbeddedFile("Qwen3.8-27B-UD-Q6_K_XL.gguf", 25_299_061_664, "701d8fa9ed214ab21bfc130cd2a7df19ca89bbef7713e2dfb19f3c63696aa917"),
             Qwen38Mmproj,
+            Qwen,
+            MtpHead: true),
+        new(
+            "qwen3.8-27b-nvfp4-very-low",
+            "Qwen3.8 27B NVFP4",
+            "VERY-LOW",
+            "esatapedico/Qwen3.8-27B-NVFP4-MTP-GGUF",
+            "bcd7a7d3e251d4ec0fd15c72584b5eb9e0981383",
+            new EmbeddedFile("Qwen3.8-27B-NVFP4-MTP-VERY-LOW.gguf", 14_862_277_984, "74ea17ea05e0e0241af8d5b29cdea38b3f4509f66d9b96c1ab05f0e1f0e537d9"),
+            Nvfp4Mmproj,
+            Qwen,
+            MtpHead: true),
+        new(
+            "qwen3.8-27b-nvfp4-compact-low",
+            "Qwen3.8 27B NVFP4",
+            "COMPACT-LOW",
+            "esatapedico/Qwen3.8-27B-NVFP4-MTP-GGUF",
+            "bcd7a7d3e251d4ec0fd15c72584b5eb9e0981383",
+            new EmbeddedFile("Qwen3.8-27B-NVFP4-MTP-COMPACT-LOW.gguf", 15_160_261_920, "ac0ef9c5eceb5a5dc9b266eacc9372508158713c6c35618cf735675451fdd3ac"),
+            Nvfp4Mmproj,
+            Qwen,
+            MtpHead: true),
+        new(
+            "qwen3.8-27b-nvfp4-low",
+            "Qwen3.8 27B NVFP4",
+            "LOW",
+            "esatapedico/Qwen3.8-27B-NVFP4-MTP-GGUF",
+            "bcd7a7d3e251d4ec0fd15c72584b5eb9e0981383",
+            new EmbeddedFile("Qwen3.8-27B-NVFP4-MTP-LOW.gguf", 15_534_575_072, "ce66a629d4a3516bba27ca91de29372f086f90f72ddb92fe298de67b8bb88bbc"),
+            Nvfp4Mmproj,
+            Qwen,
+            MtpHead: true),
+        new(
+            "qwen3.8-27b-nvfp4-medium",
+            "Qwen3.8 27B NVFP4",
+            "MEDIUM",
+            "esatapedico/Qwen3.8-27B-NVFP4-MTP-GGUF",
+            "bcd7a7d3e251d4ec0fd15c72584b5eb9e0981383",
+            new EmbeddedFile("Qwen3.8-27B-NVFP4-MTP-MEDIUM.gguf", 16_378_863_040, "f0b4c538c75037f026bde3b650f0ca639d382c128a4572769dce1183db86253a"),
+            Nvfp4Mmproj,
+            Qwen,
+            MtpHead: true),
+        new(
+            "qwen3.8-27b-nvfp4-mid-high",
+            "Qwen3.8 27B NVFP4",
+            "MID-HIGH",
+            "esatapedico/Qwen3.8-27B-NVFP4-MTP-GGUF",
+            "bcd7a7d3e251d4ec0fd15c72584b5eb9e0981383",
+            new EmbeddedFile("Qwen3.8-27B-NVFP4-MTP-MID-HIGH.gguf", 16_912_387_392, "79b032f7a118fb34f1445c4d7ae50bc7b304c74161035c3df8bd5526c12899b9"),
+            Nvfp4Mmproj,
+            Qwen,
+            MtpHead: true),
+        new(
+            "qwen3.8-27b-nvfp4-high",
+            "Qwen3.8 27B NVFP4",
+            "HIGH",
+            "esatapedico/Qwen3.8-27B-NVFP4-MTP-GGUF",
+            "bcd7a7d3e251d4ec0fd15c72584b5eb9e0981383",
+            new EmbeddedFile("Qwen3.8-27B-NVFP4-MTP-HIGH.gguf", 17_570_799_040, "d57008707b0558bde05ce61d7402e4e668ffd45a4c97d03d2ad97db73f98d403"),
+            Nvfp4Mmproj,
+            Qwen,
+            MtpHead: true),
+        new(
+            "qwen3.8-27b-nvfp4-very-high",
+            "Qwen3.8 27B NVFP4",
+            "VERY-HIGH",
+            "esatapedico/Qwen3.8-27B-NVFP4-MTP-GGUF",
+            "bcd7a7d3e251d4ec0fd15c72584b5eb9e0981383",
+            new EmbeddedFile("Qwen3.8-27B-NVFP4-MTP-VERY-HIGH.gguf", 19_694_390_752, "3e52d6280ee650520a2d901002121c11cf9d23ac75f23c52a362bf285d561d81"),
+            Nvfp4Mmproj,
+            Qwen,
+            MtpHead: true),
+        new(
+            "qwen3.8-27b-nvfp4-highest",
+            "Qwen3.8 27B NVFP4",
+            "HIGHEST",
+            "esatapedico/Qwen3.8-27B-NVFP4-MTP-GGUF",
+            "bcd7a7d3e251d4ec0fd15c72584b5eb9e0981383",
+            new EmbeddedFile("Qwen3.8-27B-NVFP4-MTP-HIGHEST.gguf", 23_185_001_824, "6a202c2faf67f79d4c8c61ec940da7a62bd59a87608508fe8048131630cc4ba6"),
+            Nvfp4Mmproj,
             Qwen,
             MtpHead: true),
         new(

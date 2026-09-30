@@ -44,7 +44,7 @@ internal sealed class LlmSession : IDisposable
     private string _configuredUrl = "";
     private int _configuredContextLength;
 
-    // The loaded profile's Embedded LLM enabled at the last connect (2026-09-29): a bot's embedded link honours it.
+    // The loaded profile's Embedded LLM server enabled at the last connect (2026-09-29): a bot's embedded link honours it.
     private bool _embeddedEnabled = true;
     private ContextLength? _detectedContextLength;
     private CancellationTokenSource? _learningCts;
@@ -208,12 +208,12 @@ internal sealed class LlmSession : IDisposable
     /// <summary>
     /// The <c>/server</c> rows of the embedded model (2026-09-29): one per catalog model, installed or not, asked nothing —
     /// the row's detail says installed, how far a paused download got, or what it costs. None when no embedded model is offered
-    /// — no service, not Windows x64, or <paramref name="effective"/>'s <c>Embedded LLM enabled</c> off (2026-09-29).
+    /// — no service, not Windows x64, or <paramref name="effective"/>'s <c>Embedded LLM server enabled</c> off (2026-09-29).
     /// </summary>
     public IReadOnlyList<LlmServer> EmbeddedRows(AppSettingsData effective)
     {
         ArgumentNullException.ThrowIfNull(effective);
-        if (_embedded is not { } embedded || !EmbeddedEndpoint.Offered || !effective.EmbeddedLlmEnabled)
+        if (_embedded is not { } embedded || !EmbeddedEndpoint.Offered || !effective.EmbeddedLlmServer)
         {
             return [];
         }
@@ -512,7 +512,7 @@ internal sealed class LlmSession : IDisposable
         _apiKey = string.IsNullOrWhiteSpace(apiKey) ? LlmEndpoint.DefaultApiKey : apiKey;
         _configuredUrl = effective.LlmUrl ?? "";
         _configuredContextLength = effective.LlmContextLength;
-        _embeddedEnabled = effective.EmbeddedLlmEnabled;
+        _embeddedEnabled = effective.EmbeddedLlmServer;
     }
 
     /// <summary>

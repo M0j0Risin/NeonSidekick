@@ -187,6 +187,16 @@ public sealed class AppSettingsData
     public List<string>? ToolbarItems { get; set; }
 
     /// <summary>
+    /// The performance bar (2026-09-29, the user's ask: "a third bar", under the toolbar, with CPU %, RAM %, GPU % and VRAM %):
+    /// one of <see cref="App.PerfBarMode.Names"/> — <c>off</c> (the default: no row, nothing sampled), <c>text</c>,
+    /// <c>gauge</c>, <c>spark</c> or <c>led</c>, the look (the user's call: "let's do all of them"). The GPU meters read
+    /// NVIDIA's NVML where an NVIDIA GPU answers, else Windows' own counters (PDH) for the adapter with the most dedicated
+    /// memory (DXGI); a machine with neither shows CPU and RAM alone. Read on every pane tick, so a change shows when the
+    /// settings pane closes; sampled once a second while on. No variable.
+    /// </summary>
+    public string ShowPerformanceBar { get; set; } = App.PerfBarMode.Default;
+
+    /// <summary>
     /// The look (2026-09-23, the user's ask): <c>synthwave</c> (the default), <c>netrunner</c>,
     /// <c>nostromo</c>, <c>noir</c>, <c>cyberpunk</c>, <c>vaporwave</c>, <c>mainframe</c>, <c>grid</c>,
     /// <c>replicant</c> or <c>abyssal</c> (the last four 2026-09-27) — one of
@@ -1669,9 +1679,11 @@ public sealed class AppSettingsData
     /// Whether the embedded model is offered at all (2026-09-29, the user's ask; on by default): off takes its models out of
     /// <c>/server</c> (and <c>/server embedded</c>), a saved embedded URL then reads as none, and a running
     /// <c>llama-server</c> stops at the reconnect the change brings — its memory is free again. Installed models stay on
-    /// disk; the <c>Embedded models</c> row still installs and removes them. The Embedded tab's first row. No variable.
+    /// disk; the <c>Embedded models</c> row still installs and removes them. The Embedded tab's first row. <c>EmbeddedLlmEnabled</c>
+    /// / <c>Embedded LLM enabled</c> until later that day, when the user named it <c>Embedded LLM server enabled</c>; the key
+    /// follows the label without the <c>Enabled</c> suffix, so a saved off went back to on once. No variable.
     /// </summary>
-    public bool EmbeddedLlmEnabled { get; set; } = true;
+    public bool EmbeddedLlmServer { get; set; } = true;
 
     /// <summary>
     /// Which llama.cpp build runs the embedded model (2026-09-29): one of <see cref="EmbeddedLlm.EmbeddedBackends.Names"/> —

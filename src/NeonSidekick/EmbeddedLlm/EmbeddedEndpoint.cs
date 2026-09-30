@@ -12,14 +12,16 @@ namespace NeonSidekick.EmbeddedLlm;
 /// all route it the same way.
 ///
 /// <para>The URL is a sentinel, never a place: the server runs on a loopback port chosen at each start, which the
-/// endpoint carries as <see cref="Llm.LlmEndpoint.LiveUrl"/>. <c>.invalid</c> is reserved (RFC 2606) and never
-/// resolves, so a code path that posts to the sentinel by mistake fails fast with a DNS error instead of reaching
-/// anything on the network.</para>
+/// endpoint carries as <see cref="Llm.LlmEndpoint.LiveUrl"/>. <c>.localhost</c> is reserved (RFC 6761) for this machine
+/// alone, which is where the server runs, so a code path that posts to the sentinel by mistake stays on loopback and
+/// never reaches the network. <c>embedded-llm.invalid</c> (RFC 2606's never-resolving name) until later that day, when
+/// the user asked for a word that reads better in the connected line and the saved profile; no synonym was kept (a
+/// profile saved on the old one falls to the server picker once, the user's call).</para>
 /// </summary>
 public static class EmbeddedEndpoint
 {
-    /// <summary>The sentinel's host; a base URL on it is the embedded model.</summary>
-    public const string Host = "embedded-llm.invalid";
+    /// <summary>The sentinel's host; a base URL on it is the embedded model. Pinned.</summary>
+    public const string Host = "embedded.localhost";
 
     /// <summary>The base URL saved for the embedded model, already <c>/v1</c>-normalised like every other.</summary>
     public static readonly Uri BaseUrl = new("http://" + Host + "/v1");
@@ -54,20 +56,20 @@ public static class EmbeddedEndpoint
     public static bool Offered => OperatingSystem.IsWindows() && RuntimeInformation.OSArchitecture == Architecture.X64;
 
     /// <summary>
-    /// Whether <paramref name="effective"/> has the embedded model switched off (<c>Embedded LLM enabled</c>, 2026-09-29, the
+    /// Whether <paramref name="effective"/> has the embedded model switched off (<c>Embedded LLM server enabled</c>, 2026-09-29, the
     /// user's ask) while its URL names it: the saved sentinel then stands for nothing, and a connect finds a server as a
     /// blank URL would — the same as a saved Claude API URL with the Claude API off.
     /// </summary>
     public static bool SwitchedOff(Settings.AppSettingsData effective)
     {
         ArgumentNullException.ThrowIfNull(effective);
-        return !effective.EmbeddedLlmEnabled && IsEmbedded(effective.LlmUrl);
+        return !effective.EmbeddedLlmServer && IsEmbedded(effective.LlmUrl);
     }
 
     /// <summary>Whether <paramref name="effective"/>'s URL names the embedded model and the switch lets it run.</summary>
     public static bool Chosen(Settings.AppSettingsData effective)
     {
         ArgumentNullException.ThrowIfNull(effective);
-        return effective.EmbeddedLlmEnabled && IsEmbedded(effective.LlmUrl);
+        return effective.EmbeddedLlmServer && IsEmbedded(effective.LlmUrl);
     }
 }

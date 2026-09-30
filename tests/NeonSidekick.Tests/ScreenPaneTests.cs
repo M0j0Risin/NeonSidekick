@@ -4259,6 +4259,85 @@ public class ScreenPaneTests : IDisposable
     }
 
     /// <summary>
+    /// The performance bar (2026-09-29): the pane's last row, under the toolbar — the toolbar one row up, its clicks with it —
+    /// rewritten in place when its text changes on the tick, the whole pane again when it comes or goes.
+    /// </summary>
+    [Fact]
+    public void PerfBar_IsTheLastRow_UnderTheToolbar_AndFollowsOnTheTick()
+    {
+        _cursorTop = 100;
+        string text = "CPU 5%";
+        bool shown = true;
+        int asked = 0;
+        using var pane = Pane();
+        pane.Hint = () => "idle";
+        pane.Toolbar = () => new ScreenPane.ToolbarParts("🔧", @"D:\x");
+        pane.Perf = cells =>
+        {
+            asked = cells;
+            return shown ? new PerfRow([new PerfSegment("CPU ", Theme.DimText), new PerfSegment(text[4..], Theme.DimText)]) : null;
+        };
+        pane.Show();
+        pane.ShowInput("abc", 3);
+
+        // Rule / input / rule / hint / toolbar / the bar: the input row at 100, the toolbar at 103, the bar at 104.
+        Assert.Equal((1, 1), (pane.ToolbarRows, pane.PerfRows));
+        Assert.Equal(8, pane.LayoutHeight);
+        Assert.Equal(39, asked);   // the row's cells: the last column left empty, as every row leaves it
+        Assert.Contains("\nidle\n🔧" + new string(' ', 33) + @"D:\x" + "\nCPU 5%", Output);
+        Assert.True(pane.TryHitToolbar(1, 103, out var tool));
+        Assert.Equal(new ScreenPane.ToolbarHit(ScreenPane.ToolbarZone.Glyph, "🔧", 0), tool);
+        Assert.False(pane.TryHitToolbar(1, 104, out _));   // the bar's row is no button
+        Assert.Equal(new ScreenPane.OffPaneHit(null, new ScreenPane.ToolbarHit(ScreenPane.ToolbarZone.Glyph, "🔧", 0)), pane.OffPaneHitAt(1, 103));
+        int draws = Draws;
+
+        // A new reading: the row again in place, nothing else; the same again: nothing.
+        text = "CPU 42%";
+        int mark = Output.Length;
+        _time.Advance(ScreenPane.Tick);
+        Assert.Equal("CPU 42%", Output[mark..]);
+        mark = Output.Length;
+        _time.Advance(ScreenPane.Tick);
+        Assert.Equal("", Output[mark..]);
+        Assert.Equal(draws, Draws);
+
+        // Off: the pane's shape changed, the whole pane again, the toolbar its last row.
+        shown = false;
+        _time.Advance(ScreenPane.Tick);
+        Assert.Equal(draws + 1, Draws);
+        Assert.Equal((1, 0), (pane.ToolbarRows, pane.PerfRows));
+        Assert.Equal(9, pane.LayoutHeight);
+        Assert.EndsWith("\nidle\n🔧" + new string(' ', 33) + @"D:\x", Output);
+
+        // On again, without the toolbar: the bar under the hint row.
+        shown = true;
+        pane.Toolbar = static () => null;
+        _time.Advance(ScreenPane.Tick);
+        Assert.Equal((0, 1), (pane.ToolbarRows, pane.PerfRows));
+        Assert.EndsWith("\nidle\nCPU 42%", Output);
+        Assert.False(pane.TryHitToolbar(1, 103, out _));
+    }
+
+    /// <summary>A window with no transcript row to spare over the smallest pane, the toolbar and the bar draws no bar; one row more draws it.</summary>
+    [Fact]
+    public void PerfBar_IsDroppedWhereTheWindowHasNoRowForIt()
+    {
+        _console.Profile.Height = 6;
+        using var pane = Pane();
+        pane.Hint = () => "idle";
+        pane.Toolbar = () => new ScreenPane.ToolbarParts("🔧", @"D:\x");
+        pane.Perf = _ => new PerfRow([new PerfSegment("RAM 7%", Theme.DimText)]);
+        pane.Show();
+        Assert.Equal((1, 0), (pane.ToolbarRows, pane.PerfRows));
+        Assert.DoesNotContain("RAM 7%", Output);
+
+        _console.Profile.Height = 7;
+        _time.Advance(ScreenPane.Tick);
+        Assert.Equal((1, 1), (pane.ToolbarRows, pane.PerfRows));
+        Assert.EndsWith("\nRAM 7%", Output);
+    }
+
+    /// <summary>
     /// The off-pane parts under an overlay (later on 2026-09-21): the toolbar's glyph, path and
     /// blanks, the hint row's model name, mark and blanks — each with its own outside key, the
     /// transcript and the rules the readers' −2; nothing lifted or under the busy row.

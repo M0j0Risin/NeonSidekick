@@ -18,11 +18,11 @@ public static class EmbeddedLlmText
     /// <summary>The note after a cancelled download: what is on disk stays.</summary>
     public const string PausedNotice = "download paused; pick the model again to resume where it stopped";
 
-    /// <summary>The refusal when the embedded model is asked for while <c>Embedded LLM enabled</c> is off (2026-09-29).</summary>
-    public const string SwitchedOffError = "the embedded LLM is off; turn Embedded LLM enabled on in /settings › Embedded to use it";
+    /// <summary>The refusal when the embedded model is asked for while <c>Embedded LLM server enabled</c> is off (2026-09-29).</summary>
+    public const string SwitchedOffError = "the embedded LLM is off; turn Embedded LLM server enabled on in /settings › Embedded to use it";
 
     /// <summary>The log line when the saved LLM URL names the embedded model but its switch is off: the URL is read as blank.</summary>
-    public const string SwitchedOffWarning = "The LLM URL names the embedded model, which is switched off (Embedded LLM enabled); looking for a server as with no URL.";
+    public const string SwitchedOffWarning = "The LLM URL names the embedded model, which is switched off (Embedded LLM server enabled); looking for a server as with no URL.";
 
     /// <summary>The refusal when an image is sent to an embedded model running without its vision projector.</summary>
     public const string NoVisionError = "the embedded model is running without its vision projector; turn Embedded vision on in /settings › Embedded to send images";
@@ -30,6 +30,23 @@ public static class EmbeddedLlmText
     /// <summary>A model's row detail in <c>/server</c> and the catalog: <see cref="RowDetail"/> over its download.</summary>
     public static string ModelDetail(EmbeddedModel model, EmbeddedModelState state) =>
         RowDetail(state, EmbeddedModelCatalog.TotalBytes(model));
+
+    /// <summary>
+    /// The drafter column's mark (2026-09-29, the user's ask): the right-most column of the catalog and of <c>/server</c>'s
+    /// embedded rows shows it for a model that can draft for itself (<see cref="EmbeddedModel.HasMtp"/> — a drafter file or
+    /// the head in its weights), whatever <c>Embedded drafter</c> says; a model without one leaves the column blank. Two cells.
+    /// </summary>
+    public const string DrafterGlyph = "⚡";
+
+    /// <summary>
+    /// The drafter column that follows <paramref name="detail"/>: the padding to <paramref name="detailWidth"/> cells, two
+    /// blanks and <see cref="DrafterGlyph"/> for a model with a drafter; empty for any other (the column is blank, with no
+    /// trailing spaces).
+    /// </summary>
+    public static string DrafterColumn(EmbeddedModel? model, string detail, int detailWidth) =>
+        model is { HasMtp: true }
+            ? new string(' ', Math.Max(0, detailWidth - UI.TextCells.Width(detail ?? ""))) + "  " + DrafterGlyph
+            : "";
 
     /// <summary>What an install costs to download: the model and its vision projector, plus the llama.cpp runtime when that is missing too.</summary>
     public static string InstallCost(EmbeddedModel model, long runtimeBytes) =>

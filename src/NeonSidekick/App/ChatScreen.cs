@@ -845,6 +845,7 @@ internal sealed partial class ChatScreen
     /// <param name="editDraft">Opens <c>/draft</c>'s temporary file (the path, the <c>Draft editor</c> command line — blank for the shell's default — and a token) and completes when the editor is done with it (<see cref="PersonaFile.EditAndWaitAsync"/> in the app; tests a lambda that writes the file, or waits on the token); null = <c>/draft</c> answers <see cref="DraftUnavailableError"/>.</param>
     /// <param name="mcp">The MCP servers' session (2026-09-20; <see cref="SidekickApp"/> builds one beside the LLM session and disposes it after the screen); null = the screen builds its own over the real transports and disposes it when it closes (the tests', with nothing configured in their temp home).</param>
     /// <param name="environment">Reads a system variable for the shell probe (<c>PATH</c>, <c>PATHEXT</c>; <see cref="EnvironmentOverrides.System"/> in the app, 2026-09-21); null = no PATH at all, which still finds <c>cmd.exe</c> and Windows PowerShell under the system folder (the tests' deterministic pair).</param>
+    /// <param name="perfSource">What the performance bar reads the machine with (2026-09-29): <see cref="Perf.PerfSources.CreateDefault"/> in the app; opened while <c>Show performance bar</c> is on, closed when it goes off; null = <see cref="Perf.NullPerfSource"/>, a bar with no meters (the tests pass a fake).</param>
     /// <param name="logFile">The <c>--log</c> file, full path (2026-09-22): <c>/log</c> opens it with <paramref name="openFile"/>, and only while it is given is <c>/log</c> a command, in <c>/help</c> and in the completion list; null = started without <c>--log</c> (and the tests).</param>
     public ChatScreen(
         IAnsiConsole console,
@@ -880,7 +881,8 @@ internal sealed partial class ChatScreen
         Action<string>? viewPicture = null,
         Func<Uri, string, HaClient>? haClient = null,
         Action<string>? followViewer = null,
-        IPrintSpooler? printSpooler = null)
+        IPrintSpooler? printSpooler = null,
+        Func<Perf.IPerfSource>? perfSource = null)
     {
         _logFile = logFile;
         ArgumentNullException.ThrowIfNull(time);
@@ -941,6 +943,8 @@ internal sealed partial class ChatScreen
         _print = new PrintService(printSpooler ?? NullPrintSpooler.Instance, _files, _effective, _time);
         _printTools = PrintTools(_print, ConfirmPrintAsync);
         _printerNames = new PrinterNameCache(_print, _time);
+        // The performance bar (2026-09-29): sampled on its own timer while the setting draws it (PerfRow).
+        _perf = new Perf.PerfSampler(perfSource ?? (() => new Perf.NullPerfSource()), _time);
         // The shell tools (2026-09-21): the runner is the one process-start site of the group; the allow
         // list lives for the process (a /clear or a profile switch keeps the session's allows, the permanent
         // ones are the loaded profile's); the gate asks through the approval pane (ApproveCommandAsync).
@@ -1005,6 +1009,9 @@ internal sealed partial class ChatScreen
             // not Resolve: the draw must not warn on a hand-edited word, the turn does. The disk and
             // the officer (2026-09-22) follow Memory and Shell police outside paths the same way.
             Toolbar = ToolbarParts,
+            // The performance bar under the toolbar (2026-09-29): read per draw and on the tick, like the toolbar, so a
+            // change of Show performance bar shows at once; the sampler runs only while it answers a row.
+            Perf = PerfBarRow,
             // The picture strip over the upper rule (later still on 2026-09-24): while ComfyUI picture strip is on;
             // read per draw and on the tick, so a flip shows at once. Not while its × has put it away (2026-09-28), until the next picture.
             PictureStrip = () => _effective().ComfyPictureStrip && !_pictureStrip.Closed ? _pictureStrip : null,
@@ -1256,6 +1263,26 @@ internal sealed partial class ChatScreen
     /// the glyphs among them their switches allow and the path when it is checked; null — no row — when nothing is checked,
     /// or when what is checked draws nothing (the disk alone with Memory off).
     /// </summary>
+    private readonly Perf.PerfSampler _perf;
+
+    /// <summary>
+    /// The performance bar's row for the settings in force (2026-09-29, the user's ask) in <paramref name="cells"/> cells:
+    /// null — no row, the sampler stopped — while Show performance bar is off, else the latest reading in its look
+    /// (<see cref="PerfBar.Render"/>). TryParse, not Resolve: the tick must not warn on a hand-edited word every 100 ms.
+    /// </summary>
+    private PerfRow? PerfBarRow(int cells)
+    {
+        PerfBarMode.TryParse(_effective().ShowPerformanceBar, out var style);
+        _perf.Ensure(style != PerfBarStyle.Off);
+        if (style == PerfBarStyle.Off)
+        {
+            return null;
+        }
+
+        var (latest, history, _) = _perf.Read();
+        return PerfBar.Render(style, latest, history, cells);
+    }
+
     private ScreenPane.ToolbarParts? ToolbarParts()
     {
         var shown = _effective();
@@ -6326,7 +6353,7 @@ internal sealed partial class ChatScreen
     /// the pane's rows. <c>/view</c>'s, a lone <c>/imagine</c> picture's, and every thumbnail's under <c>fullsize</c> (2026-09-24).
     /// </summary>
     private ThumbnailBox WindowBox() =>
-        ThumbnailSize.Fit(_pane.Profile.Width, _pane.Profile.Height, _pane.Enabled ? ScreenPane.PaneRows + _pane.InputRows + _pane.ToolbarRows + _pane.StripRows : 0);
+        ThumbnailSize.Fit(_pane.Profile.Width, _pane.Profile.Height, _pane.Enabled ? ScreenPane.PaneRows + _pane.InputRows + _pane.ToolbarRows + _pane.PerfRows + _pane.StripRows : 0);
 
     /// <summary>One picture as large as the window allows (the <c>/view</c> box), several as a thumbnail strip.</summary>
     private void ShowPictures(IReadOnlyList<ImageAttachment> images)
@@ -7305,6 +7332,7 @@ internal sealed partial class ChatScreen
             // The jobs behind the line cancelled and awaited first (2026-09-29): nothing still touches MCP, voice or speech as they go.
             await _jobs.CancelAllAsync().ConfigureAwait(false);
             _timers.Dispose();
+            _perf.Dispose();
             // The background processes go with the screen (2026-09-21): what still runs is killed, tree and all.
             _processes.Dispose();
             _comfy.Dispose();
@@ -7785,7 +7813,7 @@ internal sealed partial class ChatScreen
 
     /// <summary>The transcript's rows under the banner and the startup lines: the <c>/view</c> box with the flow's rows reserved too — the whole splash's, and the tiled splash's page.</summary>
     private ThumbnailBox SplashArea() =>
-        ThumbnailSize.Fit(_pane.Profile.Width, _pane.Profile.Height, _pane.FlowRow + ScreenPane.PaneRows + _pane.InputRows + _pane.ToolbarRows);
+        ThumbnailSize.Fit(_pane.Profile.Width, _pane.Profile.Height, _pane.FlowRow + ScreenPane.PaneRows + _pane.InputRows + _pane.ToolbarRows + _pane.PerfRows);
 
     /// <summary>
     /// The tiled splash (2026-09-24, the user's ask: <c>Welcome splash</c> <c>tiled</c>): page
@@ -8074,7 +8102,7 @@ internal sealed partial class ChatScreen
         }
 
         // A saved Claude API URL with the Claude API off or keyless stands for nothing (2026-09-27): found as a blank one.
-        // So does a saved embedded URL with Embedded LLM enabled off (2026-09-29).
+        // So does a saved embedded URL with Embedded LLM server enabled off (2026-09-29).
         bool blankUrl = string.IsNullOrWhiteSpace(effective.LlmUrl)
             || (Llm.Anthropic.ClaudeApi.IsClaudeApi(effective.LlmUrl) && !Llm.Anthropic.ClaudeApi.Offered(effective))
             || EmbeddedLlm.EmbeddedEndpoint.SwitchedOff(effective);
@@ -8152,9 +8180,9 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// Whether this screen offers the embedded model (2026-09-29): a session with one, on llama.cpp's Windows x64 builds,
-    /// with <c>Embedded LLM enabled</c> on (the same day, the user's ask).
+    /// with <c>Embedded LLM server enabled</c> on (the same day, the user's ask).
     /// </summary>
-    private bool EmbeddedOffered => EmbeddedAvailable && _effective().EmbeddedLlmEnabled;
+    private bool EmbeddedOffered => EmbeddedAvailable && _effective().EmbeddedLlmServer;
 
     /// <summary>Whether this session could run the embedded model at all, the switch aside.</summary>
     private bool EmbeddedAvailable => _session.Embedded is not null && EmbeddedLlm.EmbeddedEndpoint.Offered;
@@ -8287,7 +8315,7 @@ internal sealed partial class ChatScreen
             return;
         }
 
-        if (!_effective().EmbeddedLlmEnabled)
+        if (!_effective().EmbeddedLlmServer)
         {
             // Switched off (2026-09-29): the catalog still removes, but nothing is used or downloaded to be used.
             _transcript.Error(EmbeddedLlm.EmbeddedLlmText.SwitchedOffError);
@@ -8793,9 +8821,9 @@ internal sealed partial class ChatScreen
     {
         if (changes.HasFlag(SettingsChanges.Llm))
         {
-            if (!_effective().EmbeddedLlmEnabled)
+            if (!_effective().EmbeddedLlmServer)
             {
-                // Embedded LLM enabled off (2026-09-29): a download under way pauses, and the reconnect below stops a
+                // Embedded LLM server enabled off (2026-09-29): a download under way pauses, and the reconnect below stops a
                 // running server — the saved embedded URL now reads as none.
                 _jobs.Cancel(BackgroundJobKind.EmbeddedDownload);
             }
