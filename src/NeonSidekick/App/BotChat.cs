@@ -649,7 +649,8 @@ public static partial class BotChat
     /// <c>automatic</c> the first picture was prompted before any skill could be loaded, a topic saying which to load had no
     /// way to be obeyed): the load-only catalog (<see cref="Skills.SkillsPrompt.LoadOnlySection"/>) and a directive to load
     /// the skill the topic or the line asks for pictures — or one for writing image prompts — and a file it bundles, before
-    /// answering as the instruction above says. Pinned: it is prompt text.
+    /// answering as the instruction above says. Since 2026-09-30 (code review) it says a preloaded skill needs no load: the skill
+    /// the topic names is the one preloaded, and the directive alone sent the writer to load it again. Pinned: it is prompt text.
     /// </summary>
     public static string ImagePromptSkills(IReadOnlyList<Skills.Skill> skills)
     {
@@ -661,7 +662,7 @@ public static partial class BotChat
     public const string ImagePromptSkillsDirective =
         "Before you answer, load with load_skill any skill the chat's topic or the line asks to be used for pictures or image prompts, "
         + "or one whose description covers writing image prompts for this workflow — and a file it bundles when the skill says to read one — "
-        + "and follow it. Then answer exactly as instructed above; never mention the skill in the answer.";
+        + "and follow it; a skill already loaded for you above needs no load_skill. Then answer exactly as instructed above; never mention the skill in the answer.";
 
     /// <summary>The user message of the image-prompt request (2026-09-25): whose line, the topic when there is one, and the line. Pinned: it is prompt text.</summary>
     public static string ImagePromptRequest(string speaker, string reply, string topic)

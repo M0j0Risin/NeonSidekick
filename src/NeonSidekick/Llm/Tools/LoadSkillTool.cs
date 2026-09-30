@@ -14,6 +14,11 @@ namespace NeonSidekick.Llm.Tools;
 /// <c>enum</c> of names is rebuilt when the catalog's set changes, so the model cannot ask for a
 /// skill that is not there — the specification's tip. Offered only while at least one skill is
 /// installed (<c>ChatScreen.PrepareTurn</c>). A quiet tool: the transcript shows <see cref="Note"/>.
+/// <para>With <c>preloaded</c> (2026-09-30, code review: a <c>/botchat</c> preloaded skill, its content already in the prompt, was
+/// left out of the list but still loaded again when the model asked — the picture writer's directive even tells it to load the
+/// skill the topic names, which is the one preloaded) a name alone for one of those answers <see cref="SkillText.AlreadyLoaded"/>,
+/// not the content again. Its files are still read: those past the preload's cap stay listed by name, and may be wanted. The
+/// schema keeps every name, so such a read stays valid.</para>
 /// </summary>
 public sealed class LoadSkillTool : AIFunction
 {
@@ -22,12 +27,16 @@ public sealed class LoadSkillTool : AIFunction
     public const string FileArgument = "file";
 
     private readonly SkillCatalog _catalog;
+    private readonly HashSet<string> _preloaded;
     private JsonElement _schema;
     private int _schemaVersion = -1;
 
-    public LoadSkillTool(SkillCatalog catalog)
+    /// <param name="catalog">The skills it loads.</param>
+    /// <param name="preloaded">The skills whose content the prompt already carries (any case): a name alone for one is answered <see cref="SkillText.AlreadyLoaded"/>.</param>
+    public LoadSkillTool(SkillCatalog catalog, IReadOnlyCollection<string>? preloaded = null)
     {
         _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
+        _preloaded = new HashSet<string>(preloaded ?? [], StringComparer.OrdinalIgnoreCase);
     }
 
     public override string Name => ToolName;
@@ -89,6 +98,11 @@ public sealed class LoadSkillTool : AIFunction
             string relative = file.Trim();
             var read = SkillCatalog.ReadResource(skill, relative);
             return read.Outcome == SkillCatalog.ReadOutcome.Ok ? SkillText.File(skill.Name, relative, read.Text, read.Truncated) : SkillText.ReadError(skill, relative, read);
+        }
+
+        if (_preloaded.Contains(skill.Name))
+        {
+            return SkillText.AlreadyLoaded(skill.Name);
         }
 
         var body = SkillCatalog.ReadBody(skill);

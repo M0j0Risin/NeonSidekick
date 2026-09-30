@@ -175,6 +175,32 @@ public class LoadSkillToolTests : IDisposable
         Assert.Equal("(cut at 48,000 characters)", SkillText.BodyCutNote);
     }
 
+    /// <summary>
+    /// A preloaded skill (2026-09-30, code review: a /botchat skill whose content the prompt already carries): its name alone, in
+    /// any case, is answered "already loaded", not the content again; its files are still read, another skill loads as ever, and
+    /// the schema still names it.
+    /// </summary>
+    [Fact]
+    public async Task APreloadedSkill_ByName_IsAlreadyLoaded_ItsFilesStillRead()
+    {
+        string directory = Put("haiku");
+        File.WriteAllText(Path.Combine(directory, "forms.md"), "5-7-5");
+        Put("pdf");
+        _catalog.Scan(external: false);
+        var tool = new LoadSkillTool(_catalog, ["Haiku"]);
+        async Task<string> Call(params (string Name, object? Value)[] values) => (string)(await tool.InvokeAsync(Args(values), CancellationToken.None))!;
+
+        string again = await Call(("name", "haiku"));
+        Assert.Equal(SkillText.AlreadyLoaded("haiku"), again);
+        Assert.Contains("already loaded", again);
+        Assert.Contains("in your system prompt", again);
+        Assert.DoesNotContain("Five, seven, five.", again);
+        Assert.Equal(again, LoadSkillTool.Note(again));
+        Assert.Equal("<skill_file skill=\"haiku\" path=\"forms.md\">\n5-7-5\n</skill_file>", await Call(("name", "haiku"), ("file", "forms.md")));
+        Assert.StartsWith("<skill_content name=\"pdf\">", await Call(("name", "pdf")));
+        Assert.Contains("\"haiku\"", tool.JsonSchema.GetProperty("properties").GetProperty("name").GetProperty("enum").GetRawText());
+    }
+
     [Fact]
     public void Constructor_RefusesNull()
     {

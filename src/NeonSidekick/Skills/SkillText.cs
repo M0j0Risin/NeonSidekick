@@ -86,6 +86,12 @@ public static class SkillText
         return $"Error: there is no skill named '{name.Trim()}'; " + (names.Count == 0 ? "no skill is installed" : "the skills are: " + string.Join(", ", names));
     }
 
+    /// <summary>
+    /// <c>load_skill</c>'s answer for a skill whose content the prompt already carries (2026-09-30, code review: a <c>/botchat</c>
+    /// preloaded skill, <see cref="Llm.Tools.LoadSkillTool"/>'s <c>preloaded</c>): no content again, a sentence saying where it is.
+    /// </summary>
+    public static string AlreadyLoaded(string name) => $"Skill '{name.Trim()}' is already loaded: its instructions are in your system prompt; follow them from there.";
+
     public static string NoName => "Error: name is empty; pass the name of a skill from the list";
 
     public static string BodyMissing(string name) => $"Error: the SKILL.md of '{name}' is gone; it was there when the skills were listed";

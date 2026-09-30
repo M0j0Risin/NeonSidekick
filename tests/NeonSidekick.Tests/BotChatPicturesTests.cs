@@ -178,6 +178,7 @@ public class BotChatPicturesTests
         Assert.EndsWith("\n\n" + BotChat.ImagePromptSkillsDirective, text);
         Assert.Contains("the chat's topic or the line asks", BotChat.ImagePromptSkillsDirective);
         Assert.Contains("answer exactly as instructed above", BotChat.ImagePromptSkillsDirective);
+        Assert.Contains("a skill already loaded for you above needs no load_skill", BotChat.ImagePromptSkillsDirective);   // 2026-09-30, code review
     }
 
     private static Skills.Skill SkillNamed(string name) => new(name, "About " + name + ".", Skills.SkillScope.Profile, name);

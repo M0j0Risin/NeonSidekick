@@ -10414,10 +10414,14 @@ internal sealed partial class ChatScreen
                 // Both switches on (2026-09-30, the user's question): a skill whose content is already given is not offered to load
                 // again — the writer always has it, the bots under prompt-writer-and-bots — or the model spends its round trips
                 // reloading it and meets the no-tools last round sooner. A side left with no skill gets neither the list nor load_skill.
+                // Asked for it anyway (2026-09-30, code review: the writer's directive names the skill the topic names, the one
+                // preloaded), that side's load_skill answers it is loaded already; prompt-writer-only's bots, without it, load it.
                 var writerSkills = BotChat.WithoutPreloaded(catalog, preloadedNames);
-                var botSkills = new BotSkillSet(writerSkills, writerSkills is null ? null : loadTool, preloaded);
-                var skills = skillMode == BotSkillMode.PromptWriterAndBots ? writerSkills : catalog;
-                var skillTool = skills is null ? null : loadTool;
+                var preloadedTool = loadTool is null || preloadedNames.Count == 0 ? loadTool : new LoadSkillTool(_catalog, preloadedNames);
+                var botSkills = new BotSkillSet(writerSkills, writerSkills is null ? null : preloadedTool, preloaded);
+                bool botsPreloaded = skillMode == BotSkillMode.PromptWriterAndBots;
+                var skills = botsPreloaded ? writerSkills : catalog;
+                var skillTool = skills is null ? null : botsPreloaded ? preloadedTool : loadTool;
                 string preloadedNotice = preloadedNames.Count == 0 ? "" : BotChat.PreloadedNotice(preloadedNames, skillMode);
                 if (preloadedNotice.Length > 0 && !string.Equals(preloadedNotice, preloadedTold, StringComparison.Ordinal))
                 {
@@ -10458,8 +10462,6 @@ internal sealed partial class ChatScreen
                 {
                     assistant.Tools = [imageTool];
                     assistant.MaxToolIterations = BotImageToolIterations;
-                    // A bot that writes generate_image(…) out as text (later on 2026-09-25, the user's report) has it run, unseen and unspoken.
-                    assistant.TextToolCalls = true;
                 }
 
                 if (skillTool is not null)
@@ -10472,8 +10474,11 @@ internal sealed partial class ChatScreen
                 // The last of those round trips asks for the bot's words without the tools (2026-09-30, the user's report: a bot
                 // a few turns in spent all three on pictures and its line came out as "Stopped after 3 tool iterations").
                 assistant.LastRoundAnswers = imageTool is not null || skillTool is not null;
-                // A call written out as text is caught with load_skill alone too (2026-09-30): that last round, asked without the
-                // tools, is where a model writes one, and a skills-only bot's would otherwise reach the transcript.
+                // A call to an offered tool written out as text (later on 2026-09-25, the user's report: generate_image(…) in a
+                // bot's line) is caught: run, unseen and unspoken, in a round that offers the tools; kept out of the reply and not
+                // run in that last round. With load_skill alone too since 2026-09-30: the last round, asked without the tools, is
+                // where a model writes one, and a skills-only bot's would otherwise reach the transcript — so its written load_skill
+                // runs in the rounds before, as a bot offered both tools has had since 2026-09-25.
                 assistant.TextToolCalls = assistant.LastRoundAnswers;
 
                 DiagnosticLog.Info(AppCategory, BotChat.TurnLogLine(replies + 1, bot.Name));
@@ -11026,7 +11031,9 @@ internal sealed partial class ChatScreen
     /// a short loop — SkillLearner's shape: up to <see cref="BotPromptSkillIterations"/> requests offering <c>load_skill</c>, each
     /// call run and answered, then one with no tool at all should the cap be reached, so an answer always comes. The text of the
     /// last response, a call written in it taken out (<see cref="WithoutWrittenCalls"/>); each skill loaded is added to
-    /// <paramref name="loaded"/> as its transcript line (<see cref="LoadSkillTool.Note"/>).
+    /// <paramref name="loaded"/> as its transcript line (<see cref="LoadSkillTool.Note"/>). A call written as text in a round that
+    /// offers <c>load_skill</c> (2026-09-30, code review: a server with no tool-call parser, or markup it did not convert) runs as
+    /// a real one, as a bot's does (<see cref="Assistant.AddWrittenCalls"/>): before, it was taken out and the empty rest was the prompt.
     /// </summary>
     private static async Task<string> WriteBotPicturePromptAsync(Assistant assistant, List<ChatMessage> request, AIFunction? skillTool, List<string> loaded, CancellationToken cancellationToken)
     {
@@ -11034,14 +11041,29 @@ internal sealed partial class ChatScreen
         for (int iteration = 1; tools.Count > 0 && iteration <= BotPromptSkillIterations; iteration++)
         {
             var response = await assistant.RequestAsync(request, tools, ReasoningEffort.None, cancellationToken).ConfigureAwait(false);
-            if (response.Calls.Count == 0)
+            var messages = response.Messages.ToList();
+            var calls = response.Calls;
+            if (calls.Count == 0)
             {
-                return WithoutWrittenCalls(response.Text);
+                var (text, written) = WrittenCalls(response.Text);
+                if (written.Count == 0)
+                {
+                    return text;
+                }
+
+                Assistant.ReplaceText(messages, text);
+                Assistant.AddWrittenCalls(messages, written, iteration);
+                calls = messages.SelectMany(m => m.Contents).OfType<FunctionCallContent>().ToList();
+                if (calls.Count == 0)
+                {
+                    // None of them parsed: the words beside them are the answer.
+                    return text;
+                }
             }
 
-            request.AddRange(response.Messages);
-            var results = new List<AIContent>(response.Calls.Count);
-            foreach (var call in response.Calls)
+            request.AddRange(messages);
+            var results = new List<AIContent>(calls.Count);
+            foreach (var call in calls)
             {
                 DiagnosticLog.Debug(AppCategory, "Botchat image prompt " + Assistant.ToolCallLogLine(call.Name, Assistant.SerializeArguments(call.Arguments)));
                 var (text, _) = await Assistant.InvokeToolAsync(tools, call, cancellationToken).ConfigureAwait(false);
@@ -11063,10 +11085,18 @@ internal sealed partial class ChatScreen
     /// Qwen-style model still writes <c>&lt;tool_call&gt;</c> markup there, which the server leaves as text — before, that markup
     /// became the ComfyUI prompt. Neither run nor kept; with nothing else written the prompt is empty (no picture, its notice).
     /// </summary>
-    internal static string WithoutWrittenCalls(string text)
+    internal static string WithoutWrittenCalls(string text) => WrittenCalls(text).Text;
+
+    /// <summary>
+    /// The image prompt writer's text split into the words and the calls written out in it (2026-09-30, code review): every
+    /// form <see cref="TextToolCallFilter"/> knows, the line form (<c>load_skill name: pony-prompts</c>) included — it needs
+    /// <c>load_skill</c>'s parameter names, which the names-only filter before did not have, so that line became the prompt.
+    /// </summary>
+    internal static (string Text, IReadOnlyList<(string Name, string Arguments)> Calls) WrittenCalls(string text)
     {
-        var filter = new TextToolCallFilter([LoadSkillTool.ToolName]);
-        return filter.Push(text) + filter.Flush();
+        var filter = new TextToolCallFilter([(LoadSkillTool.ToolName, (IReadOnlyList<string>)[LoadSkillTool.NameArgument, LoadSkillTool.FileArgument])]);
+        string kept = filter.Push(text) + filter.Flush();
+        return (kept, filter.Calls);
     }
 
     /// <summary>

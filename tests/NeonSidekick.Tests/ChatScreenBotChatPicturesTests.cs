@@ -835,6 +835,89 @@ public partial class ChatScreenTests
         Assert.Equal("score_9, a dog", ChatScreen.WithoutWrittenCalls("<tool_call>\n<function=load_skill>\n<parameter=name>\npony-prompts\n</parameter>\n</function>\n</tool_call>\nscore_9, a dog"));
         Assert.Equal("", ChatScreen.WithoutWrittenCalls("load_skill(name=\"pony-prompts\")"));
         Assert.Equal("score_9, a dog <3", ChatScreen.WithoutWrittenCalls("score_9, a dog <3"));
+        // The line form (2026-09-30, code review): it needs load_skill's parameter names, which the filter before lacked.
+        Assert.Equal("score_9, a dog", ChatScreen.WithoutWrittenCalls("load_skill name: pony-prompts\nscore_9, a dog"));
+        var (text, calls) = ChatScreen.WrittenCalls("load_skill name: pony-prompts file: references/tags.md\nscore_9, a dog");
+        Assert.Equal("score_9, a dog", text);
+        Assert.Equal(LoadSkillTool.ToolName, Assert.Single(calls).Name);
+    }
+
+    /// <summary>
+    /// Both switches on and the writer asks for the preloaded skill anyway (2026-09-30, code review: the directive names the
+    /// skill the topic names, the one preloaded): load_skill answers it is loaded already, not with its content again.
+    /// </summary>
+    [Fact]
+    public async Task BotChat_SkillsEnabled_TheWriterLoadingAPreloadedSkill_IsToldItIsLoadedAlready()
+    {
+        var stub = BotPicturesFixture();
+        _settings.Update(d => d.BotChatSkills = true);
+        PutSkill(ProfileSkills, "pony-prompts", "Writes Pony Diffusion prompts.", "# Pony prompts\n\nAlways start with score_9.");
+        PutSkill(ProfileSkills, "haiku");
+        _chat.EnqueueText(DogReply);
+        _chat.Enqueue(FakeChatClient.Call("s1", LoadSkillTool.ToolName, new Dictionary<string, object?> { ["name"] = "pony-prompts" }));
+        _chat.EnqueueText("score_9, a dog surfing a wave");
+        _chat.EnqueueText("Ada ", "answers.");
+        EscDuringRequest(4);
+        PushLine("/botchat use pony-prompts for the pictures");
+        PushLine("/exit");
+
+        await RunAsync();
+
+        Assert.Equal(4, _chat.Requests.Count);
+        var result = Assert.Single(_chat.Requests[2].SelectMany(m => m.Contents).OfType<FunctionResultContent>());
+        Assert.Equal(Skills.SkillText.AlreadyLoaded("pony-prompts"), result.Result?.ToString());
+        Assert.Contains("\"text\":\"score_9, a dog surfing a wave", stub.Requests.Single(r => r.Uri.AbsolutePath == "/prompt").Body!);
+    }
+
+    /// <summary>prompt-writer-only with skills enabled: a bot, which lacks the preloaded skill's content, still loads it in full.</summary>
+    [Fact]
+    public async Task BotChat_SkillsEnabled_PromptWriterOnly_ABotLoadingThePreloadedSkill_GetsItsContent()
+    {
+        BotPicturesFixture();
+        _settings.Update(d => { d.BotChatSkills = true; d.BotChatPreloadedSkills = ["pony-prompts"]; d.BotChatSkillMode = "prompt-writer-only"; });
+        PutSkill(ProfileSkills, "pony-prompts", "Writes Pony Diffusion prompts.", "# Pony prompts\n\nAlways start with score_9.");
+        _chat.Enqueue(FakeChatClient.Call("s1", LoadSkillTool.ToolName, new Dictionary<string, object?> { ["name"] = "pony-prompts" }));
+        _chat.EnqueueText(DogReply);
+        _chat.EnqueueText("score_9, a dog surfing a wave");
+        _chat.EnqueueText("Ada ", "answers.");
+        EscDuringRequest(4);
+        PushLine("/botchat");
+        PushLine("/exit");
+
+        await RunAsync();
+
+        Assert.Equal(4, _chat.Requests.Count);
+        var result = Assert.Single(_chat.Requests[1].SelectMany(m => m.Contents).OfType<FunctionResultContent>());
+        Assert.Contains("Always start with score_9.", result.Result?.ToString());
+    }
+
+    /// <summary>
+    /// The writer's load_skill written as markup in a round that offers the tool (2026-09-30, code review: a server that did not
+    /// convert it): the call runs as a real one and the writer is asked again, where before the empty rest was the prompt.
+    /// </summary>
+    [Fact]
+    public async Task BotChat_Automatic_TheWritersCallWrittenAsText_Runs_AndThePromptFollows()
+    {
+        var stub = BotPicturesFixture();
+        _settings.Update(d => d.BotChatSkills = true);
+        PutSkill(ProfileSkills, "pony-prompts", "Writes Pony Diffusion prompts.", "# Pony prompts\n\nAlways start with score_9.");
+        _chat.EnqueueText(DogReply);
+        _chat.EnqueueText("<tool_call>\n<function=load_skill>\n<parameter=name>\npony-prompts\n</parameter>\n</function>\n</tool_call>");
+        _chat.EnqueueText("score_9, a dog surfing a wave");
+        _chat.EnqueueText("Ada ", "answers.");
+        EscDuringRequest(4);
+        PushLine("/botchat use the pony prompts skill for pictures");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Equal(4, _chat.Requests.Count);
+        var second = _chat.Requests[2];
+        Assert.Contains(second.SelectMany(m => m.Contents).OfType<FunctionCallContent>(), c => c.Name == LoadSkillTool.ToolName);
+        Assert.Contains(second.SelectMany(m => m.Contents).OfType<FunctionResultContent>(), r => (r.Result?.ToString() ?? "").Contains("Always start with score_9.", StringComparison.Ordinal));
+        Assert.DoesNotContain(second.Where(m => m.Role == ChatRole.Assistant), m => m.Text.Contains("<tool_call>", StringComparison.Ordinal));
+        Assert.Contains("\"text\":\"score_9, a dog surfing a wave", stub.Requests.Single(r => r.Uri.AbsolutePath == "/prompt").Body!);
+        Assert.DoesNotContain(BotChat.NoPromptNotice, output);
     }
 
     private const string SketchReply = "Here's a sketch I drew of a dog surfing.";
