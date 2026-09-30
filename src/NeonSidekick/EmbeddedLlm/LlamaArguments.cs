@@ -9,7 +9,9 @@ namespace NeonSidekick.EmbeddedLlm;
 /// <paramref name="MayFallBack"/> is true when the backend was chosen by <c>auto</c>, so a CUDA start that fails
 /// may be retried on Vulkan. <paramref name="Mtp"/> turns on MTP speculative decoding (2026-09-29), drafting with
 /// <paramref name="DrafterPath"/> when there is one and with the weights' own head when not; toggling Embedded drafter
-/// changes the launch, so it restarts the server.
+/// changes the launch, so it restarts the server. <paramref name="FitTargetMiB"/> (later on 2026-09-29, the user's ask:
+/// <c>Embedded VRAM budget</c>) is the MiB llama.cpp's fit leaves free on each GPU, null for its own default; a change
+/// restarts the server too.
 /// </summary>
 public sealed record LlamaLaunch(
     string Executable,
@@ -22,7 +24,8 @@ public sealed record LlamaLaunch(
     EmbeddedSampling Sampling,
     bool MayFallBack = false,
     string? DrafterPath = null,
-    bool Mtp = false)
+    bool Mtp = false,
+    int? FitTargetMiB = null)
 {
     /// <summary>The runtime folder: the process's working directory, where its DLLs are found.</summary>
     public string WorkingDirectory => Path.GetDirectoryName(Executable) ?? ".";
@@ -50,6 +53,14 @@ public sealed record LlamaLaunch(
 /// in b11258 since llama.cpp PR #23398 (Gemma 4 MTP, 2026-06-07). With a drafter file (Gemma 4's <c>mtp-*.gguf</c>) both;
 /// with a head inside the weights (Qwen3.8's NextN) the type alone, and the server builds the draft context on the
 /// target's own weights. The target verifies every drafted token, so the answer is the same, only faster.</item>
+/// <item><c>--fit-target &lt;MiB&gt;</c> (later on 2026-09-29, the user's ask: "a maximum VRAM budget, like 92%"): the margin
+/// llama.cpp's fit — <c>--fit on</c>, the default in b11258 — leaves free on each device, 1024 MiB unless given; a budget
+/// of <i>p</i> % of the biggest adapter's dedicated memory is a margin of (100 − <i>p</i>) % of it
+/// (<see cref="EmbeddedVramBudget.FitTargetMiB"/>). Fit moves only what was left unset — <c>-c 0</c> (the context shrinks
+/// first, down to <c>--fit-ctx</c>'s 4096: the build's log says "entire model can be fit by reducing context", and "context
+/// size set by user to N -> no change" for any other <c>-c</c>) and <c>-ngl auto</c> — so a set context and layer count
+/// change nothing. It measures free memory at the start: what other programs take later is not held back. Not passed on
+/// the CPU backend.</item>
 /// </list>
 /// </summary>
 public static class LlamaArguments
@@ -88,6 +99,15 @@ public static class LlamaArguments
             "--jinja",
             "-c", launch.ContextSize.ToString(CultureInfo.InvariantCulture),
             "-ngl", launch.GpuLayers,
+        ]);
+        if (launch.FitTargetMiB is { } fit)
+        {
+            args.Add("--fit-target");
+            args.Add(fit.ToString(CultureInfo.InvariantCulture));
+        }
+
+        args.AddRange(
+        [
             "--parallel", "1",
             "--no-webui",
             "--log-colors", "off",
@@ -129,18 +149,67 @@ public static class EmbeddedGpuLayers
     public static string Effective(string? setting) => Normalize(setting) ?? Auto;
 }
 
-/// <summary>The <c>Embedded context size</c> setting's range (2026-09-29): 0 for the model's own window, else 512 to 262144 tokens.</summary>
+/// <summary>
+/// The <c>Embedded context size</c> setting's range (2026-09-29): 0 to fit — the largest context the VRAM budget holds, from
+/// the model's own window down to 4096 (llama.cpp's fit takes <c>-c 0</c> as unset; "the model's own" until later on
+/// 2026-09-29, when the user asked for the context to shrink to a budget) — else 512 to 262144 tokens.
+/// </summary>
 public static class EmbeddedContextSize
 {
-    public const int Default = 32_768;
+    /// <summary>
+    /// Fit, the user's call later on 2026-09-29 (32768 until then). A profile that saved 32768 keeps it; a new one, or one
+    /// reset, fits. Pinned.
+    /// </summary>
+    public const int Default = 0;
     public const int Min = 512;
     public const int Max = 262_144;
 
     /// <summary>The settings-menu wording for a bad value. Pinned.</summary>
-    public const string Error = "must be 0 (the model's own) or a whole number from 512 to 262144";
+    public const string Error = "must be 0 (fit) or a whole number from 512 to 262144";
 
     public static bool IsValid(int value) => value == 0 || (value >= Min && value <= Max);
 
     /// <summary>What a start passes: the setting when valid, else <see cref="Default"/>.</summary>
     public static int Effective(int value) => IsValid(value) ? value : Default;
+}
+
+/// <summary>
+/// The <c>Embedded VRAM budget</c> setting (later on 2026-09-29, the user's ask: "a maximum VRAM budget, like 92%, to force it
+/// to stay at or under that amount"): <see cref="Off"/> — the default, llama.cpp's own fit margin of 1 GiB per device — or a
+/// whole percent from <see cref="Min"/> to <see cref="Max"/> of the biggest GPU's dedicated memory, the rest passed as
+/// <c>--fit-target</c> (<see cref="LlamaArguments"/>).
+/// </summary>
+public static class EmbeddedVramBudget
+{
+    public const int Off = 0;
+    public const int Min = 50;
+    public const int Max = 99;
+
+    /// <summary>How <see cref="Off"/> reads and is typed. Pinned.</summary>
+    public const string OffWord = "off";
+
+    /// <summary>The settings-menu wording for a bad value. Pinned.</summary>
+    public const string Error = "must be off or a whole percent from 50 to 99";
+
+    public static bool IsValid(int value) => value == Off || value is >= Min and <= Max;
+
+    /// <summary>A typed value (trimmed, any case, a trailing <c>%</c> allowed): <c>off</c> or 0 is <see cref="Off"/>, 50 to 99 itself, anything else null.</summary>
+    public static int? Parse(string? text)
+    {
+        string value = (text ?? "").Trim();
+        if (string.Equals(value, OffWord, StringComparison.OrdinalIgnoreCase))
+        {
+            return Off;
+        }
+
+        value = value.TrimEnd('%').TrimEnd();
+        return int.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out int percent) && IsValid(percent) ? percent : null;
+    }
+
+    /// <summary>What a start uses: the setting when valid, else <see cref="Off"/>.</summary>
+    public static int Effective(int value) => IsValid(value) ? value : Off;
+
+    /// <summary>The margin in MiB that leaves <paramref name="percent"/> of <paramref name="totalBytes"/> to fill: (100 − p) % of it, rounded half away from zero. Pinned.</summary>
+    public static int FitTargetMiB(long totalBytes, int percent) =>
+        (int)Math.Round(totalBytes / 1_048_576.0 * (100 - percent) / 100, MidpointRounding.AwayFromZero);
 }

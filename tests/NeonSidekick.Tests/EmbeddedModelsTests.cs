@@ -214,6 +214,37 @@ public class EmbeddedModelsTests : IDisposable
         Assert.False(info.Vision);
     }
 
+    [Fact]
+    public async Task Start_WithAVramBudget_LeavesTheRestFree_OnAGpuBackendOnly()
+    {
+        // Later on 2026-09-29 (the user's ask): 90 % of an 8 GiB card leaves 819 MiB to --fit-target.
+        InstallByHand();
+        var host = new FakeLlamaServerHost();
+        await using var service = new EmbeddedLlmService(_files, host, Cuda, () => 8L << 30);
+
+        await service.StartAsync(_model, new AppSettingsData { EmbeddedVramBudget = 90 }, null, CancellationToken.None);
+        await service.StartAsync(_model, new AppSettingsData { EmbeddedVramBudget = 95 }, null, CancellationToken.None);
+        await service.StartAsync(_model, new AppSettingsData(), null, CancellationToken.None);
+        Assert.Equal(new int?[] { 819, 410, null }, host.Launches.Select(l => l.FitTargetMiB));
+        Assert.NotEqual(host.Launches[0], host.Launches[1]);   // a budget change restarts the server
+
+        // No GPU memory read: llama.cpp's own margin. The CPU backend: no fit target at all.
+        var unread = new FakeLlamaServerHost();
+        await using (var blind = new EmbeddedLlmService(_files, unread, Cuda, () => null))
+        {
+            await blind.StartAsync(_model, new AppSettingsData { EmbeddedVramBudget = 90 }, null, CancellationToken.None);
+        }
+
+        var cpu = new FakeLlamaServerHost();
+        await using (var onCpu = new EmbeddedLlmService(_files, cpu, _ => new BackendChoice(LlamaBackend.Cpu, "test"), () => 8L << 30))
+        {
+            await onCpu.StartAsync(_model, new AppSettingsData { EmbeddedVramBudget = 90 }, null, CancellationToken.None);
+        }
+
+        Assert.Null(unread.Launches.Single().FitTargetMiB);
+        Assert.Null(cpu.Launches.Single().FitTargetMiB);
+    }
+
     // ── MTP (2026-09-29) ─────────────────────────────────────────────────────
 
     private (EmbeddedModel Model, EmbeddedModels Files, byte[] Drafter) WithDrafter()

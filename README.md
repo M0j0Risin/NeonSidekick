@@ -91,7 +91,7 @@ Commands typed while a reply runs:
 | Behaviour | Commands |
 |---|---|
 | Open their pane over the reply | `/help`, `/settings`, `/tools`, `/mcp`, `/sys`, `/usage`, `/about`, `/memory`, `/queue`, `/sessions`, `/sessions title`, `/skills`, `/reasoning`, `/sampling`, `/cmdlist`, `/police`, `/emptytrash`, `/cmdclear`, `/tree`, `/vault`, `/cmdcopy`, `/keycopy`, `/persona`, `/operata`, `/vocalia` |
-| Run at once | `/tts`, `/stt`, `/wake`, `/interrupt`, `/reasoning <level>`, `/sampling <field> <value>`, `/queue clear`, `/copy`, `/remember`, `/explore`, `/log`, `/timer`, `/expand`, `/collapse`, `/window`, `/cwd`, `/comfy view`, `/view <path>` |
+| Run at once | `/tts`, `/stt`, `/wake`, `/interrupt`, `/perf`, `/reasoning <level>`, `/sampling <field> <value>`, `/queue clear`, `/copy`, `/remember`, `/explore`, `/log`, `/timer`, `/expand`, `/collapse`, `/window`, `/cwd`, `/comfy view`, `/view <path>` |
 | Stop the reply first | `/clear`, `/new`, `/splash`, `/exit` |
 | Everything else | Waits for the reply to end, queued behind any earlier messages (so *Queue cancel mode* applies) |
 
@@ -103,7 +103,8 @@ Commands typed while a reply runs:
 
 | Toolbar item | Shown | Opens |
 |---|---|---|
-| ⚙️ 🛠️ 🔌 🎓 🎭 💬 📊 | always | `/settings`, `/tools`, `/mcp`, `/skills`, `/sys`, `/sessions`, `/usage` |
+| ⚙️ 🪪 🛠️ 🔌 🎓 🎭 💬 📊 | always | `/settings`, `/profile` (the profile picker), `/tools`, `/mcp`, `/skills`, `/sys`, `/sessions`, `/usage` |
+| 📈 | always | `/perf`: shows or hides the performance bar, back in its last look |
 | 💾 | while *Memory* is on | `/memory` |
 | 🔒 / 🔓 | *Shell command policy* is `ask` / `yolo` (none under `off`) | `/cmdlist` |
 | 👮 | *Shell police outside paths* is on and the policy isn't `off` | `/police` |
@@ -144,8 +145,8 @@ Settings that an environment variable or flag can override for one launch are li
 | Keep command history | Saves the ↑/↓ history (newest 1,000 lines) in the profile's `sessions.db`, so it survives restarts and profile switches. Lines holding a collapsed paste or a picture aren't saved. Off, the saved lines are deleted at the next profile load. `/cmdclear` empties it either way. | on |
 | Welcome splash | Pictures under the banner at startup, until the first line is sent: `fullsize`, `tiled` or `disabled`. See Welcome splash below. | `fullsize` |
 | Working directory in header | Prints the working directory at the right of the banner's title line. | off |
-| Show toolbar | Which items the toolbar under the hint row shows (see *Double-Click Shortcuts* above): a checklist of every glyph and the working-directory path (📂), Enter or Space to flip one, **A** / **N** / **D** (or the *select all* / *select none* / *default* buttons) for all, none or the default five. Nothing checked hides the row; the row reads `all`, `off` or how many are checked. 💾, the lock and 👮 still need their own settings on. | Settings, Tools, Skills, Sessions, path (5 of 11) |
-| Show performance bar | A bar under the toolbar with CPU %, RAM %, GPU % and VRAM %, read once a second: `off`, `text` (the numbers), `gauge` (a bar per meter), `spark` (the last ten seconds as a sparkline) or `led` (ten segments in the theme's colours). The values turn amber from 60 % and red from 85 %. An NVIDIA GPU is read through its driver (NVML); any other through Windows' own GPU counters, for the card with the most memory. Without a GPU the bar shows CPU and RAM. | `off` |
+| Show toolbar | Which items the toolbar under the hint row shows (see *Double-Click Shortcuts* above): a checklist of every glyph (🪪 Profile and 📈 Performance among them) and the working-directory path (📂), Enter or Space to flip one, **A** / **N** / **D** (or the *select all* / *select none* / *default* buttons) for all, none or the default five. Nothing checked hides the row; the row reads `all`, `off` or how many are checked. 💾, the lock and 👮 still need their own settings on. | Settings, Tools, Skills, Sessions, path (5 of 13) |
+| Show performance bar | A bar under the toolbar with CPU %, RAM %, GPU % and VRAM %, read once a second: `off`, `text` (the numbers), `gauge` (a bar per meter), `spark` (the last ten seconds as a sparkline) or `led` (ten segments in the theme's colours). The values turn amber from 60 % and red from 85 %. An NVIDIA GPU is read through its driver (NVML); any other through Windows' own GPU counters, for the card with the most memory. Without a GPU the bar shows CPU and RAM. The bar sits at the row's right edge, and each value keeps four cells (`  8%`, `100%`) so nothing shifts as it changes. `/perf` or the toolbar's 📈 shows or hides it, back in the last look you picked (`text` the first time). | `off` |
 | Theme | `synthwave`, `netrunner` (green phosphor), `nostromo` (amber phosphor), `noir` (greyscale), `cyberpunk` (colourful), `vaporwave` (pastel), `mainframe` (blue phosphor), `grid` (light cycle), `replicant` (smog and sodium) or `abyssal` (bioluminescent). | `synthwave` |
 | Draft editor | What `/draft` opens its temporary file with (`code --wait`, `notepad`…); empty uses the app Windows opens `.txt` files with. | (default .txt editor) |
 | Image viewer | Where a double-clicked picture opens. Empty: the built-in picture viewer. `system`: the app Windows registers for the file type (Paint for png, jpg and bmp). Anything else is a command, with the file's path appended (`mspaint`, `"C:\Program Files\GIMP 3\bin\gimp-3.exe"`). | (built-in viewer) |
@@ -207,10 +208,12 @@ A model the app downloads and runs itself, on llama.cpp's `llama-server`, for wh
 | Setting | What it does | Default |
 |---|---|---|
 | Embedded LLM server enabled | Offers the embedded models. Off, `/server` lists none, `/server embedded` refuses, a saved embedded URL counts as none (the app looks for a server as if it were blank), and a running embedded server stops. Installed models stay on disk. | on |
-| Embedded models | The catalog: each model with its size and state. Enter on an installed one offers *Use now* and *Remove*; on any other, *Install*, plus *Remove* for a partly downloaded one. Remove asks first, stops a download of that model and a server running it, and deletes its folder; when it was the saved LLM, the LLM URL and model are cleared. Using or installing closes the settings and connects. | |
+| Embedded models | The catalog: each model with its size and state. The title row's buttons filter it: **8GB**, **16GB** and **32GB** (keys 1, 2, 3) keep the models at most that big, one at a time (pressing the lit one again clears it); **uncensored** (U) keeps the uncensored builds, alone or with a size. They start cleared at each visit. `/server` and the startup picker carry the same buttons, which thin their embedded rows only. Enter on an installed one offers *Use now* and *Remove*; on any other, *Install*, plus *Remove* for a partly downloaded one. Remove asks first, stops a download of that model and a server running it, and deletes its folder; when it was the saved LLM, the LLM URL and model are cleared. Using or installing closes the settings and connects. | |
+| Embedded filter type | Which size the filter buttons measure: `file` (the size a row shows: weights, vision projector and drafter) or `gguf` (the weights alone). | `file` |
 | Embedded backend | Which llama.cpp build runs the model: `auto` (CUDA with an NVIDIA driver 580 or newer, else Vulkan, else the CPU), `cuda`, `vulkan` or `cpu`. The row shows what `auto` picked and why. | `auto` |
-| Embedded context size | The server's context window in tokens: 0 for the model's own (128K for Gemma 4 E2B/E4B, 256K for the larger models, which needs a lot of memory), else 512–262,144. | 32,768 |
+| Embedded context size | The server's context window in tokens: 0 to **fit**, the largest context that fits beside the model (within *Embedded VRAM budget*), from the model's own window (128K for Gemma 4 E2B/E4B, 256K for the larger models) down to 4,096; else 512–262,144, which is never shrunk. A profile that saved 32,768 (the default until this changed) keeps it. | 0 (fit) |
 | Embedded GPU layers | How many of the model's layers go on the GPU: `auto` (as many as the free VRAM holds), `all`, or a number (0 runs on the CPU). | `auto` |
+| Embedded VRAM budget | How much of the GPU's memory the embedded server may fill: `off` (llama.cpp leaves 1 GiB free on each GPU) or 50–99 % of the card with the most memory, the rest left free for other programs. It sizes only what's left to fit: *Embedded context size* 0 (the context shrinks first) and *Embedded GPU layers* `auto` (then layers move to the CPU). Measured at the server's start: memory other programs take later isn't held back. CUDA and Vulkan only; a change restarts the server. | `off` |
 | Embedded vision | Loads the model's vision projector so it can read images (about 1 GB more memory for most models, under 200 MB for the 12Bs). Off, an image sent to the embedded model is refused. | on |
 | Embedded drafter | Multi-token prediction (MTP): the model drafts a few tokens ahead and checks them, so replies come faster with the same text. Gemma 4 models use a small drafter file (downloaded with the model, or at its next start for a model installed before); Qwen3.8 has the drafter built in; the MTP column above says which. Off, no drafter is loaded (nor downloaded with a new install) and the model decodes one token at a time; turn it off if a model misbehaves with it. | on |
 
@@ -667,6 +670,7 @@ Type `/` to list every command with its summary; after a command and a space, it
 | `/model [id]` | Pick a model from the server's list, or set one. On the embedded LLM, the installed embedded models. |
 | `/new` | Start a new conversation without clearing the screen. |
 | `/operata [reset \| copy <profile> [force]]` | Edit `operata.md` (the operating rules) in your editor, reset it to the default, or copy it to another profile (`force` replaces theirs). |
+| `/perf [off \| text \| gauge \| spark \| led]` | Show or hide the performance bar (*Show performance bar*): alone it toggles, back to the last look (`text` the first time); a look sets it. Works while a reply runs; the toolbar's 📈 runs it. |
 | `/persona [reset \| copy <profile> [force]]` | The same for `persona.md` (the personality). |
 | `/print <file> [printer=<name>] [copies=N] [pages=1-3] [landscape]` | Print a file of the working directory. Text and code print as a listing, markdown formatted, a picture fitted to one page, each page headed with the file's name, the time and *page N of M*; anything else (a PDF, a Word or Excel file) goes to the program Windows has for it, on the default printer. The printer is matched by its name or part of it (`printer=color`); a name with spaces goes in quotes. Never judged by *Print action policy*. See Printing. |
 | `/print reply [options]` | Print the last reply, formatted as markdown. |
@@ -1306,7 +1310,7 @@ Every variable the app reads starts with `NEONSIDEKICK_`. They override a settin
 | Variable | Overrides | Accepts |
 |---|---|---|
 | `NEONSIDEKICK_EMBEDDED_BACKEND` | Embedded backend | `auto`, `cuda`, `vulkan`, `cpu`. |
-| `NEONSIDEKICK_EMBEDDED_CONTEXT` | Embedded context size | Tokens: 0 (the model's own) or 512–262144. |
+| `NEONSIDEKICK_EMBEDDED_CONTEXT` | Embedded context size | Tokens: 0 (fit) or 512–262144. |
 
 ### Shell
 

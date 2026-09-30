@@ -332,6 +332,53 @@ public class EmbeddedLlmCoreTests
         Assert.Equal(Launch(), Launch());
         Assert.NotEqual(Launch(), Launch(context: 8192));
         Assert.NotEqual(Launch(), Launch(mmproj: null));
+        Assert.NotEqual(Launch(), Launch() with { FitTargetMiB = 819 });   // a budget change restarts the server (later on 2026-09-29)
+    }
+
+    [Fact]
+    public void Arguments_WithAVramBudget_PassTheFitTarget_AfterTheLayers()
+    {
+        // Later on 2026-09-29 (the user's ask): the margin llama.cpp's fit leaves free, right after -ngl; none without a budget.
+        var args = LlamaArguments.Build(Launch() with { FitTargetMiB = 819 }, 1, "k");
+        int layers = args.ToList().IndexOf("-ngl");
+        Assert.Equal(["-ngl", "auto", "--fit-target", "819", "--parallel"], args.Skip(layers).Take(5));
+        Assert.DoesNotContain("--fit-target", LlamaArguments.Build(Launch(), 1, "k"));
+    }
+
+    [Theory]
+    [InlineData("off", 0)]
+    [InlineData(" OFF ", 0)]
+    [InlineData("0", 0)]
+    [InlineData("50", 50)]
+    [InlineData("99", 99)]
+    [InlineData("92 %", 92)]
+    [InlineData("92%", 92)]
+    [InlineData("49", null)]
+    [InlineData("100", null)]
+    [InlineData("-5", null)]
+    [InlineData("half", null)]
+    [InlineData("", null)]
+    public void VramBudget_HasItsRange(string text, int? expected)
+    {
+        Assert.Equal(expected, EmbeddedVramBudget.Parse(text));
+        if (expected is { } value)
+        {
+            Assert.True(EmbeddedVramBudget.IsValid(value));
+            Assert.Equal(value, EmbeddedVramBudget.Effective(value));
+        }
+    }
+
+    [Fact]
+    public void VramBudget_IsAMarginOfTheRest_InMiB()
+    {
+        Assert.Equal(0, new Settings.AppSettingsData().EmbeddedVramBudget);   // off by default, the user's call
+        Assert.Equal(819, EmbeddedVramBudget.FitTargetMiB(8L << 30, 90));   // 8 GiB at 90 %: 819.2 MiB left free
+        Assert.Equal(1229, EmbeddedVramBudget.FitTargetMiB(24L << 30, 95));
+        Assert.Equal(6144, EmbeddedVramBudget.FitTargetMiB(12L << 30, 50));
+        Assert.Equal(1966, EmbeddedVramBudget.FitTargetMiB(24L << 30, 92));
+        Assert.Equal(0, EmbeddedVramBudget.Effective(49));
+        Assert.Equal("must be off or a whole percent from 50 to 99", EmbeddedVramBudget.Error);
+        Assert.Equal("off", EmbeddedVramBudget.OffWord);
     }
 
     // ── The settings' ranges ────────────────────────────────────────────────
@@ -363,6 +410,15 @@ public class EmbeddedLlmCoreTests
     {
         Assert.Equal(valid, EmbeddedContextSize.IsValid(value));
         Assert.Equal(valid ? value : EmbeddedContextSize.Default, EmbeddedContextSize.Effective(value));
+    }
+
+    [Fact]
+    public void ContextSize_FitsByDefault()
+    {
+        // 0 — fit, the largest the VRAM budget holds — since later on 2026-09-29 (the user's call; 32768 until then).
+        Assert.Equal(0, EmbeddedContextSize.Default);
+        Assert.Equal(0, new Settings.AppSettingsData().EmbeddedContextSize);
+        Assert.Equal("must be 0 (fit) or a whole number from 512 to 262144", EmbeddedContextSize.Error);
     }
 
     // ── The wording ─────────────────────────────────────────────────────────

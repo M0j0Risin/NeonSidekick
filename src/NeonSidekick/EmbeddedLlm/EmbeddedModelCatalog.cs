@@ -44,6 +44,13 @@ public sealed record EmbeddedModel(
     /// <c>Mmproj is not null</c>. What the model can do, whatever <c>Embedded vision</c> says.
     /// </summary>
     public bool Vision => true;
+
+    /// <summary>
+    /// Whether the model is an uncensored build (later on 2026-09-29, for the model lists' <c>uncensored</c> filter): its name
+    /// says so — every HauhauCS build in the catalog carries "Uncensored" in <see cref="Display"/>, Gemma and Qwen alike, and
+    /// no other does. A new uncensored model keeps the word in its name.
+    /// </summary>
+    public bool Uncensored => Display.Contains("Uncensored", StringComparison.Ordinal);
 }
 
 /// <summary>

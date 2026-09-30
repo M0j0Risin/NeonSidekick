@@ -30,6 +30,8 @@ public class AppSettingsTests : IDisposable
         EmbeddedBackend = "vulkan",
         EmbeddedContextSize = 8192,
         EmbeddedGpuLayers = "20",
+        EmbeddedVramBudget = 92,
+        EmbeddedFilterType = "gguf",
         EmbeddedVision = false,
         EmbeddedLlmServer = false,
         EmbeddedDrafter = false,
@@ -64,6 +66,7 @@ public class AppSettingsTests : IDisposable
         ShowWorkingDirectory = false,
         ToolbarItems = ["usage", "path"],
         ShowPerformanceBar = "spark",
+        PerformanceBarLook = "led",
         ThemedViewer = false,
         ViewerLeft = -1200,
         ViewerTop = 140,
@@ -181,6 +184,7 @@ public class AppSettingsTests : IDisposable
         Assert.Equal(expected.ShowWorkingDirectory, actual.ShowWorkingDirectory);
         Assert.Equal(expected.ToolbarItems, actual.ToolbarItems);
         Assert.Equal(expected.ShowPerformanceBar, actual.ShowPerformanceBar);
+        Assert.Equal(expected.PerformanceBarLook, actual.PerformanceBarLook);
         Assert.Equal(expected.ThemedViewer, actual.ThemedViewer);
         Assert.Equal(expected.ViewerLeft, actual.ViewerLeft);
         Assert.Equal(expected.ViewerTop, actual.ViewerTop);
@@ -274,6 +278,8 @@ public class AppSettingsTests : IDisposable
         Assert.Equal(expected.EmbeddedBackend, actual.EmbeddedBackend);
         Assert.Equal(expected.EmbeddedContextSize, actual.EmbeddedContextSize);
         Assert.Equal(expected.EmbeddedGpuLayers, actual.EmbeddedGpuLayers);
+        Assert.Equal(expected.EmbeddedVramBudget, actual.EmbeddedVramBudget);
+        Assert.Equal(expected.EmbeddedFilterType, actual.EmbeddedFilterType);
         Assert.Equal(expected.EmbeddedVision, actual.EmbeddedVision);
         Assert.Equal(expected.EmbeddedLlmServer, actual.EmbeddedLlmServer);
         Assert.Equal(expected.EmbeddedDrafter, actual.EmbeddedDrafter);
@@ -297,6 +303,8 @@ public class AppSettingsTests : IDisposable
             d.EmbeddedBackend = full.EmbeddedBackend;
             d.EmbeddedContextSize = full.EmbeddedContextSize;
             d.EmbeddedGpuLayers = full.EmbeddedGpuLayers;
+            d.EmbeddedVramBudget = full.EmbeddedVramBudget;
+            d.EmbeddedFilterType = full.EmbeddedFilterType;
             d.EmbeddedVision = full.EmbeddedVision;
             d.EmbeddedLlmServer = full.EmbeddedLlmServer;
             d.EmbeddedDrafter = full.EmbeddedDrafter;
@@ -318,6 +326,7 @@ public class AppSettingsTests : IDisposable
             d.ShowWorkingDirectory = full.ShowWorkingDirectory;
             d.ToolbarItems = full.ToolbarItems;
             d.ShowPerformanceBar = full.ShowPerformanceBar;
+            d.PerformanceBarLook = full.PerformanceBarLook;
             d.ThemedViewer = full.ThemedViewer;
             d.ViewerLeft = full.ViewerLeft;
             d.ViewerTop = full.ViewerTop;
@@ -421,6 +430,8 @@ public class AppSettingsTests : IDisposable
                 d.EmbeddedBackend = full.EmbeddedBackend;
                 d.EmbeddedContextSize = full.EmbeddedContextSize;
                 d.EmbeddedGpuLayers = full.EmbeddedGpuLayers;
+                d.EmbeddedVramBudget = full.EmbeddedVramBudget;
+                d.EmbeddedFilterType = full.EmbeddedFilterType;
                 d.EmbeddedVision = full.EmbeddedVision;
                 d.EmbeddedLlmServer = full.EmbeddedLlmServer;
                 d.EmbeddedDrafter = full.EmbeddedDrafter;
@@ -442,6 +453,7 @@ public class AppSettingsTests : IDisposable
                 d.ShowWorkingDirectory = full.ShowWorkingDirectory;
                 d.ToolbarItems = full.ToolbarItems;
                 d.ShowPerformanceBar = full.ShowPerformanceBar;
+                d.PerformanceBarLook = full.PerformanceBarLook;
                 d.ThemedViewer = full.ThemedViewer;
                 d.ViewerLeft = full.ViewerLeft;
                 d.ViewerTop = full.ViewerTop;
@@ -1326,6 +1338,10 @@ public class AppSettingsTests : IDisposable
         Assert.False(s.ShowWorkingDirectory);   // 2026-09-18; off by default since 2026-09-21
         Assert.Null(s.ToolbarItems);   // 2026-09-21 as a switch, on; every item since the checklist, 2026-09-29
         Assert.Equal("off", s.ShowPerformanceBar);   // the performance bar (2026-09-29): off, the user's call
+        Assert.Equal("text", s.PerformanceBarLook);   // what a bare /perf turns on first (later on 2026-09-29)
+        Assert.Equal(0, s.EmbeddedVramBudget);        // off (later on 2026-09-29, the user's call)
+        Assert.Equal("file", s.EmbeddedFilterType);   // the user's pick "for now"
+        Assert.Equal(0, s.EmbeddedContextSize);       // fit (later on 2026-09-29; 32768 until then)
         Assert.True(s.ThemedViewer);   // later on 2026-09-27
         Assert.Null(s.ViewerLeft);   // 2026-09-28: Windows' own place until the viewer first closes
         Assert.Null(s.ViewerTop);

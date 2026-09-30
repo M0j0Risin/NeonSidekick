@@ -23,7 +23,9 @@ public sealed record PerfRow(IReadOnlyList<PerfSegment> Segments)
 /// separators and unlit cells are dim. Spectre's own charts (<c>BarChart</c>, <c>BreakdownChart</c>) are several rows of
 /// the transcript's flow and have no one-row form, so the glyphs are drawn here in the theme's colours. A meter the machine
 /// cannot read is left out. Too narrow a window shrinks the meters, then falls back to the text look, then cuts the row.
-/// Pure: the tests drive it.
+/// Later on 2026-09-29 (the user's asks) every look sits at the row's right, a blank run ahead of it filling the row
+/// (<see cref="Justified"/>), and the text look's values keep four cells as the drawn looks' do (<c>  8%</c>, <c>100%</c>),
+/// so nothing shifts as a value gains a digit; a cut row stays at the left. Pure: the tests drive it.
 /// </summary>
 public static class PerfBar
 {
@@ -55,12 +57,13 @@ public static class PerfBar
                 var drawn = Drawn(style, meters, history, width);
                 if (Width(drawn) <= cells)
                 {
-                    return new PerfRow(drawn);
+                    return Justified(drawn, cells);
                 }
             }
         }
 
-        return new PerfRow(Cut(Text(meters), cells));
+        var text = Text(meters);
+        return Width(text) <= cells ? Justified(text, cells) : new PerfRow(Cut(text, cells));
     }
 
     /// <summary>The load's colour: <see cref="Theme.Good"/> under <see cref="GoodBelow"/>, <see cref="Theme.Warn"/> under <see cref="WarnBelow"/>, else <see cref="Theme.Bad"/>.</summary>
@@ -115,7 +118,7 @@ public static class PerfBar
             }
 
             row.Add(new PerfSegment(meter.Label + " ", Theme.DimText));
-            row.Add(new PerfSegment(PerfText.Percent(meter.Value).TrimStart(), new Style(LoadColor(meter.Value))));
+            row.Add(new PerfSegment(PerfText.Percent(meter.Value), new Style(LoadColor(meter.Value))));
         }
 
         return row;
@@ -169,6 +172,18 @@ public static class PerfBar
         }
 
         return row;
+    }
+
+    /// <summary>The row pushed to the right of <paramref name="cells"/> by a blank run ahead of it; an empty row stays empty.</summary>
+    private static PerfRow Justified(List<PerfSegment> row, int cells)
+    {
+        int pad = cells - Width(row);
+        if (row.Count > 0 && pad > 0)
+        {
+            row.Insert(0, new PerfSegment(new string(' ', pad), Style.Plain));
+        }
+
+        return new PerfRow(row);
     }
 
     private static int Width(IEnumerable<PerfSegment> row) => row.Sum(s => TextCells.Width(s.Text));

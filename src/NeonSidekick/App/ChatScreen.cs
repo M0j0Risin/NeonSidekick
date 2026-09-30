@@ -1193,27 +1193,33 @@ internal sealed partial class ChatScreen
     /// and the column-keyed pairing take as they come. A seventh fixed glyph since 2026-09-29 (the
     /// user's ask): the chart the Usage pane's label already wore, between the balloon and the disk,
     /// whose double-click is <c>/usage</c> — the hint row's tally in a place that does not move; every
-    /// column after it moved by three.
+    /// column after it moved by three. Two more fixed glyphs later on 2026-09-29 (the user's ask): the ID card
+    /// <c>/profile</c>'s notices already wore, between the gear and the tools, whose double-click is <c>/profile</c> (the
+    /// picker; under a reply nothing, the command waiting for the reply and a click getting no notice), and the rising chart
+    /// after the Usage chart, whose double-click is <c>/perf</c> — the performance bar shown or hidden; every column after
+    /// the gear moved by three, after the Usage chart by six.
     /// </summary>
     public const string SettingsToolGlyph = "⚙️";
+    public const string ProfileToolGlyph = "🪪";
     public const string ToolsToolGlyph = "🛠️";
     public const string McpToolGlyph = McpText.Glyph;
     public const string SkillsToolGlyph = "🎓";
     public const string SysToolGlyph = "🎭";
     public const string SessionsToolGlyph = "💬";
     public const string UsageToolGlyph = "📊";
+    public const string PerfToolGlyph = Perf.PerfText.Glyph;
     public const string MemoryToolGlyph = "💾";
     public const string CmdAskToolGlyph = "🔒";
     public const string CmdYoloToolGlyph = "🔓";
     public const string PoliceToolGlyph = "👮";
-    public static readonly string ToolbarStrip = string.Join(GlyphSeparator, SettingsToolGlyph, ToolsToolGlyph, McpToolGlyph, SkillsToolGlyph, SysToolGlyph, SessionsToolGlyph, UsageToolGlyph);
+    public static readonly string ToolbarStrip = string.Join(GlyphSeparator, SettingsToolGlyph, ProfileToolGlyph, ToolsToolGlyph, McpToolGlyph, SkillsToolGlyph, SysToolGlyph, SessionsToolGlyph, UsageToolGlyph, PerfToolGlyph);
 
     /// <summary>
     /// The strip drawn for the switches, in the strip's order: <see cref="ToolbarStrip"/>, the disk
     /// while <paramref name="memory"/> is on, the closed lock under <c>ask</c> or the open one under
     /// <c>yolo</c> (neither under <c>off</c>), the officer while <paramref name="police"/> is on and the policy is not <c>off</c>
     /// (later on 2026-09-22, the user's ask: with no shell tool offered there is nothing to police).
-    /// The seven alone with everything off. Every item checked (not the saved default, which narrowed on 2026-09-29). Pinned.
+    /// The nine alone with everything off. Every item checked (not the saved default, which narrowed on 2026-09-29). Pinned.
     /// </summary>
     public static string ToolbarStripFor(bool memory, Shell.CommandPolicyMode policy, bool police) =>
         ToolbarStripFor(ToolbarItems.Names.ToHashSet(StringComparer.Ordinal), memory, policy, police);
@@ -1227,7 +1233,7 @@ internal sealed partial class ChatScreen
     {
         ArgumentNullException.ThrowIfNull(items);
         var glyphs = new List<string>();
-        foreach (string id in new[] { ToolbarItems.Settings, ToolbarItems.Tools, ToolbarItems.Mcp, ToolbarItems.Skills, ToolbarItems.Sys, ToolbarItems.Sessions, ToolbarItems.Usage })
+        foreach (string id in new[] { ToolbarItems.Settings, ToolbarItems.Profile, ToolbarItems.Tools, ToolbarItems.Mcp, ToolbarItems.Skills, ToolbarItems.Sys, ToolbarItems.Sessions, ToolbarItems.Usage, ToolbarItems.Perf })
         {
             if (items.Contains(id))
             {
@@ -1286,6 +1292,32 @@ internal sealed partial class ChatScreen
         return PerfBar.Render(style, latest, history, cells);
     }
 
+    /// <summary>
+    /// <c>/perf</c> (later on 2026-09-29, the user's ask; the toolbar's 📈 word): one body for the idle line and the turn —
+    /// display only, nothing reconnects, and the pane's tick adds or drops the row. Bare it toggles, back to the last look
+    /// (<see cref="PerfBarMode.Toggle"/>); a look sets it and is remembered. The saved profile's, as <c>/tts</c> reads it:
+    /// the bar has no variable.
+    /// </summary>
+    private void HandlePerf(string args)
+    {
+        var saved = _settings.Current;
+        if (PerfBarMode.Toggle(args, saved.ShowPerformanceBar, saved.PerformanceBarLook) is not { } next)
+        {
+            _transcript.Error(Perf.PerfText.UsageError);
+            return;
+        }
+
+        _settings.Update(d =>
+        {
+            d.ShowPerformanceBar = next;
+            if (next != PerfBarMode.Default)
+            {
+                d.PerformanceBarLook = next;
+            }
+        });
+        _transcript.Notice(Perf.PerfText.BarNotice(next));
+    }
+
     private ScreenPane.ToolbarParts? ToolbarParts()
     {
         var shown = _effective();
@@ -1336,12 +1368,14 @@ internal sealed partial class ChatScreen
     public static string? ToolbarWord(string glyph) => glyph switch
     {
         SettingsToolGlyph => SlashCommands.SettingsWord,
+        ProfileToolGlyph => SlashCommands.ProfileWord,
         SkillsToolGlyph => SlashCommands.SkillsWord,
         ToolsToolGlyph => SlashCommands.ToolsWord,
         McpToolGlyph => SlashCommands.McpWord,
         SysToolGlyph => SlashCommands.SysWord,
         SessionsToolGlyph => SlashCommands.SessionsWord,
         UsageToolGlyph => SlashCommands.UsageWord,
+        PerfToolGlyph => SlashCommands.PerfWord,
         MemoryToolGlyph => SlashCommands.MemoryWord,
         CmdAskToolGlyph or CmdYoloToolGlyph => SlashCommands.CmdListWord,
         PoliceToolGlyph => SlashCommands.PoliceWord,
@@ -3108,6 +3142,9 @@ internal sealed partial class ChatScreen
 
             case SlashCommand.Theme:
                 return MentionCompleter.Matches(ThemeName.Names.Select(name => new CompletionItem(name, ThemeName.Describe(name))).ToList(), argText);
+
+            case SlashCommand.Perf:
+                return MentionCompleter.Matches(PerfBarMode.Names.Select(name => new CompletionItem(name, PerfBarMode.Describe(name))).ToList(), argText);
 
             case SlashCommand.Profile:
             {
@@ -9177,6 +9214,10 @@ internal sealed partial class ChatScreen
 
             case SlashCommand.Usage:
                 await ShowUsageAsync(cancellationToken).ConfigureAwait(false);
+                return false;
+
+            case SlashCommand.Perf:
+                HandlePerf(args);
                 return false;
 
             case SlashCommand.Expand or SlashCommand.Collapse:

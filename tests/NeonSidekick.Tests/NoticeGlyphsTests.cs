@@ -15,7 +15,7 @@ public class NoticeGlyphsTests
             ["✋ "] = NoticeGlyphs.Interrupt, ["🔌 "] = NoticeGlyphs.Mcp, ["🔓 "] = NoticeGlyphs.Allowed, ["⏳ "] = NoticeGlyphs.Queue,
             ["🪪 "] = NoticeGlyphs.Profile, ["📋 "] = NoticeGlyphs.Operata, ["🗣️ "] = NoticeGlyphs.Vocalia, ["💾 "] = NoticeGlyphs.Memory,
             ["⏰ "] = NoticeGlyphs.Timer, ["📂 "] = NoticeGlyphs.Folder, ["🛠️ "] = NoticeGlyphs.Git, ["💬 "] = NoticeGlyphs.Session,
-            ["🎓 "] = NoticeGlyphs.Skill,
+            ["🎓 "] = NoticeGlyphs.Skill, ["📈 "] = NoticeGlyphs.Perf,
         };
         foreach (var (expected, actual) in glyphs)
         {

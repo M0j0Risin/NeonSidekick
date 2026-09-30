@@ -197,6 +197,14 @@ public sealed class AppSettingsData
     public string ShowPerformanceBar { get; set; } = App.PerfBarMode.Default;
 
     /// <summary>
+    /// The look a bare <c>/perf</c> (or the toolbar's 📈) turns the performance bar back on in (later on 2026-09-29, the
+    /// user's ask: "the last look used"): the last <see cref="ShowPerformanceBar"/> that was not <c>off</c>, saved whenever it
+    /// becomes one — by <c>/perf</c> or the Show performance bar picker; <c>text</c> until then. Anything that is not a look
+    /// reads as <c>text</c> (<see cref="App.PerfBarMode.LastLook"/>). No settings row, no variable.
+    /// </summary>
+    public string PerformanceBarLook { get; set; } = App.PerfBarMode.DefaultLook;
+
+    /// <summary>
     /// The look (2026-09-23, the user's ask): <c>synthwave</c> (the default), <c>netrunner</c>,
     /// <c>nostromo</c>, <c>noir</c>, <c>cyberpunk</c>, <c>vaporwave</c>, <c>mainframe</c>, <c>grid</c>,
     /// <c>replicant</c> or <c>abyssal</c> (the last four 2026-09-27) — one of
@@ -1694,9 +1702,12 @@ public sealed class AppSettingsData
     public string EmbeddedBackend { get; set; } = EmbeddedLlm.EmbeddedBackends.Auto;
 
     /// <summary>
-    /// The embedded server's context window in tokens (2026-09-29): 0 for the model's own (Gemma 4 E2B/E4B: 128K, a lot of
-    /// memory), else <see cref="EmbeddedLlm.EmbeddedContextSize.Min"/> to <see cref="EmbeddedLlm.EmbeddedContextSize.Max"/>; 32768
-    /// by default, which fits beside the model on an 8 GB GPU. Variable <see cref="EnvironmentOverrides.EmbeddedContextVariable"/>.
+    /// The embedded server's context window in tokens (2026-09-29): 0 to fit — the largest context the GPU holds beside the
+    /// model within <see cref="EmbeddedVramBudget"/>, from the model's own window (Gemma 4 E2B/E4B: 128K) down to 4096, as
+    /// llama.cpp's fit sizes an unset <c>-c</c> ("the model's own" until later on 2026-09-29) — else
+    /// <see cref="EmbeddedLlm.EmbeddedContextSize.Min"/> to <see cref="EmbeddedLlm.EmbeddedContextSize.Max"/>, which fit never
+    /// shrinks. Fit by default since later on 2026-09-29 (the user's call; 32768 until then, which a profile that saved it keeps).
+    /// Variable <see cref="EnvironmentOverrides.EmbeddedContextVariable"/>.
     /// </summary>
     public int EmbeddedContextSize { get; set; } = EmbeddedLlm.EmbeddedContextSize.Default;
 
@@ -1705,6 +1716,24 @@ public sealed class AppSettingsData
     /// fits what the free VRAM holds), <c>all</c>, or a count from 0 (CPU only) to 999. No variable.
     /// </summary>
     public string EmbeddedGpuLayers { get; set; } = EmbeddedLlm.EmbeddedGpuLayers.Auto;
+
+    /// <summary>
+    /// How much of the GPU's dedicated memory the embedded server may fill (later on 2026-09-29, the user's ask: "a maximum
+    /// VRAM budget, like 92%"): 0 is off (the default: llama.cpp's fit leaves 1 GiB free per device), else
+    /// <see cref="EmbeddedLlm.EmbeddedVramBudget.Min"/> to <see cref="EmbeddedLlm.EmbeddedVramBudget.Max"/> % of the adapter
+    /// with the most memory — the rest, passed as <c>--fit-target</c>, is left free. It sizes only what fit may: an
+    /// <see cref="EmbeddedContextSize"/> of 0 and <see cref="EmbeddedGpuLayers"/> <c>auto</c>. CUDA and Vulkan only; a change
+    /// restarts the server. No variable.
+    /// </summary>
+    public int EmbeddedVramBudget { get; set; } = EmbeddedLlm.EmbeddedVramBudget.Off;
+
+    /// <summary>
+    /// Which size the embedded model lists' 8GB / 16GB / 32GB filter buttons measure (later on 2026-09-29, the user's ask and
+    /// names): <c>file</c> (the default "for now": the size the row shows — weights, vision projector and drafter) or
+    /// <c>gguf</c> (the weights alone), <see cref="EmbeddedLlm.EmbeddedFilterTypes.Names"/>. Display only: no reconnect, no
+    /// variable.
+    /// </summary>
+    public string EmbeddedFilterType { get; set; } = EmbeddedLlm.EmbeddedFilterTypes.Default;
 
     /// <summary>
     /// Whether the embedded server loads the model's vision projector (2026-09-29, on by default): images can then be sent

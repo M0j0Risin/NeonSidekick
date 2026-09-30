@@ -180,7 +180,7 @@ public sealed class LlamaServerHost : ILlamaServerHost
         process.ErrorDataReceived += (_, e) => OnLine(e.Data);
         process.Exited += (_, _) => OnExited(process);
 
-        DiagnosticLog.Info(Category, string.Create(CultureInfo.InvariantCulture, $"Starting {launch.Executable} for {model.Id} on 127.0.0.1:{port} ({LlamaRelease.Name(launch.Backend)}, context {launch.ContextSize}, GPU layers {launch.GpuLayers}, vision {(launch.Vision ? "on" : "off")})."));
+        DiagnosticLog.Info(Category, string.Create(CultureInfo.InvariantCulture, $"Starting {launch.Executable} for {model.Id} on 127.0.0.1:{port} ({LlamaRelease.Name(launch.Backend)}, context {launch.ContextSize}, GPU layers {launch.GpuLayers}, fit target {(launch.FitTargetMiB is { } fit ? fit.ToString(CultureInfo.InvariantCulture) + " MiB" : "default")}, vision {(launch.Vision ? "on" : "off")})."));
         try
         {
             if (!process.Start())

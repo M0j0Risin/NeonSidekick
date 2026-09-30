@@ -19,19 +19,23 @@ public partial class SettingsMenuTests
     }
 
     [Fact]
-    public void TheTab_IsAfterGeneral_WithItsSevenRows_AllReconnecting()
+    public void TheTab_IsAfterGeneral_WithItsNineRows_AllButTheFilterTypeReconnecting()
     {
         int tab = (int)SettingsTab.Embedded;
         Assert.Equal("Embedded", SettingsMenu.TabTitles[tab]);
         Assert.Equal("General", SettingsMenu.TabTitles[tab - 1]);   // second since later on 2026-09-29 (the user's order); after STT until then, the Claude (API) tab between until it went to /tools
         Assert.Equal("LLM", SettingsMenu.TabTitles[tab + 1]);
-        // The switch first and MTP last (2026-09-29, the user's asks).
-        Assert.Equal([SettingsField.EmbeddedLlmServer, SettingsField.EmbeddedModels, SettingsField.EmbeddedBackend, SettingsField.EmbeddedContextSize, SettingsField.EmbeddedGpuLayers, SettingsField.EmbeddedVision, SettingsField.EmbeddedDrafter], SettingsMenu.TabFields[tab]);
-        Assert.All(SettingsMenu.TabFields[tab], f => Assert.True(SettingsMenu.IsLlmField(f), f.ToString()));
-        Assert.All(SettingsMenu.TabFields[tab], f => Assert.True(SettingsMenu.RefusedMidTurn(f), f.ToString()));
+        // The switch first and MTP last (2026-09-29, the user's asks); the filter type under the catalog, the VRAM budget under
+        // the GPU layers (later that day).
+        Assert.Equal([SettingsField.EmbeddedLlmServer, SettingsField.EmbeddedModels, SettingsField.EmbeddedFilterType, SettingsField.EmbeddedBackend, SettingsField.EmbeddedContextSize, SettingsField.EmbeddedGpuLayers, SettingsField.EmbeddedVramBudget, SettingsField.EmbeddedVision, SettingsField.EmbeddedDrafter], SettingsMenu.TabFields[tab]);
+        var reconnecting = SettingsMenu.TabFields[tab].Where(f => f != SettingsField.EmbeddedFilterType).ToList();
+        Assert.All(reconnecting, f => Assert.True(SettingsMenu.IsLlmField(f), f.ToString()));
+        Assert.All(reconnecting, f => Assert.True(SettingsMenu.RefusedMidTurn(f), f.ToString()));
+        Assert.False(SettingsMenu.IsLlmField(SettingsField.EmbeddedFilterType));   // display only: the lists read it as they open
+        Assert.False(SettingsMenu.RefusedMidTurn(SettingsField.EmbeddedFilterType));
         Assert.True(SettingsMenu.IsToggle(SettingsField.EmbeddedVision) && SettingsMenu.IsToggle(SettingsField.EmbeddedLlmServer) && SettingsMenu.IsToggle(SettingsField.EmbeddedDrafter));
         Assert.False(SettingsMenu.IsToggle(SettingsField.EmbeddedBackend));
-        Assert.Equal(["Embedded LLM server enabled", "Embedded models", "Embedded backend", "Embedded context size", "Embedded GPU layers", "Embedded vision", "Embedded drafter"], SettingsMenu.TabFields[tab].Select(SettingsMenu.FieldName));
+        Assert.Equal(["Embedded LLM server enabled", "Embedded models", "Embedded filter type", "Embedded backend", "Embedded context size", "Embedded GPU layers", "Embedded VRAM budget", "Embedded vision", "Embedded drafter"], SettingsMenu.TabFields[tab].Select(SettingsMenu.FieldName));
         var data = new AppSettingsData();
         Assert.True(data.EmbeddedLlmServer && data.EmbeddedDrafter);   // both on by default
         Assert.Equal(("on", "on"), (SettingsMenu.FieldValue(SettingsField.EmbeddedLlmServer, data, "C:\\p"), SettingsMenu.FieldValue(SettingsField.EmbeddedDrafter, data, "C:\\p")));
@@ -49,8 +53,14 @@ public partial class SettingsMenuTests
         var data = new AppSettingsData();
         Assert.Equal(SettingsMenu.EmbeddedModelsDoorLabel, SettingsMenu.FieldValue(SettingsField.EmbeddedModels, data, "C:\\p"));
         Assert.Equal("auto", SettingsMenu.FieldValue(SettingsField.EmbeddedBackend, data, "C:\\p"));
-        Assert.Equal("32,768 tokens", SettingsMenu.FieldValue(SettingsField.EmbeddedContextSize, data, "C:\\p"));
-        Assert.Equal(SettingsMenu.EmbeddedContextOwnLabel, SettingsMenu.FieldValue(SettingsField.EmbeddedContextSize, new AppSettingsData { EmbeddedContextSize = 0 }, "C:\\p"));
+        // Fit by default since later on 2026-09-29 (the user's call; 32768 until then).
+        Assert.Equal("fit", SettingsMenu.EmbeddedContextFitLabel);
+        Assert.Equal(SettingsMenu.EmbeddedContextFitLabel, SettingsMenu.FieldValue(SettingsField.EmbeddedContextSize, data, "C:\\p"));
+        Assert.Equal("32,768 tokens", SettingsMenu.FieldValue(SettingsField.EmbeddedContextSize, new AppSettingsData { EmbeddedContextSize = 32_768 }, "C:\\p"));
+        Assert.Equal("off", SettingsMenu.FieldValue(SettingsField.EmbeddedVramBudget, data, "C:\\p"));
+        Assert.Equal("92 %", SettingsMenu.FieldValue(SettingsField.EmbeddedVramBudget, new AppSettingsData { EmbeddedVramBudget = 92 }, "C:\\p"));
+        Assert.Equal("file", SettingsMenu.FieldValue(SettingsField.EmbeddedFilterType, data, "C:\\p"));
+        Assert.Equal("gguf  " + Theme.DimMarkup("the weights' GGUF alone"), SettingsMenu.EmbeddedFilterTypeLabel("gguf"));
         Assert.Equal("auto", SettingsMenu.FieldValue(SettingsField.EmbeddedGpuLayers, data, "C:\\p"));
         Assert.Equal("on", SettingsMenu.FieldValue(SettingsField.EmbeddedVision, data, "C:\\p"));
         Assert.Equal(EmbeddedLlmText.UrlDisplay, SettingsMenu.FieldValue(SettingsField.LlmUrl, new AppSettingsData { LlmUrl = "http://embedded.localhost/v1" }, "C:\\p"));
@@ -129,6 +139,52 @@ public partial class SettingsMenuTests
         Assert.Contains(SettingsMenu.RemoveRow(EmbeddedModelCatalog.Find("gemma-4-e2b")!), _console.Output);
         Assert.Equal("", _settings.Current.LlmUrl);   // the screen saves it, after an install if need be
         Assert.Empty(embedded.Removes);
+        pane.Dispose();
+    }
+
+    [Fact]
+    public async Task OnThePane_TheCatalogsFilters_ThinTheRows_ASizeAndUncensoredTogether()
+    {
+        // Later on 2026-09-29 (the user's ask): 8GB (key 1) and uncensored (U) lit, the first row is the first catalog model
+        // at most 8 GB that is uncensored.
+        var (menu, pane, _) = EmbeddedPane();
+        GoTo(SettingsTab.Embedded);
+        Push(Keys.Down, Keys.Enter);            // the catalog
+        Push(Keys.Char('1'), Keys.Char('U'));
+        Push(Keys.Enter);                       // the first row left: its page
+        Push(Keys.Enter);                       // Install
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        var filter = new EmbeddedModelFilter(8, true);
+        var first = EmbeddedModelCatalog.Models.First(m => filter.Matches(m, EmbeddedFilterType.File));
+        Assert.True(first.Uncensored);
+        Assert.Equal(first.Id, menu.TakePendingEmbeddedModel()!.Id);
+        Assert.Contains(" 8GB    16GB    32GB    uncensored ", _console.Output);
+        Assert.Contains(EmbeddedModelFilter.Keys, _console.Output);
+        pane.Dispose();
+    }
+
+    [Fact]
+    public async Task OnThePane_ASizePressedAgain_ShowsEveryModel_AndOneThatPassesNothingSaysSo()
+    {
+        var big = EmbeddedModelCatalog.Find("gemma-4-31b")!;
+        var small = EmbeddedModelCatalog.Find("gemma-4-e2b")!;
+        var (menu, pane, _) = EmbeddedPane(new FakeEmbeddedLlm { Catalog = [big, small] });
+        GoTo(SettingsTab.Embedded);
+        Push(Keys.Down, Keys.Enter);            // the catalog: 31B, then E2B
+        Push(Keys.Char('1'));                   // 8GB: E2B alone, the cursor on it
+        Push(Keys.Char('1'));                   // again: every model, the cursor kept on E2B
+        Push(Keys.Char('u'));                   // uncensored: neither is
+        Push(Keys.Enter);                       // the no-match row: nothing opens
+        Push(Keys.Char('u'));                   // dark again: both, the cursor still on E2B
+        Push(Keys.Enter);                       // E2B's page
+        Push(Keys.Enter);                       // Install
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Equal(small.Id, menu.TakePendingEmbeddedModel()!.Id);
+        Assert.Contains(EmbeddedLlmText.NoFilterMatch, _console.Output);
         pane.Dispose();
     }
 
@@ -263,7 +319,7 @@ public partial class SettingsMenuTests
     {
         var (menu, pane, _) = EmbeddedPane();
         GoTo(SettingsTab.Embedded);
-        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Enter); // Embedded context size (the switch first since 2026-09-29)
+        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter); // Embedded context size (the switch first since 2026-09-29, the filter type above since later that day)
         Backspace(10);
         _console.Input.PushText("100");
         Push(Keys.Enter);                       // refused
@@ -275,13 +331,23 @@ public partial class SettingsMenuTests
         Backspace(10);
         _console.Input.PushText("ALL");
         Push(Keys.Enter);
+        Push(Keys.Down, Keys.Enter);            // Embedded VRAM budget (later on 2026-09-29)
+        Backspace(10);
+        _console.Input.PushText("49");
+        Push(Keys.Enter);                       // refused
+        Push(Keys.Enter);
+        Backspace(10);
+        _console.Input.PushText("92 %");
+        Push(Keys.Enter);
         Push(Keys.Escape);
 
         Assert.Equal(SettingsChanges.Llm, await menu.ShowAsync(CancellationToken.None));
 
         Assert.Equal(16_384, _settings.Current.EmbeddedContextSize);
         Assert.Equal("all", _settings.Current.EmbeddedGpuLayers);
-        Assert.Contains("Embedded context size " + EmbeddedContextSize.Error + "; keeping 32768.", _console.Output);
+        Assert.Equal(92, _settings.Current.EmbeddedVramBudget);
+        Assert.Contains("Embedded context size " + EmbeddedContextSize.Error + "; keeping 0.", _console.Output);   // fit, the default since later on 2026-09-29
+        Assert.Contains("Embedded VRAM budget " + EmbeddedVramBudget.Error + "; keeping off.", _console.Output);
         pane.Dispose();
     }
 
@@ -290,13 +356,30 @@ public partial class SettingsMenuTests
     {
         var (menu, pane, _) = EmbeddedPane();
         GoTo(SettingsTab.Embedded);
-        Push(Keys.Down, Keys.Down, Keys.Enter); // Embedded backend: the page opens on auto
+        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Enter); // Embedded backend: the page opens on auto
         Push(Keys.Down, Keys.Down, Keys.Enter); // vulkan
         Push(Keys.Escape);
 
         Assert.Equal(SettingsChanges.Llm, await menu.ShowAsync(CancellationToken.None));
 
         Assert.Equal("vulkan", _settings.Current.EmbeddedBackend);
+        pane.Dispose();
+    }
+
+    [Fact]
+    public async Task OnThePane_TheFilterTypeRow_IsAPicker_NeedingNoReconnect()
+    {
+        // Later on 2026-09-29 (the user's ask): file or gguf, under the catalog; display only.
+        var (menu, pane, _) = EmbeddedPane();
+        GoTo(SettingsTab.Embedded);
+        Push(Keys.Down, Keys.Down, Keys.Enter); // Embedded filter type: the page opens on file
+        Push(Keys.Down, Keys.Enter);            // gguf
+        Push(Keys.Escape);
+
+        Assert.Equal(SettingsChanges.None, await menu.ShowAsync(CancellationToken.None));
+
+        Assert.Equal("gguf", _settings.Current.EmbeddedFilterType);
+        Assert.Contains("file  the size the row shows: weights, vision projector and drafter", _console.Output);
         pane.Dispose();
     }
 

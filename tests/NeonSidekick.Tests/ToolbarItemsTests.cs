@@ -10,11 +10,12 @@ public sealed class ToolbarItemsTests
     [Fact]
     public void TheItems_AreTheStripInOrder_ThePathLast()
     {
-        Assert.Equal(["settings", "tools", "mcp", "skills", "sys", "sessions", "usage", "memory", "cmdlist", "police", "path"], ToolbarItems.Names);
-        Assert.Equal(ChatScreen.ToolbarStrip, string.Join(" ", ToolbarItems.Names.Take(7).Select(ToolbarItems.Glyph)));   // one source for the glyphs
-        Assert.Equal([ChatScreen.MemoryToolGlyph, ChatScreen.CmdAskToolGlyph, ChatScreen.PoliceToolGlyph, "📂"], ToolbarItems.Names.Skip(7).Select(ToolbarItems.Glyph));   // the folder since 2026-09-29
+        // The ID card after the gear and the rising chart after the Usage chart (later on 2026-09-29, the user's ask).
+        Assert.Equal(["settings", "profile", "tools", "mcp", "skills", "sys", "sessions", "usage", "perf", "memory", "cmdlist", "police", "path"], ToolbarItems.Names);
+        Assert.Equal(ChatScreen.ToolbarStrip, string.Join(" ", ToolbarItems.Names.Take(9).Select(ToolbarItems.Glyph)));   // one source for the glyphs
+        Assert.Equal([ChatScreen.MemoryToolGlyph, ChatScreen.CmdAskToolGlyph, ChatScreen.PoliceToolGlyph, "📂"], ToolbarItems.Names.Skip(9).Select(ToolbarItems.Glyph));   // the folder since 2026-09-29
         Assert.Equal(FolderText.FolderGlyph, ToolbarItems.Glyph(ToolbarItems.Path));   // the Folders pane's, one source
-        Assert.All(ToolbarItems.Names.Take(10), id => Assert.Equal(ChatScreen.ToolbarWord(ToolbarItems.Glyph(id)), ToolbarItems.Describe(id).Split(' ')[0]));   // the note names what the glyph opens
+        Assert.All(ToolbarItems.Names.Take(12), id => Assert.Equal(ChatScreen.ToolbarWord(ToolbarItems.Glyph(id)), ToolbarItems.Describe(id).Split(' ')[0]));   // the note names what the glyph opens
         Assert.Equal(ChatScreen.CwdBrowseLine, ToolbarItems.Describe(ToolbarItems.Path)[..ChatScreen.CwdBrowseLine.Length]);
     }
 
@@ -41,12 +42,14 @@ public sealed class ToolbarItemsTests
     [Fact]
     public void Value_AndLabels_ArePinned()
     {
-        Assert.Equal("5 of 11", ToolbarItems.Value(null));   // the defaults (2026-09-29)
+        Assert.Equal("5 of 13", ToolbarItems.Value(null));   // the defaults (2026-09-29)
         Assert.Equal("all", ToolbarItems.Value([.. ToolbarItems.Names]));
         Assert.Equal("off", ToolbarItems.Value([]));
-        Assert.Equal("2 of 11", ToolbarItems.Value(["usage", "path"]));
+        Assert.Equal("2 of 13", ToolbarItems.Value(["usage", "path"]));
         Assert.Equal("[[x]] ⚙️  Settings                " + Theme.DimMarkup("/settings"), ToolbarItems.Label("settings", true));
         Assert.Equal("[[ ]] 📂  Working directory path  " + Theme.DimMarkup("/cwd browse · at the row's right"), ToolbarItems.Label("path", false));
         Assert.Equal("[[x]] 💾  Memory                  " + Theme.DimMarkup("/memory · while Memory is on"), ToolbarItems.Label("memory", true));
+        Assert.Equal("[[x]] 🪪  Profile                 " + Theme.DimMarkup("/profile"), ToolbarItems.Label("profile", true));
+        Assert.Equal("[[ ]] 📈  Performance             " + Theme.DimMarkup("/perf · shows or hides the performance bar"), ToolbarItems.Label("perf", false));
     }
 }

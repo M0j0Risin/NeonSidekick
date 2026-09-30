@@ -192,6 +192,22 @@ public class InfoPaneTests : IDisposable
         Assert.Equal("Help   a[b] ", Markup.Remove(InfoPane.TabStripMarkup("Help", ["a[b]"], 0)));
     }
 
+    [Fact]
+    public void TabStrip_HighlightsEveryLitTitle()
+    {
+        // A strip of switches (later on 2026-09-29, the embedded model filters): any number lit, the rest dim.
+        string strip = InfoPane.TabStripMarkup("M", ["8GB", "16GB", "uncensored"], new HashSet<int> { 0, 2 });
+        string lit = Theme.MenuHighlight.ToMarkup();
+        string dim = Theme.DimText.ToMarkup();
+        Assert.Equal($"[{Theme.Label.ToMarkup()}]M[/]  [{lit}] 8GB [/]  [{dim}] 16GB [/]  [{lit}] uncensored [/]", strip);
+        Assert.Equal(strip, InfoPane.TabStripRows("M", ["8GB", "16GB", "uncensored"], new HashSet<int> { 0, 2 }, 200).Single());
+        Assert.Equal(InfoPane.TabStripMarkup("M", ["a", "b"], -1), InfoPane.TabStripMarkup("M", ["a", "b"], new HashSet<int>()));
+
+        // A menu page's buttons light as they are On.
+        var page = new MenuPage("M", ["x"], "keys") { Buttons = [new MenuButton("8GB", '1', On: true), new MenuButton("16GB", '2')] };
+        Assert.Equal($"[{Theme.Label.ToMarkup()}]M[/]  [{lit}] 8GB [/]  [{dim}] 16GB [/]", MenuPane.TopMarkup(page));
+    }
+
     /// <summary>The label's ❓ is two cells, as Windows Terminal draws it (2026-09-28): the strip's indent and its click columns count from it.</summary>
     [Fact]
     public void TheTitlesGlyph_IsTwoCellsWide()

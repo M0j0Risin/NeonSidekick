@@ -1,3 +1,4 @@
+using System.Globalization;
 using NeonSidekick.Diagnostics;
 using NeonSidekick.Settings;
 using NeonSidekick.Speech;
@@ -58,16 +59,19 @@ public sealed class EmbeddedLlmService : IEmbeddedLlm
     private readonly EmbeddedModels _files;
     private readonly ILlamaServerHost _host;
     private readonly Func<string?, BackendChoice> _choose;
+    private readonly Func<long?> _totalVram;
     private bool _cudaFailed;
 
     /// <param name="files">The files: catalog, installs, runtimes.</param>
     /// <param name="host">The process host.</param>
     /// <param name="choose">The backend for a <c>Embedded backend</c> setting; <see cref="LlamaBackendDetect.Choose(string?)"/> when null.</param>
-    public EmbeddedLlmService(EmbeddedModels files, ILlamaServerHost host, Func<string?, BackendChoice>? choose = null)
+    /// <param name="totalVram">The biggest GPU's dedicated memory in bytes, for the VRAM budget (later on 2026-09-29); <see cref="Perf.GpuMemory.DedicatedBytes"/> when null.</param>
+    public EmbeddedLlmService(EmbeddedModels files, ILlamaServerHost host, Func<string?, BackendChoice>? choose = null, Func<long?>? totalVram = null)
     {
         _files = files ?? throw new ArgumentNullException(nameof(files));
         _host = host ?? throw new ArgumentNullException(nameof(host));
         _choose = choose ?? LlamaBackendDetect.Choose;
+        _totalVram = totalVram ?? Perf.GpuMemory.DedicatedBytes;
     }
 
     /// <summary>The app's service: the real catalog and runtimes under the two folders, a download client with no timeout (gigabytes), the real host.</summary>
@@ -169,9 +173,35 @@ public sealed class EmbeddedLlmService : IEmbeddedLlm
             model.Sampling,
             auto,
             drafter,
-            mtp);
+            mtp,
+            FitTarget(backend, effective));
         phase?.Invoke(EmbeddedLlmText.StartingLabel(model));
         return await _host.EnsureRunningAsync(launch, model, phase, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// The <c>--fit-target</c> of a launch (later on 2026-09-29, the user's ask: Embedded VRAM budget): null — llama.cpp's
+    /// own 1 GiB margin — with the budget off, on the CPU backend, or when no GPU memory is read (a warning then); else the
+    /// MiB that leaves the budget's share of the biggest adapter to fill. Per backend, so a CUDA start that falls back to
+    /// Vulkan keeps it.
+    /// </summary>
+    private int? FitTarget(LlamaBackend backend, AppSettingsData effective)
+    {
+        int budget = EmbeddedVramBudget.Effective(effective.EmbeddedVramBudget);
+        if (budget == EmbeddedVramBudget.Off || backend == LlamaBackend.Cpu)
+        {
+            return null;
+        }
+
+        if (_totalVram() is not { } total || total <= 0)
+        {
+            DiagnosticLog.Warn(Category, string.Create(CultureInfo.InvariantCulture, $"Embedded VRAM budget {budget}% not applied: no GPU memory was read, so llama.cpp keeps its own 1 GiB margin."));
+            return null;
+        }
+
+        int margin = EmbeddedVramBudget.FitTargetMiB(total, budget);
+        DiagnosticLog.Info(Category, string.Create(CultureInfo.InvariantCulture, $"Embedded VRAM budget {budget}% of {total / 1_048_576} MiB: fit target {margin} MiB."));
+        return margin;
     }
 
     /// <summary>

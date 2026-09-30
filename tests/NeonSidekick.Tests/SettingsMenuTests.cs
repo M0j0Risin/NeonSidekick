@@ -829,6 +829,7 @@ public partial class SettingsMenuTests : IDisposable
                 SettingsField.LlmReasoningEstimate,
                 SettingsField.EmbeddedLlmServer, SettingsField.EmbeddedDrafter,   // 2026-09-29, the Embedded tab's switch and MTP
                 SettingsField.ShowPerformanceBar,   // later on 2026-09-29, the performance bar
+                SettingsField.EmbeddedVramBudget, SettingsField.EmbeddedFilterType,   // later still on 2026-09-29, the VRAM budget and the model lists' filter type
             },
             Enum.GetValues<SettingsField>());
         // The compact rows: on the LLM tab after the context length but no reconnect; the type a picker, the two others typed.
@@ -1059,9 +1060,9 @@ public partial class SettingsMenuTests : IDisposable
         // Show toolbar (2026-09-21): the General row after it, a toggle, no reconnect (the pane reads it at each draw).
         Assert.False(SettingsMenu.IsToggle(SettingsField.ToolbarItems));   // a checklist since 2026-09-29, the user's ask
         Assert.Equal("Show toolbar", SettingsMenu.FieldName(SettingsField.ToolbarItems));
-        Assert.Equal("5 of 11", SettingsMenu.FieldValue(SettingsField.ToolbarItems, data, _settings.ProfileDirectory));   // the defaults since later on 2026-09-29
+        Assert.Equal("5 of 13", SettingsMenu.FieldValue(SettingsField.ToolbarItems, data, _settings.ProfileDirectory));   // the defaults since later on 2026-09-29
         Assert.Equal("off", SettingsMenu.FieldValue(SettingsField.ToolbarItems, new AppSettingsData { ToolbarItems = [] }, _settings.ProfileDirectory));
-        Assert.Equal("3 of 11", SettingsMenu.FieldValue(SettingsField.ToolbarItems, new AppSettingsData { ToolbarItems = ["usage", "PATH", " tools ", "nonsense"] }, _settings.ProfileDirectory));
+        Assert.Equal("3 of 13", SettingsMenu.FieldValue(SettingsField.ToolbarItems, new AppSettingsData { ToolbarItems = ["usage", "PATH", " tools ", "nonsense"] }, _settings.ProfileDirectory));
         Assert.Equal("all", SettingsMenu.FieldValue(SettingsField.ToolbarItems, new AppSettingsData { ToolbarItems = [.. ToolbarItems.Names] }, _settings.ProfileDirectory));
         Assert.False(SettingsMenu.RefusedMidTurn(SettingsField.ToolbarItems) || SettingsMenu.IsLlmField(SettingsField.ToolbarItems) || SettingsMenu.IsTtsField(SettingsField.ToolbarItems) || SettingsMenu.IsVoiceField(SettingsField.ToolbarItems));
         // Welcome splash (2026-09-18): the General tab's row before Show working directory (the user's order), no reconnect; a picker since 2026-09-24.
@@ -1342,7 +1343,7 @@ public partial class SettingsMenuTests : IDisposable
         // The LLM tab: the scan mode first (where a blank URL looks, so above the URL; a picker, no reconnect), then the reconnecting LLM fields in enum order, the compact rows, the turn-loop rows and the fun verbs.
         Assert.Equal(new[] { SettingsField.LlmScanMode, SettingsField.LlmUrl, SettingsField.LlmModel, SettingsField.LlmApiKey, SettingsField.LlmReasoning, SettingsField.LlmRequestTimeoutSeconds, SettingsField.LlmTurnTimeoutSeconds, SettingsField.LlmContextLength, SettingsField.LlmMidTurnUsage, SettingsField.LlmCompactType, SettingsField.LlmCompactKeepRecent, SettingsField.LlmCompactShowSummary, SettingsField.LlmAutoCompactPercent, SettingsField.LlmMaxTurns, SettingsField.LlmOfferTools, SettingsField.LlmToolCompactType, SettingsField.LlmMaxToolIterations, SettingsField.LlmUseFunVerbs, SettingsField.LlmShowThinking, SettingsField.LlmPreserveThinking, SettingsField.LlmReasoningEstimate, SettingsField.LlmSampling, SettingsField.LlmSamplingFromHuggingFace }, SettingsMenu.TabFields[(int)SettingsTab.Llm]);
         // The reconnecting rows: the LLM tab's seven, then the Claude API's four (2026-09-27; /tools' Claude tab's last four since 2026-09-29).
-        Assert.Equal(Enum.GetValues<SettingsField>().Where(SettingsMenu.IsLlmField), SettingsMenu.TabFields[(int)SettingsTab.Llm].Skip(1).Take(7).Concat(SettingsMenu.ToolsTabFields[4].TakeLast(4)).Concat(SettingsMenu.TabFields[(int)SettingsTab.Embedded].OrderBy(f => f)));   // the Embedded LLM tab's rows all reconnect (2026-09-29)
+        Assert.Equal(Enum.GetValues<SettingsField>().Where(SettingsMenu.IsLlmField), SettingsMenu.TabFields[(int)SettingsTab.Llm].Skip(1).Take(7).Concat(SettingsMenu.ToolsTabFields[4].TakeLast(4)).Concat(SettingsMenu.TabFields[(int)SettingsTab.Embedded].Where(f => f != SettingsField.EmbeddedFilterType).OrderBy(f => f)));   // the Embedded LLM tab's rows all reconnect (2026-09-29) but the filter type, display only (later that day)
         Assert.False(SettingsMenu.IsLlmField(SettingsField.LlmScanMode) || SettingsMenu.IsTtsField(SettingsField.LlmScanMode) || SettingsMenu.IsVoiceField(SettingsField.LlmScanMode));
         Assert.False(SettingsMenu.IsToggle(SettingsField.LlmScanMode));
         Assert.Equal("LLM scan mode", SettingsMenu.FieldName(SettingsField.LlmScanMode));
@@ -2601,6 +2602,31 @@ public partial class SettingsMenuTests : IDisposable
     }
 
     [Fact]
+    public async Task Server_OnThePane_TheFiltersThinTheEmbeddedRowsAlone()
+    {
+        // Later on 2026-09-29 (the user's ask): the buttons only over a list with an embedded row; a server on the network
+        // stays whatever is lit.
+        var (menu, pane) = PaneMenu();
+        LlmServer Embedded(string id) => new(NeonSidekick.EmbeddedLlm.EmbeddedEndpoint.BaseUrl, NeonSidekick.EmbeddedLlm.EmbeddedEndpoint.ServerName, new ProbeResult(true, [id], "installed"));
+        var network = new[] { Server(1234, "LM Studio", "lm"), Server(8000, "vLLM", "v") };
+        Push(Keys.Enter);
+        Assert.Same(network[0], await menu.PickServerAsync(network, null, SettingsMenu.ServerTitle, CancellationToken.None));
+        Assert.DoesNotContain("16GB", _console.Output);
+
+        var servers = new[] { Server(1234, "LM Studio", "lm"), Embedded("gemma-4-31b"), Embedded("gemma-4-e2b") };
+        Push(Keys.Char('1'));                   // 8GB: the 31B goes, LM Studio stays
+        Push(Keys.Down, Keys.Enter);            // the second row left: E2B
+        Assert.Same(servers[2], await menu.PickServerAsync(servers, null, SettingsMenu.StartupServerTitle, CancellationToken.None));
+        Assert.Contains(" 8GB    16GB    32GB    uncensored ", _console.Output);
+        Assert.Contains("ESC = the first listed", _console.Output);
+
+        Push(Keys.Char('u'), Keys.Enter);       // uncensored: no embedded row passes, LM Studio is still there to pick
+        Assert.Same(servers[0], await menu.PickServerAsync(servers, null, SettingsMenu.ServerTitle, CancellationToken.None));
+        Assert.False(pane.OverlayOpen);          // the pick closes the pane
+        pane.Dispose();
+    }
+
+    [Fact]
     public async Task Server_Escape_IsUnchanged_OnlyForTheCommand()
     {
         var servers = new[] { Server(1234, "LM Studio", "lm"), Server(8000, "vLLM", "v") };
@@ -2926,7 +2952,7 @@ public partial class SettingsMenuTests : IDisposable
         string cwd = SettingsMenu.DefaultWorkingDirectoryLabel(_settings.ProfileDirectory);
         Assert.StartsWith("(", cwd);
         Assert.EndsWith(@"\profiles\default\files)", cwd);
-        Assert.Contains(Rule(240) + "\n" + Titled(Strip) + "\n \n▸ Profile                      default (" + _settings.ProfileDirectory + ")\n  New profile mode             basic\n  Working directory (cwd)      " + cwd + "\n  Queue messages               on\n  Queue cancel mode            empty\n  Memory                       on\n  Copy user prompt             on\n  Show image thumbnails        on\n  Image thumbnail size         small\n  Transcript markdown          on\n  Paste preview lines          25 lines\n  Hide /exit autocomplete      on\n  Command typo intercept       on\n  Keep command history         on\n  Welcome splash               fullsize\n  Working directory in header  off\n  Show toolbar                 5 of 11\n  Show performance bar         off\n  Theme                        synthwave\n  Draft editor                 (default .txt editor)\n  Image viewer                 (built-in viewer)\n  Themed image viewer          on\n" + Rule(240) + "\n" + SettingsMenu.TabKeys + "\n", _console.Output);
+        Assert.Contains(Rule(240) + "\n" + Titled(Strip) + "\n \n▸ Profile                      default (" + _settings.ProfileDirectory + ")\n  New profile mode             basic\n  Working directory (cwd)      " + cwd + "\n  Queue messages               on\n  Queue cancel mode            empty\n  Memory                       on\n  Copy user prompt             on\n  Show image thumbnails        on\n  Image thumbnail size         small\n  Transcript markdown          on\n  Paste preview lines          25 lines\n  Hide /exit autocomplete      on\n  Command typo intercept       on\n  Keep command history         on\n  Welcome splash               fullsize\n  Working directory in header  off\n  Show toolbar                 5 of 13\n  Show performance bar         off\n  Theme                        synthwave\n  Draft editor                 (default .txt editor)\n  Image viewer                 (built-in viewer)\n  Themed image viewer          on\n" + Rule(240) + "\n" + SettingsMenu.TabKeys + "\n", _console.Output);
         Assert.DoesNotContain("File /tree max length", _console.Output);   // the Files tab's since 2026-09-15
         Assert.DoesNotContain("LLM URL", _console.Output);
         Assert.False(pane.OverlayOpen);
@@ -4185,8 +4211,8 @@ public partial class SettingsMenuTests : IDisposable
         Down(SettingsMenu.TabFields[(int)SettingsTab.General].ToList().IndexOf(SettingsField.ToolbarItems));
         Push(Keys.Enter);                       // the checklist, on Settings
         Push(Keys.Char(' '));                   // Settings off
-        Down(10);
-        Push(Keys.Enter);                       // the path off
+        Down(12);
+        Push(Keys.Enter);                       // the path off (the thirteenth since the ID card and the rising chart, later on 2026-09-29)
         Push(Keys.Escape, Keys.Escape);
 
         Assert.Equal(SettingsChanges.None, await menu.ShowAsync(CancellationToken.None));
@@ -4197,8 +4223,10 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Contains("[x] 📂  Working directory path", _console.Output);
         Assert.Contains("[ ] 📂  Working directory path", _console.Output);
         Assert.Contains("[ ] 🔌  MCP", _console.Output);
-        Assert.Contains("  · Show toolbar: 4 of 11", _console.Output);
-        Assert.Contains("  · Show toolbar: 3 of 11", _console.Output);
+        Assert.Contains("[ ] 🪪  Profile", _console.Output);
+        Assert.Contains("[ ] 📈  Performance", _console.Output);
+        Assert.Contains("  · Show toolbar: 4 of 13", _console.Output);
+        Assert.Contains("  · Show toolbar: 3 of 13", _console.Output);
         pane.Dispose();
     }
 
@@ -4339,14 +4367,14 @@ public partial class SettingsMenuTests : IDisposable
         var (menu, pane) = PaneMenu();
         Down(SettingsMenu.TabFields[(int)SettingsTab.General].ToList().IndexOf(SettingsField.ToolbarItems));
         Push(Keys.Enter);
-        Down(10);
+        Down(12);
         Push(Keys.Char(' '));                   // the path back: the defaults
         Push(Keys.Escape, Keys.Escape);
 
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Null(_settings.Current.ToolbarItems);
-        Assert.Contains("  · Show toolbar: 5 of 11", _console.Output);
+        Assert.Contains("  · Show toolbar: 5 of 13", _console.Output);
         pane.Dispose();
     }
 

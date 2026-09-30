@@ -31,9 +31,10 @@ public sealed record MenuTab(string Title, IReadOnlyList<string> Rows)
 /// A button on a one-list page's title row (2026-09-21, the queue pane's <c>clear all</c>): drawn
 /// as a dim tab nobody is on, the <see cref="FolderPane"/>'s shape; a click on it, or
 /// <see cref="Key"/> typed (null for none), returns a <see cref="MenuPick"/> with
-/// <see cref="MenuPick.Button"/> set.
+/// <see cref="MenuPick.Button"/> set. <paramref name="On"/> (later on 2026-09-29, the embedded model lists' filters) draws
+/// it highlighted as the tab one is on, so a button that is a switch shows its state; any number may be.
 /// </summary>
-public sealed record MenuButton(string Title, char? Key);
+public sealed record MenuButton(string Title, char? Key, bool On = false);
 
 /// <summary>
 /// One level of a menu in the pane: a title, the rows as markup (escaped by the caller), and the
@@ -600,6 +601,9 @@ public sealed class MenuPane : INoticeSink
 
     private static List<string> Titles(IReadOnlyList<MenuButton> buttons) => buttons.Select(b => b.Title).ToList();
 
+    /// <summary>The indices of the buttons that are <see cref="MenuButton.On"/>: the strip draws them highlighted (later on 2026-09-29).</summary>
+    private static HashSet<int> Lit(IReadOnlyList<MenuButton> buttons) => Enumerable.Range(0, buttons.Count).Where(i => buttons[i].On).ToHashSet();
+
     /// <summary>The index of the button whose key is <paramref name="key"/> (ignoring case), null for none. Pure.</summary>
     public static int? ButtonFor(IReadOnlyList<MenuButton> buttons, char key)
     {
@@ -670,7 +674,7 @@ public sealed class MenuPane : INoticeSink
     {
         ArgumentNullException.ThrowIfNull(page);
         return page.Tabs is { } tabs ? InfoPane.TabStripMarkup(page.Title, Titles(tabs), page.Tab)
-            : page.Buttons is { Count: > 0 } buttons ? InfoPane.TabStripMarkup(page.Title, Titles(buttons), -1)
+            : page.Buttons is { Count: > 0 } buttons ? InfoPane.TabStripMarkup(page.Title, Titles(buttons), Lit(buttons))
             : TitleMarkup(page.Title);
     }
 
@@ -683,7 +687,7 @@ public sealed class MenuPane : INoticeSink
     {
         ArgumentNullException.ThrowIfNull(page);
         return page.Tabs is { } tabs ? InfoPane.TabStripRows(page.Title, Titles(tabs), page.Tab, width)
-            : page.Buttons is { Count: > 0 } buttons ? InfoPane.TabStripRows(page.Title, Titles(buttons), -1, width)
+            : page.Buttons is { Count: > 0 } buttons ? InfoPane.TabStripRows(page.Title, Titles(buttons), Lit(buttons), width)
             : [TitleMarkup(page.Title)];
     }
 

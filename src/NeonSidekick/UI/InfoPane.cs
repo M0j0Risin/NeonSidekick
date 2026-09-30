@@ -72,14 +72,22 @@ public sealed class InfoPane
     /// The strip: the label, then every title with a space either side (so the strip does not shift
     /// when the highlight moves), the active one highlighted, the others dim. Pinned.
     /// </summary>
-    public static string TabStripMarkup(string label, IReadOnlyList<string> titles, int active)
+    public static string TabStripMarkup(string label, IReadOnlyList<string> titles, int active) =>
+        TabStripMarkup(label, titles, active < 0 ? [] : new HashSet<int> { active });
+
+    /// <summary>
+    /// <see cref="TabStripMarkup(string, IReadOnlyList{string}, int)"/> with any number of titles highlighted (later on
+    /// 2026-09-29: a button strip whose buttons are switches, the embedded model filters). Pinned.
+    /// </summary>
+    public static string TabStripMarkup(string label, IReadOnlyList<string> titles, IReadOnlySet<int> active)
     {
         ArgumentNullException.ThrowIfNull(label);
         ArgumentNullException.ThrowIfNull(titles);
+        ArgumentNullException.ThrowIfNull(active);
         var parts = new List<string>(titles.Count + 1) { $"[{Theme.Label.ToMarkup()}]{Markup.Escape(label)}[/]" };
         for (int i = 0; i < titles.Count; i++)
         {
-            var style = i == active ? Theme.MenuHighlight : Theme.DimText;
+            var style = active.Contains(i) ? Theme.MenuHighlight : Theme.DimText;
             parts.Add($"[{style.ToMarkup()}] {Markup.Escape(titles[i])} [/]");
         }
 
@@ -128,10 +136,15 @@ public sealed class InfoPane
     /// line per row, the first as <see cref="TabStripMarkup"/> draws it, the later ones indented to the
     /// first title's column with the same gaps and styles.
     /// </summary>
-    public static IReadOnlyList<string> TabStripRows(string label, IReadOnlyList<string> titles, int active, int width)
+    public static IReadOnlyList<string> TabStripRows(string label, IReadOnlyList<string> titles, int active, int width) =>
+        TabStripRows(label, titles, active < 0 ? [] : new HashSet<int> { active }, width);
+
+    /// <summary><see cref="TabStripRows(string, IReadOnlyList{string}, int, int)"/> with any number of titles highlighted (later on 2026-09-29).</summary>
+    public static IReadOnlyList<string> TabStripRows(string label, IReadOnlyList<string> titles, IReadOnlySet<int> active, int width)
     {
         ArgumentNullException.ThrowIfNull(label);
         ArgumentNullException.ThrowIfNull(titles);
+        ArgumentNullException.ThrowIfNull(active);
         var (rows, places) = TabStripLayout(label, titles, width);
         var parts = new List<string>[rows];
         for (int r = 0; r < rows; r++)
@@ -142,7 +155,7 @@ public sealed class InfoPane
         parts[0].Add($"[{Theme.Label.ToMarkup()}]{Markup.Escape(label)}[/]");
         for (int i = 0; i < titles.Count; i++)
         {
-            var style = i == active ? Theme.MenuHighlight : Theme.DimText;
+            var style = active.Contains(i) ? Theme.MenuHighlight : Theme.DimText;
             parts[places[i].Row].Add($"[{style.ToMarkup()}] {Markup.Escape(titles[i])} [/]");
         }
 

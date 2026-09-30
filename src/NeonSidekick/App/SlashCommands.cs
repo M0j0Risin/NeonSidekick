@@ -78,6 +78,13 @@ public enum SlashCommand
     /// <summary><c>/usage</c>: the tokens used and the speed — the last reply, this conversation, since launch.</summary>
     Usage,
 
+    /// <summary>
+    /// <c>/perf [off|text|gauge|spark|led]</c> (2026-09-29, the user's ask): bare, the performance bar shown in its last look
+    /// (<see cref="Settings.AppSettingsData.PerformanceBarLook"/>, text the first time) or hidden; a look sets it. Display only,
+    /// so it runs at once under a reply; the toolbar's 📈 word.
+    /// </summary>
+    Perf,
+
     /// <summary><c>/profile</c>: pick, switch to, add, delete, rename or reset a profile; since 2026-09-21 <c>edit</c> opens its <c>profile.json</c> and <c>reload</c> reads it back.</summary>
     Profile,
 
@@ -255,6 +262,7 @@ public static class SlashCommands
             new("/model", "pick a model from the LLM server, or /model <id>"),
             new("/new", "start a new conversation but do not clear the screen"),
             new("/operata", "export and manage operata.md (the operating rules) in your editor, or /operata reset to go back to the default, or /operata copy <profile> [force] to copy it into another profile"),
+            new("/perf", "show or hide the performance bar, or /perf off|text|gauge|spark|led for its look"),
             new("/persona", "export and manage persona.md (the personality) in your editor, or /persona reset to go back to the default, or /persona copy <profile> [force] to copy it into another profile"),
             new("/plan", "plan before doing: /plan <requirement> — read-only research and questions until you approve the plan (saved under .neon/plans/); then /plan approve [--fresh] | cancel | show | save [name]; /plan open [name] picks one up"),
             new("/police", "switch shell police on or off"),
@@ -376,7 +384,7 @@ public static class SlashCommands
     }
 
     /// <summary>Every command word, for help and completion.</summary>
-    public static readonly string[] Words = { "/help", "/clear", "/new", "/splash", "/theme", "/queue", "/sessions", "/compact", "/server", "/model", "/reasoning", "/sampling", "/settings", "//", "/tools", "/mcp", "/tts", "/stt", "/wake", "/interrupt", "/speak", "/remember", "/memory", "/cmdcopy", "/keycopy", "/cmdclear", "/cmdlist", "/police", "/persona", "/operata", "/vocalia", "/sys", "/usage", "/profile", "/timer", "/cwd", "/tree", "/vault", "/explore", "/view", "/imagine", "/comfy", "/ha", "/print", "/echo", "/emptytrash", "/gituser", "/copy", "/draft", "/loop", "/plan", "/botchat", "/claude", "/test", "/expand", "/collapse", "/window", "/skills", "/learn", "/about", "/exit" };
+    public static readonly string[] Words = { "/help", "/clear", "/new", "/splash", "/theme", "/queue", "/sessions", "/compact", "/server", "/model", "/reasoning", "/sampling", "/settings", "//", "/tools", "/mcp", "/tts", "/stt", "/wake", "/interrupt", "/speak", "/remember", "/memory", "/cmdcopy", "/keycopy", "/cmdclear", "/cmdlist", "/police", "/persona", "/operata", "/vocalia", "/sys", "/usage", "/perf", "/profile", "/timer", "/cwd", "/tree", "/vault", "/explore", "/view", "/imagine", "/comfy", "/ha", "/print", "/echo", "/emptytrash", "/gituser", "/copy", "/draft", "/loop", "/plan", "/botchat", "/claude", "/test", "/expand", "/collapse", "/window", "/skills", "/learn", "/about", "/exit" };
 
     /// <summary>The <c>/queue</c> word: what a double-click on the hint row's queued part sends through the mid-turn line hook, so the pane opens exactly as the typed command's does (2026-09-18). Pinned.</summary>
     public const string QueueWord = "/queue";
@@ -394,6 +402,8 @@ public static class SlashCommands
     public const string CmdListWord = "/cmdlist";     // later still on 2026-09-21, the seventh: the lock, whichever way the policy turns it
     public const string PoliceWord = "/police";       // 2026-09-22, the officer last of all, while Shell police outside paths is on
     public const string MemoryWord = "/memory";       // 2026-09-22, the disk between the balloon and the lock, while Memory is on
+    public const string ProfileWord = "/profile";     // later on 2026-09-29, the ID card after the gear: the profile picker
+    public const string PerfWord = "/perf";           // later on 2026-09-29, the rising chart after the Usage chart: the performance bar shown or hidden
 
     /// <summary>The words the hint row's model name and reasoning mark send through the screen's dispatch at idle (later on 2026-09-21, so a double-click off the pane they open can switch panes); the name is <c>/server</c> since 2026-09-22 (the user's call: the click walks server, model, then reasoning, as the typed command does). Pinned.</summary>
     public const string ServerWord = "/server";
@@ -449,6 +459,7 @@ public static class SlashCommands
             "/vocalia" => SlashCommand.Vocalia,
             "/sys" => SlashCommand.Sys,
             "/usage" => SlashCommand.Usage,
+            "/perf" => SlashCommand.Perf,
             "/profile" => SlashCommand.Profile,
             "/timer" => SlashCommand.Timer,
             "/cwd" => SlashCommand.Cwd,
@@ -504,5 +515,5 @@ public static class SlashCommands
         or SlashCommand.Remember or SlashCommand.Memory or SlashCommand.CmdCopy or SlashCommand.KeyCopy or SlashCommand.Profile or SlashCommand.Timer
         or SlashCommand.Cwd or SlashCommand.Tree or SlashCommand.Vault or SlashCommand.Explore or SlashCommand.Copy or SlashCommand.Session or SlashCommand.GitUser
         or SlashCommand.Loop or SlashCommand.Plan or SlashCommand.BotChat or SlashCommand.Claude or SlashCommand.Queue or SlashCommand.Skills or SlashCommand.Test
-        or SlashCommand.HomeAssistant or SlashCommand.Print;
+        or SlashCommand.HomeAssistant or SlashCommand.Print or SlashCommand.Perf;
 }

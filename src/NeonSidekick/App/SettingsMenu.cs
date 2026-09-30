@@ -551,7 +551,7 @@ public enum SettingsField
     /// <summary>A picker: which llama.cpp build runs the embedded model (<see cref="Settings.AppSettingsData.EmbeddedBackend"/>, 2026-09-29); a reconnect.</summary>
     EmbeddedBackend,
 
-    /// <summary>Typed: the embedded server's context window, 0 or 512 to 262144 tokens (<see cref="Settings.AppSettingsData.EmbeddedContextSize"/>, 2026-09-29); a reconnect.</summary>
+    /// <summary>Typed: the embedded server's context window, 0 (fit, the default since later on 2026-09-29) or 512 to 262144 tokens (<see cref="Settings.AppSettingsData.EmbeddedContextSize"/>, 2026-09-29); a reconnect.</summary>
     EmbeddedContextSize,
 
     /// <summary>Typed: the model layers the embedded server puts on the GPU — auto, all or a count (<see cref="Settings.AppSettingsData.EmbeddedGpuLayers"/>, 2026-09-29); a reconnect.</summary>
@@ -582,9 +582,23 @@ public enum SettingsField
     /// <summary>
     /// A picker: the performance bar's look — <c>off</c> / <c>text</c> / <c>gauge</c> / <c>spark</c> / <c>led</c>
     /// (<see cref="Settings.AppSettingsData.ShowPerformanceBar"/>, 2026-09-29, the user's ask). The General tab's row after
-    /// Show toolbar; no reconnect (the pane reads it at every tick). Last in the enum, as every newcomer.
+    /// Show toolbar; no reconnect (the pane reads it at every tick).
     /// </summary>
     ShowPerformanceBar,
+
+    /// <summary>
+    /// Typed: off or 50 to 99 % of the biggest GPU's dedicated memory for the embedded server
+    /// (<see cref="Settings.AppSettingsData.EmbeddedVramBudget"/>, later on 2026-09-29, the user's ask); a reconnect. The
+    /// Embedded tab's row after Embedded GPU layers.
+    /// </summary>
+    EmbeddedVramBudget,
+
+    /// <summary>
+    /// A picker: <c>file</c> / <c>gguf</c>, which size the embedded model lists' filter buttons measure
+    /// (<see cref="Settings.AppSettingsData.EmbeddedFilterType"/>, later on 2026-09-29, the user's ask). The Embedded tab's
+    /// row after Embedded models; no reconnect (read when a list opens). Last in the enum, as every newcomer.
+    /// </summary>
+    EmbeddedFilterType,
 }
 
 /// <summary>The tabs of <c>/settings</c> on the pane, in strip order (General, Embedded, LLM, TTS, STT, Sessions, Botchat — the user's order, 2026-09-29; Sessions right after General — the user's order, 2026-09-18 — until then; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
@@ -843,7 +857,7 @@ internal sealed partial class SettingsMenu
     public const string VoicePreviewText = "Hello. I am Neon, your friendly and concise terminal sidekick.";
 
     /// <summary><c>/profile</c>'s picker label; ESC keeps the loaded profile. The settings row's level is <see cref="Breadcrumb"/> over <see cref="FieldName"/> (no glyph under the crumb) + <see cref="SwitchKeys"/>.</summary>
-    public const string ProfileTitle = "🪪 Profile";
+    public const string ProfileTitle = ChatScreen.ProfileToolGlyph + " Profile";   // the glyph the toolbar wears for the picker (later on 2026-09-29)
     public const string ProfileKeys = "Enter = switch · ESC = keep";
 
     /// <summary>The <c>/server</c> picker's label; ESC keeps the server in use.</summary>
@@ -879,7 +893,7 @@ internal sealed partial class SettingsMenu
     public static readonly IReadOnlyList<IReadOnlyList<SettingsField>> TabFields =
     [
         [SettingsField.Profile, SettingsField.NewProfileMode, SettingsField.WorkingDirectory, SettingsField.QueueMessages, SettingsField.QueueCancelMode, SettingsField.Memory, SettingsField.CopyUserPrompt, SettingsField.ShowImageThumbnails, SettingsField.ImageThumbnailSize, SettingsField.TranscriptMarkdown, SettingsField.PastePreviewLines, SettingsField.HideExitAutocomplete, SettingsField.CommandTypoIntercept, SettingsField.KeepCommandHistory, SettingsField.WelcomeSplash, SettingsField.ShowWorkingDirectory, SettingsField.ToolbarItems, SettingsField.ShowPerformanceBar, SettingsField.Theme, SettingsField.DraftEditor, SettingsField.ImageEditor, SettingsField.ThemedViewer],
-        [SettingsField.EmbeddedLlmServer, SettingsField.EmbeddedModels, SettingsField.EmbeddedBackend, SettingsField.EmbeddedContextSize, SettingsField.EmbeddedGpuLayers, SettingsField.EmbeddedVision, SettingsField.EmbeddedDrafter],
+        [SettingsField.EmbeddedLlmServer, SettingsField.EmbeddedModels, SettingsField.EmbeddedFilterType, SettingsField.EmbeddedBackend, SettingsField.EmbeddedContextSize, SettingsField.EmbeddedGpuLayers, SettingsField.EmbeddedVramBudget, SettingsField.EmbeddedVision, SettingsField.EmbeddedDrafter],
         [SettingsField.LlmScanMode, SettingsField.LlmUrl, SettingsField.LlmModel, SettingsField.LlmApiKey, SettingsField.LlmReasoning, SettingsField.LlmRequestTimeoutSeconds, SettingsField.LlmTurnTimeoutSeconds, SettingsField.LlmContextLength, SettingsField.LlmMidTurnUsage, SettingsField.LlmCompactType, SettingsField.LlmCompactKeepRecent, SettingsField.LlmCompactShowSummary, SettingsField.LlmAutoCompactPercent, SettingsField.LlmMaxTurns, SettingsField.LlmOfferTools, SettingsField.LlmToolCompactType, SettingsField.LlmMaxToolIterations, SettingsField.LlmUseFunVerbs, SettingsField.LlmShowThinking, SettingsField.LlmPreserveThinking, SettingsField.LlmReasoningEstimate, SettingsField.LlmSampling, SettingsField.LlmSamplingFromHuggingFace],
         [SettingsField.TtsOutput, SettingsField.TtsSource, SettingsField.TtsHttpUrl, SettingsField.TtsVoicePreview, SettingsField.TtsVoicePreset, SettingsField.TtsVoice, SettingsField.TtsVoice2, SettingsField.TtsVoiceMix, SettingsField.TtsSpeed],
         Fields.Where(IsVoiceField).ToArray(),
@@ -1080,11 +1094,14 @@ internal sealed partial class SettingsMenu
     /// <summary>The <c>Embedded models</c> row with no embedded model offered, or before the catalog is read. Pinned.</summary>
     public const string EmbeddedModelsDoorLabel = "(Enter to install, use or remove)";
 
-    /// <summary>How a <c>Embedded context size</c> of 0 shows. Pinned.</summary>
-    public const string EmbeddedContextOwnLabel = "the model's own";
+    /// <summary>
+    /// How a <c>Embedded context size</c> of 0 shows: the largest context the VRAM budget holds, up to the model's own window
+    /// ("the model's own" until later on 2026-09-29, when the user asked for the context to shrink to a budget). Pinned.
+    /// </summary>
+    public const string EmbeddedContextFitLabel = "fit";
 
     /// <summary>The catalog picker's title and keys (2026-09-29).</summary>
-    public const string EmbeddedModelsKeys = "Enter = choose · ESC = back";
+    public const string EmbeddedModelsKeys = "Enter = choose · " + NeonSidekick.EmbeddedLlm.EmbeddedModelFilter.Keys + " · ESC = back";
     public const string UseNowRow = "Use now";
     public const string BackRow = "Back";
 
@@ -1096,7 +1113,7 @@ internal sealed partial class SettingsMenu
         field is SettingsField.LlmUrl or SettingsField.LlmModel or SettingsField.LlmApiKey
             or SettingsField.LlmRequestTimeoutSeconds or SettingsField.LlmTurnTimeoutSeconds or SettingsField.LlmContextLength or SettingsField.LlmReasoning
             or SettingsField.ClaudeApi or SettingsField.ClaudeApiKey or SettingsField.ClaudeApiMaxTokens or SettingsField.ClaudeApiPromptCaching
-            or SettingsField.EmbeddedLlmServer or SettingsField.EmbeddedModels or SettingsField.EmbeddedBackend or SettingsField.EmbeddedContextSize or SettingsField.EmbeddedGpuLayers or SettingsField.EmbeddedVision
+            or SettingsField.EmbeddedLlmServer or SettingsField.EmbeddedModels or SettingsField.EmbeddedBackend or SettingsField.EmbeddedContextSize or SettingsField.EmbeddedGpuLayers or SettingsField.EmbeddedVramBudget or SettingsField.EmbeddedVision
             or SettingsField.EmbeddedDrafter;
 
     /// <summary>Whether a change to <paramref name="field"/> needs the speech session re-probed.</summary>
@@ -1440,6 +1457,8 @@ internal sealed partial class SettingsMenu
         SettingsField.EmbeddedBackend => "Embedded backend",
         SettingsField.EmbeddedContextSize => "Embedded context size",
         SettingsField.EmbeddedGpuLayers => "Embedded GPU layers",
+        SettingsField.EmbeddedVramBudget => "Embedded VRAM budget",
+        SettingsField.EmbeddedFilterType => "Embedded filter type",
         SettingsField.EmbeddedVision => "Embedded vision",
         SettingsField.EmbeddedLlmServer => "Embedded LLM server enabled",
         SettingsField.EmbeddedDrafter => "Embedded drafter",
@@ -1575,8 +1594,10 @@ internal sealed partial class SettingsMenu
             SettingsField.ClaudeApiPromptCaching => OnOff(data.ClaudeApiPromptCaching),
             SettingsField.EmbeddedModels => EmbeddedModelsDoorLabel,
             SettingsField.EmbeddedBackend => data.EmbeddedBackend,
-            SettingsField.EmbeddedContextSize => data.EmbeddedContextSize == 0 ? EmbeddedContextOwnLabel : Tokens(data.EmbeddedContextSize),
+            SettingsField.EmbeddedContextSize => data.EmbeddedContextSize == 0 ? EmbeddedContextFitLabel : Tokens(data.EmbeddedContextSize),
             SettingsField.EmbeddedGpuLayers => data.EmbeddedGpuLayers,
+            SettingsField.EmbeddedVramBudget => data.EmbeddedVramBudget == NeonSidekick.EmbeddedLlm.EmbeddedVramBudget.Off ? NeonSidekick.EmbeddedLlm.EmbeddedVramBudget.OffWord : Percent(data.EmbeddedVramBudget),
+            SettingsField.EmbeddedFilterType => data.EmbeddedFilterType,
             SettingsField.EmbeddedVision => OnOff(data.EmbeddedVision),
             SettingsField.EmbeddedLlmServer => OnOff(data.EmbeddedLlmServer),
             SettingsField.EmbeddedDrafter => OnOff(data.EmbeddedDrafter),
@@ -2263,6 +2284,7 @@ internal sealed partial class SettingsMenu
         SettingsField.ClaudeApiMaxTokens => data.ClaudeApiMaxTokens.ToString(CultureInfo.InvariantCulture),
         SettingsField.EmbeddedContextSize => data.EmbeddedContextSize.ToString(CultureInfo.InvariantCulture),
         SettingsField.EmbeddedGpuLayers => data.EmbeddedGpuLayers,
+        SettingsField.EmbeddedVramBudget => data.EmbeddedVramBudget == NeonSidekick.EmbeddedLlm.EmbeddedVramBudget.Off ? NeonSidekick.EmbeddedLlm.EmbeddedVramBudget.OffWord : data.EmbeddedVramBudget.ToString(CultureInfo.InvariantCulture),
 
         // The key is never put back on the line: typing replaces it, empty clears it (the LLM API key refuses empty).
         SettingsField.LlmApiKey => "",
@@ -2747,19 +2769,66 @@ internal sealed partial class SettingsMenu
             }
         }
 
-        var page = new MenuPage(title, ServerLabels(servers).ToList(), title == StartupServerTitle ? StartupServerKeys : KeepKeys);
-        int? picked = await PickOnceAsync(page, cursor, cancellationToken).ConfigureAwait(false);
-        if (picked is { } index)
-        {
-            return servers[index];
-        }
-
-        if (title == ServerTitle)
+        string keys = title == StartupServerTitle ? StartupServerKeys : KeepKeys;
+        LlmServer? chosen = servers.Any(s => NeonSidekick.EmbeddedLlm.EmbeddedEndpoint.IsEmbedded(s.BaseUrl)) && _pane.Enabled
+            ? await PickFilteredServerAsync(servers, title, keys, cursor, cancellationToken).ConfigureAwait(false)
+            : await PickOnceAsync(new MenuPage(title, ServerLabels(servers).ToList(), keys), cursor, cancellationToken).ConfigureAwait(false) is { } index ? servers[index] : null;
+        if (chosen is null && title == ServerTitle)
         {
             Unchanged();
         }
 
-        return null;
+        return chosen;
+    }
+
+    /// <summary>
+    /// The server picker with the embedded model filters on its title row (later on 2026-09-29, the user's ask:
+    /// <see cref="NeonSidekick.EmbeddedLlm.EmbeddedModelFilter"/>), when it lists an embedded model and the pane is up: a press
+    /// thins the embedded rows alone — a server on the network and the Claude API always stay (the user's call) — and keeps
+    /// the cursor on its row while it is still shown. Every visit starts with none lit. The pane closes as the pick lands.
+    /// </summary>
+    private async Task<LlmServer?> PickFilteredServerAsync(IReadOnlyList<LlmServer> servers, string title, string keys, int cursor, CancellationToken cancellationToken)
+    {
+        var type = NeonSidekick.EmbeddedLlm.EmbeddedFilterTypes.Resolve(EffectiveNow());
+        var filter = NeonSidekick.EmbeddedLlm.EmbeddedModelFilter.None;
+        var labels = ServerLabels(servers);
+        string hint = keys.Replace(" · ESC", " · " + NeonSidekick.EmbeddedLlm.EmbeddedModelFilter.Keys + " · ESC", StringComparison.Ordinal);
+        try
+        {
+            while (true)
+            {
+                var shown = Enumerable.Range(0, servers.Count).Where(i => Passes(servers[i])).ToList();
+                var page = new MenuPage(title, FilteredRows(labels, shown), hint);
+                if (await PickChecklistAsync(page, Math.Max(0, shown.IndexOf(cursor)), cancellationToken, filter.Buttons()).ConfigureAwait(false) is not { } pick)
+                {
+                    return null;
+                }
+
+                if (pick.Row >= 0 && pick.Row < shown.Count)
+                {
+                    cursor = shown[pick.Row];
+                }
+
+                if (pick.Button >= 0)
+                {
+                    filter = filter.Press(pick.Button);
+                    continue;
+                }
+
+                if (shown.Count > 0)
+                {
+                    return servers[cursor];
+                }
+            }
+        }
+        finally
+        {
+            _pane.Close();
+        }
+
+        bool Passes(LlmServer server) =>
+            !NeonSidekick.EmbeddedLlm.EmbeddedEndpoint.IsEmbedded(server.BaseUrl)
+            || (EmbeddedRowModel(server) is { } model ? filter.Matches(model, type) : !filter.Active);
     }
 
     /// <summary>
@@ -3047,6 +3116,11 @@ internal sealed partial class SettingsMenu
         if (field == SettingsField.ShowPerformanceBar)
         {
             return await PickPerfBarModeAsync(saved, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (field == SettingsField.EmbeddedFilterType)
+        {
+            return await PickEmbeddedFilterTypeAsync(saved, cancellationToken).ConfigureAwait(false);
         }
 
         if (field == SettingsField.BotChatLlmMode)
@@ -3585,6 +3659,16 @@ internal sealed partial class SettingsMenu
                 }
 
                 Apply(field, d => d.EmbeddedGpuLayers = layers);
+                return true;
+
+            case SettingsField.EmbeddedVramBudget:
+                if (NeonSidekick.EmbeddedLlm.EmbeddedVramBudget.Parse(text) is not { } budget)
+                {
+                    Sink.Error($"{FieldName(field)} {NeonSidekick.EmbeddedLlm.EmbeddedVramBudget.Error}; keeping {EditableValue(field, saved)}.");
+                    return false;
+                }
+
+                Apply(field, d => d.EmbeddedVramBudget = budget);
                 return true;
 
             case SettingsField.ClaudeApiMaxTokens:
@@ -4725,6 +4809,9 @@ internal sealed partial class SettingsMenu
     /// Remove (after a yes) and Back; any other, Install with what it downloads, and Back — and Remove too when part of it
     /// is on disk (later that day, the user's ask: a paused download thrown away). Use now and Install hand the model to the
     /// screen (<see cref="TakePendingEmbeddedModel"/>) and return true, which closes the pane; a removal stays.
+    /// The title row carries the filters (later on 2026-09-29, the user's ask: <see cref="NeonSidekick.EmbeddedLlm.EmbeddedModelFilter"/>):
+    /// a press thins the rows and keeps the cursor on its model while it is still shown; a model's own page keeps them, and
+    /// every visit starts with none lit.
     /// </summary>
     internal async Task<bool> PickEmbeddedModelAsync(CancellationToken cancellationToken)
     {
@@ -4734,17 +4821,37 @@ internal sealed partial class SettingsMenu
             return Unchanged();
         }
 
-        int cursor = 0;
+        var type = NeonSidekick.EmbeddedLlm.EmbeddedFilterTypes.Resolve(EffectiveNow());
+        var filter = NeonSidekick.EmbeddedLlm.EmbeddedModelFilter.None;
+        int cursor = 0;   // the catalog index under the cursor
         while (true)
         {
-            var rows = EmbeddedModelLabels(embedded.Catalog, embedded.State);
-            var page = new MenuPage(Crumb(FieldName(SettingsField.EmbeddedModels)), rows, EmbeddedModelsKeys);
-            if (await PickAsync(page, cursor, cancellationToken).ConfigureAwait(false) is not { } index)
+            // Every row laid out over the whole catalog, so a filter does not move the columns.
+            var labels = EmbeddedModelLabels(embedded.Catalog, embedded.State);
+            var shown = Enumerable.Range(0, embedded.Catalog.Count).Where(i => filter.Matches(embedded.Catalog[i], type)).ToList();
+            var page = new MenuPage(Crumb(FieldName(SettingsField.EmbeddedModels)), FilteredRows(labels, shown), EmbeddedModelsKeys);
+            if (await PickChecklistAsync(page, Math.Max(0, shown.IndexOf(cursor)), cancellationToken, filter.Buttons()).ConfigureAwait(false) is not { } pick)
             {
                 return Unchanged();
             }
 
-            cursor = index;
+            if (pick.Row >= 0 && pick.Row < shown.Count)
+            {
+                cursor = shown[pick.Row];
+            }
+
+            if (pick.Button >= 0)
+            {
+                filter = filter.Press(pick.Button);
+                continue;
+            }
+
+            if (shown.Count == 0)
+            {
+                continue;   // the no-match row: nothing to open
+            }
+
+            int index = cursor;
             var model = embedded.Catalog[index];
             var state = embedded.State(model);
             string crumb = Crumb(FieldName(SettingsField.EmbeddedModels)) + " › " + model.Display;
@@ -4863,6 +4970,13 @@ internal sealed partial class SettingsMenu
         int width = models.Count == 0 ? 0 : models.Select((m, i) => TextCells.Width(NeonSidekick.EmbeddedLlm.EmbeddedLlmText.ModelDetail(m, states[i]))).Max();
         return models.Select((m, i) => EmbeddedModelLabel(m, states[i], width)).ToList();
     }
+
+    /// <summary>
+    /// The rows a filtered list shows (later on 2026-09-29): the labels at <paramref name="shown"/>, or the one dim
+    /// <see cref="NeonSidekick.EmbeddedLlm.EmbeddedLlmText.NoFilterMatch"/> row when none passes.
+    /// </summary>
+    private static List<string> FilteredRows(IReadOnlyList<string> labels, IReadOnlyList<int> shown) =>
+        shown.Count > 0 ? shown.Select(i => labels[i]).ToList() : [Theme.DimMarkup(Markup.Escape(NeonSidekick.EmbeddedLlm.EmbeddedLlmText.NoFilterMatch))];
 
     /// <summary>The catalog's quantisation column: "COMPACT-LOW" (11, esatapedico's NVFP4 tier word, later on 2026-09-29) plus two; 12 before.</summary>
     public const int EmbeddedModelQuantWidth = 13;
@@ -5252,9 +5366,36 @@ internal sealed partial class SettingsMenu
         }
 
         string name = PerfBarMode.Names[index];
-        Apply(SettingsField.ShowPerformanceBar, d => d.ShowPerformanceBar = name);
+        Apply(SettingsField.ShowPerformanceBar, d =>
+        {
+            d.ShowPerformanceBar = name;
+            if (name != PerfBarMode.Default)
+            {
+                d.PerformanceBarLook = name;   // what a bare /perf turns back on (later on 2026-09-29)
+            }
+        });
         return true;
     }
+
+    /// <summary>The filter-type picker under the settings list (later on 2026-09-29): one <see cref="EmbeddedFilterTypeLabel"/> row per <see cref="NeonSidekick.EmbeddedLlm.EmbeddedFilterTypes.Names"/> entry, the saved one under the cursor.</summary>
+    private async Task<bool> PickEmbeddedFilterTypeAsync(AppSettingsData saved, CancellationToken cancellationToken)
+    {
+        var names = NeonSidekick.EmbeddedLlm.EmbeddedFilterTypes.Names;
+        var page = new MenuPage(Crumb(FieldName(SettingsField.EmbeddedFilterType)), names.Select(EmbeddedFilterTypeLabel).ToList(), PickKeys);
+        int? picked = await PickAsync(page, Math.Max(0, Array.FindIndex(names, n => string.Equals(n, saved.EmbeddedFilterType, StringComparison.OrdinalIgnoreCase))), cancellationToken).ConfigureAwait(false);
+        if (picked is not { } index)
+        {
+            return Unchanged();
+        }
+
+        string name = names[index];
+        Apply(SettingsField.EmbeddedFilterType, d => d.EmbeddedFilterType = name);
+        return true;
+    }
+
+    /// <summary>A filter-type picker row: the name padded, then what it measures, dim. Pinned.</summary>
+    public static string EmbeddedFilterTypeLabel(string name) =>
+        Markup.Escape(name.PadRight(6)) + Theme.DimMarkup(NeonSidekick.EmbeddedLlm.EmbeddedFilterTypes.Describe(name));
 
     /// <summary>The botchat-LLM-mode picker under the settings list (later on 2026-09-25): one <see cref="BotChatLlmModeLabel"/> row per <see cref="App.BotChatLlmMode.Names"/> entry, the saved one under the cursor.</summary>
     private async Task<bool> PickBotChatLlmModeAsync(AppSettingsData saved, CancellationToken cancellationToken)

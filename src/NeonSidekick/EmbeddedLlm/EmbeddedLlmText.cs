@@ -12,6 +12,9 @@ public static class EmbeddedLlmText
     /// <summary>How the <c>LLM URL</c> row shows the sentinel (<see cref="EmbeddedEndpoint.BaseUrl"/>).</summary>
     public const string UrlDisplay = "embedded (llama.cpp)";
 
+    /// <summary>The one row of a model list whose filters pass nothing (later on 2026-09-29). Pinned.</summary>
+    public const string NoFilterMatch = "no model matches the filter";
+
     /// <summary>
     /// The refusal when no catalog model is installed and none was named, and <c>/server embedded</c>'s when it has no row to
     /// list (2026-09-29: <c>/server</c> lists the installed models alone since then, the user's ask; "pick one in /server to

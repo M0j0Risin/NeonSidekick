@@ -122,7 +122,7 @@ internal sealed partial class ChatScreen
     /// <c>/cwd</c> are quick notices; <c>/tree</c> and <c>/vault</c> are panes (the info pane, never the transcript the turn
     /// owns); <c>/cmdcopy</c> and the three prompt files' words are panes — they write another profile or a file the running
     /// turn's prompt was built from already, and ask their yes/no on the pane. <c>/keycopy</c> (2026-09-28) is one the same
-    /// way: another profile's file, its yes/no on the pane.</para>
+    /// way: another profile's file, its yes/no on the pane. <c>/perf</c> (later on 2026-09-29) is quick: display only.</para>
     /// </summary>
     public static MidTurnClass MidTurnPolicy(SlashCommand command, bool hasArgs) => command switch
     {
@@ -136,7 +136,7 @@ internal sealed partial class ChatScreen
         SlashCommand.Cwd => hasArgs ? MidTurnClass.Deferred : MidTurnClass.Quick,
         SlashCommand.Tts or SlashCommand.Voice or SlashCommand.Wake or SlashCommand.Interrupt or SlashCommand.Copy
             or SlashCommand.Remember or SlashCommand.Explore or SlashCommand.Log or SlashCommand.Timer or SlashCommand.Expand or SlashCommand.Collapse or SlashCommand.Window
-            or SlashCommand.Unknown or SlashCommand.Overloaded => MidTurnClass.Quick,
+            or SlashCommand.Perf or SlashCommand.Unknown or SlashCommand.Overloaded => MidTurnClass.Quick,
         SlashCommand.Clear or SlashCommand.New or SlashCommand.Splash or SlashCommand.Exit => MidTurnClass.Cancel,
         _ => MidTurnClass.Deferred,
     };
@@ -218,8 +218,9 @@ internal sealed partial class ChatScreen
                 // Runs when the reply ends (later on 2026-09-27; dropped before): queued as a message is, so it keeps its place
                 // behind lines typed before it; pending under /botchat, whose queue is read as the user's interjections.
                 // A line with no live row behind it is left where it was, as QueueLine leaves a message (2026-09-28, code
-                // review: the notice promised a run and nothing held the line). No such line reaches here today — the clicked
-                // words are all panes, and every watch in the app hands the editor in.
+                // review: the notice promised a run and nothing held the line). A clicked word has no live row: the toolbar's
+                // 🪪 /profile (later on 2026-09-29) under a reply is nothing, as a click gets no refusal notice; every watch in
+                // the app hands the editor in.
                 if (line.Line is not { } deferred)
                 {
                     return false;
@@ -439,6 +440,9 @@ internal sealed partial class ChatScreen
                 break;
             case SlashCommand.Queue:
                 HandleQueueArgs(args);
+                break;
+            case SlashCommand.Perf:
+                HandlePerf(args);
                 break;
             case SlashCommand.Sampling:
                 // /sampling <field> <value> (2026-09-28): the connected model's entry, read at the next turn.

@@ -15,19 +15,21 @@ namespace NeonSidekick.App;
 public static class ToolbarItems
 {
     public const string Settings = "settings";
+    public const string Profile = "profile";   // later on 2026-09-29, the user's ask: 🪪, /profile's picker
     public const string Tools = "tools";
     public const string Mcp = "mcp";
     public const string Skills = "skills";
     public const string Sys = "sys";
     public const string Sessions = "sessions";
     public const string Usage = "usage";
+    public const string Perf = "perf";         // later on 2026-09-29, the user's ask: 📈, the performance bar shown or hidden
     public const string Memory = "memory";
     public const string CmdList = "cmdlist";
     public const string Police = "police";
     public const string Path = "path";
 
     /// <summary>Every item in strip order, the path last (it sits at the row's right). Pinned.</summary>
-    public static readonly string[] Names = [Settings, Tools, Mcp, Skills, Sys, Sessions, Usage, Memory, CmdList, Police, Path];
+    public static readonly string[] Names = [Settings, Profile, Tools, Mcp, Skills, Sys, Sessions, Usage, Perf, Memory, CmdList, Police, Path];
 
     /// <summary>
     /// What a profile that never chose shows (later on 2026-09-29, the user's pick): Settings, Tools, Skills, Sessions and
@@ -42,12 +44,14 @@ public static class ToolbarItems
     public static string Glyph(string id) => id switch
     {
         Settings => ChatScreen.SettingsToolGlyph,
+        Profile => ChatScreen.ProfileToolGlyph,
         Tools => ChatScreen.ToolsToolGlyph,
         Mcp => ChatScreen.McpToolGlyph,
         Skills => ChatScreen.SkillsToolGlyph,
         Sys => ChatScreen.SysToolGlyph,
         Sessions => ChatScreen.SessionsToolGlyph,
         Usage => ChatScreen.UsageToolGlyph,
+        Perf => ChatScreen.PerfToolGlyph,
         Memory => ChatScreen.MemoryToolGlyph,
         CmdList => ChatScreen.CmdAskToolGlyph,
         Police => ChatScreen.PoliceToolGlyph,
@@ -59,12 +63,14 @@ public static class ToolbarItems
     public static string Title(string id) => id switch
     {
         Settings => "Settings",
+        Profile => "Profile",
         Tools => "Tools",
         Mcp => "MCP",
         Skills => "Skills",
         Sys => "System prompt",
         Sessions => "Sessions",
         Usage => "Usage",
+        Perf => "Performance",
         Memory => "Memory",
         CmdList => "Shell allowed commands",
         Police => "Shell police",
@@ -76,12 +82,14 @@ public static class ToolbarItems
     public static string Describe(string id) => id switch
     {
         Settings => "/settings",
+        Profile => "/profile",
         Tools => "/tools",
         Mcp => "/mcp",
         Skills => "/skills",
         Sys => "/sys",
         Sessions => "/sessions",
         Usage => "/usage",
+        Perf => "/perf · shows or hides the performance bar",
         Memory => "/memory · while Memory is on",
         CmdList => "/cmdlist · " + ChatScreen.CmdAskToolGlyph + " under ask, " + ChatScreen.CmdYoloToolGlyph + " under yolo, none under off",
         Police => "/police · while Shell police outside paths is on",
@@ -125,7 +133,7 @@ public static class ToolbarItems
         return chosen.SequenceEqual(Defaults, StringComparer.Ordinal) ? null : chosen;
     }
 
-    /// <summary>The <c>Show toolbar</c> row's value: <c>all</c>, <c>off</c> with nothing checked, else <c>4 of 11</c>. Pinned.</summary>
+    /// <summary>The <c>Show toolbar</c> row's value: <c>all</c>, <c>off</c> with nothing checked, else <c>4 of 13</c>. Pinned.</summary>
     public static string Value(IReadOnlyList<string>? saved)
     {
         int count = Resolve(saved).Count;
