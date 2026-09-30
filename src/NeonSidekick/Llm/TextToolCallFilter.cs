@@ -36,6 +36,17 @@ namespace NeonSidekick.Llm;
 /// split at every parameter name followed by <c>:</c> or <c>=</c> (<see cref="LineArguments"/>), so a prompt keeps its commas. A line
 /// that starts with the name and goes on otherwise is text as ever; the name mid-line never starts the line form. A line held for
 /// the test is only released once it is whole, so the stream waits on such a line alone.</para>
+///
+/// <para>The tagged form (2026-09-30, the user's report: <c>&lt;tool_call&gt; &lt;function=generate_image&gt; &lt;parameter=prompt&gt;
+/// score_9, … &lt;/parameter&gt; &lt;parameter=seed&gt; 5566778899 &lt;/parameter&gt; … &lt;/function&gt; &lt;/tool_call&gt;</c> reached a
+/// <c>/botchat</c> line): a Qwen-style model writes its calls in that markup, which the server turns into real calls only when the
+/// request carries tools — and <see cref="Assistant.LastRoundAnswers"/>' last round trip carries none. A <c>&lt;tool_call&gt;</c> block
+/// (its body <c>&lt;function=NAME&gt;</c> with <c>&lt;parameter=KEY&gt;VALUE&lt;/parameter&gt;</c> pairs, or the Hermes JSON object
+/// <c>{"name": …, "arguments": …}</c>), or a bare <c>&lt;function=NAME&gt;…&lt;/function&gt;</c>, is a call wherever it starts, to its
+/// close tag (<see cref="TaggedCall"/>). Any name: markup is never prose, so the offered names' guard the other forms need is not
+/// wanted here. Models leave the outer close tag off, so a <c>&lt;tool_call&gt;</c> ends at its <c>&lt;/function&gt;</c> when no
+/// <c>&lt;/tool_call&gt;</c> follows it, and the words after it are kept. A block that does not parse, or is still open when the
+/// stream ends, is dropped (<see cref="SawBroken"/>).</para>
 /// </summary>
 public sealed class TextToolCallFilter
 {
@@ -60,6 +71,25 @@ public sealed class TextToolCallFilter
     // After a call: a closing backtick (when one opened it), then whitespace, are dropped.
     private bool _skipTick;
     private bool _skipWhitespace;
+
+    // Inside a tagged call (2026-09-30): the close tag it runs to (null = none) and its body so far.
+    private string? _blockClose;
+    private readonly StringBuilder _block = new();
+
+    private const string ToolCallTag = "<tool_call>";
+    private const string ToolCallClose = "</tool_call>";
+    private const string FunctionTag = "<function=";
+    private const string FunctionClose = "</function>";
+    private const string ParameterTag = "<parameter=";
+    private const string ParameterClose = "</parameter>";
+
+    /// <summary>Which tagged start <see cref="Find"/> found, if any.</summary>
+    private enum Tag
+    {
+        None,
+        ToolCall,
+        Function,
+    }
 
     /// <param name="names">The names of the tools the turn offers; no other name is ever caught.</param>
     public TextToolCallFilter(IEnumerable<string> names)
@@ -105,6 +135,12 @@ public sealed class TextToolCallFilter
             if (_callName is not null)
             {
                 pos = ReadCall(s, pos);
+                continue;
+            }
+
+            if (_blockClose is not null)
+            {
+                pos = ReadBlock(s, pos);
                 continue;
             }
 
@@ -175,7 +211,22 @@ public sealed class TextToolCallFilter
 
             // Up to the end of this line: the next one's start is the line form's to test.
             int newline = _lineTools.Length > 0 ? s.IndexOf('\n', pos) : -1;
-            var (start, open, name, hold) = Find(s, pos, newline < 0 ? s.Length : newline + 1);
+            var (start, open, name, hold, tag) = Find(s, pos, newline < 0 ? s.Length : newline + 1);
+            if (tag != Tag.None)
+            {
+                // A tagged call: its body buffered to the close tag, a bare <function=…> kept in it for TaggedCall.
+                Emit(ref output, s, pos, start - pos);
+                _block.Clear();
+                if (tag == Tag.Function)
+                {
+                    _block.Append(s, start, open + 1 - start);
+                }
+
+                _blockClose = tag == Tag.ToolCall ? ToolCallClose : FunctionClose;
+                pos = open + 1;
+                continue;
+            }
+
             if (name is null)
             {
                 if (newline >= 0)
@@ -214,6 +265,14 @@ public sealed class TextToolCallFilter
             SawBroken = true;
             _callName = null;
             _arguments.Clear();
+        }
+
+        if (_blockClose is not null)
+        {
+            // A tagged call the stream ended in: a <tool_call> whose </function> closed is whole enough, as is its JSON.
+            string body = _block.ToString();
+            bool whole = _blockClose == ToolCallClose && (body.Contains(FunctionClose, StringComparison.Ordinal) || body.TrimStart().StartsWith('{'));
+            EndBlock(whole ? body : null);
         }
 
         string held = _pending;
@@ -397,8 +456,7 @@ public sealed class TextToolCallFilter
             return null;
         }
 
-        var values = new Dictionary<string, string>(StringComparer.Ordinal);
-        var order = new List<string>();
+        var pairs = new List<(string Key, string Value)>();
         for (int k = 0; k < keys.Count; k++)
         {
             int end = k + 1 < keys.Count ? keys[k + 1].Start : text.Length;
@@ -408,12 +466,28 @@ public sealed class TextToolCallFilter
                 value = value[1..^1];
             }
 
-            if (!values.ContainsKey(keys[k].Name))
+            pairs.Add((keys[k].Name, value));
+        }
+
+        return ArgumentsJson(pairs);
+    }
+
+    /// <summary>
+    /// <paramref name="pairs"/> as a JSON object's text (the line and tagged forms, 2026-09-30): a whole number, a number and
+    /// <c>true</c>/<c>false</c> are themselves, anything else a string; a later key wins over an earlier one, in the earlier's place.
+    /// </summary>
+    private static string ArgumentsJson(IReadOnlyList<(string Key, string Value)> pairs)
+    {
+        var values = new Dictionary<string, string>(StringComparer.Ordinal);
+        var order = new List<string>();
+        foreach (var (key, value) in pairs)
+        {
+            if (!values.ContainsKey(key))
             {
-                order.Add(keys[k].Name);
+                order.Add(key);
             }
 
-            values[keys[k].Name] = value;
+            values[key] = value;
         }
 
         using var stream = new MemoryStream();
@@ -499,6 +573,147 @@ public sealed class TextToolCallFilter
         return pos;
     }
 
+    /// <summary>Reads a tagged call's body from <paramref name="pos"/>; returns where it stopped (the end, or just past the close tag).</summary>
+    private int ReadBlock(string s, int pos)
+    {
+        string close = _blockClose!;
+        int before = _block.Length;
+        _block.Append(s, pos, s.Length - pos);
+        // The close tag may have begun in an earlier delta: the search starts where it could.
+        string block = _block.ToString();
+        int at = block.IndexOf(close, Math.Max(0, before - close.Length + 1), StringComparison.Ordinal);
+        int function = close == ToolCallClose ? block.IndexOf(FunctionClose, StringComparison.Ordinal) : -1;
+        if (function >= 0 && (at < 0 || function < at))
+        {
+            // A <tool_call>'s </function>: the block ends there unless </tool_call> follows, so a model that leaves the outer
+            // close off keeps the words after it. Whitespace or the close tag's start so far waits for the next delta.
+            int next = function + FunctionClose.Length;
+            while (next < block.Length && char.IsWhiteSpace(block[next]))
+            {
+                next++;
+            }
+
+            string rest = block[next..];
+            if (rest.StartsWith(ToolCallClose, StringComparison.Ordinal))
+            {
+                EndBlock(block[..function]);
+                return pos + (next + ToolCallClose.Length - before);
+            }
+
+            if (ToolCallClose.StartsWith(rest, StringComparison.Ordinal))
+            {
+                return s.Length;
+            }
+
+            EndBlock(block[..function]);
+            return Math.Max(pos, pos + (next - before));
+        }
+
+        if (at < 0)
+        {
+            return s.Length;
+        }
+
+        EndBlock(block[..at]);
+        return pos + (at + close.Length - before);
+    }
+
+    /// <summary>A tagged call ends: its <paramref name="body"/> caught as a call, or (null, or no parse) dropped as broken; the whitespace after it goes too.</summary>
+    private void EndBlock(string? body)
+    {
+        if (body is not null && TaggedCall(body) is { } call)
+        {
+            _calls.Add(call);
+        }
+        else
+        {
+            SawBroken = true;
+        }
+
+        _blockClose = null;
+        _block.Clear();
+        _skipWhitespace = true;
+        _last = ' ';
+        _lineStart = true;
+    }
+
+    /// <summary>
+    /// A tagged call's body (2026-09-30): <c>&lt;function=NAME&gt;</c> then <c>&lt;parameter=KEY&gt;VALUE&lt;/parameter&gt;</c> pairs (values
+    /// trimmed, typed as <see cref="LineArguments"/> types them; <c>&lt;/function&gt;</c> optional), or a JSON object with a <c>name</c> and
+    /// <c>arguments</c> (an object, or a string holding one). The tool's name and its arguments as a JSON object's text; null when it
+    /// does not parse. Pure.
+    /// </summary>
+    public static (string Name, string Arguments)? TaggedCall(string body)
+    {
+        ArgumentNullException.ThrowIfNull(body);
+        string t = body.Trim();
+        if (t.StartsWith(FunctionTag, StringComparison.Ordinal))
+        {
+            int nameEnd = t.IndexOf('>', FunctionTag.Length);
+            string name = nameEnd < 0 ? "" : t[FunctionTag.Length..nameEnd].Trim();
+            if (name.Length == 0)
+            {
+                return null;
+            }
+
+            var pairs = new List<(string Key, string Value)>();
+            int pos = nameEnd + 1;
+            while (t.IndexOf(ParameterTag, pos, StringComparison.Ordinal) is var open and >= 0)
+            {
+                int keyEnd = t.IndexOf('>', open + ParameterTag.Length);
+                int valueEnd = keyEnd < 0 ? -1 : t.IndexOf(ParameterClose, keyEnd + 1, StringComparison.Ordinal);
+                string key = keyEnd < 0 ? "" : t[(open + ParameterTag.Length)..keyEnd].Trim();
+                if (valueEnd < 0 || key.Length == 0)
+                {
+                    return null;
+                }
+
+                pairs.Add((key, t[(keyEnd + 1)..valueEnd].Trim()));
+                pos = valueEnd + ParameterClose.Length;
+            }
+
+            return (name, ArgumentsJson(pairs));
+        }
+
+        if (!t.StartsWith('{'))
+        {
+            return null;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(t);
+            var root = document.RootElement;
+            if (root.ValueKind != JsonValueKind.Object || !root.TryGetProperty("name", out var named) || named.ValueKind != JsonValueKind.String
+                || named.GetString() is not { Length: > 0 } toolName)
+            {
+                return null;
+            }
+
+            if (!root.TryGetProperty("arguments", out var arguments) || arguments.ValueKind == JsonValueKind.Null)
+            {
+                return (toolName, "{}");
+            }
+
+            if (arguments.ValueKind == JsonValueKind.Object)
+            {
+                return (toolName, arguments.GetRawText());
+            }
+
+            if (arguments.ValueKind == JsonValueKind.String && arguments.GetString() is { } text)
+            {
+                using var inner = JsonDocument.Parse(text);
+                return inner.RootElement.ValueKind == JsonValueKind.Object ? (toolName, inner.RootElement.GetRawText()) : null;
+            }
+
+            return null;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
     /// <summary>Whether a quote here would open a value or a key: nothing but spaces so far, or <c>= : , ( [ {</c> just before.</summary>
     private bool AtValueStart()
     {
@@ -514,13 +729,30 @@ public sealed class TextToolCallFilter
     /// <summary>
     /// The first call start at or after <paramref name="pos"/>: where it starts (its backtick included), where its <c>(</c> is, and
     /// the tool's name. With no whole start, <c>Name</c> is null and <c>Hold</c> is where the text that could still become one begins
-    /// (<paramref name="s"/>'s length when none can).
+    /// (<paramref name="s"/>'s length when none can). A tagged start (2026-09-30) comes back as its <see cref="Tag"/>, <c>Open</c> on
+    /// its last <c>&gt;</c>, and a null name.
     /// </summary>
-    private (int Start, int Open, string? Name, int Hold) Find(string s, int pos, int limit)
+    private (int Start, int Open, string? Name, int Hold, Tag Tag) Find(string s, int pos, int limit)
     {
         int hold = s.Length;
         for (int i = pos; i < limit; i++)
         {
+            if (s[i] == '<')
+            {
+                // A tagged call starts wherever it stands, a word before it or not.
+                var (tag, close, partial) = TagAt(s, i);
+                if (tag != Tag.None)
+                {
+                    return (i, close, null, hold, tag);
+                }
+
+                if (partial)
+                {
+                    hold = Math.Min(hold, i);
+                    break;
+                }
+            }
+
             char before = i > 0 ? s[i - 1] : _last;
             if (IsWordChar(before))
             {
@@ -562,7 +794,7 @@ public sealed class TextToolCallFilter
 
                 if (s[j] == '(')
                 {
-                    return (StartWithTick(s, pos, i), j, name, hold);
+                    return (StartWithTick(s, pos, i), j, name, hold, Tag.None);
                 }
             }
 
@@ -578,7 +810,50 @@ public sealed class TextToolCallFilter
             hold = s.Length - 1;
         }
 
-        return (0, 0, null, hold);
+        return (0, 0, null, hold, Tag.None);
+    }
+
+    /// <summary>
+    /// The tagged start at <paramref name="i"/> (on a <c>&lt;</c>): <c>&lt;tool_call&gt;</c>, or <c>&lt;function=NAME&gt;</c> with a name of
+    /// word characters, <c>-</c> or <c>.</c>, and where its <c>&gt;</c> is; or none, <c>Partial</c> when the text ends before it can say.
+    /// </summary>
+    private static (Tag Tag, int Close, bool Partial) TagAt(string s, int i)
+    {
+        int k = 0;
+        while (k < ToolCallTag.Length && i + k < s.Length && s[i + k] == ToolCallTag[k])
+        {
+            k++;
+        }
+
+        if (k == ToolCallTag.Length)
+        {
+            return (Tag.ToolCall, i + k - 1, false);
+        }
+
+        bool partial = i + k == s.Length;
+        k = 0;
+        while (k < FunctionTag.Length && i + k < s.Length && s[i + k] == FunctionTag[k])
+        {
+            k++;
+        }
+
+        if (k < FunctionTag.Length)
+        {
+            return (Tag.None, 0, partial || i + k == s.Length);
+        }
+
+        int j = i + k;
+        while (j < s.Length && (IsWordChar(s[j]) || s[j] is '-' or '.'))
+        {
+            j++;
+        }
+
+        if (j == s.Length)
+        {
+            return (Tag.None, 0, true);
+        }
+
+        return s[j] == '>' && j > i + k ? (Tag.Function, j, false) : (Tag.None, 0, partial);
     }
 
     /// <summary><paramref name="i"/>, or the backtick just before it when there is one this delta may still drop.</summary>

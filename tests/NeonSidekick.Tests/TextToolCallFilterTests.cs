@@ -251,4 +251,123 @@ public class TextToolCallFilterTests
         Assert.Null(TextToolCallFilter.LineArguments("", Parameters));
         Assert.Equal("{\"prompt\":\"a dog\",\"image2\":\"b.png\"}", TextToolCallFilter.LineArguments("PROMPT = a dog image2: b.png", Parameters));
     }
+
+    // ── The tagged form (2026-09-30, the user's report from /botchat) ──
+
+    private const string UsersMarkup = "<tool_call> <function=generate_image> <parameter=prompt> score_9, score_8_up, score_7_up, source_anime, 1boy, outdoor cafe, golden  hour sunlight, realistic, depth of field, blurry background </parameter> <parameter=seed> 5566778899 </parameter>       <parameter=aspect_ratio> 1216×832 </parameter> <parameter=sampler> dpmpp_2m_sde </parameter> <parameter=cfg> 7          </parameter> <parameter=denoise> 0.8 </parameter> </function> </tool_call>";
+
+    [Fact]
+    public void TheTaggedForm_TheUsersMarkup_IsCaught_WholeOrSplitAnywhere()
+    {
+        var (whole, filter) = Run(UsersMarkup);
+        Assert.Equal("", whole);
+        Assert.Equal(Tool, Assert.Single(filter.Calls).Name);
+        Assert.Equal("score_9, score_8_up, score_7_up, source_anime, 1boy, outdoor cafe, golden  hour sunlight, realistic, depth of field, blurry background", Argument(filter, "prompt").GetString());
+        Assert.Equal(5566778899L, Argument(filter, "seed").GetInt64());
+        Assert.Equal("1216×832", Argument(filter, "aspect_ratio").GetString());
+        Assert.Equal("dpmpp_2m_sde", Argument(filter, "sampler").GetString());
+        Assert.Equal(7, Argument(filter, "cfg").GetInt32());
+        Assert.Equal(0.8, Argument(filter, "denoise").GetDouble());
+        Assert.False(filter.SawBroken);
+
+        for (int i = 1; i < UsersMarkup.Length; i++)
+        {
+            var (text, split) = Run(UsersMarkup[..i], UsersMarkup[i..]);
+            Assert.Equal("", text);
+            Assert.Equal(filter.Calls, split.Calls);
+        }
+
+        var (lines, lineFilter) = RunLines(UsersMarkup.Select(c => c.ToString()).ToArray());   // a character at a time, the line form on
+        Assert.Equal("", lines);
+        Assert.Equal(filter.Calls, lineFilter.Calls);
+    }
+
+    [Fact]
+    public void TheTaggedForm_TheTextAroundItKept_ANameMidWordToo()
+    {
+        const string reply = "Look!<tool_call>\n<function=generate_image>\n<parameter=prompt>\na dog\n</parameter>\n</function>\n</tool_call>\n\nNice.";
+        var (whole, filter) = Run(reply);
+        Assert.Equal("Look!Nice.", whole);
+        Assert.Equal("a dog", Argument(filter, "prompt").GetString());
+
+        for (int i = 1; i < reply.Length; i++)
+        {
+            var (text, split) = Run(reply[..i], reply[i..]);
+            Assert.Equal(whole, text);
+            Assert.Equal(filter.Calls, split.Calls);
+        }
+    }
+
+    [Theory]
+    [InlineData("<tool_call>{\"name\": \"generate_image\", \"arguments\": {\"prompt\": \"a dog\", \"seed\": 7}}</tool_call>", "Here. Done.")]
+    [InlineData("<tool_call>{\"name\": \"generate_image\", \"arguments\": \"{\\\"prompt\\\": \\\"a dog\\\", \\\"seed\\\": 7}\"}</tool_call>", "Here. Done.")]
+    [InlineData("<function=generate_image><parameter=prompt>a dog</parameter><parameter=seed>7</parameter></function>", "Here. Done.")]
+    [InlineData("<tool_call><function=generate_image><parameter=prompt>a dog</parameter><parameter=seed>7</parameter></function>", "Here. Done.")]   // no outer close
+    public void TheTaggedForm_TheJsonBody_TheBareFunction_AndAMissingOuterClose(string markup, string expected)
+    {
+        string reply = "Here. " + markup + " Done.";
+        var (text, filter) = Run(reply);
+        Assert.Equal(expected, text);
+        Assert.Equal("a dog", Argument(filter, "prompt").GetString());
+        Assert.Equal(7, Argument(filter, "seed").GetInt32());
+        Assert.False(filter.SawBroken);
+
+        for (int i = 1; i < reply.Length; i++)
+        {
+            var (split, splitFilter) = Run(reply[..i], reply[i..]);
+            Assert.Equal(expected, split);
+            Assert.Equal(filter.Calls, splitFilter.Calls);
+        }
+
+        // The stream ending right after it is a call too.
+        var (ended, endedFilter) = Run(markup);
+        Assert.Equal("", ended);
+        Assert.Single(endedFilter.Calls);
+    }
+
+    [Fact]
+    public void TheTaggedForm_CutOffMidParameter_IsDropped_AndSaidSo()
+    {
+        var (text, filter) = Run("Sure: <tool_call> <function=generate_image> <parameter=prompt> a do");
+        Assert.Equal("Sure: ", text);
+        Assert.Empty(filter.Calls);
+        Assert.True(filter.SawBroken);
+
+        var (garbled, garbledFilter) = Run("<tool_call>not a call</tool_call>after");
+        Assert.Equal("after", garbled);
+        Assert.Empty(garbledFilter.Calls);
+        Assert.True(garbledFilter.SawBroken);
+    }
+
+    [Theory]
+    [InlineData("a < b and c > d")]
+    [InlineData("<b>bold</b> text")]
+    [InlineData("<tools are fun>")]
+    [InlineData("<function=>empty</function>")]
+    [InlineData("ends with <")]
+    [InlineData("ends with <tool_ca")]
+    [InlineData("ends with <function=gen")]
+    public void TheTaggedForm_AnythingElse_PassesThrough(string reply)
+    {
+        var (text, filter) = Run(reply);
+        Assert.Equal(reply, text);
+        Assert.Empty(filter.Calls);
+
+        for (int i = 1; i < reply.Length; i++)
+        {
+            Assert.Equal(reply, Run(reply[..i], reply[i..]).Text);
+        }
+    }
+
+    [Fact]
+    public void TaggedCall_ReadsBothBodies_OrIsNull()
+    {
+        Assert.Equal(("draw", "{\"prompt\":\"x\",\"n\":2}"), TextToolCallFilter.TaggedCall(" <function=draw> <parameter=prompt> x </parameter><parameter=n>2</parameter> "));
+        Assert.Equal(("draw", "{}"), TextToolCallFilter.TaggedCall("<function=draw></function>"));
+        Assert.Equal(("draw", "{}"), TextToolCallFilter.TaggedCall("{\"name\":\"draw\"}"));
+        Assert.Null(TextToolCallFilter.TaggedCall("<function=draw><parameter=prompt>x"));
+        Assert.Null(TextToolCallFilter.TaggedCall("{\"name\":\"draw\",\"arguments\":[1]}"));
+        Assert.Null(TextToolCallFilter.TaggedCall("{\"arguments\":{}}"));
+        Assert.Null(TextToolCallFilter.TaggedCall("hello"));
+    }
 }

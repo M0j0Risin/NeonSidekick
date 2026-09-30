@@ -1033,6 +1033,45 @@ public class AssistantTests
         Assert.DoesNotContain(events, e => e is TurnEvent.Notice { IsError: true });
     }
 
+    /// <summary>
+    /// The tagged markup (2026-09-30, the user's report): a Qwen-style bot writes its call as <c>&lt;tool_call&gt;</c> markup in the round
+    /// asked without the tools, where the server leaves it as text; it is kept out of the reply and not run.
+    /// </summary>
+    [Fact]
+    public async Task LastRoundAnswers_On_ATaggedCallInTheLastRound_IsDroppedAndNotRun()
+    {
+        var echo = new EchoTool();
+        var (client, _, assistant) = Build(new AIFunction[] { echo });
+        assistant.MaxToolIterations = 2;
+        assistant.LastRoundAnswers = true;
+        assistant.TextToolCalls = true;
+        client.Enqueue(FakeChatClient.Call("c0", "echo", new Dictionary<string, object?> { ["text"] = "one" }));
+        client.EnqueueText("Here. ", "<tool_call> <function=echo> <parameter=text> two </para", "meter> </function> </tool_call>", " Done.");
+
+        var events = await Run(assistant, "go");
+
+        Assert.Equal(2, client.Requests.Count);
+        Assert.Equal(["one"], echo.Received);
+        Assert.Equal("Here. Done.", string.Concat(Deltas(events)));
+        Assert.DoesNotContain(events, e => e is TurnEvent.Notice { IsError: true });
+    }
+
+    /// <summary>The same markup in a round that offers the tools runs as a real call.</summary>
+    [Fact]
+    public async Task TextToolCalls_On_ATaggedCall_Runs()
+    {
+        var echo = new EchoTool();
+        var (client, _, assistant) = Build(new AIFunction[] { echo });
+        assistant.TextToolCalls = true;
+        client.EnqueueText("<tool_call>\n<function=echo>\n<parameter=text>\ntwo\n</parameter>\n</function>\n</tool_call>");
+        client.EnqueueText("Done.");
+
+        var events = await Run(assistant, "go");
+
+        Assert.Equal(["two"], echo.Received);
+        Assert.Equal("Done.", string.Concat(Deltas(events)));
+    }
+
     [Fact]
     public async Task LastRoundAnswers_Off_TheLastRoundTripStillOffersTheTools()
     {
