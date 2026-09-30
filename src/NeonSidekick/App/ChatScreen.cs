@@ -493,11 +493,11 @@ internal sealed partial class ChatScreen
     /// <summary>Under the no-server line. Pinned.</summary>
     public static readonly string NoServerHint = $"{NoticeGlyphs.Llm}Set the URL with /settings or {EnvironmentOverrides.LlmUrlVariable}.";
 
-    /// <summary>Under the no-server line when <c>LLM scan mode</c> is <c>disabled</c> (2026-09-15): the two ways out. Pinned.</summary>
-    public static readonly string ScanDisabledHint = $"{NoticeGlyphs.Llm}Set the URL with /settings (LLM URL, or /server <url>) or {EnvironmentOverrides.LlmUrlVariable}, or set LLM scan mode to local, remote or both.";
+    /// <summary>Under the no-server line when <c>LLM server scan mode</c> is <c>disabled</c> (2026-09-15): the two ways out. Pinned.</summary>
+    public static readonly string ScanDisabledHint = $"{NoticeGlyphs.Llm}Set the URL with /settings (LLM URL, or /server <url>) or {EnvironmentOverrides.LlmUrlVariable}, or set LLM server scan mode to local, remote or both.";
 
     /// <summary><see cref="ScanDisabledHint"/> under <see cref="LlmSession.NoEmbeddedLine"/> (2026-09-30, the user's wording): with no embedded model downloaded, the catalog is the third way out.</summary>
-    public static readonly string ScanDisabledNoEmbeddedHint = $"{NoticeGlyphs.Llm}Set the URL with /settings (LLM URL, or /server <url>) or {EnvironmentOverrides.LlmUrlVariable}, or set LLM scan mode to local, remote or both. Alternatively, download an embedded model.";
+    public static readonly string ScanDisabledNoEmbeddedHint = $"{NoticeGlyphs.Llm}Set the URL with /settings (LLM URL, or /server <url>) or {EnvironmentOverrides.LlmUrlVariable}, or set LLM server scan mode to local, remote or both. Alternatively, download an embedded model.";
 
     /// <summary>The hint under <see cref="LlmSession.NoServerLine"/> for <paramref name="scope"/>: <see cref="ScanDisabledHint"/> when nothing was looked for, else <see cref="NoServerHint"/>.</summary>
     public static string NoServerHintFor(ScanScope scope) => Llm.LlmScanMode.Scans(scope) ? NoServerHint : ScanDisabledHint;
@@ -8145,7 +8145,7 @@ internal sealed partial class ChatScreen
     /// as configured; ESC connects to the first in list order, unsaved, with neither picker, as a single
     /// answer off the start does.
     /// A configured URL, an override or a console without menus take the session's own path. A blank
-    /// URL under <c>LLM scan mode</c> <c>disabled</c> asks nothing: the session's connect drops the
+    /// URL under <c>LLM server scan mode</c> <c>disabled</c> asks nothing: the session's connect drops the
     /// old endpoint and resolves null at once, no spinner, and the report says why (2026-09-15).
     /// </summary>
     /// <param name="quiet">The banner was just drawn above, or the settings pane just closed: report only what the settings cannot say.</param>
@@ -8652,7 +8652,7 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// Whether the LLM has nowhere to come from but the embedded catalog (2026-09-30, the user's ask): the embedded models are
-    /// offered, <c>LLM scan mode</c> looks for nothing, and not one catalog model is downloaded. Then the no-server lines name
+    /// offered, <c>LLM server scan mode</c> looks for nothing, and not one catalog model is downloaded. Then the no-server lines name
     /// the catalog, and the app's start opens it (<see cref="ConnectLlmAsync"/>).
     /// </summary>
     private bool NoEmbeddedDownloaded(AppSettingsData effective) =>

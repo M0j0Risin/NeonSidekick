@@ -67,7 +67,7 @@ public class LlmSessionTests
         Assert.Equal("LLM: no server found on 127.0.0.1 ports 1234, 8000, 30000, 8080, 11434, 8888; set NEONSIDEKICK_LLM_URL.", LlmSession.NoServerLine(ScanScope.Local));
         Assert.Equal("LLM: no server found on the local network (ports 1234, 8000, 30000, 8080, 11434, 8888); set NEONSIDEKICK_LLM_URL.", LlmSession.NoServerLine(ScanScope.Remote));
         Assert.Equal("LLM: no server found on 127.0.0.1 or the local network (ports 1234, 8000, 30000, 8080, 11434, 8888); set NEONSIDEKICK_LLM_URL.", LlmSession.NoServerLine(ScanScope.Both));
-        Assert.Equal("LLM: no URL is set and LLM scan mode is disabled; set NEONSIDEKICK_LLM_URL, or the URL or the scan mode in /settings.", LlmSession.NoServerLine(ScanScope.Disabled));
+        Assert.Equal("LLM: no URL is set and LLM server scan mode is disabled; set NEONSIDEKICK_LLM_URL, or the URL or the scan mode in /settings.", LlmSession.NoServerLine(ScanScope.Disabled));
     }
 
     [Fact]

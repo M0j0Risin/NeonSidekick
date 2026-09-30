@@ -1395,7 +1395,7 @@ internal sealed partial class SettingsMenu
         SettingsField.ClaudeAdvisorModel => "Claude advisor tool model",
         SettingsField.ClaudeAdvisorEffort => "Claude advisor tool effort",
         SettingsField.ClaudeAdvisorConfirm => "Claude advisor tool confirm",
-        SettingsField.LlmScanMode => "LLM scan mode",
+        SettingsField.LlmScanMode => "LLM server scan mode",
         SettingsField.WebTools => "Web tools",
         SettingsField.GitNativeTools => "Git native tools",
         SettingsField.GitNativeDiffMaxLines => "Git native diff max lines",

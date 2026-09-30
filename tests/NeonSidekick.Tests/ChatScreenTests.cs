@@ -1698,12 +1698,12 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("http://127.0.0.1:1234/v1", _settings.Current.LlmUrl);   // the fixture's, untouched
     }
 
-    // ── LLM scan mode = disabled (2026-09-15) ────────────────────────────────
+    // ── LLM server scan mode = disabled (2026-09-15) ────────────────────────────────
 
     [Fact]
     public void NoServerHintFor_IsPinned()
     {
-        Assert.Equal("🖥️ Set the URL with /settings (LLM URL, or /server <url>) or NEONSIDEKICK_LLM_URL, or set LLM scan mode to local, remote or both.", ChatScreen.ScanDisabledHint);
+        Assert.Equal("🖥️ Set the URL with /settings (LLM URL, or /server <url>) or NEONSIDEKICK_LLM_URL, or set LLM server scan mode to local, remote or both.", ChatScreen.ScanDisabledHint);
         Assert.Equal(ChatScreen.ScanDisabledHint, ChatScreen.NoServerHintFor(ScanScope.Disabled));
         Assert.Equal(ChatScreen.NoServerHint, ChatScreen.NoServerHintFor(ScanScope.Local));
         Assert.Equal(ChatScreen.NoServerHint, ChatScreen.NoServerHintFor(ScanScope.Remote));
@@ -1759,7 +1759,7 @@ public partial class ChatScreenTests : IDisposable
         _settings.Update(d => { d.LlmUrl = "http://127.0.0.1:1234"; d.LlmModel = "llama"; d.LlmScanMode = "disabled"; });
         _geometry = new ScreenGeometry(() => null);  // the pane, so the list is tabbed
         PushLine("/settings");
-        _console.Input.PushKey(Keys.Right); _console.Input.PushKey(Keys.Right);   // the LLM tab (third since 2026-09-19; fourth from 2026-09-18 until then): LLM scan mode, then LLM URL
+        _console.Input.PushKey(Keys.Right); _console.Input.PushKey(Keys.Right);   // the LLM tab (third since 2026-09-19; fourth from 2026-09-18 until then): LLM server scan mode, then LLM URL
         _console.Input.PushKey(Keys.Down);
         _console.Input.PushKey(Keys.Enter);          // the slot, prefilled with the URL
         _console.Input.PushKey(Keys.Ctrl(ConsoleKey.A));

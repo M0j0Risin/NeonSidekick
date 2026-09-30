@@ -21,7 +21,7 @@ public readonly record struct ProbeResult(bool Exists, IReadOnlyList<string> Mod
 /// <summary>
 /// Finds the OpenAI-compatible server: the configured URL if there is one, otherwise the usual
 /// ports — on this machine, on every other machine of the local network, or both, per the
-/// <c>LLM scan mode</c> setting (<see cref="LlmScanMode"/>, <see cref="LanHosts"/>) — each asked
+/// <c>LLM server scan mode</c> setting (<see cref="LlmScanMode"/>, <see cref="LanHosts"/>) — each asked
 /// for its model list.
 ///
 /// <para><b>One HTTP request per candidate and deliberately no TCP pre-check.</b> A raw

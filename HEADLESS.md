@@ -8,7 +8,7 @@ at `/exit` or at the end of input: code 0, or 3 if a shell command was refused a
 `dotnet run --project src\NeonSidekick -- --headless …`.
 
 A fresh profile offers the model no tools and looks for no server: *File tools*, *Web tools* and the other tool groups
-are off, *Shell command policy* is `off` and *LLM scan mode* is `disabled`. The examples below assume a profile set up in
+are off, *Shell command policy* is `off` and *LLM server scan mode* is `disabled`. The examples below assume a profile set up in
 the TUI beforehand (`/tools`, `/settings`) or its `profile.json` edited: a server saved or given with `--url`, and the
 tool groups a job needs switched on. `NEONSIDEKICK_COMMAND_POLICY` or `--yolo` sets the shell policy for one run.
 
@@ -184,7 +184,7 @@ $env:NEONSIDEKICK_LLM_API_KEY = (Get-Secret NeonLlmKey -AsPlainText)
 "Ping." | NeonSidekick.exe --headless --url https://llm.internal.example/v1
 ```
 
-The Claude API: switch it on and give it its key for the run, then point `--url` at it. Name the model, or the run takes the first one the account lists. Without the switch and the key, the URL is ignored and the run looks for a server as with no URL, under the profile's *LLM scan mode* (a warning says so).
+The Claude API: switch it on and give it its key for the run, then point `--url` at it. Name the model, or the run takes the first one the account lists. Without the switch and the key, the URL is ignored and the run looks for a server as with no URL, under the profile's *LLM server scan mode* (a warning says so).
 
 ```powershell
 $env:NEONSIDEKICK_CLAUDE_API = "on"

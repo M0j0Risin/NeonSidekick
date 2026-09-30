@@ -25,7 +25,7 @@ internal sealed class LlmSession : IDisposable
     /// </summary>
     public static string NoServerLine(ScanScope scope) => scope switch
     {
-        ScanScope.Disabled => $"LLM: no URL is set and LLM scan mode is disabled; set {EnvironmentOverrides.LlmUrlVariable}, or the URL or the scan mode in /settings.",
+        ScanScope.Disabled => $"LLM: no URL is set and LLM server scan mode is disabled; set {EnvironmentOverrides.LlmUrlVariable}, or the URL or the scan mode in /settings.",
         ScanScope.Remote => $"LLM: no server found on the local network (ports {LlmEndpointProbe.CandidatePortList}); set {EnvironmentOverrides.LlmUrlVariable}.",
         ScanScope.Both => $"LLM: no server found on 127.0.0.1 or the local network (ports {LlmEndpointProbe.CandidatePortList}); set {EnvironmentOverrides.LlmUrlVariable}.",
         _ => $"LLM: no server found on 127.0.0.1 ports {LlmEndpointProbe.CandidatePortList}; set {EnvironmentOverrides.LlmUrlVariable}.",
@@ -36,7 +36,7 @@ internal sealed class LlmSession : IDisposable
     /// (2026-09-30, the user's wording): the embedded catalog is the third way out. The screen's alone; headless keeps the line above.
     /// </summary>
     public static readonly string NoEmbeddedLine =
-        $"LLM: no URL is set, LLM scan mode is disabled and no embedded models are downloaded; set {EnvironmentOverrides.LlmUrlVariable}, or the URL or the scan mode in /settings. Alternatively, download an embedded model.";
+        $"LLM: no URL is set, LLM server scan mode is disabled and no embedded models are downloaded; set {EnvironmentOverrides.LlmUrlVariable}, or the URL or the scan mode in /settings. Alternatively, download an embedded model.";
 
     private readonly LlmEndpointProbe _probe;
     private readonly ContextLengthProbe _contextProbe;

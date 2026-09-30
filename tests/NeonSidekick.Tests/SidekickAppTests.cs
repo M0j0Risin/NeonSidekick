@@ -963,7 +963,7 @@ public partial class SidekickAppTests : IDisposable
     [Fact]
     public async Task Headless_ScanDisabled_SaysSo_AndAsksNothing()
     {
-        // The server on :1234 is up; with LLM scan mode disabled and no URL, headless connects nothing and says why (2026-09-15).
+        // The server on :1234 is up; with LLM server scan mode disabled and no URL, headless connects nothing and says why (2026-09-15).
         ServerOn1234("llama");
         _settings.Update(d => d.LlmScanMode = "disabled");
 

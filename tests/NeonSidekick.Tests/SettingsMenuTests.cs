@@ -1348,7 +1348,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(Enum.GetValues<SettingsField>().Where(SettingsMenu.IsLlmField), SettingsMenu.TabFields[(int)SettingsTab.Llm].Skip(1).Take(7).Concat(SettingsMenu.ToolsTabFields[4].TakeLast(4)).Concat(SettingsMenu.TabFields[(int)SettingsTab.Embedded].Where(f => f is not (SettingsField.EmbeddedFilterType or SettingsField.EmbeddedHfDownloadType)).OrderBy(f => f)));   // the Embedded LLM tab's rows all reconnect (2026-09-29) but the filter type, display only (later that day), and the HF download type (2026-09-30)
         Assert.False(SettingsMenu.IsLlmField(SettingsField.LlmScanMode) || SettingsMenu.IsTtsField(SettingsField.LlmScanMode) || SettingsMenu.IsVoiceField(SettingsField.LlmScanMode));
         Assert.False(SettingsMenu.IsToggle(SettingsField.LlmScanMode));
-        Assert.Equal("LLM scan mode", SettingsMenu.FieldName(SettingsField.LlmScanMode));
+        Assert.Equal("LLM server scan mode", SettingsMenu.FieldName(SettingsField.LlmScanMode));
         Assert.Equal("local", SettingsMenu.FieldValue(SettingsField.LlmScanMode, data, _settings.ProfileDirectory));
         Assert.Equal("remote", SettingsMenu.FieldValue(SettingsField.LlmScanMode, new AppSettingsData { LlmScanMode = "remote" }, _settings.ProfileDirectory));
         Assert.Equal("local    [#9A8BB8]the usual ports on this machine (127.0.0.1)[/]", SettingsMenu.LlmScanModeLabel("local"));   // padded to nine since disabled (2026-09-15)
@@ -1862,21 +1862,21 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Contains("  · New profile mode: basic", _console.Output);
     }
 
-    // ── LLM scan mode ───────────────────────────────────────────────────────
+    // ── LLM server scan mode ───────────────────────────────────────────────────────
 
     [Fact]
     public async Task LlmScanMode_IsRow40_APicker_NoReconnect()
     {
         Down(39);
-        Push(Keys.Enter);                           // LLM scan mode: the picker opens on local (the first row)
+        Push(Keys.Enter);                           // LLM server scan mode: the picker opens on local (the first row)
         Push(Keys.Down, Keys.Enter);                // remote
         Push(Keys.Escape);
 
         Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));
 
         Assert.Equal("remote", _settings.Current.LlmScanMode);
-        Assert.Contains(Breadcrumb("LLM scan mode"), _console.Output);
-        Assert.Contains("  · 🖥️ LLM scan mode: remote", _console.Output);
+        Assert.Contains(Breadcrumb("LLM server scan mode"), _console.Output);
+        Assert.Contains("  · 🖥️ LLM server scan mode: remote", _console.Output);
         Assert.Contains("the usual ports on every other machine on the local network", _console.Output);
         Assert.Equal(0, _synth.ListCalls);          // no server is consulted
     }
@@ -2228,7 +2228,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.None, await menu.ShowAsync(CancellationToken.None));
 
         Assert.Equal("remote", _settings.Current.LlmScanMode);
-        Assert.Contains("\n" + Titled(Strip) + "\n  · 🖥️ LLM scan mode: remote\n▸ LLM scan mode                   remote\n  LLM URL                         (scan the local network)\n", _console.Output);
+        Assert.Contains("\n" + Titled(Strip) + "\n  · 🖥️ LLM server scan mode: remote\n▸ LLM server scan mode            remote\n  LLM URL                         (scan the local network)\n", _console.Output);
         Assert.Equal(0, pane.FlowRow);
         pane.Dispose();
     }
@@ -2974,7 +2974,7 @@ public partial class SettingsMenuTests : IDisposable
 
         // Each tab under the strip, padded to its own column (28, 32, 19, 26), the whole tab in view, nothing of another tab on it.
         Assert.Contains("\n \n▸ Session logging             on\n  Session retention (days)    forever\n  Session naming mode         model-written\n  Session show name           all-names\n  Session tool                on\n  Session search max results  10 results\n  Session save thinking       off\n" + Rule(100), _console.Output);
-        Assert.Contains("\n \n▸ LLM scan mode                   local\n  LLM URL                         (probe local ports)\n  LLM model                       (first listed)\n  LLM API key                     ", _console.Output);
+        Assert.Contains("\n \n▸ LLM server scan mode            local\n  LLM URL                         (probe local ports)\n  LLM model                       (first listed)\n  LLM API key                     ", _console.Output);
         Assert.Contains("\n  LLM reasoning                   none\n  LLM request timeout (s)         3600\n  LLM turn timeout (s)            21600\n  LLM context length              (from the server)\n  LLM mid-turn usage              last-known\n  LLM compact type                summary\n  LLM compact keep recent         2 turns\n  LLM compact show summary        off\n  LLM auto compact (%)            85 %\n  LLM max turns                   auto\n  LLM offer tools                 on\n  LLM tool compact type           compact\n  LLM max tool iterations         10000 round trips\n  LLM use fun verbs               off\n  LLM show thinking               on\n  LLM preserve thinking           off\n  LLM reasoning estimate          chars\n  LLM sampling                    (server defaults)\n  LLM sampling from Hugging Face  off\n" + Rule(100), _console.Output);
         Assert.Contains("\n \n▸ TTS output         on\n  TTS source         http\n  TTS HTTP URL       http://localhost:8880/v1\n  TTS voice preview  on\n  TTS voice preset   neon\n  TTS voice          af_heart\n  TTS voice 2        am_eric\n  TTS voice mix      80 % / 20 %\n  TTS speed          1.2\n" + Rule(100), _console.Output);
         Assert.Contains("\n \n▸ STT input                 off\n  STT wake                  off\n  STT wake phrase           hey neon\n  STT interrupt             off\n  STT interrupt echo guard  100 %\n  STT interrupt confirm     200 ms\n  STT push-to-talk key      F4\n  STT whisper model         ggml-base.en.bin\n  STT vosk model            vosk-model-small-en-us-0.15\n" + Rule(100), _console.Output);
@@ -3210,7 +3210,7 @@ public partial class SettingsMenuTests : IDisposable
 
         Assert.Equal("qwen3", _settings.Current.LlmModel);
         // The edit: the tab's list under its strip with the row marked, the slot under it, the edit keys in the hint row.
-        Assert.Contains("\n" + Titled(Strip) + "\n \n  LLM scan mode                   local\n  LLM URL                         (probe local ports)\n▸ LLM model                       (first listed)\n", _console.Output);
+        Assert.Contains("\n" + Titled(Strip) + "\n \n  LLM server scan mode            local\n  LLM URL                         (probe local ports)\n▸ LLM model                       (first listed)\n", _console.Output);
         Assert.Contains("\n› \n" + Rule(100) + "\n" + SettingsMenu.EditKeys, _console.Output);
         Assert.Contains("qwen3-typo", _console.Output);
         // The results on the status line, never as a › line or a notice in the flow.
@@ -4035,7 +4035,7 @@ public partial class SettingsMenuTests : IDisposable
 
         Assert.Equal(SettingsChanges.None, await menu.ShowAsync(CancellationToken.None));
 
-        Assert.Contains("\n" + Titled(Strip) + "\n \n▸ LLM scan mode                   local\n", _console.Output);
+        Assert.Contains("\n" + Titled(Strip) + "\n \n▸ LLM server scan mode            local\n", _console.Output);
         Assert.Contains("\n▸ Embedded LLM server enabled", _console.Output);
         Assert.DoesNotContain("Agent skills", _console.Output);
         pane.Dispose();
