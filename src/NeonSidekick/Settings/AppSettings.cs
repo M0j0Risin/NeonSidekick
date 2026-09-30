@@ -779,6 +779,7 @@ public sealed class AppSettings : IDisposable
         ClaudeApiKey = source.ClaudeApiKey,
         ClaudeApiMaxTokens = source.ClaudeApiMaxTokens,
         ClaudeApiPromptCaching = source.ClaudeApiPromptCaching,
+        ClaudeCliServer = source.ClaudeCliServer,
         EmbeddedBackend = source.EmbeddedBackend,
         EmbeddedContextSize = source.EmbeddedContextSize,
         EmbeddedVramBudget = source.EmbeddedVramBudget,

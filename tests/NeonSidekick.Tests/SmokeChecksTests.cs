@@ -68,6 +68,17 @@ public class SmokeChecksTests
         Assert.Equal("1 tool listed as smoke__echo (smoke 1.0); echo answered through McpTool", check.Detail);
     }
 
+    /// <summary>The Claude CLI server's relay (2026-09-30): the app's MCP listener, the relay over a pipe pair as the CLI's stdio, a call carrying its tool-use id.</summary>
+    [Fact]
+    public void ProbeClaudeCliRelay_ListsAndAnswersThroughTheRelay()
+    {
+        var check = SmokeChecks.ProbeClaudeCliRelay();
+
+        Assert.Equal("claude-cli:relay", check.Name);
+        Assert.True(check.Passed, check.Detail);
+        Assert.Equal("1 tool listed through the relay; the call answered with its tool-use id", check.Detail);
+    }
+
     /// <summary>The git round trip (2026-09-20): every GitAccess operation the tools call over a temp repository (the JIT half; the published exe is the AOT proof).</summary>
     [Fact]
     public void ProbeGit_RoundTripsATempRepository()

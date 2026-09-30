@@ -73,6 +73,12 @@ public sealed record LlmEndpoint(Uri BaseUrl, string ModelId, string ApiKey, str
             return EmbeddedLlm.EmbeddedEndpoint.BaseUrl;
         }
 
+        if (string.Equals(trimmed, Claude.ClaudeCliEndpoint.Alias, StringComparison.OrdinalIgnoreCase))
+        {
+            // The Claude CLI (2026-09-30): "claude-cli" stands for its sentinel the same way.
+            return Claude.ClaudeCliEndpoint.BaseUrl;
+        }
+
         if (!Uri.TryCreate(trimmed, UriKind.Absolute, out var parsed)
             || (parsed.Scheme != Uri.UriSchemeHttp && parsed.Scheme != Uri.UriSchemeHttps))
         {

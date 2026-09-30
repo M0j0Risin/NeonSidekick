@@ -64,7 +64,8 @@ public class EnvironmentOverridesTests
             (EnvironmentOverrides.HomeAssistantUrlVariable, " http://localhost:8123 "),
             (EnvironmentOverrides.HomeAssistantTokenVariable, " ha-token "),
             (EnvironmentOverrides.EmbeddedBackendVariable, " Vulkan "),
-            (EnvironmentOverrides.EmbeddedContextVariable, "16384"));
+            (EnvironmentOverrides.EmbeddedContextVariable, "16384"),
+            (EnvironmentOverrides.ClaudeCliServerVariable, " ON "));
 
         var e = env.ApplyTo(new AppSettingsData());
 
@@ -99,6 +100,7 @@ public class EnvironmentOverridesTests
         Assert.Equal("ha-token", e.HomeAssistantToken);   // trimmed (2026-09-28)
         Assert.Equal("vulkan", e.EmbeddedBackend);   // any case, trimmed, the saved word (2026-09-29)
         Assert.Equal(16_384, e.EmbeddedContextSize);   // (2026-09-29)
+        Assert.True(e.ClaudeCliServer);   // a switch word, any case, trimmed (2026-09-30)
         Assert.Equal(EnvironmentOverrides.AllVariables.Length - 2, env.ActiveVariables().Count);   // everything but HOME and PROFILE
     }
 

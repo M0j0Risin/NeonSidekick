@@ -72,6 +72,11 @@ public sealed class SidekickApp
     private readonly Func<string, VadOptions, IVoiceActivityDetector> _vadFactory;
     private readonly HttpClient _modelHttpClient;
     private readonly Func<EmbeddedLlm.IEmbeddedLlm>? _embeddedLlm;
+    private readonly Func<Claude.IClaudeServerHost> _claudeServerFactory;
+
+    // The Claude CLI server's process for this run (2026-09-30): made at the run's start, disposed at its end; the chat
+    // clients built over the Claude CLI endpoint all drive this one.
+    private Claude.IClaudeServerHost? _claudeServer;
     private readonly WebAccess _web;
     private readonly Func<Mcp.McpServerConfig, string, ModelContextProtocol.Client.IClientTransport> _mcpTransport;
     private readonly Func<Uri, Comfy.ComfyClient>? _comfyClient;
@@ -129,6 +134,7 @@ public sealed class SidekickApp
     /// <param name="mcpTransport">What an MCP server's config becomes on the wire (<see cref="McpSession.DefaultTransport"/> in the app; tests a pipe into an in-process server); null = the app's.</param>
     /// <param name="frames">Where the screen's frames are held and let go as one write (2026-09-29, the rows' flicker at a turn's end): <c>Program.cs</c> passes the <see cref="UI.FrameWriter"/> it made stdout; null (tests) holds nothing.</param>
     /// <param name="embeddedLlm">Makes the embedded model's service for one run (2026-09-29): <c>Program.cs</c> passes <see cref="EmbeddedLlm.EmbeddedLlmService.Create"/> on Windows x64, tests a fake; null offers no embedded model.</param>
+    /// <param name="claudeServer">Makes the Claude CLI server's process host for one run (2026-09-30): null makes the app's own (<see cref="Claude.ClaudeServerHost"/>, which starts nothing until a turn asks), tests a fake.</param>
     public SidekickApp(
         IAnsiConsole console,
         AppSettings settings,
@@ -167,8 +173,11 @@ public sealed class SidekickApp
         Printing.IPrintSpooler? printSpooler = null,
         Func<EmbeddedLlm.IEmbeddedLlm>? embeddedLlm = null,
         Func<Perf.IPerfSource>? perfSource = null,
-        UI.IFrameHold? frames = null)
+        UI.IFrameHold? frames = null,
+        Func<Claude.IClaudeServerHost>? claudeServer = null)
     {
+        // The Claude CLI server (2026-09-30): a host over the real CLI, with this executable as its MCP relay, unless a test gives its own.
+        _claudeServerFactory = claudeServer ?? (() => new Claude.ClaudeServerHost(Claude.ClaudeServerHost.OwnRelayCommand));
         _frames = frames;
         // The performance bar's readings (2026-09-29): kernel32, NVML or PDH/DXGI in the app on Windows; none in tests.
         _perfSource = perfSource;
@@ -224,6 +233,15 @@ public sealed class SidekickApp
 
     /// <summary>The models directory: <see cref="AppSettings.ModelsDirectory"/>, the folder <c>/about</c> names.</summary>
     public string ModelsDirectory => _settings.ModelsDirectory;
+
+    /// <summary>
+    /// Where the Claude CLI server runs (2026-09-30): <c>&lt;home&gt;/claude-cli</c>, one folder for every profile. It has no
+    /// file tools, so nothing reads the folder; the CLI keeps its per-folder state (its sessions) under its name.
+    /// </summary>
+    public string ClaudeCliDirectory => Path.Combine(_settings.StorageDirectory, "claude-cli");
+
+    /// <summary>Whether the Claude CLI is offered for <paramref name="effective"/>: the switch on and the CLI found (<see cref="Claude.ClaudeCliEndpoint.Offered"/>).</summary>
+    public bool ClaudeCliOffered(AppSettingsData effective) => Claude.ClaudeCliEndpoint.Offered(effective, _environment.System);
 
     /// <summary>Long-term memory lives in the loaded profile's directory (under the home, so <c>NEONSIDEKICK_HOME</c> moves it too). Headless builds one; the screen binds its own.</summary>
     private MemoryStore BuildMemoryStore() => new(_settings.ProfileDirectory);
@@ -484,7 +502,9 @@ public sealed class SidekickApp
         LogStartup();
         EncryptSqlPasswords();
         await using var embedded = _embeddedLlm?.Invoke();
-        using var session = new LlmSession(_probe, _contextProbe, _chatClientFactory, _time, _samplingProbe, embedded);
+        await using var claudeServer = _claudeServerFactory();
+        _claudeServer = claudeServer;
+        using var session = new LlmSession(_probe, _contextProbe, _chatClientFactory, _time, _samplingProbe, embedded, claudeServer, ClaudeCliOffered);
         // The MCP servers (2026-09-20): connected after the LLM, their tools offered per turn like the screen's; disposed after the loop.
         await using var mcp = new McpSession(_settings, _mcpTransport, _time);
         var memory = BuildMemoryStore();
@@ -533,6 +553,8 @@ public sealed class SidekickApp
         long? sessionId = null;
         // The Claude conversation /claude resumes (2026-09-27), as the screen keeps it; dropped with the session.
         string? claudeSessionId = null;
+        // The Claude CLI server's session (2026-09-30), as the screen keeps it: minted at the first turn over it, dropped with the session.
+        string? claudeServerSessionId = null;
         var claude = _claude ?? new Claude.ClaudeProcess(_environment.System);
         // claude_advisor (2026-09-27): its own thread, as the screen keeps it; no one to confirm with, so a call under
         // Claude advisor tool confirm is refused; Claude's tools and the footer as [tool] / [notice] lines, the answer the result's line.
@@ -618,6 +640,7 @@ public sealed class SidekickApp
                     session.Usage.ResetConversation();
                     sessionId = null;
                     claudeSessionId = null;
+                    claudeServerSessionId = null;
                     advisorThread.SessionId = null;
                     planState.Executing = null;
                     planState.Draft = null;
@@ -656,7 +679,7 @@ public sealed class SidekickApp
 
                     if (sessionId is { } claudeSaved)
                     {
-                        sessions.SaveHistory(claudeSaved, Sessions.SessionHistory.ToJson(session.History.Messages, plan.ToStored(), planState.Executing, claudeSessionId, advisorThread.SessionId, EffectiveSettings.SessionSaveThinking));
+                        sessions.SaveHistory(claudeSaved, Sessions.SessionHistory.ToJson(session.History.Messages, plan.ToStored(), planState.Executing, claudeSessionId, advisorThread.SessionId, EffectiveSettings.SessionSaveThinking, claudeServerSessionId));
                     }
 
                     continue;
@@ -720,7 +743,7 @@ public sealed class SidekickApp
                     {
                         if (sessionId is { } planSession)
                         {
-                            sessions.SaveHistory(planSession, Sessions.SessionHistory.ToJson(assistant.History.Messages, plan.ToStored(), planState.Executing, claudeSessionId, advisorThread.SessionId, EffectiveSettings.SessionSaveThinking));
+                            sessions.SaveHistory(planSession, Sessions.SessionHistory.ToJson(assistant.History.Messages, plan.ToStored(), planState.Executing, claudeSessionId, advisorThread.SessionId, EffectiveSettings.SessionSaveThinking, claudeServerSessionId));
                         }
 
                         continue;
@@ -733,7 +756,7 @@ public sealed class SidekickApp
                 // As the screen does before a message: the last reply's context past the LLM auto compact (%) share compacts first.
                 int share = EffectiveSettings.LlmAutoCompactPercent;
                 assistant.History.MaxTurns = ChatScreen.TurnCapFor(EffectiveSettings, session.ContextLength);
-                if (ConversationCompactor.ShouldAutoCompact(session.Usage.LastRequest, session.ContextLength, share))
+                if (!Claude.ClaudeCliEndpoint.IsClaudeCli(session.Endpoint?.BaseUrl) && ConversationCompactor.ShouldAutoCompact(session.Usage.LastRequest, session.ContextLength, share))
                 {
                     int percent = UsageText.Percent(session.Usage.LastRequest.Total, session.ContextLength) ?? share;
                     var (outcome, details) = await CompactHeadlessAsync(session, assistant, null, percent, cancellationToken).ConfigureAwait(false);
@@ -749,6 +772,14 @@ public sealed class SidekickApp
 
                 // Per turn, as the screen does: a memory saved in this turn is in the next one's prompt.
                 ChatScreen.PrepareTurn(assistant, memory, memoryTools, standingTools, persona, operata, vocalia, EffectiveSettings.Memory, speechOutput: false, EffectiveSettings.LlmMaxToolIterations, EffectiveSettings.LlmOfferTools, webTools, EffectiveSettings.WebTools, ChatScreen.ContextGuardFor(EffectiveSettings, session.ContextLength), fileTools, EffectiveSettings.FileTools, skills: skills with { Enabled = EffectiveSettings.AgentSkills, External = EffectiveSettings.AgentSkills && EffectiveSettings.ExternalSkills }, sessionTools: sessionTools, sessionsEnabled: EffectiveSettings.SessionTool, disabledTools: ToolsText.DisabledSet(EffectiveSettings.ToolsDisabled), mcpTools: mcp.Tools, mcpEnabled: EffectiveSettings.McpServers, safeEdits: EffectiveSettings.FileSafeEdits, gitTools: gitTools, gitEnabled: EffectiveSettings.GitNativeTools, shellTools: shellTools, shellEnabled: ChatScreen.ShellOffered(EffectiveSettings), processes: processes, shellBridge: EffectiveSettings.ShellToolBridge, shellPolice: EffectiveSettings.ShellPoliceOutsidePaths, obsidianTools: ChatScreen.ObsidianToolsFor(vaultTools, EffectiveSettings), obsidianEnabled: ChatScreen.ObsidianOffered(EffectiveSettings), sqlTools: sqlTools, sqlEnabled: ChatScreen.SqlOffered(EffectiveSettings, sql), comfyTools: comfyTools, comfyEnabled: ChatScreen.ComfyOffered(EffectiveSettings, comfy), shellNative: EffectiveSettings.ShellPreferNative, plan: plan.Turn(presentPlan), advisorTools: advisorTools, advisorEnabled: EffectiveSettings.ClaudeAdvisor, preserveThinking: EffectiveSettings.LlmPreserveThinking, sampling: LlmSampling.Resolve(EffectiveSettings, session.Endpoint?.ModelId), homeTools: haTools, homeEnabled: ChatScreen.HomeAssistantOffered(EffectiveSettings), printTools: printTools, printEnabled: ChatScreen.PrintOffered(EffectiveSettings));
+
+                // The Claude CLI server (2026-09-30), as the screen does: the turn names its session, no guard over a history the CLI does not read.
+                assistant.ConversationId = Claude.ClaudeCliEndpoint.IsClaudeCli(session.Endpoint?.BaseUrl) ? claudeServerSessionId ??= Guid.NewGuid().ToString("D") : null;
+                if (assistant.ConversationId is not null)
+                {
+                    assistant.ContextGuard = null;
+                }
+
                 var turn = await RunHeadlessTurnAsync(session, assistant, text, cancellationToken).ConfigureAwait(false);
                 if (plan.Active && plan.Path is { } planPath && plan.Revision > planState.RevisionShown)
                 {
@@ -770,7 +801,7 @@ public sealed class SidekickApp
                     {
                         var usage = session.Usage.LastRequest;
                         sessions.AppendTurn(id, text, turn.Reply, turn.Trace.ToolCalls, turn.Trace.ToolNames, turn.Trace.LoadedSkills, turn.Trace.Errors, usage.Input, usage.Output, turn.Cancelled);
-                        sessions.SaveHistory(id, Sessions.SessionHistory.ToJson(assistant.History.Messages, plan.ToStored(), planState.Executing, claudeSessionId, advisorThread.SessionId, EffectiveSettings.SessionSaveThinking));
+                        sessions.SaveHistory(id, Sessions.SessionHistory.ToJson(assistant.History.Messages, plan.ToStored(), planState.Executing, claudeSessionId, advisorThread.SessionId, EffectiveSettings.SessionSaveThinking, claudeServerSessionId));
                     }
                 }
             }
@@ -1508,7 +1539,9 @@ public sealed class SidekickApp
     private async Task<int> RunInteractiveAsync(CancellationToken cancellationToken)
     {
         await using var embedded = _embeddedLlm?.Invoke();
-        using var session = new LlmSession(_probe, _contextProbe, _chatClientFactory, _time, _samplingProbe, embedded);
+        await using var claudeServer = _claudeServerFactory();
+        _claudeServer = claudeServer;
+        using var session = new LlmSession(_probe, _contextProbe, _chatClientFactory, _time, _samplingProbe, embedded, claudeServer, ClaudeCliOffered);
         using var speech = new SpeechSession(_synthesizerFactory, _playbackFactory, new ModelStore(ModelsDirectory, _modelHttpClient));
         using var voice = BuildVoiceSession();
         // The MCP servers' session (2026-09-20), disposed after the screen: its stdio children end once the alternate buffer is left.
@@ -1603,11 +1636,21 @@ public sealed class SidekickApp
     /// <summary>
     /// The production chat client for <paramref name="endpoint"/> (2026-09-27): the Claude API's own client on its host
     /// (<see cref="Llm.Anthropic.ClaudeApi.IsClaudeApi(Uri?)"/>), with the output cap and caching the effective settings
-    /// hold at the connect, the OpenAI-compatible one everywhere else. Every connect and every <c>/botchat</c> link
+    /// hold at the connect; the Claude CLI's (<see cref="Claude.ClaudeCliChatClient"/>, 2026-09-30) over this run's one
+    /// process on its sentinel; the OpenAI-compatible one everywhere else. Every connect and every <c>/botchat</c> link
     /// comes through here, so the provider is the URL's wherever it came from.
     /// </summary>
     private IChatClient DefaultChatClient(LlmEndpoint endpoint, LlmTimeouts timeouts)
     {
+        if (Claude.ClaudeCliEndpoint.IsClaudeCli(endpoint.BaseUrl))
+        {
+            var host = _claudeServer ?? throw new InvalidOperationException(Claude.ClaudeCliText.NotRunningError);
+            var context = new Claude.ClaudeCliContext(
+                () => Claude.ClaudeExecutable.Locate(EffectiveSettings.ClaudeExecutable, _environment.System, File.Exists),
+                ClaudeCliDirectory);
+            return new Claude.ClaudeCliChatClient(endpoint, host, context, timeouts.Request);
+        }
+
         if (!Llm.Anthropic.ClaudeApi.IsClaudeApi(endpoint.BaseUrl))
         {
             // The reasoning estimate is read at each request (2026-09-29): a change of the setting needs no reconnect.
@@ -1650,6 +1693,7 @@ public sealed class SidekickApp
         SettingsField.ClaudeAdvisor => _environment.ClaudeAdvisor is not null ? EnvironmentOverrides.ClaudeAdvisorVariable : null,
         SettingsField.ClaudeApi => _environment.ClaudeApi is not null ? EnvironmentOverrides.ClaudeApiVariable : null,
         SettingsField.ClaudeApiKey => _environment.ClaudeApiKey is not null ? EnvironmentOverrides.ClaudeApiKeyVariable : null,
+        SettingsField.ClaudeCliServer => _environment.ClaudeCliServer is not null ? EnvironmentOverrides.ClaudeCliServerVariable : null,
         _ => null,
     };
 

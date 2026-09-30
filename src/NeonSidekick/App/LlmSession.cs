@@ -1,4 +1,5 @@
 using Microsoft.Extensions.AI;
+using NeonSidekick.Claude;
 using NeonSidekick.Diagnostics;
 using NeonSidekick.Llm;
 using NeonSidekick.Llm.Anthropic;
@@ -45,6 +46,8 @@ internal sealed class LlmSession : IDisposable
     private readonly Func<LlmEndpoint, LlmTimeouts, IChatClient> _factory;
     private readonly TimeProvider _time;
     private readonly IEmbeddedLlm? _embedded;
+    private readonly IClaudeServerHost? _claudeServer;
+    private readonly Func<AppSettingsData, bool> _claudeCliOffered;
     private IChatClient? _client;
     private AppSettingsData _effective = new();
     private string _apiKey = LlmEndpoint.DefaultApiKey;
@@ -65,9 +68,14 @@ internal sealed class LlmSession : IDisposable
     /// <param name="time">The clock behind the assistant's turn deadline and its usage timings; tests pass a manual one.</param>
     /// <param name="samplingProbe">Asks the connected server for its sampling defaults when the <c>/sampling</c> pane wants them (<see cref="ServerSamplingAsync"/>); null asks nothing.</param>
     /// <param name="embedded">The embedded model (2026-09-29): its catalog's <c>/server</c> rows and the server an embedded URL starts; null offers none.</param>
-    public LlmSession(LlmEndpointProbe probe, ContextLengthProbe contextProbe, Func<LlmEndpoint, LlmTimeouts, IChatClient> factory, TimeProvider? time = null, ServerSamplingProbe? samplingProbe = null, IEmbeddedLlm? embedded = null)
+    /// <param name="claudeServer">The Claude CLI server's process (2026-09-30): stopped when another server is picked; null has none to stop.</param>
+    /// <param name="claudeCliOffered">Whether the Claude CLI is offered for the settings (<see cref="ClaudeCliEndpoint.Offered"/>, which looks for the CLI); null offers it never.</param>
+    public LlmSession(LlmEndpointProbe probe, ContextLengthProbe contextProbe, Func<LlmEndpoint, LlmTimeouts, IChatClient> factory, TimeProvider? time = null, ServerSamplingProbe? samplingProbe = null, IEmbeddedLlm? embedded = null,
+        IClaudeServerHost? claudeServer = null, Func<AppSettingsData, bool>? claudeCliOffered = null)
     {
         _embedded = embedded;
+        _claudeServer = claudeServer;
+        _claudeCliOffered = claudeCliOffered ?? (_ => false);
         _probe = probe ?? throw new ArgumentNullException(nameof(probe));
         _contextProbe = contextProbe ?? throw new ArgumentNullException(nameof(contextProbe));
         _samplingProbe = samplingProbe;
@@ -153,6 +161,23 @@ internal sealed class LlmSession : IDisposable
             _embedded?.StopExtras();   // the switch off (later on 2026-09-29): a multi-server botchat's extras go too
         }
 
+        if (ClaudeCliEndpoint.IsClaudeCli(effective.LlmUrl))
+        {
+            if (_claudeCliOffered(effective))
+            {
+                // The Claude CLI (2026-09-30) is asked nothing: its process starts at the first turn, with that turn's prompt and tools.
+                Endpoint = ClaudeCliEndpointOf(effective.LlmModel);
+                return await ConnectAsync(effective, Endpoint, cancellationToken).ConfigureAwait(false);
+            }
+
+            // Saved while it was offered; switched off (or the CLI gone) the URL stands for nothing, as the Claude API's.
+            DiagnosticLog.Warn(Category, ClaudeCliText.NotOfferedWarning);
+            var blank = AppSettings.Copy(effective);
+            blank.LlmUrl = "";
+            blank.LlmModel = "";
+            effective = blank;
+        }
+
         Endpoint = await _probe.ResolveAsync(effective, cancellationToken).ConfigureAwait(false);
         return Endpoint is not null && await ConnectAsync(effective, Endpoint, cancellationToken).ConfigureAwait(false);
     }
@@ -215,6 +240,31 @@ internal sealed class LlmSession : IDisposable
         return _embedded.Catalog.FirstOrDefault(m => _embedded.State(m).IsInstalled);
     }
 
+    /// <summary>
+    /// The Claude CLI's endpoint (2026-09-30): the sentinel, the <c>--model</c> word (a blank one is
+    /// <see cref="ClaudeCliEndpoint.DefaultModel"/>), no key, and the window every current model has until the CLI says its own.
+    /// </summary>
+    public static LlmEndpoint ClaudeCliEndpointOf(string? model) =>
+        new(ClaudeCliEndpoint.BaseUrl, ClaudeCliEndpoint.ModelOf(model), "", ClaudeCliSource, new ContextLength(ClaudeCliEndpoint.DefaultContextWindow, ClaudeCliSource));
+
+    /// <summary>Whether the Claude CLI is offered for <paramref name="effective"/> (2026-09-30): the switch on and the CLI found.</summary>
+    public bool ClaudeCliOffered(AppSettingsData effective) => _claudeCliOffered(effective);
+
+    /// <summary>The source phrase of the Claude CLI's endpoint and its window. Pinned.</summary>
+    public const string ClaudeCliSource = "Claude CLI";
+
+    /// <summary>
+    /// The Claude CLI's <c>/server</c> row (2026-09-30), asked nothing: its models are the <c>--model</c> aliases. None when
+    /// it is not offered.
+    /// </summary>
+    public IReadOnlyList<LlmServer> ClaudeCliRows(AppSettingsData effective)
+    {
+        ArgumentNullException.ThrowIfNull(effective);
+        return _claudeCliOffered(effective)
+            ? [new LlmServer(ClaudeCliEndpoint.BaseUrl, ClaudeCliEndpoint.ServerName, new ProbeResult(true, ClaudeCliEndpoint.Models, ClaudeCliText.RowDetail))]
+            : [];
+    }
+
     /// <summary>The source phrase of an embedded endpoint whose server did not start. Pinned.</summary>
     public const string EmbeddedNotRunningSource = "embedded, not running";
 
@@ -261,8 +311,9 @@ internal sealed class LlmSession : IDisposable
             DiagnosticLog.Info(Category, SamplingLogLine(sampling));
         }
 
-        // The Claude API publishes its window on the model list or nowhere: none of the native tiers live on its host.
-        if (_configuredContextLength <= 0 && _detectedContextLength is null && !ClaudeApi.IsClaudeApi(endpoint.BaseUrl))
+        // The Claude API publishes its window on the model list or nowhere: none of the native tiers live on its host. The
+        // Claude CLI's is the endpoint's own (2026-09-30): no host to ask at all.
+        if (_configuredContextLength <= 0 && _detectedContextLength is null && !ClaudeApi.IsClaudeApi(endpoint.BaseUrl) && !ClaudeCliEndpoint.IsClaudeCli(endpoint.BaseUrl))
         {
             _detectedContextLength = await _contextProbe.DetectAsync(endpoint.WireUrl, endpoint.ModelId, KeyFor(endpoint), cancellationToken).ConfigureAwait(false);
         }
@@ -301,9 +352,10 @@ internal sealed class LlmSession : IDisposable
 
     /// <summary>
     /// The scan's servers, then the embedded model's rows (<see cref="EmbeddedRows"/>, 2026-09-29), then — while the Claude
-    /// API is offered (<see cref="ClaudeApi.Offered"/>, 2026-09-27) — its row last: asked for its model list with its own
+    /// API is offered (<see cref="ClaudeApi.Offered"/>, 2026-09-27) — its row: asked for its model list with its own
     /// key alongside the scan, never scanned for, and listed whatever it answered (the row's detail then says why), so
-    /// the switch and the key are all it takes to see it. The scan mode governs neither: <c>disabled</c> still lists them.
+    /// the switch and the key are all it takes to see it; then the Claude CLI's (<see cref="ClaudeCliRows"/>, 2026-09-30)
+    /// last. The scan mode governs none of them: <c>disabled</c> still lists them.
     /// </summary>
     private async Task<IReadOnlyList<LlmServer>> WithExtraRowsAsync(AppSettingsData effective, Task<IReadOnlyList<LlmServer>> scan, CancellationToken cancellationToken)
     {
@@ -317,6 +369,7 @@ internal sealed class LlmSession : IDisposable
             servers.Add(LlmServer.From(ClaudeApi.BaseUrl, result));
         }
 
+        servers.AddRange(ClaudeCliRows(effective));
         return servers;
     }
 
@@ -342,7 +395,10 @@ internal sealed class LlmSession : IDisposable
         Reconnecting();
         Remember(effective);
         Endpoint = endpoint;
-        _detectedContextLength = endpoint.PublishedContextLength;
+
+        // The Claude CLI's window is its models' (2026-09-30), whichever way its endpoint was built (a saved URL, a picked row).
+        _detectedContextLength = endpoint.PublishedContextLength
+            ?? (ClaudeCliEndpoint.IsClaudeCli(endpoint.BaseUrl) ? new ContextLength(ClaudeCliEndpoint.DefaultContextWindow, ClaudeCliSource) : null);
         if (!EmbeddedEndpoint.IsEmbedded(endpoint.BaseUrl))
         {
             // Another server picked (2026-09-29): the embedded one's memory is free again.
@@ -351,6 +407,12 @@ internal sealed class LlmSession : IDisposable
             {
                 _embedded.Stop();
             }
+        }
+
+        if (!ClaudeCliEndpoint.IsClaudeCli(endpoint.BaseUrl) && _claudeServer is { Running: true } claudeServer)
+        {
+            // Another server picked (2026-09-30): the Claude CLI's process goes; the session stays on disk for a pick back.
+            claudeServer.Stop();
         }
 
         try
@@ -431,6 +493,16 @@ internal sealed class LlmSession : IDisposable
             string key = ClaudeApi.IsClaudeApi(starter.BaseUrl) || embedded ? starter.ApiKey
                 : string.IsNullOrWhiteSpace(own) || own == LlmEndpoint.DefaultApiKey ? _apiKey : own;
             endpoint = starter with { ModelId = embedded ? starter.ModelId : model ?? starter.ModelId, ApiKey = key, PublishedContextLength = null };
+        }
+        else if (ClaudeCliEndpoint.IsClaudeCli(profile.LlmUrl))
+        {
+            // A bot's own Claude CLI (2026-09-30): asked nothing, its requests asked beside the chat (one claude -p each).
+            if (!_claudeCliOffered(profile))
+            {
+                return (null, ClaudeCliText.NotOfferedError);
+            }
+
+            endpoint = ClaudeCliEndpointOf(model);
         }
         else if (EmbeddedEndpoint.IsEmbedded(profile.LlmUrl))
         {
@@ -580,8 +652,14 @@ internal sealed class LlmSession : IDisposable
             return Task.FromResult<ProbeResult?>(new ProbeResult(installed.Count > 0, installed, detail));
         }
 
+        if (ClaudeCliEndpoint.IsClaudeCli(Endpoint?.BaseUrl) || (Endpoint is null && _claudeCliOffered(_effective) && ClaudeCliEndpoint.IsClaudeCli(_configuredUrl)))
+        {
+            // The Claude CLI (2026-09-30): its list is the --model aliases, asked of no one.
+            return Task.FromResult<ProbeResult?>(new ProbeResult(true, ClaudeCliEndpoint.Models, ClaudeCliText.RowDetail));
+        }
+
         Uri? url = Endpoint?.BaseUrl;
-        if (url is null && !string.IsNullOrWhiteSpace(_configuredUrl) && !EmbeddedEndpoint.IsEmbedded(_configuredUrl))   // switched off: nothing to ask (2026-09-29)
+        if (url is null && !string.IsNullOrWhiteSpace(_configuredUrl) && !EmbeddedEndpoint.IsEmbedded(_configuredUrl) && !ClaudeCliEndpoint.IsClaudeCli(_configuredUrl))   // switched off: nothing to ask (2026-09-29)
         {
             try
             {
@@ -709,7 +787,7 @@ internal sealed class LlmSession : IDisposable
     public async Task<ServerSampling?> ServerSamplingAsync(AppSettingsData effective, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(effective);
-        if (_samplingProbe is null || Endpoint is not { } endpoint || ClaudeApi.IsClaudeApi(endpoint.BaseUrl))
+        if (_samplingProbe is null || Endpoint is not { } endpoint || ClaudeApi.IsClaudeApi(endpoint.BaseUrl) || ClaudeCliEndpoint.IsClaudeCli(endpoint.BaseUrl))
         {
             return null;
         }

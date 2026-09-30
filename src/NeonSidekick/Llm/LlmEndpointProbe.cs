@@ -241,8 +241,9 @@ public sealed class LlmEndpointProbe
             var v1 = LlmEndpoint.NormalizeBaseUrl(extra);
 
             // The Claude API is never scanned for: its row is the session's to add, with its own key (2026-09-27). Nor is the
-            // embedded model's sentinel (2026-09-29): its rows are the session's too, and the sentinel is no place to ask.
-            if (!urls.Contains(v1) && !(scope == ScanScope.Remote && v1.IsLoopback) && !ClaudeApi.IsClaudeApi(v1) && !EmbeddedLlm.EmbeddedEndpoint.IsEmbedded(v1)) urls.Add(v1);
+            // embedded model's sentinel (2026-09-29), nor the Claude CLI's (2026-09-30): their rows are the session's too, and
+            // a sentinel is no place to ask.
+            if (!urls.Contains(v1) && !(scope == ScanScope.Remote && v1.IsLoopback) && !ClaudeApi.IsClaudeApi(v1) && !EmbeddedLlm.EmbeddedEndpoint.IsEmbedded(v1) && !Claude.ClaudeCliEndpoint.IsClaudeCli(v1)) urls.Add(v1);
         }
 
         var tasks = urls.Select(u => ProbeAsync(u, apiKey, cancellationToken)).ToArray();

@@ -263,12 +263,14 @@ public class ClaudeTests
         Assert.Equal(
             [SettingsField.ClaudeExecutable, SettingsField.ClaudePermissions, SettingsField.ClaudeModel, SettingsField.ClaudeEffort,
              SettingsField.ClaudeAdvisor, SettingsField.ClaudeAdvisorContext, SettingsField.ClaudeAdvisorCallsPerTurn, SettingsField.ClaudeAdvisorModel, SettingsField.ClaudeAdvisorEffort, SettingsField.ClaudeAdvisorConfirm,
-             SettingsField.ClaudeApi, SettingsField.ClaudeApiKey, SettingsField.ClaudeApiMaxTokens, SettingsField.ClaudeApiPromptCaching],
+             SettingsField.ClaudeApi, SettingsField.ClaudeApiKey, SettingsField.ClaudeApiMaxTokens, SettingsField.ClaudeApiPromptCaching,
+             SettingsField.ClaudeCliServer],   // 2026-09-30, the Claude CLI server's switch
             SettingsMenu.ToolsTabFields[tab - 1]);
         Assert.Equal(
             ["Claude executable", "Claude slash command permissions", "Claude slash command model", "Claude slash command effort",
              "Claude advisor tool", "Claude advisor tool context", "Claude advisor tool calls per turn", "Claude advisor tool model", "Claude advisor tool effort", "Claude advisor tool confirm",
-             "Claude API", "Claude API key", "Claude API max tokens", "Claude API prompt caching"],
+             "Claude API", "Claude API key", "Claude API max tokens", "Claude API prompt caching",
+             "Claude CLI server"],
             SettingsMenu.ToolsTabFields[tab - 1].Select(SettingsMenu.FieldName));
         Assert.Equal("off", SettingsMenu.FieldValue(SettingsField.ClaudeAdvisor, data, "C:\\p"));
         Assert.Equal("brief", SettingsMenu.FieldValue(SettingsField.ClaudeAdvisorContext, data, "C:\\p"));

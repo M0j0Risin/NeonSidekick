@@ -31,6 +31,20 @@ internal sealed partial class ChatScreen
     /// </summary>
     private readonly ClaudeAdvisorThread _advisorThread = new();
 
+    /// <summary>
+    /// The Claude session the Claude CLI server runs this chat in (2026-09-30): minted at the first turn over the Claude CLI
+    /// (<see cref="ClaudeServerConversation"/>), stored with the session's history and read back by a restore, dropped with the
+    /// session (<see cref="ForgetSession"/>) — so <c>/clear</c> starts the CLI on a new conversation.
+    /// </summary>
+    private string? _claudeServerSessionId;
+
+    /// <summary>
+    /// The conversation id a turn over the Claude CLI names (<see cref="Assistant.ConversationId"/>), minted at the first;
+    /// null for every other server, which is sent the whole history.
+    /// </summary>
+    private string? ClaudeServerConversation() =>
+        ClaudeCliEndpoint.IsClaudeCli(_session.Endpoint?.BaseUrl) ? _claudeServerSessionId ??= NewClaudeSessionId() : null;
+
     /// <summary>The advisor's group (one tool), built once over <see cref="_claude"/>; offered while <c>Claude advisor tool</c> is on.</summary>
     private readonly IReadOnlyList<AIFunction> _advisorTools;
 
@@ -319,7 +333,7 @@ internal sealed partial class ChatScreen
     {
         if (_sessionId is { } id)
         {
-            _sessions.SaveHistory(id, SessionHistory.ToJson(_session.History.Messages, _plan.ToStored(), _executingPlan, _claudeSessionId, _advisorThread.SessionId, _effective().SessionSaveThinking));
+            _sessions.SaveHistory(id, SessionHistory.ToJson(_session.History.Messages, _plan.ToStored(), _executingPlan, _claudeSessionId, _advisorThread.SessionId, _effective().SessionSaveThinking, _claudeServerSessionId));
         }
     }
 }

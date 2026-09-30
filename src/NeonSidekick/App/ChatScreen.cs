@@ -644,6 +644,7 @@ internal sealed partial class ChatScreen
         _sessionTitle = null;
         _claudeSessionId = null;
         _advisorThread.SessionId = null;
+        _claudeServerSessionId = null;
     }
 
     /// <summary>The saved <c>Session show name</c> word last resolved and what it meant: the pane reads the setting on every draw and tick, and <see cref="SessionShowName.Resolve"/> warns on a hand-edited value — once per value this way, not once per tick.</summary>
@@ -4917,9 +4918,10 @@ internal sealed partial class ChatScreen
         StoredPlan? executing;
         string? claudeSessionId;
         string? advisorSessionId;
+        string? claudeServerSessionId;
         try
         {
-            messages = SessionHistory.FromJson(record.HistoryJson, out plan, out executing, out claudeSessionId, out advisorSessionId);
+            messages = SessionHistory.FromJson(record.HistoryJson, out plan, out executing, out claudeSessionId, out advisorSessionId, out claudeServerSessionId);
         }
         catch (Exception ex) when (ex is System.Text.Json.JsonException or FormatException)
         {
@@ -4944,6 +4946,7 @@ internal sealed partial class ChatScreen
             _sessionTitle = record.Summary;
             _claudeSessionId = claudeSessionId;
             _advisorThread.SessionId = advisorSessionId;
+            _claudeServerSessionId = claudeServerSessionId;
             _transcript.Notice(SessionRestoredNotice(record.Summary, _time.LocalTimeZone));
             RestorePlan(plan, executing);
             DiagnosticLog.Info(SessionsCategory, SessionRestoredLogLine(record.Summary.Id, record.Summary.Turns));
@@ -8178,11 +8181,13 @@ internal sealed partial class ChatScreen
         }
 
         // A saved Claude API URL with the Claude API off or keyless stands for nothing (2026-09-27): found as a blank one.
-        // So does a saved embedded URL with Embedded LLM server enabled off (2026-09-29).
+        // So does a saved embedded URL with Embedded LLM server enabled off (2026-09-29), and a saved Claude CLI URL with the
+        // Claude CLI server off or the CLI gone (2026-09-30).
         bool blankUrl = string.IsNullOrWhiteSpace(effective.LlmUrl)
             || (Llm.Anthropic.ClaudeApi.IsClaudeApi(effective.LlmUrl) && !Llm.Anthropic.ClaudeApi.Offered(effective))
-            || EmbeddedLlm.EmbeddedEndpoint.SwitchedOff(effective);
-        if (blankUrl && !Llm.LlmScanMode.Scans(Llm.LlmScanMode.Resolve(effective)) && !Llm.Anthropic.ClaudeApi.Offered(effective) && !EmbeddedOffered)
+            || EmbeddedLlm.EmbeddedEndpoint.SwitchedOff(effective)
+            || (ClaudeCliEndpoint.IsClaudeCli(effective.LlmUrl) && !_session.ClaudeCliOffered(effective));
+        if (blankUrl && !Llm.LlmScanMode.Scans(Llm.LlmScanMode.Resolve(effective)) && !Llm.Anthropic.ClaudeApi.Offered(effective) && !EmbeddedOffered && !_session.ClaudeCliOffered(effective))
         {
             await _session.ConnectAsync(effective, cancellationToken).ConfigureAwait(false);
             DrainDiagnostics();
@@ -8533,7 +8538,7 @@ internal sealed partial class ChatScreen
         if (string.IsNullOrWhiteSpace(args))
         {
             var scope = Llm.LlmScanMode.Resolve(effective);
-            if (!Llm.LlmScanMode.Scans(scope) && !Llm.Anthropic.ClaudeApi.Offered(effective) && !EmbeddedOffered)
+            if (!Llm.LlmScanMode.Scans(scope) && !Llm.Anthropic.ClaudeApi.Offered(effective) && !EmbeddedOffered && !_session.ClaudeCliOffered(effective))
             {
                 // Disabled entirely (the user's call, 2026-09-15): no spinner, no request, the session as it was.
                 _transcript.Error(LlmSession.NoServerLine(scope));
@@ -8614,11 +8619,25 @@ internal sealed partial class ChatScreen
                 return;
             }
 
-            picked = await _transcript.WithSpinnerAsync(ServerSearchLabel, () => _session.ProbeServerAsync(url, effective, cancellationToken)).ConfigureAwait(false);
-            DrainDiagnostics();
-            if (!picked.Result.Exists)
+            if (ClaudeCliEndpoint.IsClaudeCli(url))
             {
-                _transcript.Warning(SettingsMenu.ServerNotAnsweringWarning(picked.BaseUrl, picked.Result.Detail));
+                // /server claude-cli (2026-09-30): its one row, asked nothing; the model picker follows as for any pick.
+                if (_session.ClaudeCliRows(effective) is not [var cli])
+                {
+                    _transcript.Error(ClaudeCliText.NotOfferedError);
+                    return;
+                }
+
+                picked = cli;
+            }
+            else
+            {
+                picked = await _transcript.WithSpinnerAsync(ServerSearchLabel, () => _session.ProbeServerAsync(url, effective, cancellationToken)).ConfigureAwait(false);
+                DrainDiagnostics();
+                if (!picked.Result.Exists)
+                {
+                    _transcript.Warning(SettingsMenu.ServerNotAnsweringWarning(picked.BaseUrl, picked.Result.Detail));
+                }
             }
         }
 
@@ -11443,7 +11462,8 @@ internal sealed partial class ChatScreen
         // still runs; a compact leaves the context in use zeroed, so it cannot fire twice in a row.
         int share = _effective().LlmAutoCompactPercent;
         assistant.History.MaxTurns = TurnCapFor(_effective(), _session.ContextLength);
-        if (ConversationCompactor.ShouldAutoCompact(_session.Usage.LastRequest, _session.ContextLength, share))
+        // Never over the Claude CLI (2026-09-30): the CLI compacts the conversation it keeps; a summary here would change nothing it reads.
+        if (!ClaudeCliEndpoint.IsClaudeCli(_session.Endpoint?.BaseUrl) && ConversationCompactor.ShouldAutoCompact(_session.Usage.LastRequest, _session.ContextLength, share))
         {
             int percent = UsageText.Percent(_session.Usage.LastRequest.Total, _session.ContextLength) ?? share;
             await CompactAsync(focus: null, autoPercent: percent, cancellationToken).ConfigureAwait(false);
@@ -11856,6 +11876,14 @@ internal sealed partial class ChatScreen
         {
             _interpreters.Refresh();
             PrepareTurn(assistant, _memory, _memoryTools, [.. _clockTools, .. _timerTools], _persona, _operata, _vocalia, effective.Memory, speaker is not null, effective.LlmMaxToolIterations, effective.LlmOfferTools, _webTools, effective.WebTools, ContextGuardFor(effective, _session.ContextLength), _fileTools, effective.FileTools, _pane.Enabled && effective.AskUser ? _askTools : null, SkillsFor(effective), markdown, _sessionTools, effective.SessionTool, ToolsText.DisabledSet(effective.ToolsDisabled), _mcp.Tools, effective.McpServers, effective.FileSafeEdits, _gitTools, effective.GitNativeTools, _shellTools, ShellOffered(effective), _processes, effective.ShellToolBridge, effective.ShellPoliceOutsidePaths, ObsidianToolsFor(_vaultTools, effective), ObsidianOffered(effective), _sqlTools, SqlOffered(effective, _sql), _comfyTools, ComfyOffered(effective, _comfy), effective.ShellPreferNative, _plan.Turn(_presentPlan), _advisorTools, effective.ClaudeAdvisor, effective.LlmPreserveThinking, LlmSampling.Resolve(effective, _session.Endpoint?.ModelId), _haTools, HomeAssistantOffered(effective), _printTools, PrintOffered(effective));
+
+            // The Claude CLI server (2026-09-30) keeps the conversation itself: the turn names its session, and no guard
+            // measures or prunes a history the CLI does not read (it compacts its own).
+            assistant.ConversationId = ClaudeServerConversation();
+            if (assistant.ConversationId is not null)
+            {
+                assistant.ContextGuard = null;
+            }
         }
 
         bool armed = false;
@@ -12218,7 +12246,7 @@ internal sealed partial class ChatScreen
         if (_sessionId is { } id)
         {
             var messages = assistant.History.Messages;
-            _sessions.SaveHistory(id, SessionHistory.ToJson(messages, _plan.ToStored(), _executingPlan, _claudeSessionId, _advisorThread.SessionId, _effective().SessionSaveThinking));
+            _sessions.SaveHistory(id, SessionHistory.ToJson(messages, _plan.ToStored(), _executingPlan, _claudeSessionId, _advisorThread.SessionId, _effective().SessionSaveThinking, _claudeServerSessionId));
         }
     }
 

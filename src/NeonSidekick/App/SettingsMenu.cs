@@ -617,9 +617,16 @@ public enum SettingsField
     /// <summary>
     /// A toggle: whether a multi-server botchat's extra embedded servers stop when it ends
     /// (<see cref="Settings.AppSettingsData.BotChatMultiEmbeddedKill"/>, later on 2026-09-29, the user's ask). The Botchat tab,
-    /// under Botchat multi-embedded; no reconnect (read at a chat's end). Last in the enum, as every newcomer.
+    /// under Botchat multi-embedded; no reconnect (read at a chat's end).
     /// </summary>
     BotChatMultiEmbeddedKill,
+
+    /// <summary>
+    /// A toggle: whether the Claude Code CLI is offered as a server (<see cref="Settings.AppSettingsData.ClaudeCliServer"/>,
+    /// 2026-09-30, the user's ask). The <c>/tools</c> Claude tab's last row, under the Claude API's; a reconnect. Last in the
+    /// enum, as every newcomer.
+    /// </summary>
+    ClaudeCliServer,
 }
 
 /// <summary>The tabs of <c>/settings</c> on the pane, in strip order (General, Embedded, LLM, TTS, STT, Sessions, Botchat — the user's order, 2026-09-29; Sessions right after General — the user's order, 2026-09-18 — until then; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
@@ -964,7 +971,7 @@ internal sealed partial class SettingsMenu
         [SettingsField.FileTools, SettingsField.FileSafeEdits, SettingsField.FileTreeMaxLength, SettingsField.FileTreeShowSizes, SettingsField.FileMentionFolderMode, SettingsField.FileBrowserMode, SettingsField.FileViewImageMaxPerCall],
         [SettingsField.ShellCommandPolicy, SettingsField.ShellCommandAllowed, SettingsField.ShellPoliceOutsidePaths, SettingsField.ShellPreferNative, SettingsField.ShellDefault, SettingsField.ShellTimeoutSeconds, SettingsField.ShellForegroundCapSeconds, SettingsField.ShellOutputMaxChars, SettingsField.ShellCodeLanguages, SettingsField.ShellCodeTimeoutSeconds, SettingsField.ShellToolBridge, SettingsField.ShellCodeMaxToolCalls],
         [SettingsField.AskUser, SettingsField.AskMaxQuestions, SettingsField.AskMaxChoices],
-        [SettingsField.ClaudeExecutable, SettingsField.ClaudePermissions, SettingsField.ClaudeModel, SettingsField.ClaudeEffort, SettingsField.ClaudeAdvisor, SettingsField.ClaudeAdvisorContext, SettingsField.ClaudeAdvisorCallsPerTurn, SettingsField.ClaudeAdvisorModel, SettingsField.ClaudeAdvisorEffort, SettingsField.ClaudeAdvisorConfirm, SettingsField.ClaudeApi, SettingsField.ClaudeApiKey, SettingsField.ClaudeApiMaxTokens, SettingsField.ClaudeApiPromptCaching],
+        [SettingsField.ClaudeExecutable, SettingsField.ClaudePermissions, SettingsField.ClaudeModel, SettingsField.ClaudeEffort, SettingsField.ClaudeAdvisor, SettingsField.ClaudeAdvisorContext, SettingsField.ClaudeAdvisorCallsPerTurn, SettingsField.ClaudeAdvisorModel, SettingsField.ClaudeAdvisorEffort, SettingsField.ClaudeAdvisorConfirm, SettingsField.ClaudeApi, SettingsField.ClaudeApiKey, SettingsField.ClaudeApiMaxTokens, SettingsField.ClaudeApiPromptCaching, SettingsField.ClaudeCliServer],
         [SettingsField.HomeAssistantTools, SettingsField.HomeAssistantUrl, SettingsField.HomeAssistantToken, SettingsField.HomeAssistantTest, SettingsField.HomeAssistantActionPolicy, SettingsField.HomeAssistantAssistAgent, SettingsField.HomeAssistantTimeoutSeconds],
         [SettingsField.PrintTools, SettingsField.PrintActionPolicy, SettingsField.PrintDefaultPrinter, SettingsField.PrintFontSize],
         [SettingsField.ObsidianTools, SettingsField.ObsidianVault, SettingsField.ObsidianAllowDelete],
@@ -1133,7 +1140,7 @@ internal sealed partial class SettingsMenu
     public static bool IsLlmField(SettingsField field) =>
         field is SettingsField.LlmUrl or SettingsField.LlmModel or SettingsField.LlmApiKey
             or SettingsField.LlmRequestTimeoutSeconds or SettingsField.LlmTurnTimeoutSeconds or SettingsField.LlmContextLength or SettingsField.LlmReasoning
-            or SettingsField.ClaudeApi or SettingsField.ClaudeApiKey or SettingsField.ClaudeApiMaxTokens or SettingsField.ClaudeApiPromptCaching
+            or SettingsField.ClaudeApi or SettingsField.ClaudeApiKey or SettingsField.ClaudeApiMaxTokens or SettingsField.ClaudeApiPromptCaching or SettingsField.ClaudeCliServer
             or SettingsField.EmbeddedLlmServer or SettingsField.EmbeddedModels or SettingsField.EmbeddedBackend or SettingsField.EmbeddedContextSize or SettingsField.EmbeddedGpuLayers or SettingsField.EmbeddedVramBudget or SettingsField.EmbeddedVision
             or SettingsField.EmbeddedDrafter;
 
@@ -1327,7 +1334,7 @@ internal sealed partial class SettingsMenu
             or SettingsField.LlmCompactShowSummary or SettingsField.ShellToolBridge or SettingsField.ShellPoliceOutsidePaths or SettingsField.ShellPreferNative
             or SettingsField.ObsidianTools or SettingsField.ObsidianAllowDelete or SettingsField.SqlTools or SettingsField.SqlPercentMention or SettingsField.ComfyTools or SettingsField.ComfyReinforceNegatives or SettingsField.ComfyShowPrompts or SettingsField.ComfyCaretMention or SettingsField.ComfyPictureStrip
             or SettingsField.BotChatImages or SettingsField.BotChatImageAsync or SettingsField.BotChatSkills or SettingsField.BotChatVision or SettingsField.BotChatMultiEmbeddedKill or SettingsField.ClaudeAdvisor or SettingsField.ClaudeAdvisorConfirm
-            or SettingsField.ClaudeApi or SettingsField.ClaudeApiPromptCaching or SettingsField.EmbeddedVision or SettingsField.EmbeddedLlmServer or SettingsField.EmbeddedDrafter
+            or SettingsField.ClaudeApi or SettingsField.ClaudeApiPromptCaching or SettingsField.ClaudeCliServer or SettingsField.EmbeddedVision or SettingsField.EmbeddedLlmServer or SettingsField.EmbeddedDrafter
             or SettingsField.HomeAssistantTools or SettingsField.PrintTools;
 
     public static string FieldName(SettingsField field) => field switch
@@ -1476,6 +1483,7 @@ internal sealed partial class SettingsMenu
         SettingsField.ClaudeApiKey => "Claude API key",
         SettingsField.ClaudeApiMaxTokens => "Claude API max tokens",
         SettingsField.ClaudeApiPromptCaching => "Claude API prompt caching",
+        SettingsField.ClaudeCliServer => "Claude CLI server",
         SettingsField.EmbeddedModels => "Embedded models",
         SettingsField.EmbeddedBackend => "Embedded backend",
         SettingsField.EmbeddedContextSize => "Embedded context size",
@@ -1616,6 +1624,7 @@ internal sealed partial class SettingsMenu
             SettingsField.ClaudeApiKey => ClaudeApiKeyLabel(data.ClaudeApiKey),
             SettingsField.ClaudeApiMaxTokens => Tokens(data.ClaudeApiMaxTokens),
             SettingsField.ClaudeApiPromptCaching => OnOff(data.ClaudeApiPromptCaching),
+            SettingsField.ClaudeCliServer => OnOff(data.ClaudeCliServer),
             SettingsField.EmbeddedModels => EmbeddedModelsDoorLabel,
             SettingsField.EmbeddedBackend => data.EmbeddedBackend,
             SettingsField.EmbeddedContextSize => data.EmbeddedContextSize == 0 ? EmbeddedContextFitLabel : Tokens(data.EmbeddedContextSize),
@@ -4652,6 +4661,7 @@ internal sealed partial class SettingsMenu
             SettingsField.ClaudeAdvisorConfirm => data.ClaudeAdvisorConfirm,
             SettingsField.ClaudeApi => data.ClaudeApi,
             SettingsField.ClaudeApiPromptCaching => data.ClaudeApiPromptCaching,
+            SettingsField.ClaudeCliServer => data.ClaudeCliServer,
             SettingsField.EmbeddedVision => data.EmbeddedVision,
             SettingsField.EmbeddedLlmServer => data.EmbeddedLlmServer,
             SettingsField.EmbeddedDrafter => data.EmbeddedDrafter,
@@ -4726,6 +4736,7 @@ internal sealed partial class SettingsMenu
             case SettingsField.ClaudeAdvisorConfirm: data.ClaudeAdvisorConfirm = on; break;
             case SettingsField.ClaudeApi: data.ClaudeApi = on; break;
             case SettingsField.ClaudeApiPromptCaching: data.ClaudeApiPromptCaching = on; break;
+            case SettingsField.ClaudeCliServer: data.ClaudeCliServer = on; break;
             case SettingsField.EmbeddedVision: data.EmbeddedVision = on; break;
             case SettingsField.EmbeddedLlmServer: data.EmbeddedLlmServer = on; break;
             case SettingsField.EmbeddedDrafter: data.EmbeddedDrafter = on; break;
@@ -4809,6 +4820,7 @@ internal sealed partial class SettingsMenu
         SettingsField.ClaudeAdvisorConfirm => on ? "each claude_advisor call waits for your yes" : "claude_advisor runs without asking",
         SettingsField.ClaudeApi => on ? "/server offers the Claude API while a key is set (billed per message)" : "the Claude API is not offered",
         SettingsField.ClaudeApiPromptCaching => on ? "the prompt and conversation are cached between requests (cheaper)" : "every request is billed in full",
+        SettingsField.ClaudeCliServer => on ? "/server offers the Claude CLI, run with the app's tools, not its own" : "the Claude CLI is not offered; a running one stops",
         SettingsField.EmbeddedVision => on ? "the embedded model loads its vision projector and reads images" : "the embedded model reads text alone; about 1 GB less memory",
         SettingsField.EmbeddedLlmServer => on ? "/server offers the embedded models" : "no embedded models in /server; a running one stops",
         SettingsField.EmbeddedDrafter => on ? "the embedded model drafts ahead with its drafter (faster, same answers)" : "the embedded model decodes one token at a time, no drafter loaded",

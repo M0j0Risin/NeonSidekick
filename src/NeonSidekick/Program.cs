@@ -34,6 +34,14 @@ using Spectre.Console;
 // is off since SqlClient refuses it, and this keeps what the flag gave (App/CulturePin.cs).
 CulturePin.Apply();
 
+// The Claude CLI server's MCP relay (2026-09-30): this executable started by the claude CLI as its MCP server
+// (NeonSidekick --mcp-relay <address> <key>), copying the CLI's stdio to the app's loopback listener. Before anything
+// touches the console: stdout is the MCP pipe, not a screen.
+if (NeonSidekick.Claude.McpRelay.Asked(args))
+{
+    return await NeonSidekick.Claude.McpRelay.RunAsync(args[1], args[2]);
+}
+
 // Force UTF-8 console output. On Windows the NativeAOT build (InvariantGlobalization) falls back
 // to the console's OEM code page (CP437/CP850); the themed UI's box-drawing, bullets and braille
 // spinner frames are not in that code page and print as '?'. Wrapped in try/catch because the

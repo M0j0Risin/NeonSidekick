@@ -48,6 +48,7 @@ public sealed class EnvironmentOverrides
     public const string ClaudeAdvisorVariable = Prefix + "CLAUDE_ADVISOR";
     public const string ClaudeApiVariable = Prefix + "CLAUDE_API";
     public const string ClaudeApiKeyVariable = Prefix + "CLAUDE_API_KEY";
+    public const string ClaudeCliServerVariable = Prefix + "CLAUDE_CLI_SERVER";
     public const string LlmSamplingVariable = Prefix + "LLM_SAMPLING";
     public const string HomeAssistantUrlVariable = Prefix + "HA_URL";
     public const string HomeAssistantTokenVariable = Prefix + "HA_TOKEN";
@@ -64,7 +65,7 @@ public sealed class EnvironmentOverrides
         CommandPolicyVariable, ShellPoliceVariable, ObsidianVaultVariable, ComfyUrlVariable,
         ShellNativeVariable, ClaudeExeVariable, ClaudePermissionsVariable, ClaudeAdvisorVariable,
         ClaudeApiVariable, ClaudeApiKeyVariable, LlmSamplingVariable, HomeAssistantUrlVariable,
-        HomeAssistantTokenVariable, EmbeddedBackendVariable, EmbeddedContextVariable,
+        HomeAssistantTokenVariable, EmbeddedBackendVariable, EmbeddedContextVariable, ClaudeCliServerVariable,
     };
 
     /// <summary>The log category of every environment line.</summary>
@@ -170,6 +171,9 @@ public sealed class EnvironmentOverrides
     /// <summary>The Claude API key for this launch, plain (2026-09-27); never logged (<see cref="Describe"/> shows <see cref="SecretSet"/>).</summary>
     public string? ClaudeApiKey => Read(ClaudeApiKeyVariable);
 
+    /// <summary><c>Claude CLI server</c> for this launch, or null when unset or not a switch word (2026-09-30): a scripted run offers the Claude CLI without saving it.</summary>
+    public bool? ClaudeCliServer => ReadSwitch(ClaudeCliServerVariable);
+
     /// <summary>The Home Assistant server's URL, or null (2026-09-28). Checked where it is used (a non-http(s) value offers no Home Assistant tool), not here.</summary>
     public string? HomeAssistantUrl => Read(HomeAssistantUrlVariable);
 
@@ -262,6 +266,7 @@ public sealed class EnvironmentOverrides
                 ShellNativeVariable => ShellNative is not null,
                 ClaudeAdvisorVariable => ClaudeAdvisor is not null,
                 ClaudeApiVariable => ClaudeApi is not null,
+                ClaudeCliServerVariable => ClaudeCliServer is not null,
                 LlmSamplingVariable => LlmSampling is not null,
                 EmbeddedBackendVariable => EmbeddedBackend is not null,
                 EmbeddedContextVariable => EmbeddedContextSize is not null,
@@ -337,6 +342,7 @@ public sealed class EnvironmentOverrides
         if (ClaudeAdvisor is { } advisor) effective.ClaudeAdvisor = advisor;
         if (ClaudeApi is { } claudeApi) effective.ClaudeApi = claudeApi;
         if (ClaudeApiKey is { } claudeApiKey) effective.ClaudeApiKey = claudeApiKey;
+        if (ClaudeCliServer is { } claudeCliServer) effective.ClaudeCliServer = claudeCliServer;
         if (HomeAssistantUrl is { } haUrl) effective.HomeAssistantUrl = haUrl;
         if (HomeAssistantToken is { } haToken) effective.HomeAssistantToken = haToken;
         if (LlmSampling is { } sampling) effective.LlmSampling = Overlay(effective.LlmSampling, sampling);

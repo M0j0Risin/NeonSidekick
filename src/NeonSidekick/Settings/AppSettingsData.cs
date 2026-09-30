@@ -1693,6 +1693,19 @@ public sealed class AppSettingsData
     /// </summary>
     public bool ClaudeApiPromptCaching { get; set; } = true;
 
+    // ─── Claude CLI server (2026-09-30) ───────────────────────────────────────────
+
+    /// <summary>
+    /// Whether the Claude Code CLI is offered as a server (2026-09-30, the user's ask: the <c>claude</c> CLI kept running as
+    /// an open session and used as the chat's server; off by default). Offered only while the CLI is found too
+    /// (<see cref="Claude.ClaudeCliEndpoint.Offered"/>: <see cref="ClaudeExecutable"/>, else the PATH): then <c>/server</c>
+    /// and the startup picker list a <c>Claude CLI</c> row, and picking it saves <see cref="Claude.ClaudeCliEndpoint.BaseUrl"/>
+    /// as the LLM URL and the <c>--model</c> word as the LLM model. Claude Code's own tools are all off there: the model gets
+    /// the app's tools, over an MCP server the app hosts. The <c>/tools</c> Claude tab's last row; a reconnect. Variable
+    /// <see cref="EnvironmentOverrides.ClaudeCliServerVariable"/>.
+    /// </summary>
+    public bool ClaudeCliServer { get; set; }
+
     // ─── Embedded model (2026-09-29) ───────────────────────────────────────────────
     // The embedded model (2026-09-29, the user's ask: a small model the app downloads from Hugging Face and runs itself on
     // llama.cpp's llama-server, a /server choice like any other). Which model runs is the LLM URL (EmbeddedLlm.EmbeddedEndpoint)

@@ -116,6 +116,7 @@ public static partial class SmokeChecks
         results.Add(ProbeOnnxRuntime());
         results.Add(ProbeSessions());
         results.Add(ProbeMcp());
+        results.Add(ProbeClaudeCliRelay());
         results.Add(ProbeGit());
         results.Add(ProbeSql());
         results.Add(OperatingSystem.IsWindows() ? ProbeCredentials() : new SmokeCheck("sql:credentials", true, "skipped: not Windows"));
@@ -149,6 +150,73 @@ public static partial class SmokeChecks
         {
             return new SmokeCheck(name, false, $"{ex.GetType().Name}: {ex.Message}");
         }
+    }
+
+    /// <summary>
+    /// <c>claude-cli:relay</c> (2026-09-30): the Claude CLI server's way to the app's tools on the published binary — the
+    /// app's MCP listener (<see cref="Claude.ClaudeMcpServer"/>, the SDK's server over a loopback socket), the relay
+    /// (<see cref="Claude.McpRelay"/>) copying a pipe pair to it as the CLI's stdio, the real <c>McpClient</c> listing the
+    /// app's tool and calling it with the CLI's <c>_meta</c> tool-use id — everything but the CLI, which the smoke gate
+    /// cannot assume is installed.
+    /// </summary>
+    public static SmokeCheck ProbeClaudeCliRelay()
+    {
+        const string name = "claude-cli:relay";
+        try
+        {
+            return ProbeClaudeCliRelayAsync(name).GetAwaiter().GetResult();
+        }
+        catch (Exception ex)
+        {
+            return new SmokeCheck(name, false, $"{ex.GetType().Name}: {ex.Message}");
+        }
+    }
+
+    private static async Task<SmokeCheck> ProbeClaudeCliRelayAsync(string name)
+    {
+        using var budget = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        await using var server = Claude.ClaudeMcpServer.Start(() => [new SmokeEchoTool()], (call, _) =>
+            Task.FromResult(new Claude.ClaudeToolAnswer("echo: " + (call.Arguments.TryGetValue("text", out var text) ? text.GetString() : "") + " (" + call.ToolUseId + ")", [], false)));
+        var stdin = new System.IO.Pipelines.Pipe();
+        var stdout = new System.IO.Pipelines.Pipe();
+        var relay = Claude.McpRelay.RunAsync(server.Address, server.Token, stdin.Reader.AsStream(), stdout.Writer.AsStream(), Stream.Null);
+        string answered;
+        int listed;
+        await using (var client = await ModelContextProtocol.Client.McpClient.CreateAsync(new ModelContextProtocol.Protocol.StreamClientTransport(stdin.Writer.AsStream(), stdout.Reader.AsStream()), null, null, budget.Token).ConfigureAwait(false))
+        {
+            var tools = await client.ListToolsAsync((ModelContextProtocol.RequestOptions?)null, budget.Token).ConfigureAwait(false);
+            listed = tools.Count;
+            var result = await client.CallToolAsync(new ModelContextProtocol.Protocol.CallToolRequestParams
+            {
+                Name = SmokeEchoTool.EchoName,
+                Arguments = new Dictionary<string, System.Text.Json.JsonElement> { ["text"] = System.Text.Json.JsonDocument.Parse("\"ping\"").RootElement.Clone() },
+                Meta = new System.Text.Json.Nodes.JsonObject { [Claude.ClaudeMcpServer.ToolUseIdMetaKey] = "toolu_smoke" },
+            }, budget.Token).ConfigureAwait(false);
+            answered = result.Content.OfType<ModelContextProtocol.Protocol.TextContentBlock>().FirstOrDefault()?.Text ?? "";
+        }
+
+        stdin.Writer.Complete();
+        int code = await relay.WaitAsync(budget.Token).ConfigureAwait(false);
+        const string expected = "echo: ping (toolu_smoke)";
+        return listed == 1 && answered == expected && code == 0
+            ? new SmokeCheck(name, true, $"{listed} tool listed through the relay; the call answered with its tool-use id")
+            : new SmokeCheck(name, false, $"{listed} tools listed, answered \"{answered}\" (expected \"{expected}\"), relay exit {code}");
+    }
+
+    /// <summary>The relay probe's one tool: its schema is what the listener lists.</summary>
+    private sealed class SmokeEchoTool : AIFunction
+    {
+        public const string EchoName = "echo";   // not ToolName: it is no model tool, and PlanTests collects those by that constant
+
+        private static readonly System.Text.Json.JsonElement Schema = Llm.Tools.ToolSchema.Parse("""{"type":"object","properties":{"text":{"type":"string"}}}""");
+
+        public override string Name => EchoName;
+
+        public override string Description => "Echoes the text back.";
+
+        public override System.Text.Json.JsonElement JsonSchema => Schema;
+
+        protected override ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken) => new("unused");
     }
 
     private static async Task<SmokeCheck> ProbeMcpAsync(string name)

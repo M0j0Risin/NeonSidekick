@@ -920,6 +920,14 @@ public sealed class Assistant
     public IReadOnlyList<OpeningCall> PendingCalls { get; set; } = [];
 
     /// <summary>
+    /// The conversation a stateful server keeps for this chat (2026-09-30, the Claude CLI server: its session id), sent as
+    /// <see cref="ChatOptions.ConversationId"/> on every request of a turn; null for every other server, which is sent the
+    /// whole history each time. Set per turn by the shell, like <see cref="Tools"/>. The side requests (a summary, a
+    /// title) never carry it.
+    /// </summary>
+    public string? ConversationId { get; set; }
+
+    /// <summary>
     /// True for the events the opening calls raise (a <see cref="TurnEvent.ToolCall"/> or
     /// <see cref="TurnEvent.ToolResult"/> carrying <see cref="OpeningClockCallId"/>,
     /// <see cref="OpeningCwdCallId"/> or <see cref="OpeningMemoryCallId"/>). They come first and at
@@ -1003,6 +1011,9 @@ public sealed class Assistant
 
             // Every turn's thinking back, and the template asked to keep it (2026-09-28); the client takes the key off.
             AdditionalProperties = PreserveThinking ? new AdditionalPropertiesDictionary { [OpenAICompatibleChatClient.PreserveThinkingKey] = true } : null,
+
+            // The stateful server's conversation (2026-09-30), when the shell named one.
+            ConversationId = ConversationId,
         };
         Sampling?.ApplyTo(options);
 

@@ -200,6 +200,18 @@ $env:NEONSIDEKICK_EMBEDDED_BACKEND = "cpu"   # no GPU on this box
 "Ping." | NeonSidekick.exe --headless --url embedded
 ```
 
+The Claude CLI server: `--url claude-cli` runs your installed Claude Code as the model, kept open for the whole run, with
+its own tools off and this app's tools offered instead (see the README's Claude tab). Switch it on for the run with
+`NEONSIDEKICK_CLAUDE_CLI_SERVER=on`; `--model` is `fable`, `opus`, `sonnet` (the default) or `haiku`. Tool calls print as
+any model's do (`[tool] read_file …`). Claude Code must be installed and logged in; without the switch, or with Claude
+Code not found, the URL is ignored and the run looks for a server as with no URL (a warning says so). Claude Code stops
+when the run ends.
+
+```powershell
+$env:NEONSIDEKICK_CLAUDE_CLI_SERVER = "on"
+Get-Content job.txt | NeonSidekick.exe --headless --url claude-cli --model haiku --cwd D:\work
+```
+
 ---
 
 ## `--model <id>`: which model on that server
@@ -656,6 +668,7 @@ Flags beat variables; variables beat the profile's saved values.
 | `NEONSIDEKICK_EMBEDDED_BACKEND` / `NEONSIDEKICK_EMBEDDED_CONTEXT` | The embedded LLM's llama.cpp build (`auto`, `cuda`, `vulkan`, `cpu`) and context window in tokens (0 to fit the GPU, or 512–262144) for the run. |
 | `NEONSIDEKICK_LLM_API_KEY` | The server's key; never put it on the command line. |
 | `NEONSIDEKICK_CLAUDE_API` / `NEONSIDEKICK_CLAUDE_API_KEY` | `on` and a key offer the Claude API for the run (`--url https://api.anthropic.com`). The key is never logged and never sent to a local server. Every request is billed to the key's account. |
+| `NEONSIDEKICK_CLAUDE_CLI_SERVER` | `on` offers the Claude CLI server for the run (`--url claude-cli`): Claude Code as the model, with this app's tools. |
 | `NEONSIDEKICK_LLM_TURN_TIMEOUT` / `NEONSIDEKICK_LLM_REQUEST_TIMEOUT` | Seconds; raise them for long agentic jobs. |
 | `NEONSIDEKICK_LLM_CONTEXT` | The context window in tokens, when the server doesn't report it. |
 | `NEONSIDEKICK_LLM_REASONING` | Reasoning effort for the run. |
@@ -673,3 +686,7 @@ Flags beat variables; variables beat the profile's saved values.
 `--smoke`, `--audio-check` and `--voice-check` are separate modes; given together with
 `--headless`, headless wins and they are ignored. `--help` and `--version` print and exit before
 any mode runs.
+
+`--mcp-relay <address> <key>` is not for you to run: it is how Claude Code, started as the Claude CLI server, reaches
+this app's tools (it starts the app's own executable in this mode as its MCP server). It takes exactly those two
+arguments, touches no settings and prints nothing but MCP traffic.

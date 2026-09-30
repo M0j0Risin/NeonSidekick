@@ -1,0 +1,6 @@
+{"type": "user", "message": {"role": "user", "content": [{"type": "text", "text": "Call the slow tool with seconds=20, then say done."}]}, "parent_tool_use_id": null, "session_id": "cc2bbd93-cd8d-4453-97ac-5b23fb8d16f8"}
+{"type": "control_request", "request_id": "int-1", "request": {"subtype": "interrupt"}}
+{"type": "user", "message": {"role": "user", "content": [{"type": "text", "text": "Write a 500-word story about a lighthouse keeper."}]}, "parent_tool_use_id": null, "session_id": "cc2bbd93-cd8d-4453-97ac-5b23fb8d16f8"}
+{"type": "control_request", "request_id": "int-2", "request": {"subtype": "interrupt"}}
+{"type": "user", "message": {"role": "user", "content": [{"type": "text", "text": "Reply with just the word next."}]}, "parent_tool_use_id": null, "session_id": "cc2bbd93-cd8d-4453-97ac-5b23fb8d16f8"}
+{"type": "control_request", "request_id": "int-3", "request": {"subtype": "interrupt"}}

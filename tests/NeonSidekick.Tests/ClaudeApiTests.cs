@@ -574,10 +574,12 @@ public class ClaudeApiTests
         // /settings' Claude (API) tab went to /tools' Claude tab on 2026-09-29 (the user's call), under the advisor's confirm.
         Assert.DoesNotContain("Claude (API)", SettingsMenu.TabTitles);
         var claude = SettingsMenu.ToolsTabFields[ToolsText.TabTitles.ToList().IndexOf(ToolsText.ClaudeTabTitle) - 1];
-        Assert.Equal(SettingsField.ClaudeAdvisorConfirm, claude[^5]);
-        Assert.Equal([SettingsField.ClaudeApi, SettingsField.ClaudeApiKey, SettingsField.ClaudeApiMaxTokens, SettingsField.ClaudeApiPromptCaching], claude.TakeLast(4));
+        Assert.Equal(SettingsField.ClaudeAdvisorConfirm, claude[^6]);
+        // The Claude CLI server's switch below them since 2026-09-30.
+        Assert.Equal(SettingsField.ClaudeCliServer, claude[^1]);
+        Assert.Equal([SettingsField.ClaudeApi, SettingsField.ClaudeApiKey, SettingsField.ClaudeApiMaxTokens, SettingsField.ClaudeApiPromptCaching], claude.SkipLast(1).TakeLast(4));
         Assert.All(SettingsMenu.TabFields, t => Assert.DoesNotContain(SettingsField.ClaudeApi, t));
-        var apiRows = claude.TakeLast(4).ToList();
+        var apiRows = claude.SkipLast(1).TakeLast(4).ToList();
 
         var data = new AppSettingsData();
         Assert.Equal("off", SettingsMenu.FieldValue(SettingsField.ClaudeApi, data, "C:\\p"));

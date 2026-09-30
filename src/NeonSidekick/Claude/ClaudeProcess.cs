@@ -85,8 +85,22 @@ public sealed class ClaudeProcess : IClaudeCli
         string executable = ClaudeExecutable.Locate(request.Executable, _environment, _exists)
             ?? throw new ClaudeStartException(string.IsNullOrWhiteSpace(request.Executable) ? ClaudeText.NotFound : ClaudeText.ConfiguredNotFound(request.Executable.Trim()));
         var launch = new ProcessLaunch(executable, ClaudeArguments.Build(request), null, request.WorkingDirectory, "claude -p", "claude");
+        await foreach (var evt in RunLaunchAsync(launch, request.Prompt, pid => ClaudeText.StartedLog(pid, request), cancellationToken).ConfigureAwait(false))
+        {
+            yield return evt;
+        }
+    }
+
+    /// <summary>
+    /// One <c>claude -p</c> child over <paramref name="launch"/> (2026-09-30: <c>/claude</c>'s and <c>claude_advisor</c>'s,
+    /// and the Claude CLI server's one-shot requests, <see cref="ClaudeArguments.BuildOneShot"/>): <paramref name="prompt"/>
+    /// on stdin, stdin closed, the reply read off stdout. The same shape and the same guarantees as
+    /// <see cref="RunAsync"/>: a <see cref="ClaudeEvent.Result"/> last, the child's tree killed on a cancel.
+    /// </summary>
+    internal static async IAsyncEnumerable<ClaudeEvent> RunLaunchAsync(ProcessLaunch launch, string prompt, Func<int, string> startedLog, [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
         using var process = Start(launch);
-        DiagnosticLog.Info(ClaudeText.Category, ClaudeText.StartedLog(process.Id, request));
+        DiagnosticLog.Info(ClaudeText.Category, startedLog(process.Id));
 
         var stderr = ReadTailAsync(process.StandardError);
         bool exited = false;
@@ -95,7 +109,7 @@ public sealed class ClaudeProcess : IClaudeCli
         {
             try
             {
-                await process.StandardInput.WriteAsync(request.Prompt.AsMemory(), cancellationToken).ConfigureAwait(false);
+                await process.StandardInput.WriteAsync(prompt.AsMemory(), cancellationToken).ConfigureAwait(false);
                 process.StandardInput.Close();
             }
             catch (IOException)
@@ -131,7 +145,12 @@ public sealed class ClaudeProcess : IClaudeCli
         }
     }
 
-    private static Process Start(ProcessLaunch launch)
+    /// <summary>
+    /// Starts a Claude CLI child with its three streams redirected as UTF-8 (no BOM) and <see cref="ChildEnvironment"/> on
+    /// top of the inherited variables: the one place this app starts <c>claude</c>, <c>/claude</c>'s per-message children
+    /// and the Claude CLI server's long-lived one (<see cref="ClaudeServerHost"/>, 2026-09-30) alike.
+    /// </summary>
+    internal static Process Start(ProcessLaunch launch)
     {
         var start = new ProcessStartInfo(launch.Executable)
         {
@@ -161,7 +180,7 @@ public sealed class ClaudeProcess : IClaudeCli
         }
     }
 
-    private static void Kill(Process process)
+    internal static void Kill(Process process)
     {
         try
         {
@@ -178,7 +197,7 @@ public sealed class ClaudeProcess : IClaudeCli
     }
 
     /// <summary>stderr to its end, only the last <see cref="StderrTailChars"/> kept; a broken pipe ends it quietly.</summary>
-    private static async Task<string> ReadTailAsync(StreamReader reader)
+    internal static async Task<string> ReadTailAsync(StreamReader reader)
     {
         var tail = new StringBuilder();
         try

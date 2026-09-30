@@ -69,6 +69,7 @@ During early development, I was experimenting with synthwave-style themes in Spe
 * **Home Assistant:** Control lights, scenes, the TV, to-do lists and sensors through your own Home Assistant. The model finds devices by room or name ("dim the den to 30%"), and anything outside a safe list waits for your yes. `/ha` drives the house directly, without the model.
 * **ComfyUI:** Pictures from your own ComfyUI workflows (text-to-image, image-to-image, face swaps). The model writes prompts in each model family's style, or `/imagine` sends yours exactly as typed. A wizard builds or imports workflows.
 * **Claude API:** Anthropic's Claude models as one more `/server` choice, using your own API key (stored encrypted), with thinking levels, prompt caching and cost in `/usage`. It stays off until you turn it on in the *Claude* tab of `/tools`.
+* **Claude CLI server:** your installed Claude Code as a `/server` choice, kept running as one open session. Claude Code's own tools are switched off; the model gets this app's tools instead, with the same approvals. Off until you turn it on in the *Claude* tab of `/tools`.
 * **Claude Code:** `/claude` sends a message to the Claude Code CLI and brings its reply into the conversation. With `claude_advisor`, the local model can ask Claude for read-only advice when it's stuck. Both are optional and use your own Claude Code sign-in.
 * **Bot Chat:** `/botchat` lets your profiles talk to each other in their own personas and voices, optionally illustrated by ComfyUI.
 
@@ -91,7 +92,7 @@ During early development, I was experimenting with synthwave-style themes in Spe
 * Your settings live in `%USERPROFILE%\.neonsidekick` (or the folder in `NEONSIDEKICK_HOME`), under the profile `default`. A welcome splash screen shows until you send your first message.
 * The app needs an LLM to talk to. *LLM server scan mode* starts as `disabled`, so if no model is installed yet the app opens **Settings › Embedded models** straight away. Pick a model there to download it and run it inside the app. Press ESC twice to go back to the chat without installing one.
 * Already running a server such as LM Studio, Ollama or vLLM? Set *LLM server scan mode* to `local` (this machine), `remote` (your local network) or `both`, or give its address with `/server <url>`. With the URL left blank and a scan on, the startup picker **🖥️ Pick an LLM server** lists what it found: Enter saves your pick, and ESC uses the first server just for this run.
-* To use Anthropic's Claude models instead, turn on the Claude API in the *Claude* tab of `/tools`; it then shows up in `/server`.
+* To use Anthropic's Claude models instead, turn on the Claude API in the *Claude* tab of `/tools`; it then shows up in `/server`. To use your Claude Code install instead, turn on *Claude CLI server* there.
 
 ### Voice (optional)
 Speech output (`/tts`) and voice input (`/stt`) start off. The first time you turn one on, the app downloads its model: Kokoro for speech (about 326 MB), or Whisper base (about 148 MB) plus the small Silero voice detector for input. The wake word adds Vosk (about 41 MB).
@@ -101,7 +102,7 @@ Speech output (`/tts`) and voice input (`/stt`) start off. The first time you tu
 |---|---|
 | `/help` | Lists the commands and keys. |
 | `/settings` | Opens the settings. |
-| `/server` | Picks the LLM server (found, embedded or Claude API). |
+| `/server` | Picks the LLM server (found, embedded, Claude API or Claude CLI). |
 | `/model` | Picks the model on the current server. |
 | `/tools` | Chooses which tools the model may use. |
 | `/tts` / `/stt` | Turns speech output / voice input on or off. |
@@ -578,7 +579,7 @@ Every tool, grouped (Clock, Timers, Files, Git, Shell, Obsidian, SQL, ComfyUI, C
 
 #### Claude
 
-This tab covers the Claude Code CLI, for `/claude` (you send it a message) and `claude_advisor` (the model asks it for advice), then the Claude API as a server.
+This tab covers the Claude Code CLI, for `/claude` (you send it a message) and `claude_advisor` (the model asks it for advice), then the Claude API and the Claude CLI as servers.
 
 | Setting | What it does | Default |
 |---|---|---|
@@ -596,6 +597,7 @@ This tab covers the Claude Code CLI, for `/claude` (you send it a message) and `
 | Claude API key | Your Anthropic API key (`sk-ant-…`), saved encrypted for your Windows account (DPAPI) and shown as `(set, encrypted)`. Typing replaces it; an empty entry clears it. | (none) |
 | Claude API max tokens | The output cap per request, thinking included (1,024–128,000). A reply that hits it stops short, and the log says so. | 32,000 |
 | Claude API prompt caching | Marks the tools, system prompt and conversation for Anthropic's prompt cache. Each request then re-reads the previous one's content at a fraction of the price. | on |
+| Claude CLI server | Offers Claude Code on `/server` while it is found (*Claude executable*, or the PATH). If it's off (or Claude Code is gone) while the Claude CLI is the saved LLM URL, the app scans for a server as if the URL were blank, and a running Claude CLI stops. | off |
 
 With the *Claude API* switch on and a key set, `/server` (and the startup picker) lists a **Claude API** row after the local servers. Picking it sets *LLM URL* to `https://api.anthropic.com/v1` and offers the account's models, then the reasoning level.
 
@@ -605,6 +607,16 @@ With the *Claude API* switch on and a key set, `/server` (and the startup picker
 * *LLM reasoning* per model: `low`…`xhigh` turn on adaptive thinking at that effort (`xhigh` is `high` on the 4.6 models; Haiku 4.5 and older take a thinking budget instead). `none` turns thinking off where the model allows it. Opus 5.5 and Fable always think, so there `none` is the lowest effort.
 * The context window is the model's `max_input_tokens`.
 * `/usage` adds *Cache* and *Cost* rows. Cost is an estimate at list price, not the bill.
+
+With *Claude CLI server* on and Claude Code found, `/server` (and the startup picker) lists a **Claude CLI** row last. Picking it sets *LLM URL* to `claude-cli` (`http://claude-cli.localhost/v1`, a name that stands for the CLI, never a place) and offers `fable`, `opus`, `sonnet` and `haiku` as models, then the reasoning level (Claude Code's `--effort`). `/server claude-cli` goes straight to it.
+
+* **One open session.** The first message starts `claude` and keeps it running: every later message goes to the same process and the same Claude Code session, and only the new message is sent (Claude Code keeps the conversation). A change of model, reasoning, system prompt or offered tools restarts it on the same session (`--resume`), and so does a crash. `/clear`, `/new` and a profile switch start a new session. The session's id is saved with the app's session, so restoring the session resumes it.
+* **The app's tools, not Claude Code's.** Claude Code runs with all its own tools off, your Claude Code skills, hooks, settings files and MCP servers left out, and the app's own system prompt. The model gets the tools this turn offers, through an MCP server the app hosts: Claude Code starts the app's own executable as a small relay to it (`--mcp-relay`). Each call runs in the app as any model's does: the shell's approval pane, `ask_user`, the transcript and *LLM max tool iterations* all apply.
+* **ESC** interrupts Claude Code and the reply ends where it got to. If Claude Code does not stop within 3 seconds, it is closed, and the next message resumes the session on a new process.
+* Requests beside the conversation (a session's title, a skill reflection, a `/compact` summary, a `/botchat` bot) each run as a one-off `claude -p` with no tools and no saved session, so the chat's session never sees them.
+* *LLM auto compact* and the mid-turn context guard do nothing here: Claude Code compacts its own conversation. The context window is 200,000 tokens.
+* Messages count against your Claude Code plan (or its API key), as if you had typed them in Claude Code. The log records each turn's cost as Claude Code reports it.
+* Switching to another server stops the Claude CLI; the session stays on disk for a switch back.
 
 #### Home Assistant
 
@@ -791,7 +803,7 @@ Type `/` to list every command with a short summary. After a command and a space
 | `/reasoning [level]` | Pick the reasoning effort (`none`, `low`, `medium`, `high`, `xhigh`). |
 | `/remember <text>` | Add a memory. |
 | `/sampling [field value]` | Edit the per-model sampling overrides on a pane. To change the connected model's values directly, use `/sampling <field> <value>`, `<field> clear`, `extra <json>` or `clear` (see Sampling per model). |
-| `/server [url \| embedded]` | Pick an LLM server found on the usual ports, or set one by URL. The list also offers the Claude API (when it's on and has a key) and the installed embedded models. The model and reasoning pickers follow, and one reconnect applies all three. To add an embedded model, install it from `/settings` › Embedded. `embedded` lists only the installed embedded models (see Embedded). |
+| `/server [url \| embedded \| claude-cli]` | Pick an LLM server found on the usual ports, or set one by URL. The list also offers the Claude API (when it's on and has a key), the Claude CLI (when *Claude CLI server* is on and Claude Code is found) and the installed embedded models. The model and reasoning pickers follow, and one reconnect applies all three. To add an embedded model, install it from `/settings` › Embedded. `embedded` lists only the installed embedded models (see Embedded); `claude-cli` picks the Claude CLI (see Claude). |
 | `/sessions [id \| purge <id> \| purge older <age> \| purge all \| title [<text>]]` | List, restore, rename and purge stored sessions. An age is a number of days (`30`) or a duration (`12h`, `90m`, `2 hours`, `1d 6h`). `title` on its own opens a box with the current name in it (as double-clicking the name on the rule does), and works while a reply runs. |
 | `/settings`, `//` | Edit and save the settings. |
 | `/skills` | List the skills (Enter moves, renames, edits or deletes one) and edit the skill, reflection and project-file settings. |
@@ -1465,6 +1477,7 @@ Every variable the app reads starts with `NEONSIDEKICK_`. They override a settin
 | `NEONSIDEKICK_CLAUDE_ADVISOR` | Claude advisor tool | `on`/`off` (also `true`/`false`, `1`/`0`, `yes`/`no`). |
 | `NEONSIDEKICK_CLAUDE_API` | Claude API | `on`/`off` (also `true`/`false`, `1`/`0`, `yes`/`no`). |
 | `NEONSIDEKICK_CLAUDE_API_KEY` | Claude API key | The key, as issued (not encrypted). Never written to the log. |
+| `NEONSIDEKICK_CLAUDE_CLI_SERVER` | Claude CLI server | `on`/`off` (also `true`/`false`, `1`/`0`, `yes`/`no`). |
 
 ### Speech
 

@@ -47,6 +47,11 @@ public sealed record LlmServer(Uri BaseUrl, string Name, ProbeResult Result)
             return Anthropic.ClaudeApi.ServerName;
         }
 
+        if (Claude.ClaudeCliEndpoint.IsClaudeCli(baseUrl))
+        {
+            return Claude.ClaudeCliEndpoint.ServerName;
+        }
+
         if (ownedBy is not null && OwnerNames.TryGetValue(ownedBy.Trim(), out var byOwner))
         {
             return byOwner;
