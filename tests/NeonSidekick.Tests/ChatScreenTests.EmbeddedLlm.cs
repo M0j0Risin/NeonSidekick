@@ -7,7 +7,7 @@ using NeonSidekick.UI;
 
 namespace NeonSidekick.Tests;
 
-/// <summary>The embedded model on the screen (2026-09-29): its <c>/server</c> rows, the install before the switch, <c>/server embedded</c>, the startup picker.</summary>
+/// <summary>The embedded model on the screen (2026-09-29): its <c>/server</c> rows (the installed models alone since later that day), the catalog's install before the switch, <c>/server embedded</c>, the startup picker.</summary>
 public partial class ChatScreenTests
 {
     /// <summary>The fixture's session swapped for one over <paramref name="embedded"/>, its server's <c>/props</c> answered on the stub.</summary>
@@ -22,14 +22,14 @@ public partial class ChatScreenTests
     private const string EmbeddedConnectedE2b = "LLM: http://embedded.localhost/v1 model=gemma-4-e2b (embedded llama.cpp b11258 cuda on 127.0.0.1:59999)";
 
     [Fact]
-    public async Task Server_ListsTheEmbeddedModels_AndPickingAnInstalledOne_SavesItAndStartsIt()
+    public async Task Server_ListsTheInstalledEmbeddedModelsAlone_AndPickingOne_SavesItAndStartsIt()
     {
         _settings.Update(d => d.TtsOutput = false);
-        var embedded = UseEmbedded(new FakeEmbeddedLlm().Installed("gemma-4-e2b"));
+        var embedded = UseEmbedded(new FakeEmbeddedLlm().Installed("gemma-4-e2b", "gemma-4-12b-qat-uncensored"));
         PushLine("/server");
-        for (int i = 0; i < 19; i++)
+        for (int i = 0; i < 2; i++)
         {
-            _console.Input.PushKey(Keys.Down);  // past LM Studio, the 12B's six builds and the 26B A4B's and 31B's twelve to Gemma 4 E2B
+            _console.Input.PushKey(Keys.Down);  // past LM Studio and the 12B QAT Uncensored to Gemma 4 E2B, the only rows
         }
 
         _console.Input.PushKey(Keys.Enter);
@@ -40,13 +40,13 @@ public partial class ChatScreenTests
 
         Assert.Contains(SettingsMenu.ServerTitle, output);
         // Every row's detail in one column: the names padded as the catalog pads them, the quantisations after, and the
-        // detail's · under one another (2026-09-29).
-        Assert.Contains("Embedded   " + "Gemma 4 E4B QAT".PadRight(32) + "UD-Q4_K_XL   download  · 5.3 GB", output);   // each with its MTP drafter (2026-09-29)
-        Assert.Contains("Embedded   " + "Gemma 4 E2B".PadRight(32) + "UD-Q4_K_XL   installed · 4.3 GB", output);
-        Assert.Contains("Embedded   " + "Gemma 4 12B QAT Uncensored".PadRight(32) + "Q4_K_M       download  · 7.8 GB", output);
-        Assert.Contains("Embedded   " + "Gemma 4 12B".PadRight(32) + "BF16         download  · 24.5 GB", output);
-        Assert.Contains("Embedded   " + "Gemma 4 26B A4B QAT Uncensored".PadRight(32) + "Q4_K_M       download  · 18.2 GB", output);
-        Assert.Contains("LM Studio  " + "http://127.0.0.1:1234/v1".PadRight(43) + "  1 chat model", output);   // the URL column as wide as a name and a quantisation (38 until the 26B A4B names, 42 until COMPACT-LOW, 2026-09-29)
+        // detail's · under one another (2026-09-29). The installed models alone (later that day, the user's ask): a
+        // download starts from /settings › Embedded, never from /server.
+        Assert.Contains("Embedded   " + "Gemma 4 E2B".PadRight(32) + "UD-Q4_K_XL  installed · 4.3 GB", output);
+        Assert.Contains("Embedded   " + "Gemma 4 12B QAT Uncensored".PadRight(32) + "Q4_K_M      installed · 7.8 GB", output);
+        Assert.DoesNotContain("download  · ", output);
+        Assert.DoesNotContain("Gemma 4 E4B QAT", output);
+        Assert.Contains("LM Studio  " + "http://127.0.0.1:1234/v1".PadRight(42) + "  1 chat model", output);   // the URL column as wide as the widest name and quantisation shown
         Assert.Matches(@"installed · 4\.3 GB +⚡", output);   // the drafter column (2026-09-29), one column down the list
         Assert.Contains("  · 🖥️ LLM URL: " + EmbeddedLlmText.UrlDisplay, output);
         Assert.Contains(SettingsMenu.ReasoningTitle, output);
@@ -59,27 +59,44 @@ public partial class ChatScreenTests
         Assert.Equal(FakeEmbeddedLlm.LiveUrl, _endpoints[^1].LiveUrl);
     }
 
+    /// <summary>The fixture sized for the pane, so <c>/settings</c> opens with its tabs (the Embedded tab's catalog door).</summary>
+    private void UsePane()
+    {
+        _console.Profile.Height = 40;
+        _console.Profile.Width = 240;
+        _geometry = new ScreenGeometry(() => null, () => 100);
+    }
+
+    /// <summary>The keys from the input line to the catalog's Install of its first model: <c>/settings</c>, the Embedded tab, the <c>Embedded models</c> door, the model, Install.</summary>
+    private static void InstallTheFirstModelFromTheCatalog(ScriptedInput input)
+    {
+        PushLine(input, "/settings");
+        input.Push(Enumerable.Repeat(Keys.Right, (int)SettingsTab.Embedded).ToArray());
+        input.Push(Keys.Down, Keys.Enter);                // the catalog, on the first model
+        input.Push(Keys.Enter);                           // its page: Install, Back
+        input.Push(Keys.Enter);                           // Install: the pane closes, the screen downloads
+    }
+
     [Fact]
-    public async Task Server_PickingAnEmbeddedModelNotInstalled_DownloadsItFirst_ThenStartsIt()
+    public async Task Server_ListsNoEmbeddedModelNotInstalled_TheCatalogInstallsIt_ThenStartsIt()
     {
         _settings.Update(d => d.TtsOutput = false);
+        UsePane();
         var embedded = UseEmbedded(new FakeEmbeddedLlm());
-        PushLine("/server");
-        for (int i = 0; i < 22; i++)
-        {
-            _console.Input.PushKey(Keys.Down);  // the twenty-second embedded row: Gemma 4 E4B QAT
-        }
+        var model = EmbeddedModelCatalog.Models[0];
+        var input = new ScriptedInput();
+        PushLine(input, "/server");
+        input.Push(Keys.Escape);                          // LM Studio alone: nothing embedded is installed
+        InstallTheFirstModelFromTheCatalog(input);
+        PushLine(input, "/exit");
 
-        _console.Input.PushKey(Keys.Enter);
-        _console.Input.PushKey(Keys.Escape);    // keep the reasoning
-        PushLine("/exit");
+        string output = await RunAsync(input);
 
-        string output = await RunAsync();
-
-        Assert.Equal(["gemma-4-e4b-qat"], embedded.Installs);
-        Assert.Equal(["gemma-4-e4b-qat"], embedded.Starts);
-        Assert.Contains(NoticeGlyphs.Llm + EmbeddedLlmText.Installed(EmbeddedModelCatalog.Find("gemma-4-e4b-qat")!), output);
-        Assert.Equal("gemma-4-e4b-qat", _settings.Current.LlmModel);
+        Assert.DoesNotContain("Embedded   " + model.Display, output);
+        Assert.Equal([model.Id], embedded.Installs);
+        Assert.Equal([model.Id], embedded.Starts);
+        Assert.Contains(NoticeGlyphs.Llm + EmbeddedLlmText.Installed(model), output);
+        Assert.Equal(model.Id, _settings.Current.LlmModel);
     }
 
     /// <summary>
@@ -97,13 +114,15 @@ public partial class ChatScreenTests
     });
 
     /// <summary>
-    /// A download behind the line (2026-09-29, the user's ask): picked in <c>/server</c>, the reasoning asked first, then the
-    /// line is the user's while it runs — a command typed meanwhile runs — and its end installs, saves and connects.
+    /// A download behind the line (2026-09-29, the user's ask): picked in the catalog on <c>/settings</c> › Embedded (in
+    /// <c>/server</c> until later that day, which lists the installed models alone since), then the line is the user's while
+    /// it runs — a command typed meanwhile runs — and its end installs, saves and connects.
     /// </summary>
     [Fact]
-    public async Task Server_AnEmbeddedDownload_RunsBehindTheLine_ThenSwitchesToIt()
+    public async Task Settings_AnEmbeddedDownload_RunsBehindTheLine_ThenSwitchesToIt()
     {
         _settings.Update(d => d.TtsOutput = false);
+        UsePane();
         var input = Scripted();
         var embedded = UseEmbedded(new FakeEmbeddedLlm());
         var release = new TaskCompletionSource();
@@ -120,8 +139,7 @@ public partial class ChatScreenTests
             {
                 case 0:
                     step++;
-                    PushLine(input, "/server");
-                    input.Push(Keys.Down, Keys.Enter, Keys.Escape);   // the first embedded row, not installed; keep the reasoning
+                    InstallTheFirstModelFromTheCatalog(input);
                     break;
                 case 1:
                     step++;
@@ -160,12 +178,10 @@ public partial class ChatScreenTests
     /// paused notice, nothing saved, nothing started.
     /// </summary>
     [Fact]
-    public async Task Server_AnEmbeddedDownloadPaused_SavesNothing_AndSaysSo()
+    public async Task Settings_AnEmbeddedDownloadPaused_SavesNothing_AndSaysSo()
     {
         _settings.Update(d => d.TtsOutput = false);
-        _console.Profile.Height = 40;
-        _console.Profile.Width = 240;
-        _geometry = new ScreenGeometry(() => null, () => 100);
+        UsePane();
         var input = Scripted();
         var embedded = UseEmbedded(new FakeEmbeddedLlm());
         bool idle = false;
@@ -181,8 +197,7 @@ public partial class ChatScreenTests
             {
                 case 0:
                     step++;
-                    PushLine(input, "/server");
-                    input.Push(Keys.Down, Keys.Enter, Keys.Escape);
+                    InstallTheFirstModelFromTheCatalog(input);
                     break;
                 case 1:
                     step++;
@@ -208,7 +223,9 @@ public partial class ChatScreenTests
         Assert.Contains("· " + EmbeddedLlmText.PausedNotice, output);
         Assert.Equal("http://127.0.0.1:1234/v1", _settings.Current.LlmUrl);   // nothing saved before the model is there
         Assert.Empty(embedded.Starts);
-        Assert.DoesNotContain(SettingsMenu.Title + "   General", output);   // the click was the job's, never the row's /settings
+        int started = output.IndexOf(BackgroundJobText.DownloadStarted(EmbeddedModelCatalog.Models[0]), StringComparison.Ordinal);
+        Assert.True(started >= 0, output);
+        Assert.DoesNotContain(SettingsMenu.Title + "   General", output[started..]);   // the click was the job's, never the row's /settings (the catalog's own /settings closed before)
     }
 
     /// <summary>
@@ -219,9 +236,7 @@ public partial class ChatScreenTests
     public async Task Settings_RemovingTheModelThatDownloads_StopsTheDownloadFirst()
     {
         _settings.Update(d => d.TtsOutput = false);
-        _console.Profile.Height = 40;
-        _console.Profile.Width = 240;
-        _geometry = new ScreenGeometry(() => null, () => 100);   // the pane: /settings with its tabs
+        UsePane();
         var input = Scripted();
         var embedded = UseEmbedded(new FakeEmbeddedLlm());
         var model = EmbeddedModelCatalog.Models[0];
@@ -248,8 +263,7 @@ public partial class ChatScreenTests
             {
                 case 0:
                     step++;
-                    PushLine(input, "/server");
-                    input.Push(Keys.Down, Keys.Enter, Keys.Escape);   // the first embedded row, not installed; keep the reasoning
+                    InstallTheFirstModelFromTheCatalog(input);
                     break;
                 case 1:
                     step++;
@@ -284,25 +298,37 @@ public partial class ChatScreenTests
     }
 
     [Fact]
-    public async Task Server_Embedded_ListsTheEmbeddedModelsAlone()
+    public async Task Server_Embedded_ListsTheInstalledEmbeddedModelsAlone()
     {
         _settings.Update(d => d.TtsOutput = false);
         var embedded = UseEmbedded(new FakeEmbeddedLlm().Installed("gemma-4-e2b", "gemma-4-e4b-qat"));
         PushLine("/server embedded");
-        for (int i = 0; i < 18; i++)
-        {
-            _console.Input.PushKey(Keys.Down);
-        }
-
-        _console.Input.PushKey(Keys.Enter);     // the nineteenth embedded row: Gemma 4 E2B
+        _console.Input.PushKey(Keys.Enter);     // the first of the two rows: Gemma 4 E2B (E4B QAT after it in the catalog)
         _console.Input.PushKey(Keys.Escape);    // keep the reasoning
         PushLine("/exit");
 
         string output = await RunAsync();
 
         Assert.DoesNotContain("LM Studio  http://127.0.0.1:1234/v1", output);
+        Assert.Contains("Gemma 4 E4B QAT", output);
+        Assert.DoesNotContain("Gemma 4 12B", output);   // not installed: the catalog's, not /server's (2026-09-29, the user's ask)
         Assert.Equal(["gemma-4-e2b"], embedded.Starts);
         Assert.Equal(1, ModelProbes);   // the startup connect alone: /server embedded asked no server
+    }
+
+    [Fact]
+    public async Task Server_Embedded_WithNoneInstalled_PointsAtTheCatalog()
+    {
+        _settings.Update(d => d.TtsOutput = false);
+        var embedded = UseEmbedded(new FakeEmbeddedLlm());
+        PushLine("/server embedded");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains(EmbeddedLlmText.NoneInstalled, output);
+        Assert.DoesNotContain(SettingsMenu.ServerTitle, output);   // no empty picker
+        Assert.Empty(embedded.Starts);
     }
 
     [Fact]

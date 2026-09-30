@@ -206,9 +206,10 @@ internal sealed class LlmSession : IDisposable
     public const string EmbeddedUnavailable = "The LLM URL names the embedded model, which is not available here (llama.cpp's Windows x64 builds only).";
 
     /// <summary>
-    /// The <c>/server</c> rows of the embedded model (2026-09-29): one per catalog model, installed or not, asked nothing —
-    /// the row's detail says installed, how far a paused download got, or what it costs. None when no embedded model is offered
-    /// — no service, not Windows x64, or <paramref name="effective"/>'s <c>Embedded LLM server enabled</c> off (2026-09-29).
+    /// The <c>/server</c> rows of the embedded model (2026-09-29): one per installed catalog model, asked nothing — every
+    /// catalog model, installed or not, until later that day, when the user asked for the installed ones alone: a download
+    /// starts from the catalog on <c>/settings</c>' Embedded tab. None when no embedded model is offered — no service, not
+    /// Windows x64, or <paramref name="effective"/>'s <c>Embedded LLM server enabled</c> off (2026-09-29) — or none is installed.
     /// </summary>
     public IReadOnlyList<LlmServer> EmbeddedRows(AppSettingsData effective)
     {
@@ -218,7 +219,7 @@ internal sealed class LlmSession : IDisposable
             return [];
         }
 
-        return embedded.Catalog.Select(model =>
+        return embedded.Catalog.Where(model => embedded.State(model).IsInstalled).Select(model =>
         {
             var state = embedded.State(model);
             var result = new ProbeResult(state.IsInstalled, [model.Id], EmbeddedLlmText.ModelDetail(model, state));

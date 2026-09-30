@@ -19,12 +19,12 @@ public partial class SettingsMenuTests
     }
 
     [Fact]
-    public void TheTab_IsAfterStt_WithItsSevenRows_AllReconnecting()
+    public void TheTab_IsAfterGeneral_WithItsSevenRows_AllReconnecting()
     {
         int tab = (int)SettingsTab.Embedded;
         Assert.Equal("Embedded", SettingsMenu.TabTitles[tab]);
-        Assert.Equal("STT", SettingsMenu.TabTitles[tab - 1]);   // the Claude (API) tab sat between until it went to /tools (2026-09-29)
-        Assert.Equal("Botchat", SettingsMenu.TabTitles[tab + 1]);
+        Assert.Equal("General", SettingsMenu.TabTitles[tab - 1]);   // second since later on 2026-09-29 (the user's order); after STT until then, the Claude (API) tab between until it went to /tools
+        Assert.Equal("LLM", SettingsMenu.TabTitles[tab + 1]);
         // The switch first and MTP last (2026-09-29, the user's asks).
         Assert.Equal([SettingsField.EmbeddedLlmServer, SettingsField.EmbeddedModels, SettingsField.EmbeddedBackend, SettingsField.EmbeddedContextSize, SettingsField.EmbeddedGpuLayers, SettingsField.EmbeddedVision, SettingsField.EmbeddedDrafter], SettingsMenu.TabFields[tab]);
         Assert.All(SettingsMenu.TabFields[tab], f => Assert.True(SettingsMenu.IsLlmField(f), f.ToString()));

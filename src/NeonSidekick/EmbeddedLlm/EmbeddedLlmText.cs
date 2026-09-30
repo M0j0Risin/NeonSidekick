@@ -12,8 +12,12 @@ public static class EmbeddedLlmText
     /// <summary>How the <c>LLM URL</c> row shows the sentinel (<see cref="EmbeddedEndpoint.BaseUrl"/>).</summary>
     public const string UrlDisplay = "embedded (llama.cpp)";
 
-    /// <summary>The refusal when no catalog model is installed and none was named.</summary>
-    public const string NoneInstalled = "no embedded model is installed; pick one in /server to download it";
+    /// <summary>
+    /// The refusal when no catalog model is installed and none was named, and <c>/server embedded</c>'s when it has no row to
+    /// list (2026-09-29: <c>/server</c> lists the installed models alone since then, the user's ask; "pick one in /server to
+    /// download it" until then).
+    /// </summary>
+    public const string NoneInstalled = "no embedded model is installed; install one in /settings › Embedded › Embedded models";
 
     /// <summary>The note after a cancelled download: what is on disk stays.</summary>
     public const string PausedNotice = "download paused; pick the model again to resume where it stopped";

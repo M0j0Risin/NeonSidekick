@@ -43,7 +43,7 @@ During early development, I was experimenting with synthwave-style themes in Spe
 
 ### AI Connectivity & Context Management
 * **Local AI Auto-Discovery:** Set *LLM scan mode* and the app finds most OpenAI-compatible servers on this machine or your local network (LM Studio, vLLM, SGLang, Ollama, Unsloth, etc.); or give a URL by hand for a custom endpoint.
-* **Embedded LLM:** No server? Pick a Gemma 4 or Qwen model in `/server` and the app downloads it from Hugging Face (with its vision projector) and runs it on its own llama.cpp server: CUDA, Vulkan or CPU, chosen for your machine. See the *Embedded* tab of `/settings`.
+* **Embedded LLM:** No server? Install a Gemma 4 or Qwen model from the *Embedded* tab of `/settings` and the app downloads it from Hugging Face (with its vision projector) and runs it on its own llama.cpp server: CUDA, Vulkan or CPU, chosen for your machine. Installed models are then offered in `/server`.
 * **Smart Context Handling:** Configurable automatic context compaction to optimize token usage and prevent window overflow.
 * **Prompt Transparency:** Visually inspect exactly what is being fed into the system prompt and see detailed compaction summaries—no black boxes.
 * **Persistent Memory:** A UI-editable memory system that automatically injects essential, recurring details directly into context.
@@ -157,17 +157,72 @@ Settings that an environment variable or flag can override for one launch are li
 * Pictures in the profile's `splash\` folder (created for you) replace the built-in ones.
 * `/splash` shows the splash whatever this says: tiled when the setting is `tiled`, otherwise one picture.
 
-#### Sessions
+#### Embedded
+
+A model the app downloads and runs itself, on llama.cpp's `llama-server`, for when no other server is around: Gemma 4 from the small E2B to the 31B, Qwen3.6 35B A3B, and Qwen3.8 27B (also in NVFP4 for Blackwell GPUs). Models are installed from the **Embedded models** catalog on this tab: each row says `installed · 4.2 GB`, `download  · 4.2 GB` for one not yet downloaded, or how far a paused download got. *Install* downloads it in the background (📥 and its percentage on the hint row; double-click 📥 to pause), and switches to it when it's done — unless you picked another server meanwhile. `/server` (and the startup picker) lists one **Embedded** row per *installed* model after the servers it found. Builds of one model share its name, so each row shows its quantisation too, and a ⚡ in the last column marks a model with a drafter (the MTP column below). Every model reads images (its vision projector is part of the download). `/server embedded` lists the installed embedded rows alone.
+
+| Model | Quantisation | Download | MTP |
+|---|---|---|---|
+| Gemma 4 12B (`gemma-4-12b`, Unsloth) | UD-Q4_K_XL | 8 GB | drafter |
+| Gemma 4 12B (`gemma-4-12b-q5`, Unsloth) | UD-Q5_K_XL | 9.2 GB | drafter |
+| Gemma 4 12B (`gemma-4-12b-q6`, Unsloth) | UD-Q6_K_XL | 11.3 GB | drafter |
+| Gemma 4 12B (`gemma-4-12b-bf16`, Unsloth) | BF16 | 24.5 GB | drafter |
+| Gemma 4 12B QAT (`gemma-4-12b-qat`, Unsloth) | UD-Q4_K_XL | 7.1 GB | drafter |
+| Gemma 4 12B QAT Uncensored (`gemma-4-12b-qat-uncensored`, HauhauCS Balanced) | Q4_K_M | 7.8 GB | drafter |
+| Gemma 4 26B A4B (`gemma-4-26b-a4b`, Unsloth) | UD-Q4_K_XL | 18.7 GB | drafter |
+| Gemma 4 26B A4B (`gemma-4-26b-a4b-q5`, Unsloth) | UD-Q5_K_XL | 22.9 GB | drafter |
+| Gemma 4 26B A4B (`gemma-4-26b-a4b-q6`, Unsloth) | UD-Q6_K_XL | 25 GB | drafter |
+| Gemma 4 26B A4B QAT (`gemma-4-26b-a4b-qat`, Unsloth) | UD-Q4_K_XL | 15.7 GB | drafter |
+| Gemma 4 26B A4B QAT Uncensored (`gemma-4-26b-a4b-qat-uncensored`, HauhauCS Balanced) | Q4_K_M | 18.2 GB | drafter |
+| Gemma 4 26B A4B Uncensored (`gemma-4-26b-a4b-uncensored`, HauhauCS Balanced) | Q4_K_P | 18.1 GB | — |
+| Gemma 4 26B A4B Uncensored (`gemma-4-26b-a4b-uncensored-q5`, HauhauCS Balanced) | Q5_K_P | 20.5 GB | — |
+| Gemma 4 26B A4B Uncensored (`gemma-4-26b-a4b-uncensored-q6`, HauhauCS Balanced) | Q6_K_P | 24 GB | — |
+| Gemma 4 31B (`gemma-4-31b`, Unsloth) | UD-Q4_K_XL | 20.5 GB | drafter |
+| Gemma 4 31B (`gemma-4-31b-q5`, Unsloth) | UD-Q5_K_XL | 23.6 GB | drafter |
+| Gemma 4 31B QAT (`gemma-4-31b-qat`, Unsloth) | UD-Q4_K_XL | 18.8 GB | drafter |
+| Gemma 4 31B QAT Uncensored (`gemma-4-31b-qat-uncensored`, HauhauCS Balanced) | Q4_K_M | 20.2 GB | drafter |
+| Gemma 4 E2B (`gemma-4-e2b`, Unsloth) | UD-Q4_K_XL | 4.3 GB | drafter |
+| Gemma 4 E2B Uncensored (`gemma-4-e2b-uncensored`, HauhauCS Aggressive) | Q4_K_P | 4.4 GB | — |
+| Gemma 4 E4B (`gemma-4-e4b`, Unsloth) | UD-Q4_K_XL | 6.2 GB | drafter |
+| Gemma 4 E4B QAT (`gemma-4-e4b-qat`, Unsloth) | UD-Q4_K_XL | 5.3 GB | drafter |
+| Gemma 4 E4B Uncensored (`gemma-4-e4b-uncensored`, HauhauCS Aggressive) | Q4_K_P | 6.4 GB | — |
+| Qwen3.6 35B A3B (`qwen3.6-35b-a3b`, Unsloth) | UD-Q4_K_XL | 23.3 GB | — |
+| Qwen3.6 35B A3B (`qwen3.6-35b-a3b-q5`, Unsloth) | UD-Q5_K_XL | 27.5 GB | — |
+| Qwen3.6 35B A3B Uncensored (`qwen3.6-35b-a3b-uncensored`, HauhauCS Aggressive) | Q4_K_P | 24.3 GB | — |
+| Qwen3.8 27B (`qwen3.8-27b`, Unsloth) | UD-Q4_K_XL | 18.5 GB | built in |
+| Qwen3.8 27B (`qwen3.8-27b-q5`, Unsloth) | UD-Q5_K_XL | 21.8 GB | built in |
+| Qwen3.8 27B (`qwen3.8-27b-q6`, Unsloth) | UD-Q6_K_XL | 26.2 GB | built in |
+| Qwen3.8 27B NVFP4 (`qwen3.8-27b-nvfp4-very-low`, esatapedico) | VERY-LOW | 15.8 GB | built in |
+| Qwen3.8 27B NVFP4 (`qwen3.8-27b-nvfp4-compact-low`, esatapedico) | COMPACT-LOW | 16.1 GB | built in |
+| Qwen3.8 27B NVFP4 (`qwen3.8-27b-nvfp4-low`, esatapedico) | LOW | 16.5 GB | built in |
+| Qwen3.8 27B NVFP4 (`qwen3.8-27b-nvfp4-medium`, esatapedico) | MEDIUM | 17.3 GB | built in |
+| Qwen3.8 27B NVFP4 (`qwen3.8-27b-nvfp4-mid-high`, esatapedico) | MID-HIGH | 17.8 GB | built in |
+| Qwen3.8 27B NVFP4 (`qwen3.8-27b-nvfp4-high`, esatapedico) | HIGH | 18.5 GB | built in |
+| Qwen3.8 27B NVFP4 (`qwen3.8-27b-nvfp4-very-high`, esatapedico) | VERY-HIGH | 20.6 GB | built in |
+| Qwen3.8 27B NVFP4 (`qwen3.8-27b-nvfp4-highest`, esatapedico) | HIGHEST | 24.1 GB | built in |
+| Qwen3.8 27B Uncensored (`qwen3.8-27b-uncensored`, HauhauCS Aggressive) | Q4_K_P | 18.9 GB | built in |
+| Qwen3.8 27B Uncensored (`qwen3.8-27b-uncensored-q5`, HauhauCS Aggressive) | Q5_K_P | 21.1 GB | built in |
 
 | Setting | What it does | Default |
 |---|---|---|
-| Session logging | Writes every completed turn to the profile's `sessions.db`, so `/sessions` can list, search and restore it. | on |
-| Session retention (days) | Sessions whose last turn is older than this are purged at startup (0–3650; 0 = keep forever). | 0 |
-| Session naming mode | How a session gets its title: `model-written` asks the model for a short slug after the first turn; `first-line` uses the first line you sent. | `model-written` |
-| Session show name | Which titles show on the rule above the input row: `all-names`, `model-written` (a model-written or typed name only) or `none`. | `all-names` |
-| Session tool | Offers the model `session_manager` to search, list and read this profile's earlier sessions (never restore or purge). | on |
-| Session search max results | How many sessions a `session_manager` search or list returns (1–20). | 10 |
-| Session save thinking | Saves each reply's thinking with the session, so a resumed session can send it back with *LLM preserve thinking* on. Off keeps `sessions.db` smaller; thinking saved earlier is still read back. | off |
+| Embedded LLM server enabled | Offers the embedded models. Off, `/server` lists none, `/server embedded` refuses, a saved embedded URL counts as none (the app looks for a server as if it were blank), and a running embedded server stops. Installed models stay on disk. | on |
+| Embedded models | The catalog: each model with its size and state. Enter on an installed one offers *Use now* and *Remove*; on any other, *Install*, plus *Remove* for a partly downloaded one. Remove asks first, stops a download of that model and a server running it, and deletes its folder; when it was the saved LLM, the LLM URL and model are cleared. Using or installing closes the settings and connects. | |
+| Embedded backend | Which llama.cpp build runs the model: `auto` (CUDA with an NVIDIA driver 580 or newer, else Vulkan, else the CPU), `cuda`, `vulkan` or `cpu`. The row shows what `auto` picked and why. | `auto` |
+| Embedded context size | The server's context window in tokens: 0 for the model's own (128K for Gemma 4 E2B/E4B, 256K for the larger models, which needs a lot of memory), else 512–262,144. | 32,768 |
+| Embedded GPU layers | How many of the model's layers go on the GPU: `auto` (as many as the free VRAM holds), `all`, or a number (0 runs on the CPU). | `auto` |
+| Embedded vision | Loads the model's vision projector so it can read images (about 1 GB more memory for most models, under 200 MB for the 12Bs). Off, an image sent to the embedded model is refused. | on |
+| Embedded drafter | Multi-token prediction (MTP): the model drafts a few tokens ahead and checks them, so replies come faster with the same text. Gemma 4 models use a small drafter file (downloaded with the model, or at its next start for a model installed before); Qwen3.8 has the drafter built in; the MTP column above says which. Off, no drafter is loaded (nor downloaded with a new install) and the model decodes one token at a time; turn it off if a model misbehaves with it. | on |
+
+* The Qwen3.8 27B NVFP4 builds keep most weights in NVFP4, which needs the CUDA backend on an NVIDIA Blackwell GPU (RTX 50 series or newer); elsewhere they are slow or don't load. Their tiers (VERY-LOW to HIGHEST) share one NVFP4 body and differ in the output head, the token embedding and the MTP head, except HIGHEST, which keeps more in Q8_0/BF16.
+* Each file is checked against the SHA-256 Hugging Face publishes for it. A download that's paused (double-click 📥) or cut keeps what arrived, and picking the model again resumes it. The drive must have the rest plus 1 GB to spare.
+* The first start downloads llama.cpp itself (build `b11258`: 577 MB for CUDA with its runtime, 33 MB for Vulkan, 19 MB for the CPU). If `auto` picked CUDA and it doesn't start, the app says so and tries Vulkan.
+* The server listens on a random port on `127.0.0.1` only, with a key made at each start. It keeps running while you switch reasoning or change a setting it doesn't depend on, restarts when one it does changes, and stops when you pick another server, turn *Embedded LLM server enabled* off, or quit. If the app crashes, Windows stops it too.
+* Models live in `models\llm\<id>\` and llama.cpp in `llama\` under the home folder. `/about` shows both.
+* `/model` on the embedded server lists the installed embedded models; one server runs at a time. A `/botchat multi` bot whose profile points at `embedded` shares the running model.
+* Each model runs with the sampling its card recommends (Gemma 4: temperature 1.0, top-p 0.95, top-k 64; HauhauCS's QAT Balanced builds: 0.6, 0.9, 64; Qwen: 1.0, 0.95, 20); `/sampling` overrides them as for any server.
+* The 12B models at Q4 want about 8 GB of VRAM plus the context, at Q5 and Q6 about 10 and 12 GB, and BF16 about 25 GB; the 26B A4B, 31B and Qwen models want roughly their download size plus the context (or a partial offload through *Embedded GPU layers*). E2B and E4B fit in less. The 26B A4B and Qwen3.6 35B A3B are mixture-of-experts models: only 4B and 3B of their weights work per token, so they run faster than their size suggests.
+* HauhauCS's Qwen3.8 repository also ships a *FastMTP* file; it needs a patched llama.cpp, so the app uses the drafter built into the model instead.
+* Windows x64 only. The small models (E2B, E4B) call tools less reliably than the bigger ones.
 
 #### LLM
 
@@ -248,72 +303,17 @@ Voice input sets up in the background (🎧 on the hint row), so a first-use Whi
 | STT whisper model | The Whisper model that transcribes: `ggml-tiny.en.bin`, `ggml-base.en.bin` or `ggml-small.en.bin` (downloaded on first use). | `ggml-base.en.bin` |
 | STT vosk model | The Vosk model the wake word and interrupt listen with: `vosk-model-small-en-us-0.15`, `vosk-model-en-us-0.22-lgraph` or `vosk-model-small-en-in-0.4`. | `vosk-model-small-en-us-0.15` |
 
-#### Embedded
-
-A model the app downloads and runs itself, on llama.cpp's `llama-server`, for when no other server is around: Gemma 4 from the small E2B to the 31B, Qwen3.6 35B A3B, and Qwen3.8 27B (also in NVFP4 for Blackwell GPUs). `/server` (and the startup picker) lists one **Embedded** row per model after the servers it found: an installed model says `installed · 4.2 GB`, one not yet downloaded says `download  · 4.2 GB`, and a paused download says how far it got. Builds of one model share its name, so each row shows its quantisation too, and a ⚡ in the last column marks a model with a drafter (the MTP column below). Every model reads images (its vision projector is part of the download). Picking a row that isn't installed asks for the reasoning level, then downloads it in the background (📥 and its percentage on the hint row; double-click 📥 to pause), and switches to it when it's done — unless you picked another server meanwhile. `/server embedded` lists the embedded rows alone.
-
-| Model | Quantisation | Download | MTP |
-|---|---|---|---|
-| Gemma 4 12B (`gemma-4-12b`, Unsloth) | UD-Q4_K_XL | 8 GB | drafter |
-| Gemma 4 12B (`gemma-4-12b-q5`, Unsloth) | UD-Q5_K_XL | 9.2 GB | drafter |
-| Gemma 4 12B (`gemma-4-12b-q6`, Unsloth) | UD-Q6_K_XL | 11.3 GB | drafter |
-| Gemma 4 12B (`gemma-4-12b-bf16`, Unsloth) | BF16 | 24.5 GB | drafter |
-| Gemma 4 12B QAT (`gemma-4-12b-qat`, Unsloth) | UD-Q4_K_XL | 7.1 GB | drafter |
-| Gemma 4 12B QAT Uncensored (`gemma-4-12b-qat-uncensored`, HauhauCS Balanced) | Q4_K_M | 7.8 GB | drafter |
-| Gemma 4 26B A4B (`gemma-4-26b-a4b`, Unsloth) | UD-Q4_K_XL | 18.7 GB | drafter |
-| Gemma 4 26B A4B (`gemma-4-26b-a4b-q5`, Unsloth) | UD-Q5_K_XL | 22.9 GB | drafter |
-| Gemma 4 26B A4B (`gemma-4-26b-a4b-q6`, Unsloth) | UD-Q6_K_XL | 25 GB | drafter |
-| Gemma 4 26B A4B QAT (`gemma-4-26b-a4b-qat`, Unsloth) | UD-Q4_K_XL | 15.7 GB | drafter |
-| Gemma 4 26B A4B QAT Uncensored (`gemma-4-26b-a4b-qat-uncensored`, HauhauCS Balanced) | Q4_K_M | 18.2 GB | drafter |
-| Gemma 4 26B A4B Uncensored (`gemma-4-26b-a4b-uncensored`, HauhauCS Balanced) | Q4_K_P | 18.1 GB | — |
-| Gemma 4 26B A4B Uncensored (`gemma-4-26b-a4b-uncensored-q5`, HauhauCS Balanced) | Q5_K_P | 20.5 GB | — |
-| Gemma 4 26B A4B Uncensored (`gemma-4-26b-a4b-uncensored-q6`, HauhauCS Balanced) | Q6_K_P | 24 GB | — |
-| Gemma 4 31B (`gemma-4-31b`, Unsloth) | UD-Q4_K_XL | 20.5 GB | drafter |
-| Gemma 4 31B (`gemma-4-31b-q5`, Unsloth) | UD-Q5_K_XL | 23.6 GB | drafter |
-| Gemma 4 31B QAT (`gemma-4-31b-qat`, Unsloth) | UD-Q4_K_XL | 18.8 GB | drafter |
-| Gemma 4 31B QAT Uncensored (`gemma-4-31b-qat-uncensored`, HauhauCS Balanced) | Q4_K_M | 20.2 GB | drafter |
-| Gemma 4 E2B (`gemma-4-e2b`, Unsloth) | UD-Q4_K_XL | 4.3 GB | drafter |
-| Gemma 4 E2B Uncensored (`gemma-4-e2b-uncensored`, HauhauCS Aggressive) | Q4_K_P | 4.4 GB | — |
-| Gemma 4 E4B (`gemma-4-e4b`, Unsloth) | UD-Q4_K_XL | 6.2 GB | drafter |
-| Gemma 4 E4B QAT (`gemma-4-e4b-qat`, Unsloth) | UD-Q4_K_XL | 5.3 GB | drafter |
-| Gemma 4 E4B Uncensored (`gemma-4-e4b-uncensored`, HauhauCS Aggressive) | Q4_K_P | 6.4 GB | — |
-| Qwen3.6 35B A3B (`qwen3.6-35b-a3b`, Unsloth) | UD-Q4_K_XL | 23.3 GB | — |
-| Qwen3.6 35B A3B (`qwen3.6-35b-a3b-q5`, Unsloth) | UD-Q5_K_XL | 27.5 GB | — |
-| Qwen3.6 35B A3B Uncensored (`qwen3.6-35b-a3b-uncensored`, HauhauCS Aggressive) | Q4_K_P | 24.3 GB | — |
-| Qwen3.8 27B (`qwen3.8-27b`, Unsloth) | UD-Q4_K_XL | 18.5 GB | built in |
-| Qwen3.8 27B (`qwen3.8-27b-q5`, Unsloth) | UD-Q5_K_XL | 21.8 GB | built in |
-| Qwen3.8 27B (`qwen3.8-27b-q6`, Unsloth) | UD-Q6_K_XL | 26.2 GB | built in |
-| Qwen3.8 27B NVFP4 (`qwen3.8-27b-nvfp4-very-low`, esatapedico) | VERY-LOW | 15.8 GB | built in |
-| Qwen3.8 27B NVFP4 (`qwen3.8-27b-nvfp4-compact-low`, esatapedico) | COMPACT-LOW | 16.1 GB | built in |
-| Qwen3.8 27B NVFP4 (`qwen3.8-27b-nvfp4-low`, esatapedico) | LOW | 16.5 GB | built in |
-| Qwen3.8 27B NVFP4 (`qwen3.8-27b-nvfp4-medium`, esatapedico) | MEDIUM | 17.3 GB | built in |
-| Qwen3.8 27B NVFP4 (`qwen3.8-27b-nvfp4-mid-high`, esatapedico) | MID-HIGH | 17.8 GB | built in |
-| Qwen3.8 27B NVFP4 (`qwen3.8-27b-nvfp4-high`, esatapedico) | HIGH | 18.5 GB | built in |
-| Qwen3.8 27B NVFP4 (`qwen3.8-27b-nvfp4-very-high`, esatapedico) | VERY-HIGH | 20.6 GB | built in |
-| Qwen3.8 27B NVFP4 (`qwen3.8-27b-nvfp4-highest`, esatapedico) | HIGHEST | 24.1 GB | built in |
-| Qwen3.8 27B Uncensored (`qwen3.8-27b-uncensored`, HauhauCS Aggressive) | Q4_K_P | 18.9 GB | built in |
-| Qwen3.8 27B Uncensored (`qwen3.8-27b-uncensored-q5`, HauhauCS Aggressive) | Q5_K_P | 21.1 GB | built in |
+#### Sessions
 
 | Setting | What it does | Default |
 |---|---|---|
-| Embedded LLM server enabled | Offers the embedded models. Off, `/server` lists none, `/server embedded` refuses, a saved embedded URL counts as none (the app looks for a server as if it were blank), and a running embedded server stops. Installed models stay on disk. | on |
-| Embedded models | The catalog: each model with its size and state. Enter on an installed one offers *Use now* and *Remove*; on any other, *Install*, plus *Remove* for a partly downloaded one. Remove asks first, stops a download of that model and a server running it, and deletes its folder; when it was the saved LLM, the LLM URL and model are cleared. Using or installing closes the settings and connects. | |
-| Embedded backend | Which llama.cpp build runs the model: `auto` (CUDA with an NVIDIA driver 580 or newer, else Vulkan, else the CPU), `cuda`, `vulkan` or `cpu`. The row shows what `auto` picked and why. | `auto` |
-| Embedded context size | The server's context window in tokens: 0 for the model's own (128K for Gemma 4 E2B/E4B, 256K for the larger models, which needs a lot of memory), else 512–262,144. | 32,768 |
-| Embedded GPU layers | How many of the model's layers go on the GPU: `auto` (as many as the free VRAM holds), `all`, or a number (0 runs on the CPU). | `auto` |
-| Embedded vision | Loads the model's vision projector so it can read images (about 1 GB more memory for most models, under 200 MB for the 12Bs). Off, an image sent to the embedded model is refused. | on |
-| Embedded drafter | Multi-token prediction (MTP): the model drafts a few tokens ahead and checks them, so replies come faster with the same text. Gemma 4 models use a small drafter file (downloaded with the model, or at its next start for a model installed before); Qwen3.8 has the drafter built in; the MTP column above says which. Off, no drafter is loaded (nor downloaded with a new install) and the model decodes one token at a time; turn it off if a model misbehaves with it. | on |
-
-* The Qwen3.8 27B NVFP4 builds keep most weights in NVFP4, which needs the CUDA backend on an NVIDIA Blackwell GPU (RTX 50 series or newer); elsewhere they are slow or don't load. Their tiers (VERY-LOW to HIGHEST) share one NVFP4 body and differ in the output head, the token embedding and the MTP head, except HIGHEST, which keeps more in Q8_0/BF16.
-* Each file is checked against the SHA-256 Hugging Face publishes for it. A download that's paused (double-click 📥) or cut keeps what arrived, and picking the model again resumes it. The drive must have the rest plus 1 GB to spare.
-* The first start downloads llama.cpp itself (build `b11258`: 577 MB for CUDA with its runtime, 33 MB for Vulkan, 19 MB for the CPU). If `auto` picked CUDA and it doesn't start, the app says so and tries Vulkan.
-* The server listens on a random port on `127.0.0.1` only, with a key made at each start. It keeps running while you switch reasoning or change a setting it doesn't depend on, restarts when one it does changes, and stops when you pick another server, turn *Embedded LLM server enabled* off, or quit. If the app crashes, Windows stops it too.
-* Models live in `models\llm\<id>\` and llama.cpp in `llama\` under the home folder. `/about` shows both.
-* `/model` on the embedded server lists the installed embedded models; one server runs at a time. A `/botchat multi` bot whose profile points at `embedded` shares the running model.
-* Each model runs with the sampling its card recommends (Gemma 4: temperature 1.0, top-p 0.95, top-k 64; HauhauCS's QAT Balanced builds: 0.6, 0.9, 64; Qwen: 1.0, 0.95, 20); `/sampling` overrides them as for any server.
-* The 12B models at Q4 want about 8 GB of VRAM plus the context, at Q5 and Q6 about 10 and 12 GB, and BF16 about 25 GB; the 26B A4B, 31B and Qwen models want roughly their download size plus the context (or a partial offload through *Embedded GPU layers*). E2B and E4B fit in less. The 26B A4B and Qwen3.6 35B A3B are mixture-of-experts models: only 4B and 3B of their weights work per token, so they run faster than their size suggests.
-* HauhauCS's Qwen3.8 repository also ships a *FastMTP* file; it needs a patched llama.cpp, so the app uses the drafter built into the model instead.
-* Windows x64 only. The small models (E2B, E4B) call tools less reliably than the bigger ones.
+| Session logging | Writes every completed turn to the profile's `sessions.db`, so `/sessions` can list, search and restore it. | on |
+| Session retention (days) | Sessions whose last turn is older than this are purged at startup (0–3650; 0 = keep forever). | 0 |
+| Session naming mode | How a session gets its title: `model-written` asks the model for a short slug after the first turn; `first-line` uses the first line you sent. | `model-written` |
+| Session show name | Which titles show on the rule above the input row: `all-names`, `model-written` (a model-written or typed name only) or `none`. | `all-names` |
+| Session tool | Offers the model `session_manager` to search, list and read this profile's earlier sessions (never restore or purge). | on |
+| Session search max results | How many sessions a `session_manager` search or list returns (1–20). | 10 |
+| Session save thinking | Saves each reply's thinking with the session, so a resumed session can send it back with *LLM preserve thinking* on. Off keeps `sessions.db` smaller; thinking saved earlier is still read back. | off |
 
 #### Botchat
 
@@ -675,7 +675,7 @@ Type `/` to list every command with its summary; after a command and a space, it
 | `/reasoning [level]` | Pick the reasoning effort (`none`, `low`, `medium`, `high`, `xhigh`). |
 | `/remember <text>` | Add a memory. |
 | `/sampling [field value]` | Edit the sampling overrides per model on a pane; `/sampling <field> <value>`, `<field> clear`, `extra <json>` or `clear` change the connected model's (see Sampling per model). |
-| `/server [url \| embedded]` | Pick an LLM server found on the usual ports (or the Claude API, when it's on and has a key, or an embedded model), or set one. The model and reasoning pickers follow, and one reconnect applies all three. An embedded model not yet installed downloads first. `embedded` lists the embedded models alone (see Embedded). |
+| `/server [url \| embedded]` | Pick an LLM server found on the usual ports (or the Claude API, when it's on and has a key, or an embedded model), or set one. The model and reasoning pickers follow, and one reconnect applies all three. Only installed embedded models are listed; install one from `/settings` › Embedded. `embedded` lists the installed embedded models alone (see Embedded). |
 | `/sessions [id \| purge <id> \| purge older <age> \| purge all \| title [<text>]]` | List, restore, rename and purge stored sessions. An age is a number of days (`30`) or a duration (`12h`, `90m`, `2 hours`, `1d 6h`). `title` alone opens a box with the current name in it (as double-clicking the name on the rule does), and works while a reply runs. |
 | `/settings`, `//` | Edit and save the settings. |
 | `/skills` | List the skills (Enter moves, renames, edits or deletes one) and edit the skill, reflection and project-file settings. |

@@ -917,7 +917,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("32768", SettingsMenu.EditableValue(SettingsField.LlmContextLength, new AppSettingsData { LlmContextLength = 32_768 }));
         Assert.Equal(SettingsField.LlmContextLength, SettingsMenu.TabFields[(int)SettingsTab.Llm][^16]);   // the reasoning estimate since 2026-09-29; the mid-turn usage picker, the four compact rows, the turn cap, the tools, the tool-compact picker, the cap, the fun verbs, show thinking, preserve thinking, sampling and sampling from Hugging Face follow it
         // The pane's tabs (five since 2026-09-19: Ask, Files and Web are /tools' tabs, Skills is /skills' Options tab): General, Sessions, LLM in their own order, TTS / STT the enum order of their session's fields; every field on exactly one tab of the three panes.
-        Assert.Equal(["General", "Sessions", "LLM", "TTS", "STT", "Embedded", "Botchat"], SettingsMenu.TabTitles);   // Embedded LLM since 2026-09-29; Claude (API) before Botchat since later on 2026-09-27; Claude last since 2026-09-27; Botchat last from 2026-09-25;   // Sessions right after General (2026-09-18); Web last until 2026-09-19, Skills third until later that day
+        Assert.Equal(["General", "Embedded", "LLM", "TTS", "STT", "Sessions", "Botchat"], SettingsMenu.TabTitles);   // the user's order since later on 2026-09-29 (Embedded second, Sessions after STT); Embedded LLM since 2026-09-29; Claude (API) before Botchat since later on 2026-09-27; Claude last since 2026-09-27; Botchat last from 2026-09-25;   // Sessions right after General (2026-09-18); Web last until 2026-09-19, Skills third until later that day
         // The Options tab of /skills (2026-09-19; the Skills tab of /settings from 2026-09-16 until then): the skills switch, the external-folder switch and the compact-mode picker, then (2026-09-17) the #-mention switch, the delete switch, then the auto-learn switch and the reflection rows; none a reconnect.
         Assert.Equal([SettingsField.AgentSkills, SettingsField.ExternalSkills, SettingsField.SkillCompactMode, SettingsField.SkillHashMention], SettingsMenu.SkillsTabFields[0]);   // the Options tab; the reflection rows on their own tab since later on 2026-09-19
         Assert.Equal([SettingsField.ReflectionAutoLearn, SettingsField.ReflectionReasoning, SettingsField.ReflectionWindow, SettingsField.ReflectionMinToolCalls, SettingsField.ReflectionMaxRequests, SettingsField.ReflectionCooldownMinutes, SettingsField.ReflectionCooldownMode, SettingsField.ReflectionIncludesSessions, SettingsField.ReflectionYieldsToTurns, SettingsField.ReflectionEditsSupportingFiles], SettingsMenu.SkillsTabFields[1]);   // the Reflection tab: the cooldown, its mode and the sessions switch (last, the user's place) since 2026-09-19
@@ -1384,7 +1384,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(PreviewSentences, new List<string>([.. chunker.Append(SettingsMenu.VoicePreviewText), chunker.Flush()]));
         Assert.Equal(Enum.GetValues<SettingsField>().Where(SettingsMenu.IsVoiceField), SettingsMenu.TabFields[(int)SettingsTab.Stt]);
         // The Ask tab (2026-09-15; /tools' first settings tab since 2026-09-19): the question tool's switch and its two caps, none a reconnect.
-        Assert.Equal(["General", "Sessions", "LLM", "TTS", "STT", "Embedded", "Botchat"], SettingsMenu.TabTitles);   // Embedded LLM since 2026-09-29; Claude (API) before Botchat since later on 2026-09-27; Claude last since 2026-09-27; Botchat last from 2026-09-25;   // five since 2026-09-19
+        Assert.Equal(["General", "Embedded", "LLM", "TTS", "STT", "Sessions", "Botchat"], SettingsMenu.TabTitles);   // the user's order since later on 2026-09-29 (Embedded second, Sessions after STT); Embedded LLM since 2026-09-29; Claude (API) before Botchat since later on 2026-09-27; Claude last since 2026-09-27; Botchat last from 2026-09-25;   // five since 2026-09-19
         // The Options tab of /skills (2026-09-19; the Skills tab of /settings from 2026-09-16 until then): the skills switch, the external-folder switch and the compact-mode picker, then (2026-09-17) the #-mention switch, the delete switch, then the auto-learn switch and the reflection rows; none a reconnect.
         Assert.Equal([SettingsField.AgentSkills, SettingsField.ExternalSkills, SettingsField.SkillCompactMode, SettingsField.SkillHashMention], SettingsMenu.SkillsTabFields[0]);   // the Options tab; the reflection rows on their own tab since later on 2026-09-19
         Assert.Equal([SettingsField.ReflectionAutoLearn, SettingsField.ReflectionReasoning, SettingsField.ReflectionWindow, SettingsField.ReflectionMinToolCalls, SettingsField.ReflectionMaxRequests, SettingsField.ReflectionCooldownMinutes, SettingsField.ReflectionCooldownMode, SettingsField.ReflectionIncludesSessions, SettingsField.ReflectionYieldsToTurns, SettingsField.ReflectionEditsSupportingFiles], SettingsMenu.SkillsTabFields[1]);   // the Reflection tab: the cooldown, its mode and the sessions switch (last, the user's place) since 2026-09-19
@@ -2910,7 +2910,7 @@ public partial class SettingsMenuTests : IDisposable
     private string Titled(string row) => row + new string(' ', _console.Profile.Width - 2 - TextCells.Width(row)) + ScreenPane.CloseGlyph;
 
     /// <summary>The strip as the pane prints it: the label, then every tab title with a space either side, two spaces between. Pinned.</summary>
-    private const string Strip = SettingsMenu.Title + "   General    Sessions    LLM    TTS    STT    Embedded    Botchat ";   // six since 2026-09-25 (Botchat); five tabs since 2026-09-19: Ask, Files and Web are /tools' (ToolsMenuTests), Skills is /skills' Options tab (SkillsMenuTests)
+    private const string Strip = SettingsMenu.Title + "   General    Embedded    LLM    TTS    STT    Sessions    Botchat ";   // six since 2026-09-25 (Botchat); five tabs since 2026-09-19: Ask, Files and Web are /tools' (ToolsMenuTests), Skills is /skills' Options tab (SkillsMenuTests)
 
     [Fact]
     public async Task OnThePane_TheListOpensOnTheGeneralTab_AndEscClosesIt()
@@ -2939,7 +2939,7 @@ public partial class SettingsMenuTests : IDisposable
     public async Task OnThePane_EveryTab_ShowsItsRowsInOrder()
     {
         var (menu, pane) = PaneMenu();
-        Push(Keys.Right, Keys.Tab, Keys.Right, Keys.Right, Keys.Escape);   // Sessions, LLM (Tab), then TTS, STT (the three tool tabs left for /tools on 2026-09-19, the Skills tab for /skills later that day)
+        Push(Keys.Right, Keys.Tab, Keys.Right, Keys.Right, Keys.Right, Keys.Escape);   // Embedded, LLM (Tab), then TTS, STT, Sessions (the user's order, 2026-09-29; the three tool tabs left for /tools on 2026-09-19, the Skills tab for /skills later that day)
 
         Assert.Equal(SettingsChanges.None, await menu.ShowAsync(CancellationToken.None));
 
@@ -3997,26 +3997,26 @@ public partial class SettingsMenuTests : IDisposable
     }
 
     [Fact]
-    public async Task OnThePane_TheLlmTab_IsThird_AfterSessions()
+    public async Task OnThePane_TheLlmTab_IsThird_AfterEmbedded()
     {
         var (menu, pane) = PaneMenu();
-        GoTo(SettingsTab.Llm);                                  // General → Sessions → LLM (2026-09-19; the Skills tab sat between from 2026-09-18 until then — /skills' Options tab now)
-        Push(Keys.Left);                                        // Sessions
+        GoTo(SettingsTab.Llm);                                  // General → Embedded → LLM (2026-09-29, the user's order; General → Sessions → LLM from 2026-09-19, the Skills tab between from 2026-09-18 until then — /skills' Options tab now)
+        Push(Keys.Left);                                        // Embedded
         Push(Keys.Escape);
 
         Assert.Equal(SettingsChanges.None, await menu.ShowAsync(CancellationToken.None));
 
         Assert.Contains("\n" + Titled(Strip) + "\n \n▸ LLM scan mode                   local\n", _console.Output);
-        Assert.Contains("\n▸ Session logging             on\n", _console.Output);
+        Assert.Contains("\n▸ Embedded LLM server enabled", _console.Output);
         Assert.DoesNotContain("Agent skills", _console.Output);
         pane.Dispose();
     }
 
     [Fact]
-    public async Task OnThePane_TheSessionsTab_IsSecond_AfterGeneral()
+    public async Task OnThePane_TheSessionsTab_IsSixth_AfterStt()
     {
         var (menu, pane) = PaneMenu();
-        GoTo(SettingsTab.Sessions);                             // one Right (2026-09-18; the wrap from General that morning)
+        GoTo(SettingsTab.Sessions);                             // five Rights (2026-09-29, after STT; one from 2026-09-18, the wrap from General that morning)
         Push(Keys.Down, Keys.Enter);                            // Session retention (days), the second row: typed
         _console.Input.PushText("30");
         Push(Keys.Enter);
@@ -4040,7 +4040,8 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Contains("\n  · Session show name: none\n", _console.Output);
         Assert.Contains("\n▸ Session show name           none\n", _console.Output);
         Assert.False(SettingsMenu.IsToggle(SettingsField.SessionShowName));
-        Assert.Equal(SettingsTab.Sessions, (SettingsTab)1);
+        Assert.Equal(SettingsTab.Sessions, (SettingsTab)5);
+        Assert.Equal(SettingsTab.Embedded, (SettingsTab)1);   // the user's order, 2026-09-29
         Assert.Equal([SettingsField.SessionLogging, SettingsField.SessionRetentionDays, SettingsField.SessionNamingMode, SettingsField.SessionShowName, SettingsField.SessionTool, SettingsField.SessionSearchMaxResults, SettingsField.SessionSaveThinking], SettingsMenu.TabFields[(int)SettingsTab.Sessions]);
         // Save thinking (2026-09-28): the Sessions tab's last row, a toggle off by default.
         Assert.True(SettingsMenu.IsToggle(SettingsField.SessionSaveThinking));

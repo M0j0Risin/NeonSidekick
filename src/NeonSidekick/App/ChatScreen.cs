@@ -8133,7 +8133,7 @@ internal sealed partial class ChatScreen
 
         if (servers.Count > 0)
         {
-            // The embedded model's rows (2026-09-29) are always listed and never answered a scan: the picker opens as it did
+            // The embedded model's rows (2026-09-29; the installed ones alone since later that day) never answered a scan: the picker opens as it did
             // for the servers that did, or when only embedded rows stand; ESC takes the first server that answered, never a
             // embedded model — starting one loads gigabytes, which only a pick should do.
             var answered = servers.Where(s => !EmbeddedLlm.EmbeddedEndpoint.IsEmbedded(s.BaseUrl)).ToList();
@@ -8510,7 +8510,15 @@ internal sealed partial class ChatScreen
                     return;
                 }
 
-                if (await _menu.PickServerAsync(_session.EmbeddedRows(effective), _session.Endpoint?.BaseUrl, SettingsMenu.ServerTitle, cancellationToken, _session.Endpoint?.ModelId).ConfigureAwait(false) is { } row)
+                // The installed models alone (later that day, the user's ask): none installed, the catalog is where one comes from.
+                var rows = _session.EmbeddedRows(effective);
+                if (rows.Count == 0)
+                {
+                    _transcript.Error(EmbeddedLlm.EmbeddedLlmText.NoneInstalled);
+                    return;
+                }
+
+                if (await _menu.PickServerAsync(rows, _session.Endpoint?.BaseUrl, SettingsMenu.ServerTitle, cancellationToken, _session.Endpoint?.ModelId).ConfigureAwait(false) is { } row)
                 {
                     await UseEmbeddedRowAsync(row, cancellationToken).ConfigureAwait(false);
                 }
