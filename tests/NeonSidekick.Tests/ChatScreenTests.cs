@@ -18839,6 +18839,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(PerfBarMode.Words, Texts(ChatScreen.ArgumentItems("/perf", "", sources)));
         // The commands whose argument is a path of their own keep their list over a mention (2026-09-30).
         Assert.True(ChatScreen.TakesPathArgument("/speak") && ChatScreen.TakesPathArgument("/view") && ChatScreen.TakesPathArgument("/PRINT"));
+        Assert.True(ChatScreen.TakesPathArgument("/tree") && ChatScreen.TakesPathArgument("/explore") && ChatScreen.TakesPathArgument("/vault"));   // their folder lists
         Assert.False(ChatScreen.TakesPathArgument("/loop") || ChatScreen.TakesPathArgument("/plan") || ChatScreen.TakesPathArgument("/claude"));   // off and the looks (later on 2026-09-29)
         Assert.Equal([new CompletionItem("gauge", PerfBarMode.Describe("gauge"))], ChatScreen.ArgumentItems("/perf", "g", sources));
 

@@ -101,6 +101,8 @@ public sealed partial class InputLine
         private bool _walking;
         // The last event was an empty Delete that emptyDelete spent (2026-09-24): the next one's repeat flag.
         private bool _deleteSpent;
+        // The word a double-click selected, while its second press is held (2026-09-30): a drag then moves by words.
+        private (int Start, int End)? _heldWord;
         // A picture dragged toward the line (2026-09-28): the id a left press on a picture caught (−1 = none), the cell
         // it was pressed at, and whether a drag has left that cell yet (the hint row says so while it has).
         private int _pressedPicture = -1;
@@ -290,6 +292,12 @@ public sealed partial class InputLine
             ArgumentNullException.ThrowIfNull(input);
             var pane = _line._pane;
             var hintClicks = _line._hintClicks;
+            if (input is not InputEvent.Drag)
+            {
+                // A double-click's word is held only while its second press is (2026-09-30): the drags that follow it.
+                _heldWord = null;
+            }
+
             if (input is InputEvent.Release release)
             {
                 // The left button let go (2026-09-28): the drop of a picture dragged here, else nothing. It ends no pair
@@ -366,12 +374,24 @@ public sealed partial class InputLine
                 }
 
                 // The button is still down from a click on the area: the cursor follows, the anchor
-                // stays. Off the rows, or after a click that missed, the drag is nothing.
-                if (_anchor >= 0 && pane.TryHitInput(drag.X, drag.Y, out int to))
+                // stays. Off the rows, or after a click that missed, the drag is nothing. After a double-click the
+                // selection moves by whole words and always keeps the word the double-click took (2026-09-30, as Windows'
+                // edit controls do): a jitter of the second press inside it leaves it whole.
+                if (_anchor >= 0 && pane.TryHitInput(drag.X, drag.Y, out int to, out int toUnder))
                 {
+                    int anchor = _anchor;
                     int at = DraftIndex(to);
-                    if (at != _cursor)
+                    if (_heldWord is { } held)
                     {
+                        var over = WordUnder(_text.ToString(), toUnder);
+                        (anchor, at) = over.Start < held.Start ? (held.End, over.Start)
+                            : over.End > held.End ? (held.Start, over.End)
+                            : (held.Start, held.End);
+                    }
+
+                    if (at != _cursor || anchor != _anchor)
+                    {
+                        _anchor = anchor;
                         _cursor = at;
                         Redraw();
                     }
@@ -846,20 +866,21 @@ public sealed partial class InputLine
                 return EditOutcome.Handled;
             }
 
-            if (pane.TryHitInput(click.X, click.Y, out int at))
+            if (pane.TryHitInput(click.X, click.Y, out int at, out int under))
             {
                 _cursor = DraftIndex(at);
                 _anchor = _cursor;
 
                 // A second click on the same word within the interval selects it (2026-09-30, the user's ask): paired by the
-                // word's start, so the two presses may land on different letters of it; a masked value selects whole, its
-                // words' edges never shown.
-                string draft = _text.ToString();
-                var word = _o.Mask ? (Start: 0, End: draft.Length) : DraftWords.At(draft, _cursor);
+                // word's start, so the two presses may land on different letters of it. The word is the one under the
+                // pointer, not the caret's side of it: the whole of a paste's label is its token, and past a row's end
+                // it is the row's last word, never the space a wrap dropped there.
+                var word = WordUnder(_text.ToString(), under);
                 if (hintClicks.Second(DraftWordPairKey(word.Start)) && word.End > word.Start)
                 {
                     _anchor = word.Start;
                     _cursor = word.End;
+                    _heldWord = word;
                 }
 
                 Redraw();
@@ -1115,6 +1136,11 @@ public sealed partial class InputLine
         // A click's index comes from the drawn (display) rows; the draft's index is behind the labels.
         private int DraftIndex(int displayIndex) => Math.Clamp(_line._pastes.ToDraftIndex(_text.ToString(), displayIndex), 0, _text.Length);
 
+        // The word a double-click at display element `under` takes (2026-09-30, DraftWords): a masked value whole, its
+        // words' edges never shown.
+        private (int Start, int End) WordUnder(string draft, int under) =>
+            _o.Mask ? (0, draft.Length) : DraftWords.At(draft, _line._pastes.ToDraftElement(draft, under));
+
         // The list follows the draft: the word under the cursor — a command at the start, its
         // argument after it, else an @word — is looked up when it changes, and the list goes
         // when there is none (or nothing matches, or ESC dismissed this very word).
@@ -1241,7 +1267,8 @@ public sealed partial class InputLine
         /// Whether the word under the cursor in a slash command's text is a mention to complete as one (2026-09-30, the user's
         /// ask: <c>/loop infinite 1s append the time to @file.txt</c> completes the <c>@</c> as a message would): its character's
         /// list is on, and the command's argument is no path of its own (<see cref="InputLine.PathArgument"/>: <c>/speak</c>,
-        /// <c>/view</c>, <c>/print</c> keep their file list, and none of them takes an <c>@</c>).
+        /// <c>/view</c>, <c>/print</c> keep their file list and <c>/tree</c>, <c>/explore</c>, <c>/vault</c> their folder list,
+        /// and none of them takes an <c>@</c>).
         /// </summary>
         private bool MentionInArgument(string draft, string command) =>
             MentionCompleter.TriggerAt(draft, _cursor) switch

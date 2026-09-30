@@ -39,9 +39,6 @@ public class PerfBarTests
         Assert.Equal(PerfBarStyle.Led, PerfBarMode.Parse("led"));
         Assert.Equal(PerfBarStyle.Text, PerfBarMode.Parse("bars"));
         Assert.Equal("", PerfBarMode.Describe("bars"));
-        Assert.Equal(PerfBarStyle.Gauge, PerfBarMode.Resolve(new AppSettingsData { PerformanceBarLook = "gauge" }));
-        Assert.Equal(PerfBarStyle.Text, PerfBarMode.Resolve(new AppSettingsData { PerformanceBarLook = "bars" }));   // warns, once
-        Assert.Equal(PerfBarStyle.Text, PerfBarMode.Resolve(new AppSettingsData { PerformanceBarLook = "bars" }));
     }
 
     [Fact]
@@ -55,6 +52,7 @@ public class PerfBarTests
         Assert.Empty(PerfBarItems.Resolve([]));
         var resolved = PerfBarItems.Resolve([" NETUP ", "Ram", "bogus"]);
         Assert.Equal(["ram", "netup"], PerfBarItems.Names.Where(resolved.Contains));
+        Assert.Equal(["cpu"], PerfBarItems.Names.Where(PerfBarItems.Resolve(["cpu", null!]).Contains));   // a hand-edited null: skipped
         Assert.Null(PerfBarItems.Save(Only()));
         Assert.Equal(["cpu", "netdown"], PerfBarItems.Save(Only("netdown", "cpu")));   // the bar's order
         Assert.Equal("off", PerfBarItems.Value(null, "gauge"));
@@ -138,6 +136,9 @@ public class PerfBarTests
     [InlineData(850_000, " 850K")]
     [InlineData(12_400_000, "12.4M")]
     [InlineData(99_960_000, " 100M")]
+    [InlineData(999_400, " 999K")]
+    [InlineData(999_700, " 1.0M")]          // rounds to 1000K: the next unit's
+    [InlineData(999_600_000, " 1.0G")]
     [InlineData(150_000_000, " 150M")]
     [InlineData(1_200_000_000, " 1.2G")]
     public void TheRate_IsFiveCellsWide(double bits, string shown)
@@ -168,6 +169,51 @@ public class PerfBarTests
         Assert.Equal((1_000_000, 10_000, 1_000_000_000), (rates.Down, rates.Up, rates.Link));
         clock = TimeSpan.FromSeconds(2);
         Assert.Null(meter.Sample());   // no adapter left
+    }
+
+    [Fact]
+    public void NetworkMeter_ShowsTheBusiestAdapter_AndKeepsOneMissingFromAReading()
+    {
+        // Later on 2026-09-30 (the review's catch): a VPN adapter carries the same bytes as the card under it, so a sum read
+        // double; the busiest adapter's rates and link are shown. An adapter a reading skipped is rated against its last.
+        var clock = TimeSpan.Zero;
+        var counters = new ScriptedCounters(
+            [new("wifi", 0, 0, 866_000_000), new("vpn", 0, 0, 100_000_000)],
+            [new("wifi", 1_050_000, 20_000, 866_000_000), new("vpn", 1_000_000, 10_000, 100_000_000)],
+            [new("vpn", 2_000_000, 20_000, 100_000_000)],                                       // wifi skipped this reading
+            [new("wifi", 3_150_000, 60_000, 866_000_000), new("vpn", 2_000_000, 20_000, 100_000_000)]);
+        var meter = new NetworkMeter(counters, () => clock);
+
+        Assert.Null(meter.Sample());
+        clock = TimeSpan.FromSeconds(1);
+        Assert.Equal((8_400_000, 160_000, 866_000_000), meter.Sample()!.Value);   // wifi's, not the sum
+        clock = TimeSpan.FromSeconds(2);
+        Assert.Equal((8_000_000, 80_000, 100_000_000), meter.Sample()!.Value);    // the vpn alone this time
+        clock = TimeSpan.FromSeconds(3);
+        Assert.Equal((8_400_000, 160_000, 866_000_000), meter.Sample()!.Value);   // wifi over the two seconds since its last
+
+        meter.Reset();
+        Assert.Null(meter.Sample());   // a first again
+    }
+
+    [Fact]
+    public void TheSampler_ReadsWhatTheCheckedMetersNeed()
+    {
+        var time = new ManualTimeProvider();
+        var source = new FakePerfSource();
+        using var sampler = new PerfSampler(() => source, time);
+
+        sampler.Ensure(PerfBarItems.Reads(Only("cpu", "ram")));
+        time.Advance(TimeSpan.Zero);
+        Assert.Equal(PerfReads.Cpu | PerfReads.Ram, source.LastReads);   // no adapter walk, no GPU read
+
+        sampler.Ensure(PerfBarItems.Reads(Only("vram", "netup")));
+        time.Advance(PerfSampler.Interval);
+        Assert.Equal(PerfReads.Gpu | PerfReads.Net, source.LastReads);
+        Assert.Equal(PerfReads.All, PerfBarItems.Reads(Only([.. PerfBarItems.Names])));
+
+        sampler.Ensure(PerfBarItems.Reads(Only()));
+        Assert.False(sampler.Running);
     }
 
     [Fact]
@@ -341,7 +387,7 @@ public class PerfBarTests
     public void TheNullSource_ReadsNothing()
     {
         using var source = new NullPerfSource();
-        Assert.Equal(PerfSnapshot.None, source.Sample());
+        Assert.Equal(PerfSnapshot.None, source.Sample(PerfReads.All));
     }
 
     // ── The looks ───────────────────────────────────────────────────────────

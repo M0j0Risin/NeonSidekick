@@ -2778,9 +2778,18 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     /// The click's row is measured from <see cref="ScreenGeometry.CursorTop"/>: the terminal's
     /// cursor is on the area's row <c>_cursorRow</c>, so the area starts <c>_cursorRow</c> rows above it.
     /// </summary>
-    public bool TryHitInput(int x, int y, out int index)
+    public bool TryHitInput(int x, int y, out int index) => TryHitInput(x, y, out index, out _);
+
+    /// <summary>
+    /// <see cref="TryHitInput(int, int, out int)"/>, and the display index of the element the pointer is on
+    /// (<paramref name="under"/>, 2026-09-30, the double-click's word): the same as <paramref name="index"/> on a
+    /// character, the row's last element past its end — never the space a word wrap dropped there, nor the next row's
+    /// start — and the row's end on an empty row.
+    /// </summary>
+    public bool TryHitInput(int x, int y, out int index, out int under)
     {
         index = 0;
+        under = 0;
         if (!Enabled)
         {
             return false;
@@ -2804,6 +2813,9 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
             // The walk is InputLayout's (shared with the Up/Down row moves since 2026-09-21): past a
             // row broken by cells, the last character of this row is what the click meant.
             index = _shownStarts[r] + InputLayout.IndexInRow(row, col, _shownNext[r] >= 0 && _shownStarts[r] + row.Length == _shownNext[r]);
+            under = row.Length > 0 && col >= TextCells.Width(row)
+                ? _shownStarts[r] + row.Length - TextCells.ElementLengthBefore(row, row.Length)
+                : index;
             return true;
         }
     }

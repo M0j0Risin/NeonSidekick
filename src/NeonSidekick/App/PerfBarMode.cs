@@ -1,4 +1,3 @@
-using NeonSidekick.Diagnostics;
 using NeonSidekick.Settings;
 
 namespace NeonSidekick.App;
@@ -28,8 +27,9 @@ public sealed record PerfToggle(List<string>? Items, List<string>? LastItems, st
 /// <see cref="PerfBarStyle"/>. Until 2026-09-30 the setting <c>Show performance bar</c> was one of these or <c>off</c>, the
 /// switch and the look in one word; since, the meters shown are a checklist (<see cref="PerfBarItems"/>, the user's ask)
 /// and the look is <see cref="AppSettingsData.PerformanceBarLook"/>, picked on the same page's title row. <c>off</c> is a
-/// <c>/perf</c> word alone (<see cref="Words"/>). <see cref="Resolve"/> is the one place the saved look becomes the enum: a
-/// hand-edited value that is none of them falls back to <see cref="Default"/> with a warning.
+/// <c>/perf</c> word alone (<see cref="Words"/>). <see cref="Parse"/> is the one place the saved look becomes the enum: a
+/// hand-edited value that is none of them reads as <see cref="Default"/> without a warning, a display setting as the meters'
+/// list is (a <c>Resolve</c> that warned once went later on 2026-09-30, the review's catch: nothing but a test called it).
 /// </summary>
 public static class PerfBarMode
 {
@@ -44,8 +44,6 @@ public static class PerfBarMode
 
     /// <summary><c>/perf</c>'s words, as its completion lists them: <see cref="OffWord"/>, then the looks.</summary>
     public static readonly string[] Words = [OffWord, .. Names];
-
-    private const string Category = "Screen";
 
     /// <summary>Trims and ignores case; false (and <see cref="PerfBarStyle.Text"/>) for anything that is not one of <see cref="Names"/>.</summary>
     public static bool TryParse(string? text, out PerfBarStyle style)
@@ -122,26 +120,5 @@ public static class PerfBarMode
             var back = PerfBarItems.Resolve(last);
             return new(PerfBarItems.Save(back.Count > 0 ? back : PerfBarItems.Restored.ToHashSet(StringComparer.Ordinal)), last?.ToList(), name);
         }
-    }
-
-    // The last unknown value warned about: the bar asks at every tick, the log hears once per value.
-    private static string? _warned;
-
-    /// <summary>The look in force for <paramref name="effective"/>; an unknown saved value warns once and uses <see cref="Default"/>.</summary>
-    public static PerfBarStyle Resolve(AppSettingsData effective)
-    {
-        ArgumentNullException.ThrowIfNull(effective);
-        if (TryParse(effective.PerformanceBarLook, out var style))
-        {
-            return style;
-        }
-
-        if (!string.Equals(Interlocked.Exchange(ref _warned, effective.PerformanceBarLook), effective.PerformanceBarLook, StringComparison.Ordinal))
-        {
-            DiagnosticLog.Warn(Category,
-                $"{nameof(AppSettingsData.PerformanceBarLook)}='{effective.PerformanceBarLook}' is not one of {string.Join(", ", Names)}. Using {Default}.");
-        }
-
-        return PerfBarStyle.Text;
     }
 }

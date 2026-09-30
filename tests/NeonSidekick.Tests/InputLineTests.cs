@@ -1847,6 +1847,44 @@ public class InputLineTests : IDisposable
     }
 
     [Fact]
+    public async Task ADoubleClickOnAPastesLabel_SelectsItsToken_OnEitherHalf()
+    {
+        // Later on 2026-09-30 (the review's catch): the right half of a label snapped the caret past the token, and the word
+        // taken was the blank after it. The label reads "see [Pasted text #1 +5 lines] now": display 4 is its [, 28 its ].
+        var (line, keys, _) = WordClickLine();
+        keys.Push(Chars("see ")).PushPaste(Block(5)).Push(Chars(" now"));
+        keys.PushClick(Col(6), 100).PushClick(Col(24), 100);   // the left half, then the right: one word, paired
+        keys.Push(Chars("X")).Push(Keys.Enter);
+
+        Assert.Equal("see X now", Assert.IsType<InputResult.Submitted>(await line.ReadAsync(multiline: true)).Text);
+    }
+
+    [Fact]
+    public async Task AJitterOfTheSecondPress_KeepsTheWordWhole()
+    {
+        // Later on 2026-09-30 (the review's catch): a one-cell move before the release shrank "quick" to "qu".
+        var (line, keys, _) = WordClickLine();
+        keys.Push(Chars("the quick brown fox"));
+        keys.PushClick(Col(5), 100).PushClick(Col(5), 100).PushDrag(Col(6), 100).PushRelease(Col(6), 100);
+        keys.Push(Chars("slow")).Push(Keys.Enter);
+
+        Assert.Equal("the slow brown fox", Assert.IsType<InputResult.Submitted>(await line.ReadAsync()).Text);
+    }
+
+    [Theory]
+    [InlineData(12, "the X fox")]   // on to brown: quick and brown
+    [InlineData(1, "X brown fox")]  // back on to the: the and quick
+    public async Task ADragAfterADoubleClick_ExtendsByWholeWords(int dragTo, string expected)
+    {
+        var (line, keys, _) = WordClickLine();
+        keys.Push(Chars("the quick brown fox"));
+        keys.PushClick(Col(5), 100).PushClick(Col(5), 100).PushDrag(Col(dragTo), 100);
+        keys.Push(Chars("X")).Push(Keys.Enter);
+
+        Assert.Equal(expected, Assert.IsType<InputResult.Submitted>(await line.ReadAsync()).Text);
+    }
+
+    [Fact]
     public void DraftWordPairKey_IsPinned_AboveEveryHintKey()
     {
         Assert.Equal(1_000_000, InputLine.DraftWordPairKey(0));

@@ -140,7 +140,7 @@ public static partial class SmokeChecks
             bool sane = adapters.All(a => a.Received >= 0 && a.Sent >= 0 && a.LinkBits >= 0) && (rates is null || rates.Value.Down >= 0 && rates.Value.Up >= 0);
             string detail = adapters.Count == 0
                 ? "no adapter with a gateway: the network meters are left out"
-                : string.Create(CultureInfo.InvariantCulture, $"{adapters.Count} adapter{(adapters.Count == 1 ? "" : "s")} with a gateway, link {PerfText.Rate(adapters.Sum(a => (double)a.LinkBits)).Trim()}");
+                : string.Create(CultureInfo.InvariantCulture, $"{adapters.Count} adapter{(adapters.Count == 1 ? "" : "s")} with a gateway, fastest link {PerfText.Rate(adapters.Max(a => (double)a.LinkBits)).Trim()}");
             return new SmokeCheck(name, sane, sane ? detail : detail + ": a reading out of range");
         }
         catch (Exception ex)

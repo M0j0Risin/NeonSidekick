@@ -2103,7 +2103,7 @@ internal sealed partial class SettingsMenu
     public static IReadOnlyList<MenuButton> PerfBarButtons(PerfBarStyle look) =>
         [.. ChecklistButtons, .. PerfBarMode.Names.Select(name => new MenuButton(name, name[0], PerfBarMode.Name(look) == name))];
 
-    private const int PerfBarLookIndex = 2;
+    private static readonly int PerfBarLookIndex = ChecklistButtons.Count;
 
     /// <summary>Show performance bar's hint: <see cref="ToggleKeys"/> with the looks' keys (2026-09-30). Pinned.</summary>
     public const string PerfBarToggleKeys = "Enter / Space = on or off · A = all · N = none · T / G / S / L = look · ESC = back";

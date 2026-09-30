@@ -2432,6 +2432,15 @@ public class ScreenPaneTests : IDisposable
         Assert.Equal(Row0.Length, at);
         Assert.True(pane.TryHitInput(39, 101, out at));         // past the draft's end
         Assert.Equal(Long.Length, at);
+
+        // The element under the pointer (later on 2026-09-30, the double-click's word): the character itself, and past a row's
+        // end its last character, never the space the wrap dropped.
+        Assert.True(pane.TryHitInput(6, 100, out at, out int under));
+        Assert.Equal((4, 4), (at, under));
+        Assert.True(pane.TryHitInput(39, 100, out at, out under));
+        Assert.Equal((Row0.Length, Row0.Length - 1), (at, under));
+        Assert.True(pane.TryHitInput(39, 101, out _, out under));
+        Assert.Equal(Long.Length - 1, under);
     }
 
     [Fact]

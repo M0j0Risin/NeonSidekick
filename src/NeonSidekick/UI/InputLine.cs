@@ -333,7 +333,7 @@ public sealed partial class InputLine
     public Action<int>? OpenPicture { get; set; }
 
     /// <summary>
-    /// Whether a slash command's argument is a path its own file list completes (2026-09-30): there a mention character stays
+    /// Whether a slash command's argument is a path its own file or folder list completes (2026-09-30): there a mention character stays
     /// the argument list's, since the command takes a bare path; anywhere else in a command's text a mention completes as in a
     /// message. The screen's <c>ChatScreen.TakesPathArgument</c>; null = none is.
     /// </summary>

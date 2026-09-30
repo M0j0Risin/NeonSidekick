@@ -45,18 +45,41 @@ public static class PerfBarItems
         _ => id,
     };
 
-    /// <summary>The checklist's dim note beside a meter. Pinned.</summary>
+    /// <summary>The checklist's dim note beside a meter (the wording <see cref="PerfText"/>'s). Pinned.</summary>
     public static string Describe(string id) => id switch
     {
-        Cpu => "processor load",
-        Ram => "memory in use",
-        Gpu => "GPU load (NVIDIA, else Windows counters)",
-        Vram => "GPU memory in use",
-        Net => "network use, % of the link",
-        NetDown => "download rate (bits/s)",
-        NetUp => "upload rate (bits/s)",
+        Cpu => PerfText.CpuNote,
+        Ram => PerfText.RamNote,
+        Gpu => PerfText.GpuNote,
+        Vram => PerfText.VramNote,
+        Net => PerfText.NetNote,
+        NetDown => PerfText.NetDownNote,
+        NetUp => PerfText.NetUpNote,
         _ => "",
     };
+
+    /// <summary>
+    /// The readers <paramref name="on"/>'s meters need (later on 2026-09-30): the sampler runs those alone, and none at all
+    /// with nothing checked. GPU and VRAM are one reader, the network's three another.
+    /// </summary>
+    public static PerfReads Reads(IReadOnlySet<string> on)
+    {
+        ArgumentNullException.ThrowIfNull(on);
+        var reads = PerfReads.None;
+        foreach (string id in on)
+        {
+            reads |= id switch
+            {
+                Cpu => PerfReads.Cpu,
+                Ram => PerfReads.Ram,
+                Gpu or Vram => PerfReads.Gpu,
+                Net or NetDown or NetUp => PerfReads.Net,
+                _ => PerfReads.None,
+            };
+        }
+
+        return reads;
+    }
 
     /// <summary>The checklist's name column: "VRAM" (4) plus four.</summary>
     public const int TitleWidth = 8;
@@ -73,7 +96,8 @@ public static class PerfBarItems
             return new HashSet<string>(StringComparer.Ordinal);
         }
 
-        var wanted = saved.Select(w => w.Trim().ToLowerInvariant()).ToHashSet(StringComparer.Ordinal);
+        // A null in a hand-edited list is skipped (later on 2026-09-30): this runs on the pane's tick, where a throw repeats.
+        var wanted = saved.OfType<string>().Select(w => w.Trim().ToLowerInvariant()).ToHashSet(StringComparer.Ordinal);
         return Names.Where(wanted.Contains).ToHashSet(StringComparer.Ordinal);
     }
 
@@ -94,10 +118,10 @@ public static class PerfBarItems
         var on = Resolve(saved);
         if (on.Count == 0)
         {
-            return "off";
+            return PerfText.NoMeters;
         }
 
-        string meters = on.Count == Names.Length ? "all" : string.Join(", ", Names.Where(on.Contains).Select(Title));
+        string meters = on.Count == Names.Length ? PerfText.AllMeters : string.Join(", ", Names.Where(on.Contains).Select(Title));
         return meters + " · " + PerfBarMode.Name(PerfBarMode.Parse(look));
     }
 }

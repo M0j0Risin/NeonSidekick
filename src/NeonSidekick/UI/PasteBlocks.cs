@@ -289,6 +289,27 @@ public sealed class PasteBlocks
         return draft.Length;
     }
 
+    /// <summary>
+    /// The draft index of the element whose display stretch holds <paramref name="displayIndex"/> (2026-09-30, the
+    /// double-click's word): a token anywhere in its label, never the index after it as <see cref="ToDraftIndex"/> snaps
+    /// a caret; the draft's length past its end.
+    /// </summary>
+    public int ToDraftElement(string draft, int displayIndex)
+    {
+        ArgumentNullException.ThrowIfNull(draft);
+        int display = 0;
+        for (int i = 0; i < draft.Length; i++)
+        {
+            display += LabelOf(draft[i])?.Length ?? 1;
+            if (displayIndex < display)
+            {
+                return i;
+            }
+        }
+
+        return draft.Length;
+    }
+
     /// <summary>Each label's stretch in the display string, in order: what the pane paints in <see cref="Theme.PasteLabel"/>.</summary>
     public IReadOnlyList<(int Start, int Length)> LabelRanges(string draft)
     {

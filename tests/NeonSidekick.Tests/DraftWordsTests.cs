@@ -68,6 +68,22 @@ public class DraftWordsTests
     }
 
     [Fact]
+    public void AnEmoji_IsOneCluster_NeverSplitNorJoinedToAWord()
+    {
+        // Later on 2026-09-30 (the review's catch): by rune, the variation selector (a mark) joined the next word.
+        string warn = "\u26A0\uFE0F";                            // the warning sign, emoji style
+        string family = "\U0001F468\u200D\U0001F469";          // man ZWJ woman, one grapheme
+        string text = warn + "warning " + family + " ok";
+
+        Assert.Equal("warning", Word(text, 3));
+        Assert.Equal(warn, Word(text, 0));
+        Assert.Equal(warn, Word(text, 1));                         // on the selector: its cluster
+        Assert.Equal(family, Word(text, 10));
+        Assert.Equal(family, Word(text, 12));                      // inside the family
+        Assert.Equal("cafe\u0301s", Word("a cafe\u0301s b", 5));  // a combining mark rides with its letter
+    }
+
+    [Fact]
     public void ALetterPastTheBmp_CountsAsOne()
     {
         string text = "x 𝒳𝒴z y";   // two mathematical script letters, each a surrogate pair

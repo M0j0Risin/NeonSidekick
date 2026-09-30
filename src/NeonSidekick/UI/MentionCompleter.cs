@@ -337,18 +337,20 @@ public static class MentionCompleter
     /// <summary>
     /// The mention character the word under <paramref name="cursor"/> starts with (2026-09-30, the user's ask: a mention inside a
     /// slash command's text completes as it does in a message), by <see cref="TryFind(string, int, char, out int, out int, out string)"/>'s
-    /// word rule; null for a plain word, a cursor still on the character itself, or one in the middle of a word (<c>a@b</c>).
+    /// word rule — that very method, so the two never drift apart; null for a plain word, a cursor still on the character
+    /// itself, or one in the middle of a word (<c>a@b</c>).
     /// </summary>
     public static char? TriggerAt(string text, int cursor)
     {
         ArgumentNullException.ThrowIfNull(text);
-        cursor = Math.Clamp(cursor, 0, text.Length);
-        int start = cursor;
-        while (start > 0 && !IsBoundary(text[start - 1]))
+        foreach (char trigger in Triggers)
         {
-            start--;
+            if (TryFind(text, cursor, trigger, out _, out _, out _))
+            {
+                return trigger;
+            }
         }
 
-        return start < text.Length && cursor > start && Triggers.Contains(text[start], StringComparison.Ordinal) ? text[start] : null;
+        return null;
     }
 }

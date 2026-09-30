@@ -9,14 +9,18 @@ public sealed class FakePerfSource : IPerfSource
 
     public int Samples { get; private set; }
 
+    /// <summary>What the last sample was asked to read.</summary>
+    public PerfReads LastReads { get; private set; }
+
     public bool Disposed { get; private set; }
 
     /// <summary>When set, the next sample throws it.</summary>
     public Exception? Throw { get; set; }
 
-    public PerfSnapshot Sample()
+    public PerfSnapshot Sample(PerfReads reads)
     {
         Samples++;
+        LastReads = reads;
         if (Throw is { } ex)
         {
             Throw = null;

@@ -118,7 +118,8 @@ public static class ToolbarItems
             return Defaults.ToHashSet(StringComparer.Ordinal);
         }
 
-        var wanted = saved.Select(w => w.Trim().ToLowerInvariant()).ToHashSet(StringComparer.Ordinal);
+        // A null in a hand-edited list is skipped (later on 2026-09-30): this runs on the pane's tick, where a throw repeats.
+        var wanted = saved.OfType<string>().Select(w => w.Trim().ToLowerInvariant()).ToHashSet(StringComparer.Ordinal);
         return Names.Where(wanted.Contains).ToHashSet(StringComparer.Ordinal);
     }
 

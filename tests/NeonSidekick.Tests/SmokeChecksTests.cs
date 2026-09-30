@@ -87,7 +87,7 @@ public class SmokeChecksTests
 
         Assert.Equal("perf:network", check.Name);
         Assert.True(check.Passed, check.Detail);
-        Assert.Matches("^(no adapter with a gateway|\\d+ adapters? with a gateway, link )", check.Detail);
+        Assert.Matches("^(no adapter with a gateway|\\d+ adapters? with a gateway, fastest link )", check.Detail);
     }
 
     /// <summary>The git round trip (2026-09-20): every GitAccess operation the tools call over a temp repository (the JIT half; the published exe is the AOT proof).</summary>

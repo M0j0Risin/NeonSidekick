@@ -31,6 +31,7 @@ public sealed class PerfSampler : IDisposable
     private readonly List<PerfSnapshot> _history = new(HistoryLength);
     private long _version;
     private bool _warned;
+    private PerfReads _reads = PerfReads.All;
 
     public PerfSampler(Func<IPerfSource> factory, TimeProvider time)
     {
@@ -42,6 +43,20 @@ public sealed class PerfSampler : IDisposable
     public bool Running
     {
         get { lock (_gate) { return _timer is not null; } }
+    }
+
+    /// <summary>
+    /// Samples what <paramref name="reads"/> asks for (later on 2026-09-30: the checked meters' readers alone), from the next
+    /// reading on; <see cref="PerfReads.None"/> stops the sampling.
+    /// </summary>
+    public void Ensure(PerfReads reads)
+    {
+        lock (_gate)
+        {
+            _reads = reads;
+        }
+
+        Ensure(reads != PerfReads.None);
     }
 
     /// <summary>Starts the sampling (the first reading at once) or stops it; the same state again does nothing.</summary>
@@ -99,9 +114,11 @@ public sealed class PerfSampler : IDisposable
         lock (_sampleGate)
         {
             IPerfSource? source;
+            PerfReads reads;
             lock (_gate)
             {
                 source = _source;
+                reads = _reads;
             }
 
             if (source is null)
@@ -112,7 +129,7 @@ public sealed class PerfSampler : IDisposable
             PerfSnapshot reading;
             try
             {
-                reading = source.Sample();
+                reading = source.Sample(reads);
             }
             catch (Exception ex) when (ex is not OutOfMemoryException)
             {

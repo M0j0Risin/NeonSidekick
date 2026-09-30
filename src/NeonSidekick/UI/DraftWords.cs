@@ -7,12 +7,13 @@ namespace NeonSidekick.UI;
 /// <summary>
 /// The word a double-click on the draft selects (2026-09-30, the user's ask: double-click anywhere inside "quick" in "the
 /// quick brown fox" and the whole word is selected), pure over the draft's text — the editor's own, where a collapsed paste
-/// or a picture is one token character. The clicked character's class decides the span, as Windows' edit controls and the
-/// browsers do: a word character (a letter, a digit or <c>_</c>, by <see cref="Rune"/> so a letter past the BMP counts)
-/// takes the run of word characters, so <c>quick,</c> gives <c>quick</c> and <c>quick-brown</c> gives <c>quick</c>;
-/// whitespace the run of blanks (a line break is never taken); a token (<see cref="PasteBlocks.IsToken"/>) itself alone,
-/// its whole label; anything else the run of the same punctuation. A click past a row's end lands on the text's end or its
-/// line break, and the character before is taken.
+/// or a picture is one token character. The draft is walked by grapheme cluster (later on 2026-09-30, the review's catch: by
+/// rune, an emoji's variation selector joined the next word and a ZWJ family split), and the clicked cluster's first rune
+/// decides the span, as Windows' edit controls and the browsers do: a word character (a letter, a digit or <c>_</c>, a
+/// combining mark riding along in its cluster) takes the run of word clusters, so <c>quick,</c> gives <c>quick</c> and
+/// <c>quick-brown</c> gives <c>quick</c>; whitespace the run of blanks (a line break is never taken); a token
+/// (<see cref="PasteBlocks.IsToken"/>) itself alone, its whole label; anything else — a mark, an emoji — the run of the same
+/// cluster. A click past a row's end lands on the text's end or its line break, and the cluster before is taken.
 /// </summary>
 public static class DraftWords
 {
@@ -26,71 +27,68 @@ public static class DraftWords
     }
 
     /// <summary>
-    /// The span <c>[Start, End)</c> the character at <paramref name="index"/> belongs to — the one before when
-    /// <paramref name="index"/> is the end or a line break; an empty span (<c>Start == End == index</c>) when there is none.
+    /// The span <c>[Start, End)</c> the cluster at <paramref name="index"/> belongs to — the one before when
+    /// <paramref name="index"/> is the end or a line break; an empty span (<c>Start == End</c>) when there is none.
     /// </summary>
     public static (int Start, int End) At(string text, int index)
     {
         ArgumentNullException.ThrowIfNull(text);
         index = Math.Clamp(index, 0, text.Length);
-        if (index < text.Length)
+        var starts = ClusterStarts(text);
+        int last = starts.Count - 1;   // starts[last] is the text's end
+        int e = 0;
+        while (e < last && starts[e + 1] <= index)
         {
-            index = StartOfElement(text, index);   // a pair's low half is its high half's element
+            e++;   // the cluster holding index: a click on a pair's low half, or on a cluster's mark, is its cluster's
         }
 
-        if (index == text.Length || text[index] == '\n')
+        if (e == last || text[starts[e]] == '\n')
         {
-            if (index == 0 || text[index - 1] == '\n')
+            if (e == 0 || text[starts[e - 1]] == '\n')
             {
-                return (index, index);
+                return (starts[e], starts[e]);
             }
 
-            index = StartOfElement(text, index - 1);
+            e--;
         }
 
-        var kind = KindAt(text, index, out _);
+        var kind = KindOf(text, starts[e]);
         if (kind == Kind.Token)
         {
-            return (index, index + 1);
+            return (starts[e], starts[e + 1]);
         }
 
-        string? other = kind == Kind.Other ? text.Substring(index, LengthAt(text, index)) : null;
-        int start = index;
-        while (start > 0)
+        string? other = kind == Kind.Other ? text[starts[e]..starts[e + 1]] : null;
+        int first = e;
+        while (first > 0 && Same(text, starts, first - 1, kind, other))
         {
-            int before = StartOfElement(text, start - 1);
-            if (!Same(text, before, kind, other))
-            {
-                break;
-            }
-
-            start = before;
+            first--;
         }
 
-        int end = index;
-        while (end < text.Length && Same(text, end, kind, other))
+        int end = e;
+        while (end + 1 < last && Same(text, starts, end + 1, kind, other))
         {
-            end += LengthAt(text, end);
+            end++;
         }
 
-        return (start, end);
+        return (starts[first], starts[end + 1]);
     }
 
-    // Whether the element at `at` continues a run of `kind` (punctuation only with the same mark: "--", "...").
-    private static bool Same(string text, int at, Kind kind, string? other)
+    // Whether cluster `c` continues a run of `kind` (anything else only with the same cluster: "--", "...", "⚠️⚠️").
+    private static bool Same(string text, List<int> starts, int c, Kind kind, string? other)
     {
-        if (KindAt(text, at, out int length) != kind)
+        if (KindOf(text, starts[c]) != kind)
         {
             return false;
         }
 
-        return kind != Kind.Other || (length == other!.Length && string.CompareOrdinal(text, at, other, 0, length) == 0);
+        int length = starts[c + 1] - starts[c];
+        return kind != Kind.Other || (length == other!.Length && string.CompareOrdinal(text, starts[c], other, 0, length) == 0);
     }
 
-    private static Kind KindAt(string text, int at, out int length)
+    private static Kind KindOf(string text, int at)
     {
         char c = text[at];
-        length = 1;
         if (PasteBlocks.IsToken(c))
         {
             return Kind.Token;
@@ -101,10 +99,9 @@ public static class DraftWords
             return Kind.Break;
         }
 
-        if (Rune.DecodeFromUtf16(text.AsSpan(at), out var rune, out int consumed) == OperationStatus.Done)
+        if (Rune.DecodeFromUtf16(text.AsSpan(at), out var rune, out _) == OperationStatus.Done)
         {
-            length = consumed;
-            if (Rune.IsLetterOrDigit(rune) || rune.Value == '_' || Rune.GetUnicodeCategory(rune) is UnicodeCategory.NonSpacingMark or UnicodeCategory.SpacingCombiningMark)
+            if (Rune.IsLetterOrDigit(rune) || rune.Value == '_')
             {
                 return Kind.Word;
             }
@@ -115,13 +112,33 @@ public static class DraftWords
         return char.IsWhiteSpace(c) ? Kind.Space : Kind.Other;
     }
 
-    private static int LengthAt(string text, int at)
+    // Each grapheme cluster's start, then the text's end. A token and a line break are always clusters of their own: a mark
+    // after a token is no part of its label, and a break never rides in the cluster before it.
+    private static List<int> ClusterStarts(string text)
     {
-        KindAt(text, at, out int length);
-        return length;
-    }
+        var starts = new List<int>();
+        int i = 0;
+        while (i < text.Length)
+        {
+            starts.Add(i);
+            int length = 1;
+            if (!PasteBlocks.IsToken(text[i]) && text[i] != '\n')
+            {
+                length = Math.Max(1, StringInfo.GetNextTextElementLength(text.AsSpan(i)));
+                for (int j = 1; j < length; j++)
+                {
+                    if (PasteBlocks.IsToken(text[i + j]) || text[i + j] == '\n')
+                    {
+                        length = j;
+                        break;
+                    }
+                }
+            }
 
-    // The start of the element ending at or containing `at`: a low surrogate steps back onto its high half.
-    private static int StartOfElement(string text, int at) =>
-        at > 0 && char.IsLowSurrogate(text[at]) && char.IsHighSurrogate(text[at - 1]) ? at - 1 : at;
+            i += length;
+        }
+
+        starts.Add(text.Length);
+        return starts;
+    }
 }

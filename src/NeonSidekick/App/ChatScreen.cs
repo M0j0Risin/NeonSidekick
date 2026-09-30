@@ -1279,14 +1279,14 @@ internal sealed partial class ChatScreen
     /// <summary>
     /// The performance bar's row for the settings in force (2026-09-29, the user's ask) in <paramref name="cells"/> cells:
     /// null — no row, the sampler stopped — while no meter is checked (<see cref="PerfBarItems"/>, 2026-09-30), else the
-    /// latest reading of the checked ones in the look (<see cref="PerfBar.Render"/>). Parse, not Resolve: the tick must not
-    /// warn on a hand-edited word every 100 ms.
+    /// latest reading of the checked ones in the look (<see cref="PerfBar.Render"/>), the sampler reading what they need
+    /// alone (<see cref="PerfBarItems.Reads"/>).
     /// </summary>
     private PerfRow? PerfBarRow(int cells)
     {
         var shown = _effective();
         var items = PerfBarItems.Resolve(shown.PerformanceBarItems);
-        _perf.Ensure(items.Count > 0);
+        _perf.Ensure(PerfBarItems.Reads(items));
         if (items.Count == 0)
         {
             return null;
@@ -3399,6 +3399,16 @@ internal sealed partial class ChatScreen
         string.Equals(name, loaded, StringComparison.OrdinalIgnoreCase) ? LoadedProfileNote : SwitchToProfileNote;
 
     /// <summary>
+    /// Whether <paramref name="command"/>'s argument is a path its own list completes: there a mention character stays the
+    /// argument list's (2026-09-30), since the command takes a bare path. The file lists of <see cref="ArgumentPaths"/>
+    /// (<c>/speak</c>, <c>/view</c>, <c>/print</c>), and the folder lists of <c>/tree</c>, <c>/explore</c> and <c>/vault</c>
+    /// (later on 2026-09-30, the review's catch: a JS sandbox's <c>@types</c> folder opened the @ list under <c>/tree @ty</c>). Pinned.
+    /// </summary>
+    public static bool TakesPathArgument(string command) =>
+        SlashCommands.Parse(command).Command is SlashCommand.Speak or SlashCommand.View or SlashCommand.Print
+            or SlashCommand.Tree or SlashCommand.Explore or SlashCommand.Vault;
+
+    /// <summary>
     /// The path list for a command whose argument is a sandbox path — <c>/speak</c> (2026-09-17),
     /// the user's ask for the <c>@</c>-mention's shape over <c>/tree</c>'s flat word list, and
     /// <c>/view</c> (later that day): the text before the last <c>/</c> is the folder to look in,
@@ -3411,13 +3421,6 @@ internal sealed partial class ChatScreen
     /// it (a name with a space inside completes on); a path typed in full (one match, equal to
     /// the text) closes it so Enter sends, as a word list closes. Pure.
     /// </summary>
-    /// <summary>
-    /// Whether <paramref name="command"/>'s argument is a path its own file list completes (<see cref="ArgumentPaths"/>:
-    /// <c>/speak</c>, <c>/view</c>, <c>/print</c>): there a mention character stays the argument list's (2026-09-30). Pinned.
-    /// </summary>
-    public static bool TakesPathArgument(string command) =>
-        SlashCommands.Parse(command).Command is SlashCommand.Speak or SlashCommand.View or SlashCommand.Print;
-
     public static MentionResult? ArgumentPaths(string command, string argText, ArgumentSources sources)
     {
         ArgumentNullException.ThrowIfNull(command);

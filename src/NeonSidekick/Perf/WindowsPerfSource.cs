@@ -34,10 +34,16 @@ public sealed class WindowsPerfSource : IPerfSource
     /// <summary>The GPU reader in use: <c>nvml</c>, <c>pdh</c>, or null.</summary>
     public string? GpuReader => _gpu?.Name;
 
-    public PerfSnapshot Sample()
+    public PerfSnapshot Sample(PerfReads reads)
     {
+        // A reader the checked meters do not need is not run (later on 2026-09-30); the CPU's and the network's rates then
+        // start over, so a meter checked again later is no average over the time it was off.
         double? cpu = null;
-        if (PerfNative.GetSystemTimes(out var idle, out var kernel, out var user))
+        if ((reads & PerfReads.Cpu) == 0)
+        {
+            _havePrevious = false;
+        }
+        else if (PerfNative.GetSystemTimes(out var idle, out var kernel, out var user))
         {
             if (_havePrevious)
             {
@@ -49,13 +55,22 @@ public sealed class WindowsPerfSource : IPerfSource
 
         double? ram = null;
         var memory = new PerfNative.MemoryStatusEx { Length = (uint)Marshal.SizeOf<PerfNative.MemoryStatusEx>() };
-        if (PerfNative.GlobalMemoryStatusEx(ref memory))
+        if ((reads & PerfReads.Ram) != 0 && PerfNative.GlobalMemoryStatusEx(ref memory))
         {
             ram = PerfMath.Percent(memory.TotalPhys - memory.AvailPhys, memory.TotalPhys);
         }
 
-        var (gpu, vram) = _gpu?.Read() ?? (null, null);
-        var net = _net.Sample();
+        var (gpu, vram) = (reads & PerfReads.Gpu) != 0 ? _gpu?.Read() ?? (null, null) : (null, null);
+        (double Down, double Up, double Link)? net = null;
+        if ((reads & PerfReads.Net) != 0)
+        {
+            net = _net.Sample();
+        }
+        else
+        {
+            _net.Reset();
+        }
+
         return new PerfSnapshot(cpu, ram, gpu, vram, net?.Down, net?.Up, net?.Link);
     }
 

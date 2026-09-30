@@ -12,17 +12,33 @@ public readonly record struct PerfSnapshot(double? Cpu, double? Ram, double? Gpu
     public static readonly PerfSnapshot None;
 }
 
+/// <summary>
+/// Which of the machine's readers a sample runs (later on 2026-09-30, the review's catch: the network's adapter walk ran every
+/// second under a bar of CPU and RAM alone): those the checked meters need, so an unchecked meter costs nothing. GPU and VRAM
+/// share one reader, as do the three network meters.
+/// </summary>
+[Flags]
+public enum PerfReads
+{
+    None = 0,
+    Cpu = 1,
+    Ram = 2,
+    Gpu = 4,
+    Net = 8,
+    All = Cpu | Ram | Gpu | Net,
+}
+
 /// <summary>Where the sampler reads the machine: <see cref="WindowsPerfSource"/> on Windows, <see cref="NullPerfSource"/> elsewhere, a fake in the tests.</summary>
 public interface IPerfSource : IDisposable
 {
-    /// <summary>The meters now. Called on the sampler's timer thread, never two at once.</summary>
-    PerfSnapshot Sample();
+    /// <summary>The meters <paramref name="reads"/> asks for now, the rest null. Called on the sampler's timer thread, never two at once.</summary>
+    PerfSnapshot Sample(PerfReads reads);
 }
 
 /// <summary>The source where nothing can be read: every meter null, so the bar draws its row with nothing in it.</summary>
 public sealed class NullPerfSource : IPerfSource
 {
-    public PerfSnapshot Sample() => PerfSnapshot.None;
+    public PerfSnapshot Sample(PerfReads reads) => PerfSnapshot.None;
 
     public void Dispose()
     {

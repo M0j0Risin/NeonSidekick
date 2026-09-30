@@ -35,15 +35,31 @@ public static class PerfText
     /// <summary>The upload rate (2026-09-30). Pinned.</summary>
     public const string NetUpLabel = "NET↑";
 
+    // The checklist's notes beside each meter (2026-09-30, App.PerfBarItems.Describe).
+    public const string CpuNote = "processor load";
+    public const string RamNote = "memory in use";
+    public const string GpuNote = "GPU load (NVIDIA, else Windows counters)";
+    public const string VramNote = "GPU memory in use";
+    public const string NetNote = "network use, % of the link";
+    public const string NetDownNote = "download rate (bits/s)";
+    public const string NetUpNote = "upload rate (bits/s)";
+
+    /// <summary>The <c>Show performance bar</c> row's value with no meter checked (App.PerfBarItems.Value).</summary>
+    public const string NoMeters = "off";
+
+    /// <summary>The same row's word for every meter checked.</summary>
+    public const string AllMeters = "all";
+
     /// <summary>
     /// A network rate in bits/s, five cells wide (2026-09-30), in the units links and Task Manager count in:
-    /// <c> 850K</c>, <c>12.4M</c>, <c> 150M</c>, <c> 1.2G</c>. Pinned.
+    /// <c> 850K</c>, <c>12.4M</c>, <c> 150M</c>, <c> 1.2G</c>. A unit's bound is where its value rounds to 1000 (later on
+    /// 2026-09-30, the review's catch: 999,700 read <c>1000K</c>), so the next unit takes it: <c> 1.0M</c>. Pinned.
     /// </summary>
     public static string Rate(double bitsPerSecond)
     {
         double bits = double.IsNaN(bitsPerSecond) ? 0 : Math.Max(0, bitsPerSecond);
-        string text = bits < 1e6 ? Scaled(bits / 1e3, "K", whole: true)
-            : bits < 1e9 ? Scaled(bits / 1e6, "M", whole: bits >= 99.95e6)   // 99.96M would round to 100.0M, six cells
+        string text = bits < 999.5e3 ? Scaled(bits / 1e3, "K", whole: true)
+            : bits < 999.5e6 ? Scaled(bits / 1e6, "M", whole: bits >= 99.95e6)   // 99.96M would round to 100.0M, six cells
             : Scaled(bits / 1e9, "G", whole: bits >= 99.95e9);
         return text.PadLeft(5);
 
