@@ -51,6 +51,22 @@ public sealed class FrameWriterTests
         Assert.EndsWith(" after", Written);
     }
 
+    /// <summary>Settle (2026-09-29): what is held so far goes out, the hold stays — later writes wait for the release.</summary>
+    [Fact]
+    public void Settle_WritesWhatIsHeld_AndKeepsTheHold()
+    {
+        using var writer = new FrameWriter(_stream);
+        writer.Hold();
+        writer.Write("lift");
+        writer.Settle();
+        Assert.Equal("lift", Written);
+        Assert.True(writer.Holding);
+        writer.Write(" pane");
+        Assert.Equal("lift", Written);
+        writer.Release();
+        Assert.Equal("lift pane", Written);
+    }
+
     [Fact]
     public void Dispose_LetsAHeldFrameGo()
     {

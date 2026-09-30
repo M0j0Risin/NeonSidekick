@@ -16,6 +16,13 @@ public interface IFrameHold
 
     /// <summary>The matching end of a <see cref="Hold"/>: the last one writes what was held, at once.</summary>
     void Release();
+
+    /// <summary>
+    /// What is held so far written now, the hold kept (2026-09-29, the user's report: <c>/clear</c> left the pane
+    /// unpinned): before the pane asks the console where its cursor is, since the console answers for what it has
+    /// received. The frame's synchronized-output codes still keep a terminal that honours them from showing it early.
+    /// </summary>
+    void Settle();
 }
 
 /// <summary>
@@ -71,6 +78,14 @@ public sealed class FrameWriter : TextWriter, IFrameHold
             {
                 FlushLocked();
             }
+        }
+    }
+
+    public void Settle()
+    {
+        lock (_gate)
+        {
+            FlushLocked();
         }
     }
 

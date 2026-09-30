@@ -4387,11 +4387,48 @@ public class ScreenPaneTests : IDisposable
         Assert.Equal(0, frames.Open);
     }
 
+    /// <summary>
+    /// A held frame goes out before the console is asked where its cursor is (2026-09-29, the user's report: /clear left
+    /// the pane under the banner — the console, not yet sent the clear, answered with the old bottom row, and the flow row
+    /// was "corrected" to it). Here the console answers stale until the frame is settled.
+    /// </summary>
+    [Fact]
+    public void AHeldFrame_IsSettled_BeforeTheConsoleIsAsked_SoAClearKeepsThePaneAtTheBottom()
+    {
+        var frames = new CountingFrames();
+        using var pane = Pane();
+        pane.Frames = frames;
+        pane.Hint = () => "idle";
+        pane.Show();
+        _cursorRow = _console.Profile.Height - 3;   // the old input row: what the console says until the held output reaches it
+        frames.Settled = () => _cursorRow = null;
+
+        using (pane.Batch())
+        {
+            pane.Clear(home: true);
+            pane.MarkupLine("banner");
+        }
+
+        Assert.True(frames.Settles > 0);
+        Assert.True(pane.Padding > 0);   // at the bottom, the rows between the banner and the pane padded
+        Assert.Equal(0, frames.Open);
+    }
+
     private sealed class CountingFrames : IFrameHold
     {
         public int Open { get; private set; }
 
         public int Released { get; private set; }
+
+        public int Settles { get; private set; }
+
+        public Action? Settled { get; set; }
+
+        public void Settle()
+        {
+            Settles++;
+            Settled?.Invoke();
+        }
 
         public void Hold() => Open++;
 

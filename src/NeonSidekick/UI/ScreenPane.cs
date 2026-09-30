@@ -3500,6 +3500,14 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
             }
 
             RestoreFlow();
+            if (_geometry is not null && _syncDepth > 0)
+            {
+                // The console answers for what it has received: a held frame's lift, clear and flow go out first
+                // (2026-09-29, the user's report — /clear left the pane under the banner, the stale bottom row taken as
+                // the flow's). The frame's synchronized-output codes keep it off the screen until its end.
+                Frames?.Settle();
+            }
+
             if (_geometry?.CursorRow() is int actual && actual >= 0 && actual < h && actual != _row)
             {
                 DiagnosticLog.Debug(Category, $"Flow row corrected: counted {_row}, the console says {actual}.");
