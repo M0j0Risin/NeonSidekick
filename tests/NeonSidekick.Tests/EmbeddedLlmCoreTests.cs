@@ -59,17 +59,18 @@ public class EmbeddedLlmCoreTests
     // ── The catalog ─────────────────────────────────────────────────────────
 
     [Fact]
-    public void TheCatalog_IsTheUsersThirtyNine_InOrder_PinnedToACommit()
+    public void TheCatalog_IsTheUsersFortyOne_InOrder_PinnedToACommit()
     {
         // Alphabetical by name, so each model's builds sit together (2026-09-29, the user's call); one name's builds by size.
         // The eleven of the morning, then the 26B A4B and 31B builds and the Qwens of later that day (the user's picks), then
-        // esatapedico's NVFP4 tiers, in their size order (which is their tiers' order).
+        // esatapedico's NVFP4 tiers, in their size order (which is their tiers' order); Unsloth's Muse Glimmer 30B pair on 2026-09-30.
         Assert.Equal(
             ["gemma-4-12b", "gemma-4-12b-q5", "gemma-4-12b-q6", "gemma-4-12b-bf16", "gemma-4-12b-qat", "gemma-4-12b-qat-uncensored",
              "gemma-4-26b-a4b", "gemma-4-26b-a4b-q5", "gemma-4-26b-a4b-q6", "gemma-4-26b-a4b-qat", "gemma-4-26b-a4b-qat-uncensored",
              "gemma-4-26b-a4b-uncensored", "gemma-4-26b-a4b-uncensored-q5", "gemma-4-26b-a4b-uncensored-q6",
              "gemma-4-31b", "gemma-4-31b-q5", "gemma-4-31b-qat", "gemma-4-31b-qat-uncensored",
              "gemma-4-e2b", "gemma-4-e2b-uncensored", "gemma-4-e4b", "gemma-4-e4b-qat", "gemma-4-e4b-uncensored",
+             "muse-glimmer-30b", "muse-glimmer-30b-q5",
              "qwen3.6-35b-a3b", "qwen3.6-35b-a3b-q5", "qwen3.6-35b-a3b-uncensored",
              "qwen3.8-27b", "qwen3.8-27b-q5", "qwen3.8-27b-q6",
              "qwen3.8-27b-nvfp4-very-low", "qwen3.8-27b-nvfp4-compact-low", "qwen3.8-27b-nvfp4-low", "qwen3.8-27b-nvfp4-medium", "qwen3.8-27b-nvfp4-mid-high", "qwen3.8-27b-nvfp4-high", "qwen3.8-27b-nvfp4-very-high", "qwen3.8-27b-nvfp4-highest",
@@ -99,6 +100,7 @@ public class EmbeddedLlmCoreTests
         Assert.All(EmbeddedModelCatalog.Models.Where(m => m.Id.StartsWith("gemma-4-", StringComparison.Ordinal) && !qatBalanced.Contains(m.Id)), m => Assert.Equal(new EmbeddedSampling(1.0, 0.95, 64), m.Sampling));
         Assert.All(qatBalanced, id => Assert.Equal(new EmbeddedSampling(0.6, 0.9, 64), EmbeddedModelCatalog.Find(id)!.Sampling));   // HauhauCS QAT Balanced's cards
         Assert.All(EmbeddedModelCatalog.Models.Where(m => m.Id.StartsWith("qwen", StringComparison.Ordinal)), m => Assert.Equal(new EmbeddedSampling(1.0, 0.95, 20), m.Sampling));   // Qwen's "thinking, general"
+        Assert.All(EmbeddedModelCatalog.Models.Where(m => m.Id.StartsWith("muse-", StringComparison.Ordinal)), m => Assert.Equal(new EmbeddedSampling(1.0, 0.95, 64), m.Sampling));   // Meta's card
         Assert.Null(EmbeddedModelCatalog.Find("qwen3.8-9b"));   // left the catalog (2026-09-29, the user's call); the 27B came back later that day
 
         // MTP (2026-09-29, "using the drafters where available"): a drafter per Gemma 4 repository that ships one, the
@@ -108,11 +110,21 @@ public class EmbeddedLlmCoreTests
             EmbeddedModelCatalog.Models.Where(m => !m.HasMtp).Select(m => m.Id));
         Assert.Equal(["qwen3.8-27b", "qwen3.8-27b-q5", "qwen3.8-27b-q6", "qwen3.8-27b-nvfp4-very-low", "qwen3.8-27b-nvfp4-compact-low", "qwen3.8-27b-nvfp4-low", "qwen3.8-27b-nvfp4-medium", "qwen3.8-27b-nvfp4-mid-high", "qwen3.8-27b-nvfp4-high", "qwen3.8-27b-nvfp4-very-high", "qwen3.8-27b-nvfp4-highest", "qwen3.8-27b-uncensored", "qwen3.8-27b-uncensored-q5"], EmbeddedModelCatalog.Models.Where(m => m.MtpHead).Select(m => m.Id));
         Assert.All(EmbeddedModelCatalog.Models.Where(m => m.MtpHead), m => Assert.Null(m.Drafter));   // one or the other
-        foreach (var model in EmbeddedModelCatalog.Models.Where(m => m.Drafter is not null))
+        foreach (var model in EmbeddedModelCatalog.Models.Where(m => m.Drafter is not null && m.Draft == DraftKind.Mtp))
         {
             Assert.StartsWith("mtp-gemma-4-", model.Drafter!.Name, StringComparison.Ordinal);
             Assert.Matches("^[0-9a-f]{64}$", model.Drafter.Sha256);
             Assert.InRange(model.Drafter.Bytes, 50_000_000, 600_000_000);
+        }
+
+        // DFlash (2026-09-30): Muse Glimmer's block-diffusion drafter, a file of its own, never a head.
+        Assert.Equal(["muse-glimmer-30b", "muse-glimmer-30b-q5"], EmbeddedModelCatalog.Models.Where(m => m.Draft == DraftKind.DFlash).Select(m => m.Id));
+        foreach (var model in EmbeddedModelCatalog.Models.Where(m => m.Draft == DraftKind.DFlash))
+        {
+            Assert.False(model.MtpHead);
+            Assert.StartsWith("dflash-", model.Drafter!.Name, StringComparison.Ordinal);
+            Assert.Matches("^[0-9a-f]{64}$", model.Drafter.Sha256);
+            Assert.InRange(model.Drafter.Bytes, 1_000_000_000, 2_000_000_000);
         }
 
         Assert.Null(EmbeddedModelCatalog.Find("gemma-3"));
@@ -159,6 +171,18 @@ public class EmbeddedLlmCoreTests
         Assert.Equal("https://huggingface.co/unsloth/gemma-4-12b-it-GGUF/resolve/fc034cfff751157913579611efad8462ac1be606/gemma-4-12b-it-BF16.gguf", EmbeddedModelCatalog.Url(bf16, bf16.Model).AbsoluteUri);
         Assert.Equal(("BF16", "UD-Q5_K_XL", "UD-Q6_K_XL"), (bf16.Quant, EmbeddedModelCatalog.Find("gemma-4-12b-q5")!.Quant, EmbeddedModelCatalog.Find("gemma-4-12b-q6")!.Quant));
         Assert.All(EmbeddedModelCatalog.Models.Where(m => m.Repository == "unsloth/gemma-4-12b-it-GGUF"), m => Assert.Equal(EmbeddedModelCatalog.Find("gemma-4-12b")!.Mmproj, m.Mmproj));   // one repository, one projector
+
+        // Muse Glimmer 30B (2026-09-30): Unsloth's Q4/Q5 with the Q8_0 projector and the DFlash drafter, all three counted.
+        var muse = EmbeddedModelCatalog.Find("muse-glimmer-30b")!;
+        const string museBase = "https://huggingface.co/unsloth/Muse-Glimmer-30B-GGUF/resolve/faa5b025c584459c13febfa5c59883516710ae39/";
+        Assert.Equal(museBase + "Muse-Glimmer-30B-UD-Q4_K_XL.gguf", EmbeddedModelCatalog.Url(muse, muse.Model).AbsoluteUri);
+        Assert.Equal(museBase + "mmproj-Muse-Glimmer-30B-Q8_0.gguf", EmbeddedModelCatalog.Url(muse, muse.Mmproj).AbsoluteUri);
+        Assert.Equal(museBase + "dflash-kquant.gguf", EmbeddedModelCatalog.Url(muse, muse.Drafter!).AbsoluteUri);
+        Assert.Equal(15_878_222_368L + 2_051_685_088L + 1_631_205_312L, EmbeddedModelCatalog.TotalBytes(muse));
+        Assert.Equal(["19.6 GB", "25.5 GB"],
+            new[] { "muse-glimmer-30b", "muse-glimmer-30b-q5" }.Select(id => ModelStore.SizeLabel(EmbeddedModelCatalog.TotalBytes(EmbeddedModelCatalog.Find(id)!))));
+        Assert.Equal(("Muse Glimmer 30B", "UD-Q5_K_XL"), (EmbeddedModelCatalog.Find("muse-glimmer-30b-q5")!.Display, EmbeddedModelCatalog.Find("muse-glimmer-30b-q5")!.Quant));
+        Assert.All(EmbeddedModelCatalog.Models.Where(m => m.Repository == muse.Repository), m => Assert.Equal((muse.Mmproj, muse.Drafter), (m.Mmproj, m.Drafter)));   // one repository, one projector and drafter
     }
 
     [Fact]
@@ -166,7 +190,7 @@ public class EmbeddedLlmCoreTests
     {
         string dir = Path.Combine("C:", "home", "models", "llm");
         var paths = EmbeddedModelCatalog.Models.SelectMany(m => new[] { EmbeddedModelCatalog.WeightsSpec(dir, m).Path, EmbeddedModelCatalog.MmprojSpec(dir, m).Path, EmbeddedModelCatalog.DrafterSpec(dir, m)?.Path }).OfType<string>().ToList();
-        Assert.Equal(39 + 39 + 18, paths.Count);   // weights, projectors and the eighteen drafters (one repository's builds share one projector's and drafter's name and bytes, each in its own folder)
+        Assert.Equal(41 + 41 + 20, paths.Count);   // weights, projectors and the twenty drafters (Muse Glimmer's two DFlash ones since 2026-09-30) (one repository's builds share one projector's and drafter's name and bytes, each in its own folder)
         Assert.Equal(paths.Count, paths.Distinct(StringComparer.OrdinalIgnoreCase).Count());
 
         var e2b = EmbeddedModelCatalog.Find("gemma-4-e2b")!;
@@ -181,6 +205,8 @@ public class EmbeddedLlmCoreTests
         Assert.Equal(Path.Combine(dir, "gemma-4-e2b", "mtp-gemma-4-E2B-it.gguf"), drafter.Path);
         Assert.Equal(("Gemma 4 E2B MTP", e2b.Drafter!.Sha256, true), (drafter.Display, drafter.Sha256, drafter.Resumable));
         Assert.Null(EmbeddedModelCatalog.DrafterSpec(dir, EmbeddedModelCatalog.Find("qwen3.8-27b")!));   // its head is in the weights
+        var muse = EmbeddedModelCatalog.DrafterSpec(dir, EmbeddedModelCatalog.Find("muse-glimmer-30b")!)!;
+        Assert.Equal((Path.Combine(dir, "muse-glimmer-30b", "dflash-kquant.gguf"), "Muse Glimmer 30B DFlash"), (muse.Path, muse.Display));
     }
 
     // ── The llama.cpp pins ──────────────────────────────────────────────────
@@ -312,6 +338,12 @@ public class EmbeddedLlmCoreTests
 
         // Toggling Embedded drafter changes the launch, so the server restarts.
         Assert.NotEqual(Launch(), Launch() with { Mtp = true });
+
+        // Muse Glimmer's DFlash drafter (2026-09-30): -md and draft-dflash in the same place.
+        var dflash = LlamaArguments.Build(Launch() with { DrafterPath = @"C:\m\dflash-kquant.gguf", Mtp = true, Draft = DraftKind.DFlash }, 1, "k");
+        Assert.Equal(["-md", @"C:\m\dflash-kquant.gguf", "--spec-type", "draft-dflash", "--alias"], dflash.Skip(4).Take(5));
+        Assert.Equal(("draft-mtp", "draft-dflash"), (LlamaArguments.SpecType(DraftKind.Mtp), LlamaArguments.SpecType(DraftKind.DFlash)));
+        Assert.NotEqual(Launch() with { Mtp = true }, Launch() with { Mtp = true, Draft = DraftKind.DFlash });
     }
 
     [Fact]
@@ -436,6 +468,7 @@ public class EmbeddedLlmCoreTests
         Assert.Equal("Gemma 4 E2B is not installed. Install it now (download 4.3 GB + llama.cpp runtime 577 MB)?", EmbeddedLlmText.InstallQuestion(e2b, LlamaRelease.Bytes(LlamaBackend.Cuda)));   // its MTP drafter counts since 2026-09-29
         Assert.Equal("download 4.3 GB", EmbeddedLlmText.InstallCost(e2b, 0));
         Assert.Equal("Gemma 4 E2B's MTP drafter could not be downloaded, so it starts without MTP: timed out", EmbeddedLlmText.DrafterFailed(e2b, "timed out"));
+        Assert.Equal("Muse Glimmer 30B's DFlash drafter could not be downloaded, so it starts without DFlash: timed out", EmbeddedLlmText.DrafterFailed(EmbeddedModelCatalog.Find("muse-glimmer-30b")!, "timed out"));
         Assert.Equal("the embedded LLM is off; turn Embedded LLM server enabled on in /settings › Embedded to use it", EmbeddedLlmText.SwitchedOffError);
         Assert.Equal("2 of 4 installed (9.4 GB)", EmbeddedLlmText.ModelsRowValue(2, 4, 9_400_000_000));
         Assert.Equal("none of 4 installed", EmbeddedLlmText.ModelsRowValue(0, 4, 0));

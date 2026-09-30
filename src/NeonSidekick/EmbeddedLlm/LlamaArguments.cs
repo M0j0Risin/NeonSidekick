@@ -11,7 +11,8 @@ namespace NeonSidekick.EmbeddedLlm;
 /// <paramref name="DrafterPath"/> when there is one and with the weights' own head when not; toggling Embedded drafter
 /// changes the launch, so it restarts the server. <paramref name="FitTargetMiB"/> (later on 2026-09-29, the user's ask:
 /// <c>Embedded VRAM budget</c>) is the MiB llama.cpp's fit leaves free on each GPU, null for its own default; a change
-/// restarts the server too.
+/// restarts the server too. <paramref name="Draft"/> (2026-09-30) is the model's kind of drafting, which picks the
+/// <c>--spec-type</c>: MTP, or DFlash for Muse Glimmer.
 /// </summary>
 public sealed record LlamaLaunch(
     string Executable,
@@ -25,7 +26,8 @@ public sealed record LlamaLaunch(
     bool MayFallBack = false,
     string? DrafterPath = null,
     bool Mtp = false,
-    int? FitTargetMiB = null)
+    int? FitTargetMiB = null,
+    DraftKind Draft = DraftKind.Mtp)
 {
     /// <summary>The runtime folder: the process's working directory, where its DLLs are found.</summary>
     public string WorkingDirectory => Path.GetDirectoryName(Executable) ?? ".";
@@ -52,7 +54,9 @@ public sealed record LlamaLaunch(
 /// <item><c>-md</c> (<c>--spec-draft-model</c>) and <c>--spec-type draft-mtp</c> (2026-09-29): MTP speculative decoding,
 /// in b11258 since llama.cpp PR #23398 (Gemma 4 MTP, 2026-06-07). With a drafter file (Gemma 4's <c>mtp-*.gguf</c>) both;
 /// with a head inside the weights (Qwen3.8's NextN) the type alone, and the server builds the draft context on the
-/// target's own weights. The target verifies every drafted token, so the answer is the same, only faster.</item>
+/// target's own weights. The target verifies every drafted token, so the answer is the same, only faster.
+/// <c>--spec-type draft-dflash</c> instead (2026-09-30) for a DFlash drafter (Muse Glimmer's, <see cref="DraftKind.DFlash"/>),
+/// in b11258's speculative types beside <c>draft-mtp</c>; always with <c>-md</c>, there being no DFlash head in any weights.</item>
 /// <item><c>--fit-target &lt;MiB&gt;</c> (later on 2026-09-29, the user's ask: "a maximum VRAM budget, like 92%"): the margin
 /// llama.cpp's fit — <c>--fit on</c>, the default in b11258 — leaves free on each device, 1024 MiB unless given; a budget
 /// of <i>p</i> % of the biggest adapter's dedicated memory is a margin of (100 − <i>p</i>) % of it
@@ -90,7 +94,7 @@ public static class LlamaArguments
             }
 
             args.Add("--spec-type");
-            args.Add("draft-mtp");
+            args.Add(SpecType(launch.Draft));
         }
 
         args.AddRange(
@@ -126,6 +130,9 @@ public static class LlamaArguments
         ]);
         return args;
     }
+
+    /// <summary>llama.cpp's <c>--spec-type</c> for <paramref name="draft"/>: <c>draft-dflash</c> or <c>draft-mtp</c>. Pinned.</summary>
+    public static string SpecType(DraftKind draft) => draft == DraftKind.DFlash ? "draft-dflash" : "draft-mtp";
 
     private static string Number(double value) => value.ToString("0.###", CultureInfo.InvariantCulture);
 }

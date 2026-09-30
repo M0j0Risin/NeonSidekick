@@ -200,10 +200,11 @@ public class LlmSessionEmbeddedTests
              "download  · 18.7 GB", "download  · 22.9 GB", "download  · 25 GB", "download  · 15.7 GB", "download  · 18.2 GB", "download  · 18.1 GB", "download  · 20.5 GB", "download  · 24 GB",
              "download  · 20.5 GB", "download  · 23.6 GB", "download  · 18.8 GB", "download  · 20.2 GB",
              "installed · 4.3 GB", "download  · 4.4 GB", "download  · 6.2 GB", "paused    · 5.3 GB · 42%", "download  · 6.4 GB",
+             "download  · 19.6 GB", "download  · 25.5 GB",
              "download  · 23.3 GB", "download  · 27.5 GB", "download  · 24.3 GB", "download  · 18.5 GB", "download  · 21.8 GB", "download  · 26.2 GB",
              "download  · 15.8 GB", "download  · 16.1 GB", "download  · 16.5 GB", "download  · 17.3 GB", "download  · 17.8 GB", "download  · 18.5 GB", "download  · 20.6 GB", "download  · 24.1 GB",
              "download  · 18.9 GB", "download  · 21.1 GB"],
-            EmbeddedModelCatalog.Models.Select(m => EmbeddedLlmText.ModelDetail(m, _embedded.State(m))));   // each with its MTP drafter since 2026-09-29
+            EmbeddedModelCatalog.Models.Select(m => EmbeddedLlmText.ModelDetail(m, _embedded.State(m))));   // each with its MTP drafter since 2026-09-29, Muse Glimmer's DFlash one since 2026-09-30
         Assert.DoesNotContain(_http.Requests, r => r.Uri.Host == EmbeddedEndpoint.Host);   // the sentinel as the extra URL is never asked
     }
 

@@ -306,7 +306,8 @@ public sealed class EmbeddedLlmService : IEmbeddedLlm
             auto,
             drafter,
             mtp,
-            FitTarget(backend, effective));
+            FitTarget(backend, effective),
+            model.Draft);
         phase?.Invoke(EmbeddedLlmText.StartingLabel(model));
         return await host.EnsureRunningAsync(launch, model, phase, cancellationToken).ConfigureAwait(false);
     }
@@ -338,8 +339,8 @@ public sealed class EmbeddedLlmService : IEmbeddedLlm
 
     /// <summary>
     /// The MTP half of a launch (2026-09-29): nothing with Embedded drafter off or for a model that cannot draft; a
-    /// built-in head (Qwen3.8) is on with no file; a drafter (Gemma 4) is fetched first when a model installed before
-    /// drafters joined the catalog lacks it. A drafter that cannot be fetched is logged and the model starts without
+    /// built-in head (Qwen3.8) is on with no file; a drafter (Gemma 4's MTP, Muse Glimmer's DFlash) is fetched first when
+    /// a model installed before drafters joined the catalog lacks it. A drafter that cannot be fetched is logged and the model starts without
     /// MTP — slower, never broken; the next start tries again.
     /// </summary>
     private async Task<(string? Drafter, bool Mtp)> MtpAsync(EmbeddedModel model, AppSettingsData effective, Action<string>? phase, CancellationToken cancellationToken)

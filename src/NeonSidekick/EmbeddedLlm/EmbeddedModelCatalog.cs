@@ -13,6 +13,18 @@ public enum UncensoredKind
     Aggressive,
 }
 
+/// <summary>
+/// How a model drafts (2026-09-30, when Muse Glimmer joined): <see cref="Mtp"/> — Gemma 4's <c>mtp-*.gguf</c> heads or
+/// Qwen3.8's NextN head in the weights, <c>--spec-type draft-mtp</c> — or <see cref="DFlash"/>, Muse Glimmer's
+/// block-diffusion drafter file (an architecture-<c>dflash</c> GGUF that proposes 16 tokens a pass),
+/// <c>--spec-type draft-dflash</c>. The target verifies every drafted token either way.
+/// </summary>
+public enum DraftKind
+{
+    Mtp,
+    DFlash,
+}
+
 /// <summary>One file of a <see cref="EmbeddedModel"/>: its name in the repository, its exact size and its SHA-256 (lowercase hex).</summary>
 public sealed record EmbeddedFile(string Name, long Bytes, string Sha256);
 
@@ -32,6 +44,8 @@ public sealed record EmbeddedSampling(double Temperature, double TopP, int TopK)
 /// Neither is a model without MTP. <paramref name="ToolCalls"/> (2026-09-29, the user's ask, for the 🛠️ column): the
 /// model's chat template carries tool calls — every model in the catalog does, from its card, and <c>--jinja</c> is what
 /// makes <c>llama-server</c> honour them (<see cref="LlamaArguments"/>); false is for a model that would not.
+/// <paramref name="Draft"/> (2026-09-30): which kind of drafting the drafter or head does — MTP for every model but
+/// Muse Glimmer, whose <paramref name="Drafter"/> is a DFlash one; it picks <c>--spec-type</c>.
 /// </summary>
 public sealed record EmbeddedModel(
     string Id,
@@ -44,9 +58,10 @@ public sealed record EmbeddedModel(
     EmbeddedSampling Sampling,
     EmbeddedFile? Drafter = null,
     bool MtpHead = false,
-    bool ToolCalls = true)
+    bool ToolCalls = true,
+    DraftKind Draft = DraftKind.Mtp)
 {
-    /// <summary>Whether the model can draft for itself at all: a drafter file or a built-in head.</summary>
+    /// <summary>Whether the model can draft for itself at all: a drafter file (MTP or DFlash) or a built-in head.</summary>
     public bool HasMtp => Drafter is not null || MtpHead;
 
     /// <summary>
@@ -115,10 +130,21 @@ public sealed record EmbeddedModel(
 /// <see cref="LlamaRelease"/>) — nothing gates the rows by GPU, the README says so. Its projector is Unsloth's BF16 one,
 /// byte for byte. Sampling as Qwen's card (the repository's card repeats it).</para>
 ///
+/// <para>On 2026-09-30 (the user's pick) Meta's Muse Glimmer 30B joined — a dense 30B with its own perception encoder —
+/// in Unsloth's UD-Q4_K_XL and UD-Q5_K_XL. b11258 knows its architecture (<c>muse-glimmer</c>), its projector and its
+/// <c>&lt;atem:function_calls&gt;</c> tool calls. The repository has no F16 projector, so it is the Q8_0 one (2 GB; BF16 is
+/// 3.85 GB, Meta's own Q4_K_M 1.4 GB), the user's pick. Its drafter is not MTP but DFlash (<see cref="DraftKind.DFlash"/>):
+/// Unsloth's <c>dflash-kquant.gguf</c>, 1.6 GB, which Meta's card measured at 3.1× on an RTX 5090 in llama.cpp. Sampling
+/// as Meta's card (1.0, 0.95, 64; esatapedico's card says 0.7, 0.95, 40, not the model's author). esatapedico's
+/// Muse Glimmer 30B NVFP4 tiers were asked for too and wait: its card says they need a fix that is not in llama.cpp
+/// (ggml-org/llama.cpp#27178, still open that day, the fix only in gabrielcosi's fork, which ships no builds) and that a
+/// stock build loads them but generates garbage; they come in with a llama.cpp pin past the fix, with a projector and
+/// drafter from another repository (theirs carries neither).</para>
+///
 /// <para>Sampling, from each card: Google's Gemma 4 temperature 1.0, top-p 0.95, top-k 64 (HauhauCS's E2B/E4B and 26B A4B
 /// Balanced the same); HauhauCS's 12B/26B/31B QAT Balanced 0.6, 0.9, 64 (their min-p 0.05 is llama.cpp's default; their
 /// repeat penalty 1.1 is not carried); Qwen's "thinking, general" line 1.0, 0.95, 20 (its presence penalty is not
-/// carried either). Q4_K_P is HauhauCS's own per-model quantisation profile, not a llama.cpp type name, but it uses
+/// carried either); Muse Glimmer's 1.0, 0.95, 64. Q4_K_P is HauhauCS's own per-model quantisation profile, not a llama.cpp type name, but it uses
 /// standard GGUF tensor types and loads in any llama.cpp build.</para>
 /// </summary>
 public static class EmbeddedModelCatalog
@@ -126,6 +152,7 @@ public static class EmbeddedModelCatalog
     private static readonly EmbeddedSampling Gemma4 = new(1.0, 0.95, 64);
     private static readonly EmbeddedSampling HauhauBalanced = new(0.6, 0.9, 64);
     private static readonly EmbeddedSampling Qwen = new(1.0, 0.95, 20);
+    private static readonly EmbeddedSampling Muse = new(1.0, 0.95, 64);   // Gemma 4's values, from Meta's own card
 
     // The files one repository's builds share, each at the pinned commit.
     private static readonly EmbeddedFile Gemma12bMmproj = new("mmproj-F16.gguf", 175_115_840, "91f086971e56d7a7d8d39e271873fccdb49541bd259d6e02c401a4f1cb7a219e");
@@ -139,6 +166,8 @@ public static class EmbeddedModelCatalog
     private static readonly EmbeddedFile Qwen38Mmproj = new("mmproj-F16.gguf", 927_607_488, "cbb841a9ee0636b2ec172f5bb8df2ea8dfeb01e90fe7c6126581d662a0b4e43e");
     private static readonly EmbeddedFile Nvfp4Mmproj = new("mmproj-BF16.gguf", 931_146_432, "83ee4f4f205fa514161778c41df1ea14144faa0f713510893b63c2395f5c2d53");
     private static readonly EmbeddedFile Hauhau38Mmproj = new("mmproj-Qwen3.8-27B-Uncensored-HauhauCS-Aggressive-BF16.gguf", 931_146_624, "5681b690bcb8eb10cd28d62d078cb4e01521a3ea4880a3fc7d54de72de2dd142");
+    private static readonly EmbeddedFile MuseMmproj = new("mmproj-Muse-Glimmer-30B-Q8_0.gguf", 2_051_685_088, "01ff73c95108e1754a4c145176c6d3ba44338942285cb87dcac7f4f193192ea2");
+    private static readonly EmbeddedFile MuseDrafter = new("dflash-kquant.gguf", 1_631_205_312, "27d9a805fa29b943cfb6ad4843367cd4eaaaf06bd452d8cc3e00a2cd18a677bc");
 
     public static readonly IReadOnlyList<EmbeddedModel> Models =
     [
@@ -368,6 +397,28 @@ public static class EmbeddedModelCatalog
             new EmbeddedFile("mmproj-Gemma-4-E4B-Uncensored-HauhauCS-Aggressive-f16.gguf", 990_288_832, "debad39ab9c1152ab67695a674fb35e8375b2320c57bfd5075835d3ccb16c7db"),
             Gemma4),
         new(
+            "muse-glimmer-30b",
+            "Muse Glimmer 30B",
+            "UD-Q4_K_XL",
+            "unsloth/Muse-Glimmer-30B-GGUF",
+            "faa5b025c584459c13febfa5c59883516710ae39",
+            new EmbeddedFile("Muse-Glimmer-30B-UD-Q4_K_XL.gguf", 15_878_222_368, "82bece304887a313ece08400bc030f6066c7bff5b906b0cd40308ec8a409fd38"),
+            MuseMmproj,
+            Muse,
+            MuseDrafter,
+            Draft: DraftKind.DFlash),
+        new(
+            "muse-glimmer-30b-q5",
+            "Muse Glimmer 30B",
+            "UD-Q5_K_XL",
+            "unsloth/Muse-Glimmer-30B-GGUF",
+            "faa5b025c584459c13febfa5c59883516710ae39",
+            new EmbeddedFile("Muse-Glimmer-30B-UD-Q5_K_XL.gguf", 21_789_618_976, "97a66c4b41d9e778af7cdfa43508e08dbf765fb5049b740c69ad815e5191c637"),
+            MuseMmproj,
+            Muse,
+            MuseDrafter,
+            Draft: DraftKind.DFlash),
+        new(
             "qwen3.6-35b-a3b",
             "Qwen3.6 35B A3B",
             "UD-Q4_K_XL",
@@ -555,7 +606,7 @@ public static class EmbeddedModelCatalog
     /// <summary>The folder <paramref name="model"/>'s files live in: <c>&lt;embeddedModelsDirectory&gt;/&lt;id&gt;</c>.</summary>
     public static string Folder(string embeddedModelsDirectory, EmbeddedModel model) => Path.Combine(embeddedModelsDirectory, model.Id);
 
-    /// <summary>What an install downloads: the weights, the vision projector and the MTP drafter when there is one.</summary>
+    /// <summary>What an install downloads: the weights, the vision projector and the drafter (MTP or DFlash) when there is one.</summary>
     public static long TotalBytes(EmbeddedModel model) => model.Model.Bytes + model.Mmproj.Bytes + (model.Drafter?.Bytes ?? 0);
 
     /// <summary>The weights as a <see cref="ModelStore"/> spec: pinned, resumable, GGUF.</summary>
@@ -564,9 +615,11 @@ public static class EmbeddedModelCatalog
     /// <summary>The vision projector as a <see cref="ModelStore"/> spec: pinned, resumable, GGUF.</summary>
     public static ModelSpec MmprojSpec(string embeddedModelsDirectory, EmbeddedModel model) => Spec(embeddedModelsDirectory, model, model.Mmproj, model.Display + " vision");
 
-    /// <summary>The MTP drafter as a <see cref="ModelStore"/> spec, or null for a model without one.</summary>
+    /// <summary>The drafter as a <see cref="ModelStore"/> spec, named for its kind (MTP or DFlash), or null for a model without one.</summary>
     public static ModelSpec? DrafterSpec(string embeddedModelsDirectory, EmbeddedModel model) =>
-        model.Drafter is { } drafter ? Spec(embeddedModelsDirectory, model, drafter, model.Display + " MTP") : null;
+        model.Drafter is { } drafter
+            ? Spec(embeddedModelsDirectory, model, drafter, model.Display + " " + EmbeddedLlmText.DraftName(model.Draft))
+            : null;
 
     private static ModelSpec Spec(string embeddedModelsDirectory, EmbeddedModel model, EmbeddedFile file, string display) =>
         new(display, Path.Combine(Folder(embeddedModelsDirectory, model), file.Name), Url(model, file), file.Bytes, ModelFormat.Gguf, file.Sha256, Resumable: true);

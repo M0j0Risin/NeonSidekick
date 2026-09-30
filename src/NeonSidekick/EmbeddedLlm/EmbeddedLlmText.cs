@@ -152,8 +152,18 @@ public static class EmbeddedLlmText
 
     public static string InstallFailed(EmbeddedModel model, string detail) => $"{model.Display} could not be installed: {detail}";
 
-    /// <summary>The log line when a model's MTP drafter could not be fetched at its start: it runs without MTP this time.</summary>
-    public static string DrafterFailed(EmbeddedModel model, string detail) => $"{model.Display}'s MTP drafter could not be downloaded, so it starts without MTP" + Tail(detail);
+    /// <summary>
+    /// The log line when a model's drafter could not be fetched at its start: it runs without drafting this time. Named for
+    /// its kind (2026-09-30): MTP, or DFlash for Muse Glimmer's.
+    /// </summary>
+    public static string DrafterFailed(EmbeddedModel model, string detail)
+    {
+        string kind = DraftName(model.Draft);
+        return $"{model.Display}'s {kind} drafter could not be downloaded, so it starts without {kind}" + Tail(detail);
+    }
+
+    /// <summary>What a kind of drafting is called: "MTP" or "DFlash".</summary>
+    public static string DraftName(DraftKind draft) => draft == DraftKind.DFlash ? "DFlash" : "MTP";
 
     public static string Installed(EmbeddedModel model) => $"{model.Display} installed";
 

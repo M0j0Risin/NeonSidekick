@@ -118,7 +118,7 @@ public partial class SettingsMenuTests
 
         await menu.ShowAsync(CancellationToken.None);
 
-        Assert.Contains("1 of 39 installed (4.3 GB)", _console.Output);
+        Assert.Contains("1 of 41 installed (4.3 GB)", _console.Output);
         Assert.Contains("auto (cuda: fake driver)", _console.Output);
         pane.Dispose();
     }
