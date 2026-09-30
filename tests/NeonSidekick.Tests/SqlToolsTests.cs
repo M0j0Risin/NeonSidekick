@@ -16,7 +16,7 @@ namespace NeonSidekick.Tests;
 /// </summary>
 public sealed class SqlToolsTests
 {
-    private readonly AppSettingsData _settings = new();
+    private readonly AppSettingsData _settings = new() { SqlTools = true };   // the switch off by default since 2026-09-29
     private SqlCatalog _catalog = SqlCatalog.Empty;
     private readonly IReadOnlyList<AIFunction> _tools;
 

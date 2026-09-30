@@ -7,7 +7,9 @@ namespace NeonSidekick.EmbeddedLlm;
 /// reconnect whose launch equals the running one (a <c>/reasoning</c> change, a settings save that touched nothing
 /// here) keeps the server, so gigabytes are not reloaded for nothing; any difference restarts it.
 /// <paramref name="MayFallBack"/> is true when the backend was chosen by <c>auto</c>, so a CUDA start that fails
-/// may be retried on Vulkan.
+/// may be retried on Vulkan. <paramref name="Mtp"/> turns on MTP speculative decoding (2026-09-29), drafting with
+/// <paramref name="DrafterPath"/> when there is one and with the weights' own head when not; toggling Embedded MTP
+/// changes the launch, so it restarts the server.
 /// </summary>
 public sealed record LlamaLaunch(
     string Executable,
@@ -18,7 +20,9 @@ public sealed record LlamaLaunch(
     int ContextSize,
     string GpuLayers,
     EmbeddedSampling Sampling,
-    bool MayFallBack = false)
+    bool MayFallBack = false,
+    string? DrafterPath = null,
+    bool Mtp = false)
 {
     /// <summary>The runtime folder: the process's working directory, where its DLLs are found.</summary>
     public string WorkingDirectory => Path.GetDirectoryName(Executable) ?? ".";
@@ -42,6 +46,10 @@ public sealed record LlamaLaunch(
 /// <item><c>--no-webui</c>, <c>--log-colors off</c>: no web page to serve, no ANSI codes in the log lines.</item>
 /// <item><c>--temp</c>/<c>--top-p</c>/<c>--top-k</c>: the model card's sampling as the server's defaults; a request's
 /// own values (<c>/sampling</c>) still win.</item>
+/// <item><c>-md</c> (<c>--spec-draft-model</c>) and <c>--spec-type draft-mtp</c> (2026-09-29): MTP speculative decoding,
+/// in b11258 since llama.cpp PR #23398 (Gemma 4 MTP, 2026-06-07). With a drafter file (Gemma 4's <c>mtp-*.gguf</c>) both;
+/// with a head inside the weights (Qwen3.8's NextN) the type alone, and the server builds the draft context on the
+/// target's own weights. The target verifies every drafted token, so the answer is the same, only faster.</item>
 /// </list>
 /// </summary>
 public static class LlamaArguments
@@ -57,6 +65,18 @@ public static class LlamaArguments
         {
             args.Add("--mmproj");
             args.Add(mmproj);
+        }
+
+        if (launch.Mtp)
+        {
+            if (launch.DrafterPath is { } drafter)
+            {
+                args.Add("-md");
+                args.Add(drafter);
+            }
+
+            args.Add("--spec-type");
+            args.Add("draft-mtp");
         }
 
         args.AddRange(

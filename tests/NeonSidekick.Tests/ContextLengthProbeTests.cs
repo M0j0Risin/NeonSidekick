@@ -58,7 +58,7 @@ public class ContextLengthProbeTests
 
         // ResolveAsync with a configured model looks the window up for that model, not the first listed.
         var two = new StubHttpMessageHandler().Map(Root + "/v1/models", HttpStatusCode.OK, "{\"data\":[{\"id\":\"a\",\"max_model_len\":1000},{\"id\":\"b\",\"max_model_len\":2000}]}");
-        var resolved = await new LlmEndpointProbe(new HttpClient(two), TimeSpan.FromMilliseconds(500)).ResolveAsync(new NeonSidekick.Settings.AppSettingsData { LlmModel = "b" }, CancellationToken.None);
+        var resolved = await new LlmEndpointProbe(new HttpClient(two), TimeSpan.FromMilliseconds(500)).ResolveAsync(new NeonSidekick.Settings.AppSettingsData { LlmModel = "b", LlmScanMode = "local" }, CancellationToken.None);
         Assert.Equal("b", resolved!.ModelId);
         Assert.Equal(2000, resolved.PublishedContextLength!.Value.Tokens);
         Assert.Equal("probed http://127.0.0.1:1234/v1", resolved.Source);

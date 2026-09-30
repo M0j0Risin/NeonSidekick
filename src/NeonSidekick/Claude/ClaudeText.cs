@@ -34,10 +34,10 @@ public static class ClaudeText
     public const string ResumeLostNotice = "The Claude conversation could not be resumed; starting a new one.";
 
     /// <summary>The CLI is on no path this app looks at. Pinned.</summary>
-    public const string NotFound = "Claude Code was not found on the PATH or in %USERPROFILE%\\.local\\bin. Install it, or set Claude executable on the Claude (CLI) tab of /tools.";
+    public const string NotFound = "Claude Code was not found on the PATH or in %USERPROFILE%\\.local\\bin. Install it, or set Claude executable on the Claude tab of /tools.";
 
     /// <summary>The <c>Claude executable</c> setting names no file. Pinned.</summary>
-    public static string ConfiguredNotFound(string path) => $"Claude executable '{path}' does not exist. Fix it on the Claude (CLI) tab of /tools, or clear it to look on the PATH.";
+    public static string ConfiguredNotFound(string path) => $"Claude executable '{path}' does not exist. Fix it on the Claude tab of /tools, or clear it to look on the PATH.";
 
     /// <summary>The OS refused the start. Pinned.</summary>
     public static string CouldNotStart(string executable, string why) => $"Could not start Claude Code ({Path.GetFileName(executable)}): {why}";

@@ -19,18 +19,24 @@ public partial class SettingsMenuTests
     }
 
     [Fact]
-    public void TheTab_IsBesideTheClaudeApis_WithItsFiveRows_AllReconnecting()
+    public void TheTab_IsAfterStt_WithItsSevenRows_AllReconnecting()
     {
         int tab = (int)SettingsTab.Embedded;
         Assert.Equal("Embedded", SettingsMenu.TabTitles[tab]);
-        Assert.Equal(SettingsMenu.ClaudeApiTabTitle, SettingsMenu.TabTitles[tab - 1]);
+        Assert.Equal("STT", SettingsMenu.TabTitles[tab - 1]);   // the Claude (API) tab sat between until it went to /tools (2026-09-29)
         Assert.Equal("Botchat", SettingsMenu.TabTitles[tab + 1]);
-        Assert.Equal([SettingsField.EmbeddedModels, SettingsField.EmbeddedBackend, SettingsField.EmbeddedContextSize, SettingsField.EmbeddedGpuLayers, SettingsField.EmbeddedVision], SettingsMenu.TabFields[tab]);
+        // The switch first and MTP last (2026-09-29, the user's asks).
+        Assert.Equal([SettingsField.EmbeddedLlmEnabled, SettingsField.EmbeddedModels, SettingsField.EmbeddedBackend, SettingsField.EmbeddedContextSize, SettingsField.EmbeddedGpuLayers, SettingsField.EmbeddedVision, SettingsField.EmbeddedMtp], SettingsMenu.TabFields[tab]);
         Assert.All(SettingsMenu.TabFields[tab], f => Assert.True(SettingsMenu.IsLlmField(f), f.ToString()));
         Assert.All(SettingsMenu.TabFields[tab], f => Assert.True(SettingsMenu.RefusedMidTurn(f), f.ToString()));
-        Assert.True(SettingsMenu.IsToggle(SettingsField.EmbeddedVision));
+        Assert.True(SettingsMenu.IsToggle(SettingsField.EmbeddedVision) && SettingsMenu.IsToggle(SettingsField.EmbeddedLlmEnabled) && SettingsMenu.IsToggle(SettingsField.EmbeddedMtp));
         Assert.False(SettingsMenu.IsToggle(SettingsField.EmbeddedBackend));
-        Assert.Equal(["Embedded models", "Embedded backend", "Embedded context size", "Embedded GPU layers", "Embedded vision"], SettingsMenu.TabFields[tab].Select(SettingsMenu.FieldName));
+        Assert.Equal(["Embedded LLM enabled", "Embedded models", "Embedded backend", "Embedded context size", "Embedded GPU layers", "Embedded vision", "Embedded MTP"], SettingsMenu.TabFields[tab].Select(SettingsMenu.FieldName));
+        var data = new AppSettingsData();
+        Assert.True(data.EmbeddedLlmEnabled && data.EmbeddedMtp);   // both on by default
+        Assert.Equal(("on", "on"), (SettingsMenu.FieldValue(SettingsField.EmbeddedLlmEnabled, data, "C:\\p"), SettingsMenu.FieldValue(SettingsField.EmbeddedMtp, data, "C:\\p")));
+        var copy = AppSettings.Copy(new AppSettingsData { EmbeddedLlmEnabled = false, EmbeddedMtp = false });
+        Assert.False(copy.EmbeddedLlmEnabled || copy.EmbeddedMtp);
     }
 
     [Fact]
@@ -47,11 +53,12 @@ public partial class SettingsMenuTests
         Assert.Equal(EmbeddedLlmText.UrlDisplay, SettingsMenu.FieldValue(SettingsField.LlmUrl, new AppSettingsData { LlmUrl = "embedded" }, "C:\\p"));
 
         var e2b = EmbeddedModelCatalog.Find("gemma-4-e2b")!;
-        Assert.Equal("Gemma 4 E2B                 [#9A8BB8]UD-Q4_K_XL  installed · 4.2 GB[/]", SettingsMenu.EmbeddedModelLabel(e2b, EmbeddedModelState.Installed));
-        Assert.Equal("Gemma 4 12B                 [#9A8BB8]BF16        download  · 24 GB[/]", SettingsMenu.EmbeddedModelLabel(EmbeddedModelCatalog.Find("gemma-4-12b-bf16")!, EmbeddedModelState.Absent));   // the · under the installed rows' (2026-09-29)
-        Assert.Equal("Gemma 4 12B QAT Uncensored  ", SettingsMenu.EmbeddedModelLabel(EmbeddedModelCatalog.Find("gemma-4-12b-qat-uncensored")!, EmbeddedModelState.Absent)[..28]);   // the longest name, two to spare
-        Assert.Equal("Remove (4.2 GB)", SettingsMenu.RemoveRow(e2b));
-        Assert.Equal("Install (download 4.2 GB + llama.cpp runtime 577 MB)", SettingsMenu.InstallRow(e2b, 577_081_932));
+        Assert.Equal("Gemma 4 E2B                     [#9A8BB8]UD-Q4_K_XL  installed · 4.3 GB[/]", SettingsMenu.EmbeddedModelLabel(e2b, EmbeddedModelState.Installed));   // its MTP drafter counts (2026-09-29)
+        Assert.Equal("Gemma 4 12B                     [#9A8BB8]BF16        download  · 24.5 GB[/]", SettingsMenu.EmbeddedModelLabel(EmbeddedModelCatalog.Find("gemma-4-12b-bf16")!, EmbeddedModelState.Absent));   // the · under the installed rows' (2026-09-29)
+        Assert.Equal("Gemma 4 26B A4B QAT Uncensored  ", SettingsMenu.EmbeddedModelLabel(EmbeddedModelCatalog.Find("gemma-4-26b-a4b-qat-uncensored")!, EmbeddedModelState.Absent)[..32]);   // the longest name, two to spare
+        Assert.Equal(32, SettingsMenu.EmbeddedModelNameWidth);
+        Assert.Equal("Remove (4.3 GB)", SettingsMenu.RemoveRow(e2b));
+        Assert.Equal("Install (download 4.3 GB + llama.cpp runtime 577 MB)", SettingsMenu.InstallRow(e2b, 577_081_932));
         Assert.Equal("vulkan  [#9A8BB8]any GPU: NVIDIA, AMD, Intel[/]", SettingsMenu.EmbeddedBackendLabel("vulkan"));
     }
 
@@ -74,7 +81,7 @@ public partial class SettingsMenuTests
 
         await menu.ShowAsync(CancellationToken.None);
 
-        Assert.Contains("1 of 11 installed (4.2 GB)", _console.Output);
+        Assert.Contains("1 of 31 installed (4.3 GB)", _console.Output);
         Assert.Contains("auto (cuda: fake driver)", _console.Output);
         pane.Dispose();
     }
@@ -84,9 +91,9 @@ public partial class SettingsMenuTests
     {
         var (menu, pane, embedded) = EmbeddedPane(new FakeEmbeddedLlm().Installed("gemma-4-e2b"));
         GoTo(SettingsTab.Embedded);
-        Push(Keys.Enter);                       // Embedded models: the catalog, on Gemma 4 12B
-        Down(6);
-        Push(Keys.Enter);                       // Gemma 4 E2B, the seventh row: its page
+        Push(Keys.Down, Keys.Enter);            // Embedded models (under the switch since 2026-09-29): the catalog, on Gemma 4 12B
+        Down(18);
+        Push(Keys.Enter);                       // Gemma 4 E2B, the nineteenth row since the 26B A4B and 31B builds: its page
         Push(Keys.Enter);                       // Use now
 
         Assert.Equal(SettingsChanges.None, await menu.ShowAsync(CancellationToken.None));
@@ -105,9 +112,9 @@ public partial class SettingsMenuTests
     {
         var (menu, pane, embedded) = EmbeddedPane(new FakeEmbeddedLlm { RuntimeBytes = 577_081_932 });
         GoTo(SettingsTab.Embedded);
-        Push(Keys.Enter);                       // the catalog, on Gemma 4 12B
-        Down(9);
-        Push(Keys.Enter);                       // Gemma 4 E4B QAT, the tenth row: its page
+        Push(Keys.Down, Keys.Enter);            // the catalog, on Gemma 4 12B
+        Down(21);
+        Push(Keys.Enter);                       // Gemma 4 E4B QAT, the twenty-second row: its page
         Push(Keys.Enter);                       // Install
 
         await menu.ShowAsync(CancellationToken.None);
@@ -123,9 +130,9 @@ public partial class SettingsMenuTests
     {
         var (menu, pane, embedded) = EmbeddedPane(new FakeEmbeddedLlm().Installed("gemma-4-e2b"));
         GoTo(SettingsTab.Embedded);
-        Push(Keys.Enter);                       // the catalog, on Gemma 4 12B
-        Down(6);
-        Push(Keys.Enter);                       // Gemma 4 E2B, the seventh row
+        Push(Keys.Down, Keys.Enter);            // the catalog, on Gemma 4 12B
+        Down(18);
+        Push(Keys.Enter);                       // Gemma 4 E2B, the nineteenth row
         Push(Keys.Down, Keys.Enter);            // Remove (4.2 GB)
         Push(Keys.Down, Keys.Enter);            // Yes (the cursor opens on No)
         Push(Keys.Escape, Keys.Escape);         // out of the catalog, then the settings
@@ -144,7 +151,7 @@ public partial class SettingsMenuTests
     {
         var (menu, pane, _) = EmbeddedPane();
         GoTo(SettingsTab.Embedded);
-        Push(Keys.Down, Keys.Down, Keys.Enter); // Embedded context size
+        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Enter); // Embedded context size (the switch first since 2026-09-29)
         Backspace(10);
         _console.Input.PushText("100");
         Push(Keys.Enter);                       // refused
@@ -171,7 +178,7 @@ public partial class SettingsMenuTests
     {
         var (menu, pane, _) = EmbeddedPane();
         GoTo(SettingsTab.Embedded);
-        Push(Keys.Down, Keys.Enter);            // Embedded backend: the page opens on auto
+        Push(Keys.Down, Keys.Down, Keys.Enter); // Embedded backend: the page opens on auto
         Push(Keys.Down, Keys.Down, Keys.Enter); // vulkan
         Push(Keys.Escape);
 
@@ -205,7 +212,7 @@ public partial class SettingsMenuTests
         _console.Profile.Width = 240;
         var (menu, pane) = PaneMenu();
         GoTo(SettingsTab.Embedded);
-        Push(Keys.Enter);
+        Push(Keys.Down, Keys.Enter);            // the catalog, under the switch
         Push(Keys.Escape);
 
         await menu.ShowAsync(CancellationToken.None);

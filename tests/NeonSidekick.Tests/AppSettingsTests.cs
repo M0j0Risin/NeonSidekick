@@ -31,6 +31,8 @@ public class AppSettingsTests : IDisposable
         EmbeddedContextSize = 8192,
         EmbeddedGpuLayers = "20",
         EmbeddedVision = false,
+        EmbeddedLlmEnabled = false,
+        EmbeddedMtp = false,
         CommandTypoIntercept = false,
         KeepCommandHistory = false,
         CopyUserPrompt = false,
@@ -118,7 +120,7 @@ public class AppSettingsTests : IDisposable
         AskMaxQuestions = 3,
         AskUser = false,
         FileSafeEdits = true,
-        FileTools = false,
+        FileTools = true,   // off by default since 2026-09-29
         FileMentionFolderMode = "folder-apply",
         FileTreeMaxLength = 750,
         FileTreeShowSizes = false,
@@ -129,7 +131,7 @@ public class AppSettingsTests : IDisposable
         WebBrowserPath = @"C:\tools\chrome.exe",
         WebSearchMaxResults = 5,
         WebSearchMethod = "searxng",
-        WebTools = false,
+        WebTools = true,   // off by default since 2026-09-29
         AgentSkills = false,
         ExternalSkills = true,
         ProjectFile = false,
@@ -271,6 +273,8 @@ public class AppSettingsTests : IDisposable
         Assert.Equal(expected.EmbeddedContextSize, actual.EmbeddedContextSize);
         Assert.Equal(expected.EmbeddedGpuLayers, actual.EmbeddedGpuLayers);
         Assert.Equal(expected.EmbeddedVision, actual.EmbeddedVision);
+        Assert.Equal(expected.EmbeddedLlmEnabled, actual.EmbeddedLlmEnabled);
+        Assert.Equal(expected.EmbeddedMtp, actual.EmbeddedMtp);
     }
 
     [Fact]
@@ -292,6 +296,8 @@ public class AppSettingsTests : IDisposable
             d.EmbeddedContextSize = full.EmbeddedContextSize;
             d.EmbeddedGpuLayers = full.EmbeddedGpuLayers;
             d.EmbeddedVision = full.EmbeddedVision;
+            d.EmbeddedLlmEnabled = full.EmbeddedLlmEnabled;
+            d.EmbeddedMtp = full.EmbeddedMtp;
             d.CommandTypoIntercept = full.CommandTypoIntercept;
             d.KeepCommandHistory = full.KeepCommandHistory;
             d.CopyUserPrompt = full.CopyUserPrompt;
@@ -413,6 +419,8 @@ public class AppSettingsTests : IDisposable
                 d.EmbeddedContextSize = full.EmbeddedContextSize;
                 d.EmbeddedGpuLayers = full.EmbeddedGpuLayers;
                 d.EmbeddedVision = full.EmbeddedVision;
+                d.EmbeddedLlmEnabled = full.EmbeddedLlmEnabled;
+                d.EmbeddedMtp = full.EmbeddedMtp;
                 d.CommandTypoIntercept = full.CommandTypoIntercept;
                 d.KeepCommandHistory = full.KeepCommandHistory;
                 d.CopyUserPrompt = full.CopyUserPrompt;
@@ -1282,8 +1290,8 @@ public class AppSettingsTests : IDisposable
         Assert.False(s.LlmPreserveThinking);
         Assert.Null(s.LlmSampling);
         Assert.False(s.LlmSamplingFromHuggingFace);
-        Assert.Equal("local", s.LlmScanMode);
-        Assert.True(s.WebTools);
+        Assert.Equal("disabled", s.LlmScanMode);   // "local" until 2026-09-29 (the user's call: a fresh profile scans nothing)
+        Assert.False(s.WebTools);   // on until 2026-09-29 (the user's call: every tool group off in a fresh profile)
         Assert.Equal("default", s.WebBrowserMode);
         Assert.Equal("", s.WebBrowserPath);
         Assert.Equal("internet", s.WebBrowserNetworkMode);
@@ -1294,7 +1302,9 @@ public class AppSettingsTests : IDisposable
         Assert.Equal(20, AppSettingsData.DefaultWebSearchMaxResults);
         Assert.True(s.TtsVoicePreview);
         Assert.Equal("compact", s.LlmToolCompactType);
-        Assert.True(s.FileTools);
+        Assert.False(s.FileTools);   // on until 2026-09-29, with the web tools
+        Assert.False(s.ObsidianTools || s.SqlTools || s.ComfyTools || s.HomeAssistantTools);   // the four integrations too, the same day
+        Assert.True(s.EmbeddedLlmEnabled && s.EmbeddedMtp);   // the embedded model's switch and MTP (2026-09-29): on
         Assert.Equal("duckduckgo", s.WebSearchMethod);
         // The Ask tab (2026-09-15): the tool on, ten questions of ten choices; a choice needs two, so the choices floor is 2.
         Assert.True(s.AskUser);
@@ -1342,8 +1352,8 @@ public class AppSettingsTests : IDisposable
         Assert.Equal("", s.GitNativeEmail);   // the /gituser pair (2026-09-21): not set until typed
         Assert.Equal("", s.GitNativeName);
         // The shell tools (2026-09-21): ask before anything runs, nothing allowed for good, PowerShell, 180 s (1–3600) under a 600 s cap (10–3600), 30,000 chars of output (2000–500000).
-        Assert.Equal("ask", s.ShellCommandPolicy);
-        Assert.Equal("ask", NeonSidekick.Shell.CommandPolicy.Default);
+        Assert.Equal("off", s.ShellCommandPolicy);   // "ask" until 2026-09-29 (the user's call)
+        Assert.Equal("off", NeonSidekick.Shell.CommandPolicy.Default);
         Assert.Empty(s.ShellCommandAllowed);
         Assert.Equal("powershell", s.ShellDefault);
         Assert.Equal("powershell", NeonSidekick.Shell.ShellKinds.Default);

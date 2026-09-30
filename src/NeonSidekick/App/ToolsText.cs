@@ -46,10 +46,10 @@ public static class ToolsText
     /// <summary>The image tools' tab and group (2026-09-24), after Obsidian, before SQL (the user's order, 2026-09-27); "Images" until later on 2026-09-24 (the user's call: it is ComfyUI's tab).</summary>
     public const string ComfyTabTitle = "ComfyUI";
 
-    /// <summary>The Claude tab and the advisor's group (2026-09-27): <c>/claude</c>'s rows (off <c>/settings</c>, the user's call) and <c>claude_advisor</c>'s, after Ask, before Obsidian (the user's order, later that day; after ComfyUI before). Titled "Claude (CLI)" since later on 2026-09-27 (the user's call: the pair of /settings' Claude (API) tab); "Claude" before.</summary>
-    public const string ClaudeTabTitle = "Claude (CLI)";
+    /// <summary>The Claude tab and the advisor's group (2026-09-27): <c>/claude</c>'s rows (off <c>/settings</c>, the user's call) and <c>claude_advisor</c>'s, after Ask, before Obsidian (the user's order, later that day; after ComfyUI before). Titled "Claude (CLI)" from later on 2026-09-27 (the user's call: the pair of /settings' Claude (API) tab) and "Claude" again since 2026-09-29, when that tab's four rows came here under the advisor's (the user's call: one Claude tab).</summary>
+    public const string ClaudeTabTitle = "Claude";
 
-    /// <summary>The Home Assistant tools' tab and group (2026-09-28), after Claude (CLI), before Obsidian: among the other integrations, so every tab either side keeps its place from its end of the strip.</summary>
+    /// <summary>The Home Assistant tools' tab and group (2026-09-28), after Claude, before Obsidian: among the other integrations, so every tab either side keeps its place from its end of the strip.</summary>
     public const string HomeAssistantTabTitle = "Home Assistant";
 
     /// <summary>The print tools' tab and group (2026-09-28), after Home Assistant, before Obsidian: beside the other integration that acts in the room.</summary>

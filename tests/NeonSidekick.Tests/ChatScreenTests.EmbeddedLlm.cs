@@ -27,9 +27,9 @@ public partial class ChatScreenTests
         _settings.Update(d => d.TtsOutput = false);
         var embedded = UseEmbedded(new FakeEmbeddedLlm().Installed("gemma-4-e2b"));
         PushLine("/server");
-        for (int i = 0; i < 7; i++)
+        for (int i = 0; i < 19; i++)
         {
-            _console.Input.PushKey(Keys.Down);  // past the 12B's four builds, 12B QAT and 12B QAT Uncensored to Gemma 4 E2B
+            _console.Input.PushKey(Keys.Down);  // past LM Studio, the 12B's six builds and the 26B A4B's and 31B's twelve to Gemma 4 E2B
         }
 
         _console.Input.PushKey(Keys.Enter);
@@ -41,11 +41,12 @@ public partial class ChatScreenTests
         Assert.Contains(SettingsMenu.ServerTitle, output);
         // Every row's detail in one column: the names padded as the catalog pads them, the quantisations after, and the
         // detail's · under one another (2026-09-29).
-        Assert.Contains("Embedded   " + "Gemma 4 E4B QAT".PadRight(28) + "UD-Q4_K_XL  download  · 5.2 GB", output);
-        Assert.Contains("Embedded   " + "Gemma 4 E2B".PadRight(28) + "UD-Q4_K_XL  installed · 4.2 GB", output);
-        Assert.Contains("Embedded   " + "Gemma 4 12B QAT Uncensored".PadRight(28) + "Q4_K_M      download  · 7.6 GB", output);
-        Assert.Contains("Embedded   " + "Gemma 4 12B".PadRight(28) + "BF16        download  · 24 GB", output);
-        Assert.Contains("LM Studio  " + "http://127.0.0.1:1234/v1".PadRight(38) + "  1 chat model", output);
+        Assert.Contains("Embedded   " + "Gemma 4 E4B QAT".PadRight(32) + "UD-Q4_K_XL  download  · 5.3 GB", output);   // each with its MTP drafter (2026-09-29)
+        Assert.Contains("Embedded   " + "Gemma 4 E2B".PadRight(32) + "UD-Q4_K_XL  installed · 4.3 GB", output);
+        Assert.Contains("Embedded   " + "Gemma 4 12B QAT Uncensored".PadRight(32) + "Q4_K_M      download  · 7.8 GB", output);
+        Assert.Contains("Embedded   " + "Gemma 4 12B".PadRight(32) + "BF16        download  · 24.5 GB", output);
+        Assert.Contains("Embedded   " + "Gemma 4 26B A4B QAT Uncensored".PadRight(32) + "Q4_K_M      download  · 18.2 GB", output);
+        Assert.Contains("LM Studio  " + "http://127.0.0.1:1234/v1".PadRight(42) + "  1 chat model", output);   // the URL column as wide as a name and a quantisation (38 until the 26B A4B names, 2026-09-29)
         Assert.Contains("  · 🖥️ LLM URL: " + EmbeddedLlmText.UrlDisplay, output);
         Assert.Contains(SettingsMenu.ReasoningTitle, output);
         Assert.DoesNotContain(SettingsMenu.ModelTitle, output);   // an embedded row is one model: no model step
@@ -63,9 +64,9 @@ public partial class ChatScreenTests
         _settings.Update(d => d.TtsOutput = false);
         var embedded = UseEmbedded(new FakeEmbeddedLlm());
         PushLine("/server");
-        for (int i = 0; i < 10; i++)
+        for (int i = 0; i < 22; i++)
         {
-            _console.Input.PushKey(Keys.Down);  // the tenth embedded row: Gemma 4 E4B QAT
+            _console.Input.PushKey(Keys.Down);  // the twenty-second embedded row: Gemma 4 E4B QAT
         }
 
         _console.Input.PushKey(Keys.Enter);
@@ -215,12 +216,12 @@ public partial class ChatScreenTests
         _settings.Update(d => d.TtsOutput = false);
         var embedded = UseEmbedded(new FakeEmbeddedLlm().Installed("gemma-4-e2b", "gemma-4-e4b-qat"));
         PushLine("/server embedded");
-        for (int i = 0; i < 6; i++)
+        for (int i = 0; i < 18; i++)
         {
             _console.Input.PushKey(Keys.Down);
         }
 
-        _console.Input.PushKey(Keys.Enter);     // the seventh embedded row: Gemma 4 E2B
+        _console.Input.PushKey(Keys.Enter);     // the nineteenth embedded row: Gemma 4 E2B
         _console.Input.PushKey(Keys.Escape);    // keep the reasoning
         PushLine("/exit");
 
@@ -276,6 +277,26 @@ public partial class ChatScreenTests
         Assert.Contains(SettingsMenu.StartupServerTitle, output);
         Assert.Empty(embedded.Starts);
         Assert.Contains("LLM: http://127.0.0.1:1234/v1 model=llama (probed http://127.0.0.1:1234/v1)", output);
+    }
+
+    [Fact]
+    public async Task SwitchedOff_TheSavedModelNeverStarts_TheRowsAreGone_AndServerEmbeddedRefuses()
+    {
+        // Embedded LLM enabled off (2026-09-29, the user's ask): the saved embedded URL reads as none, so the startup picker
+        // opens on the scan's servers alone, and /server embedded says why it lists nothing.
+        _settings.Update(d => { d.TtsOutput = false; d.LlmUrl = "embedded"; d.LlmModel = "gemma-4-e2b"; d.EmbeddedLlmEnabled = false; });
+        var embedded = UseEmbedded(new FakeEmbeddedLlm().Installed("gemma-4-e2b"));
+        _console.Input.PushKey(Keys.Escape);    // the startup picker: the first server that answered
+        PushLine("/server embedded");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains(SettingsMenu.StartupServerTitle, output);
+        Assert.DoesNotContain("Embedded   Gemma", output);
+        Assert.Contains(EmbeddedLlmText.SwitchedOffError, output);
+        Assert.Empty(embedded.Starts);
+        Assert.Equal("http://127.0.0.1:1234/v1", _session.Endpoint?.BaseUrl.AbsoluteUri);   // the first server that answered
     }
 
     [Fact]

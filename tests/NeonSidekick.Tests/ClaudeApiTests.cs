@@ -497,13 +497,13 @@ public class ClaudeApiTests
             .Map("https://api.anthropic.com/v1/models", HttpStatusCode.OK, ModelsList);
         using var session = Session(stub, []);
 
-        var off = await session.ProbeServersAsync(new AppSettingsData { ClaudeApiKey = "sk-ant-test" }, null, CancellationToken.None);
+        var off = await session.ProbeServersAsync(new AppSettingsData { ClaudeApiKey = "sk-ant-test", LlmScanMode = "local" }, null, CancellationToken.None);
         Assert.Equal(["LM Studio"], off.Select(s => s.Name));
 
-        var keyless = await session.ProbeServersAsync(new AppSettingsData { ClaudeApi = true }, null, CancellationToken.None);
+        var keyless = await session.ProbeServersAsync(new AppSettingsData { ClaudeApi = true, LlmScanMode = "local" }, null, CancellationToken.None);
         Assert.Equal(["LM Studio"], keyless.Select(s => s.Name));
 
-        var on = await session.ProbeServersAsync(new AppSettingsData { ClaudeApi = true, ClaudeApiKey = "sk-ant-test" }, null, CancellationToken.None);
+        var on = await session.ProbeServersAsync(new AppSettingsData { ClaudeApi = true, ClaudeApiKey = "sk-ant-test", LlmScanMode = "local" }, null, CancellationToken.None);
         Assert.Equal(["LM Studio", ClaudeApi.ServerName], on.Select(s => s.Name));
 
         // The scan disabled still lists it.
@@ -533,7 +533,7 @@ public class ClaudeApiTests
         var endpoints = new List<LlmEndpoint>();
         using var session = Session(stub, endpoints);
 
-        Assert.True(await session.ConnectAsync(new AppSettingsData { ClaudeApiKey = "sk-ant-test", LlmUrl = "https://api.anthropic.com/v1" }, CancellationToken.None));
+        Assert.True(await session.ConnectAsync(new AppSettingsData { ClaudeApiKey = "sk-ant-test", LlmUrl = "https://api.anthropic.com/v1", LlmScanMode = "local" }, CancellationToken.None));
 
         Assert.Equal("http://127.0.0.1:1234/v1", Assert.Single(endpoints).BaseUrl.AbsoluteUri);
         Assert.DoesNotContain(stub.Requests, r => r.Uri.Host == ClaudeApi.Host);
@@ -569,13 +569,15 @@ public class ClaudeApiTests
     }
 
     [Fact]
-    public void Settings_TheClaudeApiTab_SitsAfterStt_WithItsFourRows()
+    public void Tools_TheClaudeTab_EndsWithTheClaudeApisFourRows()
     {
-        int tab = SettingsMenu.TabTitles.ToList().IndexOf(SettingsMenu.ClaudeApiTabTitle);
-        Assert.Equal("STT", SettingsMenu.TabTitles[tab - 1]);
-        Assert.Equal(SettingsMenu.EmbeddedTabTitle, SettingsMenu.TabTitles[tab + 1]);   // the other server of the app's own (2026-09-29); Botchat until then
-        Assert.Equal((int)SettingsTab.ClaudeApi, tab);
-        Assert.Equal([SettingsField.ClaudeApi, SettingsField.ClaudeApiKey, SettingsField.ClaudeApiMaxTokens, SettingsField.ClaudeApiPromptCaching], SettingsMenu.TabFields[tab]);
+        // /settings' Claude (API) tab went to /tools' Claude tab on 2026-09-29 (the user's call), under the advisor's confirm.
+        Assert.DoesNotContain("Claude (API)", SettingsMenu.TabTitles);
+        var claude = SettingsMenu.ToolsTabFields[ToolsText.TabTitles.ToList().IndexOf(ToolsText.ClaudeTabTitle) - 1];
+        Assert.Equal(SettingsField.ClaudeAdvisorConfirm, claude[^5]);
+        Assert.Equal([SettingsField.ClaudeApi, SettingsField.ClaudeApiKey, SettingsField.ClaudeApiMaxTokens, SettingsField.ClaudeApiPromptCaching], claude.TakeLast(4));
+        Assert.All(SettingsMenu.TabFields, t => Assert.DoesNotContain(SettingsField.ClaudeApi, t));
+        var apiRows = claude.TakeLast(4).ToList();
 
         var data = new AppSettingsData();
         Assert.Equal("off", SettingsMenu.FieldValue(SettingsField.ClaudeApi, data, "C:\\p"));
@@ -584,7 +586,7 @@ public class ClaudeApiTests
         Assert.Equal("on", SettingsMenu.FieldValue(SettingsField.ClaudeApiPromptCaching, data, "C:\\p"));
         Assert.Equal("sk••••", SettingsMenu.ClaudeApiKeyLabel("sk-ant"));
         Assert.Equal("", SettingsMenu.EditableValue(SettingsField.ClaudeApiKey, new AppSettingsData { ClaudeApiKey = "sk-ant" }));
-        Assert.All(SettingsMenu.TabFields[tab], f => Assert.True(SettingsMenu.IsLlmField(f)));
+        Assert.All(apiRows, f => Assert.True(SettingsMenu.IsLlmField(f) && SettingsMenu.RefusedMidTurn(f)));
         Assert.True(SettingsMenu.IsToggle(SettingsField.ClaudeApi) && SettingsMenu.IsToggle(SettingsField.ClaudeApiPromptCaching));
 
         var copy = AppSettings.Copy(new AppSettingsData { ClaudeApi = true, ClaudeApiKey = "k", ClaudeApiMaxTokens = 4096, ClaudeApiPromptCaching = false });

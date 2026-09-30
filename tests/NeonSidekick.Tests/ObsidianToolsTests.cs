@@ -14,7 +14,7 @@ public sealed class ObsidianToolsTests : IDisposable
     private readonly string _dir = Path.Combine(Path.GetTempPath(), "NeonSidekick.Tests", Guid.NewGuid().ToString("N"));
     private readonly string _root;
     private readonly ManualTimeProvider _time = new();
-    private readonly AppSettingsData _settings = new() { FileSafeEdits = true };
+    private readonly AppSettingsData _settings = new() { FileSafeEdits = true, ObsidianTools = true };   // the switch off by default since 2026-09-29
     private readonly ObsidianVault _vault;
     private readonly IReadOnlyList<AIFunction> _tools;
 
@@ -171,7 +171,8 @@ public sealed class ObsidianToolsTests : IDisposable
     {
         Assert.True(App.ChatScreen.ObsidianOffered(_settings));
         Assert.False(App.ChatScreen.ObsidianOffered(new AppSettingsData { ObsidianVault = _root, ObsidianTools = false }));
-        Assert.False(App.ChatScreen.ObsidianOffered(new AppSettingsData { ObsidianVault = _dir }));
+        Assert.False(App.ChatScreen.ObsidianOffered(new AppSettingsData { ObsidianVault = _dir, ObsidianTools = true }));
+        Assert.False(App.ChatScreen.ObsidianOffered(new AppSettingsData { ObsidianVault = _root }));   // the switch is off in a fresh profile (2026-09-29)
         Assert.False(App.ChatScreen.ObsidianOffered(new AppSettingsData()));
     }
 

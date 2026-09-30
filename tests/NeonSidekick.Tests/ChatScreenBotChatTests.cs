@@ -130,8 +130,8 @@ public partial class ChatScreenTests
     public async Task BotChat_NamedProfiles_OnlyThoseJoin_AndACorruptOneSitsItOut()
     {
         BotChatFixture();
-        Profiles.Create(_dir, "max", new AppSettingsData());
-        Profiles.Create(_dir, "zed", new AppSettingsData());
+        Profiles.Create(_dir, "max", PreFlipDefaults.Data());
+        Profiles.Create(_dir, "zed", PreFlipDefaults.Data());
         File.WriteAllText(Profiles.ProfileFile(_dir, "zed"), "{ not json");
         _chat.EnqueueText("One.");
         _chat.EnqueueText("never");

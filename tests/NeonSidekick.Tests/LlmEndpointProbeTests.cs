@@ -281,7 +281,7 @@ public class LlmEndpointProbeTests
         var (stub, probe) = Probe();
         stub.Map(LmStudio, HttpStatusCode.OK, StubHttpMessageHandler.ModelsJson("listed"));
 
-        var discovered = await probe.ResolveAsync(new AppSettingsData { LlmModel = " mine " }, CancellationToken.None);
+        var discovered = await probe.ResolveAsync(new AppSettingsData { LlmModel = " mine ", LlmScanMode = "local" }, CancellationToken.None);
         var configured = await probe.ResolveAsync(new AppSettingsData { LlmUrl = "http://127.0.0.1:1234", LlmModel = "mine" }, CancellationToken.None);
 
         Assert.Equal("mine", discovered!.ModelId);
@@ -293,7 +293,7 @@ public class LlmEndpointProbeTests
     {
         var (stub, probe) = Probe();
         stub.Map(LmStudio, HttpStatusCode.OK, StubHttpMessageHandler.ModelsJson("m"));
-        var endpoint = await probe.ResolveAsync(new AppSettingsData { LlmApiKey = "  " }, CancellationToken.None);
+        var endpoint = await probe.ResolveAsync(new AppSettingsData { LlmApiKey = "  ", LlmScanMode = "local" }, CancellationToken.None);
         Assert.Equal("empty", endpoint!.ApiKey);
     }
 
@@ -311,7 +311,7 @@ public class LlmEndpointProbeTests
         stub.Map(LmStudio, HttpStatusCode.OK, StubHttpMessageHandler.ModelsJson("m"));
         stub.Map("http://myhost:5000/v1/models", HttpStatusCode.OK, StubHttpMessageHandler.ModelsJson("m"));
 
-        var discovered = await probe.ResolveAsync(new AppSettingsData { LlmApiKey = stored }, CancellationToken.None);
+        var discovered = await probe.ResolveAsync(new AppSettingsData { LlmApiKey = stored, LlmScanMode = "local" }, CancellationToken.None);
         var configured = await probe.ResolveAsync(new AppSettingsData { LlmUrl = "http://myhost:5000", LlmApiKey = stored }, CancellationToken.None);
 
         Assert.Equal("sk-real", discovered!.ApiKey);
@@ -548,7 +548,7 @@ public class LlmEndpointProbeTests
         Assert.Equal("http://10.0.0.5:1234/v1", remote.BaseUrl.AbsoluteUri);
         Assert.Equal("remote-lm", remote.ModelId);
 
-        var local = await probe.ResolveAsync(new AppSettingsData(), CancellationToken.None);
+        var local = await probe.ResolveAsync(new AppSettingsData { LlmScanMode = "local" }, CancellationToken.None);
         Assert.NotNull(local);
         Assert.Equal("http://127.0.0.1:1234/v1", local.BaseUrl.AbsoluteUri);
 

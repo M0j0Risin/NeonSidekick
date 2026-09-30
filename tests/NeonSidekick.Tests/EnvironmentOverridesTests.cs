@@ -151,7 +151,7 @@ public class EnvironmentOverridesTests
     {
         var env = With((EnvironmentOverrides.CommandPolicyVariable, raw));
         Assert.Null(env.ShellCommandPolicy);
-        Assert.Equal("ask", env.ApplyTo(new AppSettingsData()).ShellCommandPolicy);
+        Assert.Equal("off", env.ApplyTo(new AppSettingsData()).ShellCommandPolicy);   // the saved default stands ("ask" until 2026-09-29)
         Assert.DoesNotContain(EnvironmentOverrides.CommandPolicyVariable, env.ActiveVariables());
     }
 

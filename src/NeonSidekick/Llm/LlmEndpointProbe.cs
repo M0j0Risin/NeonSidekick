@@ -312,14 +312,19 @@ public sealed class LlmEndpointProbe
         ArgumentNullException.ThrowIfNull(effective);
         string? configuredModel = string.IsNullOrWhiteSpace(effective.LlmModel) ? null : effective.LlmModel.Trim();
 
-        if (EmbeddedLlm.EmbeddedEndpoint.IsEmbedded(effective.LlmUrl))
+        if (EmbeddedLlm.EmbeddedEndpoint.Chosen(effective))
         {
             // The embedded model's sentinel (2026-09-29) is started, not probed: LlmSession does that before it gets here.
             DiagnosticLog.Error(Category, "The LLM URL names the embedded model, which this mode cannot start.");
             return null;
         }
 
-        if (ClaudeApi.IsClaudeApi(effective.LlmUrl) && !ClaudeApi.Offered(effective))
+        if (EmbeddedLlm.EmbeddedEndpoint.SwitchedOff(effective))
+        {
+            // Saved while the embedded model was on (2026-09-29); switched off, the URL stands for nothing, like the Claude API's below.
+            DiagnosticLog.Warn(Category, EmbeddedLlm.EmbeddedLlmText.SwitchedOffWarning);
+        }
+        else if (ClaudeApi.IsClaudeApi(effective.LlmUrl) && !ClaudeApi.Offered(effective))
         {
             // Saved while the Claude API was on (2026-09-27); with it off or keyless the URL stands for nothing, and the
             // settings' scan finds a server as a blank URL would.

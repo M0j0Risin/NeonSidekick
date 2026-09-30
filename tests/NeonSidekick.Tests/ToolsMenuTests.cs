@@ -38,6 +38,9 @@ public partial class ToolsMenuTests : IDisposable
         _console.Profile.Width = 160;   // 150 until later on 2026-09-28, when "Print" took the strip to 151 cells; 130 until 2026-09-28, when "Home Assistant" took the strip to 142 cells; 120 until later on 2026-09-27, when "Claude (CLI)" took the strip to 124 cells (the user's call: it takes a second strip row, lined up under Offered, below 128 columns since the tab strip's own layout on the same day); 100 until 2026-09-24, when the Images tab took the ten-tab strip to 107 cells
         _settings = new AppSettings(_dir);
         _settings.Update(d => { d.TtsOutput = true; d.TtsSource = "http"; d.ToolsDisabled = []; d.GitNativeTools = true; });   // delete off by default (2026-09-20), Git native tools off by default (2026-09-21): the Offered-tab scripts start from every tool on
+        // Eight settings went off by default on 2026-09-29 (the user's call): the scripts here were written with every tool group
+        // offered, the shell under ask and the local scan, so the fixture puts them back; the fresh-profile tests start from new ones.
+        _settings.Update(PreFlipDefaults.Apply);
         _speech = new SpeechSession(_ => _synth, _ => new FakeAudioPlayback(), new ModelStore(Path.Combine(_dir, "models"), new HttpClient(new StubHttpMessageHandler())));
         var root = Path.Combine(_dir, "files");
         Directory.CreateDirectory(root);
@@ -123,7 +126,7 @@ public partial class ToolsMenuTests : IDisposable
             : row + new string(' ', _console.Profile.Width - 2 - TextCells.Width(row)) + ScreenPane.CloseGlyph;
 
     /// <summary>The strip as the pane prints it: the label, then every tab title with a space either side, two spaces between. Pinned.</summary>
-    private const string Strip = ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude (CLI)    Home Assistant    Print    Obsidian    ComfyUI    SQL    Git (native)    Options ";   // Print since later on 2026-09-28, Home Assistant since 2026-09-28, Images since 2026-09-24, SQL since 2026-09-23, Obsidian since 2026-09-22, Options last since later that day (second from later on 2026-09-19); the user's order (Web, Files, Shell, Ask, Git (native)) since later on 2026-09-21, alphabetical before
+    private const string Strip = ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude    Home Assistant    Print    Obsidian    ComfyUI    SQL    Git (native)    Options ";   // Print since later on 2026-09-28, Home Assistant since 2026-09-28, Images since 2026-09-24, SQL since 2026-09-23, Obsidian since 2026-09-22, Options last since later that day (second from later on 2026-09-19); the user's order (Web, Files, Shell, Ask, Git (native)) since later on 2026-09-21, alphabetical before
 
     /// <summary>A tool row as the pane prints it at width 120 (the markup rendered): the name padded to 22, the state to 5, then the description, cut to 119 cells and an ellipsis (FittedMarkup; every description is longer).</summary>
     private string Row(string name, bool on, string mark = "  ") => Fitted(mark + name.PadRight(22) + (on ? "on" : "off").PadRight(5) + Description(name, on));
@@ -149,9 +152,9 @@ public partial class ToolsMenuTests : IDisposable
     {
         // The three tabs that left /settings (2026-09-19): their rows unchanged, every field on exactly one tab of the three panes (Skills left for /skills later that day);
         // the Options tab ahead of them (later on 2026-09-19): the pane's own $-mention switch.
-        Assert.Equal(8, SettingsMenu.TabFields.Count);   // Embedded model since 2026-09-29; Claude (API) since later on 2026-09-27; Claude on 2026-09-27 until later that day (to /tools); Botchat since 2026-09-25
+        Assert.Equal(7, SettingsMenu.TabFields.Count);   // the Claude (API) tab went to /tools' Claude tab on 2026-09-29; Embedded model since 2026-09-29; Claude (API) since later on 2026-09-27; Claude on 2026-09-27 until later that day (to /tools); Botchat since 2026-09-25
         Assert.Equal(12, SettingsMenu.ToolsTabFields.Count);   // Print since later on 2026-09-28; Home Assistant since 2026-09-28; Claude since 2026-09-27; Images since 2026-09-24; SQL since 2026-09-23   // Obsidian since 2026-09-22   // Git since 2026-09-20, Shell since 2026-09-21; the user's order (Web, Files, Shell, Ask, Git (native)) since later on 2026-09-21, alphabetical before
-        Assert.Equal(["Offered", "Web", "Files", "Shell", "Ask", "Claude (CLI)", "Home Assistant", "Print", "Obsidian", "ComfyUI", "SQL", "Git (native)", "Options"], ToolsText.TabTitles);
+        Assert.Equal(["Offered", "Web", "Files", "Shell", "Ask", "Claude", "Home Assistant", "Print", "Obsidian", "ComfyUI", "SQL", "Git (native)", "Options"], ToolsText.TabTitles);
         Assert.Equal([SettingsField.ToolsDollarMention, SettingsField.ToolCollapseCount, SettingsField.CodeCollapseCount], SettingsMenu.ToolsTabFields[11]);
         Assert.Equal([SettingsField.HomeAssistantTools, SettingsField.HomeAssistantUrl, SettingsField.HomeAssistantToken, SettingsField.HomeAssistantTest, SettingsField.HomeAssistantActionPolicy, SettingsField.HomeAssistantAssistAgent, SettingsField.HomeAssistantTimeoutSeconds], SettingsMenu.ToolsTabFields[5]);   // the switch, the server and its token, the test, the policy, Assist's agent, the timeout (2026-09-28)   // the fold's count under the switch (2026-09-22, the user's place), the code fold's under it
         Assert.Equal([SettingsField.PrintTools, SettingsField.PrintActionPolicy, SettingsField.PrintDefaultPrinter, SettingsField.PrintFontSize], SettingsMenu.ToolsTabFields[6]);   // the switch, the policy, the printer, the size (later on 2026-09-28)
@@ -171,7 +174,8 @@ public partial class ToolsMenuTests : IDisposable
         Assert.Equal(28, SettingsMenu.LabelWidthOf(SettingsMenu.ToolsTabFields[10]));   // "Git native log max commits" (later on 2026-09-21; "Git log max commits", 21, from 2026-09-20)
         Assert.Equal(27, SettingsMenu.LabelWidthOf(SettingsMenu.ToolsTabFields[9]));   // "SQL connections (profile)" (2026-09-23)
         Assert.Equal(32, SettingsMenu.LabelWidthOf(SettingsMenu.ToolsTabFields[7]));   // "Obsidian allow delete (.trash)" (2026-09-23; "Obsidian allow delete" from later on 2026-09-22, "Obsidian tools" that morning)
-        Assert.All(SettingsMenu.ToolsTabFields.SelectMany(t => t), f => Assert.False(SettingsMenu.RefusedMidTurn(f)));
+        // None refused under a reply but the Claude API's four reconnect rows, on the Claude tab since 2026-09-29.
+        Assert.Equal([SettingsField.ClaudeApi, SettingsField.ClaudeApiKey, SettingsField.ClaudeApiMaxTokens, SettingsField.ClaudeApiPromptCaching], SettingsMenu.ToolsTabFields.SelectMany(t => t).Where(SettingsMenu.RefusedMidTurn));
         Assert.Equal("⚙️ Settings", SettingsMenu.Title);
     }
 
@@ -773,12 +777,34 @@ public partial class ToolsMenuTests : IDisposable
         Push(Keys.Enter, Keys.Down, Keys.Enter);   // Web tools: the page, off picked
         Push(Keys.Escape);
 
-        await menu.ShowAsync(CancellationToken.None);
+        Assert.Equal(SettingsChanges.None, await menu.ShowAsync(CancellationToken.None));   // read at the next turn: nothing to reconnect
 
         Assert.False(_settings.Current.WebTools);
         // The seven rows padded to the tab's own column (26), the toggle's notice on the status line under the strip.
         Assert.Contains("\n" + Titled(Strip) + "\n \n▸ Web tools                 on\n  Web browser mode          default\n  Web browser path          (auto: msedge.exe)\n  Web browser network mode  internet\n  Web search method         duckduckgo\n  Web SearXNG URL           (not set)\n  Web search max results    20 results\n" + Rule(100), _console.Output);
         Assert.Contains("\n" + Titled(Strip) + "\n  · Web tools: off\n▸ Web tools                 off\n", _console.Output);
+        pane.Dispose();
+    }
+
+    [Fact]
+    public async Task OnThePane_TheClaudeApiSwitch_OnTheClaudeTab_AsksForAReconnect()
+    {
+        // The Claude API's rows came here from /settings on 2026-09-29 (the user's call), under the advisor's confirm; a
+        // save of one is a reconnect, which the screen makes once the pane closes.
+        var (menu, pane, _) = PaneMenu();
+        for (int i = 0; i < 5; i++)
+        {
+            Push(Keys.Right);                      // Web, Files, Shell, Ask, Claude
+        }
+
+        Down(SettingsMenu.ToolsTabFields[4].ToList().IndexOf(SettingsField.ClaudeApi));
+        Push(Keys.Enter, Keys.Up, Keys.Enter);     // Claude API: the page opens on off, on picked
+        Push(Keys.Escape);
+
+        Assert.Equal(SettingsChanges.Llm, await menu.ShowAsync(CancellationToken.None));
+
+        Assert.True(_settings.Current.ClaudeApi);
+        Assert.Contains("  · Claude API: on", _console.Output);
         pane.Dispose();
     }
 
@@ -981,11 +1007,11 @@ public partial class ToolsMenuTests : IDisposable
         Assert.Contains("  ·     read_file             off  Reads a text file", _console.Output);   // the console wraps the long line
         Assert.Contains("switched off in /tools", _console.Output);
         Assert.Contains("  ·   Questions (1) (off: no pane)\n", _console.Output);
-        // The tabs in strip order: Web right after Offered, then Files, Shell, Ask (the user's order, later on 2026-09-21), Claude (CLI), Home Assistant (2026-09-28), Obsidian, ComfyUI, SQL, Git (native) (the user's order, 2026-09-27) and Options last (2026-09-22).
+        // The tabs in strip order: Web right after Offered, then Files, Shell, Ask (the user's order, later on 2026-09-21), Claude (Claude (CLI) until 2026-09-29, the Claude API's four rows last since), Home Assistant (2026-09-28), Obsidian, ComfyUI, SQL, Git (native) (the user's order, 2026-09-27) and Options last (2026-09-22).
         Assert.Contains("  · Web\n  ·   Web tools: on\n  ·   Web browser mode: default\n  ·   Web browser path: (auto: msedge.exe)\n", _console.Output);
         Assert.Contains("  ·   Web search max results: 20 results\n  · Files\n  ·   File tools: on\n  ·   File safe edits: off\n", _console.Output);
         Assert.Contains("  · Shell\n  ·   Shell command policy: ask\n", _console.Output);
-        Assert.Contains("  · Ask\n  ·   Ask user: on\n  ·   Ask max questions: 10 questions\n  ·   Ask max choices per question: 10 choices\n  · Claude (CLI)\n  ·   Claude executable: (looked up)\n  ·   Claude slash command permissions: read-only\n  ·   Claude slash command model: (Claude Code's default)\n  ·   Claude slash command effort: (Claude Code's default)\n  ·   Claude advisor tool: off\n  ·   Claude advisor tool context: brief\n  ·   Claude advisor tool calls per turn: 2 calls\n  ·   Claude advisor tool model: (as Claude slash command model)\n  ·   Claude advisor tool effort: (as Claude slash command effort)\n  ·   Claude advisor tool confirm: off\n  · Home Assistant\n  ·   Home Assistant tools: on\n  ·   Home Assistant URL: (not set)\n  ·   Home Assistant API key: (none)\n  ·   Home Assistant test connection: Enter to ask the server for its version\n  ·   Home Assistant action policy: ask\n  ·   Home Assistant Assist agent: (Home Assistant's default)\n  ·   Home Assistant timeout (s): 10\n  · Print\n  ·   Print tools: off\n  ·   Print action policy: ask\n  ·   Print default printer: (Windows default)\n  ·   Print font size (pt): 10 pt\n  · Obsidian\n  ·   Obsidian tools: on\n  ·   Obsidian vault: (not set)\n  ·   Obsidian allow delete (.trash): on\n  · ComfyUI\n  ·   ComfyUI tools: on\n  ·   ComfyUI URL: (not set)\n  ·   ComfyUI workflows offered: all (not narrowed)\n  ·   ComfyUI add workflow: Enter to start workflow wizard\n  ·   ComfyUI ^-mention enabled: on\n  ·   ComfyUI timeout (s): 300\n  ·   ComfyUI max pictures per call: 5 pictures\n  ·   ComfyUI reinforce negatives: on\n  ·   ComfyUI show prompts: on\n  ·   ComfyUI picture strip: on\n  ·   ComfyUI output folder: comfy_images\n  · SQL\n  ·   SQL tools: on\n  ·   SQL connections offered: all (not narrowed)\n  ·   SQL default connection: (the first connection)\n  ·   SQL set password: Enter to set password for a connection\n  ·   SQL add connection: Enter to start connection wizard\n  ·   SQL %-mention enabled: on\n  ·   SQL max rows: 100 rows\n  ·   SQL query timeout (s): 30\n  ·   SQL connections (profile): (none) · Enter edits sql.json\n  ·   SQL connections (global): (none) · Enter edits sql.json\n  · Git (native)\n  ·   Git native tools: on\n  ·   Git native diff max lines: 500 lines\n  ·   Git native log max commits: 20 commits\n  ·   Git native email: (not set)\n  ·   Git native name: (not set)\n  · Options\n  ·   $-mention enabled: on\n  ·   Tool collapse count: 2 lines\n  ·   Code collapse count: 20 lines\n", _console.Output);
+        Assert.Contains("  · Ask\n  ·   Ask user: on\n  ·   Ask max questions: 10 questions\n  ·   Ask max choices per question: 10 choices\n  · Claude\n  ·   Claude executable: (looked up)\n  ·   Claude slash command permissions: read-only\n  ·   Claude slash command model: (Claude Code's default)\n  ·   Claude slash command effort: (Claude Code's default)\n  ·   Claude advisor tool: off\n  ·   Claude advisor tool context: brief\n  ·   Claude advisor tool calls per turn: 2 calls\n  ·   Claude advisor tool model: (as Claude slash command model)\n  ·   Claude advisor tool effort: (as Claude slash command effort)\n  ·   Claude advisor tool confirm: off\n  ·   Claude API: off\n  ·   Claude API key: (none)\n  ·   Claude API max tokens: 32,000 tokens\n  ·   Claude API prompt caching: on\n  · Home Assistant\n  ·   Home Assistant tools: on\n  ·   Home Assistant URL: (not set)\n  ·   Home Assistant API key: (none)\n  ·   Home Assistant test connection: Enter to ask the server for its version\n  ·   Home Assistant action policy: ask\n  ·   Home Assistant Assist agent: (Home Assistant's default)\n  ·   Home Assistant timeout (s): 10\n  · Print\n  ·   Print tools: off\n  ·   Print action policy: ask\n  ·   Print default printer: (Windows default)\n  ·   Print font size (pt): 10 pt\n  · Obsidian\n  ·   Obsidian tools: on\n  ·   Obsidian vault: (not set)\n  ·   Obsidian allow delete (.trash): on\n  · ComfyUI\n  ·   ComfyUI tools: on\n  ·   ComfyUI URL: (not set)\n  ·   ComfyUI workflows offered: all (not narrowed)\n  ·   ComfyUI add workflow: Enter to start workflow wizard\n  ·   ComfyUI ^-mention enabled: on\n  ·   ComfyUI timeout (s): 300\n  ·   ComfyUI max pictures per call: 5 pictures\n  ·   ComfyUI reinforce negatives: on\n  ·   ComfyUI show prompts: on\n  ·   ComfyUI picture strip: on\n  ·   ComfyUI output folder: comfy_images\n  · SQL\n  ·   SQL tools: on\n  ·   SQL connections offered: all (not narrowed)\n  ·   SQL default connection: (the first connection)\n  ·   SQL set password: Enter to set password for a connection\n  ·   SQL add connection: Enter to start connection wizard\n  ·   SQL %-mention enabled: on\n  ·   SQL max rows: 100 rows\n  ·   SQL query timeout (s): 30\n  ·   SQL connections (profile): (none) · Enter edits sql.json\n  ·   SQL connections (global): (none) · Enter edits sql.json\n  · Git (native)\n  ·   Git native tools: on\n  ·   Git native diff max lines: 500 lines\n  ·   Git native log max commits: 20 commits\n  ·   Git native email: (not set)\n  ·   Git native name: (not set)\n  · Options\n  ·   $-mention enabled: on\n  ·   Tool collapse count: 2 lines\n  ·   Code collapse count: 20 lines\n", _console.Output);
         Assert.False(pane.OverlayOpen);
         pane.Dispose();
     }

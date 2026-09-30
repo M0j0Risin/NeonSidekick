@@ -8066,15 +8066,17 @@ internal sealed partial class ChatScreen
     {
         _llmGeneration++;
         var effective = _effective();
-        if (EmbeddedLlm.EmbeddedEndpoint.IsEmbedded(effective.LlmUrl))
+        if (EmbeddedLlm.EmbeddedEndpoint.Chosen(effective))
         {
             await ConnectEmbeddedAsync(effective, quiet, cancellationToken).ConfigureAwait(false);
             return;
         }
 
         // A saved Claude API URL with the Claude API off or keyless stands for nothing (2026-09-27): found as a blank one.
+        // So does a saved embedded URL with Embedded LLM enabled off (2026-09-29).
         bool blankUrl = string.IsNullOrWhiteSpace(effective.LlmUrl)
-            || (Llm.Anthropic.ClaudeApi.IsClaudeApi(effective.LlmUrl) && !Llm.Anthropic.ClaudeApi.Offered(effective));
+            || (Llm.Anthropic.ClaudeApi.IsClaudeApi(effective.LlmUrl) && !Llm.Anthropic.ClaudeApi.Offered(effective))
+            || EmbeddedLlm.EmbeddedEndpoint.SwitchedOff(effective);
         if (blankUrl && !Llm.LlmScanMode.Scans(Llm.LlmScanMode.Resolve(effective)) && !Llm.Anthropic.ClaudeApi.Offered(effective) && !EmbeddedOffered)
         {
             await _session.ConnectAsync(effective, cancellationToken).ConfigureAwait(false);
@@ -8147,8 +8149,14 @@ internal sealed partial class ChatScreen
         ReportLlm(quiet);
     }
 
-    /// <summary>Whether this screen offers the embedded model (2026-09-29): a session with one, on llama.cpp's Windows x64 builds.</summary>
-    private bool EmbeddedOffered => _session.Embedded is not null && EmbeddedLlm.EmbeddedEndpoint.Offered;
+    /// <summary>
+    /// Whether this screen offers the embedded model (2026-09-29): a session with one, on llama.cpp's Windows x64 builds,
+    /// with <c>Embedded LLM enabled</c> on (the same day, the user's ask).
+    /// </summary>
+    private bool EmbeddedOffered => EmbeddedAvailable && _effective().EmbeddedLlmEnabled;
+
+    /// <summary>Whether this session could run the embedded model at all, the switch aside.</summary>
+    private bool EmbeddedAvailable => _session.Embedded is not null && EmbeddedLlm.EmbeddedEndpoint.Offered;
 
     /// <summary>
     /// The embedded model's connect (2026-09-29): a model named but not installed is offered for install first (a yes
@@ -8262,6 +8270,13 @@ internal sealed partial class ChatScreen
     {
         if (_session.Embedded is not { } embedded)
         {
+            return;
+        }
+
+        if (!_effective().EmbeddedLlmEnabled)
+        {
+            // Switched off (2026-09-29): the catalog still removes, but nothing is used or downloaded to be used.
+            _transcript.Error(EmbeddedLlm.EmbeddedLlmText.SwitchedOffError);
             return;
         }
 
@@ -8449,11 +8464,11 @@ internal sealed partial class ChatScreen
                 // /server embedded (2026-09-29): the embedded rows alone, the running model under the cursor.
                 if (!EmbeddedOffered)
                 {
-                    _transcript.Error(LlmSession.EmbeddedUnavailable);
+                    _transcript.Error(EmbeddedAvailable ? EmbeddedLlm.EmbeddedLlmText.SwitchedOffError : LlmSession.EmbeddedUnavailable);
                     return;
                 }
 
-                if (await _menu.PickServerAsync(_session.EmbeddedRows(), _session.Endpoint?.BaseUrl, SettingsMenu.ServerTitle, cancellationToken, _session.Endpoint?.ModelId).ConfigureAwait(false) is { } row)
+                if (await _menu.PickServerAsync(_session.EmbeddedRows(effective), _session.Endpoint?.BaseUrl, SettingsMenu.ServerTitle, cancellationToken, _session.Endpoint?.ModelId).ConfigureAwait(false) is { } row)
                 {
                     await UseEmbeddedRowAsync(row, cancellationToken).ConfigureAwait(false);
                 }
@@ -8764,6 +8779,13 @@ internal sealed partial class ChatScreen
     {
         if (changes.HasFlag(SettingsChanges.Llm))
         {
+            if (!_effective().EmbeddedLlmEnabled)
+            {
+                // Embedded LLM enabled off (2026-09-29): a download under way pauses, and the reconnect below stops a
+                // running server — the saved embedded URL now reads as none.
+                _jobs.Cancel(BackgroundJobKind.EmbeddedDownload);
+            }
+
             await ConnectLlmAsync(cancellationToken, quiet: true).ConfigureAwait(false);
         }
 
@@ -9111,7 +9133,8 @@ internal sealed partial class ChatScreen
 
             case SlashCommand.Tools:
                 // The Tools pane (2026-09-19): every tool on or off by name, the Ask / Files / Web rows after it; the four tabs as lines without the pane.
-                await _toolsMenu.ShowAsync(cancellationToken).ConfigureAwait(false);
+                // A Claude API row saved there reconnects once it closes (2026-09-29, off /settings), as /settings would.
+                await ApplySettingsChangesAsync(await _toolsMenu.ShowAsync(cancellationToken).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
                 return false;
 
             case SlashCommand.CmdList:

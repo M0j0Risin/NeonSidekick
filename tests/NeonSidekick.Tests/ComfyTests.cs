@@ -41,7 +41,7 @@ public sealed class ComfyTests : IDisposable
     private readonly string _globalComfy;
     private readonly string _root;
     private readonly WorkingDirectory _files;
-    private readonly AppSettingsData _settings = new() { ComfyUrl = Server };
+    private readonly AppSettingsData _settings = new() { ComfyUrl = Server, ComfyTools = true };   // the switch off by default since 2026-09-29
     private readonly StubHttpMessageHandler _stub = new();
     private readonly ComfyStudio _studio;
 

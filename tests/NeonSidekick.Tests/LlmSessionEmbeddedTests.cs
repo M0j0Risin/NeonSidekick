@@ -51,7 +51,7 @@ public class LlmSessionEmbeddedTests
         Assert.Same(endpoint, _endpoints.Single());
         Assert.NotNull(session.Assistant);
         Assert.Equal(["gemma-4-e2b"], _embedded.Starts);
-        Assert.Contains("starting Gemma 4 E2B on llama.cpp…", labels);
+        Assert.Contains("🦙 starting Gemma 4 E2B", labels);
         Assert.Equal(new ContextLength(32_768, "n_ctx on /props"), session.ContextLength);
         Assert.All(_http.Requests, r => Assert.Equal("127.0.0.1:59999", r.Uri.Authority));             // the live port, never the sentinel
         Assert.All(_http.Requests, r => Assert.Equal("Bearer " + FakeEmbeddedLlm.Key, r.Authorization));   // the server's own key, not the LLM API key
@@ -123,7 +123,7 @@ public class LlmSessionEmbeddedTests
         Assert.False(await session.ConnectAsync(Embedded("gemma-4-e2b"), CancellationToken.None));
 
         Assert.Contains(LlmSession.EmbeddedUnavailable, log.Errors);
-        Assert.Empty(session.EmbeddedRows());
+        Assert.Empty(session.EmbeddedRows(new AppSettingsData()));
         Assert.Null(await session.ListModelsAsync(CancellationToken.None));
     }
 
@@ -186,15 +186,19 @@ public class LlmSessionEmbeddedTests
         _http.Map("http://127.0.0.1:1234/v1/models", HttpStatusCode.OK, StubHttpMessageHandler.ModelsJson("qwen"));
         using var session = Session();
 
-        var servers = await session.ProbeServersAsync(new AppSettingsData(), EmbeddedEndpoint.BaseUrl, CancellationToken.None);
+        var servers = await session.ProbeServersAsync(new AppSettingsData { LlmScanMode = "local" }, EmbeddedEndpoint.BaseUrl, CancellationToken.None);
 
-        Assert.Equal(["LM Studio", .. Enumerable.Repeat("Embedded", 11)], servers.Select(s => s.Name));
+        Assert.Equal(["LM Studio", .. Enumerable.Repeat("Embedded", 31)], servers.Select(s => s.Name));
         Assert.All(servers.Skip(1), s => Assert.Equal(EmbeddedEndpoint.BaseUrl, s.BaseUrl));
         Assert.Equal(EmbeddedModelCatalog.Models.Select(m => m.Id), servers.Skip(1).Select(s => s.Result.ModelIds.Single()));
         Assert.Equal(
-            ["download  · 7.5 GB", "download  · 8.8 GB", "download  · 10.9 GB", "download  · 24 GB", "download  · 6.9 GB", "download  · 7.6 GB", "installed · 4.2 GB", "download  · 4.4 GB", "download  · 6.1 GB", "paused    · 5.2 GB · 42%", "download  · 6.4 GB"],
-            servers.Skip(1).Select(s => s.Result.Detail));
-        Assert.Equal([false, false, false, false, false, false, true, false, false, false, false], servers.Skip(1).Select(s => s.Result.Exists));
+            ["download  · 8 GB", "download  · 9.2 GB", "download  · 11.3 GB", "download  · 24.5 GB", "download  · 7.1 GB", "download  · 7.8 GB",
+             "download  · 18.7 GB", "download  · 22.9 GB", "download  · 25 GB", "download  · 15.7 GB", "download  · 18.2 GB", "download  · 18.1 GB", "download  · 20.5 GB", "download  · 24 GB",
+             "download  · 20.5 GB", "download  · 23.6 GB", "download  · 18.8 GB", "download  · 20.2 GB",
+             "installed · 4.3 GB", "download  · 4.4 GB", "download  · 6.2 GB", "paused    · 5.3 GB · 42%", "download  · 6.4 GB",
+             "download  · 23.3 GB", "download  · 27.5 GB", "download  · 24.3 GB", "download  · 18.5 GB", "download  · 21.8 GB", "download  · 26.2 GB", "download  · 18.9 GB", "download  · 21.1 GB"],
+            servers.Skip(1).Select(s => s.Result.Detail));   // each with its MTP drafter since 2026-09-29
+        Assert.Equal(EmbeddedModelCatalog.Models.Select(m => m.Id == "gemma-4-e2b"), servers.Skip(1).Select(s => s.Result.Exists));
         Assert.DoesNotContain(_http.Requests, r => r.Uri.Host == EmbeddedEndpoint.Host);   // the sentinel as the extra URL is never asked
     }
 
@@ -205,8 +209,73 @@ public class LlmSessionEmbeddedTests
 
         var servers = await session.DiscoverAsync(new AppSettingsData { LlmScanMode = "disabled" }, CancellationToken.None);
 
-        Assert.Equal(11, servers.Count);
+        Assert.Equal(31, servers.Count);
         Assert.All(servers, s => Assert.True(EmbeddedEndpoint.IsEmbedded(s.BaseUrl)));
+    }
+
+    // ── Embedded LLM enabled (2026-09-29) ───────────────────────────────────
+
+    [Fact]
+    public async Task SwitchedOff_TheRowsAreGone()
+    {
+        using var session = Session();
+        var off = new AppSettingsData { LlmScanMode = "disabled", EmbeddedLlmEnabled = false };
+
+        Assert.Empty(await session.DiscoverAsync(off, CancellationToken.None));
+        Assert.Empty(session.EmbeddedRows(off));
+        Assert.Equal(31, session.EmbeddedRows(new AppSettingsData()).Count);   // on by default
+    }
+
+    [Fact]
+    public async Task SwitchedOff_ASavedEmbeddedUrl_StandsForNothing_AndTheRunningServerStops()
+    {
+        _embedded.Installed("gemma-4-e2b");
+        using var session = Session();
+        await session.ConnectAsync(Embedded("gemma-4-e2b"), CancellationToken.None);
+        Assert.NotNull(_embedded.Running);
+        var warnings = new List<string>();
+        void Heard(DiagnosticEvent entry)
+        {
+            if (entry.Level == DiagnosticLevel.Warning)
+            {
+                warnings.Add(entry.Message);
+            }
+        }
+
+        var off = Embedded("gemma-4-e2b");
+        off.EmbeddedLlmEnabled = false;
+        DiagnosticLog.Emitted += Heard;
+        try
+        {
+            Assert.False(await session.ConnectAsync(off, CancellationToken.None));   // the scan is disabled by default: nothing found
+        }
+        finally
+        {
+            DiagnosticLog.Emitted -= Heard;
+        }
+
+        Assert.Null(_embedded.Running);
+        Assert.Equal(1, _embedded.Stops);
+        Assert.Equal(["gemma-4-e2b"], _embedded.Starts);   // never started again
+        Assert.Null(session.Endpoint);
+        Assert.Contains(EmbeddedLlmText.SwitchedOffWarning, warnings);
+        Assert.Null(await session.ListModelsAsync(CancellationToken.None));   // no embedded list to offer
+        Assert.True(EmbeddedEndpoint.SwitchedOff(off) && !EmbeddedEndpoint.Chosen(off));
+        Assert.True(EmbeddedEndpoint.Chosen(Embedded()) && !EmbeddedEndpoint.SwitchedOff(Embedded()));
+    }
+
+    [Fact]
+    public async Task SwitchedOff_ABotsEmbeddedLink_IsRefused()
+    {
+        _embedded.Installed("gemma-4-e2b");
+        using var session = Session();
+        await session.ConnectAsync(new AppSettingsData { EmbeddedLlmEnabled = false }, CancellationToken.None);
+
+        var (link, problem) = await session.LinkAsync(Embedded("gemma-4-e2b"), CancellationToken.None);
+
+        Assert.Null(link);
+        Assert.Equal(EmbeddedLlmText.SwitchedOffError, problem);
+        Assert.Empty(_embedded.Starts);
     }
 
     // ── /botchat multi ──────────────────────────────────────────────────────

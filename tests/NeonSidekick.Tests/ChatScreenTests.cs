@@ -138,6 +138,9 @@ public partial class ChatScreenTests : IDisposable
         // server answering here: the scripts were written for a quiet connect, so the fixture names the server and the startup
         // tests put the URL back to blank themselves.
         _settings.Update(d => d.LlmUrl = "http://127.0.0.1:1234/v1");   // the form /server saves
+        // Eight settings went off by default on 2026-09-29 (the user's call): the scripts here were written with every tool group
+        // offered, the shell under ask and the local scan, so the fixture puts them back; the fresh-profile tests start from new ones.
+        _settings.Update(PreFlipDefaults.Apply);
         _http.Map("http://127.0.0.1:1234/v1/models", HttpStatusCode.OK, StubHttpMessageHandler.ModelsJson("llama"));
         _session = new LlmSession(new LlmEndpointProbe(new HttpClient(_http), TimeSpan.FromMilliseconds(500)), new ContextLengthProbe(new HttpClient(_http), TimeSpan.FromMilliseconds(500)), (endpoint, _) => { _endpoints.Add(endpoint); return _chat; }, _time);
         _speech = new SpeechSession(_ => _synth, _ => _playback, new ModelStore(Path.Combine(_dir, "models"), new HttpClient(_http)));
@@ -4242,7 +4245,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude (CLI)    Home Assistant    Print    Obsidian    ComfyUI    SQL    Git (native)    Options ", output);
+        Assert.Contains(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude    Home Assistant    Print    Obsidian    ComfyUI    SQL    Git (native)    Options ", output);
         Assert.Contains("\n▸ ComfyUI tools                  on\n  ComfyUI URL                    (not set)\n  ComfyUI workflows offered      all (not narrowed)\n  ComfyUI add workflow           Enter to start workflow wizard\n  ComfyUI ^-mention enabled      on\n  ComfyUI timeout (s)            300\n  ComfyUI max pictures per call  5 pictures\n  ComfyUI reinforce negatives    on\n  ComfyUI show prompts           on\n  ComfyUI picture strip          on\n  ComfyUI output folder          comfy_images\n", output);   // 2026-09-24; the offered checklist and the wizard later that day, the ^-mention switch later still
         Assert.Contains("\n▸ Claude executable                   (looked up)\n  Claude slash command permissions    read-only\n  Claude slash command model          (Claude Code's default)\n  Claude slash command effort         (Claude Code's default)\n  Claude advisor tool                 off\n  Claude advisor tool context         brief\n  Claude advisor tool calls per turn  2 calls\n  Claude advisor tool model           (as Claude slash command model)\n  Claude advisor tool effort          (as Claude slash command effort)\n  Claude advisor tool confirm         off\n", output);   // 2026-09-27: /claude's rows off /settings, then the advisor's
         Assert.Contains("\n  Clock (3)\n▸ get_current_time      on   ", output);
@@ -4647,7 +4650,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude (CLI)    Home Assistant    Print    Obsidian    ComfyUI    SQL    Git (native)    Options ", output);
+        Assert.Contains(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude    Home Assistant    Print    Obsidian    ComfyUI    SQL    Git (native)    Options ", output);
         Assert.Contains("  · get_current_time: off", output);
         Assert.Equal(["get_current_time"], _settings.Current.ToolsDisabled);
         Assert.DoesNotContain(ChatScreen.MidTurnDeferredNotice("/tools"), output);
@@ -4869,7 +4872,7 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public async Task Persona_Copy_Yes_WritesTheFileIntoTheOtherProfile()
     {
-        Profiles.Create(_dir, "work", new AppSettingsData());   // no persona.md there
+        Profiles.Create(_dir, "work", PreFlipDefaults.Data());   // no persona.md there
         MyPromptFile(PersonaFile.FileName, "You are Rex.");
         PushLine("/persona copy work");
         PickYes();
@@ -4919,7 +4922,7 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public async Task Persona_Copy_Force_OntoNothing_IsAPlainCopy()
     {
-        Profiles.Create(_dir, "work", new AppSettingsData());
+        Profiles.Create(_dir, "work", PreFlipDefaults.Data());
         MyPromptFile(PersonaFile.FileName, "You are Max.");
         PushLine("/persona copy work force");
         PickYes();
@@ -4936,7 +4939,7 @@ public partial class ChatScreenTests : IDisposable
     public async Task Persona_Copy_No_Keeps()
     {
         WorkProfile();
-        Profiles.Create(_dir, "chef", new AppSettingsData());
+        Profiles.Create(_dir, "chef", PreFlipDefaults.Data());
         MyPromptFile(PersonaFile.FileName, "You are Max.");
         PushLine("/persona copy work force");
         _console.Input.PushKey(Keys.Enter);   // No is on the cursor
@@ -4954,7 +4957,7 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public async Task Persona_Copy_Refusals_AreOneLineEach_AndAskNothing()
     {
-        Profiles.Create(_dir, "work", new AppSettingsData());
+        Profiles.Create(_dir, "work", PreFlipDefaults.Data());
         PushLine("/persona copy");                 // usage: no profile
         PushLine("/persona copy work extra");      // usage: a third word that is not force
         PushLine("/persona copy work force now");  // usage: four words
@@ -4977,7 +4980,7 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public async Task Operata_Copy_Yes_WritesOperataMd()
     {
-        Profiles.Create(_dir, "work", new AppSettingsData());
+        Profiles.Create(_dir, "work", PreFlipDefaults.Data());
         MyPromptFile(OperataFile.FileName, "Answer in haiku.");
         PushLine("/operata copy work");
         PickYes();
@@ -5755,7 +5758,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        const string strip = SettingsMenu.Title + "   General    Sessions    LLM    TTS    STT    Claude (API)    Embedded    Botchat ";   // six since 2026-09-25 (Botchat); five tabs since 2026-09-19 (Ask, Files and Web are /tools', Skills is /skills' Options tab)
+        const string strip = SettingsMenu.Title + "   General    Sessions    LLM    TTS    STT    Embedded    Botchat ";   // six since 2026-09-25 (Botchat); five tabs since 2026-09-19 (Ask, Files and Web are /tools', Skills is /skills' Options tab)
         Assert.Contains("\n" + Titled(strip) + "\n  · 🖥️ LLM offer tools: off\n", output);
         Assert.Contains("  · " + ChatScreen.ToolsChangedNotice(false) + "\n", output);
         Assert.Equal("(LLM offer tools off; conversation cleared)", ChatScreen.ToolsChangedNotice(false));
@@ -6097,9 +6100,16 @@ public partial class ChatScreenTests : IDisposable
     private string ProfileDir(string name) => Profiles.Directory(_dir, name);
 
     /// <summary>A second profile on disk with its own settings, one memory, a persona, operating rules and a voice directive, so a switch has something to show.</summary>
-    private void WorkProfile()
+    private void WorkProfile(string llmUrl = "")
     {
-        Profiles.Create(_dir, "work", new AppSettingsData { LlmModel = "work-model", TtsOutput = false, SessionNamingMode = "first-line", ToolCollapseCount = 0, CodeCollapseCount = 0 });   // the fixture's titling and tool-fold opt-outs for this profile too (a reset of it brings the defaults back)
+        var work = PreFlipDefaults.Data();   // the fixture's opt-ins of 2026-09-29 for this profile too
+        work.LlmUrl = llmUrl;
+        work.LlmModel = "work-model";
+        work.TtsOutput = false;
+        work.SessionNamingMode = "first-line";
+        work.ToolCollapseCount = 0;
+        work.CodeCollapseCount = 0;
+        Profiles.Create(_dir, "work", work);   // the fixture's titling and tool-fold opt-outs for this profile too (a reset of it brings the defaults back)
         new MemoryStore(ProfileDir("work")).Add("They like tea.");
         File.WriteAllText(Path.Combine(ProfileDir("work"), PersonaFile.FileName), "You are Rex.");
         File.WriteAllText(Path.Combine(ProfileDir("work"), OperataFile.FileName), "Answer in haiku.");
@@ -6558,7 +6568,7 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public async Task Profile_Switch_IsCaseInsensitive_AndUsesTheDirectorysSpelling()
     {
-        Profiles.Create(_dir, "Work", new AppSettingsData());
+        Profiles.Create(_dir, "Work", PreFlipDefaults.Data());
         PushLine("/profile WORK");
         PushLine("/exit");
 
@@ -7351,7 +7361,8 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public async Task Profile_Reset_TheLoadedOne_Y_ClearsEverything_AndReconnects()
     {
-        WorkProfile();
+        // A named server, which a reset keeps (2026-09-27): the scan a blank URL used is off in the reset profile since 2026-09-29.
+        WorkProfile("http://127.0.0.1:1234/v1");
         _memory.Add("Their name is Chris.");
         _chat.EnqueueText("Hello.");
         _chat.EnqueueText("Arr.");
@@ -7388,7 +7399,9 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("You are Rex.", after);   // the persona file stays (2026-09-20): the fresh conversation still opens on it
         Assert.Contains("They like tea.", MemoryResult(_chat.Requests[2]));   // the memories outlive the reset and ride the opening recall_memory call of the fresh conversation
         Assert.Contains("haiku", after);   // and the operating rules file
-        Assert.Equal(new[] { ChatRole.System, ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool }, _chat.Requests[2].Select(m => m.Role));
+        // Two opening pairs, the clock's and the memories': the reset profile's file tools are off (the default since 2026-09-29), so no
+        // get_working_directory pair opens it.
+        Assert.Equal(new[] { ChatRole.System, ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool }, _chat.Requests[2].Select(m => m.Role));
         Assert.Equal("hi again", _chat.Requests[2][1].Text);
         // The default profile is untouched.
         Assert.Equal(new[] { "Their name is Chris." }, new MemoryStore(ProfileDir(Profiles.DefaultName)).Snapshot());
@@ -7700,7 +7713,7 @@ public partial class ChatScreenTests : IDisposable
     public async Task CmdCopy_CorruptTarget_IsAnError_AndTheFileIsLeftAlone()
     {
         // A profile.json that does not parse is never overwritten with the defaults plus the prefixes (Profiles.ReadProfileFile throws).
-        Profiles.Create(_dir, "work", new AppSettingsData());
+        Profiles.Create(_dir, "work", PreFlipDefaults.Data());
         File.WriteAllText(Profiles.ProfileFile(_dir, "work"), "{ not json");
         _settings.Update(d => d.ShellCommandAllowed = ["echo"]);
         PushLine("/cmdcopy work");
@@ -7853,7 +7866,7 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public async Task Profile_Pull_ACorruptSource_IsAnError_AndNothingChanges()
     {
-        Profiles.Create(_dir, "work", new AppSettingsData());
+        Profiles.Create(_dir, "work", PreFlipDefaults.Data());
         File.WriteAllText(Profiles.ProfileFile(_dir, "work"), "{ not json");
         _settings.Update(d => d.LlmModel = "default-model");
         PushLine("/profile pull work");
@@ -7972,7 +7985,7 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public async Task KeyCopy_CorruptTarget_IsAnError_AndTheFileIsLeftAlone()
     {
-        Profiles.Create(_dir, "work", new AppSettingsData());
+        Profiles.Create(_dir, "work", PreFlipDefaults.Data());
         File.WriteAllText(Profiles.ProfileFile(_dir, "work"), "{ not json");
         _settings.Update(d => d.LlmApiKey = "my-llm");
         PushLine("/keycopy work");
@@ -8085,7 +8098,7 @@ public partial class ChatScreenTests : IDisposable
     public async Task ProfileSwitch_RecallsTheNewProfilesHistory()
     {
         _settings.Update(d => d.TtsOutput = false);
-        Profiles.Create(_dir, "work", new AppSettingsData { TtsOutput = false });
+        Profiles.Create(_dir, "work", new AppSettingsData { TtsOutput = false, LlmScanMode = "local" });
         SeedHistory(Profiles.Directory(_dir, "work"), "work line");
         SeedHistory(_settings.ProfileDirectory, "default line");
         StepsWhenIdle(Line("/profile work"), Key(Keys.Up), Key(Keys.Enter), Line("/exit"));   // Up: the work profile's last line, never /profile work
@@ -8134,7 +8147,7 @@ public partial class ChatScreenTests : IDisposable
     public async Task CmdCopyHistory_AppendsIntoTheOtherProfilesStore_OrReplacesIt()
     {
         _settings.Update(d => d.TtsOutput = false);
-        Profiles.Create(_dir, "work", new AppSettingsData());
+        Profiles.Create(_dir, "work", PreFlipDefaults.Data());
         SeedHistory(Profiles.Directory(_dir, "work"), "theirs");
         SeedHistory(_settings.ProfileDirectory, "mine", "also mine");
         PushLine("/cmdcopy work --history");
@@ -8320,7 +8333,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("\n" + ScreenPane.ToolbarRow(ChatScreen.ToolbarStrip, cwd, 239), output);
         Assert.Contains("\n" + ScreenPane.ToolbarRow(ChatScreen.ToolbarStripFor(false, CommandPolicyMode.Yolo, false), cwd, 239), output);
         Assert.DoesNotContain(ChatScreen.CmdAskToolGlyph, output);
-        int settings = output.IndexOf("\n" + Titled(SettingsMenu.Title + "   General    Sessions    LLM    TTS    STT    Claude (API)    Embedded    Botchat ") + "\n", StringComparison.Ordinal);
+        int settings = output.IndexOf("\n" + Titled(SettingsMenu.Title + "   General    Sessions    LLM    TTS    STT    Embedded    Botchat ") + "\n", StringComparison.Ordinal);
         int allowed = output.IndexOf("\n" + Titled(AllowedCommandsTitle) + "\n", StringComparison.Ordinal);
         Assert.True(settings > 0 && allowed > settings, output);
         Assert.Empty(_chat.Requests);
@@ -8372,8 +8385,8 @@ public partial class ChatScreenTests : IDisposable
         Assert.False(_settings.Current.Memory);
         Assert.False(_settings.Current.ShellPoliceOutsidePaths);
         string memory = "\n" + Titled(MemoryMenu.Title) + "\n";
-        string settings = "\n" + Titled(SettingsMenu.Title + "   General    Sessions    LLM    TTS    STT    Claude (API)    Embedded    Botchat ") + "\n";
-        string tools = "\n" + Titled(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude (CLI)    Home Assistant    Print    Obsidian    ComfyUI    SQL    Git (native)    Options ") + "\n";
+        string settings = "\n" + Titled(SettingsMenu.Title + "   General    Sessions    LLM    TTS    STT    Embedded    Botchat ") + "\n";
+        string tools = "\n" + Titled(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude    Home Assistant    Print    Obsidian    ComfyUI    SQL    Git (native)    Options ") + "\n";
         string allowed = "\n" + Titled(AllowedCommandsTitle) + "\n";
         Assert.Equal(1, output.Split(memory).Length - 1);
         Assert.Equal(1, output.Split(allowed).Length - 1);
@@ -9001,7 +9014,7 @@ public partial class ChatScreenTests : IDisposable
 
         string rule = new(ScreenPane.RuleGlyph, 240);
         // The list in the pane under the rule, its tab strip and its own hint; the toggle and the save on its status line.
-        const string strip = SettingsMenu.Title + "   General    Sessions    LLM    TTS    STT    Claude (API)    Embedded    Botchat ";   // six since 2026-09-25 (Botchat); five tabs since 2026-09-19 (Ask, Files and Web are /tools', Skills is /skills' Options tab)
+        const string strip = SettingsMenu.Title + "   General    Sessions    LLM    TTS    STT    Embedded    Botchat ";   // six since 2026-09-25 (Botchat); five tabs since 2026-09-19 (Ask, Files and Web are /tools', Skills is /skills' Options tab)
         Assert.Contains(rule + "\n" + Titled(strip) + "\n \n▸ Profile", output);
         Assert.Contains(rule + "\n" + Row(SettingsMenu.TabKeys) + "\n", output);
         Assert.Contains("\n" + Titled(strip) + "\n  · Memory: off\n", output);
@@ -9291,7 +9304,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        const string strip = SettingsMenu.Title + "   General    Sessions    LLM    TTS    STT    Claude (API)    Embedded    Botchat ";   // six since 2026-09-25 (Botchat); five tabs since 2026-09-19 (Ask, Files and Web are /tools', Skills is /skills' Options tab)
+        const string strip = SettingsMenu.Title + "   General    Sessions    LLM    TTS    STT    Embedded    Botchat ";   // six since 2026-09-25 (Botchat); five tabs since 2026-09-19 (Ask, Files and Web are /tools', Skills is /skills' Options tab)
         Assert.Contains("\n" + Titled(strip) + "\n \n▸ Profile", output);
         Assert.DoesNotContain("› /settings", output);
         Assert.Contains("› hi!", output);
@@ -9329,7 +9342,7 @@ public partial class ChatScreenTests : IDisposable
 
         Assert.StartsWith("25 tokens", UsageText.HintPart(_session.Usage, _session.ContextLength));
         int usage = output.IndexOf("\n" + Titled(UsageText.Label + "   Statistics ") + "\n", StringComparison.Ordinal);
-        int settings = output.IndexOf("\n" + Titled(SettingsMenu.Title + "   General    Sessions    LLM    TTS    STT    Claude (API)    Embedded    Botchat ") + "\n", StringComparison.Ordinal);
+        int settings = output.IndexOf("\n" + Titled(SettingsMenu.Title + "   General    Sessions    LLM    TTS    STT    Embedded    Botchat ") + "\n", StringComparison.Ordinal);
         Assert.True(usage > 0 && settings > usage, output);
         Assert.DoesNotContain("› /usage", output);
         Assert.Contains("› ok!", output);
@@ -9395,8 +9408,8 @@ public partial class ChatScreenTests : IDisposable
         string cwd = WorkingDirectory.Resolve("", _settings.ProfileDirectory);
         Assert.Contains("\n" + ScreenPane.ToolbarRow(ChatScreen.ToolbarStripFor(true, CommandPolicyMode.Ask, true), cwd, 239), output);
         Assert.DoesNotContain("\n" + ScreenPane.ToolbarRow(ChatScreen.ToolbarStrip, cwd, 239), output);   // never the fixed glyphs alone: memory, the policy and the police are on
-        int settings = output.IndexOf("\n" + Titled(SettingsMenu.Title + "   General    Sessions    LLM    TTS    STT    Claude (API)    Embedded    Botchat ") + "\n", StringComparison.Ordinal);
-        int tools = output.IndexOf(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude (CLI)    Home Assistant    Print    Obsidian    ComfyUI    SQL    Git (native)    Options ", StringComparison.Ordinal);
+        int settings = output.IndexOf("\n" + Titled(SettingsMenu.Title + "   General    Sessions    LLM    TTS    STT    Embedded    Botchat ") + "\n", StringComparison.Ordinal);
+        int tools = output.IndexOf(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude    Home Assistant    Print    Obsidian    ComfyUI    SQL    Git (native)    Options ", StringComparison.Ordinal);
         int mcp = output.IndexOf(McpText.Label + "   Servers    Tools    Options ", StringComparison.Ordinal);
         int skills = output.IndexOf(SkillsText.Label + "   Offered    Reflection    Project    Options ", StringComparison.Ordinal);
         int sys = output.IndexOf("\n" + Titled(SystemPromptSummary.Label + "   Prompt    Tools ") + "\n", StringComparison.Ordinal);
@@ -9405,11 +9418,11 @@ public partial class ChatScreenTests : IDisposable
         int memory = output.IndexOf("\n" + Titled(MemoryMenu.Title) + "\n", StringComparison.Ordinal);
         int allowed = output.IndexOf("\n" + Titled(AllowedCommandsTitle) + "\n", StringComparison.Ordinal);
         int police = output.IndexOf("\n" + Titled(PoliceTitle) + "\n", StringComparison.Ordinal);
-        int blanks = output.LastIndexOf("\n" + Titled(SettingsMenu.Title + "   General    Sessions    LLM    TTS    STT    Claude (API)    Embedded    Botchat ") + "\n", StringComparison.Ordinal);
+        int blanks = output.LastIndexOf("\n" + Titled(SettingsMenu.Title + "   General    Sessions    LLM    TTS    STT    Embedded    Botchat ") + "\n", StringComparison.Ordinal);
         int folder = output.IndexOf("\n" + Titled(FolderText.Title + "   " + FolderText.CollapseAllButton + " ") + "\n" + cwd + "\n", StringComparison.Ordinal);
         Assert.True(settings > 0 && tools > settings && mcp > tools && skills > mcp && sys > skills && sessions > sys && usage > sessions && memory > usage && allowed > memory && police > allowed && blanks > police && folder > blanks, output);
         Assert.Equal(1, output.Split("\n" + Titled(MemoryMenu.Title) + "\n").Length - 1);
-        Assert.Equal(2, output.Split("\n" + Titled(SettingsMenu.Title + "   General    Sessions    LLM    TTS    STT    Claude (API)    Embedded    Botchat ") + "\n").Length - 1);   // the gear and the blanks
+        Assert.Equal(2, output.Split("\n" + Titled(SettingsMenu.Title + "   General    Sessions    LLM    TTS    STT    Embedded    Botchat ") + "\n").Length - 1);   // the gear and the blanks
         Assert.DoesNotContain(MemoryMenu.EmptyNotice, output);
         Assert.Contains("  · " + FolderText.KeptNotice + "\n", output);
         Assert.All(new[] { "/settings", "/skills", "/tools", "/mcp", "/sys", "/sessions", "/memory", "/cmdlist", "/police", "/cwd" }, word => Assert.DoesNotContain("› " + word, output));
@@ -9492,8 +9505,8 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        string settings = "\n" + Titled(SettingsMenu.Title + "   General    Sessions    LLM    TTS    STT    Claude (API)    Embedded    Botchat ") + "\n";
-        string tools = "\n" + Titled(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude (CLI)    Home Assistant    Print    Obsidian    ComfyUI    SQL    Git (native)    Options ") + "\n";
+        string settings = "\n" + Titled(SettingsMenu.Title + "   General    Sessions    LLM    TTS    STT    Embedded    Botchat ") + "\n";
+        string tools = "\n" + Titled(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude    Home Assistant    Print    Obsidian    ComfyUI    SQL    Git (native)    Options ") + "\n";
         string help = "\n" + Titled(InfoPane.Title + "   Commands (basic)    Commands (advanced)    Keys ") + "\n";
         string sys = "\n" + Titled(SystemPromptSummary.Label + "   Prompt    Tools ") + "\n";
         string sessions = "\n" + Titled(SessionsMenu.Title) + "\n";
@@ -9565,7 +9578,7 @@ public partial class ChatScreenTests : IDisposable
 
         string model = "\n" + Titled(SettingsMenu.ServerTitle) + "\n";
         string reasoning = "\n" + Titled(SettingsMenu.ReasoningTitle) + "\n";
-        string settings = "\n" + Titled(SettingsMenu.Title + "   General    Sessions    LLM    TTS    STT    Claude (API)    Embedded    Botchat ") + "\n";
+        string settings = "\n" + Titled(SettingsMenu.Title + "   General    Sessions    LLM    TTS    STT    Embedded    Botchat ") + "\n";
         string folder = "\n" + Titled(FolderText.Title + "   " + FolderText.CollapseAllButton + " ") + "\n";
         Assert.Equal(2, output.Split(model).Length - 1);
         Assert.Equal(1, output.Split(reasoning).Length - 1);
@@ -11354,10 +11367,10 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         output = string.Join("\n", output.Split('\n').Select(l => l.TrimEnd()));
-        string tools = "\n" + Titled(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude (CLI)    Home Assistant    Print    Obsidian    ComfyUI    SQL    Git (native)    Options ") + "\n";
+        string tools = "\n" + Titled(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude    Home Assistant    Print    Obsidian    ComfyUI    SQL    Git (native)    Options ") + "\n";
         string sys = "\n" + Titled(SystemPromptSummary.Label + "   Prompt    Tools ") + "\n";
         string sessions = "\n" + Titled(SessionsMenu.Title) + "\n";
-        string settings = "\n" + Titled(SettingsMenu.Title + "   General    Sessions    LLM    TTS    STT    Claude (API)    Embedded    Botchat ") + "\n";
+        string settings = "\n" + Titled(SettingsMenu.Title + "   General    Sessions    LLM    TTS    STT    Embedded    Botchat ") + "\n";
         string allowed = "\n" + Titled(AllowedCommandsTitle) + "\n";
         int at = output.IndexOf(tools, StringComparison.Ordinal);
         Assert.True(at > 0, output);

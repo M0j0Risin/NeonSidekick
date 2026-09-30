@@ -43,6 +43,9 @@ internal sealed class LlmSession : IDisposable
     private string _apiKey = LlmEndpoint.DefaultApiKey;
     private string _configuredUrl = "";
     private int _configuredContextLength;
+
+    // The loaded profile's Embedded LLM enabled at the last connect (2026-09-29): a bot's embedded link honours it.
+    private bool _embeddedEnabled = true;
     private ContextLength? _detectedContextLength;
     private CancellationTokenSource? _learningCts;
     private CancellationTokenSource? _titlingCts;
@@ -122,7 +125,7 @@ internal sealed class LlmSession : IDisposable
         Reconnecting();
         Remember(effective);
 
-        if (EmbeddedEndpoint.IsEmbedded(effective.LlmUrl))
+        if (EmbeddedEndpoint.Chosen(effective))
         {
             Endpoint = await ResolveEmbeddedAsync(effective, phase, cancellationToken).ConfigureAwait(false);
             return Endpoint is { LiveUrl: not null } && await ConnectAsync(effective, Endpoint, cancellationToken).ConfigureAwait(false);
@@ -204,11 +207,13 @@ internal sealed class LlmSession : IDisposable
 
     /// <summary>
     /// The <c>/server</c> rows of the embedded model (2026-09-29): one per catalog model, installed or not, asked nothing —
-    /// the row's detail says installed, how far a paused download got, or what it costs. None when no embedded model is offered.
+    /// the row's detail says installed, how far a paused download got, or what it costs. None when no embedded model is offered
+    /// — no service, not Windows x64, or <paramref name="effective"/>'s <c>Embedded LLM enabled</c> off (2026-09-29).
     /// </summary>
-    public IReadOnlyList<LlmServer> EmbeddedRows()
+    public IReadOnlyList<LlmServer> EmbeddedRows(AppSettingsData effective)
     {
-        if (_embedded is not { } embedded || !EmbeddedEndpoint.Offered)
+        ArgumentNullException.ThrowIfNull(effective);
+        if (_embedded is not { } embedded || !EmbeddedEndpoint.Offered || !effective.EmbeddedLlmEnabled)
         {
             return [];
         }
@@ -287,7 +292,7 @@ internal sealed class LlmSession : IDisposable
     {
         Task<ProbeResult>? claude = ClaudeApi.Offered(effective) ? _probe.ProbeAsync(ClaudeApi.BaseUrl, ClaudeApi.Key(effective), cancellationToken) : null;
         var servers = new List<LlmServer>(await scan.ConfigureAwait(false));
-        servers.AddRange(EmbeddedRows());
+        servers.AddRange(EmbeddedRows(effective));
         if (claude is not null)
         {
             var result = await claude.ConfigureAwait(false);
@@ -456,6 +461,12 @@ internal sealed class LlmSession : IDisposable
             return (null, EmbeddedUnavailable);
         }
 
+        if (!_embeddedEnabled)
+        {
+            // The loaded profile's switch governs the one server, whichever profile a bot comes from (2026-09-29).
+            return (null, EmbeddedLlmText.SwitchedOffError);
+        }
+
         if (_embedded.Running is { } running)
         {
             if (model is not null && !string.Equals(model, running.ModelId, StringComparison.OrdinalIgnoreCase))
@@ -501,6 +512,7 @@ internal sealed class LlmSession : IDisposable
         _apiKey = string.IsNullOrWhiteSpace(apiKey) ? LlmEndpoint.DefaultApiKey : apiKey;
         _configuredUrl = effective.LlmUrl ?? "";
         _configuredContextLength = effective.LlmContextLength;
+        _embeddedEnabled = effective.EmbeddedLlmEnabled;
     }
 
     /// <summary>
@@ -509,7 +521,7 @@ internal sealed class LlmSession : IDisposable
     /// </summary>
     public Task<ProbeResult?> ListModelsAsync(CancellationToken cancellationToken)
     {
-        if (EmbeddedEndpoint.IsEmbedded(Endpoint?.BaseUrl) || (Endpoint is null && EmbeddedEndpoint.IsEmbedded(_configuredUrl)))
+        if (EmbeddedEndpoint.IsEmbedded(Endpoint?.BaseUrl) || (Endpoint is null && _embeddedEnabled && EmbeddedEndpoint.IsEmbedded(_configuredUrl)))
         {
             // The embedded model (2026-09-29): its list is the installed catalog models, asked of no server — a pick restarts
             // the one server with the other model.
@@ -524,7 +536,7 @@ internal sealed class LlmSession : IDisposable
         }
 
         Uri? url = Endpoint?.BaseUrl;
-        if (url is null && !string.IsNullOrWhiteSpace(_configuredUrl))
+        if (url is null && !string.IsNullOrWhiteSpace(_configuredUrl) && !EmbeddedEndpoint.IsEmbedded(_configuredUrl))   // switched off: nothing to ask (2026-09-29)
         {
             try
             {

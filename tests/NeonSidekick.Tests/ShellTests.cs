@@ -30,18 +30,19 @@ public sealed class ShellTests
         Assert.Equal("Shell", ShellKinds.Category);
 
         Assert.Equal(["off", "ask", "yolo"], CommandPolicy.Names);
-        Assert.Equal("ask", CommandPolicy.Default);
+        Assert.Equal("off", CommandPolicy.Default);   // "ask" until 2026-09-29 (the user's call)
         Assert.True(CommandPolicy.TryParse(" Yolo ", out var yolo) && yolo == CommandPolicyMode.Yolo);
         Assert.True(CommandPolicy.TryParse("off", out var off) && off == CommandPolicyMode.Off);
-        Assert.False(CommandPolicy.TryParse("maybe", out var ask));
-        Assert.Equal(CommandPolicyMode.Ask, ask);
+        Assert.False(CommandPolicy.TryParse("maybe", out var unknown));
+        Assert.Equal(CommandPolicyMode.Off, unknown);   // the default's, so the toolbar agrees with Resolve
         Assert.Equal("yolo", CommandPolicy.Name(CommandPolicyMode.Yolo));
         Assert.Equal("no shell or script tool is offered", CommandPolicy.Describe("off"));
         Assert.Equal("you approve each command not on the allow list", CommandPolicy.Describe("ask"));
         Assert.Equal("every command runs, nothing is asked", CommandPolicy.Describe("yolo"));
         Assert.Equal(CommandPolicyMode.Yolo, CommandPolicy.Resolve(new AppSettingsData { ShellCommandPolicy = "yolo" }));
-        Assert.Equal(CommandPolicyMode.Ask, CommandPolicy.Resolve(new AppSettingsData { ShellCommandPolicy = "whatever" }));
-        Assert.True(App.ChatScreen.ShellOffered(new AppSettingsData()));
+        Assert.Equal(CommandPolicyMode.Off, CommandPolicy.Resolve(new AppSettingsData { ShellCommandPolicy = "whatever" }));
+        Assert.False(App.ChatScreen.ShellOffered(new AppSettingsData()));   // off by default since 2026-09-29
+        Assert.True(App.ChatScreen.ShellOffered(new AppSettingsData { ShellCommandPolicy = "ask" }));
         Assert.False(App.ChatScreen.ShellOffered(new AppSettingsData { ShellCommandPolicy = "off" }));
     }
 
@@ -147,7 +148,7 @@ public sealed class ShellTests
     [Fact]
     public async Task CommandGate_Ask_RunsTheAllowed_AsksTheRest_AndRecordsThePick()
     {
-        var settings = new AppSettingsData();
+        var settings = new AppSettingsData { ShellCommandPolicy = "ask" };   // off by default since 2026-09-29
         var saved = new List<string>();
         var list = new CommandAllowList(() => saved, merged => saved = [.. merged]);
         var answers = new Queue<CommandChoice?>();
@@ -190,7 +191,7 @@ public sealed class ShellTests
     [Fact]
     public async Task CommandGate_Refusals_RecordWhatDidNotRun()
     {
-        var settings = new AppSettingsData { ShellCommandAllowed = ["dir"] };
+        var settings = new AppSettingsData { ShellCommandAllowed = ["dir"], ShellCommandPolicy = "ask" };
         var gate = new CommandGate(() => settings, new CommandAllowList(() => settings.ShellCommandAllowed, _ => { }), null);
 
         Assert.Empty(gate.Refusals);
@@ -216,7 +217,7 @@ public sealed class ShellTests
     [Fact]
     public async Task CommandGate_WithoutAnAsker_TheListAloneDecides()
     {
-        var settings = new AppSettingsData { ShellCommandAllowed = ["dir"] };
+        var settings = new AppSettingsData { ShellCommandAllowed = ["dir"], ShellCommandPolicy = "ask" };
         var gate = new CommandGate(() => settings, new CommandAllowList(() => settings.ShellCommandAllowed, _ => { }), null);
 
         Assert.False(gate.CanAsk);
@@ -225,7 +226,7 @@ public sealed class ShellTests
         Assert.False(refused.Allowed);
         Assert.StartsWith("Error: the command was not approved: no screen to ask on", refused.Error);
         Assert.Contains("allowed prefixes: dir; ", refused.Error);
-        Assert.Contains("allowed prefixes: none; ", (await new CommandGate(() => new AppSettingsData(), new CommandAllowList(() => [], _ => { }), null).JudgeAsync(Request(), CancellationToken.None)).Error);
+        Assert.Contains("allowed prefixes: none; ", (await new CommandGate(() => new AppSettingsData { ShellCommandPolicy = "ask" }, new CommandAllowList(() => [], _ => { }), null).JudgeAsync(Request(), CancellationToken.None)).Error);
     }
 
     // ── The probe ────────────────────────────────────────────────────────────

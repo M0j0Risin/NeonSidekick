@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Headers;
+using NeonSidekick.Diagnostics;
 using NeonSidekick.EmbeddedLlm;
 using NeonSidekick.Settings;
 using NeonSidekick.Speech;
@@ -211,6 +212,103 @@ public class EmbeddedModelsTests : IDisposable
 
         Assert.Null(host.Launches[0].MmprojPath);
         Assert.False(info.Vision);
+    }
+
+    // ── MTP (2026-09-29) ─────────────────────────────────────────────────────
+
+    private (EmbeddedModel Model, EmbeddedModels Files, byte[] Drafter) WithDrafter()
+    {
+        byte[] drafter = FakeModelFiles.GgufBytes(5_000);
+        var model = _model with { Drafter = new EmbeddedFile("mtp-tiny.gguf", drafter.Length, FakeModelFiles.Sha256(drafter)) };
+        Serve(EmbeddedModelCatalog.Url(model, model.Drafter!).AbsoluteUri, drafter);
+        return (model, new EmbeddedModels(ModelsDir, LlamaDir, new HttpClient(_http), [model], Runtime), drafter);
+    }
+
+    [Fact]
+    public async Task Install_FetchesTheDrafterLast_ButStateNeverWaitsForIt()
+    {
+        var (model, files, drafter) = WithDrafter();
+        var labels = new List<string>();
+
+        var result = await files.InstallAsync(model, labels.Add, CancellationToken.None);
+
+        Assert.True(result.Ok, result.Detail);
+        Assert.Equal(drafter, File.ReadAllBytes(files.DrafterPath(model)!));
+        Assert.Contains("verifying Tiny Model MTP…", labels);
+
+        // A model installed before its drafter joined the catalog is still installed: the start fetches it.
+        File.Delete(files.DrafterPath(model)!);
+        Assert.True(files.State(model).IsInstalled);
+        Assert.Null(files.DrafterPath(_model));
+    }
+
+    [Fact]
+    public async Task Start_WithMtpOn_FetchesAMissingDrafter_AndDraftsWithIt()
+    {
+        var (model, files, drafter) = WithDrafter();
+        Directory.CreateDirectory(EmbeddedModelCatalog.Folder(ModelsDir, model));
+        File.WriteAllBytes(files.WeightsPath(model), _weights);
+        File.WriteAllBytes(files.MmprojPath(model), _mmproj);
+        var host = new FakeLlamaServerHost();
+        await using var service = new EmbeddedLlmService(files, host, Cuda);
+
+        await service.StartAsync(model, new AppSettingsData(), null, CancellationToken.None);
+
+        Assert.Equal(drafter, File.ReadAllBytes(files.DrafterPath(model)!));
+        Assert.Equal((files.DrafterPath(model), true), (host.Launches[0].DrafterPath, host.Launches[0].Mtp));
+
+        // Embedded MTP off: neither, so the launch differs and the real host restarts the server.
+        await service.StartAsync(model, new AppSettingsData { EmbeddedMtp = false }, null, CancellationToken.None);
+        Assert.Equal((null, false), (host.Launches[1].DrafterPath, host.Launches[1].Mtp));
+    }
+
+    [Fact]
+    public async Task Start_WithADrafterThatWillNotDownload_RunsWithoutMtp()
+    {
+        var (model, files, _) = WithDrafter();
+        var broken = model with { Drafter = model.Drafter! with { Sha256 = new string('2', 64) } };
+        files = new EmbeddedModels(ModelsDir, LlamaDir, new HttpClient(_http), [broken], Runtime);
+        Directory.CreateDirectory(EmbeddedModelCatalog.Folder(ModelsDir, broken));
+        File.WriteAllBytes(files.WeightsPath(broken), _weights);
+        File.WriteAllBytes(files.MmprojPath(broken), _mmproj);
+        var host = new FakeLlamaServerHost();
+        await using var service = new EmbeddedLlmService(files, host, Cuda);
+        var warnings = new List<string>();
+        void Heard(DiagnosticEvent entry)
+        {
+            if (entry.Level == DiagnosticLevel.Warning)
+            {
+                warnings.Add(entry.Message);
+            }
+        }
+
+        DiagnosticLog.Emitted += Heard;
+        try
+        {
+            await service.StartAsync(broken, new AppSettingsData(), null, CancellationToken.None);
+        }
+        finally
+        {
+            DiagnosticLog.Emitted -= Heard;
+        }
+
+        Assert.Equal((null, false), (host.Launches[0].DrafterPath, host.Launches[0].Mtp));
+        Assert.Contains(warnings, w => w.StartsWith("Tiny Model's MTP drafter could not be downloaded", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Start_OfAModelWithAHead_DraftsWithNoFile()
+    {
+        InstallByHand();
+        var headed = _model with { MtpHead = true };
+        var host = new FakeLlamaServerHost();
+        await using var service = new EmbeddedLlmService(new EmbeddedModels(ModelsDir, LlamaDir, new HttpClient(_http), [headed], Runtime), host, Cuda);
+
+        await service.StartAsync(headed, new AppSettingsData(), null, CancellationToken.None);
+        await service.StartAsync(_model, new AppSettingsData(), null, CancellationToken.None);
+
+        Assert.Equal((null, true), (host.Launches[0].DrafterPath, host.Launches[0].Mtp));
+        Assert.Equal((null, false), (host.Launches[1].DrafterPath, host.Launches[1].Mtp));   // no MTP at all: nothing
     }
 
     [Fact]

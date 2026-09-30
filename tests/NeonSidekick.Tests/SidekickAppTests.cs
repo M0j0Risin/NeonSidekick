@@ -43,6 +43,9 @@ public partial class SidekickAppTests : IDisposable
         // delete is off in a fresh profile (2026-09-20); the headless scripts pin the full file rule, so the fixture opts it back on —
         // and File safe edits with it, since the rule's clause reads "into .trash" only under the setting (later on 2026-09-20).
         _settings.Update(d => { d.ToolsDisabled = []; d.FileSafeEdits = true; d.GitNativeTools = true; });   // Git native tools off by default since 2026-09-21: the headless turns opt in
+        // Eight settings went off by default on 2026-09-29 (the user's call): the scripts here were written with every tool group
+        // offered, the shell under ask and the local scan, so the fixture puts them back; the fresh-profile tests start from new ones.
+        _settings.Update(PreFlipDefaults.Apply);
     }
 
     public void Dispose()
@@ -970,6 +973,28 @@ public partial class SidekickAppTests : IDisposable
         Assert.Contains("Neon: " + SidekickApp.HeadlessNoAssistantReply, output);
         Assert.Empty(_http.Requests);
         Assert.Empty(_chat.Requests);
+    }
+
+    [Fact]
+    public async Task Headless_AFreshProfile_ScansNothing_AndOffersNoToolGroup()
+    {
+        // The defaults of 2026-09-29 (the user's call): no scan, the tool groups and the shell off. The server on :1234 is up,
+        // yet a blank URL asks nothing; with a URL, the request carries none of the groups that went off.
+        ServerOn1234("llama");
+        var fresh = new AppSettingsData();
+        _settings.Update(d => { d.LlmScanMode = fresh.LlmScanMode; d.FileTools = fresh.FileTools; d.WebTools = fresh.WebTools; d.ShellCommandPolicy = fresh.ShellCommandPolicy; });
+
+        string output = await Headless("hello\n");
+
+        Assert.Contains(SidekickApp.HeadlessNoServerLine(ScanScope.Disabled), output);
+        Assert.Empty(_http.Requests);
+
+        _settings.Update(d => d.LlmUrl = "http://127.0.0.1:1234/v1");
+        _chat.EnqueueText("Hi.");
+        await Headless("hello\n");
+
+        var tools = _chat.Options[^1]!.Tools!.Select(t => t.Name).ToList();
+        Assert.DoesNotContain(tools, t => t.StartsWith("web_", StringComparison.Ordinal) || t == "run_command" || t == "read_file");
     }
 
     [Fact]

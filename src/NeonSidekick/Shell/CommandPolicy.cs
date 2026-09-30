@@ -26,13 +26,16 @@ public enum CommandPolicyMode
 /// </summary>
 public static class CommandPolicy
 {
-    /// <summary>Ask. The compiled default, pinned by <c>AppSettingsTests</c>: a fresh profile never runs a command behind the user's back.</summary>
-    public const string Default = "ask";
+    /// <summary>
+    /// Off. The compiled default, pinned by <c>AppSettingsTests</c>: a fresh profile offers no shell tool at all (2026-09-29,
+    /// the user's call; <c>ask</c> until then — a fresh profile never ran a command behind the user's back, and now it runs none).
+    /// </summary>
+    public const string Default = "off";
 
     /// <summary>The modes in menu order.</summary>
     public static readonly string[] Names = { "off", "ask", "yolo" };
 
-    /// <summary>Trims and ignores case; false (and <see cref="CommandPolicyMode.Ask"/>) for anything that is not one of <see cref="Names"/>.</summary>
+    /// <summary>Trims and ignores case; false (and <see cref="Default"/>'s <see cref="CommandPolicyMode.Off"/>, so a display of a bad value agrees with <see cref="Resolve"/>) for anything that is not one of <see cref="Names"/>.</summary>
     public static bool TryParse(string? text, out CommandPolicyMode mode)
     {
         switch (text?.Trim().ToLowerInvariant())
@@ -40,7 +43,7 @@ public static class CommandPolicy
             case "off": mode = CommandPolicyMode.Off; return true;
             case "ask": mode = CommandPolicyMode.Ask; return true;
             case "yolo": mode = CommandPolicyMode.Yolo; return true;
-            default: mode = CommandPolicyMode.Ask; return false;
+            default: mode = CommandPolicyMode.Off; return false;
         }
     }
 

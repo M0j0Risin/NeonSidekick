@@ -405,8 +405,9 @@ public sealed class AppSettingsData
     /// Where discovery looks when <see cref="LlmUrl"/> is blank: one of <see cref="Llm.LlmScanMode.Names"/>
     /// (<c>local</c> = the usual ports on 127.0.0.1, <c>remote</c> = the same ports on every other
     /// machine of the local network, <c>both</c>, <c>disabled</c> = no scan at all: a blank URL
-    /// connects nothing and a bare <c>/server</c> refuses, 2026-09-15). Read at each scan
-    /// (<c>/server</c>, a blank-URL connect), never a reconnect. No variable.
+    /// connects nothing and a bare <c>/server</c> refuses, 2026-09-15). <c>disabled</c> by default since 2026-09-29 (the
+    /// user's call; <c>local</c> before): a fresh profile asks no port until the user picks a server or a mode. Read at
+    /// each scan (<c>/server</c>, a blank-URL connect), never a reconnect. No variable.
     /// </summary>
     public string LlmScanMode { get; set; } = Llm.LlmScanMode.Default;
 
@@ -1056,9 +1057,10 @@ public sealed class AppSettingsData
     /// turn like <see cref="WebTools"/>, no reconnect. Off, the default rules lose their file
     /// sentences and no <c>get_working_directory</c> call opens the conversation (the user's own
     /// <c>/cwd</c>, <c>/tree</c>, <c>/explore</c> and <c>/emptytrash</c> keep working). The row is the one
-    /// switch (<c>/files</c> went 2026-09-18). No variable.
+    /// switch (<c>/files</c> went 2026-09-18). Off by default since 2026-09-29 (the user's call, with the other tool
+    /// groups and the scan: a fresh profile offers the model nothing it did not turn on). No variable.
     /// </summary>
-    public bool FileTools { get; set; } = true;
+    public bool FileTools { get; set; }
 
     /// <summary>
     /// Entries a <c>/tree</c> lists before it stops with a tail line: <see cref="Files.WorkingDirectory.MinTreeLength"/>
@@ -1137,10 +1139,10 @@ public sealed class AppSettingsData
     /// <summary>
     /// Whether a turn offers the eight vault tools (<c>vault_read</c>, <c>vault_search</c>, …) over
     /// <see cref="ObsidianVault"/> (2026-09-22); read at each turn like <see cref="GitNativeTools"/>, no reconnect.
-    /// On by default: it offers nothing until a vault is set, so a profile that never names one never sees them.
-    /// No variable.
+    /// On by default until 2026-09-29 (it offered nothing until a vault was set); off since, the user's call with
+    /// <see cref="FileTools"/>. No variable.
     /// </summary>
-    public bool ObsidianTools { get; set; } = true;
+    public bool ObsidianTools { get; set; }
 
     /// <summary>
     /// The Obsidian vault the vault tools work in, a full path to the folder holding <c>.obsidian</c>
@@ -1168,9 +1170,10 @@ public sealed class AppSettingsData
     /// <summary>
     /// Whether a turn offers the eight SQL tools (<c>sql_connections</c>, <c>sql_query</c>, …) over the connections
     /// in <c>sql.json</c> (2026-09-23); read at each turn like <see cref="ObsidianTools"/>, no reconnect. On by
-    /// default for the same reason: it offers nothing until a connection is defined. No variable.
+    /// default until 2026-09-29 (it offered nothing until a connection was defined); off since, the user's call.
+    /// No variable.
     /// </summary>
-    public bool SqlTools { get; set; } = true;
+    public bool SqlTools { get; set; }
 
     /// <summary>
     /// The connection a SQL tool uses when the call names none (2026-09-23): a name in <c>sql.json</c>; empty, or a
@@ -1230,10 +1233,10 @@ public sealed class AppSettingsData
     /// <summary>
     /// Whether a turn offers the image tools (<c>generate_image</c>, <c>set_splash_image</c>) over the ComfyUI server
     /// at <see cref="ComfyUrl"/> (2026-09-24); read at each turn like <see cref="SqlTools"/>, no reconnect. On by
-    /// default for the same reason: it offers nothing until a URL is set and a workflow is in a <c>comfy</c> folder.
-    /// No variable.
+    /// default until 2026-09-29 (it offered nothing until a URL was set and a workflow was in a <c>comfy</c> folder);
+    /// off since, the user's call. No variable.
     /// </summary>
-    public bool ComfyTools { get; set; } = true;
+    public bool ComfyTools { get; set; }
 
     /// <summary>
     /// The ComfyUI server (2026-09-24): <c>http://host:8188</c>, often another machine on the LAN — the user's own
@@ -1346,7 +1349,8 @@ public sealed class AppSettingsData
     /// the Shell group's switch, and the default rules lose their shell sentence), <c>ask</c> (a command
     /// whose prefixes are not all in <see cref="ShellCommandAllowed"/> or allowed for the session is put to
     /// the user on the pane first; with no pane to ask on it is refused), <c>yolo</c> (everything runs).
-    /// Anything else reads as <see cref="Shell.CommandPolicy.Default"/>. Read at each call, no reconnect.
+    /// Anything else reads as <see cref="Shell.CommandPolicy.Default"/>, <c>off</c> since 2026-09-29 (the user's call;
+    /// <c>ask</c> before). Read at each call, no reconnect.
     /// <see cref="EnvironmentOverrides.CommandPolicyVariable"/> outranks it, so a scripted headless run can say yolo.
     /// </summary>
     public string ShellCommandPolicy { get; set; } = Shell.CommandPolicy.Default;
@@ -1523,9 +1527,10 @@ public sealed class AppSettingsData
     /// <summary>
     /// Whether a turn offers the model <c>web_search</c> and <c>web_fetch</c>; read at each turn like
     /// <see cref="Memory"/>, no reconnect. Off, the default rules lose their web sentence.
-    /// The row is the one switch (<c>/web</c> went 2026-09-18). No variable.
+    /// The row is the one switch (<c>/web</c> went 2026-09-18). Off by default since 2026-09-29 (the user's call, with
+    /// <see cref="FileTools"/>). No variable.
     /// </summary>
-    public bool WebTools { get; set; } = true;
+    public bool WebTools { get; set; }
 
     // ─── MCP ────────────────────────────────────────────────────────────────────
 
@@ -1564,7 +1569,7 @@ public sealed class AppSettingsData
     /// <summary>
     /// The Claude Code CLI <c>/claude</c> starts (2026-09-27): a full path, or empty to look for <c>claude.exe</c> on the
     /// PATH, then npm's <c>claude.cmd</c>, then <c>%USERPROFILE%\.local\bin</c> (<see cref="Claude.ClaudeExecutable"/>).
-    /// The Claude (CLI) tab's first row; read at each <c>/claude</c>. Variable <see cref="EnvironmentOverrides.ClaudeExeVariable"/>.
+    /// The Claude tab's first row; read at each <c>/claude</c>. Variable <see cref="EnvironmentOverrides.ClaudeExeVariable"/>.
     /// </summary>
     public string ClaudeExecutable { get; set; } = "";
 
@@ -1585,7 +1590,7 @@ public sealed class AppSettingsData
 
     /// <summary>
     /// Whether the model is offered <c>claude_advisor</c> (2026-09-27, the user's ask: the local model asks Claude Code
-    /// for advice on its own, read-only, when it is stuck): the tool group's switch, the <c>/tools</c> Claude (CLI) tab's
+    /// for advice on its own, read-only, when it is stuck): the tool group's switch, the <c>/tools</c> Claude tab's
     /// first advisor row. Off by default — every call costs money on the user's Claude account. Variable
     /// <see cref="EnvironmentOverrides.ClaudeAdvisorVariable"/>.
     /// </summary>
@@ -1621,7 +1626,7 @@ public sealed class AppSettingsData
     /// <c>/server</c> choice, off by default — every message costs money on the key's account). Offered only while a key
     /// is set too (<see cref="Llm.Anthropic.ClaudeApi.Offered"/>): then <c>/server</c> and the startup picker list a
     /// <c>Claude API</c> row, and picking it saves <see cref="Llm.Anthropic.ClaudeApi.BaseUrl"/> as the LLM URL. The
-    /// <c>Claude (API)</c> tab's first row; a reconnect. Variable <see cref="EnvironmentOverrides.ClaudeApiVariable"/>.
+    /// <c>/tools</c> Claude tab's first API row, under the advisor's (2026-09-29; <c>/settings</c>' Claude (API) tab's first until then); a reconnect. Variable <see cref="EnvironmentOverrides.ClaudeApiVariable"/>.
     /// </summary>
     public bool ClaudeApi { get; set; }
 
@@ -1659,6 +1664,14 @@ public sealed class AppSettingsData
     // server restarts only when what it was started with changed (EmbeddedLlm.LlamaLaunch).
 
     /// <summary>
+    /// Whether the embedded model is offered at all (2026-09-29, the user's ask; on by default): off takes its models out of
+    /// <c>/server</c> (and <c>/server embedded</c>), a saved embedded URL then reads as none, and a running
+    /// <c>llama-server</c> stops at the reconnect the change brings — its memory is free again. Installed models stay on
+    /// disk; the <c>Embedded models</c> row still installs and removes them. The Embedded tab's first row. No variable.
+    /// </summary>
+    public bool EmbeddedLlmEnabled { get; set; } = true;
+
+    /// <summary>
     /// Which llama.cpp build runs the embedded model (2026-09-29): one of <see cref="EmbeddedLlm.EmbeddedBackends.Names"/> —
     /// <c>auto</c> (the default: CUDA with an NVIDIA driver new enough, else Vulkan, else the CPU;
     /// <see cref="EmbeddedLlm.LlamaBackendDetect"/>), <c>cuda</c>, <c>vulkan</c> or <c>cpu</c>. Anything else reads as
@@ -1686,6 +1699,15 @@ public sealed class AppSettingsData
     /// </summary>
     public bool EmbeddedVision { get; set; } = true;
 
+    /// <summary>
+    /// Whether the embedded server drafts with MTP, multi-token prediction (2026-09-29, the user's ask; on by default):
+    /// speculative decoding with the model's drafter (<see cref="EmbeddedLlm.EmbeddedModel.Drafter"/>, fetched at the start
+    /// when missing) or the head its weights carry (<see cref="EmbeddedLlm.EmbeddedModel.MtpHead"/>). The model checks
+    /// every drafted token, so the answer is the same, only faster; off is the way back if a build misbehaves with it.
+    /// A model without MTP runs the same either way. No variable.
+    /// </summary>
+    public bool EmbeddedMtp { get; set; } = true;
+
     // ─── Home Assistant (2026-09-28) ────────────────────────────────────────────
     // The ha_ tools and /ha (2026-09-28, the user's ask: "plan an integration for Home Assistant" — a Docker instance with
     // Hue lights and a Bravia TV; read and act, the risky calls behind the pane; /ha for direct control; Assist as a fallback).
@@ -1693,10 +1715,10 @@ public sealed class AppSettingsData
     /// <summary>
     /// Whether a turn offers the Home Assistant tools (<c>ha_overview</c>, <c>ha_lights</c>, …) over the server at
     /// <see cref="HomeAssistantUrl"/> (2026-09-28); read at each turn like <see cref="ComfyTools"/>, no reconnect. On by
-    /// default for the same reason: it offers nothing until a URL and a token are set. The Home Assistant tab of
-    /// <c>/tools</c>. No variable.
+    /// default until 2026-09-29 (it offered nothing until a URL and a token were set); off since, the user's call. The
+    /// Home Assistant tab of <c>/tools</c>. No variable.
     /// </summary>
-    public bool HomeAssistantTools { get; set; } = true;
+    public bool HomeAssistantTools { get; set; }
 
     /// <summary>
     /// The Home Assistant server (2026-09-28): <c>http://localhost:8123</c> or another machine on the LAN — the user's own

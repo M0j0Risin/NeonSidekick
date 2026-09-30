@@ -23,7 +23,8 @@ public readonly record struct EmbeddedModelState(EmbeddedModelStateKind Kind, in
 
 /// <summary>
 /// The embedded model's files (2026-09-29): which catalog models are installed, installing one (its weights, then its
-/// vision projector — both resumable and SHA-256-checked through <see cref="ModelStore"/>), installing the llama.cpp
+/// vision projector, then its MTP drafter when it has one — each resumable and SHA-256-checked through
+/// <see cref="ModelStore"/>), installing the llama.cpp
 /// runtime a backend needs, removing a model, and pruning runtimes of builds no longer pinned. Knows nothing of
 /// processes; <see cref="EmbeddedLlmService"/> puts this and <see cref="ILlamaServerHost"/> together.
 ///
@@ -66,9 +67,14 @@ public sealed class EmbeddedModels
     /// <summary>The model's vision projector on disk (present or not).</summary>
     public string MmprojPath(EmbeddedModel model) => EmbeddedModelCatalog.MmprojSpec(ModelsDirectory, model).Path;
 
+    /// <summary>The model's MTP drafter on disk (present or not), or null for a model without one.</summary>
+    public string? DrafterPath(EmbeddedModel model) => EmbeddedModelCatalog.DrafterSpec(ModelsDirectory, model)?.Path;
+
     /// <summary>
-    /// Where <paramref name="model"/> stands: both files whole is installed; any bytes of either on disk is partial (with
-    /// how far); nothing is absent.
+    /// Where <paramref name="model"/> stands: the weights and the projector whole is installed; any bytes of either on
+    /// disk is partial (with how far); nothing is absent. The MTP drafter does not count (2026-09-29): the models
+    /// installed before drafters joined the catalog stay installed, and the start fetches a missing one
+    /// (<see cref="EnsureDrafterAsync"/>).
     /// </summary>
     public EmbeddedModelState State(EmbeddedModel model)
     {
@@ -83,7 +89,7 @@ public sealed class EmbeddedModels
         long held = weights + mmproj;
         return held == 0
             ? EmbeddedModelState.Absent
-            : new EmbeddedModelState(EmbeddedModelStateKind.Partial, (int)Math.Min(99, held * 100 / EmbeddedModelCatalog.TotalBytes(model)));
+            : new EmbeddedModelState(EmbeddedModelStateKind.Partial, (int)Math.Min(99, held * 100 / (model.Model.Bytes + model.Mmproj.Bytes)));
     }
 
     /// <summary>The catalog models that are installed, in catalog order.</summary>
@@ -125,19 +131,21 @@ public sealed class EmbeddedModels
     }
 
     /// <summary>
-    /// Installs <paramref name="model"/>: the weights, then the vision projector, each resumable and checked. A cancel
-    /// keeps what arrived; the next install resumes it.
+    /// Installs <paramref name="model"/>: the weights, then the vision projector, then the MTP drafter when it has one,
+    /// each resumable and checked. A cancel keeps what arrived; the next install resumes it.
     /// </summary>
     public async Task<ModelResult> InstallAsync(EmbeddedModel model, Action<string>? phase, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(model);
-        foreach (var spec in new[] { EmbeddedModelCatalog.WeightsSpec(ModelsDirectory, model), EmbeddedModelCatalog.MmprojSpec(ModelsDirectory, model) })
+        var specs = new List<ModelSpec> { EmbeddedModelCatalog.WeightsSpec(ModelsDirectory, model), EmbeddedModelCatalog.MmprojSpec(ModelsDirectory, model) };
+        if (EmbeddedModelCatalog.DrafterSpec(ModelsDirectory, model) is { } drafter)
         {
-            var result = await _store.EnsureAsync(
-                spec,
-                VoiceSession.Progress(phase, spec.Display, spec.ApproxBytes),
-                () => phase?.Invoke(EmbeddedLlmText.VerifyingLabel(spec.Display)),
-                cancellationToken).ConfigureAwait(false);
+            specs.Add(drafter);
+        }
+
+        foreach (var spec in specs)
+        {
+            var result = await EnsureAsync(spec, phase, cancellationToken).ConfigureAwait(false);
             if (!result.Ok)
             {
                 return result;
@@ -146,6 +154,25 @@ public sealed class EmbeddedModels
 
         return new ModelResult(true, EmbeddedModelCatalog.Folder(ModelsDirectory, model), EmbeddedLlmText.Installed(model));
     }
+
+    /// <summary>
+    /// Makes sure <paramref name="model"/>'s MTP drafter is on disk (2026-09-29): a model installed before its drafter
+    /// joined the catalog fetches it here, at its next start with Embedded MTP on. Null for a model without a drafter.
+    /// </summary>
+    public async Task<ModelResult?> EnsureDrafterAsync(EmbeddedModel model, Action<string>? phase, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(model);
+        return EmbeddedModelCatalog.DrafterSpec(ModelsDirectory, model) is { } spec
+            ? await EnsureAsync(spec, phase, cancellationToken).ConfigureAwait(false)
+            : null;
+    }
+
+    private Task<ModelResult> EnsureAsync(ModelSpec spec, Action<string>? phase, CancellationToken cancellationToken) =>
+        _store.EnsureAsync(
+            spec,
+            VoiceSession.Progress(phase, spec.Display, spec.ApproxBytes),
+            () => phase?.Invoke(EmbeddedLlmText.VerifyingLabel(spec.Display)),
+            cancellationToken);
 
     /// <summary>
     /// Deletes <paramref name="model"/>'s folder, partial downloads and all. The caller stops a server that has it

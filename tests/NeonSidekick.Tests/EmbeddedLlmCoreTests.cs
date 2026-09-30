@@ -57,11 +57,18 @@ public class EmbeddedLlmCoreTests
     // ── The catalog ─────────────────────────────────────────────────────────
 
     [Fact]
-    public void TheCatalog_IsTheUsersEleven_InOrder_PinnedToACommit()
+    public void TheCatalog_IsTheUsersThirtyOne_InOrder_PinnedToACommit()
     {
         // Alphabetical by name, so each model's builds sit together (2026-09-29, the user's call); one name's builds by size.
+        // The eleven of the morning, then the 26B A4B and 31B builds and the Qwens of later that day (the user's picks).
         Assert.Equal(
-            ["gemma-4-12b", "gemma-4-12b-q5", "gemma-4-12b-q6", "gemma-4-12b-bf16", "gemma-4-12b-qat", "gemma-4-12b-qat-uncensored", "gemma-4-e2b", "gemma-4-e2b-uncensored", "gemma-4-e4b", "gemma-4-e4b-qat", "gemma-4-e4b-uncensored"],
+            ["gemma-4-12b", "gemma-4-12b-q5", "gemma-4-12b-q6", "gemma-4-12b-bf16", "gemma-4-12b-qat", "gemma-4-12b-qat-uncensored",
+             "gemma-4-26b-a4b", "gemma-4-26b-a4b-q5", "gemma-4-26b-a4b-q6", "gemma-4-26b-a4b-qat", "gemma-4-26b-a4b-qat-uncensored",
+             "gemma-4-26b-a4b-uncensored", "gemma-4-26b-a4b-uncensored-q5", "gemma-4-26b-a4b-uncensored-q6",
+             "gemma-4-31b", "gemma-4-31b-q5", "gemma-4-31b-qat", "gemma-4-31b-qat-uncensored",
+             "gemma-4-e2b", "gemma-4-e2b-uncensored", "gemma-4-e4b", "gemma-4-e4b-qat", "gemma-4-e4b-uncensored",
+             "qwen3.6-35b-a3b", "qwen3.6-35b-a3b-q5", "qwen3.6-35b-a3b-uncensored",
+             "qwen3.8-27b", "qwen3.8-27b-q5", "qwen3.8-27b-q6", "qwen3.8-27b-uncensored", "qwen3.8-27b-uncensored-q5"],
             EmbeddedModelCatalog.Models.Select(m => m.Id));
         foreach (var name in EmbeddedModelCatalog.Models.GroupBy(m => m.Display))
         {
@@ -83,9 +90,25 @@ public class EmbeddedLlmCoreTests
             Assert.Same(model, EmbeddedModelCatalog.Find(model.Id.ToUpperInvariant()));
         }
 
-        Assert.All(EmbeddedModelCatalog.Models.Where(m => m.Id.StartsWith("gemma-4-", StringComparison.Ordinal) && m.Id != "gemma-4-12b-qat-uncensored"), m => Assert.Equal(new EmbeddedSampling(1.0, 0.95, 64), m.Sampling));
-        Assert.Equal(new EmbeddedSampling(0.6, 0.9, 64), EmbeddedModelCatalog.Find("gemma-4-12b-qat-uncensored")!.Sampling);   // HauhauCS Balanced's card
-        Assert.Null(EmbeddedModelCatalog.Find("qwen3.8-9b"));   // left the catalog (2026-09-29, the user's call)
+        string[] qatBalanced = ["gemma-4-12b-qat-uncensored", "gemma-4-26b-a4b-qat-uncensored", "gemma-4-31b-qat-uncensored"];
+        Assert.All(EmbeddedModelCatalog.Models.Where(m => m.Id.StartsWith("gemma-4-", StringComparison.Ordinal) && !qatBalanced.Contains(m.Id)), m => Assert.Equal(new EmbeddedSampling(1.0, 0.95, 64), m.Sampling));
+        Assert.All(qatBalanced, id => Assert.Equal(new EmbeddedSampling(0.6, 0.9, 64), EmbeddedModelCatalog.Find(id)!.Sampling));   // HauhauCS QAT Balanced's cards
+        Assert.All(EmbeddedModelCatalog.Models.Where(m => m.Id.StartsWith("qwen", StringComparison.Ordinal)), m => Assert.Equal(new EmbeddedSampling(1.0, 0.95, 20), m.Sampling));   // Qwen's "thinking, general"
+        Assert.Null(EmbeddedModelCatalog.Find("qwen3.8-9b"));   // left the catalog (2026-09-29, the user's call); the 27B came back later that day
+
+        // MTP (2026-09-29, "using the drafters where available"): a drafter per Gemma 4 repository that ships one, the
+        // Qwen3.8 builds' head in their weights, nothing for the Aggressive E2B/E4B, the 26B A4B Balanced or Qwen3.6.
+        Assert.Equal(
+            ["gemma-4-26b-a4b-uncensored", "gemma-4-26b-a4b-uncensored-q5", "gemma-4-26b-a4b-uncensored-q6", "gemma-4-e2b-uncensored", "gemma-4-e4b-uncensored", "qwen3.6-35b-a3b", "qwen3.6-35b-a3b-q5", "qwen3.6-35b-a3b-uncensored"],
+            EmbeddedModelCatalog.Models.Where(m => !m.HasMtp).Select(m => m.Id));
+        Assert.Equal(["qwen3.8-27b", "qwen3.8-27b-q5", "qwen3.8-27b-q6", "qwen3.8-27b-uncensored", "qwen3.8-27b-uncensored-q5"], EmbeddedModelCatalog.Models.Where(m => m.MtpHead).Select(m => m.Id));
+        Assert.All(EmbeddedModelCatalog.Models.Where(m => m.MtpHead), m => Assert.Null(m.Drafter));   // one or the other
+        foreach (var model in EmbeddedModelCatalog.Models.Where(m => m.Drafter is not null))
+        {
+            Assert.StartsWith("mtp-gemma-4-", model.Drafter!.Name, StringComparison.Ordinal);
+            Assert.Matches("^[0-9a-f]{64}$", model.Drafter.Sha256);
+            Assert.InRange(model.Drafter.Bytes, 50_000_000, 600_000_000);
+        }
 
         Assert.Null(EmbeddedModelCatalog.Find("gemma-3"));
         Assert.Null(EmbeddedModelCatalog.Find(null));
@@ -97,17 +120,26 @@ public class EmbeddedLlmCoreTests
         var e4b = EmbeddedModelCatalog.Find("gemma-4-e4b-qat")!;
         Assert.Equal("https://huggingface.co/unsloth/gemma-4-E4B-it-qat-GGUF/resolve/8c5a9e4fd5482e2be20fe0bf013b4c262a8f4265/gemma-4-E4B-it-qat-UD-Q4_K_XL.gguf", EmbeddedModelCatalog.Url(e4b, e4b.Model).AbsoluteUri);
         Assert.Equal("https://huggingface.co/unsloth/gemma-4-E4B-it-qat-GGUF/resolve/8c5a9e4fd5482e2be20fe0bf013b4c262a8f4265/mmproj-F16.gguf", EmbeddedModelCatalog.Url(e4b, e4b.Mmproj).AbsoluteUri);
-        Assert.Equal(4_215_695_776L + 990_372_672L, EmbeddedModelCatalog.TotalBytes(e4b));
-        Assert.Equal("5.2 GB", ModelStore.SizeLabel(EmbeddedModelCatalog.TotalBytes(e4b)));
+        Assert.Equal("https://huggingface.co/unsloth/gemma-4-E4B-it-qat-GGUF/resolve/8c5a9e4fd5482e2be20fe0bf013b4c262a8f4265/mtp-gemma-4-E4B-it.gguf", EmbeddedModelCatalog.Url(e4b, e4b.Drafter!).AbsoluteUri);
+        Assert.Equal(4_215_695_776L + 990_372_672L + 59_678_016L, EmbeddedModelCatalog.TotalBytes(e4b));   // the drafter counts (2026-09-29)
+        Assert.Equal("5.3 GB", ModelStore.SizeLabel(EmbeddedModelCatalog.TotalBytes(e4b)));
 
         var uncensored = EmbeddedModelCatalog.Find("gemma-4-e4b-uncensored")!;
         Assert.Equal("https://huggingface.co/HauhauCS/Gemma-4-E4B-Uncensored-HauhauCS-Aggressive/resolve/45b6a334b4bcd1d7f37179df58b3b1d66a184e5d/Gemma-4-E4B-Uncensored-HauhauCS-Aggressive-Q4_K_P.gguf", EmbeddedModelCatalog.Url(uncensored, uncensored.Model).AbsoluteUri);
         Assert.Equal("Q4_K_P", uncensored.Quant);
         Assert.Equal("6.4 GB", ModelStore.SizeLabel(EmbeddedModelCatalog.TotalBytes(uncensored)));
 
-        // The ones of later on 2026-09-29, the 12B's three more builds last.
-        Assert.Equal(["6.1 GB", "7.5 GB", "6.9 GB", "7.6 GB", "8.8 GB", "10.9 GB", "24 GB"],
+        // The ones of later on 2026-09-29, the 12B's three more builds last, each with its drafter.
+        Assert.Equal(["6.2 GB", "8 GB", "7.1 GB", "7.8 GB", "9.2 GB", "11.3 GB", "24.5 GB"],
             new[] { "gemma-4-e4b", "gemma-4-12b", "gemma-4-12b-qat", "gemma-4-12b-qat-uncensored", "gemma-4-12b-q5", "gemma-4-12b-q6", "gemma-4-12b-bf16" }.Select(id => ModelStore.SizeLabel(EmbeddedModelCatalog.TotalBytes(EmbeddedModelCatalog.Find(id)!))));
+        // The big ones of later still: the 26B A4B and 31B with drafters, the 26B A4B Balanced and the Qwens without a file.
+        Assert.Equal(["18.7 GB", "15.7 GB", "18.2 GB", "18.1 GB", "20.5 GB", "20.2 GB", "23.3 GB", "24.3 GB", "18.5 GB", "18.9 GB"],
+            new[] { "gemma-4-26b-a4b", "gemma-4-26b-a4b-qat", "gemma-4-26b-a4b-qat-uncensored", "gemma-4-26b-a4b-uncensored", "gemma-4-31b", "gemma-4-31b-qat-uncensored", "qwen3.6-35b-a3b", "qwen3.6-35b-a3b-uncensored", "qwen3.8-27b", "qwen3.8-27b-uncensored" }.Select(id => ModelStore.SizeLabel(EmbeddedModelCatalog.TotalBytes(EmbeddedModelCatalog.Find(id)!))));
+        var qwen = EmbeddedModelCatalog.Find("qwen3.8-27b-uncensored")!;
+        Assert.Equal("https://huggingface.co/HauhauCS/Qwen3.8-27B-Uncensored-HauhauCS-Aggressive-MTP-GGUF/resolve/993a5971fda8f30dd1b7eb2654792ba4415c7460/Qwen3.8-27B-Uncensored-HauhauCS-Aggressive-Q4_K_P.gguf", EmbeddedModelCatalog.Url(qwen, qwen.Model).AbsoluteUri);
+        var gemma31 = EmbeddedModelCatalog.Find("gemma-4-31b-qat-uncensored")!;
+        Assert.Equal("https://huggingface.co/HauhauCS/Gemma4-31B-QAT-Uncensored-HauhauCS-Balanced-MTP/resolve/9654466e82d83f5ebfe1518a369bc5900873abb1/mtp-gemma-4-31B-it.gguf", EmbeddedModelCatalog.Url(gemma31, gemma31.Drafter!).AbsoluteUri);
+        Assert.All(EmbeddedModelCatalog.Models.Where(m => m.Repository == "unsloth/gemma-4-26B-A4B-it-GGUF"), m => Assert.Equal(EmbeddedModelCatalog.Find("gemma-4-26b-a4b")!.Drafter, m.Drafter));   // one repository, one drafter
         var balanced = EmbeddedModelCatalog.Find("gemma-4-12b-qat-uncensored")!;
         Assert.Equal("https://huggingface.co/HauhauCS/Gemma4-12B-QAT-Uncensored-HauhauCS-Balanced/resolve/ae8045ac2bd216293ca49a3065da2c942dde4b68/mmproj-Gemma4-12B-QAT-Uncensored-HauhauCS-Balanced-BF16.gguf", EmbeddedModelCatalog.Url(balanced, balanced.Mmproj).AbsoluteUri);
         var bf16 = EmbeddedModelCatalog.Find("gemma-4-12b-bf16")!;
@@ -120,8 +152,8 @@ public class EmbeddedLlmCoreTests
     public void EachModel_HasItsOwnFolder_SoTheTwoMmprojF16sNeverCollide()
     {
         string dir = Path.Combine("C:", "home", "models", "llm");
-        var paths = EmbeddedModelCatalog.Models.SelectMany(m => new[] { EmbeddedModelCatalog.WeightsSpec(dir, m).Path, EmbeddedModelCatalog.MmprojSpec(dir, m).Path }).ToList();
-        Assert.Equal(22, paths.Count);   // eleven weights, eleven projectors (the 12B's four builds share one projector's name and bytes, each in its own folder)
+        var paths = EmbeddedModelCatalog.Models.SelectMany(m => new[] { EmbeddedModelCatalog.WeightsSpec(dir, m).Path, EmbeddedModelCatalog.MmprojSpec(dir, m).Path, EmbeddedModelCatalog.DrafterSpec(dir, m)?.Path }).OfType<string>().ToList();
+        Assert.Equal(31 + 31 + 18, paths.Count);   // weights, projectors and the eighteen drafters (one repository's builds share one projector's and drafter's name and bytes, each in its own folder)
         Assert.Equal(paths.Count, paths.Distinct(StringComparer.OrdinalIgnoreCase).Count());
 
         var e2b = EmbeddedModelCatalog.Find("gemma-4-e2b")!;
@@ -132,6 +164,10 @@ public class EmbeddedLlmCoreTests
         Assert.Equal(e2b.Model.Sha256, weights.Sha256);
         Assert.Equal(e2b.Model.Bytes, weights.ApproxBytes);
         Assert.Equal("Gemma 4 E2B vision", EmbeddedModelCatalog.MmprojSpec(dir, e2b)!.Display);
+        var drafter = EmbeddedModelCatalog.DrafterSpec(dir, e2b)!;
+        Assert.Equal(Path.Combine(dir, "gemma-4-e2b", "mtp-gemma-4-E2B-it.gguf"), drafter.Path);
+        Assert.Equal(("Gemma 4 E2B MTP", e2b.Drafter!.Sha256, true), (drafter.Display, drafter.Sha256, drafter.Resumable));
+        Assert.Null(EmbeddedModelCatalog.DrafterSpec(dir, EmbeddedModelCatalog.Find("qwen3.8-27b")!));   // its head is in the weights
     }
 
     // ── The llama.cpp pins ──────────────────────────────────────────────────
@@ -246,6 +282,26 @@ public class EmbeddedLlmCoreTests
     }
 
     [Fact]
+    public void Arguments_WithMtp_DraftWithTheFile_OrTheWeightsOwnHead()
+    {
+        // A Gemma 4 drafter (2026-09-29): -md and the type, right after the projector.
+        var drafted = LlamaArguments.Build(Launch() with { DrafterPath = @"C:\m\mtp-gemma-4-E2B-it.gguf", Mtp = true }, 1, "k");
+        Assert.Equal(["-m", @"C:\m\model.gguf", "--mmproj", @"C:\m\mmproj-F16.gguf", "-md", @"C:\m\mtp-gemma-4-E2B-it.gguf", "--spec-type", "draft-mtp", "--alias"], drafted.Take(9));
+
+        // Qwen3.8's head in its weights: the type alone, llama-server drafts on the target's own weights.
+        var headed = LlamaArguments.Build(Launch() with { Mtp = true }, 1, "k");
+        Assert.DoesNotContain("-md", headed);
+        Assert.Equal(["--spec-type", "draft-mtp"], headed.Skip(4).Take(2));
+
+        // Off (or a model without MTP): neither, and a drafter path alone does nothing.
+        Assert.DoesNotContain("--spec-type", LlamaArguments.Build(Launch(), 1, "k"));
+        Assert.DoesNotContain("-md", LlamaArguments.Build(Launch() with { DrafterPath = @"C:\m\d.gguf" }, 1, "k"));
+
+        // Toggling Embedded MTP changes the launch, so the server restarts.
+        Assert.NotEqual(Launch(), Launch() with { Mtp = true });
+    }
+
+    [Fact]
     public void Arguments_WithoutVision_LeaveTheProjectorOut()
     {
         var args = LlamaArguments.Build(Launch(mmproj: null, context: 0, layers: "all"), 1, "k");
@@ -308,8 +364,10 @@ public class EmbeddedLlmCoreTests
         Assert.Equal("paused    · 4.2 GB · 42%", EmbeddedLlmText.RowDetail(new EmbeddedModelState(EmbeddedModelStateKind.Partial, 42), 4_170_150_816));
         Assert.Equal(9, EmbeddedLlmText.StateWidth);   // "installed", the longest word
         Assert.Equal("embedded llama.cpp b11258 cuda on 127.0.0.1:53121", EmbeddedLlmText.Source(new EmbeddedServerInfo(new Uri("http://127.0.0.1:53121/v1"), 53121, "k", LlamaBackend.Cuda, "m", true)));
-        Assert.Equal("Gemma 4 E2B is not installed. Install it now (download 4.2 GB + llama.cpp runtime 577 MB)?", EmbeddedLlmText.InstallQuestion(e2b, LlamaRelease.Bytes(LlamaBackend.Cuda)));
-        Assert.Equal("download 4.2 GB", EmbeddedLlmText.InstallCost(e2b, 0));
+        Assert.Equal("Gemma 4 E2B is not installed. Install it now (download 4.3 GB + llama.cpp runtime 577 MB)?", EmbeddedLlmText.InstallQuestion(e2b, LlamaRelease.Bytes(LlamaBackend.Cuda)));   // its MTP drafter counts since 2026-09-29
+        Assert.Equal("download 4.3 GB", EmbeddedLlmText.InstallCost(e2b, 0));
+        Assert.Equal("Gemma 4 E2B's MTP drafter could not be downloaded, so it starts without MTP: timed out", EmbeddedLlmText.DrafterFailed(e2b, "timed out"));
+        Assert.Equal("the embedded LLM is off; turn Embedded LLM enabled on in /settings › Embedded to use it", EmbeddedLlmText.SwitchedOffError);
         Assert.Equal("2 of 4 installed (9.4 GB)", EmbeddedLlmText.ModelsRowValue(2, 4, 9_400_000_000));
         Assert.Equal("none of 4 installed", EmbeddedLlmText.ModelsRowValue(0, 4, 0));
         Assert.Equal("auto (cuda: NVIDIA driver 610.88)", EmbeddedLlmText.BackendRowValue("auto", new BackendChoice(LlamaBackend.Cuda, "NVIDIA driver 610.88")));
@@ -317,5 +375,8 @@ public class EmbeddedLlmCoreTests
         Assert.Equal("llama-server exited with code 3 before it was ready", EmbeddedLlmText.ExitedEarly(3, " "));
         Assert.Equal("llama-server was not ready after 300 s", EmbeddedLlmText.StartTimeout(TimeSpan.FromMinutes(5)));
         Assert.Equal("embedded (llama.cpp)", EmbeddedLlmText.UrlDisplay);
+        // The spinner's two lines (2026-09-29, the user's wording): the llama, no "on llama.cpp", no ellipsis.
+        Assert.Equal("🦙 starting Gemma 4 E2B", EmbeddedLlmText.StartingLabel(e2b));
+        Assert.Equal("🦙 loading Gemma 4 E2B", EmbeddedLlmText.LoadingLabel(e2b));
     }
 }

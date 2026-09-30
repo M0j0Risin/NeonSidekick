@@ -157,6 +157,7 @@ public sealed class EmbeddedLlmService : IEmbeddedLlm
 
         // The projector with Embedded vision on and the file there.
         string mmproj = _files.MmprojPath(model);
+        var (drafter, mtp) = await MtpAsync(model, effective, phase, cancellationToken).ConfigureAwait(false);
         var launch = new LlamaLaunch(
             _files.Executable(backend),
             backend,
@@ -166,8 +167,41 @@ public sealed class EmbeddedLlmService : IEmbeddedLlm
             EmbeddedContextSize.Effective(effective.EmbeddedContextSize),
             EmbeddedGpuLayers.Effective(effective.EmbeddedGpuLayers),
             model.Sampling,
-            auto);
+            auto,
+            drafter,
+            mtp);
         phase?.Invoke(EmbeddedLlmText.StartingLabel(model));
         return await _host.EnsureRunningAsync(launch, model, phase, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// The MTP half of a launch (2026-09-29): nothing with Embedded MTP off or for a model that cannot draft; a
+    /// built-in head (Qwen3.8) is on with no file; a drafter (Gemma 4) is fetched first when a model installed before
+    /// drafters joined the catalog lacks it. A drafter that cannot be fetched is logged and the model starts without
+    /// MTP — slower, never broken; the next start tries again.
+    /// </summary>
+    private async Task<(string? Drafter, bool Mtp)> MtpAsync(EmbeddedModel model, AppSettingsData effective, Action<string>? phase, CancellationToken cancellationToken)
+    {
+        if (!effective.EmbeddedMtp || !model.HasMtp)
+        {
+            return (null, false);
+        }
+
+        if (_files.DrafterPath(model) is not { } drafter)
+        {
+            return (null, true);
+        }
+
+        if (!File.Exists(drafter))
+        {
+            var fetched = await _files.EnsureDrafterAsync(model, phase, cancellationToken).ConfigureAwait(false);
+            if (fetched is not { Ok: true })
+            {
+                DiagnosticLog.Warn(Category, EmbeddedLlmText.DrafterFailed(model, fetched?.Detail ?? ""));
+                return (null, false);
+            }
+        }
+
+        return (drafter, true);
     }
 }

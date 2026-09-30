@@ -7,6 +7,11 @@ at `/exit` or at the end of input: code 0, or 3 if a shell command was refused a
 (`publish\output\NeonSidekick.exe`) is on `PATH`; from a checkout, swap in
 `dotnet run --project src\NeonSidekick -- --headless …`.
 
+A fresh profile offers the model no tools and looks for no server: *File tools*, *Web tools* and the other tool groups
+are off, *Shell command policy* is `off` and *LLM scan mode* is `disabled`. The examples below assume a profile set up in
+the TUI beforehand (`/tools`, `/settings`) or its `profile.json` edited: a server saved or given with `--url`, and the
+tool groups a job needs switched on. `NEONSIDEKICK_COMMAND_POLICY` or `--yolo` sets the shell policy for one run.
+
 ## What the output looks like
 
 ```
@@ -179,7 +184,7 @@ $env:NEONSIDEKICK_LLM_API_KEY = (Get-Secret NeonLlmKey -AsPlainText)
 "Ping." | NeonSidekick.exe --headless --url https://llm.internal.example/v1
 ```
 
-The Claude API: switch it on and give it its key for the run, then point `--url` at it. Name the model, or the run takes the first one the account lists. Without the switch and the key, the URL is ignored and the run looks for a local server instead (a warning says so).
+The Claude API: switch it on and give it its key for the run, then point `--url` at it. Name the model, or the run takes the first one the account lists. Without the switch and the key, the URL is ignored and the run looks for a server as with no URL, under the profile's *LLM scan mode* (a warning says so).
 
 ```powershell
 $env:NEONSIDEKICK_CLAUDE_API = "on"
@@ -187,7 +192,7 @@ $env:NEONSIDEKICK_CLAUDE_API_KEY = (Get-Secret AnthropicKey -AsPlainText)
 "Summarise this repo's README." | NeonSidekick.exe --headless --url https://api.anthropic.com --model claude-sonnet-5
 ```
 
-The embedded LLM: `--url embedded` runs a model the app downloaded, on its own llama.cpp server, with no other server needed. `--model` names the model's id (`gemma-4-12b`, `gemma-4-12b-q5`, `gemma-4-12b-q6`, `gemma-4-12b-bf16`, `gemma-4-12b-qat`, `gemma-4-12b-qat-uncensored`, `gemma-4-e2b`, `gemma-4-e2b-uncensored`, `gemma-4-e4b`, `gemma-4-e4b-qat`, `gemma-4-e4b-uncensored`); without it, the first one installed runs, in that order. A headless run never downloads a model: install it once in the app (pick its **Embedded** row in `/server`), or the run ends with an error saying it isn't installed. It does download the llama.cpp runtime on a first run (577 MB for CUDA, 33 MB for Vulkan), and loading the model takes a few seconds before the first answer. The server stops when the run ends.
+The embedded LLM: `--url embedded` runs a model the app downloaded, on its own llama.cpp server, with no other server needed. `--model` names the model's id (`gemma-4-12b`, `gemma-4-12b-q5`, `gemma-4-12b-q6`, `gemma-4-12b-bf16`, `gemma-4-12b-qat`, `gemma-4-12b-qat-uncensored`, `gemma-4-26b-a4b`, `gemma-4-26b-a4b-q5`, `gemma-4-26b-a4b-q6`, `gemma-4-26b-a4b-qat`, `gemma-4-26b-a4b-qat-uncensored`, `gemma-4-26b-a4b-uncensored`, `gemma-4-26b-a4b-uncensored-q5`, `gemma-4-26b-a4b-uncensored-q6`, `gemma-4-31b`, `gemma-4-31b-q5`, `gemma-4-31b-qat`, `gemma-4-31b-qat-uncensored`, `gemma-4-e2b`, `gemma-4-e2b-uncensored`, `gemma-4-e4b`, `gemma-4-e4b-qat`, `gemma-4-e4b-uncensored`, `qwen3.6-35b-a3b`, `qwen3.6-35b-a3b-q5`, `qwen3.6-35b-a3b-uncensored`, `qwen3.8-27b`, `qwen3.8-27b-q5`, `qwen3.8-27b-q6`, `qwen3.8-27b-uncensored`, `qwen3.8-27b-uncensored-q5`); without it, the first one installed runs, in that order. A headless run never downloads a model: install it once in the app (pick its **Embedded** row in `/server`), or the run ends with an error saying it isn't installed. It does download the llama.cpp runtime on a first run (577 MB for CUDA, 33 MB for Vulkan), and loading the model takes a few seconds before the first answer. The server stops when the run ends. The profile's *Embedded LLM enabled* must be on (it is by default); off, `embedded` counts as no URL. With *Embedded MTP* on (the default) a model with a drafter drafts ahead, and a Gemma 4 model installed before drafters were added fetches its small drafter at its first start.
 
 ```powershell
 Get-Content job.txt | NeonSidekick.exe --headless --url embedded --model gemma-4-e2b
@@ -338,10 +343,10 @@ The shell command policy for a run comes from, in order: the `--yolo` flag, the
 profile's saved *Shell command policy*. Neither the flag nor the variable is ever saved. What each
 policy means headless:
 
-- `ask` (the default): nothing can ask, so only commands whose prefixes are on the profile's
+- `off` (the default since 2026-09-29): the shell tools aren't offered at all.
+- `ask`: nothing can ask, so only commands whose prefixes are on the profile's
   *Shell allowed commands* list run. See [When a command is refused](#when-a-command-is-refused) below.
 - `yolo`: every `run_command` command and `execute_code` script runs without asking.
-- `off`: the shell tools aren't offered at all.
 
 `yolo` does **not** switch off the path police. With *Shell police outside paths* on (the default),
 a command that names a path outside the working directory is still refused, and the run still ends
@@ -655,7 +660,7 @@ Flags beat variables; variables beat the profile's saved values.
 | `NEONSIDEKICK_LLM_CONTEXT` | The context window in tokens, when the server doesn't report it. |
 | `NEONSIDEKICK_LLM_REASONING` | Reasoning effort for the run. |
 | `NEONSIDEKICK_LLM_SAMPLING` | Sampling for the run, a JSON object in wire names: `{"temperature":0.2,"top_k":20,"seed":42}`. It is laid over the profile's saved values for every model; a bad value is logged and the variable ignored. |
-| `NEONSIDEKICK_COMMAND_POLICY` | `ask` (default: only allow-listed commands run, since nothing can ask), or `yolo` (every command runs; use only when you trust the job and the folder). `--yolo` outranks it. |
+| `NEONSIDEKICK_COMMAND_POLICY` | `off` (the default: no shell tools), `ask` (only allow-listed commands run, since nothing can ask), or `yolo` (every command runs; use only when you trust the job and the folder). `--yolo` outranks it. |
 | `NEONSIDEKICK_SHELL_POLICE` | `off` lets shell commands name paths outside the working directory for the run; `on` turns the police back on over a saved `off`. `--no-police` outranks it. |
 | `NEONSIDEKICK_SHELL_NATIVE` | `off` lets a single `cat`, `dir`, `git status`, `curl`… go to the shell as written for the run, instead of being sent back once a turn to the native tool that does it (*Shell prefer native tools*, on by default); `on` turns it back on over a saved `off`. A line sent back is not a refusal: it never makes the run exit 3. |
 | `NEONSIDEKICK_CLAUDE_EXE` / `NEONSIDEKICK_CLAUDE_PERMISSIONS` | The Claude Code CLI for `/claude`, and what it may do on its own for the run: `read-only` (default), `edit` or `full`. |

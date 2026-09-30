@@ -52,4 +52,22 @@ public static class EmbeddedEndpoint
     /// (<see cref="LlamaRelease"/>), so another OS or an Arm64 machine sees no embedded rows.
     /// </summary>
     public static bool Offered => OperatingSystem.IsWindows() && RuntimeInformation.OSArchitecture == Architecture.X64;
+
+    /// <summary>
+    /// Whether <paramref name="effective"/> has the embedded model switched off (<c>Embedded LLM enabled</c>, 2026-09-29, the
+    /// user's ask) while its URL names it: the saved sentinel then stands for nothing, and a connect finds a server as a
+    /// blank URL would — the same as a saved Claude API URL with the Claude API off.
+    /// </summary>
+    public static bool SwitchedOff(Settings.AppSettingsData effective)
+    {
+        ArgumentNullException.ThrowIfNull(effective);
+        return !effective.EmbeddedLlmEnabled && IsEmbedded(effective.LlmUrl);
+    }
+
+    /// <summary>Whether <paramref name="effective"/>'s URL names the embedded model and the switch lets it run.</summary>
+    public static bool Chosen(Settings.AppSettingsData effective)
+    {
+        ArgumentNullException.ThrowIfNull(effective);
+        return effective.EmbeddedLlmEnabled && IsEmbedded(effective.LlmUrl);
+    }
 }

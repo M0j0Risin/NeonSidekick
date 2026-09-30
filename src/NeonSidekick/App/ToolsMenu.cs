@@ -17,9 +17,11 @@ namespace NeonSidekick.App;
 /// <see cref="SettingsMenu.EditAsync"/>) under this pane's strip, its pickers titled <c>Tools › …</c>
 /// (<see cref="SettingsMenu.Root"/>); a group's switch stays the first row of its tab, and a group
 /// whose switch is off shows dim on the Offered tab with the switch named after its heading — the
-/// per-tool values still flip and save. Nothing here reconnects or clears the conversation: every
-/// flip is read at the next turn (<see cref="ChatScreen.PrepareTurn"/>), so the pane opens mid-turn
-/// too and edits as <c>/settings</c> does there (none of its rows is <see cref="SettingsMenu.RefusedMidTurn"/>).
+/// per-tool values still flip and save. Nothing here clears the conversation: every flip is read at the next turn
+/// (<see cref="ChatScreen.PrepareTurn"/>), so the pane opens mid-turn too and edits as <c>/settings</c> does there. The
+/// one exception is the Claude tab's four Claude API rows (2026-09-29, off <c>/settings</c>): each is a reconnect
+/// (<see cref="SettingsMenu.IsLlmField"/>), refused mid-turn like there, and <see cref="ShowAsync"/> returns
+/// <see cref="SettingsChanges.Llm"/> when one saved, so the screen reconnects once the pane closes — <c>/mcp</c>'s shape.
 /// Without the pane the tabs print as plain lines. <c>/tools</c> takes no argument: <c>/tools expand</c> and
 /// <c>/tools collapse</c> (2026-09-22) became the root <c>/expand</c> and <c>/collapse</c> later that day, the user's ask.
 /// The Shell tab's allowed-commands row has a door of its own since later on 2026-09-21:
@@ -95,8 +97,10 @@ internal sealed class ToolsMenu
     }
 
     /// <param name="midTurn">The pane opened while a reply runs: the flips save and the rows edit as on <c>/settings</c>; a row refused there is refused here (none today).</param>
-    public async Task ShowAsync(CancellationToken cancellationToken, bool midTurn = false)
+    /// <returns><see cref="SettingsChanges.Llm"/> when a reconnect row (a Claude API row) saved, else none.</returns>
+    public async Task<SettingsChanges> ShowAsync(CancellationToken cancellationToken, bool midTurn = false)
     {
+        var changes = SettingsChanges.None;
         if (!_pane.Enabled)
         {
             foreach (var line in Lines(_facts(), _settings.Current, _menu))
@@ -104,7 +108,7 @@ internal sealed class ToolsMenu
                 _transcript.Notice(line);
             }
 
-            return;
+            return changes;
         }
 
         int tab = 0;
@@ -125,7 +129,7 @@ internal sealed class ToolsMenu
 
                 if (await _pane.PickAsync(page, cursor, cancellationToken).ConfigureAwait(false) is not { } pick)
                 {
-                    return;
+                    return changes;
                 }
 
                 tab = pick.Tab;
@@ -163,7 +167,10 @@ internal sealed class ToolsMenu
 
                 // The page on the tab the pane ended on, so a typed edit under it keeps that tab's rows (PickSettingAsync's shape).
                 var shown = pick.Tab == page.Tab ? page : MenuPage.Tabbed(ToolsText.Label, page.Tabs!, pick.Tab, SettingsMenu.TabKeys);
-                await _menu.EditAsync(field, saved, shown, cursor, cancellationToken).ConfigureAwait(false);
+                if (await _menu.EditAsync(field, saved, shown, cursor, cancellationToken).ConfigureAwait(false) && SettingsMenu.IsLlmField(field))
+                {
+                    changes |= SettingsChanges.Llm;
+                }
             }
         }
         finally

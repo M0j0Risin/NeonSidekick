@@ -18,6 +18,12 @@ public static class EmbeddedLlmText
     /// <summary>The note after a cancelled download: what is on disk stays.</summary>
     public const string PausedNotice = "download paused; pick the model again to resume where it stopped";
 
+    /// <summary>The refusal when the embedded model is asked for while <c>Embedded LLM enabled</c> is off (2026-09-29).</summary>
+    public const string SwitchedOffError = "the embedded LLM is off; turn Embedded LLM enabled on in /settings › Embedded to use it";
+
+    /// <summary>The log line when the saved LLM URL names the embedded model but its switch is off: the URL is read as blank.</summary>
+    public const string SwitchedOffWarning = "The LLM URL names the embedded model, which is switched off (Embedded LLM enabled); looking for a server as with no URL.";
+
     /// <summary>The refusal when an image is sent to an embedded model running without its vision projector.</summary>
     public const string NoVisionError = "the embedded model is running without its vision projector; turn Embedded vision on in /settings › Embedded to send images";
 
@@ -41,9 +47,11 @@ public static class EmbeddedLlmText
 
     public static string UnpackingLabel(string display) => $"unpacking {display}…";
 
-    public static string StartingLabel(EmbeddedModel model) => $"starting {model.Display} on llama.cpp…";
+    /// <summary>The spinner while <c>llama-server</c> starts: <c>🦙 starting Gemma 4 12B</c> (2026-09-29, the user's wording; was <c>starting … on llama.cpp…</c>).</summary>
+    public static string StartingLabel(EmbeddedModel model) => $"🦙 starting {model.Display}";
 
-    public static string LoadingLabel(EmbeddedModel model) => $"loading {model.Display}…";
+    /// <summary>The spinner while the started server loads the weights: <c>🦙 loading Gemma 4 12B</c> (same day, same call).</summary>
+    public static string LoadingLabel(EmbeddedModel model) => $"🦙 loading {model.Display}";
 
     /// <summary>
     /// A <c>/server</c> row's detail (dim, after the model's name): installed, not yet, or part-way, the word padded to
@@ -86,6 +94,9 @@ public static class EmbeddedLlmText
     public static string RuntimeFailed(string detail) => $"the llama.cpp runtime could not be installed: {detail}";
 
     public static string InstallFailed(EmbeddedModel model, string detail) => $"{model.Display} could not be installed: {detail}";
+
+    /// <summary>The log line when a model's MTP drafter could not be fetched at its start: it runs without MTP this time.</summary>
+    public static string DrafterFailed(EmbeddedModel model, string detail) => $"{model.Display}'s MTP drafter could not be downloaded, so it starts without MTP" + Tail(detail);
 
     public static string Installed(EmbeddedModel model) => $"{model.Display} installed";
 

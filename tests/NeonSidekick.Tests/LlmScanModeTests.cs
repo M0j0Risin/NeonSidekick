@@ -11,7 +11,7 @@ public class LlmScanModeTests
     {
         // disabled last (2026-09-15), so the picker's saved-row arithmetic for the three scans is unchanged.
         Assert.Equal(new[] { "local", "remote", "both", "disabled" }, LlmScanMode.Names);
-        Assert.Equal("local", LlmScanMode.Default);
+        Assert.Equal("disabled", LlmScanMode.Default);   // "local" until 2026-09-29 (the user's call)
         Assert.Equal(LlmScanMode.Default, new AppSettingsData().LlmScanMode);
     }
 
@@ -35,10 +35,10 @@ public class LlmScanModeTests
     [InlineData("all")]
     [InlineData("off")]
     [InlineData("none")]
-    public void TryParse_RejectsAnythingElse_AsLocal(string? text)
+    public void TryParse_RejectsAnythingElse_AsTheDefault(string? text)
     {
         Assert.False(LlmScanMode.TryParse(text, out var scope));
-        Assert.Equal(ScanScope.Local, scope);
+        Assert.Equal(ScanScope.Disabled, scope);   // the default's, so a display agrees with Resolve (Local until 2026-09-29)
     }
 
     [Fact]
@@ -82,7 +82,7 @@ public class LlmScanModeTests
         Assert.Equal(ScanScope.Remote, LlmScanMode.Resolve(new AppSettingsData { LlmScanMode = "remote" }));
         Assert.Equal(ScanScope.Both, LlmScanMode.Resolve(new AppSettingsData { LlmScanMode = "Both" }));
         Assert.Equal(ScanScope.Disabled, LlmScanMode.Resolve(new AppSettingsData { LlmScanMode = "disabled" }));
-        Assert.Equal(ScanScope.Local, LlmScanMode.Resolve(new AppSettingsData()));
+        Assert.Equal(ScanScope.Disabled, LlmScanMode.Resolve(new AppSettingsData()));
     }
 
     [Fact]
@@ -93,7 +93,7 @@ public class LlmScanModeTests
         DiagnosticLog.Emitted += capture;
         try
         {
-            Assert.Equal(ScanScope.Local, LlmScanMode.Resolve(new AppSettingsData { LlmScanMode = "lan" }));
+            Assert.Equal(ScanScope.Disabled, LlmScanMode.Resolve(new AppSettingsData { LlmScanMode = "lan" }));
         }
         finally
         {
@@ -101,6 +101,6 @@ public class LlmScanModeTests
         }
 
         var warning = Assert.Single(warnings);
-        Assert.Contains("LlmScanMode='lan' is not one of local, remote, both, disabled. Using local.", warning.Message);
+        Assert.Contains("LlmScanMode='lan' is not one of local, remote, both, disabled. Using disabled.", warning.Message);
     }
 }

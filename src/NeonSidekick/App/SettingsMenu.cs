@@ -430,19 +430,19 @@ public enum SettingsField
     /// <summary>A toggle: whether the model's thinking streams into the transcript and folds when the answer starts (<see cref="Settings.AppSettingsData.LlmShowThinking"/>). The LLM tab's last row (2026-09-26, the user's ask); no reconnect (read at each turn). Last in the enum, as every newcomer.</summary>
     LlmShowThinking,
 
-    /// <summary>Typed: the Claude Code CLI <c>/claude</c> starts (<see cref="Settings.AppSettingsData.ClaudeExecutable"/>); empty = looked up. The <c>/tools</c> Claude (CLI) tab's first row (2026-09-27; on <c>/settings</c> that morning); read at each <c>/claude</c> and advisor call.</summary>
+    /// <summary>Typed: the Claude Code CLI <c>/claude</c> starts (<see cref="Settings.AppSettingsData.ClaudeExecutable"/>); empty = looked up. The <c>/tools</c> Claude tab's first row (2026-09-27; on <c>/settings</c> that morning); read at each <c>/claude</c> and advisor call.</summary>
     ClaudeExecutable,
 
-    /// <summary>A picker over <see cref="Claude.ClaudePermission.Names"/>: what the Claude Code child may do on its own (<see cref="Settings.AppSettingsData.ClaudePermissions"/>). The Claude (CLI) tab's second row (2026-09-27).</summary>
+    /// <summary>A picker over <see cref="Claude.ClaudePermission.Names"/>: what the Claude Code child may do on its own (<see cref="Settings.AppSettingsData.ClaudePermissions"/>). The Claude tab's second row (2026-09-27).</summary>
     ClaudePermissions,
 
-    /// <summary>Typed: the <c>--model</c> of a <c>/claude</c> run (<see cref="Settings.AppSettingsData.ClaudeModel"/>); empty = the CLI's own. The Claude (CLI) tab's third row (2026-09-27).</summary>
+    /// <summary>Typed: the <c>--model</c> of a <c>/claude</c> run (<see cref="Settings.AppSettingsData.ClaudeModel"/>); empty = the CLI's own. The Claude tab's third row (2026-09-27).</summary>
     ClaudeModel,
 
-    /// <summary>A picker over <see cref="Claude.ClaudeEffort.Names"/>: the <c>--effort</c> of a <c>/claude</c> run (<see cref="Settings.AppSettingsData.ClaudeEffort"/>). The Claude (CLI) tab's last row (2026-09-27).</summary>
+    /// <summary>A picker over <see cref="Claude.ClaudeEffort.Names"/>: the <c>--effort</c> of a <c>/claude</c> run (<see cref="Settings.AppSettingsData.ClaudeEffort"/>). The Claude tab's last row (2026-09-27).</summary>
     ClaudeEffort,
 
-    /// <summary>A toggle: whether the model is offered <c>claude_advisor</c> (<see cref="Settings.AppSettingsData.ClaudeAdvisor"/>). The <c>/tools</c> Claude (CLI) tab, under the four Claude command rows (2026-09-27); the group's switch, no reconnect (read at each turn).</summary>
+    /// <summary>A toggle: whether the model is offered <c>claude_advisor</c> (<see cref="Settings.AppSettingsData.ClaudeAdvisor"/>). The <c>/tools</c> Claude tab, under the four Claude command rows (2026-09-27); the group's switch, no reconnect (read at each turn).</summary>
     ClaudeAdvisor,
 
     /// <summary>A picker over <see cref="Claude.ClaudeAdvisorContext.Names"/>: what an advisor call sends besides the question (<see cref="Settings.AppSettingsData.ClaudeAdvisorContext"/>). Under the switch (2026-09-27).</summary>
@@ -457,10 +457,10 @@ public enum SettingsField
     /// <summary>A picker over <see cref="Claude.ClaudeEffort.Names"/>: the <c>--effort</c> of an advisor call (<see cref="Settings.AppSettingsData.ClaudeAdvisorEffort"/>); empty = the Claude slash command effort. Under the model (2026-09-27).</summary>
     ClaudeAdvisorEffort,
 
-    /// <summary>A toggle: whether each advisor call waits for the user's yes (<see cref="Settings.AppSettingsData.ClaudeAdvisorConfirm"/>). The Claude (CLI) tab's last row (2026-09-27).</summary>
+    /// <summary>A toggle: whether each advisor call waits for the user's yes (<see cref="Settings.AppSettingsData.ClaudeAdvisorConfirm"/>). The Claude tab's last row (2026-09-27).</summary>
     ClaudeAdvisorConfirm,
 
-    /// <summary>A toggle: whether the Claude API is offered as a server (<see cref="Settings.AppSettingsData.ClaudeApi"/>). The <c>/settings</c> Claude (API) tab's first row (2026-09-27); a reconnect.</summary>
+    /// <summary>A toggle: whether the Claude API is offered as a server (<see cref="Settings.AppSettingsData.ClaudeApi"/>). The <c>/tools</c> Claude tab, first of the four API rows under the advisor's (2026-09-29; the first row of <c>/settings</c>' Claude (API) tab from 2026-09-27); a reconnect.</summary>
     ClaudeApi,
 
     /// <summary>Typed: the Claude API key, saved DPAPI-encrypted and shown masked (<see cref="Settings.AppSettingsData.ClaudeApiKey"/>); empty clears it. Under the switch (2026-09-27); a reconnect.</summary>
@@ -469,7 +469,7 @@ public enum SettingsField
     /// <summary>Typed: the <c>max_tokens</c> of every Claude API request (<see cref="Settings.AppSettingsData.ClaudeApiMaxTokens"/>). Under the key (2026-09-27); a reconnect.</summary>
     ClaudeApiMaxTokens,
 
-    /// <summary>A toggle: whether Claude API requests carry prompt-cache breakpoints (<see cref="Settings.AppSettingsData.ClaudeApiPromptCaching"/>). The Claude (API) tab's last row (2026-09-27); a reconnect. Last in the enum, as every newcomer.</summary>
+    /// <summary>A toggle: whether Claude API requests carry prompt-cache breakpoints (<see cref="Settings.AppSettingsData.ClaudeApiPromptCaching"/>). The <c>/tools</c> Claude tab's last row (2026-09-29; the Claude (API) tab's from 2026-09-27); a reconnect. Last in the enum, as every newcomer.</summary>
     ClaudeApiPromptCaching,
 
     /// <summary>A toggle: whether the <c>/botchat</c> bots get the main chat's skills and <c>load_skill</c> (<see cref="Settings.AppSettingsData.BotChatSkills"/>). The Botchat tab's last row (2026-09-27, the user's ask); no reconnect (read per reply). Last in the enum, as every newcomer.</summary>
@@ -563,9 +563,21 @@ public enum SettingsField
     /// <summary>
     /// A picker: how a reasoning count the server did not report is estimated — <c>off</c>, <c>chars</c>, <c>tokenize</c>
     /// (<see cref="Settings.AppSettingsData.LlmReasoningEstimate"/>, 2026-09-29). The LLM tab, under <c>LLM preserve
-    /// thinking</c>; no reconnect (read at each request). Last in the enum, as every newcomer.
+    /// thinking</c>; no reconnect (read at each request).
     /// </summary>
     LlmReasoningEstimate,
+
+    /// <summary>
+    /// A toggle: whether the embedded model is offered at all (<see cref="Settings.AppSettingsData.EmbeddedLlmEnabled"/>,
+    /// 2026-09-29, the user's ask); a reconnect, which stops a running embedded server when it goes off. The Embedded tab's first row.
+    /// </summary>
+    EmbeddedLlmEnabled,
+
+    /// <summary>
+    /// A toggle: whether the embedded server drafts with MTP (<see cref="Settings.AppSettingsData.EmbeddedMtp"/>, 2026-09-29); a
+    /// reconnect. The Embedded tab's last row. Last in the enum, as every newcomer.
+    /// </summary>
+    EmbeddedMtp,
 }
 
 /// <summary>The tabs of <c>/settings</c> on the pane, in strip order (Sessions right after General — the user's order, 2026-09-18; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
@@ -583,10 +595,11 @@ public enum SettingsTab
     /// <summary>The voice rows, last since 2026-09-19 (Ask, Files and Web after it until then) until the Botchat tab came after them.</summary>
     Stt,
 
-    /// <summary>The Claude API's four rows (2026-09-27, the user's ask and place: after STT, before Botchat) — the switch that offers it on <c>/server</c>, its key, its output cap and its prompt caching.</summary>
-    ClaudeApi,
-
-    /// <summary>The embedded model's five rows (2026-09-29): the catalog door, the backend, the context size, the GPU layers and the vision switch — beside the Claude API's, the other server of the app's own.</summary>
+    /// <summary>
+    /// The embedded model's rows (2026-09-29): the <c>Embedded LLM enabled</c> switch, the catalog door, the backend, the
+    /// context size, the GPU layers, the vision switch and the MTP switch — after STT, where the Claude API's tab stood until
+    /// later that day, when its four rows went to <c>/tools</c>' Claude tab (the user's call).
+    /// </summary>
     Embedded,
 
     /// <summary>The <c>/botchat</c> picture rows (2026-09-25, the user's ask: a Botchat tab on <c>/settings</c>), last (a Claude tab followed it on 2026-09-27 until later that day, when its rows moved to <c>/tools</c>' Claude tab, the user's call).</summary>
@@ -836,13 +849,10 @@ internal sealed partial class SettingsMenu
     private static readonly SettingsField[] Fields = Enum.GetValues<SettingsField>();
 
     /// <summary>The strip titles, one per <see cref="SettingsTab"/> (five since 2026-09-19: Ask, Files and Web are <c>/tools</c>' tabs, <see cref="ToolsText.TabTitles"/>, and Skills is <c>/skills</c>' Options tab, <see cref="SkillsText.OptionsTabTitle"/>). Pinned.</summary>
-    public static readonly IReadOnlyList<string> TabTitles = ["General", "Sessions", "LLM", "TTS", "STT", ClaudeApiTabTitle, EmbeddedTabTitle, "Botchat"];
+    public static readonly IReadOnlyList<string> TabTitles = ["General", "Sessions", "LLM", "TTS", "STT", EmbeddedTabTitle, "Botchat"];
 
     /// <summary>The embedded model tab's strip title (2026-09-29). Pinned.</summary>
     public const string EmbeddedTabTitle = "Embedded";
-
-    /// <summary>The Claude API tab's strip title (2026-09-27, the user's name for it). Pinned.</summary>
-    public const string ClaudeApiTabTitle = "Claude (API)";
 
     /// <summary>
     /// The rows of each tab on the pane, indexed by <see cref="SettingsTab"/>, in the order shown
@@ -866,8 +876,7 @@ internal sealed partial class SettingsMenu
         [SettingsField.LlmScanMode, SettingsField.LlmUrl, SettingsField.LlmModel, SettingsField.LlmApiKey, SettingsField.LlmReasoning, SettingsField.LlmRequestTimeoutSeconds, SettingsField.LlmTurnTimeoutSeconds, SettingsField.LlmContextLength, SettingsField.LlmMidTurnUsage, SettingsField.LlmCompactType, SettingsField.LlmCompactKeepRecent, SettingsField.LlmCompactShowSummary, SettingsField.LlmAutoCompactPercent, SettingsField.LlmMaxTurns, SettingsField.LlmOfferTools, SettingsField.LlmToolCompactType, SettingsField.LlmMaxToolIterations, SettingsField.LlmUseFunVerbs, SettingsField.LlmShowThinking, SettingsField.LlmPreserveThinking, SettingsField.LlmReasoningEstimate, SettingsField.LlmSampling, SettingsField.LlmSamplingFromHuggingFace],
         [SettingsField.TtsOutput, SettingsField.TtsSource, SettingsField.TtsHttpUrl, SettingsField.TtsVoicePreview, SettingsField.TtsVoicePreset, SettingsField.TtsVoice, SettingsField.TtsVoice2, SettingsField.TtsVoiceMix, SettingsField.TtsSpeed],
         Fields.Where(IsVoiceField).ToArray(),
-        [SettingsField.ClaudeApi, SettingsField.ClaudeApiKey, SettingsField.ClaudeApiMaxTokens, SettingsField.ClaudeApiPromptCaching],
-        [SettingsField.EmbeddedModels, SettingsField.EmbeddedBackend, SettingsField.EmbeddedContextSize, SettingsField.EmbeddedGpuLayers, SettingsField.EmbeddedVision],
+        [SettingsField.EmbeddedLlmEnabled, SettingsField.EmbeddedModels, SettingsField.EmbeddedBackend, SettingsField.EmbeddedContextSize, SettingsField.EmbeddedGpuLayers, SettingsField.EmbeddedVision, SettingsField.EmbeddedMtp],
         [SettingsField.BotChatLlmMode, SettingsField.BotChatImages, SettingsField.BotChatImageMode, SettingsField.BotChatTxt2ImgWorkflow, SettingsField.BotChatImg2ImgWorkflow, SettingsField.BotChatImg2ImgMode, SettingsField.BotChatImageAsync, SettingsField.BotChatNonTtsDelaySeconds, SettingsField.BotChatSkills, SettingsField.BotChatPreloadedSkills, SettingsField.BotChatSkillMode, SettingsField.BotChatVision],
     ];
 
@@ -902,7 +911,9 @@ internal sealed partial class SettingsMenu
     /// Shell (2026-09-21) is the policy (its switch), the allowed list, the outside-paths police (2026-09-22), the default shell, the two timeouts and the output cap,
     /// then the script rows: the languages, their timeout, the tool bridge switch (later that day) and the tool-call cap it governs.
     /// Claude (2026-09-27, the user's call: <c>/claude</c>'s four rows off <c>/settings</c>, named <c>Claude command …</c>) is those four, then
-    /// the advisor's six (<c>claude_advisor</c>): its switch, the context, the per-turn cap, the model, the effort and the confirm switch.
+    /// the advisor's six (<c>claude_advisor</c>): its switch, the context, the per-turn cap, the model, the effort and the confirm switch;
+    /// since 2026-09-29 (the user's call: one tab named <c>Claude</c>, <c>Claude (CLI)</c> until then) the Claude API's four rows follow,
+    /// off <c>/settings</c>' <c>Claude (API)</c> tab — the switch, the key, the output cap and the prompt caching, each a reconnect.
     /// With <see cref="TabFields"/> and <see cref="SkillsTabFields"/> they are every <see cref="SettingsField"/> once (pinned); the flat no-pane list keeps them all.
     /// </summary>
     public static readonly IReadOnlyList<IReadOnlyList<SettingsField>> ToolsTabFields =
@@ -911,7 +922,7 @@ internal sealed partial class SettingsMenu
         [SettingsField.FileTools, SettingsField.FileSafeEdits, SettingsField.FileTreeMaxLength, SettingsField.FileTreeShowSizes, SettingsField.FileMentionFolderMode, SettingsField.FileBrowserMode, SettingsField.FileViewImageMaxPerCall],
         [SettingsField.ShellCommandPolicy, SettingsField.ShellCommandAllowed, SettingsField.ShellPoliceOutsidePaths, SettingsField.ShellPreferNative, SettingsField.ShellDefault, SettingsField.ShellTimeoutSeconds, SettingsField.ShellForegroundCapSeconds, SettingsField.ShellOutputMaxChars, SettingsField.ShellCodeLanguages, SettingsField.ShellCodeTimeoutSeconds, SettingsField.ShellToolBridge, SettingsField.ShellCodeMaxToolCalls],
         [SettingsField.AskUser, SettingsField.AskMaxQuestions, SettingsField.AskMaxChoices],
-        [SettingsField.ClaudeExecutable, SettingsField.ClaudePermissions, SettingsField.ClaudeModel, SettingsField.ClaudeEffort, SettingsField.ClaudeAdvisor, SettingsField.ClaudeAdvisorContext, SettingsField.ClaudeAdvisorCallsPerTurn, SettingsField.ClaudeAdvisorModel, SettingsField.ClaudeAdvisorEffort, SettingsField.ClaudeAdvisorConfirm],
+        [SettingsField.ClaudeExecutable, SettingsField.ClaudePermissions, SettingsField.ClaudeModel, SettingsField.ClaudeEffort, SettingsField.ClaudeAdvisor, SettingsField.ClaudeAdvisorContext, SettingsField.ClaudeAdvisorCallsPerTurn, SettingsField.ClaudeAdvisorModel, SettingsField.ClaudeAdvisorEffort, SettingsField.ClaudeAdvisorConfirm, SettingsField.ClaudeApi, SettingsField.ClaudeApiKey, SettingsField.ClaudeApiMaxTokens, SettingsField.ClaudeApiPromptCaching],
         [SettingsField.HomeAssistantTools, SettingsField.HomeAssistantUrl, SettingsField.HomeAssistantToken, SettingsField.HomeAssistantTest, SettingsField.HomeAssistantActionPolicy, SettingsField.HomeAssistantAssistAgent, SettingsField.HomeAssistantTimeoutSeconds],
         [SettingsField.PrintTools, SettingsField.PrintActionPolicy, SettingsField.PrintDefaultPrinter, SettingsField.PrintFontSize],
         [SettingsField.ObsidianTools, SettingsField.ObsidianVault, SettingsField.ObsidianAllowDelete],
@@ -1069,7 +1080,8 @@ internal sealed partial class SettingsMenu
         field is SettingsField.LlmUrl or SettingsField.LlmModel or SettingsField.LlmApiKey
             or SettingsField.LlmRequestTimeoutSeconds or SettingsField.LlmTurnTimeoutSeconds or SettingsField.LlmContextLength or SettingsField.LlmReasoning
             or SettingsField.ClaudeApi or SettingsField.ClaudeApiKey or SettingsField.ClaudeApiMaxTokens or SettingsField.ClaudeApiPromptCaching
-            or SettingsField.EmbeddedModels or SettingsField.EmbeddedBackend or SettingsField.EmbeddedContextSize or SettingsField.EmbeddedGpuLayers or SettingsField.EmbeddedVision;
+            or SettingsField.EmbeddedLlmEnabled or SettingsField.EmbeddedModels or SettingsField.EmbeddedBackend or SettingsField.EmbeddedContextSize or SettingsField.EmbeddedGpuLayers or SettingsField.EmbeddedVision
+            or SettingsField.EmbeddedMtp;
 
     /// <summary>Whether a change to <paramref name="field"/> needs the speech session re-probed.</summary>
     public static bool IsTtsField(SettingsField field) =>
@@ -1256,7 +1268,7 @@ internal sealed partial class SettingsMenu
             or SettingsField.LlmCompactShowSummary or SettingsField.ShellToolBridge or SettingsField.ShellPoliceOutsidePaths or SettingsField.ShellPreferNative
             or SettingsField.ObsidianTools or SettingsField.ObsidianAllowDelete or SettingsField.SqlTools or SettingsField.SqlPercentMention or SettingsField.ComfyTools or SettingsField.ComfyReinforceNegatives or SettingsField.ComfyShowPrompts or SettingsField.ComfyCaretMention or SettingsField.ComfyPictureStrip
             or SettingsField.BotChatImages or SettingsField.BotChatImageAsync or SettingsField.BotChatSkills or SettingsField.BotChatVision or SettingsField.ClaudeAdvisor or SettingsField.ClaudeAdvisorConfirm
-            or SettingsField.ClaudeApi or SettingsField.ClaudeApiPromptCaching or SettingsField.EmbeddedVision
+            or SettingsField.ClaudeApi or SettingsField.ClaudeApiPromptCaching or SettingsField.EmbeddedVision or SettingsField.EmbeddedLlmEnabled or SettingsField.EmbeddedMtp
             or SettingsField.HomeAssistantTools or SettingsField.PrintTools;
 
     public static string FieldName(SettingsField field) => field switch
@@ -1408,6 +1420,8 @@ internal sealed partial class SettingsMenu
         SettingsField.EmbeddedContextSize => "Embedded context size",
         SettingsField.EmbeddedGpuLayers => "Embedded GPU layers",
         SettingsField.EmbeddedVision => "Embedded vision",
+        SettingsField.EmbeddedLlmEnabled => "Embedded LLM enabled",
+        SettingsField.EmbeddedMtp => "Embedded MTP",
         SettingsField.AskUser => "Ask user",
         SettingsField.AskMaxQuestions => "Ask max questions",
         SettingsField.AskMaxChoices => "Ask max choices per question",
@@ -1542,6 +1556,8 @@ internal sealed partial class SettingsMenu
             SettingsField.EmbeddedContextSize => data.EmbeddedContextSize == 0 ? EmbeddedContextOwnLabel : Tokens(data.EmbeddedContextSize),
             SettingsField.EmbeddedGpuLayers => data.EmbeddedGpuLayers,
             SettingsField.EmbeddedVision => OnOff(data.EmbeddedVision),
+            SettingsField.EmbeddedLlmEnabled => OnOff(data.EmbeddedLlmEnabled),
+            SettingsField.EmbeddedMtp => OnOff(data.EmbeddedMtp),
             SettingsField.LlmScanMode => data.LlmScanMode,
             SettingsField.TtsSource => data.TtsSource,
             SettingsField.WebTools => OnOff(data.WebTools),
@@ -4382,6 +4398,8 @@ internal sealed partial class SettingsMenu
             SettingsField.ClaudeApi => data.ClaudeApi,
             SettingsField.ClaudeApiPromptCaching => data.ClaudeApiPromptCaching,
             SettingsField.EmbeddedVision => data.EmbeddedVision,
+            SettingsField.EmbeddedLlmEnabled => data.EmbeddedLlmEnabled,
+            SettingsField.EmbeddedMtp => data.EmbeddedMtp,
             SettingsField.BotChatImages => data.BotChatImages,
             SettingsField.BotChatImageAsync => data.BotChatImageAsync,
             SettingsField.BotChatSkills => data.BotChatSkills,
@@ -4453,6 +4471,8 @@ internal sealed partial class SettingsMenu
             case SettingsField.ClaudeApi: data.ClaudeApi = on; break;
             case SettingsField.ClaudeApiPromptCaching: data.ClaudeApiPromptCaching = on; break;
             case SettingsField.EmbeddedVision: data.EmbeddedVision = on; break;
+            case SettingsField.EmbeddedLlmEnabled: data.EmbeddedLlmEnabled = on; break;
+            case SettingsField.EmbeddedMtp: data.EmbeddedMtp = on; break;
             case SettingsField.BotChatImages: data.BotChatImages = on; break;
             case SettingsField.BotChatImageAsync: data.BotChatImageAsync = on; break;
             case SettingsField.BotChatSkills: data.BotChatSkills = on; break;
@@ -4533,6 +4553,8 @@ internal sealed partial class SettingsMenu
         SettingsField.ClaudeApi => on ? "/server offers the Claude API while a key is set (billed per message)" : "the Claude API is not offered",
         SettingsField.ClaudeApiPromptCaching => on ? "the prompt and conversation are cached between requests (cheaper)" : "every request is billed in full",
         SettingsField.EmbeddedVision => on ? "the embedded model loads its vision projector and reads images" : "the embedded model reads text alone; about 1 GB less memory",
+        SettingsField.EmbeddedLlmEnabled => on ? "/server offers the embedded models" : "no embedded models in /server; a running one stops",
+        SettingsField.EmbeddedMtp => on ? "the embedded model drafts ahead with MTP (faster, same answers)" : "the embedded model decodes one token at a time",
         SettingsField.BotChatImages => on ? "/botchat draws pictures while the ComfyUI tools are offered" : "/botchat is talk alone",
         SettingsField.BotChatImageAsync => on ? "the next bot answers while the picture renders" : "the chat waits for each picture",
         SettingsField.BotChatSkills => on ? "the bots get load_skill over this profile's and the global skills" : "/botchat bots get no skills",
@@ -4672,8 +4694,8 @@ internal sealed partial class SettingsMenu
         Markup.Escape(model.Display.PadRight(EmbeddedModelNameWidth)) + Theme.DimMarkup(model.Quant.PadRight(12)
             + NeonSidekick.EmbeddedLlm.EmbeddedLlmText.ModelDetail(model, state));
 
-    /// <summary>The catalog picker's name column: "Gemma 4 12B QAT Uncensored" (26) plus two (2026-09-29; 24 while the longest was 22).</summary>
-    public const int EmbeddedModelNameWidth = 28;
+    /// <summary>The catalog picker's name column: "Gemma 4 26B A4B QAT Uncensored" (30) plus two (later on 2026-09-29, when the 26B A4B builds joined; 28 for "Gemma 4 12B QAT Uncensored" before, 24 while the longest was 22).</summary>
+    public const int EmbeddedModelNameWidth = 32;
 
     /// <summary>The installed model's removal row: <c>Remove (5.2 GB)</c>. Pinned.</summary>
     public static string RemoveRow(NeonSidekick.EmbeddedLlm.EmbeddedModel model) => $"Remove ({Speech.ModelStore.SizeLabel(NeonSidekick.EmbeddedLlm.EmbeddedModelCatalog.TotalBytes(model))})";

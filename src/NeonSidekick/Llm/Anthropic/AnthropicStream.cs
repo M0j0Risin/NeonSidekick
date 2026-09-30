@@ -68,7 +68,7 @@ public sealed class AnthropicStream
 
     /// <summary>The log line for a reply cut at the output cap. Pinned.</summary>
     public static string MaxTokensWarning(string model) =>
-        $"The Claude API reply ({model}) stopped at its output cap; raise Claude API max tokens in /settings › Claude (API) if replies are cut short.";
+        $"The Claude API reply ({model}) stopped at its output cap; raise Claude API max tokens in /tools › Claude if replies are cut short.";
 
     /// <summary>The updates for one event; <paramref name="data"/> is its JSON. An <c>error</c> event throws <see cref="AnthropicApiException"/>.</summary>
     public IEnumerable<ChatResponseUpdate> Handle(string? eventName, string data)
@@ -365,7 +365,7 @@ public sealed class AnthropicApiException : Exception
     public string ErrorType { get; }
 
     /// <summary>What a key problem adds. Pinned.</summary>
-    public const string KeyHint = " — check Claude API key in /settings › Claude (API)";
+    public const string KeyHint = " — check Claude API key in /tools › Claude";
 
     /// <summary><c>HTTP 401: invalid x-api-key — check …</c>; <c>overloaded_error: Overloaded</c> for a stream's error. Pinned.</summary>
     public static string Compose(int status, string errorType, string message)

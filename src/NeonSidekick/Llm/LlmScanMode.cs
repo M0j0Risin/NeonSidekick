@@ -28,15 +28,18 @@ public enum ScanScope
 /// </summary>
 public static class LlmScanMode
 {
-    /// <summary>This machine alone. The compiled default, pinned by <c>AppSettingsTests</c>.</summary>
-    public const string Default = "local";
+    /// <summary>
+    /// No scan. The compiled default, pinned by <c>AppSettingsTests</c>: since 2026-09-29 (the user's call; <c>local</c>, this
+    /// machine alone, until then) a fresh profile asks no port until a server is picked or a mode is.
+    /// </summary>
+    public const string Default = "disabled";
 
     /// <summary>The modes in menu order; <c>disabled</c> last (2026-09-15).</summary>
     public static readonly string[] Names = { "local", "remote", "both", "disabled" };
 
     private const string Category = "Llm";
 
-    /// <summary>Trims and ignores case; false (and <see cref="ScanScope.Local"/>) for anything that is not one of <see cref="Names"/>.</summary>
+    /// <summary>Trims and ignores case; false (and <see cref="Default"/>'s <see cref="ScanScope.Disabled"/>, so a display of a bad value agrees with <see cref="Resolve"/>) for anything that is not one of <see cref="Names"/>.</summary>
     public static bool TryParse(string? text, out ScanScope scope)
     {
         switch (text?.Trim().ToLowerInvariant())
@@ -45,7 +48,7 @@ public static class LlmScanMode
             case "remote": scope = ScanScope.Remote; return true;
             case "both": scope = ScanScope.Both; return true;
             case "disabled": scope = ScanScope.Disabled; return true;
-            default: scope = ScanScope.Local; return false;
+            default: scope = ScanScope.Disabled; return false;
         }
     }
 
