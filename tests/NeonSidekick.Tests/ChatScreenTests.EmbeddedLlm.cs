@@ -210,6 +210,78 @@ public partial class ChatScreenTests
         Assert.DoesNotContain(SettingsMenu.Title + "   General", output);   // the click was the job's, never the row's /settings
     }
 
+    /// <summary>
+    /// The catalog's Remove on the model downloading behind the line (2026-09-29, the user's ask): the download is stopped
+    /// and awaited before the folder goes — no paused notice, nothing saved, nothing started — and the 📥 slot is free.
+    /// </summary>
+    [Fact]
+    public async Task Settings_RemovingTheModelThatDownloads_StopsTheDownloadFirst()
+    {
+        _settings.Update(d => d.TtsOutput = false);
+        _console.Profile.Height = 40;
+        _console.Profile.Width = 240;
+        _geometry = new ScreenGeometry(() => null, () => 100);   // the pane: /settings with its tabs
+        var input = Scripted();
+        var embedded = UseEmbedded(new FakeEmbeddedLlm());
+        var model = EmbeddedModelCatalog.Models[0];
+        bool idle = false;
+        bool cancelled = false;
+        embedded.InstallGate = async ct =>
+        {
+            embedded.Partial(model.Id, 10);                   // bytes on disk: the catalog offers Remove
+            StepPastTheGrace(() => Volatile.Read(ref idle));
+            try
+            {
+                await Task.Delay(Timeout.Infinite, ct);
+            }
+            finally
+            {
+                Volatile.Write(ref cancelled, true);
+                Assert.Empty(embedded.Removes);               // stopped before the folder went
+            }
+        };
+        int step = 0;
+        input.OnWait = () =>
+        {
+            switch (step)
+            {
+                case 0:
+                    step++;
+                    PushLine(input, "/server");
+                    input.Push(Keys.Down, Keys.Enter, Keys.Escape);   // the first embedded row, not installed; keep the reasoning
+                    break;
+                case 1:
+                    step++;
+                    Volatile.Write(ref idle, true);
+                    PushLine(input, "/settings");
+                    input.Push(Enumerable.Repeat(Keys.Right, (int)SettingsTab.Embedded).ToArray());
+                    input.Push(Keys.Down, Keys.Enter);                // the catalog, on the first model
+                    input.Push(Keys.Enter);                           // its page: Install, Remove, Back
+                    input.Push(Keys.Down, Keys.Enter);                // Remove (the partial download)
+                    input.Push(Keys.Down, Keys.Enter);                // Yes
+                    input.Push(Keys.Escape, Keys.Escape);
+                    break;
+                case 2:
+                    if (embedded.Removes.Count > 0)
+                    {
+                        step++;
+                        PushLine(input, "/exit");
+                    }
+
+                    break;
+            }
+        };
+
+        string output = await RunAsync();
+
+        Assert.True(Volatile.Read(ref cancelled));
+        Assert.Equal([model.Id], embedded.Removes);
+        Assert.Contains(EmbeddedLlmText.Removed(model), output);
+        Assert.DoesNotContain(EmbeddedLlmText.PausedNotice, output);   // its end dropped: the files are gone, not paused
+        Assert.Empty(embedded.Starts);
+        Assert.Equal("http://127.0.0.1:1234/v1", _settings.Current.LlmUrl);
+    }
+
     [Fact]
     public async Task Server_Embedded_ListsTheEmbeddedModelsAlone()
     {

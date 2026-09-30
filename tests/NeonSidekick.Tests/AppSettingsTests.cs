@@ -32,7 +32,7 @@ public class AppSettingsTests : IDisposable
         EmbeddedGpuLayers = "20",
         EmbeddedVision = false,
         EmbeddedLlmEnabled = false,
-        EmbeddedMtp = false,
+        EmbeddedDrafter = false,
         CommandTypoIntercept = false,
         KeepCommandHistory = false,
         CopyUserPrompt = false,
@@ -274,7 +274,7 @@ public class AppSettingsTests : IDisposable
         Assert.Equal(expected.EmbeddedGpuLayers, actual.EmbeddedGpuLayers);
         Assert.Equal(expected.EmbeddedVision, actual.EmbeddedVision);
         Assert.Equal(expected.EmbeddedLlmEnabled, actual.EmbeddedLlmEnabled);
-        Assert.Equal(expected.EmbeddedMtp, actual.EmbeddedMtp);
+        Assert.Equal(expected.EmbeddedDrafter, actual.EmbeddedDrafter);
     }
 
     [Fact]
@@ -297,7 +297,7 @@ public class AppSettingsTests : IDisposable
             d.EmbeddedGpuLayers = full.EmbeddedGpuLayers;
             d.EmbeddedVision = full.EmbeddedVision;
             d.EmbeddedLlmEnabled = full.EmbeddedLlmEnabled;
-            d.EmbeddedMtp = full.EmbeddedMtp;
+            d.EmbeddedDrafter = full.EmbeddedDrafter;
             d.CommandTypoIntercept = full.CommandTypoIntercept;
             d.KeepCommandHistory = full.KeepCommandHistory;
             d.CopyUserPrompt = full.CopyUserPrompt;
@@ -420,7 +420,7 @@ public class AppSettingsTests : IDisposable
                 d.EmbeddedGpuLayers = full.EmbeddedGpuLayers;
                 d.EmbeddedVision = full.EmbeddedVision;
                 d.EmbeddedLlmEnabled = full.EmbeddedLlmEnabled;
-                d.EmbeddedMtp = full.EmbeddedMtp;
+                d.EmbeddedDrafter = full.EmbeddedDrafter;
                 d.CommandTypoIntercept = full.CommandTypoIntercept;
                 d.KeepCommandHistory = full.KeepCommandHistory;
                 d.CopyUserPrompt = full.CopyUserPrompt;
@@ -1304,7 +1304,7 @@ public class AppSettingsTests : IDisposable
         Assert.Equal("compact", s.LlmToolCompactType);
         Assert.False(s.FileTools);   // on until 2026-09-29, with the web tools
         Assert.False(s.ObsidianTools || s.SqlTools || s.ComfyTools || s.HomeAssistantTools);   // the four integrations too, the same day
-        Assert.True(s.EmbeddedLlmEnabled && s.EmbeddedMtp);   // the embedded model's switch and MTP (2026-09-29): on
+        Assert.True(s.EmbeddedLlmEnabled && s.EmbeddedDrafter);   // the embedded model's switch and MTP (2026-09-29): on
         Assert.Equal("duckduckgo", s.WebSearchMethod);
         // The Ask tab (2026-09-15): the tool on, ten questions of ten choices; a choice needs two, so the choices floor is 2.
         Assert.True(s.AskUser);

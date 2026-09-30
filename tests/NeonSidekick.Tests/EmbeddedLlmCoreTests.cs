@@ -297,7 +297,7 @@ public class EmbeddedLlmCoreTests
         Assert.DoesNotContain("--spec-type", LlamaArguments.Build(Launch(), 1, "k"));
         Assert.DoesNotContain("-md", LlamaArguments.Build(Launch() with { DrafterPath = @"C:\m\d.gguf" }, 1, "k"));
 
-        // Toggling Embedded MTP changes the launch, so the server restarts.
+        // Toggling Embedded drafter changes the launch, so the server restarts.
         Assert.NotEqual(Launch(), Launch() with { Mtp = true });
     }
 

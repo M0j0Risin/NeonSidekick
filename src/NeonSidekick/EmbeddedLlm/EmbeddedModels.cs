@@ -131,16 +131,17 @@ public sealed class EmbeddedModels
     }
 
     /// <summary>
-    /// Installs <paramref name="model"/>: the weights, then the vision projector, then the MTP drafter when it has one,
-    /// each resumable and checked. A cancel keeps what arrived; the next install resumes it.
+    /// Installs <paramref name="model"/>: the weights, then the vision projector, then the MTP drafter when it has one and
+    /// <paramref name="drafter"/> is on (Embedded drafter; off, a later start with it on fetches it), each resumable and
+    /// checked. A cancel keeps what arrived; the next install resumes it.
     /// </summary>
-    public async Task<ModelResult> InstallAsync(EmbeddedModel model, Action<string>? phase, CancellationToken cancellationToken)
+    public async Task<ModelResult> InstallAsync(EmbeddedModel model, Action<string>? phase, CancellationToken cancellationToken, bool drafter = true)
     {
         ArgumentNullException.ThrowIfNull(model);
         var specs = new List<ModelSpec> { EmbeddedModelCatalog.WeightsSpec(ModelsDirectory, model), EmbeddedModelCatalog.MmprojSpec(ModelsDirectory, model) };
-        if (EmbeddedModelCatalog.DrafterSpec(ModelsDirectory, model) is { } drafter)
+        if (drafter && EmbeddedModelCatalog.DrafterSpec(ModelsDirectory, model) is { } drafterSpec)
         {
-            specs.Add(drafter);
+            specs.Add(drafterSpec);
         }
 
         foreach (var spec in specs)
@@ -157,7 +158,7 @@ public sealed class EmbeddedModels
 
     /// <summary>
     /// Makes sure <paramref name="model"/>'s MTP drafter is on disk (2026-09-29): a model installed before its drafter
-    /// joined the catalog fetches it here, at its next start with Embedded MTP on. Null for a model without a drafter.
+    /// joined the catalog fetches it here, at its next start with Embedded drafter on. Null for a model without a drafter.
     /// </summary>
     public async Task<ModelResult?> EnsureDrafterAsync(EmbeddedModel model, Action<string>? phase, CancellationToken cancellationToken)
     {

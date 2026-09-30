@@ -256,13 +256,13 @@ public enum SettingsField
     /// <summary>Typed: the seconds one MCP server gets to connect and list its tools, 5 to 300 (<see cref="Settings.AppSettingsData.McpConnectTimeoutSeconds"/>). The Options tab of <c>/mcp</c>' second row (2026-09-20); no reconnect (read at the next connect).</summary>
     McpConnectTimeoutSeconds,
 
-    /// <summary>Whether a turn offers the eleven git tools (<see cref="Settings.AppSettingsData.GitNativeTools"/>). The Git (native) tab of <c>/tools</c>' first row (2026-09-20; <c>Git native tools</c>, off by default, since 2026-09-21); a toggle, no reconnect (read at each turn).</summary>
+    /// <summary>Whether a turn offers the eleven git tools (<see cref="Settings.AppSettingsData.GitNativeTools"/>). The Git tab of <c>/tools</c>' first row (2026-09-20; <c>Git native tools</c>, off by default, since 2026-09-21); a toggle, no reconnect (read at each turn).</summary>
     GitNativeTools,
 
-    /// <summary>Typed: the most patch lines one <c>git_diff</c> shows, 20 to 5000 (<see cref="Settings.AppSettingsData.GitNativeDiffMaxLines"/>). The Git (native) tab's second row; no reconnect (read at each call).</summary>
+    /// <summary>Typed: the most patch lines one <c>git_diff</c> shows, 20 to 5000 (<see cref="Settings.AppSettingsData.GitNativeDiffMaxLines"/>). The Git tab's second row; no reconnect (read at each call).</summary>
     GitNativeDiffMaxLines,
 
-    /// <summary>Typed: how many commits a <c>git_log</c> without <c>max_commits</c> lists, 1 to 200 (<see cref="Settings.AppSettingsData.GitNativeLogMaxCommits"/>). The Git (native) tab's third row; no reconnect (read at each call).</summary>
+    /// <summary>Typed: how many commits a <c>git_log</c> without <c>max_commits</c> lists, 1 to 200 (<see cref="Settings.AppSettingsData.GitNativeLogMaxCommits"/>). The Git tab's third row; no reconnect (read at each call).</summary>
     GitNativeLogMaxCommits,
 
     /// <summary>A picker over <see cref="Shell.CommandPolicy.Names"/>: what stands between <c>run_command</c> and the shell (<see cref="Settings.AppSettingsData.ShellCommandPolicy"/>) — <c>off</c> is the Shell group's switch. The Shell tab of <c>/tools</c>' first row (2026-09-21); no reconnect (read at each call).</summary>
@@ -295,10 +295,10 @@ public enum SettingsField
     /// <summary>A toggle: whether a compact's summary, or its pruned results, follow the compact notice in the transcript (<see cref="Settings.AppSettingsData.LlmCompactShowSummary"/>). The LLM tab, right under <see cref="LlmCompactKeepRecent"/> (2026-09-21); no reconnect (read at each compact).</summary>
     LlmCompactShowSummary,
 
-    /// <summary>Typed: the <c>user.email</c> <c>/gituser</c> writes into the working directory's repository (<see cref="Settings.AppSettingsData.GitNativeEmail"/>); empty = not set. The Git (native) tab's fourth row (2026-09-21); no reconnect (read at each <c>/gituser</c>).</summary>
+    /// <summary>Typed: the <c>user.email</c> <c>/gituser</c> writes into the working directory's repository (<see cref="Settings.AppSettingsData.GitNativeEmail"/>); empty = not set. The Git tab's fourth row (2026-09-21); no reconnect (read at each <c>/gituser</c>).</summary>
     GitNativeEmail,
 
-    /// <summary>Typed: the <c>user.name</c> <c>/gituser</c> writes beside the email (<see cref="Settings.AppSettingsData.GitNativeName"/>); empty = not set. The Git (native) tab's last row (2026-09-21); no reconnect.</summary>
+    /// <summary>Typed: the <c>user.name</c> <c>/gituser</c> writes beside the email (<see cref="Settings.AppSettingsData.GitNativeName"/>); empty = not set. The Git tab's last row (2026-09-21); no reconnect.</summary>
     GitNativeName,
 
     /// <summary>A toggle: whether an <c>execute_code</c> script may call the app's other tools through its <c>neon_tools</c> module (<see cref="Settings.AppSettingsData.ShellToolBridge"/>). The Shell tab, right above the tool-call cap it governs (later on 2026-09-21); no reconnect (read at each call and each turn).</summary>
@@ -574,10 +574,11 @@ public enum SettingsField
     EmbeddedLlmEnabled,
 
     /// <summary>
-    /// A toggle: whether the embedded server drafts with MTP (<see cref="Settings.AppSettingsData.EmbeddedMtp"/>, 2026-09-29); a
-    /// reconnect. The Embedded tab's last row. Last in the enum, as every newcomer.
+    /// A toggle: whether the embedded server drafts ahead with its drafter (<see cref="Settings.AppSettingsData.EmbeddedDrafter"/>,
+    /// 2026-09-29; <c>Embedded MTP</c> until later that day, the user's name); a reconnect. The Embedded tab's last row.
+    /// Last in the enum, as every newcomer.
     /// </summary>
-    EmbeddedMtp,
+    EmbeddedDrafter,
 }
 
 /// <summary>The tabs of <c>/settings</c> on the pane, in strip order (Sessions right after General — the user's order, 2026-09-18; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
@@ -876,7 +877,7 @@ internal sealed partial class SettingsMenu
         [SettingsField.LlmScanMode, SettingsField.LlmUrl, SettingsField.LlmModel, SettingsField.LlmApiKey, SettingsField.LlmReasoning, SettingsField.LlmRequestTimeoutSeconds, SettingsField.LlmTurnTimeoutSeconds, SettingsField.LlmContextLength, SettingsField.LlmMidTurnUsage, SettingsField.LlmCompactType, SettingsField.LlmCompactKeepRecent, SettingsField.LlmCompactShowSummary, SettingsField.LlmAutoCompactPercent, SettingsField.LlmMaxTurns, SettingsField.LlmOfferTools, SettingsField.LlmToolCompactType, SettingsField.LlmMaxToolIterations, SettingsField.LlmUseFunVerbs, SettingsField.LlmShowThinking, SettingsField.LlmPreserveThinking, SettingsField.LlmReasoningEstimate, SettingsField.LlmSampling, SettingsField.LlmSamplingFromHuggingFace],
         [SettingsField.TtsOutput, SettingsField.TtsSource, SettingsField.TtsHttpUrl, SettingsField.TtsVoicePreview, SettingsField.TtsVoicePreset, SettingsField.TtsVoice, SettingsField.TtsVoice2, SettingsField.TtsVoiceMix, SettingsField.TtsSpeed],
         Fields.Where(IsVoiceField).ToArray(),
-        [SettingsField.EmbeddedLlmEnabled, SettingsField.EmbeddedModels, SettingsField.EmbeddedBackend, SettingsField.EmbeddedContextSize, SettingsField.EmbeddedGpuLayers, SettingsField.EmbeddedVision, SettingsField.EmbeddedMtp],
+        [SettingsField.EmbeddedLlmEnabled, SettingsField.EmbeddedModels, SettingsField.EmbeddedBackend, SettingsField.EmbeddedContextSize, SettingsField.EmbeddedGpuLayers, SettingsField.EmbeddedVision, SettingsField.EmbeddedDrafter],
         [SettingsField.BotChatLlmMode, SettingsField.BotChatImages, SettingsField.BotChatImageMode, SettingsField.BotChatTxt2ImgWorkflow, SettingsField.BotChatImg2ImgWorkflow, SettingsField.BotChatImg2ImgMode, SettingsField.BotChatImageAsync, SettingsField.BotChatNonTtsDelaySeconds, SettingsField.BotChatSkills, SettingsField.BotChatPreloadedSkills, SettingsField.BotChatSkillMode, SettingsField.BotChatVision],
     ];
 
@@ -1050,6 +1051,15 @@ internal sealed partial class SettingsMenu
 
     private AppSettingsData EffectiveNow() => Effective?.Invoke() ?? _settings.Current;
 
+    /// <summary>
+    /// Run before the catalog removes a model (2026-09-29, the user's ask), set by the screen: a download of that model under
+    /// way is stopped and awaited, so no file is still open when its folder goes. Null does nothing (tests without one).
+    /// </summary>
+    public Func<NeonSidekick.EmbeddedLlm.EmbeddedModel, CancellationToken, Task>? BeforeEmbeddedRemove { get; set; }
+
+    /// <summary>Set when a removal cleared the saved LLM URL and model (the model in use went): <see cref="ShowAsync(CancellationToken, bool)"/> then reports an LLM change.</summary>
+    private bool _embeddedLlmCleared;
+
     /// <summary>The model a use or an install on the catalog picker chose, for the screen to download and connect once the pane is closed.</summary>
     private NeonSidekick.EmbeddedLlm.EmbeddedModel? _pendingEmbeddedModel;
 
@@ -1081,7 +1091,7 @@ internal sealed partial class SettingsMenu
             or SettingsField.LlmRequestTimeoutSeconds or SettingsField.LlmTurnTimeoutSeconds or SettingsField.LlmContextLength or SettingsField.LlmReasoning
             or SettingsField.ClaudeApi or SettingsField.ClaudeApiKey or SettingsField.ClaudeApiMaxTokens or SettingsField.ClaudeApiPromptCaching
             or SettingsField.EmbeddedLlmEnabled or SettingsField.EmbeddedModels or SettingsField.EmbeddedBackend or SettingsField.EmbeddedContextSize or SettingsField.EmbeddedGpuLayers or SettingsField.EmbeddedVision
-            or SettingsField.EmbeddedMtp;
+            or SettingsField.EmbeddedDrafter;
 
     /// <summary>Whether a change to <paramref name="field"/> needs the speech session re-probed.</summary>
     public static bool IsTtsField(SettingsField field) =>
@@ -1268,7 +1278,7 @@ internal sealed partial class SettingsMenu
             or SettingsField.LlmCompactShowSummary or SettingsField.ShellToolBridge or SettingsField.ShellPoliceOutsidePaths or SettingsField.ShellPreferNative
             or SettingsField.ObsidianTools or SettingsField.ObsidianAllowDelete or SettingsField.SqlTools or SettingsField.SqlPercentMention or SettingsField.ComfyTools or SettingsField.ComfyReinforceNegatives or SettingsField.ComfyShowPrompts or SettingsField.ComfyCaretMention or SettingsField.ComfyPictureStrip
             or SettingsField.BotChatImages or SettingsField.BotChatImageAsync or SettingsField.BotChatSkills or SettingsField.BotChatVision or SettingsField.ClaudeAdvisor or SettingsField.ClaudeAdvisorConfirm
-            or SettingsField.ClaudeApi or SettingsField.ClaudeApiPromptCaching or SettingsField.EmbeddedVision or SettingsField.EmbeddedLlmEnabled or SettingsField.EmbeddedMtp
+            or SettingsField.ClaudeApi or SettingsField.ClaudeApiPromptCaching or SettingsField.EmbeddedVision or SettingsField.EmbeddedLlmEnabled or SettingsField.EmbeddedDrafter
             or SettingsField.HomeAssistantTools or SettingsField.PrintTools;
 
     public static string FieldName(SettingsField field) => field switch
@@ -1421,7 +1431,7 @@ internal sealed partial class SettingsMenu
         SettingsField.EmbeddedGpuLayers => "Embedded GPU layers",
         SettingsField.EmbeddedVision => "Embedded vision",
         SettingsField.EmbeddedLlmEnabled => "Embedded LLM enabled",
-        SettingsField.EmbeddedMtp => "Embedded MTP",
+        SettingsField.EmbeddedDrafter => "Embedded drafter",
         SettingsField.AskUser => "Ask user",
         SettingsField.AskMaxQuestions => "Ask max questions",
         SettingsField.AskMaxChoices => "Ask max choices per question",
@@ -1557,7 +1567,7 @@ internal sealed partial class SettingsMenu
             SettingsField.EmbeddedGpuLayers => data.EmbeddedGpuLayers,
             SettingsField.EmbeddedVision => OnOff(data.EmbeddedVision),
             SettingsField.EmbeddedLlmEnabled => OnOff(data.EmbeddedLlmEnabled),
-            SettingsField.EmbeddedMtp => OnOff(data.EmbeddedMtp),
+            SettingsField.EmbeddedDrafter => OnOff(data.EmbeddedDrafter),
             SettingsField.LlmScanMode => data.LlmScanMode,
             SettingsField.TtsSource => data.TtsSource,
             SettingsField.WebTools => OnOff(data.WebTools),
@@ -1971,8 +1981,30 @@ internal sealed partial class SettingsMenu
     public static string CodeLanguageLabel(string name, bool enabled, bool installed) =>
         Markup.Escape((enabled ? "[x] " : "[ ] ") + name.PadRight(11)) + Theme.DimMarkup(Shell.CodeLanguages.Describe(name) + (installed ? "" : NotFoundSuffix));
 
-    /// <summary>The code-languages list's hint. Pinned.</summary>
-    public const string ToggleKeys = "Enter / Space = on or off · ESC = back";
+    /// <summary>The checklists' hint (the code-languages list's first; A and N since 2026-09-29, <see cref="ChecklistButtons"/>). Pinned.</summary>
+    public const string ToggleKeys = "Enter / Space = on or off · A = all · N = none · ESC = back";
+
+    /// <summary>
+    /// The checklists' first title-row button (2026-09-29, the user's ask, the Folders pane's <c>collapse all</c> its
+    /// model): every row ticked. On Show toolbar, Botchat preloaded skills, SQL connections offered, ComfyUI workflows
+    /// offered and Shell code languages. Pinned.
+    /// </summary>
+    public const string SelectAllButton = "⊞ select all";
+
+    /// <summary>The key that is <see cref="SelectAllButton"/>.</summary>
+    public const char SelectAllKey = 'a';
+
+    /// <summary>The checklists' second button (2026-09-29): every row unticked — refused on Shell code languages, where one stays. Pinned.</summary>
+    public const string SelectNoneButton = "⊠ select none";
+
+    /// <summary>The key that is <see cref="SelectNoneButton"/>.</summary>
+    public const char SelectNoneKey = 'n';
+
+    /// <summary>The checklists' buttons: select all (index 0), select none (index 1).</summary>
+    public static readonly IReadOnlyList<MenuButton> ChecklistButtons = [new(SelectAllButton, SelectAllKey), new(SelectNoneButton, SelectNoneKey)];
+
+    private const int SelectAllIndex = 0;
+    private const int SelectNoneIndex = 1;
 
     /// <summary>The status line when the last language would go: at least one stays (the user's rule, 2026-09-21). Pinned.</summary>
     public const string LastLanguageError = "At least one language stays on.";
@@ -2322,7 +2354,15 @@ internal sealed partial class SettingsMenu
                     continue;
                 }
 
-                if (await EditAsync(field, saved, page, row, cancellationToken).ConfigureAwait(false))
+                bool edited = await EditAsync(field, saved, page, row, cancellationToken).ConfigureAwait(false);
+                if (_embeddedLlmCleared)
+                {
+                    // The model in use removed from the catalog (2026-09-29): its URL and model cleared, so the LLM reconnects — to none.
+                    _embeddedLlmCleared = false;
+                    changes |= SettingsChanges.Llm;
+                }
+
+                if (edited)
                 {
                     if (field == SettingsField.EmbeddedModels)
                     {
@@ -2534,6 +2574,23 @@ internal sealed partial class SettingsMenu
 
         var picked = await ScreenPane.ModalAsync(_console, () => prompt.ShowAsync(_console, cancellationToken)).ConfigureAwait(false);
         return picked.IsCanceled ? null : picked.Value;
+    }
+
+    /// <summary>
+    /// <see cref="PickAsync"/> for the checklists (2026-09-29, the user's ask): the page with <see cref="ChecklistButtons"/> on
+    /// its title row; the row (the cursor's for a button) and the button pressed, −1 for Enter or Space on a row; null on ESC.
+    /// Without the pane (the Spectre prompt) there are no buttons.
+    /// </summary>
+    private async Task<(int Row, int Button)?> PickChecklistAsync(MenuPage page, int cursor, CancellationToken cancellationToken)
+    {
+        if (_pane.Enabled)
+        {
+            return await _pane.PickAsync(page with { Buttons = ChecklistButtons }, cursor, cancellationToken).ConfigureAwait(false) is { } picked
+                ? (picked.Row, picked.Button)
+                : null;
+        }
+
+        return await PickAsync(page, cursor, cancellationToken).ConfigureAwait(false) is { } row ? (row, -1) : null;
     }
 
     /// <summary>A single-level picker: the pane is closed as soon as the pick lands, so what follows goes to the transcript.</summary>
@@ -4399,7 +4456,7 @@ internal sealed partial class SettingsMenu
             SettingsField.ClaudeApiPromptCaching => data.ClaudeApiPromptCaching,
             SettingsField.EmbeddedVision => data.EmbeddedVision,
             SettingsField.EmbeddedLlmEnabled => data.EmbeddedLlmEnabled,
-            SettingsField.EmbeddedMtp => data.EmbeddedMtp,
+            SettingsField.EmbeddedDrafter => data.EmbeddedDrafter,
             SettingsField.BotChatImages => data.BotChatImages,
             SettingsField.BotChatImageAsync => data.BotChatImageAsync,
             SettingsField.BotChatSkills => data.BotChatSkills,
@@ -4472,7 +4529,7 @@ internal sealed partial class SettingsMenu
             case SettingsField.ClaudeApiPromptCaching: data.ClaudeApiPromptCaching = on; break;
             case SettingsField.EmbeddedVision: data.EmbeddedVision = on; break;
             case SettingsField.EmbeddedLlmEnabled: data.EmbeddedLlmEnabled = on; break;
-            case SettingsField.EmbeddedMtp: data.EmbeddedMtp = on; break;
+            case SettingsField.EmbeddedDrafter: data.EmbeddedDrafter = on; break;
             case SettingsField.BotChatImages: data.BotChatImages = on; break;
             case SettingsField.BotChatImageAsync: data.BotChatImageAsync = on; break;
             case SettingsField.BotChatSkills: data.BotChatSkills = on; break;
@@ -4537,7 +4594,7 @@ internal sealed partial class SettingsMenu
         SettingsField.FileSafeEdits => on ? "edit and delete operations move copies to .trash first" : "edit and delete operations function normally",
         SettingsField.FileTreeShowSizes => on ? "/tree carries each file's size" : "/tree names alone",
         SettingsField.WebTools => on ? "web tools enabled" : "web tools disabled",
-        SettingsField.GitNativeTools => on ? "git (native) tools enabled" : "git (native) tools disabled",
+        SettingsField.GitNativeTools => on ? "git native tools enabled" : "git native tools disabled",
         SettingsField.ObsidianTools => on ? "Obsidian tools enabled" : "Obsidian tools disabled",
         SettingsField.ObsidianAllowDelete => on ? "vault_delete may move a note or attachment to the vault's .trash" : "vault_delete is disabled",
         SettingsField.SqlTools => on ? "the model reads the SQL Server connections of sql.json" : "no SQL tools",
@@ -4554,7 +4611,7 @@ internal sealed partial class SettingsMenu
         SettingsField.ClaudeApiPromptCaching => on ? "the prompt and conversation are cached between requests (cheaper)" : "every request is billed in full",
         SettingsField.EmbeddedVision => on ? "the embedded model loads its vision projector and reads images" : "the embedded model reads text alone; about 1 GB less memory",
         SettingsField.EmbeddedLlmEnabled => on ? "/server offers the embedded models" : "no embedded models in /server; a running one stops",
-        SettingsField.EmbeddedMtp => on ? "the embedded model drafts ahead with MTP (faster, same answers)" : "the embedded model decodes one token at a time",
+        SettingsField.EmbeddedDrafter => on ? "the embedded model drafts ahead with its drafter (faster, same answers)" : "the embedded model decodes one token at a time, no drafter loaded",
         SettingsField.BotChatImages => on ? "/botchat draws pictures while the ComfyUI tools are offered" : "/botchat is talk alone",
         SettingsField.BotChatImageAsync => on ? "the next bot answers while the picture renders" : "the chat waits for each picture",
         SettingsField.BotChatSkills => on ? "the bots get load_skill over this profile's and the global skills" : "/botchat bots get no skills",
@@ -4626,8 +4683,9 @@ internal sealed partial class SettingsMenu
 
     /// <summary>
     /// The embedded model's catalog (2026-09-29): one row per model with its size and state. An installed one offers Use now,
-    /// Remove (after a yes) and Back; any other, Install with what it downloads, and Back. Use now and Install hand the
-    /// model to the screen (<see cref="TakePendingEmbeddedModel"/>) and return true, which closes the pane; a removal stays.
+    /// Remove (after a yes) and Back; any other, Install with what it downloads, and Back — and Remove too when part of it
+    /// is on disk (later that day, the user's ask: a paused download thrown away). Use now and Install hand the model to the
+    /// screen (<see cref="TakePendingEmbeddedModel"/>) and return true, which closes the pane; a removal stays.
     /// </summary>
     internal async Task<bool> PickEmbeddedModelAsync(CancellationToken cancellationToken)
     {
@@ -4661,30 +4719,82 @@ internal sealed partial class SettingsMenu
                     return true;
                 }
 
-                if (action == 1 && await ConfirmAsync(NeonSidekick.EmbeddedLlm.EmbeddedLlmText.RemoveQuestion(model), cancellationToken).ConfigureAwait(false))
+                if (action == 1)
                 {
-                    if (embedded.Remove(model) is { } error)
-                    {
-                        Sink.Error(NeonSidekick.EmbeddedLlm.EmbeddedLlmText.InstallFailed(model, error));
-                    }
-                    else
-                    {
-                        Sink.Notice(NeonSidekick.EmbeddedLlm.EmbeddedLlmText.Removed(model));
-                    }
+                    await RemoveEmbeddedModelAsync(embedded, model, NeonSidekick.EmbeddedLlm.EmbeddedLlmText.RemoveQuestion(model), cancellationToken).ConfigureAwait(false);
                 }
 
                 continue;
             }
 
             string install = InstallRow(model, embedded.RuntimeBytesToDownload(EffectiveNow()));
-            int? choice = await PickAsync(new MenuPage(crumb, [Markup.Escape(install), BackRow], PickKeys), 0, cancellationToken).ConfigureAwait(false);
+            bool partial = state.Kind == NeonSidekick.EmbeddedLlm.EmbeddedModelStateKind.Partial;
+            var choices = partial ? new[] { Markup.Escape(install), Markup.Escape(RemovePartialRow), BackRow } : new[] { Markup.Escape(install), BackRow };
+            int? choice = await PickAsync(new MenuPage(crumb, choices, PickKeys), 0, cancellationToken).ConfigureAwait(false);
             if (choice == 0)
             {
                 _pendingEmbeddedModel = model;
                 return true;
             }
+
+            if (partial && choice == 1)
+            {
+                await RemoveEmbeddedModelAsync(embedded, model, NeonSidekick.EmbeddedLlm.EmbeddedLlmText.RemovePartialQuestion(model), cancellationToken).ConfigureAwait(false);
+            }
         }
     }
+
+    /// <summary>
+    /// The catalog's Remove (2026-09-29; the download stop and the LLM clear later that day, the user's ask): after a yes to
+    /// <paramref name="question"/>, a download of the model under way is stopped (<see cref="BeforeEmbeddedRemove"/>), the
+    /// folder goes (the service stops a server that has it loaded first), and when the saved LLM URL and model named it they
+    /// are cleared — <see cref="EmbeddedLlmClearedNotice"/> — so no connect looks for a model that is gone. The model in use
+    /// is refused while a reply runs: its server is the one answering.
+    /// </summary>
+    private async Task RemoveEmbeddedModelAsync(NeonSidekick.EmbeddedLlm.IEmbeddedLlm embedded, NeonSidekick.EmbeddedLlm.EmbeddedModel model, string question, CancellationToken cancellationToken)
+    {
+        var saved = _settings.Current;
+        bool named = NeonSidekick.EmbeddedLlm.EmbeddedEndpoint.IsEmbedded(saved.LlmUrl) && string.Equals(saved.LlmModel.Trim(), model.Id, StringComparison.OrdinalIgnoreCase);
+        if (_midTurn && (named || string.Equals(embedded.Running?.ModelId, model.Id, StringComparison.Ordinal)))
+        {
+            Sink.Notice(NotWhileReplyRunsNotice);
+            return;
+        }
+
+        if (!await ConfirmAsync(question, cancellationToken).ConfigureAwait(false))
+        {
+            return;
+        }
+
+        if (BeforeEmbeddedRemove is { } stop)
+        {
+            await stop(model, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (embedded.Remove(model) is { } error)
+        {
+            Sink.Error(NeonSidekick.EmbeddedLlm.EmbeddedLlmText.InstallFailed(model, error));
+            return;
+        }
+
+        Sink.Notice(NeonSidekick.EmbeddedLlm.EmbeddedLlmText.Removed(model));
+        if (named)
+        {
+            _settings.Update(d =>
+            {
+                d.LlmUrl = "";
+                d.LlmModel = "";
+            });
+            Sink.Notice(EmbeddedLlmClearedNotice);
+            _embeddedLlmCleared = true;
+        }
+    }
+
+    /// <summary>The notice when the removed model was the saved LLM (2026-09-29): URL and model cleared. Pinned.</summary>
+    public const string EmbeddedLlmClearedNotice = "The LLM URL and model named it, so both are cleared; pick another in /server.";
+
+    /// <summary>A partly downloaded model's removal row (2026-09-29, the user's ask). Pinned.</summary>
+    public const string RemovePartialRow = "Remove (the partial download)";
 
     /// <summary>The notice when the catalog is opened where no embedded model is offered. Pinned.</summary>
     public const string NoEmbeddedModelNotice = "No embedded model is offered here (llama.cpp's Windows x64 builds only).";
@@ -4809,8 +4919,8 @@ internal sealed partial class SettingsMenu
             var on = loaded.Offered(offered).Connections.Select(c => c.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
             int width = loaded.Connections.Max(c => c.Name.Length) + 2;
             var page = new MenuPage(Crumb(FieldName(SettingsField.SqlConnectionsOffered)), loaded.Connections.Select(c => SqlOfferedRow(c, on.Contains(c.Name), width)).ToList(), ToggleKeys) { SpaceToggles = true };
-            int? picked = await PickAsync(page, Math.Min(cursor, loaded.Connections.Count - 1), cancellationToken).ConfigureAwait(false);
-            if (picked is not { } index)
+            var picked = await PickChecklistAsync(page, Math.Min(cursor, loaded.Connections.Count - 1), cancellationToken).ConfigureAwait(false);
+            if (picked is not { } pick)
             {
                 if (!changed)
                 {
@@ -4820,9 +4930,17 @@ internal sealed partial class SettingsMenu
                 return changed;
             }
 
-            cursor = index;
-            string name = loaded.Connections[index].Name;
-            var next = loaded.Connections.Select(c => c.Name).Where(n => on.Contains(n) != string.Equals(n, name, StringComparison.OrdinalIgnoreCase)).ToList();
+            cursor = pick.Row;
+            string name = loaded.Connections[pick.Row].Name;
+            // Select all ticks the connections listed now, one added later still starting hidden (2026-09-29, the user's call).
+            var next = pick.Button == SelectAllIndex ? loaded.Connections.Select(c => c.Name).ToList()
+                : pick.Button == SelectNoneIndex ? []
+                : loaded.Connections.Select(c => c.Name).Where(n => on.Contains(n) != string.Equals(n, name, StringComparison.OrdinalIgnoreCase)).ToList();
+            if (offered is not null && next.Count == on.Count && next.All(on.Contains))
+            {
+                continue;   // a button that changes nothing saves nothing; from "not narrowed", select all narrows to today's list
+            }
+
             // A name ticked before but no longer in the files stays in the list: it counts again if the connection comes back.
             if (offered is not null)
             {
@@ -4972,8 +5090,8 @@ internal sealed partial class SettingsMenu
         {
             var enabled = Shell.CodeLanguages.Resolve(_settings.Current).Select(Shell.CodeLanguages.Name).ToHashSet(StringComparer.Ordinal);
             var page = new MenuPage(Crumb(FieldName(SettingsField.ShellCodeLanguages)), Shell.CodeLanguages.Names.Select(name => CodeLanguageLabel(name, enabled.Contains(name), installed.Contains(name))).ToList(), ToggleKeys) { SpaceToggles = true };
-            int? picked = await PickAsync(page, cursor, cancellationToken).ConfigureAwait(false);
-            if (picked is not { } index)
+            var picked = await PickChecklistAsync(page, cursor, cancellationToken).ConfigureAwait(false);
+            if (picked is not { } pick)
             {
                 if (!changed)
                 {
@@ -4983,15 +5101,22 @@ internal sealed partial class SettingsMenu
                 return changed;
             }
 
-            cursor = index;
-            string name = Shell.CodeLanguages.Names[index];
-            if (enabled.Contains(name) && enabled.Count == 1)
+            cursor = pick.Row;
+            string name = Shell.CodeLanguages.Names[pick.Row];
+            if (pick.Button == SelectNoneIndex || (pick.Button < 0 && enabled.Contains(name) && enabled.Count == 1))
             {
                 Sink.Error(LastLanguageError);
                 continue;
             }
 
-            var next = Shell.CodeLanguages.Names.Where(n => enabled.Contains(n) != string.Equals(n, name, StringComparison.Ordinal)).ToList();
+            var next = pick.Button == SelectAllIndex
+                ? Shell.CodeLanguages.Names.ToList()
+                : Shell.CodeLanguages.Names.Where(n => enabled.Contains(n) != string.Equals(n, name, StringComparison.Ordinal)).ToList();
+            if (next.Count == enabled.Count && next.All(enabled.Contains))
+            {
+                continue;   // select all with every language on: nothing to save
+            }
+
             Apply(SettingsField.ShellCodeLanguages, d => d.ShellCodeLanguages = next);
             changed = true;
         }
@@ -5011,8 +5136,8 @@ internal sealed partial class SettingsMenu
         {
             var on = App.ToolbarItems.Resolve(_settings.Current.ToolbarItems);
             var page = new MenuPage(Crumb(FieldName(SettingsField.ToolbarItems)), names.Select(id => App.ToolbarItems.Label(id, on.Contains(id))).ToList(), ToggleKeys) { SpaceToggles = true };
-            int? picked = await PickAsync(page, cursor, cancellationToken).ConfigureAwait(false);
-            if (picked is not { } index)
+            var picked = await PickChecklistAsync(page, cursor, cancellationToken).ConfigureAwait(false);
+            if (picked is not { } pick)
             {
                 if (!changed)
                 {
@@ -5022,9 +5147,15 @@ internal sealed partial class SettingsMenu
                 return changed;
             }
 
-            cursor = index;
-            string id = names[index];
-            var next = names.Where(n => on.Contains(n) != string.Equals(n, id, StringComparison.Ordinal)).ToHashSet(StringComparer.Ordinal);
+            cursor = pick.Row;
+            var next = pick.Button == SelectAllIndex ? names.ToHashSet(StringComparer.Ordinal)
+                : pick.Button == SelectNoneIndex ? new HashSet<string>(StringComparer.Ordinal)
+                : names.Where(n => on.Contains(n) != string.Equals(n, names[pick.Row], StringComparison.Ordinal)).ToHashSet(StringComparer.Ordinal);
+            if (next.SetEquals(on))
+            {
+                continue;   // select all with every item on, or none with none: nothing to save
+            }
+
             Apply(SettingsField.ToolbarItems, d => d.ToolbarItems = App.ToolbarItems.Save(next));
             changed = true;
         }
@@ -5184,8 +5315,8 @@ internal sealed partial class SettingsMenu
             var on = chosen.Select(n => n.Trim()).ToHashSet(StringComparer.OrdinalIgnoreCase);
             int width = skills.Max(s => s.Name.Length) + 2;
             var page = new MenuPage(Crumb(FieldName(SettingsField.BotChatPreloadedSkills)), skills.Select(s => PreloadedSkillRow(s, on.Contains(s.Name), width)).ToList(), ToggleKeys) { SpaceToggles = true };
-            int? picked = await PickAsync(page, Math.Min(cursor, skills.Count - 1), cancellationToken).ConfigureAwait(false);
-            if (picked is not { } index)
+            var picked = await PickChecklistAsync(page, Math.Min(cursor, skills.Count - 1), cancellationToken).ConfigureAwait(false);
+            if (picked is not { } pick)
             {
                 if (!changed)
                 {
@@ -5195,9 +5326,16 @@ internal sealed partial class SettingsMenu
                 return changed;
             }
 
-            cursor = index;
-            string name = skills[index].Name;
-            var next = skills.Select(s => s.Name).Where(n => on.Contains(n) != string.Equals(n, name, StringComparison.OrdinalIgnoreCase)).ToList();
+            cursor = pick.Row;
+            string name = skills[pick.Row].Name;
+            var next = pick.Button == SelectAllIndex ? skills.Select(s => s.Name).ToList()
+                : pick.Button == SelectNoneIndex ? []
+                : skills.Select(s => s.Name).Where(n => on.Contains(n) != string.Equals(n, name, StringComparison.OrdinalIgnoreCase)).ToList();
+            if (next.Count == skills.Count(s => on.Contains(s.Name)) && next.All(on.Contains))
+            {
+                continue;   // a button that changes nothing saves nothing
+            }
+
             next.AddRange(chosen.Where(n => !skills.Any(s => string.Equals(s.Name, n.Trim(), StringComparison.OrdinalIgnoreCase))));
             Apply(SettingsField.BotChatPreloadedSkills, d => d.BotChatPreloadedSkills = next.Count == 0 ? null : next);
             changed = true;

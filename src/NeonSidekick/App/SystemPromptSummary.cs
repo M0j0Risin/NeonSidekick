@@ -33,7 +33,7 @@ namespace NeonSidekick.App;
 /// <param name="McpEnabled">The setting <c>MCP servers</c> (2026-09-20, the Options tab of <c>/mcp</c>): off means no server is started and no MCP tool offered.</param>
 /// <param name="McpTools">How many of their tools the next turn offers (the ones switched off on <c>/mcp</c> left out).</param>
 /// <param name="FileSafeEdits">The setting <c>File safe edits</c> (2026-09-20): off with <c>delete</c> offered puts <see cref="Assistant.FileRuleDeleteInPlace"/> into the default rules — <c>delete</c> removes for good then — and (later still that day) drops <c>restore</c> from the offer, so neither the rules nor the Tools tab name it.</param>
-/// <param name="GitEnabled">The setting <c>Git native tools</c> (2026-09-20, the Git (native) tab of <c>/tools</c>; <c>Git tools</c> on the Git tab until 2026-09-21).</param>
+/// <param name="GitEnabled">The setting <c>Git native tools</c> (2026-09-20, the Git tab of <c>/tools</c>; <c>Git tools</c> on the Git tab until 2026-09-21).</param>
 /// <param name="GitTools">How many git tools the next turn offers (the ones switched off on <c>/tools</c> left out); the rules carry <see cref="Assistant.GitRule"/> while any is.</param>
 /// <param name="ShellEnabled">Whether the setting <c>Shell command policy</c> is not <c>off</c> (2026-09-21, the Shell tab of <c>/tools</c>): the group's switch.</param>
 /// <param name="ShellTools">How many shell tools the next turn offers (the ones switched off on <c>/tools</c> left out); the rules carry <see cref="Assistant.ShellRule"/> while any is.</param>
@@ -220,7 +220,7 @@ public static class SystemPromptSummary
     /// <summary>The tail of the Sessions group while the setting <c>Session tool</c> is off (2026-09-18). Pinned.</summary>
     public const string SessionsOffSuffix = "session tool is off";
 
-    /// <summary>The tail of the Git (native) group while the setting <c>Git native tools</c> is off (2026-09-20; the setting's new name since 2026-09-21). Pinned.</summary>
+    /// <summary>The tail of the Git group while the setting <c>Git native tools</c> is off (2026-09-20; the setting's new name since 2026-09-21). Pinned.</summary>
     public const string GitOffSuffix = "git native tools is off";
 
     /// <summary>The tail of the Shell group while the setting <c>Shell command policy</c> is <c>off</c> (2026-09-21). Pinned.</summary>
@@ -505,7 +505,7 @@ public static class SystemPromptSummary
         {
             // The git tools (2026-09-20): right after the file tools, the sandbox's two groups together; offered while the setting Git native tools says so.
             string gitNote = !gitEnabled ? NotOffered(GitOffSuffix) : standing;
-            groups.Add(Group(ToolsText.GitTabTitle, git, gitNote, gitEnabled && toolsEnabled, SettingsField.GitNativeTools, disabled));   // "Git (native)", the tab's word, since 2026-09-21
+            groups.Add(Group(ToolsText.GitTabTitle, git, gitNote, gitEnabled && toolsEnabled, SettingsField.GitNativeTools, disabled));   // "Git", the tab's word ("Git (native)" 2026-09-21 to 2026-09-29)
         }
 
         if (shell is not null)

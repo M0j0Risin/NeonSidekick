@@ -234,7 +234,7 @@ public class FolderPaneTests : IDisposable
         var tree = new FolderTree(Disks());
         int bob = tree.ExpandTo(P(C, "Users", "bob"));
         input.PushClick(1, 100);                         // the label: nothing
-        input.PushClick(8, 100);                         // the gap before the button: nothing
+        input.PushClick(11, 100);                        // the gap before the button: nothing (the label 📂 Folders since 2026-09-29)
         input.PushClick(10, 101);                        // the path row: nothing
         input.PushClick(14, 104, MouseButton.Right);     // a right click: nothing
         input.PushClick(12, 100);                        // the button: everything closed, the cursor on C:\
@@ -245,10 +245,10 @@ public class FolderPaneTests : IDisposable
 
         Assert.Equal(Windows ? D : C, picked);
         Assert.Contains("\n" + C + "\n" + Closed(true, 0, C) + "\n" + SecondRoot() + Rule(40), Output);
-        Assert.True(FolderPane.ButtonAt(9));
-        Assert.True(FolderPane.ButtonAt(24));
-        Assert.False(FolderPane.ButtonAt(8));
-        Assert.False(FolderPane.ButtonAt(25));
+        Assert.True(FolderPane.ButtonAt(12));
+        Assert.True(FolderPane.ButtonAt(27));
+        Assert.False(FolderPane.ButtonAt(11));
+        Assert.False(FolderPane.ButtonAt(28));
     }
 
     [Fact]

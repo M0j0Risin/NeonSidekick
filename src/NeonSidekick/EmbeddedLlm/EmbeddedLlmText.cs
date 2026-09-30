@@ -104,6 +104,9 @@ public static class EmbeddedLlmText
 
     public static string RemoveQuestion(EmbeddedModel model) => $"Remove {model.Display} ({ModelStore.SizeLabel(EmbeddedModelCatalog.TotalBytes(model))})?";
 
+    /// <summary>The question before a partly downloaded model's files go (2026-09-29, the user's ask). Pinned.</summary>
+    public static string RemovePartialQuestion(EmbeddedModel model) => $"Remove the partial download of {model.Display}?";
+
     /// <summary>A start that ended before the server was ready: the exit code and llama.cpp's last lines.</summary>
     public static string ExitedEarly(int code, string tail) =>
         string.Create(CultureInfo.InvariantCulture, $"llama-server exited with code {code} before it was ready") + Tail(tail);

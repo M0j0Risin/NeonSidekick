@@ -1080,6 +1080,7 @@ internal sealed partial class ChatScreen
         // The embedded model's tab (2026-09-29): its catalog and live rows over the session's service, the backend under the effective settings.
         _menu.EmbeddedLlm = _session.Embedded;
         _menu.Effective = _effective;
+        _menu.BeforeEmbeddedRemove = StopEmbeddedDownloadOfAsync;
         BindProfile();
     }
 
@@ -1202,10 +1203,10 @@ internal sealed partial class ChatScreen
     /// while <paramref name="memory"/> is on, the closed lock under <c>ask</c> or the open one under
     /// <c>yolo</c> (neither under <c>off</c>), the officer while <paramref name="police"/> is on and the policy is not <c>off</c>
     /// (later on 2026-09-22, the user's ask: with no shell tool offered there is nothing to police).
-    /// The seven alone with everything off. Pinned.
+    /// The seven alone with everything off. Every item checked (not the saved default, which narrowed on 2026-09-29). Pinned.
     /// </summary>
     public static string ToolbarStripFor(bool memory, Shell.CommandPolicyMode policy, bool police) =>
-        ToolbarStripFor(ToolbarItems.Resolve(null), memory, policy, police);
+        ToolbarStripFor(ToolbarItems.Names.ToHashSet(StringComparer.Ordinal), memory, policy, police);
 
     /// <summary>
     /// The strip for the items Show toolbar checks (2026-09-29, the user's ask): each checked fixed glyph in strip order,
@@ -5814,12 +5815,12 @@ internal sealed partial class ChatScreen
         };
     }
 
-    /// <summary>Which of the two settings is empty: <c>Git native email and Git native name are not set; set them on the Git (native) tab of /tools.</c>, or the one. Pinned.</summary>
+    /// <summary>Which of the two settings is empty: <c>Git native email and Git native name are not set; set them on the Git tab of /tools.</c>, or the one. Pinned.</summary>
     public static string GitIdentityUnsetError(bool email, bool name) =>
-        (email && name ? "Git native email and Git native name are" : email ? "Git native email is" : "Git native name is") + " not set; set " + (email && name ? "them" : "it") + " on the Git (native) tab of /tools.";
+        (email && name ? "Git native email and Git native name are" : email ? "Git native email is" : "Git native name is") + " not set; set " + (email && name ? "them" : "it") + " on the Git tab of /tools.";
 
     /// <summary>The setting <c>Git native tools</c> is off (later on 2026-09-21, the user's call): <c>/gituser</c> writes nothing and says why. Pinned.</summary>
-    public const string GitNativeToolsOffError = "Git native tools is off; /gituser does nothing until it is on (the Git (native) tab of /tools).";
+    public const string GitNativeToolsOffError = "Git native tools is off; /gituser does nothing until it is on (the Git tab of /tools).";
 
     public static string GitIdentityWrittenNotice(string name, string email) => $"({NoticeGlyphs.Git}git user set for this repository: {name} <{email}>)";
 
@@ -8247,6 +8248,19 @@ internal sealed partial class ChatScreen
                 await installed().ConfigureAwait(false);
             },
             cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// The catalog's removal of <paramref name="model"/> (2026-09-29, the user's ask): a download of it under way is stopped and
+    /// awaited, its end dropped — no paused notice, the files are about to go — so nothing holds them open.
+    /// </summary>
+    private async Task StopEmbeddedDownloadOfAsync(EmbeddedLlm.EmbeddedModel model, CancellationToken cancellationToken)
+    {
+        if (_jobs.Running(BackgroundJobKind.EmbeddedDownload) && string.Equals(_downloading?.Id, model.Id, StringComparison.Ordinal))
+        {
+            await _jobs.StopAsync(BackgroundJobKind.EmbeddedDownload).ConfigureAwait(false);
+            _downloading = null;
+        }
     }
 
     /// <summary><see cref="UseEmbeddedModelAsync"/> for a picked <c>/server</c> row: the row carries the catalog id as its one model.</summary>

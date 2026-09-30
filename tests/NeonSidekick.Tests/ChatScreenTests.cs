@@ -3699,7 +3699,7 @@ public partial class ChatScreenTests : IDisposable
 
         Assert.DoesNotMatch(GroupHeading("Questions"), output);   // not offered: left out of the tab (2026-09-26)
         Assert.Matches(ToolsHeading("Files (15)", null, "get_working_directory"), output);
-        Assert.Matches(ToolsHeading("Git (native) (11)", null, "git_status"), output);   // between Files and Web (2026-09-20; the fixture opts every tool on; the tab's word since 2026-09-21)
+        Assert.Matches(ToolsHeading("Git (11)", null, "git_status"), output);   // between Files and Web (2026-09-20; the fixture opts every tool on; the tab's word since 2026-09-21)
         Assert.Matches(ToolsHeading("Web (4)", null, "web_search"), output);
         Assert.Matches(ToolsHeading("Sessions (1)", null, "session_manager"), output);   // 2026-09-18, ahead of the questions
         Assert.Contains("Operating rules — default\n", output);
@@ -4245,7 +4245,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude    Home Assistant    Print    Obsidian    ComfyUI    SQL    Git (native)    Options ", output);
+        Assert.Contains(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude    Home Assistant    Print    Obsidian    ComfyUI    SQL    Git    Options ", output);
         Assert.Contains("\n▸ ComfyUI tools                  on\n  ComfyUI URL                    (not set)\n  ComfyUI workflows offered      all (not narrowed)\n  ComfyUI add workflow           Enter to start workflow wizard\n  ComfyUI ^-mention enabled      on\n  ComfyUI timeout (s)            300\n  ComfyUI max pictures per call  5 pictures\n  ComfyUI reinforce negatives    on\n  ComfyUI show prompts           on\n  ComfyUI picture strip          on\n  ComfyUI output folder          comfy_images\n", output);   // 2026-09-24; the offered checklist and the wizard later that day, the ^-mention switch later still
         Assert.Contains("\n▸ Claude executable                   (looked up)\n  Claude slash command permissions    read-only\n  Claude slash command model          (Claude Code's default)\n  Claude slash command effort         (Claude Code's default)\n  Claude advisor tool                 off\n  Claude advisor tool context         brief\n  Claude advisor tool calls per turn  2 calls\n  Claude advisor tool model           (as Claude slash command model)\n  Claude advisor tool effort          (as Claude slash command effort)\n  Claude advisor tool confirm         off\n", output);   // 2026-09-27: /claude's rows off /settings, then the advisor's
         Assert.Contains("\n  Clock (3)\n▸ get_current_time      on   ", output);
@@ -4650,7 +4650,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude    Home Assistant    Print    Obsidian    ComfyUI    SQL    Git (native)    Options ", output);
+        Assert.Contains(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude    Home Assistant    Print    Obsidian    ComfyUI    SQL    Git    Options ", output);
         Assert.Contains("  · get_current_time: off", output);
         Assert.Equal(["get_current_time"], _settings.Current.ToolsDisabled);
         Assert.DoesNotContain(ChatScreen.MidTurnDeferredNotice("/tools"), output);
@@ -6235,10 +6235,10 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public void GitLabels_ArePinned()
     {
-        Assert.Equal("Git native email and Git native name are not set; set them on the Git (native) tab of /tools.", ChatScreen.GitIdentityUnsetError(true, true));
-        Assert.Equal("Git native email is not set; set it on the Git (native) tab of /tools.", ChatScreen.GitIdentityUnsetError(true, false));
-        Assert.Equal("Git native name is not set; set it on the Git (native) tab of /tools.", ChatScreen.GitIdentityUnsetError(false, true));
-        Assert.Equal("Git native tools is off; /gituser does nothing until it is on (the Git (native) tab of /tools).", ChatScreen.GitNativeToolsOffError);
+        Assert.Equal("Git native email and Git native name are not set; set them on the Git tab of /tools.", ChatScreen.GitIdentityUnsetError(true, true));
+        Assert.Equal("Git native email is not set; set it on the Git tab of /tools.", ChatScreen.GitIdentityUnsetError(true, false));
+        Assert.Equal("Git native name is not set; set it on the Git tab of /tools.", ChatScreen.GitIdentityUnsetError(false, true));
+        Assert.Equal("Git native tools is off; /gituser does nothing until it is on (the Git tab of /tools).", ChatScreen.GitNativeToolsOffError);
         Assert.Equal("(🛠️ git user set for this repository: Some User <user@email.com>)", ChatScreen.GitIdentityWrittenNotice("Some User", "user@email.com"));   // the tools' glyph since 2026-09-22
         Assert.Equal("Git repository already has a [user] section: Old <old@x>; /gituser force replaces it.", ChatScreen.GitIdentityPresentError("Old", "old@x"));   // an error since 2026-09-22
         Assert.Equal(@"'D:\x' is not inside a git repository; /cwd into one first.", ChatScreen.GitNoRepositoryError(@"D:\x"));
@@ -8314,7 +8314,7 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public async Task TheToolbarLock_FollowsTheShellCommandPolicy_NoneUnderOff_OpenUnderYolo()
     {
-        _settings.Update(d => { d.TtsOutput = false; d.ToolbarItems = null; d.ShellCommandPolicy = "off"; d.Memory = false; d.ShellPoliceOutsidePaths = false; });
+        _settings.Update(d => { d.TtsOutput = false; d.ToolbarItems = [.. ToolbarItems.Names]; d.ShellCommandPolicy = "off"; d.Memory = false; d.ShellPoliceOutsidePaths = false; });
         _console.Profile.Height = 40;
         _console.Profile.Width = 240;
         _geometry = new ScreenGeometry(() => null, () => 100);
@@ -8350,7 +8350,7 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public async Task TheToolbarDisk_AndTheOfficer_FollowMemory_AndShellPolice_AndTheOfficersPairIsThePolicePage()
     {
-        _settings.Update(d => { d.TtsOutput = false; d.ToolbarItems = null; });   // Memory, ask and the police: the defaults
+        _settings.Update(d => { d.TtsOutput = false; d.ToolbarItems = [.. ToolbarItems.Names]; });   // Memory, ask and the police: the defaults
         _console.Profile.Height = 40;
         _console.Profile.Width = 240;
         _geometry = new ScreenGeometry(() => null, () => 100);
@@ -8386,7 +8386,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.False(_settings.Current.ShellPoliceOutsidePaths);
         string memory = "\n" + Titled(MemoryMenu.Title) + "\n";
         string settings = "\n" + Titled(SettingsMenu.Title + "   General    Sessions    LLM    TTS    STT    Embedded    Botchat ") + "\n";
-        string tools = "\n" + Titled(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude    Home Assistant    Print    Obsidian    ComfyUI    SQL    Git (native)    Options ") + "\n";
+        string tools = "\n" + Titled(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude    Home Assistant    Print    Obsidian    ComfyUI    SQL    Git    Options ") + "\n";
         string allowed = "\n" + Titled(AllowedCommandsTitle) + "\n";
         Assert.Equal(1, output.Split(memory).Length - 1);
         Assert.Equal(1, output.Split(allowed).Length - 1);
@@ -8399,7 +8399,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.True(output.IndexOf(tools, StringComparison.Ordinal) < output.LastIndexOf(settings, StringComparison.Ordinal), output);
         Assert.DoesNotContain(ChatScreen.PoliceToolGlyph, output[output.LastIndexOf(settings, StringComparison.Ordinal)..]);   // the row under the last pane and after it: no officer
         Assert.All(new[] { "/memory", "/cmdlist", "/police" }, word => Assert.DoesNotContain("› " + word, output));
-        Assert.Null(_settings.Current.ToolbarItems);
+        Assert.Equal(ToolbarItems.Names, _settings.Current.ToolbarItems);   // untouched: every item, as the test set it
         Assert.Equal("hi!", Assert.Single(_chat.Requests).Last(m => m.Role == ChatRole.User).Text);
     }
 
@@ -9074,7 +9074,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Matches(ToolsHeading("Clock (3)", null, "get_current_time"), output);
         Assert.Matches(ToolsHeading("Timers (3)", null, "start_timer"), output);
         Assert.Matches(ToolsHeading("Files (15)", null, "get_working_directory"), output);
-        Assert.Matches(ToolsHeading("Git (native) (11)", null, "git_status"), output);   // between Files and Web (2026-09-20; the fixture opts every tool on; the tab's word since 2026-09-21)
+        Assert.Matches(ToolsHeading("Git (11)", null, "git_status"), output);   // between Files and Web (2026-09-20; the fixture opts every tool on; the tab's word since 2026-09-21)
         Assert.Matches(ToolsHeading("Web (4)", null, "web_search"), output);
         Assert.Matches(ToolsHeading("Memory (2)", null, "save_memory"), output);
         Assert.Matches(ToolsHeading("Sessions (1)", null, "session_manager"), output);   // 2026-09-18, between the skills and the questions
@@ -9360,7 +9360,7 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public async Task ADoubleClickOnAToolbarGlyph_OpensItsPane_OnThePath_TheBrowser_AndTheDraftComesBack()
     {
-        _settings.Update(d => { d.TtsOutput = false; d.ToolbarItems = null; });
+        _settings.Update(d => { d.TtsOutput = false; d.ToolbarItems = [.. ToolbarItems.Names]; });
         _console.Profile.Height = 40;
         _console.Profile.Width = 240;
         _geometry = new ScreenGeometry(() => null, () => 100);   // an empty line: row 100, the rule 101, the hint row 102, the toolbar 103
@@ -9409,7 +9409,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("\n" + ScreenPane.ToolbarRow(ChatScreen.ToolbarStripFor(true, CommandPolicyMode.Ask, true), cwd, 239), output);
         Assert.DoesNotContain("\n" + ScreenPane.ToolbarRow(ChatScreen.ToolbarStrip, cwd, 239), output);   // never the fixed glyphs alone: memory, the policy and the police are on
         int settings = output.IndexOf("\n" + Titled(SettingsMenu.Title + "   General    Sessions    LLM    TTS    STT    Embedded    Botchat ") + "\n", StringComparison.Ordinal);
-        int tools = output.IndexOf(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude    Home Assistant    Print    Obsidian    ComfyUI    SQL    Git (native)    Options ", StringComparison.Ordinal);
+        int tools = output.IndexOf(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude    Home Assistant    Print    Obsidian    ComfyUI    SQL    Git    Options ", StringComparison.Ordinal);
         int mcp = output.IndexOf(McpText.Label + "   Servers    Tools    Options ", StringComparison.Ordinal);
         int skills = output.IndexOf(SkillsText.Label + "   Offered    Reflection    Project    Options ", StringComparison.Ordinal);
         int sys = output.IndexOf("\n" + Titled(SystemPromptSummary.Label + "   Prompt    Tools ") + "\n", StringComparison.Ordinal);
@@ -9464,7 +9464,7 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public async Task UnderAPane_ADoubleClickOnItsOwnToolbarGlyph_ClosesIt_OnAnothers_SwitchesToThatPane()
     {
-        _settings.Update(d => { d.TtsOutput = false; d.ToolbarItems = null; });
+        _settings.Update(d => { d.TtsOutput = false; d.ToolbarItems = [.. ToolbarItems.Names]; });
         _console.Profile.Height = 40;
         _console.Profile.Width = 240;
         _geometry = new ScreenGeometry(() => null, () => 100);
@@ -9506,7 +9506,7 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         string settings = "\n" + Titled(SettingsMenu.Title + "   General    Sessions    LLM    TTS    STT    Embedded    Botchat ") + "\n";
-        string tools = "\n" + Titled(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude    Home Assistant    Print    Obsidian    ComfyUI    SQL    Git (native)    Options ") + "\n";
+        string tools = "\n" + Titled(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude    Home Assistant    Print    Obsidian    ComfyUI    SQL    Git    Options ") + "\n";
         string help = "\n" + Titled(InfoPane.Title + "   Commands (basic)    Commands (advanced)    Keys ") + "\n";
         string sys = "\n" + Titled(SystemPromptSummary.Label + "   Prompt    Tools ") + "\n";
         string sessions = "\n" + Titled(SessionsMenu.Title) + "\n";
@@ -9556,7 +9556,7 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public async Task UnderAPane_ADoubleClickOnTheModelName_TheMark_ThePath_OrTheBlanks_ClosesOrSwitches()
     {
-        _settings.Update(d => { d.TtsOutput = false; d.ToolbarItems = null; });
+        _settings.Update(d => { d.TtsOutput = false; d.ToolbarItems = [.. ToolbarItems.Names]; });
         _console.Profile.Height = 40;
         _console.Profile.Width = 240;
         _geometry = new ScreenGeometry(() => null, () => 100);   // the hint row 102 ("llama ○" ends at 238), the toolbar 103
@@ -9629,7 +9629,7 @@ public partial class ChatScreenTests : IDisposable
     public void ToolbarStripFor_TheCheckedItems_IsPinned()
     {
         IReadOnlySet<string> Items(params string[] ids) => ToolbarItems.Resolve(ids);
-        Assert.Equal(ChatScreen.ToolbarStripFor(true, CommandPolicyMode.Ask, true), ChatScreen.ToolbarStripFor(ToolbarItems.Resolve(null), true, CommandPolicyMode.Ask, true));
+        Assert.Equal(ChatScreen.ToolbarStripFor(true, CommandPolicyMode.Ask, true), ChatScreen.ToolbarStripFor(ToolbarItems.Resolve([.. ToolbarItems.Names]), true, CommandPolicyMode.Ask, true));
         Assert.Equal("📊 💾", ChatScreen.ToolbarStripFor(Items("usage", "memory"), true, CommandPolicyMode.Ask, true));
         Assert.Equal("📊", ChatScreen.ToolbarStripFor(Items("usage", "memory"), false, CommandPolicyMode.Ask, true));   // Memory off: no disk, checked or not
         Assert.Equal("⚙️ 🔓", ChatScreen.ToolbarStripFor(Items("cmdlist", "settings"), true, CommandPolicyMode.Yolo, true));   // strip order, not the list's
@@ -11303,7 +11303,7 @@ public partial class ChatScreenTests : IDisposable
                 Scripted().Push(Keys.Escape);
             }
         });
-        _settings.Update(d => d.ToolbarItems = null);
+        _settings.Update(d => d.ToolbarItems = [.. ToolbarItems.Names]);
         _console.Profile.Width = 240;
         _geometry = new ScreenGeometry(() => null, () => 100);   // MidTurnFixture's own geometry has no cursor row
 
@@ -11359,7 +11359,7 @@ public partial class ChatScreenTests : IDisposable
                     break;
             }
         }, "One ", "two ", "three ", "four ", "five ", "six ", "seven ", "eight.");
-        _settings.Update(d => d.ToolbarItems = null);
+        _settings.Update(d => d.ToolbarItems = [.. ToolbarItems.Names]);
         _console.Profile.Width = 240;
         _geometry = new ScreenGeometry(() => null, () => 100);
         SeedSession();
@@ -11367,7 +11367,7 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         output = string.Join("\n", output.Split('\n').Select(l => l.TrimEnd()));
-        string tools = "\n" + Titled(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude    Home Assistant    Print    Obsidian    ComfyUI    SQL    Git (native)    Options ") + "\n";
+        string tools = "\n" + Titled(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude    Home Assistant    Print    Obsidian    ComfyUI    SQL    Git    Options ") + "\n";
         string sys = "\n" + Titled(SystemPromptSummary.Label + "   Prompt    Tools ") + "\n";
         string sessions = "\n" + Titled(SessionsMenu.Title) + "\n";
         string settings = "\n" + Titled(SettingsMenu.Title + "   General    Sessions    LLM    TTS    STT    Embedded    Botchat ") + "\n";
@@ -18496,7 +18496,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(SkilledPrompt(false, [], web: true, ask: AskLimits.Default, markdown: true, git: false), _chat.Requests[0][0].Text);   // the pane on: the Markdown and ask rules ride
         Assert.DoesNotContain(Assistant.GitRule, _chat.Requests[0][0].Text!, StringComparison.Ordinal);
         Assert.DoesNotContain("Git native tools — ", output);   // no Git heading on the Prompt tab since 2026-09-26
-        Assert.DoesNotMatch(GroupHeading("Git (native)"), output);   // not offered: left out of the tab (2026-09-26)
+        Assert.DoesNotMatch(GroupHeading("Git"), output);   // not offered: left out of the tab (2026-09-26)
     }
 
     [Fact]

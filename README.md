@@ -99,7 +99,7 @@ Commands typed while a reply runs:
 * **Hint row:** model name → `/server` (server, then model, then reasoning) · reasoning glyph → `/reasoning` · tokens/spinner → `/usage` · 🖼️/🎨 and its timer while ComfyUI renders → cancel the pictures (the reply goes on; ESC still ends it) · 📥 / 🔌 / 🎧 / 🔈 while an embedded download, the MCP servers, voice input or speech output set up → cancel that one · queued count → `/queue` · blank space → `/settings`.
 * **Long setups run in the background:** an embedded model's download, the MCP servers connecting, and the first-use downloads and loads of voice input and speech output. One that takes longer than half a second leaves the input line to you: its glyph (📥, 🔌, 🎧 or 🔈) sits on the hint row with its progress, menus, commands and chat keep working, and its status line prints when it finishes.
 * **Rule over the input row:** the session's name → `/sessions title` (rename it).
-* **Toolbar** (*Show toolbar*): a glyph toggles its pane, or switches to it from another pane. *Show toolbar* is a checklist: uncheck any glyph or the working directory to leave it off the row, or everything to hide the row.
+* **Toolbar** (*Show toolbar*): a glyph toggles its pane, or switches to it from another pane. *Show toolbar* is a checklist: uncheck any glyph or the working directory to leave it off the row, or everything to hide the row. By default it shows ⚙️ Settings, 🛠️ Tools, 🎓 Skills, 💬 Sessions and the working directory.
 
 | Toolbar item | Shown | Opens |
 |---|---|---|
@@ -143,7 +143,7 @@ Settings that an environment variable or flag can override for one launch are li
 | Keep command history | Saves the ↑/↓ history (newest 1,000 lines) in the profile's `sessions.db`, so it survives restarts and profile switches. Lines holding a collapsed paste or a picture aren't saved. Off, the saved lines are deleted at the next profile load. `/cmdclear` empties it either way. | on |
 | Welcome splash | Pictures under the banner at startup, until the first line is sent: `fullsize`, `tiled` or `disabled`. See Welcome splash below. | `fullsize` |
 | Working directory in header | Prints the working directory at the right of the banner's title line. | off |
-| Show toolbar | Which items the toolbar under the hint row shows (see *Double-Click Shortcuts* above): a checklist of every glyph and the working-directory path, Enter or Space to flip one. Nothing checked hides the row; the row reads `all`, `off` or how many are checked. 💾, the lock and 👮 still need their own settings on. | all |
+| Show toolbar | Which items the toolbar under the hint row shows (see *Double-Click Shortcuts* above): a checklist of every glyph and the working-directory path (📂), Enter or Space to flip one, **A** / **N** (or the *select all* / *select none* buttons) for all or none. Nothing checked hides the row; the row reads `all`, `off` or how many are checked. 💾, the lock and 👮 still need their own settings on. | Settings, Tools, Skills, Sessions, path (5 of 11) |
 | Theme | `synthwave`, `netrunner` (green phosphor), `nostromo` (amber phosphor), `noir` (greyscale), `cyberpunk` (colourful), `vaporwave` (pastel), `mainframe` (blue phosphor), `grid` (light cycle), `replicant` (smog and sodium) or `abyssal` (bioluminescent). | `synthwave` |
 | Draft editor | What `/draft` opens its temporary file with (`code --wait`, `notepad`…); empty uses the app Windows opens `.txt` files with. | (default .txt editor) |
 | Image viewer | Where a double-clicked picture opens. Empty: the built-in picture viewer. `system`: the app Windows registers for the file type (Paint for png, jpg and bmp). Anything else is a command, with the file's path appended (`mspaint`, `"C:\Program Files\GIMP 3\bin\gimp-3.exe"`). | (built-in viewer) |
@@ -288,12 +288,12 @@ A model the app downloads and runs itself, on llama.cpp's `llama-server`, for wh
 | Setting | What it does | Default |
 |---|---|---|
 | Embedded LLM enabled | Offers the embedded models. Off, `/server` lists none, `/server embedded` refuses, a saved embedded URL counts as none (the app looks for a server as if it were blank), and a running embedded server stops. Installed models stay on disk. | on |
-| Embedded models | The catalog: each model with its size and state. Enter on an installed one offers *Use now* and *Remove*; on any other, *Install*. Using or installing closes the settings and connects. | |
+| Embedded models | The catalog: each model with its size and state. Enter on an installed one offers *Use now* and *Remove*; on any other, *Install*, plus *Remove* for a partly downloaded one. Remove asks first, stops a download of that model and a server running it, and deletes its folder; when it was the saved LLM, the LLM URL and model are cleared. Using or installing closes the settings and connects. | |
 | Embedded backend | Which llama.cpp build runs the model: `auto` (CUDA with an NVIDIA driver 580 or newer, else Vulkan, else the CPU), `cuda`, `vulkan` or `cpu`. The row shows what `auto` picked and why. | `auto` |
 | Embedded context size | The server's context window in tokens: 0 for the model's own (128K for Gemma 4 E2B/E4B, 256K for the larger models, which needs a lot of memory), else 512–262,144. | 32,768 |
 | Embedded GPU layers | How many of the model's layers go on the GPU: `auto` (as many as the free VRAM holds), `all`, or a number (0 runs on the CPU). | `auto` |
 | Embedded vision | Loads the model's vision projector so it can read images (about 1 GB more memory for most models, under 200 MB for the 12Bs). Off, an image sent to the embedded model is refused. | on |
-| Embedded MTP | Multi-token prediction: the model drafts a few tokens ahead and checks them, so replies come faster with the same text. Gemma 4 models use a small drafter file (downloaded with the model, or at its next start for a model installed before); Qwen3.8 has the drafter built in; the MTP column above says which. Turn it off if a model misbehaves with it. | on |
+| Embedded drafter | Multi-token prediction (MTP): the model drafts a few tokens ahead and checks them, so replies come faster with the same text. Gemma 4 models use a small drafter file (downloaded with the model, or at its next start for a model installed before); Qwen3.8 has the drafter built in; the MTP column above says which. Off, no drafter is loaded (nor downloaded with a new install) and the model decodes one token at a time; turn it off if a model misbehaves with it. | on |
 
 * Each file is checked against the SHA-256 Hugging Face publishes for it. A download that's paused (double-click 📥) or cut keeps what arrived, and picking the model again resumes it. The drive must have the rest plus 1 GB to spare.
 * The first start downloads llama.cpp itself (build `b11258`: 577 MB for CUDA with its runtime, 33 MB for Vulkan, 19 MB for the CPU). If `auto` picked CUDA and it doesn't start, the app says so and tries Vulkan.
@@ -318,7 +318,7 @@ A model the app downloads and runs itself, on llama.cpp's `llama-server`, for wh
 | Botchat image async | On: the next bot speaks while the picture renders, and the picture appears when nothing is streaming. Off: each reply is held back until its picture is drawn, then appears under it. | on |
 | Botchat non-TTS delay | Seconds to pause after each reply when no voice plays (*TTS output* off), so it can be read (0–30; 0 = no pause). A line typed meanwhile joins the chat; ESC during the pause ends it. | 5 |
 | Botchat skills enabled | Offers every bot `load_skill` (never `skill_editor`) over the skills this chat sees: the starting profile's, the global ones and, with *Use external skills*, the external ones, but never a bot's own profile's. In `automatic` mode the prompt writer gets them too. Needs *Agent skills*; switching `load_skill` off in `/tools` turns this off too. | off |
-| Botchat preloaded skills | Skills the app loads itself, so no `load_skill` call is needed: tick them in the checklist, or name one as a whole word in the topic (`/botchat use pony-prompts for the pictures`). Needs *Agent skills*, but not *Botchat skills enabled*. The chat says which were loaded. | none |
+| Botchat preloaded skills | Skills the app loads itself, so no `load_skill` call is needed: tick them in the checklist (**A** / **N** for all or none), or name one as a whole word in the topic (`/botchat use pony-prompts for the pictures`). Needs *Agent skills*, but not *Botchat skills enabled*. The chat says which were loaded. | none |
 | Botchat skill mode | Who gets the preloaded skills: `prompt-writer-and-bots` (the picture prompt writer and every bot's system prompt) or `prompt-writer-only`. | `prompt-writer-and-bots` |
 | Botchat vision enabled | Shows each bot, on its turn, the newest 4 pictures since it last spoke, each captioned with whose it is (not the ones it drew itself). Only for models that read images: a text-only server fails the turn (in `multi` mode, every bot's model counts). Pictures aren't kept for `/botchat --resume` or the saved session. | off |
 
@@ -440,7 +440,7 @@ Every tool, grouped (Clock, Timers, Files, Git, Shell, Obsidian, SQL, ComfyUI, C
 | Shell timeout (s) | How long a foreground command without `timeout` may run before it is killed (1–3600). | 180 |
 | Shell foreground cap (s) | The most a foreground command may wait, whatever its `timeout` says (10–3600). | 600 |
 | Shell output max chars | The most output one result carries back (2000–500000); over it the head and tail are kept and the whole text goes to `.shell\<id>.log` under the working directory, where `read_file` reaches it. | 30000 |
-| Shell code languages | The languages `execute_code` may run — `powershell`, `python`, `node`; one or more, and a language is offered only while its interpreter is found. Enter or Space flips one; the last one on stays. | all three |
+| Shell code languages | The languages `execute_code` may run — `powershell`, `python`, `node`; one or more, and a language is offered only while its interpreter is found. Enter or Space flips one, **A** turns all on; the last one on stays, so **N** is refused. | all three |
 | Shell code timeout (s) | How long an `execute_code` script without `timeout` may run before it is killed (1–3600). | 300 |
 | Shell tool bridge | Lets an `execute_code` script call the app's other tools through its `neon_tools` module (a loopback socket with a per-run token). Off, no module is written and nothing mentions it, so the script does everything itself. | off |
 | Shell tool bridge max calls | How many tool calls one script may make through the bridge (1–500). | 50 |
@@ -528,7 +528,7 @@ The services that run without asking under `ask` can be changed in `profile.json
 |---|---|---|
 | ComfyUI tools | Offers the image tools (`generate_image`, `set_splash_image`), once *ComfyUI URL* is set and a workflow is in a `comfy` folder. | off |
 | ComfyUI URL | The ComfyUI server, often another machine on your LAN (`http://gpu-box:8188`). Like the LLM server, the web tools' network mode never blocks it. | (not set) |
-| ComfyUI workflows offered | A checklist of the installed workflows the model is offered. Until you narrow it, all are, new ones included; after that only ticked ones are. With one ticked, every plain request and a plain `/imagine` go to it. `/imagine <name>` can still use a hidden one. | all (not narrowed) |
+| ComfyUI workflows offered | A checklist of the installed workflows the model is offered. Until you narrow it, all are, new ones included; after that only ticked ones are. **A** / **N** tick all or none (all means the ones installed now: a new one still starts hidden). With one ticked, every plain request and a plain `/imagine` go to it. `/imagine <name>` can still use a hidden one. | all (not narrowed) |
 | ComfyUI add workflow | A wizard that **builds** a standard workflow from your server's checkpoints, or **imports** one you exported from ComfyUI. See Adding a workflow. | — |
 | ComfyUI ^-mention enabled | `^` and part of a name on the input line lists the offered workflows (family, shape, size); a pick writes `^name`, which `generate_image` reads as the workflow to use. | on |
 | ComfyUI timeout (s) | How long the tool waits for one generation, queue included (10–3600); the job may still finish in ComfyUI. | 300 |
@@ -543,7 +543,7 @@ The services that run without asking under `ask` can be changed in `profile.json
 | Setting | What it does | Default |
 |---|---|---|
 | SQL tools | Offers the SQL tools (connections, databases, tables, columns, describe, relationships, indexes, query) over the connections in `sql.json`, once one is defined. | off |
-| SQL connections offered | A checklist of the connections in both `sql.json` files. Until you narrow it, all are offered, new ones included; after that only ticked ones are, and new ones stay hidden until ticked. A hidden connection is invisible to every SQL tool, the rules, the `%`-mention and the default (`sql_connections` says how many are hidden, never which). | all (not narrowed) |
+| SQL connections offered | A checklist of the connections in both `sql.json` files. Until you narrow it, all are offered, new ones included; after that only ticked ones are, and new ones stay hidden until ticked. **A** / **N** tick all or none (all means the ones listed now). A hidden connection is invisible to every SQL tool, the rules, the `%`-mention and the default (`sql_connections` says how many are hidden, never which). | all (not narrowed) |
 | SQL default connection | The connection used when a call names none: one of the offered connections, or the first. A call can still name another offered connection, and `database` can open other databases on the same server. | (the first connection) |
 | SQL set password | Pick a connection that takes a password (`sql` or `runas`) and type it, masked. It is saved to that connection's store: encrypted in its `sql.json`, or in Windows Credential Manager. | — |
 | SQL add connection | A wizard for a new connection, one page per choice, which can **test** the draft (`SELECT @@VERSION`) before saving it. See Managing connections. | — |
@@ -553,7 +553,7 @@ The services that run without asking under `ask` can be changed in `profile.json
 | SQL connections (profile) | Enter opens the profile's `sql.json` in your editor (created with a commented example of each sign-in kind); the value counts its connections. | (none) |
 | SQL connections (global) | The same for the home folder's `sql.json`, which every profile reads; the profile's wins on a name clash. | (none) |
 
-#### Git (native)
+#### Git
 
 | Setting | What it does | Default |
 |---|---|---|
@@ -785,7 +785,7 @@ Type `/` to list every command with its summary; after a command and a space, it
 
 #### Folder picker
 
-`/cwd browse`, and the *Working directory* and *Obsidian vault* rows, open a folder tree on the pane.
+`/cwd browse`, and the *Working directory* and *Obsidian vault* rows, open a folder tree on the pane, headed **📂 Folders**.
 
 * `⌂ profile` (the profile's `files\` folder) and `▣ splash` (its `splash\` folder) sit above the drives; the tree opens on the directory in use.
 * Space, → and ← open and close folders; `-` collapses all. Clicking a folder's glyph, or double-clicking its name, opens or closes it.
@@ -855,7 +855,7 @@ What the model can call, in the groups `/tools` and `/sys` show. A group's switc
 </details>
 
 <details>
-<summary><b>📁 Files & Git (native)</b></summary>
+<summary><b>📁 Files & Git</b></summary>
 
 ### Files
 
@@ -879,14 +879,14 @@ All paths are relative to the working directory; nothing outside it is reachable
 | `unzip` | `path, to?, overwrite?` | Extracts a `.zip` archive into a folder, all or nothing. |
 | `open` | `path?` | Opens a file in the user's own editor or viewer, or a folder in Explorer; no path opens the working directory. |
 
-### Git (native)
+### Git
 
 In-process git (LibGit2Sharp), for when the shell is off or the model should never run `git.exe`. Turn *Git native tools* off to leave git to the shell.
 
 * Local only: no `fetch`, `pull`, `push` or `clone`.
 * The repository's root must be the working directory or a folder under it. Every tool takes an optional `path`, the file or folder it targets, which also locates the repository.
 * `git_delete` starts off; switch it on in the Offered tab of `/tools`.
-* Commits need an identity: set *Git native email* and *Git native name* on the Git (native) tab of `/tools`, then run `/gituser` to write them into the repository's config.
+* Commits need an identity: set *Git native email* and *Git native name* on the Git tab of `/tools`, then run `/gituser` to write them into the repository's config.
 
 | Tool | Arguments | What it does |
 |---|---|---|

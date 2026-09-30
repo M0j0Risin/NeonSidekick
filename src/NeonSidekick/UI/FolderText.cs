@@ -6,8 +6,11 @@ namespace NeonSidekick.UI;
 /// <summary>The <c>/cwd browse</c> pane's words (<see cref="FolderPane"/>, 2026-09-21), pinned by <c>FolderPaneTests</c>.</summary>
 public static class FolderText
 {
-    /// <summary>The strip's label.</summary>
-    public const string Title = "Folders";
+    /// <summary>The folder (2026-09-29, the user's ask): ahead of <see cref="Title"/> and the toolbar checklist's working-directory row (<see cref="App.ToolbarItems.Glyph"/>). Two cells. Not <c>Glyph</c>: that is a node's.</summary>
+    public const string FolderGlyph = "📂";
+
+    /// <summary>The strip's label: the folder and the word since 2026-09-29 (the user's ask; the word alone before).</summary>
+    public const string Title = FolderGlyph + " Folders";
 
     /// <summary>The one button on the strip, drawn as a dim tab: every node closed, the cursor on its root.</summary>
     public const string CollapseAllButton = "⊟ collapse all";

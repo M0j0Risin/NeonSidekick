@@ -3,6 +3,7 @@ using NeonSidekick.App;
 using NeonSidekick.Files;
 using NeonSidekick.Llm;
 using NeonSidekick.Settings;
+using NeonSidekick.Skills;
 using NeonSidekick.Speech;
 using NeonSidekick.Tests.Fakes;
 using NeonSidekick.UI;
@@ -826,7 +827,7 @@ public partial class SettingsMenuTests : IDisposable
                 SettingsField.PrintTools, SettingsField.PrintActionPolicy, SettingsField.PrintDefaultPrinter, SettingsField.PrintFontSize,
                 SettingsField.EmbeddedModels, SettingsField.EmbeddedBackend, SettingsField.EmbeddedContextSize, SettingsField.EmbeddedGpuLayers, SettingsField.EmbeddedVision,
                 SettingsField.LlmReasoningEstimate,
-                SettingsField.EmbeddedLlmEnabled, SettingsField.EmbeddedMtp,   // 2026-09-29, the Embedded tab's switch and MTP
+                SettingsField.EmbeddedLlmEnabled, SettingsField.EmbeddedDrafter,   // 2026-09-29, the Embedded tab's switch and MTP
             },
             Enum.GetValues<SettingsField>());
         // The compact rows: on the LLM tab after the context length but no reconnect; the type a picker, the two others typed.
@@ -1051,7 +1052,7 @@ public partial class SettingsMenuTests : IDisposable
         // Show toolbar (2026-09-21): the General row after it, a toggle, no reconnect (the pane reads it at each draw).
         Assert.False(SettingsMenu.IsToggle(SettingsField.ToolbarItems));   // a checklist since 2026-09-29, the user's ask
         Assert.Equal("Show toolbar", SettingsMenu.FieldName(SettingsField.ToolbarItems));
-        Assert.Equal("all", SettingsMenu.FieldValue(SettingsField.ToolbarItems, data, _settings.ProfileDirectory));
+        Assert.Equal("5 of 11", SettingsMenu.FieldValue(SettingsField.ToolbarItems, data, _settings.ProfileDirectory));   // the defaults since later on 2026-09-29
         Assert.Equal("off", SettingsMenu.FieldValue(SettingsField.ToolbarItems, new AppSettingsData { ToolbarItems = [] }, _settings.ProfileDirectory));
         Assert.Equal("3 of 11", SettingsMenu.FieldValue(SettingsField.ToolbarItems, new AppSettingsData { ToolbarItems = ["usage", "PATH", " tools ", "nonsense"] }, _settings.ProfileDirectory));
         Assert.Equal("all", SettingsMenu.FieldValue(SettingsField.ToolbarItems, new AppSettingsData { ToolbarItems = [.. ToolbarItems.Names] }, _settings.ProfileDirectory));
@@ -1211,8 +1212,8 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("20", SettingsMenu.EditableValue(SettingsField.GitNativeLogMaxCommits, data));
         Assert.Equal("must be 20 to 5000 lines", SettingsMenu.GitNativeDiffMaxLinesRangeError);
         Assert.Equal("must be 1 to 200 commits", SettingsMenu.GitNativeLogMaxCommitsRangeError);
-        Assert.Equal("git (native) tools enabled", SettingsMenu.ToggleDescribe(SettingsField.GitNativeTools, true));
-        Assert.Equal("git (native) tools disabled", SettingsMenu.ToggleDescribe(SettingsField.GitNativeTools, false));
+        Assert.Equal("git native tools enabled", SettingsMenu.ToggleDescribe(SettingsField.GitNativeTools, true));
+        Assert.Equal("git native tools disabled", SettingsMenu.ToggleDescribe(SettingsField.GitNativeTools, false));
         Assert.False(SettingsMenu.RefusedMidTurn(SettingsField.GitNativeTools));
         Assert.Equal("Web search method", SettingsMenu.FieldName(SettingsField.WebSearchMethod));
         Assert.Equal("duckduckgo", SettingsMenu.FieldValue(SettingsField.WebSearchMethod, data, _settings.ProfileDirectory));
@@ -2819,12 +2820,12 @@ public partial class SettingsMenuTests : IDisposable
 
     /// <summary>The menu over a pane with geometry: every list is a level of the pane, the notices its status line.</summary>
     /// <param name="browseFolder">The folder picker the Working directory (cwd) row opens (2026-09-22); null leaves the row asking for a typed path, as it did before the picker.</param>
-    private (SettingsMenu Menu, ScreenPane Pane) PaneMenu(Func<CancellationToken, Task<string?>>? browseFolder = null)
+    private (SettingsMenu Menu, ScreenPane Pane) PaneMenu(Func<CancellationToken, Task<string?>>? browseFolder = null, Func<IReadOnlyList<Skill>>? botChatSkills = null)
     {
         _console.Profile.Height = 40;
         var pane = new ScreenPane(_console, new ScreenGeometry(() => null), new ManualTimeProvider()) { Hint = () => "idle" };
         var keys = new KeySource(_console.Input, TimeSpan.FromMilliseconds(1));
-        var menu = new SettingsMenu(new ConsoleWithInput(pane, keys), _settings, f => _overrides.GetValueOrDefault(f), new InputLine(pane, keys), new TranscriptRenderer(pane), _speech, new MenuPane(pane, keys), _ => FakeBrowserPath, browseFolder: browseFolder);
+        var menu = new SettingsMenu(new ConsoleWithInput(pane, keys), _settings, f => _overrides.GetValueOrDefault(f), new InputLine(pane, keys), new TranscriptRenderer(pane), _speech, new MenuPane(pane, keys), _ => FakeBrowserPath, browseFolder: browseFolder, botChatSkills: botChatSkills);
         pane.Show();
         return (menu, pane);
     }
@@ -2918,7 +2919,7 @@ public partial class SettingsMenuTests : IDisposable
         string cwd = SettingsMenu.DefaultWorkingDirectoryLabel(_settings.ProfileDirectory);
         Assert.StartsWith("(", cwd);
         Assert.EndsWith(@"\profiles\default\files)", cwd);
-        Assert.Contains(Rule(240) + "\n" + Titled(Strip) + "\n \n▸ Profile                      default (" + _settings.ProfileDirectory + ")\n  New profile mode             basic\n  Working directory (cwd)      " + cwd + "\n  Queue messages               on\n  Queue cancel mode            empty\n  Memory                       on\n  Copy user prompt             on\n  Show image thumbnails        on\n  Image thumbnail size         small\n  Transcript markdown          on\n  Paste preview lines          25 lines\n  Hide /exit autocomplete      on\n  Command typo intercept       on\n  Keep command history         on\n  Welcome splash               fullsize\n  Working directory in header  off\n  Show toolbar                 all\n  Theme                        synthwave\n  Draft editor                 (default .txt editor)\n  Image viewer                 (built-in viewer)\n  Themed image viewer          on\n" + Rule(240) + "\n" + SettingsMenu.TabKeys + "\n", _console.Output);
+        Assert.Contains(Rule(240) + "\n" + Titled(Strip) + "\n \n▸ Profile                      default (" + _settings.ProfileDirectory + ")\n  New profile mode             basic\n  Working directory (cwd)      " + cwd + "\n  Queue messages               on\n  Queue cancel mode            empty\n  Memory                       on\n  Copy user prompt             on\n  Show image thumbnails        on\n  Image thumbnail size         small\n  Transcript markdown          on\n  Paste preview lines          25 lines\n  Hide /exit autocomplete      on\n  Command typo intercept       on\n  Keep command history         on\n  Welcome splash               fullsize\n  Working directory in header  off\n  Show toolbar                 5 of 11\n  Theme                        synthwave\n  Draft editor                 (default .txt editor)\n  Image viewer                 (built-in viewer)\n  Themed image viewer          on\n" + Rule(240) + "\n" + SettingsMenu.TabKeys + "\n", _console.Output);
         Assert.DoesNotContain("File /tree max length", _console.Output);   // the Files tab's since 2026-09-15
         Assert.DoesNotContain("LLM URL", _console.Output);
         Assert.False(pane.OverlayOpen);
@@ -4164,8 +4165,9 @@ public partial class SettingsMenuTests : IDisposable
     }
 
     /// <summary>
-    /// Show toolbar is a checklist (2026-09-29, the user's ask; a switch at row 105 until then): every item checked at
-    /// first, Enter or Space flipping one and saving at once in strip order, ESC back; the row reads how many are checked.
+    /// Show toolbar is a checklist (2026-09-29, the user's ask; a switch at row 105 until then): the defaults checked at
+    /// first (Settings, Tools, Skills, Sessions and the path since later that day), Enter or Space flipping one and saving at
+    /// once in strip order, ESC back; the row reads how many are checked.
     /// </summary>
     [Fact]
     public async Task OnThePane_ShowToolbar_IsAChecklist_SavedInStripOrder_NeedingNoReconnect()
@@ -4181,12 +4183,49 @@ public partial class SettingsMenuTests : IDisposable
 
         Assert.Equal(SettingsChanges.None, await menu.ShowAsync(CancellationToken.None));
 
-        Assert.Equal(["tools", "mcp", "skills", "sys", "sessions", "usage", "memory", "cmdlist", "police"], _settings.Current.ToolbarItems);
+        Assert.Equal(["tools", "skills", "sessions"], _settings.Current.ToolbarItems);
         Assert.Contains("[x] ⚙️  Settings", _console.Output);
         Assert.Contains("[ ] ⚙️  Settings", _console.Output);
-        Assert.Contains("[ ]     Working directory path", _console.Output);
-        Assert.Contains("  · Show toolbar: 10 of 11", _console.Output);
-        Assert.Contains("  · Show toolbar: 9 of 11", _console.Output);
+        Assert.Contains("[x] 📂  Working directory path", _console.Output);
+        Assert.Contains("[ ] 📂  Working directory path", _console.Output);
+        Assert.Contains("[ ] 🔌  MCP", _console.Output);
+        Assert.Contains("  · Show toolbar: 4 of 11", _console.Output);
+        Assert.Contains("  · Show toolbar: 3 of 11", _console.Output);
+        pane.Dispose();
+    }
+
+    /// <summary>
+    /// The checklist's title-row buttons (2026-09-29, the user's ask, the Folders pane's collapse all their model): A ticks
+    /// every item — a full list — N none, a click on a button the same; each saves at once, and one that changes nothing saves nothing.
+    /// </summary>
+    [Fact]
+    public async Task OnThePane_ShowToolbar_SelectAll_AndSelectNone_ByKey_AndByClick()
+    {
+        var (menu, pane) = PaneMenu();
+        Down(SettingsMenu.TabFields[(int)SettingsTab.General].ToList().IndexOf(SettingsField.ToolbarItems));
+        Push(Keys.Enter);
+        Push(Keys.Char('a'));                   // every item
+        Push(Keys.Char('A'));                   // again: nothing to save
+        Push(Keys.Escape, Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Equal(ToolbarItems.Names, _settings.Current.ToolbarItems);
+        Assert.Contains(SettingsMenu.SelectAllButton, _console.Output);
+        Assert.Contains(SettingsMenu.SelectNoneButton, _console.Output);
+        Assert.Contains(SettingsMenu.ToggleKeys, _console.Output);
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(_console.Output, "  · Show toolbar: all"));
+        pane.Dispose();
+
+        (menu, pane) = PaneMenu();
+        Down(SettingsMenu.TabFields[(int)SettingsTab.General].ToList().IndexOf(SettingsField.ToolbarItems));
+        Push(Keys.Enter);
+        Push(Keys.Char('n'));                   // none: no toolbar
+        Push(Keys.Escape, Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Equal([], _settings.Current.ToolbarItems);
         pane.Dispose();
     }
 
@@ -4194,6 +4233,7 @@ public partial class SettingsMenuTests : IDisposable
     [Fact]
     public async Task OnThePane_ShowToolbar_AllOff_IsAnEmptyList()
     {
+        _settings.Update(d => d.ToolbarItems = [.. ToolbarItems.Names]);   // every item on, as the default was until later on 2026-09-29
         var (menu, pane) = PaneMenu();
         Down(SettingsMenu.TabFields[(int)SettingsTab.General].ToList().IndexOf(SettingsField.ToolbarItems));
         Push(Keys.Enter);
@@ -4211,22 +4251,69 @@ public partial class SettingsMenuTests : IDisposable
         pane.Dispose();
     }
 
-    /// <summary>The last unchecked item checked again (2026-09-29): every item saves as null, so one added later joins.</summary>
+    /// <summary>
+    /// Botchat preloaded skills on the pane (2026-09-27; the first drive of it, with its buttons, 2026-09-29): Space flips one,
+    /// A ticks every installed skill, N none — saved as null — and a name ticked before but no longer installed stays through all three.
+    /// </summary>
     [Fact]
-    public async Task OnThePane_ShowToolbar_AllOn_SavesNull()
+    public async Task OnThePane_BotchatPreloadedSkills_FlipsOne_SelectsAll_ThenNone_KeepingAGoneName()
     {
-        _settings.Update(d => d.ToolbarItems = [.. ToolbarItems.Names.Where(n => n != "police")]);
+        _settings.Update(d => d.BotChatPreloadedSkills = ["gone"]);
+        Skill[] skills = [new("haiku", "Writes haiku.", SkillScope.Profile, _dir), new("pony-prompts", "Writes prompts.", SkillScope.Profile, _dir)];
+        var (menu, pane) = PaneMenu(botChatSkills: () => skills);
+        GoTo(SettingsTab.BotChat);
+        Down(SettingsMenu.TabFields[(int)SettingsTab.BotChat].ToList().IndexOf(SettingsField.BotChatPreloadedSkills));
+        Push(Keys.Enter);
+        Push(Keys.Char(' '));                   // haiku on
+        Push(Keys.Escape, Keys.Escape);
+        await menu.ShowAsync(CancellationToken.None);
+        pane.Dispose();
+
+        Assert.Equal(["haiku", "gone"], _settings.Current.BotChatPreloadedSkills);
+
+        (menu, pane) = PaneMenu(botChatSkills: () => skills);
+        GoTo(SettingsTab.BotChat);
+        Down(SettingsMenu.TabFields[(int)SettingsTab.BotChat].ToList().IndexOf(SettingsField.BotChatPreloadedSkills));
+        Push(Keys.Enter);
+        Push(Keys.Char('a'));                   // both
+        Push(Keys.Escape, Keys.Escape);
+        await menu.ShowAsync(CancellationToken.None);
+        pane.Dispose();
+
+        Assert.Equal(["haiku", "pony-prompts", "gone"], _settings.Current.BotChatPreloadedSkills);
+
+        (menu, pane) = PaneMenu(botChatSkills: () => skills);
+        GoTo(SettingsTab.BotChat);
+        Down(SettingsMenu.TabFields[(int)SettingsTab.BotChat].ToList().IndexOf(SettingsField.BotChatPreloadedSkills));
+        Push(Keys.Enter);
+        Push(Keys.Char('n'));                   // none of the installed ones; the gone name stays
+        Push(Keys.Escape, Keys.Escape);
+        await menu.ShowAsync(CancellationToken.None);
+        pane.Dispose();
+
+        Assert.Equal(["gone"], _settings.Current.BotChatPreloadedSkills);
+        Assert.Contains(SettingsMenu.SelectAllButton, _console.Output);
+    }
+
+    /// <summary>
+    /// Checked back to exactly the defaults (later on 2026-09-29): saved as null, so the profile follows them; every item was
+    /// null until the defaults narrowed that day.
+    /// </summary>
+    [Fact]
+    public async Task OnThePane_ShowToolbar_TheDefaultsAgain_SaveNull()
+    {
+        _settings.Update(d => d.ToolbarItems = ["settings", "tools", "skills", "sessions"]);
         var (menu, pane) = PaneMenu();
         Down(SettingsMenu.TabFields[(int)SettingsTab.General].ToList().IndexOf(SettingsField.ToolbarItems));
         Push(Keys.Enter);
-        Down(9);
-        Push(Keys.Char(' '));                   // the officer back: every item
+        Down(10);
+        Push(Keys.Char(' '));                   // the path back: the defaults
         Push(Keys.Escape, Keys.Escape);
 
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Null(_settings.Current.ToolbarItems);
-        Assert.Contains("  · Show toolbar: all", _console.Output);
+        Assert.Contains("  · Show toolbar: 5 of 11", _console.Output);
         pane.Dispose();
     }
 

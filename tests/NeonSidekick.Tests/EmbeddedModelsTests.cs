@@ -243,6 +243,21 @@ public class EmbeddedModelsTests : IDisposable
     }
 
     [Fact]
+    public async Task Install_WithEmbeddedDrafterOff_LeavesTheDrafterOut_TheModelStillInstalled()
+    {
+        // Embedded drafter (2026-09-29, the user's ask): off, an install fetches the weights and the projector only.
+        var (model, files, _) = WithDrafter();
+        var host = new FakeLlamaServerHost();
+        await using var service = new EmbeddedLlmService(files, host, Cuda);
+
+        var result = await service.InstallAsync(model, new AppSettingsData { EmbeddedDrafter = false }, null, CancellationToken.None);
+
+        Assert.True(result.Ok, result.Detail);
+        Assert.True(files.State(model).IsInstalled);
+        Assert.False(File.Exists(files.DrafterPath(model)!));
+    }
+
+    [Fact]
     public async Task Start_WithMtpOn_FetchesAMissingDrafter_AndDraftsWithIt()
     {
         var (model, files, drafter) = WithDrafter();
@@ -257,8 +272,8 @@ public class EmbeddedModelsTests : IDisposable
         Assert.Equal(drafter, File.ReadAllBytes(files.DrafterPath(model)!));
         Assert.Equal((files.DrafterPath(model), true), (host.Launches[0].DrafterPath, host.Launches[0].Mtp));
 
-        // Embedded MTP off: neither, so the launch differs and the real host restarts the server.
-        await service.StartAsync(model, new AppSettingsData { EmbeddedMtp = false }, null, CancellationToken.None);
+        // Embedded drafter off: neither, so the launch differs and the real host restarts the server.
+        await service.StartAsync(model, new AppSettingsData { EmbeddedDrafter = false }, null, CancellationToken.None);
         Assert.Equal((null, false), (host.Launches[1].DrafterPath, host.Launches[1].Mtp));
     }
 

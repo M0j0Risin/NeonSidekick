@@ -831,8 +831,8 @@ internal sealed partial class SettingsMenu
             var on = ComfyWorkflowCatalog.Offered(installed, offered).Select(w => w.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
             int width = installed.Max(w => w.Name.Length) + 2;
             var page = new MenuPage(Crumb(FieldName(SettingsField.ComfyWorkflowsOffered)), installed.Select(w => ComfyOfferedRow(w, on.Contains(w.Name), width)).ToList(), ToggleKeys) { SpaceToggles = true };
-            int? picked = await PickAsync(page, Math.Min(cursor, installed.Count - 1), cancellationToken).ConfigureAwait(false);
-            if (picked is not { } index)
+            var picked = await PickChecklistAsync(page, Math.Min(cursor, installed.Count - 1), cancellationToken).ConfigureAwait(false);
+            if (picked is not { } pick)
             {
                 if (!changed)
                 {
@@ -842,9 +842,17 @@ internal sealed partial class SettingsMenu
                 return changed;
             }
 
-            cursor = index;
-            string name = installed[index].Name;
-            var next = installed.Select(w => w.Name).Where(n => on.Contains(n) != string.Equals(n, name, StringComparison.OrdinalIgnoreCase)).ToList();
+            cursor = pick.Row;
+            string name = installed[pick.Row].Name;
+            // Select all ticks the workflows installed now, one added later still starting hidden (2026-09-29, the user's call).
+            var next = pick.Button == SelectAllIndex ? installed.Select(w => w.Name).ToList()
+                : pick.Button == SelectNoneIndex ? []
+                : installed.Select(w => w.Name).Where(n => on.Contains(n) != string.Equals(n, name, StringComparison.OrdinalIgnoreCase)).ToList();
+            if (offered is not null && next.Count == on.Count && next.All(on.Contains))
+            {
+                continue;   // a button that changes nothing saves nothing; from "not narrowed", select all narrows to today's list
+            }
+
             // A name ticked before but no longer installed stays in the list: it counts again if the workflow comes back.
             if (offered is not null)
             {

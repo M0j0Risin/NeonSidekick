@@ -104,7 +104,7 @@ public sealed class EmbeddedLlmService : IEmbeddedLlm
             return ModelResult.Failed(runtime.Path, EmbeddedLlmText.RuntimeFailed(runtime.Detail));
         }
 
-        var installed = await _files.InstallAsync(model, phase, cancellationToken).ConfigureAwait(false);
+        var installed = await _files.InstallAsync(model, phase, cancellationToken, drafter: effective.EmbeddedDrafter).ConfigureAwait(false);
         return installed.Ok ? installed : ModelResult.Failed(installed.Path, EmbeddedLlmText.InstallFailed(model, installed.Detail));
     }
 
@@ -175,14 +175,14 @@ public sealed class EmbeddedLlmService : IEmbeddedLlm
     }
 
     /// <summary>
-    /// The MTP half of a launch (2026-09-29): nothing with Embedded MTP off or for a model that cannot draft; a
+    /// The MTP half of a launch (2026-09-29): nothing with Embedded drafter off or for a model that cannot draft; a
     /// built-in head (Qwen3.8) is on with no file; a drafter (Gemma 4) is fetched first when a model installed before
     /// drafters joined the catalog lacks it. A drafter that cannot be fetched is logged and the model starts without
     /// MTP — slower, never broken; the next start tries again.
     /// </summary>
     private async Task<(string? Drafter, bool Mtp)> MtpAsync(EmbeddedModel model, AppSettingsData effective, Action<string>? phase, CancellationToken cancellationToken)
     {
-        if (!effective.EmbeddedMtp || !model.HasMtp)
+        if (!effective.EmbeddedDrafter || !model.HasMtp)
         {
             return (null, false);
         }

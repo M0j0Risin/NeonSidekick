@@ -26,17 +26,17 @@ public partial class SettingsMenuTests
         Assert.Equal("STT", SettingsMenu.TabTitles[tab - 1]);   // the Claude (API) tab sat between until it went to /tools (2026-09-29)
         Assert.Equal("Botchat", SettingsMenu.TabTitles[tab + 1]);
         // The switch first and MTP last (2026-09-29, the user's asks).
-        Assert.Equal([SettingsField.EmbeddedLlmEnabled, SettingsField.EmbeddedModels, SettingsField.EmbeddedBackend, SettingsField.EmbeddedContextSize, SettingsField.EmbeddedGpuLayers, SettingsField.EmbeddedVision, SettingsField.EmbeddedMtp], SettingsMenu.TabFields[tab]);
+        Assert.Equal([SettingsField.EmbeddedLlmEnabled, SettingsField.EmbeddedModels, SettingsField.EmbeddedBackend, SettingsField.EmbeddedContextSize, SettingsField.EmbeddedGpuLayers, SettingsField.EmbeddedVision, SettingsField.EmbeddedDrafter], SettingsMenu.TabFields[tab]);
         Assert.All(SettingsMenu.TabFields[tab], f => Assert.True(SettingsMenu.IsLlmField(f), f.ToString()));
         Assert.All(SettingsMenu.TabFields[tab], f => Assert.True(SettingsMenu.RefusedMidTurn(f), f.ToString()));
-        Assert.True(SettingsMenu.IsToggle(SettingsField.EmbeddedVision) && SettingsMenu.IsToggle(SettingsField.EmbeddedLlmEnabled) && SettingsMenu.IsToggle(SettingsField.EmbeddedMtp));
+        Assert.True(SettingsMenu.IsToggle(SettingsField.EmbeddedVision) && SettingsMenu.IsToggle(SettingsField.EmbeddedLlmEnabled) && SettingsMenu.IsToggle(SettingsField.EmbeddedDrafter));
         Assert.False(SettingsMenu.IsToggle(SettingsField.EmbeddedBackend));
-        Assert.Equal(["Embedded LLM enabled", "Embedded models", "Embedded backend", "Embedded context size", "Embedded GPU layers", "Embedded vision", "Embedded MTP"], SettingsMenu.TabFields[tab].Select(SettingsMenu.FieldName));
+        Assert.Equal(["Embedded LLM enabled", "Embedded models", "Embedded backend", "Embedded context size", "Embedded GPU layers", "Embedded vision", "Embedded drafter"], SettingsMenu.TabFields[tab].Select(SettingsMenu.FieldName));
         var data = new AppSettingsData();
-        Assert.True(data.EmbeddedLlmEnabled && data.EmbeddedMtp);   // both on by default
-        Assert.Equal(("on", "on"), (SettingsMenu.FieldValue(SettingsField.EmbeddedLlmEnabled, data, "C:\\p"), SettingsMenu.FieldValue(SettingsField.EmbeddedMtp, data, "C:\\p")));
-        var copy = AppSettings.Copy(new AppSettingsData { EmbeddedLlmEnabled = false, EmbeddedMtp = false });
-        Assert.False(copy.EmbeddedLlmEnabled || copy.EmbeddedMtp);
+        Assert.True(data.EmbeddedLlmEnabled && data.EmbeddedDrafter);   // both on by default
+        Assert.Equal(("on", "on"), (SettingsMenu.FieldValue(SettingsField.EmbeddedLlmEnabled, data, "C:\\p"), SettingsMenu.FieldValue(SettingsField.EmbeddedDrafter, data, "C:\\p")));
+        var copy = AppSettings.Copy(new AppSettingsData { EmbeddedLlmEnabled = false, EmbeddedDrafter = false });
+        Assert.False(copy.EmbeddedLlmEnabled || copy.EmbeddedDrafter);
     }
 
     [Fact]
@@ -143,6 +143,93 @@ public partial class SettingsMenuTests
         Assert.Contains(EmbeddedLlmText.RemoveQuestion(EmbeddedModelCatalog.Find("gemma-4-e2b")!), _console.Output);
         Assert.Contains(EmbeddedLlmText.Removed(EmbeddedModelCatalog.Find("gemma-4-e2b")!), _console.Output);
         Assert.Null(menu.TakePendingEmbeddedModel());
+        pane.Dispose();
+    }
+
+    /// <summary>
+    /// A partly downloaded model offers Remove too (2026-09-29, the user's ask): after a yes the screen's hook runs first — it
+    /// stops a download of that model under way — then the folder goes, and the catalog stays.
+    /// </summary>
+    [Fact]
+    public async Task OnThePane_APartialModel_OffersRemove_TheHookFirst_ThenTheFolder()
+    {
+        var (menu, pane, embedded) = EmbeddedPane(new FakeEmbeddedLlm().Partial("gemma-4-e4b-qat", 40));
+        var removesAtHook = new List<int>();
+        menu.BeforeEmbeddedRemove = (model, _) =>
+        {
+            Assert.Equal("gemma-4-e4b-qat", model.Id);
+            removesAtHook.Add(embedded.Removes.Count);
+            return Task.CompletedTask;
+        };
+        GoTo(SettingsTab.Embedded);
+        Push(Keys.Down, Keys.Enter);            // the catalog, on Gemma 4 12B
+        Down(21);
+        Push(Keys.Enter);                       // Gemma 4 E4B QAT, the twenty-second row: its page
+        Push(Keys.Down, Keys.Enter);            // Remove (the partial download)
+        Push(Keys.Down, Keys.Enter);            // Yes
+        Push(Keys.Escape, Keys.Escape);
+
+        Assert.Equal(SettingsChanges.None, await menu.ShowAsync(CancellationToken.None));
+
+        Assert.Equal(["gemma-4-e4b-qat"], embedded.Removes);
+        Assert.Equal([0], removesAtHook);       // the hook before the removal
+        Assert.Contains(SettingsMenu.RemovePartialRow, _console.Output);
+        Assert.Contains(EmbeddedLlmText.RemovePartialQuestion(EmbeddedModelCatalog.Find("gemma-4-e4b-qat")!), _console.Output);
+        Assert.Null(menu.TakePendingEmbeddedModel());
+        pane.Dispose();
+    }
+
+    /// <summary>
+    /// Removing the model the saved LLM names (2026-09-29, the user's ask): the URL and model are cleared with a notice, and
+    /// the menu reports an LLM change so the screen reconnects — to none. Another model's removal leaves them be.
+    /// </summary>
+    [Fact]
+    public async Task OnThePane_RemovingTheModelInUse_ClearsTheLlmUrlAndModel_AndAsksForAReconnect()
+    {
+        _settings.Update(d =>
+        {
+            d.LlmUrl = "embedded";
+            d.LlmModel = "gemma-4-e2b";
+        });
+        var (menu, pane, embedded) = EmbeddedPane(new FakeEmbeddedLlm().Installed("gemma-4-e2b"));
+        GoTo(SettingsTab.Embedded);
+        Push(Keys.Down, Keys.Enter);            // the catalog
+        Down(18);
+        Push(Keys.Enter);                       // Gemma 4 E2B
+        Push(Keys.Down, Keys.Enter);            // Remove
+        Push(Keys.Down, Keys.Enter);            // Yes
+        Push(Keys.Escape, Keys.Escape);
+
+        Assert.Equal(SettingsChanges.Llm, await menu.ShowAsync(CancellationToken.None));
+
+        Assert.Equal(["gemma-4-e2b"], embedded.Removes);
+        Assert.Equal(("", ""), (_settings.Current.LlmUrl, _settings.Current.LlmModel));
+        Assert.Contains(SettingsMenu.EmbeddedLlmClearedNotice, _console.Output);
+        pane.Dispose();
+    }
+
+    [Fact]
+    public async Task OnThePane_RemovingAnotherModel_LeavesTheLlmBe()
+    {
+        _settings.Update(d =>
+        {
+            d.LlmUrl = "embedded";
+            d.LlmModel = "gemma-4-12b";
+        });
+        var (menu, pane, embedded) = EmbeddedPane(new FakeEmbeddedLlm().Installed("gemma-4-e2b", "gemma-4-12b"));
+        GoTo(SettingsTab.Embedded);
+        Push(Keys.Down, Keys.Enter);
+        Down(18);
+        Push(Keys.Enter);                       // Gemma 4 E2B
+        Push(Keys.Down, Keys.Enter);
+        Push(Keys.Down, Keys.Enter);
+        Push(Keys.Escape, Keys.Escape);
+
+        Assert.Equal(SettingsChanges.None, await menu.ShowAsync(CancellationToken.None));
+
+        Assert.Equal(["gemma-4-e2b"], embedded.Removes);
+        Assert.Equal(("embedded", "gemma-4-12b"), (_settings.Current.LlmUrl, _settings.Current.LlmModel));
+        Assert.DoesNotContain(SettingsMenu.EmbeddedLlmClearedNotice, _console.Output);
         pane.Dispose();
     }
 

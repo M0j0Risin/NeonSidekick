@@ -10,7 +10,7 @@ namespace NeonSidekick.Settings;
 ///
 /// <para><b>The key is the label (2026-09-17, the user's call):</b> the tab's prefix as the row shows
 /// it (<c>Llm</c>, <c>Tts</c>, <c>Stt</c>, <c>Ask</c>, <c>File</c>/<c>Tree</c>, <c>Web</c>,
-/// <c>Skill</c>/<c>Reflection</c>, <c>Session</c>, <c>GitNative</c> for the Git (native) tab; none on General) and the label's words, no <c>Enabled</c> suffix on a
+/// <c>Skill</c>/<c>Reflection</c>, <c>Session</c>, <c>GitNative</c> for the Git tab; none on General) and the label's words, no <c>Enabled</c> suffix on a
 /// switch; a relabelled row is renamed with it. <see cref="SchemaVersion"/> first, then the five
 /// <c>/settings</c> tabs' blocks in the tabs' order, then the <c>/skills</c> pane's Options tab (Skills),
 /// then the <c>/tools</c> pane's (Tools, Ask, Files, Git, Shell, Web — the strip's order until 2026-09-21, when it became
@@ -179,7 +179,9 @@ public sealed class AppSettingsData
     /// <c>/usage</c> (📊, since 2026-09-29), then 💾 <c>/memory</c> while <see cref="Memory"/> is on, the lock
     /// <c>/cmdlist</c> that follows <see cref="ShellCommandPolicy"/>, and 👮 while <see cref="ShellPoliceOutsidePaths"/>
     /// is on — the lock since later that day, the disk and the officer since 2026-09-22), the working directory in force
-    /// (<c>/cwd browse</c>) at its right. Null is every item, one added later too; an empty list draws no row at all.
+    /// (<c>/cwd browse</c>) at its right. Null is <see cref="App.ToolbarItems.Defaults"/> — Settings, Tools, Skills, Sessions
+    /// and the path since later on 2026-09-29 (the user's pick; every item, one added later too, before); an empty list draws
+    /// no row at all.
     /// Read on every pane draw and on its tick, so a change shows when the settings pane closes. No variable.
     /// </summary>
     public List<string>? ToolbarItems { get; set; }
@@ -1125,11 +1127,11 @@ public sealed class AppSettingsData
     /// The <c>user.email</c> that <c>/gituser</c> writes into the working directory's repository config
     /// (2026-09-21), with <see cref="GitNativeName"/>; empty = not set, and the command refuses — as it does
     /// while <see cref="GitNativeTools"/> is off (later that day). Never read by the git tools — a commit signs
-    /// with whatever git's own config holds. The Git (native) tab of <c>/tools</c>, fourth row. No variable.
+    /// with whatever git's own config holds. The Git tab of <c>/tools</c>, fourth row. No variable.
     /// </summary>
     public string GitNativeEmail { get; set; } = "";
 
-    /// <summary>The <c>user.name</c> <c>/gituser</c> writes beside <see cref="GitNativeEmail"/> (2026-09-21); empty = not set. The Git (native) tab's last row. No variable.</summary>
+    /// <summary>The <c>user.name</c> <c>/gituser</c> writes beside <see cref="GitNativeEmail"/> (2026-09-21); empty = not set. The Git tab's last row. No variable.</summary>
     public string GitNativeName { get; set; } = "";
 
     // ─── Obsidian ───────────────────────────────────────────────────────────────
@@ -1700,13 +1702,15 @@ public sealed class AppSettingsData
     public bool EmbeddedVision { get; set; } = true;
 
     /// <summary>
-    /// Whether the embedded server drafts with MTP, multi-token prediction (2026-09-29, the user's ask; on by default):
+    /// Whether the embedded server drafts ahead, MTP multi-token prediction (2026-09-29, the user's ask; on by default):
     /// speculative decoding with the model's drafter (<see cref="EmbeddedLlm.EmbeddedModel.Drafter"/>, fetched at the start
     /// when missing) or the head its weights carry (<see cref="EmbeddedLlm.EmbeddedModel.MtpHead"/>). The model checks
-    /// every drafted token, so the answer is the same, only faster; off is the way back if a build misbehaves with it.
-    /// A model without MTP runs the same either way. No variable.
+    /// every drafted token, so the answer is the same, only faster; off is the way back if a build misbehaves with it, and
+    /// off no drafter is loaded, nor downloaded with an install (the next start with it on fetches one). A model without
+    /// MTP runs the same either way. <c>EmbeddedMtp</c> / <c>Embedded MTP</c> until later that day, when the user named it
+    /// <c>Embedded drafter</c>; the key follows the label, so a saved off went back to on once. No variable.
     /// </summary>
-    public bool EmbeddedMtp { get; set; } = true;
+    public bool EmbeddedDrafter { get; set; } = true;
 
     // ─── Home Assistant (2026-09-28) ────────────────────────────────────────────
     // The ha_ tools and /ha (2026-09-28, the user's ask: "plan an integration for Home Assistant" — a Docker instance with

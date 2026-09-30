@@ -776,7 +776,7 @@ public sealed class AppSettings : IDisposable
         EmbeddedGpuLayers = source.EmbeddedGpuLayers,
         EmbeddedVision = source.EmbeddedVision,
         EmbeddedLlmEnabled = source.EmbeddedLlmEnabled,
-        EmbeddedMtp = source.EmbeddedMtp,
+        EmbeddedDrafter = source.EmbeddedDrafter,
         HomeAssistantTools = source.HomeAssistantTools,
         HomeAssistantUrl = source.HomeAssistantUrl,
         HomeAssistantToken = source.HomeAssistantToken,

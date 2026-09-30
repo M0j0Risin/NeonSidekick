@@ -8,7 +8,7 @@ namespace NeonSidekick.EmbeddedLlm;
 /// here) keeps the server, so gigabytes are not reloaded for nothing; any difference restarts it.
 /// <paramref name="MayFallBack"/> is true when the backend was chosen by <c>auto</c>, so a CUDA start that fails
 /// may be retried on Vulkan. <paramref name="Mtp"/> turns on MTP speculative decoding (2026-09-29), drafting with
-/// <paramref name="DrafterPath"/> when there is one and with the weights' own head when not; toggling Embedded MTP
+/// <paramref name="DrafterPath"/> when there is one and with the weights' own head when not; toggling Embedded drafter
 /// changes the launch, so it restarts the server.
 /// </summary>
 public sealed record LlamaLaunch(
