@@ -70,6 +70,9 @@ public partial class ChatScreenTests : IDisposable
     /// <summary>What /draft opens its temporary file with (2026-09-19): a lambda that writes the file and returns, or waits on the token; null = the screen has no editor.</summary>
     private Func<string, string, CancellationToken, Task>? _editDraft;
     private Func<Uri, NeonSidekick.Comfy.ComfyClient>? _comfyClient;
+
+    // The Home Assistant client the screen's /ha reaches (2026-09-30: a stub server under a reply); null = the real one.
+    private Func<Uri, string, NeonSidekick.HomeAssistant.HaClient>? _haClient;
     private Action<string>? _openViewer;   // the picture viewer (2026-09-27): null = none, as off Windows
     private Action<string>? _viewPicture;   // a double-clicked picture in that viewer (later on 2026-09-27): null = none, the registered app
     private Action<string>? _followViewer;   // the strip's arrows moving an open viewer (2026-09-28): null = none
@@ -265,7 +268,7 @@ public partial class ChatScreenTests : IDisposable
     private async Task<string> RunAsync(IAnsiConsoleInput input, CancellationToken cancellationToken = default)
     {
         _keys = new KeySource(input, TimeSpan.FromMilliseconds(1));
-        var screen = new ChatScreen(_console, _settings, () => _settings.Current, _overriddenBy, _session, _speech, _keys, _voice, _openFile ?? _openedFiles.Add, RenderScreen, _time, _geometry, mouse: _mouse, copyToClipboard: CopyToClipboard, random: _random, clipboardImage: _clipboardImage, web: _web, setTitle: _titles.Add, externalSkills: Path.Combine(_dir, "agents-skills"), holdWheel: _holdWheel, splash: _splash, editDraft: _editDraft, mcp: _mcp, logFile: _logFile, comfyClient: _comfyClient, openImage: _openImage, claude: _claudeCli, openViewer: _openViewer, viewPicture: _viewPicture, followViewer: _followViewer, printSpooler: _printSpooler, perfSource: () => _perfSource);
+        var screen = new ChatScreen(_console, _settings, () => _settings.Current, _overriddenBy, _session, _speech, _keys, _voice, _openFile ?? _openedFiles.Add, RenderScreen, _time, _geometry, mouse: _mouse, copyToClipboard: CopyToClipboard, random: _random, clipboardImage: _clipboardImage, web: _web, setTitle: _titles.Add, externalSkills: Path.Combine(_dir, "agents-skills"), holdWheel: _holdWheel, splash: _splash, editDraft: _editDraft, mcp: _mcp, logFile: _logFile, comfyClient: _comfyClient, openImage: _openImage, claude: _claudeCli, openViewer: _openViewer, viewPicture: _viewPicture, followViewer: _followViewer, printSpooler: _printSpooler, perfSource: () => _perfSource, haClient: _haClient);
         _running = screen;
         int code = await screen.RunAsync(cancellationToken);
         Assert.Equal(0, code);
@@ -11210,6 +11213,8 @@ public partial class ChatScreenTests : IDisposable
     [InlineData(SlashCommand.Cwd, true, MidTurnClass.Deferred)]
     [InlineData(SlashCommand.Tree, false, MidTurnClass.Pane)]   // the info pane, later on 2026-09-27
     [InlineData(SlashCommand.Vault, true, MidTurnClass.Pane)]
+    [InlineData(SlashCommand.HomeAssistant, false, MidTurnClass.Pane)]   // 2026-09-30: on the watcher, the reply streaming on
+    [InlineData(SlashCommand.HomeAssistant, true, MidTurnClass.Pane)]
     [InlineData(SlashCommand.Window, false, MidTurnClass.Quick)]   // later on 2026-09-27
     [InlineData(SlashCommand.Perf, false, MidTurnClass.Quick)]     // later on 2026-09-29: display only
     [InlineData(SlashCommand.Perf, true, MidTurnClass.Quick)]
@@ -11733,6 +11738,59 @@ public partial class ChatScreenTests : IDisposable
         Assert.DoesNotContain("  · " + TreeText.LastBranch + "docs", output);   // no tree lines as notices
         Assert.DoesNotContain(ChatScreen.MidTurnDeferredNotice("/tree"), output);
         Assert.DoesNotContain(ChatScreen.CancelledNotice, output);
+        Assert.Single(_chat.Requests);
+    }
+
+    /// <summary>
+    /// <c>/ha</c> under a reply (2026-09-30, the user's ask: it waited for the reply to end): the call runs on the watcher and
+    /// its line lands in the reply, which runs on; a failure is its error line the same way.
+    /// </summary>
+    [Fact]
+    public async Task MidTurn_HomeAssistant_RunsAtOnce_ItsLineInTheReply()
+    {
+        const string server = "http://ha.lan:8123";
+        var stub = new StubHttpMessageHandler()
+            .Map(server + "/api/states", System.Net.HttpStatusCode.OK, File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "ha", "states.json")))
+            .Map(server + "/api/template", System.Net.HttpStatusCode.OK, File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "ha", "areas.json")), "text/plain")
+            .Map(server + "/api/services/", System.Net.HttpStatusCode.OK, "[]");
+        _haClient = (url, token) => new NeonSidekick.HomeAssistant.HaClient(url, token, new HttpClient(stub));
+        _settings.Update(d =>
+        {
+            d.HomeAssistantUrl = server;
+            d.HomeAssistantToken = "test-token";
+        });
+        MidTurnFixture(i =>
+        {
+            if (i == 1)
+            {
+                PushLine("/ha scene indoor night");
+            }
+        });
+
+        string output = await RunAsync();
+
+        Assert.Contains("  · scene.turn_on → Indoor Night", output);
+        Assert.DoesNotContain(ChatScreen.MidTurnDeferredNotice("/ha"), output);
+        Assert.DoesNotContain(ChatScreen.CancelledNotice, output);
+        Assert.Single(_chat.Requests);
+    }
+
+    [Fact]
+    public async Task MidTurn_HomeAssistant_NotConfigured_IsItsErrorLine_InTheReply()
+    {
+        _settings.Update(d => d.HomeAssistantUrl = "");
+        MidTurnFixture(i =>
+        {
+            if (i == 1)
+            {
+                PushLine("/ha");
+            }
+        });
+
+        string output = await RunAsync();
+
+        Assert.Contains(NeonSidekick.HomeAssistant.HaText.NotConfigured, output);
+        Assert.DoesNotContain(ChatScreen.MidTurnDeferredNotice("/ha"), output);
         Assert.Single(_chat.Requests);
     }
 

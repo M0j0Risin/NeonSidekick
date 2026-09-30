@@ -18,6 +18,12 @@ public partial class SettingsMenuTests
         return (menu, pane, embedded);
     }
 
+    /// <summary>
+    /// A model's row in the catalog as a visit opens it: the normal builds alone, the uncensored ones left out by default
+    /// (later on 2026-09-30, the user's ask), so the rows below count from the catalog rather than by hand.
+    /// </summary>
+    private static int NormalRow(string id) => EmbeddedModelCatalog.Models.Where(m => !m.Uncensored).ToList().FindIndex(m => m.Id == id);
+
     [Fact]
     public void TheTab_IsAfterGeneral_WithItsNineRows_AllButTheFilterTypeReconnecting()
     {
@@ -130,8 +136,8 @@ public partial class SettingsMenuTests
         var (menu, pane, embedded) = EmbeddedPane(new FakeEmbeddedLlm().Installed("gemma-4-e2b"));
         GoTo(SettingsTab.Embedded);
         Push(Keys.Down, Keys.Enter);            // Embedded models (under the switch since 2026-09-29): the catalog, on Gemma 4 12B
-        Down(18);
-        Push(Keys.Enter);                       // Gemma 4 E2B, the nineteenth row since the 26B A4B and 31B builds: its page
+        Down(NormalRow("gemma-4-e2b"));
+        Push(Keys.Enter);                       // Gemma 4 E2B: its page
         Push(Keys.Enter);                       // Use now
 
         Assert.Equal(SettingsChanges.None, await menu.ShowAsync(CancellationToken.None));
@@ -148,12 +154,12 @@ public partial class SettingsMenuTests
     [Fact]
     public async Task OnThePane_TheCatalogsFilters_ThinTheRows_ASizeAndUncensoredTogether()
     {
-        // Later on 2026-09-29 (the user's ask): 8GB (key 1) and uncensored (U) lit, the first row is the first catalog model
-        // at most 8 GB that is uncensored.
+        // Later on 2026-09-29 (the user's ask): 8GB (key 1) and uncensored (X since later on 2026-09-30) lit, the first row is
+        // the first catalog model at most 8 GB that is uncensored.
         var (menu, pane, _) = EmbeddedPane();
         GoTo(SettingsTab.Embedded);
         Push(Keys.Down, Keys.Enter);            // the catalog
-        Push(Keys.Char('1'), Keys.Char('U'));
+        Push(Keys.Char('1'), Keys.Char('X'));
         Push(Keys.Enter);                       // the first row left: its page
         Push(Keys.Enter);                       // Install
 
@@ -163,7 +169,7 @@ public partial class SettingsMenuTests
         var first = EmbeddedModelCatalog.Models.First(m => filter.Matches(m, EmbeddedFilterType.File));
         Assert.True(first.Uncensored);
         Assert.Equal(first.Id, menu.TakePendingEmbeddedModel()!.Id);
-        Assert.Contains(" 8GB    16GB    32GB    installed    uninstalled    uncensored ", _console.Output);   // the catalog's pair between (later on 2026-09-29)
+        Assert.Contains(" 8GB    16GB    32GB    installed    uninstalled    drafter    sort size    uncensored ", _console.Output);   // the catalog's pair after the sizes (later on 2026-09-29), uncensored last (later on 2026-09-30)
         Assert.Contains(EmbeddedModelFilter.CatalogKeys, _console.Output);
         pane.Dispose();
     }
@@ -187,7 +193,7 @@ public partial class SettingsMenuTests
 
         Assert.Equal(big.Id, menu.TakePendingEmbeddedModel()!.Id);
         Assert.Contains(" › " + small.Display, _console.Output);   // the sorted top row's page came first
-        Assert.Contains(" uncensored    drafter    sort size ", _console.Output);   // drafter between (later on 2026-09-30)
+        Assert.Contains(" drafter    sort size    uncensored ", _console.Output);   // uncensored last (later on 2026-09-30)
         pane.Dispose();
     }
 
@@ -215,13 +221,13 @@ public partial class SettingsMenuTests
     [Fact]
     public async Task OnThePane_InstalledAndUninstalled_AreARadioPair_OnTheDisksState()
     {
-        // Later on 2026-09-29 (the user's ask): I keeps the installed models, N the others, N again every one.
+        // Later on 2026-09-29 (the user's ask): I keeps the installed models, U the others (N until later on 2026-09-30).
         var (menu, pane, _) = EmbeddedPane(new FakeEmbeddedLlm().Installed("gemma-4-e2b"));
         GoTo(SettingsTab.Embedded);
         Push(Keys.Down, Keys.Enter);            // the catalog
         Push(Keys.Char('i'));                   // installed: E2B alone, the cursor on it
         Push(Keys.Enter, Keys.Escape);          // its page (Use now, Remove, Back), closed
-        Push(Keys.Char('n'));                   // uninstalled: E2B gone, the first row the catalog's first
+        Push(Keys.Char('u'));                   // uninstalled: E2B gone, the first row the catalog's first
         Push(Keys.Enter);                       // Gemma 4 12B's page
         Push(Keys.Enter);                       // Install
 
@@ -249,6 +255,50 @@ public partial class SettingsMenuTests
     }
 
     [Fact]
+    public async Task OnThePane_TheUncensoredBuilds_AreLeftOutByDefault_AndXShowsThemAlone()
+    {
+        // Later on 2026-09-30 (the user's ask): the normal E2B alone at first; X, the uncensored one alone; X again, the normal one.
+        var normal = EmbeddedModelCatalog.Find("gemma-4-e2b")!;
+        var uncensored = EmbeddedModelCatalog.Find("gemma-4-e2b-uncensored")!;
+        var (menu, pane, _) = EmbeddedPane(new FakeEmbeddedLlm { Catalog = [uncensored, normal] });
+        GoTo(SettingsTab.Embedded);
+        Push(Keys.Down, Keys.Enter);            // the catalog: the normal E2B alone
+        Push(Keys.Enter, Keys.Escape);          // its page, closed
+        Push(Keys.Char('x'), Keys.Home);        // uncensored: HauhauCS's E2B alone
+        Push(Keys.Enter);                       // its page
+        Push(Keys.Enter);                       // Install
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Equal(uncensored.Id, menu.TakePendingEmbeddedModel()!.Id);
+        Assert.Contains(" › " + normal.Display + " ", _console.Output);   // the normal one's page came first
+        pane.Dispose();
+    }
+
+    [Fact]
+    public async Task OnThePane_AnUncensoredModelInUse_OpensWithUncensoredLit_OnItsRow()
+    {
+        // Later on 2026-09-30 (the user's pick): the saved model is shown, and the cursor starts on it.
+        _settings.Update(d =>
+        {
+            d.LlmUrl = "embedded";
+            d.LlmModel = "gemma-4-e2b-uncensored";
+        });
+        var normal = EmbeddedModelCatalog.Find("gemma-4-e2b")!;
+        var uncensored = EmbeddedModelCatalog.Find("gemma-4-e2b-uncensored")!;
+        var (menu, pane, _) = EmbeddedPane(new FakeEmbeddedLlm { Catalog = [normal, uncensored] }.Installed(uncensored.Id));
+        GoTo(SettingsTab.Embedded);
+        Push(Keys.Down, Keys.Enter);            // the catalog: uncensored lit, on HauhauCS's E2B
+        Push(Keys.Enter);                       // its page
+        Push(Keys.Enter);                       // Use now
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Equal(uncensored.Id, menu.TakePendingEmbeddedModel()!.Id);
+        pane.Dispose();
+    }
+
+    [Fact]
     public async Task OnThePane_ASizePressedAgain_ShowsEveryModel_AndOneThatPassesNothingSaysSo()
     {
         var big = EmbeddedModelCatalog.Find("gemma-4-31b")!;
@@ -258,9 +308,9 @@ public partial class SettingsMenuTests
         Push(Keys.Down, Keys.Enter);            // the catalog: 31B, then E2B
         Push(Keys.Char('1'));                   // 8GB: E2B alone, the cursor on it
         Push(Keys.Char('1'));                   // again: every model, the cursor kept on E2B
-        Push(Keys.Char('u'));                   // uncensored: neither is
+        Push(Keys.Char('x'));                   // uncensored: neither is
         Push(Keys.Enter);                       // the no-match row: nothing opens
-        Push(Keys.Char('u'));                   // dark again: both, the cursor still on E2B
+        Push(Keys.Char('x'));                   // dark again: both, the cursor still on E2B
         Push(Keys.Enter);                       // E2B's page
         Push(Keys.Enter);                       // Install
 
@@ -277,8 +327,8 @@ public partial class SettingsMenuTests
         var (menu, pane, embedded) = EmbeddedPane(new FakeEmbeddedLlm { RuntimeBytes = 577_081_932 });
         GoTo(SettingsTab.Embedded);
         Push(Keys.Down, Keys.Enter);            // the catalog, on Gemma 4 12B
-        Down(21);
-        Push(Keys.Enter);                       // Gemma 4 E4B QAT, the twenty-second row: its page
+        Down(NormalRow("gemma-4-e4b-qat"));
+        Push(Keys.Enter);                       // Gemma 4 E4B QAT: its page
         Push(Keys.Enter);                       // Install
 
         await menu.ShowAsync(CancellationToken.None);
@@ -295,8 +345,8 @@ public partial class SettingsMenuTests
         var (menu, pane, embedded) = EmbeddedPane(new FakeEmbeddedLlm().Installed("gemma-4-e2b"));
         GoTo(SettingsTab.Embedded);
         Push(Keys.Down, Keys.Enter);            // the catalog, on Gemma 4 12B
-        Down(18);
-        Push(Keys.Enter);                       // Gemma 4 E2B, the nineteenth row
+        Down(NormalRow("gemma-4-e2b"));
+        Push(Keys.Enter);                       // Gemma 4 E2B
         Push(Keys.Down, Keys.Enter);            // Remove (4.2 GB)
         Push(Keys.Down, Keys.Enter);            // Yes (the cursor opens on No)
         Push(Keys.Escape, Keys.Escape);         // out of the catalog, then the settings
@@ -327,8 +377,8 @@ public partial class SettingsMenuTests
         };
         GoTo(SettingsTab.Embedded);
         Push(Keys.Down, Keys.Enter);            // the catalog, on Gemma 4 12B
-        Down(21);
-        Push(Keys.Enter);                       // Gemma 4 E4B QAT, the twenty-second row: its page
+        Down(NormalRow("gemma-4-e4b-qat"));
+        Push(Keys.Enter);                       // Gemma 4 E4B QAT: its page
         Push(Keys.Down, Keys.Enter);            // Remove (the partial download)
         Push(Keys.Down, Keys.Enter);            // Yes
         Push(Keys.Escape, Keys.Escape);
@@ -357,8 +407,7 @@ public partial class SettingsMenuTests
         });
         var (menu, pane, embedded) = EmbeddedPane(new FakeEmbeddedLlm().Installed("gemma-4-e2b"));
         GoTo(SettingsTab.Embedded);
-        Push(Keys.Down, Keys.Enter);            // the catalog
-        Down(18);
+        Push(Keys.Down, Keys.Enter);            // the catalog, on Gemma 4 E2B: the saved model (later on 2026-09-30)
         Push(Keys.Enter);                       // Gemma 4 E2B
         Push(Keys.Down, Keys.Enter);            // Remove
         Push(Keys.Down, Keys.Enter);            // Yes
@@ -382,8 +431,8 @@ public partial class SettingsMenuTests
         });
         var (menu, pane, embedded) = EmbeddedPane(new FakeEmbeddedLlm().Installed("gemma-4-e2b", "gemma-4-12b"));
         GoTo(SettingsTab.Embedded);
-        Push(Keys.Down, Keys.Enter);
-        Down(18);
+        Push(Keys.Down, Keys.Enter);            // the catalog, on the saved Gemma 4 12B
+        Down(NormalRow("gemma-4-e2b") - NormalRow("gemma-4-12b"));
         Push(Keys.Enter);                       // Gemma 4 E2B
         Push(Keys.Down, Keys.Enter);
         Push(Keys.Down, Keys.Enter);

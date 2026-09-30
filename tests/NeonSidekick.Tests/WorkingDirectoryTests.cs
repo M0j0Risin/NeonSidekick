@@ -297,6 +297,23 @@ public sealed class WorkingDirectoryTests : IDisposable
     }
 
     [Fact]
+    public void FileTree_HideGitFolders_LeavesOutEveryDotGitFolder_EvenUnderShowHidden_ButWalksOneAskedFor()
+    {
+        // /tree (2026-09-30, the user's ask: "in the same way it ignores .trash"): the root's .git and a nested repository's,
+        // whatever show-hidden says; a .git file (a submodule's pointer) is no folder and stays; /tree .git still walks it.
+        Put(@".git\HEAD", "");
+        Put(@"sub\.git\config", "");
+        Put(@"mod\.git", "gitdir: ../.git/modules/mod");
+        Put("a.txt", "");
+        File.SetAttributes(Full(".git"), FileAttributes.Directory | FileAttributes.Hidden);
+
+        var names = _files.FileTree("", WorkingDirectory.DefaultTreeLength, showHidden: true, hideGitFolders: true).Entries.Select(e => e.Name);
+        Assert.Equal(new[] { "mod", ".git", "sub", "a.txt" }, names);
+        Assert.Equal(new[] { "HEAD" }, _files.FileTree(".git", WorkingDirectory.DefaultTreeLength, showHidden: true, hideGitFolders: true).Entries.Select(e => e.Name));
+        Assert.Contains(_files.FileTree("", WorkingDirectory.DefaultTreeLength, showHidden: true).Entries, e => e.Name == ".git" && e.IsDirectory);   // off by default
+    }
+
+    [Fact]
     public void FileTree_EmptyFolder_HasNoEntries()
     {
         Directory.CreateDirectory(Full("empty"));

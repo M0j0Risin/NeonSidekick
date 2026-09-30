@@ -5732,7 +5732,8 @@ internal sealed partial class ChatScreen
     /// stops at <c>File /tree max length</c> entries and a file's size rides along under <c>File /tree show sizes</c>.
     /// What it lists follows <c>File browser/tree mode</c>, as the folder browsers do (2026-09-23, the user's call):
     /// <c>default</c> leaves out hidden and system entries and every dot-file and dot-folder, <c>show-hidden</c> lists
-    /// them all (<c>.git</c> too). A path outside the root, missing or a file is the usual file error.
+    /// them all. A <c>.git</c> folder at any depth is left out either way since 2026-09-30 (the user's ask: as <c>.trash</c>
+    /// is), unless it is the folder asked for. A path outside the root, missing or a file is the usual file error.
     /// </summary>
     private void HandleTree(string args) => WriteTree(TreeLines(args, out string? error), error);
 
@@ -5743,7 +5744,7 @@ internal sealed partial class ChatScreen
         var effective = _effective();
         int cap = Math.Clamp(effective.FileTreeMaxLength, WorkingDirectory.MinTreeLength, WorkingDirectory.MaxTreeLength);
         bool showHidden = FileBrowserMode.Resolve(effective) == FileBrowserVisibility.ShowHidden;
-        var result = _files.FileTree(args, cap, hideDotEntries: !showHidden, showHidden: showHidden);
+        var result = _files.FileTree(args, cap, hideDotEntries: !showHidden, showHidden: showHidden, hideGitFolders: true);
         if (result.Outcome != FileOutcome.Ok)
         {
             error = TreeText.Error(result);

@@ -128,19 +128,43 @@ internal sealed partial class ChatScreen
     private async Task HandleHomeAssistantAsync(string args, CancellationToken cancellationToken)
     {
         var result = await _transcript.WithSpinnerAsync(HaText.Working, () => HaCommand.RunAsync(_ha, args, cancellationToken)).ConfigureAwait(false);
-        if (result.Failed)
-        {
-            foreach (string line in result.Lines)
-            {
-                _transcript.Error(line);
-            }
+        WriteHomeResult(result, _transcript);
+    }
 
+    /// <summary>
+    /// <c>/ha</c> under a reply (2026-09-30, the user's ask; <see cref="MidTurnPolicy(SlashCommand, bool)"/> says why it runs on
+    /// the watcher): no spinner — the busy row is up already —, the lines through the flow sink, which posts them to the turn.
+    /// </summary>
+    private async Task HandleHomeAssistantMidTurnAsync(string args, CancellationToken cancellationToken)
+    {
+        HaCommandResult result;
+        try
+        {
+            result = await HaCommand.RunAsync(_ha, args, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // The turn's end took the keys back (the interrupt's listen, the exit): the call is dropped, as a pane is closed.
+            DiagnosticLog.Debug(HaText.Category, "/ha under the reply was cancelled as the reply ended.");
             return;
         }
 
+        WriteHomeResult(result, _flow);
+    }
+
+    /// <summary>A <c>/ha</c> result's lines as notices, or a failure's as errors.</summary>
+    private static void WriteHomeResult(HaCommandResult result, INoticeSink sink)
+    {
         foreach (string line in result.Lines)
         {
-            _transcript.Notice(line);
+            if (result.Failed)
+            {
+                sink.Error(line);
+            }
+            else
+            {
+                sink.Notice(line);
+            }
         }
     }
 }

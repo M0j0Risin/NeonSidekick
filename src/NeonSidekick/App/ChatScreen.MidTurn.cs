@@ -123,13 +123,19 @@ internal sealed partial class ChatScreen
     /// owns); <c>/cmdcopy</c> and the three prompt files' words are panes — they write another profile or a file the running
     /// turn's prompt was built from already, and ask their yes/no on the pane. <c>/keycopy</c> (2026-09-28) is one the same
     /// way: another profile's file, its yes/no on the pane. <c>/perf</c> (later on 2026-09-29) is quick: display only.</para>
+    /// <para><c>/ha</c> (2026-09-30, the user's ask: it waited for the reply) is a <see cref="MidTurnClass.Pane"/> though it opens
+    /// none: a quick act runs on the turn task, and a Home Assistant call — up to <c>Home Assistant timeout</c>, 10 s by
+    /// default — would hold the streaming reply that long. On the watcher the reply streams on, its lines go through the flow
+    /// sink, and the turn's end awaits the watcher's line before the idle line (<see cref="EndTurnAsync"/>), so none is lost;
+    /// the keys wait only while the call runs. <c>HaSession</c> holds its own lock, as the completion's background read needs.</para>
     /// </summary>
     public static MidTurnClass MidTurnPolicy(SlashCommand command, bool hasArgs) => command switch
     {
         SlashCommand.None => MidTurnClass.Message,
         SlashCommand.Help or SlashCommand.Settings or SlashCommand.Sys or SlashCommand.Memory
             or SlashCommand.Usage or SlashCommand.About or SlashCommand.EmptyTrash or SlashCommand.CmdClear or SlashCommand.Mcp or SlashCommand.CmdList or SlashCommand.Police or SlashCommand.Tools
-            or SlashCommand.Tree or SlashCommand.Vault or SlashCommand.CmdCopy or SlashCommand.KeyCopy or SlashCommand.Persona or SlashCommand.Operata or SlashCommand.Vocalia => MidTurnClass.Pane,
+            or SlashCommand.Tree or SlashCommand.Vault or SlashCommand.CmdCopy or SlashCommand.KeyCopy or SlashCommand.Persona or SlashCommand.Operata or SlashCommand.Vocalia
+            or SlashCommand.HomeAssistant => MidTurnClass.Pane,
         SlashCommand.Reasoning or SlashCommand.Queue or SlashCommand.Sampling => hasArgs ? MidTurnClass.Quick : MidTurnClass.Pane,
         SlashCommand.Session => hasArgs ? MidTurnClass.Deferred : MidTurnClass.Pane,
         SlashCommand.Skills => hasArgs ? MidTurnClass.Deferred : MidTurnClass.Pane,
@@ -419,6 +425,10 @@ internal sealed partial class ChatScreen
                     Post(() => Defer(SettingsChanges.Llm, MidTurnAppliesNotice));
                 }
 
+                break;
+            case SlashCommand.HomeAssistant:
+                // /ha (2026-09-30): the call on the watcher, the reply streaming on; its lines through the flow sink.
+                await HandleHomeAssistantMidTurnAsync(args, cancellationToken).ConfigureAwait(false);
                 break;
         }
     }

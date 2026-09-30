@@ -19,12 +19,13 @@ public class EmbeddedModelFilterTests
     [Fact]
     public void TheButtons_ArePinned_AndStartDark()
     {
+        // Uncensored last on X since later on 2026-09-30 (the user's ask), after sort size.
         var buttons = EmbeddedModelFilter.None.Buttons();
-        Assert.Equal(["8GB", "16GB", "32GB", "uncensored", "drafter", "sort size"], buttons.Select(b => b.Title));
-        Assert.Equal(new char?[] { '1', '2', '3', 'u', 'd', 's' }, buttons.Select(b => b.Key));
+        Assert.Equal(["8GB", "16GB", "32GB", "drafter", "sort size", "uncensored"], buttons.Select(b => b.Title));
+        Assert.Equal(new char?[] { '1', '2', '3', 'd', 's', 'x' }, buttons.Select(b => b.Key));
         Assert.All(buttons, b => Assert.False(b.On));
         Assert.False(EmbeddedModelFilter.None.Active);
-        Assert.Equal("1 / 2 / 3 = GB · U = uncensored · D = drafter · S = sort", EmbeddedModelFilter.Keys);   // shortened later on 2026-09-30
+        Assert.Equal("1 / 2 / 3 = GB · D = drafter · S = sort · X = unc", EmbeddedModelFilter.Keys);   // shortened later on 2026-09-30
         Assert.Equal("no model matches the filter", EmbeddedLlmText.NoFilterMatch);
     }
 
@@ -37,24 +38,26 @@ public class EmbeddedModelFilterTests
         Assert.Equal(new EmbeddedModelFilter(16, false), eight.Press(1));    // another size takes its place
         Assert.Equal(EmbeddedModelFilter.None, eight.Press(0));             // the lit one pressed again: none
 
-        var both = eight.Press(3);
+        Assert.Equal(5, EmbeddedModelFilter.UncensoredIndex());
+        Assert.Equal(7, EmbeddedModelFilter.UncensoredIndex(withInstalled: true));
+        var both = eight.Press(5);
         Assert.Equal(new EmbeddedModelFilter(8, true), both);
-        Assert.Equal([true, false, false, true, false, false], both.Buttons().Select(b => b.On));
+        Assert.Equal([true, false, false, false, false, true], both.Buttons().Select(b => b.On));
         Assert.Equal(new EmbeddedModelFilter(32, true), both.Press(2));     // the size moves, uncensored stays
-        Assert.Equal(new EmbeddedModelFilter(8, false), both.Press(3));
+        Assert.Equal(new EmbeddedModelFilter(8, false), both.Press(5));
         Assert.Equal(both, both.Press(9));                                  // no such button
         Assert.True(both.Active);
     }
 
     [Fact]
-    public void TheCatalogsButtons_PutInstalledAndUninstalled_BetweenTheSizesAndUncensored_ARadioPair()
+    public void TheCatalogsButtons_PutInstalledAndUninstalled_AfterTheSizes_ARadioPair()
     {
-        // Later on 2026-09-29 (the user's ask): the catalog alone; /server keeps the four.
+        // Later on 2026-09-29 (the user's ask): the catalog alone; /server keeps the others. Uninstalled on U since later on 2026-09-30.
         var buttons = EmbeddedModelFilter.None.Buttons(withInstalled: true);
-        Assert.Equal(["8GB", "16GB", "32GB", "installed", "uninstalled", "uncensored", "drafter", "sort size"], buttons.Select(b => b.Title));
-        Assert.Equal(new char?[] { '1', '2', '3', 'i', 'n', 'u', 'd', 's' }, buttons.Select(b => b.Key));
+        Assert.Equal(["8GB", "16GB", "32GB", "installed", "uninstalled", "drafter", "sort size", "uncensored"], buttons.Select(b => b.Title));
+        Assert.Equal(new char?[] { '1', '2', '3', 'i', 'u', 'd', 's', 'x' }, buttons.Select(b => b.Key));
         Assert.Equal(6, EmbeddedModelFilter.None.Buttons().Count);
-        Assert.Equal("1 / 2 / 3 = GB · I / N = installed / uninstalled · U = uncensored · D = drafter · S = sort", EmbeddedModelFilter.CatalogKeys);
+        Assert.Equal("1 / 2 / 3 = GB · I / U = inst / uninst · D = drafter · S = sort · X = unc", EmbeddedModelFilter.CatalogKeys);
 
         var installed = EmbeddedModelFilter.None.Press(3, withInstalled: true);
         Assert.Equal(new EmbeddedModelFilter(null, false, true), installed);
@@ -62,7 +65,7 @@ public class EmbeddedModelFilterTests
         var uninstalled = installed.Press(4, withInstalled: true);
         Assert.Equal(new EmbeddedModelFilter(null, false, false), uninstalled);
         Assert.Equal(EmbeddedModelFilter.None, uninstalled.Press(4, withInstalled: true));   // the lit one again: none
-        Assert.Equal(new EmbeddedModelFilter(16, true, false), uninstalled.Press(1, withInstalled: true).Press(5, withInstalled: true));   // the others left be
+        Assert.Equal(new EmbeddedModelFilter(16, true, false), uninstalled.Press(1, withInstalled: true).Press(7, withInstalled: true));   // the others left be
         Assert.True(uninstalled.Active);
 
         var small = new EmbeddedModelFilter(8, false, true);
@@ -121,6 +124,11 @@ public class EmbeddedModelFilterTests
         Assert.True(filter.Matches(Model("B Uncensored", 1_000_000_000), EmbeddedFilterType.File));
         Assert.False(filter.Matches(Model("B", 1_000_000_000), EmbeddedFilterType.File));
 
+        // Dark, the other half (later on 2026-09-30, the user's ask): the uncensored builds are left out by default.
+        Assert.False(EmbeddedModelFilter.None.Matches(Model("B Uncensored", 1_000_000_000), EmbeddedFilterType.File));
+        Assert.True(EmbeddedModelFilter.None.Matches(Model("B", 1_000_000_000), EmbeddedFilterType.File));
+        Assert.All(EmbeddedModelCatalog.Models, m => Assert.NotEqual(m.Uncensored, EmbeddedModelFilter.None.Matches(m, EmbeddedFilterType.File)));
+
         var small = new EmbeddedModelFilter(8, true);
         Assert.True(small.Matches(Model("B Uncensored", 5_000_000_000), EmbeddedFilterType.File));
         Assert.False(small.Matches(Model("B Uncensored", 9_000_000_000), EmbeddedFilterType.File));
@@ -128,45 +136,55 @@ public class EmbeddedModelFilterTests
     }
 
     [Fact]
-    public void SortSize_IsItsOwnSwitch_LastOnBothLists_AndNoFilter()
+    public void For_LightsUncensored_WhenTheModelInUseIsAnUncensoredBuild()
     {
-        // 2026-09-30 (the user's ask).
-        Assert.Equal(5, EmbeddedModelFilter.SortSizeIndex());   // after drafter since later on 2026-09-30
-        Assert.Equal(7, EmbeddedModelFilter.SortSizeIndex(withInstalled: true));
+        // Later on 2026-09-30 (the user's pick): the row the pane opens on is shown.
+        Assert.Equal(new EmbeddedModelFilter(null, true), EmbeddedModelFilter.For(Model("B Uncensored", 1_000_000_000)));
+        Assert.Equal(EmbeddedModelFilter.None, EmbeddedModelFilter.For(Model("B", 1_000_000_000)));
+        Assert.Equal(EmbeddedModelFilter.None, EmbeddedModelFilter.For(null));
+    }
 
-        var sorted = EmbeddedModelFilter.None.Press(5);
+    [Fact]
+    public void SortSize_IsItsOwnSwitch_AfterDrafter_AndNoFilter()
+    {
+        // 2026-09-30 (the user's ask); last until uncensored moved after it later that day.
+        Assert.Equal(4, EmbeddedModelFilter.SortSizeIndex());
+        Assert.Equal(6, EmbeddedModelFilter.SortSizeIndex(withInstalled: true));
+
+        var sorted = EmbeddedModelFilter.None.Press(4);
         Assert.Equal(new EmbeddedModelFilter(null, false, null, true), sorted);
-        Assert.Equal([false, false, false, false, false, true], sorted.Buttons().Select(b => b.On));
+        Assert.Equal([false, false, false, false, true, false], sorted.Buttons().Select(b => b.On));
         Assert.False(sorted.Active);                                          // it thins nothing
-        Assert.Equal(EmbeddedModelFilter.None, sorted.Press(5));              // pressed again: dark
-        Assert.Equal(new EmbeddedModelFilter(8, true, null, true), sorted.Press(0).Press(3));   // the filters left be
+        Assert.Equal(EmbeddedModelFilter.None, sorted.Press(4));              // pressed again: dark
+        Assert.Equal(new EmbeddedModelFilter(8, true, null, true), sorted.Press(0).Press(5));   // the filters left be
 
-        var catalog = EmbeddedModelFilter.None.Press(7, withInstalled: true);
+        var catalog = EmbeddedModelFilter.None.Press(6, withInstalled: true);
         Assert.True(catalog.SortSize);
-        Assert.Equal([false, false, false, false, false, false, false, true], catalog.Buttons(withInstalled: true).Select(b => b.On));
-        Assert.True(catalog.Press(5, withInstalled: true) is { Uncensored: true, SortSize: true });
+        Assert.Equal([false, false, false, false, false, false, true, false], catalog.Buttons(withInstalled: true).Select(b => b.On));
+        Assert.True(catalog.Press(7, withInstalled: true) is { Uncensored: true, SortSize: true });
     }
 
     [Fact]
     public void Drafter_IsItsOwnSwitch_BeforeSortSize_AndKeepsTheModelsThatDraft()
     {
         // Later on 2026-09-30 (the user's ask): a drafter file (MTP or DFlash) or a head built into the weights.
-        Assert.Equal(4, EmbeddedModelFilter.DrafterIndex());
-        Assert.Equal(6, EmbeddedModelFilter.DrafterIndex(withInstalled: true));
+        Assert.Equal(3, EmbeddedModelFilter.DrafterIndex());
+        Assert.Equal(5, EmbeddedModelFilter.DrafterIndex(withInstalled: true));
 
-        var drafter = EmbeddedModelFilter.None.Press(4);
+        var drafter = EmbeddedModelFilter.None.Press(3);
         Assert.Equal(new EmbeddedModelFilter(null, false, null, false, true), drafter);
-        Assert.Equal([false, false, false, false, true, false], drafter.Buttons().Select(b => b.On));
+        Assert.Equal([false, false, false, true, false, false], drafter.Buttons().Select(b => b.On));
         Assert.True(drafter.Active);
-        Assert.Equal(EmbeddedModelFilter.None, drafter.Press(4));             // pressed again: dark
-        Assert.True(drafter.Press(0).Press(3).Press(5) is { MaxGb: 8, Uncensored: true, SortSize: true, Drafter: true });   // the others left be
-        Assert.True(EmbeddedModelFilter.None.Press(6, withInstalled: true).Press(3, withInstalled: true) is { Drafter: true, Installed: true });
+        Assert.Equal(EmbeddedModelFilter.None, drafter.Press(3));             // pressed again: dark
+        Assert.True(drafter.Press(0).Press(5).Press(4) is { MaxGb: 8, Uncensored: true, SortSize: true, Drafter: true });   // the others left be
+        Assert.True(EmbeddedModelFilter.None.Press(5, withInstalled: true).Press(3, withInstalled: true) is { Drafter: true, Installed: true });
 
         Assert.True(drafter.Matches(Model("A", 5_000_000_000, 500_000_000), EmbeddedFilterType.File));   // its own drafter file
         Assert.True(drafter.Matches(Model("A", 5_000_000_000, mtpHead: true), EmbeddedFilterType.File));  // built in
         Assert.False(drafter.Matches(Model("A", 5_000_000_000), EmbeddedFilterType.File));
         Assert.False(new EmbeddedModelFilter(8, false, Drafter: true).Matches(Model("A", 9_000_000_000, mtpHead: true), EmbeddedFilterType.File));
-        Assert.All(EmbeddedModelCatalog.Models, m => Assert.Equal(m.HasMtp, drafter.Matches(m, EmbeddedFilterType.File)));
+        // Each half by its own uncensored state (later on 2026-09-30).
+        Assert.All(EmbeddedModelCatalog.Models, m => Assert.Equal(m.HasMtp, (drafter with { Uncensored = m.Uncensored }).Matches(m, EmbeddedFilterType.File)));
     }
 
     [Fact]

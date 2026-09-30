@@ -2853,7 +2853,9 @@ internal sealed partial class SettingsMenu
     private async Task<LlmServer?> PickFilteredServerAsync(IReadOnlyList<LlmServer> servers, string title, string keys, int cursor, CancellationToken cancellationToken)
     {
         var type = NeonSidekick.EmbeddedLlm.EmbeddedFilterTypes.Resolve(EffectiveNow());
-        var filter = NeonSidekick.EmbeddedLlm.EmbeddedModelFilter.None;
+        // Uncensored lit when the row the pane opens on is an uncensored build (later on 2026-09-30, the user's pick), so it shows.
+        var filter = NeonSidekick.EmbeddedLlm.EmbeddedModelFilter.For(
+            cursor >= 0 && cursor < servers.Count && NeonSidekick.EmbeddedLlm.EmbeddedEndpoint.IsEmbedded(servers[cursor].BaseUrl) ? EmbeddedRowModel(servers[cursor]) : null);
         var labels = ServerLabels(servers);
         string hint = keys.Replace(" · ESC", " · " + NeonSidekick.EmbeddedLlm.EmbeddedModelFilter.Keys + " · ESC", StringComparison.Ordinal);
         try
@@ -4897,9 +4899,13 @@ internal sealed partial class SettingsMenu
             return Unchanged();
         }
 
-        var type = NeonSidekick.EmbeddedLlm.EmbeddedFilterTypes.Resolve(EffectiveNow());
-        var filter = NeonSidekick.EmbeddedLlm.EmbeddedModelFilter.None;
-        int cursor = 0;   // the catalog index under the cursor
+        var effective = EffectiveNow();
+        var type = NeonSidekick.EmbeddedLlm.EmbeddedFilterTypes.Resolve(effective);
+        // The saved embedded model, when there is one (later on 2026-09-30, the user's pick): the cursor starts on it, and an
+        // uncensored build lights uncensored, so its row shows.
+        var inUse = NeonSidekick.EmbeddedLlm.EmbeddedEndpoint.IsEmbedded(effective.LlmUrl) ? NeonSidekick.EmbeddedLlm.EmbeddedModelCatalog.Find(effective.LlmModel, embedded.Catalog) : null;
+        var filter = NeonSidekick.EmbeddedLlm.EmbeddedModelFilter.For(inUse);
+        int cursor = inUse is null ? 0 : Math.Max(0, embedded.Catalog.ToList().IndexOf(inUse));   // the catalog index under the cursor
         while (true)
         {
             // Every row laid out over the whole catalog, so a filter does not move the columns.

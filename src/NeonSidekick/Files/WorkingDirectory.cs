@@ -462,8 +462,11 @@ public sealed class WorkingDirectory
     /// entries the vault tools leave to Obsidian. <paramref name="showHidden"/> (2026-09-23, <c>/tree</c> under
     /// <c>File browser/tree mode</c> <c>show-hidden</c>) lists the entries with the Hidden or System attribute too
     /// (<c>.git</c> on Windows), which every walk leaves out otherwise; reparse points stay out either way.
+    /// <paramref name="hideGitFolders"/> (2026-09-30, <c>/tree</c>, the user's ask: "in the same way it ignores .trash") leaves
+    /// out every folder named <c>.git</c>, at any depth — a nested repository's or a submodule's too — whatever
+    /// <paramref name="showHidden"/> says; like <c>.trash</c>, the folder asked for itself is still walked.
     /// </summary>
-    public FileTreeResult FileTree(string relative, int maxEntries, int maxDepth = int.MaxValue, bool hideDotEntries = false, bool showHidden = false)
+    public FileTreeResult FileTree(string relative, int maxEntries, int maxDepth = int.MaxValue, bool hideDotEntries = false, bool showHidden = false, bool hideGitFolders = false)
     {
         var outcome = Resolve(relative, forWrite: false, out string full);
         if (outcome != FileOutcome.Ok)
@@ -488,7 +491,7 @@ public sealed class WorkingDirectory
 
             int cap = Math.Clamp(maxEntries, MinTreeLength, MaxTreeLength);
             var entries = new List<FileTreeEntry>();
-            bool truncated = !DescendAll(full, 1, cap, Math.Max(1, maxDepth), hideDotEntries, showHidden, entries);
+            bool truncated = !DescendAll(full, 1, cap, Math.Max(1, maxDepth), hideDotEntries, showHidden, hideGitFolders, entries);
             return new FileTreeResult(FileOutcome.Ok, display, header, entries, truncated);
         }
         catch (Exception ex) when (IsFileFailure(ex))
@@ -498,7 +501,7 @@ public sealed class WorkingDirectory
     }
 
     /// <summary>Depth-first, folders first then names per level; false once <paramref name="cap"/> entries are listed and more remain.</summary>
-    private bool DescendAll(string directory, int depth, int cap, int maxDepth, bool hideDotEntries, bool showHidden, List<FileTreeEntry> entries)
+    private bool DescendAll(string directory, int depth, int cap, int maxDepth, bool hideDotEntries, bool showHidden, bool hideGitFolders, List<FileTreeEntry> entries)
     {
         bool atRoot = string.Equals(directory, Root, StringComparison.OrdinalIgnoreCase);
         var children = new List<DirectoryEntry>();
@@ -513,7 +516,8 @@ public sealed class WorkingDirectory
             foreach (var info in new DirectoryInfo(directory).EnumerateFileSystemInfos("*", options))
             {
                 bool isDirectory = (info.Attributes & FileAttributes.Directory) != 0;
-                if ((atRoot && isDirectory && IsTrashName(info.Name)) || (hideDotEntries && info.Name.StartsWith('.')))
+                if ((atRoot && isDirectory && IsTrashName(info.Name)) || (hideDotEntries && info.Name.StartsWith('.'))
+                    || (hideGitFolders && isDirectory && string.Equals(info.Name, GitFolderName, StringComparison.OrdinalIgnoreCase)))
                 {
                     continue;
                 }
@@ -537,7 +541,7 @@ public sealed class WorkingDirectory
 
             var child = children[i];
             entries.Add(new FileTreeEntry(child.Name, depth, child.IsDirectory, child.Length, i == children.Count - 1));
-            if (child.IsDirectory && depth < maxDepth && !DescendAll(Path.Combine(directory, child.Name), depth + 1, cap, maxDepth, hideDotEntries, showHidden, entries))
+            if (child.IsDirectory && depth < maxDepth && !DescendAll(Path.Combine(directory, child.Name), depth + 1, cap, maxDepth, hideDotEntries, showHidden, hideGitFolders, entries))
             {
                 return false;
             }

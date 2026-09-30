@@ -2620,12 +2620,33 @@ public partial class SettingsMenuTests : IDisposable
         Push(Keys.Char('1'));                   // 8GB: the 31B goes, LM Studio stays
         Push(Keys.Down, Keys.Enter);            // the second row left: E2B
         Assert.Same(servers[2], await menu.PickServerAsync(servers, null, SettingsMenu.StartupServerTitle, CancellationToken.None));
-        Assert.Contains(" 8GB    16GB    32GB    uncensored    drafter    sort size ", _console.Output);
+        Assert.Contains(" 8GB    16GB    32GB    drafter    sort size    uncensored ", _console.Output);   // uncensored last (later on 2026-09-30)
         Assert.Contains("ESC = the first listed", _console.Output);
 
-        Push(Keys.Char('u'), Keys.Enter);       // uncensored: no embedded row passes, LM Studio is still there to pick
+        Push(Keys.Char('x'), Keys.Enter);       // uncensored (X since later on 2026-09-30): no embedded row passes, LM Studio is still there to pick
         Assert.Same(servers[0], await menu.PickServerAsync(servers, null, SettingsMenu.ServerTitle, CancellationToken.None));
         Assert.False(pane.OverlayOpen);          // the pick closes the pane
+        pane.Dispose();
+    }
+
+    [Fact]
+    public async Task Server_OnThePane_TheUncensoredRows_AreLeftOut_UnlessTheOneInUseIsOne()
+    {
+        // Later on 2026-09-30 (the user's ask and pick): an uncensored row is hidden by default, X shows the uncensored rows
+        // alone; a pane that opens on an uncensored model in use starts with X lit, the cursor on it.
+        _console.Profile.Width = 240;
+        var (menu, pane) = PaneMenu();
+        LlmServer Embedded(string id) => new(NeonSidekick.EmbeddedLlm.EmbeddedEndpoint.BaseUrl, NeonSidekick.EmbeddedLlm.EmbeddedEndpoint.ServerName, new ProbeResult(true, [id], "installed"));
+        var servers = new[] { Server(1234, "LM Studio", "lm"), Embedded("gemma-4-e2b-uncensored"), Embedded("gemma-4-e2b") };
+
+        Push(Keys.Down, Keys.Enter);            // the uncensored row hidden: the second row is the normal E2B
+        Assert.Same(servers[2], await menu.PickServerAsync(servers, null, SettingsMenu.ServerTitle, CancellationToken.None));
+
+        Push(Keys.Char('x'), Keys.Down, Keys.Enter);   // X: the uncensored E2B alone among the embedded rows, second
+        Assert.Same(servers[1], await menu.PickServerAsync(servers, null, SettingsMenu.ServerTitle, CancellationToken.None));
+
+        Push(Keys.Enter);                       // opened on the uncensored model in use: lit, the cursor on its row
+        Assert.Same(servers[1], await menu.PickServerAsync(servers, NeonSidekick.EmbeddedLlm.EmbeddedEndpoint.BaseUrl, SettingsMenu.ServerTitle, CancellationToken.None, "gemma-4-e2b-uncensored"));
         pane.Dispose();
     }
 

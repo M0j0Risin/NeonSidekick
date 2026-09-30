@@ -76,7 +76,7 @@ public static class EmbeddedFilterTypes
 /// Embedded models, <c>/server</c>'s LLM server pane and the startup picker — <c>8GB</c>, <c>16GB</c> and <c>32GB</c> as
 /// radio buttons (one at a time; the lit one pressed again goes dark), <c>uncensored</c> on its own. A size keeps the models
 /// at most that big (<see cref="EmbeddedFilterTypes"/> says which bytes), uncensored the <see cref="EmbeddedModel.Uncensored"/>
-/// ones; both together, both. Nothing is saved: every visit to a pane starts at <see cref="None"/>, every model shown.
+/// ones; both together, both. Nothing is saved: every visit to a pane starts at <see cref="None"/> (or <see cref="For"/>).
 /// The catalog alone (later still on 2026-09-29, the user's ask) carries <c>installed</c> and <c>uninstalled</c> between the
 /// sizes and uncensored, a radio pair of their own (<see cref="Installed"/>; <c>/server</c> lists installed models only).
 /// <c>sort size</c> (2026-09-30, the user's ask) is last on every list and no filter: lit, <see cref="Arrange"/> orders the
@@ -84,22 +84,32 @@ public static class EmbeddedFilterTypes
 /// <c>drafter</c> (later on 2026-09-30, the user's ask) sits between uncensored and sort size on every list, a switch of its
 /// own like uncensored: lit, it keeps the models that can draft ahead (<see cref="EmbeddedModel.HasMtp"/>: a drafter file, MTP
 /// or DFlash, or a head built into the weights — README's Drafter column, <c>drafter</c> or <c>built in</c>).
+/// <para>Uncensored flipped later still on 2026-09-30 (the user's ask): the uncensored builds are left out by default, so a
+/// visit starts with the normal ones alone; lit, the list is the uncensored builds alone, dark the normal ones alone — two
+/// halves, never both. It moved last, after sort size, on the key X; uninstalled took U, and N went. A pane whose model in
+/// use is uncensored starts with it lit (<see cref="For"/>, the user's pick), so that row shows.</para>
 /// Pure: the tests drive it.
 /// </summary>
 public sealed record EmbeddedModelFilter(int? MaxGb, bool Uncensored, bool? Installed = null, bool SortSize = false, bool Drafter = false)
 {
-    /// <summary>No button lit: every model.</summary>
+    /// <summary>No button lit: every normal model, the uncensored builds left out (later on 2026-09-30).</summary>
     public static readonly EmbeddedModelFilter None = new(null, false);
+
+    /// <summary>
+    /// A visit's first filter (later on 2026-09-30, the user's pick): <see cref="None"/>, with uncensored lit when
+    /// <paramref name="inUse"/> — the model the pane opens on — is an uncensored build, so its row is shown.
+    /// </summary>
+    public static EmbeddedModelFilter For(EmbeddedModel? inUse) => inUse is { Uncensored: true } ? None with { Uncensored = true } : None;
 
     /// <summary>The installed and uninstalled buttons' titles (the catalog's, later on 2026-09-29). Pinned.</summary>
     public const string InstalledButton = "installed";
 
     public const string UninstalledButton = "uninstalled";
 
-    /// <summary>Their keys: I, and N for not installed.</summary>
+    /// <summary>Their keys: I and U (N for not installed until later on 2026-09-30, when uncensored gave U up).</summary>
     public const char InstalledKey = 'i';
 
-    public const char UninstalledKey = 'n';
+    public const char UninstalledKey = 'u';
 
     /// <summary>The size buttons' gigabytes, in button order. Pinned.</summary>
     public static readonly int[] Sizes = [8, 16, 32];
@@ -107,11 +117,11 @@ public sealed record EmbeddedModelFilter(int? MaxGb, bool Uncensored, bool? Inst
     /// <summary>The uncensored button's title. Pinned.</summary>
     public const string UncensoredButton = "uncensored";
 
-    /// <summary>The uncensored button's key.</summary>
-    public const char UncensoredKey = 'u';
+    /// <summary>The uncensored button's key: X (U until later on 2026-09-30).</summary>
+    public const char UncensoredKey = 'x';
 
-    /// <summary>The uncensored button's index: after the sizes, and after installed and uninstalled <paramref name="withInstalled"/>.</summary>
-    public static int UncensoredIndex(bool withInstalled = false) => Sizes.Length + (withInstalled ? 2 : 0);
+    /// <summary>The uncensored button's index: after sort size, last (later on 2026-09-30).</summary>
+    public static int UncensoredIndex(bool withInstalled = false) => SortSizeIndex(withInstalled) + 1;
 
     /// <summary>The sort size button's title (2026-09-30). Pinned.</summary>
     public const string SortSizeButton = "sort size";
@@ -125,31 +135,31 @@ public sealed record EmbeddedModelFilter(int? MaxGb, bool Uncensored, bool? Inst
     /// <summary>The drafter button's key.</summary>
     public const char DrafterKey = 'd';
 
-    /// <summary>The drafter button's index: after uncensored.</summary>
-    public static int DrafterIndex(bool withInstalled = false) => UncensoredIndex(withInstalled) + 1;
+    /// <summary>The drafter button's index: after the sizes, and after installed and uninstalled <paramref name="withInstalled"/>.</summary>
+    public static int DrafterIndex(bool withInstalled = false) => Sizes.Length + (withInstalled ? 2 : 0);
 
-    /// <summary>The sort size button's index: after drafter, last.</summary>
+    /// <summary>The sort size button's index: after drafter.</summary>
     public static int SortSizeIndex(bool withInstalled = false) => DrafterIndex(withInstalled) + 1;
 
     /// <summary>
     /// The filters' part of <c>/server</c>'s hint row. Pinned. Shortened later on 2026-09-30 (the user's ask): the sizes are
-    /// on their buttons, so <c>1 / 2 / 3 = GB</c>, and sort size is <c>S = sort</c>.
+    /// on their buttons, so <c>1 / 2 / 3 = GB</c>, and sort size is <c>S = sort</c>; uncensored, last on X, is <c>X = unc</c>.
     /// </summary>
-    public const string Keys = "1 / 2 / 3 = GB · U = uncensored · D = drafter · S = sort";
+    public const string Keys = "1 / 2 / 3 = GB · D = drafter · S = sort · X = unc";
 
-    /// <summary>The filters' part of the catalog's hint row, with installed and uninstalled (later on 2026-09-29). Pinned.</summary>
-    public const string CatalogKeys = "1 / 2 / 3 = GB · I / N = installed / uninstalled · U = uncensored · D = drafter · S = sort";
+    /// <summary>The filters' part of the catalog's hint row, with installed and uninstalled (later on 2026-09-29; <c>I / U = inst / uninst</c> later on 2026-09-30). Pinned.</summary>
+    public const string CatalogKeys = "1 / 2 / 3 = GB · I / U = inst / uninst · D = drafter · S = sort · X = unc";
 
     /// <summary>A size button's title: <c>8GB</c>. Pinned.</summary>
     public static string SizeButton(int gb) => gb.ToString(System.Globalization.CultureInfo.InvariantCulture) + "GB";
 
-    /// <summary>Whether any filter button is lit (sort size thins nothing, so it is not one).</summary>
+    /// <summary>Whether any filter button is lit (sort size thins nothing, so it is not one; dark uncensored thins, but is no button lit).</summary>
     public bool Active => MaxGb is not null || Uncensored || Installed is not null || Drafter;
 
     /// <summary>
     /// The buttons, the lit ones <see cref="MenuButton.On"/>: the sizes on the keys 1, 2 and 3, then — <paramref name="withInstalled"/>,
-    /// the catalog's — installed on I and uninstalled on N, then uncensored on U, drafter on D, then sort size on S. <see cref="Press"/>
-    /// reads the same layout.
+    /// the catalog's — installed on I and uninstalled on U, then drafter on D, sort size on S, and uncensored on X last
+    /// (later on 2026-09-30). <see cref="Press"/> reads the same layout.
     /// </summary>
     public IReadOnlyList<MenuButton> Buttons(bool withInstalled = false)
     {
@@ -165,15 +175,15 @@ public sealed record EmbeddedModelFilter(int? MaxGb, bool Uncensored, bool? Inst
             buttons.Add(new MenuButton(UninstalledButton, UninstalledKey, Installed == false));
         }
 
-        buttons.Add(new MenuButton(UncensoredButton, UncensoredKey, Uncensored));
         buttons.Add(new MenuButton(DrafterButton, DrafterKey, Drafter));
         buttons.Add(new MenuButton(SortSizeButton, SortSizeKey, SortSize));
+        buttons.Add(new MenuButton(UncensoredButton, UncensoredKey, Uncensored));
         return buttons;
     }
 
     /// <summary>
     /// The filter after the button at <paramref name="index"/> of <see cref="Buttons"/> is pressed: a size lights alone, or goes
-    /// dark when it was the lit one; installed and uninstalled the same between themselves; uncensored, drafter and sort size flip. Each
+    /// dark when it was the lit one; installed and uninstalled the same between themselves; drafter, sort size and uncensored flip. Each
     /// group leaves the others be; any other index changes nothing.
     /// </summary>
     public EmbeddedModelFilter Press(int index, bool withInstalled = false)
@@ -205,12 +215,13 @@ public sealed record EmbeddedModelFilter(int? MaxGb, bool Uncensored, bool? Inst
     /// <summary>
     /// Whether <paramref name="model"/> passes. The size is compared as a row shows it — gigabytes of 10⁹ to one decimal, as
     /// <c>ModelStore.SizeLabel</c> writes them — so a row that reads "8 GB" passes 8GB. <paramref name="installed"/> is the
-    /// model's state on disk (a paused download is not installed); <c>/server</c>'s rows are all installed.
+    /// model's state on disk (a paused download is not installed); <c>/server</c>'s rows are all installed. Uncensored picks a
+    /// half (later on 2026-09-30): lit, the uncensored builds alone; dark, the others alone.
     /// </summary>
     public bool Matches(EmbeddedModel model, EmbeddedFilterType type, bool installed = true)
     {
         ArgumentNullException.ThrowIfNull(model);
-        if (Uncensored && !model.Uncensored)
+        if (Uncensored != model.Uncensored)
         {
             return false;
         }
