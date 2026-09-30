@@ -17,6 +17,9 @@ public sealed class WindowsPerfSource : IPerfSource
     private const string Category = "Perf";
 
     private readonly IGpuReader? _gpu;
+
+    // The network meters (2026-09-30): .NET's own adapter counters, a rate from each two readings.
+    private readonly NetworkMeter _net = new(new NetworkCounters());
     private ulong _idle;
     private ulong _kernel;
     private ulong _user;
@@ -52,7 +55,8 @@ public sealed class WindowsPerfSource : IPerfSource
         }
 
         var (gpu, vram) = _gpu?.Read() ?? (null, null);
-        return new PerfSnapshot(cpu, ram, gpu, vram);
+        var net = _net.Sample();
+        return new PerfSnapshot(cpu, ram, gpu, vram, net?.Down, net?.Up, net?.Link);
     }
 
     public void Dispose() => _gpu?.Dispose();

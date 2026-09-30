@@ -323,8 +323,21 @@ public sealed partial class InputLine
     /// </summary>
     public const int RuleTitlePairKey = -500_000;
 
+    /// <summary>
+    /// What two clicks on the draft must share to pair into a word's selection (2026-09-30, <see cref="DraftWords"/>): the
+    /// word's start, far above every <see cref="HintPairKey"/> (a zone, or eight plus a strip column), so no part shares one. Pinned.
+    /// </summary>
+    public static int DraftWordPairKey(int wordStart) => 1_000_000 + wordStart;
+
     /// <summary>What a double-click on a transcript picture does with its id (later on 2026-09-24): the screen's opener; null = nothing.</summary>
     public Action<int>? OpenPicture { get; set; }
+
+    /// <summary>
+    /// Whether a slash command's argument is a path its own file list completes (2026-09-30): there a mention character stays
+    /// the argument list's, since the command takes a bare path; anywhere else in a command's text a mention completes as in a
+    /// message. The screen's <c>ChatScreen.TakesPathArgument</c>; null = none is.
+    /// </summary>
+    public Func<string, bool>? PathArgument { get; set; }
 
     /// <summary>
     /// What a click on a picture strip tile does with its id (2026-09-28, the user's ask: a click selects it, a double-click

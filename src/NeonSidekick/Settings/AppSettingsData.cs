@@ -187,22 +187,32 @@ public sealed class AppSettingsData
     public List<string>? ToolbarItems { get; set; }
 
     /// <summary>
-    /// The performance bar (2026-09-29, the user's ask: "a third bar", under the toolbar, with CPU %, RAM %, GPU % and VRAM %):
-    /// one of <see cref="App.PerfBarMode.Names"/> — <c>off</c> (the default: no row, nothing sampled), <c>text</c>,
-    /// <c>gauge</c>, <c>spark</c> or <c>led</c>, the look (the user's call: "let's do all of them"). The GPU meters read
-    /// NVIDIA's NVML where an NVIDIA GPU answers, else Windows' own counters (PDH) for the adapter with the most dedicated
-    /// memory (DXGI); a machine with neither shows CPU and RAM alone. Read on every pane tick, so a change shows when the
-    /// settings pane closes; sampled once a second while on. No variable.
+    /// The performance bar's meters (2026-09-30, the user's ask: <c>Show performance bar</c> a checklist like Show toolbar,
+    /// none by default, in place of the one word — <c>ShowPerformanceBar</c>, off or a look, from 2026-09-29 — that was both
+    /// the switch and the look; that key is retired, so a profile saved with it shows no bar until a meter is checked): the
+    /// ids of <see cref="App.PerfBarItems.Names"/> — CPU, RAM, GPU, VRAM, and the network's NET%, NET↓ and NET↑ — in that order.
+    /// Null (the default) is none: no row, nothing sampled. The GPU meters read NVIDIA's NVML where an NVIDIA GPU answers, else
+    /// Windows' own counters (PDH) for the adapter with the most dedicated memory (DXGI); the network's, .NET's own counters of
+    /// the adapters with a gateway. A meter the machine cannot read is left out. Read on every pane tick, so a change shows at
+    /// once; sampled once a second while any is checked. The row keeps the label <c>Show performance bar</c> (the key differs,
+    /// as <see cref="ToolbarItems"/>' does). No variable.
     /// </summary>
-    public string ShowPerformanceBar { get; set; } = App.PerfBarMode.Default;
+    public List<string>? PerformanceBarItems { get; set; }
 
     /// <summary>
-    /// The look a bare <c>/perf</c> (or the toolbar's 📈) turns the performance bar back on in (later on 2026-09-29, the
-    /// user's ask: "the last look used"): the last <see cref="ShowPerformanceBar"/> that was not <c>off</c>, saved whenever it
-    /// becomes one — by <c>/perf</c> or the Show performance bar picker; <c>text</c> until then. Anything that is not a look
-    /// reads as <c>text</c> (<see cref="App.PerfBarMode.LastLook"/>). No settings row, no variable.
+    /// The meters a bare <c>/perf</c> (or the toolbar's 📈) brings back after it hid the bar (2026-09-30): what was checked when
+    /// it hid it; null until then, when <see cref="App.PerfBarItems.Restored"/> (CPU, RAM, GPU and VRAM) come back. No settings
+    /// row, no variable.
     /// </summary>
-    public string PerformanceBarLook { get; set; } = App.PerfBarMode.DefaultLook;
+    public List<string>? PerformanceBarLastItems { get; set; }
+
+    /// <summary>
+    /// The performance bar's look (later on 2026-09-29, the user's ask: "the last look used"; the look itself since
+    /// 2026-09-30): one of <see cref="App.PerfBarMode.Names"/> — <c>text</c> (the default), <c>gauge</c>, <c>spark</c> or
+    /// <c>led</c> — picked on the <c>Show performance bar</c> page's title row or by <c>/perf &lt;look&gt;</c>. Anything else
+    /// reads as <c>text</c>. No row of its own, no variable.
+    /// </summary>
+    public string PerformanceBarLook { get; set; } = App.PerfBarMode.Default;
 
     /// <summary>
     /// The look (2026-09-23, the user's ask): <c>synthwave</c> (the default), <c>netrunner</c>,

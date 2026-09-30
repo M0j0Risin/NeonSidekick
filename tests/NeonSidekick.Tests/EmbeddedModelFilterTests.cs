@@ -153,14 +153,18 @@ public class EmbeddedModelFilterTests
 
         var sorted = EmbeddedModelFilter.None.Press(4);
         Assert.Equal(new EmbeddedModelFilter(null, false, null, true), sorted);
-        Assert.Equal([false, false, false, false, true, false], sorted.Buttons().Select(b => b.On));
+        Assert.All(sorted.Buttons(), b => Assert.False(b.On));   // named for what a press gives, never lit (later on 2026-09-30)
+        Assert.Equal("sort name", sorted.Buttons()[EmbeddedModelFilter.SortSizeIndex()].Title);
+        Assert.Equal("sort size", EmbeddedModelFilter.None.Buttons()[EmbeddedModelFilter.SortSizeIndex()].Title);
+        Assert.Equal(("sort size", "sort name"), (EmbeddedModelFilter.SortSizeButton, EmbeddedModelFilter.SortNameButton));
         Assert.False(sorted.Active);                                          // it thins nothing
-        Assert.Equal(EmbeddedModelFilter.None, sorted.Press(4));              // pressed again: dark
+        Assert.Equal(EmbeddedModelFilter.None, sorted.Press(4));              // pressed again: name order
         Assert.Equal(new EmbeddedModelFilter(8, true, null, true), sorted.Press(0).Press(5));   // the filters left be
 
         var catalog = EmbeddedModelFilter.None.Press(6, withInstalled: true);
         Assert.True(catalog.SortSize);
-        Assert.Equal([false, false, false, false, false, false, true, false], catalog.Buttons(withInstalled: true).Select(b => b.On));
+        Assert.All(catalog.Buttons(withInstalled: true), b => Assert.False(b.On));
+        Assert.Equal("sort name", catalog.Buttons(withInstalled: true)[EmbeddedModelFilter.SortSizeIndex(withInstalled: true)].Title);
         Assert.True(catalog.Press(7, withInstalled: true) is { Uncensored: true, SortSize: true });
     }
 

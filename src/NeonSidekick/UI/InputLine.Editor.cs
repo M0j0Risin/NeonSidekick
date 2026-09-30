@@ -848,9 +848,20 @@ public sealed partial class InputLine
 
             if (pane.TryHitInput(click.X, click.Y, out int at))
             {
-                hintClicks.Reset();
                 _cursor = DraftIndex(at);
                 _anchor = _cursor;
+
+                // A second click on the same word within the interval selects it (2026-09-30, the user's ask): paired by the
+                // word's start, so the two presses may land on different letters of it; a masked value selects whole, its
+                // words' edges never shown.
+                string draft = _text.ToString();
+                var word = _o.Mask ? (Start: 0, End: draft.Length) : DraftWords.At(draft, _cursor);
+                if (hintClicks.Second(DraftWordPairKey(word.Start)) && word.End > word.Start)
+                {
+                    _anchor = word.Start;
+                    _cursor = word.End;
+                }
+
                 Redraw();
                 return EditOutcome.Handled;
             }
@@ -1128,7 +1139,7 @@ public sealed partial class InputLine
                 string typed = query;
                 words = () => MentionCompleter.Matches(_line._commands!(), typed);
             }
-            else if (_arguing && MentionCompleter.TryFindArgument(draft, _cursor, out string command, out start, out end, out query))
+            else if (_arguing && MentionCompleter.TryFindArgument(draft, _cursor, out string command, out start, out end, out query) && !MentionInArgument(draft, command))
             {
                 string typed = query;
                 argument = () => _line._arguments!(command, typed);
@@ -1225,6 +1236,24 @@ public sealed partial class InputLine
             _list = new MentionList(start, end, query, found.Paths, found.Truncated, 0, 0) { Prefix = "@" };
             ShowList();
         }
+
+        /// <summary>
+        /// Whether the word under the cursor in a slash command's text is a mention to complete as one (2026-09-30, the user's
+        /// ask: <c>/loop infinite 1s append the time to @file.txt</c> completes the <c>@</c> as a message would): its character's
+        /// list is on, and the command's argument is no path of its own (<see cref="InputLine.PathArgument"/>: <c>/speak</c>,
+        /// <c>/view</c>, <c>/print</c> keep their file list, and none of them takes an <c>@</c>).
+        /// </summary>
+        private bool MentionInArgument(string draft, string command) =>
+            MentionCompleter.TriggerAt(draft, _cursor) switch
+            {
+                '@' => _completing,
+                '#' => _hashing,
+                '$' => _dollaring,
+                '%' => _percenting,
+                '^' => _careting,
+                _ => false,
+            }
+            && _line.PathArgument?.Invoke(command) != true;
 
         private void ShowList()
         {

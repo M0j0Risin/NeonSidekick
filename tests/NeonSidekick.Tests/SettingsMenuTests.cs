@@ -1025,8 +1025,8 @@ public partial class SettingsMenuTests : IDisposable
         Assert.False(SettingsMenu.IsToggle(SettingsField.ShowPerformanceBar));
         Assert.Equal("Show performance bar", SettingsMenu.FieldName(SettingsField.ShowPerformanceBar));
         Assert.Equal("off", SettingsMenu.FieldValue(SettingsField.ShowPerformanceBar, data, _settings.ProfileDirectory));
-        Assert.Equal("gauge", SettingsMenu.FieldValue(SettingsField.ShowPerformanceBar, new AppSettingsData { ShowPerformanceBar = "gauge" }, _settings.ProfileDirectory));
-        Assert.Equal("spark [#9A8BB8]" + PerfBarMode.Describe("spark") + "[/]", SettingsMenu.PerfBarModeLabel("spark"));
+        // A checklist since 2026-09-30: the checked meters and the look.
+        Assert.Equal("CPU, NET↑ · gauge", SettingsMenu.FieldValue(SettingsField.ShowPerformanceBar, new AppSettingsData { PerformanceBarItems = ["netup", "cpu"], PerformanceBarLook = "gauge" }, _settings.ProfileDirectory));
         // Draft editor (2026-09-19): typed, the General tab's last row, blank = the shell's default for .txt, no reconnect (read at each /draft).
         Assert.False(SettingsMenu.IsToggle(SettingsField.DraftEditor));
         Assert.Equal("Draft editor", SettingsMenu.FieldName(SettingsField.DraftEditor));
@@ -4313,6 +4313,48 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(ToolbarItems.Defaults.ToHashSet(StringComparer.Ordinal), ToolbarItems.Resolve(_settings.Current.ToolbarItems));
         Assert.Contains(SettingsMenu.DefaultsButton, _console.Output);
         Assert.Single(System.Text.RegularExpressions.Regex.Matches(_console.Output, "  · Show toolbar: " + System.Text.RegularExpressions.Regex.Escape(ToolbarItems.Value(null))));
+        pane.Dispose();
+    }
+
+    /// <summary>
+    /// Show performance bar as a checklist (2026-09-30, the user's ask): Enter flips a meter and saves at once, in the bar's
+    /// order; the look is a title-row button (T, G, S, L), the one in force lit, and pressing it again saves nothing; N
+    /// unchecks every meter, which saves null — no bar.
+    /// </summary>
+    [Fact]
+    public async Task OnThePane_ShowPerformanceBar_ChecksMeters_AndTheLookIsATitleRowButton()
+    {
+        var (menu, pane) = PaneMenu();
+        Down(SettingsMenu.TabFields[(int)SettingsTab.General].ToList().IndexOf(SettingsField.ShowPerformanceBar));
+        Push(Keys.Enter);
+        Push(Keys.Down, Keys.Enter);            // RAM
+        Push(Keys.Up, Keys.Enter);              // CPU
+        Push(Keys.Char('g'));                   // the gauge look
+        Push(Keys.Char('G'));                   // again: nothing to save
+        Push(Keys.Escape, Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Equal(["cpu", "ram"], _settings.Current.PerformanceBarItems);
+        Assert.Equal("gauge", _settings.Current.PerformanceBarLook);
+        Assert.Contains(SettingsMenu.PerfBarToggleKeys, _console.Output);
+        Assert.Contains(SettingsMenu.SelectAllButton, _console.Output);
+        Assert.Contains("  · Show performance bar: CPU, RAM · gauge", _console.Output);
+        Assert.Equal(["gauge"], SettingsMenu.PerfBarButtons(PerfBarStyle.Gauge).Where(b => b.On).Select(b => b.Title));
+        Assert.Equal(["⊞ select all", "⊠ select none", "text", "gauge", "spark", "led"], SettingsMenu.PerfBarButtons(PerfBarStyle.Text).Select(b => b.Title));
+        Assert.Equal(['a', 'n', 't', 'g', 's', 'l'], SettingsMenu.PerfBarButtons(PerfBarStyle.Text).Select(b => b.Key!.Value));
+        pane.Dispose();
+
+        (menu, pane) = PaneMenu();
+        Down(SettingsMenu.TabFields[(int)SettingsTab.General].ToList().IndexOf(SettingsField.ShowPerformanceBar));
+        Push(Keys.Enter);
+        Push(Keys.Char('n'));                   // none: no bar
+        Push(Keys.Escape, Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Null(_settings.Current.PerformanceBarItems);
+        Assert.Equal("gauge", _settings.Current.PerformanceBarLook);   // the look stays for the next meter checked
         pane.Dispose();
     }
 

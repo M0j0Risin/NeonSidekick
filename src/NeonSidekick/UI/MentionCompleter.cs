@@ -330,4 +330,25 @@ public static class MentionCompleter
     }
 
     private static bool IsBoundary(char c) => char.IsWhiteSpace(c) || PasteBlocks.IsToken(c);
+
+    /// <summary>The characters that start a mention: <c>@</c> a path, <c>#</c> a skill, <c>$</c> a tool, <c>%</c> a connection, <c>^</c> a workflow. Pinned.</summary>
+    public const string Triggers = "@#$%^";
+
+    /// <summary>
+    /// The mention character the word under <paramref name="cursor"/> starts with (2026-09-30, the user's ask: a mention inside a
+    /// slash command's text completes as it does in a message), by <see cref="TryFind(string, int, char, out int, out int, out string)"/>'s
+    /// word rule; null for a plain word, a cursor still on the character itself, or one in the middle of a word (<c>a@b</c>).
+    /// </summary>
+    public static char? TriggerAt(string text, int cursor)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        cursor = Math.Clamp(cursor, 0, text.Length);
+        int start = cursor;
+        while (start > 0 && !IsBoundary(text[start - 1]))
+        {
+            start--;
+        }
+
+        return start < text.Length && cursor > start && Triggers.Contains(text[start], StringComparison.Ordinal) ? text[start] : null;
+    }
 }

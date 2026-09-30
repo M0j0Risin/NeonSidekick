@@ -79,6 +79,17 @@ public class SmokeChecksTests
         Assert.Equal("1 tool listed through the relay; the call answered with its tool-use id", check.Detail);
     }
 
+    /// <summary>The performance bar's network meters (2026-09-30): .NET's adapter counters read twice, the rates sane (the JIT half; the published exe is the AOT proof).</summary>
+    [Fact]
+    public void ProbePerfNetwork_ReadsTheAdapters()
+    {
+        var check = SmokeChecks.ProbePerfNetwork();
+
+        Assert.Equal("perf:network", check.Name);
+        Assert.True(check.Passed, check.Detail);
+        Assert.Matches("^(no adapter with a gateway|\\d+ adapters? with a gateway, link )", check.Detail);
+    }
+
     /// <summary>The git round trip (2026-09-20): every GitAccess operation the tools call over a temp repository (the JIT half; the published exe is the AOT proof).</summary>
     [Fact]
     public void ProbeGit_RoundTripsATempRepository()

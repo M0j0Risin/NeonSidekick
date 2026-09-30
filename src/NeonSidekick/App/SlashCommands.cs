@@ -79,9 +79,10 @@ public enum SlashCommand
     Usage,
 
     /// <summary>
-    /// <c>/perf [off|text|gauge|spark|led]</c> (2026-09-29, the user's ask): bare, the performance bar shown in its last look
-    /// (<see cref="Settings.AppSettingsData.PerformanceBarLook"/>, text the first time) or hidden; a look sets it. Display only,
-    /// so it runs at once under a reply; the toolbar's 📈 word.
+    /// <c>/perf [off|text|gauge|spark|led]</c> (2026-09-29, the user's ask): bare, the performance bar hidden, or shown again
+    /// with the meters it last had (<see cref="Settings.AppSettingsData.PerformanceBarLastItems"/>; CPU, RAM, GPU and VRAM the
+    /// first time, 2026-09-30); <c>off</c> hides it; a look sets it and shows the bar. Display only, so it runs at once under a
+    /// reply; the toolbar's 📈 word.
     /// </summary>
     Perf,
 

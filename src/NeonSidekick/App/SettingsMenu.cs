@@ -580,9 +580,10 @@ public enum SettingsField
     EmbeddedDrafter,
 
     /// <summary>
-    /// A picker: the performance bar's look — <c>off</c> / <c>text</c> / <c>gauge</c> / <c>spark</c> / <c>led</c>
-    /// (<see cref="Settings.AppSettingsData.ShowPerformanceBar"/>, 2026-09-29, the user's ask). The General tab's row after
-    /// Show toolbar; no reconnect (the pane reads it at every tick).
+    /// A checklist: the performance bar's meters (<see cref="Settings.AppSettingsData.PerformanceBarItems"/>, 2026-09-30, the
+    /// user's ask; a picker of <c>off</c> or a look from 2026-09-29), with the look on the page's title row
+    /// (<see cref="Settings.AppSettingsData.PerformanceBarLook"/>). The General tab's row after Show toolbar; no reconnect (the
+    /// pane reads it at every tick).
     /// </summary>
     ShowPerformanceBar,
 
@@ -1755,7 +1756,7 @@ internal sealed partial class SettingsMenu
             SettingsField.SessionTool => OnOff(data.SessionTool),
             SettingsField.ShowWorkingDirectory => OnOff(data.ShowWorkingDirectory),
             SettingsField.ToolbarItems => App.ToolbarItems.Value(data.ToolbarItems),
-            SettingsField.ShowPerformanceBar => data.ShowPerformanceBar,
+            SettingsField.ShowPerformanceBar => PerfBarItems.Value(data.PerformanceBarItems, data.PerformanceBarLook),
             SettingsField.ThemedViewer => OnOff(data.ThemedViewer),
             SettingsField.Theme => data.Theme,
             SettingsField.QueueMessages => OnOff(data.QueueMessages),
@@ -2093,6 +2094,20 @@ internal sealed partial class SettingsMenu
     /// <summary>Show toolbar's hint: <see cref="ToggleKeys"/> with D (2026-09-29). Pinned.</summary>
     public const string ToolbarToggleKeys = "Enter / Space = on or off · A = all · N = none · D = default · ESC = back";
 
+    /// <summary>
+    /// Show performance bar's buttons (2026-09-30, the user's ask: the look on the checklist's own screen):
+    /// <see cref="ChecklistButtons"/>, then one per look (<see cref="PerfBarMode.Names"/>, from index
+    /// <see cref="PerfBarLookIndex"/>, keys T, G, S and L), the one in force lit — a radio group, as the embedded model lists'
+    /// size filters are. Pinned.
+    /// </summary>
+    public static IReadOnlyList<MenuButton> PerfBarButtons(PerfBarStyle look) =>
+        [.. ChecklistButtons, .. PerfBarMode.Names.Select(name => new MenuButton(name, name[0], PerfBarMode.Name(look) == name))];
+
+    private const int PerfBarLookIndex = 2;
+
+    /// <summary>Show performance bar's hint: <see cref="ToggleKeys"/> with the looks' keys (2026-09-30). Pinned.</summary>
+    public const string PerfBarToggleKeys = "Enter / Space = on or off · A = all · N = none · T / G / S / L = look · ESC = back";
+
     /// <summary>The status line when the last language would go: at least one stays (the user's rule, 2026-09-21). Pinned.</summary>
     public const string LastLanguageError = "At least one language stays on.";
 
@@ -2147,10 +2162,6 @@ internal sealed partial class SettingsMenu
     /// <summary>One row of the queue-cancel-mode picker: the mode and its hint (padded to six: <c>drain</c> and <c>empty</c> are five). Pinned.</summary>
     public static string QueueCancelModeLabel(string name) =>
         Markup.Escape(name.PadRight(6)) + Theme.DimMarkup(QueueCancelMode.Describe(name));
-
-    /// <summary>One row of the performance-bar picker (2026-09-29): the mode and its hint (padded to six: <c>gauge</c> and <c>spark</c> are five). Pinned.</summary>
-    public static string PerfBarModeLabel(string name) =>
-        Markup.Escape(name.PadRight(6)) + Theme.DimMarkup(PerfBarMode.Describe(name));
 
     /// <summary>One row of the botchat-LLM-mode picker: the mode and its hint (padded to seven: <c>single</c> is six). Pinned.</summary>
     public static string BotChatLlmModeLabel(string name) =>
@@ -3189,7 +3200,7 @@ internal sealed partial class SettingsMenu
 
         if (field == SettingsField.ShowPerformanceBar)
         {
-            return await PickPerfBarModeAsync(saved, cancellationToken).ConfigureAwait(false);
+            return await EditPerfBarAsync(cancellationToken).ConfigureAwait(false);
         }
 
         if (field == SettingsField.EmbeddedFilterType)
@@ -5450,26 +5461,59 @@ internal sealed partial class SettingsMenu
         return true;
     }
 
-    /// <summary>The performance-bar picker under the settings list (2026-09-29): one <see cref="PerfBarModeLabel"/> row per <see cref="PerfBarMode.Names"/> entry, the saved one under the cursor.</summary>
-    private async Task<bool> PickPerfBarModeAsync(AppSettingsData saved, CancellationToken cancellationToken)
+    /// <summary>
+    /// The performance bar's page under the settings list (2026-09-30, the user's ask: the toolbar's checklist, and the look on
+    /// the same screen): one <see cref="PerfBarItems.Label"/> row per meter, Enter or Space flipping it and saving at once,
+    /// nothing checked no bar; on the title row the checklists' select all and select none, then the four looks
+    /// (<see cref="PerfBarButtons"/>), the one in force lit — the embedded model lists' radio buttons' shape. The list is
+    /// re-shown until ESC, the bar redrawing under it. Without the pane there are no buttons, and <c>/perf &lt;look&gt;</c>
+    /// sets the look. True when anything changed.
+    /// </summary>
+    private async Task<bool> EditPerfBarAsync(CancellationToken cancellationToken)
     {
-        var page = new MenuPage(Crumb(FieldName(SettingsField.ShowPerformanceBar)), PerfBarMode.Names.Select(PerfBarModeLabel).ToList(), PickKeys);
-        int? picked = await PickAsync(page, Math.Max(0, Array.IndexOf(PerfBarMode.Names, saved.ShowPerformanceBar)), cancellationToken).ConfigureAwait(false);
-        if (picked is not { } index)
+        bool changed = false;
+        int cursor = 0;
+        var names = PerfBarItems.Names;
+        while (true)
         {
-            return Unchanged();
-        }
-
-        string name = PerfBarMode.Names[index];
-        Apply(SettingsField.ShowPerformanceBar, d =>
-        {
-            d.ShowPerformanceBar = name;
-            if (name != PerfBarMode.Default)
+            var saved = _settings.Current;
+            var on = PerfBarItems.Resolve(saved.PerformanceBarItems);
+            var page = new MenuPage(Crumb(FieldName(SettingsField.ShowPerformanceBar)), names.Select(id => PerfBarItems.Label(id, on.Contains(id))).ToList(), PerfBarToggleKeys) { SpaceToggles = true };
+            var picked = await PickChecklistAsync(page, cursor, cancellationToken, PerfBarButtons(PerfBarMode.Parse(saved.PerformanceBarLook))).ConfigureAwait(false);
+            if (picked is not { } pick)
             {
-                d.PerformanceBarLook = name;   // what a bare /perf turns back on (later on 2026-09-29)
+                if (!changed)
+                {
+                    Sink.Notice(UnchangedNotice);
+                }
+
+                return changed;
             }
-        });
-        return true;
+
+            cursor = pick.Row;
+            if (pick.Button >= PerfBarLookIndex)
+            {
+                string look = PerfBarMode.Names[pick.Button - PerfBarLookIndex];
+                if (!string.Equals(look, PerfBarMode.Name(PerfBarMode.Parse(saved.PerformanceBarLook)), StringComparison.Ordinal))
+                {
+                    Apply(SettingsField.ShowPerformanceBar, d => d.PerformanceBarLook = look);
+                    changed = true;
+                }
+
+                continue;
+            }
+
+            var next = pick.Button == SelectAllIndex ? names.ToHashSet(StringComparer.Ordinal)
+                : pick.Button == SelectNoneIndex ? new HashSet<string>(StringComparer.Ordinal)
+                : names.Where(n => on.Contains(n) != string.Equals(n, names[pick.Row], StringComparison.Ordinal)).ToHashSet(StringComparer.Ordinal);
+            if (next.SetEquals(on))
+            {
+                continue;   // select all with every meter on, none with none: nothing to save
+            }
+
+            Apply(SettingsField.ShowPerformanceBar, d => d.PerformanceBarItems = PerfBarItems.Save(next));
+            changed = true;
+        }
     }
 
     /// <summary>The filter-type picker under the settings list (later on 2026-09-29): one <see cref="EmbeddedFilterTypeLabel"/> row per <see cref="NeonSidekick.EmbeddedLlm.EmbeddedFilterTypes.Names"/> entry, the saved one under the cursor.</summary>

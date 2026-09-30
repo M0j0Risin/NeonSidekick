@@ -1770,6 +1770,90 @@ public class InputLineTests : IDisposable
     // The glyph takes two cells: column 2 + n is the cell of the draft's character n (the cursor lands before it).
     private static int Col(int index) => 2 + index;
 
+    // ── A double-click selects the word (2026-09-30) ───────────────────────
+
+    private (InputLine Line, ScriptedInput Keys, ManualTimeProvider Time) WordClickLine(Func<string, bool>? copyToClipboard = null)
+    {
+        _console.Profile.Height = 10;
+        var time = new ManualTimeProvider();
+        var pane = new ScreenPane(_console, new ScreenGeometry(() => null, () => 100), time);
+        pane.Show();
+        var scripted = new ScriptedInput();
+        return (new InputLine(pane, new KeySource(scripted, TimeSpan.FromMilliseconds(1)), copyToClipboard: copyToClipboard), scripted, time);
+    }
+
+    [Fact]
+    public async Task ADoubleClickInsideAWord_SelectsIt_AndTypingReplacesIt()
+    {
+        var (line, keys, _) = WordClickLine();
+        keys.Push(Chars("the quick brown fox"));
+        keys.PushClick(Col(5), 100).PushClick(Col(7), 100);   // on the u, then the c: two letters of one word
+        keys.Push(Chars("slow")).Push(Keys.Enter);
+
+        Assert.Equal("the slow brown fox", Assert.IsType<InputResult.Submitted>(await line.ReadAsync()).Text);
+    }
+
+    [Fact]
+    public async Task ADoubleClickedWord_CopiesWithCtrlC()
+    {
+        var copied = new List<string>();
+        var (line, keys, _) = WordClickLine(text => { copied.Add(text); return true; });
+        keys.Push(Chars("the quick brown fox"));
+        keys.PushClick(Col(11), 100).PushClick(Col(11), 100);   // on the r of brown
+        keys.Push(Keys.Ctrl(ConsoleKey.C)).Push(Keys.Enter);
+
+        await line.ReadAsync();
+
+        Assert.Equal(["brown"], copied);
+    }
+
+    [Fact]
+    public async Task TwoClicksTooFarApart_OrOnTwoWords_OrWithAKeyBetween_OnlyPlaceTheCursor()
+    {
+        var (line, keys, time) = WordClickLine();
+        keys.Push(Chars("the quick brown fox"));
+        keys.PushClick(Col(5), 100);
+        keys.OnWait = () =>
+        {
+            keys.OnWait = null;
+            time.Advance(DoubleClick.Interval + TimeSpan.FromMilliseconds(1));
+            keys.PushClick(Col(7), 100).Push(Keys.Char('X')).Push(Keys.Enter);   // too late: the caret before the c
+        };
+
+        Assert.Equal("the quiXck brown fox", Assert.IsType<InputResult.Submitted>(await line.ReadAsync()).Text);
+
+        (line, keys, _) = WordClickLine();
+        keys.Push(Chars("the quick brown fox"));
+        keys.PushClick(Col(5), 100).PushClick(Col(12), 100).Push(Keys.Char('X')).Push(Keys.Enter);   // quick, then brown
+
+        Assert.Equal("the quick brXown fox", Assert.IsType<InputResult.Submitted>(await line.ReadAsync()).Text);
+
+        (line, keys, _) = WordClickLine();
+        keys.Push(Chars("the quick brown fox"));
+        keys.PushClick(Col(5), 100).Push(Keys.Key(ConsoleKey.RightArrow)).PushClick(Col(6), 100).Push(Keys.Char('X')).Push(Keys.Enter);
+
+        Assert.Equal("the quXick brown fox", Assert.IsType<InputResult.Submitted>(await line.ReadAsync()).Text);
+    }
+
+    [Fact]
+    public async Task ADoubleClickOnAMaskedValue_SelectsItWhole()
+    {
+        var (line, keys, _) = WordClickLine();
+        keys.Push(Chars("pass word"));
+        keys.PushClick(Col(1), 100).PushClick(Col(1), 100);
+        keys.Push(Chars("x")).Push(Keys.Enter);
+
+        Assert.Equal("x", Assert.IsType<InputResult.Submitted>(await line.ReadAsync(mask: true)).Text);
+    }
+
+    [Fact]
+    public void DraftWordPairKey_IsPinned_AboveEveryHintKey()
+    {
+        Assert.Equal(1_000_000, InputLine.DraftWordPairKey(0));
+        Assert.Equal(1_000_042, InputLine.DraftWordPairKey(42));
+        Assert.True(InputLine.DraftWordPairKey(0) > InputLine.HintPairKey(new ScreenPane.HintHit(ScreenPane.HintZone.Strip, "", 500)));
+    }
+
     [Theory]
     [InlineData(ConsoleKey.Delete)]
     [InlineData(ConsoleKey.Backspace)]
@@ -2815,6 +2899,64 @@ public class InputLineTests : IDisposable
     }
 
     // ── The #-mention list (2026-09-17) ─────────────────────────────────────
+
+    /// <summary>
+    /// A mention inside a slash command's text completes as it does in a message (2026-09-30, the user's ask:
+    /// <c>/loop infinite 1s append the time to @file.txt</c>): the argument list, which answers nothing there, yields to it.
+    /// </summary>
+    [Fact]
+    public async Task Mentions_InsideACommandsText_Complete_AsInAMessage()
+    {
+        var (line, keys, pane, asked) = WordLine();
+        int waits = 0;
+        keys.Push(Chars("/tts on then read @b"));
+        keys.OnWait = () =>
+        {
+            switch (waits++)
+            {
+                case 0:
+                    Assert.True(pane.OverlayOpen);   // the @ list, not /tts' on | off
+                    keys.Push(Keys.Enter);
+                    break;
+                case 1:
+                    Assert.False(pane.OverlayOpen);
+                    keys.Push(Chars("and #w"));
+                    break;
+                case 2:
+                    Assert.True(pane.OverlayOpen);   // the skills
+                    keys.Push(Keys.Enter);
+                    break;
+                case 3:
+                    keys.Push(Keys.Enter);
+                    break;
+            }
+        };
+
+        var submitted = Assert.IsType<InputResult.Submitted>(await line.ReadAsync(multiline: true, mentions: MentionFolderAction.Apply));
+
+        Assert.Equal("/tts on then read @test/bling.txt and #weather-info", submitted.Text);
+        Assert.Contains("b", asked);
+    }
+
+    /// <summary>A command whose argument is a path of its own (/speak, /view, /print) keeps its file list: an @ there is no mention (2026-09-30).</summary>
+    [Fact]
+    public async Task Mentions_InAPathCommand_StayTheArgumentList()
+    {
+        var (line, keys, pane, asked) = WordLine();
+        line.PathArgument = command => command.Equals("/speak", StringComparison.OrdinalIgnoreCase);
+        keys.Push(Chars("/speak @b"));
+        keys.OnWait = () =>
+        {
+            keys.OnWait = null;
+            Assert.False(pane.OverlayOpen);   // /speak's own list has no "@b"
+            keys.Push(Keys.Enter);
+        };
+
+        var submitted = Assert.IsType<InputResult.Submitted>(await line.ReadAsync(multiline: true, mentions: MentionFolderAction.Apply));
+
+        Assert.Equal("/speak @b", submitted.Text);
+        Assert.Empty(asked);   // the @ tree never asked
+    }
 
     [Fact]
     public async Task HashMentions_AHashWordOpensTheSkills_TypingNarrows_AndEnterWritesTheName_NotSends()

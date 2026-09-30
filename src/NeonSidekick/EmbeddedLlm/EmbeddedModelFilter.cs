@@ -79,8 +79,10 @@ public static class EmbeddedFilterTypes
 /// ones; both together, both. Nothing is saved: every visit to a pane starts at <see cref="None"/> (or <see cref="For"/>).
 /// The catalog alone (later still on 2026-09-29, the user's ask) carries <c>installed</c> and <c>uninstalled</c> between the
 /// sizes and uncensored, a radio pair of their own (<see cref="Installed"/>; <c>/server</c> lists installed models only).
-/// <c>sort size</c> (2026-09-30, the user's ask) is last on every list and no filter: lit, <see cref="Arrange"/> orders the
-/// embedded rows smallest first by the same bytes the sizes measure; dark, they keep the catalog's order. Not saved either.
+/// <c>sort size</c> (2026-09-30, the user's ask) is last on every list and no filter: pressed, <see cref="Arrange"/> orders the
+/// embedded rows smallest first by the same bytes the sizes measure; pressed again, they keep the catalog's order, which is by
+/// name. Not saved either. Since later that day (the user's ask) it names the order a press gives — <c>sort size</c> in name
+/// order, <c>sort name</c> sorted by size — and is never lit: a lit <c>sort name</c> would read as name order in force.
 /// <c>drafter</c> (later on 2026-09-30, the user's ask) sits between uncensored and sort size on every list, a switch of its
 /// own like uncensored: lit, it keeps the models that can draft ahead (<see cref="EmbeddedModel.HasMtp"/>: a drafter file, MTP
 /// or DFlash, or a head built into the weights — README's Drafter column, <c>drafter</c> or <c>built in</c>).
@@ -123,8 +125,11 @@ public sealed record EmbeddedModelFilter(int? MaxGb, bool Uncensored, bool? Inst
     /// <summary>The uncensored button's index: after sort size, last (later on 2026-09-30).</summary>
     public static int UncensoredIndex(bool withInstalled = false) => SortSizeIndex(withInstalled) + 1;
 
-    /// <summary>The sort size button's title (2026-09-30). Pinned.</summary>
+    /// <summary>The sort button's title in the catalog's (name) order: what a press gives (2026-09-30). Pinned.</summary>
     public const string SortSizeButton = "sort size";
+
+    /// <summary>The sort button's title while sorted by size (later on 2026-09-30, the user's ask): a press goes back to name order. Pinned.</summary>
+    public const string SortNameButton = "sort name";
 
     /// <summary>The sort size button's key.</summary>
     public const char SortSizeKey = 's';
@@ -176,7 +181,7 @@ public sealed record EmbeddedModelFilter(int? MaxGb, bool Uncensored, bool? Inst
         }
 
         buttons.Add(new MenuButton(DrafterButton, DrafterKey, Drafter));
-        buttons.Add(new MenuButton(SortSizeButton, SortSizeKey, SortSize));
+        buttons.Add(new MenuButton(SortSize ? SortNameButton : SortSizeButton, SortSizeKey));   // the order a press gives, never lit
         buttons.Add(new MenuButton(UncensoredButton, UncensoredKey, Uncensored));
         return buttons;
     }

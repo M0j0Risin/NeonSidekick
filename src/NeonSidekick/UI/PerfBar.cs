@@ -16,7 +16,9 @@ public sealed record PerfRow(IReadOnlyList<PerfSegment> Segments)
 
 /// <summary>
 /// The performance bar's row (2026-09-29, the user's ask: a third bar under the toolbar with CPU %, RAM %, GPU % and VRAM %,
-/// in four looks — "let's do all of them"): <see cref="PerfBarStyle.Text"/> writes each meter's label and value;
+/// in four looks — "let's do all of them"; since 2026-09-30 the meters the <c>Show performance bar</c> checklist checks,
+/// <see cref="PerfBarItems"/>, the network's among them — NET% a share like the rest, NET↓ and NET↑ written as rates and
+/// drawn as shares of the link): <see cref="PerfBarStyle.Text"/> writes each meter's label and value;
 /// <see cref="PerfBarStyle.Gauge"/> draws a heavy line in half-cell steps (eighth blocks, a cell tall, until 2026-09-30); <see cref="PerfBarStyle.Spark"/> the last
 /// <see cref="PerfSampler.HistoryLength"/> readings as a sparkline; <see cref="PerfBarStyle.Led"/> ten segments lit along the
 /// theme's gradient. Values and the gauge's and sparkline's cells take the load's colour (<see cref="LoadColor"/>); labels,
@@ -40,16 +42,21 @@ public static class PerfBar
     // The widths a drawn meter tries, widest first, before the row falls back to text.
     private static readonly int[] MeterWidths = [MeterCells, 8, 6, 4];
 
-    /// <summary>The row for <paramref name="style"/> in <paramref name="cells"/> cells; null for <see cref="PerfBarStyle.Off"/>.</summary>
-    public static PerfRow? Render(PerfBarStyle style, PerfSnapshot latest, IReadOnlyList<PerfSnapshot> history, int cells)
+    /// <summary>
+    /// The row of the meters <paramref name="items"/> checks (<see cref="PerfBarItems"/>, 2026-09-30) in <paramref name="style"/>
+    /// in <paramref name="cells"/> cells; null — no row — with none checked. A checked meter the machine cannot read is left
+    /// out, so a row may be empty (GPU alone on a machine without one): the row stays, and the pane's layout with it.
+    /// </summary>
+    public static PerfRow? Render(PerfBarStyle style, IReadOnlySet<string> items, PerfSnapshot latest, IReadOnlyList<PerfSnapshot> history, int cells)
     {
+        ArgumentNullException.ThrowIfNull(items);
         ArgumentNullException.ThrowIfNull(history);
-        if (style == PerfBarStyle.Off)
+        if (items.Count == 0)
         {
             return null;
         }
 
-        var meters = Meters(latest);
+        var meters = Meters(items, latest);
         if (style != PerfBarStyle.Text)
         {
             foreach (int width in MeterWidths)
@@ -87,22 +94,46 @@ public static class PerfBar
     /// <summary>How many of <paramref name="cells"/> LED segments <paramref name="percent"/> lights (a started segment counts). Pinned.</summary>
     public static int LedsLit(double percent, int cells) => (int)Math.Ceiling(Math.Round(PerfMath.Clamp(percent) / 100 * cells, 6));
 
-    private readonly record struct Meter(string Label, double Value, Func<PerfSnapshot, double?> Read);
+    /// <summary>
+    /// One meter as the row draws it: its label, the share that fills its gauge, colours it and picks its sparkline and LEDs
+    /// (<see cref="Read"/> for each reading of the history), and the value written after it — the share, or a network
+    /// direction's rate (2026-09-30).
+    /// </summary>
+    private readonly record struct Meter(string Label, double Value, string ValueText, Func<PerfSnapshot, double?> Read);
 
-    private static List<Meter> Meters(PerfSnapshot latest)
+    private static List<Meter> Meters(IReadOnlySet<string> items, PerfSnapshot latest)
     {
-        var meters = new List<Meter>(4);
-        Add(PerfText.CpuLabel, s => s.Cpu);
-        Add(PerfText.RamLabel, s => s.Ram);
-        Add(PerfText.GpuLabel, s => s.Gpu);
-        Add(PerfText.VramLabel, s => s.Vram);
+        var meters = new List<Meter>(PerfBarItems.Names.Length);
+        foreach (string id in PerfBarItems.Names.Where(items.Contains))
+        {
+            switch (id)
+            {
+                case PerfBarItems.Cpu: Share(PerfText.CpuLabel, s => s.Cpu); break;
+                case PerfBarItems.Ram: Share(PerfText.RamLabel, s => s.Ram); break;
+                case PerfBarItems.Gpu: Share(PerfText.GpuLabel, s => s.Gpu); break;
+                case PerfBarItems.Vram: Share(PerfText.VramLabel, s => s.Vram); break;
+                case PerfBarItems.Net: Share(PerfText.NetLabel, s => PerfMath.NetPercent(s.NetDown, s.NetUp, s.NetLink)); break;
+                case PerfBarItems.NetDown: Rate(PerfText.NetDownLabel, s => s.NetDown); break;
+                case PerfBarItems.NetUp: Rate(PerfText.NetUpLabel, s => s.NetUp); break;
+            }
+        }
+
         return meters;
 
-        void Add(string label, Func<PerfSnapshot, double?> read)
+        void Share(string label, Func<PerfSnapshot, double?> read)
         {
             if (read(latest) is { } value)
             {
-                meters.Add(new Meter(label, PerfMath.Clamp(value), read));
+                meters.Add(new Meter(label, PerfMath.Clamp(value), PerfText.Percent(value), read));
+            }
+        }
+
+        // A direction's rate (2026-09-30): written as bits/s, drawn as its share of the link (none while the link is unknown).
+        void Rate(string label, Func<PerfSnapshot, double?> rate)
+        {
+            if (rate(latest) is { } value)
+            {
+                meters.Add(new Meter(label, PerfMath.LinkPercent(value, latest.NetLink) ?? 0, PerfText.Rate(value), s => PerfMath.LinkPercent(rate(s), s.NetLink)));
             }
         }
     }
@@ -118,7 +149,7 @@ public static class PerfBar
             }
 
             row.Add(new PerfSegment(meter.Label + " ", Theme.DimText));
-            row.Add(new PerfSegment(PerfText.Percent(meter.Value), new Style(LoadColor(meter.Value))));
+            row.Add(new PerfSegment(meter.ValueText, new Style(LoadColor(meter.Value))));
         }
 
         return row;
@@ -168,7 +199,7 @@ public static class PerfBar
                     break;
             }
 
-            row.Add(new PerfSegment(" " + PerfText.Percent(meter.Value), new Style(LoadColor(meter.Value))));
+            row.Add(new PerfSegment(" " + meter.ValueText, new Style(LoadColor(meter.Value))));
         }
 
         return row;

@@ -90,4 +90,19 @@ public static class PerfMath
 
     /// <summary>A reading kept inside 0–100.</summary>
     public static double Clamp(double percent) => double.IsNaN(percent) ? 0 : Math.Clamp(percent, 0, 100);
+
+    /// <summary>
+    /// A byte counter's rate in bits/s between two readings <paramref name="elapsed"/> apart (2026-09-30, the network meters):
+    /// null with no time between them; 0 for a counter that went back (an adapter reset).
+    /// </summary>
+    public static double? Rate(long before, long now, TimeSpan elapsed) =>
+        elapsed <= TimeSpan.Zero ? null : now < before ? 0 : (now - before) * 8.0 / elapsed.TotalSeconds;
+
+    /// <summary>A rate as a share of the link's speed (both bits/s), 0–100; null when either is unknown or the link is none.</summary>
+    public static double? LinkPercent(double? rate, double? link) =>
+        rate is { } r && link is { } l && l > 0 ? Clamp(r / l * 100) : null;
+
+    /// <summary>NET%: the busier direction as a share of the link, null when the link is unknown.</summary>
+    public static double? NetPercent(double? down, double? up, double? link) =>
+        down is null && up is null ? null : LinkPercent(Math.Max(down ?? 0, up ?? 0), link);
 }

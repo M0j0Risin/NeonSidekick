@@ -1035,6 +1035,7 @@ internal sealed partial class ChatScreen
         // the command and #-mention lists the catalog and the two Skills-tab switches (2026-09-17);
         // Ctrl+C over a selection writes the clipboard with /copy's writer.
         _input = new InputLine(_pane, keys, clipboard, _transcript, clipboardImage, query => _files.Complete(query), CommandChoices, ArgumentChoices, HashChoices, DollarChoices, _copy, PercentChoices, CaretChoices);
+        _input.PathArgument = TakesPathArgument;   // a mention in any other command's text completes (2026-09-30)
         _input.Remembered = StoreCommand;
         _input.OpenPicture = OpenPicture;
         _input.SelectPicture = SelectStripPicture;
@@ -1277,32 +1278,34 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// The performance bar's row for the settings in force (2026-09-29, the user's ask) in <paramref name="cells"/> cells:
-    /// null — no row, the sampler stopped — while Show performance bar is off, else the latest reading in its look
-    /// (<see cref="PerfBar.Render"/>). TryParse, not Resolve: the tick must not warn on a hand-edited word every 100 ms.
+    /// null — no row, the sampler stopped — while no meter is checked (<see cref="PerfBarItems"/>, 2026-09-30), else the
+    /// latest reading of the checked ones in the look (<see cref="PerfBar.Render"/>). Parse, not Resolve: the tick must not
+    /// warn on a hand-edited word every 100 ms.
     /// </summary>
     private PerfRow? PerfBarRow(int cells)
     {
-        PerfBarMode.TryParse(_effective().ShowPerformanceBar, out var style);
-        _perf.Ensure(style != PerfBarStyle.Off);
-        if (style == PerfBarStyle.Off)
+        var shown = _effective();
+        var items = PerfBarItems.Resolve(shown.PerformanceBarItems);
+        _perf.Ensure(items.Count > 0);
+        if (items.Count == 0)
         {
             return null;
         }
 
         var (latest, history, _) = _perf.Read();
-        return PerfBar.Render(style, latest, history, cells);
+        return PerfBar.Render(PerfBarMode.Parse(shown.PerformanceBarLook), items, latest, history, cells);
     }
 
     /// <summary>
     /// <c>/perf</c> (later on 2026-09-29, the user's ask; the toolbar's 📈 word): one body for the idle line and the turn —
-    /// display only, nothing reconnects, and the pane's tick adds or drops the row. Bare it toggles, back to the last look
-    /// (<see cref="PerfBarMode.Toggle"/>); a look sets it and is remembered. The saved profile's, as <c>/tts</c> reads it:
-    /// the bar has no variable.
+    /// display only, nothing reconnects, and the pane's tick adds or drops the row. Bare it hides the bar, keeping its meters,
+    /// or brings them back (<see cref="PerfBarMode.Toggle"/>, the checklist's since 2026-09-30); <c>off</c> hides it; a look
+    /// sets it and shows the bar. The saved profile's, as <c>/tts</c> reads it: the bar has no variable.
     /// </summary>
     private void HandlePerf(string args)
     {
         var saved = _settings.Current;
-        if (PerfBarMode.Toggle(args, saved.ShowPerformanceBar, saved.PerformanceBarLook) is not { } next)
+        if (PerfBarMode.Toggle(args, saved.PerformanceBarItems, saved.PerformanceBarLastItems, saved.PerformanceBarLook) is not { } next)
         {
             _transcript.Error(Perf.PerfText.UsageError);
             return;
@@ -1310,13 +1313,11 @@ internal sealed partial class ChatScreen
 
         _settings.Update(d =>
         {
-            d.ShowPerformanceBar = next;
-            if (next != PerfBarMode.Default)
-            {
-                d.PerformanceBarLook = next;
-            }
+            d.PerformanceBarItems = next.Items;
+            d.PerformanceBarLastItems = next.LastItems;
+            d.PerformanceBarLook = next.Look;
         });
-        _transcript.Notice(Perf.PerfText.BarNotice(next));
+        _transcript.Notice(Perf.PerfText.BarNotice(next.Items is null ? PerfBarMode.OffWord : next.Look));
     }
 
     private ScreenPane.ToolbarParts? ToolbarParts()
@@ -3155,7 +3156,7 @@ internal sealed partial class ChatScreen
                 return MentionCompleter.Matches(ThemeName.Names.Select(name => new CompletionItem(name, ThemeName.Describe(name))).ToList(), argText);
 
             case SlashCommand.Perf:
-                return MentionCompleter.Matches(PerfBarMode.Names.Select(name => new CompletionItem(name, PerfBarMode.Describe(name))).ToList(), argText);
+                return MentionCompleter.Matches(PerfBarMode.Words.Select(name => new CompletionItem(name, PerfBarMode.Describe(name))).ToList(), argText);
 
             case SlashCommand.Profile:
             {
@@ -3410,6 +3411,13 @@ internal sealed partial class ChatScreen
     /// it (a name with a space inside completes on); a path typed in full (one match, equal to
     /// the text) closes it so Enter sends, as a word list closes. Pure.
     /// </summary>
+    /// <summary>
+    /// Whether <paramref name="command"/>'s argument is a path its own file list completes (<see cref="ArgumentPaths"/>:
+    /// <c>/speak</c>, <c>/view</c>, <c>/print</c>): there a mention character stays the argument list's (2026-09-30). Pinned.
+    /// </summary>
+    public static bool TakesPathArgument(string command) =>
+        SlashCommands.Parse(command).Command is SlashCommand.Speak or SlashCommand.View or SlashCommand.Print;
+
     public static MentionResult? ArgumentPaths(string command, string argText, ArgumentSources sources)
     {
         ArgumentNullException.ThrowIfNull(command);

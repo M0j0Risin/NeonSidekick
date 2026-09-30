@@ -12,12 +12,19 @@ public class PerfBarTests
 {
     // ── The setting ─────────────────────────────────────────────────────────
 
+    /// <summary>The four meters of the bar before the checklist (2026-09-30), what the looks' tests draw.</summary>
+    private static readonly IReadOnlySet<string> Four = PerfBarItems.Restored.ToHashSet(StringComparer.Ordinal);
+
+    private static IReadOnlySet<string> Only(params string[] ids) => ids.ToHashSet(StringComparer.Ordinal);
+
     [Fact]
-    public void TheModes_ArePinned_OffByDefault()
+    public void TheLooks_ArePinned_TextByDefault()
     {
-        Assert.Equal(["off", "text", "gauge", "spark", "led"], PerfBarMode.Names);
-        Assert.Equal("off", PerfBarMode.Default);
-        Assert.Equal("off", new AppSettingsData().ShowPerformanceBar);
+        // The look alone since 2026-09-30: whether the bar shows is the checklist's (PerfBarItems).
+        Assert.Equal(["text", "gauge", "spark", "led"], PerfBarMode.Names);
+        Assert.Equal(["off", "text", "gauge", "spark", "led"], PerfBarMode.Words);
+        Assert.Equal("text", PerfBarMode.Default);
+        Assert.Equal("text", new AppSettingsData().PerformanceBarLook);
         foreach (string name in PerfBarMode.Names)
         {
             Assert.True(PerfBarMode.TryParse(" " + name.ToUpperInvariant() + " ", out var style));
@@ -25,45 +32,167 @@ public class PerfBarTests
             Assert.NotEqual("", PerfBarMode.Describe(name));
         }
 
+        Assert.Equal("hide the performance bar", PerfBarMode.Describe("off"));
+        Assert.False(PerfBarMode.TryParse("off", out _));
         Assert.False(PerfBarMode.TryParse("bars", out var none));
-        Assert.Equal(PerfBarStyle.Off, none);
+        Assert.Equal(PerfBarStyle.Text, none);
+        Assert.Equal(PerfBarStyle.Led, PerfBarMode.Parse("led"));
+        Assert.Equal(PerfBarStyle.Text, PerfBarMode.Parse("bars"));
         Assert.Equal("", PerfBarMode.Describe("bars"));
-        Assert.Equal(PerfBarStyle.Gauge, PerfBarMode.Resolve(new AppSettingsData { ShowPerformanceBar = "gauge" }));
-        Assert.Equal(PerfBarStyle.Off, PerfBarMode.Resolve(new AppSettingsData { ShowPerformanceBar = "bars" }));   // warns, once
-        Assert.Equal(PerfBarStyle.Off, PerfBarMode.Resolve(new AppSettingsData { ShowPerformanceBar = "bars" }));
+        Assert.Equal(PerfBarStyle.Gauge, PerfBarMode.Resolve(new AppSettingsData { PerformanceBarLook = "gauge" }));
+        Assert.Equal(PerfBarStyle.Text, PerfBarMode.Resolve(new AppSettingsData { PerformanceBarLook = "bars" }));   // warns, once
+        Assert.Equal(PerfBarStyle.Text, PerfBarMode.Resolve(new AppSettingsData { PerformanceBarLook = "bars" }));
     }
 
-    [Theory]
-    // Bare: off (or a hand-edited word) → the last look, text the first time; a look showing → off (later on 2026-09-29).
-    [InlineData("", "off", "text", "text")]
-    [InlineData("", "off", "gauge", "gauge")]
-    [InlineData(" ", "gauge", "gauge", "off")]
-    [InlineData("", "bars", "led", "led")]
-    [InlineData("", "off", "off", "text")]
-    [InlineData("", "off", "bogus", "text")]
-    // A look sets it, whatever shows.
-    [InlineData(" LED ", "off", "text", "led")]
-    [InlineData("off", "gauge", "gauge", "off")]
-    [InlineData("spark", "gauge", "gauge", "spark")]
-    [InlineData("bogus", "off", "text", null)]
-    public void Perf_Toggles_BackToTheLastLook_OrSetsOne(string args, string shown, string last, string? expected)
+    [Fact]
+    public void TheMeters_ArePinned_NoneByDefault()
     {
-        Assert.Equal(expected, PerfBarMode.Toggle(args, shown, last));
+        Assert.Equal(["cpu", "ram", "gpu", "vram", "net", "netdown", "netup"], PerfBarItems.Names);
+        Assert.Equal(["CPU", "RAM", "GPU", "VRAM", "NET%", "NET↓", "NET↑"], PerfBarItems.Names.Select(PerfBarItems.Title));
+        Assert.Equal(["cpu", "ram", "gpu", "vram"], PerfBarItems.Restored);
+        Assert.Null(new AppSettingsData().PerformanceBarItems);
+        Assert.Empty(PerfBarItems.Resolve(null));
+        Assert.Empty(PerfBarItems.Resolve([]));
+        var resolved = PerfBarItems.Resolve([" NETUP ", "Ram", "bogus"]);
+        Assert.Equal(["ram", "netup"], PerfBarItems.Names.Where(resolved.Contains));
+        Assert.Null(PerfBarItems.Save(Only()));
+        Assert.Equal(["cpu", "netdown"], PerfBarItems.Save(Only("netdown", "cpu")));   // the bar's order
+        Assert.Equal("off", PerfBarItems.Value(null, "gauge"));
+        Assert.Equal("CPU, RAM, NET↓ · gauge", PerfBarItems.Value(["netdown", "ram", "cpu"], "gauge"));
+        Assert.Equal("all · text", PerfBarItems.Value([.. PerfBarItems.Names], "bars"));
+        Assert.Equal("[[x]] CPU     " + Theme.DimMarkup("processor load"), PerfBarItems.Label("cpu", true));   // markup: the brackets escaped
+        Assert.StartsWith("[[ ]] NET↑    ", PerfBarItems.Label("netup", false), StringComparison.Ordinal);
+        Assert.All(PerfBarItems.Names, id => Assert.NotEqual("", PerfBarItems.Describe(id)));
+        var copy = AppSettings.Copy(new AppSettingsData { PerformanceBarItems = ["cpu"], PerformanceBarLastItems = ["gpu"], PerformanceBarLook = "spark" });
+        Assert.Equal(["cpu"], copy.PerformanceBarItems);
+        Assert.Equal(["gpu"], copy.PerformanceBarLastItems);
+        Assert.Equal("spark", copy.PerformanceBarLook);
+    }
+
+    [Fact]
+    public void Perf_Bare_HidesKeepingTheMeters_ThenBringsThemBack()
+    {
+        var hidden = PerfBarMode.Toggle("", ["cpu", "net"], null, "gauge")!;
+        Assert.Null(hidden.Items);
+        Assert.Equal(["cpu", "net"], hidden.LastItems);
+        Assert.Equal("gauge", hidden.Look);
+
+        var shown = PerfBarMode.Toggle(" ", hidden.Items, hidden.LastItems, hidden.Look)!;
+        Assert.Equal(["cpu", "net"], shown.Items);
+        Assert.Equal("gauge", shown.Look);
+
+        // Never picked: the bar as it was before the checklist; a hand-edited look reads as text.
+        var first = PerfBarMode.Toggle("", null, null, "bogus")!;
+        Assert.Equal(["cpu", "ram", "gpu", "vram"], first.Items);
+        Assert.Equal("text", first.Look);
+    }
+
+    [Fact]
+    public void Perf_ALook_SetsItAndShowsTheBar_OffHides_AnythingElseIsTheUsage()
+    {
+        var led = PerfBarMode.Toggle(" LED ", null, ["gpu"], "text")!;
+        Assert.Equal(["gpu"], led.Items);
+        Assert.Equal("led", led.Look);
+        var spark = PerfBarMode.Toggle("spark", ["ram"], null, "gauge")!;
+        Assert.Equal(["ram"], spark.Items);   // shown already: its meters kept
+        Assert.Equal("spark", spark.Look);
+        var off = PerfBarMode.Toggle("OFF", ["ram"], null, "gauge")!;
+        Assert.Null(off.Items);
+        Assert.Equal(["ram"], off.LastItems);
+        Assert.Equal("gauge", off.Look);
+        var stillOff = PerfBarMode.Toggle("off", null, ["vram"], "gauge")!;
+        Assert.Null(stillOff.Items);
+        Assert.Equal(["vram"], stillOff.LastItems);   // hidden already: the last meters kept
+        Assert.Null(PerfBarMode.Toggle("bogus", null, null, "text"));
     }
 
     [Fact]
     public void Perf_Wording_IsPinned()
     {
-        Assert.Equal("text", PerfBarMode.DefaultLook);
-        Assert.Equal("text", new AppSettingsData().PerformanceBarLook);
-        Assert.Equal("spark", AppSettings.Copy(new AppSettingsData { PerformanceBarLook = "spark" }).PerformanceBarLook);
-        Assert.Equal("gauge", PerfBarMode.LastLook("gauge"));
-        Assert.Equal("text", PerfBarMode.LastLook("off"));
-        Assert.Equal("text", PerfBarMode.LastLook(null));
         Assert.Equal("📈", PerfText.Glyph);
         Assert.Equal("(📈 performance bar on: gauge)", PerfText.BarNotice("gauge"));
         Assert.Equal("(📈 performance bar off)", PerfText.BarNotice("off"));
         Assert.Equal("/perf takes off, text, gauge, spark or led, or nothing to toggle.", PerfText.UsageError);
+    }
+
+    // ── The network (2026-09-30) ────────────────────────────────────────────
+
+    [Fact]
+    public void Rate_IsBitsASecond_AResetCounterReadsZero()
+    {
+        Assert.Equal(8_000, PerfMath.Rate(1_000, 2_000, TimeSpan.FromSeconds(1)));
+        Assert.Equal(4_000, PerfMath.Rate(1_000, 2_000, TimeSpan.FromSeconds(2)));
+        Assert.Equal(0, PerfMath.Rate(5_000, 100, TimeSpan.FromSeconds(1)));   // the adapter reset
+        Assert.Null(PerfMath.Rate(0, 100, TimeSpan.Zero));
+        Assert.Equal(50, PerfMath.LinkPercent(50e6, 100e6));
+        Assert.Equal(100, PerfMath.LinkPercent(300e6, 100e6));
+        Assert.Null(PerfMath.LinkPercent(1e6, 0));
+        Assert.Null(PerfMath.LinkPercent(null, 1e9));
+        Assert.Equal(40, PerfMath.NetPercent(10e6, 40e6, 100e6));   // the busier direction
+        Assert.Null(PerfMath.NetPercent(null, null, 100e6));
+        Assert.Null(PerfMath.NetPercent(10e6, 1e6, null));
+    }
+
+    [Theory]
+    [InlineData(0, "   0K")]
+    [InlineData(850_000, " 850K")]
+    [InlineData(12_400_000, "12.4M")]
+    [InlineData(99_960_000, " 100M")]
+    [InlineData(150_000_000, " 150M")]
+    [InlineData(1_200_000_000, " 1.2G")]
+    public void TheRate_IsFiveCellsWide(double bits, string shown)
+    {
+        Assert.Equal(shown, PerfText.Rate(bits));
+    }
+
+    private sealed class ScriptedCounters(params IReadOnlyList<NetworkAdapterReading>[] readings) : INetworkCounters
+    {
+        private int _next;
+
+        public IReadOnlyList<NetworkAdapterReading> Read() => readings[Math.Min(_next++, readings.Length - 1)];
+    }
+
+    [Fact]
+    public void NetworkMeter_RatesOverTheAdaptersInBothReadings()
+    {
+        var clock = TimeSpan.Zero;
+        var counters = new ScriptedCounters(
+            [new("eth", 1_000, 500, 1_000_000_000)],
+            [new("eth", 126_000, 1_750, 1_000_000_000), new("wifi", 9_000_000, 9_000_000, 300_000_000)],   // wifi joins: no spike
+            []);
+        var meter = new NetworkMeter(counters, () => clock);
+
+        Assert.Null(meter.Sample());   // the first reading: no rate yet
+        clock = TimeSpan.FromSeconds(1);
+        var rates = meter.Sample()!.Value;
+        Assert.Equal((1_000_000, 10_000, 1_000_000_000), (rates.Down, rates.Up, rates.Link));
+        clock = TimeSpan.FromSeconds(2);
+        Assert.Null(meter.Sample());   // no adapter left
+    }
+
+    [Fact]
+    public void NetworkMeters_TextShowsTheRates_TheDrawnLooksTheirShareOfTheLink()
+    {
+        var reading = new PerfSnapshot(null, null, null, null, NetDown: 12_400_000, NetUp: 800_000, NetLink: 100_000_000);
+
+        var text = PerfBar.Render(PerfBarStyle.Text, Only("net", "netdown", "netup"), reading, [], 120)!;
+        Assert.Equal(Centered("NET%  12% · NET↓ 12.4M · NET↑  800K", 120), text.Text);
+        Assert.Equal(new Style(Theme.Good), text.Segments.Single(s => s.Text == "12.4M").Style);
+
+        var gauge = PerfBar.Render(PerfBarStyle.Gauge, Only("netdown"), reading, [], 120)!;
+        Assert.Equal(Centered("NET↓ ━───────── 12.4M", 120), gauge.Text);   // 12.4 % of the link (one cell), the rate after it
+
+        // No adapter: the network meters left out; an unknown link leaves NET% out and draws the rates empty.
+        Assert.Equal("", PerfBar.Render(PerfBarStyle.Text, Only("net", "netdown"), new PerfSnapshot(34, null, null, null), [], 120)!.Text);
+        var unknownLink = reading with { NetLink = null };
+        Assert.Equal(Centered("NET↓ 12.4M", 120), PerfBar.Render(PerfBarStyle.Text, Only("net", "netdown"), unknownLink, [], 120)!.Text);
+    }
+
+    [Fact]
+    public void OnlyTheCheckedMeters_Draw_InTheBarsOrder()
+    {
+        var row = PerfBar.Render(PerfBarStyle.Text, Only("vram", "cpu"), Reading, [], 120)!;
+        Assert.Equal(Centered("CPU  34% · VRAM  91%", 120), row.Text);
     }
 
     // ── The arithmetic ──────────────────────────────────────────────────────
@@ -223,15 +352,15 @@ public class PerfBarTests
     private static string Centered(string text, int cells) => new string(' ', (cells - TextCells.Width(text)) / 2) + text;
 
     [Fact]
-    public void Off_DrawsNoRow()
+    public void NoMeterChecked_DrawsNoRow()
     {
-        Assert.Null(PerfBar.Render(PerfBarStyle.Off, Reading, [], 120));
+        Assert.Null(PerfBar.Render(PerfBarStyle.Gauge, Only(), Reading, [], 120));
     }
 
     [Fact]
     public void Text_IsTheLabelsAndValues_TheValuesInTheLoadsColour()
     {
-        var row = PerfBar.Render(PerfBarStyle.Text, Reading, [], 120)!;
+        var row = PerfBar.Render(PerfBarStyle.Text, Four, Reading, [], 120)!;
         Assert.Equal(Centered("CPU  34% · RAM  62% · GPU  18% · VRAM  91%", 120), row.Text);
         Assert.Equal(new Style(Theme.Good), row.Segments.Single(s => s.Text == " 34%").Style);
         Assert.Equal(new Style(Theme.Warn), row.Segments.Single(s => s.Text == " 62%").Style);
@@ -239,11 +368,11 @@ public class PerfBarTests
         Assert.Equal(Theme.DimText, row.Segments.Single(s => s.Text == "CPU ").Style);
 
         // No GPU reader: its meters left out. Nothing read yet: an empty row, still a row.
-        Assert.Equal(Centered("CPU  34% · RAM  62%", 120), PerfBar.Render(PerfBarStyle.Text, Reading with { Gpu = null, Vram = null }, [], 120)!.Text);
-        Assert.Equal("", PerfBar.Render(PerfBarStyle.Text, PerfSnapshot.None, [], 120)!.Text);
+        Assert.Equal(Centered("CPU  34% · RAM  62%", 120), PerfBar.Render(PerfBarStyle.Text, Four, Reading with { Gpu = null, Vram = null }, [], 120)!.Text);
+        Assert.Equal("", PerfBar.Render(PerfBarStyle.Text, Four, PerfSnapshot.None, [], 120)!.Text);
 
         // Too narrow: cut at the edge, at the row's left.
-        Assert.Equal("CPU  34% · R", PerfBar.Render(PerfBarStyle.Text, Reading, [], 12)!.Text);
+        Assert.Equal("CPU  34% · R", PerfBar.Render(PerfBarStyle.Text, Four, Reading, [], 12)!.Text);
     }
 
     [Fact]
@@ -256,7 +385,7 @@ public class PerfBarTests
         Assert.Equal(("", "──────────"), PerfBar.Gauge(1.25, 10));
         Assert.Equal(("╸", "─────────"), PerfBar.Gauge(5, 10));
 
-        var row = PerfBar.Render(PerfBarStyle.Gauge, Reading, [], 120)!;
+        var row = PerfBar.Render(PerfBarStyle.Gauge, Four, Reading, [], 120)!;
         Assert.Equal(Centered("CPU ━━━╸──────  34%   RAM ━━━━━━────  62%   GPU ━━────────  18%   VRAM ━━━━━━━━━─  91%", 120), row.Text);
         Assert.Equal(new Style(Theme.Bad), row.Segments.Single(s => s.Text == "━━━━━━━━━").Style);
         Assert.Equal(Theme.DimText, row.Segments.Single(s => s.Text == "──────").Style);
@@ -270,7 +399,7 @@ public class PerfBarTests
         Assert.Equal("█", PerfBar.SparkLevel(100));
 
         var history = new[] { 0.0, 20, 40, 60, 90 }.Select(v => new PerfSnapshot(v, 50, null, null)).ToList();
-        var row = PerfBar.Render(PerfBarStyle.Spark, history[^1], history, 120)!;
+        var row = PerfBar.Render(PerfBarStyle.Spark, Four, history[^1], history, 120)!;
         Assert.Equal(Centered("CPU      ▁▂▄▅█  90%   RAM      ▅▅▅▅▅  50%", 120), row.Text);   // five readings: five blanks ahead of them
         Assert.Equal(new Style(Theme.Bad), row.Segments.First(s => s.Text == "█").Style);
         Assert.Equal(new Style(Theme.Good), row.Segments.First(s => s.Text == "▁").Style);
@@ -284,7 +413,7 @@ public class PerfBarTests
         Assert.Equal(10, PerfBar.LedsLit(100, 10));
         Assert.Equal(3, PerfBar.LedsLit(30, 10));   // exactly three, not a fourth started
 
-        var row = PerfBar.Render(PerfBarStyle.Led, new PerfSnapshot(34, null, null, null), [], 120)!;
+        var row = PerfBar.Render(PerfBarStyle.Led, Four, new PerfSnapshot(34, null, null, null), [], 120)!;
         Assert.Equal(Centered("CPU ▰▰▰▰▱▱▱▱▱▱  34%", 120), row.Text);
         var lit = row.Segments.Where(s => s.Text == PerfText.LedOn).ToList();
         Assert.Equal(new Style(Theme.GradientStops[0]), lit[0].Style);
@@ -296,11 +425,11 @@ public class PerfBarTests
     [InlineData(62, 4)]   // four each: 62 cells exactly
     public void ANarrowWindow_ShrinksTheMeters_ThenFallsBackToText(int cells, int meter)
     {
-        var row = PerfBar.Render(PerfBarStyle.Led, Reading, [], cells)!;
+        var row = PerfBar.Render(PerfBarStyle.Led, Four, Reading, [], cells)!;
         Assert.True(TextCells.Width(row.Text) <= cells);
         Assert.Equal(meter * 4, row.Text.Count(c => c is '▰' or '▱'));
 
-        var text = PerfBar.Render(PerfBarStyle.Gauge, Reading, [], 45)!;
+        var text = PerfBar.Render(PerfBarStyle.Gauge, Four, Reading, [], 45)!;
         Assert.Equal(Centered("CPU  34% · RAM  62% · GPU  18% · VRAM  91%", 45), text.Text);   // no meter width fits: the text look
     }
 
@@ -309,18 +438,18 @@ public class PerfBarTests
     {
         foreach (var style in new[] { PerfBarStyle.Text, PerfBarStyle.Gauge, PerfBarStyle.Spark, PerfBarStyle.Led })
         {
-            var row = PerfBar.Render(style, Reading, [Reading], 120)!;
+            var row = PerfBar.Render(style, Four, Reading, [Reading], 120)!;
             int pad = row.Segments[0].Text.Length;
             int drawn = TextCells.Width(row.Text) - pad;
             Assert.True(pad > 0 && row.Segments[0].Text.All(c => c == ' '), style.ToString());
             Assert.Equal((120 - drawn) / 2, pad);   // the odd cell, if any, at the right
         }
 
-        Assert.NotEqual(' ', PerfBar.Render(PerfBarStyle.Text, Reading, [], 12)!.Text[0]);
+        Assert.NotEqual(' ', PerfBar.Render(PerfBarStyle.Text, Four, Reading, [], 12)!.Text[0]);
 
         // The text look's values keep four cells, so a value gaining a digit moves nothing.
-        Assert.Equal("CPU   7%", PerfBar.Render(PerfBarStyle.Text, new PerfSnapshot(7.49, null, null, null), [], 8)!.Text);
-        Assert.Equal("CPU 100%", PerfBar.Render(PerfBarStyle.Text, new PerfSnapshot(100, null, null, null), [], 8)!.Text);
+        Assert.Equal("CPU   7%", PerfBar.Render(PerfBarStyle.Text, Four, new PerfSnapshot(7.49, null, null, null), [], 8)!.Text);
+        Assert.Equal("CPU 100%", PerfBar.Render(PerfBarStyle.Text, Four, new PerfSnapshot(100, null, null, null), [], 8)!.Text);
     }
 
     [Theory]

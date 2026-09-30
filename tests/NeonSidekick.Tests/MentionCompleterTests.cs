@@ -268,4 +268,29 @@ public class MentionCompleterTests
             Theme.DimMarkup(MenuPane.NoPointer + MentionCompleter.TruncatedRow),
         }, rows);
     }
+
+    /// <summary>The mention character the word under the cursor starts with (2026-09-30): what lets a mention inside a slash command's text complete.</summary>
+    [Theory]
+    [InlineData("/loop 3 append to @fi", 21, '@')]
+    [InlineData("/plan add #sk", 13, '#')]
+    [InlineData("x $re", 5, '$')]
+    [InlineData("x %db", 5, '%')]
+    [InlineData("x ^wf", 5, '^')]
+    [InlineData("x @", 3, '@')]
+    public void TriggerAt_TheWordsFirstCharacter_WhenItIsAMention(string text, int cursor, char trigger)
+    {
+        Assert.Equal(trigger, MentionCompleter.TriggerAt(text, cursor));
+    }
+
+    [Theory]
+    [InlineData("/loop 3 append", 14)]   // a plain word
+    [InlineData("x @fi", 2)]             // the cursor still before the @
+    [InlineData("mail a@b", 8)]          // an @ inside a word
+    [InlineData("/loop", 5)]             // the command word
+    [InlineData("", 0)]
+    public void TriggerAt_IsNullForAnythingElse(string text, int cursor)
+    {
+        Assert.Null(MentionCompleter.TriggerAt(text, cursor));
+        Assert.Equal("@#$%^", MentionCompleter.Triggers);
+    }
 }

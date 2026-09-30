@@ -128,6 +128,7 @@ public static partial class SmokeChecks
         results.Add(ProbePerfKernel32());
         results.Add(ProbePerfNvml());
         results.Add(ProbePerfPdhDxgi());
+        results.Add(ProbePerfNetwork());
         results.Add(ProbeLlamaServer(modelsDirectory));
         return results;
     }

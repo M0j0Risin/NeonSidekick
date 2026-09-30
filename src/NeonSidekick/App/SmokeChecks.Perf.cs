@@ -119,4 +119,33 @@ public static partial class SmokeChecks
         $"load {Reading(load)}, vram {Reading(vram)}";
 
     private static string Reading(double? value) => value is { } v ? v.ToString("0", CultureInfo.InvariantCulture) + "%" : "n/a";
+
+    /// <summary>
+    /// <c>perf:network</c> (2026-09-30): the performance bar's network meters in the published binary — .NET's own adapter
+    /// counters (<see cref="NetworkCounters"/>: <c>NetworkInterface</c>, the adapters that are up with a gateway, their byte
+    /// totals and link speeds) read twice a moment apart through <see cref="NetworkMeter"/>, which proves the runtime's path
+    /// survives trimming. A machine with no adapter carrying traffic passes, saying so.
+    /// </summary>
+    public static SmokeCheck ProbePerfNetwork()
+    {
+        const string name = "perf:network";
+        try
+        {
+            var counters = new NetworkCounters();
+            var adapters = counters.Read();
+            var meter = new NetworkMeter(counters);
+            meter.Sample();
+            Thread.Sleep(50);
+            var rates = meter.Sample();
+            bool sane = adapters.All(a => a.Received >= 0 && a.Sent >= 0 && a.LinkBits >= 0) && (rates is null || rates.Value.Down >= 0 && rates.Value.Up >= 0);
+            string detail = adapters.Count == 0
+                ? "no adapter with a gateway: the network meters are left out"
+                : string.Create(CultureInfo.InvariantCulture, $"{adapters.Count} adapter{(adapters.Count == 1 ? "" : "s")} with a gateway, link {PerfText.Rate(adapters.Sum(a => (double)a.LinkBits)).Trim()}");
+            return new SmokeCheck(name, sane, sane ? detail : detail + ": a reading out of range");
+        }
+        catch (Exception ex)
+        {
+            return new SmokeCheck(name, false, $"{ex.GetType().Name}: {ex.Message}");
+        }
+    }
 }

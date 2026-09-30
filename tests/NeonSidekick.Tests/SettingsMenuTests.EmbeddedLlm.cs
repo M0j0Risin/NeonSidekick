@@ -177,7 +177,8 @@ public partial class SettingsMenuTests
     [Fact]
     public async Task OnThePane_SortSize_PutsTheSmallestModelFirst_AndPressedAgain_TheCatalogsOrder()
     {
-        // 2026-09-30 (the user's ask): S lights sort size, the smallest model on top; S again, the catalog's order.
+        // 2026-09-30 (the user's ask): S sorts by size, the smallest model on top, and the button reads sort name (later that day);
+        // S again, the catalog's order, and it reads sort size.
         var big = EmbeddedModelCatalog.Find("gemma-4-31b")!;
         var small = EmbeddedModelCatalog.Find("gemma-4-e2b")!;
         var (menu, pane, _) = EmbeddedPane(new FakeEmbeddedLlm { Catalog = [big, small] });
@@ -194,6 +195,7 @@ public partial class SettingsMenuTests
         Assert.Equal(big.Id, menu.TakePendingEmbeddedModel()!.Id);
         Assert.Contains(" › " + small.Display, _console.Output);   // the sorted top row's page came first
         Assert.Contains(" drafter    sort size    uncensored ", _console.Output);   // uncensored last (later on 2026-09-30)
+        Assert.Contains(" drafter    sort name    uncensored ", _console.Output);   // while sorted by size
         pane.Dispose();
     }
 

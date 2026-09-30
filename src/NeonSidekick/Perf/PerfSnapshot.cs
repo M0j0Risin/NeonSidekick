@@ -3,9 +3,10 @@ namespace NeonSidekick.Perf;
 /// <summary>
 /// One reading of the machine (2026-09-29, the performance bar): each meter as a percentage from 0 to 100, or null when
 /// this machine cannot tell it (no GPU the readers know, the first CPU sample before there is a delta). The bar leaves a
-/// null meter out.
+/// null meter out. The network's (2026-09-30) are rates: <paramref name="NetDown"/> and <paramref name="NetUp"/> in bits/s
+/// and <paramref name="NetLink"/> the link's speed in bits/s, from which the bar takes its shares (<see cref="PerfMath.LinkPercent"/>).
 /// </summary>
-public readonly record struct PerfSnapshot(double? Cpu, double? Ram, double? Gpu, double? Vram)
+public readonly record struct PerfSnapshot(double? Cpu, double? Ram, double? Gpu, double? Vram, double? NetDown = null, double? NetUp = null, double? NetLink = null)
 {
     /// <summary>Nothing read yet.</summary>
     public static readonly PerfSnapshot None;

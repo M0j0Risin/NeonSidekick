@@ -66,7 +66,8 @@ public class AppSettingsTests : IDisposable
         WelcomeSplashMode = "tiled",
         ShowWorkingDirectory = false,
         ToolbarItems = ["usage", "path"],
-        ShowPerformanceBar = "spark",
+        PerformanceBarItems = ["cpu", "netdown"],
+        PerformanceBarLastItems = ["gpu"],
         BotChatMultiEmbedded = "multi-server",
         BotChatMultiEmbeddedKill = false,
         PerformanceBarLook = "led",
@@ -186,7 +187,8 @@ public class AppSettingsTests : IDisposable
         Assert.Equal(expected.WelcomeSplashMode, actual.WelcomeSplashMode);
         Assert.Equal(expected.ShowWorkingDirectory, actual.ShowWorkingDirectory);
         Assert.Equal(expected.ToolbarItems, actual.ToolbarItems);
-        Assert.Equal(expected.ShowPerformanceBar, actual.ShowPerformanceBar);
+        Assert.Equal(expected.PerformanceBarItems, actual.PerformanceBarItems);
+        Assert.Equal(expected.PerformanceBarLastItems, actual.PerformanceBarLastItems);
         Assert.Equal(expected.BotChatMultiEmbedded, actual.BotChatMultiEmbedded);
         Assert.Equal(expected.BotChatMultiEmbeddedKill, actual.BotChatMultiEmbeddedKill);
         Assert.Equal(expected.PerformanceBarLook, actual.PerformanceBarLook);
@@ -332,7 +334,8 @@ public class AppSettingsTests : IDisposable
             d.WelcomeSplashMode = full.WelcomeSplashMode;
             d.ShowWorkingDirectory = full.ShowWorkingDirectory;
             d.ToolbarItems = full.ToolbarItems;
-            d.ShowPerformanceBar = full.ShowPerformanceBar;
+            d.PerformanceBarItems = full.PerformanceBarItems;
+            d.PerformanceBarLastItems = full.PerformanceBarLastItems;
             d.BotChatMultiEmbedded = full.BotChatMultiEmbedded;
             d.BotChatMultiEmbeddedKill = full.BotChatMultiEmbeddedKill;
             d.PerformanceBarLook = full.PerformanceBarLook;
@@ -462,7 +465,8 @@ public class AppSettingsTests : IDisposable
                 d.WelcomeSplashMode = full.WelcomeSplashMode;
                 d.ShowWorkingDirectory = full.ShowWorkingDirectory;
                 d.ToolbarItems = full.ToolbarItems;
-                d.ShowPerformanceBar = full.ShowPerformanceBar;
+                d.PerformanceBarItems = full.PerformanceBarItems;
+                d.PerformanceBarLastItems = full.PerformanceBarLastItems;
                 d.BotChatMultiEmbedded = full.BotChatMultiEmbedded;
                 d.BotChatMultiEmbeddedKill = full.BotChatMultiEmbeddedKill;
                 d.PerformanceBarLook = full.PerformanceBarLook;
@@ -1349,8 +1353,9 @@ public class AppSettingsTests : IDisposable
         Assert.Equal("fullsize", s.WelcomeSplashMode);   // 2026-09-18; a pick since 2026-09-24 (on was fullsize)
         Assert.False(s.ShowWorkingDirectory);   // 2026-09-18; off by default since 2026-09-21
         Assert.Null(s.ToolbarItems);   // 2026-09-21 as a switch, on; every item since the checklist, 2026-09-29
-        Assert.Equal("off", s.ShowPerformanceBar);   // the performance bar (2026-09-29): off, the user's call
-        Assert.Equal("text", s.PerformanceBarLook);   // what a bare /perf turns on first (later on 2026-09-29)
+        Assert.Null(s.PerformanceBarItems);   // the performance bar (2026-09-29): off, the user's call; no meter checked since the checklist, 2026-09-30
+        Assert.Null(s.PerformanceBarLastItems);   // what a bare /perf brings back: CPU, RAM, GPU and VRAM until it hides one (2026-09-30)
+        Assert.Equal("text", s.PerformanceBarLook);   // the look (later on 2026-09-29)
         Assert.Equal(91, s.EmbeddedVramBudget);       // 91 since 2026-09-30 (the user's call; off from later on 2026-09-29)
         Assert.Equal("file", s.EmbeddedFilterType);   // the user's pick "for now"
         Assert.Equal("parallel", s.EmbeddedHfDownloadType);   // 2026-09-30, the user's pick

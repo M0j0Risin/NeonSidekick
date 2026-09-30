@@ -26,6 +26,31 @@ public static class PerfText
     public const string GpuLabel = "GPU";
     public const string VramLabel = "VRAM";
 
+    /// <summary>The network's share of the link (2026-09-30). Pinned.</summary>
+    public const string NetLabel = "NET%";
+
+    /// <summary>The download rate (2026-09-30). Pinned.</summary>
+    public const string NetDownLabel = "NET↓";
+
+    /// <summary>The upload rate (2026-09-30). Pinned.</summary>
+    public const string NetUpLabel = "NET↑";
+
+    /// <summary>
+    /// A network rate in bits/s, five cells wide (2026-09-30), in the units links and Task Manager count in:
+    /// <c> 850K</c>, <c>12.4M</c>, <c> 150M</c>, <c> 1.2G</c>. Pinned.
+    /// </summary>
+    public static string Rate(double bitsPerSecond)
+    {
+        double bits = double.IsNaN(bitsPerSecond) ? 0 : Math.Max(0, bitsPerSecond);
+        string text = bits < 1e6 ? Scaled(bits / 1e3, "K", whole: true)
+            : bits < 1e9 ? Scaled(bits / 1e6, "M", whole: bits >= 99.95e6)   // 99.96M would round to 100.0M, six cells
+            : Scaled(bits / 1e9, "G", whole: bits >= 99.95e9);
+        return text.PadLeft(5);
+
+        static string Scaled(double value, string unit, bool whole) =>
+            value.ToString(whole ? "0" : "0.0", CultureInfo.InvariantCulture) + unit;
+    }
+
     /// <summary>Between two meters of the <c>text</c> look.</summary>
     public const string TextSeparator = " · ";
 

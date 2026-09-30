@@ -13823,6 +13823,37 @@ public partial class ChatScreenTests : IDisposable
     }
 
     /// <summary>
+    /// A double-click on the draft under a reply (2026-09-30, the user's ask): the live row pairs the two clicks and selects the
+    /// word, so what is typed next replaces it, and the line sends that once the reply is done.
+    /// </summary>
+    [Fact]
+    public async Task ADoubleClickOnTheDraft_UnderAReply_SelectsTheWord()
+    {
+        PaneOf40Rows();
+        _settings.Update(d => d.TtsOutput = false);
+        _chat.EnqueueText("Hello ", "there.");
+        _chat.EnqueueText("Ok.");
+        _chat.BeforeUpdate = async (i, ct) =>
+        {
+            if (i == 1 && _chat.Requests.Count == 1)
+            {
+                // Mid-reply: typed, then a double-click on "quick" (the u and the i), then the word typed over.
+                _scripted!.Push("the quick fox".Select(Keys.Char).ToArray()).PushClick(2 + 5, 100).PushClick(2 + 6, 100).Push("slow".Select(Keys.Char).ToArray());
+                for (int tries = 0; tries < 500 && _scripted.IsAvailable; tries++)
+                {
+                    await Task.Delay(10, CancellationToken.None);
+                }
+            }
+        };
+        StepsWhenIdle(Line("hi"), Key(Keys.Enter), Line("/exit"));
+
+        await RunAsync();
+
+        Assert.Equal(2, _chat.Requests.Count);
+        Assert.Equal("the slow fox", _chat.Requests[1].Last(m => m.Role == ChatRole.User).Text);
+    }
+
+    /// <summary>
     /// The picture viewer's button on the strip's own rule (2026-09-27): one click hands the ComfyUI output folder's full path
     /// to the viewer. The input row at 100, the upper rule at 99, the strip's own rule with the
     /// button at its left edge (2026-09-28), <see cref="ScreenPane.StripPaneRows"/> over the upper rule.
@@ -18805,7 +18836,10 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(ThemeName.Names, Texts(ChatScreen.ArgumentItems("/theme", "", sources)));
         Assert.Equal(["netrunner", "nostromo", "noir"], Texts(ChatScreen.ArgumentItems("/theme", "n", sources)));
         Assert.Equal([new CompletionItem("netrunner", "green phosphor")], ChatScreen.ArgumentItems("/theme", "ne", sources));
-        Assert.Equal(PerfBarMode.Names, Texts(ChatScreen.ArgumentItems("/perf", "", sources)));   // the looks (later on 2026-09-29)
+        Assert.Equal(PerfBarMode.Words, Texts(ChatScreen.ArgumentItems("/perf", "", sources)));
+        // The commands whose argument is a path of their own keep their list over a mention (2026-09-30).
+        Assert.True(ChatScreen.TakesPathArgument("/speak") && ChatScreen.TakesPathArgument("/view") && ChatScreen.TakesPathArgument("/PRINT"));
+        Assert.False(ChatScreen.TakesPathArgument("/loop") || ChatScreen.TakesPathArgument("/plan") || ChatScreen.TakesPathArgument("/claude"));   // off and the looks (later on 2026-09-29)
         Assert.Equal([new CompletionItem("gauge", PerfBarMode.Describe("gauge"))], ChatScreen.ArgumentItems("/perf", "g", sources));
 
         // /profile: the names (the loaded one marked) then the verbs; a verb typed opens the names behind it.
