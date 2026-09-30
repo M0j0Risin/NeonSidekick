@@ -20,11 +20,11 @@ public class EmbeddedModelFilterTests
     public void TheButtons_ArePinned_AndStartDark()
     {
         var buttons = EmbeddedModelFilter.None.Buttons();
-        Assert.Equal(["8GB", "16GB", "32GB", "uncensored"], buttons.Select(b => b.Title));
-        Assert.Equal(new char?[] { '1', '2', '3', 'u' }, buttons.Select(b => b.Key));
+        Assert.Equal(["8GB", "16GB", "32GB", "uncensored", "sort size"], buttons.Select(b => b.Title));
+        Assert.Equal(new char?[] { '1', '2', '3', 'u', 's' }, buttons.Select(b => b.Key));
         Assert.All(buttons, b => Assert.False(b.On));
         Assert.False(EmbeddedModelFilter.None.Active);
-        Assert.Equal("1 / 2 / 3 = 8 / 16 / 32 GB · U = uncensored", EmbeddedModelFilter.Keys);
+        Assert.Equal("1 / 2 / 3 = 8 / 16 / 32 GB · U = uncensored · S = sort by size", EmbeddedModelFilter.Keys);
         Assert.Equal("no model matches the filter", EmbeddedLlmText.NoFilterMatch);
     }
 
@@ -33,13 +33,13 @@ public class EmbeddedModelFilterTests
     {
         var eight = EmbeddedModelFilter.None.Press(0);
         Assert.Equal(new EmbeddedModelFilter(8, false), eight);
-        Assert.Equal([true, false, false, false], eight.Buttons().Select(b => b.On));
+        Assert.Equal([true, false, false, false, false], eight.Buttons().Select(b => b.On));
         Assert.Equal(new EmbeddedModelFilter(16, false), eight.Press(1));    // another size takes its place
         Assert.Equal(EmbeddedModelFilter.None, eight.Press(0));             // the lit one pressed again: none
 
         var both = eight.Press(3);
         Assert.Equal(new EmbeddedModelFilter(8, true), both);
-        Assert.Equal([true, false, false, true], both.Buttons().Select(b => b.On));
+        Assert.Equal([true, false, false, true, false], both.Buttons().Select(b => b.On));
         Assert.Equal(new EmbeddedModelFilter(32, true), both.Press(2));     // the size moves, uncensored stays
         Assert.Equal(new EmbeddedModelFilter(8, false), both.Press(3));
         Assert.Equal(both, both.Press(9));                                  // no such button
@@ -51,14 +51,14 @@ public class EmbeddedModelFilterTests
     {
         // Later on 2026-09-29 (the user's ask): the catalog alone; /server keeps the four.
         var buttons = EmbeddedModelFilter.None.Buttons(withInstalled: true);
-        Assert.Equal(["8GB", "16GB", "32GB", "installed", "uninstalled", "uncensored"], buttons.Select(b => b.Title));
-        Assert.Equal(new char?[] { '1', '2', '3', 'i', 'n', 'u' }, buttons.Select(b => b.Key));
-        Assert.Equal(4, EmbeddedModelFilter.None.Buttons().Count);
-        Assert.Equal("1 / 2 / 3 = 8 / 16 / 32 GB · I / N = installed / uninstalled · U = uncensored", EmbeddedModelFilter.CatalogKeys);
+        Assert.Equal(["8GB", "16GB", "32GB", "installed", "uninstalled", "uncensored", "sort size"], buttons.Select(b => b.Title));
+        Assert.Equal(new char?[] { '1', '2', '3', 'i', 'n', 'u', 's' }, buttons.Select(b => b.Key));
+        Assert.Equal(5, EmbeddedModelFilter.None.Buttons().Count);
+        Assert.Equal("1 / 2 / 3 = 8 / 16 / 32 GB · I / N = installed / uninstalled · U = uncensored · S = sort by size", EmbeddedModelFilter.CatalogKeys);
 
         var installed = EmbeddedModelFilter.None.Press(3, withInstalled: true);
         Assert.Equal(new EmbeddedModelFilter(null, false, true), installed);
-        Assert.Equal([false, false, false, true, false, false], installed.Buttons(withInstalled: true).Select(b => b.On));
+        Assert.Equal([false, false, false, true, false, false, false], installed.Buttons(withInstalled: true).Select(b => b.On));
         var uninstalled = installed.Press(4, withInstalled: true);
         Assert.Equal(new EmbeddedModelFilter(null, false, false), uninstalled);
         Assert.Equal(EmbeddedModelFilter.None, uninstalled.Press(4, withInstalled: true));   // the lit one again: none
@@ -125,5 +125,45 @@ public class EmbeddedModelFilterTests
         Assert.True(small.Matches(Model("B Uncensored", 5_000_000_000), EmbeddedFilterType.File));
         Assert.False(small.Matches(Model("B Uncensored", 9_000_000_000), EmbeddedFilterType.File));
         Assert.False(small.Matches(Model("B", 5_000_000_000), EmbeddedFilterType.File));
+    }
+
+    [Fact]
+    public void SortSize_IsItsOwnSwitch_LastOnBothLists_AndNoFilter()
+    {
+        // 2026-09-30 (the user's ask).
+        Assert.Equal(4, EmbeddedModelFilter.SortSizeIndex());
+        Assert.Equal(6, EmbeddedModelFilter.SortSizeIndex(withInstalled: true));
+
+        var sorted = EmbeddedModelFilter.None.Press(4);
+        Assert.Equal(new EmbeddedModelFilter(null, false, null, true), sorted);
+        Assert.Equal([false, false, false, false, true], sorted.Buttons().Select(b => b.On));
+        Assert.False(sorted.Active);                                          // it thins nothing
+        Assert.Equal(EmbeddedModelFilter.None, sorted.Press(4));              // pressed again: dark
+        Assert.Equal(new EmbeddedModelFilter(8, true, null, true), sorted.Press(0).Press(3));   // the filters left be
+
+        var catalog = EmbeddedModelFilter.None.Press(6, withInstalled: true);
+        Assert.True(catalog.SortSize);
+        Assert.Equal([false, false, false, false, false, false, true], catalog.Buttons(withInstalled: true).Select(b => b.On));
+        Assert.True(catalog.Press(5, withInstalled: true) is { Uncensored: true, SortSize: true });
+    }
+
+    [Fact]
+    public void Arrange_KeepsTheListsOrder_UntilSortSize_ThenSmallestFirst_TheOtherRowsInTheirPlaces()
+    {
+        // Rows 0 and 3 are no model (a server on the network, the Claude API); 1, 2, 4 and 5 are models of 9, 3, 5 and 3 GB on the row.
+        EmbeddedModel?[] rows = [null, Model("Big", 8_000_000_000), Model("Small", 2_000_000_000), null, Model("Mid", 4_000_000_000), Model("Small too", 2_000_000_000)];
+        List<int> shown = [0, 1, 2, 3, 4, 5];
+
+        Assert.Equal(shown, EmbeddedModelFilter.None.Arrange(shown, i => rows[i], EmbeddedFilterType.File));
+
+        var sorted = new EmbeddedModelFilter(null, false, SortSize: true);
+        Assert.Equal([0, 2, 5, 3, 4, 1], sorted.Arrange(shown, i => rows[i], EmbeddedFilterType.File));   // equal sizes keep their order
+        Assert.Equal([2, 4], sorted.Arrange([4, 2], i => rows[i], EmbeddedFilterType.File));             // a filtered list sorts too
+        Assert.Equal([0, 6], sorted.Arrange([0, 6], i => i < rows.Length ? rows[i] : null, EmbeddedFilterType.File));
+
+        // The filter type's bytes: 7.5 GB of weights + 1 GB of projector + 2 GB of drafter is 10.5 GB on the row, 7.5 GB alone.
+        EmbeddedModel[] pair = [Model("Drafted", 7_500_000_000, 2_000_000_000), Model("Plain", 8_000_000_000)];
+        Assert.Equal([1, 0], sorted.Arrange([0, 1], i => pair[i], EmbeddedFilterType.File));
+        Assert.Equal([0, 1], sorted.Arrange([0, 1], i => pair[i], EmbeddedFilterType.Gguf));
     }
 }

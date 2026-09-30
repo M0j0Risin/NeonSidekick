@@ -2808,6 +2808,7 @@ internal sealed partial class SettingsMenu
     /// <see cref="NeonSidekick.EmbeddedLlm.EmbeddedModelFilter"/>), when it lists an embedded model and the pane is up: a press
     /// thins the embedded rows alone — a server on the network and the Claude API always stay (the user's call) — and keeps
     /// the cursor on its row while it is still shown. Every visit starts with none lit. The pane closes as the pick lands.
+    /// Sort size (2026-09-30, the user's ask) orders the embedded rows by size among themselves, the others in their places.
     /// </summary>
     private async Task<LlmServer?> PickFilteredServerAsync(IReadOnlyList<LlmServer> servers, string title, string keys, int cursor, CancellationToken cancellationToken)
     {
@@ -2819,7 +2820,7 @@ internal sealed partial class SettingsMenu
         {
             while (true)
             {
-                var shown = Enumerable.Range(0, servers.Count).Where(i => Passes(servers[i])).ToList();
+                var shown = filter.Arrange(Enumerable.Range(0, servers.Count).Where(i => Passes(servers[i])).ToList(), i => NeonSidekick.EmbeddedLlm.EmbeddedEndpoint.IsEmbedded(servers[i].BaseUrl) ? EmbeddedRowModel(servers[i]) : null, type);
                 var page = new MenuPage(title, FilteredRows(labels, shown), hint);
                 if (await PickChecklistAsync(page, Math.Max(0, shown.IndexOf(cursor)), cancellationToken, filter.Buttons()).ConfigureAwait(false) is not { } pick)
                 {
@@ -4841,7 +4842,7 @@ internal sealed partial class SettingsMenu
     /// screen (<see cref="TakePendingEmbeddedModel"/>) and return true, which closes the pane; a removal stays.
     /// The title row carries the filters (later on 2026-09-29, the user's ask: <see cref="NeonSidekick.EmbeddedLlm.EmbeddedModelFilter"/>):
     /// a press thins the rows and keeps the cursor on its model while it is still shown; a model's own page keeps them, and
-    /// every visit starts with none lit.
+    /// every visit starts with none lit. Sort size (2026-09-30, the user's ask) orders the rows by size, smallest first.
     /// </summary>
     internal async Task<bool> PickEmbeddedModelAsync(CancellationToken cancellationToken)
     {
@@ -4858,7 +4859,7 @@ internal sealed partial class SettingsMenu
         {
             // Every row laid out over the whole catalog, so a filter does not move the columns.
             var labels = EmbeddedModelLabels(embedded.Catalog, embedded.State);
-            var shown = Enumerable.Range(0, embedded.Catalog.Count).Where(i => filter.Matches(embedded.Catalog[i], type, embedded.State(embedded.Catalog[i]).IsInstalled)).ToList();
+            var shown = filter.Arrange(Enumerable.Range(0, embedded.Catalog.Count).Where(i => filter.Matches(embedded.Catalog[i], type, embedded.State(embedded.Catalog[i]).IsInstalled)).ToList(), i => embedded.Catalog[i], type);
             var page = new MenuPage(Crumb(FieldName(SettingsField.EmbeddedModels)), FilteredRows(labels, shown), EmbeddedModelsKeys);
             if (await PickChecklistAsync(page, Math.Max(0, shown.IndexOf(cursor)), cancellationToken, filter.Buttons(withInstalled: true)).ConfigureAwait(false) is not { } pick)
             {

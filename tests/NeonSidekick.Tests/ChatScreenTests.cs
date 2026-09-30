@@ -9912,9 +9912,9 @@ public partial class ChatScreenTests : IDisposable
     }
 
     [Theory]
-    [InlineData(false, false, 14)]
-    [InlineData(true, false, 15)]
-    [InlineData(true, true, 16)]
+    [InlineData(false, false, 17)]
+    [InlineData(true, false, 18)]
+    [InlineData(true, true, 19)]
     public void KeyRows_ListWhatApplies(bool voiceOn, bool wakeReady, int count)
     {
         var rows = ChatScreen.KeyRows(voiceOn, ConsoleKey.F8, wakeReady, "hey neon");
@@ -9929,13 +9929,17 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(("Home / End", "hold Shift to select text to the beginning or end of the line starting from the cursor"), rows[5]);
         Assert.Equal(("PgUp / PgDn", "scroll the transcript a page at a time"), rows[6]);
         Assert.DoesNotContain(rows, r => r.Key is "Mouse" or "Drag" or "Drop" or "@" or "#" or "$");
-        Assert.Equal(("Alt+V", "paste content (text or images)"), rows[^7]);   // ahead of Ctrl+Home since 2026-09-27 (the user's order)
-        Assert.Equal(("Ctrl+Home", "scroll to top of the chat pane"), rows[^6]);
-        Assert.Equal(("Ctrl+End", "scroll to bottom of the chat pane"), rows[^5]);
-        Assert.Equal(("Ctrl+O", "expand or collapse the tool calls, code blocks and thinking (or click a summary line)"), rows[^4]);   // 2026-09-22
-        Assert.Equal(("Ctrl+A", "select all text on the line"), rows[^3]);
-        Assert.Equal(("Ctrl+X", "cut the selected text"), rows[^2]);   // 2026-09-25
-        Assert.Equal(("Ctrl+C", "copy the selected text · stop the speech · cancel the reply · twice to exit"), rows[^1]);
+        Assert.Equal(("Alt+V", "paste content (text or images)"), rows[^10]);   // ahead of Ctrl+Home since 2026-09-27 (the user's order)
+        Assert.Equal(("Ctrl+Home", "scroll to top of the chat pane"), rows[^9]);
+        Assert.Equal(("Ctrl+End", "scroll to bottom of the chat pane"), rows[^8]);
+        Assert.Equal(("Ctrl+O", "expand or collapse the tool calls, code blocks and thinking (or click a summary line)"), rows[^7]);   // 2026-09-22
+        Assert.Equal(("Ctrl+A", "select all text on the line"), rows[^6]);
+        Assert.Equal(("Ctrl+X", "cut the selected text"), rows[^5]);   // 2026-09-25
+        Assert.Equal(("Ctrl+C", "copy the selected text · stop the speech · cancel the reply · twice to exit"), rows[^4]);
+        // The command chords after it (2026-09-30, the user's wording).
+        Assert.Equal(("Ctrl+Alt+C", "start a new conversation and clear the screen (/clear)"), rows[^3]);
+        Assert.Equal(("Ctrl+Alt+N", "start a new conversation but do not clear the screen (/new)"), rows[^2]);
+        Assert.Equal(("Ctrl+Alt+S", "start a new conversation and show the splash screen (/splash)"), rows[^1]);
         Assert.Equal(voiceOn, rows.Any(r => r.Key == "F8"));
         if (voiceOn)
         {
@@ -14827,6 +14831,81 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(2, Refreshes(output));   // /splash's wipe, then /exit's over the picture
         Assert.Contains("▀", output[NthScreen(output, 1)..NthScreen(output, 2)]);
         Assert.DoesNotContain("▀", output[NthScreen(output, 2)..]);
+    }
+
+    // ── The command chords (2026-09-30, the user's ask) ─────────────────────
+
+    [Fact]
+    public async Task CtrlAltC_ClearsAsSlashClear_TheDraftKept()
+    {
+        _settings.Update(d => d.TtsOutput = false);
+        _chat.EnqueueText("one").EnqueueText("two");
+        StepsWhenIdle(
+            Line("a"),
+            input => { input.Push("keep".Select(Keys.Char).ToArray()); input.Push(Keys.CtrlAltC); },
+            Key(Keys.Enter),                    // the draft, back on the row after the clear
+            Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.Equal(1, Refreshes(output));     // /clear's wipe
+        Assert.Contains("› keep", output[LastScreen(output)..]);
+        Assert.Equal(2, _chat.Requests.Count);
+        Assert.Equal("keep", UserText(_chat.Requests[1]));   // the one user message: the conversation forgotten
+    }
+
+    [Fact]
+    public async Task CtrlAltN_StartsANewConversation_AsSlashNew_KeepingTheScreen()
+    {
+        _settings.Update(d => d.TtsOutput = false);
+        _chat.EnqueueText("one").EnqueueText("two");
+        StepsWhenIdle(Line("a"), Key(Keys.CtrlAltN), Line("b"), Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.Equal(0, Refreshes(output));
+        Assert.Equal(1, Count(output, "  · " + ChatScreen.NewConversationNotice + "\n"));
+        Assert.DoesNotContain("› /new", output);   // no transcript row: a chord, not a typed line
+        Assert.Equal(2, _chat.Requests.Count);
+        Assert.Equal("b", UserText(_chat.Requests[1]));
+    }
+
+    [Fact]
+    public async Task CtrlAltS_ShowsTheSplash_AsSlashSplash()
+    {
+        _settings.Update(d => d.TtsOutput = false);
+        PaneOf40Rows();
+        _random = new Random(7);
+        SplashOf(2380, 100);
+        StepsWhenIdle(Line("hi"), Key(Keys.CtrlAltS), Line("again"), Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.Equal([SplashName(0), SplashName(0)], _splashLoads);   // the startup picture, then the chord's
+        Assert.Equal(3, Refreshes(output));
+        Assert.Equal(2, _chat.Requests.Count);
+        Assert.Equal("again", UserText(_chat.Requests[1]));
+    }
+
+    [Fact]
+    public async Task MidTurn_CtrlAltS_CancelsTheReply_AndRunsAtTheIdleLine()
+    {
+        _settings.Update(d => d.WelcomeSplashMode = "disabled");
+        SplashOf(2380, 100);
+        MidTurnFixture(i =>
+        {
+            if (i == 1)
+            {
+                _scripted!.Push(Keys.CtrlAltS);
+            }
+        });
+
+        string output = await RunAsync();
+
+        Assert.Single(_chat.Requests);
+        Assert.Contains(ChatScreen.CancelledNotice, output);
+        Assert.Equal([SplashName(0)], _splashLoads);   // drawn at the idle line after the cancel
+        Assert.Equal(2, Refreshes(output));
     }
 
     // ── /theme (2026-09-23, the user's ask: just like /splash) ──────────────

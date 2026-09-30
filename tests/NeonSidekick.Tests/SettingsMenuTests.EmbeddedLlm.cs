@@ -166,6 +166,29 @@ public partial class SettingsMenuTests
     }
 
     [Fact]
+    public async Task OnThePane_SortSize_PutsTheSmallestModelFirst_AndPressedAgain_TheCatalogsOrder()
+    {
+        // 2026-09-30 (the user's ask): S lights sort size, the smallest model on top; S again, the catalog's order.
+        var big = EmbeddedModelCatalog.Find("gemma-4-31b")!;
+        var small = EmbeddedModelCatalog.Find("gemma-4-e2b")!;
+        var (menu, pane, _) = EmbeddedPane(new FakeEmbeddedLlm { Catalog = [big, small] });
+        GoTo(SettingsTab.Embedded);
+        Push(Keys.Down, Keys.Enter);            // the catalog: 31B, then E2B
+        Push(Keys.Char('s'), Keys.Home);        // sort size: E2B, then 31B; the top row
+        Push(Keys.Enter, Keys.Escape);          // E2B's page, closed
+        Push(Keys.Char('s'), Keys.Home);        // dark again: 31B on top
+        Push(Keys.Enter);                       // 31B's page
+        Push(Keys.Enter);                       // Install
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Equal(big.Id, menu.TakePendingEmbeddedModel()!.Id);
+        Assert.Contains(" › " + small.Display, _console.Output);   // the sorted top row's page came first
+        Assert.Contains(" uncensored    sort size ", _console.Output);
+        pane.Dispose();
+    }
+
+    [Fact]
     public async Task OnThePane_InstalledAndUninstalled_AreARadioPair_OnTheDisksState()
     {
         // Later on 2026-09-29 (the user's ask): I keeps the installed models, N the others, N again every one.

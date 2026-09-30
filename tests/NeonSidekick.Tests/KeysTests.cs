@@ -43,6 +43,27 @@ public class KeysTests
     }
 
     [Fact]
+    public void ShortcutLine_IsCtrlAltCNS_WithoutShift_AndAnAltGrCharacterStaysACharacter()
+    {
+        // 2026-09-30 (the user's ask): the test factory's '\0' and the console's control characters count.
+        Assert.Equal("/clear", Keys.ShortcutLine(Keys.CtrlAltC));
+        Assert.Equal("/new", Keys.ShortcutLine(Keys.CtrlAltN));
+        Assert.Equal("/splash", Keys.ShortcutLine(Keys.CtrlAltS));
+        Assert.Equal("/clear", Keys.ShortcutLine(new ConsoleKeyInfo('\x03', ConsoleKey.C, shift: false, alt: true, control: true)));
+        Assert.Equal("/new", Keys.ShortcutLine(new ConsoleKeyInfo('\x0e', ConsoleKey.N, shift: false, alt: true, control: true)));
+        Assert.Equal("/splash", Keys.ShortcutLine(new ConsoleKeyInfo('\x13', ConsoleKey.S, shift: false, alt: true, control: true)));
+
+        Assert.Null(Keys.ShortcutLine(Keys.CtrlC));
+        Assert.Null(Keys.ShortcutLine(new ConsoleKeyInfo('\x03', ConsoleKey.C, shift: true, alt: false, control: true)));   // Ctrl+Shift+C: Windows Terminal's copy
+        Assert.Null(Keys.ShortcutLine(new ConsoleKeyInfo('\0', ConsoleKey.N, shift: true, alt: true, control: true)));
+        Assert.Null(Keys.ShortcutLine(new ConsoleKeyInfo('ć', ConsoleKey.C, shift: false, alt: true, control: true)));      // AltGr+C on a Polish layout
+        Assert.Null(Keys.ShortcutLine(new ConsoleKeyInfo('S', ConsoleKey.S, shift: false, alt: false, control: true)));      // a typed "S" in Spectre's test input
+        Assert.Null(Keys.ShortcutLine(new ConsoleKeyInfo('\0', ConsoleKey.X, shift: false, alt: true, control: true)));
+        Assert.Null(Keys.ShortcutLine(new ConsoleKeyInfo('\0', ConsoleKey.C, shift: false, alt: true, control: false)));   // Alt+C alone
+        Assert.False(Keys.IsInterrupt(Keys.CtrlAltC));
+    }
+
+    [Fact]
     public void ToolGroupText_IsPinned()
     {
         Assert.Equal(1, TextCells.Width(ToolGroupText.CollapsedGlyph));

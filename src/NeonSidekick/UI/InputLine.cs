@@ -64,6 +64,12 @@ public abstract record InputResult
     /// the rename box, as a bare <c>/sessions title</c> does; <see cref="Draft"/> as <see cref="HintRow"/>'s.
     /// </summary>
     public sealed record RuleTitle(string Draft) : InputResult;
+
+    /// <summary>
+    /// A command chord on the chat line (2026-09-30, the user's ask: <see cref="Keys.ShortcutLine"/>): <see cref="Line"/> is
+    /// the command it stands for, run as the typed one; <see cref="Draft"/> as <see cref="HintRow"/>'s.
+    /// </summary>
+    public sealed record Shortcut(string Draft, string Line) : InputResult;
 }
 
 /// <summary>
@@ -468,15 +474,18 @@ public sealed partial class InputLine
     /// <paramref name="editor"/> (2026-09-25) is the editor the read feeds: the chat line passes <see cref="Chat"/>, whose
     /// draft, cursor and tokens outlive the read (the key watcher edits them under a reply) and <paramref name="initialText"/>
     /// is ignored; null (every other read) starts a fresh one over <paramref name="initialText"/>. A sent line empties it.
+    /// <paramref name="shortcuts"/> (2026-09-30, the user's ask) is the chat line's: a command chord (<see cref="Keys.ShortcutLine"/>:
+    /// Ctrl+Alt+C, N or S) ends the read as <see cref="InputResult.Shortcut"/> with the draft, and the screen runs the command.
+    /// Every other read leaves the chords alone.
     /// Throws <see cref="OperationCanceledException"/> when <paramref name="cancellationToken"/> fires.
     /// </summary>
-    public async Task<InputResult> ReadAsync(string initialText = "", bool remember = true, bool allowEmpty = false, ConsoleKey? pushToTalk = null, CancellationToken cancellationToken = default, CancellationToken wake = default, CancellationToken alert = default, bool escapeCancels = false, bool multiline = false, MentionFolderAction? mentions = null, int pastePreview = 0, Func<bool>? softEscape = null, Func<bool>? interrupt = null, Func<string, CancellationToken, Task<string?>>? intercept = null, Action? beforeCommit = null, IReadOnlyList<InputEvent>? replay = null, Func<int, bool>? emptyArrow = null, bool mask = false, Func<bool, bool>? emptyDelete = null, Func<bool>? emptyEnter = null, Editor? editor = null)
+    public async Task<InputResult> ReadAsync(string initialText = "", bool remember = true, bool allowEmpty = false, ConsoleKey? pushToTalk = null, CancellationToken cancellationToken = default, CancellationToken wake = default, CancellationToken alert = default, bool escapeCancels = false, bool multiline = false, MentionFolderAction? mentions = null, int pastePreview = 0, Func<bool>? softEscape = null, Func<bool>? interrupt = null, Func<string, CancellationToken, Task<string?>>? intercept = null, Action? beforeCommit = null, IReadOnlyList<InputEvent>? replay = null, Func<int, bool>? emptyArrow = null, bool mask = false, Func<bool, bool>? emptyDelete = null, Func<bool>? emptyEnter = null, Editor? editor = null, bool shortcuts = false)
     {
         ArgumentNullException.ThrowIfNull(initialText);
 
         // The chat line's own editor carries its draft from read to read (2026-09-25); any other read starts one over initialText.
         var line = editor ?? new Editor(this, initialText);
-        line.Begin(new ReadOptions(false, remember, allowEmpty, pushToTalk, escapeCancels, multiline, mentions, pastePreview, softEscape, interrupt, intercept, beforeCommit, emptyArrow, mask, emptyDelete, emptyEnter));
+        line.Begin(new ReadOptions(false, remember, allowEmpty, pushToTalk, escapeCancels, multiline, mentions, pastePreview, softEscape, interrupt, intercept, beforeCommit, emptyArrow, mask, emptyDelete, emptyEnter, shortcuts));
 
         using var linked = wake.CanBeCanceled || alert.CanBeCanceled ? CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, wake, alert) : null;
         var readToken = linked?.Token ?? cancellationToken;

@@ -1583,6 +1583,9 @@ internal sealed partial class ChatScreen
         rows.Add(("Ctrl+A", "select all text on the line"));
         rows.Add(("Ctrl+X", "cut the selected text"));
         rows.Add(("Ctrl+C", "copy the selected text · stop the speech · cancel the reply · twice to exit"));
+        rows.Add(("Ctrl+Alt+C", "start a new conversation and clear the screen (/clear)"));
+        rows.Add(("Ctrl+Alt+N", "start a new conversation but do not clear the screen (/new)"));
+        rows.Add(("Ctrl+Alt+S", "start a new conversation and show the splash screen (/splash)"));
         return rows.ToArray();
     }
 
@@ -7335,6 +7338,18 @@ internal sealed partial class ChatScreen
                         }
 
                         break;
+                    case InputResult.Shortcut shortcut:
+                        // A command chord (2026-09-30, the user's ask: Ctrl+Alt+C, N or S): /clear, /new or /splash through the
+                        // dispatch as the typed line — without the transcript row or the history, the draft back after.
+                        _timers.Acknowledge();
+                        DisarmExit();
+                        await _speech.StopAsync().ConfigureAwait(false);
+                        if (await HandleAsync(shortcut.Line, [], cancellationToken).ConfigureAwait(false))
+                        {
+                            return 0;
+                        }
+
+                        break;
                     case InputResult.Submitted submitted:
                         _timers.Acknowledge();
                         DisarmExit();
@@ -7520,7 +7535,8 @@ internal sealed partial class ChatScreen
                 emptyEnter: OpenStripPicture,
                 // The chat line's own editor (2026-09-25): its draft lives on under the replies. A /draft replay reads on
                 // a fresh one, so what was typed under the editor's wait stays on the row, unsent.
-                editor: replay is null ? _input.Chat : null).ConfigureAwait(false);
+                editor: replay is null ? _input.Chat : null,
+                shortcuts: true).ConfigureAwait(false);
         }
         finally
         {

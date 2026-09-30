@@ -2606,7 +2606,8 @@ public partial class SettingsMenuTests : IDisposable
     public async Task Server_OnThePane_TheFiltersThinTheEmbeddedRowsAlone()
     {
         // Later on 2026-09-29 (the user's ask): the buttons only over a list with an embedded row; a server on the network
-        // stays whatever is lit.
+        // stays whatever is lit. Wide enough for the hint with sort size (2026-09-30).
+        _console.Profile.Width = 240;
         var (menu, pane) = PaneMenu();
         LlmServer Embedded(string id) => new(NeonSidekick.EmbeddedLlm.EmbeddedEndpoint.BaseUrl, NeonSidekick.EmbeddedLlm.EmbeddedEndpoint.ServerName, new ProbeResult(true, [id], "installed"));
         var network = new[] { Server(1234, "LM Studio", "lm"), Server(8000, "vLLM", "v") };
@@ -2618,7 +2619,7 @@ public partial class SettingsMenuTests : IDisposable
         Push(Keys.Char('1'));                   // 8GB: the 31B goes, LM Studio stays
         Push(Keys.Down, Keys.Enter);            // the second row left: E2B
         Assert.Same(servers[2], await menu.PickServerAsync(servers, null, SettingsMenu.StartupServerTitle, CancellationToken.None));
-        Assert.Contains(" 8GB    16GB    32GB    uncensored ", _console.Output);
+        Assert.Contains(" 8GB    16GB    32GB    uncensored    sort size ", _console.Output);
         Assert.Contains("ESC = the first listed", _console.Output);
 
         Push(Keys.Char('u'), Keys.Enter);       // uncensored: no embedded row passes, LM Studio is still there to pick

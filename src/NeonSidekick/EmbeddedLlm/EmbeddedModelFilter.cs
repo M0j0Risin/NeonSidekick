@@ -79,9 +79,11 @@ public static class EmbeddedFilterTypes
 /// ones; both together, both. Nothing is saved: every visit to a pane starts at <see cref="None"/>, every model shown.
 /// The catalog alone (later still on 2026-09-29, the user's ask) carries <c>installed</c> and <c>uninstalled</c> between the
 /// sizes and uncensored, a radio pair of their own (<see cref="Installed"/>; <c>/server</c> lists installed models only).
+/// <c>sort size</c> (2026-09-30, the user's ask) is last on every list and no filter: lit, <see cref="Arrange"/> orders the
+/// embedded rows smallest first by the same bytes the sizes measure; dark, they keep the catalog's order. Not saved either.
 /// Pure: the tests drive it.
 /// </summary>
-public sealed record EmbeddedModelFilter(int? MaxGb, bool Uncensored, bool? Installed = null)
+public sealed record EmbeddedModelFilter(int? MaxGb, bool Uncensored, bool? Installed = null, bool SortSize = false)
 {
     /// <summary>No button lit: every model.</summary>
     public static readonly EmbeddedModelFilter None = new(null, false);
@@ -108,25 +110,34 @@ public sealed record EmbeddedModelFilter(int? MaxGb, bool Uncensored, bool? Inst
     /// <summary>The uncensored button's index: after the sizes, and after installed and uninstalled <paramref name="withInstalled"/>.</summary>
     public static int UncensoredIndex(bool withInstalled = false) => Sizes.Length + (withInstalled ? 2 : 0);
 
+    /// <summary>The sort size button's title (2026-09-30). Pinned.</summary>
+    public const string SortSizeButton = "sort size";
+
+    /// <summary>The sort size button's key.</summary>
+    public const char SortSizeKey = 's';
+
+    /// <summary>The sort size button's index: after uncensored.</summary>
+    public static int SortSizeIndex(bool withInstalled = false) => UncensoredIndex(withInstalled) + 1;
+
     /// <summary>The filters' part of <c>/server</c>'s hint row. Pinned.</summary>
-    public const string Keys = "1 / 2 / 3 = 8 / 16 / 32 GB · U = uncensored";
+    public const string Keys = "1 / 2 / 3 = 8 / 16 / 32 GB · U = uncensored · S = sort by size";
 
     /// <summary>The filters' part of the catalog's hint row, with installed and uninstalled (later on 2026-09-29). Pinned.</summary>
-    public const string CatalogKeys = "1 / 2 / 3 = 8 / 16 / 32 GB · I / N = installed / uninstalled · U = uncensored";
+    public const string CatalogKeys = "1 / 2 / 3 = 8 / 16 / 32 GB · I / N = installed / uninstalled · U = uncensored · S = sort by size";
 
     /// <summary>A size button's title: <c>8GB</c>. Pinned.</summary>
     public static string SizeButton(int gb) => gb.ToString(System.Globalization.CultureInfo.InvariantCulture) + "GB";
 
-    /// <summary>Whether any button is lit.</summary>
+    /// <summary>Whether any filter button is lit (sort size thins nothing, so it is not one).</summary>
     public bool Active => MaxGb is not null || Uncensored || Installed is not null;
 
     /// <summary>
     /// The buttons, the lit ones <see cref="MenuButton.On"/>: the sizes on the keys 1, 2 and 3, then — <paramref name="withInstalled"/>,
-    /// the catalog's — installed on I and uninstalled on N, then uncensored on U. <see cref="Press"/> reads the same layout.
+    /// the catalog's — installed on I and uninstalled on N, then uncensored on U, then sort size on S. <see cref="Press"/> reads the same layout.
     /// </summary>
     public IReadOnlyList<MenuButton> Buttons(bool withInstalled = false)
     {
-        var buttons = new List<MenuButton>(Sizes.Length + 3);
+        var buttons = new List<MenuButton>(Sizes.Length + 4);
         for (int i = 0; i < Sizes.Length; i++)
         {
             buttons.Add(new MenuButton(SizeButton(Sizes[i]), (char)('1' + i), MaxGb == Sizes[i]));
@@ -139,12 +150,13 @@ public sealed record EmbeddedModelFilter(int? MaxGb, bool Uncensored, bool? Inst
         }
 
         buttons.Add(new MenuButton(UncensoredButton, UncensoredKey, Uncensored));
+        buttons.Add(new MenuButton(SortSizeButton, SortSizeKey, SortSize));
         return buttons;
     }
 
     /// <summary>
     /// The filter after the button at <paramref name="index"/> of <see cref="Buttons"/> is pressed: a size lights alone, or goes
-    /// dark when it was the lit one; installed and uninstalled the same between themselves; uncensored flips. Each group leaves
+    /// dark when it was the lit one; installed and uninstalled the same between themselves; uncensored and sort size flip. Each group leaves
     /// the others be; any other index changes nothing.
     /// </summary>
     public EmbeddedModelFilter Press(int index, bool withInstalled = false)
@@ -158,6 +170,11 @@ public sealed record EmbeddedModelFilter(int? MaxGb, bool Uncensored, bool? Inst
         {
             bool wanted = index == Sizes.Length;
             return this with { Installed = Installed == wanted ? null : wanted };
+        }
+
+        if (index == SortSizeIndex(withInstalled))
+        {
+            return this with { SortSize = !SortSize };
         }
 
         return index == UncensoredIndex(withInstalled) ? this with { Uncensored = !Uncensored } : this;
@@ -186,7 +203,50 @@ public sealed record EmbeddedModelFilter(int? MaxGb, bool Uncensored, bool? Inst
             return true;
         }
 
-        long bytes = type == EmbeddedFilterType.Gguf ? model.Model.Bytes : EmbeddedModelCatalog.TotalBytes(model);
-        return Math.Round(bytes / 1_000_000_000.0, 1, MidpointRounding.AwayFromZero) <= max;
+        return Math.Round(Bytes(model, type) / 1_000_000_000.0, 1, MidpointRounding.AwayFromZero) <= max;
+    }
+
+    /// <summary>The bytes <paramref name="type"/> measures <paramref name="model"/> by: its weights alone, or the size its row shows.</summary>
+    public static long Bytes(EmbeddedModel model, EmbeddedFilterType type)
+    {
+        ArgumentNullException.ThrowIfNull(model);
+        return type == EmbeddedFilterType.Gguf ? model.Model.Bytes : EmbeddedModelCatalog.TotalBytes(model);
+    }
+
+    /// <summary>
+    /// The rows in the order they are shown (2026-09-30): <paramref name="shown"/> as it is while sort size is dark; lit, the
+    /// entries <paramref name="modelAt"/> names a model for are re-ordered among their own slots, smallest first by
+    /// <see cref="Bytes"/> and the list's order between equals, and every other entry (a server on the network, the Claude
+    /// API) keeps its place.
+    /// </summary>
+    public List<int> Arrange(List<int> shown, Func<int, EmbeddedModel?> modelAt, EmbeddedFilterType type)
+    {
+        ArgumentNullException.ThrowIfNull(shown);
+        ArgumentNullException.ThrowIfNull(modelAt);
+        if (!SortSize)
+        {
+            return shown;
+        }
+
+        var slots = new List<int>();
+        var models = new List<(int Entry, long Bytes)>();
+        for (int position = 0; position < shown.Count; position++)
+        {
+            if (modelAt(shown[position]) is { } model)
+            {
+                slots.Add(position);
+                models.Add((shown[position], Bytes(model, type)));
+            }
+        }
+
+        // OrderBy is stable: equal sizes keep the list's order.
+        var sorted = models.OrderBy(m => m.Bytes).ToList();
+        var arranged = shown.ToList();
+        for (int i = 0; i < slots.Count; i++)
+        {
+            arranged[slots[i]] = sorted[i].Entry;
+        }
+
+        return arranged;
     }
 }

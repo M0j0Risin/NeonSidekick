@@ -461,6 +461,22 @@ public sealed class KeySource : IAnsiConsoleInput
 
                     if (e is InputEvent.Key { Info: var k })
                     {
+                        if (Keys.ShortcutLine(k) is { } shortcut)
+                        {
+                            // A command chord (2026-09-30, the user's ask): /clear, /new or /splash offered to the line hook as a
+                            // line sent from the row would be — with a SubmittedLine, so the screen can leave it for the idle line
+                            // as it cancels the reply — the draft untouched. With no hook it is dropped, never type-ahead that would
+                            // fire at the next idle line.
+                            var chord = new SubmittedLine(shortcut, shortcut, [], shortcut);
+                            if (onLine is not null
+                                && !await ServiceAsync(LinePhase(onLine, new WatchedLine(shortcut, [], chord), []), stop, null).ConfigureAwait(false))
+                            {
+                                return accepted ? Interrupt.Accept : Interrupt.None;
+                            }
+
+                            continue;
+                        }
+
                         if (cancel(k))
                         {
                             if (editor is not null && Keys.IsInterrupt(k) && editor.TryCopySelection())

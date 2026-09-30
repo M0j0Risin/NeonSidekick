@@ -50,6 +50,37 @@ public static class Keys
     /// <summary>Ctrl+O as the console delivers it: the SI character with the key and Control.</summary>
     public static ConsoleKeyInfo CtrlO => new('\x0f', ConsoleKey.O, false, false, true);
 
+    /// <summary>
+    /// The chat line's command chords (2026-09-30, the user's ask): Ctrl+Alt+C is <c>/clear</c>, Ctrl+Alt+N <c>/new</c> and
+    /// Ctrl+Alt+S <c>/splash</c> — at the idle line and under a reply, run as the typed command would be. The user asked for
+    /// Ctrl+Shift first; Windows Terminal keeps Ctrl+Shift+N (a new window) and Ctrl+Shift+C (its copy) by default, and leaves
+    /// Ctrl+Alt with these letters alone, so all three moved to Ctrl+Alt. Control and Alt held, Shift not, and no character but
+    /// the console's own control one for the letter (ETX, SO, DC3; a test builds <c>'\0'</c>): AltGr is Ctrl+Alt, and an AltGr
+    /// key that types a character (ć, ń, ś on some layouts) stays that character. Null for every other key.
+    /// </summary>
+    public static string? ShortcutLine(ConsoleKeyInfo key)
+    {
+        if ((key.Modifiers & (ConsoleModifiers.Control | ConsoleModifiers.Alt | ConsoleModifiers.Shift)) != (ConsoleModifiers.Control | ConsoleModifiers.Alt))
+        {
+            return null;
+        }
+
+        return (key.Key, key.KeyChar) switch
+        {
+            (ConsoleKey.C, '\0' or '\x03') => "/clear",
+            (ConsoleKey.N, '\0' or '\x0e') => "/new",
+            (ConsoleKey.S, '\0' or '\x13') => "/splash",
+            _ => null,
+        };
+    }
+
+    /// <summary>Ctrl+Alt+C, Ctrl+Alt+N and Ctrl+Alt+S as a US layout delivers them: no character, the key with Control and Alt.</summary>
+    public static ConsoleKeyInfo CtrlAltC => new('\0', ConsoleKey.C, false, true, true);
+
+    public static ConsoleKeyInfo CtrlAltN => new('\0', ConsoleKey.N, false, true, true);
+
+    public static ConsoleKeyInfo CtrlAltS => new('\0', ConsoleKey.S, false, true, true);
+
     /// <summary>A plain Enter (or Shift+Enter, Alt+Enter): the key that sends a line and ends a type-ahead line; Ctrl+Enter is <see cref="IsLineBreak"/>.</summary>
     public static bool IsSend(ConsoleKeyInfo key) => key.Key == ConsoleKey.Enter && !IsLineBreak(key);
 

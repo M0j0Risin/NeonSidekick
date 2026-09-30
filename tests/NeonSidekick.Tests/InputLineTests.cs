@@ -446,6 +446,21 @@ public class InputLineTests : IDisposable
     }
 
     [Fact]
+    public async Task TheCommandChords_EndTheChatLinesRead_WithTheDraft_AndAFieldLeavesThemAlone()
+    {
+        // 2026-09-30 (the user's ask): Ctrl+Alt+N on the chat line is /new, the draft handed back; a read without shortcuts ignores it.
+        Type("keep");
+        Push(Keys.CtrlAltN);
+        var shortcut = Assert.IsType<InputResult.Shortcut>(await _line.ReadAsync(shortcuts: true));
+        Assert.Equal("/new", shortcut.Line);
+        Assert.Equal("keep", shortcut.Draft);
+
+        Type("field");
+        Push(Keys.CtrlAltC, Keys.CtrlAltS, Keys.Enter);
+        Assert.Equal("field", Assert.IsType<InputResult.Submitted>(await _line.ReadAsync()).Text);
+    }
+
+    [Fact]
     public async Task CtrlC_WithNoHook_IsEscape()
     {
         // A settings field: the draft cleared, then Cancelled from the empty row; escapeCancels at once.
