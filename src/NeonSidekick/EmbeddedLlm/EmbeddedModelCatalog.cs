@@ -18,7 +18,9 @@ public sealed record EmbeddedSampling(double Temperature, double TopP, int TopK)
 /// available") comes one of two ways: a separate small <paramref name="Drafter"/> GGUF (Gemma 4's <c>gemma4-assistant</c>
 /// heads, passed as <c>-md</c>), or an <paramref name="MtpHead"/> the weights carry themselves (Qwen3.8's NextN layer,
 /// <c>qwen35.nextn_predict_layers = 1</c>, which llama.cpp runs on the target's own weights when no <c>-md</c> is given).
-/// Neither is a model without MTP.
+/// Neither is a model without MTP. <paramref name="ToolCalls"/> (2026-09-29, the user's ask, for the 🛠️ column): the
+/// model's chat template carries tool calls — every model in the catalog does, from its card, and <c>--jinja</c> is what
+/// makes <c>llama-server</c> honour them (<see cref="LlamaArguments"/>); false is for a model that would not.
 /// </summary>
 public sealed record EmbeddedModel(
     string Id,
@@ -30,10 +32,18 @@ public sealed record EmbeddedModel(
     EmbeddedFile Mmproj,
     EmbeddedSampling Sampling,
     EmbeddedFile? Drafter = null,
-    bool MtpHead = false)
+    bool MtpHead = false,
+    bool ToolCalls = true)
 {
     /// <summary>Whether the model can draft for itself at all: a drafter file or a built-in head.</summary>
     public bool HasMtp => Drafter is not null || MtpHead;
+
+    /// <summary>
+    /// Whether the model reads images (2026-09-29, the user's ask, for the 👁️ column): every model carries its vision
+    /// projector (<see cref="Mmproj"/>), so every one does — a text-only model would make the projector optional and this
+    /// <c>Mmproj is not null</c>. What the model can do, whatever <c>Embedded vision</c> says.
+    /// </summary>
+    public bool Vision => true;
 }
 
 /// <summary>

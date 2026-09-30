@@ -4221,7 +4221,8 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(ToolbarItems.Names, _settings.Current.ToolbarItems);
         Assert.Contains(SettingsMenu.SelectAllButton, _console.Output);
         Assert.Contains(SettingsMenu.SelectNoneButton, _console.Output);
-        Assert.Contains(SettingsMenu.ToggleKeys, _console.Output);
+        Assert.Contains(SettingsMenu.DefaultsButton, _console.Output);
+        Assert.Contains(SettingsMenu.ToolbarToggleKeys, _console.Output);
         Assert.Single(System.Text.RegularExpressions.Regex.Matches(_console.Output, "  · Show toolbar: all"));
         pane.Dispose();
 
@@ -4234,6 +4235,30 @@ public partial class SettingsMenuTests : IDisposable
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Equal([], _settings.Current.ToolbarItems);
+        pane.Dispose();
+    }
+
+    /// <summary>
+    /// Show toolbar's ⊡ default (2026-09-29, the user's ask): D puts the checklist back to <see cref="ToolbarItems.Defaults"/>
+    /// — saved as null, so the profile follows a later default — and D again on the defaults saves nothing.
+    /// </summary>
+    [Fact]
+    public async Task OnThePane_ShowToolbar_Default_PutsTheDefaultsBack()
+    {
+        _settings.Update(d => d.ToolbarItems = [.. ToolbarItems.Names]);
+        var (menu, pane) = PaneMenu();
+        Down(SettingsMenu.TabFields[(int)SettingsTab.General].ToList().IndexOf(SettingsField.ToolbarItems));
+        Push(Keys.Enter);
+        Push(Keys.Char('d'));                   // the defaults
+        Push(Keys.Char('D'));                   // again: nothing to save
+        Push(Keys.Escape, Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Null(_settings.Current.ToolbarItems);
+        Assert.Equal(ToolbarItems.Defaults.ToHashSet(StringComparer.Ordinal), ToolbarItems.Resolve(_settings.Current.ToolbarItems));
+        Assert.Contains(SettingsMenu.DefaultsButton, _console.Output);
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(_console.Output, "  · Show toolbar: " + System.Text.RegularExpressions.Regex.Escape(ToolbarItems.Value(null))));
         pane.Dispose();
     }
 

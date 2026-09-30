@@ -846,6 +846,7 @@ internal sealed partial class ChatScreen
     /// <param name="mcp">The MCP servers' session (2026-09-20; <see cref="SidekickApp"/> builds one beside the LLM session and disposes it after the screen); null = the screen builds its own over the real transports and disposes it when it closes (the tests', with nothing configured in their temp home).</param>
     /// <param name="environment">Reads a system variable for the shell probe (<c>PATH</c>, <c>PATHEXT</c>; <see cref="EnvironmentOverrides.System"/> in the app, 2026-09-21); null = no PATH at all, which still finds <c>cmd.exe</c> and Windows PowerShell under the system folder (the tests' deterministic pair).</param>
     /// <param name="perfSource">What the performance bar reads the machine with (2026-09-29): <see cref="Perf.PerfSources.CreateDefault"/> in the app; opened while <c>Show performance bar</c> is on, closed when it goes off; null = <see cref="Perf.NullPerfSource"/>, a bar with no meters (the tests pass a fake).</param>
+    /// <param name="frames">Where the pane's synchronized frames are held and let go as one write (2026-09-29, the user's report: the hint row, the toolbar and the performance bar flickered at every turn's end): the <see cref="FrameWriter"/> <c>Program.cs</c> made stdout; null = no holding (the tests).</param>
     /// <param name="logFile">The <c>--log</c> file, full path (2026-09-22): <c>/log</c> opens it with <paramref name="openFile"/>, and only while it is given is <c>/log</c> a command, in <c>/help</c> and in the completion list; null = started without <c>--log</c> (and the tests).</param>
     public ChatScreen(
         IAnsiConsole console,
@@ -882,7 +883,8 @@ internal sealed partial class ChatScreen
         Func<Uri, string, HaClient>? haClient = null,
         Action<string>? followViewer = null,
         IPrintSpooler? printSpooler = null,
-        Func<Perf.IPerfSource>? perfSource = null)
+        Func<Perf.IPerfSource>? perfSource = null,
+        IFrameHold? frames = null)
     {
         _logFile = logFile;
         ArgumentNullException.ThrowIfNull(time);
@@ -972,6 +974,7 @@ internal sealed partial class ChatScreen
         // window title (WindowTitle), not on the row (2026-09-15).
         _pane = new ScreenPane(console, geometry, time)
         {
+            Frames = frames,
             Hint = HintText,
             // The strip at the row's start in every state (the spinner and a menu's hint included):
             // the brain while a reflection runs, the tag while the model writes a session title,

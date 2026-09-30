@@ -39,6 +39,10 @@ public partial class SettingsMenuTests
         Assert.False(copy.EmbeddedLlmServer || copy.EmbeddedDrafter);
     }
 
+    // The capability columns of a model with a drafter, vision and tools (2026-09-29: ⚡, then 👁️ and 🛠️), and of one without a drafter.
+    private const string Marks = "  ⚡  👁️  🛠️";
+    private const string NoDrafter = "      👁️  🛠️";
+
     [Fact]
     public void TheStaticValues_ArePinned()
     {
@@ -54,15 +58,23 @@ public partial class SettingsMenuTests
 
         var e2b = EmbeddedModelCatalog.Find("gemma-4-e2b")!;
         // Its MTP drafter counts and shows as the drafter column (2026-09-29); the quantisation column fits COMPACT-LOW.
-        Assert.Equal("Gemma 4 E2B                     [#9A8BB8]UD-Q4_K_XL   installed · 4.3 GB[/]  ⚡", SettingsMenu.EmbeddedModelLabel(e2b, EmbeddedModelState.Installed));
-        Assert.Equal("Gemma 4 12B                     [#9A8BB8]BF16         download  · 24.5 GB[/]  ⚡", SettingsMenu.EmbeddedModelLabel(EmbeddedModelCatalog.Find("gemma-4-12b-bf16")!, EmbeddedModelState.Absent));   // the · under the installed rows' (2026-09-29)
-        Assert.Equal("Qwen3.6 35B A3B                 [#9A8BB8]UD-Q4_K_XL   download  · 23.3 GB[/]", SettingsMenu.EmbeddedModelLabel(EmbeddedModelCatalog.Find("qwen3.6-35b-a3b")!, EmbeddedModelState.Absent));   // no drafter: the column is blank
-        Assert.Equal("Qwen3.8 27B NVFP4               [#9A8BB8]COMPACT-LOW  download  · 16.1 GB[/]  ⚡", SettingsMenu.EmbeddedModelLabel(EmbeddedModelCatalog.Find("qwen3.8-27b-nvfp4-compact-low")!, EmbeddedModelState.Absent));   // the head in its weights
+        Assert.Equal("Gemma 4 E2B                     [#9A8BB8]UD-Q4_K_XL   installed · 4.3 GB[/]" + Marks, SettingsMenu.EmbeddedModelLabel(e2b, EmbeddedModelState.Installed));
+        Assert.Equal("Gemma 4 12B                     [#9A8BB8]BF16         download  · 24.5 GB[/]" + Marks, SettingsMenu.EmbeddedModelLabel(EmbeddedModelCatalog.Find("gemma-4-12b-bf16")!, EmbeddedModelState.Absent));   // the · under the installed rows' (2026-09-29)
+        Assert.Equal("Qwen3.6 35B A3B                 [#9A8BB8]UD-Q4_K_XL   download  · 23.3 GB[/]" + NoDrafter, SettingsMenu.EmbeddedModelLabel(EmbeddedModelCatalog.Find("qwen3.6-35b-a3b")!, EmbeddedModelState.Absent));   // no drafter: its slot is blank, vision and tools keep their columns
+        Assert.Equal("Qwen3.8 27B NVFP4               [#9A8BB8]COMPACT-LOW  download  · 16.1 GB[/]" + Marks, SettingsMenu.EmbeddedModelLabel(EmbeddedModelCatalog.Find("qwen3.8-27b-nvfp4-compact-low")!, EmbeddedModelState.Absent));   // the head in its weights
         // The list pads every detail to the widest, so the drafter column is one column down the list.
         var labels = SettingsMenu.EmbeddedModelLabels([e2b, EmbeddedModelCatalog.Find("gemma-4-e4b-qat")!], m => m == e2b ? EmbeddedModelState.Installed : new EmbeddedModelState(EmbeddedModelStateKind.Partial, 42));
-        Assert.EndsWith("installed · 4.3 GB[/]        ⚡", labels[0], StringComparison.Ordinal);
-        Assert.EndsWith("paused    · 5.3 GB · 42%[/]  ⚡", labels[1], StringComparison.Ordinal);
+        Assert.EndsWith("installed · 4.3 GB[/]      " + Marks, labels[0], StringComparison.Ordinal);
+        Assert.EndsWith("paused    · 5.3 GB · 42%[/]" + Marks, labels[1], StringComparison.Ordinal);
         Assert.Equal(2, TextCells.Width(EmbeddedLlmText.DrafterGlyph));
+        Assert.Equal(2, TextCells.Width(EmbeddedLlmText.VisionGlyph));   // 2026-09-29: the vision and tools columns
+        Assert.Equal(2, TextCells.Width(EmbeddedLlmText.ToolsGlyph));
+        Assert.Equal(12, TextCells.Width(Marks));
+        Assert.Equal(12, TextCells.Width(NoDrafter));
+        Assert.Equal("", EmbeddedLlmText.CapabilityColumns(null, "x", 10));   // a scanned server's row has none
+        Assert.Equal(Marks, EmbeddedLlmText.CapabilityColumns(e2b, "", 0));
+        Assert.Equal("  ⚡  " + EmbeddedLlmText.VisionGlyph, EmbeddedLlmText.CapabilityColumns(e2b with { ToolCalls = false }, "", 0));   // a blank last slot leaves no trailing blanks
+        Assert.True(EmbeddedModelCatalog.Models.All(m => m.Vision && m.ToolCalls));   // every catalog model does both today
         Assert.Equal("Gemma 4 26B A4B QAT Uncensored  ", SettingsMenu.EmbeddedModelLabel(EmbeddedModelCatalog.Find("gemma-4-26b-a4b-qat-uncensored")!, EmbeddedModelState.Absent)[..32]);   // the longest name, two to spare
         Assert.Equal(32, SettingsMenu.EmbeddedModelNameWidth);
         Assert.Equal("Remove (4.3 GB)", SettingsMenu.RemoveRow(e2b));
@@ -76,12 +88,12 @@ public partial class SettingsMenuTests
         var row = new Llm.LlmServer(EmbeddedEndpoint.BaseUrl, EmbeddedEndpoint.ServerName, new Llm.ProbeResult(false, ["gemma-4-e2b"], "download  · 4.2 GB"));
 
         // The name padded as the catalog pads it, the quantisation dim after it (2026-09-29: the 12B's builds share a name).
-        Assert.Equal("Embedded   " + Theme.ColorMarkup(Theme.Ink, "Gemma 4 E2B".PadRight(SettingsMenu.EmbeddedModelNameWidth)) + Theme.DimMarkup("UD-Q4_K_XL  download  · 4.2 GB") + "  ⚡", SettingsMenu.ServerLabel(row));
+        Assert.Equal("Embedded   " + Theme.ColorMarkup(Theme.Ink, "Gemma 4 E2B".PadRight(SettingsMenu.EmbeddedModelNameWidth)) + Theme.DimMarkup("UD-Q4_K_XL  download  · 4.2 GB") + Marks, SettingsMenu.ServerLabel(row));
         // In a list the details are padded to the widest, the drafter column after; a scanned server's row has none.
         var lm = new Llm.LlmServer(new Uri("http://127.0.0.1:1234/v1"), "LM Studio", new Llm.ProbeResult(true, ["m"], "1 chat model, and more"));
         var labels = SettingsMenu.ServerLabels([lm, row]);
         Assert.EndsWith("  1 chat model, and more[/]", labels[0], StringComparison.Ordinal);
-        Assert.EndsWith("download  · 4.2 GB[/]      ⚡", labels[1], StringComparison.Ordinal);
+        Assert.EndsWith("download  · 4.2 GB[/]    " + Marks, labels[1], StringComparison.Ordinal);
         Assert.Equal("LLM servers: Embedded Gemma 4 E2B UD-Q4_K_XL", SettingsMenu.ServerListLine([row]));
     }
 

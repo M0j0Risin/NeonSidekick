@@ -42,15 +42,32 @@ public static class EmbeddedLlmText
     /// </summary>
     public const string DrafterGlyph = "⚡";
 
+    /// <summary>The vision column's mark (2026-09-29, the user's ask): a model that reads images (<see cref="EmbeddedModel.Vision"/>), whatever <c>Embedded vision</c> says. Two cells.</summary>
+    public const string VisionGlyph = "👁️";
+
+    /// <summary>The tools column's mark (2026-09-29, the user's ask): a model that calls tools (<see cref="EmbeddedModel.ToolCalls"/>); the toolbar's /tools glyph. Two cells.</summary>
+    public const string ToolsGlyph = "🛠️";
+
     /// <summary>
-    /// The drafter column that follows <paramref name="detail"/>: the padding to <paramref name="detailWidth"/> cells, two
-    /// blanks and <see cref="DrafterGlyph"/> for a model with a drafter; empty for any other (the column is blank, with no
-    /// trailing spaces).
+    /// The capability columns that follow <paramref name="detail"/> (the drafter's, 2026-09-29; vision's and tools' later
+    /// that day, the user's ask): the padding to <paramref name="detailWidth"/> cells, then a slot each for
+    /// <see cref="DrafterGlyph"/>, <see cref="VisionGlyph"/> and <see cref="ToolsGlyph"/> — two blanks and the glyph, or four
+    /// blanks, so each mark keeps its column down the list — with the trailing blanks cut; empty for a row that is no
+    /// embedded model (a scanned server's) or one that has none of them.
     /// </summary>
-    public static string DrafterColumn(EmbeddedModel? model, string detail, int detailWidth) =>
-        model is { HasMtp: true }
-            ? new string(' ', Math.Max(0, detailWidth - UI.TextCells.Width(detail ?? ""))) + "  " + DrafterGlyph
-            : "";
+    public static string CapabilityColumns(EmbeddedModel? model, string detail, int detailWidth)
+    {
+        if (model is null)
+        {
+            return "";
+        }
+
+        string slots = Slot(model.HasMtp, DrafterGlyph) + Slot(model.Vision, VisionGlyph) + Slot(model.ToolCalls, ToolsGlyph);
+        slots = slots.TrimEnd(' ');
+        return slots.Length == 0 ? "" : new string(' ', Math.Max(0, detailWidth - UI.TextCells.Width(detail ?? ""))) + slots;
+
+        static string Slot(bool on, string glyph) => "  " + (on ? glyph : "  ");
+    }
 
     /// <summary>What an install costs to download: the model and its vision projector, plus the llama.cpp runtime when that is missing too.</summary>
     public static string InstallCost(EmbeddedModel model, long runtimeBytes) =>

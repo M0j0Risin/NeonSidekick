@@ -47,6 +47,13 @@ catch
     // Leave the runtime default in place.
 }
 
+// stdout as a FrameWriter (2026-09-29, the user's report: the hint row, the toolbar and the performance bar flickered at
+// every turn's end): it flushes every write as the console's own writer did, and the pane holds each synchronized frame
+// and lets it go as one write. Installed with SetOut before the Spectre console, which takes Console.Out and asks whether
+// its writer is stdout's for its width and terminal detection.
+var frames = new FrameWriter(Console.OpenStandardOutput());
+Console.SetOut(frames);
+
 var console = AnsiConsole.Create(new AnsiConsoleSettings
 {
     Ansi = AnsiSupport.Detect,
@@ -142,7 +149,7 @@ Console.CancelKeyPress += (_, e) =>
 var geometry = ScreenGeometry.ForConsole();
 bool interactive = !options.Headless && !options.Smoke && !options.AudioCheck && !options.VoiceCheck;
 using var consoleInput = interactive && geometry is not null ? WindowsConsoleInput.TryCreate() : null;
-var app = new SidekickApp(console, settings, environment, geometry: geometry, input: consoleInput, clipboard: WindowsClipboard.TryReadText, copyToClipboard: WindowsClipboard.TrySetText, clipboardImage: WindowsClipboard.TryReadImage, setTitle: title => ConsoleTitle.TrySet(title), openViewer: NeonSidekick.Viewer.PictureWindow.IsAvailable ? NeonSidekick.Viewer.PictureWindow.Open : null, viewPicture: NeonSidekick.Viewer.PictureWindow.IsAvailable ? NeonSidekick.Viewer.PictureWindow.OpenAt : null, followViewer: NeonSidekick.Viewer.PictureWindow.IsAvailable ? NeonSidekick.Viewer.PictureWindow.Follow : null, printSpooler: OperatingSystem.IsWindows() ? new NeonSidekick.Printing.WindowsPrintSpooler() : null, embeddedLlm: NeonSidekick.EmbeddedLlm.EmbeddedEndpoint.Offered ? () => NeonSidekick.EmbeddedLlm.EmbeddedLlmService.Create(settings.EmbeddedModelsDirectory, settings.LlamaDirectory) : null, perfSource: NeonSidekick.Perf.PerfSources.CreateDefault);
+var app = new SidekickApp(console, settings, environment, geometry: geometry, input: consoleInput, clipboard: WindowsClipboard.TryReadText, copyToClipboard: WindowsClipboard.TrySetText, clipboardImage: WindowsClipboard.TryReadImage, setTitle: title => ConsoleTitle.TrySet(title), openViewer: NeonSidekick.Viewer.PictureWindow.IsAvailable ? NeonSidekick.Viewer.PictureWindow.Open : null, viewPicture: NeonSidekick.Viewer.PictureWindow.IsAvailable ? NeonSidekick.Viewer.PictureWindow.OpenAt : null, followViewer: NeonSidekick.Viewer.PictureWindow.IsAvailable ? NeonSidekick.Viewer.PictureWindow.Follow : null, printSpooler: OperatingSystem.IsWindows() ? new NeonSidekick.Printing.WindowsPrintSpooler() : null, embeddedLlm: NeonSidekick.EmbeddedLlm.EmbeddedEndpoint.Offered ? () => NeonSidekick.EmbeddedLlm.EmbeddedLlmService.Create(settings.EmbeddedModelsDirectory, settings.LlamaDirectory) : null, perfSource: NeonSidekick.Perf.PerfSources.CreateDefault, frames: frames);
 
 // The viewer's Themed image viewer switch (later on 2026-09-27), read from the effective settings on the viewer's thread.
 NeonSidekick.Viewer.PictureWindow.Themed = () => app.EffectiveSettings.ThemedViewer;

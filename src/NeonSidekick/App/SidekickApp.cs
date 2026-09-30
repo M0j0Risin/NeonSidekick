@@ -78,6 +78,7 @@ public sealed class SidekickApp
     private readonly Func<Uri, string, HomeAssistant.HaClient>? _haClient;
     private readonly Printing.IPrintSpooler _printSpooler;
     private readonly Func<Perf.IPerfSource>? _perfSource;
+    private readonly UI.IFrameHold? _frames;
     private readonly Claude.IClaudeCli? _claude;
     private readonly Action<string>? _openViewer;
     private readonly Action<string>? _viewPicture;
@@ -126,6 +127,7 @@ public sealed class SidekickApp
     /// <param name="clipboardImage">The picture the same paste takes ahead of the text, as an image file's bytes; <c>Program.cs</c> passes <see cref="WindowsClipboard.TryReadImage"/>; null = never.</param>
     /// <param name="setTitle">What the interactive screen sets the terminal window's title with (the loaded profile's name, <see cref="ChatScreen.WindowTitle"/>); <c>Program.cs</c> passes <see cref="ConsoleTitle.TrySet"/>, tests a recorder; null = never. Headless and the checks never set one.</param>
     /// <param name="mcpTransport">What an MCP server's config becomes on the wire (<see cref="McpSession.DefaultTransport"/> in the app; tests a pipe into an in-process server); null = the app's.</param>
+    /// <param name="frames">Where the screen's frames are held and let go as one write (2026-09-29, the rows' flicker at a turn's end): <c>Program.cs</c> passes the <see cref="UI.FrameWriter"/> it made stdout; null (tests) holds nothing.</param>
     /// <param name="embeddedLlm">Makes the embedded model's service for one run (2026-09-29): <c>Program.cs</c> passes <see cref="EmbeddedLlm.EmbeddedLlmService.Create"/> on Windows x64, tests a fake; null offers no embedded model.</param>
     public SidekickApp(
         IAnsiConsole console,
@@ -164,8 +166,10 @@ public sealed class SidekickApp
         Action<string>? followViewer = null,
         Printing.IPrintSpooler? printSpooler = null,
         Func<EmbeddedLlm.IEmbeddedLlm>? embeddedLlm = null,
-        Func<Perf.IPerfSource>? perfSource = null)
+        Func<Perf.IPerfSource>? perfSource = null,
+        UI.IFrameHold? frames = null)
     {
+        _frames = frames;
         // The performance bar's readings (2026-09-29): kernel32, NVML or PDH/DXGI in the app on Windows; none in tests.
         _perfSource = perfSource;
         // The embedded model (2026-09-29): llama-server under the app's own job in the app, a fake in tests, none by default.
@@ -1515,7 +1519,7 @@ public sealed class SidekickApp
         // on the row and hands it back to the terminal otherwise, so the terminal's own selection
         // and right-click copy work whenever there is nothing to click into.
         var mouse = _input as WindowsConsoleInput;
-        var screen = new ChatScreen(_console, _settings, () => EffectiveSettings, OverriddenBy, session, speech, new KeySource(_input ?? _console.Input), voice, PersonaFile.OpenInEditor, RenderScreen, _time, _geometry, _clipboard, mouse is null ? null : mouse.Capture, _copyToClipboard, clipboardImage: _clipboardImage, web: _web, setTitle: _setTitle, externalSkills: _externalSkills, holdWheel: mouse is null ? null : mouse.HoldWheel, splash: SplashImages.Source, editDraft: PersonaFile.EditAndWaitAsync, mcp: mcp, environment: _environment.System, logFile: _options.LogPath is { } logPath ? Path.GetFullPath(logPath) : null, comfyClient: _comfyClient, openImage: PersonaFile.OpenImage, claude: _claude, openViewer: _openViewer, viewPicture: _viewPicture, followViewer: _followViewer, haClient: _haClient, printSpooler: _printSpooler, perfSource: _perfSource);
+        var screen = new ChatScreen(_console, _settings, () => EffectiveSettings, OverriddenBy, session, speech, new KeySource(_input ?? _console.Input), voice, PersonaFile.OpenInEditor, RenderScreen, _time, _geometry, _clipboard, mouse is null ? null : mouse.Capture, _copyToClipboard, clipboardImage: _clipboardImage, web: _web, setTitle: _setTitle, externalSkills: _externalSkills, holdWheel: mouse is null ? null : mouse.HoldWheel, splash: SplashImages.Source, editDraft: PersonaFile.EditAndWaitAsync, mcp: mcp, environment: _environment.System, logFile: _options.LogPath is { } logPath ? Path.GetFullPath(logPath) : null, comfyClient: _comfyClient, openImage: PersonaFile.OpenImage, claude: _claude, openViewer: _openViewer, viewPicture: _viewPicture, followViewer: _followViewer, haClient: _haClient, printSpooler: _printSpooler, perfSource: _perfSource, frames: _frames);
         if (mouse is not null)
         {
             mouse.ModeChanged = screen.FlushConsole;

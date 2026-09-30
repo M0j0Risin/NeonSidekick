@@ -722,9 +722,9 @@ public class ScreenPaneTests : IDisposable
 
         // Down over the lower rule only (the cursor is on the last row), and back to its cell.
         string written = Output[mark..];
-        Assert.StartsWith("\e[?25l\e[2B\e[20D", written);
+        Assert.StartsWith("\e[?2026h\e[?25l\e[2B\e[20D", written);   // the row's rewrite one synchronized frame (2026-09-29)
         Assert.Equal("two", Strip(written));
-        Assert.EndsWith("\e[K\e[2A\e[20D\e[6C\e[?25h", written);
+        Assert.EndsWith("\e[K\e[2A\e[20D\e[6C\e[?25h\e[?2026l", written);
     }
 
     [Fact]
@@ -2525,14 +2525,14 @@ public class ScreenPaneTests : IDisposable
 
         // The hint row again, in place, and the cursor back.
         Assert.Equal("idle", Strip(Output[mark..]));
-        Assert.EndsWith("\e[K\e[2A\e[20D\e[2C\e[?25h", Output);
+        Assert.EndsWith("\e[K\e[2A\e[20D\e[2C\e[?25h\e[?2026l", Output);   // one synchronized frame (2026-09-29)
 
         // Under an overlay: the hint row again, the cursor left hidden on the overlay's first row.
         pane.ShowOverlay(new Markup("a"), "hint");
         mark = Output.Length;
         pane.Touch();
         Assert.Equal("hint", Strip(Output[mark..]));
-        Assert.EndsWith("\e[K\e[2A\e[20D", Output);
+        Assert.EndsWith("\e[K\e[2A\e[20D\e[?2026l", Output);
         Assert.DoesNotContain("\e[?25h", Output[mark..]);
 
         using var plain = Pane(geometry: false);
@@ -3341,9 +3341,9 @@ public class ScreenPaneTests : IDisposable
         {
             // Down over the two content rows and the lower rule, the spinner row, back up; the cursor stays hidden.
             string written = Output[mark..];
-            Assert.StartsWith("\e[?25l\e[3B\e[20D", written);
+            Assert.StartsWith("\e[?2026h\e[?25l\e[3B\e[20D", written);
             Assert.Contains(Theme.SpinnerFrames[0] + " listing voices", Strip(written));
-            Assert.EndsWith("\e[K\e[3A\e[20D", written);
+            Assert.EndsWith("\e[K\e[3A\e[20D\e[?2026l", written);
             Assert.DoesNotContain("\e[?25h", written);
 
             _time.Advance(ScreenPane.Tick);
@@ -3351,7 +3351,7 @@ public class ScreenPaneTests : IDisposable
         }
 
         // The overlay's hint again, and the overlay untouched.
-        Assert.EndsWith("hint\e[0m\e[K\e[3A\e[20D", Output);
+        Assert.EndsWith("hint\e[0m\e[K\e[3A\e[20D\e[?2026l", Output);
         Assert.True(pane.OverlayOpen);
 
         // With an input slot the cursor comes back to its cell, shown.
@@ -3360,7 +3360,7 @@ public class ScreenPaneTests : IDisposable
         mark = Output.Length;
         using (pane.BeginBusy("listing"))
         {
-            Assert.EndsWith("\e[K\e[2A\e[20D\e[4C\e[?25h", Output);
+            Assert.EndsWith("\e[K\e[2A\e[20D\e[4C\e[?25h\e[?2026l", Output);
         }
     }
 
@@ -4287,8 +4287,14 @@ public class ScreenPaneTests : IDisposable
         Assert.Contains("\nidle\n🔧" + new string(' ', 33) + @"D:\x" + "\nCPU 5%", Output);
         Assert.True(pane.TryHitToolbar(1, 103, out var tool));
         Assert.Equal(new ScreenPane.ToolbarHit(ScreenPane.ToolbarZone.Glyph, "🔧", 0), tool);
-        Assert.False(pane.TryHitToolbar(1, 104, out _));   // the bar's row is no button
+        Assert.True(pane.TryHitToolbar(1, 104, out tool));   // the bar is the toolbar's blanks anywhere on it (2026-09-29): /settings
+        Assert.Equal(ScreenPane.PerfBarHit, tool);
+        Assert.True(pane.TryHitToolbar(30, 104, out tool));
+        Assert.Equal(new ScreenPane.ToolbarHit(ScreenPane.ToolbarZone.Row, "", -1), tool);
         Assert.Equal(new ScreenPane.OffPaneHit(null, new ScreenPane.ToolbarHit(ScreenPane.ToolbarZone.Glyph, "🔧", 0)), pane.OffPaneHitAt(1, 103));
+        Assert.Equal(new ScreenPane.OffPaneHit(null, ScreenPane.PerfBarHit), pane.OffPaneHitAt(1, 104));
+        Assert.Equal(-4, ScreenPane.OutsideKeyOf(pane.OffPaneHitAt(1, 104)));   // pairs with the blanks
+        Assert.False(pane.TryHitToolbar(1, 105, out _));
         int draws = Draws;
 
         // A new reading: the row again in place, nothing else; the same again: nothing.
@@ -4315,7 +4321,88 @@ public class ScreenPaneTests : IDisposable
         _time.Advance(ScreenPane.Tick);
         Assert.Equal((0, 1), (pane.ToolbarRows, pane.PerfRows));
         Assert.EndsWith("\nidle\nCPU 42%", Output);
-        Assert.False(pane.TryHitToolbar(1, 103, out _));
+        Assert.True(pane.TryHitToolbar(1, 103, out tool));   // the bar alone, the last row at 103 now, answers too
+        Assert.Equal(ScreenPane.PerfBarHit, tool);
+        Assert.False(pane.TryHitToolbar(1, 102, out _));     // the hint row is the hint row's
+    }
+
+    /// <summary>
+    /// A batch while drawn (2026-09-29, the user's report: the hint row, the toolbar and the performance bar flickered at
+    /// every turn's end — the reply's commit is a batch): one synchronized frame from the lift's erase to the pane's last
+    /// row, held on <see cref="ScreenPane.Frames"/> and let go once; a row rewritten inside it opens no second frame.
+    /// </summary>
+    [Fact]
+    public void Batch_WhileDrawn_IsOneSynchronizedFrame_HeldAndLetGo()
+    {
+        _console.EmitAnsiSequences();
+        var frames = new CountingFrames();
+        using var pane = Pane();
+        pane.Frames = frames;
+        pane.Hint = () => "idle";
+        pane.Toolbar = () => new ScreenPane.ToolbarParts("🔧", @"D:\x");
+        pane.Perf = _ => new PerfRow([new PerfSegment("CPU 5%", Theme.DimText)]);
+        pane.Show();
+        int mark = Output.Length;
+
+        using (pane.Batch())
+        {
+            pane.MarkupLine("a reply");
+            Assert.Equal(1, frames.Open);
+        }
+
+        string written = Output[mark..];
+        Assert.StartsWith("\e[?2026h", written);
+        Assert.True(written.IndexOf("\e[J", StringComparison.Ordinal) > 0);
+        Assert.EndsWith("\e[?2026l", written);
+        Assert.Equal(1, Count(written, "\e[?2026h"));
+        Assert.Contains("CPU 5%", written[..written.LastIndexOf("\e[?2026l", StringComparison.Ordinal)]);
+        Assert.Equal((0, 1), (frames.Open, frames.Released));
+
+        // Every frame after it balanced too: the tick's row rewrites, a redraw.
+        _time.Advance(ScreenPane.Tick);
+        pane.Touch();
+        Assert.Equal(0, frames.Open);
+    }
+
+    /// <summary>A frame a draw left open (it threw) is closed on the next tick with no batch or modal running (2026-09-29).</summary>
+    [Fact]
+    public void AFrameLeftOpen_IsClosed_OnTheTick()
+    {
+        var frames = new CountingFrames();
+        bool fail = false;
+        using var pane = Pane();
+        pane.Frames = frames;
+        pane.Hint = () => fail ? throw new InvalidOperationException("boom") : "idle";
+        pane.Show();
+        var batch = pane.Batch();
+        Assert.Equal(1, frames.Open);
+        _time.Advance(ScreenPane.Tick);
+        Assert.Equal(1, frames.Open);   // a batch's frame stays while it runs
+
+        fail = true;
+        Assert.Throws<InvalidOperationException>(batch.Dispose);   // the closing draw throws: the frame is left open
+        Assert.Equal(1, frames.Open);
+        fail = false;
+        _time.Advance(ScreenPane.Tick);
+        Assert.Equal(0, frames.Open);
+    }
+
+    private sealed class CountingFrames : IFrameHold
+    {
+        public int Open { get; private set; }
+
+        public int Released { get; private set; }
+
+        public void Hold() => Open++;
+
+        public void Release()
+        {
+            Open--;
+            if (Open == 0)
+            {
+                Released++;
+            }
+        }
     }
 
     /// <summary>A window with no transcript row to spare over the smallest pane, the toolbar and the bar draws no bar; one row more draws it.</summary>

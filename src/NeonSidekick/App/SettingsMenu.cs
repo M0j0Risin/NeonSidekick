@@ -1211,8 +1211,8 @@ internal sealed partial class SettingsMenu
     /// A server picker row whose URL (or, for an embedded model, the model's name) is padded to
     /// <paramref name="whereWidth"/> cells, so every row's detail starts in one column (2026-09-29, the user's ask: the
     /// embedded rows' names and the servers' URLs made the details ragged), and whose detail is padded to
-    /// <paramref name="detailWidth"/> ahead of the drafter column an embedded model with one carries
-    /// (<see cref="NeonSidekick.EmbeddedLlm.EmbeddedLlmText.DrafterGlyph"/>, later that day, the user's ask). Pinned.
+    /// <paramref name="detailWidth"/> ahead of the capability columns an embedded model carries
+    /// (<see cref="NeonSidekick.EmbeddedLlm.EmbeddedLlmText.CapabilityColumns"/>: the drafter, vision and tools marks, later that day, the user's asks). Pinned.
     /// </summary>
     public static string ServerLabel(LlmServer server, int whereWidth, int detailWidth)
     {
@@ -1222,7 +1222,7 @@ internal sealed partial class SettingsMenu
         var model = NeonSidekick.EmbeddedLlm.EmbeddedEndpoint.IsEmbedded(server.BaseUrl) ? EmbeddedRowModel(server) : null;
         return Markup.Escape(server.Name.PadRight(ServerNameWidth)) + Theme.ColorMarkup(Theme.Ink, Markup.Escape(where))
             + Theme.DimMarkup(Markup.Escape(quant) + pad + "  " + Markup.Escape(server.Result.Detail))
-            + Markup.Escape(NeonSidekick.EmbeddedLlm.EmbeddedLlmText.DrafterColumn(model, server.Result.Detail, detailWidth));
+            + Markup.Escape(NeonSidekick.EmbeddedLlm.EmbeddedLlmText.CapabilityColumns(model, server.Result.Detail, detailWidth));
     }
 
     /// <summary>The picker's rows with the URL-or-model column as wide as its widest entry, and the details as wide as the widest one.</summary>
@@ -2019,6 +2019,23 @@ internal sealed partial class SettingsMenu
     private const int SelectAllIndex = 0;
     private const int SelectNoneIndex = 1;
 
+    /// <summary>
+    /// Show toolbar's third title-row button (2026-09-29, the user's ask, beside select all and select none): the checklist
+    /// back to <see cref="App.ToolbarItems.Defaults"/>, which saves as null so the profile follows a later default. Pinned.
+    /// </summary>
+    public const string DefaultsButton = "⊡ default";
+
+    /// <summary>The key that is <see cref="DefaultsButton"/>.</summary>
+    public const char DefaultsKey = 'd';
+
+    /// <summary>Show toolbar's buttons: <see cref="ChecklistButtons"/>, then default (index 2).</summary>
+    public static readonly IReadOnlyList<MenuButton> ToolbarChecklistButtons = [.. ChecklistButtons, new(DefaultsButton, DefaultsKey)];
+
+    private const int DefaultsIndex = 2;
+
+    /// <summary>Show toolbar's hint: <see cref="ToggleKeys"/> with D (2026-09-29). Pinned.</summary>
+    public const string ToolbarToggleKeys = "Enter / Space = on or off · A = all · N = none · D = default · ESC = back";
+
     /// <summary>The status line when the last language would go: at least one stays (the user's rule, 2026-09-21). Pinned.</summary>
     public const string LastLanguageError = "At least one language stays on.";
 
@@ -2595,14 +2612,14 @@ internal sealed partial class SettingsMenu
 
     /// <summary>
     /// <see cref="PickAsync"/> for the checklists (2026-09-29, the user's ask): the page with <see cref="ChecklistButtons"/> on
-    /// its title row; the row (the cursor's for a button) and the button pressed, −1 for Enter or Space on a row; null on ESC.
-    /// Without the pane (the Spectre prompt) there are no buttons.
+    /// its title row (or <paramref name="buttons"/>: Show toolbar's add default); the row (the cursor's for a button) and the
+    /// button pressed, −1 for Enter or Space on a row; null on ESC. Without the pane (the Spectre prompt) there are no buttons.
     /// </summary>
-    private async Task<(int Row, int Button)?> PickChecklistAsync(MenuPage page, int cursor, CancellationToken cancellationToken)
+    private async Task<(int Row, int Button)?> PickChecklistAsync(MenuPage page, int cursor, CancellationToken cancellationToken, IReadOnlyList<MenuButton>? buttons = null)
     {
         if (_pane.Enabled)
         {
-            return await _pane.PickAsync(page with { Buttons = ChecklistButtons }, cursor, cancellationToken).ConfigureAwait(false) is { } picked
+            return await _pane.PickAsync(page with { Buttons = buttons ?? ChecklistButtons }, cursor, cancellationToken).ConfigureAwait(false) is { } picked
                 ? (picked.Row, picked.Button)
                 : null;
         }
@@ -4821,23 +4838,23 @@ internal sealed partial class SettingsMenu
     /// <summary>The notice when the catalog is opened where no embedded model is offered. Pinned.</summary>
     public const string NoEmbeddedModelNotice = "No embedded model is offered here (llama.cpp's Windows x64 builds only).";
 
-    /// <summary>A catalog row on its own: the model's name padded, its quantisation, then its state and size, dim, and the drafter column. Pinned.</summary>
+    /// <summary>A catalog row on its own: the model's name padded, its quantisation, then its state and size, dim, and the capability columns. Pinned.</summary>
     public static string EmbeddedModelLabel(NeonSidekick.EmbeddedLlm.EmbeddedModel model, NeonSidekick.EmbeddedLlm.EmbeddedModelState state) =>
         EmbeddedModelLabel(model, state, detailWidth: 0);
 
     /// <summary>
-    /// A catalog row whose state-and-size detail is padded to <paramref name="detailWidth"/> cells, so the drafter column
-    /// (<see cref="NeonSidekick.EmbeddedLlm.EmbeddedLlmText.DrafterGlyph"/>, 2026-09-29, the user's ask) lines up down the list. Pinned.
+    /// A catalog row whose state-and-size detail is padded to <paramref name="detailWidth"/> cells, so the capability columns
+    /// (<see cref="NeonSidekick.EmbeddedLlm.EmbeddedLlmText.CapabilityColumns"/>: ⚡ 👁️ 🛠️, 2026-09-29, the user's asks) line up down the list. Pinned.
     /// </summary>
     public static string EmbeddedModelLabel(NeonSidekick.EmbeddedLlm.EmbeddedModel model, NeonSidekick.EmbeddedLlm.EmbeddedModelState state, int detailWidth)
     {
         ArgumentNullException.ThrowIfNull(model);
         string detail = NeonSidekick.EmbeddedLlm.EmbeddedLlmText.ModelDetail(model, state);
         return Markup.Escape(model.Display.PadRight(EmbeddedModelNameWidth)) + Theme.DimMarkup(Markup.Escape(model.Quant.PadRight(EmbeddedModelQuantWidth) + detail))
-            + Markup.Escape(NeonSidekick.EmbeddedLlm.EmbeddedLlmText.DrafterColumn(model, detail, detailWidth));
+            + Markup.Escape(NeonSidekick.EmbeddedLlm.EmbeddedLlmText.CapabilityColumns(model, detail, detailWidth));
     }
 
-    /// <summary>The catalog's rows, the details as wide as the widest one so the drafter column is one column.</summary>
+    /// <summary>The catalog's rows, the details as wide as the widest one so each capability column is one column.</summary>
     public static IReadOnlyList<string> EmbeddedModelLabels(IReadOnlyList<NeonSidekick.EmbeddedLlm.EmbeddedModel> models, Func<NeonSidekick.EmbeddedLlm.EmbeddedModel, NeonSidekick.EmbeddedLlm.EmbeddedModelState> state)
     {
         ArgumentNullException.ThrowIfNull(models);
@@ -5171,7 +5188,8 @@ internal sealed partial class SettingsMenu
     /// <summary>
     /// The toolbar's checklist under the settings list (2026-09-29, the user's ask: <c>Show toolbar</c> a multiple choice in
     /// place of its switch): one <see cref="App.ToolbarItems.Label"/> row per item, Enter or Space flipping it and saving at
-    /// once, the list re-shown until ESC. Nothing has to stay: nothing checked is no toolbar. True when anything was flipped.
+    /// once, the list re-shown until ESC. Nothing has to stay: nothing checked is no toolbar. Its buttons are the checklists'
+    /// and <see cref="DefaultsButton"/> (2026-09-29). True when anything was flipped.
     /// </summary>
     private async Task<bool> EditToolbarItemsAsync(CancellationToken cancellationToken)
     {
@@ -5181,8 +5199,8 @@ internal sealed partial class SettingsMenu
         while (true)
         {
             var on = App.ToolbarItems.Resolve(_settings.Current.ToolbarItems);
-            var page = new MenuPage(Crumb(FieldName(SettingsField.ToolbarItems)), names.Select(id => App.ToolbarItems.Label(id, on.Contains(id))).ToList(), ToggleKeys) { SpaceToggles = true };
-            var picked = await PickChecklistAsync(page, cursor, cancellationToken).ConfigureAwait(false);
+            var page = new MenuPage(Crumb(FieldName(SettingsField.ToolbarItems)), names.Select(id => App.ToolbarItems.Label(id, on.Contains(id))).ToList(), ToolbarToggleKeys) { SpaceToggles = true };
+            var picked = await PickChecklistAsync(page, cursor, cancellationToken, ToolbarChecklistButtons).ConfigureAwait(false);
             if (picked is not { } pick)
             {
                 if (!changed)
@@ -5196,10 +5214,11 @@ internal sealed partial class SettingsMenu
             cursor = pick.Row;
             var next = pick.Button == SelectAllIndex ? names.ToHashSet(StringComparer.Ordinal)
                 : pick.Button == SelectNoneIndex ? new HashSet<string>(StringComparer.Ordinal)
+                : pick.Button == DefaultsIndex ? App.ToolbarItems.Defaults.ToHashSet(StringComparer.Ordinal)
                 : names.Where(n => on.Contains(n) != string.Equals(n, names[pick.Row], StringComparison.Ordinal)).ToHashSet(StringComparer.Ordinal);
             if (next.SetEquals(on))
             {
-                continue;   // select all with every item on, or none with none: nothing to save
+                continue;   // select all with every item on, none with none, default on the defaults: nothing to save
             }
 
             Apply(SettingsField.ToolbarItems, d => d.ToolbarItems = App.ToolbarItems.Save(next));

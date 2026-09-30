@@ -1233,6 +1233,47 @@ public class InputLineTests : IDisposable
         Assert.Equal("a draft", Assert.IsType<InputResult.Submitted>(await line.ReadAsync(initialText: "a draft")).Text);
     }
 
+    /// <summary>
+    /// The performance bar (2026-09-29, the user's ask): two clicks anywhere on it end the read as the toolbar's blanks —
+    /// the screen's /settings — with the toolbar over it or without one; a click on the blanks then one on the bar pairs.
+    /// </summary>
+    [Fact]
+    public async Task OnThePane_ADoubleClickOnThePerfBar_EndsTheRead_AsTheToolbarsBlanks()
+    {
+        _console.Profile.Height = 10;
+        _console.Profile.Width = 40;
+        var time = new ManualTimeProvider();
+        using var pane = new ScreenPane(_console, new ScreenGeometry(() => null, () => 100), time)
+        {
+            Toolbar = () => new ScreenPane.ToolbarParts("🔧", @"D:\x"),
+            Perf = _ => new PerfRow([new PerfSegment("CPU 5%", Theme.DimText)]),
+        };
+        pane.Show();
+        var scripted = new ScriptedInput();
+        var line = new InputLine(pane, new KeySource(scripted, TimeSpan.FromMilliseconds(1)));
+        scripted.Push(Chars("a draft"));
+        // A one-row draft: row 100, the rule 101, the hint row 102, the toolbar 103, the bar 104.
+        scripted.PushClick(2, 104);
+        scripted.PushClick(30, 104);
+
+        var tool = Assert.IsType<InputResult.ToolbarRow>(await line.ReadAsync());
+        Assert.Equal(ScreenPane.PerfBarHit, tool.Hit);
+        Assert.Equal("a draft", tool.Draft);
+
+        // The blanks, then the bar: one part.
+        scripted.PushClick(20, 103);
+        scripted.PushClick(2, 104);
+        tool = Assert.IsType<InputResult.ToolbarRow>(await line.ReadAsync(initialText: "a draft"));
+        Assert.Equal(new ScreenPane.ToolbarHit(ScreenPane.ToolbarZone.Row, "", -1), tool.Hit);
+
+        // No toolbar: the bar under the hint row, at 103.
+        pane.Toolbar = static () => null;
+        scripted.PushClick(5, 103);
+        scripted.PushClick(5, 103);
+        tool = Assert.IsType<InputResult.ToolbarRow>(await line.ReadAsync(initialText: "a draft"));
+        Assert.Equal(ScreenPane.PerfBarHit, tool.Hit);
+    }
+
     /// <summary>Two clicks apart, or a click on the draft or in the transcript between them: the hint row is nothing and Enter sends.</summary>
     [Fact]
     public async Task OnThePane_HintRowClicks_ThatAreNoPair_OrWithTheFlagOff_ChangeNothing()

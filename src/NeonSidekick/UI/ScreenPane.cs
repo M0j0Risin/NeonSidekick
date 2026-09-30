@@ -338,7 +338,10 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     /// <summary>The part of the toolbar a click landed on (<see cref="TryHitToolbar"/>).</summary>
     public enum ToolbarZone
     {
-        /// <summary>Anywhere that is neither a strip glyph nor the path: a separator, a blank.</summary>
+        /// <summary>
+        /// Anywhere that is neither a strip glyph nor the path: a separator, a blank — or anywhere on the performance bar
+        /// under the row (2026-09-29, the user's ask: the bar opens <c>/settings</c> as the blanks do).
+        /// </summary>
         Row,
 
         /// <summary>One of the strip's glyphs at the row's start (<see cref="ToolbarHit.Glyph"/> says which).</summary>
@@ -350,6 +353,9 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
 
     /// <summary>Where on the toolbar a click landed: the zone, the strip glyph under it (<c>""</c> elsewhere) and the zone's first column (−1 for the row).</summary>
     public readonly record struct ToolbarHit(ToolbarZone Zone, string Glyph, int Column);
+
+    /// <summary>A click anywhere on the performance bar (2026-09-29): the toolbar's blanks, so every reader answers it with <c>/settings</c>. Pinned.</summary>
+    public static readonly ToolbarHit PerfBarHit = new(ToolbarZone.Row, "", -1);
 
     /// <param name="inner">The console the pane draws on.</param>
     /// <param name="geometry">Where the cursor is; null disables the pane (a plain transcript).</param>
@@ -443,7 +449,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
 
     /// <summary>
     /// The part of the hint row or the toolbar a click off an open pane names (later on
-    /// 2026-09-21): <see cref="Toolbar"/> on the toolbar row (a glyph, the path or the blanks),
+    /// 2026-09-21): <see cref="Toolbar"/> on the toolbar row (a glyph, the path or the blanks) or the performance bar (the blanks' <see cref="PerfBarHit"/>, 2026-09-29),
     /// <see cref="Hint"/> on the standing hint row (the model name, its reasoning mark, a strip
     /// glyph or the rest — never the queued count or the tally, which are not drawn under a pane).
     /// </summary>
@@ -469,6 +475,11 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
             if (!_drawn || _batch > 0 || _modal > 0 || _geometry?.CursorTop() is not int top)
             {
                 return null;
+            }
+
+            if (_perfRows > 0 && y == top + LastRowBelowCursor)
+            {
+                return new OffPaneHit(null, PerfBarHit);
             }
 
             if (_toolbarRows > 0 && y == top + ToolbarRowBelowCursor)
@@ -1939,6 +1950,11 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         {
             if (_batch++ == 0 && _drawn)
             {
+                // One synchronized frame from the lift to the draw (2026-09-29, the user's report: the hint row, the
+                // toolbar and the performance bar flickered at every turn's end — the reply's commit is a batch, and its
+                // erase and redraw went out as dozens of writes with nothing holding them).
+                BeginSync();
+                _batchSync = true;
                 Lift();
             }
         }
@@ -1947,13 +1963,25 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         {
             lock (_gate)
             {
-                if (--_batch == 0 && _modal == 0)
+                if (--_batch == 0)
                 {
-                    Draw();
+                    if (_modal == 0)
+                    {
+                        Draw();
+                    }
+
+                    if (_batchSync)
+                    {
+                        _batchSync = false;
+                        EndSync();
+                    }
                 }
             }
         });
     }
+
+    // The outer batch opened a synchronized frame (it began drawn): its end closes it.
+    private bool _batchSync;
 
     /// <summary>
     /// A menu at the flow end: the pane is lifted, <paramref name="work"/> draws and reads keys on
@@ -1986,7 +2014,10 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
             {
                 if (--_modal == 0 && _batch == 0)
                 {
+                    // The pane back as one frame (2026-09-29); the lift above cannot be held — the work draws in between.
+                    BeginSync();
                     Draw();
+                    EndSync();
                 }
             }
         }
@@ -2385,6 +2416,11 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         lock (_gate)
         {
             _disposed = true;
+            while (_syncDepth > 0)
+            {
+                EndSync();   // nothing held past the pane's end
+            }
+
             LeaveAlternateLocked();
         }
 
@@ -3082,8 +3118,10 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     /// it (<see cref="ToolbarHitAt"/>). It answers under the busy row (the pane glyphs work under
     /// a reply, as the tally does) and while scrolled; false under an overlay (the row is off the
     /// pane there: a double-click is the overlay's dismiss, <see cref="TryHitOutside"/>, and
-    /// <see cref="OffPaneHitAt"/> names the part for the screen's switch), when no
-    /// toolbar is drawn, when the pane is lifted, or when the console cannot say where the cursor is.
+    /// <see cref="OffPaneHitAt"/> names the part for the screen's switch), when neither the
+    /// toolbar nor the performance bar is drawn, when the pane is lifted, or when the console cannot say where the cursor is.
+    /// The performance bar is the toolbar's blanks anywhere on it (<see cref="PerfBarHit"/>; 2026-09-29, the user's ask),
+    /// with the toolbar or without it.
     /// </summary>
     public bool TryHitToolbar(int x, int y, out ToolbarHit hit)
     {
@@ -3095,12 +3133,18 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
 
         lock (_gate)
         {
-            if (!_drawn || _drawnOverlay || _toolbarRows == 0 || _batch > 0 || _modal > 0 || _geometry?.CursorTop() is not int top)
+            if (!_drawn || _drawnOverlay || _toolbarRows + _perfRows == 0 || _batch > 0 || _modal > 0 || _geometry?.CursorTop() is not int top)
             {
                 return false;
             }
 
-            if (y != top + ToolbarRowBelowCursor)
+            if (_perfRows > 0 && y == top + LastRowBelowCursor)
+            {
+                hit = PerfBarHit;
+                return true;
+            }
+
+            if (_toolbarRows == 0 || y != top + ToolbarRowBelowCursor)
             {
                 return false;
             }
@@ -4474,25 +4518,35 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     /// <summary>The row <paramref name="down"/> rows under the cursor's written again by <paramref name="write"/>, the cursor back where it was.</summary>
     private void RedrawRow(int down, Action write)
     {
-        _inner.Cursor.Show(false);
-        _inner.Cursor.Move(CursorDirection.Down, down);
-        ColumnZero();
-        write();
-        _inner.Cursor.Move(CursorDirection.Up, down);
-        ColumnZero();
-        if (_drawnOverlay && !_drawnInput)
+        // One frame (2026-09-29): the cursor's hide, the trip down and back and the row itself.
+        BeginSync();
+        try
         {
-            return;
-        }
+            _inner.Cursor.Show(false);
+            _inner.Cursor.Move(CursorDirection.Down, down);
+            ColumnZero();
+            write();
+            _inner.Cursor.Move(CursorDirection.Up, down);
+            ColumnZero();
+            if (_drawnOverlay && !_drawnInput)
+            {
+                return;
+            }
 
-        _inner.Cursor.Move(CursorDirection.Right, TextCells.Width(InputLine.PromptGlyph) + _cursorCell);
-        _inner.Cursor.Show(true);
+            _inner.Cursor.Move(CursorDirection.Right, TextCells.Width(InputLine.PromptGlyph) + _cursorCell);
+            _inner.Cursor.Show(true);
+        }
+        finally
+        {
+            EndSync();
+        }
     }
 
     private void OnTick()
     {
         lock (_gate)
         {
+            CloseLeakedFrames();
             if (_disposed || !_drawn || _batch > 0 || _modal > 0)
             {
                 return;
@@ -4630,9 +4684,61 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
 
     private void ColumnZero() => _inner.Cursor.Move(CursorDirection.Left, Width);
 
-    private void BeginSync() => _inner.Write(SyncBegin);
+    /// <summary>
+    /// Where the pane's frames are held back and let go as one write (2026-09-29, the user's report of the rows flickering
+    /// at a turn's end): <see cref="FrameWriter"/> in the app, null (no holding) in the tests.
+    /// </summary>
+    public IFrameHold? Frames { get; set; }
 
-    private void EndSync() => _inner.Write(SyncEnd);
+    // How many synchronized frames are open (BeginSync/EndSync nest: a row rewritten inside a batch's frame).
+    private int _syncDepth;
+
+    /// <summary>
+    /// A synchronized frame's start: the output held (<see cref="Frames"/>) and, on the outermost, the terminal told to
+    /// hold its screen — a nested frame writes no code, since the terminal's end is not counted.
+    /// </summary>
+    private void BeginSync()
+    {
+        Frames?.Hold();
+        if (_syncDepth++ == 0)
+        {
+            _inner.Write(SyncBegin);
+        }
+    }
+
+    /// <summary>The matching end: the terminal's end on the outermost, then the held output let go.</summary>
+    private void EndSync()
+    {
+        if (_syncDepth == 0)
+        {
+            return;
+        }
+
+        if (--_syncDepth == 0)
+        {
+            _inner.Write(SyncEnd);
+        }
+
+        Frames?.Release();
+    }
+
+    /// <summary>
+    /// A frame left open by a draw that threw (2026-09-29): with no batch or modal running none should be, and a held
+    /// writer would keep everything from the screen from then on — closed here, on the tick.
+    /// </summary>
+    private void CloseLeakedFrames()
+    {
+        if (_syncDepth == 0 || _batch > 0 || _modal > 0)
+        {
+            return;
+        }
+
+        DiagnosticLog.Debug(Category, $"{_syncDepth} synchronized frame(s) left open; closed.");
+        while (_syncDepth > 0)
+        {
+            EndSync();
+        }
+    }
 
     /// <summary>At most <paramref name="cells"/> cells of <paramref name="text"/>, an ellipsis when cut. Pinned.</summary>
     public static string Fit(string text, int cells)
