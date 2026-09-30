@@ -989,6 +989,64 @@ public class AssistantTests
         Assert.Equal("Stopped after 1 tool iterations without a final answer.", Assert.IsType<TurnEvent.Notice>(events[^1]).Text);
     }
 
+    /// <summary>The botchat's cap (2026-09-30, the user's report): the last round trip is asked without the tools, and its words end the turn.</summary>
+    [Fact]
+    public async Task LastRoundAnswers_On_TheLastRoundTripOffersNoTools_AndItsWordsEndTheTurn()
+    {
+        var echo = new EchoTool();
+        var (client, _, assistant) = Build(new AIFunction[] { echo });
+        assistant.MaxToolIterations = 3;
+        assistant.LastRoundAnswers = true;
+        client.Enqueue(FakeChatClient.Call("c0", "echo", new Dictionary<string, object?> { ["text"] = "one" }));
+        client.Enqueue(FakeChatClient.Call("c1", "echo", new Dictionary<string, object?> { ["text"] = "two" }));
+        client.EnqueueText("My line.");
+
+        var events = await Run(assistant, "go");
+
+        Assert.Equal(3, client.Requests.Count);
+        Assert.Single(client.Options[0]!.Tools!);
+        Assert.Single(client.Options[1]!.Tools!);
+        Assert.Null(client.Options[2]!.Tools);
+        Assert.Equal(["one", "two"], echo.Received);
+        Assert.Equal("My line.", string.Concat(Deltas(events)));
+        Assert.DoesNotContain(events, e => e is TurnEvent.Notice { IsError: true });
+    }
+
+    /// <summary>A call written out as text in the round that asked for words is kept out of the reply and not run.</summary>
+    [Fact]
+    public async Task LastRoundAnswers_On_ACallWrittenAsTextInTheLastRound_IsDroppedAndNotRun()
+    {
+        var echo = new EchoTool();
+        var (client, _, assistant) = Build(new AIFunction[] { echo });
+        assistant.MaxToolIterations = 2;
+        assistant.LastRoundAnswers = true;
+        assistant.TextToolCalls = true;
+        client.Enqueue(FakeChatClient.Call("c0", "echo", new Dictionary<string, object?> { ["text"] = "one" }));
+        client.EnqueueText("Here. ", "echo(text=\"two\")", " Done.");
+
+        var events = await Run(assistant, "go");
+
+        Assert.Equal(2, client.Requests.Count);
+        Assert.Equal(["one"], echo.Received);
+        Assert.Single(events.OfType<TurnEvent.ToolCall>());
+        Assert.Equal("Here. Done.", string.Concat(Deltas(events)));
+        Assert.DoesNotContain(events, e => e is TurnEvent.Notice { IsError: true });
+    }
+
+    [Fact]
+    public async Task LastRoundAnswers_Off_TheLastRoundTripStillOffersTheTools()
+    {
+        var (client, _, assistant) = Build(new AIFunction[] { new EchoTool() });
+        assistant.MaxToolIterations = 2;
+        client.Enqueue(FakeChatClient.Call("c0", "echo", new Dictionary<string, object?> { ["text"] = "one" }));
+        client.Enqueue(FakeChatClient.Call("c1", "echo", new Dictionary<string, object?> { ["text"] = "two" }));
+
+        var events = await Run(assistant, "go");
+
+        Assert.Single(client.Options[1]!.Tools!);
+        Assert.Equal("Stopped after 2 tool iterations without a final answer.", Assert.IsType<TurnEvent.Notice>(events[^1]).Text);
+    }
+
     [Fact]
     public async Task ClientFailsMidStream_CommitsPartialText_AndNotices_WithoutThrowing()
     {

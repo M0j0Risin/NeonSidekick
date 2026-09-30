@@ -544,6 +544,15 @@ public sealed class Assistant
     public bool TextToolCalls { get; set; }
 
     /// <summary>
+    /// Whether the last round trip <see cref="MaxToolIterations"/> allows is asked without the tools, so the model must answer in
+    /// words (2026-09-30, the user's report: a <c>/botchat</c> bot a few turns in spent all three of its round trips on
+    /// <c>generate_image</c> and the chat showed "Stopped after 3 tool iterations without a final answer" in place of its line).
+    /// A call the model still writes out as text in that round is kept out of the reply (<see cref="TextToolCalls"/>) but not run.
+    /// Off by default and on for botchat alone: the main chat's cap keeps its meaning, the loop's guard against a runaway.
+    /// </summary>
+    public bool LastRoundAnswers { get; set; }
+
+    /// <summary>
     /// The context window the tool loop measures a request's usage against (<see cref="WindowTokens"/>,
     /// the figure behind <c>/usage</c>), the share of it that trips the guard (<see cref="Percent"/>,
     /// the setting <c>LLM auto compact (%)</c>; 0 = never) and what the loop then does (<see cref="Mode"/>,
@@ -1030,14 +1039,25 @@ public sealed class Assistant
             cancellationToken.ThrowIfCancellationRequested();
             var request = _history.BuildRequest();
             log.Requests++;
-            DiagnosticLog.Debug(Category, RequestLogLine(iteration, request.Count, _tools.Count, _reasoning));
+
+            // The last round trip without the tools, when the turn asks for it (LastRoundAnswers, 2026-09-30).
+            bool answerRound = LastRoundAnswers && iteration == MaxToolIterations && _tools.Count > 0;
+            var roundOptions = options;
+            if (answerRound)
+            {
+                roundOptions = options.Clone();
+                roundOptions.Tools = null;
+                DiagnosticLog.Debug(Category, LastRoundLogLine(iteration));
+            }
+
+            DiagnosticLog.Debug(Category, RequestLogLine(iteration, request.Count, answerRound ? 0 : _tools.Count, _reasoning));
 
             // Only MoveNextAsync sits inside the try: C# forbids `yield` inside a try with a catch.
             // The meter's try is a finally alone, so it may: the caller abandoning the turn mid-yield still ends the count.
             Meter?.Begin();
             try
             {
-                await using (var stream = _client.GetStreamingResponseAsync(request, options, cancellationToken).GetAsyncEnumerator(cancellationToken))
+                await using (var stream = _client.GetStreamingResponseAsync(request, roundOptions, cancellationToken).GetAsyncEnumerator(cancellationToken))
                 {
                     while (true)
                     {
@@ -1188,7 +1208,15 @@ public sealed class Assistant
             {
                 // The written calls go into the history as real ones, the reply's text without them, so the model sees what ran.
                 ReplaceText(response.Messages, partial.ToString());
-                AddWrittenCalls(response.Messages, written.Calls, iteration);
+                if (answerRound)
+                {
+                    // The round asked for words (LastRoundAnswers): the written calls stay out of the reply, and are not run.
+                    DiagnosticLog.Info(Category, LastRoundTextCallsNote);
+                }
+                else
+                {
+                    AddWrittenCalls(response.Messages, written.Calls, iteration);
+                }
             }
 
             foreach (var message in response.Messages)
@@ -1623,6 +1651,13 @@ public sealed class Assistant
     /// </summary>
     /// <summary>The <c>--log</c> line when a call written as text never closed and was dropped (2026-09-25).</summary>
     internal const string TextCallBrokenNote = "The model wrote a tool call out as text and never closed it; it was dropped from the reply.";
+
+    /// <summary>The <c>--log</c> line when the last round trip is asked without the tools (<see cref="LastRoundAnswers"/>, 2026-09-30).</summary>
+    internal static string LastRoundLogLine(int iteration) =>
+        "Round trip " + iteration.ToString(CultureInfo.InvariantCulture) + " is the turn's last: asked without the tools, for an answer.";
+
+    /// <summary>The <c>--log</c> line when the model wrote a tool call as text in the round that asked for words (2026-09-30).</summary>
+    internal const string LastRoundTextCallsNote = "The model wrote a tool call out as text in the round asked for an answer; it was dropped from the reply and not run.";
 
     /// <summary>A tool schema's parameter names (its <c>properties</c>), for the written call's line form (later on 2026-09-25); none when it has none.</summary>
     internal static IReadOnlyList<string> ParameterNames(System.Text.Json.JsonElement schema) =>

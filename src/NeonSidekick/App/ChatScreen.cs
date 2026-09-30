@@ -10443,6 +10443,10 @@ internal sealed partial class ChatScreen
                     assistant.MaxToolIterations = imageTool is null ? BotSkillToolIterations : BotImageToolIterations + BotSkillToolIterations - 1;
                 }
 
+                // The last of those round trips asks for the bot's words without the tools (2026-09-30, the user's report: a bot
+                // a few turns in spent all three on pictures and its line came out as "Stopped after 3 tool iterations").
+                assistant.LastRoundAnswers = imageTool is not null || skillTool is not null;
+
                 DiagnosticLog.Info(AppCategory, BotChat.TurnLogLine(replies + 1, bot.Name));
                 int turnId = ladder.BeginBot();
                 // Async off (later on 2026-09-25): the reply is written unseen, its picture made, then both shown — picture first.
