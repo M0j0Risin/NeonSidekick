@@ -56,11 +56,14 @@ public sealed record LlamaLaunch(
 /// <item><c>--fit-target &lt;MiB&gt;</c> (later on 2026-09-29, the user's ask: "a maximum VRAM budget, like 92%"): the margin
 /// llama.cpp's fit — <c>--fit on</c>, the default in b11258 — leaves free on each device, 1024 MiB unless given; a budget
 /// of <i>p</i> % of the biggest adapter's dedicated memory is a margin of (100 − <i>p</i>) % of it
-/// (<see cref="EmbeddedVramBudget.FitTargetMiB"/>). Fit moves only what was left unset — <c>-c 0</c> (the context shrinks
-/// first, down to <c>--fit-ctx</c>'s 4096: the build's log says "entire model can be fit by reducing context", and "context
-/// size set by user to N -> no change" for any other <c>-c</c>) and <c>-ngl auto</c> — so a set context and layer count
-/// change nothing. It measures free memory at the start: what other programs take later is not held back. Not passed on
-/// the CPU backend.</item>
+/// (<see cref="EmbeddedVramBudget.FitTargetMiB"/>). Fit moves only what was left unset — an omitted <c>-c</c> (the context
+/// shrinks first, down to <c>--fit-ctx</c>'s 4096) and <c>-ngl auto</c> — so a set context and layer count change nothing.
+/// It measures free memory at the start: what other programs take later is not held back. Not passed on the CPU backend.</item>
+/// <item><c>-c</c> only for a set context (2026-09-30, the user's report: context fit ran at a ninth of the speed). An
+/// Embedded context size of 0 omits it: llama.cpp reads <c>-c 0</c> as a context the user set — the model's whole window
+/// — so fit could not shrink it and moved layers to the CPU instead. Measured that day on an RTX 5090 with Qwen3.8 27B
+/// NVFP4: <c>-c 0</c> took 262144 tokens with 51 of the layers on the GPU and ran at 12 tokens/s; no <c>-c</c> fitted
+/// 113152 tokens (84992 under a 91 % budget) with every layer on the GPU at ~107–111 tokens/s, as <c>-c 32768</c> ran.</item>
 /// </list>
 /// </summary>
 public static class LlamaArguments
@@ -97,9 +100,15 @@ public static class LlamaArguments
             "--port", port.ToString(CultureInfo.InvariantCulture),
             "--api-key", apiKey,
             "--jinja",
-            "-c", launch.ContextSize.ToString(CultureInfo.InvariantCulture),
-            "-ngl", launch.GpuLayers,
         ]);
+        if (launch.ContextSize > 0)
+        {
+            args.Add("-c");
+            args.Add(launch.ContextSize.ToString(CultureInfo.InvariantCulture));
+        }
+
+        args.Add("-ngl");
+        args.Add(launch.GpuLayers);
         if (launch.FitTargetMiB is { } fit)
         {
             args.Add("--fit-target");
@@ -151,8 +160,9 @@ public static class EmbeddedGpuLayers
 
 /// <summary>
 /// The <c>Embedded context size</c> setting's range (2026-09-29): 0 to fit — the largest context the VRAM budget holds, from
-/// the model's own window down to 4096 (llama.cpp's fit takes <c>-c 0</c> as unset; "the model's own" until later on
-/// 2026-09-29, when the user asked for the context to shrink to a budget) — else 512 to 262144 tokens.
+/// the model's own window down to 4096 (<c>-c</c> left out, which llama.cpp's fit sizes; <c>-c 0</c> until 2026-09-30, which it
+/// reads as the model's whole window; "the model's own" until later on 2026-09-29, when the user asked for the context to
+/// shrink to a budget) — else 512 to 262144 tokens.
 /// </summary>
 public static class EmbeddedContextSize
 {

@@ -319,7 +319,7 @@ public class EmbeddedLlmCoreTests
     {
         var args = LlamaArguments.Build(Launch(mmproj: null, context: 0, layers: "all"), 1, "k");
         Assert.DoesNotContain("--mmproj", args);
-        Assert.Equal("0", args[args.ToList().IndexOf("-c") + 1]);
+        Assert.DoesNotContain("-c", args);   // fit (2026-09-30): -c left out, since llama.cpp reads -c 0 as the model's whole window
         Assert.Equal("all", args[args.ToList().IndexOf("-ngl") + 1]);
         Assert.False(Launch(mmproj: null).Vision);
         Assert.True(Launch().Vision);

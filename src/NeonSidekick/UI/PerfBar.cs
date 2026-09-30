@@ -17,7 +17,7 @@ public sealed record PerfRow(IReadOnlyList<PerfSegment> Segments)
 /// <summary>
 /// The performance bar's row (2026-09-29, the user's ask: a third bar under the toolbar with CPU %, RAM %, GPU % and VRAM %,
 /// in four looks — "let's do all of them"): <see cref="PerfBarStyle.Text"/> writes each meter's label and value;
-/// <see cref="PerfBarStyle.Gauge"/> draws a bar in eighth-block steps; <see cref="PerfBarStyle.Spark"/> the last
+/// <see cref="PerfBarStyle.Gauge"/> draws a heavy line in half-cell steps (eighth blocks, a cell tall, until 2026-09-30); <see cref="PerfBarStyle.Spark"/> the last
 /// <see cref="PerfSampler.HistoryLength"/> readings as a sparkline; <see cref="PerfBarStyle.Led"/> ten segments lit along the
 /// theme's gradient. Values and the gauge's and sparkline's cells take the load's colour (<see cref="LoadColor"/>); labels,
 /// separators and unlit cells are dim. Spectre's own charts (<c>BarChart</c>, <c>BreakdownChart</c>) are several rows of
@@ -69,14 +69,14 @@ public static class PerfBar
     /// <summary>The load's colour: <see cref="Theme.Good"/> under <see cref="GoodBelow"/>, <see cref="Theme.Warn"/> under <see cref="WarnBelow"/>, else <see cref="Theme.Bad"/>.</summary>
     public static Color LoadColor(double percent) => percent < GoodBelow ? Theme.Good : percent < WarnBelow ? Theme.Warn : Theme.Bad;
 
-    /// <summary>The eighth-block bar for <paramref name="percent"/> in <paramref name="cells"/> cells: the filled part, then the track. Pinned.</summary>
+    /// <summary>The heavy-line bar for <paramref name="percent"/> in <paramref name="cells"/> cells, in half-cell steps: the filled part, then the track. Pinned.</summary>
     public static (string Filled, string Track) Gauge(double percent, int cells)
     {
-        int eighths = (int)Math.Round(PerfMath.Clamp(percent) / 100 * cells * 8, MidpointRounding.AwayFromZero);
-        int whole = eighths / 8;
-        int part = eighths % 8;
-        string filled = string.Concat(Enumerable.Repeat(PerfText.GaugeFull, whole)) + (part > 0 ? PerfText.GaugeEighths[part - 1] : "");
-        int used = whole + (part > 0 ? 1 : 0);
+        int halves = (int)Math.Round(PerfMath.Clamp(percent) / 100 * cells * 2, MidpointRounding.AwayFromZero);
+        int whole = halves / 2;
+        bool half = halves % 2 == 1;
+        string filled = string.Concat(Enumerable.Repeat(PerfText.GaugeFull, whole)) + (half ? PerfText.GaugeHalf : "");
+        int used = whole + (half ? 1 : 0);
         return (filled, string.Concat(Enumerable.Repeat(PerfText.GaugeTrack, cells - used)));
     }
 

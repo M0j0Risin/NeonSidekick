@@ -247,17 +247,19 @@ public class PerfBarTests
     }
 
     [Fact]
-    public void Gauge_FillsInEighths_TheTrackDim()
+    public void Gauge_FillsInHalves_TheTrackDim()
     {
-        Assert.Equal(("███▍", "░░░░░░"), PerfBar.Gauge(34, 10));
-        Assert.Equal(("", "░░░░░░░░░░"), PerfBar.Gauge(0, 10));
-        Assert.Equal(("██████████", ""), PerfBar.Gauge(100, 10));
-        Assert.Equal(("▏", "░░░░░░░░░"), PerfBar.Gauge(1.25, 10));
+        // A heavy line no taller than the labels (2026-09-30, the user's ask), in half-cell steps.
+        Assert.Equal(("━━━╸", "──────"), PerfBar.Gauge(34, 10));
+        Assert.Equal(("", "──────────"), PerfBar.Gauge(0, 10));
+        Assert.Equal(("━━━━━━━━━━", ""), PerfBar.Gauge(100, 10));
+        Assert.Equal(("", "──────────"), PerfBar.Gauge(1.25, 10));
+        Assert.Equal(("╸", "─────────"), PerfBar.Gauge(5, 10));
 
         var row = PerfBar.Render(PerfBarStyle.Gauge, Reading, [], 120)!;
-        Assert.Equal(Centered("CPU ███▍░░░░░░  34%   RAM ██████▎░░░  62%   GPU █▊░░░░░░░░  18%   VRAM █████████▏  91%", 120), row.Text);
-        Assert.Equal(new Style(Theme.Bad), row.Segments.Single(s => s.Text == "█████████▏").Style);
-        Assert.Equal(Theme.DimText, row.Segments.Single(s => s.Text == "░░░░░░").Style);
+        Assert.Equal(Centered("CPU ━━━╸──────  34%   RAM ━━━━━━────  62%   GPU ━━────────  18%   VRAM ━━━━━━━━━─  91%", 120), row.Text);
+        Assert.Equal(new Style(Theme.Bad), row.Segments.Single(s => s.Text == "━━━━━━━━━").Style);
+        Assert.Equal(Theme.DimText, row.Segments.Single(s => s.Text == "──────").Style);
     }
 
     [Fact]

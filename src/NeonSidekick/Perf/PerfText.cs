@@ -32,13 +32,17 @@ public static class PerfText
     /// <summary>Between two meters of the drawn looks (gauge, spark, led).</summary>
     public const string MeterSeparator = "   ";
 
-    /// <summary>The gauge's eighth blocks, one eighth to seven; a whole cell is <see cref="GaugeFull"/>.</summary>
-    public static readonly string[] GaugeEighths = ["▏", "▎", "▍", "▌", "▋", "▊", "▉"];
+    /// <summary>
+    /// A whole cell of the gauge: a heavy line through the row's middle (2026-09-30, the user's ask: the gauge no taller than its
+    /// labels; full blocks, <c>█</c> and the eighths <c>▏</c>–<c>▉</c> over a <c>░</c> track, filled the cell top to bottom until then).
+    /// </summary>
+    public const string GaugeFull = "━";
 
-    public const string GaugeFull = "█";
+    /// <summary>Half a cell of the gauge: the heavy line's left half. No shorter glyph fills in eighths, so the gauge steps in halves.</summary>
+    public const string GaugeHalf = "╸";
 
-    /// <summary>The gauge's unfilled cells, dim.</summary>
-    public const string GaugeTrack = "░";
+    /// <summary>The gauge's unfilled cells, a light line, dim.</summary>
+    public const string GaugeTrack = "─";
 
     /// <summary>The sparkline's eight heights, lowest first.</summary>
     public static readonly string[] SparkLevels = ["▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"];

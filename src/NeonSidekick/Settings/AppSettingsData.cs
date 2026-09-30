@@ -1720,7 +1720,8 @@ public sealed class AppSettingsData
     /// <summary>
     /// The embedded server's context window in tokens (2026-09-29): 0 to fit — the largest context the GPU holds beside the
     /// model within <see cref="EmbeddedVramBudget"/>, from the model's own window (Gemma 4 E2B/E4B: 128K) down to 4096, as
-    /// llama.cpp's fit sizes an unset <c>-c</c> ("the model's own" until later on 2026-09-29) — else
+    /// llama.cpp's fit sizes an unset <c>-c</c> (left out since 2026-09-30: <c>-c 0</c> read as the model's whole window, and
+    /// fit moved layers to the CPU instead, a ninth of the speed; "the model's own" until later on 2026-09-29) — else
     /// <see cref="EmbeddedLlm.EmbeddedContextSize.Min"/> to <see cref="EmbeddedLlm.EmbeddedContextSize.Max"/>, which fit never
     /// shrinks. Fit by default since later on 2026-09-29 (the user's call; 32768 until then, which a profile that saved it keeps).
     /// Variable <see cref="EnvironmentOverrides.EmbeddedContextVariable"/>.
@@ -1738,8 +1739,9 @@ public sealed class AppSettingsData
     /// VRAM budget, like 92%"): 0 is off (the default: llama.cpp's fit leaves 1 GiB free per device), else
     /// <see cref="EmbeddedLlm.EmbeddedVramBudget.Min"/> to <see cref="EmbeddedLlm.EmbeddedVramBudget.Max"/> % of the adapter
     /// with the most memory — the rest, passed as <c>--fit-target</c>, is left free. It sizes only what fit may: an
-    /// <see cref="EmbeddedContextSize"/> of 0 and <see cref="EmbeddedGpuLayers"/> <c>auto</c>. CUDA and Vulkan only; a change
-    /// restarts the server. No variable.
+    /// <see cref="EmbeddedContextSize"/> of 0 and <see cref="EmbeddedGpuLayers"/> <c>auto</c>; with a set context that does not fit
+    /// under it, fit's one lever is the layers, which then go to the CPU, slowly. CUDA and Vulkan only; a change restarts the
+    /// server. No variable.
     /// </summary>
     public int EmbeddedVramBudget { get; set; } = EmbeddedLlm.EmbeddedVramBudget.Off;
 
