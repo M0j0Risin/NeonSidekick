@@ -117,7 +117,9 @@ public sealed class LoadSkillTool : AIFunction
 
     /// <summary>
     /// The transcript's one dim line for a result: <c>loaded skill 'x' (1,234 characters)</c>,
-    /// <c>read references/a.md of skill 'x'</c>, or the error sentence as it is. Pinned.
+    /// <c>read references/a.md of skill 'x'</c>, <c>skill 'x' already loaded (preloaded)</c> (2026-09-30, code review: the
+    /// <see cref="SkillText.AlreadyLoaded"/> sentence is written to the model, and was shown word for word), or the error
+    /// sentence as it is. Pinned.
     /// </summary>
     public static string Note(string result)
     {
@@ -137,6 +139,11 @@ public sealed class LoadSkillTool : AIFunction
             int at = result.IndexOf(path, StringComparison.Ordinal);
             string relative = at < 0 ? "" : Attribute(result, at + path.Length);
             return $"read {relative} of skill '{name}'";
+        }
+
+        if (SkillText.IsAlreadyLoaded(result, out string already))
+        {
+            return SkillText.AlreadyLoadedNote(already);
         }
 
         return result;

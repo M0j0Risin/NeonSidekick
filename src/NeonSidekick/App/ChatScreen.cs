@@ -10373,6 +10373,10 @@ internal sealed partial class ChatScreen
         var pacer = new BotPicturePacer(_time);
         // The preloaded skills' notice as last shown (2026-09-27): shown again only when the set or the mode changes.
         string preloadedTold = "";
+        // The load_skill that knows the preloaded skills (2026-09-30, code review): kept while the preloaded set is unchanged, so a
+        // reply does not build a tool and parse its schema again; built only once a side is offered it.
+        LoadSkillTool? preloadedLoader = null;
+        IReadOnlyList<string> preloadedLoaderNames = [];
         // ESC's ladder (2026-09-25): the voice, then the bot replying, then the chat.
         var ladder = new BotEscLadder();
         _botNoWorkflowTold = false;
@@ -10417,7 +10421,15 @@ internal sealed partial class ChatScreen
                 // Asked for it anyway (2026-09-30, code review: the writer's directive names the skill the topic names, the one
                 // preloaded), that side's load_skill answers it is loaded already; prompt-writer-only's bots, without it, load it.
                 var writerSkills = BotChat.WithoutPreloaded(catalog, preloadedNames);
-                var preloadedTool = loadTool is null || preloadedNames.Count == 0 ? loadTool : new LoadSkillTool(_catalog, preloadedNames);
+                // Only a side left with a skill to load is offered the tool, and with none preloaded the plain one does.
+                if (writerSkills is not null && loadTool is not null && preloadedNames.Count > 0
+                    && (preloadedLoader is null || !preloadedLoaderNames.SequenceEqual(preloadedNames, StringComparer.OrdinalIgnoreCase)))
+                {
+                    preloadedLoader = new LoadSkillTool(_catalog, preloadedNames);
+                    preloadedLoaderNames = preloadedNames;
+                }
+
+                var preloadedTool = loadTool is null || preloadedNames.Count == 0 ? loadTool : preloadedLoader;
                 var botSkills = new BotSkillSet(writerSkills, writerSkills is null ? null : preloadedTool, preloaded);
                 bool botsPreloaded = skillMode == BotSkillMode.PromptWriterAndBots;
                 var skills = botsPreloaded ? writerSkills : catalog;
@@ -11030,44 +11042,39 @@ internal sealed partial class ChatScreen
     /// The image prompt's side request (2026-09-25), with <paramref name="skillTool"/> (2026-09-27, <c>Botchat skills enabled</c>)
     /// a short loop — SkillLearner's shape: up to <see cref="BotPromptSkillIterations"/> requests offering <c>load_skill</c>, each
     /// call run and answered, then one with no tool at all should the cap be reached, so an answer always comes. The text of the
-    /// last response, a call written in it taken out (<see cref="WithoutWrittenCalls"/>); each skill loaded is added to
-    /// <paramref name="loaded"/> as its transcript line (<see cref="LoadSkillTool.Note"/>). A call written as text in a round that
-    /// offers <c>load_skill</c> (2026-09-30, code review: a server with no tool-call parser, or markup it did not convert) runs as
-    /// a real one, as a bot's does (<see cref="Assistant.AddWrittenCalls"/>): before, it was taken out and the empty rest was the prompt.
+    /// last response; each skill loaded is added to <paramref name="loaded"/> as its transcript line (<see cref="LoadSkillTool.Note"/>).
+    /// <para>A call written out as text (2026-09-30) is caught by <see cref="Assistant.RequestAsync"/>'s <c>textToolCalls</c>, the
+    /// turn's own handling since the code review (this loop had a copy of it, which missed a written call beside a native one and
+    /// hard-coded <c>load_skill</c>'s parameter names): in a round that offers <c>load_skill</c> it runs as a real call, as a bot's
+    /// does — before, it was taken out and the empty rest was the prompt — and in the last round it is only taken out, so
+    /// <c>&lt;tool_call&gt;</c> markup a Qwen-style model writes there is never the ComfyUI prompt. A call to a tool the writer is
+    /// not offered runs too, and is answered <c>Error: unknown tool</c>, as a native one is: taken out instead, a writer whose
+    /// only answer was markup would have an empty prompt at once, where told the tool is not there it may still write one.</para>
+    /// <para>Words beside calls that loaded nothing new (2026-09-30, code review: a preloaded skill asked for again is answered
+    /// <see cref="SkillText.AlreadyLoaded"/>) are the prompt: they were written with the skill already in the prompt, and asking
+    /// again only costs a round trip and risks an empty answer. Words beside a load that brought content are a guess made before
+    /// it, so the writer is asked again.</para>
     /// </summary>
     private static async Task<string> WriteBotPicturePromptAsync(Assistant assistant, List<ChatMessage> request, AIFunction? skillTool, List<string> loaded, CancellationToken cancellationToken)
     {
         IReadOnlyList<AIFunction> tools = skillTool is null ? [] : [skillTool];
         for (int iteration = 1; tools.Count > 0 && iteration <= BotPromptSkillIterations; iteration++)
         {
-            var response = await assistant.RequestAsync(request, tools, ReasoningEffort.None, cancellationToken).ConfigureAwait(false);
-            var messages = response.Messages.ToList();
-            var calls = response.Calls;
-            if (calls.Count == 0)
+            var response = await assistant.RequestAsync(request, tools, ReasoningEffort.None, cancellationToken, textToolCalls: tools).ConfigureAwait(false);
+            if (response.Calls.Count == 0)
             {
-                var (text, written) = WrittenCalls(response.Text);
-                if (written.Count == 0)
-                {
-                    return text;
-                }
-
-                Assistant.ReplaceText(messages, text);
-                Assistant.AddWrittenCalls(messages, written, iteration);
-                calls = messages.SelectMany(m => m.Contents).OfType<FunctionCallContent>().ToList();
-                if (calls.Count == 0)
-                {
-                    // None of them parsed: the words beside them are the answer.
-                    return text;
-                }
+                return response.Text;
             }
 
-            request.AddRange(messages);
-            var results = new List<AIContent>(calls.Count);
-            foreach (var call in calls)
+            request.AddRange(response.Messages);
+            var results = new List<AIContent>(response.Calls.Count);
+            bool nothingNew = true;
+            foreach (var call in response.Calls)
             {
                 DiagnosticLog.Debug(AppCategory, "Botchat image prompt " + Assistant.ToolCallLogLine(call.Name, Assistant.SerializeArguments(call.Arguments)));
                 var (text, _) = await Assistant.InvokeToolAsync(tools, call, cancellationToken).ConfigureAwait(false);
                 results.Add(Assistant.ResultContent(call, text));
+                nothingNew &= SkillText.IsAlreadyLoaded(text, out _);
                 if (string.Equals(call.Name, LoadSkillTool.ToolName, StringComparison.Ordinal))
                 {
                     loaded.Add(LoadSkillTool.Note(text));
@@ -11075,28 +11082,13 @@ internal sealed partial class ChatScreen
             }
 
             request.Add(new ChatMessage(ChatRole.Tool, results));
+            if (nothingNew && response.Text.Length > 0)
+            {
+                return response.Text;
+            }
         }
 
-        return WithoutWrittenCalls((await assistant.RequestAsync(request, [], ReasoningEffort.None, cancellationToken).ConfigureAwait(false)).Text);
-    }
-
-    /// <summary>
-    /// The image prompt writer's text less any call written out in it (2026-09-30): its last request goes without tools, and a
-    /// Qwen-style model still writes <c>&lt;tool_call&gt;</c> markup there, which the server leaves as text — before, that markup
-    /// became the ComfyUI prompt. Neither run nor kept; with nothing else written the prompt is empty (no picture, its notice).
-    /// </summary>
-    internal static string WithoutWrittenCalls(string text) => WrittenCalls(text).Text;
-
-    /// <summary>
-    /// The image prompt writer's text split into the words and the calls written out in it (2026-09-30, code review): every
-    /// form <see cref="TextToolCallFilter"/> knows, the line form (<c>load_skill name: pony-prompts</c>) included — it needs
-    /// <c>load_skill</c>'s parameter names, which the names-only filter before did not have, so that line became the prompt.
-    /// </summary>
-    internal static (string Text, IReadOnlyList<(string Name, string Arguments)> Calls) WrittenCalls(string text)
-    {
-        var filter = new TextToolCallFilter([(LoadSkillTool.ToolName, (IReadOnlyList<string>)[LoadSkillTool.NameArgument, LoadSkillTool.FileArgument])]);
-        string kept = filter.Push(text) + filter.Flush();
-        return (kept, filter.Calls);
+        return (await assistant.RequestAsync(request, [], ReasoningEffort.None, cancellationToken, textToolCalls: tools).ConfigureAwait(false)).Text;
     }
 
     /// <summary>

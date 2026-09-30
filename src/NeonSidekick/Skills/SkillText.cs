@@ -90,7 +90,27 @@ public static class SkillText
     /// <c>load_skill</c>'s answer for a skill whose content the prompt already carries (2026-09-30, code review: a <c>/botchat</c>
     /// preloaded skill, <see cref="Llm.Tools.LoadSkillTool"/>'s <c>preloaded</c>): no content again, a sentence saying where it is.
     /// </summary>
-    public static string AlreadyLoaded(string name) => $"Skill '{name.Trim()}' is already loaded: its instructions are in your system prompt; follow them from there.";
+    public static string AlreadyLoaded(string name) => AlreadyLoadedOpen + name.Trim() + AlreadyLoadedClose;
+
+    private const string AlreadyLoadedOpen = "Skill '";
+    private const string AlreadyLoadedClose = "' is already loaded: its instructions are in your system prompt; follow them from there.";
+
+    /// <summary>
+    /// Whether <paramref name="result"/> is an <see cref="AlreadyLoaded"/> answer, and for which skill (2026-09-30, code review):
+    /// the sentence is the model's, so the transcript shows <see cref="AlreadyLoadedNote"/> instead, and the picture writer knows
+    /// a call of it brought nothing new.
+    /// </summary>
+    public static bool IsAlreadyLoaded(string result, out string name)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+        bool matches = result.StartsWith(AlreadyLoadedOpen, StringComparison.Ordinal) && result.EndsWith(AlreadyLoadedClose, StringComparison.Ordinal)
+            && result.Length > AlreadyLoadedOpen.Length + AlreadyLoadedClose.Length;
+        name = matches ? result[AlreadyLoadedOpen.Length..^AlreadyLoadedClose.Length] : "";
+        return matches;
+    }
+
+    /// <summary>The transcript's dim line for an <see cref="AlreadyLoaded"/> answer (2026-09-30, code review): <c>skill 'x' already loaded (preloaded)</c>.</summary>
+    public static string AlreadyLoadedNote(string name) => $"skill '{name}' already loaded (preloaded)";
 
     public static string NoName => "Error: name is empty; pass the name of a skill from the list";
 

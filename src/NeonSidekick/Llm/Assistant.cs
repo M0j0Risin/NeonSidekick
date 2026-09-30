@@ -1024,7 +1024,7 @@ public sealed class Assistant
             // A <think> block streamed as content (2026-09-28): kept, so the history carries it as thinking like the server's own.
             var tagThinking = new StringBuilder();
             // After the think filter: a call written as text, caught when the turn asks for it and offers tools.
-            var written = TextToolCalls && _tools.Count > 0 ? new TextToolCallFilter(_tools.Select(t => (t.Name, ParameterNames(t.JsonSchema)))) : null;
+            var written = TextToolCalls && _tools.Count > 0 ? WrittenCallFilter(_tools) : null;
             Exception? failure = null;
             bool cancelled = false;
 
@@ -1204,19 +1204,10 @@ public sealed class Assistant
                 }
             }
 
-            if (written is not null && (written.Calls.Count > 0 || written.SawBroken))
+            if (written is not null)
             {
-                // The written calls go into the history as real ones, the reply's text without them, so the model sees what ran.
-                ReplaceText(response.Messages, partial.ToString());
-                if (answerRound)
-                {
-                    // The round asked for words (LastRoundAnswers): the written calls stay out of the reply, and are not run.
-                    DiagnosticLog.Info(Category, LastRoundTextCallsNote);
-                }
-                else
-                {
-                    AddWrittenCalls(response.Messages, written.Calls, iteration);
-                }
+                // The round that asked for words (LastRoundAnswers) keeps its written calls out of the reply and does not run them.
+                TakeWrittenCalls(response.Messages, partial.ToString(), written, run: !answerRound, iteration);
             }
 
             foreach (var message in response.Messages)
@@ -1588,8 +1579,14 @@ public sealed class Assistant
     /// failures and cancellation propagate; the caller explains them. A null <paramref name="effort"/> sends none, as the turn
     /// does for a reasoning left unset, and <paramref name="format"/> is the request's <c>response_format</c> (2026-09-28, for
     /// <c>/test</c>'s structured-output tests: a JSON schema the adapter writes as <c>json_schema</c>); null asks for none.
+    /// <para><paramref name="textToolCalls"/> (2026-09-30, code review: the <c>/botchat</c> picture writer had its own copy of the
+    /// turn's handling, already short of it) is <see cref="TextToolCalls"/> for a side loop: the tools whose calls written out as
+    /// text are caught (<see cref="WrittenCallFilter"/>; null, the default, catches none). They are kept out of <see cref="SideResponse.Text"/>
+    /// and the messages, and in a request that offers tools become real calls in <see cref="SideResponse.Calls"/>, beside any
+    /// native ones — the turn's rule; in one that offers none, the answer round, they are only taken out. The main chat's side
+    /// loops leave it off, as its turn does: a reply that shows a call as an example would otherwise run it.</para>
     /// </summary>
-    public async Task<SideResponse> RequestAsync(IReadOnlyList<ChatMessage> request, IReadOnlyList<AIFunction> tools, ReasoningEffort? effort, CancellationToken cancellationToken, ChatResponseFormat? format = null)
+    public async Task<SideResponse> RequestAsync(IReadOnlyList<ChatMessage> request, IReadOnlyList<AIFunction> tools, ReasoningEffort? effort, CancellationToken cancellationToken, ChatResponseFormat? format = null, IReadOnlyList<AIFunction>? textToolCalls = null)
     {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(tools);
@@ -1624,6 +1621,23 @@ public sealed class Assistant
         if (filter.SawOrphanClose || filter.SawBlock)
         {
             ReplaceText(response.Messages, text.ToString());
+        }
+
+        if (textToolCalls is not null)
+        {
+            var written = WrittenCallFilter(textToolCalls);
+            string kept = written.Push(text.ToString()) + written.Flush();
+            if (written.SawBroken)
+            {
+                DiagnosticLog.Info(Category, TextCallBrokenNote);
+            }
+
+            // The ids' round: one past the assistant messages already in the request, so a later round's never repeat an earlier's.
+            int round = request.Count(m => m.Role == ChatRole.Assistant) + 1;
+            if (TakeWrittenCalls(response.Messages, kept, written, run: tools.Count > 0, round))
+            {
+                text.Clear().Append(kept);
+            }
         }
 
         var usage = TokenUsage.Zero;
@@ -1668,6 +1682,42 @@ public sealed class Assistant
     /// <summary>The <c>--log</c> line for a call the model wrote out as text (2026-09-25): <c>Text tool call generate_image: prompt="…"</c>, cut like <see cref="ToolCallLogLine"/>.</summary>
     internal static string TextCallLogLine(string name, string arguments) =>
         "Text tool call " + name + ": " + (arguments.Length <= ToolCallLogChars ? arguments : arguments[..(ToolCallLogChars - 1)] + "…");
+
+    /// <summary>
+    /// The filter for calls to <paramref name="tools"/> written out as text, each with its schema's parameter names for the line
+    /// form (2026-09-30, code review: built here once, for the turn and <see cref="RequestAsync"/> alike — the picture writer's own
+    /// copy had hard-coded <c>load_skill</c>'s names).
+    /// </summary>
+    internal static TextToolCallFilter WrittenCallFilter(IEnumerable<AIFunction> tools) =>
+        new(tools.Select(t => (t.Name, ParameterNames(t.JsonSchema))));
+
+    /// <summary>
+    /// A response's written calls, once <paramref name="written"/> has seen all its text (2026-09-30, shared by the turn and
+    /// <see cref="RequestAsync"/>): with a call caught or a broken one dropped, the messages' text becomes <paramref name="kept"/>
+    /// — the history then carries no markup to prime the model with — and, when <paramref name="run"/>, the calls are added as real
+    /// ones (<see cref="AddWrittenCalls"/>) beside any native calls; otherwise they are only logged as not run. False when the text
+    /// held nothing to take.
+    /// </summary>
+    internal static bool TakeWrittenCalls(IList<ChatMessage> messages, string kept, TextToolCallFilter written, bool run, int iteration)
+    {
+        if (written.Calls.Count == 0 && !written.SawBroken)
+        {
+            return false;
+        }
+
+        // The written calls go into the history as real ones, the reply's text without them, so the model sees what ran.
+        ReplaceText(messages, kept);
+        if (run)
+        {
+            AddWrittenCalls(messages, written.Calls, iteration);
+        }
+        else if (written.Calls.Count > 0)
+        {
+            DiagnosticLog.Info(Category, LastRoundTextCallsNote);
+        }
+
+        return true;
+    }
 
     /// <summary>
     /// The calls <see cref="TextToolCallFilter"/> caught, added to the response's last message as real

@@ -2220,6 +2220,55 @@ public class AssistantTests
         await Assert.ThrowsAsync<HttpRequestException>(() => assistant.RequestAsync([new ChatMessage(ChatRole.User, "go")], [], ReasoningEffort.None, CancellationToken.None));
     }
 
+    /// <summary>
+    /// RequestAsync's textToolCalls (2026-09-30, code review: the picture writer's own copy of the turn's handling): a call
+    /// written out as text beside a native one is a real call too, the markup out of the text and the messages; the line form
+    /// uses the tool's schema; left null, the text is as written.
+    /// </summary>
+    [Fact]
+    public async Task RequestAsync_TextToolCalls_WrittenBesideANativeCall_BothAreCalls_TheMarkupGone()
+    {
+        var (client, _, assistant) = Build();
+        var echo = new EchoTool();
+        client.Enqueue(
+            FakeChatClient.Text("Here.\n<tool_call>\n<function=echo>\n<parameter=text>\nb\n</parameter>\n</function>\n</tool_call>"),
+            FakeChatClient.Call("c1", "echo", new Dictionary<string, object?> { ["text"] = "a" }));
+        var request = new List<ChatMessage> { new(ChatRole.User, "go"), new(ChatRole.Assistant, "before"), new(ChatRole.User, "again") };
+
+        var response = await assistant.RequestAsync(request, [echo], ReasoningEffort.None, CancellationToken.None, textToolCalls: [echo]);
+
+        Assert.Equal("Here.", response.Text);
+        Assert.Equal(["c1", "text-call-2-1"], response.Calls.Select(c => c.CallId));
+        Assert.Equal("b", response.Calls[1].Arguments!["text"]?.ToString());
+        Assert.DoesNotContain("<tool_call>", string.Concat(response.Messages.Select(m => m.Text)), StringComparison.Ordinal);
+
+        client.EnqueueText("echo text: c\nDone.");
+        var line = await assistant.RequestAsync([new ChatMessage(ChatRole.User, "go")], [echo], ReasoningEffort.None, CancellationToken.None, textToolCalls: [echo]);
+        Assert.Equal("Done.", line.Text);
+        Assert.Equal("text-call-1-1", Assert.Single(line.Calls).CallId);
+
+        client.EnqueueText("echo(text=\"d\")");
+        var off = await assistant.RequestAsync([new ChatMessage(ChatRole.User, "go")], [echo], ReasoningEffort.None, CancellationToken.None);
+        Assert.Equal("echo(text=\"d\")", off.Text);
+        Assert.Empty(off.Calls);
+    }
+
+    /// <summary>In a request that offers no tool, the answer round, a written call is taken out of the text and not made a call.</summary>
+    [Fact]
+    public async Task RequestAsync_TextToolCalls_NoToolOffered_TheCallIsOnlyTakenOut()
+    {
+        var (client, _, assistant) = Build();
+        var echo = new EchoTool();
+        client.EnqueueText("<tool_call>\n<function=echo>\n<parameter=text>\nb\n</parameter>\n</function>\n</tool_call>\nscore_9, a dog");
+
+        var response = await assistant.RequestAsync([new ChatMessage(ChatRole.User, "go")], [], ReasoningEffort.None, CancellationToken.None, textToolCalls: [echo]);
+
+        Assert.Equal("score_9, a dog", response.Text);
+        Assert.Empty(response.Calls);
+        Assert.Empty(response.Messages.SelectMany(m => m.Contents).OfType<FunctionCallContent>());
+        Assert.Empty(echo.Received);
+    }
+
     [Fact]
     public async Task InvokeToolAsync_Static_RunsAgainstTheListGiven()
     {
