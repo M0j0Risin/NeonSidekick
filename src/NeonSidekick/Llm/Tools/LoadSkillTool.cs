@@ -26,6 +26,12 @@ public sealed class LoadSkillTool : AIFunction
     public const string NameArgument = "name";
     public const string FileArgument = "file";
 
+    /// <summary>
+    /// The tool's name and parameter names (2026-09-30, code review): what a call to it written as text is caught by where no
+    /// instance is at hand — the <c>/botchat</c> picture writer's last round, a bot not offered it (<see cref="Assistant.WrittenCallsTakenOut"/>).
+    /// </summary>
+    public static readonly (string Name, IReadOnlyList<string> Parameters) WrittenForm = (ToolName, [NameArgument, FileArgument]);
+
     private readonly SkillCatalog _catalog;
     private readonly HashSet<string> _preloaded;
     private JsonElement _schema;

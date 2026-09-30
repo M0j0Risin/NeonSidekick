@@ -95,7 +95,9 @@ public static class SkillText
     public static string AlreadyLoaded(string name) => AlreadyLoadedOpen + name.Trim() + AlreadyLoadedClose;
 
     private const string AlreadyLoadedOpen = "Skill '";
-    private const string AlreadyLoadedClose = "' is already loaded: its instructions are in your system prompt; follow them from there. A file it bundles is still read with load_skill and file.";
+    // The tool's and its argument's names from their constants (2026-09-30, code review), as RelativePathsNote's.
+    private const string AlreadyLoadedClose = "' is already loaded: its instructions are in your system prompt; follow them from there. A file it bundles is still read with "
+        + LoadSkillTool.ToolName + " and " + LoadSkillTool.FileArgument + ".";
 
     /// <summary>
     /// Whether <paramref name="result"/> is an <see cref="AlreadyLoaded"/> answer, and for which skill (2026-09-30, code review):

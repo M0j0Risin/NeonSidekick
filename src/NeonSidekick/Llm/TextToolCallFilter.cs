@@ -56,6 +56,12 @@ public sealed class TextToolCallFilter
     private string _pending = string.Empty;
     private char _last = ' ';
 
+    // The text let through so far, the calls dropped as broken, and where the last call caught or dropped ended (2026-09-30):
+    // _marked is how many of both LastCallEnd has seen.
+    private int _emitted;
+    private int _dropped;
+    private int _marked;
+
     // The line form: whether the next character starts a line, and the line held for the test (null = none).
     private bool _lineStart = true;
     private StringBuilder? _line;
@@ -116,6 +122,31 @@ public sealed class TextToolCallFilter
     /// <summary>A call was still open when the stream ended; its text was dropped.</summary>
     public bool SawBroken { get; private set; }
 
+    /// <summary>
+    /// How much of the text let through came before the end of the last call caught or dropped (2026-09-30, code review: the
+    /// <c>/botchat</c> picture writer's last round, where a lead-in before a call — "Let me check the tag list first." — was the
+    /// ComfyUI prompt): the words after the last call are the let-through text from here. 0 with none.
+    /// </summary>
+    public int LastCallEnd { get; private set; }
+
+    /// <summary>Notes where the text let through stands (<paramref name="output"/> is this push's so far) when a call was caught or dropped since the last mark.</summary>
+    private void Mark(StringBuilder? output)
+    {
+        int seen = _calls.Count + _dropped;
+        if (seen != _marked)
+        {
+            _marked = seen;
+            LastCallEnd = _emitted + (output?.Length ?? 0);
+        }
+    }
+
+    /// <summary>A call dropped as broken: <see cref="SawBroken"/>, and a mark for <see cref="LastCallEnd"/>.</summary>
+    private void Drop()
+    {
+        SawBroken = true;
+        _dropped++;
+    }
+
     /// <summary>Feeds one delta and returns the text that is safe to emit now, possibly empty.</summary>
     public string Push(string delta)
     {
@@ -132,6 +163,7 @@ public sealed class TextToolCallFilter
 
         while (pos < s.Length)
         {
+            Mark(output);
             if (_callName is not null)
             {
                 pos = ReadCall(s, pos);
@@ -159,8 +191,12 @@ public sealed class TextToolCallFilter
                 string line = _line.ToString();
                 if (!EndLine())
                 {
-                    // Not a call: the line is text after all, its break with it.
-                    Emit(ref output, line + "\n", 0, line.Length + 1);
+                    // Not a call: the line is text after all, its break with it — scanned again for the other forms, the line
+                    // form's test done (2026-09-30, code review: load_skill: <tool_call>… let the markup through as it was).
+                    s = line + "\n" + s[pos..];
+                    pos = 0;
+                    _lineStart = false;
+                    continue;
                 }
 
                 _lineStart = true;
@@ -252,7 +288,10 @@ public sealed class TextToolCallFilter
             pos = open + 1;
         }
 
-        return output?.ToString() ?? string.Empty;
+        Mark(output);
+        string result = output?.ToString() ?? string.Empty;
+        _emitted += result.Length;
+        return result;
     }
 
     /// <summary>
@@ -262,7 +301,7 @@ public sealed class TextToolCallFilter
     {
         if (_callName is not null)
         {
-            SawBroken = true;
+            Drop();
             _callName = null;
             _arguments.Clear();
         }
@@ -277,13 +316,21 @@ public sealed class TextToolCallFilter
 
         string held = _pending;
         _pending = string.Empty;
+        Mark(null);
         if (_line is not null)
         {
-            // A line form's line the stream ended on: a call, or its text.
+            // A line form's line the stream ended on: a call, or its text — scanned again for the other forms, as in Push.
             string line = _line.ToString();
-            held = EndLine() ? held : line + held;
+            if (!EndLine())
+            {
+                _lineStart = false;
+                return Push(line + held) + Flush();
+            }
+
+            Mark(null);
         }
 
+        _emitted += held.Length;
         return held;
     }
 
@@ -364,11 +411,6 @@ public sealed class TextToolCallFilter
         _line = null;
         if (LineCall(line) is not { } call)
         {
-            if (line.Length > 0)
-            {
-                _last = line[^1];
-            }
-
             return false;
         }
 
@@ -627,7 +669,7 @@ public sealed class TextToolCallFilter
         }
         else
         {
-            SawBroken = true;
+            Drop();
         }
 
         _blockClose = null;

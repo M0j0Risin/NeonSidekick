@@ -43,6 +43,12 @@ public sealed class GenerateImageTool : AIFunction
     public static readonly IReadOnlyList<string> ImageArguments = [ImageArgument, Image2Argument, Image3Argument];
     public const string CountArgument = "count";
 
+    /// <summary>
+    /// The tool's name and parameter names, read from its schema (2026-09-30, code review): what the <c>/botchat</c> picture writer,
+    /// never offered the tool, catches a <c>generate_image</c> call written as text by — its <c>prompt</c> is the one wanted.
+    /// </summary>
+    public static readonly (string Name, IReadOnlyList<string> Parameters) WrittenForm = (ToolName, Assistant.ParameterNames(SchemaFor(1)));
+
     // The schema's text; its count line quotes the cap in force (later on 2026-09-24), put in for {MAX}.
     private const string SchemaText =
         """

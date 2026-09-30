@@ -658,11 +658,11 @@ public static partial class BotChat
         return Skills.SkillsPrompt.LoadOnlySection(skills) + "\n\n" + ImagePromptSkillsDirective;
     }
 
-    /// <summary>The directive of <see cref="ImagePromptSkills"/>. Pinned: it is prompt text.</summary>
+    /// <summary>The directive of <see cref="ImagePromptSkills"/>, the tool's name from its constant (2026-09-30, code review). Pinned: it is prompt text.</summary>
     public const string ImagePromptSkillsDirective =
-        "Before you answer, load with load_skill any skill the chat's topic or the line asks to be used for pictures or image prompts, "
+        "Before you answer, load with " + LoadSkillTool.ToolName + " any skill the chat's topic or the line asks to be used for pictures or image prompts, "
         + "or one whose description covers writing image prompts for this workflow — and a file it bundles when the skill says to read one — "
-        + "and follow it; a skill already loaded for you above needs no load_skill. Then answer exactly as instructed above; never mention the skill in the answer.";
+        + "and follow it; a skill already loaded for you above needs no " + LoadSkillTool.ToolName + ". Then answer exactly as instructed above; never mention the skill in the answer.";
 
     /// <summary>The user message of the image-prompt request (2026-09-25): whose line, the topic when there is one, and the line. Pinned: it is prompt text.</summary>
     public static string ImagePromptRequest(string speaker, string reply, string topic)

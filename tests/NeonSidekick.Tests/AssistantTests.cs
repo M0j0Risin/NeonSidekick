@@ -1072,6 +1072,37 @@ public class AssistantTests
         Assert.Equal("Done.", string.Concat(Deltas(events)));
     }
 
+    /// <summary>
+    /// WrittenCallsTakenOut (2026-09-30, code review: a bot offered no load_skill wrote a load_skill line its preloaded skill named):
+    /// the call is kept out of the reply and never run — with no tool offered, and beside an offered one whose written call runs.
+    /// </summary>
+    [Fact]
+    public async Task WrittenCallsTakenOut_TheCallIsKeptOutOfTheReply_AndNeverRun()
+    {
+        var (client, _, assistant) = Build();
+        assistant.WrittenCallsTakenOut = [LoadSkillTool.WrittenForm];
+        client.EnqueueText("load_skill name: pony-prompts file: references/tags.md\n", "Love that wave!");
+
+        var events = await Run(assistant, "go");
+
+        Assert.Single(client.Requests);
+        Assert.Equal("Love that wave!", string.Concat(Deltas(events)));
+        Assert.Empty(events.OfType<TurnEvent.ToolCall>());
+
+        var echo = new EchoTool();
+        var (client2, _, both) = Build(new AIFunction[] { echo });
+        both.TextToolCalls = true;
+        both.WrittenCallsTakenOut = [LoadSkillTool.WrittenForm];
+        client2.EnqueueText("load_skill(name=\"pony-prompts\")\necho(text=\"hi\")");
+        client2.EnqueueText("Done.");
+
+        var events2 = await Run(both, "go");
+
+        Assert.Equal(["hi"], echo.Received);
+        Assert.Equal("echo", Assert.Single(events2.OfType<TurnEvent.ToolCall>()).Name);
+        Assert.Equal("Done.", string.Concat(Deltas(events2)));
+    }
+
     [Fact]
     public async Task LastRoundAnswers_Off_TheLastRoundTripStillOffersTheTools()
     {
@@ -2222,57 +2253,118 @@ public class AssistantTests
 
     /// <summary>
     /// RequestAsync's textToolCalls (2026-09-30, code review: the picture writer's own copy of the turn's handling): a call
-    /// written out as text beside a native one is a real call too, the markup out of the text and the messages; the line form
-    /// uses the tool's schema; left null, the text is as written.
+    /// written out as text is a real call, the markup out of the text and the messages, its id nine alphanumerics; the line form
+    /// uses the tool's parameter names; left null, the text is as written.
     /// </summary>
     [Fact]
-    public async Task RequestAsync_TextToolCalls_WrittenBesideANativeCall_BothAreCalls_TheMarkupGone()
+    public async Task RequestAsync_TextToolCalls_AWrittenCallIsACall_TheMarkupGone()
     {
         var (client, _, assistant) = Build();
         var echo = new EchoTool();
-        client.Enqueue(
-            FakeChatClient.Text("Here.\n<tool_call>\n<function=echo>\n<parameter=text>\nb\n</parameter>\n</function>\n</tool_call>"),
-            FakeChatClient.Call("c1", "echo", new Dictionary<string, object?> { ["text"] = "a" }));
+        client.EnqueueText("Here.\n<tool_call>\n<function=echo>\n<parameter=text>\nb\n</parameter>\n</function>\n</tool_call>");
         var request = new List<ChatMessage> { new(ChatRole.User, "go"), new(ChatRole.Assistant, "before"), new(ChatRole.User, "again") };
 
-        var response = await assistant.RequestAsync(request, [echo], ReasoningEffort.None, CancellationToken.None, textToolCalls: [echo]);
+        var response = await assistant.RequestAsync(request, [echo], ReasoningEffort.None, CancellationToken.None, textToolCalls: Assistant.WrittenCallNames([echo]));
 
         Assert.Equal("Here.", response.Text);
-        Assert.Equal(["c1", "text-call-2-1"], response.Calls.Select(c => c.CallId));
-        Assert.Equal("b", response.Calls[1].Arguments!["text"]?.ToString());
+        var call = Assert.Single(response.Calls);
+        Assert.Equal(Assistant.WrittenCallId(2, 1), call.CallId);
+        Assert.Equal("b", call.Arguments!["text"]?.ToString());
         Assert.DoesNotContain("<tool_call>", string.Concat(response.Messages.Select(m => m.Text)), StringComparison.Ordinal);
+        Assert.Equal("echo", Assert.Single(response.WrittenCalls).Name);
+        Assert.Equal("", response.AfterWritten);
 
         client.EnqueueText("echo text: c\nDone.");
-        var line = await assistant.RequestAsync([new ChatMessage(ChatRole.User, "go")], [echo], ReasoningEffort.None, CancellationToken.None, textToolCalls: [echo]);
+        var line = await assistant.RequestAsync([new ChatMessage(ChatRole.User, "go")], [echo], ReasoningEffort.None, CancellationToken.None, textToolCalls: Assistant.WrittenCallNames([echo]));
         Assert.Equal("Done.", line.Text);
-        Assert.Equal("text-call-1-1", Assert.Single(line.Calls).CallId);
+        Assert.Equal(Assistant.WrittenCallId(1, 1), Assert.Single(line.Calls).CallId);
+        Assert.Equal("Done.", line.AfterWritten);
 
         client.EnqueueText("echo(text=\"d\")");
         var off = await assistant.RequestAsync([new ChatMessage(ChatRole.User, "go")], [echo], ReasoningEffort.None, CancellationToken.None);
         Assert.Equal("echo(text=\"d\")", off.Text);
         Assert.Empty(off.Calls);
+        Assert.Null(off.AfterWritten);
     }
 
     /// <summary>
-    /// A written call the response also carries as a native one, same name and arguments (2026-09-30, code review: a server that
-    /// parses the call but leaves the markup in the content): one call, not two; the markup still goes.
+    /// A written call's id (2026-09-30, code review: text-call-1-1 broke the Mistral-family templates' rule): nine alphanumerics,
+    /// never an opening or pending call's, distinct across a round trip's calls and the round trips.
     /// </summary>
     [Fact]
-    public async Task RequestAsync_TextToolCalls_TheSameCallWrittenAndNative_IsOneCall()
+    public void WrittenCallId_IsNineAlphanumerics_AndDistinct()
+    {
+        var ids = Enumerable.Range(1, 12).SelectMany(round => Enumerable.Range(1, 35).Select(n => Assistant.WrittenCallId(round, n))).ToList();
+        Assert.All(ids, id =>
+        {
+            Assert.Equal(9, id.Length);
+            Assert.True(id.All(char.IsAsciiLetterOrDigit), id);
+            Assert.StartsWith(Assistant.WrittenCallIdPrefix, id, StringComparison.Ordinal);
+            Assert.False(Assistant.IsOpeningCallId(id));
+        });
+        Assert.Equal(ids.Count, ids.Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal(9, Assistant.WrittenCallId(10000, 35).Length);
+    }
+
+    /// <summary>
+    /// Calls written beside a native one (2026-09-30, code review: a server that parses the calls but leaves the markup in the
+    /// content, and the copies' values spelled apart — 7.0 against 7 — so a comparison ran both): only taken out, never run.
+    /// </summary>
+    [Fact]
+    public async Task RequestAsync_TextToolCalls_BesideANativeCall_TheWrittenOnesAreOnlyTakenOut()
     {
         var (client, _, assistant) = Build();
         var echo = new EchoTool();
         client.Enqueue(
-            FakeChatClient.Text("<tool_call>\n<function=echo>\n<parameter=text>\na\n</parameter>\n</function>\n</tool_call>"),
-            FakeChatClient.Call("c1", "echo", new Dictionary<string, object?> { ["text"] = "a" }));
+            FakeChatClient.Text("<tool_call>\n<function=echo>\n<parameter=text>\n7.0\n</parameter>\n</function>\n</tool_call>"),
+            FakeChatClient.Call("c1", "echo", new Dictionary<string, object?> { ["text"] = "7.0" }));
 
-        var response = await assistant.RequestAsync([new ChatMessage(ChatRole.User, "go")], [echo], ReasoningEffort.None, CancellationToken.None, textToolCalls: [echo]);
+        var response = await assistant.RequestAsync([new ChatMessage(ChatRole.User, "go")], [echo], ReasoningEffort.None, CancellationToken.None, textToolCalls: Assistant.WrittenCallNames([echo]));
 
         Assert.Equal("c1", Assert.Single(response.Calls).CallId);
+        Assert.Equal("c1", Assert.Single(response.Messages.SelectMany(m => m.Contents).OfType<FunctionCallContent>()).CallId);
         Assert.Equal("", response.Text);
+        Assert.Single(response.WrittenCalls);
     }
 
-    /// <summary>In a request that offers no tool, the answer round, a written call is taken out of the text and not made a call.</summary>
+    /// <summary>Two calls written alike with no native one (2026-09-30, code review: the de-dupe ran the second against the first): both run.</summary>
+    [Fact]
+    public async Task RequestAsync_TextToolCalls_TwoCallsWrittenAlike_BothAreCalls()
+    {
+        var (client, _, assistant) = Build();
+        var echo = new EchoTool();
+        client.EnqueueText("echo(text=\"a castle\")\necho(text=\"a castle\")");
+
+        var response = await assistant.RequestAsync([new ChatMessage(ChatRole.User, "go")], [echo], ReasoningEffort.None, CancellationToken.None, textToolCalls: Assistant.WrittenCallNames([echo]));
+
+        Assert.Equal([Assistant.WrittenCallId(1, 1), Assistant.WrittenCallId(1, 2)], response.Calls.Select(c => c.CallId));
+    }
+
+    /// <summary>
+    /// A written call whose arguments do not parse (2026-09-30, code review: left out, the words beside it were the reply): a call
+    /// all the same, carrying the parse error, so the model is answered it and asked again.
+    /// </summary>
+    [Fact]
+    public async Task RequestAsync_TextToolCalls_UnparsedArguments_AreACallAnsweredTheError()
+    {
+        var (client, _, assistant) = Build();
+        var echo = new EchoTool();
+        client.EnqueueText("I'll echo it first.\necho(\"a\")");
+
+        var response = await assistant.RequestAsync([new ChatMessage(ChatRole.User, "go")], [echo], ReasoningEffort.None, CancellationToken.None, textToolCalls: Assistant.WrittenCallNames([echo]));
+
+        var call = Assert.Single(response.Calls);
+        Assert.NotNull(call.Exception);
+        var (text, _) = await Assistant.InvokeToolAsync([echo], call, CancellationToken.None);
+        Assert.Contains(Assistant.WrittenArgumentsUnparsed, text, StringComparison.Ordinal);
+        Assert.StartsWith("Error:", text, StringComparison.Ordinal);
+        Assert.Empty(echo.Received);
+    }
+
+    /// <summary>
+    /// In a request that offers no tool, the answer round, a written call is taken out of the text and not made a call; the words
+    /// after it are AfterWritten, and a lead-in before it is not (2026-09-30, code review).
+    /// </summary>
     [Fact]
     public async Task RequestAsync_TextToolCalls_NoToolOffered_TheCallIsOnlyTakenOut()
     {
@@ -2280,12 +2372,18 @@ public class AssistantTests
         var echo = new EchoTool();
         client.EnqueueText("<tool_call>\n<function=echo>\n<parameter=text>\nb\n</parameter>\n</function>\n</tool_call>\nscore_9, a dog");
 
-        var response = await assistant.RequestAsync([new ChatMessage(ChatRole.User, "go")], [], ReasoningEffort.None, CancellationToken.None, textToolCalls: [echo]);
+        var response = await assistant.RequestAsync([new ChatMessage(ChatRole.User, "go")], [], ReasoningEffort.None, CancellationToken.None, textToolCalls: Assistant.WrittenCallNames([echo]));
 
         Assert.Equal("score_9, a dog", response.Text);
+        Assert.Equal("score_9, a dog", response.AfterWritten);
         Assert.Empty(response.Calls);
         Assert.Empty(response.Messages.SelectMany(m => m.Contents).OfType<FunctionCallContent>());
-        Assert.Empty(echo.Received);
+        Assert.Single(response.WrittenCalls);
+
+        client.EnqueueText("Let me check the tag list first.\necho text: tags");
+        var lead = await assistant.RequestAsync([new ChatMessage(ChatRole.User, "go")], [], ReasoningEffort.None, CancellationToken.None, textToolCalls: Assistant.WrittenCallNames([echo]));
+        Assert.Equal("Let me check the tag list first.", lead.Text);
+        Assert.Equal("", lead.AfterWritten);
     }
 
     [Fact]

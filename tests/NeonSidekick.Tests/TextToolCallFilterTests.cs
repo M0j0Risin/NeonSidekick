@@ -228,6 +228,50 @@ public class TextToolCallFilterTests
         }
     }
 
+    /// <summary>
+    /// A line the line form held and found no call on (2026-09-30, code review: <c>load_skill: &lt;tool_call&gt;…</c> let the markup
+    /// through as it was): scanned again for the other forms, whole or split anywhere, at the stream's end too.
+    /// </summary>
+    [Theory]
+    [InlineData("generate_image: <tool_call><function=generate_image><parameter=prompt>a dog</parameter></function></tool_call>\nscore_9, a wave")]
+    [InlineData("generate_image: generate_image(prompt=\"a dog\")\nscore_9, a wave")]
+    [InlineData("generate_image: generate_image(prompt=\"a dog\") score_9, a wave")]
+    public void TheLineForm_AHeldLineThatIsNoCall_IsScannedForTheOtherForms(string reply)
+    {
+        var (text, filter) = RunLines(reply);
+        Assert.Equal("generate_image: score_9, a wave", text);
+        Assert.Equal("a dog", NeonSidekick.Llm.Tools.ToolArguments.ReadString(TextToolCallFilter.ParseArguments(Assert.Single(filter.Calls).Arguments)!, "prompt"));
+
+        for (int i = 1; i < reply.Length; i++)
+        {
+            var (split, splitFilter) = RunLines(reply[..i], reply[i..]);
+            Assert.Equal(text, split);
+            Assert.Equal(filter.Calls, splitFilter.Calls);
+        }
+    }
+
+    /// <summary>
+    /// LastCallEnd (2026-09-30, code review: the picture writer's lead-in before a call was its prompt): where the words after the
+    /// last call caught or dropped start in the text let through, whole or split anywhere; 0 with none.
+    /// </summary>
+    [Theory]
+    [InlineData("Let me look.\ngenerate_image(prompt=\"a\") Then this.", "Then this.")]
+    [InlineData("Here is my sketch!\n" + UsersLine + "\nDo you like it?", "Do you like it?")]
+    [InlineData("One. generate_image(prompt=\"a\") Two. <tool_call><function=generate_image><parameter=prompt>b</parameter></function></tool_call> Three.", "Three.")]
+    [InlineData("Lead-in. generate_image(prompt=\"a", "")]
+    [InlineData("No call at all.", "No call at all.")]
+    public void LastCallEnd_IsWhereTheWordsAfterTheLastCallStart(string reply, string after)
+    {
+        var (text, filter) = RunLines(reply);
+        Assert.Equal(after, text[filter.LastCallEnd..]);
+
+        for (int i = 1; i < reply.Length; i++)
+        {
+            var (split, splitFilter) = RunLines(reply[..i], reply[i..]);
+            Assert.Equal(after, split[splitFilter.LastCallEnd..]);
+        }
+    }
+
     [Fact]
     public void TheLineForm_NeedsTheParameters_TheNamesAloneNeverCatchIt()
     {

@@ -544,6 +544,14 @@ public sealed class Assistant
     public bool TextToolCalls { get; set; }
 
     /// <summary>
+    /// Tools whose calls written out as text are kept out of the reply and never run, whatever the turn offers (2026-09-30, code
+    /// review: a <c>/botchat</c> bot offered no <c>load_skill</c> but given a preloaded skill whose content names it wrote
+    /// <c>load_skill name: …</c> into its line, shown and spoken). Each is its name and parameter names (the line form's). Empty,
+    /// the default, takes out none; a tool the turn offers and <see cref="TextToolCalls"/> catches still runs.
+    /// </summary>
+    public IReadOnlyList<(string Name, IReadOnlyList<string> Parameters)> WrittenCallsTakenOut { get; set; } = [];
+
+    /// <summary>
     /// Whether the last round trip <see cref="MaxToolIterations"/> allows is asked without the tools, so the model must answer in
     /// words (2026-09-30, the user's report: a <c>/botchat</c> bot a few turns in spent all three of its round trips on
     /// <c>generate_image</c> and the chat showed "Stopped after 3 tool iterations without a final answer" in place of its line).
@@ -1023,8 +1031,10 @@ public sealed class Assistant
             var filter = new ThinkTagFilter();
             // A <think> block streamed as content (2026-09-28): kept, so the history carries it as thinking like the server's own.
             var tagThinking = new StringBuilder();
-            // After the think filter: a call written as text, caught when the turn asks for it and offers tools.
-            var written = TextToolCalls && _tools.Count > 0 ? WrittenCallFilter(_tools) : null;
+            // After the think filter: a call written as text, caught when the turn asks for it and offers tools, and one to a tool
+            // in WrittenCallsTakenOut (2026-09-30), taken out whatever the turn offers.
+            var catching = TextToolCalls && _tools.Count > 0 ? WrittenCallNames(_tools) : [];
+            var written = catching.Count > 0 || WrittenCallsTakenOut.Count > 0 ? WrittenCallFilter([.. catching, .. WrittenCallsTakenOut]) : null;
             Exception? failure = null;
             bool cancelled = false;
 
@@ -1143,11 +1153,7 @@ public sealed class Assistant
 
             if (written is not null)
             {
-                held = (held.Length > 0 ? written.Push(held) : "") + written.Flush();
-                if (written.SawBroken)
-                {
-                    DiagnosticLog.Info(Category, TextCallBrokenNote);
-                }
+                held = EndWritten(written, held);
             }
 
             if (held.Length > 0)
@@ -1206,8 +1212,11 @@ public sealed class Assistant
 
             if (written is not null)
             {
-                // The round that asked for words (LastRoundAnswers) keeps its written calls out of the reply and does not run them.
-                TakeWrittenCalls(response.Messages, partial.ToString(), written, run: !answerRound, iteration);
+                // The round that asked for words (LastRoundAnswers) keeps its written calls out of the reply and does not run them,
+                // and no round runs one to a tool only taken out (WrittenCallsTakenOut).
+                TakeWrittenCalls(response.Messages, partial.ToString(), written, iteration,
+                    runs: answerRound || catching.Count == 0 ? null : name => catching.Any(t => t.Name == name) || !WrittenCallsTakenOut.Any(t => t.Name == name),
+                    notRunNote: answerRound ? LastRoundTextCallsNote : TakenOutTextCallsNote);
             }
 
             foreach (var message in response.Messages)
@@ -1570,7 +1579,21 @@ public sealed class Assistant
     /// <c>&lt;think&gt;</c> filtered, the tool calls it asked for (none = the model is done) and the
     /// usage the server reported (null for none), the two spans stamped as a turn's are.
     /// </summary>
-    public sealed record SideResponse(IReadOnlyList<ChatMessage> Messages, string Text, IReadOnlyList<FunctionCallContent> Calls, TokenUsage? Usage);
+    public sealed record SideResponse(IReadOnlyList<ChatMessage> Messages, string Text, IReadOnlyList<FunctionCallContent> Calls, TokenUsage? Usage)
+    {
+        /// <summary>
+        /// The calls <see cref="RequestAsync"/>'s <c>textToolCalls</c> caught written out as text (2026-09-30, code review): each
+        /// tool's name and arguments as written, run (then in <see cref="Calls"/> too) or only taken out. Empty with none.
+        /// </summary>
+        public IReadOnlyList<(string Name, string Arguments)> WrittenCalls { get; init; } = [];
+
+        /// <summary>
+        /// The words after the last call written out as text, caught or dropped as broken, trimmed (2026-09-30, code review: the
+        /// <c>/botchat</c> picture writer's lead-in before a call — "Let me check the tag list first." — was its ComfyUI prompt);
+        /// null when <see cref="Text"/> had nothing written taken out of it.
+        /// </summary>
+        public string? AfterWritten { get; init; }
+    }
 
     /// <summary>
     /// The primitive behind a side loop that runs beside a turn (<see cref="Skills.SkillLearner"/>):
@@ -1581,12 +1604,14 @@ public sealed class Assistant
     /// <c>/test</c>'s structured-output tests: a JSON schema the adapter writes as <c>json_schema</c>); null asks for none.
     /// <para><paramref name="textToolCalls"/> (2026-09-30, code review: the <c>/botchat</c> picture writer had its own copy of the
     /// turn's handling, already short of it) is <see cref="TextToolCalls"/> for a side loop: the tools whose calls written out as
-    /// text are caught (<see cref="WrittenCallFilter"/>; null, the default, catches none). They are kept out of <see cref="SideResponse.Text"/>
-    /// and the messages, and in a request that offers tools become real calls in <see cref="SideResponse.Calls"/>, beside any
-    /// native ones — the turn's rule; in one that offers none, the answer round, they are only taken out. The main chat's side
-    /// loops leave it off, as its turn does: a reply that shows a call as an example would otherwise run it.</para>
+    /// text are caught, each its name and parameter names (<see cref="WrittenCallFilter"/>, <see cref="WrittenCallNames"/>; null,
+    /// the default, catches none). They are kept out of <see cref="SideResponse.Text"/> and the messages, read in
+    /// <see cref="SideResponse.WrittenCalls"/> and <see cref="SideResponse.AfterWritten"/>, and in a request that offers tools
+    /// become real calls in <see cref="SideResponse.Calls"/> (<see cref="AddWrittenCalls"/>) — the turn's rule; in one that offers
+    /// none, the answer round, they are only taken out. The main chat's side loops leave it off, as its turn does: a reply that
+    /// shows a call as an example would otherwise run it.</para>
     /// </summary>
-    public async Task<SideResponse> RequestAsync(IReadOnlyList<ChatMessage> request, IReadOnlyList<AIFunction> tools, ReasoningEffort? effort, CancellationToken cancellationToken, ChatResponseFormat? format = null, IReadOnlyList<AIFunction>? textToolCalls = null)
+    public async Task<SideResponse> RequestAsync(IReadOnlyList<ChatMessage> request, IReadOnlyList<AIFunction> tools, ReasoningEffort? effort, CancellationToken cancellationToken, ChatResponseFormat? format = null, IReadOnlyList<(string Name, IReadOnlyList<string> Parameters)>? textToolCalls = null)
     {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(tools);
@@ -1623,21 +1648,18 @@ public sealed class Assistant
             ReplaceText(response.Messages, text.ToString());
         }
 
+        IReadOnlyList<(string Name, string Arguments)> writtenCalls = [];
+        string? afterWritten = null;
         if (textToolCalls is not null)
         {
             var written = WrittenCallFilter(textToolCalls);
-            string kept = written.Push(text.ToString()) + written.Flush();
-            if (written.SawBroken)
-            {
-                DiagnosticLog.Info(Category, TextCallBrokenNote);
-            }
-
+            string kept = EndWritten(written, text.ToString());
             // The ids' round: one past the assistant messages already in the request, so a later round's never repeat an earlier's.
             int round = request.Count(m => m.Role == ChatRole.Assistant) + 1;
-            if (TakeWrittenCalls(response.Messages, kept, written, run: tools.Count > 0, round))
-            {
-                text.Clear().Append(kept);
-            }
+            TakeWrittenCalls(response.Messages, kept, written, round, runs: tools.Count > 0 ? _ => true : null);
+            text.Clear().Append(kept);
+            writtenCalls = written.Calls;
+            afterWritten = written.Calls.Count > 0 || written.SawBroken ? kept[written.LastCallEnd..].Trim() : null;
         }
 
         var usage = TokenUsage.Zero;
@@ -1655,7 +1677,7 @@ public sealed class Assistant
             .Where(c => !c.InformationalOnly)
             .ToList();
 
-        return new SideResponse(response.Messages.ToList(), text.ToString().Trim(), calls, usage.IsEmpty ? null : usage);
+        return new SideResponse(response.Messages.ToList(), text.ToString().Trim(), calls, usage.IsEmpty ? null : usage) { WrittenCalls = writtenCalls, AfterWritten = afterWritten };
     }
 
     /// <summary>
@@ -1673,6 +1695,19 @@ public sealed class Assistant
     /// <summary>The <c>--log</c> line when the model wrote a tool call as text in the round that asked for words (2026-09-30).</summary>
     internal const string LastRoundTextCallsNote = "The model wrote a tool call out as text in the round asked for an answer; it was dropped from the reply and not run.";
 
+    /// <summary>The <c>--log</c> line when the model wrote out a call to a tool only taken out (<see cref="WrittenCallsTakenOut"/>, 2026-09-30).</summary>
+    internal const string TakenOutTextCallsNote = "The model wrote a call to a tool it is not offered out as text; it was dropped from the reply and not run.";
+
+    /// <summary>The <c>--log</c> line when calls written as text came beside native ones (2026-09-30, code review): taken out, not run.</summary>
+    internal const string WrittenBesideNativeNote = "The model wrote tool calls out as text beside native ones; they were dropped from the reply and not run.";
+
+    /// <summary>
+    /// The parse error a call written as text carries when its arguments do not parse (2026-09-30, code review: left out, the
+    /// words beside it were the reply — the <c>/botchat</c> picture writer's lead-in its ComfyUI prompt); the model is answered
+    /// <c>Error: the arguments for '…' could not be parsed: …</c>, as for a native call's.
+    /// </summary>
+    internal const string WrittenArgumentsUnparsed = "the call was written as text, and its arguments are neither name=value pairs nor a JSON object";
+
     /// <summary>A tool schema's parameter names (its <c>properties</c>), for the written call's line form (later on 2026-09-25); none when it has none.</summary>
     internal static IReadOnlyList<string> ParameterNames(System.Text.Json.JsonElement schema) =>
         schema.ValueKind == System.Text.Json.JsonValueKind.Object && schema.TryGetProperty("properties", out var properties) && properties.ValueKind == System.Text.Json.JsonValueKind.Object
@@ -1684,50 +1719,86 @@ public sealed class Assistant
         "Text tool call " + name + ": " + (arguments.Length <= ToolCallLogChars ? arguments : arguments[..(ToolCallLogChars - 1)] + "…");
 
     /// <summary>
-    /// The filter for calls to <paramref name="tools"/> written out as text, each with its schema's parameter names for the line
-    /// form (2026-09-30, code review: built here once, for the turn and <see cref="RequestAsync"/> alike — the picture writer's own
-    /// copy had hard-coded <c>load_skill</c>'s names).
+    /// <paramref name="tools"/>' names, each with its schema's parameter names for the line form (2026-09-30, code review): what
+    /// <see cref="WrittenCallFilter"/> and <see cref="RequestAsync"/>'s <c>textToolCalls</c> take, so a caller with no tool instance
+    /// at hand — the picture writer's last round — passes the names alone.
     /// </summary>
-    internal static TextToolCallFilter WrittenCallFilter(IEnumerable<AIFunction> tools) =>
-        new(tools.Select(t => (t.Name, ParameterNames(t.JsonSchema))));
+    internal static IReadOnlyList<(string Name, IReadOnlyList<string> Parameters)> WrittenCallNames(IEnumerable<AIFunction> tools) =>
+        tools.Select(t => (t.Name, ParameterNames(t.JsonSchema))).ToList();
+
+    /// <summary>
+    /// The filter for calls to <paramref name="tools"/> written out as text, each with its parameter names for the line form
+    /// (2026-09-30, code review: built here once, for the turn and <see cref="RequestAsync"/> alike).
+    /// </summary>
+    internal static TextToolCallFilter WrittenCallFilter(IEnumerable<(string Name, IReadOnlyList<string> Parameters)> tools) => new(tools);
+
+    /// <summary>
+    /// The end of a response's text through <paramref name="written"/>: <paramref name="rest"/> pushed, the filter flushed, and a
+    /// call left open logged (<see cref="TextCallBrokenNote"/>). What was let through of the two. Shared by the turn and
+    /// <see cref="RequestAsync"/> (2026-09-30, code review).
+    /// </summary>
+    private static string EndWritten(TextToolCallFilter written, string rest)
+    {
+        string kept = written.Push(rest) + written.Flush();
+        if (written.SawBroken)
+        {
+            DiagnosticLog.Info(Category, TextCallBrokenNote);
+        }
+
+        return kept;
+    }
 
     /// <summary>
     /// A response's written calls, once <paramref name="written"/> has seen all its text (2026-09-30, shared by the turn and
     /// <see cref="RequestAsync"/>): with a call caught or a broken one dropped, the messages' text becomes <paramref name="kept"/>
-    /// — the history then carries no markup to prime the model with — and, when <paramref name="run"/>, the calls are added as real
-    /// ones (<see cref="AddWrittenCalls"/>) beside any native calls; otherwise they are only logged as not run. False when the text
-    /// held nothing to take.
+    /// — the history then carries no markup to prime the model with — and each call <paramref name="runs"/> picks is added as a
+    /// real one (<see cref="AddWrittenCalls"/>); the others are logged as not run (<paramref name="notRunNote"/>). Null
+    /// <paramref name="runs"/> runs none.
     /// </summary>
-    internal static bool TakeWrittenCalls(IList<ChatMessage> messages, string kept, TextToolCallFilter written, bool run, int iteration)
+    internal static void TakeWrittenCalls(IList<ChatMessage> messages, string kept, TextToolCallFilter written, int iteration, Func<string, bool>? runs, string notRunNote = LastRoundTextCallsNote)
     {
         if (written.Calls.Count == 0 && !written.SawBroken)
         {
-            return false;
+            return;
         }
 
         // The written calls go into the history as real ones, the reply's text without them, so the model sees what ran.
         ReplaceText(messages, kept);
-        if (run)
+        List<(string Name, string Arguments)> run = runs is null ? [] : written.Calls.Where(call => runs(call.Name)).ToList();
+        if (run.Count < written.Calls.Count)
         {
-            AddWrittenCalls(messages, written.Calls, iteration);
-        }
-        else if (written.Calls.Count > 0)
-        {
-            DiagnosticLog.Info(Category, LastRoundTextCallsNote);
+            DiagnosticLog.Info(Category, notRunNote);
         }
 
-        return true;
+        if (run.Count > 0)
+        {
+            AddWrittenCalls(messages, run, iteration);
+        }
     }
 
     /// <summary>
     /// The calls <see cref="TextToolCallFilter"/> caught, added to the response's last message as real
-    /// <see cref="FunctionCallContent"/>s (2026-09-25) with ids of their own (<c>text-call-{iteration}-{n}</c>), so the loop runs them
-    /// as it runs native ones. A call whose arguments do not parse is logged and left out, and so is one the response already
-    /// carries as a native call, same name and arguments (2026-09-30, code review: a server that parses the calls but leaves the
-    /// markup in the content would otherwise have each run twice — two pictures started, a skill's content sent twice).
+    /// <see cref="FunctionCallContent"/>s (2026-09-25) with ids of their own (<see cref="WrittenCallId"/>), so the loop runs them as
+    /// it runs native ones. A call whose arguments do not parse is added too, carrying <see cref="WrittenArgumentsUnparsed"/>, so the
+    /// model is answered the error and asked again (2026-09-30, code review: left out, the words beside it were the reply).
+    /// <para>None is added when the response carries a native call (2026-09-30, code review): a server that parses the calls but
+    /// leaves the markup in the content would otherwise have each run twice — two pictures started, a skill's content sent twice —
+    /// and the two copies' values are not spelled alike (<c>7.0</c> against <c>7</c>) for a comparison to catch it. Two calls written
+    /// alike with no native one both run.</para>
     /// </summary>
     internal static void AddWrittenCalls(IList<ChatMessage> messages, IReadOnlyList<(string Name, string Arguments)> calls, int iteration)
     {
+        foreach (var (name, text) in calls)
+        {
+            DiagnosticLog.Info(Category, TextCallLogLine(name, text));
+        }
+
+        if (messages.SelectMany(m => m.Contents).OfType<FunctionCallContent>().Any(native => !native.InformationalOnly))
+        {
+            DiagnosticLog.Info(Category, WrittenBesideNativeNote);
+            return;
+        }
+
         if (messages.Count == 0)
         {
             messages.Add(new ChatMessage(ChatRole.Assistant, (string?)null));
@@ -1736,36 +1807,35 @@ public sealed class Assistant
         int n = 0;
         foreach (var (name, text) in calls)
         {
-            DiagnosticLog.Info(Category, TextCallLogLine(name, text));
-            if (TextToolCallFilter.ParseArguments(text) is not { } arguments)
-            {
-                DiagnosticLog.Warn(Category, "The arguments of a " + name + " call written as text did not parse; it was not run.");
-                continue;
-            }
-
-            if (messages.SelectMany(m => m.Contents).OfType<FunctionCallContent>().Any(native => SameCall(native, name, arguments)))
-            {
-                DiagnosticLog.Info(Category, "The " + name + " call written as text is also a native call; it runs once.");
-                continue;
-            }
-
-            n++;
-            string id = "text-call-" + iteration.ToString(CultureInfo.InvariantCulture) + "-" + n.ToString(CultureInfo.InvariantCulture);
-            messages[^1].Contents.Add(new FunctionCallContent(id, name, arguments));
+            string id = WrittenCallId(iteration, ++n);
+            messages[^1].Contents.Add(TextToolCallFilter.ParseArguments(text) is { } arguments
+                ? new FunctionCallContent(id, name, arguments)
+                : new FunctionCallContent(id, name) { Exception = new FormatException(WrittenArgumentsUnparsed) });
         }
     }
 
     /// <summary>
-    /// Whether <paramref name="call"/> is <paramref name="name"/> with <paramref name="arguments"/> (2026-09-30): the same keys, each
-    /// value the same as text — a native call's values are JSON elements, a written one's often strings, so <c>3</c> and
-    /// <c>"3"</c> are one call.
+    /// The prefix of a call written as text's id (2026-09-30, code review: <c>text-call-1-1</c> broke the opening calls' rule, and a
+    /// Mistral-family template refused the round after it).
     /// </summary>
-    private static bool SameCall(FunctionCallContent call, string name, AIFunctionArguments arguments)
+    internal const string WrittenCallIdPrefix = "neonw";
+
+    /// <summary>
+    /// The id of the <paramref name="n"/>th call written as text in round trip <paramref name="iteration"/>: <see cref="WrittenCallIdPrefix"/>
+    /// and four base-36 digits of the two — nine alphanumerics, the opening calls' rule. Unique for up to 35 a round trip.
+    /// </summary>
+    internal static string WrittenCallId(int iteration, int n)
     {
-        var mine = call.Arguments ?? new Dictionary<string, object?>();
-        return string.Equals(call.Name, name, StringComparison.Ordinal) && mine.Count == arguments.Count
-            && arguments.All(pair => mine.TryGetValue(pair.Key, out var value)
-                && string.Equals(Convert.ToString(value, CultureInfo.InvariantCulture), Convert.ToString(pair.Value, CultureInfo.InvariantCulture), StringComparison.Ordinal));
+        const string Digits = "0123456789abcdefghijklmnopqrstuvwxyz";
+        long value = ((long)iteration * 36 + n) % (36 * 36 * 36 * 36);
+        Span<char> tail = stackalloc char[4];
+        for (int i = tail.Length - 1; i >= 0; i--)
+        {
+            tail[i] = Digits[(int)(value % 36)];
+            value /= 36;
+        }
+
+        return WrittenCallIdPrefix + new string(tail);
     }
 
     internal static void ReplaceText(IList<ChatMessage> messages, string text)
