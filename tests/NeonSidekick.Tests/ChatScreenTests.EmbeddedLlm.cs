@@ -459,7 +459,7 @@ public partial class ChatScreenTests
         string output = await RunAsync(input);
 
         Assert.Contains("✗ " + LlmSession.NoEmbeddedLine, output);
-        Assert.Contains("  · " + ChatScreen.ScanDisabledNoEmbeddedHint, output);
+        Assert.DoesNotContain("🖥️ Set the URL", output);   // one line, no hint under it (2026-09-30)
         Assert.DoesNotContain(LlmSession.NoServerLine(ScanScope.Disabled), output);
         Assert.Equal(0, ModelProbes);                     // nothing was looked for
         Assert.Equal([model.Id], embedded.Installs);
@@ -483,7 +483,6 @@ public partial class ChatScreenTests
 
         Assert.Contains(EmbeddedModelCatalog.Models[0].Display, output);   // the catalog's rows were shown
         Assert.Equal(2, Count(output, "✗ " + LlmSession.NoEmbeddedLine));   // the launch, then /server
-        Assert.Equal(2, Count(output, "  · " + ChatScreen.ScanDisabledNoEmbeddedHint));
         Assert.Empty(embedded.Installs);
         Assert.Empty(embedded.Starts);
         Assert.Null(_session.Endpoint);
@@ -500,7 +499,10 @@ public partial class ChatScreenTests
         string output = await RunAsync();
 
         Assert.Contains(SettingsMenu.StartupServerTitle, output);
-        Assert.Contains("✗ " + LlmSession.NoServerLine(ScanScope.Disabled), output);
+        // The picker declined (2026-09-30, the user's report): one line naming it, not the no-URL pair.
+        Assert.Contains("✗ LLM: no server picked; /server lists the installed embedded models again", output);
+        Assert.DoesNotContain(LlmSession.NoServerLine(ScanScope.Disabled), output);
+        Assert.DoesNotContain("🖥️ Set the URL", output);
         Assert.DoesNotContain(LlmSession.NoEmbeddedLine, output);
         Assert.Empty(embedded.Starts);
     }
@@ -516,7 +518,6 @@ public partial class ChatScreenTests
         string output = await RunAsync();
 
         Assert.Contains("✗ " + LlmSession.NoServerLine(ScanScope.Disabled), output);
-        Assert.Contains("  · " + ChatScreen.ScanDisabledHint, output);
         Assert.DoesNotContain(LlmSession.NoEmbeddedLine, output);
         Assert.DoesNotContain(EmbeddedModelCatalog.Models[0].Display, output);
     }

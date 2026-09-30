@@ -1000,7 +1000,7 @@ public partial class SidekickAppTests : IDisposable
     [Fact]
     public async Task Headless_NoServerLine_NamesThePortsAndTheVariable()
     {
-        Assert.Equal("LLM: no server found on 127.0.0.1 ports 1234, 8000, 30000, 8080, 11434, 8888; set NEONSIDEKICK_LLM_URL.", SidekickApp.HeadlessNoServerLine(ScanScope.Local));
+        Assert.Equal("LLM: no server found on this machine (ports 1234, 8000, 30000, 8080, 11434, 8888). Pass --url or set NEONSIDEKICK_LLM_URL.", SidekickApp.HeadlessNoServerLine(ScanScope.Local));
         Assert.Equal("[error] No LLM endpoint. Set NEONSIDEKICK_LLM_URL and restart.", SidekickApp.HeadlessNoAssistantReply);
         await Task.CompletedTask;
     }
@@ -1576,7 +1576,7 @@ public partial class SidekickAppTests : IDisposable
         string output = await InteractiveAsync();
 
         Assert.Contains("✗ " + LlmSession.NoServerLine(ScanScope.Local), output);   // no indent asserted: spinner residue precedes it
-        Assert.Contains(ChatScreen.NoServerHint, output);
+        Assert.DoesNotContain("🖥️ Set the URL", output);   // one line, no hint under it (2026-09-30)
         Assert.Contains("  ✗ " + ChatScreen.NoAssistantError, output);
         Assert.Empty(_chat.Requests);
     }

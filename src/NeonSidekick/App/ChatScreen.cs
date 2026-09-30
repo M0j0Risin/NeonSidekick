@@ -490,20 +490,8 @@ internal sealed partial class ChatScreen
     /// <summary>The pause between silencing the speaker and opening the microphone: its last buffer and the room's reverb.</summary>
     public static readonly TimeSpan InterruptSettle = TimeSpan.FromMilliseconds(300);
 
-    /// <summary>Under the no-server line. Pinned.</summary>
-    public static readonly string NoServerHint = $"{NoticeGlyphs.Llm}Set the URL with /settings or {EnvironmentOverrides.LlmUrlVariable}.";
-
-    /// <summary>Under the no-server line when <c>LLM server scan mode</c> is <c>disabled</c> (2026-09-15): the two ways out. Pinned.</summary>
-    public static readonly string ScanDisabledHint = $"{NoticeGlyphs.Llm}Set the URL with /settings (LLM URL, or /server <url>) or {EnvironmentOverrides.LlmUrlVariable}, or set LLM server scan mode to local, remote or both.";
-
-    /// <summary><see cref="ScanDisabledHint"/> under <see cref="LlmSession.NoEmbeddedLine"/> (2026-09-30, the user's wording): with no embedded model downloaded, the catalog is the third way out.</summary>
-    public static readonly string ScanDisabledNoEmbeddedHint = $"{NoticeGlyphs.Llm}Set the URL with /settings (LLM URL, or /server <url>) or {EnvironmentOverrides.LlmUrlVariable}, or set LLM server scan mode to local, remote or both. Alternatively, download an embedded model.";
-
-    /// <summary>The hint under <see cref="LlmSession.NoServerLine"/> for <paramref name="scope"/>: <see cref="ScanDisabledHint"/> when nothing was looked for, else <see cref="NoServerHint"/>.</summary>
-    public static string NoServerHintFor(ScanScope scope) => Llm.LlmScanMode.Scans(scope) ? NoServerHint : ScanDisabledHint;
-
-    /// <summary>The reply to a message when there is no assistant. Pinned.</summary>
-    public static readonly string NoAssistantError = $"No LLM endpoint. Set the URL with /settings or {EnvironmentOverrides.LlmUrlVariable}.";
+    /// <summary>The reply to a message when there is no assistant; in the no-server lines' shape since 2026-09-30 (the user's call). Pinned.</summary>
+    public const string NoAssistantError = "No LLM server. Pick one with /server, or set LLM URL in /settings.";
 
     private readonly ScreenPane _pane;
     private readonly AppSettings _settings;
@@ -8229,7 +8217,9 @@ internal sealed partial class ChatScreen
 
             if (picked is null && answered.Count == 0)
             {
-                ReportLlm(quiet);
+                // The embedded rows alone, and ESC (2026-09-30, the user's report): the no-URL pair blamed the URL and the scan
+                // mode; the one line says what happened and where the models are.
+                _transcript.Error(LlmSession.NoServerPickedLine);
                 return;
             }
 
@@ -8542,7 +8532,6 @@ internal sealed partial class ChatScreen
             {
                 // Disabled entirely (the user's call, 2026-09-15): no spinner, no request, the session as it was.
                 _transcript.Error(LlmSession.NoServerLine(scope));
-                _transcript.Notice(ScanDisabledHint);
                 return;
             }
 
@@ -8557,7 +8546,6 @@ internal sealed partial class ChatScreen
                 }
 
                 _transcript.Error(LlmSession.NoServerLine(scope));
-                _transcript.Notice(NoServerHint);
                 return;
             }
 
@@ -8671,7 +8659,6 @@ internal sealed partial class ChatScreen
 
             var scope = Llm.LlmScanMode.Resolve(effective);
             _transcript.Error(LlmSession.NoServerLine(scope));
-            _transcript.Notice(NoServerHintFor(scope));
         }
         else if (!quiet || !SettingsNameEndpoint(_effective()))
         {
@@ -8679,12 +8666,8 @@ internal sealed partial class ChatScreen
         }
     }
 
-    /// <summary>The no-server pair when nothing was looked for and no embedded model is downloaded (2026-09-30, the user's wording).</summary>
-    private void ReportNoEmbedded()
-    {
-        _transcript.Error(LlmSession.NoEmbeddedLine);
-        _transcript.Notice(ScanDisabledNoEmbeddedHint);
-    }
+    /// <summary>The no-server line when nothing was looked for and no embedded model is downloaded (2026-09-30, one line since later that day).</summary>
+    private void ReportNoEmbedded() => _transcript.Error(LlmSession.NoEmbeddedLine);
 
     /// <summary>
     /// Whether the LLM has nowhere to come from but the embedded catalog (2026-09-30, the user's ask): the embedded models are

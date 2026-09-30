@@ -1544,7 +1544,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(0, await screen.RunAsync(CancellationToken.None));
 
         Assert.Contains("✗ " + LlmSession.NoServerLine(ScanScope.Local), Output);
-        Assert.Contains(ChatScreen.NoServerHint, Output);
+        Assert.DoesNotContain("🖥️ Set the URL", Output);   // one line, no hint under it (2026-09-30)
         Assert.Null(session.Endpoint);
     }
 
@@ -1695,7 +1695,7 @@ public partial class ChatScreenTests : IDisposable
 
         Assert.Contains("LLM: http://127.0.0.1:1234/v1 model=llama (first listed)", output);
         Assert.Contains("✗ " + LlmSession.NoServerLine(ScanScope.Local), output);
-        Assert.Contains(ChatScreen.NoServerHint, output);
+        Assert.DoesNotContain("🖥️ Set the URL", output);
         Assert.DoesNotContain(SettingsMenu.PromptTitle(SettingsMenu.ServerTitle, SettingsMenu.KeepKeys), output);
         Assert.NotNull(session.Assistant);   // the session in use is untouched
         Assert.Equal("http://127.0.0.1:1234/v1", _settings.Current.LlmUrl);   // the fixture's, untouched
@@ -1704,13 +1704,10 @@ public partial class ChatScreenTests : IDisposable
     // ── LLM server scan mode = disabled (2026-09-15) ────────────────────────────────
 
     [Fact]
-    public void NoServerHintFor_IsPinned()
+    public void NoAssistantError_IsPinned()
     {
-        Assert.Equal("🖥️ Set the URL with /settings (LLM URL, or /server <url>) or NEONSIDEKICK_LLM_URL, or set LLM server scan mode to local, remote or both.", ChatScreen.ScanDisabledHint);
-        Assert.Equal(ChatScreen.ScanDisabledHint, ChatScreen.NoServerHintFor(ScanScope.Disabled));
-        Assert.Equal(ChatScreen.NoServerHint, ChatScreen.NoServerHintFor(ScanScope.Local));
-        Assert.Equal(ChatScreen.NoServerHint, ChatScreen.NoServerHintFor(ScanScope.Remote));
-        Assert.Equal(ChatScreen.NoServerHint, ChatScreen.NoServerHintFor(ScanScope.Both));
+        // The no-server hints went on 2026-09-30 (the user's call: the lines above them say it all); this one stands alone under a message.
+        Assert.Equal("No LLM server. Pick one with /server, or set LLM URL in /settings.", ChatScreen.NoAssistantError);
     }
 
     [Fact]
@@ -1727,8 +1724,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(0, ModelProbes);
         Assert.Null(_session.Endpoint);
         Assert.Equal(2, Count(output, "✗ " + LlmSession.NoServerLine(ScanScope.Disabled)));   // the launch, then /server
-        Assert.Equal(2, Count(output, "  · " + ChatScreen.ScanDisabledHint));
-        Assert.DoesNotContain("  · " + ChatScreen.NoServerHint, output);                      // (the hint is a substring of NoAssistantError)
+        Assert.DoesNotContain("🖥️ Set the URL", output);                                      // one line, no hint under it (2026-09-30)
         Assert.DoesNotContain(ChatScreen.ConnectingLabel, output);                             // no spinner: nothing was looked for
         Assert.DoesNotContain(ChatScreen.ServerSearchLabel, output);
         Assert.DoesNotContain(SettingsMenu.PromptTitle(SettingsMenu.ServerTitle, SettingsMenu.KeepKeys), output);
@@ -1777,7 +1773,6 @@ public partial class ChatScreenTests : IDisposable
         Assert.Null(_session.Endpoint);
         Assert.Contains("  · 🖥️ LLM URL: (not set; scan disabled)", output);
         Assert.Contains("✗ " + LlmSession.NoServerLine(ScanScope.Disabled), output);
-        Assert.Contains("  · " + ChatScreen.ScanDisabledHint, output);
     }
 
     [Fact]

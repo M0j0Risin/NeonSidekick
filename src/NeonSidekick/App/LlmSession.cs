@@ -20,24 +20,47 @@ internal sealed class LlmSession : IDisposable
     private const string Category = "App";
 
     /// <summary>
-    /// Printed once when discovery under <paramref name="scope"/> found nothing — or, under
-    /// <see cref="ScanScope.Disabled"/>, when nothing was looked for: that line stands alone in
-    /// headless, so it names every way out itself. Pinned by tests.
+    /// The screen's line when discovery under <paramref name="scope"/> found nothing — or, under
+    /// <see cref="ScanScope.Disabled"/>, when nothing was looked for. One line, what happened and then the ways out, with no
+    /// hint under it (2026-09-30, the user's call: the line and a hint beneath it said the same thing twice, and named an
+    /// environment variable a TUI user never sets). The ports stay: they say why a server elsewhere was not found. Headless
+    /// has its own (<see cref="HeadlessNoServerLine"/>). Pinned by tests.
     /// </summary>
     public static string NoServerLine(ScanScope scope) => scope switch
     {
-        ScanScope.Disabled => $"LLM: no URL is set and LLM server scan mode is disabled; set {EnvironmentOverrides.LlmUrlVariable}, or the URL or the scan mode in /settings.",
-        ScanScope.Remote => $"LLM: no server found on the local network (ports {LlmEndpointProbe.CandidatePortList}); set {EnvironmentOverrides.LlmUrlVariable}.",
-        ScanScope.Both => $"LLM: no server found on 127.0.0.1 or the local network (ports {LlmEndpointProbe.CandidatePortList}); set {EnvironmentOverrides.LlmUrlVariable}.",
-        _ => $"LLM: no server found on 127.0.0.1 ports {LlmEndpointProbe.CandidatePortList}; set {EnvironmentOverrides.LlmUrlVariable}.",
+        ScanScope.Disabled => "LLM: no server set. Set LLM URL in /settings (or /server <url>), or turn on LLM server scan mode.",
+        ScanScope.Remote => $"LLM: no server found on the local network (ports {LlmEndpointProbe.CandidatePortList}). Start one, or set LLM URL in /settings.",
+        ScanScope.Both => $"LLM: no server found on this machine or the local network (ports {LlmEndpointProbe.CandidatePortList}). Start one, or set LLM URL in /settings.",
+        _ => $"LLM: no server found on this machine (ports {LlmEndpointProbe.CandidatePortList}). Start one, or set LLM URL in /settings.",
     };
 
     /// <summary>
-    /// <see cref="NoServerLine"/> for <see cref="ScanScope.Disabled"/> when the embedded models are offered and none is downloaded
-    /// (2026-09-30, the user's wording): the embedded catalog is the third way out. The screen's alone; headless keeps the line above.
+    /// <see cref="NoServerLine"/> for a headless run (2026-09-30): the same shape, the ways out a scripted run has — <c>--url</c>
+    /// and <see cref="EnvironmentOverrides.LlmUrlVariable"/>; there is no <c>/settings</c> to open. Pinned by tests.
     /// </summary>
-    public static readonly string NoEmbeddedLine =
-        $"LLM: no URL is set, LLM server scan mode is disabled and no embedded models are downloaded; set {EnvironmentOverrides.LlmUrlVariable}, or the URL or the scan mode in /settings. Alternatively, download an embedded model.";
+    public static string HeadlessNoServerLine(ScanScope scope) => scope switch
+    {
+        ScanScope.Disabled => $"LLM: no server set. Pass --url or set {EnvironmentOverrides.LlmUrlVariable}, or turn on LLM server scan mode in the profile.",
+        ScanScope.Remote => $"LLM: no server found on the local network (ports {LlmEndpointProbe.CandidatePortList}). Pass --url or set {EnvironmentOverrides.LlmUrlVariable}.",
+        ScanScope.Both => $"LLM: no server found on this machine or the local network (ports {LlmEndpointProbe.CandidatePortList}). Pass --url or set {EnvironmentOverrides.LlmUrlVariable}.",
+        _ => $"LLM: no server found on this machine (ports {LlmEndpointProbe.CandidatePortList}). Pass --url or set {EnvironmentOverrides.LlmUrlVariable}.",
+    };
+
+    /// <summary>
+    /// The screen's line when its server picker listed the installed embedded models alone and was closed with none picked
+    /// (2026-09-30, the user's report: ESC there read "no URL is set and LLM server scan mode is disabled", which named
+    /// neither the cause nor the models on offer, and a hint under it said the same again). One line, no hint. Pinned.
+    /// </summary>
+    public const string NoServerPickedLine =
+        "LLM: no server picked; /server lists the installed embedded models again, or set LLM URL or LLM server scan mode in /settings.";
+
+    /// <summary>
+    /// <see cref="NoServerLine"/> for <see cref="ScanScope.Disabled"/> when the embedded models are offered and none is downloaded
+    /// (2026-09-30): the embedded catalog is the third way out. The screen's alone; headless keeps its own line. One line, no hint
+    /// (later that day, the user's call). Pinned.
+    /// </summary>
+    public const string NoEmbeddedLine =
+        "LLM: no server set and no embedded model downloaded. Download one in /settings › Embedded, set LLM URL, or turn on LLM server scan mode.";
 
     private readonly LlmEndpointProbe _probe;
     private readonly ContextLengthProbe _contextProbe;

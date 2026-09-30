@@ -64,10 +64,15 @@ public class LlmSessionTests
         Assert.False(await session.ConnectAsync(Scanning, CancellationToken.None));
         Assert.Null(session.Endpoint);
         Assert.Null(session.Assistant);
-        Assert.Equal("LLM: no server found on 127.0.0.1 ports 1234, 8000, 30000, 8080, 11434, 8888; set NEONSIDEKICK_LLM_URL.", LlmSession.NoServerLine(ScanScope.Local));
-        Assert.Equal("LLM: no server found on the local network (ports 1234, 8000, 30000, 8080, 11434, 8888); set NEONSIDEKICK_LLM_URL.", LlmSession.NoServerLine(ScanScope.Remote));
-        Assert.Equal("LLM: no server found on 127.0.0.1 or the local network (ports 1234, 8000, 30000, 8080, 11434, 8888); set NEONSIDEKICK_LLM_URL.", LlmSession.NoServerLine(ScanScope.Both));
-        Assert.Equal("LLM: no URL is set and LLM server scan mode is disabled; set NEONSIDEKICK_LLM_URL, or the URL or the scan mode in /settings.", LlmSession.NoServerLine(ScanScope.Disabled));
+        // One line each, what happened then the ways out (2026-09-30, the user's call): the screen's name /settings, headless's --url and the variable.
+        Assert.Equal("LLM: no server found on this machine (ports 1234, 8000, 30000, 8080, 11434, 8888). Start one, or set LLM URL in /settings.", LlmSession.NoServerLine(ScanScope.Local));
+        Assert.Equal("LLM: no server found on the local network (ports 1234, 8000, 30000, 8080, 11434, 8888). Start one, or set LLM URL in /settings.", LlmSession.NoServerLine(ScanScope.Remote));
+        Assert.Equal("LLM: no server found on this machine or the local network (ports 1234, 8000, 30000, 8080, 11434, 8888). Start one, or set LLM URL in /settings.", LlmSession.NoServerLine(ScanScope.Both));
+        Assert.Equal("LLM: no server set. Set LLM URL in /settings (or /server <url>), or turn on LLM server scan mode.", LlmSession.NoServerLine(ScanScope.Disabled));
+        Assert.Equal("LLM: no server set and no embedded model downloaded. Download one in /settings › Embedded, set LLM URL, or turn on LLM server scan mode.", LlmSession.NoEmbeddedLine);
+        Assert.Equal("LLM: no server set. Pass --url or set NEONSIDEKICK_LLM_URL, or turn on LLM server scan mode in the profile.", LlmSession.HeadlessNoServerLine(ScanScope.Disabled));
+        Assert.Equal("LLM: no server found on the local network (ports 1234, 8000, 30000, 8080, 11434, 8888). Pass --url or set NEONSIDEKICK_LLM_URL.", LlmSession.HeadlessNoServerLine(ScanScope.Remote));
+        Assert.Equal("LLM: no server found on this machine or the local network (ports 1234, 8000, 30000, 8080, 11434, 8888). Pass --url or set NEONSIDEKICK_LLM_URL.", LlmSession.HeadlessNoServerLine(ScanScope.Both));
     }
 
     [Fact]

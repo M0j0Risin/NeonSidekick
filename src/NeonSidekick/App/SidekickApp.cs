@@ -34,7 +34,7 @@ public sealed class SidekickApp
     public const string HeadlessHint = "Headless mode. Type a message; /clear or /new forgets the conversation; /compact [focus] shrinks it; /plan <requirement> plans before doing (/plan approve [--fresh] | cancel | show | save [name] | open [name]); /skills add <source> [--global] [--yes] installs a skill; /claude <message> asks Claude Code; /exit or EOF exits.";
 
     /// <summary>Printed once when discovery under <paramref name="scope"/> found nothing. Pinned by tests; shared with the chat screen.</summary>
-    public static string HeadlessNoServerLine(ScanScope scope) => LlmSession.NoServerLine(scope);
+    public static string HeadlessNoServerLine(ScanScope scope) => LlmSession.HeadlessNoServerLine(scope);
 
     /// <summary>The reply to every message when there is no assistant. Pinned by tests.</summary>
     public static readonly string HeadlessNoAssistantReply =
