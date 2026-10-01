@@ -4507,7 +4507,10 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
             bool after = usage.Length > 0 && _labelAfterUsage(label);
             string unfitted = " " + BusyRow(label, elapsed, _overlay?.Hint ?? (_top >= 0 ? ScrolledHint(RowsBelowLocked()) : ""), queued, usage, after);
             string labelled = " " + Labelled(BusyText(label, elapsed), usage, after);
-            string strip = StripPrefix(_strip());
+            // Read once (2026-10-01): an embedded download's strip turns with the clock, and two reads astride a frame
+            // would leave _hintStrip blank below — its 📥 dead to a click for the draw.
+            string glyphs = _strip();
+            string strip = StripPrefix(glyphs);
             string right = Trail(_trailer(), mark, max, TextCells.Width(strip) + TextCells.Width(frame) + TextCells.Width(unfitted));
             int leftMax = right.Length == 0 ? max : max - TextCells.Width(right) - TrailerGap;
             string prefix = Fit(strip, leftMax - TextCells.Width(frame));
@@ -4520,7 +4523,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
             WriteTrailed(rest + tail, mark);
             _shownHint = left + tail;
             // The strip's place (2026-09-24): column 0, as on the standing row — when the fit left it whole, a cut glyph being no button.
-            _hintStrip = prefix == StripPrefix(_strip()) ? _strip() : "";
+            _hintStrip = prefix == strip ? glyphs : "";
             // The queued part's place: after the prefix, the frame, the blank, the label, the tally and a separator — when the fit left it whole.
             RecordQueued(queued, TextCells.Width(prefix) + TextCells.Width(frame), TextCells.Width(labelled + HintSeparator), unfitted, restMax);
             // The usage zone: the frame, the label and the tally after the prefix — when the fit kept them

@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Globalization;
 using System.Text.RegularExpressions;
+using NeonSidekick.UI;
 
 namespace NeonSidekick.App;
 
@@ -85,7 +86,7 @@ public sealed partial class BackgroundJobs
         ArgumentNullException.ThrowIfNull(work);
         ArgumentNullException.ThrowIfNull(onDone);
         await StopAsync(kind).ConfigureAwait(false);
-        var job = new Job(kind, CancellationTokenSource.CreateLinkedTokenSource(appToken), onDone, appToken);
+        var job = new Job(kind, CancellationTokenSource.CreateLinkedTokenSource(appToken), onDone, appToken, _time.GetTimestamp());
         Volatile.Write(ref _slots[(int)kind], job);
         Task task;
         try
@@ -168,7 +169,11 @@ public sealed partial class BackgroundJobs
 
     /// <summary>
     /// The hint row's part (2026-09-29): each running job's glyph (<see cref="BackgroundJobText.Glyph"/>), with its
-    /// <see cref="Progress"/> after a space when the label carries one — <c>📥 42% 🔌 1/3</c>; empty with none. Any thread. Pinned.
+    /// <see cref="Progress"/> after a space when the label carries one — <c>📥 ⠋ 42% 🔌 1/3</c>; empty with none. Any thread. Pinned.
+    /// An embedded download carries a spinner between its glyph and its number (<see cref="SpinnerFrame"/>; 2026-10-01, the
+    /// user's ask: a multi-GB file's percentage stands still for long stretches, and the runtime's zip and the SHA check show
+    /// none, so the row looked stuck). It goes after the glyph, not before, so the 📥 stays the strip's first cells and its
+    /// double-click target does not move; the frame turns with the clock, so the pane's tick sees a changed row and redraws it.
     /// </summary>
     public string Strip()
     {
@@ -178,12 +183,24 @@ public sealed partial class BackgroundJobs
             if (Volatile.Read(ref _slots[(int)kind]) is { } job)
             {
                 string glyph = BackgroundJobText.Glyph(kind);
+                if (kind == BackgroundJobKind.EmbeddedDownload)
+                {
+                    glyph += " " + SpinnerFrame(_time.GetElapsedTime(job.Started));
+                }
+
                 parts.Add(Progress(job.Label) is { } progress ? glyph + " " + progress : glyph);
             }
         }
 
         return string.Join(" ", parts);
     }
+
+    /// <summary>
+    /// The strip spinner's frame <paramref name="elapsed"/> into a job: the reply spinner's frames (<see cref="Theme.SpinnerFrames"/>,
+    /// each one cell, so the row never shifts) at the pane's own rate, one per <see cref="ScreenPane.Tick"/>. Pinned.
+    /// </summary>
+    public static string SpinnerFrame(TimeSpan elapsed) =>
+        Theme.SpinnerFrames[(int)(Math.Max(0, elapsed.Ticks) / ScreenPane.Tick.Ticks % Theme.SpinnerFrames.Length)];
 
     /// <summary>The job whose strip glyph is <paramref name="glyph"/>, or null: the strip's double-click. Pinned.</summary>
     public static BackgroundJobKind? KindOfGlyph(string glyph)
@@ -280,11 +297,14 @@ public sealed partial class BackgroundJobs
                 ? new JobOutcome(JobEnd.Failed, task.Exception!.InnerExceptions.Count == 1 ? task.Exception.InnerException : task.Exception)
                 : new JobOutcome(JobEnd.Ok);
 
-    private sealed class Job(BackgroundJobKind kind, CancellationTokenSource cts, Func<JobOutcome, Task> onDone, CancellationToken appToken)
+    private sealed class Job(BackgroundJobKind kind, CancellationTokenSource cts, Func<JobOutcome, Task> onDone, CancellationToken appToken, long started)
     {
         private string? _label;
 
         public BackgroundJobKind Kind { get; } = kind;
+
+        /// <summary>The clock's timestamp at the start, for the strip's spinner.</summary>
+        public long Started { get; } = started;
 
         public CancellationTokenSource Cts { get; } = cts;
 

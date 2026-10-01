@@ -59,7 +59,7 @@ public sealed class BackgroundJobsTests
         Assert.True(await StartBehindAsync(jobs, BackgroundJobKind.EmbeddedDownload, held.Work, o => { seen = o; return Task.CompletedTask; }));
         Assert.True(jobs.Running(BackgroundJobKind.EmbeddedDownload));
         held.Phase!("downloading Gemma 4 E2B (4.2 GB)… 42%");
-        Assert.Equal(BackgroundJobText.DownloadGlyph + " 42%", jobs.Strip());
+        Assert.Matches("^📥 [⠋⠙⠸⠴⠧⠇⠏] 42%$", jobs.Strip());
 
         held.Done.SetResult();
         Assert.True(SpinWait.SpinUntil(() => jobs.HasCompletions, TimeSpan.FromSeconds(5)));
@@ -129,6 +129,45 @@ public sealed class BackgroundJobsTests
         await Task.Delay(50);
         await jobs.DrainAsync();
         Assert.Equal(0, ends);
+    }
+
+    /// <summary>
+    /// The embedded download's spinner (2026-10-01): between the 📥 and its number, turning one frame per pane tick, there
+    /// with no number too; the other jobs carry none.
+    /// </summary>
+    [Fact]
+    public async Task TheDownloadsStrip_SpinsBetweenItsGlyphAndItsNumber_TheOthersDoNot()
+    {
+        var jobs = Jobs();
+        var download = new Held();
+        var mcp = new Held();
+        await StartBehindAsync(jobs, BackgroundJobKind.EmbeddedDownload, download.Work, _ => Task.CompletedTask);
+        await StartBehindAsync(jobs, BackgroundJobKind.Mcp, mcp.Work, _ => Task.CompletedTask);
+        mcp.Phase!("connecting MCP servers (1 of 3)");
+
+        download.Phase!("verifying Gemma 4 E2B…");
+        string before = jobs.Strip();
+        Assert.Matches("^📥 [⠋⠙⠸⠴⠧⠇⠏] 🔌 1/3$", before);
+
+        download.Phase!("downloading Gemma 4 E2B (4.2 GB)… 42%");
+        string frame = before.Split(' ')[1];
+        Assert.Equal("📥 " + frame + " 42% 🔌 1/3", jobs.Strip());
+        _time.Advance(UI.ScreenPane.Tick);
+        Assert.NotEqual("📥 " + frame + " 42% 🔌 1/3", jobs.Strip());
+
+        await jobs.CancelAllAsync();
+    }
+
+    [Fact]
+    public void SpinnerFrame_TurnsOncePerTick_AndWraps()
+    {
+        var tick = UI.ScreenPane.Tick;
+        int count = UI.Theme.SpinnerFrames.Length;
+        Assert.Equal(UI.Theme.SpinnerFrames[0], BackgroundJobs.SpinnerFrame(TimeSpan.Zero));
+        Assert.Equal(UI.Theme.SpinnerFrames[0], BackgroundJobs.SpinnerFrame(tick - TimeSpan.FromMilliseconds(1)));
+        Assert.Equal(UI.Theme.SpinnerFrames[1], BackgroundJobs.SpinnerFrame(tick));
+        Assert.Equal(UI.Theme.SpinnerFrames[0], BackgroundJobs.SpinnerFrame(tick * count));
+        Assert.Equal(UI.Theme.SpinnerFrames[0], BackgroundJobs.SpinnerFrame(TimeSpan.FromSeconds(-1)));
     }
 
     [Fact]
