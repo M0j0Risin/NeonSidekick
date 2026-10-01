@@ -19,6 +19,16 @@ internal sealed partial class ChatScreen
     /// <summary>The running <c>/botchat</c>'s ESC ladder: the kill switch ends the chat through it. Null with no chat.</summary>
     private BotEscLadder? _botLadder;
 
+    /// <summary>How long after a first Ctrl+Alt+X the second one unloads the model (the alert shows meanwhile), as <see cref="ExitConfirmWindow"/>.</summary>
+    public static readonly TimeSpan KillSwitchConfirmWindow = TimeSpan.FromSeconds(2);
+
+    /// <summary>
+    /// The kill switch's arm (later on 2026-10-01, the user's ask: two presses in a row, a safeguard against a stray one): the
+    /// UTC tick until which a second Ctrl+Alt+X unloads the model, 0 = none. Written and read on whatever task reads the key.
+    /// Other keys do not disarm it, as with the double Ctrl+C: the hook sees its own chord alone.
+    /// </summary>
+    private long _killArmedUntil;
+
     /// <summary>
     /// Ctrl+Alt+X (2026-10-01, the user's ask: "immediately unload an embedded model if one is loaded; if using an external LLM
     /// server, the command will simply do nothing"), <see cref="UI.KeySource.KillSwitch"/>'s hook: on whatever task read the
@@ -29,6 +39,10 @@ internal sealed partial class ChatScreen
     /// (<see cref="LlmSession.EmbeddedUnloaded"/>) with <see cref="EmbeddedLlmText.KilledNotice"/> — at once on the idle line,
     /// else when the cancelled work has wound down on its own task (<see cref="KillScope.Dispose"/>), so its client is never
     /// disposed under a request still unwinding. The saved URL stays: <c>/server</c> loads a model again.
+    /// Two presses since later that day (the user's ask: a safeguard against a stray one): the first, with a model to unload,
+    /// only arms it for <see cref="KillSwitchConfirmWindow"/> and puts <see cref="EmbeddedLlmText.KillArmedHint"/> on the hint
+    /// row — as an alert (<see cref="UI.ScreenPane.SetAlertHint"/>), since the standing hint is not drawn under a pane or a
+    /// spinner, where the key works too; the second inside the window kills. With nothing to unload neither press arms.
     /// </summary>
     private void KillSwitch()
     {
@@ -37,6 +51,18 @@ internal sealed partial class ChatScreen
             DiagnosticLog.Debug(AppCategory, KillSwitchIdleLog);
             return;
         }
+
+        long now = _time.GetUtcNow().UtcTicks;
+        if (now >= Volatile.Read(ref _killArmedUntil))
+        {
+            Volatile.Write(ref _killArmedUntil, now + KillSwitchConfirmWindow.Ticks);
+            _pane.SetAlertHint(EmbeddedLlmText.KillArmedHint, KillSwitchConfirmWindow);
+            DiagnosticLog.Debug(AppCategory, EmbeddedLlmText.KillArmedLog);
+            return;
+        }
+
+        Volatile.Write(ref _killArmedUntil, 0);
+        _pane.SetAlertHint(null, TimeSpan.Zero);
 
         // The work first, then the servers: a load in progress ends on its token, as Ctrl+C under its spinner ends it, rather
         // than reading the kill as a crash. The scope's notice is read only once its owner has joined the watcher this runs on.

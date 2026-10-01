@@ -8,7 +8,8 @@ namespace NeonSidekick.Tests;
 /// <summary>
 /// The embedded model's kill switch, Ctrl+Alt+X (2026-10-01, the user's ask: "immediately unload an embedded model if one is
 /// loaded; if using an external LLM server, the command will simply do nothing"): at the idle line, under a reply, in a pane
-/// and under a load.
+/// and under a load. Two presses in a row since later that day (the user's ask: a safeguard against a stray one): the first
+/// arms it and shows the alert, the second inside the window kills.
 /// </summary>
 public partial class ChatScreenTests
 {
@@ -46,6 +47,9 @@ public partial class ChatScreenTests
         Assert.Equal("Embedded model unloaded: A, B. /server loads it again.", EmbeddedLlmText.KilledNotice(["A", "B"]));
         Assert.Equal("Kill switch (Ctrl+Alt+X): stopped llama-server for gemma-4-e2b.", EmbeddedLlmText.KilledLog(["gemma-4-e2b"]));
         Assert.Equal("Gemma 4 E2B was unloaded (Ctrl+Alt+X) before it finished loading", EmbeddedLlmText.KilledStart(EmbeddedModelCatalog.Find("gemma-4-e2b")!));
+        Assert.Equal("Press Ctrl+Alt+X again to unload the embedded model", EmbeddedLlmText.KillArmedHint);
+        Assert.Equal("Kill switch (Ctrl+Alt+X): armed; a second press within two seconds unloads the embedded model.", EmbeddedLlmText.KillArmedLog);
+        Assert.Equal(TimeSpan.FromSeconds(2), ChatScreen.KillSwitchConfirmWindow);
     }
 
     [Fact]
@@ -54,7 +58,7 @@ public partial class ChatScreenTests
         var embedded = OnTheEmbeddedE2b();
         var input = WhenIdle(i =>
         {
-            i.Push(Keys.CtrlAlt(ConsoleKey.X));
+            i.Push(Keys.CtrlAlt(ConsoleKey.X), Keys.CtrlAlt(ConsoleKey.X));
             PushLine(i, "hello");
             PushLine(i, "/exit");
         });
@@ -78,7 +82,7 @@ public partial class ChatScreenTests
         var embedded = UseEmbedded(new FakeEmbeddedLlm().Installed("gemma-4-e2b"));
         var input = WhenIdle(i =>
         {
-            i.Push(Keys.CtrlAlt(ConsoleKey.X));
+            i.Push(Keys.CtrlAlt(ConsoleKey.X), Keys.CtrlAlt(ConsoleKey.X));
             PushLine(i, "/exit");
         });
 
@@ -86,6 +90,7 @@ public partial class ChatScreenTests
 
         Assert.Equal(0, embedded.Kills);
         Assert.DoesNotContain("Embedded model unloaded", output);
+        Assert.DoesNotContain(EmbeddedLlmText.KillArmedHint, output);   // nothing to unload: not even armed
         Assert.NotNull(_session.Assistant);
         Assert.Equal("http://127.0.0.1:1234/v1", _session.Endpoint?.BaseUrl.AbsoluteUri);
     }
@@ -99,6 +104,7 @@ public partial class ChatScreenTests
         {
             if (i == 1)
             {
+                _console.Input.PushKey(Keys.CtrlAlt(ConsoleKey.X));
                 _console.Input.PushKey(Keys.CtrlAlt(ConsoleKey.X));
                 while (!ct.IsCancellationRequested)
                 {
@@ -126,7 +132,7 @@ public partial class ChatScreenTests
         UsePane();
         var input = WhenIdle(
             i => PushLine(i, "/help"),
-            i => i.Push(Keys.CtrlAlt(ConsoleKey.X), Keys.Escape),   // in /help: ESC closes it, still open after the kill
+            i => i.Push(Keys.CtrlAlt(ConsoleKey.X), Keys.CtrlAlt(ConsoleKey.X), Keys.Escape),   // in /help: ESC closes it, still open after the kill
             i => PushLine(i, "/exit"));
 
         string output = await RunAsync(input);
@@ -143,6 +149,7 @@ public partial class ChatScreenTests
         embedded.StartGate = async ct =>
         {
             _console.Input.PushKey(Keys.CtrlAlt(ConsoleKey.X));
+            _console.Input.PushKey(Keys.CtrlAlt(ConsoleKey.X));
             await Task.Delay(Timeout.Infinite, ct);
         };
         PushLine("/exit");
@@ -153,5 +160,43 @@ public partial class ChatScreenTests
         Assert.Null(embedded.Running);
         Assert.Contains(KilledE2b, output);
         Assert.Null(_session.Assistant);
+    }
+
+    [Fact]
+    public async Task KillSwitch_OnePress_OnlyArms_AndShowsTheAlert()
+    {
+        // Later on 2026-10-01 (the user's ask): a stray press unloads nothing; the hint row says what a second would do.
+        var embedded = OnTheEmbeddedE2b();
+        UsePane();
+        var input = WhenIdle(
+            i => i.Push(Keys.CtrlAlt(ConsoleKey.X)),
+            i => PushLine(i, "/exit"));
+
+        string output = await RunAsync(input);
+
+        Assert.Equal(0, embedded.Kills);
+        Assert.DoesNotContain(KilledE2b, output);
+        Assert.Contains(EmbeddedLlmText.KillArmedHint, output);
+        Assert.NotNull(_session.Assistant);
+    }
+
+    [Fact]
+    public async Task KillSwitch_ASecondPressAfterTheWindow_OnlyArmsAgain()
+    {
+        var embedded = OnTheEmbeddedE2b();
+        var input = WhenIdle(
+            i => i.Push(Keys.CtrlAlt(ConsoleKey.X)),
+            i =>
+            {
+                _time.Advance(ChatScreen.KillSwitchConfirmWindow + TimeSpan.FromMilliseconds(1));
+                i.Push(Keys.CtrlAlt(ConsoleKey.X));
+            },
+            i => PushLine(i, "/exit"));
+
+        string output = await RunAsync(input);
+
+        Assert.Equal(0, embedded.Kills);
+        Assert.DoesNotContain(KilledE2b, output);
+        Assert.NotNull(_session.Assistant);
     }
 }

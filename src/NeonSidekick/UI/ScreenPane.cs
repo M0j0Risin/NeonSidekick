@@ -185,6 +185,9 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     private string _shownHint = "";
     // The row's whole text while a picture is dragged toward the chat line (2026-09-28, SetDragHint); null for none.
     private string? _dragHint;
+    // The row's whole text while an alert stands (2026-10-01, SetAlertHint), and the UTC tick it lapses at; null for none.
+    private string? _alertHint;
+    private long _alertUntil;
     private Func<string> _queued = () => "";
     private Func<string> _usage = () => "";
     private Func<string> _busyUsage = () => "";
@@ -2440,6 +2443,39 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         get { lock (_gate) { return _dragHint; } }
     }
 
+    /// <summary>
+    /// The hint row's whole text for <paramref name="lasts"/> (2026-10-01, the kill switch's first press, the user's ask: a
+    /// second press within the window unloads the embedded model): a warning that must be seen wherever the key was read,
+    /// so it stands in for the standing row, a pane's hint and the busy row alike, as <see cref="SetDragHint"/>'s does (a drag
+    /// still wins over it). The tick takes it back once it lapses; null takes it back at once. No zone of the row answers a
+    /// click meanwhile. Any thread; disabled: nothing.
+    /// </summary>
+    public void SetAlertHint(string? text, TimeSpan lasts)
+    {
+        if (!Enabled)
+        {
+            return;
+        }
+
+        lock (_gate)
+        {
+            _alertUntil = text is null ? 0 : _time.GetUtcNow().UtcTicks + lasts.Ticks;
+            if (string.Equals(text, _alertHint, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            _alertHint = text;
+            RedrawHint();
+        }
+    }
+
+    /// <summary>The text <see cref="SetAlertHint"/> put on the hint row while it stands, or null.</summary>
+    public string? AlertHint
+    {
+        get { lock (_gate) { return _alertHint; } }
+    }
+
     /// <summary>Redraws the hint row if the standing hint changed (a state change with no transcript line).</summary>
     public void RefreshHint()
     {
@@ -4419,11 +4455,12 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     private void WriteHintRow()
     {
         int max = Math.Max(1, Width - 1);
-        if (_dragHint is { } drag)
+        if ((_dragHint ?? _alertHint) is { } whole)
         {
             // A picture on its way to the line (2026-09-28): the row is the drag's alone, in the strip button's style, no zones.
-            string shown = Fit(drag, max);
-            _inner.Write(new RawText(shown, Theme.AccentSecondary));
+            // An alert (2026-10-01, the kill switch's first press) the same, in the warning's style.
+            string shown = Fit(whole, max);
+            _inner.Write(new RawText(shown, _dragHint is null ? Theme.WarnText : Theme.AccentSecondary));
             _inner.Write(EraseLineEnd);
             _shownHint = shown;
             _hintStrip = "";
@@ -4683,6 +4720,14 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
                 return;
             }
 
+            if (_alertHint is not null && _time.GetUtcNow().UtcTicks >= _alertUntil)
+            {
+                // An alert that has lapsed (2026-10-01): the row is its own again; the branches below may draw over it.
+                _alertHint = null;
+                _alertUntil = 0;
+                RedrawHint();
+            }
+
             int w = Width;
             int h = Height;
             if (w != _lastWidth || h != _lastHeight)
@@ -4811,7 +4856,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
 
     /// <summary>The standing hint (the overlay's while one is open) with the trailer is not what the hint row shows.</summary>
     private bool HintChanged() =>
-        !string.Equals(_dragHint is { } drag ? Fit(drag, Math.Max(1, Width - 1)) : PinRight(StandingRow(), _trailer(), _trailerMark(), Math.Max(1, Width - 1)), _shownHint, StringComparison.Ordinal);
+        !string.Equals((_dragHint ?? _alertHint) is { } whole ? Fit(whole, Math.Max(1, Width - 1)) : PinRight(StandingRow(), _trailer(), _trailerMark(), Math.Max(1, Width - 1)), _shownHint, StringComparison.Ordinal);
 
     private void ColumnZero() => _inner.Cursor.Move(CursorDirection.Left, Width);
 

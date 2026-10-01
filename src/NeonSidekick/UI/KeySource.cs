@@ -130,7 +130,8 @@ public sealed class KeySource : IAnsiConsoleInput
     /// The embedded model's kill switch (2026-10-01, the user's ask: Ctrl+Alt+X, <see cref="Keys.IsKillSwitch"/>): run for the
     /// key wherever it is read — the idle line, a pane, a Spectre prompt, the watch under a reply or a spinner — and the key is
     /// spent there, never type-ahead, never part of a line. On the reading task: it must not block, and never throws. Null
-    /// (the default, headless) and the key passes as any other.
+    /// (the default, headless) and the key passes as any other. Every press goes to the hook: the screen's arms on the first
+    /// and unloads on a second inside its window (later on 2026-10-01).
     /// </summary>
     public Action? KillSwitch { get; set; }
 

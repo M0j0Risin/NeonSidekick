@@ -1656,7 +1656,8 @@ internal sealed partial class ChatScreen
     /// The plain Ctrl+letter rows are sorted by the letter too since 2026-10-01 (the user's ask): A, C, O, X.
     /// Ctrl+Alt+H (<c>/help</c>) joined the same day under G, the user's wording; Ctrl+Alt+X later that day under T, the
     /// user's place and wording — the one chord with no command, so its row names none (<see cref="Keys.IsKillSwitch"/>).
-    /// Ctrl+E (<c>/explore</c>) later still that day under Ctrl+C, the user's place and wording: A, C, E, O, X.
+    /// Ctrl+E (<c>/explore</c>) later still that day under Ctrl+C, the user's place and wording: A, C, E, O, X. The kill
+    /// switch's row says "(press twice)" since later that day, when it came to want two presses (<see cref="KillSwitchConfirmWindow"/>).
     /// </summary>
     public static (string Key, string Meaning)[] KeyRows(bool voiceOn, ConsoleKey pushToTalk, bool wakeReady, string wakePhrase)
     {
@@ -1703,7 +1704,7 @@ internal sealed partial class ChatScreen
         rows.Add(("Ctrl+Alt+P", "open the profile pane (/profile)"));
         rows.Add(("Ctrl+Alt+S", "start a new conversation and show the splash screen (/splash)"));
         rows.Add(("Ctrl+Alt+T", "open the tools pane (/tools)"));
-        rows.Add(("Ctrl+Alt+X", "kill switch to immediately unload an embedded model"));
+        rows.Add(("Ctrl+Alt+X", "kill switch to immediately unload an embedded model (press twice)"));
         rows.Add(("Ctrl+Alt+Y", "open the system prompt pane (/sys)"));
         return rows.ToArray();
     }

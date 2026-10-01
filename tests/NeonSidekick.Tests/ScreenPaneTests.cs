@@ -937,6 +937,33 @@ public class ScreenPaneTests : IDisposable
     }
 
     [Fact]
+    public void AlertHint_StandsInForTheHintAndTheSpinner_UntilItLapsesOrIsTakenBack()
+    {
+        // The kill switch's first press (2026-10-01): the alert is seen under a spinner too, and goes by itself on the tick.
+        using var pane = Pane();
+        pane.Hint = () => "idle";
+        pane.Show();
+
+        pane.SetAlertHint("press again", TimeSpan.FromSeconds(2));
+        Assert.EndsWith("press again", Output);
+        using (pane.BeginBusy("thinking"))
+        {
+            Assert.EndsWith("press again", Output);   // the busy row gives way while it stands
+            int mark = Output.Length;
+            _time.Advance(TimeSpan.FromSeconds(2));
+            Assert.Null(pane.AlertHint);
+            Assert.Contains(" thinking ", Output[mark..]);
+        }
+
+        Assert.EndsWith("idle", Output);
+        pane.SetAlertHint("again", TimeSpan.FromSeconds(2));
+        Assert.EndsWith("again", Output);
+        pane.SetAlertHint(null, TimeSpan.Zero);   // taken back at once
+        Assert.Null(pane.AlertHint);
+        Assert.EndsWith("idle", Output);
+    }
+
+    [Fact]
     public void Busy_NestedScopes_TheOuterLabelChangesUnderTheInner_AndShowsWhenTheInnerEnds()
     {
         // A turn's stage changes (writing → read_file) while /settings' voice listing sits on

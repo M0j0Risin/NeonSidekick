@@ -117,6 +117,7 @@ public static class Keys
     /// the idle line — a kill switch cannot wait for any of that. <see cref="KeySource.KillSwitch"/> spends it wherever the
     /// key is read instead. <see cref="ShortcutLine"/>'s shape: Control and Alt held, Shift not, and no character but the
     /// console's own CAN (<c>'\x18'</c>; a test builds <c>'\0'</c>), so an AltGr+X that types a character stays that character.
+    /// Every press is spent on the hook; the screen's wants two in a row (later on 2026-10-01, the user's ask).
     /// </summary>
     public static bool IsKillSwitch(ConsoleKeyInfo key) =>
         key.Key == ConsoleKey.X

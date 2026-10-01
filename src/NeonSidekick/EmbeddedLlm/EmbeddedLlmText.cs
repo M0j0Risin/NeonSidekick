@@ -191,6 +191,15 @@ public static class EmbeddedLlmText
     public static string KilledStart(EmbeddedModel model) => $"{model.Display} was unloaded (Ctrl+Alt+X) before it finished loading";
 
     /// <summary>
+    /// The hint row after a first Ctrl+Alt+X with an embedded model to unload (later on 2026-10-01, the user's ask: two presses
+    /// as a safeguard against a stray one); the next within the confirm window unloads it. <c>ExitHint</c>'s shape. Pinned.
+    /// </summary>
+    public const string KillArmedHint = "Press Ctrl+Alt+X again to unload the embedded model";
+
+    /// <summary>The log line when a first Ctrl+Alt+X arms the kill switch. Pinned.</summary>
+    public const string KillArmedLog = "Kill switch (Ctrl+Alt+X): armed; a second press within two seconds unloads the embedded model.";
+
+    /// <summary>
     /// The screen's notice after the kill switch (Ctrl+Alt+X, 2026-10-01, the user's ask): the models it unloaded, by their
     /// display names (a botchat's extras too), and the way back. Pinned.
     /// </summary>

@@ -9978,7 +9978,7 @@ public partial class ChatScreenTests : IDisposable
             ("Ctrl+Alt+P", "open the profile pane (/profile)"),
             ("Ctrl+Alt+S", "start a new conversation and show the splash screen (/splash)"),
             ("Ctrl+Alt+T", "open the tools pane (/tools)"),
-            ("Ctrl+Alt+X", "kill switch to immediately unload an embedded model"),   // 2026-10-01, the user's place and wording
+            ("Ctrl+Alt+X", "kill switch to immediately unload an embedded model (press twice)"),   // 2026-10-01, the user's place and wording
             ("Ctrl+Alt+Y", "open the system prompt pane (/sys)"),
         ], rows[^16..]);
         // Each row names its chord's command; the kill switch has none (2026-10-01).
