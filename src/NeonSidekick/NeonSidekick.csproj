@@ -146,6 +146,15 @@
       oracle-check are the proof on the published binary.
     -->
     <PackageReference Include="Oracle.ManagedDataAccess.Core" Version="23.26.301" />
+    <!--
+      The MySQL tools (MySql/, Llm/Tools/MySql*Tool.cs, `MySQL tools`, 2026-09-30): read-only queries on MySQL
+      and MariaDB over the connections of mysql.json. MySqlConnector, MIT, fully managed (no native DLL), and
+      trimming- and NativeAOT-annotated since 2.4.0 — unlike SqlClient and ODP.NET it needs no rooting: the spike
+      published clean and ran connect, binds, every type (DECIMAL(65,30) through MySqlDecimal), a READ ONLY
+      transaction refusing every write, cancel and the command timeout on MySQL 8.4 and MariaDB 11.8. The smoke
+      probe mysql:driver and the check mode mysql-check are the proof on the published binary.
+    -->
+    <PackageReference Include="MySqlConnector" Version="2.6.2" />
   </ItemGroup>
 
   <ItemGroup>

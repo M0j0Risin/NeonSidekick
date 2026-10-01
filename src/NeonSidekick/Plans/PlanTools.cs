@@ -28,6 +28,8 @@ public static class PlanTools
         "sql_connections", "sql_databases", "sql_tables", "sql_columns", "sql_describe", "sql_indexes", "sql_relationships", "sql_query",
         // Oracle: read-only by four layers already (2026-09-30)
         "oracle_connections", "oracle_schemas", "oracle_tables", "oracle_columns", "oracle_describe", "oracle_indexes", "oracle_relationships", "oracle_query",
+        // MySQL and MariaDB: read-only by the same layers (2026-09-30)
+        "mysql_connections", "mysql_databases", "mysql_tables", "mysql_columns", "mysql_describe", "mysql_indexes", "mysql_relationships", "mysql_query",
         // Home Assistant: the reads (2026-09-28)
         "ha_overview", "ha_states", "ha_history",
         // printing: the list only (2026-09-28)

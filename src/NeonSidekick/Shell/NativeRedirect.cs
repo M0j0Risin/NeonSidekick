@@ -45,7 +45,8 @@ public static class NativeRedirect
         Map(Llm.Tools.GitStashTool.ToolName, "git stash");
         Map(Llm.Tools.WebFetchTool.ToolName, "curl", "wget", "invoke-webrequest", "iwr", "invoke-restmethod", "irm");
         Map(Llm.Tools.SqlQueryTool.ToolName, "sqlcmd", "invoke-sqlcmd");
-        Map(Llm.Tools.OracleQueryTool.ToolName, "sqlplus");   // 2026-09-30; SQLcl's bare "sql" is too common a word to take
+        Map(Llm.Tools.OracleQueryTool.ToolName, "sqlplus");
+        Map(Llm.Tools.MySqlQueryTool.ToolName, "mysql", "mariadb");   // 2026-09-30; SQLcl's bare "sql" is too common a word to take
         return table;
     }
 

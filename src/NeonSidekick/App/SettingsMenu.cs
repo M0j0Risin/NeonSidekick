@@ -656,8 +656,38 @@ public enum SettingsField
     /// <summary>An edit row, no setting behind it: Enter opens the profile's <c>oracle.json</c> in the editor (made with <see cref="Oracle.OracleConfigFile.EmptyText"/> when missing). The Oracle tab (2026-09-30).</summary>
     OracleConnectionsProfile,
 
-    /// <summary>An edit row, no setting behind it: Enter opens the home's <c>oracle.json</c>, every profile's. The Oracle tab's last row (2026-09-30). Last in the enum, as every newcomer.</summary>
+    /// <summary>An edit row, no setting behind it: Enter opens the home's <c>oracle.json</c>, every profile's. The Oracle tab's last row (2026-09-30).</summary>
     OracleConnectionsGlobal,
+
+    /// <summary>A toggle: whether a turn offers the eight MySQL tools (<see cref="Settings.AppSettingsData.MySqlTools"/>). The MySQL tab's first row (2026-09-30); no reconnect.</summary>
+    MySqlTools,
+
+    /// <summary>A checklist: which connections of <c>mysql.json</c> this profile offers (<see cref="Settings.AppSettingsData.MySqlConnectionsOffered"/>). The MySQL tab (2026-09-30).</summary>
+    MySqlConnectionsOffered,
+
+    /// <summary>A pick: the connection a MySQL tool uses when the call names none (<see cref="Settings.AppSettingsData.MySqlDefaultConnection"/>). The MySQL tab (2026-09-30).</summary>
+    MySqlDefaultConnection,
+
+    /// <summary>An action row (2026-09-30): Enter picks a connection and asks for its password in a masked slot, saved to its store (<see cref="MySql.MySqlSecrets.Save"/>). The MySQL tab.</summary>
+    MySqlSetPassword,
+
+    /// <summary>An action row (2026-09-30): Enter walks a new connection through every choice, tests it and adds it to that <c>mysql.json</c> (<c>SettingsMenu.MySqlWizard.cs</c>). The MySQL tab.</summary>
+    MySqlAddConnection,
+
+    /// <summary>A toggle: whether <c>%</c> and part of a name lists the MySQL connections too (<see cref="Settings.AppSettingsData.MySqlPercentMention"/>). The MySQL tab (2026-09-30).</summary>
+    MySqlPercentMention,
+
+    /// <summary>Typed: how many rows a <c>mysql_query</c> without <c>max_rows</c> returns, 1 to 1000 (<see cref="Settings.AppSettingsData.MySqlQueryMaxRows"/>). The MySQL tab (2026-09-30).</summary>
+    MySqlQueryMaxRows,
+
+    /// <summary>Typed: seconds a MySQL tool's statement may run, 1 to 600 (<see cref="Settings.AppSettingsData.MySqlQueryTimeoutSeconds"/>). The MySQL tab (2026-09-30).</summary>
+    MySqlQueryTimeoutSeconds,
+
+    /// <summary>An edit row: Enter opens the profile's <c>mysql.json</c> in the editor (made with <see cref="MySql.MySqlConfigFile.EmptyText"/> when missing). The MySQL tab (2026-09-30).</summary>
+    MySqlConnectionsProfile,
+
+    /// <summary>An edit row: Enter opens the home's <c>mysql.json</c>, every profile's. The MySQL tab's last row (2026-09-30). Last in the enum, as every newcomer.</summary>
+    MySqlConnectionsGlobal,
 }
 
 /// <summary>The tabs of <c>/settings</c> on the pane, in strip order (General, Embedded, LLM, TTS, STT, Sessions, Botchat — the user's order, 2026-09-29; Sessions right after General — the user's order, 2026-09-18 — until then; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
@@ -1009,6 +1039,7 @@ internal sealed partial class SettingsMenu
         [SettingsField.ComfyTools, SettingsField.ComfyUrl, SettingsField.ComfyWorkflowsOffered, SettingsField.ComfyAddWorkflow, SettingsField.ComfyCaretMention, SettingsField.ComfyTimeoutSeconds, SettingsField.ComfyMaxPicturesPerCall, SettingsField.ComfyReinforceNegatives, SettingsField.ComfyShowPrompts, SettingsField.ComfyPictureStrip, SettingsField.ComfyOutputFolder],
         [SettingsField.SqlTools, SettingsField.SqlConnectionsOffered, SettingsField.SqlDefaultConnection, SettingsField.SqlSetPassword, SettingsField.SqlAddConnection, SettingsField.SqlPercentMention, SettingsField.SqlQueryMaxRows, SettingsField.SqlQueryTimeoutSeconds, SettingsField.SqlConnectionsProfile, SettingsField.SqlConnectionsGlobal],
         [SettingsField.OracleTools, SettingsField.OracleConnectionsOffered, SettingsField.OracleDefaultConnection, SettingsField.OracleSetPassword, SettingsField.OracleAddConnection, SettingsField.OraclePercentMention, SettingsField.OracleQueryMaxRows, SettingsField.OracleQueryTimeoutSeconds, SettingsField.OracleConnectionsProfile, SettingsField.OracleConnectionsGlobal],
+        [SettingsField.MySqlTools, SettingsField.MySqlConnectionsOffered, SettingsField.MySqlDefaultConnection, SettingsField.MySqlSetPassword, SettingsField.MySqlAddConnection, SettingsField.MySqlPercentMention, SettingsField.MySqlQueryMaxRows, SettingsField.MySqlQueryTimeoutSeconds, SettingsField.MySqlConnectionsProfile, SettingsField.MySqlConnectionsGlobal],
         [SettingsField.GitNativeTools, SettingsField.GitNativeDiffMaxLines, SettingsField.GitNativeLogMaxCommits, SettingsField.GitNativeEmail, SettingsField.GitNativeName],
         [SettingsField.ToolsDollarMention, SettingsField.ToolCollapseCount, SettingsField.CodeCollapseCount],
     ];
@@ -1036,6 +1067,7 @@ internal sealed partial class SettingsMenu
     private readonly Action<string>? _openFile;
     private readonly Func<Sql.SqlNamedConnection, CancellationToken, Task<Sql.SqlRun>> _testSqlConnection;
     private readonly Func<Oracle.OracleNamedConnection, CancellationToken, Task<Sql.SqlRun>> _testOracleConnection;
+    private readonly Func<MySql.MySqlNamedConnection, CancellationToken, Task<Sql.SqlRun>> _testMySqlConnection;
     private readonly Func<Comfy.ComfyClient?> _comfyClient;
     private readonly Func<CancellationToken, Task<(bool Ok, string Text)>> _testHomeAssistant;
     private readonly Func<IReadOnlyList<Printing.PrinterInfo>> _printers;
@@ -1063,9 +1095,10 @@ internal sealed partial class SettingsMenu
     /// <param name="installedLanguages">The languages the <c>Shell code languages</c> list marks as found (their <see cref="Shell.CodeLanguages.Names"/> words); null = all three marked found.</param>
     /// <param name="testSqlConnection">What the <c>SQL add connection</c> summary's test runs over the unsaved draft (later on 2026-09-23), its typed password in it as a plain <c>file</c> value; null = a real <see cref="Sql.SqlAccess"/> run of <see cref="SqlTestQuery"/>.</param>
     /// <param name="testOracleConnection">What the <c>Oracle add connection</c> summary's test runs over the unsaved draft (2026-09-30), its typed password in it as a plain <c>file</c> value; null = a real <see cref="Oracle.OracleAccess"/> run (<see cref="TestOracleConnectionAsync"/>).</param>
+    /// <param name="testMySqlConnection">What the <c>MySQL add connection</c> summary's test runs over the unsaved draft (2026-09-30); null = a real <see cref="MySql.MySqlAccess"/> run (<see cref="TestMySqlConnectionAsync"/>).</param>
     /// <param name="openFile">What the SQL tab's edit rows open <c>sql.json</c> with (2026-09-23): the screen's editor opener; null = the rows say there is none.</param>
     /// <param name="browseFolder">The folder picker the <c>Working directory (cwd)</c> row opens (2026-09-22, the user's ask): the screen's <c>/cwd browse</c> tree, returning what to save — <c>""</c> for the profile's folder, a full path, or null for nothing chosen. Null (and a console with no pane) falls back to the typed path the row asked for until then.</param>
-    public SettingsMenu(IAnsiConsole console, AppSettings settings, Func<SettingsField, string?> overriddenBy, InputLine input, TranscriptRenderer transcript, SpeechSession speech, MenuPane pane, Func<string, string?>? locateBrowser = null, Func<IReadOnlySet<string>>? installedShells = null, Func<IReadOnlySet<string>>? installedLanguages = null, Func<CancellationToken, Task<string?>>? browseFolder = null, Func<string, CancellationToken, Task<string?>>? browseVault = null, Action<string>? openFile = null, Func<Sql.SqlNamedConnection, CancellationToken, Task<Sql.SqlRun>>? testSqlConnection = null, Func<Comfy.ComfyClient?>? comfyClient = null, Func<IReadOnlyList<Skills.Skill>>? botChatSkills = null, Func<CancellationToken, Task<(bool Ok, string Text)>>? testHomeAssistant = null, Func<IReadOnlyList<Printing.PrinterInfo>>? printers = null, Func<Oracle.OracleNamedConnection, CancellationToken, Task<Sql.SqlRun>>? testOracleConnection = null)
+    public SettingsMenu(IAnsiConsole console, AppSettings settings, Func<SettingsField, string?> overriddenBy, InputLine input, TranscriptRenderer transcript, SpeechSession speech, MenuPane pane, Func<string, string?>? locateBrowser = null, Func<IReadOnlySet<string>>? installedShells = null, Func<IReadOnlySet<string>>? installedLanguages = null, Func<CancellationToken, Task<string?>>? browseFolder = null, Func<string, CancellationToken, Task<string?>>? browseVault = null, Action<string>? openFile = null, Func<Sql.SqlNamedConnection, CancellationToken, Task<Sql.SqlRun>>? testSqlConnection = null, Func<Comfy.ComfyClient?>? comfyClient = null, Func<IReadOnlyList<Skills.Skill>>? botChatSkills = null, Func<CancellationToken, Task<(bool Ok, string Text)>>? testHomeAssistant = null, Func<IReadOnlyList<Printing.PrinterInfo>>? printers = null, Func<Oracle.OracleNamedConnection, CancellationToken, Task<Sql.SqlRun>>? testOracleConnection = null, Func<MySql.MySqlNamedConnection, CancellationToken, Task<Sql.SqlRun>>? testMySqlConnection = null)
     {
         // Print default printer's picker (2026-09-28): the screen's spooler in the app; none otherwise, so a test never lists the machine's.
         _printers = printers ?? (() => []);
@@ -1076,6 +1109,7 @@ internal sealed partial class SettingsMenu
         _botChatSkills = botChatSkills ?? (() => []);
         _testSqlConnection = testSqlConnection ?? TestSqlConnectionAsync;
         _testOracleConnection = testOracleConnection ?? TestOracleConnectionAsync;
+        _testMySqlConnection = testMySqlConnection ?? TestMySqlConnectionAsync;
         _browseFolder = browseFolder;
         _openFile = openFile;
         _browseVault = browseVault;
@@ -1370,7 +1404,7 @@ internal sealed partial class SettingsMenu
             or SettingsField.ObsidianTools or SettingsField.ObsidianAllowDelete or SettingsField.SqlTools or SettingsField.SqlPercentMention or SettingsField.ComfyTools or SettingsField.ComfyReinforceNegatives or SettingsField.ComfyShowPrompts or SettingsField.ComfyCaretMention or SettingsField.ComfyPictureStrip
             or SettingsField.BotChatImages or SettingsField.BotChatImageAsync or SettingsField.BotChatSkills or SettingsField.BotChatVision or SettingsField.BotChatMultiEmbeddedKill or SettingsField.ClaudeAdvisor or SettingsField.ClaudeAdvisorConfirm
             or SettingsField.ClaudeApi or SettingsField.ClaudeApiPromptCaching or SettingsField.ClaudeCliServer or SettingsField.EmbeddedVision or SettingsField.EmbeddedLlmServer or SettingsField.EmbeddedDrafter
-            or SettingsField.HomeAssistantTools or SettingsField.PrintTools or SettingsField.OracleTools or SettingsField.OraclePercentMention;
+            or SettingsField.HomeAssistantTools or SettingsField.PrintTools or SettingsField.OracleTools or SettingsField.OraclePercentMention or SettingsField.MySqlTools or SettingsField.MySqlPercentMention;
 
     public static string FieldName(SettingsField field) => field switch
     {
@@ -1515,6 +1549,16 @@ internal sealed partial class SettingsMenu
         SettingsField.OracleQueryTimeoutSeconds => "Oracle query timeout (s)",
         SettingsField.OracleConnectionsProfile => "Oracle connections (profile)",
         SettingsField.OracleConnectionsGlobal => "Oracle connections (global)",
+        SettingsField.MySqlTools => "MySQL tools",
+        SettingsField.MySqlConnectionsOffered => "MySQL connections offered",
+        SettingsField.MySqlDefaultConnection => "MySQL default connection",
+        SettingsField.MySqlSetPassword => "MySQL set password",
+        SettingsField.MySqlAddConnection => "MySQL add connection",
+        SettingsField.MySqlPercentMention => "MySQL %-mention enabled",
+        SettingsField.MySqlQueryMaxRows => "MySQL max rows",
+        SettingsField.MySqlQueryTimeoutSeconds => "MySQL query timeout (s)",
+        SettingsField.MySqlConnectionsProfile => "MySQL connections (profile)",
+        SettingsField.MySqlConnectionsGlobal => "MySQL connections (global)",
         SettingsField.ObsidianAllowDelete => "Obsidian allow delete (.trash)",   // "Obsidian allow delete" until 2026-09-23 (the user's call: the row says where a delete goes)
         SettingsField.WebBrowserMode => "Web browser mode",
         SettingsField.WebBrowserPath => "Web browser path",
@@ -1759,6 +1803,16 @@ internal sealed partial class SettingsMenu
             SettingsField.OracleQueryTimeoutSeconds => Seconds(data.OracleQueryTimeoutSeconds),
             SettingsField.OracleConnectionsProfile => OracleConnectionsLabel(Oracle.OracleConfigFile.ProfilePath(profileDirectory)),
             SettingsField.OracleConnectionsGlobal => OracleConnectionsLabel(Oracle.OracleConfigFile.GlobalPath(Profiles.HomeOf(profileDirectory))),
+            SettingsField.MySqlTools => OnOff(data.MySqlTools),
+            SettingsField.MySqlDefaultConnection => string.IsNullOrWhiteSpace(data.MySqlDefaultConnection) ? FirstSqlConnectionLabel : data.MySqlDefaultConnection,
+            SettingsField.MySqlSetPassword => SqlSetPasswordLabel,
+            SettingsField.MySqlAddConnection => SqlAddConnectionLabel,
+            SettingsField.MySqlConnectionsOffered => MySqlOfferedValue(data.MySqlConnectionsOffered, MySql.MySqlConfigFile.LoadCatalog(profileDirectory, Profiles.HomeOf(profileDirectory))),
+            SettingsField.MySqlPercentMention => OnOff(data.MySqlPercentMention),
+            SettingsField.MySqlQueryMaxRows => SqlRows(data.MySqlQueryMaxRows),
+            SettingsField.MySqlQueryTimeoutSeconds => Seconds(data.MySqlQueryTimeoutSeconds),
+            SettingsField.MySqlConnectionsProfile => MySqlConnectionsLabel(MySql.MySqlConfigFile.ProfilePath(profileDirectory)),
+            SettingsField.MySqlConnectionsGlobal => MySqlConnectionsLabel(MySql.MySqlConfigFile.GlobalPath(Profiles.HomeOf(profileDirectory))),
             SettingsField.ObsidianVault => string.IsNullOrWhiteSpace(data.ObsidianVault) ? NoObsidianVaultLabel : data.ObsidianVault,
             SettingsField.WebBrowserMode => data.WebBrowserMode,
             SettingsField.WebBrowserPath => string.IsNullOrWhiteSpace(data.WebBrowserPath) ? AutoBrowserLabel(locatedBrowser) : data.WebBrowserPath,
@@ -2421,6 +2475,8 @@ internal sealed partial class SettingsMenu
         SettingsField.SqlQueryTimeoutSeconds => data.SqlQueryTimeoutSeconds.ToString(CultureInfo.InvariantCulture),
         SettingsField.OracleQueryMaxRows => data.OracleQueryMaxRows.ToString(CultureInfo.InvariantCulture),
         SettingsField.OracleQueryTimeoutSeconds => data.OracleQueryTimeoutSeconds.ToString(CultureInfo.InvariantCulture),
+        SettingsField.MySqlQueryMaxRows => data.MySqlQueryMaxRows.ToString(CultureInfo.InvariantCulture),
+        SettingsField.MySqlQueryTimeoutSeconds => data.MySqlQueryTimeoutSeconds.ToString(CultureInfo.InvariantCulture),
         SettingsField.GitNativeEmail => data.GitNativeEmail,
         SettingsField.GitNativeName => data.GitNativeName,
         SettingsField.ObsidianVault => data.ObsidianVault,
@@ -3410,6 +3466,35 @@ internal sealed partial class SettingsMenu
             return false;
         }
 
+        if (field == SettingsField.MySqlDefaultConnection)
+        {
+            return await PickMySqlConnectionAsync(saved, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (field == SettingsField.MySqlConnectionsOffered)
+        {
+            return await EditMySqlOfferedAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        if (field == SettingsField.MySqlAddConnection)
+        {
+            return await AddMySqlConnectionAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        if (field == SettingsField.MySqlSetPassword)
+        {
+            return await SetMySqlPasswordAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        if (field is SettingsField.MySqlConnectionsProfile or SettingsField.MySqlConnectionsGlobal)
+        {
+            // An edit row (2026-09-30), the Oracle tab's: the file in the editor, made with its commented shape first.
+            OpenMySqlFile(field == SettingsField.MySqlConnectionsProfile
+                ? MySql.MySqlConfigFile.ProfilePath(_settings.ProfileDirectory)
+                : MySql.MySqlConfigFile.GlobalPath(_settings.StorageDirectory));
+            return false;
+        }
+
         if (field is SettingsField.SqlConnectionsProfile or SettingsField.SqlConnectionsGlobal)
         {
             // An edit row (2026-09-23): the file in the editor, made with its commented shape first; nothing saved here.
@@ -3668,6 +3753,26 @@ internal sealed partial class SettingsMenu
                 }
 
                 Apply(field, d => d.OracleQueryTimeoutSeconds = oracleTimeout);
+                return true;
+
+            case SettingsField.MySqlQueryMaxRows:
+                if (!int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out int mysqlRows) || mysqlRows < AppSettingsData.MinSqlQueryMaxRows || mysqlRows > AppSettingsData.MaxSqlQueryMaxRows)
+                {
+                    Sink.Error($"{FieldName(field)} {SqlQueryMaxRowsRangeError}; keeping {EditableValue(field, saved)}.");
+                    return false;
+                }
+
+                Apply(field, d => d.MySqlQueryMaxRows = mysqlRows);
+                return true;
+
+            case SettingsField.MySqlQueryTimeoutSeconds:
+                if (!int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out int mysqlTimeout) || mysqlTimeout < AppSettingsData.MinSqlQueryTimeoutSeconds || mysqlTimeout > AppSettingsData.MaxSqlQueryTimeoutSeconds)
+                {
+                    Sink.Error($"{FieldName(field)} {SqlQueryTimeoutRangeError}; keeping {EditableValue(field, saved)}.");
+                    return false;
+                }
+
+                Apply(field, d => d.MySqlQueryTimeoutSeconds = mysqlTimeout);
                 return true;
 
             case SettingsField.ComfyTimeoutSeconds:
@@ -4768,6 +4873,8 @@ internal sealed partial class SettingsMenu
             SettingsField.SqlTools => data.SqlTools,
             SettingsField.OracleTools => data.OracleTools,
             SettingsField.OraclePercentMention => data.OraclePercentMention,
+            SettingsField.MySqlTools => data.MySqlTools,
+            SettingsField.MySqlPercentMention => data.MySqlPercentMention,
             SettingsField.ComfyTools => data.ComfyTools,
             SettingsField.HomeAssistantTools => data.HomeAssistantTools,
             SettingsField.PrintTools => data.PrintTools,
@@ -4845,6 +4952,8 @@ internal sealed partial class SettingsMenu
             case SettingsField.SqlTools: data.SqlTools = on; break;
             case SettingsField.OracleTools: data.OracleTools = on; break;
             case SettingsField.OraclePercentMention: data.OraclePercentMention = on; break;
+            case SettingsField.MySqlTools: data.MySqlTools = on; break;
+            case SettingsField.MySqlPercentMention: data.MySqlPercentMention = on; break;
             case SettingsField.ComfyTools: data.ComfyTools = on; break;
             case SettingsField.HomeAssistantTools: data.HomeAssistantTools = on; break;
             case SettingsField.PrintTools: data.PrintTools = on; break;
@@ -4931,6 +5040,8 @@ internal sealed partial class SettingsMenu
         SettingsField.SqlTools => on ? "the model reads the SQL Server connections of sql.json" : "no SQL tools",
         SettingsField.OracleTools => on ? "the model reads the Oracle connections of oracle.json" : "no Oracle tools",
         SettingsField.OraclePercentMention => on ? "% and part of a name lists the Oracle connections on the line" : "% lists no Oracle connection",
+        SettingsField.MySqlTools => on ? "the model reads the MySQL connections of mysql.json" : "no MySQL tools",
+        SettingsField.MySqlPercentMention => on ? "% and part of a name lists the MySQL connections on the line" : "% lists no MySQL connection",
         SettingsField.ComfyTools => on ? "ComfyUI tools enabled" : "ComfyUI tools disabled",
         SettingsField.HomeAssistantTools => on ? "the model may read and switch Home Assistant, as the policy allows" : "no Home Assistant tools",
         SettingsField.PrintTools => on ? "the model may list the printers and print, as the policy allows" : "no print tools; /print still prints",

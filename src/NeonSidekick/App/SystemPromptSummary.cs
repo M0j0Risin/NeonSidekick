@@ -51,6 +51,8 @@ namespace NeonSidekick.App;
 /// <param name="HomeAssistantTools">How many Home Assistant tools the next turn offers (the ones switched off on <c>/tools</c> left out); the rules carry <see cref="Assistant.HomeAssistantRule"/> while any is.</param>
 /// <param name="OracleEnabled">Whether the Oracle tools may be offered (2026-09-30): the setting <c>Oracle tools</c> on and a usable connection in <c>oracle.json</c> — the group's switch (<see cref="ChatScreen.OracleOffered"/>).</param>
 /// <param name="OracleTools">How many Oracle tools the next turn offers (the ones switched off on <c>/tools</c> left out); the rules carry <see cref="Assistant.OracleRule"/> while any is.</param>
+/// <param name="MySqlEnabled">Whether the MySQL tools may be offered (2026-09-30): the setting <c>MySQL tools</c> on and a usable connection in <c>mysql.json</c> (<see cref="ChatScreen.MySqlOffered"/>).</param>
+/// <param name="MySqlTools">How many MySQL tools the next turn offers; the rules carry <see cref="Assistant.MySqlRule"/> while any is.</param>
 /// <param name="PlanDirective">Plan mode's directive while planning (2026-09-26, <see cref="Plans.PlanText.Directive"/>), else null: its own section, after the skills.</param>
 public sealed record SystemPromptFacts(
     string? Persona,
@@ -90,7 +92,9 @@ public sealed record SystemPromptFacts(
     bool HomeAssistantEnabled = false,
     int HomeAssistantTools = 0,
     bool OracleEnabled = false,
-    int OracleTools = 0)
+    int OracleTools = 0,
+    bool MySqlEnabled = false,
+    int MySqlTools = 0)
 {
     /// <summary>Whether the rules carry <see cref="Assistant.HomeAssistantRule"/>: tools on, the server set with the switch on, and at least one Home Assistant tool offered (2026-09-28).</summary>
     public bool HomeAssistant => ToolsEnabled && HomeAssistantEnabled && HomeAssistantTools > 0;
@@ -127,6 +131,9 @@ public sealed record SystemPromptFacts(
 
     /// <summary>Whether the rules carry <see cref="Assistant.OracleRule"/>: tools on, a connection defined with the switch on, and at least one Oracle tool offered (2026-09-30).</summary>
     public bool Oracle => ToolsEnabled && OracleEnabled && OracleTools > 0;
+
+    /// <summary>Whether the rules carry <see cref="Assistant.MySqlRule"/>: tools on, a connection defined with the switch on, and at least one MySQL tool offered (2026-09-30).</summary>
+    public bool MySql => ToolsEnabled && MySqlEnabled && MySqlTools > 0;
 
     /// <summary>The next turn's reply is styled Markdown and asked for as such (<see cref="ChatScreen.MarkdownTurn"/>): the setting, the pane, and the turn not spoken.</summary>
     public bool Markdown => ChatScreen.MarkdownTurn(TranscriptMarkdown, PaneOn, TtsOutput && SpeechReady);
@@ -242,6 +249,9 @@ public static class SystemPromptSummary
     /// <summary>The tail of the Oracle group while the Oracle tools cannot be offered: the switch off, or no connection in <c>oracle.json</c> (2026-09-30). Pinned.</summary>
     public const string OracleOffSuffix = "Oracle tools is off or no connection is set in oracle.json";
 
+    /// <summary>The tail of the MySQL group while the MySQL tools cannot be offered (2026-09-30). Pinned.</summary>
+    public const string MySqlOffSuffix = "MySQL tools is off or no connection is set in mysql.json";
+
     /// <summary>The tail of the ComfyUI group while the image tools cannot be offered (2026-09-24). Pinned.</summary>
     /// <summary>Why the advisor group is not offered (2026-09-27). Pinned.</summary>
     public const string ClaudeAdvisorOffSuffix = "Claude advisor tool is off";
@@ -291,7 +301,7 @@ public static class SystemPromptSummary
 
         bool customRules = !string.IsNullOrWhiteSpace(facts.OperatingRules);
         string defaultLabel = !facts.ToolsEnabled ? $"default ({ToolsOffSuffix})" : !facts.FilesEnabled ? $"default ({FilesOffSuffix})" : "default";
-        string rules = customRules ? facts.OperatingRules!.Trim() : Assistant.DefaultRules(facts.Markdown, facts.ToolsEnabled, facts.FilesEnabled, delete: !facts.Off(DeleteTool.ToolName), mcp: facts.Mcp, safeEdits: facts.FileSafeEdits, timers: facts.Timers, git: facts.Git, shell: facts.Shell, bridge: facts.Bridge, police: facts.Police, obsidian: facts.Obsidian, obsidianDelete: facts.ObsidianDelete, sql: facts.Sql, native: facts.Native, advisor: facts.Advisor, homeAssistant: facts.HomeAssistant, oracle: facts.Oracle);
+        string rules = customRules ? facts.OperatingRules!.Trim() : Assistant.DefaultRules(facts.Markdown, facts.ToolsEnabled, facts.FilesEnabled, delete: !facts.Off(DeleteTool.ToolName), mcp: facts.Mcp, safeEdits: facts.FileSafeEdits, timers: facts.Timers, git: facts.Git, shell: facts.Shell, bridge: facts.Bridge, police: facts.Police, obsidian: facts.Obsidian, obsidianDelete: facts.ObsidianDelete, sql: facts.Sql, native: facts.Native, advisor: facts.Advisor, homeAssistant: facts.HomeAssistant, oracle: facts.Oracle, mysql: facts.MySql);
         sections.Add(new(
             customRules ? $"Operating rules — {OperataFile.FileName} ({rules.Length.ToString(CultureInfo.InvariantCulture)} chars)" : $"Operating rules — {defaultLabel}",
             rules));
@@ -401,7 +411,8 @@ public static class SystemPromptSummary
             plan: facts.ToolsEnabled ? facts.PlanDirective : null,
             advisor: facts.Advisor,
             homeAssistant: facts.HomeAssistant,
-            oracle: facts.Oracle);
+            oracle: facts.Oracle,
+            mysql: facts.MySql);
     }
 
     /// <summary>The Prompt tab's heading over plan mode's directive (2026-09-26). Pinned.</summary>
@@ -495,7 +506,9 @@ public static class SystemPromptSummary
         IReadOnlyList<AIFunction>? print = null,
         bool printEnabled = true,
         IReadOnlyList<AIFunction>? oracle = null,
-        bool oracleEnabled = true)
+        bool oracleEnabled = true,
+        IReadOnlyList<AIFunction>? mysql = null,
+        bool mysqlEnabled = true)
     {
         ArgumentNullException.ThrowIfNull(clock);
         ArgumentNullException.ThrowIfNull(timers);
@@ -549,6 +562,13 @@ public static class SystemPromptSummary
             // The Oracle tools (2026-09-30): right after the SQL tools, the two database groups together; offered while the setting Oracle tools is on and oracle.json holds a connection.
             string oracleNote = !oracleEnabled ? NotOffered(OracleOffSuffix) : standing;
             groups.Add(Group(ToolsText.OracleTabTitle, oracle, oracleNote, oracleEnabled && toolsEnabled, SettingsField.OracleTools, disabled));
+        }
+
+        if (mysql is not null)
+        {
+            // The MySQL tools (2026-09-30): after the Oracle tools, the database groups together.
+            string mysqlNote = !mysqlEnabled ? NotOffered(MySqlOffSuffix) : standing;
+            groups.Add(Group(ToolsText.MySqlTabTitle, mysql, mysqlNote, mysqlEnabled && toolsEnabled, SettingsField.MySqlTools, disabled));
         }
 
         if (comfy is not null)

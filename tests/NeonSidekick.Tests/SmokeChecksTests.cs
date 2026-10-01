@@ -127,6 +127,17 @@ public class SmokeChecksTests
         Assert.Contains(" answered ORA-", check.Detail);
     }
 
+    /// <summary><c>mysql:driver</c> (later on 2026-09-30): the gate, a bound parameter, and MySqlConnector's connect path answering a port nobody serves.</summary>
+    [Fact]
+    public void ProbeMySql_ChecksTheGate_AndReachesTheManagedDriver()
+    {
+        var check = SmokeChecks.ProbeMySql();
+
+        Assert.Equal("mysql:driver", check.Name);
+        Assert.True(check.Passed, check.Detail);
+        Assert.StartsWith("gate ok; MySqlConnector ", check.Detail);
+    }
+
     [Fact]
     public void ProbeCulture_SeesTheInvariantPin()
     {

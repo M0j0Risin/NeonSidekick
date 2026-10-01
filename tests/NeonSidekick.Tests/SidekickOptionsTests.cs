@@ -66,6 +66,11 @@ public class SidekickOptionsTests
         Assert.True(oracle.IsCheck);
         Assert.False(SidekickOptions.None.IsCheck);
         Assert.NotNull(SidekickOptions.Parse(new[] { "--oracle-check" }).Error);   // the connection is required
+        var mysql = SidekickOptions.Parse(new[] { "--mysql-check", "shop" });
+        Assert.Equal("shop", mysql.MySqlCheck);
+        Assert.True(mysql.IsCheck);
+        Assert.Equal("mysql-check", mysql.Mode);
+        Assert.NotNull(SidekickOptions.Parse(new[] { "--mysql-check" }).Error);
         var o = SidekickOptions.Parse(new[] { "--voice-check" });
         Assert.True(o.VoiceCheck);
         Assert.False(o.AudioCheck);
@@ -280,6 +285,7 @@ public class SidekickOptionsTests
         Assert.Contains("--audio-check", SidekickOptions.Usage);
         Assert.Contains("--voice-check  record up to 5 s from the microphone, transcribe it, exit 0/1", SidekickOptions.Usage);
         Assert.Contains("--oracle-check <connection>  prove the Oracle tools against that connection of oracle.json (reads only), exit 0/1", SidekickOptions.Usage);
+        Assert.Contains("--mysql-check <connection>   prove the MySQL tools against that connection of mysql.json (reads only), exit 0/1", SidekickOptions.Usage);
         Assert.Contains("--url <url>", SidekickOptions.Usage);
         Assert.Contains("--model <id>", SidekickOptions.Usage);
         Assert.Contains("--cwd <path>   working directory for this launch (outranks the saved setting)", SidekickOptions.Usage);

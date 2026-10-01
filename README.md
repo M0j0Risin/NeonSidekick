@@ -67,6 +67,7 @@ During early development, I was experimenting with synthwave-style themes in Spe
 * **Obsidian:** Search, read, write and link notes directly in your vault's files. No plugin is needed, and Obsidian doesn't have to be running. Wikilinks, aliases, tags, properties and daily notes all work.
 * **SQL Server:** Read-only queries over named connections, plus discovery of schemas, relationships and indexes. Every query is checked to be a single `SELECT` and runs in a transaction that is always rolled back. Sign in with SQL, Windows or run-as accounts; passwords are stored encrypted (DPAPI, Windows' per-user encryption) or in Windows Credential Manager.
 * **Oracle:** The same read-only tools for Oracle databases, through Oracle's fully managed driver (no Oracle Client to install). Every query is checked to be a single `SELECT`, runs in a read-only session (23ai and later) and a read-only transaction that is always rolled back. Sign in with a database user; passwords are stored as the SQL Server ones are.
+* **MySQL and MariaDB:** The same read-only tools again, through MySqlConnector (fully managed, MIT). Every query is checked to be a single `SELECT`, runs in a hardened session and a read-only transaction that is always rolled back. Sign in with a database user; passwords are stored as the others are.
 * **Home Assistant:** Control lights, scenes, the TV, to-do lists and sensors through your own Home Assistant. The model finds devices by room or name ("dim the den to 30%"), and anything outside a safe list waits for your yes. `/ha` drives the house directly, without the model.
 * **ComfyUI:** Pictures from your own ComfyUI workflows (text-to-image, image-to-image, face swaps). The model writes prompts in each model family's style, or `/imagine` sends yours exactly as typed. A wizard builds or imports workflows.
 * **Claude API:** Anthropic's Claude models as one more `/server` choice, using your own API key (stored encrypted), with thinking levels, prompt caching and cost in `/usage`. It stays off until you turn it on in the *Claude* tab of `/tools`.
@@ -123,6 +124,7 @@ Speech output (`/tts`) and voice input (`/stt`) start off. The first time you tu
 | `--audio-check` | Plays a test tone through the speech output, then exits. |
 | `--voice-check` | Records up to 5 seconds from the microphone and transcribes it, then exits. |
 | `--oracle-check <connection>` | Proves the Oracle tools against that connection of `oracle.json` (types, the read-only layers, cancel and timeout; it only reads), then exits. |
+| `--mysql-check <connection>` | The same for the MySQL tools and a connection of `mysql.json`. |
 | `--version` / `--help` | Prints the version or the help text. |
 
 Both `--option value` and `--option=value` work.
@@ -567,6 +569,7 @@ Every tool, grouped (Clock, Timers, Files, Git, Shell, Obsidian, SQL, ComfyUI, C
   * `curl`/`Invoke-WebRequest` → `web_fetch`
   * `sqlcmd` → `sql_query`
   * `sqlplus` → `oracle_query`
+  * `mysql` / `mariadb` → `mysql_query`
 
   A single command that such a tool covers comes back as `Not run: 'cat' has a tool of its own — call read_file instead…`, before the pane asks.
   * Only once a turn: the same line sent again goes to the pane as usual, so a real need (an option the tool lacks) still reaches you.
@@ -697,6 +700,21 @@ You can change which services run without asking under `ask` in `profile.json` (
 | Oracle query timeout (s) | How long one Oracle tool's statement may run on the server (1–600). | 30 |
 | Oracle connections (profile) | Enter opens the profile's `oracle.json` in your editor (created with commented examples). The value shows how many connections it has. | (none) |
 | Oracle connections (global) | The same for the home folder's `oracle.json`, which every profile reads. The profile's wins on a name clash. | (none) |
+
+#### MySQL
+
+| Setting | What it does | Default |
+|---|---|---|
+| MySQL tools | Offers the MySQL tools (connections, databases, tables, columns, describe, relationships, indexes, query) over the connections in `mysql.json`, once one is defined. They work against MySQL 8.0.16+ and MariaDB 10.2+. | off |
+| MySQL connections offered | A checklist of the connections in both `mysql.json` files, as *SQL connections offered* is for `sql.json`. | all (not narrowed) |
+| MySQL default connection | The connection used when a call names none: one of the offered connections, or the first. | (the first connection) |
+| MySQL set password | Pick a connection and type its password, masked. It is saved to that connection's store: encrypted in its `mysql.json`, or in Windows Credential Manager. | — |
+| MySQL add connection | A wizard for a new connection. It can **test** the draft before saving it: who it signs in as, the server's version, and a warning when the account's grants could change data. See MySQL. | — |
+| MySQL %-mention enabled | Typing `%` and part of a name also lists the MySQL connections, each marked `MySQL ·`. | on |
+| MySQL max rows | How many rows `mysql_query` returns unless the call says otherwise (1–1000). | 100 |
+| MySQL query timeout (s) | How long one MySQL tool's statement may run (1–600), enforced on the server and by the driver. | 30 |
+| MySQL connections (profile) | Enter opens the profile's `mysql.json` in your editor (created with commented examples). | (none) |
+| MySQL connections (global) | The same for the home folder's `mysql.json`, which every profile reads. The profile's wins on a name clash. | (none) |
 
 #### Git
 
@@ -833,7 +851,7 @@ Type `/` to list every command with a short summary. After a command and a space
 | `/test [id \| reasoning \| structured \| long \| all \| history]` | Run benchmark tests against the connected model and save the results. On its own it lists the tests with their last verdicts. See Benchmark tests. |
 | `/theme [name]` | Switch the colour theme (the *Theme* setting). During a reply, it runs when the reply ends. |
 | `/timer [duration [name] \| stop <name> \| stop all]` | List the timers, start one (`10m`, `90s`, `1h30m`), or stop one. |
-| `/tools` | Switch the model's tools on or off and edit their settings (Web, Files, Shell, Ask, Claude, Home Assistant, Print, Obsidian, ComfyUI, SQL, Oracle, Git). |
+| `/tools` | Switch the model's tools on or off and edit their settings (Web, Files, Shell, Ask, Claude, Home Assistant, Print, Obsidian, ComfyUI, SQL, Oracle, MySQL, Git). |
 | `/tree [path]` | Print a tree of the working directory. Hidden, system and dot entries appear only when *File browser/tree mode* is `show-hidden`. `.git` folders are always left out, like `.trash`, unless you name one as the path. |
 | `/tts [on\|off]` | Toggle speech output. |
 | `/usage` | Show token usage and performance statistics. A `~` marks a reasoning count the app estimated (see *LLM reasoning estimate*). |
@@ -859,7 +877,7 @@ Type `/` to list every command with a short summary. After a command and a space
 
 `/plan <requirement>` has the model research and present a plan before anything changes. It needs *LLM offer tools*, and is refused while a reply runs.
 
-* **Tools**: only the read-only ones (reading and searching files, git status/log/diff, the web, SQL, Oracle, the vault, recall, skills, sessions, `ask_user`) plus `present_plan`. Every tool that writes, runs or starts something, and every MCP tool, is held back until the plan is approved.
+* **Tools**: only the read-only ones (reading and searching files, git status/log/diff, the web, SQL, Oracle, MySQL, the vault, recall, skills, sessions, `ask_user`) plus `present_plan`. Every tool that writes, runs or starts something, and every MCP tool, is held back until the plan is approved.
 * **Presenting**: the model asks what it needs (your later messages add detail), then presents the plan. The plan is printed and saved as `.neon/plans/<kebab-name>.md` under the working directory. A new plan never overwrites an older one, and each revision overwrites its own file. 📝 shows on the status strip while planning.
 * **Approving**: a pane offers **Approve & run** (`a`), **Approve, clear context & run** (`f`), **Keep refining…** (`r`, with what should change) or **Cancel plan** (`c`). The cursor starts on Keep refining, and ESC picks it too. Approving marks the file `status: approved` and sends a turn with every tool to carry the plan out, ticking its checkboxes as it goes. The fresh-context choice starts a new conversation with the plan's text in the message.
 * **Tracking**: once every checkbox is ticked, the file is marked `done`. While some are left, it is `incomplete` with a `progress: 3/7` line, reported again when the count changes or the reply is stopped.
@@ -1253,6 +1271,69 @@ Values go in as `:name` parameters. Results come back as a Markdown table; a `NU
 </details>
 
 <details>
+<summary><b>🗄️ MySQL and MariaDB</b></summary>
+
+### MySQL and MariaDB
+
+Read-only queries against MySQL 8.0.16+ and MariaDB 10.2+ over named connections, the Oracle tools' twin. The app talks to the server itself through MySqlConnector (fully managed, MIT), so no client library is needed. Connections live in `mysql.json`, a home folder file and a profile file as with the others; the profile's wins on a name clash.
+
+#### Connection settings
+
+* **`host`**, **`port`** (3306 by default), **`database`**: the database a call works in when it names none. Without one, the listings cover every database the user can see.
+* **`user`**, and the password: **`passwordStore`** `file` (default, DPAPI-encrypted in place) or `credman` (`NeonSidekick/mysql/<connection_name>`), as for the others.
+* **`sslMode`**: `preferred` (default), `required`, `verify-ca`, `verify-full` or `none`.
+* **`allowPublicKeyRetrieval`**: `true` only for a `caching_sha2_password` account over a connection without TLS (off by default: a man in the middle could hand over its own key).
+* **`connectTimeoutSeconds`**: 1–120 (default 15).
+
+```json
+{
+  "connections": {
+    "shop": {
+      "host": "localhost",
+      "port": 3306,
+      "database": "shop",
+      "user": "shop_reader",
+      "password": "type-password-here-once",
+      "description": "The sample retail database"
+    },
+    "billing": {
+      "host": "db01.example.com",
+      "database": "billing",
+      "user": "billing_ro",
+      "passwordStore": "credman",
+      "sslMode": "verify-full"
+    }
+  }
+}
+```
+
+**MySQL add connection** on the MySQL tab of `/tools` walks through a new one (file, name, host, port, database, user, password store and password, TLS mode, timeout, description) and can **test** it first: who it signs in as, the server's version, and a warning when `SHOW GRANTS` says the account could change data. **MySQL set password** updates a password.
+
+#### Safety
+
+`mysql_query` runs one read-only statement, behind these layers:
+
+1. **The gate.** The text is lexed by MySQL's rules (`#` and `-- ` comments, `'…'` and `"…"` strings with backslash escapes, `` `quoted` `` names, `@name` binds). Only one `SELECT` (or `WITH … SELECT`) passes. Refused before anything reaches the server: a second statement, executable comments (`/*! … */`, which the server runs as code), `INTO` (`OUTFILE`, `DUMPFILE`), `FOR UPDATE`/`FOR SHARE`/`LOCK IN SHARE MODE`, `LOAD_FILE`, named locks, MariaDB sequence moves, and every DML and DDL word (`INSERT`, `REPLACE` and `TRUNCATE` only as statements: as functions they're fine).
+2. **The session.** `NO_BACKSLASH_ESCAPES` and `ANSI_QUOTES` are stripped from `sql_mode`, so the server reads strings exactly as the gate did. The server caps each statement's run time (`max_execution_time` on MySQL, `max_statement_time` on MariaDB). The driver never runs `LOAD DATA LOCAL` and never sets user variables.
+3. **The transaction.** `START TRANSACTION READ ONLY` refuses any write to a real table, even from a stored function (ERROR 1792), and it is always rolled back.
+4. **The account.** Give the user `SELECT` grants alone; the wizard's test warns of one that can write.
+
+| Tool | Arguments | What it does |
+|---|---|---|
+| `mysql_connections` | — | The named connections: host, database, user and description, with the default marked. Touches no server. |
+| `mysql_databases` | `connection?` | The databases the account can see (the server's own left out), with table and view counts and character set. |
+| `mysql_tables` | `connection?, database?, pattern?` | The tables and views as `database.name`, with their kind, approximate row count and comment. |
+| `mysql_columns` | `pattern, connection?, database?` | Every column whose name matches: where it lives, its type as declared, nullability and comment. |
+| `mysql_describe` | `table, connection?, database?` | One table or view: its comment and columns (type as declared, nullability, auto_increment, default, primary key, comment), foreign keys out and in, indexes, CHECK constraints and triggers. |
+| `mysql_relationships` | `connection?, database?, table?` | The foreign-key join paths: every one in a database, or those touching a table. |
+| `mysql_indexes` | `connection?, database?, table?` | The indexes of a table or database: kind, key columns, cardinality, and — when `performance_schema` allows — each one's reads and writes since the server started, an unread one marked. |
+| `mysql_query` | `sql, connection?, database?, params?, max_rows?` | One read-only `SELECT` (`LIMIT n`). `params` is an object (`{"id": 101}` for `@id`); `max_rows` is 1–1000. |
+
+`--mysql-check <connection>` proves the tools against a real server on the published exe (every type, the gate, the session's string reading, the read-only transaction, a cancel and a timeout; it only reads).
+
+</details>
+
+<details>
 <summary><b>🏠 Home Assistant</b></summary>
 
 ### Home Assistant
@@ -1525,7 +1606,7 @@ Every variable the app reads starts with `NEONSIDEKICK_`. They override a settin
 
 | Variable | What it does | Accepts |
 |---|---|---|
-| `NEONSIDEKICK_HOME` | The home folder: `settings.json`, `profiles\`, `models\`, `llama\`, `mcp.json`, `sql.json`, `oracle.json`. | A folder path. Default `%USERPROFILE%\.neonsidekick`. |
+| `NEONSIDEKICK_HOME` | The home folder: `settings.json`, `profiles\`, `models\`, `llama\`, `mcp.json`, `sql.json`, `oracle.json`, `mysql.json`. | A folder path. Default `%USERPROFILE%\.neonsidekick`. |
 | `NEONSIDEKICK_PROFILE` | The profile for this launch; `settings.json` keeps pointing where it was. An unknown name exits with code 2. `--profile` wins. A headless run with neither loads `default`. | A profile name. |
 
 ### LLM
@@ -1600,6 +1681,7 @@ These only matter when running the test suite from source. Each live test is ski
 
 * `NEONSIDEKICK_TEST_LLM_URL`, `NEONSIDEKICK_TEST_TTS_URL`, `NEONSIDEKICK_TEST_SQL_CONNECTION`: a server to test against.
 * `NEONSIDEKICK_TEST_ORACLE_CONNECTION`: an ODP.NET connection string (`User Id=…;Password=…;Data Source=localhost:1521/FREEPDB1`) to an Oracle database whose user may create tables; the tests make their own `NS_*` fixtures once (the `gvenzl/oracle-free` container works).
+* `NEONSIDEKICK_TEST_MYSQL_CONNECTION`: a MySqlConnector connection string (`Server=127.0.0.1;Port=3306;User ID=…;Password=…;Database=…`) to a MySQL or MariaDB database its user owns; the tests make their own `ns_*` fixtures once (the `mysql:8.4` and `mariadb:11` images work).
 * `NEONSIDEKICK_TEST_HA_URL` with `NEONSIDEKICK_TEST_HA_TOKEN`: a Home Assistant to read from (the live test never switches anything).
 * `NEONSIDEKICK_TEST_WHISPER_MODEL`, `NEONSIDEKICK_TEST_SILERO_MODEL`, `NEONSIDEKICK_TEST_VOSK_MODEL`, `NEONSIDEKICK_TEST_KOKORO_MODEL`: a model, when it isn't already under `%USERPROFILE%\.neonsidekick\models`.
 * `NEONSIDEKICK_TEST_CLAUDE=1`: the live Claude Code tests, on your own sign-in (Haiku; a few cents a run).
@@ -1620,6 +1702,7 @@ These only matter when running the test suite from source. Each live test is ski
 * `Microsoft.Data.SqlClient`
 * `Microsoft.SqlServer.TransactSql.ScriptDom`
 * `Oracle.ManagedDataAccess.Core`
+* `MySqlConnector`
 * `Microsoft.ML.OnnxRuntime`
 * `KokoroSharp`
 * `Whisper.net`

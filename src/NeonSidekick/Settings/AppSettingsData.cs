@@ -1318,6 +1318,28 @@ public sealed class AppSettingsData
     /// </summary>
     public int OracleQueryTimeoutSeconds { get; set; } = DefaultSqlQueryTimeoutSeconds;
 
+    // ─── MySQL ──────────────────────────────────────────────────────────────────
+    // The MySQL tools (2026-09-30, the user's ask: "the same sort of thing for MySQL, very similar to Oracle"): read-only
+    // queries on MySQL and MariaDB over the named connections of mysql.json (the profile's and the home's).
+
+    /// <summary>Whether a turn offers the eight MySQL tools over the connections in <c>mysql.json</c> (2026-09-30); read at each turn like <see cref="OracleTools"/>, no reconnect. Off by default. No variable.</summary>
+    public bool MySqlTools { get; set; }
+
+    /// <summary>The connection a MySQL tool uses when the call names none (2026-09-30), <see cref="OracleDefaultConnection"/>'s twin; empty = the first offered. No variable.</summary>
+    public string MySqlDefaultConnection { get; set; } = "";
+
+    /// <summary>Which connections of <c>mysql.json</c> this profile offers the model (2026-09-30), <see cref="OracleConnectionsOffered"/>'s twin: null = all, a list = exactly those names. No variable.</summary>
+    public List<string>? MySqlConnectionsOffered { get; set; }
+
+    /// <summary>Whether <c>%</c> and part of a name lists the MySQL connections too (2026-09-30), each marked <c>MySQL ·</c>; offered only while <see cref="MySqlTools"/> is on. No variable.</summary>
+    public bool MySqlPercentMention { get; set; } = true;
+
+    /// <summary>The most rows one <c>mysql_query</c> returns (2026-09-30): the SQL tools' range; <c>max_rows</c> overrides it up to the same cap.</summary>
+    public int MySqlQueryMaxRows { get; set; } = DefaultSqlQueryMaxRows;
+
+    /// <summary>Seconds a MySQL tool's statement may run, on the server (<c>max_execution_time</c> / <c>max_statement_time</c>) and in the driver (2026-09-30): the SQL tools' range.</summary>
+    public int MySqlQueryTimeoutSeconds { get; set; } = DefaultSqlQueryTimeoutSeconds;
+
     // ─── Images (ComfyUI) ───────────────────────────────────────────────────────
     // The image tools (2026-09-24, the user's ask: "what can we do with comfyui?" — text to image, img2img, their own
     // exported workflows, splash art, and prompts written for Pony Diffusion XL and the other families, or sent as typed).

@@ -33,6 +33,7 @@ public sealed class NativeRedirectTests
     [InlineData("Invoke-WebRequest https://example.com", "invoke-webrequest", "web_fetch")]
     [InlineData("sqlcmd -S . -Q \"select 1\"", "sqlcmd", "sql_query")]
     [InlineData("sqlplus -s hr/x@db @q.sql", "sqlplus", "oracle_query")]
+    [InlineData("mysql -u shop_reader -p shop", "mysql", "mysql_query")]
     [InlineData("& git status", "git status", "git_status")]   // PowerShell's call operator leaves one segment
     public void AMappedLine_NamesItsTool(string command, string prefix, string tool)
     {
@@ -70,7 +71,7 @@ public sealed class NativeRedirectTests
         [
             ReadFileTool.ToolName, SearchFilesTool.ToolName, CopyTool.ToolName, MoveTool.ToolName, DeleteTool.ToolName, CreateDirectoryTool.ToolName,
             ZipTool.ToolName, UnzipTool.ToolName, GitStatusTool.ToolName, GitLogTool.ToolName, GitDiffTool.ToolName, GitShowTool.ToolName, GitBlameTool.ToolName,
-            GitStageTool.ToolName, GitCommitTool.ToolName, GitBranchTool.ToolName, GitStashTool.ToolName, WebFetchTool.ToolName, SqlQueryTool.ToolName, OracleQueryTool.ToolName,
+            GitStageTool.ToolName, GitCommitTool.ToolName, GitBranchTool.ToolName, GitStashTool.ToolName, WebFetchTool.ToolName, SqlQueryTool.ToolName, OracleQueryTool.ToolName, MySqlQueryTool.ToolName,
         ];
         Assert.All(NativeRedirect.Table.Values, tool => Assert.Contains(tool, known));
         // Every key reads as CommandPrefix would give it, so a lookup can hit.
