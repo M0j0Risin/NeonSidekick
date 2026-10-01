@@ -84,7 +84,7 @@ public class KeysTests
         Assert.Equal(line, Keys.ShortcutLine(new ConsoleKeyInfo(control, key, shift: false, alt: true, control: true)));
         Assert.Contains(line, NeonSidekick.App.SlashCommands.Words);
         Assert.Null(Keys.ShortcutLine(new ConsoleKeyInfo('\0', key, shift: true, alt: true, control: true)));
-        Assert.NotEqual(line, Keys.ShortcutLine(new ConsoleKeyInfo(control, key, shift: false, alt: false, control: true)));   // Ctrl+E alone is /explore
+        Assert.NotEqual(line, Keys.ShortcutLine(new ConsoleKeyInfo(control, key, shift: false, alt: false, control: true)));   // Ctrl+E alone is /explore, Ctrl+M /model
         Assert.Null(Keys.ShortcutLine(new ConsoleKeyInfo('\0', key, shift: false, alt: true, control: false)));
         Assert.Null(Keys.ShortcutLine(new ConsoleKeyInfo('€', key, shift: false, alt: true, control: true)));   // AltGr+E on a German layout, and its like
     }
@@ -105,6 +105,39 @@ public class KeysTests
         Assert.Null(Keys.ShortcutLine(Keys.Ctrl(ConsoleKey.O)));   // the other plain-Ctrl keys stay theirs
         Assert.False(Keys.IsToolToggle(Keys.CtrlE));
         Assert.False(Keys.IsInterrupt(Keys.CtrlE));
+    }
+
+    [Theory]
+    [InlineData(ConsoleKey.M, '\r', "/model")]
+    [InlineData(ConsoleKey.R, '\x12', "/reasoning")]
+    [InlineData(ConsoleKey.S, '\x13', "/server")]
+    public void ShortcutLine_ThePickerChords_ArePlainCtrl_AndATypedLetterStaysALetter(ConsoleKey key, char control, string line)
+    {
+        // Later still on 2026-10-01 (the user's ask): Ctrl+M, R and S, Ctrl+E's shape — the console's CR, DC2 and DC3 and the
+        // test factory's '\0' count; Shift, Alt alone and a typed upper-case letter (Spectre marks it with Control) are no chord.
+        Assert.Equal(line, Keys.ShortcutLine(new ConsoleKeyInfo(control, key, shift: false, alt: false, control: true)));
+        Assert.Equal(line, Keys.ShortcutLine(Keys.Ctrl(key)));
+        Assert.Contains(line, NeonSidekick.App.SlashCommands.Words);
+        Assert.Null(Keys.ShortcutLine(new ConsoleKeyInfo(control, key, shift: true, alt: false, control: true)));
+        Assert.Null(Keys.ShortcutLine(new ConsoleKeyInfo('\0', key, shift: false, alt: true, control: false)));
+        Assert.Null(Keys.ShortcutLine(new ConsoleKeyInfo(key.ToString()[0], key, shift: false, alt: false, control: true)));
+        Assert.Null(Keys.ShortcutLine(Keys.Char(char.ToLowerInvariant(key.ToString()[0]))));
+        Assert.False(Keys.IsInterrupt(new ConsoleKeyInfo(control, key, shift: false, alt: false, control: true)));
+        Assert.False(Keys.IsToolToggle(new ConsoleKeyInfo(control, key, shift: false, alt: false, control: true)));
+    }
+
+    [Fact]
+    public void ThePickerChords_Factories_AreTheConsoleShapes_AndTheCtrlAltLettersKeepTheirCommands()
+    {
+        Assert.Equal("/model", Keys.ShortcutLine(Keys.CtrlM));
+        Assert.Equal("/reasoning", Keys.ShortcutLine(Keys.CtrlR));
+        Assert.Equal("/server", Keys.ShortcutLine(Keys.CtrlS));
+        Assert.Equal(ConsoleKey.M, Keys.CtrlM.Key);   // the CR rides on the M key: never Enter, never a send
+        Assert.False(Keys.IsSend(Keys.CtrlM));
+        Assert.False(Keys.IsLineBreak(Keys.CtrlM));
+        Assert.Equal("/memory", Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.M)));
+        Assert.Equal("/splash", Keys.ShortcutLine(Keys.CtrlAltS));
+        Assert.Null(Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.R)));
     }
 
     [Fact]

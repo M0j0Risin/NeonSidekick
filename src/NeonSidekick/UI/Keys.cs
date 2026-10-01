@@ -53,6 +53,15 @@ public static class Keys
     /// <summary>Ctrl+E as the console delivers it: the ENQ character with the key and Control (<c>/explore</c>, <see cref="ShortcutLine"/>).</summary>
     public static ConsoleKeyInfo CtrlE => new('\x05', ConsoleKey.E, false, false, true);
 
+    /// <summary>Ctrl+M as the console delivers it: the CR character with the M key (never Enter) and Control (<c>/model</c>).</summary>
+    public static ConsoleKeyInfo CtrlM => new('\r', ConsoleKey.M, false, false, true);
+
+    /// <summary>Ctrl+R as the console delivers it: the DC2 character with the key and Control (<c>/reasoning</c>).</summary>
+    public static ConsoleKeyInfo CtrlR => new('\x12', ConsoleKey.R, false, false, true);
+
+    /// <summary>Ctrl+S as the console delivers it: the DC3 character with the key and Control (<c>/server</c>).</summary>
+    public static ConsoleKeyInfo CtrlS => new('\x13', ConsoleKey.S, false, false, true);
+
     /// <summary>
     /// The chat line's command chords (2026-09-30, the user's ask): Ctrl+Alt+C is <c>/clear</c>, Ctrl+Alt+N <c>/new</c> and
     /// Ctrl+Alt+S <c>/splash</c> — at the idle line and under a reply, run as the typed command would be. The user asked for
@@ -72,16 +81,27 @@ public static class Keys
     /// In a pane too since 2026-10-01 (the user's ask: "operate the same there as everywhere"): every pane reader hands the
     /// chord to <see cref="ScreenPane.Chord"/>, which closes the stack for the screen to run it, or toggles the bar in place
     /// (<c>/perf</c>, <c>/tb</c>), or ignores it under a tool's question.
-    /// Ctrl+E <c>/explore</c> came later on 2026-10-01 (the user's ask), the one plain-Ctrl chord: Control held, Alt and Shift
+    /// Ctrl+E <c>/explore</c> came later on 2026-10-01 (the user's ask), the first plain-Ctrl chord: Control held, Alt and Shift
     /// not, and no character but the console's own ENQ (<c>'\x05'</c>; a test <see cref="Ctrl"/> builds <c>'\0'</c>) — the
     /// <see cref="IsToolToggle"/> shape, so a typed "E" stays an "E" and Ctrl+Alt+E is still <c>/perf</c>.
+    /// Ctrl+M <c>/model</c>, Ctrl+R <c>/reasoning</c> and Ctrl+S <c>/server</c> came later still that day (the user's ask), the
+    /// three pickers, in the same shape: their CR, DC2 and DC3 count as no character. Ctrl+M's CR rides on
+    /// <see cref="ConsoleKey.M"/>, never on <see cref="ConsoleKey.Enter"/> (the console reports the key, as for Ctrl+Alt+M), so it
+    /// never sends the line; Ctrl+Alt+M and Ctrl+Alt+S are still <c>/memory</c> and <c>/splash</c>.
     /// </summary>
     public static string? ShortcutLine(ConsoleKeyInfo key)
     {
         var held = key.Modifiers & (ConsoleModifiers.Control | ConsoleModifiers.Alt | ConsoleModifiers.Shift);
         if (held == ConsoleModifiers.Control)
         {
-            return (key.Key, key.KeyChar) is (ConsoleKey.E, '\0' or '\x05') ? "/explore" : null;
+            return (key.Key, key.KeyChar) switch
+            {
+                (ConsoleKey.E, '\0' or '\x05') => "/explore",
+                (ConsoleKey.M, '\0' or '\r') => "/model",
+                (ConsoleKey.R, '\0' or '\x12') => "/reasoning",
+                (ConsoleKey.S, '\0' or '\x13') => "/server",
+                _ => null,
+            };
         }
 
         if (held != (ConsoleModifiers.Control | ConsoleModifiers.Alt))

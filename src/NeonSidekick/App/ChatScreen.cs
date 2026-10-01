@@ -1658,6 +1658,8 @@ internal sealed partial class ChatScreen
     /// user's place and wording — the one chord with no command, so its row names none (<see cref="Keys.IsKillSwitch"/>).
     /// Ctrl+E (<c>/explore</c>) later still that day under Ctrl+C, the user's place and wording: A, C, E, O, X. The kill
     /// switch's row says "(press twice)" since later that day, when it came to want two presses (<see cref="KillSwitchConfirmWindow"/>).
+    /// Ctrl+M, R and S (<c>/model</c>, <c>/reasoning</c>, <c>/server</c>) later still, the user's ask and wording, each in its
+    /// letter's place: A, C, E, M, O, R, S, X.
     /// </summary>
     public static (string Key, string Meaning)[] KeyRows(bool voiceOn, ConsoleKey pushToTalk, bool wakeReady, string wakePhrase)
     {
@@ -1688,7 +1690,10 @@ internal sealed partial class ChatScreen
         rows.Add(("Ctrl+A", "select all text on the line"));
         rows.Add(("Ctrl+C", "copy the selected text · stop the speech · cancel the reply · twice to exit"));
         rows.Add(("Ctrl+E", "open the working directory in your file browser (/explore)"));
+        rows.Add(("Ctrl+M", "open the model picker (/model)"));
         rows.Add(("Ctrl+O", "expand or collapse the tool calls, code blocks and thinking (or click a summary line)"));
+        rows.Add(("Ctrl+R", "open the reasoning picker (/reasoning)"));
+        rows.Add(("Ctrl+S", "open the server picker (/server)"));
         rows.Add(("Ctrl+X", "cut the selected text"));
         rows.Add(("Ctrl+Alt+B", "show or hide the toolbar (/tb)"));
         rows.Add(("Ctrl+Alt+C", "start a new conversation and clear the screen (/clear)"));

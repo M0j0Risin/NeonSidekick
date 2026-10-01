@@ -9932,9 +9932,9 @@ public partial class ChatScreenTests : IDisposable
     }
 
     [Theory]
-    [InlineData(false, false, 32)]
-    [InlineData(true, false, 33)]
-    [InlineData(true, true, 34)]
+    [InlineData(false, false, 35)]
+    [InlineData(true, false, 36)]
+    [InlineData(true, true, 37)]
     public void KeyRows_ListWhatApplies(bool voiceOn, bool wakeReady, int count)
     {
         var rows = ChatScreen.KeyRows(voiceOn, ConsoleKey.F8, wakeReady, "hey neon");
@@ -9950,16 +9950,24 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(("Home / End", "hold Shift to select text to the beginning or end of the line starting from the cursor"), rows[6]);
         Assert.Equal(("PgUp / PgDn", "scroll the transcript a page at a time"), rows[7]);
         Assert.DoesNotContain(rows, r => r.Key is "Mouse" or "Drag" or "Drop" or "@" or "#" or "$");
-        Assert.Equal(("Alt+V", "paste content (text or images)"), rows[^24]);   // ahead of Ctrl+Home since 2026-09-27 (the user's order)
-        Assert.Equal(("Ctrl+Home", "scroll to top of the chat pane"), rows[^23]);
-        Assert.Equal(("Ctrl+End", "scroll to bottom of the chat pane"), rows[^22]);
+        Assert.Equal(("Alt+V", "paste content (text or images)"), rows[^27]);   // ahead of Ctrl+Home since 2026-09-27 (the user's order)
+        Assert.Equal(("Ctrl+Home", "scroll to top of the chat pane"), rows[^26]);
+        Assert.Equal(("Ctrl+End", "scroll to bottom of the chat pane"), rows[^25]);
         // The Ctrl+letter rows A to Z by the letter since 2026-10-01 (the user's ask).
-        Assert.Equal(("Ctrl+A", "select all text on the line"), rows[^21]);
-        Assert.Equal(("Ctrl+C", "copy the selected text · stop the speech · cancel the reply · twice to exit"), rows[^20]);
-        Assert.Equal(("Ctrl+E", "open the working directory in your file browser (/explore)"), rows[^19]);   // later on 2026-10-01, the user's place and wording
-        Assert.Equal(Keys.ShortcutLine(Keys.CtrlE), rows[^19].Meaning[(rows[^19].Meaning.LastIndexOf('(') + 1)..^1]);
-        Assert.Equal(("Ctrl+O", "expand or collapse the tool calls, code blocks and thinking (or click a summary line)"), rows[^18]);   // 2026-09-22
+        Assert.Equal(("Ctrl+A", "select all text on the line"), rows[^24]);
+        Assert.Equal(("Ctrl+C", "copy the selected text · stop the speech · cancel the reply · twice to exit"), rows[^23]);
+        Assert.Equal(("Ctrl+E", "open the working directory in your file browser (/explore)"), rows[^22]);   // later on 2026-10-01, the user's place and wording
+        Assert.Equal(("Ctrl+M", "open the model picker (/model)"), rows[^21]);   // later still on 2026-10-01, the user's wording
+        Assert.Equal(("Ctrl+O", "expand or collapse the tool calls, code blocks and thinking (or click a summary line)"), rows[^20]);   // 2026-09-22
+        Assert.Equal(("Ctrl+R", "open the reasoning picker (/reasoning)"), rows[^19]);
+        Assert.Equal(("Ctrl+S", "open the server picker (/server)"), rows[^18]);
         Assert.Equal(("Ctrl+X", "cut the selected text"), rows[^17]);   // 2026-09-25
+        // Each plain-Ctrl chord's row names its command.
+        foreach (var (row, key) in new[] { (rows[^22], Keys.CtrlE), (rows[^21], Keys.CtrlM), (rows[^19], Keys.CtrlR), (rows[^18], Keys.CtrlS) })
+        {
+            Assert.Equal(Keys.ShortcutLine(key), row.Meaning[(row.Meaning.LastIndexOf('(') + 1)..^1]);
+        }
+
         // The command chords after it (2026-09-30, the user's wording), one block A to Z by the letter since the pane chords
         // joined later that day (the user's ask).
         Assert.Equal(
@@ -15187,6 +15195,108 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(new[] { files }, _openedFiles);
         Assert.Contains(ChatScreen.ExploreOpenedNotice(""), output);
         Assert.Empty(_chat.Requests);
+    }
+
+    [Fact]
+    public async Task CtrlR_OpensTheReasoningPicker_AsSlashReasoning_TheDraftKept()
+    {
+        // Later still on 2026-10-01 (the user's ask): the plain-Ctrl picker chords through the dispatch as the bare command, no
+        // transcript row, the draft back on the row after ESC.
+        _settings.Update(d => d.TtsOutput = false);
+        _chat.EnqueueText("one");
+        StepsWhenIdle(
+            input => { input.Push("keep".Select(Keys.Char).ToArray()); input.Push(Keys.CtrlR); },
+            Key(Keys.Escape),
+            Key(Keys.Enter),
+            Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.Contains(SettingsMenu.ReasoningTitle, output);
+        Assert.DoesNotContain("› /reasoning", output);
+        Assert.Equal("keep", UserText(Assert.Single(_chat.Requests)));
+    }
+
+    [Fact]
+    public async Task CtrlM_AsTheConsoleDeliversIt_OpensTheModelPicker_ItsCrNeverAnEnter()
+    {
+        // Ctrl+M's character is CR on the M key: the model picker, never a send of the draft.
+        _settings.Update(d => { d.TtsOutput = false; d.LlmUrl = "http://127.0.0.1:1234/v1"; d.LlmModel = "llama"; });
+        _chat.EnqueueText("one");
+        StepsWhenIdle(
+            input => { input.Push("keep".Select(Keys.Char).ToArray()); input.Push(Keys.CtrlM); },
+            Key(Keys.Escape),
+            Key(Keys.Enter),
+            Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.Contains(SettingsMenu.ModelTitle, output);
+        Assert.DoesNotContain(SettingsMenu.ServerTitle, output);
+        Assert.DoesNotContain("› /model", output);
+        Assert.Equal("llama", _settings.Current.LlmModel);
+        Assert.Equal("keep", UserText(Assert.Single(_chat.Requests)));
+    }
+
+    [Fact]
+    public async Task CtrlS_RunsTheServerFlow_AsSlashServer()
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.LlmUrl = "http://127.0.0.1:1234/v1"; d.LlmModel = "llama"; });
+        StepsWhenIdle(
+            input => { input.Push(Keys.CtrlS); input.Push(Keys.Enter, Keys.Escape, Keys.Escape); },   // the server in use, keep the model, keep the level
+            Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.Contains(SettingsMenu.ServerTitle, output);
+        Assert.Contains(SettingsMenu.ModelTitle, output);
+        Assert.Contains(SettingsMenu.ReasoningTitle, output);
+        Assert.DoesNotContain("› /server", output);
+        Assert.Equal("llama", _settings.Current.LlmModel);
+        Assert.Empty(_chat.Requests);
+    }
+
+    [Fact]
+    public async Task CtrlR_InTheHelpPane_ClosesIt_AndOpensTheReasoningPicker()
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.MenuMaxHeight = "full-screen"; });
+        _console.Profile.Height = 112;
+        _geometry = new ScreenGeometry(() => null);
+        StepsWhenIdle(
+            input => { PushLine(input, "/help"); input.Push(Keys.CtrlR); },
+            Key(Keys.Escape),                   // the one ESC: the reasoning picker, help already gone
+            Line("/exit"));
+
+        string output = await RunAsync();
+
+        int help = output.IndexOf(InfoPane.Title + "   Commands (basic)", StringComparison.Ordinal);
+        Assert.True(help > 0, output);
+        Assert.True(output.IndexOf(SettingsMenu.ReasoningTitle, help, StringComparison.Ordinal) > help, output);
+        Assert.DoesNotContain("› /reasoning", output);
+        Assert.Empty(_chat.Requests);
+    }
+
+    [Fact]
+    public async Task MidTurn_CtrlR_OpensTheReasoningPicker_OverTheReply_WhichRunsOn()
+    {
+        MidTurnFixture(i =>
+        {
+            if (i == 1)
+            {
+                _scripted!.Push(Keys.CtrlR);
+            }
+            else if (i == 2)
+            {
+                Scripted().Push(Keys.Escape);
+            }
+        });
+
+        string output = await RunAsync();
+
+        Assert.Contains(SettingsMenu.ReasoningTitle, output);
+        Assert.DoesNotContain(ChatScreen.CancelledNotice, output);
+        Assert.Single(_chat.Requests);
+        Assert.Equal(1, _session.History.TurnCount);
     }
 
     [Fact]
