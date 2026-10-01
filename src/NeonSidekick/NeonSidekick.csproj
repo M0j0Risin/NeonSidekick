@@ -7,7 +7,7 @@
     <Nullable>enable</Nullable>
     <AssemblyName>NeonSidekick</AssemblyName>
     <RootNamespace>NeonSidekick</RootNamespace>
-    <Version>0.3.7</Version>
+    <Version>0.3.8</Version>
     <!-- The copyright holder and the licence (GPL-3.0-or-later since 2026-09-20): the exe's version-info block carries them. -->
     <Authors>Christopher Nelson</Authors>
     <Copyright>Copyright (C) 2026 Christopher Nelson</Copyright>
