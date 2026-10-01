@@ -66,6 +66,7 @@ public class AppSettingsTests : IDisposable
         WelcomeSplashMode = "tiled",
         MenuMaxHeight = "half-screen",
         ShowWorkingDirectory = false,
+        ShowHeader = false,
         ToolbarItems = ["usage", "path"],
         ToolbarLastItems = ["tools"],
         PerformanceBarItems = ["cpu", "netdown"],
@@ -188,6 +189,7 @@ public class AppSettingsTests : IDisposable
         Assert.Equal(expected.WelcomeSplashMode, actual.WelcomeSplashMode);
         Assert.Equal(expected.MenuMaxHeight, actual.MenuMaxHeight);
         Assert.Equal(expected.ShowWorkingDirectory, actual.ShowWorkingDirectory);
+        Assert.Equal(expected.ShowHeader, actual.ShowHeader);
         Assert.Equal(expected.ToolbarItems, actual.ToolbarItems);
         Assert.Equal(expected.ToolbarLastItems, actual.ToolbarLastItems);
         Assert.Equal(expected.PerformanceBarItems, actual.PerformanceBarItems);
@@ -336,6 +338,7 @@ public class AppSettingsTests : IDisposable
             d.WelcomeSplashMode = full.WelcomeSplashMode;
             d.MenuMaxHeight = full.MenuMaxHeight;
             d.ShowWorkingDirectory = full.ShowWorkingDirectory;
+            d.ShowHeader = full.ShowHeader;
             d.ToolbarItems = full.ToolbarItems;
             d.ToolbarLastItems = full.ToolbarLastItems;
             d.PerformanceBarItems = full.PerformanceBarItems;
@@ -468,6 +471,7 @@ public class AppSettingsTests : IDisposable
                 d.WelcomeSplashMode = full.WelcomeSplashMode;
                 d.MenuMaxHeight = full.MenuMaxHeight;
                 d.ShowWorkingDirectory = full.ShowWorkingDirectory;
+                d.ShowHeader = full.ShowHeader;
                 d.ToolbarItems = full.ToolbarItems;
                 d.ToolbarLastItems = full.ToolbarLastItems;
                 d.PerformanceBarItems = full.PerformanceBarItems;
@@ -1362,6 +1366,7 @@ public class AppSettingsTests : IDisposable
         Assert.Equal("fullsize", s.WelcomeSplashMode);   // 2026-09-18; a pick since 2026-09-24 (on was fullsize)
         Assert.Equal("full-screen", s.MenuMaxHeight);   // 2026-10-01; three-quarters until later that day
         Assert.False(s.ShowWorkingDirectory);   // 2026-09-18; off by default since 2026-09-21
+        Assert.True(s.ShowHeader);   // 2026-10-01, the user's ask
         Assert.Null(s.ToolbarItems);   // 2026-09-21 as a switch, on; every item since the checklist, 2026-09-29
         Assert.Null(s.ToolbarLastItems);   // what a bare /tb brings back: the defaults until it hides a list (later on 2026-09-30)
         Assert.Null(s.PerformanceBarItems);   // the performance bar (2026-09-29): off, the user's call; no meter checked since the checklist, 2026-09-30

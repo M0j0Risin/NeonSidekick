@@ -792,7 +792,7 @@ public partial class SettingsMenuTests : IDisposable
                 SettingsField.AgentSkills, SettingsField.ExternalSkills, SettingsField.SkillCompactMode, SettingsField.TranscriptMarkdown, SettingsField.PastePreviewLines,
                 SettingsField.SkillHashMention,
                 SettingsField.ReflectionAutoLearn, SettingsField.ReflectionReasoning, SettingsField.ReflectionWindow, SettingsField.ReflectionMinToolCalls, SettingsField.ReflectionMaxRequests,
-                SettingsField.HideExitAutocomplete, SettingsField.CommandTypoIntercept, SettingsField.WelcomeSplash, SettingsField.ShowWorkingDirectory,
+                SettingsField.HideExitAutocomplete, SettingsField.CommandTypoIntercept, SettingsField.WelcomeSplash, SettingsField.ShowHeader, SettingsField.ShowWorkingDirectory,
                 SettingsField.QueueMessages, SettingsField.QueueCancelMode,
                 SettingsField.SessionLogging, SettingsField.SessionRetentionDays, SettingsField.SessionNamingMode, SettingsField.SessionShowName, SettingsField.SessionTool, SettingsField.SessionSearchMaxResults,
                 SettingsField.ToolsDollarMention, SettingsField.ReflectionCooldownMinutes, SettingsField.ReflectionIncludesSessions, SettingsField.ReflectionCooldownMode,
@@ -1056,7 +1056,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(15, SettingsMenu.ToolsTabFields.Count);   // UNC later still on 2026-09-30; MySQL and Oracle since 2026-09-30; Print since later on 2026-09-28; Home Assistant since 2026-09-28; Claude since 2026-09-27; Images since 2026-09-24; SQL since 2026-09-23; Obsidian since 2026-09-22 and Options last later that day (first since later on 2026-09-19); Git between Files and Web since 2026-09-20; Shell between Git and Web since 2026-09-21
         Assert.Equal(2, SettingsMenu.SkillsTabFields.Count);   // Options and Reflection, since later on 2026-09-19 (one list of 11, then 14, before)
         Assert.Equal(15, SettingsMenu.SkillsTabFields.Sum(t => t.Count));   // 14 until Project file came off the Project tab on 2026-10-01; 13 until Reflection edit supporting files came on 2026-09-27; 12 until Reflection yields to turns came on 2026-09-24; 13 until Allow skill delete went on 2026-09-23; 14 until Reflection verbose went later still on 2026-09-19
-        Assert.Equal(new[] { SettingsField.Profile, SettingsField.NewProfileMode, SettingsField.WorkingDirectory, SettingsField.QueueMessages, SettingsField.QueueCancelMode, SettingsField.Memory, SettingsField.CopyUserPrompt, SettingsField.ShowImageThumbnails, SettingsField.ImageThumbnailSize, SettingsField.TranscriptMarkdown, SettingsField.PastePreviewLines, SettingsField.HideExitAutocomplete, SettingsField.CommandTypoIntercept, SettingsField.KeepCommandHistory, SettingsField.WelcomeSplash, SettingsField.ShowWorkingDirectory, SettingsField.ToolbarItems, SettingsField.ShowPerformanceBar, SettingsField.Theme, SettingsField.MenuMaxHeight, SettingsField.DraftEditor, SettingsField.ImageEditor, SettingsField.ThemedViewer }, SettingsMenu.TabFields[(int)SettingsTab.General]);   // Menus max height under Theme, 2026-10-01; Image editor under Draft editor, later on 2026-09-24; Keep command history under the typo intercept, 2026-09-25; Theme under Show toolbar and Themed image viewer last, later on 2026-09-27; Show performance bar under Show toolbar, 2026-09-29
+        Assert.Equal(new[] { SettingsField.Profile, SettingsField.NewProfileMode, SettingsField.WorkingDirectory, SettingsField.QueueMessages, SettingsField.QueueCancelMode, SettingsField.Memory, SettingsField.CopyUserPrompt, SettingsField.ShowImageThumbnails, SettingsField.ImageThumbnailSize, SettingsField.TranscriptMarkdown, SettingsField.PastePreviewLines, SettingsField.HideExitAutocomplete, SettingsField.CommandTypoIntercept, SettingsField.KeepCommandHistory, SettingsField.WelcomeSplash, SettingsField.ShowHeader, SettingsField.ShowWorkingDirectory, SettingsField.ToolbarItems, SettingsField.ShowPerformanceBar, SettingsField.Theme, SettingsField.MenuMaxHeight, SettingsField.DraftEditor, SettingsField.ImageEditor, SettingsField.ThemedViewer }, SettingsMenu.TabFields[(int)SettingsTab.General]);   // Menus max height under Theme, 2026-10-01; Image editor under Draft editor, later on 2026-09-24; Keep command history under the typo intercept, 2026-09-25; Theme under Show toolbar and Themed image viewer last, later on 2026-09-27; Show performance bar under Show toolbar, 2026-09-29
         // Show performance bar (2026-09-29): a picker of five looks, off by default, no reconnect.
         Assert.False(SettingsMenu.IsToggle(SettingsField.ShowPerformanceBar));
         Assert.Equal("Show performance bar", SettingsMenu.FieldName(SettingsField.ShowPerformanceBar));
@@ -1084,6 +1084,12 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("hold  [#9A8BB8]a cancelled reply holds the queue; your next message runs first, then it resumes[/]", SettingsMenu.QueueCancelModeLabel("hold"));
         Assert.Equal("drain [#9A8BB8]a cancelled reply sends the next queued message at once[/]", SettingsMenu.QueueCancelModeLabel("drain"));
         Assert.Equal("empty [#9A8BB8]a cancelled reply drops every queued message[/]", SettingsMenu.QueueCancelModeLabel("empty"));
+        // Show header (2026-10-01, the user's ask): a toggle under Welcome splash, on by default, no reconnect (read at each banner draw).
+        Assert.True(SettingsMenu.IsToggle(SettingsField.ShowHeader));
+        Assert.Equal("Show header", SettingsMenu.FieldName(SettingsField.ShowHeader));
+        Assert.Equal("on", SettingsMenu.FieldValue(SettingsField.ShowHeader, data, _settings.ProfileDirectory));
+        Assert.Equal("off", SettingsMenu.FieldValue(SettingsField.ShowHeader, new AppSettingsData { ShowHeader = false }, _settings.ProfileDirectory));
+        Assert.False(SettingsMenu.RefusedMidTurn(SettingsField.ShowHeader) || SettingsMenu.IsLlmField(SettingsField.ShowHeader) || SettingsMenu.IsTtsField(SettingsField.ShowHeader) || SettingsMenu.IsVoiceField(SettingsField.ShowHeader));
         // Show working directory (2026-09-18): a toggle, the General tab's last row, no reconnect (read at each banner draw).
         Assert.True(SettingsMenu.IsToggle(SettingsField.ShowWorkingDirectory));
         Assert.Equal("Working directory in header", SettingsMenu.FieldName(SettingsField.ShowWorkingDirectory));   // "Show working directory" until 2026-09-21
@@ -3022,7 +3028,7 @@ public partial class SettingsMenuTests : IDisposable
         string cwd = SettingsMenu.DefaultWorkingDirectoryLabel(_settings.ProfileDirectory);
         Assert.StartsWith("(", cwd);
         Assert.EndsWith(@"\profiles\default\files)", cwd);
-        Assert.Contains(Rule(240) + "\n" + Titled(Strip) + "\n \n▸ Profile                      default (" + _settings.ProfileDirectory + ")\n  New profile mode             basic\n  Working directory (cwd)      " + cwd + "\n  Queue messages               on\n  Queue cancel mode            empty\n  Memory                       on\n  Copy user prompt             on\n  Show image thumbnails        on\n  Image thumbnail size         small\n  Transcript markdown          on\n  Paste preview lines          25 lines\n  Hide /exit autocomplete      on\n  Command typo intercept       on\n  Keep command history         on\n  Welcome splash               fullsize\n  Working directory in header  off\n  Show toolbar                 5 of 13\n  Show performance bar         off\n  Theme                        synthwave\n  Menus max height             full-screen\n  Draft editor                 (default .txt editor)\n  Image viewer                 (built-in viewer)\n  Themed image viewer          on\n" + Rule(240) + "\n" + SettingsMenu.TabKeys + "\n", _console.Output);
+        Assert.Contains(Rule(240) + "\n" + Titled(Strip) + "\n \n▸ Profile                      default (" + _settings.ProfileDirectory + ")\n  New profile mode             basic\n  Working directory (cwd)      " + cwd + "\n  Queue messages               on\n  Queue cancel mode            empty\n  Memory                       on\n  Copy user prompt             on\n  Show image thumbnails        on\n  Image thumbnail size         small\n  Transcript markdown          on\n  Paste preview lines          25 lines\n  Hide /exit autocomplete      on\n  Command typo intercept       on\n  Keep command history         on\n  Welcome splash               fullsize\n  Show header                  on\n  Working directory in header  off\n  Show toolbar                 5 of 13\n  Show performance bar         off\n  Theme                        synthwave\n  Menus max height             full-screen\n  Draft editor                 (default .txt editor)\n  Image viewer                 (built-in viewer)\n  Themed image viewer          on\n" + Rule(240) + "\n" + SettingsMenu.TabKeys + "\n", _console.Output);
         Assert.DoesNotContain("File /tree max length", _console.Output);   // the Files tab's since 2026-09-15
         Assert.DoesNotContain("LLM URL", _console.Output);
         Assert.False(pane.OverlayOpen);
@@ -3961,10 +3967,10 @@ public partial class SettingsMenuTests : IDisposable
     }
 
     [Fact]
-    public async Task Toggle_DollarMention_IsRow79_TheLast_OnByDefault_NoReconnect()
+    public async Task Toggle_DollarMention_IsRow80_TheLast_OnByDefault_NoReconnect()
     {
         // The $-mention switch (2026-09-19): the enum's last member, /tools' Options tab on the pane.
-        Down(78);   // one row up since Allow skill delete went, 2026-09-23
+        Down(79);   // one row up since Allow skill delete went, 2026-09-23; one down for Show header, 2026-10-01
         Push(Keys.Enter, Keys.Down, Keys.Enter, Keys.Escape);
 
         Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));
@@ -3980,11 +3986,11 @@ public partial class SettingsMenuTests : IDisposable
     }
 
     [Fact]
-    public async Task DraftEditor_IsRow83_TheLast_Typed_AnyTextIsKept_AndEmptyMeansTheShellsDefault()
+    public async Task DraftEditor_IsRow84_TheLast_Typed_AnyTextIsKept_AndEmptyMeansTheShellsDefault()
     {
         // 2026-09-19: the enum's last member, the General tab's last row on the pane; a command line, not a path, so nothing is checked here.
         _console.Profile.Width = 240;
-        Down(82);   // one row up since Allow skill delete went, 2026-09-23
+        Down(83);   // one row up since Allow skill delete went, 2026-09-23; one down for Show header, 2026-10-01
         Push(Keys.Enter);                           // Draft editor: empty
         _console.Input.PushText("code --wait");
         Push(Keys.Enter);                           // saved
@@ -4194,6 +4200,8 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("show '/exit' in the autocomplete list", SettingsMenu.ToggleDescribe(SettingsField.HideExitAutocomplete, false));
         Assert.Equal("a command typed without its slash or with extra ones offers the command", SettingsMenu.ToggleDescribe(SettingsField.CommandTypoIntercept, true));   // extra slashes since later still on 2026-09-24
         Assert.Equal("a command typed without its slash or with extra ones is sent as typed", SettingsMenu.ToggleDescribe(SettingsField.CommandTypoIntercept, false));
+        Assert.Equal("show the header", SettingsMenu.ToggleDescribe(SettingsField.ShowHeader, true));   // 2026-10-01
+        Assert.Equal("hide the header", SettingsMenu.ToggleDescribe(SettingsField.ShowHeader, false));
         Assert.Equal("show the working directory in the header", SettingsMenu.ToggleDescribe(SettingsField.ShowWorkingDirectory, true));   // the user's words, 2026-09-21
         Assert.Equal("hide the working directory in the header", SettingsMenu.ToggleDescribe(SettingsField.ShowWorkingDirectory, false));
         Assert.Equal("theme the picture viewer", SettingsMenu.ToggleDescribe(SettingsField.ThemedViewer, true));   // later on 2026-09-27
@@ -4273,11 +4281,26 @@ public partial class SettingsMenuTests : IDisposable
     }
 
     [Fact]
-    public async Task Toggle_ShowWorkingDirectory_IsRow70_OffByDefault_PersistsAndNeedsNoReconnect()
+    public async Task Toggle_ShowHeader_IsRow70_OnByDefault_PersistsAndNeedsNoReconnect()
+    {
+        // 2026-10-01 (the user's ask): the General tab's row under Welcome splash; the banner reads it at its next draw. On by default, so the flip lands on off.
+        Assert.True(_settings.Current.ShowHeader);
+        Down(69);
+        Push(Keys.Enter, Keys.Down, Keys.Enter, Keys.Escape);
+
+        Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));
+
+        Assert.False(_settings.Current.ShowHeader);
+        Assert.Contains("  · Show header: off", _console.Output);
+        Assert.Equal(0, _synth.ListCalls);
+    }
+
+    [Fact]
+    public async Task Toggle_ShowWorkingDirectory_IsRow71_OffByDefault_PersistsAndNeedsNoReconnect()
     {
         // 2026-09-18: the General tab's last row (the enum's last member until the queue's two, later that day); the banner reads it at its next draw. Off by default since 2026-09-21, so the flip lands on on.
         Assert.False(_settings.Current.ShowWorkingDirectory);
-        Down(69);
+        Down(70);   // one down for Show header, 2026-10-01
         Push(Keys.Enter, Keys.Down, Keys.Enter, Keys.Escape);
 
         Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));
@@ -4510,11 +4533,11 @@ public partial class SettingsMenuTests : IDisposable
     }
 
     [Fact]
-    public async Task Toggle_QueueMessages_IsRow71_OnByDefault_PersistsAndNeedsNoReconnect()
+    public async Task Toggle_QueueMessages_IsRow72_OnByDefault_PersistsAndNeedsNoReconnect()
     {
         // 2026-09-18: the General tab's row under Working directory (the user's place), the enum's second-to-last member; the line hook reads it at each mid-turn Enter.
         Assert.True(_settings.Current.QueueMessages);
-        Down(70);
+        Down(71);
         Push(Keys.Enter, Keys.Down, Keys.Enter, Keys.Escape);
 
         Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));
@@ -4527,11 +4550,11 @@ public partial class SettingsMenuTests : IDisposable
     }
 
     [Fact]
-    public async Task QueueCancelMode_IsRow72_TheLast_APicker_EmptyByDefault_PersistsAndNeedsNoReconnect()
+    public async Task QueueCancelMode_IsRow73_TheLast_APicker_EmptyByDefault_PersistsAndNeedsNoReconnect()
     {
         // 2026-09-18: the enum's last member, the General tab's row under Queue messages; read when a turn ends. Empty by default since 2026-09-20 (hold before).
         Assert.Equal("empty", _settings.Current.QueueCancelMode);
-        Down(71);
+        Down(72);
         Push(Keys.Enter);                           // the picker opens on empty (the last row)
         Push(Keys.Up, Keys.Up, Keys.Enter);         // hold
         Push(Keys.Escape);

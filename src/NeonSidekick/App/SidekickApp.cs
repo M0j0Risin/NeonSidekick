@@ -395,13 +395,17 @@ public sealed class SidekickApp
 
     /// <summary>
     /// <see cref="RenderScreen()"/> on <paramref name="console"/>: the chat screen passes its pane,
-    /// whose count of the rows the banner takes is what keeps the input row at the bottom.
+    /// whose count of the rows the banner takes is what keeps the input row at the bottom. With
+    /// <c>Show header</c> off (2026-10-01, the user's ask) the wipe alone: the transcript starts at the top row.
     /// </summary>
     public void RenderScreen(IAnsiConsole console)
     {
         ArgumentNullException.ThrowIfNull(console);
         ClearScreen(console);
-        RenderBanner(console);
+        if (EffectiveSettings.ShowHeader)
+        {
+            RenderBanner(console);
+        }
     }
 
     /// <summary>

@@ -173,6 +173,15 @@ public sealed class AppSettingsData
     public bool ShowWorkingDirectory { get; set; }
 
     /// <summary>
+    /// Whether the banner — the title with the version, the sunset rule and the blank line under it — is drawn at all
+    /// (2026-10-01, the user's ask: "Show header", on by default). Read at each draw — startup, <c>/clear</c>, <c>/splash</c>,
+    /// <c>/theme</c>, a profile switch, the splash dismissal —; off, the screen is still wiped and the transcript starts at
+    /// the top row. <c>/new</c> is not touched: its rule and notice stand either way (the user's call). The check modes'
+    /// banner (<c>--smoke</c> and the like) is not the chat screen's and stays. No variable.
+    /// </summary>
+    public bool ShowHeader { get; set; } = true;
+
+    /// <summary>
     /// What the toolbar under the hint row shows (2026-09-21, the user's ask; a checklist since 2026-09-29, the user's
     /// ask, in place of the <c>ShowToolbar</c> switch — a saved <c>false</c> there is dropped as any retired key, so the
     /// row comes back once): ids from <see cref="App.ToolbarItems.Names"/>. The pane glyphs sit at its left (a

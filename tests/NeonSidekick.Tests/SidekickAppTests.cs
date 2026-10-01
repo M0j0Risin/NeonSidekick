@@ -1924,6 +1924,27 @@ public partial class SidekickAppTests : IDisposable
     }
 
     [Fact]
+    public void RenderScreen_DrawsTheBanner_ByDefault()
+    {
+        // Show header (2026-10-01, the user's ask) is on out of the box: the wipe, then the banner.
+        Assert.True(_settings.Current.ShowHeader);
+        App().RenderScreen();
+
+        Assert.Contains("N E O N   S I D E K I C K", _console.Output);
+    }
+
+    [Fact]
+    public void RenderScreen_ShowHeaderOff_IsTheWipeAlone()
+    {
+        // Off, every wipe the chat screen makes (startup, /clear, /splash, /theme, a profile switch) draws no banner.
+        _settings.Update(d => d.ShowHeader = false);
+        App().RenderScreen();
+
+        Assert.DoesNotContain("N E O N   S I D E K I C K", _console.Output);
+        Assert.DoesNotContain(SidekickApp.Version, _console.Output);
+    }
+
+    [Fact]
     public void BannerTitleMarkup_PinsTheLayout()
     {
         string left = "  N E O N   S I D E K I C K  v1.2.3";   // 35 cells

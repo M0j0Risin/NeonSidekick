@@ -8578,6 +8578,8 @@ internal sealed partial class ChatScreen
     /// connect says it is missing), then the server
     /// is started under a spinner whose label follows the runtime's download, the start and the model's load — Ctrl+C
     /// cancels it and the app stays. A start that failed has drained its error; only a connected one is reported.
+    /// Since 2026-10-01 (the user's asks) a double-click on that spinner — <c>🦙 starting …</c>, <c>🦙 loading …</c> — cancels it
+    /// too, and the screen lives under it as under a reply (<see cref="LoadUnderWatchAsync"/>): the row, the toolbar, the chords.
     /// </summary>
     private async Task ConnectEmbeddedAsync(AppSettingsData effective, bool quiet, CancellationToken cancellationToken)
     {
@@ -8591,12 +8593,13 @@ internal sealed partial class ChatScreen
             return;
         }
 
-        if (await ConnectUnderWatchAsync(NoticeGlyphs.Llm, token => _transcript.WithSpinnerAsync(ConnectingLabel, async setLabel =>
+        if (await LoadUnderWatchAsync(token => _transcript.WithSpinnerAsync(ConnectingLabel, async setLabel =>
         {
             await _session.ConnectAsync(effective, setLabel, token).ConfigureAwait(false);
             return true;
         }), cancellationToken).ConfigureAwait(false))
         {
+            _transcript.Notice(ConnectCancelledNotice(NoticeGlyphs.Llm));
             return;
         }
 
@@ -8807,6 +8810,86 @@ internal sealed partial class ChatScreen
 
         DrainDiagnostics();
         return workCts.IsCancellationRequested && !cancellationToken.IsCancellationRequested;
+    }
+
+    /// <summary>
+    /// The embedded model's load (its spinner inside <paramref name="load"/>) under the reply's own watch (2026-10-01, the user's
+    /// asks: a double-click on <c>🦙 starting …</c> or <c>🦙 loading …</c> should cancel it as Ctrl+C does, and the toolbar and the
+    /// chords were dead for the minutes a load takes). <see cref="UnderWatchAsync{T}"/>'s shape — the live row, the scroll, the
+    /// pointer, a line or a chord through <see cref="OnMidTurnLineAsync"/>, so the mid-turn policy holds as under a reply (the
+    /// user's pick): a pane opens over the spinner, <c>/clear</c>, <c>/new</c> or <c>/exit</c> cancels the load and runs at the idle
+    /// line after, <c>/server</c> or <c>/profile</c> waits for it — with the acts run as they come, as
+    /// <see cref="WaitForBotSpeechAsync"/> runs them, so Ctrl+T or <c>/tts off</c> lands while the model still loads. Ctrl+C alone
+    /// is the cancel key, as for every connect; a double-click on the spinner and its label (<see cref="LoadClickLine"/>) is the
+    /// other way. True when either cancelled it (the caller prints the notice); the app token still propagates. Under another
+    /// watch already (<c>_turnRunning</c>) it is <see cref="WaitUnderWatchAsync"/>'s plain Ctrl+C wait, so the outer watch's
+    /// state is never taken from it.
+    /// </summary>
+    private async Task<bool> LoadUnderWatchAsync(Func<CancellationToken, Task> load, CancellationToken cancellationToken)
+    {
+        if (_turnRunning)
+        {
+            return await WaitUnderWatchAsync(load, Keys.IsInterrupt, cancellationToken).ConfigureAwait(false);
+        }
+
+        using var workCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        using var stop = new CancellationTokenSource();
+        using var killScope = BeginKillScope(workCts);
+        _turnRunning = true;
+        _paneClose?.Dispose();
+        _paneClose = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var paneToken = _paneClose.Token;
+        _queuedClicks.Reset();
+        var watcher = _keys.WatchAsync(workCts, stop.Token, null, null,
+            onLine: _pane.Enabled ? line => OnMidTurnLineAsync(line, workCts, paneToken) : null,
+            spend: e => { _queuedClicks.Reset(); return ScrollInput(e); },
+            cancel: Keys.IsInterrupt,
+            onClick: _pane.Enabled ? click => LoadClickLine(click, workCts) : null,
+            editor: LiveEditor);
+        try
+        {
+            var loading = load(workCts.Token);
+            while (!loading.IsCompleted)
+            {
+                await Task.WhenAny(loading, Volatile.Read(ref _actSignal).Task).ConfigureAwait(false);
+                await DrainActsAsync().ConfigureAwait(false);
+            }
+
+            await loading.ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (workCts.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+        {
+        }
+        finally
+        {
+            stop.Cancel();
+            await watcher.ConfigureAwait(false);
+            await EndTurnAsync(closePane: workCts.IsCancellationRequested, cancellationToken).ConfigureAwait(false);
+            DrainDiagnostics();
+        }
+
+        return workCts.IsCancellationRequested && !cancellationToken.IsCancellationRequested;
+    }
+
+    /// <summary>
+    /// The load's click hook (2026-10-01, <see cref="LoadUnderWatchAsync"/>), on the watcher task: two left clicks on the busy
+    /// row's spinner and its label (<see cref="ScreenPane.HintZone.Usage"/> — <c>🦙 starting …</c>, <c>🦙 loading …</c>, or the
+    /// runtime's download before them) within <see cref="DoubleClick.Interval"/> cancel <paramref name="load"/> as Ctrl+C does,
+    /// in place of the reply's <c>/usage</c> there; every other click is the reply's (<see cref="HintClickLine"/>).
+    /// </summary>
+    private string? LoadClickLine(InputEvent.Click click, CancellationTokenSource load)
+    {
+        if (click.Button == MouseButton.Left && _pane.TryHitHint(click.X, click.Y, out var hit) && hit.Zone == ScreenPane.HintZone.Usage)
+        {
+            if (_queuedClicks.Second(InputLine.HintPairKey(hit)))
+            {
+                VoiceSession.SafeCancel(load);
+            }
+
+            return null;
+        }
+
+        return HintClickLine(click);
     }
 
     /// <summary>The spinner label over a discovery: <see cref="ScanningLabel"/> when the settings' scan mode reaches the network, else <paramref name="fallback"/>.</summary>

@@ -644,6 +644,7 @@ public sealed class AppSettings : IDisposable
         QueueMessages = source.QueueMessages,
         ShowImageThumbnails = source.ShowImageThumbnails,
         ShowWorkingDirectory = source.ShowWorkingDirectory,
+        ShowHeader = source.ShowHeader,
         ToolbarItems = source.ToolbarItems is null ? null : [.. source.ToolbarItems],
         ToolbarLastItems = source.ToolbarLastItems is null ? null : [.. source.ToolbarLastItems],
         PerformanceBarItems = source.PerformanceBarItems is null ? null : [.. source.PerformanceBarItems],

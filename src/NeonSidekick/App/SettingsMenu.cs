@@ -202,6 +202,9 @@ public enum SettingsField
     /// <summary>A picker: how the splash greets you under the banner at startup — <c>fullsize</c> / <c>tiled</c> / <c>disabled</c> (<see cref="Settings.AppSettingsData.WelcomeSplashMode"/>; a toggle until 2026-09-24). The General tab's row before Show working directory (2026-09-18, the user's order); no reconnect (read at each show).</summary>
     WelcomeSplash,
 
+    /// <summary>A toggle: whether the banner is drawn at all — startup, <c>/clear</c>, <c>/splash</c>, <c>/theme</c>, a profile switch (<see cref="Settings.AppSettingsData.ShowHeader"/>, on by default). The General tab's row under Welcome splash (2026-10-01, the user's ask); no reconnect (read at each banner draw).</summary>
+    ShowHeader,
+
     /// <summary>A toggle: whether the working directory sits at the right edge of the banner's title line (<see cref="Settings.AppSettingsData.ShowWorkingDirectory"/>). The General tab's row before Draft editor (2026-09-18, its last row until 2026-09-19); no reconnect (read at each banner draw).</summary>
     ShowWorkingDirectory,
 
@@ -1023,7 +1026,7 @@ internal sealed partial class SettingsMenu
     /// </summary>
     public static readonly IReadOnlyList<IReadOnlyList<SettingsField>> TabFields =
     [
-        [SettingsField.Profile, SettingsField.NewProfileMode, SettingsField.WorkingDirectory, SettingsField.QueueMessages, SettingsField.QueueCancelMode, SettingsField.Memory, SettingsField.CopyUserPrompt, SettingsField.ShowImageThumbnails, SettingsField.ImageThumbnailSize, SettingsField.TranscriptMarkdown, SettingsField.PastePreviewLines, SettingsField.HideExitAutocomplete, SettingsField.CommandTypoIntercept, SettingsField.KeepCommandHistory, SettingsField.WelcomeSplash, SettingsField.ShowWorkingDirectory, SettingsField.ToolbarItems, SettingsField.ShowPerformanceBar, SettingsField.Theme, SettingsField.MenuMaxHeight, SettingsField.DraftEditor, SettingsField.ImageEditor, SettingsField.ThemedViewer],
+        [SettingsField.Profile, SettingsField.NewProfileMode, SettingsField.WorkingDirectory, SettingsField.QueueMessages, SettingsField.QueueCancelMode, SettingsField.Memory, SettingsField.CopyUserPrompt, SettingsField.ShowImageThumbnails, SettingsField.ImageThumbnailSize, SettingsField.TranscriptMarkdown, SettingsField.PastePreviewLines, SettingsField.HideExitAutocomplete, SettingsField.CommandTypoIntercept, SettingsField.KeepCommandHistory, SettingsField.WelcomeSplash, SettingsField.ShowHeader, SettingsField.ShowWorkingDirectory, SettingsField.ToolbarItems, SettingsField.ShowPerformanceBar, SettingsField.Theme, SettingsField.MenuMaxHeight, SettingsField.DraftEditor, SettingsField.ImageEditor, SettingsField.ThemedViewer],
         [SettingsField.EmbeddedLlmServer, SettingsField.EmbeddedModels, SettingsField.EmbeddedFilterType, SettingsField.EmbeddedHfDownloadType, SettingsField.EmbeddedBackend, SettingsField.EmbeddedContextSize, SettingsField.EmbeddedGpuLayers, SettingsField.EmbeddedVramBudget, SettingsField.EmbeddedVramOnly, SettingsField.EmbeddedVision, SettingsField.EmbeddedDrafter],
         [SettingsField.LlmScanMode, SettingsField.LlmUrl, SettingsField.LlmModel, SettingsField.LlmApiKey, SettingsField.LlmReasoning, SettingsField.LlmRequestTimeoutSeconds, SettingsField.LlmTurnTimeoutSeconds, SettingsField.LlmContextLength, SettingsField.LlmMidTurnUsage, SettingsField.LlmCompactType, SettingsField.LlmCompactKeepRecent, SettingsField.LlmCompactShowSummary, SettingsField.LlmAutoCompactPercent, SettingsField.LlmMaxTurns, SettingsField.LlmOfferTools, SettingsField.LlmToolCompactType, SettingsField.LlmMaxToolIterations, SettingsField.LlmUseFunVerbs, SettingsField.LlmShowThinking, SettingsField.LlmPreserveThinking, SettingsField.LlmReasoningEstimate, SettingsField.LlmSampling, SettingsField.LlmSamplingFromHuggingFace],
         [SettingsField.TtsOutput, SettingsField.TtsSource, SettingsField.TtsHttpUrl, SettingsField.TtsVoicePreview, SettingsField.TtsVoicePreset, SettingsField.TtsVoice, SettingsField.TtsVoice2, SettingsField.TtsVoiceMix, SettingsField.TtsSpeed],
@@ -1442,7 +1445,7 @@ internal sealed partial class SettingsMenu
             or SettingsField.WebTools or SettingsField.TtsVoicePreview or SettingsField.FileTools or SettingsField.AskUser
             or SettingsField.AgentSkills or SettingsField.ExternalSkills or SettingsField.ProjectFile or SettingsField.TranscriptMarkdown
             or SettingsField.SkillHashMention or SettingsField.ReflectionAutoLearn
-            or SettingsField.HideExitAutocomplete or SettingsField.CommandTypoIntercept or SettingsField.KeepCommandHistory or SettingsField.ShowWorkingDirectory or SettingsField.ThemedViewer
+            or SettingsField.HideExitAutocomplete or SettingsField.CommandTypoIntercept or SettingsField.KeepCommandHistory or SettingsField.ShowHeader or SettingsField.ShowWorkingDirectory or SettingsField.ThemedViewer
             or SettingsField.QueueMessages or SettingsField.SessionLogging or SettingsField.SessionTool or SettingsField.SessionSaveThinking
             or SettingsField.ToolsDollarMention or SettingsField.ReflectionIncludesSessions or SettingsField.ReflectionYieldsToTurns or SettingsField.ReflectionEditsSupportingFiles or SettingsField.McpServers or SettingsField.GitLibTools
             or SettingsField.LlmCompactShowSummary or SettingsField.ShellToolBridge or SettingsField.ShellPoliceOutsidePaths or SettingsField.ShellPreferNative
@@ -1668,6 +1671,7 @@ internal sealed partial class SettingsMenu
         SettingsField.CommandTypoIntercept => "Command typo intercept",
         SettingsField.KeepCommandHistory => "Keep command history",
         SettingsField.WelcomeSplash => "Welcome splash",
+        SettingsField.ShowHeader => "Show header",   // the user's name (2026-10-01)
         SettingsField.MenuMaxHeight => "Menus max height",   // the user's name (2026-10-01)
         SettingsField.ShowWorkingDirectory => "Working directory in header",
         SettingsField.ToolbarItems => "Show toolbar",
@@ -1930,6 +1934,7 @@ internal sealed partial class SettingsMenu
             SettingsField.SessionRetentionDays => Days(data.SessionRetentionDays),
             SettingsField.SessionSearchMaxResults => Results(data.SessionSearchMaxResults),
             SettingsField.SessionTool => OnOff(data.SessionTool),
+            SettingsField.ShowHeader => OnOff(data.ShowHeader),
             SettingsField.ShowWorkingDirectory => OnOff(data.ShowWorkingDirectory),
             SettingsField.ToolbarItems => App.ToolbarItems.Value(data.ToolbarItems),
             SettingsField.ShowPerformanceBar => PerfBarItems.Value(data.PerformanceBarItems, data.PerformanceBarLook),
@@ -5016,6 +5021,7 @@ internal sealed partial class SettingsMenu
             SettingsField.HideExitAutocomplete => data.HideExitAutocomplete,
             SettingsField.CommandTypoIntercept => data.CommandTypoIntercept,
             SettingsField.KeepCommandHistory => data.KeepCommandHistory,
+            SettingsField.ShowHeader => data.ShowHeader,
             SettingsField.ShowWorkingDirectory => data.ShowWorkingDirectory,
             SettingsField.ThemedViewer => data.ThemedViewer,
             SettingsField.QueueMessages => data.QueueMessages,
@@ -5099,6 +5105,7 @@ internal sealed partial class SettingsMenu
             case SettingsField.HideExitAutocomplete: data.HideExitAutocomplete = on; break;
             case SettingsField.CommandTypoIntercept: data.CommandTypoIntercept = on; break;
             case SettingsField.KeepCommandHistory: data.KeepCommandHistory = on; break;
+            case SettingsField.ShowHeader: data.ShowHeader = on; break;
             case SettingsField.ShowWorkingDirectory: data.ShowWorkingDirectory = on; break;
             case SettingsField.ThemedViewer: data.ThemedViewer = on; break;
             case SettingsField.QueueMessages: data.QueueMessages = on; break;
@@ -5186,6 +5193,7 @@ internal sealed partial class SettingsMenu
         SettingsField.HideExitAutocomplete => on ? "hide '/exit' from the autocomplete list" : "show '/exit' in the autocomplete list",
         SettingsField.CommandTypoIntercept => on ? "a command typed without its slash or with extra ones offers the command" : "a command typed without its slash or with extra ones is sent as typed",
         SettingsField.KeepCommandHistory => on ? "command history enabled" : "command history disabled",
+        SettingsField.ShowHeader => on ? "show the header" : "hide the header",
         SettingsField.ShowWorkingDirectory => on ? "show the working directory in the header" : "hide the working directory in the header",
         SettingsField.ThemedViewer => on ? "theme the picture viewer" : "keep the picture viewer black",
         SettingsField.QueueMessages => on ? "a message sent while a reply runs is queued and sent when the reply ends" : "a message sent during a reply goes when it ends, unlisted; no /queue",
