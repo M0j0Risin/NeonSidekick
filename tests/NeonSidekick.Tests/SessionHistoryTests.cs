@@ -163,4 +163,21 @@ public class SessionHistoryTests
         Assert.ThrowsAny<JsonException>(() => SessionHistory.FromJson("null"));
         Assert.Empty(SessionHistory.FromJson("{}"));
     }
+    /// <summary>The turn's store ordinal (2026-09-30, <c>/rewind</c>) round-trips; a message without one writes no field and an older document reads as none.</summary>
+    [Fact]
+    public void ATurnOrdinal_RoundTrips_AndIsLeftOutWhenNone()
+    {
+        var stamped = new ChatMessage(ChatRole.User, "hi");
+        ConversationHistory.SetTurnOrdinal(stamped, 7);
+        List<ChatMessage> messages = [stamped, new ChatMessage(ChatRole.Assistant, "hello")];
+
+        string json = SessionHistory.ToJson(messages);
+        var back = SessionHistory.FromJson(json);
+
+        Assert.Equal(7, ConversationHistory.TurnOrdinal(back[0]));
+        Assert.Null(ConversationHistory.TurnOrdinal(back[1]));
+        Assert.Equal(1, json.Split("\"Ordinal\"").Length - 1);
+        var old = SessionHistory.FromJson("{\"SchemaVersion\":1,\"Messages\":[{\"Role\":\"user\",\"Carrier\":false,\"Parts\":[{\"Kind\":\"text\",\"Text\":\"hi\"}]}]}");
+        Assert.Null(ConversationHistory.TurnOrdinal(Assert.Single(old)));
+    }
 }

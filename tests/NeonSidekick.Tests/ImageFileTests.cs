@@ -33,7 +33,7 @@ public class ImageFileTests : IDisposable
     private static bool IsJpeg(byte[] bytes) => bytes.Length > 3 && bytes[0] == 0xFF && bytes[1] == 0xD8 && bytes[2] == 0xFF;
 
     /// <summary>A black 8-bit RGB PNG built by hand: one IDAT of deflated zeros, so a huge picture is a small file.</summary>
-    private static byte[] BlackPng(int width, int height)
+    internal static byte[] BlackPng(int width, int height)
     {
         using var stream = new MemoryStream();
         stream.Write([0x89, (byte)'P', (byte)'N', (byte)'G', 0x0D, 0x0A, 0x1A, 0x0A]);

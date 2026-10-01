@@ -54,7 +54,7 @@ public class SmokeChecksTests
         Assert.Equal("sessions:open", check.Name);
         Assert.True(check.Passed, check.Detail);
         Assert.StartsWith("SQLite 3.", check.Detail);
-        Assert.EndsWith("1 FTS5 hit, 1 OR hit, a skill's usage and a reflection recorded, 2 messages restored, 1 purged", check.Detail);   // the schema-3 legs since 2026-09-19; the migration legs went 2026-09-24
+        Assert.EndsWith("1 FTS5 hit, 1 OR hit, a skill's usage and a reflection recorded, 2 messages restored, 1 purged, skills.db written and read", check.Detail);   // the schema-3 legs since 2026-09-19; the migration legs went 2026-09-24
     }
 
     /// <summary>The MCP round trip (2026-09-20): an in-process server over a pipe, the real client, the app's adapter answering an echo.</summary>

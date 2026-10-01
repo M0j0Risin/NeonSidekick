@@ -13,6 +13,13 @@ public sealed class StoredMessage
     /// <summary>The <see cref="ConversationHistory.CarrierKey"/> tag (a <c>view_image</c> carrier), kept off the wire and off the turn count.</summary>
     public bool Carrier { get; set; }
 
+    /// <summary>
+    /// The store ordinal of the turn this user message opened (<see cref="ConversationHistory.TurnOrdinalKey"/>, 2026-09-30,
+    /// <c>/rewind</c>). Left out while null, so a row written earlier reads the same as ever and needs no schema bump.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? Ordinal { get; set; }
+
     public List<StoredPart> Parts { get; set; } = new();
 }
 
@@ -149,7 +156,7 @@ public static class SessionHistory
 
     internal static StoredMessage Store(ChatMessage message, bool withThinking = false)
     {
-        var stored = new StoredMessage { Role = message.Role.Value, Carrier = ConversationHistory.IsImageCarrier(message) };
+        var stored = new StoredMessage { Role = message.Role.Value, Carrier = ConversationHistory.IsImageCarrier(message), Ordinal = ConversationHistory.TurnOrdinal(message) };
         foreach (var content in message.Contents)
         {
             switch (content)
@@ -215,6 +222,11 @@ public static class SessionHistory
         if (stored.Carrier)
         {
             message.AdditionalProperties = new AdditionalPropertiesDictionary { [ConversationHistory.CarrierKey] = true };
+        }
+
+        if (stored.Ordinal is { } ordinal)
+        {
+            ConversationHistory.SetTurnOrdinal(message, ordinal);
         }
 
         return message;

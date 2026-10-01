@@ -224,7 +224,7 @@ public sealed class SkillCatalog
         description.Length <= SkillFrontmatter.MaxDescriptionLength ? description : description[..(SkillFrontmatter.MaxDescriptionLength - 1)].TrimEnd() + "…";
 
     /// <summary>The subfolders of <paramref name="root"/> that hold a <see cref="FileName"/>, by name; none for a missing or unreadable root.</summary>
-    private static List<string> Folders(string root)
+    internal static List<string> Folders(string root)
     {
         var folders = new List<string>();
         try

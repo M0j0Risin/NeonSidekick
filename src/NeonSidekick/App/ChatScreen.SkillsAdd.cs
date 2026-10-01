@@ -13,13 +13,26 @@ namespace NeonSidekick.App;
 /// </summary>
 internal sealed partial class ChatScreen
 {
-    /// <summary>What followed <c>/skills</c>: <c>add &lt;source&gt;</c>, or the usage error.</summary>
+    /// <summary>What followed <c>/skills</c>: <c>add &lt;source&gt;</c>, <c>purge list|commit &lt;age&gt;</c> (2026-09-30), or the usage error.</summary>
     private async Task HandleSkillsArgumentAsync(string args, CancellationToken cancellationToken)
     {
+        var (purge, age) = SkillRecordText.ParsePurge(args);
+        if (purge != SkillRecordText.PurgeKind.None)
+        {
+            if (purge == SkillRecordText.PurgeKind.Invalid)
+            {
+                _transcript.Error(SkillRecordText.SkillsUsageError);
+                return;
+            }
+
+            await PurgeSkillsAsync(purge == SkillRecordText.PurgeKind.Commit, age, AgeWords(args), cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
         string[] parts = args.Split(' ', 2, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         if (!parts[0].Equals(SkillInstallText.AddWord, StringComparison.OrdinalIgnoreCase) || parts.Length < 2)
         {
-            _transcript.Error(SkillInstallText.UsageError);
+            _transcript.Error(SkillRecordText.SkillsUsageError);
             return;
         }
 
@@ -86,5 +99,7 @@ internal sealed partial class ChatScreen
         }
 
         public void Rescan() => screen._catalog.Scan(screen._effective().ExternalSkills);
+
+        public void Installed(SkillInstallResult result) => screen._skillRecords.Installed(result.Scope, result.Directory, result.Updated);
     }
 }

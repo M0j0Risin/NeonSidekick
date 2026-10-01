@@ -15,6 +15,13 @@ public enum SlashCommand
 
     /// <summary><c>/splash</c>: forget the conversation, wipe the screen and show the welcome splash again — the startup view, whatever <c>Welcome splash</c> says (2026-09-19, the user's ask): its tiled pages when it says <c>tiled</c>, else one picture, <c>disabled</c> included (2026-09-24). No argument.</summary>
     Splash,
+
+    /// <summary>
+    /// <c>/rewind</c> (2026-09-30, the user's ask): go back to an earlier message. It and everything after it leave the
+    /// conversation and the session, and its text returns to the input. <c>/rewind &lt;n&gt;</c> starts the picker n messages
+    /// back. A double ESC on an empty line opens it too.
+    /// </summary>
+    Rewind,
     /// <summary><c>/theme</c>: pick the colour theme from a list, or <c>/theme &lt;name&gt;</c> (2026-09-23, the user's ask); a change starts over the way <c>/splash</c> does — the conversation forgotten, the screen wiped, the splash shown in the new colours. Refused while a reply runs.</summary>
     Theme,
 
@@ -236,6 +243,7 @@ public static class SlashCommands
             new("/botchat", "let the profiles talk to each other, each in its own persona, until ESC: /botchat [profile ...] [[--] topic], or /botchat --resume [line] to carry on the last one, or /botchat --kill to stop the extra embedded servers"),
             new("/claude", "send a message to Claude Code and add its reply to the conversation: /claude <message>, or /claude new to start a new Claude conversation"),
             new("/clear", "start a new conversation and clear the screen"),
+            new(RewindText.Word, RewindText.HelpSummary),
             new("/cmdclear", "clear this profile's command history (the Up/Down recall), stored and in memory (asks first)"),
             new("/cmdcopy", "copy this profile's allowed shell commands into another, or with --history its command history: /cmdcopy <profile> [--history] [overwrite]"),
             new("/cmdlist", "list this profile's allowed shell commands on a pane, Enter removes one"),
@@ -318,7 +326,7 @@ public static class SlashCommands
     public static readonly IReadOnlySet<string> BasicCommands = new HashSet<string>(StringComparer.Ordinal)
     {
         "/clear", "/compact", "/copy", "/cwd", "/draft", "/exit", "/help", "/memory", "/model", "/new", "/profile",
-        "/queue", "/reasoning", "/remember", "/server", "/sessions", "/settings", "/skills", "/sys", "/tools", "/tree",
+        "/queue", "/reasoning", "/remember", "/rewind", "/server", "/sessions", "/settings", "/skills", "/sys", "/tools", "/tree",
     };
 
     /// <summary>Whether <paramref name="entry"/> is on the <see cref="BasicTabTitle"/> tab (<see cref="BasicCommands"/>).</summary>
@@ -385,7 +393,7 @@ public static class SlashCommands
     }
 
     /// <summary>Every command word, for help and completion.</summary>
-    public static readonly string[] Words = { "/help", "/clear", "/new", "/splash", "/theme", "/queue", "/sessions", "/compact", "/server", "/model", "/reasoning", "/sampling", "/settings", "//", "/tools", "/mcp", "/tts", "/stt", "/wake", "/interrupt", "/speak", "/remember", "/memory", "/cmdcopy", "/keycopy", "/cmdclear", "/cmdlist", "/police", "/persona", "/operata", "/vocalia", "/sys", "/usage", "/perf", "/profile", "/timer", "/cwd", "/tree", "/vault", "/explore", "/view", "/imagine", "/comfy", "/ha", "/print", "/echo", "/emptytrash", "/gituser", "/copy", "/draft", "/loop", "/plan", "/botchat", "/claude", "/test", "/expand", "/collapse", "/window", "/skills", "/learn", "/about", "/exit" };
+    public static readonly string[] Words = { "/help", "/clear", "/new", "/splash", "/rewind", "/theme", "/queue", "/sessions", "/compact", "/server", "/model", "/reasoning", "/sampling", "/settings", "//", "/tools", "/mcp", "/tts", "/stt", "/wake", "/interrupt", "/speak", "/remember", "/memory", "/cmdcopy", "/keycopy", "/cmdclear", "/cmdlist", "/police", "/persona", "/operata", "/vocalia", "/sys", "/usage", "/perf", "/profile", "/timer", "/cwd", "/tree", "/vault", "/explore", "/view", "/imagine", "/comfy", "/ha", "/print", "/echo", "/emptytrash", "/gituser", "/copy", "/draft", "/loop", "/plan", "/botchat", "/claude", "/test", "/expand", "/collapse", "/window", "/skills", "/learn", "/about", "/exit" };
 
     /// <summary>The <c>/queue</c> word: what a double-click on the hint row's queued part sends through the mid-turn line hook, so the pane opens exactly as the typed command's does (2026-09-18). Pinned.</summary>
     public const string QueueWord = "/queue";
@@ -434,6 +442,7 @@ public static class SlashCommands
             "/clear" => SlashCommand.Clear,
             "/new" => SlashCommand.New,
             "/splash" => SlashCommand.Splash,
+            "/rewind" => SlashCommand.Rewind,
             "/theme" => SlashCommand.Theme,
             "/compact" => SlashCommand.Compact,
             "/server" => SlashCommand.Server,
@@ -516,5 +525,5 @@ public static class SlashCommands
         or SlashCommand.Remember or SlashCommand.Memory or SlashCommand.CmdCopy or SlashCommand.KeyCopy or SlashCommand.Profile or SlashCommand.Timer
         or SlashCommand.Cwd or SlashCommand.Tree or SlashCommand.Vault or SlashCommand.Explore or SlashCommand.Copy or SlashCommand.Session or SlashCommand.GitUser
         or SlashCommand.Loop or SlashCommand.Plan or SlashCommand.BotChat or SlashCommand.Claude or SlashCommand.Queue or SlashCommand.Skills or SlashCommand.Test
-        or SlashCommand.HomeAssistant or SlashCommand.Print or SlashCommand.Perf;
+        or SlashCommand.HomeAssistant or SlashCommand.Print or SlashCommand.Perf or SlashCommand.Rewind;
 }

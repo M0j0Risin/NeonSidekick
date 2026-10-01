@@ -74,6 +74,7 @@ internal sealed class SkillsMenu
     private readonly InputLine _input;
     private readonly Action<string> _openFile;
     private readonly Func<string, string?> _usage;
+    private readonly SkillRecords? _records;
 
     /// <param name="facts">The catalog as of a fresh scan and the rest the tabs show; read when the list opens and again after every change.</param>
     /// <param name="settings">The store the Options tab's rows show and save to.</param>
@@ -83,8 +84,10 @@ internal sealed class SkillsMenu
     /// <param name="input">The line the rename's new name is typed on, under the page (2026-09-21).</param>
     /// <param name="openFile">Opens a file in the user's editor: the <c>edit</c> row's <c>SKILL.md</c> (2026-09-23; the screen's <c>/profile edit</c> seam).</param>
     /// <param name="usage">The scope page's caption for a skill by name (<see cref="UsageCaption"/>; the session store's usage line, 2026-09-19), null for none — read when the page opens; tests pass nothing.</param>
-    public SkillsMenu(Func<SkillsFacts> facts, AppSettings settings, SettingsMenu menu, INoticeSink transcript, MenuPane pane, InputLine input, Action<string> openFile, Func<string, string?>? usage = null)
+    /// <param name="records">The skill records (2026-09-30): a move, a rename and a delete keep them in step. Null for none.</param>
+    public SkillsMenu(Func<SkillsFacts> facts, AppSettings settings, SettingsMenu menu, INoticeSink transcript, MenuPane pane, InputLine input, Action<string> openFile, Func<string, string?>? usage = null, SkillRecords? records = null)
     {
+        _records = records;
         _facts = facts ?? throw new ArgumentNullException(nameof(facts));
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));
         _menu = menu ?? throw new ArgumentNullException(nameof(menu));
@@ -413,6 +416,7 @@ internal sealed class SkillsMenu
             switch (deleted.Outcome)
             {
                 case SkillEditOutcome.Deleted:
+                    _records?.Deleted(skill.Scope, skill.FolderName);
                     Sink.Notice(DeletedNotice(skill.Name, skill.Scope));
                     return true;
                 case SkillEditOutcome.Missing:
@@ -449,6 +453,7 @@ internal sealed class SkillsMenu
         switch (moved.Outcome)
         {
             case SkillEditOutcome.Moved:
+                _records?.Moved(skill, to);
                 Sink.Notice(MovedNotice(skill.Name, to));
                 return true;
             case SkillEditOutcome.Exists:
@@ -496,6 +501,7 @@ internal sealed class SkillsMenu
         switch (renamed.Outcome)
         {
             case SkillEditOutcome.Renamed:
+                _records?.Renamed(skill, name);
                 Sink.Notice(RenamedNotice(skill.Name, name));
                 return true;
             case SkillEditOutcome.Exists or SkillEditOutcome.ExistsElsewhere or SkillEditOutcome.ExternalReadOnly:

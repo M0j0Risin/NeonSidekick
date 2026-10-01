@@ -1005,6 +1005,29 @@ public partial class SidekickAppTests : IDisposable
         await Task.CompletedTask;
     }
 
+    /// <summary>
+    /// <c>/rewind [n]</c> headless (2026-09-30): n messages back at once, the dropped line printed, the stored session cut to
+    /// match; nothing to rewind and a bad count say so.
+    /// </summary>
+    [Fact]
+    public async Task Headless_Rewind_GoesBackAndPrintsTheDroppedLine_AndTheStoreFollows()
+    {
+        ServerOn1234("llama");
+        _chat.EnqueueText("one").EnqueueText("two").EnqueueText("three").EnqueueText("again");
+
+        string output = await Headless("/rewind\nfirst\nsecond\nthird\n/rewind 4\n/rewind 2\nsecond again\n");
+
+        Assert.Contains("Neon: " + RewindText.NothingNotice, output);
+        Assert.Contains("[error] " + RewindText.UsageError(3), output);
+        Assert.Contains("Neon: " + RewindText.RewoundNotice(2, "second"), output);
+        Assert.Contains("[notice] " + RewindText.HeadlessLineNotice("second"), output);
+        Assert.Equal(4, _chat.Requests.Count);
+        Assert.Equal(["first", "second again"], _chat.Requests[3].Where(ConversationHistory.IsTurnStart).Select(m => m.Text));
+        using var store = new NeonSidekick.Sessions.SessionStore(_settings.ProfileDirectory);
+        var record = store.Load(Assert.Single(store.List(0)).Id)!;
+        Assert.Equal(["first", "second again"], record.Turns.Select(t => t.UserText));
+    }
+
     [Fact]
     public async Task Headless_ClearForgetsTheConversation()
     {

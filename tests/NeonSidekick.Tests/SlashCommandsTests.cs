@@ -373,7 +373,7 @@ public class SlashCommandsTests
             SlashCommand.Persona, SlashCommand.Operata, SlashCommand.Vocalia,
             SlashCommand.Remember, SlashCommand.Memory, SlashCommand.CmdCopy, SlashCommand.KeyCopy, SlashCommand.Profile, SlashCommand.Timer,   // /cmdcopy 2026-09-21; /keycopy 2026-09-28; /memory 2026-09-22 (forget, then copy <profile> [overwrite], the folded /memcopy)
             SlashCommand.Cwd, SlashCommand.Tree, SlashCommand.Vault, SlashCommand.Explore, SlashCommand.Copy, SlashCommand.Session, SlashCommand.GitUser,   // /vault [path] 2026-09-23
-            SlashCommand.Loop, SlashCommand.Plan, SlashCommand.BotChat, SlashCommand.Claude, SlashCommand.Queue, SlashCommand.Skills, SlashCommand.Test, SlashCommand.HomeAssistant, SlashCommand.Print, SlashCommand.Perf,   // /perf later on 2026-09-29; /print 2026-09-28; /ha 2026-09-28; /test 2026-09-28; /claude 2026-09-27; /skills add 2026-09-26; /plan 2026-09-26; /botchat 2026-09-24; 2026-09-21 (/queue clear later that day; /skills with edit <name> from then until 2026-09-23); /tools off the list later on 2026-09-22, its expand and collapse root words
+            SlashCommand.Loop, SlashCommand.Plan, SlashCommand.BotChat, SlashCommand.Claude, SlashCommand.Queue, SlashCommand.Skills, SlashCommand.Test, SlashCommand.HomeAssistant, SlashCommand.Print, SlashCommand.Perf, SlashCommand.Rewind,   // /rewind [n] 2026-09-30; /perf later on 2026-09-29; /print 2026-09-28; /ha 2026-09-28; /test 2026-09-28; /claude 2026-09-27; /skills add 2026-09-26; /plan 2026-09-26; /botchat 2026-09-24; 2026-09-21 (/queue clear later that day; /skills with edit <name> from then until 2026-09-23); /tools off the list later on 2026-09-22, its expand and collapse root words
         ];
         foreach (var command in Enum.GetValues<SlashCommand>())
         {
@@ -599,7 +599,7 @@ public class SlashCommandsTests
     public void BasicCommands_AreRealCommands_AndTheTabTitlesArePinned()
     {
         // The basic tab's list (later on 2026-09-27, the user's): a rename or a typo would drop a row silently.
-        Assert.Equal(21, SlashCommands.BasicCommands.Count);
+        Assert.Equal(22, SlashCommands.BasicCommands.Count);   // /rewind 2026-09-30, the user's pick
         Assert.All(SlashCommands.BasicCommands, c => Assert.Contains(SlashCommands.HelpEntries, e => e.Command == c));
         Assert.False(SlashCommands.IsBasic(SlashCommands.LogEntry));
         Assert.Equal("Commands (basic)", SlashCommands.BasicTabTitle);
@@ -611,13 +611,13 @@ public class SlashCommandsTests
     {
         // One list, A to Z by the command (ordinal), no groups (2026-09-27, the user's call: the Commands tab had grown
         // cramped; nine hand-ordered groups until then — their history is in git).
-        Assert.Equal(61, SlashCommands.HelpEntries.Count);   // /keycopy, then /sampling, then /test, then /ha, then /print, since 2026-09-28; /perf later on 2026-09-29
+        Assert.Equal(62, SlashCommands.HelpEntries.Count);   // /rewind 2026-09-30   // /keycopy, then /sampling, then /test, then /ha, then /print, since 2026-09-28; /perf later on 2026-09-29
         Assert.Equal(
         [
             "/about", "/botchat", "/claude", "/clear", "/cmdclear", "/cmdcopy", "/cmdlist", "/collapse", "/comfy", "/compact", "/copy", "/cwd",
             "/draft", "/echo", "/emptytrash", "/exit", "/expand", "/explore", "/gituser", "/ha", "/help", "/imagine", "/interrupt", "/keycopy", "/learn",
             "/loop", "/mcp", "/memory", "/model", "/new", "/operata", "/perf", "/persona", "/plan", "/police", "/print", "/profile", "/queue", "/reasoning",
-            "/remember", "/sampling", "/server", "/sessions", "/settings", "/skills", "/speak", "/splash", "/stt", "/sys", "/test", "/theme", "/timer", "/tools",
+            "/remember", "/rewind", "/sampling", "/server", "/sessions", "/settings", "/skills", "/speak", "/splash", "/stt", "/sys", "/test", "/theme", "/timer", "/tools",
             "/tree", "/tts", "/usage", "/vault", "/view", "/vocalia", "/wake", "/window",
         ], SlashCommands.HelpEntries.Select(e => e.Command));
         Assert.Equal(SlashCommands.HelpEntries.Select(e => e.Command).OrderBy(c => c, StringComparer.Ordinal), SlashCommands.HelpEntries.Select(e => e.Command));
@@ -693,5 +693,17 @@ public class SlashCommandsTests
         Assert.Equal((SlashCommand.Tools, ""), SlashCommands.Parse(SlashCommands.ToolsWord));
         Assert.Equal((SlashCommand.Mcp, ""), SlashCommands.Parse(SlashCommands.McpWord));
         Assert.Equal((SlashCommand.Sys, ""), SlashCommands.Parse(SlashCommands.SysWord));
+    }
+
+    /// <summary><c>/rewind</c> (2026-09-30): a command with an optional count, on the basic tab, and it stops a running reply.</summary>
+    [Fact]
+    public void Rewind_ParsesWithItsCount_AndStopsTheReply()
+    {
+        Assert.Equal((SlashCommand.Rewind, ""), SlashCommands.Parse("/rewind"));
+        Assert.Equal((SlashCommand.Rewind, "2"), SlashCommands.Parse(" /REWIND 2 "));
+        Assert.Contains("/rewind", SlashCommands.Words);
+        Assert.True(SlashCommands.IsBasic(SlashCommands.HelpEntries.Single(e => e.Command == "/rewind")));
+        Assert.Equal(MidTurnClass.Cancel, ChatScreen.MidTurnPolicy(SlashCommand.Rewind, ""));
+        Assert.Equal(MidTurnClass.Cancel, ChatScreen.MidTurnPolicy(SlashCommand.Rewind, "3"));
     }
 }

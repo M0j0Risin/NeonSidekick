@@ -73,6 +73,9 @@ public static class NoticeGlyphs
     /// <summary>The <c>--log</c> file: <c>/log</c> (2026-09-22).</summary>
     public const string Log = "📄 ";
 
+    /// <summary><c>/rewind</c> (2026-09-30): the picker's title, the rewound line, nothing to rewind. A BMP glyph <see cref="UI.TextCells"/> lists as wide.</summary>
+    public const string Rewind = "⏪ ";
+
     /// <summary>The glyph of a prompt file's notices: 🪪 persona.md, 📋 operata.md, 🗣️ vocalia.md; nothing for another name.</summary>
     public static string PromptFile(string fileName) => fileName switch
     {

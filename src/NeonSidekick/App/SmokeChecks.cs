@@ -828,7 +828,18 @@ public static partial class SmokeChecks
                 int purged = store.PurgeAll();
                 bool telemetry = loaded is { Turns: [{ ToolNames: ["read_file", "patch_file"], SkillsLoaded: ["smoke-skill"], Errors: 1 }] }
                     && usage is { Turns: 1, Sessions: 1, WithErrors: 1 } && mark is { Skill: "smoke-skill" } && store.LastReflectionWrite() is null;
-                bool ok = hits.Count == 1 && hits[0].Turn == 1 && any.Count == 1 && restored == 2 && purged == 1 && telemetry;
+                // The skill records (2026-09-30): skills.db on the same SQLite, a row created, used, read back and deleted.
+                bool records;
+                using (var skills = new Skills.SkillRecordStore(dir))
+                {
+                    var at = DateTimeOffset.UtcNow;
+                    skills.Created(Skills.SkillScope.Global, "", "smoke-skill", "smoke-skill", at);
+                    skills.Used(Skills.SkillScope.Global, "", "SMOKE-SKILL", "smoke-skill", at);
+                    var rows = skills.All();
+                    records = rows is [{ Folder: "smoke-skill", LastUsed: not null, Category: null }] && skills.Delete(Skills.SkillScope.Global, "", "smoke-skill") && skills.All().Count == 0;
+                }
+
+                bool ok = hits.Count == 1 && hits[0].Turn == 1 && any.Count == 1 && restored == 2 && purged == 1 && telemetry && records;
                 using var connection = new Microsoft.Data.Sqlite.SqliteConnection("Data Source=:memory:");
                 connection.Open();
                 using var query = connection.CreateCommand();
@@ -836,11 +847,11 @@ public static partial class SmokeChecks
                 version = (string)(query.ExecuteScalar() ?? "?");
                 if (!ok)
                 {
-                    return new SmokeCheck(name, false, $"SQLite {version}; {hits.Count} hit(s), {any.Count} OR hit(s), {restored} message(s) restored, {purged} purged, telemetry {(telemetry ? "ok" : "wrong")}");
+                    return new SmokeCheck(name, false, $"SQLite {version}; {hits.Count} hit(s), {any.Count} OR hit(s), {restored} message(s) restored, {purged} purged, telemetry {(telemetry ? "ok" : "wrong")}, skill records {(records ? "ok" : "wrong")}");
                 }
             }
 
-            return new SmokeCheck(name, true, $"SQLite {version}; 1 FTS5 hit, 1 OR hit, a skill's usage and a reflection recorded, 2 messages restored, 1 purged");
+            return new SmokeCheck(name, true, $"SQLite {version}; 1 FTS5 hit, 1 OR hit, a skill's usage and a reflection recorded, 2 messages restored, 1 purged, skills.db written and read");
         }
         catch (Exception ex)
         {

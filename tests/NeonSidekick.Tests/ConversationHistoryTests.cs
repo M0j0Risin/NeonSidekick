@@ -321,4 +321,54 @@ public class ConversationHistoryTests
         Assert.Equal(0, history.TurnCount);
         Assert.False(history.RemoveLastTurn());
     }
+    /// <summary><c>/rewind</c> (2026-09-30): the cut at a turn start takes that turn and everything after it, carriers and results with their turns.</summary>
+    [Fact]
+    public void TruncateAt_ATurnStart_DropsThatTurnAndAfter_AndReturnsThem()
+    {
+        var history = new ConversationHistory("s");
+        history.AddUser("one");
+        history.AddAssistant("r1");
+        history.AddUser("two");
+        var call = new FunctionCallContent("c1", "read_file", new Dictionary<string, object?>());
+        history.AddMessage(new ChatMessage(ChatRole.Assistant, [call]));
+        history.AddToolResults([new FunctionResultContent(call.CallId, "text")]);
+        history.AddToolImages([new ImageAttachment("a.png", [1], ImageFile.Png, 1, 1)]);
+        history.AddAssistant("r2");
+        history.AddUser("three");
+        history.AddAssistant("r3");
+
+        Assert.Equal([0, 2, 7], history.TurnStarts());
+        Assert.Equal("three", history.LastTurnStart()!.Text);
+
+        var removed = history.TruncateAt(2);
+
+        Assert.Equal(7, removed.Count);
+        Assert.Equal("two", removed[0].Text);
+        Assert.Equal(["one", "r1"], history.Messages.Select(m => m.Text));
+        Assert.Equal(1, history.TurnCount);
+        Assert.Empty(history.TruncateAt(history.Messages.Count));   // the end: nothing goes
+        Assert.Throws<ArgumentOutOfRangeException>(() => history.TruncateAt(3));
+        history.TruncateAt(0);
+        Assert.Null(history.LastTurnStart());
+        Assert.Empty(history.TurnStarts());
+    }
+
+    /// <summary>The store ordinal rides the turn's user message (2026-09-30): read back, replaced, absent on an unstamped one.</summary>
+    [Fact]
+    public void TurnOrdinal_IsStampedOnTheMessage_AndReadBack()
+    {
+        var message = new ChatMessage(ChatRole.User, "hi");
+        Assert.Null(ConversationHistory.TurnOrdinal(message));
+
+        ConversationHistory.SetTurnOrdinal(message, 3);
+        Assert.Equal(3, ConversationHistory.TurnOrdinal(message));
+        ConversationHistory.SetTurnOrdinal(message, 4);
+        Assert.Equal(4, ConversationHistory.TurnOrdinal(message));
+
+        // A carrier's tag and the stamp live side by side.
+        var carrier = new ChatMessage(ChatRole.User, "x") { AdditionalProperties = new AdditionalPropertiesDictionary { [ConversationHistory.CarrierKey] = true } };
+        ConversationHistory.SetTurnOrdinal(carrier, 1);
+        Assert.True(ConversationHistory.IsImageCarrier(carrier));
+        Assert.Equal(1, ConversationHistory.TurnOrdinal(carrier));
+    }
 }

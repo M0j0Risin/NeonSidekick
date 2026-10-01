@@ -73,6 +73,25 @@ public static class ClaudeText
     /// <summary>Claude's side in the local model's history: tagged, so the model never takes it for its own words. Pinned.</summary>
     public static string HistoryReply(string reply) => "[Claude] " + reply;
 
+    /// <summary>
+    /// <see cref="HistoryUser"/> read back (2026-09-30, <c>/rewind</c>): the prompt of a history line that is a <c>/claude</c>
+    /// message, so the line can return to the input as typed (<c>/claude &lt;prompt&gt;</c>). Null for any other line.
+    /// </summary>
+    public static string? HistoryUserPrompt(string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        string tag = HistoryUser("");
+        return text.StartsWith(tag, StringComparison.Ordinal) ? text[tag.Length..] : null;
+    }
+
+    /// <summary><see cref="HistoryReply"/> read back: Claude's words without the tag, the text unchanged when it carries none.</summary>
+    public static string HistoryReplyText(string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        string tag = HistoryReply("");
+        return text.StartsWith(tag, StringComparison.Ordinal) ? text[tag.Length..] : text;
+    }
+
     /// <summary>Whether a stored turn's line was a <c>/claude</c> message — a restore puts the speaker's name back over its reply.</summary>
     public static bool IsClaudeLine(string userText) =>
         userText.StartsWith("/claude ", StringComparison.OrdinalIgnoreCase) && !string.Equals(userText.Trim(), "/claude " + NewWord, StringComparison.OrdinalIgnoreCase);

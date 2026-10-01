@@ -324,7 +324,7 @@ internal sealed partial class ChatScreen
             RefreshSessionTitle();
         }
 
-        _sessions.AppendTurn(id, line, reply, 0, [], [], 0, usage.Input, usage.Output, cancelled);
+        StampTurn(_session.History, _sessions.AppendTurn(id, line, reply, 0, [], [], 0, usage.Input, usage.Output, cancelled));
         SaveClaudeHistory();
     }
 

@@ -144,6 +144,7 @@ Both `--option value` and `--option=value` work.
 * Three shortcuts start a new conversation: Ctrl+Alt+C also clears the screen (`/clear`), Ctrl+Alt+N leaves the screen as it is (`/new`), and Ctrl+Alt+S shows the splash screen (`/splash`). At the idle line, a draft on the row stays. While a reply runs, they cancel it first, just as the typed command does. An AltGr key that types a character on your keyboard layout still types that character.
 * Pressing Enter while a reply runs queues the message. Nothing you type is lost, and a draft left on the row is still there after the reply ends.
 * ESC while a reply runs first stops the speech, then closes an open list, then cancels the reply. It never clears your draft there; ESC at the idle line does.
+* ESC twice on an empty input line opens `/rewind`. After the first press the hint row reads *ESC again to rewind the conversation* for two seconds.
 
 Commands typed while a reply runs:
 
@@ -151,7 +152,7 @@ Commands typed while a reply runs:
 |---|---|
 | Open their pane over the reply | `/help`, `/settings`, `/tools`, `/mcp`, `/sys`, `/usage`, `/about`, `/memory`, `/queue`, `/sessions`, `/sessions title`, `/skills`, `/reasoning`, `/sampling`, `/cmdlist`, `/police`, `/emptytrash`, `/cmdclear`, `/tree`, `/vault`, `/cmdcopy`, `/keycopy`, `/persona`, `/operata`, `/vocalia` |
 | Run at once | `/ha`, `/tts`, `/stt`, `/wake`, `/interrupt`, `/perf`, `/reasoning <level>`, `/sampling <field> <value>`, `/queue clear`, `/copy`, `/remember`, `/explore`, `/log`, `/timer`, `/expand`, `/collapse`, `/window`, `/cwd`, `/comfy view`, `/view <path>` |
-| Stop the reply first | `/clear`, `/new`, `/splash`, `/exit` |
+| Stop the reply first | `/clear`, `/new`, `/splash`, `/rewind`, `/exit` |
 | Everything else | Waits for the reply to end, queued behind any earlier messages (so *Queue cancel mode* applies) |
 
 **Double-Click Shortcuts**
@@ -502,6 +503,16 @@ One row, **Project file**: whether `NEON.md` (or `AGENTS.md`) in the working dir
 - **Where it goes:** the folder lands under the profile's or the global `skills` folder, named after the skill. A `.neon-source.json` beside its `SKILL.md` records the repository, path, commit and date. Bundled scripts run only through `run_command` and its approval, like any other command.
 - **Name collisions:** a name already in use is refused; rename or delete the existing skill on `/skills` first. The exception is a skill installed earlier from the same repository and path: adding it again replaces it where it is (an update).
 
+#### Skill records and purging unused skills
+
+The app keeps a record of every global and profile skill in `skills.db` in the home folder, shared by every profile. Each record holds the skill's folder, whether it is global or the profile's, when it was created, last modified and last used (its instructions loaded with `load_skill`, or preloaded by `/botchat`), and a category that is empty for now.
+
+- **When records change:** the model's `skill_editor`, a reflection, `/skills add` and the `/skills` pane's move, rename and delete update the record as they act.
+- **Catching outside changes:** at startup and whenever a profile loads, the app checks the folders. A skill folder with no record gets one, dated from its `SKILL.md`'s created and modified times. A newer `SKILL.md` moves the modified date (an edit in your editor). A record whose folder is gone is removed. Folders are matched by name.
+- **External skills** (`.agents\skills`) are not recorded and never purged.
+
+`/skills purge list <age>` lists the skills not used for that long, and changes nothing. `/skills purge commit <age>` deletes them, the folder and the record, after a yes/no that lists them. The age is days (`30`) or a duration (`12h`, `90m`, `1d 6h`), as `/sessions purge older` takes it. A skill that was never used counts from its last change, so one you just wrote isn't purged before it gets a chance. Only the global skills and the loaded profile's own are considered. A global skill used in any profile counts as used. There is no `purge all`: delete the folders yourself.
+
 </details>
 
 <details>
@@ -837,6 +848,7 @@ Type `/` to list every command with a short summary. After a command and a space
 | `/profile [name \| add <name> \| delete <name> \| rename <name> <new> \| reset [name] [--all] \| push <name> \| pull <name> \| edit \| reload]` | Switch, create, delete, rename or reset a profile, or copy its settings to another (`push`) or from another (`pull`). `edit` opens `profile.json` in your editor; `reload` reads it back and reconnects only what changed. See Profiles. |
 | `/queue [clear]` | List and prune the messages queued during a reply (`⊠ clear all` or `c` drops them all). `/queue clear` drops them without opening the pane. |
 | `/reasoning [level]` | Pick the reasoning effort (`none`, `low`, `medium`, `high`, `xhigh`). |
+| `/rewind [n]` | Go back to an earlier message. A list of the messages you sent opens (the cursor on the last, or n back), and after a yes the picked message and everything after it leave the conversation and its text returns to the input row, pictures and pasted blocks included, to edit and send again. A stored session loses the same turns. Only the conversation rewinds: what a tool changed (files written, commands run, commits) stays, and the yes/no names those tools. Messages compacted into a summary can't be picked. Double ESC on an empty input line opens it too. |
 | `/remember <text>` | Add a memory. |
 | `/sampling [field value]` | Edit the per-model sampling overrides on a pane. To change the connected model's values directly, use `/sampling <field> <value>`, `<field> clear`, `extra <json>` or `clear` (see Sampling per model). |
 | `/server [url \| embedded \| claude-cli]` | Pick an LLM server found on the usual ports, or set one by URL. The list also offers the Claude API (when it's on and has a key), the Claude CLI (when *Claude CLI server* is on and Claude Code is found) and the installed embedded models. The model and reasoning pickers follow, and one reconnect applies all three. To add an embedded model, install it from `/settings` › Embedded. `embedded` lists only the installed embedded models (see Embedded); `claude-cli` picks the Claude CLI (see Claude). |
@@ -844,6 +856,8 @@ Type `/` to list every command with a short summary. After a command and a space
 | `/settings`, `//` | Edit and save the settings. |
 | `/skills` | List the skills (Enter moves, renames, edits or deletes one) and edit the skill, reflection and project-file settings. |
 | `/skills add <search words \| owner/repo[/skill] \| github url \| zip url> [--global \| --profile]` | Install an [Agent Skill](https://agentskills.io) from the web, with a preview first. A pane asks where it goes (the cursor starts on Cancel). Refused while a reply runs. See Installing skills. |
+| `/skills purge list <age>` | List the skills not used for that long (`30` days, `12h`, `90m`). Nothing is deleted. See Skill records. |
+| `/skills purge commit <age>` | Delete the skills not used for that long, folder and record, after a yes/no that lists them. |
 | `/speak [file [n] \| n]` | Read a text file from the working directory aloud as a reply. On its own it resumes; a number starts from that sentence. |
 | `/splash` | Start a new conversation and show the splash screen. |
 | `/stt [on\|off]` | Toggle speech input. |
@@ -1606,7 +1620,7 @@ Every variable the app reads starts with `NEONSIDEKICK_`. They override a settin
 
 | Variable | What it does | Accepts |
 |---|---|---|
-| `NEONSIDEKICK_HOME` | The home folder: `settings.json`, `profiles\`, `models\`, `llama\`, `mcp.json`, `sql.json`, `oracle.json`, `mysql.json`. | A folder path. Default `%USERPROFILE%\.neonsidekick`. |
+| `NEONSIDEKICK_HOME` | The home folder: `settings.json`, `profiles\`, `models\`, `llama\`, `skills\`, `skills.db`, `mcp.json`, `sql.json`, `oracle.json`, `mysql.json`. | A folder path. Default `%USERPROFILE%\.neonsidekick`. |
 | `NEONSIDEKICK_PROFILE` | The profile for this launch; `settings.json` keeps pointing where it was. An unknown name exits with code 2. `--profile` wins. A headless run with neither loads `default`. | A profile name. |
 
 ### LLM

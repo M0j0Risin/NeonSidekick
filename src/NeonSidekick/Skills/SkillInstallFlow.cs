@@ -43,6 +43,11 @@ public interface ISkillInstallHost
 
     /// <summary>A rescan of the catalog, so the next turn offers the skill.</summary>
     void Rescan();
+
+    /// <summary>The skill is in place (2026-09-30): the host records it (<see cref="SkillRecords.Installed"/>). Nothing by default.</summary>
+    void Installed(SkillInstallResult result)
+    {
+    }
 }
 
 /// <summary>
@@ -250,6 +255,7 @@ public sealed class SkillInstallFlow
                 return false;
             }
 
+            host.Installed(result);
             host.Rescan();
             host.Notice(result.Updated
                 ? SkillInstallText.UpdatedNotice(candidate.Name, result.Scope, result.Directory)

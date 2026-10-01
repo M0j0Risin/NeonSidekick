@@ -115,6 +115,19 @@ public sealed class TokenTally
     }
 
     /// <summary>
+    /// The history was cut back (2026-09-30, <c>/rewind</c>): only the context in use is zeroed, as after a compact. What the
+    /// shorter history costs is known at the next reply, and the stale figure would fire the auto-compact on the next message.
+    /// The billing scopes stay: those requests were really made.
+    /// </summary>
+    public void ForgetContext()
+    {
+        lock (_gate)
+        {
+            _lastRequest = TokenUsage.Zero;
+        }
+    }
+
+    /// <summary>
     /// A skill-learning reflection ran (<c>Skills.SkillLearner</c>): its requests are billed to the
     /// conversation and the session like any other and counted under <see cref="Learning"/> for
     /// <c>/usage</c>; the context in use is <b>not</b> touched — the reflection ran beside the

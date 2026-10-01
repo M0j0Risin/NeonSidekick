@@ -9913,9 +9913,9 @@ public partial class ChatScreenTests : IDisposable
     }
 
     [Theory]
-    [InlineData(false, false, 17)]
-    [InlineData(true, false, 18)]
-    [InlineData(true, true, 19)]
+    [InlineData(false, false, 18)]
+    [InlineData(true, false, 19)]
+    [InlineData(true, true, 20)]
     public void KeyRows_ListWhatApplies(bool voiceOn, bool wakeReady, int count)
     {
         var rows = ChatScreen.KeyRows(voiceOn, ConsoleKey.F8, wakeReady, "hey neon");
@@ -9925,10 +9925,11 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(("Enter", "send the line · change/update a setting"), rows[0]);
         Assert.Equal(("Ctrl+Enter", "new line in the message"), rows[1]);   // 2026-09-22
         Assert.Equal(("ESC", "stop the speech · clear the line · cancel the reply · back out of a menu"), rows[2]);
-        Assert.Equal(("Up / Down", "earlier lines · the draft's rows when it wraps · scroll in menus"), rows[3]);   // the row moves 2026-09-21
-        Assert.Equal(("Left / Right", "change tabs in menus · hold Shift to select text"), rows[4]);
-        Assert.Equal(("Home / End", "hold Shift to select text to the beginning or end of the line starting from the cursor"), rows[5]);
-        Assert.Equal(("PgUp / PgDn", "scroll the transcript a page at a time"), rows[6]);
+        Assert.Equal(("ESC ESC", "on an empty line, rewind the conversation to an earlier message (/rewind)"), rows[3]);   // 2026-09-30
+        Assert.Equal(("Up / Down", "earlier lines · the draft's rows when it wraps · scroll in menus"), rows[4]);   // the row moves 2026-09-21
+        Assert.Equal(("Left / Right", "change tabs in menus · hold Shift to select text"), rows[5]);
+        Assert.Equal(("Home / End", "hold Shift to select text to the beginning or end of the line starting from the cursor"), rows[6]);
+        Assert.Equal(("PgUp / PgDn", "scroll the transcript a page at a time"), rows[7]);
         Assert.DoesNotContain(rows, r => r.Key is "Mouse" or "Drag" or "Drop" or "@" or "#" or "$");
         Assert.Equal(("Alt+V", "paste content (text or images)"), rows[^10]);   // ahead of Ctrl+Home since 2026-09-27 (the user's order)
         Assert.Equal(("Ctrl+Home", "scroll to top of the chat pane"), rows[^9]);
@@ -9944,13 +9945,13 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(voiceOn, rows.Any(r => r.Key == "F8"));
         if (voiceOn)
         {
-            Assert.Equal(("F8", "talk (push-to-talk key)"), rows[7]);
+            Assert.Equal(("F8", "talk (push-to-talk key)"), rows[8]);
         }
 
         Assert.Equal(wakeReady, rows.Any(r => r.Key == "say \"hey neon\""));
         if (wakeReady)
         {
-            Assert.Equal(("say \"hey neon\"", "talk without a key; during a spoken reply, cut it short (/interrupt)"), rows[8]);
+            Assert.Equal(("say \"hey neon\"", "talk without a key; during a spoken reply, cut it short (/interrupt)"), rows[9]);
         }
         Assert.DoesNotContain(rows, r => r.Key.Contains("Ctrl+Q") || r.Meaning.Contains("Ctrl+Q"));
     }
@@ -9964,7 +9965,7 @@ public partial class ChatScreenTests : IDisposable
         string[] advanced = CommandsTabLines(advanced: true);
         var basicEntries = SlashCommands.HelpEntries.Where(SlashCommands.IsBasic).ToArray();
         var advancedEntries = SlashCommands.HelpEntries.Where(e => !SlashCommands.IsBasic(e)).ToArray();
-        Assert.Equal(21, basicEntries.Length);
+        Assert.Equal(22, basicEntries.Length);
         Assert.Equal(SlashCommands.HelpEntries.Count, basicEntries.Length + advancedEntries.Length);
         Assert.Equal(basicEntries.Length, basic.Length);
         Assert.Equal(advancedEntries.Length, advanced.Length);
@@ -9981,11 +9982,11 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(
         [
             "/clear", "/compact", "/copy", "/cwd", "/draft", "/exit", "/help", "/memory", "/model", "/new", "/profile",
-            "/queue", "/reasoning", "/remember", "/server", "/sessions", "/settings", "/skills", "/sys", "/tools", "/tree",
+            "/queue", "/reasoning", "/remember", "/rewind", "/server", "/sessions", "/settings", "/skills", "/sys", "/tools", "/tree",
         ], basicEntries.Select(e => e.Command));
         Assert.DoesNotContain(basic, string.IsNullOrWhiteSpace);
         Assert.DoesNotContain(advanced, string.IsNullOrWhiteSpace);
-        Assert.StartsWith(HelpRow("/settings, //", "edit and save settings"), basic[16]);   // sorted by the command, not the label
+        Assert.StartsWith(HelpRow("/settings, //", "edit and save settings"), basic[17]);   // sorted by the command, not the label
         Assert.StartsWith(HelpRow("/about", "show general information about the app and profile"), advanced[0]);
         Assert.StartsWith(HelpRow("/botchat", "let the profiles talk to each other, each in its own persona, until ESC: /botchat [profile ...] [[--] topic]"), advanced[1]);
         Assert.StartsWith(HelpRow("/claude", "send a message to Claude Code and add its reply to the conversation"), advanced[2]);
@@ -18937,7 +18938,10 @@ public partial class ChatScreenTests : IDisposable
         Assert.Empty(ChatScreen.ArgumentItems("/persona", "copy ghost ", sources));
         // /skill took nothing from later on 2026-09-18 (the catalog listed under it from 2026-09-16 until then); edit, then the catalog after it, from 2026-09-21
         // until 2026-09-23 (the scope page's edit row since): nothing again until add came on 2026-09-26, the one word.
-        Assert.Equal([new CompletionItem(SkillInstallText.AddWord, SkillInstallText.AddNote)], ChatScreen.ArgumentItems("/skills", "", sources));
+        Assert.Equal([new CompletionItem(SkillInstallText.AddWord, SkillInstallText.AddNote), new CompletionItem(SkillRecordText.PurgeWord, SkillRecordText.PurgeNote)], ChatScreen.ArgumentItems("/skills", "", sources));   // purge 2026-09-30
+        Assert.Equal([new CompletionItem("purge list", SkillRecordText.ListNote), new CompletionItem("purge commit", SkillRecordText.CommitNote)], ChatScreen.ArgumentItems("/skills", "purge ", sources));
+        Assert.Equal([new CompletionItem("purge commit", SkillRecordText.CommitNote)], ChatScreen.ArgumentItems("/skills", "purge c", sources));
+        Assert.Empty(ChatScreen.ArgumentItems("/skills", "purge list 3", sources));   // the age is free text
         Assert.Empty(ChatScreen.ArgumentItems("/skills", "h", sources));
 
         // Free text and the rest: nothing.

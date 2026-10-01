@@ -31,7 +31,7 @@ public sealed class SidekickApp
     public const string Name = "NeonSidekick";
 
     /// <summary>The second line of headless output.</summary>
-    public const string HeadlessHint = "Headless mode. Type a message; /clear or /new forgets the conversation; /compact [focus] shrinks it; /plan <requirement> plans before doing (/plan approve [--fresh] | cancel | show | save [name] | open [name]); /skills add <source> [--global] [--yes] installs a skill; /claude <message> asks Claude Code; /exit or EOF exits.";
+    public const string HeadlessHint = "Headless mode. Type a message; /clear or /new forgets the conversation; /compact [focus] shrinks it; /plan <requirement> plans before doing (/plan approve [--fresh] | cancel | show | save [name] | open [name]); /skills add <source> [--global] [--yes] installs a skill; /claude <message> asks Claude Code; /rewind [n] goes back n messages; /exit or EOF exits.";
 
     /// <summary>Printed once when discovery under <paramref name="scope"/> found nothing. Pinned by tests; shared with the chat screen.</summary>
     public static string HeadlessNoServerLine(ScanScope scope) => LlmSession.HeadlessNoServerLine(scope);
@@ -253,13 +253,26 @@ public sealed class SidekickApp
     /// <summary>Read like the other two so the profile is bound the same way; headless never speaks, so the text never reaches the prompt.</summary>
     private VocaliaFile BuildVocaliaFile() => new(_settings.ProfileDirectory);
 
-    /// <summary>The skills as headless takes them per turn (<see cref="ChatScreen.SkillsForTurn"/>): the catalog and the tools over the live roots, the project file over the sandbox.</summary>
-    private ChatScreen.SkillsForTurn BuildSkills(WorkingDirectory files)
+    /// <summary>
+    /// The skills as headless takes them per turn (<see cref="ChatScreen.SkillsForTurn"/>): the catalog and the tools over the live
+    /// roots, the project file over the sandbox. With <paramref name="records"/> (2026-09-30) the tools record what they write and
+    /// load, and the records are reconciled with the folders here, at the run's start, as the screen does at a profile load.
+    /// </summary>
+    private ChatScreen.SkillsForTurn BuildSkills(WorkingDirectory files, SkillRecords? records = null)
     {
         Func<SkillRoots> roots = () => SkillRoots.For(_settings, _externalSkills);
         var catalog = new SkillCatalog(roots);
-        return new ChatScreen.SkillsForTurn(catalog, ChatScreen.SkillTools(catalog, roots, () => EffectiveSettings.AgentSkills && EffectiveSettings.ExternalSkills, new Llm.Tools.SkillFileAccess(() => EffectiveSettings.FileSafeEdits, _time)), new ProjectFile(() => files.Root), EffectiveSettings.AgentSkills, EffectiveSettings.AgentSkills && EffectiveSettings.ExternalSkills, EffectiveSettings.ProjectFile);
+        if (records is not null)
+        {
+            catalog.Scan(EffectiveSettings.ExternalSkills);
+            records.Reconcile(catalog.Skills.Concat(catalog.Shadowed));
+        }
+
+        return new ChatScreen.SkillsForTurn(catalog, ChatScreen.SkillTools(catalog, roots, () => EffectiveSettings.AgentSkills && EffectiveSettings.ExternalSkills, new Llm.Tools.SkillFileAccess(() => EffectiveSettings.FileSafeEdits, _time), records), new ProjectFile(() => files.Root), EffectiveSettings.AgentSkills, EffectiveSettings.AgentSkills && EffectiveSettings.ExternalSkills, EffectiveSettings.ProjectFile);
     }
+
+    /// <summary>The headless run's skill records (2026-09-30): what <c>/skills add</c>'s host tells of an install; null outside a run.</summary>
+    private SkillRecords? _headlessSkillRecords;
 
     /// <summary>The file tools' sandbox over the live effective setting (flag &gt; saved) and the loaded profile's directory.</summary>
     public WorkingDirectory BuildWorkingDirectory() =>
@@ -533,8 +546,10 @@ public sealed class SidekickApp
         var files = BuildWorkingDirectory();
         var fileTools = ChatScreen.FileTools(files, () => WorkingDirectory.IsDefault(EffectiveSettings.WorkingDirectory), PersonaFile.OpenInEditor, () => EffectiveSettings);
         var standingTools = clockTools;
-        // The skills need no console either (2026-09-16); the two settings decide per turn.
-        var skills = BuildSkills(files);
+        // The skills need no console either (2026-09-16); the two settings decide per turn. The skill records (2026-09-30) are the home's.
+        using var skillStore = new SkillRecordStore(_settings.StorageDirectory);
+        _headlessSkillRecords = new SkillRecords(skillStore, () => SkillRoots.For(_settings, _externalSkills), _time);
+        var skills = BuildSkills(files, _headlessSkillRecords);
         // The web tools need no console either; the setting Web tools decides per turn.
         var webTools = ChatScreen.WebTools(_web, files, () => EffectiveSettings);
         var git = new Git.GitAccess(files, _time);
@@ -694,7 +709,7 @@ public sealed class SidekickApp
                         sessionId ??= sessions.Begin(Sessions.SessionText.FirstLineTitle(text), session.Endpoint?.ModelId ?? "");
                         if (sessionId is { } claudeRow)
                         {
-                            sessions.AppendTurn(claudeRow, text, claudeReply, 0, [], [], 0, claudeTurn.Usage.Input, claudeTurn.Usage.Output, claudeTurn.Cancelled);
+                            ChatScreen.StampTurn(session.History, sessions.AppendTurn(claudeRow, text, claudeReply, 0, [], [], 0, claudeTurn.Usage.Input, claudeTurn.Usage.Output, claudeTurn.Cancelled));
                         }
                     }
 
@@ -703,6 +718,53 @@ public sealed class SidekickApp
                         sessions.SaveHistory(claudeSaved, Sessions.SessionHistory.ToJson(session.History.Messages, plan.ToStored(), planState.Executing, claudeSessionId, advisorThread.SessionId, EffectiveSettings.SessionSaveThinking, claudeServerSessionId));
                     }
 
+                    continue;
+                }
+
+                // /rewind [n] (2026-09-30): ahead of the server check too, since cutting the history needs no LLM. There is no
+                // picker and no input row, so it goes n messages back at once (1 by default) and prints the dropped message.
+                if (SlashCommands.Parse(text) is (SlashCommand.Rewind, var rewindArgs))
+                {
+                    var held = ConversationRewind.Turns(session.History.Messages);
+                    if (held.Count == 0)
+                    {
+                        await HeadlessLineAsync(HeadlessReplyPrefix + RewindText.NothingNotice).ConfigureAwait(false);
+                        continue;
+                    }
+
+                    if (RewindText.ParseCount(rewindArgs) is not { } back || back > held.Count)
+                    {
+                        await HeadlessLineAsync("[error] " + RewindText.UsageError(held.Count)).ConfigureAwait(false);
+                        continue;
+                    }
+
+                    var picked = held[^back];
+                    var (cut, _) = ConversationRewind.Apply(session.History, picked, sessionId is null ? null : sessions, sessionId);
+                    claudeServerSessionId = null;
+                    if (cut.HadClaude)
+                    {
+                        claudeSessionId = null;
+                    }
+
+                    if (cut.HadAdvisor)
+                    {
+                        advisorThread.SessionId = null;
+                    }
+
+                    session.Usage.ForgetContext();
+                    DiagnosticLog.Info(ChatScreen.AppCategory, RewindText.RewoundLogLine(cut.Turns, picked.Number));
+                    if (sessionId is { } rewound)
+                    {
+                        sessions.SaveHistory(rewound, Sessions.SessionHistory.ToJson(session.History.Messages, plan.ToStored(), planState.Executing, claudeSessionId, advisorThread.SessionId, EffectiveSettings.SessionSaveThinking, claudeServerSessionId));
+                    }
+
+                    await HeadlessLineAsync(HeadlessReplyPrefix + RewindText.RewoundNotice(cut.Turns, picked.Text)).ConfigureAwait(false);
+                    if (cut.ChangingTools.Count > 0)
+                    {
+                        await HeadlessNoticeLineAsync("[notice] " + RewindText.ChangesStayWarning(cut.ChangingTools)).ConfigureAwait(false);
+                    }
+
+                    await HeadlessNoticeLineAsync("[notice] " + RewindText.HeadlessLineNotice(picked.Text)).ConfigureAwait(false);
                     continue;
                 }
 
@@ -821,7 +883,7 @@ public sealed class SidekickApp
                     if (sessionId is { } id)
                     {
                         var usage = session.Usage.LastRequest;
-                        sessions.AppendTurn(id, text, turn.Reply, turn.Trace.ToolCalls, turn.Trace.ToolNames, turn.Trace.LoadedSkills, turn.Trace.Errors, usage.Input, usage.Output, turn.Cancelled);
+                        ChatScreen.StampTurn(assistant.History, sessions.AppendTurn(id, text, turn.Reply, turn.Trace.ToolCalls, turn.Trace.ToolNames, turn.Trace.LoadedSkills, turn.Trace.Errors, usage.Input, usage.Output, turn.Cancelled));
                         sessions.SaveHistory(id, Sessions.SessionHistory.ToJson(assistant.History.Messages, plan.ToStored(), planState.Executing, claudeSessionId, advisorThread.SessionId, EffectiveSettings.SessionSaveThinking, claudeServerSessionId));
                     }
                 }
@@ -1476,6 +1538,8 @@ public sealed class SidekickApp
         public void Rescan()
         {
         }
+
+        public void Installed(Skills.SkillInstallResult result) => app._headlessSkillRecords?.Installed(result.Scope, result.Directory, result.Updated);
     }
 
     /// <summary>

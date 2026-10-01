@@ -505,4 +505,34 @@ public class SessionStoreTests : IDisposable
         Assert.Equal("Purged 4 sessions last updated before 2026-08-20 21:05:00 UTC", SessionStore.PurgedOlderLogLine(4, new DateTimeOffset(2026, 8, 20, 14, 5, 0, TimeSpan.FromHours(-7))));
         Assert.Equal("Purged all sessions (9)", SessionStore.PurgedAllLogLine(9));
     }
+    /// <summary>
+    /// <c>/rewind</c>'s cut (2026-09-30): the rows past the ordinal go, search forgets them through the trigger, the count
+    /// follows so the next turn carries on from there, and the reflections stay (their skills were really written).
+    /// </summary>
+    [Fact]
+    public void TruncateTurns_DropsTheLaterRows_AndTheNextAppendCarriesOn()
+    {
+        long id = Begin();
+        Assert.Equal(1, _store.AppendTurn(id, "how do I wire vosk", "like so", 0, [], [], 0, 1, 1, false));
+        Assert.Equal(2, _store.AppendTurn(id, "and the grammar", "a list", 0, [], [], 0, 1, 1, false));
+        Assert.Equal(3, _store.AppendTurn(id, "what about kokoro", "it speaks", 0, [], [], 0, 1, 1, false));
+        _store.RecordReflection(new ReflectionRow(id, 3, false, ReflectionRow.Learned, "voices", "created", 1, 1, 1));
+        _time.Advance(TimeSpan.FromMinutes(5));
+
+        Assert.Equal(2, _store.TruncateTurns(id, 1));
+
+        var record = _store.Load(id)!;
+        Assert.Equal(["how do I wire vosk"], record.Turns.Select(t => t.UserText));
+        Assert.Equal(1, record.Summary.Turns);
+        Assert.Equal(_time.GetUtcNow(), record.Summary.UpdatedAt);
+        Assert.Empty(_store.Search("kokoro", 10));
+        Assert.Single(_store.Search("vosk", 10));
+        Assert.Equal(1, _store.ReflectionWrites("voices"));
+        Assert.Equal(2, _store.AppendTurn(id, "and piper", "too", 0, [], [], 0, 1, 1, false));
+        Assert.Equal(0, _store.TruncateTurns(id, 5));   // past the end: nothing goes
+        Assert.Equal(2, _store.Summary(id)!.Turns);
+        Assert.Equal(2, _store.TruncateTurns(id, 0));
+        Assert.Equal(0, _store.Summary(id)!.Turns);
+        Assert.Equal(1, _store.AppendTurn(id, "again", "yes", 0, [], [], 0, 1, 1, false));
+    }
 }

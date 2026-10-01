@@ -47,6 +47,16 @@ public sealed class ConversationHistory
     /// </summary>
     public const string SkillResultKey = "neon.skillResult";
 
+    /// <summary>
+    /// The <see cref="ChatMessage.AdditionalProperties"/> key on a turn's user message that holds the session store's
+    /// ordinal for that turn, an <see cref="int"/> (2026-09-30, <c>/rewind</c>). The store's <c>turns</c> rows and the
+    /// history's turns do not line up one for one: a compact's summary turn has no row, <see cref="Trim"/> drops turns
+    /// whose rows stay, and logging can start part way through a conversation. So the row a turn wrote is stamped on the
+    /// turn itself (<see cref="SetTurnOrdinal"/>), kept in the stored history (<c>StoredMessage.Ordinal</c>), and a rewind
+    /// cuts the store where the history is cut. Never sent.
+    /// </summary>
+    public const string TurnOrdinalKey = "neon.turnOrdinal";
+
     private const string Category = "Llm";
 
     private readonly List<ChatMessage> _messages = new();
@@ -89,6 +99,20 @@ public sealed class ConversationHistory
 
     /// <summary>The one boundary rule: a user message that is not a carrier starts a turn. <see cref="ConversationCompactor.Split"/> cuts by it too.</summary>
     public static bool IsTurnStart(ChatMessage message) => message.Role == ChatRole.User && !IsImageCarrier(message);
+
+    /// <summary>The store ordinal stamped on <paramref name="message"/> (<see cref="TurnOrdinalKey"/>); null when none is.</summary>
+    public static int? TurnOrdinal(ChatMessage message)
+    {
+        ArgumentNullException.ThrowIfNull(message);
+        return message.AdditionalProperties is { } properties && properties.TryGetValue(TurnOrdinalKey, out object? value) && value is int ordinal ? ordinal : null;
+    }
+
+    /// <summary>Stamps <paramref name="ordinal"/> on <paramref name="message"/> (<see cref="TurnOrdinalKey"/>), replacing any earlier stamp.</summary>
+    public static void SetTurnOrdinal(ChatMessage message, int ordinal)
+    {
+        ArgumentNullException.ThrowIfNull(message);
+        (message.AdditionalProperties ??= new AdditionalPropertiesDictionary())[TurnOrdinalKey] = ordinal;
+    }
 
     /// <summary>
     /// The index of the first message of the turn in flight: the last user message that is neither a tool result nor an
@@ -331,9 +355,46 @@ public sealed class ConversationHistory
             return false;
         }
 
-        _messages.RemoveRange(start, _messages.Count - start);
-        Recount();
+        TruncateAt(start);
         return true;
+    }
+
+    /// <summary>The last <see cref="IsTurnStart"/> message: the user's message of the turn held last; null with no turn held.</summary>
+    public ChatMessage? LastTurnStart()
+    {
+        int start = _messages.FindLastIndex(IsTurnStart);
+        return start < 0 ? null : _messages[start];
+    }
+
+    /// <summary>The index into <see cref="Messages"/> of each <see cref="IsTurnStart"/> message, oldest first.</summary>
+    public List<int> TurnStarts()
+    {
+        var starts = new List<int>();
+        for (int i = 0; i < _messages.Count; i++)
+        {
+            if (IsTurnStart(_messages[i]))
+            {
+                starts.Add(i);
+            }
+        }
+
+        return starts;
+    }
+
+    /// <summary>
+    /// Drops every message from <paramref name="index"/> to the end and returns them in order (2026-09-30, <c>/rewind</c>).
+    /// Give it a turn start (<see cref="TurnStarts"/>) so the cut falls between turns and never splits a call from its
+    /// result. A cut at the first turn takes the opening pairs with it, and the next turn seeds them again because the
+    /// count is 0. <see cref="RemoveLastTurn"/> is this cut at the last turn.
+    /// </summary>
+    public List<ChatMessage> TruncateAt(int index)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(index);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(index, _messages.Count);
+        var removed = _messages.GetRange(index, _messages.Count - index);
+        _messages.RemoveRange(index, _messages.Count - index);
+        Recount();
+        return removed;
     }
 
     /// <summary>A fresh list for one request: system prompt first, then a copy of the transcript.</summary>

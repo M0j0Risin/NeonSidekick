@@ -34,14 +34,17 @@ public sealed class LoadSkillTool : AIFunction
 
     private readonly SkillCatalog _catalog;
     private readonly HashSet<string> _preloaded;
+    private readonly Action<Skill>? _used;
     private JsonElement _schema;
     private int _schemaVersion = -1;
 
     /// <param name="catalog">The skills it loads.</param>
     /// <param name="preloaded">The skills whose content the prompt already carries (any case): a name alone for one is answered <see cref="SkillText.AlreadyLoaded"/>.</param>
-    public LoadSkillTool(SkillCatalog catalog, IReadOnlyCollection<string>? preloaded = null)
+    /// <param name="used">Told each skill whose instructions it served (2026-09-30, the skill records' last use, <see cref="SkillRecords.Used"/>); a bundled file read and an already-loaded answer are not uses.</param>
+    public LoadSkillTool(SkillCatalog catalog, IReadOnlyCollection<string>? preloaded = null, Action<Skill>? used = null)
     {
         _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
+        _used = used;
         _preloaded = new HashSet<string>(preloaded ?? [], StringComparer.OrdinalIgnoreCase);
     }
 
@@ -118,6 +121,7 @@ public sealed class LoadSkillTool : AIFunction
         }
 
         var resources = SkillCatalog.Resources(skill, out bool more);
+        _used?.Invoke(skill);
         return SkillText.Content(skill.Name, body.Text, skill.Directory, resources, more, body.Truncated);
     }
 

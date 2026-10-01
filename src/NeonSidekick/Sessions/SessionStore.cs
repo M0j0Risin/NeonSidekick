@@ -175,8 +175,11 @@ public sealed class SessionStore : IDisposable
         }
     }
 
-    /// <summary>Appends one completed turn to session <paramref name="id"/> and bumps its turn count and <c>updated_at</c>; the names go in joined by <see cref="NameSeparator"/>.</summary>
-    public void AppendTurn(long id, string userText, string replyText, int toolCalls, IReadOnlyList<string> toolNames, IReadOnlyList<string> skillsLoaded, int errors, long inputTokens, long outputTokens, bool cancelled)
+    /// <summary>
+    /// Appends one completed turn to session <paramref name="id"/> and bumps its turn count and <c>updated_at</c>; the names go in joined by <see cref="NameSeparator"/>.
+    /// Returns the new row's ordinal (2026-09-30: the screen stamps it on the turn's message for <c>/rewind</c>, <see cref="Llm.ConversationHistory.TurnOrdinalKey"/>), or null while the store is unavailable or the write failed.
+    /// </summary>
+    public int? AppendTurn(long id, string userText, string replyText, int toolCalls, IReadOnlyList<string> toolNames, IReadOnlyList<string> skillsLoaded, int errors, long inputTokens, long outputTokens, bool cancelled)
     {
         ArgumentNullException.ThrowIfNull(userText);
         ArgumentNullException.ThrowIfNull(replyText);
@@ -186,7 +189,7 @@ public sealed class SessionStore : IDisposable
         {
             if (Open() is not { } connection)
             {
-                return;
+                return null;
             }
 
             try
@@ -214,12 +217,63 @@ public sealed class SessionStore : IDisposable
                 bump.Parameters.AddWithValue("$id", id);
                 bump.Parameters.AddWithValue("$updated", now);
                 bump.ExecuteNonQuery();
+                using var read = connection.CreateCommand();
+                read.Transaction = transaction;
+                read.CommandText = "SELECT turns FROM sessions WHERE id = $id";
+                read.Parameters.AddWithValue("$id", id);
+                object? turns = read.ExecuteScalar();
                 transaction.Commit();
                 DiagnosticLog.Debug(Category, AppendedLogLine(id, cancelled));
+                return turns is long ordinal ? (int)ordinal : null;
             }
             catch (SqliteException ex)
             {
                 Fail("append a turn", ex);
+                return null;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Cuts session <paramref name="id"/> back to its first <paramref name="keepThrough"/> turns (2026-09-30, <c>/rewind</c>), in one
+    /// transaction: the <c>turns</c> rows past that ordinal are deleted (the <c>turns_ad</c> trigger takes them out of the search
+    /// index), the turn count is set to the last ordinal left (the row count, ordinals running 1, 2, 3…) so the next <see cref="AppendTurn"/> carries on from there, and
+    /// <c>updated_at</c> moves. The reflections stay. They record skills that were really written, and those skills outlive the
+    /// rewind, so <c>/skills</c>' learned counts stay true. Returns how many rows went, 0 while unavailable.
+    /// </summary>
+    public int TruncateTurns(long id, int keepThrough)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(keepThrough);
+        lock (_gate)
+        {
+            if (Open() is not { } connection)
+            {
+                return 0;
+            }
+
+            try
+            {
+                using var transaction = connection.BeginTransaction();
+                using var delete = connection.CreateCommand();
+                delete.Transaction = transaction;
+                delete.CommandText = "DELETE FROM turns WHERE session_id = $id AND ordinal > $keep";
+                delete.Parameters.AddWithValue("$id", id);
+                delete.Parameters.AddWithValue("$keep", keepThrough);
+                int removed = delete.ExecuteNonQuery();
+                using var count = connection.CreateCommand();
+                count.Transaction = transaction;
+                count.CommandText = "UPDATE sessions SET turns = COALESCE((SELECT max(ordinal) FROM turns WHERE session_id = $id), 0), updated_at = $updated WHERE id = $id";
+                count.Parameters.AddWithValue("$id", id);
+                count.Parameters.AddWithValue("$updated", Stamp(_time.GetUtcNow()));
+                count.ExecuteNonQuery();
+                transaction.Commit();
+                DiagnosticLog.Debug(Category, TruncatedLogLine(id, keepThrough, removed));
+                return removed;
+            }
+            catch (SqliteException ex)
+            {
+                Fail("truncate a session", ex);
+                return 0;
             }
         }
     }
@@ -699,6 +753,10 @@ public sealed class SessionStore : IDisposable
     /// <summary><c>Session 12: turn appended</c> / <c>… (cancelled)</c>. Pinned.</summary>
     public static string AppendedLogLine(long id, bool cancelled) =>
         string.Create(CultureInfo.InvariantCulture, $"Session {id}: turn appended{(cancelled ? " (cancelled)" : "")}");
+
+    /// <summary><c>Session 12: rewound to turn 3 (2 turns removed)</c> (2026-09-30, <c>/rewind</c>). Pinned.</summary>
+    public static string TruncatedLogLine(long id, int keepThrough, int removed) =>
+        string.Create(CultureInfo.InvariantCulture, $"Session {id}: rewound to turn {keepThrough} ({removed} turn{(removed == 1 ? "" : "s")} removed)");
 
     /// <summary><c>Session 12: history saved (24,000 chars)</c>. Pinned.</summary>
     public static string HistorySavedLogLine(long id, int chars) =>

@@ -573,6 +573,13 @@ internal sealed partial class ChatScreen
     private readonly PresentPlanTool _presentPlan;
     private readonly IReadOnlyList<AIFunction> _askTools;
     private readonly SkillCatalog _catalog;
+
+    /// <summary>
+    /// The skill records (2026-09-30, the user's ask): <c>&lt;home&gt;\skills.db</c>, shared by every profile, over the live roots.
+    /// Told by the tools, the reflection, <c>/skills add</c> and the Skills pane; reconciled at every profile load
+    /// (<see cref="BindProfile"/>); read by <c>/skills purge</c>.
+    /// </summary>
+    private readonly SkillRecords _skillRecords;
     private readonly IReadOnlyList<AIFunction> _skillTools;
     private readonly ProjectFile _project;
     private readonly QuestionMenu _questionMenu;
@@ -977,7 +984,8 @@ internal sealed partial class ChatScreen
         string external = externalSkills ?? SkillRoots.DefaultExternalDirectory();
         Func<SkillRoots> roots = () => SkillRoots.For(_settings, external);
         _catalog = new SkillCatalog(roots);
-        _skillTools = SkillTools(_catalog, roots, () => { var e = _effective(); return e.AgentSkills && e.ExternalSkills; }, new SkillFileAccess(() => _effective().FileSafeEdits, _time));
+        _skillRecords = new SkillRecords(new SkillRecordStore(_settings.StorageDirectory), roots, _time);
+        _skillTools = SkillTools(_catalog, roots, () => { var e = _effective(); return e.AgentSkills && e.ExternalSkills; }, new SkillFileAccess(() => _effective().FileSafeEdits, _time), _skillRecords);
         _project = new ProjectFile(() => _files.Root);
         _copy = copyToClipboard ?? (_ => false);
         // Everything the screen shows goes through the pane: the transcript flows above it, the
@@ -1088,7 +1096,7 @@ internal sealed partial class ChatScreen
             Flow = _flow,
         };
         // Built once: the roots ride the facts, so a profile switch needs no rebind; the Options rows through the settings menu (2026-09-19).
-        _skillsMenu = new SkillsMenu(SkillsFacts, settings, _menu, _flow, _menuPane, _input, _openFile, name => SkillsMenu.UsageCaption(_sessions, name, _effective().SessionLogging, _time.LocalTimeZone));
+        _skillsMenu = new SkillsMenu(SkillsFacts, settings, _menu, _flow, _menuPane, _input, _openFile, name => SkillsMenu.UsageCaption(_sessions, name, _effective().SessionLogging, _time.LocalTimeZone), _skillRecords);
         // The /tools pane (2026-09-19): the tool list over the live facts, the Ask / Files / Web rows through the settings menu.
         _toolsMenu = new ToolsMenu(ToolsFacts, settings, _menu, _flow, _menuPane);
         // The /mcp pane (2026-09-20): the servers and their tools over the session's snapshot, the Options rows through the settings menu.
@@ -1528,6 +1536,11 @@ internal sealed partial class ChatScreen
             return ExitHint;
         }
 
+        if (RewindArmed())
+        {
+            return RewindText.ArmedHint;
+        }
+
         if (SplashDeleteArmed() && _pane.DraftEmpty && _splashName is { } armed)
         {
             return SplashDeleteArmedHint(armed);
@@ -1573,6 +1586,7 @@ internal sealed partial class ChatScreen
             ("Enter", "send the line · change/update a setting"),
             ("Ctrl+Enter", "new line in the message"),
             ("ESC", "stop the speech · clear the line · cancel the reply · back out of a menu"),
+            (RewindText.KeyLabel, RewindText.KeyMeaning),
             ("Up / Down", "earlier lines · the draft's rows when it wraps · scroll in menus"),
             ("Left / Right", "change tabs in menus · hold Shift to select text"),
             ("Home / End", "hold Shift to select text to the beginning or end of the line starting from the cursor"),
@@ -2544,6 +2558,12 @@ internal sealed partial class ChatScreen
                 store.RecordReflection(row);
             }
 
+            // The skill it wrote into the skill records (2026-09-30), under the roots the reflection wrote to.
+            if (result.Edit is { } written)
+            {
+                _skillRecords.Edited(pending.Roots, written);
+            }
+
             if (LearnNotice(result) is { } notice)
             {
                 _learnNotices.Enqueue(notice);
@@ -3387,8 +3407,18 @@ internal sealed partial class ChatScreen
                 return MentionCompleter.Matches([new(LearnSessionsWord, LearnSessionsNote)], argText);
 
             case SlashCommand.Skills:
-                // add alone (2026-09-26): the source after it is free text — a search, a repository, a URL — never looked up per keystroke.
-                return argText.Contains(' ', StringComparison.Ordinal) ? [] : MentionCompleter.Matches([new(SkillInstallText.AddWord, SkillInstallText.AddNote)], argText);
+                // add (2026-09-26): the source after it is free text — a search, a repository, a URL — never looked up per keystroke.
+                // purge (2026-09-30): its second word, list or commit, then the age as free text.
+                if (argText.StartsWith(SkillRecordText.PurgeWord + " ", StringComparison.OrdinalIgnoreCase))
+                {
+                    return argText.Count(c => c == ' ') > 1 ? [] : MentionCompleter.Matches(
+                    [
+                        new(SkillRecordText.PurgeWord + " " + SkillRecordText.ListWord, SkillRecordText.ListNote),
+                        new(SkillRecordText.PurgeWord + " " + SkillRecordText.CommitWord, SkillRecordText.CommitNote),
+                    ], argText);
+                }
+
+                return argText.Contains(' ', StringComparison.Ordinal) ? [] : MentionCompleter.Matches([new(SkillInstallText.AddWord, SkillInstallText.AddNote), new(SkillRecordText.PurgeWord, SkillRecordText.PurgeNote)], argText);
 
             case SlashCommand.HomeAssistant:
                 // The verbs, then the rooms, names, scenes and TV words of the last snapshot (2026-09-28).
@@ -3640,6 +3670,17 @@ internal sealed partial class ChatScreen
         _sessionsMenu = new SessionsMenu(_sessions, () => _sessionId, _flow, _menuPane, _input, _time, id => { if (_sessionId == id) { ForgetSession(); } });
         PurgeExpiredSessions();
         LoadCommandHistory();
+        ReconcileSkills();
+    }
+
+    /// <summary>
+    /// The skill records brought in line with the folders (2026-09-30, <see cref="SkillRecords.Reconcile"/>): at startup, after
+    /// every profile switch, and before a purge. The catalog is scanned first, for the frontmatter names.
+    /// </summary>
+    private void ReconcileSkills()
+    {
+        _catalog.Scan(_effective().ExternalSkills);
+        _skillRecords.Reconcile(_catalog.Skills.Concat(_catalog.Shadowed));
     }
 
     /// <summary>
@@ -4458,10 +4499,10 @@ internal sealed partial class ChatScreen
     public sealed record SkillsForTurn(SkillCatalog Catalog, IReadOnlyList<AIFunction> Tools, ProjectFile Project, bool Enabled, bool External, bool ProjectFile = true);
 
     /// <summary>The skill tools (2026-09-16): <c>load_skill</c> over the catalog and <c>skill_editor</c> over the live roots and the live external switch (whether <c>.agents\skills</c> is read, so a skill there blocks its name); <paramref name="files"/> gives the editor its <c>write_file</c> / <c>edit_file</c> (2026-09-27). Shared with headless.</summary>
-    public static IReadOnlyList<AIFunction> SkillTools(SkillCatalog catalog, Func<SkillRoots> roots, Func<bool> external, SkillFileAccess? files = null) => new AIFunction[]
+    public static IReadOnlyList<AIFunction> SkillTools(SkillCatalog catalog, Func<SkillRoots> roots, Func<bool> external, SkillFileAccess? files = null, SkillRecords? records = null) => new AIFunction[]
     {
-        new LoadSkillTool(catalog),
-        new SkillEditorTool(roots, external, files),
+        new LoadSkillTool(catalog, used: records is null ? null : records.Used),
+        new SkillEditorTool(roots, external, files, records is null ? null : records.Edited),
     };
 
     /// <summary>
@@ -5063,26 +5104,7 @@ internal sealed partial class ChatScreen
             DiagnosticLog.Info(SessionsCategory, SessionRestoredLogLine(record.Summary.Id, record.Summary.Turns));
             foreach (var turn in record.Turns)
             {
-                _transcript.User(turn.UserText);
-                if (turn.ToolCalls > 0)
-                {
-                    _transcript.ToolNote(SessionText.ToolCallsNote(turn.ToolCalls));
-                }
-
-                if (turn.ReplyText.Length > 0)
-                {
-                    if (ClaudeText.IsClaudeLine(turn.UserText))
-                    {
-                        // A /claude exchange (2026-09-27): its reply under Claude's name, as it was shown.
-                        _transcript.Speaker(ClaudeText.SpeakerName, ClaudeColor);
-                    }
-
-                    _transcript.BeginAssistant(styled);
-                    _transcript.AppendDelta(turn.ReplyText);
-                    _transcript.EndAssistant();
-                }
-
-                _log.Add(turn.UserText, turn.ReplyText);
+                ReplayTurn(turn.UserText, turn.ReplyText, turn.ToolCalls, styled);
             }
         }
     }
@@ -7317,6 +7339,12 @@ internal sealed partial class ChatScreen
                     }
                 }
 
+                if (result is not InputResult.Cancelled)
+                {
+                    // Anything but an ESC forgets a first ESC (2026-09-30): the rewind's second press must follow the first.
+                    DisarmRewind();
+                }
+
                 // Leaving the line stops the tail: a sent line (a message or a command, and the
                 // ringing timer's Enter) silently — the next thing is the feedback; the push-to-talk
                 // key and the idle wake before the microphone opens (a drained speaker forgotten
@@ -7335,10 +7363,16 @@ internal sealed partial class ChatScreen
                     case InputResult.Cancelled:
                         // The cleared row is the feedback; the hint row already names the key. The
                         // hook has stopped any tail before this press reached the row: a safety net.
+                        bool ringing = _timers.HasRinging;
                         _timers.Acknowledge();
                         if (await _speech.StopAsync().ConfigureAwait(false))
                         {
                             _transcript.Notice(SpeechStoppedNotice);
+                        }
+                        else if (!ringing && await EscapeOnEmptyLineAsync(cancellationToken).ConfigureAwait(false))
+                        {
+                            // An ESC that silenced nothing (2026-09-30): the first arms /rewind, the second opens it.
+                            return 0;
                         }
 
                         break;
@@ -7527,6 +7561,7 @@ internal sealed partial class ChatScreen
             _comfy.Dispose();
             _ha.Dispose();
             _sessions.Dispose();
+            _skillRecords.Store.Dispose();
             if (_ownsMcp)
             {
                 await _mcp.DisposeAsync().ConfigureAwait(false);
@@ -9194,6 +9229,10 @@ internal sealed partial class ChatScreen
                 StartNewConversation();
                 return false;
 
+            case SlashCommand.Rewind:
+                await RewindAsync(args, cancellationToken).ConfigureAwait(false);
+                return false;
+
             case SlashCommand.Splash:
                 // The startup view over a fresh conversation (later on 2026-09-19, the user's ask):
                 // /clear's wipe and forgetting, then the picture whatever Welcome splash says.
@@ -9846,6 +9885,7 @@ internal sealed partial class ChatScreen
         try
         {
             Profiles.Rename(home, target, newName);
+            _skillRecords.RenameProfile(target, newName);   // its skill records follow it (2026-09-30)
             _transcript.Notice(ProfileRenamedNotice(target, newName));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -10546,7 +10586,7 @@ internal sealed partial class ChatScreen
                 // Built per reply (2026-09-30, code review: a cache of it across replies was state for a small set and a schema parsed once).
                 var writerSkills = BotChat.WithoutPreloaded(catalog, preloadedNames);
                 AIFunction? writerTool = loadTool is null || (writerSkills is null && !filesLeftOut) ? null
-                    : preloadedNames.Count == 0 ? loadTool : new LoadSkillTool(_catalog, preloadedNames);
+                    : preloadedNames.Count == 0 ? loadTool : new LoadSkillTool(_catalog, preloadedNames, _skillRecords.Used);
                 var botSkills = new BotSkillSet(writerSkills, writerTool, preloaded);
                 // One decision for both (2026-09-30, code review): under prompt-writer-and-bots the bots' prompt carries the preloaded
                 // content, so they get the writer's list and tool; under prompt-writer-only they get the whole catalog and the plain tool.
@@ -10975,6 +11015,7 @@ internal sealed partial class ChatScreen
 
             contents.Add(content.ToString());
             names.Add(skill.Name);
+            _skillRecords.Used(skill);   // a preload is a use (2026-09-30, the skill records' last use)
         }
 
         return (names, BotChat.PreloadedSkillsSection(contents), anyLeftOut);
@@ -11920,7 +11961,9 @@ internal sealed partial class ChatScreen
         // The hint row is the turn's again (the usage part); the reading stays remembered for /speak.
         _hintReading = null;
         // A first Ctrl+C before the turn is forgotten: mid-turn the key cancels, and the next one at the line is a first again.
+        // A first ESC's rewind arm the same (2026-09-30).
         DisarmExit();
+        DisarmRewind();
         _paneClose?.Dispose();
         _paneClose = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         var paneToken = _paneClose.Token;
@@ -12338,7 +12381,8 @@ internal sealed partial class ChatScreen
         }
 
         var usage = _session.Usage.LastReply;
-        _sessions.AppendTurn(id, text, reply, trace.ToolCalls, trace.ToolNames, trace.LoadedSkills, trace.Errors, usage.Input, usage.Output, cancelled);
+        int? ordinal = _sessions.AppendTurn(id, text, reply, trace.ToolCalls, trace.ToolNames, trace.LoadedSkills, trace.Errors, usage.Input, usage.Output, cancelled);
+        StampTurn(assistant.History, ordinal);
         SaveSessionHistory(assistant);
         if (first && !cancelled && SessionNamingMode.Resolve(effective) == SessionNaming.ModelWritten)
         {

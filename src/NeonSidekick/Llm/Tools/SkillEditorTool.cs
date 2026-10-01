@@ -89,13 +89,19 @@ public sealed class SkillEditorTool : AIFunction
     private readonly Func<SkillRoots> _roots;
     private readonly Func<bool> _external;
     private readonly SkillFileAccess? _files;
+    private readonly Action<SkillRoots, SkillEditResult>? _edited;
 
     /// <param name="roots">Read per call: the profile root moves with a profile switch.</param>
     /// <param name="external">Read per call: whether the external folder is in the catalog (<c>Agent skills</c> and <c>Use external skills</c> both on), so a skill there blocks its name.</param>
     /// <param name="files">What the file actions need, or null to offer create and update alone (2026-09-27).</param>
-    public SkillEditorTool(Func<SkillRoots> roots, Func<bool> external, SkillFileAccess? files = null)
+    /// <param name="edited">
+    /// Told every result with the roots it was written under (2026-09-30, the skill records, <see cref="SkillRecords.Edited"/>):
+    /// a refusal is told as well, and the listener keeps only the writes.
+    /// </param>
+    public SkillEditorTool(Func<SkillRoots> roots, Func<bool> external, SkillFileAccess? files = null, Action<SkillRoots, SkillEditResult>? edited = null)
     {
         _roots = roots ?? throw new ArgumentNullException(nameof(roots));
+        _edited = edited;
         _external = external ?? throw new ArgumentNullException(nameof(external));
         _files = files;
     }
@@ -147,10 +153,12 @@ public sealed class SkillEditorTool : AIFunction
         }
 
         bool external = _external();
+        var roots = _roots();
         var result = create
-            ? SkillEditor.Create(_roots(), where, name, description ?? "", instructions ?? "", external)
-            : SkillEditor.Update(_roots(), where, name, description, instructions, external);
+            ? SkillEditor.Create(roots, where, name, description ?? "", instructions ?? "", external)
+            : SkillEditor.Update(roots, where, name, description, instructions, external);
         LastResult = result with { Summary = SkillText.CleanSummary(summary) };
+        _edited?.Invoke(roots, result);
         return SkillText.Edited(result);
     }
 
@@ -179,6 +187,7 @@ public sealed class SkillEditorTool : AIFunction
 
         var result = act(_files);
         LastResult = result with { Summary = SkillText.CleanSummary(summary) };
+        _edited?.Invoke(_roots(), result);
         return SkillText.Edited(result);
     }
 
