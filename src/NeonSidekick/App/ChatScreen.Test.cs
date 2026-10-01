@@ -74,13 +74,8 @@ internal sealed partial class ChatScreen
         using var testCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         using var stop = new CancellationTokenSource();
         using var killScope = BeginKillScope(testCts);
-        // The reply's watch (2026-09-30, UnderWatchAsync's shape): a line typed or a glyph's word goes through the mid-turn policy.
-        _turnRunning = true;
-        _paneClose?.Dispose();
-        _paneClose = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        var paneToken = _paneClose.Token;
-        _queuedClicks.Reset();
-        var watcher = _keys.WatchAsync(testCts, stop.Token, null, null, _pane.Enabled ? line => OnMidTurnLineAsync(line, testCts, paneToken) : null, spend: e => { _queuedClicks.Reset(); return ScrollInput(e); }, onClick: _pane.Enabled ? HintClickLine : null, editor: LiveEditor);
+        // The reply's watch (2026-09-30, UnderWatchAsync's shape; StartReplyWatch's since 2026-10-01): a line typed or a glyph's word goes through the mid-turn policy.
+        var watcher = StartReplyWatch(testCts, stop.Token, cancellationToken);
         try
         {
             await _transcript.WithSpinnerAsync(BenchText.Label(1, tests.Count, tests[0]), setLabel => BenchRunner.RunAsync(

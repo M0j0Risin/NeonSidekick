@@ -1032,6 +1032,9 @@ internal sealed partial class ChatScreen
             // A ComfyUI generation's label after the tally (2026-09-25, the user's call): /imagine, a botchat picture and the model's generate_image alike.
             // Either kind since 2026-09-26: 🖼️ text-to-image, 🎨 image-to-image.
             LabelAfterUsage = ComfyText.IsGeneratingLabel,
+            // The embedded model's load (2026-10-01, the review's finding): its spinner and label are their own zone, so a
+            // double-click there cancels the load while one on the tally beside them still opens /usage.
+            LabelZone = _ => _loadCancel is not null,
             // The toolbar under the hint row (2026-09-21): the pane glyphs, the working directory in
             // force (the resolved path, what /cwd prints and the banner shows) and the folder; read
             // per draw and on the tick, so a /cwd change or a changed Show toolbar shows at once —
@@ -2000,9 +2003,18 @@ internal sealed partial class ChatScreen
             {
                 // The ComfyUI generation's 🖼️ / 🎨 and its time on the busy row, or a /botchat picture's on the strip
                 // (2026-09-28, the user's ask): the pair cancels the pictures alone — the reply goes on, Esc still ends it.
+                // The embedded model's spinner and label under its load (2026-10-01, the user's ask; the pane's LabelZone
+                // since the review's finding, the tally beside them staying /usage's): the pair cancels the load as Ctrl+C does.
                 if (_queuedClicks.Second(InputLine.HintPairKey(hit)))
                 {
-                    DrainPictures();
+                    if (hit.Zone == ScreenPane.HintZone.Label && _loadCancel is { } load)
+                    {
+                        VoiceSession.SafeCancel(load);
+                    }
+                    else
+                    {
+                        DrainPictures();
+                    }
                 }
 
                 return null;
@@ -6670,7 +6682,7 @@ internal sealed partial class ChatScreen
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         using var stop = new CancellationTokenSource();
         _queuedClicks.Reset();
-        var watcher = _keys.WatchAsync(cts, stop.Token, null, null, LiveLineHook, spend: e => { _queuedClicks.Reset(); return ScrollInput(e); }, onClick: _pane.Enabled ? HintClickLine : null, editor: LiveEditor);
+        var watcher = _keys.WatchAsync(cts, stop.Token, null, null, LiveLineHook, spend: SpendScroll, onClick: _pane.Enabled ? HintClickLine : null, editor: LiveEditor);
         ComfyGeneration? generation = null;
         bool cancelled = false;
         bool drained = false;
@@ -7961,7 +7973,7 @@ internal sealed partial class ChatScreen
         using var stop = new CancellationTokenSource();
         using var killScope = BeginKillScope(compactCts);
         _queuedClicks.Reset();
-        var watcher = _keys.WatchAsync(compactCts, stop.Token, null, null, LiveLineHook, spend: e => { _queuedClicks.Reset(); return ScrollInput(e); }, onClick: _pane.Enabled ? HintClickLine : null, editor: LiveEditor);
+        var watcher = _keys.WatchAsync(compactCts, stop.Token, null, null, LiveLineHook, spend: SpendScroll, onClick: _pane.Enabled ? HintClickLine : null, editor: LiveEditor);
         ConversationCompactor.Result? result = null;
         string? failure = null;
         bool cancelled = false;
@@ -8580,6 +8592,10 @@ internal sealed partial class ChatScreen
     /// cancels it and the app stays. A start that failed has drained its error; only a connected one is reported.
     /// Since 2026-10-01 (the user's asks) a double-click on that spinner — <c>🦙 starting …</c>, <c>🦙 loading …</c> — cancels it
     /// too, and the screen lives under it as under a reply (<see cref="LoadUnderWatchAsync"/>): the row, the toolbar, the chords.
+    /// Under its own watch (the review's findings, the same day) the load then ends as a reply does, in a reply's order: the
+    /// cancelled notice or the report first, a cancel's <c>Queue cancel mode</c> (a message queued for a model that never came
+    /// was sent to none, and lost), and the reconnects owed meanwhile last — never the LLM's after a cancel, which would start
+    /// the load again.
     /// </summary>
     private async Task ConnectEmbeddedAsync(AppSettingsData effective, bool quiet, CancellationToken cancellationToken)
     {
@@ -8593,20 +8609,33 @@ internal sealed partial class ChatScreen
             return;
         }
 
-        if (await LoadUnderWatchAsync(token => _transcript.WithSpinnerAsync(ConnectingLabel, async setLabel =>
+        // Under another watch already the load is that watch's wait, and what was owed meanwhile is that watch's to apply.
+        bool ownWatch = !_turnRunning;
+        bool cancelled = await LoadUnderWatchAsync(token => _transcript.WithSpinnerAsync(ConnectingLabel, async setLabel =>
         {
             await _session.ConnectAsync(effective, setLabel, token).ConfigureAwait(false);
             return true;
-        }), cancellationToken).ConfigureAwait(false))
+        }), cancellationToken).ConfigureAwait(false);
+        if (cancelled)
         {
             _transcript.Notice(ConnectCancelledNotice(NoticeGlyphs.Llm));
-            return;
         }
-
-        if (_session.Assistant is not null)
+        else if (_session.Assistant is not null)
         {
             ReportLlm(quiet);
         }
+
+        if (!ownWatch || cancellationToken.IsCancellationRequested)
+        {
+            return;
+        }
+
+        if (cancelled)
+        {
+            ApplyQueueCancelMode();
+        }
+
+        await ApplyDeferredAsync(reconnectLlm: !cancelled, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -8793,7 +8822,7 @@ internal sealed partial class ChatScreen
         }
 
         var watcher = pointer
-            ? _keys.WatchAsync(workCts, stop.Token, null, null, LiveLineHook, spend: e => { _queuedClicks.Reset(); return ScrollInput(e); }, cancel: cancel, onClick: _pane.Enabled ? HintClickLine : null, editor: LiveEditor)
+            ? _keys.WatchAsync(workCts, stop.Token, null, null, LiveLineHook, spend: SpendScroll, cancel: cancel, onClick: _pane.Enabled ? HintClickLine : null, editor: LiveEditor)
             : _keys.WatchAsync(workCts, stop.Token, null, null, cancel: cancel);
         try
         {
@@ -8824,6 +8853,13 @@ internal sealed partial class ChatScreen
     /// other way. True when either cancelled it (the caller prints the notice); the app token still propagates. Under another
     /// watch already (<c>_turnRunning</c>) it is <see cref="WaitUnderWatchAsync"/>'s plain Ctrl+C wait, so the outer watch's
     /// state is never taken from it.
+    ///
+    /// <para>The review's findings, the same day: the watch is <see cref="StartReplyWatch"/>'s, shared with the reply's other
+    /// waits; the double-click is <see cref="HintClickLine"/>'s, on the spinner and label alone (<see cref="_loadCancel"/>, the
+    /// pane's <c>LabelZone</c>) so the tally beside them still opens <c>/usage</c>; <c>/sampling</c> waits for the load's end
+    /// (<see cref="MidTurnPolicyUnderLoad"/>), and the deferred notices say "the load". A bare ESC is spent
+    /// (<see cref="SpendLoadEscape"/>). The watch ends with <see cref="EndWatchAsync"/> alone: the caller applies the owed
+    /// reconnects after its own line (<see cref="ConnectEmbeddedAsync"/>).</para>
     /// </summary>
     private async Task<bool> LoadUnderWatchAsync(Func<CancellationToken, Task> load, CancellationToken cancellationToken)
     {
@@ -8835,26 +8871,12 @@ internal sealed partial class ChatScreen
         using var workCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         using var stop = new CancellationTokenSource();
         using var killScope = BeginKillScope(workCts);
-        _turnRunning = true;
-        _paneClose?.Dispose();
-        _paneClose = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        var paneToken = _paneClose.Token;
-        _queuedClicks.Reset();
-        var watcher = _keys.WatchAsync(workCts, stop.Token, null, null,
-            onLine: _pane.Enabled ? line => OnMidTurnLineAsync(line, workCts, paneToken) : null,
-            spend: e => { _queuedClicks.Reset(); return ScrollInput(e); },
-            cancel: Keys.IsInterrupt,
-            onClick: _pane.Enabled ? click => LoadClickLine(click, workCts) : null,
-            editor: LiveEditor);
+        _loadCancel = workCts;
+        var watcher = StartReplyWatch(workCts, stop.Token, cancellationToken, cancel: Keys.IsInterrupt, spend: SpendLoadEscape);
         try
         {
             var loading = load(workCts.Token);
-            while (!loading.IsCompleted)
-            {
-                await Task.WhenAny(loading, Volatile.Read(ref _actSignal).Task).ConfigureAwait(false);
-                await DrainActsAsync().ConfigureAwait(false);
-            }
-
+            await RunActsUntilAsync(loading).ConfigureAwait(false);
             await loading.ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (workCts.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
@@ -8864,7 +8886,9 @@ internal sealed partial class ChatScreen
         {
             stop.Cancel();
             await watcher.ConfigureAwait(false);
-            await EndTurnAsync(closePane: workCts.IsCancellationRequested, cancellationToken).ConfigureAwait(false);
+            await EndWatchAsync(closePane: workCts.IsCancellationRequested).ConfigureAwait(false);
+            // After the pane the load left open has closed: a line it ran was still the load's.
+            _loadCancel = null;
             DrainDiagnostics();
         }
 
@@ -8872,24 +8896,19 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>
-    /// The load's click hook (2026-10-01, <see cref="LoadUnderWatchAsync"/>), on the watcher task: two left clicks on the busy
-    /// row's spinner and its label (<see cref="ScreenPane.HintZone.Usage"/> — <c>🦙 starting …</c>, <c>🦙 loading …</c>, or the
-    /// runtime's download before them) within <see cref="DoubleClick.Interval"/> cancel <paramref name="load"/> as Ctrl+C does,
-    /// in place of the reply's <c>/usage</c> there; every other click is the reply's (<see cref="HintClickLine"/>).
+    /// The load's ESC (2026-10-01, the review's finding: ESC is no cancel there, so a press meant to get out of the load stayed
+    /// type-ahead and fired at the picker or the idle line after it), on the watcher task: spent — an open list on the live row
+    /// closes, as under a reply, and nothing else happens. Ctrl+C is the load's cancel.
     /// </summary>
-    private string? LoadClickLine(InputEvent.Click click, CancellationTokenSource load)
+    private bool SpendLoadEscape(InputEvent e)
     {
-        if (click.Button == MouseButton.Left && _pane.TryHitHint(click.X, click.Y, out var hit) && hit.Zone == ScreenPane.HintZone.Usage)
+        if (e is not InputEvent.Key { Info: var key } || !Keys.IsCancel(key))
         {
-            if (_queuedClicks.Second(InputLine.HintPairKey(hit)))
-            {
-                VoiceSession.SafeCancel(load);
-            }
-
-            return null;
+            return false;
         }
 
-        return HintClickLine(click);
+        LiveEditor?.TryCloseList();
+        return true;
     }
 
     /// <summary>The spinner label over a discovery: <see cref="ScanningLabel"/> when the settings' scan mode reaches the network, else <paramref name="fallback"/>.</summary>
@@ -9809,7 +9828,7 @@ internal sealed partial class ChatScreen
                         _transcript.Notice(SpeechStoppedNotice);
                     }
 
-                    Defer(SettingsChanges.Tts, MidTurnSwitchNotice(SpeechOutputWord, ttsWanted));
+                    Defer(SettingsChanges.Tts, MidTurnSwitchNotice(SpeechOutputWord, ttsWanted, LoadRunning));
                     return;
                 }
 
@@ -9827,7 +9846,7 @@ internal sealed partial class ChatScreen
                 _settings.Update(d => d.SttInput = voiceWanted);
                 if (midTurn)
                 {
-                    Defer(SettingsChanges.Voice, MidTurnSwitchNotice(VoiceInputWord, voiceWanted));
+                    Defer(SettingsChanges.Voice, MidTurnSwitchNotice(VoiceInputWord, voiceWanted, LoadRunning));
                     return;
                 }
 
@@ -9865,7 +9884,7 @@ internal sealed partial class ChatScreen
 
                 if (midTurn)
                 {
-                    Defer(SettingsChanges.Voice, MidTurnSwitchNotice(WakeWordWord, wakeWanted));
+                    Defer(SettingsChanges.Voice, MidTurnSwitchNotice(WakeWordWord, wakeWanted, LoadRunning));
                 }
                 else
                 {
@@ -9903,7 +9922,7 @@ internal sealed partial class ChatScreen
 
                 if (midTurn)
                 {
-                    Defer(SettingsChanges.Voice, MidTurnSwitchNotice(InterruptWord, interruptWanted));
+                    Defer(SettingsChanges.Voice, MidTurnSwitchNotice(InterruptWord, interruptWanted, LoadRunning));
                 }
                 else
                 {
@@ -11594,12 +11613,7 @@ internal sealed partial class ChatScreen
         using var killScope = BeginKillScope(cts);
         // A line typed under the spinner is the chat's, as under a reply (2026-09-25): an interjection queued, a command run
         // by the mid-turn policy — its pane here, its act at the wait's end.
-        _turnRunning = true;
-        _paneClose?.Dispose();
-        _paneClose = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        var paneToken = _paneClose.Token;
-        _queuedClicks.Reset();
-        var watcher = _keys.WatchAsync(cts, stop.Token, null, null, _pane.Enabled ? line => OnMidTurnLineAsync(line, cts, paneToken) : null, softCancel, spend: e => { _queuedClicks.Reset(); return ScrollInput(e); }, onClick: _pane.Enabled ? HintClickLine : null, editor: LiveEditor);
+        var watcher = StartReplyWatch(cts, stop.Token, cancellationToken, softCancel);
         try
         {
             var result = await _transcript.WithSpinnerAsync(label, () => work(cts.Token)).ConfigureAwait(false);
@@ -11693,11 +11707,6 @@ internal sealed partial class ChatScreen
         using var waitCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         Task done = playing?.Completion ?? Task.Delay(pause, _time, waitCts.Token);
         using var stop = new CancellationTokenSource();
-        _turnRunning = true;
-        _paneClose?.Dispose();
-        _paneClose = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        var paneToken = _paneClose.Token;
-        _queuedClicks.Reset();
         // Written on the watcher task, read once it is joined (the finally).
         bool skipped = false;
         bool SkipSpeech()
@@ -11713,12 +11722,7 @@ internal sealed partial class ChatScreen
             return true;
         }
 
-        var watcher = _keys.WatchAsync(waitCts, stop.Token, null, null,
-            onLine: _pane.Enabled ? line => OnMidTurnLineAsync(line, waitCts, paneToken) : null,
-            softCancel: SkipSpeech,
-            spend: e => { _queuedClicks.Reset(); return ScrollInput(e); },
-            onClick: _pane.Enabled ? HintClickLine : null,
-            editor: LiveEditor);
+        var watcher = StartReplyWatch(waitCts, stop.Token, cancellationToken, SkipSpeech);
         var cancelled = Task.Delay(Timeout.Infinite, waitCts.Token);
         try
         {
@@ -12084,7 +12088,7 @@ internal sealed partial class ChatScreen
 
         var key = _voice.PushToTalk;
         _queuedClicks.Reset();
-        var watcher = _keys.WatchAsync(discard, stop.Token, k => k.Key == key || k.Key == ConsoleKey.Enter, finish, spend: e => { _queuedClicks.Reset(); return ScrollInput(e); }, onClick: _pane.Enabled ? HintClickLine : null, editor: LiveEditor);
+        var watcher = _keys.WatchAsync(discard, stop.Token, k => k.Key == key || k.Key == ConsoleKey.Enter, finish, spend: SpendScroll, onClick: _pane.Enabled ? HintClickLine : null, editor: LiveEditor);
 
         ListenResult? result = null;
         try
@@ -12256,7 +12260,7 @@ internal sealed partial class ChatScreen
         // clock and a key or a notch between the two ends it — the spend hook sees every one.
         _queuedClicks.Reset();
         var watcher = _keys.WatchAsync(turnCts, stop.Token, null, null, _pane.Enabled ? text => OnMidTurnLineAsync(text, turnCts, paneToken) : null, ladder is not null ? LadderPress : speaker is null ? null : StopSpeechFirst,
-            e => { _queuedClicks.Reset(); return ScrollInput(e); }, onClick: _pane.Enabled ? HintClickLine : null, editor: LiveEditor);
+            SpendScroll, onClick: _pane.Enabled ? HintClickLine : null, editor: LiveEditor);
         bool markdown = MarkdownTurn(effective.TranscriptMarkdown, _pane.Enabled, speaker is not null);
         bool styled = StyledReply(effective.TranscriptMarkdown, _pane.Enabled);
         // The shells found are probed afresh per turn (2026-09-21): an install during the session shows without a restart, and the schema and the run agree.

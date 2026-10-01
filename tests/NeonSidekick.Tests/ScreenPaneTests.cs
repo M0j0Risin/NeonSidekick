@@ -2990,6 +2990,43 @@ public class ScreenPaneTests : IDisposable
     }
 
     /// <summary>
+    /// The embedded model's load (2026-10-01, the review's finding: a double-click on the tally beside the load's spinner
+    /// cancelled the load): a label <see cref="ScreenPane.LabelZone"/> takes stays ahead of the tally, and its zone is the
+    /// frame, its blank and the label with its time; the tally after it stays Usage.
+    /// </summary>
+    [Fact]
+    public void TryHitHint_NamesLabel_OnTheSpinnerAndALabelZoneTakes_TheTallyStaysUsage()
+    {
+        _cursorTop = 100;
+        using var pane = Pane();
+        pane.Strip = () => "🔊";
+        pane.BusyUsage = () => "1.2k";
+        pane.LabelZone = label => label == "🦙 x";
+        pane.Show();
+        pane.ShowInput("", 0);
+
+        // "🔊 · " (five cells), the frame at 5, a blank, "🦙 x 00:00" from 7 (ten cells), " · ", then "1.2k" from 20.
+        using (pane.BeginBusy("🦙 x"))
+        {
+            Assert.True(pane.TryHitHint(5, 102, out var hit));
+            Assert.Equal(new ScreenPane.HintHit(ScreenPane.HintZone.Label, "", 5), hit);
+            Assert.True(pane.TryHitHint(16, 102, out hit));   // the time's last digit
+            Assert.Equal(ScreenPane.HintZone.Label, hit.Zone);
+            Assert.True(pane.TryHitHint(20, 102, out hit));
+            Assert.Equal(ScreenPane.HintZone.Usage, hit.Zone);
+            Assert.True(pane.TryHitHint(23, 102, out hit));
+            Assert.Equal(ScreenPane.HintZone.Usage, hit.Zone);
+        }
+
+        // Any other label is no Label zone: the spinner is Usage again.
+        using (pane.BeginBusy("thinking"))
+        {
+            Assert.True(pane.TryHitHint(5, 102, out var hit));
+            Assert.Equal(ScreenPane.HintZone.Usage, hit.Zone);
+        }
+    }
+
+    /// <summary>
     /// The ComfyUI generation's label (2026-09-28, the user's ask: a double-click there cancels the pictures): a label
     /// <see cref="ScreenPane.LabelAfterUsage"/> takes is its own zone, <see cref="ScreenPane.HintZone.Label"/>, after the tally
     /// and its separator, or right after the frame's blank with no tally; the spinner and the tally stay Usage.

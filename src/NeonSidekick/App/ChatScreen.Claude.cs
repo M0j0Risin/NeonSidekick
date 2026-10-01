@@ -161,7 +161,7 @@ internal sealed partial class ChatScreen
         var speaker = effective.TtsOutput && _speech.IsReady ? _speech.BeginTurn(cancellationToken) : null;
         using var stopSpeech = speaker is null ? default : claudeCts.Token.Register(_speech.Stop);
         _queuedClicks.Reset();
-        var watcher = _keys.WatchAsync(claudeCts, stop.Token, null, null, LiveLineHook, spend: e => { _queuedClicks.Reset(); return ScrollInput(e); }, onClick: _pane.Enabled ? HintClickLine : null, editor: LiveEditor);
+        var watcher = _keys.WatchAsync(claudeCts, stop.Token, null, null, LiveLineHook, spend: SpendScroll, onClick: _pane.Enabled ? HintClickLine : null, editor: LiveEditor);
         bool styled = StyledReply(effective.TranscriptMarkdown, _pane.Enabled);
         var level = ClaudePermission.Resolve(effective);
         var request = new ClaudeRequest(prompt, sessionId, resume, _files.Root, level, effective.ClaudeExecutable,

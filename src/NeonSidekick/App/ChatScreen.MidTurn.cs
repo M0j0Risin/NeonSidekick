@@ -69,14 +69,31 @@ internal sealed partial class ChatScreen
     // Closes a pane opened mid-turn when the turn's end needs the keys back at once (the interrupt's listen).
     private CancellationTokenSource? _paneClose;
 
+    // The embedded model's load under its own watch (LoadUnderWatchAsync, 2026-10-01): its cancel, which a double-click on the
+    // spinner's label fires (HintClickLine on the watcher task, the pane's LabelZone on the draw); null otherwise.
+    private volatile CancellationTokenSource? _loadCancel;
+
+    /// <summary>Whether the watch running is the embedded model's load, not a reply (<see cref="LoadUnderWatchAsync"/>): the notices say "the load", and <see cref="MidTurnPolicyUnderLoad"/> holds.</summary>
+    private bool LoadRunning => _loadCancel is not null;
+
     // The transcript for the menus' flow lines and the confirmations' pre-checks (see FlowSink).
     private readonly INoticeSink _flow;
 
     /// <summary>The notice for a command typed while a reply runs that has to wait for it: the line runs when the reply ends (later on 2026-09-27; it was dropped before). Pinned.</summary>
     public static string MidTurnDeferredNotice(string word) => $"({word} runs when the reply ends)";
 
+    /// <summary>
+    /// <see cref="MidTurnDeferredNotice(string)"/> under the embedded model's load when <paramref name="load"/> (2026-10-01, the
+    /// review's finding: there is no reply to end): <c>(/profile runs when the load ends)</c> — it runs whether the load ends
+    /// loaded or cancelled. Pinned.
+    /// </summary>
+    public static string MidTurnDeferredNotice(string word, bool load) => load ? $"({word} runs when the load ends)" : MidTurnDeferredNotice(word);
+
     /// <summary>The notice after a switch saved mid-turn: the reconnect it needs follows the reply. Pinned.</summary>
-    public static string MidTurnSwitchNotice(string what, bool on)
+    public static string MidTurnSwitchNotice(string what, bool on) => MidTurnSwitchNotice(what, on, load: false);
+
+    /// <summary><see cref="MidTurnSwitchNotice(string, bool)"/> under the embedded model's load when <paramref name="load"/> (2026-10-01): <c>… connecting when the load ends</c>. Pinned.</summary>
+    public static string MidTurnSwitchNotice(string what, bool on, bool load)
     {
         // The switch's own glyph, on and off alike (2026-09-22, the user's pick).
         string glyph = what switch
@@ -87,11 +104,21 @@ internal sealed partial class ChatScreen
             InterruptWord => NoticeGlyphs.Interrupt,
             _ => "",
         };
-        return on ? $"({glyph}{what} on — connecting when this reply ends)" : $"({glyph}{what} off — applies when this reply ends)";
+        string end = load ? "the load ends" : "this reply ends";
+        return on ? $"({glyph}{what} on — connecting when {end})" : $"({glyph}{what} off — applies when {end})";
     }
 
     /// <summary>The notice after <c>/reasoning</c> saved a level mid-turn (under the menu's own saved line). Pinned.</summary>
     public const string MidTurnAppliesNotice = "(applies when this reply ends)";
+
+    /// <summary>
+    /// <see cref="MidTurnAppliesNotice"/> under the embedded model's load (2026-10-01, the review's finding: no reply to end) —
+    /// true whether this load ends loaded (the quiet reconnect after it) or cancelled (the next connect reads the level). Pinned.
+    /// </summary>
+    public const string LoadAppliesNotice = "(applies when the model has loaded)";
+
+    /// <summary>The notice for a level saved under a reply or a load, whichever runs.</summary>
+    private string AppliesNotice => LoadRunning ? LoadAppliesNotice : MidTurnAppliesNotice;
 
     /// <summary>The words <see cref="MidTurnSwitchNotice"/> names the four switches by. Pinned.</summary>
     public const string SpeechOutputWord = "speech output";
@@ -167,6 +194,20 @@ internal sealed partial class ChatScreen
         _ => MidTurnPolicy(command, args.Length > 0),
     };
 
+    /// <summary>
+    /// <see cref="MidTurnPolicy(SlashCommand, string)"/> under the embedded model's load (2026-10-01, the review's finding):
+    /// <c>/sampling</c>, with a word or without, waits for the load's end. It edits the connected model's entry, and under the
+    /// load the endpoint is the one being swapped out, or none: a <c>/sampling temperature 0.2</c> run at once was saved to the
+    /// old server's model. <c>/reasoning</c> runs at once as under a reply: the level is the profile's, not the model's, and the
+    /// reconnect it owes follows a load that ended loaded (no relaunch: the level is no part of <c>LlamaLaunch</c>) and is
+    /// dropped after a cancel (<see cref="ApplyDeferredAsync"/>). Pure.
+    /// </summary>
+    public static MidTurnClass MidTurnPolicyUnderLoad(SlashCommand command, string args) => command switch
+    {
+        SlashCommand.Sampling => MidTurnClass.Deferred,
+        _ => MidTurnPolicy(command, args),
+    };
+
     /// <summary>The first word of a typed line, for the notices that name a command.</summary>
     private static string CommandWord(string text) => text.Trim().Split(' ', 2)[0];
 
@@ -190,7 +231,8 @@ internal sealed partial class ChatScreen
         }
 
         var (command, args) = ParseLine(text);
-        var policy = MidTurnPolicy(command, args);
+        bool load = LoadRunning;
+        var policy = load ? MidTurnPolicyUnderLoad(command, args) : MidTurnPolicy(command, args);
         if (policy != MidTurnClass.Message)
         {
             DiagnosticLog.Debug(AppCategory, MidTurnCommandLogLine(CommandWord(text), policy));
@@ -232,7 +274,7 @@ internal sealed partial class ChatScreen
                     return false;
                 }
 
-                Post(() => _transcript.Notice(MidTurnDeferredNotice(CommandWord(text))));
+                Post(() => _transcript.Notice(MidTurnDeferredNotice(CommandWord(text), load)));
                 if (_botChatRunning || !QueueLine(line))
                 {
                     Pend(deferred);
@@ -432,7 +474,7 @@ internal sealed partial class ChatScreen
             case SlashCommand.Reasoning:
                 if (await _menu.PickReasoningAsync("", _effective().LlmReasoning, cancellationToken).ConfigureAwait(false))
                 {
-                    Post(() => Defer(SettingsChanges.Llm, MidTurnAppliesNotice));
+                    Post(() => Defer(SettingsChanges.Llm, AppliesNotice));
                 }
 
                 break;
@@ -454,7 +496,7 @@ internal sealed partial class ChatScreen
             case SlashCommand.Reasoning:
                 if (await _menu.PickReasoningAsync(args, _effective().LlmReasoning, cancellationToken).ConfigureAwait(false))
                 {
-                    Defer(SettingsChanges.Llm, MidTurnAppliesNotice);
+                    Defer(SettingsChanges.Llm, AppliesNotice);
                 }
 
                 break;
@@ -580,6 +622,52 @@ internal sealed partial class ChatScreen
         }
     }
 
+    /// <summary>
+    /// Runs the acts as they are posted until <paramref name="done"/> completes (2026-10-01, the review's finding: the turn's end
+    /// and the embedded model's load each had the loop by hand); nothing when it is done already.
+    /// </summary>
+    private async Task RunActsUntilAsync(Task done)
+    {
+        while (!done.IsCompleted)
+        {
+            await Task.WhenAny(done, Volatile.Read(ref _actSignal).Task).ConfigureAwait(false);
+            await DrainActsAsync().ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    /// The reply's watch over a wait that is no reply (2026-10-01, the review's finding: <see cref="UnderWatchAsync{T}"/>,
+    /// <see cref="WaitForBotSpeechAsync"/> and <see cref="LoadUnderWatchAsync"/> each set it up by hand): <c>_turnRunning</c> set,
+    /// a fresh pane-close source linked to <paramref name="cancellationToken"/>, the clicks unpaired, and the watcher started
+    /// with the live row, the scroll, the pointer (<see cref="HintClickLine"/>) and every line through
+    /// <see cref="OnMidTurnLineAsync"/> — a pane opens here, an act is posted to the waiting flow, a cancel goes through
+    /// <paramref name="cts"/>. <paramref name="softCancel"/> and <paramref name="cancel"/> are the watch's own;
+    /// <paramref name="spend"/> is asked after the scroll, which every key passes (it ends a click pair). The caller stops <paramref name="stop"/>, awaits the watcher and
+    /// ends the wait (<see cref="EndTurnAsync"/>, or <see cref="EndWatchAsync"/>).
+    /// </summary>
+    private Task<Interrupt> StartReplyWatch(CancellationTokenSource cts, CancellationToken stop, CancellationToken cancellationToken, Func<bool>? softCancel = null, Func<ConsoleKeyInfo, bool>? cancel = null, Func<InputEvent, bool>? spend = null)
+    {
+        _turnRunning = true;
+        _paneClose?.Dispose();
+        _paneClose = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var paneToken = _paneClose.Token;
+        _queuedClicks.Reset();
+        return _keys.WatchAsync(cts, stop, null, null,
+            onLine: _pane.Enabled ? line => OnMidTurnLineAsync(line, cts, paneToken) : null,
+            softCancel: softCancel,
+            spend: e => SpendScroll(e) || (spend is not null && spend(e)),
+            cancel: cancel,
+            onClick: _pane.Enabled ? HintClickLine : null,
+            editor: LiveEditor);
+    }
+
+    /// <summary>The watchers' scroll: a wheel notch or a scroll key pages the transcript, and any of them ends a click pair.</summary>
+    private bool SpendScroll(InputEvent e)
+    {
+        _queuedClicks.Reset();
+        return ScrollInput(e);
+    }
+
     /// <summary>Runs every queued act, a fresh signal armed first. A failing act is one error line, never the turn's end.</summary>
     private async Task DrainActsAsync()
     {
@@ -607,29 +695,43 @@ internal sealed partial class ChatScreen
     /// </summary>
     private async Task EndTurnAsync(bool closePane, CancellationToken cancellationToken)
     {
+        await EndWatchAsync(closePane).ConfigureAwait(false);
+        if (cancellationToken.IsCancellationRequested)
+        {
+            return;
+        }
+
+        await ApplyDeferredAsync(reconnectLlm: true, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// <see cref="EndTurnAsync"/>'s first half (2026-10-01, split for the embedded model's load): the pane closed or awaited, the
+    /// acts run as they come, <c>_turnRunning</c> cleared and the last acts run. The owed reconnects are left in <see cref="_deferred"/>.
+    /// </summary>
+    private async Task EndWatchAsync(bool closePane)
+    {
         if (closePane && _paneClose is { } close)
         {
             VoiceSession.SafeCancel(close);
         }
 
         var pending = _keys.PendingLine;
-        while (!pending.IsCompleted)
-        {
-            await Task.WhenAny(pending, Volatile.Read(ref _actSignal).Task).ConfigureAwait(false);
-            await DrainActsAsync().ConfigureAwait(false);
-        }
-
+        await RunActsUntilAsync(pending).ConfigureAwait(false);
         await pending.ConfigureAwait(false);
         _turnRunning = false;
         await DrainActsAsync().ConfigureAwait(false);
-        if (cancellationToken.IsCancellationRequested)
-        {
-            return;
-        }
+    }
 
+    /// <summary>
+    /// <see cref="EndTurnAsync"/>'s second half: the reconnects the quick switches owe, quietly. Without <paramref name="reconnectLlm"/>
+    /// (2026-10-01, the review's finding: a <c>/reasoning</c> owed under a cancelled load reconnected, which started the load the user
+    /// had just cancelled) the LLM's is dropped — its setting is saved, and the next connect reads it.
+    /// </summary>
+    private async Task ApplyDeferredAsync(bool reconnectLlm, CancellationToken cancellationToken)
+    {
         var owed = _deferred;
         _deferred = SettingsChanges.None;
-        if (owed.HasFlag(SettingsChanges.Llm))
+        if (owed.HasFlag(SettingsChanges.Llm) && reconnectLlm)
         {
             await ConnectLlmAsync(cancellationToken, quiet: true).ConfigureAwait(false);
         }

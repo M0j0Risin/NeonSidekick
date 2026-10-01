@@ -192,6 +192,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     private Func<string> _usage = () => "";
     private Func<string> _busyUsage = () => "";
     private Func<string, bool> _labelAfterUsage = _ => false;
+    private Func<string, bool> _labelZone = _ => false;
 
     // The overlay (the info pane, the menus): drawn where the input row is, the cursor hidden
     // meanwhile — or, with an input slot, above the input rows, the cursor on them.
@@ -233,7 +234,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     private int _usageColumn = -1;
     private int _usageCells;
 
-    // The busy row's label when LabelAfterUsage takes it (2026-09-28, HintZone.Label): −1 for none.
+    // The busy row's label when LabelAfterUsage or LabelZone takes it (2026-09-28, HintZone.Label): −1 for none.
     private int _labelColumn = -1;
     private int _labelCells;
 
@@ -328,6 +329,8 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         /// The busy row's label and its time when <see cref="LabelAfterUsage"/> takes it — the ComfyUI generation's
         /// <c>🖼️ 00:12</c> / <c>🎨 00:12</c> (2026-09-28, the user's ask: a double-click there cancels the pictures) — ahead
         /// of <see cref="Usage"/>, which keeps the spinner and the tally. After <see cref="Mark"/>, for the same reason.
+        /// A label <see cref="LabelZone"/> takes (2026-10-01, the embedded model's load: a double-click cancels it) is the
+        /// spinner's frame, its blank and the label in their usual place, ahead of the tally, which stays <see cref="Usage"/>.
         /// </summary>
         Label,
     }
@@ -703,6 +706,19 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     {
         get => _labelAfterUsage;
         set => _labelAfterUsage = value ?? throw new ArgumentNullException(nameof(value));
+    }
+
+    /// <summary>
+    /// Which busy labels are their own click zone where they stand, ahead of the tally (2026-10-01, the review's finding: the
+    /// embedded model's load took a double-click anywhere on <see cref="HintZone.Usage"/> as its cancel, the tally beside
+    /// it included): <see cref="HintZone.Label"/> is then the spinner's frame, its blank and the label with its time, and the
+    /// tally keeps <see cref="HintZone.Usage"/>. A label <see cref="LabelAfterUsage"/> takes is its own zone already. Asked
+    /// per draw; none by default.
+    /// </summary>
+    public Func<string, bool> LabelZone
+    {
+        get => _labelZone;
+        set => _labelZone = value ?? throw new ArgumentNullException(nameof(value));
     }
 
     /// <summary>
@@ -4515,12 +4531,15 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
             RecordUsage(_top < 0 ? zone : "", TextCells.Width(prefix), 0, frame + unfitted, zoneCells);
             // The label's own place (2026-09-28, HintZone.Label): a label LabelAfterUsage takes — after the tally and its
             // separator, or right after the frame's blank with none — when the fit kept it whole, and not while scrolled.
+            // A label LabelZone takes (2026-10-01) stays where it stands, and its zone takes the frame and the blank before it.
             string busyText = BusyText(label, elapsed);
+            bool trailing = _labelAfterUsage(label);
+            bool leading = !trailing && _labelZone(label);
             int labelAhead = after ? TextCells.Width(" " + usage + HintSeparator) : 1;
             int labelWidth = TextCells.Width(busyText);
-            bool labelWhole = _top < 0 && _labelAfterUsage(label) && (TextCells.Width(unfitted) <= restMax || labelAhead + labelWidth <= restMax);
-            _labelColumn = labelWhole ? TextCells.Width(prefix) + TextCells.Width(frame) + labelAhead : -1;
-            _labelCells = labelWhole ? labelWidth : 0;
+            bool labelWhole = _top < 0 && (trailing || leading) && (TextCells.Width(unfitted) <= restMax || labelAhead + labelWidth <= restMax);
+            _labelColumn = !labelWhole ? -1 : leading ? TextCells.Width(prefix) : TextCells.Width(prefix) + TextCells.Width(frame) + labelAhead;
+            _labelCells = !labelWhole ? 0 : leading ? TextCells.Width(frame) + labelAhead + labelWidth : labelWidth;
         }
         else
         {
