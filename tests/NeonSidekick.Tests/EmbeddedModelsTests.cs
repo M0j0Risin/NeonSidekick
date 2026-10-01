@@ -306,7 +306,7 @@ public class EmbeddedModelsTests : IDisposable
         var cpu = new FakeLlamaServerHost();
         await using (var onCpu = new EmbeddedLlmService(_files, cpu, _ => new BackendChoice(LlamaBackend.Cpu, "test"), () => 8L << 30))
         {
-            await onCpu.StartAsync(_model, new AppSettingsData { EmbeddedVramBudget = 90 }, null, CancellationToken.None);
+            await onCpu.StartAsync(_model, new AppSettingsData { EmbeddedVramBudget = 90, EmbeddedVramOnly = false }, null, CancellationToken.None);   // VRAM only refuses the CPU
         }
 
         Assert.Null(unread.Launches.Single().FitTargetMiB);
@@ -454,6 +454,63 @@ public class EmbeddedModelsTests : IDisposable
         Assert.Equal(3, host.Launches.Count);
     }
 
+    /// <summary>
+    /// The kill switch (Ctrl+Alt+X, 2026-10-01, the user's ask) during a load: the start's model unloaded without waiting for
+    /// it, the start failing as the kill's — no Vulkan fallback, CUDA not marked failed — and nothing left to kill after.
+    /// </summary>
+    [Fact]
+    public async Task Kill_DuringALoad_EndsTheStartAsTheKills_WithoutAFallback()
+    {
+        InstallByHand();
+        var release = new TaskCompletionSource();
+        var host = new FakeLlamaServerHost { StartGate = _ => release.Task };
+        await using var service = new EmbeddedLlmService(_files, host, Cuda, () => 8L << 30);
+
+        var start = service.StartAsync(_model, new AppSettingsData(), null, CancellationToken.None);
+        for (int i = 0; i < 500 && host.Launches.Count == 0; i++)
+        {
+            await Task.Delay(10);
+        }
+
+        Assert.True(service.Starting);
+        Assert.Equal(["tiny-model"], service.Kill());
+        release.SetResult();
+
+        var ex = await Assert.ThrowsAsync<EmbeddedLlmException>(() => start);
+        Assert.True(ex.Killed);
+        Assert.Equal(EmbeddedLlmText.KilledStart(_model), ex.Message);
+        Assert.Equal(LlamaBackend.Cuda, Assert.Single(host.Launches).Backend);   // no Vulkan after it
+        Assert.Equal(new BackendChoice(LlamaBackend.Cuda, "test driver"), service.Backend(new AppSettingsData()));
+        Assert.False(service.Starting);
+        Assert.Empty(service.Kill());
+    }
+
+    /// <summary>The kill switch with servers up (2026-10-01): the main one and a botchat's extra, both killed; the extra's host is kept for a later chat.</summary>
+    [Fact]
+    public async Task Kill_StopsTheMainServerAndTheExtras()
+    {
+        InstallByHand();
+        var main = new FakeLlamaServerHost();
+        var hosts = new List<FakeLlamaServerHost>();
+        await using var service = new EmbeddedLlmService(_files, main, Cuda, () => 8L << 30, () =>
+        {
+            var host = new FakeLlamaServerHost { Port = 59990 - hosts.Count };
+            hosts.Add(host);
+            return host;
+        });
+        await service.StartAsync(_model, new AppSettingsData(), null, CancellationToken.None);
+        await service.StartExtraAsync(_model, new AppSettingsData(), null, CancellationToken.None);
+
+        Assert.Equal(["tiny-model"], service.Kill());
+
+        Assert.Null(service.Running);
+        Assert.Empty(service.Extras);
+        Assert.Equal((1, 1), (main.Kills, hosts.Single().Kills));
+        Assert.Equal(0, main.Stops);
+        await service.StartExtraAsync(_model, new AppSettingsData(), null, CancellationToken.None);
+        Assert.Single(hosts);
+    }
+
     [Fact]
     public async Task ACudaRuntimeThatWillNotDownload_IsNoReasonToFallBack()
     {
@@ -495,8 +552,9 @@ public class EmbeddedModelsTests : IDisposable
         await using var service = new EmbeddedLlmService(_files, host, Cuda);
 
         await service.StartAsync(_model, new AppSettingsData { EmbeddedVramOnly = true, EmbeddedGpuLayers = "20" }, null, CancellationToken.None);
-        await service.StartAsync(_model, new AppSettingsData { EmbeddedGpuLayers = "20" }, null, CancellationToken.None);
-        Assert.Equal([("all", true), ("20", false)], host.Launches.Select(l => (l.GpuLayers, l.VramOnly)));
+        await service.StartAsync(_model, new AppSettingsData { EmbeddedVramOnly = false, EmbeddedGpuLayers = "20" }, null, CancellationToken.None);
+        await service.StartAsync(_model, new AppSettingsData { EmbeddedGpuLayers = "20" }, null, CancellationToken.None);   // on by default since later on 2026-10-01
+        Assert.Equal([("all", true), ("20", false), ("all", true)], host.Launches.Select(l => (l.GpuLayers, l.VramOnly)));
 
         // The CPU backend has no VRAM to stay in: refused before anything starts.
         var cpu = new FakeLlamaServerHost();
@@ -535,7 +593,7 @@ public class EmbeddedModelsTests : IDisposable
         var small = new FakeLlamaServerHost();
         await using (var service = new EmbeddedLlmService(_files, small, Vulkan, () => 128L << 20))
         {
-            await service.StartAsync(_model, new AppSettingsData(), null, CancellationToken.None);
+            await service.StartAsync(_model, new AppSettingsData { EmbeddedVramOnly = false }, null, CancellationToken.None);
         }
 
         var cuda = new FakeLlamaServerHost();

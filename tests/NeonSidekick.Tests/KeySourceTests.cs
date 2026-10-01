@@ -176,6 +176,64 @@ public class KeySourceTests
     }
 
     /// <summary>Ctrl+Q used to quit; it is an ordinary key now, kept as type-ahead like any other.</summary>
+    /// <summary>The kill switch (2026-10-01): a read spends Ctrl+Alt+X on the hook and returns the next event; without a hook the key passes.</summary>
+    [Fact]
+    public async Task ReadInputAsync_KillSwitch_IsSpentOnTheHook_OrPassesWithoutOne()
+    {
+        var input = new TestConsoleInput();
+        var keys = new KeySource(input, FastPoll);
+        int kills = 0;
+        keys.KillSwitch = () => kills++;
+        input.PushKey(Keys.CtrlAlt(ConsoleKey.X));
+        input.PushKey(Keys.Char('a'));
+
+        Assert.Equal(new InputEvent.Key(Keys.Char('a')), await keys.ReadInputAsync(CancellationToken.None));
+        Assert.Equal(1, kills);
+
+        input.PushKey(Keys.CtrlAlt(ConsoleKey.X));
+        input.PushKey(Keys.Char('b'));
+        Assert.Equal('b', (await keys.ReadKeyAsync(CancellationToken.None))!.Value.KeyChar);
+        input.PushKey(Keys.CtrlAlt(ConsoleKey.X));
+        input.PushKey(Keys.Char('c'));
+        Assert.Equal('c', ((IAnsiConsoleInput)keys).ReadKey(intercept: true)!.Value.KeyChar);
+        Assert.Equal(3, kills);
+
+        // A hook that throws still spends the key.
+        keys.KillSwitch = () => throw new InvalidOperationException("boom");
+        input.PushKey(Keys.CtrlAlt(ConsoleKey.X));
+        input.PushKey(Keys.Char('d'));
+        Assert.Equal(new InputEvent.Key(Keys.Char('d')), await keys.ReadInputAsync(CancellationToken.None));
+
+        keys.KillSwitch = null;
+        input.PushKey(Keys.CtrlAlt(ConsoleKey.X));
+        Assert.Equal(new InputEvent.Key(Keys.CtrlAlt(ConsoleKey.X)), await keys.ReadInputAsync(CancellationToken.None));
+    }
+
+    /// <summary>The kill switch under a reply (2026-10-01): run on the watcher, never a cancel, never type-ahead, never a line.</summary>
+    [Fact]
+    public async Task Watch_KillSwitch_RunsTheHook_NeverBufferedNorALine()
+    {
+        var input = new TestConsoleInput();
+        var keys = new KeySource(input, FastPoll);
+        int kills = 0;
+        keys.KillSwitch = () => kills++;
+        input.PushKey(Keys.CtrlAlt(ConsoleKey.X));
+        input.PushKey(Keys.Char('h'));
+        using var turn = new CancellationTokenSource();
+        using var stop = new CancellationTokenSource();
+        var lines = new List<KeySource.WatchedLine>();
+
+        var watch = keys.WatchAsync(turn, stop.Token, null, null, line => { lines.Add(line); return Task.FromResult(true); });
+        await WaitUntilAsync(() => keys.Buffered == 1);
+        stop.Cancel();
+
+        Assert.Equal(Interrupt.None, await watch);
+        Assert.Equal(1, kills);
+        Assert.False(turn.IsCancellationRequested);
+        Assert.Empty(lines);
+        Assert.Equal('h', (await keys.ReadKeyAsync(CancellationToken.None))!.Value.KeyChar);
+    }
+
     [Fact]
     public async Task Watch_CtrlQ_IsJustAnotherKey()
     {

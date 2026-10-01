@@ -57,6 +57,17 @@ public interface IEmbeddedLlm : IAsyncDisposable
 
     /// <summary>Stops every extra server, never the main one; the ones that were running.</summary>
     IReadOnlyList<EmbeddedServerInfo> StopExtras();
+
+    /// <summary>Whether a start, main or extra, is in progress — the runtime's download included (2026-10-01, for the kill switch).</summary>
+    bool Starting { get; }
+
+    /// <summary>
+    /// The kill switch (Ctrl+Alt+X, 2026-10-01, the user's ask: "immediately unload an embedded model"): every server, the
+    /// main one and the extras, killed at once without waiting for a start in progress, which then throws with
+    /// <see cref="EmbeddedLlmException.Killed"/> — never a CUDA to Vulkan fallback. The ids of the models it unloaded, running
+    /// or loading; empty when there was nothing, which the screen reads as "another server: do nothing".
+    /// </summary>
+    IReadOnlyList<string> Kill();
 }
 
 /// <summary>
@@ -66,7 +77,9 @@ public interface IEmbeddedLlm : IAsyncDisposable
 /// start (a driver present but broken, a GPU the build does not know), it says so and tries Vulkan — and remembers,
 /// so later starts in this run go to Vulkan directly instead of failing CUDA again first. A CUDA runtime that could not
 /// be downloaded is not such a failure: it is reported as it is, and the next start tries CUDA again. Nor is a load
-/// Embedded VRAM only refused (2026-10-01): the model did not fit, which Vulkan would not change.
+/// Embedded VRAM only refused (2026-10-01): the model did not fit, which Vulkan would not change. Nor is a start the kill
+/// switch took (Ctrl+Alt+X, later that day, <see cref="Kill"/>): whatever such a start throws is the kill's
+/// (<see cref="EmbeddedLlmException.Killed"/>), and CUDA is not marked failed by it.
 /// </summary>
 public sealed class EmbeddedLlmService : IEmbeddedLlm
 {
@@ -88,6 +101,12 @@ public sealed class EmbeddedLlmService : IEmbeddedLlm
     private readonly Lock _extrasLock = new();
     private readonly SemaphoreSlim _extrasGate = new(1, 1);
     private bool _cudaFailed;
+
+    // The kill switch (2026-10-01): the starts in progress, by model id, and how many kills there were — a start that saw
+    // one since it began is the kill's, whatever it then threw.
+    private readonly List<string> _starting = [];
+    private readonly Lock _startingLock = new();
+    private int _kills;
 
     /// <param name="files">The files: catalog, installs, runtimes.</param>
     /// <param name="host">The process host.</param>
@@ -237,20 +256,45 @@ public sealed class EmbeddedLlmService : IEmbeddedLlm
     /// </summary>
     private async Task<EmbeddedServerInfo> StartOnHostAsync(ILlamaServerHost host, EmbeddedModel model, AppSettingsData effective, Action<string>? phase, CancellationToken cancellationToken)
     {
-        var choice = Backend(effective);
-        bool auto = EmbeddedBackends.Forced(effective.EmbeddedBackend) is null;
-        DiagnosticLog.Info(Category, $"Backend {LlamaRelease.Name(choice.Backend)} ({choice.Reason}).");
+        int kills = Volatile.Read(ref _kills);
+        lock (_startingLock)
+        {
+            _starting.Add(model.Id);
+        }
+
         try
         {
-            return await StartOnAsync(host, choice.Backend, model, effective, auto, phase, cancellationToken).ConfigureAwait(false);
+            var choice = Backend(effective);
+            bool auto = EmbeddedBackends.Forced(effective.EmbeddedBackend) is null;
+            DiagnosticLog.Info(Category, $"Backend {LlamaRelease.Name(choice.Backend)} ({choice.Reason}).");
+            try
+            {
+                return await StartOnAsync(host, choice.Backend, model, effective, auto, phase, kills, cancellationToken).ConfigureAwait(false);
+            }
+            catch (EmbeddedLlmException ex) when (auto && choice.Backend == LlamaBackend.Cuda && !ex.RuntimeMissing && !ex.VramOnlyRefused && !ex.Killed
+                && !cancellationToken.IsCancellationRequested && !KilledSince(kills))
+            {
+                _cudaFailed = true;
+                DiagnosticLog.Warn(Category, EmbeddedLlmText.CudaFallback(ex.Message));
+                return await StartOnAsync(host, LlamaBackend.Vulkan, model, effective, auto, phase, kills, cancellationToken).ConfigureAwait(false);
+            }
         }
-        catch (EmbeddedLlmException ex) when (auto && choice.Backend == LlamaBackend.Cuda && !ex.RuntimeMissing && !ex.VramOnlyRefused)
+        catch (EmbeddedLlmException ex) when (!ex.Killed && KilledSince(kills))
         {
-            _cudaFailed = true;
-            DiagnosticLog.Warn(Category, EmbeddedLlmText.CudaFallback(ex.Message));
-            return await StartOnAsync(host, LlamaBackend.Vulkan, model, effective, auto, phase, cancellationToken).ConfigureAwait(false);
+            // The kill switch took the start (2026-10-01): whatever the start then threw is the kill's.
+            throw new EmbeddedLlmException(EmbeddedLlmText.KilledStart(model), killed: true);
+        }
+        finally
+        {
+            lock (_startingLock)
+            {
+                _starting.Remove(model.Id);
+            }
         }
     }
+
+    /// <summary>Whether the kill switch was pressed since a start read <paramref name="kills"/>.</summary>
+    private bool KilledSince(int kills) => Volatile.Read(ref _kills) != kills;
 
     public string? Remove(EmbeddedModel model)
     {
@@ -273,6 +317,51 @@ public sealed class EmbeddedLlmService : IEmbeddedLlm
 
     public void Stop() => _host.Stop();
 
+    public bool Starting
+    {
+        get
+        {
+            lock (_startingLock)
+            {
+                return _starting.Count > 0;
+            }
+        }
+    }
+
+    public IReadOnlyList<string> Kill()
+    {
+        Interlocked.Increment(ref _kills);
+        var ids = new List<string>();
+        lock (_startingLock)
+        {
+            ids.AddRange(_starting);
+        }
+
+        // The extras' list is read, never cleared: a later botchat reuses their hosts, as after StopExtras.
+        List<ILlamaServerHost> hosts;
+        lock (_extrasLock)
+        {
+            hosts = [_host, .. _extras.Select(e => e.Host)];
+        }
+
+        foreach (var host in hosts)
+        {
+            string? id = host.Running?.ModelId;
+            if (host.Kill() && id is not null)
+            {
+                ids.Add(id);
+            }
+        }
+
+        var unloaded = ids.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        if (unloaded.Count > 0)
+        {
+            DiagnosticLog.Info(Category, EmbeddedLlmText.KilledLog(unloaded));
+        }
+
+        return unloaded;
+    }
+
     public async ValueTask DisposeAsync()
     {
         await _host.DisposeAsync().ConfigureAwait(false);
@@ -291,7 +380,7 @@ public sealed class EmbeddedLlmService : IEmbeddedLlm
         _extrasGate.Dispose();
     }
 
-    private async Task<EmbeddedServerInfo> StartOnAsync(ILlamaServerHost host, LlamaBackend backend, EmbeddedModel model, AppSettingsData effective, bool auto, Action<string>? phase, CancellationToken cancellationToken)
+    private async Task<EmbeddedServerInfo> StartOnAsync(ILlamaServerHost host, LlamaBackend backend, EmbeddedModel model, AppSettingsData effective, bool auto, Action<string>? phase, int kills, CancellationToken cancellationToken)
     {
         // Embedded VRAM only (2026-10-01, the user's ask): every layer on the GPU whatever Embedded GPU layers says, and
         // no start at all on the CPU backend, which has no VRAM to stay in — nor, the same day (the review's finding, the
@@ -332,6 +421,12 @@ public sealed class EmbeddedLlmService : IEmbeddedLlm
             FitTarget(backend, effective),
             model.Draft,
             vramOnly);
+        if (KilledSince(kills))
+        {
+            // Killed while the runtime or the drafter downloaded (2026-10-01): no process to kill yet, so none is started.
+            throw new EmbeddedLlmException(EmbeddedLlmText.KilledStart(model), killed: true);
+        }
+
         phase?.Invoke(EmbeddedLlmText.StartingLabel(model));
         return await host.EnsureRunningAsync(launch, model, phase, cancellationToken).ConfigureAwait(false);
     }

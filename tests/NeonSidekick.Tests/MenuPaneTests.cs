@@ -1012,6 +1012,25 @@ public class MenuPaneTests : IDisposable
         Assert.Null(pane.TakeDismissChord());
     }
 
+    /// <summary>The kill switch in a list (2026-10-01): the hook runs and the list reads on, nothing dismissed, no chord kept.</summary>
+    [Fact]
+    public async Task TheKillSwitch_LeavesTheListReading()
+    {
+        var (pane, input, keys) = ClickablePane(cursorTop: 100);
+        using var _ = pane;
+        pane.Show();
+        var menu = new MenuPane(pane, keys);
+        int kills = 0;
+        keys.KillSwitch = () => kills++;
+        input.Push(Keys.CtrlAlt(ConsoleKey.X), Keys.Down, Keys.Enter);
+
+        Assert.Equal(new MenuPick(0, 1), await menu.PickAsync(Page("one", "two", "three"), 0, CancellationToken.None));
+        Assert.Equal(1, kills);
+        Assert.False(pane.Dismissed);
+        Assert.Null(pane.TakeDismissChord());
+        menu.Close();
+    }
+
     /// <summary>A chord the screen does in place (<c>/perf</c>, <c>/tb</c>) leaves the list reading; under a tool's question every chord is nobody's.</summary>
     [Fact]
     public async Task AChord_DoneInPlace_OrSuppressed_LeavesTheListReading()

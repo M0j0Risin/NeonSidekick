@@ -90,6 +90,23 @@ public class KeysTests
     }
 
     [Fact]
+    public void IsKillSwitch_IsCtrlAltX_WithoutShift_AndNeverAShortcutLine()
+    {
+        // 2026-10-01 (the user's ask): the test factory's '\0' and the console's CAN count; Ctrl+X (cut), Shift, Alt alone and an
+        // AltGr+X that types a character do not. A chord with no command: never a ShortcutLine.
+        Assert.True(Keys.IsKillSwitch(Keys.CtrlAlt(ConsoleKey.X)));
+        Assert.True(Keys.IsKillSwitch(new ConsoleKeyInfo('\x18', ConsoleKey.X, shift: false, alt: true, control: true)));
+        Assert.Null(Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.X)));
+        Assert.False(Keys.IsKillSwitch(Keys.Ctrl(ConsoleKey.X)));
+        Assert.False(Keys.IsKillSwitch(new ConsoleKeyInfo('\x18', ConsoleKey.X, shift: false, alt: false, control: true)));
+        Assert.False(Keys.IsKillSwitch(new ConsoleKeyInfo('\0', ConsoleKey.X, shift: true, alt: true, control: true)));
+        Assert.False(Keys.IsKillSwitch(new ConsoleKeyInfo('\0', ConsoleKey.X, shift: false, alt: true, control: false)));
+        Assert.False(Keys.IsKillSwitch(new ConsoleKeyInfo('ź', ConsoleKey.X, shift: false, alt: true, control: true)));   // AltGr+X on a Polish layout
+        Assert.False(Keys.IsKillSwitch(Keys.CtrlAltC));
+        Assert.False(Keys.IsKillSwitch(Keys.Char('x')));
+    }
+
+    [Fact]
     public void ToolGroupText_IsPinned()
     {
         Assert.Equal(1, TextCells.Width(ToolGroupText.CollapsedGlyph));

@@ -187,6 +187,26 @@ public static class EmbeddedLlmText
 
     public static string CudaFallback(string detail) => $"CUDA did not start ({detail}); trying Vulkan";
 
+    /// <summary>A start the kill switch (Ctrl+Alt+X, 2026-10-01) stopped mid-load: what the connect logs, at Info. Pinned.</summary>
+    public static string KilledStart(EmbeddedModel model) => $"{model.Display} was unloaded (Ctrl+Alt+X) before it finished loading";
+
+    /// <summary>
+    /// The screen's notice after the kill switch (Ctrl+Alt+X, 2026-10-01, the user's ask): the models it unloaded, by their
+    /// display names (a botchat's extras too), and the way back. Pinned.
+    /// </summary>
+    public static string KilledNotice(IReadOnlyList<string> names)
+    {
+        ArgumentNullException.ThrowIfNull(names);
+        return $"Embedded model unloaded: {string.Join(", ", names)}. /server loads it again.";
+    }
+
+    /// <summary>The log line of a kill (Ctrl+Alt+X, 2026-10-01): the model ids whose llama-server it stopped.</summary>
+    public static string KilledLog(IReadOnlyList<string> ids)
+    {
+        ArgumentNullException.ThrowIfNull(ids);
+        return $"Kill switch (Ctrl+Alt+X): stopped llama-server for {string.Join(", ", ids)}.";
+    }
+
     /// <summary>
     /// Embedded VRAM only's refusal of a load that came up with part of the model in system memory (2026-10-01, the user's
     /// ask): what went there — layers llama.cpp left on the CPU, shared memory the driver placed — and what to lower.

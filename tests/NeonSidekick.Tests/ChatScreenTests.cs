@@ -9932,9 +9932,9 @@ public partial class ChatScreenTests : IDisposable
     }
 
     [Theory]
-    [InlineData(false, false, 30)]
-    [InlineData(true, false, 31)]
-    [InlineData(true, true, 32)]
+    [InlineData(false, false, 31)]
+    [InlineData(true, false, 32)]
+    [InlineData(true, true, 33)]
     public void KeyRows_ListWhatApplies(bool voiceOn, bool wakeReady, int count)
     {
         var rows = ChatScreen.KeyRows(voiceOn, ConsoleKey.F8, wakeReady, "hey neon");
@@ -9950,14 +9950,14 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(("Home / End", "hold Shift to select text to the beginning or end of the line starting from the cursor"), rows[6]);
         Assert.Equal(("PgUp / PgDn", "scroll the transcript a page at a time"), rows[7]);
         Assert.DoesNotContain(rows, r => r.Key is "Mouse" or "Drag" or "Drop" or "@" or "#" or "$");
-        Assert.Equal(("Alt+V", "paste content (text or images)"), rows[^22]);   // ahead of Ctrl+Home since 2026-09-27 (the user's order)
-        Assert.Equal(("Ctrl+Home", "scroll to top of the chat pane"), rows[^21]);
-        Assert.Equal(("Ctrl+End", "scroll to bottom of the chat pane"), rows[^20]);
+        Assert.Equal(("Alt+V", "paste content (text or images)"), rows[^23]);   // ahead of Ctrl+Home since 2026-09-27 (the user's order)
+        Assert.Equal(("Ctrl+Home", "scroll to top of the chat pane"), rows[^22]);
+        Assert.Equal(("Ctrl+End", "scroll to bottom of the chat pane"), rows[^21]);
         // The Ctrl+letter rows A to Z by the letter since 2026-10-01 (the user's ask).
-        Assert.Equal(("Ctrl+A", "select all text on the line"), rows[^19]);
-        Assert.Equal(("Ctrl+C", "copy the selected text · stop the speech · cancel the reply · twice to exit"), rows[^18]);
-        Assert.Equal(("Ctrl+O", "expand or collapse the tool calls, code blocks and thinking (or click a summary line)"), rows[^17]);   // 2026-09-22
-        Assert.Equal(("Ctrl+X", "cut the selected text"), rows[^16]);   // 2026-09-25
+        Assert.Equal(("Ctrl+A", "select all text on the line"), rows[^20]);
+        Assert.Equal(("Ctrl+C", "copy the selected text · stop the speech · cancel the reply · twice to exit"), rows[^19]);
+        Assert.Equal(("Ctrl+O", "expand or collapse the tool calls, code blocks and thinking (or click a summary line)"), rows[^18]);   // 2026-09-22
+        Assert.Equal(("Ctrl+X", "cut the selected text"), rows[^17]);   // 2026-09-25
         // The command chords after it (2026-09-30, the user's wording), one block A to Z by the letter since the pane chords
         // joined later that day (the user's ask).
         Assert.Equal(
@@ -9976,10 +9976,12 @@ public partial class ChatScreenTests : IDisposable
             ("Ctrl+Alt+P", "open the profile pane (/profile)"),
             ("Ctrl+Alt+S", "start a new conversation and show the splash screen (/splash)"),
             ("Ctrl+Alt+T", "open the tools pane (/tools)"),
+            ("Ctrl+Alt+X", "kill switch to immediately unload an embedded model"),   // 2026-10-01, the user's place and wording
             ("Ctrl+Alt+Y", "open the system prompt pane (/sys)"),
-        ], rows[^15..]);
-        // Each row names its chord's command.
-        Assert.All(rows[^15..], row => Assert.Equal(Keys.ShortcutLine(Keys.CtrlAlt(Enum.Parse<ConsoleKey>(row.Key[^1..]))), row.Meaning[(row.Meaning.LastIndexOf('(') + 1)..^1]));
+        ], rows[^16..]);
+        // Each row names its chord's command; the kill switch has none (2026-10-01).
+        Assert.All(rows[^16..].Where(row => row.Key != "Ctrl+Alt+X"), row => Assert.Equal(Keys.ShortcutLine(Keys.CtrlAlt(Enum.Parse<ConsoleKey>(row.Key[^1..]))), row.Meaning[(row.Meaning.LastIndexOf('(') + 1)..^1]));
+        Assert.Null(Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.X)));
         Assert.Equal(voiceOn, rows.Any(r => r.Key == "F8"));
         if (voiceOn)
         {

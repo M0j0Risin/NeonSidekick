@@ -47,11 +47,10 @@ public partial class SettingsMenuTests
         var data = new AppSettingsData();
         Assert.True(data.EmbeddedLlmServer && data.EmbeddedDrafter);   // both on by default
         Assert.Equal(("on", "on"), (SettingsMenu.FieldValue(SettingsField.EmbeddedLlmServer, data, "C:\\p"), SettingsMenu.FieldValue(SettingsField.EmbeddedDrafter, data, "C:\\p")));
-        var copy = AppSettings.Copy(new AppSettingsData { EmbeddedLlmServer = false, EmbeddedDrafter = false, EmbeddedVramOnly = true });
-        Assert.False(copy.EmbeddedLlmServer || copy.EmbeddedDrafter);
-        Assert.True(copy.EmbeddedVramOnly);
-        Assert.False(data.EmbeddedVramOnly);   // off by default (2026-10-01, the user's ask)
-        Assert.Equal("off", SettingsMenu.FieldValue(SettingsField.EmbeddedVramOnly, data, "C:\\p"));
+        var copy = AppSettings.Copy(new AppSettingsData { EmbeddedLlmServer = false, EmbeddedDrafter = false, EmbeddedVramOnly = false });
+        Assert.False(copy.EmbeddedLlmServer || copy.EmbeddedDrafter || copy.EmbeddedVramOnly);
+        Assert.True(data.EmbeddedVramOnly);   // on by default since later on 2026-10-01 (the user's call; off until then)
+        Assert.Equal("on", SettingsMenu.FieldValue(SettingsField.EmbeddedVramOnly, data, "C:\\p"));
     }
 
     // The capability columns of a model with a drafter, vision and tools (2026-09-29: ⚡, then 👁️ and 🛠️), and of one without a drafter.

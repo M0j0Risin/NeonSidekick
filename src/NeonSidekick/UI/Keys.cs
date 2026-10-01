@@ -98,6 +98,19 @@ public static class Keys
         };
     }
 
+    /// <summary>
+    /// Ctrl+Alt+X, the embedded model's kill switch (2026-10-01, the user's ask: "immediately unload an embedded model if one
+    /// is loaded", nothing with any other server). A chord with no command, so never a <see cref="ShortcutLine"/>: the chord
+    /// lines run through the dispatch, the mid-turn hook and the panes as typed commands, and a spinner's watch holds them for
+    /// the idle line — a kill switch cannot wait for any of that. <see cref="KeySource.KillSwitch"/> spends it wherever the
+    /// key is read instead. <see cref="ShortcutLine"/>'s shape: Control and Alt held, Shift not, and no character but the
+    /// console's own CAN (<c>'\x18'</c>; a test builds <c>'\0'</c>), so an AltGr+X that types a character stays that character.
+    /// </summary>
+    public static bool IsKillSwitch(ConsoleKeyInfo key) =>
+        key.Key == ConsoleKey.X
+        && key.KeyChar is '\0' or '\x18'
+        && (key.Modifiers & (ConsoleModifiers.Control | ConsoleModifiers.Alt | ConsoleModifiers.Shift)) == (ConsoleModifiers.Control | ConsoleModifiers.Alt);
+
     /// <summary>Ctrl+Alt+C, Ctrl+Alt+N and Ctrl+Alt+S as a US layout delivers them: no character, the key with Control and Alt.</summary>
     public static ConsoleKeyInfo CtrlAltC => new('\0', ConsoleKey.C, false, true, true);
 

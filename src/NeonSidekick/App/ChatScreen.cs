@@ -1052,6 +1052,8 @@ internal sealed partial class ChatScreen
         };
         _keys.Mirror = _pane;
         _pane.ChordInPlace = ChordInPlace;
+        // Ctrl+Alt+X (2026-10-01): the embedded model's kill switch, wherever the key is read.
+        _keys.KillSwitch = KillSwitch;
         _transcript = new TranscriptRenderer(_pane)
         {
             // Tool collapse count (2026-09-22): read when a tool run opens, clamped as the menu saves it.
@@ -1646,7 +1648,8 @@ internal sealed partial class ChatScreen
     /// The Ctrl+Alt rows are one block sorted by the letter (later on 2026-09-30, the user's ask, when B, D, E, G, K, L, M, O,
     /// P, T and Y joined C, N and S: <see cref="Keys.ShortcutLine"/>).
     /// The plain Ctrl+letter rows are sorted by the letter too since 2026-10-01 (the user's ask): A, C, O, X.
-    /// Ctrl+Alt+H (<c>/help</c>) joined the same day under G, the user's wording.
+    /// Ctrl+Alt+H (<c>/help</c>) joined the same day under G, the user's wording; Ctrl+Alt+X later that day under T, the
+    /// user's place and wording — the one chord with no command, so its row names none (<see cref="Keys.IsKillSwitch"/>).
     /// </summary>
     public static (string Key, string Meaning)[] KeyRows(bool voiceOn, ConsoleKey pushToTalk, bool wakeReady, string wakePhrase)
     {
@@ -1692,6 +1695,7 @@ internal sealed partial class ChatScreen
         rows.Add(("Ctrl+Alt+P", "open the profile pane (/profile)"));
         rows.Add(("Ctrl+Alt+S", "start a new conversation and show the splash screen (/splash)"));
         rows.Add(("Ctrl+Alt+T", "open the tools pane (/tools)"));
+        rows.Add(("Ctrl+Alt+X", "kill switch to immediately unload an embedded model"));
         rows.Add(("Ctrl+Alt+Y", "open the system prompt pane (/sys)"));
         return rows.ToArray();
     }
@@ -7928,6 +7932,7 @@ internal sealed partial class ChatScreen
         var mode = CompactType.Resolve(effective);
         using var compactCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         using var stop = new CancellationTokenSource();
+        using var killScope = BeginKillScope(compactCts);
         _queuedClicks.Reset();
         var watcher = _keys.WatchAsync(compactCts, stop.Token, null, null, LiveLineHook, spend: e => { _queuedClicks.Reset(); return ScrollInput(e); }, onClick: _pane.Enabled ? HintClickLine : null, editor: LiveEditor);
         ConversationCompactor.Result? result = null;
@@ -8750,6 +8755,8 @@ internal sealed partial class ChatScreen
     {
         using var workCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         using var stop = new CancellationTokenSource();
+        // A connect's load, a draft's or a loop's wait (2026-10-01): Ctrl+Alt+X cancels it as Ctrl+C does.
+        using var killScope = BeginKillScope(workCts);
         if (pointer)
         {
             _queuedClicks.Reset();
@@ -10659,6 +10666,7 @@ internal sealed partial class ChatScreen
         string preloadedTold = "";
         // ESC's ladder (2026-09-25): the voice, then the bot replying, then the chat.
         var ladder = new BotEscLadder();
+        Volatile.Write(ref _botLadder, ladder);   // Ctrl+Alt+X ends the chat through it (2026-10-01)
         _botNoWorkflowTold = false;
         _botChatRunning = true;
         _botChatCast = castNames;
@@ -10905,6 +10913,7 @@ internal sealed partial class ChatScreen
         }
         finally
         {
+            Volatile.Write(ref _botLadder, null);
             _botChatRunning = false;
             _botChatCast = null;
             _botPictureLog = null;
@@ -11472,6 +11481,7 @@ internal sealed partial class ChatScreen
     {
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         using var stop = new CancellationTokenSource();
+        using var killScope = BeginKillScope(cts);
         // A line typed under the spinner is the chat's, as under a reply (2026-09-25): an interjection queued, a command run
         // by the mid-turn policy — its pane here, its act at the wait's end.
         _turnRunning = true;
@@ -12072,6 +12082,8 @@ internal sealed partial class ChatScreen
     {
         using var turnCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         using var stop = new CancellationTokenSource();
+        // The reply is the model's work: Ctrl+Alt+X cancels it, and its unload is finished once the turn has wound down.
+        using var killScope = BeginKillScope(turnCts);
         // The mid-turn line hook (the pane only: without it nothing can be shown or typed under
         // a reply): a pane it opens reads the keys under the app token and the close signal the
         // turn's end may send (EndTurnAsync). The previous turn's pane was awaited before this one.

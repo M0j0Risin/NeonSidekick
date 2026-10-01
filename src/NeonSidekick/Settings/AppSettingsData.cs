@@ -1883,7 +1883,8 @@ public sealed class AppSettingsData
 
     /// <summary>
     /// Whether the embedded server must stay in VRAM (2026-10-01, the user's ask: "forbid spilling over into system RAM if
-    /// VRAM runs out", off by default). llama.cpp has no such switch, and memory reaches system RAM two ways: llama.cpp's fit
+    /// VRAM runs out"; off by default until later that day, on since, the user's call — a profile saved with it off keeps it
+    /// off, as Embedded VRAM budget's did). llama.cpp has no such switch, and memory reaches system RAM two ways: llama.cpp's fit
     /// moving layers to the CPU (<see cref="EmbeddedGpuLayers"/> <c>auto</c>), and on Windows the NVIDIA driver's CUDA sysmem
     /// fallback, which places what does not fit in shared memory without llama.cpp knowing. On, every layer goes on the GPU
     /// (<c>-ngl all</c>, whatever <see cref="EmbeddedGpuLayers"/> says; fit then shrinks only an unset context), and a load
@@ -1893,7 +1894,7 @@ public sealed class AppSettingsData
     /// shared), and for a load whose layer line never came, so it could not be checked (the same day's review). The driver's own switch is the NVIDIA Control Panel's per-program "CUDA - Sysmem Fallback Policy"; the
     /// app never changes it. A change restarts the server. No variable.
     /// </summary>
-    public bool EmbeddedVramOnly { get; set; }
+    public bool EmbeddedVramOnly { get; set; } = true;
 
     /// <summary>
     /// Which size the embedded model lists' 8GB / 16GB / 32GB filter buttons measure (later on 2026-09-29, the user's ask and

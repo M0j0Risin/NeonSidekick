@@ -247,9 +247,36 @@ internal sealed class LlmSession : IDisposable
         }
         catch (EmbeddedLlmException ex)
         {
-            DiagnosticLog.Error(Category, ex.Message);
+            // The kill switch's (2026-10-01) is the user's own act: said, never an error.
+            DiagnosticLog.Write(ex.Killed ? DiagnosticLevel.Info : DiagnosticLevel.Error, Category, ex.Message);
             return new LlmEndpoint(EmbeddedEndpoint.BaseUrl, model.Id, LlmEndpoint.DefaultApiKey, EmbeddedNotRunningSource);
         }
+    }
+
+    /// <summary>
+    /// The kill switch (Ctrl+Alt+X, 2026-10-01, the user's ask): every embedded server killed at once
+    /// (<see cref="IEmbeddedLlm.Kill"/>), from whatever task read the key — the session's own state is left for
+    /// <see cref="EmbeddedUnloaded"/> on the screen's task. The ids of the models unloaded; empty when there were none (no
+    /// embedded model here, or another server in use), and the screen then does nothing.
+    /// </summary>
+    public IReadOnlyList<string> KillEmbedded() => _embedded?.Kill() ?? [];
+
+    /// <summary>
+    /// After <see cref="KillEmbedded"/>, on the screen's task: with the endpoint the embedded model's, the session lets it go
+    /// — no endpoint (the hint row's model name goes), no assistant — so the next message says to pick a server, and
+    /// <c>/server</c> loads a model again. The saved URL stays. Another endpoint (a botchat's extras were the ones killed) is
+    /// left as it is.
+    /// </summary>
+    public void EmbeddedUnloaded()
+    {
+        if (Endpoint is not { } endpoint || !EmbeddedEndpoint.IsEmbedded(endpoint.BaseUrl))
+        {
+            return;
+        }
+
+        Reconnecting();
+        EmbeddedServer = null;
+        Endpoint = null;
     }
 
     /// <summary>

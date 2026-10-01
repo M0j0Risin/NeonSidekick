@@ -88,6 +88,18 @@ internal sealed class BotEscLadder
         }
     }
 
+    /// <summary>
+    /// Ends the chat from outside the ladder (2026-10-01, the embedded model's kill switch, Ctrl+Alt+X): the bots' servers are
+    /// gone, and the next bot's link would only start one again.
+    /// </summary>
+    public void End()
+    {
+        lock (_gate)
+        {
+            _endRequested = true;
+        }
+    }
+
     /// <summary>Whether a press cut bot turn <paramref name="turn"/> short (<see cref="BotPress.SkipBot"/>), without taking it.</summary>
     public bool Skipped(int turn)
     {

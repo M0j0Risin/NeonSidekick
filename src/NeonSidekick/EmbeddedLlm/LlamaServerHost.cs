@@ -14,13 +14,20 @@ public sealed record EmbeddedServerInfo(Uri BaseUrl, int Port, string ApiKey, Ll
 /// <summary>An embedded-model failure the user reads as it is (a start that failed, a runtime that would not install, a model not installed).</summary>
 public sealed class EmbeddedLlmException : Exception
 {
-    public EmbeddedLlmException(string message, bool portInUse = false, bool runtimeMissing = false, bool vramOnlyRefused = false)
+    public EmbeddedLlmException(string message, bool portInUse = false, bool runtimeMissing = false, bool vramOnlyRefused = false, bool killed = false)
         : base(message)
     {
         PortInUse = portInUse;
         RuntimeMissing = runtimeMissing;
         VramOnlyRefused = vramOnlyRefused;
+        Killed = killed;
     }
+
+    /// <summary>
+    /// True when the kill switch (Ctrl+Alt+X, 2026-10-01) stopped the start: the user's own act, not a failure, so no CUDA to
+    /// Vulkan fallback and no error line.
+    /// </summary>
+    public bool Killed { get; }
 
     /// <summary>
     /// True when Embedded VRAM only refused the start (2026-10-01): the model spilled or did not fit in VRAM, the backend is
@@ -54,6 +61,13 @@ public interface ILlamaServerHost : IAsyncDisposable
 
     /// <summary>Stops the server, if any, and waits briefly for it to go (its model files are memory-mapped until then).</summary>
     void Stop();
+
+    /// <summary>
+    /// The kill switch (Ctrl+Alt+X, 2026-10-01, the user's ask): <see cref="Stop"/> without waiting for a start in progress —
+    /// the process killed whether it is up or still loading, and that start then throws with
+    /// <see cref="EmbeddedLlmException.Killed"/>. True when there was a process to kill.
+    /// </summary>
+    bool Kill();
 }
 
 /// <summary>
@@ -81,6 +95,9 @@ public interface ILlamaServerHost : IAsyncDisposable
 /// is refused as not checked (<see cref="VramRefusal"/>). The report is fed only then (the same day's review): before and
 /// after, lines go to the log and the tail alone. The <c>-lv 4</c> the launch passed stays for the server's life — llama-server
 /// has no way to lower it at run time — so its request lines stay in the Debug log.</item>
+/// <item>the kill switch (Ctrl+Alt+X, later on 2026-10-01, <see cref="Kill"/>) stops the process outside the gate, so a load in
+/// progress never holds it up; that start finds its process gone and throws with <see cref="EmbeddedLlmException.Killed"/>,
+/// and a server killed between ready and its record is never reported running.</item>
 /// </list>
 /// </summary>
 public sealed class LlamaServerHost : ILlamaServerHost
@@ -177,6 +194,23 @@ public sealed class LlamaServerHost : ILlamaServerHost
         }
     }
 
+    /// <summary>
+    /// <see cref="StopCore"/> outside <c>_gate</c>, which a start holds for its whole load (2026-10-01, the kill switch): the
+    /// state is read and cleared under <c>_state</c>, so the start in progress finds its process gone and reports the kill
+    /// (<see cref="StartAsync"/>).
+    /// </summary>
+    public bool Kill()
+    {
+        bool had;
+        lock (_state)
+        {
+            had = _process is not null;
+        }
+
+        StopCore();
+        return had;
+    }
+
     public ValueTask DisposeAsync()
     {
         StopCore();
@@ -246,6 +280,11 @@ public sealed class LlamaServerHost : ILlamaServerHost
                 await CheckVramAsync(process.Id, cancellationToken).ConfigureAwait(false);
             }
         }
+        catch (Exception ex) when (ex is not OperationCanceledException && Killed(process))
+        {
+            // The kill switch took the process mid-load (2026-10-01): whatever the load then saw is the kill's.
+            throw new EmbeddedLlmException(EmbeddedLlmText.KilledStart(model), killed: true);
+        }
         catch
         {
             StopCore();
@@ -262,7 +301,16 @@ public sealed class LlamaServerHost : ILlamaServerHost
         var info = new EmbeddedServerInfo(new Uri(string.Create(CultureInfo.InvariantCulture, $"http://127.0.0.1:{port}/v1")), port, key, launch.Backend, model.Id, launch.Vision);
         lock (_state)
         {
-            _info = info;
+            // A kill between ready and here leaves no server to report: Running would name a dead process.
+            if (ReferenceEquals(_process, process))
+            {
+                _info = info;
+            }
+        }
+
+        if (Killed(process))
+        {
+            throw new EmbeddedLlmException(EmbeddedLlmText.KilledStart(model), killed: true);
         }
 
         DiagnosticLog.Info(Category, string.Create(CultureInfo.InvariantCulture, $"llama-server is ready on 127.0.0.1:{port} (pid {process.Id})."));
@@ -323,6 +371,15 @@ public sealed class LlamaServerHost : ILlamaServerHost
         }
 
         return VramSpill.Check(report, sharedBytes) is { } spill ? EmbeddedLlmText.VramSpilled(spill) : null;
+    }
+
+    /// <summary>Whether <paramref name="process"/> is no longer this host's: <see cref="Kill"/> took it (a start's own failures stop it only after this is asked).</summary>
+    private bool Killed(Process process)
+    {
+        lock (_state)
+        {
+            return !ReferenceEquals(_process, process);
+        }
     }
 
     /// <summary>Whether a VRAM-only start's load lines include a failed device allocation.</summary>

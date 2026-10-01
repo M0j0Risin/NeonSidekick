@@ -1,3 +1,4 @@
+using NeonSidekick.Diagnostics;
 using Spectre.Console;
 
 namespace NeonSidekick.UI;
@@ -124,6 +125,34 @@ public sealed class KeySource : IAnsiConsoleInput
     /// reply is seen on the input row while it waits. Null (the default) shows nothing.
     /// </summary>
     public ScreenPane? Mirror { get; set; }
+
+    /// <summary>
+    /// The embedded model's kill switch (2026-10-01, the user's ask: Ctrl+Alt+X, <see cref="Keys.IsKillSwitch"/>): run for the
+    /// key wherever it is read — the idle line, a pane, a Spectre prompt, the watch under a reply or a spinner — and the key is
+    /// spent there, never type-ahead, never part of a line. On the reading task: it must not block, and never throws. Null
+    /// (the default, headless) and the key passes as any other.
+    /// </summary>
+    public Action? KillSwitch { get; set; }
+
+    /// <summary>Whether <paramref name="e"/> is the kill switch's key and a hook took it (<see cref="KillSwitch"/>).</summary>
+    private bool SpentOnKillSwitch(InputEvent? e)
+    {
+        if (KillSwitch is not { } kill || e is not InputEvent.Key { Info: var key } || !Keys.IsKillSwitch(key))
+        {
+            return false;
+        }
+
+        try
+        {
+            kill();
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            DiagnosticLog.Debug("Keys", "The kill switch failed: " + ex.Message);
+        }
+
+        return true;
+    }
 
     /// <summary>
     /// What a run of typed-ahead events reads as: printable characters in order, Backspace taking
@@ -256,23 +285,34 @@ public sealed class KeySource : IAnsiConsoleInput
     /// </summary>
     public async Task<InputEvent?> ReadInputAsync(CancellationToken cancellationToken)
     {
-        if (_buffer.Count > 0)
+        while (true)
         {
-            return _buffer.Dequeue();
-        }
+            InputEvent? e;
+            if (_buffer.Count > 0)
+            {
+                e = _buffer.Dequeue();
+            }
+            else
+            {
+                if (cancellationToken.IsCancellationRequested)
+                {
+                    return null;
+                }
 
-        if (cancellationToken.IsCancellationRequested)
-        {
-            return null;
-        }
+                try
+                {
+                    e = await _events.ReadAsync(cancellationToken).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    return null;
+                }
+            }
 
-        try
-        {
-            return await _events.ReadAsync(cancellationToken).ConfigureAwait(false);
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            return null;
+            if (!SpentOnKillSwitch(e))
+            {
+                return e;
+            }
         }
     }
 
@@ -347,14 +387,21 @@ public sealed class KeySource : IAnsiConsoleInput
     {
         while (_buffer.Count > 0)
         {
-            if (_buffer.Dequeue() is InputEvent.Key buffered)
+            if (_buffer.Dequeue() is InputEvent.Key buffered && !SpentOnKillSwitch(buffered))
             {
                 return buffered.Info;
             }
         }
 
-        DropMouse();
-        return _events.Read() is InputEvent.Key key ? key.Info : null;
+        while (true)
+        {
+            DropMouse();
+            var e = _events.Read();
+            if (!SpentOnKillSwitch(e))
+            {
+                return e is InputEvent.Key key ? key.Info : null;
+            }
+        }
     }
 
     /// <summary>Mouse events (clicks, drags, wheel notches) at the head of the source are nobody's but the line's and the panes'; every other reader skips them.</summary>
@@ -494,6 +541,12 @@ public sealed class KeySource : IAnsiConsoleInput
                     catch (InvalidOperationException)
                     {
                         e = null;
+                    }
+
+                    if (SpentOnKillSwitch(e))
+                    {
+                        // The kill switch (2026-10-01): spent here, under a reply or a spinner, ahead of every other key.
+                        continue;
                     }
 
                     if (e is InputEvent.Key { Info: var k })

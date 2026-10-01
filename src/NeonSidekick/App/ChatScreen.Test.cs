@@ -73,6 +73,7 @@ internal sealed partial class ChatScreen
         bool live = _pane.Enabled;
         using var testCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         using var stop = new CancellationTokenSource();
+        using var killScope = BeginKillScope(testCts);
         // The reply's watch (2026-09-30, UnderWatchAsync's shape): a line typed or a glyph's word goes through the mid-turn policy.
         _turnRunning = true;
         _paneClose?.Dispose();

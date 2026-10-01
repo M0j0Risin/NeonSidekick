@@ -10,7 +10,9 @@ namespace NeonSidekick.Tests.Fakes;
 /// probe), and a record of every install, start, stop and removal. <see cref="InstallGate"/> holds an install open so a
 /// test can cancel it; <see cref="StartFailure"/> and <see cref="InstallFailure"/> make them fail. <see cref="StartGate"/>
 /// (later on 2026-09-29) is awaited inside every start before it lands, so parallel links interleave as the real ones do;
-/// the extras (multi-server botchats) answer on ports under <see cref="Port"/>, each with its own key.
+/// the extras (multi-server botchats) answer on ports under <see cref="Port"/>, each with its own key. <see cref="Kill"/>
+/// (2026-10-01, the kill switch) unloads the main server, the extras and a start held at the gate, which then throws as the
+/// real one does (<see cref="EmbeddedLlmException.Killed"/>).
 /// </summary>
 public sealed class FakeEmbeddedLlm : IEmbeddedLlm
 {
@@ -113,10 +115,7 @@ public sealed class FakeEmbeddedLlm : IEmbeddedLlm
         Starts.Add(model.Id);
         StartSettings.Add(effective);
         phase?.Invoke(EmbeddedLlmText.StartingLabel(model));
-        if (StartGate is { } gate)
-        {
-            await gate(cancellationToken);
-        }
+        await GateAsync(model, cancellationToken);
 
         if (StartFailure is { } failure)
         {
@@ -146,10 +145,7 @@ public sealed class FakeEmbeddedLlm : IEmbeddedLlm
 
         ExtraStarts.Add(model.Id);
         ExtraStartSettings.Add(effective);
-        if (StartGate is { } gate)
-        {
-            await gate(cancellationToken);
-        }
+        await GateAsync(model, cancellationToken);
 
         if (ExtraStartFailure is { } failure)
         {
@@ -189,6 +185,72 @@ public sealed class FakeEmbeddedLlm : IEmbeddedLlm
         Running = null;
     }
 
+    private readonly List<string> _starting = new();
+    private int _kills;
+
+    public int Kills => _kills;
+
+    public bool Starting
+    {
+        get
+        {
+            lock (_starting)
+            {
+                return _starting.Count > 0;
+            }
+        }
+    }
+
+    public IReadOnlyList<string> Kill()
+    {
+        Interlocked.Increment(ref _kills);
+        var ids = new List<string>();
+        lock (_starting)
+        {
+            ids.AddRange(_starting);
+        }
+
+        if (Running is { } running)
+        {
+            ids.Add(running.ModelId);
+        }
+
+        ids.AddRange(_extras.Select(e => e.ModelId));
+        Running = null;
+        _extras.Clear();
+        return ids.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+    }
+
+    /// <summary>Awaits <see cref="StartGate"/> with <paramref name="id"/> counted as starting; throws as a killed start does when a kill landed meanwhile.</summary>
+    private async Task GateAsync(EmbeddedModel model, CancellationToken cancellationToken)
+    {
+        int kills = Volatile.Read(ref _kills);
+        lock (_starting)
+        {
+            _starting.Add(model.Id);
+        }
+
+        try
+        {
+            if (StartGate is { } gate)
+            {
+                await gate(cancellationToken);
+            }
+        }
+        finally
+        {
+            lock (_starting)
+            {
+                _starting.Remove(model.Id);
+            }
+        }
+
+        if (Volatile.Read(ref _kills) != kills)
+        {
+            throw new EmbeddedLlmException(EmbeddedLlmText.KilledStart(model), killed: true);
+        }
+    }
+
     public ValueTask DisposeAsync()
     {
         Disposed = true;
@@ -214,22 +276,49 @@ public sealed class FakeLlamaServerHost : ILlamaServerHost
     /// <summary>The port it answers on (later on 2026-09-29: a multi-server botchat's extra hosts each their own).</summary>
     public int Port { get; init; } = 59998;
 
-    public Task<EmbeddedServerInfo> EnsureRunningAsync(LlamaLaunch launch, EmbeddedModel model, Action<string>? phase, CancellationToken cancellationToken)
+    /// <summary>
+    /// Awaited inside a start once its launch is recorded (2026-10-01): a test lands a <see cref="Kill"/> while it "loads", and the
+    /// start then fails as the real host's would on its process gone — a plain failure, which the service reads as the kill's.
+    /// </summary>
+    public Func<CancellationToken, Task>? StartGate { get; set; }
+
+    public async Task<EmbeddedServerInfo> EnsureRunningAsync(LlamaLaunch launch, EmbeddedModel model, Action<string>? phase, CancellationToken cancellationToken)
     {
         Launches.Add(launch);
+        int kills = Kills;
+        if (StartGate is { } gate)
+        {
+            await gate(cancellationToken);
+        }
+
+        if (Kills != kills)
+        {
+            throw new EmbeddedLlmException(EmbeddedLlmText.StartFailed(EmbeddedLlmText.ExitedEarly(1, "")));
+        }
+
         if (Fail?.Invoke(launch) is { } failure)
         {
-            return Task.FromException<EmbeddedServerInfo>(failure);
+            throw failure;
         }
 
         Running = new EmbeddedServerInfo(new Uri($"http://127.0.0.1:{Port}/v1"), Port, "host-key", launch.Backend, model.Id, launch.Vision);
-        return Task.FromResult(Running);
+        return Running;
     }
 
     public void Stop()
     {
         Stops++;
         Running = null;
+    }
+
+    public int Kills { get; private set; }
+
+    public bool Kill()
+    {
+        Kills++;
+        bool had = Running is not null;
+        Running = null;
+        return had;
     }
 
     public ValueTask DisposeAsync()
