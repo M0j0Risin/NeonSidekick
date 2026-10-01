@@ -29,6 +29,14 @@ public sealed record LlamaAsset(string Name, long Bytes, string Sha256);
 /// (the 12.4 build predates sm_120), and it needs driver 580 or newer (<see cref="LlamaBackendDetect.MinimumCudaDriver"/>).
 /// Its runtime DLLs come in a second zip without a build number in its name, unpacked into the same folder. Every zip
 /// is flat.</para>
+///
+/// <para>The release's other builds are left out on purpose (2026-10-01, the user's call). ROCm/HIP
+/// (<c>win-rocm-10.0-x64</c>): Vulkan already runs AMD cards at comparable speed, while ROCm's zip is 257 MB to download
+/// and about 1.2 GB unpacked (a 993 MB <c>ggml-hip.dll</c> with its own <c>amdhip64_7.dll</c>), is built for RDNA1–4
+/// (gfx101x–gfx120x) only, and a file check cannot tell those from a GCN/Vega card or an iGPU. SYCL and OpenVINO (Intel):
+/// Vulkan covers Arc, and SYCL alone carries about 400 MB of MKL/oneDNN. CUDA 12.4: a driver older than 580 already falls
+/// to Vulkan. The arm64 builds: <see cref="EmbeddedEndpoint.Offered"/> is x64 only. Metal has no asset of its own — the
+/// <c>macos-arm64</c> tarball is the Metal build — so it arrives with a macOS port, not as a backend here.</para>
 /// </summary>
 public static class LlamaRelease
 {
