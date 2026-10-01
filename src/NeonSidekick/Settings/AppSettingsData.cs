@@ -258,8 +258,8 @@ public sealed class AppSettingsData
     /// <summary>
     /// The most of the window a menu, info or folder pane takes (2026-10-01, the user's ask, with every tab of a pane
     /// held at its tallest tab's height so the pane no longer jumps as one tabs through it): one of
-    /// <see cref="UI.MenuHeight.Names"/> — <c>half-screen</c>, <c>three-quarters</c> (the default) or <c>full-screen</c>
-    /// (all but one transcript row, the pane as it grew before). It caps the whole pane, its rules and hint row
+    /// <see cref="UI.MenuHeight.Names"/> — <c>half-screen</c>, <c>three-quarters</c> or <c>full-screen</c>
+    /// (all but one transcript row, the pane as it grew before; the default, <c>three-quarters</c> until later that day). It caps the whole pane, its rules and hint row
     /// included; a longer list scrolls. Anything else reads as <see cref="UI.MenuHeight.Default"/>. Read at every
     /// pane draw; nothing without the pane. No variable.
     /// </summary>

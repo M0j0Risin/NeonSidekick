@@ -71,6 +71,9 @@ public static class Keys
     /// <summary>Ctrl+S as the console delivers it: the DC3 character with the key and Control (<c>/server</c>).</summary>
     public static ConsoleKeyInfo CtrlS => new('\x13', ConsoleKey.S, false, false, true);
 
+    /// <summary>Ctrl+/ as the console delivers it on a US layout: no character, the Oem2 key with Control (<c>/settings</c>).</summary>
+    public static ConsoleKeyInfo CtrlSlash => new('\0', ConsoleKey.Oem2, false, false, true);
+
     /// <summary>
     /// The chat line's command chords (2026-09-30, the user's ask): Ctrl+Alt+C is <c>/clear</c>, Ctrl+Alt+N <c>/new</c> and
     /// Ctrl+Alt+S <c>/splash</c> — at the idle line and under a reply, run as the typed command would be. The user asked for
@@ -99,6 +102,12 @@ public static class Keys
     /// Later still on 2026-10-01 (the user's ask) <c>/help</c>, <c>/profile</c> and <c>/usage</c> moved to plain Ctrl+H, P and U,
     /// and Ctrl+Alt+H, P and G went: their BS, DLE and NAK count as no character. Ctrl+H's BS rides on <see cref="ConsoleKey.H"/>;
     /// Backspace is its own key, never <see cref="ConsoleKey.H"/>, so the two do not meet.
+    /// Later still on 2026-10-01 (the user's ask) <c>/splash</c> moved to Ctrl+Alt+P, free since <c>/profile</c> left it, and
+    /// <c>/skills</c> to Ctrl+Alt+S, so Ctrl+Alt+K went; P's DLE counts as no character as S's DC3 does. And Ctrl+/ is
+    /// <c>/settings</c> (the user asked for Ctrl+Alt+/ first, then plain Ctrl+/), Ctrl+E's shape on <see cref="ConsoleKey.Oem2"/>:
+    /// the console reports it with no character (US's <c>'\x1f'</c> counts too, should one send it), and a typed "/" carries its
+    /// character, so it stays a "/" and the slash list still opens. Oem2 is the "/" key of a US layout; elsewhere it is
+    /// whatever key sits there (# on a German one), since a "/" that needs Shift cannot be told from Ctrl+Shift.
     /// </summary>
     public static string? ShortcutLine(ConsoleKeyInfo key)
     {
@@ -114,6 +123,7 @@ public static class Keys
                 (ConsoleKey.R, '\0' or '\x12') => "/reasoning",
                 (ConsoleKey.S, '\0' or '\x13') => "/server",
                 (ConsoleKey.U, '\0' or '\x15') => "/usage",
+                (ConsoleKey.Oem2, '\0' or '\x1f') => "/settings",
                 _ => null,
             };
         }
@@ -127,9 +137,9 @@ public static class Keys
         {
             (ConsoleKey.C, '\0' or '\x03') => "/clear",
             (ConsoleKey.N, '\0' or '\x0e') => "/new",
-            (ConsoleKey.S, '\0' or '\x13') => "/splash",
+            (ConsoleKey.P, '\0' or '\x10') => "/splash",
             (ConsoleKey.T, '\0' or '\x14') => "/tools",
-            (ConsoleKey.K, '\0' or '\x0b') => "/skills",
+            (ConsoleKey.S, '\0' or '\x13') => "/skills",
             (ConsoleKey.Y, '\0' or '\x19') => "/sys",
             (ConsoleKey.E, '\0' or '\x05') => "/perf",
             (ConsoleKey.M, '\0' or '\r') => "/memory",

@@ -9,17 +9,17 @@ public enum MenuHeightStyle
     /// <summary>Half the window: the pane, its rules and its hint row included.</summary>
     Half,
 
-    /// <summary>Three quarters of the window, the default.</summary>
+    /// <summary>Three quarters of the window.</summary>
     ThreeQuarters,
 
-    /// <summary>Everything but one transcript row (<see cref="ScreenPane.MaxOverlayRows"/>): the pane as it grew before the setting.</summary>
+    /// <summary>Everything but one transcript row (<see cref="ScreenPane.MaxOverlayRows"/>): the pane as it grew before the setting, the default.</summary>
     Full,
 }
 
 /// <summary>
 /// The setting <c>Menus max height</c> (2026-10-01, the user's ask, with the tabs held at their tallest tab's height so
-/// the pane no longer jumps as one tabs through it): <c>half-screen</c>, <c>three-quarters</c> (the default) and
-/// <c>full-screen</c>, and the rows they leave a menu's content — the <see cref="SplashMode"/> shape. It caps the whole
+/// the pane no longer jumps as one tabs through it): <c>half-screen</c>, <c>three-quarters</c> and <c>full-screen</c> (the
+/// default; <c>three-quarters</c> until later that day, the user's call), and the rows they leave a menu's content — the <see cref="SplashMode"/> shape. It caps the whole
 /// pane of the <see cref="MenuPane"/>, the <see cref="InfoPane"/> and the <see cref="FolderPane"/> (the user's answer:
 /// the pane, not only its padding): a list longer than the cap scrolls behind the viewport as it did at the window's edge.
 /// The share is of <see cref="ScreenPane.LayoutHeight"/> (the window less the bars under the hint row), and counts the
@@ -30,7 +30,7 @@ public enum MenuHeightStyle
 public static class MenuHeight
 {
     /// <summary>The compiled default, pinned by <c>AppSettingsTests</c>.</summary>
-    public const string Default = "three-quarters";
+    public const string Default = "full-screen";
 
     /// <summary>The heights in menu order.</summary>
     public static readonly string[] Names = { "half-screen", "three-quarters", "full-screen" };
@@ -46,7 +46,7 @@ public static class MenuHeight
     // The last unknown word warned about: the panes read the setting on every draw, so a hand-edited value warns once.
     private static string? s_warned;
 
-    /// <summary>Trims and ignores case; false (and <see cref="MenuHeightStyle.ThreeQuarters"/>) for anything that is not one of <see cref="Names"/>.</summary>
+    /// <summary>Trims and ignores case; false (and <see cref="MenuHeightStyle.Full"/>, the default) for anything that is not one of <see cref="Names"/>.</summary>
     public static bool TryParse(string? text, out MenuHeightStyle style)
     {
         switch (text?.Trim().ToLowerInvariant())
@@ -54,7 +54,7 @@ public static class MenuHeight
             case "half-screen": style = MenuHeightStyle.Half; return true;
             case "three-quarters": style = MenuHeightStyle.ThreeQuarters; return true;
             case "full-screen": style = MenuHeightStyle.Full; return true;
-            default: style = MenuHeightStyle.ThreeQuarters; return false;
+            default: style = MenuHeightStyle.Full; return false;
         }
     }
 

@@ -963,7 +963,7 @@ public class MenuPaneTests : IDisposable
         using var _ = pane;
         pane.Show();
         var menu = new MenuPane(pane, keys);
-        input.Push(Keys.Down, Keys.CtrlAlt(ConsoleKey.K), Keys.Enter);
+        input.Push(Keys.Down, Keys.CtrlAltS, Keys.Enter);
 
         Assert.Null(await menu.PickAsync(Page("one", "two", "three"), 0, CancellationToken.None));
         Assert.True(pane.Dismissed);
@@ -986,7 +986,7 @@ public class MenuPaneTests : IDisposable
         using var _ = pane;
         pane.Show();
         var menu = new MenuPane(pane, keys);
-        input.Push(Keys.CtrlAlt(ConsoleKey.K));
+        input.Push(Keys.CtrlAltS);
         Assert.Null(await menu.PickAsync(Page("one"), 0, CancellationToken.None));
         menu.Close();
 

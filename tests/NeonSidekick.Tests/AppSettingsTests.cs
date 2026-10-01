@@ -1360,7 +1360,7 @@ public class AppSettingsTests : IDisposable
         Assert.Equal("protected", s.SkillCompactMode);
         Assert.True(s.TranscriptMarkdown);
         Assert.Equal("fullsize", s.WelcomeSplashMode);   // 2026-09-18; a pick since 2026-09-24 (on was fullsize)
-        Assert.Equal("three-quarters", s.MenuMaxHeight);   // 2026-10-01
+        Assert.Equal("full-screen", s.MenuMaxHeight);   // 2026-10-01; three-quarters until later that day
         Assert.False(s.ShowWorkingDirectory);   // 2026-09-18; off by default since 2026-09-21
         Assert.Null(s.ToolbarItems);   // 2026-09-21 as a switch, on; every item since the checklist, 2026-09-29
         Assert.Null(s.ToolbarLastItems);   // what a bare /tb brings back: the defaults until it hides a list (later on 2026-09-30)

@@ -43,15 +43,16 @@ public class KeysTests
     }
 
     [Fact]
-    public void ShortcutLine_IsCtrlAltCNS_WithoutShift_AndAnAltGrCharacterStaysACharacter()
+    public void ShortcutLine_IsCtrlAltCNP_WithoutShift_AndAnAltGrCharacterStaysACharacter()
     {
-        // 2026-09-30 (the user's ask): the test factory's '\0' and the console's control characters count.
+        // 2026-09-30 (the user's ask): the test factory's '\0' and the console's control characters count. /splash was
+        // Ctrl+Alt+S until later still on 2026-10-01 (the user's ask), Ctrl+Alt+P since.
         Assert.Equal("/clear", Keys.ShortcutLine(Keys.CtrlAltC));
         Assert.Equal("/new", Keys.ShortcutLine(Keys.CtrlAltN));
-        Assert.Equal("/splash", Keys.ShortcutLine(Keys.CtrlAltS));
+        Assert.Equal("/splash", Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.P)));
         Assert.Equal("/clear", Keys.ShortcutLine(new ConsoleKeyInfo('\x03', ConsoleKey.C, shift: false, alt: true, control: true)));
         Assert.Equal("/new", Keys.ShortcutLine(new ConsoleKeyInfo('\x0e', ConsoleKey.N, shift: false, alt: true, control: true)));
-        Assert.Equal("/splash", Keys.ShortcutLine(new ConsoleKeyInfo('\x13', ConsoleKey.S, shift: false, alt: true, control: true)));
+        Assert.Equal("/splash", Keys.ShortcutLine(new ConsoleKeyInfo('\x10', ConsoleKey.P, shift: false, alt: true, control: true)));
 
         Assert.Null(Keys.ShortcutLine(Keys.CtrlC));
         Assert.Null(Keys.ShortcutLine(new ConsoleKeyInfo('\x03', ConsoleKey.C, shift: true, alt: false, control: true)));   // Ctrl+Shift+C: Windows Terminal's copy
@@ -65,7 +66,7 @@ public class KeysTests
 
     [Theory]
     [InlineData(ConsoleKey.T, '\x14', "/tools")]
-    [InlineData(ConsoleKey.K, '\x0b', "/skills")]
+    [InlineData(ConsoleKey.S, '\x13', "/skills")]   // from Ctrl+Alt+K later still on 2026-10-01 (the user's ask)
     [InlineData(ConsoleKey.Y, '\x19', "/sys")]
     [InlineData(ConsoleKey.E, '\x05', "/perf")]
     [InlineData(ConsoleKey.M, '\r', "/memory")]
@@ -136,7 +137,8 @@ public class KeysTests
         Assert.False(Keys.IsSend(Keys.CtrlM));
         Assert.False(Keys.IsLineBreak(Keys.CtrlM));
         Assert.Equal("/memory", Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.M)));
-        Assert.Equal("/splash", Keys.ShortcutLine(Keys.CtrlAltS));
+        Assert.Equal("/skills", Keys.ShortcutLine(Keys.CtrlAltS));
+        Assert.Equal("/splash", Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.P)));
         Assert.Null(Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.R)));
 
         Assert.Equal("/help", Keys.ShortcutLine(Keys.CtrlH));
@@ -145,10 +147,28 @@ public class KeysTests
         Assert.Equal(ConsoleKey.H, Keys.CtrlH.Key);   // the BS rides on the H key: never Backspace
         Assert.Null(Keys.ShortcutLine(Keys.Backspace));
         Assert.Null(Keys.ShortcutLine(new ConsoleKeyInfo('\b', ConsoleKey.Backspace, false, false, true)));   // Ctrl+Backspace
-        // The Ctrl+Alt chords they replaced are gone.
+        // The Ctrl+Alt chords they replaced are gone (Ctrl+Alt+P came back as /splash), and Ctrl+Alt+K with /skills' move.
         Assert.Null(Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.G)));
         Assert.Null(Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.H)));
-        Assert.Null(Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.P)));
+        Assert.Null(Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.K)));
+    }
+
+    [Fact]
+    public void ShortcutLine_CtrlSlash_IsSettings_AndATypedSlashStaysASlash()
+    {
+        // Later still on 2026-10-01 (the user's ask): Ctrl+/ on the US "/" key (Oem2), no character or US's '\x1f'; a typed
+        // "/" carries its character (the slash list's key), and Shift, Alt and Ctrl+Alt are no chord.
+        Assert.Equal("/settings", Keys.ShortcutLine(Keys.CtrlSlash));
+        Assert.Equal("/settings", Keys.ShortcutLine(new ConsoleKeyInfo('\x1f', ConsoleKey.Oem2, shift: false, alt: false, control: true)));
+        Assert.Contains("/settings", NeonSidekick.App.SlashCommands.Words);
+        Assert.Null(Keys.ShortcutLine(Keys.Char('/')));
+        Assert.Null(Keys.ShortcutLine(new ConsoleKeyInfo('/', ConsoleKey.Oem2, shift: false, alt: false, control: false)));
+        Assert.Null(Keys.ShortcutLine(new ConsoleKeyInfo('/', ConsoleKey.Oem2, shift: false, alt: false, control: true)));
+        Assert.Null(Keys.ShortcutLine(new ConsoleKeyInfo('\0', ConsoleKey.Oem2, shift: true, alt: false, control: true)));
+        Assert.Null(Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.Oem2)));
+        Assert.Null(Keys.ShortcutLine(new ConsoleKeyInfo('\0', ConsoleKey.Oem2, shift: false, alt: true, control: false)));
+        Assert.False(Keys.IsInterrupt(Keys.CtrlSlash));
+        Assert.False(Keys.IsToolToggle(Keys.CtrlSlash));
     }
 
     [Fact]

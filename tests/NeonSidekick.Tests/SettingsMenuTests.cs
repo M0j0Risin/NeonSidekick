@@ -1113,10 +1113,10 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("tiled    [#9A8BB8]the pictures as thumbnails at the image thumbnail size, a screenful at a time; ← → page[/]", SettingsMenu.WelcomeSplashModeLabel("tiled"));
         Assert.Equal("disabled [#9A8BB8]the banner alone at startup[/]", SettingsMenu.WelcomeSplashModeLabel("disabled"));
         Assert.False(SettingsMenu.RefusedMidTurn(SettingsField.WelcomeSplash) || SettingsMenu.IsLlmField(SettingsField.WelcomeSplash) || SettingsMenu.IsTtsField(SettingsField.WelcomeSplash) || SettingsMenu.IsVoiceField(SettingsField.WelcomeSplash));
-        // Menus max height (2026-10-01, the user's ask and name): a picker of three heights, three-quarters by default, no reconnect.
+        // Menus max height (2026-10-01, the user's ask and name): a picker of three heights, full-screen by default (three-quarters until later that day), no reconnect.
         Assert.False(SettingsMenu.IsToggle(SettingsField.MenuMaxHeight));
         Assert.Equal("Menus max height", SettingsMenu.FieldName(SettingsField.MenuMaxHeight));
-        Assert.Equal("three-quarters", SettingsMenu.FieldValue(SettingsField.MenuMaxHeight, data, _settings.ProfileDirectory));
+        Assert.Equal("full-screen", SettingsMenu.FieldValue(SettingsField.MenuMaxHeight, data, _settings.ProfileDirectory));
         Assert.Equal("half-screen", SettingsMenu.FieldValue(SettingsField.MenuMaxHeight, new AppSettingsData { MenuMaxHeight = "half-screen" }, _settings.ProfileDirectory));
         Assert.Equal("half-screen    [#9A8BB8]a menu takes at most half the window[/]", SettingsMenu.MenuMaxHeightLabel("half-screen"));
         Assert.Equal("three-quarters [#9A8BB8]a menu takes at most three quarters of the window[/]", SettingsMenu.MenuMaxHeightLabel("three-quarters"));
@@ -3022,7 +3022,7 @@ public partial class SettingsMenuTests : IDisposable
         string cwd = SettingsMenu.DefaultWorkingDirectoryLabel(_settings.ProfileDirectory);
         Assert.StartsWith("(", cwd);
         Assert.EndsWith(@"\profiles\default\files)", cwd);
-        Assert.Contains(Rule(240) + "\n" + Titled(Strip) + "\n \n▸ Profile                      default (" + _settings.ProfileDirectory + ")\n  New profile mode             basic\n  Working directory (cwd)      " + cwd + "\n  Queue messages               on\n  Queue cancel mode            empty\n  Memory                       on\n  Copy user prompt             on\n  Show image thumbnails        on\n  Image thumbnail size         small\n  Transcript markdown          on\n  Paste preview lines          25 lines\n  Hide /exit autocomplete      on\n  Command typo intercept       on\n  Keep command history         on\n  Welcome splash               fullsize\n  Working directory in header  off\n  Show toolbar                 5 of 13\n  Show performance bar         off\n  Theme                        synthwave\n  Menus max height             three-quarters\n  Draft editor                 (default .txt editor)\n  Image viewer                 (built-in viewer)\n  Themed image viewer          on\n" + Rule(240) + "\n" + SettingsMenu.TabKeys + "\n", _console.Output);
+        Assert.Contains(Rule(240) + "\n" + Titled(Strip) + "\n \n▸ Profile                      default (" + _settings.ProfileDirectory + ")\n  New profile mode             basic\n  Working directory (cwd)      " + cwd + "\n  Queue messages               on\n  Queue cancel mode            empty\n  Memory                       on\n  Copy user prompt             on\n  Show image thumbnails        on\n  Image thumbnail size         small\n  Transcript markdown          on\n  Paste preview lines          25 lines\n  Hide /exit autocomplete      on\n  Command typo intercept       on\n  Keep command history         on\n  Welcome splash               fullsize\n  Working directory in header  off\n  Show toolbar                 5 of 13\n  Show performance bar         off\n  Theme                        synthwave\n  Menus max height             full-screen\n  Draft editor                 (default .txt editor)\n  Image viewer                 (built-in viewer)\n  Themed image viewer          on\n" + Rule(240) + "\n" + SettingsMenu.TabKeys + "\n", _console.Output);
         Assert.DoesNotContain("File /tree max length", _console.Output);   // the Files tab's since 2026-09-15
         Assert.DoesNotContain("LLM URL", _console.Output);
         Assert.False(pane.OverlayOpen);
@@ -4254,13 +4254,13 @@ public partial class SettingsMenuTests : IDisposable
     }
 
     [Fact]
-    public async Task MenuMaxHeight_IsAPicker_ThreeQuartersByDefault_PersistsAndNeedsNoReconnect()
+    public async Task MenuMaxHeight_IsAPicker_FullScreenByDefault_PersistsAndNeedsNoReconnect()
     {
         // 2026-10-01, the user's ask: the General tab's row under Theme; the enum's last member.
-        Assert.Equal("three-quarters", _settings.Current.MenuMaxHeight);
+        Assert.Equal("full-screen", _settings.Current.MenuMaxHeight);
         Down(Array.IndexOf(Enum.GetValues<SettingsField>(), SettingsField.MenuMaxHeight));
-        Push(Keys.Enter);                           // the picker opens on three-quarters (the second row)
-        Push(Keys.Up, Keys.Enter);                  // half-screen
+        Push(Keys.Enter);                           // the picker opens on full-screen (the third row)
+        Push(Keys.Up, Keys.Up, Keys.Enter);         // half-screen
         Push(Keys.Escape);
 
         Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));

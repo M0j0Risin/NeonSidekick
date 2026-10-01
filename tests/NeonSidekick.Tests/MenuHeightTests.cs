@@ -7,11 +7,11 @@ namespace NeonSidekick.Tests;
 public class MenuHeightTests
 {
     [Fact]
-    public void Names_ArePinned_InMenuOrder_ThreeQuartersTheDefault()
+    public void Names_ArePinned_InMenuOrder_FullScreenTheDefault()
     {
-        // 2026-10-01, the user's ask: three heights, three-quarters by default.
+        // 2026-10-01, the user's ask: three heights, full-screen by default (three-quarters until later that day).
         Assert.Equal(new[] { "half-screen", "three-quarters", "full-screen" }, MenuHeight.Names);
-        Assert.Equal("three-quarters", MenuHeight.Default);
+        Assert.Equal("full-screen", MenuHeight.Default);
         Assert.Equal(MenuHeight.Default, new AppSettingsData().MenuMaxHeight);
     }
 
@@ -32,10 +32,10 @@ public class MenuHeightTests
     [InlineData("")]
     [InlineData("half")]
     [InlineData("full")]
-    public void TryParse_RejectsAnythingElse_AndHandsBackThreeQuarters(string? text)
+    public void TryParse_RejectsAnythingElse_AndHandsBackFullScreen(string? text)
     {
         Assert.False(MenuHeight.TryParse(text, out var style));
-        Assert.Equal(MenuHeightStyle.ThreeQuarters, style);
+        Assert.Equal(MenuHeightStyle.Full, style);
     }
 
     [Fact]
@@ -56,8 +56,8 @@ public class MenuHeightTests
         try
         {
             // A word no other test uses: the warned word is process-wide.
-            Assert.Equal(MenuHeightStyle.ThreeQuarters, MenuHeight.Resolve("most-of-it"));
-            Assert.Equal(MenuHeightStyle.ThreeQuarters, MenuHeight.Resolve("most-of-it"));   // every draw reads it: one warning
+            Assert.Equal(MenuHeightStyle.Full, MenuHeight.Resolve("most-of-it"));
+            Assert.Equal(MenuHeightStyle.Full, MenuHeight.Resolve("most-of-it"));   // every draw reads it: one warning
             Assert.Equal(MenuHeightStyle.Half, MenuHeight.Resolve("HALF-SCREEN"));
         }
         finally
@@ -66,7 +66,7 @@ public class MenuHeightTests
         }
 
         var warning = Assert.Single(warnings);
-        Assert.Contains("MenuMaxHeight='most-of-it' is not one of half-screen, three-quarters, full-screen. Using three-quarters.", warning.Message);
+        Assert.Contains("MenuMaxHeight='most-of-it' is not one of half-screen, three-quarters, full-screen. Using full-screen.", warning.Message);
     }
 
     [Theory]

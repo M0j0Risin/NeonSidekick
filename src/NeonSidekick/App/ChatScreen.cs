@@ -1446,7 +1446,7 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// What closed the last pane, taken once (both are cleared): a command chord pressed in it (2026-10-01, the user's ask:
-    /// its bare command, ahead of any click — Ctrl+Alt+T in <c>/tools</c> closes it, Ctrl+Alt+K there opens <c>/skills</c>;
+    /// its bare command, ahead of any click — Ctrl+Alt+T in <c>/tools</c> closes it, Ctrl+Alt+S there opens <c>/skills</c>;
     /// <see cref="ScreenPane.TakeDismissChord"/>), else the line a double-click off it names (<see cref="OffPaneLine"/>).
     /// <c>Chord</c> says which, since a click that names no pane is the close alone where a chord still runs.
     /// </summary>
@@ -1688,6 +1688,7 @@ internal sealed partial class ChatScreen
         rows.Add(("Alt+V", "paste content (text or images)"));
         rows.Add(("Ctrl+Home", "scroll to top of the chat pane"));
         rows.Add(("Ctrl+End", "scroll to bottom of the chat pane"));
+        rows.Add(("Ctrl+/", "open settings (/settings)"));
         rows.Add(("Ctrl+A", "select all text on the line"));
         rows.Add(("Ctrl+C", "copy the selected text · stop the speech · cancel the reply · twice to exit"));
         rows.Add(("Ctrl+E", "open the working directory in your file browser (/explore)"));
@@ -1703,12 +1704,12 @@ internal sealed partial class ChatScreen
         rows.Add(("Ctrl+Alt+C", "start a new conversation and clear the screen (/clear)"));
         rows.Add(("Ctrl+Alt+D", "open the MCP pane (/mcp)"));
         rows.Add(("Ctrl+Alt+E", "show or hide the performance bar (/perf)"));
-        rows.Add(("Ctrl+Alt+K", "open the skills pane (/skills)"));
         rows.Add(("Ctrl+Alt+L", "open the allowed commands list (/cmdlist)"));
         rows.Add(("Ctrl+Alt+M", "open the memory pane (/memory)"));
         rows.Add(("Ctrl+Alt+N", "start a new conversation but do not clear the screen (/new)"));
         rows.Add(("Ctrl+Alt+O", "open the shell police setting (/police)"));
-        rows.Add(("Ctrl+Alt+S", "start a new conversation and show the splash screen (/splash)"));
+        rows.Add(("Ctrl+Alt+P", "start a new conversation and show the splash screen (/splash)"));
+        rows.Add(("Ctrl+Alt+S", "open the skills pane (/skills)"));
         rows.Add(("Ctrl+Alt+T", "open the tools pane (/tools)"));
         rows.Add(("Ctrl+Alt+X", "kill switch to immediately unload an embedded model (press twice)"));
         rows.Add(("Ctrl+Alt+Y", "open the system prompt pane (/sys)"));
