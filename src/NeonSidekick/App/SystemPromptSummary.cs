@@ -49,6 +49,8 @@ namespace NeonSidekick.App;
 /// <param name="ClaudeAdvisorTools">How many advisor tools the next turn offers (0 while switched off on <c>/tools</c>); the rules carry <see cref="Assistant.ClaudeAdvisorRule"/> while it is.</param>
 /// <param name="HomeAssistantEnabled">Whether the Home Assistant tools may be offered (2026-09-28): the setting <c>Home Assistant tools</c> on, a URL and a readable token — the group's switch (<see cref="ChatScreen.HomeAssistantOffered"/>).</param>
 /// <param name="HomeAssistantTools">How many Home Assistant tools the next turn offers (the ones switched off on <c>/tools</c> left out); the rules carry <see cref="Assistant.HomeAssistantRule"/> while any is.</param>
+/// <param name="OracleEnabled">Whether the Oracle tools may be offered (2026-09-30): the setting <c>Oracle tools</c> on and a usable connection in <c>oracle.json</c> — the group's switch (<see cref="ChatScreen.OracleOffered"/>).</param>
+/// <param name="OracleTools">How many Oracle tools the next turn offers (the ones switched off on <c>/tools</c> left out); the rules carry <see cref="Assistant.OracleRule"/> while any is.</param>
 /// <param name="PlanDirective">Plan mode's directive while planning (2026-09-26, <see cref="Plans.PlanText.Directive"/>), else null: its own section, after the skills.</param>
 public sealed record SystemPromptFacts(
     string? Persona,
@@ -86,7 +88,9 @@ public sealed record SystemPromptFacts(
     bool ClaudeAdvisorEnabled = false,
     int ClaudeAdvisorTools = 0,
     bool HomeAssistantEnabled = false,
-    int HomeAssistantTools = 0)
+    int HomeAssistantTools = 0,
+    bool OracleEnabled = false,
+    int OracleTools = 0)
 {
     /// <summary>Whether the rules carry <see cref="Assistant.HomeAssistantRule"/>: tools on, the server set with the switch on, and at least one Home Assistant tool offered (2026-09-28).</summary>
     public bool HomeAssistant => ToolsEnabled && HomeAssistantEnabled && HomeAssistantTools > 0;
@@ -120,6 +124,9 @@ public sealed record SystemPromptFacts(
 
     /// <summary>Whether the rules carry <see cref="Assistant.SqlRule"/>: tools on, a connection defined with the switch on, and at least one SQL tool offered (2026-09-23).</summary>
     public bool Sql => ToolsEnabled && SqlEnabled && SqlTools > 0;
+
+    /// <summary>Whether the rules carry <see cref="Assistant.OracleRule"/>: tools on, a connection defined with the switch on, and at least one Oracle tool offered (2026-09-30).</summary>
+    public bool Oracle => ToolsEnabled && OracleEnabled && OracleTools > 0;
 
     /// <summary>The next turn's reply is styled Markdown and asked for as such (<see cref="ChatScreen.MarkdownTurn"/>): the setting, the pane, and the turn not spoken.</summary>
     public bool Markdown => ChatScreen.MarkdownTurn(TranscriptMarkdown, PaneOn, TtsOutput && SpeechReady);
@@ -232,6 +239,9 @@ public static class SystemPromptSummary
     /// <summary>The tail of the SQL group while the SQL tools cannot be offered: the switch off, or no connection in <c>sql.json</c> (2026-09-23). Pinned.</summary>
     public const string SqlOffSuffix = "SQL tools is off or no connection is set in sql.json";
 
+    /// <summary>The tail of the Oracle group while the Oracle tools cannot be offered: the switch off, or no connection in <c>oracle.json</c> (2026-09-30). Pinned.</summary>
+    public const string OracleOffSuffix = "Oracle tools is off or no connection is set in oracle.json";
+
     /// <summary>The tail of the ComfyUI group while the image tools cannot be offered (2026-09-24). Pinned.</summary>
     /// <summary>Why the advisor group is not offered (2026-09-27). Pinned.</summary>
     public const string ClaudeAdvisorOffSuffix = "Claude advisor tool is off";
@@ -281,7 +291,7 @@ public static class SystemPromptSummary
 
         bool customRules = !string.IsNullOrWhiteSpace(facts.OperatingRules);
         string defaultLabel = !facts.ToolsEnabled ? $"default ({ToolsOffSuffix})" : !facts.FilesEnabled ? $"default ({FilesOffSuffix})" : "default";
-        string rules = customRules ? facts.OperatingRules!.Trim() : Assistant.DefaultRules(facts.Markdown, facts.ToolsEnabled, facts.FilesEnabled, delete: !facts.Off(DeleteTool.ToolName), mcp: facts.Mcp, safeEdits: facts.FileSafeEdits, timers: facts.Timers, git: facts.Git, shell: facts.Shell, bridge: facts.Bridge, police: facts.Police, obsidian: facts.Obsidian, obsidianDelete: facts.ObsidianDelete, sql: facts.Sql, native: facts.Native, advisor: facts.Advisor, homeAssistant: facts.HomeAssistant);
+        string rules = customRules ? facts.OperatingRules!.Trim() : Assistant.DefaultRules(facts.Markdown, facts.ToolsEnabled, facts.FilesEnabled, delete: !facts.Off(DeleteTool.ToolName), mcp: facts.Mcp, safeEdits: facts.FileSafeEdits, timers: facts.Timers, git: facts.Git, shell: facts.Shell, bridge: facts.Bridge, police: facts.Police, obsidian: facts.Obsidian, obsidianDelete: facts.ObsidianDelete, sql: facts.Sql, native: facts.Native, advisor: facts.Advisor, homeAssistant: facts.HomeAssistant, oracle: facts.Oracle);
         sections.Add(new(
             customRules ? $"Operating rules — {OperataFile.FileName} ({rules.Length.ToString(CultureInfo.InvariantCulture)} chars)" : $"Operating rules — {defaultLabel}",
             rules));
@@ -390,7 +400,8 @@ public static class SystemPromptSummary
             native: facts.Native,
             plan: facts.ToolsEnabled ? facts.PlanDirective : null,
             advisor: facts.Advisor,
-            homeAssistant: facts.HomeAssistant);
+            homeAssistant: facts.HomeAssistant,
+            oracle: facts.Oracle);
     }
 
     /// <summary>The Prompt tab's heading over plan mode's directive (2026-09-26). Pinned.</summary>
@@ -482,7 +493,9 @@ public static class SystemPromptSummary
         IReadOnlyList<AIFunction>? homeAssistant = null,
         bool homeAssistantEnabled = true,
         IReadOnlyList<AIFunction>? print = null,
-        bool printEnabled = true)
+        bool printEnabled = true,
+        IReadOnlyList<AIFunction>? oracle = null,
+        bool oracleEnabled = true)
     {
         ArgumentNullException.ThrowIfNull(clock);
         ArgumentNullException.ThrowIfNull(timers);
@@ -529,6 +542,13 @@ public static class SystemPromptSummary
             // The SQL tools (2026-09-23): after the vault tools; offered while the setting SQL tools is on and sql.json holds a connection.
             string sqlNote = !sqlEnabled ? NotOffered(SqlOffSuffix) : standing;
             groups.Add(Group(ToolsText.SqlTabTitle, sql, sqlNote, sqlEnabled && toolsEnabled, SettingsField.SqlTools, disabled));
+        }
+
+        if (oracle is not null)
+        {
+            // The Oracle tools (2026-09-30): right after the SQL tools, the two database groups together; offered while the setting Oracle tools is on and oracle.json holds a connection.
+            string oracleNote = !oracleEnabled ? NotOffered(OracleOffSuffix) : standing;
+            groups.Add(Group(ToolsText.OracleTabTitle, oracle, oracleNote, oracleEnabled && toolsEnabled, SettingsField.OracleTools, disabled));
         }
 
         if (comfy is not null)

@@ -60,6 +60,12 @@ public class SidekickOptionsTests
     [Fact]
     public void Parse_VoiceCheck()
     {
+        Assert.Null(SidekickOptions.Parse(new[] { "--voice-check" }).OracleCheck);
+        var oracle = SidekickOptions.Parse(new[] { "--oracle-check", "free" });
+        Assert.Equal("free", oracle.OracleCheck);
+        Assert.True(oracle.IsCheck);
+        Assert.False(SidekickOptions.None.IsCheck);
+        Assert.NotNull(SidekickOptions.Parse(new[] { "--oracle-check" }).Error);   // the connection is required
         var o = SidekickOptions.Parse(new[] { "--voice-check" });
         Assert.True(o.VoiceCheck);
         Assert.False(o.AudioCheck);
@@ -273,6 +279,7 @@ public class SidekickOptionsTests
         Assert.Contains("--smoke", SidekickOptions.Usage);
         Assert.Contains("--audio-check", SidekickOptions.Usage);
         Assert.Contains("--voice-check  record up to 5 s from the microphone, transcribe it, exit 0/1", SidekickOptions.Usage);
+        Assert.Contains("--oracle-check <connection>  prove the Oracle tools against that connection of oracle.json (reads only), exit 0/1", SidekickOptions.Usage);
         Assert.Contains("--url <url>", SidekickOptions.Usage);
         Assert.Contains("--model <id>", SidekickOptions.Usage);
         Assert.Contains("--cwd <path>   working directory for this launch (outranks the saved setting)", SidekickOptions.Usage);
@@ -299,6 +306,7 @@ public class SidekickOptionsTests
         Assert.Equal("smoke", SidekickOptions.Parse(["--smoke"]).Mode);
         Assert.Equal("audio-check", SidekickOptions.Parse(["--audio-check"]).Mode);
         Assert.Equal("voice-check", SidekickOptions.Parse(["--voice-check"]).Mode);
+        Assert.Equal("oracle-check", SidekickOptions.Parse(["--oracle-check", "free"]).Mode);
         Assert.Null(SidekickOptions.Parse(["--headless"]).Describe());
         Assert.Equal(@"--url http://h:1/v1 --model m --cwd D:\x --log C:\t.log", SidekickOptions.Parse(["--url", "http://h:1/v1", "--model", "m", "--cwd", @"D:\x", "--log", @"C:\t.log"]).Describe());
     }

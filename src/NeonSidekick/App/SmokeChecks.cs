@@ -120,6 +120,7 @@ public static partial class SmokeChecks
         results.Add(ProbeGit());
         results.Add(ProbeSql());
         results.Add(OperatingSystem.IsWindows() ? ProbeCredentials() : new SmokeCheck("sql:credentials", true, "skipped: not Windows"));
+        results.Add(ProbeOracle());
         results.Add(ProbeCulture());
         results.Add(ProbeKokoroVoices(nativeDirectory));
         results.Add(ProbeKokoroPhonemizer());

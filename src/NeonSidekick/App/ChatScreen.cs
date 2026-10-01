@@ -12,6 +12,7 @@ using NeonSidekick.Llm.Tools;
 using NeonSidekick.Mcp;
 using NeonSidekick.Memory;
 using NeonSidekick.Obsidian;
+using NeonSidekick.Oracle;
 using NeonSidekick.Plans;
 using NeonSidekick.Printing;
 using NeonSidekick.Sessions;
@@ -545,6 +546,8 @@ internal sealed partial class ChatScreen
     private readonly IReadOnlyList<AIFunction> _vaultTools;
     private readonly SqlAccess _sql;
     private readonly IReadOnlyList<AIFunction> _sqlTools;
+    private readonly OracleAccess _oracle;
+    private readonly IReadOnlyList<AIFunction> _oracleTools;
     private readonly ComfyStudio _comfy;
     private readonly IReadOnlyList<AIFunction> _comfyTools;
 
@@ -934,6 +937,8 @@ internal sealed partial class ChatScreen
         // Narrowed to the connections the profile offers (later that day): every tool, the rules and the %-mention see only those.
         _sql = new SqlAccess(() => SqlConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory).Offered(_effective().SqlConnectionsOffered));
         _sqlTools = SqlTools(_sql, _effective);
+        _oracle = new OracleAccess(() => OracleConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory).Offered(_effective().OracleConnectionsOffered));
+        _oracleTools = OracleTools(_oracle, _effective);
         // The image tools (2026-09-24): the profile's comfy folder over the home's, rescanned at every call; the client made for the ComfyUI URL in force.
         // A pasted picture as generate_image's input (later still on 2026-09-24): the line's store at full size, read at
         // call time — the input line is built below, so the lambda reads the field then, not now.
@@ -2733,7 +2738,9 @@ internal sealed partial class ChatScreen
             effective.ClaudeAdvisor,
             Without(_advisorTools, disabled).Count,
             HomeAssistantOffered(effective),
-            Without(_haTools, disabled).Count);
+            Without(_haTools, disabled).Count,
+            OracleOffered(effective, _oracle),
+            Without(_oracleTools, disabled).Count);
     }
 
     /// <summary>
@@ -2780,7 +2787,7 @@ internal sealed partial class ChatScreen
         var disabled = ToolsText.DisabledSet(effective.ToolsDisabled);
         var fileTools = FileToolsFor(_fileTools, effective.FileSafeEdits);   // restore only with File safe edits on (later still on 2026-09-20)
         bool files = effective.FileTools && Without(fileTools, disabled).Count > 0;
-        var groups = SystemPromptSummary.ToolGroups(_clockTools, _timerTools, fileTools, _memoryTools, effective.Memory, effective.LlmOfferTools, WebToolsFor(_webTools, files), effective.WebTools, effective.FileTools, _askTools, effective.AskUser, _pane.Enabled, _skillTools, effective.AgentSkills, _sessionTools, effective.SessionTool, disabled, skillInstalled: Catalog(effective).Count > 0, mcp: _mcp.ServerTools, mcpEnabled: effective.McpServers, git: _gitTools, gitEnabled: effective.GitNativeTools, shell: _shellTools, shellEnabled: ShellOffered(effective), codeAvailable: CodeAvailable(), obsidian: ObsidianToolsFor(_vaultTools, effective), obsidianEnabled: ObsidianOffered(effective), sql: _sqlTools, sqlEnabled: SqlOffered(effective, _sql), comfy: _comfyTools, comfyEnabled: ComfyOffered(effective, _comfy), advisor: _advisorTools, advisorEnabled: effective.ClaudeAdvisor, homeAssistant: _haTools, homeAssistantEnabled: HomeAssistantOffered(effective), print: _printTools, printEnabled: PrintOffered(effective));
+        var groups = SystemPromptSummary.ToolGroups(_clockTools, _timerTools, fileTools, _memoryTools, effective.Memory, effective.LlmOfferTools, WebToolsFor(_webTools, files), effective.WebTools, effective.FileTools, _askTools, effective.AskUser, _pane.Enabled, _skillTools, effective.AgentSkills, _sessionTools, effective.SessionTool, disabled, skillInstalled: Catalog(effective).Count > 0, mcp: _mcp.ServerTools, mcpEnabled: effective.McpServers, git: _gitTools, gitEnabled: effective.GitNativeTools, shell: _shellTools, shellEnabled: ShellOffered(effective), codeAvailable: CodeAvailable(), obsidian: ObsidianToolsFor(_vaultTools, effective), obsidianEnabled: ObsidianOffered(effective), sql: _sqlTools, sqlEnabled: SqlOffered(effective, _sql), comfy: _comfyTools, comfyEnabled: ComfyOffered(effective, _comfy), advisor: _advisorTools, advisorEnabled: effective.ClaudeAdvisor, homeAssistant: _haTools, homeAssistantEnabled: HomeAssistantOffered(effective), print: _printTools, printEnabled: PrintOffered(effective), oracle: _oracleTools, oracleEnabled: OracleOffered(effective, _oracle));
         return groups.SelectMany(g => g.Tools.Where(t => g.Offers(t.Name)).Select(t => new CompletionItem(t.Name, t.Description))).ToList();
     }
 
@@ -2793,12 +2800,22 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// The input line's <c>%</c>-mention list (later on 2026-09-23): <see cref="SqlChoices"/> while the setting
-    /// <c>SQL %-mention enabled</c> and <c>SQL tools</c> are both on, else nothing — <c>%</c> is ordinary text then.
+    /// <c>SQL %-mention enabled</c> and <c>SQL tools</c> are both on, then (2026-09-30) <see cref="OracleChoices"/> while
+    /// <c>Oracle %-mention enabled</c> and <c>Oracle tools</c> are — nothing from either, and <c>%</c> is ordinary text.
     /// </summary>
     private IReadOnlyList<CompletionItem> PercentChoices()
     {
         var effective = _effective();
-        return effective.SqlPercentMention && effective.SqlTools ? SqlChoices(_sql.Catalog()) : [];
+        IReadOnlyList<CompletionItem> sql = effective.SqlPercentMention && effective.SqlTools ? SqlChoices(_sql.Catalog()) : [];
+        IReadOnlyList<CompletionItem> oracle = effective.OraclePercentMention && effective.OracleTools ? OracleChoices(_oracle.Catalog()) : [];
+        return oracle.Count == 0 ? sql : [.. sql, .. oracle];
+    }
+
+    /// <summary>The Oracle connections as mention items (2026-09-30): each name with <see cref="OracleText.MentionNote"/> (<c>Oracle ·</c> first, so a name the SQL list has too reads apart), in the catalog's order. Pure.</summary>
+    public static IReadOnlyList<CompletionItem> OracleChoices(OracleCatalog catalog)
+    {
+        ArgumentNullException.ThrowIfNull(catalog);
+        return catalog.Connections.Select(c => new CompletionItem(c.Name, OracleText.MentionNote(c))).ToList();
     }
 
     /// <summary>The SQL connections as mention items (later on 2026-09-23): each name with <see cref="SqlText.MentionNote"/>, in the catalog's order (the profile's first). Pure.</summary>
@@ -3550,7 +3567,7 @@ internal sealed partial class ChatScreen
         var disabled = TurnDisabled(effective);
         var fileTools = FileToolsFor(_fileTools, effective.FileSafeEdits);   // restore only with File safe edits on (later still on 2026-09-20): /sys shows the list cut, Files (14)
         bool files = effective.FileTools && Without(fileTools, disabled).Count > 0;   // the turn's rule (PrepareTurn): an emptied file group is the switch off
-        return WithPlanGroup(SystemPromptSummary.OfferedOnly(SystemPromptSummary.ToolGroups(_clockTools, _timerTools, fileTools, _memoryTools, effective.Memory, effective.LlmOfferTools, WebToolsFor(_webTools, files), effective.WebTools, effective.FileTools, _askTools, effective.AskUser, _pane.Enabled, _skillTools, effective.AgentSkills, _sessionTools, effective.SessionTool, disabled, mcp: _mcp.ServerTools, mcpEnabled: effective.McpServers, git: _gitTools, gitEnabled: effective.GitNativeTools, shell: _shellTools, shellEnabled: ShellOffered(effective), codeAvailable: CodeAvailable(), obsidian: ObsidianOffered(effective) ? ObsidianToolsFor(_vaultTools, effective) : null, sql: SqlOffered(effective, _sql) ? _sqlTools : null, comfy: ComfyOffered(effective, _comfy) ? _comfyTools : null, advisor: _advisorTools, advisorEnabled: effective.ClaudeAdvisor, homeAssistant: HomeAssistantOffered(effective) ? _haTools : null)));   // the vault group only with a vault (2026-09-22): /sys stays as it was for a profile that never names one
+        return WithPlanGroup(SystemPromptSummary.OfferedOnly(SystemPromptSummary.ToolGroups(_clockTools, _timerTools, fileTools, _memoryTools, effective.Memory, effective.LlmOfferTools, WebToolsFor(_webTools, files), effective.WebTools, effective.FileTools, _askTools, effective.AskUser, _pane.Enabled, _skillTools, effective.AgentSkills, _sessionTools, effective.SessionTool, disabled, mcp: _mcp.ServerTools, mcpEnabled: effective.McpServers, git: _gitTools, gitEnabled: effective.GitNativeTools, shell: _shellTools, shellEnabled: ShellOffered(effective), codeAvailable: CodeAvailable(), obsidian: ObsidianOffered(effective) ? ObsidianToolsFor(_vaultTools, effective) : null, sql: SqlOffered(effective, _sql) ? _sqlTools : null, comfy: ComfyOffered(effective, _comfy) ? _comfyTools : null, advisor: _advisorTools, advisorEnabled: effective.ClaudeAdvisor, homeAssistant: HomeAssistantOffered(effective) ? _haTools : null, oracle: OracleOffered(effective, _oracle) ? _oracleTools : null)));   // the vault group only with a vault (2026-09-22): /sys stays as it was for a profile that never names one
     }
 
     /// <summary>Whether <c>execute_code</c> has a language to run (2026-09-21): the setting's languages, one of them installed.</summary>
@@ -3578,7 +3595,7 @@ internal sealed partial class ChatScreen
         var disabled = ToolsText.DisabledSet(effective.ToolsDisabled);
         // The whole file list, restore noted under File safe edits off (later still on 2026-09-20): the row stays, dim, with its reason — the download_file shape.
         _interpreters.Refresh();
-        var groups = SystemPromptSummary.ToolGroups(_clockTools, _timerTools, _fileTools, _memoryTools, effective.Memory, effective.LlmOfferTools, _webTools, effective.WebTools, effective.FileTools, _askTools, effective.AskUser, _pane.Enabled, _skillTools, effective.AgentSkills, _sessionTools, effective.SessionTool, disabled, skillInstalled: Catalog(effective).Count > 0, git: _gitTools, gitEnabled: effective.GitNativeTools, safeEdits: effective.FileSafeEdits, shell: _shellTools, shellEnabled: ShellOffered(effective), codeAvailable: CodeAvailable(), obsidian: ObsidianToolsFor(_vaultTools, effective), obsidianEnabled: ObsidianOffered(effective), sql: _sqlTools, sqlEnabled: SqlOffered(effective, _sql), comfy: _comfyTools, comfyEnabled: ComfyOffered(effective, _comfy), advisor: _advisorTools, advisorEnabled: effective.ClaudeAdvisor, homeAssistant: _haTools, homeAssistantEnabled: HomeAssistantOffered(effective), print: _printTools, printEnabled: PrintOffered(effective));
+        var groups = SystemPromptSummary.ToolGroups(_clockTools, _timerTools, _fileTools, _memoryTools, effective.Memory, effective.LlmOfferTools, _webTools, effective.WebTools, effective.FileTools, _askTools, effective.AskUser, _pane.Enabled, _skillTools, effective.AgentSkills, _sessionTools, effective.SessionTool, disabled, skillInstalled: Catalog(effective).Count > 0, git: _gitTools, gitEnabled: effective.GitNativeTools, safeEdits: effective.FileSafeEdits, shell: _shellTools, shellEnabled: ShellOffered(effective), codeAvailable: CodeAvailable(), obsidian: ObsidianToolsFor(_vaultTools, effective), obsidianEnabled: ObsidianOffered(effective), sql: _sqlTools, sqlEnabled: SqlOffered(effective, _sql), comfy: _comfyTools, comfyEnabled: ComfyOffered(effective, _comfy), advisor: _advisorTools, advisorEnabled: effective.ClaudeAdvisor, homeAssistant: _haTools, homeAssistantEnabled: HomeAssistantOffered(effective), print: _printTools, printEnabled: PrintOffered(effective), oracle: _oracleTools, oracleEnabled: OracleOffered(effective, _oracle));
         return new ToolsFacts(groups, effective.LlmOfferTools, disabled);
     }
 
@@ -3932,6 +3949,44 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>
+    /// The eight Oracle tools (2026-09-30), <see cref="SqlTools"/>' twin, offered on every turn while <see cref="OracleOffered"/>
+    /// says so (headless too): the connections first, then the catalog from the schemas down to a table and its indexes, the
+    /// query last. Each reads the settings in force at the call and <c>oracle.json</c> afresh.
+    /// </summary>
+    public static IReadOnlyList<AIFunction> OracleTools(OracleAccess oracle, Func<AppSettingsData> effective) => new AIFunction[]
+    {
+        new OracleConnectionsTool(oracle, effective),
+        new OracleSchemasTool(oracle, effective),
+        new OracleTablesTool(oracle, effective),
+        new OracleColumnsTool(oracle, effective),
+        new OracleDescribeTool(oracle, effective),
+        new OracleRelationshipsTool(oracle, effective),
+        new OracleIndexesTool(oracle, effective),
+        new OracleQueryTool(oracle, effective),
+    };
+
+    /// <summary>The Oracle tools' names: their result's first line is the transcript's note (<see cref="SqlText.Note"/>).</summary>
+    public static readonly IReadOnlySet<string> OracleToolNames = new HashSet<string>(StringComparer.Ordinal)
+    {
+        OracleConnectionsTool.ToolName,
+        OracleSchemasTool.ToolName,
+        OracleTablesTool.ToolName,
+        OracleColumnsTool.ToolName,
+        OracleDescribeTool.ToolName,
+        OracleRelationshipsTool.ToolName,
+        OracleIndexesTool.ToolName,
+        OracleQueryTool.ToolName,
+    };
+
+    /// <summary>Whether the Oracle group is offered (2026-09-30): the setting <c>Oracle tools</c> on and at least one usable connection in <c>oracle.json</c> (the profile's or the home's).</summary>
+    public static bool OracleOffered(AppSettingsData effective, OracleAccess oracle)
+    {
+        ArgumentNullException.ThrowIfNull(effective);
+        ArgumentNullException.ThrowIfNull(oracle);
+        return effective.OracleTools && oracle.Catalog().Connections.Count > 0;
+    }
+
+    /// <summary>
     /// <c>/imagine</c>'s argument list (later on 2026-09-24): every installed workflow — <c>/imagine</c> may name any —
     /// with what it is, the ones the model is not offered noted (<see cref="ComfyText.CompletionNote"/>).
     /// </summary>
@@ -4134,7 +4189,7 @@ internal sealed partial class ChatScreen
     /// (the setting <c>Shell prefer native tools</c>), the rules gain <see cref="Assistant.ShellNativeRule"/> after the shell sentence. <paramref name="sampling"/>
     /// (2026-09-28, the setting <c>LLM sampling</c>, resolved for the connected model) replaces the assistant's when given. Shared with headless.
     /// </summary>
-    public static void PrepareTurn(Assistant assistant, MemoryStore memory, IReadOnlyList<AIFunction> memoryTools, IReadOnlyList<AIFunction> standingTools, PersonaFile persona, OperataFile operata, VocaliaFile vocalia, bool memoryEnabled, bool speechOutput, int maxToolIterations = Assistant.DefaultMaxToolIterations, bool toolsEnabled = true, IReadOnlyList<AIFunction>? webTools = null, bool webEnabled = false, Assistant.TurnContextGuard? contextGuard = null, IReadOnlyList<AIFunction>? fileTools = null, bool filesEnabled = false, IReadOnlyList<AIFunction>? askTools = null, SkillsForTurn? skills = null, bool markdown = false, IReadOnlyList<AIFunction>? sessionTools = null, bool sessionsEnabled = false, IReadOnlySet<string>? disabledTools = null, IReadOnlyList<AIFunction>? mcpTools = null, bool mcpEnabled = false, bool safeEdits = true, IReadOnlyList<AIFunction>? gitTools = null, bool gitEnabled = false, IReadOnlyList<AIFunction>? shellTools = null, bool shellEnabled = false, ProcessRegistry? processes = null, bool shellBridge = false, bool shellPolice = true, IReadOnlyList<AIFunction>? obsidianTools = null, bool obsidianEnabled = false, IReadOnlyList<AIFunction>? sqlTools = null, bool sqlEnabled = false, IReadOnlyList<AIFunction>? comfyTools = null, bool comfyEnabled = false, bool shellNative = false, PlanTurn? plan = null, IReadOnlyList<AIFunction>? advisorTools = null, bool advisorEnabled = false, bool preserveThinking = false, LlmSampling? sampling = null, IReadOnlyList<AIFunction>? homeTools = null, bool homeEnabled = false, IReadOnlyList<AIFunction>? printTools = null, bool printEnabled = false)
+    public static void PrepareTurn(Assistant assistant, MemoryStore memory, IReadOnlyList<AIFunction> memoryTools, IReadOnlyList<AIFunction> standingTools, PersonaFile persona, OperataFile operata, VocaliaFile vocalia, bool memoryEnabled, bool speechOutput, int maxToolIterations = Assistant.DefaultMaxToolIterations, bool toolsEnabled = true, IReadOnlyList<AIFunction>? webTools = null, bool webEnabled = false, Assistant.TurnContextGuard? contextGuard = null, IReadOnlyList<AIFunction>? fileTools = null, bool filesEnabled = false, IReadOnlyList<AIFunction>? askTools = null, SkillsForTurn? skills = null, bool markdown = false, IReadOnlyList<AIFunction>? sessionTools = null, bool sessionsEnabled = false, IReadOnlySet<string>? disabledTools = null, IReadOnlyList<AIFunction>? mcpTools = null, bool mcpEnabled = false, bool safeEdits = true, IReadOnlyList<AIFunction>? gitTools = null, bool gitEnabled = false, IReadOnlyList<AIFunction>? shellTools = null, bool shellEnabled = false, ProcessRegistry? processes = null, bool shellBridge = false, bool shellPolice = true, IReadOnlyList<AIFunction>? obsidianTools = null, bool obsidianEnabled = false, IReadOnlyList<AIFunction>? sqlTools = null, bool sqlEnabled = false, IReadOnlyList<AIFunction>? comfyTools = null, bool comfyEnabled = false, bool shellNative = false, PlanTurn? plan = null, IReadOnlyList<AIFunction>? advisorTools = null, bool advisorEnabled = false, bool preserveThinking = false, LlmSampling? sampling = null, IReadOnlyList<AIFunction>? homeTools = null, bool homeEnabled = false, IReadOnlyList<AIFunction>? printTools = null, bool printEnabled = false, IReadOnlyList<AIFunction>? oracleTools = null, bool oracleEnabled = false)
     {
         ArgumentNullException.ThrowIfNull(assistant);
         ArgumentNullException.ThrowIfNull(memory);
@@ -4175,7 +4230,7 @@ internal sealed partial class ChatScreen
         {
             // Plan mode (2026-09-26): every tool it does not allow joins the /tools list for this turn, so a group
             // loses them as it loses a tool switched off, and a group left empty takes its rule with it.
-            disabledTools = PlanTools.Widen(disabledTools, standingTools, fileTools, webTools, gitTools, shellTools, obsidianTools, sqlTools, comfyTools, memoryTools, skillTools, sessionTools, askTools, mcpTools, advisorTools, homeTools, printTools);
+            disabledTools = PlanTools.Widen(disabledTools, standingTools, fileTools, webTools, gitTools, shellTools, obsidianTools, sqlTools, oracleTools, comfyTools, memoryTools, skillTools, sessionTools, askTools, mcpTools, advisorTools, homeTools, printTools);
         }
 
         if (disabledTools is { Count: > 0 })
@@ -4188,6 +4243,7 @@ internal sealed partial class ChatScreen
             shellTools = shellTools is null ? null : Without(shellTools, disabledTools);
             obsidianTools = obsidianTools is null ? null : Without(obsidianTools, disabledTools);
             sqlTools = sqlTools is null ? null : Without(sqlTools, disabledTools);
+            oracleTools = oracleTools is null ? null : Without(oracleTools, disabledTools);
             comfyTools = comfyTools is null ? null : Without(comfyTools, disabledTools);
             homeTools = homeTools is null ? null : Without(homeTools, disabledTools);
             printTools = printTools is null ? null : Without(printTools, disabledTools);
@@ -4229,6 +4285,9 @@ internal sealed partial class ChatScreen
         // The SQL tools after the vault tools (2026-09-23): the setting SQL tools and a connection in sql.json are the group's switch.
         bool sql = sqlEnabled && sqlTools is { Count: > 0 };
         offered = sql ? [.. offered, .. sqlTools!] : offered;
+        // The Oracle tools right after the SQL tools (2026-09-30): the setting Oracle tools and a connection in oracle.json are the group's switch.
+        bool oracle = oracleEnabled && oracleTools is { Count: > 0 };
+        offered = oracle ? [.. offered, .. oracleTools!] : offered;
         // The image tools after the SQL tools (2026-09-24): ComfyUI tools, a URL and a workflow are the group's switch; no rule — the description carries the workflows and the prompt styles.
         bool comfy = comfyEnabled && comfyTools is { Count: > 0 };
         offered = comfy ? [.. offered, .. comfyTools!] : offered;
@@ -4303,7 +4362,7 @@ internal sealed partial class ChatScreen
         assistant.OpeningCalls = opening;
         // The notified exits since the last turn ride in as seeded polls (2026-09-21), on every turn, while process is offered.
         assistant.PendingCalls = processes is null ? [] : PendingProcessPolls(processes, assistant.Tools);
-        assistant.History.SystemPrompt = Assistant.SystemPrompt(speechOutput, memoryEnabled ? memory.Snapshot() : null, persona.Read(), operata.Read(), vocalia.Read(), web: web, files: files, ask: ask, project: project, skills: catalog, markdown: markdown, sessions: sessions, download: download, recall: recall is not null, delete: delete, mcp: mcp, safeEdits: safeEdits, timers: timers, git: git, shell: shell, bridge: bridge, police: police, obsidian: obsidian, obsidianDelete: obsidianDelete, sql: sql, native: native, plan: plan?.Directive, advisor: advisor, homeAssistant: home);
+        assistant.History.SystemPrompt = Assistant.SystemPrompt(speechOutput, memoryEnabled ? memory.Snapshot() : null, persona.Read(), operata.Read(), vocalia.Read(), web: web, files: files, ask: ask, project: project, skills: catalog, markdown: markdown, sessions: sessions, download: download, recall: recall is not null, delete: delete, mcp: mcp, safeEdits: safeEdits, timers: timers, git: git, shell: shell, bridge: bridge, police: police, obsidian: obsidian, obsidianDelete: obsidianDelete, sql: sql, native: native, plan: plan?.Directive, advisor: advisor, homeAssistant: home, oracle: oracle);
     }
 
     /// <summary>
@@ -11869,7 +11928,7 @@ internal sealed partial class ChatScreen
         if (bot is null)
         {
             _interpreters.Refresh();
-            PrepareTurn(assistant, _memory, _memoryTools, [.. _clockTools, .. _timerTools], _persona, _operata, _vocalia, effective.Memory, speaker is not null, effective.LlmMaxToolIterations, effective.LlmOfferTools, _webTools, effective.WebTools, ContextGuardFor(effective, _session.ContextLength), _fileTools, effective.FileTools, _pane.Enabled && effective.AskUser ? _askTools : null, SkillsFor(effective), markdown, _sessionTools, effective.SessionTool, ToolsText.DisabledSet(effective.ToolsDisabled), _mcp.Tools, effective.McpServers, effective.FileSafeEdits, _gitTools, effective.GitNativeTools, _shellTools, ShellOffered(effective), _processes, effective.ShellToolBridge, effective.ShellPoliceOutsidePaths, ObsidianToolsFor(_vaultTools, effective), ObsidianOffered(effective), _sqlTools, SqlOffered(effective, _sql), _comfyTools, ComfyOffered(effective, _comfy), effective.ShellPreferNative, _plan.Turn(_presentPlan), _advisorTools, effective.ClaudeAdvisor, effective.LlmPreserveThinking, LlmSampling.Resolve(effective, _session.Endpoint?.ModelId), _haTools, HomeAssistantOffered(effective), _printTools, PrintOffered(effective));
+            PrepareTurn(assistant, _memory, _memoryTools, [.. _clockTools, .. _timerTools], _persona, _operata, _vocalia, effective.Memory, speaker is not null, effective.LlmMaxToolIterations, effective.LlmOfferTools, _webTools, effective.WebTools, ContextGuardFor(effective, _session.ContextLength), _fileTools, effective.FileTools, _pane.Enabled && effective.AskUser ? _askTools : null, SkillsFor(effective), markdown, _sessionTools, effective.SessionTool, ToolsText.DisabledSet(effective.ToolsDisabled), _mcp.Tools, effective.McpServers, effective.FileSafeEdits, _gitTools, effective.GitNativeTools, _shellTools, ShellOffered(effective), _processes, effective.ShellToolBridge, effective.ShellPoliceOutsidePaths, ObsidianToolsFor(_vaultTools, effective), ObsidianOffered(effective), _sqlTools, SqlOffered(effective, _sql), _comfyTools, ComfyOffered(effective, _comfy), effective.ShellPreferNative, _plan.Turn(_presentPlan), _advisorTools, effective.ClaudeAdvisor, effective.LlmPreserveThinking, LlmSampling.Resolve(effective, _session.Endpoint?.ModelId), _haTools, HomeAssistantOffered(effective), _printTools, PrintOffered(effective), _oracleTools, OracleOffered(effective, _oracle));
 
             // The Claude CLI server (2026-09-30) keeps the conversation itself: the turn names its session, and no guard
             // measures or prunes a history the CLI does not read (it compacts its own).
@@ -12739,7 +12798,7 @@ internal sealed partial class ChatScreen
                 // The printer list is the model's to read; the line is the result's header (PrintText.Note, 2026-09-28).
                 _transcript.ToolNote(PrintText.Note(result.Text));
                 break;
-            case TurnEvent.ToolResult result when SqlToolNames.Contains(result.Name):
+            case TurnEvent.ToolResult result when SqlToolNames.Contains(result.Name) || OracleToolNames.Contains(result.Name):
                 // A table of rows is the model's to read; the line is the result's header (SqlText.Note, 2026-09-23).
                 _transcript.ToolNote(SqlText.Note(result.Text));
                 break;

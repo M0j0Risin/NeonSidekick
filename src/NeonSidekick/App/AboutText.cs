@@ -129,6 +129,7 @@ public static class AboutText
         new("LibGit2Sharp.NativeBinaries", "2.0.324", "MIT", "libgit2 prebuilt for win-x64 (GPL-2.0 with the linking exception)"),
         new("Microsoft.Data.SqlClient", "7.1.0", "MIT", "the SQL tools' SQL Server client, with its native SNI network layer"),
         new("SqlServer.TransactSql.ScriptDom", "180.107.0", "MIT", "the T-SQL parser behind the SQL tools' read-only gate"),
+        new("Oracle.ManagedDataAccess.Core", "23.26.301", "Oracle Free Use Terms", "the Oracle tools' fully managed Oracle client (ODP.NET Core)"),
         new("KokoroSharp", "0.8.0", "MIT", "Kokoro in-process; bundles espeak-ng (GPL-3.0) for the non-English voices"),
         new("Kokoro-82M in-process", "1.0", "Apache-2.0", "the TTS model in-process, downloaded on first use"),
         new("Whisper.net", "1.9.1", "MIT", "whisper.cpp bindings: speech-to-text and the Silero VAD in-process"),

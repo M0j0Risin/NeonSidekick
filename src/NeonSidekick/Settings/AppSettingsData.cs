@@ -1272,6 +1272,52 @@ public sealed class AppSettingsData
     public const int MaxSqlQueryTimeoutSeconds = 600;
     public const int DefaultSqlQueryTimeoutSeconds = 30;
 
+    // ─── Oracle ─────────────────────────────────────────────────────────────────
+    // The Oracle tools (2026-09-30, the user's ask: "mirror what we did for SQL server, but for Oracle", read-only by
+    // every means): read-only queries on the named connections of oracle.json (the profile's and the home's).
+
+    /// <summary>
+    /// Whether a turn offers the eight Oracle tools (<c>oracle_connections</c>, <c>oracle_query</c>, …) over the connections
+    /// in <c>oracle.json</c> (2026-09-30); read at each turn like <see cref="SqlTools"/>, no reconnect. Off by default, as
+    /// <see cref="SqlTools"/> is. No variable.
+    /// </summary>
+    public bool OracleTools { get; set; }
+
+    /// <summary>
+    /// The connection an Oracle tool uses when the call names none (2026-09-30), <see cref="SqlDefaultConnection"/>'s twin: a
+    /// name in <c>oracle.json</c>; empty, or a name no longer there (or no longer offered), = the first offered connection.
+    /// The Oracle tab of <c>/tools</c>. No variable.
+    /// </summary>
+    public string OracleDefaultConnection { get; set; } = "";
+
+    /// <summary>
+    /// Which connections of <c>oracle.json</c> this profile offers the model (2026-09-30), <see cref="SqlConnectionsOffered"/>'s
+    /// twin: null = not narrowed (every connection, a new one included); a list = exactly those names, so one added
+    /// afterwards stays hidden until ticked; an empty list offers none. The Oracle tab of <c>/tools</c>. No variable.
+    /// </summary>
+    public List<string>? OracleConnectionsOffered { get; set; }
+
+    /// <summary>
+    /// Whether <c>%</c> and part of a name on the chat line lists the Oracle connections too (2026-09-30), beside the SQL
+    /// ones <see cref="SqlPercentMention"/> lists, each marked <c>Oracle ·</c>; a pick writes <c>%name</c> into the draft.
+    /// Offered only while <see cref="OracleTools"/> is on. Read at each keystroke, no reconnect; the Oracle tab of
+    /// <c>/tools</c>. No variable.
+    /// </summary>
+    public bool OraclePercentMention { get; set; } = true;
+
+    /// <summary>
+    /// The most rows one <c>oracle_query</c> returns (2026-09-30): <see cref="MinSqlQueryMaxRows"/> to
+    /// <see cref="MaxSqlQueryMaxRows"/>, the SQL tools' range; the argument <c>max_rows</c> overrides it up to the same cap.
+    /// Past it the header says more exist and the cursor is closed (the rest is never fetched).
+    /// </summary>
+    public int OracleQueryMaxRows { get; set; } = DefaultSqlQueryMaxRows;
+
+    /// <summary>
+    /// Seconds an Oracle tool's statement may run on the server before it is stopped (2026-09-30, ORA-01013):
+    /// <see cref="MinSqlQueryTimeoutSeconds"/> to <see cref="MaxSqlQueryTimeoutSeconds"/>, the SQL tools' range.
+    /// </summary>
+    public int OracleQueryTimeoutSeconds { get; set; } = DefaultSqlQueryTimeoutSeconds;
+
     // ─── Images (ComfyUI) ───────────────────────────────────────────────────────
     // The image tools (2026-09-24, the user's ask: "what can we do with comfyui?" — text to image, img2img, their own
     // exported workflows, splash art, and prompts written for Pony Diffusion XL and the other families, or sent as typed).

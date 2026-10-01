@@ -62,16 +62,26 @@ public sealed record SidekickOptions(
     public const string ProfileFlag = "--profile";
     public const string YoloFlag = "--yolo";
     public const string NoPoliceFlag = "--no-police";
+    public const string OracleCheckFlag = "--oracle-check";
+
+    /// <summary>
+    /// <c>--oracle-check &lt;connection&gt;</c> (2026-09-30): run <see cref="OracleCheck"/> over that connection of the loaded
+    /// profile's <c>oracle.json</c> and exit 0/1 — the Oracle tools' proof on the published binary. A check mode: no screen, no
+    /// turn; needs a server, so not in the build gate. A property rather than a positional member, so every existing
+    /// construction stands.
+    /// </summary>
+    public string? OracleCheck { get; init; }
 
     /// <summary>The help text. Pinned wording; tests assert on it.</summary>
     public const string Usage =
-        "Usage: NeonSidekick [--headless] [--smoke] [--audio-check] [--voice-check] [--url <url>] [--model <id>] [--cwd <path>] [--profile <name>] [--yolo] [--no-police] [--log <path>] [--version] [--help]\n" +
+        "Usage: NeonSidekick [--headless] [--smoke] [--audio-check] [--voice-check] [--oracle-check <connection>] [--url <url>] [--model <id>] [--cwd <path>] [--profile <name>] [--yolo] [--no-police] [--log <path>] [--version] [--help]\n" +
         "\n" +
         "  (no flags)     interactive TUI\n" +
         "  --headless     stdin/stdout REPL, no TUI (profile \"default\" unless --profile or NEONSIDEKICK_PROFILE names one)\n" +
         "  --smoke        render the banner, verify native dependencies, exit 0/1\n" +
         "  --audio-check  play a 440 Hz tone through the speech output path, exit 0/1\n" +
         "  --voice-check  record up to 5 s from the microphone, transcribe it, exit 0/1\n" +
+        "  --oracle-check <connection>  prove the Oracle tools against that connection of oracle.json (reads only), exit 0/1\n" +
         "  --url <url>    LLM base URL for this launch (outranks NEONSIDEKICK_LLM_URL and the saved setting)\n" +
         "  --model <id>   model id for this launch (outranks NEONSIDEKICK_LLM_MODEL and the saved setting)\n" +
         "  --cwd <path>   working directory for this launch (outranks the saved setting)\n" +
@@ -152,6 +162,17 @@ public sealed record SidekickOptions(
                 }
 
                 result = result with { Profile = profile };
+                continue;
+            }
+
+            if (TryValueFlag(OracleCheckFlag, args, ref i, arg, lower, out var oracle, out error))
+            {
+                if (error is not null)
+                {
+                    return result with { Error = error };
+                }
+
+                result = result with { OracleCheck = oracle };
                 continue;
             }
 
@@ -241,13 +262,17 @@ public sealed record SidekickOptions(
     public string? LaunchProfile(string? environmentProfile) =>
         Profile ?? environmentProfile ?? (Headless ? Profiles.DefaultName : null);
 
-    /// <summary>The mode this launch runs: <c>interactive</c>, <c>headless</c>, <c>smoke</c>, <c>audio-check</c>, <c>voice-check</c>.</summary>
+    /// <summary>The mode this launch runs: <c>interactive</c>, <c>headless</c>, <c>smoke</c>, <c>audio-check</c>, <c>voice-check</c>, <c>oracle-check</c>.</summary>
     public string Mode =>
         Headless ? "headless"
         : Smoke ? "smoke"
         : AudioCheck ? "audio-check"
         : VoiceCheck ? "voice-check"
+        : OracleCheck is not null ? "oracle-check"
         : "interactive";
+
+    /// <summary>Whether this launch runs one of the check modes (<c>--smoke</c>, <c>--audio-check</c>, <c>--voice-check</c>, <c>--oracle-check</c>): no screen, no input reader.</summary>
+    public bool IsCheck => Smoke || AudioCheck || VoiceCheck || OracleCheck is not null;
 
     /// <summary>
     /// The value flags as typed, for the log at startup: <c>--cwd D:\x --log C:\t.log</c>; null when

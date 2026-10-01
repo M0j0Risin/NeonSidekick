@@ -43,6 +43,9 @@ public static class ToolsText
     /// <summary>The SQL tools' tab and group (2026-09-23), after ComfyUI, before Git (native) (the user's order, 2026-09-27).</summary>
     public const string SqlTabTitle = "SQL";
 
+    /// <summary>The Oracle tools' tab and group (2026-09-30), right after SQL, before Git: the two database tabs together.</summary>
+    public const string OracleTabTitle = "Oracle";
+
     /// <summary>The image tools' tab and group (2026-09-24), after Obsidian, before SQL (the user's order, 2026-09-27); "Images" until later on 2026-09-24 (the user's call: it is ComfyUI's tab).</summary>
     public const string ComfyTabTitle = "ComfyUI";
 
@@ -55,8 +58,8 @@ public static class ToolsText
     /// <summary>The print tools' tab and group (2026-09-28), after Home Assistant, before Obsidian: beside the other integration that acts in the room.</summary>
     public const string PrintTabTitle = "Print";
 
-    /// <summary>The thirteen tabs in strip order (Home Assistant after Claude since 2026-09-28, Print after Home Assistant later that day): Offered, Web, Files, Shell, Ask, Claude, Obsidian, ComfyUI, SQL, Git (native), Options — the user's order since 2026-09-27 (Ask, Git (native), Obsidian, SQL, ComfyUI, Claude before); Options last since later on 2026-09-22 (the user's ask; second, after Offered, before); alphabetical before 2026-09-21; the last ten index <see cref="SettingsMenu.ToolsTabFields"/> one down.</summary>
-    public static readonly IReadOnlyList<string> TabTitles = [OfferedTabTitle, WebTabTitle, FilesTabTitle, ShellTabTitle, AskTabTitle, ClaudeTabTitle, HomeAssistantTabTitle, PrintTabTitle, ObsidianTabTitle, ComfyTabTitle, SqlTabTitle, GitTabTitle, OptionsTabTitle];
+    /// <summary>The fourteen tabs in strip order (Home Assistant after Claude since 2026-09-28, Print after Home Assistant later that day, Oracle after SQL since 2026-09-30): Offered, Web, Files, Shell, Ask, Claude, Obsidian, ComfyUI, SQL, Oracle, Git (native), Options — the user's order since 2026-09-27 (Ask, Git (native), Obsidian, SQL, ComfyUI, Claude before); Options last since later on 2026-09-22 (the user's ask; second, after Offered, before); alphabetical before 2026-09-21; the last ten index <see cref="SettingsMenu.ToolsTabFields"/> one down.</summary>
+    public static readonly IReadOnlyList<string> TabTitles = [OfferedTabTitle, WebTabTitle, FilesTabTitle, ShellTabTitle, AskTabTitle, ClaudeTabTitle, HomeAssistantTabTitle, PrintTabTitle, ObsidianTabTitle, ComfyTabTitle, SqlTabTitle, OracleTabTitle, GitTabTitle, OptionsTabTitle];
 
     /// <summary>The Offered tab's hint row. Pinned.</summary>
     public const string OfferedKeys = "Enter / Space = on or off · ←/→ tabs · ESC = close";
@@ -72,6 +75,9 @@ public static class ToolsText
 
     /// <summary>After the SQL heading while the group is not offered: the switch is off or <c>sql.json</c> holds no connection (2026-09-23). Pinned.</summary>
     public const string SqlOffSuffix = "(off: SQL tools is off or no connection is set in sql.json)";
+
+    /// <summary>After the Oracle heading while the group is not offered: the switch is off or <c>oracle.json</c> holds no connection (2026-09-30). Pinned.</summary>
+    public const string OracleOffSuffix = "(off: Oracle tools is off or no connection is set in oracle.json)";
 
     /// <summary>After the ComfyUI heading while the group is not offered: the switch is off, no ComfyUI URL is set or no workflow is in a comfy folder (2026-09-24). Pinned.</summary>
     public const string ComfyOffSuffix = "(off: ComfyUI tools is off, no ComfyUI URL is set or no workflow is in a comfy folder)";
@@ -169,6 +175,12 @@ public static class ToolsText
         {
             // The vault's two-reason shape (2026-09-23): the switch, or no connection defined.
             return SqlOffSuffix;
+        }
+
+        if (group.Switch == SettingsField.OracleTools)
+        {
+            // The SQL shape (2026-09-30): the switch, or no connection defined.
+            return OracleOffSuffix;
         }
 
         return group.Switch is { } field ? GroupOffSuffix(SettingsMenu.FieldName(field)) : "";

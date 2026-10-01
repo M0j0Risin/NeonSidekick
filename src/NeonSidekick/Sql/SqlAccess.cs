@@ -31,9 +31,10 @@ public sealed record SqlGrid(IReadOnlyList<string> Columns, IReadOnlyList<string
     /// more to learn whether any is left. Each cell through <see cref="SqlText.Cell"/>; a value the client
     /// cannot materialise (a CLR type such as <c>geography</c> or <c>hierarchyid</c>, whose assembly the app
     /// does not carry; a <c>decimal(38)</c> past <see cref="decimal"/>'s range) is its provider value's text or
-    /// <see cref="SqlText.Unreadable"/>, never a failed call.
+    /// <see cref="SqlText.Unreadable"/>, never a failed call. <paramref name="readCell"/> reads a cell in place of that
+    /// (2026-09-30: <see cref="Oracle.OracleAccess"/>'s, for Oracle's own types).
     /// </summary>
-    public static async Task<SqlGrid> ReadAsync(DbDataReader reader, int maxRows, CancellationToken cancellationToken)
+    public static async Task<SqlGrid> ReadAsync(DbDataReader reader, int maxRows, CancellationToken cancellationToken, Func<DbDataReader, int, string>? readCell = null)
     {
         ArgumentNullException.ThrowIfNull(reader);
         var columns = new string[reader.FieldCount];
@@ -56,7 +57,7 @@ public sealed record SqlGrid(IReadOnlyList<string> Columns, IReadOnlyList<string
             var cells = new string[columns.Length];
             for (int i = 0; i < cells.Length; i++)
             {
-                cells[i] = ReadCell(reader, i);
+                cells[i] = (readCell ?? ReadCell)(reader, i);
             }
 
             rows.Add(cells);

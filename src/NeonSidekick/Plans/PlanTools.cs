@@ -26,6 +26,8 @@ public static class PlanTools
         "web_search", "web_fetch",
         // SQL: read-only by three layers already
         "sql_connections", "sql_databases", "sql_tables", "sql_columns", "sql_describe", "sql_indexes", "sql_relationships", "sql_query",
+        // Oracle: read-only by four layers already (2026-09-30)
+        "oracle_connections", "oracle_schemas", "oracle_tables", "oracle_columns", "oracle_describe", "oracle_indexes", "oracle_relationships", "oracle_query",
         // Home Assistant: the reads (2026-09-28)
         "ha_overview", "ha_states", "ha_history",
         // printing: the list only (2026-09-28)

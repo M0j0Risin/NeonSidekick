@@ -35,7 +35,7 @@ public partial class ToolsMenuTests : IDisposable
 
     public ToolsMenuTests()
     {
-        _console.Profile.Width = 160;   // 150 until later on 2026-09-28, when "Print" took the strip to 151 cells; 130 until 2026-09-28, when "Home Assistant" took the strip to 142 cells; 120 until later on 2026-09-27, when "Claude (CLI)" took the strip to 124 cells (the user's call: it takes a second strip row, lined up under Offered, below 128 columns since the tab strip's own layout on the same day); 100 until 2026-09-24, when the Images tab took the ten-tab strip to 107 cells
+        _console.Profile.Width = 170;   // 160 until 2026-09-30, when "Oracle" took the strip to 161 cells; 150 until later on 2026-09-28, when "Print" took the strip to 151 cells; 130 until 2026-09-28, when "Home Assistant" took the strip to 142 cells; 120 until later on 2026-09-27, when "Claude (CLI)" took the strip to 124 cells (the user's call: it takes a second strip row, lined up under Offered, below 128 columns since the tab strip's own layout on the same day); 100 until 2026-09-24, when the Images tab took the ten-tab strip to 107 cells
         _settings = new AppSettings(_dir);
         _settings.Update(d => { d.TtsOutput = true; d.TtsSource = "http"; d.ToolsDisabled = []; d.GitNativeTools = true; });   // delete off by default (2026-09-20), Git native tools off by default (2026-09-21): the Offered-tab scripts start from every tool on
         // Eight settings went off by default on 2026-09-29 (the user's call): the scripts here were written with every tool group
@@ -89,13 +89,13 @@ public partial class ToolsMenuTests : IDisposable
     }
 
     /// <summary>The menu over a pane with geometry: every list is a level of the pane, the notices its status line.</summary>
-    private (ToolsMenu Menu, ScreenPane Pane, SettingsMenu Settings) PaneMenu(Func<string, CancellationToken, Task<string?>>? browseVault = null, Func<NeonSidekick.Sql.SqlNamedConnection, CancellationToken, Task<NeonSidekick.Sql.SqlRun>>? testSql = null, Func<NeonSidekick.Comfy.ComfyClient?>? comfy = null)
+    private (ToolsMenu Menu, ScreenPane Pane, SettingsMenu Settings) PaneMenu(Func<string, CancellationToken, Task<string?>>? browseVault = null, Func<NeonSidekick.Sql.SqlNamedConnection, CancellationToken, Task<NeonSidekick.Sql.SqlRun>>? testSql = null, Func<NeonSidekick.Comfy.ComfyClient?>? comfy = null, Func<NeonSidekick.Oracle.OracleNamedConnection, CancellationToken, Task<NeonSidekick.Sql.SqlRun>>? testOracle = null)
     {
         _console.Profile.Height = 40;
         var pane = new ScreenPane(_console, new ScreenGeometry(() => null), new ManualTimeProvider()) { Hint = () => "idle" };
         var keys = new KeySource(_console.Input, TimeSpan.FromMilliseconds(1));
         var menuPane = new MenuPane(pane, keys);
-        var settings = new SettingsMenu(new ConsoleWithInput(pane, keys), _settings, _ => null, new InputLine(pane, keys), new TranscriptRenderer(pane), _speech, menuPane, _ => FakeBrowserPath, browseVault: browseVault, testSqlConnection: testSql, comfyClient: comfy);
+        var settings = new SettingsMenu(new ConsoleWithInput(pane, keys), _settings, _ => null, new InputLine(pane, keys), new TranscriptRenderer(pane), _speech, menuPane, _ => FakeBrowserPath, browseVault: browseVault, testSqlConnection: testSql, comfyClient: comfy, testOracleConnection: testOracle);
         var menu = new ToolsMenu(Facts, _settings, settings, new TranscriptRenderer(pane), menuPane);
         pane.Show();
         return (menu, pane, settings);
@@ -126,12 +126,12 @@ public partial class ToolsMenuTests : IDisposable
             : row + new string(' ', _console.Profile.Width - 2 - TextCells.Width(row)) + ScreenPane.CloseGlyph;
 
     /// <summary>The strip as the pane prints it: the label, then every tab title with a space either side, two spaces between. Pinned.</summary>
-    private const string Strip = ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude    Home Assistant    Print    Obsidian    ComfyUI    SQL    Git    Options ";   // Print since later on 2026-09-28, Home Assistant since 2026-09-28, Images since 2026-09-24, SQL since 2026-09-23, Obsidian since 2026-09-22, Options last since later that day (second from later on 2026-09-19); the user's order (Web, Files, Shell, Ask, Git (native)) since later on 2026-09-21, alphabetical before
+    private const string Strip = ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude    Home Assistant    Print    Obsidian    ComfyUI    SQL    Oracle    Git    Options ";   // Print since later on 2026-09-28, Home Assistant since 2026-09-28, Images since 2026-09-24, SQL since 2026-09-23, Obsidian since 2026-09-22, Options last since later that day (second from later on 2026-09-19); the user's order (Web, Files, Shell, Ask, Git (native)) since later on 2026-09-21, alphabetical before
 
     /// <summary>A tool row as the pane prints it at width 120 (the markup rendered): the name padded to 22, the state to 5, then the description, cut to 119 cells and an ellipsis (FittedMarkup; every description is longer).</summary>
     private string Row(string name, bool on, string mark = "  ") => Fitted(mark + name.PadRight(22) + (on ? "on" : "off").PadRight(5) + Description(name, on));
 
-    private static string Fitted(string row) => row.Length <= 160 ? row : row[..159] + "…";   // the fixture's width (150 until the Print tab, later on 2026-09-28)
+    private static string Fitted(string row) => row.Length <= 170 ? row : row[..169] + "…";   // the fixture's width (160 until the Oracle tab, 2026-09-30; 150 until the Print tab, later on 2026-09-28)
 
     /// <summary>
     /// The description, and — on a row the turn would not offer — its note after two spaces, as <see cref="ToolsText.OfferedRows"/> draws it
@@ -153,26 +153,28 @@ public partial class ToolsMenuTests : IDisposable
         // The three tabs that left /settings (2026-09-19): their rows unchanged, every field on exactly one tab of the three panes (Skills left for /skills later that day);
         // the Options tab ahead of them (later on 2026-09-19): the pane's own $-mention switch.
         Assert.Equal(7, SettingsMenu.TabFields.Count);   // the Claude (API) tab went to /tools' Claude tab on 2026-09-29; Embedded model since 2026-09-29; Claude (API) since later on 2026-09-27; Claude on 2026-09-27 until later that day (to /tools); Botchat since 2026-09-25
-        Assert.Equal(12, SettingsMenu.ToolsTabFields.Count);   // Print since later on 2026-09-28; Home Assistant since 2026-09-28; Claude since 2026-09-27; Images since 2026-09-24; SQL since 2026-09-23   // Obsidian since 2026-09-22   // Git since 2026-09-20, Shell since 2026-09-21; the user's order (Web, Files, Shell, Ask, Git (native)) since later on 2026-09-21, alphabetical before
-        Assert.Equal(["Offered", "Web", "Files", "Shell", "Ask", "Claude", "Home Assistant", "Print", "Obsidian", "ComfyUI", "SQL", "Git", "Options"], ToolsText.TabTitles);
-        Assert.Equal([SettingsField.ToolsDollarMention, SettingsField.ToolCollapseCount, SettingsField.CodeCollapseCount], SettingsMenu.ToolsTabFields[11]);
+        Assert.Equal(13, SettingsMenu.ToolsTabFields.Count);   // Oracle since 2026-09-30; Print since later on 2026-09-28; Home Assistant since 2026-09-28; Claude since 2026-09-27; Images since 2026-09-24; SQL since 2026-09-23   // Obsidian since 2026-09-22   // Git since 2026-09-20, Shell since 2026-09-21; the user's order (Web, Files, Shell, Ask, Git (native)) since later on 2026-09-21, alphabetical before
+        Assert.Equal(["Offered", "Web", "Files", "Shell", "Ask", "Claude", "Home Assistant", "Print", "Obsidian", "ComfyUI", "SQL", "Oracle", "Git", "Options"], ToolsText.TabTitles);
+        Assert.Equal([SettingsField.ToolsDollarMention, SettingsField.ToolCollapseCount, SettingsField.CodeCollapseCount], SettingsMenu.ToolsTabFields[12]);
         Assert.Equal([SettingsField.HomeAssistantTools, SettingsField.HomeAssistantUrl, SettingsField.HomeAssistantToken, SettingsField.HomeAssistantTest, SettingsField.HomeAssistantActionPolicy, SettingsField.HomeAssistantAssistAgent, SettingsField.HomeAssistantTimeoutSeconds], SettingsMenu.ToolsTabFields[5]);   // the switch, the server and its token, the test, the policy, Assist's agent, the timeout (2026-09-28)   // the fold's count under the switch (2026-09-22, the user's place), the code fold's under it
         Assert.Equal([SettingsField.PrintTools, SettingsField.PrintActionPolicy, SettingsField.PrintDefaultPrinter, SettingsField.PrintFontSize], SettingsMenu.ToolsTabFields[6]);   // the switch, the policy, the printer, the size (later on 2026-09-28)
         Assert.Equal([SettingsField.WebTools, SettingsField.WebBrowserMode, SettingsField.WebBrowserPath, SettingsField.WebBrowserNetworkMode, SettingsField.WebSearchMethod, SettingsField.WebSearxngUrl, SettingsField.WebSearchMaxResults], SettingsMenu.ToolsTabFields[0]);
         Assert.Equal([SettingsField.FileTools, SettingsField.FileSafeEdits, SettingsField.FileTreeMaxLength, SettingsField.FileTreeShowSizes, SettingsField.FileMentionFolderMode, SettingsField.FileBrowserMode, SettingsField.FileViewImageMaxPerCall], SettingsMenu.ToolsTabFields[1]);   // the view_image cap last, 2026-09-19; the browser mode under the folder mode, 2026-09-21
         Assert.Equal([SettingsField.ShellCommandPolicy, SettingsField.ShellCommandAllowed, SettingsField.ShellPoliceOutsidePaths, SettingsField.ShellPreferNative, SettingsField.ShellDefault, SettingsField.ShellTimeoutSeconds, SettingsField.ShellForegroundCapSeconds, SettingsField.ShellOutputMaxChars, SettingsField.ShellCodeLanguages, SettingsField.ShellCodeTimeoutSeconds, SettingsField.ShellToolBridge, SettingsField.ShellCodeMaxToolCalls], SettingsMenu.ToolsTabFields[2]);   // the policy (the switch) first, then the list, the shell, the caps, then execute_code's four (2026-09-21; the bridge switch later that day; the police toggle third, 2026-09-22; prefer native under it, 2026-09-26)
         Assert.Equal([SettingsField.AskUser, SettingsField.AskMaxQuestions, SettingsField.AskMaxChoices], SettingsMenu.ToolsTabFields[3]);
-        Assert.Equal([SettingsField.GitNativeTools, SettingsField.GitNativeDiffMaxLines, SettingsField.GitNativeLogMaxCommits, SettingsField.GitNativeEmail, SettingsField.GitNativeName], SettingsMenu.ToolsTabFields[10]);   // the switch first, then the limits, then the identity pair (2026-09-21); the Git native labels later that day
+        Assert.Equal([SettingsField.GitNativeTools, SettingsField.GitNativeDiffMaxLines, SettingsField.GitNativeLogMaxCommits, SettingsField.GitNativeEmail, SettingsField.GitNativeName], SettingsMenu.ToolsTabFields[11]);   // the switch first, then the limits, then the identity pair (2026-09-21); the Git native labels later that day
         Assert.Equal([SettingsField.ObsidianTools, SettingsField.ObsidianVault, SettingsField.ObsidianAllowDelete], SettingsMenu.ToolsTabFields[7]);   // the switch, then the vault (2026-09-22), then the delete switch (later that day)
         Assert.Equal([SettingsField.SqlTools, SettingsField.SqlConnectionsOffered, SettingsField.SqlDefaultConnection, SettingsField.SqlSetPassword, SettingsField.SqlAddConnection, SettingsField.SqlPercentMention, SettingsField.SqlQueryMaxRows, SettingsField.SqlQueryTimeoutSeconds, SettingsField.SqlConnectionsProfile, SettingsField.SqlConnectionsGlobal], SettingsMenu.ToolsTabFields[9]);   // the switch, the offered list (later that day), the default, the password prompt, the add-connection wizard and the %-mention switch (later that day), the two caps, the two edit rows (2026-09-23)
+        Assert.Equal([SettingsField.OracleTools, SettingsField.OracleConnectionsOffered, SettingsField.OracleDefaultConnection, SettingsField.OracleSetPassword, SettingsField.OracleAddConnection, SettingsField.OraclePercentMention, SettingsField.OracleQueryMaxRows, SettingsField.OracleQueryTimeoutSeconds, SettingsField.OracleConnectionsProfile, SettingsField.OracleConnectionsGlobal], SettingsMenu.ToolsTabFields[10]);   // the SQL tab's rows, in its order (2026-09-30)
         Assert.Equal(Enum.GetValues<SettingsField>().Order(), SettingsMenu.TabFields.Concat(SettingsMenu.SkillsTabFields).Concat(SettingsMenu.ToolsTabFields).Concat(SettingsMenu.McpTabFields).SelectMany(t => t).Order());
-        Assert.Equal(21, SettingsMenu.LabelWidthOf(SettingsMenu.ToolsTabFields[11]));   // "Tool collapse count" (2026-09-22; "$-mention enabled", 19, before)
+        Assert.Equal(21, SettingsMenu.LabelWidthOf(SettingsMenu.ToolsTabFields[12]));   // "Tool collapse count" (2026-09-22; "$-mention enabled", 19, before)
         Assert.Equal(26, SettingsMenu.LabelWidthOf(SettingsMenu.ToolsTabFields[0]));   // "Web browser network mode" (the Web-prefixed labels, later still on 2026-09-19; "Web search max results", 24, before)
         Assert.Equal(32, SettingsMenu.LabelWidthOf(SettingsMenu.ToolsTabFields[1]));   // "File view image max (per call)" (later still on 2026-09-19; "Stale line number guard", 25, that morning; "Always return line numbers", 28, before)
         Assert.Equal(29, SettingsMenu.LabelWidthOf(SettingsMenu.ToolsTabFields[2]));   // "Shell tool bridge max calls" (the Shell tab, 2026-09-21; the row was "Shell code max tool calls", 27, until later that day)
         Assert.Equal(30, SettingsMenu.LabelWidthOf(SettingsMenu.ToolsTabFields[3]));   // "Ask max choices per question"
-        Assert.Equal(28, SettingsMenu.LabelWidthOf(SettingsMenu.ToolsTabFields[10]));   // "Git native log max commits" (later on 2026-09-21; "Git log max commits", 21, from 2026-09-20)
+        Assert.Equal(28, SettingsMenu.LabelWidthOf(SettingsMenu.ToolsTabFields[11]));   // "Git native log max commits" (later on 2026-09-21; "Git log max commits", 21, from 2026-09-20)
         Assert.Equal(27, SettingsMenu.LabelWidthOf(SettingsMenu.ToolsTabFields[9]));   // "SQL connections (profile)" (2026-09-23)
+        Assert.Equal(30, SettingsMenu.LabelWidthOf(SettingsMenu.ToolsTabFields[10]));   // "Oracle connections (profile)" (2026-09-30)
         Assert.Equal(32, SettingsMenu.LabelWidthOf(SettingsMenu.ToolsTabFields[7]));   // "Obsidian allow delete (.trash)" (2026-09-23; "Obsidian allow delete" from later on 2026-09-22, "Obsidian tools" that morning)
         // None refused under a reply but the Claude API's four reconnect rows, on the Claude tab since 2026-09-29, and the Claude CLI server's (2026-09-30).
         Assert.Equal([SettingsField.ClaudeApi, SettingsField.ClaudeApiKey, SettingsField.ClaudeApiMaxTokens, SettingsField.ClaudeApiPromptCaching, SettingsField.ClaudeCliServer], SettingsMenu.ToolsTabFields.SelectMany(t => t).Where(SettingsMenu.RefusedMidTurn));
@@ -337,7 +339,7 @@ public partial class ToolsMenuTests : IDisposable
         Directory.CreateDirectory(plain);
         Directory.CreateDirectory(Path.Combine(vault, ".obsidian"));
         var (menu, _, _) = PaneMenu();
-        Push(Keys.Left, Keys.Left, Keys.Left, Keys.Left, Keys.Left, Keys.Down, Keys.Enter);   // Offered → Options → Git (native) → SQL → ComfyUI → Obsidian, the vault row's typed slot
+        Push(Keys.Left, Keys.Left, Keys.Left, Keys.Left, Keys.Left, Keys.Left, Keys.Down, Keys.Enter);   // Offered → Options → Git (native) → Oracle → SQL → ComfyUI → Obsidian, the vault row's typed slot
         Push([.. plain.Select(Keys.Char), Keys.Enter]);         // no .obsidian: refused, kept
         Push(Keys.Enter);
         Push([.. vault.Select(Keys.Char), Keys.Enter]);
@@ -361,7 +363,7 @@ public partial class ToolsMenuTests : IDisposable
         Directory.CreateDirectory(_settings.ProfileDirectory);
         File.WriteAllText(path, """{ "connections": { "prod": { "server": "x", "auth": "runas", "user": "CONTOSO\\svc-test" }, "mine": { "server": "y", "auth": "windows" } } }""");
         var (menu, _, _) = PaneMenu();
-        Push(Keys.Left, Keys.Left, Keys.Left, Keys.Down, Keys.Down, Keys.Down, Keys.Enter);   // Offered → Options → Git (native) → SQL, the set-password row (the third since the offered list): the pick
+        Push(Keys.Left, Keys.Left, Keys.Left, Keys.Left, Keys.Down, Keys.Down, Keys.Down, Keys.Enter);   // Offered → Options → Git (native) → Oracle → SQL, the set-password row (the third since the offered list): the pick
         Push(Keys.Enter);                                               // prod, the one connection that takes a password
         Push([.. "s3cret".Select(Keys.Char), Keys.Enter]);
         Push(Keys.Escape);
@@ -378,11 +380,161 @@ public partial class ToolsMenuTests : IDisposable
         Assert.Equal("prod  (runas CONTOSO\\svc-test · encrypted in sql.json)", SettingsMenu.SqlPasswordRow(loaded.Connections[0]));
     }
 
+    /// <summary>Offered → Options → Git → Oracle, row <paramref name="row"/> (2026-09-30): the switch 0, offered 1, default 2, password 3, wizard 4.</summary>
+    private void OpenOracleRow(int row) => Push([Keys.Left, Keys.Left, Keys.Left, .. Enumerable.Repeat(Keys.Down, row), Keys.Enter]);
+
+    /// <summary>
+    /// <c>Oracle add connection</c> (2026-09-30, the user's ask): a connection walked through every page into the profile's file,
+    /// the test run over the unsaved draft (its password handed over plain, nothing written) naming who it signed in as and
+    /// warning of an account that can write, then saved — the entry in the file, the password encrypted after it, never on screen.
+    /// </summary>
+    [Fact]
+    public async Task OnThePane_TheOracleWizard_WalksAConnection_TestsTheDraft_WarnsOfWrites_AndSavesIt()
+    {
+        string path = NeonSidekick.Oracle.OracleConfigFile.ProfilePath(_settings.ProfileDirectory);
+        var tested = new List<(NeonSidekick.Oracle.OracleNamedConnection Connection, bool FileThere)>();
+        var (menu, _, _) = PaneMenu(testOracle: (c, _) =>
+        {
+            tested.Add((c, File.Exists(path)));
+            return Task.FromResult(new NeonSidekick.Sql.SqlRun(NeonSidekick.Sql.SqlOutcome.Ok, "", c.Name, "NEON",
+                [new NeonSidekick.Sql.SqlGrid(["user", "container", "version"], [["NEON", "FREEPDB1", "23.0.0.0.0"]], false), new NeonSidekick.Sql.SqlGrid(["what"], [["CREATE TABLE"], ["owns 3 tables"]], false)], TimeSpan.Zero));
+        });
+        OpenOracleRow(4);
+        Push(Keys.Enter);                         // the profile's file
+        Type("free");
+        Type("localhost:1521/FREEPDB1");
+        Push(Keys.Enter);                         // no default schema: the user's own
+        Type("sys");                              // refused: SYS is never held to a read-only transaction
+        Push([.. Enumerable.Repeat(Keys.Backspace, 3)]);
+        Type("neon");
+        Push(Keys.Enter);                         // file
+        Type("s3cret");
+        Push(Keys.Enter);                         // the default timeout
+        Type("the container");
+        Push(Keys.Down, Keys.Enter);              // Test
+        Push(Keys.Up, Keys.Enter);                // Save
+        Push(Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        var (connection, fileThere) = Assert.Single(tested);
+        Assert.False(fileThere);
+        Assert.Equal("s3cret", connection.Config.Password);
+        var loaded = NeonSidekick.Oracle.OracleConfigFile.Load(path);
+        var free = Assert.Single(loaded.Connections);
+        Assert.Equal("free", free.Name);
+        Assert.Equal("localhost:1521/FREEPDB1", free.Config.DataSource);
+        Assert.Equal("neon", free.Config.User);
+        Assert.Null(free.Config.Schema);
+        Assert.Equal("the container", free.Config.Description);
+        Assert.Equal("s3cret", NeonSidekick.Oracle.OracleSecrets.Resolve(free).Value);
+        Assert.StartsWith(NeonSidekick.Oracle.OracleConfigFile.EmptyText[..40], File.ReadAllText(path));
+        Assert.Contains("\"user\" is 'sys'; SYS", _console.Output);
+        Assert.Contains(NeonSidekick.Oracle.OracleText.TestOk("free", "NEON", "FREEPDB1", "23.0.0.0.0"), _console.Output);
+        Assert.Contains("This account can change data (CREATE TABLE, owns 3 tables)", _console.Output);
+        Assert.Contains("Added 'free' to ", _console.Output);
+        Assert.Contains(SettingsMenu.SqlWizardMasked, _console.Output);
+        Assert.DoesNotContain("s3cret", _console.Output);
+        Assert.Null(_settings.Current.OracleConnectionsOffered);
+    }
+
+    /// <summary>The wizard's ESC on its first page writes nothing; a bad schema asks again; a narrowed profile's first save row offers the new one.</summary>
+    [Fact]
+    public async Task OnThePane_TheOracleWizard_ChecksTheSchema_OffersIntoANarrowedProfile_AndEscWritesNothing()
+    {
+        _settings.Update(d => d.OracleConnectionsOffered = ["other"]);
+        string home = NeonSidekick.Oracle.OracleConfigFile.GlobalPath(_settings.StorageDirectory);
+        var (menu, _, _) = PaneMenu(testOracle: (c, _) => Task.FromResult(NeonSidekick.Sql.SqlRun.Refused(NeonSidekick.Sql.SqlOutcome.ConnectFailed, "ORA-12541: no listener", c.Name)));
+        OpenOracleRow(4);
+        Push(Keys.Escape);                        // the first page: nothing written
+        Push(Keys.Enter);                         // again
+        Push(Keys.Down, Keys.Enter);              // the home's file
+        Type("ledger");
+        Type("(DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)(HOST=db)(PORT=1521))(CONNECT_DATA=(SERVICE_NAME=LEDGER)))");
+        Type("not a name");                       // refused
+        Push([.. Enumerable.Repeat(Keys.Backspace, 10)]);
+        Type("ledger");
+        Type("ledger_ro");
+        Push(Keys.Down, Keys.Enter);              // credman
+        Type("pw");
+        Type("9");
+        Push(Keys.Enter);                         // no description
+        Push(Keys.Down, Keys.Down, Keys.Enter);   // Test: the failure on the status line, still saveable
+        Push(Keys.Up, Keys.Up, Keys.Enter);       // Save, and offer it
+        Push(Keys.Escape);
+
+        string target = "NeonSidekick/oracle/ledger";
+        try
+        {
+            await menu.ShowAsync(CancellationToken.None);
+
+            Assert.Contains(SettingsMenu.SqlWizardCancelledNotice, _console.Output);
+            Assert.Contains(NeonSidekick.Oracle.OracleText.BadSchemaKey("not a name"), _console.Output);
+            Assert.Contains("Error: could not connect to ledger: ORA-12541: no listener", _console.Output);
+            var ledger = Assert.Single(NeonSidekick.Oracle.OracleConfigFile.Load(home).Connections);
+            Assert.Equal("ledger", ledger.Config.Schema);
+            Assert.True(ledger.Config.InCredentialManager);
+            Assert.Null(ledger.Config.Password);
+            Assert.Equal(9, ledger.Config.ConnectTimeoutSeconds);
+            Assert.Equal("pw", NeonSidekick.Sql.WindowsCredentials.ReadGeneric(target).Value);
+            Assert.Equal(["other", "ledger"], _settings.Current.OracleConnectionsOffered);
+        }
+        finally
+        {
+            NeonSidekick.Sql.WindowsCredentials.DeleteGeneric(target);
+        }
+    }
+
+    [Fact]
+    public async Task OnThePane_TheOracleTab_SetsAPassword_Masked_IntoTheConnectionsStore()
+    {
+        string path = NeonSidekick.Oracle.OracleConfigFile.ProfilePath(_settings.ProfileDirectory);
+        Directory.CreateDirectory(_settings.ProfileDirectory);
+        File.WriteAllText(path, """{ "connections": { "free": { "dataSource": "x:1521/y", "user": "neon" } } }""");
+        var (menu, _, _) = PaneMenu();
+        OpenOracleRow(3);
+        Push(Keys.Enter);                                               // free
+        Push([.. "s3cret".Select(Keys.Char), Keys.Enter]);
+        Push(Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        var loaded = NeonSidekick.Oracle.OracleConfigFile.Load(path);
+        Assert.Equal("s3cret", NeonSidekick.Oracle.OracleSecrets.Resolve(loaded.Connections[0]).Value);
+        Assert.Contains("▸ " + SettingsMenu.OraclePasswordRow(loaded.Connections[0]), _console.Output);
+        Assert.DoesNotContain("s3cret", _console.Output);
+        Assert.Contains("Saved the password of 'free', encrypted, in ", _console.Output);
+        Assert.Equal("free  (user neon · encrypted in oracle.json)", SettingsMenu.OraclePasswordRow(loaded.Connections[0]));
+    }
+
+    [Fact]
+    public async Task OnThePane_TheOracleTab_NarrowsTheOfferedConnections_AndPicksTheDefault()
+    {
+        string path = NeonSidekick.Oracle.OracleConfigFile.ProfilePath(_settings.ProfileDirectory);
+        Directory.CreateDirectory(_settings.ProfileDirectory);
+        File.WriteAllText(path, """{ "connections": { "free": { "dataSource": "x:1521/y", "user": "u" }, "ledger": { "dataSource": "z:1521/l", "user": "u" } } }""");
+        var (menu, _, _) = PaneMenu();
+        OpenOracleRow(1);
+        Push(Keys.Enter);                                    // free off
+        Push(Keys.Escape);
+        Push(Keys.Down, Keys.Enter);                         // the default row: the pick
+        Push(Keys.Down, Keys.Enter);                         // ledger (the first row is "the first connection")
+        Push(Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Equal(["ledger"], _settings.Current.OracleConnectionsOffered);
+        Assert.Equal("ledger", _settings.Current.OracleDefaultConnection);
+        Assert.Contains("Oracle connections offered    all (not narrowed)", _console.Output);
+        Assert.Contains("[ ] free", _console.Output);
+        Assert.Equal("1 of 2", SettingsMenu.OracleOfferedValue(_settings.Current.OracleConnectionsOffered, NeonSidekick.Oracle.OracleConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory)));
+    }
+
     /// <summary>Types <paramref name="text"/> into the open slot and submits it.</summary>
     private void Type(string text) => Push([.. text.Select(Keys.Char), Keys.Enter]);
 
     /// <summary>Offered → Options → SQL, the add-connection row (the fifth, under the password prompt): the wizard.</summary>
-    private void OpenSqlWizard() => Push(Keys.Left, Keys.Left, Keys.Left, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter);
+    private void OpenSqlWizard() => Push(Keys.Left, Keys.Left, Keys.Left, Keys.Left, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter);
 
     /// <summary>
     /// <c>SQL add connection</c> (later on 2026-09-23, the user's ask): a SQL login walked through every page into the profile's
@@ -612,7 +764,7 @@ public partial class ToolsMenuTests : IDisposable
         Directory.CreateDirectory(_settings.ProfileDirectory);
         File.WriteAllText(path, """{ "connections": { "aw": { "server": "x", "auth": "windows" }, "prod": { "server": "y", "auth": "windows" } } }""");
         var (menu, _, _) = PaneMenu();
-        Push(Keys.Left, Keys.Left, Keys.Left, Keys.Down, Keys.Enter);   // Offered → Options → Git (native) → SQL, the offered row: the checklist
+        Push(Keys.Left, Keys.Left, Keys.Left, Keys.Left, Keys.Down, Keys.Enter);   // Offered → Options → Git (native) → Oracle → SQL, the offered row: the checklist
         Push(Keys.Down, Keys.Enter);                         // prod off
         Push(Keys.Char(' '));                                // and on again (Space flips too)
         Push(Keys.Enter);                                    // and off
@@ -641,7 +793,7 @@ public partial class ToolsMenuTests : IDisposable
         var opened = new List<string>();
         var answers = new Queue<string?>([vault, null]);
         var (menu, pane, _) = PaneMenu((openOn, _) => { opened.Add(openOn); return Task.FromResult(answers.Dequeue()); });
-        Push(Keys.Left, Keys.Left, Keys.Left, Keys.Left, Keys.Left, Keys.Down, Keys.Enter);   // Offered → Options → Git (native) → SQL → ComfyUI → Obsidian, the vault row: the picker, the vault picked
+        Push(Keys.Left, Keys.Left, Keys.Left, Keys.Left, Keys.Left, Keys.Left, Keys.Down, Keys.Enter);   // Offered → Options → Git (native) → Oracle → SQL → ComfyUI → Obsidian, the vault row: the picker, the vault picked
         Push(Keys.Enter);                                       // again: nothing picked
         Push(Keys.Escape);
 
@@ -1011,7 +1163,7 @@ public partial class ToolsMenuTests : IDisposable
         Assert.Contains("  · Web\n  ·   Web tools: on\n  ·   Web browser mode: default\n  ·   Web browser path: (auto: msedge.exe)\n", _console.Output);
         Assert.Contains("  ·   Web search max results: 20 results\n  · Files\n  ·   File tools: on\n  ·   File safe edits: off\n", _console.Output);
         Assert.Contains("  · Shell\n  ·   Shell command policy: ask\n", _console.Output);
-        Assert.Contains("  · Ask\n  ·   Ask user: on\n  ·   Ask max questions: 10 questions\n  ·   Ask max choices per question: 10 choices\n  · Claude\n  ·   Claude executable: (looked up)\n  ·   Claude slash command permissions: read-only\n  ·   Claude slash command model: (Claude Code's default)\n  ·   Claude slash command effort: (Claude Code's default)\n  ·   Claude advisor tool: off\n  ·   Claude advisor tool context: brief\n  ·   Claude advisor tool calls per turn: 2 calls\n  ·   Claude advisor tool model: (as Claude slash command model)\n  ·   Claude advisor tool effort: (as Claude slash command effort)\n  ·   Claude advisor tool confirm: off\n  ·   Claude API: off\n  ·   Claude API key: (none)\n  ·   Claude API max tokens: 32,000 tokens\n  ·   Claude API prompt caching: on\n  ·   Claude CLI server: off\n  · Home Assistant\n  ·   Home Assistant tools: on\n  ·   Home Assistant URL: (not set)\n  ·   Home Assistant API key: (none)\n  ·   Home Assistant test connection: Enter to ask the server for its version\n  ·   Home Assistant action policy: ask\n  ·   Home Assistant Assist agent: (Home Assistant's default)\n  ·   Home Assistant timeout (s): 10\n  · Print\n  ·   Print tools: off\n  ·   Print action policy: ask\n  ·   Print default printer: (Windows default)\n  ·   Print font size (pt): 10 pt\n  · Obsidian\n  ·   Obsidian tools: on\n  ·   Obsidian vault: (not set)\n  ·   Obsidian allow delete (.trash): on\n  · ComfyUI\n  ·   ComfyUI tools: on\n  ·   ComfyUI URL: (not set)\n  ·   ComfyUI workflows offered: all (not narrowed)\n  ·   ComfyUI add workflow: Enter to start workflow wizard\n  ·   ComfyUI ^-mention enabled: on\n  ·   ComfyUI timeout (s): 300\n  ·   ComfyUI max pictures per call: 5 pictures\n  ·   ComfyUI reinforce negatives: on\n  ·   ComfyUI show prompts: on\n  ·   ComfyUI picture strip: on\n  ·   ComfyUI output folder: comfy_images\n  · SQL\n  ·   SQL tools: on\n  ·   SQL connections offered: all (not narrowed)\n  ·   SQL default connection: (the first connection)\n  ·   SQL set password: Enter to set password for a connection\n  ·   SQL add connection: Enter to start connection wizard\n  ·   SQL %-mention enabled: on\n  ·   SQL max rows: 100 rows\n  ·   SQL query timeout (s): 30\n  ·   SQL connections (profile): (none) · Enter edits sql.json\n  ·   SQL connections (global): (none) · Enter edits sql.json\n  · Git\n  ·   Git native tools: on\n  ·   Git native diff max lines: 500 lines\n  ·   Git native log max commits: 20 commits\n  ·   Git native email: (not set)\n  ·   Git native name: (not set)\n  · Options\n  ·   $-mention enabled: on\n  ·   Tool collapse count: 2 lines\n  ·   Code collapse count: 20 lines\n", _console.Output);
+        Assert.Contains("  · Ask\n  ·   Ask user: on\n  ·   Ask max questions: 10 questions\n  ·   Ask max choices per question: 10 choices\n  · Claude\n  ·   Claude executable: (looked up)\n  ·   Claude slash command permissions: read-only\n  ·   Claude slash command model: (Claude Code's default)\n  ·   Claude slash command effort: (Claude Code's default)\n  ·   Claude advisor tool: off\n  ·   Claude advisor tool context: brief\n  ·   Claude advisor tool calls per turn: 2 calls\n  ·   Claude advisor tool model: (as Claude slash command model)\n  ·   Claude advisor tool effort: (as Claude slash command effort)\n  ·   Claude advisor tool confirm: off\n  ·   Claude API: off\n  ·   Claude API key: (none)\n  ·   Claude API max tokens: 32,000 tokens\n  ·   Claude API prompt caching: on\n  ·   Claude CLI server: off\n  · Home Assistant\n  ·   Home Assistant tools: on\n  ·   Home Assistant URL: (not set)\n  ·   Home Assistant API key: (none)\n  ·   Home Assistant test connection: Enter to ask the server for its version\n  ·   Home Assistant action policy: ask\n  ·   Home Assistant Assist agent: (Home Assistant's default)\n  ·   Home Assistant timeout (s): 10\n  · Print\n  ·   Print tools: off\n  ·   Print action policy: ask\n  ·   Print default printer: (Windows default)\n  ·   Print font size (pt): 10 pt\n  · Obsidian\n  ·   Obsidian tools: on\n  ·   Obsidian vault: (not set)\n  ·   Obsidian allow delete (.trash): on\n  · ComfyUI\n  ·   ComfyUI tools: on\n  ·   ComfyUI URL: (not set)\n  ·   ComfyUI workflows offered: all (not narrowed)\n  ·   ComfyUI add workflow: Enter to start workflow wizard\n  ·   ComfyUI ^-mention enabled: on\n  ·   ComfyUI timeout (s): 300\n  ·   ComfyUI max pictures per call: 5 pictures\n  ·   ComfyUI reinforce negatives: on\n  ·   ComfyUI show prompts: on\n  ·   ComfyUI picture strip: on\n  ·   ComfyUI output folder: comfy_images\n  · SQL\n  ·   SQL tools: on\n  ·   SQL connections offered: all (not narrowed)\n  ·   SQL default connection: (the first connection)\n  ·   SQL set password: Enter to set password for a connection\n  ·   SQL add connection: Enter to start connection wizard\n  ·   SQL %-mention enabled: on\n  ·   SQL max rows: 100 rows\n  ·   SQL query timeout (s): 30\n  ·   SQL connections (profile): (none) · Enter edits sql.json\n  ·   SQL connections (global): (none) · Enter edits sql.json\n  · Oracle\n  ·   Oracle tools: off\n  ·   Oracle connections offered: all (not narrowed)\n  ·   Oracle default connection: (the first connection)\n  ·   Oracle set password: Enter to set password for a connection\n  ·   Oracle add connection: Enter to start connection wizard\n  ·   Oracle %-mention enabled: on\n  ·   Oracle max rows: 100 rows\n  ·   Oracle query timeout (s): 30\n  ·   Oracle connections (profile): (none) · Enter edits oracle.json\n  ·   Oracle connections (global): (none) · Enter edits oracle.json\n  · Git\n  ·   Git native tools: on\n  ·   Git native diff max lines: 500 lines\n  ·   Git native log max commits: 20 commits\n  ·   Git native email: (not set)\n  ·   Git native name: (not set)\n  · Options\n  ·   $-mention enabled: on\n  ·   Tool collapse count: 2 lines\n  ·   Code collapse count: 20 lines\n", _console.Output);
         Assert.False(pane.OverlayOpen);
         pane.Dispose();
     }
@@ -1115,7 +1267,7 @@ public partial class ToolsMenuTests : IDisposable
         Directory.CreateDirectory(_settings.ProfileDirectory);
         File.WriteAllText(path, """{ "connections": { "aw": { "server": "x", "auth": "windows" }, "prod": { "server": "y", "auth": "windows" } } }""");
         var (menu, _, _) = PaneMenu();
-        Push(Keys.Left, Keys.Left, Keys.Left, Keys.Down, Keys.Enter);   // Offered → Options → Git → SQL, the offered row
+        Push(Keys.Left, Keys.Left, Keys.Left, Keys.Left, Keys.Down, Keys.Enter);   // Offered → Options → Git → Oracle → SQL, the offered row
         Push(Keys.Char('a'));
         Push(Keys.Escape, Keys.Escape);
 
@@ -1124,7 +1276,7 @@ public partial class ToolsMenuTests : IDisposable
         Assert.Equal(["aw", "prod"], _settings.Current.SqlConnectionsOffered);
 
         (menu, _, _) = PaneMenu();
-        Push(Keys.Left, Keys.Left, Keys.Left, Keys.Down, Keys.Enter);
+        Push(Keys.Left, Keys.Left, Keys.Left, Keys.Left, Keys.Down, Keys.Enter);
         Push(Keys.Char('n'));
         Push(Keys.Escape, Keys.Escape);
 
@@ -1159,7 +1311,7 @@ public partial class ToolsMenuTests : IDisposable
         Assert.Equal([], _settings.Current.ComfyWorkflowsOffered);
     }
 
-    private void OpenImagesRow(int row) => Push([Keys.Left, Keys.Left, Keys.Left, Keys.Left, .. Enumerable.Repeat(Keys.Down, row), Keys.Enter]);
+    private void OpenImagesRow(int row) => Push([Keys.Left, Keys.Left, Keys.Left, Keys.Left, Keys.Left, .. Enumerable.Repeat(Keys.Down, row), Keys.Enter]);
 
     [Fact]
     public async Task OnThePane_TheComfyUITab_NarrowsTheOfferedWorkflows_AndANewOneStartsHidden()

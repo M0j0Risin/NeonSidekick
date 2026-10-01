@@ -115,6 +115,18 @@ public class SmokeChecksTests
         Assert.Contains("Microsoft.Data.SqlClient.SNI.dll", SmokeChecks.RequiredNativeLibraries);
     }
 
+    /// <summary><c>oracle:driver</c> (2026-09-30): the gate, the fetch-size setter the trimmed driver broke, and ODP.NET's connect path answering a port nobody serves.</summary>
+    [Fact]
+    public void ProbeOracle_ChecksTheGate_AndReachesTheManagedDriver()
+    {
+        var check = SmokeChecks.ProbeOracle();
+
+        Assert.Equal("oracle:driver", check.Name);
+        Assert.True(check.Passed, check.Detail);
+        Assert.StartsWith("gate ok; ODP.NET ", check.Detail);
+        Assert.Contains(" answered ORA-", check.Detail);
+    }
+
     [Fact]
     public void ProbeCulture_SeesTheInvariantPin()
     {

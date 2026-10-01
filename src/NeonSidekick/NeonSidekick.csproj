@@ -132,6 +132,25 @@
     -->
     <PackageReference Include="Microsoft.Data.SqlClient" Version="7.1.0" />
     <PackageReference Include="Microsoft.SqlServer.TransactSql.ScriptDom" Version="180.107.0" />
+    <!--
+      The Oracle tools (Oracle/, Llm/Tools/Oracle*Tool.cs, `Oracle tools`, 2026-09-30): read-only queries on
+      Oracle over the connections of oracle.json. ODP.NET Core, Oracle's free, fully managed driver (no
+      Instant Client; its one P/Invoke is crypt32), under the Oracle Free Use Terms. It declares no AOT
+      support either — Dotfuscated, reflection for its optional add-ons (cloud tokens, Kerberos, config
+      files: not used here) — and ILC reports IL2104/IL3053 and IL3000s naming OracleInternal (third-party,
+      tolerated). The spike against Oracle Free 23.26 ran connect, binds, every scalar type, CLOB/BLOB/RAW,
+      TIMESTAMP WITH TIME ZONE, intervals, BOOLEAN, async reads, cancel and ORA-01013 cleanly — except
+      that the trimmed assembly threw NullReferenceException from OracleCommand.InitialLONGFetchSize and read
+      LONG columns (the dictionary's DATA_DEFAULT, SEARCH_CONDITION, ALL_VIEWS.TEXT) as empty. Rooted whole
+      (TrimmerRootAssembly below, ~9 MB), both work. The smoke probe oracle:driver and the check mode
+      oracle-check are the proof on the published binary.
+    -->
+    <PackageReference Include="Oracle.ManagedDataAccess.Core" Version="23.26.301" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- ODP.NET reaches its own members by reflection: trimmed, LONG columns read empty (see its PackageReference). -->
+    <TrimmerRootAssembly Include="Oracle.ManagedDataAccess" />
   </ItemGroup>
 
   <!--

@@ -214,6 +214,20 @@ public sealed class Assistant
         NeonSidekick.Llm.Tools.SqlQueryTool.ToolName + " runs one SELECT per call, kept small with WHERE and TOP, values bound as @name through params.";
 
     /// <summary>
+    /// The sentence the default rules gain while the Oracle tools are offered (the setting <c>Oracle tools</c> on and a
+    /// connection in <c>oracle.json</c>, 2026-09-30): appended after <see cref="SqlRule"/> by <see cref="DefaultRules"/>, its
+    /// twin — the dialect (FETCH FIRST, not TOP or LIMIT; <c>:name</c> binds; no trailing semicolon), that the tools only read,
+    /// the order a question is worked in, and that unquoted names are upper case. Pinned.
+    /// </summary>
+    public const string OracleRule =
+        "The Oracle tools read Oracle databases (Oracle SQL: FETCH FIRST n ROWS ONLY, not TOP or LIMIT; no trailing semicolon; unquoted names are upper case) on the user's named connections and never change data: " +
+        NeonSidekick.Llm.Tools.OracleConnectionsTool.ToolName + " lists the connections and " + NeonSidekick.Llm.Tools.OracleSchemasTool.ToolName + " a database's schemas; " +
+        NeonSidekick.Llm.Tools.OracleTablesTool.ToolName + " finds a table and " + NeonSidekick.Llm.Tools.OracleColumnsTool.ToolName + " a column, " +
+        NeonSidekick.Llm.Tools.OracleDescribeTool.ToolName + " shows a table's columns, keys and constraints, " + NeonSidekick.Llm.Tools.OracleRelationshipsTool.ToolName + " the joins and " +
+        NeonSidekick.Llm.Tools.OracleIndexesTool.ToolName + " the indexes — look before you query, never guess a column; " +
+        NeonSidekick.Llm.Tools.OracleQueryTool.ToolName + " runs one SELECT per call, kept small with WHERE and FETCH FIRST, values bound as :name through params.";
+
+    /// <summary>
     /// The sentence the default rules gain while the shell tools are offered (the setting <c>Shell command
     /// policy</c> not <c>off</c>, 2026-09-21): appended after <see cref="GitRule"/> by <see cref="DefaultRules"/>. It
     /// says what the tool is for, that the sandbox is only where a command starts, that the user stands between
@@ -279,13 +293,13 @@ public sealed class Assistant
     /// The sentence the default rules gain after the shell rule while the setting <c>Shell prefer native tools</c> is on
     /// (2026-09-26, the user's ask: the model kept running <c>cat</c>, <c>dir</c>, <c>git status</c> or <c>curl</c> through
     /// <c>run_command</c> when a tool of its own did the job). It names only the groups offered that turn —
-    /// <paramref name="files"/>, <paramref name="git"/>, <paramref name="web"/>, <paramref name="sql"/> — each with the shell
+    /// <paramref name="files"/>, <paramref name="git"/>, <paramref name="web"/>, <paramref name="sql"/>, <paramref name="oracle"/> (2026-09-30) — each with the shell
     /// words it replaces, since a small model follows a named word better than a principle; empty when none is, so a
     /// shell-only turn gains nothing. <c>run_command</c> backs it at the call (<see cref="Shell.NativeRedirect"/>). Pinned.
     /// </summary>
-    public static string ShellNativeRule(bool files, bool git, bool web, bool sql)
+    public static string ShellNativeRule(bool files, bool git, bool web, bool sql, bool oracle = false)
     {
-        var parts = new List<string>(4);
+        var parts = new List<string>(5);
         if (files)
         {
             parts.Add(NeonSidekick.Llm.Tools.ReadFileTool.ToolName + " and " + NeonSidekick.Llm.Tools.SearchFilesTool.ToolName + " read, search and list files (not cat, type, Get-Content, dir, ls or grep) and the file tools write, copy, move and delete them");
@@ -304,6 +318,11 @@ public sealed class Assistant
         if (sql)
         {
             parts.Add(NeonSidekick.Llm.Tools.SqlQueryTool.ToolName + " reads the databases (not sqlcmd)");
+        }
+
+        if (oracle)
+        {
+            parts.Add(NeonSidekick.Llm.Tools.OracleQueryTool.ToolName + " reads the Oracle databases (not sqlplus)");
         }
 
         return parts.Count == 0
@@ -422,16 +441,16 @@ public sealed class Assistant
     /// default, later that day), and as the <c>…Unpoliced</c> variant with <paramref name="police"/> false (the setting <c>Shell police
     /// outside paths</c> off, 2026-09-22; <see cref="ShellRuleFor"/>), followed by <see cref="ShellNativeRule"/> with <paramref name="native"/>
     /// (the setting <c>Shell prefer native tools</c>, 2026-09-26) when it names a group. <see cref="ObsidianDeleteRule"/> follows <see cref="ObsidianRule"/>
-    /// with <paramref name="obsidianDelete"/> (<c>vault_delete</c> offered, later on 2026-09-22); <see cref="SqlRule"/> after them with <paramref name="sql"/> (2026-09-23), <see cref="HomeAssistantRule"/> after it with <paramref name="homeAssistant"/> (2026-09-28), <see cref="ClaudeAdvisorRule"/> after that with <paramref name="advisor"/> (2026-09-27). With <paramref name="markdown"/> false it is <see cref="OperatingRules"/> and its variants byte for byte.
+    /// with <paramref name="obsidianDelete"/> (<c>vault_delete</c> offered, later on 2026-09-22); <see cref="SqlRule"/> after them with <paramref name="sql"/> (2026-09-23), <see cref="OracleRule"/> after it with <paramref name="oracle"/> (2026-09-30), <see cref="HomeAssistantRule"/> after it with <paramref name="homeAssistant"/> (2026-09-28), <see cref="ClaudeAdvisorRule"/> after that with <paramref name="advisor"/> (2026-09-27). With <paramref name="markdown"/> false it is <see cref="OperatingRules"/> and its variants byte for byte.
     /// </summary>
-    public static string DefaultRules(bool markdown, bool tools, bool files = true, bool web = false, AskLimits? ask = null, bool sessions = false, bool download = true, bool delete = true, bool mcp = false, bool safeEdits = true, bool timers = true, bool git = false, bool shell = false, bool bridge = false, bool police = true, bool obsidian = false, bool obsidianDelete = false, bool sql = false, bool native = false, bool advisor = false, bool homeAssistant = false) =>
+    public static string DefaultRules(bool markdown, bool tools, bool files = true, bool web = false, AskLimits? ask = null, bool sessions = false, bool download = true, bool delete = true, bool mcp = false, bool safeEdits = true, bool timers = true, bool git = false, bool shell = false, bool bridge = false, bool police = true, bool obsidian = false, bool obsidianDelete = false, bool sql = false, bool native = false, bool advisor = false, bool homeAssistant = false, bool oracle = false) =>
         tools
-            ? TextRule(markdown) + " " + (timers ? ToolRules : ToolRulesWithoutTimers) + (files ? " " + (delete ? (safeEdits ? FileRule : FileRuleDeleteInPlace) : FileRuleWithoutDelete) : "") + (web ? " " + WebRule : "") + (web && files && download ? " " + DownloadRule : "") + (git ? " " + GitRule : "") + (shell ? " " + ShellRuleFor(bridge, police) + NativeTail(native, files, git, web, sql) : "") + (obsidian ? " " + ObsidianRule + (obsidianDelete ? " " + ObsidianDeleteRule : "") : "") + (sql ? " " + SqlRule : "") + (homeAssistant ? " " + HomeAssistantRule : "") + (advisor ? " " + ClaudeAdvisorRule : "") + (ask is { } limits ? " " + AskRule(limits) : "") + (sessions ? " " + SessionRule : "") + (mcp ? " " + McpRule : "")
+            ? TextRule(markdown) + " " + (timers ? ToolRules : ToolRulesWithoutTimers) + (files ? " " + (delete ? (safeEdits ? FileRule : FileRuleDeleteInPlace) : FileRuleWithoutDelete) : "") + (web ? " " + WebRule : "") + (web && files && download ? " " + DownloadRule : "") + (git ? " " + GitRule : "") + (shell ? " " + ShellRuleFor(bridge, police) + NativeTail(native, files, git, web, sql, oracle) : "") + (obsidian ? " " + ObsidianRule + (obsidianDelete ? " " + ObsidianDeleteRule : "") : "") + (sql ? " " + SqlRule : "") + (oracle ? " " + OracleRule : "") + (homeAssistant ? " " + HomeAssistantRule : "") + (advisor ? " " + ClaudeAdvisorRule : "") + (ask is { } limits ? " " + AskRule(limits) : "") + (sessions ? " " + SessionRule : "") + (mcp ? " " + McpRule : "")
             : TextRule(markdown);
 
     /// <summary><see cref="ShellNativeRule"/> after a space, or nothing: off, or no group to name.</summary>
-    private static string NativeTail(bool native, bool files, bool git, bool web, bool sql) =>
-        native && ShellNativeRule(files, git, web, sql) is { Length: > 0 } rule ? " " + rule : "";
+    private static string NativeTail(bool native, bool files, bool git, bool web, bool sql, bool oracle) =>
+        native && ShellNativeRule(files, git, web, sql, oracle) is { Length: > 0 } rule ? " " + rule : "";
 
     /// <summary>
     /// The system prompt for a turn, in this order: the persona (<paramref name="persona"/> from
@@ -470,11 +489,11 @@ public sealed class Assistant
     /// the third (2026-09-20) is a whole group: <paramref name="timers"/> false (no timer tool offered — headless, or the
     /// three switched off) drops <see cref="TimerRule"/>.
     /// </summary>
-    public static string SystemPrompt(bool speechOutput, IReadOnlyList<string>? memories, string? persona = null, string? operatingRules = null, string? voiceDirective = null, bool tools = true, bool web = false, bool files = true, AskLimits? ask = null, ProjectNotes? project = null, IReadOnlyList<Skills.Skill>? skills = null, bool markdown = false, bool sessions = false, bool download = true, bool recall = true, bool delete = true, bool mcp = false, bool safeEdits = true, bool timers = true, bool git = false, bool shell = false, bool bridge = false, bool police = true, bool obsidian = false, bool obsidianDelete = false, bool sql = false, bool native = false, string? plan = null, bool advisor = false, bool homeAssistant = false)
+    public static string SystemPrompt(bool speechOutput, IReadOnlyList<string>? memories, string? persona = null, string? operatingRules = null, string? voiceDirective = null, bool tools = true, bool web = false, bool files = true, AskLimits? ask = null, ProjectNotes? project = null, IReadOnlyList<Skills.Skill>? skills = null, bool markdown = false, bool sessions = false, bool download = true, bool recall = true, bool delete = true, bool mcp = false, bool safeEdits = true, bool timers = true, bool git = false, bool shell = false, bool bridge = false, bool police = true, bool obsidian = false, bool obsidianDelete = false, bool sql = false, bool native = false, string? plan = null, bool advisor = false, bool homeAssistant = false, bool oracle = false)
     {
         bool customPersona = !string.IsNullOrWhiteSpace(persona);
         bool customRules = !string.IsNullOrWhiteSpace(operatingRules);
-        string defaultRules = DefaultRules(markdown, tools, files, web, ask, sessions, download, delete, mcp, safeEdits, timers, git, shell, bridge, police, obsidian, obsidianDelete, sql, native, advisor, homeAssistant);
+        string defaultRules = DefaultRules(markdown, tools, files, web, ask, sessions, download, delete, mcp, safeEdits, timers, git, shell, bridge, police, obsidian, obsidianDelete, sql, native, advisor, homeAssistant, oracle);
         var sb = new StringBuilder(!customPersona && !customRules
             ? DefaultPersona + " " + defaultRules
             : (customPersona ? persona!.Trim() : DefaultPersona) + "\n\n" + (customRules ? operatingRules!.Trim() : defaultRules));

@@ -66,6 +66,7 @@ During early development, I was experimenting with synthwave-style themes in Spe
 ### Integrations
 * **Obsidian:** Search, read, write and link notes directly in your vault's files. No plugin is needed, and Obsidian doesn't have to be running. Wikilinks, aliases, tags, properties and daily notes all work.
 * **SQL Server:** Read-only queries over named connections, plus discovery of schemas, relationships and indexes. Every query is checked to be a single `SELECT` and runs in a transaction that is always rolled back. Sign in with SQL, Windows or run-as accounts; passwords are stored encrypted (DPAPI, Windows' per-user encryption) or in Windows Credential Manager.
+* **Oracle:** The same read-only tools for Oracle databases, through Oracle's fully managed driver (no Oracle Client to install). Every query is checked to be a single `SELECT`, runs in a read-only session (23ai and later) and a read-only transaction that is always rolled back. Sign in with a database user; passwords are stored as the SQL Server ones are.
 * **Home Assistant:** Control lights, scenes, the TV, to-do lists and sensors through your own Home Assistant. The model finds devices by room or name ("dim the den to 30%"), and anything outside a safe list waits for your yes. `/ha` drives the house directly, without the model.
 * **ComfyUI:** Pictures from your own ComfyUI workflows (text-to-image, image-to-image, face swaps). The model writes prompts in each model family's style, or `/imagine` sends yours exactly as typed. A wizard builds or imports workflows.
 * **Claude API:** Anthropic's Claude models as one more `/server` choice, using your own API key (stored encrypted), with thinking levels, prompt caching and cost in `/usage`. It stays off until you turn it on in the *Claude* tab of `/tools`.
@@ -121,6 +122,7 @@ Speech output (`/tts`) and voice input (`/stt`) start off. The first time you tu
 | `--smoke` | Checks the native parts load, then exits. |
 | `--audio-check` | Plays a test tone through the speech output, then exits. |
 | `--voice-check` | Records up to 5 seconds from the microphone and transcribes it, then exits. |
+| `--oracle-check <connection>` | Proves the Oracle tools against that connection of `oracle.json` (types, the read-only layers, cancel and timeout; it only reads), then exits. |
 | `--version` / `--help` | Prints the version or the help text. |
 
 Both `--option value` and `--option=value` work.
@@ -564,6 +566,7 @@ Every tool, grouped (Clock, Timers, Files, Git, Shell, Obsidian, SQL, ComfyUI, C
   * `git status`/`log`/`diff`/`add`/`commit` → the git tools
   * `curl`/`Invoke-WebRequest` → `web_fetch`
   * `sqlcmd` → `sql_query`
+  * `sqlplus` → `oracle_query`
 
   A single command that such a tool covers comes back as `Not run: 'cat' has a tool of its own — call read_file instead…`, before the pane asks.
   * Only once a turn: the same line sent again goes to the pane as usual, so a real need (an option the tool lacks) still reaches you.
@@ -679,6 +682,21 @@ You can change which services run without asking under `ask` in `profile.json` (
 | SQL query timeout (s) | How long one SQL tool's batch may run on the server (1–600). | 30 |
 | SQL connections (profile) | Enter opens the profile's `sql.json` in your editor (created with a commented example of each sign-in kind). The value shows how many connections it has. | (none) |
 | SQL connections (global) | The same for the home folder's `sql.json`, which every profile reads. The profile's wins on a name clash. | (none) |
+
+#### Oracle
+
+| Setting | What it does | Default |
+|---|---|---|
+| Oracle tools | Offers the Oracle tools (connections, schemas, tables, columns, describe, relationships, indexes, query) over the connections in `oracle.json`, once one is defined. | off |
+| Oracle connections offered | A checklist of the connections in both `oracle.json` files, as *SQL connections offered* is for `sql.json`. | all (not narrowed) |
+| Oracle default connection | The connection used when a call names none: one of the offered connections, or the first. A call can still name another, and `schema` works in another schema. | (the first connection) |
+| Oracle set password | Pick a connection and type its password, masked. It is saved to that connection's store: encrypted in its `oracle.json`, or in Windows Credential Manager. | — |
+| Oracle add connection | A wizard for a new connection, one page per choice. It can **test** the draft before saving it: who it signs in as, the server's version, and a warning when the account could change data. See Oracle. | — |
+| Oracle %-mention enabled | Typing `%` and part of a name also lists the Oracle connections, each marked `Oracle ·`; a pick writes `%name` as text. | on |
+| Oracle max rows | How many rows `oracle_query` returns unless the call says otherwise (1–1000). Past that, the header says more exist. | 100 |
+| Oracle query timeout (s) | How long one Oracle tool's statement may run on the server (1–600). | 30 |
+| Oracle connections (profile) | Enter opens the profile's `oracle.json` in your editor (created with commented examples). The value shows how many connections it has. | (none) |
+| Oracle connections (global) | The same for the home folder's `oracle.json`, which every profile reads. The profile's wins on a name clash. | (none) |
 
 #### Git
 
@@ -815,7 +833,7 @@ Type `/` to list every command with a short summary. After a command and a space
 | `/test [id \| reasoning \| structured \| long \| all \| history]` | Run benchmark tests against the connected model and save the results. On its own it lists the tests with their last verdicts. See Benchmark tests. |
 | `/theme [name]` | Switch the colour theme (the *Theme* setting). During a reply, it runs when the reply ends. |
 | `/timer [duration [name] \| stop <name> \| stop all]` | List the timers, start one (`10m`, `90s`, `1h30m`), or stop one. |
-| `/tools` | Switch the model's tools on or off and edit their settings (Web, Files, Shell, Ask, Claude, Home Assistant, Print, Obsidian, ComfyUI, SQL, Git). |
+| `/tools` | Switch the model's tools on or off and edit their settings (Web, Files, Shell, Ask, Claude, Home Assistant, Print, Obsidian, ComfyUI, SQL, Oracle, Git). |
 | `/tree [path]` | Print a tree of the working directory. Hidden, system and dot entries appear only when *File browser/tree mode* is `show-hidden`. `.git` folders are always left out, like `.trash`, unless you name one as the path. |
 | `/tts [on\|off]` | Toggle speech output. |
 | `/usage` | Show token usage and performance statistics. A `~` marks a reasoning count the app estimated (see *LLM reasoning estimate*). |
@@ -841,7 +859,7 @@ Type `/` to list every command with a short summary. After a command and a space
 
 `/plan <requirement>` has the model research and present a plan before anything changes. It needs *LLM offer tools*, and is refused while a reply runs.
 
-* **Tools**: only the read-only ones (reading and searching files, git status/log/diff, the web, SQL, the vault, recall, skills, sessions, `ask_user`) plus `present_plan`. Every tool that writes, runs or starts something, and every MCP tool, is held back until the plan is approved.
+* **Tools**: only the read-only ones (reading and searching files, git status/log/diff, the web, SQL, Oracle, the vault, recall, skills, sessions, `ask_user`) plus `present_plan`. Every tool that writes, runs or starts something, and every MCP tool, is held back until the plan is approved.
 * **Presenting**: the model asks what it needs (your later messages add detail), then presents the plan. The plan is printed and saved as `.neon/plans/<kebab-name>.md` under the working directory. A new plan never overwrites an older one, and each revision overwrites its own file. 📝 shows on the status strip while planning.
 * **Approving**: a pane offers **Approve & run** (`a`), **Approve, clear context & run** (`f`), **Keep refining…** (`r`, with what should change) or **Cancel plan** (`c`). The cursor starts on Keep refining, and ESC picks it too. Approving marks the file `status: approved` and sends a turn with every tool to carry the plan out, ticking its checkboxes as it goes. The fresh-context choice starts a new conversation with the plan's text in the message.
 * **Tracking**: once every checkbox is ticked, the file is marked `done`. While some are left, it is `incomplete` with a `progress: 3/7` line, reported again when the count changes or the reply is stopped.
@@ -1165,6 +1183,76 @@ Read-only queries against SQL Server over named connections. The app talks to th
 </details>
 
 <details>
+<summary><b>🗄️ Oracle</b></summary>
+
+### Oracle
+
+Read-only queries against Oracle over named connections, the SQL Server tools' twin. The app talks to the database itself through ODP.NET Core, Oracle's fully managed driver, so no Oracle Client or Instant Client is needed. Connections live in `oracle.json`, a home folder file and a profile file as with `sql.json`; the profile's wins on a name clash.
+
+#### Connection settings
+
+* **`dataSource`**: EZConnect `host:port/service` (`localhost:1521/FREEPDB1`; the port is 1521 when left out), or a whole `(DESCRIPTION=…)`.
+* **`user`**: the database user. `SYS` (and any `… AS SYSDBA` sign-in) is refused: Oracle does not hold SYS to a read-only transaction.
+* **`schema`**: the schema a call works in when it names none (`ALTER SESSION SET CURRENT_SCHEMA`); the user's own by default.
+* **`connectTimeoutSeconds`**: 1–120 (default 15).
+* **`passwordStore`**: `file` (default, encrypted in place with DPAPI) or `credman` (Windows Credential Manager, `NeonSidekick/oracle/<connection_name>`), exactly as for `sql.json`.
+
+#### Managing connections
+
+* **Oracle add connection** (the Oracle tab of `/tools`) walks you through a new connection: the file, name, data source, default schema, user, password store and password (masked), connect timeout and description.
+  * The summary can **test** the draft (nothing written): who it signed in as, which container, the server's version. When the account could change data (write privileges, `CREATE …`, `… ANY …`, tables it owns), it says so: the tools never write, but a read-only account is the real guard.
+  * It only adds connections. To change an existing one, edit the file.
+* **Oracle set password** updates a connection's password.
+* Or edit `%USERPROFILE%\.neonsidekick\oracle.json` (global) and `%USERPROFILE%\.neonsidekick\profiles\<profile>\oracle.json` directly.
+
+```json
+{
+  "connections": {
+    // Password encrypted in place by DPAPI after first read
+    "hr": {
+      "dataSource": "localhost:1521/FREEPDB1",
+      "user": "hr_reader",
+      "password": "type-password-here-once",
+      "schema": "HR",
+      "description": "The sample human-resources schema"
+    },
+    // A full descriptor, the password in Windows Credential Manager
+    "ledger": {
+      "dataSource": "(DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)(HOST=dbhost01.example.com)(PORT=1521))(CONNECT_DATA=(SERVICE_NAME=LEDGER)))",
+      "user": "ledger_ro",
+      "passwordStore": "credman"
+    }
+  }
+}
+```
+
+#### Safety
+
+`oracle_query` runs one read-only statement, behind four layers:
+
+1. **The gate.** Oracle has no managed parser, so the text is lexed (comments, `'…'`, `q'[…]'` and `n'…'` literals, `"quoted"` names and `:binds` understood, so a keyword can't hide in or behind them). Only one `SELECT` (or `WITH … SELECT`) passes. Refused before anything reaches the server: a second statement, PL/SQL (`BEGIN`, `DECLARE`, `WITH FUNCTION`), `FOR UPDATE`, `INTO`, `NEXTVAL` (a sequence never rolls back), database links (`@remote`), inline external tables and `BFILENAME` (files on the server), every DML and DDL word, and packages that reach outside or past the gate (`UTL_HTTP`, `UTL_FILE`, `DBMS_PIPE`, `DBMS_SQL`, `DBMS_XMLGEN`, `DBMS_SCHEDULER`, …).
+2. **The session.** On 23ai and later, `ALTER SESSION SET READ_ONLY = TRUE` first: the server refuses any DML or DDL (ORA-28193), even from an autonomous-transaction function the query calls.
+3. **The transaction.** `SET TRANSACTION READ ONLY` (DML and row locks refused, ORA-01456), and it is always rolled back.
+4. **The account.** Give the user only `SELECT` grants (or `ALTER USER … READ ONLY` on 23ai); the wizard's test warns of one that can write.
+
+Values go in as `:name` parameters. Results come back as a Markdown table; a `NUMBER` past 28 digits keeps every digit, a CLOB or BLOB shows its first part and its length. Object types (`SDO_GEOMETRY`, `XMLTYPE`) need converting to text in the query. The listings leave out Oracle's own schemas.
+
+| Tool | Arguments | What it does |
+|---|---|---|
+| `oracle_connections` | — | The named connections: data source, user, schema and description, with the default marked. Touches no server. |
+| `oracle_schemas` | `connection?` | The schemas the account can see (Oracle's own left out), with table and view counts; the account's own is marked. |
+| `oracle_tables` | `connection?, schema?, pattern?` | The tables and views as `SCHEMA.NAME`, with their kind, the optimizer's row count and comment. `pattern` is text anywhere in the name (case-insensitive), or a `LIKE` pattern when it holds `%` or `*`. |
+| `oracle_columns` | `pattern, connection?, schema?` | Every table and view column whose name matches: where it lives, its type, nullability and comment. |
+| `oracle_describe` | `table, connection?, schema?` | One table or view in full: its comment and columns (type as declared, nullability, identity, virtual, default, primary key, comment), the foreign keys out and in, its indexes, CHECK constraints and triggers. A bare name finds the one in the call's schema, else the one schema that has it. |
+| `oracle_relationships` | `connection?, schema?, table?` | The foreign-key join paths: every one, those touching a schema, or those touching a table. |
+| `oracle_indexes` | `connection?, table?, schema?` | The indexes of a table, a schema or every schema: kind, key columns, status, visibility, the optimizer's counts. With `DBA_INDEX_USAGE` readable (`SELECT_CATALOG_ROLE`), also each one's recorded use, an index with none marked *(no use recorded)*. |
+| `oracle_query` | `sql, connection?, schema?, params?, max_rows?` | One read-only `SELECT` (`FETCH FIRST n ROWS ONLY`, no trailing `;`). `params` is an object (`{"id": 101}` for `:id`); `max_rows` is 1–1000 (*Oracle max rows* by default). |
+
+`--oracle-check <connection>` proves the tools against a real database on the published exe (every type, the read-only layers, a cancel and a timeout; it only reads).
+
+</details>
+
+<details>
 <summary><b>🏠 Home Assistant</b></summary>
 
 ### Home Assistant
@@ -1437,7 +1525,7 @@ Every variable the app reads starts with `NEONSIDEKICK_`. They override a settin
 
 | Variable | What it does | Accepts |
 |---|---|---|
-| `NEONSIDEKICK_HOME` | The home folder: `settings.json`, `profiles\`, `models\`, `llama\`, `mcp.json`, `sql.json`. | A folder path. Default `%USERPROFILE%\.neonsidekick`. |
+| `NEONSIDEKICK_HOME` | The home folder: `settings.json`, `profiles\`, `models\`, `llama\`, `mcp.json`, `sql.json`, `oracle.json`. | A folder path. Default `%USERPROFILE%\.neonsidekick`. |
 | `NEONSIDEKICK_PROFILE` | The profile for this launch; `settings.json` keeps pointing where it was. An unknown name exits with code 2. `--profile` wins. A headless run with neither loads `default`. | A profile name. |
 
 ### LLM
@@ -1511,6 +1599,7 @@ While *Shell tool bridge* is on, the app passes `NEONSIDEKICK_BRIDGE_ADDRESS` an
 These only matter when running the test suite from source. Each live test is skipped unless its resource is there.
 
 * `NEONSIDEKICK_TEST_LLM_URL`, `NEONSIDEKICK_TEST_TTS_URL`, `NEONSIDEKICK_TEST_SQL_CONNECTION`: a server to test against.
+* `NEONSIDEKICK_TEST_ORACLE_CONNECTION`: an ODP.NET connection string (`User Id=…;Password=…;Data Source=localhost:1521/FREEPDB1`) to an Oracle database whose user may create tables; the tests make their own `NS_*` fixtures once (the `gvenzl/oracle-free` container works).
 * `NEONSIDEKICK_TEST_HA_URL` with `NEONSIDEKICK_TEST_HA_TOKEN`: a Home Assistant to read from (the live test never switches anything).
 * `NEONSIDEKICK_TEST_WHISPER_MODEL`, `NEONSIDEKICK_TEST_SILERO_MODEL`, `NEONSIDEKICK_TEST_VOSK_MODEL`, `NEONSIDEKICK_TEST_KOKORO_MODEL`: a model, when it isn't already under `%USERPROFILE%\.neonsidekick\models`.
 * `NEONSIDEKICK_TEST_CLAUDE=1`: the live Claude Code tests, on your own sign-in (Haiku; a few cents a run).
@@ -1530,6 +1619,7 @@ These only matter when running the test suite from source. Each live test is ski
 * `Microsoft.Data.Sqlite`
 * `Microsoft.Data.SqlClient`
 * `Microsoft.SqlServer.TransactSql.ScriptDom`
+* `Oracle.ManagedDataAccess.Core`
 * `Microsoft.ML.OnnxRuntime`
 * `KokoroSharp`
 * `Whisper.net`
