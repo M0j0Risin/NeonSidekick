@@ -27,6 +27,10 @@ public class QuestionMenuTests : IDisposable
 
     private static string Rule(int width) => new(ScreenPane.RuleGlyph, width);
 
+    /// <summary><paramref name="before"/>, then the blank rows that hold every question at the tallest one's height (2026-10-01), then <paramref name="after"/>.</summary>
+    private void AssertPadded(string before, string after) =>
+        Assert.Matches(new System.Text.RegularExpressions.Regex(System.Text.RegularExpressions.Regex.Escape(before) + "(?: \n)*" + System.Text.RegularExpressions.Regex.Escape(after)), Output);
+
     /// <summary>A title or strip row as the pane prints it since 2026-09-18: the text, then the × close glyph in column width − 2.</summary>
     private static string Titled(string row, int width = 60) => row + new string(' ', width - 2 - TextCells.Width(row)) + ScreenPane.CloseGlyph;
 
@@ -73,13 +77,13 @@ public class QuestionMenuTests : IDisposable
         Assert.Same(Colour, answers![0].Question);
         Assert.False(pane.OverlayOpen);
         // The first tab: the strip, the question as the caption, the spacer, the options, the Other row, the single keys.
-        Assert.Contains(Rule(60) + "\n" + Titled("Questions   Colour    Q2    Submit ") + "\nWhich colour?\n \n▸ ( ) red\n  ( ) blue\n  ( ) Other…\n" + Rule(60) + "\n" + QuestionMenu.SingleKeys + "\n", Output);
+        AssertPadded(Rule(60) + "\n" + Titled("Questions   Colour    Q2    Submit ") + "\nWhich colour?\n \n▸ ( ) red\n  ( ) blue\n  ( ) Other…\n", Rule(60) + "\n" + QuestionMenu.SingleKeys + "\n");
         // Enter on blue: the next tab, its own caption and keys.
-        Assert.Contains("\nToppings?\n \n▸ [ ] cheese\n  [ ] olives\n  [ ] ham\n  [ ] Other…\n" + Rule(60) + "\n" + QuestionMenu.MultiKeys + "\n", Output);
+        AssertPadded("\nToppings?\n \n▸ [ ] cheese\n  [ ] olives\n  [ ] ham\n  [ ] Other…\n", Rule(60) + "\n" + QuestionMenu.MultiKeys + "\n");
         Assert.Contains("\n▸ [x] cheese\n  [ ] olives\n", Output);
         Assert.Contains("\n  [x] cheese\n▸ [x] olives\n", Output);
         // The Submit tab: every question with its answer, the cursor on Submit.
-        Assert.Contains("\n" + Titled("Questions   Colour    Q2    Submit ") + "\n" + QuestionMenu.SubmitCaption + "\n \n  Q1 Colour — blue\n  Q2 — cheese, olives\n▸ Submit\n" + Rule(60) + "\n" + QuestionMenu.SubmitKeys, Output);
+        AssertPadded("\n" + Titled("Questions   Colour    Q2    Submit ") + "\n" + QuestionMenu.SubmitCaption + "\n \n  Q1 Colour — blue\n  Q2 — cheese, olives\n▸ Submit\n", Rule(60) + "\n" + QuestionMenu.SubmitKeys);
     }
 
     [Fact]
@@ -112,7 +116,7 @@ public class QuestionMenuTests : IDisposable
 
         // The slot under the list with the Other keys, then the row marked with the text and blue unmarked.
         // (The tab was reached by ← inside the pane: the slot must draw THAT tab, not the one the page was built for.)
-        Assert.Contains("\nWhich colour?\n \n  ( ) red\n  (x) blue\n▸ ( ) Other…\n› \n" + Rule(60) + "\n" + QuestionMenu.OtherKeys, Output);
+        AssertPadded("\nWhich colour?\n \n  ( ) red\n  (x) blue\n▸ ( ) Other…\n", "› \n" + Rule(60) + "\n" + QuestionMenu.OtherKeys);
         Assert.Contains("\n  ( ) red\n  ( ) blue\n▸ (x) Other: teal\n", Output);
         Assert.Contains("\n  Q1 Colour — teal\n  Q2 — " + QuestionMenu.NoAnswer + "\n▸ Submit\n", Output);
         // Submit with a gap: the error on the status line, the tab still up.

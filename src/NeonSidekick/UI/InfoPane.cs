@@ -3,7 +3,11 @@ using Spectre.Console.Rendering;
 
 namespace NeonSidekick.UI;
 
-/// <summary>One tab of the info pane: a title in the strip and the content it shows, built on every show (live state).</summary>
+/// <summary>
+/// One tab of the info pane: a title in the strip and the content it shows, built on every show (live state) — and, for
+/// a tab not shown, once when the pane opens (and again on a width change) to measure it, every tab padded to the
+/// tallest one's height (2026-10-01).
+/// </summary>
 public sealed record InfoTab(string Title, Func<IRenderable> Content);
 
 /// <summary>
@@ -30,7 +34,10 @@ public sealed record InfoTab(string Title, Func<IRenderable> Content);
 /// <para>The viewport is the <see cref="MenuPane"/>'s: the content is laid out at the window's width
 /// once per draw, and when it outgrows the rows the window leaves over one transcript row, the strip
 /// and the spacer, one fewer row is shown and a dim <see cref="MenuPane.MoreHint"/> row takes the last
-/// slot (<see cref="Viewport"/>, pure). Switching tabs starts at the top again.</para>
+/// slot (<see cref="Viewport"/>, pure). Switching tabs starts at the top again. The rows are the
+/// <c>Menus max height</c> share of the window (<see cref="ScreenPane.MenuContentRows"/>, 2026-10-01), and
+/// every tab is padded with blank rows under its content to the tallest tab's height (the same day, the
+/// user's ask: the pane jumped as one tabbed through <c>/help</c> and <c>/usage</c>).</para>
 /// </summary>
 public sealed class InfoPane
 {
@@ -58,6 +65,11 @@ public sealed class InfoPane
     private int _count;
     private int _stripRows = 1;
     private int _width = int.MaxValue;
+
+    // The tallest tab's content lines and the width they were laid out at (2026-10-01): every tab is padded to it, so the
+    // pane keeps its height as one tabs through it; −1 = not measured this visit.
+    private int _tallest;
+    private int _tallestWidth = -1;
 
     /// <param name="mouse">Takes (true) or hands back (false) the console's mouse; null when the screen has none to take.</param>
     public InfoPane(ScreenPane pane, KeySource keys, Action<bool>? mouse = null)
@@ -254,6 +266,7 @@ public sealed class InfoPane
 
         int active = Math.Clamp(initial, 0, tabs.Count - 1);
         _first = 0;
+        _tallestWidth = -1;
         _clicks.Reset();
         _mouse?.Invoke(true);
         try
@@ -390,14 +403,32 @@ public sealed class InfoPane
         var strip = TabStripRows(label, titles, active, width);
         _width = width;
         _stripRows = strip.Count;
-        int capacity = ScreenPane.MaxOverlayRows(height, 0) - HeaderRows - (_stripRows - 1);
+        int capacity = _pane.MenuContentRows(height, 0) - HeaderRows - (_stripRows - 1);
         var content = ScreenPane.RenderLines(tabs[active].Content(), _pane, width);
         _count = content.Count;
         (_first, _shown) = Viewport(_count, capacity, _first);
+        if (_tallestWidth != width)
+        {
+            // Every other tab built and laid out once a visit (the shown one is above), and again only when the width
+            // moves: the scroll keys redraw on every press.
+            _tallest = _count;
+            for (int i = 0; i < tabs.Count; i++)
+            {
+                if (i != active)
+                {
+                    _tallest = Math.Max(_tallest, ScreenPane.RenderLines(tabs[i].Content(), _pane, width).Count);
+                }
+            }
+
+            _tallestWidth = width;
+        }
+
+        bool more = _shown < _count;
+        int pad = Math.Min(Math.Max(_tallest, _count), Math.Max(0, capacity)) - (_shown + (more ? 1 : 0));
 
         // The spacer is a space, not an empty Text: Rows adds a line break only after a child that
         // rendered something, so an empty one would collapse the blank line.
-        var lines = new List<IRenderable>(HeaderRows + _stripRows + _shown);
+        var lines = new List<IRenderable>(HeaderRows + _stripRows + _shown + Math.Max(0, pad));
         foreach (var row in strip)
         {
             lines.Add(new Markup(row).Overflow(Overflow.Ellipsis));
@@ -409,9 +440,14 @@ public sealed class InfoPane
             lines.Add(new SegmentLines(content[_first + i]));
         }
 
-        if (_shown < _count)
+        if (more)
         {
             lines.Add(new Markup(Theme.DimMarkup(MenuPane.MoreHint)));
+        }
+
+        for (int i = 0; i < pad; i++)
+        {
+            lines.Add(new Text(" "));
         }
 
         _pane.ShowOverlay(new Rows(lines), HintText, close: true);

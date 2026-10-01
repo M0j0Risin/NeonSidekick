@@ -3685,7 +3685,7 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public async Task WithGeometry_SysPromptWithAskOff_SaysSo_OnTheToolsTab()
     {
-        _settings.Update(d => { d.TtsOutput = false; d.AskUser = false; });
+        _settings.Update(d => { d.TtsOutput = false; d.AskUser = false; d.MenuMaxHeight = "full-screen"; });   // the whole tab (2026-10-01)
         _console.Profile.Height = 110;   // the Git group (2026-09-20) makes the Tools tab eleven rows taller
         _geometry = new ScreenGeometry(() => null);
         PushLine("/sys");
@@ -9045,7 +9045,7 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public async Task WithGeometry_SysPromptOpensTheInfoPane_PromptThenTools_AndEscClosesIt()
     {
-        _settings.Update(d => d.TtsOutput = false);
+        _settings.Update(d => { d.TtsOutput = false; d.MenuMaxHeight = "full-screen"; });   // the whole tab (2026-10-01)
         _console.Profile.Height = 112;   // the Git group (2026-09-20) makes the Tools tab eleven rows taller; skill_editor's file-actions sentence (2026-09-27) a row more
         _geometry = new ScreenGeometry(() => null);
         PushLine("/sys");
@@ -9082,12 +9082,37 @@ public partial class ChatScreenTests : IDisposable
     }
 
     [Fact]
+    public async Task WithGeometry_MenusMaxHeight_ThreeQuartersByDefault_CapsTheInfoPane()
+    {
+        // 2026-10-01, the user's ask: the screen hands the pane the saved word. Three quarters of 24 rows less the two rules
+        // and the hint is 15 content rows, and /sys's tabs are taller than that, so both fill it exactly.
+        _settings.Update(d => d.TtsOutput = false);
+        _console.Profile.Height = 24;
+        _geometry = new ScreenGeometry(() => null);
+        PushLine("/sys");
+        _console.Input.PushKey(Keys.Escape);
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        string rule = new(ScreenPane.RuleGlyph, 240);
+        string strip = rule + "\n" + Titled(SystemPromptSummary.Label + "   Prompt    Tools ") + "\n";
+        int top = output.IndexOf(strip, StringComparison.Ordinal);
+        Assert.True(top >= 0, output);
+        int bottom = output.IndexOf("\n" + rule + "\n" + Row(InfoPane.HintText) + "\n", top, StringComparison.Ordinal);
+        Assert.True(bottom > top, output);
+        Assert.Equal(15, output[(top + rule.Length + 1)..bottom].Split('\n').Length);
+        Assert.Contains("\n" + MenuPane.MoreHint + "\n" + rule + "\n" + Row(InfoPane.HintText) + "\n", output);
+    }
+
+    [Fact]
     public async Task WithGeometry_SysPromptScrolls_AndReadsTheLiveState()
     {
         // A persona file, a remembered fact, speech on with the TTS ready (the fixture's default).
         Directory.CreateDirectory(_settings.ProfileDirectory);
         File.WriteAllText(Path.Combine(_settings.ProfileDirectory, PersonaFile.FileName), "You are Rex, a [pirate].\n");
         _memory.Add("Their name is Chris.");
+        _settings.Update(d => d.MenuMaxHeight = "full-screen");   // the 12-row window's pages as they were (2026-10-01)
         _console.Profile.Height = 12;
         _geometry = new ScreenGeometry(() => null);
         PushLine("/sys");
@@ -9116,7 +9141,7 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public async Task WithGeometry_SysPromptWithMemoryOff_SaysSo_InBothTabs()
     {
-        _settings.Update(d => { d.TtsOutput = false; d.Memory = false; });
+        _settings.Update(d => { d.TtsOutput = false; d.Memory = false; d.MenuMaxHeight = "full-screen"; });   // the whole tab (2026-10-01)
         _console.Profile.Height = 110;   // the Git group (2026-09-20) makes the Tools tab eleven rows taller
         _geometry = new ScreenGeometry(() => null);
         PushLine("/sys");
@@ -14968,7 +14993,7 @@ public partial class ChatScreenTests : IDisposable
     {
         // The pane chords (later on 2026-09-30, the user's ask): the bare command through the dispatch, no transcript row,
         // the draft back on the row after ESC.
-        _settings.Update(d => d.TtsOutput = false);
+        _settings.Update(d => { d.TtsOutput = false; d.MenuMaxHeight = "full-screen"; });   // the whole tab (2026-10-01)
         _console.Profile.Height = 112;
         _geometry = new ScreenGeometry(() => null);
         _chat.EnqueueText("one");
@@ -14989,7 +15014,7 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public async Task CtrlAltY_OpensTheSystemPromptPane_AsSlashSys()
     {
-        _settings.Update(d => d.TtsOutput = false);
+        _settings.Update(d => { d.TtsOutput = false; d.MenuMaxHeight = "full-screen"; });   // the whole tab (2026-10-01)
         _console.Profile.Height = 112;
         _geometry = new ScreenGeometry(() => null);
         StepsWhenIdle(Key(Keys.CtrlAlt(ConsoleKey.Y)), Key(Keys.Escape), Line("/exit"));
@@ -15004,7 +15029,7 @@ public partial class ChatScreenTests : IDisposable
     public async Task CtrlAltH_OpensTheHelpPane_AsSlashHelp()
     {
         // 2026-10-01 (the user's ask): Ctrl+Alt+H is /help, the pane on its first tab.
-        _settings.Update(d => d.TtsOutput = false);
+        _settings.Update(d => { d.TtsOutput = false; d.MenuMaxHeight = "full-screen"; });   // the whole tab (2026-10-01)
         _console.Profile.Height = 112;
         _geometry = new ScreenGeometry(() => null);
         StepsWhenIdle(Key(Keys.CtrlAlt(ConsoleKey.H)), Key(Keys.Escape), Line("/exit"));
@@ -15045,7 +15070,7 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public async Task CtrlAltY_InTheHelpPane_ClosesIt_AndOpensTheSystemPromptPane()
     {
-        _settings.Update(d => d.TtsOutput = false);
+        _settings.Update(d => { d.TtsOutput = false; d.MenuMaxHeight = "full-screen"; });   // the whole tab (2026-10-01)
         _console.Profile.Height = 112;
         _geometry = new ScreenGeometry(() => null);
         StepsWhenIdle(
@@ -15065,7 +15090,7 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public async Task CtrlAltH_InTheHelpPane_ClosesIt_ItsOwnChord()
     {
-        _settings.Update(d => d.TtsOutput = false);
+        _settings.Update(d => { d.TtsOutput = false; d.MenuMaxHeight = "full-screen"; });   // the whole tab (2026-10-01)
         _console.Profile.Height = 112;
         _geometry = new ScreenGeometry(() => null);
         _chat.EnqueueText("one");
@@ -15082,7 +15107,7 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public async Task CtrlAltC_InASettingsPane_ClosesEveryLevel_AndClears()
     {
-        _settings.Update(d => d.TtsOutput = false);
+        _settings.Update(d => { d.TtsOutput = false; d.MenuMaxHeight = "full-screen"; });   // the whole tab (2026-10-01)
         _console.Profile.Height = 112;
         _geometry = new ScreenGeometry(() => null);
         _chat.EnqueueText("one").EnqueueText("two");
@@ -15105,7 +15130,7 @@ public partial class ChatScreenTests : IDisposable
     {
         // In place (2026-10-01, the user's call): the pane stays, so the "x" after the chord is the pane's (nothing),
         // never a draft on the idle line that the Enter after the ESC would send.
-        _settings.Update(d => d.TtsOutput = false);
+        _settings.Update(d => { d.TtsOutput = false; d.MenuMaxHeight = "full-screen"; });   // the whole tab (2026-10-01)
         _console.Profile.Height = 112;
         _geometry = new ScreenGeometry(() => null);
         StepsWhenIdle(

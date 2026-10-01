@@ -64,6 +64,7 @@ public class AppSettingsTests : IDisposable
         ShowImageThumbnails = false,
         TranscriptMarkdown = false,
         WelcomeSplashMode = "tiled",
+        MenuMaxHeight = "half-screen",
         ShowWorkingDirectory = false,
         ToolbarItems = ["usage", "path"],
         ToolbarLastItems = ["tools"],
@@ -185,6 +186,7 @@ public class AppSettingsTests : IDisposable
         Assert.Equal(expected.ShowImageThumbnails, actual.ShowImageThumbnails);
         Assert.Equal(expected.TranscriptMarkdown, actual.TranscriptMarkdown);
         Assert.Equal(expected.WelcomeSplashMode, actual.WelcomeSplashMode);
+        Assert.Equal(expected.MenuMaxHeight, actual.MenuMaxHeight);
         Assert.Equal(expected.ShowWorkingDirectory, actual.ShowWorkingDirectory);
         Assert.Equal(expected.ToolbarItems, actual.ToolbarItems);
         Assert.Equal(expected.ToolbarLastItems, actual.ToolbarLastItems);
@@ -332,6 +334,7 @@ public class AppSettingsTests : IDisposable
             d.ShowImageThumbnails = full.ShowImageThumbnails;
             d.TranscriptMarkdown = full.TranscriptMarkdown;
             d.WelcomeSplashMode = full.WelcomeSplashMode;
+            d.MenuMaxHeight = full.MenuMaxHeight;
             d.ShowWorkingDirectory = full.ShowWorkingDirectory;
             d.ToolbarItems = full.ToolbarItems;
             d.ToolbarLastItems = full.ToolbarLastItems;
@@ -463,6 +466,7 @@ public class AppSettingsTests : IDisposable
                 d.ShowImageThumbnails = full.ShowImageThumbnails;
                 d.TranscriptMarkdown = full.TranscriptMarkdown;
                 d.WelcomeSplashMode = full.WelcomeSplashMode;
+                d.MenuMaxHeight = full.MenuMaxHeight;
                 d.ShowWorkingDirectory = full.ShowWorkingDirectory;
                 d.ToolbarItems = full.ToolbarItems;
                 d.ToolbarLastItems = full.ToolbarLastItems;
@@ -1356,6 +1360,7 @@ public class AppSettingsTests : IDisposable
         Assert.Equal("protected", s.SkillCompactMode);
         Assert.True(s.TranscriptMarkdown);
         Assert.Equal("fullsize", s.WelcomeSplashMode);   // 2026-09-18; a pick since 2026-09-24 (on was fullsize)
+        Assert.Equal("three-quarters", s.MenuMaxHeight);   // 2026-10-01
         Assert.False(s.ShowWorkingDirectory);   // 2026-09-18; off by default since 2026-09-21
         Assert.Null(s.ToolbarItems);   // 2026-09-21 as a switch, on; every item since the checklist, 2026-09-29
         Assert.Null(s.ToolbarLastItems);   // what a bare /tb brings back: the defaults until it hides a list (later on 2026-09-30)

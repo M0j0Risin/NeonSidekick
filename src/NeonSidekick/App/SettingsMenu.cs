@@ -716,9 +716,17 @@ public enum SettingsField
     /// <summary>
     /// A toggle: whether the embedded server must stay in VRAM, every layer on the GPU and a load that spilled into system
     /// memory refused (<see cref="Settings.AppSettingsData.EmbeddedVramOnly"/>, 2026-10-01, the user's ask); a reconnect. The
-    /// Embedded tab's row after Embedded VRAM budget. Last in the enum, as every newcomer.
+    /// Embedded tab's row after Embedded VRAM budget.
     /// </summary>
     EmbeddedVramOnly,
+
+    /// <summary>
+    /// A picker: the most of the window a menu, info or folder pane takes — <c>half-screen</c> / <c>three-quarters</c> /
+    /// <c>full-screen</c> (<see cref="Settings.AppSettingsData.MenuMaxHeight"/>, 2026-10-01, the user's ask, with every tab
+    /// held at its tallest tab's height). The General tab's row after Theme; no reconnect (read at each pane draw). Last in
+    /// the enum, as every newcomer.
+    /// </summary>
+    MenuMaxHeight,
 }
 
 /// <summary>The tabs of <c>/settings</c> on the pane, in strip order (General, Embedded, LLM, TTS, STT, Sessions, Botchat — the user's order, 2026-09-29; Sessions right after General — the user's order, 2026-09-18 — until then; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
@@ -1001,7 +1009,7 @@ internal sealed partial class SettingsMenu
     /// Files and Web tabs are <c>/tools</c>' since 2026-09-19, <see cref="ToolsTabFields"/>, and the Skills tab
     /// <c>/skills</c>' Options tab since later that day, <see cref="SkillsTabFields"/>).
     /// General is spelled out (the profile and what a new one copies, then where its files live, then the message queue's switch and its cancel mode (2026-09-18, the user's place: right under the working directory), then the switches and pickers (<c>Mouse in menus</c> sat among them until 2026-09-21, when the mouse became the pane's for good), the
-    /// transcript's Markdown and the paste preview, then the two line conveniences of 2026-09-18 — the hidden <c>/exit</c>, the typo intercept —, the command history's switch (2026-09-25), the welcome splash (the user's order, later that day), the banner's working directory, the theme (2026-09-23; last until later on 2026-09-27, when the user moved it under the toolbar's switch), the draft editor (2026-09-19), the image viewer and the themed-viewer switch last (later on 2026-09-27)); LLM
+    /// transcript's Markdown and the paste preview, then the two line conveniences of 2026-09-18 — the hidden <c>/exit</c>, the typo intercept —, the command history's switch (2026-09-25), the welcome splash (the user's order, later that day), the banner's working directory, the theme (2026-09-23; last until later on 2026-09-27, when the user moved it under the toolbar's switch), the menus' max height (2026-10-01, beside the theme: both the look), the draft editor (2026-09-19), the image viewer and the themed-viewer switch last (later on 2026-09-27)); LLM
     /// is spelled out too: the scan mode (where a blank URL looks, so it sits above the URL), the
     /// <see cref="IsLlmField"/> rows, the compact rows, then <see cref="SettingsField.LlmOfferTools"/> ABOVE
     /// <see cref="SettingsField.LlmToolCompactType"/> (the user's order, 2026-09-15), the round-trip cap and the fun
@@ -1012,7 +1020,7 @@ internal sealed partial class SettingsMenu
     /// </summary>
     public static readonly IReadOnlyList<IReadOnlyList<SettingsField>> TabFields =
     [
-        [SettingsField.Profile, SettingsField.NewProfileMode, SettingsField.WorkingDirectory, SettingsField.QueueMessages, SettingsField.QueueCancelMode, SettingsField.Memory, SettingsField.CopyUserPrompt, SettingsField.ShowImageThumbnails, SettingsField.ImageThumbnailSize, SettingsField.TranscriptMarkdown, SettingsField.PastePreviewLines, SettingsField.HideExitAutocomplete, SettingsField.CommandTypoIntercept, SettingsField.KeepCommandHistory, SettingsField.WelcomeSplash, SettingsField.ShowWorkingDirectory, SettingsField.ToolbarItems, SettingsField.ShowPerformanceBar, SettingsField.Theme, SettingsField.DraftEditor, SettingsField.ImageEditor, SettingsField.ThemedViewer],
+        [SettingsField.Profile, SettingsField.NewProfileMode, SettingsField.WorkingDirectory, SettingsField.QueueMessages, SettingsField.QueueCancelMode, SettingsField.Memory, SettingsField.CopyUserPrompt, SettingsField.ShowImageThumbnails, SettingsField.ImageThumbnailSize, SettingsField.TranscriptMarkdown, SettingsField.PastePreviewLines, SettingsField.HideExitAutocomplete, SettingsField.CommandTypoIntercept, SettingsField.KeepCommandHistory, SettingsField.WelcomeSplash, SettingsField.ShowWorkingDirectory, SettingsField.ToolbarItems, SettingsField.ShowPerformanceBar, SettingsField.Theme, SettingsField.MenuMaxHeight, SettingsField.DraftEditor, SettingsField.ImageEditor, SettingsField.ThemedViewer],
         [SettingsField.EmbeddedLlmServer, SettingsField.EmbeddedModels, SettingsField.EmbeddedFilterType, SettingsField.EmbeddedHfDownloadType, SettingsField.EmbeddedBackend, SettingsField.EmbeddedContextSize, SettingsField.EmbeddedGpuLayers, SettingsField.EmbeddedVramBudget, SettingsField.EmbeddedVramOnly, SettingsField.EmbeddedVision, SettingsField.EmbeddedDrafter],
         [SettingsField.LlmScanMode, SettingsField.LlmUrl, SettingsField.LlmModel, SettingsField.LlmApiKey, SettingsField.LlmReasoning, SettingsField.LlmRequestTimeoutSeconds, SettingsField.LlmTurnTimeoutSeconds, SettingsField.LlmContextLength, SettingsField.LlmMidTurnUsage, SettingsField.LlmCompactType, SettingsField.LlmCompactKeepRecent, SettingsField.LlmCompactShowSummary, SettingsField.LlmAutoCompactPercent, SettingsField.LlmMaxTurns, SettingsField.LlmOfferTools, SettingsField.LlmToolCompactType, SettingsField.LlmMaxToolIterations, SettingsField.LlmUseFunVerbs, SettingsField.LlmShowThinking, SettingsField.LlmPreserveThinking, SettingsField.LlmReasoningEstimate, SettingsField.LlmSampling, SettingsField.LlmSamplingFromHuggingFace],
         [SettingsField.TtsOutput, SettingsField.TtsSource, SettingsField.TtsHttpUrl, SettingsField.TtsVoicePreview, SettingsField.TtsVoicePreset, SettingsField.TtsVoice, SettingsField.TtsVoice2, SettingsField.TtsVoiceMix, SettingsField.TtsSpeed],
@@ -1656,6 +1664,7 @@ internal sealed partial class SettingsMenu
         SettingsField.CommandTypoIntercept => "Command typo intercept",
         SettingsField.KeepCommandHistory => "Keep command history",
         SettingsField.WelcomeSplash => "Welcome splash",
+        SettingsField.MenuMaxHeight => "Menus max height",   // the user's name (2026-10-01)
         SettingsField.ShowWorkingDirectory => "Working directory in header",
         SettingsField.ToolbarItems => "Show toolbar",
         SettingsField.ShowPerformanceBar => "Show performance bar",
@@ -1909,6 +1918,7 @@ internal sealed partial class SettingsMenu
             SettingsField.CommandTypoIntercept => OnOff(data.CommandTypoIntercept),
             SettingsField.KeepCommandHistory => OnOff(data.KeepCommandHistory),
             SettingsField.WelcomeSplash => data.WelcomeSplashMode,
+            SettingsField.MenuMaxHeight => data.MenuMaxHeight,
             SettingsField.SessionLogging => OnOff(data.SessionLogging),
             SettingsField.SessionNamingMode => data.SessionNamingMode,
             SettingsField.SessionShowName => data.SessionShowName,
@@ -2355,6 +2365,10 @@ internal sealed partial class SettingsMenu
     /// <summary>One row of the welcome-splash picker: the mode and its hint (padded to nine: <c>fullsize</c> and <c>disabled</c> are eight). Pinned.</summary>
     public static string WelcomeSplashModeLabel(string name) =>
         Markup.Escape(name.PadRight(9)) + Theme.DimMarkup(UI.SplashMode.Describe(name));
+
+    /// <summary>One row of the menus-max-height picker: the height and its hint (padded to fifteen: <c>three-quarters</c> is fourteen). Pinned.</summary>
+    public static string MenuMaxHeightLabel(string name) =>
+        Markup.Escape(name.PadRight(15)) + Theme.DimMarkup(UI.MenuHeight.Describe(name));
 
     /// <summary>One row of the search-method picker: the method and its hint (padded to eleven: <c>duckduckgo</c> is ten). Pinned.</summary>
     public static string SearchMethodLabel(string name) =>
@@ -3426,6 +3440,11 @@ internal sealed partial class SettingsMenu
         if (field == SettingsField.WelcomeSplash)
         {
             return await PickWelcomeSplashModeAsync(saved, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (field == SettingsField.MenuMaxHeight)
+        {
+            return await PickMenuMaxHeightAsync(saved, cancellationToken).ConfigureAwait(false);
         }
 
         if (field == SettingsField.WebSearchMethod)
@@ -6079,6 +6098,26 @@ internal sealed partial class SettingsMenu
 
         string name = UI.SplashMode.Names[index];
         Apply(SettingsField.WelcomeSplash, d => d.WelcomeSplashMode = name);
+        return true;
+    }
+
+    /// <summary>
+    /// The menus-max-height picker under the settings list (2026-10-01): one <see cref="MenuMaxHeightLabel"/> row per
+    /// <see cref="UI.MenuHeight.Names"/> entry, the height in force under the cursor (a hand-edited word, its default).
+    /// The pane re-sizes to the pick at its next draw, this list's included.
+    /// </summary>
+    private async Task<bool> PickMenuMaxHeightAsync(AppSettingsData saved, CancellationToken cancellationToken)
+    {
+        UI.MenuHeight.TryParse(saved.MenuMaxHeight, out var current);
+        var page = new MenuPage(Crumb(FieldName(SettingsField.MenuMaxHeight)), UI.MenuHeight.Names.Select(MenuMaxHeightLabel).ToList(), PickKeys);
+        int? picked = await PickAsync(page, Array.IndexOf(UI.MenuHeight.Names, UI.MenuHeight.Name(current)), cancellationToken).ConfigureAwait(false);
+        if (picked is not { } index)
+        {
+            return Unchanged();
+        }
+
+        string name = UI.MenuHeight.Names[index];
+        Apply(SettingsField.MenuMaxHeight, d => d.MenuMaxHeight = name);
         return true;
     }
 

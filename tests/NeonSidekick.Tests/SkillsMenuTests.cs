@@ -115,6 +115,10 @@ public class SkillsMenuTests : IDisposable
 
     private static string Rule(int width) => new(ScreenPane.RuleGlyph, width);
 
+    /// <summary><paramref name="before"/>, then the blank rows that hold a tab at its pane's tallest tab's height (2026-10-01), then <paramref name="after"/>.</summary>
+    private void AssertPadded(string before, string after) =>
+        Assert.Matches(new System.Text.RegularExpressions.Regex(System.Text.RegularExpressions.Regex.Escape(before) + "(?: \n)*" + System.Text.RegularExpressions.Regex.Escape(after)), _console.Output);
+
     /// <summary>A title row as the pane prints it: the text, then the × close glyph in column width − 2.</summary>
     private static string Titled(string row, int width = 100) => row + new string(' ', width - 2 - TextCells.Width(row)) + ScreenPane.CloseGlyph;
 
@@ -181,8 +185,8 @@ public class SkillsMenuTests : IDisposable
 
         await menu.ShowAsync(CancellationToken.None);
 
-        Assert.Contains("\n" + Titled(Strip) + "\n \n▸ haiku  profile  Writes haiku.\n  Shadowed (a higher root holds the name):\n    haiku  global   shadowed by the profile skills\n" + Rule(100) + "\n" + SkillsMenu.LoadedKeys + "\n", _console.Output);
-        Assert.Contains("\n▸ Project file  on   NEON.md (3 characters)\n" + Rule(100) + "\n" + SkillsText.ProjectKeys + "\n", _console.Output);
+        AssertPadded("\n" + Titled(Strip) + "\n \n▸ haiku  profile  Writes haiku.\n  Shadowed (a higher root holds the name):\n    haiku  global   shadowed by the profile skills\n", Rule(100) + "\n" + SkillsMenu.LoadedKeys + "\n");
+        AssertPadded("\n▸ Project file  on   NEON.md (3 characters)\n", Rule(100) + "\n" + SkillsText.ProjectKeys + "\n");
         Assert.Contains("\n" + Titled(Strip) + "\n  · Project file: off\n▸ Project file  off  NEON.md (3 characters)\n", _console.Output);   // the flip on the status line, the row re-read, the cursor kept
         Assert.Contains("\n" + Titled(Strip) + "\n  · Project file: on\n▸ Project file  on   NEON.md (3 characters)\n", _console.Output);
         Assert.True(_settings.Current.ProjectFile);
@@ -554,8 +558,8 @@ public class SkillsMenuTests : IDisposable
 
         Assert.False(_settings.Current.AgentSkills);
         Assert.False(_settings.Current.ReflectionIncludesSessions);
-        Assert.Contains("\n" + Titled(Strip) + "\n \n" + OptionsRows + Rule(100) + "\n" + SettingsMenu.TabKeys + "\n", _console.Output);
-        Assert.Contains("\n" + Titled(Strip) + "\n \n" + ReflectionRows + Rule(100) + "\n" + SettingsMenu.TabKeys + "\n", _console.Output);   // the flip's notice dropped by the tab switch (2026-09-20)
+        AssertPadded("\n" + Titled(Strip) + "\n \n" + OptionsRows, Rule(100) + "\n" + SettingsMenu.TabKeys + "\n");
+        AssertPadded("\n" + Titled(Strip) + "\n \n" + ReflectionRows, Rule(100) + "\n" + SettingsMenu.TabKeys + "\n");   // the flip's notice dropped by the tab switch (2026-09-20)
         Assert.DoesNotContain("\n  · Agent skills: off\n" + ReflectionRows, _console.Output);
         Assert.Contains("\n" + Titled(SkillsText.Label + " › Reflection includes sessions") + "\n", _console.Output);
         Assert.Contains("\n" + Titled(Strip) + "\n  · Reflection includes sessions: off\n", _console.Output);

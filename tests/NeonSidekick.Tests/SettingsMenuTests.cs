@@ -863,6 +863,7 @@ public partial class SettingsMenuTests : IDisposable
                 SettingsField.UncSharesProfile,
                 SettingsField.UncSharesGlobal,
                 SettingsField.EmbeddedVramOnly,
+                SettingsField.MenuMaxHeight,
             },
             Enum.GetValues<SettingsField>());
         // The compact rows: on the LLM tab after the context length but no reconnect; the type a picker, the two others typed.
@@ -1050,7 +1051,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(15, SettingsMenu.ToolsTabFields.Count);   // UNC later still on 2026-09-30; MySQL and Oracle since 2026-09-30; Print since later on 2026-09-28; Home Assistant since 2026-09-28; Claude since 2026-09-27; Images since 2026-09-24; SQL since 2026-09-23; Obsidian since 2026-09-22 and Options last later that day (first since later on 2026-09-19); Git between Files and Web since 2026-09-20; Shell between Git and Web since 2026-09-21
         Assert.Equal(2, SettingsMenu.SkillsTabFields.Count);   // Options and Reflection, since later on 2026-09-19 (one list of 11, then 14, before)
         Assert.Equal(14, SettingsMenu.SkillsTabFields.Sum(t => t.Count));   // 13 until Reflection edit supporting files came on 2026-09-27; 12 until Reflection yields to turns came on 2026-09-24; 13 until Allow skill delete went on 2026-09-23; 14 until Reflection verbose went later still on 2026-09-19
-        Assert.Equal(new[] { SettingsField.Profile, SettingsField.NewProfileMode, SettingsField.WorkingDirectory, SettingsField.QueueMessages, SettingsField.QueueCancelMode, SettingsField.Memory, SettingsField.CopyUserPrompt, SettingsField.ShowImageThumbnails, SettingsField.ImageThumbnailSize, SettingsField.TranscriptMarkdown, SettingsField.PastePreviewLines, SettingsField.HideExitAutocomplete, SettingsField.CommandTypoIntercept, SettingsField.KeepCommandHistory, SettingsField.WelcomeSplash, SettingsField.ShowWorkingDirectory, SettingsField.ToolbarItems, SettingsField.ShowPerformanceBar, SettingsField.Theme, SettingsField.DraftEditor, SettingsField.ImageEditor, SettingsField.ThemedViewer }, SettingsMenu.TabFields[(int)SettingsTab.General]);   // Image editor under Draft editor, later on 2026-09-24; Keep command history under the typo intercept, 2026-09-25; Theme under Show toolbar and Themed image viewer last, later on 2026-09-27; Show performance bar under Show toolbar, 2026-09-29
+        Assert.Equal(new[] { SettingsField.Profile, SettingsField.NewProfileMode, SettingsField.WorkingDirectory, SettingsField.QueueMessages, SettingsField.QueueCancelMode, SettingsField.Memory, SettingsField.CopyUserPrompt, SettingsField.ShowImageThumbnails, SettingsField.ImageThumbnailSize, SettingsField.TranscriptMarkdown, SettingsField.PastePreviewLines, SettingsField.HideExitAutocomplete, SettingsField.CommandTypoIntercept, SettingsField.KeepCommandHistory, SettingsField.WelcomeSplash, SettingsField.ShowWorkingDirectory, SettingsField.ToolbarItems, SettingsField.ShowPerformanceBar, SettingsField.Theme, SettingsField.MenuMaxHeight, SettingsField.DraftEditor, SettingsField.ImageEditor, SettingsField.ThemedViewer }, SettingsMenu.TabFields[(int)SettingsTab.General]);   // Menus max height under Theme, 2026-10-01; Image editor under Draft editor, later on 2026-09-24; Keep command history under the typo intercept, 2026-09-25; Theme under Show toolbar and Themed image viewer last, later on 2026-09-27; Show performance bar under Show toolbar, 2026-09-29
         // Show performance bar (2026-09-29): a picker of five looks, off by default, no reconnect.
         Assert.False(SettingsMenu.IsToggle(SettingsField.ShowPerformanceBar));
         Assert.Equal("Show performance bar", SettingsMenu.FieldName(SettingsField.ShowPerformanceBar));
@@ -1107,6 +1108,15 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("tiled    [#9A8BB8]the pictures as thumbnails at the image thumbnail size, a screenful at a time; ← → page[/]", SettingsMenu.WelcomeSplashModeLabel("tiled"));
         Assert.Equal("disabled [#9A8BB8]the banner alone at startup[/]", SettingsMenu.WelcomeSplashModeLabel("disabled"));
         Assert.False(SettingsMenu.RefusedMidTurn(SettingsField.WelcomeSplash) || SettingsMenu.IsLlmField(SettingsField.WelcomeSplash) || SettingsMenu.IsTtsField(SettingsField.WelcomeSplash) || SettingsMenu.IsVoiceField(SettingsField.WelcomeSplash));
+        // Menus max height (2026-10-01, the user's ask and name): a picker of three heights, three-quarters by default, no reconnect.
+        Assert.False(SettingsMenu.IsToggle(SettingsField.MenuMaxHeight));
+        Assert.Equal("Menus max height", SettingsMenu.FieldName(SettingsField.MenuMaxHeight));
+        Assert.Equal("three-quarters", SettingsMenu.FieldValue(SettingsField.MenuMaxHeight, data, _settings.ProfileDirectory));
+        Assert.Equal("half-screen", SettingsMenu.FieldValue(SettingsField.MenuMaxHeight, new AppSettingsData { MenuMaxHeight = "half-screen" }, _settings.ProfileDirectory));
+        Assert.Equal("half-screen    [#9A8BB8]a menu takes at most half the window[/]", SettingsMenu.MenuMaxHeightLabel("half-screen"));
+        Assert.Equal("three-quarters [#9A8BB8]a menu takes at most three quarters of the window[/]", SettingsMenu.MenuMaxHeightLabel("three-quarters"));
+        Assert.Equal("full-screen    [#9A8BB8]a menu grows to all but one row of the window[/]", SettingsMenu.MenuMaxHeightLabel("full-screen"));
+        Assert.False(SettingsMenu.RefusedMidTurn(SettingsField.MenuMaxHeight) || SettingsMenu.IsLlmField(SettingsField.MenuMaxHeight) || SettingsMenu.IsTtsField(SettingsField.MenuMaxHeight) || SettingsMenu.IsVoiceField(SettingsField.MenuMaxHeight));
         // The two line switches of 2026-09-18: the General tab's last rows and the last enum members, toggles, no reconnect.
         Assert.True(SettingsMenu.IsToggle(SettingsField.HideExitAutocomplete));
         Assert.True(SettingsMenu.IsToggle(SettingsField.CommandTypoIntercept));
@@ -2979,6 +2989,10 @@ public partial class SettingsMenuTests : IDisposable
 
     private static string Rule(int width) => new(ScreenPane.RuleGlyph, width);
 
+    /// <summary>A tab's rows, then the blank rows that hold every tab at its pane's tallest tab's height (2026-10-01), then the rule under the list.</summary>
+    private void AssertTabEnds(string rows, int width) =>
+        Assert.Matches(new System.Text.RegularExpressions.Regex(System.Text.RegularExpressions.Regex.Escape(rows) + "(?: \n)*" + System.Text.RegularExpressions.Regex.Escape(Rule(width))), _console.Output);
+
     /// <summary>A title or strip row as the pane prints it since 2026-09-18: the text, then the × close glyph in column width − 2 (the console's width as the test set it).</summary>
     private string Titled(string row) => row + new string(' ', _console.Profile.Width - 2 - TextCells.Width(row)) + ScreenPane.CloseGlyph;
 
@@ -2999,7 +3013,7 @@ public partial class SettingsMenuTests : IDisposable
         string cwd = SettingsMenu.DefaultWorkingDirectoryLabel(_settings.ProfileDirectory);
         Assert.StartsWith("(", cwd);
         Assert.EndsWith(@"\profiles\default\files)", cwd);
-        Assert.Contains(Rule(240) + "\n" + Titled(Strip) + "\n \n▸ Profile                      default (" + _settings.ProfileDirectory + ")\n  New profile mode             basic\n  Working directory (cwd)      " + cwd + "\n  Queue messages               on\n  Queue cancel mode            empty\n  Memory                       on\n  Copy user prompt             on\n  Show image thumbnails        on\n  Image thumbnail size         small\n  Transcript markdown          on\n  Paste preview lines          25 lines\n  Hide /exit autocomplete      on\n  Command typo intercept       on\n  Keep command history         on\n  Welcome splash               fullsize\n  Working directory in header  off\n  Show toolbar                 5 of 13\n  Show performance bar         off\n  Theme                        synthwave\n  Draft editor                 (default .txt editor)\n  Image viewer                 (built-in viewer)\n  Themed image viewer          on\n" + Rule(240) + "\n" + SettingsMenu.TabKeys + "\n", _console.Output);
+        Assert.Contains(Rule(240) + "\n" + Titled(Strip) + "\n \n▸ Profile                      default (" + _settings.ProfileDirectory + ")\n  New profile mode             basic\n  Working directory (cwd)      " + cwd + "\n  Queue messages               on\n  Queue cancel mode            empty\n  Memory                       on\n  Copy user prompt             on\n  Show image thumbnails        on\n  Image thumbnail size         small\n  Transcript markdown          on\n  Paste preview lines          25 lines\n  Hide /exit autocomplete      on\n  Command typo intercept       on\n  Keep command history         on\n  Welcome splash               fullsize\n  Working directory in header  off\n  Show toolbar                 5 of 13\n  Show performance bar         off\n  Theme                        synthwave\n  Menus max height             three-quarters\n  Draft editor                 (default .txt editor)\n  Image viewer                 (built-in viewer)\n  Themed image viewer          on\n" + Rule(240) + "\n" + SettingsMenu.TabKeys + "\n", _console.Output);
         Assert.DoesNotContain("File /tree max length", _console.Output);   // the Files tab's since 2026-09-15
         Assert.DoesNotContain("LLM URL", _console.Output);
         Assert.False(pane.OverlayOpen);
@@ -3017,11 +3031,11 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.None, await menu.ShowAsync(CancellationToken.None));
 
         // Each tab under the strip, padded to its own column (28, 32, 19, 26), the whole tab in view, nothing of another tab on it.
-        Assert.Contains("\n \n▸ Session logging             on\n  Session retention (days)    forever\n  Session naming mode         model-written\n  Session show name           all-names\n  Session tool                on\n  Session search max results  10 results\n  Session save thinking       off\n" + Rule(100), _console.Output);
+        AssertTabEnds("\n \n▸ Session logging             on\n  Session retention (days)    forever\n  Session naming mode         model-written\n  Session show name           all-names\n  Session tool                on\n  Session search max results  10 results\n  Session save thinking       off\n", 100);
         Assert.Contains("\n \n▸ LLM server scan mode            local\n  LLM URL                         (probe local ports)\n  LLM model                       (first listed)\n  LLM API key                     ", _console.Output);
-        Assert.Contains("\n  LLM reasoning                   none\n  LLM request timeout (s)         3600\n  LLM turn timeout (s)            21600\n  LLM context length              (from the server)\n  LLM mid-turn usage              last-known\n  LLM compact type                summary\n  LLM compact keep recent         2 turns\n  LLM compact show summary        off\n  LLM auto compact (%)            85 %\n  LLM max turns                   auto\n  LLM offer tools                 on\n  LLM tool compact type           compact\n  LLM max tool iterations         10000 round trips\n  LLM use fun verbs               off\n  LLM show thinking               on\n  LLM preserve thinking           off\n  LLM reasoning estimate          chars\n  LLM sampling                    (server defaults)\n  LLM sampling from Hugging Face  off\n" + Rule(100), _console.Output);
-        Assert.Contains("\n \n▸ TTS output         on\n  TTS source         http\n  TTS HTTP URL       http://localhost:8880/v1\n  TTS voice preview  on\n  TTS voice preset   neon\n  TTS voice          af_heart\n  TTS voice 2        am_eric\n  TTS voice mix      80 % / 20 %\n  TTS speed          1.2\n" + Rule(100), _console.Output);
-        Assert.Contains("\n \n▸ STT input                 off\n  STT wake                  off\n  STT wake phrase           hey neon\n  STT interrupt             off\n  STT interrupt echo guard  100 %\n  STT interrupt confirm     200 ms\n  STT push-to-talk key      F4\n  STT whisper model         ggml-base.en.bin\n  STT vosk model            vosk-model-small-en-us-0.15\n" + Rule(100), _console.Output);
+        AssertTabEnds("\n  LLM reasoning                   none\n  LLM request timeout (s)         3600\n  LLM turn timeout (s)            21600\n  LLM context length              (from the server)\n  LLM mid-turn usage              last-known\n  LLM compact type                summary\n  LLM compact keep recent         2 turns\n  LLM compact show summary        off\n  LLM auto compact (%)            85 %\n  LLM max turns                   auto\n  LLM offer tools                 on\n  LLM tool compact type           compact\n  LLM max tool iterations         10000 round trips\n  LLM use fun verbs               off\n  LLM show thinking               on\n  LLM preserve thinking           off\n  LLM reasoning estimate          chars\n  LLM sampling                    (server defaults)\n  LLM sampling from Hugging Face  off\n", 100);
+        AssertTabEnds("\n \n▸ TTS output         on\n  TTS source         http\n  TTS HTTP URL       http://localhost:8880/v1\n  TTS voice preview  on\n  TTS voice preset   neon\n  TTS voice          af_heart\n  TTS voice 2        am_eric\n  TTS voice mix      80 % / 20 %\n  TTS speed          1.2\n", 100);
+        AssertTabEnds("\n \n▸ STT input                 off\n  STT wake                  off\n  STT wake phrase           hey neon\n  STT interrupt             off\n  STT interrupt echo guard  100 %\n  STT interrupt confirm     200 ms\n  STT push-to-talk key      F4\n  STT whisper model         ggml-base.en.bin\n  STT vosk model            vosk-model-small-en-us-0.15\n", 100);
         Assert.DoesNotContain("Ask user", _console.Output);   // /tools' since 2026-09-19
         Assert.DoesNotContain("File tools", _console.Output);
         Assert.DoesNotContain("Web tools", _console.Output);
@@ -4103,7 +4117,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("none", _settings.Current.SessionShowName);
         Assert.Equal(30, _settings.Current.SessionRetentionDays);
         // The seven rows padded to the tab's own column (28) in the user's order (retention second, the show-name picker under the naming mode, the tool above the search cap, save thinking last since 2026-09-28), then the picker's page, then the notices on the status line.
-        Assert.Contains("\n" + Titled(Strip) + "\n \n▸ Session logging             on\n  Session retention (days)    forever\n  Session naming mode         model-written\n  Session show name           all-names\n  Session tool                on\n  Session search max results  10 results\n  Session save thinking       off\n" + Rule(100), _console.Output);
+        AssertTabEnds("\n" + Titled(Strip) + "\n \n▸ Session logging             on\n  Session retention (days)    forever\n  Session naming mode         model-written\n  Session show name           all-names\n  Session tool                on\n  Session search max results  10 results\n  Session save thinking       off\n", 100);
         Assert.Contains("\n" + Titled(Breadcrumb("Session naming mode")) + "\n \n  first-line     the session is named after its first sent line\n▸ model-written  the model writes a short title after the first turn\n" + Rule(100), _console.Output);
         Assert.Contains("\n  · Session retention (days): 30 days\n", _console.Output);
         Assert.Contains("\n▸ Session retention (days)    30 days\n", _console.Output);
@@ -4225,6 +4239,25 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Contains(Breadcrumb("Welcome splash"), _console.Output);
         Assert.Contains("  · Welcome splash: tiled", _console.Output);
         Assert.Contains("the banner alone at startup", _console.Output);
+        Assert.Equal(0, _synth.ListCalls);
+    }
+
+    [Fact]
+    public async Task MenuMaxHeight_IsAPicker_ThreeQuartersByDefault_PersistsAndNeedsNoReconnect()
+    {
+        // 2026-10-01, the user's ask: the General tab's row under Theme; the enum's last member.
+        Assert.Equal("three-quarters", _settings.Current.MenuMaxHeight);
+        Down(Array.IndexOf(Enum.GetValues<SettingsField>(), SettingsField.MenuMaxHeight));
+        Push(Keys.Enter);                           // the picker opens on three-quarters (the second row)
+        Push(Keys.Up, Keys.Enter);                  // half-screen
+        Push(Keys.Escape);
+
+        Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));
+
+        Assert.Equal("half-screen", _settings.Current.MenuMaxHeight);
+        Assert.Contains(Breadcrumb("Menus max height"), _console.Output);
+        Assert.Contains("  · Menus max height: half-screen", _console.Output);
+        Assert.Contains("a menu grows to all but one row of the window", _console.Output);
         Assert.Equal(0, _synth.ListCalls);
     }
 

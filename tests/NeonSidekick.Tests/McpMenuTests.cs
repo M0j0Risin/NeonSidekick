@@ -80,6 +80,10 @@ public class McpMenuTests : IAsyncDisposable
 
     private static string Rule(int width) => new(ScreenPane.RuleGlyph, width);
 
+    /// <summary>A tab's rows, then the blank rows that hold every tab at its pane's tallest tab's height (2026-10-01), then the rule under the list.</summary>
+    private void AssertTabEnds(string rows, int width) =>
+        Assert.Matches(new System.Text.RegularExpressions.Regex(System.Text.RegularExpressions.Regex.Escape(rows) + "(?: \n)*" + System.Text.RegularExpressions.Regex.Escape(Rule(width))), _console.Output);
+
     private string Titled(string row) => row + new string(' ', _console.Profile.Width - 2 - TextCells.Width(row)) + ScreenPane.CloseGlyph;
 
     /// <summary>The strip as the pane prints it. Pinned.</summary>
@@ -280,7 +284,7 @@ public class McpMenuTests : IAsyncDisposable
 
         Assert.False(_settings.Current.McpServers);
         Assert.Equal(45, _settings.Current.McpConnectTimeoutSeconds);
-        Assert.Contains("\n" + Titled(Strip) + "\n \n▸ MCP servers              on\n  MCP connect timeout (s)  30\n" + Rule(100), _console.Output);
+        AssertTabEnds("\n" + Titled(Strip) + "\n \n▸ MCP servers              on\n  MCP connect timeout (s)  30\n", 100);
         Assert.Contains(McpText.Label + " › MCP servers", _console.Output);
         Assert.Contains("no MCP server is started; the pane still lists the config", _console.Output);
         Assert.Contains("  · MCP servers: off\n", _console.Output);

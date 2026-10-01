@@ -652,6 +652,7 @@ public sealed class AppSettings : IDisposable
         Theme = source.Theme,
         TranscriptMarkdown = source.TranscriptMarkdown,
         WelcomeSplashMode = source.WelcomeSplashMode,
+        MenuMaxHeight = source.MenuMaxHeight,
         WorkingDirectory = source.WorkingDirectory,
         SessionLogging = source.SessionLogging,
         SessionNamingMode = source.SessionNamingMode,

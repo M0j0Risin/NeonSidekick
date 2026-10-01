@@ -256,6 +256,10 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     private int _perfRows;
     private string? _shownPerf;
 
+    // The menus' height cap (2026-10-01): the saved word of Menus max height, read at every menu draw; full-screen (the
+    // pane as it grew before the setting) until the screen sets it.
+    private Func<string> _menuHeight = static () => "full-screen";
+
     // The picture strip (later still on 2026-09-24): the provider, the rows the last draw gave it (0 or
     // PictureStrip.Rows — Draw is the only writer), the strip's version and highlight as drawn (the tick's
     // comparison), and where its tiles landed (TryHitStrip).
@@ -731,6 +735,25 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         get => _perf;
         set => _perf = value ?? throw new ArgumentNullException(nameof(value));
     }
+
+    /// <summary>
+    /// The <c>Menus max height</c> word (2026-10-01, the user's ask): read by the <see cref="MenuPane"/>, the
+    /// <see cref="InfoPane"/> and the <see cref="FolderPane"/> on every draw through <see cref="MenuContentRows"/>, so a
+    /// change applies at the next pane shown. <c>full-screen</c> (the default here) is the pane as it grew before the setting.
+    /// </summary>
+    public Func<string> MenuHeight
+    {
+        get => _menuHeight;
+        set => _menuHeight = value ?? throw new ArgumentNullException(nameof(value));
+    }
+
+    /// <summary>
+    /// The content rows a menu may take on a window of <paramref name="height"/> rows (the host's
+    /// <see cref="LayoutHeight"/>) over <paramref name="inputRows"/> input rows: <see cref="UI.MenuHeight.ContentRows"/>
+    /// under <see cref="MenuHeight"/>, never past <see cref="MaxOverlayRows"/>.
+    /// </summary>
+    public int MenuContentRows(int height, int inputRows) =>
+        UI.MenuHeight.ContentRows(UI.MenuHeight.Resolve(_menuHeight()), height, inputRows);
 
     /// <summary>The rows the performance bar took in the last draw: 1 while drawn, else 0 (the thumbnail sizing adds it, as <see cref="ToolbarRows"/>).</summary>
     public int PerfRows

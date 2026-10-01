@@ -1040,6 +1040,9 @@ internal sealed partial class ChatScreen
             // The performance bar under the toolbar (2026-09-29): read per draw and on the tick, like the toolbar, so a
             // change of Show performance bar shows at once; the sampler runs only while it answers a row.
             Perf = PerfBarRow,
+            // The menus' height cap (2026-10-01, the user's ask): read at every menu, info and folder pane draw, so a change
+            // of Menus max height applies to the next pane shown.
+            MenuHeight = () => _effective().MenuMaxHeight,
             // The picture strip over the upper rule (later still on 2026-09-24): while ComfyUI picture strip is on;
             // read per draw and on the tick, so a flip shows at once. Not while its × has put it away (2026-09-28), until the next picture.
             PictureStrip = () => _effective().ComfyPictureStrip && !_pictureStrip.Closed ? _pictureStrip : null,

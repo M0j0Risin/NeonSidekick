@@ -117,6 +117,10 @@ public partial class ToolsMenuTests : IDisposable
 
     private static string Rule(int width) => new(ScreenPane.RuleGlyph, width);
 
+    /// <summary>A tab's rows, then the blank rows that hold every tab at its pane's tallest tab's height (2026-10-01), then the rule under the list.</summary>
+    private void AssertTabEnds(string rows, int width) =>
+        Assert.Matches(new System.Text.RegularExpressions.Regex(System.Text.RegularExpressions.Regex.Escape(rows) + "(?: \n)*" + System.Text.RegularExpressions.Regex.Escape(Rule(width))), _console.Output);
+
     /// <summary>A title or strip row as the pane prints it: the text, then the × close glyph in column width − 2.</summary>
     // The pane's own rule (ScreenPane.Draw): a first row with no room for the gap and the glyph goes without. The nine-tab
     // strip (SQL, 2026-09-23) is 97 cells, so on the fixture's 100 columns the strip row carries no ×; a narrower title still does.
@@ -287,7 +291,7 @@ public partial class ToolsMenuTests : IDisposable
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.False(_settings.Current.ToolsDollarMention);
-        Assert.Contains("\n" + Titled(Strip) + "\n \n▸ $-mention enabled    on\n  Tool collapse count  2 lines\n  Code collapse count  20 lines\n" + Rule(100), _console.Output);
+        AssertTabEnds("\n" + Titled(Strip) + "\n \n▸ $-mention enabled    on\n  Tool collapse count  2 lines\n  Code collapse count  20 lines\n", 100);
         Assert.Contains(ToolsText.Label + " › $-mention enabled", _console.Output);
         Assert.Contains("$ is ordinary text", _console.Output);
         Assert.Contains("\n" + Titled(Strip) + "\n  · $-mention enabled: off\n▸ $-mention enabled    off\n", _console.Output);
@@ -309,7 +313,7 @@ public partial class ToolsMenuTests : IDisposable
 
         Assert.False(_settings.Current.AskUser);
         // The three rows padded to the tab's own column (30), the toggle's notice on the status line under the strip.
-        Assert.Contains("\n" + Titled(Strip) + "\n \n▸ Ask user                      on\n  Ask max questions             10 questions\n  Ask max choices per question  10 choices\n" + Rule(100), _console.Output);
+        AssertTabEnds("\n" + Titled(Strip) + "\n \n▸ Ask user                      on\n  Ask max questions             10 questions\n  Ask max choices per question  10 choices\n", 100);
         Assert.Contains("\n" + Titled(Strip) + "\n  · Ask user: off\n▸ Ask user                      off\n", _console.Output);
         Assert.Contains("\n▸ File tools                      on\n", _console.Output);
         pane.Dispose();
@@ -328,7 +332,7 @@ public partial class ToolsMenuTests : IDisposable
 
         Assert.False(_settings.Current.FileTools);
         // The six rows (the view_image cap last, 2026-09-19; the @-mention folder mode before it, 2026-09-17, and the browser mode under that, 2026-09-21; Safe edits gone since 2026-10-01, folder-remain the default since then, Always return line numbers gone later that day and the stale line number guard later still, with edit_lines) padded to the tab's own column (32), the toggle's notice on the status line under the strip.
-        Assert.Contains("\n" + Titled(Strip) + "\n \n▸ File tools                      on\n  File /tree max length           500 entries\n  File /tree show sizes           on\n  File @-mention folder mode      folder-remain\n  File browser/tree mode          default\n  File view image max (per call)  10 pictures\n" + Rule(100), _console.Output);
+        AssertTabEnds("\n" + Titled(Strip) + "\n \n▸ File tools                      on\n  File /tree max length           500 entries\n  File /tree show sizes           on\n  File @-mention folder mode      folder-remain\n  File browser/tree mode          default\n  File view image max (per call)  10 pictures\n", 100);
         Assert.Contains("\n" + Titled(Strip) + "\n  · File tools: off\n▸ File tools                      off\n", _console.Output);
         Assert.Contains("\n▸ GitLib tools            on\n", _console.Output);
         pane.Dispose();
@@ -1015,7 +1019,7 @@ public partial class ToolsMenuTests : IDisposable
         Assert.Equal(1000, _settings.Current.GitLibDiffMaxLines);
         Assert.Equal(20, _settings.Current.GitLibLogMaxCommits);
         // The five rows padded to the tab's own column (24 since the GitLib labels, 2026-09-30; 28 before), the diff cap's notice then the log cap's refusal on the status line.
-        Assert.Contains("\n" + Titled(Strip) + "\n \n▸ GitLib tools            on\n  GitLib diff max lines   500 lines\n  GitLib log max commits  20 commits\n  GitLib email            (not set)\n  GitLib name             (not set)\n" + Rule(100), _console.Output);
+        AssertTabEnds("\n" + Titled(Strip) + "\n \n▸ GitLib tools            on\n  GitLib diff max lines   500 lines\n  GitLib log max commits  20 commits\n  GitLib email            (not set)\n  GitLib name             (not set)\n", 100);
         Assert.Contains("\n  GitLib diff max lines   1000 lines\n", _console.Output);
         Assert.Contains("GitLib log max commits must be 1 to 200 commits; keeping 20.", _console.Output);
         pane.Dispose();
@@ -1042,7 +1046,7 @@ public partial class ToolsMenuTests : IDisposable
         Assert.Equal("cmd", _settings.Current.ShellDefault);
         Assert.Equal(180, _settings.Current.ShellTimeoutSeconds);
         // The ten rows padded to the tab's own column (27), then the picker's rows, the list's, and the notices on the status line.
-        Assert.Contains("\n" + Titled(Strip) + "\n \n▸ Shell command policy         ask\n  Shell allowed commands       2 prefixes\n  Shell police outside paths   on\n  Shell prefer native tools    on\n  Shell default                powershell\n  Shell timeout (s)            180\n  Shell foreground cap (s)     600\n  Shell output max chars       30,000 chars\n  Shell code languages         powershell, python, node\n  Shell code timeout (s)       300\n  Shell tool bridge            off\n  Shell tool bridge max calls  50 tool calls\n" + Rule(100), _console.Output);
+        AssertTabEnds("\n" + Titled(Strip) + "\n \n▸ Shell command policy         ask\n  Shell allowed commands       2 prefixes\n  Shell police outside paths   on\n  Shell prefer native tools    on\n  Shell default                powershell\n  Shell timeout (s)            180\n  Shell foreground cap (s)     600\n  Shell output max chars       30,000 chars\n  Shell code languages         powershell, python, node\n  Shell code timeout (s)       300\n  Shell tool bridge            off\n  Shell tool bridge max calls  50 tool calls\n", 100);
         Assert.Contains("\n" + Titled(ToolsText.Label + " › Shell command policy") + "\n \n  off  no shell or script tool is offered\n▸ ask  you approve each command not on the allow list\n  yolo every command runs, nothing is asked\n", _console.Output);
         Assert.Contains("  · Shell command policy: yolo\n", _console.Output);
         Assert.Contains("\n" + Titled(ToolsText.Label + " › Shell allowed commands") + "\n \n▸ dotnet build\n  git push\n", _console.Output);
@@ -1127,7 +1131,7 @@ public partial class ToolsMenuTests : IDisposable
 
         Assert.False(_settings.Current.WebTools);
         // The seven rows padded to the tab's own column (26), the toggle's notice on the status line under the strip.
-        Assert.Contains("\n" + Titled(Strip) + "\n \n▸ Web tools                 on\n  Web browser mode          default\n  Web browser path          (auto: msedge.exe)\n  Web browser network mode  internet\n  Web search method         duckduckgo\n  Web SearXNG URL           (not set)\n  Web search max results    20 results\n" + Rule(100), _console.Output);
+        AssertTabEnds("\n" + Titled(Strip) + "\n \n▸ Web tools                 on\n  Web browser mode          default\n  Web browser path          (auto: msedge.exe)\n  Web browser network mode  internet\n  Web search method         duckduckgo\n  Web SearXNG URL           (not set)\n  Web search max results    20 results\n", 100);
         Assert.Contains("\n" + Titled(Strip) + "\n  · Web tools: off\n▸ Web tools                 off\n", _console.Output);
         pane.Dispose();
     }

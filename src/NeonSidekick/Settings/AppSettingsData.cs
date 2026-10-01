@@ -255,6 +255,16 @@ public sealed class AppSettingsData
     public string WelcomeSplashMode { get; set; } = UI.SplashMode.Default;
 
     /// <summary>
+    /// The most of the window a menu, info or folder pane takes (2026-10-01, the user's ask, with every tab of a pane
+    /// held at its tallest tab's height so the pane no longer jumps as one tabs through it): one of
+    /// <see cref="UI.MenuHeight.Names"/> — <c>half-screen</c>, <c>three-quarters</c> (the default) or <c>full-screen</c>
+    /// (all but one transcript row, the pane as it grew before). It caps the whole pane, its rules and hint row
+    /// included; a longer list scrolls. Anything else reads as <see cref="UI.MenuHeight.Default"/>. Read at every
+    /// pane draw; nothing without the pane. No variable.
+    /// </summary>
+    public string MenuMaxHeight { get; set; } = UI.MenuHeight.Default;
+
+    /// <summary>
     /// The folder the file tools may read and write, a full path. Empty means the profile's own
     /// <c>files\</c> folder (<c>WorkingDirectory.Resolve</c>), so every profile has a sandbox
     /// from its first turn and the setting only ever points it somewhere else. No environment

@@ -343,11 +343,98 @@ public class MenuPaneTests : IDisposable
 
         // Right from One (on "b") lands on Two with the cursor on its first row; Tab twice wraps past Three to One.
         Assert.Equal(new MenuPick(0, 0), picked);
-        Assert.Contains(Rule(40) + "\n" + Titled("Settings   One    Two    Three ") + "\n \n▸ a\n  b\n" + Rule(40) + "\nEnter = pick · ←/→ tabs · ESC = back\n", Output);
+        Assert.Contains(Rule(40) + "\n" + Titled("Settings   One    Two    Three ") + "\n \n▸ a\n  b\n \n" + Rule(40) + "\nEnter = pick · ←/→ tabs · ESC = back\n", Output);   // padded to Three's height (2026-10-01)
         Assert.Contains("\n" + Titled("Settings   One    Two    Three ") + "\n \n  a\n▸ b\n", Output);
-        Assert.Contains("\n" + Titled("Settings   One    Two    Three ") + "\n \n▸ c\n" + Rule(40), Output);
+        Assert.Contains("\n" + Titled("Settings   One    Two    Three ") + "\n \n▸ c\n \n \n" + Rule(40), Output);
         Assert.Contains("\n" + Titled("Settings   One    Two    Three ") + "\n \n▸ d\n  e\n  f\n", Output);
         Assert.True(menu.IsOpen);
+        menu.Close();
+    }
+
+    [Fact]
+    public void TabBodyRows_IsTheTallestTabsCaptionAndRows_NoneForAOneListPage()
+    {
+        Assert.Equal(3, MenuPane.TabBodyRows(Tabbed(), 40));
+        // A caption counts: the question pane's tabs differ by theirs (a word per row at width 5).
+        var captioned = MenuPage.Tabbed("Q", [new MenuTab("A", ["x"]) { Caption = "one two" }, new MenuTab("B", ["y", "z"])], 0, "h");
+        Assert.Equal(3, MenuPane.TabBodyRows(captioned, 5));
+        Assert.Equal(2, MenuPane.TabBodyRows(captioned, 40));
+        Assert.Equal(0, MenuPane.TabBodyRows(Page("one", "two"), 40));
+    }
+
+    [Fact]
+    public async Task EveryTab_KeepsTheTallestTabsHeight_TheBlankUnderTheList()
+    {
+        // 2026-10-01, the user's ask: the pane jumped up and down as one tabbed through /settings.
+        using var pane = Pane();
+        pane.Show();
+        var menu = new MenuPane(pane, _keys);
+        Push(Keys.Right, Keys.Right, Keys.Escape);
+
+        Assert.Null(await menu.PickAsync(Tabbed(), 0, CancellationToken.None));
+
+        string strip = Titled("Settings   One    Two    Three ");
+        Assert.Contains("\n" + strip + "\n \n▸ a\n  b\n \n" + Rule(40), Output);       // One: two rows and a blank
+        Assert.Contains("\n" + strip + "\n \n▸ c\n \n \n" + Rule(40), Output);         // Two: one row and two
+        Assert.Contains("\n" + strip + "\n \n▸ d\n  e\n  f\n" + Rule(40), Output);     // Three, the tallest: none
+        menu.Close();
+    }
+
+    [Fact]
+    public async Task APage_WithoutTabs_IsNotPadded()
+    {
+        using var pane = Pane();
+        pane.Show();
+        var menu = new MenuPane(pane, _keys);
+        Push(Keys.Escape);
+
+        Assert.Null(await menu.PickAsync(Page("one"), 0, CancellationToken.None));
+
+        Assert.Contains("\n" + Titled("Settings") + "\n \n▸ one\n" + Rule(40), Output);
+        menu.Close();
+    }
+
+    private static string[] Numbered(int count) => Enumerable.Range(0, count).Select(i => "r" + i.ToString(System.Globalization.CultureInfo.InvariantCulture)).ToArray();
+
+    [Theory]
+    // Menus max height on a 24-row window (2026-10-01): the title and the spacer, then the rest of the content rows the
+    // height leaves — half 12 − 3 = 9, three-quarters 18 − 3 = 15, full-screen 24 − 4 = 20 — the more row the last.
+    [InlineData("half-screen", 6)]
+    [InlineData("three-quarters", 12)]
+    [InlineData("full-screen", 17)]
+    public async Task MenusMaxHeight_CapsThePane_AndTheListScrollsInside(string height, int shown)
+    {
+        _console.Profile.Height = 24;
+        using var pane = Pane();
+        pane.MenuHeight = () => height;
+        pane.Show();
+        var menu = new MenuPane(pane, _keys);
+        Push(Keys.Escape);
+
+        Assert.Null(await menu.PickAsync(Page(Numbered(30)), 0, CancellationToken.None));
+
+        string rows = string.Concat(Numbered(shown).Select((r, i) => (i == 0 ? "▸ " : "  ") + r + "\n"));
+        Assert.Contains("\n" + Titled("Settings") + "\n \n" + rows + "  " + MenuPane.MoreHint + "\n" + Rule(40), Output);
+        menu.Close();
+    }
+
+    [Fact]
+    public async Task ATabTallerThanTheCap_Scrolls_AndTheOthersFillTheCap()
+    {
+        _console.Profile.Height = 24;
+        using var pane = Pane();
+        pane.MenuHeight = () => "half-screen";
+        pane.Show();
+        var menu = new MenuPane(pane, _keys);
+        Push(Keys.Right, Keys.Escape);
+        var page = MenuPage.Tabbed("Settings", [new MenuTab("Long", Numbered(30)), new MenuTab("Short", ["c"])], 0, "hint");
+
+        Assert.Null(await menu.PickAsync(page, 0, CancellationToken.None));
+
+        // Half of 24 less the rules and hint: 9 content rows, the strip and the spacer two of them, so seven under them.
+        string strip = Titled("Settings   Long    Short ");
+        Assert.Contains("\n" + strip + "\n \n▸ r0\n  r1\n  r2\n  r3\n  r4\n  r5\n  " + MenuPane.MoreHint + "\n" + Rule(40), Output);
+        Assert.Contains("\n" + strip + "\n \n▸ c\n \n \n \n \n \n \n" + Rule(40), Output);
         menu.Close();
     }
 
@@ -365,7 +452,7 @@ public class MenuPaneTests : IDisposable
         Assert.Equal(new MenuPick(1, 0), picked);
         Assert.Contains("\n▸ d\n  e\n  f\n", Output);
         Assert.Contains("\n  d\n▸ e\n  f\n", Output);
-        Assert.Contains("\n▸ c\n" + Rule(40), Output);
+        Assert.Contains("\n▸ c\n \n \n" + Rule(40), Output);
         menu.Close();
     }
 
@@ -464,7 +551,7 @@ public class MenuPaneTests : IDisposable
         // Five draws: the open, Down, Two, Three, the row click.
         Assert.Equal(5, CountOf(Output[mark..], "\n" + Titled("Settings   One    Two    Three ") + "\n"));
         Assert.Contains("\n  a\n▸ b\n", Output);
-        Assert.Contains("\n \n▸ c\n" + Rule(40), Output);
+        Assert.Contains("\n \n▸ c\n \n \n" + Rule(40), Output);
         Assert.Contains("\n \n▸ d\n  e\n  f\n", Output);
         Assert.Contains("\n  d\n▸ e\n  f\n", Output);
         menu.Close();
@@ -993,7 +1080,7 @@ public class MenuPaneTests : IDisposable
 
         // Two draws: the open and Two.
         Assert.Equal(2, CountOf(Output[mark..], "\n" + Titled("Settings   One    Two    Three ") + "\n"));
-        Assert.Contains("\n \n▸ c\n" + Rule(40), Output);
+        Assert.Contains("\n \n▸ c\n \n \n" + Rule(40), Output);
         menu.Close();
     }
 
@@ -1188,7 +1275,7 @@ public class MenuPaneTests : IDisposable
         Assert.Equal(new MenuPick(1, 2), await menu.PickAsync(Questions(), 0, CancellationToken.None));
 
         // The strip, the caption row (37 cells fit the 40), the spacer, the rows, the tab's own hint.
-        Assert.Contains(Rule(40) + "\n" + Titled("Questions   One    Two    Submit ") + "\nWhich colour do you like best of all?\n \n▸ ( ) red\n  ( ) blue\n" + Rule(40) + "\nEnter = choose\n", Output);
+        Assert.Contains(Rule(40) + "\n" + Titled("Questions   One    Two    Submit ") + "\nWhich colour do you like best of all?\n \n▸ ( ) red\n  ( ) blue\n \n" + Rule(40) + "\nEnter = choose\n", Output);
         // The switch: the other tab's caption, its cursor on the page's row for it (2), the base hint.
         Assert.Contains("\n" + Titled("Questions   One    Two    Submit ") + "\nToppings?\n \n  [ ] a\n  [ ] b\n▸ [ ] c\n" + Rule(40) + "\nEnter = pick · ←/→ tabs · ESC = back", Output);
         menu.Close();
@@ -1237,7 +1324,7 @@ public class MenuPaneTests : IDisposable
 
         // Left from the first tab wraps to Submit, whose cursor is 1; Space still toggles after the switch.
         Assert.Equal(new MenuPick(2, 1, Toggle: true), await menu.PickAsync(Questions(), 0, CancellationToken.None));
-        Assert.Contains("\n  One — (no answer)\n▸ Submit\n" + Rule(40) + "\nEnter = pick · ←/→ tabs · ESC = back", Output);
+        Assert.Contains("\n  One — (no answer)\n▸ Submit\n \n \n" + Rule(40) + "\nEnter = pick · ←/→ tabs · ESC = back", Output);
         menu.Close();
     }
 

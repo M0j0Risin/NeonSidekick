@@ -159,7 +159,9 @@ public readonly record struct MenuPick(int Tab, int Row, bool Toggle = false, in
 /// A row longer than the width is cut at the edge with an ellipsis, never wrapped
 /// (<see cref="FittedMarkup"/>, 2026-09-18), so the viewport's count holds. A list longer than the
 /// room the window leaves scrolls behind a viewport, the last row saying so
-/// (<see cref="MoreHint"/>). Without the pane (no geometry) there is nothing to draw: the callers
+/// (<see cref="MoreHint"/>); the room is the <c>Menus max height</c> share of the window
+/// (<see cref="ScreenPane.MenuContentRows"/>, 2026-10-01), and a tabbed page keeps its tallest
+/// tab's height on every tab (<see cref="TabBodyRows"/>, the same day). Without the pane (no geometry) there is nothing to draw: the callers
 /// branch to a Spectre prompt, and a call here throws.</para>
 /// </summary>
 public sealed class MenuPane : INoticeSink
@@ -693,7 +695,36 @@ public sealed class MenuPane : INoticeSink
             : [TitleMarkup(page.Title)];
     }
 
-    /// <summary>The page laid out for the window: the title or the tab strip, the caption, the status (or a spacer row), the rows in view, the more row.</summary>
+    /// <summary>
+    /// The rows under the strip of <paramref name="page"/>'s tallest tab laid out for <paramref name="width"/> cells: its
+    /// caption's rows (<see cref="CaptionRows"/>) and its list rows; 0 on a one-list page. What every tab of the page is
+    /// padded to (2026-10-01, the user's ask), so the pane keeps its height as one tabs through it. Pure.
+    /// </summary>
+    public static int TabBodyRows(MenuPage page, int width)
+    {
+        ArgumentNullException.ThrowIfNull(page);
+        if (page.Tabs is not { } tabs)
+        {
+            return 0;
+        }
+
+        int tallest = 0;
+        foreach (var tab in tabs)
+        {
+            int caption = tab.Caption is { } text ? CaptionRows(text, width, CaptionMaxRows).Count : 0;
+            tallest = Math.Max(tallest, caption + tab.Rows.Count);
+        }
+
+        return tallest;
+    }
+
+    /// <summary>
+    /// The page laid out for the window: the title or the tab strip, the caption, the status (or a spacer row), the rows in
+    /// view, the more row, and on a tabbed page blank rows to its tallest tab's height (<see cref="TabBodyRows"/>,
+    /// 2026-10-01, the user's ask: the pane jumped up and down as one tabbed through <c>/settings</c>) — under the list, so
+    /// it stays under the strip and the hint row stays put. All of it within <c>Menus max height</c>
+    /// (<see cref="ScreenPane.MenuContentRows"/>, the same day): a tab taller than the cap scrolls, the others fill it.
+    /// </summary>
     private void Show()
     {
         var page = _page!;
@@ -702,10 +733,12 @@ public sealed class MenuPane : INoticeSink
         var top = TopRows(page, Width);
         _stripRows = top.Count;
         int header = Header;
-        int capacity = ScreenPane.MaxOverlayRows(Height, _inputRows) - header;
+        int capacity = _pane.MenuContentRows(Height, _inputRows) - header;
         (_first, _shown) = Viewport(page.Rows.Count, _cursor, capacity, _first);
+        bool more = _shown < page.Rows.Count;
+        int pad = Math.Min(TabBodyRows(page, Width), _captionRows + Math.Max(0, capacity)) - (_captionRows + _shown + (more ? 1 : 0));
 
-        var lines = new List<IRenderable>(header + _shown + 1);
+        var lines = new List<IRenderable>(header + _shown + 1 + Math.Max(0, pad));
         foreach (var row in top)
         {
             lines.Add(new Markup(row).Overflow(Overflow.Ellipsis));
@@ -736,9 +769,15 @@ public sealed class MenuPane : INoticeSink
             lines.Add(new FittedMarkup(RowMarkup(page.Rows[r], r == _cursor)));
         }
 
-        if (_shown < page.Rows.Count)
+        if (more)
         {
             lines.Add(new Markup(Theme.DimMarkup(NoPointer + MoreHint)));
+        }
+
+        for (int i = 0; i < pad; i++)
+        {
+            // A space, as the spacer: an empty Text would collapse. A click here lands on no row and does nothing.
+            lines.Add(new Text(" "));
         }
 
         _pane.ShowOverlay(new Rows(lines), page.Hint, input: _inputRows > 0, close: true);

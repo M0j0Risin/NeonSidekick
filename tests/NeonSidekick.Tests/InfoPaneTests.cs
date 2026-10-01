@@ -50,7 +50,7 @@ public class InfoPaneTests : IDisposable
 
         await new InfoPane(pane, Source()).ShowAsync(InfoPane.Title, Tabs(), 0, CancellationToken.None);
 
-        Assert.Equal(["One"], _built);
+        Assert.Equal(["One", "Two", "Three"], _built);   // the open measures the other tabs (2026-10-01)
         Assert.Contains(Rule(40) + "\n" + Titled(InfoPane.Title + "   One    Two    Three ") + "\n \nfirst\n" + Rule(40) + "\n" + InfoPane.HintText + "\n", Output);
         Assert.False(pane.OverlayOpen);
         Assert.EndsWith(Rule(40) + "\n› \n" + Rule(40) + "\nidle", Output);
@@ -82,7 +82,7 @@ public class InfoPaneTests : IDisposable
 
         await new InfoPane(pane, Source()).ShowAsync(InfoPane.Title, Tabs(), 0, CancellationToken.None);
 
-        Assert.Equal(["One", "Two", "Three", "One"], _built);
+        Assert.Equal(["One", "Two", "Three", "Two", "Three", "One"], _built);   // the open measures, then Right, Tab, Right
     }
 
     [Fact]
@@ -96,7 +96,7 @@ public class InfoPaneTests : IDisposable
 
         await new InfoPane(pane, Source()).ShowAsync(InfoPane.Title, Tabs(), 1, CancellationToken.None);
 
-        Assert.Equal(["Two", "One", "Three"], _built);
+        Assert.Equal(["Two", "One", "Three", "One", "Three"], _built);   // the open measures, then Left, Shift+Tab
     }
 
     [Fact]
@@ -112,7 +112,7 @@ public class InfoPaneTests : IDisposable
 
         await new InfoPane(pane, Source()).ShowAsync(InfoPane.Title, Tabs(), 0, CancellationToken.None);
 
-        Assert.Equal(["One"], _built);
+        Assert.Equal(["One", "Two", "Three"], _built);
         Assert.DoesNotContain("x", Output.Replace("first", "").Replace(InfoPane.HintText, ""));
     }
 
@@ -154,7 +154,7 @@ public class InfoPaneTests : IDisposable
 
         await new InfoPane(pane, new KeySource(input, TimeSpan.FromMilliseconds(1))).ShowAsync(InfoPane.Title, Tabs(), 0, cts.Token);
 
-        Assert.Equal(["One"], _built);
+        Assert.Equal(["One", "Two", "Three"], _built);
         Assert.False(pane.OverlayOpen);
     }
 
@@ -302,6 +302,38 @@ public class InfoPaneTests : IDisposable
     }
 
     [Fact]
+    public async Task EveryTab_KeepsTheTallestTabsHeight_TheBlankUnderTheContent()
+    {
+        // 2026-10-01, the user's ask: /help and /usage jumped as one tabbed through them.
+        using var pane = Pane();
+        pane.Show();
+        _console.Input.PushKey(Keys.Right);
+        _console.Input.PushKey(Keys.Escape);
+
+        await new InfoPane(pane, Source()).ShowAsync(InfoPane.Title, [Tab("Short", "brief"), Tab("Tall", Numbered(3))], 0, CancellationToken.None);
+
+        string strip = Titled(InfoPane.Title + "   Short    Tall ");
+        Assert.Contains("\n" + strip + "\n \nbrief\n \n \n" + Rule(40), Output);
+        Assert.Contains("\n" + strip + "\n \nline1\nline2\nline3\n" + Rule(40), Output);
+    }
+
+    [Fact]
+    public async Task MenusMaxHeight_CapsThePane_AndTheContentScrollsInside()
+    {
+        // Half of 24 rows less the rules and hint: 9 content rows, the strip and the spacer two of them (2026-10-01).
+        _console.Profile.Height = 24;
+        using var pane = Pane();
+        pane.MenuHeight = () => "half-screen";
+        pane.Show();
+        _console.Input.PushKey(Keys.Escape);
+
+        await new InfoPane(pane, Source()).ShowAsync(InfoPane.Title, [Tab("Long", Numbered(20))], 0, CancellationToken.None);
+
+        Assert.Contains("\n \nline1\nline2\nline3\nline4\nline5\nline6\n" + MenuPane.MoreHint + "\n" + Rule(40), Output);
+        Assert.DoesNotContain("line7", Output);
+    }
+
+    [Fact]
     public async Task SwitchingTabs_StartsAtTheTop()
     {
         using var pane = Pane();
@@ -312,8 +344,8 @@ public class InfoPaneTests : IDisposable
 
         await new InfoPane(pane, Source()).ShowAsync(InfoPane.Title, [Tab("Long", Numbered(20)), Tab("Short", "brief")], 0, CancellationToken.None);
 
-        Assert.Equal(["Long", "Long", "Short"], _built);
-        Assert.Contains(Titled(InfoPane.Title + "   Long    Short ") + "\n \nbrief\n" + Rule(40) + "\n" + InfoPane.HintText + "\n", Output);
+        Assert.Equal(["Long", "Short", "Long", "Short"], _built);
+        Assert.Contains(Titled(InfoPane.Title + "   Long    Short ") + "\n \nbrief\n \n \n \n \n \n" + Rule(40) + "\n" + InfoPane.HintText + "\n", Output);
         Assert.EndsWith(Rule(40) + "\n› \n" + Rule(40) + "\nidle", Output);
     }
 
@@ -416,7 +448,7 @@ public class InfoPaneTests : IDisposable
 
         await new InfoPane(pane, keys).ShowAsync(InfoPane.Title, [Tab("One", "first"), Tab("Two", "second"), Tab("Three", "third"), Tab("Four", "fourth")], 0, CancellationToken.None);
 
-        Assert.Equal(["One", "Three"], _built);
+        Assert.Equal(["One", "Two", "Three", "Four", "Three"], _built);
         Assert.Contains("\n" + Titled(InfoPane.Title + "   One    Two ", 30) + "\n          Three    Four \n \nthird\n" + Rule(30), Output);
     }
 
@@ -435,8 +467,8 @@ public class InfoPaneTests : IDisposable
 
         await new InfoPane(pane, keys).ShowAsync(InfoPane.Title, [Tab("One", "first"), Tab("Two", Numbered(20)), Tab("Three", "third")], 0, CancellationToken.None);
 
-        Assert.Equal(["One", "Two", "Two", "Three", "One"], _built);
-        Assert.Contains("\n" + Titled(InfoPane.Title + "   One    Two    Three ") + "\n \nthird\n" + Rule(40), Output);
+        Assert.Equal(["One", "Two", "Three", "Two", "Two", "Three", "One"], _built);
+        Assert.Contains("\n" + Titled(InfoPane.Title + "   One    Two    Three ") + "\n \nthird\n \n \n \n \n \n" + Rule(40), Output);
         Assert.EndsWith(Rule(40) + "\n› \n" + Rule(40) + "\nidle", Output);
     }
 
@@ -453,7 +485,7 @@ public class InfoPaneTests : IDisposable
 
         await new InfoPane(pane, keys).ShowAsync(InfoPane.Title, [Tab("One", "first"), Tab("Two", "second")], 0, CancellationToken.None);
 
-        Assert.Equal(["One"], _built);
+        Assert.Equal(["One", "Two"], _built);
         Assert.False(pane.OverlayOpen);
         Assert.True(input.IsAvailable);
         Assert.EndsWith(Rule(40) + "\n› \n" + Rule(40) + "\nidle", Output);
@@ -475,7 +507,7 @@ public class InfoPaneTests : IDisposable
 
         await new InfoPane(pane, keys).ShowAsync(InfoPane.Title, [Tab("One", "first"), Tab("Two", "second")], 0, CancellationToken.None);
 
-        Assert.Equal(["One", "Two"], _built);
+        Assert.Equal(["One", "Two", "Two"], _built);
         Assert.False(pane.OverlayOpen);
         Assert.False(pane.Dismissed);
         Assert.True(input.IsAvailable);
@@ -500,7 +532,7 @@ public class InfoPaneTests : IDisposable
         await new InfoPane(pane, keys).ShowAsync(InfoPane.Title, Tabs(), 0, CancellationToken.None);
 
         // One draw (the open), nothing redrawn for any of the seven events.
-        Assert.Equal(["One"], _built);
+        Assert.Equal(["One", "Two", "Three"], _built);
     }
 
     /// <summary>A notch is three lines (<see cref="InfoPane.WheelLines"/>), clamped like the keys; the no-op notches do not redraw.</summary>

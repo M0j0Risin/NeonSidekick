@@ -317,7 +317,7 @@ public sealed class FolderPane
     {
         var tree = _tree!;
         int count = tree.Visible.Count;
-        int capacity = ScreenPane.MaxOverlayRows(Height, 0) - HeaderRows;
+        int capacity = _pane.MenuContentRows(Height, 0) - HeaderRows;   // within Menus max height (2026-10-01)
         (_first, _shown) = MenuPane.Viewport(count, _cursor, capacity, _first);
 
         var lines = new List<IRenderable>(HeaderRows + _shown + 1) { new Markup(StripMarkup()) };
