@@ -261,7 +261,9 @@ public sealed class InfoPane
             Show(label, tabs, active);
             while (true)
             {
-                var input = await _keys.ReadInputAsync(cancellationToken).ConfigureAwait(false);
+                // A command chord (2026-10-01, the user's ask: as everywhere else) is done in place, or the pane backs out as
+                // on ESC and the screen runs it (KeySource.ReadPaneInputAsync).
+                var input = await _keys.ReadPaneInputAsync(_pane, cancellationToken).ConfigureAwait(false);
                 if (input is null)
                 {
                     return;
@@ -313,18 +315,6 @@ public sealed class InfoPane
                 else if (input is not InputEvent.Key { Info: var k })
                 {
                     _clicks.Reset();
-                    continue;
-                }
-                else if (Keys.ShortcutLine(k) is { } chord)
-                {
-                    // A command chord (2026-10-01, the user's ask: as everywhere else): done in place, or the pane
-                    // backs out and the screen runs it (ScreenPane.Chord).
-                    _clicks.Reset();
-                    if (!_pane.Chord(chord))
-                    {
-                        return;
-                    }
-
                     continue;
                 }
                 else if (Keys.IsCancel(k) || Keys.IsInterrupt(k))

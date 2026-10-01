@@ -522,7 +522,12 @@ public sealed partial class InputLine
                 {
                     try
                     {
-                        input = await _keys.ReadInputAsync(readToken).ConfigureAwait(false);
+                        // A command chord in a typed value under its pane (2026-10-01, the user's ask: as everywhere else) is done
+                        // in place, or every level closes through the ESC key's own path and the screen runs it
+                        // (KeySource.ReadPaneInputAsync). The chat line's reads (shortcuts) take their chord as a result of their own.
+                        input = shortcuts
+                            ? await _keys.ReadInputAsync(readToken).ConfigureAwait(false)
+                            : await _keys.ReadPaneInputAsync(_pane, readToken).ConfigureAwait(false);
                     }
                     catch (InvalidOperationException)
                     {

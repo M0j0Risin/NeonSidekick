@@ -315,7 +315,8 @@ internal sealed partial class ChatScreen
         while (true)
         {
             await RunPaneOnceAsync(command, args, cancellationToken).ConfigureAwait(false);
-            if (_pane.TakeDismissHit() is not { } hit || OffPaneLine(hit) is not { } next)
+            var (next, chord) = TakeOffPane();
+            if (next is null)
             {
                 return null;
             }
@@ -328,7 +329,7 @@ internal sealed partial class ChatScreen
 
             if (MidTurnPolicy(nextCommand, nextArgs) != MidTurnClass.Pane)
             {
-                return hit.Chord;
+                return chord ? next : null;
             }
 
             command = nextCommand;
@@ -599,8 +600,10 @@ internal sealed partial class ChatScreen
     /// <summary>
     /// After a turn: a pane still open on the watcher task is closed when the keys are needed at
     /// once (<paramref name="closePane"/>: the interrupt's listen, the exit) and awaited otherwise
-    /// (the reply ended under <c>/help</c>; the user closes it), then the acts posted meanwhile run
-    /// and the reconnects the quick switches owe follow, quietly.
+    /// (the reply ended under <c>/help</c>; the user closes it), the acts posted meanwhile run as they come — as the
+    /// reply's own wait runs them (<see cref="NextEventAsync"/>; 2026-10-01, the review's finding: Ctrl+Alt+E in a pane the
+    /// reply ended under toggled nothing until the pane closed, and twice was no change at all) — and the reconnects the
+    /// quick switches owe follow, quietly.
     /// </summary>
     private async Task EndTurnAsync(bool closePane, CancellationToken cancellationToken)
     {
@@ -609,7 +612,14 @@ internal sealed partial class ChatScreen
             VoiceSession.SafeCancel(close);
         }
 
-        await _keys.PendingLine.ConfigureAwait(false);
+        var pending = _keys.PendingLine;
+        while (!pending.IsCompleted)
+        {
+            await Task.WhenAny(pending, Volatile.Read(ref _actSignal).Task).ConfigureAwait(false);
+            await DrainActsAsync().ConfigureAwait(false);
+        }
+
+        await pending.ConfigureAwait(false);
         _turnRunning = false;
         await DrainActsAsync().ConfigureAwait(false);
         if (cancellationToken.IsCancellationRequested)

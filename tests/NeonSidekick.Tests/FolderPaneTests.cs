@@ -96,11 +96,12 @@ public class FolderPaneTests : IDisposable
         screen.ChordInPlace = line => line == "/perf";
         input.Push(Keys.CtrlAlt(ConsoleKey.E), Keys.Char(' '), Keys.Down, Keys.Enter);
         Assert.Equal(P(C, "Users"), await picker.PickAsync(new FolderTree(Disks()), 0, CancellationToken.None));
-        Assert.Null(screen.TakeDismissHit());
+        Assert.Null(screen.TakeDismissChord());
 
         input.Push(Keys.CtrlAltC, Keys.Enter);
         Assert.Null(await picker.PickAsync(new FolderTree(Disks()), 0, CancellationToken.None));
-        Assert.Equal(new ScreenPane.OffPaneHit(null, null, "/clear"), screen.TakeDismissHit());
+        Assert.Equal("/clear", screen.TakeDismissChord());
+        Assert.Null(screen.TakeDismissHit());
         Assert.False(screen.OverlayOpen);
     }
 

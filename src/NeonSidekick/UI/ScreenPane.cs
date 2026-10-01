@@ -278,6 +278,9 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     // Where the last dismissing double-click landed (Dismiss(x, y)), until TakeDismissHit.
     private OffPaneHit? _dismissHit;
 
+    // The command chord that last dismissed a pane (Chord), until TakeDismissChord; a new overlay keeps it.
+    private string? _dismissChord;
+
     /// <summary>The part of the standing hint row a click landed on (<see cref="TryHitHint(int, int, out HintHit)"/>).</summary>
     public enum HintZone
     {
@@ -448,6 +451,22 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     }
 
     /// <summary>
+    /// The command chord that last dismissed a pane (<see cref="Chord"/>), once: cleared here and by <see cref="Close"/> —
+    /// never by a new overlay (the review's finding, 2026-10-01: a handler that went on to show another pane after the first
+    /// closed dropped the chord), so the screen runs it as soon as the hosts and the handler have backed out. Null when none
+    /// did. Kept apart from <see cref="TakeDismissHit"/>, which is a click's place on the screen, not a command.
+    /// </summary>
+    public string? TakeDismissChord()
+    {
+        lock (_gate)
+        {
+            var chord = _dismissChord;
+            _dismissChord = null;
+            return chord;
+        }
+    }
+
+    /// <summary>
     /// The screen's hook for a command chord pressed in a pane that leaves the pane open (2026-10-01, the user's ask:
     /// Ctrl+Alt+E <c>/perf</c> and Ctrl+Alt+B <c>/tb</c> toggle their bar in place, the tick repainting the pane's new
     /// shape): true when it did the chord's command, false for every chord that closes the pane first. Null: none does.
@@ -484,9 +503,10 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     /// A command chord (<see cref="Keys.ShortcutLine"/>) pressed in a pane (2026-10-01, the user's ask: the chords work in a pane
     /// as everywhere else): what a pane reader does with it. True when the reader carries on — the chords are suppressed (a
     /// tool-asked pane), or <see cref="ChordInPlace"/> did the command with the pane open, or there is no overlay to close;
-    /// false when the whole stack was dismissed (<see cref="Dismissed"/>) with <paramref name="line"/> kept as the
-    /// <see cref="OffPaneHit.Chord"/> of <see cref="TakeDismissHit"/>, so the screen runs it once the hosts have backed out —
+    /// false when the whole stack was dismissed (<see cref="Dismissed"/>) with <paramref name="line"/> kept for
+    /// <see cref="TakeDismissChord"/>, so the screen runs it once the hosts have backed out —
     /// the double-click off a pane's path, which closes the pane its own word names and opens any other.
+    /// The pane readers come here through <see cref="KeySource.ReadPaneInputAsync"/>.
     /// </summary>
     public bool Chord(string line)
     {
@@ -509,7 +529,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
             }
 
             Dismissed = true;
-            _dismissHit = new OffPaneHit(null, null, line);
+            _dismissChord = line;
             return false;
         }
     }
@@ -519,10 +539,8 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     /// 2026-09-21): <see cref="Toolbar"/> on the toolbar row (a glyph, the path or the blanks) or the performance bar (the blanks' <see cref="PerfBarHit"/>, 2026-09-29),
     /// <see cref="Hint"/> on the standing hint row (the model name, its reasoning mark, a strip
     /// glyph or the rest — never the queued count or the tally, which are not drawn under a pane).
-    /// <see cref="Chord"/> is no click at all (2026-10-01): the command chord pressed in the pane (<see cref="ScreenPane.Chord"/>),
-    /// its bare command as typed; the two click parts are null with it.
     /// </summary>
-    public readonly record struct OffPaneHit(HintHit? Hint, ToolbarHit? Toolbar, string? Chord = null);
+    public readonly record struct OffPaneHit(HintHit? Hint, ToolbarHit? Toolbar);
 
     /// <summary>
     /// <see cref="OffPaneHit"/> for buffer cell (<paramref name="x"/>, <paramref name="y"/>) —
@@ -2460,6 +2478,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
                     _drawnClose = false;
                     Dismissed = false;
                     _dismissHit = null;
+                    _dismissChord = null;
                 }
             }
 

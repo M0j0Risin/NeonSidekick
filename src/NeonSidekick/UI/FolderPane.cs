@@ -82,7 +82,9 @@ public sealed class FolderPane
             Show();
             while (true)
             {
-                var input = await _keys.ReadInputAsync(cancellationToken).ConfigureAwait(false);
+                // A command chord (2026-10-01, the user's ask: as everywhere else) is done in place, or nothing is picked as
+                // on ESC and the screen runs it (KeySource.ReadPaneInputAsync).
+                var input = await _keys.ReadPaneInputAsync(_pane, cancellationToken).ConfigureAwait(false);
                 if (input is null)
                 {
                     return null;
@@ -168,18 +170,6 @@ public sealed class FolderPane
                 {
                     MoveTo(Clamp(_cursor - wheel.Notches));
                     continue;
-                }
-
-                if ((input as InputEvent.Key)?.Info is { } chordKey && Keys.ShortcutLine(chordKey) is { } chord)
-                {
-                    // A command chord (2026-10-01, the user's ask: as everywhere else): done in place, or nothing picked
-                    // and the screen runs it (ScreenPane.Chord).
-                    if (_pane.Chord(chord))
-                    {
-                        continue;
-                    }
-
-                    return null;
                 }
 
                 if ((input as InputEvent.Key)?.Info is not { } k || Keys.IsCancel(k) || Keys.IsInterrupt(k))

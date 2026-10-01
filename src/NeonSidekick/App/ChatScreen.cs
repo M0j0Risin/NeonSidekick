@@ -1414,12 +1414,9 @@ internal sealed partial class ChatScreen
     /// nothing (the switches are the idle line's), nor do the queued count and the tally (never
     /// drawn under a pane). The screen closes the pane the word owns, or switches to the one it
     /// names (<see cref="HandleAsync"/>, <see cref="RunPaneAsync"/>). Pinned.
-    /// A command chord pressed in the pane (2026-10-01, the user's ask) is its bare command, ahead of every click part, the
-    /// same close-or-switch: Ctrl+Alt+T in <c>/tools</c> closes it, Ctrl+Alt+K there opens <c>/skills</c>.
     /// </summary>
     public static string? OffPaneLine(ScreenPane.OffPaneHit hit) => hit switch
     {
-        { Chord: { } chord } => chord,
         { Toolbar: { } tool } => tool.Zone switch
         {
             ScreenPane.ToolbarZone.Path => CwdBrowseLine,
@@ -1435,6 +1432,19 @@ internal sealed partial class ChatScreen
         },
         _ => null,
     };
+
+    /// <summary>
+    /// What closed the last pane, taken once (both are cleared): a command chord pressed in it (2026-10-01, the user's ask:
+    /// its bare command, ahead of any click — Ctrl+Alt+T in <c>/tools</c> closes it, Ctrl+Alt+K there opens <c>/skills</c>;
+    /// <see cref="ScreenPane.TakeDismissChord"/>), else the line a double-click off it names (<see cref="OffPaneLine"/>).
+    /// <c>Chord</c> says which, since a click that names no pane is the close alone where a chord still runs.
+    /// </summary>
+    private (string? Line, bool Chord) TakeOffPane()
+    {
+        string? chord = _pane.TakeDismissChord();
+        var hit = _pane.TakeDismissHit();
+        return chord is not null ? (chord, true) : (hit is { } h ? OffPaneLine(h) : null, false);
+    }
 
     /// <summary>The command a double-click on a toolbar glyph runs (2026-09-21), as the typed word; null for anything else. The officer's is <c>/police</c> since later on 2026-09-22 (nothing until then). Pinned.</summary>
     public static string? ToolbarWord(string glyph) => glyph switch
@@ -3105,6 +3115,9 @@ internal sealed partial class ChatScreen
         }
 
         var page = new MenuPage(TypoTitle(line.TrimEnd()), [TypoRow(item)], TypoKeys);
+        // The command chords are nobody's here (2026-10-01, the review's finding): the pane's ESC sends the line, so a chord's
+        // close sent the typo as a message and ran the command after the reply — a question to the user, as a tool's is.
+        using var chords = _pane.SuppressChords();
         try
         {
             var picked = await _menuPane.PickAsync(page, 0, cancellationToken).ConfigureAwait(false);
@@ -7374,6 +7387,23 @@ internal sealed partial class ChatScreen
                     return 0;
                 }
 
+                if (TakeOffPane().Line is { } offPane)
+                {
+                    // A pane opened outside the dispatch (the startup's server picker, a job's, the read's own) that a command
+                    // chord or a double-click off it closed (2026-10-01, the review's finding: it lay there until the next dispatch
+                    // took it, after the first reply — Ctrl+Alt+N in the startup picker wiped the conversation it had just begun):
+                    // run now, as the dispatch would have, the Shortcut arm's way.
+                    _timers.Acknowledge();
+                    DisarmExit();
+                    await _speech.StopAsync().ConfigureAwait(false);
+                    if (await HandleAsync(offPane, [], cancellationToken).ConfigureAwait(false))
+                    {
+                        return 0;
+                    }
+
+                    continue;
+                }
+
                 IReadOnlyList<InputEvent>? replay = null;
                 SubmittedLine? send = null;
                 // A draft the editor just handed back (2026-09-19) goes first: the user is
@@ -9246,8 +9276,8 @@ internal sealed partial class ChatScreen
     /// the pane it opened named (later on 2026-09-21, the user's ask): the pane's own word — its
     /// toolbar glyph, the model name under the model picker, the path under the folder picker, the
     /// blanks under the settings — ends there, the pane closed; another pane's word opens that
-    /// pane, which may be switched from in turn (<see cref="ScreenPane.TakeDismissHit"/>,
-    /// <see cref="OffPaneLine"/>). Returns true when the shell should exit.
+    /// pane, which may be switched from in turn (<see cref="TakeOffPane"/>; a command chord pressed in the pane the same
+    /// way, 2026-10-01). Returns true when the shell should exit.
     /// </summary>
     private async Task<bool> HandleAsync(string text, IReadOnlyList<ImageAttachment> images, CancellationToken cancellationToken)
     {
@@ -9259,7 +9289,7 @@ internal sealed partial class ChatScreen
                 return true;
             }
 
-            if (_pane.TakeDismissHit() is not { } hit || OffPaneLine(hit) is not { } next || ParseLine(next).Command == command)
+            if (TakeOffPane().Line is not { } next || ParseLine(next).Command == command)
             {
                 return false;
             }

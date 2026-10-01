@@ -880,11 +880,49 @@ public class MenuPaneTests : IDisposable
 
         Assert.Null(await menu.PickAsync(Page("one", "two", "three"), 0, CancellationToken.None));
         Assert.True(pane.Dismissed);
-        Assert.Equal(new ScreenPane.OffPaneHit(null, null, "/skills"), pane.TakeDismissHit());
+        Assert.Equal("/skills", pane.TakeDismissChord());
+        Assert.Null(pane.TakeDismissHit());               // a chord is no click
         Assert.True(input.IsAvailable);                  // the Enter, never read
         Assert.Null(await menu.PickAsync(Page("one", "two"), 0, CancellationToken.None));
         menu.Close();
         Assert.False(pane.Dismissed);
+    }
+
+    /// <summary>
+    /// The chord outlives the next overlay (2026-10-01, the review's finding: a handler that showed another pane after the
+    /// first closed dropped it, the screen then running nothing), where a click's part does not; taken once.
+    /// </summary>
+    [Fact]
+    public async Task AChord_OutlivesTheNextPane_AndIsTakenOnce()
+    {
+        var (pane, input, keys) = ClickablePane(cursorTop: 100);
+        using var _ = pane;
+        pane.Show();
+        var menu = new MenuPane(pane, keys);
+        input.Push(Keys.CtrlAlt(ConsoleKey.K));
+        Assert.Null(await menu.PickAsync(Page("one"), 0, CancellationToken.None));
+        menu.Close();
+
+        input.Push(Keys.Enter);                          // the handler's next pane, answered
+        Assert.Equal(new MenuPick(0, 0), await menu.PickAsync(Page("two"), 0, CancellationToken.None));
+        menu.Close();
+
+        Assert.Equal("/skills", pane.TakeDismissChord());
+        Assert.Null(pane.TakeDismissChord());
+    }
+
+    /// <summary>The pane read with no overlay open (2026-10-01): a chord passes as read, nothing dismissed or kept.</summary>
+    [Fact]
+    public async Task ReadPaneInputAsync_WithNoOverlay_PassesAChordAsRead()
+    {
+        var (pane, input, keys) = ClickablePane(cursorTop: 100);
+        using var _ = pane;
+        pane.Show();
+        input.Push(Keys.CtrlAltC);
+
+        Assert.Equal(new InputEvent.Key(Keys.CtrlAltC), await keys.ReadPaneInputAsync(pane, CancellationToken.None));
+        Assert.False(pane.Dismissed);
+        Assert.Null(pane.TakeDismissChord());
     }
 
     /// <summary>A chord the screen does in place (<c>/perf</c>, <c>/tb</c>) leaves the list reading; under a tool's question every chord is nobody's.</summary>
@@ -915,7 +953,7 @@ public class MenuPaneTests : IDisposable
 
         Assert.Equal(["/perf"], done);                   // never asked while suppressed
         Assert.False(pane.Dismissed);
-        Assert.Null(pane.TakeDismissHit());
+        Assert.Null(pane.TakeDismissChord());
         menu.Close();
     }
 
@@ -932,7 +970,7 @@ public class MenuPaneTests : IDisposable
 
         Assert.IsType<InputResult.Cancelled>(await menu.EditAsync(Page("one", "two"), 1, line, "old", allowEmpty: false, CancellationToken.None));
         Assert.True(pane.Dismissed);
-        Assert.Equal(new ScreenPane.OffPaneHit(null, null, "/new"), pane.TakeDismissHit());
+        Assert.Equal("/new", pane.TakeDismissChord());
         Assert.True(input.IsAvailable);                  // the Enter, never read
         menu.Close();
     }

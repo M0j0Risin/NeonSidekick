@@ -9451,7 +9451,6 @@ public partial class ChatScreenTests : IDisposable
         Assert.Null(ChatScreen.OffPaneLine(Hint(ScreenPane.HintZone.Queued, "", 3)));
         Assert.Null(ChatScreen.OffPaneLine(Hint(ScreenPane.HintZone.Usage, "", 5)));
         Assert.Null(ChatScreen.OffPaneLine(new ScreenPane.OffPaneHit(null, null)));
-        Assert.Equal("/skills", ChatScreen.OffPaneLine(new ScreenPane.OffPaneHit(null, null, "/skills")));   // a chord in the pane, 2026-10-01
     }
 
     /// <summary>
@@ -15173,6 +15172,99 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(1, _session.History.TurnCount);
     }
 
+    [Fact]
+    public async Task MidTurn_CtrlAltE_InAPaneTheReplyEndedUnder_TogglesTheBar_WithThePaneStillOpen()
+    {
+        // The review's finding (2026-10-01): with the reply over and the pane left open, the turn's end waited on the pane and
+        // ran nothing posted meanwhile, so the bar changed only at the close — and twice was no change at all.
+        _settings.Update(d => d.TtsOutput = false);
+        _console.Profile.Height = 40;
+        _geometry = new ScreenGeometry(() => null);
+        _chat.EnqueueText("One ", "two ", "three.");
+        _chat.BeforeUpdate = async (i, _) =>
+        {
+            if (_chat.Requests.Count == 1 && i == 0)
+            {
+                _scripted!.Push(Keys.CtrlAlt(ConsoleKey.H));
+            }
+
+            await Task.Delay(40, CancellationToken.None);
+        };
+        using var replied = new ManualResetEventSlim();
+        _chat.AfterLastUpdate = _ =>
+        {
+            replied.Set();
+            return Task.CompletedTask;
+        };
+        var input = Scripted();
+        bool? barWhileOpen = null;
+        int step = 0;
+        input.OnWait = () =>
+        {
+            if (step == 0)
+            {
+                PushLine(input, "hi");
+                step++;
+            }
+            else if (step == 1 && _keys is { PendingLine.IsCompleted: false })
+            {
+                // The help pane's first read, still inside the watcher's own call (the source runs this hook before it awaits):
+                // the chord comes from another task, once the reply is over and the turn has gone on to wait for the pane, so
+                // the watcher lets go meanwhile. A slow machine still in the reply's own wait passes either way; it can never
+                // fail the test.
+                step++;
+                _ = Task.Run(async () =>
+                {
+                    replied.Wait(TimeSpan.FromSeconds(5));
+                    await Task.Delay(200);
+                    input.Push(Keys.CtrlAlt(ConsoleKey.E));
+                });
+            }
+            else if (step == 2)
+            {
+                // The pane reads on (the chord was done in place): the bar must be on before it closes.
+                barWhileOpen = SpinWait.SpinUntil(() => _settings.Current.PerformanceBarItems is not null, TimeSpan.FromSeconds(5));
+                input.Push(Keys.Escape);
+                step++;
+            }
+            else if (step == 3)
+            {
+                PushLine(input, "/exit");
+                step++;
+            }
+        };
+
+        string output = await RunAsync();
+
+        Assert.Contains(InfoPane.Title + "   Commands (basic)", output);
+        Assert.True(barWhileOpen, output);
+        Assert.NotNull(_settings.Current.PerformanceBarItems);
+        Assert.Single(_chat.Requests);
+    }
+
+    [Fact]
+    public async Task Startup_CtrlAltN_OnTheServerPicker_StartsANewConversationAtOnce_NotAfterTheFirstReply()
+    {
+        // The review's finding (2026-10-01): a pane opened outside the dispatch kept its chord until the first message's
+        // dispatch took it, after the reply — /new wiped the conversation that reply had just begun.
+        _settings.Update(d => { d.LlmUrl = ""; d.TtsOutput = false; });
+        _console.Profile.Height = 112;
+        _geometry = new ScreenGeometry(() => null);
+        ServerOn(11434, "phi");
+        _chat.EnqueueText("one");
+        StepsWhenIdle(Key(Keys.CtrlAltN), Line("hi"), Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.Contains(SettingsMenu.StartupServerTitle, output);
+        Assert.Equal("", _settings.Current.LlmUrl);   // closed as on ESC: the first listed, unsaved
+        int fresh = output.IndexOf(ChatScreen.NewConversationNotice, StringComparison.Ordinal);
+        Assert.True(fresh > 0, output);
+        Assert.True(output.IndexOf("› hi", StringComparison.Ordinal) > fresh, output);
+        Assert.Equal(1, Count(output, ChatScreen.NewConversationNotice));
+        Assert.Equal(1, _session.History.TurnCount);  // the reply kept
+    }
+
     // ── /theme (2026-09-23, the user's ask: just like /splash) ──────────────
 
     [Fact]
@@ -18266,6 +18358,22 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(1, Refreshes(output));   // /clear ran
         Assert.Contains("› /clear", output);
         Assert.Empty(_chat.Requests);   // "clear" was never sent (never committed either: InputLineTests pins that through History, since the live row draws like a committed line)
+    }
+
+    [Fact]
+    public async Task WithGeometry_ACommandChord_InTheTypoPane_IsNobodys()
+    {
+        // 2026-10-01 (the review's finding): the pane's ESC sends the line as typed, so a chord's close sent "clear" to the
+        // model and ran /new after the reply. Ignored there, as under a tool's question: the Enter after it still picks.
+        _settings.Update(d => d.TtsOutput = false);
+        _geometry = new ScreenGeometry(() => null);
+        StepsWhenIdle(Line("clear"), Key(Keys.CtrlAltN), Key(Keys.Enter), Key(Keys.Enter), Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.DoesNotContain(ChatScreen.NewConversationNotice, output);
+        Assert.Equal(1, Refreshes(output));   // /clear ran
+        Assert.Empty(_chat.Requests);
     }
 
     [Theory]

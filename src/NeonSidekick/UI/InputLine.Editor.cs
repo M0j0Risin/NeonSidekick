@@ -330,19 +330,7 @@ public sealed partial class InputLine
                 return EditOutcome.Handled;
             }
 
-            if (!_o.Live && !_o.Shortcuts && input is InputEvent.Key { Info: var chordKey } && Keys.ShortcutLine(chordKey) is { } chord && pane.OverlayOpen)
-            {
-                // A command chord in a typed value under its pane (2026-10-01, the user's ask: as everywhere else): done in
-                // place, or every level closes through the ESC key's own path, as the double-click off the pane does, and the
-                // screen runs it (ScreenPane.Chord). The chat line's own chord is the branch further down.
-                if (pane.Chord(chord))
-                {
-                    return EditOutcome.Handled;
-                }
-
-                input = new InputEvent.Key(Keys.Escape);
-            }
-            else if (!_o.Live && input is InputEvent.Click { Button: MouseButton.Left } close && pane.TryHitClose(close.X, close.Y))
+            if (!_o.Live && input is InputEvent.Click { Button: MouseButton.Left } close && pane.TryHitClose(close.X, close.Y))
             {
                 // The × at an overlay's corner (a typed settings value under its menu, 2026-09-18)
                 // is the ESC key: the same path, hooks and all.

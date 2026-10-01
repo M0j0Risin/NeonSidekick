@@ -277,6 +277,32 @@ public sealed class KeySource : IAnsiConsoleInput
     }
 
     /// <summary>
+    /// <see cref="ReadInputAsync"/> for a reader under an open pane (the menu, the info pane, the folder picker, a typed value
+    /// under its menu): a command chord (<see cref="Keys.ShortcutLine"/>) goes to <paramref name="pane"/>'s
+    /// <see cref="ScreenPane.Chord"/> — done in place or ignored, and the next event read; or the whole stack dismissed, and
+    /// the ESC key returned, so the reader backs out by its own ESC path, hooks and all. With no overlay open every event
+    /// passes as read. The one place the chords are read in a pane (2026-10-01, the review's finding: the block was copied
+    /// into each reader, and a new one would have missed it).
+    /// </summary>
+    public async Task<InputEvent?> ReadPaneInputAsync(ScreenPane pane, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(pane);
+        while (true)
+        {
+            var input = await ReadInputAsync(cancellationToken).ConfigureAwait(false);
+            if (input is not InputEvent.Key { Info: var key } || Keys.ShortcutLine(key) is not { } line || !pane.OverlayOpen)
+            {
+                return input;
+            }
+
+            if (!pane.Chord(line))
+            {
+                return new InputEvent.Key(Keys.Escape);
+            }
+        }
+    }
+
+    /// <summary>
     /// The next key, clicks dropped: <see cref="ReadInputAsync"/> for whatever reads keys only (the
     /// Spectre prompts through <see cref="IAnsiConsoleInput"/>). Same contract: null on cancellation,
     /// <see cref="InvalidOperationException"/> without a keyboard.
