@@ -99,8 +99,10 @@ public class McpSessionTests : IAsyncDisposable
     {
         ProfileFile(Two);
         _servers.Failing.Add("chrome");
-        var log = new List<DiagnosticEvent>();
-        Action<DiagnosticEvent> capture = e => { if (e.Category == McpSession.Category) log.Add(e); };
+        // A concurrent queue (2026-10-01, a flake): the servers connect at once and a subscriber runs on the producing thread,
+        // so two lines could land together and a List lost one ("Failed chrome" missing, one run in five).
+        var log = new System.Collections.Concurrent.ConcurrentQueue<DiagnosticEvent>();
+        Action<DiagnosticEvent> capture = e => { if (e.Category == McpSession.Category) log.Enqueue(e); };
         DiagnosticLog.Emitted += capture;
         await using var session = Session();
         try

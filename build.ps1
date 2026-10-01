@@ -93,8 +93,12 @@ if (-not $Publish) {
     # gigabytes) under $CoverageDir, and the run failed. Without it the first release run
     # (2026-09-21) sat for GitHub's six-hour job maximum with nothing in the log after the last
     # failure.
+    # The facts that load an embedded model onto the GPU are left out (2026-10-01): the app is usually open during a build,
+    # its own model holding VRAM, so the VRAM-only fact failed and both ate the card meanwhile. CI skips them anyway (no
+    # model installed); a plain dotnet test still runs them where one is.
     if (Test-Path $CoverageDir) { Remove-Item -Recurse -Force $CoverageDir }
     dotnet test $TestProject -c Release --no-build --verbosity minimal `
+        --filter "Category!=LoadsEmbeddedModel" `
         --blame-hang --blame-hang-timeout 10m --blame-hang-dump-type mini `
         --collect:"XPlat Code Coverage" --settings $RunSettings --results-directory $CoverageDir
     if ($LASTEXITCODE -ne 0) { Fail "Tests FAILED" }

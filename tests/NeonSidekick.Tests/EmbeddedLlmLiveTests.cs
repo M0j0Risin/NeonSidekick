@@ -17,6 +17,14 @@ internal static class EmbeddedLlmTestModels
 {
     public const string ModelVariable = "NEONSIDEKICK_TEST_EMBEDDED_MODEL";
 
+    /// <summary>
+    /// The trait value of the facts that load a model onto the GPU (2026-10-01, the user's call): <c>build.ps1</c>'s test run
+    /// leaves them out (<c>--filter Category!=LoadsEmbeddedModel</c>), since the app is routinely open then, its own model
+    /// holding VRAM — the VRAM-only fact then fails, and both eat the card meanwhile. A plain <c>dotnet test</c> still runs
+    /// them where a model is installed; CI never has one.
+    /// </summary>
+    public const string LoadsModelCategory = "LoadsEmbeddedModel";
+
     public static readonly string EmbeddedModelsDirectory;
     public static readonly string LlamaDirectory;
     public static readonly EmbeddedModel? Model;
@@ -207,6 +215,7 @@ public class EmbeddedLlmLiveTests
         new(new LlmEndpoint(EmbeddedEndpoint.BaseUrl, info.ModelId, info.ApiKey, EmbeddedLlmText.Source(info)) { LiveUrl = info.BaseUrl }, TimeSpan.FromMinutes(2), reasoningEstimate: () => ReasoningEstimate.Tokenize);
 
     [EmbeddedLlmFact]
+    [Trait("Category", EmbeddedLlmTestModels.LoadsModelCategory)]
     public async Task TheServer_Starts_Answers_ReadsAPicture_IsReused_AndStops()
     {
         var model = EmbeddedLlmTestModels.Model!;
@@ -260,6 +269,7 @@ public class EmbeddedLlmLiveTests
     /// (137984 tokens). Runs where that model and CUDA are installed and the card is at most 32 GB; else returns.
     /// </summary>
     [EmbeddedLlmFact]
+    [Trait("Category", EmbeddedLlmTestModels.LoadsModelCategory)]
     public async Task VramOnly_RefusesALoadThatDoesNotFit_AndKeepsOneThatDoes()
     {
         var model = EmbeddedModelCatalog.Find("qwen3.8-27b-nvfp4-highest")!;
