@@ -7,7 +7,7 @@ public sealed record ProjectNotes(string FileName, string Text);
 /// The working directory's own notes for the model: <c>NEON.md</c> in its root, else
 /// <c>AGENTS.md</c> (the cross-client convention) — <c>NEON.md</c> wins when both exist. Read into
 /// the system prompt after the operating rules on every turn while <c>Agent skills</c> and (later
-/// on 2026-09-19) <c>Project file</c> — the toggle on <c>/skills</c>' Project tab — are on,
+/// on 2026-09-19) <c>Project file</c> — the toggle on <c>/skills</c>' Options tab (its Project tab until 2026-10-01) — are on,
 /// so a <c>/cwd</c> swaps the notes with the folder; absent or blank, nothing is added. The
 /// mechanics are <see cref="PromptFile"/>'s over a live path: the folder is asked for on every
 /// read. No default text and no seeding — the file is the project's, not the profile's.

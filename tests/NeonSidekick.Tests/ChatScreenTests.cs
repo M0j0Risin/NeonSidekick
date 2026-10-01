@@ -9432,7 +9432,7 @@ public partial class ChatScreenTests : IDisposable
         int settings = output.IndexOf("\n" + Titled(SettingsMenu.Title + "   General    Embedded    LLM    TTS    STT    Sessions    Botchat ") + "\n", StringComparison.Ordinal);
         int tools = output.IndexOf(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude    HA    Print    Obsidian    ComfyUI    SQL    Oracle    MySQL    UNC    GitLib    Options ", StringComparison.Ordinal);
         int mcp = output.IndexOf(McpText.Label + "   Servers    Tools    Options ", StringComparison.Ordinal);
-        int skills = output.IndexOf(SkillsText.Label + "   Offered    Reflection    Project    Options ", StringComparison.Ordinal);
+        int skills = output.IndexOf(SkillsText.Label + "   Offered    Reflection    Options ", StringComparison.Ordinal);
         int sys = output.IndexOf("\n" + Titled(SystemPromptSummary.Label + "   Prompt    Tools ") + "\n", StringComparison.Ordinal);
         int sessions = output.IndexOf("\n" + Titled(SessionsMenu.Title) + "\n", StringComparison.Ordinal);
         int usage = output.IndexOf("\n" + Titled(UsageText.Label + "   Statistics ") + "\n", StringComparison.Ordinal);
@@ -9533,7 +9533,7 @@ public partial class ChatScreenTests : IDisposable
         string help = "\n" + Titled(InfoPane.Title + "   Commands (basic)    Commands (advanced)    Keys ") + "\n";
         string sys = "\n" + Titled(SystemPromptSummary.Label + "   Prompt    Tools ") + "\n";
         string sessions = "\n" + Titled(SessionsMenu.Title) + "\n";
-        string skills = "\n" + Titled(SkillsText.Label + "   Offered    Reflection    Project    Options ") + "\n";
+        string skills = "\n" + Titled(SkillsText.Label + "   Offered    Reflection    Options ") + "\n";
         string memory = "\n" + Titled(MemoryMenu.Title) + "\n";
         string usage = "\n" + Titled(UsageText.Label + "   Statistics ") + "\n";
         string allowed = "\n" + Titled(AllowedCommandsTitle) + "\n";
@@ -16728,7 +16728,7 @@ public partial class ChatScreenTests : IDisposable
     }
 
     [Fact]
-    public async Task Skill_Command_Bare_WithoutThePane_PrintsTheFourTabs()
+    public async Task Skill_Command_Bare_WithoutThePane_PrintsTheThreeTabs()
     {
         _settings.Update(d => d.TtsOutput = false);
         string directory = PutSkill(ProfileSkills, "haiku");
@@ -16741,17 +16741,17 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         Assert.Contains("  · Offered\n  ·   haiku  profile  Writes haiku. Use when asked for one.\n  · Reflection\n", output);   // Reflection right after Offered since 2026-09-22
-        Assert.Contains("  · Options\n  ·   Agent skills: on\n  ·   Use external skills (.agents\\skills): off\n", output);   // the Options section last (2026-09-22; between Offered and Reflection from 2026-09-19)
-        Assert.Contains("  · Reflection\n  ·   Reflection (auto-learn): off\n  ·   Reflection reasoning: none\n  ·   Reflection window: 3 turns\n  ·   Reflection min tool calls: 4 tool calls\n  ·   Reflection max requests: 4 requests\n  ·   Reflection cooldown (minutes): off\n  ·   Reflection cooldown mode: last-written-skill\n  ·   Reflection includes sessions: off\n  ·   Reflection yields to turns: off\n  ·   Reflection edit supporting files: off\n  · Project\n", output);   // the fixture turns the auto-learn off, the verbose lines on, the cooldown and the sessions evidence off
-        Assert.Contains("  · Project\n  ·   Project file  on   NEON.md (6 characters)\n", output);   // the toggle row alone since later on 2026-09-19 (the working directory over it, and a Roots section after, until then)
+        Assert.Contains("  · Options\n  ·   Agent skills: on\n  ·   Use external skills (.agents\\skills): off\n  ·   Project file: on\n", output);   // the Options section last (2026-09-22; between Offered and Reflection from 2026-09-19), the Project file row among it since 2026-10-01
+        Assert.Contains("  · Reflection\n  ·   Reflection (auto-learn): off\n  ·   Reflection reasoning: none\n  ·   Reflection window: 3 turns\n  ·   Reflection min tool calls: 4 tool calls\n  ·   Reflection max requests: 4 requests\n  ·   Reflection cooldown (minutes): off\n  ·   Reflection cooldown mode: last-written-skill\n  ·   Reflection includes sessions: off\n  ·   Reflection yields to turns: off\n  ·   Reflection edit supporting files: off\n  · Options\n", output);   // the fixture turns the auto-learn off, the verbose lines on, the cooldown and the sessions evidence off
+        Assert.DoesNotContain("  · Project\n", output);   // the Project section, the toggle row alone from later on 2026-09-19, went on 2026-10-01
         Assert.DoesNotContain("Roots", output);
         Assert.DoesNotContain("Working directory", output);
         Assert.Contains(directory, ProfileSkills + Path.DirectorySeparatorChar + "haiku");
     }
 
-    /// <summary>A bare /skills on the pane is a tabbed menu (SkillsMenu; /skill list earlier on 2026-09-18, the bare word since later that day): the strip, the catalog rows as cursor stops, the Project tab's toggle row (the Roots tab after it until later on 2026-09-19) — Enter flips it, the next turn reads it; ESC closes.</summary>
+    /// <summary>A bare /skills on the pane is a tabbed menu (SkillsMenu; /skill list earlier on 2026-09-18, the bare word since later that day): the strip, the catalog rows as cursor stops, the Options tab's Project file row (a Project tab of its own from later on 2026-09-19 until 2026-10-01) — Enter opens its page, off picked, the next turn reads it; ESC closes.</summary>
     [Fact]
-    public async Task WithGeometry_BareSkills_OpensTheSkillsMenu_OnFourTabs_TheProjectToggleFlips()
+    public async Task WithGeometry_BareSkills_OpensTheSkillsMenu_OnThreeTabs_TheProjectFileRowFlips()
     {
         _settings.Update(d => d.TtsOutput = false);
         PutSkill(ProfileSkills, "haiku");
@@ -16759,26 +16759,28 @@ public partial class ChatScreenTests : IDisposable
         _geometry = new ScreenGeometry(() => null);
         PushLine("/skills");
         _console.Input.PushKey(Keys.Right);   // Reflection (the reflection's rows, 2026-09-19)
-        _console.Input.PushKey(Keys.Right);   // Project
-        _console.Input.PushKey(Keys.Enter);   // the toggle: off
         _console.Input.PushKey(Keys.Right);   // Options (the settings rows, 2026-09-19; last since 2026-09-22)
+        _console.Input.PushKey(Keys.Down);
+        _console.Input.PushKey(Keys.Down);    // Project file (its own Project tab until 2026-10-01)
+        _console.Input.PushKey(Keys.Enter);   // its page
+        _console.Input.PushKey(Keys.Down);
+        _console.Input.PushKey(Keys.Enter);   // off
         _console.Input.PushKey(Keys.Escape);
         PushLine("/exit");
 
         string output = await RunAsync();
 
-        Assert.Contains(SkillsText.Label + "   Offered    Reflection    Project    Options ", output);
+        Assert.Contains(SkillsText.Label + "   Offered    Reflection    Options ", output);
         Assert.DoesNotContain("Roots", output);
         Assert.False(_settings.Current.ProjectFile);
         Assert.Contains("\n▸ Reflection (auto-learn)           off\n  Reflection reasoning              none\n", output);   // the Reflection tab, padded to its own column (the fixture turns the auto-learn off)
-        Assert.Contains("\n▸ Agent skills                          on\n  Use external skills (.agents\\skills)  off\n", output);   // the Options tab, the rows padded to its own column
+        Assert.Contains("\n▸ Agent skills                          on\n  Use external skills (.agents\\skills)  off\n  Project file                          on\n", output);   // the Options tab, the rows padded to its own column
         Assert.Contains("\n" + SettingsMenu.TabKeys, output);
         Assert.Contains("\n▸ haiku  profile  Writes haiku. Use when asked for one.\n", output);
         Assert.Contains("\n" + SkillsMenu.LoadedKeys, output);   // the trailer follows on the hint row
-        // The Project tab's one row, the cursor on it, the flip on the status line and the row re-read.
-        Assert.Contains("\n▸ " + SkillsText.NotesLabel.PadRight(SkillsText.ProjectLabelWidth) + "on   " + SkillsText.NoNotesLine + "\n", output);
-        Assert.Contains("\n  · " + SkillsText.ProjectFlippedNotice(false) + "\n▸ " + SkillsText.NotesLabel.PadRight(SkillsText.ProjectLabelWidth) + "off  " + SkillsText.NoNotesLine + "\n", output);
-        Assert.Contains("\n" + SkillsText.ProjectKeys, output);
+        // The Options tab's Project file row, the flip on the status line and the row re-read.
+        Assert.Contains("\n  · Project file: off\n", output);
+        Assert.Contains("\n▸ Project file                          off\n", output);
         Assert.DoesNotContain("Working directory", output);
     }
 
@@ -18338,7 +18340,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains(SkillsText.Label + "   Offered    Reflection    Project    Options ", output);   // no Roots tab since later on 2026-09-19
+        Assert.Contains(SkillsText.Label + "   Offered    Reflection    Options ", output);   // no Roots tab since later on 2026-09-19
         Assert.Contains("▸ haiku  profile  Writes haiku. Use when asked for one.", output);
         Assert.DoesNotContain(ChatScreen.MidTurnDeferredNotice("/skills"), output);
         Assert.DoesNotContain(ChatScreen.CancelledNotice, output);

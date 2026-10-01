@@ -7,19 +7,18 @@ using Spectre.Console;
 namespace NeonSidekick.App;
 
 /// <summary>
-/// The <c>/skills</c> screen (2026-09-18, the user's ask; the plural since 2026-09-19): the four tabs in <see cref="SkillsText"/>'s
-/// words — Offered, Options, Reflection, Project (the Roots tab after them until later on 2026-09-19, the user's call; the
-/// scope page names each root's folder) — as one tabbed <see cref="MenuPane"/> page, so a long catalog
+/// The <c>/skills</c> screen (2026-09-18, the user's ask; the plural since 2026-09-19): the three tabs in <see cref="SkillsText"/>'s
+/// words — Offered, Reflection, Options (the Roots tab after them until later on 2026-09-19, the user's call; the
+/// scope page names each root's folder; a Project tab before Options from later on 2026-09-19 until 2026-10-01) — as one tabbed <see cref="MenuPane"/> page, so a long catalog
 /// scrolls behind the menu's viewport and every skill row is a cursor stop. The Options tab (2026-09-19,
 /// the user's ask) and the Reflection tab (later that day) are the settings rows that were <c>/settings</c>' Skills tab
 /// (<see cref="SettingsMenu.SkillsTabFields"/>), edited through <see cref="SettingsMenu"/>'s own seams
 /// (<see cref="SettingsMenu.FieldsTab"/>, <see cref="SettingsMenu.EditAsync"/>) under this pane's strip, its
 /// pickers titled <c>Skills › …</c> (<see cref="SettingsMenu.Root"/>) like the scope page — the <see cref="ToolsMenu"/>
 /// shape; none of its rows reconnects or is <see cref="SettingsMenu.RefusedMidTurn"/>, so they edit mid-turn too,
-/// and the facts are read again after an edit (the skills switch empties the Offered tab). The Project tab's one row
-/// (later on 2026-09-19, the user's ask) is the <c>Project file</c> toggle in the <see cref="ToolsMenu"/> Offered tab's
-/// shape: Enter or Space flips it in place (<c>AppSettingsData.ProjectFile</c>, <see cref="SkillsText.ProjectFlippedNotice"/>
-/// on the status line, the facts read again, the cursor kept), mid-turn too — the next turn reads it. Enter or a double-click on
+/// and the facts are read again after an edit (the skills switch empties the Offered tab). The <c>Project file</c> toggle
+/// is an Options row since 2026-10-01 (the user's ask, <see cref="SettingsField.ProjectFile"/>): the one row of a Project tab
+/// of its own, flipped by hand here, from later on 2026-09-19 until then. Enter or a double-click on
 /// a skill's row (a loaded one, or a shadowed one — the duplicate is the thing to clean up) opens the
 /// scope page under the list: <c>profile</c>, <c>global</c>, <c>rename</c> (2026-09-21, the user's ask), <c>edit</c>
 /// (2026-09-23, the user's ask: it opens the skill's <c>SKILL.md</c> in the editor, the status line saying so, and took
@@ -40,7 +39,7 @@ namespace NeonSidekick.App;
 /// (a rescan) and the list re-shown with the notice on the status line. Enter on any other row — a
 /// heading, a warning, a skipped folder — does nothing, and so does Space on the Offered tab. The
 /// <see cref="QueueMenu"/> shape: no prompt fallback, a console without the pane gets
-/// <see cref="Lines"/> in the transcript — the four tabs as headed sections.
+/// <see cref="Lines"/> in the transcript — the three tabs as headed sections.
 /// </summary>
 internal sealed class SkillsMenu
 {
@@ -211,11 +210,8 @@ internal sealed class SkillsMenu
     /// <summary>The Reflection tab's index in the strip: the reflection's rows, second after Offered (third, after Options, from later on 2026-09-19 until 2026-09-22).</summary>
     public const int ReflectionTab = 1;
 
-    /// <summary>The Project tab's index in the strip: the <c>Project file</c> toggle, third (last until 2026-09-22).</summary>
-    public const int ProjectTab = 2;
-
-    /// <summary>The Options tab's index in the strip: the skill settings, last since 2026-09-22 (the user's ask; second, after Offered, from 2026-09-19).</summary>
-    public const int OptionsTab = 3;
+    /// <summary>The Options tab's index in the strip: the skill settings, last since 2026-09-22 (the user's ask; second, after Offered, from 2026-09-19), third since the Project tab went (2026-10-01).</summary>
+    public const int OptionsTab = 2;
 
     /// <summary>The settings tabs' titles, indexed like <see cref="SettingsMenu.SkillsTabFields"/> (Options, then Reflection; the strip puts Options last).</summary>
     public static readonly IReadOnlyList<string> SettingsTabTitles = [SkillsText.OptionsTabTitle, SkillsText.ReflectionTabTitle];
@@ -223,7 +219,7 @@ internal sealed class SkillsMenu
     /// <summary>The <see cref="SettingsMenu.SkillsTabFields"/> list a settings tab shows: Options' first, Reflection's second.</summary>
     private static IReadOnlyList<SettingsField> SettingsFields(int tab) => SettingsMenu.SkillsTabFields[tab == OptionsTab ? 0 : 1];
 
-    /// <summary>The tabbed page: the Offered rows first, the Reflection rows (<see cref="SettingsMenu.FieldsTab"/> under <see cref="SettingsMenu.TabKeys"/>) second, the Project tab third with its cursor on the toggle (past the off line), the Options rows last (2026-09-22), Space a flip there (<see cref="MenuPage.SpaceToggles"/> — page-wide, so the host ignores it elsewhere).</summary>
+    /// <summary>The tabbed page: the Offered rows first, the Reflection rows (<see cref="SettingsMenu.FieldsTab"/> under <see cref="SettingsMenu.TabKeys"/>) second, the Options rows last (2026-09-22); Space is nothing anywhere since the Project tab, its one flip, went (2026-10-01), as on <c>/settings</c>.</summary>
     public static MenuPage Page(SkillsFacts facts, IReadOnlyList<(string Markup, Skill? Skill)> loaded, AppSettingsData saved, SettingsMenu menu, int tab)
     {
         ArgumentNullException.ThrowIfNull(facts);
@@ -234,34 +230,22 @@ internal sealed class SkillsMenu
         {
             new(SkillsText.OfferedTabTitle, loaded.Select(r => r.Markup).ToList()) { Hint = LoadedKeys },
             menu.FieldsTab(SkillsText.ReflectionTabTitle, SettingsFields(ReflectionTab), saved) with { Hint = SettingsMenu.TabKeys },
-            new(SkillsText.ProjectTabTitle, SkillsText.ProjectRowsMarkup(facts)) { Hint = SkillsText.ProjectKeys },
             menu.FieldsTab(SkillsText.OptionsTabTitle, SettingsFields(OptionsTab), saved) with { Hint = SettingsMenu.TabKeys },
         };
-        return MenuPage.Tabbed(SkillsText.Label, tabs, tab, OtherKeys) with { SpaceToggles = true, TabCursors = [0, 0, SkillsText.ProjectRowIndex(facts), 0] };
+        return MenuPage.Tabbed(SkillsText.Label, tabs, tab, OtherKeys) with { TabCursors = [0, 0, 0] };
     }
 
-    /// <summary>The four tabs as plain lines, for a console without the pane, in the strip's order: <see cref="SkillsText.Lines"/> with the Reflection rows (<see cref="SettingsMenu.PlainRow"/>) headed and indented ahead of the Project section and the Options rows after it.</summary>
+    /// <summary>The three tabs as plain lines, for a console without the pane, in the strip's order: <see cref="SkillsText.Lines"/>, then the Reflection rows and the Options rows (<see cref="SettingsMenu.PlainRow"/>), each headed and indented.</summary>
     public static IEnumerable<string> Lines(SkillsFacts facts, AppSettingsData saved, SettingsMenu menu)
     {
         ArgumentNullException.ThrowIfNull(facts);
         ArgumentNullException.ThrowIfNull(saved);
         ArgumentNullException.ThrowIfNull(menu);
-        foreach (var line in SkillsText.Lines(facts))
+        foreach (var line in SkillsText.Lines(facts)
+            .Concat(Section(ReflectionTab, SkillsText.ReflectionTabTitle))
+            .Concat(Section(OptionsTab, SkillsText.OptionsTabTitle)))
         {
-            if (line == SkillsText.ProjectTabTitle)
-            {
-                foreach (var row in Section(ReflectionTab, SkillsText.ReflectionTabTitle))
-                {
-                    yield return row;
-                }
-            }
-
             yield return line;
-        }
-
-        foreach (var row in Section(OptionsTab, SkillsText.OptionsTabTitle))
-        {
-            yield return row;
         }
 
         IEnumerable<string> Section(int tab, string title) =>
@@ -270,7 +254,7 @@ internal sealed class SkillsMenu
 
     // ── Screen ──────────────────────────────────────────────────────────────
 
-    /// <param name="midTurn">The pane opened while a reply runs: the list shows, a scope pick is refused; the Options rows edit as on <c>/settings</c> (none is refused there) and the Project toggle flips (read at the next turn).</param>
+    /// <param name="midTurn">The pane opened while a reply runs: the list shows, a scope pick is refused; the Options and Reflection rows edit as on <c>/settings</c> (none is refused there; read at the next turn).</param>
     public async Task ShowAsync(CancellationToken cancellationToken, bool midTurn = false)
     {
         var facts = _facts();
@@ -302,25 +286,6 @@ internal sealed class SkillsMenu
 
                 tab = pick.Tab;
                 cursor = pick.Row;
-                if (tab == ProjectTab)
-                {
-                    // The Project file toggle (later on 2026-09-19): flipped in place, the /tools Offered tab's shape.
-                    if (cursor == SkillsText.ProjectRowIndex(facts))
-                    {
-                        bool on = !facts.ProjectFile;
-                        _settings.Update(d => d.ProjectFile = on);
-                        Sink.Notice(SkillsText.ProjectFlippedNotice(on));
-                        facts = _facts();
-                    }
-
-                    continue;
-                }
-
-                if (pick.Toggle)
-                {
-                    continue;   // Space elsewhere: nothing, as on /settings and /tools
-                }
-
                 if (tab is OptionsTab or ReflectionTab)
                 {
                     var fields = SettingsFields(tab);

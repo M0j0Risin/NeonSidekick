@@ -724,9 +724,12 @@ public enum SettingsField
     /// A picker: the most of the window a menu, info or folder pane takes — <c>half-screen</c> / <c>three-quarters</c> /
     /// <c>full-screen</c> (<see cref="Settings.AppSettingsData.MenuMaxHeight"/>, 2026-10-01, the user's ask, with every tab
     /// held at its tallest tab's height). The General tab's row after Theme; no reconnect (read at each pane draw). Last in
-    /// the enum, as every newcomer.
+    /// the enum until <see cref="ProjectFile"/>.
     /// </summary>
     MenuMaxHeight,
+
+    /// <summary>A toggle: whether the working directory's <c>NEON.md</c> / <c>AGENTS.md</c> is read into the prompt as project notes (<see cref="Settings.AppSettingsData.ProjectFile"/>), read only while <see cref="AgentSkills"/> is on. The Options tab of <c>/skills</c>' third row since 2026-10-01 (the user's ask: the one row of the Project tab from later on 2026-09-19 until then, which went); no reconnect (read at each turn). Last in the enum, as every newcomer.</summary>
+    ProjectFile,
 }
 
 /// <summary>The tabs of <c>/settings</c> on the pane, in strip order (General, Embedded, LLM, TTS, STT, Sessions, Botchat — the user's order, 2026-09-29; Sessions right after General — the user's order, 2026-09-18 — until then; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
@@ -1032,8 +1035,8 @@ internal sealed partial class SettingsMenu
     /// <summary>
     /// The rows of <c>/skills</c>' Options tab (2026-09-19, moved off <c>/settings</c> — its Skills tab, third since 2026-09-18, last from
     /// 2026-09-16 until then — the user's call, right after the Ask, Files and Web move), two lists since later on 2026-09-19 (the user's
-    /// ask), indexed by <c>SkillsMenu</c>'s tab one down: the Options tab — the skills switch, the external-folder switch
-    /// it governs, the compact mode, then the # list (2026-09-17; the skill slash commands sat beside it until later on 2026-09-18), the delete switch
+    /// ask), indexed by <c>SkillsMenu</c>'s tab one down: the Options tab — the skills switch, the external-folder and project-file switches
+    /// it governs (the latter 2026-10-01, the user's ask: off the Project tab, which went), the compact mode, then the # list (2026-09-17; the skill slash commands sat beside it until later on 2026-09-18), the delete switch
     /// (2026-09-18, the pane's scope picker) — and the Reflection tab — the reflection's eight rows (2026-09-17: the auto-learn switch, its reasoning level,
     /// window, min calls and max requests; the cooldown, its mode and the sessions switch, 2026-09-19; the verbose switch, 2026-09-17, went later still on 2026-09-19). Edited through <see cref="FieldsTab"/> / <see cref="EditAsync"/>
     /// under the <c>/skills</c> strip (<see cref="SkillsMenu"/>), the pickers titled <c>Skills › …</c> (<see cref="Root"/>); none of
@@ -1042,7 +1045,7 @@ internal sealed partial class SettingsMenu
     /// </summary>
     public static readonly IReadOnlyList<IReadOnlyList<SettingsField>> SkillsTabFields =
     [
-        [SettingsField.AgentSkills, SettingsField.ExternalSkills, SettingsField.SkillCompactMode, SettingsField.SkillHashMention],
+        [SettingsField.AgentSkills, SettingsField.ExternalSkills, SettingsField.ProjectFile, SettingsField.SkillCompactMode, SettingsField.SkillHashMention],
         [SettingsField.ReflectionAutoLearn, SettingsField.ReflectionReasoning, SettingsField.ReflectionWindow, SettingsField.ReflectionMinToolCalls, SettingsField.ReflectionMaxRequests, SettingsField.ReflectionCooldownMinutes, SettingsField.ReflectionCooldownMode, SettingsField.ReflectionIncludesSessions, SettingsField.ReflectionYieldsToTurns, SettingsField.ReflectionEditsSupportingFiles],
     ];
 
@@ -1437,7 +1440,7 @@ internal sealed partial class SettingsMenu
             or SettingsField.Memory or SettingsField.CopyUserPrompt or SettingsField.ShowImageThumbnails
             or SettingsField.FileTreeShowSizes or SettingsField.LlmOfferTools or SettingsField.LlmUseFunVerbs or SettingsField.LlmShowThinking or SettingsField.LlmPreserveThinking or SettingsField.LlmSamplingFromHuggingFace
             or SettingsField.WebTools or SettingsField.TtsVoicePreview or SettingsField.FileTools or SettingsField.AskUser
-            or SettingsField.AgentSkills or SettingsField.ExternalSkills or SettingsField.TranscriptMarkdown
+            or SettingsField.AgentSkills or SettingsField.ExternalSkills or SettingsField.ProjectFile or SettingsField.TranscriptMarkdown
             or SettingsField.SkillHashMention or SettingsField.ReflectionAutoLearn
             or SettingsField.HideExitAutocomplete or SettingsField.CommandTypoIntercept or SettingsField.KeepCommandHistory or SettingsField.ShowWorkingDirectory or SettingsField.ThemedViewer
             or SettingsField.QueueMessages or SettingsField.SessionLogging or SettingsField.SessionTool or SettingsField.SessionSaveThinking
@@ -1643,6 +1646,7 @@ internal sealed partial class SettingsMenu
         SettingsField.FileBrowserMode => "File browser/tree mode",   // "File browser mode" until 2026-09-23, when /tree came to follow it (the user's call)
         SettingsField.AgentSkills => "Agent skills",
         SettingsField.ExternalSkills => ExternalSkillsName,
+        SettingsField.ProjectFile => "Project file",
         SettingsField.TranscriptMarkdown => "Transcript markdown",
         SettingsField.SkillCompactMode => "Skill compact mode",
         SettingsField.PastePreviewLines => "Paste preview lines",
@@ -1897,6 +1901,7 @@ internal sealed partial class SettingsMenu
             SettingsField.FileBrowserMode => data.FileBrowserMode,
             SettingsField.AgentSkills => OnOff(data.AgentSkills),
             SettingsField.ExternalSkills => OnOff(data.ExternalSkills),
+            SettingsField.ProjectFile => OnOff(data.ProjectFile),
             SettingsField.TranscriptMarkdown => OnOff(data.TranscriptMarkdown),
             SettingsField.SkillCompactMode => data.SkillCompactMode,
             SettingsField.PastePreviewLines => Lines(data.PastePreviewLines),
@@ -4999,6 +5004,7 @@ internal sealed partial class SettingsMenu
             SettingsField.AskUser => data.AskUser,
             SettingsField.AgentSkills => data.AgentSkills,
             SettingsField.ExternalSkills => data.ExternalSkills,
+            SettingsField.ProjectFile => data.ProjectFile,
             SettingsField.TranscriptMarkdown => data.TranscriptMarkdown,
             SettingsField.SkillHashMention => data.SkillHashMention,
             SettingsField.ToolsDollarMention => data.ToolsDollarMention,
@@ -5081,6 +5087,7 @@ internal sealed partial class SettingsMenu
             case SettingsField.AskUser: data.AskUser = on; break;
             case SettingsField.AgentSkills: data.AgentSkills = on; break;
             case SettingsField.ExternalSkills: data.ExternalSkills = on; break;
+            case SettingsField.ProjectFile: data.ProjectFile = on; break;
             case SettingsField.TranscriptMarkdown: data.TranscriptMarkdown = on; break;
             case SettingsField.SkillHashMention: data.SkillHashMention = on; break;
             case SettingsField.ToolsDollarMention: data.ToolsDollarMention = on; break;
@@ -5168,6 +5175,7 @@ internal sealed partial class SettingsMenu
         SettingsField.LlmCompactShowSummary => on ? "the summary's lines or the pruned results, then the protected counts" : "the one compact notice alone",
         SettingsField.AgentSkills => on ? "the skills catalog, load_skill and skill_editor are offered" : "no skills, no project notes",
         SettingsField.ExternalSkills => on ? "%USERPROFILE%\\.agents\\skills is read too" : "profile and global skills only",
+        SettingsField.ProjectFile => on ? "use project file (NEON.md or AGENTS.md in the working directory)" : "project files in the working directory are ignored",   // the user's wording, 2026-10-01
         SettingsField.SkillHashMention => on ? "# and part of a name lists the loaded skills on the line" : "# is ordinary text",
         SettingsField.ToolsDollarMention => on ? "$ and part of a name lists the offered tools on the line" : "$ is ordinary text",
         SettingsField.McpServers => on ? "the configured MCP servers connect and their tools are offered" : "no MCP server is started; the pane still lists the config",

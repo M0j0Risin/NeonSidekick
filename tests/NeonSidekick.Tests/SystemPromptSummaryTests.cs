@@ -107,7 +107,7 @@ public class SystemPromptSummaryTests : IDisposable
         Assert.Equal(Assistant.SystemPrompt(false, []), SystemPromptSummary.SystemPrompt(Facts(skills: false, catalog: [haiku], project: notes)));
         // The Project file toggle off (later on 2026-09-19): the row says why, the skills stand.
         var fileOff = SystemPromptSummary.PromptSections(Facts(catalog: [haiku], projectFile: false));
-        Assert.Equal("Project notes — off (Project file is off on the Project tab of /skills)", fileOff[2].Heading);
+        Assert.Equal("Project notes — off (Project file is off on the Options tab of /skills)", fileOff[2].Heading);
         Assert.Equal("", fileOff[2].Body);
         Assert.Equal("Skills — on, 1 skill", fileOff[4].Heading);
         Assert.Equal("Project notes — off (agent skills is off)", Headings(Facts(skills: false, projectFile: false))[2]);   // the skills switch first

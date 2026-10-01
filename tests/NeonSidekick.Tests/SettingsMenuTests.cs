@@ -864,6 +864,7 @@ public partial class SettingsMenuTests : IDisposable
                 SettingsField.UncSharesGlobal,
                 SettingsField.EmbeddedVramOnly,
                 SettingsField.MenuMaxHeight,
+                SettingsField.ProjectFile,   // 2026-10-01, the /skills Project tab's toggle as an Options row
             },
             Enum.GetValues<SettingsField>());
         // The compact rows: on the LLM tab after the context length but no reconnect; the type a picker, the two others typed.
@@ -954,7 +955,7 @@ public partial class SettingsMenuTests : IDisposable
         // The pane's tabs (five since 2026-09-19: Ask, Files and Web are /tools' tabs, Skills is /skills' Options tab): General, Sessions, LLM in their own order, TTS / STT the enum order of their session's fields; every field on exactly one tab of the three panes.
         Assert.Equal(["General", "Embedded", "LLM", "TTS", "STT", "Sessions", "Botchat"], SettingsMenu.TabTitles);   // the user's order since later on 2026-09-29 (Embedded second, Sessions after STT); Embedded LLM since 2026-09-29; Claude (API) before Botchat since later on 2026-09-27; Claude last since 2026-09-27; Botchat last from 2026-09-25;   // Sessions right after General (2026-09-18); Web last until 2026-09-19, Skills third until later that day
         // The Options tab of /skills (2026-09-19; the Skills tab of /settings from 2026-09-16 until then): the skills switch, the external-folder switch and the compact-mode picker, then (2026-09-17) the #-mention switch, the delete switch, then the auto-learn switch and the reflection rows; none a reconnect.
-        Assert.Equal([SettingsField.AgentSkills, SettingsField.ExternalSkills, SettingsField.SkillCompactMode, SettingsField.SkillHashMention], SettingsMenu.SkillsTabFields[0]);   // the Options tab; the reflection rows on their own tab since later on 2026-09-19
+        Assert.Equal([SettingsField.AgentSkills, SettingsField.ExternalSkills, SettingsField.ProjectFile, SettingsField.SkillCompactMode, SettingsField.SkillHashMention], SettingsMenu.SkillsTabFields[0]);   // the Options tab; the reflection rows on their own tab since later on 2026-09-19
         Assert.Equal([SettingsField.ReflectionAutoLearn, SettingsField.ReflectionReasoning, SettingsField.ReflectionWindow, SettingsField.ReflectionMinToolCalls, SettingsField.ReflectionMaxRequests, SettingsField.ReflectionCooldownMinutes, SettingsField.ReflectionCooldownMode, SettingsField.ReflectionIncludesSessions, SettingsField.ReflectionYieldsToTurns, SettingsField.ReflectionEditsSupportingFiles], SettingsMenu.SkillsTabFields[1]);   // the Reflection tab: the cooldown, its mode and the sessions switch (last, the user's place) since 2026-09-19
         // Reflection min tool calls (2026-09-17): the tab's last row and the enum's last member, typed 3–20; the error door stays one recovered error.
         Assert.False(SettingsMenu.IsToggle(SettingsField.ReflectionMinToolCalls));
@@ -1038,6 +1039,10 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("Agent skills", SettingsMenu.FieldName(SettingsField.AgentSkills));
         Assert.Equal("Use external skills (.agents\\skills)", SettingsMenu.FieldName(SettingsField.ExternalSkills));
         Assert.Equal(SettingsMenu.ExternalSkillsName, SettingsMenu.FieldName(SettingsField.ExternalSkills));
+        Assert.True(SettingsMenu.IsToggle(SettingsField.ProjectFile));   // 2026-10-01: the Project tab's toggle, an Options row now
+        Assert.Equal("Project file", SettingsMenu.FieldName(SettingsField.ProjectFile));
+        Assert.Equal("on", SettingsMenu.FieldValue(SettingsField.ProjectFile, data, _settings.ProfileDirectory));
+        Assert.Equal("off", SettingsMenu.FieldValue(SettingsField.ProjectFile, new AppSettingsData { ProjectFile = false }, _settings.ProfileDirectory));
         Assert.Equal("Skill compact mode", SettingsMenu.FieldName(SettingsField.SkillCompactMode));
         Assert.Equal("on", SettingsMenu.FieldValue(SettingsField.AgentSkills, data, _settings.ProfileDirectory));
         Assert.Equal("off", SettingsMenu.FieldValue(SettingsField.AgentSkills, new AppSettingsData { AgentSkills = false }, _settings.ProfileDirectory));
@@ -1050,7 +1055,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(7, SettingsMenu.TabFields.Count);   // the Claude (API) tab went to /tools' Claude tab on 2026-09-29; Embedded LLM since 2026-09-29; Claude (API) since later on 2026-09-27; Claude on 2026-09-27 until later that day (to /tools); Botchat since 2026-09-25; 9 until 2026-09-19, when Ask, Files and Web moved to /tools (ToolsTabFields) and, later that day, Skills to /skills (SkillsTabFields)
         Assert.Equal(15, SettingsMenu.ToolsTabFields.Count);   // UNC later still on 2026-09-30; MySQL and Oracle since 2026-09-30; Print since later on 2026-09-28; Home Assistant since 2026-09-28; Claude since 2026-09-27; Images since 2026-09-24; SQL since 2026-09-23; Obsidian since 2026-09-22 and Options last later that day (first since later on 2026-09-19); Git between Files and Web since 2026-09-20; Shell between Git and Web since 2026-09-21
         Assert.Equal(2, SettingsMenu.SkillsTabFields.Count);   // Options and Reflection, since later on 2026-09-19 (one list of 11, then 14, before)
-        Assert.Equal(14, SettingsMenu.SkillsTabFields.Sum(t => t.Count));   // 13 until Reflection edit supporting files came on 2026-09-27; 12 until Reflection yields to turns came on 2026-09-24; 13 until Allow skill delete went on 2026-09-23; 14 until Reflection verbose went later still on 2026-09-19
+        Assert.Equal(15, SettingsMenu.SkillsTabFields.Sum(t => t.Count));   // 14 until Project file came off the Project tab on 2026-10-01; 13 until Reflection edit supporting files came on 2026-09-27; 12 until Reflection yields to turns came on 2026-09-24; 13 until Allow skill delete went on 2026-09-23; 14 until Reflection verbose went later still on 2026-09-19
         Assert.Equal(new[] { SettingsField.Profile, SettingsField.NewProfileMode, SettingsField.WorkingDirectory, SettingsField.QueueMessages, SettingsField.QueueCancelMode, SettingsField.Memory, SettingsField.CopyUserPrompt, SettingsField.ShowImageThumbnails, SettingsField.ImageThumbnailSize, SettingsField.TranscriptMarkdown, SettingsField.PastePreviewLines, SettingsField.HideExitAutocomplete, SettingsField.CommandTypoIntercept, SettingsField.KeepCommandHistory, SettingsField.WelcomeSplash, SettingsField.ShowWorkingDirectory, SettingsField.ToolbarItems, SettingsField.ShowPerformanceBar, SettingsField.Theme, SettingsField.MenuMaxHeight, SettingsField.DraftEditor, SettingsField.ImageEditor, SettingsField.ThemedViewer }, SettingsMenu.TabFields[(int)SettingsTab.General]);   // Menus max height under Theme, 2026-10-01; Image editor under Draft editor, later on 2026-09-24; Keep command history under the typo intercept, 2026-09-25; Theme under Show toolbar and Themed image viewer last, later on 2026-09-27; Show performance bar under Show toolbar, 2026-09-29
         // Show performance bar (2026-09-29): a picker of five looks, off by default, no reconnect.
         Assert.False(SettingsMenu.IsToggle(SettingsField.ShowPerformanceBar));
@@ -1422,7 +1427,7 @@ public partial class SettingsMenuTests : IDisposable
         // The Ask tab (2026-09-15; /tools' first settings tab since 2026-09-19): the question tool's switch and its two caps, none a reconnect.
         Assert.Equal(["General", "Embedded", "LLM", "TTS", "STT", "Sessions", "Botchat"], SettingsMenu.TabTitles);   // the user's order since later on 2026-09-29 (Embedded second, Sessions after STT); Embedded LLM since 2026-09-29; Claude (API) before Botchat since later on 2026-09-27; Claude last since 2026-09-27; Botchat last from 2026-09-25;   // five since 2026-09-19
         // The Options tab of /skills (2026-09-19; the Skills tab of /settings from 2026-09-16 until then): the skills switch, the external-folder switch and the compact-mode picker, then (2026-09-17) the #-mention switch, the delete switch, then the auto-learn switch and the reflection rows; none a reconnect.
-        Assert.Equal([SettingsField.AgentSkills, SettingsField.ExternalSkills, SettingsField.SkillCompactMode, SettingsField.SkillHashMention], SettingsMenu.SkillsTabFields[0]);   // the Options tab; the reflection rows on their own tab since later on 2026-09-19
+        Assert.Equal([SettingsField.AgentSkills, SettingsField.ExternalSkills, SettingsField.ProjectFile, SettingsField.SkillCompactMode, SettingsField.SkillHashMention], SettingsMenu.SkillsTabFields[0]);   // the Options tab; the reflection rows on their own tab since later on 2026-09-19
         Assert.Equal([SettingsField.ReflectionAutoLearn, SettingsField.ReflectionReasoning, SettingsField.ReflectionWindow, SettingsField.ReflectionMinToolCalls, SettingsField.ReflectionMaxRequests, SettingsField.ReflectionCooldownMinutes, SettingsField.ReflectionCooldownMode, SettingsField.ReflectionIncludesSessions, SettingsField.ReflectionYieldsToTurns, SettingsField.ReflectionEditsSupportingFiles], SettingsMenu.SkillsTabFields[1]);   // the Reflection tab: the cooldown, its mode and the sessions switch (last, the user's place) since 2026-09-19
         // Reflection min tool calls (2026-09-17): the tab's last row and the enum's last member, typed 3–20; the error door stays one recovered error.
         Assert.False(SettingsMenu.IsToggle(SettingsField.ReflectionMinToolCalls));
@@ -1467,6 +1472,10 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("Agent skills", SettingsMenu.FieldName(SettingsField.AgentSkills));
         Assert.Equal("Use external skills (.agents\\skills)", SettingsMenu.FieldName(SettingsField.ExternalSkills));
         Assert.Equal(SettingsMenu.ExternalSkillsName, SettingsMenu.FieldName(SettingsField.ExternalSkills));
+        Assert.True(SettingsMenu.IsToggle(SettingsField.ProjectFile));   // 2026-10-01: the Project tab's toggle, an Options row now
+        Assert.Equal("Project file", SettingsMenu.FieldName(SettingsField.ProjectFile));
+        Assert.Equal("on", SettingsMenu.FieldValue(SettingsField.ProjectFile, data, _settings.ProfileDirectory));
+        Assert.Equal("off", SettingsMenu.FieldValue(SettingsField.ProjectFile, new AppSettingsData { ProjectFile = false }, _settings.ProfileDirectory));
         Assert.Equal("Skill compact mode", SettingsMenu.FieldName(SettingsField.SkillCompactMode));
         Assert.Equal("on", SettingsMenu.FieldValue(SettingsField.AgentSkills, data, _settings.ProfileDirectory));
         Assert.Equal("off", SettingsMenu.FieldValue(SettingsField.AgentSkills, new AppSettingsData { AgentSkills = false }, _settings.ProfileDirectory));
@@ -4176,6 +4185,8 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("memory disabled", SettingsMenu.ToggleDescribe(SettingsField.Memory, false));
         Assert.Equal("no tools at all; a change starts a new conversation", SettingsMenu.ToggleDescribe(SettingsField.LlmOfferTools, false));
         Assert.Equal("%USERPROFILE%\\.agents\\skills is read too", SettingsMenu.ToggleDescribe(SettingsField.ExternalSkills, true));
+        Assert.Equal("use project file (NEON.md or AGENTS.md in the working directory)", SettingsMenu.ToggleDescribe(SettingsField.ProjectFile, true));   // the user's words, 2026-10-01
+        Assert.Equal("project files in the working directory are ignored", SettingsMenu.ToggleDescribe(SettingsField.ProjectFile, false));
         // 2026-09-18: the user's own sentences for /copy, and the two new line switches.
         Assert.Equal("/copy copies user prompts and model replies", SettingsMenu.ToggleDescribe(SettingsField.CopyUserPrompt, true));
         Assert.Equal("/copy copies model replies only", SettingsMenu.ToggleDescribe(SettingsField.CopyUserPrompt, false));

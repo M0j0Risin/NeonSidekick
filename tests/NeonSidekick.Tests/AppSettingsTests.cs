@@ -1356,7 +1356,7 @@ public class AppSettingsTests : IDisposable
         Assert.Equal("folder-remain", s.FileMentionFolderMode);
         Assert.True(s.AgentSkills);
         Assert.False(s.ExternalSkills);
-        Assert.True(s.ProjectFile);   // later on 2026-09-19: the notes read unless the Project tab's toggle says not
+        Assert.True(s.ProjectFile);   // later on 2026-09-19: the notes read unless the toggle (the Options tab of /skills since 2026-10-01) says not
         Assert.Equal("protected", s.SkillCompactMode);
         Assert.True(s.TranscriptMarkdown);
         Assert.Equal("fullsize", s.WelcomeSplashMode);   // 2026-09-18; a pick since 2026-09-24 (on was fullsize)

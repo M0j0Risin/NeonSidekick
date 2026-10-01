@@ -15,7 +15,6 @@ public class SkillsMenuTests : IDisposable
     private readonly ManualTimeProvider _time = new();
     private readonly string _dir = Path.Combine(Path.GetTempPath(), "NeonSidekick.Tests", Guid.NewGuid().ToString("N"));
     private readonly SkillRoots _roots;
-    private ProjectNotes? _notes;
     private readonly SkillCatalog _catalog;
     private readonly AppSettings _settings;
     private readonly SpeechSession _speech;
@@ -71,11 +70,11 @@ public class SkillsMenuTests : IDisposable
     {
         if (!_enabled || !_settings.Current.AgentSkills)
         {
-            return new SkillsFacts(false, _settings.Current.ProjectFile, [], [], [], _roots, null);
+            return new SkillsFacts(false, [], [], [], _roots);
         }
 
         _catalog.Scan(_external);
-        return new SkillsFacts(true, _settings.Current.ProjectFile, _catalog.Skills, _catalog.Shadowed, _catalog.Problems, _roots, _notes);
+        return new SkillsFacts(true, _catalog.Skills, _catalog.Shadowed, _catalog.Problems, _roots);
     }
 
     /// <summary>The settings menu the Options tab's rows are edited through (the /tools fixture's shape).</summary>
@@ -122,10 +121,10 @@ public class SkillsMenuTests : IDisposable
     /// <summary>A title row as the pane prints it: the text, then the × close glyph in column width − 2.</summary>
     private static string Titled(string row, int width = 100) => row + new string(' ', width - 2 - TextCells.Width(row)) + ScreenPane.CloseGlyph;
 
-    private const string Strip = SkillsText.Label + "   Offered    Reflection    Project    Options ";   // Options last since 2026-09-22 (the user's ask); Loaded until 2026-09-19; Options (the settings rows, /settings' Skills tab until then) since later that day; Reflection (the reflection's rows out of Options) later still; the Roots tab after Project until later still that day
+    private const string Strip = SkillsText.Label + "   Offered    Reflection    Options ";   // Options last since 2026-09-22 (the user's ask); the Project tab before it went on 2026-10-01, its toggle an Options row; Loaded until 2026-09-19; Options (the settings rows, /settings' Skills tab until then) since later that day; Reflection (the reflection's rows out of Options) later still; the Roots tab after Project until later still that day
 
-    /// <summary>The Options tab's four rows at their defaults, padded to the tab's own column (38: the external-skills label), as the pane prints them. Pinned.</summary>
-    private const string OptionsRows = "▸ Agent skills                          on\n  Use external skills (.agents\\skills)  off\n  Skill compact mode                    protected\n  #-mention enabled                     on\n";   // Allow skill delete, the fifth, went on 2026-09-23 (delete always offered)
+    /// <summary>The Options tab's five rows at their defaults, padded to the tab's own column (38: the external-skills label), as the pane prints them; Project file third since 2026-10-01. Pinned.</summary>
+    private const string OptionsRows = "▸ Agent skills                          on\n  Use external skills (.agents\\skills)  off\n  Project file                          on\n  Skill compact mode                    protected\n  #-mention enabled                     on\n";   // Allow skill delete, the fifth, went on 2026-09-23 (delete always offered)
 
     /// <summary>The Reflection tab's nine rows at their defaults (later on 2026-09-19), padded to its own column (31: the cooldown minutes label). Pinned.</summary>
     private const string ReflectionRows = "▸ Reflection (auto-learn)           on\n  Reflection reasoning              none\n  Reflection window                 3 turns\n  Reflection min tool calls         4 tool calls\n  Reflection max requests           4 requests\n  Reflection cooldown (minutes)     5 minutes\n  Reflection cooldown mode          last-written-skill\n  Reflection includes sessions      on\n  Reflection yields to turns        on\n  Reflection edit supporting files  off\n";
@@ -143,8 +142,7 @@ public class SkillsMenuTests : IDisposable
         Assert.Equal([SkillScope.Profile, SkillScope.Global], SkillsMenu.ScopeRows);
         Assert.Equal(SkillsText.Label + " › haiku", SkillsMenu.ScopeTitle("haiku"));
         Assert.Equal(1, SkillsMenu.ReflectionTab);
-        Assert.Equal(2, SkillsMenu.ProjectTab);
-        Assert.Equal(3, SkillsMenu.OptionsTab);   // last since 2026-09-22 (second before)
+        Assert.Equal(2, SkillsMenu.OptionsTab);   // last since 2026-09-22 (second before; fourth until the Project tab went, 2026-10-01)
         Assert.Equal(["Options", "Reflection"], SkillsMenu.SettingsTabTitles);
         Assert.Equal("profile  [#9A8BB8]" + _roots.Profile.Replace("[", "[[", StringComparison.Ordinal) + "[/]", SkillsMenu.ScopeRow(SkillScope.Profile, _roots));
         Assert.Equal("delete   [#9A8BB8]remove the folder and everything in it[/]", SkillsMenu.DeleteRow);
@@ -169,27 +167,26 @@ public class SkillsMenuTests : IDisposable
         Assert.Equal("Could not find skill 'haiku' on disk any more; the list was read again", SkillsMenu.MissingError("haiku"));
     }
 
-    /// <summary>The pane: the four tabs under the strip, the Offered rows first; Enter or Space on a heading does nothing (the page re-shown); the Project tab's one row is the Project file toggle (later on 2026-09-19; the Roots tab after it until then) — Enter flips it off, Space back on, each on the status line; ESC closes with nothing in the transcript.</summary>
+    /// <summary>The pane: the three tabs under the strip, the Offered rows first; Enter or Space on a heading does nothing (the page re-shown); the Project file toggle is an Options row since 2026-10-01 (the one row of a Project tab of its own from later on 2026-09-19 until then) — Enter opens its page, off picked, the status line saying so; ESC closes with nothing in the transcript.</summary>
     [Fact]
-    public async Task OnThePane_TheFourTabs_EnterOnAHeadingDoesNothing_TheProjectRowFlips()
+    public async Task OnThePane_TheThreeTabs_EnterOnAHeadingDoesNothing_TheProjectFileRowFlips()
     {
         Put(SkillScope.Profile, "haiku", "Writes haiku.");
         Put(SkillScope.Global, "haiku", "The global one.");
-        _notes = new ProjectNotes("NEON.md", "abc");
         var (menu, pane) = PaneMenu();
         int flow = pane.FlowRow;
         Push(Keys.Down, Keys.Enter, Keys.Char(' '));     // the Shadowed heading: nothing, Enter or Space
-        Push(Keys.Right, Keys.Right, Keys.Enter);                // Project (over Reflection): the toggle off
-        Push(Keys.Char(' '));                       // and on again
+        Push(Keys.Left, Keys.Down, Keys.Down, Keys.Char(' '));   // Options (the strip wrapped), Project file: Space is nothing
+        Push(Keys.Enter, Keys.Down, Keys.Enter);                 // its page, off picked
         Push(Keys.Escape);
 
         await menu.ShowAsync(CancellationToken.None);
 
         AssertPadded("\n" + Titled(Strip) + "\n \n▸ haiku  profile  Writes haiku.\n  Shadowed (a higher root holds the name):\n    haiku  global   shadowed by the profile skills\n", Rule(100) + "\n" + SkillsMenu.LoadedKeys + "\n");
-        AssertPadded("\n▸ Project file  on   NEON.md (3 characters)\n", Rule(100) + "\n" + SkillsText.ProjectKeys + "\n");
-        Assert.Contains("\n" + Titled(Strip) + "\n  · Project file: off\n▸ Project file  off  NEON.md (3 characters)\n", _console.Output);   // the flip on the status line, the row re-read, the cursor kept
-        Assert.Contains("\n" + Titled(Strip) + "\n  · Project file: on\n▸ Project file  on   NEON.md (3 characters)\n", _console.Output);
-        Assert.True(_settings.Current.ProjectFile);
+        Assert.Contains("\n" + Titled(SkillsText.Label + " › Project file") + "\n", _console.Output);
+        Assert.Contains("\n" + Titled(Strip) + "\n  · Project file: off\n  Agent skills                          on\n  Use external skills (.agents\\skills)  off\n▸ Project file                          off\n", _console.Output);   // the flip on the status line, the row re-read, the cursor kept
+        Assert.False(_settings.Current.ProjectFile);
+        Assert.DoesNotContain("Project    ", _console.Output);   // no Project tab in the strip
         Assert.DoesNotContain("Roots", _console.Output);
         Assert.DoesNotContain("Working directory", _console.Output);
         Assert.DoesNotContain(SkillsMenu.ScopeTitle("haiku"), _console.Output);
@@ -199,18 +196,18 @@ public class SkillsMenuTests : IDisposable
         pane.Dispose();
     }
 
-    /// <summary>The toggle saves off and stays off past the pane (the next turn reads it); mid-turn it flips too, like a /tools flip.</summary>
+    /// <summary>The toggle saves off and stays off past the pane (the next turn reads it); mid-turn it flips too, as every Options row edits there.</summary>
     [Fact]
-    public async Task OnThePane_TheProjectToggle_SavesOff_MidTurnToo()
+    public async Task OnThePane_TheProjectFileRow_SavesOff_MidTurnToo()
     {
         var (menu, pane) = PaneMenu();
-        Push(Keys.Right, Keys.Right, Keys.Enter);                // Project: off
+        Push(Keys.Left, Keys.Down, Keys.Down, Keys.Enter, Keys.Down, Keys.Enter);   // Options (the strip wrapped), Project file: off
         Push(Keys.Escape);
 
         await menu.ShowAsync(CancellationToken.None, midTurn: true);
 
         Assert.False(_settings.Current.ProjectFile);
-        Assert.Contains("\n  · Project file: off\n▸ Project file  off  " + SkillsText.NoNotesLine + "\n", _console.Output);
+        Assert.Contains("\n  · Project file: off\n", _console.Output);
         Assert.DoesNotContain(SettingsMenu.NotWhileReplyRunsNotice, _console.Output);
         pane.Dispose();
     }
@@ -522,7 +519,7 @@ public class SkillsMenuTests : IDisposable
     }
 
     [Fact]
-    public async Task WithoutThePane_PrintsTheFourTabsAsLines_ToTheTranscript()
+    public async Task WithoutThePane_PrintsTheThreeTabsAsLines_ToTheTranscript()
     {
         Put(SkillScope.Profile, "haiku", "Writes haiku.");
         var pane = new ScreenPane(_console, geometry: null, _time);
@@ -533,14 +530,14 @@ public class SkillsMenuTests : IDisposable
 
         await menu.ShowAsync(CancellationToken.None);
 
-        // In the strip's order: Offered, Reflection, Project, Options last (2026-09-22; Options second from 2026-09-19, Reflection later that day), every row as `label: value`; the Project section the toggle row, no Roots section.
-        Assert.Contains("  · Offered\n  ·   haiku  profile  Writes haiku.\n  · Reflection\n  ·   Reflection (auto-learn): on\n  ·   Reflection reasoning: none\n  ·   Reflection window: 3 turns\n  ·   Reflection min tool calls: 4 tool calls\n  ·   Reflection max requests: 4 requests\n  ·   Reflection cooldown (minutes): 5 minutes\n  ·   Reflection cooldown mode: last-written-skill\n  ·   Reflection includes sessions: on\n  ·   Reflection yields to turns: on\n  ·   Reflection edit supporting files: off\n  · Project\n  ·   Project file  on   " + SkillsText.NoNotesLine + "\n  · Options\n  ·   Agent skills: on\n  ·   Use external skills (.agents\\skills): off\n  ·   Skill compact mode: protected\n  ·   #-mention enabled: on\n", _console.Output);
+        // In the strip's order: Offered, Reflection, Options last (2026-09-22; Options second from 2026-09-19, Reflection later that day), every row as `label: value`; the Project file row among the Options since 2026-10-01 (a Project section of its own until then), no Roots section.
+        Assert.Contains("  · Offered\n  ·   haiku  profile  Writes haiku.\n  · Reflection\n  ·   Reflection (auto-learn): on\n  ·   Reflection reasoning: none\n  ·   Reflection window: 3 turns\n  ·   Reflection min tool calls: 4 tool calls\n  ·   Reflection max requests: 4 requests\n  ·   Reflection cooldown (minutes): 5 minutes\n  ·   Reflection cooldown mode: last-written-skill\n  ·   Reflection includes sessions: on\n  ·   Reflection yields to turns: on\n  ·   Reflection edit supporting files: off\n  · Options\n  ·   Agent skills: on\n  ·   Use external skills (.agents\\skills): off\n  ·   Project file: on\n  ·   Skill compact mode: protected\n  ·   #-mention enabled: on\n", _console.Output);
         Assert.DoesNotContain("Roots", _console.Output);
     }
 
     // ── The Options tab (2026-09-19): /settings' Skills tab, hosted here ────
 
-    /// <summary>The Reflection tab is second, after Offered, the Options tab last (2026-09-22; Options second, Reflection third before): the settings rows in the /settings order, each tab padded to its own column; Enter on a toggle opens its page under the strip, the pick saves and shows on the status line; Project sits between them.</summary>
+    /// <summary>The Reflection tab is second, after Offered, the Options tab last (2026-09-22; Options second, Reflection third before): the settings rows in the /settings order, each tab padded to its own column; Enter on a toggle opens its page under the strip, the pick saves and shows on the status line.</summary>
     [Fact]
     public async Task OnThePane_TheReflectionTab_IsSecond_TheOptionsTabLast_ItsToggleSaves_AndTheFactsAreReadAgain()
     {
@@ -548,10 +545,9 @@ public class SkillsMenuTests : IDisposable
         var (menu, pane) = PaneMenu();
         Push(Keys.Left);                                        // the strip wraps: Offered → Options
         Push(Keys.Enter, Keys.Down, Keys.Enter);                // Agent skills: the page, off picked
-        Push(Keys.Left, Keys.Left);                             // Project, Reflection
+        Push(Keys.Left);                                        // Reflection
         Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter, Keys.Down, Keys.Enter);   // Reflection includes sessions (the last row until Reflection yields to turns on 2026-09-24; Reflection verbose there until later still on 2026-09-19): the page (the cursor on the saved on row), off picked under it
-        Push(Keys.Right);                                       // Project
-        Push(Keys.Left, Keys.Left);                             // Reflection, Offered (the off line now)
+        Push(Keys.Left);                                        // Offered (the off line now)
         Push(Keys.Escape);
 
         await menu.ShowAsync(CancellationToken.None);
@@ -564,7 +560,6 @@ public class SkillsMenuTests : IDisposable
         Assert.Contains("\n" + Titled(SkillsText.Label + " › Reflection includes sessions") + "\n", _console.Output);
         Assert.Contains("\n" + Titled(Strip) + "\n  · Reflection includes sessions: off\n", _console.Output);
         Assert.Contains("\n" + Titled(Strip) + "\n  · Agent skills: off\n▸ Agent skills                          off\n", _console.Output);
-        Assert.Contains("\n▸ Project file  on   " + SkillsText.NoNotesLine + "\n", _console.Output);   // the Project tab leads with the off line too, the cursor on the toggle under it
         Assert.Contains("\n" + Fitted("▸ " + SkillsText.OffLine) + "\n", _console.Output);   // the tabs re-read after the flip
         Assert.False(pane.OverlayOpen);
         pane.Dispose();
@@ -576,7 +571,7 @@ public class SkillsMenuTests : IDisposable
     {
         var (menu, pane, settings) = PaneMenuWithSettings();
         Push(Keys.Left);                                        // Options, the strip wrapped
-        Push(Keys.Down, Keys.Down, Keys.Enter);                 // Skill compact mode: the picker
+        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Enter);      // Skill compact mode (under Project file since 2026-10-01): the picker
         Push(Keys.Down, Keys.Enter);                            // unprotected
         Push(Keys.Escape);
 
@@ -597,7 +592,7 @@ public class SkillsMenuTests : IDisposable
         Put(SkillScope.Profile, "haiku", "Writes haiku.");
         var (menu, pane) = PaneMenu();
         Push(Keys.Enter);                                       // haiku: the scope page refused
-        Push(Keys.Left, Keys.Down, Keys.Down, Keys.Down, Keys.Enter, Keys.Down, Keys.Enter);    // Options (the strip wrapped), #-mention enabled: the page (the cursor on the saved on row, the default), off picked — Allow skill delete, the row this used until it went on 2026-09-23
+        Push(Keys.Left, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter, Keys.Down, Keys.Enter);    // Options (the strip wrapped), #-mention enabled (fifth since 2026-10-01): the page (the cursor on the saved on row, the default), off picked — Allow skill delete, the row this used until it went on 2026-09-23
         Push(Keys.Escape);
 
         await menu.ShowAsync(CancellationToken.None, midTurn: true);

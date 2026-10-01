@@ -1797,12 +1797,12 @@ internal sealed partial class ChatScreen
     private AboutFacts AboutFacts() =>
         App.AboutFacts.Runtime(SidekickApp.Version, _settings.StorageDirectory, _settings.ProfileDirectory, _settings.ModelsDirectory);
 
-    /// <summary>The skills as the next turn would see them (a rescan while the setting says so, like <see cref="SystemPromptFacts"/>), for <c>/skills</c> (<see cref="SkillsMenu"/>, which reads it again after a move, a delete or a flip). The notes are read whatever <c>Project file</c> says — the Project tab shows what is on disk beside the toggle.</summary>
+    /// <summary>The skills as the next turn would see them (a rescan while the setting says so, like <see cref="SystemPromptFacts"/>), for <c>/skills</c> (<see cref="SkillsMenu"/>, which reads it again after a move, a delete or a flip). The project notes are not among them since the Project tab went (2026-10-01).</summary>
     private SkillsFacts SkillsFacts()
     {
         var effective = _effective();
         var skills = Catalog(effective);
-        return new SkillsFacts(effective.AgentSkills, effective.ProjectFile, skills, effective.AgentSkills ? _catalog.Shadowed : [], effective.AgentSkills ? _catalog.Problems : [], _catalog.Roots, effective.AgentSkills ? _project.ReadNotes() : null);
+        return new SkillsFacts(effective.AgentSkills, skills, effective.AgentSkills ? _catalog.Shadowed : [], effective.AgentSkills ? _catalog.Problems : [], _catalog.Roots);
     }
 
     /// <summary>The refusal for <c>/learn</c> while the setting <c>Agent skills</c> is off (<c>/skill &lt;name&gt;</c>'s too, until later on 2026-09-18). Pinned.</summary>

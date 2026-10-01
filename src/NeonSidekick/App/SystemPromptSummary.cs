@@ -29,7 +29,7 @@ namespace NeonSidekick.App;
 /// <param name="Skills">The catalog as of the last scan (empty when off or none installed).</param>
 /// <param name="Project">The working directory's <c>NEON.md</c> / <c>AGENTS.md</c> notes, or null when neither is there (or skills or the project file are off).</param>
 /// <param name="DisabledTools">The tools switched off one by one on <c>/tools</c> (2026-09-19, <c>ToolsDisabled</c>): an opening call whose tool is here is not sent, and <c>recall_memory</c> here puts the list back into the prompt.</param>
-/// <param name="ProjectFile">The setting <c>Project file</c> (later on 2026-09-19, the Project tab of <c>/skills</c>): off means the notes are not read, whatever the working directory holds.</param>
+/// <param name="ProjectFile">The setting <c>Project file</c> (later on 2026-09-19, the Project tab of <c>/skills</c>; its Options tab since 2026-10-01): off means the notes are not read, whatever the working directory holds.</param>
 /// <param name="McpEnabled">The setting <c>MCP servers</c> (2026-09-20, the Options tab of <c>/mcp</c>): off means no server is started and no MCP tool offered.</param>
 /// <param name="McpTools">How many of their tools the next turn offers (the ones switched off on <c>/mcp</c> left out).</param>
 /// <param name="GitEnabled">The setting <c>GitLib tools</c> (2026-09-20, the GitLib tab of <c>/tools</c>; <c>Git tools</c> on the Git tab until 2026-09-21, <c>Git native tools</c> until 2026-09-30).</param>
@@ -234,8 +234,8 @@ public static class SystemPromptSummary
     /// <summary>The tail of the Skills group, the skills section and the project notes while the setting <c>Agent skills</c> is off (2026-09-16). Pinned.</summary>
     public const string SkillsOffSuffix = "agent skills is off";
 
-    /// <summary>The Project notes row's reason while the toggle on <c>/skills</c>' Project tab is off (later on 2026-09-19). Pinned.</summary>
-    public const string ProjectFileOffSuffix = "Project file is off on the Project tab of /skills";
+    /// <summary>The Project notes row's reason while the toggle on <c>/skills</c>' Options tab is off (later on 2026-09-19; its Project tab until 2026-10-01). Pinned.</summary>
+    public const string ProjectFileOffSuffix = "Project file is off on the Options tab of /skills";
 
     /// <summary>The tail of the Sessions group while the setting <c>Session tool</c> is off (2026-09-18). Pinned.</summary>
     public const string SessionsOffSuffix = "session tool is off";

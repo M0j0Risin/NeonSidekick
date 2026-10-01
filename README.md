@@ -475,16 +475,13 @@ Lists the loaded skills with their scope (`profile`, `global` or `external`) and
 | Reflection yields to turns | A message sent while a reflection runs pauses it, so the reply gets the server. The same reflection runs again once the reply and any queued messages are done. Turn it off if your server handles requests in parallel. | on |
 | Reflection edit supporting files | Lets a reflection also change a skill's supporting files (the data, examples or scripts beside its `SKILL.md`) with `skill_editor`'s `write_file` and `edit_file`. When off, a reflection writes the `SKILL.md` alone; the main chat may always write them. | off |
 
-#### Project
-
-One row, **Project file**: whether `NEON.md` (or `AGENTS.md`) in the working directory is read into the prompt as project notes. The row shows which file was found and its size. Default on.
-
 #### Options
 
 | Setting | What it does | Default |
 |---|---|---|
 | Agent skills | Lists the skills in the prompt and offers `load_skill` and `skill_editor`. Turning it off also stops the project file being read. | on |
 | Use external skills (.agents\skills) | Also reads the skills in `%USERPROFILE%\.agents\skills`, read-only. | off |
+| Project file | Reads `NEON.md` (or `AGENTS.md`) in the working directory into the prompt as project notes. When off, those files are ignored. Like the skills, it needs Agent skills on. | on |
 | Skill compact mode | `protected` keeps a loaded skill's instructions through a prune; `unprotected` prunes them like any tool result. | `protected` |
 | #-mention enabled | Typing `#` and part of a name on the input line lists the loaded skills; a pick writes `#name` as text. | on |
 

@@ -16,11 +16,12 @@ namespace NeonSidekick.Settings;
 /// then the <c>/tools</c> pane's (Tools, Ask, Files, Git, Shell, Web — the strip's order until 2026-09-21, when it became
 /// Web, Files, Shell, Ask, Git (native), the user's order; the blocks stayed put) —,
 /// then the <c>/mcp</c> pane's (MCP, 2026-09-20), alphabetical within — the file reads like the four
-/// panes; a new field goes into its block, with a default, and into <c>AppSettings.Copy</c>. Three keys
+/// panes; a new field goes into its block, with a default, and into <c>AppSettings.Copy</c>. Two keys
 /// are not settings rows: <see cref="ToolsDisabled"/>, a list flipped on <c>/tools</c>' Offered tab (the
 /// Tools block holds it and the Options tab's one row, <see cref="ToolsDollarMention"/>),
-/// <see cref="McpServersDisabled"/>, the second list, flipped on <c>/mcp</c>' Servers tab, and
-/// <see cref="ProjectFile"/>, flipped on <c>/skills</c>' Project tab. The deserializer supplies
+/// and <see cref="McpServersDisabled"/>, the second list, flipped on <c>/mcp</c>' Servers tab
+/// (<see cref="ProjectFile"/>, flipped on <c>/skills</c>' Project tab, was a third until it became an
+/// Options row on 2026-10-01). The deserializer supplies
 /// the default when a key is absent and skips one it does not know, so a file written by an older
 /// build loads — a renamed or retired key simply takes its default (no migration, the user's call
 /// over keeping every old spelling alive).</para>
@@ -847,8 +848,9 @@ public sealed class AppSettingsData
     /// system prompt (later on 2026-09-19, the user's ask; always, under <see cref="AgentSkills"/>,
     /// until then). Off = the file is left alone whatever it holds; nothing either way while
     /// <see cref="AgentSkills"/> is off. Read at each turn, no reconnect, no conversation clear.
-    /// Not a settings row: the <c>Project file</c> row of <c>/skills</c>' Project tab flips it in
-    /// place (Enter or Space, the <c>/tools</c> Offered tab's shape), the one editor. No variable.
+    /// The <c>Project file</c> row of <c>/skills</c>' Options tab since 2026-10-01 (the user's ask,
+    /// <c>SettingsField.ProjectFile</c>); the one row of a Project tab of its own, flipped in place,
+    /// from later on 2026-09-19 until then. No variable.
     /// </summary>
     public bool ProjectFile { get; set; } = true;
 
