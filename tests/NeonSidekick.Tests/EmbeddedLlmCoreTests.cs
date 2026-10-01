@@ -428,6 +428,60 @@ public class EmbeddedLlmCoreTests
         var empty = LlamaLoadReport.Parse(["", "srv  llama_server: model loaded"]);
         empty.Add(null);
         Assert.Equal((0, 0, 0.0, false), (empty.TotalLayers, empty.LayersOnCpu, empty.HostBufferMiB, empty.OutOfMemory));
+        Assert.True(empty.Loaded);
+    }
+
+    [Fact]
+    public void ALoadReport_IsLoadedOnlyAtTheLastLine()
+    {
+        // The review's finding (2026-10-01): /health may say 200 before the pipe delivered the host buffers; the host waits for this.
+        var report = LlamaLoadReport.Parse(CudaLoad);
+        Assert.False(report.Loaded);
+        report.Add("0.08.947.960 I srv  llama_server: model loaded");
+        Assert.True(report.Loaded);
+        Assert.False(LlamaLoadReport.Parse(["srv    load_model: loading model 'C:\\m\\model loaded.gguf'"]).Loaded);
+    }
+
+    [Fact]
+    public void ALoadReport_CountsEachBufferOncePerLoad()
+    {
+        // The review's finding (2026-10-01): a second reserve of a buffer replaces it, so a repeated line cannot widen the allowance.
+        var report = LlamaLoadReport.Parse([.. CudaLoad, "sched_reserve:  CUDA_Host compute buffer size =   212.02 MiB", "sched_reserve:  CUDA_Host compute buffer size =   180.00 MiB"]);
+        Assert.Equal(180.95, report.HostBufferMiB, 2);
+        Assert.Equal((66, 66), (report.OffloadedLayers, report.TotalLayers));
+
+        // A drafter's load is a load of its own: its buffers add to the weights'.
+        var drafted = LlamaLoadReport.Parse([.. CudaLoad, "load_tensors: offloaded 4/4 layers to GPU", "llama_context:  CUDA_Host  output buffer size =     0.95 MiB", "sched_reserve:  CUDA_Host compute buffer size =    20.00 MiB"]);
+        Assert.Equal(233.92, drafted.HostBufferMiB, 2);
+        Assert.Equal((70, 70, 0), (drafted.OffloadedLayers, drafted.TotalLayers, drafted.LayersOnCpu));
+
+        // A buffer line before any load line still counts.
+        Assert.Equal(3.0, LlamaLoadReport.Parse(["llama_context: Vulkan_Host  output buffer size =     3.00 MiB"]).HostBufferMiB);
+    }
+
+    [Theory]
+    [InlineData("W ggml_cuda_host_malloc: failed to allocate 512.00 MiB of pinned memory: out of memory")]
+    [InlineData("ggml_vulkan: Failed to allocate pinned memory (vk::Device::allocateMemory: ErrorOutOfHostMemory)")]
+    [InlineData("W ggml_vulkan: failed to allocate pinned memory: ErrorOutOfDeviceMemory")]
+    [InlineData("srv  operator(): failed to allocate a slot")]
+    [InlineData("0.00.564.765 W common_fit_params: failed to fit params to free device memory: out of memory target")]
+    public void ALoadReport_DoesNotTakeAFallbackWarning_ForAFailedAllocation(string line)
+    {
+        // The review's finding (2026-10-01): pinned memory that falls back to plain memory is no reason to say "does not fit".
+        Assert.False(LlamaLoadReport.Parse([line]).OutOfMemory);
+    }
+
+    [Fact]
+    public void AVramOnlyLoad_WithNoLayerLine_IsRefusedAsNotChecked()
+    {
+        // The review's finding (2026-10-01): no load line used to pass as 0 of 0 layers on the CPU.
+        Assert.Equal(EmbeddedLlmText.VramNotChecked, LlamaServerHost.VramRefusal(new LlamaLoadReport(), 100L << 20));
+        Assert.Equal(EmbeddedLlmText.VramNotChecked, LlamaServerHost.VramRefusal(LlamaLoadReport.Parse(["srv  llama_server: model loaded"]), null));
+
+        var clean = LlamaLoadReport.Parse(CudaLoad);
+        Assert.Null(LlamaServerHost.VramRefusal(clean, 344L << 20));
+        Assert.Null(LlamaServerHost.VramRefusal(clean, null));
+        Assert.Equal(EmbeddedLlmText.VramSpilled(new VramSpill(0, 66, 527)), LlamaServerHost.VramRefusal(clean, 740L << 20));
     }
 
     [Fact]
@@ -558,5 +612,14 @@ public class EmbeddedLlmCoreTests
         Assert.Equal("it spilled 15 of 66 layers and about 40 MiB of shared GPU memory into system RAM, and Embedded VRAM only is on; " + Advice, EmbeddedLlmText.VramSpilled(new VramSpill(15, 66, 40)));
         Assert.Equal("it does not fit in VRAM with every layer on the GPU, and Embedded VRAM only is on; " + Advice, EmbeddedLlmText.VramDidNotFit);
         Assert.Equal("Embedded VRAM only is on, but the backend is the CPU; choose CUDA or Vulkan in Embedded backend, or turn Embedded VRAM only off", EmbeddedLlmText.VramOnlyOnCpu);
+        Assert.Equal("Embedded VRAM only is on, but the GPU has little or no VRAM of its own (an integrated GPU shares system RAM); turn Embedded VRAM only off to run it there", EmbeddedLlmText.VramOnlyNoVram);
+        Assert.Equal("llama-server did not say where it put the model's layers, so Embedded VRAM only could not check the load; turn Embedded VRAM only off to start it", EmbeddedLlmText.VramNotChecked);
+        Assert.Equal(1024, EmbeddedLlmService.MinDedicatedVramMiB);
+
+        // The check's log lines, moved out of the host (the same day's review).
+        Assert.Equal("Embedded VRAM only: 66/66 layers on the GPU, host buffers 213 MiB, shared GPU memory 344 MiB.", EmbeddedLlmText.VramCheckSummary(LlamaLoadReport.Parse(CudaLoad), 344L << 20));
+        Assert.EndsWith("shared GPU memory unknown.", EmbeddedLlmText.VramCheckSummary(new LlamaLoadReport(), null));
+        Assert.Equal("Embedded VRAM only: no \"model loaded\" line within 10 s; checking the lines that came.", EmbeddedLlmText.VramLoadLineLate(TimeSpan.FromSeconds(10)));
+        Assert.StartsWith("Embedded VRAM only: the server's shared GPU memory was not read", EmbeddedLlmText.VramSharedNotRead);
     }
 }

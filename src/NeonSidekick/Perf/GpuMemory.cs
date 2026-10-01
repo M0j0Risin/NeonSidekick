@@ -26,8 +26,10 @@ public static class GpuMemory
     }
 
     /// <summary>
-    /// The shared GPU memory process <paramref name="pid"/> holds, in bytes (2026-10-01, Embedded VRAM only:
-    /// <see cref="PdhGpu.ProcessSharedUsage"/>); null off Windows or when PDH does not answer for it.
+    /// The shared GPU memory process <paramref name="pid"/> holds on the biggest adapter, in bytes (2026-10-01, Embedded VRAM
+    /// only: <see cref="PdhGpu.ProcessSharedUsage"/>). The biggest adapter is the budget's and the bar's card, and the one
+    /// llama.cpp's Vulkan backend prefers (a dedicated GPU over an integrated one). Null off Windows, with no hardware adapter,
+    /// or when PDH does not answer for it.
     /// </summary>
     public static long? ProcessSharedBytes(int pid)
     {
@@ -38,7 +40,7 @@ public static class GpuMemory
 
         try
         {
-            return PdhGpu.ProcessSharedUsage(pid) is { } bytes ? (long)bytes : null;
+            return PdhGpu.BiggestAdapter() is { } adapter && PdhGpu.ProcessSharedUsage(pid, adapter.Luid) is { } bytes ? (long)bytes : null;
         }
         catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException)
         {

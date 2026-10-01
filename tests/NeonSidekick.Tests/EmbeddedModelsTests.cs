@@ -503,8 +503,48 @@ public class EmbeddedModelsTests : IDisposable
         await using var onCpu = new EmbeddedLlmService(_files, cpu, _ => new BackendChoice(LlamaBackend.Cpu, "test"));
         var ex = await Assert.ThrowsAsync<EmbeddedLlmException>(() => onCpu.StartAsync(_model, new AppSettingsData { EmbeddedVramOnly = true }, null, CancellationToken.None));
         Assert.Equal(EmbeddedLlmText.VramOnlyOnCpu, ex.Message);
-        Assert.True(ex.VramSpill);
+        Assert.True(ex.VramOnlyRefused);
         Assert.Empty(cpu.Launches);
+    }
+
+    [Fact]
+    public async Task VramOnly_OnVulkan_RefusesAGpuWithNoVramOfItsOwn()
+    {
+        // The review's finding (2026-10-01, the user's call: a clear refusal): an integrated GPU's every allocation is
+        // shared memory, so the spill check would refuse every load with advice that cannot help.
+        InstallByHand();
+        static BackendChoice Vulkan(string? _) => new(LlamaBackend.Vulkan, "test");
+        var on = new AppSettingsData { EmbeddedVramOnly = true };
+        foreach (Func<long?> dedicated in new Func<long?>[] { () => 128L << 20, () => null, () => ((long)EmbeddedLlmService.MinDedicatedVramMiB << 20) - 1 })
+        {
+            var host = new FakeLlamaServerHost();
+            await using var service = new EmbeddedLlmService(_files, host, Vulkan, dedicated);
+            var ex = await Assert.ThrowsAsync<EmbeddedLlmException>(() => service.StartAsync(_model, on, null, CancellationToken.None));
+            Assert.Equal(EmbeddedLlmText.VramOnlyNoVram, ex.Message);
+            Assert.True(ex.VramOnlyRefused);
+            Assert.Empty(host.Launches);
+        }
+
+        // A discrete card starts; so does a small one off VRAM only; CUDA is never an integrated GPU.
+        var big = new FakeLlamaServerHost();
+        await using (var service = new EmbeddedLlmService(_files, big, Vulkan, () => 8L << 30))
+        {
+            await service.StartAsync(_model, on, null, CancellationToken.None);
+        }
+
+        var small = new FakeLlamaServerHost();
+        await using (var service = new EmbeddedLlmService(_files, small, Vulkan, () => 128L << 20))
+        {
+            await service.StartAsync(_model, new AppSettingsData(), null, CancellationToken.None);
+        }
+
+        var cuda = new FakeLlamaServerHost();
+        await using (var service = new EmbeddedLlmService(_files, cuda, Cuda, () => 128L << 20))
+        {
+            await service.StartAsync(_model, on, null, CancellationToken.None);
+        }
+
+        Assert.Equal([true, false, true], new[] { big, small, cuda }.Select(h => h.Launches.Single().VramOnly));
     }
 
     [Fact]
@@ -512,12 +552,12 @@ public class EmbeddedModelsTests : IDisposable
     {
         // A model that does not fit on CUDA does not fit on Vulkan either, and CUDA is not broken: no fallback, nothing remembered.
         InstallByHand();
-        var host = new FakeLlamaServerHost { Fail = _ => new EmbeddedLlmException(EmbeddedLlmText.StartFailed(EmbeddedLlmText.VramDidNotFit), vramSpill: true) };
+        var host = new FakeLlamaServerHost { Fail = _ => new EmbeddedLlmException(EmbeddedLlmText.StartFailed(EmbeddedLlmText.VramDidNotFit), vramOnlyRefused: true) };
         await using var service = new EmbeddedLlmService(_files, host, Cuda);
 
         var ex = await Assert.ThrowsAsync<EmbeddedLlmException>(() => service.StartAsync(_model, new AppSettingsData { EmbeddedVramOnly = true }, null, CancellationToken.None));
 
-        Assert.True(ex.VramSpill);
+        Assert.True(ex.VramOnlyRefused);
         Assert.Equal([LlamaBackend.Cuda], host.Launches.Select(l => l.Backend));
         Assert.Equal(LlamaBackend.Cuda, service.Backend(new AppSettingsData()).Backend);
     }

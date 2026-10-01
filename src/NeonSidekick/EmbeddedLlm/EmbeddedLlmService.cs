@@ -72,6 +72,13 @@ public sealed class EmbeddedLlmService : IEmbeddedLlm
 {
     private const string Category = "EmbeddedLlm";
 
+    /// <summary>
+    /// The least dedicated memory a GPU may report for Embedded VRAM only on Vulkan, in MiB (2026-10-01): an Intel integrated
+    /// GPU reports about 128 MiB and an AMD APU its default carve-out of 512 MiB, both refused; an APU carve-out the user
+    /// raised past it is real dedicated memory and passes. Pinned.
+    /// </summary>
+    public const int MinDedicatedVramMiB = 1024;
+
     private readonly EmbeddedModels _files;
     private readonly ILlamaServerHost _host;
     private readonly Func<string?, BackendChoice> _choose;
@@ -237,7 +244,7 @@ public sealed class EmbeddedLlmService : IEmbeddedLlm
         {
             return await StartOnAsync(host, choice.Backend, model, effective, auto, phase, cancellationToken).ConfigureAwait(false);
         }
-        catch (EmbeddedLlmException ex) when (auto && choice.Backend == LlamaBackend.Cuda && !ex.RuntimeMissing && !ex.VramSpill)
+        catch (EmbeddedLlmException ex) when (auto && choice.Backend == LlamaBackend.Cuda && !ex.RuntimeMissing && !ex.VramOnlyRefused)
         {
             _cudaFailed = true;
             DiagnosticLog.Warn(Category, EmbeddedLlmText.CudaFallback(ex.Message));
@@ -287,11 +294,18 @@ public sealed class EmbeddedLlmService : IEmbeddedLlm
     private async Task<EmbeddedServerInfo> StartOnAsync(ILlamaServerHost host, LlamaBackend backend, EmbeddedModel model, AppSettingsData effective, bool auto, Action<string>? phase, CancellationToken cancellationToken)
     {
         // Embedded VRAM only (2026-10-01, the user's ask): every layer on the GPU whatever Embedded GPU layers says, and
-        // no start at all on the CPU backend, which has no VRAM to stay in.
+        // no start at all on the CPU backend, which has no VRAM to stay in — nor, the same day (the review's finding, the
+        // user's call), on Vulkan over a GPU with little or no memory of its own: an integrated GPU's allocations are all
+        // shared system memory, so every load would read as a spill. CUDA is never an integrated GPU here.
         bool vramOnly = effective.EmbeddedVramOnly;
         if (vramOnly && backend == LlamaBackend.Cpu)
         {
-            throw new EmbeddedLlmException(EmbeddedLlmText.VramOnlyOnCpu, vramSpill: true);
+            throw new EmbeddedLlmException(EmbeddedLlmText.VramOnlyOnCpu, vramOnlyRefused: true);
+        }
+
+        if (vramOnly && backend == LlamaBackend.Vulkan && (_totalVram() is not { } dedicated || dedicated < (long)MinDedicatedVramMiB << 20))
+        {
+            throw new EmbeddedLlmException(EmbeddedLlmText.VramOnlyNoVram, vramOnlyRefused: true);
         }
 
         var runtime = await _files.EnsureRuntimeAsync(backend, phase, cancellationToken).ConfigureAwait(false);

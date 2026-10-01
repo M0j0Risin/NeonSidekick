@@ -273,7 +273,7 @@ public class EmbeddedLlmLiveTests
         await using var service = new EmbeddedLlmService(files, host, _ => new BackendChoice(LlamaBackend.Cuda, "test"));
 
         var ex = await Assert.ThrowsAsync<EmbeddedLlmException>(() => service.StartAsync(model, new AppSettingsData { EmbeddedVramOnly = true, EmbeddedContextSize = 262_144, EmbeddedVision = false }, null, CancellationToken.None));
-        Assert.True(ex.VramSpill, ex.Message);
+        Assert.True(ex.VramOnlyRefused, ex.Message);
         Assert.StartsWith(EmbeddedLlmText.StartFailed("it "), ex.Message);
         Assert.Null(host.Running);
 

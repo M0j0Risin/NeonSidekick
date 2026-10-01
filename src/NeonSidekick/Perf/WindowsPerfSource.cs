@@ -296,12 +296,13 @@ internal sealed unsafe class PdhGpu : IGpuReader
     }
 
     /// <summary>
-    /// The shared GPU memory process <paramref name="pid"/> holds now, in bytes, summed over its adapters (2026-10-01,
-    /// Embedded VRAM only): <c>\GPU Process Memory(*)\Shared Usage</c>, Task Manager's "Shared GPU memory" — where the
-    /// NVIDIA driver's sysmem fallback puts what does not fit, and the pinned host buffers llama.cpp asks for. One
-    /// collection: it is a level, not a rate. Null when the counter does not open or has no instance for the process.
+    /// The shared GPU memory process <paramref name="pid"/> holds now on adapter <paramref name="luid"/>, the one the model
+    /// runs on, in bytes (2026-10-01, Embedded VRAM only): <c>\GPU Process Memory(*)\Shared Usage</c>, Task Manager's "Shared
+    /// GPU memory" — where the NVIDIA driver's sysmem fallback puts what does not fit, and the pinned host buffers llama.cpp
+    /// asks for. Only that adapter's (the same day's review): another GPU the process opened is not the model's spill. One
+    /// collection: it is a level, not a rate. Null when the counter does not open or has no instance for the process there.
     /// </summary>
-    internal static double? ProcessSharedUsage(int pid)
+    internal static double? ProcessSharedUsage(int pid, long luid)
     {
         if (PerfNative.PdhOpenQuery(null, 0, out nint query) != 0)
         {
@@ -316,18 +317,7 @@ internal sealed unsafe class PdhGpu : IGpuReader
                 return null;
             }
 
-            double sum = 0;
-            bool any = false;
-            foreach (var (instance, value) in Values(shared))
-            {
-                if (PerfMath.IsProcessInstance(instance, pid))
-                {
-                    sum += value;
-                    any = true;
-                }
-            }
-
-            return any ? sum : null;
+            return PerfMath.ProcessAdapterSum(Values(shared), pid, luid);
         }
         finally
         {

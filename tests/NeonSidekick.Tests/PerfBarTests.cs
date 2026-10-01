@@ -288,6 +288,26 @@ public class PerfBarTests
     }
 
     [Fact]
+    public void AProcessesSharedGpuMemory_IsSummedOnTheOneAdapter()
+    {
+        // The review's finding (2026-10-01): a hybrid laptop's integrated GPU is not where the model spilled.
+        const long Dgpu = 0x0000_0000_0001_5985L;
+        (string, double)[] values =
+        [
+            ("pid_16_luid_0x00000000_0x00015985_phys_0", 300),
+            ("pid_16_luid_0x00000000_0x00015985_phys_1", 40),
+            ("pid_16_luid_0x00000000_0x0000D1B5_phys_0", 5000),   // the same process on the iGPU
+            ("pid_167_luid_0x00000000_0x00015985_phys_0", 7000),   // another process on the dGPU
+            ("luid_0x00000000_0x00015985_phys_0", 9000),
+        ];
+
+        Assert.Equal(340, PerfMath.ProcessAdapterSum(values, 16, Dgpu));
+        Assert.Equal(7000, PerfMath.ProcessAdapterSum(values, 167, Dgpu));
+        Assert.Null(PerfMath.ProcessAdapterSum(values, 167, 0xD1B5));
+        Assert.Null(PerfMath.ProcessAdapterSum([], 16, Dgpu));
+    }
+
+    [Fact]
     public void AProcessesSharedGpuMemory_IsReadOrNull()
     {
         // This machine's own process: whatever PDH says (null where it has no GPU instance), never a throw.

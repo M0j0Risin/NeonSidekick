@@ -217,5 +217,33 @@ public static class EmbeddedLlmText
     /// <summary>Embedded VRAM only's refusal on the CPU backend, which has no VRAM to stay in (2026-10-01). Pinned.</summary>
     public const string VramOnlyOnCpu = "Embedded VRAM only is on, but the backend is the CPU; choose CUDA or Vulkan in Embedded backend, or turn Embedded VRAM only off";
 
+    /// <summary>
+    /// Embedded VRAM only's refusal on a GPU with little or no memory of its own (2026-10-01, the review's finding and the
+    /// user's call: a clear refusal): an integrated GPU's every allocation is shared system memory, so the spill check would
+    /// refuse every load with advice that cannot help. Pinned.
+    /// </summary>
+    public const string VramOnlyNoVram = "Embedded VRAM only is on, but the GPU has little or no VRAM of its own (an integrated GPU shares system RAM); turn Embedded VRAM only off to run it there";
+
+    /// <summary>
+    /// Embedded VRAM only's refusal of a load whose layer line never came (2026-10-01, the review's finding): the runtime is
+    /// pinned, so no line means the check could not run, not that the load was clean. Pinned.
+    /// </summary>
+    public const string VramNotChecked = "llama-server did not say where it put the model's layers, so Embedded VRAM only could not check the load; turn Embedded VRAM only off to start it";
+
+    /// <summary>The warning when the server's shared GPU memory was not read: only its layers were checked (2026-10-01).</summary>
+    public const string VramSharedNotRead = "Embedded VRAM only: the server's shared GPU memory was not read, so only its layers were checked.";
+
+    /// <summary>The warning when a VRAM-only load's last line did not come through in time; the check runs on what came (2026-10-01).</summary>
+    public static string VramLoadLineLate(TimeSpan waited) =>
+        string.Create(CultureInfo.InvariantCulture, $"Embedded VRAM only: no \"model loaded\" line within {waited.TotalSeconds:0} s; checking the lines that came.");
+
+    /// <summary>The log line of what Embedded VRAM only's check read from a load (2026-10-01).</summary>
+    public static string VramCheckSummary(LlamaLoadReport report, long? sharedBytes)
+    {
+        ArgumentNullException.ThrowIfNull(report);
+        string shared = sharedBytes is { } bytes ? (bytes / 1_048_576).ToString(CultureInfo.InvariantCulture) + " MiB" : "unknown";
+        return string.Create(CultureInfo.InvariantCulture, $"Embedded VRAM only: {report.OffloadedLayers}/{report.TotalLayers} layers on the GPU, host buffers {report.HostBufferMiB:0} MiB, shared GPU memory {shared}.");
+    }
+
     private static string Tail(string tail) => string.IsNullOrWhiteSpace(tail) ? "" : ": " + tail.Trim();
 }

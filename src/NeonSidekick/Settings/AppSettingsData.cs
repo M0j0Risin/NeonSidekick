@@ -1879,7 +1879,8 @@ public sealed class AppSettingsData
     /// (<c>-ngl all</c>, whatever <see cref="EmbeddedGpuLayers"/> says; fit then shrinks only an unset context), and a load
     /// that still spilled — an allocation that failed, layers on the CPU, shared GPU memory beyond llama.cpp's pinned
     /// buffers — is stopped and the connect refused with what to lower (<see cref="EmbeddedLlm.VramSpill"/>). Refused on the
-    /// CPU backend. The driver's own switch is the NVIDIA Control Panel's per-program "CUDA - Sysmem Fallback Policy"; the
+    /// CPU backend, on Vulkan over a GPU with under 1 GiB of its own memory (an integrated GPU, whose every allocation is
+    /// shared), and for a load whose layer line never came, so it could not be checked (the same day's review). The driver's own switch is the NVIDIA Control Panel's per-program "CUDA - Sysmem Fallback Policy"; the
     /// app never changes it. A change restarts the server. No variable.
     /// </summary>
     public bool EmbeddedVramOnly { get; set; }

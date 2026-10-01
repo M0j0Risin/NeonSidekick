@@ -69,6 +69,28 @@ public static class PerfMath
         instance is not null
         && instance.StartsWith(string.Create(CultureInfo.InvariantCulture, $"pid_{pid}_"), StringComparison.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// Process <paramref name="pid"/>'s values on adapter <paramref name="luid"/> in a PDH GPU counter's instances, summed;
+    /// null when it has none there (2026-10-01, Embedded VRAM only: the review's finding — summed over every adapter, memory
+    /// a Vulkan instance committed on a laptop's integrated GPU read as the model's spill).
+    /// </summary>
+    public static double? ProcessAdapterSum(IEnumerable<(string Instance, double Value)> values, int pid, long luid)
+    {
+        ArgumentNullException.ThrowIfNull(values);
+        double sum = 0;
+        bool any = false;
+        foreach (var (instance, value) in values)
+        {
+            if (IsProcessInstance(instance, pid) && TryParseLuid(instance, out long id) && id == luid)
+            {
+                sum += value;
+                any = true;
+            }
+        }
+
+        return any ? sum : null;
+    }
+
     /// <summary>A LUID as one number: the high part over the low.</summary>
     public static long Luid(uint high, uint low) => (long)(((ulong)high << 32) | low);
 

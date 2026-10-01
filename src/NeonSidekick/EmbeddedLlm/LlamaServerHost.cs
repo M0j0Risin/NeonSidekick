@@ -14,19 +14,21 @@ public sealed record EmbeddedServerInfo(Uri BaseUrl, int Port, string ApiKey, Ll
 /// <summary>An embedded-model failure the user reads as it is (a start that failed, a runtime that would not install, a model not installed).</summary>
 public sealed class EmbeddedLlmException : Exception
 {
-    public EmbeddedLlmException(string message, bool portInUse = false, bool runtimeMissing = false, bool vramSpill = false)
+    public EmbeddedLlmException(string message, bool portInUse = false, bool runtimeMissing = false, bool vramOnlyRefused = false)
         : base(message)
     {
         PortInUse = portInUse;
         RuntimeMissing = runtimeMissing;
-        VramSpill = vramSpill;
+        VramOnlyRefused = vramOnlyRefused;
     }
 
     /// <summary>
-    /// True when Embedded VRAM only refused the load (2026-10-01): the model did not fit in VRAM. Not a broken backend, so
-    /// <c>auto</c> does not fall back from CUDA to Vulkan on it — the same model would not fit there either.
+    /// True when Embedded VRAM only refused the start (2026-10-01): the model spilled or did not fit in VRAM, the backend is
+    /// the CPU, the GPU has no VRAM of its own, or the load could not be checked. Not a broken backend, so <c>auto</c> does
+    /// not fall back from CUDA to Vulkan on it — the same model would not fit there either. <c>VramSpill</c> until the same
+    /// day's review: that is the record's name too, and not every refusal is a spill.
     /// </summary>
-    public bool VramSpill { get; }
+    public bool VramOnlyRefused { get; }
 
     /// <summary>True when the llama.cpp runtime could not be installed (a download failed): nothing was started, so it says nothing about the backend.</summary>
     public bool RuntimeMissing { get; }
@@ -71,10 +73,14 @@ public interface ILlamaServerHost : IAsyncDisposable
 /// <item>an exit nobody asked for, once ready, is an Error line (the TUI shows it), and the next connect starts a new
 /// server;</item>
 /// <item>with <see cref="LlamaLaunch.VramOnly"/> (2026-10-01, the user's ask), a load that put part of the model in system
-/// memory is refused: the server is stopped and the start throws with <see cref="EmbeddedLlmException.VramSpill"/>. A load
-/// whose allocation failed says it did not fit; one that came up is checked against its load lines
-/// (<see cref="LlamaLoadReport"/>) and its shared GPU memory (<see cref="VramSpill.Check"/>) — the NVIDIA driver's sysmem
-/// fallback, which llama.cpp never sees, shows only there. Measured once at ready, when every buffer is allocated.</item>
+/// memory is refused: the server is stopped and the start throws with <see cref="EmbeddedLlmException.VramOnlyRefused"/>. A
+/// load that exited before ready after a failed allocation says it did not fit; one that came up is checked against its
+/// load lines (<see cref="LlamaLoadReport"/>) and its shared GPU memory (<see cref="VramSpill.Check"/>) — the NVIDIA
+/// driver's sysmem fallback, which llama.cpp never sees, shows only there. Measured once at ready, when every buffer is
+/// allocated, after the load's last line has come through the pipe (<see cref="LoadLinesWait"/>); a load with no layer line
+/// is refused as not checked (<see cref="VramRefusal"/>). The report is fed only then (the same day's review): before and
+/// after, lines go to the log and the tail alone. The <c>-lv 4</c> the launch passed stays for the server's life — llama-server
+/// has no way to lower it at run time — so its request lines stay in the Debug log.</item>
 /// </list>
 /// </summary>
 public sealed class LlamaServerHost : ILlamaServerHost
@@ -92,7 +98,8 @@ public sealed class LlamaServerHost : ILlamaServerHost
     private Process? _process;
     private LlamaLaunch? _launch;
     private EmbeddedServerInfo? _info;
-    private LlamaLoadReport _report = new();
+    private LlamaLoadReport? _report;   // a VRAM-only start's, until its check
+    private TaskCompletionSource _loaded = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     /// <param name="http">The client <c>/health</c> is asked through; each request carries its own short deadline.</param>
     /// <param name="sharedMemory">A process's shared GPU memory in bytes, for Embedded VRAM only (2026-10-01); <see cref="Perf.GpuMemory.ProcessSharedBytes"/> when null.</param>
@@ -104,6 +111,13 @@ public sealed class LlamaServerHost : ILlamaServerHost
 
     /// <summary>How long a start may take to answer <c>/health</c> with 200: loading 5 GB from a cold disk and a first scan of the CUDA DLLs by an antivirus take their time.</summary>
     public TimeSpan ReadyTimeout { get; init; } = TimeSpan.FromMinutes(5);
+
+    /// <summary>
+    /// How long a VRAM-only start waits, after <c>/health</c> answered 200, for the load's last line (<c>model loaded</c>) to come
+    /// through the pipe (2026-10-01, the review's finding): checked sooner, a host buffer still in the pipe is missing from the
+    /// allowance and a clean load reads as a spill. Past it the check runs on what came.
+    /// </summary>
+    public TimeSpan LoadLinesWait { get; init; } = TimeSpan.FromSeconds(10);
 
     public EmbeddedServerInfo? Running
     {
@@ -192,7 +206,8 @@ public sealed class LlamaServerHost : ILlamaServerHost
         lock (_state)
         {
             _tail.Clear();
-            _report = new LlamaLoadReport();
+            _report = launch.VramOnly ? new LlamaLoadReport() : null;
+            _loaded = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         }
 
         var process = new Process { StartInfo = start, EnableRaisingEvents = true };
@@ -228,18 +243,20 @@ public sealed class LlamaServerHost : ILlamaServerHost
             await WaitReadyAsync(process, port, model, phase, cancellationToken).ConfigureAwait(false);
             if (launch.VramOnly)
             {
-                CheckVram(process.Id);
+                await CheckVramAsync(process.Id, cancellationToken).ConfigureAwait(false);
             }
-        }
-        catch (EmbeddedLlmException ex) when (launch.VramOnly && !ex.PortInUse && !ex.VramSpill && OutOfMemory())
-        {
-            StopCore();
-            throw new EmbeddedLlmException(EmbeddedLlmText.StartFailed(EmbeddedLlmText.VramDidNotFit), vramSpill: true);
         }
         catch
         {
             StopCore();
             throw;
+        }
+        finally
+        {
+            lock (_state)
+            {
+                _report = null;   // checked or failed: later lines go to the log and the tail alone
+            }
         }
 
         var info = new EmbeddedServerInfo(new Uri(string.Create(CultureInfo.InvariantCulture, $"http://127.0.0.1:{port}/v1")), port, key, launch.Backend, model.Id, launch.Vision);
@@ -252,34 +269,68 @@ public sealed class LlamaServerHost : ILlamaServerHost
         return info;
     }
 
-    /// <summary>Embedded VRAM only's check of a server that came up: throws when its load spilled into system memory.</summary>
-    private void CheckVram(int pid)
+    /// <summary>
+    /// Embedded VRAM only's check of a server that came up: waits for the load's last line (<see cref="LoadLinesWait"/>),
+    /// then throws when the load spilled into system memory or could not be checked.
+    /// </summary>
+    private async Task CheckVramAsync(int pid, CancellationToken cancellationToken)
     {
+        Task loaded;
+        lock (_state)
+        {
+            loaded = _loaded.Task;
+        }
+
+        try
+        {
+            await loaded.WaitAsync(LoadLinesWait, cancellationToken).ConfigureAwait(false);
+        }
+        catch (TimeoutException)
+        {
+            DiagnosticLog.Warn(Category, EmbeddedLlmText.VramLoadLineLate(LoadLinesWait));
+        }
+
         long? shared = _sharedMemory(pid);
         LlamaLoadReport report;
         lock (_state)
         {
-            report = _report;
+            report = _report ?? new LlamaLoadReport();
         }
 
         if (shared is null)
         {
-            DiagnosticLog.Warn(Category, "Embedded VRAM only: the server's shared GPU memory was not read, so only its layers were checked.");
+            DiagnosticLog.Warn(Category, EmbeddedLlmText.VramSharedNotRead);
         }
 
-        DiagnosticLog.Info(Category, string.Create(CultureInfo.InvariantCulture, $"Embedded VRAM only: {report.OffloadedLayers}/{report.TotalLayers} layers on the GPU, host buffers {report.HostBufferMiB:0} MiB, shared GPU memory {(shared is { } s ? (s / 1_048_576).ToString(CultureInfo.InvariantCulture) + " MiB" : "unknown")}."));
-        if (VramSpill.Check(report, shared) is { } spill)
+        DiagnosticLog.Info(Category, EmbeddedLlmText.VramCheckSummary(report, shared));
+        if (VramRefusal(report, shared) is { } refusal)
         {
-            throw new EmbeddedLlmException(EmbeddedLlmText.StartFailed(EmbeddedLlmText.VramSpilled(spill)), vramSpill: true);
+            throw new EmbeddedLlmException(EmbeddedLlmText.StartFailed(refusal), vramOnlyRefused: true);
         }
     }
 
-    /// <summary>Whether the load lines seen so far include a failed device allocation.</summary>
+    /// <summary>
+    /// Why Embedded VRAM only refuses a load that came up, or null to keep it (2026-10-01): no layer line at all is a load
+    /// that could not be checked (the review's finding — it used to pass as 0 of 0 layers on the CPU); else what
+    /// <see cref="VramSpill.Check"/> finds.
+    /// </summary>
+    internal static string? VramRefusal(LlamaLoadReport report, long? sharedBytes)
+    {
+        ArgumentNullException.ThrowIfNull(report);
+        if (report.TotalLayers == 0)
+        {
+            return EmbeddedLlmText.VramNotChecked;
+        }
+
+        return VramSpill.Check(report, sharedBytes) is { } spill ? EmbeddedLlmText.VramSpilled(spill) : null;
+    }
+
+    /// <summary>Whether a VRAM-only start's load lines include a failed device allocation.</summary>
     private bool OutOfMemory()
     {
         lock (_state)
         {
-            return _report.OutOfMemory;
+            return _report?.OutOfMemory == true;
         }
     }
 
@@ -295,6 +346,15 @@ public sealed class LlamaServerHost : ILlamaServerHost
             {
                 // Let the output pumps flush the last lines, which say why.
                 await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
+
+                // A VRAM-only load that failed an allocation and then exited did not fit (2026-10-01). Only an exit
+                // before ready (the same day's review): a timeout or a crash with a non-fatal allocation line in the log is
+                // what it is, and auto's CUDA to Vulkan fallback still sees it.
+                if (OutOfMemory())
+                {
+                    throw new EmbeddedLlmException(EmbeddedLlmText.StartFailed(EmbeddedLlmText.VramDidNotFit), vramOnlyRefused: true);
+                }
+
                 string tail = ErrorTail();
                 bool portInUse = tail.Contains("bind", StringComparison.OrdinalIgnoreCase);
                 throw new EmbeddedLlmException(EmbeddedLlmText.StartFailed(EmbeddedLlmText.ExitedEarly(process.ExitCode, tail)), portInUse);
@@ -379,7 +439,15 @@ public sealed class LlamaServerHost : ILlamaServerHost
         DiagnosticLog.Debug(Category, line);
         lock (_state)
         {
-            _report.Add(line);
+            if (_report is { } report)
+            {
+                report.Add(line);
+                if (report.Loaded)
+                {
+                    _loaded.TrySetResult();
+                }
+            }
+
             _tail.Enqueue(line.Trim());
             while (_tail.Count > TailLines)
             {
