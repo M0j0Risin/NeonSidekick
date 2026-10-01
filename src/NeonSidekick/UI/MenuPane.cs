@@ -468,6 +468,18 @@ public sealed class MenuPane : INoticeSink
                     continue;
                 }
 
+                if ((input as InputEvent.Key)?.Info is { } chordKey && Keys.ShortcutLine(chordKey) is { } chord)
+                {
+                    // A command chord (2026-10-01, the user's ask: as everywhere else): done in place, ignored under a
+                    // tool's question, or every level backs out and the screen runs it (ScreenPane.Chord).
+                    if (_pane.Chord(chord))
+                    {
+                        continue;
+                    }
+
+                    return null;
+                }
+
                 if ((input as InputEvent.Key)?.Info is not { } k || Keys.IsCancel(k) || Keys.IsInterrupt(k))
                 {
                     // ESC, and Ctrl+C the same (2026-09-17): nothing picked, the menu backs out.

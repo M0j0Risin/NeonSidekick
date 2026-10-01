@@ -868,6 +868,75 @@ public class MenuPaneTests : IDisposable
         Assert.False(pane.Dismissed);
     }
 
+    /// <summary>A command chord in the list (2026-10-01, the user's ask): null with every level dismissed and the chord kept for the screen, the keys after it unread.</summary>
+    [Fact]
+    public async Task AChord_DismissesThePane_AndKeepsItsCommandForTheScreen()
+    {
+        var (pane, input, keys) = ClickablePane(cursorTop: 100);
+        using var _ = pane;
+        pane.Show();
+        var menu = new MenuPane(pane, keys);
+        input.Push(Keys.Down, Keys.CtrlAlt(ConsoleKey.K), Keys.Enter);
+
+        Assert.Null(await menu.PickAsync(Page("one", "two", "three"), 0, CancellationToken.None));
+        Assert.True(pane.Dismissed);
+        Assert.Equal(new ScreenPane.OffPaneHit(null, null, "/skills"), pane.TakeDismissHit());
+        Assert.True(input.IsAvailable);                  // the Enter, never read
+        Assert.Null(await menu.PickAsync(Page("one", "two"), 0, CancellationToken.None));
+        menu.Close();
+        Assert.False(pane.Dismissed);
+    }
+
+    /// <summary>A chord the screen does in place (<c>/perf</c>, <c>/tb</c>) leaves the list reading; under a tool's question every chord is nobody's.</summary>
+    [Fact]
+    public async Task AChord_DoneInPlace_OrSuppressed_LeavesTheListReading()
+    {
+        var (pane, input, keys) = ClickablePane(cursorTop: 100);
+        using var _ = pane;
+        pane.Show();
+        var menu = new MenuPane(pane, keys);
+        var done = new List<string>();
+        pane.ChordInPlace = line =>
+        {
+            done.Add(line);
+            return line == "/perf";
+        };
+        input.Push(Keys.CtrlAlt(ConsoleKey.E), Keys.Down, Keys.Enter);
+
+        Assert.Equal(new MenuPick(0, 1), await menu.PickAsync(Page("one", "two", "three"), 0, CancellationToken.None));
+        Assert.Equal(["/perf"], done);
+        Assert.False(pane.Dismissed);
+
+        using (pane.SuppressChords())
+        {
+            input.Push(Keys.CtrlAltC, Keys.CtrlAlt(ConsoleKey.E), Keys.Enter);
+            Assert.Equal(new MenuPick(0, 2), await menu.PickAsync(Page("one", "two", "three"), 2, CancellationToken.None));
+        }
+
+        Assert.Equal(["/perf"], done);                   // never asked while suppressed
+        Assert.False(pane.Dismissed);
+        Assert.Null(pane.TakeDismissHit());
+        menu.Close();
+    }
+
+    /// <summary>A chord under a typed edit: Cancelled with every level dismissed and the chord kept, as the double-click off the pane.</summary>
+    [Fact]
+    public async Task EditAsync_AChord_CancelsAndDismisses_KeepingIt()
+    {
+        var (pane, input, keys) = ClickablePane(cursorTop: 100);
+        using var _ = pane;
+        pane.Show();
+        var menu = new MenuPane(pane, keys);
+        var line = new InputLine(pane, keys);
+        input.Push(Keys.Char('x'), Keys.CtrlAltN, Keys.Enter);
+
+        Assert.IsType<InputResult.Cancelled>(await menu.EditAsync(Page("one", "two"), 1, line, "old", allowEmpty: false, CancellationToken.None));
+        Assert.True(pane.Dismissed);
+        Assert.Equal(new ScreenPane.OffPaneHit(null, null, "/new"), pane.TakeDismissHit());
+        Assert.True(input.IsAvailable);                  // the Enter, never read
+        menu.Close();
+    }
+
     /// <summary>A double-click on a tab's title switches once and picks nothing; a click on the strip then one on a row are no pair either.</summary>
     [Fact]
     public async Task ADoubleClickOnATabTitle_SwitchesOnce_AndPicksNothing()

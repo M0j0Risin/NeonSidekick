@@ -217,6 +217,17 @@ public sealed class KeySource : IAnsiConsoleInput
     }
 
     /// <summary>
+    /// A command chord's line (<see cref="Keys.ShortcutLine"/>) as the line hook is offered it: its bare command as the text, no
+    /// events, and a <see cref="SubmittedLine"/> so the screen can leave it for the idle line or open its pane. The watcher's
+    /// chord and, since 2026-10-01, one pressed in a pane under a reply (the screen's re-offer) are the same line.
+    /// </summary>
+    public static WatchedLine ChordLine(string line)
+    {
+        ArgumentNullException.ThrowIfNull(line);
+        return new WatchedLine(line, [], new SubmittedLine(line, line, [], line));
+    }
+
+    /// <summary>
     /// What a line's events read as on one row: <see cref="PreviewText"/> over them without the
     /// Enter that ends the run — printable characters, Backspace taking a character or a whole
     /// paste back, a collapsing paste as <c>[Pasted text +N lines]</c>, an inline paste as its
@@ -467,9 +478,8 @@ public sealed class KeySource : IAnsiConsoleInput
                             // line hook as a line sent from the row would be — with a SubmittedLine, so the screen can leave it for
                             // the idle line as it cancels the reply, or open its pane over it — the draft untouched. With no hook it is dropped, never type-ahead that would
                             // fire at the next idle line.
-                            var chord = new SubmittedLine(shortcut, shortcut, [], shortcut);
                             if (onLine is not null
-                                && !await ServiceAsync(LinePhase(onLine, new WatchedLine(shortcut, [], chord), []), stop, null).ConfigureAwait(false))
+                                && !await ServiceAsync(LinePhase(onLine, ChordLine(shortcut), []), stop, null).ConfigureAwait(false))
                             {
                                 return accepted ? Interrupt.Accept : Interrupt.None;
                             }
@@ -672,8 +682,11 @@ public sealed class KeySource : IAnsiConsoleInput
     }
 
     /// <summary>A request's phase for <see cref="ServiceAsync"/>: nothing goes back on the buffer, a throw is swallowed.</summary>
-    private static Func<Task<IReadOnlyList<InputEvent>>> RequestPhase(PaneRequest request) => async () =>
+    private Func<Task<IReadOnlyList<InputEvent>>> RequestPhase(PaneRequest request) => async () =>
     {
+        // A tool's question ignores the command chords while it is open (2026-10-01, the user's call): a chord must never
+        // answer it — deny a command, skip a question — by accident (ScreenPane.SuppressChords).
+        using var chords = Mirror?.SuppressChords();
         try
         {
             await request.Phase().ConfigureAwait(false);

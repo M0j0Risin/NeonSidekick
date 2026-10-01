@@ -315,6 +315,18 @@ public sealed class InfoPane
                     _clicks.Reset();
                     continue;
                 }
+                else if (Keys.ShortcutLine(k) is { } chord)
+                {
+                    // A command chord (2026-10-01, the user's ask: as everywhere else): done in place, or the pane
+                    // backs out and the screen runs it (ScreenPane.Chord).
+                    _clicks.Reset();
+                    if (!_pane.Chord(chord))
+                    {
+                        return;
+                    }
+
+                    continue;
+                }
                 else if (Keys.IsCancel(k) || Keys.IsInterrupt(k))
                 {
                     // ESC, and Ctrl+C the same (2026-09-17): the pane backs out.

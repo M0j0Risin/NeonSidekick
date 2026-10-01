@@ -170,6 +170,18 @@ public sealed class FolderPane
                     continue;
                 }
 
+                if ((input as InputEvent.Key)?.Info is { } chordKey && Keys.ShortcutLine(chordKey) is { } chord)
+                {
+                    // A command chord (2026-10-01, the user's ask: as everywhere else): done in place, or nothing picked
+                    // and the screen runs it (ScreenPane.Chord).
+                    if (_pane.Chord(chord))
+                    {
+                        continue;
+                    }
+
+                    return null;
+                }
+
                 if ((input as InputEvent.Key)?.Info is not { } k || Keys.IsCancel(k) || Keys.IsInterrupt(k))
                 {
                     return null;

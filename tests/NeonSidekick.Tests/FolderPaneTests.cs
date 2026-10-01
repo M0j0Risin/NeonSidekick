@@ -87,6 +87,23 @@ public class FolderPaneTests : IDisposable
         Assert.EndsWith(Rule(40) + "\n› \n" + Rule(40) + "\nidle", Output);
     }
 
+    /// <summary>A command chord (2026-10-01, the user's ask): nothing chosen, the chord kept for the screen; one done in place (<c>/perf</c>) leaves the tree reading.</summary>
+    [Fact]
+    public async Task AChord_ChoosesNothing_AndKeepsItsCommand_UnlessDoneInPlace()
+    {
+        var (picker, screen, input) = Picker();
+        using var _ = screen;
+        screen.ChordInPlace = line => line == "/perf";
+        input.Push(Keys.CtrlAlt(ConsoleKey.E), Keys.Char(' '), Keys.Down, Keys.Enter);
+        Assert.Equal(P(C, "Users"), await picker.PickAsync(new FolderTree(Disks()), 0, CancellationToken.None));
+        Assert.Null(screen.TakeDismissHit());
+
+        input.Push(Keys.CtrlAltC, Keys.Enter);
+        Assert.Null(await picker.PickAsync(new FolderTree(Disks()), 0, CancellationToken.None));
+        Assert.Equal(new ScreenPane.OffPaneHit(null, null, "/clear"), screen.TakeDismissHit());
+        Assert.False(screen.OverlayOpen);
+    }
+
     [Fact]
     public async Task RightOpensThenStepsIn_LeftClosesThenStepsOut_EscChoosesNothing()
     {

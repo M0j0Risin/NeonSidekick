@@ -9451,6 +9451,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Null(ChatScreen.OffPaneLine(Hint(ScreenPane.HintZone.Queued, "", 3)));
         Assert.Null(ChatScreen.OffPaneLine(Hint(ScreenPane.HintZone.Usage, "", 5)));
         Assert.Null(ChatScreen.OffPaneLine(new ScreenPane.OffPaneHit(null, null)));
+        Assert.Equal("/skills", ChatScreen.OffPaneLine(new ScreenPane.OffPaneHit(null, null, "/skills")));   // a chord in the pane, 2026-10-01
     }
 
     /// <summary>
@@ -11496,6 +11497,22 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(AskUserText.NotAnswered, Assert.Single(_chat.Requests[1][^1].Contents.OfType<FunctionResultContent>()).Result);
         // The idle line came back after the reply: the input row with its placeholder.
         Assert.Contains(InputLine.PromptGlyph + ChatScreen.InputPlaceholder, output);
+    }
+
+    [Fact]
+    public async Task AskUser_TheChordsAreIgnored_ThePaneStillAsks()
+    {
+        // A tool's question ignores the command chords (2026-10-01, the user's call): no clear, no bar, the answers as typed after.
+        AskUserFixture([Keys.CtrlAltC, Keys.CtrlAlt(ConsoleKey.E), Keys.Down, Keys.Enter, Keys.Char(' '), Keys.Down, Keys.Char(' '), Keys.Right, Keys.Enter], "Blue, cheese and olives.");
+
+        string output = await RunAsync();
+
+        Assert.Contains("🛠️ Which colour? — blue\n", output);
+        Assert.Contains("  🛠️ Toppings? — cheese, olives\n", output);
+        Assert.DoesNotContain(ChatScreen.CancelledNotice, output);
+        Assert.Equal(0, Refreshes(output));
+        Assert.Null(_settings.Current.PerformanceBarItems);
+        Assert.Equal(2, _chat.Requests.Count);
     }
 
     [Fact]
@@ -15019,6 +15036,138 @@ public partial class ChatScreenTests : IDisposable
 
         output = string.Join("\n", output.Split('\n').Select(l => l.TrimEnd()));
         Assert.Contains("\n" + Titled(UsageText.Label + "   Statistics ") + "\n", output);
+        Assert.DoesNotContain(ChatScreen.CancelledNotice, output);
+        Assert.Single(_chat.Requests);
+        Assert.Equal(1, _session.History.TurnCount);
+    }
+
+    // ── The chords in a pane (2026-10-01, the user's ask: as everywhere else) ──
+
+    [Fact]
+    public async Task CtrlAltY_InTheHelpPane_ClosesIt_AndOpensTheSystemPromptPane()
+    {
+        _settings.Update(d => d.TtsOutput = false);
+        _console.Profile.Height = 112;
+        _geometry = new ScreenGeometry(() => null);
+        StepsWhenIdle(
+            input => { PushLine(input, "/help"); input.Push(Keys.CtrlAlt(ConsoleKey.Y)); },
+            Key(Keys.Escape),                   // the one ESC: the system prompt's pane, help already gone
+            Line("/exit"));
+
+        string output = await RunAsync();
+
+        int help = output.IndexOf(InfoPane.Title + "   Commands (basic)", StringComparison.Ordinal);
+        Assert.True(help > 0, output);
+        Assert.True(output.IndexOf(SystemPromptSummary.Label + "   Prompt    Tools ", help, StringComparison.Ordinal) > help, output);
+        Assert.DoesNotContain("› /sys", output);
+        Assert.Empty(_chat.Requests);
+    }
+
+    [Fact]
+    public async Task CtrlAltH_InTheHelpPane_ClosesIt_ItsOwnChord()
+    {
+        _settings.Update(d => d.TtsOutput = false);
+        _console.Profile.Height = 112;
+        _geometry = new ScreenGeometry(() => null);
+        _chat.EnqueueText("one");
+        StepsWhenIdle(
+            input => { PushLine(input, "/help"); input.Push(Keys.CtrlAlt(ConsoleKey.H)); },
+            Line("hi"),                         // the idle line again, not the help pane once more
+            Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.Equal("hi", UserText(Assert.Single(_chat.Requests)));
+    }
+
+    [Fact]
+    public async Task CtrlAltC_InASettingsPane_ClosesEveryLevel_AndClears()
+    {
+        _settings.Update(d => d.TtsOutput = false);
+        _console.Profile.Height = 112;
+        _geometry = new ScreenGeometry(() => null);
+        _chat.EnqueueText("one").EnqueueText("two");
+        StepsWhenIdle(
+            Line("a"),
+            input => { PushLine(input, "/tools"); input.Push(Keys.CtrlAltC); },
+            Line("b"),
+            Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.Equal(1, Refreshes(output));     // /clear's wipe
+        Assert.Contains(ToolsText.Label + "   Offered    Web ", output);
+        Assert.Equal(2, _chat.Requests.Count);
+        Assert.Equal("b", UserText(_chat.Requests[1]));   // the one user message: the conversation forgotten
+    }
+
+    [Fact]
+    public async Task CtrlAltE_InThePane_TogglesThePerformanceBar_WithThePaneLeftOpen()
+    {
+        // In place (2026-10-01, the user's call): the pane stays, so the "x" after the chord is the pane's (nothing),
+        // never a draft on the idle line that the Enter after the ESC would send.
+        _settings.Update(d => d.TtsOutput = false);
+        _console.Profile.Height = 112;
+        _geometry = new ScreenGeometry(() => null);
+        StepsWhenIdle(
+            input => { PushLine(input, "/help"); input.Push(Keys.CtrlAlt(ConsoleKey.E), Keys.Char('x'), Keys.Escape, Keys.Enter); },
+            Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.NotNull(_settings.Current.PerformanceBarItems);
+        Assert.Contains(NeonSidekick.Perf.PerfText.BarNotice(_settings.Current.PerformanceBarLook), output);
+        Assert.Empty(_chat.Requests);
+    }
+
+    [Fact]
+    public async Task MidTurn_CtrlAltC_InAPaneOverTheReply_CancelsIt_AndClearsAtTheIdleLine()
+    {
+        MidTurnFixture(i =>
+        {
+            if (i == 1)
+            {
+                _scripted!.Push(Keys.CtrlAlt(ConsoleKey.H));
+            }
+            else if (i == 2)
+            {
+                Scripted().Push(Keys.CtrlAltC);
+            }
+        });
+
+        string output = await RunAsync();
+
+        Assert.Contains(InfoPane.Title + "   Commands (basic)", output);
+        Assert.Contains(ChatScreen.CancelledNotice, output);
+        Assert.Single(_chat.Requests);
+        Assert.Equal(1, Refreshes(output));     // /clear's wipe, at the idle line after the cancel
+    }
+
+    [Fact]
+    public async Task MidTurn_CtrlAltG_InAPaneOverTheReply_SwitchesToTheUsagePane_WhichRunsOn()
+    {
+        MidTurnFixture(i =>
+        {
+            if (i == 0)
+            {
+                _scripted!.Push(Keys.CtrlAlt(ConsoleKey.H));
+            }
+            else if (i == 1)
+            {
+                Scripted().Push(Keys.CtrlAlt(ConsoleKey.G));
+            }
+            else if (i == 2)
+            {
+                Scripted().Push(Keys.Escape);
+            }
+        });
+
+        string output = await RunAsync();
+
+        output = string.Join("\n", output.Split('\n').Select(l => l.TrimEnd()));
+        int help = output.IndexOf(InfoPane.Title + "   Commands (basic)", StringComparison.Ordinal);
+        Assert.True(help > 0, output);
+        Assert.True(output.IndexOf(UsageText.Label + "   Statistics ", help, StringComparison.Ordinal) > help, output);
         Assert.DoesNotContain(ChatScreen.CancelledNotice, output);
         Assert.Single(_chat.Requests);
         Assert.Equal(1, _session.History.TurnCount);

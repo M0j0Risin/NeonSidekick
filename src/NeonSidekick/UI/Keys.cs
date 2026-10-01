@@ -66,6 +66,9 @@ public static class Keys
     /// that character.
     /// Ctrl+Alt+H <c>/help</c> came on 2026-10-01 (the user's ask), its BS (<c>'\x08'</c>) no character as the others' are;
     /// Backspace is its own key, never <see cref="ConsoleKey.H"/>, so the two do not meet.
+    /// In a pane too since 2026-10-01 (the user's ask: "operate the same there as everywhere"): every pane reader hands the
+    /// chord to <see cref="ScreenPane.Chord"/>, which closes the stack for the screen to run it, or toggles the bar in place
+    /// (<c>/perf</c>, <c>/tb</c>), or ignores it under a tool's question.
     /// </summary>
     public static string? ShortcutLine(ConsoleKeyInfo key)
     {

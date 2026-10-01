@@ -448,12 +448,81 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     }
 
     /// <summary>
+    /// The screen's hook for a command chord pressed in a pane that leaves the pane open (2026-10-01, the user's ask:
+    /// Ctrl+Alt+E <c>/perf</c> and Ctrl+Alt+B <c>/tb</c> toggle their bar in place, the tick repainting the pane's new
+    /// shape): true when it did the chord's command, false for every chord that closes the pane first. Null: none does.
+    /// </summary>
+    public Func<string, bool>? ChordInPlace { get; set; }
+
+    // How many tool-asked panes are open (SuppressChords); while above zero a chord in a pane is nobody's.
+    private int _chordsSuppressed;
+
+    /// <summary>
+    /// The chords set aside while the returned scope lasts (2026-10-01, the user's call): a pane a tool opened to ask the user
+    /// (a command's approval, <c>ask_user</c>, the plan's approval…) ignores them, so a chord can never answer it by accident.
+    /// </summary>
+    public IDisposable SuppressChords()
+    {
+        Interlocked.Increment(ref _chordsSuppressed);
+        return new ChordScope(this);
+    }
+
+    private sealed class ChordScope(ScreenPane pane) : IDisposable
+    {
+        private int _done;
+
+        public void Dispose()
+        {
+            if (Interlocked.Exchange(ref _done, 1) == 0)
+            {
+                Interlocked.Decrement(ref pane._chordsSuppressed);
+            }
+        }
+    }
+
+    /// <summary>
+    /// A command chord (<see cref="Keys.ShortcutLine"/>) pressed in a pane (2026-10-01, the user's ask: the chords work in a pane
+    /// as everywhere else): what a pane reader does with it. True when the reader carries on — the chords are suppressed (a
+    /// tool-asked pane), or <see cref="ChordInPlace"/> did the command with the pane open, or there is no overlay to close;
+    /// false when the whole stack was dismissed (<see cref="Dismissed"/>) with <paramref name="line"/> kept as the
+    /// <see cref="OffPaneHit.Chord"/> of <see cref="TakeDismissHit"/>, so the screen runs it once the hosts have backed out —
+    /// the double-click off a pane's path, which closes the pane its own word names and opens any other.
+    /// </summary>
+    public bool Chord(string line)
+    {
+        ArgumentNullException.ThrowIfNull(line);
+        if (Volatile.Read(ref _chordsSuppressed) > 0 || !Enabled)
+        {
+            return true;
+        }
+
+        if (ChordInPlace is { } inPlace && inPlace(line))
+        {
+            return true;
+        }
+
+        lock (_gate)
+        {
+            if (_overlay is null)
+            {
+                return true;
+            }
+
+            Dismissed = true;
+            _dismissHit = new OffPaneHit(null, null, line);
+            return false;
+        }
+    }
+
+    /// <summary>
     /// The part of the hint row or the toolbar a click off an open pane names (later on
     /// 2026-09-21): <see cref="Toolbar"/> on the toolbar row (a glyph, the path or the blanks) or the performance bar (the blanks' <see cref="PerfBarHit"/>, 2026-09-29),
     /// <see cref="Hint"/> on the standing hint row (the model name, its reasoning mark, a strip
     /// glyph or the rest — never the queued count or the tally, which are not drawn under a pane).
+    /// <see cref="Chord"/> is no click at all (2026-10-01): the command chord pressed in the pane (<see cref="ScreenPane.Chord"/>),
+    /// its bare command as typed; the two click parts are null with it.
     /// </summary>
-    public readonly record struct OffPaneHit(HintHit? Hint, ToolbarHit? Toolbar);
+    public readonly record struct OffPaneHit(HintHit? Hint, ToolbarHit? Toolbar, string? Chord = null);
 
     /// <summary>
     /// <see cref="OffPaneHit"/> for buffer cell (<paramref name="x"/>, <paramref name="y"/>) —

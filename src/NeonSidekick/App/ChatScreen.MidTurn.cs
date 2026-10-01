@@ -243,7 +243,12 @@ internal sealed partial class ChatScreen
                 Post(() => HandleQuickAsync(command, args, text, paneToken));
                 return true;
             default:
-                await RunPaneAsync(command, args, paneToken).ConfigureAwait(false);
+                if (await RunPaneAsync(command, args, paneToken).ConfigureAwait(false) is { } chord)
+                {
+                    // A chord pressed in the pane that names no pane (2026-10-01): offered as the live row's chord is.
+                    await OnMidTurnLineAsync(KeySource.ChordLine(chord), turnCts, paneToken).ConfigureAwait(false);
+                }
+
                 return true;
         }
     }
@@ -301,22 +306,29 @@ internal sealed partial class ChatScreen
     /// what a double-click off the pane named (later on 2026-09-21, as <c>HandleAsync</c> at idle):
     /// the pane's own word ends there; another <see cref="MidTurnClass.Pane"/> command's opens that
     /// pane; a word refused under the reply (<c>/model</c>, <c>/cwd browse</c>) is the close alone —
-    /// a click deserves no refusal notice.
+    /// a click deserves no refusal notice. A command chord pressed in the pane (2026-10-01, the user's ask) closes it the
+    /// same way, and one that is no pane's comes back to the caller, which offers it as the chord on the live row is
+    /// (<see cref="OnMidTurnLineAsync"/>): <c>/clear</c> cancels the reply and waits, <c>/profile</c> is deferred.
     /// </summary>
-    private async Task RunPaneAsync(SlashCommand command, string args, CancellationToken cancellationToken)
+    private async Task<string?> RunPaneAsync(SlashCommand command, string args, CancellationToken cancellationToken)
     {
         while (true)
         {
             await RunPaneOnceAsync(command, args, cancellationToken).ConfigureAwait(false);
             if (_pane.TakeDismissHit() is not { } hit || OffPaneLine(hit) is not { } next)
             {
-                return;
+                return null;
             }
 
             var (nextCommand, nextArgs) = ParseLine(next);
-            if (nextCommand == command || MidTurnPolicy(nextCommand, nextArgs) != MidTurnClass.Pane)
+            if (nextCommand == command)
             {
-                return;
+                return null;
+            }
+
+            if (MidTurnPolicy(nextCommand, nextArgs) != MidTurnClass.Pane)
+            {
+                return hit.Chord;
             }
 
             command = nextCommand;

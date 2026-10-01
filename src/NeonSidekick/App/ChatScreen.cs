@@ -1048,6 +1048,7 @@ internal sealed partial class ChatScreen
             Placeholder = InputPlaceholder,
         };
         _keys.Mirror = _pane;
+        _pane.ChordInPlace = ChordInPlace;
         _transcript = new TranscriptRenderer(_pane)
         {
             // Tool collapse count (2026-09-22): read when a tool run opens, clamped as the menu saves it.
@@ -1365,6 +1366,27 @@ internal sealed partial class ChatScreen
         _transcript.Notice(ToolbarItems.Notice(ToolbarItems.Resolve(next.Items).Count > 0));
     }
 
+    /// <summary>
+    /// A command chord pressed in a pane that leaves it open (2026-10-01, the user's call): Ctrl+Alt+E <c>/perf</c> and Ctrl+Alt+B
+    /// <c>/tb</c> toggle their bar as typed — here at the idle line, posted to the turn task under a reply — and the tick
+    /// repaints the pane's new shape. False for every other chord: the pane closes and the screen runs it
+    /// (<see cref="ScreenPane.Chord"/>, <see cref="OffPaneLine"/>).
+    /// </summary>
+    private bool ChordInPlace(string line)
+    {
+        switch (ParseLine(line).Command)
+        {
+            case SlashCommand.Perf:
+                RunOrPost(() => HandlePerf(""));
+                return true;
+            case SlashCommand.Tb:
+                RunOrPost(() => HandleToolbar(""));
+                return true;
+            default:
+                return false;
+        }
+    }
+
     private ScreenPane.ToolbarParts? ToolbarParts()
     {
         var shown = _effective();
@@ -1392,9 +1414,12 @@ internal sealed partial class ChatScreen
     /// nothing (the switches are the idle line's), nor do the queued count and the tally (never
     /// drawn under a pane). The screen closes the pane the word owns, or switches to the one it
     /// names (<see cref="HandleAsync"/>, <see cref="RunPaneAsync"/>). Pinned.
+    /// A command chord pressed in the pane (2026-10-01, the user's ask) is its bare command, ahead of every click part, the
+    /// same close-or-switch: Ctrl+Alt+T in <c>/tools</c> closes it, Ctrl+Alt+K there opens <c>/skills</c>.
     /// </summary>
     public static string? OffPaneLine(ScreenPane.OffPaneHit hit) => hit switch
     {
+        { Chord: { } chord } => chord,
         { Toolbar: { } tool } => tool.Zone switch
         {
             ScreenPane.ToolbarZone.Path => CwdBrowseLine,
