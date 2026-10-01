@@ -3843,7 +3843,7 @@ public partial class ChatScreenTests : IDisposable
         // A fresh profile's ToolsDisabled: gitlib_delete (2026-09-20), zip and unzip (2026-09-21) — gitlib_discard no longer (2026-09-23, the user's call) and delete no longer
         // (later on 2026-09-21, the user's call: on out of the box, so the file rule keeps its delete / restore clause); the fixture had opted every tool on.
         _settings.Update(d => { d.TtsOutput = false; d.ToolsDisabled = [.. new AppSettingsData().ToolsDisabled]; });
-        Assert.Equal([GitDeleteTool.ToolName, UnzipTool.ToolName, ZipTool.ToolName], _settings.Current.ToolsDisabled);
+        Assert.Equal([GitDeleteTool.ToolName, UnzipTool.ToolName, ZipTool.ToolName, UncDeleteTool.ToolName], _settings.Current.ToolsDisabled);   // unc_delete since 2026-09-30
         _chat.EnqueueText("Hello.");
         _console.Profile.Height = 90;
         _geometry = new ScreenGeometry(() => null);
@@ -4236,6 +4236,7 @@ public partial class ChatScreenTests : IDisposable
         _console.Input.PushKey(Keys.Right);     // SQL (2026-09-23)
         _console.Input.PushKey(Keys.Right);     // Oracle (2026-09-30)
         _console.Input.PushKey(Keys.Right);     // MySQL (later on 2026-09-30)
+        _console.Input.PushKey(Keys.Right);     // UNC (later still on 2026-09-30)
         _console.Input.PushKey(Keys.Right);     // ComfyUI (2026-09-24; Images until later that day)
         _console.Input.PushKey(Keys.Right);     // Claude (2026-09-27)
         _console.Input.PushKey(Keys.Right);     // Home Assistant (2026-09-28)
@@ -4246,7 +4247,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude    Home Assistant    Print    Obsidian    ComfyUI    SQL    Oracle    MySQL    GitLib    Options ", output);
+        Assert.Contains(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude    Home Assistant    Print    Obsidian    ComfyUI    SQL    Oracle    MySQL    UNC    GitLib    Options ", output);
         Assert.Contains("\n▸ ComfyUI tools                  on\n  ComfyUI URL                    (not set)\n  ComfyUI workflows offered      all (not narrowed)\n  ComfyUI add workflow           Enter to start workflow wizard\n  ComfyUI ^-mention enabled      on\n  ComfyUI timeout (s)            300\n  ComfyUI max pictures per call  5 pictures\n  ComfyUI reinforce negatives    on\n  ComfyUI show prompts           on\n  ComfyUI picture strip          on\n  ComfyUI output folder          comfy_images\n", output);   // 2026-09-24; the offered checklist and the wizard later that day, the ^-mention switch later still
         Assert.Contains("\n▸ Claude executable                   (looked up)\n  Claude slash command permissions    read-only\n  Claude slash command model          (Claude Code's default)\n  Claude slash command effort         (Claude Code's default)\n  Claude advisor tool                 off\n  Claude advisor tool context         brief\n  Claude advisor tool calls per turn  2 calls\n  Claude advisor tool model           (as Claude slash command model)\n  Claude advisor tool effort          (as Claude slash command effort)\n  Claude advisor tool confirm         off\n", output);   // 2026-09-27: /claude's rows off /settings, then the advisor's
         Assert.Contains("\n  Clock (3)\n▸ get_current_time      on   ", output);
@@ -4651,7 +4652,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude    Home Assistant    Print    Obsidian    ComfyUI    SQL    Oracle    MySQL    GitLib    Options ", output);
+        Assert.Contains(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude    Home Assistant    Print    Obsidian    ComfyUI    SQL    Oracle    MySQL    UNC    GitLib    Options ", output);
         Assert.Contains("  · get_current_time: off", output);
         Assert.Equal(["get_current_time"], _settings.Current.ToolsDisabled);
         Assert.DoesNotContain(ChatScreen.MidTurnDeferredNotice("/tools"), output);
@@ -5824,7 +5825,7 @@ public partial class ChatScreenTests : IDisposable
     public void QuietTools_AreTheMemoryClockTimerAndFileTools()
     {
         Assert.Equal(ShellToolNames.All.Order(), ChatScreen.ShellToolNames.Order());
-        string[] expected = [SaveMemoryTool.ToolName, RecallMemoryTool.ToolName, AskUserTool.ToolName, WebSearchTool.ToolName, WebFetchTool.ToolName, OpenUrlTool.ToolName, DownloadFileTool.ToolName, SessionManagerTool.ToolName, GetCurrentTimeTool.ToolName, ShiftDateTool.ToolName, DaysBetweenTool.ToolName, StartTimerTool.ToolName, StopTimerTool.ToolName, ListTimersTool.ToolName, .. FileToolNames.All, GenerateImageTool.ToolName, SetSplashImageTool.ToolName, LoadSkillTool.ToolName, SkillEditorTool.ToolName, PresentPlanTool.ToolName, .. GitToolNames.All, .. ShellToolNames.All];   // the image tools since 2026-09-24; present_plan 2026-09-26 (the plan is printed as it runs)
+        string[] expected = [SaveMemoryTool.ToolName, RecallMemoryTool.ToolName, AskUserTool.ToolName, WebSearchTool.ToolName, WebFetchTool.ToolName, OpenUrlTool.ToolName, DownloadFileTool.ToolName, SessionManagerTool.ToolName, GetCurrentTimeTool.ToolName, ShiftDateTool.ToolName, DaysBetweenTool.ToolName, StartTimerTool.ToolName, StopTimerTool.ToolName, ListTimersTool.ToolName, .. FileToolNames.All, GenerateImageTool.ToolName, SetSplashImageTool.ToolName, LoadSkillTool.ToolName, SkillEditorTool.ToolName, PresentPlanTool.ToolName, .. GitToolNames.All, .. ShellToolNames.All, .. UncToolNames.All];   // the image tools since 2026-09-24; present_plan 2026-09-26 (the plan is printed as it runs); the UNC tools 2026-09-30, one line as the file tools
         Assert.Equal(GitToolNames.All.Order(), ChatScreen.GitToolNames.Order());
         Assert.Equal(expected.Order(), ChatScreen.QuietTools.Order());
     }
@@ -8388,7 +8389,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.False(_settings.Current.ShellPoliceOutsidePaths);
         string memory = "\n" + Titled(MemoryMenu.Title) + "\n";
         string settings = "\n" + Titled(SettingsMenu.Title + "   General    Embedded    LLM    TTS    STT    Sessions    Botchat ") + "\n";
-        string tools = "\n" + Titled(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude    Home Assistant    Print    Obsidian    ComfyUI    SQL    Oracle    MySQL    GitLib    Options ") + "\n";
+        string tools = "\n" + Titled(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude    Home Assistant    Print    Obsidian    ComfyUI    SQL    Oracle    MySQL    UNC    GitLib    Options ") + "\n";
         string allowed = "\n" + Titled(AllowedCommandsTitle) + "\n";
         Assert.Equal(1, output.Split(memory).Length - 1);
         Assert.Equal(1, output.Split(allowed).Length - 1);
@@ -9411,7 +9412,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("\n" + ScreenPane.ToolbarRow(ChatScreen.ToolbarStripFor(true, CommandPolicyMode.Ask, true), cwd, 239), output);
         Assert.DoesNotContain("\n" + ScreenPane.ToolbarRow(ChatScreen.ToolbarStrip, cwd, 239), output);   // never the fixed glyphs alone: memory, the policy and the police are on
         int settings = output.IndexOf("\n" + Titled(SettingsMenu.Title + "   General    Embedded    LLM    TTS    STT    Sessions    Botchat ") + "\n", StringComparison.Ordinal);
-        int tools = output.IndexOf(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude    Home Assistant    Print    Obsidian    ComfyUI    SQL    Oracle    MySQL    GitLib    Options ", StringComparison.Ordinal);
+        int tools = output.IndexOf(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude    Home Assistant    Print    Obsidian    ComfyUI    SQL    Oracle    MySQL    UNC    GitLib    Options ", StringComparison.Ordinal);
         int mcp = output.IndexOf(McpText.Label + "   Servers    Tools    Options ", StringComparison.Ordinal);
         int skills = output.IndexOf(SkillsText.Label + "   Offered    Reflection    Project    Options ", StringComparison.Ordinal);
         int sys = output.IndexOf("\n" + Titled(SystemPromptSummary.Label + "   Prompt    Tools ") + "\n", StringComparison.Ordinal);
@@ -9510,7 +9511,7 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         string settings = "\n" + Titled(SettingsMenu.Title + "   General    Embedded    LLM    TTS    STT    Sessions    Botchat ") + "\n";
-        string tools = "\n" + Titled(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude    Home Assistant    Print    Obsidian    ComfyUI    SQL    Oracle    MySQL    GitLib    Options ") + "\n";
+        string tools = "\n" + Titled(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude    Home Assistant    Print    Obsidian    ComfyUI    SQL    Oracle    MySQL    UNC    GitLib    Options ") + "\n";
         string help = "\n" + Titled(InfoPane.Title + "   Commands (basic)    Commands (advanced)    Keys ") + "\n";
         string sys = "\n" + Titled(SystemPromptSummary.Label + "   Prompt    Tools ") + "\n";
         string sessions = "\n" + Titled(SessionsMenu.Title) + "\n";
@@ -9913,9 +9914,9 @@ public partial class ChatScreenTests : IDisposable
     }
 
     [Theory]
-    [InlineData(false, false, 18)]
-    [InlineData(true, false, 19)]
-    [InlineData(true, true, 20)]
+    [InlineData(false, false, 29)]
+    [InlineData(true, false, 30)]
+    [InlineData(true, true, 31)]
     public void KeyRows_ListWhatApplies(bool voiceOn, bool wakeReady, int count)
     {
         var rows = ChatScreen.KeyRows(voiceOn, ConsoleKey.F8, wakeReady, "hey neon");
@@ -9931,17 +9932,34 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(("Home / End", "hold Shift to select text to the beginning or end of the line starting from the cursor"), rows[6]);
         Assert.Equal(("PgUp / PgDn", "scroll the transcript a page at a time"), rows[7]);
         Assert.DoesNotContain(rows, r => r.Key is "Mouse" or "Drag" or "Drop" or "@" or "#" or "$");
-        Assert.Equal(("Alt+V", "paste content (text or images)"), rows[^10]);   // ahead of Ctrl+Home since 2026-09-27 (the user's order)
-        Assert.Equal(("Ctrl+Home", "scroll to top of the chat pane"), rows[^9]);
-        Assert.Equal(("Ctrl+End", "scroll to bottom of the chat pane"), rows[^8]);
-        Assert.Equal(("Ctrl+O", "expand or collapse the tool calls, code blocks and thinking (or click a summary line)"), rows[^7]);   // 2026-09-22
-        Assert.Equal(("Ctrl+A", "select all text on the line"), rows[^6]);
-        Assert.Equal(("Ctrl+X", "cut the selected text"), rows[^5]);   // 2026-09-25
-        Assert.Equal(("Ctrl+C", "copy the selected text · stop the speech · cancel the reply · twice to exit"), rows[^4]);
-        // The command chords after it (2026-09-30, the user's wording).
-        Assert.Equal(("Ctrl+Alt+C", "start a new conversation and clear the screen (/clear)"), rows[^3]);
-        Assert.Equal(("Ctrl+Alt+N", "start a new conversation but do not clear the screen (/new)"), rows[^2]);
-        Assert.Equal(("Ctrl+Alt+S", "start a new conversation and show the splash screen (/splash)"), rows[^1]);
+        Assert.Equal(("Alt+V", "paste content (text or images)"), rows[^21]);   // ahead of Ctrl+Home since 2026-09-27 (the user's order)
+        Assert.Equal(("Ctrl+Home", "scroll to top of the chat pane"), rows[^20]);
+        Assert.Equal(("Ctrl+End", "scroll to bottom of the chat pane"), rows[^19]);
+        Assert.Equal(("Ctrl+O", "expand or collapse the tool calls, code blocks and thinking (or click a summary line)"), rows[^18]);   // 2026-09-22
+        Assert.Equal(("Ctrl+A", "select all text on the line"), rows[^17]);
+        Assert.Equal(("Ctrl+X", "cut the selected text"), rows[^16]);   // 2026-09-25
+        Assert.Equal(("Ctrl+C", "copy the selected text · stop the speech · cancel the reply · twice to exit"), rows[^15]);
+        // The command chords after it (2026-09-30, the user's wording), one block A to Z by the letter since the pane chords
+        // joined later that day (the user's ask).
+        Assert.Equal(
+        [
+            ("Ctrl+Alt+B", "show or hide the toolbar (/tb)"),
+            ("Ctrl+Alt+C", "start a new conversation and clear the screen (/clear)"),
+            ("Ctrl+Alt+D", "open the MCP pane (/mcp)"),
+            ("Ctrl+Alt+E", "show or hide the performance bar (/perf)"),
+            ("Ctrl+Alt+G", "open the usage pane (/usage)"),
+            ("Ctrl+Alt+K", "open the skills pane (/skills)"),
+            ("Ctrl+Alt+L", "open the allowed commands list (/cmdlist)"),
+            ("Ctrl+Alt+M", "open the memory pane (/memory)"),
+            ("Ctrl+Alt+N", "start a new conversation but do not clear the screen (/new)"),
+            ("Ctrl+Alt+O", "open the shell police setting (/police)"),
+            ("Ctrl+Alt+P", "open the profile pane (/profile)"),
+            ("Ctrl+Alt+S", "start a new conversation and show the splash screen (/splash)"),
+            ("Ctrl+Alt+T", "open the tools pane (/tools)"),
+            ("Ctrl+Alt+Y", "open the system prompt pane (/sys)"),
+        ], rows[^14..]);
+        // Each row names its chord's command.
+        Assert.All(rows[^14..], row => Assert.Equal(Keys.ShortcutLine(Keys.CtrlAlt(Enum.Parse<ConsoleKey>(row.Key[^1..]))), row.Meaning[(row.Meaning.LastIndexOf('(') + 1)..^1]));
         Assert.Equal(voiceOn, rows.Any(r => r.Key == "F8"));
         if (voiceOn)
         {
@@ -11402,7 +11420,7 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         output = string.Join("\n", output.Split('\n').Select(l => l.TrimEnd()));
-        string tools = "\n" + Titled(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude    Home Assistant    Print    Obsidian    ComfyUI    SQL    Oracle    MySQL    GitLib    Options ") + "\n";
+        string tools = "\n" + Titled(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude    Home Assistant    Print    Obsidian    ComfyUI    SQL    Oracle    MySQL    UNC    GitLib    Options ") + "\n";
         string sys = "\n" + Titled(SystemPromptSummary.Label + "   Prompt    Tools ") + "\n";
         string sessions = "\n" + Titled(SessionsMenu.Title) + "\n";
         string settings = "\n" + Titled(SettingsMenu.Title + "   General    Embedded    LLM    TTS    STT    Sessions    Botchat ") + "\n";
@@ -15008,6 +15026,67 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains(ChatScreen.CancelledNotice, output);
         Assert.Equal([SplashName(0)], _splashLoads);   // drawn at the idle line after the cancel
         Assert.Equal(2, Refreshes(output));
+    }
+
+    [Fact]
+    public async Task CtrlAltT_OpensTheToolsPane_AsSlashTools_TheDraftKept()
+    {
+        // The pane chords (later on 2026-09-30, the user's ask): the bare command through the dispatch, no transcript row,
+        // the draft back on the row after ESC.
+        _settings.Update(d => d.TtsOutput = false);
+        _console.Profile.Height = 112;
+        _geometry = new ScreenGeometry(() => null);
+        _chat.EnqueueText("one");
+        StepsWhenIdle(
+            input => { input.Push("keep".Select(Keys.Char).ToArray()); input.Push(Keys.CtrlAlt(ConsoleKey.T)); },
+            Key(Keys.Escape),
+            Key(Keys.Enter),
+            Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.Contains(ToolsText.Label + "   Offered    Web ", output);
+        Assert.DoesNotContain("› /tools", output);
+        Assert.Single(_chat.Requests);
+        Assert.Equal("keep", UserText(_chat.Requests[0]));
+    }
+
+    [Fact]
+    public async Task CtrlAltY_OpensTheSystemPromptPane_AsSlashSys()
+    {
+        _settings.Update(d => d.TtsOutput = false);
+        _console.Profile.Height = 112;
+        _geometry = new ScreenGeometry(() => null);
+        StepsWhenIdle(Key(Keys.CtrlAlt(ConsoleKey.Y)), Key(Keys.Escape), Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.Contains(SystemPromptSummary.Label + "   Prompt    Tools ", output);
+        Assert.Empty(_chat.Requests);
+    }
+
+    [Fact]
+    public async Task MidTurn_CtrlAltG_OpensTheUsagePane_OverTheReply_WhichRunsOn()
+    {
+        MidTurnFixture(i =>
+        {
+            if (i == 1)
+            {
+                _scripted!.Push(Keys.CtrlAlt(ConsoleKey.G));
+            }
+            else if (i == 2)
+            {
+                Scripted().Push(Keys.Escape);
+            }
+        });
+
+        string output = await RunAsync();
+
+        output = string.Join("\n", output.Split('\n').Select(l => l.TrimEnd()));
+        Assert.Contains("\n" + Titled(UsageText.Label + "   Statistics ") + "\n", output);
+        Assert.DoesNotContain(ChatScreen.CancelledNotice, output);
+        Assert.Single(_chat.Requests);
+        Assert.Equal(1, _session.History.TurnCount);
     }
 
     // ── /theme (2026-09-23, the user's ask: just like /splash) ──────────────

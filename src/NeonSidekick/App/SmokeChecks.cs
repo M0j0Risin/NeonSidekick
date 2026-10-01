@@ -122,6 +122,7 @@ public static partial class SmokeChecks
         results.Add(OperatingSystem.IsWindows() ? ProbeCredentials() : new SmokeCheck("sql:credentials", true, "skipped: not Windows"));
         results.Add(ProbeOracle());
         results.Add(ProbeMySql());
+        results.Add(OperatingSystem.IsWindows() ? ProbeUnc() : new SmokeCheck("unc:impersonation", true, "skipped: not Windows"));
         results.Add(ProbeCulture());
         results.Add(ProbeKokoroVoices(nativeDirectory));
         results.Add(ProbeKokoroPhonemizer());

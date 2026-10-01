@@ -66,6 +66,7 @@ public class AppSettingsTests : IDisposable
         WelcomeSplashMode = "tiled",
         ShowWorkingDirectory = false,
         ToolbarItems = ["usage", "path"],
+        ToolbarLastItems = ["tools"],
         PerformanceBarItems = ["cpu", "netdown"],
         PerformanceBarLastItems = ["gpu"],
         BotChatMultiEmbedded = "multi-server",
@@ -187,6 +188,7 @@ public class AppSettingsTests : IDisposable
         Assert.Equal(expected.WelcomeSplashMode, actual.WelcomeSplashMode);
         Assert.Equal(expected.ShowWorkingDirectory, actual.ShowWorkingDirectory);
         Assert.Equal(expected.ToolbarItems, actual.ToolbarItems);
+        Assert.Equal(expected.ToolbarLastItems, actual.ToolbarLastItems);
         Assert.Equal(expected.PerformanceBarItems, actual.PerformanceBarItems);
         Assert.Equal(expected.PerformanceBarLastItems, actual.PerformanceBarLastItems);
         Assert.Equal(expected.BotChatMultiEmbedded, actual.BotChatMultiEmbedded);
@@ -334,6 +336,7 @@ public class AppSettingsTests : IDisposable
             d.WelcomeSplashMode = full.WelcomeSplashMode;
             d.ShowWorkingDirectory = full.ShowWorkingDirectory;
             d.ToolbarItems = full.ToolbarItems;
+            d.ToolbarLastItems = full.ToolbarLastItems;
             d.PerformanceBarItems = full.PerformanceBarItems;
             d.PerformanceBarLastItems = full.PerformanceBarLastItems;
             d.BotChatMultiEmbedded = full.BotChatMultiEmbedded;
@@ -465,6 +468,7 @@ public class AppSettingsTests : IDisposable
                 d.WelcomeSplashMode = full.WelcomeSplashMode;
                 d.ShowWorkingDirectory = full.ShowWorkingDirectory;
                 d.ToolbarItems = full.ToolbarItems;
+                d.ToolbarLastItems = full.ToolbarLastItems;
                 d.PerformanceBarItems = full.PerformanceBarItems;
                 d.PerformanceBarLastItems = full.PerformanceBarLastItems;
                 d.BotChatMultiEmbedded = full.BotChatMultiEmbedded;
@@ -611,7 +615,7 @@ public class AppSettingsTests : IDisposable
         a.LlmModel = "mutated-locally";
         a.ToolsDisabled.Add("read_file");
         Assert.Equal("", settings.Current.LlmModel);
-        Assert.Equal(["gitlib_delete", "unzip", "zip"], settings.Current.ToolsDisabled);   // the default: gitlib_delete since 2026-09-20, zip and unzip since 2026-09-21 (delete was here until later that day, gitlib_discard until 2026-09-23); the local Add never reached the store
+        Assert.Equal(["gitlib_delete", "unzip", "zip", "unc_delete"], settings.Current.ToolsDisabled);   // the default: gitlib_delete since 2026-09-20, zip and unzip since 2026-09-21, unc_delete since 2026-09-30 (delete was here until later that day, gitlib_discard until 2026-09-23); the local Add never reached the store
     }
 
     [Fact]
@@ -693,7 +697,7 @@ public class AppSettingsTests : IDisposable
         Assert.True(settings.Current.ComfyPictureStrip);   // its neighbour untouched by the retired ComfyPictureStripSync key (2026-09-28)
         Assert.True(settings.Current.SkillHashMention);   // its neighbour untouched by the retired SkillSlashCommands key
         Assert.True(settings.Current.LlmOfferTools);   // the renamed key, skipped; the default stands
-        Assert.Equal(["gitlib_delete", "unzip", "zip"], settings.Current.ToolsDisabled);   // no ToolsDisabled key in the old file: the default fills it (a saved [] or ["delete"] would stand)
+        Assert.Equal(["gitlib_delete", "unzip", "zip", "unc_delete"], settings.Current.ToolsDisabled);   // no ToolsDisabled key in the old file: the default fills it (a saved [] or ["delete"] would stand)
         Assert.Equal(WorkingDirectory.DefaultTreeLength, settings.Current.FileTreeMaxLength);   // the old TreeMaxLength key, skipped
         Assert.Equal("", settings.Current.WebSearxngUrl);   // the old SearxngUrl key, skipped
         // On 2026-09-30 the Git native rows became GitLib and their keys followed (the user's pick: no migration).
@@ -1358,6 +1362,7 @@ public class AppSettingsTests : IDisposable
         Assert.Equal("fullsize", s.WelcomeSplashMode);   // 2026-09-18; a pick since 2026-09-24 (on was fullsize)
         Assert.False(s.ShowWorkingDirectory);   // 2026-09-18; off by default since 2026-09-21
         Assert.Null(s.ToolbarItems);   // 2026-09-21 as a switch, on; every item since the checklist, 2026-09-29
+        Assert.Null(s.ToolbarLastItems);   // what a bare /tb brings back: the defaults until it hides a list (later on 2026-09-30)
         Assert.Null(s.PerformanceBarItems);   // the performance bar (2026-09-29): off, the user's call; no meter checked since the checklist, 2026-09-30
         Assert.Null(s.PerformanceBarLastItems);   // what a bare /perf brings back: CPU, RAM, GPU and VRAM until it hides one (2026-09-30)
         Assert.Equal("text", s.PerformanceBarLook);   // the look (later on 2026-09-29)
@@ -1388,7 +1393,7 @@ public class AppSettingsTests : IDisposable
         Assert.False(s.FileSafeEdits);
         Assert.True(s.SkillHashMention);
         Assert.True(s.ToolsDollarMention);   // 2026-09-19
-        Assert.Equal([NeonSidekick.Llm.Tools.GitDeleteTool.ToolName, NeonSidekick.Llm.Tools.UnzipTool.ToolName, NeonSidekick.Llm.Tools.ZipTool.ToolName], s.ToolsDisabled);   // gitlib_delete since 2026-09-20 (the user's call; gitlib_discard with it until 2026-09-23, the user's call again), zip and unzip since 2026-09-21; delete was opt-in from 2026-09-20 until later on 2026-09-21 (the user's call both times); a saved list stands
+        Assert.Equal([NeonSidekick.Llm.Tools.GitDeleteTool.ToolName, NeonSidekick.Llm.Tools.UnzipTool.ToolName, NeonSidekick.Llm.Tools.ZipTool.ToolName, NeonSidekick.Llm.Tools.UncDeleteTool.ToolName], s.ToolsDisabled);   // unc_delete since 2026-09-30; gitlib_delete since 2026-09-20 (the user's call; gitlib_discard with it until 2026-09-23, the user's call again), zip and unzip since 2026-09-21; delete was opt-in from 2026-09-20 until later on 2026-09-21 (the user's call both times); a saved list stands
         // The git tools (2026-09-20): on, 500 patch lines (20–5000), 20 commits (1–200).
         Assert.False(s.GitLibTools);   // off by default since later on 2026-09-21 (on from 2026-09-20): the model reaches git through the shell unless the profile opts in
         Assert.Equal(500, s.GitLibDiffMaxLines);

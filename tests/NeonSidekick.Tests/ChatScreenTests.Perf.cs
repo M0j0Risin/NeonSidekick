@@ -76,6 +76,41 @@ public partial class ChatScreenTests
     }
 
     /// <summary>
+    /// <c>/tb</c> (later on 2026-09-30, the user's ask: "same as how /perf works for the perfbar"): bare it hides the toolbar
+    /// and shows it again with the items it had; <c>off</c> and <c>on</c> say which; Ctrl+Alt+B is the bare word; anything
+    /// else is the usage error. Never a turn.
+    /// </summary>
+    [Fact]
+    public async Task Tb_Toggles_KeepingTheItems_AndCtrlAltB_IsTheBareWord()
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.ToolbarItems = ["tools", "usage"]; });
+        var shown = new List<string>();
+        Action<ScriptedInput> Then(Action<ScriptedInput> step) => input =>
+        {
+            shown.Add(ToolbarItems.Value(_settings.Current.ToolbarItems));   // what the step before left
+            step(input);
+        };
+        StepsWhenIdle(
+            Line("/tb"),
+            Then(input => PushLine(input, "/tb")),
+            Then(input => PushLine(input, "/tb off")),
+            Then(input => input.Push(Keys.CtrlAlt(ConsoleKey.B))),
+            Then(input => PushLine(input, "/tb on")),
+            Then(input => PushLine(input, "/tb sideways")),
+            Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.Equal(["off", "2 of 13", "off", "2 of 13", "2 of 13"], shown);
+        Assert.Contains(ToolbarItems.Notice(false), output);
+        Assert.Contains(ToolbarItems.Notice(true), output);
+        Assert.Contains(ToolbarItems.UsageError, output);
+        Assert.Equal(["tools", "usage"], _settings.Current.ToolbarItems);
+        Assert.Equal(["tools", "usage"], _settings.Current.ToolbarLastItems);
+        Assert.Empty(_chat.Requests);
+    }
+
+    /// <summary>
     /// The toolbar's 🪪 and 📈 (later on 2026-09-29, the user's ask), checked alone: the ID card at column 0 opens the profile
     /// picker, the rising chart at 3 shows the performance bar in its look — no transcript row for either.
     /// </summary>

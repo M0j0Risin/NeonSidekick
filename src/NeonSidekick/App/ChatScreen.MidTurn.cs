@@ -142,7 +142,7 @@ internal sealed partial class ChatScreen
         SlashCommand.Cwd => hasArgs ? MidTurnClass.Deferred : MidTurnClass.Quick,
         SlashCommand.Tts or SlashCommand.Voice or SlashCommand.Wake or SlashCommand.Interrupt or SlashCommand.Copy
             or SlashCommand.Remember or SlashCommand.Explore or SlashCommand.Log or SlashCommand.Timer or SlashCommand.Expand or SlashCommand.Collapse or SlashCommand.Window
-            or SlashCommand.Perf or SlashCommand.Unknown or SlashCommand.Overloaded => MidTurnClass.Quick,
+            or SlashCommand.Perf or SlashCommand.Tb or SlashCommand.Unknown or SlashCommand.Overloaded => MidTurnClass.Quick,
         SlashCommand.Clear or SlashCommand.New or SlashCommand.Splash or SlashCommand.Rewind or SlashCommand.Exit => MidTurnClass.Cancel,
         _ => MidTurnClass.Deferred,
     };
@@ -453,6 +453,9 @@ internal sealed partial class ChatScreen
                 break;
             case SlashCommand.Perf:
                 HandlePerf(args);
+                break;
+            case SlashCommand.Tb:
+                HandleToolbar(args);
                 break;
             case SlashCommand.Sampling:
                 // /sampling <field> <value> (2026-09-28): the connected model's entry, read at the next turn.

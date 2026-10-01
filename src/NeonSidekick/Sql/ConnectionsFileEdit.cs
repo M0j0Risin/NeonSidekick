@@ -11,15 +11,23 @@ namespace NeonSidekick.Sql;
 /// same shape): a connection's <c>password</c> written over or inserted, and a whole connection added. Each finds its
 /// spot with a comment-tolerant <see cref="Utf8JsonReader"/>, splices the bytes, writes a temp file and moves it over the
 /// original. The engine-specific parts — the file's <c>EmptyText</c>, the entry's serialisation — stay with the caller.
+/// The entries sit under <c>connections</c> unless a caller names another key: <c>unc.json</c>'s are <c>shares</c>
+/// (2026-09-30, the UNC tools), its refusals saying "share" for "connection".
 /// </summary>
 public static class ConnectionsFileEdit
 {
+    /// <summary>The key the entries sit under by default: <c>sql.json</c>'s, <c>oracle.json</c>'s and <c>mysql.json</c>'s.</summary>
+    public const string DefaultSection = "connections";
+
+    /// <summary>What an entry is called in a refusal by default.</summary>
+    public const string DefaultNoun = "connection";
+
     /// <summary>
     /// Writes <paramref name="value"/> as the <c>password</c> of connection <paramref name="name"/> in <paramref name="path"/>,
     /// touching nothing else: the string token replaced, or — for a connection with no <c>password</c> yet — the key inserted
     /// after its <c>user</c> value (after the object's brace without one). Null on success, else why not.
     /// </summary>
-    public static string? WritePassword(string path, string name, string value)
+    public static string? WritePassword(string path, string name, string value, string section = DefaultSection, string noun = DefaultNoun)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
@@ -28,9 +36,9 @@ public static class ConnectionsFileEdit
         {
             byte[] bytes = File.ReadAllBytes(path);
             int bom = Bom(bytes);
-            if (Locate(bytes.AsSpan(bom), name) is not { } spot)
+            if (Locate(bytes.AsSpan(bom), name, section) is not { } spot)
             {
-                return SqlText.ConnectionNotInFile(name);
+                return SqlText.ConnectionNotInFile(name, noun);
             }
 
             string quoted = "\"" + JsonEncodedText.Encode(value, JavaScriptEncoder.UnsafeRelaxedJsonEscaping) + "\"";
@@ -50,7 +58,7 @@ public static class ConnectionsFileEdit
     /// missing file is made with <paramref name="emptyText"/> first. A name already in the file (trimmed, case-insensitive)
     /// is refused. Null on success, else why not.
     /// </summary>
-    public static string? AddConnection(string path, string name, string entryJson, string emptyText)
+    public static string? AddConnection(string path, string name, string entryJson, string emptyText, string section = DefaultSection, string noun = DefaultNoun)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
@@ -63,7 +71,7 @@ public static class ConnectionsFileEdit
             byte[] bytes = File.ReadAllBytes(path);
             int bom = Bom(bytes);
             var json = bytes.AsSpan(bom);
-            var spot = LocateInsert(json, name);
+            var spot = LocateInsert(json, name, section, noun);
             if (spot.Error is { } refused)
             {
                 return refused;
@@ -77,7 +85,7 @@ public static class ConnectionsFileEdit
                 InsertKind.AfterLast => "," + newline + "    " + entry,
                 InsertKind.IntoEmpty => newline + "    " + entry + newline + "  ",
                 InsertKind.IntoEmptyWithComments => newline + "    " + entry,
-                _ => newline + "  \"connections\": {" + newline + "    " + entry + newline + "  }" + (spot.RootHasKeys ? "," : ""),
+                _ => newline + "  \"" + section + "\": {" + newline + "    " + entry + newline + "  }" + (spot.RootHasKeys ? "," : ""),
             };
 
             Splice(path, bytes, bom + spot.Start, bom + spot.End, insert);
@@ -144,7 +152,7 @@ public static class ConnectionsFileEdit
     /// <c>connections</c> is not one, or <paramref name="name"/> is already an entry (trimmed, case-insensitive — as a
     /// catalog's <c>Find</c> would match it).
     /// </summary>
-    private static InsertSpot LocateInsert(ReadOnlySpan<byte> json, string name)
+    private static InsertSpot LocateInsert(ReadOnlySpan<byte> json, string name, string section, string noun)
     {
         var reader = new Utf8JsonReader(json, new JsonReaderOptions { CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true });
         if (!reader.Read() || reader.TokenType != JsonTokenType.StartObject)
@@ -157,7 +165,7 @@ public static class ConnectionsFileEdit
         while (reader.Read() && reader.TokenType == JsonTokenType.PropertyName)
         {
             rootHasKeys = true;
-            bool isConnections = reader.GetString()!.Equals("connections", StringComparison.OrdinalIgnoreCase);
+            bool isConnections = reader.GetString()!.Equals(section, StringComparison.OrdinalIgnoreCase);
             reader.Read();
             if (!isConnections)
             {
@@ -167,7 +175,7 @@ public static class ConnectionsFileEdit
 
             if (reader.TokenType != JsonTokenType.StartObject)
             {
-                return new InsertSpot(0, 0, default, true, SqlText.ConnectionsNotAnObject);
+                return new InsertSpot(0, 0, default, true, section == DefaultSection ? SqlText.ConnectionsNotAnObject : SqlText.SectionNotAnObject(section));
             }
 
             int open = (int)reader.TokenStartIndex;
@@ -176,7 +184,7 @@ public static class ConnectionsFileEdit
             {
                 if (string.Equals(reader.GetString()!.Trim(), name, StringComparison.OrdinalIgnoreCase))
                 {
-                    return new InsertSpot(0, 0, default, true, SqlText.ConnectionAlreadyInFile(name));
+                    return new InsertSpot(0, 0, default, true, SqlText.ConnectionAlreadyInFile(name, noun));
                 }
 
                 reader.Read();
@@ -211,7 +219,7 @@ public static class ConnectionsFileEdit
     /// The <c>password</c> string token of <c>connections.&lt;name&gt;</c> in <paramref name="json"/>, or where one goes.
     /// Keys match as the deserializer matches them (case-insensitive); the name matches trimmed, ordinally.
     /// </summary>
-    private static PasswordSpot? Locate(ReadOnlySpan<byte> json, string name)
+    private static PasswordSpot? Locate(ReadOnlySpan<byte> json, string name, string section)
     {
         var reader = new Utf8JsonReader(json, new JsonReaderOptions { CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true });
         bool inConnections = false;
@@ -223,7 +231,7 @@ public static class ConnectionsFileEdit
             switch (reader.TokenType)
             {
                 case JsonTokenType.PropertyName when reader.CurrentDepth == 1:
-                    inConnections = reader.GetString()!.Equals("connections", StringComparison.OrdinalIgnoreCase);
+                    inConnections = reader.GetString()!.Equals(section, StringComparison.OrdinalIgnoreCase);
                     break;
                 case JsonTokenType.PropertyName when reader.CurrentDepth == 2 && inConnections:
                     inTarget = string.Equals(reader.GetString()!.Trim(), name, StringComparison.Ordinal);

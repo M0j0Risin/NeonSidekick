@@ -25,6 +25,7 @@ using NeonSidekick.Skills;
 using NeonSidekick.Speech;
 using NeonSidekick.Timers;
 using NeonSidekick.UI;
+using NeonSidekick.Unc;
 using NeonSidekick.Viewer;
 using NeonSidekick.Web;
 using Spectre.Console;
@@ -551,6 +552,8 @@ internal sealed partial class ChatScreen
     private readonly IReadOnlyList<AIFunction> _oracleTools;
     private readonly MySqlAccess _mysql;
     private readonly IReadOnlyList<AIFunction> _mysqlTools;
+    private readonly UncAccess _unc;
+    private readonly IReadOnlyList<AIFunction> _uncTools;
     private readonly ComfyStudio _comfy;
     private readonly IReadOnlyList<AIFunction> _comfyTools;
 
@@ -951,6 +954,9 @@ internal sealed partial class ChatScreen
         _oracleTools = OracleTools(_oracle, _effective);
         _mysql = new MySqlAccess(() => MySqlConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory).Offered(_effective().MySqlConnectionsOffered));
         _mysqlTools = MySqlTools(_mysql, _effective);
+        // The UNC tools (2026-09-30): the profile's unc.json over the home's, read at every call, narrowed to the shares the profile offers.
+        _unc = new UncAccess(() => UncConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory).Offered(_effective().UncSharesOffered), time);
+        _uncTools = UncTools(_unc, _files, _effective);
         // The image tools (2026-09-24): the profile's comfy folder over the home's, rescanned at every call; the client made for the ComfyUI URL in force.
         // A pasted picture as generate_image's input (later still on 2026-09-24): the line's store at full size, read at
         // call time — the input line is built below, so the lambda reads the field then, not now.
@@ -1338,6 +1344,27 @@ internal sealed partial class ChatScreen
         _transcript.Notice(Perf.PerfText.BarNotice(next.Items is null ? PerfBarMode.OffWord : next.Look));
     }
 
+    /// <summary>
+    /// <c>/tb</c> (later on 2026-09-30, the user's ask; Ctrl+Alt+B): the toolbar hidden or shown again, saved as the
+    /// <c>Show toolbar</c> checklist is (<see cref="ToolbarItems.Toggle"/>), so the row goes or comes back at the next draw.
+    /// </summary>
+    private void HandleToolbar(string args)
+    {
+        var saved = _settings.Current;
+        if (ToolbarItems.Toggle(args, saved.ToolbarItems, saved.ToolbarLastItems) is not { } next)
+        {
+            _transcript.Error(ToolbarItems.UsageError);
+            return;
+        }
+
+        _settings.Update(d =>
+        {
+            d.ToolbarItems = next.Items;
+            d.ToolbarLastItems = next.LastItems;
+        });
+        _transcript.Notice(ToolbarItems.Notice(ToolbarItems.Resolve(next.Items).Count > 0));
+    }
+
     private ScreenPane.ToolbarParts? ToolbarParts()
     {
         var shown = _effective();
@@ -1578,6 +1605,8 @@ internal sealed partial class ChatScreen
     /// Ctrl+Enter after Enter (2026-09-22): a line break in the draft (<see cref="Keys.IsLineBreak"/>).
     /// Ctrl+O after Ctrl+End (later that day): the tool runs unfolded or folded (<see cref="Keys.IsToolToggle"/>).
     /// Alt+V moved up ahead of Ctrl+Home on 2026-09-27 (the user's order; it sat after Ctrl+O until then).
+    /// The Ctrl+Alt rows are one block sorted by the letter (later on 2026-09-30, the user's ask, when B, D, E, G, K, L, M, O,
+    /// P, T and Y joined C, N and S: <see cref="Keys.ShortcutLine"/>).
     /// </summary>
     public static (string Key, string Meaning)[] KeyRows(bool voiceOn, ConsoleKey pushToTalk, bool wakeReady, string wakePhrase)
     {
@@ -1609,9 +1638,20 @@ internal sealed partial class ChatScreen
         rows.Add(("Ctrl+A", "select all text on the line"));
         rows.Add(("Ctrl+X", "cut the selected text"));
         rows.Add(("Ctrl+C", "copy the selected text · stop the speech · cancel the reply · twice to exit"));
+        rows.Add(("Ctrl+Alt+B", "show or hide the toolbar (/tb)"));
         rows.Add(("Ctrl+Alt+C", "start a new conversation and clear the screen (/clear)"));
+        rows.Add(("Ctrl+Alt+D", "open the MCP pane (/mcp)"));
+        rows.Add(("Ctrl+Alt+E", "show or hide the performance bar (/perf)"));
+        rows.Add(("Ctrl+Alt+G", "open the usage pane (/usage)"));
+        rows.Add(("Ctrl+Alt+K", "open the skills pane (/skills)"));
+        rows.Add(("Ctrl+Alt+L", "open the allowed commands list (/cmdlist)"));
+        rows.Add(("Ctrl+Alt+M", "open the memory pane (/memory)"));
         rows.Add(("Ctrl+Alt+N", "start a new conversation but do not clear the screen (/new)"));
+        rows.Add(("Ctrl+Alt+O", "open the shell police setting (/police)"));
+        rows.Add(("Ctrl+Alt+P", "open the profile pane (/profile)"));
         rows.Add(("Ctrl+Alt+S", "start a new conversation and show the splash screen (/splash)"));
+        rows.Add(("Ctrl+Alt+T", "open the tools pane (/tools)"));
+        rows.Add(("Ctrl+Alt+Y", "open the system prompt pane (/sys)"));
         return rows.ToArray();
     }
 
@@ -2727,6 +2767,8 @@ internal sealed partial class ChatScreen
     {
         var effective = _effective();
         var disabled = TurnDisabled(effective);
+        bool filesOffered = effective.FileTools && Without(FileToolsFor(_fileTools, effective.FileSafeEdits), disabled).Count > 0;
+        var unc = Without(UncToolsFor(_uncTools, effective, _unc.Catalog(), filesOffered), disabled);
         return new SystemPromptFacts(
             _persona.Read(),
             _operata.Read(),
@@ -2767,7 +2809,11 @@ internal sealed partial class ChatScreen
             OracleOffered(effective, _oracle),
             Without(_oracleTools, disabled).Count,
             MySqlOffered(effective, _mysql),
-            Without(_mysqlTools, disabled).Count);
+            Without(_mysqlTools, disabled).Count,
+            UncOffered(effective, _unc),
+            unc.Count,
+            unc.Any(t => t is UncFetchTool),
+            unc.Any(t => UncWriteToolNames.Contains(t.Name)));
     }
 
     /// <summary>
@@ -2814,7 +2860,7 @@ internal sealed partial class ChatScreen
         var disabled = ToolsText.DisabledSet(effective.ToolsDisabled);
         var fileTools = FileToolsFor(_fileTools, effective.FileSafeEdits);   // restore only with File safe edits on (later still on 2026-09-20)
         bool files = effective.FileTools && Without(fileTools, disabled).Count > 0;
-        var groups = SystemPromptSummary.ToolGroups(_clockTools, _timerTools, fileTools, _memoryTools, effective.Memory, effective.LlmOfferTools, WebToolsFor(_webTools, files), effective.WebTools, effective.FileTools, _askTools, effective.AskUser, _pane.Enabled, _skillTools, effective.AgentSkills, _sessionTools, effective.SessionTool, disabled, skillInstalled: Catalog(effective).Count > 0, mcp: _mcp.ServerTools, mcpEnabled: effective.McpServers, git: _gitTools, gitEnabled: effective.GitLibTools, shell: _shellTools, shellEnabled: ShellOffered(effective), codeAvailable: CodeAvailable(), obsidian: ObsidianToolsFor(_vaultTools, effective), obsidianEnabled: ObsidianOffered(effective), sql: _sqlTools, sqlEnabled: SqlOffered(effective, _sql), comfy: _comfyTools, comfyEnabled: ComfyOffered(effective, _comfy), advisor: _advisorTools, advisorEnabled: effective.ClaudeAdvisor, homeAssistant: _haTools, homeAssistantEnabled: HomeAssistantOffered(effective), print: _printTools, printEnabled: PrintOffered(effective), oracle: _oracleTools, oracleEnabled: OracleOffered(effective, _oracle), mysql: _mysqlTools, mysqlEnabled: MySqlOffered(effective, _mysql));
+        var groups = SystemPromptSummary.ToolGroups(_clockTools, _timerTools, fileTools, _memoryTools, effective.Memory, effective.LlmOfferTools, WebToolsFor(_webTools, files), effective.WebTools, effective.FileTools, _askTools, effective.AskUser, _pane.Enabled, _skillTools, effective.AgentSkills, _sessionTools, effective.SessionTool, disabled, skillInstalled: Catalog(effective).Count > 0, mcp: _mcp.ServerTools, mcpEnabled: effective.McpServers, git: _gitTools, gitEnabled: effective.GitLibTools, shell: _shellTools, shellEnabled: ShellOffered(effective), codeAvailable: CodeAvailable(), obsidian: ObsidianToolsFor(_vaultTools, effective), obsidianEnabled: ObsidianOffered(effective), sql: _sqlTools, sqlEnabled: SqlOffered(effective, _sql), comfy: _comfyTools, comfyEnabled: ComfyOffered(effective, _comfy), advisor: _advisorTools, advisorEnabled: effective.ClaudeAdvisor, homeAssistant: _haTools, homeAssistantEnabled: HomeAssistantOffered(effective), print: _printTools, printEnabled: PrintOffered(effective), oracle: _oracleTools, oracleEnabled: OracleOffered(effective, _oracle), mysql: _mysqlTools, mysqlEnabled: MySqlOffered(effective, _mysql), unc: UncToolsFor(_uncTools, effective, _unc.Catalog(), files), uncEnabled: UncOffered(effective, _unc));
         return groups.SelectMany(g => g.Tools.Where(t => g.Offers(t.Name)).Select(t => new CompletionItem(t.Name, t.Description))).ToList();
     }
 
@@ -2836,7 +2882,15 @@ internal sealed partial class ChatScreen
         IReadOnlyList<CompletionItem> sql = effective.SqlPercentMention && effective.SqlTools ? SqlChoices(_sql.Catalog()) : [];
         IReadOnlyList<CompletionItem> oracle = effective.OraclePercentMention && effective.OracleTools ? OracleChoices(_oracle.Catalog()) : [];
         IReadOnlyList<CompletionItem> mysql = effective.MySqlPercentMention && effective.MySqlTools ? MySqlChoices(_mysql.Catalog()) : [];
-        return oracle.Count == 0 && mysql.Count == 0 ? sql : [.. sql, .. oracle, .. mysql];
+        IReadOnlyList<CompletionItem> unc = effective.UncPercentMention && effective.UncTools ? UncChoices(_unc.Catalog()) : [];
+        return oracle.Count == 0 && mysql.Count == 0 && unc.Count == 0 ? sql : [.. sql, .. oracle, .. mysql, .. unc];
+    }
+
+    /// <summary>The UNC shares as mention items (2026-09-30): each name with <see cref="UncText.MentionNote"/> (<c>UNC ·</c> first, so a name a database list has too reads apart), in the catalog's order. Pure.</summary>
+    public static IReadOnlyList<CompletionItem> UncChoices(UncCatalog catalog)
+    {
+        ArgumentNullException.ThrowIfNull(catalog);
+        return catalog.Shares.Select(s => new CompletionItem(s.Name, UncText.MentionNote(s))).ToList();
     }
 
     /// <summary>The MySQL connections as mention items (2026-09-30): each name with <see cref="MySqlText.MentionNote"/> (<c>MySQL ·</c> first), in the catalog's order. Pure.</summary>
@@ -3209,6 +3263,9 @@ internal sealed partial class ChatScreen
 
             case SlashCommand.Perf:
                 return MentionCompleter.Matches(PerfBarMode.Words.Select(name => new CompletionItem(name, PerfBarMode.Describe(name))).ToList(), argText);
+
+            case SlashCommand.Tb:
+                return MentionCompleter.Matches(ToolbarItems.Words.Select(word => new CompletionItem(word, ToolbarItems.DescribeWord(word))).ToList(), argText);
 
             case SlashCommand.Profile:
             {
@@ -3612,7 +3669,7 @@ internal sealed partial class ChatScreen
         var disabled = TurnDisabled(effective);
         var fileTools = FileToolsFor(_fileTools, effective.FileSafeEdits);   // restore only with File safe edits on (later still on 2026-09-20): /sys shows the list cut, Files (14)
         bool files = effective.FileTools && Without(fileTools, disabled).Count > 0;   // the turn's rule (PrepareTurn): an emptied file group is the switch off
-        return WithPlanGroup(SystemPromptSummary.OfferedOnly(SystemPromptSummary.ToolGroups(_clockTools, _timerTools, fileTools, _memoryTools, effective.Memory, effective.LlmOfferTools, WebToolsFor(_webTools, files), effective.WebTools, effective.FileTools, _askTools, effective.AskUser, _pane.Enabled, _skillTools, effective.AgentSkills, _sessionTools, effective.SessionTool, disabled, mcp: _mcp.ServerTools, mcpEnabled: effective.McpServers, git: _gitTools, gitEnabled: effective.GitLibTools, shell: _shellTools, shellEnabled: ShellOffered(effective), codeAvailable: CodeAvailable(), obsidian: ObsidianOffered(effective) ? ObsidianToolsFor(_vaultTools, effective) : null, sql: SqlOffered(effective, _sql) ? _sqlTools : null, comfy: ComfyOffered(effective, _comfy) ? _comfyTools : null, advisor: _advisorTools, advisorEnabled: effective.ClaudeAdvisor, homeAssistant: HomeAssistantOffered(effective) ? _haTools : null, oracle: OracleOffered(effective, _oracle) ? _oracleTools : null, mysql: MySqlOffered(effective, _mysql) ? _mysqlTools : null)));   // the vault group only with a vault (2026-09-22): /sys stays as it was for a profile that never names one
+        return WithPlanGroup(SystemPromptSummary.OfferedOnly(SystemPromptSummary.ToolGroups(_clockTools, _timerTools, fileTools, _memoryTools, effective.Memory, effective.LlmOfferTools, WebToolsFor(_webTools, files), effective.WebTools, effective.FileTools, _askTools, effective.AskUser, _pane.Enabled, _skillTools, effective.AgentSkills, _sessionTools, effective.SessionTool, disabled, mcp: _mcp.ServerTools, mcpEnabled: effective.McpServers, git: _gitTools, gitEnabled: effective.GitLibTools, shell: _shellTools, shellEnabled: ShellOffered(effective), codeAvailable: CodeAvailable(), obsidian: ObsidianOffered(effective) ? ObsidianToolsFor(_vaultTools, effective) : null, sql: SqlOffered(effective, _sql) ? _sqlTools : null, comfy: ComfyOffered(effective, _comfy) ? _comfyTools : null, advisor: _advisorTools, advisorEnabled: effective.ClaudeAdvisor, homeAssistant: HomeAssistantOffered(effective) ? _haTools : null, oracle: OracleOffered(effective, _oracle) ? _oracleTools : null, mysql: MySqlOffered(effective, _mysql) ? _mysqlTools : null, unc: UncOffered(effective, _unc) ? UncToolsFor(_uncTools, effective, _unc.Catalog(), files) : null)));   // the vault group only with a vault (2026-09-22): /sys stays as it was for a profile that never names one
     }
 
     /// <summary>Whether <c>execute_code</c> has a language to run (2026-09-21): the setting's languages, one of them installed.</summary>
@@ -3640,7 +3697,7 @@ internal sealed partial class ChatScreen
         var disabled = ToolsText.DisabledSet(effective.ToolsDisabled);
         // The whole file list, restore noted under File safe edits off (later still on 2026-09-20): the row stays, dim, with its reason — the download_file shape.
         _interpreters.Refresh();
-        var groups = SystemPromptSummary.ToolGroups(_clockTools, _timerTools, _fileTools, _memoryTools, effective.Memory, effective.LlmOfferTools, _webTools, effective.WebTools, effective.FileTools, _askTools, effective.AskUser, _pane.Enabled, _skillTools, effective.AgentSkills, _sessionTools, effective.SessionTool, disabled, skillInstalled: Catalog(effective).Count > 0, git: _gitTools, gitEnabled: effective.GitLibTools, safeEdits: effective.FileSafeEdits, shell: _shellTools, shellEnabled: ShellOffered(effective), codeAvailable: CodeAvailable(), obsidian: ObsidianToolsFor(_vaultTools, effective), obsidianEnabled: ObsidianOffered(effective), sql: _sqlTools, sqlEnabled: SqlOffered(effective, _sql), comfy: _comfyTools, comfyEnabled: ComfyOffered(effective, _comfy), advisor: _advisorTools, advisorEnabled: effective.ClaudeAdvisor, homeAssistant: _haTools, homeAssistantEnabled: HomeAssistantOffered(effective), print: _printTools, printEnabled: PrintOffered(effective), oracle: _oracleTools, oracleEnabled: OracleOffered(effective, _oracle), mysql: _mysqlTools, mysqlEnabled: MySqlOffered(effective, _mysql));
+        var groups = SystemPromptSummary.ToolGroups(_clockTools, _timerTools, _fileTools, _memoryTools, effective.Memory, effective.LlmOfferTools, _webTools, effective.WebTools, effective.FileTools, _askTools, effective.AskUser, _pane.Enabled, _skillTools, effective.AgentSkills, _sessionTools, effective.SessionTool, disabled, skillInstalled: Catalog(effective).Count > 0, git: _gitTools, gitEnabled: effective.GitLibTools, safeEdits: effective.FileSafeEdits, shell: _shellTools, shellEnabled: ShellOffered(effective), codeAvailable: CodeAvailable(), obsidian: ObsidianToolsFor(_vaultTools, effective), obsidianEnabled: ObsidianOffered(effective), sql: _sqlTools, sqlEnabled: SqlOffered(effective, _sql), comfy: _comfyTools, comfyEnabled: ComfyOffered(effective, _comfy), advisor: _advisorTools, advisorEnabled: effective.ClaudeAdvisor, homeAssistant: _haTools, homeAssistantEnabled: HomeAssistantOffered(effective), print: _printTools, printEnabled: PrintOffered(effective), oracle: _oracleTools, oracleEnabled: OracleOffered(effective, _oracle), mysql: _mysqlTools, mysqlEnabled: MySqlOffered(effective, _mysql), unc: UncToolsFor(_uncTools, effective, _unc.Catalog(), effective.FileTools), uncEnabled: UncOffered(effective, _unc));
         return new ToolsFacts(groups, effective.LlmOfferTools, disabled);
     }
 
@@ -4077,6 +4134,66 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>
+    /// The UNC tools (2026-09-30), every one: the reads (<c>unc_shares</c>, <c>unc_search</c>, <c>unc_info</c>, <c>unc_read</c>),
+    /// <c>unc_fetch</c> into <paramref name="sandbox"/>, and the changes. What a turn offers of them is <see cref="UncToolsFor"/>'s
+    /// (headless too).
+    /// </summary>
+    public static IReadOnlyList<AIFunction> UncTools(UncAccess unc, WorkingDirectory sandbox, Func<AppSettingsData> effective) => new AIFunction[]
+    {
+        new UncSharesTool(unc, effective),
+        new UncSearchTool(unc, effective),
+        new UncInfoTool(unc, effective),
+        new UncReadTool(unc, effective),
+        new UncFetchTool(unc, sandbox, effective),
+        new UncWriteTool(unc, effective),
+        new UncPatchTool(unc, effective),
+        new UncCreateDirectoryTool(unc, effective),
+        new UncMoveTool(unc, effective),
+        new UncCopyTool(unc, effective),
+        new UncDeleteTool(unc, effective),
+        new UncPutTool(unc, sandbox, effective),
+    };
+
+    /// <summary>The UNC tools that change a share (2026-09-30): offered only under <c>UNC writes</c> with a <c>readwrite</c> share (<see cref="UncToolsFor"/>).</summary>
+    public static readonly IReadOnlySet<string> UncWriteToolNames = new HashSet<string>(StringComparer.Ordinal)
+    {
+        UncWriteTool.ToolName,
+        UncPatchTool.ToolName,
+        UncCreateDirectoryTool.ToolName,
+        UncMoveTool.ToolName,
+        UncCopyTool.ToolName,
+        UncDeleteTool.ToolName,
+        UncPutTool.ToolName,
+    };
+
+    /// <summary>
+    /// What a turn may offer of the UNC tools (2026-09-30): the reads always; <c>unc_fetch</c> and <c>unc_put</c> only with the File
+    /// tools offered (<paramref name="files"/>: each has the working directory at its other end); the changes (<see cref="UncWriteToolNames"/>)
+    /// only while <c>UNC writes</c> is on and an offered share is <c>readwrite</c> — the user's two keys, checked again at every call. Pure.
+    /// </summary>
+    public static IReadOnlyList<AIFunction> UncToolsFor(IReadOnlyList<AIFunction> tools, AppSettingsData effective, UncCatalog catalog, bool files)
+    {
+        ArgumentNullException.ThrowIfNull(tools);
+        ArgumentNullException.ThrowIfNull(effective);
+        ArgumentNullException.ThrowIfNull(catalog);
+        bool writes = effective.UncWrites && catalog.Shares.Any(s => s.Config.IsReadWrite);
+        return tools.Where(t => t switch
+        {
+            UncFetchTool => files,
+            UncPutTool => files && writes,
+            _ => writes || !UncWriteToolNames.Contains(t.Name),
+        }).ToList();
+    }
+
+    /// <summary>Whether the UNC group is offered (2026-09-30): the setting <c>UNC tools</c> on and at least one usable share in <c>unc.json</c>.</summary>
+    public static bool UncOffered(AppSettingsData effective, UncAccess unc)
+    {
+        ArgumentNullException.ThrowIfNull(effective);
+        ArgumentNullException.ThrowIfNull(unc);
+        return effective.UncTools && unc.Catalog().Shares.Count > 0;
+    }
+
+    /// <summary>
     /// <c>/imagine</c>'s argument list (later on 2026-09-24): every installed workflow — <c>/imagine</c> may name any —
     /// with what it is, the ones the model is not offered noted (<see cref="ComfyText.CompletionNote"/>).
     /// </summary>
@@ -4226,6 +4343,18 @@ internal sealed partial class ChatScreen
         RunCommandTool.ToolName,
         ProcessTool.ToolName,
         ExecuteCodeTool.ToolName,
+        UncSharesTool.ToolName,
+        UncSearchTool.ToolName,
+        UncInfoTool.ToolName,
+        UncReadTool.ToolName,
+        UncFetchTool.ToolName,
+        UncWriteTool.ToolName,
+        UncPatchTool.ToolName,
+        UncCreateDirectoryTool.ToolName,
+        UncMoveTool.ToolName,
+        UncCopyTool.ToolName,
+        UncDeleteTool.ToolName,
+        UncPutTool.ToolName,
     };
 
     /// <summary>
@@ -4279,7 +4408,7 @@ internal sealed partial class ChatScreen
     /// (the setting <c>Shell prefer native tools</c>), the rules gain <see cref="Assistant.ShellNativeRule"/> after the shell sentence. <paramref name="sampling"/>
     /// (2026-09-28, the setting <c>LLM sampling</c>, resolved for the connected model) replaces the assistant's when given. Shared with headless.
     /// </summary>
-    public static void PrepareTurn(Assistant assistant, MemoryStore memory, IReadOnlyList<AIFunction> memoryTools, IReadOnlyList<AIFunction> standingTools, PersonaFile persona, OperataFile operata, VocaliaFile vocalia, bool memoryEnabled, bool speechOutput, int maxToolIterations = Assistant.DefaultMaxToolIterations, bool toolsEnabled = true, IReadOnlyList<AIFunction>? webTools = null, bool webEnabled = false, Assistant.TurnContextGuard? contextGuard = null, IReadOnlyList<AIFunction>? fileTools = null, bool filesEnabled = false, IReadOnlyList<AIFunction>? askTools = null, SkillsForTurn? skills = null, bool markdown = false, IReadOnlyList<AIFunction>? sessionTools = null, bool sessionsEnabled = false, IReadOnlySet<string>? disabledTools = null, IReadOnlyList<AIFunction>? mcpTools = null, bool mcpEnabled = false, bool safeEdits = true, IReadOnlyList<AIFunction>? gitTools = null, bool gitEnabled = false, IReadOnlyList<AIFunction>? shellTools = null, bool shellEnabled = false, ProcessRegistry? processes = null, bool shellBridge = false, bool shellPolice = true, IReadOnlyList<AIFunction>? obsidianTools = null, bool obsidianEnabled = false, IReadOnlyList<AIFunction>? sqlTools = null, bool sqlEnabled = false, IReadOnlyList<AIFunction>? comfyTools = null, bool comfyEnabled = false, bool shellNative = false, PlanTurn? plan = null, IReadOnlyList<AIFunction>? advisorTools = null, bool advisorEnabled = false, bool preserveThinking = false, LlmSampling? sampling = null, IReadOnlyList<AIFunction>? homeTools = null, bool homeEnabled = false, IReadOnlyList<AIFunction>? printTools = null, bool printEnabled = false, IReadOnlyList<AIFunction>? oracleTools = null, bool oracleEnabled = false, IReadOnlyList<AIFunction>? mysqlTools = null, bool mysqlEnabled = false)
+    public static void PrepareTurn(Assistant assistant, MemoryStore memory, IReadOnlyList<AIFunction> memoryTools, IReadOnlyList<AIFunction> standingTools, PersonaFile persona, OperataFile operata, VocaliaFile vocalia, bool memoryEnabled, bool speechOutput, int maxToolIterations = Assistant.DefaultMaxToolIterations, bool toolsEnabled = true, IReadOnlyList<AIFunction>? webTools = null, bool webEnabled = false, Assistant.TurnContextGuard? contextGuard = null, IReadOnlyList<AIFunction>? fileTools = null, bool filesEnabled = false, IReadOnlyList<AIFunction>? askTools = null, SkillsForTurn? skills = null, bool markdown = false, IReadOnlyList<AIFunction>? sessionTools = null, bool sessionsEnabled = false, IReadOnlySet<string>? disabledTools = null, IReadOnlyList<AIFunction>? mcpTools = null, bool mcpEnabled = false, bool safeEdits = true, IReadOnlyList<AIFunction>? gitTools = null, bool gitEnabled = false, IReadOnlyList<AIFunction>? shellTools = null, bool shellEnabled = false, ProcessRegistry? processes = null, bool shellBridge = false, bool shellPolice = true, IReadOnlyList<AIFunction>? obsidianTools = null, bool obsidianEnabled = false, IReadOnlyList<AIFunction>? sqlTools = null, bool sqlEnabled = false, IReadOnlyList<AIFunction>? comfyTools = null, bool comfyEnabled = false, bool shellNative = false, PlanTurn? plan = null, IReadOnlyList<AIFunction>? advisorTools = null, bool advisorEnabled = false, bool preserveThinking = false, LlmSampling? sampling = null, IReadOnlyList<AIFunction>? homeTools = null, bool homeEnabled = false, IReadOnlyList<AIFunction>? printTools = null, bool printEnabled = false, IReadOnlyList<AIFunction>? oracleTools = null, bool oracleEnabled = false, IReadOnlyList<AIFunction>? mysqlTools = null, bool mysqlEnabled = false, IReadOnlyList<AIFunction>? uncTools = null, bool uncEnabled = false)
     {
         ArgumentNullException.ThrowIfNull(assistant);
         ArgumentNullException.ThrowIfNull(memory);
@@ -4320,7 +4449,7 @@ internal sealed partial class ChatScreen
         {
             // Plan mode (2026-09-26): every tool it does not allow joins the /tools list for this turn, so a group
             // loses them as it loses a tool switched off, and a group left empty takes its rule with it.
-            disabledTools = PlanTools.Widen(disabledTools, standingTools, fileTools, webTools, gitTools, shellTools, obsidianTools, sqlTools, oracleTools, mysqlTools, comfyTools, memoryTools, skillTools, sessionTools, askTools, mcpTools, advisorTools, homeTools, printTools);
+            disabledTools = PlanTools.Widen(disabledTools, standingTools, fileTools, webTools, gitTools, shellTools, obsidianTools, sqlTools, oracleTools, mysqlTools, uncTools, comfyTools, memoryTools, skillTools, sessionTools, askTools, mcpTools, advisorTools, homeTools, printTools);
         }
 
         if (disabledTools is { Count: > 0 })
@@ -4335,6 +4464,7 @@ internal sealed partial class ChatScreen
             sqlTools = sqlTools is null ? null : Without(sqlTools, disabledTools);
             oracleTools = oracleTools is null ? null : Without(oracleTools, disabledTools);
             mysqlTools = mysqlTools is null ? null : Without(mysqlTools, disabledTools);
+            uncTools = uncTools is null ? null : Without(uncTools, disabledTools);
             comfyTools = comfyTools is null ? null : Without(comfyTools, disabledTools);
             homeTools = homeTools is null ? null : Without(homeTools, disabledTools);
             printTools = printTools is null ? null : Without(printTools, disabledTools);
@@ -4382,6 +4512,13 @@ internal sealed partial class ChatScreen
         // The MySQL tools after the Oracle tools (2026-09-30): the setting MySQL tools and a connection in mysql.json are the group's switch.
         bool mysql = mysqlEnabled && mysqlTools is { Count: > 0 };
         offered = mysql ? [.. offered, .. mysqlTools!] : offered;
+        // The UNC tools after the MySQL tools (2026-09-30): the setting UNC tools and a share in unc.json are the group's switch;
+        // unc_fetch and unc_put have the working directory at their other end, so they ride only with the file tools offered.
+        uncTools = uncTools is null || files ? uncTools : uncTools.Where(t => t is not (UncFetchTool or UncPutTool)).ToList();
+        bool unc = uncEnabled && uncTools is { Count: > 0 };
+        offered = unc ? [.. offered, .. uncTools!] : offered;
+        bool uncFetch = unc && uncTools!.Any(t => t is UncFetchTool);
+        bool uncWrite = unc && uncTools!.Any(t => UncWriteToolNames.Contains(t.Name));
         // The image tools after the SQL tools (2026-09-24): ComfyUI tools, a URL and a workflow are the group's switch; no rule — the description carries the workflows and the prompt styles.
         bool comfy = comfyEnabled && comfyTools is { Count: > 0 };
         offered = comfy ? [.. offered, .. comfyTools!] : offered;
@@ -4456,7 +4593,7 @@ internal sealed partial class ChatScreen
         assistant.OpeningCalls = opening;
         // The notified exits since the last turn ride in as seeded polls (2026-09-21), on every turn, while process is offered.
         assistant.PendingCalls = processes is null ? [] : PendingProcessPolls(processes, assistant.Tools);
-        assistant.History.SystemPrompt = Assistant.SystemPrompt(speechOutput, memoryEnabled ? memory.Snapshot() : null, persona.Read(), operata.Read(), vocalia.Read(), web: web, files: files, ask: ask, project: project, skills: catalog, markdown: markdown, sessions: sessions, download: download, recall: recall is not null, delete: delete, mcp: mcp, safeEdits: safeEdits, timers: timers, git: git, shell: shell, bridge: bridge, police: police, obsidian: obsidian, obsidianDelete: obsidianDelete, sql: sql, native: native, plan: plan?.Directive, advisor: advisor, homeAssistant: home, oracle: oracle, mysql: mysql);
+        assistant.History.SystemPrompt = Assistant.SystemPrompt(speechOutput, memoryEnabled ? memory.Snapshot() : null, persona.Read(), operata.Read(), vocalia.Read(), web: web, files: files, ask: ask, project: project, skills: catalog, markdown: markdown, sessions: sessions, download: download, recall: recall is not null, delete: delete, mcp: mcp, safeEdits: safeEdits, timers: timers, git: git, shell: shell, bridge: bridge, police: police, obsidian: obsidian, obsidianDelete: obsidianDelete, sql: sql, native: native, plan: plan?.Directive, advisor: advisor, homeAssistant: home, oracle: oracle, mysql: mysql, unc: unc, uncFetch: uncFetch, uncWrite: uncWrite);
     }
 
     /// <summary>
@@ -7507,8 +7644,8 @@ internal sealed partial class ChatScreen
 
                         break;
                     case InputResult.Shortcut shortcut:
-                        // A command chord (2026-09-30, the user's ask: Ctrl+Alt+C, N or S): /clear, /new or /splash through the
-                        // dispatch as the typed line — without the transcript row or the history, the draft back after.
+                        // A command chord (2026-09-30, the user's ask: Ctrl+Alt+C, N or S, and the pane chords later that day,
+                        // Keys.ShortcutLine): its bare command through the dispatch as the typed line — without the transcript row or the history, the draft back after.
                         _timers.Acknowledge();
                         DisarmExit();
                         await _speech.StopAsync().ConfigureAwait(false);
@@ -9456,6 +9593,10 @@ internal sealed partial class ChatScreen
 
             case SlashCommand.Perf:
                 HandlePerf(args);
+                return false;
+
+            case SlashCommand.Tb:
+                HandleToolbar(args);
                 return false;
 
             case SlashCommand.Expand or SlashCommand.Collapse:
@@ -12024,7 +12165,7 @@ internal sealed partial class ChatScreen
         if (bot is null)
         {
             _interpreters.Refresh();
-            PrepareTurn(assistant, _memory, _memoryTools, [.. _clockTools, .. _timerTools], _persona, _operata, _vocalia, effective.Memory, speaker is not null, effective.LlmMaxToolIterations, effective.LlmOfferTools, _webTools, effective.WebTools, ContextGuardFor(effective, _session.ContextLength), _fileTools, effective.FileTools, _pane.Enabled && effective.AskUser ? _askTools : null, SkillsFor(effective), markdown, _sessionTools, effective.SessionTool, ToolsText.DisabledSet(effective.ToolsDisabled), _mcp.Tools, effective.McpServers, effective.FileSafeEdits, _gitTools, effective.GitLibTools, _shellTools, ShellOffered(effective), _processes, effective.ShellToolBridge, effective.ShellPoliceOutsidePaths, ObsidianToolsFor(_vaultTools, effective), ObsidianOffered(effective), _sqlTools, SqlOffered(effective, _sql), _comfyTools, ComfyOffered(effective, _comfy), effective.ShellPreferNative, _plan.Turn(_presentPlan), _advisorTools, effective.ClaudeAdvisor, effective.LlmPreserveThinking, LlmSampling.Resolve(effective, _session.Endpoint?.ModelId), _haTools, HomeAssistantOffered(effective), _printTools, PrintOffered(effective), _oracleTools, OracleOffered(effective, _oracle), _mysqlTools, MySqlOffered(effective, _mysql));
+            PrepareTurn(assistant, _memory, _memoryTools, [.. _clockTools, .. _timerTools], _persona, _operata, _vocalia, effective.Memory, speaker is not null, effective.LlmMaxToolIterations, effective.LlmOfferTools, _webTools, effective.WebTools, ContextGuardFor(effective, _session.ContextLength), _fileTools, effective.FileTools, _pane.Enabled && effective.AskUser ? _askTools : null, SkillsFor(effective), markdown, _sessionTools, effective.SessionTool, ToolsText.DisabledSet(effective.ToolsDisabled), _mcp.Tools, effective.McpServers, effective.FileSafeEdits, _gitTools, effective.GitLibTools, _shellTools, ShellOffered(effective), _processes, effective.ShellToolBridge, effective.ShellPoliceOutsidePaths, ObsidianToolsFor(_vaultTools, effective), ObsidianOffered(effective), _sqlTools, SqlOffered(effective, _sql), _comfyTools, ComfyOffered(effective, _comfy), effective.ShellPreferNative, _plan.Turn(_presentPlan), _advisorTools, effective.ClaudeAdvisor, effective.LlmPreserveThinking, LlmSampling.Resolve(effective, _session.Endpoint?.ModelId), _haTools, HomeAssistantOffered(effective), _printTools, PrintOffered(effective), _oracleTools, OracleOffered(effective, _oracle), _mysqlTools, MySqlOffered(effective, _mysql), UncToolsFor(_uncTools, effective, _unc.Catalog(), effective.FileTools), UncOffered(effective, _unc));
 
             // The Claude CLI server (2026-09-30) keeps the conversation itself: the turn names its session, and no guard
             // measures or prunes a history the CLI does not read (it compacts its own).

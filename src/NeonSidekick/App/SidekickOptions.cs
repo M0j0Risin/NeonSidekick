@@ -64,6 +64,10 @@ public sealed record SidekickOptions(
     public const string NoPoliceFlag = "--no-police";
     public const string OracleCheckFlag = "--oracle-check";
     public const string MySqlCheckFlag = "--mysql-check";
+    public const string UncCheckFlag = "--unc-check";
+
+    /// <summary><c>--unc-check &lt;share&gt;</c> (2026-09-30): run <see cref="UncCheck"/> over that share of <c>unc.json</c> and exit 0/1 — the UNC tools' proof, reads only.</summary>
+    public string? UncCheck { get; init; }
 
     /// <summary><c>--mysql-check &lt;connection&gt;</c> (2026-09-30): run <see cref="MySqlCheck"/> over that connection of <c>mysql.json</c> and exit 0/1, <see cref="OracleCheck"/>'s twin.</summary>
     public string? MySqlCheck { get; init; }
@@ -78,7 +82,7 @@ public sealed record SidekickOptions(
 
     /// <summary>The help text. Pinned wording; tests assert on it.</summary>
     public const string Usage =
-        "Usage: NeonSidekick [--headless] [--smoke] [--audio-check] [--voice-check] [--oracle-check <connection>] [--mysql-check <connection>] [--url <url>] [--model <id>] [--cwd <path>] [--profile <name>] [--yolo] [--no-police] [--log <path>] [--version] [--help]\n" +
+        "Usage: NeonSidekick [--headless] [--smoke] [--audio-check] [--voice-check] [--oracle-check <connection>] [--mysql-check <connection>] [--unc-check <share>] [--url <url>] [--model <id>] [--cwd <path>] [--profile <name>] [--yolo] [--no-police] [--log <path>] [--version] [--help]\n" +
         "\n" +
         "  (no flags)     interactive TUI\n" +
         "  --headless     stdin/stdout REPL, no TUI (profile \"default\" unless --profile or NEONSIDEKICK_PROFILE names one)\n" +
@@ -87,6 +91,7 @@ public sealed record SidekickOptions(
         "  --voice-check  record up to 5 s from the microphone, transcribe it, exit 0/1\n" +
         "  --oracle-check <connection>  prove the Oracle tools against that connection of oracle.json (reads only), exit 0/1\n" +
         "  --mysql-check <connection>   prove the MySQL tools against that connection of mysql.json (reads only), exit 0/1\n" +
+        "  --unc-check <share>          prove the UNC tools against that share of unc.json (reads only), exit 0/1\n" +
         "  --url <url>    LLM base URL for this launch (outranks NEONSIDEKICK_LLM_URL and the saved setting)\n" +
         "  --model <id>   model id for this launch (outranks NEONSIDEKICK_LLM_MODEL and the saved setting)\n" +
         "  --cwd <path>   working directory for this launch (outranks the saved setting)\n" +
@@ -192,6 +197,17 @@ public sealed record SidekickOptions(
                 continue;
             }
 
+            if (TryValueFlag(UncCheckFlag, args, ref i, arg, lower, out var unc, out error))
+            {
+                if (error is not null)
+                {
+                    return result with { Error = error };
+                }
+
+                result = result with { UncCheck = unc };
+                continue;
+            }
+
             switch (lower)
             {
                 case "--smoke":
@@ -278,7 +294,7 @@ public sealed record SidekickOptions(
     public string? LaunchProfile(string? environmentProfile) =>
         Profile ?? environmentProfile ?? (Headless ? Profiles.DefaultName : null);
 
-    /// <summary>The mode this launch runs: <c>interactive</c>, <c>headless</c>, <c>smoke</c>, <c>audio-check</c>, <c>voice-check</c>, <c>oracle-check</c>, <c>mysql-check</c>.</summary>
+    /// <summary>The mode this launch runs: <c>interactive</c>, <c>headless</c>, <c>smoke</c>, <c>audio-check</c>, <c>voice-check</c>, <c>oracle-check</c>, <c>mysql-check</c>, <c>unc-check</c>.</summary>
     public string Mode =>
         Headless ? "headless"
         : Smoke ? "smoke"
@@ -286,10 +302,11 @@ public sealed record SidekickOptions(
         : VoiceCheck ? "voice-check"
         : OracleCheck is not null ? "oracle-check"
         : MySqlCheck is not null ? "mysql-check"
+        : UncCheck is not null ? "unc-check"
         : "interactive";
 
-    /// <summary>Whether this launch runs one of the check modes (<c>--smoke</c>, <c>--audio-check</c>, <c>--voice-check</c>, <c>--oracle-check</c>, <c>--mysql-check</c>): no screen, no input reader.</summary>
-    public bool IsCheck => Smoke || AudioCheck || VoiceCheck || OracleCheck is not null || MySqlCheck is not null;
+    /// <summary>Whether this launch runs one of the check modes (<c>--smoke</c>, <c>--audio-check</c>, <c>--voice-check</c>, <c>--oracle-check</c>, <c>--mysql-check</c>, <c>--unc-check</c>): no screen, no input reader.</summary>
+    public bool IsCheck => Smoke || AudioCheck || VoiceCheck || OracleCheck is not null || MySqlCheck is not null || UncCheck is not null;
 
     /// <summary>
     /// The value flags as typed, for the log at startup: <c>--cwd D:\x --log C:\t.log</c>; null when

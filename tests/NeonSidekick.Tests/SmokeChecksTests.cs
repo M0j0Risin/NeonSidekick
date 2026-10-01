@@ -127,6 +127,23 @@ public class SmokeChecksTests
         Assert.Contains(" answered ORA-", check.Detail);
     }
 
+    /// <summary><c>unc:impersonation</c> (later on 2026-09-30): a netonly token on every parallel worker, and the share sandbox reading a temp folder under it.</summary>
+    [Fact]
+    public void ProbeUnc_SeesTheTokenOnEveryWorker_AndTheShareSandboxReads()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;   // a netonly token is Windows'
+        }
+
+        var check = SmokeChecks.ProbeUnc();
+
+        Assert.Equal("unc:impersonation", check.Name);
+        Assert.True(check.Passed, check.Detail);
+        Assert.StartsWith("netonly token on ", check.Detail);
+        Assert.EndsWith(" worker threads; the share sandbox listed 8 and searched 8", check.Detail);
+    }
+
     /// <summary><c>mysql:driver</c> (later on 2026-09-30): the gate, a bound parameter, and MySqlConnector's connect path answering a port nobody serves.</summary>
     [Fact]
     public void ProbeMySql_ChecksTheGate_AndReachesTheManagedDriver()

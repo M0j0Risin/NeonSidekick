@@ -71,6 +71,11 @@ public class SidekickOptionsTests
         Assert.True(mysql.IsCheck);
         Assert.Equal("mysql-check", mysql.Mode);
         Assert.NotNull(SidekickOptions.Parse(new[] { "--mysql-check" }).Error);
+        var unc = SidekickOptions.Parse(new[] { "--unc-check", "eng" });   // later still on 2026-09-30
+        Assert.Equal("eng", unc.UncCheck);
+        Assert.True(unc.IsCheck);
+        Assert.Equal("unc-check", unc.Mode);
+        Assert.NotNull(SidekickOptions.Parse(new[] { "--unc-check" }).Error);
         var o = SidekickOptions.Parse(new[] { "--voice-check" });
         Assert.True(o.VoiceCheck);
         Assert.False(o.AudioCheck);
@@ -286,6 +291,8 @@ public class SidekickOptionsTests
         Assert.Contains("--voice-check  record up to 5 s from the microphone, transcribe it, exit 0/1", SidekickOptions.Usage);
         Assert.Contains("--oracle-check <connection>  prove the Oracle tools against that connection of oracle.json (reads only), exit 0/1", SidekickOptions.Usage);
         Assert.Contains("--mysql-check <connection>   prove the MySQL tools against that connection of mysql.json (reads only), exit 0/1", SidekickOptions.Usage);
+        Assert.Contains("--unc-check <share>          prove the UNC tools against that share of unc.json (reads only), exit 0/1", SidekickOptions.Usage);
+        Assert.Contains("[--unc-check <share>]", SidekickOptions.Usage);
         Assert.Contains("--url <url>", SidekickOptions.Usage);
         Assert.Contains("--model <id>", SidekickOptions.Usage);
         Assert.Contains("--cwd <path>   working directory for this launch (outranks the saved setting)", SidekickOptions.Usage);

@@ -134,6 +134,67 @@ public static class ToolbarItems
         return chosen.SequenceEqual(Defaults, StringComparer.Ordinal) ? null : chosen;
     }
 
+    /// <summary><c>/tb</c>'s words (later on 2026-09-30): <c>on</c> and <c>off</c>, the completion's list. Pinned.</summary>
+    public const string OnWord = "on";
+
+    public const string OffWord = "off";
+
+    public static readonly string[] Words = [OnWord, OffWord];
+
+    /// <summary><c>/tb</c>'s completion hint beside a word. Pinned.</summary>
+    public static string DescribeWord(string word) => word switch
+    {
+        OnWord => "show the toolbar with the items it last had",
+        OffWord => "hide the toolbar",
+        _ => "",
+    };
+
+    /// <summary><c>/tb</c>'s row on <c>/help</c>. Pinned.</summary>
+    public const string HelpSummary = "show or hide the toolbar, or /tb on|off";
+
+    /// <summary>What <c>/tb</c> says it did. Pinned.</summary>
+    public static string Notice(bool shown) => shown ? "(toolbar on)" : "(toolbar off)";
+
+    /// <summary><c>/tb</c> given something that is not on or off. Pinned.</summary>
+    public const string UsageError = "/tb takes on or off, or nothing to toggle.";
+
+    /// <summary>What <c>/tb</c> saves: the toolbar's items, and the ones a later <c>/tb</c> brings back.</summary>
+    public readonly record struct ToolbarToggle(List<string>? Items, List<string>? LastItems);
+
+    /// <summary>
+    /// What <c>/tb</c> saves, pure (later on 2026-09-30, the user's ask, <see cref="PerfBarMode.Toggle"/>'s shape): bare, the
+    /// toolbar hidden while it shows — an empty list, its items kept in <paramref name="last"/> as <see cref="Save"/> would
+    /// write them (null for <see cref="Defaults"/>) — else shown again with <paramref name="last"/> (<see cref="Defaults"/> when
+    /// it is null or names nothing); <c>on</c> and <c>off</c> say which, and leave a toolbar already that way as it is. Null for
+    /// anything else, the usage error.
+    /// </summary>
+    public static ToolbarToggle? Toggle(string args, IReadOnlyList<string>? items, IReadOnlyList<string>? last)
+    {
+        ArgumentNullException.ThrowIfNull(args);
+        var shown = Resolve(items);
+        string word = args.Trim();
+        bool? wanted = word.Length == 0 ? shown.Count == 0
+            : string.Equals(word, OnWord, StringComparison.OrdinalIgnoreCase) ? true
+            : string.Equals(word, OffWord, StringComparison.OrdinalIgnoreCase) ? false
+            : null;
+        if (wanted is not { } show)
+        {
+            return null;
+        }
+
+        if (show == shown.Count > 0)
+        {
+            return new(items?.ToList(), last?.ToList());
+        }
+
+        if (!show)
+        {
+            return new([], Save(shown));
+        }
+
+        return new(last is null || Resolve(last).Count == 0 ? null : Save(Resolve(last)), last?.ToList());
+    }
+
     /// <summary>The <c>Show toolbar</c> row's value: <c>all</c>, <c>off</c> with nothing checked, else <c>4 of 13</c>. Pinned.</summary>
     public static string Value(IReadOnlyList<string>? saved)
     {

@@ -63,6 +63,31 @@ public class KeysTests
         Assert.False(Keys.IsInterrupt(Keys.CtrlAltC));
     }
 
+    [Theory]
+    [InlineData(ConsoleKey.T, '\x14', "/tools")]
+    [InlineData(ConsoleKey.K, '\x0b', "/skills")]
+    [InlineData(ConsoleKey.P, '\x10', "/profile")]
+    [InlineData(ConsoleKey.Y, '\x19', "/sys")]
+    [InlineData(ConsoleKey.G, '\x07', "/usage")]
+    [InlineData(ConsoleKey.E, '\x05', "/perf")]
+    [InlineData(ConsoleKey.M, '\r', "/memory")]
+    [InlineData(ConsoleKey.D, '\x04', "/mcp")]
+    [InlineData(ConsoleKey.L, '\x0c', "/cmdlist")]
+    [InlineData(ConsoleKey.O, '\x0f', "/police")]
+    [InlineData(ConsoleKey.B, '\x02', "/tb")]
+    public void ShortcutLine_ThePaneChords_AreTheirBareCommands(ConsoleKey key, char control, string line)
+    {
+        // Later on 2026-09-30 (the user's ask): the test factory's '\0' and the console's control character count; Shift,
+        // Ctrl alone, Alt alone and an AltGr key that types a character are no chord.
+        Assert.Equal(line, Keys.ShortcutLine(Keys.CtrlAlt(key)));
+        Assert.Equal(line, Keys.ShortcutLine(new ConsoleKeyInfo(control, key, shift: false, alt: true, control: true)));
+        Assert.Contains(line, NeonSidekick.App.SlashCommands.Words);
+        Assert.Null(Keys.ShortcutLine(new ConsoleKeyInfo('\0', key, shift: true, alt: true, control: true)));
+        Assert.Null(Keys.ShortcutLine(new ConsoleKeyInfo(control, key, shift: false, alt: false, control: true)));
+        Assert.Null(Keys.ShortcutLine(new ConsoleKeyInfo('\0', key, shift: false, alt: true, control: false)));
+        Assert.Null(Keys.ShortcutLine(new ConsoleKeyInfo('€', key, shift: false, alt: true, control: true)));   // AltGr+E on a German layout, and its like
+    }
+
     [Fact]
     public void ToolGroupText_IsPinned()
     {

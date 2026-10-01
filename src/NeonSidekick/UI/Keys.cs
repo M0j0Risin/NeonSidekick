@@ -57,6 +57,13 @@ public static class Keys
     /// Ctrl+Alt with these letters alone, so all three moved to Ctrl+Alt. Control and Alt held, Shift not, and no character but
     /// the console's own control one for the letter (ETX, SO, DC3; a test builds <c>'\0'</c>): AltGr is Ctrl+Alt, and an AltGr
     /// key that types a character (ć, ń, ś on some layouts) stays that character. Null for every other key.
+    /// Eleven more came later on 2026-09-30 (the user's ask), each its bare command as typed: Ctrl+Alt+T <c>/tools</c>, K
+    /// <c>/skills</c>, P <c>/profile</c>, Y <c>/sys</c>, G <c>/usage</c>, E <c>/perf</c> (the performance bar shown or hidden),
+    /// M <c>/memory</c>, D <c>/mcp</c>, L <c>/cmdlist</c>, O <c>/police</c> (the Shell police page) and B <c>/tb</c> (the
+    /// toolbar shown or hidden). Under a reply each goes where its typed line would: a pane over the reply, <c>/perf</c> and
+    /// <c>/tb</c> at once, <c>/profile</c> left for the idle line. Their control characters (DC4, VT, DLE, EM, BEL, ENQ, CR,
+    /// EOT, FF, SI, STX) count as no character, as ETX does for C; an AltGr key that types one (€ on AltGr+E, ł, ó) is still
+    /// that character.
     /// </summary>
     public static string? ShortcutLine(ConsoleKeyInfo key)
     {
@@ -70,6 +77,17 @@ public static class Keys
             (ConsoleKey.C, '\0' or '\x03') => "/clear",
             (ConsoleKey.N, '\0' or '\x0e') => "/new",
             (ConsoleKey.S, '\0' or '\x13') => "/splash",
+            (ConsoleKey.T, '\0' or '\x14') => "/tools",
+            (ConsoleKey.K, '\0' or '\x0b') => "/skills",
+            (ConsoleKey.P, '\0' or '\x10') => "/profile",
+            (ConsoleKey.Y, '\0' or '\x19') => "/sys",
+            (ConsoleKey.G, '\0' or '\x07') => "/usage",
+            (ConsoleKey.E, '\0' or '\x05') => "/perf",
+            (ConsoleKey.M, '\0' or '\r') => "/memory",
+            (ConsoleKey.D, '\0' or '\x04') => "/mcp",
+            (ConsoleKey.L, '\0' or '\x0c') => "/cmdlist",
+            (ConsoleKey.O, '\0' or '\x0f') => "/police",
+            (ConsoleKey.B, '\0' or '\x02') => "/tb",
             _ => null,
         };
     }
@@ -80,6 +98,9 @@ public static class Keys
     public static ConsoleKeyInfo CtrlAltN => new('\0', ConsoleKey.N, false, true, true);
 
     public static ConsoleKeyInfo CtrlAltS => new('\0', ConsoleKey.S, false, true, true);
+
+    /// <summary>The Ctrl+Alt chord for <paramref name="key"/> as a US layout delivers it (later on 2026-09-30): no character, Control and Alt.</summary>
+    public static ConsoleKeyInfo CtrlAlt(ConsoleKey key) => new('\0', key, false, true, true);
 
     /// <summary>A plain Enter (or Shift+Enter, Alt+Enter): the key that sends a line and ends a type-ahead line; Ctrl+Enter is <see cref="IsLineBreak"/>.</summary>
     public static bool IsSend(ConsoleKeyInfo key) => key.Key == ConsoleKey.Enter && !IsLineBreak(key);

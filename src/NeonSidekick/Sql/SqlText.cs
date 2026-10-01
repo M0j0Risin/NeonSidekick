@@ -42,10 +42,13 @@ public static class SqlText
     public static string PasswordSavedToFile(string name, string path) => $"Saved the password of '{name}', encrypted, in {path}.";
     public static string PasswordSavedToCredman(string name, string target) => $"Saved the password of '{name}' to Windows Credential Manager as {target}.";
     public static string PasswordSaveFailed(string name, string detail) => $"Could not save the password of '{name}': {detail}.";
-    public static string ConnectionNotInFile(string name) => $"no connection '{name}' was found in the file to write to";
-    public static string ConnectionAlreadyInFile(string name) => $"a connection named '{name}' is already in the file";
+    public static string ConnectionNotInFile(string name, string noun = "connection") => $"no {noun} '{name}' was found in the file to write to";
+    public static string ConnectionAlreadyInFile(string name, string noun = "connection") => $"a {noun} named '{name}' is already in the file";
     public const string FileNotAnObject = "the file does not hold a JSON object";
     public const string ConnectionsNotAnObject = "\"connections\" in the file is not an object";
+
+    /// <summary><see cref="ConnectionsNotAnObject"/> for a file whose entries sit under another key (<c>unc.json</c>'s <c>shares</c>, 2026-09-30). Pinned.</summary>
+    public static string SectionNotAnObject(string section) => $"\"{section}\" in the file is not an object";
     public static string ConnectionAdded(string name, string path) => $"Added '{name}' to {path}.";
     public static string ConnectionAddFailed(string name, string detail) => $"Could not add '{name}': {detail}.";
     public const string NoPasswordConnections ="No connection in sql.json takes a password (sql or runas); add one first.";

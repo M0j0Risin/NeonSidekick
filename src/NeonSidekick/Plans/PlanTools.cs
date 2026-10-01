@@ -30,6 +30,8 @@ public static class PlanTools
         "oracle_connections", "oracle_schemas", "oracle_tables", "oracle_columns", "oracle_describe", "oracle_indexes", "oracle_relationships", "oracle_query",
         // MySQL and MariaDB: read-only by the same layers (2026-09-30)
         "mysql_connections", "mysql_databases", "mysql_tables", "mysql_columns", "mysql_describe", "mysql_indexes", "mysql_relationships", "mysql_query",
+        // UNC shares: the reads (2026-09-30); unc_fetch writes the working directory, so it is not here
+        "unc_shares", "unc_search", "unc_info", "unc_read",
         // Home Assistant: the reads (2026-09-28)
         "ha_overview", "ha_states", "ha_history",
         // printing: the list only (2026-09-28)
@@ -55,6 +57,7 @@ public static class PlanTools
         "generate_image", "set_splash_image",
         "ha_lights", "ha_scene", "ha_media", "ha_todo", "ha_call_service", "ha_assist",
         "print_file",
+        "unc_fetch", "unc_write", "unc_patch", "unc_create_directory", "unc_move", "unc_copy", "unc_delete", "unc_put",
     };
 
     /// <summary>Whether plan mode keeps <paramref name="tool"/>.</summary>

@@ -187,6 +187,14 @@ public sealed class AppSettingsData
     public List<string>? ToolbarItems { get; set; }
 
     /// <summary>
+    /// The items a bare <c>/tb</c> (or Ctrl+Alt+B, or <c>/tb on</c>) brings back after it hid the toolbar (later on 2026-09-30,
+    /// the user's ask: "same as how /perf works for the perfbar"): what showed when it hid it, as <see cref="ToolbarItems"/>
+    /// saves it; null until then, or when that was <see cref="App.ToolbarItems.Defaults"/>, which come back. No settings row,
+    /// no variable.
+    /// </summary>
+    public List<string>? ToolbarLastItems { get; set; }
+
+    /// <summary>
     /// The performance bar's meters (2026-09-30, the user's ask: <c>Show performance bar</c> a checklist like Show toolbar,
     /// none by default, in place of the one word — <c>ShowPerformanceBar</c>, off or a look, from 2026-09-29 — that was both
     /// the switch and the look; that key is retired, so a profile saved with it shows no bar until a meter is checked): the
@@ -988,9 +996,10 @@ public sealed class AppSettingsData
     /// the user's call: the trash tool opt-in, flipped on <c>/tools</c>' Offered tab) until later on 2026-09-21,
     /// when the user asked for it on out of the box; a profile saved with it off keeps it off. <c>gitlib_discard</c> left
     /// the list on 2026-09-23 (the user's call: on out of the box, as <c>delete</c> went before it); a profile saved
-    /// with it off keeps it off until it is flipped on the Offered tab.
+    /// with it off keeps it off until it is flipped on the Offered tab. <c>unc_delete</c> joined on 2026-09-30 (a delete on a share is
+    /// permanent, a folder with everything in it — opt-in like <c>gitlib_delete</c>, even under <c>UNC writes</c>).
     /// </summary>
-    public List<string> ToolsDisabled { get; set; } = [Llm.Tools.GitDeleteTool.ToolName, Llm.Tools.UnzipTool.ToolName, Llm.Tools.ZipTool.ToolName];
+    public List<string> ToolsDisabled { get; set; } = [Llm.Tools.GitDeleteTool.ToolName, Llm.Tools.UnzipTool.ToolName, Llm.Tools.ZipTool.ToolName, Llm.Tools.UncDeleteTool.ToolName];
 
     /// <summary>
     /// Whether <c>$</c> and part of a name on the chat line lists the tools the next turn offers
@@ -1342,6 +1351,36 @@ public sealed class AppSettingsData
 
     /// <summary>Seconds a MySQL tool's statement may run, on the server (<c>max_execution_time</c> / <c>max_statement_time</c>) and in the driver (2026-09-30): the SQL tools' range.</summary>
     public int MySqlQueryTimeoutSeconds { get; set; } = DefaultSqlQueryTimeoutSeconds;
+
+    // ─── UNC ────────────────────────────────────────────────────────────────────
+    // The UNC tools (2026-09-30, the user's ask: SQL's integrated auth and run-as for UNC paths, "gated access to file systems on
+    // UNC paths outside the working directory for searching files, researching files"): the named shares of unc.json (the
+    // profile's and the home's), each a \\server\share path or an outside folder, reached as the user or as another account.
+
+    /// <summary>
+    /// Whether a turn offers the UNC tools over the shares in <c>unc.json</c> (2026-09-30): <c>unc_shares</c>, <c>unc_search</c>,
+    /// <c>unc_info</c>, <c>unc_read</c> and — with the File tools on — <c>unc_fetch</c>; the changing tools only under
+    /// <see cref="UncWrites"/>. Read at each turn. Off by default. No variable.
+    /// </summary>
+    public bool UncTools { get; set; }
+
+    /// <summary>
+    /// The master key of every change on a share (2026-09-30, the user's call: "force it to be read-only by default with an option
+    /// for read-write"): off (the default), every share is read-only whatever its <c>access</c>; on, a share whose <c>access</c> is
+    /// <c>readwrite</c> gets <c>unc_write</c>, <c>unc_patch</c>, <c>unc_create_directory</c>, <c>unc_move</c>, <c>unc_copy</c>,
+    /// <c>unc_delete</c> and <c>unc_put</c>. Changes and deletes there are permanent — nothing is kept (the user's call). Both keys
+    /// are checked again at every call. Read at each turn. No variable.
+    /// </summary>
+    public bool UncWrites { get; set; }
+
+    /// <summary>The share a UNC tool uses when the call names none and gives no full path (2026-09-30), <see cref="SqlDefaultConnection"/>'s twin; empty = the first offered. No variable.</summary>
+    public string UncDefaultShare { get; set; } = "";
+
+    /// <summary>Which shares of <c>unc.json</c> this profile offers the model (2026-09-30), <see cref="SqlConnectionsOffered"/>'s twin: null = all, a list = exactly those names. No variable.</summary>
+    public List<string>? UncSharesOffered { get; set; }
+
+    /// <summary>Whether <c>%</c> and part of a name lists the UNC shares too (2026-09-30), each marked <c>UNC ·</c>; offered only while <see cref="UncTools"/> is on. No variable.</summary>
+    public bool UncPercentMention { get; set; } = true;
 
     // ─── Images (ComfyUI) ───────────────────────────────────────────────────────
     // The image tools (2026-09-24, the user's ask: "what can we do with comfyui?" — text to image, img2img, their own

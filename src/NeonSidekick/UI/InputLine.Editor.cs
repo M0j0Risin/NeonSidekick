@@ -499,7 +499,7 @@ public sealed partial class InputLine
 
             if (_o.Shortcuts && !_o.Live && Keys.ShortcutLine(k) is { } shortcut)
             {
-                // A command chord (2026-09-30, the user's ask): /clear, /new or /splash, run by the screen as typed; the draft
+                // A command chord (2026-09-30, the user's ask): /clear, /new, /splash or a pane's word, run by the screen as typed; the draft
                 // comes back after. An AltGr key that types a character was typed above and never reaches here.
                 EndRow();
                 return new EditOutcome.End(new InputResult.Shortcut(_text.ToString(), shortcut));

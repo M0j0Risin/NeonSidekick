@@ -70,36 +70,59 @@ public sealed class SearchFilesTool : FileTool
     public override JsonElement JsonSchema => Schema;
 
     /// <summary>The dispatch: a content search with <paramref name="text"/>, else one of the three listing shapes.</summary>
-    public string Describe(string text, string path, string? files, bool regex, CancellationToken cancellationToken, int context = 0, string output = ContentOutput, string order = NameOrder, int? limit = null, int? depth = null)
+    public string Describe(string text, string path, string? files, bool regex, CancellationToken cancellationToken, int context = 0, string output = ContentOutput, string order = NameOrder, int? limit = null, int? depth = null) =>
+        Run(Files, new SearchRequest(text, path, files ?? "", regex, context, output, order, limit, depth), cancellationToken).Text;
+
+    /// <summary>One <c>search_files</c> call's arguments, read and checked (<see cref="TryRead"/>).</summary>
+    public sealed record SearchRequest(string Text, string Path, string Files, bool Regex, int Context, string Output, string Order, int? Limit, int? Depth);
+
+    /// <summary>
+    /// <see cref="Describe"/>'s dispatch over any sandbox (2026-09-30: <c>unc_search</c> runs it over a share): a content search
+    /// with text, else one of the three listing shapes; <c>Budgeted</c> when a share's walk stopped at its budget
+    /// (<see cref="SearchResult.Budgeted"/>, <see cref="RecentResult.Budgeted"/>).
+    /// </summary>
+    public static (string Text, bool Budgeted) Run(WorkingDirectory sandbox, SearchRequest request, CancellationToken cancellationToken)
     {
-        string needle = (text ?? "").Trim();
+        ArgumentNullException.ThrowIfNull(sandbox);
+        ArgumentNullException.ThrowIfNull(request);
+        string needle = (request.Text ?? "").Trim();
+        string path = request.Path;
+        string files = request.Files;
+        int? limit = request.Limit;
+        int? depth = request.Depth;
         int walkDepth = depth is { } d ? Math.Max(1, d) : int.MaxValue;
         if (needle.Length > 0)
         {
-            bool countFiles = string.Equals((output ?? "").Trim(), FilesOutput, StringComparison.OrdinalIgnoreCase);
-            var result = Files.Search(needle, path, files, regex, cancellationToken, context, limit ?? WorkingDirectory.DefaultSearchLimit, walkDepth, countFiles ? SearchOutput.Files : SearchOutput.Content);
-            return countFiles ? FileText.SearchFiles(result, needle) : FileText.SearchHits(result, needle);
+            bool countFiles = string.Equals((request.Output ?? "").Trim(), FilesOutput, StringComparison.OrdinalIgnoreCase);
+            var result = sandbox.Search(needle, path, files, request.Regex, cancellationToken, request.Context, limit ?? WorkingDirectory.DefaultSearchLimit, walkDepth, countFiles ? SearchOutput.Files : SearchOutput.Content);
+            return (countFiles ? FileText.SearchFiles(result, needle) : FileText.SearchHits(result, needle), result.Budgeted);
         }
 
-        if (string.Equals((order ?? "").Trim(), ModifiedOrder, StringComparison.OrdinalIgnoreCase))
+        if (string.Equals((request.Order ?? "").Trim(), ModifiedOrder, StringComparison.OrdinalIgnoreCase))
         {
-            return FileText.Recent(Files.Recent(path, limit ?? WorkingDirectory.DefaultRecent, walkDepth));
+            var recent = sandbox.Recent(path, limit ?? WorkingDirectory.DefaultRecent, walkDepth);
+            return (FileText.Recent(recent), recent.Budgeted);
         }
 
         if (!string.IsNullOrWhiteSpace(files))
         {
-            return FileText.Found(Files.Find(files, path, limit ?? WorkingDirectory.DefaultFindLimit, walkDepth), files.Trim());
+            return (FileText.Found(sandbox.Find(files, path, limit ?? WorkingDirectory.DefaultFindLimit, walkDepth), files.Trim()), false);
         }
 
         int levels = Math.Clamp(depth ?? 1, 1, WorkingDirectory.MaxTreeDepth);
         return levels == 1
-            ? FileText.Listing(Files.List(path, limit ?? WorkingDirectory.MaxEntries))
-            : FileText.Listing(Files.FileTree(path, Math.Clamp(limit ?? WorkingDirectory.MaxEntries, 1, WorkingDirectory.MaxListLimit), levels), levels);
+            ? (FileText.Listing(sandbox.List(path, limit ?? WorkingDirectory.MaxEntries)), false)
+            : (FileText.Listing(sandbox.FileTree(path, Math.Clamp(limit ?? WorkingDirectory.MaxEntries, 1, WorkingDirectory.MaxListLimit), levels), levels), false);
     }
 
-    protected override async ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
+    /// <summary>
+    /// Reads and checks a <c>search_files</c>-shaped call (shared with <c>unc_search</c>, 2026-09-30): null with the request, else
+    /// the sentence for the first bad argument (a non-boolean regex, a non-integer count, an output or order out of range).
+    /// </summary>
+    public static string? TryRead(AIFunctionArguments arguments, out SearchRequest? request)
     {
         ArgumentNullException.ThrowIfNull(arguments);
+        request = null;
         if (!ToolArguments.TryReadBoolean(arguments, RegexArgument, out var regex, out var raw))
         {
             return FileText.BadBoolean(RegexArgument, raw);
@@ -132,10 +155,27 @@ public sealed class SearchFilesTool : FileTool
             return FileText.BadChoice(OrderArgument, order, OrderChoices);
         }
 
-        string text = ToolArguments.ReadString(arguments, TextArgument);
-        string path = ReadPath(arguments);
-        string files = ToolArguments.ReadString(arguments, FilesArgument);
+        request = new SearchRequest(
+            ToolArguments.ReadString(arguments, TextArgument),
+            ToolArguments.ReadString(arguments, PathArgument),
+            ToolArguments.ReadString(arguments, FilesArgument),
+            regex ?? false,
+            context ?? 0,
+            output,
+            order,
+            limit,
+            depth);
+        return null;
+    }
+
+    protected override async ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
+    {
+        if (TryRead(arguments, out var request) is { } refused)
+        {
+            return refused;
+        }
+
         // Off the caller's thread: the walk is synchronous and parallel, and the turn loop is the UI's.
-        return await Task.Run(() => Describe(text, path, files, regex ?? false, cancellationToken, context ?? 0, output, order, limit, depth), cancellationToken).ConfigureAwait(false);
+        return await Task.Run(() => Run(Files, request!, cancellationToken).Text, cancellationToken).ConfigureAwait(false);
     }
 }

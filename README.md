@@ -4,7 +4,7 @@
 ![Windows](https://img.shields.io/badge/Windows-0078D6?style=flat&logo=windows&logoColor=white)
 
 
-Neon Sidekick is an agentic terminal client for local LLMs. It's built on .NET 10 and draws inspiration from tools like Claude Code, Hermes Agent and Cline. It brings together many of my favorite features from those tools and adds some unique toolsets of my own. It's Windows-first and is meant as a stable base for building agentic tools. Next on the roadmap: stronger coding capabilities and official macOS and Linux support.
+Neon Sidekick is an agentic terminal client for local LLMs. It's built on .NET 10 and draws inspiration from tools like Claude Code, Hermes Agent and Cline. It brings together many of my favorite features from those tools and adds some unique ideas of my own. It's Windows-first and is meant as a stable base for building agentic tools. Next on the roadmap: stronger coding capabilities and official macOS and Linux support.
 
 <div align="center">
   <table>
@@ -21,7 +21,7 @@ Neon Sidekick is an agentic terminal client for local LLMs. It's built on .NET 1
 
 ## Why "Neon"
 
-During early development, I was experimenting with synthwave-style themes in Spectre.Console while simultaneously testing the Vosk voice integration. I needed a short, punchy wake word, and "Neon" fit the aesthetic perfectly. The name stuck for the project. Today, while the default profile is still "Neon," the system is completely configurable—allowing you to create as many custom profiles, personas, and wake words as you like.
+During early development, I was experimenting with synthwave-style themes in Spectre.Console while simultaneously testing the Vosk voice integration. I needed a short, punchy wake word, and "Neon" fit the aesthetic perfectly. The name stuck for the project. Today, the system is highly configurable—allowing you to create as many custom profiles, personas, and wake words as you like.
 
 ## Contents
 
@@ -67,6 +67,7 @@ During early development, I was experimenting with synthwave-style themes in Spe
 * **Obsidian:** Search, read, write and link notes directly in your vault's files. No plugin is needed, and Obsidian doesn't have to be running. Wikilinks, aliases, tags, properties and daily notes all work.
 * **SQL Server:** Read-only queries over named connections, plus discovery of schemas, relationships and indexes. Every query is checked to be a single `SELECT` and runs in a transaction that is always rolled back. Sign in with SQL, Windows or run-as accounts; passwords are stored encrypted (DPAPI, Windows' per-user encryption) or in Windows Credential Manager.
 * **Oracle:** The same read-only tools for Oracle databases, through Oracle's fully managed driver (no Oracle Client to install). Every query is checked to be a single `SELECT`, runs in a read-only session (23ai and later) and a read-only transaction that is always rolled back. Sign in with a database user; passwords are stored as the SQL Server ones are.
+* **UNC shares and outside folders:** Search, read and (when you allow it) change files on `\\server\share` paths and local folders outside the working directory, without mapped drives. Each share is reached as you or as another Windows account (like `runas /netonly`), its password stored as the SQL ones are. Read-only unless the share is marked read-write and *UNC writes* is on; changes there are permanent.
 * **MySQL and MariaDB:** The same read-only tools again, through MySqlConnector (fully managed, MIT). Every query is checked to be a single `SELECT`, runs in a hardened session and a read-only transaction that is always rolled back. Sign in with a database user; passwords are stored as the others are.
 * **Home Assistant:** Control lights, scenes, the TV, to-do lists and sensors through your own Home Assistant. The model finds devices by room or name ("dim the den to 30%"), and anything outside a safe list waits for your yes. `/ha` drives the house directly, without the model.
 * **ComfyUI:** Pictures from your own ComfyUI workflows (text-to-image, image-to-image, face swaps). The model writes prompts in each model family's style, or `/imagine` sends yours exactly as typed. A wizard builds or imports workflows.
@@ -125,6 +126,7 @@ Speech output (`/tts`) and voice input (`/stt`) start off. The first time you tu
 | `--voice-check` | Records up to 5 seconds from the microphone and transcribes it, then exits. |
 | `--oracle-check <connection>` | Proves the Oracle tools against that connection of `oracle.json` (types, the read-only layers, cancel and timeout; it only reads), then exits. |
 | `--mysql-check <connection>` | The same for the MySQL tools and a connection of `mysql.json`. |
+| `--unc-check <share>` | Proves the UNC tools against that share of `unc.json` (its reach, the runas token, a listing and a search; it only reads), then exits. |
 | `--version` / `--help` | Prints the version or the help text. |
 
 Both `--option value` and `--option=value` work.
@@ -142,6 +144,7 @@ Both `--option value` and `--option=value` work.
 * The input row is always a full editor, even while a reply streams or `/botchat` runs. It has ←/→, Home/End and Delete; Shift+arrows, Ctrl+A or a drag to select; a double-click to select a word (letters, digits and `_`; a password field selects all); Ctrl+C / Ctrl+X to copy / cut; right-click or Alt+V to paste; a click to place the cursor; ↑/↓ for history; and the `/`, `@`, `#`, `$`, `%` and `^` lists. The mention lists work inside a slash command's text too (`/loop infinite 1s append the time to @notes.txt`), except for `/speak`, `/view` and `/print`, whose own file list completes their path.
 * To attach a picture from the ComfyUI picture strip or the transcript, drag it onto the input row. It is attached as if you had dropped its file from the desktop (a picture with no file goes in as a pasted one). While you drag, the hint row reads **🖼️ drop on line**; letting go anywhere else attaches nothing. This also works while a reply is running.
 * Three shortcuts start a new conversation: Ctrl+Alt+C also clears the screen (`/clear`), Ctrl+Alt+N leaves the screen as it is (`/new`), and Ctrl+Alt+S shows the splash screen (`/splash`). At the idle line, a draft on the row stays. While a reply runs, they cancel it first, just as the typed command does. An AltGr key that types a character on your keyboard layout still types that character.
+* More Ctrl+Alt shortcuts run a command as if you had typed it on its own: Ctrl+Alt+B `/tb` (show or hide the toolbar), Ctrl+Alt+D `/mcp`, Ctrl+Alt+E `/perf` (show or hide the performance bar), Ctrl+Alt+G `/usage`, Ctrl+Alt+K `/skills`, Ctrl+Alt+L `/cmdlist`, Ctrl+Alt+M `/memory`, Ctrl+Alt+O `/police`, Ctrl+Alt+P `/profile`, Ctrl+Alt+T `/tools` and Ctrl+Alt+Y `/sys`. A draft on the row stays. While a reply runs, a pane opens over it and the reply carries on, just as the typed command does (`/profile` waits for the reply to end). The Keys tab of `/help` lists them all.
 * Pressing Enter while a reply runs queues the message. Nothing you type is lost, and a draft left on the row is still there after the reply ends.
 * ESC while a reply runs first stops the speech, then closes an open list, then cancels the reply. It never clears your draft there; ESC at the idle line does.
 * ESC twice on an empty input line opens `/rewind`. After the first press the hint row reads *ESC again to rewind the conversation* for two seconds.
@@ -151,7 +154,7 @@ Commands typed while a reply runs:
 | Behaviour | Commands |
 |---|---|
 | Open their pane over the reply | `/help`, `/settings`, `/tools`, `/mcp`, `/sys`, `/usage`, `/about`, `/memory`, `/queue`, `/sessions`, `/sessions title`, `/skills`, `/reasoning`, `/sampling`, `/cmdlist`, `/police`, `/emptytrash`, `/cmdclear`, `/tree`, `/vault`, `/cmdcopy`, `/keycopy`, `/persona`, `/operata`, `/vocalia` |
-| Run at once | `/ha`, `/tts`, `/stt`, `/wake`, `/interrupt`, `/perf`, `/reasoning <level>`, `/sampling <field> <value>`, `/queue clear`, `/copy`, `/remember`, `/explore`, `/log`, `/timer`, `/expand`, `/collapse`, `/window`, `/cwd`, `/comfy view`, `/view <path>` |
+| Run at once | `/ha`, `/tts`, `/stt`, `/wake`, `/interrupt`, `/perf`, `/tb`, `/reasoning <level>`, `/sampling <field> <value>`, `/queue clear`, `/copy`, `/remember`, `/explore`, `/log`, `/timer`, `/expand`, `/collapse`, `/window`, `/cwd`, `/comfy view`, `/view <path>` |
 | Stop the reply first | `/clear`, `/new`, `/splash`, `/rewind`, `/exit` |
 | Everything else | Waits for the reply to end, queued behind any earlier messages (so *Queue cancel mode* applies) |
 
@@ -581,6 +584,7 @@ Every tool, grouped (Clock, Timers, Files, GitLib, Shell, Obsidian, SQL, ComfyUI
   * `sqlcmd` → `sql_query`
   * `sqlplus` → `oracle_query`
   * `mysql` / `mariadb` → `mysql_query`
+  * `net use`, `dir \\server` or `copy \\server` → the UNC tools (named in the rules only)
 
   A single command that such a tool covers comes back as `Not run: 'cat' has a tool of its own — call read_file instead…`, before the pane asks.
   * Only once a turn: the same line sent again goes to the pane as usual, so a real need (an option the tool lacks) still reaches you.
@@ -727,6 +731,20 @@ You can change which services run without asking under `ask` in `profile.json` (
 | MySQL connections (profile) | Enter opens the profile's `mysql.json` in your editor (created with commented examples). | (none) |
 | MySQL connections (global) | The same for the home folder's `mysql.json`, which every profile reads. The profile's wins on a name clash. | (none) |
 
+#### UNC
+
+| Setting | What it does | Default |
+|---|---|---|
+| UNC tools | Offers the UNC tools over the shares in `unc.json`, once one is defined: `unc_shares`, `unc_search`, `unc_info`, `unc_read`, and `unc_fetch` while the File tools are on. See UNC shares. | off |
+| UNC writes | The master key of every change on a share. Off, every share is read-only. On, a share whose `access` is `readwrite` also gets `unc_write`, `unc_patch`, `unc_create_directory`, `unc_move`, `unc_copy`, `unc_delete` (off by default in the Offered tab) and `unc_put`. Changes there are permanent. | off |
+| UNC shares offered | A checklist of the shares in both `unc.json` files, as *SQL connections offered* is for `sql.json`. | all (not narrowed) |
+| UNC default share | The share used when a call names none and gives no full path: one of the offered shares, or the first. | (the first share) |
+| UNC set password | Pick a runas share and type its password, masked. It is saved to that share's store: encrypted in its `unc.json`, or in Windows Credential Manager. | — |
+| UNC add share | A wizard for a new share. It can **test** the draft before saving it by listing its root under its account. | — |
+| UNC %-mention enabled | Typing `%` and part of a name also lists the shares, each marked `UNC ·`. | on |
+| UNC shares (profile) | Enter opens the profile's `unc.json` in your editor (created with commented examples). | (none) |
+| UNC shares (global) | The same for the home folder's `unc.json`, which every profile reads. The profile's wins on a name clash. | (none) |
+
 #### GitLib
 
 | Setting | What it does | Default |
@@ -862,10 +880,11 @@ Type `/` to list every command with a short summary. After a command and a space
 | `/splash` | Start a new conversation and show the splash screen. |
 | `/stt [on\|off]` | Toggle speech input. |
 | `/sys` | Show the system prompt and the tools sent to the model. |
+| `/tb [on \| off]` | Show or hide the toolbar (*Show toolbar*). On its own it hides the toolbar, or shows it again with the items it last had (the default five the first time); `on` and `off` say which. Works while a reply runs; Ctrl+Alt+B runs it too. |
 | `/test [id \| reasoning \| structured \| long \| all \| history]` | Run benchmark tests against the connected model and save the results. On its own it lists the tests with their last verdicts. See Benchmark tests. |
 | `/theme [name]` | Switch the colour theme (the *Theme* setting). During a reply, it runs when the reply ends. |
 | `/timer [duration [name] \| stop <name> \| stop all]` | List the timers, start one (`10m`, `90s`, `1h30m`), or stop one. |
-| `/tools` | Switch the model's tools on or off and edit their settings (Web, Files, Shell, Ask, Claude, Home Assistant, Print, Obsidian, ComfyUI, SQL, Oracle, MySQL, Git). |
+| `/tools` | Switch the model's tools on or off and edit their settings (Web, Files, Shell, Ask, Claude, Home Assistant, Print, Obsidian, ComfyUI, SQL, Oracle, MySQL, UNC, Git). |
 | `/tree [path]` | Print a tree of the working directory. Hidden, system and dot entries appear only when *File browser/tree mode* is `show-hidden`. `.git` folders are always left out, like `.trash`, unless you name one as the path. |
 | `/tts [on\|off]` | Toggle speech output. |
 | `/usage` | Show token usage and performance statistics. A `~` marks a reasoning count the app estimated (see *LLM reasoning estimate*). |
@@ -891,7 +910,7 @@ Type `/` to list every command with a short summary. After a command and a space
 
 `/plan <requirement>` has the model research and present a plan before anything changes. It needs *LLM offer tools*, and is refused while a reply runs.
 
-* **Tools**: only the read-only ones (reading and searching files, git status/log/diff, the web, SQL, Oracle, MySQL, the vault, recall, skills, sessions, `ask_user`) plus `present_plan`. Every tool that writes, runs or starts something, and every MCP tool, is held back until the plan is approved.
+* **Tools**: only the read-only ones (reading and searching files, git status/log/diff, the web, SQL, Oracle, MySQL, the UNC shares' reads, the vault, recall, skills, sessions, `ask_user`) plus `present_plan`. Every tool that writes, runs or starts something, and every MCP tool, is held back until the plan is approved.
 * **Presenting**: the model asks what it needs (your later messages add detail), then presents the plan. The plan is printed and saved as `.neon/plans/<kebab-name>.md` under the working directory. A new plan never overwrites an older one, and each revision overwrites its own file. 📝 shows on the status strip while planning.
 * **Approving**: a pane offers **Approve & run** (`a`), **Approve, clear context & run** (`f`), **Keep refining…** (`r`, with what should change) or **Cancel plan** (`c`). The cursor starts on Keep refining, and ESC picks it too. Approving marks the file `status: approved` and sends a turn with every tool to carry the plan out, ticking its checkboxes as it goes. The fresh-context choice starts a new conversation with the plan's text in the message.
 * **Tracking**: once every checkbox is ticked, the file is marked `done`. While some are left, it is `incomplete` with a `progress: 3/7` line, reported again when the count changes or the reply is stopped.
@@ -1351,6 +1370,75 @@ Read-only queries against MySQL 8.0.16+ and MariaDB 10.2+ over named connections
 </details>
 
 <details>
+<summary><b>📂 UNC shares and outside folders</b></summary>
+
+### UNC shares and outside folders
+
+The UNC tools reach named network shares (`\\server\share`, or a folder under one) and local folders outside the working directory (`D:\Data`), without mapped drives. Each share is reached either as you (`windows`) or as another Windows account (`runas`, like `runas /netonly`: your own identity locally, the other account's credentials for the network sign-in). Shares are read-only unless two keys say otherwise. Shares live in `unc.json`, a home folder file and a profile file as with the SQL connections; the profile's wins on a name clash.
+
+#### Share settings
+
+* **`path`** (required): `\\server\share`, a folder under it, or a full local path (`D:\Data`). In JSON a backslash is doubled (`"\\\\fs01\\eng"`) or written as `/` (`"//fs01/eng"`). A device path (`\\?\…`), a relative path or a whole drive (`D:\`) is refused.
+* **`auth`**: `windows` (default) or `runas`. Under `runas`, **`user`** is `DOMAIN\name` or `name@domain`, and the password is kept as for SQL: **`passwordStore`** `file` (default, DPAPI-encrypted in place) or `credman` (`NeonSidekick/unc/<share_name>`).
+* **`access`**: `read` (default) or `readwrite`. A `readwrite` share can be changed only while **UNC writes** is on (the UNC tab of `/tools`, off by default): both keys are checked at every call.
+* **`description`**: what the share holds; the model reads it to pick a share.
+
+```json
+{
+  "shares": {
+    "eng": { "path": "//fs01/eng", "description": "Engineering specs and drawings" },
+    "finance": {
+      "path": "//fs02.corp.local/finance/reports",
+      "auth": "runas",
+      "user": "CORP\\svc_reader",
+      "passwordStore": "credman"
+    },
+    "data": { "path": "D:/Data", "access": "readwrite" }
+  }
+}
+```
+
+**UNC add share** on the UNC tab of `/tools` walks through a new one (file, name, path, sign-in, account, password store and password, access, description) and can **test** it first by listing its root under its account; it never writes. **UNC set password** updates a runas password.
+
+#### How it signs in
+
+* A `runas` share gets a `LOGON32_LOGON_NEW_CREDENTIALS` token for each call. That token is a logon session of its own, so it never collides with your mapped drives ("multiple connections to a server by the same user") and leaves nothing behind in `net use`. Windows checks the password only when the server is reached: a wrong one comes back as "unknown account or wrong password".
+* A `windows` share uses whatever your own sign-in has for that server (a mapped drive's credentials, or a `cmdkey /add:server` entry).
+* Use the UNC path rather than a mapped drive letter: a mapping belongs to one sign-in, and a runas token or an elevated app may not see it. The wizard warns of a drive letter that is a mapped network drive.
+* Prefer server names to IP addresses: an address falls back from Kerberos to NTLM, which a domain may block.
+* Testing `runas` against `\\localhost` proves nothing: Windows signs a loopback session in with your own token, whatever account the share names.
+* Each call starts a fresh logon session, so the first access to a server costs a sign-in (tens to a few hundred milliseconds).
+
+#### Safety
+
+* **Paths** are judged as in the working directory: relative to the share's root (or a full path under it), never above it. A path naming a stream (`file.txt:secret`) is refused. Walks skip reparse points, so a DFS link inside a share isn't followed; add the link's target as a share of its own.
+* **Writes** need *UNC writes* on and the share's `access` set to `readwrite`. The changing tools aren't offered otherwise, and each call checks both again.
+* **Changes are permanent.** A share has no `.trash`: an overwrite replaces the file in place (its permissions and attributes kept), and `unc_delete` removes a file or folder for good. `unc_delete` is off in a fresh profile even under UNC writes; switch it on in the Offered tab. A file server's Previous Versions may still have a copy.
+* **Audit.** Every change logs a line with the share, the account and the path.
+* **Budgets.** A search reads at most 256 MB with four readers and looks at 100,000 entries, then says it stopped early. A preflight gives up on a share that doesn't answer in 10 seconds.
+* The shell can't reach a share through the app's sign-in: a runas share's token is the UNC tools' alone.
+
+| Tool | Arguments | What it does |
+|---|---|---|
+| `unc_shares` | `check?` | The named shares: path, account, read-only or read-write, description, the default marked. `check` lists each root now. |
+| `unc_search` | `share?, text?, path?, files?, regex?, context?, output?, order?, limit?, depth?` | `search_files` on a share: search inside files, or list folders, matching names, or recent files. |
+| `unc_info` | `share?, path?` | A file's size, dates, lines and words; a folder's counts. |
+| `unc_read` | `share?, path, start_line?, max_lines?` | Read a text file, whole or in part. |
+| `unc_fetch` | `share?, path, to?, overwrite?` | Copy a file or folder from a share into the working directory (with the File tools on), for `view_image`, `execute_code` and the file tools. At most 5,000 files and 500 MB. |
+| `unc_write` | `share?, path, content, mode?` | Write a text file: `create` (default), `overwrite` or `append`. |
+| `unc_patch` | `share?, path, old_text, new_text, replace_all?` | Change part of a text file. |
+| `unc_create_directory` | `share?, path` | Create a folder. |
+| `unc_move` / `unc_copy` | `share?, from, to, overwrite?` | Move, rename or copy within one share. |
+| `unc_delete` | `share?, path` | Delete a file or folder, permanently. Off by default. |
+| `unc_put` | `from, share?, to?, overwrite?` | Copy a file or folder from the working directory onto a share (with the File tools on). |
+
+`share` can be left out when `path` is a full path under a share; otherwise the default share (or the first) is used. The changing tools (`unc_write` through `unc_put`) appear only under both keys.
+
+`--unc-check <share>` proves the tools against a real share on the published exe (its reach, the runas token on every worker thread, a listing and a search; it only reads).
+
+</details>
+
+<details>
 <summary><b>🏠 Home Assistant</b></summary>
 
 ### Home Assistant
@@ -1623,7 +1711,7 @@ Every variable the app reads starts with `NEONSIDEKICK_`. They override a settin
 
 | Variable | What it does | Accepts |
 |---|---|---|
-| `NEONSIDEKICK_HOME` | The home folder: `settings.json`, `profiles\`, `models\`, `llama\`, `skills\`, `skills.db`, `mcp.json`, `sql.json`, `oracle.json`, `mysql.json`. | A folder path. Default `%USERPROFILE%\.neonsidekick`. |
+| `NEONSIDEKICK_HOME` | The home folder: `settings.json`, `profiles\`, `models\`, `llama\`, `skills\`, `skills.db`, `mcp.json`, `sql.json`, `oracle.json`, `mysql.json`, `unc.json`. | A folder path. Default `%USERPROFILE%\.neonsidekick`. |
 | `NEONSIDEKICK_PROFILE` | The profile for this launch; `settings.json` keeps pointing where it was. An unknown name exits with code 2. `--profile` wins. A headless run with neither loads `default`. | A profile name. |
 
 ### LLM
@@ -1699,6 +1787,7 @@ These only matter when running the test suite from source. Each live test is ski
 * `NEONSIDEKICK_TEST_LLM_URL`, `NEONSIDEKICK_TEST_TTS_URL`, `NEONSIDEKICK_TEST_SQL_CONNECTION`: a server to test against.
 * `NEONSIDEKICK_TEST_ORACLE_CONNECTION`: an ODP.NET connection string (`User Id=…;Password=…;Data Source=localhost:1521/FREEPDB1`) to an Oracle database whose user may create tables; the tests make their own `NS_*` fixtures once (the `gvenzl/oracle-free` container works).
 * `NEONSIDEKICK_TEST_MYSQL_CONNECTION`: a MySqlConnector connection string (`Server=127.0.0.1;Port=3306;User ID=…;Password=…;Database=…`) to a MySQL or MariaDB database its user owns; the tests make their own `ns_*` fixtures once (the `mysql:8.4` and `mariadb:11` images work).
+* `NEONSIDEKICK_TEST_UNC_SHARE`: a `\\server\share` path you can read (`\\localhost\C$\Windows` on a workstation); with `NEONSIDEKICK_TEST_UNC_USER` and `NEONSIDEKICK_TEST_UNC_PASSWORD`, a second account that can read it, for the runas path. The tests never write.
 * `NEONSIDEKICK_TEST_HA_URL` with `NEONSIDEKICK_TEST_HA_TOKEN`: a Home Assistant to read from (the live test never switches anything).
 * `NEONSIDEKICK_TEST_WHISPER_MODEL`, `NEONSIDEKICK_TEST_SILERO_MODEL`, `NEONSIDEKICK_TEST_VOSK_MODEL`, `NEONSIDEKICK_TEST_KOKORO_MODEL`: a model, when it isn't already under `%USERPROFILE%\.neonsidekick\models`.
 * `NEONSIDEKICK_TEST_CLAUDE=1`: the live Claude Code tests, on your own sign-in (Haiku; a few cents a run).

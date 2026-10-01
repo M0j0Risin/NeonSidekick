@@ -488,7 +488,7 @@ public sealed partial class InputLine
     /// draft, cursor and tokens outlive the read (the key watcher edits them under a reply) and <paramref name="initialText"/>
     /// is ignored; null (every other read) starts a fresh one over <paramref name="initialText"/>. A sent line empties it.
     /// <paramref name="shortcuts"/> (2026-09-30, the user's ask) is the chat line's: a command chord (<see cref="Keys.ShortcutLine"/>:
-    /// Ctrl+Alt+C, N or S) ends the read as <see cref="InputResult.Shortcut"/> with the draft, and the screen runs the command.
+    /// Ctrl+Alt+C, N or S, and the pane chords later that day) ends the read as <see cref="InputResult.Shortcut"/> with the draft, and the screen runs the command.
     /// Every other read leaves the chords alone.
     /// Throws <see cref="OperationCanceledException"/> when <paramref name="cancellationToken"/> fires.
     /// </summary>

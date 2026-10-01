@@ -129,9 +129,19 @@ public sealed record SearchResult(
 {
     /// <summary>The files that hold a hit with their counts, sorted by path — filled under <see cref="SearchOutput.Files"/> alone (2026-09-19).</summary>
     public IReadOnlyList<SearchFileCount> Files { get; init; } = Files ?? [];
+
+    /// <summary>
+    /// The walk stopped at <see cref="WorkingDirectoryOptions.SearchByteBudget"/> or <see cref="WorkingDirectoryOptions.MaxWalkEntries"/>
+    /// (a share, 2026-09-30) before it had looked at everything; <see cref="Truncated"/> is set with it.
+    /// </summary>
+    public bool Budgeted { get; init; }
 }
 
-public sealed record RecentResult(FileOutcome Outcome, string Relative, IReadOnlyList<RecentEntry> Entries, string Detail = "");
+public sealed record RecentResult(FileOutcome Outcome, string Relative, IReadOnlyList<RecentEntry> Entries, string Detail = "")
+{
+    /// <summary>The walk stopped at <see cref="WorkingDirectoryOptions.MaxWalkEntries"/> (a share, 2026-09-30): the newest of what was looked at, not of everything.</summary>
+    public bool Budgeted { get; init; }
+}
 
 public sealed record InfoResult(
     FileOutcome Outcome,
@@ -211,6 +221,38 @@ public sealed record EmptyTrashResult(FileOutcome Outcome, int Files, int Folder
 public sealed record ZipResult(FileOutcome Outcome, string Relative, string Archive, int Entries, long Bytes, string Detail = "");
 
 public sealed record OpenResult(FileOutcome Outcome, string Relative, bool IsDirectory, string Detail = "");
+
+/// <summary>
+/// How a <see cref="WorkingDirectory"/> treats its root (2026-09-30, the UNC tools: a share is a sandbox too, one per call,
+/// with the same path check, caps and outcomes, but a remote folder someone else owns). <see cref="Sandbox"/> is the working
+/// directory as it always was; <see cref="Share"/> is a UNC share's or an outside folder's.
+/// </summary>
+/// <param name="CreateRoot">A missing root is created by the first operation (the working directory); off, it is an error — a typo is never made into a folder.</param>
+/// <param name="Trash">The root's <c>.trash</c> is the delete bin: hidden from listings and walks, written by nothing but delete and restore. Off (a share: deletes and overwrites are permanent, the user's call), <c>.trash</c> is a folder like any other and no copy is ever kept.</param>
+/// <param name="SearchParallelism">Files a content search reads at once; 0 is one per processor. A share's is 4, kind to the file server and the link.</param>
+/// <param name="SearchByteBudget">Bytes a content search may read before it stops with what it has (<see cref="SearchResult.Budgeted"/>).</param>
+/// <param name="MaxWalkEntries">Entries a search, find or recent walk looks at before it stops (<see cref="SearchResult.Budgeted"/>, <see cref="RecentResult.Budgeted"/>, a find's <c>Truncated</c>).</param>
+/// <param name="PreserveOnReplace">An overwrite replaces the file in place (<see cref="File.Replace(string, string, string?, bool)"/>), keeping its ACL, owner and attributes, rather than moving a new file over it.</param>
+public sealed record WorkingDirectoryOptions(
+    bool CreateRoot = true,
+    bool Trash = true,
+    int SearchParallelism = 0,
+    long SearchByteBudget = long.MaxValue,
+    int MaxWalkEntries = int.MaxValue,
+    bool PreserveOnReplace = false)
+{
+    /// <summary>The working directory: created on first use, its <c>.trash</c> the delete bin, no budgets.</summary>
+    public static readonly WorkingDirectoryOptions Sandbox = new();
+
+    /// <summary>A UNC share or outside folder (2026-09-30): never created, no trash, a search of 4 readers and 256 MB, walks of 100,000 entries, overwrites in place.</summary>
+    public static readonly WorkingDirectoryOptions Share = new(
+        CreateRoot: false,
+        Trash: false,
+        SearchParallelism: 4,
+        SearchByteBudget: 256_000_000,
+        MaxWalkEntries: 100_000,
+        PreserveOnReplace: true);
+}
 
 /// <summary>
 /// The per-profile working directory: the one folder the file tools may read and write. One
@@ -302,14 +344,20 @@ public sealed class WorkingDirectory
 
     private readonly Func<string> _root;
     private readonly TimeProvider _time;
+    private readonly WorkingDirectoryOptions _options;
 
     /// <param name="root">The resolved root, read on every call (<see cref="Resolve(string, string)"/> over the effective settings).</param>
     /// <param name="time">The clock behind the trash stamp and the dates shown.</param>
-    public WorkingDirectory(Func<string> root, TimeProvider time)
+    /// <param name="options">How the root is treated: <see cref="WorkingDirectoryOptions.Sandbox"/> (the default) for the working directory, <see cref="WorkingDirectoryOptions.Share"/> for a UNC share (2026-09-30).</param>
+    public WorkingDirectory(Func<string> root, TimeProvider time, WorkingDirectoryOptions? options = null)
     {
         _root = root ?? throw new ArgumentNullException(nameof(root));
         _time = time ?? throw new ArgumentNullException(nameof(time));
+        _options = options ?? WorkingDirectoryOptions.Sandbox;
     }
+
+    /// <summary>How this instance treats its root (<see cref="WorkingDirectoryOptions"/>).</summary>
+    public WorkingDirectoryOptions Options => _options;
 
     /// <summary>The setting's meaning: blank is the profile's <see cref="DefaultFolderName"/> folder, anything else a full path.</summary>
     public static string Resolve(string configured, string profileDirectory)
@@ -326,13 +374,25 @@ public sealed class WorkingDirectory
     /// <summary>The root, full and without a trailing separator.</summary>
     public string Root => Path.TrimEndingDirectorySeparator(Path.GetFullPath(_root()));
 
-    /// <summary>Creates the root when it is missing and returns it. Throws on failure; the tools translate.</summary>
+    /// <summary>
+    /// Creates the root when it is missing and returns it. Throws on failure; the tools translate. Under
+    /// <see cref="WorkingDirectoryOptions.CreateRoot"/> off (a share, 2026-09-30) a missing root is never created — a read
+    /// that made a typo into a folder would be a write to a read-only share — and throws <see cref="DirectoryNotFoundException"/>.
+    /// </summary>
     public string EnsureExists()
     {
         string root = Root;
+        if (!_options.CreateRoot)
+        {
+            return Directory.Exists(root) ? root : throw new DirectoryNotFoundException(RootMissingMessage(root));
+        }
+
         Directory.CreateDirectory(root);
         return root;
     }
+
+    /// <summary>What a missing root that is not created says (<see cref="WorkingDirectoryOptions.CreateRoot"/> off). Pinned.</summary>
+    public static string RootMissingMessage(string root) => $"{root} does not exist or cannot be reached";
 
     /// <summary>Whether the root exists, without creating it.</summary>
     public bool Exists => Directory.Exists(Root);
@@ -375,7 +435,7 @@ public sealed class WorkingDirectory
         }
 
         full = candidate;
-        if (forWrite && IsInTrash(root, candidate))
+        if (forWrite && _options.Trash && IsInTrash(root, candidate))
         {
             return FileOutcome.TrashReadOnly;
         }
@@ -428,7 +488,7 @@ public sealed class WorkingDirectory
             foreach (var info in new DirectoryInfo(full).EnumerateFileSystemInfos())
             {
                 bool isDirectory = (info.Attributes & FileAttributes.Directory) != 0;
-                if (atRoot && isDirectory && IsTrashName(info.Name))
+                if (atRoot && isDirectory && _options.Trash && IsTrashName(info.Name))
                 {
                     continue;
                 }
@@ -516,7 +576,7 @@ public sealed class WorkingDirectory
             foreach (var info in new DirectoryInfo(directory).EnumerateFileSystemInfos("*", options))
             {
                 bool isDirectory = (info.Attributes & FileAttributes.Directory) != 0;
-                if ((atRoot && isDirectory && IsTrashName(info.Name)) || (hideDotEntries && info.Name.StartsWith('.'))
+                if ((atRoot && isDirectory && _options.Trash && IsTrashName(info.Name)) || (hideDotEntries && info.Name.StartsWith('.'))
                     || (hideGitFolders && isDirectory && string.Equals(info.Name, GitFolderName, StringComparison.OrdinalIgnoreCase)))
                 {
                     continue;
@@ -577,9 +637,10 @@ public sealed class WorkingDirectory
 
             var paths = new List<string>();
             bool truncated = false;
+            int walked = 0;
             foreach (var entry in Walk(full, pattern, recurse: true, maxDepth: maxDepth))
             {
-                if (paths.Count >= limit)
+                if (paths.Count >= limit || ++walked > _options.MaxWalkEntries)
                 {
                     truncated = true;
                     break;
@@ -627,7 +688,7 @@ public sealed class WorkingDirectory
             return new MentionResult(outcome, [], false);
         }
 
-        if (IsInTrash(Root, full))
+        if (_options.Trash && IsInTrash(Root, full))
         {
             return new MentionResult(FileOutcome.Ok, [], false);
         }
@@ -736,12 +797,32 @@ public sealed class WorkingDirectory
                 : Walk(full, pattern, recurse: true, maxDepth: maxDepth);
             var hits = new ConcurrentBag<SearchHit>();
             var counts = new ConcurrentBag<SearchFileCount>();
-            int matches = 0, searched = 0, matchedFiles = 0, timedOut = 0;
-            var options = new ParallelOptions { MaxDegreeOfParallelism = Environment.ProcessorCount, CancellationToken = cancellationToken };
+            int matches = 0, searched = 0, matchedFiles = 0, timedOut = 0, walked = 0, budgeted = 0;
+            long bytesRead = 0;
+            var options = new ParallelOptions
+            {
+                MaxDegreeOfParallelism = _options.SearchParallelism > 0 ? _options.SearchParallelism : Environment.ProcessorCount,
+                CancellationToken = cancellationToken,
+            };
             Parallel.ForEach(entries, options, (entry, state) =>
             {
+                if (Interlocked.Increment(ref walked) > _options.MaxWalkEntries)
+                {
+                    Volatile.Write(ref budgeted, 1);
+                    state.Stop();
+                    return;
+                }
+
                 if (entry.Length > MaxTextFileBytes)
                 {
+                    return;
+                }
+
+                // A share's budget (2026-09-30): the bytes read over the network, counted before the read.
+                if (Interlocked.Add(ref bytesRead, entry.Length) > _options.SearchByteBudget)
+                {
+                    Volatile.Write(ref budgeted, 1);
+                    state.Stop();
                     return;
                 }
 
@@ -848,24 +929,26 @@ public sealed class WorkingDirectory
             {
                 var files = counts.ToList();
                 files.Sort((a, b) => StringComparer.OrdinalIgnoreCase.Compare(a.RelativePath, b.RelativePath));
-                bool cut = files.Count > limit || Volatile.Read(ref matchedFiles) > limit;
+                bool over = Volatile.Read(ref budgeted) != 0;
+                bool cut = files.Count > limit || Volatile.Read(ref matchedFiles) > limit || over;
                 if (files.Count > limit)
                 {
                     files.RemoveRange(limit, files.Count - limit);
                 }
 
-                return new SearchResult(FileOutcome.Ok, display, [], searched, Math.Min(matchedFiles, limit), timedOut, cut, _time.GetElapsedTime(started), SingleFile: singleFile, Files: files);
+                return new SearchResult(FileOutcome.Ok, display, [], searched, Math.Min(matchedFiles, limit), timedOut, cut, _time.GetElapsedTime(started), SingleFile: singleFile, Files: files) { Budgeted = over };
             }
 
             var sorted = hits.ToList();
             sorted.Sort(CompareHits);
-            bool truncated = sorted.Count > limit || Volatile.Read(ref matches) > limit;
+            bool budget = Volatile.Read(ref budgeted) != 0;
+            bool truncated = sorted.Count > limit || Volatile.Read(ref matches) > limit || budget;
             if (sorted.Count > limit)
             {
                 sorted.RemoveRange(limit, sorted.Count - limit);
             }
 
-            return new SearchResult(FileOutcome.Ok, display, sorted, searched, matchedFiles, timedOut, truncated, _time.GetElapsedTime(started), SingleFile: singleFile);
+            return new SearchResult(FileOutcome.Ok, display, sorted, searched, matchedFiles, timedOut, truncated, _time.GetElapsedTime(started), SingleFile: singleFile) { Budgeted = budget };
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -900,8 +983,16 @@ public sealed class WorkingDirectory
             }
 
             var top = new List<WalkEntry>(limit + 1);
+            int walked = 0;
+            bool budgeted = false;
             foreach (var entry in Walk(full, "*", recurse: true, maxDepth: maxDepth))
             {
+                if (++walked > _options.MaxWalkEntries)
+                {
+                    budgeted = true;
+                    break;
+                }
+
                 if (top.Count == limit && entry.LastWriteTimeUtc <= top[^1].LastWriteTimeUtc)
                 {
                     continue;
@@ -916,7 +1007,7 @@ public sealed class WorkingDirectory
             }
 
             var entries = top.Select(e => new RecentEntry(Relative(e.FullPath), Local(e.LastWriteTimeUtc), e.Length)).ToList();
-            return new RecentResult(FileOutcome.Ok, display, entries);
+            return new RecentResult(FileOutcome.Ok, display, entries) { Budgeted = budgeted };
         }
         catch (Exception ex) when (IsFileFailure(ex))
         {
@@ -1162,7 +1253,7 @@ public sealed class WorkingDirectory
             }
 
             bool copied = existed && keepCopy && CopyToTrash(full, display);
-            long bytes = WriteAtomically(full, Utf8NoBom.GetBytes(text));
+            long bytes = WriteAtomically(full, Utf8NoBom.GetBytes(text), _options.PreserveOnReplace);
             Count(text, out int lines, out int words);
             return new WriteResult(FileOutcome.Ok, display, bytes, existed, copied, Lines: lines, Words: words);
         }
@@ -1203,7 +1294,7 @@ public sealed class WorkingDirectory
             }
 
             bool copied = existed && keepCopy && CopyToTrash(full, display);
-            long written = WriteAtomically(full, bytes);
+            long written = WriteAtomically(full, bytes, _options.PreserveOnReplace);
             return new WriteResult(FileOutcome.Ok, display, written, existed, copied);
         }
         catch (Exception ex) when (IsFileFailure(ex))
@@ -1433,7 +1524,7 @@ public sealed class WorkingDirectory
     }
 
     /// <summary>Writes an LF-normalised text back with the file's ending and its BOM.</summary>
-    private static void Save(string full, string normalised, bool bom, string ending)
+    private void Save(string full, string normalised, bool bom, string ending)
     {
         byte[] output = Utf8NoBom.GetBytes(ending == "\n" ? normalised : normalised.Replace("\n", ending, StringComparison.Ordinal));
         if (bom)
@@ -1441,7 +1532,7 @@ public sealed class WorkingDirectory
             output = [0xEF, 0xBB, 0xBF, .. output];
         }
 
-        WriteAtomically(full, output);
+        WriteAtomically(full, output, _options.PreserveOnReplace);
     }
 
     /// <summary>The successful edit's result with the region around the new text (<see cref="EditContextLines"/> each side, none over <see cref="MaxEditRegionLines"/>).</summary>
@@ -1609,7 +1700,7 @@ public sealed class WorkingDirectory
             bool kept = false;
             if (inTheWay && !merge)
             {
-                if (keepCopy)
+                if (keepCopy && _options.Trash)
                 {
                     MoveToTrash(destination, Relative(destination));
                     kept = true;
@@ -1654,6 +1745,152 @@ public sealed class WorkingDirectory
         }
     }
 
+    /// <summary>The most bytes one <see cref="CopyBetween"/> carries (2026-09-30: <c>unc_fetch</c> and <c>unc_put</c>).</summary>
+    public const long MaxTransferBytes = 500_000_000;
+
+    /// <summary>The most files one <see cref="CopyBetween"/> of a folder carries.</summary>
+    public const int MaxTransferFiles = 5_000;
+
+    /// <summary>A <see cref="CopyBetween"/> over <see cref="MaxTransferBytes"/> or <see cref="MaxTransferFiles"/>: the detail of its <see cref="FileOutcome.Failed"/>. Pinned.</summary>
+    public static string TransferCapDetail(int files, long bytes) =>
+        string.Create(CultureInfo.InvariantCulture, $"{files:N0} files, {bytes:N0} bytes is over one transfer's cap of {MaxTransferFiles:N0} files and {MaxTransferBytes:N0} bytes; copy a smaller folder");
+
+    /// <summary>
+    /// Copies a file or a folder from one sandbox to another (2026-09-30, the UNC tools: a share to the working directory for
+    /// <c>unc_fetch</c>, the other way for <c>unc_put</c>). Both paths go through their own <see cref="Resolve(string, bool, out string)"/>;
+    /// a blank <paramref name="toRelative"/> is the source's own name at the target's root. The rest is <see cref="Copy"/>'s rule:
+    /// something in the way only with <paramref name="overwrite"/>, kept in the target's <c>.trash</c> under <paramref name="keepCopy"/>
+    /// (when it has one), a folder over a folder merged, a file in a folder's way <see cref="FileOutcome.FolderInTheWay"/>. A file
+    /// replaced on a target with <see cref="WorkingDirectoryOptions.PreserveOnReplace"/> keeps its ACL. One call carries at most
+    /// <see cref="MaxTransferFiles"/> files and <see cref="MaxTransferBytes"/> bytes, counted before anything is written.
+    /// </summary>
+    public static MoveResult CopyBetween(WorkingDirectory from, string fromRelative, WorkingDirectory to, string? toRelative, bool overwrite, bool keepCopy = false)
+    {
+        ArgumentNullException.ThrowIfNull(from);
+        ArgumentNullException.ThrowIfNull(to);
+        var outcome = from.Resolve(fromRelative, forWrite: false, out string source);
+        if (outcome != FileOutcome.Ok)
+        {
+            return new MoveResult(outcome, fromRelative, toRelative ?? "", false, false);
+        }
+
+        string target = string.IsNullOrWhiteSpace(toRelative) ? Path.GetFileName(source) : toRelative.Trim();
+        outcome = to.Resolve(target, forWrite: true, out string destination);
+        if (outcome != FileOutcome.Ok)
+        {
+            return new MoveResult(outcome, from.Relative(source), target, false, false);
+        }
+
+        try
+        {
+            from.EnsureExists();
+            to.EnsureExists();
+            bool isDirectory = Directory.Exists(source);
+            if (!isDirectory && !File.Exists(source))
+            {
+                return new MoveResult(FileOutcome.Missing, from.Relative(source), to.Relative(destination), false, false);
+            }
+
+            string fromDisplay = from.Relative(source, isDirectory);
+            string toDisplay = to.Relative(destination, isDirectory);
+            if (string.Equals(destination, to.Root, StringComparison.OrdinalIgnoreCase))
+            {
+                return new MoveResult(FileOutcome.Exists, fromDisplay, toDisplay, isDirectory, false);
+            }
+
+            int files = 1;
+            long bytes = isDirectory ? 0 : new FileInfo(source).Length;
+            if (isDirectory)
+            {
+                files = 0;
+                foreach (var file in new DirectoryInfo(source).EnumerateFiles("*", WalkOptions(recurse: true)))
+                {
+                    files++;
+                    bytes += file.Length;
+                    if (files > MaxTransferFiles || bytes > MaxTransferBytes)
+                    {
+                        break;
+                    }
+                }
+            }
+
+            if (files > MaxTransferFiles || bytes > MaxTransferBytes)
+            {
+                return new MoveResult(FileOutcome.Failed, fromDisplay, toDisplay, isDirectory, false, TransferCapDetail(files, bytes));
+            }
+
+            bool inTheWay = File.Exists(destination) || Directory.Exists(destination);
+            if (inTheWay && !overwrite)
+            {
+                return new MoveResult(FileOutcome.Exists, fromDisplay, toDisplay, isDirectory, false);
+            }
+
+            bool folderInTheWay = inTheWay && Directory.Exists(destination);
+            bool kept = false;
+            if (folderInTheWay && !isDirectory)
+            {
+                if (!(keepCopy && to._options.Trash))
+                {
+                    return new MoveResult(FileOutcome.FolderInTheWay, fromDisplay, to.Relative(destination, isDirectory: true), isDirectory, false);
+                }
+
+                to.MoveToTrash(destination, to.Relative(destination));
+                kept = true;
+            }
+            else if (inTheWay && !folderInTheWay)
+            {
+                if (isDirectory)
+                {
+                    if (keepCopy && to._options.Trash)
+                    {
+                        to.MoveToTrash(destination, to.Relative(destination));
+                        kept = true;
+                    }
+                    else
+                    {
+                        File.Delete(destination);
+                    }
+                }
+                else
+                {
+                    kept = keepCopy && to.CopyToTrash(destination, to.Relative(destination));
+                }
+            }
+
+            Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+            if (isDirectory)
+            {
+                CopyDirectory(source, destination);
+            }
+            else if (to._options.PreserveOnReplace && File.Exists(destination))
+            {
+                string temp = TempSibling(destination);
+                try
+                {
+                    File.Copy(source, temp);
+                    if (!TryReplace(temp, destination))
+                    {
+                        File.Move(temp, destination, overwrite: true);
+                    }
+                }
+                finally
+                {
+                    DeleteQuietly(temp);
+                }
+            }
+            else
+            {
+                File.Copy(source, destination, overwrite: true);
+            }
+
+            return new MoveResult(FileOutcome.Ok, fromDisplay, toDisplay, isDirectory, false, CopyKept: kept);
+        }
+        catch (Exception ex) when (IsFileFailure(ex))
+        {
+            return new MoveResult(FileOutcome.Failed, from.Relative(source), to.Relative(destination), false, false, ex.Message);
+        }
+    }
+
     /// <summary>
     /// Moves a file or folder into <c>.trash\&lt;stamp&gt;\&lt;relative&gt;</c>: a same-volume move, nothing destroyed —
     /// while <paramref name="toTrash"/> (<c>File safe edits</c>). Without it (2026-09-20, the user's call) the entry is
@@ -1690,7 +1927,7 @@ public sealed class WorkingDirectory
                 return new TrashResult(FileOutcome.GitProtected, display, "", isDirectory);
             }
 
-            if (!toTrash)
+            if (!toTrash || !_options.Trash)
             {
                 if (isDirectory)
                 {
@@ -1803,7 +2040,7 @@ public sealed class WorkingDirectory
     /// </summary>
     private bool CopyToTrash(string full, string relative)
     {
-        if (new FileInfo(full).Length > MaxTextFileBytes)
+        if (!_options.Trash || new FileInfo(full).Length > MaxTextFileBytes)
         {
             return false;
         }
@@ -1886,7 +2123,7 @@ public sealed class WorkingDirectory
                 if (occupied)
                 {
                     // The live entry (2026-09-20): kept in .trash under File safe edits; else a file is replaced in place, a folder refused.
-                    if (keepCopy)
+                    if (keepCopy && _options.Trash)
                     {
                         MoveToTrash(full, sub);
                         kept = true;
@@ -2298,6 +2535,7 @@ public sealed class WorkingDirectory
     private FileSystemEnumerable<WalkEntry> Walk(string directory, string? namePattern, bool recurse, bool includeDirectories = false, int maxDepth = int.MaxValue)
     {
         string root = Root;
+        bool trash = _options.Trash;
         GlobAlternative[]? alternatives = namePattern is null
             ? null
             : [.. PathGlob.ExpandBraces(namePattern).Select(p => new GlobAlternative(p, PathGlob.IsPathPattern(p)))];
@@ -2308,9 +2546,9 @@ public sealed class WorkingDirectory
         {
             ShouldIncludePredicate = (ref FileSystemEntry entry) =>
                 (includeDirectories || !entry.IsDirectory)
-                && !IsRootTrash(ref entry, root)
+                && !(trash && IsRootTrash(ref entry, root))
                 && (alternatives is null || entry.IsDirectory || MatchesAny(alternatives, ref entry, directory, root)),
-            ShouldRecursePredicate = (ref FileSystemEntry entry) => !IsRootTrash(ref entry, root) && DepthUnder(entry.Directory, directory) < maxDepth,
+            ShouldRecursePredicate = (ref FileSystemEntry entry) => !(trash && IsRootTrash(ref entry, root)) && DepthUnder(entry.Directory, directory) < maxDepth,
         };
     }
 
@@ -2406,15 +2644,24 @@ public sealed class WorkingDirectory
         }
     }
 
-    /// <summary>A temp sibling written whole, then moved over the target: a reader never sees half a file.</summary>
-    internal static long WriteAtomically(string full, byte[] bytes)
+    /// <summary>
+    /// A temp sibling written whole, then moved over the target: a reader never sees half a file. Under
+    /// <paramref name="preserve"/> (<see cref="WorkingDirectoryOptions.PreserveOnReplace"/>, a share, 2026-09-30) an existing
+    /// target is replaced with <see cref="File.Replace(string, string, string?, bool)"/> (Win32 <c>ReplaceFile</c>), which keeps
+    /// its ACL, owner, attributes and streams — a move would give it the temp file's inherited security instead, and reset a
+    /// file server's per-file permissions on every edit; a refusal falls back to the move.
+    /// </summary>
+    internal static long WriteAtomically(string full, byte[] bytes, bool preserve = false)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(full)!);
         string temp = TempSibling(full);
         try
         {
             File.WriteAllBytes(temp, bytes);
-            File.Move(temp, full, overwrite: true);
+            if (!preserve || !File.Exists(full) || !TryReplace(temp, full))
+            {
+                File.Move(temp, full, overwrite: true);
+            }
         }
         finally
         {
@@ -2422,6 +2669,21 @@ public sealed class WorkingDirectory
         }
 
         return bytes.LongLength;
+    }
+
+    /// <summary><see cref="File.Replace(string, string, string?, bool)"/> of <paramref name="full"/> by <paramref name="temp"/>; false (logged) when the file system refuses it.</summary>
+    private static bool TryReplace(string temp, string full)
+    {
+        try
+        {
+            File.Replace(temp, full, destinationBackupFileName: null, ignoreMetadataErrors: true);
+            return true;
+        }
+        catch (Exception ex) when (IsFileFailure(ex) || ex is PlatformNotSupportedException)
+        {
+            DiagnosticLog.Debug(Category, $"Could not replace {full} in place, moving over it: {ex.Message}");
+            return false;
+        }
     }
 
     private static string TempSibling(string full) => full + "." + Guid.NewGuid().ToString("N") + ".tmp";

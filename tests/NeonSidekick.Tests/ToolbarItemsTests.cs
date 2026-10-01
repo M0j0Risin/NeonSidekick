@@ -31,6 +31,32 @@ public sealed class ToolbarItemsTests
     }
 
     [Fact]
+    public void Toggle_HidesKeepingTheItems_ShowsThemAgain_TheDefaultsTheFirstTime()
+    {
+        // /tb (later on 2026-09-30, the user's ask), PerfBarMode.Toggle's shape.
+        var hiddenDefaults = ToolbarItems.Toggle("", null, null)!.Value;
+        Assert.Empty(hiddenDefaults.Items!);
+        Assert.Null(hiddenDefaults.LastItems);                                                   // the defaults, kept as null
+        Assert.Null(ToolbarItems.Toggle("", [], null)!.Value.Items);                             // shown again: the defaults
+        var hidden = ToolbarItems.Toggle(" ", ["usage", "tools"], null)!.Value;
+        Assert.Empty(hidden.Items!);
+        Assert.Equal(["tools", "usage"], hidden.LastItems);                                      // strip order, as Save writes
+        Assert.Equal(["tools", "usage"], ToolbarItems.Toggle("", hidden.Items, hidden.LastItems)!.Value.Items);
+        Assert.Null(ToolbarItems.Toggle("", [], ["nonsense"])!.Value.Items);                     // a last list naming nothing: the defaults
+        Assert.Equal(["usage"], ToolbarItems.Toggle("ON", ["usage"], ["tools"])!.Value.Items);  // already shown: as it is
+        Assert.Empty(ToolbarItems.Toggle("off", [], ["tools"])!.Value.Items!);                   // already hidden: as it is
+        Assert.Equal(["tools"], ToolbarItems.Toggle("off", [], ["tools"])!.Value.LastItems);
+        Assert.Equal(["tools"], ToolbarItems.Toggle("on", [], ["tools"])!.Value.Items);
+        Assert.Null(ToolbarItems.Toggle("sideways", null, null));
+
+        Assert.Equal(["on", "off"], ToolbarItems.Words);
+        Assert.Equal("show or hide the toolbar, or /tb on|off", ToolbarItems.HelpSummary);
+        Assert.Equal("(toolbar off)", ToolbarItems.Notice(false));
+        Assert.Equal("(toolbar on)", ToolbarItems.Notice(true));
+        Assert.Equal("/tb takes on or off, or nothing to toggle.", ToolbarItems.UsageError);
+    }
+
+    [Fact]
     public void Save_TheDefaultsAreNull_ElseStripOrder_EveryItemAFullList()
     {
         Assert.Null(ToolbarItems.Save(new HashSet<string> { "path", "sessions", "skills", "tools", "settings" }));

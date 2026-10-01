@@ -686,8 +686,35 @@ public enum SettingsField
     /// <summary>An edit row: Enter opens the profile's <c>mysql.json</c> in the editor (made with <see cref="MySql.MySqlConfigFile.EmptyText"/> when missing). The MySQL tab (2026-09-30).</summary>
     MySqlConnectionsProfile,
 
-    /// <summary>An edit row: Enter opens the home's <c>mysql.json</c>, every profile's. The MySQL tab's last row (2026-09-30). Last in the enum, as every newcomer.</summary>
+    /// <summary>An edit row: Enter opens the home's <c>mysql.json</c>, every profile's. The MySQL tab's last row (2026-09-30).</summary>
     MySqlConnectionsGlobal,
+
+    /// <summary>A toggle: whether a turn offers the UNC tools over the shares of <c>unc.json</c> (<see cref="Settings.AppSettingsData.UncTools"/>). The UNC tab's first row (2026-09-30).</summary>
+    UncTools,
+
+    /// <summary>A toggle: the master key of every change on a share (<see cref="Settings.AppSettingsData.UncWrites"/>); off, every share is read-only. The UNC tab (2026-09-30).</summary>
+    UncWrites,
+
+    /// <summary>A checklist: which shares of <c>unc.json</c> this profile offers (<see cref="Settings.AppSettingsData.UncSharesOffered"/>). The UNC tab (2026-09-30).</summary>
+    UncSharesOffered,
+
+    /// <summary>A pick: the share a UNC tool uses when the call names none (<see cref="Settings.AppSettingsData.UncDefaultShare"/>). The UNC tab (2026-09-30).</summary>
+    UncDefaultShare,
+
+    /// <summary>An action row (2026-09-30): Enter picks a runas share and asks for its password in a masked slot, saved to its store (<see cref="Unc.UncSecrets.Save"/>). The UNC tab.</summary>
+    UncSetPassword,
+
+    /// <summary>An action row (2026-09-30): Enter walks a new share through every choice, tests it and adds it to that <c>unc.json</c> (<c>SettingsMenu.UncWizard.cs</c>). The UNC tab.</summary>
+    UncAddShare,
+
+    /// <summary>A toggle: whether <c>%</c> and part of a name lists the UNC shares too (<see cref="Settings.AppSettingsData.UncPercentMention"/>). The UNC tab (2026-09-30).</summary>
+    UncPercentMention,
+
+    /// <summary>An edit row: Enter opens the profile's <c>unc.json</c> in the editor (made with <see cref="Unc.UncConfigFile.EmptyText"/> when missing). The UNC tab (2026-09-30).</summary>
+    UncSharesProfile,
+
+    /// <summary>An edit row: Enter opens the home's <c>unc.json</c>, every profile's. The UNC tab's last row (2026-09-30). Last in the enum, as every newcomer.</summary>
+    UncSharesGlobal,
 }
 
 /// <summary>The tabs of <c>/settings</c> on the pane, in strip order (General, Embedded, LLM, TTS, STT, Sessions, Botchat — the user's order, 2026-09-29; Sessions right after General — the user's order, 2026-09-18 — until then; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
@@ -1040,6 +1067,7 @@ internal sealed partial class SettingsMenu
         [SettingsField.SqlTools, SettingsField.SqlConnectionsOffered, SettingsField.SqlDefaultConnection, SettingsField.SqlSetPassword, SettingsField.SqlAddConnection, SettingsField.SqlPercentMention, SettingsField.SqlQueryMaxRows, SettingsField.SqlQueryTimeoutSeconds, SettingsField.SqlConnectionsProfile, SettingsField.SqlConnectionsGlobal],
         [SettingsField.OracleTools, SettingsField.OracleConnectionsOffered, SettingsField.OracleDefaultConnection, SettingsField.OracleSetPassword, SettingsField.OracleAddConnection, SettingsField.OraclePercentMention, SettingsField.OracleQueryMaxRows, SettingsField.OracleQueryTimeoutSeconds, SettingsField.OracleConnectionsProfile, SettingsField.OracleConnectionsGlobal],
         [SettingsField.MySqlTools, SettingsField.MySqlConnectionsOffered, SettingsField.MySqlDefaultConnection, SettingsField.MySqlSetPassword, SettingsField.MySqlAddConnection, SettingsField.MySqlPercentMention, SettingsField.MySqlQueryMaxRows, SettingsField.MySqlQueryTimeoutSeconds, SettingsField.MySqlConnectionsProfile, SettingsField.MySqlConnectionsGlobal],
+        [SettingsField.UncTools, SettingsField.UncWrites, SettingsField.UncSharesOffered, SettingsField.UncDefaultShare, SettingsField.UncSetPassword, SettingsField.UncAddShare, SettingsField.UncPercentMention, SettingsField.UncSharesProfile, SettingsField.UncSharesGlobal],
         [SettingsField.GitLibTools, SettingsField.GitLibDiffMaxLines, SettingsField.GitLibLogMaxCommits, SettingsField.GitLibEmail, SettingsField.GitLibName],
         [SettingsField.ToolsDollarMention, SettingsField.ToolCollapseCount, SettingsField.CodeCollapseCount],
     ];
@@ -1068,6 +1096,7 @@ internal sealed partial class SettingsMenu
     private readonly Func<Sql.SqlNamedConnection, CancellationToken, Task<Sql.SqlRun>> _testSqlConnection;
     private readonly Func<Oracle.OracleNamedConnection, CancellationToken, Task<Sql.SqlRun>> _testOracleConnection;
     private readonly Func<MySql.MySqlNamedConnection, CancellationToken, Task<Sql.SqlRun>> _testMySqlConnection;
+    private readonly Func<Unc.UncNamedShare, CancellationToken, Task<Unc.UncResult<int>>> _testUncShare;
     private readonly Func<Comfy.ComfyClient?> _comfyClient;
     private readonly Func<CancellationToken, Task<(bool Ok, string Text)>> _testHomeAssistant;
     private readonly Func<IReadOnlyList<Printing.PrinterInfo>> _printers;
@@ -1096,9 +1125,10 @@ internal sealed partial class SettingsMenu
     /// <param name="testSqlConnection">What the <c>SQL add connection</c> summary's test runs over the unsaved draft (later on 2026-09-23), its typed password in it as a plain <c>file</c> value; null = a real <see cref="Sql.SqlAccess"/> run of <see cref="SqlTestQuery"/>.</param>
     /// <param name="testOracleConnection">What the <c>Oracle add connection</c> summary's test runs over the unsaved draft (2026-09-30), its typed password in it as a plain <c>file</c> value; null = a real <see cref="Oracle.OracleAccess"/> run (<see cref="TestOracleConnectionAsync"/>).</param>
     /// <param name="testMySqlConnection">What the <c>MySQL add connection</c> summary's test runs over the unsaved draft (2026-09-30); null = a real <see cref="MySql.MySqlAccess"/> run (<see cref="TestMySqlConnectionAsync"/>).</param>
+    /// <param name="testUncShare">What the <c>UNC add share</c> summary's test runs over the unsaved draft (2026-09-30): how many entries the root lists under the draft's account; null = a real <see cref="Unc.UncAccess"/> run (<see cref="TestUncShareAsync"/>). It never writes.</param>
     /// <param name="openFile">What the SQL tab's edit rows open <c>sql.json</c> with (2026-09-23): the screen's editor opener; null = the rows say there is none.</param>
     /// <param name="browseFolder">The folder picker the <c>Working directory (cwd)</c> row opens (2026-09-22, the user's ask): the screen's <c>/cwd browse</c> tree, returning what to save — <c>""</c> for the profile's folder, a full path, or null for nothing chosen. Null (and a console with no pane) falls back to the typed path the row asked for until then.</param>
-    public SettingsMenu(IAnsiConsole console, AppSettings settings, Func<SettingsField, string?> overriddenBy, InputLine input, TranscriptRenderer transcript, SpeechSession speech, MenuPane pane, Func<string, string?>? locateBrowser = null, Func<IReadOnlySet<string>>? installedShells = null, Func<IReadOnlySet<string>>? installedLanguages = null, Func<CancellationToken, Task<string?>>? browseFolder = null, Func<string, CancellationToken, Task<string?>>? browseVault = null, Action<string>? openFile = null, Func<Sql.SqlNamedConnection, CancellationToken, Task<Sql.SqlRun>>? testSqlConnection = null, Func<Comfy.ComfyClient?>? comfyClient = null, Func<IReadOnlyList<Skills.Skill>>? botChatSkills = null, Func<CancellationToken, Task<(bool Ok, string Text)>>? testHomeAssistant = null, Func<IReadOnlyList<Printing.PrinterInfo>>? printers = null, Func<Oracle.OracleNamedConnection, CancellationToken, Task<Sql.SqlRun>>? testOracleConnection = null, Func<MySql.MySqlNamedConnection, CancellationToken, Task<Sql.SqlRun>>? testMySqlConnection = null)
+    public SettingsMenu(IAnsiConsole console, AppSettings settings, Func<SettingsField, string?> overriddenBy, InputLine input, TranscriptRenderer transcript, SpeechSession speech, MenuPane pane, Func<string, string?>? locateBrowser = null, Func<IReadOnlySet<string>>? installedShells = null, Func<IReadOnlySet<string>>? installedLanguages = null, Func<CancellationToken, Task<string?>>? browseFolder = null, Func<string, CancellationToken, Task<string?>>? browseVault = null, Action<string>? openFile = null, Func<Sql.SqlNamedConnection, CancellationToken, Task<Sql.SqlRun>>? testSqlConnection = null, Func<Comfy.ComfyClient?>? comfyClient = null, Func<IReadOnlyList<Skills.Skill>>? botChatSkills = null, Func<CancellationToken, Task<(bool Ok, string Text)>>? testHomeAssistant = null, Func<IReadOnlyList<Printing.PrinterInfo>>? printers = null, Func<Oracle.OracleNamedConnection, CancellationToken, Task<Sql.SqlRun>>? testOracleConnection = null, Func<MySql.MySqlNamedConnection, CancellationToken, Task<Sql.SqlRun>>? testMySqlConnection = null, Func<Unc.UncNamedShare, CancellationToken, Task<Unc.UncResult<int>>>? testUncShare = null)
     {
         // Print default printer's picker (2026-09-28): the screen's spooler in the app; none otherwise, so a test never lists the machine's.
         _printers = printers ?? (() => []);
@@ -1110,6 +1140,7 @@ internal sealed partial class SettingsMenu
         _testSqlConnection = testSqlConnection ?? TestSqlConnectionAsync;
         _testOracleConnection = testOracleConnection ?? TestOracleConnectionAsync;
         _testMySqlConnection = testMySqlConnection ?? TestMySqlConnectionAsync;
+        _testUncShare = testUncShare ?? TestUncShareAsync;
         _browseFolder = browseFolder;
         _openFile = openFile;
         _browseVault = browseVault;
@@ -1404,7 +1435,8 @@ internal sealed partial class SettingsMenu
             or SettingsField.ObsidianTools or SettingsField.ObsidianAllowDelete or SettingsField.SqlTools or SettingsField.SqlPercentMention or SettingsField.ComfyTools or SettingsField.ComfyReinforceNegatives or SettingsField.ComfyShowPrompts or SettingsField.ComfyCaretMention or SettingsField.ComfyPictureStrip
             or SettingsField.BotChatImages or SettingsField.BotChatImageAsync or SettingsField.BotChatSkills or SettingsField.BotChatVision or SettingsField.BotChatMultiEmbeddedKill or SettingsField.ClaudeAdvisor or SettingsField.ClaudeAdvisorConfirm
             or SettingsField.ClaudeApi or SettingsField.ClaudeApiPromptCaching or SettingsField.ClaudeCliServer or SettingsField.EmbeddedVision or SettingsField.EmbeddedLlmServer or SettingsField.EmbeddedDrafter
-            or SettingsField.HomeAssistantTools or SettingsField.PrintTools or SettingsField.OracleTools or SettingsField.OraclePercentMention or SettingsField.MySqlTools or SettingsField.MySqlPercentMention;
+            or SettingsField.HomeAssistantTools or SettingsField.PrintTools or SettingsField.OracleTools or SettingsField.OraclePercentMention or SettingsField.MySqlTools or SettingsField.MySqlPercentMention
+            or SettingsField.UncTools or SettingsField.UncWrites or SettingsField.UncPercentMention;
 
     public static string FieldName(SettingsField field) => field switch
     {
@@ -1559,6 +1591,15 @@ internal sealed partial class SettingsMenu
         SettingsField.MySqlQueryTimeoutSeconds => "MySQL query timeout (s)",
         SettingsField.MySqlConnectionsProfile => "MySQL connections (profile)",
         SettingsField.MySqlConnectionsGlobal => "MySQL connections (global)",
+        SettingsField.UncTools => "UNC tools",
+        SettingsField.UncWrites => "UNC writes",
+        SettingsField.UncSharesOffered => "UNC shares offered",
+        SettingsField.UncDefaultShare => "UNC default share",
+        SettingsField.UncSetPassword => "UNC set password",
+        SettingsField.UncAddShare => "UNC add share",
+        SettingsField.UncPercentMention => "UNC %-mention enabled",
+        SettingsField.UncSharesProfile => "UNC shares (profile)",
+        SettingsField.UncSharesGlobal => "UNC shares (global)",
         SettingsField.ObsidianAllowDelete => "Obsidian allow delete (.trash)",   // "Obsidian allow delete" until 2026-09-23 (the user's call: the row says where a delete goes)
         SettingsField.WebBrowserMode => "Web browser mode",
         SettingsField.WebBrowserPath => "Web browser path",
@@ -1813,6 +1854,15 @@ internal sealed partial class SettingsMenu
             SettingsField.MySqlQueryTimeoutSeconds => Seconds(data.MySqlQueryTimeoutSeconds),
             SettingsField.MySqlConnectionsProfile => MySqlConnectionsLabel(MySql.MySqlConfigFile.ProfilePath(profileDirectory)),
             SettingsField.MySqlConnectionsGlobal => MySqlConnectionsLabel(MySql.MySqlConfigFile.GlobalPath(Profiles.HomeOf(profileDirectory))),
+            SettingsField.UncTools => OnOff(data.UncTools),
+            SettingsField.UncWrites => OnOff(data.UncWrites),
+            SettingsField.UncSharesOffered => UncOfferedValue(data.UncSharesOffered, Unc.UncConfigFile.LoadCatalog(profileDirectory, Profiles.HomeOf(profileDirectory))),
+            SettingsField.UncDefaultShare => string.IsNullOrWhiteSpace(data.UncDefaultShare) ? FirstUncShareLabel : data.UncDefaultShare,
+            SettingsField.UncSetPassword => UncSetPasswordLabel,
+            SettingsField.UncAddShare => UncAddShareLabel,
+            SettingsField.UncPercentMention => OnOff(data.UncPercentMention),
+            SettingsField.UncSharesProfile => UncSharesLabel(Unc.UncConfigFile.ProfilePath(profileDirectory)),
+            SettingsField.UncSharesGlobal => UncSharesLabel(Unc.UncConfigFile.GlobalPath(Profiles.HomeOf(profileDirectory))),
             SettingsField.ObsidianVault => string.IsNullOrWhiteSpace(data.ObsidianVault) ? NoObsidianVaultLabel : data.ObsidianVault,
             SettingsField.WebBrowserMode => data.WebBrowserMode,
             SettingsField.WebBrowserPath => string.IsNullOrWhiteSpace(data.WebBrowserPath) ? AutoBrowserLabel(locatedBrowser) : data.WebBrowserPath,
@@ -3495,6 +3545,35 @@ internal sealed partial class SettingsMenu
             return false;
         }
 
+        if (field == SettingsField.UncDefaultShare)
+        {
+            return await PickUncShareAsync(saved, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (field == SettingsField.UncSharesOffered)
+        {
+            return await EditUncOfferedAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        if (field == SettingsField.UncAddShare)
+        {
+            return await AddUncShareAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        if (field == SettingsField.UncSetPassword)
+        {
+            return await SetUncPasswordAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        if (field is SettingsField.UncSharesProfile or SettingsField.UncSharesGlobal)
+        {
+            // An edit row (2026-09-30), the database tabs': the file in the editor, made with its commented shape first.
+            OpenUncFile(field == SettingsField.UncSharesProfile
+                ? Unc.UncConfigFile.ProfilePath(_settings.ProfileDirectory)
+                : Unc.UncConfigFile.GlobalPath(_settings.StorageDirectory));
+            return false;
+        }
+
         if (field is SettingsField.SqlConnectionsProfile or SettingsField.SqlConnectionsGlobal)
         {
             // An edit row (2026-09-23): the file in the editor, made with its commented shape first; nothing saved here.
@@ -4875,6 +4954,9 @@ internal sealed partial class SettingsMenu
             SettingsField.OraclePercentMention => data.OraclePercentMention,
             SettingsField.MySqlTools => data.MySqlTools,
             SettingsField.MySqlPercentMention => data.MySqlPercentMention,
+            SettingsField.UncTools => data.UncTools,
+            SettingsField.UncWrites => data.UncWrites,
+            SettingsField.UncPercentMention => data.UncPercentMention,
             SettingsField.ComfyTools => data.ComfyTools,
             SettingsField.HomeAssistantTools => data.HomeAssistantTools,
             SettingsField.PrintTools => data.PrintTools,
@@ -4954,6 +5036,9 @@ internal sealed partial class SettingsMenu
             case SettingsField.OraclePercentMention: data.OraclePercentMention = on; break;
             case SettingsField.MySqlTools: data.MySqlTools = on; break;
             case SettingsField.MySqlPercentMention: data.MySqlPercentMention = on; break;
+            case SettingsField.UncTools: data.UncTools = on; break;
+            case SettingsField.UncWrites: data.UncWrites = on; break;
+            case SettingsField.UncPercentMention: data.UncPercentMention = on; break;
             case SettingsField.ComfyTools: data.ComfyTools = on; break;
             case SettingsField.HomeAssistantTools: data.HomeAssistantTools = on; break;
             case SettingsField.PrintTools: data.PrintTools = on; break;
@@ -5042,6 +5127,9 @@ internal sealed partial class SettingsMenu
         SettingsField.OraclePercentMention => on ? "% and part of a name lists the Oracle connections on the line" : "% lists no Oracle connection",
         SettingsField.MySqlTools => on ? "the model reads the MySQL connections of mysql.json" : "no MySQL tools",
         SettingsField.MySqlPercentMention => on ? "% and part of a name lists the MySQL connections on the line" : "% lists no MySQL connection",
+        SettingsField.UncTools => on ? "the model reaches the shares of unc.json" : "no UNC tools",
+        SettingsField.UncWrites => on ? "a readwrite share may be changed — permanently" : "every share is read-only",
+        SettingsField.UncPercentMention => on ? "% and part of a name lists the UNC shares on the line" : "% lists no UNC share",
         SettingsField.ComfyTools => on ? "ComfyUI tools enabled" : "ComfyUI tools disabled",
         SettingsField.HomeAssistantTools => on ? "the model may read and switch Home Assistant, as the policy allows" : "no Home Assistant tools",
         SettingsField.PrintTools => on ? "the model may list the printers and print, as the policy allows" : "no print tools; /print still prints",
