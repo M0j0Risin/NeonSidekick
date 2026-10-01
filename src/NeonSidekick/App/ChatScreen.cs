@@ -1353,7 +1353,7 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>
-    /// <c>/tb</c> (later on 2026-09-30, the user's ask; Ctrl+Alt+B): the toolbar hidden or shown again, saved as the
+    /// <c>/tb</c> (later on 2026-09-30, the user's ask; Ctrl+T, Ctrl+Alt+B until later still on 2026-10-01): the toolbar hidden or shown again, saved as the
     /// <c>Show toolbar</c> checklist is (<see cref="ToolbarItems.Toggle"/>), so the row goes or comes back at the next draw.
     /// </summary>
     private void HandleToolbar(string args)
@@ -1374,8 +1374,8 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>
-    /// A command chord pressed in a pane that leaves it open (2026-10-01, the user's call): Ctrl+Alt+E <c>/perf</c> and Ctrl+Alt+B
-    /// <c>/tb</c> toggle their bar as typed — here at the idle line, posted to the turn task under a reply — and the tick
+    /// A command chord pressed in a pane that leaves it open (2026-10-01, the user's call): Ctrl+F <c>/perf</c> and Ctrl+T
+    /// <c>/tb</c> (Ctrl+Alt+E and B until later still that day) toggle their bar as typed — here at the idle line, posted to the turn task under a reply — and the tick
     /// repaints the pane's new shape. Ctrl+E <c>/explore</c> the same (later on 2026-10-01): it opens a window outside the
     /// terminal, so the pane has no reason to close. False for every other chord: the pane closes and the screen runs it
     /// (<see cref="ScreenPane.Chord"/>, <see cref="OffPaneLine"/>).
@@ -1692,18 +1692,18 @@ internal sealed partial class ChatScreen
         rows.Add(("Ctrl+A", "select all text on the line"));
         rows.Add(("Ctrl+C", "copy the selected text · stop the speech · cancel the reply · twice to exit"));
         rows.Add(("Ctrl+E", "open the working directory in your file browser (/explore)"));
+        rows.Add(("Ctrl+F", "show or hide the performance bar (/perf)"));
         rows.Add(("Ctrl+H", "open help (/help)"));
         rows.Add(("Ctrl+M", "open the model picker (/model)"));
         rows.Add(("Ctrl+O", "expand or collapse the tool calls, code blocks and thinking (or click a summary line)"));
         rows.Add(("Ctrl+P", "open the profile pane (/profile)"));
         rows.Add(("Ctrl+R", "open the reasoning picker (/reasoning)"));
         rows.Add(("Ctrl+S", "open the server picker (/server)"));
+        rows.Add(("Ctrl+T", "show or hide the toolbar (/tb)"));
         rows.Add(("Ctrl+U", "open the usage pane (/usage)"));
         rows.Add(("Ctrl+X", "cut the selected text"));
-        rows.Add(("Ctrl+Alt+B", "show or hide the toolbar (/tb)"));
         rows.Add(("Ctrl+Alt+C", "start a new conversation and clear the screen (/clear)"));
         rows.Add(("Ctrl+Alt+D", "open the MCP pane (/mcp)"));
-        rows.Add(("Ctrl+Alt+E", "show or hide the performance bar (/perf)"));
         rows.Add(("Ctrl+Alt+L", "open the allowed commands list (/cmdlist)"));
         rows.Add(("Ctrl+Alt+M", "open the memory pane (/memory)"));
         rows.Add(("Ctrl+Alt+N", "start a new conversation but do not clear the screen (/new)"));

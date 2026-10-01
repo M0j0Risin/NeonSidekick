@@ -77,11 +77,11 @@ public partial class ChatScreenTests
 
     /// <summary>
     /// <c>/tb</c> (later on 2026-09-30, the user's ask: "same as how /perf works for the perfbar"): bare it hides the toolbar
-    /// and shows it again with the items it had; <c>off</c> and <c>on</c> say which; Ctrl+Alt+B is the bare word; anything
+    /// and shows it again with the items it had; <c>off</c> and <c>on</c> say which; Ctrl+T (Ctrl+Alt+B until later still on 2026-10-01) is the bare word; anything
     /// else is the usage error. Never a turn.
     /// </summary>
     [Fact]
-    public async Task Tb_Toggles_KeepingTheItems_AndCtrlAltB_IsTheBareWord()
+    public async Task Tb_Toggles_KeepingTheItems_AndCtrlT_IsTheBareWord()
     {
         _settings.Update(d => { d.TtsOutput = false; d.ToolbarItems = ["tools", "usage"]; });
         var shown = new List<string>();
@@ -94,7 +94,7 @@ public partial class ChatScreenTests
             Line("/tb"),
             Then(input => PushLine(input, "/tb")),
             Then(input => PushLine(input, "/tb off")),
-            Then(input => input.Push(Keys.CtrlAlt(ConsoleKey.B))),
+            Then(input => input.Push(Keys.CtrlT)),
             Then(input => PushLine(input, "/tb on")),
             Then(input => PushLine(input, "/tb sideways")),
             Line("/exit"));

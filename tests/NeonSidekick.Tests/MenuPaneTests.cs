@@ -1045,7 +1045,7 @@ public class MenuPaneTests : IDisposable
             done.Add(line);
             return line == "/perf";
         };
-        input.Push(Keys.CtrlAlt(ConsoleKey.E), Keys.Down, Keys.Enter);
+        input.Push(Keys.CtrlF, Keys.Down, Keys.Enter);
 
         Assert.Equal(new MenuPick(0, 1), await menu.PickAsync(Page("one", "two", "three"), 0, CancellationToken.None));
         Assert.Equal(["/perf"], done);
@@ -1053,7 +1053,7 @@ public class MenuPaneTests : IDisposable
 
         using (pane.SuppressChords())
         {
-            input.Push(Keys.CtrlAltC, Keys.CtrlAlt(ConsoleKey.E), Keys.Enter);
+            input.Push(Keys.CtrlAltC, Keys.CtrlF, Keys.Enter);
             Assert.Equal(new MenuPick(0, 2), await menu.PickAsync(Page("one", "two", "three"), 2, CancellationToken.None));
         }
 

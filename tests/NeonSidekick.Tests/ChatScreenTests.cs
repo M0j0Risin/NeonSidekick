@@ -9961,17 +9961,19 @@ public partial class ChatScreenTests : IDisposable
             ("Ctrl+A", "select all text on the line"),
             ("Ctrl+C", "copy the selected text · stop the speech · cancel the reply · twice to exit"),
             ("Ctrl+E", "open the working directory in your file browser (/explore)"),   // later on 2026-10-01, the user's place and wording
+            ("Ctrl+F", "show or hide the performance bar (/perf)"),   // from Ctrl+Alt+E, later still on 2026-10-01
             ("Ctrl+H", "open help (/help)"),   // from Ctrl+Alt+H, later still on 2026-10-01
             ("Ctrl+M", "open the model picker (/model)"),   // later still on 2026-10-01, the user's wording
             ("Ctrl+O", "expand or collapse the tool calls, code blocks and thinking (or click a summary line)"),   // 2026-09-22
             ("Ctrl+P", "open the profile pane (/profile)"),   // from Ctrl+Alt+P
             ("Ctrl+R", "open the reasoning picker (/reasoning)"),
             ("Ctrl+S", "open the server picker (/server)"),
+            ("Ctrl+T", "show or hide the toolbar (/tb)"),   // from Ctrl+Alt+B
             ("Ctrl+U", "open the usage pane (/usage)"),   // from Ctrl+Alt+G
             ("Ctrl+X", "cut the selected text"),   // 2026-09-25
-        ], rows[^25..^13]);
+        ], rows[^25..^11]);
         // Each plain-Ctrl chord's row names its command.
-        foreach (var (row, key) in new[] { (rows[^25], Keys.CtrlSlash), (rows[^22], Keys.CtrlE), (rows[^21], Keys.CtrlH), (rows[^20], Keys.CtrlM), (rows[^18], Keys.CtrlP), (rows[^17], Keys.CtrlR), (rows[^16], Keys.CtrlS), (rows[^15], Keys.CtrlU) })
+        foreach (var (row, key) in new[] { (rows[^25], Keys.CtrlSlash), (rows[^22], Keys.CtrlE), (rows[^21], Keys.CtrlF), (rows[^20], Keys.CtrlH), (rows[^19], Keys.CtrlM), (rows[^17], Keys.CtrlP), (rows[^16], Keys.CtrlR), (rows[^15], Keys.CtrlS), (rows[^14], Keys.CtrlT), (rows[^13], Keys.CtrlU) })
         {
             Assert.Equal(Keys.ShortcutLine(key), row.Meaning[(row.Meaning.LastIndexOf('(') + 1)..^1]);
         }
@@ -9980,10 +9982,8 @@ public partial class ChatScreenTests : IDisposable
         // joined later that day (the user's ask).
         Assert.Equal(
         [
-            ("Ctrl+Alt+B", "show or hide the toolbar (/tb)"),
             ("Ctrl+Alt+C", "start a new conversation and clear the screen (/clear)"),
             ("Ctrl+Alt+D", "open the MCP pane (/mcp)"),
-            ("Ctrl+Alt+E", "show or hide the performance bar (/perf)"),
             ("Ctrl+Alt+L", "open the allowed commands list (/cmdlist)"),
             ("Ctrl+Alt+M", "open the memory pane (/memory)"),
             ("Ctrl+Alt+N", "start a new conversation but do not clear the screen (/new)"),
@@ -9993,9 +9993,9 @@ public partial class ChatScreenTests : IDisposable
             ("Ctrl+Alt+T", "open the tools pane (/tools)"),
             ("Ctrl+Alt+X", "kill switch to immediately unload an embedded model (press twice)"),   // 2026-10-01, the user's place and wording
             ("Ctrl+Alt+Y", "open the system prompt pane (/sys)"),
-        ], rows[^13..]);
+        ], rows[^11..]);
         // Each row names its chord's command; the kill switch has none (2026-10-01).
-        Assert.All(rows[^13..].Where(row => row.Key != "Ctrl+Alt+X"), row => Assert.Equal(Keys.ShortcutLine(Keys.CtrlAlt(Enum.Parse<ConsoleKey>(row.Key[^1..]))), row.Meaning[(row.Meaning.LastIndexOf('(') + 1)..^1]));
+        Assert.All(rows[^11..].Where(row => row.Key != "Ctrl+Alt+X"), row => Assert.Equal(Keys.ShortcutLine(Keys.CtrlAlt(Enum.Parse<ConsoleKey>(row.Key[^1..]))), row.Meaning[(row.Meaning.LastIndexOf('(') + 1)..^1]));
         Assert.Null(Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.X)));
         Assert.Equal(voiceOn, rows.Any(r => r.Key == "F8"));
         if (voiceOn)
@@ -11544,7 +11544,7 @@ public partial class ChatScreenTests : IDisposable
     public async Task AskUser_TheChordsAreIgnored_ThePaneStillAsks()
     {
         // A tool's question ignores the command chords (2026-10-01, the user's call): no clear, no bar, the answers as typed after.
-        AskUserFixture([Keys.CtrlAltC, Keys.CtrlAlt(ConsoleKey.E), Keys.Down, Keys.Enter, Keys.Char(' '), Keys.Down, Keys.Char(' '), Keys.Right, Keys.Enter], "Blue, cheese and olives.");
+        AskUserFixture([Keys.CtrlAltC, Keys.CtrlF, Keys.Down, Keys.Enter, Keys.Char(' '), Keys.Down, Keys.Char(' '), Keys.Right, Keys.Enter], "Blue, cheese and olives.");
 
         string output = await RunAsync();
 
@@ -15216,7 +15216,7 @@ public partial class ChatScreenTests : IDisposable
     }
 
     [Fact]
-    public async Task CtrlAltE_InThePane_TogglesThePerformanceBar_WithThePaneLeftOpen()
+    public async Task CtrlF_InThePane_TogglesThePerformanceBar_WithThePaneLeftOpen()
     {
         // In place (2026-10-01, the user's call): the pane stays, so the "x" after the chord is the pane's (nothing),
         // never a draft on the idle line that the Enter after the ESC would send.
@@ -15224,7 +15224,7 @@ public partial class ChatScreenTests : IDisposable
         _console.Profile.Height = 112;
         _geometry = new ScreenGeometry(() => null);
         StepsWhenIdle(
-            input => { PushLine(input, "/help"); input.Push(Keys.CtrlAlt(ConsoleKey.E), Keys.Char('x'), Keys.Escape, Keys.Enter); },
+            input => { PushLine(input, "/help"); input.Push(Keys.CtrlF, Keys.Char('x'), Keys.Escape, Keys.Enter); },
             Line("/exit"));
 
         string output = await RunAsync();
@@ -15258,7 +15258,7 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public async Task CtrlE_InThePane_OpensTheWorkingDirectory_WithThePaneLeftOpen()
     {
-        // In place, as Ctrl+Alt+E (later on 2026-10-01): the pane stays, so the "x" after the chord is the pane's (nothing),
+        // In place, as Ctrl+F (Ctrl+Alt+E until later still on 2026-10-01): the pane stays, so the "x" after the chord is the pane's (nothing),
         // never a draft on the idle line that the Enter after the ESC would send.
         _settings.Update(d => { d.TtsOutput = false; d.MenuMaxHeight = "full-screen"; });
         _console.Profile.Height = 112;
@@ -15451,7 +15451,7 @@ public partial class ChatScreenTests : IDisposable
     }
 
     [Fact]
-    public async Task MidTurn_CtrlAltE_InAPaneTheReplyEndedUnder_TogglesTheBar_WithThePaneStillOpen()
+    public async Task MidTurn_CtrlF_InAPaneTheReplyEndedUnder_TogglesTheBar_WithThePaneStillOpen()
     {
         // The review's finding (2026-10-01): with the reply over and the pane left open, the turn's end waited on the pane and
         // ran nothing posted meanwhile, so the bar changed only at the close — and twice was no change at all.
@@ -15495,7 +15495,7 @@ public partial class ChatScreenTests : IDisposable
                 {
                     replied.Wait(TimeSpan.FromSeconds(5));
                     await Task.Delay(200);
-                    input.Push(Keys.CtrlAlt(ConsoleKey.E));
+                    input.Push(Keys.CtrlF);
                 });
             }
             else if (step == 2)

@@ -97,7 +97,7 @@ public enum SlashCommand
     /// <c>/tb [on|off]</c> (later on 2026-09-30, the user's ask: "same as how /perf works for the perfbar"): bare, the toolbar
     /// hidden while it shows — its items kept in <see cref="Settings.AppSettingsData.ToolbarLastItems"/> — else shown again with
     /// them (<see cref="ToolbarItems.Defaults"/> the first time); <c>on</c> and <c>off</c> say which. Display only, so it runs at
-    /// once under a reply; Ctrl+Alt+B.
+    /// once under a reply; Ctrl+T (Ctrl+Alt+B until later still on 2026-10-01).
     /// </summary>
     Tb,
 

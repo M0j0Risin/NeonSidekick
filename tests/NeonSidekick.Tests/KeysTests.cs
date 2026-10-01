@@ -68,12 +68,10 @@ public class KeysTests
     [InlineData(ConsoleKey.T, '\x14', "/tools")]
     [InlineData(ConsoleKey.S, '\x13', "/skills")]   // from Ctrl+Alt+K later still on 2026-10-01 (the user's ask)
     [InlineData(ConsoleKey.Y, '\x19', "/sys")]
-    [InlineData(ConsoleKey.E, '\x05', "/perf")]
     [InlineData(ConsoleKey.M, '\r', "/memory")]
     [InlineData(ConsoleKey.D, '\x04', "/mcp")]
     [InlineData(ConsoleKey.L, '\x0c', "/cmdlist")]
     [InlineData(ConsoleKey.O, '\x0f', "/police")]
-    [InlineData(ConsoleKey.B, '\x02', "/tb")]
     public void ShortcutLine_ThePaneChords_AreTheirBareCommands(ConsoleKey key, char control, string line)
     {
         // Later on 2026-09-30 (the user's ask): the test factory's '\0' and the console's control character count; Shift,
@@ -90,12 +88,12 @@ public class KeysTests
     [Fact]
     public void ShortcutLine_CtrlE_IsExplore_WithoutAltOrShift_AndATypedEStaysAnE()
     {
-        // Later on 2026-10-01 (the user's ask): the console's ENQ and the test factory's '\0' count; Ctrl+Alt+E stays /perf,
+        // Later on 2026-10-01 (the user's ask): the console's ENQ and the test factory's '\0' count; Ctrl+Alt+E was /perf (gone since Ctrl+F),
         // Shift, Alt alone and a typed "E" (Spectre's test input marks it with Control) are no chord.
         Assert.Equal("/explore", Keys.ShortcutLine(Keys.CtrlE));
         Assert.Equal("/explore", Keys.ShortcutLine(Keys.Ctrl(ConsoleKey.E)));
         Assert.Contains("/explore", NeonSidekick.App.SlashCommands.Words);
-        Assert.Equal("/perf", Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.E)));
+        Assert.Null(Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.E)));
         Assert.Null(Keys.ShortcutLine(new ConsoleKeyInfo('\x05', ConsoleKey.E, shift: true, alt: false, control: true)));
         Assert.Null(Keys.ShortcutLine(new ConsoleKeyInfo('E', ConsoleKey.E, shift: false, alt: false, control: true)));
         Assert.Null(Keys.ShortcutLine(new ConsoleKeyInfo('\0', ConsoleKey.E, shift: false, alt: true, control: false)));
@@ -106,11 +104,13 @@ public class KeysTests
     }
 
     [Theory]
+    [InlineData(ConsoleKey.F, '\x06', "/perf")]     // from Ctrl+Alt+E later still on 2026-10-01 (the user's ask)
     [InlineData(ConsoleKey.H, '\x08', "/help")]   // moved from Ctrl+Alt+H later still on 2026-10-01 (the user's ask)
     [InlineData(ConsoleKey.M, '\r', "/model")]
     [InlineData(ConsoleKey.P, '\x10', "/profile")]   // from Ctrl+Alt+P
     [InlineData(ConsoleKey.R, '\x12', "/reasoning")]
     [InlineData(ConsoleKey.S, '\x13', "/server")]
+    [InlineData(ConsoleKey.T, '\x14', "/tb")]       // from Ctrl+Alt+B
     [InlineData(ConsoleKey.U, '\x15', "/usage")]     // from Ctrl+Alt+G
     public void ShortcutLine_ThePlainCtrlChords_AreTheirBareCommands_AndATypedLetterStaysALetter(ConsoleKey key, char control, string line)
     {
@@ -144,6 +144,8 @@ public class KeysTests
         Assert.Equal("/help", Keys.ShortcutLine(Keys.CtrlH));
         Assert.Equal("/profile", Keys.ShortcutLine(Keys.CtrlP));
         Assert.Equal("/usage", Keys.ShortcutLine(Keys.CtrlU));
+        Assert.Equal("/perf", Keys.ShortcutLine(Keys.CtrlF));
+        Assert.Equal("/tb", Keys.ShortcutLine(Keys.CtrlT));
         Assert.Equal(ConsoleKey.H, Keys.CtrlH.Key);   // the BS rides on the H key: never Backspace
         Assert.Null(Keys.ShortcutLine(Keys.Backspace));
         Assert.Null(Keys.ShortcutLine(new ConsoleKeyInfo('\b', ConsoleKey.Backspace, false, false, true)));   // Ctrl+Backspace
@@ -151,6 +153,9 @@ public class KeysTests
         Assert.Null(Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.G)));
         Assert.Null(Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.H)));
         Assert.Null(Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.K)));
+        Assert.Null(Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.B)));   // /tb on Ctrl+T, /perf on Ctrl+F since later still on 2026-10-01
+        Assert.Null(Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.E)));
+        Assert.Equal("/tools", Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.T)));
     }
 
     [Fact]

@@ -188,7 +188,7 @@ public sealed class AppSettingsData
     public List<string>? ToolbarItems { get; set; }
 
     /// <summary>
-    /// The items a bare <c>/tb</c> (or Ctrl+Alt+B, or <c>/tb on</c>) brings back after it hid the toolbar (later on 2026-09-30,
+    /// The items a bare <c>/tb</c> (or Ctrl+T, or <c>/tb on</c>) brings back after it hid the toolbar (later on 2026-09-30,
     /// the user's ask: "same as how /perf works for the perfbar"): what showed when it hid it, as <see cref="ToolbarItems"/>
     /// saves it; null until then, or when that was <see cref="App.ToolbarItems.Defaults"/>, which come back. No settings row,
     /// no variable.

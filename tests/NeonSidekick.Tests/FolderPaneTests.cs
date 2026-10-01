@@ -94,7 +94,7 @@ public class FolderPaneTests : IDisposable
         var (picker, screen, input) = Picker();
         using var _ = screen;
         screen.ChordInPlace = line => line == "/perf";
-        input.Push(Keys.CtrlAlt(ConsoleKey.E), Keys.Char(' '), Keys.Down, Keys.Enter);
+        input.Push(Keys.CtrlF, Keys.Char(' '), Keys.Down, Keys.Enter);
         Assert.Equal(P(C, "Users"), await picker.PickAsync(new FolderTree(Disks()), 0, CancellationToken.None));
         Assert.Null(screen.TakeDismissChord());
 

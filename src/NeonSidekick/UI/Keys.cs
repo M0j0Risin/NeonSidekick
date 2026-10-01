@@ -53,6 +53,9 @@ public static class Keys
     /// <summary>Ctrl+E as the console delivers it: the ENQ character with the key and Control (<c>/explore</c>, <see cref="ShortcutLine"/>).</summary>
     public static ConsoleKeyInfo CtrlE => new('\x05', ConsoleKey.E, false, false, true);
 
+    /// <summary>Ctrl+F as the console delivers it: the ACK character with the key and Control (<c>/perf</c>).</summary>
+    public static ConsoleKeyInfo CtrlF => new('\x06', ConsoleKey.F, false, false, true);
+
     /// <summary>Ctrl+H as the console delivers it: the BS character with the H key (never Backspace) and Control (<c>/help</c>).</summary>
     public static ConsoleKeyInfo CtrlH => new('\x08', ConsoleKey.H, false, false, true);
 
@@ -70,6 +73,9 @@ public static class Keys
 
     /// <summary>Ctrl+S as the console delivers it: the DC3 character with the key and Control (<c>/server</c>).</summary>
     public static ConsoleKeyInfo CtrlS => new('\x13', ConsoleKey.S, false, false, true);
+
+    /// <summary>Ctrl+T as the console delivers it: the DC4 character with the key and Control (<c>/tb</c>).</summary>
+    public static ConsoleKeyInfo CtrlT => new('\x14', ConsoleKey.T, false, false, true);
 
     /// <summary>Ctrl+/ as the console delivers it on a US layout: no character, the Oem2 key with Control (<c>/settings</c>).</summary>
     public static ConsoleKeyInfo CtrlSlash => new('\0', ConsoleKey.Oem2, false, false, true);
@@ -94,7 +100,7 @@ public static class Keys
     /// (<c>/perf</c>, <c>/tb</c>), or ignores it under a tool's question.
     /// Ctrl+E <c>/explore</c> came later on 2026-10-01 (the user's ask), the first plain-Ctrl chord: Control held, Alt and Shift
     /// not, and no character but the console's own ENQ (<c>'\x05'</c>; a test <see cref="Ctrl"/> builds <c>'\0'</c>) — the
-    /// <see cref="IsToolToggle"/> shape, so a typed "E" stays an "E" and Ctrl+Alt+E is still <c>/perf</c>.
+    /// <see cref="IsToolToggle"/> shape, so a typed "E" stays an "E" and Ctrl+Alt+E is still <c>/perf</c> (until Ctrl+F took it, below).
     /// Ctrl+M <c>/model</c>, Ctrl+R <c>/reasoning</c> and Ctrl+S <c>/server</c> came later still that day (the user's ask), the
     /// three pickers, in the same shape: their CR, DC2 and DC3 count as no character. Ctrl+M's CR rides on
     /// <see cref="ConsoleKey.M"/>, never on <see cref="ConsoleKey.Enter"/> (the console reports the key, as for Ctrl+Alt+M), so it
@@ -108,6 +114,8 @@ public static class Keys
     /// the console reports it with no character (US's <c>'\x1f'</c> counts too, should one send it), and a typed "/" carries its
     /// character, so it stays a "/" and the slash list still opens. Oem2 is the "/" key of a US layout; elsewhere it is
     /// whatever key sits there (# on a German one), since a "/" that needs Shift cannot be told from Ctrl+Shift.
+    /// Later still on 2026-10-01 (the user's ask) <c>/tb</c> moved to plain Ctrl+T and <c>/perf</c> to Ctrl+F, and Ctrl+Alt+B
+    /// and Ctrl+Alt+E went: their DC4 and ACK count as no character. Ctrl+Alt+T is still <c>/tools</c>.
     /// </summary>
     public static string? ShortcutLine(ConsoleKeyInfo key)
     {
@@ -117,11 +125,13 @@ public static class Keys
             return (key.Key, key.KeyChar) switch
             {
                 (ConsoleKey.E, '\0' or '\x05') => "/explore",
+                (ConsoleKey.F, '\0' or '\x06') => "/perf",
                 (ConsoleKey.H, '\0' or '\x08') => "/help",
                 (ConsoleKey.M, '\0' or '\r') => "/model",
                 (ConsoleKey.P, '\0' or '\x10') => "/profile",
                 (ConsoleKey.R, '\0' or '\x12') => "/reasoning",
                 (ConsoleKey.S, '\0' or '\x13') => "/server",
+                (ConsoleKey.T, '\0' or '\x14') => "/tb",
                 (ConsoleKey.U, '\0' or '\x15') => "/usage",
                 (ConsoleKey.Oem2, '\0' or '\x1f') => "/settings",
                 _ => null,
@@ -141,12 +151,10 @@ public static class Keys
             (ConsoleKey.T, '\0' or '\x14') => "/tools",
             (ConsoleKey.S, '\0' or '\x13') => "/skills",
             (ConsoleKey.Y, '\0' or '\x19') => "/sys",
-            (ConsoleKey.E, '\0' or '\x05') => "/perf",
             (ConsoleKey.M, '\0' or '\r') => "/memory",
             (ConsoleKey.D, '\0' or '\x04') => "/mcp",
             (ConsoleKey.L, '\0' or '\x0c') => "/cmdlist",
             (ConsoleKey.O, '\0' or '\x0f') => "/police",
-            (ConsoleKey.B, '\0' or '\x02') => "/tb",
             _ => null,
         };
     }
