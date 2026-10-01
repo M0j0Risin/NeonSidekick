@@ -26,8 +26,11 @@ public static class PerfText
     public const string GpuLabel = "GPU";
     public const string VramLabel = "VRAM";
 
-    /// <summary>The network's share of the link (2026-09-30). Pinned.</summary>
-    public const string NetLabel = "NET%";
+    /// <summary>
+    /// The network's share of the link (2026-09-30). <c>NET%</c> until 2026-10-01, when the <c>%</c> went (the user's ask: the
+    /// value beside it carries one); <see cref="NetDownLabel"/> and <see cref="NetUpLabel"/> keep their arrows. Pinned.
+    /// </summary>
+    public const string NetLabel = "NET";
 
     /// <summary>The download rate (2026-09-30). Pinned.</summary>
     public const string NetDownLabel = "NET↓";

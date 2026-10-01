@@ -198,7 +198,7 @@ public sealed class AppSettingsData
     /// The performance bar's meters (2026-09-30, the user's ask: <c>Show performance bar</c> a checklist like Show toolbar,
     /// none by default, in place of the one word — <c>ShowPerformanceBar</c>, off or a look, from 2026-09-29 — that was both
     /// the switch and the look; that key is retired, so a profile saved with it shows no bar until a meter is checked): the
-    /// ids of <see cref="App.PerfBarItems.Names"/> — CPU, RAM, GPU, VRAM, and the network's NET%, NET↓ and NET↑ — in that order.
+    /// ids of <see cref="App.PerfBarItems.Names"/> — CPU, RAM, GPU, VRAM, and the network's NET, NET↓ and NET↑ — in that order.
     /// Null (the default) is none: no row, nothing sampled. The GPU meters read NVIDIA's NVML where an NVIDIA GPU answers, else
     /// Windows' own counters (PDH) for the adapter with the most dedicated memory (DXGI); the network's, .NET's own counters of
     /// the adapters with a gateway. A meter the machine cannot read is left out. Read on every pane tick, so a change shows at

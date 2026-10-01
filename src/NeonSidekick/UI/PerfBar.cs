@@ -17,7 +17,7 @@ public sealed record PerfRow(IReadOnlyList<PerfSegment> Segments)
 /// <summary>
 /// The performance bar's row (2026-09-29, the user's ask: a third bar under the toolbar with CPU %, RAM %, GPU % and VRAM %,
 /// in four looks — "let's do all of them"; since 2026-09-30 the meters the <c>Show performance bar</c> checklist checks,
-/// <see cref="PerfBarItems"/>, the network's among them — NET% a share like the rest, NET↓ and NET↑ written as rates and
+/// <see cref="PerfBarItems"/>, the network's among them — NET a share like the rest, NET↓ and NET↑ written as rates and
 /// drawn as shares of the link): <see cref="PerfBarStyle.Text"/> writes each meter's label and value;
 /// <see cref="PerfBarStyle.Gauge"/> draws a heavy line in half-cell steps (eighth blocks, a cell tall, until 2026-09-30); <see cref="PerfBarStyle.Spark"/> the last
 /// <see cref="PerfSampler.HistoryLength"/> readings as a sparkline; <see cref="PerfBarStyle.Led"/> ten segments lit along the

@@ -15,7 +15,7 @@ public interface INetworkCounters
 
 /// <summary>
 /// The machine's network adapters as .NET's own <see cref="NetworkInterface"/> reports them (2026-09-30, the performance
-/// bar's NET%, NET↓ and NET↑, the user's ask): no P/Invoke of the app's own and no native library — the runtime reads the
+/// bar's NET, NET↓ and NET↑, the user's ask): no P/Invoke of the app's own and no native library — the runtime reads the
 /// adapters (on Windows through iphlpapi) and is AOT-clean; the smoke's <c>perf:network</c> proves it on the published exe.
 /// The adapters read are those that are up, are neither loopback nor a tunnel, and have a gateway, so a Hyper-V or WSL
 /// <c>vEthernet</c> switch without one is never read; which of them the meters show is <see cref="NetworkMeter"/>'s call. Each
@@ -67,7 +67,7 @@ public sealed class NetworkCounters : INetworkCounters
 /// The network meters from two readings a sample apart (2026-09-30): the busiest adapter's bits a second received and sent,
 /// and its link speed. The busiest, not the sum (later on 2026-09-30, the review's catch): a VPN adapter with a gateway
 /// carries the same bytes as the card under it, so a sum read double, and a docked laptop's Wi-Fi and Ethernet together
-/// summed their links and halved NET%; Windows sends the traffic over one of them, and the busiest is that one. Each adapter
+/// summed their links and halved NET; Windows sends the traffic over one of them, and the busiest is that one. Each adapter
 /// is rated against its own last reading, whenever that was: one missing from a reading keeps its last, so a reading that
 /// skipped it is no gap in the meters, and an adapter new to the list adds nothing until its second reading (a Wi-Fi
 /// reconnect is no spike). Null before a second reading of any adapter, and with none.

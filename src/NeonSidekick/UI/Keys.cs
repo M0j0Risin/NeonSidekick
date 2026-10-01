@@ -64,6 +64,8 @@ public static class Keys
     /// <c>/tb</c> at once, <c>/profile</c> left for the idle line. Their control characters (DC4, VT, DLE, EM, BEL, ENQ, CR,
     /// EOT, FF, SI, STX) count as no character, as ETX does for C; an AltGr key that types one (€ on AltGr+E, ł, ó) is still
     /// that character.
+    /// Ctrl+Alt+H <c>/help</c> came on 2026-10-01 (the user's ask), its BS (<c>'\x08'</c>) no character as the others' are;
+    /// Backspace is its own key, never <see cref="ConsoleKey.H"/>, so the two do not meet.
     /// </summary>
     public static string? ShortcutLine(ConsoleKeyInfo key)
     {
@@ -82,6 +84,7 @@ public static class Keys
             (ConsoleKey.P, '\0' or '\x10') => "/profile",
             (ConsoleKey.Y, '\0' or '\x19') => "/sys",
             (ConsoleKey.G, '\0' or '\x07') => "/usage",
+            (ConsoleKey.H, '\0' or '\x08') => "/help",
             (ConsoleKey.E, '\0' or '\x05') => "/perf",
             (ConsoleKey.M, '\0' or '\r') => "/memory",
             (ConsoleKey.D, '\0' or '\x04') => "/mcp",

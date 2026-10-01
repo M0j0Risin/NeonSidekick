@@ -1608,6 +1608,7 @@ internal sealed partial class ChatScreen
     /// The Ctrl+Alt rows are one block sorted by the letter (later on 2026-09-30, the user's ask, when B, D, E, G, K, L, M, O,
     /// P, T and Y joined C, N and S: <see cref="Keys.ShortcutLine"/>).
     /// The plain Ctrl+letter rows are sorted by the letter too since 2026-10-01 (the user's ask): A, C, O, X.
+    /// Ctrl+Alt+H (<c>/help</c>) joined the same day under G, the user's wording.
     /// </summary>
     public static (string Key, string Meaning)[] KeyRows(bool voiceOn, ConsoleKey pushToTalk, bool wakeReady, string wakePhrase)
     {
@@ -1644,6 +1645,7 @@ internal sealed partial class ChatScreen
         rows.Add(("Ctrl+Alt+D", "open the MCP pane (/mcp)"));
         rows.Add(("Ctrl+Alt+E", "show or hide the performance bar (/perf)"));
         rows.Add(("Ctrl+Alt+G", "open the usage pane (/usage)"));
+        rows.Add(("Ctrl+Alt+H", "open help (/help)"));
         rows.Add(("Ctrl+Alt+K", "open the skills pane (/skills)"));
         rows.Add(("Ctrl+Alt+L", "open the allowed commands list (/cmdlist)"));
         rows.Add(("Ctrl+Alt+M", "open the memory pane (/memory)"));

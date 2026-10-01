@@ -45,7 +45,7 @@ public class PerfBarTests
     public void TheMeters_ArePinned_NoneByDefault()
     {
         Assert.Equal(["cpu", "ram", "gpu", "vram", "net", "netdown", "netup"], PerfBarItems.Names);
-        Assert.Equal(["CPU", "RAM", "GPU", "VRAM", "NET%", "NET↓", "NET↑"], PerfBarItems.Names.Select(PerfBarItems.Title));
+        Assert.Equal(["CPU", "RAM", "GPU", "VRAM", "NET", "NET↓", "NET↑"], PerfBarItems.Names.Select(PerfBarItems.Title));
         Assert.Equal(["cpu", "ram", "gpu", "vram"], PerfBarItems.Restored);
         Assert.Null(new AppSettingsData().PerformanceBarItems);
         Assert.Empty(PerfBarItems.Resolve(null));
@@ -222,13 +222,13 @@ public class PerfBarTests
         var reading = new PerfSnapshot(null, null, null, null, NetDown: 12_400_000, NetUp: 800_000, NetLink: 100_000_000);
 
         var text = PerfBar.Render(PerfBarStyle.Text, Only("net", "netdown", "netup"), reading, [], 120)!;
-        Assert.Equal(Centered("NET%  12% · NET↓ 12.4M · NET↑  800K", 120), text.Text);
+        Assert.Equal(Centered("NET  12% · NET↓ 12.4M · NET↑  800K", 120), text.Text);
         Assert.Equal(new Style(Theme.Good), text.Segments.Single(s => s.Text == "12.4M").Style);
 
         var gauge = PerfBar.Render(PerfBarStyle.Gauge, Only("netdown"), reading, [], 120)!;
         Assert.Equal(Centered("NET↓ ━───────── 12.4M", 120), gauge.Text);   // 12.4 % of the link (one cell), the rate after it
 
-        // No adapter: the network meters left out; an unknown link leaves NET% out and draws the rates empty.
+        // No adapter: the network meters left out; an unknown link leaves NET out and draws the rates empty.
         Assert.Equal("", PerfBar.Render(PerfBarStyle.Text, Only("net", "netdown"), new PerfSnapshot(34, null, null, null), [], 120)!.Text);
         var unknownLink = reading with { NetLink = null };
         Assert.Equal(Centered("NET↓ 12.4M", 120), PerfBar.Render(PerfBarStyle.Text, Only("net", "netdown"), unknownLink, [], 120)!.Text);

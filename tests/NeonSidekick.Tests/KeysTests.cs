@@ -69,6 +69,7 @@ public class KeysTests
     [InlineData(ConsoleKey.P, '\x10', "/profile")]
     [InlineData(ConsoleKey.Y, '\x19', "/sys")]
     [InlineData(ConsoleKey.G, '\x07', "/usage")]
+    [InlineData(ConsoleKey.H, '\x08', "/help")]   // 2026-10-01
     [InlineData(ConsoleKey.E, '\x05', "/perf")]
     [InlineData(ConsoleKey.M, '\r', "/memory")]
     [InlineData(ConsoleKey.D, '\x04', "/mcp")]

@@ -8,7 +8,7 @@ namespace NeonSidekick.App;
 /// The setting <c>Show performance bar</c> as a checklist (2026-09-30, the user's ask: the toolbar's shape — pick the
 /// meters, none picked is no bar — in place of the one word that was both the switch and the look): one id per meter, in
 /// the bar's order, saved in <see cref="Settings.AppSettingsData.PerformanceBarItems"/>. Null there is none (the default:
-/// no row, nothing sampled). The network's three (NET%, NET↓, NET↑) came with it, each a choice of its own (the user's
+/// no row, nothing sampled). The network's three (NET, NET↓, NET↑) came with it, each a choice of its own (the user's
 /// pick). The look is <see cref="Settings.AppSettingsData.PerformanceBarLook"/>, picked on the same page's title row.
 /// <see cref="Resolve"/> is the one place the saved list becomes the set: a display setting, so an unknown word is dropped
 /// without a warning.

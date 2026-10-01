@@ -102,7 +102,7 @@ public static class PerfMath
     public static double? LinkPercent(double? rate, double? link) =>
         rate is { } r && link is { } l && l > 0 ? Clamp(r / l * 100) : null;
 
-    /// <summary>NET%: the busier direction as a share of the link, null when the link is unknown.</summary>
+    /// <summary>NET: the busier direction as a share of the link, null when the link is unknown.</summary>
     public static double? NetPercent(double? down, double? up, double? link) =>
         down is null && up is null ? null : LinkPercent(Math.Max(down ?? 0, up ?? 0), link);
 }
