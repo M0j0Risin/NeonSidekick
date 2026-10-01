@@ -275,6 +275,27 @@ public class PerfBarTests
     }
 
     [Theory]
+    [InlineData("pid_16764_luid_0x00000000_0x00015985_phys_0", 16764, true)]
+    [InlineData("PID_16764_luid_0x00000000_0x00015985_phys_0", 16764, true)]
+    [InlineData("pid_167640_luid_0x00000000_0x00015985_phys_0", 16764, false)]
+    [InlineData("pid_1676_luid_0x00000000_0x00015985_phys_0", 16764, false)]
+    [InlineData("luid_0x00000000_0x00015985_phys_0", 16764, false)]
+    [InlineData(null, 16764, false)]
+    public void AProcessInstance_IsItsPidExactly(string? instance, int pid, bool mine)
+    {
+        // Embedded VRAM only's shared-memory reading (2026-10-01): pid 1676 is not pid 16764.
+        Assert.Equal(mine, PerfMath.IsProcessInstance(instance, pid));
+    }
+
+    [Fact]
+    public void AProcessesSharedGpuMemory_IsReadOrNull()
+    {
+        // This machine's own process: whatever PDH says (null where it has no GPU instance), never a throw.
+        Assert.True(GpuMemory.ProcessSharedBytes(Environment.ProcessId) is null or >= 0);
+        Assert.Null(GpuMemory.ProcessSharedBytes(-1));
+    }
+
+    [Theory]
     [InlineData(null)]
     [InlineData("pid_4_phys_0")]
     [InlineData("luid_0x0000")]

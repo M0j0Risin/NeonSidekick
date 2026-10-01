@@ -487,6 +487,42 @@ public class EmbeddedModelsTests : IDisposable
     }
 
     [Fact]
+    public async Task Start_WithVramOnly_PutsEveryLayerOnTheGpu_AndRefusesTheCpu()
+    {
+        // 2026-10-01 (the user's ask): -ngl all whatever Embedded GPU layers says, and the launch carries the check.
+        InstallByHand();
+        var host = new FakeLlamaServerHost();
+        await using var service = new EmbeddedLlmService(_files, host, Cuda);
+
+        await service.StartAsync(_model, new AppSettingsData { EmbeddedVramOnly = true, EmbeddedGpuLayers = "20" }, null, CancellationToken.None);
+        await service.StartAsync(_model, new AppSettingsData { EmbeddedGpuLayers = "20" }, null, CancellationToken.None);
+        Assert.Equal([("all", true), ("20", false)], host.Launches.Select(l => (l.GpuLayers, l.VramOnly)));
+
+        // The CPU backend has no VRAM to stay in: refused before anything starts.
+        var cpu = new FakeLlamaServerHost();
+        await using var onCpu = new EmbeddedLlmService(_files, cpu, _ => new BackendChoice(LlamaBackend.Cpu, "test"));
+        var ex = await Assert.ThrowsAsync<EmbeddedLlmException>(() => onCpu.StartAsync(_model, new AppSettingsData { EmbeddedVramOnly = true }, null, CancellationToken.None));
+        Assert.Equal(EmbeddedLlmText.VramOnlyOnCpu, ex.Message);
+        Assert.True(ex.VramSpill);
+        Assert.Empty(cpu.Launches);
+    }
+
+    [Fact]
+    public async Task AVramOnlyRefusal_IsNoReasonToFallBack()
+    {
+        // A model that does not fit on CUDA does not fit on Vulkan either, and CUDA is not broken: no fallback, nothing remembered.
+        InstallByHand();
+        var host = new FakeLlamaServerHost { Fail = _ => new EmbeddedLlmException(EmbeddedLlmText.StartFailed(EmbeddedLlmText.VramDidNotFit), vramSpill: true) };
+        await using var service = new EmbeddedLlmService(_files, host, Cuda);
+
+        var ex = await Assert.ThrowsAsync<EmbeddedLlmException>(() => service.StartAsync(_model, new AppSettingsData { EmbeddedVramOnly = true }, null, CancellationToken.None));
+
+        Assert.True(ex.VramSpill);
+        Assert.Equal([LlamaBackend.Cuda], host.Launches.Select(l => l.Backend));
+        Assert.Equal(LlamaBackend.Cuda, service.Backend(new AppSettingsData()).Backend);
+    }
+
+    [Fact]
     public async Task Install_PutsTheRuntimeInFirst_ThenTheModel()
     {
         var host = new FakeLlamaServerHost();

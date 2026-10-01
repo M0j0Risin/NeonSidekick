@@ -253,4 +253,33 @@ public class EmbeddedLlmLiveTests
         using var probe = new HttpClient { Timeout = TimeSpan.FromSeconds(2) };
         await Assert.ThrowsAnyAsync<Exception>(() => probe.GetAsync(new Uri($"http://127.0.0.1:{restarted.Port}/health")));
     }
+
+    /// <summary>
+    /// Embedded VRAM only for real (2026-10-01, the user's ask), on the model the spike that day measured: Qwen3.8 27B NVFP4
+    /// on a 32 GB card does not fit with 262144 tokens and every layer on the GPU, and does with the context left to fit
+    /// (137984 tokens). Runs where that model and CUDA are installed and the card is at most 32 GB; else returns.
+    /// </summary>
+    [EmbeddedLlmFact]
+    public async Task VramOnly_RefusesALoadThatDoesNotFit_AndKeepsOneThatDoes()
+    {
+        var model = EmbeddedModelCatalog.Find("qwen3.8-27b-nvfp4-highest")!;
+        var files = new EmbeddedModels(EmbeddedLlmTestModels.EmbeddedModelsDirectory, EmbeddedLlmTestModels.LlamaDirectory, new HttpClient());
+        if (!files.State(model).IsInstalled || !files.RuntimeInstalled(LlamaBackend.Cuda) || NeonSidekick.Perf.GpuMemory.DedicatedBytes() is not (> 0 and <= 34L << 30))
+        {
+            return;   // an embedded gate: the model, CUDA and a card it overflows
+        }
+
+        var host = new LlamaServerHost();
+        await using var service = new EmbeddedLlmService(files, host, _ => new BackendChoice(LlamaBackend.Cuda, "test"));
+
+        var ex = await Assert.ThrowsAsync<EmbeddedLlmException>(() => service.StartAsync(model, new AppSettingsData { EmbeddedVramOnly = true, EmbeddedContextSize = 262_144, EmbeddedVision = false }, null, CancellationToken.None));
+        Assert.True(ex.VramSpill, ex.Message);
+        Assert.StartsWith(EmbeddedLlmText.StartFailed("it "), ex.Message);
+        Assert.Null(host.Running);
+
+        var info = await service.StartAsync(model, new AppSettingsData { EmbeddedVramOnly = true, EmbeddedVision = false }, null, CancellationToken.None);
+        Assert.Equal(model.Id, info.ModelId);
+        service.Stop();
+        Assert.Null(host.Running);
+    }
 }

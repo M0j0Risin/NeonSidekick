@@ -12,7 +12,9 @@ namespace NeonSidekick.EmbeddedLlm;
 /// changes the launch, so it restarts the server. <paramref name="FitTargetMiB"/> (later on 2026-09-29, the user's ask:
 /// <c>Embedded VRAM budget</c>) is the MiB llama.cpp's fit leaves free on each GPU, null for its own default; a change
 /// restarts the server too. <paramref name="Draft"/> (2026-09-30) is the model's kind of drafting, which picks the
-/// <c>--spec-type</c>: MTP, or DFlash for Muse Glimmer.
+/// <c>--spec-type</c>: MTP, or DFlash for Muse Glimmer. <paramref name="VramOnly"/> (2026-10-01, the user's ask: Embedded VRAM
+/// only) puts every layer on the GPU and has the host refuse a load that spilled into system memory
+/// (<see cref="LlamaServerHost"/>, <see cref="VramSpill"/>); the service passes <c>all</c> as <paramref name="GpuLayers"/> then.
 /// </summary>
 public sealed record LlamaLaunch(
     string Executable,
@@ -27,7 +29,8 @@ public sealed record LlamaLaunch(
     string? DrafterPath = null,
     bool Mtp = false,
     int? FitTargetMiB = null,
-    DraftKind Draft = DraftKind.Mtp)
+    DraftKind Draft = DraftKind.Mtp,
+    bool VramOnly = false)
 {
     /// <summary>The runtime folder: the process's working directory, where its DLLs are found.</summary>
     public string WorkingDirectory => Path.GetDirectoryName(Executable) ?? ".";
@@ -68,6 +71,11 @@ public sealed record LlamaLaunch(
 /// — so fit could not shrink it and moved layers to the CPU instead. Measured that day on an RTX 5090 with Qwen3.8 27B
 /// NVFP4: <c>-c 0</c> took 262144 tokens with 51 of the layers on the GPU and ran at 12 tokens/s; no <c>-c</c> fitted
 /// 113152 tokens (84992 under a 91 % budget) with every layer on the GPU at ~107–111 tokens/s, as <c>-c 32768</c> ran.</item>
+/// <item>With <see cref="LlamaLaunch.VramOnly"/> (2026-10-01): <c>-ngld all</c> beside a drafter, so its layers stay on the GPU as
+/// the weights' do (<c>-ngl all</c>, from the service), and <c>-lv 4</c>, the level at which b11258 logs the load lines the host
+/// checks (<see cref="LlamaLoadReport"/>; about 28 more Debug lines a request). With <c>-ngl all</c> fit still shrinks an unset
+/// context — Qwen3.8 27B NVFP4 that day: 262144 to 137984 tokens, all 66 layers on the GPU — and with a set one it gives up
+/// ("n_gpu_layers already set by user"), so a context that does not fit fails to allocate instead of moving layers.</item>
 /// </list>
 /// </summary>
 public static class LlamaArguments
@@ -91,6 +99,11 @@ public static class LlamaArguments
             {
                 args.Add("-md");
                 args.Add(drafter);
+                if (launch.VramOnly)
+                {
+                    args.Add("-ngld");
+                    args.Add(EmbeddedGpuLayers.All);
+                }
             }
 
             args.Add("--spec-type");
@@ -128,8 +141,17 @@ public static class LlamaArguments
             "--top-p", Number(launch.Sampling.TopP),
             "--top-k", launch.Sampling.TopK.ToString(CultureInfo.InvariantCulture),
         ]);
+        if (launch.VramOnly)
+        {
+            args.Add("-lv");
+            args.Add(VramOnlyVerbosity);
+        }
+
         return args;
     }
+
+    /// <summary>The <c>-lv</c> a VRAM-only launch passes: trace, where the load lines are. Pinned.</summary>
+    public const string VramOnlyVerbosity = "4";
 
     /// <summary>llama.cpp's <c>--spec-type</c> for <paramref name="draft"/>: <c>draft-dflash</c> or <c>draft-mtp</c>. Pinned.</summary>
     public static string SpecType(DraftKind draft) => draft == DraftKind.DFlash ? "draft-dflash" : "draft-mtp";

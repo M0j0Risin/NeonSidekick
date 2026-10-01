@@ -710,8 +710,15 @@ public enum SettingsField
     /// <summary>An edit row: Enter opens the profile's <c>unc.json</c> in the editor (made with <see cref="Unc.UncConfigFile.EmptyText"/> when missing). The UNC tab (2026-09-30).</summary>
     UncSharesProfile,
 
-    /// <summary>An edit row: Enter opens the home's <c>unc.json</c>, every profile's. The UNC tab's last row (2026-09-30). Last in the enum, as every newcomer.</summary>
+    /// <summary>An edit row: Enter opens the home's <c>unc.json</c>, every profile's. The UNC tab's last row (2026-09-30).</summary>
     UncSharesGlobal,
+
+    /// <summary>
+    /// A toggle: whether the embedded server must stay in VRAM, every layer on the GPU and a load that spilled into system
+    /// memory refused (<see cref="Settings.AppSettingsData.EmbeddedVramOnly"/>, 2026-10-01, the user's ask); a reconnect. The
+    /// Embedded tab's row after Embedded VRAM budget. Last in the enum, as every newcomer.
+    /// </summary>
+    EmbeddedVramOnly,
 }
 
 /// <summary>The tabs of <c>/settings</c> on the pane, in strip order (General, Embedded, LLM, TTS, STT, Sessions, Botchat — the user's order, 2026-09-29; Sessions right after General — the user's order, 2026-09-18 — until then; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
@@ -1006,7 +1013,7 @@ internal sealed partial class SettingsMenu
     public static readonly IReadOnlyList<IReadOnlyList<SettingsField>> TabFields =
     [
         [SettingsField.Profile, SettingsField.NewProfileMode, SettingsField.WorkingDirectory, SettingsField.QueueMessages, SettingsField.QueueCancelMode, SettingsField.Memory, SettingsField.CopyUserPrompt, SettingsField.ShowImageThumbnails, SettingsField.ImageThumbnailSize, SettingsField.TranscriptMarkdown, SettingsField.PastePreviewLines, SettingsField.HideExitAutocomplete, SettingsField.CommandTypoIntercept, SettingsField.KeepCommandHistory, SettingsField.WelcomeSplash, SettingsField.ShowWorkingDirectory, SettingsField.ToolbarItems, SettingsField.ShowPerformanceBar, SettingsField.Theme, SettingsField.DraftEditor, SettingsField.ImageEditor, SettingsField.ThemedViewer],
-        [SettingsField.EmbeddedLlmServer, SettingsField.EmbeddedModels, SettingsField.EmbeddedFilterType, SettingsField.EmbeddedHfDownloadType, SettingsField.EmbeddedBackend, SettingsField.EmbeddedContextSize, SettingsField.EmbeddedGpuLayers, SettingsField.EmbeddedVramBudget, SettingsField.EmbeddedVision, SettingsField.EmbeddedDrafter],
+        [SettingsField.EmbeddedLlmServer, SettingsField.EmbeddedModels, SettingsField.EmbeddedFilterType, SettingsField.EmbeddedHfDownloadType, SettingsField.EmbeddedBackend, SettingsField.EmbeddedContextSize, SettingsField.EmbeddedGpuLayers, SettingsField.EmbeddedVramBudget, SettingsField.EmbeddedVramOnly, SettingsField.EmbeddedVision, SettingsField.EmbeddedDrafter],
         [SettingsField.LlmScanMode, SettingsField.LlmUrl, SettingsField.LlmModel, SettingsField.LlmApiKey, SettingsField.LlmReasoning, SettingsField.LlmRequestTimeoutSeconds, SettingsField.LlmTurnTimeoutSeconds, SettingsField.LlmContextLength, SettingsField.LlmMidTurnUsage, SettingsField.LlmCompactType, SettingsField.LlmCompactKeepRecent, SettingsField.LlmCompactShowSummary, SettingsField.LlmAutoCompactPercent, SettingsField.LlmMaxTurns, SettingsField.LlmOfferTools, SettingsField.LlmToolCompactType, SettingsField.LlmMaxToolIterations, SettingsField.LlmUseFunVerbs, SettingsField.LlmShowThinking, SettingsField.LlmPreserveThinking, SettingsField.LlmReasoningEstimate, SettingsField.LlmSampling, SettingsField.LlmSamplingFromHuggingFace],
         [SettingsField.TtsOutput, SettingsField.TtsSource, SettingsField.TtsHttpUrl, SettingsField.TtsVoicePreview, SettingsField.TtsVoicePreset, SettingsField.TtsVoice, SettingsField.TtsVoice2, SettingsField.TtsVoiceMix, SettingsField.TtsSpeed],
         Fields.Where(IsVoiceField).ToArray(),
@@ -1239,7 +1246,7 @@ internal sealed partial class SettingsMenu
             or SettingsField.LlmRequestTimeoutSeconds or SettingsField.LlmTurnTimeoutSeconds or SettingsField.LlmContextLength or SettingsField.LlmReasoning
             or SettingsField.ClaudeApi or SettingsField.ClaudeApiKey or SettingsField.ClaudeApiMaxTokens or SettingsField.ClaudeApiPromptCaching or SettingsField.ClaudeCliServer
             or SettingsField.EmbeddedLlmServer or SettingsField.EmbeddedModels or SettingsField.EmbeddedBackend or SettingsField.EmbeddedContextSize or SettingsField.EmbeddedGpuLayers or SettingsField.EmbeddedVramBudget or SettingsField.EmbeddedVision
-            or SettingsField.EmbeddedDrafter;
+            or SettingsField.EmbeddedDrafter or SettingsField.EmbeddedVramOnly;
 
     /// <summary>Whether a change to <paramref name="field"/> needs the speech session re-probed.</summary>
     public static bool IsTtsField(SettingsField field) =>
@@ -1430,7 +1437,7 @@ internal sealed partial class SettingsMenu
             or SettingsField.LlmCompactShowSummary or SettingsField.ShellToolBridge or SettingsField.ShellPoliceOutsidePaths or SettingsField.ShellPreferNative
             or SettingsField.ObsidianTools or SettingsField.ObsidianAllowDelete or SettingsField.SqlTools or SettingsField.SqlPercentMention or SettingsField.ComfyTools or SettingsField.ComfyReinforceNegatives or SettingsField.ComfyShowPrompts or SettingsField.ComfyCaretMention or SettingsField.ComfyPictureStrip
             or SettingsField.BotChatImages or SettingsField.BotChatImageAsync or SettingsField.BotChatSkills or SettingsField.BotChatVision or SettingsField.BotChatMultiEmbeddedKill or SettingsField.ClaudeAdvisor or SettingsField.ClaudeAdvisorConfirm
-            or SettingsField.ClaudeApi or SettingsField.ClaudeApiPromptCaching or SettingsField.ClaudeCliServer or SettingsField.EmbeddedVision or SettingsField.EmbeddedLlmServer or SettingsField.EmbeddedDrafter
+            or SettingsField.ClaudeApi or SettingsField.ClaudeApiPromptCaching or SettingsField.ClaudeCliServer or SettingsField.EmbeddedVision or SettingsField.EmbeddedLlmServer or SettingsField.EmbeddedDrafter or SettingsField.EmbeddedVramOnly
             or SettingsField.HomeAssistantTools or SettingsField.PrintTools or SettingsField.OracleTools or SettingsField.OraclePercentMention or SettingsField.MySqlTools or SettingsField.MySqlPercentMention
             or SettingsField.UncTools or SettingsField.UncWrites or SettingsField.UncPercentMention;
 
@@ -1615,6 +1622,7 @@ internal sealed partial class SettingsMenu
         SettingsField.EmbeddedContextSize => "Embedded context size",
         SettingsField.EmbeddedGpuLayers => "Embedded GPU layers",
         SettingsField.EmbeddedVramBudget => "Embedded VRAM budget",
+        SettingsField.EmbeddedVramOnly => "Embedded VRAM only",
         SettingsField.EmbeddedFilterType => "Embedded filter type",
         SettingsField.EmbeddedHfDownloadType => "Embedded HF download type",
         SettingsField.EmbeddedVision => "Embedded vision",
@@ -1758,6 +1766,7 @@ internal sealed partial class SettingsMenu
             SettingsField.EmbeddedFilterType => data.EmbeddedFilterType,
             SettingsField.EmbeddedHfDownloadType => data.EmbeddedHfDownloadType,
             SettingsField.EmbeddedVision => OnOff(data.EmbeddedVision),
+            SettingsField.EmbeddedVramOnly => OnOff(data.EmbeddedVramOnly),
             SettingsField.EmbeddedLlmServer => OnOff(data.EmbeddedLlmServer),
             SettingsField.EmbeddedDrafter => OnOff(data.EmbeddedDrafter),
             SettingsField.LlmScanMode => data.LlmScanMode,
@@ -4964,6 +4973,7 @@ internal sealed partial class SettingsMenu
             SettingsField.ClaudeApiPromptCaching => data.ClaudeApiPromptCaching,
             SettingsField.ClaudeCliServer => data.ClaudeCliServer,
             SettingsField.EmbeddedVision => data.EmbeddedVision,
+            SettingsField.EmbeddedVramOnly => data.EmbeddedVramOnly,
             SettingsField.EmbeddedLlmServer => data.EmbeddedLlmServer,
             SettingsField.EmbeddedDrafter => data.EmbeddedDrafter,
             SettingsField.BotChatImages => data.BotChatImages,
@@ -5045,6 +5055,7 @@ internal sealed partial class SettingsMenu
             case SettingsField.ClaudeApiPromptCaching: data.ClaudeApiPromptCaching = on; break;
             case SettingsField.ClaudeCliServer: data.ClaudeCliServer = on; break;
             case SettingsField.EmbeddedVision: data.EmbeddedVision = on; break;
+            case SettingsField.EmbeddedVramOnly: data.EmbeddedVramOnly = on; break;
             case SettingsField.EmbeddedLlmServer: data.EmbeddedLlmServer = on; break;
             case SettingsField.EmbeddedDrafter: data.EmbeddedDrafter = on; break;
             case SettingsField.BotChatImages: data.BotChatImages = on; break;
@@ -5134,6 +5145,7 @@ internal sealed partial class SettingsMenu
         SettingsField.ClaudeApiPromptCaching => on ? "the prompt and conversation are cached between requests (cheaper)" : "every request is billed in full",
         SettingsField.ClaudeCliServer => on ? "/server offers the Claude CLI, run with the app's tools, not its own" : "the Claude CLI is not offered; a running one stops",
         SettingsField.EmbeddedVision => on ? "the embedded model loads its vision projector and reads images" : "the embedded model reads text alone; about 1 GB less memory",
+        SettingsField.EmbeddedVramOnly => on ? "every layer on the GPU; a load that spills into system RAM is refused" : "a model too big for VRAM may run partly from system RAM, slowly",
         SettingsField.EmbeddedLlmServer => on ? "/server offers the embedded models" : "no embedded models in /server; a running one stops",
         SettingsField.EmbeddedDrafter => on ? "the embedded model drafts ahead with its drafter (faster, same answers)" : "the embedded model decodes one token at a time, no drafter loaded",
         SettingsField.BotChatImages => on ? "/botchat draws pictures while the ComfyUI tools are offered" : "/botchat is talk alone",

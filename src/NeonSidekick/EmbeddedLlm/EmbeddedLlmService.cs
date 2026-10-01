@@ -65,7 +65,8 @@ public interface IEmbeddedLlm : IAsyncDisposable
 /// the <see cref="LlamaLaunch"/> from the settings, and asks the host. When <c>auto</c> chose CUDA and CUDA does not
 /// start (a driver present but broken, a GPU the build does not know), it says so and tries Vulkan — and remembers,
 /// so later starts in this run go to Vulkan directly instead of failing CUDA again first. A CUDA runtime that could not
-/// be downloaded is not such a failure: it is reported as it is, and the next start tries CUDA again.
+/// be downloaded is not such a failure: it is reported as it is, and the next start tries CUDA again. Nor is a load
+/// Embedded VRAM only refused (2026-10-01): the model did not fit, which Vulkan would not change.
 /// </summary>
 public sealed class EmbeddedLlmService : IEmbeddedLlm
 {
@@ -236,7 +237,7 @@ public sealed class EmbeddedLlmService : IEmbeddedLlm
         {
             return await StartOnAsync(host, choice.Backend, model, effective, auto, phase, cancellationToken).ConfigureAwait(false);
         }
-        catch (EmbeddedLlmException ex) when (auto && choice.Backend == LlamaBackend.Cuda && !ex.RuntimeMissing)
+        catch (EmbeddedLlmException ex) when (auto && choice.Backend == LlamaBackend.Cuda && !ex.RuntimeMissing && !ex.VramSpill)
         {
             _cudaFailed = true;
             DiagnosticLog.Warn(Category, EmbeddedLlmText.CudaFallback(ex.Message));
@@ -285,6 +286,14 @@ public sealed class EmbeddedLlmService : IEmbeddedLlm
 
     private async Task<EmbeddedServerInfo> StartOnAsync(ILlamaServerHost host, LlamaBackend backend, EmbeddedModel model, AppSettingsData effective, bool auto, Action<string>? phase, CancellationToken cancellationToken)
     {
+        // Embedded VRAM only (2026-10-01, the user's ask): every layer on the GPU whatever Embedded GPU layers says, and
+        // no start at all on the CPU backend, which has no VRAM to stay in.
+        bool vramOnly = effective.EmbeddedVramOnly;
+        if (vramOnly && backend == LlamaBackend.Cpu)
+        {
+            throw new EmbeddedLlmException(EmbeddedLlmText.VramOnlyOnCpu, vramSpill: true);
+        }
+
         var runtime = await _files.EnsureRuntimeAsync(backend, phase, cancellationToken).ConfigureAwait(false);
         if (!runtime.Ok)
         {
@@ -301,13 +310,14 @@ public sealed class EmbeddedLlmService : IEmbeddedLlm
             effective.EmbeddedVision && File.Exists(mmproj) ? mmproj : null,
             model.Id,
             EmbeddedContextSize.Effective(effective.EmbeddedContextSize),
-            EmbeddedGpuLayers.Effective(effective.EmbeddedGpuLayers),
+            vramOnly ? EmbeddedGpuLayers.All : EmbeddedGpuLayers.Effective(effective.EmbeddedGpuLayers),
             model.Sampling,
             auto,
             drafter,
             mtp,
             FitTarget(backend, effective),
-            model.Draft);
+            model.Draft,
+            vramOnly);
         phase?.Invoke(EmbeddedLlmText.StartingLabel(model));
         return await host.EnsureRunningAsync(launch, model, phase, cancellationToken).ConfigureAwait(false);
     }

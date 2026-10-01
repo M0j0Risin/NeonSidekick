@@ -60,6 +60,15 @@ public static class PerfMath
         return true;
     }
 
+    /// <summary>
+    /// Whether a PDH GPU counter's instance (<c>pid_16764_luid_0x00000000_0x00015985_phys_0</c>) is process
+    /// <paramref name="pid"/>'s (2026-10-01, Embedded VRAM only): its <c>pid_</c> part names that id exactly, so pid 16 is
+    /// not pid 167.
+    /// </summary>
+    public static bool IsProcessInstance(string? instance, int pid) =>
+        instance is not null
+        && instance.StartsWith(string.Create(CultureInfo.InvariantCulture, $"pid_{pid}_"), StringComparison.OrdinalIgnoreCase);
+
     /// <summary>A LUID as one number: the high part over the low.</summary>
     public static long Luid(uint high, uint low) => (long)(((ulong)high << 32) | low);
 

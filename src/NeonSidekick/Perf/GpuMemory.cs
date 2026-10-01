@@ -24,4 +24,25 @@ public static class GpuMemory
             return null;
         }
     }
+
+    /// <summary>
+    /// The shared GPU memory process <paramref name="pid"/> holds, in bytes (2026-10-01, Embedded VRAM only:
+    /// <see cref="PdhGpu.ProcessSharedUsage"/>); null off Windows or when PDH does not answer for it.
+    /// </summary>
+    public static long? ProcessSharedBytes(int pid)
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return null;
+        }
+
+        try
+        {
+            return PdhGpu.ProcessSharedUsage(pid) is { } bytes ? (long)bytes : null;
+        }
+        catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException)
+        {
+            return null;
+        }
+    }
 }

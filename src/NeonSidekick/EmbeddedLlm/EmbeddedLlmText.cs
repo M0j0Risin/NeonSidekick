@@ -187,5 +187,35 @@ public static class EmbeddedLlmText
 
     public static string CudaFallback(string detail) => $"CUDA did not start ({detail}); trying Vulkan";
 
+    /// <summary>
+    /// Embedded VRAM only's refusal of a load that came up with part of the model in system memory (2026-10-01, the user's
+    /// ask): what went there — layers llama.cpp left on the CPU, shared memory the driver placed — and what to lower.
+    /// </summary>
+    public static string VramSpilled(VramSpill spill)
+    {
+        ArgumentNullException.ThrowIfNull(spill);
+        var parts = new List<string>(2);
+        if (spill.LayersOnCpu > 0)
+        {
+            parts.Add(string.Create(CultureInfo.InvariantCulture, $"{spill.LayersOnCpu} of {spill.TotalLayers} layers"));
+        }
+
+        if (spill.SharedMiB > 0)
+        {
+            parts.Add(string.Create(CultureInfo.InvariantCulture, $"about {spill.SharedMiB} MiB of shared GPU memory"));
+        }
+
+        return $"it spilled {string.Join(" and ", parts)} into system RAM, and Embedded VRAM only is on; {VramAdvice}";
+    }
+
+    /// <summary>Embedded VRAM only's refusal of a load whose allocation failed: with every layer on the GPU, it does not fit (2026-10-01). Pinned.</summary>
+    public const string VramDidNotFit = "it does not fit in VRAM with every layer on the GPU, and Embedded VRAM only is on; " + VramAdvice;
+
+    /// <summary>What to lower when a VRAM-only load does not fit.</summary>
+    private const string VramAdvice = "set Embedded context size to 0 (fit) or lower it, lower Embedded VRAM budget, close what else uses the GPU, or pick a smaller model";
+
+    /// <summary>Embedded VRAM only's refusal on the CPU backend, which has no VRAM to stay in (2026-10-01). Pinned.</summary>
+    public const string VramOnlyOnCpu = "Embedded VRAM only is on, but the backend is the CPU; choose CUDA or Vulkan in Embedded backend, or turn Embedded VRAM only off";
+
     private static string Tail(string tail) => string.IsNullOrWhiteSpace(tail) ? "" : ": " + tail.Trim();
 }

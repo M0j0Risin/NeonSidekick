@@ -1872,6 +1872,19 @@ public sealed class AppSettingsData
     public int EmbeddedVramBudget { get; set; } = EmbeddedLlm.EmbeddedVramBudget.Default;
 
     /// <summary>
+    /// Whether the embedded server must stay in VRAM (2026-10-01, the user's ask: "forbid spilling over into system RAM if
+    /// VRAM runs out", off by default). llama.cpp has no such switch, and memory reaches system RAM two ways: llama.cpp's fit
+    /// moving layers to the CPU (<see cref="EmbeddedGpuLayers"/> <c>auto</c>), and on Windows the NVIDIA driver's CUDA sysmem
+    /// fallback, which places what does not fit in shared memory without llama.cpp knowing. On, every layer goes on the GPU
+    /// (<c>-ngl all</c>, whatever <see cref="EmbeddedGpuLayers"/> says; fit then shrinks only an unset context), and a load
+    /// that still spilled — an allocation that failed, layers on the CPU, shared GPU memory beyond llama.cpp's pinned
+    /// buffers — is stopped and the connect refused with what to lower (<see cref="EmbeddedLlm.VramSpill"/>). Refused on the
+    /// CPU backend. The driver's own switch is the NVIDIA Control Panel's per-program "CUDA - Sysmem Fallback Policy"; the
+    /// app never changes it. A change restarts the server. No variable.
+    /// </summary>
+    public bool EmbeddedVramOnly { get; set; }
+
+    /// <summary>
     /// Which size the embedded model lists' 8GB / 16GB / 32GB filter buttons measure (later on 2026-09-29, the user's ask and
     /// names): <c>file</c> (the default "for now": the size the row shows — weights, vision projector and drafter) or
     /// <c>gguf</c> (the weights alone), <see cref="EmbeddedLlm.EmbeddedFilterTypes.Names"/>. Display only: no reconnect, no

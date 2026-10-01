@@ -32,8 +32,8 @@ public partial class SettingsMenuTests
         Assert.Equal("General", SettingsMenu.TabTitles[tab - 1]);   // second since later on 2026-09-29 (the user's order); after STT until then, the Claude (API) tab between until it went to /tools
         Assert.Equal("LLM", SettingsMenu.TabTitles[tab + 1]);
         // The switch first and MTP last (2026-09-29, the user's asks); the filter type under the catalog, the VRAM budget under
-        // the GPU layers (later that day), the HF download type under the filter type (2026-09-30).
-        Assert.Equal([SettingsField.EmbeddedLlmServer, SettingsField.EmbeddedModels, SettingsField.EmbeddedFilterType, SettingsField.EmbeddedHfDownloadType, SettingsField.EmbeddedBackend, SettingsField.EmbeddedContextSize, SettingsField.EmbeddedGpuLayers, SettingsField.EmbeddedVramBudget, SettingsField.EmbeddedVision, SettingsField.EmbeddedDrafter], SettingsMenu.TabFields[tab]);
+        // the GPU layers (later that day), the HF download type under the filter type (2026-09-30), VRAM only under the budget (2026-10-01).
+        Assert.Equal([SettingsField.EmbeddedLlmServer, SettingsField.EmbeddedModels, SettingsField.EmbeddedFilterType, SettingsField.EmbeddedHfDownloadType, SettingsField.EmbeddedBackend, SettingsField.EmbeddedContextSize, SettingsField.EmbeddedGpuLayers, SettingsField.EmbeddedVramBudget, SettingsField.EmbeddedVramOnly, SettingsField.EmbeddedVision, SettingsField.EmbeddedDrafter], SettingsMenu.TabFields[tab]);
         var reconnecting = SettingsMenu.TabFields[tab].Where(f => f is not (SettingsField.EmbeddedFilterType or SettingsField.EmbeddedHfDownloadType)).ToList();
         Assert.All(reconnecting, f => Assert.True(SettingsMenu.IsLlmField(f), f.ToString()));
         Assert.All(reconnecting, f => Assert.True(SettingsMenu.RefusedMidTurn(f), f.ToString()));
@@ -41,14 +41,17 @@ public partial class SettingsMenuTests
         Assert.False(SettingsMenu.RefusedMidTurn(SettingsField.EmbeddedFilterType));
         Assert.False(SettingsMenu.IsLlmField(SettingsField.EmbeddedHfDownloadType));   // read as each download starts
         Assert.False(SettingsMenu.RefusedMidTurn(SettingsField.EmbeddedHfDownloadType));
-        Assert.True(SettingsMenu.IsToggle(SettingsField.EmbeddedVision) && SettingsMenu.IsToggle(SettingsField.EmbeddedLlmServer) && SettingsMenu.IsToggle(SettingsField.EmbeddedDrafter));
+        Assert.True(SettingsMenu.IsToggle(SettingsField.EmbeddedVision) && SettingsMenu.IsToggle(SettingsField.EmbeddedLlmServer) && SettingsMenu.IsToggle(SettingsField.EmbeddedDrafter) && SettingsMenu.IsToggle(SettingsField.EmbeddedVramOnly));
         Assert.False(SettingsMenu.IsToggle(SettingsField.EmbeddedBackend));
-        Assert.Equal(["Embedded LLM server enabled", "Embedded models", "Embedded filter type", "Embedded HF download type", "Embedded backend", "Embedded context size", "Embedded GPU layers", "Embedded VRAM budget", "Embedded vision", "Embedded drafter"], SettingsMenu.TabFields[tab].Select(SettingsMenu.FieldName));
+        Assert.Equal(["Embedded LLM server enabled", "Embedded models", "Embedded filter type", "Embedded HF download type", "Embedded backend", "Embedded context size", "Embedded GPU layers", "Embedded VRAM budget", "Embedded VRAM only", "Embedded vision", "Embedded drafter"], SettingsMenu.TabFields[tab].Select(SettingsMenu.FieldName));
         var data = new AppSettingsData();
         Assert.True(data.EmbeddedLlmServer && data.EmbeddedDrafter);   // both on by default
         Assert.Equal(("on", "on"), (SettingsMenu.FieldValue(SettingsField.EmbeddedLlmServer, data, "C:\\p"), SettingsMenu.FieldValue(SettingsField.EmbeddedDrafter, data, "C:\\p")));
-        var copy = AppSettings.Copy(new AppSettingsData { EmbeddedLlmServer = false, EmbeddedDrafter = false });
+        var copy = AppSettings.Copy(new AppSettingsData { EmbeddedLlmServer = false, EmbeddedDrafter = false, EmbeddedVramOnly = true });
         Assert.False(copy.EmbeddedLlmServer || copy.EmbeddedDrafter);
+        Assert.True(copy.EmbeddedVramOnly);
+        Assert.False(data.EmbeddedVramOnly);   // off by default (2026-10-01, the user's ask)
+        Assert.Equal("off", SettingsMenu.FieldValue(SettingsField.EmbeddedVramOnly, data, "C:\\p"));
     }
 
     // The capability columns of a model with a drafter, vision and tools (2026-09-29: ⚡, then 👁️ and 🛠️), and of one without a drafter.

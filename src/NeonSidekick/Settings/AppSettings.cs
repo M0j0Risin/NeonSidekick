@@ -805,6 +805,7 @@ public sealed class AppSettings : IDisposable
         EmbeddedHfDownloadType = source.EmbeddedHfDownloadType,
         EmbeddedGpuLayers = source.EmbeddedGpuLayers,
         EmbeddedVision = source.EmbeddedVision,
+        EmbeddedVramOnly = source.EmbeddedVramOnly,
         EmbeddedLlmServer = source.EmbeddedLlmServer,
         EmbeddedDrafter = source.EmbeddedDrafter,
         HomeAssistantTools = source.HomeAssistantTools,

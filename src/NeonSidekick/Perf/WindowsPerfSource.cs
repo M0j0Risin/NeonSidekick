@@ -295,6 +295,46 @@ internal sealed unsafe class PdhGpu : IGpuReader
         return (load, any ? PerfMath.Percent(used, _total) : null);
     }
 
+    /// <summary>
+    /// The shared GPU memory process <paramref name="pid"/> holds now, in bytes, summed over its adapters (2026-10-01,
+    /// Embedded VRAM only): <c>\GPU Process Memory(*)\Shared Usage</c>, Task Manager's "Shared GPU memory" — where the
+    /// NVIDIA driver's sysmem fallback puts what does not fit, and the pinned host buffers llama.cpp asks for. One
+    /// collection: it is a level, not a rate. Null when the counter does not open or has no instance for the process.
+    /// </summary>
+    internal static double? ProcessSharedUsage(int pid)
+    {
+        if (PerfNative.PdhOpenQuery(null, 0, out nint query) != 0)
+        {
+            return null;
+        }
+
+        try
+        {
+            if (PerfNative.PdhAddEnglishCounter(query, @"\GPU Process Memory(*)\Shared Usage", 0, out nint shared) != 0
+                || PerfNative.PdhCollectQueryData(query) != 0)
+            {
+                return null;
+            }
+
+            double sum = 0;
+            bool any = false;
+            foreach (var (instance, value) in Values(shared))
+            {
+                if (PerfMath.IsProcessInstance(instance, pid))
+                {
+                    sum += value;
+                    any = true;
+                }
+            }
+
+            return any ? sum : null;
+        }
+        finally
+        {
+            PerfNative.PdhCloseQuery(query);
+        }
+    }
+
     /// <summary>A wildcard counter's instances and values now; the instances whose value is not valid are left out.</summary>
     private static List<(string Instance, double Value)> Values(nint counter)
     {

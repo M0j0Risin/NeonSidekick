@@ -377,6 +377,76 @@ public class EmbeddedLlmCoreTests
         Assert.DoesNotContain("--fit-target", LlamaArguments.Build(Launch(), 1, "k"));
     }
 
+    [Fact]
+    public void Arguments_WithVramOnly_TraceTheLoad_AndKeepTheDrafterOnTheGpu()
+    {
+        // 2026-10-01 (the user's ask): -lv 4 last, where the load lines are; -ngld all beside a drafter. The service passes -ngl all.
+        var args = LlamaArguments.Build(Launch(layers: "all") with { VramOnly = true, DrafterPath = @"C:\m\mtp.gguf", Mtp = true }, 1, "k");
+        Assert.Equal(["-md", @"C:\m\mtp.gguf", "-ngld", "all", "--spec-type"], args.Skip(4).Take(5));
+        Assert.Equal(["-lv", "4"], args.TakeLast(2));
+        Assert.Equal("4", LlamaArguments.VramOnlyVerbosity);
+
+        // A head in the weights: no drafter file, so no -ngld. Off: neither.
+        Assert.DoesNotContain("-ngld", LlamaArguments.Build(Launch() with { VramOnly = true, Mtp = true }, 1, "k"));
+        var off = LlamaArguments.Build(Launch() with { DrafterPath = @"C:\m\mtp.gguf", Mtp = true }, 1, "k");
+        Assert.DoesNotContain("-ngld", off);
+        Assert.DoesNotContain("-lv", off);
+        Assert.NotEqual(Launch(), Launch() with { VramOnly = true });   // a toggle restarts the server
+    }
+
+    /// <summary>b11258's load lines at -lv 4, as the 2026-10-01 spike logged them on an RTX 5090 (Qwen3.8 27B NVFP4, CUDA).</summary>
+    private static readonly string[] CudaLoad =
+    [
+        "0.00.564.765 W common_fit_params: failed to fit params to free device memory: n_gpu_layers already set by user to -2, abort",
+        "0.02.306.208 I load_tensors: offloaded 66/66 layers to GPU",
+        "0.02.306.214 I load_tensors:   CPU_Mapped model buffer size =  2425.00 MiB",
+        "0.02.306.215 I load_tensors:        CUDA0 model buffer size = 18865.37 MiB",
+        "0.08.429.420 I llama_context:  CUDA_Host  output buffer size =     0.95 MiB",
+        "0.08.446.050 I llama_kv_cache:      CUDA0 KV buffer size = 12288.00 MiB",
+        "0.08.708.490 I sched_reserve:      CUDA0 compute buffer size =   314.02 MiB",
+        "0.08.708.496 I sched_reserve:  CUDA_Host compute buffer size =   212.02 MiB",
+    ];
+
+    [Fact]
+    public void ALoadReport_ReadsTheLayers_TheHostBuffers_AndAFailedAllocation()
+    {
+        var report = LlamaLoadReport.Parse(CudaLoad);
+        Assert.Equal((66, 66, 0), (report.OffloadedLayers, report.TotalLayers, report.LayersOnCpu));
+        Assert.Equal(212.97, report.HostBufferMiB, 2);   // the two CUDA_Host buffers, not CUDA0's or CPU_Mapped
+        Assert.False(report.OutOfMemory);   // "failed to fit params" is fit giving up, not an allocation
+
+        // A drafter's load adds its own line; a partial one leaves layers on the CPU. Vulkan's host buffers count the same.
+        var partial = LlamaLoadReport.Parse(["load_tensors: offloaded 51/66 layers to GPU", "load_tensors: offloaded 4/4 layers to GPU", "llama_context: Vulkan_Host  output buffer size =     1.00 MiB"]);
+        Assert.Equal((55, 70, 15), (partial.OffloadedLayers, partial.TotalLayers, partial.LayersOnCpu));
+        Assert.Equal(1.0, partial.HostBufferMiB);
+
+        // The two backends' failed allocations, as the spike logged them.
+        Assert.True(LlamaLoadReport.Parse(["E ggml_backend_cuda_buffer_type_alloc_buffer: allocating 16384.00 MiB on device 0: cudaMalloc failed: out of memory"]).OutOfMemory);
+        Assert.True(LlamaLoadReport.Parse(["ggml_vulkan: vk::Device::allocateMemory: ErrorOutOfDeviceMemory"]).OutOfMemory);
+        Assert.True(LlamaLoadReport.Parse(["E alloc_tensor_range: failed to allocate Vulkan0 buffer of size 1073741824"]).OutOfMemory);
+
+        var empty = LlamaLoadReport.Parse(["", "srv  llama_server: model loaded"]);
+        empty.Add(null);
+        Assert.Equal((0, 0, 0.0, false), (empty.TotalLayers, empty.LayersOnCpu, empty.HostBufferMiB, empty.OutOfMemory));
+    }
+
+    [Fact]
+    public void TheSpillCheck_AllowsTheHostBuffers_AndASlack_ButNoLayerOnTheCpu()
+    {
+        // Measured 2026-10-01: a clean load 78-143 MiB over its host buffers, one past free VRAM 527 MiB over.
+        Assert.Equal(256, VramSpill.SlackMiB);
+        var report = LlamaLoadReport.Parse(CudaLoad);
+        Assert.Null(VramSpill.Check(report, 344L << 20));   // the clean load's reading: 131 MiB over
+        Assert.Null(VramSpill.Check(report, (213L + 256) << 20));   // the slack itself still passes
+        Assert.Null(VramSpill.Check(report, null));   // not read: the layers alone decide
+        Assert.Equal(new VramSpill(0, 66, 527), VramSpill.Check(report, 740L << 20));   // the spill's reading
+        Assert.Equal(new VramSpill(0, 66, 527), VramSpill.Check(report, 740L << 20, slackMiB: 100));
+
+        var partial = LlamaLoadReport.Parse(["load_tensors: offloaded 51/66 layers to GPU"]);
+        Assert.Equal(new VramSpill(15, 66, 0), VramSpill.Check(partial, null));
+        Assert.Equal(new VramSpill(15, 66, 0), VramSpill.Check(partial, 100L << 20));
+    }
+
     [Theory]
     [InlineData("off", 0)]
     [InlineData(" OFF ", 0)]
@@ -481,5 +551,12 @@ public class EmbeddedLlmCoreTests
         // The spinner's two lines (2026-09-29, the user's wording): the llama, no "on llama.cpp", no ellipsis.
         Assert.Equal("🦙 starting Gemma 4 E2B", EmbeddedLlmText.StartingLabel(e2b));
         Assert.Equal("🦙 loading Gemma 4 E2B", EmbeddedLlmText.LoadingLabel(e2b));
+
+        // Embedded VRAM only's refusals (2026-10-01): what spilled, then what to lower.
+        const string Advice = "set Embedded context size to 0 (fit) or lower it, lower Embedded VRAM budget, close what else uses the GPU, or pick a smaller model";
+        Assert.Equal("it spilled about 527 MiB of shared GPU memory into system RAM, and Embedded VRAM only is on; " + Advice, EmbeddedLlmText.VramSpilled(new VramSpill(0, 66, 527)));
+        Assert.Equal("it spilled 15 of 66 layers and about 40 MiB of shared GPU memory into system RAM, and Embedded VRAM only is on; " + Advice, EmbeddedLlmText.VramSpilled(new VramSpill(15, 66, 40)));
+        Assert.Equal("it does not fit in VRAM with every layer on the GPU, and Embedded VRAM only is on; " + Advice, EmbeddedLlmText.VramDidNotFit);
+        Assert.Equal("Embedded VRAM only is on, but the backend is the CPU; choose CUDA or Vulkan in Embedded backend, or turn Embedded VRAM only off", EmbeddedLlmText.VramOnlyOnCpu);
     }
 }
