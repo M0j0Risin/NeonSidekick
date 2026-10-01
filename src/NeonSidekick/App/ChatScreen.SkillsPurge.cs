@@ -17,7 +17,7 @@ internal sealed partial class ChatScreen
     /// read the skills in this profile's view, the global ones and its own, whose last use is older than <paramref name="age"/>.
     /// A skill never loaded goes by its last change instead (<see cref="SkillRecord.Reference"/>).
     /// <list type="bullet">
-    /// <item><c>list</c> prints them, one line each under a head line that names the commit, and changes nothing.</item>
+    /// <item><c>list</c> prints them as a table under a head line that names the commit (<see cref="SkillRecordText.Table"/>), and changes nothing.</item>
     /// <item><c>commit</c> asks a yes/no whose caption lists them. A yes deletes each folder through <see cref="SkillEditor.Delete"/>,
     /// the Skills pane's own permanent delete with its guard, then its record. A folder that will not go keeps its record and is
     /// an error line, and the catalog is scanned again at the end.</item>
@@ -40,9 +40,10 @@ internal sealed partial class ChatScreen
         if (!commit)
         {
             _transcript.Notice(SkillRecordText.ListNotice(stale.Count, age, ageWords));
-            foreach (var record in stale)
+            // A table (2026-09-30, the user's ask): the columns line up under their titles.
+            foreach (string line in SkillRecordText.Table(stale, zone))
             {
-                _transcript.Notice("  " + SkillRecordText.Line(record, zone));
+                _transcript.Notice("  " + line);
             }
 
             return;

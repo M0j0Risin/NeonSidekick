@@ -1,4 +1,5 @@
 using NeonSidekick.App;
+using NeonSidekick.Sessions;
 using NeonSidekick.Skills;
 using NeonSidekick.UI;
 
@@ -39,8 +40,11 @@ public partial class ChatScreenTests
 
         var days = TimeSpan.FromDays(30);
         Assert.Contains("· " + SkillRecordText.ListNotice(1, days, "30"), output);
-        Assert.Contains("old-skill · global · never used, modified ", output);
-        Assert.DoesNotContain("fresh-skill · global", output);
+        // The table (2026-09-30): the titles, then the stale skill's row under them, each column padded to its widest cell;
+        // the fresh one is not listed.
+        Assert.Contains("·   Skill       Scope    Last used   Modified\n", output);
+        Assert.Contains("·   old-skill   global   never       " + SessionText.Moment(_time.GetUtcNow().AddDays(-60), _time.LocalTimeZone) + "\n", output);
+        Assert.DoesNotContain("fresh-skill", output);
         Assert.Contains(Titled(SkillRecordText.CommitPrompt(1, days)), output);
         Assert.Contains("· " + SkillRecordText.PurgedNotice(["old-skill"], days), output);
         Assert.False(Directory.Exists(old));

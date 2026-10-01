@@ -212,6 +212,29 @@ public class SkillRecordsTests : IDisposable
         Assert.Equal(["old-unused", "used-long-ago"], stale.Select(r => r.Folder));   // oldest first; ada's never in neon's view
     }
 
+    /// <summary>The dry run's table (2026-09-30, the user's ask): a header, one row per skill, every column padded to its widest cell.</summary>
+    [Fact]
+    public void Table_LinesTheColumnsUp()
+    {
+        var at = new DateTimeOffset(2026, 8, 1, 14, 5, 0, TimeSpan.Zero);
+        var rows = new[]
+        {
+            new SkillRecord(1, SkillScope.Global, "pdf", "pdf", "pdf", null, at.AddDays(-9), at.AddDays(-9), at),
+            new SkillRecord(2, SkillScope.Profile, "neon", "meeting-notes", "meeting-notes", null, at.AddDays(-9), at, null),
+        };
+
+        var table = SkillRecordText.Table(rows, TimeZoneInfo.Utc);
+
+        Assert.Equal(
+        [
+            "Skill           Scope     Last used          Modified",
+            "pdf             global    2026-08-01 14:05   2026-07-23 14:05",
+            "meeting-notes   profile   never              2026-08-01 14:05",
+        ], table);
+        Assert.Equal(["Skill", "Scope", "Last used", "Modified"], SkillRecordText.TableHeaders);
+        Assert.Single(SkillRecordText.Table([], TimeZoneInfo.Utc));   // the header alone
+    }
+
     [Theory]
     [InlineData("purge list 30", SkillRecordText.PurgeKind.List, 30 * 24)]
     [InlineData("PURGE Commit 12h", SkillRecordText.PurgeKind.Commit, 12)]

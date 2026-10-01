@@ -93,6 +93,67 @@ public static class SkillRecordText
         return record.Folder + " · " + SkillScopes.Name(record.Scope) + " · " + when;
     }
 
+    /// <summary>The table's column titles, in order. Pinned.</summary>
+    public static readonly IReadOnlyList<string> TableHeaders = ["Skill", "Scope", "Last used", "Modified"];
+
+    /// <summary>The last-used cell of a skill never loaded. Pinned.</summary>
+    public const string NeverUsed = "never";
+
+    /// <summary>The space between two columns of <see cref="Table"/>.</summary>
+    public const int ColumnGap = 3;
+
+    /// <summary>
+    /// The dry run's list as a table (2026-09-30, the user's ask: straighter columns than one dotted line per skill). The rows
+    /// are a header (<see cref="TableHeaders"/>), then one per skill: its folder, <c>global</c> or <c>profile</c>, when it was last
+    /// used (<see cref="NeverUsed"/> for never), and when it was last changed. Each column is padded to its widest cell in
+    /// terminal cells (<see cref="UI.TextCells.Width"/>), so a wide character in a folder name keeps the columns straight. The
+    /// last column carries no padding.
+    /// </summary>
+    public static IReadOnlyList<string> Table(IReadOnlyList<SkillRecord> records, TimeZoneInfo zone)
+    {
+        ArgumentNullException.ThrowIfNull(records);
+        ArgumentNullException.ThrowIfNull(zone);
+        var rows = new List<string[]> { TableHeaders.ToArray() };
+        foreach (var record in records)
+        {
+            rows.Add(
+            [
+                record.Folder,
+                SkillScopes.Name(record.Scope),
+                record.LastUsed is { } used ? SessionText.Moment(used, zone) : NeverUsed,
+                SessionText.Moment(record.Modified > record.Created ? record.Modified : record.Created, zone),
+            ]);
+        }
+
+        int columns = TableHeaders.Count;
+        var widths = new int[columns];
+        foreach (var row in rows)
+        {
+            for (int c = 0; c < columns; c++)
+            {
+                widths[c] = Math.Max(widths[c], UI.TextCells.Width(row[c]));
+            }
+        }
+
+        var lines = new List<string>(rows.Count);
+        foreach (var row in rows)
+        {
+            var line = new System.Text.StringBuilder();
+            for (int c = 0; c < columns; c++)
+            {
+                line.Append(row[c]);
+                if (c < columns - 1)
+                {
+                    line.Append(' ', widths[c] - UI.TextCells.Width(row[c]) + ColumnGap);
+                }
+            }
+
+            lines.Add(line.ToString());
+        }
+
+        return lines;
+    }
+
     /// <summary>The yes/no: <c>🧹 Delete 2 skills unused for 30 days?</c> Pinned.</summary>
     public static string CommitPrompt(int count, TimeSpan age) => Glyph + "Delete " + Skills(count) + " unused for " + SessionText.Age(age) + "?";
 
