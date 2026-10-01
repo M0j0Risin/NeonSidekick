@@ -28,7 +28,9 @@ namespace NeonSidekick.UI;
 /// <c>ENABLE_PROCESSED_INPUT</c> (since 2026-09-17), so Ctrl+C is a key record the screen decides
 /// about — copy, stop the speech, cancel, twice to exit — and never <c>Console.CancelKeyPress</c>
 /// while the reader lives; Ctrl+Break is the host's whatever the mode and stays the app token.
-/// The released mode with processed input as the shell had it comes back on <see cref="Dispose"/>.</para>
+/// Both drop <c>ENABLE_LINE_INPUT</c> and <c>ENABLE_ECHO_INPUT</c> as well (2026-10-01), so Ctrl+S is the
+/// <c>/server</c> chord and never the host's pause key.
+/// The released mode with processed, line and echo input as the shell had them comes back on <see cref="Dispose"/>.</para>
 ///
 /// <para>Under Windows Terminal the mouse mode reaches the terminal through ConPTY, and while it is
 /// on <em>every</em> mouse event comes to the app unless Shift is held (Shift+drag is the terminal's own
@@ -340,10 +342,14 @@ public sealed class WindowsConsoleInput : IAnsiConsoleInput, IInputEvents, IDisp
     /// lives: <see cref="Released"/> with processed input off (Ctrl+C is a key record for the
     /// screen, since 2026-09-17; Ctrl+Break stays the host's); captured adds mouse input and drops
     /// quick-edit, released leaves both as the shell had them.
+    /// Line and echo input go too (2026-10-01, the user's report that Ctrl+S did nothing): with line input on, the host
+    /// takes Ctrl+S (Ctrl without Alt) as its pause key — output suspended, the key eaten, and the next press eaten to
+    /// resume — so the <c>/server</c> chord never arrived. The reader takes raw records (<c>ReadConsoleInputW</c>), so
+    /// neither bit ever did anything for the app; echo goes with line input, which the host requires.
     /// </summary>
     internal static uint Mode(uint original, bool captured)
     {
-        uint mode = Released(original) & ~EnableProcessedInput;
+        uint mode = Released(original) & ~(EnableProcessedInput | EnableLineInput | EnableEchoInput);
         return captured ? (mode | EnableMouseInput) & ~EnableQuickEditMode : mode;
     }
 

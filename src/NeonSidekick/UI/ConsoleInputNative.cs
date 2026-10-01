@@ -22,6 +22,8 @@ public static partial class ConsoleInputNative
 
     // Console input modes.
     public const uint EnableProcessedInput = 0x0001;
+    public const uint EnableLineInput = 0x0002;
+    public const uint EnableEchoInput = 0x0004;
     public const uint EnableMouseInput = 0x0010;
     public const uint EnableQuickEditMode = 0x0040;
     public const uint EnableExtendedFlags = 0x0080;
