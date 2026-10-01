@@ -129,7 +129,7 @@ public sealed class UncConfigFileTests : IDisposable
         var offered = catalog.Offered(["data"]);
         Assert.Equal(["data"], offered.Shares.Select(s => s.Name));
         Assert.Equal(1, offered.Hidden);
-        Assert.Same(catalog, catalog.Offered(null));
+        Assert.Empty(catalog.Offered(null).Shares);   // null offers none (2026-10-01)
     }
 
     [Fact]

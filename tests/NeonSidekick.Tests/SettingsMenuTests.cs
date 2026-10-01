@@ -859,7 +859,7 @@ public partial class SettingsMenuTests : IDisposable
                 SettingsField.UncDefaultShare,
                 SettingsField.UncSetPassword,
                 SettingsField.UncAddShare,
-                SettingsField.UncPercentMention,
+                SettingsField.UncStarMention,
                 SettingsField.UncSharesProfile,
                 SettingsField.UncSharesGlobal,
                 SettingsField.EmbeddedVramOnly,

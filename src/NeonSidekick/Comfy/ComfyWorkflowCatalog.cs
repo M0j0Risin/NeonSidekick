@@ -68,18 +68,14 @@ public sealed class ComfyWorkflowCatalog
 
     /// <summary>
     /// <paramref name="workflows"/> narrowed to <paramref name="names"/> (later on 2026-09-24, the SQL connections'
-    /// shape, <c>SqlCatalog.Offered</c>): null = not narrowed, every one; a list = exactly those names, any case — a
-    /// workflow added later stays out until ticked, a name no longer installed is ignored. Pure.
+    /// shape, <c>SqlCatalog.Offered</c>): exactly those names, any case — a workflow added later stays out until ticked, a
+    /// name no longer installed is ignored. Null offers none, as an empty list does (2026-10-01, the user's call; it was
+    /// "not narrowed", every one, until then). Pure.
     /// </summary>
     public static IReadOnlyList<ComfyWorkflow> Offered(IReadOnlyList<ComfyWorkflow> workflows, IReadOnlyList<string>? names)
     {
         ArgumentNullException.ThrowIfNull(workflows);
-        if (names is null)
-        {
-            return workflows;
-        }
-
-        var wanted = new HashSet<string>(names.Select(n => n.Trim()), StringComparer.OrdinalIgnoreCase);
+        var wanted = new HashSet<string>((names ?? []).Select(n => n.Trim()), StringComparer.OrdinalIgnoreCase);
         return workflows.Where(w => wanted.Contains(w.Name)).ToList();
     }
 

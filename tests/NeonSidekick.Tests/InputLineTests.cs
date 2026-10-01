@@ -2854,7 +2854,7 @@ public class InputLineTests : IDisposable
     }
 
     /// <summary>A pane line with the five sources: the command list, the argument table above, the mention tree of <see cref="MentionLine"/>, the skills as the #-mention list (2026-09-17; <paramref name="hash"/> false = an empty source, the switch off) and the tools as the $-mention list (2026-09-19; <paramref name="dollar"/> the same).</summary>
-    private (InputLine Line, ScriptedInput Keys, ScreenPane Pane, List<string> Asked) WordLine(bool commands = true, bool skills = true, bool hash = true, bool dollar = true, bool percent = true, bool caret = true)
+    private (InputLine Line, ScriptedInput Keys, ScreenPane Pane, List<string> Asked) WordLine(bool commands = true, bool skills = true, bool hash = true, bool dollar = true, bool percent = true, bool caret = true, bool star = true)
     {
         _console.Profile.Height = 12;
         var pane = new ScreenPane(_console, new ScreenGeometry(() => null, () => 100), new ManualTimeProvider());
@@ -2867,7 +2867,7 @@ public class InputLineTests : IDisposable
             return new MentionResult(FileOutcome.Ok, Tree.TryGetValue(query, out var paths) ? paths : [], false);
         }
 
-        var line = new InputLine(pane, new KeySource(scripted, TimeSpan.FromMilliseconds(1)), mentions: Complete, commands: commands ? () => Commands : null, arguments: skills ? Arguments : null, skills: () => hash ? Skills : [], tools: () => dollar ? Tools : [], connections: () => percent ? Connections : [], workflows: () => caret ? Workflows : []);
+        var line = new InputLine(pane, new KeySource(scripted, TimeSpan.FromMilliseconds(1)), mentions: Complete, commands: commands ? () => Commands : null, arguments: skills ? Arguments : null, skills: () => hash ? Skills : [], tools: () => dollar ? Tools : [], connections: () => percent ? Connections : [], workflows: () => caret ? Workflows : [], shares: () => star ? Shares : []);
         return (line, scripted, pane, asked);
     }
 
@@ -3150,6 +3150,79 @@ public class InputLineTests : IDisposable
             }
         };
         Assert.Equal("%p", Assert.IsType<InputResult.Submitted>(await off.ReadAsync(multiline: true, mentions: MentionFolderAction.Apply)).Text);
+    }
+
+    // ── *-mentions (2026-10-01): the % shape over the offered UNC shares, once part of %'s list ─
+
+    private static readonly IReadOnlyList<CompletionItem> Shares =
+    [
+        new("eng", @"\\fs01\eng — the engineering share"),
+        new("data", @"D:\Data · readwrite"),
+    ];
+
+    [Fact]
+    public async Task StarMentions_AStarWordOpensTheShares_NotTheConnections_AndEnterWritesTheName_NotSends()
+    {
+        var (line, keys, pane, asked) = WordLine();
+        int waits = 0;
+        keys.Push(Chars("open the plan on *"));
+        keys.OnWait = () =>
+        {
+            switch (waits++)
+            {
+                case 0:
+                    // A bare * lists every share with where it points; no connection is on it.
+                    Assert.True(pane.OverlayOpen);
+                    Assert.Contains(@"eng   \\fs01", _console.Output);
+                    Assert.Contains(@"data  D:\Data", _console.Output);
+                    Assert.DoesNotContain("adventureworks", _console.Output);
+                    keys.Push(Chars("e"));
+                    break;
+                case 1:
+                    Assert.True(pane.OverlayOpen);
+                    keys.Push(Keys.Enter);
+                    break;
+                case 2:
+                    Assert.False(pane.OverlayOpen);
+                    keys.Push(Chars("please")).Push(Keys.Enter);
+                    break;
+            }
+        };
+
+        var submitted = Assert.IsType<InputResult.Submitted>(await line.ReadAsync(multiline: true, mentions: MentionFolderAction.Apply));
+
+        Assert.Equal("open the plan on *eng please", submitted.Text);
+        Assert.Empty(asked);   // * is not @
+    }
+
+    [Fact]
+    public async Task StarMentions_AStarInsideAWord_OrTheSwitchOff_OpensNothing()
+    {
+        var (line, keys, pane, _) = WordLine();
+        int waits = 0;
+        keys.Push(Chars("2*e"));
+        keys.OnWait = () =>
+        {
+            if (waits++ == 0)
+            {
+                Assert.False(pane.OverlayOpen);   // a product is not a mention
+                keys.Push(Keys.Enter);
+            }
+        };
+        Assert.Equal("2*e", Assert.IsType<InputResult.Submitted>(await line.ReadAsync(multiline: true, mentions: MentionFolderAction.Apply)).Text);
+
+        var (off, offKeys, offPane, _) = WordLine(star: false);
+        waits = 0;
+        offKeys.Push(Chars("*e"));
+        offKeys.OnWait = () =>
+        {
+            if (waits++ == 0)
+            {
+                Assert.False(offPane.OverlayOpen);
+                offKeys.Push(Keys.Enter);
+            }
+        };
+        Assert.Equal("*e", Assert.IsType<InputResult.Submitted>(await off.ReadAsync(multiline: true, mentions: MentionFolderAction.Apply)).Text);
     }
 
     // ── ^-mentions (2026-09-24): the % shape over the offered ComfyUI workflows ─

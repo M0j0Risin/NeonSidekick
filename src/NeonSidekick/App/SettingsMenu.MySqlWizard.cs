@@ -379,8 +379,8 @@ internal sealed partial class SettingsMenu
         int cursor = 0;
         while (true)
         {
-            bool narrowed = _settings.Current.MySqlConnectionsOffered is not null;
-            var actions = narrowed ? new List<string> { SqlWizardSaveOfferedRow, MySqlWizardSaveHiddenRow } : [SqlWizardSaveRow];
+            // Always offer-or-hide (2026-10-01): nothing is offered until ticked, so the wizard is where a new one is.
+            var actions = new List<string> { SqlWizardSaveOfferedRow, MySqlWizardSaveHiddenRow };
             int test = actions.Count;
             actions.Add(SqlWizardTestRow);
             actions.Add(SqlWizardCancelRow);
@@ -465,7 +465,7 @@ internal sealed partial class SettingsMenu
         new MySqlAccess(() => new MySqlCatalog([connection], []))
             .RunAsync(connection.Name, null, null, [MySqlCatalogQueries.WhoAmI, MySqlCatalogQueries.Grants], [], 50, _settings.Current.MySqlQueryTimeoutSeconds, cancellationToken);
 
-    /// <summary>Writes the draft: the entry, then its password to its store, then — when <paramref name="offer"/> and the profile narrowed its offered list — its name there. Null when nothing was written.</summary>
+    /// <summary>Writes the draft: the entry, then its password to its store, then — when <paramref name="offer"/> — its name there. Null when nothing was written.</summary>
     private bool? MySqlWizardSave(MySqlDraft draft, bool offer)
     {
         var c = draft.Config;
@@ -499,11 +499,12 @@ internal sealed partial class SettingsMenu
             Sink.Error(notice);
         }
 
-        if (!offer || _settings.Current.MySqlConnectionsOffered is not { } offered)
+        if (!offer)
         {
             return false;
         }
 
+        var offered = _settings.Current.MySqlConnectionsOffered ?? [];   // null offers none (2026-10-01)
         Apply(SettingsField.MySqlConnectionsOffered, d => d.MySqlConnectionsOffered = [.. offered, draft.Name]);
         return true;
     }

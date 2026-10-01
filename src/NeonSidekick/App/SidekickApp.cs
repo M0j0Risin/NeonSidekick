@@ -553,7 +553,9 @@ public sealed class SidekickApp
         // The file tools need no console, so headless has them; the editor opener is the real one.
         // The setting File tools decides per turn, like Web tools; the clock alone is standing.
         var files = BuildWorkingDirectory();
-        var fileTools = ChatScreen.FileTools(files, () => WorkingDirectory.IsDefault(EffectiveSettings.WorkingDirectory), PersonaFile.OpenInEditor, () => EffectiveSettings);
+        // The UNC shares' door first (2026-10-01): open reaches the offered shares too.
+        var unc = new Unc.UncAccess(() => Unc.UncConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory).Offered(EffectiveSettings.UncSharesOffered), _time);
+        var fileTools = ChatScreen.FileTools(files, () => WorkingDirectory.IsDefault(EffectiveSettings.WorkingDirectory), PersonaFile.OpenInEditor, () => EffectiveSettings, unc);
         var standingTools = clockTools;
         // The skills need no console either (2026-09-16); the two settings decide per turn. The skill records (2026-09-30) are the home's.
         using var skillStore = new SkillRecordStore(_settings.StorageDirectory);
@@ -571,7 +573,6 @@ public sealed class SidekickApp
         var mysql = new MySql.MySqlAccess(() => MySql.MySqlConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory).Offered(EffectiveSettings.MySqlConnectionsOffered));
         var mysqlTools = ChatScreen.MySqlTools(mysql, () => EffectiveSettings);
         // The UNC tools (2026-09-30): no console needed, so headless has them too; every change still needs UNC writes and a readwrite share.
-        var unc = new Unc.UncAccess(() => Unc.UncConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory).Offered(EffectiveSettings.UncSharesOffered), _time);
         var uncTools = ChatScreen.UncTools(unc, files, () => EffectiveSettings);
         // The image tools (2026-09-24): no console needed, so headless has them too.
         using var comfy = new Comfy.ComfyStudio(ChatScreen.ComfyCatalog(_settings), files, () => EffectiveSettings, _comfyClient);

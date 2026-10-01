@@ -82,20 +82,20 @@ public static class ToolsText
     /// <summary>After the Obsidian heading while the group is not offered: the switch is off or no vault is set (2026-09-22). Pinned.</summary>
     public const string ObsidianOffSuffix = "(off: Obsidian tools is off or no Obsidian vault is set)";
 
-    /// <summary>After the SQL heading while the group is not offered: the switch is off or <c>sql.json</c> holds no connection (2026-09-23). Pinned.</summary>
-    public const string SqlOffSuffix = "(off: SQL tools is off or no connection is set in sql.json)";
+    /// <summary>After the SQL heading while the group is not offered: the switch is off or no connection of <c>sql.json</c> is offered (2026-09-23; "offered" since 2026-10-01, when nothing is until ticked). Pinned.</summary>
+    public const string SqlOffSuffix = "(off: SQL tools is off or no connection of sql.json is offered)";
 
-    /// <summary>After the Oracle heading while the group is not offered: the switch is off or <c>oracle.json</c> holds no connection (2026-09-30). Pinned.</summary>
-    public const string OracleOffSuffix = "(off: Oracle tools is off or no connection is set in oracle.json)";
+    /// <summary>After the Oracle heading while the group is not offered: the switch is off or no connection of <c>oracle.json</c> is offered (2026-09-30). Pinned.</summary>
+    public const string OracleOffSuffix = "(off: Oracle tools is off or no connection of oracle.json is offered)";
 
-    /// <summary>After the MySQL heading while the group is not offered: the switch is off or <c>mysql.json</c> holds no connection (2026-09-30). Pinned.</summary>
-    public const string MySqlOffSuffix = "(off: MySQL tools is off or no connection is set in mysql.json)";
+    /// <summary>After the MySQL heading while the group is not offered: the switch is off or no connection of <c>mysql.json</c> is offered (2026-09-30). Pinned.</summary>
+    public const string MySqlOffSuffix = "(off: MySQL tools is off or no connection of mysql.json is offered)";
 
-    /// <summary>After the UNC heading while the group is not offered: the switch is off or <c>unc.json</c> holds no share (2026-09-30). Pinned.</summary>
-    public const string UncOffSuffix = "(off: UNC tools is off or no share is set in unc.json)";
+    /// <summary>After the UNC heading while the group is not offered: the switch is off or no share of <c>unc.json</c> is offered (2026-09-30). Pinned.</summary>
+    public const string UncOffSuffix = "(off: UNC tools is off or no share of unc.json is offered)";
 
-    /// <summary>After the ComfyUI heading while the group is not offered: the switch is off, no ComfyUI URL is set or no workflow is in a comfy folder (2026-09-24). Pinned.</summary>
-    public const string ComfyOffSuffix = "(off: ComfyUI tools is off, no ComfyUI URL is set or no workflow is in a comfy folder)";
+    /// <summary>After the ComfyUI heading while the group is not offered: the switch is off, no ComfyUI URL is set or no workflow is offered (2026-09-24). Pinned.</summary>
+    public const string ComfyOffSuffix = "(off: ComfyUI tools is off, no ComfyUI URL is set or no workflow is offered)";
 
     /// <summary>After the Home Assistant heading while the group is not offered: the switch is off, or no URL or API key is set (2026-09-28). Pinned.</summary>
     public const string HomeAssistantOffSuffix = "(off: Home Assistant tools is off, or no Home Assistant URL or API key is set)";

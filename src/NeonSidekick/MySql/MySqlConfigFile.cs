@@ -15,18 +15,13 @@ public sealed record MySqlCatalog(IReadOnlyList<MySqlNamedConnection> Connection
     public static readonly MySqlCatalog Empty = new([], []);
 
     /// <summary>
-    /// The catalog narrowed to the connections a profile offers (<c>MySQL connections offered</c>): <paramref name="names"/>
-    /// null = all of them; else only those whose name is in it (case-insensitive), in file order, <see cref="Hidden"/>
-    /// counting the rest. The problems are kept. Pure.
+    /// The catalog narrowed to the connections a profile offers (<c>MySQL connections offered</c>): only those whose name is in
+    /// <paramref name="names"/> (case-insensitive), in file order, <see cref="Hidden"/> counting the rest; null offers none, as
+    /// an empty list does (2026-10-01, the user's call; it was "all" until then). The problems are kept. Pure.
     /// </summary>
     public MySqlCatalog Offered(IReadOnlyList<string>? names)
     {
-        if (names is null)
-        {
-            return this;
-        }
-
-        var wanted = new HashSet<string>(names.Select(n => n.Trim()), StringComparer.OrdinalIgnoreCase);
+        var wanted = new HashSet<string>((names ?? []).Select(n => n.Trim()), StringComparer.OrdinalIgnoreCase);
         var kept = Connections.Where(c => wanted.Contains(c.Name)).ToList();
         return this with { Connections = kept, Hidden = Hidden + Connections.Count - kept.Count };
     }

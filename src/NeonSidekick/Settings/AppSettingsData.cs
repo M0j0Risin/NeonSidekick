@@ -1245,10 +1245,11 @@ public sealed class AppSettingsData
 
     /// <summary>
     /// Which connections of <c>sql.json</c> this profile offers the model (later on 2026-09-23, the user's ask: a way
-    /// to limit what it can reach, not only choose its default). Null = not narrowed: every connection, a new one
-    /// included — every profile's start, so a setup from before keeps working. A list = exactly those names
-    /// (case-insensitive), so a connection added to <c>sql.json</c> afterwards stays hidden until ticked (the user's
-    /// call); an empty list offers none; a name no longer in the files is ignored. A hidden connection is out of
+    /// to limit what it can reach, not only choose its default). Exactly those names (case-insensitive), so a connection
+    /// added to <c>sql.json</c> afterwards stays hidden until ticked (the user's call); a name no longer in the files is
+    /// ignored. Null — every profile's start — offers none, as an empty list does (2026-10-01, the user's call: "nothing is
+    /// offered until a user manually picks one or more"; the add wizard's offer row ticks the new one; until then null was
+    /// "not narrowed", every connection, and a profile saved so offers none now until ticked). A hidden connection is out of
     /// every tool, the rules, the <c>%</c>-mention and the default; <c>sql_connections</c> says how many are hidden,
     /// never which. Still encrypted at startup and settable with <c>SQL set password</c>. The SQL tab of <c>/tools</c>,
     /// second row. No variable.
@@ -1306,8 +1307,8 @@ public sealed class AppSettingsData
 
     /// <summary>
     /// Which connections of <c>oracle.json</c> this profile offers the model (2026-09-30), <see cref="SqlConnectionsOffered"/>'s
-    /// twin: null = not narrowed (every connection, a new one included); a list = exactly those names, so one added
-    /// afterwards stays hidden until ticked; an empty list offers none. The Oracle tab of <c>/tools</c>. No variable.
+    /// twin: exactly those names, so one added afterwards stays hidden until ticked; null or an empty list offers none
+    /// (2026-10-01; null was "every connection" until then). The Oracle tab of <c>/tools</c>. No variable.
     /// </summary>
     public List<string>? OracleConnectionsOffered { get; set; }
 
@@ -1342,7 +1343,7 @@ public sealed class AppSettingsData
     /// <summary>The connection a MySQL tool uses when the call names none (2026-09-30), <see cref="OracleDefaultConnection"/>'s twin; empty = the first offered. No variable.</summary>
     public string MySqlDefaultConnection { get; set; } = "";
 
-    /// <summary>Which connections of <c>mysql.json</c> this profile offers the model (2026-09-30), <see cref="OracleConnectionsOffered"/>'s twin: null = all, a list = exactly those names. No variable.</summary>
+    /// <summary>Which connections of <c>mysql.json</c> this profile offers the model (2026-09-30), <see cref="OracleConnectionsOffered"/>'s twin: exactly those names; null or empty offers none (2026-10-01; null was all until then). No variable.</summary>
     public List<string>? MySqlConnectionsOffered { get; set; }
 
     /// <summary>Whether <c>%</c> and part of a name lists the MySQL connections too (2026-09-30), each marked <c>MySQL ·</c>; offered only while <see cref="MySqlTools"/> is on. No variable.</summary>
@@ -1378,11 +1379,16 @@ public sealed class AppSettingsData
     /// <summary>The share a UNC tool uses when the call names none and gives no full path (2026-09-30), <see cref="SqlDefaultConnection"/>'s twin; empty = the first offered. No variable.</summary>
     public string UncDefaultShare { get; set; } = "";
 
-    /// <summary>Which shares of <c>unc.json</c> this profile offers the model (2026-09-30), <see cref="SqlConnectionsOffered"/>'s twin: null = all, a list = exactly those names. No variable.</summary>
+    /// <summary>Which shares of <c>unc.json</c> this profile offers the model (2026-09-30), <see cref="SqlConnectionsOffered"/>'s twin: exactly those names; null or empty offers none (2026-10-01; null was all until then). No variable.</summary>
     public List<string>? UncSharesOffered { get; set; }
 
-    /// <summary>Whether <c>%</c> and part of a name lists the UNC shares too (2026-09-30), each marked <c>UNC ·</c>; offered only while <see cref="UncTools"/> is on. No variable.</summary>
-    public bool UncPercentMention { get; set; } = true;
+    /// <summary>
+    /// Whether <c>*</c> and part of a name lists the UNC shares on the input line; offered only while <see cref="UncTools"/> is on.
+    /// No variable. 2026-09-30 as <c>UncPercentMention</c>, the shares marked <c>UNC ·</c> in the database connections' <c>%</c> list;
+    /// 2026-10-01 their own <c>*</c> (the user's call: "I'm fine with sharing the %-mention for the database tools"), renamed, so
+    /// a saved value of the old name falls back to on.
+    /// </summary>
+    public bool UncStarMention { get; set; } = true;
 
     // ─── Images (ComfyUI) ───────────────────────────────────────────────────────
     // The image tools (2026-09-24, the user's ask: "what can we do with comfyui?" — text to image, img2img, their own
@@ -1405,9 +1411,10 @@ public sealed class AppSettingsData
 
     /// <summary>
     /// Which installed ComfyUI workflows the model is offered (later on 2026-09-24, the user's ask: "similar to how
-    /// we've done it for the SQL connections … so we could possibly limit it down to one"). Null = not narrowed: every
-    /// workflow, a new one included. A list = exactly those names (any case), so a workflow added later stays hidden
-    /// until ticked; an empty list offers none. <c>generate_image</c>'s description and its unnamed pick see only these,
+    /// we've done it for the SQL connections … so we could possibly limit it down to one"). Exactly those names (any
+    /// case), so a workflow added later stays hidden until ticked; null or an empty list offers none (2026-10-01, the
+    /// user's call: nothing is offered until ticked or offered by the wizard; null was "not narrowed", every workflow,
+    /// until then). <c>generate_image</c>'s description and its unnamed pick see only these,
     /// as does a bare <c>/imagine</c>; <c>/imagine &lt;name&gt;</c> may still name any installed one. The ComfyUI tab of
     /// <c>/tools</c>. No variable.
     /// </summary>

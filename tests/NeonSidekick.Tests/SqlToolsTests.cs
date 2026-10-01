@@ -193,7 +193,8 @@ public sealed class SqlToolsTests
     public async Task OnlyTheOfferedConnections_AreReachable_AndTheModelIsToldHowManyAreHidden()
     {
         var all = new SqlCatalog([Unreachable("aw"), Unreachable("prod"), Unreachable("secret")], []);
-        Assert.Same(all, all.Offered(null));
+        Assert.Empty(all.Offered(null).Connections);   // null offers none, as empty does (2026-10-01; it was all)
+        Assert.Equal(3, all.Offered(null).Hidden);
         var narrowed = all.Offered([" PROD ", "gone"]);
         Assert.Equal(["prod"], narrowed.Connections.Select(c => c.Name));
         Assert.Equal(2, narrowed.Hidden);

@@ -171,7 +171,7 @@ public partial class ToolsMenuTests : IDisposable
         Assert.Equal([SettingsField.SqlTools, SettingsField.SqlConnectionsOffered, SettingsField.SqlDefaultConnection, SettingsField.SqlSetPassword, SettingsField.SqlAddConnection, SettingsField.SqlPercentMention, SettingsField.SqlQueryMaxRows, SettingsField.SqlQueryTimeoutSeconds, SettingsField.SqlConnectionsProfile, SettingsField.SqlConnectionsGlobal], SettingsMenu.ToolsTabFields[9]);   // the switch, the offered list (later that day), the default, the password prompt, the add-connection wizard and the %-mention switch (later that day), the two caps, the two edit rows (2026-09-23)
         Assert.Equal([SettingsField.OracleTools, SettingsField.OracleConnectionsOffered, SettingsField.OracleDefaultConnection, SettingsField.OracleSetPassword, SettingsField.OracleAddConnection, SettingsField.OraclePercentMention, SettingsField.OracleQueryMaxRows, SettingsField.OracleQueryTimeoutSeconds, SettingsField.OracleConnectionsProfile, SettingsField.OracleConnectionsGlobal], SettingsMenu.ToolsTabFields[10]);   // the SQL tab's rows, in its order (2026-09-30)
         Assert.Equal([SettingsField.MySqlTools, SettingsField.MySqlConnectionsOffered, SettingsField.MySqlDefaultConnection, SettingsField.MySqlSetPassword, SettingsField.MySqlAddConnection, SettingsField.MySqlPercentMention, SettingsField.MySqlQueryMaxRows, SettingsField.MySqlQueryTimeoutSeconds, SettingsField.MySqlConnectionsProfile, SettingsField.MySqlConnectionsGlobal], SettingsMenu.ToolsTabFields[11]);   // the Oracle tab's rows, in its order (later on 2026-09-30)
-        Assert.Equal([SettingsField.UncTools, SettingsField.UncWrites, SettingsField.UncSharesOffered, SettingsField.UncDefaultShare, SettingsField.UncSetPassword, SettingsField.UncAddShare, SettingsField.UncPercentMention, SettingsField.UncSharesProfile, SettingsField.UncSharesGlobal], SettingsMenu.ToolsTabFields[12]);   // the two switches, the offered list, the default, the password prompt, the wizard, the %-mention switch, the two edit rows (later still on 2026-09-30)
+        Assert.Equal([SettingsField.UncTools, SettingsField.UncWrites, SettingsField.UncSharesOffered, SettingsField.UncDefaultShare, SettingsField.UncSetPassword, SettingsField.UncAddShare, SettingsField.UncStarMention, SettingsField.UncSharesProfile, SettingsField.UncSharesGlobal], SettingsMenu.ToolsTabFields[12]);   // the two switches, the offered list, the default, the password prompt, the wizard, the %-mention switch, the two edit rows (later still on 2026-09-30)
         Assert.Equal(Enum.GetValues<SettingsField>().Order(), SettingsMenu.TabFields.Concat(SettingsMenu.SkillsTabFields).Concat(SettingsMenu.ToolsTabFields).Concat(SettingsMenu.McpTabFields).SelectMany(t => t).Order());
         Assert.Equal(21, SettingsMenu.LabelWidthOf(SettingsMenu.ToolsTabFields[14]));   // "Tool collapse count" (2026-09-22; "$-mention enabled", 19, before)
         Assert.Equal(26, SettingsMenu.LabelWidthOf(SettingsMenu.ToolsTabFields[0]));   // "Web browser network mode" (the Web-prefixed labels, later still on 2026-09-19; "Web search max results", 24, before)
@@ -419,8 +419,8 @@ public partial class ToolsMenuTests : IDisposable
         Type("s3cret");
         Push(Keys.Enter);                         // the default timeout
         Type("the container");
-        Push(Keys.Down, Keys.Enter);              // Test
-        Push(Keys.Up, Keys.Enter);                // Save
+        Push(Keys.Down, Keys.Down, Keys.Enter);   // Test (under the two save rows, always both since 2026-10-01)
+        Push(Keys.Up, Keys.Up, Keys.Enter);       // Save, and offer it
         Push(Keys.Escape);
 
         await menu.ShowAsync(CancellationToken.None);
@@ -443,7 +443,7 @@ public partial class ToolsMenuTests : IDisposable
         Assert.Contains("Added 'free' to ", _console.Output);
         Assert.Contains(SettingsMenu.SqlWizardMasked, _console.Output);
         Assert.DoesNotContain("s3cret", _console.Output);
-        Assert.Null(_settings.Current.OracleConnectionsOffered);
+        Assert.Equal(["free"], _settings.Current.OracleConnectionsOffered);   // offered by the wizard into a list nothing was in
     }
 
     /// <summary>The wizard's ESC on its first page writes nothing; a bad schema asks again; a narrowed profile's first save row offers the new one.</summary>
@@ -523,7 +523,7 @@ public partial class ToolsMenuTests : IDisposable
         File.WriteAllText(path, """{ "connections": { "free": { "dataSource": "x:1521/y", "user": "u" }, "ledger": { "dataSource": "z:1521/l", "user": "u" } } }""");
         var (menu, _, _) = PaneMenu();
         OpenOracleRow(1);
-        Push(Keys.Enter);                                    // free off
+        Push(Keys.Down, Keys.Enter);                         // ledger on (nothing is ticked until the user ticks it)
         Push(Keys.Escape);
         Push(Keys.Down, Keys.Enter);                         // the default row: the pick
         Push(Keys.Down, Keys.Enter);                         // ledger (the first row is "the first connection")
@@ -533,7 +533,7 @@ public partial class ToolsMenuTests : IDisposable
 
         Assert.Equal(["ledger"], _settings.Current.OracleConnectionsOffered);
         Assert.Equal("ledger", _settings.Current.OracleDefaultConnection);
-        Assert.Contains("Oracle connections offered    all (not narrowed)", _console.Output);
+        Assert.Contains("Oracle connections offered    none of 2", _console.Output);
         Assert.Contains("[ ] free", _console.Output);
         Assert.Equal("1 of 2", SettingsMenu.OracleOfferedValue(_settings.Current.OracleConnectionsOffered, NeonSidekick.Oracle.OracleConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory)));
     }
@@ -572,8 +572,8 @@ public partial class ToolsMenuTests : IDisposable
         Push(Keys.Down, Keys.Down, Keys.Down, Keys.Enter);   // verify-full
         Push(Keys.Enter);                         // the default timeout
         Type("the sample shop");
-        Push(Keys.Down, Keys.Enter);              // Test
-        Push(Keys.Up, Keys.Enter);                // Save
+        Push(Keys.Down, Keys.Down, Keys.Enter);   // Test (under the two save rows, always both since 2026-10-01)
+        Push(Keys.Up, Keys.Up, Keys.Enter);       // Save, and offer it
         Push(Keys.Escape);
 
         await menu.ShowAsync(CancellationToken.None);
@@ -586,6 +586,7 @@ public partial class ToolsMenuTests : IDisposable
         Assert.Contains(NeonSidekick.MySql.MySqlText.TestOk("shop", "neon@%", "8.4.11"), _console.Output);
         Assert.Contains("This account can change data (ALL PRIVILEGES ON `shop`.*)", _console.Output);
         Assert.Contains("Added 'shop' to ", _console.Output);
+        Assert.Equal(["shop"], _settings.Current.MySqlConnectionsOffered);
         Assert.DoesNotContain("s3cret", _console.Output);
     }
 
@@ -600,7 +601,7 @@ public partial class ToolsMenuTests : IDisposable
         Push(Keys.Enter);                                    // shop
         Push([.. "s3cret".Select(Keys.Char), Keys.Enter]);
         Push(Keys.Up, Keys.Up, Keys.Enter);                  // the offered row: the checklist
-        Push(Keys.Enter);                                    // shop off
+        Push(Keys.Down, Keys.Enter);                         // billing on
         Push(Keys.Escape, Keys.Escape);
 
         await menu.ShowAsync(CancellationToken.None);
@@ -644,8 +645,8 @@ public partial class ToolsMenuTests : IDisposable
         Push(Keys.Enter);                         // windows: the account pages skipped
         Push(Keys.Down, Keys.Enter);              // readwrite, while UNC writes is off
         Type("engineering specs");
-        Push(Keys.Down, Keys.Enter);              // Test
-        Push(Keys.Up, Keys.Enter);                // Save
+        Push(Keys.Down, Keys.Down, Keys.Enter);   // Test (under the two save rows, always both since 2026-10-01)
+        Push(Keys.Up, Keys.Up, Keys.Enter);       // Save, and offer it
         Push(Keys.Escape);
 
         await menu.ShowAsync(CancellationToken.None);
@@ -661,6 +662,7 @@ public partial class ToolsMenuTests : IDisposable
         Assert.Contains(SettingsMenu.UncWizardWritesOffNotice, _console.Output);
         Assert.Contains(SettingsMenu.UncWizardTestOkNotice("eng", 7), _console.Output);
         Assert.Contains("Added 'eng' to ", _console.Output);
+        Assert.Equal(["eng"], _settings.Current.UncSharesOffered);
         Assert.Equal("Reached 'eng': 7 entries at its root.", SettingsMenu.UncWizardTestOkNotice("eng", 7));
     }
 
@@ -682,8 +684,8 @@ public partial class ToolsMenuTests : IDisposable
         Type("s3cret");
         Push(Keys.Enter);                         // read
         Push(Keys.Enter);                         // no description
-        Push(Keys.Down, Keys.Enter);              // Test: refused, but the summary stays
-        Push(Keys.Up, Keys.Enter);                // Save: back on the wizard's row
+        Push(Keys.Down, Keys.Down, Keys.Enter);   // Test: refused, but the summary stays
+        Push(Keys.Up, Keys.Enter);                // Save, hidden: back on the wizard's row
         Push(Keys.Enter);                         // the wizard again
         Push(Keys.Escape);                        // out of the first page: nothing
         Push(Keys.Escape);
@@ -698,6 +700,7 @@ public partial class ToolsMenuTests : IDisposable
         Assert.Contains(NeonSidekick.Unc.UncText.BadAccount("fin", @"CORP\svc"), _console.Output);
         Assert.Contains(SettingsMenu.UncWizardCancelledNotice, _console.Output);
         Assert.DoesNotContain("s3cret", _console.Output);
+        Assert.Null(_settings.Current.UncSharesOffered);   // saved hidden: nothing offered
     }
 
     [Fact]
@@ -711,7 +714,7 @@ public partial class ToolsMenuTests : IDisposable
         Push(Keys.Enter);                                    // fin
         Push([.. "s3cret".Select(Keys.Char), Keys.Enter]);
         Push(Keys.Up, Keys.Up, Keys.Enter);                  // the offered row: the checklist
-        Push(Keys.Enter);                                    // eng off
+        Push(Keys.Down, Keys.Enter);                         // fin on (nothing is ticked until the user ticks it, 2026-10-01)
         Push(Keys.Escape);
         Push(Keys.Up, Keys.Enter, Keys.Up, Keys.Enter);      // UNC writes: the page, on picked
         Push(Keys.Escape);
@@ -725,7 +728,7 @@ public partial class ToolsMenuTests : IDisposable
         Assert.Equal(["fin"], _settings.Current.UncSharesOffered);
         Assert.DoesNotContain("s3cret", _console.Output);
         Assert.Equal("1 of 2", SettingsMenu.UncOfferedValue(["fin"], NeonSidekick.Unc.UncConfigFile.Load(path)));
-        Assert.Equal(SettingsMenu.SqlNotNarrowedLabel, SettingsMenu.UncOfferedValue(null, NeonSidekick.Unc.UncConfigFile.Load(path)));
+        Assert.Equal("none of 2", SettingsMenu.UncOfferedValue(null, NeonSidekick.Unc.UncConfigFile.Load(path)));
         Assert.Equal("2 shares · Enter edits unc.json", SettingsMenu.UncSharesLabel(path));
         Assert.Equal("Enter to set password for a runas share", SettingsMenu.UncSetPasswordLabel);
         Assert.Equal("Enter to start share wizard", SettingsMenu.UncAddShareLabel);
@@ -762,8 +765,8 @@ public partial class ToolsMenuTests : IDisposable
         Push(Keys.Char('y'), Keys.Enter);         // trust the certificate
         Push(Keys.Enter);                         // the default timeout
         Type("the sample");
-        Push(Keys.Down, Keys.Enter);              // Test
-        Push(Keys.Up, Keys.Enter);                // Save
+        Push(Keys.Down, Keys.Down, Keys.Enter);   // Test (under the two save rows, always both since 2026-10-01)
+        Push(Keys.Up, Keys.Up, Keys.Enter);       // Save, and offer it
         Push(Keys.Escape);
 
         await menu.ShowAsync(CancellationToken.None);
@@ -790,7 +793,7 @@ public partial class ToolsMenuTests : IDisposable
         Assert.Contains(SettingsMenu.SqlWizardSummaryCaption, _console.Output);
         Assert.Contains(SettingsMenu.SqlWizardMasked, _console.Output);
         Assert.DoesNotContain("s3cret", _console.Output);
-        Assert.Null(_settings.Current.SqlConnectionsOffered);   // not narrowed: offered as it is
+        Assert.Equal(["aw"], _settings.Current.SqlConnectionsOffered);   // offered by the wizard (nothing is until ticked, 2026-10-01)
     }
 
     /// <summary>
@@ -879,7 +882,7 @@ public partial class ToolsMenuTests : IDisposable
         Push(Keys.Down, Keys.Enter);              // credman
         Type("pw");
         Push(Keys.Enter, Keys.Enter, Keys.Enter, Keys.Enter);   // mandatory, no, the default timeout, no description
-        Push(Keys.Down, Keys.Enter);              // Test: refused
+        Push(Keys.Down, Keys.Down, Keys.Enter);   // Test (under the two save rows): refused
         Push(Keys.Down, Keys.Enter);              // Cancel
         Push(Keys.Escape);
 
@@ -935,12 +938,12 @@ public partial class ToolsMenuTests : IDisposable
         Push(Keys.Enter);
         Push(Keys.Down, Keys.Enter);              // windows
         Push(Keys.Enter, Keys.Enter, Keys.Enter, Keys.Enter);
-        // The summary: Save, Test, Cancel, then the rows File, Name, Server, Database, Sign-in (the eighth).
-        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter);
+        // The summary: the two save rows, Test, Cancel, then the rows File, Name, Server, Database, Sign-in (the ninth).
+        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter);
         Push(Keys.Up, Keys.Enter);                // sql: the user page, then the password page, then the summary
         Type("reader");
         Type("pw");
-        Push(Keys.Home, Keys.Enter);              // Save
+        Push(Keys.Home, Keys.Enter);              // Save, and offer it
         Push(Keys.Escape);
 
         await menu.ShowAsync(CancellationToken.None);
@@ -952,8 +955,8 @@ public partial class ToolsMenuTests : IDisposable
     }
 
     /// <summary>
-    /// <c>SQL connections offered</c> (later on 2026-09-23): a checklist of every connection; the first flip narrows the
-    /// profile to the rest, a flip back offers it again, and a connection added to the file afterwards starts unticked.
+    /// <c>SQL connections offered</c> (later on 2026-09-23): a checklist of every connection, none ticked at first (2026-10-01);
+    /// a flip offers one, a flip back hides it again, and a connection added to the file afterwards starts unticked.
     /// </summary>
     [Fact]
     public async Task OnThePane_TheSqlTab_NarrowsTheOfferedConnections_AndANewOneStartsHidden()
@@ -963,22 +966,22 @@ public partial class ToolsMenuTests : IDisposable
         File.WriteAllText(path, """{ "connections": { "aw": { "server": "x", "auth": "windows" }, "prod": { "server": "y", "auth": "windows" } } }""");
         var (menu, _, _) = PaneMenu();
         Push(Keys.Left, Keys.Left, Keys.Left, Keys.Left, Keys.Left, Keys.Left, Keys.Down, Keys.Enter);   // Offered → Options → Git (native) → UNC → MySQL → Oracle → SQL, the offered row: the checklist
-        Push(Keys.Down, Keys.Enter);                         // prod off
-        Push(Keys.Char(' '));                                // and on again (Space flips too)
-        Push(Keys.Enter);                                    // and off
+        Push(Keys.Enter);                                    // aw on
+        Push(Keys.Char(' '));                                // and off again (Space flips too)
+        Push(Keys.Enter);                                    // and on
         Push(Keys.Escape, Keys.Escape);
 
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Equal(["aw"], _settings.Current.SqlConnectionsOffered);
-        Assert.Contains("SQL connections offered    all (not narrowed)", _console.Output);
+        Assert.Contains("SQL connections offered    none of 2", _console.Output);
         Assert.Contains("SQL connections offered    1 of 2", _console.Output);
         Assert.Contains("[x] aw    x", _console.Output);
 
         File.WriteAllText(path, """{ "connections": { "aw": { "server": "x", "auth": "windows" }, "prod": { "server": "y", "auth": "windows" }, "new": { "server": "z", "auth": "windows" } } }""");
         var loaded = NeonSidekick.Sql.SqlConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory);
         Assert.Equal("1 of 3", SettingsMenu.SqlOfferedValue(_settings.Current.SqlConnectionsOffered, loaded));   // the new one hidden until ticked
-        Assert.Equal(SettingsMenu.SqlNotNarrowedLabel, SettingsMenu.SqlOfferedValue(null, loaded));
+        Assert.Equal("none of 3", SettingsMenu.SqlOfferedValue(null, loaded));   // null offers none (2026-10-01)
         Assert.Equal("none of 3", SettingsMenu.SqlOfferedValue([], loaded));
     }
 
@@ -1345,7 +1348,7 @@ public partial class ToolsMenuTests : IDisposable
         Assert.Contains("  · Web\n  ·   Web tools: on\n  ·   Web browser mode: default\n  ·   Web browser path: (auto: msedge.exe)\n", _console.Output);
         Assert.Contains("  ·   Web search max results: 20 results\n  · Files\n  ·   File tools: on\n", _console.Output);
         Assert.Contains("  · Shell\n  ·   Shell command policy: ask\n", _console.Output);
-        Assert.Contains("  · Ask\n  ·   Ask user: on\n  ·   Ask max questions: 10 questions\n  ·   Ask max choices per question: 10 choices\n  · Claude\n  ·   Claude executable: (looked up)\n  ·   Claude slash command permissions: read-only\n  ·   Claude slash command model: (Claude Code's default)\n  ·   Claude slash command effort: (Claude Code's default)\n  ·   Claude advisor tool: off\n  ·   Claude advisor tool context: brief\n  ·   Claude advisor tool calls per turn: 2 calls\n  ·   Claude advisor tool model: (as Claude slash command model)\n  ·   Claude advisor tool effort: (as Claude slash command effort)\n  ·   Claude advisor tool confirm: off\n  ·   Claude API: off\n  ·   Claude API key: (none)\n  ·   Claude API max tokens: 32,000 tokens\n  ·   Claude API prompt caching: on\n  ·   Claude CLI server: off\n  · HA\n  ·   Home Assistant tools: on\n  ·   Home Assistant URL: (not set)\n  ·   Home Assistant API key: (none)\n  ·   Home Assistant test connection: Enter to ask the server for its version\n  ·   Home Assistant action policy: ask\n  ·   Home Assistant Assist agent: (Home Assistant's default)\n  ·   Home Assistant timeout (s): 10\n  · Print\n  ·   Print tools: off\n  ·   Print action policy: ask\n  ·   Print default printer: (Windows default)\n  ·   Print font size (pt): 10 pt\n  · Obsidian\n  ·   Obsidian tools: on\n  ·   Obsidian vault: (not set)\n  ·   Obsidian allow delete (.trash): on\n  · ComfyUI\n  ·   ComfyUI tools: on\n  ·   ComfyUI URL: (not set)\n  ·   ComfyUI workflows offered: all (not narrowed)\n  ·   ComfyUI add workflow: Enter to start workflow wizard\n  ·   ComfyUI ^-mention enabled: on\n  ·   ComfyUI timeout (s): 300\n  ·   ComfyUI max pictures per call: 5 pictures\n  ·   ComfyUI reinforce negatives: on\n  ·   ComfyUI show prompts: on\n  ·   ComfyUI picture strip: on\n  ·   ComfyUI output folder: comfy_images\n  · SQL\n  ·   SQL tools: on\n  ·   SQL connections offered: all (not narrowed)\n  ·   SQL default connection: (the first connection)\n  ·   SQL set password: Enter to set password for a connection\n  ·   SQL add connection: Enter to start connection wizard\n  ·   SQL %-mention enabled: on\n  ·   SQL max rows: 100 rows\n  ·   SQL query timeout (s): 30\n  ·   SQL connections (profile): (none) · Enter edits sql.json\n  ·   SQL connections (global): (none) · Enter edits sql.json\n  · Oracle\n  ·   Oracle tools: off\n  ·   Oracle connections offered: all (not narrowed)\n  ·   Oracle default connection: (the first connection)\n  ·   Oracle set password: Enter to set password for a connection\n  ·   Oracle add connection: Enter to start connection wizard\n  ·   Oracle %-mention enabled: on\n  ·   Oracle max rows: 100 rows\n  ·   Oracle query timeout (s): 30\n  ·   Oracle connections (profile): (none) · Enter edits oracle.json\n  ·   Oracle connections (global): (none) · Enter edits oracle.json\n  · MySQL\n  ·   MySQL tools: off\n  ·   MySQL connections offered: all (not narrowed)\n  ·   MySQL default connection: (the first connection)\n  ·   MySQL set password: Enter to set password for a connection\n  ·   MySQL add connection: Enter to start connection wizard\n  ·   MySQL %-mention enabled: on\n  ·   MySQL max rows: 100 rows\n  ·   MySQL query timeout (s): 30\n  ·   MySQL connections (profile): (none) · Enter edits mysql.json\n  ·   MySQL connections (global): (none) · Enter edits mysql.json\n  · UNC\n  ·   UNC tools: off\n  ·   UNC writes: off\n  ·   UNC shares offered: all (not narrowed)\n  ·   UNC default share: (the first share)\n  ·   UNC set password: Enter to set password for a runas share\n  ·   UNC add share: Enter to start share wizard\n  ·   UNC %-mention enabled: on\n  ·   UNC shares (profile): (none) · Enter edits unc.json\n  ·   UNC shares (global): (none) · Enter edits unc.json\n  · GitLib\n  ·   GitLib tools: on\n  ·   GitLib diff max lines: 500 lines\n  ·   GitLib log max commits: 20 commits\n  ·   GitLib email: (not set)\n  ·   GitLib name: (not set)\n  · Options\n  ·   $-mention enabled: on\n  ·   Tool collapse count: 2 lines\n  ·   Code collapse count: 20 lines\n", _console.Output);
+        Assert.Contains("  · Ask\n  ·   Ask user: on\n  ·   Ask max questions: 10 questions\n  ·   Ask max choices per question: 10 choices\n  · Claude\n  ·   Claude executable: (looked up)\n  ·   Claude slash command permissions: read-only\n  ·   Claude slash command model: (Claude Code's default)\n  ·   Claude slash command effort: (Claude Code's default)\n  ·   Claude advisor tool: off\n  ·   Claude advisor tool context: brief\n  ·   Claude advisor tool calls per turn: 2 calls\n  ·   Claude advisor tool model: (as Claude slash command model)\n  ·   Claude advisor tool effort: (as Claude slash command effort)\n  ·   Claude advisor tool confirm: off\n  ·   Claude API: off\n  ·   Claude API key: (none)\n  ·   Claude API max tokens: 32,000 tokens\n  ·   Claude API prompt caching: on\n  ·   Claude CLI server: off\n  · HA\n  ·   Home Assistant tools: on\n  ·   Home Assistant URL: (not set)\n  ·   Home Assistant API key: (none)\n  ·   Home Assistant test connection: Enter to ask the server for its version\n  ·   Home Assistant action policy: ask\n  ·   Home Assistant Assist agent: (Home Assistant's default)\n  ·   Home Assistant timeout (s): 10\n  · Print\n  ·   Print tools: off\n  ·   Print action policy: ask\n  ·   Print default printer: (Windows default)\n  ·   Print font size (pt): 10 pt\n  · Obsidian\n  ·   Obsidian tools: on\n  ·   Obsidian vault: (not set)\n  ·   Obsidian allow delete (.trash): on\n  · ComfyUI\n  ·   ComfyUI tools: on\n  ·   ComfyUI URL: (not set)\n  ·   ComfyUI workflows offered: none of 0\n  ·   ComfyUI add workflow: Enter to start workflow wizard\n  ·   ComfyUI ^-mention enabled: on\n  ·   ComfyUI timeout (s): 300\n  ·   ComfyUI max pictures per call: 5 pictures\n  ·   ComfyUI reinforce negatives: on\n  ·   ComfyUI show prompts: on\n  ·   ComfyUI picture strip: on\n  ·   ComfyUI output folder: comfy_images\n  · SQL\n  ·   SQL tools: on\n  ·   SQL connections offered: none of 0\n  ·   SQL default connection: (the first connection)\n  ·   SQL set password: Enter to set password for a connection\n  ·   SQL add connection: Enter to start connection wizard\n  ·   SQL %-mention enabled: on\n  ·   SQL max rows: 100 rows\n  ·   SQL query timeout (s): 30\n  ·   SQL connections (profile): (none) · Enter edits sql.json\n  ·   SQL connections (global): (none) · Enter edits sql.json\n  · Oracle\n  ·   Oracle tools: off\n  ·   Oracle connections offered: none of 0\n  ·   Oracle default connection: (the first connection)\n  ·   Oracle set password: Enter to set password for a connection\n  ·   Oracle add connection: Enter to start connection wizard\n  ·   Oracle %-mention enabled: on\n  ·   Oracle max rows: 100 rows\n  ·   Oracle query timeout (s): 30\n  ·   Oracle connections (profile): (none) · Enter edits oracle.json\n  ·   Oracle connections (global): (none) · Enter edits oracle.json\n  · MySQL\n  ·   MySQL tools: off\n  ·   MySQL connections offered: none of 0\n  ·   MySQL default connection: (the first connection)\n  ·   MySQL set password: Enter to set password for a connection\n  ·   MySQL add connection: Enter to start connection wizard\n  ·   MySQL %-mention enabled: on\n  ·   MySQL max rows: 100 rows\n  ·   MySQL query timeout (s): 30\n  ·   MySQL connections (profile): (none) · Enter edits mysql.json\n  ·   MySQL connections (global): (none) · Enter edits mysql.json\n  · UNC\n  ·   UNC tools: off\n  ·   UNC writes: off\n  ·   UNC shares offered: none of 0\n  ·   UNC default share: (the first share)\n  ·   UNC set password: Enter to set password for a runas share\n  ·   UNC add share: Enter to start share wizard\n  ·   UNC *-mention enabled: on\n  ·   UNC shares (profile): (none) · Enter edits unc.json\n  ·   UNC shares (global): (none) · Enter edits unc.json\n  · GitLib\n  ·   GitLib tools: on\n  ·   GitLib diff max lines: 500 lines\n  ·   GitLib log max commits: 20 commits\n  ·   GitLib email: (not set)\n  ·   GitLib name: (not set)\n  · Options\n  ·   $-mention enabled: on\n  ·   Tool collapse count: 2 lines\n  ·   Code collapse count: 20 lines\n", _console.Output);
         Assert.False(pane.OverlayOpen);
         pane.Dispose();
     }
@@ -1439,8 +1442,8 @@ public partial class ToolsMenuTests : IDisposable
     }
 
     /// <summary>
-    /// SQL connections offered's buttons (2026-09-29, the user's ask): from "not narrowed", A saves the connections listed
-    /// now — one added later starts hidden (the user's call) — and N saves an empty list, none offered.
+    /// SQL connections offered's buttons (2026-09-29, the user's ask): A saves the connections listed now — one added later
+    /// starts hidden (the user's call) — and N saves an empty list, none offered.
     /// </summary>
     [Fact]
     public async Task OnThePane_TheSqlOffered_SelectAll_SavesTodaysList_SelectNone_AnEmptyOne()
@@ -1502,20 +1505,20 @@ public partial class ToolsMenuTests : IDisposable
         ComfyWorkflowFile(_settings.GlobalComfyDirectory, "juggernaut-xl");
         var (menu, _, _) = PaneMenu();
         OpenImagesRow(2);
-        Push(Keys.Enter);                                    // juggernaut-xl off (the list is by name)
+        Push(Keys.Down, Keys.Enter);                         // pony-txt2img on (the list is by name; none ticked at first)
         Push(Keys.Escape, Keys.Escape);
 
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Equal(["pony-txt2img"], _settings.Current.ComfyWorkflowsOffered);
-        Assert.Matches(@"ComfyUI workflows offered +all \(not narrowed\)", _console.Output);   // the column is the tab's widest label
+        Assert.Matches(@"ComfyUI workflows offered +none of 2", _console.Output);   // the column is the tab's widest label
         Assert.Matches(@"ComfyUI workflows offered +1 of 2", _console.Output);
         Assert.Contains("[ ] juggernaut-xl  ", _console.Output);
 
         ComfyWorkflowFile(_settings.ProfileComfyDirectory, "new-one");
         var installed = new NeonSidekick.Comfy.ComfyWorkflowCatalog(() => [_settings.ProfileComfyDirectory, _settings.GlobalComfyDirectory]).Workflows;
         Assert.Equal("1 of 3", SettingsMenu.ComfyOfferedValue(_settings.Current.ComfyWorkflowsOffered, installed));   // the new one hidden until ticked
-        Assert.Equal(SettingsMenu.ComfyNotNarrowedLabel, SettingsMenu.ComfyOfferedValue(null, installed));
+        Assert.Equal("none of 3", SettingsMenu.ComfyOfferedValue(null, installed));   // null offers none (2026-10-01)
         Assert.Equal("none of 3", SettingsMenu.ComfyOfferedValue([], installed));
     }
 
@@ -1538,8 +1541,8 @@ public partial class ToolsMenuTests : IDisposable
         Push(Keys.Enter, Keys.Enter, Keys.Enter, Keys.Enter);   // 1024, 1024, 25, 7
         Push(Keys.Enter);                     // pony's negative
         Type("anime portraits");
-        Push(Keys.Down, Keys.Enter);          // Test
-        Push(Keys.Up, Keys.Enter);            // Save
+        Push(Keys.Down, Keys.Down, Keys.Enter);   // Test (under the two save rows)
+        Push(Keys.Up, Keys.Up, Keys.Enter);       // Save, and offer it
         Push(Keys.Escape);
 
         await menu.ShowAsync(CancellationToken.None);
@@ -1558,7 +1561,7 @@ public partial class ToolsMenuTests : IDisposable
         Assert.Contains("\"steps\":8", queued);
         Assert.Contains("Tested 'ponydiffusionv6xl' in ", _console.Output);
         Assert.Contains("Added workflow 'ponydiffusionv6xl' to ", _console.Output);
-        Assert.Null(_settings.Current.ComfyWorkflowsOffered);
+        Assert.Equal(["ponydiffusionv6xl"], _settings.Current.ComfyWorkflowsOffered);
     }
 
     /// <summary>The import path: an exported graph placeholdered, its own values the defaults, saved on a narrowed profile and offered to the model.</summary>

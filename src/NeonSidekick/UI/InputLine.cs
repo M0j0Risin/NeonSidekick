@@ -160,6 +160,7 @@ public sealed partial class InputLine
     private readonly Func<IReadOnlyList<CompletionItem>>? _tools;
     private readonly Func<IReadOnlyList<CompletionItem>>? _connections;
     private readonly Func<IReadOnlyList<CompletionItem>>? _workflows;
+    private readonly Func<IReadOnlyList<CompletionItem>>? _shares;
     private readonly INoticeSink? _notices;
     private readonly Func<string, bool>? _copy;
 
@@ -208,11 +209,14 @@ public sealed partial class InputLine
     /// <paramref name="workflows"/> is the <c>^</c>-mention list's source (later still on 2026-09-24; <c>ChatScreen.CaretChoices</c>:
     /// the ComfyUI workflows the model is offered with their family, shape and size, empty while the setting is off or the
     /// image tools are not offered), the same shape: a pick writes <c>^name</c> and a space; null = that list never opens.
+    /// <paramref name="shares"/> is the <c>*</c>-mention list's source (2026-10-01, the user's ask: the UNC shares off the database
+    /// connections' <c>%</c>; <c>ChatScreen.StarChoices</c>: the offered shares of <c>unc.json</c> with their root and description,
+    /// empty while the setting or the UNC tools are off), the same shape: a pick writes <c>*name</c> and a space; null = that list never opens.
     /// <paramref name="copyToClipboard"/> is what Ctrl+C over a selection writes the selected text
     /// with (2026-09-17; <see cref="WindowsClipboard.TrySetText"/> in the app, the same writer as
     /// <c>/copy</c>'s; tests record the text), true on success; null = every copy fails and says so.
     /// </summary>
-    public InputLine(ScreenPane pane, KeySource keys, Func<string?>? clipboard = null, INoticeSink? notices = null, Func<byte[]?>? clipboardImage = null, Func<string, MentionResult>? mentions = null, Func<IReadOnlyList<CompletionItem>>? commands = null, Func<string, string, ArgumentList>? arguments = null, Func<IReadOnlyList<CompletionItem>>? skills = null, Func<IReadOnlyList<CompletionItem>>? tools = null, Func<string, bool>? copyToClipboard = null, Func<IReadOnlyList<CompletionItem>>? connections = null, Func<IReadOnlyList<CompletionItem>>? workflows = null)
+    public InputLine(ScreenPane pane, KeySource keys, Func<string?>? clipboard = null, INoticeSink? notices = null, Func<byte[]?>? clipboardImage = null, Func<string, MentionResult>? mentions = null, Func<IReadOnlyList<CompletionItem>>? commands = null, Func<string, string, ArgumentList>? arguments = null, Func<IReadOnlyList<CompletionItem>>? skills = null, Func<IReadOnlyList<CompletionItem>>? tools = null, Func<string, bool>? copyToClipboard = null, Func<IReadOnlyList<CompletionItem>>? connections = null, Func<IReadOnlyList<CompletionItem>>? workflows = null, Func<IReadOnlyList<CompletionItem>>? shares = null)
     {
         _pane = pane ?? throw new ArgumentNullException(nameof(pane));
         _keys = keys ?? throw new ArgumentNullException(nameof(keys));
@@ -225,6 +229,7 @@ public sealed partial class InputLine
         _tools = tools;
         _connections = connections;
         _workflows = workflows;
+        _shares = shares;
         _notices = notices;
         _copy = copyToClipboard;
         _hintClicks = new DoubleClick(pane.Time);

@@ -3,6 +3,7 @@ using System.Security.Principal;
 using Microsoft.Win32.SafeHandles;
 using NeonSidekick.Diagnostics;
 using NeonSidekick.Files;
+using NeonSidekick.Settings;
 using NeonSidekick.Sql;
 
 namespace NeonSidekick.Unc;
@@ -56,6 +57,16 @@ public sealed class UncAccess
 
     /// <summary>The shares a call can name, read now.</summary>
     public UncCatalog Catalog() => _catalog();
+
+    /// <summary>
+    /// Whether the UNC group is offered (2026-09-30; here since 2026-10-01, when <c>open</c> asked it too): the setting
+    /// <c>UNC tools</c> on and at least one share offered.
+    /// </summary>
+    public bool IsOffered(AppSettingsData effective)
+    {
+        ArgumentNullException.ThrowIfNull(effective);
+        return effective.UncTools && Catalog().Shares.Count > 0;
+    }
 
     /// <summary>
     /// The share and the path within it a call means: <paramref name="share"/> by name (case-insensitive); or, with none named and
@@ -149,14 +160,15 @@ public sealed class UncAccess
     /// netonly token taken under <c>runas</c>, then the preflight and the work on a pool thread that owns the token. A read
     /// (<paramref name="write"/> false) is abandoned when <paramref name="cancellationToken"/> fires (it throws); a write is waited
     /// out. A refusal before the work — no password, no token, an unreachable or refusing root — is the result's sentence.
+    /// <paramref name="signIn"/> false (2026-10-01, <c>open</c>) runs it as the user even on a <c>runas</c> share: no token taken.
     /// </summary>
-    public async Task<UncResult<T>> RunAsync<T>(UncNamedShare share, bool write, Func<WorkingDirectory, T> act, CancellationToken cancellationToken)
+    public async Task<UncResult<T>> RunAsync<T>(UncNamedShare share, bool write, Func<WorkingDirectory, T> act, CancellationToken cancellationToken, bool signIn = true)
     {
         ArgumentNullException.ThrowIfNull(share);
         ArgumentNullException.ThrowIfNull(act);
         var files = Files(share);
         SafeAccessTokenHandle? token = null;
-        if (share.Config.IsRunAs)
+        if (share.Config.IsRunAs && signIn)
         {
             if (!OperatingSystem.IsWindows())
             {

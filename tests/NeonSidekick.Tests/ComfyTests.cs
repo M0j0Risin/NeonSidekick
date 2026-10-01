@@ -64,9 +64,14 @@ public sealed class ComfyTests : IDisposable
         try { Directory.Delete(_dir, recursive: true); } catch { /* best effort */ }
     }
 
+    /// <summary>
+    /// Installs a workflow and ticks it in <c>ComfyUI workflows offered</c>, as the wizard's offer row would (2026-10-01: nothing is
+    /// offered until ticked); a test that narrows sets the list itself after installing.
+    /// </summary>
     private void Workflow(string name, string json, string? sidecar = null, bool global = false)
     {
         string folder = global ? _globalComfy : _profileComfy;
+        _settings.ComfyWorkflowsOffered = [.. _settings.ComfyWorkflowsOffered ?? [], name];
         File.WriteAllText(Path.Combine(folder, name + ".json"), json);
         if (sidecar is not null)
         {
@@ -677,6 +682,9 @@ public sealed class ComfyTests : IDisposable
         Assert.False(ChatScreen.ComfyOffered(_settings, _studio));
         Workflow("a", Txt2Img);
         Assert.True(ChatScreen.ComfyOffered(_settings, _studio));
+        _settings.ComfyWorkflowsOffered = null;
+        Assert.False(ChatScreen.ComfyOffered(_settings, _studio));   // installed but not ticked: null offers none (2026-10-01)
+        _settings.ComfyWorkflowsOffered = ["a"];
         Assert.False(ChatScreen.ComfyOffered(new AppSettingsData { ComfyUrl = "ftp://x" }, _studio));
         Assert.False(ChatScreen.ComfyOffered(new AppSettingsData { ComfyUrl = Server, ComfyTools = false }, _studio));
     }
@@ -811,7 +819,7 @@ public sealed class ComfyTests : IDisposable
         Assert.StartsWith("generated 1 picture with juggernaut-xl", named.Text);   // /imagine may name a hidden one
         var unnamed = await _studio.GenerateAsync(new ComfyRequest("x", Seed: 6, AnyWorkflow: true), CancellationToken.None);
         Assert.StartsWith("generated 1 picture with pony-txt2img", unnamed.Text);   // and without a name the offered one is the choice
-        Assert.Equal(["juggernaut-xl", "pony-txt2img"], ComfyWorkflowCatalog.Offered(_studio.Catalog.Workflows, null).Select(w => w.Name));
+        Assert.Empty(ComfyWorkflowCatalog.Offered(_studio.Catalog.Workflows, null));   // null offers none (2026-10-01; it was every one)
 
         _settings.ComfyWorkflowsOffered = [];
         Assert.Equal(ComfyText.NoneOffered, (string?)await tool.InvokeAsync(Args(("prompt", "x"))));

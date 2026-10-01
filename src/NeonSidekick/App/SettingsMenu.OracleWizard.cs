@@ -116,7 +116,7 @@ internal sealed partial class SettingsMenu
 
     /// <summary>
     /// The wizard: its steps in order, ESC one back (before the first: nothing written), a change from the summary back to
-    /// it. True when a setting changed: the offered list, for a connection saved into a narrowed profile.
+    /// it. True when a setting changed: the offered list, for a connection saved and offered.
     /// </summary>
     private async Task<bool> AddOracleConnectionAsync(CancellationToken cancellationToken)
     {
@@ -366,7 +366,7 @@ internal sealed partial class SettingsMenu
     }
 
     /// <summary>
-    /// The summary: the save rows (with and without offering it, on a profile that narrowed its offered list), the test, the
+    /// The summary: the save rows (with and without offering it — always both since 2026-10-01, when nothing is offered until ticked), the test, the
     /// cancel, then every row of the draft. Done with whether a setting changed; or the step a row picked; or neither for ESC (back).
     /// </summary>
     private async Task<(bool Done, bool Changed, OracleWizardStep? Edit)> OracleWizardSummaryAsync(OracleDraft draft, CancellationToken cancellationToken)
@@ -374,8 +374,8 @@ internal sealed partial class SettingsMenu
         int cursor = 0;
         while (true)
         {
-            bool narrowed = _settings.Current.OracleConnectionsOffered is not null;
-            var actions = narrowed ? new List<string> { SqlWizardSaveOfferedRow, OracleWizardSaveHiddenRow } : [SqlWizardSaveRow];
+            // Always offer-or-hide (2026-10-01): nothing is offered until ticked, so the wizard is where a new one is.
+            var actions = new List<string> { SqlWizardSaveOfferedRow, OracleWizardSaveHiddenRow };
             int test = actions.Count;
             actions.Add(SqlWizardTestRow);
             actions.Add(SqlWizardCancelRow);
@@ -416,7 +416,7 @@ internal sealed partial class SettingsMenu
         }
     }
 
-    /// <summary>The summary's hidden-save row on a narrowed profile. Pinned.</summary>
+    /// <summary>The summary's hidden-save row. Pinned.</summary>
     public const string OracleWizardSaveHiddenRow = "Save, hidden from the model until ticked in Oracle connections offered";
 
     /// <summary>
@@ -467,7 +467,7 @@ internal sealed partial class SettingsMenu
 
     /// <summary>
     /// Writes the draft: the entry (<see cref="OracleConfigFile.AddConnection"/>), then its password to its store, then — when
-    /// <paramref name="offer"/> and the profile narrowed its offered list — its name added there. Whether a setting changed;
+    /// <paramref name="offer"/> — its name added there. Whether a setting changed;
     /// null when nothing was written (the status line says why), the summary shown again.
     /// </summary>
     private bool? OracleWizardSave(OracleDraft draft, bool offer)
@@ -503,11 +503,12 @@ internal sealed partial class SettingsMenu
             Sink.Error(notice);
         }
 
-        if (!offer || _settings.Current.OracleConnectionsOffered is not { } offered)
+        if (!offer)
         {
             return false;
         }
 
+        var offered = _settings.Current.OracleConnectionsOffered ?? [];   // null offers none (2026-10-01)
         Apply(SettingsField.OracleConnectionsOffered, d => d.OracleConnectionsOffered = [.. offered, draft.Name]);
         return true;
     }

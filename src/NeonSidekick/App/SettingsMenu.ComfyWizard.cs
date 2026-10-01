@@ -24,9 +24,6 @@ internal sealed partial class SettingsMenu
     /// <summary>The value column of the <c>ComfyUI add workflow</c> action row. Pinned.</summary>
     public const string ComfyAddWorkflowLabel = "Enter to start workflow wizard";
 
-    /// <summary>The <c>ComfyUI workflows offered</c> value before the profile narrows it. Pinned.</summary>
-    public const string ComfyNotNarrowedLabel = "all (not narrowed)";
-
     /// <summary>The wizard's rows, one per <see cref="ComfyWizardStep"/> before the summary, in its order. Pinned.</summary>
     public static readonly IReadOnlyList<string> ComfyWizardLabels =
         ["Source", "File", "Kind", "Checkpoint", "Family", "Scope", "Name", "CLIP skip", "Sampler", "Scheduler", "Width", "Height", "Steps", "CFG", "Denoise", "Negative", "Description"];
@@ -83,7 +80,6 @@ internal sealed partial class SettingsMenu
     /// <summary>The CLIP skip picks: none, then 2. Pinned.</summary>
     public static readonly IReadOnlyList<string> ComfyWizardClipSkipRows = ["none", "2"];
 
-    public const string ComfyWizardSaveRow = "Save";
     public const string ComfyWizardSaveOfferedRow = "Save, and offer it to the model";
     public const string ComfyWizardSaveHiddenRow = "Save, hidden from the model until ticked in ComfyUI workflows offered";
     public const string ComfyWizardTestRow = "Test the workflow";
@@ -637,14 +633,14 @@ internal sealed partial class SettingsMenu
             return null;
         }, cancellationToken);
 
-    /// <summary>The summary: save (offered or hidden on a narrowed profile), test, cancel, then every row; <c>SqlWizardSummaryAsync</c>'s contract.</summary>
+    /// <summary>The summary: save (offered or hidden), test, cancel, then every row; <c>SqlWizardSummaryAsync</c>'s contract.</summary>
     private async Task<(bool Done, bool Changed, ComfyWizardStep? Edit)> ComfyWizardSummaryAsync(ComfyDraft draft, CancellationToken cancellationToken)
     {
         int cursor = 0;
         while (true)
         {
-            bool narrowed = _settings.Current.ComfyWorkflowsOffered is not null;
-            var actions = narrowed ? new List<string> { ComfyWizardSaveOfferedRow, ComfyWizardSaveHiddenRow } : [ComfyWizardSaveRow];
+            // Always offer-or-hide (2026-10-01): nothing is offered until ticked, so the wizard is where a new one is.
+            var actions = new List<string> { ComfyWizardSaveOfferedRow, ComfyWizardSaveHiddenRow };
             int test = actions.Count;
             actions.Add(ComfyWizardTestRow);
             actions.Add(ComfyWizardCancelRow);
@@ -759,7 +755,7 @@ internal sealed partial class SettingsMenu
         }
     }
 
-    /// <summary>Writes the draft (<see cref="ComfyWorkflowFile.Add"/>), then — offered on a narrowed profile — its name into the list. Whether a setting changed; null when nothing was written.</summary>
+    /// <summary>Writes the draft (<see cref="ComfyWorkflowFile.Add"/>), then — offered — its name into the list. Whether a setting changed; null when nothing was written.</summary>
     private bool? ComfyWizardSave(ComfyDraft draft, bool offer)
     {
         if (ComfyWizardMissing(draft) is { } missing)
@@ -776,11 +772,12 @@ internal sealed partial class SettingsMenu
         }
 
         Sink.Notice(ComfyWorkflowAdded(draft.Name, folder));
-        if (!offer || _settings.Current.ComfyWorkflowsOffered is not { } offered)
+        if (!offer)
         {
             return false;
         }
 
+        var offered = _settings.Current.ComfyWorkflowsOffered ?? [];   // null offers none (2026-10-01)
         Apply(SettingsField.ComfyWorkflowsOffered, d => d.ComfyWorkflowsOffered = [.. offered, draft.Name]);
         return true;
     }
@@ -791,15 +788,10 @@ internal sealed partial class SettingsMenu
     private static IReadOnlyList<ComfyWorkflow> InstalledComfyWorkflows(string profileDirectory) =>
         new ComfyWorkflowCatalog(() => [Path.Combine(profileDirectory, ComfyWorkflowCatalog.DirectoryName), Path.Combine(Profiles.HomeOf(profileDirectory), ComfyWorkflowCatalog.DirectoryName)]).Workflows;
 
-    /// <summary>The <c>ComfyUI workflows offered</c> value: <see cref="ComfyNotNarrowedLabel"/>, <c>K of N</c> or <c>none of N</c>. Pinned.</summary>
+    /// <summary>The <c>ComfyUI workflows offered</c> value: <c>K of N</c>, or <c>none of N</c> — before any is ticked too (2026-10-01: null offers none). Pinned.</summary>
     public static string ComfyOfferedValue(IReadOnlyList<string>? offered, IReadOnlyList<ComfyWorkflow> installed)
     {
         ArgumentNullException.ThrowIfNull(installed);
-        if (offered is null)
-        {
-            return ComfyNotNarrowedLabel;
-        }
-
         int kept = ComfyWorkflowCatalog.Offered(installed, offered).Count;
         return (kept == 0 ? "none" : Invariant(kept)) + " of " + Invariant(installed.Count);
     }
@@ -813,7 +805,7 @@ internal sealed partial class SettingsMenu
         return Markup.Escape((offered ? "[x] " : "[ ] ") + workflow.Name.PadRight(width)) + Theme.DimMarkup(note);
     }
 
-    /// <summary><c>EditSqlOfferedAsync</c>'s loop over the installed workflows: Enter or Space flips one, saved at once; the first flip from "not narrowed" keeps all but that one.</summary>
+    /// <summary><c>EditSqlOfferedAsync</c>'s loop over the installed workflows: Enter or Space flips one, saved at once; nothing is ticked until the user ticks it (2026-10-01).</summary>
     private async Task<bool> EditComfyOfferedAsync(CancellationToken cancellationToken)
     {
         bool changed = false;
@@ -848,9 +840,9 @@ internal sealed partial class SettingsMenu
             var next = pick.Button == SelectAllIndex ? installed.Select(w => w.Name).ToList()
                 : pick.Button == SelectNoneIndex ? []
                 : installed.Select(w => w.Name).Where(n => on.Contains(n) != string.Equals(n, name, StringComparison.OrdinalIgnoreCase)).ToList();
-            if (offered is not null && next.Count == on.Count && next.All(on.Contains))
+            if (next.Count == on.Count && next.All(on.Contains))
             {
-                continue;   // a button that changes nothing saves nothing; from "not narrowed", select all narrows to today's list
+                continue;   // a button that changes nothing saves nothing (null and empty both offer none, 2026-10-01)
             }
 
             // A name ticked before but no longer installed stays in the list: it counts again if the workflow comes back.

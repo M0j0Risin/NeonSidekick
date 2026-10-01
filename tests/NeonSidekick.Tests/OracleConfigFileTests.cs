@@ -123,7 +123,7 @@ public sealed class OracleConfigFileTests : IDisposable
         var narrowed = catalog.Offered(["hr", "never-there"]);
         Assert.Equal(["hr"], narrowed.Connections.Select(c => c.Name));
         Assert.Equal(1, narrowed.Hidden);
-        Assert.Same(catalog, catalog.Offered(null));
+        Assert.Empty(catalog.Offered(null).Connections);   // null offers none (2026-10-01)
     }
 
     [Fact]

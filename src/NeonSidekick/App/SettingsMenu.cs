@@ -704,8 +704,8 @@ public enum SettingsField
     /// <summary>An action row (2026-09-30): Enter walks a new share through every choice, tests it and adds it to that <c>unc.json</c> (<c>SettingsMenu.UncWizard.cs</c>). The UNC tab.</summary>
     UncAddShare,
 
-    /// <summary>A toggle: whether <c>%</c> and part of a name lists the UNC shares too (<see cref="Settings.AppSettingsData.UncPercentMention"/>). The UNC tab (2026-09-30).</summary>
-    UncPercentMention,
+    /// <summary>A toggle: whether <c>*</c> and part of a name lists the UNC shares (<see cref="Settings.AppSettingsData.UncStarMention"/>). The UNC tab (2026-09-30; its own <c>*</c> since 2026-10-01, was <c>%</c>).</summary>
+    UncStarMention,
 
     /// <summary>An edit row: Enter opens the profile's <c>unc.json</c> in the editor (made with <see cref="Unc.UncConfigFile.EmptyText"/> when missing). The UNC tab (2026-09-30).</summary>
     UncSharesProfile,
@@ -1079,7 +1079,7 @@ internal sealed partial class SettingsMenu
         [SettingsField.SqlTools, SettingsField.SqlConnectionsOffered, SettingsField.SqlDefaultConnection, SettingsField.SqlSetPassword, SettingsField.SqlAddConnection, SettingsField.SqlPercentMention, SettingsField.SqlQueryMaxRows, SettingsField.SqlQueryTimeoutSeconds, SettingsField.SqlConnectionsProfile, SettingsField.SqlConnectionsGlobal],
         [SettingsField.OracleTools, SettingsField.OracleConnectionsOffered, SettingsField.OracleDefaultConnection, SettingsField.OracleSetPassword, SettingsField.OracleAddConnection, SettingsField.OraclePercentMention, SettingsField.OracleQueryMaxRows, SettingsField.OracleQueryTimeoutSeconds, SettingsField.OracleConnectionsProfile, SettingsField.OracleConnectionsGlobal],
         [SettingsField.MySqlTools, SettingsField.MySqlConnectionsOffered, SettingsField.MySqlDefaultConnection, SettingsField.MySqlSetPassword, SettingsField.MySqlAddConnection, SettingsField.MySqlPercentMention, SettingsField.MySqlQueryMaxRows, SettingsField.MySqlQueryTimeoutSeconds, SettingsField.MySqlConnectionsProfile, SettingsField.MySqlConnectionsGlobal],
-        [SettingsField.UncTools, SettingsField.UncWrites, SettingsField.UncSharesOffered, SettingsField.UncDefaultShare, SettingsField.UncSetPassword, SettingsField.UncAddShare, SettingsField.UncPercentMention, SettingsField.UncSharesProfile, SettingsField.UncSharesGlobal],
+        [SettingsField.UncTools, SettingsField.UncWrites, SettingsField.UncSharesOffered, SettingsField.UncDefaultShare, SettingsField.UncSetPassword, SettingsField.UncAddShare, SettingsField.UncStarMention, SettingsField.UncSharesProfile, SettingsField.UncSharesGlobal],
         [SettingsField.GitLibTools, SettingsField.GitLibDiffMaxLines, SettingsField.GitLibLogMaxCommits, SettingsField.GitLibEmail, SettingsField.GitLibName],
         [SettingsField.ToolsDollarMention, SettingsField.ToolCollapseCount, SettingsField.CodeCollapseCount],
     ];
@@ -1447,7 +1447,7 @@ internal sealed partial class SettingsMenu
             or SettingsField.BotChatImages or SettingsField.BotChatImageAsync or SettingsField.BotChatSkills or SettingsField.BotChatVision or SettingsField.BotChatMultiEmbeddedKill or SettingsField.ClaudeAdvisor or SettingsField.ClaudeAdvisorConfirm
             or SettingsField.ClaudeApi or SettingsField.ClaudeApiPromptCaching or SettingsField.ClaudeCliServer or SettingsField.EmbeddedVision or SettingsField.EmbeddedLlmServer or SettingsField.EmbeddedDrafter or SettingsField.EmbeddedVramOnly
             or SettingsField.HomeAssistantTools or SettingsField.PrintTools or SettingsField.OracleTools or SettingsField.OraclePercentMention or SettingsField.MySqlTools or SettingsField.MySqlPercentMention
-            or SettingsField.UncTools or SettingsField.UncWrites or SettingsField.UncPercentMention;
+            or SettingsField.UncTools or SettingsField.UncWrites or SettingsField.UncStarMention;
 
     public static string FieldName(SettingsField field) => field switch
     {
@@ -1608,7 +1608,7 @@ internal sealed partial class SettingsMenu
         SettingsField.UncDefaultShare => "UNC default share",
         SettingsField.UncSetPassword => "UNC set password",
         SettingsField.UncAddShare => "UNC add share",
-        SettingsField.UncPercentMention => "UNC %-mention enabled",
+        SettingsField.UncStarMention => "UNC *-mention enabled",
         SettingsField.UncSharesProfile => "UNC shares (profile)",
         SettingsField.UncSharesGlobal => "UNC shares (global)",
         SettingsField.ObsidianAllowDelete => "Obsidian allow delete (.trash)",   // "Obsidian allow delete" until 2026-09-23 (the user's call: the row says where a delete goes)
@@ -1873,7 +1873,7 @@ internal sealed partial class SettingsMenu
             SettingsField.UncDefaultShare => string.IsNullOrWhiteSpace(data.UncDefaultShare) ? FirstUncShareLabel : data.UncDefaultShare,
             SettingsField.UncSetPassword => UncSetPasswordLabel,
             SettingsField.UncAddShare => UncAddShareLabel,
-            SettingsField.UncPercentMention => OnOff(data.UncPercentMention),
+            SettingsField.UncStarMention => OnOff(data.UncStarMention),
             SettingsField.UncSharesProfile => UncSharesLabel(Unc.UncConfigFile.ProfilePath(profileDirectory)),
             SettingsField.UncSharesGlobal => UncSharesLabel(Unc.UncConfigFile.GlobalPath(Profiles.HomeOf(profileDirectory))),
             SettingsField.ObsidianVault => string.IsNullOrWhiteSpace(data.ObsidianVault) ? NoObsidianVaultLabel : data.ObsidianVault,
@@ -1991,23 +1991,15 @@ internal sealed partial class SettingsMenu
     }
 
     /// <summary>
-    /// The value of <c>SQL connections offered</c> (later on 2026-09-23): <see cref="SqlNotNarrowedLabel"/> while the
-    /// profile never narrowed it, else how many of the loaded connections it offers. Pinned.
+    /// The value of <c>SQL connections offered</c> (later on 2026-09-23): how many of the loaded connections the profile
+    /// offers, <c>none of N</c> before any is ticked (2026-10-01: null offers none; it read "all (not narrowed)" until then). Pinned.
     /// </summary>
     public static string SqlOfferedValue(IReadOnlyList<string>? offered, Sql.SqlCatalog loaded)
     {
         ArgumentNullException.ThrowIfNull(loaded);
-        if (offered is null)
-        {
-            return SqlNotNarrowedLabel;
-        }
-
         int kept = loaded.Offered(offered).Connections.Count;
         return (kept == 0 ? "none" : kept.ToString(CultureInfo.InvariantCulture)) + " of " + loaded.Connections.Count.ToString(CultureInfo.InvariantCulture);
     }
-
-    /// <summary>The <c>SQL connections offered</c> value before the profile narrows it: every connection, a new one too. Pinned.</summary>
-    public const string SqlNotNarrowedLabel = "all (not narrowed)";
 
     /// <summary>One row of the <c>SQL connections offered</c> checklist: the mark, the name, where it points. Pinned.</summary>
     public static string SqlOfferedRow(Sql.SqlNamedConnection connection, bool offered, int width)
@@ -4978,7 +4970,7 @@ internal sealed partial class SettingsMenu
             SettingsField.MySqlPercentMention => data.MySqlPercentMention,
             SettingsField.UncTools => data.UncTools,
             SettingsField.UncWrites => data.UncWrites,
-            SettingsField.UncPercentMention => data.UncPercentMention,
+            SettingsField.UncStarMention => data.UncStarMention,
             SettingsField.ComfyTools => data.ComfyTools,
             SettingsField.HomeAssistantTools => data.HomeAssistantTools,
             SettingsField.PrintTools => data.PrintTools,
@@ -5060,7 +5052,7 @@ internal sealed partial class SettingsMenu
             case SettingsField.MySqlPercentMention: data.MySqlPercentMention = on; break;
             case SettingsField.UncTools: data.UncTools = on; break;
             case SettingsField.UncWrites: data.UncWrites = on; break;
-            case SettingsField.UncPercentMention: data.UncPercentMention = on; break;
+            case SettingsField.UncStarMention: data.UncStarMention = on; break;
             case SettingsField.ComfyTools: data.ComfyTools = on; break;
             case SettingsField.HomeAssistantTools: data.HomeAssistantTools = on; break;
             case SettingsField.PrintTools: data.PrintTools = on; break;
@@ -5143,14 +5135,14 @@ internal sealed partial class SettingsMenu
         SettingsField.GitLibTools => on ? "gitlib tools enabled" : "gitlib tools disabled",
         SettingsField.ObsidianTools => on ? "Obsidian tools enabled" : "Obsidian tools disabled",
         SettingsField.ObsidianAllowDelete => on ? "vault_delete may move a note or attachment to the vault's .trash" : "vault_delete is disabled",
-        SettingsField.SqlTools => on ? "the model reads the SQL Server connections of sql.json" : "no SQL tools",
-        SettingsField.OracleTools => on ? "the model reads the Oracle connections of oracle.json" : "no Oracle tools",
+        SettingsField.SqlTools => on ? "SQL tools enabled" : "SQL tools disabled",
+        SettingsField.OracleTools => on ? "Oracle tools enabled" : "Oracle tools disabled",
         SettingsField.OraclePercentMention => on ? "% and part of a name lists the Oracle connections on the line" : "% lists no Oracle connection",
-        SettingsField.MySqlTools => on ? "the model reads the MySQL connections of mysql.json" : "no MySQL tools",
+        SettingsField.MySqlTools => on ? "MySQL tools enabled" : "MySQL tools disabled",
         SettingsField.MySqlPercentMention => on ? "% and part of a name lists the MySQL connections on the line" : "% lists no MySQL connection",
-        SettingsField.UncTools => on ? "the model reaches the shares of unc.json" : "no UNC tools",
-        SettingsField.UncWrites => on ? "a readwrite share may be changed — permanently" : "every share is read-only",
-        SettingsField.UncPercentMention => on ? "% and part of a name lists the UNC shares on the line" : "% lists no UNC share",
+        SettingsField.UncTools => on ? "UNC tools enabled" : "UNC tools disabled",
+        SettingsField.UncWrites => on ? "read-write shares may write" : "read-only forced for all shares",
+        SettingsField.UncStarMention => on ? "* and part of a name lists the UNC shares on the line" : "* is ordinary text",
         SettingsField.ComfyTools => on ? "ComfyUI tools enabled" : "ComfyUI tools disabled",
         SettingsField.HomeAssistantTools => on ? "the model may read and switch Home Assistant, as the policy allows" : "no Home Assistant tools",
         SettingsField.PrintTools => on ? "the model may list the printers and print, as the policy allows" : "no print tools; /print still prints",
@@ -5513,8 +5505,8 @@ internal sealed partial class SettingsMenu
 
     /// <summary>
     /// <c>SQL connections offered</c> (later on 2026-09-23): every connection the two files hold, ticked or not, Enter or
-    /// Space flipping one and the list shown again until ESC (the <see cref="EditCodeLanguagesAsync"/> shape). The first
-    /// flip of a profile that never narrowed it saves every name but the flipped one — from then on the list is exact,
+    /// Space flipping one and the list shown again until ESC (the <see cref="EditCodeLanguagesAsync"/> shape). The list is
+    /// exact: nothing is ticked until the user ticks it (2026-10-01; until then a never-narrowed profile started all ticked),
     /// and a connection added later stays hidden until ticked (the user's call). True when anything changed.
     /// </summary>
     private async Task<bool> EditSqlOfferedAsync(CancellationToken cancellationToken)
@@ -5551,9 +5543,9 @@ internal sealed partial class SettingsMenu
             var next = pick.Button == SelectAllIndex ? loaded.Connections.Select(c => c.Name).ToList()
                 : pick.Button == SelectNoneIndex ? []
                 : loaded.Connections.Select(c => c.Name).Where(n => on.Contains(n) != string.Equals(n, name, StringComparison.OrdinalIgnoreCase)).ToList();
-            if (offered is not null && next.Count == on.Count && next.All(on.Contains))
+            if (next.Count == on.Count && next.All(on.Contains))
             {
-                continue;   // a button that changes nothing saves nothing; from "not narrowed", select all narrows to today's list
+                continue;   // a button that changes nothing saves nothing (null and empty both offer none, 2026-10-01)
             }
 
             // A name ticked before but no longer in the files stays in the list: it counts again if the connection comes back.

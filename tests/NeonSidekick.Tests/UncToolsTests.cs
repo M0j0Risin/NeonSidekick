@@ -269,7 +269,7 @@ public sealed class UncToolsTests : IDisposable
         Assert.Contains(Assistant.UncWriteRule, SystemPromptSummary.SystemPrompt(facts with { UncWrite = true }));
         var group = Assert.Single(SystemPromptSummary.ToolGroups([], [], [], [], false, unc: _tools, uncEnabled: false), g => g.Label == ToolsText.UncTabTitle);
         Assert.Contains(SystemPromptSummary.UncOffSuffix, group.Note);
-        Assert.Equal("UNC tools is off or no share is set in unc.json", SystemPromptSummary.UncOffSuffix);
+        Assert.Equal("UNC tools is off or no share of unc.json is offered", SystemPromptSummary.UncOffSuffix);
     }
 
     [Fact]
@@ -298,8 +298,8 @@ public sealed class UncToolsTests : IDisposable
     {
         var choices = ChatScreen.UncChoices(_catalog);
         Assert.Equal(["eng", "data"], choices.Select(c => c.Text));
-        Assert.Equal("UNC · " + _eng, choices[0].Note);
-        Assert.Equal("UNC · " + _data + " · readwrite", choices[1].Note);
+        Assert.Equal(_eng, choices[0].Note);
+        Assert.Equal(_data + " · readwrite", choices[1].Note);
         Assert.Equal($"share 'eng' ({_eng})", EngName);
         Assert.Equal(EngName + " (2 entries):", UncText.Scoped(FileText.RootName + " (2 entries):", _catalog.Shares[0]));
         Assert.Equal("1 more share in unc.json is switched off for this profile (the UNC tab of /tools).", UncText.HiddenShares(1));
@@ -307,5 +307,40 @@ public sealed class UncToolsTests : IDisposable
         Assert.Equal(UncText.NoShares, UncText.Shares(UncCatalog.Empty, null, writesOn: true));
         Assert.Equal("Error: UNC writes is off, so every share is read-only; the user turns it on (the UNC tab of /tools)", UncText.WritesOff);
         Assert.Equal("Error: share 'eng' is read-only (\"access\": \"read\" in unc.json); the user makes it readwrite to allow changes", UncText.ReadOnlyShare("eng"));
+    }
+
+    /// <summary>
+    /// <c>open</c> on a share (2026-10-01, the user's ask): the schema carries <c>share</c> only while a share is offered; a share's
+    /// file, a full path under a share and a share's root open through the opener, worded for the share; a <c>runas</c> share on the
+    /// network is refused unopened (the user's call); a share named while none is offered is refused; a relative path without one
+    /// stays the working directory's.
+    /// </summary>
+    [Fact]
+    public async Task Open_OnAShare_OpensThroughTheOpener_RefusesARunAsNetworkShare_AndTheSchemaFollowsTheGroup()
+    {
+        var opened = new List<string>();
+        var open = new OpenTool(_sandbox, opened.Add, new UncAccess(() => _catalog, _time), () => _settings);
+        async Task<string> Open(params (string Name, object? Value)[] pairs) =>
+            (string)(await open.InvokeAsync(new AIFunctionArguments(pairs.ToDictionary(p => p.Name, p => p.Value))))!;
+        static string[] Properties(AIFunction tool) => tool.JsonSchema.GetProperty("properties").EnumerateObject().Select(p => p.Name).ToArray();
+
+        Assert.Equal(["path", "share"], Properties(open));
+        Assert.Contains("UNC share", open.Description);
+        Assert.Equal(@"opened specs\a.md in the user's editor", await Open(("share", "ENG"), ("path", @"specs\a.md")));
+        Assert.Equal(@"opened specs\b.md in the user's editor", await Open(("path", Path.Combine(_eng, "specs", "b.md"))));   // the share a full path lies in
+        Assert.Equal($"opened {DataName} in Explorer", await Open(("share", "data")));
+        Assert.Equal(UncText.UnknownShare("nope", "eng, data"), await Open(("share", "nope"), ("path", "x")));
+        Assert.Equal([Path.Combine(_eng, "specs", "a.md"), Path.Combine(_eng, "specs", "b.md"), _data], opened);
+
+        _catalog = new UncCatalog([.. _catalog.Shares, new UncNamedShare("fin", new UncShareConfig { Path = @"\\fs02\fin", Auth = "runas", User = @"CORP\svc" }, "test")], []);
+        Assert.Equal(UncText.OpenRunAsRefused("fin"), await Open(("share", "fin"), ("path", "q3.xlsx")));
+        Assert.Equal("Error: share 'fin' signs in as another account, which a program the shell starts cannot use; unc_fetch the file into the working directory, then open the copy there", UncText.OpenRunAsRefused("fin"));
+        Assert.Equal(3, opened.Count);   // nothing opened, nothing reached
+
+        _settings.UncTools = false;
+        Assert.Equal(["path"], Properties(open));
+        Assert.DoesNotContain("UNC share", open.Description);
+        Assert.Equal(UncText.NoSharesOffered, await Open(("share", "eng"), ("path", @"specs\a.md")));
+        Assert.Equal(FileText.Missing("nope"), await Open(("path", "nope")));   // the working directory's, as ever
     }
 }

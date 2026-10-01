@@ -249,23 +249,23 @@ public static class SystemPromptSummary
     /// <summary>The tail of the Obsidian group while the vault tools cannot be offered: the switch off, or no vault set (2026-09-22). Pinned.</summary>
     public const string ObsidianOffSuffix = "Obsidian tools is off or no vault is set";
 
-    /// <summary>The tail of the SQL group while the SQL tools cannot be offered: the switch off, or no connection in <c>sql.json</c> (2026-09-23). Pinned.</summary>
-    public const string SqlOffSuffix = "SQL tools is off or no connection is set in sql.json";
+    /// <summary>The tail of the SQL group while the SQL tools cannot be offered: the switch off, or no connection of <c>sql.json</c> offered (2026-09-23). Pinned.</summary>
+    public const string SqlOffSuffix = "SQL tools is off or no connection of sql.json is offered";
 
-    /// <summary>The tail of the Oracle group while the Oracle tools cannot be offered: the switch off, or no connection in <c>oracle.json</c> (2026-09-30). Pinned.</summary>
-    public const string OracleOffSuffix = "Oracle tools is off or no connection is set in oracle.json";
+    /// <summary>The tail of the Oracle group while the Oracle tools cannot be offered: the switch off, or no connection of <c>oracle.json</c> offered (2026-09-30). Pinned.</summary>
+    public const string OracleOffSuffix = "Oracle tools is off or no connection of oracle.json is offered";
 
     /// <summary>The tail of the MySQL group while the MySQL tools cannot be offered (2026-09-30). Pinned.</summary>
-    public const string MySqlOffSuffix = "MySQL tools is off or no connection is set in mysql.json";
+    public const string MySqlOffSuffix = "MySQL tools is off or no connection of mysql.json is offered";
 
-    /// <summary>The tail of the UNC group while the UNC tools cannot be offered: the switch off, or no share in <c>unc.json</c> (2026-09-30). Pinned.</summary>
-    public const string UncOffSuffix = "UNC tools is off or no share is set in unc.json";
+    /// <summary>The tail of the UNC group while the UNC tools cannot be offered: the switch off, or no share of <c>unc.json</c> offered (2026-09-30). Pinned.</summary>
+    public const string UncOffSuffix = "UNC tools is off or no share of unc.json is offered";
 
     /// <summary>The tail of the ComfyUI group while the image tools cannot be offered (2026-09-24). Pinned.</summary>
     /// <summary>Why the advisor group is not offered (2026-09-27). Pinned.</summary>
     public const string ClaudeAdvisorOffSuffix = "Claude advisor tool is off";
 
-    public const string ComfyOffSuffix = "ComfyUI tools is off, no ComfyUI URL is set or no workflow is in a comfy folder";
+    public const string ComfyOffSuffix = "ComfyUI tools is off, no ComfyUI URL is set or no workflow is offered";
 
     /// <summary>The tail of the Home Assistant group while its tools cannot be offered (2026-09-28). Pinned.</summary>
     public const string HomeAssistantOffSuffix = "Home Assistant tools is off, or no Home Assistant URL or API key is set";

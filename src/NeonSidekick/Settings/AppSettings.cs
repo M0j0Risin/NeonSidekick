@@ -759,7 +759,7 @@ public sealed class AppSettings : IDisposable
         UncWrites = source.UncWrites,
         UncDefaultShare = source.UncDefaultShare,
         UncSharesOffered = source.UncSharesOffered is null ? null : [.. source.UncSharesOffered],
-        UncPercentMention = source.UncPercentMention,
+        UncStarMention = source.UncStarMention,
         ComfyTools = source.ComfyTools,
         ComfyUrl = source.ComfyUrl,
         ComfyWorkflowsOffered = source.ComfyWorkflowsOffered is null ? null : [.. source.ComfyWorkflowsOffered],

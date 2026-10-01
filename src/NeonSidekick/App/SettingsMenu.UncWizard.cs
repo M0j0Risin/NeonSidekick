@@ -23,7 +23,7 @@ internal sealed partial class SettingsMenu
         ["File", "Name", "Path", "Sign-in", "User", "Password store", "Password", "Access", "Description"];
 
     public const string UncWizardFileQuestion = "Scope for unc.json?";
-    public const string UncWizardNameQuestion = "Its name: what the model passes as \"share\" and %name picks on the input line.";
+    public const string UncWizardNameQuestion = "Its name: what the model passes as \"share\" and *name picks on the input line.";
     public const string UncWizardPathQuestion = "The path: \\\\server\\share, a folder under it, or a local folder such as D:\\Data.";
     public const string UncWizardAuthQuestion = "Who the share is reached as.";
     public const string UncWizardUserQuestion = "The Windows account to reach it as: DOMAIN\\name or name@domain.";
@@ -149,7 +149,7 @@ internal sealed partial class SettingsMenu
     /// <summary>
     /// The wizard: its steps in order, ESC one back (before the first: nothing written), a change from the summary back to it (by
     /// the step the draft still lacks, when the change asks for one — a sign-in that now takes a password). True when a setting
-    /// changed: the offered list, for a share saved into a narrowed profile.
+    /// changed: the offered list, for a share saved and offered.
     /// </summary>
     private async Task<bool> AddUncShareAsync(CancellationToken cancellationToken)
     {
@@ -409,7 +409,7 @@ internal sealed partial class SettingsMenu
     }
 
     /// <summary>
-    /// The summary: the save rows (with and without offering it, on a profile that narrowed its offered list), the test, the cancel,
+    /// The summary: the save rows (with and without offering it — always both since 2026-10-01, when nothing is offered until ticked), the test, the cancel,
     /// then every row of the draft. Done with whether a setting changed; or the step a row picked; or neither for ESC (back).
     /// </summary>
     private async Task<(bool Done, bool Changed, UncWizardStep? Edit)> UncWizardSummaryAsync(UncDraft draft, CancellationToken cancellationToken)
@@ -417,8 +417,8 @@ internal sealed partial class SettingsMenu
         int cursor = 0;
         while (true)
         {
-            bool narrowed = _settings.Current.UncSharesOffered is not null;
-            var actions = narrowed ? new List<string> { SqlWizardSaveOfferedRow, UncWizardSaveHiddenRow } : [SqlWizardSaveRow];
+            // Always offer-or-hide (2026-10-01): nothing is offered until ticked, so the wizard is where a new one is.
+            var actions = new List<string> { SqlWizardSaveOfferedRow, UncWizardSaveHiddenRow };
             int test = actions.Count;
             actions.Add(UncWizardTestRow);
             actions.Add(SqlWizardCancelRow);
@@ -509,7 +509,7 @@ internal sealed partial class SettingsMenu
 
     /// <summary>
     /// Writes the draft: the entry (<see cref="UncConfigFile.AddShare"/>), then under runas its password to its store, then — when
-    /// <paramref name="offer"/> and the profile narrowed its offered list — its name added there. Whether a setting changed; null
+    /// <paramref name="offer"/> — its name added there. Whether a setting changed; null
     /// when nothing was written (the status line says why), the summary shown again.
     /// </summary>
     private bool? UncWizardSave(UncDraft draft, bool offer)
@@ -554,11 +554,12 @@ internal sealed partial class SettingsMenu
             }
         }
 
-        if (!offer || _settings.Current.UncSharesOffered is not { } offered)
+        if (!offer)
         {
             return false;
         }
 
+        var offered = _settings.Current.UncSharesOffered ?? [];   // null offers none (2026-10-01)
         Apply(SettingsField.UncSharesOffered, d => d.UncSharesOffered = [.. offered, draft.Name]);
         return true;
     }

@@ -59,7 +59,6 @@ internal sealed partial class SettingsMenu
     public static readonly IReadOnlyList<string> SqlWizardEncryptRows =
         ["mandatory  encrypted, the certificate checked unless trusted below (the default)", "strict     TDS 8: TLS first, the certificate always checked", "optional   encrypted only if the server asks"];
 
-    public const string SqlWizardSaveRow = "Save";
     public const string SqlWizardSaveOfferedRow = "Save, and offer it to the model";
     public const string SqlWizardSaveHiddenRow = "Save, hidden from the model until ticked in SQL connections offered";
     public const string SqlWizardTestRow = "Test the connection";
@@ -192,7 +191,7 @@ internal sealed partial class SettingsMenu
     /// <summary>
     /// The wizard: its steps in order, ESC one back (before the first: nothing written), a change from the summary back
     /// to it (by the step the draft still lacks, when the change asks for one — a sign-in that now takes a password).
-    /// True when a setting changed: the offered list, for a connection saved into a narrowed profile.
+    /// True when a setting changed: the offered list, for a connection saved and offered.
     /// </summary>
     private async Task<bool> AddSqlConnectionAsync(CancellationToken cancellationToken)
     {
@@ -484,7 +483,7 @@ internal sealed partial class SettingsMenu
     }
 
     /// <summary>
-    /// The summary: the save rows (with and without offering it, on a profile that narrowed its offered list), the test, the
+    /// The summary: the save rows (with and without offering it — always both since 2026-10-01, when nothing is offered until ticked), the test, the
     /// cancel, then every row of the draft. Done with whether a setting changed; or the step a row picked; or neither for ESC (back).
     /// </summary>
     private async Task<(bool Done, bool Changed, SqlWizardStep? Edit)> SqlWizardSummaryAsync(SqlDraft draft, CancellationToken cancellationToken)
@@ -492,8 +491,8 @@ internal sealed partial class SettingsMenu
         int cursor = 0;
         while (true)
         {
-            bool narrowed = _settings.Current.SqlConnectionsOffered is not null;
-            var actions = narrowed ? new List<string> { SqlWizardSaveOfferedRow, SqlWizardSaveHiddenRow } : [SqlWizardSaveRow];
+            // Always offer-or-hide (2026-10-01): nothing is offered until ticked, so the wizard is where a new one is.
+            var actions = new List<string> { SqlWizardSaveOfferedRow, SqlWizardSaveHiddenRow };
             int test = actions.Count;
             actions.Add(SqlWizardTestRow);
             actions.Add(SqlWizardCancelRow);
@@ -585,7 +584,7 @@ internal sealed partial class SettingsMenu
 
     /// <summary>
     /// Writes the draft: the entry (<see cref="SqlConfigFile.AddConnection"/>), then its password to its store, then — when
-    /// <paramref name="offer"/> and the profile narrowed its offered list — its name added there. Whether a setting changed;
+    /// <paramref name="offer"/> — its name added there. Whether a setting changed;
     /// null when nothing was written (the status line says why), the summary shown again.
     /// </summary>
     private bool? SqlWizardSave(SqlDraft draft, bool offer)
@@ -624,11 +623,12 @@ internal sealed partial class SettingsMenu
             }
         }
 
-        if (!offer || _settings.Current.SqlConnectionsOffered is not { } offered)
+        if (!offer)
         {
             return false;
         }
 
+        var offered = _settings.Current.SqlConnectionsOffered ?? [];   // null offers none (2026-10-01)
         Apply(SettingsField.SqlConnectionsOffered, d => d.SqlConnectionsOffered = [.. offered, draft.Name]);
         return true;
     }

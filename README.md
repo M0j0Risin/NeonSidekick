@@ -143,7 +143,7 @@ Both `--option value` and `--option=value` work.
 * **Session name:** Double-click the session's name at the right end of the rule above the input row to rename it, the same as `/sessions title`. The box opens with the current name filled in. This also works while a reply is running. During `/botchat` the rule shows the chat's cast instead (`Botchat: neon, ada and max`), and double-clicking it does nothing.
 
 **Input line**
-* The input row is always a full editor, even while a reply streams or `/botchat` runs. It has ←/→, Home/End and Delete; Shift+arrows, Ctrl+A or a drag to select; a double-click to select a word (letters, digits and `_`; a password field selects all); Ctrl+C / Ctrl+X to copy / cut; right-click or Alt+V to paste; a click to place the cursor; ↑/↓ for history; and the `/`, `@`, `#`, `$`, `%` and `^` lists. The mention lists work inside a slash command's text too (`/loop infinite 1s append the time to @notes.txt`), except for `/speak`, `/view` and `/print`, whose own file list completes their path.
+* The input row is always a full editor, even while a reply streams or `/botchat` runs. It has ←/→, Home/End and Delete; Shift+arrows, Ctrl+A or a drag to select; a double-click to select a word (letters, digits and `_`; a password field selects all); Ctrl+C / Ctrl+X to copy / cut; right-click or Alt+V to paste; a click to place the cursor; ↑/↓ for history; and the `/`, `@`, `#`, `$`, `%`, `^` and `*` lists. The mention lists work inside a slash command's text too (`/loop infinite 1s append the time to @notes.txt`), except for `/speak`, `/view` and `/print`, whose own file list completes their path.
 * To attach a picture from the ComfyUI picture strip or the transcript, drag it onto the input row. It is attached as if you had dropped its file from the desktop (a picture with no file goes in as a pasted one). While you drag, the hint row reads **🖼️ drop on line**; letting go anywhere else attaches nothing. This also works while a reply is running.
 * Three shortcuts start a new conversation: Ctrl+Alt+C also clears the screen (`/clear`), Ctrl+Alt+N leaves the screen as it is (`/new`), and Ctrl+Alt+S shows the splash screen (`/splash`). At the idle line, a draft on the row stays. While a reply runs, they cancel it first, just as the typed command does. An AltGr key that types a character on your keyboard layout still types that character.
 * More Ctrl+Alt shortcuts run a command as if you had typed it on its own: Ctrl+Alt+B `/tb` (show or hide the toolbar), Ctrl+Alt+D `/mcp`, Ctrl+Alt+E `/perf` (show or hide the performance bar), Ctrl+Alt+G `/usage`, Ctrl+Alt+H `/help`, Ctrl+Alt+K `/skills`, Ctrl+Alt+L `/cmdlist`, Ctrl+Alt+M `/memory`, Ctrl+Alt+O `/police`, Ctrl+Alt+P `/profile`, Ctrl+Alt+T `/tools` and Ctrl+Alt+Y `/sys`. A draft on the row stays. While a reply runs, a pane opens over it and the reply carries on, just as the typed command does (`/profile` waits for the reply to end). The Keys tab of `/help` lists them all.
@@ -681,7 +681,7 @@ You can change which services run without asking under `ask` in `profile.json` (
 |---|---|---|
 | ComfyUI tools | Offers the image tools (`generate_image`, `set_splash_image`), once *ComfyUI URL* is set and a workflow is in a `comfy` folder. | off |
 | ComfyUI URL | The ComfyUI server, often another machine on your LAN (`http://gpu-box:8188`). As with the LLM server, the web tools' network mode never blocks it. | (not set) |
-| ComfyUI workflows offered | A checklist of the installed workflows the model is offered. Until you narrow it, all are offered, new ones included; after that, only ticked ones are. **A** / **N** tick all or none ("all" means the ones installed now, so a new one still starts hidden). With one ticked, every plain request and a plain `/imagine` go to it. `/imagine <name>` can still use a hidden one. | all (not narrowed) |
+| ComfyUI workflows offered | A checklist of the installed workflows the model is offered. Nothing is offered until you tick it here or offer it from the add-workflow wizard, and a workflow added later stays hidden until ticked. **A** / **N** tick all or none ("all" means the ones installed now). With one ticked, every plain request and a plain `/imagine` go to it. `/imagine <name>` can still use a hidden one. | none |
 | ComfyUI add workflow | A wizard that **builds** a standard workflow from your server's checkpoints, or **imports** one you exported from ComfyUI. See Adding a workflow. | — |
 | ComfyUI ^-mention enabled | Typing `^` and part of a name on the input line lists the offered workflows (family, shape, size). A pick writes `^name`, which `generate_image` reads as the workflow to use. | on |
 | ComfyUI timeout (s) | How long the tool waits for one generation, queue included (10–3600). The job may still finish in ComfyUI. | 300 |
@@ -696,7 +696,7 @@ You can change which services run without asking under `ask` in `profile.json` (
 | Setting | What it does | Default |
 |---|---|---|
 | SQL tools | Offers the SQL tools (connections, databases, tables, columns, describe, relationships, indexes, query) over the connections in `sql.json`, once one is defined. | off |
-| SQL connections offered | A checklist of the connections in both `sql.json` files. Until you narrow it, all are offered, new ones included. After that, only ticked ones are, and new ones stay hidden until ticked. **A** / **N** tick all or none ("all" means the ones listed now). A hidden connection is invisible to every SQL tool, the rules, the `%`-mention and the default (`sql_connections` says how many are hidden, never which). | all (not narrowed) |
+| SQL connections offered | A checklist of the connections in both `sql.json` files. Nothing is offered until you tick it here or offer it from the add-connection wizard, and a connection added later stays hidden until ticked. **A** / **N** tick all or none ("all" means the ones listed now). A hidden connection is invisible to every SQL tool, the rules, the `%`-mention and the default (`sql_connections` says how many are hidden, never which). | none |
 | SQL default connection | The connection used when a call names none: one of the offered connections, or the first. A call can still name another offered connection, and `database` can open other databases on the same server. | (the first connection) |
 | SQL set password | Pick a connection that takes a password (`sql` or `runas`) and type it, masked. It is saved to that connection's store: encrypted in its `sql.json`, or in Windows Credential Manager. | — |
 | SQL add connection | A wizard for a new connection, one page per choice. It can **test** the draft (`SELECT @@VERSION`) before saving it. See Managing connections. | — |
@@ -711,7 +711,7 @@ You can change which services run without asking under `ask` in `profile.json` (
 | Setting | What it does | Default |
 |---|---|---|
 | Oracle tools | Offers the Oracle tools (connections, schemas, tables, columns, describe, relationships, indexes, query) over the connections in `oracle.json`, once one is defined. | off |
-| Oracle connections offered | A checklist of the connections in both `oracle.json` files, as *SQL connections offered* is for `sql.json`. | all (not narrowed) |
+| Oracle connections offered | A checklist of the connections in both `oracle.json` files, as *SQL connections offered* is for `sql.json`: nothing until ticked. | none |
 | Oracle default connection | The connection used when a call names none: one of the offered connections, or the first. A call can still name another, and `schema` works in another schema. | (the first connection) |
 | Oracle set password | Pick a connection and type its password, masked. It is saved to that connection's store: encrypted in its `oracle.json`, or in Windows Credential Manager. | — |
 | Oracle add connection | A wizard for a new connection, one page per choice. It can **test** the draft before saving it: who it signs in as, the server's version, and a warning when the account could change data. See Oracle. | — |
@@ -726,7 +726,7 @@ You can change which services run without asking under `ask` in `profile.json` (
 | Setting | What it does | Default |
 |---|---|---|
 | MySQL tools | Offers the MySQL tools (connections, databases, tables, columns, describe, relationships, indexes, query) over the connections in `mysql.json`, once one is defined. They work against MySQL 8.0.16+ and MariaDB 10.2+. | off |
-| MySQL connections offered | A checklist of the connections in both `mysql.json` files, as *SQL connections offered* is for `sql.json`. | all (not narrowed) |
+| MySQL connections offered | A checklist of the connections in both `mysql.json` files, as *SQL connections offered* is for `sql.json`: nothing until ticked. | none |
 | MySQL default connection | The connection used when a call names none: one of the offered connections, or the first. | (the first connection) |
 | MySQL set password | Pick a connection and type its password, masked. It is saved to that connection's store: encrypted in its `mysql.json`, or in Windows Credential Manager. | — |
 | MySQL add connection | A wizard for a new connection. It can **test** the draft before saving it: who it signs in as, the server's version, and a warning when the account's grants could change data. See MySQL. | — |
@@ -742,11 +742,11 @@ You can change which services run without asking under `ask` in `profile.json` (
 |---|---|---|
 | UNC tools | Offers the UNC tools over the shares in `unc.json`, once one is defined: `unc_shares`, `unc_search`, `unc_info`, `unc_read`, and `unc_fetch` while the File tools are on. See UNC shares. | off |
 | UNC writes | The master key of every change on a share. Off, every share is read-only. On, a share whose `access` is `readwrite` also gets `unc_write`, `unc_patch`, `unc_create_directory`, `unc_move`, `unc_copy`, `unc_delete` (off by default in the Offered tab) and `unc_put`. Changes there are permanent. | off |
-| UNC shares offered | A checklist of the shares in both `unc.json` files, as *SQL connections offered* is for `sql.json`. | all (not narrowed) |
+| UNC shares offered | A checklist of the shares in both `unc.json` files, as *SQL connections offered* is for `sql.json`: nothing until ticked. | none |
 | UNC default share | The share used when a call names none and gives no full path: one of the offered shares, or the first. | (the first share) |
 | UNC set password | Pick a runas share and type its password, masked. It is saved to that share's store: encrypted in its `unc.json`, or in Windows Credential Manager. | — |
 | UNC add share | A wizard for a new share. It can **test** the draft before saving it by listing its root under its account. | — |
-| UNC %-mention enabled | Typing `%` and part of a name also lists the shares, each marked `UNC ·`. | on |
+| UNC *-mention enabled | Typing `*` and part of a name on the input line lists the offered shares (path, read-write, description); a pick writes `*name` as text. The database connections keep `%`. | on |
 | UNC shares (profile) | Enter opens the profile's `unc.json` in your editor (created with commented examples). | (none) |
 | UNC shares (global) | The same for the home folder's `unc.json`, which every profile reads. The profile's wins on a name clash. | (none) |
 
@@ -1101,7 +1101,7 @@ All paths are relative to the working directory. Nothing outside it can be reach
 | `delete` | `path` | Deletes a file or folder for good, a folder with everything in it. `.git`, anything in it, and a folder holding one are always refused. |
 | `zip` | `path, to?, overwrite?` | Packs a file or folder into a `.zip` archive, by default beside the original. |
 | `unzip` | `path, to?, overwrite?` | Extracts a `.zip` archive into a folder, all or nothing. |
-| `open` | `path?` | Opens a file in the user's own editor or viewer, or a folder in Explorer. With no path, it opens the working directory. |
+| `open` | `path?, share?` | Opens a file in the user's own editor or viewer, or a folder in Explorer. With no path, it opens the working directory. While the UNC tools offer a share, `share` (or a full `\\server\share` path) opens the file or folder on that share instead; a runas share on the network is refused (see UNC shares). |
 
 ### GitLib
 
@@ -1177,7 +1177,7 @@ Read-only queries against SQL Server over named connections. The app talks to th
 
 * **SQL add connection** (the SQL tab of `/tools`) walks you through a new connection, one page per choice: the file (profile or global), name, server, database, sign-in, account, password store and password (masked), encryption, certificate trust, connect timeout and description.
   * The summary can **test** the draft (`SELECT @@VERSION`, nothing written), and saves it into the file with its comments kept.
-  * On a profile that narrowed *SQL connections offered*, it can offer the new connection too.
+  * Its save rows offer the new connection to the model, or save it hidden until ticked in *SQL connections offered*.
   * ESC steps back a page; Enter on a summary row changes that choice.
   * It only adds connections. To change an existing one, edit the file.
 * **SQL set password** updates a connection's password.
@@ -1419,7 +1419,7 @@ The UNC tools reach named network shares (`\\server\share`, or a folder under on
 * **Changes are permanent.** An overwrite replaces the file in place (its permissions and attributes kept), and `unc_delete` removes a file or folder for good. `unc_delete` is off in a fresh profile even under UNC writes; switch it on in the Offered tab. A file server's Previous Versions may still have a copy.
 * **Audit.** Every change logs a line with the share, the account and the path.
 * **Budgets.** A search reads at most 256 MB with four readers and looks at 100,000 entries, then says it stopped early. A preflight gives up on a share that doesn't answer in 10 seconds.
-* The shell can't reach a share through the app's sign-in: a runas share's token is the UNC tools' alone.
+* The shell can't reach a share through the app's sign-in: a runas share's token is the UNC tools' alone. For the same reason `open` refuses a runas share on the network (Explorer or the editor would sign in as you): `unc_fetch` the file into the working directory, then open the copy.
 
 | Tool | Arguments | What it does |
 |---|---|---|
@@ -1505,7 +1505,7 @@ The image tools run **your own ComfyUI workflows** on your server (*ComfyUI URL*
   * It reads both a plain `KSampler` graph and the custom-sampler graph FLUX.2 uses (`SamplerCustomAdvanced` with its `RandomNoise`, scheduler and guider; CFG sets the `FluxGuidance`).
   * A value fed by a primitive node gets its placeholder there. A value set by another node (a switch, a resolution picker) is left as built, and the wizard says so.
 * FLUX.2, Krea 2, Z-Image, Qwen Image, Ernie Image, Boogu, LongCat Image, HiDream I1 and Ideogram 4 load as separate model files, which **Build** can't wire up. For these, export ComfyUI's own template and **Import** it. (Copybara has no family yet.)
-* The summary can **test** the draft (one small run of at most 512 px and 8 steps; nothing saved), and saves it as `<name>.json` + `<name>.md`. On a profile that narrowed *ComfyUI workflows offered*, it can offer the new one too. ESC steps back a page.
+* The summary can **test** the draft (one small run of at most 512 px and 8 steps; nothing saved), and saves it as `<name>.json` + `<name>.md`. Its save rows offer the new one to the model, or save it hidden until ticked in *ComfyUI workflows offered*. ESC steps back a page.
 
 **By hand:**
 

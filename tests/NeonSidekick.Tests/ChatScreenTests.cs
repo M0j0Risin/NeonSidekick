@@ -13393,7 +13393,7 @@ public partial class ChatScreenTests : IDisposable
     /// <summary>A stub ComfyUI whose every picture is a solid <paramref name="width"/> × <paramref name="height"/> image (4 × 4 unless a test needs one wide enough to show its drawn size).</summary>
     private StubHttpMessageHandler ComfyServer(int width = 4, int height = 4)
     {
-        _settings.Update(d => { d.TtsOutput = false; d.ComfyUrl = "http://comfy.lan:8188"; });
+        _settings.Update(d => { d.TtsOutput = false; d.ComfyUrl = "http://comfy.lan:8188"; d.ComfyWorkflowsOffered = ["pony"]; });   // ticked: nothing is offered until it is (2026-10-01)
         File.WriteAllText(Path.Combine(_settings.ProfileComfyDirectory, "pony.json"),
             "{\"3\":{\"class_type\":\"KSampler\",\"inputs\":{\"seed\":\"{{seed}}\"}},\"6\":{\"class_type\":\"CLIPTextEncode\",\"inputs\":{\"text\":\"{{prompt}}\"}},\"7\":{\"class_type\":\"CLIPTextEncode\",\"inputs\":{\"text\":\"{{negative}}\"}}}");
         var stub = new StubHttpMessageHandler()
@@ -13411,7 +13411,7 @@ public partial class ChatScreenTests : IDisposable
     /// </summary>
     private StubHttpMessageHandler HeldComfyServer(TaskCompletionSource polled)
     {
-        _settings.Update(d => { d.TtsOutput = false; d.ComfyUrl = "http://comfy.lan:8188"; });
+        _settings.Update(d => { d.TtsOutput = false; d.ComfyUrl = "http://comfy.lan:8188"; d.ComfyWorkflowsOffered = ["pony"]; });   // ticked: nothing is offered until it is (2026-10-01)
         File.WriteAllText(Path.Combine(_settings.ProfileComfyDirectory, "pony.json"),
             "{\"3\":{\"class_type\":\"KSampler\",\"inputs\":{\"seed\":\"{{seed}}\"}},\"6\":{\"class_type\":\"CLIPTextEncode\",\"inputs\":{\"text\":\"{{prompt}}\"}},\"7\":{\"class_type\":\"CLIPTextEncode\",\"inputs\":{\"text\":\"{{negative}}\"}}}");
         var stub = new StubHttpMessageHandler()
@@ -15160,6 +15160,26 @@ public partial class ChatScreenTests : IDisposable
                 Scripted().Push(Keys.CtrlAltC);
             }
         });
+
+        // The reply is held at its last update until the chord's cancel lands (2026-10-01, a flake): the pane has to open
+        // (measuring every tab first, since the menus keep their height) and read the chord, which a loaded runner can
+        // stretch past the fixture's fixed 40 ms holds, and the reply then ended uncancelled. Ten seconds is never reached
+        // unless the chord is lost, which the test should fail on.
+        var hold = _chat.BeforeUpdate!;
+        _chat.BeforeUpdate = async (i, ct) =>
+        {
+            await hold(i, ct);
+            if (i == 2 && _chat.Requests.Count == 1)
+            {
+                try
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(10), ct);
+                }
+                catch (OperationCanceledException)
+                {
+                }
+            }
+        };
 
         string output = await RunAsync();
 

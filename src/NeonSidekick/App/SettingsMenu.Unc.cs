@@ -28,15 +28,10 @@ internal sealed partial class SettingsMenu
         return (loaded.Problems.Count == 0 ? count : count + ", " + Sql.SqlText.Count(loaded.Problems.Count, "problem")) + " · Enter edits unc.json";
     }
 
-    /// <summary>The value of <c>UNC shares offered</c>: <see cref="SqlNotNarrowedLabel"/> while the profile never narrowed it, else how many of the loaded shares it offers. Pinned.</summary>
+    /// <summary>The value of <c>UNC shares offered</c>: how many of the loaded shares the profile offers, <c>none of N</c> before any is ticked (2026-10-01: null offers none). Pinned.</summary>
     public static string UncOfferedValue(IReadOnlyList<string>? offered, UncCatalog loaded)
     {
         ArgumentNullException.ThrowIfNull(loaded);
-        if (offered is null)
-        {
-            return SqlNotNarrowedLabel;
-        }
-
         int kept = loaded.Offered(offered).Shares.Count;
         return (kept == 0 ? "none" : kept.ToString(CultureInfo.InvariantCulture)) + " of " + loaded.Shares.Count.ToString(CultureInfo.InvariantCulture);
     }
@@ -83,8 +78,8 @@ internal sealed partial class SettingsMenu
 
     /// <summary>
     /// <c>UNC shares offered</c>, <see cref="EditSqlOfferedAsync"/>'s twin: every share the two files hold, ticked or not, Enter or
-    /// Space flipping one until ESC; the first flip of a profile that never narrowed it saves every name but the flipped one, so a
-    /// share added later stays hidden until ticked. True when anything changed.
+    /// Space flipping one until ESC; nothing is ticked until the user ticks it (2026-10-01; a never-narrowed profile started all ticked
+    /// until then), so a share added later stays hidden until ticked. True when anything changed.
     /// </summary>
     private async Task<bool> EditUncOfferedAsync(CancellationToken cancellationToken)
     {
@@ -119,9 +114,9 @@ internal sealed partial class SettingsMenu
             var next = pick.Button == SelectAllIndex ? loaded.Shares.Select(s => s.Name).ToList()
                 : pick.Button == SelectNoneIndex ? []
                 : loaded.Shares.Select(s => s.Name).Where(n => on.Contains(n) != string.Equals(n, name, StringComparison.OrdinalIgnoreCase)).ToList();
-            if (offered is not null && next.Count == on.Count && next.All(on.Contains))
+            if (next.Count == on.Count && next.All(on.Contains))
             {
-                continue;
+                continue;   // null and empty both offer none (2026-10-01)
             }
 
             if (offered is not null)

@@ -40,6 +40,16 @@ public static class UncText
     // ─── which share ────────────────────────────────────────────────────────────
 
     public const string NoShares = "Error: no UNC share is defined; the user adds one to unc.json (the UNC tab of /tools)";
+    /// <summary><c>open</c> given a share while none is offered (2026-10-01): the switch off or nothing ticked. Pinned.</summary>
+    public const string NoSharesOffered = "Error: no UNC share is offered; the user turns on UNC tools and ticks a share in UNC shares offered (the UNC tab of /tools)";
+
+    /// <summary>
+    /// <c>open</c> on a <c>runas</c> share on the network (2026-10-01, the user's call): the program the shell starts runs as the
+    /// user, never with the share's sign-in, so the model is pointed to a copy instead. Pinned.
+    /// </summary>
+    public static string OpenRunAsRefused(string name) =>
+        $"Error: share '{name}' signs in as another account, which a program the shell starts cannot use; unc_fetch the file into the working directory, then open the copy there";
+
     public static string UnknownShare(string name, string names) => $"Error: no UNC share is named '{name}'; the shares are {names}";
     public static string NotInShare(string path, UncNamedShare share) => $"Error: '{path}' is not under share '{share.Name}' ({share.Config.Root}); give a path relative to it, or leave \"share\" out";
     public static string NotUnderAnyShare(string path, string names) => $"Error: '{path}' is under no UNC share the tools can reach; the shares are {names} (unc_shares lists where each points)";
@@ -183,12 +193,15 @@ public static class UncText
         return sb.ToString();
     }
 
-    /// <summary>A share's note on the <c>%</c>-mention list: <c>UNC ·</c>, where it points, read or read-write, then its description. Pinned.</summary>
+    /// <summary>
+    /// A share's note on the <c>*</c>-mention list: where it points, read or read-write, then its description. Pinned. Until
+    /// 2026-10-01 it began <c>UNC ·</c> to read apart in the database connections' <c>%</c> list; the shares' own list needs none.
+    /// </summary>
     public static string MentionNote(UncNamedShare share)
     {
         ArgumentNullException.ThrowIfNull(share);
         var config = share.Config;
-        string where = "UNC · " + config.Root + (config.IsReadWrite ? " · readwrite" : "");
+        string where = config.Root + (config.IsReadWrite ? " · readwrite" : "");
         return string.IsNullOrWhiteSpace(config.Description) ? where : where + " — " + config.Description.Trim();
     }
 }

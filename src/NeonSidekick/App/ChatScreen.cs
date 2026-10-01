@@ -934,7 +934,10 @@ internal sealed partial class ChatScreen
         // The sandbox reads the live setting and profile directory on every call: a /cwd save or
         // a profile switch changes the root with nothing to rebind.
         _files = new WorkingDirectory(() => WorkingDirectory.Resolve(_effective().WorkingDirectory, _settings.ProfileDirectory), time);
-        _fileTools = FileTools(_files, () => WorkingDirectory.IsDefault(_effective().WorkingDirectory), _openFile, _effective);
+        // The UNC shares' door (2026-09-30) before the file tools: open reaches the offered shares too (2026-10-01).
+        // The profile's unc.json over the home's, read at every call, narrowed to the shares the profile offers.
+        _unc = new UncAccess(() => UncConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory).Offered(_effective().UncSharesOffered), time);
+        _fileTools = FileTools(_files, () => WorkingDirectory.IsDefault(_effective().WorkingDirectory), _openFile, _effective, _unc);
         _timers = new TimerBoard(time, SignalAlert);
         _jobs = new BackgroundJobs(SignalAlert, time);
         _timerTools = TimerTools(_timers);
@@ -954,8 +957,7 @@ internal sealed partial class ChatScreen
         _oracleTools = OracleTools(_oracle, _effective);
         _mysql = new MySqlAccess(() => MySqlConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory).Offered(_effective().MySqlConnectionsOffered));
         _mysqlTools = MySqlTools(_mysql, _effective);
-        // The UNC tools (2026-09-30): the profile's unc.json over the home's, read at every call, narrowed to the shares the profile offers.
-        _unc = new UncAccess(() => UncConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory).Offered(_effective().UncSharesOffered), time);
+        // The UNC tools (2026-09-30), over the door built above.
         _uncTools = UncTools(_unc, _files, _effective);
         // The image tools (2026-09-24): the profile's comfy folder over the home's, rescanned at every call; the client made for the ComfyUI URL in force.
         // A pasted picture as generate_image's input (later still on 2026-09-24): the line's store at full size, read at
@@ -1064,7 +1066,7 @@ internal sealed partial class ChatScreen
         // The @-mention list asks the sandbox as it stands at the keystroke (the root is a live read too);
         // the command and #-mention lists the catalog and the two Skills-tab switches (2026-09-17);
         // Ctrl+C over a selection writes the clipboard with /copy's writer.
-        _input = new InputLine(_pane, keys, clipboard, _transcript, clipboardImage, query => _files.Complete(query), CommandChoices, ArgumentChoices, HashChoices, DollarChoices, _copy, PercentChoices, CaretChoices);
+        _input = new InputLine(_pane, keys, clipboard, _transcript, clipboardImage, query => _files.Complete(query), CommandChoices, ArgumentChoices, HashChoices, DollarChoices, _copy, PercentChoices, CaretChoices, StarChoices);
         _input.PathArgument = TakesPathArgument;   // a mention in any other command's text completes (2026-09-30)
         _input.Remembered = StoreCommand;
         _input.OpenPicture = OpenPicture;
@@ -2918,7 +2920,8 @@ internal sealed partial class ChatScreen
     /// <summary>
     /// The input line's <c>%</c>-mention list (later on 2026-09-23): <see cref="SqlChoices"/> while the setting
     /// <c>SQL %-mention enabled</c> and <c>SQL tools</c> are both on, then (2026-09-30) <see cref="OracleChoices"/> while
-    /// <c>Oracle %-mention enabled</c> and <c>Oracle tools</c> are — nothing from either, and <c>%</c> is ordinary text.
+    /// <c>Oracle %-mention enabled</c> and <c>Oracle tools</c> are, and the MySQL connections likewise — nothing from any, and
+    /// <c>%</c> is ordinary text. The UNC shares were here too until 2026-10-01; they have their own <see cref="StarChoices"/>.
     /// </summary>
     private IReadOnlyList<CompletionItem> PercentChoices()
     {
@@ -2926,11 +2929,21 @@ internal sealed partial class ChatScreen
         IReadOnlyList<CompletionItem> sql = effective.SqlPercentMention && effective.SqlTools ? SqlChoices(_sql.Catalog()) : [];
         IReadOnlyList<CompletionItem> oracle = effective.OraclePercentMention && effective.OracleTools ? OracleChoices(_oracle.Catalog()) : [];
         IReadOnlyList<CompletionItem> mysql = effective.MySqlPercentMention && effective.MySqlTools ? MySqlChoices(_mysql.Catalog()) : [];
-        IReadOnlyList<CompletionItem> unc = effective.UncPercentMention && effective.UncTools ? UncChoices(_unc.Catalog()) : [];
-        return oracle.Count == 0 && mysql.Count == 0 && unc.Count == 0 ? sql : [.. sql, .. oracle, .. mysql, .. unc];
+        return oracle.Count == 0 && mysql.Count == 0 ? sql : [.. sql, .. oracle, .. mysql];
     }
 
-    /// <summary>The UNC shares as mention items (2026-09-30): each name with <see cref="UncText.MentionNote"/> (<c>UNC ·</c> first, so a name a database list has too reads apart), in the catalog's order. Pure.</summary>
+    /// <summary>
+    /// The input line's <c>*</c>-mention list (2026-10-01, the user's ask: the UNC shares off the database connections' <c>%</c>):
+    /// <see cref="UncChoices"/> over the offered shares while <c>UNC *-mention enabled</c> and <c>UNC tools</c> are both on, else
+    /// nothing, and <c>*</c> is ordinary text.
+    /// </summary>
+    private IReadOnlyList<CompletionItem> StarChoices()
+    {
+        var effective = _effective();
+        return effective.UncStarMention && effective.UncTools ? UncChoices(_unc.Catalog()) : [];
+    }
+
+    /// <summary>The UNC shares as mention items (2026-09-30): each name with <see cref="UncText.MentionNote"/>, in the catalog's order. Pure.</summary>
     public static IReadOnlyList<CompletionItem> UncChoices(UncCatalog catalog)
     {
         ArgumentNullException.ThrowIfNull(catalog);
@@ -3922,9 +3935,10 @@ internal sealed partial class ChatScreen
     /// no console). <paramref name="isDefault"/> says whether the root in force is the profile's
     /// own folder; <paramref name="openFile"/> is the shell's "open with" for <c>open</c>;
     /// <paramref name="effective"/> is where <c>view_image</c> reads its cap (<c>File view image max (per call)</c>) at every
-    /// call. Fourteen since 2026-10-01: <c>restore</c> went with File safe edits (the user's call).
+    /// call. Fourteen since 2026-10-01: <c>restore</c> went with File safe edits (the user's call). <paramref name="unc"/> (later
+    /// on 2026-10-01) lets <c>open</c> open on an offered UNC share; null = the working directory alone.
     /// </summary>
-    public static IReadOnlyList<AIFunction> FileTools(WorkingDirectory files, Func<bool> isDefault, Action<string> openFile, Func<AppSettingsData> effective) => new AIFunction[]
+    public static IReadOnlyList<AIFunction> FileTools(WorkingDirectory files, Func<bool> isDefault, Action<string> openFile, Func<AppSettingsData> effective, UncAccess? unc = null) => new AIFunction[]
     {
         new GetWorkingDirectoryTool(files, isDefault),
         new SearchFilesTool(files),
@@ -3939,7 +3953,7 @@ internal sealed partial class ChatScreen
         new DeleteTool(files),
         new ZipTool(files),
         new UnzipTool(files),
-        new OpenTool(files, openFile),
+        new OpenTool(files, openFile, unc, effective),
     };
 
     /// <summary>
@@ -4217,12 +4231,11 @@ internal sealed partial class ChatScreen
         }).ToList();
     }
 
-    /// <summary>Whether the UNC group is offered (2026-09-30): the setting <c>UNC tools</c> on and at least one usable share in <c>unc.json</c>.</summary>
+    /// <summary>Whether the UNC group is offered (2026-09-30): the setting <c>UNC tools</c> on and at least one share offered (<see cref="UncAccess.IsOffered"/>).</summary>
     public static bool UncOffered(AppSettingsData effective, UncAccess unc)
     {
-        ArgumentNullException.ThrowIfNull(effective);
         ArgumentNullException.ThrowIfNull(unc);
-        return effective.UncTools && unc.Catalog().Shares.Count > 0;
+        return unc.IsOffered(effective);
     }
 
     /// <summary>

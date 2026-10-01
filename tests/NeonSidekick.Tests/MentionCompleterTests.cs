@@ -276,6 +276,7 @@ public class MentionCompleterTests
     [InlineData("x $re", 5, '$')]
     [InlineData("x %db", 5, '%')]
     [InlineData("x ^wf", 5, '^')]
+    [InlineData("x *sh", 5, '*')]
     [InlineData("x @", 3, '@')]
     public void TriggerAt_TheWordsFirstCharacter_WhenItIsAMention(string text, int cursor, char trigger)
     {
@@ -291,6 +292,6 @@ public class MentionCompleterTests
     public void TriggerAt_IsNullForAnythingElse(string text, int cursor)
     {
         Assert.Null(MentionCompleter.TriggerAt(text, cursor));
-        Assert.Equal("@#$%^", MentionCompleter.Triggers);
+        Assert.Equal("@#$%^*", MentionCompleter.Triggers);
     }
 }

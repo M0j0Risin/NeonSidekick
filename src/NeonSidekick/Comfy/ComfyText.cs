@@ -496,7 +496,7 @@ public static class ComfyText
 
         var shown = ComfyWorkflowCatalog.Offered(workflows, offered);
         string count = workflows.Count == 0 ? "no workflow yet" : workflows.Count == 1 ? "1 workflow" : workflows.Count.ToString(CultureInfo.InvariantCulture) + " workflows";
-        lines.Add(workflows.Count == 0 ? count : offered is null ? count + ":" : count + ", " + shown.Count.ToString(CultureInfo.InvariantCulture) + " offered to the model:");
+        lines.Add(workflows.Count == 0 ? count : count + ", " + shown.Count.ToString(CultureInfo.InvariantCulture) + " offered to the model:");
         foreach (var workflow in workflows)
         {
             lines.Add("  " + WorkflowLine(workflow) + " · {{" + string.Join("}} {{", workflow.Placeholders.Order(StringComparer.Ordinal)) + "}}" + (shown.Contains(workflow) ? "" : " · hidden"));

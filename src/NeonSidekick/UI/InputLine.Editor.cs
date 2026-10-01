@@ -116,7 +116,7 @@ public sealed partial class InputLine
         // The empty-line hooks a live read keeps (2026-09-28, SetLiveHooks): the picture strip's keys under a reply.
         private Func<int, bool>? _liveEmptyArrow;
         private Func<bool>? _liveEmptyEnter;
-        private bool _completing, _commanding, _arguing, _hashing, _dollaring, _percenting, _careting;
+        private bool _completing, _commanding, _arguing, _hashing, _dollaring, _percenting, _careting, _starring;
 
         internal Editor(InputLine line, string initialText)
         {
@@ -150,6 +150,7 @@ public sealed partial class InputLine
             _dollaring = onPane && _line._tools is not null;
             _percenting = onPane && _line._connections is not null;
             _careting = onPane && _line._workflows is not null;
+            _starring = onPane && _line._shares is not null;
             _historyIndex = _line._history.Count;
             _draft = "";
             _goalCol = -1;
@@ -1146,7 +1147,7 @@ public sealed partial class InputLine
         // when there is none (or nothing matches, or ESC dismissed this very word).
         private void RefreshList()
         {
-            if (!_completing && !_commanding && !_arguing && !_hashing && !_dollaring && !_percenting && !_careting)
+            if (!_completing && !_commanding && !_arguing && !_hashing && !_dollaring && !_percenting && !_careting && !_starring)
             {
                 return;
             }
@@ -1186,7 +1187,7 @@ public sealed partial class InputLine
             }
             else if (_percenting && MentionCompleter.TryFind(draft, _cursor, '%', out start, out end, out query))
             {
-                // A %connection mention (later on 2026-09-23): the $tool shape over the SQL connections of sql.json.
+                // A %connection mention (later on 2026-09-23): the $tool shape over the database connections (SQL, Oracle, MySQL).
                 string typed = query;
                 prefix = "%";
                 words = () => MentionCompleter.Matches(_line._connections!(), typed);
@@ -1197,6 +1198,13 @@ public sealed partial class InputLine
                 string typed = query;
                 prefix = "^";
                 words = () => MentionCompleter.Matches(_line._workflows!(), typed);
+            }
+            else if (_starring && MentionCompleter.TryFind(draft, _cursor, '*', out start, out end, out query))
+            {
+                // A *share mention (2026-10-01, the user's ask): the %connection shape over the offered UNC shares, once part of %'s list.
+                string typed = query;
+                prefix = "*";
+                words = () => MentionCompleter.Matches(_line._shares!(), typed);
             }
             else if (!_completing || !MentionCompleter.TryFind(draft, _cursor, out start, out end, out query))
             {
@@ -1278,6 +1286,7 @@ public sealed partial class InputLine
                 '$' => _dollaring,
                 '%' => _percenting,
                 '^' => _careting,
+                '*' => _starring,
                 _ => false,
             }
             && _line.PathArgument?.Invoke(command) != true;

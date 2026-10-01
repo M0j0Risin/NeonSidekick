@@ -16,18 +16,13 @@ public sealed record UncCatalog(IReadOnlyList<UncNamedShare> Shares, IReadOnlyLi
     public static readonly UncCatalog Empty = new([], []);
 
     /// <summary>
-    /// The catalog narrowed to the shares a profile offers (<c>UNC shares offered</c>): <paramref name="names"/> null = all of
-    /// them; else only those whose name is in it (case-insensitive), in file order, <see cref="Hidden"/> counting the rest. The
-    /// problems are kept. Pure.
+    /// The catalog narrowed to the shares a profile offers (<c>UNC shares offered</c>): only those whose name is in
+    /// <paramref name="names"/> (case-insensitive), in file order, <see cref="Hidden"/> counting the rest; null offers none, as
+    /// an empty list does (2026-10-01, the user's call; it was "all" until then). The problems are kept. Pure.
     /// </summary>
     public UncCatalog Offered(IReadOnlyList<string>? names)
     {
-        if (names is null)
-        {
-            return this;
-        }
-
-        var wanted = new HashSet<string>(names.Select(n => n.Trim()), StringComparer.OrdinalIgnoreCase);
+        var wanted = new HashSet<string>((names ?? []).Select(n => n.Trim()), StringComparer.OrdinalIgnoreCase);
         var kept = Shares.Where(s => wanted.Contains(s.Name)).ToList();
         return this with { Shares = kept, Hidden = Hidden + Shares.Count - kept.Count };
     }
@@ -115,7 +110,7 @@ public sealed class UncConfigFile
     /// </summary>
     public const string EmptyText =
         "{\n" +
-        "  // One entry per share. Its name is what the model passes as \"share\", and what %name picks on the input line.\n" +
+        "  // One entry per share. Its name is what the model passes as \"share\", and what *name picks on the input line.\n" +
         "  // \"path\" is required: \\\\server\\share, a folder under it, or a local folder. In JSON a backslash is doubled\n" +
         "  // (\"\\\\\\\\fs01\\\\eng\") or written as / (\"//fs01/eng\"). Remove the leading // from an example to use it, and put it\n" +
         "  // inside \"shares\" below.\n" +

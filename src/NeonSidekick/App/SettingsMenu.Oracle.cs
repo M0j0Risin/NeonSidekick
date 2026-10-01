@@ -22,15 +22,10 @@ internal sealed partial class SettingsMenu
         return (loaded.Problems.Count == 0 ? count : count + ", " + Sql.SqlText.Count(loaded.Problems.Count, "problem")) + " · Enter edits oracle.json";
     }
 
-    /// <summary>The value of <c>Oracle connections offered</c>: <see cref="SqlNotNarrowedLabel"/> while the profile never narrowed it, else how many of the loaded connections it offers. Pinned.</summary>
+    /// <summary>The value of <c>Oracle connections offered</c>: how many of the loaded connections the profile offers, <c>none of N</c> before any is ticked (2026-10-01: null offers none). Pinned.</summary>
     public static string OracleOfferedValue(IReadOnlyList<string>? offered, OracleCatalog loaded)
     {
         ArgumentNullException.ThrowIfNull(loaded);
-        if (offered is null)
-        {
-            return SqlNotNarrowedLabel;
-        }
-
         int kept = loaded.Offered(offered).Connections.Count;
         return (kept == 0 ? "none" : kept.ToString(CultureInfo.InvariantCulture)) + " of " + loaded.Connections.Count.ToString(CultureInfo.InvariantCulture);
     }
@@ -74,8 +69,8 @@ internal sealed partial class SettingsMenu
 
     /// <summary>
     /// <c>Oracle connections offered</c>, <see cref="EditSqlOfferedAsync"/>'s twin: every connection the two files hold, ticked
-    /// or not, Enter or Space flipping one until ESC; the first flip of a profile that never narrowed it saves every name but
-    /// the flipped one, so a connection added later stays hidden until ticked. True when anything changed.
+    /// or not, Enter or Space flipping one until ESC; nothing is ticked until the user ticks it (2026-10-01; a
+    /// never-narrowed profile started all ticked until then), so a connection added later stays hidden until ticked. True when anything changed.
     /// </summary>
     private async Task<bool> EditOracleOfferedAsync(CancellationToken cancellationToken)
     {
@@ -110,9 +105,9 @@ internal sealed partial class SettingsMenu
             var next = pick.Button == SelectAllIndex ? loaded.Connections.Select(c => c.Name).ToList()
                 : pick.Button == SelectNoneIndex ? []
                 : loaded.Connections.Select(c => c.Name).Where(n => on.Contains(n) != string.Equals(n, name, StringComparison.OrdinalIgnoreCase)).ToList();
-            if (offered is not null && next.Count == on.Count && next.All(on.Contains))
+            if (next.Count == on.Count && next.All(on.Contains))
             {
-                continue;
+                continue;   // null and empty both offer none (2026-10-01)
             }
 
             if (offered is not null)
