@@ -5,14 +5,14 @@ using NeonSidekick.Settings;
 
 namespace NeonSidekick.Llm.Tools;
 
-/// <summary><c>git_log(path?, ref?, max_commits?)</c>: the commits reachable from <c>ref</c> (HEAD by default), newest first; under a file or folder, those that changed it.</summary>
+/// <summary><c>gitlib_log(path?, ref?, max_commits?)</c>: the commits reachable from <c>ref</c> (HEAD by default), newest first; under a file or folder, those that changed it.</summary>
 public sealed class GitLogTool : GitTool
 {
-    public const string ToolName = "git_log";
+    public const string ToolName = "gitlib_log";
     public const string MaxCommitsArgument = "max_commits";
 
-    public const int MinCommits = AppSettingsData.MinGitNativeLogMaxCommits;
-    public const int MaxCommits = AppSettingsData.MaxGitNativeLogMaxCommits;
+    public const int MinCommits = AppSettingsData.MinGitLibLogMaxCommits;
+    public const int MaxCommits = AppSettingsData.MaxGitLibLogMaxCommits;
 
     private static readonly JsonElement Schema = ToolSchema.Parse(
         $$"""
@@ -42,7 +42,7 @@ public sealed class GitLogTool : GitTool
     public static int DefaultCount(AppSettingsData effective)
     {
         ArgumentNullException.ThrowIfNull(effective);
-        return Math.Clamp(effective.GitNativeLogMaxCommits, MinCommits, MaxCommits);
+        return Math.Clamp(effective.GitLibLogMaxCommits, MinCommits, MaxCommits);
     }
 
     public string Describe(string path, string reference, int? maxCommits)

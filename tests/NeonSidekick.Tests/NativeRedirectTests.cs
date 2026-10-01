@@ -24,17 +24,17 @@ public sealed class NativeRedirectTests
     [InlineData("mkdir out", "mkdir", "create_directory")]
     [InlineData("Compress-Archive -Path x -DestinationPath x.zip", "compress-archive", "zip")]
     [InlineData("Expand-Archive x.zip", "expand-archive", "unzip")]
-    [InlineData("git status --short", "git status", "git_status")]
-    [InlineData("git log -5 --oneline", "git log", "git_log")]
-    [InlineData("git diff HEAD~1", "git diff", "git_diff")]
-    [InlineData("git add .", "git add", "git_stage")]
-    [InlineData("git commit -m \"fix\"", "git commit", "git_commit")]
+    [InlineData("git status --short", "git status", "gitlib_status")]
+    [InlineData("git log -5 --oneline", "git log", "gitlib_log")]
+    [InlineData("git diff HEAD~1", "git diff", "gitlib_diff")]
+    [InlineData("git add .", "git add", "gitlib_stage")]
+    [InlineData("git commit -m \"fix\"", "git commit", "gitlib_commit")]
     [InlineData("curl https://example.com", "curl", "web_fetch")]
     [InlineData("Invoke-WebRequest https://example.com", "invoke-webrequest", "web_fetch")]
     [InlineData("sqlcmd -S . -Q \"select 1\"", "sqlcmd", "sql_query")]
     [InlineData("sqlplus -s hr/x@db @q.sql", "sqlplus", "oracle_query")]
     [InlineData("mysql -u shop_reader -p shop", "mysql", "mysql_query")]
-    [InlineData("& git status", "git status", "git_status")]   // PowerShell's call operator leaves one segment
+    [InlineData("& git status", "git status", "gitlib_status")]   // PowerShell's call operator leaves one segment
     public void AMappedLine_NamesItsTool(string command, string prefix, string tool)
     {
         Assert.Equal((prefix, tool), NativeRedirect.For(command, Everything));

@@ -6,13 +6,13 @@ using NeonSidekick.Settings;
 namespace NeonSidekick.Llm.Tools;
 
 /// <summary>
-/// <c>git_delete(kind, name?, index?, path?)</c>: removes a local branch (never the one checked out), a tag
+/// <c>gitlib_delete(kind, name?, index?, path?)</c>: removes a local branch (never the one checked out), a tag
 /// or a stash. Off by name in a fresh profile's <c>ToolsDisabled</c> beside <see cref="GitDiscardTool"/>
 /// (2026-09-20): a dropped stash or an unmerged branch's commits are reachable only through the reflog.
 /// </summary>
 public sealed class GitDeleteTool : GitTool
 {
-    public const string ToolName = "git_delete";
+    public const string ToolName = "gitlib_delete";
     public const string KindArgument = "kind";
     public const string NameArgument = "name";
     public const string IndexArgument = "index";

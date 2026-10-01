@@ -239,12 +239,12 @@ public class AssistantTests
     public void SystemPrompt_GitOn_AppendsTheGitRule_AfterTheDownloadRule_ToTheDefaultRulesOnly()
     {
         Assert.Equal(
-            "The working directory may be a git repository (or hold one): git_status shows its state, git_log its history, git_show a commit or a file at a commit, " +
-            "git_diff the changes, git_blame who wrote a line; git_stage, git_commit, git_branch and git_stash change it — commit only what the user asked to commit, " +
+            "The working directory may be a git repository (or hold one): gitlib_status shows its state, gitlib_log its history, gitlib_show a commit or a file at a commit, " +
+            "gitlib_diff the changes, gitlib_blame who wrote a line; gitlib_stage, gitlib_commit, gitlib_branch and gitlib_stash change it — commit only what the user asked to commit, " +
             "with the message they gave or a short imperative one, and never remove or overwrite work the user did not name.",
             Assistant.GitRule);
-        Assert.DoesNotContain("git_discard", Assistant.GitRule);
-        Assert.DoesNotContain("git_delete", Assistant.GitRule);
+        Assert.DoesNotContain("gitlib_discard", Assistant.GitRule);
+        Assert.DoesNotContain("gitlib_delete", Assistant.GitRule);
         Assert.Equal(Assistant.DefaultSystemPrompt + " " + Assistant.GitRule, Assistant.SystemPrompt(false, null, git: true));
         Assert.Equal(DefaultWebSystemPrompt + " " + Assistant.GitRule, Assistant.SystemPrompt(false, null, web: true, git: true));
         Assert.Equal(DefaultWebSystemPrompt + " " + Assistant.GitRule + " " + Assistant.AskRule(AskLimits.Default) + " " + Assistant.SessionRule + " " + Assistant.McpRule, Assistant.SystemPrompt(false, null, web: true, ask: AskLimits.Default, sessions: true, mcp: true, git: true));
@@ -366,9 +366,9 @@ public class AssistantTests
     {
         Assert.Equal(
             "Call run_command only for what no other tool does: read_file and search_files read, search and list files (not cat, type, Get-Content, dir, ls or grep) and the file tools write, copy, move and delete them; " +
-            "the git_ tools look at and change the repository (not git status, log, diff, add or commit); web_search and web_fetch reach the web (not curl or Invoke-WebRequest); sql_query reads the databases (not sqlcmd).",
+            "the gitlib_ tools look at and change the repository (not git status, log, diff, add or commit); web_search and web_fetch reach the web (not curl or Invoke-WebRequest); sql_query reads the databases (not sqlcmd).",
             Assistant.ShellNativeRule(files: true, git: true, web: true, sql: true));
-        Assert.Equal("Call run_command only for what no other tool does: the git_ tools look at and change the repository (not git status, log, diff, add or commit).", Assistant.ShellNativeRule(files: false, git: true, web: false, sql: false));
+        Assert.Equal("Call run_command only for what no other tool does: the gitlib_ tools look at and change the repository (not git status, log, diff, add or commit).", Assistant.ShellNativeRule(files: false, git: true, web: false, sql: false));
         Assert.Equal("", Assistant.ShellNativeRule(false, false, false, false));
 
         string files = Assistant.ShellNativeRule(files: true, git: false, web: false, sql: false);

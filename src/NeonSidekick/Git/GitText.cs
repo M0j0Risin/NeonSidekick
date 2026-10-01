@@ -19,7 +19,7 @@ public static class GitText
     public const string NoNewName = "Error: give the branch's new name";
     public const string NoReference = "Error: give the commit to show (a sha, a branch, a tag, HEAD~1)";
     public const string NoBlamePath = "Error: give the file to blame";
-    public const string NothingStaged = "Error: nothing is staged; stage the changes with git_stage first";
+    public const string NothingStaged = "Error: nothing is staged; stage the changes with gitlib_stage first";
     public const string NothingToAmend = "Error: there is no commit to amend yet";
     public const string NothingToStash = "Error: nothing to stash: the working tree is clean";
     public const string NoCommits = "Error: the repository has no commits yet";

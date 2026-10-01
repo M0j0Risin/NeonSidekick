@@ -58,7 +58,7 @@ public sealed class GitToolsTests : IDisposable
     public void Names_Schemas_AndDescriptions_ArePinned()
     {
         Assert.Equal(GitToolNames.All, _tools.Select(t => t.Name));
-        Assert.Equal(["git_status", "git_log", "git_show", "git_diff", "git_blame", "git_branch", "git_stage", "git_commit", "git_stash", "git_discard", "git_delete"], GitToolNames.All);
+        Assert.Equal(["gitlib_status", "gitlib_log", "gitlib_show", "gitlib_diff", "gitlib_blame", "gitlib_branch", "gitlib_stage", "gitlib_commit", "gitlib_stash", "gitlib_discard", "gitlib_delete"], GitToolNames.All);
         Assert.All(_tools, t => Assert.Equal("object", t.JsonSchema.GetProperty("type").GetString()));
         Assert.All(_tools, t => Assert.True(t.JsonSchema.GetProperty("properties").TryGetProperty("path", out _), t.Name + " takes path"));
 
@@ -107,7 +107,7 @@ public sealed class GitToolsTests : IDisposable
         Assert.Equal(
             "Shows changes as a unified diff with the files and their line counts first: with nothing but path, the unstaged changes in the working tree; " +
             "staged: true, what is staged; ref, one commit against its parent; from and to, everything between two commits. " +
-            "Untracked files are not in it (git_status lists them); a long patch is cut at max_lines — narrow it with path.",
+            "Untracked files are not in it (gitlib_status lists them); a long patch is cut at max_lines — narrow it with path.",
             Tool<GitDiffTool>().Description);
         Assert.Equal(
             "Shows who last changed each line of a file and in which commit: one row per line with the short sha, the date, the author, the line number and the text; " +
@@ -115,19 +115,19 @@ public sealed class GitToolsTests : IDisposable
             Tool<GitBlameTool>().Description);
         Assert.Equal(
             "Lists, creates, switches to or renames git branches. A switch never overwrites local changes (commit or stash them first); " +
-            "deleting a branch is git_delete's job.",
+            "deleting a branch is gitlib_delete's job.",
             Tool<GitBranchTool>().Description);
         Assert.Equal(
             "Stages or unstages changes for the next commit: the paths named, or \".\" for everything changed under path. " +
-            "Stage only what the user asked to commit; git_status shows what is staged.",
+            "Stage only what the user asked to commit; gitlib_status shows what is staged.",
             Tool<GitStageTool>().Description);
         Assert.Equal(
             "Commits what is staged with the message given, signed with the user's git identity (user.name / user.email from git config). " +
-            "Stage with git_stage first; commit only what the user asked for, with their message or a short imperative one.",
+            "Stage with gitlib_stage first; commit only what the user asked for, with their message or a short imperative one.",
             Tool<GitCommitTool>().Description);
         Assert.Equal(
             "Puts the working tree's changes aside and brings them back: push saves them as a stash and cleans the tree, pop or apply restores stash@{index}, list shows them. " +
-            "Dropping a stash is git_delete's job.",
+            "Dropping a stash is gitlib_delete's job.",
             Tool<GitStashTool>().Description);
         Assert.Equal(
             "Throws uncommitted changes away for good: the paths named go back to how they are at ref (HEAD by default), index and working tree alike; " +
@@ -137,8 +137,8 @@ public sealed class GitToolsTests : IDisposable
             "Removes a local branch (never the one checked out), a tag, or a stash by its index. " +
             "A branch's unmerged commits and a dropped stash are gone from every listing — do it only when the user asked for exactly that.",
             Tool<GitDeleteTool>().Description);
-        // git_delete is the fresh profile's opt-in (git_discard on out of the box since 2026-09-23); the rule names neither.
-        Assert.Equal(["git_delete", "unzip", "zip"], new AppSettingsData().ToolsDisabled);   // delete on out of the box since later on 2026-09-21
+        // gitlib_delete is the fresh profile's opt-in (gitlib_discard on out of the box since 2026-09-23); the rule names neither.
+        Assert.Equal(["gitlib_delete", "unzip", "zip"], new AppSettingsData().ToolsDisabled);   // delete on out of the box since later on 2026-09-21
         Assert.All(_tools, t => Assert.Contains(t.Name, App.ChatScreen.QuietTools));
     }
 
@@ -170,15 +170,15 @@ public sealed class GitToolsTests : IDisposable
 
         string log = await Invoke(Tool<GitLogTool>());
         Assert.Matches($@"^2 commits on main, newest first:\n{second[..7]} 2026-09-01 12:\d\d Test User: second\n{first[..7]} 2026-09-01 12:\d\d Test User: first$", log);
-        _settings.GitNativeLogMaxCommits = 1;
+        _settings.GitLibLogMaxCommits = 1;
         Assert.StartsWith("1 commit on main, newest first (more before them):\n", await Invoke(Tool<GitLogTool>()));
         Assert.StartsWith("2 commits on main", await Invoke(Tool<GitLogTool>(), ("max_commits", 5)));
         Assert.Equal("Error: max_commits must be 1 to 200", await Invoke(Tool<GitLogTool>(), ("max_commits", 0)));
         Assert.Equal("Error: 'lots' is not a whole number for 'max_commits'", await Invoke(Tool<GitLogTool>(), ("max_commits", "lots")));
         Assert.Equal("Error: 'nope' names no commit, branch or tag", await Invoke(Tool<GitLogTool>(), ("ref", "nope")));
         Assert.Equal("No commits touch b.txt on main", await Invoke(Tool<GitLogTool>(), ("path", "b.txt"), ("max_commits", 5)));
-        Assert.Equal(1, GitLogTool.DefaultCount(new AppSettingsData { GitNativeLogMaxCommits = -4 }));
-        Assert.Equal(200, GitLogTool.DefaultCount(new AppSettingsData { GitNativeLogMaxCommits = 9999 }));
+        Assert.Equal(1, GitLogTool.DefaultCount(new AppSettingsData { GitLibLogMaxCommits = -4 }));
+        Assert.Equal(200, GitLogTool.DefaultCount(new AppSettingsData { GitLibLogMaxCommits = 9999 }));
     }
 
     [Fact]
@@ -219,14 +219,14 @@ public sealed class GitToolsTests : IDisposable
         Assert.StartsWith($"Changes from {first[..7]} to {sha} (1 file, +1 −1):", await Invoke(Tool<GitDiffTool>(), ("from", first[..7]), ("to", "HEAD")));
         Assert.Equal("Error: 'zzz' is not there", await Invoke(Tool<GitDiffTool>(), ("ref", "HEAD"), ("path", "zzz")));
 
-        _settings.GitNativeDiffMaxLines = 20;
+        _settings.GitLibDiffMaxLines = 20;
         string cut = await Invoke(Tool<GitDiffTool>(), ("ref", "HEAD"), ("max_lines", 20));
         Assert.DoesNotContain("[… cut", cut);   // seven lines fit
         Assert.Equal("Error: max_lines must be 20 to 5000", await Invoke(Tool<GitDiffTool>(), ("max_lines", 5)));
         Assert.Equal("Error: give ref alone, from with to, or staged — not a mix", await Invoke(Tool<GitDiffTool>(), ("ref", "HEAD"), ("staged", true)));
         Assert.Equal("Error: give ref alone, from with to, or staged — not a mix", await Invoke(Tool<GitDiffTool>(), ("from", "HEAD")));
         Assert.Equal("Error: 'maybe' is not true or false for 'staged'", await Invoke(Tool<GitDiffTool>(), ("staged", "maybe")));
-        Assert.Equal(20, GitDiffTool.DefaultLines(new AppSettingsData { GitNativeDiffMaxLines = 1 }));
+        Assert.Equal(20, GitDiffTool.DefaultLines(new AppSettingsData { GitLibDiffMaxLines = 1 }));
         Assert.Null(GitDiffTool.Request("", "HEAD", "a", "b", false));
         Assert.Equal(new GitDiffRequest(GitDiffKind.Range, "src", From: "a", To: "b"), GitDiffTool.Request("src", "", " a ", "b ", false));
         Assert.Equal(new GitDiffRequest(GitDiffKind.Unstaged, ""), GitDiffTool.Request("", "", "", "", false));
@@ -308,7 +308,7 @@ public sealed class GitToolsTests : IDisposable
         Assert.Equal("Error: '42' is not a list of paths for 'paths'", await Invoke(Tool<GitStageTool>(), ("action", "stage"), ("paths", 42)));
         Assert.Equal("Error: 'add' is not an action here", await Invoke(Tool<GitStageTool>(), ("action", "add"), ("paths", new[] { "a.txt" })));
         Assert.Equal("Error: give the commit message", await Invoke(Tool<GitCommitTool>(), ("message", " ")));
-        Assert.Equal("Error: nothing is staged; stage the changes with git_stage first", await Invoke(Tool<GitCommitTool>(), ("message", "x")));
+        Assert.Equal("Error: nothing is staged; stage the changes with gitlib_stage first", await Invoke(Tool<GitCommitTool>(), ("message", "x")));
 
         Write("a.txt", "one\n");
         Write(Path.Combine("src", "b.txt"), "b\n");

@@ -59,6 +59,27 @@ public class LlmSessionEmbeddedTests
         Assert.True(session.EmbeddedServer!.Vision);
     }
 
+    /// <summary>
+    /// Another model's load (2026-09-30, the user's ask): the old model's name leaves the endpoint, and so the hint row, as the
+    /// load begins. A reconnect to the model already running keeps it.
+    /// </summary>
+    [Fact]
+    public async Task AnotherModelsLoad_ClearsTheEndpointFirst_TheSameModelKeepsIt()
+    {
+        _embedded.Installed("gemma-4-e2b", "gemma-4-12b");
+        ServeProps();
+        using var session = Session();
+        Assert.True(await session.ConnectAsync(Embedded("gemma-4-e2b"), (Action<string>?)null, CancellationToken.None));
+        var seen = new List<string?>();
+        _embedded.StartGate = _ => { seen.Add(session.Endpoint?.ModelId); return Task.CompletedTask; };
+
+        Assert.True(await session.ConnectAsync(Embedded("gemma-4-12b"), (Action<string>?)null, CancellationToken.None));
+        Assert.True(await session.ConnectAsync(Embedded("gemma-4-12b"), (Action<string>?)null, CancellationToken.None));
+
+        Assert.Equal([null, "gemma-4-12b"], seen);
+        Assert.Equal("gemma-4-12b", session.Endpoint!.ModelId);
+    }
+
     [Fact]
     public async Task AnEmbeddedUrl_WithNoModel_RunsTheFirstInstalled()
     {

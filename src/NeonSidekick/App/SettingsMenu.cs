@@ -256,14 +256,14 @@ public enum SettingsField
     /// <summary>Typed: the seconds one MCP server gets to connect and list its tools, 5 to 300 (<see cref="Settings.AppSettingsData.McpConnectTimeoutSeconds"/>). The Options tab of <c>/mcp</c>' second row (2026-09-20); no reconnect (read at the next connect).</summary>
     McpConnectTimeoutSeconds,
 
-    /// <summary>Whether a turn offers the eleven git tools (<see cref="Settings.AppSettingsData.GitNativeTools"/>). The Git tab of <c>/tools</c>' first row (2026-09-20; <c>Git native tools</c>, off by default, since 2026-09-21); a toggle, no reconnect (read at each turn).</summary>
-    GitNativeTools,
+    /// <summary>Whether a turn offers the eleven git tools (<see cref="Settings.AppSettingsData.GitLibTools"/>). The GitLib tab of <c>/tools</c>' first row (2026-09-20; off by default since 2026-09-21; <c>Git native tools</c> from 2026-09-21, <c>GitLib tools</c> since 2026-09-30); a toggle, no reconnect (read at each turn).</summary>
+    GitLibTools,
 
-    /// <summary>Typed: the most patch lines one <c>git_diff</c> shows, 20 to 5000 (<see cref="Settings.AppSettingsData.GitNativeDiffMaxLines"/>). The Git tab's second row; no reconnect (read at each call).</summary>
-    GitNativeDiffMaxLines,
+    /// <summary>Typed: the most patch lines one <c>gitlib_diff</c> shows, 20 to 5000 (<see cref="Settings.AppSettingsData.GitLibDiffMaxLines"/>). The GitLib tab's second row; no reconnect (read at each call).</summary>
+    GitLibDiffMaxLines,
 
-    /// <summary>Typed: how many commits a <c>git_log</c> without <c>max_commits</c> lists, 1 to 200 (<see cref="Settings.AppSettingsData.GitNativeLogMaxCommits"/>). The Git tab's third row; no reconnect (read at each call).</summary>
-    GitNativeLogMaxCommits,
+    /// <summary>Typed: how many commits a <c>gitlib_log</c> without <c>max_commits</c> lists, 1 to 200 (<see cref="Settings.AppSettingsData.GitLibLogMaxCommits"/>). The GitLib tab's third row; no reconnect (read at each call).</summary>
+    GitLibLogMaxCommits,
 
     /// <summary>A picker over <see cref="Shell.CommandPolicy.Names"/>: what stands between <c>run_command</c> and the shell (<see cref="Settings.AppSettingsData.ShellCommandPolicy"/>) — <c>off</c> is the Shell group's switch. The Shell tab of <c>/tools</c>' first row (2026-09-21); no reconnect (read at each call).</summary>
     ShellCommandPolicy,
@@ -295,11 +295,11 @@ public enum SettingsField
     /// <summary>A toggle: whether a compact's summary, or its pruned results, follow the compact notice in the transcript (<see cref="Settings.AppSettingsData.LlmCompactShowSummary"/>). The LLM tab, right under <see cref="LlmCompactKeepRecent"/> (2026-09-21); no reconnect (read at each compact).</summary>
     LlmCompactShowSummary,
 
-    /// <summary>Typed: the <c>user.email</c> <c>/gituser</c> writes into the working directory's repository (<see cref="Settings.AppSettingsData.GitNativeEmail"/>); empty = not set. The Git tab's fourth row (2026-09-21); no reconnect (read at each <c>/gituser</c>).</summary>
-    GitNativeEmail,
+    /// <summary>Typed: the <c>user.email</c> <c>/gituser</c> writes into the working directory's repository (<see cref="Settings.AppSettingsData.GitLibEmail"/>); empty = not set. The GitLib tab's fourth row (2026-09-21); no reconnect (read at each <c>/gituser</c>).</summary>
+    GitLibEmail,
 
-    /// <summary>Typed: the <c>user.name</c> <c>/gituser</c> writes beside the email (<see cref="Settings.AppSettingsData.GitNativeName"/>); empty = not set. The Git tab's last row (2026-09-21); no reconnect.</summary>
-    GitNativeName,
+    /// <summary>Typed: the <c>user.name</c> <c>/gituser</c> writes beside the email (<see cref="Settings.AppSettingsData.GitLibName"/>); empty = not set. The GitLib tab's last row (2026-09-21); no reconnect.</summary>
+    GitLibName,
 
     /// <summary>A toggle: whether an <c>execute_code</c> script may call the app's other tools through its <c>neon_tools</c> module (<see cref="Settings.AppSettingsData.ShellToolBridge"/>). The Shell tab, right above the tool-call cap it governs (later on 2026-09-21); no reconnect (read at each call and each turn).</summary>
     ShellToolBridge,
@@ -1017,7 +1017,7 @@ internal sealed partial class SettingsMenu
     /// until later that day), the search method above the Web SearXNG URL it governs. The group switch stays each tab's first row.
     /// Since later still on 2026-09-19 (the user's ask) every Files and Web row carries its tab's word (<c>File /tree max length</c>, <c>Web SearXNG URL</c>, …) and the six JSON keys that
     /// differed followed (<c>FileTreeMaxLength</c>, <c>FileTreeShowSizes</c>, <c>FileMentionFolderMode</c>, <c>FileViewImageMaxPerCall</c>, <c>WebSearxngUrl</c>) — no migration, the old key skipped on load.
-    /// Git (2026-09-20; Git (native) since 2026-09-21, its rows <c>Git native …</c>) is its switch, the diff cap, the log cap and the identity pair;
+    /// Git (2026-09-20; Git (native) from 2026-09-21, its rows <c>Git native …</c>; GitLib since 2026-09-30, the tab and its rows) is its switch, the diff cap, the log cap and the identity pair;
     /// Shell (2026-09-21) is the policy (its switch), the allowed list, the outside-paths police (2026-09-22), the default shell, the two timeouts and the output cap,
     /// then the script rows: the languages, their timeout, the tool bridge switch (later that day) and the tool-call cap it governs.
     /// Claude (2026-09-27, the user's call: <c>/claude</c>'s four rows off <c>/settings</c>, named <c>Claude command …</c>) is those four, then
@@ -1040,7 +1040,7 @@ internal sealed partial class SettingsMenu
         [SettingsField.SqlTools, SettingsField.SqlConnectionsOffered, SettingsField.SqlDefaultConnection, SettingsField.SqlSetPassword, SettingsField.SqlAddConnection, SettingsField.SqlPercentMention, SettingsField.SqlQueryMaxRows, SettingsField.SqlQueryTimeoutSeconds, SettingsField.SqlConnectionsProfile, SettingsField.SqlConnectionsGlobal],
         [SettingsField.OracleTools, SettingsField.OracleConnectionsOffered, SettingsField.OracleDefaultConnection, SettingsField.OracleSetPassword, SettingsField.OracleAddConnection, SettingsField.OraclePercentMention, SettingsField.OracleQueryMaxRows, SettingsField.OracleQueryTimeoutSeconds, SettingsField.OracleConnectionsProfile, SettingsField.OracleConnectionsGlobal],
         [SettingsField.MySqlTools, SettingsField.MySqlConnectionsOffered, SettingsField.MySqlDefaultConnection, SettingsField.MySqlSetPassword, SettingsField.MySqlAddConnection, SettingsField.MySqlPercentMention, SettingsField.MySqlQueryMaxRows, SettingsField.MySqlQueryTimeoutSeconds, SettingsField.MySqlConnectionsProfile, SettingsField.MySqlConnectionsGlobal],
-        [SettingsField.GitNativeTools, SettingsField.GitNativeDiffMaxLines, SettingsField.GitNativeLogMaxCommits, SettingsField.GitNativeEmail, SettingsField.GitNativeName],
+        [SettingsField.GitLibTools, SettingsField.GitLibDiffMaxLines, SettingsField.GitLibLogMaxCommits, SettingsField.GitLibEmail, SettingsField.GitLibName],
         [SettingsField.ToolsDollarMention, SettingsField.ToolCollapseCount, SettingsField.CodeCollapseCount],
     ];
 
@@ -1399,7 +1399,7 @@ internal sealed partial class SettingsMenu
             or SettingsField.SkillHashMention or SettingsField.ReflectionAutoLearn
             or SettingsField.HideExitAutocomplete or SettingsField.CommandTypoIntercept or SettingsField.KeepCommandHistory or SettingsField.ShowWorkingDirectory or SettingsField.ThemedViewer
             or SettingsField.QueueMessages or SettingsField.SessionLogging or SettingsField.SessionTool or SettingsField.SessionSaveThinking
-            or SettingsField.ToolsDollarMention or SettingsField.ReflectionIncludesSessions or SettingsField.ReflectionYieldsToTurns or SettingsField.ReflectionEditsSupportingFiles or SettingsField.McpServers or SettingsField.GitNativeTools
+            or SettingsField.ToolsDollarMention or SettingsField.ReflectionIncludesSessions or SettingsField.ReflectionYieldsToTurns or SettingsField.ReflectionEditsSupportingFiles or SettingsField.McpServers or SettingsField.GitLibTools
             or SettingsField.LlmCompactShowSummary or SettingsField.ShellToolBridge or SettingsField.ShellPoliceOutsidePaths or SettingsField.ShellPreferNative
             or SettingsField.ObsidianTools or SettingsField.ObsidianAllowDelete or SettingsField.SqlTools or SettingsField.SqlPercentMention or SettingsField.ComfyTools or SettingsField.ComfyReinforceNegatives or SettingsField.ComfyShowPrompts or SettingsField.ComfyCaretMention or SettingsField.ComfyPictureStrip
             or SettingsField.BotChatImages or SettingsField.BotChatImageAsync or SettingsField.BotChatSkills or SettingsField.BotChatVision or SettingsField.BotChatMultiEmbeddedKill or SettingsField.ClaudeAdvisor or SettingsField.ClaudeAdvisorConfirm
@@ -1473,8 +1473,8 @@ internal sealed partial class SettingsMenu
         SettingsField.ClaudeAdvisorConfirm => "Claude advisor tool confirm",
         SettingsField.LlmScanMode => "LLM server scan mode",
         SettingsField.WebTools => "Web tools",
-        SettingsField.GitNativeTools => "Git native tools",
-        SettingsField.GitNativeDiffMaxLines => "Git native diff max lines",
+        SettingsField.GitLibTools => "GitLib tools",
+        SettingsField.GitLibDiffMaxLines => "GitLib diff max lines",
         SettingsField.ShellCommandPolicy => "Shell command policy",
         SettingsField.ShellCommandAllowed => "Shell allowed commands",
         SettingsField.ShellPoliceOutsidePaths => "Shell police outside paths",
@@ -1487,9 +1487,9 @@ internal sealed partial class SettingsMenu
         SettingsField.ShellCodeTimeoutSeconds => "Shell code timeout (s)",
         SettingsField.ShellToolBridge => "Shell tool bridge",
         SettingsField.ShellCodeMaxToolCalls => "Shell tool bridge max calls",   // the bridge's cap, named after the switch above it (later on 2026-09-21, the user's ask; "Shell code max tool calls" before)
-        SettingsField.GitNativeLogMaxCommits => "Git native log max commits",
-        SettingsField.GitNativeEmail => "Git native email",
-        SettingsField.GitNativeName => "Git native name",
+        SettingsField.GitLibLogMaxCommits => "GitLib log max commits",
+        SettingsField.GitLibEmail => "GitLib email",
+        SettingsField.GitLibName => "GitLib name",
         SettingsField.ObsidianTools => "Obsidian tools",
         SettingsField.ObsidianVault => "Obsidian vault",
         SettingsField.SqlTools => "SQL tools",
@@ -1727,8 +1727,8 @@ internal sealed partial class SettingsMenu
             SettingsField.LlmScanMode => data.LlmScanMode,
             SettingsField.TtsSource => data.TtsSource,
             SettingsField.WebTools => OnOff(data.WebTools),
-            SettingsField.GitNativeTools => OnOff(data.GitNativeTools),
-            SettingsField.GitNativeDiffMaxLines => Lines(data.GitNativeDiffMaxLines),
+            SettingsField.GitLibTools => OnOff(data.GitLibTools),
+            SettingsField.GitLibDiffMaxLines => Lines(data.GitLibDiffMaxLines),
             SettingsField.ShellCommandPolicy => data.ShellCommandPolicy,
             SettingsField.ShellCommandAllowed => Prefixes(data.ShellCommandAllowed.Count),
             SettingsField.ShellPoliceOutsidePaths => OnOff(data.ShellPoliceOutsidePaths),
@@ -1741,9 +1741,9 @@ internal sealed partial class SettingsMenu
             SettingsField.ShellCodeTimeoutSeconds => Seconds(data.ShellCodeTimeoutSeconds),
             SettingsField.ShellToolBridge => OnOff(data.ShellToolBridge),
             SettingsField.ShellCodeMaxToolCalls => ToolCalls(data.ShellCodeMaxToolCalls),
-            SettingsField.GitNativeLogMaxCommits => Commits(data.GitNativeLogMaxCommits),
-            SettingsField.GitNativeEmail => string.IsNullOrWhiteSpace(data.GitNativeEmail) ? NoGitIdentityLabel : data.GitNativeEmail,
-            SettingsField.GitNativeName => string.IsNullOrWhiteSpace(data.GitNativeName) ? NoGitIdentityLabel : data.GitNativeName,
+            SettingsField.GitLibLogMaxCommits => Commits(data.GitLibLogMaxCommits),
+            SettingsField.GitLibEmail => string.IsNullOrWhiteSpace(data.GitLibEmail) ? NoGitIdentityLabel : data.GitLibEmail,
+            SettingsField.GitLibName => string.IsNullOrWhiteSpace(data.GitLibName) ? NoGitIdentityLabel : data.GitLibName,
             SettingsField.ObsidianTools => OnOff(data.ObsidianTools),
             SettingsField.ObsidianAllowDelete => OnOff(data.ObsidianAllowDelete),
             SettingsField.SqlTools => OnOff(data.SqlTools),
@@ -1886,7 +1886,7 @@ internal sealed partial class SettingsMenu
     /// <summary>How the menu shows an empty <see cref="AppSettingsData.WebSearxngUrl"/> (the engine is <see cref="SettingsField.WebSearchMethod"/>'s row, not this one's). Pinned.</summary>
     public const string NoSearxngUrlLabel = "(not set)";
 
-    /// <summary>How the menu shows an empty <see cref="AppSettingsData.GitNativeEmail"/> or <see cref="AppSettingsData.GitNativeName"/> (2026-09-21): <c>/gituser</c> refuses until both are set (and while <see cref="AppSettingsData.GitNativeTools"/> is off). Pinned.</summary>
+    /// <summary>How the menu shows an empty <see cref="AppSettingsData.GitLibEmail"/> or <see cref="AppSettingsData.GitLibName"/> (2026-09-21): <c>/gituser</c> refuses until both are set (and while <see cref="AppSettingsData.GitLibTools"/> is off). Pinned.</summary>
     public const string NoGitIdentityLabel = "(not set)";
 
     /// <summary>How the menu shows an empty <see cref="AppSettingsData.ObsidianVault"/> (2026-09-22): no vault, so no vault tool is offered. Pinned.</summary>
@@ -2239,13 +2239,13 @@ internal sealed partial class SettingsMenu
     /// <summary>The notice after a prefix is removed from the allowed list: <c>Shell allowed commands: git push removed</c>. Pinned.</summary>
     public static string PrefixRemovedNotice(string prefix) => FieldName(SettingsField.ShellCommandAllowed) + ": " + prefix + " removed";
 
-    /// <summary>The settings-menu wording for a bad <see cref="SettingsField.GitNativeDiffMaxLines"/>. Pinned.</summary>
-    public static readonly string GitNativeDiffMaxLinesRangeError =
-        "must be " + AppSettingsData.MinGitNativeDiffMaxLines.ToString(CultureInfo.InvariantCulture) + " to " + AppSettingsData.MaxGitNativeDiffMaxLines.ToString(CultureInfo.InvariantCulture) + " lines";
+    /// <summary>The settings-menu wording for a bad <see cref="SettingsField.GitLibDiffMaxLines"/>. Pinned.</summary>
+    public static readonly string GitLibDiffMaxLinesRangeError =
+        "must be " + AppSettingsData.MinGitLibDiffMaxLines.ToString(CultureInfo.InvariantCulture) + " to " + AppSettingsData.MaxGitLibDiffMaxLines.ToString(CultureInfo.InvariantCulture) + " lines";
 
-    /// <summary>The settings-menu wording for a bad <see cref="SettingsField.GitNativeLogMaxCommits"/>. Pinned.</summary>
-    public static readonly string GitNativeLogMaxCommitsRangeError =
-        "must be " + AppSettingsData.MinGitNativeLogMaxCommits.ToString(CultureInfo.InvariantCulture) + " to " + AppSettingsData.MaxGitNativeLogMaxCommits.ToString(CultureInfo.InvariantCulture) + " commits";
+    /// <summary>The settings-menu wording for a bad <see cref="SettingsField.GitLibLogMaxCommits"/>. Pinned.</summary>
+    public static readonly string GitLibLogMaxCommitsRangeError =
+        "must be " + AppSettingsData.MinGitLibLogMaxCommits.ToString(CultureInfo.InvariantCulture) + " to " + AppSettingsData.MaxGitLibLogMaxCommits.ToString(CultureInfo.InvariantCulture) + " commits";
 
     /// <summary>The settings-menu wording for a bad <see cref="SettingsField.WebSearchMaxResults"/>. Pinned.</summary>
     public static readonly string WebSearchMaxResultsRangeError =
@@ -2464,21 +2464,21 @@ internal sealed partial class SettingsMenu
         SettingsField.WebSearchMaxResults => data.WebSearchMaxResults.ToString(CultureInfo.InvariantCulture),
         SettingsField.ToolCollapseCount => data.ToolCollapseCount.ToString(CultureInfo.InvariantCulture),
         SettingsField.CodeCollapseCount => data.CodeCollapseCount.ToString(CultureInfo.InvariantCulture),
-        SettingsField.GitNativeDiffMaxLines => data.GitNativeDiffMaxLines.ToString(CultureInfo.InvariantCulture),
+        SettingsField.GitLibDiffMaxLines => data.GitLibDiffMaxLines.ToString(CultureInfo.InvariantCulture),
         SettingsField.ShellTimeoutSeconds => data.ShellTimeoutSeconds.ToString(CultureInfo.InvariantCulture),
         SettingsField.ShellForegroundCapSeconds => data.ShellForegroundCapSeconds.ToString(CultureInfo.InvariantCulture),
         SettingsField.ShellOutputMaxChars => data.ShellOutputMaxChars.ToString(CultureInfo.InvariantCulture),
         SettingsField.ShellCodeTimeoutSeconds => data.ShellCodeTimeoutSeconds.ToString(CultureInfo.InvariantCulture),
         SettingsField.ShellCodeMaxToolCalls => data.ShellCodeMaxToolCalls.ToString(CultureInfo.InvariantCulture),
-        SettingsField.GitNativeLogMaxCommits => data.GitNativeLogMaxCommits.ToString(CultureInfo.InvariantCulture),
+        SettingsField.GitLibLogMaxCommits => data.GitLibLogMaxCommits.ToString(CultureInfo.InvariantCulture),
         SettingsField.SqlQueryMaxRows => data.SqlQueryMaxRows.ToString(CultureInfo.InvariantCulture),
         SettingsField.SqlQueryTimeoutSeconds => data.SqlQueryTimeoutSeconds.ToString(CultureInfo.InvariantCulture),
         SettingsField.OracleQueryMaxRows => data.OracleQueryMaxRows.ToString(CultureInfo.InvariantCulture),
         SettingsField.OracleQueryTimeoutSeconds => data.OracleQueryTimeoutSeconds.ToString(CultureInfo.InvariantCulture),
         SettingsField.MySqlQueryMaxRows => data.MySqlQueryMaxRows.ToString(CultureInfo.InvariantCulture),
         SettingsField.MySqlQueryTimeoutSeconds => data.MySqlQueryTimeoutSeconds.ToString(CultureInfo.InvariantCulture),
-        SettingsField.GitNativeEmail => data.GitNativeEmail,
-        SettingsField.GitNativeName => data.GitNativeName,
+        SettingsField.GitLibEmail => data.GitLibEmail,
+        SettingsField.GitLibName => data.GitLibName,
         SettingsField.ObsidianVault => data.ObsidianVault,
         SettingsField.AskMaxQuestions => data.AskMaxQuestions.ToString(CultureInfo.InvariantCulture),
         SettingsField.AskMaxChoices => data.AskMaxChoices.ToString(CultureInfo.InvariantCulture),
@@ -3519,7 +3519,7 @@ internal sealed partial class SettingsMenu
             return await PickVoskModelAsync(saved, cancellationToken).ConfigureAwait(false);
         }
 
-        bool allowEmpty = field is SettingsField.LlmUrl or SettingsField.LlmModel or SettingsField.TtsVoice2 or SettingsField.WorkingDirectory or SettingsField.WebBrowserPath or SettingsField.WebSearxngUrl or SettingsField.DraftEditor or SettingsField.ImageEditor or SettingsField.GitNativeEmail or SettingsField.GitNativeName or SettingsField.ObsidianVault or SettingsField.ComfyUrl or SettingsField.ComfyOutputFolder or SettingsField.ClaudeExecutable or SettingsField.ClaudeModel or SettingsField.ClaudeAdvisorModel or SettingsField.ClaudeApiKey
+        bool allowEmpty = field is SettingsField.LlmUrl or SettingsField.LlmModel or SettingsField.TtsVoice2 or SettingsField.WorkingDirectory or SettingsField.WebBrowserPath or SettingsField.WebSearxngUrl or SettingsField.DraftEditor or SettingsField.ImageEditor or SettingsField.GitLibEmail or SettingsField.GitLibName or SettingsField.ObsidianVault or SettingsField.ComfyUrl or SettingsField.ComfyOutputFolder or SettingsField.ClaudeExecutable or SettingsField.ClaudeModel or SettingsField.ClaudeAdvisorModel or SettingsField.ClaudeApiKey
             or SettingsField.HomeAssistantUrl or SettingsField.HomeAssistantAssistAgent;
         var result = await EditTextAsync(field, page, row, EditableValue(field, saved), allowEmpty, cancellationToken).ConfigureAwait(false);
         if (result is not InputResult.Submitted submitted)
@@ -3695,24 +3695,24 @@ internal sealed partial class SettingsMenu
                 Apply(field, d => d.WebSearchMaxResults = hits);
                 return true;
 
-            case SettingsField.GitNativeDiffMaxLines:
-                if (!int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out int diffLines) || diffLines < AppSettingsData.MinGitNativeDiffMaxLines || diffLines > AppSettingsData.MaxGitNativeDiffMaxLines)
+            case SettingsField.GitLibDiffMaxLines:
+                if (!int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out int diffLines) || diffLines < AppSettingsData.MinGitLibDiffMaxLines || diffLines > AppSettingsData.MaxGitLibDiffMaxLines)
                 {
-                    Sink.Error($"{FieldName(field)} {GitNativeDiffMaxLinesRangeError}; keeping {EditableValue(field, saved)}.");
+                    Sink.Error($"{FieldName(field)} {GitLibDiffMaxLinesRangeError}; keeping {EditableValue(field, saved)}.");
                     return false;
                 }
 
-                Apply(field, d => d.GitNativeDiffMaxLines = diffLines);
+                Apply(field, d => d.GitLibDiffMaxLines = diffLines);
                 return true;
 
-            case SettingsField.GitNativeLogMaxCommits:
-                if (!int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out int logCommits) || logCommits < AppSettingsData.MinGitNativeLogMaxCommits || logCommits > AppSettingsData.MaxGitNativeLogMaxCommits)
+            case SettingsField.GitLibLogMaxCommits:
+                if (!int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out int logCommits) || logCommits < AppSettingsData.MinGitLibLogMaxCommits || logCommits > AppSettingsData.MaxGitLibLogMaxCommits)
                 {
-                    Sink.Error($"{FieldName(field)} {GitNativeLogMaxCommitsRangeError}; keeping {EditableValue(field, saved)}.");
+                    Sink.Error($"{FieldName(field)} {GitLibLogMaxCommitsRangeError}; keeping {EditableValue(field, saved)}.");
                     return false;
                 }
 
-                Apply(field, d => d.GitNativeLogMaxCommits = logCommits);
+                Apply(field, d => d.GitLibLogMaxCommits = logCommits);
                 return true;
 
             case SettingsField.SqlQueryMaxRows:
@@ -4072,13 +4072,13 @@ internal sealed partial class SettingsMenu
                 Apply(field, d => d.DraftEditor = text);
                 return true;
 
-            case SettingsField.GitNativeEmail:
+            case SettingsField.GitLibEmail:
                 // Whatever git accepts (2026-09-21): an address is not checked here, and empty is "not set".
-                Apply(field, d => d.GitNativeEmail = text);
+                Apply(field, d => d.GitLibEmail = text);
                 return true;
 
-            case SettingsField.GitNativeName:
-                Apply(field, d => d.GitNativeName = text);
+            case SettingsField.GitLibName:
+                Apply(field, d => d.GitLibName = text);
                 return true;
 
             case SettingsField.TtsSpeed:
@@ -4867,7 +4867,7 @@ internal sealed partial class SettingsMenu
             SettingsField.LlmSamplingFromHuggingFace => data.LlmSamplingFromHuggingFace,
             SettingsField.SessionSaveThinking => data.SessionSaveThinking,
             SettingsField.WebTools => data.WebTools,
-            SettingsField.GitNativeTools => data.GitNativeTools,
+            SettingsField.GitLibTools => data.GitLibTools,
             SettingsField.ObsidianTools => data.ObsidianTools,
             SettingsField.ObsidianAllowDelete => data.ObsidianAllowDelete,
             SettingsField.SqlTools => data.SqlTools,
@@ -4946,7 +4946,7 @@ internal sealed partial class SettingsMenu
             case SettingsField.LlmSamplingFromHuggingFace: data.LlmSamplingFromHuggingFace = on; break;
             case SettingsField.SessionSaveThinking: data.SessionSaveThinking = on; break;
             case SettingsField.WebTools: data.WebTools = on; break;
-            case SettingsField.GitNativeTools: data.GitNativeTools = on; break;
+            case SettingsField.GitLibTools: data.GitLibTools = on; break;
             case SettingsField.ObsidianTools: data.ObsidianTools = on; break;
             case SettingsField.ObsidianAllowDelete: data.ObsidianAllowDelete = on; break;
             case SettingsField.SqlTools: data.SqlTools = on; break;
@@ -5034,7 +5034,7 @@ internal sealed partial class SettingsMenu
         SettingsField.FileSafeEdits => on ? "edit and delete operations move copies to .trash first" : "edit and delete operations function normally",
         SettingsField.FileTreeShowSizes => on ? "/tree carries each file's size" : "/tree names alone",
         SettingsField.WebTools => on ? "web tools enabled" : "web tools disabled",
-        SettingsField.GitNativeTools => on ? "git native tools enabled" : "git native tools disabled",
+        SettingsField.GitLibTools => on ? "gitlib tools enabled" : "gitlib tools disabled",
         SettingsField.ObsidianTools => on ? "Obsidian tools enabled" : "Obsidian tools disabled",
         SettingsField.ObsidianAllowDelete => on ? "vault_delete may move a note or attachment to the vault's .trash" : "vault_delete is disabled",
         SettingsField.SqlTools => on ? "the model reads the SQL Server connections of sql.json" : "no SQL tools",
@@ -6352,7 +6352,7 @@ internal sealed partial class SettingsMenu
     /// <summary>The <c>Shell output max chars</c> row's value: <c>30,000 chars</c> (2026-09-21). Pinned.</summary>
     public static string Chars(int value) => value.ToString("N0", CultureInfo.InvariantCulture) + " chars";
 
-    /// <summary><c>20 commits</c> (the Git native log cap, 2026-09-20).</summary>
+    /// <summary><c>20 commits</c> (the GitLib log cap, 2026-09-20).</summary>
     public static string Commits(int value) => value.ToString(CultureInfo.InvariantCulture) + (value == 1 ? " commit" : " commits");
 
     /// <summary>The <c>Ask max questions</c> row's value: <c>10 questions</c>, <c>1 question</c>. Pinned.</summary>

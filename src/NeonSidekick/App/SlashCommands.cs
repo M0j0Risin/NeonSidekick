@@ -135,7 +135,7 @@ public enum SlashCommand
     /// <summary><c>/emptytrash</c>: delete everything in the working directory's <c>.trash</c> for good, after a confirmation.</summary>
     EmptyTrash,
 
-    /// <summary><c>/gituser [force]</c> (2026-09-21): the <c>Git native email</c> and <c>Git native name</c> settings written into the working directory's repository config as <c>user.email</c> / <c>user.name</c>; a <c>[user]</c> section already there is kept unless <c>force</c>, and <c>Git native tools</c> off refuses (later that day). <c>/git user [force]</c> until 2026-09-26 (the user's call: the one verb was noise); <c>/git</c> is an unknown command now.</summary>
+    /// <summary><c>/gituser [force]</c> (2026-09-21): the <c>GitLib email</c> and <c>GitLib name</c> settings (<c>Git native …</c> until 2026-09-30) written into the working directory's repository config as <c>user.email</c> / <c>user.name</c>; a <c>[user]</c> section already there is kept unless <c>force</c>, and <c>GitLib tools</c> off refuses (later that day). <c>/git user [force]</c> until 2026-09-26 (the user's call: the one verb was noise); <c>/git</c> is an unknown command now.</summary>
     GitUser,
 
     /// <summary><c>/window</c> (<c>/windowsize</c> until later on 2026-09-19): the terminal window's width and height, for information.</summary>
@@ -258,7 +258,7 @@ public static class SlashCommands
             new("/exit", "exit/quit the application"),
             new("/expand", "expand all items in the transcript"),
             new("/explore", "open the working directory in your file browser, or /explore <path>"),
-            new("/gituser", "write the Git native email and Git native name into the working directory's repository"),
+            new("/gituser", "write the GitLib email and GitLib name into the working directory's repository"),
             new("/ha", "Home Assistant: /ha for the overview, /ha on|off|toggle <room or light> [brightness%], /ha scene <name>, /ha tv on|off|mute|unmute|up|down|vol <n>|source <name>, /ha states [filter], /ha say <sentence> (Assist)"),
             new("/help", "show help"),
             new("/imagine", "generate a picture on ComfyUI from your own prompt, sent as typed: /imagine [workflow] <prompt> [-- <negative>] [--seed N] [--size WxH]"),

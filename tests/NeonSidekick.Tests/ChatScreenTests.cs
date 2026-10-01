@@ -137,7 +137,7 @@ public partial class ChatScreenTests : IDisposable
         // delete is off in a fresh profile (2026-09-20, the user's call: the trash tool is opt-in): the scripts here pin the full file rule and
         // every file tool offered, so the fixture opts it back on; the delete-off tests pin the fresh-profile picture themselves. The same
         // rule reads "into .trash" only while File safe edits is on (later on 2026-09-20; off by default since 2026-09-19), so that goes on too.
-        _settings.Update(d => { d.ToolsDisabled = []; d.FileSafeEdits = true; d.GitNativeTools = true; });   // Git native tools off by default since 2026-09-21: the fixture opts in, the git-off test flips it back
+        _settings.Update(d => { d.ToolsDisabled = []; d.FileSafeEdits = true; d.GitLibTools = true; });   // GitLib tools off by default since 2026-09-21: the fixture opts in, the git-off test flips it back
         // A blank URL walks server, model and reasoning pickers at startup since 2026-09-23 (the user's call), even for the one
         // server answering here: the scripts were written for a quiet connect, so the fixture names the server and the startup
         // tests put the URL back to blank themselves.
@@ -3698,7 +3698,7 @@ public partial class ChatScreenTests : IDisposable
 
         Assert.DoesNotMatch(GroupHeading("Questions"), output);   // not offered: left out of the tab (2026-09-26)
         Assert.Matches(ToolsHeading("Files (15)", null, "get_working_directory"), output);
-        Assert.Matches(ToolsHeading("Git (11)", null, "git_status"), output);   // between Files and Web (2026-09-20; the fixture opts every tool on; the tab's word since 2026-09-21)
+        Assert.Matches(ToolsHeading("GitLib (11)", null, "gitlib_status"), output);   // between Files and Web (2026-09-20; the fixture opts every tool on; the tab's word since 2026-09-21)
         Assert.Matches(ToolsHeading("Web (4)", null, "web_search"), output);
         Assert.Matches(ToolsHeading("Sessions (1)", null, "session_manager"), output);   // 2026-09-18, ahead of the questions
         Assert.Contains("Operating rules — default\n", output);
@@ -3840,7 +3840,7 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public async Task Turn_FreshProfile_DeleteAndGitDiscardOn_ZipAndGitDeleteOff_AndSysPromptCountsThirteen()
     {
-        // A fresh profile's ToolsDisabled: git_delete (2026-09-20), zip and unzip (2026-09-21) — git_discard no longer (2026-09-23, the user's call) and delete no longer
+        // A fresh profile's ToolsDisabled: gitlib_delete (2026-09-20), zip and unzip (2026-09-21) — gitlib_discard no longer (2026-09-23, the user's call) and delete no longer
         // (later on 2026-09-21, the user's call: on out of the box, so the file rule keeps its delete / restore clause); the fixture had opted every tool on.
         _settings.Update(d => { d.TtsOutput = false; d.ToolsDisabled = [.. new AppSettingsData().ToolsDisabled]; });
         Assert.Equal([GitDeleteTool.ToolName, UnzipTool.ToolName, ZipTool.ToolName], _settings.Current.ToolsDisabled);
@@ -3858,7 +3858,7 @@ public partial class ChatScreenTests : IDisposable
         var offered = _chat.Options[0]!.Tools!.Cast<AIFunction>().Select(t => t.Name).ToArray();
         Assert.Contains(DeleteTool.ToolName, offered);
         Assert.Contains(RestoreTool.ToolName, offered);
-        Assert.Equal(StandingAndFileTools.Length + 3 - 3, offered.Length);   // skill_editor, session_manager and (the pane on) ask_user ride; zip, unzip and git_delete gone
+        Assert.Equal(StandingAndFileTools.Length + 3 - 3, offered.Length);   // skill_editor, session_manager and (the pane on) ask_user ride; zip, unzip and gitlib_delete gone
         Assert.DoesNotContain(ZipTool.ToolName, offered);
         Assert.DoesNotContain(UnzipTool.ToolName, offered);
         Assert.Contains(GitDiscardTool.ToolName, offered);
@@ -3892,7 +3892,7 @@ public partial class ChatScreenTests : IDisposable
         var offered = _chat.Options[0]!.Tools!.Cast<AIFunction>().Select(t => t.Name).ToArray();
         Assert.DoesNotContain(DeleteTool.ToolName, offered);
         Assert.Contains(RestoreTool.ToolName, offered);
-        Assert.Equal(StandingAndFileTools.Length + 3 - 4, offered.Length);   // delete gone with the three (git_discard on since 2026-09-23)
+        Assert.Equal(StandingAndFileTools.Length + 3 - 4, offered.Length);   // delete gone with the three (gitlib_discard on since 2026-09-23)
         string prompt = _chat.Requests[0][0].Text!;
         Assert.Contains(Assistant.FileRuleWithoutDelete, prompt, StringComparison.Ordinal);
         Assert.DoesNotContain(Assistant.FileRule, prompt, StringComparison.Ordinal);
@@ -4246,7 +4246,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude    Home Assistant    Print    Obsidian    ComfyUI    SQL    Oracle    MySQL    Git    Options ", output);
+        Assert.Contains(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude    Home Assistant    Print    Obsidian    ComfyUI    SQL    Oracle    MySQL    GitLib    Options ", output);
         Assert.Contains("\n▸ ComfyUI tools                  on\n  ComfyUI URL                    (not set)\n  ComfyUI workflows offered      all (not narrowed)\n  ComfyUI add workflow           Enter to start workflow wizard\n  ComfyUI ^-mention enabled      on\n  ComfyUI timeout (s)            300\n  ComfyUI max pictures per call  5 pictures\n  ComfyUI reinforce negatives    on\n  ComfyUI show prompts           on\n  ComfyUI picture strip          on\n  ComfyUI output folder          comfy_images\n", output);   // 2026-09-24; the offered checklist and the wizard later that day, the ^-mention switch later still
         Assert.Contains("\n▸ Claude executable                   (looked up)\n  Claude slash command permissions    read-only\n  Claude slash command model          (Claude Code's default)\n  Claude slash command effort         (Claude Code's default)\n  Claude advisor tool                 off\n  Claude advisor tool context         brief\n  Claude advisor tool calls per turn  2 calls\n  Claude advisor tool model           (as Claude slash command model)\n  Claude advisor tool effort          (as Claude slash command effort)\n  Claude advisor tool confirm         off\n", output);   // 2026-09-27: /claude's rows off /settings, then the advisor's
         Assert.Contains("\n  Clock (3)\n▸ get_current_time      on   ", output);
@@ -4256,7 +4256,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("\n▸ $-mention enabled    on\n  Tool collapse count  off\n  Code collapse count  off\n", output);   // the fixture's 0s (2026-09-22)
         Assert.Contains("\n▸ Ask user                      on\n", output);
         Assert.Contains("\n▸ File tools                      on\n", output);
-        Assert.Contains("\n▸ Git native tools            on\n  Git native diff max lines   500 lines\n  Git native log max commits  20 commits\n  Git native email            (not set)\n  Git native name             (not set)\n", output);
+        Assert.Contains("\n▸ GitLib tools            on\n  GitLib diff max lines   500 lines\n  GitLib log max commits  20 commits\n  GitLib email            (not set)\n  GitLib name             (not set)\n", output);
         Assert.Contains("\n▸ Shell command policy         ask\n  Shell allowed commands       none\n  Shell police outside paths   on\n  Shell prefer native tools    on\n  Shell default                powershell\n  Shell timeout (s)            180\n  Shell foreground cap (s)     600\n  Shell output max chars       30,000 chars\n  Shell code languages         powershell, python, node\n  Shell code timeout (s)       300\n  Shell tool bridge            off\n  Shell tool bridge max calls  50 tool calls\n", output);
         Assert.Contains("\n▸ Web tools                 on\n", output);
         Assert.Contains("\n▸ SQL tools                  on\n  SQL connections offered    all (not narrowed)\n  SQL default connection     (the first connection)\n  SQL set password           Enter to set password for a connection\n  SQL add connection         Enter to start connection wizard\n  SQL %-mention enabled      on\n  SQL max rows               100 rows\n  SQL query timeout (s)      30\n  SQL connections (profile)  (none) · Enter edits sql.json\n", output);   // 2026-09-23
@@ -4651,7 +4651,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude    Home Assistant    Print    Obsidian    ComfyUI    SQL    Oracle    MySQL    Git    Options ", output);
+        Assert.Contains(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude    Home Assistant    Print    Obsidian    ComfyUI    SQL    Oracle    MySQL    GitLib    Options ", output);
         Assert.Contains("  · get_current_time: off", output);
         Assert.Equal(["get_current_time"], _settings.Current.ToolsDisabled);
         Assert.DoesNotContain(ChatScreen.MidTurnDeferredNotice("/tools"), output);
@@ -6236,10 +6236,10 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public void GitLabels_ArePinned()
     {
-        Assert.Equal("Git native email and Git native name are not set; set them on the Git tab of /tools.", ChatScreen.GitIdentityUnsetError(true, true));
-        Assert.Equal("Git native email is not set; set it on the Git tab of /tools.", ChatScreen.GitIdentityUnsetError(true, false));
-        Assert.Equal("Git native name is not set; set it on the Git tab of /tools.", ChatScreen.GitIdentityUnsetError(false, true));
-        Assert.Equal("Git native tools is off; /gituser does nothing until it is on (the Git tab of /tools).", ChatScreen.GitNativeToolsOffError);
+        Assert.Equal("GitLib email and GitLib name are not set; set them on the GitLib tab of /tools.", ChatScreen.GitIdentityUnsetError(true, true));
+        Assert.Equal("GitLib email is not set; set it on the GitLib tab of /tools.", ChatScreen.GitIdentityUnsetError(true, false));
+        Assert.Equal("GitLib name is not set; set it on the GitLib tab of /tools.", ChatScreen.GitIdentityUnsetError(false, true));
+        Assert.Equal("GitLib tools is off; /gituser does nothing until it is on (the GitLib tab of /tools).", ChatScreen.GitLibToolsOffError);
         Assert.Equal("(🛠️ git user set for this repository: Some User <user@email.com>)", ChatScreen.GitIdentityWrittenNotice("Some User", "user@email.com"));   // the tools' glyph since 2026-09-22
         Assert.Equal("Git repository already has a [user] section: Old <old@x>; /gituser force replaces it.", ChatScreen.GitIdentityPresentError("Old", "old@x"));   // an error since 2026-09-22
         Assert.Equal(@"'D:\x' is not inside a git repository; /cwd into one first.", ChatScreen.GitNoRepositoryError(@"D:\x"));
@@ -6254,7 +6254,7 @@ public partial class ChatScreenTests : IDisposable
     public async Task GitUser_WritesTheIdentity_KeepsOneAlreadyThere_UnlessForced()
     {
         // /gituser (2026-09-21; /git user until 2026-09-26): the two settings into the sandbox repository's .git/config; a second run finds the section and says so; force replaces it.
-        _settings.Update(d => { d.TtsOutput = false; d.GitNativeEmail = "user@email.com"; d.GitNativeName = "Some User"; });
+        _settings.Update(d => { d.TtsOutput = false; d.GitLibEmail = "user@email.com"; d.GitLibName = "Some User"; });
         string files = Path.Combine(_settings.ProfileDirectory, "files");
         Directory.CreateDirectory(files);
         Repository.Init(files);   // not GitAccessTests.Init: that one writes a local identity already
@@ -6278,7 +6278,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(1, config.Split("name = Some User").Length - 1);
 
         // Forced: the new pair over the old.
-        _settings.Update(d => { d.GitNativeEmail = "new@email.com"; d.GitNativeName = "New User"; });
+        _settings.Update(d => { d.GitLibEmail = "new@email.com"; d.GitLibName = "New User"; });
         PushLine("/gituser force");
         PushLine("/exit");
         output = await RunAsync();
@@ -6306,28 +6306,28 @@ public partial class ChatScreenTests : IDisposable
         Assert.False(Directory.Exists(Path.Combine(files, ".git")));
 
         // One set: named alone (the settings are read when the line runs, so one run per state).
-        _settings.Update(d => d.GitNativeEmail = "user@email.com");
+        _settings.Update(d => d.GitLibEmail = "user@email.com");
         PushLine("/gituser");
         PushLine("/exit");
         output = await RunAsync();
         Assert.Contains("  ✗ " + ChatScreen.GitIdentityUnsetError(false, true), output);
 
         // Both set, no repository: the root named, and never an init.
-        _settings.Update(d => d.GitNativeName = "Some User");
+        _settings.Update(d => d.GitLibName = "Some User");
         PushLine("/gituser");
         PushLine("/exit");
         output = await RunAsync();
         Assert.Contains("  ✗ " + ChatScreen.GitNoRepositoryError(files), output);
         Assert.False(Directory.Exists(Path.Combine(files, ".git")));
 
-        // Git native tools off (later on 2026-09-21): the error names the switch before anything else — the identity set and a repository there, nothing is written.
+        // GitLib tools off (later on 2026-09-21; Git native tools until 2026-09-30): the error names the switch before anything else — the identity set and a repository there, nothing is written.
         Repository.Init(files);
-        _settings.Update(d => d.GitNativeTools = false);
+        _settings.Update(d => d.GitLibTools = false);
         PushLine("/gituser");
         PushLine("/gituser force");
         PushLine("/exit");
         output = await RunAsync();
-        Assert.Equal(2, output.Split("  ✗ " + ChatScreen.GitNativeToolsOffError).Length - 1);
+        Assert.Equal(2, output.Split("  ✗ " + ChatScreen.GitLibToolsOffError).Length - 1);
         Assert.DoesNotContain(ChatScreen.GitIdentityWrittenNotice("Some User", "user@email.com"), output);
         using var repo = new Repository(files);
         Assert.Null(repo.Config.Get<string>("user.email", ConfigurationLevel.Local));
@@ -7202,7 +7202,7 @@ public partial class ChatScreenTests : IDisposable
         PushLine("/exit");
         var edited = AppSettings.Copy(_settings.Current);
         edited.LlmModel = "by-hand";
-        edited.GitNativeLogMaxCommits = 33;
+        edited.GitLibLogMaxCommits = 33;
         await _settings.FlushAsync();
         File.WriteAllText(_settings.FilePath, JsonSerializer.Serialize(edited, SettingsJsonContext.Default.AppSettingsData));
 
@@ -7211,11 +7211,11 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("  · " + ChatScreen.ProfileReloadedNotice(_settings.ProfileName, 2), output);
         Assert.DoesNotContain(SettingsMenu.SwitchedNotice(_settings.ProfileName), output);
         Assert.Equal("by-hand", _settings.Current.LlmModel);
-        Assert.Equal(33, _settings.Current.GitNativeLogMaxCommits);
+        Assert.Equal(33, _settings.Current.GitLibLogMaxCommits);
         Assert.Equal(2, _chat.Requests.Count);
         Assert.Equal("hi", _chat.Requests[1][1].Text);   // the conversation kept through the reload
         Assert.Equal("again", _chat.Requests[1][^1].Text);
-        Assert.Equal(SettingsChanges.Llm, ChatScreen.ReloadChanges(["LlmModel: before → by-hand", "GitNativeLogMaxCommits: 20 → 33"]));
+        Assert.Equal(SettingsChanges.Llm, ChatScreen.ReloadChanges(["LlmModel: before → by-hand", "GitLibLogMaxCommits: 20 → 33"]));
         Assert.Equal(SettingsChanges.Tts | SettingsChanges.Voice | SettingsChanges.Mcp | SettingsChanges.Conversation, ChatScreen.ReloadChanges(["TtsSpeed: 1 → 1.2", "SttInput: false → true", "McpServers: true → false", "LlmOfferTools: true → false", "NoSuchField: 1 → 2"]));
         Assert.Equal(SettingsChanges.None, ChatScreen.ReloadChanges([]));
     }
@@ -8388,7 +8388,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.False(_settings.Current.ShellPoliceOutsidePaths);
         string memory = "\n" + Titled(MemoryMenu.Title) + "\n";
         string settings = "\n" + Titled(SettingsMenu.Title + "   General    Embedded    LLM    TTS    STT    Sessions    Botchat ") + "\n";
-        string tools = "\n" + Titled(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude    Home Assistant    Print    Obsidian    ComfyUI    SQL    Oracle    MySQL    Git    Options ") + "\n";
+        string tools = "\n" + Titled(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude    Home Assistant    Print    Obsidian    ComfyUI    SQL    Oracle    MySQL    GitLib    Options ") + "\n";
         string allowed = "\n" + Titled(AllowedCommandsTitle) + "\n";
         Assert.Equal(1, output.Split(memory).Length - 1);
         Assert.Equal(1, output.Split(allowed).Length - 1);
@@ -9076,7 +9076,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Matches(ToolsHeading("Clock (3)", null, "get_current_time"), output);
         Assert.Matches(ToolsHeading("Timers (3)", null, "start_timer"), output);
         Assert.Matches(ToolsHeading("Files (15)", null, "get_working_directory"), output);
-        Assert.Matches(ToolsHeading("Git (11)", null, "git_status"), output);   // between Files and Web (2026-09-20; the fixture opts every tool on; the tab's word since 2026-09-21)
+        Assert.Matches(ToolsHeading("GitLib (11)", null, "gitlib_status"), output);   // between Files and Web (2026-09-20; the fixture opts every tool on; the tab's word since 2026-09-21)
         Assert.Matches(ToolsHeading("Web (4)", null, "web_search"), output);
         Assert.Matches(ToolsHeading("Memory (2)", null, "save_memory"), output);
         Assert.Matches(ToolsHeading("Sessions (1)", null, "session_manager"), output);   // 2026-09-18, between the skills and the questions
@@ -9411,7 +9411,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("\n" + ScreenPane.ToolbarRow(ChatScreen.ToolbarStripFor(true, CommandPolicyMode.Ask, true), cwd, 239), output);
         Assert.DoesNotContain("\n" + ScreenPane.ToolbarRow(ChatScreen.ToolbarStrip, cwd, 239), output);   // never the fixed glyphs alone: memory, the policy and the police are on
         int settings = output.IndexOf("\n" + Titled(SettingsMenu.Title + "   General    Embedded    LLM    TTS    STT    Sessions    Botchat ") + "\n", StringComparison.Ordinal);
-        int tools = output.IndexOf(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude    Home Assistant    Print    Obsidian    ComfyUI    SQL    Oracle    MySQL    Git    Options ", StringComparison.Ordinal);
+        int tools = output.IndexOf(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude    Home Assistant    Print    Obsidian    ComfyUI    SQL    Oracle    MySQL    GitLib    Options ", StringComparison.Ordinal);
         int mcp = output.IndexOf(McpText.Label + "   Servers    Tools    Options ", StringComparison.Ordinal);
         int skills = output.IndexOf(SkillsText.Label + "   Offered    Reflection    Project    Options ", StringComparison.Ordinal);
         int sys = output.IndexOf("\n" + Titled(SystemPromptSummary.Label + "   Prompt    Tools ") + "\n", StringComparison.Ordinal);
@@ -9510,7 +9510,7 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         string settings = "\n" + Titled(SettingsMenu.Title + "   General    Embedded    LLM    TTS    STT    Sessions    Botchat ") + "\n";
-        string tools = "\n" + Titled(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude    Home Assistant    Print    Obsidian    ComfyUI    SQL    Oracle    MySQL    Git    Options ") + "\n";
+        string tools = "\n" + Titled(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude    Home Assistant    Print    Obsidian    ComfyUI    SQL    Oracle    MySQL    GitLib    Options ") + "\n";
         string help = "\n" + Titled(InfoPane.Title + "   Commands (basic)    Commands (advanced)    Keys ") + "\n";
         string sys = "\n" + Titled(SystemPromptSummary.Label + "   Prompt    Tools ") + "\n";
         string sessions = "\n" + Titled(SessionsMenu.Title) + "\n";
@@ -11402,7 +11402,7 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         output = string.Join("\n", output.Split('\n').Select(l => l.TrimEnd()));
-        string tools = "\n" + Titled(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude    Home Assistant    Print    Obsidian    ComfyUI    SQL    Oracle    MySQL    Git    Options ") + "\n";
+        string tools = "\n" + Titled(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude    Home Assistant    Print    Obsidian    ComfyUI    SQL    Oracle    MySQL    GitLib    Options ") + "\n";
         string sys = "\n" + Titled(SystemPromptSummary.Label + "   Prompt    Tools ") + "\n";
         string sessions = "\n" + Titled(SessionsMenu.Title) + "\n";
         string settings = "\n" + Titled(SettingsMenu.Title + "   General    Embedded    LLM    TTS    STT    Sessions    Botchat ") + "\n";
@@ -18668,11 +18668,11 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains(Assistant.GitRule, _chat.Requests[0][0].Text!, StringComparison.Ordinal);
     }
 
-    /// <summary>The Git native tools switch off (the default since 2026-09-21): no git tool offered, the rule gone, the group noted on /sys (2026-09-20).</summary>
+    /// <summary>The GitLib tools switch off (the default since 2026-09-21; Git native tools until 2026-09-30): no git tool offered, the rule gone, the group noted on /sys (2026-09-20).</summary>
     [Fact]
     public async Task Turn_GitToolsOff_OffersNoGitTool_AndTheRulesLoseTheGitSentence()
     {
-        _settings.Update(d => { d.TtsOutput = false; d.GitNativeTools = false; });
+        _settings.Update(d => { d.TtsOutput = false; d.GitLibTools = false; });
         _chat.EnqueueText("Hello.");
         _console.Profile.Height = 110;
         _geometry = new ScreenGeometry(() => null);
@@ -18685,12 +18685,12 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         var offered = _chat.Options[0]!.Tools!.Cast<AIFunction>().Select(t => t.Name).ToArray();
-        Assert.DoesNotContain(offered, n => n.StartsWith("git_", StringComparison.Ordinal));
+        Assert.DoesNotContain(offered, n => n.StartsWith("gitlib_", StringComparison.Ordinal));
         Assert.Contains(ReadFileTool.ToolName, offered);
         Assert.Equal(SkilledPrompt(false, [], web: true, ask: AskLimits.Default, markdown: true, git: false), _chat.Requests[0][0].Text);   // the pane on: the Markdown and ask rules ride
         Assert.DoesNotContain(Assistant.GitRule, _chat.Requests[0][0].Text!, StringComparison.Ordinal);
-        Assert.DoesNotContain("Git native tools — ", output);   // no Git heading on the Prompt tab since 2026-09-26
-        Assert.DoesNotMatch(GroupHeading("Git"), output);   // not offered: left out of the tab (2026-09-26)
+        Assert.DoesNotContain("GitLib tools — ", output);   // no Git heading on the Prompt tab since 2026-09-26
+        Assert.DoesNotMatch(GroupHeading("GitLib"), output);   // not offered: left out of the tab (2026-09-26)
     }
 
     [Fact]

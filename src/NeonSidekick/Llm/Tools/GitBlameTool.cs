@@ -5,10 +5,10 @@ using NeonSidekick.Settings;
 
 namespace NeonSidekick.Llm.Tools;
 
-/// <summary><c>git_blame(path, from_line?, to_line?, ref?)</c>: who last changed each line of a file, over a window of at most <see cref="GitAccess.MaxBlameLines"/> lines.</summary>
+/// <summary><c>gitlib_blame(path, from_line?, to_line?, ref?)</c>: who last changed each line of a file, over a window of at most <see cref="GitAccess.MaxBlameLines"/> lines.</summary>
 public sealed class GitBlameTool : GitTool
 {
-    public const string ToolName = "git_blame";
+    public const string ToolName = "gitlib_blame";
     public const string FromLineArgument = "from_line";
     public const string ToLineArgument = "to_line";
 

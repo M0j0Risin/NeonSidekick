@@ -231,6 +231,14 @@ internal sealed class LlmSession : IDisposable
             return null;
         }
 
+        // Another model about to load (2026-09-30, the user's ask): the old one's name leaves the hint row now, not when the new
+        // one is up. The trailer reads Endpoint live, and the connect's spinner redraws it each frame. The same model, a
+        // /reasoning pick's quiet reconnect, keeps it, since that start returns at once.
+        if (_embedded.Running?.ModelId is not { } running || !string.Equals(running, model.Id, StringComparison.OrdinalIgnoreCase))
+        {
+            Endpoint = null;
+        }
+
         try
         {
             var info = await _embedded.StartAsync(model, effective, phase, cancellationToken).ConfigureAwait(false);

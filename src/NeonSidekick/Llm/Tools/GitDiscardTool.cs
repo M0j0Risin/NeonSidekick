@@ -6,14 +6,14 @@ using NeonSidekick.Settings;
 namespace NeonSidekick.Llm.Tools;
 
 /// <summary>
-/// <c>git_discard(paths?, ref?, path?)</c>: throws local changes away — the paths named put back as they
+/// <c>gitlib_discard(paths?, ref?, path?)</c>: throws local changes away — the paths named put back as they
 /// are at <c>ref</c> (HEAD by default), or with no paths the whole tree reset hard to it. The one git tool
 /// that loses uncommitted work, so it is off by name in a fresh profile's <c>ToolsDisabled</c> (the
 /// <c>delete</c> precedent, 2026-09-20) and flipped on <c>/tools</c>' Offered tab.
 /// </summary>
 public sealed class GitDiscardTool : GitTool
 {
-    public const string ToolName = "git_discard";
+    public const string ToolName = "gitlib_discard";
     public const string PathsArgument = "paths";
 
     private static readonly JsonElement Schema = ToolSchema.Parse(

@@ -10,7 +10,7 @@ namespace NeonSidekick.Settings;
 ///
 /// <para><b>The key is the label (2026-09-17, the user's call):</b> the tab's prefix as the row shows
 /// it (<c>Llm</c>, <c>Tts</c>, <c>Stt</c>, <c>Ask</c>, <c>File</c>/<c>Tree</c>, <c>Web</c>,
-/// <c>Skill</c>/<c>Reflection</c>, <c>Session</c>, <c>GitNative</c> for the Git tab; none on General) and the label's words, no <c>Enabled</c> suffix on a
+/// <c>Skill</c>/<c>Reflection</c>, <c>Session</c>, <c>GitLib</c> for the GitLib tab (<c>GitNative</c> 2026-09-21 to 2026-09-30); none on General) and the label's words, no <c>Enabled</c> suffix on a
 /// switch; a relabelled row is renamed with it. <see cref="SchemaVersion"/> first, then the five
 /// <c>/settings</c> tabs' blocks in the tabs' order, then the <c>/skills</c> pane's Options tab (Skills),
 /// then the <c>/tools</c> pane's (Tools, Ask, Files, Git, Shell, Web — the strip's order until 2026-09-21, when it became
@@ -981,12 +981,12 @@ public sealed class AppSettingsData
     /// the tool from the next turn whatever its group's switch says (an emptied group loses its rule
     /// too); a name no tool carries is inert and kept. Read at each turn, no reconnect, no
     /// conversation clear. Not a settings row — the one list in the file. No variable.
-    /// <c>git_delete</c> / <c>git_discard</c> (later on 2026-09-20, the user's call: the two git tools that lose
+    /// <c>gitlib_delete</c> / <c>gitlib_discard</c> (later on 2026-09-20, the user's call: the two git tools that lose
     /// work), and <c>unzip</c> / <c>zip</c> since 2026-09-21 (the same call again: a bulk extract and a bulk
     /// pack are opt-in too); a saved list stands — a profile that holds <c>[]</c> or <c>["delete"]</c> keeps the
     /// rest on, so a profile from before keeps zip and unzip. <c>delete</c> was here from the start (2026-09-20,
     /// the user's call: the trash tool opt-in, flipped on <c>/tools</c>' Offered tab) until later on 2026-09-21,
-    /// when the user asked for it on out of the box; a profile saved with it off keeps it off. <c>git_discard</c> left
+    /// when the user asked for it on out of the box; a profile saved with it off keeps it off. <c>gitlib_discard</c> left
     /// the list on 2026-09-23 (the user's call: on out of the box, as <c>delete</c> went before it); a profile saved
     /// with it off keeps it off until it is flipped on the Offered tab.
     /// </summary>
@@ -1129,54 +1129,57 @@ public sealed class AppSettingsData
     public const int MaxViewImageMaxPerCall = 100;
     public const int DefaultViewImageMaxPerCall = 10;
 
-    // ─── Git (native) ───────────────────────────────────────────────────────────
+    // ─── GitLib ─────────────────────────────────────────────────────────────────
     // Renamed Git native … on 2026-09-21 (the user's call): the in-process LibGit2Sharp tools as
     // against git through the shell. The five keys followed their labels (no migration: the old
     // GitTools/GitDiffMaxLines/GitLogMaxCommits/GitEmail/GitName keys are skipped on load).
+    // Renamed GitLib … on 2026-09-30 (the user's ask), the tools with them (git_status → gitlib_status …): the keys
+    // followed again, with no migration (the user's pick) — the old GitNative* keys are skipped on load, so the five
+    // settings start at their defaults, and a saved git_* name in ToolsDisabled no longer matches a tool.
 
     /// <summary>
-    /// The most patch lines one <c>git_diff</c> shows (2026-09-20; <c>Git native diff max lines</c> since 2026-09-21): <see cref="MinGitNativeDiffMaxLines"/> to
-    /// <see cref="MaxGitNativeDiffMaxLines"/>; the argument <c>max_lines</c> overrides it up to the same cap, a cut
+    /// The most patch lines one <c>gitlib_diff</c> shows (2026-09-20; <c>Git native diff max lines</c> from 2026-09-21, <c>GitLib diff max lines</c> since 2026-09-30): <see cref="MinGitLibDiffMaxLines"/> to
+    /// <see cref="MaxGitLibDiffMaxLines"/>; the argument <c>max_lines</c> overrides it up to the same cap, a cut
     /// patch says so and names <c>path</c> to narrow it, and the tool clamps a hand-edited value. Read at
     /// each call, no reconnect. No variable.
     /// </summary>
-    public int GitNativeDiffMaxLines { get; set; } = DefaultGitNativeDiffMaxLines;
+    public int GitLibDiffMaxLines { get; set; } = DefaultGitLibDiffMaxLines;
 
-    public const int MinGitNativeDiffMaxLines = 20;
-    public const int MaxGitNativeDiffMaxLines = 5000;
-    public const int DefaultGitNativeDiffMaxLines = 500;
+    public const int MinGitLibDiffMaxLines = 20;
+    public const int MaxGitLibDiffMaxLines = 5000;
+    public const int DefaultGitLibDiffMaxLines = 500;
 
     /// <summary>
-    /// How many commits a <c>git_log</c> without <c>max_commits</c> lists (2026-09-20; <c>Git native log max commits</c> since 2026-09-21):
-    /// <see cref="MinGitNativeLogMaxCommits"/> to <see cref="MaxGitNativeLogMaxCommits"/>; the argument overrides it up to
+    /// How many commits a <c>gitlib_log</c> without <c>max_commits</c> lists (2026-09-20; <c>Git native log max commits</c> from 2026-09-21, <c>GitLib log max commits</c> since 2026-09-30):
+    /// <see cref="MinGitLibLogMaxCommits"/> to <see cref="MaxGitLibLogMaxCommits"/>; the argument overrides it up to
     /// the same cap, and a hand-edited value is clamped. No variable.
     /// </summary>
-    public int GitNativeLogMaxCommits { get; set; } = DefaultGitNativeLogMaxCommits;
+    public int GitLibLogMaxCommits { get; set; } = DefaultGitLibLogMaxCommits;
 
-    public const int MinGitNativeLogMaxCommits = 1;
-    public const int MaxGitNativeLogMaxCommits = 200;
-    public const int DefaultGitNativeLogMaxCommits = 20;
+    public const int MinGitLibLogMaxCommits = 1;
+    public const int MaxGitLibLogMaxCommits = 200;
+    public const int DefaultGitLibLogMaxCommits = 20;
 
     /// <summary>
     /// Whether a turn offers the model the eleven git tools over the repository at or under the working
-    /// directory (2026-09-20; <c>Git native tools</c> since 2026-09-21); read at each turn like <see cref="WebTools"/>, no reconnect.
+    /// directory (2026-09-20; <c>Git native tools</c> from 2026-09-21, <c>GitLib tools</c> since 2026-09-30); read at each turn like <see cref="WebTools"/>, no reconnect.
     /// Off — the default since 2026-09-21 (the user's call, like <see cref="McpServers"/>): the model reaches git
     /// through the shell unless the profile opts in — the default rules lose their git sentence and
-    /// <c>/gituser</c> refuses. <c>git_delete</c> is off by name in a fresh profile's <see cref="ToolsDisabled"/>
-    /// besides (<c>git_discard</c> was too until 2026-09-23). No variable.
+    /// <c>/gituser</c> refuses. <c>gitlib_delete</c> is off by name in a fresh profile's <see cref="ToolsDisabled"/>
+    /// besides (<c>gitlib_discard</c> was too until 2026-09-23). No variable.
     /// </summary>
-    public bool GitNativeTools { get; set; }
+    public bool GitLibTools { get; set; }
 
     /// <summary>
     /// The <c>user.email</c> that <c>/gituser</c> writes into the working directory's repository config
-    /// (2026-09-21), with <see cref="GitNativeName"/>; empty = not set, and the command refuses — as it does
-    /// while <see cref="GitNativeTools"/> is off (later that day). Never read by the git tools — a commit signs
-    /// with whatever git's own config holds. The Git tab of <c>/tools</c>, fourth row. No variable.
+    /// (2026-09-21), with <see cref="GitLibName"/>; empty = not set, and the command refuses — as it does
+    /// while <see cref="GitLibTools"/> is off (later that day). Never read by the git tools — a commit signs
+    /// with whatever git's own config holds. The GitLib tab of <c>/tools</c>, fourth row. No variable.
     /// </summary>
-    public string GitNativeEmail { get; set; } = "";
+    public string GitLibEmail { get; set; } = "";
 
-    /// <summary>The <c>user.name</c> <c>/gituser</c> writes beside <see cref="GitNativeEmail"/> (2026-09-21); empty = not set. The Git tab's last row. No variable.</summary>
-    public string GitNativeName { get; set; } = "";
+    /// <summary>The <c>user.name</c> <c>/gituser</c> writes beside <see cref="GitLibEmail"/> (2026-09-21); empty = not set. The GitLib tab's last row. No variable.</summary>
+    public string GitLibName { get; set; } = "";
 
     // ─── Obsidian ───────────────────────────────────────────────────────────────
     // The vault tools (2026-09-22, the user's ask: "Obsidian integration — accessing and managing files in
@@ -1184,7 +1187,7 @@ public sealed class AppSettingsData
 
     /// <summary>
     /// Whether a turn offers the eight vault tools (<c>vault_read</c>, <c>vault_search</c>, …) over
-    /// <see cref="ObsidianVault"/> (2026-09-22); read at each turn like <see cref="GitNativeTools"/>, no reconnect.
+    /// <see cref="ObsidianVault"/> (2026-09-22); read at each turn like <see cref="GitLibTools"/>, no reconnect.
     /// On by default until 2026-09-29 (it offered nothing until a vault was set); off since, the user's call with
     /// <see cref="FileTools"/>. No variable.
     /// </summary>

@@ -32,8 +32,8 @@ public static class ToolsText
     public const string OptionsTabTitle = "Options";
     public const string AskTabTitle = "Ask";
     public const string FilesTabTitle = "Files";
-    /// <summary><c>Git</c> until 2026-09-21, when the user asked for <c>Git (native)</c> (the in-process LibGit2Sharp tools as against git through the shell), and <c>Git</c> again since 2026-09-29, the user's call: the tab and the Offered heading, the rows keep their <c>Git native …</c> labels.</summary>
-    public const string GitTabTitle = "Git";
+    /// <summary><c>Git</c> until 2026-09-21, when the user asked for <c>Git (native)</c> (the in-process LibGit2Sharp tools as against git through the shell), and <c>Git</c> again since 2026-09-29, the user's call: the tab and the Offered heading, the rows keep their <c>Git native …</c> labels. <c>GitLib</c> since 2026-09-30 (the user's ask), the tab, the heading, the rows and the tools' names (<c>gitlib_status</c> …) alike.</summary>
+    public const string GitTabTitle = "GitLib";
     public const string ShellTabTitle = "Shell";
     public const string WebTabTitle = "Web";
 

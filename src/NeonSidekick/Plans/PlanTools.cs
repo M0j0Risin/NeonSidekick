@@ -21,7 +21,7 @@ public static class PlanTools
         // files
         "get_working_directory", "search_files", "file_info", "read_file", "view_image",
         // git
-        "git_status", "git_log", "git_show", "git_diff", "git_blame",
+        "gitlib_status", "gitlib_log", "gitlib_show", "gitlib_diff", "gitlib_blame",
         // web
         "web_search", "web_fetch",
         // SQL: read-only by three layers already
@@ -47,7 +47,7 @@ public static class PlanTools
     {
         "start_timer", "stop_timer",
         "write_file", "patch_file", "create_directory", "move", "copy", "delete", "restore", "zip", "unzip", "open",
-        "git_stage", "git_commit", "git_stash", "git_discard", "git_delete", "git_branch",
+        "gitlib_stage", "gitlib_commit", "gitlib_stash", "gitlib_discard", "gitlib_delete", "gitlib_branch",
         "run_command", "process", "execute_code",
         "download_file", "open_url",
         "vault_write", "vault_properties", "vault_move", "vault_delete", "vault_daily",

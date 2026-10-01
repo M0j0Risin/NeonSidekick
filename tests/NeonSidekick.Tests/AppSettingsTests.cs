@@ -80,8 +80,8 @@ public class AppSettingsTests : IDisposable
         LlmMaxTurns = 40,
         LlmCompactKeepRecent = 4,
         LlmCompactShowSummary = true,
-        GitNativeEmail = "me@example.invalid",
-        GitNativeName = "Some User",
+        GitLibEmail = "me@example.invalid",
+        GitLibName = "Some User",
         ShellToolBridge = true,
         ShellPoliceOutsidePaths = false,
         ShellPreferNative = false,
@@ -201,8 +201,8 @@ public class AppSettingsTests : IDisposable
         Assert.Equal(expected.LlmMaxTurns, actual.LlmMaxTurns);
         Assert.Equal(expected.LlmCompactKeepRecent, actual.LlmCompactKeepRecent);
         Assert.Equal(expected.LlmCompactShowSummary, actual.LlmCompactShowSummary);
-        Assert.Equal(expected.GitNativeEmail, actual.GitNativeEmail);
-        Assert.Equal(expected.GitNativeName, actual.GitNativeName);
+        Assert.Equal(expected.GitLibEmail, actual.GitLibEmail);
+        Assert.Equal(expected.GitLibName, actual.GitLibName);
         Assert.Equal(expected.ShellToolBridge, actual.ShellToolBridge);
         Assert.Equal(expected.ShellPoliceOutsidePaths, actual.ShellPoliceOutsidePaths);
         Assert.Equal(expected.ShellPreferNative, actual.ShellPreferNative);
@@ -348,8 +348,8 @@ public class AppSettingsTests : IDisposable
             d.LlmMaxTurns = full.LlmMaxTurns;
             d.LlmCompactKeepRecent = full.LlmCompactKeepRecent;
             d.LlmCompactShowSummary = full.LlmCompactShowSummary;
-            d.GitNativeEmail = full.GitNativeEmail;
-            d.GitNativeName = full.GitNativeName;
+            d.GitLibEmail = full.GitLibEmail;
+            d.GitLibName = full.GitLibName;
             d.ShellToolBridge = full.ShellToolBridge;
             d.ShellPoliceOutsidePaths = full.ShellPoliceOutsidePaths;
             d.ShellPreferNative = full.ShellPreferNative;
@@ -479,8 +479,8 @@ public class AppSettingsTests : IDisposable
                 d.LlmMaxTurns = full.LlmMaxTurns;
                 d.LlmCompactKeepRecent = full.LlmCompactKeepRecent;
                 d.LlmCompactShowSummary = full.LlmCompactShowSummary;
-                d.GitNativeEmail = full.GitNativeEmail;
-                d.GitNativeName = full.GitNativeName;
+                d.GitLibEmail = full.GitLibEmail;
+                d.GitLibName = full.GitLibName;
                 d.ShellToolBridge = full.ShellToolBridge;
                 d.ShellPoliceOutsidePaths = full.ShellPoliceOutsidePaths;
                 d.ShellPreferNative = full.ShellPreferNative;
@@ -611,7 +611,7 @@ public class AppSettingsTests : IDisposable
         a.LlmModel = "mutated-locally";
         a.ToolsDisabled.Add("read_file");
         Assert.Equal("", settings.Current.LlmModel);
-        Assert.Equal(["git_delete", "unzip", "zip"], settings.Current.ToolsDisabled);   // the default: git_delete since 2026-09-20, zip and unzip since 2026-09-21 (delete was here until later that day, git_discard until 2026-09-23); the local Add never reached the store
+        Assert.Equal(["gitlib_delete", "unzip", "zip"], settings.Current.ToolsDisabled);   // the default: gitlib_delete since 2026-09-20, zip and unzip since 2026-09-21 (delete was here until later that day, gitlib_discard until 2026-09-23); the local Add never reached the store
     }
 
     [Fact]
@@ -678,9 +678,10 @@ public class AppSettingsTests : IDisposable
         // Later still on 2026-09-19 FileStaleLineNumberGuard went with edit_lines (the eight file tools folded into four): retired, skipped the same way.
         // On 2026-09-24 the on/off WelcomeSplash became the WelcomeSplashMode pick: no migration (the user's call), so an old off is fullsize again.
         // On 2026-09-28 ComfyPictureStripSync went (the user's call: the strip and the viewer always follow each other): retired, skipped the same way.
+        // On 2026-09-30 the five GitNative* keys became GitLib* (the rows' new labels): old spellings, skipped the same way.
         Directory.CreateDirectory(Profiles.Directory(_dir, Profiles.DefaultName));
         File.WriteAllText(Profiles.ProfileFile(_dir, Profiles.DefaultName),
-            "{ \"SchemaVersion\": 1, \"LlmUrl\": \"http://old:1234/v1\", \"ShowProfileName\": false, \"ThinkingFunVerbs\": true, \"LlmUseFunVerbs\": true, \"SpeechOutputEnabled\": true, \"CopyUserText\": false, \"WebBrowserAllowLan\": true, \"SkillSlashCommands\": false, \"LlmTools\": false, \"FileLineNumbers\": true, \"FileStaleLineNumberGuard\": true, \"TreeMaxLength\": 750, \"SearxngUrl\": \"http://old:8080\", \"ReflectionVerbose\": false, \"WelcomeSplash\": false, \"ComfyPictureStripSync\": \"disabled\" }");
+            "{ \"SchemaVersion\": 1, \"LlmUrl\": \"http://old:1234/v1\", \"ShowProfileName\": false, \"ThinkingFunVerbs\": true, \"LlmUseFunVerbs\": true, \"SpeechOutputEnabled\": true, \"CopyUserText\": false, \"WebBrowserAllowLan\": true, \"SkillSlashCommands\": false, \"LlmTools\": false, \"FileLineNumbers\": true, \"FileStaleLineNumberGuard\": true, \"TreeMaxLength\": 750, \"SearxngUrl\": \"http://old:8080\", \"ReflectionVerbose\": false, \"WelcomeSplash\": false, \"ComfyPictureStripSync\": \"disabled\", \"GitNativeTools\": true, \"GitNativeEmail\": \"me@example.com\", \"GitNativeLogMaxCommits\": 50 }");
 
         using var settings = new AppSettings(_dir);
         Assert.Equal("http://old:1234/v1", settings.Current.LlmUrl);
@@ -692,9 +693,13 @@ public class AppSettingsTests : IDisposable
         Assert.True(settings.Current.ComfyPictureStrip);   // its neighbour untouched by the retired ComfyPictureStripSync key (2026-09-28)
         Assert.True(settings.Current.SkillHashMention);   // its neighbour untouched by the retired SkillSlashCommands key
         Assert.True(settings.Current.LlmOfferTools);   // the renamed key, skipped; the default stands
-        Assert.Equal(["git_delete", "unzip", "zip"], settings.Current.ToolsDisabled);   // no ToolsDisabled key in the old file: the default fills it (a saved [] or ["delete"] would stand)
+        Assert.Equal(["gitlib_delete", "unzip", "zip"], settings.Current.ToolsDisabled);   // no ToolsDisabled key in the old file: the default fills it (a saved [] or ["delete"] would stand)
         Assert.Equal(WorkingDirectory.DefaultTreeLength, settings.Current.FileTreeMaxLength);   // the old TreeMaxLength key, skipped
         Assert.Equal("", settings.Current.WebSearxngUrl);   // the old SearxngUrl key, skipped
+        // On 2026-09-30 the Git native rows became GitLib and their keys followed (the user's pick: no migration).
+        Assert.False(settings.Current.GitLibTools);   // the old GitNativeTools key, skipped
+        Assert.Equal("", settings.Current.GitLibEmail);
+        Assert.Equal(AppSettingsData.DefaultGitLibLogMaxCommits, settings.Current.GitLibLogMaxCommits);
         Assert.Equal(1, settings.Current.SchemaVersion);   // read as written; the compiled default is 2
         Assert.Equal(2, new AppSettingsData().SchemaVersion);
     }
@@ -1383,13 +1388,13 @@ public class AppSettingsTests : IDisposable
         Assert.False(s.FileSafeEdits);
         Assert.True(s.SkillHashMention);
         Assert.True(s.ToolsDollarMention);   // 2026-09-19
-        Assert.Equal([NeonSidekick.Llm.Tools.GitDeleteTool.ToolName, NeonSidekick.Llm.Tools.UnzipTool.ToolName, NeonSidekick.Llm.Tools.ZipTool.ToolName], s.ToolsDisabled);   // git_delete since 2026-09-20 (the user's call; git_discard with it until 2026-09-23, the user's call again), zip and unzip since 2026-09-21; delete was opt-in from 2026-09-20 until later on 2026-09-21 (the user's call both times); a saved list stands
+        Assert.Equal([NeonSidekick.Llm.Tools.GitDeleteTool.ToolName, NeonSidekick.Llm.Tools.UnzipTool.ToolName, NeonSidekick.Llm.Tools.ZipTool.ToolName], s.ToolsDisabled);   // gitlib_delete since 2026-09-20 (the user's call; gitlib_discard with it until 2026-09-23, the user's call again), zip and unzip since 2026-09-21; delete was opt-in from 2026-09-20 until later on 2026-09-21 (the user's call both times); a saved list stands
         // The git tools (2026-09-20): on, 500 patch lines (20–5000), 20 commits (1–200).
-        Assert.False(s.GitNativeTools);   // off by default since later on 2026-09-21 (on from 2026-09-20): the model reaches git through the shell unless the profile opts in
-        Assert.Equal(500, s.GitNativeDiffMaxLines);
-        Assert.Equal(20, s.GitNativeLogMaxCommits);
-        Assert.Equal("", s.GitNativeEmail);   // the /gituser pair (2026-09-21): not set until typed
-        Assert.Equal("", s.GitNativeName);
+        Assert.False(s.GitLibTools);   // off by default since later on 2026-09-21 (on from 2026-09-20): the model reaches git through the shell unless the profile opts in
+        Assert.Equal(500, s.GitLibDiffMaxLines);
+        Assert.Equal(20, s.GitLibLogMaxCommits);
+        Assert.Equal("", s.GitLibEmail);   // the /gituser pair (2026-09-21): not set until typed
+        Assert.Equal("", s.GitLibName);
         // The shell tools (2026-09-21): ask before anything runs, nothing allowed for good, PowerShell, 180 s (1–3600) under a 600 s cap (10–3600), 30,000 chars of output (2000–500000).
         Assert.Equal("off", s.ShellCommandPolicy);   // "ask" until 2026-09-29 (the user's call)
         Assert.Equal("off", NeonSidekick.Shell.CommandPolicy.Default);

@@ -5,10 +5,10 @@ using NeonSidekick.Settings;
 
 namespace NeonSidekick.Llm.Tools;
 
-/// <summary><c>git_stash(action, message?, index?, include_untracked?, path?)</c>: saves the working tree's changes aside (<c>push</c>), brings them back (<c>pop</c>, <c>apply</c>), lists them; dropping one is <c>git_delete</c>'s.</summary>
+/// <summary><c>gitlib_stash(action, message?, index?, include_untracked?, path?)</c>: saves the working tree's changes aside (<c>push</c>), brings them back (<c>pop</c>, <c>apply</c>), lists them; dropping one is <c>gitlib_delete</c>'s.</summary>
 public sealed class GitStashTool : GitTool
 {
-    public const string ToolName = "git_stash";
+    public const string ToolName = "gitlib_stash";
     public const string ActionArgument = "action";
     public const string MessageArgument = "message";
     public const string IndexArgument = "index";
@@ -42,7 +42,7 @@ public sealed class GitStashTool : GitTool
 
     public override string Description =>
         "Puts the working tree's changes aside and brings them back: push saves them as a stash and cleans the tree, pop or apply restores stash@{index}, list shows them. " +
-        "Dropping a stash is git_delete's job.";
+        "Dropping a stash is gitlib_delete's job.";
 
     public override JsonElement JsonSchema => Schema;
 

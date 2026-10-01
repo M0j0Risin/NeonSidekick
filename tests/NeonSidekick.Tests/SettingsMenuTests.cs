@@ -797,10 +797,10 @@ public partial class SettingsMenuTests : IDisposable
                 SettingsField.SessionLogging, SettingsField.SessionRetentionDays, SettingsField.SessionNamingMode, SettingsField.SessionShowName, SettingsField.SessionTool, SettingsField.SessionSearchMaxResults,
                 SettingsField.ToolsDollarMention, SettingsField.ReflectionCooldownMinutes, SettingsField.ReflectionIncludesSessions, SettingsField.ReflectionCooldownMode,
                 SettingsField.DraftEditor, SettingsField.FileViewImageMaxPerCall,
-                SettingsField.McpServers, SettingsField.McpConnectTimeoutSeconds, SettingsField.GitNativeTools, SettingsField.GitNativeDiffMaxLines, SettingsField.GitNativeLogMaxCommits,
+                SettingsField.McpServers, SettingsField.McpConnectTimeoutSeconds, SettingsField.GitLibTools, SettingsField.GitLibDiffMaxLines, SettingsField.GitLibLogMaxCommits,
                 SettingsField.ShellCommandPolicy, SettingsField.ShellCommandAllowed, SettingsField.ShellDefault, SettingsField.ShellTimeoutSeconds, SettingsField.ShellForegroundCapSeconds, SettingsField.ShellOutputMaxChars,
                 SettingsField.ShellCodeLanguages, SettingsField.ShellCodeTimeoutSeconds, SettingsField.ShellCodeMaxToolCalls,
-                SettingsField.LlmCompactShowSummary, SettingsField.GitNativeEmail, SettingsField.GitNativeName, SettingsField.ShellToolBridge, SettingsField.FileBrowserMode, SettingsField.ToolbarItems, SettingsField.ShellPoliceOutsidePaths,
+                SettingsField.LlmCompactShowSummary, SettingsField.GitLibEmail, SettingsField.GitLibName, SettingsField.ShellToolBridge, SettingsField.FileBrowserMode, SettingsField.ToolbarItems, SettingsField.ShellPoliceOutsidePaths,
                 SettingsField.ToolCollapseCount, SettingsField.CodeCollapseCount,
                 SettingsField.ObsidianTools, SettingsField.ObsidianVault, SettingsField.ObsidianAllowDelete,
                 SettingsField.SqlTools, SettingsField.SqlDefaultConnection, SettingsField.SqlQueryMaxRows, SettingsField.SqlQueryTimeoutSeconds, SettingsField.SqlConnectionsProfile, SettingsField.SqlConnectionsGlobal, SettingsField.SqlSetPassword, SettingsField.SqlPercentMention, SettingsField.SqlConnectionsOffered, SettingsField.SqlAddConnection, SettingsField.Theme,
@@ -1217,35 +1217,35 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("cmd        [#9A8BB8]cmd.exe: batch syntax[/]", SettingsMenu.ShellLabel("cmd", installed: true));
         Assert.Equal("Shell allowed commands: git push removed", SettingsMenu.PrefixRemovedNotice("git push"));
         // The git rows (2026-09-20): the Git tab (Git (native), the last, since later on 2026-09-21) — the switch, then the two caps alphabetically; typed, none a reconnect.
-        Assert.Equal(new[] { SettingsField.GitNativeTools, SettingsField.GitNativeDiffMaxLines, SettingsField.GitNativeLogMaxCommits, SettingsField.GitNativeEmail, SettingsField.GitNativeName }, SettingsMenu.ToolsTabFields[12]);
+        Assert.Equal(new[] { SettingsField.GitLibTools, SettingsField.GitLibDiffMaxLines, SettingsField.GitLibLogMaxCommits, SettingsField.GitLibEmail, SettingsField.GitLibName }, SettingsMenu.ToolsTabFields[12]);
         // The identity pair (2026-09-21): typed, empty allowed and shown as (not set), no validation.
-        Assert.Equal("Git native email", SettingsMenu.FieldName(SettingsField.GitNativeEmail));   // the Git native labels, later on 2026-09-21
-        Assert.Equal("Git native name", SettingsMenu.FieldName(SettingsField.GitNativeName));
-        Assert.Equal("(not set)", SettingsMenu.FieldValue(SettingsField.GitNativeEmail, data, _settings.ProfileDirectory));
-        Assert.Equal("(not set)", SettingsMenu.FieldValue(SettingsField.GitNativeName, data, _settings.ProfileDirectory));
-        Assert.Equal("me@example.invalid", SettingsMenu.FieldValue(SettingsField.GitNativeEmail, new AppSettingsData { GitNativeEmail = "me@example.invalid" }, _settings.ProfileDirectory));
-        Assert.Equal("Some User", SettingsMenu.FieldValue(SettingsField.GitNativeName, new AppSettingsData { GitNativeName = "Some User" }, _settings.ProfileDirectory));
-        Assert.Equal("", SettingsMenu.EditableValue(SettingsField.GitNativeEmail, data));
-        Assert.Equal("", SettingsMenu.EditableValue(SettingsField.GitNativeName, data));
-        Assert.False(SettingsMenu.IsToggle(SettingsField.GitNativeEmail));
-        Assert.False(SettingsMenu.IsToggle(SettingsField.GitNativeName));
-        Assert.Equal("Git native tools", SettingsMenu.FieldName(SettingsField.GitNativeTools));
-        Assert.Equal("Git native diff max lines", SettingsMenu.FieldName(SettingsField.GitNativeDiffMaxLines));
-        Assert.Equal("Git native log max commits", SettingsMenu.FieldName(SettingsField.GitNativeLogMaxCommits));
-        Assert.True(SettingsMenu.IsToggle(SettingsField.GitNativeTools));
-        Assert.False(SettingsMenu.IsToggle(SettingsField.GitNativeDiffMaxLines));
-        Assert.Equal("off", SettingsMenu.FieldValue(SettingsField.GitNativeTools, data, _settings.ProfileDirectory));   // off by default since later on 2026-09-21
-        Assert.Equal("on", SettingsMenu.FieldValue(SettingsField.GitNativeTools, new AppSettingsData { GitNativeTools = true }, _settings.ProfileDirectory));
-        Assert.Equal("500 lines", SettingsMenu.FieldValue(SettingsField.GitNativeDiffMaxLines, data, _settings.ProfileDirectory));
-        Assert.Equal("20 commits", SettingsMenu.FieldValue(SettingsField.GitNativeLogMaxCommits, data, _settings.ProfileDirectory));
-        Assert.Equal("1 commit", SettingsMenu.FieldValue(SettingsField.GitNativeLogMaxCommits, new AppSettingsData { GitNativeLogMaxCommits = 1 }, _settings.ProfileDirectory));
-        Assert.Equal("500", SettingsMenu.EditableValue(SettingsField.GitNativeDiffMaxLines, data));
-        Assert.Equal("20", SettingsMenu.EditableValue(SettingsField.GitNativeLogMaxCommits, data));
-        Assert.Equal("must be 20 to 5000 lines", SettingsMenu.GitNativeDiffMaxLinesRangeError);
-        Assert.Equal("must be 1 to 200 commits", SettingsMenu.GitNativeLogMaxCommitsRangeError);
-        Assert.Equal("git native tools enabled", SettingsMenu.ToggleDescribe(SettingsField.GitNativeTools, true));
-        Assert.Equal("git native tools disabled", SettingsMenu.ToggleDescribe(SettingsField.GitNativeTools, false));
-        Assert.False(SettingsMenu.RefusedMidTurn(SettingsField.GitNativeTools));
+        Assert.Equal("GitLib email", SettingsMenu.FieldName(SettingsField.GitLibEmail));   // the GitLib labels, later on 2026-09-21
+        Assert.Equal("GitLib name", SettingsMenu.FieldName(SettingsField.GitLibName));
+        Assert.Equal("(not set)", SettingsMenu.FieldValue(SettingsField.GitLibEmail, data, _settings.ProfileDirectory));
+        Assert.Equal("(not set)", SettingsMenu.FieldValue(SettingsField.GitLibName, data, _settings.ProfileDirectory));
+        Assert.Equal("me@example.invalid", SettingsMenu.FieldValue(SettingsField.GitLibEmail, new AppSettingsData { GitLibEmail = "me@example.invalid" }, _settings.ProfileDirectory));
+        Assert.Equal("Some User", SettingsMenu.FieldValue(SettingsField.GitLibName, new AppSettingsData { GitLibName = "Some User" }, _settings.ProfileDirectory));
+        Assert.Equal("", SettingsMenu.EditableValue(SettingsField.GitLibEmail, data));
+        Assert.Equal("", SettingsMenu.EditableValue(SettingsField.GitLibName, data));
+        Assert.False(SettingsMenu.IsToggle(SettingsField.GitLibEmail));
+        Assert.False(SettingsMenu.IsToggle(SettingsField.GitLibName));
+        Assert.Equal("GitLib tools", SettingsMenu.FieldName(SettingsField.GitLibTools));
+        Assert.Equal("GitLib diff max lines", SettingsMenu.FieldName(SettingsField.GitLibDiffMaxLines));
+        Assert.Equal("GitLib log max commits", SettingsMenu.FieldName(SettingsField.GitLibLogMaxCommits));
+        Assert.True(SettingsMenu.IsToggle(SettingsField.GitLibTools));
+        Assert.False(SettingsMenu.IsToggle(SettingsField.GitLibDiffMaxLines));
+        Assert.Equal("off", SettingsMenu.FieldValue(SettingsField.GitLibTools, data, _settings.ProfileDirectory));   // off by default since later on 2026-09-21
+        Assert.Equal("on", SettingsMenu.FieldValue(SettingsField.GitLibTools, new AppSettingsData { GitLibTools = true }, _settings.ProfileDirectory));
+        Assert.Equal("500 lines", SettingsMenu.FieldValue(SettingsField.GitLibDiffMaxLines, data, _settings.ProfileDirectory));
+        Assert.Equal("20 commits", SettingsMenu.FieldValue(SettingsField.GitLibLogMaxCommits, data, _settings.ProfileDirectory));
+        Assert.Equal("1 commit", SettingsMenu.FieldValue(SettingsField.GitLibLogMaxCommits, new AppSettingsData { GitLibLogMaxCommits = 1 }, _settings.ProfileDirectory));
+        Assert.Equal("500", SettingsMenu.EditableValue(SettingsField.GitLibDiffMaxLines, data));
+        Assert.Equal("20", SettingsMenu.EditableValue(SettingsField.GitLibLogMaxCommits, data));
+        Assert.Equal("must be 20 to 5000 lines", SettingsMenu.GitLibDiffMaxLinesRangeError);
+        Assert.Equal("must be 1 to 200 commits", SettingsMenu.GitLibLogMaxCommitsRangeError);
+        Assert.Equal("gitlib tools enabled", SettingsMenu.ToggleDescribe(SettingsField.GitLibTools, true));
+        Assert.Equal("gitlib tools disabled", SettingsMenu.ToggleDescribe(SettingsField.GitLibTools, false));
+        Assert.False(SettingsMenu.RefusedMidTurn(SettingsField.GitLibTools));
         Assert.Equal("Web search method", SettingsMenu.FieldName(SettingsField.WebSearchMethod));
         Assert.Equal("duckduckgo", SettingsMenu.FieldValue(SettingsField.WebSearchMethod, data, _settings.ProfileDirectory));
         Assert.Equal("searxng", SettingsMenu.FieldValue(SettingsField.WebSearchMethod, new AppSettingsData { WebSearchMethod = "searxng" }, _settings.ProfileDirectory));
@@ -1496,7 +1496,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(32, SettingsMenu.LabelWidthOf(SettingsMenu.ToolsTabFields[1]));   // "File view image max (per call)" (the File-prefixed labels, later still on 2026-09-19; "Stale line number guard", 25, that morning; "Always return line numbers", 28, from 2026-09-17 until it went; "Tree max length", 17, before)
         Assert.Equal(29, SettingsMenu.LabelWidthOf(SettingsMenu.ToolsTabFields[2]));   // "Shell tool bridge max calls" (the Shell tab, 2026-09-21; the row was "Shell code max tool calls", 27, until later that day)
         Assert.Equal(30, SettingsMenu.LabelWidthOf(SettingsMenu.ToolsTabFields[3]));   // "Ask max choices per question"
-        Assert.Equal(28, SettingsMenu.LabelWidthOf(SettingsMenu.ToolsTabFields[12]));   // "Git native log max commits" (later on 2026-09-21; "Git log max commits", 21, from 2026-09-20)
+        Assert.Equal(24, SettingsMenu.LabelWidthOf(SettingsMenu.ToolsTabFields[12]));   // "GitLib log max commits" (2026-09-30; "Git native log max commits", 28, from later on 2026-09-21; "Git log max commits", 21, from 2026-09-20)
         Assert.Equal(38, SettingsMenu.LabelWidthOf(SettingsMenu.SkillsTabFields[0]));   // "Use external skills (.agents\\skills)"
         Assert.Equal(34, SettingsMenu.LabelWidthOf(SettingsMenu.SkillsTabFields[1]));   // "Reflection edit supporting files" (2026-09-27; "Reflection cooldown (minutes)", 31, from later on 2026-09-19)
         Assert.Equal("TTS speed          [#EFE6FF]1.2[/]", SettingsMenu.FieldLabel(SettingsField.TtsSpeed, data, _settings.ProfileDirectory, null, SettingsMenu.TabLabelWidth(SettingsTab.Tts)));   // 1.0 until 2026-09-18

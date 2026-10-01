@@ -5,10 +5,10 @@ using NeonSidekick.Settings;
 
 namespace NeonSidekick.Llm.Tools;
 
-/// <summary><c>git_status(path?)</c>: the branch, its upstream lag, and every staged, unstaged, untracked and conflicted path under <c>path</c>.</summary>
+/// <summary><c>gitlib_status(path?)</c>: the branch, its upstream lag, and every staged, unstaged, untracked and conflicted path under <c>path</c>.</summary>
 public sealed class GitStatusTool : GitTool
 {
-    public const string ToolName = "git_status";
+    public const string ToolName = "gitlib_status";
 
     private static readonly JsonElement Schema = ToolSchema.Parse(
         $$"""

@@ -5,10 +5,10 @@ using NeonSidekick.Settings;
 
 namespace NeonSidekick.Llm.Tools;
 
-/// <summary><c>git_show(ref, path?)</c>: a commit's header, message and changed files; with a path, that file's text (or that folder's entries) as it is at the commit.</summary>
+/// <summary><c>gitlib_show(ref, path?)</c>: a commit's header, message and changed files; with a path, that file's text (or that folder's entries) as it is at the commit.</summary>
 public sealed class GitShowTool : GitTool
 {
-    public const string ToolName = "git_show";
+    public const string ToolName = "gitlib_show";
 
     private static readonly JsonElement Schema = ToolSchema.Parse(
         $$"""

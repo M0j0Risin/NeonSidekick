@@ -546,7 +546,7 @@ public class SlashCommandsTests
         Assert.DoesNotContain("Ctrl+Q", SlashCommands.HelpText);
         Assert.DoesNotContain("(also", SlashCommands.HelpText);
         Assert.StartsWith("Commands:\n" + Row("/about", "show general information about the app and profile") + Row("/botchat", SlashCommands.HelpEntries.Single(e => e.Command == "/botchat").Summary), SlashCommands.HelpText);   // A to Z since 2026-09-27 (the user's call); /settings led the grouped list until then
-        Assert.Contains(Row("/gituser", "write the Git native email and Git native name into the working directory's repository") + Row("/ha", SlashCommands.HelpEntries.Single(e => e.Command == "/ha").Summary) + Row("/help", "show help") + Row("/imagine", SlashCommands.HelpEntries.Single(e => e.Command == "/imagine").Summary), SlashCommands.HelpText);   // neighbours by the alphabet since 2026-09-27
+        Assert.Contains(Row("/gituser", "write the GitLib email and GitLib name into the working directory's repository") + Row("/ha", SlashCommands.HelpEntries.Single(e => e.Command == "/ha").Summary) + Row("/help", "show help") + Row("/imagine", SlashCommands.HelpEntries.Single(e => e.Command == "/imagine").Summary), SlashCommands.HelpText);   // neighbours by the alphabet since 2026-09-27
         Assert.Contains(Row("/settings, //", "edit and save settings"), SlashCommands.HelpText);
         Assert.Contains(Row("/profile", "switch profiles, or /profile <name> | add <name> | delete <name> | rename <name> <new-name> | reset [name] | push <name> | pull <name> | edit | reload"), SlashCommands.HelpText);   // edit and reload 2026-09-21, push and pull 2026-09-28
         Assert.Contains(Row("/exit", "exit/quit the application"), SlashCommands.HelpText);
@@ -571,7 +571,7 @@ public class SlashCommandsTests
         Assert.Contains(Row("/tree", "print a tree of the working directory's folders and files, or /tree <path>"), SlashCommands.HelpText);
         Assert.Contains(Row("/explore", "open the working directory in your file browser, or /explore <path>"), SlashCommands.HelpText);
         Assert.Contains(Row("/emptytrash", "empty the working directory's .trash for good (asks first)"), SlashCommands.HelpText);
-        Assert.Contains(Row("/gituser", "write the Git native email and Git native name into the working directory's repository"), SlashCommands.HelpText);   // 2026-09-21 (/git until 2026-09-26)
+        Assert.Contains(Row("/gituser", "write the GitLib email and GitLib name into the working directory's repository"), SlashCommands.HelpText);   // 2026-09-21 (/git until 2026-09-26)
         Assert.Contains(Row("/timer", "list timers, or /timer <duration> [name] (10m, 90s, 1h30m) | stop <name> | stop all"), SlashCommands.HelpText);
         Assert.Contains(Row("/window", "show the terminal window's width and height"), SlashCommands.HelpText);
         Assert.Contains(Row("/persona", "export and manage persona.md (the personality) in your editor, or /persona reset to go back to the default, or /persona copy <profile> [force] to copy it into another profile"), SlashCommands.HelpText);   // copy 2026-09-21
@@ -647,7 +647,7 @@ public class SlashCommandsTests
         Assert.Equal("print a line as a reply and read it aloud when speech is on: /echo <text>", Summary("/echo"));
         Assert.Equal("open an image, or a folder of images, from the working directory in the picture viewer; --chat draws the image in the transcript instead: /view <image or folder> [--chat]", Summary("/view"));
         Assert.Equal("show the terminal window's width and height", Summary("/window"));
-        Assert.Equal("write the Git native email and Git native name into the working directory's repository", Summary("/gituser"));   // /git until 2026-09-26
+        Assert.Equal("write the GitLib email and GitLib name into the working directory's repository", Summary("/gituser"));   // /git until 2026-09-26
         Assert.Equal("let the profiles talk to each other, each in its own persona, until ESC: /botchat [profile ...] [[--] topic], or /botchat --resume [line] to carry on the last one, or /botchat --kill to stop the extra embedded servers", Summary("/botchat"));   // --resume 2026-09-25, --kill later on 2026-09-29
         Assert.Equal("list timers, or /timer <duration> [name] (10m, 90s, 1h30m) | stop <name> | stop all", Summary("/timer"));
         Assert.Equal("send a message to Claude Code and add its reply to the conversation: /claude <message>, or /claude new to start a new Claude conversation", Summary("/claude"));   // 2026-09-27

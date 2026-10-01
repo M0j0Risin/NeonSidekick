@@ -15,6 +15,12 @@ internal sealed partial class ChatScreen
     /// ESC stopping it the way it stops a compact; with the pane each test's line lands as it finishes, without it (the
     /// spinner owning the screen) they are written after. Then the table, and the run is saved in the profile's
     /// <c>tests.json</c> — a stopped one too, with what finished. Nothing enters the conversation.
+    /// <para>A run starts from a clean slate (2026-09-30, the user's ask): <c>/clear</c>'s act first (<see cref="ClearAndRefresh"/>), so
+    /// the screen is the banner, the conversation and its session are forgotten, and the hint row's usage figures go. Under the run
+    /// the row and the glyphs are what they are under a reply (2026-09-30, the user's ask; a line waited for the run's end until then,
+    /// and a glyph's word was dropped): a line goes through the mid-turn policy (<see cref="OnMidTurnLineAsync"/>). A pane
+    /// (<c>/settings</c>, <c>/usage</c>, a toolbar glyph) opens over the run, a quick act runs at its end
+    /// (<see cref="EndTurnAsync"/>), <c>/clear</c>, <c>/new</c> or <c>/exit</c> stops it as ESC does, and a message is queued.</para>
     /// </summary>
     private async Task HandleTestAsync(string args, CancellationToken cancellationToken)
     {
@@ -54,6 +60,8 @@ internal sealed partial class ChatScreen
             return;
         }
 
+        // The clean slate (2026-09-30): the screen, the conversation, the session and the hint row's figures, as /clear leaves them.
+        ClearAndRefresh();
         var context = new BenchContext(_session.ContextLength?.Tokens);
         bool claudeApi = ClaudeApi.IsClaudeApi(endpoint.BaseUrl);
         if (tests.Any(t => t.Category == BenchCategory.LongContext))
@@ -65,8 +73,13 @@ internal sealed partial class ChatScreen
         bool live = _pane.Enabled;
         using var testCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         using var stop = new CancellationTokenSource();
+        // The reply's watch (2026-09-30, UnderWatchAsync's shape): a line typed or a glyph's word goes through the mid-turn policy.
+        _turnRunning = true;
+        _paneClose?.Dispose();
+        _paneClose = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var paneToken = _paneClose.Token;
         _queuedClicks.Reset();
-        var watcher = _keys.WatchAsync(testCts, stop.Token, null, null, LiveLineHook, spend: e => { _queuedClicks.Reset(); return ScrollInput(e); }, onClick: _pane.Enabled ? HintClickLine : null, editor: LiveEditor);
+        var watcher = _keys.WatchAsync(testCts, stop.Token, null, null, _pane.Enabled ? line => OnMidTurnLineAsync(line, testCts, paneToken) : null, spend: e => { _queuedClicks.Reset(); return ScrollInput(e); }, onClick: _pane.Enabled ? HintClickLine : null, editor: LiveEditor);
         try
         {
             await _transcript.WithSpinnerAsync(BenchText.Label(1, tests.Count, tests[0]), setLabel => BenchRunner.RunAsync(
@@ -90,6 +103,7 @@ internal sealed partial class ChatScreen
         {
             stop.Cancel();
             await watcher.ConfigureAwait(false);
+            await EndTurnAsync(closePane: testCts.IsCancellationRequested, cancellationToken).ConfigureAwait(false);
         }
 
         if (!live)

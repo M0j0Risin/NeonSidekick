@@ -630,6 +630,25 @@ public sealed class SidekickApp
 
             var assistant = session.Assistant;
 
+            // The conversation forgotten (/clear, /new, /splash, and a /test run's clean slate since 2026-09-30): the history, the
+            // usage, the session row and the Claude threads; plan mode left with its notice.
+            async Task ForgetConversationAsync()
+            {
+                assistant?.History.Clear();
+                session.Usage.ResetConversation();
+                sessionId = null;
+                claudeSessionId = null;
+                claudeServerSessionId = null;
+                advisorThread.SessionId = null;
+                planState.Executing = null;
+                planState.Draft = null;
+                if (plan.Active)
+                {
+                    await HeadlessNoticeLineAsync("[notice] " + Plans.PlanText.LeftOnResetNotice(plan.Path)).ConfigureAwait(false);
+                    plan.Exit();
+                }
+            }
+
             while (!cancellationToken.IsCancellationRequested)
             {
                 while (processes.TryTakeAlert(out var alert))
@@ -672,20 +691,7 @@ public sealed class SidekickApp
                 bool isClear = text.Equals("/clear", StringComparison.OrdinalIgnoreCase) || text.Equals("/splash", StringComparison.OrdinalIgnoreCase);
                 if (isClear || text.Equals("/new", StringComparison.OrdinalIgnoreCase))
                 {
-                    assistant?.History.Clear();
-                    session.Usage.ResetConversation();
-                    sessionId = null;
-                    claudeSessionId = null;
-                    claudeServerSessionId = null;
-                    advisorThread.SessionId = null;
-                    planState.Executing = null;
-                    planState.Draft = null;
-                    if (plan.Active)
-                    {
-                        await HeadlessNoticeLineAsync("[notice] " + Plans.PlanText.LeftOnResetNotice(plan.Path)).ConfigureAwait(false);
-                        plan.Exit();
-                    }
-
+                    await ForgetConversationAsync().ConfigureAwait(false);
                     await HeadlessLineAsync(HeadlessReplyPrefix + (isClear ? "(conversation cleared)" : ChatScreen.NewConversationNotice)).ConfigureAwait(false);
                     continue;
                 }
@@ -795,7 +801,7 @@ public sealed class SidekickApp
                 // /test (2026-09-28): ahead of the server check, since the listing and the saved runs need no LLM; a run refuses without one.
                 if (SlashCommands.Parse(text) is (SlashCommand.Test, var testArgs))
                 {
-                    await HeadlessTestAsync(session, testArgs, cancellationToken).ConfigureAwait(false);
+                    await HeadlessTestAsync(session, testArgs, ForgetConversationAsync, cancellationToken).ConfigureAwait(false);
                     continue;
                 }
 
@@ -854,7 +860,7 @@ public sealed class SidekickApp
                 }
 
                 // Per turn, as the screen does: a memory saved in this turn is in the next one's prompt.
-                ChatScreen.PrepareTurn(assistant, memory, memoryTools, standingTools, persona, operata, vocalia, EffectiveSettings.Memory, speechOutput: false, EffectiveSettings.LlmMaxToolIterations, EffectiveSettings.LlmOfferTools, webTools, EffectiveSettings.WebTools, ChatScreen.ContextGuardFor(EffectiveSettings, session.ContextLength), fileTools, EffectiveSettings.FileTools, skills: skills with { Enabled = EffectiveSettings.AgentSkills, External = EffectiveSettings.AgentSkills && EffectiveSettings.ExternalSkills }, sessionTools: sessionTools, sessionsEnabled: EffectiveSettings.SessionTool, disabledTools: ToolsText.DisabledSet(EffectiveSettings.ToolsDisabled), mcpTools: mcp.Tools, mcpEnabled: EffectiveSettings.McpServers, safeEdits: EffectiveSettings.FileSafeEdits, gitTools: gitTools, gitEnabled: EffectiveSettings.GitNativeTools, shellTools: shellTools, shellEnabled: ChatScreen.ShellOffered(EffectiveSettings), processes: processes, shellBridge: EffectiveSettings.ShellToolBridge, shellPolice: EffectiveSettings.ShellPoliceOutsidePaths, obsidianTools: ChatScreen.ObsidianToolsFor(vaultTools, EffectiveSettings), obsidianEnabled: ChatScreen.ObsidianOffered(EffectiveSettings), sqlTools: sqlTools, sqlEnabled: ChatScreen.SqlOffered(EffectiveSettings, sql), comfyTools: comfyTools, comfyEnabled: ChatScreen.ComfyOffered(EffectiveSettings, comfy), shellNative: EffectiveSettings.ShellPreferNative, plan: plan.Turn(presentPlan), advisorTools: advisorTools, advisorEnabled: EffectiveSettings.ClaudeAdvisor, preserveThinking: EffectiveSettings.LlmPreserveThinking, sampling: LlmSampling.Resolve(EffectiveSettings, session.Endpoint?.ModelId), homeTools: haTools, homeEnabled: ChatScreen.HomeAssistantOffered(EffectiveSettings), printTools: printTools, printEnabled: ChatScreen.PrintOffered(EffectiveSettings), oracleTools: oracleTools, oracleEnabled: ChatScreen.OracleOffered(EffectiveSettings, oracle), mysqlTools: mysqlTools, mysqlEnabled: ChatScreen.MySqlOffered(EffectiveSettings, mysql));
+                ChatScreen.PrepareTurn(assistant, memory, memoryTools, standingTools, persona, operata, vocalia, EffectiveSettings.Memory, speechOutput: false, EffectiveSettings.LlmMaxToolIterations, EffectiveSettings.LlmOfferTools, webTools, EffectiveSettings.WebTools, ChatScreen.ContextGuardFor(EffectiveSettings, session.ContextLength), fileTools, EffectiveSettings.FileTools, skills: skills with { Enabled = EffectiveSettings.AgentSkills, External = EffectiveSettings.AgentSkills && EffectiveSettings.ExternalSkills }, sessionTools: sessionTools, sessionsEnabled: EffectiveSettings.SessionTool, disabledTools: ToolsText.DisabledSet(EffectiveSettings.ToolsDisabled), mcpTools: mcp.Tools, mcpEnabled: EffectiveSettings.McpServers, safeEdits: EffectiveSettings.FileSafeEdits, gitTools: gitTools, gitEnabled: EffectiveSettings.GitLibTools, shellTools: shellTools, shellEnabled: ChatScreen.ShellOffered(EffectiveSettings), processes: processes, shellBridge: EffectiveSettings.ShellToolBridge, shellPolice: EffectiveSettings.ShellPoliceOutsidePaths, obsidianTools: ChatScreen.ObsidianToolsFor(vaultTools, EffectiveSettings), obsidianEnabled: ChatScreen.ObsidianOffered(EffectiveSettings), sqlTools: sqlTools, sqlEnabled: ChatScreen.SqlOffered(EffectiveSettings, sql), comfyTools: comfyTools, comfyEnabled: ChatScreen.ComfyOffered(EffectiveSettings, comfy), shellNative: EffectiveSettings.ShellPreferNative, plan: plan.Turn(presentPlan), advisorTools: advisorTools, advisorEnabled: EffectiveSettings.ClaudeAdvisor, preserveThinking: EffectiveSettings.LlmPreserveThinking, sampling: LlmSampling.Resolve(EffectiveSettings, session.Endpoint?.ModelId), homeTools: haTools, homeEnabled: ChatScreen.HomeAssistantOffered(EffectiveSettings), printTools: printTools, printEnabled: ChatScreen.PrintOffered(EffectiveSettings), oracleTools: oracleTools, oracleEnabled: ChatScreen.OracleOffered(EffectiveSettings, oracle), mysqlTools: mysqlTools, mysqlEnabled: ChatScreen.MySqlOffered(EffectiveSettings, mysql));
 
                 // The Claude CLI server (2026-09-30), as the screen does: the turn names its session, no guard over a history the CLI does not read.
                 assistant.ConversationId = Claude.ClaudeCliEndpoint.IsClaudeCli(session.Endpoint?.BaseUrl) ? claudeServerSessionId ??= Guid.NewGuid().ToString("D") : null;
@@ -1161,7 +1167,7 @@ public sealed class SidekickApp
     /// line per test as it finishes (a fail's answer under it) and the table after as plain markdown — saved to the
     /// profile's <c>tests.json</c> as the screen saves it. Ctrl+C stops a run; what finished is shown and saved.
     /// </summary>
-    private async Task HeadlessTestAsync(LlmSession session, string args, CancellationToken cancellationToken)
+    private async Task HeadlessTestAsync(LlmSession session, string args, Func<Task> forgetConversation, CancellationToken cancellationToken)
     {
         var history = new Bench.BenchHistory(_settings.ProfileDirectory);
         if (args.Length == 0)
@@ -1191,6 +1197,8 @@ public sealed class SidekickApp
             return;
         }
 
+        // A run starts from a clean slate, as the screen's does (2026-09-30): the conversation forgotten first.
+        await forgetConversation().ConfigureAwait(false);
         var context = new Bench.BenchContext(session.ContextLength?.Tokens);
         bool claudeApi = Llm.Anthropic.ClaudeApi.IsClaudeApi(endpoint.BaseUrl);
         if (tests.Any(t => t.Category == Bench.BenchCategory.LongContext))

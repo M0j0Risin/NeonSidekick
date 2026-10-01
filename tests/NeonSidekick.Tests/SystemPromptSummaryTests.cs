@@ -623,7 +623,7 @@ public class SystemPromptSummaryTests : IDisposable
     [Fact]
     public void PromptSections_TheGitRule_RidesWhileAnyToolIsOffered_NoHeading()
     {
-        // No Git native tools heading since 2026-09-26, on or off: the rule in the rules is what the model reads.
+        // No GitLib tools heading since 2026-09-26, on or off: the rule in the rules is what the model reads.
         Assert.DoesNotContain(Headings(Facts(gitTools: 11)), h => h.StartsWith("Git", StringComparison.Ordinal));
         Assert.DoesNotContain(Headings(Facts() with { GitEnabled = false }), h => h.StartsWith("Git", StringComparison.Ordinal));
         // The rule rides the defaults only while a git tool is offered; it never names the two opt-in tools, so no variant.

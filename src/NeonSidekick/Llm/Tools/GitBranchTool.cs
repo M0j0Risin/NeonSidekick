@@ -5,10 +5,10 @@ using NeonSidekick.Settings;
 
 namespace NeonSidekick.Llm.Tools;
 
-/// <summary><c>git_branch(action, name?, new_name?, start_point?, switch_to?, path?)</c>: the branches and tags (<c>list</c>), a new branch (<c>create</c>), a checkout (<c>switch</c>), a rename.</summary>
+/// <summary><c>gitlib_branch(action, name?, new_name?, start_point?, switch_to?, path?)</c>: the branches and tags (<c>list</c>), a new branch (<c>create</c>), a checkout (<c>switch</c>), a rename.</summary>
 public sealed class GitBranchTool : GitTool
 {
-    public const string ToolName = "git_branch";
+    public const string ToolName = "gitlib_branch";
     public const string ActionArgument = "action";
     public const string NameArgument = "name";
     public const string NewNameArgument = "new_name";
@@ -44,7 +44,7 @@ public sealed class GitBranchTool : GitTool
 
     public override string Description =>
         "Lists, creates, switches to or renames git branches. A switch never overwrites local changes (commit or stash them first); " +
-        "deleting a branch is git_delete's job.";
+        "deleting a branch is gitlib_delete's job.";
 
     public override JsonElement JsonSchema => Schema;
 

@@ -16,7 +16,7 @@ public sealed record GitEntry(char Code, string Path, string? OldPath = null);
 /// <summary>One file a diff, a commit or a stash changed: the code, the paths, the line counts, and whether it is binary (no counts then).</summary>
 public sealed record GitChange(char Code, string Path, string? OldPath, int Added, int Deleted, bool Binary);
 
-/// <summary>The working tree's state (<c>git_status</c>).</summary>
+/// <summary>The working tree's state (<c>gitlib_status</c>).</summary>
 public sealed record GitStatusReport(
     GitOutcome Outcome,
     string Detail,
@@ -38,14 +38,14 @@ public sealed record GitStatusReport(
     public bool Clean => Staged.Count == 0 && Unstaged.Count == 0 && Untracked.Count == 0 && Conflicts.Count == 0;
 }
 
-/// <summary>The commits reachable from a ref, newest first (<c>git_log</c>); <c>Path</c> set when only those touching it were asked for.</summary>
+/// <summary>The commits reachable from a ref, newest first (<c>gitlib_log</c>); <c>Path</c> set when only those touching it were asked for.</summary>
 public sealed record GitLogReport(GitOutcome Outcome, string Detail, string Reference, string? Path, IReadOnlyList<GitCommitInfo> Commits, bool Truncated)
 {
     public static GitLogReport Refused(GitOutcome outcome, string detail = "") => new(outcome, detail, "", null, [], false);
 }
 
 /// <summary>
-/// One commit (<c>git_show</c> without a path: its header and the files it changed) or one path at a commit
+/// One commit (<c>gitlib_show</c> without a path: its header and the files it changed) or one path at a commit
 /// (with a path: a file's text — <c>Cut</c> when it stopped at the cap — or a folder's entries).
 /// </summary>
 public sealed record GitShowReport(
@@ -102,7 +102,7 @@ public sealed record GitDiffReport(
 /// <summary>One blamed line: its number, the commit that last touched it and the text.</summary>
 public sealed record GitBlameLine(int Number, string Short, string Author, DateTimeOffset When, string Text);
 
-/// <summary>A file's lines with their last commits (<c>git_blame</c>), over the window <c>From</c>–<c>To</c> of <c>TotalLines</c>.</summary>
+/// <summary>A file's lines with their last commits (<c>gitlib_blame</c>), over the window <c>From</c>–<c>To</c> of <c>TotalLines</c>.</summary>
 public sealed record GitBlameReport(GitOutcome Outcome, string Detail, string Path, string Reference, int From, int To, int TotalLines, IReadOnlyList<GitBlameLine> Lines, int Commits)
 {
     public static GitBlameReport Refused(GitOutcome outcome, string detail = "") => new(outcome, detail, "", "", 0, 0, 0, [], 0);
@@ -111,7 +111,7 @@ public sealed record GitBlameReport(GitOutcome Outcome, string Detail, string Pa
 /// <summary>One branch or tag: its name, the short sha it points at, its subject, and for a local branch its upstream and whether it is checked out.</summary>
 public sealed record GitRef(string Name, string Short, string Subject, bool Current = false, string? Upstream = null);
 
-/// <summary>The branches and tags (<c>git_branch list</c>): the local branches, the remote-tracking ones, the tags, each capped.</summary>
+/// <summary>The branches and tags (<c>gitlib_branch list</c>): the local branches, the remote-tracking ones, the tags, each capped.</summary>
 public sealed record GitRefsReport(GitOutcome Outcome, string Detail, string? Current, bool Detached, IReadOnlyList<GitRef> Local, IReadOnlyList<GitRef> Remote, IReadOnlyList<GitRef> Tags, bool Truncated)
 {
     public static GitRefsReport Refused(GitOutcome outcome, string detail = "") => new(outcome, detail, null, false, [], [], [], false);
@@ -161,7 +161,7 @@ public sealed record GitDiscardResult(GitOutcome Outcome, string Detail, IReadOn
     public static GitDiscardResult Refused(GitOutcome outcome, string detail = "") => new(outcome, detail, [], "", "", "", 0);
 }
 
-/// <summary>What <c>git_delete</c> removes.</summary>
+/// <summary>What <c>gitlib_delete</c> removes.</summary>
 public enum GitDeleteKind
 {
     Branch,

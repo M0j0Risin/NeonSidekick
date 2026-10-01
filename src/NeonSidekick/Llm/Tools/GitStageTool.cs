@@ -5,10 +5,10 @@ using NeonSidekick.Settings;
 
 namespace NeonSidekick.Llm.Tools;
 
-/// <summary><c>git_stage(action, paths, path?)</c>: stages or unstages paths — <c>.</c> for everything changed under <c>path</c>; the sandbox's <c>.trash</c> never.</summary>
+/// <summary><c>gitlib_stage(action, paths, path?)</c>: stages or unstages paths — <c>.</c> for everything changed under <c>path</c>; the sandbox's <c>.trash</c> never.</summary>
 public sealed class GitStageTool : GitTool
 {
-    public const string ToolName = "git_stage";
+    public const string ToolName = "gitlib_stage";
     public const string ActionArgument = "action";
     public const string PathsArgument = "paths";
 
@@ -36,7 +36,7 @@ public sealed class GitStageTool : GitTool
 
     public override string Description =>
         "Stages or unstages changes for the next commit: the paths named, or \".\" for everything changed under path. " +
-        "Stage only what the user asked to commit; git_status shows what is staged.";
+        "Stage only what the user asked to commit; gitlib_status shows what is staged.";
 
     public override JsonElement JsonSchema => Schema;
 

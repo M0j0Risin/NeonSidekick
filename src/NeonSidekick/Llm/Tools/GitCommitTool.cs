@@ -5,10 +5,10 @@ using NeonSidekick.Settings;
 
 namespace NeonSidekick.Llm.Tools;
 
-/// <summary><c>git_commit(message, amend?, allow_empty?, path?)</c>: commits the index, signed from git config (<c>user.name</c> / <c>user.email</c>; without them an <c>Error:</c> that asks the user to set them).</summary>
+/// <summary><c>gitlib_commit(message, amend?, allow_empty?, path?)</c>: commits the index, signed from git config (<c>user.name</c> / <c>user.email</c>; without them an <c>Error:</c> that asks the user to set them).</summary>
 public sealed class GitCommitTool : GitTool
 {
-    public const string ToolName = "git_commit";
+    public const string ToolName = "gitlib_commit";
     public const string MessageArgument = "message";
     public const string AmendArgument = "amend";
     public const string AllowEmptyArgument = "allow_empty";
@@ -35,7 +35,7 @@ public sealed class GitCommitTool : GitTool
 
     public override string Description =>
         "Commits what is staged with the message given, signed with the user's git identity (user.name / user.email from git config). " +
-        "Stage with git_stage first; commit only what the user asked for, with their message or a short imperative one.";
+        "Stage with gitlib_stage first; commit only what the user asked for, with their message or a short imperative one.";
 
     public override JsonElement JsonSchema => Schema;
 

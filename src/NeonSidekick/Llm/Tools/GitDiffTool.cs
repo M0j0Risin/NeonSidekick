@@ -6,21 +6,21 @@ using NeonSidekick.Settings;
 namespace NeonSidekick.Llm.Tools;
 
 /// <summary>
-/// <c>git_diff(path?, ref?, from?, to?, staged?, max_lines?)</c>: the unstaged changes (a bare call), the
+/// <c>gitlib_diff(path?, ref?, from?, to?, staged?, max_lines?)</c>: the unstaged changes (a bare call), the
 /// staged ones (<c>staged</c>), one commit's against its parent (<c>ref</c>) or two refs' (<c>from</c> + <c>to</c>),
 /// as the changed files with their counts and a unified patch. The patch is the app's own
 /// (<see cref="UnifiedDiff"/>): LibGit2Sharp's diff kills the process under NativeAOT.
 /// </summary>
 public sealed class GitDiffTool : GitTool
 {
-    public const string ToolName = "git_diff";
+    public const string ToolName = "gitlib_diff";
     public const string FromArgument = "from";
     public const string ToArgument = "to";
     public const string StagedArgument = "staged";
     public const string MaxLinesArgument = "max_lines";
 
-    public const int MinLines = AppSettingsData.MinGitNativeDiffMaxLines;
-    public const int MaxLines = AppSettingsData.MaxGitNativeDiffMaxLines;
+    public const int MinLines = AppSettingsData.MinGitLibDiffMaxLines;
+    public const int MaxLines = AppSettingsData.MaxGitLibDiffMaxLines;
 
     private static readonly JsonElement Schema = ToolSchema.Parse(
         $$"""
@@ -46,7 +46,7 @@ public sealed class GitDiffTool : GitTool
     public override string Description =>
         "Shows changes as a unified diff with the files and their line counts first: with nothing but path, the unstaged changes in the working tree; " +
         "staged: true, what is staged; ref, one commit against its parent; from and to, everything between two commits. " +
-        "Untracked files are not in it (git_status lists them); a long patch is cut at max_lines — narrow it with path.";
+        "Untracked files are not in it (gitlib_status lists them); a long patch is cut at max_lines — narrow it with path.";
 
     public override JsonElement JsonSchema => Schema;
 
@@ -54,7 +54,7 @@ public sealed class GitDiffTool : GitTool
     public static int DefaultLines(AppSettingsData effective)
     {
         ArgumentNullException.ThrowIfNull(effective);
-        return Math.Clamp(effective.GitNativeDiffMaxLines, MinLines, MaxLines);
+        return Math.Clamp(effective.GitLibDiffMaxLines, MinLines, MaxLines);
     }
 
     /// <summary>Which diff the arguments ask for, or null for a mix that names none (<see cref="GitText.BadDiffArguments"/>).</summary>

@@ -52,7 +52,7 @@ You:
 | `/claude <message>` | Sends the message to Claude Code, as in the TUI (see the README's `/claude`). The reply streams after `Claude: `; each tool Claude uses is a `[tool] Claude › Read …` line; a `[notice]` says which tools *Claude slash command permissions* denied, and a last `[notice]` gives the cost and tokens. The exchange joins the conversation, so the next message to the local model can build on it, and the next `/claude` resumes the same Claude conversation. `/claude new` starts another (so do `/new` and `/clear`). Nothing is ever asked: whatever the level does not allow is denied (`NEONSIDEKICK_CLAUDE_PERMISSIONS=edit` for a run that may edit files). A missing CLI or a failed run prints `[error] …`. Works with no LLM server. |
 | `/ha [on\|off\|toggle <name> [n%] \| scene <name> \| tv … \| states [filter] \| say <sentence>]` | Drives Home Assistant directly, as in the TUI (see the README's `/ha`): each line of the answer is printed as it is (`light.turn_on → Den · 40%`, the overview's lines), a failure as `[error] …`. It is your own command, so *Home Assistant action policy* never applies. Works with no LLM server; needs *Home Assistant URL* and *Home Assistant API key* (or the two variables below). |
 | `/print <file> [printer=<name>] [copies=N] [pages=1-3] [landscape] \| reply \| printers` | Prints a file of the working directory, the last reply, or lists the printers, as in the TUI (see the README's *Printing*): the answer's lines are printed as they are (`Printed notes.md: 2 pages to Office Laser`), a failure as `[error] …`. It is your own command, so *Print action policy* never applies (the model's `print_file` is refused headless under `ask`). Works with no LLM server. |
-| `/test [id \| reasoning \| structured \| long \| all \| history]` | Runs the benchmark tests against the connected model, as in the TUI (see the README's *Benchmark tests*): a `[notice]` line per test as it finishes (a failure's answer on a second `[notice]` line), then the results table as markdown after `Neon: `. The run is saved in the profile's `tests.json`. Alone it prints the tests with their last verdicts for the connected model; `history` prints the saved runs. An unknown name prints `[error] …`. The listing and `history` work with no LLM server; a run needs one. |
+| `/test [id \| reasoning \| structured \| long \| all \| history]` | Runs the benchmark tests against the connected model, as in the TUI (see the README's *Benchmark tests*). A run first forgets the conversation, as `/clear` does: a `[notice]` line per test as it finishes (a failure's answer on a second `[notice]` line), then the results table as markdown after `Neon: `. The run is saved in the profile's `tests.json`. Alone it prints the tests with their last verdicts for the connected model; `history` prints the saved runs. An unknown name prints `[error] …`. The listing and `history` work with no LLM server; a run needs one. |
 | `/skills add <source> [--global \| --profile] [--yes]` | Installs an Agent Skill, as in the TUI (see the README's *Installing skills*). The source is search words (skills.sh), `owner/repo`, `owner/repo/skill`, a github.com link or an https `.zip` link. A GitHub repository is listed through the GitHub API and only the needed files fetched (the whole zip only as a fallback), so large repositories work; a repository of more than 100 skills needs one named. Several search hits, or several skills in one repository, are printed as `[notice]` lines of ids to type back (`/skills add anthropics/skills/pdf`). One skill is previewed as plain lines. Without `--yes` nothing is written and a `[notice]` says so; with it the skill goes to the profile's skills, or the global ones with `--global`, and a `[notice]` names the folder. Reinstalling from the same source updates it where it is. Errors print as `[error] …`. Works with no LLM server. |
 
 Automatic compaction also runs headless: before a message, if the last reply used more of the
@@ -140,7 +140,7 @@ Two unrelated tasks in one run, with a clean slate between them:
 @"
 Summarize README.md in five bullets.
 /new
-Draft a commit message for the files changed today (use the git tools).
+Draft a commit message for the files changed today (use the GitLib tools).
 "@ | NeonSidekick.exe --headless
 ```
 
@@ -243,7 +243,7 @@ foreach ($m in "qwen3-30b-a3b", "gemma-3-27b-it", "mistral-small-3.2") {
 
 ## `--cwd <path>`: the working directory (the file sandbox)
 
-The file, git, shell and download tools all work inside this folder. A relative path resolves
+The file, GitLib, shell and download tools all work inside this folder. A relative path resolves
 against the directory you launch from. Outranks the saved *Working directory* setting.
 
 Point it at a project:

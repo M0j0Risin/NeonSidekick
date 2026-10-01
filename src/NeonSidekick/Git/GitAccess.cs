@@ -54,7 +54,7 @@ public sealed class GitAccess
     /// <summary>Commits a path-filtered log walks before it stops (a path with few touches in a long history).</summary>
     public const int MaxLogWalk = 10_000;
 
-    /// <summary>The most a file's text is read for <c>git_show</c> (<see cref="WorkingDirectory.MaxReadChars"/>).</summary>
+    /// <summary>The most a file's text is read for <c>gitlib_show</c> (<see cref="WorkingDirectory.MaxReadChars"/>).</summary>
     public const int MaxShowChars = WorkingDirectory.MaxReadChars;
 
     private readonly WorkingDirectory _files;

@@ -20,7 +20,7 @@ public enum CommandPolicyMode
 /// The setting <c>Shell command policy</c> (2026-09-21): the three words the operator picks from
 /// (<c>off</c>, <c>ask</c>, <c>yolo</c>) and their mapping to <see cref="CommandPolicyMode"/>, the
 /// <see cref="Web.NetworkMode"/> shape. It is the Shell group's switch: <c>off</c> offers no shell
-/// tool and drops the rule sentence, as <c>Git native tools</c> off does for git. <see cref="Resolve"/> is
+/// tool and drops the rule sentence, as <c>GitLib tools</c> off does for git. <see cref="Resolve"/> is
 /// the one place the saved string becomes the enum: a hand-edited value that is none of them falls
 /// back to <see cref="Default"/> with a warning.
 /// </summary>

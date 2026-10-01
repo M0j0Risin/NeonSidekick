@@ -198,7 +198,7 @@ Settings that an environment variable or flag can override for one launch are li
 |---|---|---|
 | Profile | Switches to another profile (each has its own settings, persona, memory, skills and sessions). | `default` |
 | New profile mode | What `/profile add` copies from the current profile: `basic` copies the settings and memories; `advanced` also copies the persona, operating-rules and voice-directive files. | `basic` |
-| Working directory (cwd) | The folder the file and git tools work in. Empty means the profile's own `files\` folder. Editing the row opens the `/cwd browse` folder picker, and `/cwd <path>` sets a typed path. | profile's `files\` |
+| Working directory (cwd) | The folder the file and GitLib tools work in. Empty means the profile's own `files\` folder. Editing the row opens the `/cwd browse` folder picker, and `/cwd <path>` sets a typed path. | profile's `files\` |
 | Queue messages | Messages sent while a reply streams are listed (as a count, and in `/queue`) and sent when the reply ends. When off, they are still sent then, just not listed. | on |
 | Queue cancel mode | What a cancelled reply does with the queue: `hold` keeps it until your next message, `drain` sends the next message at once, `empty` drops them all. | `empty` |
 | Memory | Offers the model `save_memory` / `recall_memory` and opens every conversation with what it remembers. | on |
@@ -520,7 +520,7 @@ The app keeps a record of every global and profile skill in `skills.db` in the h
 
 #### Offered
 
-Every tool, grouped (Clock, Timers, Files, Git, Shell, Obsidian, SQL, ComfyUI, Claude, Web, Memory, Skills, Sessions, Questions), with the description the model reads. Enter or Space turns one tool on or off. A group whose switch is off is shown dim. In a new profile, `git_delete` (loses branches, tags and stashes), `zip` and `unzip` start off.
+Every tool, grouped (Clock, Timers, Files, GitLib, Shell, Obsidian, SQL, ComfyUI, Claude, Web, Memory, Skills, Sessions, Questions), with the description the model reads. Enter or Space turns one tool on or off. A group whose switch is off is shown dim. In a new profile, `gitlib_delete` (loses branches, tags and stashes), `zip` and `unzip` start off.
 
 #### Web
 
@@ -576,7 +576,7 @@ Every tool, grouped (Clock, Timers, Files, Git, Shell, Obsidian, SQL, ComfyUI, C
   * `--no-police` (one launch) and `NEONSIDEKICK_SHELL_POLICE` override it; `--yolo` never turns it off.
 * **Prefer native tools**: the operating rules tell the model to use `run_command` only when no other tool does the job. They name the tools offered that turn and the shell commands each replaces:
   * `cat`/`type`/`Get-Content`/`dir`/`ls`/`grep` → `read_file`/`search_files`
-  * `git status`/`log`/`diff`/`add`/`commit` → the git tools
+  * `git status`/`log`/`diff`/`add`/`commit` → the GitLib tools
   * `curl`/`Invoke-WebRequest` → `web_fetch`
   * `sqlcmd` → `sql_query`
   * `sqlplus` → `oracle_query`
@@ -727,15 +727,15 @@ You can change which services run without asking under `ask` in `profile.json` (
 | MySQL connections (profile) | Enter opens the profile's `mysql.json` in your editor (created with commented examples). | (none) |
 | MySQL connections (global) | The same for the home folder's `mysql.json`, which every profile reads. The profile's wins on a name clash. | (none) |
 
-#### Git
+#### GitLib
 
 | Setting | What it does | Default |
 |---|---|---|
-| Git native tools | Offers the git tools (status, log, show, diff, blame, branch, stage, commit, stash, discard, delete) over the repository in the working directory. They run inside the app, with no `git.exe`. When off, the model reaches git through the shell only, and `/gituser` does nothing. | off |
-| Git native diff max lines | Where a `git_diff` patch is cut (20–5000). | 500 |
-| Git native log max commits | How many commits `git_log` returns unless the call says otherwise (1–200). | 20 |
-| Git native email | The `user.email` that `/gituser` writes into the repository's config. The git tools never read it. | (not set) |
-| Git native name | The `user.name` that `/gituser` writes beside it. | (not set) |
+| GitLib tools | Offers the GitLib tools (`gitlib_status`, …: status, log, show, diff, blame, branch, stage, commit, stash, discard, delete) over the repository in the working directory. They run inside the app, with no `git.exe`. When off, the model reaches git through the shell only, and `/gituser` does nothing. | off |
+| GitLib diff max lines | Where a `gitlib_diff` patch is cut (20–5000). | 500 |
+| GitLib log max commits | How many commits `gitlib_log` returns unless the call says otherwise (1–200). | 20 |
+| GitLib email | The `user.email` that `/gituser` writes into the repository's config. The GitLib tools never read it. | (not set) |
+| GitLib name | The `user.name` that `/gituser` writes beside it. | (not set) |
 
 #### Options
 
@@ -789,7 +789,7 @@ The system prompt section by section, each with its status:
 
 #### Tools
 
-Every tool the reply may call, grouped (Clock, Timers, Files, Git, Shell, Obsidian, SQL, ComfyUI, Claude, Web, Memory, Skills, Sessions, one group per connected MCP server, Plan in plan mode, Questions), with the description the model reads. Tools and groups that are switched off are left out; `/tools` lists everything.
+Every tool the reply may call, grouped (Clock, Timers, Files, GitLib, Shell, Obsidian, SQL, ComfyUI, Claude, Web, Memory, Skills, Sessions, one group per connected MCP server, Plan in plan mode, Questions), with the description the model reads. Tools and groups that are switched off are left out; `/tools` lists everything.
 
 </details>
 
@@ -819,7 +819,7 @@ Type `/` to list every command with a short summary. After a command and a space
 | `/emptytrash` | Permanently empty the working directory's `.trash` (asks first). |
 | `/exit` | Exit the app. |
 | `/explore [path]` | Open the working directory in your file browser. |
-| `/gituser [force]` | Write *Git native email* and *Git native name* into the repository's config as `user.email` / `user.name`. An existing `[user]` section is kept unless you add `force`. Does nothing while *Git native tools* is off. |
+| `/gituser [force]` | Write *GitLib email* and *GitLib name* into the repository's config as `user.email` / `user.name`. An existing `[user]` section is kept unless you add `force`. Does nothing while *GitLib tools* is off. |
 | `/ha` | Home Assistant at a glance: the server, the lights on in each room, the TV, temperatures, motion, low batteries and to-do lists. |
 | `/ha on\|off\|toggle <room or name> [brightness%]` | Switch a room (its group light), a light, a switch or the TV (`/ha on den 40%`, `/ha off kitchen and hallway`). |
 | `/ha scene <name>` | Activate a scene (`/ha scene den relax`). |
@@ -966,7 +966,9 @@ Type `/` to list every command with a short summary. After a command and a space
 * Each test sends only its own messages: no system prompt, no history, no tools. Sampling and reasoning are the connected model's own (`/sampling`, `/reasoning`), as in chat.
 * The structured tests send their schema as `response_format` (`json_schema`, `strict: true`, the schema exactly as written). A reply wrapped in a code fence fails. The invoice schema's root is an array, which llama.cpp, vLLM and SGLang accept. Over the Claude API these two tests are skipped.
 * The long-context tests are sized from the context window (from the settings or the server). The retrieval haystack takes up to half of it (at most ~66k tokens), and saturation fills it. When the window is unknown, they use ~66k tokens. The *LLM request timeout* applies, and a refused or timed-out request counts as an error.
+* A run starts the way `/clear` leaves things: the screen is cleared, the conversation and its session are forgotten, and the token figures leave the hint row.
 * Results show as one line per test (a failure shows what the model answered), then a table with the time, tokens and tok/s. ESC stops the run and keeps what finished.
+* While it runs, the input row and the toolbar and hint-row glyphs work as they do during a reply: a pane command or glyph opens its pane over the run, a quick command runs when it ends, `/clear`, `/new` or `/exit` stops it as ESC does, and a message is queued.
 * Runs are saved in the profile's `tests.json` (the last 50), each with the reasoning level and sampling it ran with, shown under its table and in `/test history`. `/test history` lists them, and a bare `/test` shows each test's last verdict for the connected model. Nothing enters the conversation.
 
 #### Imagine options
@@ -1031,7 +1033,7 @@ The viewer and the ComfyUI picture strip follow each other:
 ## Tools
 [↑ Back to top](#neon-sidekick)
 
-These are the tools the model can call, grouped as `/tools` and `/sys` show them. Each group has a switch that offers or withholds the whole group: `File tools`, `Git native tools`, `Shell command policy`, `Obsidian tools`, `SQL tools`, `ComfyUI tools`, `Home Assistant tools`, `Print tools`, `Claude advisor tool`, `Web tools`, `Memory`, `Agent skills`, `Session tool`, `Ask user` and `MCP servers`. To switch a single tool on or off, use the Offered tab of `/tools`.
+These are the tools the model can call, grouped as `/tools` and `/sys` show them. Each group has a switch that offers or withholds the whole group: `File tools`, `GitLib tools`, `Shell command policy`, `Obsidian tools`, `SQL tools`, `ComfyUI tools`, `Home Assistant tools`, `Print tools`, `Claude advisor tool`, `Web tools`, `Memory`, `Agent skills`, `Session tool`, `Ask user` and `MCP servers`. To switch a single tool on or off, use the Offered tab of `/tools`.
 
 <details>
 <summary><b>🕒 Clock & Timers</b></summary>
@@ -1079,28 +1081,29 @@ All paths are relative to the working directory. Nothing outside it can be reach
 | `unzip` | `path, to?, overwrite?` | Extracts a `.zip` archive into a folder, all or nothing. |
 | `open` | `path?` | Opens a file in the user's own editor or viewer, or a folder in Explorer. With no path, it opens the working directory. |
 
-### Git
+### GitLib
 
-These tools run git inside the app (LibGit2Sharp), for when the shell is off or the model should never run `git.exe`. Turn *Git native tools* off to leave git to the shell.
+These tools run git inside the app (LibGit2Sharp), for when the shell is off or the model should never run `git.exe`. Turn *GitLib tools* off to leave git to the shell.
 
 * Local only: no `fetch`, `pull`, `push` or `clone`.
 * The repository's root must be the working directory or a folder under it. Every tool takes an optional `path`: the file or folder it targets, which also tells it which repository to use.
-* `git_delete` starts off. Switch it on in the Offered tab of `/tools`.
-* Commits need an identity. Set *Git native email* and *Git native name* on the Git tab of `/tools`, then run `/gituser` to write them into the repository's config.
+* `gitlib_delete` starts off. Switch it on in the Offered tab of `/tools`.
+* Renamed on 2026-09-30: the tools were `git_status`, `git_log` and so on, and the settings *Git native …*. A profile from before starts with the GitLib settings at their defaults (the tools off, the email and name unset), and `gitlib_delete` switched on: switch it off again in the Offered tab if you want it off.
+* Commits need an identity. Set *GitLib email* and *GitLib name* on the GitLib tab of `/tools`, then run `/gituser` to write them into the repository's config.
 
 | Tool | Arguments | What it does |
 |---|---|---|
-| `git_status` | `path?` | The branch, how far ahead of or behind its upstream it is, and every staged, modified, untracked or conflicted path. |
-| `git_log` | `path?, ref?, max_commits?` | The commits reachable from `ref` (HEAD by default), newest first. With a file, only the commits that changed it. |
-| `git_show` | `ref, path?` | One commit: its author, date, message and the files it changed. With a file, the file's text at that commit; with a folder, its entries. |
-| `git_diff` | `path?, ref?, from?, to?, staged?, max_lines?` | A unified diff of the unstaged changes, the staged ones, one commit against its parent, or everything between two commits. |
-| `git_blame` | `path, from_line?, to_line?, ref?` | Who last changed each line of a file, and in which commit, a window of lines at a time. |
-| `git_branch` | `action, name?, new_name?, start_point?, switch_to?, path?` | `list`, `create`, `switch` or `rename` branches. A switch never overwrites local changes. |
-| `git_stage` | `action, paths, path?` | `stage` or `unstage` the paths named, or `.` for everything changed under `path`. |
-| `git_commit` | `message, amend?, allow_empty?, path?` | Commits what is staged, signed with the identity in git config (`user.name` / `user.email`). |
-| `git_stash` | `action, message?, index?, include_untracked?, path?` | `push` sets the working tree's changes aside, `pop` or `apply` brings a stash back, and `list` shows them. |
-| `git_discard` | `paths?, ref?, path?` | Throws uncommitted changes away. The paths named go back to `ref`; with none, the whole tree is hard reset (untracked files are left alone). |
-| `git_delete` | `kind, name?, index?, path?` | Removes a local `branch` (never the one checked out), a `tag`, or a `stash` by index. |
+| `gitlib_status` | `path?` | The branch, how far ahead of or behind its upstream it is, and every staged, modified, untracked or conflicted path. |
+| `gitlib_log` | `path?, ref?, max_commits?` | The commits reachable from `ref` (HEAD by default), newest first. With a file, only the commits that changed it. |
+| `gitlib_show` | `ref, path?` | One commit: its author, date, message and the files it changed. With a file, the file's text at that commit; with a folder, its entries. |
+| `gitlib_diff` | `path?, ref?, from?, to?, staged?, max_lines?` | A unified diff of the unstaged changes, the staged ones, one commit against its parent, or everything between two commits. |
+| `gitlib_blame` | `path, from_line?, to_line?, ref?` | Who last changed each line of a file, and in which commit, a window of lines at a time. |
+| `gitlib_branch` | `action, name?, new_name?, start_point?, switch_to?, path?` | `list`, `create`, `switch` or `rename` branches. A switch never overwrites local changes. |
+| `gitlib_stage` | `action, paths, path?` | `stage` or `unstage` the paths named, or `.` for everything changed under `path`. |
+| `gitlib_commit` | `message, amend?, allow_empty?, path?` | Commits what is staged, signed with the identity in git config (`user.name` / `user.email`). |
+| `gitlib_stash` | `action, message?, index?, include_untracked?, path?` | `push` sets the working tree's changes aside, `pop` or `apply` brings a stash back, and `list` shows them. |
+| `gitlib_discard` | `paths?, ref?, path?` | Throws uncommitted changes away. The paths named go back to `ref`; with none, the whole tree is hard reset (untracked files are left alone). |
+| `gitlib_delete` | `kind, name?, index?, path?` | Removes a local `branch` (never the one checked out), a `tag`, or a `stash` by index. |
 
 </details>
 

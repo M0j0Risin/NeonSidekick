@@ -42,7 +42,7 @@ public partial class SidekickAppTests : IDisposable
         _settings.Update(d => d.SessionNamingMode = "first-line");
         // delete is off in a fresh profile (2026-09-20); the headless scripts pin the full file rule, so the fixture opts it back on —
         // and File safe edits with it, since the rule's clause reads "into .trash" only under the setting (later on 2026-09-20).
-        _settings.Update(d => { d.ToolsDisabled = []; d.FileSafeEdits = true; d.GitNativeTools = true; });   // Git native tools off by default since 2026-09-21: the headless turns opt in
+        _settings.Update(d => { d.ToolsDisabled = []; d.FileSafeEdits = true; d.GitLibTools = true; });   // GitLib tools off by default since 2026-09-21: the headless turns opt in
         // Eight settings went off by default on 2026-09-29 (the user's call): the scripts here were written with every tool group
         // offered, the shell under ask and the local scan, so the fixture puts them back; the fresh-profile tests start from new ones.
         _settings.Update(PreFlipDefaults.Apply);
@@ -414,16 +414,16 @@ public partial class SidekickAppTests : IDisposable
         string files = Path.Combine(_settings.ProfileDirectory, "files");
         GitAccessTests.Init(files);
         GitAccessTests.CommitFile(files, "notes.txt", "one\n", "first");
-        _chat.Enqueue(FakeChatClient.Call("c1", "git_status", new Dictionary<string, object?>()));
+        _chat.Enqueue(FakeChatClient.Call("c1", "gitlib_status", new Dictionary<string, object?>()));
         _chat.EnqueueText("Clean.");
 
         string output = await Headless("git status?\n");
 
-        Assert.Contains("[tool] git_status {}", output);
-        Assert.Contains("[tool] git_status -> On branch main: clean", output);
+        Assert.Contains("[tool] gitlib_status {}", output);
+        Assert.Contains("[tool] gitlib_status -> On branch main: clean", output);
         Assert.Contains(Assistant.GitRule, _chat.Requests[0][0].Text!, StringComparison.Ordinal);
-        Assert.Contains("git_commit", _chat.Options[0]!.Tools!.Cast<AIFunction>().Select(t => t.Name));
-        Assert.Contains("git_discard", _chat.Options[0]!.Tools!.Cast<AIFunction>().Select(t => t.Name));   // the fixture opts every tool on; a fresh profile keeps the two opt-ins off
+        Assert.Contains("gitlib_commit", _chat.Options[0]!.Tools!.Cast<AIFunction>().Select(t => t.Name));
+        Assert.Contains("gitlib_discard", _chat.Options[0]!.Tools!.Cast<AIFunction>().Select(t => t.Name));   // the fixture opts every tool on; a fresh profile keeps the two opt-ins off
     }
 
     /// <summary>
@@ -445,7 +445,7 @@ public partial class SidekickAppTests : IDisposable
         Assert.Equal(3, SidekickApp.HeadlessRefusedExitCode);
         Assert.Contains(Assistant.ShellRuleWithoutBridge, _chat.Requests[0][0].Text!, StringComparison.Ordinal);   // the bridge off by default (later on 2026-09-21)
         var offered = _chat.Options[0]!.Tools!.Cast<AIFunction>().Select(t => t.Name).ToList();
-        Assert.Equal(offered.IndexOf("git_delete") + 1, offered.IndexOf("run_command"));
+        Assert.Equal(offered.IndexOf("gitlib_delete") + 1, offered.IndexOf("run_command"));
     }
 
     /// <summary>The variable says yolo (2026-09-21): the command runs headless, its result a generic tool line — the header, then the output flattened.</summary>
@@ -1026,6 +1026,20 @@ public partial class SidekickAppTests : IDisposable
         using var store = new NeonSidekick.Sessions.SessionStore(_settings.ProfileDirectory);
         var record = store.Load(Assert.Single(store.List(0)).Id)!;
         Assert.Equal(["first", "second again"], record.Turns.Select(t => t.UserText));
+    }
+
+    /// <summary>A headless <c>/test</c> run starts from a clean slate, as the screen's does (2026-09-30): the turn before it is forgotten.</summary>
+    [Fact]
+    public async Task Headless_TestRun_ForgetsTheConversationFirst()
+    {
+        ServerOn1234("llama");
+        _chat.EnqueueText("Hi.").EnqueueText("Drawer.").EnqueueText("Ok.");
+
+        string output = await Headless("hello\n/test mind\nafter\n");
+
+        Assert.Contains("1/1 passed", output);
+        Assert.Equal(3, _chat.Requests.Count);
+        Assert.Equal(["after"], _chat.Requests[2].Where(ConversationHistory.IsTurnStart).Select(m => m.Text));
     }
 
     [Fact]
