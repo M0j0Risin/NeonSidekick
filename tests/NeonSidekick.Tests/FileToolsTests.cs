@@ -8,7 +8,7 @@ using NeonSidekick.Tests.Fakes;
 
 namespace NeonSidekick.Tests;
 
-/// <summary>The fifteen file tools (2026-09-19: 19 less <c>list_directory</c>, <c>recent_files</c>, <c>append_file</c>, <c>edit_file</c> and <c>edit_lines</c>, folded into <c>search_files</c>, <c>write_file</c> and <c>patch_file</c>) over a real temp folder: schemas pinned, every <c>Describe</c> exercised once, the argument shapes a model sends.</summary>
+/// <summary>The fourteen file tools (2026-09-19: 19 less <c>list_directory</c>, <c>recent_files</c>, <c>append_file</c>, <c>edit_file</c> and <c>edit_lines</c>, folded into <c>search_files</c>, <c>write_file</c> and <c>patch_file</c>; <c>restore</c> went with File safe edits on 2026-10-01) over a real temp folder: schemas pinned, every <c>Describe</c> exercised once, the argument shapes a model sends.</summary>
 public sealed class FileToolsTests : IDisposable
 {
     private readonly string _dir = Path.Combine(Path.GetTempPath(), "NeonSidekick.Tests", Guid.NewGuid().ToString("N"));
@@ -17,8 +17,7 @@ public sealed class FileToolsTests : IDisposable
     private readonly WorkingDirectory _files;
     private readonly List<string> _opened = new();
     private readonly IReadOnlyList<AIFunction> _tools;
-    // Safe edits on (its default until 2026-09-19): the tests below count the trash copies; the ones for the off path clear it.
-    private readonly AppSettingsData _settings = new() { FileSafeEdits = true };
+    private readonly AppSettingsData _settings = new();
     private bool _isDefault = true;
 
     public FileToolsTests()
@@ -63,10 +62,10 @@ public sealed class FileToolsTests : IDisposable
     }
 
     [Fact]
-    public void FileTools_AreTheFifteen_InOrder_AllQuiet()
+    public void FileTools_AreTheFourteen_InOrder_AllQuiet()
     {
         Assert.Equal(FileToolNames.All, _tools.Select(t => t.Name));
-        Assert.Equal(15, _tools.Count);
+        Assert.Equal(14, _tools.Count);   // fifteen until 2026-10-01, when restore went with File safe edits
         Assert.All(_tools, t => Assert.Contains(t.Name, ChatScreen.QuietTools));
         Assert.All(_tools, t => Assert.Contains("working directory", t.Description));
         Assert.All(_tools, t => Assert.Equal("object", t.JsonSchema.GetProperty("type").GetString()));
@@ -84,7 +83,6 @@ public sealed class FileToolsTests : IDisposable
     [InlineData(MoveTool.ToolName, "from,to,overwrite", "from,to")]
     [InlineData(CopyTool.ToolName, "from,to,overwrite", "from,to")]
     [InlineData(DeleteTool.ToolName, "path", "path")]
-    [InlineData(RestoreTool.ToolName, "path,overwrite", "path")]
     [InlineData(ZipTool.ToolName, "path,to,overwrite", "path")]
     [InlineData(UnzipTool.ToolName, "path,to,overwrite", "path")]
     [InlineData(OpenTool.ToolName, "path", "")]
@@ -238,11 +236,10 @@ public sealed class FileToolsTests : IDisposable
         Assert.Equal(FileText.WriteExists("notes.txt"), await Invoke(write, ("path", "notes.txt"), ("content", "x"), ("mode", "create")));
         Assert.Equal("Error: 'notes.txt' already exists; call again with mode overwrite to replace it, or mode append to add to its end", FileText.WriteExists("notes.txt"));
         Assert.Equal(FileText.BadChoice("mode", "upsert", WriteFileTool.ModeChoices), await Invoke(write, ("path", "notes.txt"), ("content", "x"), ("mode", "upsert")));
-        // Safe edits (on in this fixture): the replaced file is copied into .trash first and the sentence says so.
-        Assert.Equal("replaced notes.txt (13 bytes, 3 lines, 3 words) (previous version in .trash)", await Invoke(write, ("path", "notes.txt"), ("content", "one\ntwo\nthree"), ("mode", "overwrite")));
-        Assert.Equal("replaced notes.txt (13 bytes, 3 lines, 3 words) (previous version in .trash)", await Invoke(write, ("path", "notes.txt"), ("content", "one\ntwo\nthree"), ("mode", Json("\"OVERWRITE\""))));
-        Assert.Equal("one\ntwo\nthr", File.ReadAllText(Path.Combine(_root, ".trash", "20260911-140530", "notes.txt")));
-        Assert.Equal("one\ntwo\nthree", File.ReadAllText(Path.Combine(_root, ".trash", "20260911-140530", "notes.txt (2)")));
+        // An overwrite replaces the file in place, nothing kept (the .trash copy went with File safe edits, 2026-10-01).
+        Assert.Equal("replaced notes.txt (13 bytes, 3 lines, 3 words)", await Invoke(write, ("path", "notes.txt"), ("content", "one\ntwo\nthree"), ("mode", "overwrite")));
+        Assert.Equal("replaced notes.txt (13 bytes, 3 lines, 3 words)", await Invoke(write, ("path", "notes.txt"), ("content", "one\ntwo\nthree"), ("mode", Json("\"OVERWRITE\""))));
+        Assert.False(Directory.Exists(Path.Combine(_root, ".trash")));
 
         // A read is the bare text (never numbered since 2026-09-19); a leftover numbered argument is ignored like any unknown one.
         var read = Tool<ReadFileTool>();
@@ -254,13 +251,13 @@ public sealed class FileToolsTests : IDisposable
         Assert.Equal(ClockText.BadInteger("max_lines", "all"), await Invoke(read, ("path", "notes.txt"), ("max_lines", "all")));
         Assert.Equal(FileText.Missing("gone.txt"), await Invoke(read, ("path", "gone.txt")));
 
-        Assert.Equal("appended 5 bytes to notes.txt (now 4 lines, 4 words) (previous version in .trash)", await Invoke(write, ("path", "notes.txt"), ("content", "four"), ("mode", "append")));   // the newline before it counts
+        Assert.Equal("appended 5 bytes to notes.txt (now 4 lines, 4 words)", await Invoke(write, ("path", "notes.txt"), ("content", "four"), ("mode", "append")));   // the newline before it counts
         Assert.Equal("created log.txt (2 bytes, 1 line, 1 word)", await Invoke(write, ("path", "log.txt"), ("content", "hi"), ("mode", "append")));
         Assert.Equal("one\ntwo\nthree\nfour", File.ReadAllText(Path.Combine(_root, "notes.txt")));
 
-        // An edit's result: the new line, then the region around it numbered (two lines each side), the kept-copy suffix first.
+        // An edit's result: the new line, then the region around it numbered (two lines each side).
         var patch = Tool<PatchFileTool>();
-        Assert.Equal("edited notes.txt (line 2; now 4 lines, 4 words) (previous version in .trash):\n1: one\n2: 2\n3: three\n4: four", await Invoke(patch, ("path", "notes.txt"), ("old_text", "two"), ("new_text", "2")));
+        Assert.Equal("edited notes.txt (line 2; now 4 lines, 4 words):\n1: one\n2: 2\n3: three\n4: four", await Invoke(patch, ("path", "notes.txt"), ("old_text", "two"), ("new_text", "2")));
         Assert.Equal("one\n2\nthree\nfour", File.ReadAllText(Path.Combine(_root, "notes.txt")));
         Assert.Equal(FileText.EditNotFound("notes.txt"), await Invoke(patch, ("path", "notes.txt"), ("old_text", "nine hundred"), ("new_text", "9")));
         Assert.Equal(FileText.EditEmpty, await Invoke(patch, ("path", "notes.txt"), ("new_text", "9")));
@@ -271,16 +268,10 @@ public sealed class FileToolsTests : IDisposable
         Assert.Equal(FileText.AlreadyApplied("notes.txt"), await Invoke(patch, ("path", "notes.txt"), ("old_text", "one\nnever here\nthree"), ("new_text", "one\n2\nthree")));
         Assert.Equal("one\n2\nthree\nfour", File.ReadAllText(Path.Combine(_root, "notes.txt")));
 
-        // Undo: restore with overwrite puts the newest kept copy back and trashes the live file.
-        // Undo: restore with overwrite puts the newest kept copy back, the live file kept in .trash too while File safe edits is on (the fixture has it on).
-        Assert.Equal("restored notes.txt from .trash\\20260911-140530\\ (previous version in .trash)", await Invoke(Tool<RestoreTool>(), ("path", "notes.txt"), ("overwrite", Json("true"))));
-        Assert.Equal("one\ntwo\nthree\nfour", File.ReadAllText(Path.Combine(_root, "notes.txt")));   // the version before the patch
-        Assert.Equal(FileText.BadBoolean("overwrite", "y"), await Invoke(Tool<RestoreTool>(), ("path", "notes.txt"), ("overwrite", "y")));
-
         // old_text nowhere as written is found by the chain (2026-09-19): here with each line trimmed, the new lines taking the file's indentation.
         Put("style.css", ".a {\n    color: red;\n    margin: 0;\n}\n.b {\n  color: red;\n}\n");
         Assert.Equal(
-            "edited style.css (lines 2–3; now 7 lines, 12 words)" + FileText.LineTrimmedNote + " (previous version in .trash):\n1: .a {\n2:     color: blue;\n3:     margin: 1px;\n4: }\n5: .b {",
+            "edited style.css (lines 2–3; now 7 lines, 12 words)" + FileText.LineTrimmedNote + ":\n1: .a {\n2:     color: blue;\n3:     margin: 1px;\n4: }\n5: .b {",
             await Invoke(patch, ("path", "style.css"), ("old_text", "  color: red;\n  margin: 0;"), ("new_text", "  color: blue;\n  margin: 1px;")));
         Assert.Equal(".a {\n    color: blue;\n    margin: 1px;\n}\n.b {\n  color: red;\n}\n", File.ReadAllText(Path.Combine(_root, "style.css")));
         // Several loose matches without replace_all: the refusal names them.
@@ -291,18 +282,17 @@ public sealed class FileToolsTests : IDisposable
         Put("dup.txt", "a a");
         Assert.Equal(FileText.EditAmbiguous("dup.txt", 2, [new MatchLocation(1, "a a"), new MatchLocation(1, "a a")]), await Invoke(patch, ("path", "dup.txt"), ("old_text", "a"), ("new_text", "b")));
         Assert.Equal(FileText.BadBoolean("replace_all", "all"), await Invoke(patch, ("path", "dup.txt"), ("old_text", "a"), ("new_text", "b"), ("replace_all", "all")));
-        _settings.FileSafeEdits = false;
         Assert.Equal("replaced 2 occurrences of old_text in dup.txt (lines 1, 1; now 1 line, 2 words)", await Invoke(patch, ("path", "dup.txt"), ("old_text", "a"), ("new_text", "b"), ("replace_all", Json("true"))));
         Assert.Equal("b b", File.ReadAllText(Path.Combine(_root, "dup.txt")));
         Assert.Equal("edited dup.txt (line 1; now 1 line, 2 words):\n1: c b", await Invoke(patch, ("path", "dup.txt"), ("old_text", "b b"), ("new_text", "c b"), ("replace_all", Json("true"))));   // one occurrence: the plain shape
         Put("indent.txt", "  a\n a\n");
         Assert.Equal("replaced 2 occurrences of old_text in indent.txt (lines 1, 2; now 2 lines, 2 words)" + FileText.LineTrimmedNote, await Invoke(patch, ("path", "indent.txt"), ("old_text", "    a"), ("new_text", "b"), ("replace_all", Json("true"))));
         Assert.Equal("  b\n b\n", File.ReadAllText(Path.Combine(_root, "indent.txt")));
-        Assert.False(Directory.Exists(Path.Combine(_root, ".trash", "20260911-140530", "dup.txt")));
+        Assert.False(Directory.Exists(Path.Combine(_root, ".trash")));
     }
 
     [Fact]
-    public async Task CreateMoveCopyDeleteRestore()
+    public async Task CreateMoveCopyDelete()
     {
         Assert.Equal("created docs\\notes\\", await Invoke(Tool<CreateDirectoryTool>(), ("path", @"docs\notes")));
         Assert.Equal("docs\\ already exists", await Invoke(Tool<CreateDirectoryTool>(), ("path", "docs")));
@@ -314,23 +304,19 @@ public sealed class FileToolsTests : IDisposable
         Assert.Equal("renamed docs\\ to papers\\", await Invoke(move, ("from", "docs"), ("to", "papers")));
         Put("c.txt", "c");
         Assert.Equal(FileText.Exists(@"papers\b.txt"), await Invoke(move, ("from", "c.txt"), ("to", @"papers\b.txt")));
-        // What a move replaces is kept in .trash while File safe edits is on (2026-09-20; the fixture has it on), the sentence saying so;
-        // off, a file is replaced in place with nothing kept and a folder in the way is refused.
-        Assert.Equal("moved c.txt to papers\\b.txt (previous version in .trash)", await Invoke(move, ("from", "c.txt"), ("to", @"papers\b.txt"), ("overwrite", Json("true"))));
-        Assert.Equal("a", File.ReadAllText(Path.Combine(_root, ".trash", "20260911-140530", "papers", "b.txt")));
+        // With overwrite a file in the way is replaced in place, nothing kept, and a folder in the way is refused (2026-09-20).
+        Assert.Equal("moved c.txt to papers\\b.txt", await Invoke(move, ("from", "c.txt"), ("to", @"papers\b.txt"), ("overwrite", Json("true"))));
+        Assert.Equal("c", File.ReadAllText(Path.Combine(_root, "papers", "b.txt")));
         Put("e.txt", "e");
-        _settings.FileSafeEdits = false;
         Assert.Equal(FileText.FolderInTheWay(@"papers\"), await Invoke(move, ("from", "e.txt"), ("to", "papers"), ("overwrite", Json("true"))));
         Assert.Equal("Error: 'papers\\' is a folder in the way — move it aside first", FileText.FolderInTheWay(@"papers\"));
         Assert.Equal("moved e.txt to papers\\b.txt", await Invoke(move, ("from", "e.txt"), ("to", @"papers\b.txt"), ("overwrite", Json("true"))));
-        Assert.False(File.Exists(Path.Combine(_root, ".trash", "20260911-140530", "papers", "b.txt (2)")));
-        _settings.FileSafeEdits = true;
+        Assert.False(Directory.Exists(Path.Combine(_root, ".trash")));
         Assert.Equal(FileText.BadBoolean("overwrite", "y"), await Invoke(move, ("from", "x"), ("to", "y"), ("overwrite", "y")));
         Assert.Equal(FileText.Missing("x"), await Invoke(move, ("from", "x"), ("to", "y")));
         Assert.Equal(FileText.PathRequired("from"), await Invoke(move, ("to", "y")));
         Assert.Equal(FileText.PathRequired("to"), await Invoke(move, ("from", "x")));
         Assert.Equal(FileText.PathRequired("path"), await Invoke(Tool<CreateDirectoryTool>()));
-        Assert.Equal(FileText.PathRequired("path"), await Invoke(Tool<RestoreTool>()));
         Assert.Equal(FileText.PathRequired("path"), await Invoke(Tool<UnzipTool>()));
         Assert.Equal(FileText.PathRequired("path"), await Invoke(Tool<WriteFileTool>(), ("content", "x"), ("mode", "append")));
         Assert.Equal(FileText.PathRequired("path"), await Invoke(Tool<ReadFileTool>()));
@@ -342,63 +328,34 @@ public sealed class FileToolsTests : IDisposable
         Assert.Equal(FileText.PathRequired("from"), await Invoke(copy, ("to", "d.txt")));
         Assert.Equal(FileText.IntoItself(@"papers\", @"papers\inner\"), await Invoke(copy, ("from", "papers"), ("to", @"papers\inner")));
 
-        Assert.Equal(
-            "moved d.txt to .trash\\20260911-140530\\d.txt (nothing is destroyed; restore brings it back)",
-            await Invoke(Tool<DeleteTool>(), ("path", "d.txt")));
-        Assert.Equal(FileText.Missing("d.txt"), await Invoke(Tool<DeleteTool>(), ("path", "d.txt")));
-        Assert.Equal(FileText.RootItself, await Invoke(Tool<DeleteTool>()));
-        Assert.Equal(FileText.TrashReadOnly(@".trash\20260911-140530\d.txt"), await Invoke(Tool<DeleteTool>(), ("path", @".trash\20260911-140530\d.txt")));
-        Assert.Equal("restored d.txt from .trash\\20260911-140530\\", await Invoke(Tool<RestoreTool>(), ("path", "d.txt")));
-        Assert.Equal(FileText.RestoreExists("d.txt"), await Invoke(Tool<RestoreTool>(), ("path", "d.txt")));
-        Assert.Equal(FileText.NotInTrash("never.txt"), await Invoke(Tool<RestoreTool>(), ("path", "never.txt")));
-
-        // File safe edits off (2026-09-20, the user's call): delete removes for good — a folder with everything in it —, the description says so at every read, .trash untouched.
+        // delete removes for good — a folder with everything in it (in place since 2026-09-20 with File safe edits off, always since 2026-10-01).
         var delete = Tool<DeleteTool>();
-        Assert.Equal(DeleteTool.DescribeTool(true), delete.Description);
-        _settings.FileSafeEdits = false;
-        Assert.Equal(DeleteTool.DescribeTool(false), delete.Description);
-        // Later still on 2026-09-20 (the user's ask): the off-form names neither restore nor .trash — the tool is not offered then, and the model never hears of a trash.
-        // 2026-09-21 (the user's ask again): nor the setting, nor that nothing brings a file back — the model confused itself over a restore it could not reach.
-        Assert.Equal(
-            "Deletes a file or folder under the working directory (the user's cwd / current directory) for good; a folder goes with everything in it." +
-            " A .git folder, anything in it, or a folder holding one is never deleted.",   // the .git note on both forms since 2026-09-23 (the user's call)
-            DeleteTool.DescribeTool(false));
-        Assert.EndsWith(DeleteTool.GitNote, DeleteTool.DescribeTool(true), StringComparison.Ordinal);
-        Assert.DoesNotContain("safe edits", DeleteTool.DescribeTool(false), StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("brings it back", DeleteTool.DescribeTool(false));
         Assert.Equal("deleted d.txt", await Invoke(delete, ("path", "d.txt")));   // no "(File safe edits is off: nothing was kept)" since 2026-09-21
         Assert.False(File.Exists(Path.Combine(_root, "d.txt")));
-        Assert.False(File.Exists(Path.Combine(_root, ".trash", "20260911-140530", "d.txt (2)")));
-        Assert.Equal(FileText.NotInTrash("d.txt"), await Invoke(Tool<RestoreTool>(), ("path", "d.txt")));   // the earlier copy was restored already; nothing new kept
+        Assert.Equal(FileText.Missing("d.txt"), await Invoke(delete, ("path", "d.txt")));
+        Assert.Equal(FileText.RootItself, await Invoke(delete));
         Assert.Equal("deleted the folder backup\\ and everything in it", await Invoke(delete, ("path", "backup")));
         Assert.False(Directory.Exists(Path.Combine(_root, "backup")));
-        Assert.Equal(FileText.TrashReadOnly(@".trash\20260911-140530"), await Invoke(delete, ("path", @".trash\20260911-140530")));
-        _settings.FileSafeEdits = true;
-        Assert.Equal(
-            "Deletes a file or folder under the working directory (the user's cwd / current directory) by moving it to the .trash folder there; nothing is destroyed, and restore brings it back." +
-            " A .git folder, anything in it, or a folder holding one is never deleted.",
-            delete.Description);
+        // A .trash left from before 2026-10-01 is a folder like any other: deleted like one.
+        Put(@".trash\20260911-140530\old.txt", "old");
+        Assert.Equal(@"deleted .trash\20260911-140530\old.txt", await Invoke(delete, ("path", @".trash\20260911-140530\old.txt")));
+        Assert.Equal("deleted the folder .trash\\ and everything in it", await Invoke(delete, ("path", ".trash")));
+        Assert.False(Directory.Exists(Path.Combine(_root, ".trash")));
     }
 
     [Fact]
-    public void SafeEditsOff_TheDescriptionsNameNoTrash_AndTheListLosesRestore()
+    public void Descriptions_NameNoTrashNoRestoreNoSetting()
     {
-        // Later still on 2026-09-20 (the user's ask): while File safe edits is off the model never sees the words restore or .trash — the four
-        // write-side descriptions drop their trash clause at every read, and FileToolsFor (the WebToolsFor shape) cuts restore from the offer.
+        // 2026-09-21 (the user's ask): no setting, nor that nothing brings a file back — the model confused itself over a restore it could not reach;
+        // since 2026-10-01 (File safe edits gone) the one form, which no description of any file tool contradicts.
         var write = Tool<WriteFileTool>();
         var move = Tool<MoveTool>();
         var copy = Tool<CopyTool>();
-        Assert.Equal(WriteFileTool.DescribeTool(true), write.Description);
-        Assert.Equal(MoveTool.DescribeTool(true), move.Description);
-        Assert.Equal(CopyTool.DescribeTool(true), copy.Description);
-        Assert.Contains(".trash", write.Description, StringComparison.Ordinal);
-        Assert.Contains(".trash", move.Description, StringComparison.Ordinal);
-        Assert.Contains(".trash", copy.Description, StringComparison.Ordinal);
-
-        _settings.FileSafeEdits = false;
-        Assert.Equal(WriteFileTool.DescribeTool(false), write.Description);
-        Assert.Equal(MoveTool.DescribeTool(false), move.Description);
-        Assert.Equal(CopyTool.DescribeTool(false), copy.Description);
+        Assert.Equal(
+            "Deletes a file or folder under the working directory (the user's cwd / current directory) for good; a folder goes with everything in it." +
+            " A .git folder, anything in it, or a folder holding one is never deleted.",   // the .git note since 2026-09-23 (the user's call)
+            Tool<DeleteTool>().Description);
+        Assert.EndsWith(DeleteTool.GitNote, DeleteTool.DescriptionText, StringComparison.Ordinal);
         Assert.Equal(
             "Writes a text file under the working directory (the user's cwd / current directory), creating any missing folders. " +
             "mode create (the default) leaves a file that already exists alone; mode overwrite replaces it; mode append adds the content at its end on a new line, creating the file if missing — for journals, logs and lists. " +
@@ -413,21 +370,13 @@ public sealed class FileToolsTests : IDisposable
             "Copies a file or a folder (with everything in it) under the working directory (the user's cwd / current directory) to a new path. " +
             "Refuses to replace something already at the new path unless overwrite is true; a file is replaced in place and a folder in the way is refused (a folder copied over a folder merges into it).",
             copy.Description);
-        Assert.Equal(WriteFileTool.DescribeTool(true).Replace("The previous version of a replaced or appended file is kept in .trash while File safe edits is on. ", "", StringComparison.Ordinal), write.Description);
         foreach (var tool in _tools)
         {
-            if (tool is not RestoreTool)
-            {
-                Assert.DoesNotContain("trash", tool.Description, StringComparison.OrdinalIgnoreCase);
-                Assert.DoesNotContain("restore", tool.Description, StringComparison.OrdinalIgnoreCase);
-            }
+            Assert.DoesNotContain("trash", tool.Description, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("restore", tool.Description, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("safe edits", tool.Description, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("brings it back", tool.Description, StringComparison.OrdinalIgnoreCase);
         }
-
-        var cut = ChatScreen.FileToolsFor(_tools, safeEdits: false);
-        Assert.DoesNotContain(cut, t => t is RestoreTool);
-        Assert.Equal(_tools.Count - 1, cut.Count);
-        Assert.Same(_tools, ChatScreen.FileToolsFor(_tools, safeEdits: true));
-        Assert.Same(cut, ChatScreen.FileToolsFor(cut, safeEdits: false));
     }
 
     [Fact]
@@ -470,9 +419,8 @@ public sealed class FileToolsTests : IDisposable
     {
         Assert.Throws<ArgumentNullException>(() => new SearchFilesTool(null!));
         Assert.Throws<ArgumentNullException>(() => new GetWorkingDirectoryTool(_files, null!));
-        Assert.Throws<ArgumentNullException>(() => new MoveTool(_files, null!));
-        Assert.Throws<ArgumentNullException>(() => new CopyTool(_files, null!));
-        Assert.Throws<ArgumentNullException>(() => new RestoreTool(_files, null!));
+        Assert.Throws<ArgumentNullException>(() => new MoveTool(null!));
+        Assert.Throws<ArgumentNullException>(() => new CopyTool(null!));
         Assert.Throws<ArgumentNullException>(() => new OpenTool(_files, null!));
         Assert.Throws<ArgumentNullException>(() => new WorkingDirectory(null!, _time));
         Assert.Throws<ArgumentNullException>(() => new WorkingDirectory(() => _root, null!));

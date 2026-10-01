@@ -605,8 +605,9 @@ public sealed class GitAccess
 
     /// <summary>
     /// Stages (or, with <paramref name="unstage"/>, unstages) <paramref name="paths"/> — sandbox-relative, or
-    /// <c>.</c> for everything changed under <paramref name="relative"/>. The sandbox's <c>.trash</c> is never
-    /// staged; a path that is neither in the tree nor in the index is <see cref="GitOutcome.Missing"/>.
+    /// <c>.</c> for everything changed under <paramref name="relative"/>; a path that is neither in the tree nor in
+    /// the index is <see cref="GitOutcome.Missing"/>. (The sandbox's <c>.trash</c> was never staged until 2026-10-01, when
+    /// File safe edits and its <c>.trash</c> went, the user's call: a folder of that name is a folder like any other.)
     /// </summary>
     public GitStageResult Stage(string relative, IReadOnlyList<string> paths, bool unstage)
     {
@@ -634,14 +635,9 @@ public sealed class GitAccess
                 }
                 else
                 {
-                    switch (_files.Resolve(text, forWrite: true, out string each))
+                    if (_files.Resolve(text, forWrite: true, out string each) != FileOutcome.Ok)
                     {
-                        case FileOutcome.Ok:
-                            break;
-                        case FileOutcome.TrashReadOnly:
-                            return GitStageResult.Refused(GitOutcome.TrashReadOnly, text);
-                        default:
-                            return GitStageResult.Refused(GitOutcome.OutsideRoot, text);
+                        return GitStageResult.Refused(GitOutcome.OutsideRoot, text);
                     }
 
                     if (RepoPath(location, each) is not { } repoPath)
@@ -670,7 +666,7 @@ public sealed class GitAccess
                     continue;
                 }
 
-                // "." (or the tree itself): every changed path under the folder, one by one — never the sandbox's .trash.
+                // "." (or the tree itself): every changed path under the folder, one by one.
                 foreach (var entry in StatusEntries(repo, location, under, recurseUntracked: true))
                 {
                     bool wanted = unstage ? IndexCode(entry.State) is not null : entry.State.HasFlag(FileStatus.NewInWorkdir) || WorkdirCode(entry.State) is not null;
@@ -866,14 +862,9 @@ public sealed class GitAccess
                 }
                 else
                 {
-                    switch (_files.Resolve(text, forWrite: true, out string each))
+                    if (_files.Resolve(text, forWrite: true, out string each) != FileOutcome.Ok)
                     {
-                        case FileOutcome.Ok:
-                            break;
-                        case FileOutcome.TrashReadOnly:
-                            return GitDiscardResult.Refused(GitOutcome.TrashReadOnly, text);
-                        default:
-                            return GitDiscardResult.Refused(GitOutcome.OutsideRoot, text);
+                        return GitDiscardResult.Refused(GitOutcome.OutsideRoot, text);
                     }
 
                     if (RepoPath(location, each) is not { } repoPath)
@@ -1194,7 +1185,7 @@ public sealed class GitAccess
         return (list, truncated);
     }
 
-    /// <summary>The status entries under <paramref name="prefix"/> (<c>""</c> = all), ignored files and submodules out, the sandbox's <c>.trash</c> out.</summary>
+    /// <summary>The status entries under <paramref name="prefix"/> (<c>""</c> = all), ignored files and submodules out (the sandbox's <c>.trash</c> too until 2026-10-01).</summary>
     private IEnumerable<StatusEntry> StatusEntries(Repository repo, RepoLocation location, string prefix, bool recurseUntracked)
     {
         var options = new StatusOptions
@@ -1211,14 +1202,8 @@ public sealed class GitAccess
             options.PathSpec = [prefix];
         }
 
-        string? trash = RepoPath(location, _files.TrashPath);
         foreach (var entry in repo.RetrieveStatus(options))
         {
-            if (trash is { Length: > 0 } && (entry.FilePath.Equals(trash, StringComparison.OrdinalIgnoreCase) || entry.FilePath.StartsWith(trash + "/", StringComparison.OrdinalIgnoreCase)))
-            {
-                continue;
-            }
-
             if (entry.State == FileStatus.Unaltered || entry.State.HasFlag(FileStatus.Ignored))
             {
                 continue;

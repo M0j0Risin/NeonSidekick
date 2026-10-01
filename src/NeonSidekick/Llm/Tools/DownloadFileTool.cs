@@ -11,7 +11,7 @@ namespace NeonSidekick.Llm.Tools;
 /// an archive, a data file, a page's source — saved under the working directory as it came, through
 /// <see cref="WebFetcher.DownloadAsync"/> (the HTTP leg alone, the LAN rule at every hop, up to
 /// <see cref="WebFetcher.MaxFileDownloadBytes"/>) and <see cref="WorkingDirectory.WriteBytes"/> (the
-/// sandbox, <c>overwrite</c>, the copy into <c>.trash</c> under <c>File safe edits</c>). <c>path</c> is the
+/// sandbox, <c>overwrite</c>). <c>path</c> is the
 /// file to write; a folder (an existing one, or a path ending in a separator) takes the file's own
 /// name inside it — from the server's <c>Content-Disposition</c>, else the URL's last segment
 /// (<see cref="FileNameFor"/>); no <c>path</c> is the top of the working directory. Offered while
@@ -51,16 +51,13 @@ public sealed class DownloadFileTool : AIFunction
 
     public override string Name => ToolName;
 
-    public override string Description => DescribeTool(_effective().FileSafeEdits);
+    public override string Description => DescriptionText;
 
-    /// <summary>
-    /// The description under either setting, read at every call (later still on 2026-09-20, the user's ask): the
-    /// off-form names no <c>.trash</c>, since nothing is kept then and the model never hears of a trash. Pinned.
-    /// </summary>
-    public static string DescribeTool(bool safeEdits) =>
+    /// <summary>The description; its <c>.trash</c> clause went with File safe edits (2026-10-01, the user's call). Pinned.</summary>
+    public static readonly string DescriptionText =
         "Downloads a file from the web — a picture, a PDF, an archive, a data file, a page's source — and saves it under the working directory (the user's cwd / current directory), creating any missing folders; nothing is read or opened. " +
         "path is the file to write, or a folder to put it in under the file's own name; without it the file lands at the top under its own name. " +
-        "A file that already exists is left alone unless overwrite is true" + (safeEdits ? " (the previous version is kept in .trash while File safe edits is on). " : ". ") +
+        "A file that already exists is left alone unless overwrite is true. " +
         "Up to " + WebText.Size(WebFetcher.MaxFileDownloadBytes) + ". To read a page use " + WebFetchTool.ToolName + "; to look at a saved picture use " + ViewImageTool.ToolName + ".";
 
     public override JsonElement JsonSchema => Schema;
@@ -148,7 +145,7 @@ public sealed class DownloadFileTool : AIFunction
             return WebText.NoFileName(download.Url);
         }
 
-        var written = _files.WriteBytes(target, download.Bytes, overwrite, effective.FileSafeEdits);
+        var written = _files.WriteBytes(target, download.Bytes, overwrite);
         return WebText.Downloaded(written, download.Url, download.MediaType);
     }
 

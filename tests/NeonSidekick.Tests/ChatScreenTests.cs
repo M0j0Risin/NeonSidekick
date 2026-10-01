@@ -134,10 +134,9 @@ public partial class ChatScreenTests : IDisposable
         // The toolbar under the hint row is on by default (2026-09-21) and takes a row of every pane drawn here — the scroll
         // tests count rows at height 10, the menu tests their tab's rows — so the fixture opts out and the toolbar tests opt in.
         _settings.Update(d => d.ToolbarItems = []);
-        // delete is off in a fresh profile (2026-09-20, the user's call: the trash tool is opt-in): the scripts here pin the full file rule and
-        // every file tool offered, so the fixture opts it back on; the delete-off tests pin the fresh-profile picture themselves. The same
-        // rule reads "into .trash" only while File safe edits is on (later on 2026-09-20; off by default since 2026-09-19), so that goes on too.
-        _settings.Update(d => { d.ToolsDisabled = []; d.FileSafeEdits = true; d.GitLibTools = true; });   // GitLib tools off by default since 2026-09-21: the fixture opts in, the git-off test flips it back
+        // A fresh profile switches some tools off by name (gitlib_delete, zip, unzip, unc_delete): the scripts here pin every file tool
+        // offered, so the fixture opts them back on; the fresh-profile tests pin that picture themselves.
+        _settings.Update(d => { d.ToolsDisabled = []; d.GitLibTools = true; });   // GitLib tools off by default since 2026-09-21: the fixture opts in, the git-off test flips it back
         // A blank URL walks server, model and reasoning pickers at startup since 2026-09-23 (the user's call), even for the one
         // server answering here: the scripts were written for a quiet connect, so the fixture names the server and the startup
         // tests put the URL back to blank themselves.
@@ -3697,7 +3696,7 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         Assert.DoesNotMatch(GroupHeading("Questions"), output);   // not offered: left out of the tab (2026-09-26)
-        Assert.Matches(ToolsHeading("Files (15)", null, "get_working_directory"), output);
+        Assert.Matches(ToolsHeading("Files (14)", null, "get_working_directory"), output);
         Assert.Matches(ToolsHeading("GitLib (11)", null, "gitlib_status"), output);   // between Files and Web (2026-09-20; the fixture opts every tool on; the tab's word since 2026-09-21)
         Assert.Matches(ToolsHeading("Web (4)", null, "web_search"), output);
         Assert.Matches(ToolsHeading("Sessions (1)", null, "session_manager"), output);   // 2026-09-18, ahead of the questions
@@ -3787,10 +3786,11 @@ public partial class ChatScreenTests : IDisposable
     }
 
     [Fact]
-    public async Task Turn_SafeEditsOff_DeleteOn_TheRuleSaysDeleteRemovesForGood()
+    public async Task Turn_DeleteOn_TheRuleSaysDeleteRemovesForGood_AndNothingNamesATrash()
     {
-        // File safe edits off with delete offered (2026-09-20, the user's call): PrepareTurn puts FileRuleDeleteInPlace into the prompt; the fixture opts every tool on.
-        _settings.Update(d => { d.TtsOutput = false; d.FileSafeEdits = false; });
+        // delete offered: the file rule says it removes for good (FileRuleDeleteInPlace's words under File safe edits off from 2026-09-20; the only
+        // form since 2026-10-01, when that setting, its .trash and restore went, the user's call); the fixture opts every tool on.
+        _settings.Update(d => d.TtsOutput = false);
         _chat.EnqueueText("Hello.");
         PushLine("hi");
         PushLine("/exit");
@@ -3800,20 +3800,15 @@ public partial class ChatScreenTests : IDisposable
         var tools = _chat.Options[0]!.Tools!.Cast<AIFunction>().ToList();
         var offered = tools.Select(t => t.Name).ToArray();
         Assert.Contains(DeleteTool.ToolName, offered);
-        // Later still on 2026-09-20 (the user's ask): restore is not offered while the setting is off, and nothing the model reads names it or .trash.
-        Assert.DoesNotContain(RestoreTool.ToolName, offered);
-        Assert.Equal(StandingAndFileTools.Length - 1 + 2, offered.Length);   // restore gone; skill_editor and session_manager ride (the fixture opts every tool on; no pane, no ask_user)
+        Assert.DoesNotContain("restore", offered);
+        Assert.Equal(StandingAndFileTools.Length + 2, offered.Length);   // skill_editor and session_manager ride (the fixture opts every tool on; no pane, no ask_user)
         string prompt = _chat.Requests[0][0].Text!;
-        Assert.Contains(Assistant.FileRuleDeleteInPlace, prompt, StringComparison.Ordinal);
-        Assert.DoesNotContain(Assistant.FileRule, prompt, StringComparison.Ordinal);
-        Assert.DoesNotContain("delete only moves", prompt, StringComparison.Ordinal);
-        Assert.DoesNotContain(" restore ", prompt, StringComparison.Ordinal);   // the tool's name; SessionRule's "The user restores" is another word
+        Assert.Contains(Assistant.FileRule, prompt, StringComparison.Ordinal);
+        Assert.Contains("delete removes a file or a folder for good", prompt, StringComparison.Ordinal);
+        Assert.DoesNotContain(" restore ", prompt, StringComparison.Ordinal);   // the old tool's name; SessionRule's "The user restores" is another word
         Assert.DoesNotContain("trash", prompt, StringComparison.OrdinalIgnoreCase);
-        Assert.Equal(DeleteTool.DescribeTool(false), tools.Single(t => t.Name == DeleteTool.ToolName).Description);
-        Assert.Equal(WriteFileTool.DescribeTool(false), tools.Single(t => t.Name == WriteFileTool.ToolName).Description);
-        Assert.Equal(MoveTool.DescribeTool(false), tools.Single(t => t.Name == MoveTool.ToolName).Description);
-        Assert.Equal(CopyTool.DescribeTool(false), tools.Single(t => t.Name == CopyTool.ToolName).Description);
-        Assert.Equal(DownloadFileTool.DescribeTool(false), tools.Single(t => t.Name == DownloadFileTool.ToolName).Description);
+        Assert.Equal(DeleteTool.DescriptionText, tools.Single(t => t.Name == DeleteTool.ToolName).Description);
+        Assert.Equal(DownloadFileTool.DescriptionText, tools.Single(t => t.Name == DownloadFileTool.ToolName).Description);
         Assert.All(tools, t => Assert.DoesNotContain("trash", t.Description, StringComparison.OrdinalIgnoreCase));
     }
 
@@ -3838,10 +3833,10 @@ public partial class ChatScreenTests : IDisposable
     }
 
     [Fact]
-    public async Task Turn_FreshProfile_DeleteAndGitDiscardOn_ZipAndGitDeleteOff_AndSysPromptCountsThirteen()
+    public async Task Turn_FreshProfile_DeleteAndGitDiscardOn_ZipAndGitDeleteOff_AndSysPromptCountsTwelve()
     {
         // A fresh profile's ToolsDisabled: gitlib_delete (2026-09-20), zip and unzip (2026-09-21) — gitlib_discard no longer (2026-09-23, the user's call) and delete no longer
-        // (later on 2026-09-21, the user's call: on out of the box, so the file rule keeps its delete / restore clause); the fixture had opted every tool on.
+        // (later on 2026-09-21, the user's call: on out of the box, so the file rule keeps its delete clause); the fixture had opted every tool on.
         _settings.Update(d => { d.TtsOutput = false; d.ToolsDisabled = [.. new AppSettingsData().ToolsDisabled]; });
         Assert.Equal([GitDeleteTool.ToolName, UnzipTool.ToolName, ZipTool.ToolName, UncDeleteTool.ToolName], _settings.Current.ToolsDisabled);   // unc_delete since 2026-09-30
         _chat.EnqueueText("Hello.");
@@ -3857,7 +3852,6 @@ public partial class ChatScreenTests : IDisposable
 
         var offered = _chat.Options[0]!.Tools!.Cast<AIFunction>().Select(t => t.Name).ToArray();
         Assert.Contains(DeleteTool.ToolName, offered);
-        Assert.Contains(RestoreTool.ToolName, offered);
         Assert.Equal(StandingAndFileTools.Length + 3 - 3, offered.Length);   // skill_editor, session_manager and (the pane on) ask_user ride; zip, unzip and gitlib_delete gone
         Assert.DoesNotContain(ZipTool.ToolName, offered);
         Assert.DoesNotContain(UnzipTool.ToolName, offered);
@@ -3868,15 +3862,15 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains(Assistant.FileRule, prompt, StringComparison.Ordinal);   // the pane on: the Markdown rule and the ask rule ride too, so the rule alone is pinned here
         Assert.DoesNotContain(Assistant.FileRuleWithoutDelete, prompt, StringComparison.Ordinal);
         Assert.Contains(_chat.Requests[0], m => m.Contents.OfType<FunctionCallContent>().Any(c => c.CallId == Assistant.OpeningCwdCallId));   // the group stands: the cwd call rides
-        Assert.Matches(ToolsHeading("Files (13)", null, "get_working_directory"), output);   // the tab counts what is sent (2026-09-26)
+        Assert.Matches(ToolsHeading("Files (12)", null, "get_working_directory"), output);   // the tab counts what is sent (2026-09-26); 13 until restore went, 2026-10-01
         Assert.Contains("Operating rules — default\n", output);
     }
 
     [Fact]
-    public async Task Turn_DeleteSwitchedOff_TheRuleLosesItsClause_AndSysPromptCountsTwelve()
+    public async Task Turn_DeleteSwitchedOff_TheRuleLosesItsClause_AndSysPromptCountsEleven()
     {
         // delete off by name on /tools (opt-out since later on 2026-09-21; the fresh-profile default from 2026-09-20 until then): the file rule
-        // drops its delete / restore clause (the DownloadRule shape), the group and every other file tool stand.
+        // drops its delete clause (the DownloadRule shape), the group and every other file tool stand.
         _settings.Update(d => { d.TtsOutput = false; d.ToolsDisabled = [.. new AppSettingsData().ToolsDisabled, DeleteTool.ToolName]; });
         _chat.EnqueueText("Hello.");
         _console.Profile.Height = 90;
@@ -3891,15 +3885,14 @@ public partial class ChatScreenTests : IDisposable
 
         var offered = _chat.Options[0]!.Tools!.Cast<AIFunction>().Select(t => t.Name).ToArray();
         Assert.DoesNotContain(DeleteTool.ToolName, offered);
-        Assert.Contains(RestoreTool.ToolName, offered);
         Assert.Equal(StandingAndFileTools.Length + 3 - 4, offered.Length);   // delete gone with the three (gitlib_discard on since 2026-09-23)
         string prompt = _chat.Requests[0][0].Text!;
         Assert.Contains(Assistant.FileRuleWithoutDelete, prompt, StringComparison.Ordinal);
         Assert.DoesNotContain(Assistant.FileRule, prompt, StringComparison.Ordinal);
-        Assert.DoesNotContain("delete only moves", prompt);
+        Assert.DoesNotContain("delete removes", prompt);
         Assert.Contains(_chat.Requests[0], m => m.Contents.OfType<FunctionCallContent>().Any(c => c.CallId == Assistant.OpeningCwdCallId));   // the group stands: the cwd call rides
-        Assert.Matches(ToolsHeading("Files (12)", null, "get_working_directory"), output);
-        Assert.DoesNotContain("delete only moves", output);
+        Assert.Matches(ToolsHeading("Files (11)", null, "get_working_directory"), output);   // 12 until restore went, 2026-10-01
+        Assert.DoesNotContain("delete removes", output);
         // The pane wraps the rules, so the Prompt tab's text is pinned in SystemPromptSummaryTests.DeleteOff_TheRulesLoseTheDeleteClause_ThePromptAgrees.
     }
 
@@ -3993,7 +3986,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("Memory — on, 0 facts remembered (in the prompt: recall_memory is off in /tools)", output);
         Assert.Contains("Operating rules — default\n", output);   // the group stands
         // The Tools tab leaves a disabled tool out (2026-09-26): the group counts what is left, the first row is the next tool, no note anywhere.
-        Assert.Matches(ToolsHeading("Files (13)", null, "search_files"), output);
+        Assert.Matches(ToolsHeading("Files (12)", null, "search_files"), output);
         Assert.Equal(0, CountOf(output, "not offered: switched off in /tools"));
         Assert.Matches(ToolsHeading("Memory (1)", null, "save_memory"), output);
         Assert.Matches(ToolsHeading("Web (4)", null, "web_search"), output);
@@ -4247,7 +4240,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude    Home Assistant    Print    Obsidian    ComfyUI    SQL    Oracle    MySQL    UNC    GitLib    Options ", output);
+        Assert.Contains(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude    HA    Print    Obsidian    ComfyUI    SQL    Oracle    MySQL    UNC    GitLib    Options ", output);
         Assert.Contains("\n▸ ComfyUI tools                  on\n  ComfyUI URL                    (not set)\n  ComfyUI workflows offered      all (not narrowed)\n  ComfyUI add workflow           Enter to start workflow wizard\n  ComfyUI ^-mention enabled      on\n  ComfyUI timeout (s)            300\n  ComfyUI max pictures per call  5 pictures\n  ComfyUI reinforce negatives    on\n  ComfyUI show prompts           on\n  ComfyUI picture strip          on\n  ComfyUI output folder          comfy_images\n", output);   // 2026-09-24; the offered checklist and the wizard later that day, the ^-mention switch later still
         Assert.Contains("\n▸ Claude executable                   (looked up)\n  Claude slash command permissions    read-only\n  Claude slash command model          (Claude Code's default)\n  Claude slash command effort         (Claude Code's default)\n  Claude advisor tool                 off\n  Claude advisor tool context         brief\n  Claude advisor tool calls per turn  2 calls\n  Claude advisor tool model           (as Claude slash command model)\n  Claude advisor tool effort          (as Claude slash command effort)\n  Claude advisor tool confirm         off\n", output);   // 2026-09-27: /claude's rows off /settings, then the advisor's
         Assert.Contains("\n  Clock (3)\n▸ get_current_time      on   ", output);
@@ -4624,7 +4617,7 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         Assert.Contains("  · Offered\n  ·   Clock (3)\n  ·     get_current_time      on   ", output);
-        Assert.Contains("  ·   Files (14 of 15)\n", output);
+        Assert.Contains("  ·   Files (13 of 14)\n", output);
         Assert.Contains("  ·     zip                   off  ", output);
         Assert.Contains("  ·   Questions (1) (off: no pane)\n", output);
         Assert.Contains("  · Options\n  ·   $-mention enabled: on\n", output);
@@ -4652,7 +4645,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude    Home Assistant    Print    Obsidian    ComfyUI    SQL    Oracle    MySQL    UNC    GitLib    Options ", output);
+        Assert.Contains(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude    HA    Print    Obsidian    ComfyUI    SQL    Oracle    MySQL    UNC    GitLib    Options ", output);
         Assert.Contains("  · get_current_time: off", output);
         Assert.Equal(["get_current_time"], _settings.Current.ToolsDisabled);
         Assert.DoesNotContain(ChatScreen.MidTurnDeferredNotice("/tools"), output);
@@ -8389,7 +8382,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.False(_settings.Current.ShellPoliceOutsidePaths);
         string memory = "\n" + Titled(MemoryMenu.Title) + "\n";
         string settings = "\n" + Titled(SettingsMenu.Title + "   General    Embedded    LLM    TTS    STT    Sessions    Botchat ") + "\n";
-        string tools = "\n" + Titled(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude    Home Assistant    Print    Obsidian    ComfyUI    SQL    Oracle    MySQL    UNC    GitLib    Options ") + "\n";
+        string tools = "\n" + Titled(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude    HA    Print    Obsidian    ComfyUI    SQL    Oracle    MySQL    UNC    GitLib    Options ") + "\n";
         string allowed = "\n" + Titled(AllowedCommandsTitle) + "\n";
         Assert.Equal(1, output.Split(memory).Length - 1);
         Assert.Equal(1, output.Split(allowed).Length - 1);
@@ -9076,7 +9069,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains(rule + "\n" + Titled(SystemPromptSummary.Label + "   Prompt    Tools ") + "\n \nClock (3)", output);
         Assert.Matches(ToolsHeading("Clock (3)", null, "get_current_time"), output);
         Assert.Matches(ToolsHeading("Timers (3)", null, "start_timer"), output);
-        Assert.Matches(ToolsHeading("Files (15)", null, "get_working_directory"), output);
+        Assert.Matches(ToolsHeading("Files (14)", null, "get_working_directory"), output);
         Assert.Matches(ToolsHeading("GitLib (11)", null, "gitlib_status"), output);   // between Files and Web (2026-09-20; the fixture opts every tool on; the tab's word since 2026-09-21)
         Assert.Matches(ToolsHeading("Web (4)", null, "web_search"), output);
         Assert.Matches(ToolsHeading("Memory (2)", null, "save_memory"), output);
@@ -9155,7 +9148,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("  · Memory — on, directive (the list rides the opening recall_memory call)", output);
         Assert.DoesNotContain("Also sent", output);   // the system message alone since 2026-09-26
         Assert.DoesNotContain("Opening clock call", output);
-        Assert.Contains("  · Files (15)", output);
+        Assert.Contains("  · Files (14)", output);
         Assert.Contains("  ·   " + "read_file".PadRight(22) + "Reads a text file", output);
         Assert.DoesNotContain("Questions (1)", output);   // no pane, no ask_user: left out of the tool lines (2026-09-26)
         Assert.DoesNotContain(InfoPane.HintText, output);
@@ -9412,7 +9405,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("\n" + ScreenPane.ToolbarRow(ChatScreen.ToolbarStripFor(true, CommandPolicyMode.Ask, true), cwd, 239), output);
         Assert.DoesNotContain("\n" + ScreenPane.ToolbarRow(ChatScreen.ToolbarStrip, cwd, 239), output);   // never the fixed glyphs alone: memory, the policy and the police are on
         int settings = output.IndexOf("\n" + Titled(SettingsMenu.Title + "   General    Embedded    LLM    TTS    STT    Sessions    Botchat ") + "\n", StringComparison.Ordinal);
-        int tools = output.IndexOf(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude    Home Assistant    Print    Obsidian    ComfyUI    SQL    Oracle    MySQL    UNC    GitLib    Options ", StringComparison.Ordinal);
+        int tools = output.IndexOf(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude    HA    Print    Obsidian    ComfyUI    SQL    Oracle    MySQL    UNC    GitLib    Options ", StringComparison.Ordinal);
         int mcp = output.IndexOf(McpText.Label + "   Servers    Tools    Options ", StringComparison.Ordinal);
         int skills = output.IndexOf(SkillsText.Label + "   Offered    Reflection    Project    Options ", StringComparison.Ordinal);
         int sys = output.IndexOf("\n" + Titled(SystemPromptSummary.Label + "   Prompt    Tools ") + "\n", StringComparison.Ordinal);
@@ -9511,7 +9504,7 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         string settings = "\n" + Titled(SettingsMenu.Title + "   General    Embedded    LLM    TTS    STT    Sessions    Botchat ") + "\n";
-        string tools = "\n" + Titled(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude    Home Assistant    Print    Obsidian    ComfyUI    SQL    Oracle    MySQL    UNC    GitLib    Options ") + "\n";
+        string tools = "\n" + Titled(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude    HA    Print    Obsidian    ComfyUI    SQL    Oracle    MySQL    UNC    GitLib    Options ") + "\n";
         string help = "\n" + Titled(InfoPane.Title + "   Commands (basic)    Commands (advanced)    Keys ") + "\n";
         string sys = "\n" + Titled(SystemPromptSummary.Label + "   Prompt    Tools ") + "\n";
         string sessions = "\n" + Titled(SessionsMenu.Title) + "\n";
@@ -9935,10 +9928,11 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(("Alt+V", "paste content (text or images)"), rows[^21]);   // ahead of Ctrl+Home since 2026-09-27 (the user's order)
         Assert.Equal(("Ctrl+Home", "scroll to top of the chat pane"), rows[^20]);
         Assert.Equal(("Ctrl+End", "scroll to bottom of the chat pane"), rows[^19]);
-        Assert.Equal(("Ctrl+O", "expand or collapse the tool calls, code blocks and thinking (or click a summary line)"), rows[^18]);   // 2026-09-22
-        Assert.Equal(("Ctrl+A", "select all text on the line"), rows[^17]);
-        Assert.Equal(("Ctrl+X", "cut the selected text"), rows[^16]);   // 2026-09-25
-        Assert.Equal(("Ctrl+C", "copy the selected text · stop the speech · cancel the reply · twice to exit"), rows[^15]);
+        // The Ctrl+letter rows A to Z by the letter since 2026-10-01 (the user's ask).
+        Assert.Equal(("Ctrl+A", "select all text on the line"), rows[^18]);
+        Assert.Equal(("Ctrl+C", "copy the selected text · stop the speech · cancel the reply · twice to exit"), rows[^17]);
+        Assert.Equal(("Ctrl+O", "expand or collapse the tool calls, code blocks and thinking (or click a summary line)"), rows[^16]);   // 2026-09-22
+        Assert.Equal(("Ctrl+X", "cut the selected text"), rows[^15]);   // 2026-09-25
         // The command chords after it (2026-09-30, the user's wording), one block A to Z by the letter since the pane chords
         // joined later that day (the user's ask).
         Assert.Equal(
@@ -10190,7 +10184,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("\U0001F5D1️ ", ChatScreen.TrashGlyph);
         Assert.Equal(2, TextCells.Width(ChatScreen.TrashGlyph.TrimEnd()));
         Assert.Equal(3, TextCells.Width(ChatScreen.TrashGlyph));
-        Assert.StartsWith("(" + ChatScreen.TrashGlyph, ChatScreen.TrashEmptiedNotice(1, 0, 4));
+        Assert.StartsWith("(" + ChatScreen.TrashGlyph, ChatScreen.SessionsPurgedNotice(1));
     }
     // ── Working directory ───────────────────────────────────────────────────
 
@@ -10335,16 +10329,11 @@ public partial class ChatScreenTests : IDisposable
         Assert.Empty(_chat.Requests);
     }
 
-    // ── /emptytrash, /window ────────────────────────────────────────────────
+    // ── /window ─────────────────────────────────────────────────────────────
 
     [Fact]
-    public void EmptyTrashAndWindowLabels_ArePinned()
+    public void WindowLabel_IsPinned()
     {
-        Assert.Equal(@"🗑️ Empty D:\x\.trash — 3 files, 1 folder, 1.2 KB?", ChatScreen.EmptyTrashPrompt(@"D:\x\.trash", 3, 1, 1_234, false));
-        Assert.Equal(@"🗑️ Empty D:\x\.trash — 1 file, 0 folders, 0 B, counted the first 10,000 entries only?", ChatScreen.EmptyTrashPrompt(@"D:\x\.trash", 1, 0, 0, true));
-        Assert.Equal(@"(🗑️ nothing in D:\x\.trash)", ChatScreen.TrashAlreadyEmptyNotice(@"D:\x\.trash"));
-        Assert.Equal("(🗑️ emptied the trash: 2 files, 2 folders, 8 B)", ChatScreen.TrashEmptiedNotice(2, 2, 8));
-        Assert.Equal("Could not empty the trash: locked", ChatScreen.EmptyTrashFailedError("locked"));
         Assert.Equal("🖥️ Terminal window: 120 columns × 30 rows", ChatScreen.WindowNotice(120, 30));
     }
 
@@ -11151,17 +11140,6 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("Since launch         every request summed\nTotal                98\n", output);
     }
 
-    /// <summary>The screen's working directory is the profile's <c>files</c> folder; a stamp folder under its <c>.trash</c> as <c>delete</c> would leave it.</summary>
-    private string TrashedFile(string relative, string text)
-    {
-        string full = Path.Combine(_settings.ProfileDirectory, WorkingDirectory.DefaultFolderName, WorkingDirectory.TrashFolderName, "20260911-140500", relative);
-        Directory.CreateDirectory(Path.GetDirectoryName(full)!);
-        File.WriteAllText(full, text);
-        return full;
-    }
-
-    private string TrashDir => Path.Combine(_settings.ProfileDirectory, WorkingDirectory.DefaultFolderName, WorkingDirectory.TrashFolderName);
-
     // ── Commands during a reply ─────────────────────────────────────────────
 
     /// <summary>
@@ -11199,7 +11177,6 @@ public partial class ChatScreenTests : IDisposable
     [InlineData(SlashCommand.Memory, true, MidTurnClass.Pane)]   // 2026-09-22: /memory forget's confirmation is a pane as the list is, so the word never changes the class
     [InlineData(SlashCommand.Usage, false, MidTurnClass.Pane)]
     [InlineData(SlashCommand.About, false, MidTurnClass.Pane)]
-    [InlineData(SlashCommand.EmptyTrash, false, MidTurnClass.Pane)]
     [InlineData(SlashCommand.GitUser, true, MidTurnClass.Deferred)]
     [InlineData(SlashCommand.Queue, false, MidTurnClass.Pane)]
     [InlineData(SlashCommand.Queue, true, MidTurnClass.Quick)]   // /queue clear, 2026-09-21
@@ -11420,7 +11397,7 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         output = string.Join("\n", output.Split('\n').Select(l => l.TrimEnd()));
-        string tools = "\n" + Titled(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude    Home Assistant    Print    Obsidian    ComfyUI    SQL    Oracle    MySQL    UNC    GitLib    Options ") + "\n";
+        string tools = "\n" + Titled(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude    HA    Print    Obsidian    ComfyUI    SQL    Oracle    MySQL    UNC    GitLib    Options ") + "\n";
         string sys = "\n" + Titled(SystemPromptSummary.Label + "   Prompt    Tools ") + "\n";
         string sessions = "\n" + Titled(SessionsMenu.Title) + "\n";
         string settings = "\n" + Titled(SettingsMenu.Title + "   General    Embedded    LLM    TTS    STT    Sessions    Botchat ") + "\n";
@@ -12675,65 +12652,6 @@ public partial class ChatScreenTests : IDisposable
         Assert.DoesNotContain(ChatScreen.CancelledNotice, output);
         Assert.Single(_chat.Requests);
         Assert.Contains("› /exit", output);
-    }
-
-    [Fact]
-    public async Task EmptyTrash_Y_DeletesTheContents_KeepsTheFolder()
-    {
-        TrashedFile("a.txt", "12345");
-        TrashedFile(@"proj\b.txt", "678");
-        PushLine("/emptytrash");
-        PickYes();
-        PushLine("/exit");
-
-        string output = await RunAsync();
-
-        Assert.Contains(SettingsMenu.PromptTitle(ChatScreen.EmptyTrashPrompt(TrashDir, 2, 2, 8, false), SettingsMenu.ConfirmKeys), output);
-        Assert.Contains("  · " + ChatScreen.TrashEmptiedNotice(2, 2, 8), output);
-        Assert.True(Directory.Exists(TrashDir));
-        Assert.Empty(Directory.EnumerateFileSystemEntries(TrashDir));
-        Assert.Empty(_chat.Requests);   // "y" was the answer, not a message
-    }
-
-    [Fact]
-    public async Task EmptyTrash_AnythingElse_Keeps()
-    {
-        string file = TrashedFile("a.txt", "12345");
-        PushLine("/emptytrash");
-        _console.Input.PushKey(Keys.Enter);   // No is on the cursor
-        PushLine("/emptytrash");
-        _console.Input.PushKey(Keys.Escape);
-        PushLine("/exit");
-
-        string output = await RunAsync();
-
-        Assert.Equal(2, output.Split(SettingsMenu.PromptTitle(ChatScreen.EmptyTrashPrompt(TrashDir, 1, 1, 5, false), SettingsMenu.ConfirmKeys)).Length - 1);
-        Assert.Equal(2, output.Split("  · " + ChatScreen.KeptNotice).Length - 1);
-        Assert.True(File.Exists(file));
-        Assert.Empty(_chat.Requests);
-    }
-
-    [Theory]
-    [InlineData(false)]   // no .trash at all (a fresh profile)
-    [InlineData(true)]    // an empty one
-    public async Task EmptyTrash_WhenEmpty_SaysSoWithoutAsking(bool folderExists)
-    {
-        if (folderExists)
-        {
-            Directory.CreateDirectory(TrashDir);
-        }
-
-        PushLine("/emptytrash");
-        PushLine("/emptytrash now");
-        PushLine("/exit");
-
-        string output = await RunAsync();
-
-        Assert.Contains("  · " + ChatScreen.TrashAlreadyEmptyNotice(TrashDir), output);
-        Assert.DoesNotContain(SettingsMenu.ConfirmKeys, output);
-        Assert.Contains("  ✗ " + ChatScreen.NoArgumentError("/emptytrash"), output);
-        Assert.Equal(folderExists, Directory.Exists(TrashDir));   // nothing is created for the look
-        Assert.Empty(_chat.Requests);
     }
 
     [Fact]

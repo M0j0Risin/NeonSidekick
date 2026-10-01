@@ -140,8 +140,6 @@ public enum SlashCommand
     /// <summary><c>/collapse</c>: every tool run and code block past its collapse count, and every thinking block, folded again (2026-09-22, the user's ask: what <c>/tools collapse</c> did, as a root word). No argument.</summary>
     Collapse,
 
-    /// <summary><c>/emptytrash</c>: delete everything in the working directory's <c>.trash</c> for good, after a confirmation.</summary>
-    EmptyTrash,
 
     /// <summary><c>/gituser [force]</c> (2026-09-21): the <c>GitLib email</c> and <c>GitLib name</c> settings (<c>Git native …</c> until 2026-09-30) written into the working directory's repository config as <c>user.email</c> / <c>user.name</c>; a <c>[user]</c> section already there is kept unless <c>force</c>, and <c>GitLib tools</c> off refuses (later that day). <c>/git user [force]</c> until 2026-09-26 (the user's call: the one verb was noise); <c>/git</c> is an unknown command now.</summary>
     GitUser,
@@ -262,7 +260,6 @@ public static class SlashCommands
             new("/cwd", "show or change the working directory, or /cwd <path> | ~ | browse"),
             new("/draft", "write the next message in your editor: a temporary file, sent when it is saved and closed"),
             new("/echo", "print a line as a reply and read it aloud when speech is on: /echo <text>"),
-            new("/emptytrash", "empty the working directory's .trash for good (asks first)"),
             new("/exit", "exit/quit the application"),
             new("/expand", "expand all items in the transcript"),
             new("/explore", "open the working directory in your file browser, or /explore <path>"),
@@ -402,7 +399,7 @@ public static class SlashCommands
     }
 
     /// <summary>Every command word, for help and completion.</summary>
-    public static readonly string[] Words = { "/help", "/clear", "/new", "/splash", "/rewind", "/theme", "/queue", "/sessions", "/compact", "/server", "/model", "/reasoning", "/sampling", "/settings", "//", "/tools", "/mcp", "/tts", "/stt", "/wake", "/interrupt", "/speak", "/remember", "/memory", "/cmdcopy", "/keycopy", "/cmdclear", "/cmdlist", "/police", "/persona", "/operata", "/vocalia", "/sys", "/usage", "/perf", "/tb", "/profile", "/timer", "/cwd", "/tree", "/vault", "/explore", "/view", "/imagine", "/comfy", "/ha", "/print", "/echo", "/emptytrash", "/gituser", "/copy", "/draft", "/loop", "/plan", "/botchat", "/claude", "/test", "/expand", "/collapse", "/window", "/skills", "/learn", "/about", "/exit" };
+    public static readonly string[] Words = { "/help", "/clear", "/new", "/splash", "/rewind", "/theme", "/queue", "/sessions", "/compact", "/server", "/model", "/reasoning", "/sampling", "/settings", "//", "/tools", "/mcp", "/tts", "/stt", "/wake", "/interrupt", "/speak", "/remember", "/memory", "/cmdcopy", "/keycopy", "/cmdclear", "/cmdlist", "/police", "/persona", "/operata", "/vocalia", "/sys", "/usage", "/perf", "/tb", "/profile", "/timer", "/cwd", "/tree", "/vault", "/explore", "/view", "/imagine", "/comfy", "/ha", "/print", "/echo", "/gituser", "/copy", "/draft", "/loop", "/plan", "/botchat", "/claude", "/test", "/expand", "/collapse", "/window", "/skills", "/learn", "/about", "/exit" };
 
     /// <summary>The <c>/queue</c> word: what a double-click on the hint row's queued part sends through the mid-turn line hook, so the pane opens exactly as the typed command's does (2026-09-18). Pinned.</summary>
     public const string QueueWord = "/queue";
@@ -503,7 +500,6 @@ public static class SlashCommands
             "/test" => SlashCommand.Test,
             "/expand" => SlashCommand.Expand,
             "/collapse" => SlashCommand.Collapse,
-            "/emptytrash" => SlashCommand.EmptyTrash,
             "/gituser" => SlashCommand.GitUser,
             "/window" => SlashCommand.Window,
             "/log" => log ? SlashCommand.Log : SlashCommand.Unknown,

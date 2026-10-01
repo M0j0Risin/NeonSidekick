@@ -5,7 +5,7 @@ using NeonSidekick.Settings;
 
 namespace NeonSidekick.Llm.Tools;
 
-/// <summary><c>gitlib_stage(action, paths, path?)</c>: stages or unstages paths — <c>.</c> for everything changed under <c>path</c>; the sandbox's <c>.trash</c> never.</summary>
+/// <summary><c>gitlib_stage(action, paths, path?)</c>: stages or unstages paths — <c>.</c> for everything changed under <c>path</c>.</summary>
 public sealed class GitStageTool : GitTool
 {
     public const string ToolName = "gitlib_stage";

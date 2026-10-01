@@ -32,7 +32,6 @@ namespace NeonSidekick.App;
 /// <param name="ProjectFile">The setting <c>Project file</c> (later on 2026-09-19, the Project tab of <c>/skills</c>): off means the notes are not read, whatever the working directory holds.</param>
 /// <param name="McpEnabled">The setting <c>MCP servers</c> (2026-09-20, the Options tab of <c>/mcp</c>): off means no server is started and no MCP tool offered.</param>
 /// <param name="McpTools">How many of their tools the next turn offers (the ones switched off on <c>/mcp</c> left out).</param>
-/// <param name="FileSafeEdits">The setting <c>File safe edits</c> (2026-09-20): off with <c>delete</c> offered puts <see cref="Assistant.FileRuleDeleteInPlace"/> into the default rules — <c>delete</c> removes for good then — and (later still that day) drops <c>restore</c> from the offer, so neither the rules nor the Tools tab name it.</param>
 /// <param name="GitEnabled">The setting <c>GitLib tools</c> (2026-09-20, the GitLib tab of <c>/tools</c>; <c>Git tools</c> on the Git tab until 2026-09-21, <c>Git native tools</c> until 2026-09-30).</param>
 /// <param name="GitTools">How many git tools the next turn offers (the ones switched off on <c>/tools</c> left out); the rules carry <see cref="Assistant.GitRule"/> while any is.</param>
 /// <param name="ShellEnabled">Whether the setting <c>Shell command policy</c> is not <c>off</c> (2026-09-21, the Shell tab of <c>/tools</c>): the group's switch.</param>
@@ -77,7 +76,6 @@ public sealed record SystemPromptFacts(
     bool ProjectFile = true,
     bool McpEnabled = true,
     int McpTools = 0,
-    bool FileSafeEdits = true,
     bool GitEnabled = true,
     int GitTools = 0,
     bool ShellEnabled = true,
@@ -171,13 +169,13 @@ public sealed record SystemPromptSection(string Heading, string Body)
 }
 
 /// <summary>A group of the Tools tab: its name, why it is not offered (if it is not), its tools, and whether the next turn offers them.</summary>
-/// <param name="Name">The group's name and count: <c>Files (15)</c>.</param>
+/// <param name="Name">The group's name and count: <c>Files (14)</c>.</param>
 /// <param name="Note">Why the group is not offered (<c>not offered: file tools is off</c>), empty while it is — dim in the description column on the pane, so a long reason never widens the name column.</param>
 /// <param name="Tools">The tools of the group, in the order the turn offers them.</param>
 /// <param name="Offered">Whether the next turn offers the group.</param>
 public sealed record ToolGroup(string Name, string Note, IReadOnlyList<AIFunction> Tools, bool Offered)
 {
-    /// <summary>The plain-line heading: the name, then <c> — </c> and the note when there is one (<c>Files (15) — not offered: file tools is off</c>). Pinned.</summary>
+    /// <summary>The plain-line heading: the name, then <c> — </c> and the note when there is one (<c>Files (14) — not offered: file tools is off</c>). Pinned.</summary>
     public string Title => Note.Length > 0 ? $"{Name} — {Note}" : Name;
 
     /// <summary>
@@ -226,9 +224,6 @@ public static class SystemPromptSummary
 
     /// <summary>The tail of the Files group and the rules heading while the setting <c>File tools</c> is off (2026-09-15). Pinned.</summary>
     public const string FilesOffSuffix = "file tools is off";
-
-    /// <summary>The note on <c>restore</c> while the setting <c>File safe edits</c> is off (later still on 2026-09-20: nothing lands in <c>.trash</c> then, so the tool is not offered). Pinned.</summary>
-    public const string SafeEditsOffSuffix = "File safe edits is off";
 
     /// <summary>The tail of the Questions group while the setting <c>Ask user</c> is off (2026-09-15). Pinned.</summary>
     public const string AskOffSuffix = "ask user is off";
@@ -315,7 +310,7 @@ public static class SystemPromptSummary
 
         bool customRules = !string.IsNullOrWhiteSpace(facts.OperatingRules);
         string defaultLabel = !facts.ToolsEnabled ? $"default ({ToolsOffSuffix})" : !facts.FilesEnabled ? $"default ({FilesOffSuffix})" : "default";
-        string rules = customRules ? facts.OperatingRules!.Trim() : Assistant.DefaultRules(facts.Markdown, facts.ToolsEnabled, facts.FilesEnabled, delete: !facts.Off(DeleteTool.ToolName), mcp: facts.Mcp, safeEdits: facts.FileSafeEdits, timers: facts.Timers, git: facts.Git, shell: facts.Shell, bridge: facts.Bridge, police: facts.Police, obsidian: facts.Obsidian, obsidianDelete: facts.ObsidianDelete, sql: facts.Sql, native: facts.Native, advisor: facts.Advisor, homeAssistant: facts.HomeAssistant, oracle: facts.Oracle, mysql: facts.MySql, unc: facts.Unc, uncFetch: facts.Unc && facts.UncFetch, uncWrite: facts.Unc && facts.UncWrite);
+        string rules = customRules ? facts.OperatingRules!.Trim() : Assistant.DefaultRules(facts.Markdown, facts.ToolsEnabled, facts.FilesEnabled, delete: !facts.Off(DeleteTool.ToolName), mcp: facts.Mcp, timers: facts.Timers, git: facts.Git, shell: facts.Shell, bridge: facts.Bridge, police: facts.Police, obsidian: facts.Obsidian, obsidianDelete: facts.ObsidianDelete, sql: facts.Sql, native: facts.Native, advisor: facts.Advisor, homeAssistant: facts.HomeAssistant, oracle: facts.Oracle, mysql: facts.MySql, unc: facts.Unc, uncFetch: facts.Unc && facts.UncFetch, uncWrite: facts.Unc && facts.UncWrite);
         sections.Add(new(
             customRules ? $"Operating rules — {OperataFile.FileName} ({rules.Length.ToString(CultureInfo.InvariantCulture)} chars)" : $"Operating rules — {defaultLabel}",
             rules));
@@ -412,7 +407,6 @@ public static class SystemPromptSummary
             recall: facts.Recall,
             delete: !facts.Off(DeleteTool.ToolName),
             mcp: facts.Mcp,
-            safeEdits: facts.FileSafeEdits,
             timers: facts.Timers,
             git: facts.Git,
             shell: facts.Shell,
@@ -479,9 +473,8 @@ public static class SystemPromptSummary
     /// the setting <c>Session tool</c> is, every group when the setting <c>LLM offer tools</c> is (the group's
     /// own reason first). Since 2026-09-19 a tool switched off by name (<paramref name="disabled"/>,
     /// <c>/tools</c>) is noted on its row (<see cref="ToolGroup.ToolNotes"/>) and the group's name counts
-    /// what is left — <c>Files (13 of 15)</c>; <paramref name="skillInstalled"/> false notes <c>load_skill</c>
-    /// as dropped (the <c>/tools</c> list passes it; <c>/sys</c> keeps the plain names), and <paramref name="safeEdits"/>
-    /// false notes <c>restore</c> the same way (later still on 2026-09-20, the <c>download_file</c> shape). Pinned.
+    /// what is left — <c>Files (12 of 14)</c>; <paramref name="skillInstalled"/> false notes <c>load_skill</c>
+    /// as dropped (the <c>/tools</c> list passes it; <c>/sys</c> keeps the plain names). Pinned.
     /// </summary>
     public static IReadOnlyList<ToolGroup> ToolGroups(
         IReadOnlyList<AIFunction> clock,
@@ -506,7 +499,6 @@ public static class SystemPromptSummary
         bool mcpEnabled = true,
         IReadOnlyList<AIFunction>? git = null,
         bool gitEnabled = true,
-        bool safeEdits = true,
         IReadOnlyList<AIFunction>? shell = null,
         bool shellEnabled = true,
         bool codeAvailable = true,
@@ -538,13 +530,11 @@ public static class SystemPromptSummary
         string webNote = !webEnabled ? NotOffered("web is off") : standing;
         string filesNote = !filesEnabled ? NotOffered(FilesOffSuffix) : standing;
         string questionsNote = !askEnabled ? NotOffered(AskOffSuffix) : !paneOn ? NotOffered(NoPaneSuffix) : standing;
-        // restore rides only with File safe edits on (later still on 2026-09-20): a whole file list under the setting off notes it (the /tools list; /sys passes the list already cut).
-        var fileNotes = !safeEdits && files.Any(t => t is RestoreTool) ? new Dictionary<string, string>(StringComparer.Ordinal) { [RestoreTool.ToolName] = NotOffered(SafeEditsOffSuffix) } : null;
         var groups = new List<ToolGroup>(8)
         {
             Group("Clock", clock, standing, toolsEnabled, null, disabled),
             Group("Timers", timers, standing, toolsEnabled, null, disabled),
-            Group("Files", files, filesNote, filesEnabled && toolsEnabled, SettingsField.FileTools, disabled, fileNotes),
+            Group("Files", files, filesNote, filesEnabled && toolsEnabled, SettingsField.FileTools, disabled),
         };
         if (git is not null)
         {
@@ -608,7 +598,7 @@ public static class SystemPromptSummary
         {
             // The Home Assistant tools (2026-09-28): after the image tools; offered while Home Assistant tools is on and a URL and a token are set.
             string homeNote = !homeAssistantEnabled ? NotOffered(HomeAssistantOffSuffix) : standing;
-            groups.Add(Group(ToolsText.HomeAssistantTabTitle, homeAssistant, homeNote, homeAssistantEnabled && toolsEnabled, SettingsField.HomeAssistantTools, disabled));
+            groups.Add(Group(ToolsText.HomeAssistantGroupTitle, homeAssistant, homeNote, homeAssistantEnabled && toolsEnabled, SettingsField.HomeAssistantTools, disabled));
         }
 
         if (print is not null)
@@ -694,8 +684,8 @@ public static class SystemPromptSummary
     /// <summary>
     /// The groups cut to what the next turn sends, for <c>/sys</c>' Tools tab (2026-09-26, the user's call): a
     /// group not offered goes, header and all; in an offered one, a tool with a note (switched off on <c>/tools</c>,
-    /// <c>load_skill</c> with no skill, <c>restore</c> under File safe edits off …) goes; a group left with no tool
-    /// goes too. The names recount what is left — <c>Files (14)</c>, never <c>14 of 15</c> — since the tab now
+    /// <c>load_skill</c> with no skill …) goes; a group left with no tool
+    /// goes too. The names recount what is left — <c>Files (13)</c>, never <c>13 of 14</c> — since the tab now
     /// names only what is sent. <c>/tools</c>' Offered tab keeps the whole list: it is where a tool is switched back on.
     /// </summary>
     public static IReadOnlyList<ToolGroup> OfferedOnly(IReadOnlyList<ToolGroup> groups)
@@ -725,7 +715,7 @@ public static class SystemPromptSummary
     /// <summary>The empty tab's line: <see cref="NoToolsOffered"/>, with the reason while <c>LLM offer tools</c> is off. Pinned.</summary>
     public static string NoToolsLine(bool toolsEnabled) => toolsEnabled ? NoToolsOffered : $"{NoToolsOffered} ({ToolsOffSuffix})";
 
-    /// <summary>The group's name and count: <c>Files (15)</c> with every tool offered, <c>Files (13 of 15)</c> with some switched off by name (2026-09-19). Pinned.</summary>
+    /// <summary>The group's name and count: <c>Files (14)</c> with every tool offered, <c>Files (12 of 14)</c> with some switched off by name (2026-09-19). Pinned.</summary>
     public static string GroupName(string name, int offered, int total) =>
         offered == total
             ? $"{name} ({total.ToString(CultureInfo.InvariantCulture)})"

@@ -993,7 +993,7 @@ public sealed class AppSettingsData
     /// work), and <c>unzip</c> / <c>zip</c> since 2026-09-21 (the same call again: a bulk extract and a bulk
     /// pack are opt-in too); a saved list stands — a profile that holds <c>[]</c> or <c>["delete"]</c> keeps the
     /// rest on, so a profile from before keeps zip and unzip. <c>delete</c> was here from the start (2026-09-20,
-    /// the user's call: the trash tool opt-in, flipped on <c>/tools</c>' Offered tab) until later on 2026-09-21,
+    /// the user's call: opt-in, flipped on <c>/tools</c>' Offered tab) until later on 2026-09-21,
     /// when the user asked for it on out of the box; a profile saved with it off keeps it off. <c>gitlib_discard</c> left
     /// the list on 2026-09-23 (the user's call: on out of the box, as <c>delete</c> went before it); a profile saved
     /// with it off keeps it off until it is flipped on the Offered tab. <c>unc_delete</c> joined on 2026-09-30 (a delete on a share is
@@ -1098,20 +1098,12 @@ public sealed class AppSettingsData
     public string FileBrowserMode { get; set; } = Files.FileBrowserMode.Default;
 
     /// <summary>
-    /// Whether an edit keeps the previous version (2026-09-17): <c>patch_file</c> and a <c>write_file</c> that
-    /// replaces or appends a file that exists copy it into
-    /// <c>.trash</c> first, so <c>restore</c> with <c>overwrite</c> undoes the change; a replacing <c>move</c>,
-    /// <c>copy</c> or <c>restore</c> keeps what it replaces the same way, and <c>delete</c> moves into
-    /// <c>.trash</c> (both 2026-09-20). Off = the edit alone, and <c>delete</c> removes for good, a folder with
-    /// everything in it (the default since 2026-09-19, on before). Read at each tool call, no reconnect. No variable.
-    /// </summary>
-    public bool FileSafeEdits { get; set; }
-
-    /// <summary>
-    /// Whether a turn offers the model the fifteen file tools over the working directory; read at each
+    /// Whether a turn offers the model the fourteen file tools over the working directory (fifteen until 2026-10-01, when
+    /// <c>restore</c> went with File safe edits, the user's call: every edit and delete is in place, and a saved
+    /// <c>FileSafeEdits</c> key is skipped on load); read at each
     /// turn like <see cref="WebTools"/>, no reconnect. Off, the default rules lose their file
     /// sentences and no <c>get_working_directory</c> call opens the conversation (the user's own
-    /// <c>/cwd</c>, <c>/tree</c>, <c>/explore</c> and <c>/emptytrash</c> keep working). The row is the one
+    /// <c>/cwd</c>, <c>/tree</c> and <c>/explore</c> keep working). The row is the one
     /// switch (<c>/files</c> went 2026-09-18). Off by default since 2026-09-29 (the user's call, with the other tool
     /// groups and the scan: a fresh profile offers the model nothing it did not turn on). No variable.
     /// </summary>

@@ -1,7 +1,6 @@
 using System.Text.Json;
 using Microsoft.Extensions.AI;
 using NeonSidekick.Files;
-using NeonSidekick.Settings;
 
 namespace NeonSidekick.Llm.Tools;
 
@@ -12,8 +11,7 @@ namespace NeonSidekick.Llm.Tools;
 /// chain: as written first, then with spacing, indentation, escapes and typographic characters
 /// tolerated, last by similarity; the result names the strategy when it was not exact. The match
 /// runs over LF-normalised text, so what a read shows matches a CRLF file; the file keeps its line
-/// ending and its BOM. The result names the edited lines and shows them numbered. <c>File safe edits</c>
-/// keeps the previous version in <c>.trash</c>.
+/// ending and its BOM. The result names the edited lines and shows them numbered.
 /// </summary>
 public sealed class PatchFileTool : FileTool
 {
@@ -36,12 +34,8 @@ public sealed class PatchFileTool : FileTool
         }
         """);
 
-    private readonly Func<AppSettingsData> _effective;
-
-    /// <param name="effective">The settings <c>File safe edits</c> is read from at every call.</param>
-    public PatchFileTool(WorkingDirectory files, Func<AppSettingsData> effective) : base(files)
+    public PatchFileTool(WorkingDirectory files) : base(files)
     {
-        _effective = effective ?? throw new ArgumentNullException(nameof(effective));
     }
 
     public override string Name => ToolName;
@@ -56,7 +50,7 @@ public sealed class PatchFileTool : FileTool
     public override JsonElement JsonSchema => Schema;
 
     public string Describe(string path, string oldText, string newText, bool replaceAll = false) =>
-        FileText.Edited(Files.EditText(path, oldText, newText, replaceAll, _effective().FileSafeEdits));
+        FileText.Edited(Files.EditText(path, oldText, newText, replaceAll));
 
     protected override ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
     {

@@ -210,7 +210,7 @@ public static class Profiles
     /// into the profile <paramref name="name"/> (just <see cref="Create"/>d, so nothing is
     /// overwritten) and returns the names copied, in <see cref="SidekickFiles"/> order; with
     /// <paramref name="only"/> (<see cref="NewProfileMode.FilesFor"/>) just the ones it names. Never the
-    /// <c>files</c> sandbox or its <c>.trash</c>: those are the sidekick's own. Throws
+    /// <c>files</c> sandbox: that is the sidekick's own. Throws
     /// <see cref="IOException"/> / <see cref="UnauthorizedAccessException"/>; the caller reports.
     /// </summary>
     public static IReadOnlyList<string> CopySidekickFiles(string sourceDirectory, string home, string name, IReadOnlyList<string>? only = null)
@@ -334,7 +334,7 @@ public static class Profiles
     /// Takes the profile's settings back to the compiled defaults: <c>profile.json</c> rewritten (the
     /// directory created when it was only logical, as <c>default</c>'s can be) and nothing else touched
     /// — since 2026-09-20 (the user's call) the memories, the persona, the operating rules and the
-    /// voice directive stay, like the <c>files</c> sandbox and its <c>.trash</c> always did (every one
+    /// voice directive stay, like the <c>files</c> sandbox always did (every one
     /// of <see cref="SidekickFiles"/> went until then). No guard: <c>default</c> may be reset, and the
     /// caller asks the user first. The loaded profile is reset through
     /// <c>AppSettings.ResetProfileAsync</c>, which flushes its pending save first and reloads.
@@ -487,7 +487,7 @@ public static class Profiles
 
     /// <summary>
     /// Moves the profile's directory — and everything in it: <c>profile.json</c>, the sidekick's
-    /// files, the <c>files</c> sandbox with its <c>.trash</c> — under <paramref name="newName"/>.
+    /// files, the <c>files</c> sandbox — under <paramref name="newName"/>.
     /// No guard here, like <see cref="Delete"/>: <see cref="RenameRefusal"/> and the
     /// <see cref="Exists"/> check on the new name are the caller's. Throws <see cref="IOException"/>
     /// (a target directory that is already there among them) / <see cref="UnauthorizedAccessException"/>;

@@ -355,7 +355,6 @@ public class SlashCommandsTests
     [InlineData("/help me", "me")]
     [InlineData("/settings x", "x")]
     [InlineData("// x", "x")]
-    [InlineData("/emptytrash now", "now")]
     [InlineData("/window 80", "80")]
     [InlineData("/draft notes.txt", "notes.txt")]   // 2026-09-19: the editor is the argument, never a file
     public void Parse_AKnownCommandWithAnArgumentItDoesNotTake_IsOverloaded(string line, string args)
@@ -571,7 +570,6 @@ public class SlashCommandsTests
         Assert.Contains(Row("/cwd", "show or change the working directory, or /cwd <path> | ~ | browse"), SlashCommands.HelpText);
         Assert.Contains(Row("/tree", "print a tree of the working directory's folders and files, or /tree <path>"), SlashCommands.HelpText);
         Assert.Contains(Row("/explore", "open the working directory in your file browser, or /explore <path>"), SlashCommands.HelpText);
-        Assert.Contains(Row("/emptytrash", "empty the working directory's .trash for good (asks first)"), SlashCommands.HelpText);
         Assert.Contains(Row("/gituser", "write the GitLib email and GitLib name into the working directory's repository"), SlashCommands.HelpText);   // 2026-09-21 (/git until 2026-09-26)
         Assert.Contains(Row("/timer", "list timers, or /timer <duration> [name] (10m, 90s, 1h30m) | stop <name> | stop all"), SlashCommands.HelpText);
         Assert.Contains(Row("/window", "show the terminal window's width and height"), SlashCommands.HelpText);
@@ -612,11 +610,11 @@ public class SlashCommandsTests
     {
         // One list, A to Z by the command (ordinal), no groups (2026-09-27, the user's call: the Commands tab had grown
         // cramped; nine hand-ordered groups until then — their history is in git).
-        Assert.Equal(63, SlashCommands.HelpEntries.Count);   // /tb later on 2026-09-30   // /rewind 2026-09-30   // /keycopy, then /sampling, then /test, then /ha, then /print, since 2026-09-28; /perf later on 2026-09-29
+        Assert.Equal(62, SlashCommands.HelpEntries.Count);   // /emptytrash went 2026-10-01   // /tb later on 2026-09-30   // /rewind 2026-09-30   // /keycopy, then /sampling, then /test, then /ha, then /print, since 2026-09-28; /perf later on 2026-09-29
         Assert.Equal(
         [
             "/about", "/botchat", "/claude", "/clear", "/cmdclear", "/cmdcopy", "/cmdlist", "/collapse", "/comfy", "/compact", "/copy", "/cwd",
-            "/draft", "/echo", "/emptytrash", "/exit", "/expand", "/explore", "/gituser", "/ha", "/help", "/imagine", "/interrupt", "/keycopy", "/learn",
+            "/draft", "/echo", "/exit", "/expand", "/explore", "/gituser", "/ha", "/help", "/imagine", "/interrupt", "/keycopy", "/learn",
             "/loop", "/mcp", "/memory", "/model", "/new", "/operata", "/perf", "/persona", "/plan", "/police", "/print", "/profile", "/queue", "/reasoning",
             "/remember", "/rewind", "/sampling", "/server", "/sessions", "/settings", "/skills", "/speak", "/splash", "/stt", "/sys", "/tb", "/test", "/theme", "/timer", "/tools",
             "/tree", "/tts", "/usage", "/vault", "/view", "/vocalia", "/wake", "/window",

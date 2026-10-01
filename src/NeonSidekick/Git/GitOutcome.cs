@@ -8,9 +8,6 @@ public enum GitOutcome
     /// <summary>The path leaves the working directory (the sandbox rule, <see cref="Files.WorkingDirectory.Resolve(string, bool, out string)"/>).</summary>
     OutsideRoot,
 
-    /// <summary>The path is under the sandbox's <c>.trash</c>, which nothing writes.</summary>
-    TrashReadOnly,
-
     /// <summary>No <c>.git</c> from the path up to the working directory's root.</summary>
     NoRepository,
 

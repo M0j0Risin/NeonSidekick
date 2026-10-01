@@ -263,15 +263,13 @@ public sealed class GitAccessTests : IDisposable
     {
         Init();
         Write("notes.txt", "one\n");
-        Directory.CreateDirectory(Path.Combine(_root, ".trash"));
-        Write(Path.Combine(".trash", "old.txt"), "x");
 
         var unborn = _git.Status("");
         Assert.Equal(GitOutcome.Ok, unborn.Outcome);
         Assert.True(unborn.Unborn);
         Assert.Equal("main", unborn.Branch);
         Assert.Null(unborn.HeadShort);
-        Assert.Equal(["notes.txt"], unborn.Untracked.Select(e => e.Path));   // .trash never shows
+        Assert.Equal(["notes.txt"], unborn.Untracked.Select(e => e.Path));
         Assert.Empty(unborn.Staged);
 
         Assert.Equal(GitOutcome.Ok, _git.Stage("", ["notes.txt"], unstage: false).Outcome);
@@ -560,14 +558,13 @@ public sealed class GitAccessTests : IDisposable
     // ---- stage / commit ----
 
     [Fact]
-    public void Stage_ADot_StagesEverythingUnderTheFolder_ButNeverTheTrash()
+    public void Stage_ADot_StagesEverythingUnderTheFolder()
     {
         Init();
         CommitFile(_root, "a.txt", "a\n", "first");
         Write("a.txt", "a2\n");
         Write(Path.Combine("src", "b.txt"), "b\n");
         Write(Path.Combine("src", "deep", "c.txt"), "c\n");
-        Write(Path.Combine(".trash", "old.txt"), "x");
 
         var under = _git.Stage("src", ["."], unstage: false);
         Assert.Equal(GitOutcome.Ok, under.Outcome);
@@ -587,7 +584,6 @@ public sealed class GitAccessTests : IDisposable
         Assert.True(unstaged.Unstage);
         Assert.Equal([Path.Combine("src", "deep", "c.txt")], _git.Status("").Staged.Select(e => e.Path));
 
-        Assert.Equal(GitOutcome.TrashReadOnly, _git.Stage("", [".trash/old.txt"], unstage: false).Outcome);
         Assert.Equal(GitOutcome.OutsideRoot, _git.Stage("", ["../x"], unstage: false).Outcome);
         Assert.Equal(GitOutcome.Missing, _git.Stage("", ["nope.txt"], unstage: false).Outcome);
         Assert.Equal(["a.txt", Path.Combine("src", "b.txt")], _git.Stage("", ["./"], unstage: false).Paths);   // the root itself = everything under it
@@ -740,7 +736,6 @@ public sealed class GitAccessTests : IDisposable
         Assert.Equal("changed\n", File.ReadAllText(Path.Combine(_root, "b.txt")));
 
         Assert.Equal(GitOutcome.Missing, _git.Discard("", ["untracked.txt"], "").Outcome);
-        Assert.Equal(GitOutcome.TrashReadOnly, _git.Discard("", [".trash/x"], "").Outcome);
         Assert.Equal(GitOutcome.RefNotFound, _git.Discard("", ["a.txt"], "nope").Outcome);
 
         var reset = _git.Discard("", [], first[..7]);

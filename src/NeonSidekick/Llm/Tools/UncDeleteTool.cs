@@ -50,8 +50,8 @@ public sealed class UncDeleteTool : UncTool
 
         return await WriteAsync(ReadShare(arguments), path, "deleted", (files, relative) =>
         {
-            var deleted = files.Delete(relative, toTrash: false);
-            return (FileText.Trashed(deleted), deleted.Outcome == FileOutcome.Ok);
+            var deleted = files.Delete(relative);
+            return (FileText.Deleted(deleted), deleted.Outcome == FileOutcome.Ok);
         }, cancellationToken).ConfigureAwait(false);
     }
 }

@@ -1,7 +1,6 @@
 using System.Text.Json;
 using Microsoft.Extensions.AI;
 using NeonSidekick.Files;
-using NeonSidekick.Settings;
 
 namespace NeonSidekick.Llm.Tools;
 
@@ -10,8 +9,7 @@ namespace NeonSidekick.Llm.Tools;
 /// existing file refused, since a small model rewriting the user's notes on a misread is the risk
 /// and the refusal names the mode so a deliberate retry is one more call), replaces one
 /// (<c>overwrite</c>) or adds to its end (<c>append</c>, on a new line, creating a missing file —
-/// <c>append_file</c>'s job until 2026-09-19). <c>File safe edits</c> copies a replaced or appended
-/// file into <c>.trash</c> first (2026-09-17).
+/// <c>append_file</c>'s job until 2026-09-19).
 /// </summary>
 public sealed class WriteFileTool : FileTool
 {
@@ -41,26 +39,18 @@ public sealed class WriteFileTool : FileTool
         }
         """);
 
-    private readonly Func<AppSettingsData> _effective;
-
-    /// <param name="effective">The settings <c>File safe edits</c> is read from at every call.</param>
-    public WriteFileTool(WorkingDirectory files, Func<AppSettingsData> effective) : base(files)
+    public WriteFileTool(WorkingDirectory files) : base(files)
     {
-        _effective = effective ?? throw new ArgumentNullException(nameof(effective));
     }
 
     public override string Name => ToolName;
 
-    public override string Description => DescribeTool(_effective().FileSafeEdits);
+    public override string Description => DescriptionText;
 
-    /// <summary>
-    /// The description under either setting, read at every call (later still on 2026-09-20, the user's ask): the
-    /// off-form drops the <c>.trash</c> sentence, since nothing is kept then and the model never hears of a trash. Pinned.
-    /// </summary>
-    public static string DescribeTool(bool safeEdits) =>
+    /// <summary>The description; its <c>.trash</c> sentence went with File safe edits (2026-10-01, the user's call). Pinned.</summary>
+    public const string DescriptionText =
         "Writes a text file under the working directory (the user's cwd / current directory), creating any missing folders. " +
         "mode create (the default) leaves a file that already exists alone; mode overwrite replaces it; mode append adds the content at its end on a new line, creating the file if missing — for journals, logs and lists. " +
-        (safeEdits ? "The previous version of a replaced or appended file is kept in .trash while File safe edits is on. " : "") +
         "The result reports the file's size, line count and word count, so nothing else is needed to check them. To change part of a file use patch_file.";
 
     public override JsonElement JsonSchema => Schema;
@@ -93,10 +83,9 @@ public sealed class WriteFileTool : FileTool
 
     public string Describe(string path, string content, WriteMode mode = WriteMode.Create)
     {
-        bool safe = _effective().FileSafeEdits;
         return mode == WriteMode.Append
-            ? FileText.Appended(Files.AppendText(path, content, safe))
-            : FileText.Wrote(Files.WriteText(path, content, overwrite: mode == WriteMode.Overwrite, keepCopy: safe));
+            ? FileText.Appended(Files.AppendText(path, content))
+            : FileText.Wrote(Files.WriteText(path, content, overwrite: mode == WriteMode.Overwrite));
     }
 
     protected override ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)

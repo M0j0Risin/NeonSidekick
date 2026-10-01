@@ -14,7 +14,7 @@ public sealed class ObsidianToolsTests : IDisposable
     private readonly string _dir = Path.Combine(Path.GetTempPath(), "NeonSidekick.Tests", Guid.NewGuid().ToString("N"));
     private readonly string _root;
     private readonly ManualTimeProvider _time = new();
-    private readonly AppSettingsData _settings = new() { FileSafeEdits = true, ObsidianTools = true };   // the switch off by default since 2026-09-29
+    private readonly AppSettingsData _settings = new() { ObsidianTools = true };   // the switch off by default since 2026-09-29
     private readonly ObsidianVault _vault;
     private readonly IReadOnlyList<AIFunction> _tools;
 
@@ -300,15 +300,14 @@ public sealed class ObsidianToolsTests : IDisposable
     }
 
     [Fact]
-    public async Task Overwrite_KeepsThePreviousVersionInTheVaultsTrash_UnderSafeEdits()
+    public async Task Overwrite_NeverTrashes()
     {
+        // vault_write never puts anything in the vault's .trash (2026-10-01, the user's call, when File safe edits went: it kept a copy
+        // there under the setting until then); only vault_delete uses it.
         Put("Plan.md", "old\n");
-        Assert.Equal("replaced Plan.md (1 line, 1 word)" + ObsidianText.KeptIn(".trash/Plan.md"), await Invoke<VaultWriteTool>(("note", "Plan"), ("content", "new"), ("mode", "overwrite")));
-        Assert.Equal("old\n", Get(".trash/Plan.md"));
+        Assert.Equal("replaced Plan.md (1 line, 1 word)", await Invoke<VaultWriteTool>(("note", "Plan"), ("content", "new"), ("mode", "overwrite")));
         Assert.Equal("new\n", Get("Plan.md"));
-        _settings.FileSafeEdits = false;
-        Assert.Equal("replaced Plan.md (1 line, 1 word)", await Invoke<VaultWriteTool>(("note", "Plan"), ("content", "newer"), ("mode", "overwrite")));
-        Assert.False(File.Exists(Path.Combine(_root, ".trash", "Plan 1.md")));
+        Assert.False(Directory.Exists(Path.Combine(_root, ".trash")));
     }
 
     [Fact]

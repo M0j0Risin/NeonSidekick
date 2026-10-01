@@ -153,16 +153,16 @@ public sealed class UncToolsTests : IDisposable
     }
 
     [Fact]
-    public async Task UncFetch_CopiesIntoTheWorkingDirectory_KeepingWhatItReplaces_UnderFileSafeEdits()
+    public async Task UncFetch_CopiesIntoTheWorkingDirectory_ReplacingOnlyWithOverwrite()
     {
         string fetched = await Invoke<UncFetchTool>(("share", "eng"), ("path", @"specs\a.md"));
         Assert.Equal($"fetched specs\\a.md from {EngName} to a.md in the working directory", fetched);
         Assert.Equal("alpha needle\nbeta\n", File.ReadAllText(Path.Combine(_sandboxRoot, "a.md")));
 
-        _settings.FileSafeEdits = true;
         Put(_eng, @"specs\a.md", "changed\n");
         string again = await Invoke<UncFetchTool>(("share", "eng"), ("path", @"specs\a.md"), ("overwrite", true));
-        Assert.EndsWith(FileText.CopyKeptSuffix, again);
+        Assert.Equal($"fetched specs\\a.md from {EngName} to a.md in the working directory", again);   // nothing kept (File safe edits went 2026-10-01)
+        Assert.False(Directory.Exists(Path.Combine(_sandboxRoot, ".trash")));
         Assert.Equal("changed\n", File.ReadAllText(Path.Combine(_sandboxRoot, "a.md")));
 
         Assert.Equal(UncText.Scoped(FileText.Error(FileOutcome.OutsideRoot, @"..\data", "fetch"), _catalog.Shares[0]), await Invoke<UncFetchTool>(("path", @"..\data")));
@@ -186,7 +186,6 @@ public sealed class UncToolsTests : IDisposable
     public async Task OnAReadWriteShare_ChangesArePermanent_NothingKept_AndEachIsAudited()
     {
         _settings.UncWrites = true;
-        _settings.FileSafeEdits = true;   // the working directory's setting: a share keeps nothing whatever it says
         var audit = new List<string>();
         Action<DiagnosticEvent> capture = e => { if (e.Category == UncConfigFile.Category && e.Level == DiagnosticLevel.Info) audit.Add(e.Message); };
         DiagnosticLog.Emitted += capture;

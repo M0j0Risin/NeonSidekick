@@ -66,7 +66,6 @@ public sealed class VaultWriteTool : VaultTool
         string note = ReadNote(arguments);
         string content = ToolArguments.ReadString(arguments, ContentArgument);
         string heading = ToolArguments.ReadString(arguments, VaultReadTool.HeadingArgument);
-        bool safeEdits = Effective.FileSafeEdits;
-        return OffThread(() => Vault.Write(note, content, mode, heading, safeEdits), cancellationToken);
+        return OffThread(() => Vault.Write(note, content, mode, heading), cancellationToken);
     }
 }

@@ -164,11 +164,11 @@ public sealed class SkillEditorTool : AIFunction
 
     /// <summary><c>write_file</c>: <paramref name="content"/> as the whole of <paramref name="path"/> in skill <paramref name="name"/> (2026-09-27).</summary>
     public string DescribeWrite(string name, string path, string content, string? summary = null) =>
-        DescribeFile(path, files => SkillEditor.WriteFile(_roots(), SkillScope.Profile, name, path, content, _external(), files.SafeEdits(), files.Time), summary);
+        DescribeFile(path, files => SkillEditor.WriteFile(_roots(), SkillScope.Profile, name, path, content, _external(), files.Time), summary);
 
     /// <summary><c>edit_file</c>: <paramref name="oldText"/> → <paramref name="newText"/> in <paramref name="path"/> of skill <paramref name="name"/> (2026-09-27).</summary>
     public string DescribeEdit(string name, string path, string oldText, string newText, bool replaceAll, string? summary = null) =>
-        DescribeFile(path, files => SkillEditor.EditFile(_roots(), SkillScope.Profile, name, path, oldText, newText, replaceAll, _external(), files.SafeEdits(), files.Time), summary);
+        DescribeFile(path, files => SkillEditor.EditFile(_roots(), SkillScope.Profile, name, path, oldText, newText, replaceAll, _external(), files.Time), summary);
 
     /// <summary>A file action under the tool's rules: refused as an unknown action when files are not offered, and for a blank path; the skill is found where it lives (the profile first).</summary>
     private string DescribeFile(string path, Func<SkillFileAccess, SkillEditResult> act, string? summary)
@@ -228,7 +228,8 @@ public sealed class SkillEditorTool : AIFunction
 }
 
 /// <summary>
-/// What <c>skill_editor</c>'s file actions need beyond the roots (2026-09-27): <c>File safe edits</c>,
-/// read at each call (the previous version into the skill's own <c>.trash</c>), and the clock behind the trash stamp.
+/// What <c>skill_editor</c>'s file actions need beyond the roots (2026-09-27): the clock the skill folder's
+/// <see cref="Files.WorkingDirectory"/> runs on; present at all, the file actions are offered. <c>File safe edits</c>, read at
+/// each call, rode beside it until 2026-10-01, when that setting went (the user's call).
 /// </summary>
-public sealed record SkillFileAccess(Func<bool> SafeEdits, TimeProvider Time);
+public sealed record SkillFileAccess(TimeProvider Time);

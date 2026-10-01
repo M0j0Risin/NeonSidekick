@@ -128,7 +128,6 @@ public class AppSettingsTests : IDisposable
         AskMaxChoices = 15,
         AskMaxQuestions = 3,
         AskUser = false,
-        FileSafeEdits = true,
         FileTools = true,   // off by default since 2026-09-29
         FileMentionFolderMode = "folder-apply",
         FileTreeMaxLength = 750,
@@ -249,7 +248,6 @@ public class AppSettingsTests : IDisposable
         Assert.Equal(expected.AskMaxChoices, actual.AskMaxChoices);
         Assert.Equal(expected.AskMaxQuestions, actual.AskMaxQuestions);
         Assert.Equal(expected.AskUser, actual.AskUser);
-        Assert.Equal(expected.FileSafeEdits, actual.FileSafeEdits);
         Assert.Equal(expected.FileTools, actual.FileTools);
         Assert.Equal(expected.FileMentionFolderMode, actual.FileMentionFolderMode);
         Assert.Equal(expected.FileTreeMaxLength, actual.FileTreeMaxLength);
@@ -393,7 +391,6 @@ public class AppSettingsTests : IDisposable
             d.AskMaxChoices = full.AskMaxChoices;
             d.AskMaxQuestions = full.AskMaxQuestions;
             d.AskUser = full.AskUser;
-            d.FileSafeEdits = full.FileSafeEdits;
             d.FileTools = full.FileTools;
             d.FileMentionFolderMode = full.FileMentionFolderMode;
             d.FileTreeMaxLength = full.FileTreeMaxLength;
@@ -525,7 +522,6 @@ public class AppSettingsTests : IDisposable
                 d.AskMaxChoices = full.AskMaxChoices;
                 d.AskMaxQuestions = full.AskMaxQuestions;
                 d.AskUser = full.AskUser;
-                    d.FileSafeEdits = full.FileSafeEdits;
                 d.FileTools = full.FileTools;
                 d.FileMentionFolderMode = full.FileMentionFolderMode;
                 d.FileTreeMaxLength = full.FileTreeMaxLength;
@@ -1389,8 +1385,6 @@ public class AppSettingsTests : IDisposable
         Assert.Equal(25, s.PastePreviewLines);
         Assert.Equal(25, PasteBlocks.DefaultPreviewLines);
         Assert.Equal(200, PasteBlocks.MaxPreviewLines);
-        // The Files-tab Safe edits switch (2026-09-17; the stale-number guard beside it until later on 2026-09-19): off out of the box since 2026-09-19, the user's call.
-        Assert.False(s.FileSafeEdits);
         Assert.True(s.SkillHashMention);
         Assert.True(s.ToolsDollarMention);   // 2026-09-19
         Assert.Equal([NeonSidekick.Llm.Tools.GitDeleteTool.ToolName, NeonSidekick.Llm.Tools.UnzipTool.ToolName, NeonSidekick.Llm.Tools.ZipTool.ToolName, NeonSidekick.Llm.Tools.UncDeleteTool.ToolName], s.ToolsDisabled);   // unc_delete since 2026-09-30; gitlib_delete since 2026-09-20 (the user's call; gitlib_discard with it until 2026-09-23, the user's call again), zip and unzip since 2026-09-21; delete was opt-in from 2026-09-20 until later on 2026-09-21 (the user's call both times); a saved list stands

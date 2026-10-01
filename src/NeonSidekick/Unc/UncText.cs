@@ -89,15 +89,15 @@ public static class UncText
     }
 
     /// <summary>
-    /// <c>unc_fetch</c>'s answer: <c>fetched reports\q3.xlsx from share 'fin' (\\fs02\fin) to q3.xlsx in the working directory</c>, the
-    /// <c>File safe edits</c> note when what it replaced was kept; a refusal is the copy's own sentence (the working directory's end).
+    /// <c>unc_fetch</c>'s answer: <c>fetched reports\q3.xlsx from share 'fin' (\\fs02\fin) to q3.xlsx in the working directory</c>;
+    /// a refusal is the copy's own sentence (the working directory's end).
     /// </summary>
     public static string Fetched(MoveResult result, UncNamedShare share)
     {
         ArgumentNullException.ThrowIfNull(result);
         return result.Outcome != FileOutcome.Ok
             ? FileText.Copied(result)
-            : $"fetched {result.From} from {ShareName(share)} to {result.To} in the working directory" + (result.CopyKept ? FileText.CopyKeptSuffix : "");
+            : $"fetched {result.From} from {ShareName(share)} to {result.To} in the working directory";
     }
 
     /// <summary>

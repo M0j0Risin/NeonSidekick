@@ -15,13 +15,12 @@ public class SkillEditorFileTests : IDisposable
     private readonly string _dir = Path.Combine(Path.GetTempPath(), "NeonSidekick.Tests", Guid.NewGuid().ToString("N"));
     private readonly SkillRoots _roots;
     private readonly SkillEditorTool _tool;
-    private bool _safeEdits;
     private bool _external;
 
     public SkillEditorFileTests()
     {
         _roots = new SkillRoots(Path.Combine(_dir, "profile", "skills"), Path.Combine(_dir, "skills"), Path.Combine(_dir, ".agents", "skills"));
-        _tool = new SkillEditorTool(() => _roots, () => _external, new SkillFileAccess(() => _safeEdits, TimeProvider.System));
+        _tool = new SkillEditorTool(() => _roots, () => _external, new SkillFileAccess(TimeProvider.System));
     }
 
     public void Dispose()
@@ -141,7 +140,6 @@ public class SkillEditorFileTests : IDisposable
 
         Assert.StartsWith("Error: skill 'emojese' (profile): ", await Invoke(("action", "write_file"), ("name", "emojese"), ("path", "../other/x.txt"), ("content", "x")), StringComparison.Ordinal);
         Assert.StartsWith("Error: skill 'emojese' (profile): ", await Invoke(("action", "write_file"), ("name", "emojese"), ("path", Path.Combine(_dir, "x.txt")), ("content", "x")), StringComparison.Ordinal);
-        Assert.StartsWith("Error: skill 'emojese' (profile): ", await Invoke(("action", "write_file"), ("name", "emojese"), ("path", ".trash/x.txt"), ("content", "x")), StringComparison.Ordinal);
         Assert.False(File.Exists(Path.Combine(_roots.Profile, "other", "x.txt")));
         Assert.False(File.Exists(Path.Combine(_dir, "x.txt")));
 
@@ -158,18 +156,17 @@ public class SkillEditorFileTests : IDisposable
     }
 
     [Fact]
-    public async Task SafeEdits_KeepThePreviousVersionInTheSkillsTrash_WhichIsNeverAResource()
+    public async Task WriteFile_ReplacesInPlace_NothingKept()
     {
+        // The previous version is gone (its copy into the skill's .trash went with File safe edits, 2026-10-01, the user's call).
         string folder = Put(_roots.Profile, "emojese");
         File.WriteAllText(Path.Combine(folder, "mapping.json"), "old");
-        _safeEdits = true;
 
         string answer = await Invoke(("action", "write_file"), ("name", "emojese"), ("path", "mapping.json"), ("content", "new"));
 
         Assert.Contains("replaced mapping.json", answer, StringComparison.Ordinal);
         Assert.Equal("new", File.ReadAllText(Path.Combine(folder, "mapping.json")));
-        string trash = Path.Combine(folder, Files.WorkingDirectory.TrashFolderName);
-        Assert.Contains(Directory.EnumerateFiles(trash, "*", SearchOption.AllDirectories), f => File.ReadAllText(f) == "old");
+        Assert.False(Directory.Exists(Path.Combine(folder, ".trash")));
         var catalog = new SkillCatalog(() => _roots);
         catalog.Scan(false);
         Assert.Equal(["mapping.json"], SkillCatalog.Resources(catalog.Skills.Single(), out _));
@@ -238,7 +235,7 @@ public class SkillEditorFileTests : IDisposable
         client.Enqueue(FakeChatClient.Call("r1", SkillEditorTool.ToolName, WriteArgs("emojese")));
         var assistant = new Assistant(client, new ConversationHistory("sys"), Timeouts);
 
-        var result = await SkillLearner.RunAsync(assistant, new ReflectionMaterial.Turn(Turn(), null), _roots, false, ReasoningEffort.None, CancellationToken.None, 4, null, new SkillFileAccess(() => false, TimeProvider.System));
+        var result = await SkillLearner.RunAsync(assistant, new ReflectionMaterial.Turn(Turn(), null), _roots, false, ReasoningEffort.None, CancellationToken.None, 4, null, new SkillFileAccess(TimeProvider.System));
 
         Assert.Equal(SkillLearnOutcome.Learned, result.Outcome);
         Assert.Equal(SkillEditOutcome.FileWritten, result.Edit!.Outcome);

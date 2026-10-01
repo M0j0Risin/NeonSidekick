@@ -33,7 +33,6 @@ public static class GitText
     public static string Bare(string path) => $"Error: '{path}' is a bare repository (no working tree)";
     public static string NotOwned(string detail) => $"Error: git refuses the repository ({detail}); the user can allow it with git config --global --add safe.directory <path>";
     public static string OutsideRoot(string path) => $"Error: '{path}' is outside the working directory";
-    public static string TrashReadOnly(string path) => $"Error: '{path}' is in the .trash folder, which git never touches";
     public static string NotInRepository(string path) => $"Error: '{path}' is not inside the repository";
     public static string Missing(string path) => $"Error: '{path}' is not there";
     public static string RefNotFound(string reference) => $"Error: '{reference}' names no commit, branch or tag";
@@ -65,7 +64,6 @@ public static class GitText
     public static string Error(GitOutcome outcome, string detail) => outcome switch
     {
         GitOutcome.OutsideRoot => OutsideRoot(detail),
-        GitOutcome.TrashReadOnly => TrashReadOnly(detail),
         GitOutcome.NoRepository => NoRepository(detail),
         GitOutcome.AboveSandbox => AboveSandbox(detail),
         GitOutcome.Bare => Bare(detail),

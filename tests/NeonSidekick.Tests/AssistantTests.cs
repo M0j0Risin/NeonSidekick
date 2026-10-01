@@ -443,8 +443,8 @@ public class AssistantTests
         Assert.Equal(Assistant.MarkdownRule + " " + Assistant.ToolRules, Assistant.DefaultRules(true, tools: true, files: false));
         Assert.Equal(Assistant.MarkdownRule, Assistant.DefaultRules(true, tools: false));
 
-        // delete switched off on /tools (off in a fresh profile since 2026-09-20): the file rule loses its delete / restore clause, nothing else moves.
-        Assert.Equal(Assistant.FileRuleWithoutDelete, Assistant.FileRule.Replace("; delete only moves to its .trash folder and restore brings things back. ", ". ", StringComparison.Ordinal));
+        // delete switched off on /tools (off in a fresh profile since 2026-09-20): the file rule loses its delete clause, nothing else moves.
+        Assert.Equal(Assistant.FileRuleWithoutDelete, Assistant.FileRule.Replace("; delete removes a file or a folder for good, with everything in it. ", ". ", StringComparison.Ordinal));
         Assert.DoesNotContain("delete", Assistant.FileRuleWithoutDelete, StringComparison.Ordinal);
         Assert.DoesNotContain("restore", Assistant.FileRuleWithoutDelete, StringComparison.Ordinal);
         Assert.Equal(Assistant.PlainTextRule + " " + Assistant.ToolRules + " " + Assistant.FileRuleWithoutDelete, Assistant.DefaultRules(false, tools: true, delete: false));
@@ -452,18 +452,14 @@ public class AssistantTests
         Assert.Equal(Assistant.DefaultPersona + " " + Assistant.PlainTextRule + " " + Assistant.ToolRules + " " + Assistant.FileRuleWithoutDelete, Assistant.SystemPrompt(false, null, delete: false));
         Assert.Equal(Assistant.OperatingRules, Assistant.DefaultRules(false, tools: true, delete: true));
 
-        // File safe edits off with delete offered (2026-09-20, the user's call): the clause tells the truth — delete removes for good — and, later still that day
-        // (the user's ask), names neither restore nor .trash: the tool is not offered then, and the prompt never mentions a trash; nor the setting (2026-09-21, the user's ask again).
-        Assert.Equal(Assistant.FileRuleDeleteInPlace, Assistant.FileRule.Replace("delete only moves to its .trash folder and restore brings things back. ", "delete removes a file or a folder for good, with everything in it. ", StringComparison.Ordinal));
-        Assert.DoesNotContain("restore", Assistant.FileRuleDeleteInPlace, StringComparison.Ordinal);
-        Assert.DoesNotContain(".trash", Assistant.FileRuleDeleteInPlace, StringComparison.Ordinal);
-        Assert.DoesNotContain("safe edits", Assistant.FileRuleDeleteInPlace, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("trash", Assistant.DefaultRules(false, tools: true, web: true, ask: AskLimits.Default, sessions: true, mcp: true, safeEdits: false, git: true), StringComparison.OrdinalIgnoreCase);
-        Assert.Equal(Assistant.PlainTextRule + " " + Assistant.ToolRules + " " + Assistant.FileRuleDeleteInPlace, Assistant.DefaultRules(false, tools: true, safeEdits: false));
-        Assert.Equal(Assistant.PlainTextRule + " " + Assistant.ToolRules + " " + Assistant.FileRuleWithoutDelete, Assistant.DefaultRules(false, tools: true, delete: false, safeEdits: false));   // delete off wins: no clause to reword
-        Assert.Equal(Assistant.OperatingRulesWithoutFiles, Assistant.DefaultRules(false, tools: true, files: false, safeEdits: false));
-        Assert.Equal(Assistant.DefaultPersona + " " + Assistant.PlainTextRule + " " + Assistant.ToolRules + " " + Assistant.FileRuleDeleteInPlace, Assistant.SystemPrompt(false, null, safeEdits: false));
-        Assert.Equal(Assistant.OperatingRules, Assistant.DefaultRules(false, tools: true, safeEdits: true));
+        // The delete clause tells the truth — delete removes for good (FileRuleDeleteInPlace's words since 2026-09-20, under File safe edits off; the
+        // only form since 2026-10-01, when that setting, its .trash and restore went) — and names neither restore nor a trash, nor the setting (2026-09-21, the user's ask).
+        Assert.DoesNotContain("restore", Assistant.FileRule, StringComparison.Ordinal);
+        Assert.DoesNotContain("trash", Assistant.FileRule, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("safe edits", Assistant.FileRule, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("trash", Assistant.DefaultRules(false, tools: true, web: true, ask: AskLimits.Default, sessions: true, mcp: true, git: true), StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(Assistant.PlainTextRule + " " + Assistant.ToolRules + " " + Assistant.FileRule, Assistant.DefaultRules(false, tools: true));
+        Assert.Equal(Assistant.DefaultPersona + " " + Assistant.PlainTextRule + " " + Assistant.ToolRules + " " + Assistant.FileRule, Assistant.SystemPrompt(false, null));
 
         // No timer tool offered (2026-09-20: headless, or the three switched off on /tools): the tool rules lose their timer sentence, nothing else moves.
         Assert.Equal(Assistant.ToolRulesWithoutTimers + " " + Assistant.TimerRule, Assistant.ToolRules);
@@ -1204,7 +1200,7 @@ public class AssistantTests
             "and use shift_date or days_between for calendar arithmetic instead of counting yourself. " +
             "For a countdown, use start_timer, stop_timer and list_timers; never guess what is left on a timer. " +
             "The user's working directory — also called the cwd, the current directory or the current working directory — is a folder on this computer where you may read, search, write and organise files with the file tools " +
-            "(get_working_directory gives its path); every path you pass is relative to it and nothing outside it is reachable; delete only moves to its .trash folder and restore brings things back. " +
+            "(get_working_directory gives its path); every path you pass is relative to it and nothing outside it is reachable; delete removes a file or a folder for good, with everything in it. " +
             "To look at a picture (png, jpg, gif, webp, bmp) in the working directory call view_image (several at once with paths); read_file cannot read one.",
             Assistant.DefaultSystemPrompt);
         Assert.Equal(10000, Assistant.DefaultMaxToolIterations);

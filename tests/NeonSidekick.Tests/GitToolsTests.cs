@@ -317,7 +317,6 @@ public sealed class GitToolsTests : IDisposable
         Assert.Equal("Staged 1 path: src\\b.txt", await Invoke(Tool<GitStageTool>(), ("action", "stage"), ("paths", new[] { "." }), ("path", "src")));
         Assert.Equal("Nothing to stage under src\\", await Invoke(Tool<GitStageTool>(), ("action", "stage"), ("paths", new[] { "." }), ("path", "src")));
         Assert.Equal("Error: 'nope.txt' is not there", await Invoke(Tool<GitStageTool>(), ("action", "stage"), ("paths", new[] { "nope.txt" })));
-        Assert.Equal("Error: '.trash\\x' is in the .trash folder, which git never touches", await Invoke(Tool<GitStageTool>(), ("action", "stage"), ("paths", new[] { ".trash\\x" })));
         Assert.Matches(@"^Committed [0-9a-f]{7} on main: first \(2 files, \+2 −0\)$", await Invoke(Tool<GitCommitTool>(), ("message", "first")));
         Assert.Matches(@"^Amended [0-9a-f]{7} on main: first, again \(2 files, \+2 −0\)$", await Invoke(Tool<GitCommitTool>(), ("message", "first, again"), ("amend", true)));
         Assert.Equal("Error: 'yes' is not true or false for 'amend'", await Invoke(Tool<GitCommitTool>(), ("message", "x"), ("amend", "yes")));

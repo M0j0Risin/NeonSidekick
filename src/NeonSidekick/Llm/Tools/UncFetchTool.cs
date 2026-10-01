@@ -10,7 +10,7 @@ namespace NeonSidekick.Llm.Tools;
 /// <c>unc_fetch(share?, path, to?, overwrite?)</c> (2026-09-30): a file or folder copied from a share into the working directory
 /// (<see cref="WorkingDirectory.CopyBetween"/>), as the share's account — how a share's picture reaches <c>view_image</c>, a
 /// spreadsheet <c>execute_code</c>, a folder <c>zip</c>. Offered only with the File tools on (it writes the working directory, so
-/// plan mode keeps it out); what it replaces there is kept in <c>.trash</c> under <c>File safe edits</c>. Nothing on the share changes.
+/// plan mode keeps it out); what it replaces there is replaced for good. Nothing on the share changes.
 /// </summary>
 public sealed class UncFetchTool : UncTool
 {
@@ -61,14 +61,13 @@ public sealed class UncFetchTool : UncTool
         }
 
         string to = ToolArguments.ReadString(arguments, ToArgument).Trim();
-        bool keepCopy = Effective.FileSafeEdits;
         return await ReadAsync(ReadShare(arguments), path, (files, relative, share) =>
         {
             // The share's end judged first, in the share's words; what fails after is the working directory's end, or the copy.
             var side = files.Resolve(relative, forWrite: false, out _);
             return side != FileOutcome.Ok
                 ? UncText.Scoped(FileText.Error(side, relative, "fetch"), share)
-                : UncText.Fetched(WorkingDirectory.CopyBetween(files, relative, _sandbox, to, overwrite ?? false, keepCopy), share);
+                : UncText.Fetched(WorkingDirectory.CopyBetween(files, relative, _sandbox, to, overwrite ?? false), share);
         }, cancellationToken).ConfigureAwait(false);
     }
 }

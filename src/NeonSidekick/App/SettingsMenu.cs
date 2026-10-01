@@ -175,9 +175,6 @@ public enum SettingsField
     /// <summary>Lines of a collapsed paste the transcript shows under the sent line (<see cref="Settings.AppSettingsData.PastePreviewLines"/>); 0 = the label alone. The General tab's last row from 2026-09-16 until the two switches of 2026-09-18; no reconnect (read at each idle read).</summary>
     PastePreviewLines,
 
-    /// <summary>A toggle: whether an edit copies the previous version into <c>.trash</c> first and <c>delete</c> moves there (<see cref="Settings.AppSettingsData.FileSafeEdits"/>); off, edits land in place and <c>delete</c> removes for good (2026-09-20). The Files tab's second row (2026-09-17); no reconnect (read at each tool call).</summary>
-    FileSafeEdits,
-
     /// <summary>A toggle: whether <c>#</c> and part of a name lists the loaded skills on the chat line (<see cref="Settings.AppSettingsData.SkillHashMention"/>). The Options tab of <c>/skills</c>' fourth row (2026-09-17; fifth until later on 2026-09-18, when Skill slash commands went); no reconnect (read at each keystroke).</summary>
     SkillHashMention,
 
@@ -1038,8 +1035,8 @@ internal sealed partial class SettingsMenu
     /// The rows of <c>/tools</c>' four settings tabs (2026-09-19, the Ask, Files and Web rows moved off <c>/settings</c> the user's call), indexed by
     /// <see cref="ToolsText.TabTitles"/> one down (Web, Files, Shell, Ask, Claude, Obsidian, ComfyUI, SQL, Git (native), Options — the user's order since 2026-09-27; Web, Files, Shell, Ask, Git (native), Obsidian, SQL, ComfyUI, Claude, Options before; alphabetical before 2026-09-21): Options (later on 2026-09-19) is the <c>$</c>-mention switch, and under it the tool-run fold (<c>Tool collapse count</c>, 2026-09-22, the user's place);
     /// Ask (2026-09-15) is the question tool's switch and its two caps;
-    /// Files (2026-09-15) is the file-tools switch, the Safe edits switch (2026-09-17; Stale line number guard beside it until 2026-09-19, Always return
-    /// line numbers between them until 2026-09-19), the two <c>/tree</c> rows (once General's last two), the @-mention folder mode
+    /// Files (2026-09-15) is the file-tools switch (the Safe edits switch under it from 2026-09-17 until 2026-10-01, when File safe edits
+    /// went, the user's call), the two <c>/tree</c> rows (once General's last two), the @-mention folder mode
     /// (General's until 2026-09-17), the <c>/cwd browse</c> mode under it (2026-09-21) and the <c>view_image</c> cap last (2026-09-19); Web is the seven web rows (2026-09-15, once on General under Memory; the tab read Browser
     /// until later that day), the search method above the Web SearXNG URL it governs. The group switch stays each tab's first row.
     /// Since later still on 2026-09-19 (the user's ask) every Files and Web row carries its tab's word (<c>File /tree max length</c>, <c>Web SearXNG URL</c>, …) and the six JSON keys that
@@ -1056,7 +1053,7 @@ internal sealed partial class SettingsMenu
     public static readonly IReadOnlyList<IReadOnlyList<SettingsField>> ToolsTabFields =
     [
         [SettingsField.WebTools, SettingsField.WebBrowserMode, SettingsField.WebBrowserPath, SettingsField.WebBrowserNetworkMode, SettingsField.WebSearchMethod, SettingsField.WebSearxngUrl, SettingsField.WebSearchMaxResults],
-        [SettingsField.FileTools, SettingsField.FileSafeEdits, SettingsField.FileTreeMaxLength, SettingsField.FileTreeShowSizes, SettingsField.FileMentionFolderMode, SettingsField.FileBrowserMode, SettingsField.FileViewImageMaxPerCall],
+        [SettingsField.FileTools, SettingsField.FileTreeMaxLength, SettingsField.FileTreeShowSizes, SettingsField.FileMentionFolderMode, SettingsField.FileBrowserMode, SettingsField.FileViewImageMaxPerCall],
         [SettingsField.ShellCommandPolicy, SettingsField.ShellCommandAllowed, SettingsField.ShellPoliceOutsidePaths, SettingsField.ShellPreferNative, SettingsField.ShellDefault, SettingsField.ShellTimeoutSeconds, SettingsField.ShellForegroundCapSeconds, SettingsField.ShellOutputMaxChars, SettingsField.ShellCodeLanguages, SettingsField.ShellCodeTimeoutSeconds, SettingsField.ShellToolBridge, SettingsField.ShellCodeMaxToolCalls],
         [SettingsField.AskUser, SettingsField.AskMaxQuestions, SettingsField.AskMaxChoices],
         [SettingsField.ClaudeExecutable, SettingsField.ClaudePermissions, SettingsField.ClaudeModel, SettingsField.ClaudeEffort, SettingsField.ClaudeAdvisor, SettingsField.ClaudeAdvisorContext, SettingsField.ClaudeAdvisorCallsPerTurn, SettingsField.ClaudeAdvisorModel, SettingsField.ClaudeAdvisorEffort, SettingsField.ClaudeAdvisorConfirm, SettingsField.ClaudeApi, SettingsField.ClaudeApiKey, SettingsField.ClaudeApiMaxTokens, SettingsField.ClaudeApiPromptCaching, SettingsField.ClaudeCliServer],
@@ -1426,7 +1423,6 @@ internal sealed partial class SettingsMenu
             or SettingsField.FileTreeShowSizes or SettingsField.LlmOfferTools or SettingsField.LlmUseFunVerbs or SettingsField.LlmShowThinking or SettingsField.LlmPreserveThinking or SettingsField.LlmSamplingFromHuggingFace
             or SettingsField.WebTools or SettingsField.TtsVoicePreview or SettingsField.FileTools or SettingsField.AskUser
             or SettingsField.AgentSkills or SettingsField.ExternalSkills or SettingsField.TranscriptMarkdown
-            or SettingsField.FileSafeEdits
             or SettingsField.SkillHashMention or SettingsField.ReflectionAutoLearn
             or SettingsField.HideExitAutocomplete or SettingsField.CommandTypoIntercept or SettingsField.KeepCommandHistory or SettingsField.ShowWorkingDirectory or SettingsField.ThemedViewer
             or SettingsField.QueueMessages or SettingsField.SessionLogging or SettingsField.SessionTool or SettingsField.SessionSaveThinking
@@ -1634,7 +1630,6 @@ internal sealed partial class SettingsMenu
         SettingsField.TranscriptMarkdown => "Transcript markdown",
         SettingsField.SkillCompactMode => "Skill compact mode",
         SettingsField.PastePreviewLines => "Paste preview lines",
-        SettingsField.FileSafeEdits => "File safe edits",
         SettingsField.SkillHashMention => "#-mention enabled",
         SettingsField.ToolsDollarMention => "$-mention enabled",
         SettingsField.ToolCollapseCount => "Tool collapse count",
@@ -1887,7 +1882,6 @@ internal sealed partial class SettingsMenu
             SettingsField.TranscriptMarkdown => OnOff(data.TranscriptMarkdown),
             SettingsField.SkillCompactMode => data.SkillCompactMode,
             SettingsField.PastePreviewLines => Lines(data.PastePreviewLines),
-            SettingsField.FileSafeEdits => OnOff(data.FileSafeEdits),
             SettingsField.SkillHashMention => OnOff(data.SkillHashMention),
             SettingsField.ToolsDollarMention => OnOff(data.ToolsDollarMention),
             SettingsField.ToolCollapseCount => Lines(data.ToolCollapseCount),
@@ -4985,7 +4979,6 @@ internal sealed partial class SettingsMenu
             SettingsField.AgentSkills => data.AgentSkills,
             SettingsField.ExternalSkills => data.ExternalSkills,
             SettingsField.TranscriptMarkdown => data.TranscriptMarkdown,
-            SettingsField.FileSafeEdits => data.FileSafeEdits,
             SettingsField.SkillHashMention => data.SkillHashMention,
             SettingsField.ToolsDollarMention => data.ToolsDollarMention,
             SettingsField.McpServers => data.McpServers,
@@ -5067,7 +5060,6 @@ internal sealed partial class SettingsMenu
             case SettingsField.AgentSkills: data.AgentSkills = on; break;
             case SettingsField.ExternalSkills: data.ExternalSkills = on; break;
             case SettingsField.TranscriptMarkdown: data.TranscriptMarkdown = on; break;
-            case SettingsField.FileSafeEdits: data.FileSafeEdits = on; break;
             case SettingsField.SkillHashMention: data.SkillHashMention = on; break;
             case SettingsField.ToolsDollarMention: data.ToolsDollarMention = on; break;
             case SettingsField.McpServers: data.McpServers = on; break;
@@ -5116,7 +5108,6 @@ internal sealed partial class SettingsMenu
         SettingsField.SttInterrupt => on ? "the wake phrase during a spoken reply stops it" : "a spoken reply plays to its end",
         SettingsField.AskUser => on ? "ask user enabled" : "ask user disabled",
         SettingsField.FileTools => on ? "file tools enabled" : "file tools disabled",
-        SettingsField.FileSafeEdits => on ? "edit and delete operations move copies to .trash first" : "edit and delete operations function normally",
         SettingsField.FileTreeShowSizes => on ? "/tree carries each file's size" : "/tree names alone",
         SettingsField.WebTools => on ? "web tools enabled" : "web tools disabled",
         SettingsField.GitLibTools => on ? "gitlib tools enabled" : "gitlib tools disabled",

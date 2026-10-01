@@ -102,14 +102,13 @@ public sealed class WorkingDirectoryTests : IDisposable
     }
 
     [Fact]
-    public void Resolve_TheTrash_IsReadableButNotWritable()
+    public void Resolve_ADotTrash_IsAFolderLikeAnyOther()
     {
+        // Written by nothing since File safe edits went (2026-10-01, the user's call): a .trash left from before reads and writes as any folder.
         Assert.Equal(FileOutcome.Ok, _files.Resolve(@".trash\x.txt", forWrite: false, out _));
-        Assert.Equal(FileOutcome.Ok, _files.Resolve(".TRASH", forWrite: false, out _));
-        Assert.Equal(FileOutcome.TrashReadOnly, _files.Resolve(@".trash\x.txt", forWrite: true, out string full));
-        Assert.Equal(Path.Combine(_root, ".trash", "x.txt"), full);   // the path is still handed back, for the sentence
-        Assert.Equal(FileOutcome.TrashReadOnly, _files.Resolve(".trash", forWrite: true, out _));
-        Assert.Equal(FileOutcome.Ok, _files.Resolve(".trashy", forWrite: true, out _));
+        Assert.Equal(FileOutcome.Ok, _files.Resolve(@".trash\x.txt", forWrite: true, out string full));
+        Assert.Equal(Path.Combine(_root, ".trash", "x.txt"), full);
+        Assert.Equal(FileOutcome.Ok, _files.Resolve(".trash", forWrite: true, out _));
     }
 
     [Fact]
@@ -124,13 +123,12 @@ public sealed class WorkingDirectoryTests : IDisposable
     // ---- listing ----
 
     [Fact]
-    public void List_FoldersFirstThenFiles_ByName_TheRootsTrashHidden()
+    public void List_FoldersFirstThenFiles_ByName()
     {
         Put("b.txt", "bb");
         Put("A.txt", "a");
         Put(@"zed\x.txt", "");
         Put(@"alpha\y.txt", "");
-        Put(@".trash\20260911-140530\old.txt", "old");
 
         var result = _files.List("");
 
@@ -141,10 +139,9 @@ public sealed class WorkingDirectoryTests : IDisposable
         Assert.Equal(2, result.Entries[3].Length);
         Assert.False(result.Truncated);
 
-        // Named, the trash lists like any folder.
-        var trash = _files.List(".trash");
-        Assert.Equal(FileOutcome.Ok, trash.Outcome);
-        Assert.Equal(new[] { "20260911-140530" }, trash.Entries.Select(e => e.Name));
+        // A .trash left from before 2026-10-01 is listed like any folder (it was hidden at the root while File safe edits kept copies there).
+        Put(@".trash\20260911-140530\old.txt", "old");
+        Assert.Equal(new[] { ".trash", "alpha", "zed", "A.txt", "b.txt" }, _files.List("").Entries.Select(e => e.Name));
     }
 
     [Fact]
@@ -183,7 +180,6 @@ public sealed class WorkingDirectoryTests : IDisposable
         Put(@"b\deep\deeper\deepest\bottom\x.txt", "");
         Put(@"a\one.txt", "");
         Put(@"a\sub\two.txt", "");
-        Put(@".trash\20260911-140530\a\x.txt", "");
 
         Assert.Equal(new[] { "a", "b" }, _files.FileTree("", WorkingDirectory.MaxEntries, 1).Entries.Select(e => e.Name));
         Assert.Equal(new[] { ("a", 1), ("sub", 2), ("one.txt", 2), ("b", 1), ("deep", 2) }, _files.FileTree("", WorkingDirectory.MaxEntries, 2).Entries.Select(e => (e.Name, e.Depth)));
@@ -211,14 +207,13 @@ public sealed class WorkingDirectoryTests : IDisposable
     // ---- /tree ----
 
     [Fact]
-    public void FileTree_FoldersFirstThenFiles_DepthFirst_WithSizesAndIsLast_TrashSkippedAtTheRoot()
+    public void FileTree_FoldersFirstThenFiles_DepthFirst_WithSizesAndIsLast()
     {
         Put(@"b\deep\bottom.txt", "12345");
         Put(@"a\one.txt", "1");
         Put(@"a\sub\two.txt", "22");
         Put("zed.md", "");
         Put("Alpha.md", "abc");
-        Put(@".trash\20260911-140530\a\x.txt", "");
         File.SetAttributes(Put("hidden.txt", ""), FileAttributes.Hidden);
 
         var result = _files.FileTree("", WorkingDirectory.DefaultTreeLength);
@@ -247,11 +242,6 @@ public sealed class WorkingDirectoryTests : IDisposable
         Assert.Equal(Full("a") + @"\", sub.FullPath);
         Assert.Equal(new[] { "sub", "two.txt", "one.txt" }, sub.Entries.Select(e => e.Name));
 
-        // The trash is left out of the root walk but walked when it is the folder asked for.
-        var trash = _files.FileTree(WorkingDirectory.TrashFolderName, WorkingDirectory.DefaultTreeLength);
-        Assert.Equal(FileOutcome.Ok, trash.Outcome);
-        Assert.Equal(new[] { "20260911-140530", "a", "x.txt" }, trash.Entries.Select(e => e.Name));
-
         Assert.Equal(FileOutcome.Missing, _files.FileTree("nope", 10).Outcome);
         Assert.Equal(FileOutcome.IsAFile, _files.FileTree(@"a\one.txt", 10).Outcome);
         Assert.Equal(FileOutcome.OutsideRoot, _files.FileTree(@"..\outside", 10).Outcome);
@@ -273,20 +263,19 @@ public sealed class WorkingDirectoryTests : IDisposable
         var result = _files.FileTree("", WorkingDirectory.DefaultTreeLength, hideDotEntries: true);
 
         Assert.Equal(new[] { ("Notes", 1, false), ("Plan.md", 2, true), ("Home.md", 1, true) }, result.Entries.Select(e => (e.Name, e.Depth, e.IsLast)));
-        // Without the switch the dot-names are there as ever (the root's .trash aside).
+        // Without the switch the dot-names are there as ever (the root's .trash too since 2026-10-01).
         Assert.Contains(_files.FileTree("", WorkingDirectory.DefaultTreeLength).Entries, e => e.Name == ".obsidian");
-        Assert.DoesNotContain(_files.FileTree("", WorkingDirectory.DefaultTreeLength).Entries, e => e.Name == ".trash");
+        Assert.Contains(_files.FileTree("", WorkingDirectory.DefaultTreeLength).Entries, e => e.Name == ".trash");
     }
 
     [Fact]
-    public void FileTree_ShowHidden_ListsHiddenAndDotEntries_ButNeverTheRootsTrash()
+    public void FileTree_ShowHidden_ListsHiddenAndDotEntries()
     {
         // /tree under File browser/tree mode show-hidden (2026-09-23, the user's call): the Hidden .git and a hidden folder too; the
-        // default (hideDotEntries, the walk's own Hidden skip) leaves out both and the plain dot-file; the root's .trash stays out always.
+        // default (hideDotEntries, the walk's own Hidden skip) leaves out both and the plain dot-file.
         Put(@".git\HEAD", "");
         Put(".config", "");
         Put(@"secret\x.txt", "");
-        Put(@".trash\old.txt", "");
         Put("a.txt", "");
         File.SetAttributes(Full(".git"), FileAttributes.Directory | FileAttributes.Hidden);
         File.SetAttributes(Full("secret"), FileAttributes.Directory | FileAttributes.Hidden);
@@ -299,7 +288,7 @@ public sealed class WorkingDirectoryTests : IDisposable
     [Fact]
     public void FileTree_HideGitFolders_LeavesOutEveryDotGitFolder_EvenUnderShowHidden_ButWalksOneAskedFor()
     {
-        // /tree (2026-09-30, the user's ask: "in the same way it ignores .trash"): the root's .git and a nested repository's,
+        // /tree (2026-09-30, the user's ask: "in the same way it ignores .trash", as it did then): the root's .git and a nested repository's,
         // whatever show-hidden says; a .git file (a submodule's pointer) is no folder and stays; /tree .git still walks it.
         Put(@".git\HEAD", "");
         Put(@"sub\.git\config", "");
@@ -348,13 +337,12 @@ public sealed class WorkingDirectoryTests : IDisposable
     // ---- find ----
 
     [Fact]
-    public void Find_ByGlob_Recursive_Sorted_TrashExcluded()
+    public void Find_ByGlob_Recursive_Sorted()
     {
         Put("readme.md", "");
         Put(@"docs\notes.md", "");
         Put(@"docs\deep\more.MD", "");
         Put(@"docs\other.txt", "");
-        Put(@".trash\20260911-140530\gone.md", "");
 
         var result = _files.Find("*.md", "");
         Assert.Equal(FileOutcome.Ok, result.Outcome);
@@ -410,13 +398,12 @@ public sealed class WorkingDirectoryTests : IDisposable
         Put(@"test\bling.txt", "");
         Put("zed.md", "");
         Put("Alpha.md", "");
-        Put(@".trash\20260911-140530\gone.md", "");
         File.SetAttributes(Put("hidden.txt", ""), FileAttributes.Hidden);
 
         var result = _files.Complete("");
 
         Assert.Equal(FileOutcome.Ok, result.Outcome);
-        // One level only (nothing of test/ inside), folders first, then by name ignoring case; the trash and a hidden file skipped.
+        // One level only (nothing of test/ inside), folders first, then by name ignoring case; a hidden file skipped.
         Assert.Equal(new[] { "test/", "Alpha.md", "zed.md" }, result.Paths);
         Assert.False(result.Truncated);
         Assert.Equal(new[] { "test/bling.txt", "test/thing.txt" }, _files.Complete("test/").Paths);
@@ -452,10 +439,6 @@ public sealed class WorkingDirectoryTests : IDisposable
         Assert.Equal(FileOutcome.OutsideRoot, _files.Complete("../x").Outcome);
         Assert.Equal(FileOutcome.Missing, _files.Complete("nope/").Outcome);
         Assert.Equal(FileOutcome.IsAFile, _files.Complete("a.txt/").Outcome);
-        Put(@".trash\20260911-140530\gone.md", "");
-        var trash = _files.Complete(".trash/");
-        Assert.Equal(FileOutcome.Ok, trash.Outcome);
-        Assert.Empty(trash.Paths);
     }
 
     [Fact]
@@ -505,7 +488,6 @@ public sealed class WorkingDirectoryTests : IDisposable
         Put(@"a\c.txt", "  a needle, trimmed   ");
         Put("bin.dat", "needle\0binary");
         Put("big.txt", new string('x', (int)WorkingDirectory.MaxTextFileBytes + 1) + " needle");
-        Put(@".trash\20260911-140530\t.txt", "needle in the trash");
 
         var result = _files.Search("needle", "", null, regex: false, CancellationToken.None);
 
@@ -676,7 +658,7 @@ public sealed class WorkingDirectoryTests : IDisposable
     // ---- recent ----
 
     [Fact]
-    public void Recent_NewestFirst_Capped_TrashExcluded()
+    public void Recent_NewestFirst_Capped()
     {
         var t0 = new DateTime(2026, 9, 1, 12, 0, 0, DateTimeKind.Utc);
         for (int i = 0; i < 5; i++)
@@ -687,8 +669,6 @@ public sealed class WorkingDirectoryTests : IDisposable
 
         string sub = Put(@"sub\g.txt", "sub");
         File.SetLastWriteTimeUtc(sub, t0.AddMinutes(10));
-        string trashed = Put(@".trash\20260911-140530\z.txt", "");
-        File.SetLastWriteTimeUtc(trashed, t0.AddHours(5));
 
         var result = _files.Recent("", 3);
 
@@ -734,7 +714,6 @@ public sealed class WorkingDirectoryTests : IDisposable
         Put(@"docs\a.txt", "12345");
         Put(@"docs\sub\b.txt", "123");
         Put(@"docs\sub\deep\c.txt", "1");
-        Put(@".trash\20260911-140530\x.txt", "trash");
 
         var result = _files.Info("docs");
         Assert.True(result.IsDirectory);
@@ -745,7 +724,7 @@ public sealed class WorkingDirectoryTests : IDisposable
         Assert.False(result.Truncated);
 
         var root = _files.Info("");
-        Assert.Equal(3, root.Files);   // the trash is not counted
+        Assert.Equal(3, root.Files);
         Assert.Equal(3, root.Folders);
     }
 
@@ -872,12 +851,11 @@ public sealed class WorkingDirectoryTests : IDisposable
         Assert.Equal(FileOutcome.IsDirectory, _files.WriteText("dir", "x", true).Outcome);
         Assert.Equal(FileOutcome.TooLong, _files.WriteText("x.txt", new string('x', WorkingDirectory.MaxWriteChars + 1), true).Outcome);
         Assert.Equal(FileOutcome.OutsideRoot, _files.WriteText(@"..\x.txt", "x", true).Outcome);
-        Assert.Equal(FileOutcome.TrashReadOnly, _files.WriteText(@".trash\x.txt", "x", true).Outcome);
         Assert.False(File.Exists(Full("x.txt")));
     }
 
     [Fact]
-    public void WriteBytes_Creates_RefusesToReplace_ThenReplacesWithOverwrite_KeepingACopy_AndIsExistingDirectoryAnswers()
+    public void WriteBytes_Creates_RefusesToReplace_ThenReplacesWithOverwrite_AndIsExistingDirectoryAnswers()
     {
         // 2026-09-18: the download's sink — WriteText's guards over bytes as they are, no length cap of its own.
         byte[] png = [0x89, 0x50, 0x4E, 0x47, 0];
@@ -891,18 +869,16 @@ public sealed class WorkingDirectoryTests : IDisposable
         Assert.Equal(FileOutcome.Exists, _files.WriteBytes(@"img\cat.png", [1], overwrite: false).Outcome);
         Assert.Equal(png, File.ReadAllBytes(Full(@"img\cat.png")));
 
-        var replaced = _files.WriteBytes("img/cat.png", [1, 2], overwrite: true, keepCopy: true);
+        var replaced = _files.WriteBytes("img/cat.png", [1, 2], overwrite: true);
         Assert.Equal(FileOutcome.Ok, replaced.Outcome);
         Assert.True(replaced.Replaced);
-        Assert.True(replaced.CopyKept);
         Assert.Equal(new byte[] { 1, 2 }, File.ReadAllBytes(Full(@"img\cat.png")));
-        Assert.Equal(png, File.ReadAllBytes(Directory.GetFiles(Full(".trash"), "cat.png", SearchOption.AllDirectories).Single()));
+        Assert.False(Directory.Exists(Full(".trash")));   // nothing kept (File safe edits went 2026-10-01)
         Assert.Empty(Directory.GetFiles(Full("img"), "*.tmp"));
 
         Directory.CreateDirectory(Full("dir"));
         Assert.Equal(FileOutcome.IsDirectory, _files.WriteBytes("dir", [1], true).Outcome);
         Assert.Equal(FileOutcome.OutsideRoot, _files.WriteBytes(@"..\x.bin", [1], true).Outcome);
-        Assert.Equal(FileOutcome.TrashReadOnly, _files.WriteBytes(@".trash\x.bin", [1], true).Outcome);
 
         Assert.True(_files.IsExistingDirectory("dir"));
         Assert.True(_files.IsExistingDirectory(""));
@@ -986,14 +962,7 @@ public sealed class WorkingDirectoryTests : IDisposable
         Assert.Empty(all.Region);
         Assert.Equal("Q\ny Q\nz\nQ", File.ReadAllText(Full("all.txt")));
         Assert.Equal(FileOutcome.EditAmbiguous, _files.EditText("all.txt", "Q", "x").Outcome);   // without the flag, as before
-
-        // Safe edits: the copy lands in .trash first, stacked within the second.
-        Assert.False(_files.EditText("all.txt", "y", "w").CopyKept);
-        var kept = _files.EditText("all.txt", "w", "y", keepCopy: true);
-        Assert.True(kept.CopyKept);
-        Assert.Equal("Q\nw Q\nz\nQ", File.ReadAllText(Full(@".trash\20260911-140530\all.txt")));
-        Assert.True(_files.EditText("all.txt", "y", "v", keepCopy: true).CopyKept);
-        Assert.Equal("Q\ny Q\nz\nQ", File.ReadAllText(Full(@".trash\20260911-140530\all.txt (2)")));
+        Assert.False(Directory.Exists(Full(".trash")));   // an edit keeps no copy (File safe edits went 2026-10-01)
     }
 
     [Fact]
@@ -1068,7 +1037,6 @@ public sealed class WorkingDirectoryTests : IDisposable
         Assert.Equal(FileOutcome.Exists, _files.CreateDirectory("").Outcome);
         Put("f.txt", "");
         Assert.Equal(FileOutcome.IsAFile, _files.CreateDirectory("f.txt").Outcome);
-        Assert.Equal(FileOutcome.TrashReadOnly, _files.CreateDirectory(@".trash\new").Outcome);
     }
 
     // ---- move / copy ----
@@ -1110,108 +1078,38 @@ public sealed class WorkingDirectoryTests : IDisposable
     }
 
     [Fact]
-    public void Restore_WithOverwrite_TrashesTheLiveEntry_AndBringsTheKeptCopyBack_NotTheOneJustTrashed()
-    {
-        // Safe edits (2026-09-17): a write over a file keeps a copy; restore with overwrite is the undo.
-        Put("a.txt", "v1");
-        Assert.True(_files.WriteText("a.txt", "v2", overwrite: true, keepCopy: true).CopyKept);
-        Assert.True(_files.AppendText("a.txt", "more", keepCopy: true).CopyKept);
-        Assert.Equal("v2\nmore", File.ReadAllText(Full("a.txt")));
-        Assert.Equal("v1", File.ReadAllText(Full(@".trash\20260911-140530\a.txt")));
-        Assert.Equal("v2", File.ReadAllText(Full(@".trash\20260911-140530\a.txt (2)")));
-
-        Assert.Equal(FileOutcome.Exists, _files.Restore("a.txt").Outcome);
-        Assert.Equal("v2\nmore", File.ReadAllText(Full("a.txt")));
-
-        // The copy is found first (a.txt (2) = v2), then the live file goes to the trash as (3) — under keepCopy (File safe edits, 2026-09-20) — then v2 comes back.
-        var undone = _files.Restore("a.txt", overwrite: true, keepCopy: true);
-        Assert.Equal((FileOutcome.Ok, true), (undone.Outcome, undone.CopyKept));
-        Assert.Equal("v2", File.ReadAllText(Full("a.txt")));
-        Assert.Equal("v2\nmore", File.ReadAllText(Full(@".trash\20260911-140530\a.txt (3)")));
-        Assert.False(File.Exists(Full(@".trash\20260911-140530\a.txt (2)")));
-
-        // Again: the newest is (3) — the gap at (2) is never refilled, so the numbers keep their order — the live v2 lands as (4), and the appended version returns.
-        Assert.Equal(FileOutcome.Ok, _files.Restore("a.txt", overwrite: true, keepCopy: true).Outcome);
-        Assert.Equal("v2\nmore", File.ReadAllText(Full("a.txt")));
-        Assert.Equal("v2", File.ReadAllText(Full(@".trash\20260911-140530\a.txt (4)")));
-        Assert.False(File.Exists(Full(@".trash\20260911-140530\a.txt (2)")));
-
-        // No copy without the switch, and a fresh write keeps nothing to copy; a new file appended is not copied either.
-        Assert.False(_files.WriteText("a.txt", "v3", overwrite: true).CopyKept);
-        Assert.False(_files.WriteText("b.txt", "new", overwrite: false, keepCopy: true).CopyKept);
-        Assert.False(_files.AppendText("c.txt", "new", keepCopy: true).CopyKept);
-        Assert.Equal(FileOutcome.NotInTrash, _files.Restore("c.txt", overwrite: true).Outcome);   // nothing to bring back: the live file is left alone
-        Assert.Equal("new", File.ReadAllText(Full("c.txt")));
-    }
-
-    [Fact]
-    public void Restore_WithOverwrite_WithoutKeepCopy_ReplacesAFileInPlace_RefusesAFolder()
-    {
-        // 2026-09-20: the trash is File safe edits' alone — without keepCopy the live file is replaced, nothing of it kept.
-        Put("a.txt", "v1");
-        Assert.True(_files.WriteText("a.txt", "v2", overwrite: true, keepCopy: true).CopyKept);
-        var undone = _files.Restore("a.txt", overwrite: true);
-        Assert.Equal((FileOutcome.Ok, false), (undone.Outcome, undone.CopyKept));
-        Assert.Equal("v1", File.ReadAllText(Full("a.txt")));
-        Assert.Empty(Directory.EnumerateFiles(Full(@".trash"), "*", SearchOption.AllDirectories));   // v2 is gone; the emptied stamp folder went with its copy
-
-        // A folder standing where a trashed file was is refused without keepCopy, trashed with it.
-        Put("b.txt", "b");
-        Assert.Equal(FileOutcome.Ok, _files.Delete("b.txt").Outcome);
-        Put(@"b.txt\inner.txt", "x");   // a folder, with something in it, where the file was
-        var refused = _files.Restore("b.txt", overwrite: true);
-        Assert.Equal((FileOutcome.FolderInTheWay, @"b.txt\", true), (refused.Outcome, refused.Relative, refused.IsDirectory));
-        Assert.True(Directory.Exists(Full("b.txt")));
-        var kept = _files.Restore("b.txt", overwrite: true, keepCopy: true);
-        Assert.Equal((FileOutcome.Ok, true), (kept.Outcome, kept.CopyKept));
-        Assert.Equal("b", File.ReadAllText(Full("b.txt")));
-        Assert.Equal("x", File.ReadAllText(Full(@".trash\20260911-140530\b.txt (2)\inner.txt")));   // the folder that was in the way, kept whole
-    }
-
-    [Fact]
-    public void Move_RefusesAnOccupiedDestination_UnlessOverwrite_WhatIsInTheWayFollowsKeepCopy()
+    public void Move_RefusesAnOccupiedDestination_UnlessOverwrite_AFileReplacedInPlace_AFolderRefused()
     {
         Put("a.txt", "a");
         Put("b.txt", "b");
         Assert.Equal(FileOutcome.Exists, _files.Move("a.txt", "b.txt", false).Outcome);
         Assert.Equal("b", File.ReadAllText(Full("b.txt")));
 
-        // A file in the way: replaced in place without keepCopy (nothing in .trash), kept with it (2026-09-20; never kept before).
-        var replaced = _files.Move("a.txt", "b.txt", true);
-        Assert.Equal((FileOutcome.Ok, false), (replaced.Outcome, replaced.CopyKept));
+        // A file in the way: replaced in place, nothing kept (2026-09-20; the .trash copy under File safe edits went 2026-10-01).
+        Assert.Equal(FileOutcome.Ok, _files.Move("a.txt", "b.txt", true).Outcome);
         Assert.Equal("a", File.ReadAllText(Full("b.txt")));
         Assert.False(File.Exists(Full("a.txt")));
         Assert.False(Directory.Exists(Full(".trash")));
-        Put("c.txt", "c");
-        var keptFile = _files.Move("c.txt", "b.txt", true, keepCopy: true);
-        Assert.Equal((FileOutcome.Ok, true), (keptFile.Outcome, keptFile.CopyKept));
-        Assert.Equal("c", File.ReadAllText(Full("b.txt")));
-        Assert.Equal("a", File.ReadAllText(Full(@".trash\20260911-140530\b.txt")));
 
-        // A folder in the way of a folder: refused without keepCopy, trashed with it — nothing destroyed either way.
+        // A folder in the way of a folder: refused, nothing destroyed.
         Put(@"old\keep.txt", "old");
         Put(@"new\fresh.txt", "new");
         var refused = _files.Move("new", "old", true);
         Assert.Equal((FileOutcome.FolderInTheWay, @"new\", @"old\"), (refused.Outcome, refused.From, refused.To));
         Assert.True(File.Exists(Full(@"old\keep.txt")));
         Assert.True(File.Exists(Full(@"new\fresh.txt")));
-        var keptFolder = _files.Move("new", "old", true, keepCopy: true);
-        Assert.Equal((FileOutcome.Ok, true), (keptFolder.Outcome, keptFolder.CopyKept));
-        Assert.True(File.Exists(Full(@"old\fresh.txt")));
-        Assert.False(File.Exists(Full(@"old\keep.txt")));
-        Assert.True(File.Exists(Full(@".trash\20260911-140530\old\keep.txt")));
 
-        // A folder in the way of a file: the same rule; a file in the way of a folder is replaced in place without keepCopy.
+        // A folder in the way of a file: the same rule; a file in the way of a folder is replaced in place.
         Put("d.txt", "d");
         Directory.CreateDirectory(Full("spot"));
         Assert.Equal(FileOutcome.FolderInTheWay, _files.Move("d.txt", "spot", true).Outcome);
-        Assert.Equal(FileOutcome.Ok, _files.Move("d.txt", "spot", true, keepCopy: true).Outcome);
-        Assert.Equal("d", File.ReadAllText(Full("spot")));
+        Assert.True(File.Exists(Full("d.txt")));
         Put(@"dir\x.txt", "x");
         Put("flat.txt", "flat");
         Assert.Equal(FileOutcome.Ok, _files.Move("dir", "flat.txt", true).Outcome);
         Assert.True(File.Exists(Full(@"flat.txt\x.txt")));
         Assert.Equal(FileText.FolderInTheWay(@"old\"), FileText.Moved(refused));
+        Assert.False(Directory.Exists(Full(".trash")));
     }
 
     [Fact]
@@ -1219,28 +1117,20 @@ public sealed class WorkingDirectoryTests : IDisposable
     {
         Put("a.txt", "a");
         Put("b.txt", "b");
-        var replaced = _files.Copy("a.txt", "b.txt", true);
-        Assert.Equal((FileOutcome.Ok, false), (replaced.Outcome, replaced.CopyKept));
+        Assert.Equal(FileOutcome.Ok, _files.Copy("a.txt", "b.txt", true).Outcome);
         Assert.Equal("a", File.ReadAllText(Full("b.txt")));
-        Assert.False(Directory.Exists(Full(".trash")));
-        Put("c.txt", "c");
-        Assert.True(_files.Copy("c.txt", "b.txt", true, keepCopy: true).CopyKept);
-        Assert.Equal("a", File.ReadAllText(Full(@".trash\20260911-140530\b.txt")));
 
         Directory.CreateDirectory(Full("spot"));
         Assert.Equal(FileOutcome.FolderInTheWay, _files.Copy("a.txt", "spot", true).Outcome);
         Assert.Equal(FileText.FolderInTheWay(@"spot\"), FileText.Copied(_files.Copy("a.txt", "spot", true)));
-        Assert.True(_files.Copy("a.txt", "spot", true, keepCopy: true).CopyKept);
-        Assert.Equal("a", File.ReadAllText(Full("spot")));
+        Assert.True(Directory.Exists(Full("spot")));
 
-        // A folder copied over a folder merges under either setting: nothing is destroyed by a merge, nothing kept either.
+        // A folder copied over a folder merges: nothing is destroyed by a merge.
         Put(@"src\new.txt", "new");
         Put(@"dst\old.txt", "old");
-        var merged = _files.Copy("src", "dst", true);
-        Assert.Equal((FileOutcome.Ok, false), (merged.Outcome, merged.CopyKept));
+        Assert.Equal(FileOutcome.Ok, _files.Copy("src", "dst", true).Outcome);
         Assert.True(File.Exists(Full(@"dst\old.txt")) && File.Exists(Full(@"dst\new.txt")));
-        Assert.False(_files.Copy("src", "dst", true, keepCopy: true).CopyKept);
-        Assert.False(Directory.Exists(Full(@".trash\20260911-140530\dst")));
+        Assert.False(Directory.Exists(Full(".trash")));
     }
 
     [Fact]
@@ -1266,176 +1156,75 @@ public sealed class WorkingDirectoryTests : IDisposable
         Assert.Equal(FileOutcome.IntoItself, _files.Copy("src", @"src\copy", false).Outcome);
     }
 
-    // ---- delete / restore ----
-
-    [Fact]
-    public void Delete_MovesToAStampedTrashFolder_AndRestoreBringsItBack()
-    {
-        Put(@"docs\notes.txt", "keep me");
-
-        var trashed = _files.Delete(@"docs\notes.txt");
-        Assert.Equal(FileOutcome.Ok, trashed.Outcome);
-        Assert.Equal(@"docs\notes.txt", trashed.Relative);
-        Assert.Equal(@".trash\20260911-140530\docs\notes.txt", trashed.TrashPath);
-        Assert.False(File.Exists(Full(@"docs\notes.txt")));
-        Assert.Equal("keep me", File.ReadAllText(Full(trashed.TrashPath)));
-
-        var restored = _files.Restore(@"docs\notes.txt");
-        Assert.Equal(FileOutcome.Ok, restored.Outcome);
-        Assert.Equal(@"docs\notes.txt", restored.Relative);
-        Assert.Equal(@".trash\20260911-140530\", restored.TrashPath);
-        Assert.Equal("keep me", File.ReadAllText(Full(@"docs\notes.txt")));
-        Assert.False(Directory.Exists(Full(@".trash\20260911-140530")));   // the emptied stamp folder goes
-
-        Assert.Equal(FileOutcome.Exists, _files.Restore(@"docs\notes.txt").Outcome);
-        File.Delete(Full(@"docs\notes.txt"));
-        Assert.Equal(FileOutcome.NotInTrash, _files.Restore(@"docs\notes.txt").Outcome);
-        Assert.Equal(FileOutcome.Missing, _files.Delete("nope").Outcome);
-        Assert.Equal(FileOutcome.TrashReadOnly, _files.Delete(@".trash\x").Outcome);
-        Assert.Equal(FileOutcome.IntoItself, _files.Delete("").Outcome);
-    }
+    // ---- delete ----
 
     [Theory]
-    [InlineData(true)]
     [InlineData(false)]
-    public void Delete_NeverTouchesGit_ItsContents_OrAFolderHoldingIt(bool toTrash)
+    [InlineData(true)]
+    public void Delete_NeverTouchesGit_ItsContents_OrAFolderHoldingIt(bool nested)
     {
         // 2026-09-23, the user's call: .git, anything in it, and a folder with a .git anywhere under it (a folder, or a worktree's
-        // .git file) are refused under either File safe edits mode, in any case; nothing moves, nothing is removed.
-        Put(@".git\config", "[core]");
-        Put(@"repo\sub\.git\HEAD", "ref: refs/heads/main");
-        Put(@"repo\readme.md", "hi");
-        Put(@"wt\.git", "gitdir: ../.git/worktrees/wt");
-        Put(@"plain\a.txt", "a");
+        // .git file) are refused, in any case; nothing is removed. Run at the root and one folder down.
+        string at = nested ? "outer" : "";
+        string P(string relative) => at.Length == 0 ? relative : Path.Combine(at, relative);
+        Put(P(@".git\config"), "[core]");
+        Put(P(@"repo\sub\.git\HEAD"), "ref: refs/heads/main");
+        Put(P(@"repo\readme.md"), "hi");
+        Put(P(@"wt\.git"), "gitdir: ../.git/worktrees/wt");
+        Put(P(@"plain\a.txt"), "a");
 
         foreach (string path in new[] { ".git", @".git\config", @".GIT\config", "repo", @"repo\sub", @"repo\sub\.git", @"repo\sub\.git\HEAD", "wt", @"wt\.git" })
         {
-            Assert.Equal(FileOutcome.GitProtected, _files.Delete(path, toTrash).Outcome);
+            Assert.Equal(FileOutcome.GitProtected, _files.Delete(P(path)).Outcome);
         }
 
-        Assert.True(File.Exists(Full(@".git\config")));
-        Assert.True(File.Exists(Full(@"repo\sub\.git\HEAD")));
-        Assert.True(File.Exists(Full(@"wt\.git")));
-        Assert.False(Directory.Exists(Full(".trash")));
+        Assert.True(File.Exists(Full(P(@".git\config"))));
+        Assert.True(File.Exists(Full(P(@"repo\sub\.git\HEAD"))));
+        Assert.True(File.Exists(Full(P(@"wt\.git"))));
 
-        Assert.Equal(FileOutcome.Ok, _files.Delete(@"repo\readme.md", toTrash).Outcome);   // a file beside a .git is the user's own
-        Assert.Equal(FileOutcome.Ok, _files.Delete("plain", toTrash).Outcome);
-        Assert.Equal(@"Error: 'repo\' is or holds a .git folder, which delete never removes", FileText.Trashed(_files.Delete("repo", toTrash)));
+        Assert.Equal(FileOutcome.Ok, _files.Delete(P(@"repo\readme.md")).Outcome);   // a file beside a .git is the user's own
+        Assert.Equal(FileOutcome.Ok, _files.Delete(P("plain")).Outcome);
+        Assert.Equal($@"Error: '{P(@"repo\")}' is or holds a .git folder, which delete never removes", FileText.Deleted(_files.Delete(P("repo"))));
         Assert.True(WorkingDirectory.IsGitPath(@"a\.Git\b"));
         Assert.False(WorkingDirectory.IsGitPath(@"a\.github\b"));
         Assert.False(WorkingDirectory.IsGitPath(".gitignore"));
     }
 
     [Fact]
-    public void Delete_TwiceInOneSecond_SuffixesTheClash_AndRestoreTakesTheLatest()
+    public void Delete_RemovesForGood_AFolderWithEverythingInIt_TheGuardsStand()
     {
-        Put("a.txt", "first");
-        Assert.Equal(FileOutcome.Ok, _files.Delete("a.txt").Outcome);
-        Put("a.txt", "second");
-        var second = _files.Delete("a.txt");
-        Assert.Equal(@".trash\20260911-140530\a.txt (2)", second.TrashPath);
-
-        Assert.Equal(FileOutcome.Ok, _files.Restore("a.txt").Outcome);
-        Assert.Equal("second", File.ReadAllText(Full("a.txt")));
-        Assert.True(File.Exists(Full(@".trash\20260911-140530\a.txt")));   // the first copy stays
-
-        Assert.Equal(FileOutcome.Exists, _files.Restore("a.txt").Outcome);
-        File.Delete(Full("a.txt"));
-        Assert.Equal(FileOutcome.Ok, _files.Restore("a.txt").Outcome);
-        Assert.Equal("first", File.ReadAllText(Full("a.txt")));
-    }
-
-    [Fact]
-    public void Delete_AFolder_AndRestore_TheNewestStampWins()
-    {
-        Put(@"proj\a.txt", "v1");
-        Assert.Equal(FileOutcome.Ok, _files.Delete("proj").Outcome);
-        _time.UtcNow = _time.UtcNow.AddMinutes(1);
-        Put(@"proj\a.txt", "v2");
-        var trashed = _files.Delete("proj");
-        Assert.True(trashed.IsDirectory);
-        Assert.Equal(@".trash\20260911-140630\proj\", trashed.TrashPath);
-
-        var restored = _files.Restore("proj");
-        Assert.Equal(FileOutcome.Ok, restored.Outcome);
-        Assert.True(restored.IsDirectory);
-        Assert.Equal("v2", File.ReadAllText(Full(@"proj\a.txt")));
-        Assert.True(File.Exists(Full(@".trash\20260911-140530\proj\a.txt")));
-    }
-
-    [Fact]
-    public void Delete_InPlace_WhenSafeEditsOff_NothingKept_TheGuardsStand()
-    {
-        // File safe edits off (2026-09-20, the user's call): a file goes for good, a folder with everything in it — the one recursive
-        // delete in the sandbox — and .trash is never touched; the root, the trash and a missing entry are refused as before.
+        // A file goes for good, a folder with everything in it — the one recursive delete in the sandbox (in place under File safe edits
+        // off since 2026-09-20, always since 2026-10-01, when that setting and its .trash went, the user's call); the root and a missing entry are refused.
         Put(@"docs\notes.txt", "gone");
         Put(@"proj\sub\a.txt", "v1");
         Put(@"proj\b.txt", "v2");
 
-        var file = _files.Delete(@"docs\notes.txt", toTrash: false);
+        var file = _files.Delete(@"docs\notes.txt");
         Assert.Equal(FileOutcome.Ok, file.Outcome);
         Assert.Equal(@"docs\notes.txt", file.Relative);
-        Assert.Equal("", file.TrashPath);
-        Assert.True(file.Destroyed);
         Assert.False(file.IsDirectory);
         Assert.False(File.Exists(Full(@"docs\notes.txt")));
         Assert.True(Directory.Exists(Full("docs")));   // the parent stays
         Assert.False(Directory.Exists(Full(".trash")));
-        Assert.Equal(FileOutcome.NotInTrash, _files.Restore(@"docs\notes.txt").Outcome);
 
-        var folder = _files.Delete("proj", toTrash: false);
+        var folder = _files.Delete("proj");
         Assert.Equal(FileOutcome.Ok, folder.Outcome);
         Assert.Equal(@"proj\", folder.Relative);
-        Assert.True(folder.Destroyed);
         Assert.True(folder.IsDirectory);
         Assert.False(Directory.Exists(Full("proj")));
         Assert.False(Directory.Exists(Full(".trash")));
 
-        Assert.Equal(FileOutcome.Missing, _files.Delete("nope", toTrash: false).Outcome);
-        Assert.Equal(FileOutcome.IntoItself, _files.Delete("", toTrash: false).Outcome);
+        Assert.Equal(FileOutcome.Missing, _files.Delete("nope").Outcome);
+        Assert.Equal(FileOutcome.IntoItself, _files.Delete("").Outcome);
+        // A .trash left from before 2026-10-01 is a folder like any other.
         Put(@".trash\20260911-140530\x.txt", "kept");
-        Assert.Equal(FileOutcome.TrashReadOnly, _files.Delete(@".trash\20260911-140530\x.txt", toTrash: false).Outcome);
-        Assert.True(File.Exists(Full(@".trash\20260911-140530\x.txt")));
-
-        // The default is the safe direction: a caller that says nothing trashes.
-        Put("c.txt", "c");
-        var trashed = _files.Delete("c.txt");
-        Assert.False(trashed.Destroyed);
-        Assert.Equal(@".trash\20260911-140530\c.txt", trashed.TrashPath);
-        Assert.Equal("Deleted docs\\notes.txt in place (File safe edits off)", WorkingDirectory.DeletedLogLine(@"docs\notes.txt"));
+        Assert.Equal(FileOutcome.Ok, _files.Delete(@".trash\20260911-140530\x.txt").Outcome);
+        Assert.Equal(FileOutcome.Ok, _files.Delete(".trash").Outcome);
+        Assert.False(Directory.Exists(Full(".trash")));
+        Assert.Equal("Deleted docs\\notes.txt", WorkingDirectory.DeletedLogLine(@"docs\notes.txt"));
     }
 
-    // ---- empty trash ----
-
-    [Fact]
-    public void EmptyTrash_RemovesEverythingUnderTrash_KeepsTheFolder()
-    {
-        Put("keep.txt", "stays");
-        Put("a.txt", "12345");
-        Put(@"proj\sub\b.txt", "678");
-        Assert.Equal(FileOutcome.Ok, _files.Delete("a.txt").Outcome);
-        _time.UtcNow = _time.UtcNow.AddMinutes(1);
-        Assert.Equal(FileOutcome.Ok, _files.Delete("proj").Outcome);
-        Assert.Equal(_files.TrashPath, Full(".trash"));
-
-        // What the prompt shows: the same walk info takes, over the trash by name.
-        var before = _files.Info(".trash");
-        Assert.Equal(FileOutcome.Ok, before.Outcome);
-        Assert.Equal(2, before.Files);
-        Assert.Equal(4, before.Folders);   // two stamps, proj, sub
-        Assert.Equal(8, before.Bytes);
-
-        var result = _files.EmptyTrash();
-
-        Assert.Equal(FileOutcome.Ok, result.Outcome);
-        Assert.Equal(2, result.Files);
-        Assert.Equal(4, result.Folders);
-        Assert.Equal(8, result.Bytes);
-        Assert.True(Directory.Exists(Full(".trash")));
-        Assert.Empty(Directory.EnumerateFileSystemEntries(Full(".trash")));
-        Assert.Equal("stays", File.ReadAllText(Full("keep.txt")));
-        Assert.Equal(FileOutcome.NotInTrash, _files.Restore("a.txt").Outcome);
-    }
+    // ---- purge ----
 
     /// <summary>PurgeFolder (later still on 2026-09-24, <c>/comfy purge</c>): everything under the folder, dot-folders included, the folder kept, nothing beside it touched.</summary>
     [Fact]
@@ -1456,58 +1245,46 @@ public sealed class WorkingDirectoryTests : IDisposable
     }
 
     [Fact]
-    public void PurgeFolder_RefusesTheRoot_TheTrash_OutsideAndAFile_MissingIsOk()
+    public void PurgeFolder_RefusesTheRoot_OutsideAndAFile_MissingIsOk()
     {
         Put("keep.txt", "stays");
-        Put(@".trash\x.txt", "t");
 
         var root = _files.PurgeFolder(".");
         Assert.Equal((FileOutcome.OutsideRoot, WorkingDirectory.PurgeRootRefusal), (root.Outcome, root.Detail));
         Assert.Equal(FileOutcome.OutsideRoot, _files.PurgeFolder("").Outcome);
         Assert.Equal(FileOutcome.OutsideRoot, _files.PurgeFolder(@"sub\..").Outcome);
         Assert.Equal(FileOutcome.OutsideRoot, _files.PurgeFolder("..").Outcome);
-        Assert.Equal(FileOutcome.TrashReadOnly, _files.PurgeFolder(".trash").Outcome);
         Assert.Equal(FileOutcome.IsAFile, _files.PurgeFolder("keep.txt").Outcome);
         Assert.Equal(FileOutcome.Ok, _files.PurgeFolder("nothing-here").Outcome);
         Assert.Equal("stays", File.ReadAllText(Full("keep.txt")));
-        Assert.True(File.Exists(Full(@".trash\x.txt")));
     }
 
     [Fact]
-    public void EmptyTrash_NoTrashFolder_IsOkWithZeros_AndCreatesNothing()
+    public void PurgeFolder_NoFolder_IsOkWithZeros_AndCreatesNothing()
     {
-        var result = _files.EmptyTrash();
+        _files.EnsureExists();
+        var result = _files.PurgeFolder("out");
 
         Assert.Equal(FileOutcome.Ok, result.Outcome);
         Assert.Equal((0, 0, 0L), (result.Files, result.Folders, result.Bytes));
-        Assert.False(Directory.Exists(Full(".trash")));
-        Assert.False(_files.Exists);
-
-        _files.EnsureExists();
-        Directory.CreateDirectory(Full(".trash"));
-        Assert.Equal(FileOutcome.Ok, _files.EmptyTrash().Outcome);
-        Assert.True(Directory.Exists(Full(".trash")));
+        Assert.False(Directory.Exists(Full("out")));
     }
 
     [Fact]
-    public void EmptyTrash_ReadOnlyAndHiddenFiles_GoToo()
+    public void PurgeFolder_ReadOnlyAndHiddenFiles_GoToo()
     {
-        Put("locked.txt", "ro");
-        Put(@"dir\hidden.txt", "h");
-        Assert.Equal(FileOutcome.Ok, _files.Delete("locked.txt").Outcome);
-        Assert.Equal(FileOutcome.Ok, _files.Delete("dir").Outcome);
-        string locked = Full(@".trash\20260911-140530\locked.txt");
-        string hidden = Full(@".trash\20260911-140530\dir\hidden.txt");
+        string locked = Put(@"out\locked.txt", "ro");
+        string hidden = Put(@"out\dir\hidden.txt", "h");
         File.SetAttributes(locked, FileAttributes.ReadOnly);
         File.SetAttributes(hidden, FileAttributes.Hidden);
 
-        var result = _files.EmptyTrash();
+        var result = _files.PurgeFolder("out");
 
         Assert.Equal(FileOutcome.Ok, result.Outcome);
         Assert.Equal(2, result.Files);
-        Assert.Equal(2, result.Folders);
+        Assert.Equal(1, result.Folders);
         Assert.Equal(3, result.Bytes);
-        Assert.Empty(Directory.EnumerateFileSystemEntries(Full(".trash")));
+        Assert.Empty(Directory.EnumerateFileSystemEntries(Full("out")));
     }
 
     // ---- zip / unzip ----
@@ -1560,7 +1337,6 @@ public sealed class WorkingDirectoryTests : IDisposable
         Assert.Equal(FileOutcome.IntoItself, _files.Zip("d", @"d\d.zip", false).Outcome);
         Assert.Equal(FileOutcome.IntoItself, _files.Zip("", null, false).Outcome);
         Assert.Equal(FileOutcome.Missing, _files.Zip("nope", null, false).Outcome);
-        Assert.Equal(FileOutcome.TrashReadOnly, _files.Zip("a.txt", @".trash\a.zip", false).Outcome);
     }
 
     [Fact]
@@ -1688,14 +1464,14 @@ public sealed class WorkingDirectoryTests : IDisposable
     }
 
     [Fact]
-    public void ReadImage_Ok_Missing_Directory_NotAnImage_TooBig_Outside_Trash()
+    public void ReadImage_Ok_Missing_Directory_NotAnImage_TooBig_Outside_DotFolder()
     {
         Directory.CreateDirectory(Full("shots"));
         File.WriteAllBytes(Full(@"shots\square.bmp"), NeonSidekick.App.SmokeChecks.SolidBmp(4, 4));
         Put("notes.txt", "not a picture");
         Directory.CreateDirectory(Full("dir"));
-        Directory.CreateDirectory(Full(WorkingDirectory.TrashFolderName));
-        File.WriteAllBytes(Full(WorkingDirectory.TrashFolderName + @"\old.bmp"), NeonSidekick.App.SmokeChecks.SolidBmp(2, 2));
+        Directory.CreateDirectory(Full(".trash"));
+        File.WriteAllBytes(Full(@".trash\old.bmp"), NeonSidekick.App.SmokeChecks.SolidBmp(2, 2));
         using (var big = new FileStream(Full("huge.png"), FileMode.Create))
         {
             big.SetLength(ImageFile.MaxFileBytes + 1);
@@ -1715,33 +1491,25 @@ public sealed class WorkingDirectoryTests : IDisposable
         Assert.Null(_files.ReadImage("notes.txt").Image);
         Assert.Equal(FileOutcome.ImageTooBig, _files.ReadImage("huge.png").Outcome);
         Assert.Equal(FileOutcome.OutsideRoot, _files.ReadImage(@"..\x.png").Outcome);
-        Assert.Equal(FileOutcome.Ok, _files.ReadImage(WorkingDirectory.TrashFolderName + @"\old.bmp").Outcome);
+        Assert.Equal(FileOutcome.Ok, _files.ReadImage(@".trash\old.bmp").Outcome);   // a dot-folder reads like any other
     }
     [Fact]
-    public void TrashMoves_LogTheirCopies_AndTheLinesArePinned()
+    public void Delete_LogsWhatWent_AndTheLineIsPinned()
     {
+        // One Debug line per delete; the trash's Trashed, Kept, Restored and emptied lines went with File safe edits (2026-10-01, the user's call).
         Put("a.txt", "x");
         var lines = new List<NeonSidekick.Diagnostics.DiagnosticEvent>();
-        Action<NeonSidekick.Diagnostics.DiagnosticEvent> capture = e => { if (e.Category == WorkingDirectory.Category && (e.Message.StartsWith("Trashed ", StringComparison.Ordinal) || e.Message.StartsWith("Restored ", StringComparison.Ordinal) || e.Message.StartsWith("Trash emptied", StringComparison.Ordinal))) lines.Add(e); };
+        Action<NeonSidekick.Diagnostics.DiagnosticEvent> capture = e => { if (e.Category == WorkingDirectory.Category && e.Message.StartsWith("Deleted ", StringComparison.Ordinal)) lines.Add(e); };
         NeonSidekick.Diagnostics.DiagnosticLog.Emitted += capture;
         try
         {
             Assert.Equal(FileOutcome.Ok, _files.Delete("a.txt").Outcome);
-            Assert.Equal(FileOutcome.Ok, _files.Restore("a.txt").Outcome);
-            Assert.Equal(FileOutcome.Ok, _files.Delete("a.txt").Outcome);
-            Assert.Equal(FileOutcome.Ok, _files.EmptyTrash().Outcome);
         }
         finally
         {
             NeonSidekick.Diagnostics.DiagnosticLog.Emitted -= capture;
         }
 
-        Assert.Equal(4, lines.Count);
-        Assert.Matches(@"^Trashed a\.txt as \.trash\\\d{8}-\d{6}\\a\.txt$", lines[0].Message);
-        Assert.Matches(@"^Restored a\.txt from \.trash\\\d{8}-\d{6}\\$", lines[1].Message);
-        Assert.Matches(@"^Trashed a\.txt as \.trash\\\d{8}-\d{6}\\a\.txt$", lines[2].Message);
-        Assert.Equal((NeonSidekick.Diagnostics.DiagnosticLevel.Info, "Trash emptied: 1 files, 1 folders, 1 bytes"), (lines[3].Level, lines[3].Message));
-        Assert.All(lines.Take(3), e => Assert.Equal(NeonSidekick.Diagnostics.DiagnosticLevel.Debug, e.Level));
-        Assert.Equal("Kept the previous notes.md as .trash\\x\\notes.md", WorkingDirectory.KeptLogLine("notes.md", ".trash\\x\\notes.md"));
+        Assert.Equal((NeonSidekick.Diagnostics.DiagnosticLevel.Debug, "Deleted a.txt"), (Assert.Single(lines).Level, lines[0].Message));
     }
 }

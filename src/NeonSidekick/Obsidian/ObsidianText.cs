@@ -125,8 +125,8 @@ public static class ObsidianText
         return FileText.Counts(lines, words);
     }
 
-    public static string Wrote(string relative, bool created, string text, string kept) =>
-        (created ? "created " : "replaced ") + relative + " (" + Counts(text).TrimStart(',', ' ') + ")" + kept;
+    public static string Wrote(string relative, bool created, string text) =>
+        (created ? "created " : "replaced ") + relative + " (" + Counts(text).TrimStart(',', ' ') + ")";
 
     public static string Inserted(string relative, bool created, bool append, string heading, string text) =>
         (created ? "created " : (append ? "appended to " : "prepended to ")) + relative
@@ -160,9 +160,6 @@ public static class ObsidianText
 
         return head + "; " + Count(linkedFrom.Count, "note") + " still " + (linkedFrom.Count == 1 ? "links" : "link") + " to it:\n" + list;
     }
-
-    /// <summary>What an overwrite with <c>File safe edits</c> on adds: where the previous version went.</summary>
-    public static string KeptIn(string trashPath) => $"; the previous version is in {trashPath}";
 
     public static string Moved(string from, string to, int links, int notes) =>
         links == 0

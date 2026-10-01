@@ -51,10 +51,10 @@ public sealed class SkillCatalog
 
     /// <summary>
     /// Folders <see cref="Resources"/> never enters, and <c>skill_editor</c>'s file actions never write
-    /// into. <c>.trash</c> since 2026-09-27: where a skill's previous file versions go under
-    /// <c>File safe edits</c> (<see cref="SkillEditor.WriteFile"/>), the app's, never the skill's.
+    /// into. <c>.trash</c> was one from 2026-09-27 until 2026-10-01, when File safe edits stopped keeping a skill's
+    /// previous file versions there (the user's call).
     /// </summary>
-    public static readonly string[] SkippedFolders = { ".git", "node_modules", WorkingDirectory.TrashFolderName };
+    public static readonly string[] SkippedFolders = { ".git", "node_modules" };
 
     private sealed record Entry(DateTime LastWriteUtc, long Length, SkillFrontmatter? Frontmatter, string? Problem);
 

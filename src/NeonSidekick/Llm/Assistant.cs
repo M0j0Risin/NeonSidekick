@@ -100,31 +100,20 @@ public sealed class Assistant
     /// <summary>
     /// The two sentences of <see cref="OperatingRules"/> that name the file tools and the working
     /// directory: in the default rules while the setting <c>File tools</c> is on (the file tools
-    /// offered), gone with them; a custom <c>operata.md</c> stands verbatim either way. Pinned.
+    /// offered), gone with them; a custom <c>operata.md</c> stands verbatim either way. Its <c>delete</c> clause
+    /// says the truth: a file or a folder goes for good (<c>FileRuleDeleteInPlace</c>'s words since 2026-09-20, under
+    /// <c>File safe edits</c> off; the only form since 2026-10-01, when that setting, its <c>.trash</c> and <c>restore</c>
+    /// went, the user's call). It names no trash and no setting (2026-09-21, the user's ask: told <c>File safe edits is
+    /// off</c>, the model reasoned about a switch it cannot reach). Pinned.
     /// </summary>
     public const string FileRule =
-        "The user's working directory — also called the cwd, the current directory or the current working directory — is a folder on this computer where you may read, search, write and organise files with the file tools " +
-        "(" + NeonSidekick.Llm.Tools.GetWorkingDirectoryTool.ToolName + " gives its path); every path you pass is relative to it and nothing outside it is reachable; " +
-        NeonSidekick.Llm.Tools.DeleteTool.ToolName + " only moves to its .trash folder and " + NeonSidekick.Llm.Tools.RestoreTool.ToolName + " brings things back. " +
-        "To look at a picture (png, jpg, gif, webp, bmp) in the working directory call " + NeonSidekick.Llm.Tools.ViewImageTool.ToolName + " (several at once with " + NeonSidekick.Llm.Tools.ViewImageTool.PathsArgument + "); " + NeonSidekick.Llm.Tools.ReadFileTool.ToolName + " cannot read one.";
-
-    /// <summary>
-    /// <see cref="FileRule"/> with its <c>delete</c> / <c>restore</c> clause telling the truth under
-    /// <c>File safe edits</c> off (2026-09-20, the user's call): <c>delete</c> removes for good, a folder with
-    /// everything in it — and, since later still that day (the user's ask), neither <c>restore</c> nor
-    /// <c>.trash</c> is named: the tool is not offered while the setting is off (<c>ChatScreen.FileToolsFor</c>),
-    /// so the prompt never mentions a trash — nor, since 2026-09-21 (the user's ask), the setting itself:
-    /// told <c>File safe edits is off</c>, the model reasoned about a switch it cannot reach. The default
-    /// rules while <c>delete</c> is offered and the setting is off; <see cref="OperatingRules"/> stays byte-identical. Pinned.
-    /// </summary>
-    public const string FileRuleDeleteInPlace =
         "The user's working directory — also called the cwd, the current directory or the current working directory — is a folder on this computer where you may read, search, write and organise files with the file tools " +
         "(" + NeonSidekick.Llm.Tools.GetWorkingDirectoryTool.ToolName + " gives its path); every path you pass is relative to it and nothing outside it is reachable; " +
         NeonSidekick.Llm.Tools.DeleteTool.ToolName + " removes a file or a folder for good, with everything in it. " +
         "To look at a picture (png, jpg, gif, webp, bmp) in the working directory call " + NeonSidekick.Llm.Tools.ViewImageTool.ToolName + " (several at once with " + NeonSidekick.Llm.Tools.ViewImageTool.PathsArgument + "); " + NeonSidekick.Llm.Tools.ReadFileTool.ToolName + " cannot read one.";
 
     /// <summary>
-    /// <see cref="FileRule"/> without its <c>delete</c> / <c>restore</c> clause: the default rules while
+    /// <see cref="FileRule"/> without its <c>delete</c> clause: the default rules while
     /// <c>delete</c> is switched off on <c>/tools</c> (2026-09-20 — off in a fresh profile until later on
     /// 2026-09-21, when the user asked for it on out of the box), the <see cref="DownloadRule"/> shape; <see cref="OperatingRules"/> stays
     /// byte-identical. Pinned.
@@ -479,9 +468,7 @@ public sealed class Assistant
     /// with <paramref name="web"/> (and <see cref="DownloadRule"/> with both, unless <paramref name="download"/> is false —
     /// <c>download_file</c> switched off by name on <c>/tools</c>, 2026-09-19), <see cref="AskRule"/> with <paramref name="ask"/>,
     /// <see cref="SessionRule"/> with <paramref name="sessions"/> and, last, <see cref="McpRule"/> with <paramref name="mcp"/> (2026-09-20). The file rule is
-    /// <see cref="FileRuleWithoutDelete"/> with <paramref name="delete"/> false and <see cref="FileRuleDeleteInPlace"/> with <paramref name="safeEdits"/> false
-    /// (<c>File safe edits</c> off while <c>delete</c> is offered, 2026-09-20 — neither names <c>restore</c> or <c>.trash</c>, since the
-    /// tool is not offered then); the tool rules are
+    /// <see cref="FileRuleWithoutDelete"/> with <paramref name="delete"/> false; the tool rules are
     /// <see cref="ToolRulesWithoutTimers"/> with <paramref name="timers"/> false (no timer tool offered — headless, or the
     /// Timers group emptied on <c>/tools</c>, 2026-09-20); <see cref="ShellRule"/> rides after the git sentence with
     /// <paramref name="shell"/> (the shell tools offered: <c>Shell command policy</c> not off, 2026-09-21), as
@@ -491,9 +478,9 @@ public sealed class Assistant
     /// (the setting <c>Shell prefer native tools</c>, 2026-09-26) when it names a group. <see cref="ObsidianDeleteRule"/> follows <see cref="ObsidianRule"/>
     /// with <paramref name="obsidianDelete"/> (<c>vault_delete</c> offered, later on 2026-09-22); <see cref="SqlRule"/> after them with <paramref name="sql"/> (2026-09-23), <see cref="OracleRule"/> after it with <paramref name="oracle"/> (2026-09-30), <see cref="MySqlRule"/> after that with <paramref name="mysql"/> (the same day), <see cref="HomeAssistantRule"/> after it with <paramref name="homeAssistant"/> (2026-09-28), <see cref="ClaudeAdvisorRule"/> after that with <paramref name="advisor"/> (2026-09-27). With <paramref name="markdown"/> false it is <see cref="OperatingRules"/> and its variants byte for byte.
     /// </summary>
-    public static string DefaultRules(bool markdown, bool tools, bool files = true, bool web = false, AskLimits? ask = null, bool sessions = false, bool download = true, bool delete = true, bool mcp = false, bool safeEdits = true, bool timers = true, bool git = false, bool shell = false, bool bridge = false, bool police = true, bool obsidian = false, bool obsidianDelete = false, bool sql = false, bool native = false, bool advisor = false, bool homeAssistant = false, bool oracle = false, bool mysql = false, bool unc = false, bool uncFetch = false, bool uncWrite = false) =>
+    public static string DefaultRules(bool markdown, bool tools, bool files = true, bool web = false, AskLimits? ask = null, bool sessions = false, bool download = true, bool delete = true, bool mcp = false, bool timers = true, bool git = false, bool shell = false, bool bridge = false, bool police = true, bool obsidian = false, bool obsidianDelete = false, bool sql = false, bool native = false, bool advisor = false, bool homeAssistant = false, bool oracle = false, bool mysql = false, bool unc = false, bool uncFetch = false, bool uncWrite = false) =>
         tools
-            ? TextRule(markdown) + " " + (timers ? ToolRules : ToolRulesWithoutTimers) + (files ? " " + (delete ? (safeEdits ? FileRule : FileRuleDeleteInPlace) : FileRuleWithoutDelete) : "") + (web ? " " + WebRule : "") + (web && files && download ? " " + DownloadRule : "") + (git ? " " + GitRule : "") + (shell ? " " + ShellRuleFor(bridge, police) + NativeTail(native, files, git, web, sql, oracle, mysql, unc) : "") + (obsidian ? " " + ObsidianRule + (obsidianDelete ? " " + ObsidianDeleteRule : "") : "") + (sql ? " " + SqlRule : "") + (oracle ? " " + OracleRule : "") + (mysql ? " " + MySqlRule : "") + (unc ? " " + UncRule + (uncFetch ? " " + UncFetchRule : "") + (uncWrite ? " " + UncWriteRule : "") : "") + (homeAssistant ? " " + HomeAssistantRule : "") + (advisor ? " " + ClaudeAdvisorRule : "") + (ask is { } limits ? " " + AskRule(limits) : "") + (sessions ? " " + SessionRule : "") + (mcp ? " " + McpRule : "")
+            ? TextRule(markdown) + " " + (timers ? ToolRules : ToolRulesWithoutTimers) + (files ? " " + (delete ? FileRule : FileRuleWithoutDelete) : "") + (web ? " " + WebRule : "") + (web && files && download ? " " + DownloadRule : "") + (git ? " " + GitRule : "") + (shell ? " " + ShellRuleFor(bridge, police) + NativeTail(native, files, git, web, sql, oracle, mysql, unc) : "") + (obsidian ? " " + ObsidianRule + (obsidianDelete ? " " + ObsidianDeleteRule : "") : "") + (sql ? " " + SqlRule : "") + (oracle ? " " + OracleRule : "") + (mysql ? " " + MySqlRule : "") + (unc ? " " + UncRule + (uncFetch ? " " + UncFetchRule : "") + (uncWrite ? " " + UncWriteRule : "") : "") + (homeAssistant ? " " + HomeAssistantRule : "") + (advisor ? " " + ClaudeAdvisorRule : "") + (ask is { } limits ? " " + AskRule(limits) : "") + (sessions ? " " + SessionRule : "") + (mcp ? " " + McpRule : "")
             : TextRule(markdown);
 
     /// <summary><see cref="ShellNativeRule"/> after a space, or nothing: off, or no group to name.</summary>
@@ -537,11 +524,11 @@ public sealed class Assistant
     /// the third (2026-09-20) is a whole group: <paramref name="timers"/> false (no timer tool offered — headless, or the
     /// three switched off) drops <see cref="TimerRule"/>.
     /// </summary>
-    public static string SystemPrompt(bool speechOutput, IReadOnlyList<string>? memories, string? persona = null, string? operatingRules = null, string? voiceDirective = null, bool tools = true, bool web = false, bool files = true, AskLimits? ask = null, ProjectNotes? project = null, IReadOnlyList<Skills.Skill>? skills = null, bool markdown = false, bool sessions = false, bool download = true, bool recall = true, bool delete = true, bool mcp = false, bool safeEdits = true, bool timers = true, bool git = false, bool shell = false, bool bridge = false, bool police = true, bool obsidian = false, bool obsidianDelete = false, bool sql = false, bool native = false, string? plan = null, bool advisor = false, bool homeAssistant = false, bool oracle = false, bool mysql = false, bool unc = false, bool uncFetch = false, bool uncWrite = false)
+    public static string SystemPrompt(bool speechOutput, IReadOnlyList<string>? memories, string? persona = null, string? operatingRules = null, string? voiceDirective = null, bool tools = true, bool web = false, bool files = true, AskLimits? ask = null, ProjectNotes? project = null, IReadOnlyList<Skills.Skill>? skills = null, bool markdown = false, bool sessions = false, bool download = true, bool recall = true, bool delete = true, bool mcp = false, bool timers = true, bool git = false, bool shell = false, bool bridge = false, bool police = true, bool obsidian = false, bool obsidianDelete = false, bool sql = false, bool native = false, string? plan = null, bool advisor = false, bool homeAssistant = false, bool oracle = false, bool mysql = false, bool unc = false, bool uncFetch = false, bool uncWrite = false)
     {
         bool customPersona = !string.IsNullOrWhiteSpace(persona);
         bool customRules = !string.IsNullOrWhiteSpace(operatingRules);
-        string defaultRules = DefaultRules(markdown, tools, files, web, ask, sessions, download, delete, mcp, safeEdits, timers, git, shell, bridge, police, obsidian, obsidianDelete, sql, native, advisor, homeAssistant, oracle, mysql, unc, uncFetch, uncWrite);
+        string defaultRules = DefaultRules(markdown, tools, files, web, ask, sessions, download, delete, mcp, timers, git, shell, bridge, police, obsidian, obsidianDelete, sql, native, advisor, homeAssistant, oracle, mysql, unc, uncFetch, uncWrite);
         var sb = new StringBuilder(!customPersona && !customRules
             ? DefaultPersona + " " + defaultRules
             : (customPersona ? persona!.Trim() : DefaultPersona) + "\n\n" + (customRules ? operatingRules!.Trim() : defaultRules));

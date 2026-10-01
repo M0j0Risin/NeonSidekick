@@ -67,8 +67,8 @@ During early development, I was experimenting with synthwave-style themes in Spe
 * **Obsidian:** Search, read, write and link notes directly in your vault's files. No plugin is needed, and Obsidian doesn't have to be running. Wikilinks, aliases, tags, properties and daily notes all work.
 * **SQL Server:** Read-only queries over named connections, plus discovery of schemas, relationships and indexes. Every query is checked to be a single `SELECT` and runs in a transaction that is always rolled back. Sign in with SQL, Windows or run-as accounts; passwords are stored encrypted (DPAPI, Windows' per-user encryption) or in Windows Credential Manager.
 * **Oracle:** The same read-only tools for Oracle databases, through Oracle's fully managed driver (no Oracle Client to install). Every query is checked to be a single `SELECT`, runs in a read-only session (23ai and later) and a read-only transaction that is always rolled back. Sign in with a database user; passwords are stored as the SQL Server ones are.
-* **UNC shares and outside folders:** Search, read and (when you allow it) change files on `\\server\share` paths and local folders outside the working directory, without mapped drives. Each share is reached as you or as another Windows account (like `runas /netonly`), its password stored as the SQL ones are. Read-only unless the share is marked read-write and *UNC writes* is on; changes there are permanent.
 * **MySQL and MariaDB:** The same read-only tools again, through MySqlConnector (fully managed, MIT). Every query is checked to be a single `SELECT`, runs in a hardened session and a read-only transaction that is always rolled back. Sign in with a database user; passwords are stored as the others are.
+* **UNC shares and outside folders:** Search, read and (when you allow it) change files on `\\server\share` paths and local folders outside the working directory, without mapped drives. Each share is reached as you or as another Windows account (like `runas /netonly`), its password stored as the SQL ones are. Read-only unless the share is marked read-write and *UNC writes* is on; changes there are permanent.
 * **Home Assistant:** Control lights, scenes, the TV, to-do lists and sensors through your own Home Assistant. The model finds devices by room or name ("dim the den to 30%"), and anything outside a safe list waits for your yes. `/ha` drives the house directly, without the model.
 * **ComfyUI:** Pictures from your own ComfyUI workflows (text-to-image, image-to-image, face swaps). The model writes prompts in each model family's style, or `/imagine` sends yours exactly as typed. A wizard builds or imports workflows.
 * **Claude API:** Anthropic's Claude models as one more `/server` choice, using your own API key (stored encrypted), with thinking levels, prompt caching and cost in `/usage`. It stays off until you turn it on in the *Claude* tab of `/tools`.
@@ -84,8 +84,10 @@ During early development, I was experimenting with synthwave-style themes in Spe
 * **Windows Terminal** is recommended. The interface is tuned for it.
 * Optional extras:
   * For the embedded LLM, an NVIDIA GPU with driver 580 or newer (CUDA) or any GPU with Vulkan. Without one it runs on the CPU, slowly.
-  * For web pages that need a real browser, Edge, Chrome or Brave.
-  * For `/claude` and the Claude advisor, the Claude Code CLI.
+  * For headless web browsing, Edge, Chrome or Brave (otherwise httpClient only).
+  * For `/claude` and the Claude advisor tool, the Claude Code CLI.
+  * For more flexible scripting, Python and Node (otherwise Powershell/pwsh only).
+  * For enhanced web search capabilities, SearXNG in Docker Desktop (instructions in docs) or another external host (otherwise embedded DuckDuckGo or bring your own MCP web search).
 
 ### Install
 1. Download `NeonSidekick-v<version>-win-x64.zip` from the [GitHub Releases page](https://github.com/M0j0Risin/NeonSidekick/releases). A `.sha256` file beside it lets you check the download.
@@ -153,7 +155,7 @@ Commands typed while a reply runs:
 
 | Behaviour | Commands |
 |---|---|
-| Open their pane over the reply | `/help`, `/settings`, `/tools`, `/mcp`, `/sys`, `/usage`, `/about`, `/memory`, `/queue`, `/sessions`, `/sessions title`, `/skills`, `/reasoning`, `/sampling`, `/cmdlist`, `/police`, `/emptytrash`, `/cmdclear`, `/tree`, `/vault`, `/cmdcopy`, `/keycopy`, `/persona`, `/operata`, `/vocalia` |
+| Open their pane over the reply | `/help`, `/settings`, `/tools`, `/mcp`, `/sys`, `/usage`, `/about`, `/memory`, `/queue`, `/sessions`, `/sessions title`, `/skills`, `/reasoning`, `/sampling`, `/cmdlist`, `/police`, `/cmdclear`, `/tree`, `/vault`, `/cmdcopy`, `/keycopy`, `/persona`, `/operata`, `/vocalia` |
 | Run at once | `/ha`, `/tts`, `/stt`, `/wake`, `/interrupt`, `/perf`, `/tb`, `/reasoning <level>`, `/sampling <field> <value>`, `/queue clear`, `/copy`, `/remember`, `/explore`, `/log`, `/timer`, `/expand`, `/collapse`, `/window`, `/cwd`, `/comfy view`, `/view <path>` |
 | Stop the reply first | `/clear`, `/new`, `/splash`, `/rewind`, `/exit` |
 | Everything else | Waits for the reply to end, queued behind any earlier messages (so *Queue cancel mode* applies) |
@@ -542,7 +544,6 @@ Every tool, grouped (Clock, Timers, Files, GitLib, Shell, Obsidian, SQL, ComfyUI
 | Setting | What it does | Default |
 |---|---|---|
 | File tools | Offers the sandboxed file tools (read, write, patch, search, move, copy, zip, view_image…). They only reach files under the working directory. | off |
-| File safe edits | Keeps an undo copy. Every edit saves the previous version in `.trash` first, `delete` moves files there, and `restore` puts them back. When off, edits write in place and `delete` removes for good. Best when the folder isn't under Git. | off |
 | File /tree max length | How many entries `/tree` prints before it stops (1–10000). | 500 |
 | File /tree show sizes | `/tree` shows each file's size. | on |
 | File @-mention folder mode | What picking a folder from the `@` list does: `folder-remain` keeps the list open inside it; `folder-apply` writes `@folder/` and closes. | `folder-remain` |
@@ -834,7 +835,6 @@ Type `/` to list every command with a short summary. After a command and a space
 | `/cwd [path \| ~ \| browse]` | Show or change the working directory. `~` returns to the profile's `files\` folder; `browse` opens the folder picker. |
 | `/draft` | Write the next message in your editor. It is sent when you save and close the file. |
 | `/echo <text>` | Print a line as a reply, and read it aloud when speech is on. |
-| `/emptytrash` | Permanently empty the working directory's `.trash` (asks first). |
 | `/exit` | Exit the app. |
 | `/explore [path]` | Open the working directory in your file browser. |
 | `/gituser [force]` | Write *GitLib email* and *GitLib name* into the repository's config as `user.email` / `user.name`. An existing `[user]` section is kept unless you add `force`. Does nothing while *GitLib tools* is off. |
@@ -885,7 +885,7 @@ Type `/` to list every command with a short summary. After a command and a space
 | `/theme [name]` | Switch the colour theme (the *Theme* setting). During a reply, it runs when the reply ends. |
 | `/timer [duration [name] \| stop <name> \| stop all]` | List the timers, start one (`10m`, `90s`, `1h30m`), or stop one. |
 | `/tools` | Switch the model's tools on or off and edit their settings (Web, Files, Shell, Ask, Claude, Home Assistant, Print, Obsidian, ComfyUI, SQL, Oracle, MySQL, UNC, Git). |
-| `/tree [path]` | Print a tree of the working directory. Hidden, system and dot entries appear only when *File browser/tree mode* is `show-hidden`. `.git` folders are always left out, like `.trash`, unless you name one as the path. |
+| `/tree [path]` | Print a tree of the working directory. Hidden, system and dot entries appear only when *File browser/tree mode* is `show-hidden`. `.git` folders are always left out unless you name one as the path. |
 | `/tts [on\|off]` | Toggle speech output. |
 | `/usage` | Show token usage and performance statistics. A `~` marks a reasoning count the app estimated (see *LLM reasoning estimate*). |
 | `/vault [path]` | Print a tree of the *Obsidian vault* (or a folder in it), like `/tree`. Dot-folders are left out, the length is capped by *File /tree max length*, and sizes follow *File /tree show sizes*. Fails if *Obsidian tools* is off, no vault is set, or the folder can't be reached or has no `.obsidian`. |
@@ -1094,8 +1094,7 @@ All paths are relative to the working directory. Nothing outside it can be reach
 | `create_directory` | `path` | Creates a folder and any missing parents. |
 | `move` | `from, to, overwrite?` | Renames or moves a file or folder. It won't replace anything at the new path unless `overwrite` is true. |
 | `copy` | `from, to, overwrite?` | Copies a file or folder to a new path, under the same overwrite rule. A folder copied over a folder merges into it. |
-| `delete` | `path` | Deletes a file or folder: into `.trash` while *File safe edits* is on, for good when it is off. `.git`, anything in it, and a folder holding one are always refused. |
-| `restore` | `path, overwrite?` | Puts back the newest `.trash` copy of a file or folder. With `overwrite`, it undoes the last edit of a file. Offered only while *File safe edits* is on. |
+| `delete` | `path` | Deletes a file or folder for good, a folder with everything in it. `.git`, anything in it, and a folder holding one are always refused. |
 | `zip` | `path, to?, overwrite?` | Packs a file or folder into a `.zip` archive, by default beside the original. |
 | `unzip` | `path, to?, overwrite?` | Extracts a `.zip` archive into a folder, all or nothing. |
 | `open` | `path?` | Opens a file in the user's own editor or viewer, or a folder in Explorer. With no path, it opens the working directory. |
@@ -1133,7 +1132,7 @@ These tools run git inside the app (LibGit2Sharp), for when the shell is off or 
 
 The vault tools work on the vault's files directly: no plugin, no network, and Obsidian doesn't need to be running.
 
-Notes are found by name, `[[wikilink]]`, alias or path. Inline tags and frontmatter properties both count. Dot-folders (`.obsidian`) are ignored, and line endings are kept as they were. When a note is overwritten, its old version goes to the vault's `.trash`.
+Notes are found by name, `[[wikilink]]`, alias or path. Inline tags and frontmatter properties both count. Dot-folders (`.obsidian`) are ignored, and line endings are kept as they were. Overwriting a note replaces it in place; only `vault_delete` uses the vault's `.trash`.
 
 | Tool | Arguments | What it does |
 |---|---|---|
@@ -1413,7 +1412,7 @@ The UNC tools reach named network shares (`\\server\share`, or a folder under on
 
 * **Paths** are judged as in the working directory: relative to the share's root (or a full path under it), never above it. A path naming a stream (`file.txt:secret`) is refused. Walks skip reparse points, so a DFS link inside a share isn't followed; add the link's target as a share of its own.
 * **Writes** need *UNC writes* on and the share's `access` set to `readwrite`. The changing tools aren't offered otherwise, and each call checks both again.
-* **Changes are permanent.** A share has no `.trash`: an overwrite replaces the file in place (its permissions and attributes kept), and `unc_delete` removes a file or folder for good. `unc_delete` is off in a fresh profile even under UNC writes; switch it on in the Offered tab. A file server's Previous Versions may still have a copy.
+* **Changes are permanent.** An overwrite replaces the file in place (its permissions and attributes kept), and `unc_delete` removes a file or folder for good. `unc_delete` is off in a fresh profile even under UNC writes; switch it on in the Offered tab. A file server's Previous Versions may still have a copy.
 * **Audit.** Every change logs a line with the share, the account and the path.
 * **Budgets.** A search reads at most 256 MB with four readers and looks at 100,000 entries, then says it stopped early. A preflight gives up on a share that doesn't answer in 10 seconds.
 * The shell can't reach a share through the app's sign-in: a runas share's token is the UNC tools' alone.
@@ -1652,7 +1651,7 @@ Get-Content job.txt | NeonSidekick.exe --headless --profile work
 | Tool | Arguments | What it does |
 |---|---|---|
 | `load_skill` | `name, file?` | Loads a skill's full instructions by name (the list of skills is in the system prompt), or one of its bundled files. Reads up to 64,000 characters, twice `read_file`'s limit, since it can't read a file in pages. Offered only while a skill is installed. |
-| `skill_editor` | `action, scope?, name, description?, instructions?, path?, content?, old_text?, new_text?, replace_all?, summary?` | `create` or `update` a skill under the `profile` (default) or `global` root. For an existing skill's supporting files, `write_file` writes a whole file (`content`) and `edit_file` swaps `old_text` for `new_text` (matched as `patch_file` does); `path` is relative to the skill folder. It never touches `SKILL.md` itself, `.neon-source.json`, or anything in `.git`, `node_modules` or `.trash`. With *File safe edits* on, the previous version goes to the skill's own `.trash`. External skills are read-only, and it never deletes. |
+| `skill_editor` | `action, scope?, name, description?, instructions?, path?, content?, old_text?, new_text?, replace_all?, summary?` | `create` or `update` a skill under the `profile` (default) or `global` root. For an existing skill's supporting files, `write_file` writes a whole file (`content`) and `edit_file` swaps `old_text` for `new_text` (matched as `patch_file` does); `path` is relative to the skill folder. It never touches `SKILL.md` itself, `.neon-source.json`, or anything in `.git` or `node_modules`. A write or edit replaces the file in place. External skills are read-only, and it never deletes. |
 
 ### Sessions
 

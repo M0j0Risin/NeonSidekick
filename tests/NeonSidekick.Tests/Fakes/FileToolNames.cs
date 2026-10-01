@@ -18,7 +18,6 @@ public static class FileToolNames
         MoveTool.ToolName,
         CopyTool.ToolName,
         DeleteTool.ToolName,
-        RestoreTool.ToolName,
         ZipTool.ToolName,
         UnzipTool.ToolName,
         OpenTool.ToolName,

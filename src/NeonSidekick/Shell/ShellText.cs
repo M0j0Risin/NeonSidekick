@@ -17,7 +17,7 @@ public static class ShellText
     public const string StderrSeparator = "--- stderr ---";
     public const string CutSuffix = " — output cut";
 
-    /// <summary>The folder under the working directory a cut result's whole output is written to, beside <c>.trash</c>.</summary>
+    /// <summary>The folder under the working directory a cut result's whole output is written to.</summary>
     public const string SpillFolderName = ".shell";
 
     /// <summary>The share of the cap the head of a cut result keeps; the tail gets the rest.</summary>

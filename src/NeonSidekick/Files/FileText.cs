@@ -47,7 +47,6 @@ public static class FileText
     // ---- errors ----
 
     public static string OutsideRoot(string path) => $"Error: '{path}' is outside the working directory; every path must stay inside it";
-    public static string TrashReadOnly(string path) => $"Error: '{path}' is in {WorkingDirectory.TrashFolderName}, which only delete and restore may change";
     public static string Missing(string path) => $"Error: nothing is at '{path}'";
     public static string IsDirectory(string path) => $"Error: '{path}' is a folder, not a file";
     public static string IsAFile(string path) => $"Error: '{path}' is a file, not a folder";
@@ -60,7 +59,6 @@ public static class FileText
     public static string NotAnImage(string path) => $"Error: '{path}' could not be read as an image";
     public static string ImageTooBig(string path) => $"Error: '{path}' is over {ImageFile.MaxFileBytes / 1_000_000} MB or {ImageFile.MaxPixels / 1_000_000} megapixels; too large to view";
     public static string NotAnArchive(string path) => $"Error: '{path}' is not a zip archive";
-    public static string NotInTrash(string path) => $"Error: no deleted copy of '{path}' is in {WorkingDirectory.TrashFolderName}";
     public static string Exists(string path) => $"Error: '{path}' already exists; call again with overwrite true to replace it";
     /// <summary><c>write_file</c>'s form of <see cref="Exists"/> (2026-09-19): the tool has a <c>mode</c>, not an <c>overwrite</c>. Pinned.</summary>
     public static string WriteExists(string path) => $"Error: '{path}' already exists; call again with mode overwrite to replace it, or mode append to add to its end";
@@ -140,13 +138,8 @@ public static class FileText
         _ => "",
     };
 
-    /// <summary>What every write-side sentence ends with when <c>File safe edits</c> kept the previous version. Pinned.</summary>
-    public const string CopyKeptSuffix = " (previous version in .trash)";
-
     /// <summary>
-    /// A folder at a <c>move</c> / <c>copy</c> / <c>restore</c> destination under <c>overwrite</c> while <c>File safe edits</c>
-    /// is off (2026-09-20). It names neither the setting nor <c>.trash</c> (2026-09-21, the user's ask: the model hears of
-    /// neither while the setting is off — it said so, and the model reasoned about a switch it cannot reach). Pinned.
+    /// A folder at a <c>move</c> / <c>copy</c> destination under <c>overwrite</c> (2026-09-20): never replaced. Pinned.
     /// </summary>
     public static string FolderInTheWay(string path) =>
         $"Error: '{path}' is a folder in the way — move it aside first";
@@ -154,9 +147,6 @@ public static class FileText
     /// <summary>A <c>delete</c> of <c>.git</c>, of anything in it, or of a folder holding one (2026-09-23, the user's call). Pinned.</summary>
     public static string GitProtected(string path) =>
         $"Error: '{path}' is or holds a {WorkingDirectory.GitFolderName} folder, which delete never removes";
-
-    /// <summary><c>restore</c> over something that is there again, without <c>overwrite</c>. Pinned.</summary>
-    public static string RestoreExists(string path) => $"Error: '{path}' is already there; call again with overwrite true to put the trashed copy over it";
 
     /// <summary>A line as a refusal quotes it: trimmed, cut at <see cref="WorkingDirectory.MaxQuotedChars"/> with an ellipsis.</summary>
     public static string Quote(string line)
@@ -180,13 +170,11 @@ public static class FileText
         return outcome switch
         {
             FileOutcome.OutsideRoot => OutsideRoot(path),
-            FileOutcome.TrashReadOnly => TrashReadOnly(path),
             FileOutcome.Missing => Missing(path),
             FileOutcome.IsDirectory => IsDirectory(path),
             FileOutcome.IsAFile => IsAFile(path),
             FileOutcome.NotText => NotText(path),
             FileOutcome.NotAnArchive => NotAnArchive(path),
-            FileOutcome.NotInTrash => NotInTrash(path),
             FileOutcome.Exists => Exists(path),
             FileOutcome.Empty => EditEmpty,
             FileOutcome.Same => EditSame,
@@ -638,10 +626,8 @@ public static class FileText
             return Error(result.Outcome, result.Relative, "write", result.Detail);
         }
 
-        return (result.Replaced ? "replaced " : "wrote ") + result.Relative + " (" + Bytes(result.Bytes) + Counts(result.Lines, result.Words) + ")" + Kept(result.CopyKept);
+        return (result.Replaced ? "replaced " : "wrote ") + result.Relative + " (" + Bytes(result.Bytes) + Counts(result.Lines, result.Words) + ")";
     }
-
-    private static string Kept(bool copyKept) => copyKept ? CopyKeptSuffix : "";
 
     /// <summary>
     /// <c>, 9 lines, 2,182 words</c> — what every write-side sentence carries since 2026-09-18, so the
@@ -665,7 +651,7 @@ public static class FileText
         }
 
         string now = result.Lines is { } && result.Words is { } ? " (now" + Counts(result.Lines, result.Words)[1..] + ")" : "";
-        return "appended " + Bytes(result.Bytes) + " to " + result.Relative + now + Kept(result.CopyKept);
+        return "appended " + Bytes(result.Bytes) + " to " + result.Relative + now;
     }
 
     /// <summary>
@@ -709,11 +695,11 @@ public static class FileText
                 sb.Append(", …");
             }
 
-            return sb.Append(Now(result)).Append(')').Append(StrategyNote(result.Strategy)).Append(Kept(result.CopyKept)).ToString();
+            return sb.Append(Now(result)).Append(')').Append(StrategyNote(result.Strategy)).ToString();
         }
 
         sb.Append("edited ").Append(result.Relative).Append(" (").Append(Range(result)).Append(Now(result)).Append(')')
-          .Append(StrategyNote(result.Strategy)).Append(Kept(result.CopyKept));
+          .Append(StrategyNote(result.Strategy));
         if (result.Region.Count > 0)
         {
             sb.Append(":\n").Append(Numbered(result.Region, result.RegionFrom, result.RegionFrom + result.Region.Count - 1));
@@ -766,7 +752,7 @@ public static class FileText
             return Error(result.Outcome, result.Outcome is FileOutcome.Exists or FileOutcome.FolderInTheWay ? result.To : result.From, "move", result.Detail, result.To);
         }
 
-        return (result.Renamed ? "renamed " : "moved ") + result.From + " to " + result.To + Kept(result.CopyKept);
+        return (result.Renamed ? "renamed " : "moved ") + result.From + " to " + result.To;
     }
 
     public static string Copied(MoveResult result)
@@ -777,10 +763,15 @@ public static class FileText
             return Error(result.Outcome, result.Outcome is FileOutcome.Exists or FileOutcome.FolderInTheWay ? result.To : result.From, "copy", result.Detail, result.To);
         }
 
-        return "copied " + result.From + " to " + result.To + Kept(result.CopyKept);
+        return "copied " + result.From + " to " + result.To;
     }
 
-    public static string Trashed(TrashResult result)
+    /// <summary>
+    /// A delete's sentence: what is gone, a folder with everything in it (2026-09-20). It names no setting (2026-09-21, the user's
+    /// ask: the model reasoned about a switch it cannot reach); <c>Trashed</c> until 2026-10-01, when File safe edits, its
+    /// <c>.trash</c> and <c>restore</c> went (the user's call) and every delete became this one.
+    /// </summary>
+    public static string Deleted(DeleteResult result)
     {
         ArgumentNullException.ThrowIfNull(result);
         if (result.Outcome == FileOutcome.IntoItself)
@@ -793,31 +784,7 @@ public static class FileText
             return Error(result.Outcome, result.Relative, "delete", result.Detail);
         }
 
-        if (result.Destroyed)
-        {
-            // An in-place delete (File safe edits off, 2026-09-20): what is gone, a folder with everything in it. It names no
-            // restore, a tool the turn does not offer then (later still that day), and since 2026-09-21 (the user's ask) not
-            // the setting either — "(File safe edits is off: nothing was kept)" had the model reasoning about a switch it cannot reach.
-            return "deleted " + (result.IsDirectory ? "the folder " + result.Relative + " and everything in it" : result.Relative);
-        }
-
-        return "moved " + result.Relative + " to " + result.TrashPath + " (nothing is destroyed; restore brings it back)";
-    }
-
-    public static string Restored(TrashResult result)
-    {
-        ArgumentNullException.ThrowIfNull(result);
-        if (result.Outcome == FileOutcome.Exists)
-        {
-            return RestoreExists(result.Relative);
-        }
-
-        if (result.Outcome != FileOutcome.Ok)
-        {
-            return Error(result.Outcome, result.Relative, "restore", result.Detail);
-        }
-
-        return "restored " + result.Relative + " from " + result.TrashPath + Kept(result.CopyKept);
+        return "deleted " + (result.IsDirectory ? "the folder " + result.Relative + " and everything in it" : result.Relative);
     }
 
     public static string Zipped(ZipResult result)

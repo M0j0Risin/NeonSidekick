@@ -235,15 +235,15 @@ public static class SkillEditor
     /// so the sandbox's confinement, its <see cref="WorkingDirectory.MaxWriteChars"/> cap and its atomic
     /// write are the file tools' own. Never the SKILL.md (<see cref="Create"/> and <see cref="Update"/>
     /// write that, frontmatter checked), the app's sidecar or a folder the skill never keeps
-    /// (<see cref="SkillEditOutcome.ProtectedFile"/>). <paramref name="keepCopy"/> is <c>File safe edits</c>:
-    /// the previous version goes into the skill's own <c>.trash</c>, which <see cref="SkillCatalog.Resources"/> skips.
+    /// (<see cref="SkillEditOutcome.ProtectedFile"/>). The previous version is replaced for good (its copy into the
+    /// skill's own <c>.trash</c> under <c>File safe edits</c> went with that setting on 2026-10-01, the user's call).
     /// </summary>
-    public static SkillEditResult WriteFile(SkillRoots roots, SkillScope scope, string name, string path, string content, bool external, bool keepCopy, TimeProvider time)
+    public static SkillEditResult WriteFile(SkillRoots roots, SkillScope scope, string name, string path, string content, bool external, TimeProvider time)
     {
         ArgumentNullException.ThrowIfNull(content);
         return InFile(roots, scope, name, path, external, time, (files, relative, where) =>
         {
-            var written = files.WriteText(relative, content, overwrite: true, keepCopy);
+            var written = files.WriteText(relative, content, overwrite: true);
             return new SkillEditResult(written.Outcome == FileOutcome.Ok ? SkillEditOutcome.FileWritten : SkillEditOutcome.FileRefused, where.Name, where.Scope, written.Bytes, FileText.Wrote(written), Path: relative);
         });
     }
@@ -253,13 +253,13 @@ public static class SkillEditor
     /// <paramref name="newText"/> in a supporting file — <c>patch_file</c>'s <see cref="WorkingDirectory.EditText"/>
     /// with its fuzzy match, line endings and BOM kept — under <see cref="WriteFile"/>'s rules.
     /// </summary>
-    public static SkillEditResult EditFile(SkillRoots roots, SkillScope scope, string name, string path, string oldText, string newText, bool replaceAll, bool external, bool keepCopy, TimeProvider time)
+    public static SkillEditResult EditFile(SkillRoots roots, SkillScope scope, string name, string path, string oldText, string newText, bool replaceAll, bool external, TimeProvider time)
     {
         ArgumentNullException.ThrowIfNull(oldText);
         ArgumentNullException.ThrowIfNull(newText);
         return InFile(roots, scope, name, path, external, time, (files, relative, where) =>
         {
-            var edited = files.EditText(relative, oldText, newText, replaceAll, keepCopy);
+            var edited = files.EditText(relative, oldText, newText, replaceAll);
             return new SkillEditResult(edited.Outcome == FileOutcome.Ok ? SkillEditOutcome.FileEdited : SkillEditOutcome.FileRefused, where.Name, where.Scope, 0, FileText.Edited(edited), Path: relative);
         });
     }

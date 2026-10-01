@@ -16,7 +16,7 @@ public sealed class WebToolsTests : IDisposable
     private readonly StubHttpMessageHandler _http = new();
     private readonly FakeHeadlessBrowser _browser = new();
     private readonly ManualTimeProvider _time = new();
-    private readonly AppSettingsData _settings = new() { FileSafeEdits = true };   // on (the default until 2026-09-19): the download test below exercises the trash copy
+    private readonly AppSettingsData _settings = new();
     private readonly WebAccess _web;
     private readonly WebSearchTool _search;
     private readonly WebFetchTool _fetch;
@@ -97,20 +97,10 @@ public sealed class WebToolsTests : IDisposable
         Assert.Equal(
             "Downloads a file from the web — a picture, a PDF, an archive, a data file, a page's source — and saves it under the working directory (the user's cwd / current directory), creating any missing folders; nothing is read or opened. " +
             "path is the file to write, or a folder to put it in under the file's own name; without it the file lands at the top under its own name. " +
-            "A file that already exists is left alone unless overwrite is true (the previous version is kept in .trash while File safe edits is on). " +
+            "A file that already exists is left alone unless overwrite is true. " +   // its .trash clause went with File safe edits (2026-10-01)
             "Up to 50 MB. To read a page use web_fetch; to look at a saved picture use view_image.",
             _download.Description);
-        // File safe edits off (later still on 2026-09-20, the user's ask): the description names no .trash, read at every call.
-        Assert.Equal(DownloadFileTool.DescribeTool(true), _download.Description);
-        _settings.FileSafeEdits = false;
-        Assert.Equal(DownloadFileTool.DescribeTool(false), _download.Description);
-        Assert.Equal(
-            "Downloads a file from the web — a picture, a PDF, an archive, a data file, a page's source — and saves it under the working directory (the user's cwd / current directory), creating any missing folders; nothing is read or opened. " +
-            "path is the file to write, or a folder to put it in under the file's own name; without it the file lands at the top under its own name. " +
-            "A file that already exists is left alone unless overwrite is true. " +
-            "Up to 50 MB. To read a page use web_fetch; to look at a saved picture use view_image.",
-            _download.Description);
-        _settings.FileSafeEdits = true;
+        Assert.Equal(DownloadFileTool.DescriptionText, _download.Description);
     }
 
     // ── open_url ────────────────────────────────────────────────────────────
@@ -413,20 +403,16 @@ public sealed class WebToolsTests : IDisposable
     }
 
     [Fact]
-    public async Task Download_AnExistingFile_NeedsOverwrite_AndSafeEditsKeepsACopy()
+    public async Task Download_AnExistingFile_NeedsOverwrite_ThenIsReplacedInPlace()
     {
         _http.Map("https://example.com/cat.png", (_, _) => Task.FromResult(StubHttpMessageHandler.Bytes(HttpStatusCode.OK, Png, "image/png")));
         Directory.CreateDirectory(_root);
         File.WriteAllBytes(Path.Combine(_root, "cat.png"), [0]);
 
         Assert.Equal("Error: 'cat.png' already exists; call again with overwrite true to replace it", await _download.DownloadAsync("https://example.com/cat.png", null, false, CancellationToken.None));
-        Assert.Equal("replaced cat.png (16 B, image/png) from https://example.com/cat.png (previous version in .trash); view_image shows it", await _download.DownloadAsync("https://example.com/cat.png", null, true, CancellationToken.None));
-        Assert.Equal(Png, Saved("cat.png"));
-        Assert.Single(Directory.GetFiles(Path.Combine(_root, ".trash"), "cat.png", SearchOption.AllDirectories));
-
-        _settings.FileSafeEdits = false;
         Assert.Equal("replaced cat.png (16 B, image/png) from https://example.com/cat.png; view_image shows it", await _download.DownloadAsync("https://example.com/cat.png", null, true, CancellationToken.None));
-        Assert.Single(Directory.GetFiles(Path.Combine(_root, ".trash"), "cat.png", SearchOption.AllDirectories));
+        Assert.Equal(Png, Saved("cat.png"));
+        Assert.False(Directory.Exists(Path.Combine(_root, ".trash")));   // nothing kept (File safe edits went 2026-10-01)
     }
 
     [Fact]

@@ -651,13 +651,13 @@ public sealed class ObsidianVault
 
     /// <summary>
     /// <c>vault_write</c>. <see cref="VaultWriteMode.Create"/> makes a new note and refuses an existing one;
-    /// <see cref="VaultWriteMode.Overwrite"/> replaces the whole note (with <paramref name="safeEdits"/> — the setting
-    /// <c>File safe edits</c> — the previous version is copied into the vault's <c>.trash</c> folder first, Obsidian's own
-    /// "Move to Obsidian trash" place); <see cref="VaultWriteMode.Append"/> adds at the end, or at the end of
+    /// <see cref="VaultWriteMode.Overwrite"/> replaces the whole note, for good (until 2026-10-01 the setting <c>File safe edits</c>
+    /// copied the previous version into the vault's <c>.trash</c> first; it went, and the user's call is that a write never
+    /// trashes — only <see cref="Delete"/> uses the vault's <c>.trash</c>); <see cref="VaultWriteMode.Append"/> adds at the end, or at the end of
     /// <paramref name="heading"/>'s section; <see cref="VaultWriteMode.Prepend"/> adds right after the frontmatter, or right
     /// under the heading. The last three create a missing note (a heading then is refused). The content takes the note's line endings.
     /// </summary>
-    public string Write(string note, string content, VaultWriteMode mode, string heading, bool safeEdits)
+    public string Write(string note, string content, VaultWriteMode mode, string heading)
     {
         lock (_gate)
         {
@@ -707,7 +707,6 @@ public sealed class ObsidianVault
                         return ObsidianText.HeadingNotFound(relative, h, []);
                     }
 
-                    string kept = "";
                     bool bom = false;
                     string newLine = "\n";
                     if (!created)
@@ -718,14 +717,13 @@ public sealed class ObsidianVault
                         }
 
                         (bom, newLine) = (old.Bom, old.NewLine);
-                        kept = safeEdits ? ObsidianText.KeptIn(KeepCopy(root, full, relative)) : "";
                     }
 
                     string text = Join(WorkingDirectory.SplitLines(content), newLine);
                     WriteText(full, text, bom);
                     result = mode is VaultWriteMode.Append or VaultWriteMode.Prepend
                         ? ObsidianText.Inserted(relative, created: true, mode == VaultWriteMode.Append, "", text)
-                        : ObsidianText.Wrote(relative, created, text, kept);
+                        : ObsidianText.Wrote(relative, created, text);
                 }
                 else
                 {
@@ -779,19 +777,10 @@ public sealed class ObsidianVault
         }
     }
 
-    /// <summary>A copy of the note in the vault's <c>.trash</c> (<c>Plan.md</c>, then <c>Plan 1.md</c>, …); its vault path.</summary>
-    private static string KeepCopy(string root, string full, string relative)
-    {
-        string candidate = TrashTarget(root, full, VaultPaths.NoteExtension);
-        File.Copy(full, candidate);
-        DiagnosticLog.Debug(Category, $"Kept {relative} as {candidate}");
-        return TrashFolderName + "/" + Path.GetFileName(candidate);
-    }
-
     /// <summary>
     /// A free name in the vault's <c>.trash</c> for the file at <paramref name="full"/>, the folder made when missing:
-    /// its own name, then <c>Plan 1.md</c>, <c>Plan 2.md</c>, … with <paramref name="extension"/> (2026-09-22, shared by
-    /// the kept copies and <see cref="Delete"/>, which keeps an attachment's own). Nothing there is ever overwritten.
+    /// its own name, then <c>Plan 1.md</c>, <c>Plan 2.md</c>, … with <paramref name="extension"/> (2026-09-22; <see cref="Delete"/>
+    /// keeps an attachment's own). Nothing there is ever overwritten.
     /// </summary>
     private static string TrashTarget(string root, string full, string extension)
     {

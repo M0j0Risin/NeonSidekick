@@ -5,7 +5,7 @@ using NeonSidekick.Tests.Fakes;
 namespace NeonSidekick.Tests;
 
 /// <summary>
-/// <see cref="WorkingDirectoryOptions.Share"/> (2026-09-30, the UNC tools): a share's root is never created, has no trash,
+/// <see cref="WorkingDirectoryOptions.Share"/> (2026-09-30, the UNC tools): a share's root is never created,
 /// keeps a replaced file's attributes, and stops its walks at the budgets; <see cref="WorkingDirectory.CopyBetween"/> carries
 /// a file or folder from one sandbox to the other.
 /// </summary>
@@ -51,8 +51,8 @@ public sealed class WorkingDirectoryShareTests : IDisposable
     public void TheOptions_AreTheSandboxByDefault_AndTheSharesAsPinned()
     {
         Assert.Same(WorkingDirectoryOptions.Sandbox, new WorkingDirectory(() => _root, _time).Options);
-        Assert.Equal(new WorkingDirectoryOptions(true, true, 0, long.MaxValue, int.MaxValue, false), WorkingDirectoryOptions.Sandbox);
-        Assert.Equal(new WorkingDirectoryOptions(false, false, 4, 256_000_000, 100_000, true), WorkingDirectoryOptions.Share);
+        Assert.Equal(new WorkingDirectoryOptions(true, 0, long.MaxValue, int.MaxValue, false), WorkingDirectoryOptions.Sandbox);   // the Trash flag went 2026-10-01
+        Assert.Equal(new WorkingDirectoryOptions(false, 4, 256_000_000, 100_000, true), WorkingDirectoryOptions.Share);
         Assert.Same(WorkingDirectoryOptions.Share, _share.Options);
     }
 
@@ -75,7 +75,7 @@ public sealed class WorkingDirectoryShareTests : IDisposable
     }
 
     [Fact]
-    public void WithoutTrash_DotTrashIsAPlainFolder_Listed_Walked_AndWritable()
+    public void DotTrash_IsAPlainFolder_Listed_Walked_AndWritable()
     {
         Put(_root, @".trash\old.txt", "kept needle");
         Put(_root, "a.txt", "a");
@@ -88,24 +88,16 @@ public sealed class WorkingDirectoryShareTests : IDisposable
     }
 
     [Fact]
-    public void Overwrites_Patches_AndDeletes_ArePermanent_NoCopyKept_EvenWhenOneIsAsked()
+    public void Overwrites_Patches_AndDeletes_ArePermanent_NoCopyKept()
     {
         Put(_root, "a.txt", "one");
         Put(_root, "b.txt", "two");
         Put(_root, @"sub\c.txt", "three");
 
-        var write = _share.WriteText("a.txt", "uno", overwrite: true, keepCopy: true);
-        Assert.Equal(FileOutcome.Ok, write.Outcome);
-        Assert.False(write.CopyKept);
-        var edit = _share.EditText("b.txt", "two", "dos", keepCopy: true);
-        Assert.Equal(FileOutcome.Ok, edit.Outcome);
-        Assert.False(edit.CopyKept);
-        var gone = _share.Delete("sub");   // toTrash defaults to true: the share has none
-        Assert.Equal(FileOutcome.Ok, gone.Outcome);
-        Assert.True(gone.Destroyed);
-        var moved = _share.Copy("a.txt", "b.txt", overwrite: true, keepCopy: true);
-        Assert.Equal(FileOutcome.Ok, moved.Outcome);
-        Assert.False(moved.CopyKept);
+        Assert.Equal(FileOutcome.Ok, _share.WriteText("a.txt", "uno", overwrite: true).Outcome);
+        Assert.Equal(FileOutcome.Ok, _share.EditText("b.txt", "two", "dos").Outcome);
+        Assert.Equal(FileOutcome.Ok, _share.Delete("sub").Outcome);
+        Assert.Equal(FileOutcome.Ok, _share.Copy("a.txt", "b.txt", overwrite: true).Outcome);
 
         Assert.Equal("uno", File.ReadAllText(Path.Combine(_root, "b.txt")));
         Assert.False(Directory.Exists(Path.Combine(_root, "sub")));
@@ -183,9 +175,9 @@ public sealed class WorkingDirectoryShareTests : IDisposable
 
         Assert.Equal(FileOutcome.Exists, WorkingDirectory.CopyBetween(_share, @"reports\q3.txt", sandbox, null, overwrite: false).Outcome);
         Put(_root, @"reports\q3.txt", "q3 v2");
-        var again = WorkingDirectory.CopyBetween(_share, @"reports\q3.txt", sandbox, null, overwrite: true, keepCopy: true);
+        var again = WorkingDirectory.CopyBetween(_share, @"reports\q3.txt", sandbox, null, overwrite: true);
         Assert.Equal(FileOutcome.Ok, again.Outcome);
-        Assert.True(again.CopyKept);   // the sandbox's own .trash, under File safe edits
+        Assert.False(Directory.Exists(Path.Combine(sandboxRoot, ".trash")));   // replaced in place (File safe edits' copy went 2026-10-01)
         Assert.Equal("q3 v2", File.ReadAllText(Path.Combine(sandboxRoot, "q3.txt")));
     }
 
@@ -198,10 +190,9 @@ public sealed class WorkingDirectoryShareTests : IDisposable
         string onShare = Put(_root, @"docs\notes.txt", "old");
         File.SetAttributes(onShare, FileAttributes.Hidden | FileAttributes.Archive);
 
-        var put = WorkingDirectory.CopyBetween(sandbox, "notes.txt", _share, @"docs\notes.txt", overwrite: true, keepCopy: true);
+        var put = WorkingDirectory.CopyBetween(sandbox, "notes.txt", _share, @"docs\notes.txt", overwrite: true);
 
         Assert.Equal(FileOutcome.Ok, put.Outcome);
-        Assert.False(put.CopyKept);
         Assert.Equal("new", File.ReadAllText(onShare));
         Assert.True(File.GetAttributes(onShare).HasFlag(FileAttributes.Hidden));
         Assert.False(Directory.Exists(Path.Combine(_root, ".trash")));

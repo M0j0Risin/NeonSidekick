@@ -58,8 +58,11 @@ public static class ToolsText
     /// <summary>The Claude tab and the advisor's group (2026-09-27): <c>/claude</c>'s rows (off <c>/settings</c>, the user's call) and <c>claude_advisor</c>'s, after Ask, before Obsidian (the user's order, later that day; after ComfyUI before). Titled "Claude (CLI)" from later on 2026-09-27 (the user's call: the pair of /settings' Claude (API) tab) and "Claude" again since 2026-09-29, when that tab's four rows came here under the advisor's (the user's call: one Claude tab).</summary>
     public const string ClaudeTabTitle = "Claude";
 
-    /// <summary>The Home Assistant tools' tab and group (2026-09-28), after Claude, before Obsidian: among the other integrations, so every tab either side keeps its place from its end of the strip.</summary>
-    public const string HomeAssistantTabTitle = "Home Assistant";
+    /// <summary>The Home Assistant tools' tab (2026-09-28), after Claude, before Obsidian: among the other integrations, so every tab either side keeps its place from its end of the strip. "HA" since 2026-10-01 (the user's call: strip width); "Home Assistant" until then, which the group keeps (<see cref="HomeAssistantGroupTitle"/>).</summary>
+    public const string HomeAssistantTabTitle = "HA";
+
+    /// <summary>The Home Assistant tools' group on <c>/sys</c> and the Offered tab (2026-09-28): the full name, the tab's short one being for the strip alone (2026-10-01).</summary>
+    public const string HomeAssistantGroupTitle = "Home Assistant";
 
     /// <summary>The print tools' tab and group (2026-09-28), after Home Assistant, before Obsidian: beside the other integration that acts in the room.</summary>
     public const string PrintTabTitle = "Print";

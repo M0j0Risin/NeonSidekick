@@ -20,7 +20,6 @@ public class FileTextTests
     public void Errors_ArePinned_AndStartWithError()
     {
         Assert.Equal("Error: '..\\x' is outside the working directory; every path must stay inside it", FileText.OutsideRoot(@"..\x"));
-        Assert.Equal("Error: '.trash\\a' is in .trash, which only delete and restore may change", FileText.TrashReadOnly(@".trash\a"));
         Assert.Equal("Error: nothing is at 'a.txt'", FileText.Missing("a.txt"));
         Assert.Equal("Error: 'docs\\' is a folder, not a file", FileText.IsDirectory(@"docs\"));
         Assert.Equal("Error: 'a.txt' is a file, not a folder", FileText.IsAFile("a.txt"));
@@ -29,7 +28,6 @@ public class FileTextTests
         Assert.Equal("Error: 'a.png' could not be read as an image", FileText.NotAnImage("a.png"));
         Assert.Equal("Error: 'a.png' is over 20 MB or 40 megapixels; too large to view", FileText.ImageTooBig("a.png"));
         Assert.Equal("Error: 'a.txt' is not a zip archive", FileText.NotAnArchive("a.txt"));
-        Assert.Equal("Error: no deleted copy of 'a.txt' is in .trash", FileText.NotInTrash("a.txt"));
         Assert.Equal("Error: 'a.txt' already exists; call again with overwrite true to replace it", FileText.Exists("a.txt"));
         Assert.Equal("Error: old_text was not found in 'a.txt', even with spacing, indentation, quotes and dashes matched loosely; read the file again and copy the text as it is (the line numbers an edit result shows are not part of the file)", FileText.EditNotFound("a.txt"));
         Assert.Equal("Error: old_text appears 3 times in 'a.txt'; include enough surrounding text to make it unique, or pass replace_all true", FileText.EditAmbiguous("a.txt", 3));
@@ -63,7 +61,6 @@ public class FileTextTests
         Assert.All(FuzzyMatch.Chain.Skip(1), s => Assert.StartsWith(" (old_text matched ", FileText.StrategyNote(s), StringComparison.Ordinal));
         Assert.Equal(new string('a', 79) + "…", FileText.Quote(new string('a', 81)));
         Assert.Equal(new string('a', 80), FileText.Quote(new string('a', 80)));
-        Assert.Equal("Error: 'a.txt' is already there; call again with overwrite true to put the trashed copy over it", FileText.RestoreExists("a.txt"));
         Assert.Equal("Error: cannot put 'docs\\' inside itself ('docs\\in\\')", FileText.IntoItself(@"docs\", @"docs\in\"));
         Assert.Equal("Error: cannot put 'the working directory' inside itself ('x\\')", FileText.IntoItself("", @"x\"));
         Assert.Equal("Error: 'big.log' is too large to handle as text", FileText.TooBig("big.log"));
@@ -81,13 +78,11 @@ public class FileTextTests
     public void Error_MapsEveryOutcome()
     {
         Assert.Equal(FileText.OutsideRoot("p"), FileText.Error(FileOutcome.OutsideRoot, "p", "read"));
-        Assert.Equal(FileText.TrashReadOnly("p"), FileText.Error(FileOutcome.TrashReadOnly, "p", "read"));
         Assert.Equal(FileText.Missing("p"), FileText.Error(FileOutcome.Missing, "p", "read"));
         Assert.Equal(FileText.IsDirectory("p"), FileText.Error(FileOutcome.IsDirectory, "p", "read"));
         Assert.Equal(FileText.IsAFile("p"), FileText.Error(FileOutcome.IsAFile, "p", "read"));
         Assert.Equal(FileText.NotText("p"), FileText.Error(FileOutcome.NotText, "p", "read"));
         Assert.Equal(FileText.NotAnArchive("p"), FileText.Error(FileOutcome.NotAnArchive, "p", "read"));
-        Assert.Equal(FileText.NotInTrash("p"), FileText.Error(FileOutcome.NotInTrash, "p", "read"));
         Assert.Equal(FileText.Exists("p"), FileText.Error(FileOutcome.Exists, "p", "read"));
         Assert.Equal(FileText.EditEmpty, FileText.Error(FileOutcome.Empty, "p", "read"));
         Assert.Equal(FileText.EditNotFound("p"), FileText.Error(FileOutcome.EditNotFound, "p", "read"));
@@ -253,16 +248,15 @@ public class FileTextTests
         Assert.Equal("created log.txt (40 bytes)", FileText.Appended(new WriteResult(FileOutcome.Ok, "log.txt", 40, false)));
         Assert.Equal("Error: could not append to 'log.txt': x", FileText.Appended(new WriteResult(FileOutcome.Failed, "log.txt", 0, false, Detail: "x")));
 
-        Assert.Equal("replaced notes.txt (1 byte) (previous version in .trash)", FileText.Wrote(new WriteResult(FileOutcome.Ok, "notes.txt", 1, true, CopyKept: true)));
-        Assert.Equal("appended 40 bytes to log.txt (previous version in .trash)", FileText.Appended(new WriteResult(FileOutcome.Ok, "log.txt", 40, true, CopyKept: true)));
+        Assert.Equal("replaced notes.txt (1 byte)", FileText.Wrote(new WriteResult(FileOutcome.Ok, "notes.txt", 1, true)));   // no kept-copy suffix since 2026-10-01 (File safe edits gone)
 
-        // An edit (2026-09-17): the new lines' range, the kept-copy suffix, then the region numbered.
+        // An edit (2026-09-17): the new lines' range, then the region numbered.
         Assert.Equal("edited notes.txt (line 12; now 40 lines, 0 words)", FileText.Edited(new EditResult(FileOutcome.Ok, "notes.txt", 12, 1, 12, 12, 40)));
         Assert.Equal("edited notes.txt (line 12; now 40 lines, 300 words)" + FileText.IndentNote, FileText.Edited(new EditResult(FileOutcome.Ok, "notes.txt", 12, 1, 12, 12, 40, Words: 300, Strategy: MatchStrategy.IndentationFlexible)));
-        Assert.Equal("edited notes.txt (line 12; now 40 lines, 300 words)" + FileText.ContextNote + FileText.CopyKeptSuffix, FileText.Edited(new EditResult(FileOutcome.Ok, "notes.txt", 12, 1, 12, 12, 40, Words: 300, CopyKept: true, Strategy: MatchStrategy.ContextAware)));
+        Assert.Equal("edited notes.txt (line 12; now 40 lines, 300 words)" + FileText.ContextNote, FileText.Edited(new EditResult(FileOutcome.Ok, "notes.txt", 12, 1, 12, 12, 40, Words: 300, Strategy: MatchStrategy.ContextAware)));
         Assert.Equal(
-            "edited notes.txt (line 12; now 40 lines, 0 words) (previous version in .trash):\n10: a\n11: b\n12: NEW\n13: d\n14: e",
-            FileText.Edited(new EditResult(FileOutcome.Ok, "notes.txt", 12, 1, 12, 12, 40, ["a", "b", "NEW", "d", "e"], 10, null, true)));
+            "edited notes.txt (line 12; now 40 lines, 0 words):\n10: a\n11: b\n12: NEW\n13: d\n14: e",
+            FileText.Edited(new EditResult(FileOutcome.Ok, "notes.txt", 12, 1, 12, 12, 40, ["a", "b", "NEW", "d", "e"], 10)));
         Assert.Equal(
             "edited notes.txt (lines 12–14; now 40 lines, 0 words):\n11: b\n12: x\n13: y\n14: z\n15: d",
             FileText.Edited(new EditResult(FileOutcome.Ok, "notes.txt", 12, 1, 12, 14, 40, ["b", "x", "y", "z", "d"], 11)));
@@ -272,8 +266,8 @@ public class FileTextTests
         Assert.Equal("edited notes.txt (lines 12–89; now 100 lines, 0 words); read_file to see the lines", FileText.Edited(new EditResult(FileOutcome.Ok, "notes.txt", 12, 1, 12, 89, 100)));
         Assert.Equal("replaced 3 occurrences of old_text in notes.txt (lines 3, 9, 14; now 40 lines, 0 words)", FileText.Edited(new EditResult(FileOutcome.Ok, "notes.txt", 3, 3, 0, 0, 40, null, 0, [3, 9, 14])));
         Assert.Equal(
-            "replaced 12 occurrences of old_text in notes.txt (lines 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, …; now 40 lines, 0 words) (previous version in .trash)",
-            FileText.Edited(new EditResult(FileOutcome.Ok, "notes.txt", 1, 12, 0, 0, 40, null, 0, Enumerable.Range(1, 12).ToList(), true)));
+            "replaced 12 occurrences of old_text in notes.txt (lines 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, …; now 40 lines, 0 words)",
+            FileText.Edited(new EditResult(FileOutcome.Ok, "notes.txt", 1, 12, 0, 0, 40, null, 0, Enumerable.Range(1, 12).ToList())));
         Assert.Equal(FileText.EditAmbiguous("notes.txt", 3), FileText.Edited(new EditResult(FileOutcome.EditAmbiguous, "notes.txt", 0, 3)));
         Assert.Equal(FileText.EditAmbiguous("notes.txt", 3, [new MatchLocation(4, "x")]), FileText.Edited(new EditResult(FileOutcome.EditAmbiguous, "notes.txt", 0, 3, Locations: [new MatchLocation(4, "x")])));
         Assert.Equal(FileText.ApproximateAll("notes.txt", 2), FileText.Edited(new EditResult(FileOutcome.ApproximateAll, "notes.txt", 0, 2)));
@@ -296,25 +290,15 @@ public class FileTextTests
         Assert.Equal("copied a.txt to b.txt", FileText.Copied(new MoveResult(FileOutcome.Ok, "a.txt", "b.txt", false, true)));
         Assert.Equal("Error: could not copy 'a.txt': x", FileText.Copied(new MoveResult(FileOutcome.Failed, "a.txt", "b.txt", false, false, "x")));
 
-        Assert.Equal(
-            "moved notes.txt to .trash\\20260912-140500\\notes.txt (nothing is destroyed; restore brings it back)",
-            FileText.Trashed(new TrashResult(FileOutcome.Ok, "notes.txt", @".trash\20260912-140500\notes.txt", false)));
-        Assert.Equal(FileText.RootItself, FileText.Trashed(new TrashResult(FileOutcome.IntoItself, "", "", true)));
-        // An in-place delete (File safe edits off, 2026-09-20): the sentence says what is gone, a folder with everything in it — and since 2026-09-21 (the user's ask) not that the setting is off.
-        Assert.Equal("deleted notes.txt", FileText.Trashed(new TrashResult(FileOutcome.Ok, "notes.txt", "", false, Destroyed: true)));
-        Assert.Equal("deleted the folder docs\\ and everything in it", FileText.Trashed(new TrashResult(FileOutcome.Ok, @"docs\", "", true, Destroyed: true)));
-        Assert.Equal(FileText.Missing("x"), FileText.Trashed(new TrashResult(FileOutcome.Missing, "x", "", false)));
-        Assert.Equal("restored notes.txt from .trash\\20260912-140500\\", FileText.Restored(new TrashResult(FileOutcome.Ok, "notes.txt", @".trash\20260912-140500\", false)));
-        // What an overwrite replaced is kept in .trash under File safe edits (2026-09-20): the write-side suffix on the three; a folder in the way without it is refused, the destination named.
-        Assert.Equal("moved a.txt to b.txt (previous version in .trash)", FileText.Moved(new MoveResult(FileOutcome.Ok, "a.txt", "b.txt", false, false, CopyKept: true)));
-        Assert.Equal("copied a.txt to b.txt (previous version in .trash)", FileText.Copied(new MoveResult(FileOutcome.Ok, "a.txt", "b.txt", false, false, CopyKept: true)));
-        Assert.Equal("restored notes.txt from .trash\\20260912-140500\\ (previous version in .trash)", FileText.Restored(new TrashResult(FileOutcome.Ok, "notes.txt", @".trash\20260912-140500\", false, CopyKept: true)));
+        Assert.Equal(FileText.RootItself, FileText.Deleted(new DeleteResult(FileOutcome.IntoItself, "", true)));
+        // A delete (in place since 2026-09-20, always since 2026-10-01): the sentence says what is gone, a folder with everything in it — and since 2026-09-21 (the user's ask) no setting.
+        Assert.Equal("deleted notes.txt", FileText.Deleted(new DeleteResult(FileOutcome.Ok, "notes.txt", false)));
+        Assert.Equal("deleted the folder docs\\ and everything in it", FileText.Deleted(new DeleteResult(FileOutcome.Ok, @"docs\", true)));
+        Assert.Equal(FileText.Missing("x"), FileText.Deleted(new DeleteResult(FileOutcome.Missing, "x", false)));
+        // A folder in the way of an overwrite is refused, the destination named (2026-09-20).
         Assert.Equal(FileText.FolderInTheWay(@"b\"), FileText.Moved(new MoveResult(FileOutcome.FolderInTheWay, "a.txt", @"b\", false, false)));
         Assert.Equal(FileText.FolderInTheWay(@"b\"), FileText.Copied(new MoveResult(FileOutcome.FolderInTheWay, "a.txt", @"b\", false, false)));
-        Assert.Equal(FileText.FolderInTheWay(@"b\"), FileText.Restored(new TrashResult(FileOutcome.FolderInTheWay, @"b\", "", true)));
         Assert.Equal("Error: 'b\\' is a folder in the way — move it aside first", FileText.FolderInTheWay(@"b\"));   // neither the setting nor .trash since 2026-09-21
-        Assert.Equal(FileText.RestoreExists("notes.txt"), FileText.Restored(new TrashResult(FileOutcome.Exists, "notes.txt", "", false)));
-        Assert.Equal(FileText.NotInTrash("x"), FileText.Restored(new TrashResult(FileOutcome.NotInTrash, "x", "", false)));
 
         Assert.Equal("zipped docs\\ into docs.zip (12 entries, 40.1 KB)", FileText.Zipped(new ZipResult(FileOutcome.Ok, @"docs\", "docs.zip", 12, 40_100)));
         Assert.Equal("zipped a.txt into a.zip (1 entry, 100 B)", FileText.Zipped(new ZipResult(FileOutcome.Ok, "a.txt", "a.zip", 1, 100)));

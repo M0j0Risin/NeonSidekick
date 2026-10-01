@@ -104,8 +104,7 @@ public static class WebText
 
     /// <summary>
     /// A saved download (2026-09-18): <c>downloaded images/cat.png (213.4 KB, image/png) from https://example.com/cat.png</c>
-    /// — <c>replaced</c> over a file that was there, <see cref="Files.FileText.CopyKeptSuffix"/> when
-    /// <c>File safe edits</c> kept it, <c>(no type)</c> for a server that named none, and for a picture
+    /// — <c>replaced</c> over a file that was there, <c>(no type)</c> for a server that named none, and for a picture
     /// <see cref="ViewImageNote"/>; a file outcome that is not Ok is <see cref="Files.FileText.Error"/>'s
     /// sentence with the verb <c>download</c>. Pinned.
     /// </summary>
@@ -120,7 +119,6 @@ public static class WebText
         }
 
         return (result.Replaced ? "replaced " : "downloaded ") + result.Relative + " (" + Size(result.Bytes) + ", " + (mediaType.Length == 0 ? "(no type)" : mediaType) + ") from " + url
-            + (result.CopyKept ? Files.FileText.CopyKeptSuffix : "")
             + (Files.ImageFile.IsImagePath(result.Relative) ? ViewImageNote : "");
     }
 

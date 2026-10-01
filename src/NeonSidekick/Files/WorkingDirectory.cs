@@ -16,15 +16,11 @@ public enum FileOutcome
     /// <summary>The path resolves outside the working directory (or a zip entry outside its destination).</summary>
     OutsideRoot,
 
-    /// <summary>The path is inside <c>.trash</c>, which only <c>delete</c> and <c>restore</c> may write.</summary>
-    TrashReadOnly,
-
     Missing,
     IsDirectory,
     IsAFile,
     NotText,
     NotAnArchive,
-    NotInTrash,
 
     /// <summary>Something is already at the destination and <c>overwrite</c> was not asked for.</summary>
     Exists,
@@ -69,7 +65,7 @@ public enum FileOutcome
     /// <summary>A <c>patch_file</c> whose arguments carry escapes the matched text does not (<see cref="EscapeDrift"/> on the result, 2026-09-19).</summary>
     EscapeDrift,
 
-    /// <summary>A folder at a <c>move</c> / <c>copy</c> / <c>restore</c> destination with <c>overwrite</c> while <c>File safe edits</c> is off (2026-09-20): a folder is replaced only with a copy kept in <c>.trash</c>.</summary>
+    /// <summary>A folder at a <c>move</c> / <c>copy</c> destination with <c>overwrite</c> (2026-09-20): a folder in the way is never replaced.</summary>
     FolderInTheWay,
 
     /// <summary>A <c>delete</c> of <c>.git</c>, of anything in it, or of a folder holding one (2026-09-23, the user's call): git's own store is never deleted.</summary>
@@ -164,10 +160,9 @@ public sealed record ReadResult(FileOutcome Outcome, string Relative, string Tex
 public sealed record ImageResult(FileOutcome Outcome, string Relative, ImageAttachment? Image, string Detail = "");
 
 /// <param name="Replaced">A write replaced an existing file; an append created a new one when false.</param>
-/// <param name="CopyKept">The previous version went into <c>.trash</c> first (<c>File safe edits</c>, 2026-09-17).</param>
 /// <param name="Lines">The file's line count after the write (2026-09-18, so the model needs no <c>file_info</c> to count); null for bytes or a file too big to count.</param>
 /// <param name="Words">The file's whitespace-separated word count after the write, the same way.</param>
-public sealed record WriteResult(FileOutcome Outcome, string Relative, long Bytes, bool Replaced, bool CopyKept = false, string Detail = "", int? Lines = null, int? Words = null);
+public sealed record WriteResult(FileOutcome Outcome, string Relative, long Bytes, bool Replaced, string Detail = "", int? Lines = null, int? Words = null);
 
 /// <summary>
 /// What an edit did. <paramref name="Line"/> is the first line touched (the match's line);
@@ -177,7 +172,7 @@ public sealed record WriteResult(FileOutcome Outcome, string Relative, long Byte
 /// the file's line count then, and <paramref name="Region"/> the lines around it (<see cref="WorkingDirectory.EditContextLines"/>
 /// on each side, at most <see cref="WorkingDirectory.MaxEditRegionLines"/> — empty when the region is over the cap or the edit was
 /// a <c>replace_all</c>), <paramref name="RegionFrom"/> the number of its first line. <paramref name="Lines"/> lists the lines of
-/// every occurrence a <c>replace_all</c> touched. <paramref name="CopyKept"/>: the previous version went into <c>.trash</c> first.
+/// every occurrence a <c>replace_all</c> touched.
 /// <paramref name="Words"/> is the file's word count after the edit (2026-09-18, beside <paramref name="TotalLines"/>).
 /// <paramref name="Strategy"/> is the way <c>old_text</c> was found (2026-09-19; <see cref="MatchStrategy.Exact"/> when
 /// as written), <paramref name="Locations"/> the first few matches an ambiguous refusal names, <paramref name="Drift"/> the
@@ -194,7 +189,6 @@ public sealed record EditResult(
     IReadOnlyList<string>? Region = null,
     int RegionFrom = 0,
     IReadOnlyList<int>? Lines = null,
-    bool CopyKept = false,
     string Detail = "",
     int Words = 0,
     MatchStrategy Strategy = MatchStrategy.Exact,
@@ -209,14 +203,13 @@ public sealed record EditResult(
 public sealed record CreateResult(FileOutcome Outcome, string Relative, string Detail = "");
 
 /// <param name="Renamed">Only the last path segment changed.</param>
-public sealed record MoveResult(FileOutcome Outcome, string From, string To, bool IsDirectory, bool Renamed, string Detail = "", bool CopyKept = false);
+public sealed record MoveResult(FileOutcome Outcome, string From, string To, bool IsDirectory, bool Renamed, string Detail = "");
 
-/// <param name="TrashPath">The entry's path inside the working directory, under <c>.trash</c>; empty when <paramref name="Destroyed"/>.</param>
-/// <param name="Destroyed">A <see cref="WorkingDirectory.Delete"/> in place (<c>File safe edits</c> off, 2026-09-20): nothing kept, nothing to restore.</param>
-public sealed record TrashResult(FileOutcome Outcome, string Relative, string TrashPath, bool IsDirectory, string Detail = "", bool CopyKept = false, bool Destroyed = false);
+/// <summary>What a <see cref="WorkingDirectory.Delete"/> removed, for good (in place since 2026-10-01, when File safe edits and its <c>.trash</c> went, the user's call).</summary>
+public sealed record DeleteResult(FileOutcome Outcome, string Relative, bool IsDirectory, string Detail = "");
 
-/// <summary>What <see cref="WorkingDirectory.EmptyTrash"/> removed: the files, the folders and their bytes.</summary>
-public sealed record EmptyTrashResult(FileOutcome Outcome, int Files, int Folders, long Bytes, string Detail = "");
+/// <summary>What <see cref="WorkingDirectory.PurgeFolder"/> removed: the files, the folders and their bytes (<c>PurgeResult</c> until 2026-10-01).</summary>
+public sealed record PurgeResult(FileOutcome Outcome, int Files, int Folders, long Bytes, string Detail = "");
 
 public sealed record ZipResult(FileOutcome Outcome, string Relative, string Archive, int Entries, long Bytes, string Detail = "");
 
@@ -228,26 +221,23 @@ public sealed record OpenResult(FileOutcome Outcome, string Relative, bool IsDir
 /// directory as it always was; <see cref="Share"/> is a UNC share's or an outside folder's.
 /// </summary>
 /// <param name="CreateRoot">A missing root is created by the first operation (the working directory); off, it is an error — a typo is never made into a folder.</param>
-/// <param name="Trash">The root's <c>.trash</c> is the delete bin: hidden from listings and walks, written by nothing but delete and restore. Off (a share: deletes and overwrites are permanent, the user's call), <c>.trash</c> is a folder like any other and no copy is ever kept.</param>
 /// <param name="SearchParallelism">Files a content search reads at once; 0 is one per processor. A share's is 4, kind to the file server and the link.</param>
 /// <param name="SearchByteBudget">Bytes a content search may read before it stops with what it has (<see cref="SearchResult.Budgeted"/>).</param>
 /// <param name="MaxWalkEntries">Entries a search, find or recent walk looks at before it stops (<see cref="SearchResult.Budgeted"/>, <see cref="RecentResult.Budgeted"/>, a find's <c>Truncated</c>).</param>
 /// <param name="PreserveOnReplace">An overwrite replaces the file in place (<see cref="File.Replace(string, string, string?, bool)"/>), keeping its ACL, owner and attributes, rather than moving a new file over it.</param>
 public sealed record WorkingDirectoryOptions(
     bool CreateRoot = true,
-    bool Trash = true,
     int SearchParallelism = 0,
     long SearchByteBudget = long.MaxValue,
     int MaxWalkEntries = int.MaxValue,
     bool PreserveOnReplace = false)
 {
-    /// <summary>The working directory: created on first use, its <c>.trash</c> the delete bin, no budgets.</summary>
+    /// <summary>The working directory: created on first use, no budgets.</summary>
     public static readonly WorkingDirectoryOptions Sandbox = new();
 
-    /// <summary>A UNC share or outside folder (2026-09-30): never created, no trash, a search of 4 readers and 256 MB, walks of 100,000 entries, overwrites in place.</summary>
+    /// <summary>A UNC share or outside folder (2026-09-30): never created, a search of 4 readers and 256 MB, walks of 100,000 entries, overwrites in place.</summary>
     public static readonly WorkingDirectoryOptions Share = new(
         CreateRoot: false,
-        Trash: false,
         SearchParallelism: 4,
         SearchByteBudget: 256_000_000,
         MaxWalkEntries: 100_000,
@@ -263,8 +253,8 @@ public sealed record WorkingDirectoryOptions(
 /// <see cref="Resolve(string, bool, out string)"/>: <see cref="Path.GetFullPath(string)"/>, then a
 /// prefix check against the root. Nothing here follows symlinks or junctions — the walks skip
 /// reparse points and the check is on the spelling of the path, which is the documented limit.
-/// The <c>.trash</c> folder at the root is where <see cref="Delete"/> puts things: readable when
-/// named, hidden from the root listing and every walk, writable by nothing but delete and restore.</para>
+/// A delete, an overwrite and an edit are permanent: the <c>.trash</c> folder that kept copies under File safe edits
+/// went on 2026-10-01 (the user's call), and a <c>.trash</c> left behind is a folder like any other.</para>
 ///
 /// <para>Nothing throws for a model's mistake: every result carries a <see cref="FileOutcome"/>,
 /// and an <see cref="IOException"/> or <see cref="UnauthorizedAccessException"/> becomes
@@ -273,7 +263,6 @@ public sealed record WorkingDirectoryOptions(
 public sealed class WorkingDirectory
 {
     public const string DefaultFolderName = "files";
-    public const string TrashFolderName = ".trash";
 
     /// <summary>The folder <c>delete</c> never touches, nor anything in it or a folder holding it (2026-09-23).</summary>
     public const string GitFolderName = ".git";
@@ -347,7 +336,7 @@ public sealed class WorkingDirectory
     private readonly WorkingDirectoryOptions _options;
 
     /// <param name="root">The resolved root, read on every call (<see cref="Resolve(string, string)"/> over the effective settings).</param>
-    /// <param name="time">The clock behind the trash stamp and the dates shown.</param>
+    /// <param name="time">The clock behind the dates shown.</param>
     /// <param name="options">How the root is treated: <see cref="WorkingDirectoryOptions.Sandbox"/> (the default) for the working directory, <see cref="WorkingDirectoryOptions.Share"/> for a UNC share (2026-09-30).</param>
     public WorkingDirectory(Func<string> root, TimeProvider time, WorkingDirectoryOptions? options = null)
     {
@@ -397,12 +386,10 @@ public sealed class WorkingDirectory
     /// <summary>Whether the root exists, without creating it.</summary>
     public bool Exists => Directory.Exists(Root);
 
-    /// <summary>The root's <c>.trash</c> folder, full; it may not exist yet.</summary>
-    public string TrashPath => Path.Combine(Root, TrashFolderName);
-
     /// <summary>
     /// The sandbox: <paramref name="relative"/> against the root, accepted only when it stays
-    /// inside. <paramref name="forWrite"/> also refuses the trash. The one place a path is judged.
+    /// inside. The one place a path is judged; <paramref name="forWrite"/> marks a caller that will write (no refusal of its own
+    /// since the <c>.trash</c> went, 2026-10-01).
     /// </summary>
     public FileOutcome Resolve(string relative, bool forWrite, out string full)
     {
@@ -435,11 +422,6 @@ public sealed class WorkingDirectory
         }
 
         full = candidate;
-        if (forWrite && _options.Trash && IsInTrash(root, candidate))
-        {
-            return FileOutcome.TrashReadOnly;
-        }
-
         return FileOutcome.Ok;
     }
 
@@ -483,16 +465,10 @@ public sealed class WorkingDirectory
                 return new ListResult(FileOutcome.Missing, display, [], false);
             }
 
-            bool atRoot = string.Equals(full, Root, StringComparison.OrdinalIgnoreCase);
             var entries = new List<DirectoryEntry>();
             foreach (var info in new DirectoryInfo(full).EnumerateFileSystemInfos())
             {
                 bool isDirectory = (info.Attributes & FileAttributes.Directory) != 0;
-                if (atRoot && isDirectory && _options.Trash && IsTrashName(info.Name))
-                {
-                    continue;
-                }
-
                 entries.Add(new DirectoryEntry(info.Name, isDirectory, isDirectory ? 0 : ((FileInfo)info).Length));
             }
 
@@ -513,8 +489,7 @@ public sealed class WorkingDirectory
 
     /// <summary>
     /// <c>/tree</c>: every folder and file under <paramref name="relative"/>, depth first, folders
-    /// before files at each level, no depth limit; the root's <c>.trash</c> left out unless it is
-    /// the folder asked for. Stops at <paramref name="maxEntries"/> (clamped to
+    /// before files at each level, no depth limit. Stops at <paramref name="maxEntries"/> (clamped to
     /// <see cref="MinTreeLength"/>..<see cref="MaxTreeLength"/>) with <c>Truncated</c>. <paramref name="maxDepth"/>
     /// (2026-09-18, the nested listing's <c>depth</c>) stops the descent that many levels down; the default
     /// is every level. <paramref name="hideDotEntries"/> (2026-09-22, <c>/vault</c>) leaves out every file and
@@ -522,9 +497,9 @@ public sealed class WorkingDirectory
     /// entries the vault tools leave to Obsidian. <paramref name="showHidden"/> (2026-09-23, <c>/tree</c> under
     /// <c>File browser/tree mode</c> <c>show-hidden</c>) lists the entries with the Hidden or System attribute too
     /// (<c>.git</c> on Windows), which every walk leaves out otherwise; reparse points stay out either way.
-    /// <paramref name="hideGitFolders"/> (2026-09-30, <c>/tree</c>, the user's ask: "in the same way it ignores .trash") leaves
+    /// <paramref name="hideGitFolders"/> (2026-09-30, <c>/tree</c>, the user's ask) leaves
     /// out every folder named <c>.git</c>, at any depth — a nested repository's or a submodule's too — whatever
-    /// <paramref name="showHidden"/> says; like <c>.trash</c>, the folder asked for itself is still walked.
+    /// <paramref name="showHidden"/> says; the folder asked for itself is still walked.
     /// </summary>
     public FileTreeResult FileTree(string relative, int maxEntries, int maxDepth = int.MaxValue, bool hideDotEntries = false, bool showHidden = false, bool hideGitFolders = false)
     {
@@ -563,7 +538,6 @@ public sealed class WorkingDirectory
     /// <summary>Depth-first, folders first then names per level; false once <paramref name="cap"/> entries are listed and more remain.</summary>
     private bool DescendAll(string directory, int depth, int cap, int maxDepth, bool hideDotEntries, bool showHidden, bool hideGitFolders, List<FileTreeEntry> entries)
     {
-        bool atRoot = string.Equals(directory, Root, StringComparison.OrdinalIgnoreCase);
         var children = new List<DirectoryEntry>();
         try
         {
@@ -576,7 +550,7 @@ public sealed class WorkingDirectory
             foreach (var info in new DirectoryInfo(directory).EnumerateFileSystemInfos("*", options))
             {
                 bool isDirectory = (info.Attributes & FileAttributes.Directory) != 0;
-                if ((atRoot && isDirectory && _options.Trash && IsTrashName(info.Name)) || (hideDotEntries && info.Name.StartsWith('.'))
+                if ((hideDotEntries && info.Name.StartsWith('.'))
                     || (hideGitFolders && isDirectory && string.Equals(info.Name, GitFolderName, StringComparison.OrdinalIgnoreCase)))
                 {
                     continue;
@@ -667,8 +641,8 @@ public sealed class WorkingDirectory
     /// trailing <c>/</c> on a folder, folders first then by name; at most <see cref="MaxMentionMatches"/>,
     /// the walk itself stopping after <see cref="MaxMentionVisited"/> entries (either cut sets
     /// <c>Truncated</c>). Like the other walks (and unlike <see cref="List"/>) hidden, system and
-    /// reparse-point entries are skipped, and the root's <c>.trash</c>. A folder outside the root
-    /// (<c>..</c>), inside <c>.trash</c>, missing or a file yields nothing with the outcome; the
+    /// reparse-point entries are skipped. A folder outside the root
+    /// (<c>..</c>), missing or a file yields nothing with the outcome; the
     /// root is never created here. With <paramref name="files"/> (2026-09-17) a file is listed
     /// only when the predicate keeps its full path — <see cref="IsTextFile"/> for the <c>/speak</c>
     /// list, the probe <see cref="ReadText"/> judges by, so what is offered will read;
@@ -686,11 +660,6 @@ public sealed class WorkingDirectory
         if (outcome != FileOutcome.Ok)
         {
             return new MentionResult(outcome, [], false);
-        }
-
-        if (_options.Trash && IsInTrash(Root, full))
-        {
-            return new MentionResult(FileOutcome.Ok, [], false);
         }
 
         try
@@ -1177,7 +1146,7 @@ public sealed class WorkingDirectory
     /// <summary>
     /// A picture as the model gets it (<see cref="ImageFile.TryLoad"/>: the caps, the downscale),
     /// its path the relative one so the sentences never show the full path. No extension gate — the
-    /// bytes decide, as for a dropped file — and <c>.trash</c> is readable like any folder. A file the
+    /// bytes decide, as for a dropped file. A file the
     /// codecs refuse is <see cref="FileOutcome.NotAnImage"/>, one over the caps <see cref="FileOutcome.ImageTooBig"/>.
     /// </summary>
     public ImageResult ReadImage(string relative)
@@ -1222,8 +1191,7 @@ public sealed class WorkingDirectory
 
     // ---- write side ----
 
-    /// <param name="keepCopy">Copy the file being replaced into <c>.trash</c> first (<c>File safe edits</c>); a file over <see cref="MaxTextFileBytes"/> is not copied.</param>
-    public WriteResult WriteText(string relative, string text, bool overwrite, bool keepCopy = false)
+    public WriteResult WriteText(string relative, string text, bool overwrite)
     {
         ArgumentNullException.ThrowIfNull(text);
         var outcome = Resolve(relative, forWrite: true, out string full);
@@ -1252,10 +1220,9 @@ public sealed class WorkingDirectory
                 return new WriteResult(FileOutcome.Exists, display, 0, false);
             }
 
-            bool copied = existed && keepCopy && CopyToTrash(full, display);
             long bytes = WriteAtomically(full, Utf8NoBom.GetBytes(text), _options.PreserveOnReplace);
             Count(text, out int lines, out int words);
-            return new WriteResult(FileOutcome.Ok, display, bytes, existed, copied, Lines: lines, Words: words);
+            return new WriteResult(FileOutcome.Ok, display, bytes, existed, Lines: lines, Words: words);
         }
         catch (Exception ex) when (IsFileFailure(ex))
         {
@@ -1265,11 +1232,10 @@ public sealed class WorkingDirectory
 
     /// <summary>
     /// <see cref="WriteText"/> for bytes as they are (a download, 2026-09-18): the same guards —
-    /// the sandbox, a folder in the way, a file there unless <paramref name="overwrite"/>, the copy
-    /// into <c>.trash</c> under <paramref name="keepCopy"/> (skipped over <see cref="MaxTextFileBytes"/>,
-    /// as ever) — and the same atomic write; no length cap (the caller's is the download's).
+    /// the sandbox, a folder in the way, a file there unless <paramref name="overwrite"/> — and the
+    /// same atomic write; no length cap (the caller's is the download's).
     /// </summary>
-    public WriteResult WriteBytes(string relative, byte[] bytes, bool overwrite, bool keepCopy = false)
+    public WriteResult WriteBytes(string relative, byte[] bytes, bool overwrite)
     {
         ArgumentNullException.ThrowIfNull(bytes);
         var outcome = Resolve(relative, forWrite: true, out string full);
@@ -1293,9 +1259,8 @@ public sealed class WorkingDirectory
                 return new WriteResult(FileOutcome.Exists, display, 0, false);
             }
 
-            bool copied = existed && keepCopy && CopyToTrash(full, display);
             long written = WriteAtomically(full, bytes, _options.PreserveOnReplace);
-            return new WriteResult(FileOutcome.Ok, display, written, existed, copied);
+            return new WriteResult(FileOutcome.Ok, display, written, existed);
         }
         catch (Exception ex) when (IsFileFailure(ex))
         {
@@ -1326,8 +1291,7 @@ public sealed class WorkingDirectory
     }
 
     /// <summary>Adds to the end (a newline first when the file does not end with one); creates a missing file.</summary>
-    /// <param name="keepCopy">Copy the file into <c>.trash</c> first when it exists (<c>File safe edits</c>).</param>
-    public WriteResult AppendText(string relative, string text, bool keepCopy = false)
+    public WriteResult AppendText(string relative, string text)
     {
         ArgumentNullException.ThrowIfNull(text);
         var outcome = Resolve(relative, forWrite: true, out string full);
@@ -1352,7 +1316,6 @@ public sealed class WorkingDirectory
 
             Directory.CreateDirectory(Path.GetDirectoryName(full)!);
             bool existed = File.Exists(full);
-            bool copied = existed && keepCopy && CopyToTrash(full, display);
             using var stream = new FileStream(full, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
             long written = 0;
             if (stream.Length > 0)
@@ -1386,7 +1349,7 @@ public sealed class WorkingDirectory
                 words = w;
             }
 
-            return new WriteResult(FileOutcome.Ok, display, written, existed, copied, Lines: lines, Words: words);
+            return new WriteResult(FileOutcome.Ok, display, written, existed, Lines: lines, Words: words);
         }
         catch (Exception ex) when (IsFileFailure(ex))
         {
@@ -1402,11 +1365,10 @@ public sealed class WorkingDirectory
     /// text with its line breaks normalised to <c>\n</c> (the form <see cref="ReadText"/> shows, so a
     /// multi-line <c>old_text</c> copied from a read matches a CRLF file too, 2026-09-17), and the file is
     /// written back with the line ending it had (<see cref="DetectLineEnding"/>: the first break
-    /// decides, so a mixed file comes out uniform); a BOM is kept. <paramref name="keepCopy"/> puts
-    /// the previous version into <c>.trash</c> first. An edit already in the file is
+    /// decides, so a mixed file comes out uniform); a BOM is kept. An edit already in the file is
     /// <see cref="FileOutcome.AlreadyApplied"/>, nothing written.
     /// </summary>
-    public EditResult EditText(string relative, string oldText, string newText, bool replaceAll = false, bool keepCopy = false)
+    public EditResult EditText(string relative, string oldText, string newText, bool replaceAll = false)
     {
         ArgumentNullException.ThrowIfNull(oldText);
         ArgumentNullException.ThrowIfNull(newText);
@@ -1462,14 +1424,13 @@ public sealed class WorkingDirectory
             }
 
             string edited = match.Content;
-            bool kept = keepCopy && CopyToTrash(full, display);
             Save(full, edited, bom, ending);
 
             if (match.Count > 1)
             {
                 var lines = match.Spans.Select(s => 1 + content.AsSpan(0, s.Start).Count('\n')).ToList();
                 Count(edited, out int totalLines, out int words);
-                return new EditResult(FileOutcome.Ok, display, lines[0], match.Count, 0, 0, totalLines, null, 0, lines, kept, Words: words, Strategy: match.Strategy);
+                return new EditResult(FileOutcome.Ok, display, lines[0], match.Count, 0, 0, totalLines, null, 0, lines, Words: words, Strategy: match.Strategy);
             }
 
             // The new text's lines: from the placed replacement's first line through the last it reaches.
@@ -1481,7 +1442,7 @@ public sealed class WorkingDirectory
                 newTo = newFrom - 1;
             }
 
-            return Done(display, edited, newFrom, newTo, 1, kept, match.Strategy);
+            return Done(display, edited, newFrom, newTo, 1, match.Strategy);
         }
         catch (Exception ex) when (IsFileFailure(ex))
         {
@@ -1536,7 +1497,7 @@ public sealed class WorkingDirectory
     }
 
     /// <summary>The successful edit's result with the region around the new text (<see cref="EditContextLines"/> each side, none over <see cref="MaxEditRegionLines"/>).</summary>
-    private static EditResult Done(string display, string edited, int newFrom, int newTo, int count, bool kept, MatchStrategy strategy = MatchStrategy.Exact)
+    private static EditResult Done(string display, string edited, int newFrom, int newTo, int count, MatchStrategy strategy = MatchStrategy.Exact)
     {
         var lines = SplitLines(edited);
         int total = lines.Count;
@@ -1549,7 +1510,7 @@ public sealed class WorkingDirectory
         }
 
         Count(edited, out _, out int words);
-        return new EditResult(FileOutcome.Ok, display, newFrom, count, newFrom, newTo, total, region, region is null ? 0 : from, null, kept, Words: words, Strategy: strategy);
+        return new EditResult(FileOutcome.Ok, display, newFrom, count, newFrom, newTo, total, region, region is null ? 0 : from, null, Words: words, Strategy: strategy);
     }
 
     /// <summary>Every <c>\r\n</c> and lone <c>\r</c> as <c>\n</c>: the one form the edits match and splice in.</summary>
@@ -1638,20 +1599,19 @@ public sealed class WorkingDirectory
     }
 
     /// <summary>
-    /// Moves or renames a file or a folder. With <paramref name="overwrite"/>, what is in the way goes
-    /// to <c>.trash</c> first under <paramref name="keepCopy"/> (<c>File safe edits</c>, 2026-09-20); without
-    /// it a file in the way is replaced in place and a folder in the way is <see cref="FileOutcome.FolderInTheWay"/>.
+    /// Moves or renames a file or a folder. With <paramref name="overwrite"/> (2026-09-20) a file in the way is
+    /// replaced in place and a folder in the way is <see cref="FileOutcome.FolderInTheWay"/>.
     /// </summary>
-    public MoveResult Move(string from, string to, bool overwrite, bool keepCopy = false) => Transfer(from, to, overwrite, move: true, keepCopy);
+    public MoveResult Move(string from, string to, bool overwrite) => Transfer(from, to, overwrite, move: true);
 
     /// <summary>
     /// Copies a file or a folder (recursively, reparse points skipped). With <paramref name="overwrite"/>
-    /// the rule is <see cref="Move"/>'s — but a folder copied over a folder merges into it, under either
-    /// setting (nothing is destroyed by a merge).
+    /// the rule is <see cref="Move"/>'s — but a folder copied over a folder merges into it (nothing is
+    /// destroyed by a merge).
     /// </summary>
-    public MoveResult Copy(string from, string to, bool overwrite, bool keepCopy = false) => Transfer(from, to, overwrite, move: false, keepCopy);
+    public MoveResult Copy(string from, string to, bool overwrite) => Transfer(from, to, overwrite, move: false);
 
-    private MoveResult Transfer(string from, string to, bool overwrite, bool move, bool keepCopy)
+    private MoveResult Transfer(string from, string to, bool overwrite, bool move)
     {
         var outcome = Resolve(from, forWrite: move, out string source);
         if (outcome != FileOutcome.Ok)
@@ -1693,19 +1653,13 @@ public sealed class WorkingDirectory
                 return new MoveResult(FileOutcome.Exists, fromDisplay, toDisplay, isDirectory, false);
             }
 
-            // What is in the way (2026-09-20): kept in .trash under File safe edits; else a file is
-            // replaced in place and a folder refused — except a folder a folder is copied over, which merges.
+            // What is in the way (2026-09-20): a file is replaced in place and a folder refused — except a
+            // folder a folder is copied over, which merges.
             bool folderInTheWay = inTheWay && Directory.Exists(destination);
             bool merge = folderInTheWay && isDirectory && !move;
-            bool kept = false;
             if (inTheWay && !merge)
             {
-                if (keepCopy && _options.Trash)
-                {
-                    MoveToTrash(destination, Relative(destination));
-                    kept = true;
-                }
-                else if (folderInTheWay)
+                if (folderInTheWay)
                 {
                     return new MoveResult(FileOutcome.FolderInTheWay, fromDisplay, Relative(destination, isDirectory: true), isDirectory, false);
                 }
@@ -1737,7 +1691,7 @@ public sealed class WorkingDirectory
                 File.Copy(source, destination, overwrite: true);
             }
 
-            return new MoveResult(FileOutcome.Ok, fromDisplay, toDisplay, isDirectory, renamed, CopyKept: kept);
+            return new MoveResult(FileOutcome.Ok, fromDisplay, toDisplay, isDirectory, renamed);
         }
         catch (Exception ex) when (IsFileFailure(ex))
         {
@@ -1759,12 +1713,12 @@ public sealed class WorkingDirectory
     /// Copies a file or a folder from one sandbox to another (2026-09-30, the UNC tools: a share to the working directory for
     /// <c>unc_fetch</c>, the other way for <c>unc_put</c>). Both paths go through their own <see cref="Resolve(string, bool, out string)"/>;
     /// a blank <paramref name="toRelative"/> is the source's own name at the target's root. The rest is <see cref="Copy"/>'s rule:
-    /// something in the way only with <paramref name="overwrite"/>, kept in the target's <c>.trash</c> under <paramref name="keepCopy"/>
-    /// (when it has one), a folder over a folder merged, a file in a folder's way <see cref="FileOutcome.FolderInTheWay"/>. A file
+    /// something in the way only with <paramref name="overwrite"/>, a folder over a folder merged, a file in a folder's way
+    /// <see cref="FileOutcome.FolderInTheWay"/>, a file over a file replaced. A file
     /// replaced on a target with <see cref="WorkingDirectoryOptions.PreserveOnReplace"/> keeps its ACL. One call carries at most
     /// <see cref="MaxTransferFiles"/> files and <see cref="MaxTransferBytes"/> bytes, counted before anything is written.
     /// </summary>
-    public static MoveResult CopyBetween(WorkingDirectory from, string fromRelative, WorkingDirectory to, string? toRelative, bool overwrite, bool keepCopy = false)
+    public static MoveResult CopyBetween(WorkingDirectory from, string fromRelative, WorkingDirectory to, string? toRelative, bool overwrite)
     {
         ArgumentNullException.ThrowIfNull(from);
         ArgumentNullException.ThrowIfNull(to);
@@ -1826,35 +1780,14 @@ public sealed class WorkingDirectory
             }
 
             bool folderInTheWay = inTheWay && Directory.Exists(destination);
-            bool kept = false;
             if (folderInTheWay && !isDirectory)
             {
-                if (!(keepCopy && to._options.Trash))
-                {
-                    return new MoveResult(FileOutcome.FolderInTheWay, fromDisplay, to.Relative(destination, isDirectory: true), isDirectory, false);
-                }
-
-                to.MoveToTrash(destination, to.Relative(destination));
-                kept = true;
+                return new MoveResult(FileOutcome.FolderInTheWay, fromDisplay, to.Relative(destination, isDirectory: true), isDirectory, false);
             }
-            else if (inTheWay && !folderInTheWay)
+
+            if (inTheWay && !folderInTheWay && isDirectory)
             {
-                if (isDirectory)
-                {
-                    if (keepCopy && to._options.Trash)
-                    {
-                        to.MoveToTrash(destination, to.Relative(destination));
-                        kept = true;
-                    }
-                    else
-                    {
-                        File.Delete(destination);
-                    }
-                }
-                else
-                {
-                    kept = keepCopy && to.CopyToTrash(destination, to.Relative(destination));
-                }
+                File.Delete(destination);
             }
 
             Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
@@ -1883,7 +1816,7 @@ public sealed class WorkingDirectory
                 File.Copy(source, destination, overwrite: true);
             }
 
-            return new MoveResult(FileOutcome.Ok, fromDisplay, toDisplay, isDirectory, false, CopyKept: kept);
+            return new MoveResult(FileOutcome.Ok, fromDisplay, toDisplay, isDirectory, false);
         }
         catch (Exception ex) when (IsFileFailure(ex))
         {
@@ -1892,19 +1825,18 @@ public sealed class WorkingDirectory
     }
 
     /// <summary>
-    /// Moves a file or folder into <c>.trash\&lt;stamp&gt;\&lt;relative&gt;</c>: a same-volume move, nothing destroyed —
-    /// while <paramref name="toTrash"/> (<c>File safe edits</c>). Without it (2026-09-20, the user's call) the entry is
-    /// removed in place, a folder with everything in it: the one recursive delete in the sandbox, behind the setting.
-    /// Either way the root and anything under <c>.trash</c> are refused (<c>/emptytrash</c> alone clears the trash), and so
-    /// (2026-09-23, the user's call) are <c>.git</c>, anything in it and a folder with a <c>.git</c> anywhere under it —
-    /// <see cref="FileOutcome.GitProtected"/>, whichever the setting: a repository's history is not the model's to lose.
+    /// Removes a file or a folder for good, a folder with everything in it: the one recursive delete in the sandbox
+    /// (in place since 2026-09-20 with File safe edits off, and always since 2026-10-01, when that setting and its
+    /// <c>.trash</c> went, the user's call). The root is refused, and so (2026-09-23, the user's call) are <c>.git</c>,
+    /// anything in it and a folder with a <c>.git</c> anywhere under it — <see cref="FileOutcome.GitProtected"/>: a
+    /// repository's history is not the model's to lose.
     /// </summary>
-    public TrashResult Delete(string relative, bool toTrash = true)
+    public DeleteResult Delete(string relative)
     {
         var outcome = Resolve(relative, forWrite: true, out string full);
         if (outcome != FileOutcome.Ok)
         {
-            return new TrashResult(outcome, relative, "", false);
+            return new DeleteResult(outcome, relative, false);
         }
 
         try
@@ -1913,41 +1845,35 @@ public sealed class WorkingDirectory
             bool isDirectory = Directory.Exists(full);
             if (!isDirectory && !File.Exists(full))
             {
-                return new TrashResult(FileOutcome.Missing, Relative(full), "", false);
+                return new DeleteResult(FileOutcome.Missing, Relative(full), false);
             }
 
             string display = Relative(full, isDirectory);
             if (string.Equals(full, Root, StringComparison.OrdinalIgnoreCase))
             {
-                return new TrashResult(FileOutcome.IntoItself, display, "", true);
+                return new DeleteResult(FileOutcome.IntoItself, display, true);
             }
 
             if (IsGitPath(Relative(full)) || (isDirectory && HoldsGit(full)))
             {
-                return new TrashResult(FileOutcome.GitProtected, display, "", isDirectory);
+                return new DeleteResult(FileOutcome.GitProtected, display, isDirectory);
             }
 
-            if (!toTrash || !_options.Trash)
+            if (isDirectory)
             {
-                if (isDirectory)
-                {
-                    Directory.Delete(full, recursive: true);
-                }
-                else
-                {
-                    File.Delete(full);
-                }
-
-                DiagnosticLog.Debug(Category, DeletedLogLine(Relative(full)));
-                return new TrashResult(FileOutcome.Ok, display, "", isDirectory, Destroyed: true);
+                Directory.Delete(full, recursive: true);
+            }
+            else
+            {
+                File.Delete(full);
             }
 
-            string trashed = MoveToTrash(full, Relative(full));
-            return new TrashResult(FileOutcome.Ok, display, Relative(trashed, isDirectory), isDirectory);
+            DiagnosticLog.Debug(Category, DeletedLogLine(Relative(full)));
+            return new DeleteResult(FileOutcome.Ok, display, isDirectory);
         }
         catch (Exception ex) when (IsFileFailure(ex))
         {
-            return new TrashResult(FileOutcome.Failed, Relative(full), "", false, ex.Message);
+            return new DeleteResult(FileOutcome.Failed, Relative(full), false, ex.Message);
         }
     }
 
@@ -1974,239 +1900,32 @@ public sealed class WorkingDirectory
             ReturnSpecialDirectories = false,
         }).Any();
 
-    /// <summary>The move behind <see cref="Delete"/> and an overwritten folder; returns the full path inside the trash.</summary>
-    private string MoveToTrash(string full, string relative)
-    {
-        string candidate = NextCopy(relative);
-        if (Directory.Exists(full))
-        {
-            Directory.Move(full, candidate);
-        }
-        else
-        {
-            File.Move(full, candidate);
-        }
-
-        DiagnosticLog.Debug(Category, TrashedLogLine(relative, Relative(candidate)));
-        return candidate;
-    }
-
-    /// <summary><c>Trashed notes.md as .trash\20260919-140500\notes.md</c>. Pinned.</summary>
-    public static string TrashedLogLine(string relative, string copy) => $"Trashed {relative} as {copy}";
-
-    /// <summary>The in-place <see cref="Delete"/>: <c>Deleted notes.md in place (File safe edits off)</c>. Pinned.</summary>
-    public static string DeletedLogLine(string relative) => $"Deleted {relative} in place (File safe edits off)";
-
-    /// <summary>The <c>File safe edits</c> copy: <c>Kept the previous notes.md as .trash\…\notes.md</c>. Pinned.</summary>
-    public static string KeptLogLine(string relative, string copy) => $"Kept the previous {relative} as {copy}";
-
-    /// <summary><c>Restored notes.md from .trash\20260919-140500\</c>. Pinned.</summary>
-    public static string RestoredLogLine(string relative, string stamp) => $"Restored {relative} from {stamp}";
-
-    /// <summary><c>Trash emptied: 12 files, 3 folders, 340,000 bytes</c>. Pinned.</summary>
-    public static string TrashEmptiedLogLine(int files, int folders, long bytes) =>
-        string.Create(CultureInfo.InvariantCulture, $"Trash emptied: {files} files, {folders} folders, {bytes:N0} bytes");
-
-    /// <summary>The entry at <paramref name="target"/> or its highest <c> (n)</c> sibling, whichever exists with the biggest n; null with none.</summary>
-    private static string? NewestCopy(string target)
-    {
-        string? parent = Path.GetDirectoryName(target);
-        if (parent is null || !Directory.Exists(parent))
-        {
-            return null;
-        }
-
-        string name = Path.GetFileName(target);
-        string? best = File.Exists(target) || Directory.Exists(target) ? target : null;
-        int bestN = 1;
-        foreach (string entry in Directory.EnumerateFileSystemEntries(parent, name + " (*)"))
-        {
-            string tail = Path.GetFileName(entry).AsSpan(name.Length).ToString();
-            if (tail.Length > 3 && tail.StartsWith(" (", StringComparison.Ordinal) && tail.EndsWith(')')
-                && int.TryParse(tail.AsSpan(2, tail.Length - 3), NumberStyles.None, CultureInfo.InvariantCulture, out int n) && n > bestN)
-            {
-                best = entry;
-                bestN = n;
-            }
-        }
-
-        return best;
-    }
-
-    /// <summary>
-    /// A copy of a file about to be changed into <c>.trash\&lt;stamp&gt;\&lt;relative&gt;</c> (<c>File safe edits</c>,
-    /// 2026-09-17), the same stamp and <c>(n)</c> rule as <see cref="MoveToTrash"/>; false when the file is over
-    /// <see cref="MaxTextFileBytes"/> (never copied). A failure to copy is the edit's failure.
-    /// </summary>
-    private bool CopyToTrash(string full, string relative)
-    {
-        if (!_options.Trash || new FileInfo(full).Length > MaxTextFileBytes)
-        {
-            return false;
-        }
-
-        string copy = NextCopy(relative);
-        File.Copy(full, copy);
-        DiagnosticLog.Debug(Category, KeptLogLine(relative, Relative(copy)));
-        return true;
-    }
-
-    /// <summary>
-    /// Where the next copy of <paramref name="relative"/> lands in this second's stamp: the plain
-    /// name, else one past the highest <c> (n)</c> there — never a gap left by a restore, so the
-    /// numbers stay in the order the copies were taken (2026-09-17). The stamp folder is created.
-    /// </summary>
-    private string NextCopy(string relative)
-    {
-        string stamp = Local(_time.GetUtcNow().UtcDateTime).ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture);
-        string target = Path.Combine(Root, TrashFolderName, stamp, relative);
-        Directory.CreateDirectory(Path.GetDirectoryName(target)!);
-        string? newest = NewestCopy(target);
-        if (newest is null)
-        {
-            return target;
-        }
-
-        int n = newest.Length == target.Length ? 1 : int.Parse(newest.AsSpan(target.Length + 2, newest.Length - target.Length - 3), NumberStyles.None, CultureInfo.InvariantCulture);
-        return target + " (" + (n + 1).ToString(CultureInfo.InvariantCulture) + ")";
-    }
-
-    /// <summary>
-    /// Puts back the newest trashed copy of <paramref name="relative"/>; refuses when something is at that
-    /// path again unless <paramref name="overwrite"/>: under <paramref name="keepCopy"/> (<c>File safe edits</c>) what is there is trashed first (the way an edit
-    /// is undone, 2026-09-17) — the copy is found BEFORE that move, or the just-trashed entry would be the newest and come straight back —
-    /// without it a live file is replaced in place and a live folder is <see cref="FileOutcome.FolderInTheWay"/> (2026-09-20).
-    /// </summary>
-    public TrashResult Restore(string relative, bool overwrite = false, bool keepCopy = false)
-    {
-        var outcome = Resolve(relative, forWrite: true, out string full);
-        if (outcome != FileOutcome.Ok)
-        {
-            return new TrashResult(outcome, relative, "", false);
-        }
-
-        string display = Relative(full);
-        try
-        {
-            EnsureExists();
-            bool occupied = File.Exists(full) || Directory.Exists(full);
-            if (occupied && !overwrite)
-            {
-                return new TrashResult(FileOutcome.Exists, Relative(full, Directory.Exists(full)), "", Directory.Exists(full));
-            }
-
-            string trash = Path.Combine(Root, TrashFolderName);
-            string sub = Relative(full);
-            if (!Directory.Exists(trash))
-            {
-                return new TrashResult(FileOutcome.NotInTrash, display, "", false);
-            }
-
-            var stamps = Directory.GetDirectories(trash).Select(Path.GetFileName).OfType<string>().ToList();
-            stamps.Sort(StringComparer.Ordinal);
-            stamps.Reverse();
-            foreach (var stamp in stamps)
-            {
-                string stampPath = Path.Combine(trash, stamp);
-                // The plain name, then " (2)", " (3)"…: the highest suffix is the latest of the
-                // copies that landed in this stamp, and the stamps are visited newest first. A
-                // restore leaves a gap in the run, so the highest that exists wins, not the last
-                // of a contiguous run (2026-09-17).
-                string? found = NewestCopy(Path.Combine(stampPath, sub));
-                if (found is null)
-                {
-                    continue;
-                }
-
-                bool isDirectory = Directory.Exists(found);
-                bool kept = false;
-                if (occupied)
-                {
-                    // The live entry (2026-09-20): kept in .trash under File safe edits; else a file is replaced in place, a folder refused.
-                    if (keepCopy && _options.Trash)
-                    {
-                        MoveToTrash(full, sub);
-                        kept = true;
-                    }
-                    else if (Directory.Exists(full))
-                    {
-                        return new TrashResult(FileOutcome.FolderInTheWay, Relative(full, isDirectory: true), "", true);
-                    }
-                    else
-                    {
-                        File.Delete(full);
-                    }
-                }
-
-                Directory.CreateDirectory(Path.GetDirectoryName(full)!);
-                if (isDirectory)
-                {
-                    Directory.Move(found, full);
-                }
-                else
-                {
-                    File.Move(found, full);
-                }
-
-                if (!Directory.EnumerateFileSystemEntries(stampPath, "*", SearchOption.AllDirectories).Any(File.Exists))
-                {
-                    Directory.Delete(stampPath, recursive: true);
-                }
-
-                DiagnosticLog.Debug(Category, RestoredLogLine(Relative(full, isDirectory), Relative(stampPath, isDirectory: true)));
-                return new TrashResult(FileOutcome.Ok, Relative(full, isDirectory), Relative(stampPath, isDirectory: true), isDirectory, CopyKept: kept);
-            }
-
-            return new TrashResult(FileOutcome.NotInTrash, display, "", false);
-        }
-        catch (Exception ex) when (IsFileFailure(ex))
-        {
-            return new TrashResult(FileOutcome.Failed, display, "", false, ex.Message);
-        }
-    }
-
-    /// <summary>
-    /// Deletes everything under the root's <c>.trash</c> for good; the folder itself stays. The
-    /// one destructive operation here: reached only by <c>/emptytrash</c> after a typed
-    /// confirmation, never by a tool. Junctions and symlinks inside the trash are removed as
-    /// links, not followed (the count and the delete agree on that). A read-only file that was
-    /// moved in is made writable first, so it cannot stop the run. No trash folder = nothing to do.
-    /// </summary>
-    public EmptyTrashResult EmptyTrash()
-    {
-        var result = EmptyContents(TrashPath);
-        if (result.Outcome == FileOutcome.Ok && Directory.Exists(TrashPath))
-        {
-            DiagnosticLog.Info(Category, TrashEmptiedLogLine(result.Files, result.Folders, result.Bytes));
-        }
-
-        return result;
-    }
+    /// <summary>The <see cref="Delete"/>: <c>Deleted notes.md</c>. Pinned.</summary>
+    public static string DeletedLogLine(string relative) => $"Deleted {relative}";
 
     /// <summary>
     /// Deletes everything under <paramref name="relative"/> for good; the folder itself stays (2026-09-24, the user's
-    /// ask: <c>/comfy purge</c> empties the ComfyUI output folder, its <c>.pasted</c> inputs included). The second
-    /// destructive operation here, after <see cref="EmptyTrash"/>, and like it reached only by a slash command after a
-    /// typed confirmation, never by a tool. Refused outside the sandbox, inside the trash, on the root itself (an
+    /// ask: <c>/comfy purge</c> empties the ComfyUI output folder, its <c>.pasted</c> inputs included), reached only by
+    /// a slash command after a typed confirmation, never by a tool. Refused outside the sandbox, on the root itself (an
     /// empty output folder setting means the working directory — purging that would take everything) and on a file.
     /// A missing folder is nothing to do.
     /// </summary>
-    public EmptyTrashResult PurgeFolder(string relative)
+    public PurgeResult PurgeFolder(string relative)
     {
         var outcome = Resolve(relative, forWrite: true, out string full);
         if (outcome != FileOutcome.Ok)
         {
-            return new EmptyTrashResult(outcome, 0, 0, 0);
+            return new PurgeResult(outcome, 0, 0, 0);
         }
 
         if (string.Equals(full, Root, StringComparison.OrdinalIgnoreCase))
         {
-            return new EmptyTrashResult(FileOutcome.OutsideRoot, 0, 0, 0, PurgeRootRefusal);
+            return new PurgeResult(FileOutcome.OutsideRoot, 0, 0, 0, PurgeRootRefusal);
         }
 
         if (File.Exists(full))
         {
-            return new EmptyTrashResult(FileOutcome.IsAFile, 0, 0, 0);
+            return new PurgeResult(FileOutcome.IsAFile, 0, 0, 0);
         }
 
         var result = EmptyContents(full);
@@ -2225,14 +1944,14 @@ public sealed class WorkingDirectory
         string.Create(CultureInfo.InvariantCulture, $"Purged {relative}: {files} files, {folders} folders, {bytes:N0} bytes");
 
     /// <summary>
-    /// The walk-and-delete behind <see cref="EmptyTrash"/> and <see cref="PurgeFolder"/>: everything under
+    /// The walk-and-delete behind <see cref="PurgeFolder"/>: everything under
     /// <paramref name="target"/> counted, read-only cleared, then deleted; the folder itself stays. Absent = nothing to do.
     /// </summary>
-    private static EmptyTrashResult EmptyContents(string target)
+    private static PurgeResult EmptyContents(string target)
     {
         if (!Directory.Exists(target))
         {
-            return new EmptyTrashResult(FileOutcome.Ok, 0, 0, 0);
+            return new PurgeResult(FileOutcome.Ok, 0, 0, 0);
         }
 
         int files = 0, folders = 0;
@@ -2278,11 +1997,11 @@ public sealed class WorkingDirectory
                 File.Delete(file);
             }
 
-            return new EmptyTrashResult(FileOutcome.Ok, files, folders, bytes);
+            return new PurgeResult(FileOutcome.Ok, files, folders, bytes);
         }
         catch (Exception ex) when (IsFileFailure(ex))
         {
-            return new EmptyTrashResult(FileOutcome.Failed, files, folders, bytes, ex.Message);
+            return new PurgeResult(FileOutcome.Failed, files, folders, bytes, ex.Message);
         }
     }
 
@@ -2526,8 +2245,7 @@ public sealed class WorkingDirectory
     /// One enumeration for every walk: files matching <paramref name="namePattern"/> (a Win32
     /// glob over the name, null = all; a path glob — a separator or <c>**</c> in it — over the
     /// file's path under <paramref name="directory"/> or under the root, <see cref="PathGlob"/>,
-    /// 2026-09-17), folders too when asked, never into a reparse point, never into the root's
-    /// <c>.trash</c>, never below <paramref name="maxDepth"/> levels (1 = the folder's own entries; <c>search_files</c>'s
+    /// 2026-09-17), folders too when asked, never into a reparse point, never below <paramref name="maxDepth"/> levels (1 = the folder's own entries; <c>search_files</c>'s
     /// <c>depth</c>, 2026-09-19). Each entry's size and write time come with it — no second stat.
     /// Brace groups are expanded first (<see cref="PathGlob.ExpandBraces"/>, 2026-09-24) and each
     /// alternative is judged name-or-path on its own, so <c>{src/*.cs,*.md}</c> mixes the two.
@@ -2535,7 +2253,6 @@ public sealed class WorkingDirectory
     private FileSystemEnumerable<WalkEntry> Walk(string directory, string? namePattern, bool recurse, bool includeDirectories = false, int maxDepth = int.MaxValue)
     {
         string root = Root;
-        bool trash = _options.Trash;
         GlobAlternative[]? alternatives = namePattern is null
             ? null
             : [.. PathGlob.ExpandBraces(namePattern).Select(p => new GlobAlternative(p, PathGlob.IsPathPattern(p)))];
@@ -2546,9 +2263,8 @@ public sealed class WorkingDirectory
         {
             ShouldIncludePredicate = (ref FileSystemEntry entry) =>
                 (includeDirectories || !entry.IsDirectory)
-                && !(trash && IsRootTrash(ref entry, root))
                 && (alternatives is null || entry.IsDirectory || MatchesAny(alternatives, ref entry, directory, root)),
-            ShouldRecursePredicate = (ref FileSystemEntry entry) => !(trash && IsRootTrash(ref entry, root)) && DepthUnder(entry.Directory, directory) < maxDepth,
+            ShouldRecursePredicate = (ref FileSystemEntry entry) => DepthUnder(entry.Directory, directory) < maxDepth,
         };
     }
 
@@ -2603,32 +2319,12 @@ public sealed class WorkingDirectory
         PathGlob.IsMatch(pattern, Path.GetRelativePath(directory, fullPath))
         || (!string.Equals(directory, root, StringComparison.OrdinalIgnoreCase) && PathGlob.IsMatch(pattern, Path.GetRelativePath(root, fullPath)));
 
-    private static bool IsRootTrash(ref FileSystemEntry entry, string root) =>
-        entry.IsDirectory
-        && entry.FileName.Equals(TrashFolderName, StringComparison.OrdinalIgnoreCase)
-        && entry.Directory.TrimEnd(Path.DirectorySeparatorChar).Equals(root, StringComparison.OrdinalIgnoreCase);
-
-    private static bool IsTrashName(string name) => string.Equals(name, TrashFolderName, StringComparison.OrdinalIgnoreCase);
-
     /// <summary><paramref name="path"/> equals <paramref name="root"/> or lies under it, by spelling.</summary>
     internal static bool IsInside(string root, string path) =>
         string.Equals(path, root, StringComparison.OrdinalIgnoreCase)
         || (path.Length > root.Length
             && path.StartsWith(root, StringComparison.OrdinalIgnoreCase)
             && (path[root.Length] == Path.DirectorySeparatorChar || path[root.Length] == Path.AltDirectorySeparatorChar));
-
-    private static bool IsInTrash(string root, string full)
-    {
-        if (full.Length <= root.Length)
-        {
-            return false;
-        }
-
-        var rest = full.AsSpan(root.Length + 1);
-        int cut = rest.IndexOfAny('\\', '/');
-        var first = cut < 0 ? rest : rest[..cut];
-        return first.Equals(TrashFolderName, StringComparison.OrdinalIgnoreCase);
-    }
 
     private static void CopyDirectory(string source, string destination)
     {

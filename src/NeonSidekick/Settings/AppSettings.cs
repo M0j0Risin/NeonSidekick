@@ -724,7 +724,6 @@ public sealed class AppSettings : IDisposable
         AskUser = source.AskUser,
         FileMentionFolderMode = source.FileMentionFolderMode,
         FileBrowserMode = source.FileBrowserMode,
-        FileSafeEdits = source.FileSafeEdits,
         FileTools = source.FileTools,
         FileTreeMaxLength = source.FileTreeMaxLength,
         FileTreeShowSizes = source.FileTreeShowSizes,

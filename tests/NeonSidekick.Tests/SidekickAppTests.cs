@@ -42,7 +42,7 @@ public partial class SidekickAppTests : IDisposable
         _settings.Update(d => d.SessionNamingMode = "first-line");
         // delete is off in a fresh profile (2026-09-20); the headless scripts pin the full file rule, so the fixture opts it back on —
         // and File safe edits with it, since the rule's clause reads "into .trash" only under the setting (later on 2026-09-20).
-        _settings.Update(d => { d.ToolsDisabled = []; d.FileSafeEdits = true; d.GitLibTools = true; });   // GitLib tools off by default since 2026-09-21: the headless turns opt in
+        _settings.Update(d => { d.ToolsDisabled = []; d.GitLibTools = true; });   // GitLib tools off by default since 2026-09-21: the headless turns opt in
         // Eight settings went off by default on 2026-09-29 (the user's call): the scripts here were written with every tool group
         // offered, the shell under ask and the local scan, so the fixture puts them back; the fresh-profile tests start from new ones.
         _settings.Update(PreFlipDefaults.Apply);

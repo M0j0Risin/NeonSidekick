@@ -1,7 +1,6 @@
 using System.Text.Json;
 using Microsoft.Extensions.AI;
 using NeonSidekick.Files;
-using NeonSidekick.Settings;
 
 namespace NeonSidekick.Llm.Tools;
 
@@ -26,32 +25,23 @@ public sealed class CopyTool : FileTool
         }
         """);
 
-    private readonly Func<AppSettingsData> _effective;
-
-    /// <param name="effective">The settings <c>File safe edits</c> is read from at every call (2026-09-20: whether what is replaced is kept in <c>.trash</c>).</param>
-    public CopyTool(WorkingDirectory files, Func<AppSettingsData> effective) : base(files)
+    public CopyTool(WorkingDirectory files) : base(files)
     {
-        _effective = effective ?? throw new ArgumentNullException(nameof(effective));
     }
 
     public override string Name => ToolName;
 
-    public override string Description => DescribeTool(_effective().FileSafeEdits);
+    public override string Description => DescriptionText;
 
-    /// <summary>
-    /// The description under either setting, read at every call (later still on 2026-09-20, the user's ask): the
-    /// off-form names no <c>.trash</c>, since nothing is kept then and the model never hears of a trash. Pinned.
-    /// </summary>
-    public static string DescribeTool(bool safeEdits) =>
+    /// <summary>The description; what a <c>.trash</c> kept went with File safe edits (2026-10-01, the user's call). Pinned.</summary>
+    public const string DescriptionText =
         "Copies a file or a folder (with everything in it) under the working directory (the user's cwd / current directory) to a new path. " +
         "Refuses to replace something already at the new path unless overwrite is true; " +
-        (safeEdits
-            ? "what is replaced is kept in .trash while File safe edits is on, else a file is replaced in place and a folder in the way is refused (a folder copied over a folder merges into it)."
-            : "a file is replaced in place and a folder in the way is refused (a folder copied over a folder merges into it).");
+        "a file is replaced in place and a folder in the way is refused (a folder copied over a folder merges into it).";
 
     public override JsonElement JsonSchema => Schema;
 
-    public string Describe(string from, string to, bool overwrite) => FileText.Copied(Files.Copy(from, to, overwrite, _effective().FileSafeEdits));
+    public string Describe(string from, string to, bool overwrite) => FileText.Copied(Files.Copy(from, to, overwrite));
 
     protected override ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
     {

@@ -991,7 +991,7 @@ internal sealed partial class ChatScreen
         Func<SkillRoots> roots = () => SkillRoots.For(_settings, external);
         _catalog = new SkillCatalog(roots);
         _skillRecords = new SkillRecords(new SkillRecordStore(_settings.StorageDirectory), roots, _time);
-        _skillTools = SkillTools(_catalog, roots, () => { var e = _effective(); return e.AgentSkills && e.ExternalSkills; }, new SkillFileAccess(() => _effective().FileSafeEdits, _time), _skillRecords);
+        _skillTools = SkillTools(_catalog, roots, () => { var e = _effective(); return e.AgentSkills && e.ExternalSkills; }, new SkillFileAccess(_time), _skillRecords);
         _project = new ProjectFile(() => _files.Root);
         _copy = copyToClipboard ?? (_ => false);
         // Everything the screen shows goes through the pane: the transcript flows above it, the
@@ -1607,6 +1607,7 @@ internal sealed partial class ChatScreen
     /// Alt+V moved up ahead of Ctrl+Home on 2026-09-27 (the user's order; it sat after Ctrl+O until then).
     /// The Ctrl+Alt rows are one block sorted by the letter (later on 2026-09-30, the user's ask, when B, D, E, G, K, L, M, O,
     /// P, T and Y joined C, N and S: <see cref="Keys.ShortcutLine"/>).
+    /// The plain Ctrl+letter rows are sorted by the letter too since 2026-10-01 (the user's ask): A, C, O, X.
     /// </summary>
     public static (string Key, string Meaning)[] KeyRows(bool voiceOn, ConsoleKey pushToTalk, bool wakeReady, string wakePhrase)
     {
@@ -1634,10 +1635,10 @@ internal sealed partial class ChatScreen
         rows.Add(("Alt+V", "paste content (text or images)"));
         rows.Add(("Ctrl+Home", "scroll to top of the chat pane"));
         rows.Add(("Ctrl+End", "scroll to bottom of the chat pane"));
-        rows.Add(("Ctrl+O", "expand or collapse the tool calls, code blocks and thinking (or click a summary line)"));
         rows.Add(("Ctrl+A", "select all text on the line"));
-        rows.Add(("Ctrl+X", "cut the selected text"));
         rows.Add(("Ctrl+C", "copy the selected text · stop the speech · cancel the reply · twice to exit"));
+        rows.Add(("Ctrl+O", "expand or collapse the tool calls, code blocks and thinking (or click a summary line)"));
+        rows.Add(("Ctrl+X", "cut the selected text"));
         rows.Add(("Ctrl+Alt+B", "show or hide the toolbar (/tb)"));
         rows.Add(("Ctrl+Alt+C", "start a new conversation and clear the screen (/clear)"));
         rows.Add(("Ctrl+Alt+D", "open the MCP pane (/mcp)"));
@@ -2273,9 +2274,9 @@ internal sealed partial class ChatScreen
         };
     }
 
-    /// <summary>The supporting-file actions a reflection decided now is offered: with <c>Reflection edit supporting files</c> on (2026-09-27), <c>File safe edits</c> read live at each write; null otherwise.</summary>
+    /// <summary>The supporting-file actions a reflection decided now is offered: with <c>Reflection edit supporting files</c> on (2026-09-27); null otherwise.</summary>
     private SkillFileAccess? ReflectionFiles(AppSettingsData effective) =>
-        effective.ReflectionEditsSupportingFiles ? new SkillFileAccess(() => _effective().FileSafeEdits, _time) : null;
+        effective.ReflectionEditsSupportingFiles ? new SkillFileAccess(_time) : null;
 
     /// <summary>
     /// Everything a reflection is started with, captured when it is decided (<see cref="MaybeLearn"/>):
@@ -2767,7 +2768,7 @@ internal sealed partial class ChatScreen
     {
         var effective = _effective();
         var disabled = TurnDisabled(effective);
-        bool filesOffered = effective.FileTools && Without(FileToolsFor(_fileTools, effective.FileSafeEdits), disabled).Count > 0;
+        bool filesOffered = effective.FileTools && Without(_fileTools, disabled).Count > 0;
         var unc = Without(UncToolsFor(_uncTools, effective, _unc.Catalog(), filesOffered), disabled);
         return new SystemPromptFacts(
             _persona.Read(),
@@ -2778,7 +2779,7 @@ internal sealed partial class ChatScreen
             effective.TtsOutput,
             _speech.IsReady,
             effective.LlmOfferTools,
-            effective.FileTools && Without(FileToolsFor(_fileTools, effective.FileSafeEdits), disabled).Count > 0,   // the turn's own rule: every file tool off on /tools (restore gone with File safe edits off) reads as the switch off
+            filesOffered,   // the turn's own rule: every file tool off on /tools reads as the switch off
             effective.AgentSkills,
             Catalog(effective),
             effective.AgentSkills && effective.ProjectFile ? _project.ReadNotes() : null,
@@ -2788,7 +2789,6 @@ internal sealed partial class ChatScreen
             effective.ProjectFile,
             effective.McpServers,
             Without(_mcp.Tools, disabled).Count,
-            effective.FileSafeEdits,
             effective.GitLibTools,
             Without(_gitTools, disabled).Count,
             ShellOffered(effective),
@@ -2858,7 +2858,7 @@ internal sealed partial class ChatScreen
         }
 
         var disabled = ToolsText.DisabledSet(effective.ToolsDisabled);
-        var fileTools = FileToolsFor(_fileTools, effective.FileSafeEdits);   // restore only with File safe edits on (later still on 2026-09-20)
+        var fileTools = _fileTools;
         bool files = effective.FileTools && Without(fileTools, disabled).Count > 0;
         var groups = SystemPromptSummary.ToolGroups(_clockTools, _timerTools, fileTools, _memoryTools, effective.Memory, effective.LlmOfferTools, WebToolsFor(_webTools, files), effective.WebTools, effective.FileTools, _askTools, effective.AskUser, _pane.Enabled, _skillTools, effective.AgentSkills, _sessionTools, effective.SessionTool, disabled, skillInstalled: Catalog(effective).Count > 0, mcp: _mcp.ServerTools, mcpEnabled: effective.McpServers, git: _gitTools, gitEnabled: effective.GitLibTools, shell: _shellTools, shellEnabled: ShellOffered(effective), codeAvailable: CodeAvailable(), obsidian: ObsidianToolsFor(_vaultTools, effective), obsidianEnabled: ObsidianOffered(effective), sql: _sqlTools, sqlEnabled: SqlOffered(effective, _sql), comfy: _comfyTools, comfyEnabled: ComfyOffered(effective, _comfy), advisor: _advisorTools, advisorEnabled: effective.ClaudeAdvisor, homeAssistant: _haTools, homeAssistantEnabled: HomeAssistantOffered(effective), print: _printTools, printEnabled: PrintOffered(effective), oracle: _oracleTools, oracleEnabled: OracleOffered(effective, _oracle), mysql: _mysqlTools, mysqlEnabled: MySqlOffered(effective, _mysql), unc: UncToolsFor(_uncTools, effective, _unc.Catalog(), files), uncEnabled: UncOffered(effective, _unc));
         return groups.SelectMany(g => g.Tools.Where(t => g.Offers(t.Name)).Select(t => new CompletionItem(t.Name, t.Description))).ToList();
@@ -3667,7 +3667,7 @@ internal sealed partial class ChatScreen
     {
         var effective = _effective();
         var disabled = TurnDisabled(effective);
-        var fileTools = FileToolsFor(_fileTools, effective.FileSafeEdits);   // restore only with File safe edits on (later still on 2026-09-20): /sys shows the list cut, Files (14)
+        var fileTools = _fileTools;
         bool files = effective.FileTools && Without(fileTools, disabled).Count > 0;   // the turn's rule (PrepareTurn): an emptied file group is the switch off
         return WithPlanGroup(SystemPromptSummary.OfferedOnly(SystemPromptSummary.ToolGroups(_clockTools, _timerTools, fileTools, _memoryTools, effective.Memory, effective.LlmOfferTools, WebToolsFor(_webTools, files), effective.WebTools, effective.FileTools, _askTools, effective.AskUser, _pane.Enabled, _skillTools, effective.AgentSkills, _sessionTools, effective.SessionTool, disabled, mcp: _mcp.ServerTools, mcpEnabled: effective.McpServers, git: _gitTools, gitEnabled: effective.GitLibTools, shell: _shellTools, shellEnabled: ShellOffered(effective), codeAvailable: CodeAvailable(), obsidian: ObsidianOffered(effective) ? ObsidianToolsFor(_vaultTools, effective) : null, sql: SqlOffered(effective, _sql) ? _sqlTools : null, comfy: ComfyOffered(effective, _comfy) ? _comfyTools : null, advisor: _advisorTools, advisorEnabled: effective.ClaudeAdvisor, homeAssistant: HomeAssistantOffered(effective) ? _haTools : null, oracle: OracleOffered(effective, _oracle) ? _oracleTools : null, mysql: MySqlOffered(effective, _mysql) ? _mysqlTools : null, unc: UncOffered(effective, _unc) ? UncToolsFor(_uncTools, effective, _unc.Catalog(), files) : null)));   // the vault group only with a vault (2026-09-22): /sys stays as it was for a profile that never names one
     }
@@ -3695,9 +3695,8 @@ internal sealed partial class ChatScreen
     {
         var effective = _effective();
         var disabled = ToolsText.DisabledSet(effective.ToolsDisabled);
-        // The whole file list, restore noted under File safe edits off (later still on 2026-09-20): the row stays, dim, with its reason — the download_file shape.
         _interpreters.Refresh();
-        var groups = SystemPromptSummary.ToolGroups(_clockTools, _timerTools, _fileTools, _memoryTools, effective.Memory, effective.LlmOfferTools, _webTools, effective.WebTools, effective.FileTools, _askTools, effective.AskUser, _pane.Enabled, _skillTools, effective.AgentSkills, _sessionTools, effective.SessionTool, disabled, skillInstalled: Catalog(effective).Count > 0, git: _gitTools, gitEnabled: effective.GitLibTools, safeEdits: effective.FileSafeEdits, shell: _shellTools, shellEnabled: ShellOffered(effective), codeAvailable: CodeAvailable(), obsidian: ObsidianToolsFor(_vaultTools, effective), obsidianEnabled: ObsidianOffered(effective), sql: _sqlTools, sqlEnabled: SqlOffered(effective, _sql), comfy: _comfyTools, comfyEnabled: ComfyOffered(effective, _comfy), advisor: _advisorTools, advisorEnabled: effective.ClaudeAdvisor, homeAssistant: _haTools, homeAssistantEnabled: HomeAssistantOffered(effective), print: _printTools, printEnabled: PrintOffered(effective), oracle: _oracleTools, oracleEnabled: OracleOffered(effective, _oracle), mysql: _mysqlTools, mysqlEnabled: MySqlOffered(effective, _mysql), unc: UncToolsFor(_uncTools, effective, _unc.Catalog(), effective.FileTools), uncEnabled: UncOffered(effective, _unc));
+        var groups = SystemPromptSummary.ToolGroups(_clockTools, _timerTools, _fileTools, _memoryTools, effective.Memory, effective.LlmOfferTools, _webTools, effective.WebTools, effective.FileTools, _askTools, effective.AskUser, _pane.Enabled, _skillTools, effective.AgentSkills, _sessionTools, effective.SessionTool, disabled, skillInstalled: Catalog(effective).Count > 0, git: _gitTools, gitEnabled: effective.GitLibTools, shell: _shellTools, shellEnabled: ShellOffered(effective), codeAvailable: CodeAvailable(), obsidian: ObsidianToolsFor(_vaultTools, effective), obsidianEnabled: ObsidianOffered(effective), sql: _sqlTools, sqlEnabled: SqlOffered(effective, _sql), comfy: _comfyTools, comfyEnabled: ComfyOffered(effective, _comfy), advisor: _advisorTools, advisorEnabled: effective.ClaudeAdvisor, homeAssistant: _haTools, homeAssistantEnabled: HomeAssistantOffered(effective), print: _printTools, printEnabled: PrintOffered(effective), oracle: _oracleTools, oracleEnabled: OracleOffered(effective, _oracle), mysql: _mysqlTools, mysqlEnabled: MySqlOffered(effective, _mysql), unc: UncToolsFor(_uncTools, effective, _unc.Catalog(), effective.FileTools), uncEnabled: UncOffered(effective, _unc));
         return new ToolsFacts(groups, effective.LlmOfferTools, disabled);
     }
 
@@ -3875,8 +3874,8 @@ internal sealed partial class ChatScreen
     /// The file tools over the working directory, offered on every turn (headless too: they need
     /// no console). <paramref name="isDefault"/> says whether the root in force is the profile's
     /// own folder; <paramref name="openFile"/> is the shell's "open with" for <c>open</c>;
-    /// <paramref name="effective"/> is where the read and edit tools read the Files-tab switches
-    /// (<c>File safe edits</c>) and <c>view_image</c> its cap (<c>File view image max (per call)</c>) at every call.
+    /// <paramref name="effective"/> is where <c>view_image</c> reads its cap (<c>File view image max (per call)</c>) at every
+    /// call. Fourteen since 2026-10-01: <c>restore</c> went with File safe edits (the user's call).
     /// </summary>
     public static IReadOnlyList<AIFunction> FileTools(WorkingDirectory files, Func<bool> isDefault, Action<string> openFile, Func<AppSettingsData> effective) => new AIFunction[]
     {
@@ -3885,13 +3884,12 @@ internal sealed partial class ChatScreen
         new FileInfoTool(files),
         new ReadFileTool(files),
         new ViewImageTool(files, effective),
-        new WriteFileTool(files, effective),
-        new PatchFileTool(files, effective),
+        new WriteFileTool(files),
+        new PatchFileTool(files),
         new CreateDirectoryTool(files),
-        new MoveTool(files, effective),
-        new CopyTool(files, effective),
-        new DeleteTool(files, effective),
-        new RestoreTool(files, effective),
+        new MoveTool(files),
+        new CopyTool(files),
+        new DeleteTool(files),
         new ZipTool(files),
         new UnzipTool(files),
         new OpenTool(files, openFile),
@@ -3921,19 +3919,6 @@ internal sealed partial class ChatScreen
     {
         ArgumentNullException.ThrowIfNull(webTools);
         return filesEnabled || !webTools.Any(t => t is DownloadFileTool) ? webTools : webTools.Where(t => t is not DownloadFileTool).ToList();
-    }
-
-    /// <summary>
-    /// <paramref name="fileTools"/> as a turn offers them: whole with <c>File safe edits</c> on, less
-    /// <see cref="RestoreTool"/> with it off (later still on 2026-09-20, the user's ask) — nothing lands in
-    /// <c>.trash</c> then, so the model gets no tool that reaches it and no sentence naming it
-    /// (<see cref="Assistant.FileRuleDeleteInPlace"/>, the five descriptions). The <see cref="WebToolsFor"/>
-    /// shape: the same list itself when nothing is dropped. Pure.
-    /// </summary>
-    public static IReadOnlyList<AIFunction> FileToolsFor(IReadOnlyList<AIFunction> fileTools, bool safeEdits)
-    {
-        ArgumentNullException.ThrowIfNull(fileTools);
-        return safeEdits || !fileTools.Any(t => t is RestoreTool) ? fileTools : fileTools.Where(t => t is not RestoreTool).ToList();
     }
 
     /// <summary>
@@ -4322,7 +4307,6 @@ internal sealed partial class ChatScreen
         MoveTool.ToolName,
         CopyTool.ToolName,
         DeleteTool.ToolName,
-        RestoreTool.ToolName,
         ZipTool.ToolName,
         UnzipTool.ToolName,
         OpenTool.ToolName,
@@ -4397,18 +4381,14 @@ internal sealed partial class ChatScreen
     /// (a call answers <c>Error: unknown tool</c>). The MCP tools (<paramref name="mcpTools"/>, 2026-09-20: every connected
     /// server's, prefixed <c>&lt;server&gt;__&lt;tool&gt;</c>) go after the session tool and before the question tool while
     /// <paramref name="mcpEnabled"/> (the setting <c>MCP servers</c>) says so, the <c>/tools</c> list dropping names from them
-    /// as from any group, with <see cref="Assistant.McpRule"/> ending the default rules; no opening call. <paramref name="safeEdits"/>
-    /// (the setting <c>File safe edits</c>, 2026-09-20) picks the file rule's <c>delete</c> clause: into <c>.trash</c>, or
-    /// <see cref="Assistant.FileRuleDeleteInPlace"/> while it is off and <c>delete</c> is offered — and, later still that day,
-    /// drops <c>restore</c> from the file list (<see cref="FileToolsFor"/>) ahead of the group decision, so the model never
-    /// hears of the trash while the setting is off. The timer sentence
+    /// as from any group, with <see cref="Assistant.McpRule"/> ending the default rules; no opening call. The timer sentence
     /// (<see cref="Assistant.TimerRule"/>, 2026-09-20) rides only while a timer tool is among <paramref name="standingTools"/>:
     /// headless passes the clock alone (nothing could ring the alert), and the pane loses the three on <c>/tools</c>. With the shell offered,
     /// <c>run_command</c> is told the turn's tool names (<see cref="RunCommandTool.BeginTurn"/>, 2026-09-26) and, with <paramref name="shellNative"/>
     /// (the setting <c>Shell prefer native tools</c>), the rules gain <see cref="Assistant.ShellNativeRule"/> after the shell sentence. <paramref name="sampling"/>
     /// (2026-09-28, the setting <c>LLM sampling</c>, resolved for the connected model) replaces the assistant's when given. Shared with headless.
     /// </summary>
-    public static void PrepareTurn(Assistant assistant, MemoryStore memory, IReadOnlyList<AIFunction> memoryTools, IReadOnlyList<AIFunction> standingTools, PersonaFile persona, OperataFile operata, VocaliaFile vocalia, bool memoryEnabled, bool speechOutput, int maxToolIterations = Assistant.DefaultMaxToolIterations, bool toolsEnabled = true, IReadOnlyList<AIFunction>? webTools = null, bool webEnabled = false, Assistant.TurnContextGuard? contextGuard = null, IReadOnlyList<AIFunction>? fileTools = null, bool filesEnabled = false, IReadOnlyList<AIFunction>? askTools = null, SkillsForTurn? skills = null, bool markdown = false, IReadOnlyList<AIFunction>? sessionTools = null, bool sessionsEnabled = false, IReadOnlySet<string>? disabledTools = null, IReadOnlyList<AIFunction>? mcpTools = null, bool mcpEnabled = false, bool safeEdits = true, IReadOnlyList<AIFunction>? gitTools = null, bool gitEnabled = false, IReadOnlyList<AIFunction>? shellTools = null, bool shellEnabled = false, ProcessRegistry? processes = null, bool shellBridge = false, bool shellPolice = true, IReadOnlyList<AIFunction>? obsidianTools = null, bool obsidianEnabled = false, IReadOnlyList<AIFunction>? sqlTools = null, bool sqlEnabled = false, IReadOnlyList<AIFunction>? comfyTools = null, bool comfyEnabled = false, bool shellNative = false, PlanTurn? plan = null, IReadOnlyList<AIFunction>? advisorTools = null, bool advisorEnabled = false, bool preserveThinking = false, LlmSampling? sampling = null, IReadOnlyList<AIFunction>? homeTools = null, bool homeEnabled = false, IReadOnlyList<AIFunction>? printTools = null, bool printEnabled = false, IReadOnlyList<AIFunction>? oracleTools = null, bool oracleEnabled = false, IReadOnlyList<AIFunction>? mysqlTools = null, bool mysqlEnabled = false, IReadOnlyList<AIFunction>? uncTools = null, bool uncEnabled = false)
+    public static void PrepareTurn(Assistant assistant, MemoryStore memory, IReadOnlyList<AIFunction> memoryTools, IReadOnlyList<AIFunction> standingTools, PersonaFile persona, OperataFile operata, VocaliaFile vocalia, bool memoryEnabled, bool speechOutput, int maxToolIterations = Assistant.DefaultMaxToolIterations, bool toolsEnabled = true, IReadOnlyList<AIFunction>? webTools = null, bool webEnabled = false, Assistant.TurnContextGuard? contextGuard = null, IReadOnlyList<AIFunction>? fileTools = null, bool filesEnabled = false, IReadOnlyList<AIFunction>? askTools = null, SkillsForTurn? skills = null, bool markdown = false, IReadOnlyList<AIFunction>? sessionTools = null, bool sessionsEnabled = false, IReadOnlySet<string>? disabledTools = null, IReadOnlyList<AIFunction>? mcpTools = null, bool mcpEnabled = false, IReadOnlyList<AIFunction>? gitTools = null, bool gitEnabled = false, IReadOnlyList<AIFunction>? shellTools = null, bool shellEnabled = false, ProcessRegistry? processes = null, bool shellBridge = false, bool shellPolice = true, IReadOnlyList<AIFunction>? obsidianTools = null, bool obsidianEnabled = false, IReadOnlyList<AIFunction>? sqlTools = null, bool sqlEnabled = false, IReadOnlyList<AIFunction>? comfyTools = null, bool comfyEnabled = false, bool shellNative = false, PlanTurn? plan = null, IReadOnlyList<AIFunction>? advisorTools = null, bool advisorEnabled = false, bool preserveThinking = false, LlmSampling? sampling = null, IReadOnlyList<AIFunction>? homeTools = null, bool homeEnabled = false, IReadOnlyList<AIFunction>? printTools = null, bool printEnabled = false, IReadOnlyList<AIFunction>? oracleTools = null, bool oracleEnabled = false, IReadOnlyList<AIFunction>? mysqlTools = null, bool mysqlEnabled = false, IReadOnlyList<AIFunction>? uncTools = null, bool uncEnabled = false)
     {
         ArgumentNullException.ThrowIfNull(assistant);
         ArgumentNullException.ThrowIfNull(memory);
@@ -4476,8 +4456,6 @@ internal sealed partial class ChatScreen
             advisorTools = advisorTools is null ? null : Without(advisorTools, disabledTools);
         }
 
-        // restore rides only with File safe edits on (later still on 2026-09-20): cut ahead of the group decision, so restore alone left on reads as the group emptied.
-        fileTools = fileTools is null ? null : FileToolsFor(fileTools, safeEdits);
         bool files = filesEnabled && fileTools is { Count: > 0 };
         // The timer sentence rides only with a timer tool (2026-09-20): headless has none, the pane loses all three on /tools.
         bool timers = standingTools.Any(t => t is StartTimerTool or StopTimerTool or ListTimersTool);
@@ -4485,9 +4463,8 @@ internal sealed partial class ChatScreen
         webTools = webTools is null ? null : WebToolsFor(webTools, files);
         bool web = webEnabled && webTools is { Count: > 0 };
         bool download = web && webTools!.Any(t => t is DownloadFileTool);
-        // The delete/restore clause of the file rule rides only while delete is offered (2026-09-20; off in a fresh profile until later on 2026-09-21).
+        // The delete clause of the file rule rides only while delete is offered (2026-09-20; off in a fresh profile until later on 2026-09-21).
         bool delete = files && fileTools!.Any(t => t is DeleteTool);
-        // … and says what delete does: into .trash, or gone for good while File safe edits is off (2026-09-20, safeEdits).
         // The rule quotes the caps the offered tool itself reads, so the two never disagree.
         AskLimits? ask = askTools is { Count: > 0 } ? askTools.OfType<AskUserTool>().FirstOrDefault()?.Limits ?? AskLimits.Default : null;
         IReadOnlyList<AIFunction> offered = files ? [.. standingTools, .. fileTools!] : standingTools;
@@ -4593,7 +4570,7 @@ internal sealed partial class ChatScreen
         assistant.OpeningCalls = opening;
         // The notified exits since the last turn ride in as seeded polls (2026-09-21), on every turn, while process is offered.
         assistant.PendingCalls = processes is null ? [] : PendingProcessPolls(processes, assistant.Tools);
-        assistant.History.SystemPrompt = Assistant.SystemPrompt(speechOutput, memoryEnabled ? memory.Snapshot() : null, persona.Read(), operata.Read(), vocalia.Read(), web: web, files: files, ask: ask, project: project, skills: catalog, markdown: markdown, sessions: sessions, download: download, recall: recall is not null, delete: delete, mcp: mcp, safeEdits: safeEdits, timers: timers, git: git, shell: shell, bridge: bridge, police: police, obsidian: obsidian, obsidianDelete: obsidianDelete, sql: sql, native: native, plan: plan?.Directive, advisor: advisor, homeAssistant: home, oracle: oracle, mysql: mysql, unc: unc, uncFetch: uncFetch, uncWrite: uncWrite);
+        assistant.History.SystemPrompt = Assistant.SystemPrompt(speechOutput, memoryEnabled ? memory.Snapshot() : null, persona.Read(), operata.Read(), vocalia.Read(), web: web, files: files, ask: ask, project: project, skills: catalog, markdown: markdown, sessions: sessions, download: download, recall: recall is not null, delete: delete, mcp: mcp, timers: timers, git: git, shell: shell, bridge: bridge, police: police, obsidian: obsidian, obsidianDelete: obsidianDelete, sql: sql, native: native, plan: plan?.Directive, advisor: advisor, homeAssistant: home, oracle: oracle, mysql: mysql, unc: unc, uncFetch: uncFetch, uncWrite: uncWrite);
     }
 
     /// <summary>
@@ -6005,8 +5982,8 @@ internal sealed partial class ChatScreen
     /// stops at <c>File /tree max length</c> entries and a file's size rides along under <c>File /tree show sizes</c>.
     /// What it lists follows <c>File browser/tree mode</c>, as the folder browsers do (2026-09-23, the user's call):
     /// <c>default</c> leaves out hidden and system entries and every dot-file and dot-folder, <c>show-hidden</c> lists
-    /// them all. A <c>.git</c> folder at any depth is left out either way since 2026-09-30 (the user's ask: as <c>.trash</c>
-    /// is), unless it is the folder asked for. A path outside the root, missing or a file is the usual file error.
+    /// them all. A <c>.git</c> folder at any depth is left out either way since 2026-09-30 (the user's ask: as the
+    /// root's <c>.trash</c> was until 2026-10-01), unless it is the folder asked for. A path outside the root, missing or a file is the usual file error.
     /// </summary>
     private void HandleTree(string args) => WriteTree(TreeLines(args, out string? error), error);
 
@@ -6815,7 +6792,7 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// <c>/comfy purge</c> (later still on 2026-09-24, the user's ask): everything in the ComfyUI output folder — the pictures,
-    /// the <c>.pasted</c> inputs, anything else put there — deleted for good, the folder kept; shaped like <c>/emptytrash</c>
+    /// the <c>.pasted</c> inputs, anything else put there — deleted for good, the folder kept; shaped like <c>/emptytrash</c> was
     /// (the count, one typed confirmation, then <see cref="WorkingDirectory.PurgeFolder"/>). An output folder that is the working
     /// directory itself is refused rather than asked about. A paste saved before is written again at its next use.
     /// </summary>
@@ -6908,75 +6885,19 @@ internal sealed partial class ChatScreen
         }
     }
 
-    // ── /emptytrash ─────────────────────────────────────────────────────────
-
-    /// <summary>The confirmation line before an <c>/emptytrash</c>: the folder and what is in it; <c>y</c> or <c>yes</c> empties, anything else keeps. Pinned.</summary>
-    public static string EmptyTrashPrompt(string trashPath, int files, int folders, long bytes, bool truncated) =>
-        $"{TrashGlyph}Empty {trashPath} — {TrashContents(files, folders, bytes)}"
-        + (truncated ? $", counted the first {WorkingDirectory.MaxInfoEntries.ToString("N0", CultureInfo.InvariantCulture)} entries only" : "")
-        + "?";
-
-    public static string TrashAlreadyEmptyNotice(string trashPath) => $"({TrashGlyph}nothing in {trashPath})";
+    // ── the purge lines' glyph ──────────────────────────────────────────────
 
     /// <summary>
-    /// What the emptied-trash line opens with, inside its parentheses (2026-09-18, the reflection lines' shape,
-    /// <see cref="LearnGlyph"/>): the wastebasket with its variation selector — U+1F5D1 alone is text-presentation,
-    /// one narrow monochrome cell in Windows Terminal; U+FE0F makes it the two-cell colour emoji, and
-    /// <see cref="TextCells"/> counts the selector as zero so the scrollback wraps as the terminal draws. Pinned.
+    /// What a purge line opens with, inside its parentheses (2026-09-18, the reflection lines' shape,
+    /// <see cref="LearnGlyph"/>; <c>/emptytrash</c>'s until 2026-10-01, when it went with File safe edits, and
+    /// <c>/sessions purge</c>'s and <c>/comfy purge</c>'s since): the wastebasket with its variation selector — U+1F5D1
+    /// alone is text-presentation, one narrow monochrome cell in Windows Terminal; U+FE0F makes it the two-cell colour
+    /// emoji, and <see cref="TextCells"/> counts the selector as zero so the scrollback wraps as the terminal draws. Pinned.
     /// </summary>
     public const string TrashGlyph = "🗑️ ";
 
-    public static string TrashEmptiedNotice(int files, int folders, long bytes) => $"({TrashGlyph}emptied the trash: {TrashContents(files, folders, bytes)})";
-
-    public static string EmptyTrashFailedError(string detail) => $"Could not empty the trash: {detail}";
-
     private static string TrashContents(int files, int folders, long bytes) =>
         FileText.Count(files, "file", "files") + ", " + FileText.Count(folders, "folder", "folders") + ", " + FileText.Size(bytes);
-
-    /// <summary>
-    /// <c>/emptytrash</c>: what the trash holds (the same walk <c>info</c> uses), one typed
-    /// confirmation on the input line (ESC or anything but <c>y</c> keeps), then everything under
-    /// <c>.trash</c> is deleted for good and the folder kept. An empty or absent trash says so and
-    /// asks nothing. Runs only from the input line: no turn in flight, the microphone closed.
-    /// </summary>
-    private async Task EmptyTrashAsync(CancellationToken cancellationToken)
-    {
-        string trashPath = _files.TrashPath;
-        var info = _files.Info(WorkingDirectory.TrashFolderName);
-        if (info.Outcome == FileOutcome.Missing || (info.Outcome == FileOutcome.Ok && info.Files == 0 && info.Folders == 0))
-        {
-            _flow.Notice(TrashAlreadyEmptyNotice(trashPath));
-            return;
-        }
-
-        if (info.Outcome != FileOutcome.Ok)
-        {
-            _flow.Error(EmptyTrashFailedError(info.Detail));
-            return;
-        }
-
-        if (!await ConfirmAsync(EmptyTrashPrompt(trashPath, info.Files, info.Folders, info.Bytes, info.Truncated), cancellationToken).ConfigureAwait(false))
-        {
-            _flow.Notice(KeptNotice);
-            return;
-        }
-
-        // The deletion and its line on the turn task when the question was asked mid-turn.
-        RunOrPost(() =>
-        {
-            var result = _files.EmptyTrash();
-            if (result.Outcome == FileOutcome.Ok)
-            {
-                _transcript.Notice(TrashEmptiedNotice(result.Files, result.Folders, result.Bytes));
-            }
-            else
-            {
-                _transcript.Error(EmptyTrashFailedError(result.Detail));
-            }
-
-            DrainDiagnostics();
-        });
-    }
 
     // ── /window ─────────────────────────────────────────────────────────────
 
@@ -9571,10 +9492,6 @@ internal sealed partial class ChatScreen
                 await HandleDraftAsync(cancellationToken).ConfigureAwait(false);
                 return false;
 
-            case SlashCommand.EmptyTrash:
-                await EmptyTrashAsync(cancellationToken).ConfigureAwait(false);
-                return false;
-
             case SlashCommand.CmdClear:
                 await CmdClearAsync(cancellationToken).ConfigureAwait(false);
                 return false;
@@ -10244,7 +10161,7 @@ internal sealed partial class ChatScreen
     /// [overwrite]</c>, the copy the standalone <c>/memcopy</c> did, confirmation and all; <c>edit</c>
     /// (2026-09-23), <c>memory.json</c> in the editor; anything else <see cref="MemoryUsageError"/>. The one method both dispatches call — the idle line's
     /// and the mid-turn pane phase's — so every word behaves the same under a reply; the error goes
-    /// through <see cref="_flow"/> for that reason, as <see cref="EmptyTrashAsync"/>'s does.
+    /// through <see cref="_flow"/> for that reason.
     /// </summary>
     private async Task HandleMemoryAsync(string args, CancellationToken cancellationToken)
     {
@@ -12165,7 +12082,7 @@ internal sealed partial class ChatScreen
         if (bot is null)
         {
             _interpreters.Refresh();
-            PrepareTurn(assistant, _memory, _memoryTools, [.. _clockTools, .. _timerTools], _persona, _operata, _vocalia, effective.Memory, speaker is not null, effective.LlmMaxToolIterations, effective.LlmOfferTools, _webTools, effective.WebTools, ContextGuardFor(effective, _session.ContextLength), _fileTools, effective.FileTools, _pane.Enabled && effective.AskUser ? _askTools : null, SkillsFor(effective), markdown, _sessionTools, effective.SessionTool, ToolsText.DisabledSet(effective.ToolsDisabled), _mcp.Tools, effective.McpServers, effective.FileSafeEdits, _gitTools, effective.GitLibTools, _shellTools, ShellOffered(effective), _processes, effective.ShellToolBridge, effective.ShellPoliceOutsidePaths, ObsidianToolsFor(_vaultTools, effective), ObsidianOffered(effective), _sqlTools, SqlOffered(effective, _sql), _comfyTools, ComfyOffered(effective, _comfy), effective.ShellPreferNative, _plan.Turn(_presentPlan), _advisorTools, effective.ClaudeAdvisor, effective.LlmPreserveThinking, LlmSampling.Resolve(effective, _session.Endpoint?.ModelId), _haTools, HomeAssistantOffered(effective), _printTools, PrintOffered(effective), _oracleTools, OracleOffered(effective, _oracle), _mysqlTools, MySqlOffered(effective, _mysql), UncToolsFor(_uncTools, effective, _unc.Catalog(), effective.FileTools), UncOffered(effective, _unc));
+            PrepareTurn(assistant, _memory, _memoryTools, [.. _clockTools, .. _timerTools], _persona, _operata, _vocalia, effective.Memory, speaker is not null, effective.LlmMaxToolIterations, effective.LlmOfferTools, _webTools, effective.WebTools, ContextGuardFor(effective, _session.ContextLength), _fileTools, effective.FileTools, _pane.Enabled && effective.AskUser ? _askTools : null, SkillsFor(effective), markdown, _sessionTools, effective.SessionTool, ToolsText.DisabledSet(effective.ToolsDisabled), _mcp.Tools, effective.McpServers, _gitTools, effective.GitLibTools, _shellTools, ShellOffered(effective), _processes, effective.ShellToolBridge, effective.ShellPoliceOutsidePaths, ObsidianToolsFor(_vaultTools, effective), ObsidianOffered(effective), _sqlTools, SqlOffered(effective, _sql), _comfyTools, ComfyOffered(effective, _comfy), effective.ShellPreferNative, _plan.Turn(_presentPlan), _advisorTools, effective.ClaudeAdvisor, effective.LlmPreserveThinking, LlmSampling.Resolve(effective, _session.Endpoint?.ModelId), _haTools, HomeAssistantOffered(effective), _printTools, PrintOffered(effective), _oracleTools, OracleOffered(effective, _oracle), _mysqlTools, MySqlOffered(effective, _mysql), UncToolsFor(_uncTools, effective, _unc.Catalog(), effective.FileTools), UncOffered(effective, _unc));
 
             // The Claude CLI server (2026-09-30) keeps the conversation itself: the turn names its session, and no guard
             // measures or prunes a history the CLI does not read (it compacts its own).
