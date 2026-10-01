@@ -53,6 +53,15 @@ public static class Keys
     /// <summary>Ctrl+E as the console delivers it: the ENQ character with the key and Control (<c>/explore</c>, <see cref="ShortcutLine"/>).</summary>
     public static ConsoleKeyInfo CtrlE => new('\x05', ConsoleKey.E, false, false, true);
 
+    /// <summary>Ctrl+H as the console delivers it: the BS character with the H key (never Backspace) and Control (<c>/help</c>).</summary>
+    public static ConsoleKeyInfo CtrlH => new('\x08', ConsoleKey.H, false, false, true);
+
+    /// <summary>Ctrl+P as the console delivers it: the DLE character with the key and Control (<c>/profile</c>).</summary>
+    public static ConsoleKeyInfo CtrlP => new('\x10', ConsoleKey.P, false, false, true);
+
+    /// <summary>Ctrl+U as the console delivers it: the NAK character with the key and Control (<c>/usage</c>).</summary>
+    public static ConsoleKeyInfo CtrlU => new('\x15', ConsoleKey.U, false, false, true);
+
     /// <summary>Ctrl+M as the console delivers it: the CR character with the M key (never Enter) and Control (<c>/model</c>).</summary>
     public static ConsoleKeyInfo CtrlM => new('\r', ConsoleKey.M, false, false, true);
 
@@ -76,8 +85,7 @@ public static class Keys
     /// <c>/tb</c> at once, <c>/profile</c> left for the idle line. Their control characters (DC4, VT, DLE, EM, BEL, ENQ, CR,
     /// EOT, FF, SI, STX) count as no character, as ETX does for C; an AltGr key that types one (€ on AltGr+E, ł, ó) is still
     /// that character.
-    /// Ctrl+Alt+H <c>/help</c> came on 2026-10-01 (the user's ask), its BS (<c>'\x08'</c>) no character as the others' are;
-    /// Backspace is its own key, never <see cref="ConsoleKey.H"/>, so the two do not meet.
+    /// Ctrl+Alt+H <c>/help</c> came on 2026-10-01 (the user's ask), its BS (<c>'\x08'</c>) no character as the others' are.
     /// In a pane too since 2026-10-01 (the user's ask: "operate the same there as everywhere"): every pane reader hands the
     /// chord to <see cref="ScreenPane.Chord"/>, which closes the stack for the screen to run it, or toggles the bar in place
     /// (<c>/perf</c>, <c>/tb</c>), or ignores it under a tool's question.
@@ -88,6 +96,9 @@ public static class Keys
     /// three pickers, in the same shape: their CR, DC2 and DC3 count as no character. Ctrl+M's CR rides on
     /// <see cref="ConsoleKey.M"/>, never on <see cref="ConsoleKey.Enter"/> (the console reports the key, as for Ctrl+Alt+M), so it
     /// never sends the line; Ctrl+Alt+M and Ctrl+Alt+S are still <c>/memory</c> and <c>/splash</c>.
+    /// Later still on 2026-10-01 (the user's ask) <c>/help</c>, <c>/profile</c> and <c>/usage</c> moved to plain Ctrl+H, P and U,
+    /// and Ctrl+Alt+H, P and G went: their BS, DLE and NAK count as no character. Ctrl+H's BS rides on <see cref="ConsoleKey.H"/>;
+    /// Backspace is its own key, never <see cref="ConsoleKey.H"/>, so the two do not meet.
     /// </summary>
     public static string? ShortcutLine(ConsoleKeyInfo key)
     {
@@ -97,9 +108,12 @@ public static class Keys
             return (key.Key, key.KeyChar) switch
             {
                 (ConsoleKey.E, '\0' or '\x05') => "/explore",
+                (ConsoleKey.H, '\0' or '\x08') => "/help",
                 (ConsoleKey.M, '\0' or '\r') => "/model",
+                (ConsoleKey.P, '\0' or '\x10') => "/profile",
                 (ConsoleKey.R, '\0' or '\x12') => "/reasoning",
                 (ConsoleKey.S, '\0' or '\x13') => "/server",
+                (ConsoleKey.U, '\0' or '\x15') => "/usage",
                 _ => null,
             };
         }
@@ -116,10 +130,7 @@ public static class Keys
             (ConsoleKey.S, '\0' or '\x13') => "/splash",
             (ConsoleKey.T, '\0' or '\x14') => "/tools",
             (ConsoleKey.K, '\0' or '\x0b') => "/skills",
-            (ConsoleKey.P, '\0' or '\x10') => "/profile",
             (ConsoleKey.Y, '\0' or '\x19') => "/sys",
-            (ConsoleKey.G, '\0' or '\x07') => "/usage",
-            (ConsoleKey.H, '\0' or '\x08') => "/help",
             (ConsoleKey.E, '\0' or '\x05') => "/perf",
             (ConsoleKey.M, '\0' or '\r') => "/memory",
             (ConsoleKey.D, '\0' or '\x04') => "/mcp",

@@ -1659,7 +1659,8 @@ internal sealed partial class ChatScreen
     /// Ctrl+E (<c>/explore</c>) later still that day under Ctrl+C, the user's place and wording: A, C, E, O, X. The kill
     /// switch's row says "(press twice)" since later that day, when it came to want two presses (<see cref="KillSwitchConfirmWindow"/>).
     /// Ctrl+M, R and S (<c>/model</c>, <c>/reasoning</c>, <c>/server</c>) later still, the user's ask and wording, each in its
-    /// letter's place: A, C, E, M, O, R, S, X.
+    /// letter's place: A, C, E, M, O, R, S, X. Then <c>/help</c>, <c>/profile</c> and <c>/usage</c> moved from Ctrl+Alt+H, P and G
+    /// to plain Ctrl+H, P and U (the user's ask), their rows' wording kept: A, C, E, H, M, O, P, R, S, U, X.
     /// </summary>
     public static (string Key, string Meaning)[] KeyRows(bool voiceOn, ConsoleKey pushToTalk, bool wakeReady, string wakePhrase)
     {
@@ -1690,23 +1691,23 @@ internal sealed partial class ChatScreen
         rows.Add(("Ctrl+A", "select all text on the line"));
         rows.Add(("Ctrl+C", "copy the selected text · stop the speech · cancel the reply · twice to exit"));
         rows.Add(("Ctrl+E", "open the working directory in your file browser (/explore)"));
+        rows.Add(("Ctrl+H", "open help (/help)"));
         rows.Add(("Ctrl+M", "open the model picker (/model)"));
         rows.Add(("Ctrl+O", "expand or collapse the tool calls, code blocks and thinking (or click a summary line)"));
+        rows.Add(("Ctrl+P", "open the profile pane (/profile)"));
         rows.Add(("Ctrl+R", "open the reasoning picker (/reasoning)"));
         rows.Add(("Ctrl+S", "open the server picker (/server)"));
+        rows.Add(("Ctrl+U", "open the usage pane (/usage)"));
         rows.Add(("Ctrl+X", "cut the selected text"));
         rows.Add(("Ctrl+Alt+B", "show or hide the toolbar (/tb)"));
         rows.Add(("Ctrl+Alt+C", "start a new conversation and clear the screen (/clear)"));
         rows.Add(("Ctrl+Alt+D", "open the MCP pane (/mcp)"));
         rows.Add(("Ctrl+Alt+E", "show or hide the performance bar (/perf)"));
-        rows.Add(("Ctrl+Alt+G", "open the usage pane (/usage)"));
-        rows.Add(("Ctrl+Alt+H", "open help (/help)"));
         rows.Add(("Ctrl+Alt+K", "open the skills pane (/skills)"));
         rows.Add(("Ctrl+Alt+L", "open the allowed commands list (/cmdlist)"));
         rows.Add(("Ctrl+Alt+M", "open the memory pane (/memory)"));
         rows.Add(("Ctrl+Alt+N", "start a new conversation but do not clear the screen (/new)"));
         rows.Add(("Ctrl+Alt+O", "open the shell police setting (/police)"));
-        rows.Add(("Ctrl+Alt+P", "open the profile pane (/profile)"));
         rows.Add(("Ctrl+Alt+S", "start a new conversation and show the splash screen (/splash)"));
         rows.Add(("Ctrl+Alt+T", "open the tools pane (/tools)"));
         rows.Add(("Ctrl+Alt+X", "kill switch to immediately unload an embedded model (press twice)"));

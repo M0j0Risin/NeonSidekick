@@ -9954,16 +9954,22 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(("Ctrl+Home", "scroll to top of the chat pane"), rows[^26]);
         Assert.Equal(("Ctrl+End", "scroll to bottom of the chat pane"), rows[^25]);
         // The Ctrl+letter rows A to Z by the letter since 2026-10-01 (the user's ask).
-        Assert.Equal(("Ctrl+A", "select all text on the line"), rows[^24]);
-        Assert.Equal(("Ctrl+C", "copy the selected text · stop the speech · cancel the reply · twice to exit"), rows[^23]);
-        Assert.Equal(("Ctrl+E", "open the working directory in your file browser (/explore)"), rows[^22]);   // later on 2026-10-01, the user's place and wording
-        Assert.Equal(("Ctrl+M", "open the model picker (/model)"), rows[^21]);   // later still on 2026-10-01, the user's wording
-        Assert.Equal(("Ctrl+O", "expand or collapse the tool calls, code blocks and thinking (or click a summary line)"), rows[^20]);   // 2026-09-22
-        Assert.Equal(("Ctrl+R", "open the reasoning picker (/reasoning)"), rows[^19]);
-        Assert.Equal(("Ctrl+S", "open the server picker (/server)"), rows[^18]);
-        Assert.Equal(("Ctrl+X", "cut the selected text"), rows[^17]);   // 2026-09-25
+        Assert.Equal(
+        [
+            ("Ctrl+A", "select all text on the line"),
+            ("Ctrl+C", "copy the selected text · stop the speech · cancel the reply · twice to exit"),
+            ("Ctrl+E", "open the working directory in your file browser (/explore)"),   // later on 2026-10-01, the user's place and wording
+            ("Ctrl+H", "open help (/help)"),   // from Ctrl+Alt+H, later still on 2026-10-01
+            ("Ctrl+M", "open the model picker (/model)"),   // later still on 2026-10-01, the user's wording
+            ("Ctrl+O", "expand or collapse the tool calls, code blocks and thinking (or click a summary line)"),   // 2026-09-22
+            ("Ctrl+P", "open the profile pane (/profile)"),   // from Ctrl+Alt+P
+            ("Ctrl+R", "open the reasoning picker (/reasoning)"),
+            ("Ctrl+S", "open the server picker (/server)"),
+            ("Ctrl+U", "open the usage pane (/usage)"),   // from Ctrl+Alt+G
+            ("Ctrl+X", "cut the selected text"),   // 2026-09-25
+        ], rows[^24..^13]);
         // Each plain-Ctrl chord's row names its command.
-        foreach (var (row, key) in new[] { (rows[^22], Keys.CtrlE), (rows[^21], Keys.CtrlM), (rows[^19], Keys.CtrlR), (rows[^18], Keys.CtrlS) })
+        foreach (var (row, key) in new[] { (rows[^22], Keys.CtrlE), (rows[^21], Keys.CtrlH), (rows[^20], Keys.CtrlM), (rows[^18], Keys.CtrlP), (rows[^17], Keys.CtrlR), (rows[^16], Keys.CtrlS), (rows[^15], Keys.CtrlU) })
         {
             Assert.Equal(Keys.ShortcutLine(key), row.Meaning[(row.Meaning.LastIndexOf('(') + 1)..^1]);
         }
@@ -9976,21 +9982,18 @@ public partial class ChatScreenTests : IDisposable
             ("Ctrl+Alt+C", "start a new conversation and clear the screen (/clear)"),
             ("Ctrl+Alt+D", "open the MCP pane (/mcp)"),
             ("Ctrl+Alt+E", "show or hide the performance bar (/perf)"),
-            ("Ctrl+Alt+G", "open the usage pane (/usage)"),
-            ("Ctrl+Alt+H", "open help (/help)"),   // 2026-10-01
             ("Ctrl+Alt+K", "open the skills pane (/skills)"),
             ("Ctrl+Alt+L", "open the allowed commands list (/cmdlist)"),
             ("Ctrl+Alt+M", "open the memory pane (/memory)"),
             ("Ctrl+Alt+N", "start a new conversation but do not clear the screen (/new)"),
             ("Ctrl+Alt+O", "open the shell police setting (/police)"),
-            ("Ctrl+Alt+P", "open the profile pane (/profile)"),
             ("Ctrl+Alt+S", "start a new conversation and show the splash screen (/splash)"),
             ("Ctrl+Alt+T", "open the tools pane (/tools)"),
             ("Ctrl+Alt+X", "kill switch to immediately unload an embedded model (press twice)"),   // 2026-10-01, the user's place and wording
             ("Ctrl+Alt+Y", "open the system prompt pane (/sys)"),
-        ], rows[^16..]);
+        ], rows[^13..]);
         // Each row names its chord's command; the kill switch has none (2026-10-01).
-        Assert.All(rows[^16..].Where(row => row.Key != "Ctrl+Alt+X"), row => Assert.Equal(Keys.ShortcutLine(Keys.CtrlAlt(Enum.Parse<ConsoleKey>(row.Key[^1..]))), row.Meaning[(row.Meaning.LastIndexOf('(') + 1)..^1]));
+        Assert.All(rows[^13..].Where(row => row.Key != "Ctrl+Alt+X"), row => Assert.Equal(Keys.ShortcutLine(Keys.CtrlAlt(Enum.Parse<ConsoleKey>(row.Key[^1..]))), row.Meaning[(row.Meaning.LastIndexOf('(') + 1)..^1]));
         Assert.Null(Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.X)));
         Assert.Equal(voiceOn, rows.Any(r => r.Key == "F8"));
         if (voiceOn)
@@ -15038,13 +15041,13 @@ public partial class ChatScreenTests : IDisposable
     }
 
     [Fact]
-    public async Task CtrlAltH_OpensTheHelpPane_AsSlashHelp()
+    public async Task CtrlH_OpensTheHelpPane_AsSlashHelp()
     {
-        // 2026-10-01 (the user's ask): Ctrl+Alt+H is /help, the pane on its first tab.
+        // 2026-10-01 (the user's ask): Ctrl+Alt+H was /help, plain Ctrl+H since later that day; the pane on its first tab.
         _settings.Update(d => { d.TtsOutput = false; d.MenuMaxHeight = "full-screen"; });   // the whole tab (2026-10-01)
         _console.Profile.Height = 112;
         _geometry = new ScreenGeometry(() => null);
-        StepsWhenIdle(Key(Keys.CtrlAlt(ConsoleKey.H)), Key(Keys.Escape), Line("/exit"));
+        StepsWhenIdle(Key(Keys.CtrlH), Key(Keys.Escape), Line("/exit"));
 
         string output = await RunAsync();
 
@@ -15054,13 +15057,48 @@ public partial class ChatScreenTests : IDisposable
     }
 
     [Fact]
-    public async Task MidTurn_CtrlAltG_OpensTheUsagePane_OverTheReply_WhichRunsOn()
+    public async Task CtrlP_OpensTheProfilePane_AsSlashProfile_TheDraftKept()
+    {
+        // Later still on 2026-10-01 (the user's ask): /profile moved from Ctrl+Alt+P to plain Ctrl+P.
+        _settings.Update(d => d.TtsOutput = false);
+        _chat.EnqueueText("one");
+        StepsWhenIdle(
+            input => { input.Push("keep".Select(Keys.Char).ToArray()); input.Push(Keys.CtrlP); },
+            Key(Keys.Escape),
+            Key(Keys.Enter),
+            Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.Contains(SettingsMenu.ProfileTitle, output);
+        Assert.DoesNotContain("› /profile", output);
+        Assert.Equal("keep", UserText(Assert.Single(_chat.Requests)));
+    }
+
+    [Fact]
+    public async Task CtrlAltH_IsRetired_NoHelpPane_TheDraftSentIntact()
+    {
+        // Ctrl+Alt+H, G and P went when their commands moved to plain Ctrl+H, U and P (later still on 2026-10-01, the user's ask).
+        _settings.Update(d => d.TtsOutput = false);
+        _chat.EnqueueText("one");
+        StepsWhenIdle(
+            input => { input.Push("keep".Select(Keys.Char).ToArray()); input.Push(Keys.CtrlAlt(ConsoleKey.H)); input.Push(Keys.Enter); },
+            Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.DoesNotContain(InfoPane.Title + "   Commands (basic)", output);
+        Assert.Equal("keep", UserText(Assert.Single(_chat.Requests)));
+    }
+
+    [Fact]
+    public async Task MidTurn_CtrlU_OpensTheUsagePane_OverTheReply_WhichRunsOn()
     {
         MidTurnFixture(i =>
         {
             if (i == 1)
             {
-                _scripted!.Push(Keys.CtrlAlt(ConsoleKey.G));
+                _scripted!.Push(Keys.CtrlU);
             }
             else if (i == 2)
             {
@@ -15100,14 +15138,14 @@ public partial class ChatScreenTests : IDisposable
     }
 
     [Fact]
-    public async Task CtrlAltH_InTheHelpPane_ClosesIt_ItsOwnChord()
+    public async Task CtrlH_InTheHelpPane_ClosesIt_ItsOwnChord()
     {
         _settings.Update(d => { d.TtsOutput = false; d.MenuMaxHeight = "full-screen"; });   // the whole tab (2026-10-01)
         _console.Profile.Height = 112;
         _geometry = new ScreenGeometry(() => null);
         _chat.EnqueueText("one");
         StepsWhenIdle(
-            input => { PushLine(input, "/help"); input.Push(Keys.CtrlAlt(ConsoleKey.H)); },
+            input => { PushLine(input, "/help"); input.Push(Keys.CtrlH); },
             Line("hi"),                         // the idle line again, not the help pane once more
             Line("/exit"));
 
@@ -15306,7 +15344,7 @@ public partial class ChatScreenTests : IDisposable
         {
             if (i == 1)
             {
-                _scripted!.Push(Keys.CtrlAlt(ConsoleKey.H));
+                _scripted!.Push(Keys.CtrlH);
             }
             else if (i == 2)
             {
@@ -15343,17 +15381,17 @@ public partial class ChatScreenTests : IDisposable
     }
 
     [Fact]
-    public async Task MidTurn_CtrlAltG_InAPaneOverTheReply_SwitchesToTheUsagePane_WhichRunsOn()
+    public async Task MidTurn_CtrlU_InAPaneOverTheReply_SwitchesToTheUsagePane_WhichRunsOn()
     {
         MidTurnFixture(i =>
         {
             if (i == 0)
             {
-                _scripted!.Push(Keys.CtrlAlt(ConsoleKey.H));
+                _scripted!.Push(Keys.CtrlH);
             }
             else if (i == 1)
             {
-                Scripted().Push(Keys.CtrlAlt(ConsoleKey.G));
+                Scripted().Push(Keys.CtrlU);
             }
             else if (i == 2)
             {
@@ -15385,7 +15423,7 @@ public partial class ChatScreenTests : IDisposable
         {
             if (_chat.Requests.Count == 1 && i == 0)
             {
-                _scripted!.Push(Keys.CtrlAlt(ConsoleKey.H));
+                _scripted!.Push(Keys.CtrlH);
             }
 
             await Task.Delay(40, CancellationToken.None);
