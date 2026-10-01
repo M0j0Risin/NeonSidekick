@@ -9932,9 +9932,9 @@ public partial class ChatScreenTests : IDisposable
     }
 
     [Theory]
-    [InlineData(false, false, 31)]
-    [InlineData(true, false, 32)]
-    [InlineData(true, true, 33)]
+    [InlineData(false, false, 32)]
+    [InlineData(true, false, 33)]
+    [InlineData(true, true, 34)]
     public void KeyRows_ListWhatApplies(bool voiceOn, bool wakeReady, int count)
     {
         var rows = ChatScreen.KeyRows(voiceOn, ConsoleKey.F8, wakeReady, "hey neon");
@@ -9950,12 +9950,14 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(("Home / End", "hold Shift to select text to the beginning or end of the line starting from the cursor"), rows[6]);
         Assert.Equal(("PgUp / PgDn", "scroll the transcript a page at a time"), rows[7]);
         Assert.DoesNotContain(rows, r => r.Key is "Mouse" or "Drag" or "Drop" or "@" or "#" or "$");
-        Assert.Equal(("Alt+V", "paste content (text or images)"), rows[^23]);   // ahead of Ctrl+Home since 2026-09-27 (the user's order)
-        Assert.Equal(("Ctrl+Home", "scroll to top of the chat pane"), rows[^22]);
-        Assert.Equal(("Ctrl+End", "scroll to bottom of the chat pane"), rows[^21]);
+        Assert.Equal(("Alt+V", "paste content (text or images)"), rows[^24]);   // ahead of Ctrl+Home since 2026-09-27 (the user's order)
+        Assert.Equal(("Ctrl+Home", "scroll to top of the chat pane"), rows[^23]);
+        Assert.Equal(("Ctrl+End", "scroll to bottom of the chat pane"), rows[^22]);
         // The Ctrl+letter rows A to Z by the letter since 2026-10-01 (the user's ask).
-        Assert.Equal(("Ctrl+A", "select all text on the line"), rows[^20]);
-        Assert.Equal(("Ctrl+C", "copy the selected text · stop the speech · cancel the reply · twice to exit"), rows[^19]);
+        Assert.Equal(("Ctrl+A", "select all text on the line"), rows[^21]);
+        Assert.Equal(("Ctrl+C", "copy the selected text · stop the speech · cancel the reply · twice to exit"), rows[^20]);
+        Assert.Equal(("Ctrl+E", "open the working directory in your file browser (/explore)"), rows[^19]);   // later on 2026-10-01, the user's place and wording
+        Assert.Equal(Keys.ShortcutLine(Keys.CtrlE), rows[^19].Meaning[(rows[^19].Meaning.LastIndexOf('(') + 1)..^1]);
         Assert.Equal(("Ctrl+O", "expand or collapse the tool calls, code blocks and thinking (or click a summary line)"), rows[^18]);   // 2026-09-22
         Assert.Equal(("Ctrl+X", "cut the selected text"), rows[^17]);   // 2026-09-25
         // The command chords after it (2026-09-30, the user's wording), one block A to Z by the letter since the pane chords
@@ -15143,6 +15145,47 @@ public partial class ChatScreenTests : IDisposable
 
         Assert.NotNull(_settings.Current.PerformanceBarItems);
         Assert.Contains(NeonSidekick.Perf.PerfText.BarNotice(_settings.Current.PerformanceBarLook), output);
+        Assert.Empty(_chat.Requests);
+    }
+
+    [Fact]
+    public async Task CtrlE_OpensTheWorkingDirectory_AsSlashExplore_TheDraftKept()
+    {
+        // Later on 2026-10-01 (the user's ask): the plain-Ctrl chord through the dispatch as the bare command, no transcript
+        // row, the draft back on the row after.
+        _settings.Update(d => d.TtsOutput = false);
+        string files = Path.Combine(_settings.ProfileDirectory, WorkingDirectory.DefaultFolderName);
+        _chat.EnqueueText("one");
+        StepsWhenIdle(
+            input => { input.Push("keep".Select(Keys.Char).ToArray()); input.Push(Keys.CtrlE); },
+            Key(Keys.Enter),
+            Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.Equal(new[] { files }, _openedFiles);
+        Assert.Contains("  · " + ChatScreen.ExploreOpenedNotice(""), output);
+        Assert.DoesNotContain("› /explore", output);
+        Assert.Equal("keep", UserText(Assert.Single(_chat.Requests)));
+    }
+
+    [Fact]
+    public async Task CtrlE_InThePane_OpensTheWorkingDirectory_WithThePaneLeftOpen()
+    {
+        // In place, as Ctrl+Alt+E (later on 2026-10-01): the pane stays, so the "x" after the chord is the pane's (nothing),
+        // never a draft on the idle line that the Enter after the ESC would send.
+        _settings.Update(d => { d.TtsOutput = false; d.MenuMaxHeight = "full-screen"; });
+        _console.Profile.Height = 112;
+        _geometry = new ScreenGeometry(() => null);
+        string files = Path.Combine(_settings.ProfileDirectory, WorkingDirectory.DefaultFolderName);
+        StepsWhenIdle(
+            input => { PushLine(input, "/help"); input.Push(Keys.CtrlE, Keys.Char('x'), Keys.Escape, Keys.Enter); },
+            Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.Equal(new[] { files }, _openedFiles);
+        Assert.Contains(ChatScreen.ExploreOpenedNotice(""), output);
         Assert.Empty(_chat.Requests);
     }
 

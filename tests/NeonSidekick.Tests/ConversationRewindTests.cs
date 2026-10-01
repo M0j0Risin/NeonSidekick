@@ -192,14 +192,14 @@ public class ConversationRewindTests : IDisposable
         var turn = new RewindTurn(3, 9, "fix the build\nand the tests", 2);
         var cut = new RewindCut(2, ["write_file", "run_command"], false, false, null, false);
 
-        Assert.Equal("⏪ Rewind", RewindText.Title);
-        Assert.Equal("⏪ Rewind to before #3? 2 messages go.", RewindText.ConfirmPrompt(turn, cut));
-        Assert.Equal("⏪ Rewind to before #3? 1 message goes.", RewindText.ConfirmPrompt(turn, cut with { Turns = 1 }));
+        Assert.Equal("↩️ Rewind", RewindText.Title);
+        Assert.Equal("↩️ Rewind to before #3? 2 messages go.", RewindText.ConfirmPrompt(turn, cut));
+        Assert.Equal("↩️ Rewind to before #3? 1 message goes.", RewindText.ConfirmPrompt(turn, cut with { Turns = 1 }));
         Assert.Equal("Not undone: what write_file, run_command changed stays as it is.", RewindText.ConfirmCaption(cut));
         Assert.Null(RewindText.ConfirmCaption(cut with { ChangingTools = [] }));
-        Assert.Equal("(⏪ rewound 2 messages: \"fix the build …\")", RewindText.RewoundNotice(2, turn.Text));
+        Assert.Equal("(↩️ rewound 2 messages: \"fix the build …\")", RewindText.RewoundNotice(2, turn.Text));
         Assert.Equal("What write_file, run_command changed stays as it is: rewinding does not undo it.", RewindText.ChangesStayWarning(cut.ChangingTools));
-        Assert.Equal("(⏪ nothing to rewind)", RewindText.NothingNotice);
+        Assert.Equal("(↩️ nothing to rewind)", RewindText.NothingNotice);
         Assert.Equal("/rewind takes a number of messages back, from 1 to 4.", RewindText.UsageError(4));
         Assert.Equal("/rewind takes a number of messages back: 1 is the only one.", RewindText.UsageError(1));
         Assert.Equal("Rewound 2 turns (to before turn 3)", RewindText.RewoundLogLine(2, 3));

@@ -64,7 +64,7 @@ public static class RewindText
         return Theme.DimMarkup("#" + turn.Number.ToString(CultureInfo.InvariantCulture)) + "  " + Markup.Escape(FirstLine(turn.Text)) + calls;
     }
 
-    /// <summary>The confirmation's question: <c>⏪ Rewind to before #3? 2 messages go.</c> Pinned.</summary>
+    /// <summary>The confirmation's question: <c>↩️ Rewind to before #3? 2 messages go.</c> Pinned.</summary>
     public static string ConfirmPrompt(RewindTurn turn, RewindCut cut)
     {
         ArgumentNullException.ThrowIfNull(turn);
@@ -82,7 +82,7 @@ public static class RewindText
         return cut.ChangingTools.Count == 0 ? null : "Not undone: what " + string.Join(", ", cut.ChangingTools) + " changed stays as it is.";
     }
 
-    /// <summary>After the rewind: <c>(⏪ rewound 2 messages: "first line…")</c>, the picked message quoted. Pinned.</summary>
+    /// <summary>After the rewind: <c>(↩️ rewound 2 messages: "first line…")</c>, the picked message quoted. Pinned.</summary>
     public static string RewoundNotice(int turns, string line) =>
         "(" + NoticeGlyphs.Rewind + "rewound " + Messages(turns) + ": " + LogText.Quoted(FirstLine(line)) + ")";
 

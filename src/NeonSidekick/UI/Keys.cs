@@ -50,6 +50,9 @@ public static class Keys
     /// <summary>Ctrl+O as the console delivers it: the SI character with the key and Control.</summary>
     public static ConsoleKeyInfo CtrlO => new('\x0f', ConsoleKey.O, false, false, true);
 
+    /// <summary>Ctrl+E as the console delivers it: the ENQ character with the key and Control (<c>/explore</c>, <see cref="ShortcutLine"/>).</summary>
+    public static ConsoleKeyInfo CtrlE => new('\x05', ConsoleKey.E, false, false, true);
+
     /// <summary>
     /// The chat line's command chords (2026-09-30, the user's ask): Ctrl+Alt+C is <c>/clear</c>, Ctrl+Alt+N <c>/new</c> and
     /// Ctrl+Alt+S <c>/splash</c> — at the idle line and under a reply, run as the typed command would be. The user asked for
@@ -69,10 +72,19 @@ public static class Keys
     /// In a pane too since 2026-10-01 (the user's ask: "operate the same there as everywhere"): every pane reader hands the
     /// chord to <see cref="ScreenPane.Chord"/>, which closes the stack for the screen to run it, or toggles the bar in place
     /// (<c>/perf</c>, <c>/tb</c>), or ignores it under a tool's question.
+    /// Ctrl+E <c>/explore</c> came later on 2026-10-01 (the user's ask), the one plain-Ctrl chord: Control held, Alt and Shift
+    /// not, and no character but the console's own ENQ (<c>'\x05'</c>; a test <see cref="Ctrl"/> builds <c>'\0'</c>) — the
+    /// <see cref="IsToolToggle"/> shape, so a typed "E" stays an "E" and Ctrl+Alt+E is still <c>/perf</c>.
     /// </summary>
     public static string? ShortcutLine(ConsoleKeyInfo key)
     {
-        if ((key.Modifiers & (ConsoleModifiers.Control | ConsoleModifiers.Alt | ConsoleModifiers.Shift)) != (ConsoleModifiers.Control | ConsoleModifiers.Alt))
+        var held = key.Modifiers & (ConsoleModifiers.Control | ConsoleModifiers.Alt | ConsoleModifiers.Shift);
+        if (held == ConsoleModifiers.Control)
+        {
+            return (key.Key, key.KeyChar) is (ConsoleKey.E, '\0' or '\x05') ? "/explore" : null;
+        }
+
+        if (held != (ConsoleModifiers.Control | ConsoleModifiers.Alt))
         {
             return null;
         }

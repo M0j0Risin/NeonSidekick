@@ -1376,13 +1376,17 @@ internal sealed partial class ChatScreen
     /// <summary>
     /// A command chord pressed in a pane that leaves it open (2026-10-01, the user's call): Ctrl+Alt+E <c>/perf</c> and Ctrl+Alt+B
     /// <c>/tb</c> toggle their bar as typed — here at the idle line, posted to the turn task under a reply — and the tick
-    /// repaints the pane's new shape. False for every other chord: the pane closes and the screen runs it
+    /// repaints the pane's new shape. Ctrl+E <c>/explore</c> the same (later on 2026-10-01): it opens a window outside the
+    /// terminal, so the pane has no reason to close. False for every other chord: the pane closes and the screen runs it
     /// (<see cref="ScreenPane.Chord"/>, <see cref="OffPaneLine"/>).
     /// </summary>
     private bool ChordInPlace(string line)
     {
         switch (ParseLine(line).Command)
         {
+            case SlashCommand.Explore:
+                RunOrPost(() => HandleExplore(""));
+                return true;
             case SlashCommand.Perf:
                 RunOrPost(() => HandlePerf(""));
                 return true;
@@ -1652,6 +1656,7 @@ internal sealed partial class ChatScreen
     /// The plain Ctrl+letter rows are sorted by the letter too since 2026-10-01 (the user's ask): A, C, O, X.
     /// Ctrl+Alt+H (<c>/help</c>) joined the same day under G, the user's wording; Ctrl+Alt+X later that day under T, the
     /// user's place and wording — the one chord with no command, so its row names none (<see cref="Keys.IsKillSwitch"/>).
+    /// Ctrl+E (<c>/explore</c>) later still that day under Ctrl+C, the user's place and wording: A, C, E, O, X.
     /// </summary>
     public static (string Key, string Meaning)[] KeyRows(bool voiceOn, ConsoleKey pushToTalk, bool wakeReady, string wakePhrase)
     {
@@ -1681,6 +1686,7 @@ internal sealed partial class ChatScreen
         rows.Add(("Ctrl+End", "scroll to bottom of the chat pane"));
         rows.Add(("Ctrl+A", "select all text on the line"));
         rows.Add(("Ctrl+C", "copy the selected text · stop the speech · cancel the reply · twice to exit"));
+        rows.Add(("Ctrl+E", "open the working directory in your file browser (/explore)"));
         rows.Add(("Ctrl+O", "expand or collapse the tool calls, code blocks and thinking (or click a summary line)"));
         rows.Add(("Ctrl+X", "cut the selected text"));
         rows.Add(("Ctrl+Alt+B", "show or hide the toolbar (/tb)"));

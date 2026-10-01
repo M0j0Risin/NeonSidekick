@@ -84,9 +84,27 @@ public class KeysTests
         Assert.Equal(line, Keys.ShortcutLine(new ConsoleKeyInfo(control, key, shift: false, alt: true, control: true)));
         Assert.Contains(line, NeonSidekick.App.SlashCommands.Words);
         Assert.Null(Keys.ShortcutLine(new ConsoleKeyInfo('\0', key, shift: true, alt: true, control: true)));
-        Assert.Null(Keys.ShortcutLine(new ConsoleKeyInfo(control, key, shift: false, alt: false, control: true)));
+        Assert.NotEqual(line, Keys.ShortcutLine(new ConsoleKeyInfo(control, key, shift: false, alt: false, control: true)));   // Ctrl+E alone is /explore
         Assert.Null(Keys.ShortcutLine(new ConsoleKeyInfo('\0', key, shift: false, alt: true, control: false)));
         Assert.Null(Keys.ShortcutLine(new ConsoleKeyInfo('€', key, shift: false, alt: true, control: true)));   // AltGr+E on a German layout, and its like
+    }
+
+    [Fact]
+    public void ShortcutLine_CtrlE_IsExplore_WithoutAltOrShift_AndATypedEStaysAnE()
+    {
+        // Later on 2026-10-01 (the user's ask): the console's ENQ and the test factory's '\0' count; Ctrl+Alt+E stays /perf,
+        // Shift, Alt alone and a typed "E" (Spectre's test input marks it with Control) are no chord.
+        Assert.Equal("/explore", Keys.ShortcutLine(Keys.CtrlE));
+        Assert.Equal("/explore", Keys.ShortcutLine(Keys.Ctrl(ConsoleKey.E)));
+        Assert.Contains("/explore", NeonSidekick.App.SlashCommands.Words);
+        Assert.Equal("/perf", Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.E)));
+        Assert.Null(Keys.ShortcutLine(new ConsoleKeyInfo('\x05', ConsoleKey.E, shift: true, alt: false, control: true)));
+        Assert.Null(Keys.ShortcutLine(new ConsoleKeyInfo('E', ConsoleKey.E, shift: false, alt: false, control: true)));
+        Assert.Null(Keys.ShortcutLine(new ConsoleKeyInfo('\0', ConsoleKey.E, shift: false, alt: true, control: false)));
+        Assert.Null(Keys.ShortcutLine(Keys.Char('e')));
+        Assert.Null(Keys.ShortcutLine(Keys.Ctrl(ConsoleKey.O)));   // the other plain-Ctrl keys stay theirs
+        Assert.False(Keys.IsToolToggle(Keys.CtrlE));
+        Assert.False(Keys.IsInterrupt(Keys.CtrlE));
     }
 
     [Fact]
