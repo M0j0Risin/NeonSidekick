@@ -33,6 +33,44 @@ public sealed class ThemeFileTests : IDisposable
     private IEnumerable<string> ProblemsOf(string file) =>
         Scan().Problems.Where(p => Path.GetFileName(p.FilePath) == file).Select(p => p.Problem);
 
+    // ── Subfolders (2026-10-02) ─────────────────────────────────────────────
+
+    private void WriteIn(string folder, string file, string json)
+    {
+        Directory.CreateDirectory(Path.Combine(_dir, folder));
+        File.WriteAllText(Path.Combine(_dir, folder, file), json);
+    }
+
+    [Fact]
+    public void AFirstLevelSubfolder_IsRead_ADeeperOne_AndADotFolder_AreNot()
+    {
+        WriteIn("cosmos", "aurora.json", """{ "colors": { "primary": "#112233" } }""");
+        WriteIn(Path.Combine("cosmos", "deeper"), "hidden.json", "{}");
+        WriteIn(".parked", "parked.json", "{}");
+        Write("loose.json", "{}");
+
+        var scan = Scan();
+
+        Assert.Equal([.. ThemeName.Names, "aurora", "loose"], scan.Names);   // the user's themes in name order, wherever they sit
+        Assert.Empty(scan.Problems);
+    }
+
+    [Fact]
+    public void ALooseFile_KeepsItsName_OverASubfoldersFile_WhichIsSkipped_NamedByItsPath()
+    {
+        Write("blueprint.json", """{ "colors": { "primary": "#112233" } }""");
+        WriteIn("solid", "blueprint.json", """{ "colors": { "primary": "#445566" } }""");
+        WriteIn("a-first", "blueprint.json", "{}");   // a subfolder sorting before the loose file's name changes nothing: the folder's own come first
+
+        var scan = Scan();
+
+        Assert.Equal(new Color(0x11, 0x22, 0x33), User("blueprint").Primary);
+        Assert.Equal(
+            [("a-first\\blueprint.json", ThemeText.Duplicate("blueprint", "blueprint.json")), ("solid\\blueprint.json", ThemeText.Duplicate("blueprint", "blueprint.json"))],
+            scan.Problems.Select(p => (p.Shown!, p.Problem)));
+        Assert.Equal("solid\\blueprint.json: skipped: blueprint.json already names a theme \"blueprint\"", ThemeText.Problem(scan.Problems[1].Shown!, scan.Problems[1].Problem));
+    }
+
     // ── The words ──────────────────────────────────────────────────────────
 
     [Fact]
@@ -243,7 +281,7 @@ public sealed class ThemeFileTests : IDisposable
         var scan = Scan();
 
         Assert.Equal([.. ThemeName.Names, "dup"], scan.Names);
-        Assert.Equal([ThemeText.Duplicate("dup", Path.Combine(_dir, "x.json"))], ProblemsOf("y.json"));
+        Assert.Equal([ThemeText.Duplicate("dup", "x.json")], ProblemsOf("y.json"));
         Assert.StartsWith("skipped: not a theme file", Assert.Single(ProblemsOf("broken.json")));
         Assert.Equal([ThemeText.BadName("bad name")], ProblemsOf("bad name.json"));
         Assert.Equal([ThemeText.NoBase("nothing")], ProblemsOf("orphan.json"));
@@ -459,8 +497,9 @@ public sealed class ThemeFileTests : IDisposable
         [ThemeStyleSlot.Border, ThemeStyleSlot.PaneRule, ThemeStyleSlot.MarkdownRule, ThemeStyleSlot.Placeholder];
 
     /// <summary>
-    /// Every category's files copied into one themes folder, the way the README says to install them, and scanned: none
-    /// skipped and none with a note (a misspelt key or a bad colour), and no two named alike across the categories.
+    /// Every category folder dropped into the themes folder whole, the way the README says to try one (subfolders read since
+    /// 2026-10-02), and scanned: none skipped and none with a note (a misspelt key or a bad colour), and no two named alike across
+    /// the categories.
     /// </summary>
     private ThemeScan ScanTheExamples(out int files)
     {
@@ -472,9 +511,11 @@ public sealed class ThemeFileTests : IDisposable
                 continue;
             }
 
+            string into = Path.Combine(_dir, Path.GetFileName(folder));
+            Directory.CreateDirectory(into);
             foreach (string file in Directory.EnumerateFiles(folder, "*.json"))
             {
-                File.Copy(file, Path.Combine(_dir, Path.GetFileName(file)));
+                File.Copy(file, Path.Combine(into, Path.GetFileName(file)));
                 files++;
             }
         }

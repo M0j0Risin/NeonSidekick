@@ -28,8 +28,9 @@ public class VoicePresetsTests : IDisposable
 
     private void Put(string file, string json)
     {
-        Directory.CreateDirectory(Voices);
-        File.WriteAllText(Path.Combine(Voices, file), json);
+        string path = Path.Combine(Voices, file);
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllText(path, json);
     }
 
     // ── The shipped collection (assets/voices, 2026-10-02) ──────────────────
@@ -80,8 +81,9 @@ public class VoicePresetsTests : IDisposable
     }
 
     /// <summary>
-    /// Every category's files copied into one voices folder, the way the README says to install them, and loaded: none skipped,
-    /// none named like a built-in or like another, every voice one Kokoro has, and the accents English first.
+    /// Every category folder dropped into the voices folder whole, the way the README says to try one (subfolders read since
+    /// 2026-10-02), and loaded: none skipped, none named like a built-in or like another, every voice one Kokoro has, and the
+    /// accents English first.
     /// </summary>
     [Fact]
     public void TheCollection_LoadsWhole_FromOneFolder_NoNameTwice_EveryVoiceKokoros()
@@ -90,13 +92,15 @@ public class VoicePresetsTests : IDisposable
         var names = new List<string>();
         foreach (string folder in CategoryFolders())
         {
+            string into = Path.Combine(Voices, Path.GetFileName(folder));
+            Directory.CreateDirectory(into);
             foreach (string file in Directory.EnumerateFiles(folder, "*.json"))
             {
                 string name = Path.GetFileNameWithoutExtension(file);
-                Assert.False(File.Exists(Path.Combine(Voices, Path.GetFileName(file))), name + " is in two folders");
+                Assert.DoesNotContain(name, names);   // no name in two folders
                 Assert.DoesNotContain(name, VoicePresets.BuiltInNames);
                 Assert.Matches("^[a-z]+$", name);
-                File.Copy(file, Path.Combine(Voices, Path.GetFileName(file)));
+                File.Copy(file, Path.Combine(into, Path.GetFileName(file)));
                 names.Add(name);
             }
         }
@@ -160,6 +164,58 @@ public class VoicePresetsTests : IDisposable
         Assert.Equal(["amanda", "neon", "richard", "hunter", "larry", "jack", "willow", "ada", "zed"], presets.Select(p => p.Name));
         Assert.Equal(new VoicePreset("neon", "af_sky", "", 100, 1.0), presets[1]);   // the built-in's name and place, the file's values
         Assert.Equal(new VoicePreset("zed", "bf_emma", "bm_lewis", 40, 0.9), presets[^1]);
+    }
+
+    [Fact]
+    public void AFirstLevelSubfolder_IsRead_InNameOrderWithTheRest_ADeeperOne_AndADotFolder_AreNot()
+    {
+        // 2026-10-02: a category folder dropped in whole.
+        Put(Path.Combine("accents", "lucia.json"), """{ "TtsVoice": "af_bella", "TtsVoice2": "ef_dora", "TtsVoiceMix": 60, "TtsSpeed": 1.1 }""");
+        Put(Path.Combine("accents", "Neon.json"), """{ "TtsVoice": "af_sky", "TtsVoiceMix": 100, "TtsSpeed": 1.0 }""");   // an override from a subfolder too
+        Put(Path.Combine("accents", "deeper", "hidden.json"), """{ "TtsVoice": "af_sky", "TtsVoiceMix": 100, "TtsSpeed": 1.0 }""");
+        Put(Path.Combine(".parked", "parked.json"), """{ "TtsVoice": "af_sky", "TtsVoiceMix": 100, "TtsSpeed": 1.0 }""");
+        Put("zed.json", """{ "TtsVoice": "af_sky", "TtsVoiceMix": 100, "TtsSpeed": 1.0 }""");
+        Put("ada.json", """{ "TtsVoice": "af_heart", "TtsVoiceMix": 100, "TtsSpeed": 1.0 }""");
+
+        var presets = VoicePresets.Load(_home);
+
+        Assert.Equal([.. VoicePresets.BuiltInNames, "ada", "lucia", "zed"], presets.Select(p => p.Name));
+        Assert.Equal(new VoicePreset("neon", "af_sky", "", 100, 1.0), presets[1]);
+    }
+
+    [Fact]
+    public void ALooseFile_KeepsItsName_OverASubfoldersFile_WhichIsSkipped_WithAWarning()
+    {
+        Put("amelie.json", """{ "TtsVoice": "af_heart", "TtsVoice2": "ff_siwis", "TtsVoiceMix": 60, "TtsSpeed": 1.05 }""");
+        Put(Path.Combine("accents", "amelie.json"), """{ "TtsVoice": "af_sky", "TtsVoiceMix": 100, "TtsSpeed": 1.0 }""");
+        var warnings = new List<string>();
+        Action<NeonSidekick.Diagnostics.DiagnosticEvent> capture = e => { if (e.Level == NeonSidekick.Diagnostics.DiagnosticLevel.Warning) warnings.Add(e.Message); };
+        NeonSidekick.Diagnostics.DiagnosticLog.Emitted += capture;
+        IReadOnlyList<VoicePreset> presets;
+        try
+        {
+            presets = VoicePresets.Load(_home);
+        }
+        finally
+        {
+            NeonSidekick.Diagnostics.DiagnosticLog.Emitted -= capture;
+        }
+
+        Assert.Equal(new VoicePreset("amelie", "af_heart", "ff_siwis", 60, 1.05), presets[^1]);
+        string shown = Path.Combine("accents", "amelie.json");
+        Assert.Equal([VoicePresets.DuplicateWarning(shown, "amelie.json", "amelie")], warnings);
+        Assert.Equal("Skipped " + shown + ": amelie.json already names the preset amelie.", warnings[0]);
+    }
+
+    [Fact]
+    public void AnEditInASubfolder_IsReadAgain()
+    {
+        Put(Path.Combine("brisk", "dash.json"), """{ "TtsVoice": "am_puck", "TtsVoiceMix": 100, "TtsSpeed": 1.4 }""");
+        Assert.Equal(1.4, VoicePresets.Load(_home)[^1].Speed);
+
+        Put(Path.Combine("brisk", "dash.json"), """{ "TtsVoice": "am_puck", "TtsVoiceMix": 100, "TtsSpeed": 1.25 }""");
+        File.SetLastWriteTimeUtc(Path.Combine(Voices, "brisk", "dash.json"), DateTime.UtcNow.AddMinutes(1));
+        Assert.Equal(1.25, VoicePresets.Load(_home)[^1].Speed);
     }
 
     [Fact]

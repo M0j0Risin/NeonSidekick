@@ -23,7 +23,10 @@ public sealed record VoicePreset(string Name, string Voice, string Voice2, int M
 /// <c>{ "TtsVoice": "af_heart", "TtsVoice2": "am_eric", "TtsVoiceMix": 80, "TtsSpeed": 1.2 }</c>, read through
 /// <see cref="JsonDocument"/> (comments and trailing commas allowed). A file with a blank voice, a mix or speed outside the settings'
 /// ranges, or no JSON object in it is skipped with a warning, never clamped — an override that is skipped leaves its built-in in
-/// place. Subfolders are not read. Never throws.</para>
+/// place. The folder's first-level subfolders are read too (2026-10-02, the user's ask: a category folder of <c>assets\voices</c> dropped
+/// in whole; a dot-folder is skipped, a deeper one never read): the folder's own files first, then each subfolder's, all in name order,
+/// and the first file to give a name keeps it, a later one skipped with a warning naming both by their path under the folder. The
+/// list itself stays the built-ins, then the user's in name order. Never throws.</para>
 ///
 /// <para>The row's value is rendered with every pane draw, so <see cref="Load"/> caches the list per home and re-reads only when
 /// the folder's files change (a name, a write time or a length), so a file dropped in or edited shows the next time the row draws.</para>
@@ -61,7 +64,7 @@ public static class VoicePresets
                 return _cached;
             }
 
-            var loaded = files.Count == 0 ? Embedded() : Merge(Embedded(), files);
+            var loaded = files.Count == 0 ? Embedded() : Merge(Embedded(), files, folder);
             _cachedHome = homeDirectory;
             _cachedStamp = stamp;
             _cached = loaded;
@@ -101,39 +104,81 @@ public static class VoicePresets
         }
     }
 
-    /// <summary>The <c>*.json</c> files right in <paramref name="folder"/>, in name order; none for a folder that is missing or unreadable (warned about).</summary>
+    /// <summary>
+    /// The <c>*.json</c> files the folder gives, in the order they are taken: <paramref name="folder"/>'s own in name order, then each
+    /// first-level subfolder's (not a dot-folder), the folders and their files in name order (2026-10-02). None for a missing folder;
+    /// an unreadable folder or subfolder is warned about and left out.
+    /// </summary>
     private static IReadOnlyList<FileInfo> Files(string folder)
     {
         try
         {
-            return Directory.Exists(folder)
-                ? new DirectoryInfo(folder).EnumerateFiles("*.json", SearchOption.TopDirectoryOnly).OrderBy(f => f.Name, StringComparer.OrdinalIgnoreCase).ToList()
-                : [];
+            if (!Directory.Exists(folder))
+            {
+                return [];
+            }
+
+            var root = new DirectoryInfo(folder);
+            var files = Json(root);
+            foreach (var sub in root.EnumerateDirectories().Where(d => !d.Name.StartsWith('.')).OrderBy(d => d.Name, StringComparer.OrdinalIgnoreCase))
+            {
+                try
+                {
+                    files.AddRange(Json(sub));
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    DiagnosticLog.Warn(Category, $"Could not read {sub.FullName}; its presets are left out.", ex);
+                }
+            }
+
+            return files;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             DiagnosticLog.Warn(Category, $"Could not read {folder}; using the built-in presets.", ex);
             return [];
         }
+
+        static List<FileInfo> Json(DirectoryInfo directory) =>
+            directory.EnumerateFiles("*.json", SearchOption.TopDirectoryOnly).OrderBy(f => f.Name, StringComparer.OrdinalIgnoreCase).ToList();
     }
 
-    /// <summary>What the cache compares: every file's name, write time and length.</summary>
+    /// <summary>What the cache compares: every file's full path, write time and length.</summary>
     private static string Stamp(IReadOnlyList<FileInfo> files) =>
-        string.Join('|', files.Select(f => f.Name + ":" + f.LastWriteTimeUtc.Ticks.ToString(CultureInfo.InvariantCulture) + ":" + f.Length.ToString(CultureInfo.InvariantCulture)));
+        string.Join('|', files.Select(f => f.FullName + ":" + f.LastWriteTimeUtc.Ticks.ToString(CultureInfo.InvariantCulture) + ":" + f.Length.ToString(CultureInfo.InvariantCulture)));
 
-    /// <summary>The built-ins with each readable file over the one of its name, then the rest of the files' presets in name order.</summary>
-    private static IReadOnlyList<VoicePreset> Merge(IReadOnlyList<VoicePreset> builtIns, IReadOnlyList<FileInfo> files)
+    /// <summary>
+    /// The built-ins with each readable file over the one of its name, then the rest of the files' presets in name order. The first
+    /// file to give a name keeps it (<see cref="Files"/>' order: the folder's own before a subfolder's); a later one is skipped with a
+    /// warning naming both by their paths under <paramref name="folder"/>.
+    /// </summary>
+    private static IReadOnlyList<VoicePreset> Merge(IReadOnlyList<VoicePreset> builtIns, IReadOnlyList<FileInfo> files, string folder)
     {
         var list = builtIns.ToList();
         var added = new List<VoicePreset>();
+        var taken = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (var file in files)
         {
             string name = Path.GetFileNameWithoutExtension(file.Name).Trim();
-            if (name.Length == 0 || FromFile(name, file.FullName) is not { } preset)
+            string shown = Path.GetRelativePath(folder, file.FullName);
+            if (name.Length == 0)
             {
                 continue;
             }
 
+            if (taken.TryGetValue(name, out string? first))
+            {
+                DiagnosticLog.Warn(Category, DuplicateWarning(shown, first, name));
+                continue;
+            }
+
+            if (FromFile(name, file.FullName) is not { } preset)
+            {
+                continue;
+            }
+
+            taken[name] = shown;
             int index = list.FindIndex(p => string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase));
             if (index >= 0)
             {
@@ -145,9 +190,12 @@ public static class VoicePresets
             }
         }
 
-        list.AddRange(added);
+        list.AddRange(added.OrderBy(p => p.Name, StringComparer.OrdinalIgnoreCase));
         return list;
     }
+
+    /// <summary>A later file with a name an earlier one gave: <c>Skipped accents\amelie.json: amelie.json already names the preset amelie.</c> Pinned.</summary>
+    public static string DuplicateWarning(string shown, string first, string name) => $"Skipped {shown}: {first} already names the preset {name}.";
 
     private static VoicePreset? FromFile(string name, string path)
     {

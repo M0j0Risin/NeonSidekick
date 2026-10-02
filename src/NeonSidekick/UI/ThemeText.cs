@@ -20,14 +20,14 @@ public static class ThemeText
     /// <summary>What <c>/theme export</c> with no name or too many words says.</summary>
     public const string ExportUsage = "/theme export <name> [new-name] writes the theme to the themes folder as a file to edit.";
 
-    /// <summary>One problem of one file, as the log and the transcript show it.</summary>
-    public static string Problem(string filePath, string problem) =>
-        string.Create(CultureInfo.InvariantCulture, $"{Path.GetFileName(filePath)}: {problem}");
+    /// <summary>One problem of one file, as the log and the transcript show it; <paramref name="shown"/> names the file (its path under the themes folder since 2026-10-02, when subfolders came in).</summary>
+    public static string Problem(string shown, string problem) =>
+        string.Create(CultureInfo.InvariantCulture, $"{shown}: {problem}");
 
     public static string Unreadable(string message) => $"skipped: cannot read it ({message})";
     public static string NotJson(string message) => $"skipped: not a theme file ({message})";
     public static string BadName(string name) => $"skipped: \"{name}\" is not a theme name (lower-case letters, digits, - and _, up to 32, and not \"{ExportWord}\")";
-    public static string Duplicate(string name, string otherFile) => $"skipped: {Path.GetFileName(otherFile)} already names a theme \"{name}\"";
+    public static string Duplicate(string name, string otherShown) => $"skipped: {otherShown} already names a theme \"{name}\"";
     public static string NoBase(string baseName) => $"skipped: its base \"{baseName}\" is no theme";
     public static string BaseCycle(string baseName) => $"skipped: its base \"{baseName}\" leads back to itself";
     public static string BaseFailed(string baseName) => $"skipped: its base \"{baseName}\" did not load";

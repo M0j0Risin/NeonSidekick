@@ -1073,9 +1073,9 @@ The viewer and the ComfyUI picture strip follow each other:
 
 #### Custom themes
 
-Your own themes are JSON files in the `themes` folder of the home (`%USERPROFILE%\.neonsidekick\themes`, or under `NEONSIDEKICK_HOME`), shared by every profile. They appear after the built-ins in `/theme`, its argument list and the *Theme* setting, sorted by name. A file named like a built-in theme replaces that built-in: it takes the built-in's place in the list, and any theme whose `base` is that name (including the default base, synthwave) builds on your file. The folder is read each time one of those opens, so a new or edited file shows up without a restart; pick the theme again to see an edit.
+Your own themes are JSON files in the `themes` folder of the home (`%USERPROFILE%\.neonsidekick\themes`, or under `NEONSIDEKICK_HOME`), shared by every profile. Its subfolders are read too, one level deep (not their own subfolders, nor one whose name starts with `.`). When two files give the same name, the one loose in the folder wins over one in a subfolder; between subfolders, the first by name wins. The skipped file gets a warning naming both. They appear after the built-ins in `/theme`, its argument list and the *Theme* setting, sorted by name. A file named like a built-in theme replaces that built-in: it takes the built-in's place in the list, and any theme whose `base` is that name (including the default base, synthwave) builds on your file. The folder is read each time one of those opens, so a new or edited file shows up without a restart; pick the theme again to see an edit.
 
-Fifty ready-made themes come with the repo in [`assets/themes`](assets/themes), one folder per category. To use one, copy its file into the `themes` folder itself (subfolders aren't read) and pick it with `/theme`. To compare them all side by side, open [`Theme Atlas.html`](assets/themes/Theme%20Atlas.html) in a browser. It previews these fifty and the ten built-ins. The `built-in` folder holds the built-ins as files. Copy one in as it is, or edited, to replace that built-in, or rename it (the file and its `"name"`) to keep it as a theme of its own.
+Fifty ready-made themes come with the repo in [`assets/themes`](assets/themes), one folder per category. To use one, copy its file into the `themes` folder, or drop a whole category folder in (`themes\cosmos`), and pick it with `/theme`. To compare them all side by side, open [`Theme Atlas.html`](assets/themes/Theme%20Atlas.html) in a browser. It previews these fifty and the ten built-ins. The `built-in` folder holds the built-ins as files. Copy one in as it is, or edited, to replace that built-in, or rename it (the file and its `"name"`) to keep it as a theme of its own.
 
 | Folder | Themes |
 |--------|--------|
@@ -1156,9 +1156,9 @@ The *TTS voice preset* row (the TTS tab of `/settings`) picks from the seven bui
 }
 ```
 
-A file that doesn't parse, or has a value out of range, is skipped with a warning, and a built-in it would replace stays. Subfolders aren't read.
+A file that doesn't parse, or has a value out of range, is skipped with a warning, and a built-in it would replace stays. Subfolders one level deep are read too, as for themes: a file loose in the folder wins a name over one in a subfolder, and the skipped one gets a warning.
 
-Forty-one more presets come with the repo in [`assets/voices`](assets/voices), one folder per kind, beside the built-ins as files in `built-in`. To use one, copy its file into the `voices` folder and pick it. To hear them first, open [`Voice Atlas.html`](assets/voices/Voice%20Atlas.html) in a browser: every preset, built-ins included, says one line at its own speed (the samples are in `assets/voices/samples`). Kokoro grades its voices one by one ([`VOICES.md`](https://huggingface.co/hexgrad/Kokoro-82M/blob/main/VOICES.md)), and the blends lean on the stronger ones.
+Forty-one more presets come with the repo in [`assets/voices`](assets/voices), one folder per kind, beside the built-ins as files in `built-in`. To use one, copy its file into the `voices` folder, or drop a whole folder in (`voices\accents`), and pick it. To hear them first, open [`Voice Atlas.html`](assets/voices/Voice%20Atlas.html) in a browser: every preset, built-ins included, says one line at its own speed (the samples are in `assets/voices/samples`). Kokoro grades its voices one by one ([`VOICES.md`](https://huggingface.co/hexgrad/Kokoro-82M/blob/main/VOICES.md)), and the blends lean on the stronger ones.
 
 | Folder | Presets |
 |--------|---------|
