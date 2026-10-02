@@ -941,7 +941,8 @@ public sealed class AppSettingsData
     /// companion skill instead, so a later update from the same origin stays clean; <c>allow-and-mark</c> lets it write, the skill records
     /// keep the change, and the install's update page warns that updating replaces it. The main chat and <c>/skills revert</c> are
     /// unaffected. Read when a reflection is decided, no reconnect; the Reflection tab of <c>/skills</c>, last row, labelled
-    /// <c>Reflection AgentSkills.io skills</c> (<c>Reflection installed skills</c> until later on 2026-10-02, the user's call). No variable.
+    /// <c>Reflection downloaded skills</c> (<c>Reflection installed skills</c> until later on 2026-10-02, briefly <c>Reflection AgentSkills.io skills</c>
+    /// that day, the user's calls; agentskills.io is the format every skill here follows, not where these come from). No variable.
     /// </summary>
     public string ReflectionInstalledSkills { get; set; } = Skills.ReflectionInstalledSkills.Default;
 

@@ -3,7 +3,7 @@ using NeonSidekick.Settings;
 
 namespace NeonSidekick.Skills;
 
-/// <summary>What a reflection may do to an installed skill (<c>Reflection AgentSkills.io skills</c>, 2026-10-02).</summary>
+/// <summary>What a reflection may do to an installed skill (<c>Reflection downloaded skills</c>, 2026-10-02).</summary>
 public enum ReflectionInstalledPolicy
 {
     /// <summary>Its <c>skill_editor</c> refuses every change to a skill with a <see cref="SkillProvenance"/> sidecar.</summary>

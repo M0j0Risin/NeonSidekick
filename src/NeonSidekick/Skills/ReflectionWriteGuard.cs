@@ -24,7 +24,7 @@ public sealed class ReflectionWriteGuard
 
     /// <param name="roots">The roots the reflection writes under (fixed at its decision).</param>
     /// <param name="external">Whether the external root is read, as the editor reads it.</param>
-    /// <param name="installed">What the reflection may do to an installed skill (<c>Reflection AgentSkills.io skills</c>).</param>
+    /// <param name="installed">What the reflection may do to an installed skill (<c>Reflection downloaded skills</c>).</param>
     public ReflectionWriteGuard(Func<SkillRoots> roots, bool external, ReflectionInstalledPolicy installed)
     {
         _roots = roots ?? throw new ArgumentNullException(nameof(roots));

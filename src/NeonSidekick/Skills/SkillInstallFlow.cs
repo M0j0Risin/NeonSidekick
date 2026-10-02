@@ -222,7 +222,7 @@ public sealed class SkillInstallFlow
                     return false;
             }
 
-            // An update over what reflections changed says so before the question (2026-10-02, Reflection AgentSkills.io skills = allow-and-mark).
+            // An update over what reflections changed says so before the question (2026-10-02, Reflection downloaded skills = allow-and-mark).
             if (check.Option == SkillInstallOption.Update && check.Scope is { } updating && host.ReflectionChangesSinceInstall(updating, candidate.Name) is > 0 and var changes)
             {
                 host.Warning(SkillRecordText.ChangedSinceInstallWarning(changes));

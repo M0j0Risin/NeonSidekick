@@ -195,7 +195,7 @@ public static class SkillText
     public static string ExternalReadOnly(string name) =>
         $"Error: skill '{name}' exists in the external skills ({SkillRoots.ExternalDirectoryName}\\{SkillRoots.DirectoryName}), which this app never writes; edit it by hand or pick another name";
 
-    /// <summary>A reflection's write refused for an installed skill under <c>Reflection AgentSkills.io skills</c> = <c>read-only</c> (2026-10-02). Pinned.</summary>
+    /// <summary>A reflection's write refused for an installed skill under <c>Reflection downloaded skills</c> = <c>read-only</c> (2026-10-02). Pinned.</summary>
     public static string InstalledReadOnly(string name, string origin) =>
         $"Error: skill '{name}' was installed from {(string.IsNullOrWhiteSpace(origin) ? "a skill source" : origin)}, and a reflection leaves an installed skill as it is; to keep what these turns taught, create a companion skill (a new name) instead";
 
