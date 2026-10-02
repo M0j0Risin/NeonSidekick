@@ -1,0 +1,36 @@
+{
+  "name": "vhs",
+  "description": "be kind, rewind",
+  "colors": {
+    "primary": "#FF3B5C",
+    "secondary": "#3BE0FF",
+    "tertiary": "#F2E85C",
+    "deep": "#2B3A80",
+    "highlight": "#FFF3B0",
+    "warm": "#FF8A5C",
+    "tint": "#B48CFF",
+    "ink": "#E8E6F0",
+    "dim": "#8E8AA0",
+    "dimmer": "#33323F",
+    "bg": "#0B0D14",
+    "panelBg": "#171A26",
+    "good": "#5CFF8A",
+    "bad": "#FF6A3B",
+    "warn": "#F2E85C"
+  },
+  "gradient": [
+    "#3BE0FF",
+    "#8AF0FF",
+    "#E8E6F0",
+    "#FF9AB0",
+    "#FF3B5C"
+  ],
+  "styles": {
+    "markdownHeading1": {
+      "underline": true
+    },
+    "codeComment": {
+      "italic": false
+    }
+  }
+}

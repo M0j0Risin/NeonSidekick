@@ -1,0 +1,52 @@
+{
+  "name": "vinyl",
+  "description": "33⅓ rpm",
+  "colors": {
+    "primary": "#E84A3A",
+    "secondary": "#F2E2B8",
+    "tertiary": "#9AB8D8",
+    "deep": "#424242",
+    "highlight": "#FFF0C8",
+    "warm": "#FF8A4A",
+    "tint": "#D8A8A0",
+    "ink": "#EDE8E0",
+    "dim": "#918C86",
+    "dimmer": "#353330",
+    "bg": "#070707",
+    "panelBg": "#141414",
+    "good": "#8AD8A0",
+    "bad": "#FF4A6A",
+    "warn": "#FFD27A"
+  },
+  "gradient": [
+    "#5A5A5A",
+    "#9A9A9A",
+    "#5A5A5A",
+    "#B8C0C8",
+    "#5A5A5A",
+    "#F2E2B8",
+    "#E84A3A",
+    "#E84A3A",
+    "#F2E2B8",
+    "#5A5A5A",
+    "#B8C0C8",
+    "#5A5A5A",
+    "#9A9A9A",
+    "#5A5A5A"
+  ],
+  "styles": {
+    "markdownHeading1": {
+      "fg": "secondary",
+      "bold": true
+    },
+    "markdownBullet": {
+      "fg": "primary"
+    },
+    "tableHeader": {
+      "fg": "secondary"
+    },
+    "border": {
+      "fg": "#6A6A6A"
+    }
+  }
+}

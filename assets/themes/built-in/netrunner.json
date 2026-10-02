@@ -1,0 +1,29 @@
+{
+  "name": "netrunner",
+  "description": "green phosphor",
+  "colors": {
+    "primary": "#00FF41",
+    "secondary": "#3DFFD0",
+    "tertiary": "#B6FF3D",
+    "deep": "#0F6B2E",
+    "highlight": "#E0FF6B",
+    "warm": "#9CFF57",
+    "tint": "#5CFFA8",
+    "ink": "#D7FFE0",
+    "dim": "#5E9A6C",
+    "dimmer": "#24402C",
+    "bg": "#020A04",
+    "panelBg": "#07170C",
+    "good": "#39FF88",
+    "bad": "#FF3355",
+    "warn": "#E0FF6B"
+  },
+  "gradient": [
+    "#0F6B2E",
+    "#00C83A",
+    "#00FF41",
+    "#3DFFD0",
+    "#E0FF6B"
+  ],
+  "styles": {}
+}

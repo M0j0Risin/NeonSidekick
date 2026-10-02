@@ -1,0 +1,39 @@
+{
+  "name": "orbit",
+  "description": "sunrise from orbit",
+  "colors": {
+    "primary": "#5A9AFF",
+    "secondary": "#FFC86A",
+    "tertiary": "#9A7AFF",
+    "deep": "#1A2A5A",
+    "highlight": "#FFF4D0",
+    "warm": "#FF8A5A",
+    "tint": "#7AD8FF",
+    "ink": "#EAF0FF",
+    "dim": "#8090B0",
+    "dimmer": "#243048",
+    "bg": "#02040C",
+    "panelBg": "#0A1020",
+    "good": "#6AE8A0",
+    "bad": "#FF4A6A",
+    "warn": "#FFC86A"
+  },
+  "gradient": [
+    "#3A5AC0",
+    "#4A7AE8",
+    "#7AB0FF",
+    "#9A7AFF",
+    "#FF8A9A",
+    "#FFF4D0",
+    "#FF8A9A",
+    "#9A7AFF",
+    "#7AB0FF",
+    "#4A7AE8",
+    "#3A5AC0"
+  ],
+  "styles": {
+    "user": {
+      "fg": "tint"
+    }
+  }
+}

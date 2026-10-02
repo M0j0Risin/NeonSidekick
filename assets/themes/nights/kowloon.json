@@ -1,0 +1,28 @@
+{
+  "name": "kowloon",
+  "description": "walled city neon",
+  "colors": {
+    "primary": "#FF3864",
+    "secondary": "#3DFFB5",
+    "tertiary": "#FFB43D",
+    "deep": "#5A2230",
+    "highlight": "#FFE58A",
+    "warm": "#FF7F50",
+    "tint": "#7AD9FF",
+    "ink": "#EFE7DA",
+    "dim": "#988F86",
+    "dimmer": "#3A3530",
+    "bg": "#0B0A09",
+    "panelBg": "#191614",
+    "good": "#9CFF6D",
+    "bad": "#FF5A3C",
+    "warn": "#FFE58A"
+  },
+  "gradient": [
+    "#A03850",
+    "#FF3864",
+    "#FFB43D",
+    "#3DFFB5",
+    "#7AD9FF"
+  ]
+}

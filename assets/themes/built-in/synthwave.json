@@ -1,0 +1,29 @@
+{
+  "name": "synthwave",
+  "description": "default theme",
+  "colors": {
+    "primary": "#FF2E97",
+    "secondary": "#33E0FF",
+    "tertiary": "#B15BFF",
+    "deep": "#7B2FF7",
+    "highlight": "#FFC832",
+    "warm": "#FF8A3D",
+    "tint": "#F45B9B",
+    "ink": "#EFE6FF",
+    "dim": "#9A8BB8",
+    "dimmer": "#443C56",
+    "bg": "#0B0416",
+    "panelBg": "#160A28",
+    "good": "#3DF27A",
+    "bad": "#FF4D6D",
+    "warn": "#FFC832"
+  },
+  "gradient": [
+    "#33E0FF",
+    "#B15BFF",
+    "#FF2E97",
+    "#FF8A3D",
+    "#FFC832"
+  ],
+  "styles": {}
+}

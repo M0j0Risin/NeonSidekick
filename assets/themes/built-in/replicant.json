@@ -1,0 +1,29 @@
+{
+  "name": "replicant",
+  "description": "smog and sodium",
+  "colors": {
+    "primary": "#FF8A2A",
+    "secondary": "#2FD4C4",
+    "tertiary": "#C9A26B",
+    "deep": "#5A3A1E",
+    "highlight": "#FFC77A",
+    "warm": "#FF6A3D",
+    "tint": "#7FB8B0",
+    "ink": "#EDE3D6",
+    "dim": "#8E8578",
+    "dimmer": "#3A3530",
+    "bg": "#0B0E10",
+    "panelBg": "#161A1D",
+    "good": "#8FE3A0",
+    "bad": "#FF3D5A",
+    "warn": "#FFC77A"
+  },
+  "gradient": [
+    "#1E4A4F",
+    "#2FD4C4",
+    "#C9A26B",
+    "#FF8A2A",
+    "#FFC77A"
+  ],
+  "styles": {}
+}

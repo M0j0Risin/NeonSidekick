@@ -1,0 +1,39 @@
+{
+  "name": "infrared",
+  "description": "thermal camera",
+  "colors": {
+    "primary": "#FF7A1A",
+    "secondary": "#FFE45C",
+    "tertiary": "#E0458F",
+    "deep": "#3A1066",
+    "highlight": "#FFF6C8",
+    "warm": "#FF4A2A",
+    "tint": "#A070F0",
+    "ink": "#F4ECE6",
+    "dim": "#9A8C9E",
+    "dimmer": "#3A2E40",
+    "bg": "#06030C",
+    "panelBg": "#140A1E",
+    "good": "#5CE6B0",
+    "bad": "#FF3355",
+    "warn": "#FFE45C"
+  },
+  "gradient": [
+    "#7A2AB0",
+    "#A01E8A",
+    "#D0306A",
+    "#F04A3A",
+    "#FF7A1A",
+    "#FFA52A",
+    "#FFD84A",
+    "#FFFFD8"
+  ],
+  "styles": {
+    "codeComment": {
+      "fg": "tint"
+    },
+    "markdownHeading1": {
+      "fg": "highlight"
+    }
+  }
+}

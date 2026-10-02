@@ -1,0 +1,28 @@
+{
+  "name": "aurora",
+  "description": "northern lights",
+  "colors": {
+    "primary": "#5CFFB0",
+    "secondary": "#B48CFF",
+    "tertiary": "#5CC8FF",
+    "deep": "#1E3A5F",
+    "highlight": "#F0FFB0",
+    "warm": "#FF9DD2",
+    "tint": "#8EF5FF",
+    "ink": "#E8F4FF",
+    "dim": "#7D93AD",
+    "dimmer": "#263548",
+    "bg": "#050A14",
+    "panelBg": "#0D1626",
+    "good": "#7CFFA0",
+    "bad": "#FF5C8A",
+    "warn": "#F0FFB0"
+  },
+  "gradient": [
+    "#3F78B0",
+    "#5CC8FF",
+    "#5CFFB0",
+    "#B48CFF",
+    "#FF9DD2"
+  ]
+}

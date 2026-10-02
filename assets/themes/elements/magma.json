@@ -1,0 +1,28 @@
+{
+  "name": "magma",
+  "description": "molten rock",
+  "colors": {
+    "primary": "#FF5A1F",
+    "secondary": "#FFC247",
+    "tertiary": "#E8E85A",
+    "deep": "#5A1A0A",
+    "highlight": "#FFE08A",
+    "warm": "#FF8A3D",
+    "tint": "#FF9F80",
+    "ink": "#F5E6DC",
+    "dim": "#9E8478",
+    "dimmer": "#3D2C26",
+    "bg": "#0C0605",
+    "panelBg": "#1C100C",
+    "good": "#B8E86A",
+    "bad": "#FF3355",
+    "warn": "#FFE08A"
+  },
+  "gradient": [
+    "#A8320F",
+    "#D8400F",
+    "#FF5A1F",
+    "#FFC247",
+    "#FFF3B0"
+  ]
+}

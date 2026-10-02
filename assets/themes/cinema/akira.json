@@ -1,0 +1,33 @@
+{
+  "name": "akira",
+  "description": "neo-tokyo red",
+  "colors": {
+    "primary": "#FF2D2D",
+    "secondary": "#4FD1FF",
+    "tertiary": "#FF8A5C",
+    "deep": "#6B1020",
+    "highlight": "#FFD23F",
+    "warm": "#FF6B35",
+    "tint": "#FF9EB5",
+    "ink": "#F2ECE4",
+    "dim": "#9A8F99",
+    "dimmer": "#3E3540",
+    "bg": "#0A0810",
+    "panelBg": "#1A1220",
+    "good": "#4CF0A0",
+    "bad": "#FF5C8A",
+    "warn": "#FFD23F"
+  },
+  "gradient": [
+    "#B01E32",
+    "#D8262E",
+    "#FF2D2D",
+    "#FF8A5C",
+    "#FFD23F"
+  ],
+  "styles": {
+    "markdownHeading1": {
+      "underline": true
+    }
+  }
+}

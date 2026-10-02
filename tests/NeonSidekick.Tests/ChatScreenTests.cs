@@ -15662,6 +15662,114 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("synthwave", _settings.Current.Theme);
     }
 
+    // ── The user's themes (2026-10-01) ─────────────────────────────────────
+
+    private void WriteUserTheme(string file, string json)
+    {
+        Directory.CreateDirectory(_settings.ThemesDirectory);
+        File.WriteAllText(Path.Combine(_settings.ThemesDirectory, file), json);
+    }
+
+    [Fact]
+    public void ArgumentItems_Theme_TheUsersThemes_AndExportsNames()
+    {
+        var sources = Sources() with { Themes = () => [new("synthwave", "default theme"), new("dracula", "vampire purple")] };
+
+        Assert.Equal(["synthwave", "dracula", ThemeText.ExportWord], Texts(ChatScreen.ArgumentItems("/theme", "", sources)));
+        Assert.Equal([new CompletionItem("dracula", "vampire purple")], ChatScreen.ArgumentItems("/theme", "dr", sources));
+        Assert.Equal(["export synthwave", "export dracula"], Texts(ChatScreen.ArgumentItems("/theme", "export ", sources)));
+        Assert.Equal(["export dracula"], Texts(ChatScreen.ArgumentItems("/theme", "EXPORT d", sources)));
+        Assert.Empty(ChatScreen.ArgumentItems("/theme", "export dracula x", sources));   // the new name is free text
+    }
+
+    [Fact]
+    public async Task Theme_AUserTheme_IsPickedByName_AndWorn()
+    {
+        using var theme = new ThemeScope();
+        _settings.Update(d => d.TtsOutput = false);
+        WriteUserTheme("dracula.json", """{ "description": "vampire purple", "colors": { "primary": "#FF79C6" }, "styles": { "codeKeyword": { "bold": true } } }""");
+        LinesWhenIdle("/theme dracula", "/exit");
+
+        string output = await RunAsync();
+
+        Assert.Equal("dracula", _settings.Current.Theme);
+        Assert.Equal("dracula", Theme.Current.Name);
+        Assert.Equal("#FF79C6", Theme.ToHex(Theme.Primary));
+        Assert.Equal(Decoration.Bold, Theme.CodeKeyword.Decoration);
+        Assert.Contains("  · Theme: dracula", output);
+    }
+
+    [Fact]
+    public async Task Theme_TheList_ShowsTheUsersThemesLast_AndPicksOne()
+    {
+        using var theme = new ThemeScope();
+        _settings.Update(d => d.TtsOutput = false);
+        WriteUserTheme("dracula.json", """{ "description": "vampire purple" }""");
+        WriteUserTheme("broken.json", """{ "base": "nothing" }""");
+        PushLine("/theme");
+        _console.Input.PushKey(Keys.Up);        // wraps to the last row: dracula
+        _console.Input.PushKey(Keys.Enter);
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Equal("dracula", _settings.Current.Theme);
+        Assert.Contains("vampire purple", output);
+        Assert.Contains("broken.json: " + ThemeText.NoBase("nothing"), output);   // the file's problem, said as a warning
+    }
+
+    [Fact]
+    public async Task Theme_AnUnknownName_ListsTheUsersThemesToo()
+    {
+        using var theme = new ThemeScope();
+        _settings.Update(d => d.TtsOutput = false);
+        WriteUserTheme("dracula.json", "{}");
+        LinesWhenIdle("/theme matrix", "/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains("  ✗ " + SettingsMenu.ThemeNameError("matrix", [.. ThemeName.Names, "dracula"]), output);
+        Assert.EndsWith("abyssal or dracula, or nothing to pick from a list.", SettingsMenu.ThemeNameError("matrix", [.. ThemeName.Names, "dracula"]));
+    }
+
+    [Fact]
+    public async Task ThemeExport_WritesAFullFile_UnderANewName_AndNeverOverwrites()
+    {
+        using var theme = new ThemeScope();
+        _settings.Update(d => d.TtsOutput = false);
+        LinesWhenIdle("/theme export nostromo", "/theme export nostromo", "/theme export nostromo synthwave", "/theme export nostromo Bad!", "/theme export", "/theme export nostromo mine", "/exit");
+
+        string output = await RunAsync();
+
+        string path = Path.Combine(_settings.ThemesDirectory, "nostromo-custom.json");
+        Assert.Contains("  · " + ThemeText.ExportDone("nostromo-custom", path), output);
+        Assert.Contains("  ✗ " + ThemeText.ExportNameTaken("nostromo-custom"), output);   // the first one's file now loads
+        Assert.Contains("  ✗ " + ThemeText.ExportNameTaken("synthwave"), output);
+        Assert.Contains("  ✗ " + ThemeText.ExportBadName("bad!"), output);
+        Assert.Contains("  ✗ " + ThemeText.ExportUsage, output);
+        Assert.True(File.Exists(Path.Combine(_settings.ThemesDirectory, "mine.json")));
+        var scan = ThemeCatalog.Scan(_settings.ThemesDirectory);
+        Assert.Empty(scan.Problems);
+        Assert.Equal(ThemePalette.Nostromo.Colors(), scan.Themes.Single(t => t.Name == "nostromo-custom").Colors());
+        Assert.Same(ThemePalette.Synthwave, Theme.Current);   // nothing put in force
+        Assert.Equal(0, Refreshes(output));
+    }
+
+    [Fact]
+    public async Task ThemeExport_AFileInTheWay_IsNotOverwritten()
+    {
+        using var theme = new ThemeScope();
+        _settings.Update(d => d.TtsOutput = false);
+        WriteUserTheme("noir-custom.json", "not json");   // fails to load, so its name is free, but the file is there
+        LinesWhenIdle("/theme export noir", "/exit");
+
+        string output = await RunAsync();
+
+        string path = Path.Combine(_settings.ThemesDirectory, "noir-custom.json");
+        Assert.Contains("  ✗ " + ThemeText.ExportExists(path), output);
+        Assert.Equal("not json", File.ReadAllText(path));
+    }
+
     [Fact]
     public async Task Theme_Bare_PicksFromTheList()
     {
@@ -19429,8 +19537,8 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(ReasoningLevel.Levels, Texts(ChatScreen.ArgumentItems("/reasoning", "", sources)));
         Assert.Equal([new CompletionItem("high", ReasoningLevel.Describe("high"))], ChatScreen.ArgumentItems("/reasoning", "h", sources));
 
-        // /theme (2026-09-23): the names with their notes, in menu order.
-        Assert.Equal(ThemeName.Names, Texts(ChatScreen.ArgumentItems("/theme", "", sources)));
+        // /theme (2026-09-23): the names with their notes, in menu order, then export (2026-10-01).
+        Assert.Equal([.. ThemeName.Names, ThemeText.ExportWord], Texts(ChatScreen.ArgumentItems("/theme", "", sources)));
         Assert.Equal(["netrunner", "nostromo", "noir"], Texts(ChatScreen.ArgumentItems("/theme", "n", sources)));
         Assert.Equal([new CompletionItem("netrunner", "green phosphor")], ChatScreen.ArgumentItems("/theme", "ne", sources));
         Assert.Equal(PerfBarMode.Words, Texts(ChatScreen.ArgumentItems("/perf", "", sources)));

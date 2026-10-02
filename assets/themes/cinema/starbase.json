@@ -1,0 +1,38 @@
+{
+  "name": "starbase",
+  "description": "bridge panels",
+  "colors": {
+    "primary": "#FF9C33",
+    "secondary": "#9C9CFF",
+    "tertiary": "#CC99CC",
+    "deep": "#7A4F99",
+    "highlight": "#FFCC99",
+    "warm": "#FF7744",
+    "tint": "#99CCFF",
+    "ink": "#FFE8D0",
+    "dim": "#A89AB8",
+    "dimmer": "#3A3448",
+    "bg": "#000000",
+    "panelBg": "#121018",
+    "good": "#99DD88",
+    "bad": "#FF5555",
+    "warn": "#FFCC66"
+  },
+  "gradient": [
+    "#CC6666",
+    "#FF9C33",
+    "#FFCC99",
+    "#CC99CC",
+    "#9C9CFF"
+  ],
+  "styles": {
+    "menuHighlight": {
+      "fg": "bg",
+      "bg": "primary"
+    },
+    "menuHighlightDim": {
+      "fg": "#4A2A0A",
+      "bg": "primary"
+    }
+  }
+}

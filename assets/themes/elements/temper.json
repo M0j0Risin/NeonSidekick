@@ -1,0 +1,55 @@
+{
+  "name": "temper",
+  "description": "tempered steel",
+  "colors": {
+    "primary": "#D8A850",
+    "secondary": "#6A9AE8",
+    "tertiary": "#A07AD0",
+    "deep": "#3A4048",
+    "highlight": "#F0DFA0",
+    "warm": "#C8803A",
+    "tint": "#8AB8E8",
+    "ink": "#E6E8EC",
+    "dim": "#8E949C",
+    "dimmer": "#34383E",
+    "bg": "#0A0B0D",
+    "panelBg": "#16181C",
+    "good": "#8AD0A0",
+    "bad": "#E85A4A",
+    "warn": "#E8C870"
+  },
+  "gradient": [
+    "#F2E6B8",
+    "#F0DFA0",
+    "#E8C870",
+    "#D8A850",
+    "#C8883E",
+    "#B07448",
+    "#A86A48",
+    "#8A5A70",
+    "#7A4AA0",
+    "#6050B8",
+    "#4A62D0",
+    "#4A7AD8",
+    "#7AA8E0",
+    "#9AAABA"
+  ],
+  "styles": {
+    "markdownHeading1": {
+      "fg": "highlight",
+      "bold": true
+    },
+    "codeType": {
+      "fg": "tertiary"
+    },
+    "codeFunction": {
+      "fg": "secondary"
+    },
+    "thinking": {
+      "fg": "#8AA0B8"
+    },
+    "paneRule": {
+      "fg": "#4A5058"
+    }
+  }
+}

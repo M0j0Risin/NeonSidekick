@@ -1,0 +1,72 @@
+{
+  "name": "bauhaus",
+  "description": "form follows function",
+  "colors": {
+    "primary": "#E8352B",
+    "secondary": "#F7C42B",
+    "tertiary": "#3F7FE8",
+    "deep": "#5A5A60",
+    "highlight": "#FFE07A",
+    "warm": "#FF7A2B",
+    "tint": "#8AB0FF",
+    "ink": "#F2EEE3",
+    "dim": "#9A968C",
+    "dimmer": "#3A3834",
+    "bg": "#0E0E10",
+    "panelBg": "#1C1C20",
+    "good": "#4FCF7A",
+    "bad": "#FF6A5A",
+    "warn": "#F7C42B"
+  },
+  "gradient": [
+    "#E8352B",
+    "#E8352B",
+    "#E8352B",
+    "#E8352B",
+    "#E8352B",
+    "#E8352B",
+    "#F7C42B",
+    "#F7C42B",
+    "#F7C42B",
+    "#F7C42B",
+    "#3F7FE8",
+    "#3F7FE8",
+    "#3F7FE8",
+    "#3F7FE8"
+  ],
+  "styles": {
+    "markdownHeading1": {
+      "fg": "bg",
+      "bg": "secondary",
+      "bold": true
+    },
+    "markdownHeading": {
+      "fg": "primary"
+    },
+    "markdownBullet": {
+      "fg": "primary"
+    },
+    "markdownQuoteBar": {
+      "fg": "tertiary"
+    },
+    "tableHeader": {
+      "fg": "secondary",
+      "underline": true
+    },
+    "menuHighlight": {
+      "fg": "bg",
+      "bg": "secondary"
+    },
+    "menuHighlightDim": {
+      "fg": "#4A3A08",
+      "bg": "secondary"
+    },
+    "codeKeyword": {
+      "fg": "primary",
+      "bold": true
+    },
+    "errorText": {
+      "underline": true
+    }
+  }
+}

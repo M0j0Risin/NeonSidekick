@@ -8,23 +8,28 @@ namespace NeonSidekick.UI;
 /// tab's <c>Theme</c> row or with <c>/theme</c>, the way <see cref="ThumbnailSize"/> maps its words.
 /// <see cref="Resolve"/> is the one place the saved string becomes a <see cref="ThemePalette"/>: a
 /// hand-edited value that is none of them falls back to <see cref="Default"/> with a warning.
-/// Named <c>ThemeName</c>, not <c>Theme</c>, so it never clashes with the palette class.
+/// Named <c>ThemeName</c>, not <c>Theme</c>, so it never clashes with the palette class. Since 2026-10-01 the user's own
+/// themes (<see cref="ThemeCatalog"/>) are names too wherever a themes folder or a scan is passed.
 /// </summary>
 public static class ThemeName
 {
     /// <summary>The compiled default, pinned by <c>AppSettingsTests</c>.</summary>
     public const string Default = "synthwave";
 
-    /// <summary>The names in menu order (<see cref="ThemePalette.All"/>'s).</summary>
+    /// <summary>The built-ins' names in menu order (<see cref="ThemePalette.All"/>'s); a scan's own are <see cref="ThemeScan.Names"/>.</summary>
     public static readonly string[] Names = ThemePalette.All.Select(p => p.Name).ToArray();
 
     private const string Category = "Theme";
 
     /// <summary>Trims and ignores case; false (and synthwave) for anything that is not one of <see cref="Names"/>.</summary>
-    public static bool TryParse(string? text, out ThemePalette palette)
+    public static bool TryParse(string? text, out ThemePalette palette) => TryParse(text, ThemePalette.All, out palette);
+
+    /// <summary>As <see cref="TryParse(string?, out ThemePalette)"/> among <paramref name="themes"/> (a <see cref="ThemeCatalog"/> scan's, 2026-10-01).</summary>
+    public static bool TryParse(string? text, IReadOnlyList<ThemePalette> themes, out ThemePalette palette)
     {
+        ArgumentNullException.ThrowIfNull(themes);
         string? name = text?.Trim();
-        foreach (var candidate in ThemePalette.All)
+        foreach (var candidate in themes)
         {
             if (string.Equals(candidate.Name, name, StringComparison.OrdinalIgnoreCase))
             {
@@ -38,22 +43,40 @@ public static class ThemeName
     }
 
     /// <summary>The note beside a name in the picker and <c>/theme</c>'s argument list; empty for an unknown one. Pinned.</summary>
-    public static string Describe(string name) => TryParse(name, out var palette) ? palette.Description : "";
+    public static string Describe(string name) => Describe(name, ThemePalette.All);
 
-    /// <summary>The palette in force for <paramref name="effective"/>; an unknown saved value warns and uses <see cref="Default"/>.</summary>
-    public static ThemePalette Resolve(AppSettingsData effective)
+    /// <summary>As <see cref="Describe(string)"/> among <paramref name="themes"/>.</summary>
+    public static string Describe(string name, IReadOnlyList<ThemePalette> themes) => TryParse(name, themes, out var palette) ? palette.Description : "";
+
+    /// <summary>The palette in force for <paramref name="effective"/> among the built-ins; an unknown saved value warns and uses <see cref="Default"/>.</summary>
+    public static ThemePalette Resolve(AppSettingsData effective) => Resolve(effective, ThemeCatalog.BuiltIn);
+
+    /// <summary>
+    /// As <see cref="Resolve(AppSettingsData)"/> with the user's themes of <paramref name="themesDirectory"/> too
+    /// (2026-10-01). A built-in's name is answered without reading the folder; another is looked for in a scan of it.
+    /// </summary>
+    public static ThemePalette Resolve(AppSettingsData effective, string? themesDirectory)
     {
         ArgumentNullException.ThrowIfNull(effective);
-        if (TryParse(effective.Theme, out var palette))
+        return TryParse(effective.Theme, out var builtIn) ? builtIn : Resolve(effective, ThemeCatalog.Scan(themesDirectory));
+    }
+
+    private static ThemePalette Resolve(AppSettingsData effective, ThemeScan scan)
+    {
+        ArgumentNullException.ThrowIfNull(effective);
+        if (TryParse(effective.Theme, scan.Themes, out var palette))
         {
             return palette;
         }
 
         DiagnosticLog.Warn(Category,
-            $"{nameof(AppSettingsData.Theme)}='{effective.Theme}' is not one of {string.Join(", ", Names)}. Using {Default}.");
+            $"{nameof(AppSettingsData.Theme)}='{effective.Theme}' is not one of {string.Join(", ", scan.Names)}. Using {Default}.");
         return ThemePalette.Synthwave;
     }
 
-    /// <summary>Puts <paramref name="effective"/>'s theme in force (<see cref="Theme.Use"/>).</summary>
+    /// <summary>Puts <paramref name="effective"/>'s theme in force (<see cref="Theme.Use"/>), among the built-ins.</summary>
     public static void Apply(AppSettingsData effective) => Theme.Use(Resolve(effective));
+
+    /// <summary>Puts <paramref name="effective"/>'s theme in force, among the built-ins and the themes of <paramref name="themesDirectory"/>.</summary>
+    public static void Apply(AppSettingsData effective, string? themesDirectory) => Theme.Use(Resolve(effective, themesDirectory));
 }

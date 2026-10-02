@@ -1,0 +1,29 @@
+{
+  "name": "nostromo",
+  "description": "amber phosphor",
+  "colors": {
+    "primary": "#FFB000",
+    "secondary": "#FFD27A",
+    "tertiary": "#E09A3A",
+    "deep": "#6E4600",
+    "highlight": "#FFE6A8",
+    "warm": "#FF8C1A",
+    "tint": "#FFC266",
+    "ink": "#FFE9C2",
+    "dim": "#9C7A45",
+    "dimmer": "#45341B",
+    "bg": "#0D0800",
+    "panelBg": "#1A1004",
+    "good": "#D4FF7A",
+    "bad": "#FF4A2E",
+    "warn": "#FFE6A8"
+  },
+  "gradient": [
+    "#6E4600",
+    "#CC8400",
+    "#FFB000",
+    "#FFD27A",
+    "#FFF3D6"
+  ],
+  "styles": {}
+}

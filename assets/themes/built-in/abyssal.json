@@ -1,0 +1,29 @@
+{
+  "name": "abyssal",
+  "description": "bioluminescent",
+  "colors": {
+    "primary": "#00FFD5",
+    "secondary": "#9D6BFF",
+    "tertiary": "#FFE45C",
+    "deep": "#1B3A6B",
+    "highlight": "#FFF3A0",
+    "warm": "#FFB86B",
+    "tint": "#6BD6FF",
+    "ink": "#E0F7FF",
+    "dim": "#6C8AA6",
+    "dimmer": "#1E2F48",
+    "bg": "#020A1A",
+    "panelBg": "#0A1830",
+    "good": "#5CFFA0",
+    "bad": "#FF4F7A",
+    "warn": "#FFF3A0"
+  },
+  "gradient": [
+    "#1B3A6B",
+    "#6BD6FF",
+    "#00FFD5",
+    "#9D6BFF",
+    "#FFE45C"
+  ],
+  "styles": {}
+}

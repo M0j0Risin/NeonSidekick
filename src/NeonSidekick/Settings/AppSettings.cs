@@ -120,6 +120,9 @@ public sealed class AppSettings : IDisposable
     /// <summary>The llama.cpp runtimes the embedded model runs on (2026-09-29): <c>llama</c> under the home, one folder per build and backend.</summary>
     public string LlamaDirectory => Path.Combine(StorageDirectory, "llama");
 
+    /// <summary>The user's themes (2026-10-01): <c>themes</c> under the home, every profile's (<see cref="UI.ThemeCatalog"/>).</summary>
+    public string ThemesDirectory => Path.Combine(StorageDirectory, UI.ThemeCatalog.DirectoryName);
+
     /// <summary>The global skills folder: <c>skills</c> under the home, every profile's (<c>Skills.SkillRoots</c>).</summary>
     public string GlobalSkillsDirectory => Path.Combine(StorageDirectory, Skills.SkillRoots.DirectoryName);
 

@@ -1,0 +1,66 @@
+{
+  "name": "glitch",
+  "description": "corrupted data",
+  "colors": {
+    "primary": "#FF2AD8",
+    "secondary": "#2AFFE8",
+    "tertiary": "#D8FF2A",
+    "deep": "#4A3888",
+    "highlight": "#FFF07A",
+    "warm": "#FF7A2A",
+    "tint": "#8A7AFF",
+    "ink": "#F0F0F0",
+    "dim": "#8E8A98",
+    "dimmer": "#34303C",
+    "bg": "#050307",
+    "panelBg": "#120E18",
+    "good": "#2AFF7A",
+    "bad": "#FF2A4A",
+    "warn": "#FFF07A"
+  },
+  "gradient": [
+    "#FF2AD8",
+    "#2AFFE8",
+    "#FF2AD8",
+    "#FFFFFF",
+    "#D8FF2A",
+    "#6A44A0",
+    "#6A44A0",
+    "#2AFFE8",
+    "#FF2AD8",
+    "#2A6AFF",
+    "#FFFFFF",
+    "#D8FF2A",
+    "#FF2A4A",
+    "#2AFFE8"
+  ],
+  "styles": {
+    "markdownHeading1": {
+      "fg": "bg",
+      "bg": "primary",
+      "bold": true
+    },
+    "selectedText": {
+      "fg": "bg",
+      "bg": "tertiary"
+    },
+    "spinner": {
+      "fg": "tertiary"
+    },
+    "codeDeleted": {
+      "strikethrough": true
+    },
+    "codeInserted": {
+      "underline": true
+    },
+    "markdownLinkUrl": {
+      "underline": true
+    },
+    "placeholder": {
+      "italic": true
+    },
+    "errorText": {
+      "bg": "#2A0A12"
+    }
+  }
+}

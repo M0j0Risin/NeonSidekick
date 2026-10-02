@@ -1,0 +1,37 @@
+{
+  "name": "collider",
+  "description": "particle collision",
+  "colors": {
+    "primary": "#FF3DB8",
+    "secondary": "#3DE8FF",
+    "tertiary": "#FFE45C",
+    "deep": "#2A2A6A",
+    "highlight": "#FFF8D0",
+    "warm": "#FF8A3D",
+    "tint": "#A08AFF",
+    "ink": "#EEF0F8",
+    "dim": "#8A8EA4",
+    "dimmer": "#2C303E",
+    "bg": "#04050A",
+    "panelBg": "#0E1018",
+    "good": "#5AFF9A",
+    "bad": "#FF4A4A",
+    "warn": "#FFE45C"
+  },
+  "gradient": [
+    "#2A9AC0",
+    "#3DE8FF",
+    "#8AF4FF",
+    "#E0FCFF",
+    "#FFFFFF",
+    "#FFE0F4",
+    "#FF8AD8",
+    "#FF3DB8",
+    "#C02A8A"
+  ],
+  "styles": {
+    "markdownHeading1": {
+      "fg": "tertiary"
+    }
+  }
+}

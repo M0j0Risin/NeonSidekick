@@ -1,0 +1,39 @@
+{
+  "name": "supernova",
+  "description": "stellar explosion",
+  "colors": {
+    "primary": "#FF6A3D",
+    "secondary": "#8AD8FF",
+    "tertiary": "#D04AFF",
+    "deep": "#3A1A6A",
+    "highlight": "#FFF0A0",
+    "warm": "#FF4A6A",
+    "tint": "#FFA0D8",
+    "ink": "#F5F0FF",
+    "dim": "#948CB0",
+    "dimmer": "#2E2844",
+    "bg": "#03020A",
+    "panelBg": "#0E0A1C",
+    "good": "#6AFFB0",
+    "bad": "#FF3D3D",
+    "warn": "#FFD04A"
+  },
+  "gradient": [
+    "#8A44D0",
+    "#D04AFF",
+    "#FF4A6A",
+    "#FF6A3D",
+    "#FFD04A",
+    "#E8F8FF",
+    "#FFD04A",
+    "#FF6A3D",
+    "#FF4A6A",
+    "#D04AFF",
+    "#8A44D0"
+  ],
+  "styles": {
+    "markdownHeading1": {
+      "fg": "secondary"
+    }
+  }
+}

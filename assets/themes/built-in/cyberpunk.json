@@ -1,0 +1,29 @@
+{
+  "name": "cyberpunk",
+  "description": "colorful",
+  "colors": {
+    "primary": "#FCEE0A",
+    "secondary": "#00F0FF",
+    "tertiary": "#FF2A6D",
+    "deep": "#7A1530",
+    "highlight": "#FFB800",
+    "warm": "#FF6B00",
+    "tint": "#C5F900",
+    "ink": "#F2F2F2",
+    "dim": "#8A8A99",
+    "dimmer": "#35353F",
+    "bg": "#0A0A12",
+    "panelBg": "#15151F",
+    "good": "#00FF9F",
+    "bad": "#FF003C",
+    "warn": "#FFB800"
+  },
+  "gradient": [
+    "#00F0FF",
+    "#7AF7FF",
+    "#FCEE0A",
+    "#FF6B00",
+    "#FF003C"
+  ],
+  "styles": {}
+}

@@ -1,0 +1,41 @@
+{
+  "name": "prism",
+  "description": "white light, split",
+  "colors": {
+    "primary": "#6AB0FF",
+    "secondary": "#FFE14D",
+    "tertiary": "#B27AFF",
+    "deep": "#3A3A5A",
+    "highlight": "#FFF6C0",
+    "warm": "#FF9A3D",
+    "tint": "#5AE8C8",
+    "ink": "#F2F2F7",
+    "dim": "#8E8E9C",
+    "dimmer": "#33333D",
+    "bg": "#050508",
+    "panelBg": "#121218",
+    "good": "#5AE88A",
+    "bad": "#FF4D5E",
+    "warn": "#FFC23D"
+  },
+  "gradient": [
+    "#FF4D4D",
+    "#FF9A3D",
+    "#FFE14D",
+    "#5AE88A",
+    "#5AB8FF",
+    "#9A6AFF",
+    "#FFFFFF",
+    "#9A6AFF",
+    "#5AB8FF",
+    "#5AE88A",
+    "#FFE14D",
+    "#FF9A3D",
+    "#FF4D4D"
+  ],
+  "styles": {
+    "markdownHeading1": {
+      "fg": "highlight"
+    }
+  }
+}

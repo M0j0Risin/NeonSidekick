@@ -857,7 +857,11 @@ internal sealed partial class SettingsMenu
     public const string ThemeTitle = "🎨 Theme";
 
     /// <summary>What <c>/theme &lt;name&gt;</c> answers to a word that is not one of <see cref="ThemeName.Names"/>. Pinned.</summary>
-    public static string ThemeNameError(string name) => $"No theme named \"{name}\". /theme takes " + string.Join(", ", ThemeName.Names[..^1]) + " or " + ThemeName.Names[^1] + ", or nothing to pick from a list.";
+    public static string ThemeNameError(string name) => ThemeNameError(name, ThemeName.Names);
+
+    /// <summary>As <see cref="ThemeNameError(string)"/> over <paramref name="names"/>, the built-ins and the user's themes (2026-10-01).</summary>
+    public static string ThemeNameError(string name, IReadOnlyList<string> names) =>
+        $"No theme named \"{name}\". /theme takes " + string.Join(", ", names.Take(names.Count - 1)) + " or " + names[^1] + ", or nothing to pick from a list.";
 
     /// <summary>What <c>/theme</c> says when the theme picked is the one already in force: nothing is cleared. Pinned.</summary>
     public static string ThemeAlreadyNotice(string name) => $"Theme: {name} (already in force)";
@@ -2478,8 +2482,15 @@ internal sealed partial class SettingsMenu
         Markup.Escape(name.PadRight(9)) + Theme.DimMarkup(ThumbnailSize.Describe(name));
 
     /// <summary>One row of the theme picker: the name and its note (padded to ten: the longest names are nine). Pinned.</summary>
-    public static string ThemeLabel(string name) =>
-        Markup.Escape(name.PadRight(10)) + Theme.DimMarkup(ThemeName.Describe(name));
+    public static string ThemeLabel(string name) => ThemeLabel(name, ThemePalette.All);
+
+    /// <summary>As <see cref="ThemeLabel(string)"/> among <paramref name="themes"/> (2026-10-01): padded to ten, or past the longest name when a user theme's is longer.</summary>
+    public static string ThemeLabel(string name, IReadOnlyList<ThemePalette> themes)
+    {
+        ArgumentNullException.ThrowIfNull(themes);
+        int width = Math.Max(10, themes.Max(t => t.Name.Length) + 1);
+        return Markup.Escape(name.PadRight(width)) + Theme.DimMarkup(ThemeName.Describe(name, themes));
+    }
 
     /// <summary>One row of the new-profile-mode picker: the mode and its hint (padded to nine: <c>advanced</c> is eight). Pinned.</summary>
     public static string NewProfileModeLabel(string name) =>
@@ -6237,14 +6248,15 @@ internal sealed partial class SettingsMenu
     /// <summary>The theme picker under the settings list: one <see cref="ThemeLabel"/> row per <see cref="ThemeName.Names"/> entry, the saved one under the cursor. The pick is put in force at once, so the pane wears it; the screen starts over when the pane closes (<see cref="SettingsChanges.Theme"/>).</summary>
     private async Task<bool> PickThemeRowAsync(AppSettingsData saved, CancellationToken cancellationToken)
     {
-        var page = new MenuPage(Crumb(FieldName(SettingsField.Theme)), ThemeRows(), PickKeys);
-        int? picked = await PickAsync(page, ThemeCursor(saved.Theme), cancellationToken).ConfigureAwait(false);
+        var themes = ScanThemes().Themes;
+        var page = new MenuPage(Crumb(FieldName(SettingsField.Theme)), ThemeRows(themes), PickKeys);
+        int? picked = await PickAsync(page, ThemeCursor(saved.Theme, themes), cancellationToken).ConfigureAwait(false);
         if (picked is not { } index)
         {
             return Unchanged();
         }
 
-        var palette = ThemePalette.All[index];
+        var palette = themes[index];
         Apply(SettingsField.Theme, d => d.Theme = palette.Name);
         Theme.Use(palette);
         return true;
@@ -6256,16 +6268,26 @@ internal sealed partial class SettingsMenu
     /// otherwise the themes as a one-level list opened on the one in force. Quiet on a change — the
     /// screen starts over and says so itself — and returns true only when the theme in force changed;
     /// the one already in force says <see cref="ThemeAlreadyNotice"/>, ESC <see cref="UnchangedNotice"/>.
-    /// Without menus the guard prints.
+    /// Without menus the guard prints. The user's themes (2026-10-01) are read afresh each time, their
+    /// files' problems said as warnings; <c>/theme export …</c> is <see cref="ExportTheme"/>.
     /// </summary>
     public async Task<bool> PickThemeAsync(string requestedName, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(requestedName);
-        if (!string.IsNullOrWhiteSpace(requestedName))
+        string request = requestedName.Trim();
+        if (request.Equals(ThemeText.ExportWord, StringComparison.OrdinalIgnoreCase)
+            || request.StartsWith(ThemeText.ExportWord + " ", StringComparison.OrdinalIgnoreCase))
         {
-            if (!ThemeName.TryParse(requestedName, out var named))
+            ExportTheme(request[ThemeText.ExportWord.Length..]);
+            return false;
+        }
+
+        var scan = ScanThemes();
+        if (request.Length > 0)
+        {
+            if (!ThemeName.TryParse(request, scan.Themes, out var named))
             {
-                Flow.Error(ThemeNameError(requestedName.Trim()));
+                Flow.Error(ThemeNameError(request, scan.Names));
                 return false;
             }
 
@@ -6278,15 +6300,81 @@ internal sealed partial class SettingsMenu
             return false;
         }
 
-        var page = new MenuPage(ThemeTitle, ThemeRows(), KeepKeys);
-        int? picked = await PickOnceAsync(page, ThemeCursor(Theme.Current.Name), cancellationToken).ConfigureAwait(false);
-        return picked is { } index ? SaveTheme(ThemePalette.All[index]) : Unchanged();
+        var page = new MenuPage(ThemeTitle, ThemeRows(scan.Themes), KeepKeys);
+        int? picked = await PickOnceAsync(page, ThemeCursor(Theme.Current.Name, scan.Themes), cancellationToken).ConfigureAwait(false);
+        return picked is { } index ? SaveTheme(scan.Themes[index]) : Unchanged();
+    }
+
+    /// <summary>
+    /// <c>/theme export &lt;name&gt; [new-name]</c> (2026-10-01, the user's ask): writes the theme as a full file —
+    /// every colour role, the gradient, its style changes (<see cref="ThemeFile.Export"/>) — to
+    /// <c>&lt;home&gt;/themes/&lt;new-name&gt;.json</c>, a starting point to edit. The new name defaults to
+    /// <c>&lt;name&gt;-custom</c>: the theme's own would clash with it and be skipped. Never overwrites a file and
+    /// never takes a name a theme already has. Nothing is put in force.
+    /// </summary>
+    private void ExportTheme(string args)
+    {
+        string[] words = args.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (words.Length is 0 or > 2)
+        {
+            Flow.Error(ThemeText.ExportUsage);
+            return;
+        }
+
+        var scan = ScanThemes();
+        if (!ThemeName.TryParse(words[0], scan.Themes, out var palette))
+        {
+            Flow.Error(ThemeNameError(words[0], scan.Names));
+            return;
+        }
+
+        string newName = words.Length == 2 ? words[1].ToLowerInvariant() : palette.Name + "-custom";
+        if (!ThemeFile.IsValidName(newName))
+        {
+            Flow.Error(ThemeText.ExportBadName(newName));
+            return;
+        }
+
+        if (ThemeName.TryParse(newName, scan.Themes, out _))
+        {
+            Flow.Error(ThemeText.ExportNameTaken(newName));
+            return;
+        }
+
+        string path = Path.Combine(_settings.ThemesDirectory, newName + ".json");
+        try
+        {
+            Directory.CreateDirectory(_settings.ThemesDirectory);
+            using var stream = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None);
+            using var writer = new StreamWriter(stream);
+            writer.Write(ThemeFile.Export(palette, newName));
+        }
+        catch (IOException) when (File.Exists(path))
+        {
+            Flow.Error(ThemeText.ExportExists(path));
+            return;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Flow.Error(ThemeText.ExportFailed(ex.Message));
+            return;
+        }
+
+        Sink.Notice(ThemeText.ExportDone(newName, path));
+    }
+
+    /// <summary>The themes as of now, the built-ins and the user's, each file's problem said as a warning.</summary>
+    private ThemeScan ScanThemes()
+    {
+        var scan = ThemeCatalog.Scan(_settings.ThemesDirectory);
+        ThemeCatalog.Report(scan);
+        return scan;
     }
 
     /// <summary>Saves <paramref name="palette"/>'s name (when the saved one differs) and puts it in force; true when the theme in force changed, else <see cref="ThemeAlreadyNotice"/>.</summary>
     private bool SaveTheme(ThemePalette palette)
     {
-        bool changed = !ReferenceEquals(Theme.Current, palette);
+        bool changed = !Theme.Current.Equals(palette);   // by look: a user theme is a new instance at every scan
         if (!string.Equals(_settings.Current.Theme, palette.Name, StringComparison.Ordinal))
         {
             _settings.Update(d => d.Theme = palette.Name);
@@ -6301,11 +6389,12 @@ internal sealed partial class SettingsMenu
         return changed;
     }
 
-    /// <summary>One <see cref="ThemeLabel"/> row per theme, in <see cref="ThemeName.Names"/> order.</summary>
-    private static List<string> ThemeRows() => ThemeName.Names.Select(ThemeLabel).ToList();
+    /// <summary>One <see cref="ThemeLabel(string, IReadOnlyList{ThemePalette})"/> row per theme of <paramref name="themes"/>, in its order.</summary>
+    private static List<string> ThemeRows(IReadOnlyList<ThemePalette> themes) => themes.Select(t => ThemeLabel(t.Name, themes)).ToList();
 
-    /// <summary>The row of <paramref name="name"/> (an unknown one reads as the default's, the first).</summary>
-    private static int ThemeCursor(string name) => ThemeName.TryParse(name, out var palette) ? Array.IndexOf(ThemeName.Names, palette.Name) : 0;
+    /// <summary>The row of <paramref name="name"/> among <paramref name="themes"/> (an unknown one reads as the default's, the first).</summary>
+    private static int ThemeCursor(string name, IReadOnlyList<ThemePalette> themes) =>
+        Math.Max(0, themes.ToList().FindIndex(t => string.Equals(t.Name, name.Trim(), StringComparison.OrdinalIgnoreCase)));
 
     /// <summary>The new-profile-mode picker under the settings list: one <see cref="NewProfileModeLabel"/> row per <see cref="NewProfileMode.Names"/> entry, the saved one under the cursor.</summary>
     private async Task<bool> PickNewProfileModeAsync(AppSettingsData saved, CancellationToken cancellationToken)

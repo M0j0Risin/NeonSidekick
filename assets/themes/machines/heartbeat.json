@@ -1,0 +1,42 @@
+{
+  "name": "heartbeat",
+  "description": "ECG monitor",
+  "colors": {
+    "primary": "#3DFF8A",
+    "secondary": "#5AE0FF",
+    "tertiary": "#FFE04A",
+    "deep": "#1A5A34",
+    "highlight": "#E0FFE8",
+    "warm": "#FFB04A",
+    "tint": "#FF8AD0",
+    "ink": "#E6F5EA",
+    "dim": "#7E9A88",
+    "dimmer": "#22382B",
+    "bg": "#020805",
+    "panelBg": "#0A1610",
+    "good": "#3DFF8A",
+    "bad": "#FF3B3B",
+    "warn": "#FFE04A"
+  },
+  "gradient": [
+    "#2A9A58",
+    "#2A9A58",
+    "#2A9A58",
+    "#1E7A44",
+    "#3DFF8A",
+    "#F0FFF4",
+    "#3DFF8A",
+    "#1E7A44",
+    "#2A9A58",
+    "#2A9A58",
+    "#2A9A58"
+  ],
+  "styles": {
+    "spinner": {
+      "fg": "primary"
+    },
+    "errorText": {
+      "underline": true
+    }
+  }
+}

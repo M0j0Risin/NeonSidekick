@@ -1,0 +1,33 @@
+{
+  "name": "miami",
+  "description": "pastel night, 1985",
+  "colors": {
+    "primary": "#3FE0D0",
+    "secondary": "#FF8FC4",
+    "tertiary": "#FFB86B",
+    "deep": "#1E5A66",
+    "highlight": "#FFF0A8",
+    "warm": "#FF8F7A",
+    "tint": "#B8A8FF",
+    "ink": "#F0F7F7",
+    "dim": "#84A3A6",
+    "dimmer": "#24393D",
+    "bg": "#061317",
+    "panelBg": "#0E2329",
+    "good": "#6BFFB0",
+    "bad": "#FF4F6A",
+    "warn": "#FFF0A8"
+  },
+  "gradient": [
+    "#3FE0D0",
+    "#8FE8E0",
+    "#FFB86B",
+    "#FF8FC4",
+    "#FF6FB5"
+  ],
+  "styles": {
+    "user": {
+      "bold": false
+    }
+  }
+}

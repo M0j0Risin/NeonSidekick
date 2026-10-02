@@ -1,0 +1,35 @@
+{
+  "name": "nebula",
+  "description": "stellar nursery",
+  "colors": {
+    "primary": "#FF4FD8",
+    "secondary": "#4FE8FF",
+    "tertiary": "#9D7BFF",
+    "deep": "#2A1C5E",
+    "highlight": "#FFF4D6",
+    "warm": "#FF8F6B",
+    "tint": "#7BB8FF",
+    "ink": "#EDE8FF",
+    "dim": "#8E88B0",
+    "dimmer": "#2C2846",
+    "bg": "#04030D",
+    "panelBg": "#0E0B22",
+    "good": "#6BFFC2",
+    "bad": "#FF5470",
+    "warn": "#FFD27A"
+  },
+  "gradient": [
+    "#6A44C0",
+    "#9D3FD0",
+    "#D048D8",
+    "#FF4FD8",
+    "#7BB8FF",
+    "#4FE8FF",
+    "#FFF4D6"
+  ],
+  "styles": {
+    "markdownBullet": {
+      "fg": "highlight"
+    }
+  }
+}

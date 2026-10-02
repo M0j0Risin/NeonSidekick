@@ -1,0 +1,69 @@
+{
+  "name": "deco",
+  "description": "the gilded age",
+  "colors": {
+    "primary": "#D8B05A",
+    "secondary": "#4ACBA0",
+    "tertiary": "#E8D8A8",
+    "deep": "#4A3E28",
+    "highlight": "#FFE8A8",
+    "warm": "#C88A4A",
+    "tint": "#8ADCC0",
+    "ink": "#F2E8D2",
+    "dim": "#9A9080",
+    "dimmer": "#38342C",
+    "bg": "#050505",
+    "panelBg": "#141210",
+    "good": "#6ADB9A",
+    "bad": "#E8504A",
+    "warn": "#FFC86A"
+  },
+  "gradient": [
+    "#6A5A3A",
+    "#D8B05A",
+    "#8A7448",
+    "#F2D88A",
+    "#8A7448",
+    "#D8B05A",
+    "#FFF4D0",
+    "#FFF4D0",
+    "#D8B05A",
+    "#8A7448",
+    "#F2D88A",
+    "#8A7448",
+    "#D8B05A",
+    "#6A5A3A"
+  ],
+  "styles": {
+    "markdownHeading1": {
+      "fg": "highlight",
+      "bold": true,
+      "underline": true
+    },
+    "markdownHeading": {
+      "fg": "primary"
+    },
+    "markdownBullet": {
+      "fg": "secondary"
+    },
+    "tableHeader": {
+      "fg": "primary",
+      "underline": true
+    },
+    "menuHighlight": {
+      "fg": "bg",
+      "bg": "primary"
+    },
+    "menuHighlightDim": {
+      "fg": "#4A3A18",
+      "bg": "primary"
+    },
+    "codeKeyword": {
+      "fg": "primary",
+      "bold": true
+    },
+    "codeString": {
+      "fg": "secondary"
+    }
+  }
+}

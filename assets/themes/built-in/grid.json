@@ -1,0 +1,29 @@
+{
+  "name": "grid",
+  "description": "light cycle",
+  "colors": {
+    "primary": "#00E5FF",
+    "secondary": "#FF9E1B",
+    "tertiary": "#7DF9FF",
+    "deep": "#0A4F66",
+    "highlight": "#FFD27A",
+    "warm": "#FF7A1A",
+    "tint": "#B8F4FF",
+    "ink": "#E6FBFF",
+    "dim": "#6F97A3",
+    "dimmer": "#203840",
+    "bg": "#000508",
+    "panelBg": "#061419",
+    "good": "#3DFFB0",
+    "bad": "#FF3B3B",
+    "warn": "#FFD27A"
+  },
+  "gradient": [
+    "#0A4F66",
+    "#00A8C8",
+    "#00E5FF",
+    "#7DF9FF",
+    "#FF9E1B"
+  ],
+  "styles": {}
+}

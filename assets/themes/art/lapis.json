@@ -1,0 +1,36 @@
+{
+  "name": "lapis",
+  "description": "lapis and gold",
+  "colors": {
+    "primary": "#E6B84A",
+    "secondary": "#5A8FFF",
+    "tertiary": "#3FC7B0",
+    "deep": "#1C3170",
+    "highlight": "#F5DC8C",
+    "warm": "#D9803A",
+    "tint": "#8FB0FF",
+    "ink": "#F0E9D6",
+    "dim": "#8C93AD",
+    "dimmer": "#2A3352",
+    "bg": "#050A1C",
+    "panelBg": "#0E1836",
+    "good": "#7FD98A",
+    "bad": "#E8505B",
+    "warn": "#F5DC8C"
+  },
+  "gradient": [
+    "#3A5AC0",
+    "#5A8FFF",
+    "#3FC7B0",
+    "#E6B84A",
+    "#F5DC8C"
+  ],
+  "styles": {
+    "tableHeader": {
+      "fg": "primary"
+    },
+    "markdownHeading": {
+      "fg": "highlight"
+    }
+  }
+}

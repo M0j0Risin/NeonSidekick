@@ -1,0 +1,33 @@
+{
+  "name": "circuit",
+  "description": "solder mask and copper",
+  "colors": {
+    "primary": "#E8A54A",
+    "secondary": "#8AD0FF",
+    "tertiary": "#6BE8A0",
+    "deep": "#1F5A38",
+    "highlight": "#FFE08A",
+    "warm": "#FF8A3D",
+    "tint": "#C8B8FF",
+    "ink": "#F2F5EE",
+    "dim": "#87A893",
+    "dimmer": "#23412F",
+    "bg": "#04140C",
+    "panelBg": "#0A2416",
+    "good": "#6BE8A0",
+    "bad": "#FF4A4A",
+    "warn": "#FFB03A"
+  },
+  "gradient": [
+    "#2F7A50",
+    "#4FAA6E",
+    "#E8A54A",
+    "#FFE08A",
+    "#FFF6D6"
+  ],
+  "styles": {
+    "paneRule": {
+      "fg": "primary"
+    }
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "name": "sakura",
+  "description": "blossoms at night",
+  "colors": {
+    "primary": "#FF8FB8",
+    "secondary": "#A8E6CF",
+    "tertiary": "#C9A0FF",
+    "deep": "#5A2A48",
+    "highlight": "#FFE3A3",
+    "warm": "#FFB08A",
+    "tint": "#FFC7DD",
+    "ink": "#FBEFF4",
+    "dim": "#A8909E",
+    "dimmer": "#45343F",
+    "bg": "#120A10",
+    "panelBg": "#22141D",
+    "good": "#9EE6B8",
+    "bad": "#FF5C6C",
+    "warn": "#FFE3A3"
+  },
+  "gradient": [
+    "#9A5288",
+    "#C9A0FF",
+    "#FF8FB8",
+    "#FFC7DD",
+    "#FFE3A3"
+  ],
+  "styles": {
+    "markdownBullet": {
+      "fg": "primary"
+    },
+    "markdownQuoteBar": {
+      "fg": "primary"
+    }
+  }
+}

@@ -141,6 +141,62 @@ public class ThemeTests
         Assert.NotEqual(p.Bg, p.PanelBg);
     }
 
+    // ── Style changes (2026-10-01, the user's themes) ───────────────────────
+
+    [Fact]
+    public void NoChanges_AnAliasIsItsSourcesStyle()
+    {
+        using var scope = new ThemeScope();
+        Assert.Equal(Theme.AccentSecondary, Theme.User);
+        Assert.Equal(Theme.AccentSecondary, Theme.SpinnerStyle);
+        Assert.Equal(Theme.DimText, Theme.Hint);
+        Assert.Equal(Theme.CodeKeyword, Theme.CodeTag);
+        Assert.Equal(Theme.PaneRule, Theme.MarkdownRule);
+    }
+
+    [Fact]
+    public void AChange_RestylesItsSlot_AndFlowsIntoItsAliases_ButNotIntoOneChangedItself()
+    {
+        using var scope = new ThemeScope();
+        var green = new Color(0, 0xFF, 0);
+        var red = new Color(0xFF, 0, 0);
+        Theme.Use(ThemePalette.Synthwave with
+        {
+            Name = "custom",
+            Styles = new Dictionary<ThemeStyleSlot, StyleOverride>
+            {
+                [ThemeStyleSlot.AccentSecondary] = new(Foreground: green, Clear: Decoration.Bold),
+                [ThemeStyleSlot.Spinner] = new(Foreground: red),
+                [ThemeStyleSlot.CodeComment] = new(Background: red, Set: Decoration.Underline, Clear: Decoration.Italic),
+            },
+        });
+
+        Assert.Equal(green, Theme.AccentSecondary.Foreground);
+        Assert.Equal(Decoration.None, Theme.AccentSecondary.Decoration);
+        Assert.Equal(green, Theme.User.Foreground);              // the alias follows its source
+        Assert.Equal(green, Theme.MarkdownHeading.Foreground);
+        Assert.Equal(red, Theme.SpinnerStyle.Foreground);        // changed itself
+        Assert.Equal(Decoration.None, Theme.SpinnerStyle.Decoration);   // over its source's final style
+        Assert.Equal(ThemePalette.Synthwave.Dim, Theme.CodeComment.Foreground);
+        Assert.Equal(red, Theme.CodeComment.Background);
+        Assert.Equal(Decoration.Underline, Theme.CodeComment.Decoration);
+        Assert.Equal(ThemePalette.Synthwave.Secondary, Theme.TableHeader.Foreground);   // no alias: untouched
+        Assert.Equal(ThemePalette.Synthwave.Secondary, Theme.Secondary);                // the palette colour stays
+    }
+
+    [Fact]
+    public void Synthwave_StylesAreTheOriginalCompositions()
+    {
+        using var scope = new ThemeScope();
+        var p = ThemePalette.Synthwave;
+        Assert.Equal(new Style(p.Primary, decoration: Decoration.Bold), Theme.Accent);
+        Assert.Equal(new Style(p.Ink, p.PanelBg), Theme.MenuHighlight);
+        Assert.Equal(new Style(p.Bg, p.Secondary), Theme.SelectedText);
+        Assert.Equal(new Style(p.Dim, p.PanelBg, Decoration.Italic), Theme.ThinkingText);
+        Assert.Equal(new Style(p.Tertiary, p.PanelBg, Decoration.Bold), Theme.CodeHeading);
+        Assert.Equal(new Style(p.Dimmer), Theme.Placeholder);
+    }
+
     /// <summary>The WCAG 2 contrast ratio of two colours, 1 to 21.</summary>
     private static double Contrast(Color a, Color b)
     {

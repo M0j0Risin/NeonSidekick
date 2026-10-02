@@ -27,7 +27,9 @@ namespace NeonSidekick.UI;
 /// <param name="Good">Success, enabled, connected.</param>
 /// <param name="Bad">Failure, error.</param>
 /// <param name="Warn">A warning.</param>
-/// <param name="GradientStops">The five stops of the banner title and its rule, left to right.</param>
+/// <param name="GradientStops">The stops of the banner title and its rule, left to right: five on every built-in, 2 to 16 from a theme file.</param>
+/// <param name="Styles">A theme file's changes to single styles (2026-10-01, the user's ask; <see cref="ThemeStyleSlot"/>), its base's under its own; null on every built-in.</param>
+/// <param name="SourcePath">The file a user theme was read from (<see cref="ThemeCatalog"/>); null on a built-in.</param>
 public sealed record ThemePalette(
     string Name,
     string Description,
@@ -46,7 +48,9 @@ public sealed record ThemePalette(
     Color Good,
     Color Bad,
     Color Warn,
-    Color[] GradientStops)
+    Color[] GradientStops,
+    IReadOnlyDictionary<ThemeStyleSlot, StyleOverride>? Styles = null,
+    string? SourcePath = null)
 {
     /// <summary>The original neon sunset (the default): hot magenta, cyan, violet, sunset amber on deep space.</summary>
     public static readonly ThemePalette Synthwave = Build(
@@ -251,6 +255,94 @@ public sealed record ThemePalette(
     /// <summary>Every theme, in menu order (the default first, newcomers last).</summary>
     public static readonly IReadOnlyList<ThemePalette> All = [Synthwave, Netrunner, Nostromo, Noir, Cyberpunk, Vaporwave, Mainframe, Grid, Replicant, Abyssal];
 
+    /// <summary>True for the compiled themes; false for one read from <c>&lt;home&gt;/themes</c>.</summary>
+    public bool IsBuiltIn => SourcePath is null;
+
+    /// <summary>The colour of <paramref name="slot"/>.</summary>
+    public Color ColorOf(ThemeColorSlot slot) => slot switch
+    {
+        ThemeColorSlot.Primary => Primary,
+        ThemeColorSlot.Secondary => Secondary,
+        ThemeColorSlot.Tertiary => Tertiary,
+        ThemeColorSlot.Deep => Deep,
+        ThemeColorSlot.Highlight => Highlight,
+        ThemeColorSlot.Warm => Warm,
+        ThemeColorSlot.Tint => Tint,
+        ThemeColorSlot.Ink => Ink,
+        ThemeColorSlot.Dim => Dim,
+        ThemeColorSlot.Dimmer => Dimmer,
+        ThemeColorSlot.Bg => Bg,
+        ThemeColorSlot.PanelBg => PanelBg,
+        ThemeColorSlot.Good => Good,
+        ThemeColorSlot.Bad => Bad,
+        ThemeColorSlot.Warn => Warn,
+        _ => throw new ArgumentOutOfRangeException(nameof(slot), slot, null),
+    };
+
+    /// <summary>Every colour, in <see cref="ThemeColorSlot"/> order.</summary>
+    public Color[] Colors() => Enumerable.Range(0, ThemeKeys.Colors.Count).Select(i => ColorOf((ThemeColorSlot)i)).ToArray();
+
+    /// <summary>
+    /// A palette from <paramref name="colors"/> in <see cref="ThemeColorSlot"/> order (<see cref="ThemeFile"/>'s way in).
+    /// </summary>
+    public static ThemePalette FromColors(
+        string name, string description, Color[] colors, Color[] gradient,
+        IReadOnlyDictionary<ThemeStyleSlot, StyleOverride>? styles, string? sourcePath)
+    {
+        ArgumentNullException.ThrowIfNull(colors);
+        if (colors.Length != ThemeKeys.Colors.Count)
+        {
+            throw new ArgumentException($"Expected {ThemeKeys.Colors.Count} colours, got {colors.Length}.", nameof(colors));
+        }
+
+        return new ThemePalette(name, description, colors[0], colors[1], colors[2], colors[3], colors[4], colors[5], colors[6],
+            colors[7], colors[8], colors[9], colors[10], colors[11], colors[12], colors[13], colors[14], gradient, styles, sourcePath);
+    }
+
+    /// <summary>The gradient a theme that names none gets: secondary → tertiary → primary → warm → highlight (synthwave's sunset).</summary>
+    public static Color[] DerivedGradient(Color primary, Color secondary, Color tertiary, Color warm, Color highlight) =>
+        [secondary, tertiary, primary, warm, highlight];
+
+    /// <summary>
+    /// Value equality (2026-10-01): a user theme is read afresh at every scan, a new instance each time, so
+    /// <see cref="Theme.Use"/> and <c>/theme</c> ask whether the <em>look</em> changed — the colours, the gradient,
+    /// the style changes — not whether it is the same object. The generated equality would compare the array and the
+    /// dictionary by reference.
+    /// </summary>
+    public bool Equals(ThemePalette? other)
+    {
+        if (other is null)
+        {
+            return false;
+        }
+
+        if (ReferenceEquals(this, other))
+        {
+            return true;
+        }
+
+        return string.Equals(Name, other.Name, StringComparison.Ordinal)
+            && string.Equals(Description, other.Description, StringComparison.Ordinal)
+            && string.Equals(SourcePath, other.SourcePath, StringComparison.Ordinal)
+            && Colors().SequenceEqual(other.Colors())
+            && GradientStops.SequenceEqual(other.GradientStops)
+            && SameStyles(Styles, other.Styles);
+    }
+
+    /// <inheritdoc />
+    public override int GetHashCode() => HashCode.Combine(StringComparer.Ordinal.GetHashCode(Name), Primary, Bg);
+
+    private static bool SameStyles(IReadOnlyDictionary<ThemeStyleSlot, StyleOverride>? a, IReadOnlyDictionary<ThemeStyleSlot, StyleOverride>? b)
+    {
+        int countA = a?.Count ?? 0, countB = b?.Count ?? 0;
+        if (countA != countB)
+        {
+            return false;
+        }
+
+        return countA == 0 || a!.All(pair => b!.TryGetValue(pair.Key, out var other) && pair.Value == other);
+    }
+
     /// <summary>
     /// A palette with synthwave's two derived slots filled in when a theme leaves them out:
     /// <c>Warn</c> is the <paramref name="highlight"/> (synthwave's amber) and the gradient runs
@@ -262,5 +354,5 @@ public sealed record ThemePalette(
         Color highlight, Color warm, Color tint, Color ink, Color dim, Color dimmer, Color bg, Color panelBg,
         Color good, Color bad, Color? warn, Color[]? gradient) =>
         new(name, description, primary, secondary, tertiary, deep, highlight, warm, tint, ink, dim, dimmer, bg, panelBg,
-            good, bad, warn ?? highlight, gradient ?? [secondary, tertiary, primary, warm, highlight]);
+            good, bad, warn ?? highlight, gradient ?? DerivedGradient(primary, secondary, tertiary, warm, highlight));
 }

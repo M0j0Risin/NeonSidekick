@@ -1,0 +1,29 @@
+{
+  "name": "mainframe",
+  "description": "blue phosphor",
+  "colors": {
+    "primary": "#6EC8FF",
+    "secondary": "#D6F0FF",
+    "tertiary": "#3D8BFF",
+    "deep": "#1A3F7A",
+    "highlight": "#BDF0FF",
+    "warm": "#8FB8FF",
+    "tint": "#9ADCFF",
+    "ink": "#E2F2FF",
+    "dim": "#6A88A8",
+    "dimmer": "#22324A",
+    "bg": "#020812",
+    "panelBg": "#081628",
+    "good": "#7AFFD4",
+    "bad": "#FF4D5E",
+    "warn": "#BDF0FF"
+  },
+  "gradient": [
+    "#1A3F7A",
+    "#2F6FD0",
+    "#6EC8FF",
+    "#D6F0FF",
+    "#FFFFFF"
+  ],
+  "styles": {}
+}

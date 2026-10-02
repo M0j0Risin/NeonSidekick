@@ -1,0 +1,74 @@
+{
+  "name": "inkwash",
+  "description": "sumi-e and a red seal",
+  "colors": {
+    "primary": "#E0DAD0",
+    "secondary": "#B8B2A6",
+    "tertiary": "#E0482E",
+    "deep": "#4A4844",
+    "highlight": "#F2EEE6",
+    "warm": "#C8C0B0",
+    "tint": "#A8A298",
+    "ink": "#E8E4DA",
+    "dim": "#8E8A82",
+    "dimmer": "#363430",
+    "bg": "#0B0B0A",
+    "panelBg": "#181816",
+    "good": "#A8C8A0",
+    "bad": "#E8503A",
+    "warn": "#D8B87A"
+  },
+  "gradient": [
+    "#F2EEE6",
+    "#F2EEE6",
+    "#DCD6CC",
+    "#C6C0B6",
+    "#B0AAA0",
+    "#A09A92",
+    "#948F88",
+    "#857F79",
+    "#77736E",
+    "#6B6763",
+    "#625E5A",
+    "#5C5854",
+    "#5A5652",
+    "#E0482E"
+  ],
+  "styles": {
+    "accent": {
+      "bold": false
+    },
+    "markdownHeading1": {
+      "fg": "highlight",
+      "bold": true
+    },
+    "markdownHeading": {
+      "fg": "primary",
+      "bold": false,
+      "italic": true
+    },
+    "markdownBullet": {
+      "fg": "tertiary"
+    },
+    "markdownQuoteBar": {
+      "fg": "tertiary"
+    },
+    "codeKeyword": {
+      "fg": "highlight",
+      "bold": true
+    },
+    "codeType": {
+      "fg": "primary"
+    },
+    "codeString": {
+      "fg": "warm",
+      "italic": true
+    },
+    "codeNumber": {
+      "fg": "tertiary"
+    },
+    "codeFunction": {
+      "fg": "secondary"
+    }
+  }
+}

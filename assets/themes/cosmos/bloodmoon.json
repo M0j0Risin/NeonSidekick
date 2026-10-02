@@ -1,0 +1,37 @@
+{
+  "name": "bloodmoon",
+  "description": "lunar eclipse",
+  "colors": {
+    "primary": "#E8503A",
+    "secondary": "#E8E0D0",
+    "tertiary": "#C08A6A",
+    "deep": "#5A1A14",
+    "highlight": "#F0D8B0",
+    "warm": "#FF7A4A",
+    "tint": "#D8A0A0",
+    "ink": "#F2E6E0",
+    "dim": "#9A8A88",
+    "dimmer": "#3A2C2C",
+    "bg": "#060304",
+    "panelBg": "#140A0C",
+    "good": "#9ADBA0",
+    "bad": "#FF3D7A",
+    "warn": "#F0C060"
+  },
+  "gradient": [
+    "#F2ECE0",
+    "#C8C0B0",
+    "#A88A70",
+    "#C0583E",
+    "#B0302A",
+    "#C0583E",
+    "#A88A70",
+    "#C8C0B0",
+    "#F2ECE0"
+  ],
+  "styles": {
+    "markdownHeading1": {
+      "fg": "secondary"
+    }
+  }
+}

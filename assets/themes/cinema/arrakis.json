@@ -1,0 +1,28 @@
+{
+  "name": "arrakis",
+  "description": "spice and sand",
+  "colors": {
+    "primary": "#E8892B",
+    "secondary": "#5AA9E6",
+    "tertiary": "#D9B26F",
+    "deep": "#6B4A22",
+    "highlight": "#F6D58E",
+    "warm": "#D9622B",
+    "tint": "#B8C4D6",
+    "ink": "#F3E6CF",
+    "dim": "#A08C6E",
+    "dimmer": "#4A3D2C",
+    "bg": "#120C06",
+    "panelBg": "#22180D",
+    "good": "#A6D96A",
+    "bad": "#FF5A4A",
+    "warn": "#F6D58E"
+  },
+  "gradient": [
+    "#6B4A22",
+    "#D9B26F",
+    "#E8892B",
+    "#D9622B",
+    "#5AA9E6"
+  ]
+}

@@ -218,7 +218,7 @@ Settings that an environment variable or flag can override for one launch are li
 | Show image thumbnails | Draws a small colour block of each picture you send under your line, of each picture a tool fetches or makes, and of each `/botchat` picture. `/view` and `/imagine` draw theirs either way. | on |
 | Image thumbnail size | `tiny` (32×8), `small` (48×12), `medium` (64×16), `large` (80×20) or `xlarge` (96×24) columns × rows, or `fullsize`: each picture as large as the transcript allows, stacked. | `small` |
 | Copy user prompt | `/copy` includes your prompt above the reply. When off, it copies the reply alone. | on |
-| Theme | `synthwave`, `netrunner` (green phosphor), `nostromo` (amber phosphor), `noir` (greyscale), `cyberpunk` (colourful), `vaporwave` (pastel), `mainframe` (blue phosphor), `grid` (light cycle), `replicant` (smog and sodium) or `abyssal` (bioluminescent). | `synthwave` |
+| Theme | `synthwave`, `netrunner` (green phosphor), `nostromo` (amber phosphor), `noir` (greyscale), `cyberpunk` (colourful), `vaporwave` (pastel), `mainframe` (blue phosphor), `grid` (light cycle), `replicant` (smog and sodium) or `abyssal` (bioluminescent), followed by your own themes from the `themes` folder (see [Custom themes](#custom-themes)). | `synthwave` |
 | Welcome splash | Shows pictures under the banner at startup, until you send the first line: `fullsize`, `tiled` or `disabled`. See Welcome splash below. | `fullsize` |
 | Show header | Shows the banner (the title, the version and the rule under it) at startup and after `/clear`, `/splash`, `/theme` and a profile switch. Off, the screen starts with the transcript. `/new` keeps its own rule either way. `/header` and Ctrl+Alt+H flip it; the change shows at the next clear. | on |
 | Working directory in header | Prints the working directory at the right of the banner's title line. | off |
@@ -890,7 +890,7 @@ Type `/` to list every command with a short summary. After a command and a space
 | `/sys` | Show the system prompt and the tools sent to the model. |
 | `/tb [on \| off]` | Show or hide the toolbar (*Show toolbar*). On its own it hides the toolbar, or shows it again with the items it last had (the default five the first time); `on` and `off` say which. Works while a reply runs; Ctrl+T runs it too. |
 | `/test [id \| reasoning \| structured \| long \| all \| history]` | Run benchmark tests against the connected model and save the results. On its own it lists the tests with their last verdicts. See Benchmark tests. |
-| `/theme [name]` | Switch the colour theme (the *Theme* setting). During a reply, it runs when the reply ends. |
+| `/theme [name]` | Switch the colour theme (the *Theme* setting), built-in or [custom](#custom-themes). During a reply, it runs when the reply ends. `/theme export <name> [new-name]` writes a theme to the `themes` folder as a file to edit (see [Custom themes](#custom-themes)). |
 | `/timer [duration [name] \| stop <name> \| stop all]` | List the timers, start one (`10m`, `90s`, `1h30m`), or stop one. |
 | `/tools` | Switch the model's tools on or off and edit their settings (Web, Files, Shell, Ask, Claude, Home Assistant, Print, Obsidian, ComfyUI, SQL, Oracle, MySQL, UNC, Git). |
 | `/tree [path]` | Print a tree of the working directory. Hidden, system and dot entries appear only when *File browser/tree mode* is `show-hidden`. `.git` folders are always left out unless you name one as the path. |
@@ -1054,6 +1054,65 @@ The viewer and the ComfyUI picture strip follow each other:
   * Only `profile.json` is copied, and the target keeps its own working directory. Memories, persona, operating rules, voice directive and MCP servers stay as they are.
   * Any profile can be overwritten, `default` included. A pull clears the conversation, as a reset does.
 * The *LLM API key*, *Claude API key* and *Home Assistant API key* are kept in `profile.json`, encrypted for your Windows account (DPAPI, Windows' built-in per-user encryption; stored as `dpapi:…`). A key typed into the file by hand is encrypted the next time the profile loads (the `empty` placeholder stays as it is). An encrypted key can only be read by the same Windows user on the same machine.
+
+#### Custom themes
+
+Your own themes are JSON files in the `themes` folder of the home (`%USERPROFILE%\.neonsidekick\themes`, or under `NEONSIDEKICK_HOME`), shared by every profile. They appear after the built-ins in `/theme`, its argument list and the *Theme* setting, sorted by name. The folder is read each time one of those opens, so a new or edited file shows up without a restart; pick the theme again to see an edit.
+
+The easiest start is `/theme export <name> [new-name]`. It writes any theme to `themes\<new-name>.json` with every colour filled in. The new name defaults to `<name>-custom`, and an existing file is never overwritten.
+
+```jsonc
+{
+  "name": "dracula",                 // optional: the file name when left out
+  "description": "vampire purple",   // optional: the note beside the name ("custom theme" when left out)
+  "base": "synthwave",               // optional: a built-in or another of your themes (synthwave when left out)
+  "colors": { "primary": "#FF79C6", "secondary": "#8BE9FD", "ink": "#F8F8F2", "bg": "#282A36", "panelBg": "#44475A" },
+  "gradient": ["#8BE9FD", "#BD93F9", "#FF79C6", "#FFB86C", "#F1FA8C"],
+  "styles": {
+    "codeComment": { "fg": "#6272A4", "italic": true },
+    "codeKeyword": { "fg": "primary", "bold": true },
+    "menuHighlight": { "bg": "#44475A" }
+  }
+}
+```
+
+* **A file only says what it changes.** Anything left out comes from `base`: colours, gradient and style changes. A base that is itself a file can build on another, as long as the chain doesn't loop.
+* **Names** are 1 to 32 lower-case letters, digits, `-` or `_`, starting with a letter or digit, and not `export`. A file named like a built-in theme, or like a theme an earlier file (by file name) already took, is skipped.
+* **Colours** are `#RRGGBB` or `#RGB`. Comments and trailing commas are allowed.
+* **Derived colours.** On synthwave and most built-ins, `warn` is the highlight and the gradient runs secondary → tertiary → primary → warm → highlight. If the base works that way and your file sets neither, they are worked out again from your colours, so the banner wears your accents. A base that sets its own (netrunner's gradient, noir's warn) passes it on unchanged.
+* **Problems.** A file that can't be read, isn't valid JSON, has a bad name or a missing or looping base is skipped. A misspelled key or a bad colour is ignored, and the rest of the theme still loads. Each problem shows as a warning naming the file when `/theme` or the *Theme* setting opens.
+
+**Colour roles** (`colors`). Every style below is made from these.
+
+| Role | What it colours |
+|------|-----------------|
+| `primary` | The main accent: headings, borders, keywords, markup tags. |
+| `secondary` | The counter-accent: your lines, the spinner, table headers, inline code, types and keys, the selection. |
+| `tertiary` | The third accent: section headings, bullets, the quote bar, function calls, the paste label. |
+| `deep` | The receding structural colour: the pane rule, a reply table's border. |
+| `highlight` | The warm highlight: string literals. |
+| `warm` | Numbers. |
+| `tint` | A soft accent: `$variables`. |
+| `ink` | Body text. |
+| `dim` | Secondary, dim text and the hint row. |
+| `dimmer` | A step darker than `dim`: the input row's ghost text. |
+| `bg` | The page background (the selection's text, disabled menu rows, a picture's transparent pixels, the viewer). |
+| `panelBg` | The lifted fill: code blocks, the highlighted menu row. |
+| `good` | Success, enabled, connected. |
+| `bad` | Failure, error. |
+| `warn` | A warning. |
+
+`gradient` is the banner title and its rule, left to right, with 2 to 16 stops.
+
+**Style changes** (`styles`). Each entry can set `fg` and `bg` (a hex colour, or a role name such as `"dim"` meaning that role in this theme) and turn `bold`, `italic`, `underline`, `dim` or `strikethrough` on (`true`) or off (`false`). Anything an entry leaves out stays as the theme makes it. The styles are:
+
+* **Text:** `body`, `dimText`, `accent`, `accentSecondary`, `accentTertiary`, `label`, `errorText`, `goodText`, `warnText`.
+* **Screen:** `user` (your lines), `assistant` (the reply), `systemText` (notices), `sectionHeading`, `border`, `tableHeader`, `spinner`, `paneRule`, `hint`, `trailerMark`, `pasteLabel`, `placeholder`, `selectedText`.
+* **Menus:** `menuHighlight`, `menuHighlightDim`, `menuDisabled`.
+* **Replies:** `markdownBold`, `markdownItalic`, `markdownCode`, `markdownCodeBlock`, `markdownCodeLabel`, `thinking`, `markdownHeading1`, `markdownHeading`, `markdownBullet`, `markdownQuoteBar`, `markdownQuote`, `markdownLinkUrl`, `markdownRule`.
+* **Code highlighting:** `codeKeyword`, `codeType`, `codeString`, `codeNumber`, `codeComment`, `codePunctuation`, `codeFunction`, `codeVariable`, `codeAttribute`, `codeTag`, `codeHeading`, `codeInserted`, `codeDeleted`.
+
+Some styles start as copies of another: `user`, `spinner` and `markdownHeading` copy `accentSecondary`; `assistant` copies `body`; `systemText`, `hint`, `markdownCodeLabel`, `markdownQuote` and `markdownLinkUrl` copy `dimText`; `sectionHeading` copies `accentTertiary`; `markdownHeading1` copies `accent`; `markdownBullet` and `markdownQuoteBar` copy `trailerMark`; `markdownRule` copies `paneRule`; `codeAttribute` copies `codeType`; `codeTag` copies `codeKeyword`. Changing the original changes its copies too, unless a copy has a change of its own. Anything drawn straight in a role's colour rather than through one of these styles follows `colors` only.
 
 </details>
 

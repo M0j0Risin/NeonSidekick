@@ -311,7 +311,7 @@ public sealed class SidekickApp
 
         // The saved theme in force before anything is drawn (2026-09-23): the banner, the check
         // modes' output and the headless REPL wear it as the screen does.
-        ThemeName.Apply(EffectiveSettings);
+        ThemeName.Apply(EffectiveSettings, _settings.ThemesDirectory);
 
         if (options.Headless)
         {

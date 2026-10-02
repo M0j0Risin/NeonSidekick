@@ -3207,7 +3207,7 @@ internal sealed partial class ChatScreen
     /// (<c>Complete(query, ImageFile.IsImagePath)</c>, for <c>/view</c>) — <see cref="ArgumentPaths"/> —
     /// the disk reads behind a function each, so <c>/tts o</c> scans no catalog.
     /// </summary>
-    public sealed record ArgumentSources(Func<IReadOnlyList<string>> Profiles, string LoadedProfile, IReadOnlyList<string> Timers, Func<string, IReadOnlyList<string>> Folders, Func<string, MentionResult> TextFiles, Func<string, MentionResult> ImageFiles, Func<IReadOnlyList<CompletionItem>>? Sessions = null, Func<IReadOnlyList<CompletionItem>>? Skills = null, Func<string, IReadOnlyList<string>>? VaultFolders = null, Func<IReadOnlyList<CompletionItem>>? Workflows = null, bool Planning = false, Func<IReadOnlyList<CompletionItem>>? Plans = null, Func<string, IReadOnlyList<CompletionItem>>? Home = null, Func<string, MentionResult>? AnyFiles = null, Func<string, IReadOnlyList<CompletionItem>>? Print = null);
+    public sealed record ArgumentSources(Func<IReadOnlyList<string>> Profiles, string LoadedProfile, IReadOnlyList<string> Timers, Func<string, IReadOnlyList<string>> Folders, Func<string, MentionResult> TextFiles, Func<string, MentionResult> ImageFiles, Func<IReadOnlyList<CompletionItem>>? Sessions = null, Func<IReadOnlyList<CompletionItem>>? Skills = null, Func<string, IReadOnlyList<string>>? VaultFolders = null, Func<IReadOnlyList<CompletionItem>>? Workflows = null, bool Planning = false, Func<IReadOnlyList<CompletionItem>>? Plans = null, Func<string, IReadOnlyList<CompletionItem>>? Home = null, Func<string, MentionResult>? AnyFiles = null, Func<string, IReadOnlyList<CompletionItem>>? Print = null, Func<IReadOnlyList<CompletionItem>>? Themes = null);
 
     /// <summary>The note beside <c>on</c> / <c>off</c> on a switch's list: what the switch is. Pinned.</summary>
     public static string SwitchSubject(SlashCommand command) => command switch
@@ -3366,7 +3366,19 @@ internal sealed partial class ChatScreen
                 return argText.Contains(' ', StringComparison.Ordinal) ? [] : MentionCompleter.Matches(sources.Workflows?.Invoke() ?? [], argText);
 
             case SlashCommand.Theme:
-                return MentionCompleter.Matches(ThemeName.Names.Select(name => new CompletionItem(name, ThemeName.Describe(name))).ToList(), argText);
+            {
+                // The built-ins and the user's themes (2026-10-01), then export; after "export " the names again, for its first word only.
+                var themes = sources.Themes?.Invoke() ?? ThemeName.Names.Select(name => new CompletionItem(name, ThemeName.Describe(name))).ToList();
+                string exportHead = ThemeText.ExportWord + " ";
+                if (argText.StartsWith(exportHead, StringComparison.OrdinalIgnoreCase))
+                {
+                    return argText[exportHead.Length..].Contains(' ', StringComparison.Ordinal)
+                        ? []
+                        : MentionCompleter.Matches(themes.Select(t => new CompletionItem(exportHead + t.Text, t.Note)).ToList(), argText);
+                }
+
+                return MentionCompleter.Matches([.. themes, new CompletionItem(ThemeText.ExportWord, ThemeText.ExportNote)], argText);
+            }
 
             case SlashCommand.Perf:
                 return MentionCompleter.Matches(PerfBarMode.Words.Select(name => new CompletionItem(name, PerfBarMode.Describe(name))).ToList(), argText);
@@ -3736,6 +3748,10 @@ internal sealed partial class ChatScreen
         return found;
     }
 
+    /// <summary>The themes for <c>/theme</c>'s list, the user's read afresh (2026-10-01); their problems are said when a picker opens, not per keystroke.</summary>
+    private IReadOnlyList<CompletionItem> ThemeChoices() =>
+        ThemeCatalog.Scan(_settings.ThemesDirectory).Themes.Select(t => new CompletionItem(t.Name, t.Description)).ToList();
+
     /// <summary>The argument list's live sources: the profiles on disk, the board's timers, the sandbox's folders, its text files and its image files.</summary>
     private ArgumentList ArgumentChoices(string command, string argText)
     {
@@ -3754,7 +3770,8 @@ internal sealed partial class ChatScreen
             PlanChoices,
             HomeAssistantChoices,
             prefix => _files.Complete(prefix),
-            PrintChoices);
+            PrintChoices,
+            ThemeChoices);
         return ArgumentPaths(command, argText, sources) is { } paths
             ? new ArgumentList([], paths.Paths, paths.Truncated)
             : new ArgumentList(ArgumentItems(command, argText, sources));
@@ -8097,7 +8114,7 @@ internal sealed partial class ChatScreen
     /// </summary>
     private void RestartInTheme()
     {
-        ThemeName.Apply(_effective());
+        ThemeName.Apply(_effective(), _settings.ThemesDirectory);
         ClearAndRefresh();
         ShowSplash(force: true);
         _transcript.Notice(SettingsMenu.SavedNotice(SettingsField.Theme, _settings.Current, _settings.ProfileDirectory));
@@ -10308,7 +10325,7 @@ internal sealed partial class ChatScreen
         BindProfile();
         DiagnosticLog.Debug(AppSettings.Category, AppSettings.NotDefaultLogLine(SettingsDiff.NotDefault(_effective())));
         // The new profile's theme (2026-09-23) before the wipe below, so the fresh screen wears it.
-        ThemeName.Apply(_effective());
+        ThemeName.Apply(_effective(), _settings.ThemesDirectory);
         ApplyWindowTitle();
         _session.History.Clear();
         DropQueue();

@@ -25,11 +25,14 @@ public static class Theme
     /// <summary>The palette in force.</summary>
     public static ThemePalette Current => s_current.Palette;
 
-    /// <summary>Makes <paramref name="palette"/> the palette in force; every style after this reads it.</summary>
+    /// <summary>
+    /// Makes <paramref name="palette"/> the palette in force; every style after this reads it. A palette with the same look
+    /// as the one in force (<see cref="ThemePalette.Equals(ThemePalette?)"/>, a user theme read afresh) keeps the instance.
+    /// </summary>
     public static void Use(ThemePalette palette)
     {
         ArgumentNullException.ThrowIfNull(palette);
-        if (!ReferenceEquals(s_current.Palette, palette))
+        if (!s_current.Palette.Equals(palette))
         {
             s_current = new ThemeStyles(palette);
         }
@@ -74,115 +77,115 @@ public static class Theme
     public static Color[] GradientStops => s_current.Palette.GradientStops;
 
     // ── Styles ──────────────────────────────────────────────────────────────
-    public static Style Body => s_current.Body;
-    public static Style DimText => s_current.DimText;
-    public static Style Accent => s_current.Accent;
-    public static Style AccentSecondary => s_current.AccentSecondary;
-    public static Style AccentTertiary => s_current.AccentTertiary;
-    public static Style Label => s_current.Label;
+    public static Style Body => s_current[ThemeStyleSlot.Body];
+    public static Style DimText => s_current[ThemeStyleSlot.DimText];
+    public static Style Accent => s_current[ThemeStyleSlot.Accent];
+    public static Style AccentSecondary => s_current[ThemeStyleSlot.AccentSecondary];
+    public static Style AccentTertiary => s_current[ThemeStyleSlot.AccentTertiary];
+    public static Style Label => s_current[ThemeStyleSlot.Label];
 
     /// <summary>The user's own lines in the transcript.</summary>
-    public static Style User => s_current.AccentSecondary;
+    public static Style User => s_current[ThemeStyleSlot.User];
     /// <summary>The assistant's streamed reply text.</summary>
-    public static Style Assistant => s_current.Body;
+    public static Style Assistant => s_current[ThemeStyleSlot.Assistant];
     /// <summary>Notices, hints, status — anything neither party said.</summary>
-    public static Style SystemText => s_current.DimText;
+    public static Style SystemText => s_current[ThemeStyleSlot.SystemText];
     /// <summary>An error line.</summary>
-    public static Style ErrorText => s_current.ErrorText;
+    public static Style ErrorText => s_current[ThemeStyleSlot.ErrorText];
     /// <summary>A success line (connected, enabled, passed).</summary>
-    public static Style GoodText => s_current.GoodText;
+    public static Style GoodText => s_current[ThemeStyleSlot.GoodText];
     /// <summary>A warning line.</summary>
-    public static Style WarnText => s_current.WarnText;
+    public static Style WarnText => s_current[ThemeStyleSlot.WarnText];
     /// <summary>A section heading over cyan row labels in an info pane (<c>/usage</c>'s Context / Last reply, <c>/sys</c>'s Persona / Clock (3) …): violet bold, so the heading and its rows read as two tiers — the user's call, 2026-09-16.</summary>
-    public static Style SectionHeading => s_current.AccentTertiary;
+    public static Style SectionHeading => s_current[ThemeStyleSlot.SectionHeading];
 
     /// <summary>The border for panels.</summary>
-    public static Style BorderStyle => s_current.BorderStyle;
+    public static Style BorderStyle => s_current[ThemeStyleSlot.Border];
     /// <summary>Table header text.</summary>
-    public static Style TableHeader => s_current.TableHeader;
+    public static Style TableHeader => s_current[ThemeStyleSlot.TableHeader];
 
     /// <summary>Braille spinner frames, 80 ms cadence.</summary>
     public static readonly string[] SpinnerFrames = { "⠋", "⠙", "⠸", "⠴", "⠧", "⠇", "⠏" };
 
     /// <summary>The <c>Status</c> spinner while the model thinks or a server is probed.</summary>
-    public static Style SpinnerStyle => s_current.AccentSecondary;
+    public static Style SpinnerStyle => s_current[ThemeStyleSlot.Spinner];
     /// <summary>The rule above the input row.</summary>
-    public static Style PaneRule => s_current.PaneRule;
+    public static Style PaneRule => s_current[ThemeStyleSlot.PaneRule];
     /// <summary>The hint row under the input row.</summary>
-    public static Style Hint => s_current.DimText;
+    public static Style Hint => s_current[ThemeStyleSlot.Hint];
     /// <summary>The mark after the trailer on the hint row (the reasoning glyph beside the model): violet, plain — the user's call, 2026-09-15.</summary>
-    public static Style TrailerMark => s_current.TrailerMark;
+    public static Style TrailerMark => s_current[ThemeStyleSlot.TrailerMark];
     /// <summary>The highlighted row of a selection menu.</summary>
-    public static Style MenuHighlight => s_current.MenuHighlight;
+    public static Style MenuHighlight => s_current[ThemeStyleSlot.MenuHighlight];
     /// <summary>The dim part of a highlighted row (the note beside a command or skill name on the input line's list, 2026-09-16).</summary>
-    public static Style MenuHighlightDim => s_current.MenuHighlightDim;
+    public static Style MenuHighlightDim => s_current[ThemeStyleSlot.MenuHighlightDim];
     /// <summary>A disabled menu row.</summary>
-    public static Style MenuDisabled => s_current.MenuDisabled;
+    public static Style MenuDisabled => s_current[ThemeStyleSlot.MenuDisabled];
     /// <summary>The selected stretch of the input row (a drag or Shift+arrows): the user's colour inverted.</summary>
-    public static Style SelectedText => s_current.SelectedText;
+    public static Style SelectedText => s_current[ThemeStyleSlot.SelectedText];
     /// <summary>A pasted block's placeholder on the input row (<c>[Pasted text #1 +49 lines]</c>): violet, so it reads as a thing and not as typed text.</summary>
-    public static Style PasteLabel => s_current.PasteLabel;
+    public static Style PasteLabel => s_current[ThemeStyleSlot.PasteLabel];
     /// <summary>The ghost text on the empty input row (<c>Type a message or /help for more info</c>): a step dimmer than the hint row (the user's call, 2026-09-14), never the user's colour.</summary>
-    public static Style Placeholder => s_current.Placeholder;
+    public static Style Placeholder => s_current[ThemeStyleSlot.Placeholder];
 
     // ── The styled transcript (UI/Markdown, `Transcript markdown`) ──────────
     /// <summary>Bold text in a reply (<c>**bold**</c>): the body colour, bold — emphasis, not a colour change.</summary>
-    public static Style MarkdownBold => s_current.MarkdownBold;
+    public static Style MarkdownBold => s_current[ThemeStyleSlot.MarkdownBold];
     /// <summary>Italic text in a reply (<c>*italic*</c>).</summary>
-    public static Style MarkdownItalic => s_current.MarkdownItalic;
+    public static Style MarkdownItalic => s_current[ThemeStyleSlot.MarkdownItalic];
     /// <summary>Inline code (<c>`code`</c>): cyan, so a name stands out of the prose.</summary>
-    public static Style MarkdownCode => s_current.MarkdownCode;
+    public static Style MarkdownCode => s_current[ThemeStyleSlot.MarkdownCode];
     /// <summary>The lines of a fenced code block: body text on the lifted panel fill.</summary>
-    public static Style MarkdownCodeBlock => s_current.MarkdownCodeBlock;
+    public static Style MarkdownCodeBlock => s_current[ThemeStyleSlot.MarkdownCodeBlock];
     /// <summary>The language label above a fenced code block.</summary>
-    public static Style MarkdownCodeLabel => s_current.DimText;
+    public static Style MarkdownCodeLabel => s_current[ThemeStyleSlot.MarkdownCodeLabel];
     /// <summary>The model's thinking (2026-09-26): dim italic on the code block's lifted fill — a panel like code, told apart by its ink.</summary>
-    public static Style ThinkingText => s_current.ThinkingText;
+    public static Style ThinkingText => s_current[ThemeStyleSlot.Thinking];
     /// <summary>A first-level heading.</summary>
-    public static Style MarkdownHeading1 => s_current.Accent;
+    public static Style MarkdownHeading1 => s_current[ThemeStyleSlot.MarkdownHeading1];
     /// <summary>Every other heading level.</summary>
-    public static Style MarkdownHeading => s_current.AccentSecondary;
+    public static Style MarkdownHeading => s_current[ThemeStyleSlot.MarkdownHeading];
     /// <summary>The bullet or number ahead of a list item.</summary>
-    public static Style MarkdownBullet => s_current.TrailerMark;
+    public static Style MarkdownBullet => s_current[ThemeStyleSlot.MarkdownBullet];
     /// <summary>The gutter bar of a blockquote.</summary>
-    public static Style MarkdownQuoteBar => s_current.TrailerMark;
+    public static Style MarkdownQuoteBar => s_current[ThemeStyleSlot.MarkdownQuoteBar];
     /// <summary>The text of a blockquote.</summary>
-    public static Style MarkdownQuote => s_current.DimText;
+    public static Style MarkdownQuote => s_current[ThemeStyleSlot.MarkdownQuote];
     /// <summary>The URL shown after a link's text.</summary>
-    public static Style MarkdownLinkUrl => s_current.DimText;
+    public static Style MarkdownLinkUrl => s_current[ThemeStyleSlot.MarkdownLinkUrl];
     /// <summary>A thematic break (<c>---</c>) in a reply.</summary>
-    public static Style MarkdownRule => s_current.PaneRule;
+    public static Style MarkdownRule => s_current[ThemeStyleSlot.MarkdownRule];
 
     // ── Code highlighting (UI/Markdown/CodeLexer, fenced blocks with a known language) ──
     // Every style keeps the block's lifted panel fill, so a highlighted block reads as one slab
     // like a plain one; the accents carry the classes (2026-09-22): primary keywords, secondary
     // types and keys, highlight strings, warm numbers, tertiary calls, dim italic comments.
     /// <summary>A keyword (<c>if</c>, <c>class</c>, <c>SELECT</c>) or a directive (<c>#include</c>).</summary>
-    public static Style CodeKeyword => s_current.CodeKeyword;
+    public static Style CodeKeyword => s_current[ThemeStyleSlot.CodeKeyword];
     /// <summary>A type or builtin name, a Rust lifetime, a shell builtin.</summary>
-    public static Style CodeType => s_current.CodeType;
+    public static Style CodeType => s_current[ThemeStyleSlot.CodeType];
     /// <summary>A string literal.</summary>
-    public static Style CodeString => s_current.CodeString;
+    public static Style CodeString => s_current[ThemeStyleSlot.CodeString];
     /// <summary>A numeric literal, a CSS colour.</summary>
-    public static Style CodeNumber => s_current.CodeNumber;
+    public static Style CodeNumber => s_current[ThemeStyleSlot.CodeNumber];
     /// <summary>A comment: dim and italic, so it recedes behind the code.</summary>
-    public static Style CodeComment => s_current.CodeComment;
+    public static Style CodeComment => s_current[ThemeStyleSlot.CodeComment];
     /// <summary>Operators and brackets: dim, so the words carry the line.</summary>
-    public static Style CodePunctuation => s_current.CodePunctuation;
+    public static Style CodePunctuation => s_current[ThemeStyleSlot.CodePunctuation];
     /// <summary>A call (<c>name(</c>), a macro, a PowerShell cmdlet.</summary>
-    public static Style CodeFunction => s_current.CodeFunction;
+    public static Style CodeFunction => s_current[ThemeStyleSlot.CodeFunction];
     /// <summary>A <c>$variable</c>.</summary>
-    public static Style CodeVariable => s_current.CodeVariable;
+    public static Style CodeVariable => s_current[ThemeStyleSlot.CodeVariable];
     /// <summary>A key, an attribute, a decorator, a command-line flag.</summary>
-    public static Style CodeAttribute => s_current.CodeType;
+    public static Style CodeAttribute => s_current[ThemeStyleSlot.CodeAttribute];
     /// <summary>A markup element name, a CSS selector.</summary>
-    public static Style CodeTag => s_current.CodeKeyword;
+    public static Style CodeTag => s_current[ThemeStyleSlot.CodeTag];
     /// <summary>An INI/TOML section, a diff's file header or hunk.</summary>
-    public static Style CodeHeading => s_current.CodeHeading;
+    public static Style CodeHeading => s_current[ThemeStyleSlot.CodeHeading];
     /// <summary>A diff's added line.</summary>
-    public static Style CodeInserted => s_current.CodeInserted;
+    public static Style CodeInserted => s_current[ThemeStyleSlot.CodeInserted];
     /// <summary>A diff's removed line.</summary>
-    public static Style CodeDeleted => s_current.CodeDeleted;
+    public static Style CodeDeleted => s_current[ThemeStyleSlot.CodeDeleted];
 
     /// <summary>The style of a <see cref="CodeTokenKind"/>; plain text is <see cref="MarkdownCodeBlock"/>.</summary>
     public static Style CodeStyle(CodeTokenKind kind) => kind switch
@@ -356,87 +359,76 @@ public static class Theme
     private static string ToHex2(byte v) => v.ToString("X2", CultureInfo.InvariantCulture);
 
     /// <summary>
-    /// The styles of one palette, built once when it is put in force, with the compositions the
-    /// synthwave look always had; the aliases above (<see cref="User"/>, <see cref="Hint"/>,
-    /// <see cref="MarkdownHeading"/> …) read the same instances.
+    /// The styles of one palette, built once when it is put in force, one per <see cref="ThemeStyleSlot"/>, with the
+    /// compositions the synthwave look always had. Since 2026-10-01 (the user's themes) each slot then takes the palette's
+    /// <see cref="ThemePalette.Styles"/> change, and an alias slot (<see cref="User"/>, <see cref="Hint"/>,
+    /// <see cref="MarkdownHeading"/> …) starts from its source's final style (<see cref="ThemeKeys.AliasOf"/>), so with no
+    /// change it is the very same style as before.
     /// </summary>
     private sealed class ThemeStyles
     {
+        private readonly Style[] _styles;
+
         public ThemeStyles(ThemePalette p)
         {
             Palette = p;
-            Body = new(foreground: p.Ink);
-            DimText = new(foreground: p.Dim);
-            Accent = new(foreground: p.Primary, decoration: Decoration.Bold);
-            AccentSecondary = new(foreground: p.Secondary, decoration: Decoration.Bold);
-            AccentTertiary = new(foreground: p.Tertiary, decoration: Decoration.Bold);
-            Label = new(foreground: p.Dim, decoration: Decoration.Bold);
-            ErrorText = new(foreground: p.Bad, decoration: Decoration.Bold);
-            GoodText = new(foreground: p.Good, decoration: Decoration.Bold);
-            WarnText = new(foreground: p.Warn, decoration: Decoration.Bold);
-            BorderStyle = new(foreground: p.Primary);
-            TableHeader = new(foreground: p.Secondary, decoration: Decoration.Bold);
-            PaneRule = new(foreground: p.Deep);
-            TrailerMark = new(foreground: p.Tertiary);
-            MenuHighlight = new(foreground: p.Ink, background: p.PanelBg);
-            MenuHighlightDim = new(foreground: p.Dim, background: p.PanelBg);
-            MenuDisabled = new(foreground: p.Dim, background: p.Bg);
-            SelectedText = new(foreground: p.Bg, background: p.Secondary);
-            PasteLabel = new(foreground: p.Tertiary, decoration: Decoration.Bold);
-            Placeholder = new(foreground: p.Dimmer);
-            MarkdownBold = new(foreground: p.Ink, decoration: Decoration.Bold);
-            MarkdownItalic = new(foreground: p.Ink, decoration: Decoration.Italic);
-            MarkdownCode = new(foreground: p.Secondary);
-            MarkdownCodeBlock = new(foreground: p.Ink, background: p.PanelBg);
-            ThinkingText = new(foreground: p.Dim, background: p.PanelBg, decoration: Decoration.Italic);
-            CodeKeyword = new(foreground: p.Primary, background: p.PanelBg);
-            CodeType = new(foreground: p.Secondary, background: p.PanelBg);
-            CodeString = new(foreground: p.Highlight, background: p.PanelBg);
-            CodeNumber = new(foreground: p.Warm, background: p.PanelBg);
-            CodeComment = new(foreground: p.Dim, background: p.PanelBg, decoration: Decoration.Italic);
-            CodePunctuation = new(foreground: p.Dim, background: p.PanelBg);
-            CodeFunction = new(foreground: p.Tertiary, background: p.PanelBg);
-            CodeVariable = new(foreground: p.Tint, background: p.PanelBg);
-            CodeHeading = new(foreground: p.Tertiary, background: p.PanelBg, decoration: Decoration.Bold);
-            CodeInserted = new(foreground: p.Good, background: p.PanelBg);
-            CodeDeleted = new(foreground: p.Bad, background: p.PanelBg);
+            _styles = new Style[ThemeKeys.Styles.Count];
+            for (int i = 0; i < _styles.Length; i++)
+            {
+                var slot = (ThemeStyleSlot)i;
+                Style style = ThemeKeys.AliasOf(slot) is { } source ? _styles[(int)source] : Derive(slot, p);
+                if (p.Styles is { } changes && changes.TryGetValue(slot, out var change))
+                {
+                    style = change.ApplyTo(style);
+                }
+
+                _styles[i] = style;
+            }
         }
 
         public ThemePalette Palette { get; }
-        public Style Body { get; }
-        public Style DimText { get; }
-        public Style Accent { get; }
-        public Style AccentSecondary { get; }
-        public Style AccentTertiary { get; }
-        public Style Label { get; }
-        public Style ErrorText { get; }
-        public Style GoodText { get; }
-        public Style WarnText { get; }
-        public Style BorderStyle { get; }
-        public Style TableHeader { get; }
-        public Style PaneRule { get; }
-        public Style TrailerMark { get; }
-        public Style MenuHighlight { get; }
-        public Style MenuHighlightDim { get; }
-        public Style MenuDisabled { get; }
-        public Style SelectedText { get; }
-        public Style PasteLabel { get; }
-        public Style Placeholder { get; }
-        public Style MarkdownBold { get; }
-        public Style MarkdownItalic { get; }
-        public Style MarkdownCode { get; }
-        public Style MarkdownCodeBlock { get; }
-        public Style ThinkingText { get; }
-        public Style CodeKeyword { get; }
-        public Style CodeType { get; }
-        public Style CodeString { get; }
-        public Style CodeNumber { get; }
-        public Style CodeComment { get; }
-        public Style CodePunctuation { get; }
-        public Style CodeFunction { get; }
-        public Style CodeVariable { get; }
-        public Style CodeHeading { get; }
-        public Style CodeInserted { get; }
-        public Style CodeDeleted { get; }
+
+        public Style this[ThemeStyleSlot slot] => _styles[(int)slot];
+
+        /// <summary>The style the palette gives a slot that is no alias.</summary>
+        private static Style Derive(ThemeStyleSlot slot, ThemePalette p) => slot switch
+        {
+            ThemeStyleSlot.Body => new(foreground: p.Ink),
+            ThemeStyleSlot.DimText => new(foreground: p.Dim),
+            ThemeStyleSlot.Accent => new(foreground: p.Primary, decoration: Decoration.Bold),
+            ThemeStyleSlot.AccentSecondary => new(foreground: p.Secondary, decoration: Decoration.Bold),
+            ThemeStyleSlot.AccentTertiary => new(foreground: p.Tertiary, decoration: Decoration.Bold),
+            ThemeStyleSlot.Label => new(foreground: p.Dim, decoration: Decoration.Bold),
+            ThemeStyleSlot.ErrorText => new(foreground: p.Bad, decoration: Decoration.Bold),
+            ThemeStyleSlot.GoodText => new(foreground: p.Good, decoration: Decoration.Bold),
+            ThemeStyleSlot.WarnText => new(foreground: p.Warn, decoration: Decoration.Bold),
+            ThemeStyleSlot.Border => new(foreground: p.Primary),
+            ThemeStyleSlot.TableHeader => new(foreground: p.Secondary, decoration: Decoration.Bold),
+            ThemeStyleSlot.PaneRule => new(foreground: p.Deep),
+            ThemeStyleSlot.TrailerMark => new(foreground: p.Tertiary),
+            ThemeStyleSlot.MenuHighlight => new(foreground: p.Ink, background: p.PanelBg),
+            ThemeStyleSlot.MenuHighlightDim => new(foreground: p.Dim, background: p.PanelBg),
+            ThemeStyleSlot.MenuDisabled => new(foreground: p.Dim, background: p.Bg),
+            ThemeStyleSlot.SelectedText => new(foreground: p.Bg, background: p.Secondary),
+            ThemeStyleSlot.PasteLabel => new(foreground: p.Tertiary, decoration: Decoration.Bold),
+            ThemeStyleSlot.Placeholder => new(foreground: p.Dimmer),
+            ThemeStyleSlot.MarkdownBold => new(foreground: p.Ink, decoration: Decoration.Bold),
+            ThemeStyleSlot.MarkdownItalic => new(foreground: p.Ink, decoration: Decoration.Italic),
+            ThemeStyleSlot.MarkdownCode => new(foreground: p.Secondary),
+            ThemeStyleSlot.MarkdownCodeBlock => new(foreground: p.Ink, background: p.PanelBg),
+            ThemeStyleSlot.Thinking => new(foreground: p.Dim, background: p.PanelBg, decoration: Decoration.Italic),
+            ThemeStyleSlot.CodeKeyword => new(foreground: p.Primary, background: p.PanelBg),
+            ThemeStyleSlot.CodeType => new(foreground: p.Secondary, background: p.PanelBg),
+            ThemeStyleSlot.CodeString => new(foreground: p.Highlight, background: p.PanelBg),
+            ThemeStyleSlot.CodeNumber => new(foreground: p.Warm, background: p.PanelBg),
+            ThemeStyleSlot.CodeComment => new(foreground: p.Dim, background: p.PanelBg, decoration: Decoration.Italic),
+            ThemeStyleSlot.CodePunctuation => new(foreground: p.Dim, background: p.PanelBg),
+            ThemeStyleSlot.CodeFunction => new(foreground: p.Tertiary, background: p.PanelBg),
+            ThemeStyleSlot.CodeVariable => new(foreground: p.Tint, background: p.PanelBg),
+            ThemeStyleSlot.CodeHeading => new(foreground: p.Tertiary, background: p.PanelBg, decoration: Decoration.Bold),
+            ThemeStyleSlot.CodeInserted => new(foreground: p.Good, background: p.PanelBg),
+            ThemeStyleSlot.CodeDeleted => new(foreground: p.Bad, background: p.PanelBg),
+            _ => throw new ArgumentOutOfRangeException(nameof(slot), slot, "An alias slot has no style of its own."),
+        };
     }
 }

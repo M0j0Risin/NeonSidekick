@@ -1,0 +1,37 @@
+{
+  "name": "lighthouse",
+  "description": "beam over a dark sea",
+  "colors": {
+    "primary": "#FFE7A0",
+    "secondary": "#7AC8E8",
+    "tertiary": "#E0A060",
+    "deep": "#1E3A5F",
+    "highlight": "#FFF8E0",
+    "warm": "#E85A3A",
+    "tint": "#A8C8E0",
+    "ink": "#EAF0F5",
+    "dim": "#8494A8",
+    "dimmer": "#26344A",
+    "bg": "#030812",
+    "panelBg": "#0B1626",
+    "good": "#7AE8B0",
+    "bad": "#FF4A4A",
+    "warn": "#FFC24A"
+  },
+  "gradient": [
+    "#4A6A9A",
+    "#4A6A9A",
+    "#5A7AA8",
+    "#A8BCD8",
+    "#FFF8E0",
+    "#A8BCD8",
+    "#5A7AA8",
+    "#4A6A9A",
+    "#4A6A9A"
+  ],
+  "styles": {
+    "markdownQuoteBar": {
+      "fg": "primary"
+    }
+  }
+}

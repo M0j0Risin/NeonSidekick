@@ -1,0 +1,38 @@
+{
+  "name": "blackhole",
+  "description": "event horizon",
+  "colors": {
+    "primary": "#FF9A3D",
+    "secondary": "#FFE6B0",
+    "tertiary": "#A070E0",
+    "deep": "#3A1E50",
+    "highlight": "#FFF6E0",
+    "warm": "#E0602A",
+    "tint": "#C098FF",
+    "ink": "#F2EAE0",
+    "dim": "#988C94",
+    "dimmer": "#352C34",
+    "bg": "#020104",
+    "panelBg": "#0E0A12",
+    "good": "#7CE8B0",
+    "bad": "#FF4A5A",
+    "warn": "#FFD27A"
+  },
+  "gradient": [
+    "#FFF6E0",
+    "#FFD08A",
+    "#FF9A3D",
+    "#C8503A",
+    "#7A44B0",
+    "#C8503A",
+    "#FF9A3D",
+    "#FFD08A",
+    "#FFF6E0"
+  ],
+  "styles": {
+    "selectedText": {
+      "fg": "bg",
+      "bg": "primary"
+    }
+  }
+}

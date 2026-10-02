@@ -1,0 +1,44 @@
+{
+  "name": "kaleidoscope",
+  "description": "mirrored glass",
+  "colors": {
+    "primary": "#FF4A8A",
+    "secondary": "#4AE0A0",
+    "tertiary": "#5A8AFF",
+    "deep": "#3A2A5A",
+    "highlight": "#FFD84A",
+    "warm": "#FF8A4A",
+    "tint": "#C08AFF",
+    "ink": "#F4F0F8",
+    "dim": "#9890A8",
+    "dimmer": "#352F40",
+    "bg": "#07060A",
+    "panelBg": "#15121C",
+    "good": "#7AE87A",
+    "bad": "#FF4A4A",
+    "warn": "#FFD84A"
+  },
+  "gradient": [
+    "#FF4A8A",
+    "#FFD84A",
+    "#4AE0A0",
+    "#5A8AFF",
+    "#C08AFF",
+    "#FF4A8A",
+    "#FFFFFF",
+    "#FF4A8A",
+    "#C08AFF",
+    "#5A8AFF",
+    "#4AE0A0",
+    "#FFD84A",
+    "#FF4A8A"
+  ],
+  "styles": {
+    "codeString": {
+      "fg": "secondary"
+    },
+    "codeNumber": {
+      "fg": "tint"
+    }
+  }
+}

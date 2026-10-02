@@ -1,0 +1,34 @@
+{
+  "name": "oxide",
+  "description": "rust and verdigris",
+  "colors": {
+    "primary": "#D9622B",
+    "secondary": "#5FD4B0",
+    "tertiary": "#C9934A",
+    "deep": "#5A2E16",
+    "highlight": "#E8C07A",
+    "warm": "#B8452A",
+    "tint": "#8FC7B5",
+    "ink": "#ECE3D8",
+    "dim": "#9A8D80",
+    "dimmer": "#3C342D",
+    "bg": "#0C0907",
+    "panelBg": "#1A1511",
+    "good": "#A8D96A",
+    "bad": "#FF4D4D",
+    "warn": "#E8C07A"
+  },
+  "gradient": [
+    "#8A3A1A",
+    "#B8452A",
+    "#D9622B",
+    "#C9934A",
+    "#8FC7B5",
+    "#5FD4B0"
+  ],
+  "styles": {
+    "paneRule": {
+      "fg": "tertiary"
+    }
+  }
+}

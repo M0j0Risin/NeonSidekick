@@ -1,0 +1,35 @@
+{
+  "name": "solaris",
+  "description": "total eclipse",
+  "colors": {
+    "primary": "#FFD86B",
+    "secondary": "#E87A9A",
+    "tertiary": "#C9B79A",
+    "deep": "#4A4034",
+    "highlight": "#FFF3C4",
+    "warm": "#FFA94D",
+    "tint": "#F2B8C8",
+    "ink": "#F7F2E8",
+    "dim": "#9C958A",
+    "dimmer": "#36322C",
+    "bg": "#000000",
+    "panelBg": "#0F0D0A",
+    "good": "#B8F28A",
+    "bad": "#FF4A3D",
+    "warn": "#FFA94D"
+  },
+  "gradient": [
+    "#7A6A55",
+    "#C9B79A",
+    "#FFF3C4",
+    "#FFFFFF",
+    "#FFF3C4",
+    "#C9B79A",
+    "#7A6A55"
+  ],
+  "styles": {
+    "markdownHeading1": {
+      "fg": "highlight"
+    }
+  }
+}

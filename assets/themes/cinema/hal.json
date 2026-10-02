@@ -1,0 +1,28 @@
+{
+  "name": "hal",
+  "description": "I'm sorry, Dave",
+  "base": "noir",
+  "colors": {
+    "primary": "#FF2A1A",
+    "deep": "#5C0F0A",
+    "warm": "#FF7A4D",
+    "tint": "#FF8C80",
+    "bad": "#FF5CAA",
+    "warn": "#FFB000"
+  },
+  "gradient": [
+    "#A01A10",
+    "#C8200F",
+    "#FF2A1A",
+    "#FF8A6A",
+    "#FFD9A0"
+  ],
+  "styles": {
+    "spinner": {
+      "fg": "primary"
+    },
+    "markdownHeading1": {
+      "fg": "ink"
+    }
+  }
+}

@@ -1,0 +1,65 @@
+{
+  "name": "stainedglass",
+  "description": "cathedral window",
+  "colors": {
+    "primary": "#E8344A",
+    "secondary": "#4A90FF",
+    "tertiary": "#F2B33A",
+    "deep": "#5E5866",
+    "highlight": "#FFE08A",
+    "warm": "#FF7A3A",
+    "tint": "#B07AFF",
+    "ink": "#F4EEE0",
+    "dim": "#9C92A0",
+    "dimmer": "#3A3240",
+    "bg": "#07050A",
+    "panelBg": "#15101C",
+    "good": "#4AD08A",
+    "bad": "#FF6A4A",
+    "warn": "#F2B33A"
+  },
+  "gradient": [
+    "#E8344A",
+    "#E8344A",
+    "#F2B33A",
+    "#4A90FF",
+    "#4AD08A",
+    "#5E5866",
+    "#B07AFF",
+    "#E8344A",
+    "#F2B33A",
+    "#4A90FF",
+    "#4AD08A",
+    "#B07AFF",
+    "#F2B33A",
+    "#E8344A"
+  ],
+  "styles": {
+    "markdownHeading1": {
+      "fg": "tertiary",
+      "bold": true
+    },
+    "markdownQuoteBar": {
+      "fg": "primary"
+    },
+    "markdownBullet": {
+      "fg": "tertiary"
+    },
+    "border": {
+      "fg": "#7A7480"
+    },
+    "codeKeyword": {
+      "fg": "primary",
+      "bold": true
+    },
+    "codeType": {
+      "fg": "secondary"
+    },
+    "codeString": {
+      "fg": "good"
+    },
+    "codeFunction": {
+      "fg": "tint"
+    }
+  }
+}

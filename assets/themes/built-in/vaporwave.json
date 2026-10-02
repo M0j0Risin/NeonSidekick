@@ -1,0 +1,29 @@
+{
+  "name": "vaporwave",
+  "description": "pastel",
+  "colors": {
+    "primary": "#FF71CE",
+    "secondary": "#01CDFE",
+    "tertiary": "#B967FF",
+    "deep": "#6A3FB0",
+    "highlight": "#FFFB96",
+    "warm": "#FFB38A",
+    "tint": "#05FFA1",
+    "ink": "#F5EEFF",
+    "dim": "#A99CC4",
+    "dimmer": "#4A3F63",
+    "bg": "#1A1030",
+    "panelBg": "#25183F",
+    "good": "#05FFA1",
+    "bad": "#FF5C8A",
+    "warn": "#FFFB96"
+  },
+  "gradient": [
+    "#01CDFE",
+    "#05FFA1",
+    "#B967FF",
+    "#FF71CE",
+    "#FFFB96"
+  ],
+  "styles": {}
+}

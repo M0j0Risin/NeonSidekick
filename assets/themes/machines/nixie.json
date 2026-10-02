@@ -1,0 +1,56 @@
+{
+  "name": "nixie",
+  "description": "cold-cathode glow",
+  "colors": {
+    "primary": "#FF7A2A",
+    "secondary": "#FFB070",
+    "tertiary": "#A8B8C0",
+    "deep": "#4A2E1E",
+    "highlight": "#FFD8A8",
+    "warm": "#FF5A1A",
+    "tint": "#FF9A7A",
+    "ink": "#F2E2D0",
+    "dim": "#9A8A7C",
+    "dimmer": "#3A302A",
+    "bg": "#080504",
+    "panelBg": "#16100C",
+    "good": "#9AE8A0",
+    "bad": "#FF3A5A",
+    "warn": "#FFC870"
+  },
+  "gradient": [
+    "#7A5A48",
+    "#FF8A3A",
+    "#FFB070",
+    "#FF7A2A",
+    "#FFC890",
+    "#7A5A48",
+    "#FF9A4A",
+    "#FF7A2A",
+    "#FFD8A8",
+    "#FF8A3A",
+    "#FFB070",
+    "#FF7A2A",
+    "#FFC890",
+    "#FF9A4A"
+  ],
+  "styles": {
+    "spinner": {
+      "fg": "primary"
+    },
+    "markdownHeading1": {
+      "fg": "highlight",
+      "bold": true
+    },
+    "codeNumber": {
+      "fg": "highlight",
+      "bold": true
+    },
+    "tableHeader": {
+      "fg": "primary"
+    },
+    "paneRule": {
+      "fg": "#5A4030"
+    }
+  }
+}

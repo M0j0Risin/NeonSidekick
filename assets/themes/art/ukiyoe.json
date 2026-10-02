@@ -1,0 +1,56 @@
+{
+  "name": "ukiyoe",
+  "description": "the great wave",
+  "colors": {
+    "primary": "#4A86E8",
+    "secondary": "#F2E2C0",
+    "tertiary": "#E89A8A",
+    "deep": "#26487F",
+    "highlight": "#FFF4DC",
+    "warm": "#D8784A",
+    "tint": "#9AB8E0",
+    "ink": "#F2EAD8",
+    "dim": "#8A94A4",
+    "dimmer": "#26344A",
+    "bg": "#050A14",
+    "panelBg": "#0E1828",
+    "good": "#8AD0A8",
+    "bad": "#E84A4A",
+    "warn": "#E8C07A"
+  },
+  "gradient": [
+    "#3460B0",
+    "#4A86E8",
+    "#A8C8F0",
+    "#F2E2C0",
+    "#4A86E8",
+    "#3460B0",
+    "#3460B0",
+    "#4A86E8",
+    "#A8C8F0",
+    "#FFF4DC",
+    "#4A86E8",
+    "#3460B0",
+    "#A8C8F0",
+    "#E89A8A"
+  ],
+  "styles": {
+    "markdownHeading1": {
+      "fg": "secondary",
+      "bold": true
+    },
+    "markdownQuoteBar": {
+      "fg": "primary"
+    },
+    "codeKeyword": {
+      "fg": "primary",
+      "bold": true
+    },
+    "codeString": {
+      "fg": "secondary"
+    },
+    "codeNumber": {
+      "fg": "tertiary"
+    }
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "name": "witchhour",
+  "description": "cauldron and candlelight",
+  "colors": {
+    "primary": "#FF8A1F",
+    "secondary": "#8CFF4A",
+    "tertiary": "#B07AFF",
+    "deep": "#4A2A6B",
+    "highlight": "#FFD27A",
+    "warm": "#FF5E2A",
+    "tint": "#D98CFF",
+    "ink": "#F2EAD8",
+    "dim": "#998E9E",
+    "dimmer": "#3A3042",
+    "bg": "#0A0610",
+    "panelBg": "#181020",
+    "good": "#8CFF4A",
+    "bad": "#FF3D5E",
+    "warn": "#FFD27A"
+  },
+  "gradient": [
+    "#7A4AB0",
+    "#B07AFF",
+    "#FF8A1F",
+    "#FFD27A",
+    "#8CFF4A"
+  ],
+  "styles": {
+    "codeComment": {
+      "fg": "tertiary"
+    }
+  }
+}

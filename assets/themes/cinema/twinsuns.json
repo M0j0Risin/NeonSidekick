@@ -1,0 +1,37 @@
+{
+  "name": "twinsuns",
+  "description": "binary sunset",
+  "colors": {
+    "primary": "#FFB04A",
+    "secondary": "#8FB8FF",
+    "tertiary": "#E87A5A",
+    "deep": "#4A3060",
+    "highlight": "#FFE8A8",
+    "warm": "#FF8A3D",
+    "tint": "#D0A8E0",
+    "ink": "#F5EBDD",
+    "dim": "#9A90A0",
+    "dimmer": "#38323F",
+    "bg": "#0A0814",
+    "panelBg": "#171427",
+    "good": "#A8E07A",
+    "bad": "#FF4A5E",
+    "warn": "#FFE8A8"
+  },
+  "gradient": [
+    "#7A6AA0",
+    "#C08A70",
+    "#FFF0B0",
+    "#E8A050",
+    "#A86A88",
+    "#E89060",
+    "#FFC890",
+    "#C08A70",
+    "#7A6AA0"
+  ],
+  "styles": {
+    "markdownBullet": {
+      "fg": "primary"
+    }
+  }
+}

@@ -1,0 +1,39 @@
+{
+  "name": "commodore",
+  "description": "64 kilobytes of blue",
+  "colors": {
+    "primary": "#8BE0F0",
+    "secondary": "#E8F08A",
+    "tertiary": "#B6E8A0",
+    "deep": "#6C5EB5",
+    "highlight": "#F0D080",
+    "warm": "#E09A70",
+    "tint": "#D8A0F0",
+    "ink": "#E4E0FF",
+    "dim": "#ADA6EE",
+    "dimmer": "#6457B0",
+    "bg": "#20185A",
+    "panelBg": "#2C2275",
+    "good": "#9AE884",
+    "bad": "#FF9A90",
+    "warn": "#F0D080"
+  },
+  "gradient": [
+    "#FF7777",
+    "#E09A70",
+    "#E8F08A",
+    "#9AE884",
+    "#8BE0F0"
+  ],
+  "styles": {
+    "user": {
+      "bold": false
+    },
+    "markdownHeading1": {
+      "fg": "secondary"
+    },
+    "border": {
+      "fg": "deep"
+    }
+  }
+}

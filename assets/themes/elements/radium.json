@@ -1,0 +1,28 @@
+{
+  "name": "radium",
+  "description": "glows in the dark",
+  "colors": {
+    "primary": "#B8FF3D",
+    "secondary": "#FFD400",
+    "tertiary": "#3DA9FF",
+    "deep": "#2E4A10",
+    "highlight": "#F5FF8A",
+    "warm": "#FFA51F",
+    "tint": "#7FFFD4",
+    "ink": "#EEF5E0",
+    "dim": "#8A9A78",
+    "dimmer": "#2E3826",
+    "bg": "#070A04",
+    "panelBg": "#12180C",
+    "good": "#6CFF8A",
+    "bad": "#FF4D4D",
+    "warn": "#FFA51F"
+  },
+  "gradient": [
+    "#3DA9FF",
+    "#7FFFD4",
+    "#B8FF3D",
+    "#FFD400",
+    "#FFA51F"
+  ]
+}

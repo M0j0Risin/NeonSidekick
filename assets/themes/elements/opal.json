@@ -1,0 +1,59 @@
+{
+  "name": "opal",
+  "description": "black opal fire",
+  "colors": {
+    "primary": "#3DF2A8",
+    "secondary": "#4AB8FF",
+    "tertiary": "#FF6A8A",
+    "deep": "#2E4070",
+    "highlight": "#F2F07A",
+    "warm": "#FF9A4A",
+    "tint": "#B88AFF",
+    "ink": "#EEF2F8",
+    "dim": "#8A93A8",
+    "dimmer": "#283044",
+    "bg": "#05070C",
+    "panelBg": "#0E1220",
+    "good": "#5AF07A",
+    "bad": "#FF4A4A",
+    "warn": "#F2F07A"
+  },
+  "gradient": [
+    "#34568A",
+    "#3DF2A8",
+    "#3A5E96",
+    "#4AB8FF",
+    "#7AE8FF",
+    "#34568A",
+    "#3A4E90",
+    "#FF6A8A",
+    "#B88AFF",
+    "#3DF2A8",
+    "#F2F07A",
+    "#2E6E8E",
+    "#4AB8FF",
+    "#FF6A8A"
+  ],
+  "styles": {
+    "selectedText": {
+      "fg": "bg",
+      "bg": "primary"
+    },
+    "markdownHeading1": {
+      "fg": "secondary",
+      "bold": true
+    },
+    "markdownBullet": {
+      "fg": "primary"
+    },
+    "codeFunction": {
+      "fg": "tint"
+    },
+    "codeNumber": {
+      "fg": "tertiary"
+    },
+    "codeVariable": {
+      "fg": "warm"
+    }
+  }
+}

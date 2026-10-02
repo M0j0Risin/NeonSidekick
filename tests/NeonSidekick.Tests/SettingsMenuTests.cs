@@ -1758,6 +1758,11 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("nostromo  [#9A8BB8]amber phosphor[/]", SettingsMenu.ThemeLabel("nostromo"));
         Assert.Equal("No theme named \"matrix\". /theme takes synthwave, netrunner, nostromo, noir, cyberpunk, vaporwave, mainframe, grid, replicant or abyssal, or nothing to pick from a list.", SettingsMenu.ThemeNameError("matrix"));
         Assert.Equal("Theme: noir (already in force)", SettingsMenu.ThemeAlreadyNotice("noir"));
+        // A user theme's longer name widens the column (2026-10-01).
+        var mine = ThemePalette.Synthwave with { Name = "a-much-longer-name", Description = "mine", SourcePath = "x.json" };
+        IReadOnlyList<ThemePalette> themes = [.. ThemePalette.All, mine];
+        Assert.Equal("noir" + new string(' ', 15) + "[#9A8BB8]greyscale[/]", SettingsMenu.ThemeLabel("noir", themes));
+        Assert.Equal("a-much-longer-name [#9A8BB8]mine[/]", SettingsMenu.ThemeLabel("a-much-longer-name", themes));
         Assert.Equal("Theme: netrunner", SettingsMenu.SavedNotice(SettingsField.Theme, new AppSettingsData { Theme = "netrunner" }, _settings.ProfileDirectory));
     }
 

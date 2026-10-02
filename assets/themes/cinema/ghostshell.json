@@ -1,0 +1,28 @@
+{
+  "name": "ghostshell",
+  "description": "thermoptic teal",
+  "colors": {
+    "primary": "#2EF2C2",
+    "secondary": "#A7F3FF",
+    "tertiary": "#7A9CFF",
+    "deep": "#12505A",
+    "highlight": "#E8F7A0",
+    "warm": "#9FE870",
+    "tint": "#6EE7E0",
+    "ink": "#DDEBEA",
+    "dim": "#7F9A9A",
+    "dimmer": "#2C3B3D",
+    "bg": "#060C0E",
+    "panelBg": "#0F1B1E",
+    "good": "#6CFFB0",
+    "bad": "#FF5C7A",
+    "warn": "#E8F7A0"
+  },
+  "gradient": [
+    "#12505A",
+    "#1FA59A",
+    "#2EF2C2",
+    "#A7F3FF",
+    "#FFFFFF"
+  ]
+}
