@@ -8363,7 +8363,7 @@ public partial class ChatScreenTests : IDisposable
             Key(Keys.Escape),                                                    // closed, unchanged: the draft back
             input => input.Push(Keys.Char('!'), Keys.Enter),
             Line("/settings"),
-            input => input.Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter, Keys.Down, Keys.Enter, Keys.Escape),   // General's sixth row, Memory: its page on "on", off picked; the pane closed: the disk gone
+            input => input.Push(Keys.Down, Keys.Down, Keys.Down, Keys.Enter, Keys.Down, Keys.Enter, Keys.Escape),   // General's fourth row, Memory (since 2026-10-01): its page on "on", off picked; the pane closed: the disk gone
             input => { input.PushClick(27, 103); input.PushClick(27, 103); },    // 🔒 back at 27: the list
             Key(Keys.Escape),
             Line("/tools"),
@@ -8991,9 +8991,7 @@ public partial class ChatScreenTests : IDisposable
         PushLine("/settings");
         _console.Input.PushKey(Keys.Down);
         _console.Input.PushKey(Keys.Down);
-        _console.Input.PushKey(Keys.Down);
-        _console.Input.PushKey(Keys.Down);
-        _console.Input.PushKey(Keys.Down);          // Memory (General, sixth row: New profile mode sits under Profile, the queue's two rows under Working directory since 2026-09-18)
+        _console.Input.PushKey(Keys.Down);          // Memory (General, fourth row: New profile mode sits under Profile, Memory under Working directory since 2026-10-01)
         _console.Input.PushKey(Keys.Enter);         // its on/off page (2026-09-17)
         _console.Input.PushKey(Keys.Down);
         _console.Input.PushKey(Keys.Enter);         // off
@@ -9262,9 +9260,7 @@ public partial class ChatScreenTests : IDisposable
         PushLine("/settings");
         _console.Input.PushKey(Keys.Down);
         _console.Input.PushKey(Keys.Down);
-        _console.Input.PushKey(Keys.Down);
-        _console.Input.PushKey(Keys.Down);
-        _console.Input.PushKey(Keys.Down);          // Memory (General, sixth row: New profile mode sits under Profile, the queue's two rows under Working directory since 2026-09-18)
+        _console.Input.PushKey(Keys.Down);          // Memory (General, fourth row: New profile mode sits under Profile, Memory under Working directory since 2026-10-01)
         _console.Input.PushKey(Keys.Enter);         // its on/off page
         _console.Input.PushKey(Keys.Down);
         _console.Input.PushKey(Keys.Enter);         // off: the list again

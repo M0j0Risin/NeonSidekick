@@ -169,10 +169,10 @@ public enum SettingsField
     /// <summary>A picker over <see cref="Skills.SkillCompactMode.Names"/>: whether a loaded skill survives a prune (<see cref="Settings.AppSettingsData.SkillCompactMode"/>). The Options tab of <c>/skills</c>' third row (2026-09-16); no reconnect.</summary>
     SkillCompactMode,
 
-    /// <summary>A toggle: whether replies are shown as styled Markdown and asked for as such (<see cref="Settings.AppSettingsData.TranscriptMarkdown"/>). The General tab's row under Image thumbnail size (2026-09-16, once under @-mention folder mode; the last until Paste preview lines); no reconnect (read at each turn).</summary>
+    /// <summary>A toggle: whether replies are shown as styled Markdown and asked for as such (<see cref="Settings.AppSettingsData.TranscriptMarkdown"/>). The General tab's first transcript row, above Paste preview lines (2026-10-01; under Image thumbnail size from 2026-09-16, once under @-mention folder mode; the last until Paste preview lines); no reconnect (read at each turn).</summary>
     TranscriptMarkdown,
 
-    /// <summary>Lines of a collapsed paste the transcript shows under the sent line (<see cref="Settings.AppSettingsData.PastePreviewLines"/>); 0 = the label alone. The General tab's last row from 2026-09-16 until the two switches of 2026-09-18; no reconnect (read at each idle read).</summary>
+    /// <summary>Lines of a collapsed paste the transcript shows under the sent line (<see cref="Settings.AppSettingsData.PastePreviewLines"/>); 0 = the label alone. The General tab's row under Transcript markdown (2026-10-01; its last row from 2026-09-16 until the two switches of 2026-09-18); no reconnect (read at each idle read).</summary>
     PastePreviewLines,
 
     /// <summary>A toggle: whether <c>#</c> and part of a name lists the loaded skills on the chat line (<see cref="Settings.AppSettingsData.SkillHashMention"/>). The Options tab of <c>/skills</c>' fourth row (2026-09-17; fifth until later on 2026-09-18, when Skill slash commands went); no reconnect (read at each keystroke).</summary>
@@ -193,22 +193,22 @@ public enum SettingsField
     /// <summary>Typed: the model requests one reflection may make before it is given up, 1 to 20 (<see cref="Settings.AppSettingsData.ReflectionMaxRequests"/>, <c>Skills.ReflectionMaxRequests</c>). The Options tab of <c>/skills</c>' tenth row (2026-09-17; the verbose switch under it until later still on 2026-09-19); no reconnect (read when a reflection starts).</summary>
     ReflectionMaxRequests,
 
-    /// <summary>A toggle: whether the <c>/</c> completion list leaves <c>/exit</c> out (<see cref="Settings.AppSettingsData.HideExitAutocomplete"/>). The General tab's row after Paste preview lines (2026-09-18); no reconnect (read at each keystroke).</summary>
+    /// <summary>A toggle: whether the <c>/</c> completion list leaves <c>/exit</c> out (<see cref="Settings.AppSettingsData.HideExitAutocomplete"/>). The General tab's input-line run's last row, under Command typo intercept (2026-10-01; after Paste preview lines from 2026-09-18); no reconnect (read at each keystroke).</summary>
     HideExitAutocomplete,
 
-    /// <summary>A toggle: whether a sent line that is a command's bare name offers the command first (<see cref="Settings.AppSettingsData.CommandTypoIntercept"/>). The General tab's row before Welcome splash (2026-09-18); no reconnect (read at each Enter).</summary>
+    /// <summary>A toggle: whether a sent line that is a command's bare name offers the command first (<see cref="Settings.AppSettingsData.CommandTypoIntercept"/>). The General tab's row under Keep command history (2026-10-01; before Welcome splash from 2026-09-18); no reconnect (read at each Enter).</summary>
     CommandTypoIntercept,
 
-    /// <summary>A picker: how the splash greets you under the banner at startup — <c>fullsize</c> / <c>tiled</c> / <c>disabled</c> (<see cref="Settings.AppSettingsData.WelcomeSplashMode"/>; a toggle until 2026-09-24). The General tab's row before Show working directory (2026-09-18, the user's order); no reconnect (read at each show).</summary>
+    /// <summary>A picker: how the splash greets you under the banner at startup — <c>fullsize</c> / <c>tiled</c> / <c>disabled</c> (<see cref="Settings.AppSettingsData.WelcomeSplashMode"/>; a toggle until 2026-09-24). The General tab's row under Theme (2026-10-01; before Show working directory from 2026-09-18, the user's order); no reconnect (read at each show).</summary>
     WelcomeSplash,
 
     /// <summary>A toggle: whether the banner is drawn at all — startup, <c>/clear</c>, <c>/splash</c>, <c>/theme</c>, a profile switch (<see cref="Settings.AppSettingsData.ShowHeader"/>, on by default). The General tab's row under Welcome splash (2026-10-01, the user's ask); no reconnect (read at each banner draw).</summary>
     ShowHeader,
 
-    /// <summary>A toggle: whether the working directory sits at the right edge of the banner's title line (<see cref="Settings.AppSettingsData.ShowWorkingDirectory"/>). The General tab's row before Draft editor (2026-09-18, its last row until 2026-09-19); no reconnect (read at each banner draw).</summary>
+    /// <summary>A toggle: whether the working directory sits at the right edge of the banner's title line (<see cref="Settings.AppSettingsData.ShowWorkingDirectory"/>). The General tab's row under Show header (2026-10-01; before Draft editor from 2026-09-19, its last row until then); no reconnect (read at each banner draw).</summary>
     ShowWorkingDirectory,
 
-    /// <summary>A toggle: whether a message sent while a reply runs is queued rather than only left for the idle line (<see cref="Settings.AppSettingsData.QueueMessages"/>). The General tab's row after Working directory (2026-09-18, the user's order); no reconnect (read at each mid-turn Enter).</summary>
+    /// <summary>A toggle: whether a message sent while a reply runs is queued rather than only left for the idle line (<see cref="Settings.AppSettingsData.QueueMessages"/>). The General tab's input-line run's first row, after Memory (2026-10-01; after Working directory from 2026-09-18, the user's order); no reconnect (read at each mid-turn Enter).</summary>
     QueueMessages,
 
     /// <summary>A picker: what a cancelled reply does to the queue — <c>hold</c> / <c>drain</c> / <c>empty</c> (<see cref="Settings.AppSettingsData.QueueCancelMode"/>). The General tab's row after Queue messages (2026-09-18); no reconnect (read when a turn ends).</summary>
@@ -244,7 +244,7 @@ public enum SettingsField
     /// <summary>A picker over <see cref="Skills.ReflectionCooldownMode.Names"/>: what the cooldown holds back (<see cref="Settings.AppSettingsData.ReflectionCooldownMode"/>). The Options tab of <c>/skills</c>' row after the cooldown minutes (2026-09-19); no reconnect (read at each reply's end).</summary>
     ReflectionCooldownMode,
 
-    /// <summary>Typed: the command line <c>/draft</c> opens its file with, or empty for the shell's default (<see cref="Settings.AppSettingsData.DraftEditor"/>). The General tab's last row (2026-09-19); no reconnect (read at each <c>/draft</c>).</summary>
+    /// <summary>Typed: the command line <c>/draft</c> opens its file with, or empty for the shell's default (<see cref="Settings.AppSettingsData.DraftEditor"/>). The General tab's outside-apps run's first row, after Menus max height (2026-10-01; its last row from 2026-09-19); no reconnect (read at each <c>/draft</c>).</summary>
     DraftEditor,
 
     /// <summary>Typed: the most pictures one <c>view_image</c> call loads, 1 to 100 (<see cref="Settings.AppSettingsData.FileViewImageMaxPerCall"/>). The Files tab of <c>/tools</c>' last row (2026-09-19); no reconnect (read at each call).</summary>
@@ -358,7 +358,7 @@ public enum SettingsField
     /// <summary>An action row, no setting behind it (later on 2026-09-23, the user's ask): Enter walks a new connection through every choice — the file, the name, the server, the sign-in, the password (masked), the TLS pair — tests it and adds it to that <c>sql.json</c> (<c>SettingsMenu.SqlWizard.cs</c>). The SQL tab's fifth row, under <see cref="SqlSetPassword"/>. Last in the enum, as every newcomer.</summary>
     SqlAddConnection,
 
-    /// <summary>A pick among <see cref="UI.ThemeName.Names"/>: the look (<see cref="Settings.AppSettingsData.Theme"/>, 2026-09-23). The General tab's last row; a change puts the theme in force at once (the pane re-colours) and raises <see cref="SettingsChanges.Theme"/>, so the screen starts over as <c>/splash</c> does when the pane closes. No reconnect. Last in the enum, as every newcomer.</summary>
+    /// <summary>A pick among <see cref="UI.ThemeName.Names"/>: the look (<see cref="Settings.AppSettingsData.Theme"/>, 2026-09-23). The General tab's screen run's first row, after Copy user prompt (2026-10-01; its last row before); a change puts the theme in force at once (the pane re-colours) and raises <see cref="SettingsChanges.Theme"/>, so the screen starts over as <c>/splash</c> does when the pane closes. No reconnect. Last in the enum, as every newcomer.</summary>
     Theme,
 
     /// <summary>A toggle: whether a turn offers the image tools (<see cref="Settings.AppSettingsData.ComfyTools"/>). The ComfyUI tab of <c>/tools</c>' first row (2026-09-24); no reconnect (read at each turn). Last in the enum, as every newcomer.</summary>
@@ -418,7 +418,7 @@ public enum SettingsField
     /// <summary>A picker: what the busy row's token tally shows while a turn runs — <c>estimate</c> / <c>last-known</c> (<see cref="Settings.AppSettingsData.LlmMidTurnUsage"/>). On the LLM tab under <see cref="LlmContextLength"/> (2026-09-25); no reconnect (read on every draw).</summary>
     LlmMidTurnUsage,
 
-    /// <summary>A toggle: whether the input line's Up/Down history is stored in <c>sessions.db</c> and recalled after a restart (<see cref="Settings.AppSettingsData.KeepCommandHistory"/>). The General tab's row under Command typo intercept (2026-09-25, the user's ask); no reconnect (read at each remembered line and each load).</summary>
+    /// <summary>A toggle: whether the input line's Up/Down history is stored in <c>sessions.db</c> and recalled after a restart (<see cref="Settings.AppSettingsData.KeepCommandHistory"/>). The General tab's row under Queue cancel mode (2026-10-01; under Command typo intercept from 2026-09-25, the user's ask); no reconnect (read at each remembered line and each load).</summary>
     KeepCommandHistory,
 
     /// <summary>Typed: the seconds <c>/botchat</c> rests after a reply when no voice plays, 0 (off) to 30 (<see cref="Settings.AppSettingsData.BotChatNonTtsDelaySeconds"/>). The Botchat tab's last row (2026-09-26, the user's ask); no reconnect (read per reply). Last in the enum, as every newcomer.</summary>
@@ -726,7 +726,7 @@ public enum SettingsField
     /// <summary>
     /// A picker: the most of the window a menu, info or folder pane takes — <c>half-screen</c> / <c>three-quarters</c> /
     /// <c>full-screen</c> (<see cref="Settings.AppSettingsData.MenuMaxHeight"/>, 2026-10-01, the user's ask, with every tab
-    /// held at its tallest tab's height). The General tab's row after Theme; no reconnect (read at each pane draw). Last in
+    /// held at its tallest tab's height). The General tab's screen run's last row, after Show performance bar (2026-10-01; after Theme before); no reconnect (read at each pane draw). Last in
     /// the enum until <see cref="ProjectFile"/>.
     /// </summary>
     MenuMaxHeight,
@@ -1014,8 +1014,13 @@ internal sealed partial class SettingsMenu
     /// (General, Embedded, LLM, TTS, STT, Sessions, Botchat — the user's order, 2026-09-29; General, Sessions, LLM, TTS, STT from 2026-09-18, Sessions right after General; the Ask,
     /// Files and Web tabs are <c>/tools</c>' since 2026-09-19, <see cref="ToolsTabFields"/>, and the Skills tab
     /// <c>/skills</c>' Options tab since later that day, <see cref="SkillsTabFields"/>).
-    /// General is spelled out (the profile and what a new one copies, then where its files live, then the message queue's switch and its cancel mode (2026-09-18, the user's place: right under the working directory), then the switches and pickers (<c>Mouse in menus</c> sat among them until 2026-09-21, when the mouse became the pane's for good), the
-    /// transcript's Markdown and the paste preview, then the two line conveniences of 2026-09-18 — the hidden <c>/exit</c>, the typo intercept —, the command history's switch (2026-09-25), the welcome splash (the user's order, later that day), the banner's working directory, the theme (2026-09-23; last until later on 2026-09-27, when the user moved it under the toolbar's switch), the menus' max height (2026-10-01, beside the theme: both the look), the draft editor (2026-09-19), the image viewer and the themed-viewer switch last (later on 2026-09-27)); LLM
+    /// General is spelled out in five runs (2026-10-01, the user's call: 24 rows grown by "under X" and "last" had scattered their
+    /// kin — the working directory at the top and its header switch far below, the theme apart from the themed viewer): who and where
+    /// (the profile, what a new one copies, where its files live, the memory it carries), the input line (the message queue's switch and
+    /// its cancel mode, the command history, the typo intercept, the hidden <c>/exit</c>), the transcript (its Markdown, the paste preview,
+    /// the thumbnails' switch and size, what <c>/copy</c> takes), the screen (the theme, then top to bottom: the welcome splash, the header
+    /// and the working directory in it, the toolbar, the performance bar, the menus' max height), and the outside apps last (the draft
+    /// editor, the image viewer and the themed-viewer switch). Each dependent row stays right under the one it hangs on; LLM
     /// is spelled out too: the scan mode (where a blank URL looks, so it sits above the URL), the
     /// <see cref="IsLlmField"/> rows, the compact rows, then <see cref="SettingsField.LlmOfferTools"/> ABOVE
     /// <see cref="SettingsField.LlmToolCompactType"/> (the user's order, 2026-09-15), the round-trip cap and the fun
@@ -1026,7 +1031,11 @@ internal sealed partial class SettingsMenu
     /// </summary>
     public static readonly IReadOnlyList<IReadOnlyList<SettingsField>> TabFields =
     [
-        [SettingsField.Profile, SettingsField.NewProfileMode, SettingsField.WorkingDirectory, SettingsField.QueueMessages, SettingsField.QueueCancelMode, SettingsField.Memory, SettingsField.CopyUserPrompt, SettingsField.ShowImageThumbnails, SettingsField.ImageThumbnailSize, SettingsField.TranscriptMarkdown, SettingsField.PastePreviewLines, SettingsField.HideExitAutocomplete, SettingsField.CommandTypoIntercept, SettingsField.KeepCommandHistory, SettingsField.WelcomeSplash, SettingsField.ShowHeader, SettingsField.ShowWorkingDirectory, SettingsField.ToolbarItems, SettingsField.ShowPerformanceBar, SettingsField.Theme, SettingsField.MenuMaxHeight, SettingsField.DraftEditor, SettingsField.ImageEditor, SettingsField.ThemedViewer],
+        [SettingsField.Profile, SettingsField.NewProfileMode, SettingsField.WorkingDirectory, SettingsField.Memory,
+         SettingsField.QueueMessages, SettingsField.QueueCancelMode, SettingsField.KeepCommandHistory, SettingsField.CommandTypoIntercept, SettingsField.HideExitAutocomplete,
+         SettingsField.TranscriptMarkdown, SettingsField.PastePreviewLines, SettingsField.ShowImageThumbnails, SettingsField.ImageThumbnailSize, SettingsField.CopyUserPrompt,
+         SettingsField.Theme, SettingsField.WelcomeSplash, SettingsField.ShowHeader, SettingsField.ShowWorkingDirectory, SettingsField.ToolbarItems, SettingsField.ShowPerformanceBar, SettingsField.MenuMaxHeight,
+         SettingsField.DraftEditor, SettingsField.ImageEditor, SettingsField.ThemedViewer],
         [SettingsField.EmbeddedLlmServer, SettingsField.EmbeddedModels, SettingsField.EmbeddedFilterType, SettingsField.EmbeddedHfDownloadType, SettingsField.EmbeddedBackend, SettingsField.EmbeddedContextSize, SettingsField.EmbeddedGpuLayers, SettingsField.EmbeddedVramBudget, SettingsField.EmbeddedVramOnly, SettingsField.EmbeddedVision, SettingsField.EmbeddedDrafter],
         [SettingsField.LlmScanMode, SettingsField.LlmUrl, SettingsField.LlmModel, SettingsField.LlmApiKey, SettingsField.LlmReasoning, SettingsField.LlmRequestTimeoutSeconds, SettingsField.LlmTurnTimeoutSeconds, SettingsField.LlmContextLength, SettingsField.LlmMidTurnUsage, SettingsField.LlmCompactType, SettingsField.LlmCompactKeepRecent, SettingsField.LlmCompactShowSummary, SettingsField.LlmAutoCompactPercent, SettingsField.LlmMaxTurns, SettingsField.LlmOfferTools, SettingsField.LlmToolCompactType, SettingsField.LlmMaxToolIterations, SettingsField.LlmUseFunVerbs, SettingsField.LlmShowThinking, SettingsField.LlmPreserveThinking, SettingsField.LlmReasoningEstimate, SettingsField.LlmSampling, SettingsField.LlmSamplingFromHuggingFace],
         [SettingsField.TtsOutput, SettingsField.TtsSource, SettingsField.TtsHttpUrl, SettingsField.TtsVoicePreview, SettingsField.TtsVoicePreset, SettingsField.TtsVoice, SettingsField.TtsVoice2, SettingsField.TtsVoiceMix, SettingsField.TtsSpeed],

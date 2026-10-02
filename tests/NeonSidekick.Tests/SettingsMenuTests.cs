@@ -877,7 +877,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("LLM mid-turn usage", SettingsMenu.FieldName(SettingsField.LlmMidTurnUsage));
         Assert.Equal("last-known", SettingsMenu.FieldValue(SettingsField.LlmMidTurnUsage, data, _settings.ProfileDirectory));
         Assert.Equal("estimate", SettingsMenu.FieldValue(SettingsField.LlmMidTurnUsage, new AppSettingsData { LlmMidTurnUsage = "estimate" }, _settings.ProfileDirectory));
-        // Keep command history (2026-09-25): a General toggle under the typo intercept, on by default, no reconnect.
+        // Keep command history (2026-09-25): a General toggle, on by default, no reconnect; under Queue cancel mode since 2026-10-01 (the typo intercept's until then).
         Assert.True(SettingsMenu.IsToggle(SettingsField.KeepCommandHistory));
         Assert.Equal("Keep command history", SettingsMenu.FieldName(SettingsField.KeepCommandHistory));
         Assert.Equal("on", SettingsMenu.FieldValue(SettingsField.KeepCommandHistory, data, _settings.ProfileDirectory));
@@ -885,7 +885,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.False(SettingsMenu.RefusedMidTurn(SettingsField.KeepCommandHistory));
         Assert.Equal("command history enabled", SettingsMenu.ToggleDescribe(SettingsField.KeepCommandHistory, true));
         Assert.Equal("command history disabled", SettingsMenu.ToggleDescribe(SettingsField.KeepCommandHistory, false));
-        Assert.Equal(SettingsField.KeepCommandHistory, SettingsMenu.TabFields[(int)SettingsTab.General][SettingsMenu.TabFields[(int)SettingsTab.General].ToList().IndexOf(SettingsField.CommandTypoIntercept) + 1]);
+        Assert.Equal(SettingsField.KeepCommandHistory, SettingsMenu.TabFields[(int)SettingsTab.General][SettingsMenu.TabFields[(int)SettingsTab.General].ToList().IndexOf(SettingsField.QueueCancelMode) + 1]);
         // The show-summary toggle (2026-09-21): right under keep recent, no reconnect, off by default.
         Assert.False(SettingsMenu.IsLlmField(SettingsField.LlmCompactShowSummary));
         Assert.True(SettingsMenu.IsToggle(SettingsField.LlmCompactShowSummary));
@@ -1056,7 +1056,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(15, SettingsMenu.ToolsTabFields.Count);   // UNC later still on 2026-09-30; MySQL and Oracle since 2026-09-30; Print since later on 2026-09-28; Home Assistant since 2026-09-28; Claude since 2026-09-27; Images since 2026-09-24; SQL since 2026-09-23; Obsidian since 2026-09-22 and Options last later that day (first since later on 2026-09-19); Git between Files and Web since 2026-09-20; Shell between Git and Web since 2026-09-21
         Assert.Equal(2, SettingsMenu.SkillsTabFields.Count);   // Options and Reflection, since later on 2026-09-19 (one list of 11, then 14, before)
         Assert.Equal(15, SettingsMenu.SkillsTabFields.Sum(t => t.Count));   // 14 until Project file came off the Project tab on 2026-10-01; 13 until Reflection edit supporting files came on 2026-09-27; 12 until Reflection yields to turns came on 2026-09-24; 13 until Allow skill delete went on 2026-09-23; 14 until Reflection verbose went later still on 2026-09-19
-        Assert.Equal(new[] { SettingsField.Profile, SettingsField.NewProfileMode, SettingsField.WorkingDirectory, SettingsField.QueueMessages, SettingsField.QueueCancelMode, SettingsField.Memory, SettingsField.CopyUserPrompt, SettingsField.ShowImageThumbnails, SettingsField.ImageThumbnailSize, SettingsField.TranscriptMarkdown, SettingsField.PastePreviewLines, SettingsField.HideExitAutocomplete, SettingsField.CommandTypoIntercept, SettingsField.KeepCommandHistory, SettingsField.WelcomeSplash, SettingsField.ShowHeader, SettingsField.ShowWorkingDirectory, SettingsField.ToolbarItems, SettingsField.ShowPerformanceBar, SettingsField.Theme, SettingsField.MenuMaxHeight, SettingsField.DraftEditor, SettingsField.ImageEditor, SettingsField.ThemedViewer }, SettingsMenu.TabFields[(int)SettingsTab.General]);   // Menus max height under Theme, 2026-10-01; Image editor under Draft editor, later on 2026-09-24; Keep command history under the typo intercept, 2026-09-25; Theme under Show toolbar and Themed image viewer last, later on 2026-09-27; Show performance bar under Show toolbar, 2026-09-29
+        Assert.Equal(new[] { SettingsField.Profile, SettingsField.NewProfileMode, SettingsField.WorkingDirectory, SettingsField.Memory, SettingsField.QueueMessages, SettingsField.QueueCancelMode, SettingsField.KeepCommandHistory, SettingsField.CommandTypoIntercept, SettingsField.HideExitAutocomplete, SettingsField.TranscriptMarkdown, SettingsField.PastePreviewLines, SettingsField.ShowImageThumbnails, SettingsField.ImageThumbnailSize, SettingsField.CopyUserPrompt, SettingsField.Theme, SettingsField.WelcomeSplash, SettingsField.ShowHeader, SettingsField.ShowWorkingDirectory, SettingsField.ToolbarItems, SettingsField.ShowPerformanceBar, SettingsField.MenuMaxHeight, SettingsField.DraftEditor, SettingsField.ImageEditor, SettingsField.ThemedViewer }, SettingsMenu.TabFields[(int)SettingsTab.General]);   // five runs since 2026-10-01 (the user's call): who and where, the input line, the transcript, the screen, the outside apps; before that: Menus max height under Theme, 2026-10-01; Image editor under Draft editor, later on 2026-09-24; Keep command history under the typo intercept, 2026-09-25; Theme under Show toolbar and Themed image viewer last, later on 2026-09-27; Show performance bar under Show toolbar, 2026-09-29
         // Show performance bar (2026-09-29): a picker of five looks, off by default, no reconnect.
         Assert.False(SettingsMenu.IsToggle(SettingsField.ShowPerformanceBar));
         Assert.Equal("Show performance bar", SettingsMenu.FieldName(SettingsField.ShowPerformanceBar));
@@ -3024,11 +3024,11 @@ public partial class SettingsMenuTests : IDisposable
 
         Assert.Equal(SettingsChanges.None, await menu.ShowAsync(CancellationToken.None));
 
-        // General: its rows in their own order (Keep command history under Command typo intercept, 2026-09-25; Mouse in menus gone, 2026-09-21; Draft editor last, 2026-09-19; Show toolbar after Show working directory, 2026-09-21) (the six web rows moved to the Web tab and the two /tree rows to Files, 2026-09-15; Transcript markdown and Paste preview lines, 2026-09-16; the @-mention folder mode to Files, 2026-09-17; the two line switches, Welcome splash, then Show working directory last, and the queue's two rows under Working directory, 2026-09-18), padded to the tab's own column (25), nothing of the other tabs.
+        // General: its rows in their own order (five runs since 2026-10-01, the user's call: who and where, the input line, the transcript, the screen, the outside apps; Keep command history under Command typo intercept, 2026-09-25; Mouse in menus gone, 2026-09-21; Draft editor last, 2026-09-19; Show toolbar after Show working directory, 2026-09-21) (the six web rows moved to the Web tab and the two /tree rows to Files, 2026-09-15; Transcript markdown and Paste preview lines, 2026-09-16; the @-mention folder mode to Files, 2026-09-17; the two line switches, Welcome splash, then Show working directory last, and the queue's two rows under Working directory, 2026-09-18), padded to the tab's own column (25), nothing of the other tabs.
         string cwd = SettingsMenu.DefaultWorkingDirectoryLabel(_settings.ProfileDirectory);
         Assert.StartsWith("(", cwd);
         Assert.EndsWith(@"\profiles\default\files)", cwd);
-        Assert.Contains(Rule(240) + "\n" + Titled(Strip) + "\n \n▸ Profile                      default (" + _settings.ProfileDirectory + ")\n  New profile mode             basic\n  Working directory (cwd)      " + cwd + "\n  Queue messages               on\n  Queue cancel mode            empty\n  Memory                       on\n  Copy user prompt             on\n  Show image thumbnails        on\n  Image thumbnail size         small\n  Transcript markdown          on\n  Paste preview lines          25 lines\n  Hide /exit autocomplete      on\n  Command typo intercept       on\n  Keep command history         on\n  Welcome splash               fullsize\n  Show header                  on\n  Working directory in header  off\n  Show toolbar                 5 of 13\n  Show performance bar         off\n  Theme                        synthwave\n  Menus max height             full-screen\n  Draft editor                 (default .txt editor)\n  Image viewer                 (built-in viewer)\n  Themed image viewer          on\n" + Rule(240) + "\n" + SettingsMenu.TabKeys + "\n", _console.Output);
+        Assert.Contains(Rule(240) + "\n" + Titled(Strip) + "\n \n▸ Profile                      default (" + _settings.ProfileDirectory + ")\n  New profile mode             basic\n  Working directory (cwd)      " + cwd + "\n  Memory                       on\n  Queue messages               on\n  Queue cancel mode            empty\n  Keep command history         on\n  Command typo intercept       on\n  Hide /exit autocomplete      on\n  Transcript markdown          on\n  Paste preview lines          25 lines\n  Show image thumbnails        on\n  Image thumbnail size         small\n  Copy user prompt             on\n  Theme                        synthwave\n  Welcome splash               fullsize\n  Show header                  on\n  Working directory in header  off\n  Show toolbar                 5 of 13\n  Show performance bar         off\n  Menus max height             full-screen\n  Draft editor                 (default .txt editor)\n  Image viewer                 (built-in viewer)\n  Themed image viewer          on\n" + Rule(240) + "\n" + SettingsMenu.TabKeys + "\n", _console.Output);
         Assert.DoesNotContain("File /tree max length", _console.Output);   // the Files tab's since 2026-09-15
         Assert.DoesNotContain("LLM URL", _console.Output);
         Assert.False(pane.OverlayOpen);
@@ -3085,8 +3085,8 @@ public partial class SettingsMenuTests : IDisposable
     {
         _console.Profile.Width = 240;
         var (menu, pane, input) = ClickablePaneMenu(cursorTop: 100);
-        input.PushClick(4, 107);                 // Memory (a double-click; the queue's two rows above it since 2026-09-18)
-        input.PushClick(4, 107);
+        input.PushClick(4, 105);                 // Memory (a double-click; right under Working directory since 2026-10-01, the queue's two rows above it from 2026-09-18)
+        input.PushClick(4, 105);
         input.PushClick(238, 100);               // the × on the on/off page: back to the list
         input.PushClick(239, 100);               // the × on the list: closed
         input.Push(Keys.Escape);                 // never read
@@ -3108,8 +3108,8 @@ public partial class SettingsMenuTests : IDisposable
         _console.Profile.Width = 240;
         var (menu, pane, input) = ClickablePaneMenu(cursorTop: 100);
         Assert.True(_settings.Current.Memory);
-        input.PushClick(4, 107);                 // Memory: strip 100, spacer 101, Profile 102, New profile mode 103, Working directory 104, Queue messages 105, Queue cancel mode 106
-        input.PushClick(4, 107);
+        input.PushClick(4, 105);                 // Memory: strip 100, spacer 101, Profile 102, New profile mode 103, Working directory 104 (under it since 2026-10-01, the queue's two rows before)
+        input.PushClick(4, 105);
         input.PushClick(4, 103);                 // off: breadcrumb 100, spacer 101, on 102
         input.PushClick(6, 103);
         input.Push(Keys.Escape);
@@ -3131,8 +3131,8 @@ public partial class SettingsMenuTests : IDisposable
         _console.Profile.Width = 240;
         var (menu, pane, input) = ClickablePaneMenu(cursorTop: 100);
         Assert.True(_settings.Current.Memory);
-        input.PushClick(4, 107);                 // Memory (see the double-click test for the rows)
-        input.PushClick(4, 107);
+        input.PushClick(4, 105);                 // Memory (see the double-click test for the rows)
+        input.PushClick(4, 105);
         input.PushClick(4, 50);                  // the transcript under the on/off page: a first
         input.Push(Keys.Down);                   // a key ends the pair: off under the cursor, nothing picked
         input.PushClick(4, 50);                  // a first again
@@ -3160,7 +3160,7 @@ public partial class SettingsMenuTests : IDisposable
         var (menu, pane) = PaneMenu();
         Push(Keys.Enter);                       // Profile: refused
         Push(Keys.Down, Keys.Down, Keys.Enter);   // Working directory: refused
-        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Enter, Keys.Down, Keys.Enter);   // Memory (past the queue's two rows): a General toggle, its page opens, off picked, saved
+        Push(Keys.Down, Keys.Enter, Keys.Down, Keys.Enter);   // Memory (right under Working directory since 2026-10-01): a General toggle, its page opens, off picked, saved
         GoTo(SettingsTab.Llm); Push(Keys.Down, Keys.Enter);   // LLM URL: refused
         Push(Keys.Right, Keys.Enter);           // TTS output: refused
         Push(Keys.Right, Keys.Enter);           // STT input: refused
