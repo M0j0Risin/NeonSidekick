@@ -65,6 +65,13 @@ public sealed record SidekickOptions(
     public const string OracleCheckFlag = "--oracle-check";
     public const string MySqlCheckFlag = "--mysql-check";
     public const string UncCheckFlag = "--unc-check";
+    public const string DockerCheckFlag = "--docker-check";
+
+    /// <summary>
+    /// <c>--docker-check</c> (2026-10-02): run <see cref="App.DockerCheck"/> over the engine pipe the settings name and exit 0/1 —
+    /// the Docker tools' proof on the published binary, reads only. Needs Docker Desktop running, so not in the build gate.
+    /// </summary>
+    public bool DockerCheck { get; init; }
 
     /// <summary><c>--unc-check &lt;share&gt;</c> (2026-09-30): run <see cref="UncCheck"/> over that share of <c>unc.json</c> and exit 0/1 — the UNC tools' proof, reads only.</summary>
     public string? UncCheck { get; init; }
@@ -82,7 +89,7 @@ public sealed record SidekickOptions(
 
     /// <summary>The help text. Pinned wording; tests assert on it.</summary>
     public const string Usage =
-        "Usage: NeonSidekick [--headless] [--smoke] [--audio-check] [--voice-check] [--oracle-check <connection>] [--mysql-check <connection>] [--unc-check <share>] [--url <url>] [--model <id>] [--cwd <path>] [--profile <name>] [--yolo] [--no-police] [--log <path>] [--version] [--help]\n" +
+        "Usage: NeonSidekick [--headless] [--smoke] [--audio-check] [--voice-check] [--oracle-check <connection>] [--mysql-check <connection>] [--unc-check <share>] [--docker-check] [--url <url>] [--model <id>] [--cwd <path>] [--profile <name>] [--yolo] [--no-police] [--log <path>] [--version] [--help]\n" +
         "\n" +
         "  (no flags)     interactive TUI\n" +
         "  --headless     stdin/stdout REPL, no TUI (profile \"default\" unless --profile or NEONSIDEKICK_PROFILE names one)\n" +
@@ -92,6 +99,7 @@ public sealed record SidekickOptions(
         "  --oracle-check <connection>  prove the Oracle tools against that connection of oracle.json (reads only), exit 0/1\n" +
         "  --mysql-check <connection>   prove the MySQL tools against that connection of mysql.json (reads only), exit 0/1\n" +
         "  --unc-check <share>          prove the UNC tools against that share of unc.json (reads only), exit 0/1\n" +
+        "  --docker-check               prove the Docker tools against Docker Desktop's engine pipe (reads only), exit 0/1\n" +
         "  --url <url>    LLM base URL for this launch (outranks NEONSIDEKICK_LLM_URL and the saved setting)\n" +
         "  --model <id>   model id for this launch (outranks NEONSIDEKICK_LLM_MODEL and the saved setting)\n" +
         "  --cwd <path>   working directory for this launch (outranks the saved setting)\n" +
@@ -222,6 +230,9 @@ public sealed record SidekickOptions(
                 case "--voice-check":
                     result = result with { VoiceCheck = true };
                     break;
+                case DockerCheckFlag:
+                    result = result with { DockerCheck = true };
+                    break;
                 case YoloFlag:
                     result = result with { Yolo = true };
                     break;
@@ -294,7 +305,7 @@ public sealed record SidekickOptions(
     public string? LaunchProfile(string? environmentProfile) =>
         Profile ?? environmentProfile ?? (Headless ? Profiles.DefaultName : null);
 
-    /// <summary>The mode this launch runs: <c>interactive</c>, <c>headless</c>, <c>smoke</c>, <c>audio-check</c>, <c>voice-check</c>, <c>oracle-check</c>, <c>mysql-check</c>, <c>unc-check</c>.</summary>
+    /// <summary>The mode this launch runs: <c>interactive</c>, <c>headless</c>, <c>smoke</c>, <c>audio-check</c>, <c>voice-check</c>, <c>oracle-check</c>, <c>mysql-check</c>, <c>unc-check</c>, <c>docker-check</c>.</summary>
     public string Mode =>
         Headless ? "headless"
         : Smoke ? "smoke"
@@ -303,10 +314,11 @@ public sealed record SidekickOptions(
         : OracleCheck is not null ? "oracle-check"
         : MySqlCheck is not null ? "mysql-check"
         : UncCheck is not null ? "unc-check"
+        : DockerCheck ? "docker-check"
         : "interactive";
 
-    /// <summary>Whether this launch runs one of the check modes (<c>--smoke</c>, <c>--audio-check</c>, <c>--voice-check</c>, <c>--oracle-check</c>, <c>--mysql-check</c>, <c>--unc-check</c>): no screen, no input reader.</summary>
-    public bool IsCheck => Smoke || AudioCheck || VoiceCheck || OracleCheck is not null || MySqlCheck is not null || UncCheck is not null;
+    /// <summary>Whether this launch runs one of the check modes (<c>--smoke</c>, <c>--audio-check</c>, <c>--voice-check</c>, <c>--oracle-check</c>, <c>--mysql-check</c>, <c>--unc-check</c>, <c>--docker-check</c>): no screen, no input reader.</summary>
+    public bool IsCheck => Smoke || AudioCheck || VoiceCheck || OracleCheck is not null || MySqlCheck is not null || UncCheck is not null || DockerCheck;
 
     /// <summary>
     /// The value flags as typed, for the log at startup: <c>--cwd D:\x --log C:\t.log</c>; null when

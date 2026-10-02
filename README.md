@@ -69,6 +69,7 @@ During early development, I was experimenting with synthwave-style themes in Spe
 * **Oracle:** The same read-only tools for Oracle databases, through Oracle's fully managed driver (no Oracle Client to install). Every query is checked to be a single `SELECT`, runs in a read-only session (23ai and later) and a read-only transaction that is always rolled back. Sign in with a database user; passwords are stored as the SQL Server ones are.
 * **MySQL and MariaDB:** The same read-only tools again, through MySqlConnector (fully managed, MIT). Every query is checked to be a single `SELECT`, runs in a hardened session and a read-only transaction that is always rolled back. Sign in with a database user; passwords are stored as the others are.
 * **UNC shares and outside folders:** Search, read and (when you allow it) change files on `\\server\share` paths and local folders outside the working directory, without mapped drives. Each share is reached as you or as another Windows account (like `runas /netonly`), its password stored as the SQL ones are. Read-only unless the share is marked read-write and *UNC writes* is on; changes there are permanent.
+* **Docker Desktop:** See your containers, their logs, health, resource use, images, volumes, networks and compose projects, through the Docker engine's own API (no `docker.exe`). Environment values in an inspect are hidden. With *Docker writes* on, the model can also start, stop, restart, pull and clean up, each change waiting for your yes. `/docker` opens the containers on a pane for your own hand.
 * **Home Assistant:** Control lights, scenes, the TV, to-do lists and sensors through your own Home Assistant. The model finds devices by room or name ("dim the den to 30%"), and anything outside a safe list waits for your yes. `/ha` drives the house directly, without the model.
 * **ComfyUI:** Pictures from your own ComfyUI workflows (text-to-image, image-to-image, face swaps). The model writes prompts in each model family's style, or `/imagine` sends yours exactly as typed. A wizard builds or imports workflows.
 * **Claude API:** Anthropic's Claude models as one more `/server` choice, using your own API key (stored encrypted), with thinking levels, prompt caching and cost in `/usage`. It stays off until you turn it on in the *Claude* tab of `/tools`.
@@ -129,6 +130,7 @@ Speech output (`/tts`) and voice input (`/stt`) start off. The first time you tu
 | `--oracle-check <connection>` | Proves the Oracle tools against that connection of `oracle.json` (types, the read-only layers, cancel and timeout; it only reads), then exits. |
 | `--mysql-check <connection>` | The same for the MySQL tools and a connection of `mysql.json`. |
 | `--unc-check <share>` | Proves the UNC tools against that share of `unc.json` (its reach, the runas token, a listing and a search; it only reads), then exits. |
+| `--docker-check` | Proves the Docker tools against Docker Desktop's engine pipe (the version, the containers, a redacted inspect, a log and a stats sample of a running one; it only reads), then exits. |
 | `--version` / `--help` | Prints the version or the help text. |
 
 Both `--option value` and `--option=value` work.
@@ -544,7 +546,7 @@ The app keeps a record of every global and profile skill in `skills.db` in the h
 
 #### Offered
 
-Every tool, grouped (Clock, Timers, Files, GitLib, Shell, Obsidian, SQL, ComfyUI, Claude, Web, Memory, Skills, Sessions, Questions), with the description the model reads. Enter or Space turns one tool on or off. A group whose switch is off is shown dim. In a new profile, `gitlib_delete` (loses branches, tags and stashes), `zip` and `unzip` start off.
+Every tool, grouped (Clock, Timers, Files, GitLib, Shell, Obsidian, SQL, ComfyUI, Claude, Web, Memory, Skills, Sessions, Questions), with the description the model reads. Enter or Space turns one tool on or off. A group whose switch is off is shown dim. In a new profile, `gitlib_delete` (loses branches, tags and stashes), `zip`, `unzip`, `unc_delete`, `docker_remove` and `docker_prune` start off.
 
 #### Web
 
@@ -768,6 +770,14 @@ You can change which services run without asking under `ask` in `profile.json` (
 | UNC shares (profile) | Enter opens the profile's `unc.json` in your editor (created with commented examples). | (none) |
 | UNC shares (global) | The same for the home folder's `unc.json`, which every profile reads. The profile's wins on a name clash. | (none) |
 
+#### Docker
+
+| Setting | What it does | Default |
+|---|---|---|
+| Docker tools | Offers the Docker tools: `docker_containers`, `docker_logs`, `docker_inspect`, `docker_stats`, `docker_resources` and `docker_compose`. They are offered whether Docker Desktop runs or not (they say when it doesn't). `/docker` works either way. See Docker. | off |
+| Docker writes | The master key of the model's changes. Off, the model may only look. On, it also gets `docker_lifecycle`, `docker_pull`, `docker_remove` and `docker_prune` (the last two off by default in the Offered tab), and every one of those calls waits for your yes on the pane. Headless refuses them. | off |
+| Docker engine pipe | The Docker engine's named pipe: `docker_engine` (Docker Desktop's), any other name, `\\.\pipe\name` or the CLI's `npipe:////./pipe/name`. Blank is the default. | `\\.\pipe\docker_engine` |
+
 #### GitLib
 
 | Setting | What it does | Default |
@@ -855,6 +865,9 @@ Type `/` to list every command with a short summary. After a command and a space
 | `/compact [focus]` | Shrink the current context. A focus tells the summary what to concentrate on. |
 | `/copy [n \| all] [--thinking]` | Copy the last reply (or the last *n*, or the whole transcript) to the clipboard as Markdown. `--thinking` includes the model's thinking, quoted under `💭 **Thinking**` where it happened. |
 | `/cwd [path \| ~ \| browse]` | Show or change the working directory. `~` returns to the profile's `files\` folder; `browse` opens the folder picker. |
+| `/docker` | Docker Desktop's containers on a pane, running first, with their state, health and ports. Enter on one offers what fits its state: stop, restart or pause (each asks first), start or unpause, its last 50 log lines, open a published port in the browser, copy the id. Without the pane it lists them. |
+| `/docker ps \| status \| logs <container> [lines] \| stats [container]` | The containers; Docker Desktop's and the engine's versions with the counts; a container's last lines (50 by default); the CPU, memory, network and disk use of one or every running container. |
+| `/docker start\|stop\|restart\|pause\|unpause <container>` | Act on one container, by name, part of a name or id. Your own hand: *Docker writes* never applies, nothing is asked, every change is logged. Runs under a reply too. |
 | `/draft` | Write the next message in your editor. It is sent when you save and close the file. |
 | `/echo <text>` | Print a line as a reply, and read it aloud when speech is on. |
 | `/exit` | Exit the app. |
@@ -1176,7 +1189,7 @@ The samples and the atlas are written by `dotnet run tools/VoiceSamples.cs`. It 
 ## Tools
 [↑ Back to top](#neon-sidekick)
 
-These are the tools the model can call, grouped as `/tools` and `/sys` show them. Each group has a switch that offers or withholds the whole group: `File tools`, `GitLib tools`, `Shell command policy`, `Obsidian tools`, `SQL tools`, `ComfyUI tools`, `Home Assistant tools`, `Print tools`, `Claude advisor tool`, `Web tools`, `Memory`, `Agent skills`, `Session tool`, `Ask user` and `MCP servers`. To switch a single tool on or off, use the Offered tab of `/tools`.
+These are the tools the model can call, grouped as `/tools` and `/sys` show them. Each group has a switch that offers or withholds the whole group: `File tools`, `GitLib tools`, `Shell command policy`, `Obsidian tools`, `SQL tools`, `Docker tools`, `ComfyUI tools`, `Home Assistant tools`, `Print tools`, `Claude advisor tool`, `Web tools`, `Memory`, `Agent skills`, `Session tool`, `Ask user` and `MCP servers`. To switch a single tool on or off, use the Offered tab of `/tools`.
 
 <details>
 <summary><b>🕒 Clock & Timers</b></summary>
@@ -1562,6 +1575,36 @@ The UNC tools reach named network shares (`\\server\share`, or a folder under on
 </details>
 
 <details>
+<summary><b>🐳 Docker</b></summary>
+
+### Docker
+
+The Docker tools reach Docker Desktop through the Docker engine's own API on its named pipe (`\\.\pipe\docker_engine`, *Docker engine pipe*). The app never starts `docker.exe` or Docker Desktop: when Desktop isn't running, the tools and `/docker` say so. A container is named the way you would name it: its name, a unique part of one ("mysql" for `mysql_dev`), or an id or id prefix of four or more characters. A name that fits several is a question listing them.
+
+* **Two keys for changes.** *Docker writes* (off by default) offers the changing tools, and every call of one waits for your yes on the pane, with what it would do ("Stop container mysql_dev (mysql:8.4, Up 3 days)?"). A prune says how much it would free first. Headless has no pane, so the model's changes are always refused there; `/docker` still works.
+* **Removals are opt-in.** `docker_remove` and `docker_prune` start off in a fresh profile even under *Docker writes*: switch them on in the Offered tab of `/tools`. A profile saved before keeps its own list, so there the yes on the pane is their only guard.
+* **Secrets.** `docker_inspect` shows the names of a container's environment variables but never their values. A label or command-line flag whose name sounds secret (password, token, key, secret, auth, cert, credential) has its value hidden too, and so does a password in a URL. A log can't be redacted: the model is told it may hold secrets and never to repeat one.
+* **Audit.** Every change, the model's or yours, logs a line with who asked, the act and how it ended.
+* **Compose.** The engine knows no compose: a project is the containers that carry its `com.docker.compose.project` label. `docker_lifecycle` with `scope: project` acts on them all, starting dependencies first (from `com.docker.compose.depends_on`) and stopping them last. `compose up` from the files is not offered, since that needs the CLI.
+
+| Tool | Arguments | What it does |
+|---|---|---|
+| `docker_containers` | `all?, filter?, project?` | The containers, running first: name, state and health, status, image, published ports, compose project, short id. `all` false leaves out stopped ones. |
+| `docker_logs` | `container, tail?, since?, grep?, stream?, timestamps?` | The last `tail` lines (100, up to 2000), since an age (`10m`, `2h`, `1d`) or a moment, stdout or stderr only. With `grep` the last 5000 lines are read and the matching ones kept. Colour codes are removed; at most 16,000 characters are returned, the oldest lines cut first. |
+| `docker_inspect` | `container` | One container in detail: state, health checks, exit code, restarts, image, command, environment names, ports, mounts, networks, restart policy, limits, compose project and labels, with the secrets hidden. |
+| `docker_stats` | `container?` | CPU (of one CPU, as `docker stats` shows it), memory against its limit, network and disk traffic and processes, for one container or every running one. |
+| `docker_resources` | `kind, filter?, unused?` | `images` (tags, size, age, which containers use each), `volumes` (which containers mount each), `networks` (subnets, which containers are on each) or `disk` (the space each kind takes and what a prune would free). |
+| `docker_compose` | `project?` | The compose projects: folder, compose files, services and their state. |
+| `docker_lifecycle` | `target, action, scope?, timeout_seconds?` | `start`, `stop`, `restart`, `pause` or `unpause` a container, or a whole compose project with `scope: project`. A stop or restart waits `timeout_seconds` (10, up to 120) before the engine kills the container. Asks first. |
+| `docker_pull` | `image, tag?` | Pull a public image (`nginx`, `postgres:16`, `ghcr.io/owner/app`); no registry credentials are sent. Asks first. |
+| `docker_remove` | `kind, name, force?` | Remove one container (its anonymous volumes are kept), image or volume, for good. `force` removes a running container or a used image. Asks first; off by default. |
+| `docker_prune` | `kind, all?` | Remove the stopped containers, the untagged images (every unused one with `all`), the empty networks, the anonymous unused volumes (named ones too with `all`) or the build cache. Asks first, with the count and size; off by default. |
+
+`--docker-check` proves the tools against the real engine on the published exe (the version agreed, the containers, a redacted inspect, a log and a stats sample of a running container; it only reads).
+
+</details>
+
+<details>
 <summary><b>🏠 Home Assistant</b></summary>
 
 ### Home Assistant
@@ -1898,6 +1941,7 @@ Every variable the app reads starts with `NEONSIDEKICK_`. They override a settin
 | `NEONSIDEKICK_COMFY_URL` | ComfyUI URL | The ComfyUI server's URL, e.g. `http://gpu-box:8188`. |
 | `NEONSIDEKICK_HA_URL` | Home Assistant URL | The Home Assistant server's URL, e.g. `http://localhost:8123`. |
 | `NEONSIDEKICK_HA_TOKEN` | Home Assistant API key | A long-lived access token, as issued (not encrypted). Never written to the log. |
+| `NEONSIDEKICK_DOCKER_PIPE` | Docker engine pipe | The engine's pipe: a bare name, `\\.\pipe\name` or `npipe:////./pipe/name` (what `DOCKER_HOST` holds on Windows). |
 
 ### Set by the app
 
@@ -1911,6 +1955,7 @@ These only matter when running the test suite from source. Each live test is ski
 * `NEONSIDEKICK_TEST_ORACLE_CONNECTION`: an ODP.NET connection string (`User Id=…;Password=…;Data Source=localhost:1521/FREEPDB1`) to an Oracle database whose user may create tables; the tests make their own `NS_*` fixtures once (the `gvenzl/oracle-free` container works).
 * `NEONSIDEKICK_TEST_MYSQL_CONNECTION`: a MySqlConnector connection string (`Server=127.0.0.1;Port=3306;User ID=…;Password=…;Database=…`) to a MySQL or MariaDB database its user owns; the tests make their own `ns_*` fixtures once (the `mysql:8.4` and `mariadb:11` images work).
 * `NEONSIDEKICK_TEST_UNC_SHARE`: a `\\server\share` path you can read (`\\localhost\C$\Windows` on a workstation); with `NEONSIDEKICK_TEST_UNC_USER` and `NEONSIDEKICK_TEST_UNC_PASSWORD`, a second account that can read it, for the runas path. The tests never write.
+* `NEONSIDEKICK_TEST_DOCKER_CONTAINER`: the name of a running container to read (`mysql_dev`), with Docker Desktop running; `NEONSIDEKICK_TEST_DOCKER_PIPE` names another engine pipe. The tests never change anything.
 * `NEONSIDEKICK_TEST_HA_URL` with `NEONSIDEKICK_TEST_HA_TOKEN`: a Home Assistant to read from (the live test never switches anything).
 * `NEONSIDEKICK_TEST_WHISPER_MODEL`, `NEONSIDEKICK_TEST_SILERO_MODEL`, `NEONSIDEKICK_TEST_VOSK_MODEL`, `NEONSIDEKICK_TEST_KOKORO_MODEL`: a model, when it isn't already under `%USERPROFILE%\.neonsidekick\models`.
 * `NEONSIDEKICK_TEST_CLAUDE=1`: the live Claude Code tests, on your own sign-in (Haiku; a few cents a run).

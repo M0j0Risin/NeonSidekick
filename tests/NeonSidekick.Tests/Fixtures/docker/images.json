@@ -1,0 +1,6 @@
+[
+  {"Containers":-1,"Created":1790707188,"Id":"sha256:6ea90827b1100f8f2ae306a539f86d2c264a26ed435a2a9f75551dd5c3aeb242","Labels":{},"ParentId":"","RepoDigests":["mysql@sha256:6ea9"],"RepoTags":["mysql:8.4"],"SharedSize":-1,"Size":1122244549},
+  {"Containers":-1,"Created":1790503022,"Id":"sha256:3e6710a7ab2a61311d9d899b719f6c3657791c63e8f4942cec4ebc42401d6b76","Labels":null,"ParentId":"","RepoDigests":[],"RepoTags":["ghcr.io/home-assistant/home-assistant:stable"],"SharedSize":-1,"Size":3437741401},
+  {"Containers":-1,"Created":1780000000,"Id":"sha256:deadbeefcafe0011223344556677889900aabbccddeeff00112233445566778899","Labels":null,"ParentId":"","RepoDigests":null,"RepoTags":null,"SharedSize":-1,"Size":52428800},
+  {"Containers":-1,"Created":1789000000,"Id":"sha256:1111222233334444555566667777888899990000aaaabbbbccccddddeeeeffff","Labels":null,"ParentId":"","RepoDigests":[],"RepoTags":["nginx:1.27","nginx:latest"],"SharedSize":-1,"Size":200000000}
+]

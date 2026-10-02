@@ -1,0 +1,6 @@
+{"Volumes":[
+  {"CreatedAt":"2026-07-31T18:17:29Z","Driver":"local","Labels":{"com.docker.compose.project":"searxng","com.docker.compose.volume":"valkey-data"},"Mountpoint":"/var/lib/docker/volumes/searxng_valkey-data/_data","Name":"searxng_valkey-data","Options":null,"Scope":"local"},
+  {"CreatedAt":"2026-10-01T00:32:06Z","Driver":"local","Labels":{"com.docker.volume.anonymous":""},"Mountpoint":"/var/lib/docker/volumes/02c6/_data","Name":"02c61c74061fc17b3e28d1113765abac5e8e549828536bfe5716f5dabba53148","Options":null,"Scope":"local"},
+  {"CreatedAt":"2026-09-05T22:12:49Z","Driver":"local","Labels":null,"Mountpoint":"/var/lib/docker/volumes/kokoro-models/_data","Name":"kokoro-models","Options":null,"Scope":"local"},
+  {"CreatedAt":"2026-08-24T03:26:09Z","Driver":"local","Labels":null,"Mountpoint":"/var/lib/docker/volumes/open-webui/_data","Name":"open-webui","Options":null,"Scope":"local"}
+],"Warnings":null}

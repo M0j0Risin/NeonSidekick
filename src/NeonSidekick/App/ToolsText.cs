@@ -52,6 +52,9 @@ public static class ToolsText
     /// <summary>The UNC tools' tab and group (2026-09-30), after MySQL, before GitLib: the outside places the model reaches, together.</summary>
     public const string UncTabTitle = "UNC";
 
+    /// <summary>The Docker tools' tab and group (2026-10-02), after UNC, before GitLib: the outside places and services the model reaches, together.</summary>
+    public const string DockerTabTitle = "Docker";
+
     /// <summary>The image tools' tab and group (2026-09-24), after Obsidian, before SQL (the user's order, 2026-09-27); "Images" until later on 2026-09-24 (the user's call: it is ComfyUI's tab).</summary>
     public const string ComfyTabTitle = "ComfyUI";
 
@@ -67,8 +70,8 @@ public static class ToolsText
     /// <summary>The print tools' tab and group (2026-09-28), after Claude, before Obsidian (after Home Assistant until later on 2026-10-01, when that tab moved to second to last).</summary>
     public const string PrintTabTitle = "Print";
 
-    /// <summary>The sixteen tabs in strip order (Home Assistant second to last, before Options, since later on 2026-10-01, the user's ask, and Print after Claude with it; Home Assistant after Claude from 2026-09-28 and Print after it later that day; Oracle after SQL, MySQL after Oracle and UNC after MySQL since 2026-09-30): Offered, Web, Files, Shell, Ask, Claude, Obsidian, ComfyUI, SQL, Oracle, Git (native), Options — the user's order since 2026-09-27 (Ask, Git (native), Obsidian, SQL, ComfyUI, Claude before); Options last since later on 2026-09-22 (the user's ask; second, after Offered, before); alphabetical before 2026-09-21; the last ten index <see cref="SettingsMenu.ToolsTabFields"/> one down.</summary>
-    public static readonly IReadOnlyList<string> TabTitles = [OfferedTabTitle, WebTabTitle, FilesTabTitle, ShellTabTitle, AskTabTitle, ClaudeTabTitle, PrintTabTitle, ObsidianTabTitle, ComfyTabTitle, SqlTabTitle, OracleTabTitle, MySqlTabTitle, UncTabTitle, GitTabTitle, HomeAssistantTabTitle, OptionsTabTitle];
+    /// <summary>The seventeen tabs in strip order (Docker after UNC since 2026-10-02; Home Assistant second to last, before Options, since later on 2026-10-01, the user's ask, and Print after Claude with it; Home Assistant after Claude from 2026-09-28 and Print after it later that day; Oracle after SQL, MySQL after Oracle and UNC after MySQL since 2026-09-30): Offered, Web, Files, Shell, Ask, Claude, Obsidian, ComfyUI, SQL, Oracle, Git (native), Options — the user's order since 2026-09-27 (Ask, Git (native), Obsidian, SQL, ComfyUI, Claude before); Options last since later on 2026-09-22 (the user's ask; second, after Offered, before); alphabetical before 2026-09-21; the last ten index <see cref="SettingsMenu.ToolsTabFields"/> one down.</summary>
+    public static readonly IReadOnlyList<string> TabTitles = [OfferedTabTitle, WebTabTitle, FilesTabTitle, ShellTabTitle, AskTabTitle, ClaudeTabTitle, PrintTabTitle, ObsidianTabTitle, ComfyTabTitle, SqlTabTitle, OracleTabTitle, MySqlTabTitle, UncTabTitle, DockerTabTitle, GitTabTitle, HomeAssistantTabTitle, OptionsTabTitle];
 
     /// <summary>The Offered tab's hint row. Pinned.</summary>
     public const string OfferedKeys = "Enter / Space = on or off · ←/→ tabs · ESC = close";

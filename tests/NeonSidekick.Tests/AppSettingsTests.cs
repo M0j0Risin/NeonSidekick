@@ -619,7 +619,7 @@ public class AppSettingsTests : IDisposable
         a.LlmModel = "mutated-locally";
         a.ToolsDisabled.Add("read_file");
         Assert.Equal("", settings.Current.LlmModel);
-        Assert.Equal(["gitlib_delete", "unzip", "zip", "unc_delete"], settings.Current.ToolsDisabled);   // the default: gitlib_delete since 2026-09-20, zip and unzip since 2026-09-21, unc_delete since 2026-09-30 (delete was here until later that day, gitlib_discard until 2026-09-23); the local Add never reached the store
+        Assert.Equal(["gitlib_delete", "unzip", "zip", "unc_delete", "docker_remove", "docker_prune"], settings.Current.ToolsDisabled);   // the default: gitlib_delete since 2026-09-20, zip and unzip since 2026-09-21, unc_delete since 2026-09-30, docker_remove and docker_prune since 2026-10-02 (delete was here until later that day, gitlib_discard until 2026-09-23); the local Add never reached the store
     }
 
     [Fact]
@@ -701,7 +701,7 @@ public class AppSettingsTests : IDisposable
         Assert.True(settings.Current.ComfyPictureStrip);   // its neighbour untouched by the retired ComfyPictureStripSync key (2026-09-28)
         Assert.True(settings.Current.SkillHashMention);   // its neighbour untouched by the retired SkillSlashCommands key
         Assert.True(settings.Current.LlmOfferTools);   // the renamed key, skipped; the default stands
-        Assert.Equal(["gitlib_delete", "unzip", "zip", "unc_delete"], settings.Current.ToolsDisabled);   // no ToolsDisabled key in the old file: the default fills it (a saved [] or ["delete"] would stand)
+        Assert.Equal(["gitlib_delete", "unzip", "zip", "unc_delete", "docker_remove", "docker_prune"], settings.Current.ToolsDisabled);   // no ToolsDisabled key in the old file: the default fills it (a saved [] or ["delete"] would stand)
         Assert.Equal(WorkingDirectory.DefaultTreeLength, settings.Current.FileTreeMaxLength);   // the old TreeMaxLength key, skipped
         Assert.Equal("", settings.Current.WebSearxngUrl);   // the old SearxngUrl key, skipped
         // On 2026-09-30 the Git native rows became GitLib and their keys followed (the user's pick: no migration).
@@ -1397,7 +1397,7 @@ public class AppSettingsTests : IDisposable
         Assert.Equal(200, PasteBlocks.MaxPreviewLines);
         Assert.True(s.SkillHashMention);
         Assert.True(s.ToolsDollarMention);   // 2026-09-19
-        Assert.Equal([NeonSidekick.Llm.Tools.GitDeleteTool.ToolName, NeonSidekick.Llm.Tools.UnzipTool.ToolName, NeonSidekick.Llm.Tools.ZipTool.ToolName, NeonSidekick.Llm.Tools.UncDeleteTool.ToolName], s.ToolsDisabled);   // unc_delete since 2026-09-30; gitlib_delete since 2026-09-20 (the user's call; gitlib_discard with it until 2026-09-23, the user's call again), zip and unzip since 2026-09-21; delete was opt-in from 2026-09-20 until later on 2026-09-21 (the user's call both times); a saved list stands
+        Assert.Equal([NeonSidekick.Llm.Tools.GitDeleteTool.ToolName, NeonSidekick.Llm.Tools.UnzipTool.ToolName, NeonSidekick.Llm.Tools.ZipTool.ToolName, NeonSidekick.Llm.Tools.UncDeleteTool.ToolName, NeonSidekick.Llm.Tools.DockerRemoveTool.ToolName, NeonSidekick.Llm.Tools.DockerPruneTool.ToolName], s.ToolsDisabled);   // docker_remove and docker_prune since 2026-10-02; unc_delete since 2026-09-30; gitlib_delete since 2026-09-20 (the user's call; gitlib_discard with it until 2026-09-23, the user's call again), zip and unzip since 2026-09-21; delete was opt-in from 2026-09-20 until later on 2026-09-21 (the user's call both times); a saved list stands
         // The git tools (2026-09-20): on, 500 patch lines (20–5000), 20 commits (1–200).
         Assert.False(s.GitLibTools);   // off by default since later on 2026-09-21 (on from 2026-09-20): the model reaches git through the shell unless the profile opts in
         Assert.Equal(500, s.GitLibDiffMaxLines);

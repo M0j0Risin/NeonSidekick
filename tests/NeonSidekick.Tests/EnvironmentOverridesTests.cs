@@ -65,7 +65,8 @@ public class EnvironmentOverridesTests
             (EnvironmentOverrides.HomeAssistantTokenVariable, " ha-token "),
             (EnvironmentOverrides.EmbeddedBackendVariable, " Vulkan "),
             (EnvironmentOverrides.EmbeddedContextVariable, "16384"),
-            (EnvironmentOverrides.ClaudeCliServerVariable, " ON "));
+            (EnvironmentOverrides.ClaudeCliServerVariable, " ON "),
+            (EnvironmentOverrides.DockerPipeVariable, " npipe:////./pipe/dockerDesktopLinuxEngine "));
 
         var e = env.ApplyTo(new AppSettingsData());
 
@@ -101,6 +102,7 @@ public class EnvironmentOverridesTests
         Assert.Equal("vulkan", e.EmbeddedBackend);   // any case, trimmed, the saved word (2026-09-29)
         Assert.Equal(16_384, e.EmbeddedContextSize);   // (2026-09-29)
         Assert.True(e.ClaudeCliServer);   // a switch word, any case, trimmed (2026-09-30)
+        Assert.Equal("npipe:////./pipe/dockerDesktopLinuxEngine", e.DockerEnginePipe);   // trimmed, kept as given; the pipe's bare name is read where it is used (2026-10-02)
         Assert.Equal(EnvironmentOverrides.AllVariables.Length - 2, env.ActiveVariables().Count);   // everything but HOME and PROFILE
     }
 

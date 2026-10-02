@@ -1,0 +1,21 @@
+{
+  "LayersSize": 5000000000,
+  "Images": [
+    {"Id":"sha256:6ea9","RepoTags":["mysql:8.4"],"Size":1000000000,"SharedSize":0,"Containers":1},
+    {"Id":"sha256:dead","RepoTags":null,"Size":300000000,"SharedSize":100000000,"Containers":0},
+    {"Id":"sha256:1111","RepoTags":["nginx:latest"],"Size":200000000,"SharedSize":0,"Containers":0}
+  ],
+  "Containers": [
+    {"Id":"2dc6","State":"running","SizeRw":1000},
+    {"Id":"19b2","State":"exited","SizeRw":5000000}
+  ],
+  "Volumes": [
+    {"Name":"searxng_valkey-data","UsageData":{"Size":2000000,"RefCount":1}},
+    {"Name":"open-webui","UsageData":{"Size":700000000,"RefCount":0}},
+    {"Name":"kokoro-models","UsageData":{"Size":-1,"RefCount":0}}
+  ],
+  "BuildCache": [
+    {"ID":"a","Size":400000000,"InUse":false,"Shared":false},
+    {"ID":"b","Size":100000000,"InUse":true,"Shared":false}
+  ]
+}

@@ -1,0 +1,2 @@
+{"status":"Pulling from library/nosuchimage","id":"latest"}
+{"errorDetail":{"message":"pull access denied for nosuchimage, repository does not exist or may require 'docker login'"},"error":"pull access denied for nosuchimage, repository does not exist or may require 'docker login'"}

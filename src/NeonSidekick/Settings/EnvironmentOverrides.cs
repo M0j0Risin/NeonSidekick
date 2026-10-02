@@ -54,6 +54,7 @@ public sealed class EnvironmentOverrides
     public const string HomeAssistantTokenVariable = Prefix + "HA_TOKEN";
     public const string EmbeddedBackendVariable = Prefix + "EMBEDDED_BACKEND";
     public const string EmbeddedContextVariable = Prefix + "EMBEDDED_CONTEXT";
+    public const string DockerPipeVariable = Prefix + "DOCKER_PIPE";
 
     /// <summary>Every variable this class reads, for documentation.</summary>
     public static readonly string[] AllVariables =
@@ -66,6 +67,7 @@ public sealed class EnvironmentOverrides
         ShellNativeVariable, ClaudeExeVariable, ClaudePermissionsVariable, ClaudeAdvisorVariable,
         ClaudeApiVariable, ClaudeApiKeyVariable, LlmSamplingVariable, HomeAssistantUrlVariable,
         HomeAssistantTokenVariable, EmbeddedBackendVariable, EmbeddedContextVariable, ClaudeCliServerVariable,
+        DockerPipeVariable,
     };
 
     /// <summary>The log category of every environment line.</summary>
@@ -179,6 +181,9 @@ public sealed class EnvironmentOverrides
 
     /// <summary>The Home Assistant long-lived access token for this launch, plain (2026-09-28); never logged (<see cref="Describe"/> shows <see cref="SecretSet"/>).</summary>
     public string? HomeAssistantToken => Read(HomeAssistantTokenVariable);
+
+    /// <summary>The Docker engine's pipe for this launch, or null (2026-10-02, <c>Docker engine pipe</c>): any form <see cref="Docker.DockerPipe.Normalize"/> reads, so a CI box's <c>npipe:////./pipe/…</c> from <c>DOCKER_HOST</c> can be passed as it is.</summary>
+    public string? DockerPipe => Read(DockerPipeVariable);
 
     /// <summary>
     /// Sampling for this launch, or null when unset or refused (2026-09-28, the setting <c>LLM sampling</c>): a JSON object
@@ -345,6 +350,7 @@ public sealed class EnvironmentOverrides
         if (ClaudeCliServer is { } claudeCliServer) effective.ClaudeCliServer = claudeCliServer;
         if (HomeAssistantUrl is { } haUrl) effective.HomeAssistantUrl = haUrl;
         if (HomeAssistantToken is { } haToken) effective.HomeAssistantToken = haToken;
+        if (DockerPipe is { } dockerPipe) effective.DockerEnginePipe = dockerPipe;
         if (LlmSampling is { } sampling) effective.LlmSampling = Overlay(effective.LlmSampling, sampling);
         if (EmbeddedBackend is { } embeddedBackend) effective.EmbeddedBackend = embeddedBackend;
         if (EmbeddedContextSize is { } embeddedContext) effective.EmbeddedContextSize = embeddedContext;

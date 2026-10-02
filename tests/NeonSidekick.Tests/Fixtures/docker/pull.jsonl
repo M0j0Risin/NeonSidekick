@@ -1,0 +1,6 @@
+{"status":"Pulling from library/nginx","id":"latest"}
+{"status":"Pulling fs layer","progressDetail":{},"id":"a2abf6c4d29d"}
+{"status":"Downloading","progressDetail":{"current":1024,"total":2048},"progress":"[=====>     ]","id":"a2abf6c4d29d"}
+{"status":"Pull complete","progressDetail":{},"id":"a2abf6c4d29d"}
+{"status":"Digest: sha256:0d17b565c37bcbd895e9d92315a05c1c3c9a29f762b011a10c54a66cd53c9b31"}
+{"status":"Status: Downloaded newer image for nginx:latest"}

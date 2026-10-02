@@ -32,7 +32,7 @@ public class SettingsDiffTests
         var lines = SettingsDiff.Changes(before, after);
 
         Assert.Contains("LlmApiKey: " + SettingsDiff.Redacted, lines);
-        Assert.Contains("ToolsDisabled: [gitlib_delete, unzip, zip, unc_delete] → [read_file, web_fetch]", lines);   // gitlib_delete off by default since 2026-09-20 (gitlib_discard too until 2026-09-23), zip and unzip since 2026-09-21; delete was too until later that day
+        Assert.Contains("ToolsDisabled: [gitlib_delete, unzip, zip, unc_delete, docker_remove, docker_prune] → [read_file, web_fetch]", lines);   // gitlib_delete off by default since 2026-09-20 (gitlib_discard too until 2026-09-23), zip and unzip since 2026-09-21; delete was too until later that day
         Assert.DoesNotContain(lines, l => l.Contains("sk-secret", StringComparison.Ordinal));
         Assert.Contains(nameof(AppSettingsData.LlmApiKey), SettingsDiff.Secrets);
     }

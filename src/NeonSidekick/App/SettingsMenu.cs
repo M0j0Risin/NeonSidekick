@@ -743,8 +743,17 @@ public enum SettingsField
     /// <summary>Typed: the most characters of table a <c>sql_query</c>, <c>oracle_query</c> or <c>mysql_query</c> answer carries, 1,000 to 1,000,000 (<see cref="Settings.AppSettingsData.QueryResultMaxChars"/>). On the SQL tab under the timeout, the three engines' one row (2026-10-01, the user's ask; the file tools' 32,000 until then); no reconnect (read at each call).</summary>
     QueryResultMaxChars,
 
-    /// <summary>A picker: what a reflection may do to a skill installed with <c>/skills add</c> — <c>read-only</c> / <c>allow-and-mark</c> (<see cref="Settings.AppSettingsData.ReflectionInstalledSkills"/>). The Reflection tab of <c>/skills</c>' last row (2026-10-02, the user's call in the reflection audit); no reconnect (read when a reflection is decided). Last in the enum, as every newcomer.</summary>
+    /// <summary>A picker: what a reflection may do to a skill installed with <c>/skills add</c> — <c>read-only</c> / <c>allow-and-mark</c> (<see cref="Settings.AppSettingsData.ReflectionInstalledSkills"/>). The Reflection tab of <c>/skills</c>' last row (2026-10-02, the user's call in the reflection audit); no reconnect (read when a reflection is decided). Last in the enum until <see cref="DockerTools"/>.</summary>
     ReflectionInstalledSkills,
+
+    /// <summary>A toggle: whether a turn offers the Docker tools (<see cref="Settings.AppSettingsData.DockerTools"/>). The Docker tab of <c>/tools</c>' first row (2026-10-02, the user's ask); no reconnect (read at each turn).</summary>
+    DockerTools,
+
+    /// <summary>A toggle: the master key of the model's Docker changes (<see cref="Settings.AppSettingsData.DockerWrites"/>); off, the model may only look. The Docker tab (2026-10-02).</summary>
+    DockerWrites,
+
+    /// <summary>Typed: the Docker engine's named pipe, blank for <c>docker_engine</c> (<see cref="Settings.AppSettingsData.DockerEnginePipe"/>). The Docker tab's last row (2026-10-02); no reconnect (read at each call). Last in the enum, as every newcomer.</summary>
+    DockerEnginePipe,
 }
 
 /// <summary>The tabs of <c>/settings</c> on the pane, in strip order (General, Embedded, LLM, TTS, STT, Sessions, Botchat — the user's order, 2026-09-29; Sessions right after General — the user's order, 2026-09-18 — until then; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
@@ -1117,6 +1126,7 @@ internal sealed partial class SettingsMenu
         [SettingsField.OracleTools, SettingsField.OracleConnectionsOffered, SettingsField.OracleDefaultConnection, SettingsField.OracleSetPassword, SettingsField.OracleAddConnection, SettingsField.OraclePercentMention, SettingsField.OracleQueryMaxRows, SettingsField.OracleQueryTimeoutSeconds, SettingsField.OracleConnectionsProfile, SettingsField.OracleConnectionsGlobal],
         [SettingsField.MySqlTools, SettingsField.MySqlConnectionsOffered, SettingsField.MySqlDefaultConnection, SettingsField.MySqlSetPassword, SettingsField.MySqlAddConnection, SettingsField.MySqlPercentMention, SettingsField.MySqlQueryMaxRows, SettingsField.MySqlQueryTimeoutSeconds, SettingsField.MySqlConnectionsProfile, SettingsField.MySqlConnectionsGlobal],
         [SettingsField.UncTools, SettingsField.UncWrites, SettingsField.UncSharesOffered, SettingsField.UncDefaultShare, SettingsField.UncSetPassword, SettingsField.UncAddShare, SettingsField.UncStarMention, SettingsField.UncSharesProfile, SettingsField.UncSharesGlobal],
+        [SettingsField.DockerTools, SettingsField.DockerWrites, SettingsField.DockerEnginePipe],
         [SettingsField.GitLibTools, SettingsField.GitLibDiffMaxLines, SettingsField.GitLibLogMaxCommits, SettingsField.GitLibEmail, SettingsField.GitLibName],
         [SettingsField.HomeAssistantTools, SettingsField.HomeAssistantUrl, SettingsField.HomeAssistantToken, SettingsField.HomeAssistantTest, SettingsField.HomeAssistantActionPolicy, SettingsField.HomeAssistantAssistAgent, SettingsField.HomeAssistantTimeoutSeconds],
         [SettingsField.ToolsDollarMention, SettingsField.ToolCollapseCount, SettingsField.CodeCollapseCount],
@@ -1485,7 +1495,8 @@ internal sealed partial class SettingsMenu
             or SettingsField.BotChatImages or SettingsField.BotChatImageAsync or SettingsField.BotChatSkills or SettingsField.BotChatVision or SettingsField.BotChatMultiEmbeddedKill or SettingsField.ClaudeAdvisor or SettingsField.ClaudeAdvisorConfirm
             or SettingsField.ClaudeApi or SettingsField.ClaudeApiPromptCaching or SettingsField.ClaudeCliServer or SettingsField.EmbeddedVision or SettingsField.EmbeddedLlmServer or SettingsField.EmbeddedDrafter or SettingsField.EmbeddedVramOnly
             or SettingsField.HomeAssistantTools or SettingsField.PrintTools or SettingsField.OracleTools or SettingsField.OraclePercentMention or SettingsField.MySqlTools or SettingsField.MySqlPercentMention
-            or SettingsField.UncTools or SettingsField.UncWrites or SettingsField.UncStarMention;
+            or SettingsField.UncTools or SettingsField.UncWrites or SettingsField.UncStarMention
+            or SettingsField.DockerTools or SettingsField.DockerWrites;
 
     public static string FieldName(SettingsField field) => field switch
     {
@@ -1651,6 +1662,9 @@ internal sealed partial class SettingsMenu
         SettingsField.UncStarMention => "UNC *-mention enabled",
         SettingsField.UncSharesProfile => "UNC shares (profile)",
         SettingsField.UncSharesGlobal => "UNC shares (global)",
+        SettingsField.DockerTools => "Docker tools",
+        SettingsField.DockerWrites => "Docker writes",
+        SettingsField.DockerEnginePipe => "Docker engine pipe",
         SettingsField.ObsidianAllowDelete => "Obsidian allow delete (.trash)",   // "Obsidian allow delete" until 2026-09-23 (the user's call: the row says where a delete goes)
         SettingsField.WebBrowserMode => "Web browser mode",
         SettingsField.WebBrowserPath => "Web browser path",
@@ -1921,6 +1935,9 @@ internal sealed partial class SettingsMenu
             SettingsField.UncStarMention => OnOff(data.UncStarMention),
             SettingsField.UncSharesProfile => UncSharesLabel(Unc.UncConfigFile.ProfilePath(profileDirectory)),
             SettingsField.UncSharesGlobal => UncSharesLabel(Unc.UncConfigFile.GlobalPath(Profiles.HomeOf(profileDirectory))),
+            SettingsField.DockerTools => OnOff(data.DockerTools),
+            SettingsField.DockerWrites => OnOff(data.DockerWrites),
+            SettingsField.DockerEnginePipe => Docker.DockerPipe.Display(data.DockerEnginePipe),
             SettingsField.ObsidianVault => string.IsNullOrWhiteSpace(data.ObsidianVault) ? NoObsidianVaultLabel : data.ObsidianVault,
             SettingsField.WebBrowserMode => data.WebBrowserMode,
             SettingsField.WebBrowserPath => string.IsNullOrWhiteSpace(data.WebBrowserPath) ? AutoBrowserLabel(locatedBrowser) : data.WebBrowserPath,
@@ -2579,6 +2596,7 @@ internal sealed partial class SettingsMenu
         SettingsField.HomeAssistantToken => "",
         SettingsField.HomeAssistantUrl => data.HomeAssistantUrl,
         SettingsField.HomeAssistantAssistAgent => data.HomeAssistantAssistAgent,
+        SettingsField.DockerEnginePipe => data.DockerEnginePipe,
         SettingsField.HomeAssistantTimeoutSeconds => data.HomeAssistantTimeoutSeconds.ToString(CultureInfo.InvariantCulture),
         SettingsField.PrintFontSize => data.PrintFontSize.ToString(CultureInfo.InvariantCulture),
         SettingsField.ComfyOutputFolder => data.ComfyOutputFolder,
@@ -3690,7 +3708,7 @@ internal sealed partial class SettingsMenu
         }
 
         bool allowEmpty = field is SettingsField.LlmUrl or SettingsField.LlmModel or SettingsField.TtsVoice2 or SettingsField.WorkingDirectory or SettingsField.WebBrowserPath or SettingsField.WebSearxngUrl or SettingsField.DraftEditor or SettingsField.ImageEditor or SettingsField.GitLibEmail or SettingsField.GitLibName or SettingsField.ObsidianVault or SettingsField.ComfyUrl or SettingsField.ComfyOutputFolder or SettingsField.ClaudeExecutable or SettingsField.ClaudeModel or SettingsField.ClaudeAdvisorModel or SettingsField.ClaudeApiKey
-            or SettingsField.HomeAssistantUrl or SettingsField.HomeAssistantAssistAgent;
+            or SettingsField.HomeAssistantUrl or SettingsField.HomeAssistantAssistAgent or SettingsField.DockerEnginePipe;
         var result = await EditTextAsync(field, page, row, EditableValue(field, saved), allowEmpty, cancellationToken).ConfigureAwait(false);
         if (result is not InputResult.Submitted submitted)
         {
@@ -4219,6 +4237,11 @@ internal sealed partial class SettingsMenu
 
             case SettingsField.HomeAssistantAssistAgent:
                 Apply(field, d => d.HomeAssistantAssistAgent = text);
+                return true;
+
+            case SettingsField.DockerEnginePipe:
+                // Kept as the bare name whatever form was typed (2026-10-02); blank is the default pipe.
+                Apply(field, d => d.DockerEnginePipe = Docker.DockerPipe.Normalize(text));
                 return true;
 
             case SettingsField.HomeAssistantTimeoutSeconds:
@@ -5097,6 +5120,8 @@ internal sealed partial class SettingsMenu
             SettingsField.UncTools => data.UncTools,
             SettingsField.UncWrites => data.UncWrites,
             SettingsField.UncStarMention => data.UncStarMention,
+            SettingsField.DockerTools => data.DockerTools,
+            SettingsField.DockerWrites => data.DockerWrites,
             SettingsField.ComfyTools => data.ComfyTools,
             SettingsField.HomeAssistantTools => data.HomeAssistantTools,
             SettingsField.PrintTools => data.PrintTools,
@@ -5181,6 +5206,8 @@ internal sealed partial class SettingsMenu
             case SettingsField.UncTools: data.UncTools = on; break;
             case SettingsField.UncWrites: data.UncWrites = on; break;
             case SettingsField.UncStarMention: data.UncStarMention = on; break;
+            case SettingsField.DockerTools: data.DockerTools = on; break;
+            case SettingsField.DockerWrites: data.DockerWrites = on; break;
             case SettingsField.ComfyTools: data.ComfyTools = on; break;
             case SettingsField.HomeAssistantTools: data.HomeAssistantTools = on; break;
             case SettingsField.PrintTools: data.PrintTools = on; break;
@@ -5273,6 +5300,8 @@ internal sealed partial class SettingsMenu
         SettingsField.UncTools => on ? "UNC tools enabled" : "UNC tools disabled",
         SettingsField.UncWrites => on ? "read-write shares may write" : "read-only forced for all shares",
         SettingsField.UncStarMention => on ? "* and part of a name lists the UNC shares on the line" : "* is ordinary text",
+        SettingsField.DockerTools => on ? "Docker tools enabled; /docker works either way" : "Docker tools disabled; /docker still works",
+        SettingsField.DockerWrites => on ? "the model may start, stop, pull and prune, each change asking first" : "the model may only look at Docker",
         SettingsField.ComfyTools => on ? "ComfyUI tools enabled" : "ComfyUI tools disabled",
         SettingsField.HomeAssistantTools => on ? "the model may read and switch Home Assistant, as the policy allows" : "no Home Assistant tools",
         SettingsField.PrintTools => on ? "the model may list the printers and print, as the policy allows" : "no print tools; /print still prints",

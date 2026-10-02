@@ -73,6 +73,9 @@ public partial class ChatScreenTests : IDisposable
 
     // The Home Assistant client the screen's /ha reaches (2026-09-30: a stub server under a reply); null = the real one.
     private Func<Uri, string, NeonSidekick.HomeAssistant.HaClient>? _haClient;
+
+    /// <summary>The Docker engine (2026-10-02): an unmapped stub unless a test maps one, so no test reaches the real pipe.</summary>
+    private Func<string, NeonSidekick.Docker.DockerClient> _dockerClient = pipe => new NeonSidekick.Docker.DockerClient(pipe, new HttpClient(new StubHttpMessageHandler()));
     private Action<string>? _openViewer;   // the picture viewer (2026-09-27): null = none, as off Windows
     private Action<string>? _viewPicture;   // a double-clicked picture in that viewer (later on 2026-09-27): null = none, the registered app
     private Action<string>? _followViewer;   // the strip's arrows moving an open viewer (2026-09-28): null = none
@@ -275,7 +278,7 @@ public partial class ChatScreenTests : IDisposable
     private async Task<string> RunAsync(IAnsiConsoleInput input, CancellationToken cancellationToken = default)
     {
         _keys = new KeySource(input, TimeSpan.FromMilliseconds(1));
-        var screen = new ChatScreen(_console, _settings, () => _settings.Current, _overriddenBy, _session, _speech, _keys, _voice, _openFile ?? _openedFiles.Add, RenderScreen, _time, _geometry, mouse: _mouse, copyToClipboard: CopyToClipboard, random: _random, clipboardImage: _clipboardImage, web: _web, setTitle: _titles.Add, externalSkills: Path.Combine(_dir, "agents-skills"), holdWheel: _holdWheel, splash: _splash, editDraft: _editDraft, mcp: _mcp, logFile: _logFile, comfyClient: _comfyClient, openImage: _openImage, claude: _claudeCli, openViewer: _openViewer, viewPicture: _viewPicture, followViewer: _followViewer, printSpooler: _printSpooler, perfSource: () => _perfSource, haClient: _haClient);
+        var screen = new ChatScreen(_console, _settings, () => _settings.Current, _overriddenBy, _session, _speech, _keys, _voice, _openFile ?? _openedFiles.Add, RenderScreen, _time, _geometry, mouse: _mouse, copyToClipboard: CopyToClipboard, random: _random, clipboardImage: _clipboardImage, web: _web, setTitle: _titles.Add, externalSkills: Path.Combine(_dir, "agents-skills"), holdWheel: _holdWheel, splash: _splash, editDraft: _editDraft, mcp: _mcp, logFile: _logFile, comfyClient: _comfyClient, openImage: _openImage, claude: _claudeCli, openViewer: _openViewer, viewPicture: _viewPicture, followViewer: _followViewer, printSpooler: _printSpooler, perfSource: () => _perfSource, haClient: _haClient, dockerClient: _dockerClient);
         _running = screen;
         int code = await screen.RunAsync(cancellationToken);
         Assert.Equal(0, code);
@@ -3846,7 +3849,7 @@ public partial class ChatScreenTests : IDisposable
         // A fresh profile's ToolsDisabled: gitlib_delete (2026-09-20), zip and unzip (2026-09-21) — gitlib_discard no longer (2026-09-23, the user's call) and delete no longer
         // (later on 2026-09-21, the user's call: on out of the box, so the file rule keeps its delete clause); the fixture had opted every tool on.
         _settings.Update(d => { d.TtsOutput = false; d.ToolsDisabled = [.. new AppSettingsData().ToolsDisabled]; });
-        Assert.Equal([GitDeleteTool.ToolName, UnzipTool.ToolName, ZipTool.ToolName, UncDeleteTool.ToolName], _settings.Current.ToolsDisabled);   // unc_delete since 2026-09-30
+        Assert.Equal([GitDeleteTool.ToolName, UnzipTool.ToolName, ZipTool.ToolName, UncDeleteTool.ToolName, DockerRemoveTool.ToolName, DockerPruneTool.ToolName], _settings.Current.ToolsDisabled);   // docker_remove and docker_prune since 2026-10-02; unc_delete since 2026-09-30
         _chat.EnqueueText("Hello.");
         _console.Profile.Height = 90;
         _geometry = new ScreenGeometry(() => null);
@@ -4238,6 +4241,7 @@ public partial class ChatScreenTests : IDisposable
         _console.Input.PushKey(Keys.Right);     // Oracle (2026-09-30)
         _console.Input.PushKey(Keys.Right);     // MySQL (later on 2026-09-30)
         _console.Input.PushKey(Keys.Right);     // UNC (later still on 2026-09-30)
+        _console.Input.PushKey(Keys.Right);     // Docker (2026-10-02)
         _console.Input.PushKey(Keys.Right);     // ComfyUI (2026-09-24; Images until later that day)
         _console.Input.PushKey(Keys.Right);     // Claude (2026-09-27)
         _console.Input.PushKey(Keys.Right);     // Home Assistant (2026-09-28)
@@ -4248,7 +4252,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude    Print    Obsidian    ComfyUI    SQL    Oracle    MySQL    UNC    GitLib    HA    Options ", output);
+        Assert.Contains(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude    Print    Obsidian    ComfyUI    SQL    Oracle    MySQL    UNC    Docker    GitLib    HA    Options ", output);
         Assert.Contains("\n▸ ComfyUI tools                  on\n  ComfyUI URL                    (not set)\n  ComfyUI workflows offered      none of 0\n  ComfyUI add workflow           Enter to start workflow wizard\n  ComfyUI ^-mention enabled      on\n  ComfyUI timeout (s)            300\n  ComfyUI max pictures per call  5 pictures\n  ComfyUI reinforce negatives    on\n  ComfyUI show prompts           on\n  ComfyUI picture strip          on\n  ComfyUI output folder          comfy_images\n", output);   // 2026-09-24; the offered checklist and the wizard later that day, the ^-mention switch later still
         Assert.Contains("\n▸ Claude executable                   (looked up)\n  Claude slash command permissions    read-only\n  Claude slash command model          (Claude Code's default)\n  Claude slash command effort         (Claude Code's default)\n  Claude advisor tool                 off\n  Claude advisor tool context         brief\n  Claude advisor tool calls per turn  2 calls\n  Claude advisor tool model           (as Claude slash command model)\n  Claude advisor tool effort          (as Claude slash command effort)\n  Claude advisor tool confirm         off\n", output);   // 2026-09-27: /claude's rows off /settings, then the advisor's
         Assert.Contains("\n  Clock (3)\n▸ get_current_time      on   ", output);
@@ -4653,7 +4657,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude    Print    Obsidian    ComfyUI    SQL    Oracle    MySQL    UNC    GitLib    HA    Options ", output);
+        Assert.Contains(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude    Print    Obsidian    ComfyUI    SQL    Oracle    MySQL    UNC    Docker    GitLib    HA    Options ", output);
         Assert.Contains("  · get_current_time: off", output);
         Assert.Equal(["get_current_time"], _settings.Current.ToolsDisabled);
         Assert.DoesNotContain(ChatScreen.MidTurnDeferredNotice("/tools"), output);
@@ -8393,7 +8397,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.False(_settings.Current.ShellPoliceOutsidePaths);
         string memory = "\n" + Titled(MemoryMenu.Title) + "\n";
         string settings = "\n" + Titled(SettingsMenu.Title + "   General    Embedded    LLM    TTS    STT    Sessions    Botchat ") + "\n";
-        string tools = "\n" + Titled(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude    Print    Obsidian    ComfyUI    SQL    Oracle    MySQL    UNC    GitLib    HA    Options ") + "\n";
+        string tools = "\n" + Titled(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude    Print    Obsidian    ComfyUI    SQL    Oracle    MySQL    UNC    Docker    GitLib    HA    Options ") + "\n";
         string allowed = "\n" + Titled(AllowedCommandsTitle) + "\n";
         Assert.Equal(1, output.Split(memory).Length - 1);
         Assert.Equal(1, output.Split(allowed).Length - 1);
@@ -9438,7 +9442,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("\n" + ScreenPane.ToolbarRow(ChatScreen.ToolbarStripFor(true, CommandPolicyMode.Ask, true), cwd, 239), output);
         Assert.DoesNotContain("\n" + ScreenPane.ToolbarRow(ChatScreen.ToolbarStrip, cwd, 239), output);   // never the fixed glyphs alone: memory, the policy and the police are on
         int settings = output.IndexOf("\n" + Titled(SettingsMenu.Title + "   General    Embedded    LLM    TTS    STT    Sessions    Botchat ") + "\n", StringComparison.Ordinal);
-        int tools = output.IndexOf(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude    Print    Obsidian    ComfyUI    SQL    Oracle    MySQL    UNC    GitLib    HA    Options ", StringComparison.Ordinal);
+        int tools = output.IndexOf(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude    Print    Obsidian    ComfyUI    SQL    Oracle    MySQL    UNC    Docker    GitLib    HA    Options ", StringComparison.Ordinal);
         int mcp = output.IndexOf(McpText.Label + "   Servers    Tools    Options ", StringComparison.Ordinal);
         int skills = output.IndexOf(SkillsText.Label + "   Offered    Reflection    Options ", StringComparison.Ordinal);
         int sys = output.IndexOf("\n" + Titled(SystemPromptSummary.Label + "   Prompt    Tools ") + "\n", StringComparison.Ordinal);
@@ -9537,7 +9541,7 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         string settings = "\n" + Titled(SettingsMenu.Title + "   General    Embedded    LLM    TTS    STT    Sessions    Botchat ") + "\n";
-        string tools = "\n" + Titled(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude    Print    Obsidian    ComfyUI    SQL    Oracle    MySQL    UNC    GitLib    HA    Options ") + "\n";
+        string tools = "\n" + Titled(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude    Print    Obsidian    ComfyUI    SQL    Oracle    MySQL    UNC    Docker    GitLib    HA    Options ") + "\n";
         string help = "\n" + Titled(InfoPane.Title + "   Commands (basic)    Commands (advanced)    Keys ") + "\n";
         string sys = "\n" + Titled(SystemPromptSummary.Label + "   Prompt    Tools ") + "\n";
         string sessions = "\n" + Titled(SessionsMenu.Title) + "\n";
@@ -11448,7 +11452,7 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         output = string.Join("\n", output.Split('\n').Select(l => l.TrimEnd()));
-        string tools = "\n" + Titled(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude    Print    Obsidian    ComfyUI    SQL    Oracle    MySQL    UNC    GitLib    HA    Options ") + "\n";
+        string tools = "\n" + Titled(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Claude    Print    Obsidian    ComfyUI    SQL    Oracle    MySQL    UNC    Docker    GitLib    HA    Options ") + "\n";
         string sys = "\n" + Titled(SystemPromptSummary.Label + "   Prompt    Tools ") + "\n";
         string sessions = "\n" + Titled(SessionsMenu.Title) + "\n";
         string settings = "\n" + Titled(SettingsMenu.Title + "   General    Embedded    LLM    TTS    STT    Sessions    Botchat ") + "\n";
@@ -11851,6 +11855,64 @@ public partial class ChatScreenTests : IDisposable
 
         Assert.Contains(NeonSidekick.HomeAssistant.HaText.NotConfigured, output);
         Assert.DoesNotContain(ChatScreen.MidTurnDeferredNotice("/ha"), output);
+        Assert.Single(_chat.Requests);
+    }
+
+    /// <summary>A Docker engine over a stub (2026-10-02): the version, the fixture's containers, and 204 for every stop.</summary>
+    private StubHttpMessageHandler DockerEngine()
+    {
+        string Fixture(string name) => File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "docker", name));
+        var stub = new StubHttpMessageHandler()
+            .Map(NeonSidekick.Docker.DockerClient.Host + "/version", System.Net.HttpStatusCode.OK, Fixture("version.json"))
+            .Map(NeonSidekick.Docker.DockerClient.Host + "/v1.47/containers/json", System.Net.HttpStatusCode.OK, Fixture("containers.json"))
+            .Map(NeonSidekick.Docker.DockerClient.Host + "/v1.47/containers/c9e0889008d03fe42ce2ba7be159d07f2392a1c5abe9322dd7acb9bce852b7f3/stop", System.Net.HttpStatusCode.NoContent, "");
+        _dockerClient = pipe => new NeonSidekick.Docker.DockerClient(pipe, new HttpClient(stub));
+        return stub;
+    }
+
+    /// <summary>
+    /// <c>/docker</c> on the pane (2026-10-02): the containers listed running first, Enter opens the first one's page, stop asks
+    /// under the list with the cursor on No, Yes stops it — the user's own hand, Docker writes off and nothing asked of the model.
+    /// </summary>
+    [Fact]
+    public async Task Docker_WithGeometry_ThePaneListsTheContainers_StopAsksFirst_YesStops()
+    {
+        var engine = DockerEngine();
+        _settings.Update(d => d.TtsOutput = false);
+        _console.Profile.Height = 40;
+        _geometry = new ScreenGeometry(() => null);
+        StepsWhenIdle(Line("/docker"), Key(Keys.Enter), Key(Keys.Enter), Key(Keys.Down), Key(Keys.Enter), Key(Keys.Escape), Line("/exit"));
+
+        string output = await RunAsync();
+
+        var mariadb = NeonSidekick.Docker.DockerJson.Containers(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "docker", "containers.json")))!.Single(c => c.Name == "mariadb_dev");
+        Assert.Contains(DockerMenu.Title, output);   // the title row carries the refresh button too
+        Assert.Contains("\n▸ ● mariadb_dev     running (healthy)  3307→3306/tcp  mariadb:11\n", output);
+        Assert.Contains("\n" + Titled(DockerMenu.RowTitle(mariadb)) + "\n \n▸ stop        stop it (asks first)\n", output);
+        Assert.Contains("\n" + Titled(DockerMenu.ConfirmPrompt("stop", mariadb)) + "\n \n▸ No\n  Yes\n", output);
+        Assert.Contains("(🐳 stopped mariadb_dev)", output);
+        Assert.Single(engine.Requests, r => r.Method == HttpMethod.Post && r.Uri.PathAndQuery == "/v1.47/containers/c9e0889008d03fe42ce2ba7be159d07f2392a1c5abe9322dd7acb9bce852b7f3/stop?t=10");
+        Assert.False(_settings.Current.DockerWrites);
+        Assert.Empty(_chat.Requests);
+    }
+
+    /// <summary><c>/docker</c> typed and under a reply (2026-10-02, /ha's way): its lines land in the reply, which runs on.</summary>
+    [Fact]
+    public async Task MidTurn_Docker_RunsAtOnce_ItsLinesInTheReply()
+    {
+        DockerEngine();
+        MidTurnFixture(i =>
+        {
+            if (i == 1)
+            {
+                PushLine("/docker ps");
+            }
+        });
+
+        string output = await RunAsync();
+
+        Assert.Contains("  · Docker: 6 containers (4 running, 1 exited, 1 paused)", output);
+        Assert.DoesNotContain(ChatScreen.MidTurnDeferredNotice("/docker"), output);
         Assert.Single(_chat.Requests);
     }
 

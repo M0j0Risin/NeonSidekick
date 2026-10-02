@@ -1,0 +1,51 @@
+{
+  "Id": "2dc6d221ea8a008bfa4558be3d820e5e015273f0c3158005caefeaaca7f11177",
+  "Created": "2026-09-30T22:52:05.123Z",
+  "Path": "docker-entrypoint.sh",
+  "Args": ["mysqld"],
+  "State": {
+    "Status": "running", "Running": true, "Paused": false, "Restarting": false, "OOMKilled": false, "Dead": false, "Pid": 4242, "ExitCode": 0, "Error": "",
+    "StartedAt": "2026-09-30T22:52:06.987654321Z", "FinishedAt": "0001-01-01T00:00:00Z",
+    "Health": {
+      "Status": "healthy", "FailingStreak": 0,
+      "Log": [
+        {"Start": "2026-10-02T16:40:00.1Z", "End": "2026-10-02T16:40:00.5Z", "ExitCode": 0, "Output": "mysqld is alive\n"},
+        {"Start": "2026-10-02T16:40:30.1Z", "End": "2026-10-02T16:40:30.5Z", "ExitCode": 0, "Output": "mysqld is alive\n"},
+        {"Start": "2026-10-02T16:41:00.1Z", "End": "2026-10-02T16:41:00.5Z", "ExitCode": 0, "Output": "mysqld is alive\n"},
+        {"Start": "2026-10-02T16:41:30.1Z", "End": "2026-10-02T16:41:30.5Z", "ExitCode": 0, "Output": "mysqladmin --password=FixtureHealthSecret ping ok\n"}
+      ]
+    }
+  },
+  "Image": "sha256:6ea90827b1100f8f2ae306a539f86d2c264a26ed435a2a9f75551dd5c3aeb242",
+  "ResolvConfPath": "/var/lib/docker/containers/2dc6/resolv.conf",
+  "HostsPath": "/var/lib/docker/containers/2dc6/hosts",
+  "Name": "/mysql_dev",
+  "RestartCount": 2,
+  "Driver": "overlayfs",
+  "HostConfig": {
+    "RestartPolicy": {"Name": "unless-stopped", "MaximumRetryCount": 0},
+    "Memory": 2147483648, "NanoCpus": 1500000000, "Privileged": false,
+    "LogConfig": {"Type": "splunk", "Config": {"splunk-token": "FixtureSplunkToken"}}
+  },
+  "GraphDriver": {"Data": {"MergedDir": "/var/lib/docker/overlay2/abc/merged"}, "Name": "overlay2"},
+  "Mounts": [
+    {"Type": "volume", "Name": "02c61c74061fc17b3e28d1113765abac5e8e549828536bfe5716f5dabba53148", "Source": "/var/lib/docker/volumes/02c6/_data", "Destination": "/var/lib/mysql", "RW": true},
+    {"Type": "bind", "Source": "/home/neon/initdb", "Destination": "/docker-entrypoint-initdb.d", "RW": false}
+  ],
+  "Config": {
+    "Hostname": "2dc6d221ea8a",
+    "User": "mysql",
+    "Env": ["MYSQL_ROOT_PASSWORD=FixtureRootSecret", "MYSQL_DATABASE=shop", "DATABASE_URL=mysql://app:FixtureUrlSecret@db:3306/shop", "PATH=/usr/local/sbin:/usr/local/bin", "GOSU_VERSION=1.17"],
+    "Cmd": ["mysqld", "--default-authentication-plugin=caching_sha2_password", "--admin-password", "FixtureCmdSecret", "--log-url=https://ops:FixtureLogSecret@logs.example.com/in"],
+    "Healthcheck": {"Test": ["CMD-SHELL", "mysqladmin ping --password=FixtureCheckSecret"]},
+    "Image": "mysql:8.4",
+    "WorkingDir": "/",
+    "Entrypoint": ["docker-entrypoint.sh"],
+    "Labels": {"com.docker.compose.project": "shop", "com.docker.compose.service": "db", "com.docker.compose.project.working_dir": "/home/neon/shop", "maintainer": "neon", "api.token": "FixtureLabelSecret", "desktop.docker.io/ports.scheme": "v2"}
+  },
+  "NetworkSettings": {
+    "Ports": {"3306/tcp": [{"HostIp": "0.0.0.0", "HostPort": "3306"}, {"HostIp": "::", "HostPort": "3306"}], "33060/tcp": null},
+    "Networks": {"bridge": {"IPAddress": "172.17.0.5"}}
+  },
+  "ExecIDs": ["exec-1"]
+}

@@ -98,7 +98,9 @@ public partial class SidekickAppTests : IDisposable
             // The web over the same stub (2026-09-26, /skills add headless): every host public, nothing reaches the network.
             web: new NeonSidekick.Web.WebAccess(new HttpClient(_http), new FakeHeadlessBrowser(), new ManualTimeProvider(), (_, _) => Task.FromResult(new[] { IPAddress.Parse("140.82.112.9") })),
             // /claude over a script (2026-09-27): no test starts the real CLI.
-            claude: _claudeCli);
+            claude: _claudeCli,
+            // The Docker engine over the same stub (2026-10-02): no test reaches the real pipe; unmapped, the engine is unreachable.
+            dockerClient: pipe => new NeonSidekick.Docker.DockerClient(pipe, new HttpClient(_http)));
 
     /// <summary>The MCP seam (2026-09-20): in-process pipe servers behind every session the app builds; nothing configured in the temp home, so nothing connects unless a test writes an mcp.json.</summary>
     private readonly InProcessMcpServers _mcpServers = new();
@@ -285,6 +287,21 @@ public partial class SidekickAppTests : IDisposable
         var record = store.Load(sessions[1].Id)!;
         Assert.Equal(new[] { ("hello there", "Hello"), ("and again", "Again") }, record.Turns.Select(t => (t.UserText, t.ReplyText)));
         Assert.Equal(2, NeonSidekick.Sessions.SessionHistory.FromJson(record.HistoryJson).Count(ConversationHistory.IsTurnStart));
+    }
+
+    /// <summary><c>/docker</c> headless (2026-10-02): ahead of the server check — the engine needs no LLM; the bare word lists, a failure is an <c>[error]</c> line.</summary>
+    [Fact]
+    public async Task Headless_Docker_ListsTheContainers_AndSaysWhenTheEngineIsAway()
+    {
+        string away = await Headless("/docker\n");
+        Assert.Contains(@"[error] Error: cannot reach the Docker engine on \\.\pipe\docker_engine: ", away);
+
+        _http.Map(NeonSidekick.Docker.DockerClient.Host + "/version", HttpStatusCode.OK, File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "docker", "version.json")));
+        _http.Map(NeonSidekick.Docker.DockerClient.Host + "/v1.47/containers/json", HttpStatusCode.OK, File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "docker", "containers.json")));
+        string output = await Headless("/docker\n/docker frob\n");
+        Assert.Contains("Docker: 6 containers (4 running, 1 exited, 1 paused)" + Environment.NewLine + "mariadb_dev · running (healthy)", output);
+        Assert.Contains("[error] " + NeonSidekick.Docker.DockerText.Usage, output);
+        Assert.DoesNotContain(SidekickApp.HeadlessNoAssistantReply, output);
     }
 
     /// <summary><c>/print</c> headless (2026-09-28): no spooler handed in, so no printers; a failure is an <c>[error]</c> line, and it needs no server.</summary>

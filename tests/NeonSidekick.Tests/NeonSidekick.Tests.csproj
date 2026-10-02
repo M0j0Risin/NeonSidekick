@@ -52,6 +52,11 @@
          a real Hue + Bravia instance's shapes — a room group and its lights, a zone group, an unavailable light, scenes,
          the TV, a remote, a button, a switch, motion, temperature, a low battery, the shopping list. HaSnapshot is pinned to it. -->
     <None Include="Fixtures\ha\*.json" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Docker Engine API answers (2026-10-02): hand-made in the shapes engine 29.7.2 (API 1.55, Docker Desktop 4.90) gave over
+         \\.\pipe\docker_engine at v1.47 — the container list with compose projects, IPv4 and IPv6 port rows and every health; an
+         inspect with fake secrets in every place the redaction covers; stats under cgroup v2 and v1; the images, volumes,
+         networks and disk use; a pull's progress lines and a refused pull. The Docker client and tools are pinned to them. -->
+    <None Include="Fixtures\docker\*.*" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

@@ -1,0 +1,7 @@
+[
+  {"Name":"searxng_default","Id":"e89009cb0a6f","Scope":"local","Driver":"bridge","IPAM":{"Driver":"default","Options":null,"Config":[{"Subnet":"172.18.0.0/16","Gateway":"172.18.0.1"}]},"Internal":false,"Labels":{"com.docker.compose.project":"searxng"}},
+  {"Name":"bridge","Id":"1ed0b2cee027","Scope":"local","Driver":"bridge","IPAM":{"Driver":"default","Options":null,"Config":[{"Subnet":"172.17.0.0/16","Gateway":"172.17.0.1"}]},"Internal":false,"Labels":{}},
+  {"Name":"host","Id":"aa","Scope":"local","Driver":"host","IPAM":{"Driver":"default","Options":null,"Config":[]},"Internal":false,"Labels":{}},
+  {"Name":"none","Id":"bb","Scope":"local","Driver":"null","IPAM":{"Driver":"default","Options":null,"Config":[]},"Internal":false,"Labels":{}},
+  {"Name":"old_project_default","Id":"cc","Scope":"local","Driver":"bridge","IPAM":{"Driver":"default","Options":null,"Config":[{"Subnet":"172.20.0.0/16"}]},"Internal":true,"Labels":{}}
+]

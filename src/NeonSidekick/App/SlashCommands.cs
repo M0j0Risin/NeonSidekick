@@ -185,6 +185,14 @@ public enum SlashCommand
     HomeAssistant,
 
     /// <summary>
+    /// <c>/docker</c> (2026-10-02, the user's ask: control Docker Desktop from the app): the bare word opens the containers on a
+    /// pane (<see cref="DockerMenu"/>) — start, stop, restart, pause, logs, open a published port, copy the id —, and
+    /// <c>/docker ps | status | logs &lt;container&gt; [lines] | stats [container] | start|stop|restart|pause|unpause &lt;container&gt;</c>
+    /// runs typed (<see cref="Docker.DockerCommand"/>). The user's own hand: never judged by <c>Docker writes</c>.
+    /// </summary>
+    Docker,
+
+    /// <summary>
     /// <c>/print</c> (2026-09-28, the user's ask): a file of the working directory on paper — <c>/print &lt;file&gt;
     /// [printer=&lt;name&gt;] [copies=N] [pages=1-3] [landscape]</c>, <c>/print reply</c> for the last reply, <c>/print printers</c>
     /// (<see cref="Printing.PrintCommand"/>). The user's own hand: never judged by <c>Print action policy</c>.
@@ -265,6 +273,7 @@ public static class SlashCommands
             new("/compact", "shrink the current context, or /compact <focus> to steer the summary"),
             new("/copy", "copy the last reply to the clipboard as markdown, or /copy <n> | all; --thinking for the model's thinking too"),
             new("/cwd", "show or change the working directory, or /cwd <path> | ~ | browse"),
+            new("/docker", "Docker Desktop's containers on a pane (start, stop, restart, logs, open a port), or /docker ps | status | logs <container> [lines] | stats [container] | start|stop|restart|pause|unpause <container>"),
             new("/draft", "write the next message in your editor: a temporary file, sent when it is saved and closed"),
             new("/echo", "print a line as a reply and read it aloud when speech is on: /echo <text>"),
             new("/exit", "exit/quit the application"),
@@ -407,7 +416,7 @@ public static class SlashCommands
     }
 
     /// <summary>Every command word, for help and completion.</summary>
-    public static readonly string[] Words = { "/help", "/clear", "/new", "/splash", "/rewind", "/theme", "/queue", "/sessions", "/compact", "/server", "/model", "/reasoning", "/sampling", "/settings", "//", "/tools", "/mcp", "/tts", "/stt", "/wake", "/interrupt", "/speak", "/remember", "/memory", "/cmdcopy", "/keycopy", "/cmdclear", "/cmdlist", "/police", "/persona", "/operata", "/vocalia", "/sys", "/usage", "/perf", "/tb", "/header", "/profile", "/timer", "/cwd", "/tree", "/vault", "/explore", "/view", "/imagine", "/comfy", "/ha", "/print", "/echo", "/gituser", "/copy", "/draft", "/loop", "/plan", "/botchat", "/claude", "/test", "/expand", "/collapse", "/window", "/skills", "/learn", "/about", "/exit" };
+    public static readonly string[] Words = { "/help", "/clear", "/new", "/splash", "/rewind", "/theme", "/queue", "/sessions", "/compact", "/server", "/model", "/reasoning", "/sampling", "/settings", "//", "/tools", "/mcp", "/tts", "/stt", "/wake", "/interrupt", "/speak", "/remember", "/memory", "/cmdcopy", "/keycopy", "/cmdclear", "/cmdlist", "/police", "/persona", "/operata", "/vocalia", "/sys", "/usage", "/perf", "/tb", "/header", "/profile", "/timer", "/cwd", "/tree", "/vault", "/explore", "/view", "/imagine", "/comfy", "/ha", "/docker", "/print", "/echo", "/gituser", "/copy", "/draft", "/loop", "/plan", "/botchat", "/claude", "/test", "/expand", "/collapse", "/window", "/skills", "/learn", "/about", "/exit" };
 
     /// <summary>The <c>/queue</c> word: what a double-click on the hint row's queued part sends through the mid-turn line hook, so the pane opens exactly as the typed command's does (2026-09-18). Pinned.</summary>
     public const string QueueWord = "/queue";
@@ -496,6 +505,7 @@ public static class SlashCommands
             "/imagine" => SlashCommand.Imagine,
             "/comfy" => SlashCommand.Comfy,
             "/ha" => SlashCommand.HomeAssistant,
+            "/docker" => SlashCommand.Docker,
             "/print" => SlashCommand.Print,
             "/echo" => SlashCommand.Echo,
             "/queue" => SlashCommand.Queue,
@@ -540,5 +550,5 @@ public static class SlashCommands
         or SlashCommand.Remember or SlashCommand.Memory or SlashCommand.CmdCopy or SlashCommand.KeyCopy or SlashCommand.Profile or SlashCommand.Timer
         or SlashCommand.Cwd or SlashCommand.Tree or SlashCommand.Vault or SlashCommand.Explore or SlashCommand.Copy or SlashCommand.Session or SlashCommand.GitUser
         or SlashCommand.Loop or SlashCommand.Plan or SlashCommand.BotChat or SlashCommand.Claude or SlashCommand.Queue or SlashCommand.Skills or SlashCommand.Test
-        or SlashCommand.HomeAssistant or SlashCommand.Print or SlashCommand.Perf or SlashCommand.Tb or SlashCommand.Header or SlashCommand.Rewind;
+        or SlashCommand.HomeAssistant or SlashCommand.Docker or SlashCommand.Print or SlashCommand.Perf or SlashCommand.Tb or SlashCommand.Header or SlashCommand.Rewind;
 }

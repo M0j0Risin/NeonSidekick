@@ -56,6 +56,9 @@ namespace NeonSidekick.App;
 /// <param name="UncTools">How many UNC tools the next turn offers (<see cref="ChatScreen.UncToolsFor"/>, the ones switched off on <c>/tools</c> left out); the rules carry <see cref="Assistant.UncRule"/> while any is.</param>
 /// <param name="UncFetch">Whether <c>unc_fetch</c> is among them: the rules add <see cref="Assistant.UncFetchRule"/>.</param>
 /// <param name="UncWrite">Whether a change on a share is among them (<c>UNC writes</c> on, a <c>readwrite</c> share): the rules add <see cref="Assistant.UncWriteRule"/>.</param>
+/// <param name="DockerEnabled">Whether the Docker tools may be offered (2026-10-02): the setting <c>Docker tools</c> on, on Windows (<see cref="ChatScreen.DockerOffered"/>).</param>
+/// <param name="DockerTools">How many Docker tools the next turn offers (<see cref="ChatScreen.DockerToolsFor"/>, the ones switched off on <c>/tools</c> left out); the rules carry <see cref="Assistant.DockerRule"/> while any is.</param>
+/// <param name="DockerWrite">Whether a Docker change is among them (<c>Docker writes</c> on): the rules add <see cref="Assistant.DockerWriteRule"/>.</param>
 /// <param name="PlanDirective">Plan mode's directive while planning (2026-09-26, <see cref="Plans.PlanText.Directive"/>), else null: its own section, after the skills.</param>
 public sealed record SystemPromptFacts(
     string? Persona,
@@ -100,7 +103,10 @@ public sealed record SystemPromptFacts(
     bool UncEnabled = false,
     int UncTools = 0,
     bool UncFetch = false,
-    bool UncWrite = false)
+    bool UncWrite = false,
+    bool DockerEnabled = false,
+    int DockerTools = 0,
+    bool DockerWrite = false)
 {
     /// <summary>Whether the rules carry <see cref="Assistant.HomeAssistantRule"/>: tools on, the server set with the switch on, and at least one Home Assistant tool offered (2026-09-28).</summary>
     public bool HomeAssistant => ToolsEnabled && HomeAssistantEnabled && HomeAssistantTools > 0;
@@ -143,6 +149,9 @@ public sealed record SystemPromptFacts(
 
     /// <summary>Whether the rules carry <see cref="Assistant.UncRule"/>: tools on, a share defined with the switch on, and at least one UNC tool offered (2026-09-30).</summary>
     public bool Unc => ToolsEnabled && UncEnabled && UncTools > 0;
+
+    /// <summary>Whether the rules carry <see cref="Assistant.DockerRule"/>: tools on, the switch on, and at least one Docker tool offered (2026-10-02).</summary>
+    public bool Docker => ToolsEnabled && DockerEnabled && DockerTools > 0;
 
     /// <summary>The next turn's reply is styled Markdown and asked for as such (<see cref="ChatScreen.MarkdownTurn"/>): the setting, the pane, and the turn not spoken.</summary>
     public bool Markdown => ChatScreen.MarkdownTurn(TranscriptMarkdown, PaneOn, TtsOutput && SpeechReady);
@@ -261,6 +270,9 @@ public static class SystemPromptSummary
     /// <summary>The tail of the UNC group while the UNC tools cannot be offered: the switch off, or no share of <c>unc.json</c> offered (2026-09-30). Pinned.</summary>
     public const string UncOffSuffix = "UNC tools is off or no share of unc.json is offered";
 
+    /// <summary>The tail of the Docker group while its tools cannot be offered: the switch off (2026-10-02). Pinned.</summary>
+    public const string DockerOffSuffix = "Docker tools is off";
+
     /// <summary>The tail of the ComfyUI group while the image tools cannot be offered (2026-09-24). Pinned.</summary>
     /// <summary>Why the advisor group is not offered (2026-09-27). Pinned.</summary>
     public const string ClaudeAdvisorOffSuffix = "Claude advisor tool is off";
@@ -310,7 +322,7 @@ public static class SystemPromptSummary
 
         bool customRules = !string.IsNullOrWhiteSpace(facts.OperatingRules);
         string defaultLabel = !facts.ToolsEnabled ? $"default ({ToolsOffSuffix})" : !facts.FilesEnabled ? $"default ({FilesOffSuffix})" : "default";
-        string rules = customRules ? facts.OperatingRules!.Trim() : Assistant.DefaultRules(facts.Markdown, facts.ToolsEnabled, facts.FilesEnabled, delete: !facts.Off(DeleteTool.ToolName), mcp: facts.Mcp, timers: facts.Timers, git: facts.Git, shell: facts.Shell, bridge: facts.Bridge, police: facts.Police, obsidian: facts.Obsidian, obsidianDelete: facts.ObsidianDelete, sql: facts.Sql, native: facts.Native, advisor: facts.Advisor, homeAssistant: facts.HomeAssistant, oracle: facts.Oracle, mysql: facts.MySql, unc: facts.Unc, uncFetch: facts.Unc && facts.UncFetch, uncWrite: facts.Unc && facts.UncWrite);
+        string rules = customRules ? facts.OperatingRules!.Trim() : Assistant.DefaultRules(facts.Markdown, facts.ToolsEnabled, facts.FilesEnabled, delete: !facts.Off(DeleteTool.ToolName), mcp: facts.Mcp, timers: facts.Timers, git: facts.Git, shell: facts.Shell, bridge: facts.Bridge, police: facts.Police, obsidian: facts.Obsidian, obsidianDelete: facts.ObsidianDelete, sql: facts.Sql, native: facts.Native, advisor: facts.Advisor, homeAssistant: facts.HomeAssistant, oracle: facts.Oracle, mysql: facts.MySql, unc: facts.Unc, uncFetch: facts.Unc && facts.UncFetch, uncWrite: facts.Unc && facts.UncWrite, docker: facts.Docker, dockerWrite: facts.Docker && facts.DockerWrite);
         sections.Add(new(
             customRules ? $"Operating rules — {OperataFile.FileName} ({rules.Length.ToString(CultureInfo.InvariantCulture)} chars)" : $"Operating rules — {defaultLabel}",
             rules));
@@ -423,7 +435,9 @@ public static class SystemPromptSummary
             mysql: facts.MySql,
             unc: facts.Unc,
             uncFetch: facts.Unc && facts.UncFetch,
-            uncWrite: facts.Unc && facts.UncWrite);
+            uncWrite: facts.Unc && facts.UncWrite,
+            docker: facts.Docker,
+            dockerWrite: facts.Docker && facts.DockerWrite);
     }
 
     /// <summary>The Prompt tab's heading over plan mode's directive (2026-09-26). Pinned.</summary>
@@ -519,7 +533,9 @@ public static class SystemPromptSummary
         IReadOnlyList<AIFunction>? mysql = null,
         bool mysqlEnabled = true,
         IReadOnlyList<AIFunction>? unc = null,
-        bool uncEnabled = true)
+        bool uncEnabled = true,
+        IReadOnlyList<AIFunction>? docker = null,
+        bool dockerEnabled = true)
     {
         ArgumentNullException.ThrowIfNull(clock);
         ArgumentNullException.ThrowIfNull(timers);
@@ -585,6 +601,13 @@ public static class SystemPromptSummary
             // The UNC tools (2026-09-30): after the database groups; offered while the setting UNC tools is on and unc.json holds a share.
             string uncNote = !uncEnabled ? NotOffered(UncOffSuffix) : standing;
             groups.Add(Group(ToolsText.UncTabTitle, unc, uncNote, uncEnabled && toolsEnabled, SettingsField.UncTools, disabled));
+        }
+
+        if (docker is not null)
+        {
+            // The Docker tools (2026-10-02): after the UNC tools, the outside places together; offered while the setting Docker tools is on.
+            string dockerNote = !dockerEnabled ? NotOffered(DockerOffSuffix) : standing;
+            groups.Add(Group(ToolsText.DockerTabTitle, docker, dockerNote, dockerEnabled && toolsEnabled, SettingsField.DockerTools, disabled));
         }
 
         if (comfy is not null)

@@ -1032,9 +1032,11 @@ public sealed class AppSettingsData
     /// when the user asked for it on out of the box; a profile saved with it off keeps it off. <c>gitlib_discard</c> left
     /// the list on 2026-09-23 (the user's call: on out of the box, as <c>delete</c> went before it); a profile saved
     /// with it off keeps it off until it is flipped on the Offered tab. <c>unc_delete</c> joined on 2026-09-30 (a delete on a share is
-    /// permanent, a folder with everything in it — opt-in like <c>gitlib_delete</c>, even under <c>UNC writes</c>).
+    /// permanent, a folder with everything in it — opt-in like <c>gitlib_delete</c>, even under <c>UNC writes</c>). <c>docker_remove</c>
+    /// and <c>docker_prune</c> joined on 2026-10-02 (a removed volume or image is gone; opt-in even under <c>Docker writes</c>, each call
+    /// still asking); a profile saved before keeps its list, so there the yes on the pane is their only guard.
     /// </summary>
-    public List<string> ToolsDisabled { get; set; } = [Llm.Tools.GitDeleteTool.ToolName, Llm.Tools.UnzipTool.ToolName, Llm.Tools.ZipTool.ToolName, Llm.Tools.UncDeleteTool.ToolName];
+    public List<string> ToolsDisabled { get; set; } = [Llm.Tools.GitDeleteTool.ToolName, Llm.Tools.UnzipTool.ToolName, Llm.Tools.ZipTool.ToolName, Llm.Tools.UncDeleteTool.ToolName, Llm.Tools.DockerRemoveTool.ToolName, Llm.Tools.DockerPruneTool.ToolName];
 
     /// <summary>
     /// Whether <c>$</c> and part of a name on the chat line lists the tools the next turn offers
@@ -1443,6 +1445,34 @@ public sealed class AppSettingsData
     /// a saved value of the old name falls back to on.
     /// </summary>
     public bool UncStarMention { get; set; } = true;
+
+    // ─── Docker ─────────────────────────────────────────────────────────────────
+    // The Docker tools and /docker (2026-10-02, the user's ask: control Docker Desktop from the app; the user's call: the
+    // Engine API over the engine's named pipe, no docker.exe, no new process-start site, compose up left out).
+
+    /// <summary>
+    /// Whether a turn offers the Docker tools (2026-10-02): <c>docker_containers</c>, <c>docker_logs</c>, <c>docker_inspect</c>,
+    /// <c>docker_stats</c>, <c>docker_resources</c> and <c>docker_compose</c>; the changing tools only under <see cref="DockerWrites"/>.
+    /// Offered whether Docker Desktop runs or not (the tools say it is down). Read at each turn. Off by default. No variable.
+    /// <c>/docker</c> works either way.
+    /// </summary>
+    public bool DockerTools { get; set; }
+
+    /// <summary>
+    /// The master key of the model's changes (2026-10-02, the UNC writes shape): off (the default), the model may only look;
+    /// on, it gets <c>docker_lifecycle</c> (start, stop, restart, pause, unpause a container or a compose project),
+    /// <c>docker_pull</c>, <c>docker_remove</c> and <c>docker_prune</c> — the last two off by name in a fresh profile's
+    /// <see cref="ToolsDisabled"/> — and every one of them still waits for the user's yes on the pane (headless refuses them).
+    /// Checked again at every call. <c>/docker</c> and its pane are the user's own hand and never judged. No variable.
+    /// </summary>
+    public bool DockerWrites { get; set; }
+
+    /// <summary>
+    /// The Docker engine's named pipe (2026-10-02): <c>docker_engine</c> (Docker Desktop's, the default), any other name bare,
+    /// as <c>\\.\pipe\name</c> or as the CLI's <c>npipe:////./pipe/name</c> (<see cref="Docker.DockerPipe.Normalize"/>); blank is
+    /// the default. Variable: <c>NEONSIDEKICK_DOCKER_PIPE</c>.
+    /// </summary>
+    public string DockerEnginePipe { get; set; } = Docker.DockerPipe.DefaultName;
 
     // ─── Images (ComfyUI) ───────────────────────────────────────────────────────
     // The image tools (2026-09-24, the user's ask: "what can we do with comfyui?" — text to image, img2img, their own

@@ -32,6 +32,8 @@ public static class PlanTools
         "mysql_connections", "mysql_databases", "mysql_tables", "mysql_columns", "mysql_describe", "mysql_indexes", "mysql_relationships", "mysql_query",
         // UNC shares: the reads (2026-09-30); unc_fetch writes the working directory, so it is not here
         "unc_shares", "unc_search", "unc_info", "unc_read",
+        // Docker: the reads (2026-10-02)
+        "docker_containers", "docker_logs", "docker_inspect", "docker_stats", "docker_resources", "docker_compose",
         // Home Assistant: the reads (2026-09-28)
         "ha_overview", "ha_states", "ha_history",
         // printing: the list only (2026-09-28)
@@ -58,6 +60,7 @@ public static class PlanTools
         "ha_lights", "ha_scene", "ha_media", "ha_todo", "ha_call_service", "ha_assist",
         "print_file",
         "unc_fetch", "unc_write", "unc_patch", "unc_create_directory", "unc_move", "unc_copy", "unc_delete", "unc_put",
+        "docker_lifecycle", "docker_pull", "docker_remove", "docker_prune",
     };
 
     /// <summary>Whether plan mode keeps <paramref name="tool"/>.</summary>
