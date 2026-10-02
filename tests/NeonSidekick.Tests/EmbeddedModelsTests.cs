@@ -440,7 +440,9 @@ public class EmbeddedModelsTests : IDisposable
     {
         InstallByHand();
         var host = new FakeLlamaServerHost { Fail = l => l.Backend == LlamaBackend.Cuda ? new EmbeddedLlmException("no CUDA device") : null };
-        await using var service = new EmbeddedLlmService(_files, host, Cuda);
+        // A GPU of its own (8 GiB), not the machine's: Embedded VRAM only is on by default, and on Vulkan it refuses a GPU
+        // with little or no dedicated memory, which is what a CI runner's probe reads (the v0.4.0 release run, 2026-10-02).
+        await using var service = new EmbeddedLlmService(_files, host, Cuda, () => 8L << 30);
 
         var info = await service.StartAsync(_model, new AppSettingsData(), null, CancellationToken.None);
 
