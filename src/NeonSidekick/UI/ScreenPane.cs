@@ -26,7 +26,7 @@ namespace NeonSidekick.UI;
 /// retained in a <see cref="Scrollback"/> (the one place is <c>Track</c>), and <see cref="ScrollPage"/>
 /// (PgUp/PgDn on the input line, and the key watcher during a turn) paints a window of it in the
 /// transcript region while the pane stays on the last rows — <see cref="Scrolled"/>, the rows-below
-/// count in the hint (<see cref="ScrolledHint"/>), the anchor a store row so rows arriving below never
+/// count on a row of its own over the upper rule (<see cref="ScrolledRow"/>; on the hint row until 2026-10-01), the anchor a store row so rows arriving below never
 /// move what is read. Flow writes meanwhile go to the store alone. Paging back to the bottom,
 /// Ctrl+End (<see cref="ScrollToEnd"/>, 2026-09-17), a resize (the buffer is not reflowed by the
 /// terminal) and a sent line write the store's tail back as the flow and draw the pane as before.
@@ -223,14 +223,14 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
 
     // The queued part (Queued) as last drawn, in either row: its first column and its width in
     // cells, −1 / 0 when none was drawn (nothing queued, cut by a narrow window, or under an
-    // overlay's or the scroll's hint). TryHitQueued reads them; TryHitHint the standing row's alone.
+    // overlay's hint — the scroll's too until 2026-10-01). TryHitQueued reads them; TryHitHint the standing row's alone.
     private int _queuedColumn = -1;
     private int _queuedCells;
 
     // The usage zone (HintZone.Usage, 2026-09-21) as last drawn, in either row: the token tally
     // (Usage) on the standing row, the spinner and its label on the busy row — its first column
     // and its width in cells, −1 / 0 when none was drawn (nothing counted, the timers or the exit
-    // hint in the tally's place, cut by a narrow window, or under an overlay's or the scroll's hint).
+    // hint in the tally's place, cut by a narrow window, or under an overlay's hint — the scroll's too until 2026-10-01).
     private int _usageColumn = -1;
     private int _usageCells;
 
@@ -238,9 +238,13 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     private int _labelColumn = -1;
     private int _labelCells;
 
-    // Whether the hint row as last drawn (either row) carried the scroll's hint (ScrolledHint):
-    // then every hit that is neither a strip glyph nor the trailer is Scrolled, not the row.
-    private bool _hintScrolled;
+    // The scroll's row (2026-10-01, the user's ask: the scroll's hint had taken the whole hint row, the strip, the tally
+    // and the model gone for as long as the user read back): while scrolled, ScrolledRow centered on a row of its own
+    // over the upper rule — over the picture strip's rule when the strip is up, the pane's top row either way. The rows
+    // the last draw gave it (0 or 1, Draw the only writer, as _stripRows) and its text as drawn (null = none; the tick's
+    // comparison). The hint row stays the screen's own meanwhile.
+    private int _scrollRows;
+    private string? _shownScroll;
 
     // The toolbar (2026-09-21): the provider, the rows the last draw gave it (0 or 1 — Draw is the
     // only writer, like _drawnOverlay), the row's text as drawn (null = no row; the tick's
@@ -305,9 +309,10 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         Queued,
 
         /// <summary>
-        /// The scroll's hint (<see cref="ScrolledHint"/>, later on 2026-09-18): what <see cref="Row"/>
-        /// is while the transcript is scrolled — the text, a separator, a blank, the whole busy row —
-        /// so a double-click there is the bottom again, as Ctrl+End is.
+        /// The scroll's hint (<see cref="ScrolledHint"/>, later on 2026-09-18): so a double-click there is the bottom
+        /// again, as Ctrl+End is. Until 2026-10-01 it was what <see cref="Row"/> was while the transcript was scrolled (the
+        /// hint row carried the scroll's hint); since, it is the whole of the scroll's own row over the upper rule
+        /// (<see cref="ScrolledRow"/>), and the hint row keeps its zones while scrolled.
         /// </summary>
         Scrolled,
 
@@ -586,7 +591,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
 
             if (_busyLabel is null && y == top + HintRowBelowCursor)
             {
-                return new OffPaneHit(HintHitAt(_hintStrip, _trailerColumn, _markColumn, -1, 0, -1, 0, x, _hintScrolled), null);
+                return new OffPaneHit(HintHitAt(_hintStrip, _trailerColumn, _markColumn, -1, 0, -1, 0, x), null);
             }
 
             return null;
@@ -1362,7 +1367,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     }
 
     /// <summary>Scrolls the region by <paramref name="pages"/> pages (a page = the region's rows less one; negative = up, towards the start).</summary>
-    public void ScrollPage(int pages) => ScrollBy(pages * Math.Max(1, RegionRows(_paneRows) - 1));
+    public void ScrollPage(int pages) => ScrollBy(pages * Math.Max(1, ScrolledRegionRows - 1));
 
     /// <summary>The rows a wheel notch scrolls: Windows' own lines-per-notch default (<c>InfoPane.WheelLines</c> is the pane's own).</summary>
     public const int WheelRows = 3;
@@ -1386,7 +1391,13 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
 
         lock (_gate)
         {
-            int max = Math.Max(0, _store.Rows(Width).Count - RegionRows(_paneRows));
+            int count = _store.Rows(Width).Count;
+            if (_top < 0 && FitsAtTheBottom(count))
+            {
+                return;
+            }
+
+            int max = Math.Max(0, count - ScrolledRegionRows);
             int current = _top >= 0 ? _top : max;
             int top = Math.Clamp(current + rows, 0, max);
             int next = top >= max ? -1 : top;
@@ -1434,8 +1445,9 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
 
         lock (_gate)
         {
-            int max = Math.Max(0, _store.Rows(Width).Count - RegionRows(_paneRows));
-            if (max == 0 || _top == 0)
+            int count = _store.Rows(Width).Count;
+            int max = Math.Max(0, count - ScrolledRegionRows);
+            if (FitsAtTheBottom(count) || max == 0 || _top == 0)
             {
                 return;
             }
@@ -1453,6 +1465,29 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     public static int RegionRows(int height, int paneRows) => Math.Max(1, height - paneRows);
 
     private int RegionRows(int paneRows) => RegionRows(Height, paneRows);
+
+    /// <summary>
+    /// The region a scrolled draw leaves (2026-10-01): the last draw's pane with the scroll's row in it — at the bottom
+    /// the pane has none, and the anchor a scroll from there sets is counted against the region it will be drawn in.
+    /// </summary>
+    private int ScrolledRegionRows => RegionRows(_paneRows - _scrollRows + 1);
+
+    /// <summary>
+    /// A transcript of <paramref name="count"/> rows is whole on the screen at the bottom: there is nothing to scroll to,
+    /// though the scroll's row would leave the scrolled region one row short of it (2026-10-01).
+    /// </summary>
+    private bool FitsAtTheBottom(int count) => count <= RegionRows(_paneRows - _scrollRows);
+
+    /// <summary>
+    /// The scroll's own row (2026-10-01, the user's ask and their pick of centered): <see cref="ScrolledHint"/> cut to
+    /// <paramref name="cells"/> and centered in them by the blanks at its left, the odd one at its right. Pure, pinned.
+    /// </summary>
+    public static string ScrolledRow(int below, int cells)
+    {
+        cells = Math.Max(1, cells);
+        string hint = Fit(ScrolledHint(below), cells);
+        return new string(' ', (cells - TextCells.Width(hint)) / 2) + hint;
+    }
 
     private int RowsBelowLocked()
     {
@@ -1528,7 +1563,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
                 }
                 else
                 {
-                    RedrawHint();
+                    RedrawScrollRow();
                 }
 
                 return;
@@ -1574,7 +1609,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
             if (_top >= 0)
             {
                 // Scrolled: nothing of it was drawn; the count below changed.
-                RedrawHint();
+                RedrawScrollRow();
                 return;
             }
 
@@ -1838,8 +1873,9 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
 
         // The picture strip and its rule sit between the region and the upper rule (2026-09-25, the user's report: a click
         // on a tool run's summary did nothing while the strip showed — every row was read the strip's height too high).
+        // The scroll's row (2026-10-01) over them while scrolled.
         int region = RegionRows(_paneRows);
-        int r = y - (top - CursorDepth - 1 - _stripRows - region);
+        int r = y - (top - CursorDepth - 1 - _stripRows - _scrollRows - region);
         if (r < 0 || r >= region)
         {
             return null;
@@ -1907,7 +1943,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
                 }
                 else
                 {
-                    RedrawHint();
+                    RedrawScrollRow();
                 }
 
                 return;
@@ -2363,7 +2399,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
             return;
         }
 
-        var shown = LayoutInput(Width, Height - BarRows - _stripRows);
+        var shown = LayoutInput(Width, Height - BarRows - _stripRows - _scrollRows);
         if (shown.Rows.Count == _inputRows)
         {
             RewriteInputRows(shown);
@@ -2774,7 +2810,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         }
 
         int firstRow = _firstRow;
-        var shown = LayoutInput(Width, Height - BarRows - _stripRows);
+        var shown = LayoutInput(Width, Height - BarRows - _stripRows - _scrollRows);
         if (_stripRows > 0 && (text.Length == 0) != _drawnStripHighlight)
         {
             // The draft emptied or filled under a highlighted strip: the highlight follows it, the whole pane again.
@@ -3121,9 +3157,9 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     /// The zones are those of the standing row as last drawn; under the busy row the strip keeps its
     /// glyphs (2026-09-24, the brain's mid-turn cancel), the spinner and its label are
     /// <see cref="HintZone.Usage"/> and every other hit is the row.
-    /// While the transcript is scrolled (either row) the row is <see cref="HintZone.Scrolled"/>
-    /// instead — the strip and the trailer keep their zones — so a double-click on the scroll's
-    /// hint is the bottom again; <c>/settings</c> from the row waits for the bottom.
+    /// While the transcript is scrolled the scroll's own row over the upper rule (<see cref="ScrolledRow"/>, 2026-10-01)
+    /// answers too, <see cref="HintZone.Scrolled"/> at any column, so a double-click on the scroll's hint is the bottom
+    /// again; the hint row keeps its zones then (until that day it was the scroll's, its row <see cref="HintZone.Scrolled"/>).
     /// </summary>
     public bool TryHitHint(int x, int y, out HintHit hit)
     {
@@ -3140,12 +3176,18 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
                 return false;
             }
 
+            if (_scrollRows > 0 && y == top - ScrollRowAboveCursor)
+            {
+                hit = new HintHit(HintZone.Scrolled, "", -1);
+                return true;
+            }
+
             if (y != top + HintRowBelowCursor)
             {
                 return false;
             }
 
-            hit = HintHitAt(_hintStrip, _trailerColumn, _markColumn, _busyLabel is null ? _queuedColumn : -1, _queuedCells, _usageColumn, _usageCells, _labelColumn, _labelCells, x, _hintScrolled);
+            hit = HintHitAt(_hintStrip, _trailerColumn, _markColumn, _busyLabel is null ? _queuedColumn : -1, _queuedCells, _usageColumn, _usageCells, _labelColumn, _labelCells, x);
             return true;
         }
     }
@@ -3183,38 +3225,37 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     /// <summary>
     /// <see cref="HintHitAt(string, int, int)"/> with the queued part's place (2026-09-18): the
     /// <paramref name="queuedCells"/> from <paramref name="queuedColumn"/> (−1 for none) are
-    /// <see cref="HintZone.Queued"/>, its first column the hit's; with <paramref name="scrolled"/>
-    /// (the row drawn with <see cref="ScrolledHint"/>) what would be the row is
-    /// <see cref="HintZone.Scrolled"/>. Pinned.
+    /// <see cref="HintZone.Queued"/>, its first column the hit's. Until 2026-10-01 a <c>scrolled</c> flag made the row
+    /// <see cref="HintZone.Scrolled"/>; the scroll's hint has its own row since (<see cref="ScrolledRow"/>). Pinned.
     /// </summary>
-    public static HintHit HintHitAt(string strip, int trailerColumn, int queuedColumn, int queuedCells, int x, bool scrolled = false) =>
-        HintHitAt(strip, trailerColumn, queuedColumn, queuedCells, -1, 0, x, scrolled);
+    public static HintHit HintHitAt(string strip, int trailerColumn, int queuedColumn, int queuedCells, int x) =>
+        HintHitAt(strip, trailerColumn, queuedColumn, queuedCells, -1, 0, x);
 
     /// <summary>
-    /// <see cref="HintHitAt(string, int, int, int, int, bool)"/> with the usage zone's place
+    /// <see cref="HintHitAt(string, int, int, int, int)"/> with the usage zone's place
     /// (2026-09-21): the <paramref name="usageCells"/> from <paramref name="usageColumn"/> (−1 for
     /// none) are <see cref="HintZone.Usage"/>, its first column the hit's — the token tally on the
     /// standing row, the spinner and its label on the busy row; behind the trailer and the queued
     /// part, ahead of the strip. Pinned.
     /// </summary>
-    public static HintHit HintHitAt(string strip, int trailerColumn, int queuedColumn, int queuedCells, int usageColumn, int usageCells, int x, bool scrolled = false) =>
-        HintHitAt(strip, trailerColumn, -1, queuedColumn, queuedCells, usageColumn, usageCells, x, scrolled);
+    public static HintHit HintHitAt(string strip, int trailerColumn, int queuedColumn, int queuedCells, int usageColumn, int usageCells, int x) =>
+        HintHitAt(strip, trailerColumn, -1, queuedColumn, queuedCells, usageColumn, usageCells, x);
 
     /// <summary>
-    /// <see cref="HintHitAt(string, int, int, int, int, int, int, bool)"/> with the mark's place
+    /// <see cref="HintHitAt(string, int, int, int, int, int, int)"/> with the mark's place
     /// (2026-09-21): from <paramref name="markColumn"/> (−1 for none) to the row's end is
     /// <see cref="HintZone.Mark"/>, its first column the hit's, ahead of the trailer — which is
     /// then the name and the separator before the mark. Pinned.
     /// </summary>
-    public static HintHit HintHitAt(string strip, int trailerColumn, int markColumn, int queuedColumn, int queuedCells, int usageColumn, int usageCells, int x, bool scrolled = false) =>
-        HintHitAt(strip, trailerColumn, markColumn, queuedColumn, queuedCells, usageColumn, usageCells, -1, 0, x, scrolled);
+    public static HintHit HintHitAt(string strip, int trailerColumn, int markColumn, int queuedColumn, int queuedCells, int usageColumn, int usageCells, int x) =>
+        HintHitAt(strip, trailerColumn, markColumn, queuedColumn, queuedCells, usageColumn, usageCells, -1, 0, x);
 
     /// <summary>
-    /// <see cref="HintHitAt(string, int, int, int, int, int, int, int, bool)"/> with the label's place (2026-09-28): the
+    /// <see cref="HintHitAt(string, int, int, int, int, int, int, int)"/> with the label's place (2026-09-28): the
     /// <paramref name="labelCells"/> from <paramref name="labelColumn"/> (−1 for none) are <see cref="HintZone.Label"/>, its
     /// first column the hit's — inside the usage zone on the busy row, so ahead of it. Pinned.
     /// </summary>
-    public static HintHit HintHitAt(string strip, int trailerColumn, int markColumn, int queuedColumn, int queuedCells, int usageColumn, int usageCells, int labelColumn, int labelCells, int x, bool scrolled = false)
+    public static HintHit HintHitAt(string strip, int trailerColumn, int markColumn, int queuedColumn, int queuedCells, int usageColumn, int usageCells, int labelColumn, int labelCells, int x)
     {
         ArgumentNullException.ThrowIfNull(strip);
         if (markColumn >= 0 && x >= markColumn)
@@ -3247,7 +3288,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
             return new HintHit(HintZone.Strip, glyph, column);
         }
 
-        return new HintHit(scrolled ? HintZone.Scrolled : HintZone.Row, "", -1);
+        return new HintHit(HintZone.Row, "", -1);
     }
 
     /// <summary>
@@ -3584,19 +3625,23 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
 
         _drawnStripHighlight = stripHighlight;
 
+        // The scroll's row (2026-10-01) over the rest while scrolled, when the window keeps a transcript row over the
+        // smallest pane, the bars, the strip and it; the input rows and the overlay are capped over what it leaves.
+        int scrollRows = _top >= 0 && h >= PaneRows + barRows + stripRows + 2 ? 1 : 0;
+
         List<SegmentLine>? overlayLines = null;
         int overlayRows = 0;
         ShownInput? shown = null;
         if (_overlay is null || _overlay.Input)
         {
-            shown = LayoutInput(w, h - barRows - stripRows);
+            shown = LayoutInput(w, h - barRows - stripRows - scrollRows);
         }
 
         int closeColumn = -1;
         if (_overlay is { } overlay)
         {
             overlayLines = Segment.SplitLines(overlay.Content.GetSegments(_inner), w);
-            overlayRows = Math.Clamp(overlayLines.Count, 0, MaxOverlayRows(h - barRows, shown?.Rows.Count ?? 0));
+            overlayRows = Math.Clamp(overlayLines.Count, 0, MaxOverlayRows(h - barRows - scrollRows, shown?.Rows.Count ?? 0));
             if (overlay.Close && overlayRows > 0)
             {
                 // The close glyph in column w − 2 of the first row, TrailerGap cells clear of the
@@ -3615,13 +3660,13 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
             }
         }
 
-        _paneRows = 3 + overlayRows + (shown?.Rows.Count ?? 0) + barRows + stripRows;
+        _paneRows = 3 + overlayRows + (shown?.Rows.Count ?? 0) + barRows + stripRows + scrollRows;
         _toolbarRows = toolbarRows;
         _perfRows = perfRows;
         _stripRows = stripRows;
 
         // Scrolled: the anchor against the region this pane leaves; at or past the last window it
-        // is the bottom after all (a taller pane, a store that shrank).
+        // is the bottom after all (a taller pane, a store that shrank) — and the scroll's row goes.
         IReadOnlyList<SegmentLine>? window = null;
         int region = RegionRows(_paneRows);
         if (_top >= 0)
@@ -3632,8 +3677,13 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
             {
                 _top = -1;
                 window = null;
+                _paneRows -= scrollRows;
+                scrollRows = 0;
+                region = RegionRows(_paneRows);
             }
         }
+
+        _scrollRows = scrollRows;
 
         _inner.Cursor.Show(false);
 
@@ -3788,6 +3838,16 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
             {
                 _row = Math.Max(0, _row - overflow);
             }
+        }
+
+        if (scrollRows > 0)
+        {
+            WriteScrollRow(w);
+            EndRow();
+        }
+        else
+        {
+            _shownScroll = null;
         }
 
         if (stripLines is not null)
@@ -4281,10 +4341,13 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     private int CursorDepth => !_drawnOverlay ? _cursorRow : _drawnInput ? _overlayRows + _cursorRow : 0;
 
     /// <summary>How many rows under the terminal's cursor the hint row sits, as last drawn: over the rows under the cursor and the lower rule; the toolbar, when drawn, is one further.</summary>
-    private int HintRowBelowCursor => _paneRows - 2 - _toolbarRows - _perfRows - _stripRows - CursorDepth;
+    private int HintRowBelowCursor => _paneRows - 2 - _toolbarRows - _perfRows - _stripRows - _scrollRows - CursorDepth;
 
     /// <summary>How many rows under the terminal's cursor the pane's last row sits, as last drawn: the hint row, or the toolbar under it (2026-09-21), or the performance bar under that (2026-09-29).</summary>
-    private int LastRowBelowCursor => _paneRows - 2 - _stripRows - CursorDepth;
+    private int LastRowBelowCursor => _paneRows - 2 - _stripRows - _scrollRows - CursorDepth;
+
+    /// <summary>How many rows over the terminal's cursor the scroll's row sits (2026-10-01), as last drawn: over the upper rule, and the picture strip's rows with their rule when drawn.</summary>
+    private int ScrollRowAboveCursor => CursorDepth + 1 + _stripRows + 1;
 
     /// <summary>How many rows under the terminal's cursor the toolbar sits, as last drawn: the last row, or the one over the performance bar.</summary>
     private int ToolbarRowBelowCursor => LastRowBelowCursor - _perfRows;
@@ -4488,7 +4551,6 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
             _usageCells = 0;
             _labelColumn = -1;
             _labelCells = 0;
-            _hintScrolled = false;
             return;
         }
 
@@ -4500,12 +4562,13 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
             // gives way to the uncut left as PinRight's does (2026-09-28).
             string frame = Theme.SpinnerFrames[_frame % Theme.SpinnerFrames.Length];
             string queued = StandingQueued();
-            // The tally beside the label (2026-09-25), where the standing row would have it: not under an overlay's hint or the scroll's.
-            string usage = _overlay is null && _top < 0 ? _busyUsage() : "";
+            // The tally beside the label (2026-09-25), where the standing row would have it: not under an overlay's hint (nor
+            // under the scroll's until 2026-10-01, when it went to a row of its own).
+            string usage = _overlay is null ? _busyUsage() : "";
             var elapsed = _time.GetElapsedTime(_busySince);
             // A label that trails the tally (LabelAfterUsage, the ComfyUI generation's) swaps the two; nothing else moves.
             bool after = usage.Length > 0 && _labelAfterUsage(label);
-            string unfitted = " " + BusyRow(label, elapsed, _overlay?.Hint ?? (_top >= 0 ? ScrolledHint(RowsBelowLocked()) : ""), queued, usage, after);
+            string unfitted = " " + BusyRow(label, elapsed, _overlay?.Hint ?? "", queued, usage, after);
             string labelled = " " + Labelled(BusyText(label, elapsed), usage, after);
             // Read once (2026-10-01): an embedded download's strip turns with the clock, and two reads astride a frame
             // would leave _hintStrip blank below — its 📥 dead to a click for the draw.
@@ -4527,20 +4590,20 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
             // The queued part's place: after the prefix, the frame, the blank, the label, the tally and a separator — when the fit left it whole.
             RecordQueued(queued, TextCells.Width(prefix) + TextCells.Width(frame), TextCells.Width(labelled + HintSeparator), unfitted, restMax);
             // The usage zone: the frame, the label and the tally after the prefix — when the fit kept them
-            // whole, and not while scrolled (the row is the scroll's then, like the standing one). A tally
-            // the fit cut leaves the frame and whichever comes first — the label, or the tally ahead of a trailing one.
+            // whole. A tally the fit cut leaves the frame and whichever comes first — the label, or the tally
+            // ahead of a trailing one.
             int zoneCells = restMax + TextCells.Width(frame);
             string zone = TextCells.Width(frame + unfitted) <= zoneCells || TextCells.Width(frame + labelled) < zoneCells ? frame + labelled : frame + " " + (after ? usage : BusyText(label, elapsed));
-            RecordUsage(_top < 0 ? zone : "", TextCells.Width(prefix), 0, frame + unfitted, zoneCells);
+            RecordUsage(zone, TextCells.Width(prefix), 0, frame + unfitted, zoneCells);
             // The label's own place (2026-09-28, HintZone.Label): a label LabelAfterUsage takes — after the tally and its
-            // separator, or right after the frame's blank with none — when the fit kept it whole, and not while scrolled.
+            // separator, or right after the frame's blank with none — when the fit kept it whole.
             // A label LabelZone takes (2026-10-01) stays where it stands, and its zone takes the frame and the blank before it.
             string busyText = BusyText(label, elapsed);
             bool trailing = _labelAfterUsage(label);
             bool leading = !trailing && _labelZone(label);
             int labelAhead = after ? TextCells.Width(" " + usage + HintSeparator) : 1;
             int labelWidth = TextCells.Width(busyText);
-            bool labelWhole = _top < 0 && (trailing || leading) && (TextCells.Width(unfitted) <= restMax || labelAhead + labelWidth <= restMax);
+            bool labelWhole = (trailing || leading) && (TextCells.Width(unfitted) <= restMax || labelAhead + labelWidth <= restMax);
             _labelColumn = !labelWhole ? -1 : leading ? TextCells.Width(prefix) : TextCells.Width(prefix) + TextCells.Width(frame) + labelAhead;
             _labelCells = !labelWhole ? 0 : leading ? TextCells.Width(frame) + labelAhead + labelWidth : labelWidth;
         }
@@ -4559,8 +4622,8 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
             int cells = right.Length == 0 ? max : max - TextCells.Width(right) - TrailerGap;
             RecordQueued(StandingQueued(), 0, _hintStrip.Length == 0 ? 0 : TextCells.Width(_hintStrip) + HintSeparator.Length, row, cells);
             // The usage zone: the tally where the screen's hint put it — nowhere under an overlay's
-            // or the scroll's hint, or when the timers or the exit hint stand in its place.
-            string usage = _overlay is null && _top < 0 ? _usage() : "";
+            // hint, or when the timers or the exit hint stand in its place.
+            string usage = _overlay is null ? _usage() : "";
             int at = usage.Length == 0 ? -1 : row.IndexOf(usage, StringComparison.Ordinal);
             RecordUsage(at < 0 ? "" : usage, 0, at < 0 ? 0 : TextCells.Width(row[..at]), row, cells);
             _labelColumn = -1;
@@ -4573,8 +4636,6 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
             _markColumn = -1;
         }
 
-        // Either row carries the scroll's hint while scrolled (an overlay's hint wins on both).
-        _hintScrolled = _overlay is null && _top >= 0;
         _inner.Write(EraseLineEnd);
     }
 
@@ -4647,11 +4708,34 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         _inner.Write(new RawText(mark, Theme.TrailerMark));
     }
 
-    /// <summary>The overlay's hint while one is open, else the scroll's while scrolled (<see cref="ScrolledHint"/>), else the screen's.</summary>
-    private string StandingHint() => _overlay is { } overlay ? overlay.Hint : _top >= 0 ? ScrolledHint(RowsBelowLocked()) : _hint();
+    /// <summary>The overlay's hint while one is open, else the screen's — scrolled too since 2026-10-01, the scroll's hint on a row of its own (<see cref="ScrolledRow"/>).</summary>
+    private string StandingHint() => _overlay is { } overlay ? overlay.Hint : _hint();
 
-    /// <summary>The queued part while the row is the screen's own — nothing under an overlay's hint or the scroll's (2026-09-18).</summary>
-    private string StandingQueued() => _overlay is null && _top < 0 ? _queued() : "";
+    /// <summary>The queued part while the row is the screen's own — nothing under an overlay's hint (2026-09-18; under the scroll's until 2026-10-01).</summary>
+    private string StandingQueued() => _overlay is null ? _queued() : "";
+
+    /// <summary>The scroll's row (2026-10-01) on the cursor's row: <see cref="ScrolledRow"/> in the hint's style, the rest of the row erased; the text remembered for the tick.</summary>
+    private void WriteScrollRow(int width)
+    {
+        string row = ScrolledRow(RowsBelowLocked(), width - 1);
+        _inner.Write(new RawText(row, Theme.Hint));
+        _inner.Write(EraseLineEnd);
+        _shownScroll = row;
+    }
+
+    /// <summary><see cref="RedrawHint"/> for the scroll's row (2026-10-01): its row again, in place, over the upper rule; nothing while none is drawn.</summary>
+    private void RedrawScrollRow()
+    {
+        if (!_drawn || _batch > 0 || _modal > 0 || _scrollRows == 0)
+        {
+            return;
+        }
+
+        RedrawRow(-ScrollRowAboveCursor, () => WriteScrollRow(Width));
+    }
+
+    /// <summary>The count on the scroll's row is not the drawn one (a reply streaming on below, a write stored while scrolled).</summary>
+    private bool ScrollRowChanged() => _scrollRows > 0 && !string.Equals(ScrolledRow(RowsBelowLocked(), Width - 1), _shownScroll, StringComparison.Ordinal);
 
     /// <summary>The standing hint behind the strip and the queued part (<see cref="HintRow"/>: each alone when the others are empty).</summary>
     private string StandingRow() => HintRow(HintRow(_strip(), StandingQueued()), StandingHint());
@@ -4705,7 +4789,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         _shownPerf = row.Text;
     }
 
-    /// <summary>The row <paramref name="down"/> rows under the cursor's written again by <paramref name="write"/>, the cursor back where it was.</summary>
+    /// <summary>The row <paramref name="down"/> rows under the cursor's (over it when negative: the scroll's row, 2026-10-01) written again by <paramref name="write"/>, the cursor back where it was.</summary>
     private void RedrawRow(int down, Action write)
     {
         // One frame (2026-09-29): the cursor's hide, the trip down and back and the row itself.
@@ -4713,10 +4797,10 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         try
         {
             _inner.Cursor.Show(false);
-            _inner.Cursor.Move(CursorDirection.Down, down);
+            _inner.Cursor.Move(down < 0 ? CursorDirection.Up : CursorDirection.Down, Math.Abs(down));
             ColumnZero();
             write();
-            _inner.Cursor.Move(CursorDirection.Up, down);
+            _inner.Cursor.Move(down < 0 ? CursorDirection.Down : CursorDirection.Up, Math.Abs(down));
             ColumnZero();
             if (_drawnOverlay && !_drawnInput)
             {
@@ -4780,10 +4864,15 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
 
                 if (_drawnScrolled)
                 {
-                    // Scrolled: the block is not drawn; its rows count in the hint.
+                    // Scrolled: the block is not drawn; its rows count on the scroll's row (the busy row's frame moves on its own).
                     _liveCount = _live is null ? 0 : Math.Max(0, LiveLayout(w, RegionRows(_paneRows)).Count - _liveCommitted);
                     _liveDirty = false;
-                    RedrawHint();
+                    RedrawScrollRow();
+                    if (_busyLabel is not null)
+                    {
+                        RedrawHint();
+                    }
+
                     return;
                 }
 
@@ -4854,6 +4943,12 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
             {
                 // A new reading: the row again, in place.
                 RedrawPerf();
+            }
+
+            if (ScrollRowChanged())
+            {
+                // The count below moved with nothing redrawing it (a safety net: the writes that change it redraw it).
+                RedrawScrollRow();
             }
 
             if (_busyLabel is not null)

@@ -1370,7 +1370,7 @@ public class InputLineTests : IDisposable
         // Enter's commit is the bottom again (the pane's own rule); the read saw the page keys as scrolls, not text.
         Assert.Equal("abc", Assert.IsType<InputResult.Submitted>(await line.ReadAsync()).Text);
         Assert.False(pane.Scrolled);
-        Assert.Contains("⇡ 5 rows below", _console.Output);   // the 40-column row cuts the hint short
+        Assert.Contains("⇡ 4 rows below", _console.Output);   // the scroll's row over the upper rule; 40 columns cut it, no blank to center it
     }
 
     /// <summary>PgUp as the push-to-talk key: the empty line talks (pinned above), a line with text scrolls.</summary>
@@ -1392,7 +1392,7 @@ public class InputLineTests : IDisposable
         Push(Keys.Enter);
 
         Assert.Equal("draft", Assert.IsType<InputResult.Submitted>(await line.ReadAsync(pushToTalk: ConsoleKey.PageUp)).Text);
-        Assert.Contains("⇡ 5 rows below", _console.Output);   // the 40-column row cuts the hint short
+        Assert.Contains("⇡ 4 rows below", _console.Output);   // the scroll's row over the upper rule; 40 columns cut it, no blank to center it
     }
 
     // ── The wheel ───────────────────────────────────────────────────────────
@@ -1449,7 +1449,7 @@ public class InputLineTests : IDisposable
         };
 
         Assert.Equal("YaXb", Assert.IsType<InputResult.Submitted>(await line.ReadAsync()).Text);
-        Assert.Contains("⇡ 6 rows below", _console.Output);
+        Assert.Contains("⇡ 7 rows below", _console.Output);
     }
 
     [Fact]
@@ -1477,14 +1477,15 @@ public class InputLineTests : IDisposable
         };
 
         Assert.Equal("aXb", Assert.IsType<InputResult.Submitted>(await line.ReadAsync()).Text);
-        Assert.Contains("⇡ 5 rows below", _console.Output);   // the 40-column row cuts the hint short
+        Assert.Contains("⇡ 4 rows below", _console.Output);   // the scroll's row over the upper rule; 40 columns cut it, no blank to center it
     }
 
     [Fact]
     public async Task OnThePane_ADoubleClickOnTheScrolledHint_IsTheBottomAgain_TheReadGoingOn()
     {
         // Later on 2026-09-18: two clicks on the scroll's hint within the interval are Ctrl+End —
-        // the read never ends, the draft and the cursor stay where they were.
+        // the read never ends, the draft and the cursor stay where they were. The hint is on its own row
+        // over the upper rule since 2026-10-01: row 98, the cursor's 100 under the rule's 99.
         var (line, keys, pane) = ScrollableLine();
         using var _ = pane;
         int waits = 0;
@@ -1495,7 +1496,7 @@ public class InputLineTests : IDisposable
             {
                 case 0:
                     Assert.True(pane.Scrolled);
-                    keys.Push(Keys.Left).PushClick(20, 102).PushClick(20, 102);
+                    keys.Push(Keys.Left).PushClick(20, 98).PushClick(20, 98);
                     break;
                 case 1:
                     Assert.False(pane.Scrolled);
@@ -1505,13 +1506,13 @@ public class InputLineTests : IDisposable
         };
 
         Assert.Equal("aXb", Assert.IsType<InputResult.Submitted>(await line.ReadAsync()).Text);
-        Assert.Contains("⇡ 5 rows below", _console.Output);
+        Assert.Contains("⇡ 4 rows below", _console.Output);
     }
 
     [Fact]
     public async Task OnThePane_ScrolledHintClicks_ThatAreNoPair_ScrollNothing_AndAGlyphPairStillEndsTheRead()
     {
-        // One click leaves the scroll; a pair on a strip glyph while scrolled is the glyph's row result, as ever.
+        // One click on the scroll's row leaves the scroll; a pair on a strip glyph while scrolled is the glyph's row result, as ever.
         var (line, keys, pane) = ScrollableLine();
         using var _ = pane;
         pane.Strip = () => "🔊";
@@ -1524,7 +1525,7 @@ public class InputLineTests : IDisposable
             {
                 case 0:
                     Assert.True(pane.Scrolled);
-                    keys.PushClick(20, 102);
+                    keys.PushClick(20, 98);
                     break;
                 case 1:
                     Assert.True(pane.Scrolled);

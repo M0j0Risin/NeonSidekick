@@ -412,4 +412,44 @@ public class PictureStripTests : IDisposable
         Assert.True(pane.TryToggleToolGroupAt(0, 84));
         Assert.Equal(2, pane.StoredRows);
     }
+
+    /// <summary>
+    /// Scrolled with the strip drawn (2026-10-01): the scroll's row is the pane's top row, over the strip's rule — the
+    /// transcript's rows over it, a click on a tool run's summary still landing, a double-click's row the scroll's.
+    /// </summary>
+    [Fact]
+    public void Pane_WhileScrolled_TheScrollsRowSitsOverTheStripsRule()
+    {
+        _cursorTop = 100;
+        using var pane = Pane(StripOf(1));
+        pane.Show();
+        pane.Write(new Markup("a\n"));
+        pane.BeginToolGroup(1);
+        pane.SetToolGroupSummary(new Markup("S"), new Markup("E"));
+        pane.WriteToolLine(new Markup("m1\n"));
+        pane.WriteToolLine(new Markup("m2\n"));
+        pane.EndToolGroup();
+        for (int i = 1; i <= 12; i++)
+        {
+            pane.Write(new Markup("L" + i.ToString(System.Globalization.CultureInfo.InvariantCulture) + "\n"));
+        }
+
+        Assert.Equal(14, pane.StoredRows);
+        int mark = Output.Length;
+        pane.ScrollToTop();
+        Assert.True(pane.Scrolled);
+
+        // The upper rule at 99, the strip on 93–98 under its rule at 92, the scroll's row at 91: the region is 83–90,
+        // eight rows — "a" on 83, the summary on 84 — and six below.
+        Assert.Equal(6, pane.RowsBelow);
+        Assert.Contains(ScreenPane.ScrolledRow(6, 39) + "\n" + Rule(36) + " " + ScreenPane.CloseGlyph + " ─\n", Output[mark..]);
+        Assert.True(pane.TryHitHint(0, 91, out var hit));
+        Assert.Equal(ScreenPane.HintZone.Scrolled, hit.Zone);
+        Assert.False(pane.TryHitHint(0, 92, out _));
+        Assert.False(pane.TryToggleToolGroupAt(0, 91));
+        Assert.Null(pane.PictureAt(1, 91));
+        Assert.True(pane.TryHitStripClose(37, 92));   // the strip's own rule where it was
+        Assert.True(pane.TryToggleToolGroupAt(0, 84));
+        Assert.Equal(16, pane.StoredRows);
+    }
 }

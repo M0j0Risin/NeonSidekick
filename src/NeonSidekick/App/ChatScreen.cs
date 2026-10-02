@@ -278,7 +278,7 @@ internal sealed partial class ChatScreen
     /// The hint row while the welcome splash stands, the draft is empty and Left / Right would
     /// walk the pictures (2026-09-20, the user's ask and word): the arrows, then the timers /
     /// usage / reading line after <see cref="HintJoin"/> when there is one (<see cref="SplashHintLine"/>).
-    /// Ranked after <see cref="ExitHint"/>; an open list's or the scroll's hint hides it like both.
+    /// Ranked after <see cref="ExitHint"/>; an open list's hint hides it like both (the scroll's did until 2026-10-01, when it went to a row of its own).
     /// </summary>
     public const string SplashHint = "← → slideshow";
 
@@ -1617,8 +1617,8 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// The standing hint: <see cref="ExitHint"/> while the exit is armed (the pane's tick re-reads
-    /// it, so the row clears itself at the window's end — hidden behind an open list's or the
-    /// scroll's hint, which the pane ranks first), else <see cref="SplashDeleteArmedHint"/> while a first
+    /// it, so the row clears itself at the window's end — hidden behind an open list's hint, which
+    /// the pane ranks first; the scroll's has its own row since 2026-10-01), else <see cref="SplashDeleteArmedHint"/> while a first
     /// Delete over a profile's splash picture is fresh (2026-09-24, cleared by the same tick), else
     /// <see cref="SplashHint"/> ahead of the rest
     /// while the welcome splash stands with an empty draft and the arrows would walk it

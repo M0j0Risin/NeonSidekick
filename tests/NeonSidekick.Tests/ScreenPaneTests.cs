@@ -1874,8 +1874,11 @@ public class ScreenPaneTests : IDisposable
     /// <summary>The pane over an empty row, with <paramref name="hint"/> on the hint row (compared after a TrimEnd: an empty hint ends at the rule).</summary>
     private static string PaneRows(string hint) => Rule(40) + "\n" + InputLine.PromptGlyph + "\n" + Rule(40) + (hint.Length == 0 ? "" : "\n" + hint);
 
-    /// <summary>The scrolled hint as the 40-column pane draws it: cut to the row with an ellipsis (the wording itself is pinned apart).</summary>
-    private static string ScrolledRow(int below) => ScreenPane.Fit(ScreenPane.ScrolledHint(below), 39);
+    /// <summary>The scroll's row as the 40-column pane draws it: cut to the row with an ellipsis, so no blank to center it (the wording and the centering are pinned apart).</summary>
+    private static string ScrolledRow(int below) => ScreenPane.ScrolledRow(below, 39);
+
+    /// <summary>The pane while scrolled (2026-10-01): the scroll's row over the upper rule, the hint row the screen's own — empty here.</summary>
+    private static string ScrolledPane(int below) => ScrolledRow(below) + "\n" + PaneRows("");
 
     [Fact]
     public void ScrollPage_ShowsTheStoresEarlierRows_ThePanePinned_TheHintCounting()
@@ -1887,33 +1890,38 @@ public class ScreenPaneTests : IDisposable
         Assert.False(pane.Scrolled);
         Assert.Equal(0, pane.RowsBelow);
 
-        // A page = the region (6 rows) less one: from the bottom window (L07..L12) to L02..L07.
+        // Scrolled, the pane has the scroll's row over its upper rule (2026-10-01): the region is five rows, a page four —
+        // from the bottom window (L07..L12) to L04..L08.
         int mark = Output.Length;
         pane.ScrollPage(-1);
         Assert.True(pane.Scrolled);
-        Assert.Equal(1, pane.ScrollTop);
-        Assert.Equal(5, pane.RowsBelow);
+        Assert.Equal(3, pane.ScrollTop);
+        Assert.Equal(4, pane.RowsBelow);
         Assert.Equal(0, pane.Padding);
         // Lifted from the bottom shape, then the screen erased from the top row, then the window and the pane.
         Assert.StartsWith("\e[?2026h\e[?25l\e[1A\e[40D\e[J\e[?25l\e[6A\e[40D\e[J", Output[mark..]);
-        Assert.EndsWith(Lines(2, 7) + PaneRows(ScrolledRow(5)), Strip(Output[mark..]).TrimEnd());
+        Assert.EndsWith(Lines(4, 8) + ScrolledPane(4), Strip(Output[mark..]).TrimEnd());
 
         // Up again: the top, clamped.
         pane.ScrollPage(-1);
         Assert.Equal(0, pane.ScrollTop);
-        Assert.Equal(6, pane.RowsBelow);
+        Assert.Equal(7, pane.RowsBelow);
         mark = Output.Length;
         pane.ScrollPage(-1);
         Assert.Equal(mark, Output.Length);   // nothing to do
-        Assert.EndsWith(Lines(1, 6) + PaneRows(ScrolledRow(6)), Strip(Output).TrimEnd());
+        Assert.EndsWith(Lines(1, 5) + ScrolledPane(7), Strip(Output).TrimEnd());
 
-        // Down a page: one row still below — singular.
+        // Down a page, then two rows: one row still below — singular.
         mark = Output.Length;
         pane.ScrollPage(1);
-        Assert.Equal(5, pane.ScrollTop);
-        Assert.Equal(1, pane.RowsBelow);
+        Assert.Equal(4, pane.ScrollTop);
+        Assert.Equal(3, pane.RowsBelow);
         Assert.StartsWith("\e[?2026h\e[?25l\e[7A\e[40D\e[J", Output[mark..]);   // the scrolled lift: from the cursor's row to the top
-        Assert.EndsWith(Lines(6, 11) + PaneRows(ScrolledRow(1)), Strip(Output[mark..]).TrimEnd());
+        Assert.EndsWith(Lines(5, 9) + ScrolledPane(3), Strip(Output[mark..]).TrimEnd());
+        pane.ScrollBy(2);
+        Assert.Equal(6, pane.ScrollTop);
+        Assert.Equal(1, pane.RowsBelow);
+        Assert.EndsWith(Lines(7, 11) + ScrolledPane(1), Strip(Output).TrimEnd());
 
         // Down again: the bottom — the flow's tail written back, counted, the standing hint again.
         mark = Output.Length;
@@ -1934,6 +1942,18 @@ public class ScreenPaneTests : IDisposable
         Assert.Equal("⇡ 0 rows below · PgUp/PgDn scroll · Ctrl+End bottom", ScreenPane.ScrolledHint(0));
     }
 
+    /// <summary>The scroll's row (2026-10-01, the user's pick of centered): the hint centered by blanks at its left, the odd one at its right; cut with an ellipsis when it does not fit.</summary>
+    [Fact]
+    public void ScrolledRow_CentersTheHint_AndCutsItWhenItDoesNotFit()
+    {
+        string hint = ScreenPane.ScrolledHint(5);   // 51 cells
+        Assert.Equal(new string(' ', 14) + hint, ScreenPane.ScrolledRow(5, 79));
+        Assert.Equal(new string(' ', 14) + hint, ScreenPane.ScrolledRow(5, 80));   // the odd blank at the right
+        Assert.Equal(hint, ScreenPane.ScrolledRow(5, 51));
+        Assert.Equal(ScreenPane.Fit(hint, 39), ScreenPane.ScrolledRow(5, 39));
+        Assert.Equal(new string(' ', 14) + ScreenPane.ScrolledHint(1), ScreenPane.ScrolledRow(1, 78));   // "1 row", a cell shorter
+    }
+
     /// <summary>Ctrl+Home's ScrollToTop (2026-09-18): the first window from wherever the view is; nothing at the top already, nothing on a transcript that fits; Ctrl+End the bottom again.</summary>
     [Fact]
     public void ScrollToTop_ShowsTheFirstRows_FromTheBottomOrMidway_AndIsNothingAtTheTop()
@@ -1942,8 +1962,8 @@ public class ScreenPaneTests : IDisposable
         pane.ScrollToTop();
         Assert.True(pane.Scrolled);
         Assert.Equal(0, pane.ScrollTop);
-        Assert.Equal(6, pane.RowsBelow);
-        Assert.EndsWith(Lines(1, 6) + PaneRows(ScrolledRow(6)), Strip(Output).TrimEnd());
+        Assert.Equal(7, pane.RowsBelow);
+        Assert.EndsWith(Lines(1, 5) + ScrolledPane(7), Strip(Output).TrimEnd());
 
         int mark = Output.Length;
         pane.ScrollToTop();
@@ -1952,7 +1972,7 @@ public class ScreenPaneTests : IDisposable
         pane.ScrollToEnd();
         Assert.False(pane.Scrolled);
         pane.ScrollBy(-2);
-        Assert.Equal(4, pane.ScrollTop);
+        Assert.Equal(5, pane.ScrollTop);   // the scrolled region is five rows: the last window's top is L08's
         pane.ScrollToTop();
         Assert.Equal(0, pane.ScrollTop);
 
@@ -1973,10 +1993,19 @@ public class ScreenPaneTests : IDisposable
         Assert.False(pane.Scrolled);
         Assert.Equal(mark, Output.Length);
 
-        // Exactly the region: nothing above the window either.
+        // Exactly the region: nothing above the window either — though the scrolled region, a row shorter, would not hold it (2026-10-01).
         using var full = Scrollable(lines: 6);
         full.ScrollPage(-1);
+        full.ScrollBy(-1);
+        full.ScrollWheel(1);
+        full.ScrollToTop();
         Assert.False(full.Scrolled);
+
+        // A row more: the top window is five rows, two below.
+        using var more = Scrollable(lines: 7);
+        more.ScrollPage(-1);
+        Assert.Equal(0, more.ScrollTop);
+        Assert.Equal(2, more.RowsBelow);
     }
 
     [Fact]
@@ -1987,9 +2016,9 @@ public class ScreenPaneTests : IDisposable
         Assert.Equal(13, pane.StoredRows);
 
         pane.ScrollBy(-2);
-        Assert.Equal(5, pane.ScrollTop);
+        Assert.Equal(6, pane.ScrollTop);
         Assert.Equal(2, pane.RowsBelow);
-        Assert.EndsWith(Lines(6, 11) + PaneRows(ScrolledRow(2)), Strip(Output).TrimEnd());
+        Assert.EndsWith(Lines(7, 11) + ScrolledPane(2), Strip(Output).TrimEnd());
 
         // Back: the open row comes back as the flow's row and column (five closed rows over it).
         pane.ScrollBy(2);
@@ -2010,11 +2039,11 @@ public class ScreenPaneTests : IDisposable
         pane.Write(new Markup("L13" + Environment.NewLine));
 
         Assert.Equal(13, pane.StoredRows);
-        Assert.Equal(1, pane.ScrollTop);      // the anchor stays: what is read does not move
-        Assert.Equal(6, pane.RowsBelow);
+        Assert.Equal(3, pane.ScrollTop);      // the anchor stays: what is read does not move
+        Assert.Equal(5, pane.RowsBelow);
         Assert.Equal(draws, Draws);
         Assert.DoesNotContain("L13", Output[mark..]);
-        Assert.EndsWith(ScrolledRow(6), Output.TrimEnd());
+        Assert.Equal(ScrolledRow(5), Output[mark..].Trim());   // the scroll's row alone, in place (2026-10-01: not the hint row)
 
         // Back at the bottom the new line is on the screen.
         pane.ScrollToEnd();
@@ -2032,16 +2061,16 @@ public class ScreenPaneTests : IDisposable
 
         pane.SetLive(new Markup("live1\nlive2"));
         _time.Advance(ScreenPane.Tick);
-        Assert.Equal(7, pane.RowsBelow);   // 5 stored rows below, the block's 2
+        Assert.Equal(6, pane.RowsBelow);   // 4 stored rows below, the block's 2
         Assert.DoesNotContain("live1", Output[mark..]);
-        Assert.EndsWith(ScrolledRow(7), Output.TrimEnd());
+        Assert.Equal(ScrolledRow(6), Output[mark..].Trim());   // the scroll's row alone: no spinner, so no hint row
         Assert.Equal(0, pane.LiveRows);
 
         // Committed while scrolled: stored, the count the same; the tick draws nothing more.
         int draws = Draws;
         pane.CommitLive();
         Assert.Equal(14, pane.StoredRows);
-        Assert.Equal(7, pane.RowsBelow);
+        Assert.Equal(6, pane.RowsBelow);
         Assert.Equal(draws, Draws);
         Assert.DoesNotContain("live1", Output[mark..]);
 
@@ -2057,11 +2086,11 @@ public class ScreenPaneTests : IDisposable
         pane.ScrollPage(-1);
         pane.SetLive(new Markup("live"));
         _time.Advance(ScreenPane.Tick);
-        Assert.Equal(6, pane.RowsBelow);
+        Assert.Equal(5, pane.RowsBelow);
 
         pane.DiscardLive();
-        Assert.Equal(5, pane.RowsBelow);
-        Assert.EndsWith(ScrolledRow(5), Output.TrimEnd());
+        Assert.Equal(4, pane.RowsBelow);
+        Assert.EndsWith(ScrolledRow(4), Output.TrimEnd());
     }
 
     [Fact]
@@ -2086,17 +2115,17 @@ public class ScreenPaneTests : IDisposable
         _console.EmitAnsiSequences();
         using var pane = Scrollable();
         pane.ScrollPage(-1);
-        Assert.Equal(1, pane.ScrollTop);
+        Assert.Equal(3, pane.ScrollTop);
 
-        // Taller: the region is 8 rows now, the anchor stays, the window L02..L09.
+        // Taller: the region is 7 rows now (the scroll's row in the pane), the anchor stays, the window L04..L10.
         _console.Profile.Height = 12;
         int mark = Output.Length;
         _time.Advance(ScreenPane.Tick);
         Assert.True(pane.Scrolled);
-        Assert.Equal(1, pane.ScrollTop);
-        Assert.Equal(3, pane.RowsBelow);
+        Assert.Equal(3, pane.ScrollTop);
+        Assert.Equal(2, pane.RowsBelow);
         Assert.Contains("\e[12A\e[40D\e[J", Output[mark..]);   // to the top whatever the old height, the screen erased
-        Assert.EndsWith(Lines(2, 9) + PaneRows(ScrolledRow(3)), Strip(Output[mark..]).TrimEnd());
+        Assert.EndsWith(Lines(4, 10) + ScrolledPane(2), Strip(Output[mark..]).TrimEnd());
 
         // Taller still: the anchor is past the last window — the bottom, the tail written back.
         _console.Profile.Height = 20;
@@ -2115,15 +2144,15 @@ public class ScreenPaneTests : IDisposable
         pane.ScrollBy(-100);
         Assert.Equal(0, pane.ScrollTop);
 
-        // Three overlay rows: the pane is 6 rows, the region 4 — L01..L04 over it.
+        // Three overlay rows: the pane is 7 rows with the scroll's, the region 3 — L01..L03 over it.
         pane.ShowOverlay(new Markup("a\nb\nc"), "menu");
         Assert.Equal(0, pane.ScrollTop);
-        Assert.Equal(8, pane.RowsBelow);
-        Assert.EndsWith(Lines(1, 4) + Rule(40) + "\na\nb\nc\n" + Rule(40) + "\nmenu", Strip(Output).TrimEnd());
+        Assert.Equal(9, pane.RowsBelow);
+        Assert.EndsWith(Lines(1, 3) + ScrolledRow(9) + "\n" + Rule(40) + "\na\nb\nc\n" + Rule(40) + "\nmenu", Strip(Output).TrimEnd());
 
         pane.CloseOverlay();
-        Assert.Equal(6, pane.RowsBelow);
-        Assert.EndsWith(Lines(1, 6) + PaneRows(ScrolledRow(6)), Strip(Output).TrimEnd());
+        Assert.Equal(7, pane.RowsBelow);
+        Assert.EndsWith(Lines(1, 5) + ScrolledPane(7), Strip(Output).TrimEnd());
     }
 
     [Fact]
@@ -2140,7 +2169,7 @@ public class ScreenPaneTests : IDisposable
         }
 
         Assert.Equal(draws + 1, Draws);
-        Assert.EndsWith(Lines(2, 7) + PaneRows(ScrolledRow(5)), Strip(Output).TrimEnd());
+        Assert.EndsWith(Lines(4, 8) + ScrolledPane(4), Strip(Output).TrimEnd());
     }
 
     [Fact]
@@ -2156,16 +2185,32 @@ public class ScreenPaneTests : IDisposable
         Assert.Equal(6, pane.Padding);
     }
 
+    /// <summary>Under a spinner the count keeps its own row over the upper rule (2026-10-01; it rode the busy row until then), the busy row its label and nothing after it.</summary>
     [Fact]
-    public void WhileScrolled_UnderASpinner_TheCountRidesTheBusyRow()
+    public void WhileScrolled_UnderASpinner_TheCountKeepsItsOwnRow()
     {
         _console.Profile.Width = 80;   // room for the whole row
         using var pane = Scrollable();
         using var busy = pane.BeginBusy("thinking");
+        int mark = Output.Length;
         pane.ScrollPage(-1);
 
-        Assert.EndsWith(ScreenPane.HintSeparator + ScreenPane.ScrolledHint(5), Output.TrimEnd());
-        Assert.Contains("thinking 00:00", Output);
+        string frame = Strip(Output[mark..]);
+        Assert.Contains(ScreenPane.ScrolledRow(4, 79) + "\n" + Rule(80), frame);
+        Assert.EndsWith("thinking 00:00", frame.TrimEnd());
+    }
+
+    /// <summary>Scrolled, the hint row stays the screen's own (2026-10-01, the user's ask): its hint, where the scroll's took the whole row until then.</summary>
+    [Fact]
+    public void WhileScrolled_TheHintRow_KeepsTheScreensHint()
+    {
+        using var pane = Scrollable();
+        pane.Hint = () => "idle";
+        int mark = Output.Length;
+        pane.ScrollPage(-1);
+
+        Assert.EndsWith(Lines(4, 8) + ScrolledRow(4) + "\n" + PaneRows("idle"), Strip(Output[mark..]).TrimEnd());
+        Assert.DoesNotContain("rows below", Strip(Output[mark..])[Strip(Output[mark..]).LastIndexOf(ScreenPane.RuleGlyph)..]);
     }
 
     // ── Modal ───────────────────────────────────────────────────────────────
@@ -2900,7 +2945,7 @@ public class ScreenPaneTests : IDisposable
         Assert.Equal(ScreenPane.HintZone.Row, hit.Zone);
     }
 
-    /// <summary>The usage zone (2026-09-21): the cells the tally takes on the drawn standing row, behind the trailer and the queued part; nowhere when the hint does not carry it (the timers in its place), when it is cut, or under the busy row's scroll.</summary>
+    /// <summary>The usage zone (2026-09-21): the cells the tally takes on the drawn standing row, behind the trailer and the queued part; nowhere when the hint does not carry it (the timers in its place) or when it is cut.</summary>
     [Fact]
     public void HintHitAt_TheUsageZone_IsTheTallysCells()
     {
@@ -2911,7 +2956,6 @@ public class ScreenPaneTests : IDisposable
         Assert.Equal(new ScreenPane.HintHit(ScreenPane.HintZone.Strip, "🔊", 0), ScreenPane.HintHitAt("🔊", 30, -1, 0, 5, 11, 1));
         Assert.Equal(new ScreenPane.HintHit(ScreenPane.HintZone.Trailer, "", 30), ScreenPane.HintHitAt("🔊", 30, -1, 0, 5, 11, 30));
         Assert.Equal(new ScreenPane.HintHit(ScreenPane.HintZone.Queued, "", 3), ScreenPane.HintHitAt("🔊", 30, 3, 8, 5, 11, 6));   // the queued part first
-        Assert.Equal(new ScreenPane.HintHit(ScreenPane.HintZone.Scrolled, "", -1), ScreenPane.HintHitAt("🔊", 30, -1, 0, -1, 0, 6, scrolled: true));
         Assert.Equal(ScreenPane.HintHitAt("🔊", 30, 5, 11, 15), ScreenPane.HintHitAt("🔊", 30, 5, 11, -1, 0, 15));
     }
 
@@ -3103,17 +3147,10 @@ public class ScreenPaneTests : IDisposable
     }
 
     [Fact]
-    public void HintHitAt_WhileScrolled_TheRowIsTheScrolledZone_TheStripAndTrailerKept()
+    public void HintZone_Scrolled_KeepsItsNumber()
     {
-        // Later on 2026-09-18: the scroll's hint under the click is Scrolled wherever the row would be; a glyph and the trailer answer as before.
-        Assert.Equal(new ScreenPane.HintHit(ScreenPane.HintZone.Scrolled, "", -1), ScreenPane.HintHitAt("🔊 🎤", 30, -1, 0, 8, scrolled: true));
-        Assert.Equal(new ScreenPane.HintHit(ScreenPane.HintZone.Scrolled, "", -1), ScreenPane.HintHitAt("🔊 🎤", 30, -1, 0, 2, scrolled: true));
-        Assert.Equal(new ScreenPane.HintHit(ScreenPane.HintZone.Scrolled, "", -1), ScreenPane.HintHitAt("", -1, -1, 0, 0, scrolled: true));
-        Assert.Equal(new ScreenPane.HintHit(ScreenPane.HintZone.Strip, "🎤", 3), ScreenPane.HintHitAt("🔊 🎤", 30, -1, 0, 4, scrolled: true));
-        Assert.Equal(new ScreenPane.HintHit(ScreenPane.HintZone.Trailer, "", 30), ScreenPane.HintHitAt("🔊 🎤", 30, -1, 0, 35, scrolled: true));
-        Assert.Equal(new ScreenPane.HintHit(ScreenPane.HintZone.Row, "", -1), ScreenPane.HintHitAt("🔊 🎤", 30, -1, 0, 8, scrolled: false));
-        Assert.Equal(new ScreenPane.HintHit(ScreenPane.HintZone.Row, "", -1), ScreenPane.HintHitAt("🔊 🎤", 30, -1, 0, 8));
-        // The zone's number sits under every strip key (InputLine.HintPairKey: 8 + column).
+        // The zone's number sits under every strip key (InputLine.HintPairKey: 8 + column). Since 2026-10-01 the zone is
+        // the scroll's own row over the upper rule, never the hint row's (the scrolled flag of HintHitAt went with it).
         Assert.Equal(4, (int)ScreenPane.HintZone.Scrolled);
     }
 
@@ -3128,39 +3165,48 @@ public class ScreenPaneTests : IDisposable
         pane.ShowInput("abc", 3);
         Assert.True(pane.TryHitHint(8, 102, out var hit));
         Assert.Equal(ScreenPane.HintZone.Row, hit.Zone);
+        Assert.False(pane.TryHitHint(8, 98, out _));   // the transcript's last row at the bottom
 
+        // Scrolled (2026-10-01): the scroll's row, over the upper rule (99), is Scrolled at any column; the hint row keeps
+        // its zones — the row, the glyph, the model name — and the region's rows above are no hint.
         pane.ScrollPage(-1);
         Assert.True(pane.Scrolled);
-        Assert.True(pane.TryHitHint(8, 102, out hit));
+        Assert.True(pane.TryHitHint(8, 98, out hit));
         Assert.Equal(new ScreenPane.HintHit(ScreenPane.HintZone.Scrolled, "", -1), hit);
-        Assert.True(pane.TryHitHint(0, 102, out hit));   // the glyph keeps its zone
+        Assert.True(pane.TryHitHint(0, 98, out hit));
+        Assert.Equal(ScreenPane.HintZone.Scrolled, hit.Zone);
+        Assert.False(pane.TryHitHint(8, 97, out _));
+        Assert.False(pane.TryHitHint(8, 99, out _));
+        Assert.True(pane.TryHitHint(8, 102, out hit));
+        Assert.Equal(ScreenPane.HintZone.Row, hit.Zone);
+        Assert.True(pane.TryHitHint(0, 102, out hit));
         Assert.Equal(new ScreenPane.HintHit(ScreenPane.HintZone.Strip, "🔊", 0), hit);
-        Assert.True(pane.TryHitHint(38, 102, out hit));  // the model name too
+        Assert.True(pane.TryHitHint(38, 102, out hit));
         Assert.Equal(ScreenPane.HintZone.Trailer, hit.Zone);
 
-        // The busy row carries the scroll's hint as well; its trailer is nobody's, so the rest of the row is Scrolled —
-        // the spinner and its label included (their Usage zone, 2026-09-21, is the bottom's alone) — while the strip's
-        // glyph keeps its zone, as on the standing row (2026-09-24).
+        // Under the busy row the same: the spinner and its label are Usage while scrolled too, the scroll's row Scrolled.
         using (pane.BeginBusy("thinking"))
         {
             Assert.True(pane.TryHitHint(0, 102, out hit));
             Assert.Equal(new ScreenPane.HintHit(ScreenPane.HintZone.Strip, "🔊", 0), hit);
             Assert.True(pane.TryHitHint(8, 102, out hit));
-            Assert.Equal(ScreenPane.HintZone.Scrolled, hit.Zone);
-            Assert.True(pane.TryHitHint(38, 102, out hit));
-            Assert.Equal(ScreenPane.HintZone.Scrolled, hit.Zone);
-            pane.ScrollToEnd();
-            Assert.True(pane.TryHitHint(8, 102, out hit));
             Assert.Equal(ScreenPane.HintZone.Usage, hit.Zone);
             Assert.True(pane.TryHitHint(30, 102, out hit));
             Assert.Equal(ScreenPane.HintZone.Row, hit.Zone);
+            Assert.True(pane.TryHitHint(8, 98, out hit));
+            Assert.Equal(ScreenPane.HintZone.Scrolled, hit.Zone);
+            pane.ScrollToEnd();
+            Assert.False(pane.TryHitHint(8, 98, out _));
+            Assert.True(pane.TryHitHint(8, 102, out hit));
+            Assert.Equal(ScreenPane.HintZone.Usage, hit.Zone);
         }
 
         pane.ScrollPage(-1);
-        Assert.True(pane.TryHitHint(8, 102, out hit));
+        Assert.True(pane.TryHitHint(8, 98, out hit));
         Assert.Equal(ScreenPane.HintZone.Scrolled, hit.Zone);
         pane.ScrollToEnd();
         Assert.False(pane.Scrolled);
+        Assert.False(pane.TryHitHint(8, 98, out _));
         Assert.True(pane.TryHitHint(8, 102, out hit));
         Assert.Equal(ScreenPane.HintZone.Row, hit.Zone);
     }
@@ -4671,7 +4717,7 @@ public class ScreenPaneTests : IDisposable
         Assert.False(pane.TryHitToolbar(0, 103, out _));
     }
 
-    /// <summary>Scrolled, the toolbar stays the screen's last row and the region is a row shorter.</summary>
+    /// <summary>Scrolled, the toolbar stays the screen's last row and the region is a row shorter — two with the scroll's row (2026-10-01).</summary>
     [Fact]
     public void Toolbar_StaysUnderTheScrolledWindow()
     {
@@ -4684,11 +4730,11 @@ public class ScreenPaneTests : IDisposable
             pane.Write(new Markup(Line(i) + Environment.NewLine));
         }
 
-        // The region is five rows (10 − the five-row pane): a page is four.
+        // The region is four rows (10 − the six-row pane, the scroll's row in it): a page is three.
         pane.ScrollPage(-1);
         Assert.True(pane.Scrolled);
-        Assert.Equal(3, pane.ScrollTop);
-        Assert.EndsWith(Lines(4, 8) + Rule(40) + "\n" + InputLine.PromptGlyph + "\n" + Rule(40) + "\n" + ScreenPane.Fit(ScreenPane.ScrolledHint(4), 39) + "\n🔧" + new string(' ', 33) + @"D:\x", Strip(Output).TrimEnd());
+        Assert.Equal(5, pane.ScrollTop);
+        Assert.EndsWith(Lines(6, 9) + ScrolledRow(3) + "\n" + Rule(40) + "\n" + InputLine.PromptGlyph + "\n" + Rule(40) + "\n\n🔧" + new string(' ', 33) + @"D:\x", Strip(Output).TrimEnd());
 
         pane.ScrollToEnd();
         Assert.False(pane.Scrolled);

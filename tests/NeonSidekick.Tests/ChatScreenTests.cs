@@ -173,8 +173,16 @@ public partial class ChatScreenTests : IDisposable
     /// <summary>Everything the screen has written, snapshotted under the writer's lock: safe to poll while a turn runs.</summary>
     private string Output => _output.Snapshot();
 
-    /// <summary>Whether the pane drawn last (after the last rule glyph) still shows the scrolled hint; one snapshot, so the index cannot outrun the text.</summary>
-    private static bool ScrolledAfterLastRule(string output) => output[output.LastIndexOf(ScreenPane.RuleGlyph)..].Contains("rows below", StringComparison.Ordinal);
+    /// <summary>
+    /// Whether the pane drawn last still shows the scroll's row. Since 2026-10-01 it sits over the upper rule, so the frame
+    /// that drew it has its two rule rows after it (none after a redraw in place), and a draw at the bottom since adds the
+    /// old frame's and its own; one snapshot, so the index cannot outrun the text.
+    /// </summary>
+    private static bool ScrolledInLastPane(string output)
+    {
+        int at = output.LastIndexOf("rows below", StringComparison.Ordinal);
+        return at >= 0 && output[at..].Split('\n').Count(row => row.Contains(ScreenPane.RuleGlyph, StringComparison.Ordinal)) < 4;
+    }
 
     private string ModelsDir => Path.Combine(_dir, "models");
 
@@ -5595,10 +5603,12 @@ public partial class ChatScreenTests : IDisposable
             if (i == 1)
             {
                 Scripted().Push(Keys.PageUp);
-                await WaitUntilAsync(() => Output.Contains(ScreenPane.ScrolledHint(5), StringComparison.Ordinal));
+                // The waits run out silently, so the top's count is read back below: 13, every stored row under the five-row region
+                // the scroll's row leaves (2026-10-01; the 8 pinned until then was never drawn, its wait simply ran out).
+                await WaitUntilAsync(() => Output.Contains(ScreenPane.ScrolledHint(4), StringComparison.Ordinal));
                 Scripted().Push(Keys.Ctrl(ConsoleKey.Home));
-                await WaitUntilAsync(() => Output.Contains(ScreenPane.ScrolledHint(8), StringComparison.Ordinal));
-                topped = true;
+                await WaitUntilAsync(() => Output.Contains(ScreenPane.ScrolledHint(13), StringComparison.Ordinal));
+                topped = Output.Contains(ScreenPane.ScrolledHint(13), StringComparison.Ordinal);
             }
         };
         LinesWhenIdle("hi", "/exit");
@@ -5629,7 +5639,7 @@ public partial class ChatScreenTests : IDisposable
                 Scripted().Push(Keys.PageUp);
                 await WaitUntilAsync(() => Output.Contains("rows below", StringComparison.Ordinal));
                 Scripted().Push(Keys.Ctrl(ConsoleKey.End));
-                await WaitUntilAsync(() => !ScrolledAfterLastRule(Output));
+                await WaitUntilAsync(() => !ScrolledInLastPane(Output));
                 ended = true;
             }
         };
@@ -5638,7 +5648,7 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         Assert.True(ended);
-        Assert.Contains(ScreenPane.ScrolledHint(5), output);
+        Assert.Contains(ScreenPane.ScrolledHint(4), output);
         Assert.Contains("after", output);
         Assert.Single(_chat.Requests);
         Assert.Equal("hi", UserText(_chat.Requests[0]));
@@ -5647,7 +5657,8 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public async Task WithGeometry_ADoubleClickOnTheScrolledHintDuringAReply_IsTheBottomAgain()
     {
-        // Later on 2026-09-18: the busy row's scroll hint under a pair is Ctrl+End through the watcher's click hook.
+        // Later on 2026-09-18: the scroll's hint under a pair is Ctrl+End through the watcher's click hook — on its own row
+        // over the upper rule since 2026-10-01 (98: the cursor's row 100 under the rule's 99), the busy row the turn's.
         _settings.Update(d => { d.TtsOutput = false; d.TranscriptMarkdown = false; });
         _console.Profile.Height = 10;
         _geometry = new ScreenGeometry(() => null, () => 100);
@@ -5660,9 +5671,9 @@ public partial class ChatScreenTests : IDisposable
             {
                 Scripted().Push(Keys.PageUp);
                 await WaitUntilAsync(() => Output.Contains("rows below", StringComparison.Ordinal));
-                Scripted().PushClick(20, 102);
-                Scripted().PushClick(20, 102);
-                await WaitUntilAsync(() => !ScrolledAfterLastRule(Output));
+                Scripted().PushClick(20, 98);
+                Scripted().PushClick(20, 98);
+                await WaitUntilAsync(() => !ScrolledInLastPane(Output));
                 ended = true;
             }
         };
@@ -5671,7 +5682,7 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         Assert.True(ended);
-        Assert.Contains(ScreenPane.ScrolledHint(5), output);
+        Assert.Contains(ScreenPane.ScrolledHint(4), output);
         Assert.Contains("after", output);
         Assert.Single(_chat.Requests);
     }
@@ -9807,7 +9818,7 @@ public partial class ChatScreenTests : IDisposable
     {
         _settings.Update(d => { d.TtsOutput = false; d.TranscriptMarkdown = false; });
         _console.Profile.Height = 10;
-        _geometry = new ScreenGeometry(() => null, () => 100);   // the hint row at 102
+        _geometry = new ScreenGeometry(() => null, () => 100);   // the scroll's row at 98, over the upper rule (2026-10-01; the hint row's 102 until then)
         string rows = string.Concat(Enumerable.Range(1, 12).Select(i => "row" + i + "\n"));
         _chat.EnqueueText(rows);
         _chat.EnqueueText("ok");
@@ -9816,8 +9827,8 @@ public partial class ChatScreenTests : IDisposable
             input =>
             {
                 input.Push(Keys.PageUp);
-                input.PushClick(20, 102);
-                input.PushClick(20, 102);
+                input.PushClick(20, 98);
+                input.PushClick(20, 98);
                 input.Push(Keys.Char('!'));
                 input.Push(Keys.Enter);
             },
