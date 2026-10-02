@@ -1057,9 +1057,9 @@ The viewer and the ComfyUI picture strip follow each other:
 
 #### Custom themes
 
-Your own themes are JSON files in the `themes` folder of the home (`%USERPROFILE%\.neonsidekick\themes`, or under `NEONSIDEKICK_HOME`), shared by every profile. They appear after the built-ins in `/theme`, its argument list and the *Theme* setting, sorted by name. The folder is read each time one of those opens, so a new or edited file shows up without a restart; pick the theme again to see an edit.
+Your own themes are JSON files in the `themes` folder of the home (`%USERPROFILE%\.neonsidekick\themes`, or under `NEONSIDEKICK_HOME`), shared by every profile. They appear after the built-ins in `/theme`, its argument list and the *Theme* setting, sorted by name. A file named like a built-in theme replaces that built-in: it takes the built-in's place in the list, and any theme whose `base` is that name (including the default base, synthwave) builds on your file. The folder is read each time one of those opens, so a new or edited file shows up without a restart; pick the theme again to see an edit.
 
-Fifty ready-made themes come with the repo in [`assets/themes`](assets/themes), one folder per category. To use one, copy its file into the `themes` folder itself (subfolders aren't read) and pick it with `/theme`. To compare them all side by side, open [`Theme Atlas.html`](assets/themes/Theme%20Atlas.html) in a browser. It previews these fifty and the ten built-ins. The `built-in` folder holds the built-ins as files to start from; rename one (the file and its `"name"`) before copying it in, since a file named like a built-in is skipped.
+Fifty ready-made themes come with the repo in [`assets/themes`](assets/themes), one folder per category. To use one, copy its file into the `themes` folder itself (subfolders aren't read) and pick it with `/theme`. To compare them all side by side, open [`Theme Atlas.html`](assets/themes/Theme%20Atlas.html) in a browser. It previews these fifty and the ten built-ins. The `built-in` folder holds the built-ins as files. Copy one in as it is, or edited, to replace that built-in, or rename it (the file and its `"name"`) to keep it as a theme of its own.
 
 | Folder | Themes |
 |--------|--------|
@@ -1071,13 +1071,13 @@ Fifty ready-made themes come with the repo in [`assets/themes`](assets/themes), 
 | `nights` | kowloon, lighthouse, miami, sakura, witchhour |
 | `solid` | blueprint, carbon, chalkboard, espresso, fieldradio, glacier, matcha, signal, ultraviolet, velvet (one-colour banner and rule, no gradient) |
 
-The easiest start is `/theme export <name> [new-name]`. It writes any theme to `themes\<new-name>.json` with every colour filled in. The new name defaults to `<name>-custom`, and an existing file is never overwritten.
+The easiest start is `/theme export <name> [new-name]`. It writes any theme to `themes\<new-name>.json` with every colour filled in. The new name defaults to `<name>-custom`, and an existing file is never overwritten. Give a built-in's own name (`/theme export noir noir`) to start a file that replaces it.
 
 ```jsonc
 {
   "name": "dracula",                 // optional: the file name when left out
   "description": "vampire purple",   // optional: the note beside the name ("custom theme" when left out)
-  "base": "synthwave",               // optional: a built-in or another of your themes (synthwave when left out)
+  "base": "synthwave",               // optional: a built-in or another of your themes (synthwave when left out, or the built-in a file replaces)
   "colors": { "primary": "#FF79C6", "secondary": "#8BE9FD", "ink": "#F8F8F2", "bg": "#282A36", "panelBg": "#44475A" },
   "gradient": ["#8BE9FD", "#BD93F9", "#FF79C6", "#FFB86C", "#F1FA8C"],
   "styles": {
@@ -1088,8 +1088,8 @@ The easiest start is `/theme export <name> [new-name]`. It writes any theme to `
 }
 ```
 
-* **A file only says what it changes.** Anything left out comes from `base`: colours, gradient and style changes. A base that is itself a file can build on another, as long as the chain doesn't loop.
-* **Names** are 1 to 32 lower-case letters, digits, `-` or `_`, starting with a letter or digit, and not `export`. A file named like a built-in theme, or like a theme an earlier file (by file name) already took, is skipped.
+* **A file only says what it changes.** Anything left out comes from `base`: colours, gradient and style changes. A base that is itself a file can build on another, as long as the chain doesn't loop. A file that replaces a built-in builds on the original built-in when its `base` is left out or names itself, so `noir.json` with only a `primary` is noir with that primary.
+* **Names** are 1 to 32 lower-case letters, digits, `-` or `_`, starting with a letter or digit, and not `export`. A file named like a built-in replaces it. A file named like a theme an earlier file (by file name) already took is skipped.
 * **Colours** are `#RRGGBB` or `#RGB`. Comments and trailing commas are allowed.
 * **Derived colours.** On synthwave and most built-ins, `warn` is the highlight and the gradient runs secondary → tertiary → primary → warm → highlight. If the base works that way and your file sets neither, they are worked out again from your colours, so the banner wears your accents. A base that sets its own (netrunner's gradient, noir's warn) passes it on unchanged.
 * **Problems.** A file that can't be read, isn't valid JSON, has a bad name or a missing or looping base is skipped. A misspelled key or a bad colour is ignored, and the rest of the theme still loads. Each problem shows as a warning naming the file when `/theme` or the *Theme* setting opens.

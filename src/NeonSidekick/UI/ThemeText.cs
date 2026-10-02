@@ -27,7 +27,6 @@ public static class ThemeText
     public static string Unreadable(string message) => $"skipped: cannot read it ({message})";
     public static string NotJson(string message) => $"skipped: not a theme file ({message})";
     public static string BadName(string name) => $"skipped: \"{name}\" is not a theme name (lower-case letters, digits, - and _, up to 32, and not \"{ExportWord}\")";
-    public static string BuiltInClash(string name) => $"skipped: \"{name}\" is a built-in theme; give the file another name";
     public static string Duplicate(string name, string otherFile) => $"skipped: {Path.GetFileName(otherFile)} already names a theme \"{name}\"";
     public static string NoBase(string baseName) => $"skipped: its base \"{baseName}\" is no theme";
     public static string BaseCycle(string baseName) => $"skipped: its base \"{baseName}\" leads back to itself";
@@ -39,6 +38,7 @@ public static class ThemeText
         string.Create(CultureInfo.InvariantCulture, $"the gradient has {count} stops; it takes 2 to {ThemeFile.MaxGradientStops}, ignored");
 
     public static string ExportDone(string name, string path) => $"Theme {name} written to {path}. Edit it, then /theme {name}.";
+    public static string ExportOverrides(string name, string path) => $"Theme {name} written to {path}; it now replaces the built-in {name}. Edit it, then /theme {name}.";
     public static string ExportExists(string path) => $"{path} already exists; give a new name: /theme export <name> <new-name>.";
     public static string ExportNameTaken(string name) => $"A theme named \"{name}\" already exists; give another new name.";
     public static string ExportBadName(string name) => $"\"{name}\" is not a theme name: lower-case letters, digits, - and _, up to 32.";

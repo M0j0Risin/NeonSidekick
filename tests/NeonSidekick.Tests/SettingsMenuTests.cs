@@ -1240,7 +1240,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("cmd        [#9A8BB8]cmd.exe: batch syntax[/]", SettingsMenu.ShellLabel("cmd", installed: true));
         Assert.Equal("Shell allowed commands: git push removed", SettingsMenu.PrefixRemovedNotice("git push"));
         // The git rows (2026-09-20): the Git tab (Git (native), the last, since later on 2026-09-21) — the switch, then the two caps alphabetically; typed, none a reconnect.
-        Assert.Equal(new[] { SettingsField.GitLibTools, SettingsField.GitLibDiffMaxLines, SettingsField.GitLibLogMaxCommits, SettingsField.GitLibEmail, SettingsField.GitLibName }, SettingsMenu.ToolsTabFields[13]);
+        Assert.Equal(new[] { SettingsField.GitLibTools, SettingsField.GitLibDiffMaxLines, SettingsField.GitLibLogMaxCommits, SettingsField.GitLibEmail, SettingsField.GitLibName }, SettingsMenu.ToolsTabFields[12]);
         // The identity pair (2026-09-21): typed, empty allowed and shown as (not set), no validation.
         Assert.Equal("GitLib email", SettingsMenu.FieldName(SettingsField.GitLibEmail));   // the GitLib labels, later on 2026-09-21
         Assert.Equal("GitLib name", SettingsMenu.FieldName(SettingsField.GitLibName));
@@ -1274,7 +1274,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("searxng", SettingsMenu.FieldValue(SettingsField.WebSearchMethod, new AppSettingsData { WebSearchMethod = "searxng" }, _settings.ProfileDirectory));
         Assert.Equal("duckduckgo [#9A8BB8]the built-in DuckDuckGo scrape, no setup[/]", SettingsMenu.SearchMethodLabel("duckduckgo"));
         Assert.Equal("searxng    [#9A8BB8]the instance named in Web SearXNG URL; DuckDuckGo until one is set[/]", SettingsMenu.SearchMethodLabel("searxng"));
-        foreach (var f in SettingsMenu.ToolsTabFields[13])
+        foreach (var f in SettingsMenu.ToolsTabFields[12])
         {
             Assert.False(SettingsMenu.IsLlmField(f) || SettingsMenu.IsTtsField(f) || SettingsMenu.IsVoiceField(f));
         }
@@ -1546,7 +1546,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(32, SettingsMenu.LabelWidthOf(SettingsMenu.ToolsTabFields[1]));   // "File view image max (per call)" (the File-prefixed labels, later still on 2026-09-19; "Stale line number guard", 25, that morning; "Always return line numbers", 28, from 2026-09-17 until it went; "Tree max length", 17, before)
         Assert.Equal(29, SettingsMenu.LabelWidthOf(SettingsMenu.ToolsTabFields[2]));   // "Shell tool bridge max calls" (the Shell tab, 2026-09-21; the row was "Shell code max tool calls", 27, until later that day)
         Assert.Equal(30, SettingsMenu.LabelWidthOf(SettingsMenu.ToolsTabFields[3]));   // "Ask max choices per question"
-        Assert.Equal(24, SettingsMenu.LabelWidthOf(SettingsMenu.ToolsTabFields[13]));   // "GitLib log max commits" (2026-09-30; "Git native log max commits", 28, from later on 2026-09-21; "Git log max commits", 21, from 2026-09-20)
+        Assert.Equal(24, SettingsMenu.LabelWidthOf(SettingsMenu.ToolsTabFields[12]));   // "GitLib log max commits" (2026-09-30; "Git native log max commits", 28, from later on 2026-09-21; "Git log max commits", 21, from 2026-09-20)
         Assert.Equal(38, SettingsMenu.LabelWidthOf(SettingsMenu.SkillsTabFields[0]));   // "Use external skills (.agents\\skills)"
         Assert.Equal(34, SettingsMenu.LabelWidthOf(SettingsMenu.SkillsTabFields[1]));   // "Reflection edit supporting files" (2026-09-27; "Reflection cooldown (minutes)", 31, from later on 2026-09-19)
         Assert.Equal("TTS speed          [#EFE6FF]1.2[/]", SettingsMenu.FieldLabel(SettingsField.TtsSpeed, data, _settings.ProfileDirectory, null, SettingsMenu.TabLabelWidth(SettingsTab.Tts)));   // 1.0 until 2026-09-18

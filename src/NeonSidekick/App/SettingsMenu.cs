@@ -1082,7 +1082,8 @@ internal sealed partial class SettingsMenu
 
     /// <summary>
     /// The rows of <c>/tools</c>' four settings tabs (2026-09-19, the Ask, Files and Web rows moved off <c>/settings</c> the user's call), indexed by
-    /// <see cref="ToolsText.TabTitles"/> one down (Web, Files, Shell, Ask, Claude, Obsidian, ComfyUI, SQL, Git (native), Options — the user's order since 2026-09-27; Web, Files, Shell, Ask, Git (native), Obsidian, SQL, ComfyUI, Claude, Options before; alphabetical before 2026-09-21): Options (later on 2026-09-19) is the <c>$</c>-mention switch, and under it the tool-run fold (<c>Tool collapse count</c>, 2026-09-22, the user's place);
+    /// <see cref="ToolsText.TabTitles"/> one down (the Home Assistant list second to last, before Options, since later on 2026-10-01, the user's ask; after Claude's before)
+    /// (Web, Files, Shell, Ask, Claude, Obsidian, ComfyUI, SQL, Git (native), Options — the user's order since 2026-09-27; Web, Files, Shell, Ask, Git (native), Obsidian, SQL, ComfyUI, Claude, Options before; alphabetical before 2026-09-21): Options (later on 2026-09-19) is the <c>$</c>-mention switch, and under it the tool-run fold (<c>Tool collapse count</c>, 2026-09-22, the user's place);
     /// Ask (2026-09-15) is the question tool's switch and its two caps;
     /// Files (2026-09-15) is the file-tools switch (the Safe edits switch under it from 2026-09-17 until 2026-10-01, when File safe edits
     /// went, the user's call), the two <c>/tree</c> rows (once General's last two), the @-mention folder mode
@@ -1106,7 +1107,6 @@ internal sealed partial class SettingsMenu
         [SettingsField.ShellCommandPolicy, SettingsField.ShellCommandAllowed, SettingsField.ShellPoliceOutsidePaths, SettingsField.ShellPreferNative, SettingsField.ShellDefault, SettingsField.ShellTimeoutSeconds, SettingsField.ShellForegroundCapSeconds, SettingsField.ShellOutputMaxChars, SettingsField.ShellCodeLanguages, SettingsField.ShellCodeTimeoutSeconds, SettingsField.ShellToolBridge, SettingsField.ShellCodeMaxToolCalls],
         [SettingsField.AskUser, SettingsField.AskMaxQuestions, SettingsField.AskMaxChoices],
         [SettingsField.ClaudeExecutable, SettingsField.ClaudePermissions, SettingsField.ClaudeModel, SettingsField.ClaudeEffort, SettingsField.ClaudeAdvisor, SettingsField.ClaudeAdvisorContext, SettingsField.ClaudeAdvisorCallsPerTurn, SettingsField.ClaudeAdvisorModel, SettingsField.ClaudeAdvisorEffort, SettingsField.ClaudeAdvisorConfirm, SettingsField.ClaudeApi, SettingsField.ClaudeApiKey, SettingsField.ClaudeApiMaxTokens, SettingsField.ClaudeApiPromptCaching, SettingsField.ClaudeCliServer],
-        [SettingsField.HomeAssistantTools, SettingsField.HomeAssistantUrl, SettingsField.HomeAssistantToken, SettingsField.HomeAssistantTest, SettingsField.HomeAssistantActionPolicy, SettingsField.HomeAssistantAssistAgent, SettingsField.HomeAssistantTimeoutSeconds],
         [SettingsField.PrintTools, SettingsField.PrintActionPolicy, SettingsField.PrintDefaultPrinter, SettingsField.PrintFontSize],
         [SettingsField.ObsidianTools, SettingsField.ObsidianVault, SettingsField.ObsidianAllowDelete],
         [SettingsField.ComfyTools, SettingsField.ComfyUrl, SettingsField.ComfyWorkflowsOffered, SettingsField.ComfyAddWorkflow, SettingsField.ComfyCaretMention, SettingsField.ComfyTimeoutSeconds, SettingsField.ComfyMaxPicturesPerCall, SettingsField.ComfyReinforceNegatives, SettingsField.ComfyShowPrompts, SettingsField.ComfyPictureStrip, SettingsField.ComfyOutputFolder],
@@ -1115,6 +1115,7 @@ internal sealed partial class SettingsMenu
         [SettingsField.MySqlTools, SettingsField.MySqlConnectionsOffered, SettingsField.MySqlDefaultConnection, SettingsField.MySqlSetPassword, SettingsField.MySqlAddConnection, SettingsField.MySqlPercentMention, SettingsField.MySqlQueryMaxRows, SettingsField.MySqlQueryTimeoutSeconds, SettingsField.MySqlConnectionsProfile, SettingsField.MySqlConnectionsGlobal],
         [SettingsField.UncTools, SettingsField.UncWrites, SettingsField.UncSharesOffered, SettingsField.UncDefaultShare, SettingsField.UncSetPassword, SettingsField.UncAddShare, SettingsField.UncStarMention, SettingsField.UncSharesProfile, SettingsField.UncSharesGlobal],
         [SettingsField.GitLibTools, SettingsField.GitLibDiffMaxLines, SettingsField.GitLibLogMaxCommits, SettingsField.GitLibEmail, SettingsField.GitLibName],
+        [SettingsField.HomeAssistantTools, SettingsField.HomeAssistantUrl, SettingsField.HomeAssistantToken, SettingsField.HomeAssistantTest, SettingsField.HomeAssistantActionPolicy, SettingsField.HomeAssistantAssistAgent, SettingsField.HomeAssistantTimeoutSeconds],
         [SettingsField.ToolsDollarMention, SettingsField.ToolCollapseCount, SettingsField.CodeCollapseCount],
     ];
 
@@ -6309,8 +6310,9 @@ internal sealed partial class SettingsMenu
     /// <c>/theme export &lt;name&gt; [new-name]</c> (2026-10-01, the user's ask): writes the theme as a full file —
     /// every colour role, the gradient, its style changes (<see cref="ThemeFile.Export"/>) — to
     /// <c>&lt;home&gt;/themes/&lt;new-name&gt;.json</c>, a starting point to edit. The new name defaults to
-    /// <c>&lt;name&gt;-custom</c>: the theme's own would clash with it and be skipped. Never overwrites a file and
-    /// never takes a name a theme already has. Nothing is put in force.
+    /// <c>&lt;name&gt;-custom</c>, so an export never replaces the theme it copies; a built-in's name makes the file its
+    /// override (later on 2026-10-01, the user's call: <see cref="ThemeCatalog"/>'s file wins, and the export says so).
+    /// Never overwrites a file and never takes a name a user theme already has, an override's included. Nothing is put in force.
     /// </summary>
     private void ExportTheme(string args)
     {
@@ -6335,7 +6337,8 @@ internal sealed partial class SettingsMenu
             return;
         }
 
-        if (ThemeName.TryParse(newName, scan.Themes, out _))
+        bool named = ThemeName.TryParse(newName, scan.Themes, out var taken);
+        if (named && !taken.IsBuiltIn)
         {
             Flow.Error(ThemeText.ExportNameTaken(newName));
             return;
@@ -6360,7 +6363,9 @@ internal sealed partial class SettingsMenu
             return;
         }
 
-        Sink.Notice(ThemeText.ExportDone(newName, path));
+        Sink.Notice(named
+            ? ThemeText.ExportOverrides(newName, path)
+            : ThemeText.ExportDone(newName, path));
     }
 
     /// <summary>The themes as of now, the built-ins and the user's, each file's problem said as a warning.</summary>

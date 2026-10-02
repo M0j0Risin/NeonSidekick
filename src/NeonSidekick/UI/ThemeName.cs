@@ -53,12 +53,13 @@ public static class ThemeName
 
     /// <summary>
     /// As <see cref="Resolve(AppSettingsData)"/> with the user's themes of <paramref name="themesDirectory"/> too
-    /// (2026-10-01). A built-in's name is answered without reading the folder; another is looked for in a scan of it.
+    /// (2026-10-01). The folder is always scanned: a built-in's name may be a file's that overrides it (later on 2026-10-01,
+    /// the user's call; a built-in's name was answered without reading the folder until then).
     /// </summary>
     public static ThemePalette Resolve(AppSettingsData effective, string? themesDirectory)
     {
         ArgumentNullException.ThrowIfNull(effective);
-        return TryParse(effective.Theme, out var builtIn) ? builtIn : Resolve(effective, ThemeCatalog.Scan(themesDirectory));
+        return Resolve(effective, ThemeCatalog.Scan(themesDirectory));
     }
 
     private static ThemePalette Resolve(AppSettingsData effective, ThemeScan scan)
@@ -71,7 +72,8 @@ public static class ThemeName
 
         DiagnosticLog.Warn(Category,
             $"{nameof(AppSettingsData.Theme)}='{effective.Theme}' is not one of {string.Join(", ", scan.Names)}. Using {Default}.");
-        return ThemePalette.Synthwave;
+        TryParse(Default, scan.Themes, out var fallback);   // the scan's synthwave: a file's when one overrides it
+        return fallback;
     }
 
     /// <summary>Puts <paramref name="effective"/>'s theme in force (<see cref="Theme.Use"/>), among the built-ins.</summary>

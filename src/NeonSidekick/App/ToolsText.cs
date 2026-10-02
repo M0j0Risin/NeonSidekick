@@ -58,17 +58,17 @@ public static class ToolsText
     /// <summary>The Claude tab and the advisor's group (2026-09-27): <c>/claude</c>'s rows (off <c>/settings</c>, the user's call) and <c>claude_advisor</c>'s, after Ask, before Obsidian (the user's order, later that day; after ComfyUI before). Titled "Claude (CLI)" from later on 2026-09-27 (the user's call: the pair of /settings' Claude (API) tab) and "Claude" again since 2026-09-29, when that tab's four rows came here under the advisor's (the user's call: one Claude tab).</summary>
     public const string ClaudeTabTitle = "Claude";
 
-    /// <summary>The Home Assistant tools' tab (2026-09-28), after Claude, before Obsidian: among the other integrations, so every tab either side keeps its place from its end of the strip. "HA" since 2026-10-01 (the user's call: strip width); "Home Assistant" until then, which the group keeps (<see cref="HomeAssistantGroupTitle"/>).</summary>
+    /// <summary>The Home Assistant tools' tab (2026-09-28), second to last, after GitLib, before Options, since later on 2026-10-01 (the user's ask; after Claude, before Print, until then). "HA" since 2026-10-01 (the user's call: strip width); "Home Assistant" until then, which the group keeps (<see cref="HomeAssistantGroupTitle"/>).</summary>
     public const string HomeAssistantTabTitle = "HA";
 
     /// <summary>The Home Assistant tools' group on <c>/sys</c> and the Offered tab (2026-09-28): the full name, the tab's short one being for the strip alone (2026-10-01).</summary>
     public const string HomeAssistantGroupTitle = "Home Assistant";
 
-    /// <summary>The print tools' tab and group (2026-09-28), after Home Assistant, before Obsidian: beside the other integration that acts in the room.</summary>
+    /// <summary>The print tools' tab and group (2026-09-28), after Claude, before Obsidian (after Home Assistant until later on 2026-10-01, when that tab moved to second to last).</summary>
     public const string PrintTabTitle = "Print";
 
-    /// <summary>The sixteen tabs in strip order (Home Assistant after Claude since 2026-09-28, Print after Home Assistant later that day, Oracle after SQL, MySQL after Oracle and UNC after MySQL since 2026-09-30): Offered, Web, Files, Shell, Ask, Claude, Obsidian, ComfyUI, SQL, Oracle, Git (native), Options — the user's order since 2026-09-27 (Ask, Git (native), Obsidian, SQL, ComfyUI, Claude before); Options last since later on 2026-09-22 (the user's ask; second, after Offered, before); alphabetical before 2026-09-21; the last ten index <see cref="SettingsMenu.ToolsTabFields"/> one down.</summary>
-    public static readonly IReadOnlyList<string> TabTitles = [OfferedTabTitle, WebTabTitle, FilesTabTitle, ShellTabTitle, AskTabTitle, ClaudeTabTitle, HomeAssistantTabTitle, PrintTabTitle, ObsidianTabTitle, ComfyTabTitle, SqlTabTitle, OracleTabTitle, MySqlTabTitle, UncTabTitle, GitTabTitle, OptionsTabTitle];
+    /// <summary>The sixteen tabs in strip order (Home Assistant second to last, before Options, since later on 2026-10-01, the user's ask, and Print after Claude with it; Home Assistant after Claude from 2026-09-28 and Print after it later that day; Oracle after SQL, MySQL after Oracle and UNC after MySQL since 2026-09-30): Offered, Web, Files, Shell, Ask, Claude, Obsidian, ComfyUI, SQL, Oracle, Git (native), Options — the user's order since 2026-09-27 (Ask, Git (native), Obsidian, SQL, ComfyUI, Claude before); Options last since later on 2026-09-22 (the user's ask; second, after Offered, before); alphabetical before 2026-09-21; the last ten index <see cref="SettingsMenu.ToolsTabFields"/> one down.</summary>
+    public static readonly IReadOnlyList<string> TabTitles = [OfferedTabTitle, WebTabTitle, FilesTabTitle, ShellTabTitle, AskTabTitle, ClaudeTabTitle, PrintTabTitle, ObsidianTabTitle, ComfyTabTitle, SqlTabTitle, OracleTabTitle, MySqlTabTitle, UncTabTitle, GitTabTitle, HomeAssistantTabTitle, OptionsTabTitle];
 
     /// <summary>The Offered tab's hint row. Pinned.</summary>
     public const string OfferedKeys = "Enter / Space = on or off · ←/→ tabs · ESC = close";

@@ -16,10 +16,14 @@ public sealed record ThemeScan(IReadOnlyList<ThemePalette> Themes, IReadOnlyList
 /// Every theme the operator can pick (2026-10-01, the user's ask): the built-ins in <see cref="ThemePalette.All"/>'s
 /// order, then the user's themes — every <c>*.json</c> in <c>&lt;home&gt;/themes</c> (<see cref="DirectoryName"/>), in
 /// name order. Read afresh at every <see cref="Scan"/>, so a file dropped in or edited shows the next time a list opens
-/// with no restart (the <c>comfy</c> folder's habit; the files are small, so there is no cache). A file is skipped,
-/// with a problem, when it cannot be read or parsed, when its name is no theme name, a built-in's (the built-in
-/// wins, the user's call) or a name an earlier file took, and when its <c>base</c> is no theme, leads back to
-/// itself or did not load; a base may be a built-in or another file. A missing folder is no user theme.
+/// with no restart (the <c>comfy</c> folder's habit; the files are small, so there is no cache). A file named like a
+/// built-in overrides it (later on 2026-10-01, the user's call; the file was skipped and the built-in won until then):
+/// it takes the built-in's place in the list, and every theme whose base names it, the default base included, builds on
+/// the file. Only the override itself, when its base is its own name or left out, builds on the compiled built-in; an
+/// override that fails to load leaves the built-in in its place. A file is skipped, with a
+/// problem, when it cannot be read or parsed, when its name is no theme name or a name an earlier file took, and when its
+/// <c>base</c> is no theme, leads back to itself or did not load; a base may be a built-in or another file. A missing
+/// folder is no user theme.
 /// </summary>
 public static class ThemeCatalog
 {
@@ -69,10 +73,6 @@ public static class ThemeCatalog
             {
                 problems.Add(new ThemeProblem(file, ThemeText.BadName(name)));
             }
-            else if (builtIns.ContainsKey(name))
-            {
-                problems.Add(new ThemeProblem(file, ThemeText.BuiltInClash(name)));
-            }
             else if (pending.TryGetValue(name, out var first))
             {
                 problems.Add(new ThemeProblem(file, ThemeText.Duplicate(name, first.Path)));
@@ -90,8 +90,12 @@ public static class ThemeCatalog
             Resolve(name);
         }
 
-        var users = built.Values.OfType<ThemePalette>().OrderBy(p => p.Name, StringComparer.Ordinal);
-        return new ThemeScan([.. ThemePalette.All, .. users], problems);
+        // An override that built takes its built-in's place; one that failed leaves the built-in there.
+        var themes = ThemePalette.All.Select(p => built.GetValueOrDefault(p.Name) ?? p).ToList();
+        themes.AddRange(built.Values.OfType<ThemePalette>()
+            .Where(p => !builtIns.ContainsKey(p.Name))
+            .OrderBy(p => p.Name, StringComparer.Ordinal));
+        return new ThemeScan(themes, problems);
 
         // A user theme over its base, built once; null (with its problem said) when it cannot be.
         ThemePalette? Resolve(string name)
@@ -102,18 +106,23 @@ public static class ThemeCatalog
             }
 
             var (path, data) = pending[name];
-            string baseName = string.IsNullOrWhiteSpace(data.Base) ? ThemeName.Default : data.Base.Trim().ToLowerInvariant();
+            // An override's base is its own built-in when left out, so a file that changes one colour of noir is noir with that colour.
+            string baseName = string.IsNullOrWhiteSpace(data.Base)
+                ? (builtIns.ContainsKey(name) ? name : ThemeName.Default)
+                : data.Base.Trim().ToLowerInvariant();
             ThemePalette? basePalette = null;
             string? failure = null;
-            if (builtIns.TryGetValue(baseName, out var builtIn))
+            bool own = string.Equals(baseName, name, StringComparison.OrdinalIgnoreCase);
+            if (own && builtIns.TryGetValue(baseName, out var original))
             {
-                basePalette = builtIn;
+                basePalette = original;   // an override over its own built-in
             }
             else if (!pending.ContainsKey(baseName))
             {
-                failure = ThemeText.NoBase(baseName);
+                basePalette = builtIns.GetValueOrDefault(baseName);
+                failure = basePalette is null ? ThemeText.NoBase(baseName) : null;
             }
-            else if (visiting.Contains(baseName) || string.Equals(baseName, name, StringComparison.OrdinalIgnoreCase))
+            else if (visiting.Contains(baseName) || own)
             {
                 failure = ThemeText.BaseCycle(baseName);
             }
