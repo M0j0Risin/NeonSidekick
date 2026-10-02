@@ -624,6 +624,14 @@ public sealed class AppSettingsData
     public bool SttInput { get; set; }
 
     /// <summary>
+    /// Where a spoken request goes (2026-10-02, the user's ask): one of <see cref="App.SttDestinationMode.Names"/> —
+    /// <c>chat</c> (the default, what voice input always did: sent to the model at once) or <c>draft</c> (appended to the end
+    /// of the input line's draft, a space between, sent with Enter; push-to-talk and the idle wake word then listen over a
+    /// draft too). Read at each listen, no reconnect. No variable.
+    /// </summary>
+    public string SttDestination { get; set; } = App.SttDestinationMode.Default;
+
+    /// <summary>
     /// Whether saying the wake phrase while a reply is being spoken interrupts it: playback
     /// stops and the app listens for the request. Needs voice input and speech output.
     /// </summary>

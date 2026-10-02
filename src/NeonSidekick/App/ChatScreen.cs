@@ -243,15 +243,19 @@ public readonly record struct MemoryAction(MemoryActionKind Kind, string Profile
 /// <para>Push-to-talk: the configured key on an <em>empty</em> input line listens under a spinner
 /// until the VAD hears the end of the utterance (the key again, or Enter, ends it early; ESC
 /// discards), then the transcript is shown as a <c>›</c> line, remembered in the history and sent
-/// as a message. <b>Never as a slash command</b>: a mis-heard "/clear" must not clear.</para>
+/// as a message. <b>Never as a slash command</b>: a mis-heard "/clear" must not clear. Under
+/// <c>STT destination</c> <c>draft</c> (2026-10-02, the user's ask) the transcript — push-to-talk's,
+/// the wake's and an interruption's follow-up alike — is appended to the end of the draft instead,
+/// nothing sent, and the key listens over a draft too (not Home, End, PageUp or PageDown, which edit it).</para>
 ///
 /// <para>The wake word: while the input line waits with nothing playing (never during a turn,
 /// never over a tail, never while a menu is open), <see cref="VoiceSession.ArmWake"/> keeps the
 /// microphone open and the phrase ends the read with <see cref="InputResult.WakeWord"/>. The
 /// disarm sits in a <c>finally</c> around the read, so a menu or a listen always starts with the
 /// microphone closed. A wake heard with text on the line is ignored, like F4 with text on the
-/// line, and the draft comes back. Otherwise the listener's pre-roll seeds the same listen as
-/// push-to-talk; when the request was spoken with the phrase the seed is transcribed at once.</para>
+/// line, and the draft comes back (under <c>draft</c> it listens and appends). Otherwise the
+/// listener's pre-roll seeds the same listen as push-to-talk; when the request was spoken with
+/// the phrase the seed is transcribed at once.</para>
 ///
 /// <para>The interrupt (M6): the second and last arm site is a <em>spoken</em> turn with
 /// <c>/interrupt</c> on. <see cref="RunTurnAsync"/> arms the same listener with the turn's token
@@ -7655,9 +7659,10 @@ internal sealed partial class ChatScreen
 
                         break;
                     case InputResult.WakeWord wake:
-                        if (wake.Draft.Length > 0 || hit is null)
+                        if ((wake.Draft.Length > 0 && !SpokenToDraft()) || hit is null)
                         {
                             // Like F4 with text on the line: ignored, and the draft comes back (it is the chat line's).
+                            // Under STT destination draft (2026-10-02) it listens, and the request is appended to that draft.
                             break;
                         }
 
@@ -7969,7 +7974,9 @@ internal sealed partial class ChatScreen
                 // The chat line's own editor (2026-09-25): its draft lives on under the replies. A /draft replay reads on
                 // a fresh one, so what was typed under the editor's wait stays on the row, unsent.
                 editor: replay is null ? _input.Chat : null,
-                shortcuts: true).ConfigureAwait(false);
+                shortcuts: true,
+                // STT destination draft (2026-10-02): the key listens over a draft too, unless it is one the editor moves with.
+                pushToTalkOverDraft: SpokenToDraft() && SttDestinationMode.PushToTalkOverDraft(_voice.PushToTalk)).ConfigureAwait(false);
         }
         finally
         {
@@ -12091,7 +12098,8 @@ internal sealed partial class ChatScreen
     /// input line: the settle, then the listen for the request. <c>Exit</c> when the app token
     /// ended it; <c>Text</c> the request to run, or null when there is nothing to run (a key
     /// discarded the listen, it failed, or it heard nothing — the tracker counts the silences
-    /// and switches interrupting off at the second in a row).
+    /// and switches interrupting off at the second in a row; or, under <c>STT destination</c>
+    /// <c>draft</c>, 2026-10-02, the request went to the end of the draft instead).
     /// </summary>
     private async Task<(bool Exit, string? Text)> InterruptFollowUpAsync(CancellationToken cancellationToken)
     {
@@ -12104,7 +12112,8 @@ internal sealed partial class ChatScreen
             return (true, null);
         }
 
-        var listen = await ListenForRequestAsync(InterruptedLabel(_voice.PushToTalkName), seed: null, requestSpoken: false, stripWakeWord: true, _voice.InterruptOptions, cancellationToken).ConfigureAwait(false);
+        var target = SttDestinationMode.Resolve(_effective());
+        var listen = await ListenForRequestAsync(InterruptedLabel(_voice.PushToTalkName), seed: null, requestSpoken: false, stripWakeWord: true, _voice.InterruptOptions, target, cancellationToken).ConfigureAwait(false);
         if (listen.Exit)
         {
             return (true, null);
@@ -12135,6 +12144,12 @@ internal sealed partial class ChatScreen
         }
 
         _interrupts.Note(hadRequest: true);
+        if (target == SttTarget.Draft)
+        {
+            AppendSpokenToDraft(listen.Text);
+            return (false, null);
+        }
+
         return (false, listen.Text);
     }
 
@@ -12171,9 +12186,10 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>
-    /// The push-to-talk key on an empty line. Listens under a spinner while the key watcher
-    /// treats the key (or Enter) as "done" and ESC as "discard"; the app token exits. The transcript
-    /// goes to the model exactly as a typed line would, minus the slash-command parse.
+    /// The push-to-talk key on an empty line (or over a draft, under <c>STT destination</c> <c>draft</c>).
+    /// Listens under a spinner while the key watcher treats the key (or Enter) as "done" and ESC as
+    /// "discard"; the app token exits. The transcript goes to the model exactly as a typed line would,
+    /// minus the slash-command parse — or, under <c>draft</c> (2026-10-02), to the end of the draft.
     /// </summary>
     private async Task<bool> HandlePushToTalkAsync(CancellationToken cancellationToken)
     {
@@ -12207,10 +12223,11 @@ internal sealed partial class ChatScreen
     private Task<bool> HandleWakeAsync(WakeHit hit, CancellationToken cancellationToken) =>
         ListenAndSendAsync(WakeListeningLabel(_voice.WakePhrase, _voice.PushToTalkName), hit.Seed, hit.HasRequest, stripWakeWord: true, cancellationToken);
 
-    /// <summary>One spoken message: listen, then send. Returns true when the shell should exit.</summary>
+    /// <summary>One spoken message: listen, then send — or, under <c>STT destination</c> <c>draft</c> (2026-10-02), append it to the draft. Returns true when the shell should exit.</summary>
     private async Task<bool> ListenAndSendAsync(string label, byte[]? seed, bool requestSpoken, bool stripWakeWord, CancellationToken cancellationToken)
     {
-        var listen = await ListenForRequestAsync(label, seed, requestSpoken, stripWakeWord, options: null, cancellationToken).ConfigureAwait(false);
+        var target = SttDestinationMode.Resolve(_effective());
+        var listen = await ListenForRequestAsync(label, seed, requestSpoken, stripWakeWord, options: null, target, cancellationToken).ConfigureAwait(false);
         if (listen.Exit)
         {
             return true;
@@ -12227,17 +12244,42 @@ internal sealed partial class ChatScreen
             return false;
         }
 
+        if (target == SttTarget.Draft)
+        {
+            AppendSpokenToDraft(listen.Text);
+            return false;
+        }
+
         return await RunMessageAsync(listen.Text, [], cancellationToken).ConfigureAwait(false);
     }
+
+    /// <summary>
+    /// A transcript under <c>STT destination</c> <c>draft</c> (2026-10-02, the user's ask): at the end of the chat line's draft,
+    /// a space between when the draft does not already end in whitespace (<see cref="SttDestinationMode.AppendToDraft"/>), the
+    /// cursor after it. Nothing is sent, shown as a <c>›</c> row or remembered: Enter sends it as a typed line. The listen's
+    /// watcher has been joined, so nothing else feeds the editor; the next read draws the row.
+    /// </summary>
+    private void AppendSpokenToDraft(string text)
+    {
+        _input.Chat.Load(SttDestinationMode.AppendToDraft(_input.Chat.Text, text));
+        DiagnosticLog.Debug(VoiceSession.Category, SpokenToDraftLogLine);
+    }
+
+    /// <summary>The log's line for a transcript appended to the draft (<see cref="AppendSpokenToDraft"/>).</summary>
+    public const string SpokenToDraftLogLine = "Transcript appended to the draft (STT destination draft).";
+
+    /// <summary>Whether a transcript goes to the draft (<c>STT destination</c> <c>draft</c>, 2026-10-02); quiet about an unknown saved value (chat), which <see cref="SttDestinationMode.Resolve"/> warns of at the listen.</summary>
+    private bool SpokenToDraft() => SttDestinationMode.TryParse(_effective().SttDestination, out var target) && target == SttTarget.Draft;
 
     /// <summary>
     /// One listen under a spinner. Two tokens, two meanings: <c>finish</c> ends listening and
     /// transcribes (the push-to-talk key or Enter; already cancelled when the request was spoken
     /// with the wake word), <c>discard</c> (linked to the app token; ESC) abandons the utterance.
     /// Both are created and disposed here, per utterance. A usable transcript is shown as a
-    /// <c>›</c> line and remembered; a discard or a failure is reported here and returns null.
+    /// <c>›</c> line and remembered when it goes to the chat (<paramref name="target"/>; a draft's
+    /// is neither, 2026-10-02); a discard or a failure is reported here and returns null.
     /// </summary>
-    private async Task<ListenOutcome> ListenForRequestAsync(string label, byte[]? seed, bool requestSpoken, bool stripWakeWord, VoicePipelineOptions? options, CancellationToken cancellationToken)
+    private async Task<ListenOutcome> ListenForRequestAsync(string label, byte[]? seed, bool requestSpoken, bool stripWakeWord, VoicePipelineOptions? options, SttTarget target, CancellationToken cancellationToken)
     {
         using var discard = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         using var finish = new CancellationTokenSource();
@@ -12294,10 +12336,14 @@ internal sealed partial class ChatScreen
             return new ListenOutcome("", Exit: false, Discarded: false);
         }
 
-        DismissSplash();
-        _transcript.User(text);
-        _input.Remember(text);
-        _sentDraft = text;
+        if (target == SttTarget.Chat)
+        {
+            DismissSplash();
+            _transcript.User(text);
+            _input.Remember(text);
+            _sentDraft = text;
+        }
+
         return new ListenOutcome(text, Exit: false, Discarded: false);
     }
 

@@ -840,6 +840,18 @@ public class InputLineTests : IDisposable
     }
 
     [Fact]
+    public async Task PushToTalkKey_WithTextOnTheLine_OverADraftAllowed_ReturnsPushToTalk_TheDraftKept()
+    {
+        // STT destination draft (2026-10-02): the chat line lets the key listen over a draft, which stays in the editor.
+        Type("draft");
+        Push(Keys.F4);
+
+        Assert.IsType<InputResult.PushToTalk>(await _line.ReadAsync(pushToTalk: ConsoleKey.F4, editor: _line.Chat, pushToTalkOverDraft: true));
+        Assert.Equal("draft", _line.Chat.Text);
+        Assert.Empty(_line.History);
+    }
+
+    [Fact]
     public async Task PushToTalkKey_NotConfigured_IsIgnored()
     {
         Push(Keys.F4);

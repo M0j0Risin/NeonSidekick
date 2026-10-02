@@ -870,6 +870,7 @@ public partial class SettingsMenuTests : IDisposable
                 SettingsField.DockerTools, SettingsField.DockerWrites, SettingsField.DockerEnginePipe,   // 2026-10-02, the Docker tab
                 SettingsField.DockerServers, SettingsField.DockerServerContainers, SettingsField.DockerServerStopTimeoutSeconds, SettingsField.DockerServerPostStopDelaySeconds,
                 SettingsField.DockerServerReadyTimeoutSeconds, SettingsField.DockerServerStopOnExit,   // later on 2026-10-02, /settings' Docker tab
+                SettingsField.SttDestination,   // later still on 2026-10-02, the STT tab's second row
             },
             Enum.GetValues<SettingsField>());
         // The compact rows: on the LLM tab after the context length but no reconnect; the type a picker, the two others typed.
@@ -1457,7 +1458,17 @@ public partial class SettingsMenuTests : IDisposable
         Assert.False(SettingsMenu.IsLlmField(SettingsField.TtsVoicePreview) || SettingsMenu.IsTtsField(SettingsField.TtsVoicePreview) || SettingsMenu.IsVoiceField(SettingsField.TtsVoicePreview));
         var chunker = new SentenceChunker();
         Assert.Equal(PreviewSentences, new List<string>([.. chunker.Append(SettingsMenu.VoicePreviewText), chunker.Flush()]));
-        Assert.Equal(Enum.GetValues<SettingsField>().Where(SettingsMenu.IsVoiceField), SettingsMenu.TabFields[(int)SettingsTab.Stt]);
+        // STT: the voice fields in enum order, the destination picker (2026-10-02) under the switch.
+        Assert.Equal(
+            [SettingsField.SttInput, SettingsField.SttDestination, .. Enum.GetValues<SettingsField>().Where(f => SettingsMenu.IsVoiceField(f) && f != SettingsField.SttInput)],
+            SettingsMenu.TabFields[(int)SettingsTab.Stt]);
+        // STT destination (2026-10-02, the user's ask): a picker, chat by default, no reconnect and never refused mid-turn.
+        Assert.False(SettingsMenu.IsVoiceField(SettingsField.SttDestination));
+        Assert.False(SettingsMenu.IsToggle(SettingsField.SttDestination));
+        Assert.False(SettingsMenu.RefusedMidTurn(SettingsField.SttDestination));
+        Assert.Equal("STT destination", SettingsMenu.FieldName(SettingsField.SttDestination));
+        Assert.Equal("chat", SettingsMenu.FieldValue(SettingsField.SttDestination, data, _settings.ProfileDirectory));
+        Assert.Equal("draft", SettingsMenu.FieldValue(SettingsField.SttDestination, new AppSettingsData { SttDestination = "draft" }, _settings.ProfileDirectory));
         // The Ask tab (2026-09-15; /tools' first settings tab since 2026-09-19): the question tool's switch and its two caps, none a reconnect.
         Assert.Equal(["General", "Embedded", "Docker", "LLM", "TTS", "STT", "Sessions", "Botchat"], SettingsMenu.TabTitles);   // the user's order since later on 2026-09-29 (Embedded second, Sessions after STT); Embedded LLM since 2026-09-29; Claude (API) before Botchat since later on 2026-09-27; Claude last since 2026-09-27; Botchat last from 2026-09-25;   // five since 2026-09-19
         // The Options tab of /skills (2026-09-19; the Skills tab of /settings from 2026-09-16 until then): the skills switch, the external-folder switch and the compact-mode picker, then (2026-09-17) the #-mention switch, the delete switch, then the auto-learn switch and the reflection rows; none a reconnect.
@@ -3083,7 +3094,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Contains("\n \n▸ LLM server scan mode            local\n  LLM URL                         (probe local ports)\n  LLM model                       (first listed)\n  LLM API key                     ", _console.Output);
         AssertTabEnds("\n  LLM reasoning                   none\n  LLM show thinking               on\n  LLM preserve thinking           off\n  LLM reasoning estimate          chars\n  LLM sampling                    (server defaults)\n  LLM sampling from Hugging Face  off\n  LLM offer tools                 on\n  LLM max tool iterations         10000 round trips\n  LLM request timeout (s)         3600\n  LLM turn timeout (s)            21600\n  LLM context length              (from the server)\n  LLM mid-turn usage              last-known\n  LLM max turns                   auto\n  LLM auto compact (%)            85 %\n  LLM compact type                summary\n  LLM compact keep recent         2 turns\n  LLM compact show summary        off\n  LLM tool compact type           compact\n  LLM use fun verbs               off\n", 100);   // five runs since 2026-10-01 (the users call): the connection, how it answers, tools and limits, the context, the fun verbs
         AssertTabEnds("\n \n▸ TTS output         on\n  TTS source         http\n  TTS HTTP URL       http://localhost:8880/v1\n  TTS voice preview  on\n  TTS voice preset   neon\n  TTS voice          af_heart\n  TTS voice 2        am_eric\n  TTS voice mix      80 % / 20 %\n  TTS speed          1.2\n", 100);
-        AssertTabEnds("\n \n▸ STT input                 off\n  STT wake                  off\n  STT wake phrase           hey neon\n  STT interrupt             off\n  STT interrupt echo guard  100 %\n  STT interrupt confirm     200 ms\n  STT push-to-talk key      F4\n  STT whisper model         ggml-base.en.bin\n  STT vosk model            vosk-model-small-en-us-0.15\n", 100);
+        AssertTabEnds("\n \n▸ STT input                 off\n  STT destination           chat\n  STT wake                  off\n  STT wake phrase           hey neon\n  STT interrupt             off\n  STT interrupt echo guard  100 %\n  STT interrupt confirm     200 ms\n  STT push-to-talk key      F4\n  STT whisper model         ggml-base.en.bin\n  STT vosk model            vosk-model-small-en-us-0.15\n", 100);
         Assert.DoesNotContain("Ask user", _console.Output);   // /tools' since 2026-09-19
         Assert.DoesNotContain("File tools", _console.Output);
         Assert.DoesNotContain("Web tools", _console.Output);
@@ -3333,7 +3344,7 @@ public partial class SettingsMenuTests : IDisposable
     {
         _console.EmitAnsiSequences();
         var (menu, pane) = PaneMenu();
-        GoTo(SettingsTab.Stt); Push(Keys.Down, Keys.Down);   // the STT tab, its third row
+        GoTo(SettingsTab.Stt); Push(Keys.Down, Keys.Down, Keys.Down);   // the STT tab, its fourth row (the destination second since 2026-10-02)
         Push(Keys.Enter);                       // Wake phrase, pre-filled
         _console.Input.PushText(" there");
         Push(Keys.Enter);                       // saved: the list again
@@ -4692,6 +4703,22 @@ public partial class SettingsMenuTests : IDisposable
         Assert.True(_settings.Current.SttInput);
         Assert.Contains("\n" + Titled(Breadcrumb("STT input")) + "\n \n  on  " + SettingsMenu.ToggleDescribe(SettingsField.SttInput, true) + "\n▸ off " + SettingsMenu.ToggleDescribe(SettingsField.SttInput, false) + "\n", _console.Output);
         Assert.Contains("\n" + Titled(Strip) + "\n  · STT input: on\n▸ STT input                 on\n", _console.Output);
+        pane.Dispose();
+    }
+
+    /// <summary>STT destination (2026-10-02, the user's ask): the STT tab's second row, a picker over chat and draft — no reconnect.</summary>
+    [Fact]
+    public async Task OnThePane_TheSttDestinationRow_IsAPicker_NoReconnect()
+    {
+        var (menu, pane) = PaneMenu();
+        GoTo(SettingsTab.Stt); Push(Keys.Down);   // the STT tab, its second row
+        Push(Keys.Enter, Keys.Down, Keys.Enter, Keys.Escape);   // chat under the cursor, draft picked
+
+        Assert.Equal(SettingsChanges.None, await menu.ShowAsync(CancellationToken.None));
+
+        Assert.Equal("draft", _settings.Current.SttDestination);
+        Assert.Contains("chat  " + SttDestinationMode.Describe("chat"), _console.Output);
+        Assert.Contains("draft " + SttDestinationMode.Describe("draft"), _console.Output);
         pane.Dispose();
     }
 }

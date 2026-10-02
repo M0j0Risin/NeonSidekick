@@ -770,8 +770,11 @@ public enum SettingsField
     /// <summary>Typed: seconds a started container may take to answer (<see cref="Settings.AppSettingsData.DockerServerReadyTimeoutSeconds"/>). The Docker tab (2026-10-02).</summary>
     DockerServerReadyTimeoutSeconds,
 
-    /// <summary>A toggle: whether the exit stops the container in use (<see cref="Settings.AppSettingsData.DockerServerStopOnExit"/>). The Docker tab's last row (2026-10-02). Last in the enum, as every newcomer.</summary>
+    /// <summary>A toggle: whether the exit stops the container in use (<see cref="Settings.AppSettingsData.DockerServerStopOnExit"/>). The Docker tab's last row (2026-10-02).</summary>
     DockerServerStopOnExit,
+
+    /// <summary>A picker: where a spoken request goes — <c>chat</c> / <c>draft</c> (<see cref="Settings.AppSettingsData.SttDestination"/>). The STT tab's second row, under <see cref="SttInput"/> (later on 2026-10-02, the user's ask); no reconnect (read at each listen), so not an <see cref="SettingsMenu.IsVoiceField"/>. Last in the enum, as every newcomer.</summary>
+    SttDestination,
 }
 
 /// <summary>The tabs of <c>/settings</c> on the pane, in strip order (General, Embedded, LLM, TTS, STT, Sessions, Botchat — the user's order, 2026-09-29; Sessions right after General — the user's order, 2026-09-18 — until then; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
@@ -1074,7 +1077,7 @@ internal sealed partial class SettingsMenu
     /// the compact rows it times, then <see cref="SettingsField.LlmToolCompactType"/>, still under the offer-tools switch as the user
     /// ordered on 2026-09-15), and the fun verbs last; TTS is spelled out (the user's order, 2026-09-16): the switch, the
     /// source, the server's URL, the preview toggle (no reconnect), then the voice preset (2026-09-27, just above the voice), the voices, the mix and the speed; STT is the <see cref="IsVoiceField"/>
-    /// fields in enum order; Sessions (2026-09-18, last that morning, second since) is the
+    /// fields in enum order, <see cref="SettingsField.SttDestination"/> (2026-10-02, no reconnect, so not a voice field) under the first, the switch; Sessions (2026-09-18, last that morning, second since) is the
     /// logging switch, the retention days, the naming mode, the show-name picker under it (later that day), the tool switch and the search cap (the user's order, 2026-09-18). With <see cref="SkillsTabFields"/> and <see cref="ToolsTabFields"/> they are every <see cref="SettingsField"/> once (pinned).
     /// </summary>
     public static readonly IReadOnlyList<IReadOnlyList<SettingsField>> TabFields =
@@ -1092,7 +1095,7 @@ internal sealed partial class SettingsMenu
          SettingsField.LlmContextLength, SettingsField.LlmMidTurnUsage, SettingsField.LlmMaxTurns, SettingsField.LlmAutoCompactPercent, SettingsField.LlmCompactType, SettingsField.LlmCompactKeepRecent, SettingsField.LlmCompactShowSummary, SettingsField.LlmToolCompactType,
          SettingsField.LlmUseFunVerbs],
         [SettingsField.TtsOutput, SettingsField.TtsSource, SettingsField.TtsHttpUrl, SettingsField.TtsVoicePreview, SettingsField.TtsVoicePreset, SettingsField.TtsVoice, SettingsField.TtsVoice2, SettingsField.TtsVoiceMix, SettingsField.TtsSpeed],
-        Fields.Where(IsVoiceField).ToArray(),
+        [SettingsField.SttInput, SettingsField.SttDestination, .. Fields.Where(f => IsVoiceField(f) && f != SettingsField.SttInput)],
         [SettingsField.SessionLogging, SettingsField.SessionRetentionDays, SettingsField.SessionNamingMode, SettingsField.SessionShowName, SettingsField.SessionTool, SettingsField.SessionSearchMaxResults, SettingsField.SessionSaveThinking],
         [SettingsField.BotChatLlmMode, SettingsField.BotChatMultiEmbedded, SettingsField.BotChatMultiEmbeddedKill, SettingsField.BotChatImages, SettingsField.BotChatImageMode, SettingsField.BotChatTxt2ImgWorkflow, SettingsField.BotChatImg2ImgWorkflow, SettingsField.BotChatImg2ImgMode, SettingsField.BotChatImageAsync, SettingsField.BotChatNonTtsDelaySeconds, SettingsField.BotChatSkills, SettingsField.BotChatPreloadedSkills, SettingsField.BotChatSkillMode, SettingsField.BotChatVision],
     ];
@@ -1542,6 +1545,7 @@ internal sealed partial class SettingsMenu
         SettingsField.TtsVoicePreset => "TTS voice preset",
         SettingsField.TtsOutput => "TTS output",
         SettingsField.SttInput => "STT input",
+        SettingsField.SttDestination => "STT destination",
         SettingsField.SttWake => "STT wake",
         SettingsField.SttWakePhrase => "STT wake phrase",
         SettingsField.SttPushToTalkKey => "STT push-to-talk key",
@@ -1811,6 +1815,7 @@ internal sealed partial class SettingsMenu
             SettingsField.TtsVoicePreset => PresetValue(data, profileDirectory),
             SettingsField.TtsOutput => OnOff(data.TtsOutput),
             SettingsField.SttInput => OnOff(data.SttInput),
+            SettingsField.SttDestination => data.SttDestination,
             SettingsField.SttWake => OnOff(data.SttWake),
             SettingsField.SttWakePhrase => data.SttWakePhrase,
             SettingsField.SttPushToTalkKey => data.SttPushToTalkKey,
@@ -2463,6 +2468,10 @@ internal sealed partial class SettingsMenu
     /// <summary>One row of the mid-turn-usage picker: the mode and its hint (padded to eleven: <c>last-known</c> is ten). Pinned.</summary>
     public static string MidTurnUsageLabel(string name) =>
         Markup.Escape(name.PadRight(11)) + Theme.DimMarkup(MidTurnUsageMode.Describe(name));
+
+    /// <summary>One row of the STT-destination picker (2026-10-02): the mode and its hint (padded to six: <c>draft</c> is five). Pinned.</summary>
+    public static string SttDestinationLabel(string name) =>
+        Markup.Escape(name.PadRight(6)) + Theme.DimMarkup(SttDestinationMode.Describe(name));
 
     /// <summary>One row of the botchat-image-mode picker: the mode and its hint (padded to eleven: <c>autonomous</c> is ten). Pinned.</summary>
     public static string BotChatImageModeLabel(string name) =>
@@ -3543,6 +3552,11 @@ internal sealed partial class SettingsMenu
         if (field == SettingsField.LlmMidTurnUsage)
         {
             return await PickMidTurnUsageAsync(saved, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (field == SettingsField.SttDestination)
+        {
+            return await PickSttDestinationAsync(saved, cancellationToken).ConfigureAwait(false);
         }
 
         if (field == SettingsField.BotChatImageMode)
@@ -6190,6 +6204,22 @@ internal sealed partial class SettingsMenu
 
         string name = names[index];
         Apply(SettingsField.LlmMidTurnUsage, d => d.LlmMidTurnUsage = name);
+        return true;
+    }
+
+    /// <summary>The STT-destination picker under the settings list (2026-10-02): one <see cref="SttDestinationLabel"/> row per <see cref="SttDestinationMode.Names"/> entry, the saved one under the cursor.</summary>
+    private async Task<bool> PickSttDestinationAsync(AppSettingsData saved, CancellationToken cancellationToken)
+    {
+        var names = SttDestinationMode.Names;
+        var page = new MenuPage(Crumb(FieldName(SettingsField.SttDestination)), names.Select(SttDestinationLabel).ToList(), PickKeys);
+        int? picked = await PickAsync(page, Math.Max(0, Array.IndexOf(names, saved.SttDestination)), cancellationToken).ConfigureAwait(false);
+        if (picked is not { } index)
+        {
+            return Unchanged();
+        }
+
+        string name = names[index];
+        Apply(SettingsField.SttDestination, d => d.SttDestination = name);
         return true;
     }
 

@@ -415,6 +415,7 @@ Voice input sets up in the background (🎧 on the hint row), so the first-use W
 | Setting | What it does | Default |
 |---|---|---|
 | STT input | Turns the microphone on: the push-to-talk key records a spoken message (`/stt`). | off |
+| STT destination | Where what you say goes. `chat`: sent to the model straight away. `draft`: added to the end of the input line (after a space if needed) for you to edit and send with Enter; push-to-talk and the wake word then work with text on the line too (except a push-to-talk key of `Home`, `End`, `PageUp` or `PageDown`, which still move around the draft). Applies to an interruption's request as well. | `chat` |
 | STT wake | Saying the wake phrase at the idle line starts listening, with no key (`/wake`). | off |
 | STT wake phrase | One to three words. It is also the interrupt phrase. | `hey neon` |
 | STT interrupt | Saying the wake phrase while a reply is being spoken cuts it short and listens (`/interrupt`). | off |

@@ -697,6 +697,7 @@ public sealed class AppSettings : IDisposable
         TtsVoiceMix = source.TtsVoiceMix,
         TtsVoicePreview = source.TtsVoicePreview,
         SttInput = source.SttInput,
+        SttDestination = source.SttDestination,
         SttInterrupt = source.SttInterrupt,
         SttInterruptConfirmMs = source.SttInterruptConfirmMs,
         SttInterruptEchoGuard = source.SttInterruptEchoGuard,

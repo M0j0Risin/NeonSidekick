@@ -69,7 +69,8 @@ public sealed partial class InputLine
         bool Mask = false,
         Func<bool, bool>? EmptyDelete = null,
         Func<bool>? EmptyEnter = null,
-        bool Shortcuts = false);
+        bool Shortcuts = false,
+        bool PushToTalkOverDraft = false);
 
     /// <summary>
     /// The input line's editing state and its keys, pulled out of <see cref="ReadAsync"/> on 2026-09-25 (the user's ask:
@@ -455,8 +456,9 @@ public sealed partial class InputLine
                 return EditOutcome.Handled;
             }
 
-            // Only from an empty line: with text on the row the key is just ignored (pinned).
-            if (_o.PushToTalk is { } ptt && k.Key == ptt && _text.Length == 0)
+            // Only from an empty line: with text on the row the key is just ignored (pinned) — unless the read lets it listen
+            // over a draft (2026-10-02, STT destination draft: the transcript is appended to the draft, which stays here).
+            if (_o.PushToTalk is { } ptt && k.Key == ptt && (_text.Length == 0 || _o.PushToTalkOverDraft))
             {
                 EndRow();
                 return new EditOutcome.End(new InputResult.PushToTalk());

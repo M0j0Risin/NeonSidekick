@@ -1394,6 +1394,127 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(0, Refreshes(output));   // and the screen was not redrawn either
     }
 
+    // ── STT destination draft (2026-10-02) ──────────────────────────────────
+
+    /// <summary>
+    /// STT destination draft (the user's ask): runs the screen over <paramref name="input"/> and, when a transcript lands on the
+    /// draft (its Debug line, on the screen's thread before the next read starts), counts the requests sent so far and presses
+    /// Enter, so the draft is sent as a typed line; the reply is followed by <c>/exit</c>.
+    /// </summary>
+    private async Task<(string Output, int RequestsBeforeEnter)> RunDictatingAsync(ScriptedInput input)
+    {
+        int before = -1;
+        Action<DiagnosticEvent> capture = e =>
+        {
+            if (e.Message == ChatScreen.SpokenToDraftLogLine && before < 0)
+            {
+                before = _chat.Requests.Count;
+                input.Push(Keys.Enter);
+            }
+        };
+        QuitAfterTheReply(input);
+        DiagnosticLog.Emitted += capture;
+        try
+        {
+            return (await RunAsync(input), before);
+        }
+        finally
+        {
+            DiagnosticLog.Emitted -= capture;
+        }
+    }
+
+    [Fact]
+    public async Task PushToTalk_DraftDestination_OnAnEmptyLine_PutsTheTranscriptOnTheDraft_SentByEnter()
+    {
+        VoiceOn();
+        _settings.Update(d => d.SttDestination = "draft");
+        SpeakTwoBuffers();
+        _chat.EnqueueText("Hi there.");
+        var input = Scripted();
+        input.Push(Keys.F4);
+
+        var (output, before) = await RunDictatingAsync(input);
+
+        Assert.Equal(0, before);   // nothing sent by the listen itself
+        Assert.Equal("hello", UserText(Assert.Single(_chat.Requests)));
+        Assert.Contains("● Hi there.", output);
+    }
+
+    [Fact]
+    public async Task PushToTalk_DraftDestination_OverADraft_AppendsAfterASpace()
+    {
+        VoiceOn();
+        _settings.Update(d => d.SttDestination = "draft");
+        SpeakTwoBuffers();
+        _chat.EnqueueText("ok");
+        var input = Scripted();
+        foreach (char c in "fix this")
+        {
+            input.Push(Keys.Char(c));
+        }
+
+        input.Push(Keys.F4);   // with text on the line: a listen under draft (ignored under chat, pinned)
+
+        var (output, before) = await RunDictatingAsync(input);
+
+        Assert.Equal(0, before);
+        Assert.Equal("fix this hello", UserText(Assert.Single(_chat.Requests)));
+        Assert.Contains("› fix this hello", output);
+        Assert.DoesNotContain("› hello", output);
+    }
+
+    [Fact]
+    public async Task PushToTalk_DraftDestination_ASpokenSlashCommand_IsADraft_NotSent()
+    {
+        VoiceOn();
+        _settings.Update(d => d.SttDestination = "draft");
+        SpeakTwoBuffers();
+        _recognizer.Text = "/clear";
+        _console.Input.PushKey(Keys.F4);
+
+        string output = await RunAsync();
+
+        Assert.Empty(_chat.Requests);
+        Assert.EndsWith("› /clear\n", output);   // the draft on the input row, waiting for Enter
+        Assert.Equal(0, Refreshes(output));   // never parsed as the command either
+    }
+
+    [Fact]
+    public async Task Wake_DraftDestination_OverADraft_ListensAndAppends()
+    {
+        WakeOn();
+        _settings.Update(d => d.SttDestination = "draft");
+        _wake.FinalAfterBuffers = 2;
+        _wake.Text = "neon";
+        _recognizer.Text = "Neon. Buy milk.";
+        _vad.EndAfterBuffers = 2;
+        var input = Scripted();
+        foreach (char c in "note:")
+        {
+            input.Push(Keys.Char(c));
+        }
+
+        _capture.OnStart = (c, _) =>
+        {
+            // The listener's microphone (1, the phrase with "note:" on the line), then the pipeline's (2).
+            if (c.Started <= 2)
+            {
+                c.Deliver(c.Silence(50), 1600);
+                c.Deliver(c.Silence(50), 1600);
+            }
+
+            return Task.CompletedTask;
+        };
+        _chat.EnqueueText("Noted.");
+
+        var (output, before) = await RunDictatingAsync(input);
+
+        Assert.Equal(0, before);
+        Assert.Equal("note: Buy milk.", UserText(Assert.Single(_chat.Requests)));
+        Assert.Contains("› note: Buy milk.", output);
+    }
+
     // ── Server picker (startup) and /server ─────────────────────────────────
 
     private void ServerOn(int port, params string[] models) =>
@@ -2887,6 +3008,56 @@ public partial class ChatScreenTests : IDisposable
         Assert.True(_voice.InterruptReady);
         Assert.True(_wake.Modes.Count >= 3);
         Assert.All(_wake.Modes, m => Assert.Equal(WakeDetectorMode.Keyword, m));   // every arm is the interrupt's; the idle line never armed the wake word (off)
+    }
+
+    [Fact]
+    public async Task Interrupt_DraftDestination_TheFollowUp_GoesToTheDraft_NoTurnRuns()
+    {
+        // STT destination draft (2026-10-02): the request after an interruption is appended to the draft like any other
+        // transcript; the idle line comes back and Enter sends it.
+        InterruptOn();
+        _settings.Update(d => d.SttDestination = "draft");
+        _playback.HoldBytes = true;
+        _wake.PartialAfterBuffers = 2;
+        _wake.PartialText = "[unk] neon";
+        _synth.OnSynthesize = SayThePhraseWhileSpeaking(firstListenerOnly: true);
+        FollowUpHears("Neon, how tall was it?", c => _playback.HoldBytes = false);
+        _chat.EnqueueText("One. ", "Two.").EnqueueText("Very tall.");
+        var input = Scripted();
+        PushLine(input, "tell me a story");
+        int before = -1;
+        Action<DiagnosticEvent> capture = e =>
+        {
+            if (e.Message == ChatScreen.SpokenToDraftLogLine && before < 0)
+            {
+                before = _chat.Requests.Count;
+                input.Push(Keys.Enter);
+            }
+        };
+        input.OnWait = () =>
+        {
+            if (_chat.Requests.Count >= 2 && _speech.Playing is null && before >= 0)
+            {
+                input.OnWait = null;
+                PushLine(input, "/exit");
+            }
+        };
+        DiagnosticLog.Emitted += capture;
+        string output;
+        try
+        {
+            output = await RunAsync(input);
+        }
+        finally
+        {
+            DiagnosticLog.Emitted -= capture;
+        }
+
+        AssertNoticeUnder(output, "● One. Two.", ChatScreen.InterruptedNotice);
+        Assert.Equal(1, before);   // the follow-up ran no turn of its own
+        Assert.Equal(2, _chat.Requests.Count);
+        Assert.Equal("how tall was it?", _chat.Requests[1][^1].Text);   // the phrase stripped, sent by Enter
+        Assert.Contains("● Very tall.", output);
     }
 
     [Fact]

@@ -117,6 +117,7 @@ public class AppSettingsTests : IDisposable
         TtsVoiceMix = 70,
         TtsVoicePreview = false,
         SttInput = true,
+        SttDestination = "draft",   // chat is the default (2026-10-02)
         SttInterrupt = true,
         SttInterruptConfirmMs = 600,
         SttInterruptEchoGuard = 80,
@@ -381,6 +382,7 @@ public class AppSettingsTests : IDisposable
             d.TtsVoiceMix = full.TtsVoiceMix;
             d.TtsVoicePreview = full.TtsVoicePreview;
             d.SttInput = full.SttInput;
+            d.SttDestination = full.SttDestination;
             d.SttInterrupt = full.SttInterrupt;
             d.SttInterruptConfirmMs = full.SttInterruptConfirmMs;
             d.SttInterruptEchoGuard = full.SttInterruptEchoGuard;
@@ -514,6 +516,7 @@ public class AppSettingsTests : IDisposable
                 d.TtsVoiceMix = full.TtsVoiceMix;
                 d.TtsVoicePreview = full.TtsVoicePreview;
                 d.SttInput = full.SttInput;
+                d.SttDestination = full.SttDestination;
                 d.SttInterrupt = full.SttInterrupt;
                 d.SttInterruptConfirmMs = full.SttInterruptConfirmMs;
                 d.SttInterruptEchoGuard = full.SttInterruptEchoGuard;
