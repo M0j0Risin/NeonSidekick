@@ -5743,7 +5743,7 @@ public partial class ChatScreenTests : IDisposable
                 case 1: PushLine(input, "/settings"); break;
                 case 2:
                     input.Push(Keys.Right, Keys.Right);   // the LLM tab (third since 2026-09-19; fourth from 2026-09-18 until then)
-                    input.Push(Enumerable.Repeat(Keys.Down, 14).ToArray());   // LLM offer tools, the fifteenth LLM row (LLM max turns above it since 2026-09-27, the mid-turn usage picker under the context length since 2026-09-25, the scan mode first, the show-summary toggle above it since 2026-09-21, the tool compact type just under it since 2026-09-15)
+                    input.Push(Enumerable.Repeat(Keys.Down, 10).ToArray());   // LLM offer tools, the eleventh LLM row (first of the tools-and-limits run since 2026-10-01, the user's call; the fifteenth before: LLM max turns above it since 2026-09-27, the mid-turn usage picker under the context length since 2026-09-25, the scan mode first, the show-summary toggle above it since 2026-09-21, the tool compact type just under it since 2026-09-15)
                     input.Push(Keys.Enter, Keys.Down, Keys.Enter, Keys.Escape);   // the on/off page, off picked, closed
                     break;
                 case 3: PushLine(input, "hi again"); break;

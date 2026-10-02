@@ -81,21 +81,21 @@ public enum SettingsField
     /// <summary>Whether a sent picture is drawn under the user's line; a toggle that needs no reconnect (read at each turn).</summary>
     ShowImageThumbnails,
 
-    /// <summary>A picker over <see cref="Llm.CompactType.Names"/>: what <c>/compact</c> does. On the LLM tab; no reconnect (read at each compact).</summary>
+    /// <summary>A picker over <see cref="Llm.CompactType.Names"/>: what <c>/compact</c> does. On the LLM tab under <see cref="LlmAutoCompactPercent"/> (2026-10-01, the user's call); no reconnect (read at each compact).</summary>
     LlmCompactType,
-    /// <summary>How many recent user turns a compact keeps verbatim (0 to <see cref="Llm.ConversationHistory.DefaultMaxTurns"/>). On the LLM tab; no reconnect.</summary>
+    /// <summary>How many recent user turns a compact keeps verbatim (0 to <see cref="Llm.ConversationHistory.DefaultMaxTurns"/>). On the LLM tab under <see cref="LlmCompactType"/>; no reconnect.</summary>
     LlmCompactKeepRecent,
 
-    /// <summary>The share of the window at which the next message compacts first; 0 = off. On the LLM tab; no reconnect.</summary>
+    /// <summary>The share of the window at which the next message compacts first; 0 = off. On the LLM tab under <see cref="LlmMaxTurns"/>, ahead of the compact rows (2026-10-01, the user's call: when, then how); no reconnect.</summary>
     LlmAutoCompactPercent,
-    /// <summary>How many user turns the model sees (<see cref="Settings.AppSettingsData.LlmMaxTurns"/>): 0 = auto. On the LLM tab under <see cref="LlmAutoCompactPercent"/> (2026-09-27); no reconnect (resolved before each message).</summary>
+    /// <summary>How many user turns the model sees (<see cref="Settings.AppSettingsData.LlmMaxTurns"/>): 0 = auto. On the LLM tab under <see cref="LlmMidTurnUsage"/> (2026-10-01, the user's call; under <see cref="LlmAutoCompactPercent"/> from 2026-09-27); no reconnect (resolved before each message).</summary>
     LlmMaxTurns,
-    /// <summary>A picker over <see cref="Llm.ToolCompactType.Names"/>: what the tool loop does at the <see cref="CompactAt"/> share mid-turn. On the LLM tab under <see cref="CompactAt"/>; no reconnect (read at each turn).</summary>
+    /// <summary>A picker over <see cref="Llm.ToolCompactType.Names"/>: what the tool loop does at the <see cref="CompactAt"/> share mid-turn. The LLM tab's context run's last row, under <see cref="LlmCompactShowSummary"/> (2026-10-01, the user's call; under <see cref="CompactAt"/> before); no reconnect (read at each turn).</summary>
     LlmToolCompactType,
-    /// <summary>Whether a turn offers the model its tools at all (<see cref="Settings.AppSettingsData.LlmOfferTools"/>). On the LLM tab above <see cref="MaxToolIterations"/>; no reconnect (read at each turn), but a change clears the conversation (<see cref="SettingsChanges.Conversation"/>).</summary>
+    /// <summary>Whether a turn offers the model its tools at all (<see cref="Settings.AppSettingsData.LlmOfferTools"/>). The first row of the LLM tab's tools-and-limits run, above <see cref="MaxToolIterations"/> (2026-10-01, the user's call; still above <see cref="LlmToolCompactType"/>, the user's order of 2026-09-15); no reconnect (read at each turn), but a change clears the conversation (<see cref="SettingsChanges.Conversation"/>).</summary>
     LlmOfferTools,
 
-    /// <summary>Model round trips a message may spend on tools (<see cref="Settings.AppSettingsData.LlmMaxToolIterations"/>). On the LLM tab, last; no reconnect (read at each turn).</summary>
+    /// <summary>Model round trips a message may spend on tools (<see cref="Settings.AppSettingsData.LlmMaxToolIterations"/>). On the LLM tab under <see cref="LlmOfferTools"/>, above the two timeouts (2026-10-01, the user's call); no reconnect (read at each turn).</summary>
     LlmMaxToolIterations,
     /// <summary>A picker over <see cref="UI.ThumbnailSize.Names"/>: how big the thumbnail under a sent picture is. On the General tab beside <see cref="ShowImageThumbnails"/>; no reconnect (read at each turn).</summary>
     ImageThumbnailSize,
@@ -109,7 +109,7 @@ public enum SettingsField
     /// <summary>A picker over <see cref="Settings.NewProfileMode.Names"/>: what <c>/profile add</c> copies. On the General tab under <see cref="Profile"/>; no reconnect (read at each <c>/profile add</c>).</summary>
     NewProfileMode,
 
-    /// <summary>Whether the thinking spinner reads a random <see cref="ThinkingVerbs"/> entry (<see cref="Settings.AppSettingsData.LlmUseFunVerbs"/>). Labelled <c>LLM use fun verbs</c> since 2026-09-15 (the member and the JSON key keep their name so a saved profile still loads); the LLM tab's last row; no reconnect (read at each spinner start).</summary>
+    /// <summary>Whether the thinking spinner reads a random <see cref="ThinkingVerbs"/> entry (<see cref="Settings.AppSettingsData.LlmUseFunVerbs"/>). Labelled <c>LLM use fun verbs</c> since 2026-09-15 (the member and the JSON key keep their name so a saved profile still loads); the LLM tab's last row, alone as the cosmetic one (2026-10-01, the user's call); no reconnect (read at each spinner start).</summary>
     LlmUseFunVerbs,
 
     /// <summary>A picker over <see cref="Llm.LlmScanMode.Names"/>: where a blank URL's discovery looks, or <c>disabled</c> for no scan at all (2026-09-15). On the LLM tab FIRST, above <see cref="LlmUrl"/>; no reconnect (read at each scan).</summary>
@@ -292,7 +292,7 @@ public enum SettingsField
     /// <summary>Typed: the most tool calls one <c>execute_code</c> script may make, 1 to 500 (<see cref="Settings.AppSettingsData.ShellCodeMaxToolCalls"/>). The Shell tab's last row (2026-09-21); no reconnect (read at each call).</summary>
     ShellCodeMaxToolCalls,
 
-    /// <summary>A toggle: whether a compact's summary, or its pruned results, follow the compact notice in the transcript (<see cref="Settings.AppSettingsData.LlmCompactShowSummary"/>). The LLM tab, right under <see cref="LlmCompactKeepRecent"/> (2026-09-21); no reconnect (read at each compact).</summary>
+    /// <summary>A toggle: whether a compact's summary, or its pruned results, follow the compact notice in the transcript (<see cref="Settings.AppSettingsData.LlmCompactShowSummary"/>). The LLM tab, right under <see cref="LlmCompactKeepRecent"/> (2026-09-21; above <see cref="LlmToolCompactType"/> since 2026-10-01); no reconnect (read at each compact).</summary>
     LlmCompactShowSummary,
 
     /// <summary>Typed: the <c>user.email</c> <c>/gituser</c> writes into the working directory's repository (<see cref="Settings.AppSettingsData.GitLibEmail"/>); empty = not set. The GitLib tab's fourth row (2026-09-21); no reconnect (read at each <c>/gituser</c>).</summary>
@@ -427,7 +427,7 @@ public enum SettingsField
     /// <summary>A toggle: whether <c>run_command</c> steps aside for a native tool (<see cref="Settings.AppSettingsData.ShellPreferNative"/>). The Shell tab's row under Shell police outside paths (2026-09-26, the user's ask); no reconnect (read at each call and each turn). Last in the enum, as every newcomer.</summary>
     ShellPreferNative,
 
-    /// <summary>A toggle: whether the model's thinking streams into the transcript and folds when the answer starts (<see cref="Settings.AppSettingsData.LlmShowThinking"/>). The LLM tab's last row (2026-09-26, the user's ask); no reconnect (read at each turn). Last in the enum, as every newcomer.</summary>
+    /// <summary>A toggle: whether the model's thinking streams into the transcript and folds when the answer starts (<see cref="Settings.AppSettingsData.LlmShowThinking"/>). The LLM tab's row under <see cref="LlmReasoning"/> (2026-10-01, the user's call: the thinking rows together; the last row from 2026-09-26, the user's ask); no reconnect (read at each turn). Last in the enum, as every newcomer.</summary>
     LlmShowThinking,
 
     /// <summary>Typed: the Claude Code CLI <c>/claude</c> starts (<see cref="Settings.AppSettingsData.ClaudeExecutable"/>); empty = looked up. The <c>/tools</c> Claude tab's first row (2026-09-27; on <c>/settings</c> that morning); read at each <c>/claude</c> and advisor call.</summary>
@@ -502,7 +502,7 @@ public enum SettingsField
     /// <summary>A toggle: whether a reply's thinking is saved with the session (<see cref="Settings.AppSettingsData.SessionSaveThinking"/>). The Sessions tab's last row (2026-09-28, the user's ask); no reconnect (read at each save). Last in the enum, as every newcomer.</summary>
     SessionSaveThinking,
 
-    /// <summary>A door: the models with sampling overrides (<see cref="Settings.AppSettingsData.LlmSampling"/>); Enter opens the <c>/sampling</c> pane (<see cref="SettingsMenu.SamplingPane"/>). The LLM tab's last row (2026-09-28, the user's ask); no reconnect (read at each turn). Last in the enum, as every newcomer.</summary>
+    /// <summary>A door: the models with sampling overrides (<see cref="Settings.AppSettingsData.LlmSampling"/>); Enter opens the <c>/sampling</c> pane (<see cref="SettingsMenu.SamplingPane"/>). The LLM tab's row under <see cref="LlmReasoningEstimate"/>, with the thinking rows as how the model answers (2026-10-01, the user's call; the last row from 2026-09-28, the user's ask); no reconnect (read at each turn). Last in the enum, as every newcomer.</summary>
     LlmSampling,
 
     /// <summary>A toggle: whether the <c>/sampling</c> pane reads a model's defaults from its Hugging Face card when the server says nothing (<see cref="Settings.AppSettingsData.LlmSamplingFromHuggingFace"/>). The LLM tab, under LLM sampling (2026-09-28, the user's call); no reconnect (read when the pane opens). Last in the enum, as every newcomer.</summary>
@@ -1021,10 +1021,12 @@ internal sealed partial class SettingsMenu
     /// the thumbnails' switch and size, what <c>/copy</c> takes), the screen (the theme, then top to bottom: the welcome splash, the header
     /// and the working directory in it, the toolbar, the performance bar, the menus' max height), and the outside apps last (the draft
     /// editor, the image viewer and the themed-viewer switch). Each dependent row stays right under the one it hangs on; LLM
-    /// is spelled out too: the scan mode (where a blank URL looks, so it sits above the URL), the
-    /// <see cref="IsLlmField"/> rows, the compact rows, then <see cref="SettingsField.LlmOfferTools"/> ABOVE
-    /// <see cref="SettingsField.LlmToolCompactType"/> (the user's order, 2026-09-15), the round-trip cap and the fun
-    /// verbs last (none of those a reconnect); TTS is spelled out (the user's order, 2026-09-16): the switch, the
+    /// is spelled out too, in five runs (2026-10-01, the user's call, as General's that day): the connection (the scan mode, where a
+    /// blank URL looks, so above the URL; the model; the key), how it answers (the reasoning level, the thinking's show, preserve and
+    /// estimate rows, the sampling door and its Hugging Face switch), tools and limits (<see cref="SettingsField.LlmOfferTools"/>, the
+    /// round-trip cap, the two timeouts), the context (its length, the mid-turn usage, the max turns, the auto-compact share ahead of
+    /// the compact rows it times, then <see cref="SettingsField.LlmToolCompactType"/>, still under the offer-tools switch as the user
+    /// ordered on 2026-09-15), and the fun verbs last; TTS is spelled out (the user's order, 2026-09-16): the switch, the
     /// source, the server's URL, the preview toggle (no reconnect), then the voice preset (2026-09-27, just above the voice), the voices, the mix and the speed; STT is the <see cref="IsVoiceField"/>
     /// fields in enum order; Sessions (2026-09-18, last that morning, second since) is the
     /// logging switch, the retention days, the naming mode, the show-name picker under it (later that day), the tool switch and the search cap (the user's order, 2026-09-18). With <see cref="SkillsTabFields"/> and <see cref="ToolsTabFields"/> they are every <see cref="SettingsField"/> once (pinned).
@@ -1037,7 +1039,11 @@ internal sealed partial class SettingsMenu
          SettingsField.Theme, SettingsField.WelcomeSplash, SettingsField.ShowHeader, SettingsField.ShowWorkingDirectory, SettingsField.ToolbarItems, SettingsField.ShowPerformanceBar, SettingsField.MenuMaxHeight,
          SettingsField.DraftEditor, SettingsField.ImageEditor, SettingsField.ThemedViewer],
         [SettingsField.EmbeddedLlmServer, SettingsField.EmbeddedModels, SettingsField.EmbeddedFilterType, SettingsField.EmbeddedHfDownloadType, SettingsField.EmbeddedBackend, SettingsField.EmbeddedContextSize, SettingsField.EmbeddedGpuLayers, SettingsField.EmbeddedVramBudget, SettingsField.EmbeddedVramOnly, SettingsField.EmbeddedVision, SettingsField.EmbeddedDrafter],
-        [SettingsField.LlmScanMode, SettingsField.LlmUrl, SettingsField.LlmModel, SettingsField.LlmApiKey, SettingsField.LlmReasoning, SettingsField.LlmRequestTimeoutSeconds, SettingsField.LlmTurnTimeoutSeconds, SettingsField.LlmContextLength, SettingsField.LlmMidTurnUsage, SettingsField.LlmCompactType, SettingsField.LlmCompactKeepRecent, SettingsField.LlmCompactShowSummary, SettingsField.LlmAutoCompactPercent, SettingsField.LlmMaxTurns, SettingsField.LlmOfferTools, SettingsField.LlmToolCompactType, SettingsField.LlmMaxToolIterations, SettingsField.LlmUseFunVerbs, SettingsField.LlmShowThinking, SettingsField.LlmPreserveThinking, SettingsField.LlmReasoningEstimate, SettingsField.LlmSampling, SettingsField.LlmSamplingFromHuggingFace],
+        [SettingsField.LlmScanMode, SettingsField.LlmUrl, SettingsField.LlmModel, SettingsField.LlmApiKey,
+         SettingsField.LlmReasoning, SettingsField.LlmShowThinking, SettingsField.LlmPreserveThinking, SettingsField.LlmReasoningEstimate, SettingsField.LlmSampling, SettingsField.LlmSamplingFromHuggingFace,
+         SettingsField.LlmOfferTools, SettingsField.LlmMaxToolIterations, SettingsField.LlmRequestTimeoutSeconds, SettingsField.LlmTurnTimeoutSeconds,
+         SettingsField.LlmContextLength, SettingsField.LlmMidTurnUsage, SettingsField.LlmMaxTurns, SettingsField.LlmAutoCompactPercent, SettingsField.LlmCompactType, SettingsField.LlmCompactKeepRecent, SettingsField.LlmCompactShowSummary, SettingsField.LlmToolCompactType,
+         SettingsField.LlmUseFunVerbs],
         [SettingsField.TtsOutput, SettingsField.TtsSource, SettingsField.TtsHttpUrl, SettingsField.TtsVoicePreview, SettingsField.TtsVoicePreset, SettingsField.TtsVoice, SettingsField.TtsVoice2, SettingsField.TtsVoiceMix, SettingsField.TtsSpeed],
         Fields.Where(IsVoiceField).ToArray(),
         [SettingsField.SessionLogging, SettingsField.SessionRetentionDays, SettingsField.SessionNamingMode, SettingsField.SessionShowName, SettingsField.SessionTool, SettingsField.SessionSearchMaxResults, SettingsField.SessionSaveThinking],
