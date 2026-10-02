@@ -16,20 +16,13 @@
     "panelBg": "#1E0C10",
     "good": "#A8E0A0",
     "bad": "#FF7A3A",
-    "warn": "#F0D08A"
+    "warn": "#FFF06A"
   },
   "gradient": [
-    "#F0D08A",
-    "#F0D08A"
+    "#E8485E",
+    "#E8485E"
   ],
   "styles": {
-    "markdownHeading1": {
-      "fg": "secondary",
-      "bold": true
-    },
-    "border": {
-      "fg": "secondary"
-    },
     "menuHighlight": {
       "fg": "secondary",
       "bg": "#4A1420"

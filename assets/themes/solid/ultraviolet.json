@@ -29,9 +29,6 @@
     },
     "markdownCode": {
       "fg": "highlight"
-    },
-    "markdownBullet": {
-      "fg": "tertiary"
     }
   }
 }

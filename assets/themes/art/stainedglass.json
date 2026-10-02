@@ -42,18 +42,12 @@
     "markdownQuoteBar": {
       "fg": "primary"
     },
-    "markdownBullet": {
-      "fg": "tertiary"
-    },
     "border": {
       "fg": "#7A7480"
     },
     "codeKeyword": {
       "fg": "primary",
       "bold": true
-    },
-    "codeType": {
-      "fg": "secondary"
     },
     "codeString": {
       "fg": "good"

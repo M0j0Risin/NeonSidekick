@@ -47,12 +47,6 @@
       "bold": false,
       "italic": true
     },
-    "markdownBullet": {
-      "fg": "tertiary"
-    },
-    "markdownQuoteBar": {
-      "fg": "tertiary"
-    },
     "codeKeyword": {
       "fg": "highlight",
       "bold": true

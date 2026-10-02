@@ -46,9 +46,6 @@
     "markdownBullet": {
       "fg": "primary"
     },
-    "markdownQuoteBar": {
-      "fg": "tertiary"
-    },
     "tableHeader": {
       "fg": "secondary",
       "underline": true

@@ -9,14 +9,14 @@
     "highlight": "#FFF3B0",
     "warm": "#FFB86B",
     "tint": "#C8D8FF",
-    "ink": "#F2F7FF",
+    "ink": "#D2DEF0",
     "dim": "#A8BEDD",
     "dimmer": "#4A6A9C",
     "bg": "#0A2A5C",
     "panelBg": "#12366E",
     "good": "#9AF0B0",
     "bad": "#FF9A9A",
-    "warn": "#FFE27A"
+    "warn": "#FFB86B"
   },
   "gradient": [
     "#FFFFFF",
@@ -27,9 +27,6 @@
       "fg": "primary",
       "bold": true,
       "underline": true
-    },
-    "border": {
-      "fg": "primary"
     },
     "codeComment": {
       "fg": "secondary"

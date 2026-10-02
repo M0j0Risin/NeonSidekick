@@ -22,7 +22,8 @@
       "fg": "primary"
     },
     "markdownHeading1": {
-      "fg": "ink"
+      "fg": "ink",
+      "underline": true
     }
   }
 }

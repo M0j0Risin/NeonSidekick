@@ -2,8 +2,8 @@
   "name": "glacier",
   "description": "ice shelf",
   "colors": {
-    "primary": "#BDEBFF",
-    "secondary": "#7AD0F0",
+    "primary": "#9EE0FF",
+    "secondary": "#5AC0E8",
     "tertiary": "#A0B8FF",
     "deep": "#2E5068",
     "highlight": "#F0FAFF",
@@ -19,19 +19,15 @@
     "warn": "#FFE0A0"
   },
   "gradient": [
-    "#BDEBFF",
-    "#BDEBFF"
+    "#9EE0FF",
+    "#9EE0FF"
   ],
   "styles": {
     "accent": {
       "bold": false
     },
     "markdownHeading1": {
-      "fg": "highlight",
       "bold": true
-    },
-    "codeNumber": {
-      "fg": "warm"
     }
   }
 }

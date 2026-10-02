@@ -77,6 +77,12 @@ public static class Theme
     public static Color[] GradientStops => s_current.Palette.GradientStops;
 
     // ── Styles ──────────────────────────────────────────────────────────────
+    /// <summary>
+    /// The style in force for <paramref name="slot"/>: what the named property below hands out (2026-10-01, for the check
+    /// that walks every slot of the shipped example themes in <c>assets/themes</c>).
+    /// </summary>
+    public static Style Of(ThemeStyleSlot slot) => s_current[slot];
+
     public static Style Body => s_current[ThemeStyleSlot.Body];
     public static Style DimText => s_current[ThemeStyleSlot.DimText];
     public static Style Accent => s_current[ThemeStyleSlot.Accent];

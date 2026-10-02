@@ -42,9 +42,6 @@
     "markdownBullet": {
       "fg": "primary"
     },
-    "tableHeader": {
-      "fg": "secondary"
-    },
     "border": {
       "fg": "#6A6A6A"
     }

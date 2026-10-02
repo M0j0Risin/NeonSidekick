@@ -371,4 +371,154 @@ public sealed class ThemeFileTests : IDisposable
         Assert.Equal(a.Styles![ThemeStyleSlot.CodeKeyword], User("b").Styles![ThemeStyleSlot.CodeKeyword]);
         Assert.Equal(a.Colors(), User("b").Colors());
     }
+
+    // ── The shipped examples (assets/themes) ───────────────────────────────
+
+    /// <summary>The repository's example themes: one folder per category, the built-ins' exports under <see cref="BuiltInFolder"/>.</summary>
+    private static string ExamplesDirectory()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "NeonSidekick.slnx")))
+        {
+            dir = dir.Parent;
+        }
+
+        Assert.NotNull(dir);
+        return Path.Combine(dir.FullName, "assets", "themes");
+    }
+
+    private const string BuiltInFolder = "built-in";
+
+    /// <summary>The styles that are strokes or a hint rather than text to read: they need only be seen, not read.</summary>
+    private static readonly ThemeStyleSlot[] Strokes =
+        [ThemeStyleSlot.Border, ThemeStyleSlot.PaneRule, ThemeStyleSlot.MarkdownRule, ThemeStyleSlot.Placeholder];
+
+    /// <summary>
+    /// Every category's files copied into one themes folder, the way the README says to install them, and scanned: none
+    /// skipped and none with a note (a misspelt key or a bad colour), and no two named alike across the categories.
+    /// </summary>
+    private ThemeScan ScanTheExamples(out int files)
+    {
+        files = 0;
+        foreach (string folder in Directory.EnumerateDirectories(ExamplesDirectory()))
+        {
+            if (Path.GetFileName(folder) == BuiltInFolder)
+            {
+                continue;
+            }
+
+            foreach (string file in Directory.EnumerateFiles(folder, "*.json"))
+            {
+                File.Copy(file, Path.Combine(_dir, Path.GetFileName(file)));
+                files++;
+            }
+        }
+
+        return Scan();
+    }
+
+    [Fact]
+    public void Examples_AllLoad_WithNoProblem()
+    {
+        var scan = ScanTheExamples(out int files);
+
+        Assert.Empty(scan.Problems.Select(p => $"{Path.GetFileName(p.FilePath)}: {p.Problem}"));
+        Assert.True(files >= 50, $"only {files} example files found");
+        Assert.Equal(ThemePalette.All.Count + files, scan.Themes.Count);
+    }
+
+    /// <summary>
+    /// Each example theme is held to the bar the built-ins are (<c>ThemeTests.EveryPalette_IsReadable_AndKeepsItsRolesApart</c>)
+    /// and then style by style, since a file may restyle any of them: every text style at least 3:1 on its own background
+    /// (the page's when it has none), the strokes at least visible; the accent and the first heading are never the very
+    /// style of body or bold text, which would make them vanish (glacier, chalkboard and hal had); and a style change must
+    /// change something, since the atlas and a reader copying the file count it as one.
+    /// </summary>
+    [Fact]
+    public void Examples_AreReadable_StyleByStyle()
+    {
+        using var scope = new ThemeScope();
+        var users = ScanTheExamples(out _).Themes.Where(t => !t.IsBuiltIn).ToList();
+        var failures = new List<string>();
+        foreach (var p in users)
+        {
+            Check(p.Name, ThemeTests.Contrast(p.Ink, p.Bg) >= 7, "ink on bg");
+            Check(p.Name, ThemeTests.Contrast(p.Ink, p.PanelBg) >= 7, "ink on panel");
+            Check(p.Name, ThemeTests.Contrast(p.Dim, p.Bg) >= 3, "dim on bg");
+            Check(p.Name, ThemeTests.Contrast(p.Dim, p.PanelBg) >= 3, "dim on panel");
+            Check(p.Name, ThemeTests.Contrast(p.Bad, p.Bg) >= 3, "bad on bg");
+            Check(p.Name, ThemeTests.Contrast(p.Good, p.Bg) >= 3, "good on bg");
+            Check(p.Name, ThemeTests.Contrast(p.Bg, p.Secondary) >= 4.5, "the selection");
+
+            Theme.Use(p);
+            foreach (var slot in Enum.GetValues<ThemeStyleSlot>())
+            {
+                var style = Theme.Of(slot);
+                double ratio = ThemeTests.Contrast(style.Foreground, style.Background == Color.Default ? p.Bg : style.Background);
+                double floor = Strokes.Contains(slot) ? 1.3 : 3;
+                Check(p.Name, ratio >= floor, $"{ThemeKeys.Of(slot)} at {ratio:0.00}:1");
+            }
+
+            Check(p.Name, Theme.Accent != Theme.Body, "accent is body text");
+            Check(p.Name, Theme.MarkdownHeading1 != Theme.MarkdownBold, "markdownHeading1 is bold text");
+
+            foreach (var (slot, _) in p.Styles ?? new Dictionary<ThemeStyleSlot, StyleOverride>())
+            {
+                Theme.Use(p);
+                var changed = Theme.Of(slot);
+                Theme.Use(p with { Styles = p.Styles!.Where(s => s.Key != slot).ToDictionary() });
+                Check(p.Name, Theme.Of(slot) != changed, $"the change to {ThemeKeys.Of(slot)} restates its derived style");
+            }
+        }
+
+        Assert.True(users.Count >= 50);
+        Assert.Empty(failures);
+
+        void Check(string name, bool ok, string what)
+        {
+            if (!ok)
+            {
+                failures.Add($"{name}: {what}");
+            }
+        }
+    }
+
+    /// <summary>A solid theme's banner is one colour throughout, and that colour is the whole title, so it is held to 4.5:1.</summary>
+    [Fact]
+    public void Examples_SolidBanners_AreOneReadableColour()
+    {
+        var solid = Directory.EnumerateFiles(Path.Combine(ExamplesDirectory(), "solid"), "*.json")
+            .Select(Path.GetFileNameWithoutExtension)
+            .ToHashSet();
+        var themes = ScanTheExamples(out _).Themes.Where(t => solid.Contains(t.Name)).ToList();
+
+        Assert.Equal(solid.Count, themes.Count);
+        Assert.All(themes, t =>
+        {
+            Assert.Single(t.GradientStops.Distinct());
+            Assert.True(ThemeTests.Contrast(t.GradientStops[0], t.Bg) >= 4.5, $"{t.Name}: banner {ThemeTests.Contrast(t.GradientStops[0], t.Bg):0.00}:1");
+        });
+    }
+
+    /// <summary>The built-ins' exports are what <c>/theme export</c> writes today: a built-in changed in code must be exported again.</summary>
+    [Fact]
+    public void Examples_BuiltInExports_MatchTheBuiltIns()
+    {
+        var files = Directory.EnumerateFiles(Path.Combine(ExamplesDirectory(), BuiltInFolder), "*.json").ToList();
+
+        Assert.Equal(ThemePalette.All.Count, files.Count);
+        foreach (string file in files)
+        {
+            var data = ThemeFile.Read(file, out string? problem);
+            Assert.True(data is not null, problem);
+            var builtIn = ThemePalette.All.Single(p => p.Name == ThemeFile.NameOf(data, file));
+            var notes = new List<string>();
+            var read = ThemeFile.Build(builtIn.Name, data, ThemePalette.Synthwave, file, notes);
+
+            Assert.Empty(notes);
+            Assert.Equal(builtIn.Description, read.Description);
+            Assert.Equal(builtIn.Colors(), read.Colors());
+            Assert.Equal(builtIn.GradientStops, read.GradientStops);
+        }
+    }
 }

@@ -198,7 +198,7 @@ public class ThemeTests
     }
 
     /// <summary>The WCAG 2 contrast ratio of two colours, 1 to 21.</summary>
-    private static double Contrast(Color a, Color b)
+    internal static double Contrast(Color a, Color b)
     {
         double la = Luminance(a), lb = Luminance(b);
         return (Math.Max(la, lb) + 0.05) / (Math.Min(la, lb) + 0.05);

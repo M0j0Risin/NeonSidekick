@@ -29,9 +29,6 @@
     "markdownHeading1": {
       "fg": "primary",
       "bold": true
-    },
-    "markdownBullet": {
-      "fg": "tertiary"
     }
   }
 }
