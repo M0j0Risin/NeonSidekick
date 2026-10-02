@@ -386,7 +386,7 @@ Speech output sets up in the background (🔈 on the hint row), so the first-use
 | TTS source | `in-process` runs the Kokoro voice model inside the app over ONNX Runtime (the model downloads on first use). `http` uses a Kokoro-FastAPI server instead. | `in-process` |
 | TTS HTTP URL | The Kokoro-FastAPI base URL, used while *TTS source* is `http`. | `http://localhost:8880/v1` |
 | TTS voice preview | The voice pickers (and the preset picker) speak the highlighted voice as you move through them. | on |
-| TTS voice preset | Sets *TTS voice*, *TTS voice 2*, *TTS voice mix* and *TTS speed* in one go. The preset itself isn't saved: the row shows the preset those four match, or `(custom)`. Built in: `amanda`, `neon`, `richard`, `hunter`, `larry`, `jack`, `willow`. A `voice_presets.json` in the home folder replaces the list (`{ "name": { "TtsVoice": "af_heart", "TtsVoice2": "am_eric", "TtsVoiceMix": 80, "TtsSpeed": 1.2 } }`, as in `assets/voices/voice_presets.json`); entries with out-of-range values are skipped. | `neon` |
+| TTS voice preset | Sets *TTS voice*, *TTS voice 2*, *TTS voice mix* and *TTS speed* in one go. The preset itself isn't saved: the row shows the preset those four match, or `(custom)`. Built in: `amanda`, `neon`, `richard`, `hunter`, `larry`, `jack`, `willow`. Your own presets go in the `voices` folder of the home, one JSON file each, and a file named like a built-in replaces it. Forty-one more come with the repo, with samples to listen to. See [Voice presets](#voice-presets). | `neon` |
 | TTS voice | The Kokoro voice. | `af_heart` |
 | TTS voice 2 | A second voice blended in; `(none)` for the primary voice alone. | `am_eric` |
 | TTS voice mix | The primary voice's share of the blend, 0–100 %. | 80 |
@@ -1141,6 +1141,35 @@ The easiest start is `/theme export <name> [new-name]`. It writes any theme to `
 * **Code highlighting:** `codeKeyword`, `codeType`, `codeString`, `codeNumber`, `codeComment`, `codePunctuation`, `codeFunction`, `codeVariable`, `codeAttribute`, `codeTag`, `codeHeading`, `codeInserted`, `codeDeleted`.
 
 Some styles start as copies of another: `user`, `spinner` and `markdownHeading` copy `accentSecondary`; `assistant` copies `body`; `systemText`, `hint`, `markdownCodeLabel`, `markdownQuote` and `markdownLinkUrl` copy `dimText`; `sectionHeading` copies `accentTertiary`; `markdownHeading1` copies `accent`; `markdownBullet` and `markdownQuoteBar` copy `trailerMark`; `markdownRule` copies `paneRule`; `codeAttribute` copies `codeType`; `codeTag` copies `codeKeyword`. Changing the original changes its copies too, unless a copy has a change of its own. Anything drawn straight in a role's colour rather than through one of these styles follows `colors` only.
+
+#### Voice presets
+
+The *TTS voice preset* row (the TTS tab of `/settings`) picks from the seven built-ins and your own presets: JSON files in the `voices` folder of the home (`%USERPROFILE%\.neonsidekick\voices`), one per preset, named for it. A file named like a built-in replaces it in its place; any other follows the built-ins, sorted by name. The folder is read again when a file changes, so no restart is needed.
+
+```jsonc
+{
+  "TtsVoice": "af_heart",      // the Kokoro voice
+  "TtsVoice2": "am_eric",      // a second voice blended in, or "" for the first alone
+  "TtsVoiceMix": 80,           // the first voice's share, 0-100
+  "TtsSpeed": 1.2,             // 0.5-2.0
+  "Description": "optional, for reading only; the app ignores it"
+}
+```
+
+A file that doesn't parse, or has a value out of range, is skipped with a warning, and a built-in it would replace stays. Subfolders aren't read.
+
+Forty-one more presets come with the repo in [`assets/voices`](assets/voices), one folder per kind, beside the built-ins as files in `built-in`. To use one, copy its file into the `voices` folder and pick it. To hear them first, open [`Voice Atlas.html`](assets/voices/Voice%20Atlas.html) in a browser: every preset, built-ins included, says one line at its own speed (the samples are in `assets/voices/samples`). Kokoro grades its voices one by one ([`VOICES.md`](https://huggingface.co/hexgrad/Kokoro-82M/blob/main/VOICES.md)), and the blends lean on the stronger ones.
+
+| Folder | Presets |
+|--------|---------|
+| `narrators` | ada, edmund, iris, margot, silas, walter (unhurried, for long answers) |
+| `brisk` | dash, kit, pepper, rex, sloane, zara (quick, 1.3-1.45x) |
+| `british` | alfie, beatrice, ellis, harriet, poppy, rupert |
+| `characters` | aria, atlas, jinx, maven, nick, wren |
+| `duets` | ash, morgan, quinn, river, rowan, sage (a female and a male voice blended) |
+| `accents` | amelie, arjun, beatriz, giulia, kenji, lucia, marco, mateo, mei, priya, yuki (an English voice leads, and a Spanish, French, Italian, Hindi, Portuguese, Japanese or Mandarin voice adds its accent) |
+
+The samples and the atlas are written by `dotnet run tools/VoiceSamples.cs`. It needs the Kokoro model the app downloads; rerun it after adding or changing a preset in `assets/voices`.
 
 </details>
 

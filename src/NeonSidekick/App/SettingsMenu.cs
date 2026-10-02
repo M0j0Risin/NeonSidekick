@@ -965,7 +965,7 @@ internal sealed partial class SettingsMenu
     /// <summary>The <see cref="SettingsField.TtsVoicePreset"/> row's value when the four TTS voice settings match no preset (2026-09-27).</summary>
     public const string CustomPreset = "(custom)";
 
-    /// <summary>The notice when there is no preset to pick (a home <c>voice_presets.json</c> with none that passes).</summary>
+    /// <summary>The notice when there is no preset to pick (a build that lost the built-ins; the home <c>voices</c> folder only adds to them since 2026-10-02).</summary>
     public static readonly string NoVoicePresetsNotice = $"{NoticeGlyphs.Tts}No voice presets to pick; see the log for the skipped entries.";
 
     /// <summary>The <see cref="SettingsField.TtsVoicePreset"/> row's value: the preset the saved four match (<see cref="Speech.VoicePresets.Match"/>), or <see cref="CustomPreset"/>.</summary>

@@ -206,9 +206,10 @@
     <EmbeddedResource Include="Shell\Bridge\neon_tools.py" LogicalName="bridge/neon_tools.py" />
     <EmbeddedResource Include="Shell\Bridge\neon_tools.js" LogicalName="bridge/neon_tools.js" />
     <EmbeddedResource Include="Shell\Bridge\NeonTools.psm1" LogicalName="bridge/NeonTools.psm1" />
-    <!-- The TTS voice presets (2026-09-27): the TTS tab's TTS voice preset picker (Speech/VoicePresets); a
-         <home>\voice_presets.json of the user's replaces the embedded list. -->
-    <EmbeddedResource Include="..\..\assets\voices\voice_presets.json" LogicalName="voices/voice_presets.json" Visible="false" />
+    <!-- The TTS voice presets (2026-09-27): the TTS tab's TTS voice preset picker (Speech/VoicePresets). One file per
+         built-in since 2026-10-02 (the user's call); a <home>\voices\<name>.json of the user's overrides the built-in of
+         that name or adds a preset, as the themes folder does. -->
+    <EmbeddedResource Include="..\..\assets\voices\built-in\*.json" LogicalName="voices/built-in/%(Filename)%(Extension)" Visible="false" />
   </ItemGroup>
 
   <!--

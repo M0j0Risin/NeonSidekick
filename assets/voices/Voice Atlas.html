@@ -1,0 +1,447 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sidekick Voice Atlas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&family=Martian+Mono:wght@600;800&display=swap">
+<style>
+/* Written by tools/VoiceSamples.cs; edit the presets and rerun it rather than this file. */
+:root {
+  --page: #0c0d10; --panel: #14161b; --line: #262a32; --ink: #e8e9ed; --muted: #9298a4; --accent: #ff2e97;
+  --display: "Martian Mono", "Cascadia Mono", Consolas, monospace;
+  --body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", "Cascadia Mono", Consolas, monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--page); color: var(--ink); font: 15px/1.55 var(--body); }
+.wrap { max-width: 1400px; margin: 0 auto; padding: 28px 20px 64px; display: grid; gap: 28px; }
+header { display: grid; gap: 10px; }
+.eyebrow { font: 500 12px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+h1 { margin: 0; font: 800 clamp(28px, 4.2vw, 46px)/1.05 var(--display); letter-spacing: -.02em; }
+h1 span { color: var(--accent); }
+.lede { margin: 0; max-width: 72ch; color: var(--muted); }
+.lede code, .card code { font-family: var(--mono); color: var(--ink); font-size: .92em; }
+.filters { display: flex; flex-wrap: wrap; gap: 8px; }
+.filters button { font: 500 13px/1 var(--body); color: var(--muted); background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: 8px 14px; cursor: pointer; }
+.filters button span { font-family: var(--mono); font-size: 12px; opacity: .75; margin-left: 4px; }
+.filters button[aria-pressed="true"] { color: var(--page); background: var(--accent); border-color: var(--accent); }
+.filters button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+section { display: grid; gap: 14px; }
+h2 { margin: 0; font: 600 18px/1.2 var(--display); }
+h2 small { font: 400 13px var(--mono); color: var(--muted); margin-left: 8px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; display: grid; gap: 8px; min-width: 0; }
+.card h3 { margin: 0; font: 600 17px/1.2 var(--mono); color: var(--accent); }
+.card p { margin: 0; color: var(--muted); }
+.mix { font: 13px/1.4 var(--mono); color: var(--ink); overflow-wrap: anywhere; }
+.bar { height: 6px; border-radius: 3px; background: #4b5361; overflow: hidden; }
+.bar i { display: block; height: 100%; background: var(--accent); }
+audio { width: 100%; height: 34px; }
+[hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <div class="eyebrow">NeonSidekick · TTS voice presets</div>
+  <h1>Voice <span>Atlas</span></h1>
+  <p class="lede">Every preset in <code>assets/voices</code>, speaking one line at its own speed. To use one, copy its file into
+  <code>%USERPROFILE%\.neonsidekick\voices</code> and pick it on the TTS tab's <code>TTS voice preset</code> row. A file named like a
+  built-in replaces it. The bar is the first voice's share of the blend.</p>
+</header>
+<nav class="filters" aria-label="Folders">  <button type="button" aria-pressed="true" data-folder="">all<span>48</span></button>
+  <button type="button" aria-pressed="false" data-folder="built-in">built-in<span>7</span></button>
+  <button type="button" aria-pressed="false" data-folder="narrators">narrators<span>6</span></button>
+  <button type="button" aria-pressed="false" data-folder="brisk">brisk<span>6</span></button>
+  <button type="button" aria-pressed="false" data-folder="british">british<span>6</span></button>
+  <button type="button" aria-pressed="false" data-folder="characters">characters<span>6</span></button>
+  <button type="button" aria-pressed="false" data-folder="duets">duets<span>6</span></button>
+  <button type="button" aria-pressed="false" data-folder="accents">accents<span>11</span></button>
+</nav>
+<section data-folder="built-in">
+  <h2>built-in<small>7 presets</small></h2>
+  <div class="grid">
+    <article class="card">
+      <h3>amanda</h3>
+      <p>Bright and friendly, two American voices</p>
+      <div class="mix">af_bella 60% + af_nicole 40% · speed 1.2</div>
+      <div class="bar" title="60% af_bella"><i style="width:60%"></i></div>
+      <audio controls preload="none" src="samples/built-in/amanda.wav"></audio>
+    </article>
+    <article class="card">
+      <h3>neon</h3>
+      <p>The default: warm, with a little depth</p>
+      <div class="mix">af_heart 80% + am_eric 20% · speed 1.2</div>
+      <div class="bar" title="80% af_heart"><i style="width:80%"></i></div>
+      <audio controls preload="none" src="samples/built-in/neon.wav"></audio>
+    </article>
+    <article class="card">
+      <h3>richard</h3>
+      <p>British and American, half and half</p>
+      <div class="mix">bm_george 50% + am_fenrir 50% · speed 1.2</div>
+      <div class="bar" title="50% bm_george"><i style="width:50%"></i></div>
+      <audio controls preload="none" src="samples/built-in/richard.wav"></audio>
+    </article>
+    <article class="card">
+      <h3>hunter</h3>
+      <p>Quick, deep and confident</p>
+      <div class="mix">am_adam 70% + am_michael 30% · speed 1.3</div>
+      <div class="bar" title="70% am_adam"><i style="width:70%"></i></div>
+      <audio controls preload="none" src="samples/built-in/hunter.wav"></audio>
+    </article>
+    <article class="card">
+      <h3>larry</h3>
+      <p>Playful and lively</p>
+      <div class="mix">am_puck 60% + am_adam 40% · speed 1.2</div>
+      <div class="bar" title="60% am_puck"><i style="width:60%"></i></div>
+      <audio controls preload="none" src="samples/built-in/larry.wav"></audio>
+    </article>
+    <article class="card">
+      <h3>jack</h3>
+      <p>Mostly British, with an edge</p>
+      <div class="mix">bm_george 70% + am_fenrir 30% · speed 1.2</div>
+      <div class="bar" title="70% bm_george"><i style="width:70%"></i></div>
+      <audio controls preload="none" src="samples/built-in/jack.wav"></audio>
+    </article>
+    <article class="card">
+      <h3>willow</h3>
+      <p>Light and airy, half and half</p>
+      <div class="mix">af_bella 50% + am_puck 50% · speed 1.2</div>
+      <div class="bar" title="50% af_bella"><i style="width:50%"></i></div>
+      <audio controls preload="none" src="samples/built-in/willow.wav"></audio>
+    </article>
+  </div>
+</section>
+<section data-folder="narrators">
+  <h2>narrators<small>6 presets</small></h2>
+  <div class="grid">
+    <article class="card">
+      <h3>ada</h3>
+      <p>Warm and unhurried, for long answers</p>
+      <div class="mix">af_heart 85% + bf_emma 15% · speed 1.0</div>
+      <div class="bar" title="85% af_heart"><i style="width:85%"></i></div>
+      <audio controls preload="none" src="samples/narrators/ada.wav"></audio>
+    </article>
+    <article class="card">
+      <h3>edmund</h3>
+      <p>A British storyteller by the fire</p>
+      <div class="mix">bm_fable 70% + bm_george 30% · speed 0.95</div>
+      <div class="bar" title="70% bm_fable"><i style="width:70%"></i></div>
+      <audio controls preload="none" src="samples/narrators/edmund.wav"></audio>
+    </article>
+    <article class="card">
+      <h3>iris</h3>
+      <p>Soft and close, like headphones on</p>
+      <div class="mix">af_nicole 70% + af_heart 30% · speed 1.0</div>
+      <div class="bar" title="70% af_nicole"><i style="width:70%"></i></div>
+      <audio controls preload="none" src="samples/narrators/iris.wav"></audio>
+    </article>
+    <article class="card">
+      <h3>margot</h3>
+      <p>Measured and clear, a touch of England</p>
+      <div class="mix">bf_emma 80% + af_nicole 20% · speed 1.0</div>
+      <div class="bar" title="80% bf_emma"><i style="width:80%"></i></div>
+      <audio controls preload="none" src="samples/narrators/margot.wav"></audio>
+    </article>
+    <article class="card">
+      <h3>silas</h3>
+      <p>Low and gravelly, never in a hurry</p>
+      <div class="mix">bm_lewis 60% + am_onyx 40% · speed 0.9</div>
+      <div class="bar" title="60% bm_lewis"><i style="width:60%"></i></div>
+      <audio controls preload="none" src="samples/narrators/silas.wav"></audio>
+    </article>
+    <article class="card">
+      <h3>walter</h3>
+      <p>Deep and steady, documentary style</p>
+      <div class="mix">am_michael 75% + am_fenrir 25% · speed 0.95</div>
+      <div class="bar" title="75% am_michael"><i style="width:75%"></i></div>
+      <audio controls preload="none" src="samples/narrators/walter.wav"></audio>
+    </article>
+  </div>
+</section>
+<section data-folder="brisk">
+  <h2>brisk<small>6 presets</small></h2>
+  <div class="grid">
+    <article class="card">
+      <h3>dash</h3>
+      <p>Fast and upbeat</p>
+      <div class="mix">am_puck 70% + am_echo 30% · speed 1.4</div>
+      <div class="bar" title="70% am_puck"><i style="width:70%"></i></div>
+      <audio controls preload="none" src="samples/brisk/dash.wav"></audio>
+    </article>
+    <article class="card">
+      <h3>kit</h3>
+      <p>Light and energetic</p>
+      <div class="mix">af_kore 60% + am_puck 40% · speed 1.4</div>
+      <div class="bar" title="60% af_kore"><i style="width:60%"></i></div>
+      <audio controls preload="none" src="samples/brisk/kit.wav"></audio>
+    </article>
+    <article class="card">
+      <h3>pepper</h3>
+      <p>Bright and quick</p>
+      <div class="mix">af_sky 60% + af_nova 40% · speed 1.35</div>
+      <div class="bar" title="60% af_sky"><i style="width:60%"></i></div>
+      <audio controls preload="none" src="samples/brisk/pepper.wav"></audio>
+    </article>
+    <article class="card">
+      <h3>rex</h3>
+      <p>Confident, straight to the point</p>
+      <div class="mix">am_fenrir 65% + am_liam 35% · speed 1.35</div>
+      <div class="bar" title="65% am_fenrir"><i style="width:65%"></i></div>
+      <audio controls preload="none" src="samples/brisk/rex.wav"></audio>
+    </article>
+    <article class="card">
+      <h3>sloane</h3>
+      <p>Crisp and businesslike</p>
+      <div class="mix">af_bella 70% + af_sarah 30% · speed 1.3</div>
+      <div class="bar" title="70% af_bella"><i style="width:70%"></i></div>
+      <audio controls preload="none" src="samples/brisk/sloane.wav"></audio>
+    </article>
+    <article class="card">
+      <h3>zara</h3>
+      <p>The fastest talker of the lot</p>
+      <div class="mix">af_nova 70% + af_aoede 30% · speed 1.45</div>
+      <div class="bar" title="70% af_nova"><i style="width:70%"></i></div>
+      <audio controls preload="none" src="samples/brisk/zara.wav"></audio>
+    </article>
+  </div>
+</section>
+<section data-folder="british">
+  <h2>british<small>6 presets</small></h2>
+  <div class="grid">
+    <article class="card">
+      <h3>alfie</h3>
+      <p>Friendly and easygoing</p>
+      <div class="mix">bm_daniel 60% + bm_fable 40% · speed 1.15</div>
+      <div class="bar" title="60% bm_daniel"><i style="width:60%"></i></div>
+      <audio controls preload="none" src="samples/british/alfie.wav"></audio>
+    </article>
+    <article class="card">
+      <h3>beatrice</h3>
+      <p>Polished and bright</p>
+      <div class="mix">bf_isabella 70% + bf_emma 30% · speed 1.1</div>
+      <div class="bar" title="70% bf_isabella"><i style="width:70%"></i></div>
+      <audio controls preload="none" src="samples/british/beatrice.wav"></audio>
+    </article>
+    <article class="card">
+      <h3>ellis</h3>
+      <p>Somewhere between, calm and even</p>
+      <div class="mix">bf_emma 50% + bm_fable 50% · speed 1.1</div>
+      <div class="bar" title="50% bf_emma"><i style="width:50%"></i></div>
+      <audio controls preload="none" src="samples/british/ellis.wav"></audio>
+    </article>
+    <article class="card">
+      <h3>harriet</h3>
+      <p>Gentle and precise</p>
+      <div class="mix">bf_alice 55% + bf_lily 45% · speed 1.1</div>
+      <div class="bar" title="55% bf_alice"><i style="width:55%"></i></div>
+      <audio controls preload="none" src="samples/british/harriet.wav"></audio>
+    </article>
+    <article class="card">
+      <h3>poppy</h3>
+      <p>Cheerful and light</p>
+      <div class="mix">bf_lily 60% + bf_isabella 40% · speed 1.2</div>
+      <div class="bar" title="60% bf_lily"><i style="width:60%"></i></div>
+      <audio controls preload="none" src="samples/british/poppy.wav"></audio>
+    </article>
+    <article class="card">
+      <h3>rupert</h3>
+      <p>Plummy and assured</p>
+      <div class="mix">bm_george 80% + bm_lewis 20% · speed 1.05</div>
+      <div class="bar" title="80% bm_george"><i style="width:80%"></i></div>
+      <audio controls preload="none" src="samples/british/rupert.wav"></audio>
+    </article>
+  </div>
+</section>
+<section data-folder="characters">
+  <h2>characters<small>6 presets</small></h2>
+  <div class="grid">
+    <article class="card">
+      <h3>aria</h3>
+      <p>Lyrical and airy</p>
+      <div class="mix">af_aoede 70% + af_kore 30% · speed 1.1</div>
+      <div class="bar" title="70% af_aoede"><i style="width:70%"></i></div>
+      <audio controls preload="none" src="samples/characters/aria.wav"></audio>
+    </article>
+    <article class="card">
+      <h3>atlas</h3>
+      <p>Big, slow and solid</p>
+      <div class="mix">am_onyx 60% + bm_george 40% · speed 0.9</div>
+      <div class="bar" title="60% am_onyx"><i style="width:60%"></i></div>
+      <audio controls preload="none" src="samples/characters/atlas.wav"></audio>
+    </article>
+    <article class="card">
+      <h3>jinx</h3>
+      <p>Mischievous and hard to place</p>
+      <div class="mix">am_echo 50% + af_jessica 50% · speed 1.3</div>
+      <div class="bar" title="50% am_echo"><i style="width:50%"></i></div>
+      <audio controls preload="none" src="samples/characters/jinx.wav"></audio>
+    </article>
+    <article class="card">
+      <h3>maven</h3>
+      <p>Casual, knowing, a little wry</p>
+      <div class="mix">af_river 60% + af_jessica 40% · speed 1.15</div>
+      <div class="bar" title="60% af_river"><i style="width:60%"></i></div>
+      <audio controls preload="none" src="samples/characters/maven.wav"></audio>
+    </article>
+    <article class="card">
+      <h3>nick</h3>
+      <p>Jolly and round</p>
+      <div class="mix">am_santa 80% + am_onyx 20% · speed 0.95</div>
+      <div class="bar" title="80% am_santa"><i style="width:80%"></i></div>
+      <audio controls preload="none" src="samples/characters/nick.wav"></audio>
+    </article>
+    <article class="card">
+      <h3>wren</h3>
+      <p>Small and light, one voice alone</p>
+      <div class="mix">af_sky · speed 1.25</div>
+      <div class="bar" title="100% af_sky"><i style="width:100%"></i></div>
+      <audio controls preload="none" src="samples/characters/wren.wav"></audio>
+    </article>
+  </div>
+</section>
+<section data-folder="duets">
+  <h2>duets<small>6 presets</small></h2>
+  <div class="grid">
+    <article class="card">
+      <h3>ash</h3>
+      <p>Cool and neutral</p>
+      <div class="mix">af_alloy 50% + am_echo 50% · speed 1.2</div>
+      <div class="bar" title="50% af_alloy"><i style="width:50%"></i></div>
+      <audio controls preload="none" src="samples/duets/ash.wav"></audio>
+    </article>
+    <article class="card">
+      <h3>morgan</h3>
+      <p>Transatlantic and lively</p>
+      <div class="mix">bf_emma 50% + am_puck 50% · speed 1.15</div>
+      <div class="bar" title="50% bf_emma"><i style="width:50%"></i></div>
+      <audio controls preload="none" src="samples/duets/morgan.wav"></audio>
+    </article>
+    <article class="card">
+      <h3>quinn</h3>
+      <p>Even blend of warm and deep</p>
+      <div class="mix">af_heart 50% + am_michael 50% · speed 1.15</div>
+      <div class="bar" title="50% af_heart"><i style="width:50%"></i></div>
+      <audio controls preload="none" src="samples/duets/quinn.wav"></audio>
+    </article>
+    <article class="card">
+      <h3>river</h3>
+      <p>Relaxed and conversational</p>
+      <div class="mix">af_river 50% + am_liam 50% · speed 1.2</div>
+      <div class="bar" title="50% af_river"><i style="width:50%"></i></div>
+      <audio controls preload="none" src="samples/duets/river.wav"></audio>
+    </article>
+    <article class="card">
+      <h3>rowan</h3>
+      <p>Low, soft and thoughtful</p>
+      <div class="mix">af_kore 45% + bm_lewis 55% · speed 1.1</div>
+      <div class="bar" title="45% af_kore"><i style="width:45%"></i></div>
+      <audio controls preload="none" src="samples/duets/rowan.wav"></audio>
+    </article>
+    <article class="card">
+      <h3>sage</h3>
+      <p>Calm and grounded</p>
+      <div class="mix">af_nicole 55% + am_fenrir 45% · speed 1.05</div>
+      <div class="bar" title="55% af_nicole"><i style="width:55%"></i></div>
+      <audio controls preload="none" src="samples/duets/sage.wav"></audio>
+    </article>
+  </div>
+</section>
+<section data-folder="accents">
+  <h2>accents<small>11 presets</small></h2>
+  <div class="grid">
+    <article class="card">
+      <h3>amelie</h3>
+      <p>English with a French touch</p>
+      <div class="mix">af_heart 60% + ff_siwis 40% · speed 1.05</div>
+      <div class="bar" title="60% af_heart"><i style="width:60%"></i></div>
+      <audio controls preload="none" src="samples/accents/amelie.wav"></audio>
+    </article>
+    <article class="card">
+      <h3>arjun</h3>
+      <p>English with a Hindi accent</p>
+      <div class="mix">am_michael 55% + hm_omega 45% · speed 1.1</div>
+      <div class="bar" title="55% am_michael"><i style="width:55%"></i></div>
+      <audio controls preload="none" src="samples/accents/arjun.wav"></audio>
+    </article>
+    <article class="card">
+      <h3>beatriz</h3>
+      <p>English with a Brazilian Portuguese lilt</p>
+      <div class="mix">af_bella 60% + pf_dora 40% · speed 1.1</div>
+      <div class="bar" title="60% af_bella"><i style="width:60%"></i></div>
+      <audio controls preload="none" src="samples/accents/beatriz.wav"></audio>
+    </article>
+    <article class="card">
+      <h3>giulia</h3>
+      <p>English with an Italian lilt</p>
+      <div class="mix">af_nicole 60% + if_sara 40% · speed 1.1</div>
+      <div class="bar" title="60% af_nicole"><i style="width:60%"></i></div>
+      <audio controls preload="none" src="samples/accents/giulia.wav"></audio>
+    </article>
+    <article class="card">
+      <h3>kenji</h3>
+      <p>English with a Japanese accent</p>
+      <div class="mix">am_puck 60% + jm_kumo 40% · speed 1.1</div>
+      <div class="bar" title="60% am_puck"><i style="width:60%"></i></div>
+      <audio controls preload="none" src="samples/accents/kenji.wav"></audio>
+    </article>
+    <article class="card">
+      <h3>lucia</h3>
+      <p>English with a Spanish lilt</p>
+      <div class="mix">af_bella 60% + ef_dora 40% · speed 1.1</div>
+      <div class="bar" title="60% af_bella"><i style="width:60%"></i></div>
+      <audio controls preload="none" src="samples/accents/lucia.wav"></audio>
+    </article>
+    <article class="card">
+      <h3>marco</h3>
+      <p>English with an Italian accent</p>
+      <div class="mix">am_fenrir 60% + im_nicola 40% · speed 1.1</div>
+      <div class="bar" title="60% am_fenrir"><i style="width:60%"></i></div>
+      <audio controls preload="none" src="samples/accents/marco.wav"></audio>
+    </article>
+    <article class="card">
+      <h3>mateo</h3>
+      <p>English with a Spanish accent</p>
+      <div class="mix">am_michael 60% + em_alex 40% · speed 1.1</div>
+      <div class="bar" title="60% am_michael"><i style="width:60%"></i></div>
+      <audio controls preload="none" src="samples/accents/mateo.wav"></audio>
+    </article>
+    <article class="card">
+      <h3>mei</h3>
+      <p>English with a Mandarin accent</p>
+      <div class="mix">af_nova 60% + zf_xiaoxiao 40% · speed 1.1</div>
+      <div class="bar" title="60% af_nova"><i style="width:60%"></i></div>
+      <audio controls preload="none" src="samples/accents/mei.wav"></audio>
+    </article>
+    <article class="card">
+      <h3>priya</h3>
+      <p>English with a Hindi accent</p>
+      <div class="mix">af_heart 55% + hf_alpha 45% · speed 1.1</div>
+      <div class="bar" title="55% af_heart"><i style="width:55%"></i></div>
+      <audio controls preload="none" src="samples/accents/priya.wav"></audio>
+    </article>
+    <article class="card">
+      <h3>yuki</h3>
+      <p>English with a Japanese accent</p>
+      <div class="mix">af_sky 55% + jf_alpha 45% · speed 1.15</div>
+      <div class="bar" title="55% af_sky"><i style="width:55%"></i></div>
+      <audio controls preload="none" src="samples/accents/yuki.wav"></audio>
+    </article>
+  </div>
+</section>
+</div>
+<script>
+// One folder or all; and one sample at a time.
+const buttons = document.querySelectorAll('.filters button');
+buttons.forEach(b => b.addEventListener('click', () => {
+  buttons.forEach(x => x.setAttribute('aria-pressed', x === b ? 'true' : 'false'));
+  document.querySelectorAll('section').forEach(s => s.hidden = b.dataset.folder !== '' && s.dataset.folder !== b.dataset.folder);
+}));
+document.addEventListener('play', e => document.querySelectorAll('audio').forEach(a => { if (a !== e.target) a.pause(); }), true);
+</script>
+</body>
+</html>

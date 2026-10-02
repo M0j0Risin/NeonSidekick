@@ -1,0 +1,7 @@
+{
+  "TtsVoice": "am_puck",
+  "TtsVoice2": "jm_kumo",
+  "TtsVoiceMix": 60,
+  "TtsSpeed": 1.1,
+  "Description": "English with a Japanese accent"
+}

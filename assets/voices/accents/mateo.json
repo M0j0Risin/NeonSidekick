@@ -1,0 +1,7 @@
+{
+  "TtsVoice": "am_michael",
+  "TtsVoice2": "em_alex",
+  "TtsVoiceMix": 60,
+  "TtsSpeed": 1.1,
+  "Description": "English with a Spanish accent"
+}
