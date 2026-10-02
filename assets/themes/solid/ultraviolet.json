@@ -1,0 +1,37 @@
+{
+  "name": "ultraviolet",
+  "description": "black light",
+  "colors": {
+    "primary": "#B266FF",
+    "secondary": "#E0C8FF",
+    "tertiary": "#FF6AE8",
+    "deep": "#52309A",
+    "highlight": "#F5FF6A",
+    "warm": "#FF9A5A",
+    "tint": "#C8A0FF",
+    "ink": "#F0E8FF",
+    "dim": "#9A8CB8",
+    "dimmer": "#382C4E",
+    "bg": "#08040F",
+    "panelBg": "#140A22",
+    "good": "#6AFFB8",
+    "bad": "#FF4A7A",
+    "warn": "#F5FF6A"
+  },
+  "gradient": [
+    "#B266FF",
+    "#B266FF"
+  ],
+  "styles": {
+    "selectedText": {
+      "fg": "bg",
+      "bg": "primary"
+    },
+    "markdownCode": {
+      "fg": "highlight"
+    },
+    "markdownBullet": {
+      "fg": "tertiary"
+    }
+  }
+}

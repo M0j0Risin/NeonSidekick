@@ -1,0 +1,37 @@
+{
+  "name": "glacier",
+  "description": "ice shelf",
+  "colors": {
+    "primary": "#BDEBFF",
+    "secondary": "#7AD0F0",
+    "tertiary": "#A0B8FF",
+    "deep": "#2E5068",
+    "highlight": "#F0FAFF",
+    "warm": "#FFC8A0",
+    "tint": "#D0E8F0",
+    "ink": "#EAF4FA",
+    "dim": "#8AA0B0",
+    "dimmer": "#2A3A48",
+    "bg": "#060B10",
+    "panelBg": "#0F1820",
+    "good": "#8AF0D0",
+    "bad": "#FF6A7A",
+    "warn": "#FFE0A0"
+  },
+  "gradient": [
+    "#BDEBFF",
+    "#BDEBFF"
+  ],
+  "styles": {
+    "accent": {
+      "bold": false
+    },
+    "markdownHeading1": {
+      "fg": "highlight",
+      "bold": true
+    },
+    "codeNumber": {
+      "fg": "warm"
+    }
+  }
+}

@@ -1059,7 +1059,7 @@ The viewer and the ComfyUI picture strip follow each other:
 
 Your own themes are JSON files in the `themes` folder of the home (`%USERPROFILE%\.neonsidekick\themes`, or under `NEONSIDEKICK_HOME`), shared by every profile. They appear after the built-ins in `/theme`, its argument list and the *Theme* setting, sorted by name. The folder is read each time one of those opens, so a new or edited file shows up without a restart; pick the theme again to see an edit.
 
-Forty ready-made themes come with the repo in [`assets/themes`](assets/themes), one folder per category. To use one, copy its file into the `themes` folder itself (subfolders aren't read) and pick it with `/theme`. To compare them all side by side, open [`Theme Atlas.html`](assets/themes/Theme%20Atlas.html) in a browser. It previews these forty and the ten built-ins. The `built-in` folder holds the built-ins as files to start from; rename one (the file and its `"name"`) before copying it in, since a file named like a built-in is skipped.
+Fifty ready-made themes come with the repo in [`assets/themes`](assets/themes), one folder per category. To use one, copy its file into the `themes` folder itself (subfolders aren't read) and pick it with `/theme`. To compare them all side by side, open [`Theme Atlas.html`](assets/themes/Theme%20Atlas.html) in a browser. It previews these fifty and the ten built-ins. The `built-in` folder holds the built-ins as files to start from; rename one (the file and its `"name"`) before copying it in, since a file named like a built-in is skipped.
 
 | Folder | Themes |
 |--------|--------|
@@ -1069,6 +1069,7 @@ Forty ready-made themes come with the repo in [`assets/themes`](assets/themes), 
 | `elements` | magma, opal, oxide, prism, radium, temper |
 | `machines` | circuit, collider, commodore, glitch, heartbeat, infrared, nixie, vhs, vinyl |
 | `nights` | kowloon, lighthouse, miami, sakura, witchhour |
+| `solid` | blueprint, carbon, chalkboard, espresso, fieldradio, glacier, matcha, signal, ultraviolet, velvet (one-colour banner and rule, no gradient) |
 
 The easiest start is `/theme export <name> [new-name]`. It writes any theme to `themes\<new-name>.json` with every colour filled in. The new name defaults to `<name>-custom`, and an existing file is never overwritten.
 

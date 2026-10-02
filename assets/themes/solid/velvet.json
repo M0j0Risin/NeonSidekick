@@ -1,0 +1,42 @@
+{
+  "name": "velvet",
+  "description": "theatre curtain",
+  "colors": {
+    "primary": "#E8485E",
+    "secondary": "#F0D08A",
+    "tertiary": "#E890A8",
+    "deep": "#7A2A3A",
+    "highlight": "#FFE8B0",
+    "warm": "#F0A060",
+    "tint": "#F0B8C0",
+    "ink": "#F5E8E8",
+    "dim": "#A88C90",
+    "dimmer": "#46282E",
+    "bg": "#0E0507",
+    "panelBg": "#1E0C10",
+    "good": "#A8E0A0",
+    "bad": "#FF7A3A",
+    "warn": "#F0D08A"
+  },
+  "gradient": [
+    "#F0D08A",
+    "#F0D08A"
+  ],
+  "styles": {
+    "markdownHeading1": {
+      "fg": "secondary",
+      "bold": true
+    },
+    "border": {
+      "fg": "secondary"
+    },
+    "menuHighlight": {
+      "fg": "secondary",
+      "bg": "#4A1420"
+    },
+    "menuHighlightDim": {
+      "fg": "#C89AA0",
+      "bg": "#4A1420"
+    }
+  }
+}

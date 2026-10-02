@@ -1,0 +1,41 @@
+{
+  "name": "blueprint",
+  "description": "drafting table",
+  "colors": {
+    "primary": "#FFFFFF",
+    "secondary": "#8FD8FF",
+    "tertiary": "#FFE27A",
+    "deep": "#3A62A0",
+    "highlight": "#FFF3B0",
+    "warm": "#FFB86B",
+    "tint": "#C8D8FF",
+    "ink": "#F2F7FF",
+    "dim": "#A8BEDD",
+    "dimmer": "#4A6A9C",
+    "bg": "#0A2A5C",
+    "panelBg": "#12366E",
+    "good": "#9AF0B0",
+    "bad": "#FF9A9A",
+    "warn": "#FFE27A"
+  },
+  "gradient": [
+    "#FFFFFF",
+    "#FFFFFF"
+  ],
+  "styles": {
+    "markdownHeading1": {
+      "fg": "primary",
+      "bold": true,
+      "underline": true
+    },
+    "border": {
+      "fg": "primary"
+    },
+    "codeComment": {
+      "fg": "secondary"
+    },
+    "paneRule": {
+      "fg": "#6A8AC0"
+    }
+  }
+}

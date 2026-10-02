@@ -1,0 +1,43 @@
+{
+  "name": "espresso",
+  "description": "crema and roast",
+  "colors": {
+    "primary": "#E0B07A",
+    "secondary": "#F2D2A8",
+    "tertiary": "#C8885E",
+    "deep": "#5A3A26",
+    "highlight": "#F5D89A",
+    "warm": "#D8904A",
+    "tint": "#E8B8A0",
+    "ink": "#F2E6D8",
+    "dim": "#A08C78",
+    "dimmer": "#3E3026",
+    "bg": "#120B07",
+    "panelBg": "#20150E",
+    "good": "#A8D08A",
+    "bad": "#F0605A",
+    "warn": "#F5D89A"
+  },
+  "gradient": [
+    "#E0B07A",
+    "#E0B07A"
+  ],
+  "styles": {
+    "markdownHeading1": {
+      "fg": "secondary",
+      "bold": true
+    },
+    "codeKeyword": {
+      "fg": "primary",
+      "bold": true
+    },
+    "menuHighlight": {
+      "fg": "bg",
+      "bg": "primary"
+    },
+    "menuHighlightDim": {
+      "fg": "#4A2E14",
+      "bg": "primary"
+    }
+  }
+}

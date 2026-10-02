@@ -1,0 +1,41 @@
+{
+  "name": "chalkboard",
+  "description": "chalk on slate",
+  "colors": {
+    "primary": "#F4F1E8",
+    "secondary": "#9AD8F0",
+    "tertiary": "#F5B8C8",
+    "deep": "#4E5E56",
+    "highlight": "#F7E58A",
+    "warm": "#F5C08A",
+    "tint": "#B8E8B0",
+    "ink": "#EEF0EA",
+    "dim": "#9AA59E",
+    "dimmer": "#3E4A44",
+    "bg": "#1A2420",
+    "panelBg": "#24302B",
+    "good": "#A8E8A0",
+    "bad": "#FF8A80",
+    "warn": "#F7E58A"
+  },
+  "gradient": [
+    "#F4F1E8",
+    "#F4F1E8"
+  ],
+  "styles": {
+    "accent": {
+      "bold": false
+    },
+    "markdownHeading1": {
+      "fg": "highlight",
+      "bold": true,
+      "underline": true
+    },
+    "markdownBullet": {
+      "fg": "tertiary"
+    },
+    "codeString": {
+      "fg": "tint"
+    }
+  }
+}

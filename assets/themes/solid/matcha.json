@@ -1,0 +1,37 @@
+{
+  "name": "matcha",
+  "description": "whisked green tea",
+  "colors": {
+    "primary": "#A8D86A",
+    "secondary": "#E8E0B8",
+    "tertiary": "#E0A8B8",
+    "deep": "#3E5E2C",
+    "highlight": "#F0E8A0",
+    "warm": "#E0B070",
+    "tint": "#B8E0A8",
+    "ink": "#EEF2E4",
+    "dim": "#94A088",
+    "dimmer": "#343E2E",
+    "bg": "#0B100A",
+    "panelBg": "#161E14",
+    "good": "#8AE0A0",
+    "bad": "#F06A6A",
+    "warn": "#F0D080"
+  },
+  "gradient": [
+    "#A8D86A",
+    "#A8D86A"
+  ],
+  "styles": {
+    "accent": {
+      "bold": false
+    },
+    "markdownHeading1": {
+      "fg": "primary",
+      "bold": true
+    },
+    "markdownBullet": {
+      "fg": "tertiary"
+    }
+  }
+}

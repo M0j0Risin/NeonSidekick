@@ -1,0 +1,38 @@
+{
+  "name": "fieldradio",
+  "description": "olive drab",
+  "colors": {
+    "primary": "#B8C46A",
+    "secondary": "#E8D49A",
+    "tertiary": "#FFB040",
+    "deep": "#4E5628",
+    "highlight": "#FFD27A",
+    "warm": "#E0904A",
+    "tint": "#C8D0A0",
+    "ink": "#ECE8D4",
+    "dim": "#9A9878",
+    "dimmer": "#3A3C2A",
+    "bg": "#0D0F08",
+    "panelBg": "#1A1D12",
+    "good": "#9AD88A",
+    "bad": "#F0603A",
+    "warn": "#FFB040"
+  },
+  "gradient": [
+    "#B8C46A",
+    "#B8C46A"
+  ],
+  "styles": {
+    "spinner": {
+      "fg": "tertiary"
+    },
+    "markdownHeading1": {
+      "fg": "secondary",
+      "bold": true
+    },
+    "codeNumber": {
+      "fg": "tertiary",
+      "bold": true
+    }
+  }
+}

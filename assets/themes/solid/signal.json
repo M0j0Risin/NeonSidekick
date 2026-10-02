@@ -1,0 +1,40 @@
+{
+  "name": "signal",
+  "description": "hi-vis",
+  "colors": {
+    "primary": "#FF6A00",
+    "secondary": "#E8FF3A",
+    "tertiary": "#FFB070",
+    "deep": "#6A3A14",
+    "highlight": "#FFE07A",
+    "warm": "#FF8A3A",
+    "tint": "#FFC8A0",
+    "ink": "#F2F2F2",
+    "dim": "#9A9A9A",
+    "dimmer": "#3A3A3A",
+    "bg": "#0A0A0A",
+    "panelBg": "#181818",
+    "good": "#3AFF8A",
+    "bad": "#FF3A3A",
+    "warn": "#E8FF3A"
+  },
+  "gradient": [
+    "#FF6A00",
+    "#FF6A00"
+  ],
+  "styles": {
+    "markdownHeading1": {
+      "fg": "bg",
+      "bg": "primary",
+      "bold": true
+    },
+    "errorText": {
+      "fg": "bg",
+      "bg": "bad"
+    },
+    "warnText": {
+      "fg": "bg",
+      "bg": "warn"
+    }
+  }
+}
