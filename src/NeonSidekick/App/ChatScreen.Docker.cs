@@ -176,6 +176,115 @@ internal sealed partial class ChatScreen
         WriteDockerResult(result, _flow);
     }
 
+    // ── Docker servers (2026-10-02) ──────────────────────────────────────────
+
+    /// <summary>
+    /// Switches to the chosen container <paramref name="name"/> (2026-10-02; a <c>/server</c> row, <c>/server docker:&lt;name&gt;</c>,
+    /// <c>/server docker</c>'s pick): refused while Docker servers is off or the container is not chosen; else saved as the LLM URL
+    /// (the model cleared when the URL changed — the container's own is taken), the reasoning picker offered, and one connect,
+    /// which stops the others, starts it and waits for its model under the load's spinner. With a flag or variable overriding the
+    /// URL, the save and its warning are all that happens.
+    /// </summary>
+    private async Task UseDockerAsync(string name, CancellationToken cancellationToken, bool reasoning = true)
+    {
+        var effective = _effective();
+        if (_session.DockerServers is null || !OperatingSystem.IsWindows())
+        {
+            _transcript.Error(DockerServerText.Unavailable);
+            return;
+        }
+
+        if (!effective.DockerServers)
+        {
+            _transcript.Error(DockerServerText.SwitchedOffError);
+            return;
+        }
+
+        if (!DockerEndpoint.ChosenNames(effective).Contains(name, StringComparer.Ordinal))
+        {
+            _transcript.Error(DockerServerText.NotChosen(name));
+            return;
+        }
+
+        _menu.SaveServer(DockerEndpoint.BaseUrl(name));
+        if (_overriddenBy(SettingsField.LlmUrl) is not null)
+        {
+            return;
+        }
+
+        if (reasoning)
+        {
+            // Asked before the load, as for the embedded model: the walk is still on screen.
+            await _menu.PickReasoningAsync("", _effective().LlmReasoning, cancellationToken).ConfigureAwait(false);
+        }
+
+        await ConnectLlmAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary><c>/server docker</c> (2026-10-02): the chosen containers' rows alone, read from the engine under a spinner; a pick switches to it.</summary>
+    private async Task PickDockerServerAsync(AppSettingsData effective, CancellationToken cancellationToken)
+    {
+        if (_session.DockerServers is not { } servers || !OperatingSystem.IsWindows())
+        {
+            _transcript.Error(DockerServerText.Unavailable);
+            return;
+        }
+
+        if (!effective.DockerServers)
+        {
+            _transcript.Error(DockerServerText.SwitchedOffError);
+            return;
+        }
+
+        if (DockerEndpoint.ChosenNames(effective).Count == 0)
+        {
+            _transcript.Error(DockerServerText.NoneChosenError);
+            return;
+        }
+
+        var list = await _transcript.WithSpinnerAsync(DockerText.Working, () => servers.ListAsync(effective, cancellationToken)).ConfigureAwait(false);
+        if (list.Error is not null)
+        {
+            _transcript.Error(list.Error);
+            return;
+        }
+
+        if (await _menu.PickServerAsync(LlmSession.DockerRows(list), _session.Endpoint?.BaseUrl, SettingsMenu.ServerTitle, cancellationToken).ConfigureAwait(false) is { } row
+            && DockerEndpoint.ContainerOf(row.BaseUrl) is { } name)
+        {
+            await UseDockerAsync(name, cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    /// <c>Docker server stop on exit</c> at the screen's end (2026-10-02): off by default (the container keeps running); on, with
+    /// a chosen container in use, it stops under a spinner — its own deadline, never the app's token — and the log says so.
+    /// Nothing here may cut the rest of the teardown short.
+    /// </summary>
+    private async Task StopDockerAtExitAsync()
+    {
+        var effective = _effective();
+        if (!effective.DockerServerStopOnExit || _session.DockerInUse is not { } name)
+        {
+            return;
+        }
+
+        try
+        {
+            var budget = TimeSpan.FromSeconds(Math.Clamp(effective.DockerServerStopTimeoutSeconds, 0, AppSettingsData.MaxDockerServerStopTimeoutSeconds)) + DockerServerHost.StopGrace;
+            using var cts = new CancellationTokenSource(budget);
+            var stopped = await _transcript.WithSpinnerAsync(DockerServerText.Stopping(name), () => _session.StopDockerAtExitAsync(effective, cts.Token)).ConfigureAwait(false);
+            foreach (string container in stopped)
+            {
+                DiagnosticLog.Info(DockerText.Category, SidekickApp.DockerServerExitNotice(container));
+            }
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            DiagnosticLog.Warn(DockerText.Category, "Docker server stop on exit: " + Llm.Assistant.Explain(ex));
+        }
+    }
+
     /// <summary>A <c>/docker</c> result's lines as notices, or a failure's as errors.</summary>
     private static void WriteDockerResult(DockerCommandResult result, INoticeSink sink)
     {

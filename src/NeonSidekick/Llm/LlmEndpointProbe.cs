@@ -243,7 +243,7 @@ public sealed class LlmEndpointProbe
             // The Claude API is never scanned for: its row is the session's to add, with its own key (2026-09-27). Nor is the
             // embedded model's sentinel (2026-09-29), nor the Claude CLI's (2026-09-30): their rows are the session's too, and
             // a sentinel is no place to ask.
-            if (!urls.Contains(v1) && !(scope == ScanScope.Remote && v1.IsLoopback) && !ClaudeApi.IsClaudeApi(v1) && !EmbeddedLlm.EmbeddedEndpoint.IsEmbedded(v1) && !Claude.ClaudeCliEndpoint.IsClaudeCli(v1)) urls.Add(v1);
+            if (!urls.Contains(v1) && !(scope == ScanScope.Remote && v1.IsLoopback) && !ClaudeApi.IsClaudeApi(v1) && !EmbeddedLlm.EmbeddedEndpoint.IsEmbedded(v1) && !Claude.ClaudeCliEndpoint.IsClaudeCli(v1) && !Docker.DockerEndpoint.IsDocker(v1)) urls.Add(v1);
         }
 
         var tasks = urls.Select(u => ProbeAsync(u, apiKey, cancellationToken)).ToArray();
@@ -320,7 +320,19 @@ public sealed class LlmEndpointProbe
             return null;
         }
 
-        if (EmbeddedLlm.EmbeddedEndpoint.SwitchedOff(effective))
+        if (Docker.DockerEndpoint.Chosen(effective))
+        {
+            // A chosen container's sentinel (2026-10-02) is switched to, not probed: LlmSession does that before it gets here.
+            DiagnosticLog.Error(Category, "The LLM URL names a Docker container, which this mode cannot start.");
+            return null;
+        }
+
+        if (Docker.DockerEndpoint.SwitchedOff(effective))
+        {
+            // Saved while the container was a Docker server (2026-10-02); the URL stands for nothing now, as the embedded model's below.
+            DiagnosticLog.Warn(Category, Docker.DockerServerText.SwitchedOffWarning);
+        }
+        else if (EmbeddedLlm.EmbeddedEndpoint.SwitchedOff(effective))
         {
             // Saved while the embedded model was on (2026-09-29); switched off, the URL stands for nothing, like the Claude API's below.
             DiagnosticLog.Warn(Category, EmbeddedLlm.EmbeddedLlmText.SwitchedOffWarning);

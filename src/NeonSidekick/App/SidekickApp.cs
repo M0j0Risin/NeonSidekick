@@ -82,6 +82,7 @@ public sealed class SidekickApp
     private readonly Func<Uri, Comfy.ComfyClient>? _comfyClient;
     private readonly Func<Uri, string, HomeAssistant.HaClient>? _haClient;
     private readonly Func<string, Docker.DockerClient>? _dockerClient;
+    private readonly Func<Docker.IDockerServers>? _dockerServers;
     private readonly Printing.IPrintSpooler _printSpooler;
     private readonly Func<Perf.IPerfSource>? _perfSource;
     private readonly UI.IFrameHold? _frames;
@@ -176,7 +177,8 @@ public sealed class SidekickApp
         Func<Perf.IPerfSource>? perfSource = null,
         UI.IFrameHold? frames = null,
         Func<Claude.IClaudeServerHost>? claudeServer = null,
-        Func<string, Docker.DockerClient>? dockerClient = null)
+        Func<string, Docker.DockerClient>? dockerClient = null,
+        Func<Docker.IDockerServers>? dockerServers = null)
     {
         // The Claude CLI server (2026-09-30): a host over the real CLI, with this executable as its MCP relay, unless a test gives its own.
         _claudeServerFactory = claudeServer ?? (() => new Claude.ClaudeServerHost(Claude.ClaudeServerHost.OwnRelayCommand));
@@ -201,6 +203,8 @@ public sealed class SidekickApp
         _haClient = haClient;
         // The Docker engine's client (2026-10-02): over the engine's named pipe in the app, a stub handler in tests.
         _dockerClient = dockerClient;
+        // The chosen Docker containers' switcher (2026-10-02): over the engine's pipe in the app, a fake in the session tests.
+        _dockerServers = dockerServers;
         // Claude Code headless for /claude (2026-09-27): the real CLI when null, a fake in tests.
         _claude = claude;
         _console = console ?? throw new ArgumentNullException(nameof(console));
@@ -558,7 +562,8 @@ public sealed class SidekickApp
         await using var embedded = _embeddedLlm?.Invoke();
         await using var claudeServer = _claudeServerFactory();
         _claudeServer = claudeServer;
-        using var session = new LlmSession(_probe, _contextProbe, _chatClientFactory, _time, _samplingProbe, embedded, claudeServer, ClaudeCliOffered);
+        using var dockerServers = BuildDockerServers();
+        using var session = new LlmSession(_probe, _contextProbe, _chatClientFactory, _time, _samplingProbe, embedded, claudeServer, ClaudeCliOffered, dockerServers);
         // The MCP servers (2026-09-20): connected after the LLM, their tools offered per turn like the screen's; disposed after the loop.
         await using var mcp = new McpSession(_settings, _mcpTransport, _time);
         var memory = BuildMemoryStore();
@@ -638,7 +643,9 @@ public sealed class SidekickApp
             await HeadlessLineAsync(VersionLine).ConfigureAwait(false);
             await HeadlessLineAsync(HeadlessHint).ConfigureAwait(false);
 
-            await session.ConnectAsync(EffectiveSettings, cancellationToken).ConfigureAwait(false);
+            // A chosen Docker container (2026-10-02) takes minutes to load: each step of its switch is a notice, said once.
+            Action<string>? phase = Docker.DockerEndpoint.Chosen(EffectiveSettings) ? HeadlessDockerPhase : null;
+            await session.ConnectAsync(EffectiveSettings, phase, cancellationToken).ConfigureAwait(false);
             await HeadlessLineAsync(session.Endpoint is null ? HeadlessNoServerLine(LlmScanMode.Resolve(EffectiveSettings)) : LlmSession.ConnectedLine(session.Endpoint)).ConfigureAwait(false);
             try
             {
@@ -952,6 +959,12 @@ public sealed class SidekickApp
         }
         finally
         {
+            // Docker server stop on exit (2026-10-02): off by default, the container keeps running.
+            foreach (string stopped in await StopDockerAtExitAsync(session).ConfigureAwait(false))
+            {
+                await HeadlessNoticeLineAsync("[notice] " + DockerServerExitNotice(stopped)).ConfigureAwait(false);
+            }
+
             // The MCP servers go while the log still forwards through the headless writer: a
             // `Stopped docker` line after the echo came back would land on stdout on its own.
             await mcp.DisposeAsync().ConfigureAwait(false);
@@ -1623,6 +1636,54 @@ public sealed class SidekickApp
         _headlessAtLineStart = true;
     }
 
+    /// <summary>
+    /// The chosen Docker containers' switcher for a run (2026-10-02): the session's own <see cref="Docker.DockerSession"/> over the
+    /// engine pipe the settings name (the <c>/docker</c> tools keep theirs), its readiness asked through the endpoint probe with
+    /// the settings' key. A test's own when it hands one in.
+    /// </summary>
+    private Docker.IDockerServers BuildDockerServers() =>
+        _dockerServers?.Invoke() ?? new Docker.DockerServerHost(
+            new Docker.DockerSession(() => EffectiveSettings, _dockerClient, _time),
+            (url, ct) => _probe.ProbeAsync(url, LlmEndpoint.KeyOf(EffectiveSettings), ct),
+            _time);
+
+    /// <summary>How long the exit waits for <c>Docker server stop on exit</c>: the stop's own timeout and its grace, then it gives up.</summary>
+    private TimeSpan DockerExitBudget =>
+        TimeSpan.FromSeconds(Math.Clamp(EffectiveSettings.DockerServerStopTimeoutSeconds, 0, AppSettingsData.MaxDockerServerStopTimeoutSeconds)) + Docker.DockerServerHost.StopGrace;
+
+    /// <summary>
+    /// <c>Docker server stop on exit</c> at the run's end (2026-10-02), under its own deadline rather than the app's token (which
+    /// may be the one that ended the run): the names stopped; empty when off, none in use, or anything went wrong (logged).
+    /// </summary>
+    private async Task<IReadOnlyList<string>> StopDockerAtExitAsync(LlmSession session)
+    {
+        try
+        {
+            using var budget = new CancellationTokenSource(DockerExitBudget);
+            return await session.StopDockerAtExitAsync(EffectiveSettings, budget.Token).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            DiagnosticLog.Warn(ChatScreen.AppCategory, "Docker server stop on exit: " + Llm.Assistant.Explain(ex));
+            return [];
+        }
+    }
+
+    /// <summary>The exit's notice for a container it stopped (<c>Docker server stop on exit</c>). Pinned.</summary>
+    public static string DockerServerExitNotice(string name) => Docker.DockerText.Glyph + " stopped " + name + " (Docker server stop on exit)";
+
+    /// <summary>A Docker switch's step, headless (2026-10-02): a notice line, written as it happens (the connect awaits nothing between).</summary>
+    private void HeadlessDockerPhase(string phase)
+    {
+        if (!_headlessAtLineStart)
+        {
+            _headlessOutput.WriteLine();
+        }
+
+        _headlessOutput.WriteLine("[notice] " + Docker.DockerText.Glyph + " " + phase);
+        _headlessAtLineStart = true;
+    }
+
     private async Task HeadlessLineAsync(string line)
     {
         await _headlessOutput.WriteLineAsync(line).ConfigureAwait(false);
@@ -1677,7 +1738,8 @@ public sealed class SidekickApp
         await using var embedded = _embeddedLlm?.Invoke();
         await using var claudeServer = _claudeServerFactory();
         _claudeServer = claudeServer;
-        using var session = new LlmSession(_probe, _contextProbe, _chatClientFactory, _time, _samplingProbe, embedded, claudeServer, ClaudeCliOffered);
+        using var dockerServers = BuildDockerServers();
+        using var session = new LlmSession(_probe, _contextProbe, _chatClientFactory, _time, _samplingProbe, embedded, claudeServer, ClaudeCliOffered, dockerServers);
         using var speech = new SpeechSession(_synthesizerFactory, _playbackFactory, new ModelStore(ModelsDirectory, _modelHttpClient));
         using var voice = BuildVoiceSession();
         // The MCP servers' session (2026-09-20), disposed after the screen: its stdio children end once the alternate buffer is left.

@@ -62,6 +62,23 @@ public sealed record DockerContainer(
     public string? Service => Labels.TryGetValue(ServiceLabel, out var s) && s.Length > 0 ? s : null;
 }
 
+/// <summary>One TCP port binding: the container's port, the host address it is bound on (null or blank for every address) and the host port.</summary>
+public sealed record DockerBinding(int Private, string? HostIp, int HostPort);
+
+/// <summary>
+/// What a Docker server's switch needs of <c>GET /containers/{id}/json</c> (2026-10-02): the state word and the exit code, the
+/// ports published while it runs (<c>NetworkSettings.Ports</c>) and the ones it asks for (<c>HostConfig.PortBindings</c>, there
+/// while it is stopped too), TCP only, and the network mode.
+/// </summary>
+public sealed record DockerInspected(string Id, string Name, string Status, int ExitCode, IReadOnlyList<DockerBinding> Published, IReadOnlyList<DockerBinding> Bound, string? NetworkMode)
+{
+    /// <summary>Whether it holds what a running container holds: running, paused or restarting (DockerLlmPicker's rule — each still has its memory).</summary>
+    public bool Active => Status is "running" or "paused" or "restarting";
+
+    /// <summary>Whether it has exited or died: a server that is never coming up.</summary>
+    public bool Gone => Status is "exited" or "dead";
+}
+
 /// <summary>An image as <c>GET /images/json</c> lists it.</summary>
 public sealed record DockerImage(string Id, IReadOnlyList<string> Tags, long Created, long Size)
 {
@@ -158,6 +175,59 @@ public static class DockerJson
                 Labels(c, "Labels"),
                 networks,
                 mounts));
+        }
+
+        return list;
+    }
+
+    /// <summary>An inspect answer read into <see cref="DockerInspected"/>, or null. Pure.</summary>
+    public static DockerInspected? Inspected(string json)
+    {
+        using var doc = TryParse(json);
+        if (doc is null || doc.RootElement.ValueKind != JsonValueKind.Object)
+        {
+            return null;
+        }
+
+        var r = doc.RootElement;
+        var state = r.TryGetProperty("State", out var s) ? s : default;
+        var host = r.TryGetProperty("HostConfig", out var h) ? h : default;
+        var network = r.TryGetProperty("NetworkSettings", out var n) ? n : default;
+        return new DockerInspected(
+            Str(r, "Id") ?? "",
+            (Str(r, "Name") ?? "").TrimStart('/'),
+            Str(state, "Status") ?? "",
+            Int(state, "ExitCode") ?? 0,
+            Bindings(network.ValueKind == JsonValueKind.Object && network.TryGetProperty("Ports", out var published) ? published : default),
+            Bindings(host.ValueKind == JsonValueKind.Object && host.TryGetProperty("PortBindings", out var bound) ? bound : default),
+            Str(host, "NetworkMode"));
+    }
+
+    /// <summary>A port map (<c>{"8000/tcp": [{"HostIp": "0.0.0.0", "HostPort": "8000"}]}</c>) as its TCP bindings; a blank or unparsable host port is skipped.</summary>
+    private static List<DockerBinding> Bindings(JsonElement map)
+    {
+        var list = new List<DockerBinding>();
+        if (map.ValueKind != JsonValueKind.Object)
+        {
+            return list;
+        }
+
+        foreach (var port in map.EnumerateObject())
+        {
+            string[] parts = port.Name.Split('/');
+            if (parts.Length != 2 || !string.Equals(parts[1], "tcp", StringComparison.OrdinalIgnoreCase)
+                || !int.TryParse(parts[0], NumberStyles.None, CultureInfo.InvariantCulture, out int inner) || port.Value.ValueKind != JsonValueKind.Array)
+            {
+                continue;
+            }
+
+            foreach (var binding in port.Value.EnumerateArray())
+            {
+                if (int.TryParse(Str(binding, "HostPort"), NumberStyles.None, CultureInfo.InvariantCulture, out int hostPort) && hostPort > 0)
+                {
+                    list.Add(new DockerBinding(inner, Str(binding, "HostIp"), hostPort));
+                }
+            }
         }
 
         return list;

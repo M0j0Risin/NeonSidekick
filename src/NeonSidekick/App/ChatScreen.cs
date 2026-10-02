@@ -1131,6 +1131,8 @@ internal sealed partial class ChatScreen
         _menu.SamplingPane = _samplingMenu.ShowAsync;
         // The embedded model's tab (2026-09-29): its catalog and live rows over the session's service, the backend under the effective settings.
         _menu.EmbeddedLlm = _session.Embedded;
+        // The Docker tab's container checklist (2026-10-02): the screen's engine door, the pipe the settings name.
+        _menu.DockerContainers = _docker.ContainersAsync;
         _menu.Effective = _effective;
         _menu.BeforeEmbeddedRemove = StopEmbeddedDownloadOfAsync;
         BindProfile();
@@ -7813,6 +7815,8 @@ internal sealed partial class ChatScreen
             _session.CancelLearning();
             // The jobs behind the line cancelled and awaited first (2026-09-29): nothing still touches MCP, voice or speech as they go.
             await _jobs.CancelAllAsync().ConfigureAwait(false);
+            // Docker server stop on exit (2026-10-02): off by default; on, the container in use stops while the screen is still up.
+            await StopDockerAtExitAsync().ConfigureAwait(false);
             _timers.Dispose();
             _perf.Dispose();
             // The background processes go with the screen (2026-09-21): what still runs is killed, tree and all.
@@ -8589,14 +8593,22 @@ internal sealed partial class ChatScreen
             return;
         }
 
+        if (DockerEndpoint.Chosen(effective) && _session.DockerServers is not null)
+        {
+            // A chosen Docker container (2026-10-02): the others stopped, it started and its model waited for, under the load's watch.
+            await ConnectUnderLoadAsync(effective, quiet, cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
         // A saved Claude API URL with the Claude API off or keyless stands for nothing (2026-09-27): found as a blank one.
         // So does a saved embedded URL with Embedded LLM server enabled off (2026-09-29), and a saved Claude CLI URL with the
         // Claude CLI server off or the CLI gone (2026-09-30).
         bool blankUrl = string.IsNullOrWhiteSpace(effective.LlmUrl)
             || (Llm.Anthropic.ClaudeApi.IsClaudeApi(effective.LlmUrl) && !Llm.Anthropic.ClaudeApi.Offered(effective))
             || EmbeddedLlm.EmbeddedEndpoint.SwitchedOff(effective)
-            || (ClaudeCliEndpoint.IsClaudeCli(effective.LlmUrl) && !_session.ClaudeCliOffered(effective));
-        if (blankUrl && !Llm.LlmScanMode.Scans(Llm.LlmScanMode.Resolve(effective)) && !Llm.Anthropic.ClaudeApi.Offered(effective) && !EmbeddedOffered && !_session.ClaudeCliOffered(effective))
+            || (ClaudeCliEndpoint.IsClaudeCli(effective.LlmUrl) && !_session.ClaudeCliOffered(effective))
+            || DockerEndpoint.IsDocker(effective.LlmUrl);   // a chosen one connected above (2026-10-02); any other stands for nothing
+        if (blankUrl && !Llm.LlmScanMode.Scans(Llm.LlmScanMode.Resolve(effective)) && !Llm.Anthropic.ClaudeApi.Offered(effective) && !EmbeddedOffered && !_session.ClaudeCliOffered(effective) && !_session.DockerOffered(effective))
         {
             await _session.ConnectAsync(effective, cancellationToken).ConfigureAwait(false);
             DrainDiagnostics();
@@ -8606,7 +8618,8 @@ internal sealed partial class ChatScreen
 
         if (!blankUrl || !_menu.CanShowMenus())
         {
-            if (await ConnectUnderWatchAsync(NoticeGlyphs.Llm, token => _transcript.WithSpinnerAsync(ConnectingLabel, () => _session.ConnectAsync(effective, token)), cancellationToken).ConfigureAwait(false))
+            // The label follows a chosen container's stop when one was in use (2026-10-02): leaving it takes seconds.
+            if (await ConnectUnderWatchAsync(NoticeGlyphs.Llm, token => _transcript.WithSpinnerAsync(ConnectingLabel, setLabel => _session.ConnectAsync(effective, setLabel, token)), cancellationToken).ConfigureAwait(false))
             {
                 return;
             }
@@ -8626,13 +8639,20 @@ internal sealed partial class ChatScreen
             // The embedded model's rows (2026-09-29; the installed ones alone since later that day) never answered a scan: the picker opens as it did
             // for the servers that did, or when only embedded rows stand; ESC takes the first server that answered, never a
             // embedded model — starting one loads gigabytes, which only a pick should do.
-            var answered = servers.Where(s => !EmbeddedLlm.EmbeddedEndpoint.IsEmbedded(s.BaseUrl)).ToList();
+            // A chosen container's row (2026-10-02) is no answer either: ESC never starts one.
+            var answered = servers.Where(s => !EmbeddedLlm.EmbeddedEndpoint.IsEmbedded(s.BaseUrl) && !DockerEndpoint.IsDocker(s.BaseUrl)).ToList();
             var picked = answered.Count > 1 || startup || answered.Count == 0
                 ? await _menu.PickServerAsync(servers, null, SettingsMenu.StartupServerTitle, cancellationToken).ConfigureAwait(false)
                 : null;
             if (picked is not null && EmbeddedLlm.EmbeddedEndpoint.IsEmbedded(picked.BaseUrl))
             {
                 await UseEmbeddedRowAsync(picked, cancellationToken).ConfigureAwait(false);
+                return;
+            }
+
+            if (picked is not null && DockerEndpoint.ContainerOf(picked.BaseUrl) is { } container)
+            {
+                await UseDockerAsync(container, cancellationToken).ConfigureAwait(false);
                 return;
             }
 
@@ -8661,7 +8681,7 @@ internal sealed partial class ChatScreen
             }
 
             // The connect itself is instant; the spinner covers the context-window probe that follows it.
-            if (await ConnectUnderWatchAsync(NoticeGlyphs.Llm, token => _transcript.WithSpinnerAsync(ConnectingLabel, () => _session.ConnectAsync(effective, endpoint, token)), cancellationToken).ConfigureAwait(false))
+            if (await ConnectUnderWatchAsync(NoticeGlyphs.Llm, token => _transcript.WithSpinnerAsync(ConnectingLabel, setLabel => _session.ConnectAsync(effective, endpoint, token, setLabel)), cancellationToken).ConfigureAwait(false))
             {
                 return;
             }
@@ -8710,6 +8730,19 @@ internal sealed partial class ChatScreen
             return;
         }
 
+        await ConnectUnderLoadAsync(effective, quiet, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// A connect that loads a model (the embedded server, 2026-09-29; a chosen Docker container, 2026-10-02, which shares it):
+    /// <see cref="LlmSession.ConnectAsync(AppSettingsData, Action{string}, CancellationToken)"/> under a spinner whose label
+    /// follows the load's steps, the screen living under it as under a reply (<see cref="LoadUnderWatchAsync"/>) — Ctrl+C or a
+    /// double-click on the spinner cancels it and the app stays. Then, in a reply's order, the cancelled notice or the report,
+    /// a cancel's <c>Queue cancel mode</c>, and the reconnects owed meanwhile (never the LLM's after a cancel, which would start
+    /// the load again).
+    /// </summary>
+    private async Task ConnectUnderLoadAsync(AppSettingsData effective, bool quiet, CancellationToken cancellationToken)
+    {
         // Under another watch already the load is that watch's wait, and what was owed meanwhile is that watch's to apply.
         bool ownWatch = !_turnRunning;
         bool cancelled = await LoadUnderWatchAsync(token => _transcript.WithSpinnerAsync(ConnectingLabel, async setLabel =>
@@ -9041,7 +9074,7 @@ internal sealed partial class ChatScreen
         if (string.IsNullOrWhiteSpace(args))
         {
             var scope = Llm.LlmScanMode.Resolve(effective);
-            if (!Llm.LlmScanMode.Scans(scope) && !Llm.Anthropic.ClaudeApi.Offered(effective) && !EmbeddedOffered && !_session.ClaudeCliOffered(effective))
+            if (!Llm.LlmScanMode.Scans(scope) && !Llm.Anthropic.ClaudeApi.Offered(effective) && !EmbeddedOffered && !_session.ClaudeCliOffered(effective) && !_session.DockerOffered(effective))
             {
                 // Disabled entirely (the user's call, 2026-09-15): no spinner, no request, the session as it was.
                 _transcript.Error(LlmSession.NoServerLine(scope));
@@ -9074,7 +9107,19 @@ internal sealed partial class ChatScreen
                 return;
             }
 
+            if (DockerEndpoint.ContainerOf(choice.BaseUrl) is { } container)
+            {
+                await UseDockerAsync(container, cancellationToken).ConfigureAwait(false);
+                return;
+            }
+
             picked = choice;
+        }
+        else if (string.Equals(args.Trim(), DockerEndpoint.Alias, StringComparison.OrdinalIgnoreCase))
+        {
+            // /server docker (2026-10-02): the chosen containers' rows alone, as /server embedded lists the embedded models.
+            await PickDockerServerAsync(effective, cancellationToken).ConfigureAwait(false);
+            return;
         }
         else
         {
@@ -9117,6 +9162,13 @@ internal sealed partial class ChatScreen
                     await UseEmbeddedRowAsync(row, cancellationToken).ConfigureAwait(false);
                 }
 
+                return;
+            }
+
+            if (DockerEndpoint.ContainerOf(url) is { } typed)
+            {
+                // /server docker:<name> (2026-10-02): that container, when it is a chosen one.
+                await UseDockerAsync(typed, cancellationToken).ConfigureAwait(false);
                 return;
             }
 

@@ -138,23 +138,36 @@ public sealed class DockerSession : IDisposable
     {
         ArgumentNullException.ThrowIfNull(action);
         ArgumentNullException.ThrowIfNull(targets);
-        var client = Client();
+        var lines = new List<string>(targets.Count);
+        int done = 0;
+        foreach (var container in targets)
+        {
+            var reply = await ActOneAsync(action, container, stopSeconds, who, cancellationToken).ConfigureAwait(false);
+            lines.Add(reply.Ok ? DockerText.Done(action, container, reply.Already) : reply.Error!);
+            done += reply.Ok ? 1 : 0;
+        }
+
+        return targets.Count == 1 ? lines[0] : DockerText.ActHeader(action, done, targets.Count) + "\n" + string.Join('\n', lines.Select(l => "  " + l));
+    }
+
+    /// <summary>
+    /// <paramref name="action"/> on one container (2026-10-02, the Docker servers' switch shares it with <see cref="ActAsync"/>):
+    /// the engine's reply, the outcome audited under <paramref name="who"/>, the kept list dropped. A stop or restart gives the
+    /// container <paramref name="stopSeconds"/> (clamped to <see cref="MaxStopSeconds"/>) before the engine kills it.
+    /// </summary>
+    public async Task<DockerReply> ActOneAsync(string action, DockerContainer target, int? stopSeconds, string who, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(action);
+        ArgumentNullException.ThrowIfNull(target);
         bool timed = action is "stop" or "restart";
         int seconds = Math.Clamp(stopSeconds ?? DefaultStopSeconds, 0, MaxStopSeconds);
         var timeout = timed ? TimeSpan.FromSeconds(seconds + 20) : ReadTimeout;
-        var lines = new List<string>(targets.Count);
-        int done = 0;
+        string path = "/containers/" + Uri.EscapeDataString(target.Id) + "/" + action + (timed ? "?t=" + seconds.ToString(CultureInfo.InvariantCulture) : "");
         try
         {
-            foreach (var container in targets)
-            {
-                string path = "/containers/" + Uri.EscapeDataString(container.Id) + "/" + action + (timed ? "?t=" + seconds.ToString(CultureInfo.InvariantCulture) : "");
-                var reply = await client.PostAsync(path, timeout, cancellationToken).ConfigureAwait(false);
-                string line = reply.Ok ? DockerText.Done(action, container, reply.Already) : reply.Error!;
-                DiagnosticLog.Info(DockerText.Category, DockerText.AuditLine(who, action + " " + container.Name, reply.Ok ? (reply.Already ? "already so" : "done") : line));
-                done += reply.Ok ? 1 : 0;
-                lines.Add(line);
-            }
+            var reply = await Client().PostAsync(path, timeout, cancellationToken).ConfigureAwait(false);
+            DiagnosticLog.Info(DockerText.Category, DockerText.AuditLine(who, action + " " + target.Name, reply.Ok ? (reply.Already ? "already so" : "done") : reply.Error!));
+            return reply;
         }
         finally
         {
@@ -163,8 +176,19 @@ public sealed class DockerSession : IDisposable
                 _last = null;
             }
         }
+    }
 
-        return targets.Count == 1 ? lines[0] : DockerText.ActHeader(action, done, targets.Count) + "\n" + string.Join('\n', lines.Select(l => "  " + l));
+    /// <summary><c>GET /containers/{id}/json</c> read into what a switch needs (<see cref="DockerInspected"/>): the state, the exit code and the ports; or the failure.</summary>
+    public async Task<(DockerInspected? Inspected, string? Error)> InspectAsync(string id, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(id);
+        var reply = await Client().GetAsync("/containers/" + Uri.EscapeDataString(id) + "/json", ReadTimeout, cancellationToken).ConfigureAwait(false);
+        if (!reply.Ok)
+        {
+            return (null, reply.Error);
+        }
+
+        return DockerJson.Inspected(reply.Body) is { } inspected ? (inspected, null) : (null, DockerText.BadAnswer("/containers/" + id + "/json"));
     }
 
     public void Dispose()

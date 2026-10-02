@@ -752,8 +752,26 @@ public enum SettingsField
     /// <summary>A toggle: the master key of the model's Docker changes (<see cref="Settings.AppSettingsData.DockerWrites"/>); off, the model may only look. The Docker tab (2026-10-02).</summary>
     DockerWrites,
 
-    /// <summary>Typed: the Docker engine's named pipe, blank for <c>docker_engine</c> (<see cref="Settings.AppSettingsData.DockerEnginePipe"/>). The Docker tab's last row (2026-10-02); no reconnect (read at each call). Last in the enum, as every newcomer.</summary>
+    /// <summary>Typed: the Docker engine's named pipe, blank for <c>docker_engine</c> (<see cref="Settings.AppSettingsData.DockerEnginePipe"/>). The Docker tab's last row (2026-10-02); no reconnect (read at each call). Last in the enum until <see cref="DockerServers"/>.</summary>
     DockerEnginePipe,
+
+    /// <summary>A toggle: whether <c>/server</c> offers the chosen containers (<see cref="Settings.AppSettingsData.DockerServers"/>). The Docker tab of <c>/settings</c>' first row (2026-10-02, the user's ask); a reconnect.</summary>
+    DockerServers,
+
+    /// <summary>A checklist: which of the engine's containers are servers (<see cref="Settings.AppSettingsData.DockerServerContainers"/>). The Docker tab (2026-10-02); no reconnect (read at the next connect).</summary>
+    DockerServerContainers,
+
+    /// <summary>Typed: seconds a stopping container gets (<see cref="Settings.AppSettingsData.DockerServerStopTimeoutSeconds"/>). The Docker tab (2026-10-02).</summary>
+    DockerServerStopTimeoutSeconds,
+
+    /// <summary>Typed: seconds between the stops and the start (<see cref="Settings.AppSettingsData.DockerServerPostStopDelaySeconds"/>). The Docker tab (2026-10-02).</summary>
+    DockerServerPostStopDelaySeconds,
+
+    /// <summary>Typed: seconds a started container may take to answer (<see cref="Settings.AppSettingsData.DockerServerReadyTimeoutSeconds"/>). The Docker tab (2026-10-02).</summary>
+    DockerServerReadyTimeoutSeconds,
+
+    /// <summary>A toggle: whether the exit stops the container in use (<see cref="Settings.AppSettingsData.DockerServerStopOnExit"/>). The Docker tab's last row (2026-10-02). Last in the enum, as every newcomer.</summary>
+    DockerServerStopOnExit,
 }
 
 /// <summary>The tabs of <c>/settings</c> on the pane, in strip order (General, Embedded, LLM, TTS, STT, Sessions, Botchat — the user's order, 2026-09-29; Sessions right after General — the user's order, 2026-09-18 — until then; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
@@ -768,7 +786,10 @@ public enum SettingsTab
     /// </summary>
     Embedded,
 
-    /// <summary>Third since 2026-09-19 (the skills' rows sat between, 2026-09-18 until then).</summary>
+    /// <summary>The Docker servers' rows (2026-10-02, the user's ask: a Docker tab next to Embedded): the switch, the containers, the three waits and the exit stop.</summary>
+    Docker,
+
+    /// <summary>Fourth since 2026-10-02 (third from 2026-09-19; the skills' rows sat between, 2026-09-18 until then).</summary>
     Llm,
     Tts,
 
@@ -1029,7 +1050,7 @@ internal sealed partial class SettingsMenu
     private static readonly SettingsField[] Fields = Enum.GetValues<SettingsField>();
 
     /// <summary>The strip titles, one per <see cref="SettingsTab"/> (five since 2026-09-19: Ask, Files and Web are <c>/tools</c>' tabs, <see cref="ToolsText.TabTitles"/>, and Skills is <c>/skills</c>' Options tab, <see cref="SkillsText.OptionsTabTitle"/>). Pinned.</summary>
-    public static readonly IReadOnlyList<string> TabTitles = ["General", EmbeddedTabTitle, "LLM", "TTS", "STT", "Sessions", "Botchat"];
+    public static readonly IReadOnlyList<string> TabTitles = ["General", EmbeddedTabTitle, DockerTabTitle, "LLM", "TTS", "STT", "Sessions", "Botchat"];
 
     /// <summary>The embedded model tab's strip title (2026-09-29). Pinned.</summary>
     public const string EmbeddedTabTitle = "Embedded";
@@ -1064,6 +1085,7 @@ internal sealed partial class SettingsMenu
          SettingsField.Theme, SettingsField.WelcomeSplash, SettingsField.ShowHeader, SettingsField.ShowWorkingDirectory, SettingsField.ToolbarItems, SettingsField.ShowPerformanceBar, SettingsField.MenuMaxHeight,
          SettingsField.DraftEditor, SettingsField.ImageEditor, SettingsField.ThemedViewer],
         [SettingsField.EmbeddedLlmServer, SettingsField.EmbeddedModels, SettingsField.EmbeddedFilterType, SettingsField.EmbeddedHfDownloadType, SettingsField.EmbeddedBackend, SettingsField.EmbeddedContextSize, SettingsField.EmbeddedGpuLayers, SettingsField.EmbeddedVramBudget, SettingsField.EmbeddedVramOnly, SettingsField.EmbeddedVision, SettingsField.EmbeddedDrafter],
+        [SettingsField.DockerServers, SettingsField.DockerServerContainers, SettingsField.DockerServerStopTimeoutSeconds, SettingsField.DockerServerPostStopDelaySeconds, SettingsField.DockerServerReadyTimeoutSeconds, SettingsField.DockerServerStopOnExit],
         [SettingsField.LlmScanMode, SettingsField.LlmUrl, SettingsField.LlmModel, SettingsField.LlmApiKey,
          SettingsField.LlmReasoning, SettingsField.LlmShowThinking, SettingsField.LlmPreserveThinking, SettingsField.LlmReasoningEstimate, SettingsField.LlmSampling, SettingsField.LlmSamplingFromHuggingFace,
          SettingsField.LlmOfferTools, SettingsField.LlmMaxToolIterations, SettingsField.LlmRequestTimeoutSeconds, SettingsField.LlmTurnTimeoutSeconds,
@@ -1302,7 +1324,7 @@ internal sealed partial class SettingsMenu
             or SettingsField.LlmRequestTimeoutSeconds or SettingsField.LlmTurnTimeoutSeconds or SettingsField.LlmContextLength or SettingsField.LlmReasoning
             or SettingsField.ClaudeApi or SettingsField.ClaudeApiKey or SettingsField.ClaudeApiMaxTokens or SettingsField.ClaudeApiPromptCaching or SettingsField.ClaudeCliServer
             or SettingsField.EmbeddedLlmServer or SettingsField.EmbeddedModels or SettingsField.EmbeddedBackend or SettingsField.EmbeddedContextSize or SettingsField.EmbeddedGpuLayers or SettingsField.EmbeddedVramBudget or SettingsField.EmbeddedVision
-            or SettingsField.EmbeddedDrafter or SettingsField.EmbeddedVramOnly;
+            or SettingsField.EmbeddedDrafter or SettingsField.EmbeddedVramOnly or SettingsField.DockerServers;
 
     /// <summary>Whether a change to <paramref name="field"/> needs the speech session re-probed.</summary>
     public static bool IsTtsField(SettingsField field) =>
@@ -1446,6 +1468,12 @@ internal sealed partial class SettingsMenu
     /// </summary>
     private static (string Where, string Quant) ServerWhereParts(LlmServer server)
     {
+        if (NeonSidekick.Docker.DockerEndpoint.ContainerOf(server.BaseUrl) is { } container)
+        {
+            // A chosen Docker container (2026-10-02): its name, the sentinel naming no place.
+            return (NeonSidekick.Docker.DockerServerText.UrlDisplay(container), "");
+        }
+
         if (!NeonSidekick.EmbeddedLlm.EmbeddedEndpoint.IsEmbedded(server.BaseUrl))
         {
             return (server.BaseUrl.ToString(), "");
@@ -1460,7 +1488,8 @@ internal sealed partial class SettingsMenu
     public static string ServerListLine(IReadOnlyList<LlmServer> servers)
     {
         ArgumentNullException.ThrowIfNull(servers);
-        return "LLM servers: " + string.Join(", ", servers.Select(s => s.Name + " " + (NeonSidekick.EmbeddedLlm.EmbeddedEndpoint.IsEmbedded(s.BaseUrl) ? EmbeddedRowName(s) : s.BaseUrl.ToString())));
+        return "LLM servers: " + string.Join(", ", servers.Select(s => s.Name + " " + (NeonSidekick.EmbeddedLlm.EmbeddedEndpoint.IsEmbedded(s.BaseUrl) ? EmbeddedRowName(s)
+            : NeonSidekick.Docker.DockerEndpoint.ContainerOf(s.BaseUrl) is { } container ? NeonSidekick.Docker.DockerServerText.UrlDisplay(container) : s.BaseUrl.ToString())));
     }
 
     /// <summary>An embedded row's model as one phrase: its display name and quantisation from the catalog, else its id.</summary>
@@ -1496,7 +1525,7 @@ internal sealed partial class SettingsMenu
             or SettingsField.ClaudeApi or SettingsField.ClaudeApiPromptCaching or SettingsField.ClaudeCliServer or SettingsField.EmbeddedVision or SettingsField.EmbeddedLlmServer or SettingsField.EmbeddedDrafter or SettingsField.EmbeddedVramOnly
             or SettingsField.HomeAssistantTools or SettingsField.PrintTools or SettingsField.OracleTools or SettingsField.OraclePercentMention or SettingsField.MySqlTools or SettingsField.MySqlPercentMention
             or SettingsField.UncTools or SettingsField.UncWrites or SettingsField.UncStarMention
-            or SettingsField.DockerTools or SettingsField.DockerWrites;
+            or SettingsField.DockerTools or SettingsField.DockerWrites or SettingsField.DockerServers or SettingsField.DockerServerStopOnExit;
 
     public static string FieldName(SettingsField field) => field switch
     {
@@ -1665,6 +1694,12 @@ internal sealed partial class SettingsMenu
         SettingsField.DockerTools => "Docker tools",
         SettingsField.DockerWrites => "Docker writes",
         SettingsField.DockerEnginePipe => "Docker engine pipe",
+        SettingsField.DockerServers => "Docker servers enabled",
+        SettingsField.DockerServerContainers => "Docker server containers",
+        SettingsField.DockerServerStopTimeoutSeconds => "Docker server stop timeout (s)",
+        SettingsField.DockerServerPostStopDelaySeconds => "Docker server post-stop delay (s)",
+        SettingsField.DockerServerReadyTimeoutSeconds => "Docker server ready timeout (s)",
+        SettingsField.DockerServerStopOnExit => "Docker server stop on exit",
         SettingsField.ObsidianAllowDelete => "Obsidian allow delete (.trash)",   // "Obsidian allow delete" until 2026-09-23 (the user's call: the row says where a delete goes)
         SettingsField.WebBrowserMode => "Web browser mode",
         SettingsField.WebBrowserPath => "Web browser path",
@@ -1764,7 +1799,8 @@ internal sealed partial class SettingsMenu
         ArgumentNullException.ThrowIfNull(profileDirectory);
         return field switch
         {
-            SettingsField.LlmUrl => string.IsNullOrWhiteSpace(data.LlmUrl) ? BlankUrlLabel(ScanScopeOf(data)) : NeonSidekick.EmbeddedLlm.EmbeddedEndpoint.IsEmbedded(data.LlmUrl) ? NeonSidekick.EmbeddedLlm.EmbeddedLlmText.UrlDisplay : data.LlmUrl,
+            SettingsField.LlmUrl => string.IsNullOrWhiteSpace(data.LlmUrl) ? BlankUrlLabel(ScanScopeOf(data)) : NeonSidekick.EmbeddedLlm.EmbeddedEndpoint.IsEmbedded(data.LlmUrl) ? NeonSidekick.EmbeddedLlm.EmbeddedLlmText.UrlDisplay
+                : NeonSidekick.Docker.DockerEndpoint.ContainerOf(data.LlmUrl) is { } container ? NeonSidekick.Docker.DockerServerText.UrlDisplay(container) : data.LlmUrl,
             SettingsField.LlmModel => string.IsNullOrWhiteSpace(data.LlmModel) ? "(first listed)" : data.LlmModel,
             SettingsField.LlmApiKey => ClaudeApiKeyLabel(data.LlmApiKey),
             SettingsField.LlmRequestTimeoutSeconds => Seconds(data.LlmRequestTimeoutSeconds),
@@ -1938,6 +1974,12 @@ internal sealed partial class SettingsMenu
             SettingsField.DockerTools => OnOff(data.DockerTools),
             SettingsField.DockerWrites => OnOff(data.DockerWrites),
             SettingsField.DockerEnginePipe => Docker.DockerPipe.Display(data.DockerEnginePipe),
+            SettingsField.DockerServers => OnOff(data.DockerServers),
+            SettingsField.DockerServerContainers => DockerServerContainersValue(data.DockerServerContainers),
+            SettingsField.DockerServerStopTimeoutSeconds => Seconds(data.DockerServerStopTimeoutSeconds),
+            SettingsField.DockerServerPostStopDelaySeconds => Seconds(data.DockerServerPostStopDelaySeconds),
+            SettingsField.DockerServerReadyTimeoutSeconds => Seconds(data.DockerServerReadyTimeoutSeconds),
+            SettingsField.DockerServerStopOnExit => OnOff(data.DockerServerStopOnExit),
             SettingsField.ObsidianVault => string.IsNullOrWhiteSpace(data.ObsidianVault) ? NoObsidianVaultLabel : data.ObsidianVault,
             SettingsField.WebBrowserMode => data.WebBrowserMode,
             SettingsField.WebBrowserPath => string.IsNullOrWhiteSpace(data.WebBrowserPath) ? AutoBrowserLabel(locatedBrowser) : data.WebBrowserPath,
@@ -2597,6 +2639,9 @@ internal sealed partial class SettingsMenu
         SettingsField.HomeAssistantUrl => data.HomeAssistantUrl,
         SettingsField.HomeAssistantAssistAgent => data.HomeAssistantAssistAgent,
         SettingsField.DockerEnginePipe => data.DockerEnginePipe,
+        SettingsField.DockerServerStopTimeoutSeconds => data.DockerServerStopTimeoutSeconds.ToString(CultureInfo.InvariantCulture),
+        SettingsField.DockerServerPostStopDelaySeconds => data.DockerServerPostStopDelaySeconds.ToString(CultureInfo.InvariantCulture),
+        SettingsField.DockerServerReadyTimeoutSeconds => data.DockerServerReadyTimeoutSeconds.ToString(CultureInfo.InvariantCulture),
         SettingsField.HomeAssistantTimeoutSeconds => data.HomeAssistantTimeoutSeconds.ToString(CultureInfo.InvariantCulture),
         SettingsField.PrintFontSize => data.PrintFontSize.ToString(CultureInfo.InvariantCulture),
         SettingsField.ComfyOutputFolder => data.ComfyOutputFolder,
@@ -3664,6 +3709,11 @@ internal sealed partial class SettingsMenu
             return await EditUncOfferedAsync(cancellationToken).ConfigureAwait(false);
         }
 
+        if (field == SettingsField.DockerServerContainers)
+        {
+            return await EditDockerServerContainersAsync(cancellationToken).ConfigureAwait(false);
+        }
+
         if (field == SettingsField.UncAddShare)
         {
             return await AddUncShareAsync(cancellationToken).ConfigureAwait(false);
@@ -4242,6 +4292,36 @@ internal sealed partial class SettingsMenu
             case SettingsField.DockerEnginePipe:
                 // Kept as the bare name whatever form was typed (2026-10-02); blank is the default pipe.
                 Apply(field, d => d.DockerEnginePipe = Docker.DockerPipe.Normalize(text));
+                return true;
+
+            case SettingsField.DockerServerStopTimeoutSeconds:
+                if (!int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out int dockerStop) || dockerStop < AppSettingsData.MinDockerServerStopTimeoutSeconds || dockerStop > AppSettingsData.MaxDockerServerStopTimeoutSeconds)
+                {
+                    Sink.Error($"{FieldName(field)} {DockerServerStopTimeoutRangeError}; keeping {EditableValue(field, saved)}.");
+                    return false;
+                }
+
+                Apply(field, d => d.DockerServerStopTimeoutSeconds = dockerStop);
+                return true;
+
+            case SettingsField.DockerServerPostStopDelaySeconds:
+                if (!int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out int dockerDelay) || dockerDelay < 0 || dockerDelay > AppSettingsData.MaxDockerServerPostStopDelaySeconds)
+                {
+                    Sink.Error($"{FieldName(field)} {DockerServerPostStopDelayRangeError}; keeping {EditableValue(field, saved)}.");
+                    return false;
+                }
+
+                Apply(field, d => d.DockerServerPostStopDelaySeconds = dockerDelay);
+                return true;
+
+            case SettingsField.DockerServerReadyTimeoutSeconds:
+                if (!int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out int dockerReady) || dockerReady < AppSettingsData.MinDockerServerReadyTimeoutSeconds || dockerReady > AppSettingsData.MaxDockerServerReadyTimeoutSeconds)
+                {
+                    Sink.Error($"{FieldName(field)} {DockerServerReadyTimeoutRangeError}; keeping {EditableValue(field, saved)}.");
+                    return false;
+                }
+
+                Apply(field, d => d.DockerServerReadyTimeoutSeconds = dockerReady);
                 return true;
 
             case SettingsField.HomeAssistantTimeoutSeconds:
@@ -5122,6 +5202,8 @@ internal sealed partial class SettingsMenu
             SettingsField.UncStarMention => data.UncStarMention,
             SettingsField.DockerTools => data.DockerTools,
             SettingsField.DockerWrites => data.DockerWrites,
+            SettingsField.DockerServers => data.DockerServers,
+            SettingsField.DockerServerStopOnExit => data.DockerServerStopOnExit,
             SettingsField.ComfyTools => data.ComfyTools,
             SettingsField.HomeAssistantTools => data.HomeAssistantTools,
             SettingsField.PrintTools => data.PrintTools,
@@ -5208,6 +5290,8 @@ internal sealed partial class SettingsMenu
             case SettingsField.UncStarMention: data.UncStarMention = on; break;
             case SettingsField.DockerTools: data.DockerTools = on; break;
             case SettingsField.DockerWrites: data.DockerWrites = on; break;
+            case SettingsField.DockerServers: data.DockerServers = on; break;
+            case SettingsField.DockerServerStopOnExit: data.DockerServerStopOnExit = on; break;
             case SettingsField.ComfyTools: data.ComfyTools = on; break;
             case SettingsField.HomeAssistantTools: data.HomeAssistantTools = on; break;
             case SettingsField.PrintTools: data.PrintTools = on; break;
@@ -5302,6 +5386,8 @@ internal sealed partial class SettingsMenu
         SettingsField.UncStarMention => on ? "* and part of a name lists the UNC shares on the line" : "* is ordinary text",
         SettingsField.DockerTools => on ? "Docker tools enabled; /docker works either way" : "Docker tools disabled; /docker still works",
         SettingsField.DockerWrites => on ? "the model may start, stop, pull and prune, each change asking first" : "the model may only look at Docker",
+        SettingsField.DockerServers => on ? "/server offers the chosen containers, one running at a time" : "no Docker servers; one in use stops at the reconnect",
+        SettingsField.DockerServerStopOnExit => on ? "the app's exit stops the container it was using" : "the container keeps running after the app exits",
         SettingsField.ComfyTools => on ? "ComfyUI tools enabled" : "ComfyUI tools disabled",
         SettingsField.HomeAssistantTools => on ? "the model may read and switch Home Assistant, as the policy allows" : "no Home Assistant tools",
         SettingsField.PrintTools => on ? "the model may list the printers and print, as the policy allows" : "no print tools; /print still prints",

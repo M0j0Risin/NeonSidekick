@@ -30,7 +30,8 @@ public partial class SettingsMenuTests
         int tab = (int)SettingsTab.Embedded;
         Assert.Equal("Embedded", SettingsMenu.TabTitles[tab]);
         Assert.Equal("General", SettingsMenu.TabTitles[tab - 1]);   // second since later on 2026-09-29 (the user's order); after STT until then, the Claude (API) tab between until it went to /tools
-        Assert.Equal("LLM", SettingsMenu.TabTitles[tab + 1]);
+        Assert.Equal("Docker", SettingsMenu.TabTitles[tab + 1]);   // the Docker servers' tab next to it (2026-10-02, the user's ask)
+        Assert.Equal("LLM", SettingsMenu.TabTitles[tab + 2]);
         // The switch first and MTP last (2026-09-29, the user's asks); the filter type under the catalog, the VRAM budget under
         // the GPU layers (later that day), the HF download type under the filter type (2026-09-30), VRAM only under the budget (2026-10-01).
         Assert.Equal([SettingsField.EmbeddedLlmServer, SettingsField.EmbeddedModels, SettingsField.EmbeddedFilterType, SettingsField.EmbeddedHfDownloadType, SettingsField.EmbeddedBackend, SettingsField.EmbeddedContextSize, SettingsField.EmbeddedGpuLayers, SettingsField.EmbeddedVramBudget, SettingsField.EmbeddedVramOnly, SettingsField.EmbeddedVision, SettingsField.EmbeddedDrafter], SettingsMenu.TabFields[tab]);

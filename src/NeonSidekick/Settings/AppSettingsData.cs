@@ -1474,6 +1474,49 @@ public sealed class AppSettingsData
     /// </summary>
     public string DockerEnginePipe { get; set; } = Docker.DockerPipe.DefaultName;
 
+    // ─── Docker servers (2026-10-02) ────────────────────────────────────────────
+    // Chosen Docker containers as /server choices (the user's ask, after their tray app DockerLlmPicker: their vLLM and SGLang
+    // containers, one running at a time so the GPU holds one model). /settings' Docker tab; the engine pipe is /tools' row above.
+
+    /// <summary>
+    /// Whether <c>/server</c> offers the containers of <see cref="DockerServerContainers"/> (2026-10-02). Off by default. Off
+    /// while one is in use, the reconnect stops it (picking another server does, the user's call) and its saved URL then
+    /// counts as blank. A reconnect row. No variable.
+    /// </summary>
+    public bool DockerServers { get; set; }
+
+    /// <summary>
+    /// The containers offered as servers (2026-10-02): their names, in the order the picker lists them. Starting one stops
+    /// every other one of these first; a container not named here is never touched. Null or empty offers none. Picked from
+    /// the engine's containers on the Docker tab of <c>/settings</c>. No variable.
+    /// </summary>
+    public List<string>? DockerServerContainers { get; set; }
+
+    /// <summary>Seconds a stopping container gets before the engine kills it (2026-10-02; DockerLlmPicker's 30): <see cref="MinDockerServerStopTimeoutSeconds"/> to <see cref="MaxDockerServerStopTimeoutSeconds"/>. No variable.</summary>
+    public int DockerServerStopTimeoutSeconds { get; set; } = DefaultDockerServerStopTimeoutSeconds;
+
+    /// <summary>Seconds waited after the others stop and before the chosen one starts, so the GPU's memory is free (2026-10-02; DockerLlmPicker's 2): 0 to <see cref="MaxDockerServerPostStopDelaySeconds"/>. No variable.</summary>
+    public int DockerServerPostStopDelaySeconds { get; set; } = DefaultDockerServerPostStopDelaySeconds;
+
+    /// <summary>Seconds a started container may take to answer <c>/v1/models</c> — the model loading (2026-10-02): <see cref="MinDockerServerReadyTimeoutSeconds"/> to <see cref="MaxDockerServerReadyTimeoutSeconds"/>. No variable.</summary>
+    public int DockerServerReadyTimeoutSeconds { get; set; } = DefaultDockerServerReadyTimeoutSeconds;
+
+    /// <summary>
+    /// Whether the app's exit stops the chosen container it was using (2026-10-02, the user's call: a setting). Off by default:
+    /// the container keeps running, as any container outlives the app, and the next launch connects without loading the
+    /// model again. No variable.
+    /// </summary>
+    public bool DockerServerStopOnExit { get; set; }
+
+    public const int MinDockerServerStopTimeoutSeconds = 0;
+    public const int MaxDockerServerStopTimeoutSeconds = 120;
+    public const int DefaultDockerServerStopTimeoutSeconds = 30;
+    public const int MaxDockerServerPostStopDelaySeconds = 60;
+    public const int DefaultDockerServerPostStopDelaySeconds = 2;
+    public const int MinDockerServerReadyTimeoutSeconds = 30;
+    public const int MaxDockerServerReadyTimeoutSeconds = 3600;
+    public const int DefaultDockerServerReadyTimeoutSeconds = 900;
+
     // ─── Images (ComfyUI) ───────────────────────────────────────────────────────
     // The image tools (2026-09-24, the user's ask: "what can we do with comfyui?" — text to image, img2img, their own
     // exported workflows, splash art, and prompts written for Pony Diffusion XL and the other families, or sent as typed).

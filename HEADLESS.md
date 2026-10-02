@@ -217,6 +217,18 @@ $env:NEONSIDEKICK_CLAUDE_CLI_SERVER = "on"
 Get-Content job.txt | NeonSidekick.exe --headless --url claude-cli --model haiku --cwd D:\work
 ```
 
+A Docker server: `--url docker:<container>` switches to one of the profile's chosen Docker containers (the README's
+*Docker servers*): every other chosen container is stopped first, this one is started, and the run waits until its
+`/v1/models` answers, printing each step once as a `[notice]` line (`🐳 stopping …`, `🐳 starting …`). The profile's
+*Docker servers enabled* must be on and the container ticked in *Docker server containers*; otherwise the URL counts as
+blank (a warning says so). The model is the one the container serves, so `--model` is only a preference. A failed switch
+(a stop refused, the container exiting, the ready timeout) prints that error, and the run has no model to answer.
+The container keeps running when the run ends unless *Docker server stop on exit* is on.
+
+```powershell
+"Ping." | NeonSidekick.exe --headless --url docker:vllm_gemma
+```
+
 ---
 
 ## `--model <id>`: which model on that server
@@ -669,7 +681,7 @@ Flags beat variables; variables beat the profile's saved values.
 |---|---|
 | `NEONSIDEKICK_PROFILE` | The profile, when there is no `--profile`; with neither, `default`. |
 | `NEONSIDEKICK_HOME` | A whole separate home (its own `settings.json`, profiles, models, llama.cpp runtimes, `mcp.json`, `sql.json`, `oracle.json`, `mysql.json`, `unc.json`). |
-| `NEONSIDEKICK_LLM_URL` / `NEONSIDEKICK_LLM_MODEL` | Server and model, when there is no `--url` / `--model`. `embedded` and an embedded model's id run the embedded LLM. |
+| `NEONSIDEKICK_LLM_URL` / `NEONSIDEKICK_LLM_MODEL` | Server and model, when there is no `--url` / `--model`. `embedded` and an embedded model's id run the embedded LLM; `docker:<container>` a chosen Docker container. |
 | `NEONSIDEKICK_EMBEDDED_BACKEND` / `NEONSIDEKICK_EMBEDDED_CONTEXT` | The embedded LLM's llama.cpp build (`auto`, `cuda`, `vulkan`, `cpu`) and context window in tokens (0 to fit the GPU, or 512–262144) for the run. |
 | `NEONSIDEKICK_LLM_API_KEY` | The server's key; never put it on the command line. |
 | `NEONSIDEKICK_CLAUDE_API` / `NEONSIDEKICK_CLAUDE_API_KEY` | `on` and a key offer the Claude API for the run (`--url https://api.anthropic.com`). The key is never logged and never sent to a local server. Every request is billed to the key's account. |

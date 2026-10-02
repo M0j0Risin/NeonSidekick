@@ -70,6 +70,7 @@ During early development, I was experimenting with synthwave-style themes in Spe
 * **MySQL and MariaDB:** The same read-only tools again, through MySqlConnector (fully managed, MIT). Every query is checked to be a single `SELECT`, runs in a hardened session and a read-only transaction that is always rolled back. Sign in with a database user; passwords are stored as the others are.
 * **UNC shares and outside folders:** Search, read and (when you allow it) change files on `\\server\share` paths and local folders outside the working directory, without mapped drives. Each share is reached as you or as another Windows account (like `runas /netonly`), its password stored as the SQL ones are. Read-only unless the share is marked read-write and *UNC writes* is on; changes there are permanent.
 * **Docker Desktop:** See your containers, their logs, health, resource use, images, volumes, networks and compose projects, through the Docker engine's own API (no `docker.exe`). Environment values in an inspect are hidden. With *Docker writes* on, the model can also start, stop, restart, pull and clean up, each change waiting for your yes. `/docker` opens the containers on a pane for your own hand.
+* **Docker servers:** Pick your vLLM or SGLang containers on `/settings` › Docker and they become `/server` choices. Starting one stops the others you picked first, so only one holds the GPU at a time.
 * **Home Assistant:** Control lights, scenes, the TV, to-do lists and sensors through your own Home Assistant. The model finds devices by room or name ("dim the den to 30%"), and anything outside a safe list waits for your yes. `/ha` drives the house directly, without the model.
 * **ComfyUI:** Pictures from your own ComfyUI workflows (text-to-image, image-to-image, face swaps). The model writes prompts in each model family's style, or `/imagine` sends yours exactly as typed. A wizard builds or imports workflows.
 * **Claude API:** Anthropic's Claude models as one more `/server` choice, using your own API key (stored encrypted), with thinking levels, prompt caching and cost in `/usage`. It stays off until you turn it on in the *Claude* tab of `/tools`.
@@ -321,12 +322,25 @@ The Drafter column says how a model drafts ahead (see *Embedded drafter*). **MTP
 * HauhauCS's Qwen3.8 repository also ships a *FastMTP* file. It needs a patched llama.cpp, so the app uses the drafter built into the model instead.
 * Windows x64 only. The small models (E2B, E4B) call tools less reliably than the bigger ones.
 
+#### Docker
+
+Your own LLM containers (vLLM, SGLang, anything that serves `/v1/models`) as `/server` choices, one running at a time. See *Docker servers* under Docker.
+
+| Setting | What it does | Default |
+|---|---|---|
+| Docker servers enabled | Offers the chosen containers in `/server`. Turning it off while one is in use stops it at the reconnect. | off |
+| Docker server containers | Which containers are servers: a checklist of every container the engine lists, with its state, image and ports (Enter or Space ticks one; select all or none). A ticked name the engine no longer lists is kept. | none |
+| Docker server stop timeout (s) | How long a stopping container gets before the engine kills it (0–120). | 30 |
+| Docker server post-stop delay (s) | The wait between the stops and the start, so the GPU's memory is free (0–60). | 2 |
+| Docker server ready timeout (s) | How long a started container may take to answer on `/v1/models` (30–3600). Past it the switch fails and the container is left running. | 900 |
+| Docker server stop on exit | Stops the container in use when the app exits. Off, it keeps running. | off |
+
 #### LLM
 
 | Setting | What it does | Default |
 |---|---|---|
 | LLM server scan mode | Where the app looks for a server while *LLM URL* is blank: `local` (the usual ports on this machine), `remote` (the same ports across the local network), `both`, or `disabled`. With `disabled` nothing is scanned: set the URL by hand, or pick the embedded model or the Claude API in `/server`. | `disabled` |
-| LLM URL | The server's OpenAI-compatible base URL (`http://127.0.0.1:1234/v1`), or `embedded` for the app's own embedded LLM (see *Embedded*). `/server` fills it in. When empty, the app scans as *LLM server scan mode* says and, at startup, lets you pick a server, model and reasoning level, and saves all three. ESC at that picker takes the first server without saving it. | (none) |
+| LLM URL | The server's OpenAI-compatible base URL (`http://127.0.0.1:1234/v1`), `embedded` for the app's own embedded LLM (see *Embedded*), or `docker:<container>` for a chosen Docker container (see *Docker servers*). `/server` fills it in. When empty, the app scans as *LLM server scan mode* says and, at startup, lets you pick a server, model and reasoning level, and saves all three. ESC at that picker takes the first server without saving it. | (none) |
 | LLM model | The model id. Empty takes the first model the server lists; `/model` picks one. | (first listed) |
 | LLM API key | The bearer token the server expects; `empty` for local servers that need no key. A real key is saved encrypted for your Windows account (DPAPI, Windows' built-in data protection) and shown as `(set, encrypted)`. Typing a new value replaces it (`empty` stays as it is). | `empty` |
 | LLM reasoning | How hard the model thinks, sent with every request: `none` (thinking off), `low`, `medium`, `high` or `xhigh`. `/reasoning` opens the same list. | `none` |
@@ -905,7 +919,7 @@ Type `/` to list every command with a short summary. After a command and a space
 | `/rewind [n]` | Go back to an earlier message. A list of the messages you sent opens (the cursor on the last, or n back), and after a yes the picked message and everything after it leave the conversation and its text returns to the input row, pictures and pasted blocks included, to edit and send again. A stored session loses the same turns. Only the conversation rewinds: what a tool changed (files written, commands run, commits) stays, and the yes/no names those tools. Messages compacted into a summary can't be picked. Double ESC on an empty input line opens it too. |
 | `/remember <text>` | Add a memory. |
 | `/sampling [field value]` | Edit the per-model sampling overrides on a pane. To change the connected model's values directly, use `/sampling <field> <value>`, `<field> clear`, `extra <json>` or `clear` (see Sampling per model). |
-| `/server [url \| embedded \| claude-cli]` | Pick an LLM server found on the usual ports, or set one by URL. The list also offers the Claude API (when it's on and has a key), the Claude CLI (when *Claude CLI server* is on and Claude Code is found) and the installed embedded models. The model and reasoning pickers follow, and one reconnect applies all three. To add an embedded model, install it from `/settings` › Embedded. `embedded` lists only the installed embedded models (see Embedded); `claude-cli` picks the Claude CLI (see Claude). Ctrl+S runs it too. |
+| `/server [url \| embedded \| claude-cli \| docker \| docker:<container>]` | Pick an LLM server found on the usual ports, or set one by URL. The list also offers the Claude API (when it's on and has a key), the Claude CLI (when *Claude CLI server* is on and Claude Code is found), the installed embedded models and the chosen Docker containers (when *Docker servers enabled* is on). The model and reasoning pickers follow, and one reconnect applies all three. To add an embedded model, install it from `/settings` › Embedded. `embedded` lists only the installed embedded models (see Embedded); `claude-cli` picks the Claude CLI (see Claude). `docker` lists only the chosen containers, and `docker:<container>` switches to one (see Docker servers); a container's model is the one it serves, so no model picker follows. Ctrl+S runs it too. |
 | `/sessions [id \| purge <id> \| purge older <age> \| purge all \| title [<text>]]` | List, restore, rename and purge stored sessions. An age is a number of days (`30`) or a duration (`12h`, `90m`, `2 hours`, `1d 6h`). `title` on its own opens a box with the current name in it (as double-clicking the name on the rule does), and works while a reply runs. |
 | `/settings`, `//` | Edit and save the settings. Ctrl+/ runs it too. |
 | `/skills` | List the skills (Enter moves, renames, edits or deletes one) and edit the skill, reflection and project-file settings. |
@@ -1599,6 +1613,18 @@ The Docker tools reach Docker Desktop through the Docker engine's own API on its
 | `docker_pull` | `image, tag?` | Pull a public image (`nginx`, `postgres:16`, `ghcr.io/owner/app`); no registry credentials are sent. Asks first. |
 | `docker_remove` | `kind, name, force?` | Remove one container (its anonymous volumes are kept), image or volume, for good. `force` removes a running container or a used image. Asks first; off by default. |
 | `docker_prune` | `kind, all?` | Remove the stopped containers, the untagged images (every unused one with `all`), the empty networks, the anonymous unused volumes (named ones too with `all`) or the build cache. Asks first, with the count and size; off by default. |
+
+#### Docker servers
+
+Containers that serve an OpenAI-compatible API (vLLM, SGLang and the like) can be `/server` choices, one running at a time so two models never fight over the GPU. Tick them in *Docker server containers* on `/settings` › Docker and turn *Docker servers enabled* on. This is separate from the Docker tools and *Docker writes*: it needs neither, and only touches the containers you ticked.
+
+* **Rows.** `/server` lists one **Docker** row per chosen container after the servers it found, with its state, image and published ports (`running · vllm/vllm-openai:latest · :8000`). A found server on a running container's port is not listed twice. `/server docker` lists the Docker rows alone; `docker:<container>` (also for `--url` and `NEONSIDEKICK_LLM_URL`) picks one by name.
+* **Switching.** Picking one stops every other chosen container that is running, paused or restarting, in list order, and waits until each has exited (*Docker server stop timeout* plus 15 s at most). If a stop fails, the picked one is not started. After a stop it waits *Docker server post-stop delay* for the GPU's memory to settle, then starts the container (or unpauses it). The spinner shows each step (`stopping …`, `letting the GPU's memory settle`, `starting …`, `loading the model in …`); Ctrl+C or a double-click on the spinner cancels the switch.
+* **Port and readiness.** The port is found from the container's published TCP ports (`0.0.0.0` is reached as `127.0.0.1`). The app asks `/v1/models` on each published port every second until one answers, which can take minutes while a large model loads. A container that exits while loading is an error with its exit code and its last log lines. Past *Docker server ready timeout* the switch fails and the container is left running.
+* **Model.** The model is the one the container serves (the saved *LLM model* if it lists it, else its first), with the context window it reports.
+* **Leaving.** Picking any other server (embedded, a found server, the Claude API or CLI) while on a Docker server stops the chosen containers first, before an embedded model loads. A chosen container you started outside the app is seen at the next switch and stopped like the others. With *Docker server stop on exit* on, quitting stops the container in use; off (the default), it keeps running for next time.
+* **Bots.** A `/botchat` bot whose profile points at a Docker container shares it if it is the one running, and never starts or stops one.
+* Windows only, like the Docker tools.
 
 `--docker-check` proves the tools against the real engine on the published exe (the version agreed, the containers, a redacted inspect, a log and a stats sample of a running container; it only reads).
 

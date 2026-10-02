@@ -340,7 +340,7 @@ public sealed class LlmSamplingTests : IDisposable
         Assert.Equal("*, gemma, qwen3", SamplingText.Summary(With(("qwen3", new() { TopK = 1 }), ("gemma", new() { TopK = 1 }), ("*", new() { TopK = 1 }), ("empty", new())).LlmSampling));
         Assert.Equal("*, gemma, qwen3", SettingsMenu.FieldValue(SettingsField.LlmSampling, With(("qwen3", new() { TopK = 1 }), ("gemma", new() { TopK = 1 }), ("*", new() { TopK = 1 })), ""));
         Assert.Equal("LLM sampling", SettingsMenu.FieldName(SettingsField.LlmSampling));
-        Assert.Contains(SettingsField.LlmSampling, SettingsMenu.TabFields[2]);
+        Assert.Contains(SettingsField.LlmSampling, SettingsMenu.TabFields[(int)SettingsTab.Llm]);
         Assert.False(SettingsMenu.RefusedMidTurn(SettingsField.LlmSampling));
     }
 

@@ -1,6 +1,7 @@
 using Microsoft.Extensions.AI;
 using NeonSidekick.Claude;
 using NeonSidekick.Diagnostics;
+using NeonSidekick.Docker;
 using NeonSidekick.Llm;
 using NeonSidekick.Llm.Anthropic;
 using NeonSidekick.EmbeddedLlm;
@@ -71,6 +72,11 @@ internal sealed class LlmSession : IDisposable
     private readonly IEmbeddedLlm? _embedded;
     private readonly IClaudeServerHost? _claudeServer;
     private readonly Func<AppSettingsData, bool> _claudeCliOffered;
+    private readonly IDockerServers? _docker;
+
+    // The chosen Docker container this session last switched to (2026-10-02): set before the switch, since a failed one may still
+    // have started it; cleared when another server is picked and the containers are stopped.
+    private string? _dockerInUse;
     private IChatClient? _client;
     private AppSettingsData _effective = new();
     private string _apiKey = LlmEndpoint.DefaultApiKey;
@@ -93,10 +99,12 @@ internal sealed class LlmSession : IDisposable
     /// <param name="embedded">The embedded model (2026-09-29): its catalog's <c>/server</c> rows and the server an embedded URL starts; null offers none.</param>
     /// <param name="claudeServer">The Claude CLI server's process (2026-09-30): stopped when another server is picked; null has none to stop.</param>
     /// <param name="claudeCliOffered">Whether the Claude CLI is offered for the settings (<see cref="ClaudeCliEndpoint.Offered"/>, which looks for the CLI); null offers it never.</param>
+    /// <param name="dockerServers">The chosen Docker containers' switcher (2026-10-02): their <c>/server</c> rows and the switch a Docker URL makes; null offers none.</param>
     public LlmSession(LlmEndpointProbe probe, ContextLengthProbe contextProbe, Func<LlmEndpoint, LlmTimeouts, IChatClient> factory, TimeProvider? time = null, ServerSamplingProbe? samplingProbe = null, IEmbeddedLlm? embedded = null,
-        IClaudeServerHost? claudeServer = null, Func<AppSettingsData, bool>? claudeCliOffered = null)
+        IClaudeServerHost? claudeServer = null, Func<AppSettingsData, bool>? claudeCliOffered = null, IDockerServers? dockerServers = null)
     {
         _embedded = embedded;
+        _docker = dockerServers;
         _claudeServer = claudeServer;
         _claudeCliOffered = claudeCliOffered ?? (_ => false);
         _probe = probe ?? throw new ArgumentNullException(nameof(probe));
@@ -124,6 +132,12 @@ internal sealed class LlmSession : IDisposable
 
     /// <summary>The embedded model's catalog, installs and server (2026-09-29); null when this session offers none.</summary>
     public IEmbeddedLlm? Embedded => _embedded;
+
+    /// <summary>The chosen Docker containers' switcher (2026-10-02); null when this session offers none.</summary>
+    public IDockerServers? DockerServers => _docker;
+
+    /// <summary>Whether Docker servers are offered for <paramref name="effective"/>: a switcher here, and <see cref="DockerEndpoint.Offered"/>.</summary>
+    public bool DockerOffered(AppSettingsData effective) => _docker is not null && DockerEndpoint.Offered(effective);
 
     /// <summary>The embedded server the current endpoint runs on (2026-09-29); null for any other endpoint or when it did not start.</summary>
     public EmbeddedServerInfo? EmbeddedServer { get; private set; }
@@ -167,6 +181,14 @@ internal sealed class LlmSession : IDisposable
         Reconnecting();
         Remember(effective);
 
+        // Another server than a chosen container (2026-10-02, the user's call): the running one stops first, before an embedded
+        // model loads, so the GPU never holds the two.
+        bool docker = _docker is not null && DockerEndpoint.Chosen(effective);
+        if (!docker)
+        {
+            await LeaveDockerAsync(effective, phase, cancellationToken).ConfigureAwait(false);
+        }
+
         if (EmbeddedEndpoint.Chosen(effective))
         {
             Endpoint = await ResolveEmbeddedAsync(effective, phase, cancellationToken).ConfigureAwait(false);
@@ -182,6 +204,23 @@ internal sealed class LlmSession : IDisposable
         if (!effective.EmbeddedLlmServer)
         {
             _embedded?.StopExtras();   // the switch off (later on 2026-09-29): a multi-server botchat's extras go too
+        }
+
+        if (docker)
+        {
+            // A chosen container (2026-10-02): the others stopped, it started, its API waited for — after the embedded server let go.
+            Endpoint = await ResolveDockerAsync(effective, phase, cancellationToken).ConfigureAwait(false);
+            return Endpoint is { LiveUrl: not null } && await ConnectAsync(effective, Endpoint, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (DockerEndpoint.IsDocker(effective.LlmUrl))
+        {
+            // Saved while the container was a Docker server; switched off or unticked, the URL stands for nothing, as the Claude CLI's.
+            DiagnosticLog.Warn(Category, DockerServerText.SwitchedOffWarning);
+            var blank = AppSettings.Copy(effective);
+            blank.LlmUrl = "";
+            blank.LlmModel = "";
+            effective = blank;
         }
 
         if (ClaudeCliEndpoint.IsClaudeCli(effective.LlmUrl))
@@ -251,6 +290,111 @@ internal sealed class LlmSession : IDisposable
             DiagnosticLog.Write(ex.Killed ? DiagnosticLevel.Info : DiagnosticLevel.Error, Category, ex.Message);
             return new LlmEndpoint(EmbeddedEndpoint.BaseUrl, model.Id, LlmEndpoint.DefaultApiKey, EmbeddedNotRunningSource);
         }
+    }
+
+    /// <summary>
+    /// A chosen container's endpoint (2026-10-02): every other chosen container stopped, this one started and waited for
+    /// (<see cref="IDockerServers.SwitchToAsync"/>). The base is the sentinel, its <see cref="LlmEndpoint.LiveUrl"/> the
+    /// published port that answered; the model is <c>LLM model</c> when the container lists it (or lists nothing), else the
+    /// first it lists — a vLLM or SGLang container serves one — and the window is what the list published. A switch that
+    /// fails is logged as an error and leaves an endpoint with no live URL, so no client is built.
+    /// </summary>
+    private async Task<LlmEndpoint> ResolveDockerAsync(AppSettingsData effective, Action<string>? phase, CancellationToken cancellationToken)
+    {
+        string name = DockerEndpoint.ContainerOf(effective.LlmUrl)!;
+        string? saved = string.IsNullOrWhiteSpace(effective.LlmModel) ? null : effective.LlmModel.Trim();
+        if (!string.Equals(_dockerInUse, name, StringComparison.Ordinal))
+        {
+            // Another container about to load: the old one's name leaves the hint row now, as the embedded model's does.
+            Endpoint = null;
+        }
+
+        _dockerInUse = name;
+        var result = await _docker!.SwitchToAsync(name, effective, phase, cancellationToken).ConfigureAwait(false);
+        if (!result.Ok)
+        {
+            DiagnosticLog.Error(Category, result.Error!);
+            return new LlmEndpoint(DockerEndpoint.BaseUrl(name), saved ?? LlmEndpoint.FallbackModelId, _apiKey, DockerServerText.NotRunningSource);
+        }
+
+        var listed = result.Models.ModelIds;
+        string model = saved is not null && (listed.Count == 0 || listed.Contains(saved, StringComparer.Ordinal)) ? saved
+            : listed.Count > 0 ? listed[0] : saved ?? LlmEndpoint.FallbackModelId;
+        var window = result.Models.ModelsJson is { } json ? ContextLengthProbe.ParseModelsWindow(json, model) : null;
+        return new LlmEndpoint(DockerEndpoint.BaseUrl(name), model, _apiKey, DockerServerText.Source(name, result.Port), window) { LiveUrl = result.LiveUrl };
+    }
+
+    /// <summary>
+    /// Another server picked while a chosen container was in use (2026-10-02, the user's call): every running chosen container
+    /// stops, so the GPU is free for what comes next. A container that would not stop is a warning; the connect goes on.
+    /// </summary>
+    private async Task LeaveDockerAsync(AppSettingsData effective, Action<string>? phase, CancellationToken cancellationToken)
+    {
+        if (_docker is null || _dockerInUse is null)
+        {
+            return;
+        }
+
+        var left = await _docker.StopAllAsync(effective, except: null, phase, cancellationToken).ConfigureAwait(false);
+        _dockerInUse = null;
+        if (left.Stopped.Count > 0)
+        {
+            DiagnosticLog.Info(Category, DockerServerText.Left(left.Stopped));
+        }
+
+        foreach (string error in left.Errors)
+        {
+            DiagnosticLog.Warn(Category, error);
+        }
+    }
+
+    /// <summary>The chosen container this session switched to and has not left (2026-10-02); null for none.</summary>
+    public string? DockerInUse => _dockerInUse;
+
+    /// <summary>
+    /// The app's exit (2026-10-02): with <c>Docker server stop on exit</c> on and a chosen container in use, the running ones
+    /// stop. The names stopped; empty when the setting is off (the container keeps running, the default) or none was in use.
+    /// </summary>
+    public async Task<IReadOnlyList<string>> StopDockerAtExitAsync(AppSettingsData effective, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(effective);
+        if (_docker is null || _dockerInUse is null || !effective.DockerServerStopOnExit)
+        {
+            return [];
+        }
+
+        var left = await _docker.StopAllAsync(effective, except: null, null, cancellationToken).ConfigureAwait(false);
+        _dockerInUse = null;
+        foreach (string error in left.Errors)
+        {
+            DiagnosticLog.Warn(Category, error);
+        }
+
+        return left.Stopped;
+    }
+
+    /// <summary>
+    /// The <c>/server</c> rows of the chosen containers (2026-10-02), in the chosen order, asked nothing but the engine's list:
+    /// a stopped one is never probed. A name the engine no longer lists has a row too, its detail saying so. Pure.
+    /// </summary>
+    public static IReadOnlyList<LlmServer> DockerRows(DockerServerList list)
+    {
+        ArgumentNullException.ThrowIfNull(list);
+        return list.Chosen.Select(c => new LlmServer(DockerEndpoint.BaseUrl(c.Name), DockerEndpoint.ServerName, new ProbeResult(true, [], DockerServerText.RowDetail(c))))
+            .Concat(list.Missing.Select(n => new LlmServer(DockerEndpoint.BaseUrl(n), DockerEndpoint.ServerName, new ProbeResult(false, [], DockerServerText.MissingDetail))))
+            .ToList();
+    }
+
+    /// <summary>
+    /// The scan's rows less the ones a running chosen container answers on (2026-10-02): its vLLM or SGLang port is found by the
+    /// scan too, and picking it there would leave the one-at-a-time rule. Loopback rows only. Pure.
+    /// </summary>
+    public static IReadOnlyList<LlmServer> WithoutDockerPorts(IReadOnlyList<LlmServer> scanned, DockerServerList list)
+    {
+        ArgumentNullException.ThrowIfNull(scanned);
+        ArgumentNullException.ThrowIfNull(list);
+        var ports = list.Chosen.Where(DockerServerHost.Active).SelectMany(DockerServerHost.HostPortsOf).ToHashSet();
+        return ports.Count == 0 ? scanned : scanned.Where(s => !(s.BaseUrl.IsLoopback && ports.Contains(s.BaseUrl.Port))).ToList();
     }
 
     /// <summary>
@@ -356,8 +500,15 @@ internal sealed class LlmSession : IDisposable
     /// nor the server's model list named the window — the context probe's native tiers. What the
     /// screen's server pick and the session's own <see cref="ConnectAsync(AppSettingsData, CancellationToken)"/> both end in.
     /// </summary>
-    public async Task<bool> ConnectAsync(AppSettingsData effective, LlmEndpoint endpoint, CancellationToken cancellationToken)
+    public async Task<bool> ConnectAsync(AppSettingsData effective, LlmEndpoint endpoint, CancellationToken cancellationToken, Action<string>? phase = null)
     {
+        ArgumentNullException.ThrowIfNull(endpoint);
+        if (!DockerEndpoint.IsDocker(endpoint.BaseUrl))
+        {
+            // A scan row picked (2026-10-02): a chosen container in use stops first, the user's call.
+            await LeaveDockerAsync(effective, phase, cancellationToken).ConfigureAwait(false);
+        }
+
         if (!Connect(effective, endpoint))
         {
             return false;
@@ -418,7 +569,26 @@ internal sealed class LlmSession : IDisposable
     private async Task<IReadOnlyList<LlmServer>> WithExtraRowsAsync(AppSettingsData effective, Task<IReadOnlyList<LlmServer>> scan, CancellationToken cancellationToken)
     {
         Task<ProbeResult>? claude = ClaudeApi.Offered(effective) ? _probe.ProbeAsync(ClaudeApi.BaseUrl, ClaudeApi.Key(effective), cancellationToken) : null;
-        var servers = new List<LlmServer>(await scan.ConfigureAwait(false));
+        Task<DockerServerList>? docker = DockerOffered(effective) ? _docker!.ListAsync(effective, cancellationToken) : null;
+        IReadOnlyList<LlmServer> scanned = await scan.ConfigureAwait(false);
+        var dockerRows = new List<LlmServer>();
+        if (docker is not null)
+        {
+            // The chosen containers (2026-10-02) after the scan's rows, the ports they answer on taken out of the scan's.
+            var list = await docker.ConfigureAwait(false);
+            if (list.Error is not null)
+            {
+                DiagnosticLog.Info(Category, "Docker servers: " + list.Error);
+            }
+            else
+            {
+                scanned = WithoutDockerPorts(scanned, list);
+                dockerRows.AddRange(DockerRows(list));
+            }
+        }
+
+        var servers = new List<LlmServer>(scanned);
+        servers.AddRange(dockerRows);
         servers.AddRange(EmbeddedRows(effective));
         if (claude is not null)
         {
@@ -543,14 +713,31 @@ internal sealed class LlmSession : IDisposable
             // The embedded server's per-start key and its one model go with it too (2026-09-29).
             string own = LlmEndpoint.KeyOf(profile);
             bool embedded = EmbeddedEndpoint.IsEmbedded(starter.BaseUrl);
-            if (embedded && starter.LiveUrl is null)
+            bool docker = DockerEndpoint.IsDocker(starter.BaseUrl);   // a chosen container (2026-10-02): its one model goes with it, as the embedded server's
+            if ((embedded || docker) && starter.LiveUrl is null)
             {
                 return (null, BotLinkNoServer);
             }
 
             string key = ClaudeApi.IsClaudeApi(starter.BaseUrl) || embedded ? starter.ApiKey
                 : string.IsNullOrWhiteSpace(own) || own == LlmEndpoint.DefaultApiKey ? _apiKey : own;
-            endpoint = starter with { ModelId = embedded ? starter.ModelId : model ?? starter.ModelId, ApiKey = key, PublishedContextLength = null };
+            endpoint = starter with { ModelId = embedded || docker ? starter.ModelId : model ?? starter.ModelId, ApiKey = key, PublishedContextLength = null };
+        }
+        else if (DockerEndpoint.IsDocker(profile.LlmUrl))
+        {
+            // A bot's own container (2026-10-02): only the one running is shared — a botchat never starts or stops one.
+            string wanted = DockerEndpoint.ContainerOf(profile.LlmUrl)!;
+            if (Endpoint is not { LiveUrl: not null } running || DockerEndpoint.ContainerOf(running.BaseUrl) is not { } current)
+            {
+                return (null, DockerServerText.BotNoneRunning);
+            }
+
+            if (!string.Equals(wanted, current, StringComparison.Ordinal))
+            {
+                return (null, DockerServerText.BotOtherContainer(wanted, current));
+            }
+
+            endpoint = running with { PublishedContextLength = null };
         }
         else if (ClaudeCliEndpoint.IsClaudeCli(profile.LlmUrl))
         {
@@ -714,6 +901,12 @@ internal sealed class LlmSession : IDisposable
         {
             // The Claude CLI (2026-09-30): its list is the --model aliases, asked of no one.
             return Task.FromResult<ProbeResult?>(new ProbeResult(true, ClaudeCliEndpoint.Models, ClaudeCliText.RowDetail));
+        }
+
+        if (DockerEndpoint.IsDocker(Endpoint?.BaseUrl) || (Endpoint is null && DockerEndpoint.IsDocker(_configuredUrl)))
+        {
+            // A chosen container (2026-10-02): asked where it answered; not running, there is nothing to ask.
+            return Endpoint?.LiveUrl is { } live ? ProbeAsync(live, cancellationToken) : Task.FromResult<ProbeResult?>(null);
         }
 
         Uri? url = Endpoint?.BaseUrl;

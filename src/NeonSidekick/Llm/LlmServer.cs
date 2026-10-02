@@ -52,6 +52,11 @@ public sealed record LlmServer(Uri BaseUrl, string Name, ProbeResult Result)
             return Claude.ClaudeCliEndpoint.ServerName;
         }
 
+        if (Docker.DockerEndpoint.IsDocker(baseUrl))
+        {
+            return Docker.DockerEndpoint.ServerName;
+        }
+
         if (ownedBy is not null && OwnerNames.TryGetValue(ownedBy.Trim(), out var byOwner))
         {
             return byOwner;

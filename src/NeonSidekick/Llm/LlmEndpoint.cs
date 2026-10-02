@@ -79,6 +79,15 @@ public sealed record LlmEndpoint(Uri BaseUrl, string ModelId, string ApiKey, str
             return Claude.ClaudeCliEndpoint.BaseUrl;
         }
 
+        if (trimmed.StartsWith(Docker.DockerEndpoint.AliasPrefix, StringComparison.OrdinalIgnoreCase))
+        {
+            // A chosen Docker container (2026-10-02): "docker:<name>" stands for its sentinel — read before the URL parse, which
+            // would take it for a URL of scheme "docker".
+            return Docker.DockerEndpoint.ContainerOf(trimmed) is { } container
+                ? Docker.DockerEndpoint.BaseUrl(container)
+                : throw new ArgumentException($"'{trimmed}' does not name a Docker container (docker:<name>).", nameof(raw));
+        }
+
         if (!Uri.TryCreate(trimmed, UriKind.Absolute, out var parsed)
             || (parsed.Scheme != Uri.UriSchemeHttp && parsed.Scheme != Uri.UriSchemeHttps))
         {

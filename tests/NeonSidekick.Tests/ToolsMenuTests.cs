@@ -156,7 +156,7 @@ public partial class ToolsMenuTests : IDisposable
     {
         // The three tabs that left /settings (2026-09-19): their rows unchanged, every field on exactly one tab of the three panes (Skills left for /skills later that day);
         // the Options tab ahead of them (later on 2026-09-19): the pane's own $-mention switch.
-        Assert.Equal(7, SettingsMenu.TabFields.Count);   // the Claude (API) tab went to /tools' Claude tab on 2026-09-29; Embedded model since 2026-09-29; Claude (API) since later on 2026-09-27; Claude on 2026-09-27 until later that day (to /tools); Botchat since 2026-09-25
+        Assert.Equal(8, SettingsMenu.TabFields.Count);   // /settings' Docker tab since 2026-10-02; the Claude (API) tab went to /tools' Claude tab on 2026-09-29; Embedded model since 2026-09-29; Claude (API) since later on 2026-09-27; Claude on 2026-09-27 until later that day (to /tools); Botchat since 2026-09-25
         Assert.Equal(16, SettingsMenu.ToolsTabFields.Count);   // Docker 2026-10-02; UNC later still on 2026-09-30; MySQL and Oracle since 2026-09-30; Print since later on 2026-09-28; Home Assistant since 2026-09-28; Claude since 2026-09-27; Images since 2026-09-24; SQL since 2026-09-23   // Obsidian since 2026-09-22   // Git since 2026-09-20, Shell since 2026-09-21; the user's order (Web, Files, Shell, Ask, Git (native)) since later on 2026-09-21, alphabetical before
         Assert.Equal(["Offered", "Web", "Files", "Shell", "Ask", "Claude", "Print", "Obsidian", "ComfyUI", "SQL", "Oracle", "MySQL", "UNC", "Docker", "GitLib", "HA", "Options"], ToolsText.TabTitles);
         Assert.Equal([SettingsField.ToolsDollarMention, SettingsField.ToolCollapseCount, SettingsField.CodeCollapseCount], SettingsMenu.ToolsTabFields[15]);
