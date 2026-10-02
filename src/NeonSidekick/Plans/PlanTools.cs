@@ -42,6 +42,8 @@ public static class PlanTools
         "vault_search", "vault_list", "vault_read", "vault_links",
         // memory, skills, sessions, questions
         "recall_memory", "load_skill", "session_manager", "ask_user",
+        // the camera: a photo asked of the user, as a question is (2026-10-02); the shot it saves is the user's own taking
+        "camera_capture",
         // the advisor: Claude reads and answers, read-only whatever Claude slash command permissions says (2026-09-27)
         "claude_advisor",
     };

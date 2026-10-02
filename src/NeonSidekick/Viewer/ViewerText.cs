@@ -57,6 +57,9 @@ public static class ViewerText
     /// <summary>What the window says in its middle while the folder has no picture. Pinned.</summary>
     public static string Waiting(string folder) => $"Waiting for pictures in {folder}";
 
+    /// <summary>The live window before the camera's first frame (2026-10-02). Pinned.</summary>
+    public const string LiveWaiting = "Waiting for the camera…";
+
     /// <summary>What the window says in its middle when the shown picture could not be read. Pinned.</summary>
     public static string Unreadable(string name) => $"{name} could not be read as a picture";
 

@@ -66,6 +66,14 @@ public sealed record SidekickOptions(
     public const string MySqlCheckFlag = "--mysql-check";
     public const string UncCheckFlag = "--unc-check";
     public const string DockerCheckFlag = "--docker-check";
+    public const string CameraCheckFlag = "--camera-check";
+
+    /// <summary>
+    /// <c>--camera-check</c> (2026-10-02): run <see cref="App.CameraCheck"/> on the camera the settings name and exit 0/1 — the
+    /// Media Foundation layer's proof on the published binary on a real camera (its LED lights for a few seconds). Nothing is
+    /// saved. Needs a camera, so not in the build gate.
+    /// </summary>
+    public bool CameraCheck { get; init; }
 
     /// <summary>
     /// <c>--docker-check</c> (2026-10-02): run <see cref="App.DockerCheck"/> over the engine pipe the settings name and exit 0/1 —
@@ -89,7 +97,7 @@ public sealed record SidekickOptions(
 
     /// <summary>The help text. Pinned wording; tests assert on it.</summary>
     public const string Usage =
-        "Usage: NeonSidekick [--headless] [--smoke] [--audio-check] [--voice-check] [--oracle-check <connection>] [--mysql-check <connection>] [--unc-check <share>] [--docker-check] [--url <url>] [--model <id>] [--cwd <path>] [--profile <name>] [--yolo] [--no-police] [--log <path>] [--version] [--help]\n" +
+        "Usage: NeonSidekick [--headless] [--smoke] [--audio-check] [--voice-check] [--oracle-check <connection>] [--mysql-check <connection>] [--unc-check <share>] [--docker-check] [--camera-check] [--url <url>] [--model <id>] [--cwd <path>] [--profile <name>] [--yolo] [--no-police] [--log <path>] [--version] [--help]\n" +
         "\n" +
         "  (no flags)     interactive TUI\n" +
         "  --headless     stdin/stdout REPL, no TUI (profile \"default\" unless --profile or NEONSIDEKICK_PROFILE names one)\n" +
@@ -100,6 +108,7 @@ public sealed record SidekickOptions(
         "  --mysql-check <connection>   prove the MySQL tools against that connection of mysql.json (reads only), exit 0/1\n" +
         "  --unc-check <share>          prove the UNC tools against that share of unc.json (reads only), exit 0/1\n" +
         "  --docker-check               prove the Docker tools against Docker Desktop's engine pipe (reads only), exit 0/1\n" +
+        "  --camera-check               open the camera, read frames and encode one (nothing saved), exit 0/1\n" +
         "  --url <url>    LLM base URL for this launch (outranks NEONSIDEKICK_LLM_URL and the saved setting)\n" +
         "  --model <id>   model id for this launch (outranks NEONSIDEKICK_LLM_MODEL and the saved setting)\n" +
         "  --cwd <path>   working directory for this launch (outranks the saved setting)\n" +
@@ -233,6 +242,9 @@ public sealed record SidekickOptions(
                 case DockerCheckFlag:
                     result = result with { DockerCheck = true };
                     break;
+                case CameraCheckFlag:
+                    result = result with { CameraCheck = true };
+                    break;
                 case YoloFlag:
                     result = result with { Yolo = true };
                     break;
@@ -305,7 +317,7 @@ public sealed record SidekickOptions(
     public string? LaunchProfile(string? environmentProfile) =>
         Profile ?? environmentProfile ?? (Headless ? Profiles.DefaultName : null);
 
-    /// <summary>The mode this launch runs: <c>interactive</c>, <c>headless</c>, <c>smoke</c>, <c>audio-check</c>, <c>voice-check</c>, <c>oracle-check</c>, <c>mysql-check</c>, <c>unc-check</c>, <c>docker-check</c>.</summary>
+    /// <summary>The mode this launch runs: <c>interactive</c>, <c>headless</c>, <c>smoke</c>, <c>audio-check</c>, <c>voice-check</c>, <c>oracle-check</c>, <c>mysql-check</c>, <c>unc-check</c>, <c>docker-check</c>, <c>camera-check</c>.</summary>
     public string Mode =>
         Headless ? "headless"
         : Smoke ? "smoke"
@@ -315,10 +327,11 @@ public sealed record SidekickOptions(
         : MySqlCheck is not null ? "mysql-check"
         : UncCheck is not null ? "unc-check"
         : DockerCheck ? "docker-check"
+        : CameraCheck ? "camera-check"
         : "interactive";
 
-    /// <summary>Whether this launch runs one of the check modes (<c>--smoke</c>, <c>--audio-check</c>, <c>--voice-check</c>, <c>--oracle-check</c>, <c>--mysql-check</c>, <c>--unc-check</c>, <c>--docker-check</c>): no screen, no input reader.</summary>
-    public bool IsCheck => Smoke || AudioCheck || VoiceCheck || OracleCheck is not null || MySqlCheck is not null || UncCheck is not null || DockerCheck;
+    /// <summary>Whether this launch runs one of the check modes (<c>--smoke</c>, <c>--audio-check</c>, <c>--voice-check</c>, <c>--oracle-check</c>, <c>--mysql-check</c>, <c>--unc-check</c>, <c>--docker-check</c>, <c>--camera-check</c>): no screen, no input reader.</summary>
+    public bool IsCheck => Smoke || AudioCheck || VoiceCheck || OracleCheck is not null || MySqlCheck is not null || UncCheck is not null || DockerCheck || CameraCheck;
 
     /// <summary>
     /// The value flags as typed, for the log at startup: <c>--cwd D:\x --log C:\t.log</c>; null when

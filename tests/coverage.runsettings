@@ -21,6 +21,10 @@
   - NeonSidekick.Perf.PerfNative, WindowsPerfSource, NvmlGpu and PdhGpu (2026-09-29): the performance bar's kernel32, NVML,
     DXGI and PDH readers; they read the real machine and prove themselves in the published-exe smoke (perf:kernel32,
     perf:nvml, perf:pdh-dxgi). PerfMath, PerfSampler and PerfBar, where the arithmetic and the drawing live, stay covered.
+  - NeonSidekick.Camera.CameraNative and MediaFoundationCameraSystem (2026-10-02): the camera's Media Foundation vtable calls
+    and the reader over them; they need Windows' media stack and, past the list, a real camera, and prove themselves in the
+    published-exe smoke (camera:mf, the slots that need no camera) and by camera-check on a real one, plus the live facts.
+    CameraSession, CameraFormats, CameraPixels, CameraJpeg, FrameDiff and CameraWatch, where the decisions live, stay covered.
   - Program: the composition root; the smoke run on the published exe covers it.
   - GeneratedCodeAttribute / ExcludeFromCodeCoverageAttribute: source-generated JSON contexts,
     LibraryImport stubs and GeneratedRegex bodies. CompilerGeneratedAttribute is deliberately
@@ -32,7 +36,7 @@
       <DataCollector friendlyName="XPlat Code Coverage">
         <Configuration>
           <Format>cobertura</Format>
-          <Exclude>[NeonSidekick]NeonSidekick.Audio.WinMm*,[NeonSidekick]NeonSidekick.Viewer.PictureWindow*,[NeonSidekick]NeonSidekick.Viewer.ViewerNative,[NeonSidekick]NeonSidekick.Printing.WindowsPrintSpooler*,[NeonSidekick]NeonSidekick.Printing.PrintNative,[NeonSidekick]NeonSidekick.Perf.PerfNative,[NeonSidekick]NeonSidekick.Perf.WindowsPerfSource,[NeonSidekick]NeonSidekick.Perf.NvmlGpu,[NeonSidekick]NeonSidekick.Perf.PdhGpu,[NeonSidekick]Program</Exclude>
+          <Exclude>[NeonSidekick]NeonSidekick.Audio.WinMm*,[NeonSidekick]NeonSidekick.Viewer.PictureWindow*,[NeonSidekick]NeonSidekick.Viewer.ViewerNative,[NeonSidekick]NeonSidekick.Printing.WindowsPrintSpooler*,[NeonSidekick]NeonSidekick.Printing.PrintNative,[NeonSidekick]NeonSidekick.Perf.PerfNative,[NeonSidekick]NeonSidekick.Perf.WindowsPerfSource,[NeonSidekick]NeonSidekick.Perf.NvmlGpu,[NeonSidekick]NeonSidekick.Perf.PdhGpu,[NeonSidekick]NeonSidekick.Camera.CameraNative,[NeonSidekick]NeonSidekick.Camera.MediaFoundationCameraSystem*,[NeonSidekick]Program</Exclude>
           <ExcludeByAttribute>GeneratedCodeAttribute,ExcludeFromCodeCoverageAttribute</ExcludeByAttribute>
           <SkipAutoProps>true</SkipAutoProps>
           <IncludeTestAssembly>false</IncludeTestAssembly>

@@ -70,14 +70,54 @@ public static class PictureWindow
     /// double-clicked one (2026-09-27, the user's call: clicks open the built-in viewer, not the app Windows registers).
     /// Opened, or the open one pointed at it and brought forward. Throws as <see cref="Open(string)"/> does.
     /// </summary>
-    public static void OpenAt(string picture)
+    public static void OpenAt(string picture) => OpenAt(picture, activate: true);
+
+    /// <summary>
+    /// <see cref="OpenAt(string)"/>, brought forward or not: <paramref name="activate"/> false (2026-10-02, the camera's
+    /// <c>post</c> preview) shows the window on the picture without taking the keyboard from the terminal, where the camera
+    /// pane still waits for its keys.
+    /// </summary>
+    public static void OpenAt(string picture, bool activate)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(picture);
         string folder = Path.GetDirectoryName(picture) ?? throw new ArgumentException($"{picture} has no folder", nameof(picture));
-        OpenOn(folder, picture);
+        OpenOn(folder, picture, activate);
     }
 
-    private static void OpenOn(string folder, string? select)
+    /// <summary>
+    /// The window showing a live picture (2026-10-02, the camera's <c>live</c> preview): the open window taken over — its
+    /// folder remembered for when the live picture ends — or a new one, shown without taking the keyboard.
+    /// <paramref name="closed"/> runs (on the window's thread) when the user closes the window or another use takes it over.
+    /// Throws as <see cref="Open(string)"/> does.
+    /// </summary>
+    public static ILiveView ShowLive(string title, Action closed)
+    {
+        ArgumentNullException.ThrowIfNull(title);
+        ArgumentNullException.ThrowIfNull(closed);
+        if (!IsAvailable)
+        {
+            throw new PlatformNotSupportedException(ViewerText.Unavailable);
+        }
+
+        var view = new LiveView(title, closed);
+        lock (s_gate)
+        {
+            if (s_open is { Alive: true } open && open.StartLive(view))
+            {
+                view.Window = open;
+                return view;
+            }
+
+            var window = new PictureWindowThread(null, null, view);
+            view.Window = window;
+            window.Start();
+            s_open = window;
+        }
+
+        return view;
+    }
+
+    private static void OpenOn(string folder, string? select, bool activate = true)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(folder);
         if (!IsAvailable)
@@ -87,12 +127,12 @@ public static class PictureWindow
 
         lock (s_gate)
         {
-            if (s_open is { Alive: true } open && open.Retarget(folder, select))
+            if (s_open is { Alive: true } open && open.Retarget(folder, select, activate))
             {
                 return;
             }
 
-            var window = new PictureWindowThread(folder, select);
+            var window = new PictureWindowThread(folder, select, activate: activate);
             window.Start();
             s_open = window;
         }
@@ -151,6 +191,9 @@ internal sealed unsafe class PictureWindowThread
     private const uint LoadedMessage = WmApp + 2;
     private const uint RetargetMessage = WmApp + 3;
     private const uint FollowMessage = WmApp + 4;
+    private const uint LiveStartMessage = WmApp + 5;
+    private const uint LiveFrameMessage = WmApp + 6;
+    private const uint LiveEndMessage = WmApp + 7;
     private const uint ProbeMessage = WmApp + 9;
     private static readonly IntPtr ProbeAnswer = new(0x5EE);
     private static readonly IntPtr DebounceTimer = new(1);
@@ -172,8 +215,16 @@ internal sealed unsafe class PictureWindowThread
     private readonly ConcurrentQueue<Change> _changes = new();
     private readonly ManualResetEventSlim _ready = new();
     private readonly Lock _gate = new();
-    private readonly string _startFolder;
+    private readonly string? _startFolder;
     private readonly string? _startSelect;
+    private readonly bool _startActivate;
+    private LiveView? _live;
+    private LiveView? _pendingLive;
+    private LiveView? _endingLive;
+    private string? _liveFolder;
+    private (LiveView View, ViewerBitmap? Frame, string? Title)? _pendingFrame;
+    private bool _framePosted;
+    private bool _pendingActivate = true;
     private Thread? _thread;
     private IntPtr _hwnd;
     private string? _failure;
@@ -206,10 +257,12 @@ internal sealed unsafe class PictureWindowThread
 
     private sealed record Change(int Generation, ChangeKind Kind, string Path, string? OldPath);
 
-    public PictureWindowThread(string folder, string? select = null)
+    public PictureWindowThread(string? folder, string? select = null, LiveView? live = null, bool activate = true)
     {
         _startFolder = folder;
         _startSelect = select;
+        _live = live;
+        _startActivate = activate && live is null;
     }
 
     public bool Alive => _alive;
@@ -238,13 +291,14 @@ internal sealed unsafe class PictureWindowThread
         }
     }
 
-    /// <summary>Points the live window at <paramref name="folder"/> (held on <paramref name="select"/> when one is given) and brings it forward; false when the window is gone.</summary>
-    public bool Retarget(string folder, string? select = null)
+    /// <summary>Points the live window at <paramref name="folder"/> (held on <paramref name="select"/> when one is given) and brings it forward (or shows it quietly when <paramref name="activate"/> is false); false when the window is gone.</summary>
+    public bool Retarget(string folder, string? select = null, bool activate = true)
     {
         lock (_gate)
         {
             _pendingFolder = folder;
             _pendingSelect = select;
+            _pendingActivate = activate;
         }
 
         return _alive && PostMessageW(_hwnd, RetargetMessage, IntPtr.Zero, IntPtr.Zero);
@@ -259,6 +313,65 @@ internal sealed unsafe class PictureWindowThread
         }
 
         return _alive && PostMessageW(_hwnd, FollowMessage, IntPtr.Zero, IntPtr.Zero);
+    }
+
+    /// <summary>Hands the window to a live picture (<see cref="PictureWindow.ShowLive"/>); false when the window is gone.</summary>
+    public bool StartLive(LiveView view)
+    {
+        lock (_gate)
+        {
+            _pendingLive = view;
+        }
+
+        return _alive && PostMessageW(_hwnd, LiveStartMessage, IntPtr.Zero, IntPtr.Zero);
+    }
+
+    /// <summary>
+    /// A live frame (or a held shot, or only a title) for the window: the newest replaces one still waiting, and the message is
+    /// posted only when none is pending, so a slow window is never flooded.
+    /// </summary>
+    public void PostLiveFrame(LiveView view, ViewerBitmap? frame, string? title)
+    {
+        bool post;
+        lock (_gate)
+        {
+            if (_pendingFrame is { } waiting && waiting.View == view)
+            {
+                if (waiting.Frame is { } replaced && frame is not null)
+                {
+                    view.Recycle(replaced.Bgrx);
+                }
+
+                frame ??= waiting.Frame;
+                title ??= waiting.Title;
+            }
+
+            _pendingFrame = (view, frame, title);
+            post = !_framePosted;
+            _framePosted = true;
+        }
+
+        if (post && (!_alive || !PostMessageW(_hwnd, LiveFrameMessage, IntPtr.Zero, IntPtr.Zero)))
+        {
+            lock (_gate)
+            {
+                _framePosted = false;
+            }
+        }
+    }
+
+    /// <summary>Ends <paramref name="view"/>'s live picture, if it still has the window: the folder before it again, or the window closed.</summary>
+    public void EndLive(LiveView view)
+    {
+        lock (_gate)
+        {
+            _endingLive = view;
+        }
+
+        if (_alive)
+        {
+            PostMessageW(_hwnd, LiveEndMessage, IntPtr.Zero, IntPtr.Zero);
+        }
     }
 
     /// <summary>The window asked to close, and its thread waited for a moment.</summary>
@@ -413,11 +526,31 @@ internal sealed unsafe class PictureWindowThread
             uint dpi = Math.Max(96u, GetDpiForWindow(_hwnd));
             SetWindowPos(_hwnd, HwndTop, 0, 0, (int)(DefaultWidth * dpi / 96), (int)(DefaultHeight * dpi / 96), SwpNoMove | SwpNoZOrder | SwpNoActivate);
             ApplyStyle();   // before it is shown: the bar is never light first
-            Show(_startFolder);
-            Select(_startSelect);
-            ShowWindow(_hwnd, SwShow);
-            BringForward();
-            DiagnosticLog.Info("Viewer", $"Picture viewer opened on {_startFolder}.");
+            if (_live is { } live)
+            {
+                SetWindowTextW(_hwnd, live.Title);
+                ShowWindow(_hwnd, SwShowNoActivate);
+                RaiseQuietly();
+                DiagnosticLog.Info("Viewer", "Picture viewer opened on the camera.");
+            }
+            else
+            {
+                Show(_startFolder!);
+                Select(_startSelect);
+                if (_startActivate)
+                {
+                    ShowWindow(_hwnd, SwShow);
+                    BringForward();
+                }
+                else
+                {
+                    ShowWindow(_hwnd, SwShowNoActivate);
+                    RaiseQuietly();
+                }
+
+                DiagnosticLog.Info("Viewer", $"Picture viewer opened on {_startFolder}.");
+            }
+
             _started = true;
             _ready.Set();
 
@@ -436,6 +569,8 @@ internal sealed unsafe class PictureWindowThread
         finally
         {
             _alive = false;
+            _live?.OnEnded();
+            _live = null;
             if (!_started && _hwnd != IntPtr.Zero)
             {
                 // Made but never set up: gone before the handle its procedure reads is freed.
@@ -480,6 +615,11 @@ internal sealed unsafe class PictureWindowThread
             case WmSysKeyDown when (int)wParam == ViewerState.VkF10:   // F10 (random order) is the menu key: a system key, its menu mode not wanted
             {
                 var action = ViewerState.ActionFor((int)wParam, _fullScreen, _state.SlideShow);
+                if (_live is not null)
+                {
+                    // A camera's picture (2026-10-02): full screen and closing only.
+                    action = LiveViewState.Filter(action);
+                }
 
                 // Any key but Del disarms a first Del (2026-09-27), mapped or not.
                 if (action != ViewerAction.Delete && _state.Disarm())
@@ -503,7 +643,7 @@ internal sealed unsafe class PictureWindowThread
 
             // The drag out (2026-09-28): a press remembered and the mouse captured; the first move past the system's drag
             // rectangle starts it. A double-click never moves, so it stays full screen's.
-            case WmLeftButtonDown:
+            case WmLeftButtonDown when _live is null:
                 _press = PointOf(lParam);
                 SetCapture(hwnd);
                 return IntPtr.Zero;
@@ -549,7 +689,15 @@ internal sealed unsafe class PictureWindowThread
                     _pendingSelect = null;
                 }
 
-                if (folder is not null && !string.Equals(folder, _state.Folder, StringComparison.OrdinalIgnoreCase))
+                bool activate;
+                lock (_gate)
+                {
+                    activate = _pendingActivate;
+                    _pendingActivate = true;
+                }
+
+                bool wasLive = LeaveLive();
+                if (folder is not null && (wasLive || !string.Equals(folder, _state.Folder, StringComparison.OrdinalIgnoreCase)))
                 {
                     Show(folder);
                 }
@@ -559,7 +707,16 @@ internal sealed unsafe class PictureWindowThread
 
                 ApplyStyle();
 
-                BringForward();
+                if (activate)
+                {
+                    BringForward();
+                }
+                else
+                {
+                    ShowWindow(_hwnd, SwShowNoActivate);
+                    RaiseQuietly();
+                }
+
                 return IntPtr.Zero;
             }
 
@@ -573,7 +730,7 @@ internal sealed unsafe class PictureWindowThread
                 }
 
                 // The strip's picture (2026-09-28): on this folder only, never a retarget and never brought forward.
-                if (follow is not null
+                if (follow is not null && _live is null
                     && string.Equals(Path.GetDirectoryName(follow), _state.Folder, StringComparison.OrdinalIgnoreCase)
                     && File.Exists(follow))
                 {
@@ -602,7 +759,55 @@ internal sealed unsafe class PictureWindowThread
                 }
 
                 return IntPtr.Zero;
+            case LiveStartMessage:
+            {
+                LiveView? view;
+                lock (_gate)
+                {
+                    view = _pendingLive;
+                    _pendingLive = null;
+                }
+
+                if (view is not null)
+                {
+                    TakeLive(view);
+                }
+
+                return IntPtr.Zero;
+            }
+
+            case LiveFrameMessage:
+                TakeLiveFrame();
+                return IntPtr.Zero;
+            case LiveEndMessage:
+            {
+                LiveView? ending;
+                lock (_gate)
+                {
+                    ending = _endingLive;
+                    _endingLive = null;
+                }
+
+                if (ending is not null && ending == _live)
+                {
+                    string? folder = _liveFolder;
+                    LeaveLive();
+                    if (folder is not null)
+                    {
+                        // Back to the folder the camera took the window from.
+                        Show(folder);
+                    }
+                    else
+                    {
+                        PostMessageW(_hwnd, WmClose, IntPtr.Zero, IntPtr.Zero);
+                    }
+                }
+
+                return IntPtr.Zero;
+            }
+
             case WmClose:
+                LeaveLive();
                 RememberPosition();
                 DestroyWindow(hwnd);
                 return IntPtr.Zero;
@@ -612,6 +817,90 @@ internal sealed unsafe class PictureWindowThread
         }
 
         return DefWindowProcW(hwnd, message, wParam, lParam);
+    }
+
+    // The camera takes the window (2026-10-02): the folder's watcher and slides stopped (the folder remembered for after),
+    // the picture blank until the first frame, the window raised without the keyboard. A live use already here is told it ended.
+    private void TakeLive(LiveView view)
+    {
+        if (_live is { } old && old != view)
+        {
+            old.OnEnded();
+        }
+        else if (_live is null)
+        {
+            _liveFolder = _state.Folder;
+        }
+
+        _live = view;
+        _watcher?.Dispose();
+        _watcher = null;
+        _generation++;
+        _loadVersion++;
+        _load?.Cancel();
+        KillTimer(_hwnd, SlideTimer);
+        _bitmap = null;
+        _unreadable = null;
+        SetWindowTextW(_hwnd, view.Title);
+        InvalidateRect(_hwnd, null, false);
+        ShowWindow(_hwnd, SwShowNoActivate);
+        RaiseQuietly();
+    }
+
+    // The newest frame (or held shot, or title) of the live use: painted; the frame it replaces goes back for reuse.
+    private void TakeLiveFrame()
+    {
+        (LiveView View, ViewerBitmap? Frame, string? Title)? pending;
+        lock (_gate)
+        {
+            pending = _pendingFrame;
+            _pendingFrame = null;
+            _framePosted = false;
+        }
+
+        if (pending is not { } next || next.View != _live)
+        {
+            return;
+        }
+
+        if (next.Title is { } title)
+        {
+            SetWindowTextW(_hwnd, title);
+        }
+
+        if (next.Frame is { } frame)
+        {
+            if (_bitmap is { } old && old != frame)
+            {
+                next.View.Recycle(old.Bgrx);
+            }
+
+            _bitmap = frame;
+            _unreadable = null;
+            InvalidateRect(_hwnd, null, false);
+        }
+    }
+
+    // The live use over (the window closing, a folder opened over it, the use ended): told once; true when there was one.
+    private bool LeaveLive()
+    {
+        if (_live is not { } live)
+        {
+            return false;
+        }
+
+        _live = null;
+        _liveFolder = null;
+        _bitmap = null;
+        live.OnEnded();
+        return true;
+    }
+
+    // Above the other windows without the keyboard (2026-10-02): the camera pane in the terminal keeps its keys.
+    private void RaiseQuietly()
+    {
+        SetWindowPos(_hwnd, HwndTopmost, 0, 0, 0, 0, SwpNoMove | SwpNoSize | SwpNoActivate);
+        SetWindowPos(_hwnd, HwndNoTopmost, 0, 0, 0, 0, SwpNoMove | SwpNoSize | SwpNoActivate);
     }
 
     private void Do(ViewerAction action)
@@ -940,7 +1229,7 @@ internal sealed unsafe class PictureWindowThread
             if (bitmap is null)
             {
                 FillRect(hdc, &client, fill);
-                string text = _unreadable is { } name ? ViewerText.Unreadable(name) : _state.Count == 0 ? ViewerText.Waiting(_state.Folder) : "";
+                string text = _live is not null ? ViewerText.LiveWaiting : _unreadable is { } name ? ViewerText.Unreadable(name) : _state.Count == 0 ? ViewerText.Waiting(_state.Folder) : "";
                 if (text.Length > 0)
                 {
                     SelectObject(hdc, GetStockObject(DefaultGuiFont));

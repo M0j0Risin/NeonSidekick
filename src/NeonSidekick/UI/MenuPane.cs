@@ -649,6 +649,9 @@ public sealed class MenuPane : INoticeSink
 
     public void Error(string text) => Add(NoticeKind.Error, text);
 
+    /// <summary>The status lines forgotten (2026-10-02, the camera pane: its one status line replaced at each step); drawn at the next show.</summary>
+    public void ClearStatus() => _status.Clear();
+
     private void Add(NoticeKind kind, string text)
     {
         ArgumentNullException.ThrowIfNull(text);

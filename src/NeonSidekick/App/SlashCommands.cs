@@ -193,6 +193,13 @@ public enum SlashCommand
     Docker,
 
     /// <summary>
+    /// <c>/camera</c> (2026-10-02, the user's ask: a USB camera's pictures for the model): the bare word opens the shutter pane and
+    /// puts the photo on the input line; <c>/camera snap | list | use &lt;n|name&gt; | live | watch [seconds|off] | off</c>
+    /// (<see cref="Camera.CameraCommand"/>). The user's own hand: never judged by <c>Camera tool</c>.
+    /// </summary>
+    Camera,
+
+    /// <summary>
     /// <c>/print</c> (2026-09-28, the user's ask): a file of the working directory on paper — <c>/print &lt;file&gt;
     /// [printer=&lt;name&gt;] [copies=N] [pages=1-3] [landscape]</c>, <c>/print reply</c> for the last reply, <c>/print printers</c>
     /// (<see cref="Printing.PrintCommand"/>). The user's own hand: never judged by <c>Print action policy</c>.
@@ -263,6 +270,7 @@ public static class SlashCommands
             new("/about", "show general information about the app and profile"),
             new("/botchat", "let the profiles talk to each other, each in its own persona, until ESC: /botchat [profile ...] [[--] topic], or /botchat --resume [line] to carry on the last one, or /botchat --kill to stop the extra embedded servers"),
             new("/claude", "send a message to Claude Code and add its reply to the conversation: /claude <message>, or /claude new to start a new Claude conversation"),
+            new(Camera.CameraText.Word, Camera.CameraText.HelpSummary),
             new("/clear", "start a new conversation and clear the screen"),
             new(RewindText.Word, RewindText.HelpSummary),
             new("/cmdclear", "clear this profile's command history (the Up/Down recall), stored and in memory (asks first)"),
@@ -416,7 +424,7 @@ public static class SlashCommands
     }
 
     /// <summary>Every command word, for help and completion.</summary>
-    public static readonly string[] Words = { "/help", "/clear", "/new", "/splash", "/rewind", "/theme", "/queue", "/sessions", "/compact", "/server", "/model", "/reasoning", "/sampling", "/settings", "//", "/tools", "/mcp", "/tts", "/stt", "/wake", "/interrupt", "/speak", "/remember", "/memory", "/cmdcopy", "/keycopy", "/cmdclear", "/cmdlist", "/police", "/persona", "/operata", "/vocalia", "/sys", "/usage", "/perf", "/tb", "/header", "/profile", "/timer", "/cwd", "/tree", "/vault", "/explore", "/view", "/imagine", "/comfy", "/ha", "/docker", "/print", "/echo", "/gituser", "/copy", "/draft", "/loop", "/plan", "/botchat", "/claude", "/test", "/expand", "/collapse", "/window", "/skills", "/learn", "/about", "/exit" };
+    public static readonly string[] Words = { "/help", "/clear", "/new", "/splash", "/rewind", "/theme", "/queue", "/sessions", "/compact", "/server", "/model", "/reasoning", "/sampling", "/settings", "//", "/tools", "/mcp", "/tts", "/stt", "/wake", "/interrupt", "/speak", "/remember", "/memory", "/cmdcopy", "/keycopy", "/cmdclear", "/cmdlist", "/police", "/persona", "/operata", "/vocalia", "/sys", "/usage", "/perf", "/tb", "/header", "/profile", "/timer", "/cwd", "/tree", "/vault", "/explore", "/view", "/imagine", "/comfy", "/ha", "/docker", "/camera", "/print", "/echo", "/gituser", "/copy", "/draft", "/loop", "/plan", "/botchat", "/claude", "/test", "/expand", "/collapse", "/window", "/skills", "/learn", "/about", "/exit" };
 
     /// <summary>The <c>/queue</c> word: what a double-click on the hint row's queued part sends through the mid-turn line hook, so the pane opens exactly as the typed command's does (2026-09-18). Pinned.</summary>
     public const string QueueWord = "/queue";
@@ -506,6 +514,7 @@ public static class SlashCommands
             "/comfy" => SlashCommand.Comfy,
             "/ha" => SlashCommand.HomeAssistant,
             "/docker" => SlashCommand.Docker,
+            "/camera" => SlashCommand.Camera,
             "/print" => SlashCommand.Print,
             "/echo" => SlashCommand.Echo,
             "/queue" => SlashCommand.Queue,
@@ -550,5 +559,5 @@ public static class SlashCommands
         or SlashCommand.Remember or SlashCommand.Memory or SlashCommand.CmdCopy or SlashCommand.KeyCopy or SlashCommand.Profile or SlashCommand.Timer
         or SlashCommand.Cwd or SlashCommand.Tree or SlashCommand.Vault or SlashCommand.Explore or SlashCommand.Copy or SlashCommand.Session or SlashCommand.GitUser
         or SlashCommand.Loop or SlashCommand.Plan or SlashCommand.BotChat or SlashCommand.Claude or SlashCommand.Queue or SlashCommand.Skills or SlashCommand.Test
-        or SlashCommand.HomeAssistant or SlashCommand.Docker or SlashCommand.Print or SlashCommand.Perf or SlashCommand.Tb or SlashCommand.Header or SlashCommand.Rewind;
+        or SlashCommand.HomeAssistant or SlashCommand.Docker or SlashCommand.Camera or SlashCommand.Print or SlashCommand.Perf or SlashCommand.Tb or SlashCommand.Header or SlashCommand.Rewind;
 }

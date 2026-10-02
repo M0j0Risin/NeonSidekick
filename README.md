@@ -77,6 +77,7 @@ During early development, I was experimenting with synthwave-style themes in Spe
 * **Claude CLI server:** your installed Claude Code as a `/server` choice, kept running as one open session. Claude Code's own tools are switched off; the model gets this app's tools instead, with the same approvals. Off until you turn it on in the *Claude* tab of `/tools`.
 * **Claude Code:** `/claude` sends a message to the Claude Code CLI and brings its reply into the conversation. With `claude_advisor`, the local model can ask Claude for read-only advice when it's stuck. Both are optional and use your own Claude Code sign-in.
 * **Bot Chat:** `/botchat` lets your profiles talk to each other in their own personas and voices, optionally illustrated by ComfyUI.
+* **Camera:** A USB webcam through Windows' own Media Foundation (nothing to install). `/camera` takes a photo for your next message. With *Camera tool* on, the model can ask you for one (`camera_capture`), and you take it, or allow the app to. With *Botchat camera* on, the `/botchat` bots see you as they talk, and `/camera watch` sends the model a picture when something in view changes. A 📷 on the hint row shows whenever the camera is on, and stored sessions keep a line instead of your photos unless you choose otherwise.
 
 ## Getting started
 [↑ Back to top](#neon-sidekick)
@@ -132,6 +133,7 @@ Speech output (`/tts`) and voice input (`/stt`) start off. The first time you tu
 | `--mysql-check <connection>` | The same for the MySQL tools and a connection of `mysql.json`. |
 | `--unc-check <share>` | Proves the UNC tools against that share of `unc.json` (its reach, the runas token, a listing and a search; it only reads), then exits. |
 | `--docker-check` | Proves the Docker tools against Docker Desktop's engine pipe (the version, the containers, a redacted inspect, a log and a stats sample of a running one; it only reads), then exits. |
+| `--camera-check` | Opens the camera the settings name, reads frames until the picture settles (its brightness, a warning for a black one), encodes one as a photo would be and measures the noise between two frames, then exits. Nothing is saved; the camera's light comes on for a few seconds. |
 | `--version` / `--help` | Prints the version or the help text. |
 
 Both `--option value` and `--option=value` work.
@@ -174,6 +176,7 @@ Commands typed while a reply runs:
   * 🖼️/🎨 and its timer while ComfyUI renders → cancel the pictures (the reply goes on; ESC still ends it)
   * 📥 / 🔌 / 🎧 / 🔈 while an embedded download, the MCP servers, voice input or speech output are setting up → cancel that one
   * the queued count → `/queue`
+  * 📷 while the camera is on → `/camera off` (lets go of `/camera live` and watch mode)
   * blank space → `/settings`
 * **Long setups run in the background:** an embedded model's download, the MCP servers connecting, and the first-use download and load of voice input and speech output. If one takes longer than half a second, the input line stays yours: its glyph (📥, 🔌, 🎧 or 🔈) shows its progress on the hint row, menus, commands and chat keep working, and a status line prints when it finishes.
 * **Rule over the input row:** the session's name → `/sessions title` (rename it).
@@ -455,6 +458,7 @@ Voice input sets up in the background (🎧 on the hint row), so the first-use W
 | Botchat preloaded skills | Skills the app loads itself, so no `load_skill` call is needed. Tick them in the checklist (**A** / **N** for all or none), or name one as a whole word in the topic (`/botchat use pony-prompts for the pictures`). Each comes with its bundled text files, up to 64,000 characters of them per skill (the rest stay listed by name). Needs *Agent skills*, but not *Botchat skills enabled*. With both on, a preloaded skill is not offered to load again wherever its content is already given, and a `load_skill` call for it there is answered that it is loaded already; its files can still be read, and `load_skill` stays offered for that when a file was left out past the cap, even with every skill preloaded. With *Botchat skills enabled* off, a file left out can't be read. The chat says which were loaded. | none |
 | Botchat skill mode | Who gets the preloaded skills: `prompt-writer-and-bots` (the picture prompt writer and every bot's system prompt) or `prompt-writer-only`. | `prompt-writer-and-bots` |
 | Botchat vision enabled | On its turn, shows each bot the newest 4 pictures since it last spoke (not the ones it drew itself), each captioned with whose it is. Only for models that read images: a text-only server fails the turn (in `multi` mode, every bot's model counts). Pictures aren't kept for `/botchat --resume` or the saved session. | off |
+| Botchat camera | The bots see you: the camera stays on for the chat, and each bot's turn gets a fresh picture from it, last after the chat's own pictures (4 in all), captioned as you, just now. The pictures are kept in memory only, never saved. Only for models that read images; a camera that fails is one warning and the chat goes on without it. Read when a chat starts. | off |
 
 ##### Botchat pictures
 
@@ -636,6 +640,21 @@ Every tool, grouped (Clock, Timers, Files, GitLib, Shell, Obsidian, SQL, ComfyUI
 | Ask user | Offers `ask_user`, which lets the model ask you multiple-choice questions on the pane. | on |
 | Ask max questions | How many questions one call may ask (1–10). | 10 |
 | Ask max choices per question | How many options one question may offer (2–15). | 10 |
+
+#### Camera
+
+| Setting | What it does | Default |
+|---|---|---|
+| Camera tool | Offers `camera_capture`, which lets the model ask you for a photo. Never offered without the pane, headless, or to an embedded model without vision. `/camera` works either way. | off |
+| Camera shutter | Who takes the model's photo. `user`: the camera pane shows the model's request; Space takes the photo, R takes it again, Enter sends it, ESC declines. `model`: a pane asks Deny / Allow once / Allow for this session (cleared by `/new`, `/clear` and a profile switch), and on a yes the app takes the photo at once. | `user` |
+| Camera preview | `live`: the picture viewer shows the camera live (mirrored, like a mirror) while you frame the shot, then holds the photo taken. `post`: the viewer opens on the photo once it's taken. `disabled`: no window. The viewer never takes the keyboard from the terminal. | `live` |
+| Camera device | The camera, by the name Windows lists it under, picked from the ones connected. `(first camera)` uses the first; a camera that isn't connected uses the first, with a notice. | (first camera) |
+| Camera resolution | The size the camera is asked for (`640x480`, `1280x720` or `1920x1080`). The camera runs at its own size nearest it, and a photo is scaled to fit the longer side. | `1280x720` |
+| Camera keep in sessions | Off: a stored session keeps a line naming the photo instead of the picture (the file stays in the working directory's `camera\` folder), so a resumed session doesn't carry your face. On: photos are stored like any picture. | off |
+| Camera watch interval (s) | How often `/camera watch` looks (2–3600). | 10 |
+| Camera watch change (%) | How much of the picture must change for watch mode to keep a frame (1–100). Shifts in brightness don't count. `--camera-check` prints your camera's own noise. | 8% |
+| Camera watch speaks up | Off: a changed picture rides your next message. On: the model is shown it unasked, no more often than the gap below, and only while no reply runs, nothing speaks and the input line is empty. | off |
+| Camera watch min gap (s) | The least time between two unprompted watch turns (30–3600). | 120 |
 
 #### Claude
 
@@ -880,6 +899,13 @@ Type `/` to list every command with a short summary. After a command and a space
 | `/compact [focus]` | Shrink the current context. A focus tells the summary what to concentrate on. |
 | `/copy [n \| all] [--thinking]` | Copy the last reply (or the last *n*, or the whole transcript) to the clipboard as Markdown. `--thinking` includes the model's thinking, quoted under `💭 **Thinking**` where it happened. |
 | `/cwd [path \| ~ \| browse]` | Show or change the working directory. `~` returns to the profile's `files\` folder; `browse` opens the folder picker. |
+| `/camera` | Open the camera pane: frame the shot (live in the picture viewer under *Camera preview* `live`), Space takes it, R takes it again, Enter puts it on the input line as `[Image #N]`, ESC drops it. The photo is saved in the working directory's `camera\` folder. Without the pane it takes one at once. See Camera. |
+| `/camera snap` | Take a photo at once and put it on the input line. |
+| `/camera list` | List the cameras Windows sees, numbered, the chosen one marked. |
+| `/camera use <n\|name>` | Choose the camera by its number in the list or its name (*Camera device*). |
+| `/camera live` | Show the camera live in the picture viewer until you close the window or `/camera off`. |
+| `/camera watch [seconds\|off]` | Watch mode: the camera looks every *Camera watch interval* seconds (or the seconds given), and a picture that changed rides your next message (with *Camera watch speaks up*, the model may also be shown it unasked). Never on at startup; `/camera watch off` stops it. |
+| `/camera off` | Let go of `/camera live` and watch mode; the camera closes a few seconds later. |
 | `/docker` | Docker Desktop's containers on a pane, running first, with their state, health and ports. Enter on one offers what fits its state: stop, restart or pause (each asks first), start or unpause, its last 50 log lines, open a published port in the browser, copy the id. Without the pane it lists them. |
 | `/docker ps \| status \| logs <container> [lines] \| stats [container]` | The containers; Docker Desktop's and the engine's versions with the counts; a container's last lines (50 by default); the CPU, memory, network and disk use of one or every running container. |
 | `/docker start\|stop\|restart\|pause\|unpause <container>` | Act on one container, by name, part of a name or id. Your own hand: *Docker writes* never applies, nothing is asked, every change is logged. Runs under a reply too. |
@@ -1066,6 +1092,7 @@ The picture viewer is a window of its own (Windows only). Elsewhere, the app reg
 * **A double-click on a picture in the transcript** (a sent one, one a tool fetched or generated, `/view --chat`, `/imagine`, the splash). The viewer opens on the picture's folder, showing that picture. A pasted picture or the built-in splash has no file, so it is written to `%TEMP%\NeonSidekick\pictures` first. Only a failure prints anything. *Image viewer* can send these to another program.
 * **`/view <image or folder>`**: it stays on the image, or on a folder's newest picture while following new ones.
 * **`/comfy view`**, or the **🎞️** at the left of the picture strip's rule: the ComfyUI output folder (created if missing), following new pictures as they are generated. It works while a reply runs.
+* **The camera** (*Camera preview* `live`, or `/camera live`): the live picture, mirrored, and the photo once taken. It doesn't take the keyboard from the terminal, and only F11, a double-click and Esc work in it. It takes over a viewer that is already open and goes back to that folder afterwards.
 
 | Key | Action |
 |---|---|
@@ -1087,6 +1114,17 @@ The viewer and the ComfyUI picture strip follow each other:
 
 * Browsing in the viewer (←/→, Home/End, the next picture after a delete) highlights the same picture in the strip. A picture the strip doesn't hold is ignored, and the slide show and newly arriving pictures leave the strip alone.
 * ←/→ on the strip, or a click on one of its pictures, moves an open viewer on the strip's folder to that picture, without bringing the viewer to the front.
+
+#### Camera
+
+The camera is a USB webcam (or a laptop's) read through Windows' own Media Foundation, so there's nothing to install. Windows only.
+
+* **One stream, shared.** The camera pane, the live view, a botchat and watch mode all share one open camera. It opens when the first needs it and closes a few seconds after the last lets go, so a retake doesn't wait for it again. Its first frames are dark while the exposure settles, so a photo always waits for that (about a second after the camera opens).
+* **📷 on the hint row** shows whenever the camera is on, whatever else the row shows. Double-click it to let go of `/camera live` and watch mode. The camera's own light (and Windows' camera indicator) is on at the same time.
+* **Photos** are JPEGs in the working directory's `camera\` folder, named for the moment they were taken (`20261002-140203.jpg`). A photo you retake or decline is deleted again. Botchat and watch-mode pictures are never saved.
+* **Stored sessions** keep a line naming the photo instead of the picture unless *Camera keep in sessions* is on. The picture stays in the conversation until it ends.
+* **When it fails**, the message says why: Windows' privacy setting *Let desktop apps access your camera* is off (Settings › Privacy & security › Camera), another app (a video call, the Camera app) is using the camera, it was unplugged, or Media Foundation isn't installed (Windows N needs the Media Feature Pack).
+* **Watching** is pictures, not video: the models take still images. Watch mode compares each picture with the last one the model saw, on your machine, and sends one only when enough of it changed.
 
 #### Profiles
 
@@ -1204,7 +1242,7 @@ The samples and the atlas are written by `dotnet run tools/VoiceSamples.cs`. It 
 ## Tools
 [↑ Back to top](#neon-sidekick)
 
-These are the tools the model can call, grouped as `/tools` and `/sys` show them. Each group has a switch that offers or withholds the whole group: `File tools`, `GitLib tools`, `Shell command policy`, `Obsidian tools`, `SQL tools`, `Docker tools`, `ComfyUI tools`, `Home Assistant tools`, `Print tools`, `Claude advisor tool`, `Web tools`, `Memory`, `Agent skills`, `Session tool`, `Ask user` and `MCP servers`. To switch a single tool on or off, use the Offered tab of `/tools`.
+These are the tools the model can call, grouped as `/tools` and `/sys` show them. Each group has a switch that offers or withholds the whole group: `File tools`, `GitLib tools`, `Shell command policy`, `Obsidian tools`, `SQL tools`, `Docker tools`, `ComfyUI tools`, `Home Assistant tools`, `Print tools`, `Camera tool`, `Claude advisor tool`, `Web tools`, `Memory`, `Agent skills`, `Session tool`, `Ask user` and `MCP servers`. To switch a single tool on or off, use the Offered tab of `/tools`.
 
 <details>
 <summary><b>🕒 Clock & Timers</b></summary>
@@ -1859,6 +1897,12 @@ Get-Content job.txt | NeonSidekick.exe --headless --profile work
 |---|---|---|
 | `claude_advisor` | `question, context?` | Offered while *Claude advisor tool* is on. Asks Claude Code for read-only advice; it can read and search the working directory and the web. The transcript shows the question, each tool Claude uses, the answer and a cost footer. The advisor keeps its own Claude conversation per session, separate from `/claude`'s; `/new`, `/clear` and a profile switch start a fresh one. ESC stops it along with the reply, and `/usage` counts it. |
 
+### Camera
+
+| Tool | Arguments | What it does |
+|---|---|---|
+| `camera_capture` | `prompt` | Offered while *Camera tool* is on, with the pane and a model that reads pictures. Shows the model's sentence ("Hold the label up to the camera.") and, under *Camera shutter* `user`, waits for you to take the photo (Space, R to retake, Enter to send, ESC to decline); under `model`, asks you to allow it and then takes it. The photo is saved in `camera\` and attached to the message after the result. A decline is passed on, and the model isn't asked to try again in that turn. Allowed in plan mode, as `ask_user` is. |
+
 ### Questions
 
 | Tool | Arguments | What it does |
@@ -1983,6 +2027,7 @@ These only matter when running the test suite from source. Each live test is ski
 * `NEONSIDEKICK_TEST_MYSQL_CONNECTION`: a MySqlConnector connection string (`Server=127.0.0.1;Port=3306;User ID=…;Password=…;Database=…`) to a MySQL or MariaDB database its user owns; the tests make their own `ns_*` fixtures once (the `mysql:8.4` and `mariadb:11` images work).
 * `NEONSIDEKICK_TEST_UNC_SHARE`: a `\\server\share` path you can read (`\\localhost\C$\Windows` on a workstation); with `NEONSIDEKICK_TEST_UNC_USER` and `NEONSIDEKICK_TEST_UNC_PASSWORD`, a second account that can read it, for the runas path. The tests never write.
 * `NEONSIDEKICK_TEST_DOCKER_CONTAINER`: the name of a running container to read (`mysql_dev`), with Docker Desktop running; `NEONSIDEKICK_TEST_DOCKER_PIPE` names another engine pipe. The tests never change anything.
+* `NEONSIDEKICK_TEST_CAMERA`: `1` for the first camera, or a camera's name, to run the live camera tests (the camera's light comes on); `NEONSIDEKICK_TEST_CAMERA_OUT`, a folder, keeps the test's photo there to look at.
 * `NEONSIDEKICK_TEST_HA_URL` with `NEONSIDEKICK_TEST_HA_TOKEN`: a Home Assistant to read from (the live test never switches anything).
 * `NEONSIDEKICK_TEST_WHISPER_MODEL`, `NEONSIDEKICK_TEST_SILERO_MODEL`, `NEONSIDEKICK_TEST_VOSK_MODEL`, `NEONSIDEKICK_TEST_KOKORO_MODEL`: a model, when it isn't already under `%USERPROFILE%\.neonsidekick\models`.
 * `NEONSIDEKICK_TEST_CLAUDE=1`: the live Claude Code tests, on your own sign-in (Haiku; a few cents a run).

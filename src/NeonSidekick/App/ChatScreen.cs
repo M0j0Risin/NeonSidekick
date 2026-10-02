@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Globalization;
 using System.Text;
 using Microsoft.Extensions.AI;
+using NeonSidekick.Camera;
 using NeonSidekick.Claude;
 using NeonSidekick.Diagnostics;
 using NeonSidekick.Docker;
@@ -654,6 +655,7 @@ internal sealed partial class ChatScreen
         _claudeSessionId = null;
         _advisorThread.SessionId = null;
         _claudeServerSessionId = null;
+        _cameraAllowed = false;
     }
 
     /// <summary>The saved <c>Session show name</c> word last resolved and what it meant: the pane reads the setting on every draw and tick, and <see cref="SessionShowName.Resolve"/> warns on a hand-edited value — once per value this way, not once per tick.</summary>
@@ -907,7 +909,10 @@ internal sealed partial class ChatScreen
         IPrintSpooler? printSpooler = null,
         Func<Perf.IPerfSource>? perfSource = null,
         IFrameHold? frames = null,
-        Func<string, DockerClient>? dockerClient = null)
+        Func<string, DockerClient>? dockerClient = null,
+        ICameraSystem? camera = null,
+        Func<string, Action, Viewer.ILiveView>? liveView = null,
+        Action<string>? showShot = null)
     {
         _logFile = logFile;
         ArgumentNullException.ThrowIfNull(time);
@@ -976,6 +981,13 @@ internal sealed partial class ChatScreen
         // The Docker tools and /docker (2026-10-02): the client made for the pipe in force; a model's change waits on the pane.
         _docker = new DockerSession(_effective, dockerClient, _time);
         _dockerTools = DockerTools(_docker, ConfirmDockerAsync);
+        // The camera (2026-10-02): one shared stream; photos into the sandbox's camera folder; the model's tool asks on the pane.
+        _camera = new CameraSession(camera, () => CameraSettings.Options(_effective()), _time);
+        _cameraCapture = new CameraCapture(_camera, () => _files, () => CameraSettings.Options(_effective()), _time);
+        _cameraTools = CameraTools(ShootForModelAsync);
+        _cameraWatch = new CameraWatch(_camera, _time, () => _effective().CameraWatchThreshold, OnWatchChanged);
+        _liveView = liveView;
+        _showShot = showShot;
         // The print tools and /print (2026-09-28): the spooler the composition root hands in (none in tests); a model's print waits on the pane under ask.
         _print = new PrintService(printSpooler ?? NullPrintSpooler.Instance, _files, _effective, _time);
         _printTools = PrintTools(_print, ConfirmPrintAsync);
@@ -1019,7 +1031,7 @@ internal sealed partial class ChatScreen
             // jobs (LlmSession.IsLearning / IsTitling), nothing pushed.
             // The jobs behind the line (2026-09-29) after the pictures; a switch whose setup runs shows its job's glyph, not
             // its own (a click on 🎤 or 🔊 turns it off).
-            Strip = () => PlanStrip(_plan.Active, StripGlyphs(_session.IsLearning, _session.IsTitling, _pendingPictures.Glyph, _speech.Enabled && !_jobs.Running(BackgroundJobKind.Speech), _voice.Enabled && !_jobs.Running(BackgroundJobKind.Voice), _voice.WakeReady, _voice.InterruptReady, _jobs.Strip())),
+            Strip = () => CameraStrip(_camera.Live, PlanStrip(_plan.Active, StripGlyphs(_session.IsLearning, _session.IsTitling, _pendingPictures.Glyph, _speech.Enabled && !_jobs.Running(BackgroundJobKind.Speech), _voice.Enabled && !_jobs.Running(BackgroundJobKind.Voice), _voice.WakeReady, _voice.InterruptReady, _jobs.Strip()))),
             // The model at the row's right edge, from the live connection: empty until one lands;
             // the reasoning glyph after it in its own colour, none with the model.
             // The session's name at the right edge of the rule above the input row (2026-09-18, the user's
@@ -1106,6 +1118,7 @@ internal sealed partial class ChatScreen
         // lists it either way), offered only while the setting Ask user and the pane say so (RunTurnAsync).
         _questionMenu = new QuestionMenu(_menuPane, _input);
         _approvalMenu = new CommandApprovalMenu(_menuPane);
+        _cameraMenu = new CameraMenu(_menuPane);
         _askTools = AskTools(AskUserAsync, _effective);
         _planMenu = new PlanApprovalMenu(_menuPane, _input);
         // /skills add (2026-09-26): its picks and install question on the same pane, the network through the web tools' fetcher.
@@ -1137,6 +1150,7 @@ internal sealed partial class ChatScreen
         _menu.EmbeddedLlm = _session.Embedded;
         // The Docker tab's container checklist (2026-10-02): the screen's engine door, the pipe the settings name.
         _menu.DockerContainers = _docker.ContainersAsync;
+        _menu.Cameras = _camera.Available ? _camera.List : null;
         _menu.Effective = _effective;
         _menu.BeforeEmbeddedRemove = StopEmbeddedDownloadOfAsync;
         BindProfile();
@@ -2994,7 +3008,7 @@ internal sealed partial class ChatScreen
         var disabled = ToolsText.DisabledSet(effective.ToolsDisabled);
         var fileTools = _fileTools;
         bool files = effective.FileTools && Without(fileTools, disabled).Count > 0;
-        var groups = SystemPromptSummary.ToolGroups(_clockTools, _timerTools, fileTools, _memoryTools, effective.Memory, effective.LlmOfferTools, WebToolsFor(_webTools, files), effective.WebTools, effective.FileTools, _askTools, effective.AskUser, _pane.Enabled, _skillTools, effective.AgentSkills, _sessionTools, effective.SessionTool, disabled, skillInstalled: Catalog(effective).Count > 0, mcp: _mcp.ServerTools, mcpEnabled: effective.McpServers, git: _gitTools, gitEnabled: effective.GitLibTools, shell: _shellTools, shellEnabled: ShellOffered(effective), codeAvailable: CodeAvailable(), obsidian: ObsidianToolsFor(_vaultTools, effective), obsidianEnabled: ObsidianOffered(effective), sql: _sqlTools, sqlEnabled: SqlOffered(effective, _sql), comfy: _comfyTools, comfyEnabled: ComfyOffered(effective, _comfy), advisor: _advisorTools, advisorEnabled: effective.ClaudeAdvisor, homeAssistant: _haTools, homeAssistantEnabled: HomeAssistantOffered(effective), print: _printTools, printEnabled: PrintOffered(effective), oracle: _oracleTools, oracleEnabled: OracleOffered(effective, _oracle), mysql: _mysqlTools, mysqlEnabled: MySqlOffered(effective, _mysql), unc: UncToolsFor(_uncTools, effective, _unc.Catalog(), files), uncEnabled: UncOffered(effective, _unc), docker: DockerToolsFor(_dockerTools, effective), dockerEnabled: DockerOffered(effective));
+        var groups = SystemPromptSummary.ToolGroups(_clockTools, _timerTools, fileTools, _memoryTools, effective.Memory, effective.LlmOfferTools, WebToolsFor(_webTools, files), effective.WebTools, effective.FileTools, _askTools, effective.AskUser, _pane.Enabled, _skillTools, effective.AgentSkills, _sessionTools, effective.SessionTool, disabled, skillInstalled: Catalog(effective).Count > 0, mcp: _mcp.ServerTools, mcpEnabled: effective.McpServers, git: _gitTools, gitEnabled: effective.GitLibTools, shell: _shellTools, shellEnabled: ShellOffered(effective), codeAvailable: CodeAvailable(), obsidian: ObsidianToolsFor(_vaultTools, effective), obsidianEnabled: ObsidianOffered(effective), sql: _sqlTools, sqlEnabled: SqlOffered(effective, _sql), comfy: _comfyTools, comfyEnabled: ComfyOffered(effective, _comfy), advisor: _advisorTools, advisorEnabled: effective.ClaudeAdvisor, homeAssistant: _haTools, homeAssistantEnabled: HomeAssistantOffered(effective), print: _printTools, printEnabled: PrintOffered(effective), oracle: _oracleTools, oracleEnabled: OracleOffered(effective, _oracle), mysql: _mysqlTools, mysqlEnabled: MySqlOffered(effective, _mysql), unc: UncToolsFor(_uncTools, effective, _unc.Catalog(), files), uncEnabled: UncOffered(effective, _unc), docker: DockerToolsFor(_dockerTools, effective), dockerEnabled: DockerOffered(effective), camera: _cameraTools, cameraEnabled: CameraOffered(effective));
         return groups.SelectMany(g => g.Tools.Where(t => g.Offers(t.Name)).Select(t => new CompletionItem(t.Name, t.Description))).ToList();
     }
 
@@ -3655,6 +3669,10 @@ internal sealed partial class ChatScreen
                 // The verbs, then the containers of the last list read (2026-10-02).
                 return sources.Docker?.Invoke(argText) ?? DockerCommand.Complete(null, argText);
 
+            case SlashCommand.Camera:
+                // The words, then off after watch (2026-10-02).
+                return CameraCommand.Complete(argText);
+
             case SlashCommand.Print:
                 // reply and printers for the first word, the options and the printers' names after a target (2026-09-28); the path itself is ArgumentPaths'.
                 return sources.Print?.Invoke(argText) ?? PrintCommand.Complete(argText, []);
@@ -3849,7 +3867,7 @@ internal sealed partial class ChatScreen
         var disabled = TurnDisabled(effective);
         var fileTools = _fileTools;
         bool files = effective.FileTools && Without(fileTools, disabled).Count > 0;   // the turn's rule (PrepareTurn): an emptied file group is the switch off
-        return WithPlanGroup(SystemPromptSummary.OfferedOnly(SystemPromptSummary.ToolGroups(_clockTools, _timerTools, fileTools, _memoryTools, effective.Memory, effective.LlmOfferTools, WebToolsFor(_webTools, files), effective.WebTools, effective.FileTools, _askTools, effective.AskUser, _pane.Enabled, _skillTools, effective.AgentSkills, _sessionTools, effective.SessionTool, disabled, mcp: _mcp.ServerTools, mcpEnabled: effective.McpServers, git: _gitTools, gitEnabled: effective.GitLibTools, shell: _shellTools, shellEnabled: ShellOffered(effective), codeAvailable: CodeAvailable(), obsidian: ObsidianOffered(effective) ? ObsidianToolsFor(_vaultTools, effective) : null, sql: SqlOffered(effective, _sql) ? _sqlTools : null, comfy: ComfyOffered(effective, _comfy) ? _comfyTools : null, advisor: _advisorTools, advisorEnabled: effective.ClaudeAdvisor, homeAssistant: HomeAssistantOffered(effective) ? _haTools : null, oracle: OracleOffered(effective, _oracle) ? _oracleTools : null, mysql: MySqlOffered(effective, _mysql) ? _mysqlTools : null, unc: UncOffered(effective, _unc) ? UncToolsFor(_uncTools, effective, _unc.Catalog(), files) : null, docker: DockerOffered(effective) ? DockerToolsFor(_dockerTools, effective) : null)));   // the vault group only with a vault (2026-09-22): /sys stays as it was for a profile that never names one
+        return WithPlanGroup(SystemPromptSummary.OfferedOnly(SystemPromptSummary.ToolGroups(_clockTools, _timerTools, fileTools, _memoryTools, effective.Memory, effective.LlmOfferTools, WebToolsFor(_webTools, files), effective.WebTools, effective.FileTools, _askTools, effective.AskUser, _pane.Enabled, _skillTools, effective.AgentSkills, _sessionTools, effective.SessionTool, disabled, mcp: _mcp.ServerTools, mcpEnabled: effective.McpServers, git: _gitTools, gitEnabled: effective.GitLibTools, shell: _shellTools, shellEnabled: ShellOffered(effective), codeAvailable: CodeAvailable(), obsidian: ObsidianOffered(effective) ? ObsidianToolsFor(_vaultTools, effective) : null, sql: SqlOffered(effective, _sql) ? _sqlTools : null, comfy: ComfyOffered(effective, _comfy) ? _comfyTools : null, advisor: _advisorTools, advisorEnabled: effective.ClaudeAdvisor, homeAssistant: HomeAssistantOffered(effective) ? _haTools : null, oracle: OracleOffered(effective, _oracle) ? _oracleTools : null, mysql: MySqlOffered(effective, _mysql) ? _mysqlTools : null, unc: UncOffered(effective, _unc) ? UncToolsFor(_uncTools, effective, _unc.Catalog(), files) : null, docker: DockerOffered(effective) ? DockerToolsFor(_dockerTools, effective) : null, camera: CameraOffered(effective) ? _cameraTools : null)));   // the vault group only with a vault (2026-09-22): /sys stays as it was for a profile that never names one
     }
 
     /// <summary>Whether <c>execute_code</c> has a language to run (2026-09-21): the setting's languages, one of them installed.</summary>
@@ -3876,7 +3894,7 @@ internal sealed partial class ChatScreen
         var effective = _effective();
         var disabled = ToolsText.DisabledSet(effective.ToolsDisabled);
         _interpreters.Refresh();
-        var groups = SystemPromptSummary.ToolGroups(_clockTools, _timerTools, _fileTools, _memoryTools, effective.Memory, effective.LlmOfferTools, _webTools, effective.WebTools, effective.FileTools, _askTools, effective.AskUser, _pane.Enabled, _skillTools, effective.AgentSkills, _sessionTools, effective.SessionTool, disabled, skillInstalled: Catalog(effective).Count > 0, git: _gitTools, gitEnabled: effective.GitLibTools, shell: _shellTools, shellEnabled: ShellOffered(effective), codeAvailable: CodeAvailable(), obsidian: ObsidianToolsFor(_vaultTools, effective), obsidianEnabled: ObsidianOffered(effective), sql: _sqlTools, sqlEnabled: SqlOffered(effective, _sql), comfy: _comfyTools, comfyEnabled: ComfyOffered(effective, _comfy), advisor: _advisorTools, advisorEnabled: effective.ClaudeAdvisor, homeAssistant: _haTools, homeAssistantEnabled: HomeAssistantOffered(effective), print: _printTools, printEnabled: PrintOffered(effective), oracle: _oracleTools, oracleEnabled: OracleOffered(effective, _oracle), mysql: _mysqlTools, mysqlEnabled: MySqlOffered(effective, _mysql), unc: UncToolsFor(_uncTools, effective, _unc.Catalog(), effective.FileTools), uncEnabled: UncOffered(effective, _unc), docker: DockerToolsFor(_dockerTools, effective), dockerEnabled: DockerOffered(effective));
+        var groups = SystemPromptSummary.ToolGroups(_clockTools, _timerTools, _fileTools, _memoryTools, effective.Memory, effective.LlmOfferTools, _webTools, effective.WebTools, effective.FileTools, _askTools, effective.AskUser, _pane.Enabled, _skillTools, effective.AgentSkills, _sessionTools, effective.SessionTool, disabled, skillInstalled: Catalog(effective).Count > 0, git: _gitTools, gitEnabled: effective.GitLibTools, shell: _shellTools, shellEnabled: ShellOffered(effective), codeAvailable: CodeAvailable(), obsidian: ObsidianToolsFor(_vaultTools, effective), obsidianEnabled: ObsidianOffered(effective), sql: _sqlTools, sqlEnabled: SqlOffered(effective, _sql), comfy: _comfyTools, comfyEnabled: ComfyOffered(effective, _comfy), advisor: _advisorTools, advisorEnabled: effective.ClaudeAdvisor, homeAssistant: _haTools, homeAssistantEnabled: HomeAssistantOffered(effective), print: _printTools, printEnabled: PrintOffered(effective), oracle: _oracleTools, oracleEnabled: OracleOffered(effective, _oracle), mysql: _mysqlTools, mysqlEnabled: MySqlOffered(effective, _mysql), unc: UncToolsFor(_uncTools, effective, _unc.Catalog(), effective.FileTools), uncEnabled: UncOffered(effective, _unc), docker: DockerToolsFor(_dockerTools, effective), dockerEnabled: DockerOffered(effective), camera: _cameraTools, cameraEnabled: CameraOffered(effective));
         return new ToolsFacts(groups, effective.LlmOfferTools, disabled);
     }
 
@@ -4572,7 +4590,7 @@ internal sealed partial class ChatScreen
     /// (the setting <c>Shell prefer native tools</c>), the rules gain <see cref="Assistant.ShellNativeRule"/> after the shell sentence. <paramref name="sampling"/>
     /// (2026-09-28, the setting <c>LLM sampling</c>, resolved for the connected model) replaces the assistant's when given. Shared with headless.
     /// </summary>
-    public static void PrepareTurn(Assistant assistant, MemoryStore memory, IReadOnlyList<AIFunction> memoryTools, IReadOnlyList<AIFunction> standingTools, PersonaFile persona, OperataFile operata, VocaliaFile vocalia, bool memoryEnabled, bool speechOutput, int maxToolIterations = Assistant.DefaultMaxToolIterations, bool toolsEnabled = true, IReadOnlyList<AIFunction>? webTools = null, bool webEnabled = false, Assistant.TurnContextGuard? contextGuard = null, IReadOnlyList<AIFunction>? fileTools = null, bool filesEnabled = false, IReadOnlyList<AIFunction>? askTools = null, SkillsForTurn? skills = null, bool markdown = false, IReadOnlyList<AIFunction>? sessionTools = null, bool sessionsEnabled = false, IReadOnlySet<string>? disabledTools = null, IReadOnlyList<AIFunction>? mcpTools = null, bool mcpEnabled = false, IReadOnlyList<AIFunction>? gitTools = null, bool gitEnabled = false, IReadOnlyList<AIFunction>? shellTools = null, bool shellEnabled = false, ProcessRegistry? processes = null, bool shellBridge = false, bool shellPolice = true, IReadOnlyList<AIFunction>? obsidianTools = null, bool obsidianEnabled = false, IReadOnlyList<AIFunction>? sqlTools = null, bool sqlEnabled = false, IReadOnlyList<AIFunction>? comfyTools = null, bool comfyEnabled = false, bool shellNative = false, PlanTurn? plan = null, IReadOnlyList<AIFunction>? advisorTools = null, bool advisorEnabled = false, bool preserveThinking = false, LlmSampling? sampling = null, IReadOnlyList<AIFunction>? homeTools = null, bool homeEnabled = false, IReadOnlyList<AIFunction>? printTools = null, bool printEnabled = false, IReadOnlyList<AIFunction>? oracleTools = null, bool oracleEnabled = false, IReadOnlyList<AIFunction>? mysqlTools = null, bool mysqlEnabled = false, IReadOnlyList<AIFunction>? uncTools = null, bool uncEnabled = false, IReadOnlyList<AIFunction>? dockerTools = null, bool dockerEnabled = false)
+    public static void PrepareTurn(Assistant assistant, MemoryStore memory, IReadOnlyList<AIFunction> memoryTools, IReadOnlyList<AIFunction> standingTools, PersonaFile persona, OperataFile operata, VocaliaFile vocalia, bool memoryEnabled, bool speechOutput, int maxToolIterations = Assistant.DefaultMaxToolIterations, bool toolsEnabled = true, IReadOnlyList<AIFunction>? webTools = null, bool webEnabled = false, Assistant.TurnContextGuard? contextGuard = null, IReadOnlyList<AIFunction>? fileTools = null, bool filesEnabled = false, IReadOnlyList<AIFunction>? askTools = null, SkillsForTurn? skills = null, bool markdown = false, IReadOnlyList<AIFunction>? sessionTools = null, bool sessionsEnabled = false, IReadOnlySet<string>? disabledTools = null, IReadOnlyList<AIFunction>? mcpTools = null, bool mcpEnabled = false, IReadOnlyList<AIFunction>? gitTools = null, bool gitEnabled = false, IReadOnlyList<AIFunction>? shellTools = null, bool shellEnabled = false, ProcessRegistry? processes = null, bool shellBridge = false, bool shellPolice = true, IReadOnlyList<AIFunction>? obsidianTools = null, bool obsidianEnabled = false, IReadOnlyList<AIFunction>? sqlTools = null, bool sqlEnabled = false, IReadOnlyList<AIFunction>? comfyTools = null, bool comfyEnabled = false, bool shellNative = false, PlanTurn? plan = null, IReadOnlyList<AIFunction>? advisorTools = null, bool advisorEnabled = false, bool preserveThinking = false, LlmSampling? sampling = null, IReadOnlyList<AIFunction>? homeTools = null, bool homeEnabled = false, IReadOnlyList<AIFunction>? printTools = null, bool printEnabled = false, IReadOnlyList<AIFunction>? oracleTools = null, bool oracleEnabled = false, IReadOnlyList<AIFunction>? mysqlTools = null, bool mysqlEnabled = false, IReadOnlyList<AIFunction>? uncTools = null, bool uncEnabled = false, IReadOnlyList<AIFunction>? dockerTools = null, bool dockerEnabled = false, IReadOnlyList<AIFunction>? cameraTools = null, bool cameraEnabled = false)
     {
         ArgumentNullException.ThrowIfNull(assistant);
         ArgumentNullException.ThrowIfNull(memory);
@@ -4637,6 +4655,7 @@ internal sealed partial class ChatScreen
             skillTools = Without(skillTools, disabledTools);
             sessionTools = sessionTools is null ? null : Without(sessionTools, disabledTools);
             askTools = askTools is null ? null : Without(askTools, disabledTools);
+            cameraTools = cameraTools is null ? null : Without(cameraTools, disabledTools);
             mcpTools = mcpTools is null ? null : Without(mcpTools, disabledTools);
             advisorTools = advisorTools is null ? null : Without(advisorTools, disabledTools);
         }
@@ -4718,6 +4737,9 @@ internal sealed partial class ChatScreen
         // The MCP servers' tools after the session tool (2026-09-20): the setting MCP servers, a per-group offer over what is connected.
         bool mcp = mcpEnabled && mcpTools is { Count: > 0 };
         tools = mcp ? [.. tools, .. mcpTools!] : tools;
+        // camera_capture (2026-10-02): Camera tool on, the pane and a model that reads pictures; ahead of present_plan and ask_user.
+        bool camera = cameraEnabled && cameraTools is { Count: > 0 };
+        tools = camera ? [.. tools, .. cameraTools!] : tools;
         // present_plan while planning (2026-09-26): after everything else, ahead of the question tool, which stays last.
         tools = plan is not null ? [.. tools, plan.Tool] : tools;
         assistant.Tools = ask is not null ? [.. tools, .. askTools!] : tools;
@@ -7554,6 +7576,18 @@ internal sealed partial class ChatScreen
                     continue;
                 }
 
+                if (TakeWatchNudge() is { } watched)
+                {
+                    // Watch mode spoke up (2026-10-02, Camera watch speaks up): the changed picture shown to the model unasked.
+                    _transcript.Notice(CameraText.WatchNudgeNotice);
+                    if (await RunMessageAsync(CameraText.WatchNudgeMessage, [watched.Image], cancellationToken).ConfigureAwait(false))
+                    {
+                        return 0;
+                    }
+
+                    continue;
+                }
+
                 IReadOnlyList<InputEvent>? replay = null;
                 SubmittedLine? send = null;
                 // A draft the editor just handed back (2026-09-19) goes first: the user is
@@ -7563,6 +7597,12 @@ internal sealed partial class ChatScreen
                 {
                     replay = _draftReplay;
                     _draftReplay = null;
+                }
+                else if (_attachReplay is { } attach)
+                {
+                    // A camera shot for the line (2026-10-02, /camera): the paste of its path, the draft left for the user.
+                    replay = attach;
+                    _attachReplay = null;
                 }
                 else if (_pendingLines.TryDequeue(out var pendingLine))
                 {
@@ -7710,6 +7750,11 @@ internal sealed partial class ChatScreen
                             // A job behind the line (2026-09-29): its cancel; its end is said by the drain that follows at once.
                             _jobs.Cancel(job);
                         }
+                        else if (hint.Hit.Zone == ScreenPane.HintZone.Strip && hint.Hit.Glyph == CameraText.Glyph)
+                        {
+                            // The camera's glyph (2026-10-02): /camera off, the camera let go.
+                            _transcript.Notice(CameraText.Off(CameraOff()));
+                        }
                         else if (hint.Hit.Zone == ScreenPane.HintZone.Strip && hint.Hit.Glyph == PlanText.Glyph)
                         {
                             // Plan mode's glyph (2026-09-26): where the plan stands, as /plan typed.
@@ -7829,6 +7874,9 @@ internal sealed partial class ChatScreen
             _comfy.Dispose();
             _ha.Dispose();
             _docker.Dispose();
+            StopLive();
+            _cameraWatch.Dispose();
+            _camera.Dispose();
             _sessions.Dispose();
             _skillRecords.Store.Dispose();
             if (_ownsMcp)
@@ -9840,6 +9888,10 @@ internal sealed partial class ChatScreen
                 await HandleDockerAsync(args, cancellationToken).ConfigureAwait(false);
                 return false;
 
+            case SlashCommand.Camera:
+                await HandleCameraAsync(args, cancellationToken).ConfigureAwait(false);
+                return false;
+
             case SlashCommand.Print:
                 await HandlePrintAsync(args, cancellationToken).ConfigureAwait(false);
                 return false;
@@ -10970,6 +11022,8 @@ internal sealed partial class ChatScreen
         // Vision (2026-09-27): the pictures shown in this chat, and the last one each bot was shown, by name.
         _botPictureLog = [];
         var picturesSeen = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        // The bots see the user (2026-10-02, Botchat camera): the camera held for the chat, a fresh picture per turn.
+        CameraLease? botCamera = effective.BotChatCamera ? AcquireBotCamera() : null;
         try
         {
             while (!cancellationToken.IsCancellationRequested)
@@ -11037,6 +11091,15 @@ internal sealed partial class ChatScreen
                 }
 
                 picturesSeen[bot.Name] = _botPictureLog?.Count ?? 0;
+                if (botCamera is not null && await BotCameraPictureAsync(botCamera, cancellationToken).ConfigureAwait(false) is { } cameraPicture)
+                {
+                    seenImages = BotChat.WithCamera(seenImages, cameraPicture);
+                    sentText += "\n\n" + BotChat.CameraCaption;
+                }
+                else if (botCamera is { Released: true })
+                {
+                    botCamera = null;
+                }
                 if (imageTool is not null && rework is not null && candidates.Count > 0)
                 {
                     // What the bot may rework and how (2026-09-27): on the sent text alone, as the vision caption.
@@ -11214,6 +11277,7 @@ internal sealed partial class ChatScreen
             _botChatRunning = false;
             _botChatCast = null;
             _botPictureLog = null;
+            botCamera?.Dispose();
             // Kept for /botchat --resume (2026-09-25), however the chat ended; one with nothing said has nothing to carry on.
             if (lines.Count > 0)
             {
@@ -12014,6 +12078,14 @@ internal sealed partial class ChatScreen
             return false;
         }
 
+        // The camera's photos (2026-10-02): marked so a stored session keeps a line instead; watch mode's changed picture rides along.
+        images = MarkCameraImages(images);
+        if (_session.EmbeddedServer is not { Vision: false } && _cameraWatch.Running && _cameraWatch.TakePending() is { } seen)
+        {
+            images = [.. images, seen.Image];
+            text += "\n\n" + CameraText.WatchCaption(seen.At);
+        }
+
         // Once per message, before its turn: the last reply's context at or past the LLM compact
         // at share of a known window compacts first. A failed compact is reported and the turn
         // still runs; a compact leaves the context in use zeroed, so it cannot fire twice in a row.
@@ -12475,7 +12547,9 @@ internal sealed partial class ChatScreen
         if (bot is null)
         {
             _interpreters.Refresh();
-            PrepareTurn(assistant, _memory, _memoryTools, [.. _clockTools, .. _timerTools], _persona, _operata, _vocalia, effective.Memory, speaker is not null, effective.LlmMaxToolIterations, effective.LlmOfferTools, _webTools, effective.WebTools, ContextGuardFor(effective, _session.ContextLength), _fileTools, effective.FileTools, _pane.Enabled && effective.AskUser ? _askTools : null, SkillsFor(effective), markdown, _sessionTools, effective.SessionTool, ToolsText.DisabledSet(effective.ToolsDisabled), _mcp.Tools, effective.McpServers, _gitTools, effective.GitLibTools, _shellTools, ShellOffered(effective), _processes, effective.ShellToolBridge, effective.ShellPoliceOutsidePaths, ObsidianToolsFor(_vaultTools, effective), ObsidianOffered(effective), _sqlTools, SqlOffered(effective, _sql), _comfyTools, ComfyOffered(effective, _comfy), effective.ShellPreferNative, _plan.Turn(_presentPlan), _advisorTools, effective.ClaudeAdvisor, effective.LlmPreserveThinking, LlmSampling.Resolve(effective, _session.Endpoint?.ModelId), _haTools, HomeAssistantOffered(effective), _printTools, PrintOffered(effective), _oracleTools, OracleOffered(effective, _oracle), _mysqlTools, MySqlOffered(effective, _mysql), UncToolsFor(_uncTools, effective, _unc.Catalog(), effective.FileTools), UncOffered(effective, _unc), DockerToolsFor(_dockerTools, effective), DockerOffered(effective));
+            // A photo declined in the last turn may be asked for again in this one (2026-10-02).
+            _cameraDeclined = false;
+            PrepareTurn(assistant, _memory, _memoryTools, [.. _clockTools, .. _timerTools], _persona, _operata, _vocalia, effective.Memory, speaker is not null, effective.LlmMaxToolIterations, effective.LlmOfferTools, _webTools, effective.WebTools, ContextGuardFor(effective, _session.ContextLength), _fileTools, effective.FileTools, _pane.Enabled && effective.AskUser ? _askTools : null, SkillsFor(effective), markdown, _sessionTools, effective.SessionTool, ToolsText.DisabledSet(effective.ToolsDisabled), _mcp.Tools, effective.McpServers, _gitTools, effective.GitLibTools, _shellTools, ShellOffered(effective), _processes, effective.ShellToolBridge, effective.ShellPoliceOutsidePaths, ObsidianToolsFor(_vaultTools, effective), ObsidianOffered(effective), _sqlTools, SqlOffered(effective, _sql), _comfyTools, ComfyOffered(effective, _comfy), effective.ShellPreferNative, _plan.Turn(_presentPlan), _advisorTools, effective.ClaudeAdvisor, effective.LlmPreserveThinking, LlmSampling.Resolve(effective, _session.Endpoint?.ModelId), _haTools, HomeAssistantOffered(effective), _printTools, PrintOffered(effective), _oracleTools, OracleOffered(effective, _oracle), _mysqlTools, MySqlOffered(effective, _mysql), UncToolsFor(_uncTools, effective, _unc.Catalog(), effective.FileTools), UncOffered(effective, _unc), DockerToolsFor(_dockerTools, effective), DockerOffered(effective), _cameraTools, CameraOffered(effective));
 
             // The Claude CLI server (2026-09-30) keeps the conversation itself: the turn names its session, and no guard
             // measures or prunes a history the CLI does not read (it compacts its own).
@@ -12849,7 +12923,7 @@ internal sealed partial class ChatScreen
         if (_sessionId is { } id)
         {
             var messages = assistant.History.Messages;
-            _sessions.SaveHistory(id, SessionHistory.ToJson(messages, _plan.ToStored(), _executingPlan, _claudeSessionId, _advisorThread.SessionId, _effective().SessionSaveThinking, _claudeServerSessionId));
+            _sessions.SaveHistory(id, SessionHistory.ToJson(messages, _plan.ToStored(), _executingPlan, _claudeSessionId, _advisorThread.SessionId, _effective().SessionSaveThinking, _claudeServerSessionId, _effective().CameraKeepInSessions));
         }
     }
 

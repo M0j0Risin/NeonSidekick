@@ -775,6 +775,39 @@ public enum SettingsField
 
     /// <summary>A picker: where a spoken request goes — <c>chat</c> / <c>draft</c> (<see cref="Settings.AppSettingsData.SttDestination"/>). The STT tab's second row, under <see cref="SttInput"/> (later on 2026-10-02, the user's ask); no reconnect (read at each listen), so not an <see cref="SettingsMenu.IsVoiceField"/>. Last in the enum, as every newcomer.</summary>
     SttDestination,
+
+    /// <summary>A toggle: whether a turn offers <c>camera_capture</c> (<see cref="Settings.AppSettingsData.CameraTools"/>). The Camera tab of <c>/tools</c> (2026-10-02); no reconnect.</summary>
+    CameraTools,
+
+    /// <summary>A picker: who takes the model's photo — <c>user</c> / <c>model</c> (<see cref="Settings.AppSettingsData.CameraShutter"/>). The Camera tab (2026-10-02).</summary>
+    CameraShutter,
+
+    /// <summary>A picker: how a shot is previewed — <c>live</c> / <c>post</c> / <c>disabled</c> (<see cref="Settings.AppSettingsData.CameraPreview"/>). The Camera tab (2026-10-02).</summary>
+    CameraPreview,
+
+    /// <summary>A picker over the cameras Windows lists (<see cref="Settings.AppSettingsData.CameraDevice"/>), <c>(first)</c> for none. The Camera tab (2026-10-02).</summary>
+    CameraDevice,
+
+    /// <summary>A picker: the size the camera is asked for (<see cref="Settings.AppSettingsData.CameraResolution"/>). The Camera tab (2026-10-02).</summary>
+    CameraResolution,
+
+    /// <summary>A toggle: whether a stored session keeps the camera's pictures (<see cref="Settings.AppSettingsData.CameraKeepInSessions"/>). The Camera tab (2026-10-02).</summary>
+    CameraKeepInSessions,
+
+    /// <summary>Typed: watch mode's interval in seconds (<see cref="Settings.AppSettingsData.CameraWatchSeconds"/>). The Camera tab (2026-10-02).</summary>
+    CameraWatchSeconds,
+
+    /// <summary>Typed: watch mode's change threshold in percent (<see cref="Settings.AppSettingsData.CameraWatchThreshold"/>). The Camera tab (2026-10-02).</summary>
+    CameraWatchThreshold,
+
+    /// <summary>A toggle: whether watch mode may start a turn itself (<see cref="Settings.AppSettingsData.CameraWatchUnprompted"/>). The Camera tab (2026-10-02).</summary>
+    CameraWatchUnprompted,
+
+    /// <summary>Typed: the least seconds between two unprompted watch turns (<see cref="Settings.AppSettingsData.CameraWatchMinGapSeconds"/>). The Camera tab (2026-10-02).</summary>
+    CameraWatchMinGapSeconds,
+
+    /// <summary>A toggle: whether the <c>/botchat</c> bots see the user's camera (<see cref="Settings.AppSettingsData.BotChatCamera"/>). The Botchat tab's last row (2026-10-02); no reconnect (read at the chat's start). Last in the enum, as every newcomer.</summary>
+    BotChatCamera,
 }
 
 /// <summary>The tabs of <c>/settings</c> on the pane, in strip order (General, Embedded, LLM, TTS, STT, Sessions, Botchat — the user's order, 2026-09-29; Sessions right after General — the user's order, 2026-09-18 — until then; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
@@ -1097,7 +1130,7 @@ internal sealed partial class SettingsMenu
         [SettingsField.TtsOutput, SettingsField.TtsSource, SettingsField.TtsHttpUrl, SettingsField.TtsVoicePreview, SettingsField.TtsVoicePreset, SettingsField.TtsVoice, SettingsField.TtsVoice2, SettingsField.TtsVoiceMix, SettingsField.TtsSpeed],
         [SettingsField.SttInput, SettingsField.SttDestination, .. Fields.Where(f => IsVoiceField(f) && f != SettingsField.SttInput)],
         [SettingsField.SessionLogging, SettingsField.SessionRetentionDays, SettingsField.SessionNamingMode, SettingsField.SessionShowName, SettingsField.SessionTool, SettingsField.SessionSearchMaxResults, SettingsField.SessionSaveThinking],
-        [SettingsField.BotChatLlmMode, SettingsField.BotChatMultiEmbedded, SettingsField.BotChatMultiEmbeddedKill, SettingsField.BotChatImages, SettingsField.BotChatImageMode, SettingsField.BotChatTxt2ImgWorkflow, SettingsField.BotChatImg2ImgWorkflow, SettingsField.BotChatImg2ImgMode, SettingsField.BotChatImageAsync, SettingsField.BotChatNonTtsDelaySeconds, SettingsField.BotChatSkills, SettingsField.BotChatPreloadedSkills, SettingsField.BotChatSkillMode, SettingsField.BotChatVision],
+        [SettingsField.BotChatLlmMode, SettingsField.BotChatMultiEmbedded, SettingsField.BotChatMultiEmbeddedKill, SettingsField.BotChatImages, SettingsField.BotChatImageMode, SettingsField.BotChatTxt2ImgWorkflow, SettingsField.BotChatImg2ImgWorkflow, SettingsField.BotChatImg2ImgMode, SettingsField.BotChatImageAsync, SettingsField.BotChatNonTtsDelaySeconds, SettingsField.BotChatSkills, SettingsField.BotChatPreloadedSkills, SettingsField.BotChatSkillMode, SettingsField.BotChatVision, SettingsField.BotChatCamera],
     ];
 
     /// <summary>
@@ -1143,6 +1176,7 @@ internal sealed partial class SettingsMenu
         [SettingsField.FileTools, SettingsField.FileTreeMaxLength, SettingsField.FileTreeShowSizes, SettingsField.FileMentionFolderMode, SettingsField.FileBrowserMode, SettingsField.FileViewImageMaxPerCall, SettingsField.FileSearchMaxResults],
         [SettingsField.ShellCommandPolicy, SettingsField.ShellCommandAllowed, SettingsField.ShellPoliceOutsidePaths, SettingsField.ShellPreferNative, SettingsField.ShellDefault, SettingsField.ShellTimeoutSeconds, SettingsField.ShellForegroundCapSeconds, SettingsField.ShellOutputMaxChars, SettingsField.ShellCodeLanguages, SettingsField.ShellCodeTimeoutSeconds, SettingsField.ShellToolBridge, SettingsField.ShellCodeMaxToolCalls],
         [SettingsField.AskUser, SettingsField.AskMaxQuestions, SettingsField.AskMaxChoices],
+        [SettingsField.CameraTools, SettingsField.CameraShutter, SettingsField.CameraPreview, SettingsField.CameraDevice, SettingsField.CameraResolution, SettingsField.CameraKeepInSessions, SettingsField.CameraWatchSeconds, SettingsField.CameraWatchThreshold, SettingsField.CameraWatchUnprompted, SettingsField.CameraWatchMinGapSeconds],
         [SettingsField.ClaudeExecutable, SettingsField.ClaudePermissions, SettingsField.ClaudeModel, SettingsField.ClaudeEffort, SettingsField.ClaudeAdvisor, SettingsField.ClaudeAdvisorContext, SettingsField.ClaudeAdvisorCallsPerTurn, SettingsField.ClaudeAdvisorModel, SettingsField.ClaudeAdvisorEffort, SettingsField.ClaudeAdvisorConfirm, SettingsField.ClaudeApi, SettingsField.ClaudeApiKey, SettingsField.ClaudeApiMaxTokens, SettingsField.ClaudeApiPromptCaching, SettingsField.ClaudeCliServer],
         [SettingsField.PrintTools, SettingsField.PrintActionPolicy, SettingsField.PrintDefaultPrinter, SettingsField.PrintFontSize],
         [SettingsField.ObsidianTools, SettingsField.ObsidianVault, SettingsField.ObsidianAllowDelete],
@@ -1528,7 +1562,8 @@ internal sealed partial class SettingsMenu
             or SettingsField.ClaudeApi or SettingsField.ClaudeApiPromptCaching or SettingsField.ClaudeCliServer or SettingsField.EmbeddedVision or SettingsField.EmbeddedLlmServer or SettingsField.EmbeddedDrafter or SettingsField.EmbeddedVramOnly
             or SettingsField.HomeAssistantTools or SettingsField.PrintTools or SettingsField.OracleTools or SettingsField.OraclePercentMention or SettingsField.MySqlTools or SettingsField.MySqlPercentMention
             or SettingsField.UncTools or SettingsField.UncWrites or SettingsField.UncStarMention
-            or SettingsField.DockerTools or SettingsField.DockerWrites or SettingsField.DockerServers or SettingsField.DockerServerStopOnExit;
+            or SettingsField.DockerTools or SettingsField.DockerWrites or SettingsField.DockerServers or SettingsField.DockerServerStopOnExit
+            or SettingsField.CameraTools or SettingsField.CameraKeepInSessions or SettingsField.CameraWatchUnprompted or SettingsField.BotChatCamera;
 
     public static string FieldName(SettingsField field) => field switch
     {
@@ -1546,6 +1581,17 @@ internal sealed partial class SettingsMenu
         SettingsField.TtsOutput => "TTS output",
         SettingsField.SttInput => "STT input",
         SettingsField.SttDestination => "STT destination",
+        SettingsField.CameraTools => "Camera tool",
+        SettingsField.CameraShutter => "Camera shutter",
+        SettingsField.CameraPreview => "Camera preview",
+        SettingsField.CameraDevice => "Camera device",
+        SettingsField.CameraResolution => "Camera resolution",
+        SettingsField.CameraKeepInSessions => "Camera keep in sessions",
+        SettingsField.CameraWatchSeconds => "Camera watch interval (s)",
+        SettingsField.CameraWatchThreshold => "Camera watch change (%)",
+        SettingsField.CameraWatchUnprompted => "Camera watch speaks up",
+        SettingsField.CameraWatchMinGapSeconds => "Camera watch min gap (s)",
+        SettingsField.BotChatCamera => "Botchat camera",
         SettingsField.SttWake => "STT wake",
         SettingsField.SttWakePhrase => "STT wake phrase",
         SettingsField.SttPushToTalkKey => "STT push-to-talk key",
@@ -1816,6 +1862,17 @@ internal sealed partial class SettingsMenu
             SettingsField.TtsOutput => OnOff(data.TtsOutput),
             SettingsField.SttInput => OnOff(data.SttInput),
             SettingsField.SttDestination => data.SttDestination,
+            SettingsField.CameraTools => OnOff(data.CameraTools),
+            SettingsField.CameraShutter => data.CameraShutter,
+            SettingsField.CameraPreview => data.CameraPreview,
+            SettingsField.CameraDevice => string.IsNullOrWhiteSpace(data.CameraDevice) ? FirstCameraLabel : data.CameraDevice,
+            SettingsField.CameraResolution => data.CameraResolution,
+            SettingsField.CameraKeepInSessions => OnOff(data.CameraKeepInSessions),
+            SettingsField.CameraWatchSeconds => Seconds(data.CameraWatchSeconds),
+            SettingsField.CameraWatchThreshold => data.CameraWatchThreshold.ToString(CultureInfo.InvariantCulture) + "%",
+            SettingsField.CameraWatchUnprompted => OnOff(data.CameraWatchUnprompted),
+            SettingsField.CameraWatchMinGapSeconds => Seconds(data.CameraWatchMinGapSeconds),
+            SettingsField.BotChatCamera => OnOff(data.BotChatCamera),
             SettingsField.SttWake => OnOff(data.SttWake),
             SettingsField.SttWakePhrase => data.SttWakePhrase,
             SettingsField.SttPushToTalkKey => data.SttPushToTalkKey,
@@ -2685,6 +2742,9 @@ internal sealed partial class SettingsMenu
         SettingsField.GitLibName => data.GitLibName,
         SettingsField.ObsidianVault => data.ObsidianVault,
         SettingsField.AskMaxQuestions => data.AskMaxQuestions.ToString(CultureInfo.InvariantCulture),
+        SettingsField.CameraWatchSeconds => data.CameraWatchSeconds.ToString(CultureInfo.InvariantCulture),
+        SettingsField.CameraWatchThreshold => data.CameraWatchThreshold.ToString(CultureInfo.InvariantCulture),
+        SettingsField.CameraWatchMinGapSeconds => data.CameraWatchMinGapSeconds.ToString(CultureInfo.InvariantCulture),
         SettingsField.AskMaxChoices => data.AskMaxChoices.ToString(CultureInfo.InvariantCulture),
         SettingsField.PastePreviewLines => data.PastePreviewLines.ToString(CultureInfo.InvariantCulture),
         SettingsField.SessionRetentionDays => data.SessionRetentionDays.ToString(CultureInfo.InvariantCulture),
@@ -3559,6 +3619,11 @@ internal sealed partial class SettingsMenu
             return await PickSttDestinationAsync(saved, cancellationToken).ConfigureAwait(false);
         }
 
+        if (field is SettingsField.CameraShutter or SettingsField.CameraPreview or SettingsField.CameraResolution or SettingsField.CameraDevice)
+        {
+            return await PickCameraAsync(field, saved, cancellationToken).ConfigureAwait(false);
+        }
+
         if (field == SettingsField.BotChatImageMode)
         {
             return await PickBotChatImageModeAsync(saved, cancellationToken).ConfigureAwait(false);
@@ -4166,6 +4231,36 @@ internal sealed partial class SettingsMenu
                 }
 
                 Apply(field, d => d.SessionSearchMaxResults = sessionHits);
+                return true;
+
+            case SettingsField.CameraWatchSeconds:
+                if (!int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out int watchSeconds) || watchSeconds < AppSettingsData.MinCameraWatchSeconds || watchSeconds > AppSettingsData.MaxCameraWatchSeconds)
+                {
+                    Sink.Error($"{FieldName(field)} {CameraWatchSecondsRangeError}; keeping {EditableValue(field, saved)}.");
+                    return false;
+                }
+
+                Apply(field, d => d.CameraWatchSeconds = watchSeconds);
+                return true;
+
+            case SettingsField.CameraWatchThreshold:
+                if (!int.TryParse(text.TrimEnd('%', ' '), NumberStyles.Integer, CultureInfo.InvariantCulture, out int watchThreshold) || watchThreshold < AppSettingsData.MinCameraWatchThreshold || watchThreshold > AppSettingsData.MaxCameraWatchThreshold)
+                {
+                    Sink.Error($"{FieldName(field)} {CameraWatchThresholdRangeError}; keeping {EditableValue(field, saved)}.");
+                    return false;
+                }
+
+                Apply(field, d => d.CameraWatchThreshold = watchThreshold);
+                return true;
+
+            case SettingsField.CameraWatchMinGapSeconds:
+                if (!int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out int watchGap) || watchGap < AppSettingsData.MinCameraWatchMinGapSeconds || watchGap > AppSettingsData.MaxCameraWatchMinGapSeconds)
+                {
+                    Sink.Error($"{FieldName(field)} {CameraWatchMinGapRangeError}; keeping {EditableValue(field, saved)}.");
+                    return false;
+                }
+
+                Apply(field, d => d.CameraWatchMinGapSeconds = watchGap);
                 return true;
 
             case SettingsField.AskMaxQuestions:
@@ -5217,6 +5312,10 @@ internal sealed partial class SettingsMenu
             SettingsField.UncStarMention => data.UncStarMention,
             SettingsField.DockerTools => data.DockerTools,
             SettingsField.DockerWrites => data.DockerWrites,
+            SettingsField.CameraTools => data.CameraTools,
+            SettingsField.CameraKeepInSessions => data.CameraKeepInSessions,
+            SettingsField.CameraWatchUnprompted => data.CameraWatchUnprompted,
+            SettingsField.BotChatCamera => data.BotChatCamera,
             SettingsField.DockerServers => data.DockerServers,
             SettingsField.DockerServerStopOnExit => data.DockerServerStopOnExit,
             SettingsField.ComfyTools => data.ComfyTools,
@@ -5304,6 +5403,10 @@ internal sealed partial class SettingsMenu
             case SettingsField.UncWrites: data.UncWrites = on; break;
             case SettingsField.UncStarMention: data.UncStarMention = on; break;
             case SettingsField.DockerTools: data.DockerTools = on; break;
+            case SettingsField.CameraTools: data.CameraTools = on; break;
+            case SettingsField.CameraKeepInSessions: data.CameraKeepInSessions = on; break;
+            case SettingsField.CameraWatchUnprompted: data.CameraWatchUnprompted = on; break;
+            case SettingsField.BotChatCamera: data.BotChatCamera = on; break;
             case SettingsField.DockerWrites: data.DockerWrites = on; break;
             case SettingsField.DockerServers: data.DockerServers = on; break;
             case SettingsField.DockerServerStopOnExit: data.DockerServerStopOnExit = on; break;
@@ -5400,6 +5503,10 @@ internal sealed partial class SettingsMenu
         SettingsField.UncWrites => on ? "read-write shares may write" : "read-only forced for all shares",
         SettingsField.UncStarMention => on ? "* and part of a name lists the UNC shares on the line" : "* is ordinary text",
         SettingsField.DockerTools => on ? "Docker tools enabled; /docker works either way" : "Docker tools disabled; /docker still works",
+        SettingsField.CameraTools => on ? "the model may ask for a photo; /camera works either way" : "the model cannot ask for a photo; /camera still works",
+        SettingsField.CameraKeepInSessions => on ? "stored sessions keep the camera's pictures" : "stored sessions name the camera's pictures, the files stay in camera/",
+        SettingsField.CameraWatchUnprompted => on ? "watch mode shows the model a change by itself, now and then" : "watch mode's changes ride your next message",
+        SettingsField.BotChatCamera => on ? "each bot sees a fresh picture from your camera (vision models)" : "the bots do not see your camera",
         SettingsField.DockerWrites => on ? "the model may start, stop, pull and prune, each change asking first" : "the model may only look at Docker",
         SettingsField.DockerServers => on ? "/server offers the chosen containers, one running at a time" : "no Docker servers; one in use stops at the reconnect",
         SettingsField.DockerServerStopOnExit => on ? "the app's exit stops the container it was using" : "the container keeps running after the app exits",

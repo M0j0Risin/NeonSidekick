@@ -41,6 +41,29 @@ public sealed class ConversationHistory
     public const string CarrierKey = "neon.imageCarrier";
 
     /// <summary>
+    /// The <see cref="AIContent.AdditionalProperties"/> key that marks a camera picture's part (2026-10-02; the value is the
+    /// photo's path): <c>SessionHistory</c> stores a line naming it instead, unless <c>Camera keep in sessions</c> is on.
+    /// </summary>
+    public const string CameraKey = "neon.camera";
+
+    /// <summary>An attachment's image part: its bytes and type, marked <see cref="CameraKey"/> when it came off the camera.</summary>
+    public static DataContent ImagePart(ImageAttachment image)
+    {
+        ArgumentNullException.ThrowIfNull(image);
+        var part = new DataContent(image.Bytes, image.MediaType);
+        if (image.Camera)
+        {
+            part.AdditionalProperties = new AdditionalPropertiesDictionary { [CameraKey] = image.Path };
+        }
+
+        return part;
+    }
+
+    /// <summary>The photo's path when <paramref name="content"/> is a camera picture's part (<see cref="CameraKey"/>); null otherwise.</summary>
+    public static string? CameraPath(AIContent content) =>
+        content is DataContent && content.AdditionalProperties?.TryGetValue(CameraKey, out var path) == true ? path as string ?? "" : null;
+
+    /// <summary>
     /// The <see cref="AIContent.AdditionalProperties"/> key that marks a <see cref="FunctionResultContent"/>
     /// holding a loaded skill's instructions (value <c>true</c>; <see cref="Assistant.ResultContent"/>),
     /// what the compactor's protection keeps (<c>Skill compact mode</c>). Never on the wire.
@@ -166,7 +189,7 @@ public sealed class ConversationHistory
         var contents = new List<AIContent>(images.Count + 1) { new TextContent(ImageCarrierText(images.Select(i => i.Path).ToList(), source)) };
         foreach (var image in images)
         {
-            contents.Add(new DataContent(image.Bytes, image.MediaType));
+            contents.Add(ImagePart(image));
         }
 
         _messages.Add(new ChatMessage(ChatRole.User, contents) { AdditionalProperties = new AdditionalPropertiesDictionary { [CarrierKey] = true } });
@@ -193,7 +216,7 @@ public sealed class ConversationHistory
             var contents = new List<AIContent>(images.Count + 1) { new TextContent(text) };
             foreach (var image in images)
             {
-                contents.Add(new DataContent(image.Bytes, image.MediaType));
+                contents.Add(ImagePart(image));
             }
 
             _messages.Add(new ChatMessage(ChatRole.User, contents));

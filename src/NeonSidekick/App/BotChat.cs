@@ -899,6 +899,26 @@ public static partial class BotChat
     /// <summary>The most pictures one turn message carries with <c>Botchat vision enabled</c> (2026-09-27): the newest; a local vision server pays for each.</summary>
     public const int MaxVisionPictures = 4;
 
+    /// <summary>The longer side of the camera's picture a bot is shown (<c>Botchat camera</c>, 2026-10-02): enough to see the user, light on a local server.</summary>
+    public const int CameraMaxSide = 1024;
+
+    /// <summary>How long a bot's turn waits for the camera's picture before it goes without (2026-10-02).</summary>
+    public static readonly TimeSpan CameraWait = TimeSpan.FromSeconds(3);
+
+    /// <summary>The line the turn text ends with when the camera's picture rides along (2026-10-02). Pinned: it is prompt text.</summary>
+    public const string CameraCaption = "(Attached last: the user's camera, just now — what they are doing as you speak. React to it only when it adds something.)";
+
+    /// <summary>
+    /// The chat's pictures with the camera's after them (2026-10-02): the camera's last, the newest of the others kept so the
+    /// message carries at most <paramref name="max"/>. Pure.
+    /// </summary>
+    public static IReadOnlyList<Files.ImageAttachment> WithCamera(IReadOnlyList<Files.ImageAttachment> seen, Files.ImageAttachment camera, int max = MaxVisionPictures)
+    {
+        ArgumentNullException.ThrowIfNull(seen);
+        ArgumentNullException.ThrowIfNull(camera);
+        return [.. seen.TakeLast(Math.Max(0, max - 1)), camera];
+    }
+
     /// <summary>
     /// The pictures a bot is shown on its turn (<c>Botchat vision enabled</c>, 2026-09-27): those logged after
     /// <paramref name="seen"/> (the last <see cref="BotPicture.Seq"/> it was shown), less the ones it drew itself with

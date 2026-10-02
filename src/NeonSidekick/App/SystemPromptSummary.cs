@@ -285,6 +285,9 @@ public static class SystemPromptSummary
     /// <summary>Why the print group is not offered (2026-09-28).</summary>
     public const string PrintOffSuffix = "Print tools is off";
 
+    /// <summary>After the Camera heading while <c>camera_capture</c> is not offered (2026-10-02). Pinned.</summary>
+    public const string CameraOffSuffix = "Camera tool is off, there is no pane or camera support, or the model reads no pictures";
+
     /// <summary>The note on <c>execute_code</c> while none of the languages <c>Shell code languages</c> names is installed (2026-09-21). Pinned.</summary>
     public const string NoInterpreterSuffix = "no interpreter found for the languages in Shell code languages";
 
@@ -535,7 +538,9 @@ public static class SystemPromptSummary
         IReadOnlyList<AIFunction>? unc = null,
         bool uncEnabled = true,
         IReadOnlyList<AIFunction>? docker = null,
-        bool dockerEnabled = true)
+        bool dockerEnabled = true,
+        IReadOnlyList<AIFunction>? camera = null,
+        bool cameraEnabled = true)
     {
         ArgumentNullException.ThrowIfNull(clock);
         ArgumentNullException.ThrowIfNull(timers);
@@ -629,6 +634,13 @@ public static class SystemPromptSummary
             // The print tools (2026-09-28): after the Home Assistant tools; offered while Print tools is on.
             string printNote = !printEnabled ? NotOffered(PrintOffSuffix) : standing;
             groups.Add(Group(ToolsText.PrintTabTitle, print, printNote, printEnabled && toolsEnabled, SettingsField.PrintTools, disabled));
+        }
+
+        if (camera is not null)
+        {
+            // The camera (2026-10-02): after the print tools; offered while Camera tool is on, with the pane and a model that reads pictures.
+            string cameraNote = !cameraEnabled ? NotOffered(CameraOffSuffix) : standing;
+            groups.Add(Group(ToolsText.CameraTabTitle, camera, cameraNote, cameraEnabled && toolsEnabled, SettingsField.CameraTools, disabled));
         }
 
         if (advisor is not null)

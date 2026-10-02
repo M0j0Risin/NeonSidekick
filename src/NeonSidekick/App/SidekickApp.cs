@@ -82,6 +82,9 @@ public sealed class SidekickApp
     private readonly Func<Uri, Comfy.ComfyClient>? _comfyClient;
     private readonly Func<Uri, string, HomeAssistant.HaClient>? _haClient;
     private readonly Func<string, Docker.DockerClient>? _dockerClient;
+    private readonly Camera.ICameraSystem? _camera;
+    private readonly Func<string, Action, Viewer.ILiveView>? _liveView;
+    private readonly Action<string>? _showShot;
     private readonly Func<Docker.IDockerServers>? _dockerServers;
     private readonly Printing.IPrintSpooler _printSpooler;
     private readonly Func<Perf.IPerfSource>? _perfSource;
@@ -178,8 +181,16 @@ public sealed class SidekickApp
         UI.IFrameHold? frames = null,
         Func<Claude.IClaudeServerHost>? claudeServer = null,
         Func<string, Docker.DockerClient>? dockerClient = null,
-        Func<Docker.IDockerServers>? dockerServers = null)
+        Func<Docker.IDockerServers>? dockerServers = null,
+        Camera.ICameraSystem? camera = null,
+        Func<string, Action, Viewer.ILiveView>? liveView = null,
+        Action<string>? showShot = null)
     {
+        // The camera (2026-10-02): Media Foundation in the app on Windows, a fake in tests, none elsewhere; its previews in the
+        // picture viewer (live, and a shot opened without the keyboard), none in tests.
+        _camera = camera;
+        _liveView = liveView;
+        _showShot = showShot;
         // The Claude CLI server (2026-09-30): a host over the real CLI, with this executable as its MCP relay, unless a test gives its own.
         _claudeServerFactory = claudeServer ?? (() => new Claude.ClaudeServerHost(Claude.ClaudeServerHost.OwnRelayCommand));
         _frames = frames;
@@ -387,6 +398,13 @@ public sealed class SidekickApp
             // The live proof on the published exe (2026-10-02): reads only, over the pipe the settings name.
             using var dockerCheck = new Docker.DockerSession(() => EffectiveSettings, _dockerClient, _time);
             return await DockerCheck.RunAsync(_console, dockerCheck, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (options.CameraCheck)
+        {
+            // The live proof on the published exe (2026-10-02): the camera the settings name, nothing saved.
+            using var cameraCheck = new Camera.CameraSession(_camera, () => Camera.CameraSettings.Options(EffectiveSettings), _time);
+            return await CameraCheck.RunAsync(_console, cameraCheck, cancellationToken).ConfigureAwait(false);
         }
 
         if (options.UncCheck is { } uncShare)
@@ -602,6 +620,8 @@ public sealed class SidekickApp
         var haTools = ChatScreen.HomeAssistantTools(ha, confirm: null);
         // The Docker tools (2026-10-02): no pane to ask on, so every change is refused; the reads and /docker work.
         using var docker = new Docker.DockerSession(() => EffectiveSettings, _dockerClient, _time);
+        // The camera (2026-10-02): /camera list only; a photo needs the screen's panes, so camera_capture is never offered here.
+        using var camera = new Camera.CameraSession(_camera, () => Camera.CameraSettings.Options(EffectiveSettings), _time);
         var dockerTools = ChatScreen.DockerTools(docker, confirm: null);
         // The print tools (2026-09-28): no pane to ask on, so under ask (the default) the model's print is refused; /print works.
         var print = new Printing.PrintService(_printSpooler, files, () => EffectiveSettings, _time);
@@ -819,6 +839,23 @@ public sealed class SidekickApp
                     foreach (string haLine in haResult.Lines)
                     {
                         await HeadlessLineAsync((haResult.Failed ? "[error] " : "") + haLine).ConfigureAwait(false);
+                    }
+
+                    continue;
+                }
+
+                // /camera (2026-10-02): ahead of the server check too; headless lists the cameras and nothing else.
+                if (SlashCommands.Parse(text) is (SlashCommand.Camera, var cameraArgs))
+                {
+                    if (Camera.CameraCommand.Parse(cameraArgs).Verb != Camera.CameraVerb.List)
+                    {
+                        await HeadlessLineAsync("[error] " + Camera.CameraText.NeedsScreen).ConfigureAwait(false);
+                        continue;
+                    }
+
+                    foreach (var (cameraLine, cameraError) in await Camera.CameraCommand.ListAsync(camera, EffectiveSettings.CameraDevice, cancellationToken).ConfigureAwait(false))
+                    {
+                        await HeadlessLineAsync((cameraError ? "[error] " : "") + cameraLine).ConfigureAwait(false);
                     }
 
                     continue;
@@ -1750,7 +1787,7 @@ public sealed class SidekickApp
         // on the row and hands it back to the terminal otherwise, so the terminal's own selection
         // and right-click copy work whenever there is nothing to click into.
         var mouse = _input as WindowsConsoleInput;
-        var screen = new ChatScreen(_console, _settings, () => EffectiveSettings, OverriddenBy, session, speech, new KeySource(_input ?? _console.Input), voice, PersonaFile.OpenInEditor, RenderScreen, _time, _geometry, _clipboard, mouse is null ? null : mouse.Capture, _copyToClipboard, clipboardImage: _clipboardImage, web: _web, setTitle: _setTitle, externalSkills: _externalSkills, holdWheel: mouse is null ? null : mouse.HoldWheel, splash: SplashImages.Source, editDraft: PersonaFile.EditAndWaitAsync, mcp: mcp, environment: _environment.System, logFile: _options.LogPath is { } logPath ? Path.GetFullPath(logPath) : null, comfyClient: _comfyClient, openImage: PersonaFile.OpenImage, claude: _claude, openViewer: _openViewer, viewPicture: _viewPicture, followViewer: _followViewer, haClient: _haClient, printSpooler: _printSpooler, perfSource: _perfSource, frames: _frames, dockerClient: _dockerClient);
+        var screen = new ChatScreen(_console, _settings, () => EffectiveSettings, OverriddenBy, session, speech, new KeySource(_input ?? _console.Input), voice, PersonaFile.OpenInEditor, RenderScreen, _time, _geometry, _clipboard, mouse is null ? null : mouse.Capture, _copyToClipboard, clipboardImage: _clipboardImage, web: _web, setTitle: _setTitle, externalSkills: _externalSkills, holdWheel: mouse is null ? null : mouse.HoldWheel, splash: SplashImages.Source, editDraft: PersonaFile.EditAndWaitAsync, mcp: mcp, environment: _environment.System, logFile: _options.LogPath is { } logPath ? Path.GetFullPath(logPath) : null, comfyClient: _comfyClient, openImage: PersonaFile.OpenImage, claude: _claude, openViewer: _openViewer, viewPicture: _viewPicture, followViewer: _followViewer, haClient: _haClient, printSpooler: _printSpooler, perfSource: _perfSource, frames: _frames, dockerClient: _dockerClient, camera: _camera, liveView: _liveView, showShot: _showShot);
         if (mouse is not null)
         {
             mouse.ModeChanged = screen.FlushConsole;

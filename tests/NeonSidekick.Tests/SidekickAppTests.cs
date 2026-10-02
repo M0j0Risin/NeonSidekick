@@ -100,7 +100,11 @@ public partial class SidekickAppTests : IDisposable
             // /claude over a script (2026-09-27): no test starts the real CLI.
             claude: _claudeCli,
             // The Docker engine over the same stub (2026-10-02): no test reaches the real pipe; unmapped, the engine is unreachable.
-            dockerClient: pipe => new NeonSidekick.Docker.DockerClient(pipe, new HttpClient(_http)));
+            dockerClient: pipe => new NeonSidekick.Docker.DockerClient(pipe, new HttpClient(_http)),
+            // The camera (2026-10-02): none unless a test hands in the fake.
+            camera: _camera);
+
+    private FakeCameraSystem? _camera;
 
     /// <summary>The MCP seam (2026-09-20): in-process pipe servers behind every session the app builds; nothing configured in the temp home, so nothing connects unless a test writes an mcp.json.</summary>
     private readonly InProcessMcpServers _mcpServers = new();

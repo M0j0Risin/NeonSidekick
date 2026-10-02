@@ -843,6 +843,15 @@ public sealed class AppSettingsData
     /// </summary>
     public bool BotChatVision { get; set; }
 
+    /// <summary>
+    /// Whether the <c>/botchat</c> bots see the user (2026-10-02, the user's ask: bots that react to what is going on): on, the
+    /// camera stays open for the chat and each bot's turn message carries a fresh picture from it, last after the chat's own
+    /// pictures (<see cref="App.BotChat.MaxVisionPictures"/> in all), with a caption saying it is the user's camera just now.
+    /// Held in memory only, never saved. Only for models that read images. Off by default. The Botchat tab, after
+    /// <see cref="BotChatVision"/>. No variable.
+    /// </summary>
+    public bool BotChatCamera { get; set; }
+
     // ─── Skills─────────────────────────────────────────────────────────────────
 
     /// <summary>
@@ -1121,6 +1130,89 @@ public sealed class AppSettingsData
     /// nothing can draw the questions, whatever this says. The row is the one switch (<c>/ask</c> went 2026-09-18). No variable.
     /// </summary>
     public bool AskUser { get; set; } = true;
+
+    // ─── Camera (2026-10-02) ────────────────────────────────────────────────────
+    // A USB camera's pictures for the model (the user's ask): /camera, the model's camera_capture, a botchat that sees the
+    // user, watch mode. Media Foundation in-process; /tools' Camera tab. None of these has a variable.
+
+    /// <summary>
+    /// Whether a turn offers the model <c>camera_capture</c> (2026-10-02): it asks for a photo the way <c>ask_user</c> asks a
+    /// question, and <see cref="CameraShutter"/> says who takes it. Never offered without the bottom pane (nothing could ask) or
+    /// headless, nor to an embedded model without vision. Read at each turn. Off by default. <c>/camera</c> works either way.
+    /// </summary>
+    public bool CameraTools { get; set; }
+
+    /// <summary>
+    /// Who takes the model's photo (2026-10-02, the user's call): <c>user</c> (the default: a pane shows the model's request,
+    /// Space takes the shot, R takes it again, Enter sends it, ESC declines) or <c>model</c> (a pane asks Deny / Allow once /
+    /// Allow for this session, and on a yes the app takes it at once). One of <see cref="Camera.CameraShutterMode.Names"/>.
+    /// </summary>
+    public string CameraShutter { get; set; } = Camera.CameraShutterMode.Default;
+
+    /// <summary>
+    /// How a shot is previewed (2026-10-02, the user's call): <c>live</c> (the default: the picture viewer shows the camera
+    /// live while the shutter pane is open, and holds the shot taken), <c>post</c> (the viewer opens on the shot once it is
+    /// taken) or <c>disabled</c> (no window). The viewer never takes the keyboard from the terminal. One of
+    /// <see cref="Camera.CameraPreviewMode.Names"/>.
+    /// </summary>
+    public string CameraPreview { get; set; } = Camera.CameraPreviewMode.Default;
+
+    /// <summary>
+    /// The camera by the name Windows lists it under (2026-10-02; the name, not the device path, which changes with the USB
+    /// port). Blank, the default, is the first camera; a name not connected uses the first with a notice. <c>/camera use</c>.
+    /// </summary>
+    public string CameraDevice { get; set; } = "";
+
+    /// <summary>
+    /// The size the camera is asked for (2026-10-02): <c>640x480</c>, <c>1280x720</c> (the default) or <c>1920x1080</c>; the
+    /// camera runs at its own size nearest it and a shot is scaled to fit its longer side. Anything else reads as the default.
+    /// </summary>
+    public string CameraResolution { get; set; } = DefaultCameraResolution;
+
+    public const string DefaultCameraResolution = "1280x720";
+
+    /// <summary>The <see cref="CameraResolution"/> choices, in menu order.</summary>
+    public static readonly string[] CameraResolutions = ["640x480", "1280x720", "1920x1080"];
+
+    /// <summary>
+    /// Whether a stored session keeps the camera's pictures (2026-10-02): off (the default), the conversation holds them until
+    /// it ends but <c>sessions.db</c> gets a line naming the file instead (the photo stays in the working directory's
+    /// <c>camera</c> folder); on, they are stored like any picture. A privacy default: a resumed session does not carry the
+    /// user's face.
+    /// </summary>
+    public bool CameraKeepInSessions { get; set; }
+
+    /// <summary>Watch mode's sampling interval in seconds (2026-10-02): <see cref="MinCameraWatchSeconds"/>–<see cref="MaxCameraWatchSeconds"/>.</summary>
+    public int CameraWatchSeconds { get; set; } = DefaultCameraWatchSeconds;
+
+    public const int MinCameraWatchSeconds = 2;
+    public const int MaxCameraWatchSeconds = 3600;
+    public const int DefaultCameraWatchSeconds = 10;
+
+    /// <summary>
+    /// How much of the picture must change, in percent, for watch mode to keep a frame (2026-10-02):
+    /// <see cref="MinCameraWatchThreshold"/>–<see cref="MaxCameraWatchThreshold"/>. <c>--camera-check</c> prints the camera's
+    /// own noise floor.
+    /// </summary>
+    public int CameraWatchThreshold { get; set; } = DefaultCameraWatchThreshold;
+
+    public const int MinCameraWatchThreshold = 1;
+    public const int MaxCameraWatchThreshold = 100;
+    public const int DefaultCameraWatchThreshold = 8;
+
+    /// <summary>
+    /// Whether watch mode starts a turn by itself when the picture changes (2026-10-02): off (the default), a changed frame
+    /// only rides the user's next message; on, the model is shown it unasked — no oftener than
+    /// <see cref="CameraWatchMinGapSeconds"/>, and only with no turn running, no pane open, nothing speaking and the draft empty.
+    /// </summary>
+    public bool CameraWatchUnprompted { get; set; }
+
+    /// <summary>The least time between two unprompted watch turns, in seconds: <see cref="MinCameraWatchMinGapSeconds"/>–<see cref="MaxCameraWatchMinGapSeconds"/>.</summary>
+    public int CameraWatchMinGapSeconds { get; set; } = DefaultCameraWatchMinGapSeconds;
+
+    public const int MinCameraWatchMinGapSeconds = 30;
+    public const int MaxCameraWatchMinGapSeconds = 3600;
+    public const int DefaultCameraWatchMinGapSeconds = 120;
 
     // ─── Files ──────────────────────────────────────────────────────────────────
 

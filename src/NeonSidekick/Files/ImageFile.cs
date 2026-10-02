@@ -7,7 +7,14 @@ namespace NeonSidekick.Files;
 /// original file when it is small enough and already PNG or JPEG, else a downscaled re-encode),
 /// their media type, and the size they stand at.
 /// </summary>
-public sealed record ImageAttachment(string Path, byte[] Bytes, string MediaType, int Width, int Height);
+public sealed record ImageAttachment(string Path, byte[] Bytes, string MediaType, int Width, int Height)
+{
+    /// <summary>
+    /// A picture off the camera (2026-10-02): the history marks its part so a stored session keeps a placeholder instead
+    /// unless <c>Camera keep in sessions</c> is on (<c>SessionHistory</c>).
+    /// </summary>
+    public bool Camera { get; init; }
+}
 
 /// <summary>
 /// A pasted picture as it was before any downscale (later still on 2026-09-24): the bytes <c>generate_image</c> saves and
