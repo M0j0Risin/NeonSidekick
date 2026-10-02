@@ -83,7 +83,7 @@ internal sealed class LlmSession : IDisposable
     private string _configuredUrl = "";
     private int _configuredContextLength;
 
-    // The loaded profile's Embedded LLM server enabled at the last connect (2026-09-29): a bot's embedded link honours it.
+    // The loaded profile's Embedded servers enabled at the last connect (2026-09-29): a bot's embedded link honours it.
     private bool _embeddedEnabled = true;
 
     // One embedded link at a time (later on 2026-09-29): the bots link in parallel, and each once saw no server running and
@@ -477,7 +477,7 @@ internal sealed class LlmSession : IDisposable
     /// The <c>/server</c> rows of the embedded model (2026-09-29): one per installed catalog model, asked nothing — every
     /// catalog model, installed or not, until later that day, when the user asked for the installed ones alone: a download
     /// starts from the catalog on <c>/settings</c>' Embedded tab. None when no embedded model is offered — no service, not
-    /// Windows x64, or <paramref name="effective"/>'s <c>Embedded LLM server enabled</c> off (2026-09-29) — or none is installed.
+    /// Windows x64, or <paramref name="effective"/>'s <c>Embedded servers enabled</c> off (2026-09-29) — or none is installed.
     /// </summary>
     public IReadOnlyList<LlmServer> EmbeddedRows(AppSettingsData effective)
     {

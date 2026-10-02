@@ -27,10 +27,12 @@ public static class PerfBarItems
     public static readonly string[] Names = [Cpu, Ram, Gpu, Vram, Net, NetDown, NetUp];
 
     /// <summary>
-    /// What a bare <c>/perf</c> (or the toolbar's 📈) shows when nothing was ever picked: the bar as it was before the
-    /// checklist, CPU, RAM, GPU and VRAM. Pinned.
+    /// The default meters: what a bare <c>/perf</c> (or the toolbar's 📈) shows when nothing was ever picked — the bar as it
+    /// was before the checklist, CPU, RAM, GPU and VRAM — and, since 2026-10-02 (the user's ask, Show toolbar's shape), what
+    /// the checklist's <c>⊡ default</c> button checks. <c>Restored</c> until then. Saved as the list, not as null: null is no
+    /// bar here. Pinned.
     /// </summary>
-    public static readonly string[] Restored = [Cpu, Ram, Gpu, Vram];
+    public static readonly string[] Defaults = [Cpu, Ram, Gpu, Vram];
 
     /// <summary>The meter's label, the bar's own. Pinned.</summary>
     public static string Title(string id) => id switch

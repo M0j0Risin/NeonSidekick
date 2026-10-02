@@ -219,16 +219,17 @@ public sealed class AppSettingsData
 
     /// <summary>
     /// The meters a bare <c>/perf</c> (or the toolbar's 📈) brings back after it hid the bar (2026-09-30): what was checked when
-    /// it hid it; null until then, when <see cref="App.PerfBarItems.Restored"/> (CPU, RAM, GPU and VRAM) come back. No settings
+    /// it hid it; null until then, when <see cref="App.PerfBarItems.Defaults"/> (CPU, RAM, GPU and VRAM) come back. No settings
     /// row, no variable.
     /// </summary>
     public List<string>? PerformanceBarLastItems { get; set; }
 
     /// <summary>
     /// The performance bar's look (later on 2026-09-29, the user's ask: "the last look used"; the look itself since
-    /// 2026-09-30): one of <see cref="App.PerfBarMode.Names"/> — <c>text</c> (the default), <c>gauge</c>, <c>spark</c> or
-    /// <c>led</c> — picked on the <c>Show performance bar</c> page's title row or by <c>/perf &lt;look&gt;</c>. Anything else
-    /// reads as <c>text</c>. No row of its own, no variable.
+    /// 2026-09-30): one of <see cref="App.PerfBarMode.Names"/> — <c>text</c>, <c>gauge</c>, <c>spark</c> or <c>led</c> (the
+    /// default since 2026-10-02, the user's ask; <c>text</c> until then, which a profile that saved it keeps) — picked on the
+    /// <c>Show performance bar</c> page's title row or by <c>/perf &lt;look&gt;</c>. Anything else reads as <c>led</c>. No row of
+    /// its own, no variable.
     /// </summary>
     public string PerformanceBarLook { get; set; } = App.PerfBarMode.Default;
 
@@ -1987,7 +1988,8 @@ public sealed class AppSettingsData
     /// <c>llama-server</c> stops at the reconnect the change brings — its memory is free again. Installed models stay on
     /// disk; the <c>Embedded models</c> row still installs and removes them. The Embedded tab's first row. <c>EmbeddedLlmEnabled</c>
     /// / <c>Embedded LLM enabled</c> until later that day, when the user named it <c>Embedded LLM server enabled</c>; the key
-    /// follows the label without the <c>Enabled</c> suffix, so a saved off went back to on once. No variable.
+    /// follows the label without the <c>Enabled</c> suffix, so a saved off went back to on once. <c>Embedded servers enabled</c>
+    /// since 2026-10-02 (the user's ask), the label alone: the key stayed. No variable.
     /// </summary>
     public bool EmbeddedLlmServer { get; set; } = true;
 

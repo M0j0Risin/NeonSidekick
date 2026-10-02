@@ -2701,7 +2701,7 @@ public partial class SettingsMenuTests : IDisposable
         Push(Keys.Char('1'));                   // 8GB: the 31B goes, LM Studio stays
         Push(Keys.Down, Keys.Enter);            // the second row left: E2B
         Assert.Same(servers[2], await menu.PickServerAsync(servers, null, SettingsMenu.StartupServerTitle, CancellationToken.None));
-        Assert.Contains(" 8GB    16GB    32GB    drafter    sort size    uncensored ", _console.Output);   // uncensored last (later on 2026-09-30)
+        Assert.Contains(" 8GB    16GB    32GB    drafter    sort (name)    uncensored ", _console.Output);   // uncensored last (later on 2026-09-30)
         Assert.Contains("ESC = the first listed", _console.Output);
 
         Push(Keys.Char('x'), Keys.Enter);       // uncensored (X since later on 2026-09-30): no embedded row passes, LM Studio is still there to pick
@@ -4142,7 +4142,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.None, await menu.ShowAsync(CancellationToken.None));
 
         Assert.Contains("\n" + Titled(Strip) + "\n \n▸ LLM server scan mode            local\n", _console.Output);
-        Assert.Contains("\n▸ Embedded LLM server enabled", _console.Output);
+        Assert.Contains("\n▸ Embedded servers enabled", _console.Output);
         Assert.DoesNotContain("Agent skills", _console.Output);
         pane.Dispose();
     }
@@ -4460,8 +4460,8 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Contains(SettingsMenu.SelectAllButton, _console.Output);
         Assert.Contains("  · Show performance bar: CPU, RAM · gauge", _console.Output);
         Assert.Equal(["gauge"], SettingsMenu.PerfBarButtons(PerfBarStyle.Gauge).Where(b => b.On).Select(b => b.Title));
-        Assert.Equal(["⊞ select all", "⊠ select none", "text", "gauge", "spark", "led"], SettingsMenu.PerfBarButtons(PerfBarStyle.Text).Select(b => b.Title));
-        Assert.Equal(['a', 'n', 't', 'g', 's', 'l'], SettingsMenu.PerfBarButtons(PerfBarStyle.Text).Select(b => b.Key!.Value));
+        Assert.Equal(["⊞ select all", "⊠ select none", "⊡ default", "text", "gauge", "spark", "led"], SettingsMenu.PerfBarButtons(PerfBarStyle.Text).Select(b => b.Title));
+        Assert.Equal(['a', 'n', 'd', 't', 'g', 's', 'l'], SettingsMenu.PerfBarButtons(PerfBarStyle.Text).Select(b => b.Key!.Value));
         pane.Dispose();
 
         (menu, pane) = PaneMenu();
@@ -4474,6 +4474,34 @@ public partial class SettingsMenuTests : IDisposable
 
         Assert.Null(_settings.Current.PerformanceBarItems);
         Assert.Equal("gauge", _settings.Current.PerformanceBarLook);   // the look stays for the next meter checked
+        pane.Dispose();
+    }
+
+    /// <summary>
+    /// Show performance bar's default button (2026-10-02, the user's ask, as Show toolbar has): D checks CPU, RAM, GPU and
+    /// VRAM alone, saved as the list; pressed again it saves nothing, and the look is left be.
+    /// </summary>
+    [Fact]
+    public async Task OnThePane_ShowPerformanceBar_Default_ChecksCpuRamGpuVram()
+    {
+        _settings.Update(d =>
+        {
+            d.PerformanceBarItems = ["cpu", "netup"];
+            d.PerformanceBarLook = "spark";
+        });
+        var (menu, pane) = PaneMenu();
+        Down(SettingsMenu.TabFields[(int)SettingsTab.General].ToList().IndexOf(SettingsField.ShowPerformanceBar));
+        Push(Keys.Enter);
+        Push(Keys.Char('d'));                   // the defaults
+        Push(Keys.Char('D'));                   // again: nothing to save
+        Push(Keys.Escape, Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Equal(PerfBarItems.Defaults, _settings.Current.PerformanceBarItems);
+        Assert.Equal("spark", _settings.Current.PerformanceBarLook);
+        Assert.Contains(SettingsMenu.DefaultsButton, _console.Output);
+        Assert.Contains("  · Show performance bar: CPU, RAM, GPU, VRAM · spark", _console.Output);
         pane.Dispose();
     }
 

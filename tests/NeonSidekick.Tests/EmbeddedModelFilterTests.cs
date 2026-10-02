@@ -21,7 +21,7 @@ public class EmbeddedModelFilterTests
     {
         // Uncensored last on X since later on 2026-09-30 (the user's ask), after sort size.
         var buttons = EmbeddedModelFilter.None.Buttons();
-        Assert.Equal(["8GB", "16GB", "32GB", "drafter", "sort size", "uncensored"], buttons.Select(b => b.Title));
+        Assert.Equal(["8GB", "16GB", "32GB", "drafter", "sort (name)", "uncensored"], buttons.Select(b => b.Title));
         Assert.Equal(new char?[] { '1', '2', '3', 'd', 's', 'x' }, buttons.Select(b => b.Key));
         Assert.All(buttons, b => Assert.False(b.On));
         Assert.False(EmbeddedModelFilter.None.Active);
@@ -54,7 +54,7 @@ public class EmbeddedModelFilterTests
     {
         // Later on 2026-09-29 (the user's ask): the catalog alone; /server keeps the others. Uninstalled on U since later on 2026-09-30.
         var buttons = EmbeddedModelFilter.None.Buttons(withInstalled: true);
-        Assert.Equal(["8GB", "16GB", "32GB", "installed", "uninstalled", "drafter", "sort size", "uncensored"], buttons.Select(b => b.Title));
+        Assert.Equal(["8GB", "16GB", "32GB", "installed", "uninstalled", "drafter", "sort (name)", "uncensored"], buttons.Select(b => b.Title));
         Assert.Equal(new char?[] { '1', '2', '3', 'i', 'u', 'd', 's', 'x' }, buttons.Select(b => b.Key));
         Assert.Equal(6, EmbeddedModelFilter.None.Buttons().Count);
         Assert.Equal("1 / 2 / 3 = GB · I / U = inst / uninst · D = drafter · S = sort · X = unc", EmbeddedModelFilter.CatalogKeys);
@@ -153,10 +153,10 @@ public class EmbeddedModelFilterTests
 
         var sorted = EmbeddedModelFilter.None.Press(4);
         Assert.Equal(new EmbeddedModelFilter(null, false, null, true), sorted);
-        Assert.All(sorted.Buttons(), b => Assert.False(b.On));   // named for what a press gives, never lit (later on 2026-09-30)
-        Assert.Equal("sort name", sorted.Buttons()[EmbeddedModelFilter.SortSizeIndex()].Title);
-        Assert.Equal("sort size", EmbeddedModelFilter.None.Buttons()[EmbeddedModelFilter.SortSizeIndex()].Title);
-        Assert.Equal(("sort size", "sort name"), (EmbeddedModelFilter.SortSizeButton, EmbeddedModelFilter.SortNameButton));
+        Assert.All(sorted.Buttons(), b => Assert.False(b.On));   // named for the order shown (2026-10-02), never lit
+        Assert.Equal("sort (size)", sorted.Buttons()[EmbeddedModelFilter.SortSizeIndex()].Title);
+        Assert.Equal("sort (name)", EmbeddedModelFilter.None.Buttons()[EmbeddedModelFilter.SortSizeIndex()].Title);
+        Assert.Equal(("sort (size)", "sort (name)"), (EmbeddedModelFilter.SortSizeButton, EmbeddedModelFilter.SortNameButton));
         Assert.False(sorted.Active);                                          // it thins nothing
         Assert.Equal(EmbeddedModelFilter.None, sorted.Press(4));              // pressed again: name order
         Assert.Equal(new EmbeddedModelFilter(8, true, null, true), sorted.Press(0).Press(5));   // the filters left be
@@ -164,7 +164,7 @@ public class EmbeddedModelFilterTests
         var catalog = EmbeddedModelFilter.None.Press(6, withInstalled: true);
         Assert.True(catalog.SortSize);
         Assert.All(catalog.Buttons(withInstalled: true), b => Assert.False(b.On));
-        Assert.Equal("sort name", catalog.Buttons(withInstalled: true)[EmbeddedModelFilter.SortSizeIndex(withInstalled: true)].Title);
+        Assert.Equal("sort (size)", catalog.Buttons(withInstalled: true)[EmbeddedModelFilter.SortSizeIndex(withInstalled: true)].Title);
         Assert.True(catalog.Press(7, withInstalled: true) is { Uncensored: true, SortSize: true });
     }
 

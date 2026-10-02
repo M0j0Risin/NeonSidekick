@@ -25,11 +25,11 @@ public static class EmbeddedLlmText
     /// <summary>The note after a cancelled download: what is on disk stays.</summary>
     public const string PausedNotice = "download paused; pick the model again to resume where it stopped";
 
-    /// <summary>The refusal when the embedded model is asked for while <c>Embedded LLM server enabled</c> is off (2026-09-29).</summary>
-    public const string SwitchedOffError = "the embedded LLM is off; turn Embedded LLM server enabled on in /settings › Embedded to use it";
+    /// <summary>The refusal when the embedded model is asked for while <c>Embedded servers enabled</c> is off (2026-09-29).</summary>
+    public const string SwitchedOffError = "the embedded LLM is off; turn Embedded servers enabled on in /settings › Embedded to use it";
 
     /// <summary>The log line when the saved LLM URL names the embedded model but its switch is off: the URL is read as blank.</summary>
-    public const string SwitchedOffWarning = "The LLM URL names the embedded model, which is switched off (Embedded LLM server enabled); looking for a server as with no URL.";
+    public const string SwitchedOffWarning = "The LLM URL names the embedded model, which is switched off (Embedded servers enabled); looking for a server as with no URL.";
 
     /// <summary>The refusal when an image is sent to an embedded model running without its vision projector.</summary>
     public const string NoVisionError = "the embedded model is running without its vision projector; turn Embedded vision on in /settings › Embedded to send images";

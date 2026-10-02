@@ -8601,7 +8601,7 @@ internal sealed partial class ChatScreen
         }
 
         // A saved Claude API URL with the Claude API off or keyless stands for nothing (2026-09-27): found as a blank one.
-        // So does a saved embedded URL with Embedded LLM server enabled off (2026-09-29), and a saved Claude CLI URL with the
+        // So does a saved embedded URL with Embedded servers enabled off (2026-09-29), and a saved Claude CLI URL with the
         // Claude CLI server off or the CLI gone (2026-09-30).
         bool blankUrl = string.IsNullOrWhiteSpace(effective.LlmUrl)
             || (Llm.Anthropic.ClaudeApi.IsClaudeApi(effective.LlmUrl) && !Llm.Anthropic.ClaudeApi.Offered(effective))
@@ -8698,7 +8698,7 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// Whether this screen offers the embedded model (2026-09-29): a session with one, on llama.cpp's Windows x64 builds,
-    /// with <c>Embedded LLM server enabled</c> on (the same day, the user's ask).
+    /// with <c>Embedded servers enabled</c> on (the same day, the user's ask).
     /// </summary>
     private bool EmbeddedOffered => EmbeddedAvailable && _effective().EmbeddedLlmServer;
 
@@ -9512,7 +9512,7 @@ internal sealed partial class ChatScreen
         {
             if (!_effective().EmbeddedLlmServer)
             {
-                // Embedded LLM server enabled off (2026-09-29): a download under way pauses, and the reconnect below stops a
+                // Embedded servers enabled off (2026-09-29): a download under way pauses, and the reconnect below stops a
                 // running server — the saved embedded URL now reads as none.
                 _jobs.Cancel(BackgroundJobKind.EmbeddedDownload);
             }

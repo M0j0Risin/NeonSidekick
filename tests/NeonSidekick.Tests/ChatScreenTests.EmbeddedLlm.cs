@@ -381,7 +381,7 @@ public partial class ChatScreenTests
     [Fact]
     public async Task SwitchedOff_TheSavedModelNeverStarts_TheRowsAreGone_AndServerEmbeddedRefuses()
     {
-        // Embedded LLM server enabled off (2026-09-29, the user's ask): the saved embedded URL reads as none, so the startup picker
+        // Embedded servers enabled off (2026-09-29, the user's ask): the saved embedded URL reads as none, so the startup picker
         // opens on the scan's servers alone, and /server embedded says why it lists nothing.
         _settings.Update(d => { d.TtsOutput = false; d.LlmUrl = "embedded"; d.LlmModel = "gemma-4-e2b"; d.EmbeddedLlmServer = false; });
         var embedded = UseEmbedded(new FakeEmbeddedLlm().Installed("gemma-4-e2b"));

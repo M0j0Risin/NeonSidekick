@@ -241,7 +241,7 @@ public class LlmSessionEmbeddedTests
         Assert.All(servers, s => Assert.True(EmbeddedEndpoint.IsEmbedded(s.BaseUrl)));
     }
 
-    // ── Embedded LLM server enabled (2026-09-29) ───────────────────────────────────
+    // ── Embedded servers enabled (2026-09-29) ───────────────────────────────────
 
     [Fact]
     public async Task SwitchedOff_TheRowsAreGone()

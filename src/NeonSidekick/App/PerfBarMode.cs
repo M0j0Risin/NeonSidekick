@@ -33,8 +33,8 @@ public sealed record PerfToggle(List<string>? Items, List<string>? LastItems, st
 /// </summary>
 public static class PerfBarMode
 {
-    /// <summary>The look before any was picked. Pinned by <c>AppSettingsTests</c>.</summary>
-    public const string Default = "text";
+    /// <summary>The look before any was picked: <c>led</c> since 2026-10-02 (the user's ask), <c>text</c> until then. Pinned by <c>AppSettingsTests</c>.</summary>
+    public const string Default = "led";
 
     /// <summary>The <c>/perf</c> word that hides the bar.</summary>
     public const string OffWord = "off";
@@ -45,7 +45,7 @@ public static class PerfBarMode
     /// <summary><c>/perf</c>'s words, as its completion lists them: <see cref="OffWord"/>, then the looks.</summary>
     public static readonly string[] Words = [OffWord, .. Names];
 
-    /// <summary>Trims and ignores case; false (and <see cref="PerfBarStyle.Text"/>) for anything that is not one of <see cref="Names"/>.</summary>
+    /// <summary>Trims and ignores case; false (and <see cref="Default"/>'s <see cref="PerfBarStyle.Led"/>) for anything that is not one of <see cref="Names"/>.</summary>
     public static bool TryParse(string? text, out PerfBarStyle style)
     {
         switch (text?.Trim().ToLowerInvariant())
@@ -54,11 +54,11 @@ public static class PerfBarMode
             case "gauge": style = PerfBarStyle.Gauge; return true;
             case "spark": style = PerfBarStyle.Spark; return true;
             case "led": style = PerfBarStyle.Led; return true;
-            default: style = PerfBarStyle.Text; return false;
+            default: style = PerfBarStyle.Led; return false;   // Default's, so a hand-edited word reads as a fresh profile does
         }
     }
 
-    /// <summary>The look <paramref name="text"/> names, <see cref="PerfBarStyle.Text"/> for anything else, with no warning (the pane's tick asks).</summary>
+    /// <summary>The look <paramref name="text"/> names, <see cref="Default"/>'s for anything else, with no warning (the pane's tick asks).</summary>
     public static PerfBarStyle Parse(string? text)
     {
         TryParse(text, out var style);
@@ -88,7 +88,7 @@ public static class PerfBarMode
     /// <summary>
     /// What <c>/perf</c> saves, pure (later on 2026-09-29, the user's ask; the checklist's since 2026-09-30): bare, the bar
     /// hidden while it shows — its meters kept in <paramref name="last"/> — else shown again with the last ones (or
-    /// <see cref="PerfBarItems.Restored"/> the first time); <c>off</c> hides it; a look sets it and shows the bar the same way;
+    /// <see cref="PerfBarItems.Defaults"/> the first time); <c>off</c> hides it; a look sets it and shows the bar the same way;
     /// null for anything else, the usage error.
     /// </summary>
     public static PerfToggle? Toggle(string args, IReadOnlyList<string>? items, IReadOnlyList<string>? last, string? look)
@@ -118,7 +118,7 @@ public static class PerfBarMode
             }
 
             var back = PerfBarItems.Resolve(last);
-            return new(PerfBarItems.Save(back.Count > 0 ? back : PerfBarItems.Restored.ToHashSet(StringComparer.Ordinal)), last?.ToList(), name);
+            return new(PerfBarItems.Save(back.Count > 0 ? back : PerfBarItems.Defaults.ToHashSet(StringComparer.Ordinal)), last?.ToList(), name);
         }
     }
 }

@@ -15,7 +15,7 @@ public partial class ChatScreenTests
         _console.Profile.Height = 40;
         _console.Profile.Width = 120;
         _geometry = new ScreenGeometry(() => null, () => 100);
-        _settings.Update(d => d.PerformanceBarItems = ["cpu", "gpu", "vram"]);
+        _settings.Update(d => { d.PerformanceBarItems = ["cpu", "gpu", "vram"]; d.PerformanceBarLook = "text"; });   // the numbers look (led is the default since 2026-10-02)
         _perfSource.Next = new PerfSnapshot(34, 62, null, 91);
         var input = Scripted();
         bool shown = false;
@@ -65,8 +65,8 @@ public partial class ChatScreenTests
 
         string output = await RunAsync();
 
-        Assert.Equal(["CPU, RAM, GPU, VRAM · text", "CPU, RAM, GPU, VRAM · gauge", "off", "CPU, RAM, GPU, VRAM · gauge"], shown);
-        Assert.Contains(PerfText.BarNotice("text"), output);
+        Assert.Equal(["CPU, RAM, GPU, VRAM · led", "CPU, RAM, GPU, VRAM · gauge", "off", "CPU, RAM, GPU, VRAM · gauge"], shown);
+        Assert.Contains(PerfText.BarNotice("led"), output);   // the default look, led since 2026-10-02
         Assert.Contains(PerfText.BarNotice("off"), output);
         Assert.Contains(PerfText.BarNotice("gauge"), output);
         Assert.Contains(PerfText.UsageError, output);
@@ -124,7 +124,7 @@ public partial class ChatScreenTests
         StepsWhenIdle(
             input => { input.PushClick(0, 103); input.PushClick(1, 103); },   // 🪪: the profile picker
             Key(Keys.Escape),
-            input => { input.PushClick(3, 103); input.PushClick(3, 103); },   // 📈: the bar on, its four first meters in text
+            input => { input.PushClick(3, 103); input.PushClick(3, 103); },   // 📈: the bar on, its four first meters in the default look (led since 2026-10-02)
             Line("/exit"));
 
         string output = await RunAsync();
@@ -132,7 +132,7 @@ public partial class ChatScreenTests
         Assert.Contains("\n" + ScreenPane.ToolbarRow(ChatScreen.ProfileToolGlyph + " " + ChatScreen.PerfToolGlyph, "", 239), output);
         Assert.Contains(Titled(SettingsMenu.ProfileTitle), output);
         Assert.Equal(["cpu", "ram", "gpu", "vram"], _settings.Current.PerformanceBarItems);
-        Assert.Contains(PerfText.BarNotice("text"), output);
+        Assert.Contains(PerfText.BarNotice("led"), output);   // the default look, led since 2026-10-02
         Assert.All(new[] { "/profile", "/perf" }, word => Assert.DoesNotContain("› " + word, output));
         Assert.Empty(_chat.Requests);
     }

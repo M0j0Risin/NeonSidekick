@@ -56,7 +56,7 @@ public static class EmbeddedEndpoint
     public static bool Offered => OperatingSystem.IsWindows() && RuntimeInformation.OSArchitecture == Architecture.X64;
 
     /// <summary>
-    /// Whether <paramref name="effective"/> has the embedded model switched off (<c>Embedded LLM server enabled</c>, 2026-09-29, the
+    /// Whether <paramref name="effective"/> has the embedded model switched off (<c>Embedded servers enabled</c>, 2026-09-29, the
     /// user's ask) while its URL names it: the saved sentinel then stands for nothing, and a connect finds a server as a
     /// blank URL would — the same as a saved Claude API URL with the Claude API off.
     /// </summary>

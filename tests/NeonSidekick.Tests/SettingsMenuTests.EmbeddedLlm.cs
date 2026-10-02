@@ -44,7 +44,7 @@ public partial class SettingsMenuTests
         Assert.False(SettingsMenu.RefusedMidTurn(SettingsField.EmbeddedHfDownloadType));
         Assert.True(SettingsMenu.IsToggle(SettingsField.EmbeddedVision) && SettingsMenu.IsToggle(SettingsField.EmbeddedLlmServer) && SettingsMenu.IsToggle(SettingsField.EmbeddedDrafter) && SettingsMenu.IsToggle(SettingsField.EmbeddedVramOnly));
         Assert.False(SettingsMenu.IsToggle(SettingsField.EmbeddedBackend));
-        Assert.Equal(["Embedded LLM server enabled", "Embedded models", "Embedded filter type", "Embedded HF download type", "Embedded backend", "Embedded context size", "Embedded GPU layers", "Embedded VRAM budget", "Embedded VRAM only", "Embedded vision", "Embedded drafter"], SettingsMenu.TabFields[tab].Select(SettingsMenu.FieldName));
+        Assert.Equal(["Embedded servers enabled", "Embedded models", "Embedded filter type", "Embedded HF download type", "Embedded backend", "Embedded context size", "Embedded GPU layers", "Embedded VRAM budget", "Embedded VRAM only", "Embedded vision", "Embedded drafter"], SettingsMenu.TabFields[tab].Select(SettingsMenu.FieldName));
         var data = new AppSettingsData();
         Assert.True(data.EmbeddedLlmServer && data.EmbeddedDrafter);   // both on by default
         Assert.Equal(("on", "on"), (SettingsMenu.FieldValue(SettingsField.EmbeddedLlmServer, data, "C:\\p"), SettingsMenu.FieldValue(SettingsField.EmbeddedDrafter, data, "C:\\p")));
@@ -172,7 +172,7 @@ public partial class SettingsMenuTests
         var first = EmbeddedModelCatalog.Models.First(m => filter.Matches(m, EmbeddedFilterType.File));
         Assert.True(first.Uncensored);
         Assert.Equal(first.Id, menu.TakePendingEmbeddedModel()!.Id);
-        Assert.Contains(" 8GB    16GB    32GB    installed    uninstalled    drafter    sort size    uncensored ", _console.Output);   // the catalog's pair after the sizes (later on 2026-09-29), uncensored last (later on 2026-09-30)
+        Assert.Contains(" 8GB    16GB    32GB    installed    uninstalled    drafter    sort (name)    uncensored ", _console.Output);   // the catalog's pair after the sizes (later on 2026-09-29), uncensored last (later on 2026-09-30)
         Assert.Contains(EmbeddedModelFilter.CatalogKeys, _console.Output);
         pane.Dispose();
     }
@@ -180,8 +180,8 @@ public partial class SettingsMenuTests
     [Fact]
     public async Task OnThePane_SortSize_PutsTheSmallestModelFirst_AndPressedAgain_TheCatalogsOrder()
     {
-        // 2026-09-30 (the user's ask): S sorts by size, the smallest model on top, and the button reads sort name (later that day);
-        // S again, the catalog's order, and it reads sort size.
+        // 2026-09-30 (the user's ask): S sorts by size, the smallest model on top, and the button reads sort (size) (2026-10-02:
+        // the order shown); S again, the catalog's order, and it reads sort (name).
         var big = EmbeddedModelCatalog.Find("gemma-4-31b")!;
         var small = EmbeddedModelCatalog.Find("gemma-4-e2b")!;
         var (menu, pane, _) = EmbeddedPane(new FakeEmbeddedLlm { Catalog = [big, small] });
@@ -197,8 +197,8 @@ public partial class SettingsMenuTests
 
         Assert.Equal(big.Id, menu.TakePendingEmbeddedModel()!.Id);
         Assert.Contains(" › " + small.Display, _console.Output);   // the sorted top row's page came first
-        Assert.Contains(" drafter    sort size    uncensored ", _console.Output);   // uncensored last (later on 2026-09-30)
-        Assert.Contains(" drafter    sort name    uncensored ", _console.Output);   // while sorted by size
+        Assert.Contains(" drafter    sort (name)    uncensored ", _console.Output);   // uncensored last (later on 2026-09-30)
+        Assert.Contains(" drafter    sort (size)    uncensored ", _console.Output);   // while sorted by size
         pane.Dispose();
     }
 

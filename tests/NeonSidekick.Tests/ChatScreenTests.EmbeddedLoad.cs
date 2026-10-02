@@ -111,7 +111,7 @@ public partial class ChatScreenTests
         {
             input.PushClick(3, 103);   // 📈 on the toolbar: /perf, a quick act run while the load waits
             input.PushClick(3, 103);
-            await UntilAsync(() => Output.Contains(PerfText.BarNotice("text"), StringComparison.Ordinal), ct);
+            await UntilAsync(() => Output.Contains(PerfText.BarNotice("led"), StringComparison.Ordinal), ct);   // the default look, led since 2026-10-02
             toggledUnderTheLoad = true;
         };
 

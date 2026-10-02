@@ -780,7 +780,7 @@ public enum SettingsTab
     General,
 
     /// <summary>
-    /// The embedded model's rows (2026-09-29): the <c>Embedded LLM server enabled</c> switch, the catalog door, the backend, the
+    /// The embedded model's rows (2026-09-29): the <c>Embedded servers enabled</c> switch, the catalog door, the backend, the
     /// context size, the GPU layers, the vision switch and the MTP switch — second since later that day (the user's order:
     /// General, Embedded, LLM, TTS, STT, Sessions, Botchat); after STT until then, where the Claude API's tab had stood.
     /// </summary>
@@ -1724,7 +1724,7 @@ internal sealed partial class SettingsMenu
         SettingsField.EmbeddedFilterType => "Embedded filter type",
         SettingsField.EmbeddedHfDownloadType => "Embedded HF download type",
         SettingsField.EmbeddedVision => "Embedded vision",
-        SettingsField.EmbeddedLlmServer => "Embedded LLM server enabled",
+        SettingsField.EmbeddedLlmServer => "Embedded servers enabled",
         SettingsField.EmbeddedDrafter => "Embedded drafter",
         SettingsField.AskUser => "Ask user",
         SettingsField.AskMaxQuestions => "Ask max questions",
@@ -2380,17 +2380,18 @@ internal sealed partial class SettingsMenu
 
     /// <summary>
     /// Show performance bar's buttons (2026-09-30, the user's ask: the look on the checklist's own screen):
-    /// <see cref="ChecklistButtons"/>, then one per look (<see cref="PerfBarMode.Names"/>, from index
+    /// <see cref="ChecklistButtons"/>, then <see cref="DefaultsButton"/> (index 2, 2026-10-02, the user's ask, as Show
+    /// toolbar has: <see cref="PerfBarItems.Defaults"/>), then one per look (<see cref="PerfBarMode.Names"/>, from index
     /// <see cref="PerfBarLookIndex"/>, keys T, G, S and L), the one in force lit — a radio group, as the embedded model lists'
     /// size filters are. Pinned.
     /// </summary>
     public static IReadOnlyList<MenuButton> PerfBarButtons(PerfBarStyle look) =>
-        [.. ChecklistButtons, .. PerfBarMode.Names.Select(name => new MenuButton(name, name[0], PerfBarMode.Name(look) == name))];
+        [.. ChecklistButtons, new(DefaultsButton, DefaultsKey), .. PerfBarMode.Names.Select(name => new MenuButton(name, name[0], PerfBarMode.Name(look) == name))];
 
-    private static readonly int PerfBarLookIndex = ChecklistButtons.Count;
+    private static readonly int PerfBarLookIndex = DefaultsIndex + 1;
 
-    /// <summary>Show performance bar's hint: <see cref="ToggleKeys"/> with the looks' keys (2026-09-30). Pinned.</summary>
-    public const string PerfBarToggleKeys = "Enter / Space = on or off · A = all · N = none · T / G / S / L = look · ESC = back";
+    /// <summary>Show performance bar's hint: <see cref="ToggleKeys"/> with D (2026-10-02) and the looks' keys (2026-09-30). Pinned.</summary>
+    public const string PerfBarToggleKeys = "Enter / Space = on or off · A = all · N = none · D = default · T / G / S / L = look · ESC = back";
 
     /// <summary>The status line when the last language would go: at least one stays (the user's rule, 2026-09-21). Pinned.</summary>
     public const string LastLanguageError = "At least one language stays on.";
@@ -6035,8 +6036,8 @@ internal sealed partial class SettingsMenu
     /// <summary>
     /// The performance bar's page under the settings list (2026-09-30, the user's ask: the toolbar's checklist, and the look on
     /// the same screen): one <see cref="PerfBarItems.Label"/> row per meter, Enter or Space flipping it and saving at once,
-    /// nothing checked no bar; on the title row the checklists' select all and select none, then the four looks
-    /// (<see cref="PerfBarButtons"/>), the one in force lit — the embedded model lists' radio buttons' shape. The list is
+    /// nothing checked no bar; on the title row the checklists' select all and select none, default (2026-10-02, the user's
+    /// ask: CPU, RAM, GPU and VRAM), then the four looks (<see cref="PerfBarButtons"/>), the one in force lit — the embedded model lists' radio buttons' shape. The list is
     /// re-shown until ESC, the bar redrawing under it. Without the pane there are no buttons, and <c>/perf &lt;look&gt;</c>
     /// sets the look. True when anything changed.
     /// </summary>
@@ -6076,10 +6077,11 @@ internal sealed partial class SettingsMenu
 
             var next = pick.Button == SelectAllIndex ? names.ToHashSet(StringComparer.Ordinal)
                 : pick.Button == SelectNoneIndex ? new HashSet<string>(StringComparer.Ordinal)
+                : pick.Button == DefaultsIndex ? PerfBarItems.Defaults.ToHashSet(StringComparer.Ordinal)
                 : names.Where(n => on.Contains(n) != string.Equals(n, names[pick.Row], StringComparison.Ordinal)).ToHashSet(StringComparer.Ordinal);
             if (next.SetEquals(on))
             {
-                continue;   // select all with every meter on, none with none: nothing to save
+                continue;   // select all with every meter on, none with none, default on the defaults: nothing to save
             }
 
             Apply(SettingsField.ShowPerformanceBar, d => d.PerformanceBarItems = PerfBarItems.Save(next));

@@ -13,18 +13,18 @@ public class PerfBarTests
     // ── The setting ─────────────────────────────────────────────────────────
 
     /// <summary>The four meters of the bar before the checklist (2026-09-30), what the looks' tests draw.</summary>
-    private static readonly IReadOnlySet<string> Four = PerfBarItems.Restored.ToHashSet(StringComparer.Ordinal);
+    private static readonly IReadOnlySet<string> Four = PerfBarItems.Defaults.ToHashSet(StringComparer.Ordinal);
 
     private static IReadOnlySet<string> Only(params string[] ids) => ids.ToHashSet(StringComparer.Ordinal);
 
     [Fact]
-    public void TheLooks_ArePinned_TextByDefault()
+    public void TheLooks_ArePinned_LedByDefault()
     {
         // The look alone since 2026-09-30: whether the bar shows is the checklist's (PerfBarItems).
         Assert.Equal(["text", "gauge", "spark", "led"], PerfBarMode.Names);
         Assert.Equal(["off", "text", "gauge", "spark", "led"], PerfBarMode.Words);
-        Assert.Equal("text", PerfBarMode.Default);
-        Assert.Equal("text", new AppSettingsData().PerformanceBarLook);
+        Assert.Equal("led", PerfBarMode.Default);   // text until 2026-10-02 (the user's ask)
+        Assert.Equal("led", new AppSettingsData().PerformanceBarLook);
         foreach (string name in PerfBarMode.Names)
         {
             Assert.True(PerfBarMode.TryParse(" " + name.ToUpperInvariant() + " ", out var style));
@@ -35,9 +35,9 @@ public class PerfBarTests
         Assert.Equal("hide the performance bar", PerfBarMode.Describe("off"));
         Assert.False(PerfBarMode.TryParse("off", out _));
         Assert.False(PerfBarMode.TryParse("bars", out var none));
-        Assert.Equal(PerfBarStyle.Text, none);
+        Assert.Equal(PerfBarStyle.Led, none);   // the default's, as Parse
         Assert.Equal(PerfBarStyle.Led, PerfBarMode.Parse("led"));
-        Assert.Equal(PerfBarStyle.Text, PerfBarMode.Parse("bars"));
+        Assert.Equal(PerfBarStyle.Led, PerfBarMode.Parse("bars"));
         Assert.Equal("", PerfBarMode.Describe("bars"));
     }
 
@@ -46,7 +46,7 @@ public class PerfBarTests
     {
         Assert.Equal(["cpu", "ram", "gpu", "vram", "net", "netdown", "netup"], PerfBarItems.Names);
         Assert.Equal(["CPU", "RAM", "GPU", "VRAM", "NET", "NET↓", "NET↑"], PerfBarItems.Names.Select(PerfBarItems.Title));
-        Assert.Equal(["cpu", "ram", "gpu", "vram"], PerfBarItems.Restored);
+        Assert.Equal(["cpu", "ram", "gpu", "vram"], PerfBarItems.Defaults);
         Assert.Null(new AppSettingsData().PerformanceBarItems);
         Assert.Empty(PerfBarItems.Resolve(null));
         Assert.Empty(PerfBarItems.Resolve([]));
@@ -57,7 +57,7 @@ public class PerfBarTests
         Assert.Equal(["cpu", "netdown"], PerfBarItems.Save(Only("netdown", "cpu")));   // the bar's order
         Assert.Equal("off", PerfBarItems.Value(null, "gauge"));
         Assert.Equal("CPU, RAM, NET↓ · gauge", PerfBarItems.Value(["netdown", "ram", "cpu"], "gauge"));
-        Assert.Equal("all · text", PerfBarItems.Value([.. PerfBarItems.Names], "bars"));
+        Assert.Equal("all · led", PerfBarItems.Value([.. PerfBarItems.Names], "bars"));   // an unknown look reads as the default, led since 2026-10-02
         Assert.Equal("[[x]] CPU     " + Theme.DimMarkup("processor load"), PerfBarItems.Label("cpu", true));   // markup: the brackets escaped
         Assert.StartsWith("[[ ]] NET↑    ", PerfBarItems.Label("netup", false), StringComparison.Ordinal);
         Assert.All(PerfBarItems.Names, id => Assert.NotEqual("", PerfBarItems.Describe(id)));
@@ -79,10 +79,10 @@ public class PerfBarTests
         Assert.Equal(["cpu", "net"], shown.Items);
         Assert.Equal("gauge", shown.Look);
 
-        // Never picked: the bar as it was before the checklist; a hand-edited look reads as text.
+        // Never picked: the bar as it was before the checklist; a hand-edited look reads as the default (led since 2026-10-02).
         var first = PerfBarMode.Toggle("", null, null, "bogus")!;
         Assert.Equal(["cpu", "ram", "gpu", "vram"], first.Items);
-        Assert.Equal("text", first.Look);
+        Assert.Equal("led", first.Look);
     }
 
     [Fact]
