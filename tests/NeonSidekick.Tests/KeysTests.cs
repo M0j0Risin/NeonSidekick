@@ -282,7 +282,9 @@ public class TextCellsTests
     [InlineData("⛓️‍\U0001F4A5", 2)]   // ⛓️‍💥 (later on 2026-09-29, the uncensored column): a ZWJ sequence, one glyph as wide as its first part
     [InlineData("⛓️‍\U0001F4A5 x", 4)]
     [InlineData("\U0001F468‍\U0001F469‍\U0001F467", 2)]   // 👨‍👩‍👧: the family, three pairs joined, two cells
-    [InlineData("\U0001F4A2", 2)]                // 💢: the aggressive build's, a pair alone
+    [InlineData("\U0001F4A2", 2)]                // 💢: a pair alone (the aggressive build's mark until 2026-10-02)
+    [InlineData("⚔️", 2)]              // ⚔️: the crossed swords, Neutral bare, two cells with the selector
+    [InlineData("⛓️‍💥⚔️", 4)]   // ⛓️‍💥⚔️ (2026-10-02): the aggressive build's mark, the chain and the swords side by side
     public void Width_CountsCells(string text, int cells)
     {
         Assert.Equal(cells, TextCells.Width(text));

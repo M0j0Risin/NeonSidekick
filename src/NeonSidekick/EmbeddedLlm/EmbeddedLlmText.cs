@@ -57,8 +57,12 @@ public static class EmbeddedLlmText
     /// </summary>
     public const string UncensoredGlyph = "⛓️‍💥";
 
-    /// <summary>The uncensored column's mark for an aggressive build (later on 2026-09-29, the user's pick; <see cref="UncensoredKind.Aggressive"/>). Two cells.</summary>
-    public const string AggressiveGlyph = "💢";
+    /// <summary>
+    /// The uncensored column's mark for an aggressive build (<see cref="UncensoredKind.Aggressive"/>): the broken chain with the
+    /// crossed swords after it (2026-10-02, the user's pick; <c>💢</c> from later on 2026-09-29). Four cells: the chain's two and
+    /// <c>⚔️</c>'s two (a Neutral symbol with its selector). The column is the last, so its width moves no other.
+    /// </summary>
+    public const string AggressiveGlyph = UncensoredGlyph + "⚔️";
 
     /// <summary>
     /// The capability columns that follow <paramref name="detail"/> (the drafter's, 2026-09-29; vision's and tools' later
