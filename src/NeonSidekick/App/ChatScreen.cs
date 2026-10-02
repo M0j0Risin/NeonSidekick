@@ -8107,16 +8107,18 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// A theme change (2026-09-23, the user's call: <c>/theme</c> and the Settings pane's <c>Theme</c>
-    /// row work just like <c>/splash</c>): what is already drawn keeps the colours it was drawn in (the
-    /// scrollback stores styled segments), so the screen starts over in the new ones — /clear's wipe
-    /// and forgetting, the splash whatever <c>Welcome splash</c> says, and the saved line under it.
+    /// row): what is already drawn keeps the colours it was drawn in (the scrollback stores styled
+    /// segments), so the screen starts over in the new ones — /clear's wipe and forgetting, the splash
+    /// as <c>Welcome splash</c> says, and the saved line under it. Until 2026-10-02 the splash came
+    /// whatever the setting said, as <c>/splash</c>'s does; now (the user's call) <c>disabled</c> makes
+    /// a theme change a plain <c>/clear</c>, the startup's rule.
     /// The session was stored turn by turn, so <c>/sessions</c> brings it back, replayed in the new theme.
     /// </summary>
     private void RestartInTheme()
     {
         ThemeName.Apply(_effective(), _settings.ThemesDirectory);
         ClearAndRefresh();
-        ShowSplash(force: true);
+        ShowSplash();
         _transcript.Notice(SettingsMenu.SavedNotice(SettingsField.Theme, _settings.Current, _settings.ProfileDirectory));
     }
 

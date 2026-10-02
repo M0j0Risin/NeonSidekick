@@ -15586,10 +15586,10 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(1, _session.History.TurnCount);  // the reply kept
     }
 
-    // ── /theme (2026-09-23, the user's ask: just like /splash) ──────────────
+    // ── /theme (2026-09-23, the user's ask; the splash as Welcome splash says since 2026-10-02) ──
 
     [Fact]
-    public async Task Theme_Named_SavesIt_PutsItInForce_AndStartsOverLikeSplash()
+    public async Task Theme_Named_SplashDisabled_SavesIt_PutsItInForce_AndStartsOverLikeClear()
     {
         using var theme = new ThemeScope();
         _settings.Update(d => { d.TtsOutput = false; d.WelcomeSplashMode = "disabled"; });
@@ -15601,17 +15601,45 @@ public partial class ChatScreenTests : IDisposable
 
         Assert.Equal("cyberpunk", _settings.Current.Theme);
         Assert.Same(ThemePalette.Cyberpunk, Theme.Current);
-        // /splash's shape: the wipe, the picture whatever Welcome splash says, the saved line under it.
-        Assert.Equal([SplashName(0)], _splashLoads);
-        // No startup picture (the setting is off), so "hi" wiped nothing; /theme wiped the screen, "again" wiped its picture.
-        int[] screens = Enumerable.Range(0, 3).Select(i => NthScreen(output, i)).ToArray();
+        // /clear's shape (2026-10-02, the user's call): the wipe and the saved line, no picture with the setting off.
+        Assert.Empty(_splashLoads);
+        Assert.DoesNotContain("▀", output);
+        // No startup picture, so "hi" wiped nothing; /theme wiped the screen, and "again" over no splash did not.
+        Assert.Equal(1, Refreshes(output));
+        int[] screens = Enumerable.Range(0, 2).Select(i => NthScreen(output, i)).ToArray();
         Assert.Contains("› hi", output[screens[0]..screens[1]]);
-        Assert.Contains("▀", output[screens[1]..screens[2]]);
-        Assert.Contains("  · Theme: cyberpunk", output[screens[1]..screens[2]]);
+        Assert.Contains("  · Theme: cyberpunk", output[screens[1]..]);
         Assert.DoesNotContain("› /theme", output[screens[1]..]);
-        Assert.Contains("› again", output[screens[2]..]);
+        Assert.Contains("› again", output[screens[1]..]);
         // The conversation forgotten: the second request holds one user message.
         Assert.Equal(2, _chat.Requests.Count);
+        Assert.Equal("again", UserText(_chat.Requests[1]));
+    }
+
+    [Fact]
+    public async Task Theme_Named_SplashOn_StartsOverWithThePicture()
+    {
+        using var theme = new ThemeScope();
+        _settings.Update(d => { d.TtsOutput = false; d.WelcomeSplashMode = "fullsize"; });
+        PaneOf40Rows();
+        _random = new Random(7);
+        SplashOf(2380, 100);
+        LinesWhenIdle("hi", "/theme CyberPunk", "again", "/exit");
+
+        string output = await RunAsync();
+
+        Assert.Same(ThemePalette.Cyberpunk, Theme.Current);
+        // The startup picture, then the theme's: the setting is on, so the fresh screen shows it as the startup does.
+        Assert.Equal([SplashName(0), SplashName(0)], _splashLoads);
+        // "hi" wiped the startup splash, /theme wiped the screen, "again" wiped the theme's picture.
+        Assert.Equal(3, Refreshes(output));
+        int[] screens = Enumerable.Range(0, 4).Select(i => NthScreen(output, i)).ToArray();
+        Assert.Contains("› hi", output[screens[1]..screens[2]]);
+        Assert.Contains("▀", output[screens[2]..screens[3]]);
+        Assert.Contains("  · Theme: cyberpunk", output[screens[2]..screens[3]]);
+        Assert.DoesNotContain("› /theme", output[screens[2]..]);
+        Assert.DoesNotContain("▀", output[screens[3]..]);
+        Assert.Contains("› again", output[screens[3]..]);
         Assert.Equal("again", UserText(_chat.Requests[1]));
     }
 

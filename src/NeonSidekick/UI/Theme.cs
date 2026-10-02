@@ -15,7 +15,7 @@ namespace NeonSidekick.UI;
 /// palette's style set, swapped whole by <see cref="Use"/> — one reference assignment, so a
 /// line rendered on another thread mid-swap is at worst one line in two themes. A swap does not
 /// re-colour what is already drawn (the scrollback keeps styled segments), which is why a theme
-/// change starts over the way <c>/splash</c> does.
+/// change starts over the way <c>/clear</c> does, with the welcome splash when it is on.
 /// </para>
 /// </summary>
 public static class Theme

@@ -235,6 +235,7 @@ Settings that an environment variable or flag can override for one launch are li
 * `tiled` shows thumbnails at *Image thumbnail size*, as many as fit; ←/→ page through them and a double-click opens one.
 * Pictures in the profile's `splash\` folder (created for you) replace the built-in ones.
 * `/splash` shows the splash whatever the setting says: tiled when it is `tiled`, otherwise one picture.
+* A theme change starts the screen over like `/clear`, with the splash only when the setting is `fullsize` or `tiled`.
 
 #### Embedded
 
