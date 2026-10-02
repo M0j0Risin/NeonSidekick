@@ -93,7 +93,7 @@ footer code { font-family: var(--mono); color: var(--ink); }
 
 <div class="wrap">
   <header>
-    <div class="eyebrow">NeonSidekick 0.3.8 · <span id="count">60</span> themes · seven categories</div>
+    <div class="eyebrow">NeonSidekick 0.4.0 · <span id="count">60</span> themes · seven categories</div>
     <h1>Sidekick <span>Theme Atlas</span></h1>
     <p class="lede">Every theme as the app resolves it. The banner letters, the rule's five segments and all 51 styles come from the app's own <code>Theme</code> code; only the screen's layout is a mock-up. Pick a card, or use ← and → to step through.</p>
   </header>
@@ -177,7 +177,7 @@ function colored(hex, text) { const el = document.createElement("span"); el.styl
 function banner(t) {
   const frag = document.createDocumentFragment();
   t.t.forEach(([hex, ch]) => frag.append(colored(hex, ch)));
-  frag.append(st(t, "dimText", "  v0.3.8"));
+  frag.append(st(t, "dimText", "  v0.4.0"));
   return frag;
 }
 function rule(t, width) {
