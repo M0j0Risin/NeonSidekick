@@ -608,9 +608,11 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// A picture drawn in the transcript, for a double-click to open (later on 2026-09-24): its name, the file it came from
-    /// when there is one, and its bytes for when there is none. An open prints nothing; only an error does (2026-09-24, the user's call).
+    /// when there is one, and its bytes for when there is none — written into <paramref name="Folder"/> to be opened (a watch
+    /// picture's <c>.watch</c> under the Camera output folder, 2026-10-02), else <see cref="PictureTempFolder"/>. An open prints nothing; only an error
+    /// does (2026-09-24, the user's call).
     /// </summary>
-    private sealed record PictureSource(string Name, string? FullPath, byte[] Bytes);
+    private sealed record PictureSource(string Name, string? FullPath, byte[] Bytes, string? Folder = null);
 
     // Every picture drawn, by id (its index); read on the watcher task too, so under its own lock.
     private readonly List<PictureSource> _pictures = [];
@@ -981,9 +983,9 @@ internal sealed partial class ChatScreen
         // The Docker tools and /docker (2026-10-02): the client made for the pipe in force; a model's change waits on the pane.
         _docker = new DockerSession(_effective, dockerClient, _time);
         _dockerTools = DockerTools(_docker, ConfirmDockerAsync);
-        // The camera (2026-10-02): one shared stream; photos into the sandbox's camera folder; the model's tool asks on the pane.
+        // The camera (2026-10-02): one shared stream; photos into the Camera output folder; the model's tool asks on the pane.
         _camera = new CameraSession(camera, () => CameraSettings.Options(_effective()), _time);
-        _cameraCapture = new CameraCapture(_camera, () => _files, () => CameraSettings.Options(_effective()), _time);
+        _cameraCapture = new CameraCapture(_camera, () => _files, () => _effective().CameraOutputFolder, () => CameraSettings.Options(_effective()), _time);
         _cameraTools = CameraTools(ShootForModelAsync);
         _cameraWatch = new CameraWatch(_camera, _time, () => _effective().CameraWatchThreshold, OnWatchChanged);
         _liveView = liveView;
@@ -2077,6 +2079,17 @@ internal sealed partial class ChatScreen
                 if (_queuedClicks.Second(InputLine.HintPairKey(hit)))
                 {
                     _jobs.Cancel(job);
+                }
+
+                return null;
+            }
+
+            if (hit.Zone == ScreenPane.HintZone.Strip && hit.Glyph == CameraText.Glyph)
+            {
+                // The camera's 📷 on the busy row (2026-10-02): the pair is /camera off under a reply as at idle, its notice on the turn task.
+                if (_queuedClicks.Second(InputLine.HintPairKey(hit)))
+                {
+                    Post(() => _transcript.Notice(CameraText.Off(CameraOff())));
                 }
 
                 return null;
@@ -7539,6 +7552,8 @@ internal sealed partial class ChatScreen
             _mouse?.Invoke(true);
             _holdWheel?.Invoke(true);
             ApplyWindowTitle();
+            // The watch pictures a double-click left behind (2026-10-02): cleared as the profile loads, in case watch mode never stopped cleanly.
+            ClearWatchFolder();
 
             await ConnectLlmAsync(cancellationToken, quiet: true, startup: true).ConfigureAwait(false);
             await ConnectSpeechAsync(cancellationToken, quiet: true).ConfigureAwait(false);
@@ -10498,6 +10513,8 @@ internal sealed partial class ChatScreen
         ForgetSession();
         LeavePlanOnReset();
         BindProfile();
+        // The new profile's working directory: its camera .watch folder cleared as it loads (2026-10-02).
+        ClearWatchFolder();
         DiagnosticLog.Debug(AppSettings.Category, AppSettings.NotDefaultLogLine(SettingsDiff.NotDefault(_effective())));
         // The new profile's theme (2026-09-23) before the wipe below, so the fresh screen wears it.
         ThemeName.Apply(_effective(), _settings.ThemesDirectory);
@@ -11080,33 +11097,30 @@ internal sealed partial class ChatScreen
                 // The caption rides the sent text alone: the stored session keeps the line as it was.
                 string sentText = turnText;
                 IReadOnlyList<ImageAttachment> seenImages = [];
-                if (effective.BotChatVision && _botPictureLog is { Count: > 0 } pictureLog)
+                // The user's camera picture first (Botchat camera, 2026-10-02): it takes the last of the picture slots, so the
+                // chat's own pictures are picked with one fewer and their caption names exactly the ones attached (later that
+                // day, the user's report: four named, three sent, and the camera's picture read as the fourth bot's).
+                ImageAttachment? cameraPicture = null;
+                if (botCamera is not null)
                 {
-                    var shown = BotChat.PicturesFor(bot.Name, pictureLog, picturesSeen.GetValueOrDefault(bot.Name));
-                    if (shown.Count > 0)
+                    cameraPicture = await BotCameraPictureAsync(botCamera, cancellationToken).ConfigureAwait(false);
+                    if (cameraPicture is null && botCamera.Released)
                     {
-                        sentText += "\n\n" + BotChat.PicturesCaption(bot.Name, shown);
-                        seenImages = shown.SelectMany(p => p.Images).ToList();
+                        botCamera = null;
                     }
                 }
 
+                var (turnPictures, captions) = BotChat.TurnPictures(bot.Name, _botPictureLog, picturesSeen.GetValueOrDefault(bot.Name), effective.BotChatVision, cameraPicture);
+                seenImages = turnPictures;
+                sentText += captions;
                 picturesSeen[bot.Name] = _botPictureLog?.Count ?? 0;
-                if (botCamera is not null && await BotCameraPictureAsync(botCamera, cancellationToken).ConfigureAwait(false) is { } cameraPicture)
-                {
-                    seenImages = BotChat.WithCamera(seenImages, cameraPicture);
-                    sentText += "\n\n" + BotChat.CameraCaption;
-                }
-                else if (botCamera is { Released: true })
-                {
-                    botCamera = null;
-                }
                 if (imageTool is not null && rework is not null && candidates.Count > 0)
                 {
                     // What the bot may rework and how (2026-09-27): on the sent text alone, as the vision caption.
                     sentText += "\n\n" + BotChat.ReworkCaption(rework.Name, candidates);
                 }
 
-                var history = new ConversationHistory(BotChat.SystemPrompt(bot.Persona, bot.Name, others, topic, speaking, bot.VoiceDirective, markdown, pronouns, images: imageTool is not null, skills: skills, preloaded: botsPreloaded ? preloaded : null));
+                var history = new ConversationHistory(BotChat.SystemPrompt(bot.Persona, bot.Name, others, topic, speaking, bot.VoiceDirective, markdown, pronouns, images: imageTool is not null, skills: skills, preloaded: botsPreloaded ? preloaded : null, camera: cameraPicture is not null));
                 history.Replace(prior);
                 if ((links.Count > 0 && links[next] is { } own ? _session.CreateAssistant(history, own) : _session.CreateAssistant(history)) is not { } assistant)
                 {
@@ -13196,9 +13210,11 @@ internal sealed partial class ChatScreen
         }
 
         string name = Path.GetFileName(image.Path.Replace('/', Path.DirectorySeparatorChar));
+        // A camera picture with no file (watch mode's, 2026-10-02) opens from the Camera output folder's .watch, found now.
+        string? folder = full is null && image.Camera ? WatchFolderPath() : null;
         lock (_pictures)
         {
-            _pictures.Add(new PictureSource(name.Length > 0 ? name : "picture.png", full, image.Bytes));
+            _pictures.Add(new PictureSource(name.Length > 0 ? name : "picture.png", full, image.Bytes, folder));
             return _pictures.Count - 1;
         }
     }
@@ -13307,8 +13323,9 @@ internal sealed partial class ChatScreen
             }
             else
             {
-                Directory.CreateDirectory(PictureTempFolder);
-                path = Path.Combine(PictureTempFolder, source.Name);
+                string folder = source.Folder ?? PictureTempFolder;
+                Directory.CreateDirectory(folder);
+                path = Path.Combine(folder, source.Name);
                 File.WriteAllBytes(path, source.Bytes);
             }
 

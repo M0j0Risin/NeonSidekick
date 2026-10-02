@@ -874,6 +874,7 @@ public partial class SettingsMenuTests : IDisposable
                 SettingsField.CameraTools, SettingsField.CameraShutter, SettingsField.CameraPreview, SettingsField.CameraDevice, SettingsField.CameraResolution,   // the camera, 2026-10-02: /tools' Camera tab
                 SettingsField.CameraKeepInSessions, SettingsField.CameraWatchSeconds, SettingsField.CameraWatchThreshold, SettingsField.CameraWatchUnprompted, SettingsField.CameraWatchMinGapSeconds,
                 SettingsField.BotChatCamera,   // the Botchat tab's last row
+                SettingsField.CameraOutputFolder,   // later on 2026-10-02, the Camera tab's photo folder
             },
             Enum.GetValues<SettingsField>());
         // The compact rows: on the LLM tab after the context length but no reconnect; the type a picker, the two others typed.

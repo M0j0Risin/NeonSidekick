@@ -419,14 +419,49 @@ internal sealed partial class ChatScreen
         lease?.Dispose();
     }
 
-    /// <summary><c>/camera off</c> (and the strip glyph's click): the live view and watch mode let go; how many holds were.</summary>
+    /// <summary><c>/camera off</c> (and the strip glyph's click): the live view and watch mode let go, the watch folder cleared; how many holds were.</summary>
     private int CameraOff()
     {
         int released = _liveLease is null ? 0 : 1;
         StopLive();
-        released += _cameraWatch.Stop() ? 1 : 0;
-        _watchNudge = false;
+        released += StopWatch() ? 1 : 0;
         return released;
+    }
+
+    /// <summary>Watch mode stopped, any nudge forgotten, and the watch folder (<see cref="CameraWatch.FolderFor"/>) cleared; true when it was running.</summary>
+    private bool StopWatch()
+    {
+        bool stopped = _cameraWatch.Stop();
+        _watchNudge = false;
+        ClearWatchFolder();
+        return stopped;
+    }
+
+    /// <summary>The watch folder (<see cref="CameraWatch.FolderFor"/> the Camera output folder) as a full path; null when the sandbox refuses it (the temp folder is used then).</summary>
+    private string? WatchFolderPath() =>
+        _files.Resolve(CameraWatch.FolderFor(_effective().CameraOutputFolder), forWrite: true, out string full) == FileOutcome.Ok ? full : null;
+
+    /// <summary>
+    /// Deletes the watch folder (<see cref="CameraWatch.FolderFor"/>) and the watch pictures a double-click wrote there (2026-10-02,
+    /// the user's call): when watch mode stops and when a profile loads. Nothing to do without one; a failure (a picture held open
+    /// elsewhere) is only logged, and the next clear tries again.
+    /// </summary>
+    private void ClearWatchFolder()
+    {
+        if (WatchFolderPath() is not { } folder || !Directory.Exists(folder))
+        {
+            return;
+        }
+
+        try
+        {
+            Directory.Delete(folder, recursive: true);
+            DiagnosticLog.Debug(CameraCategory, "Cleared " + folder);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            DiagnosticLog.Warn(CameraCategory, $"Could not clear {folder}: {ex.Message}");
+        }
     }
 
     /// <summary><c>/camera watch [seconds | off]</c>: watch mode on at the interval given (or the setting's), or off.</summary>
@@ -435,8 +470,7 @@ internal sealed partial class ChatScreen
         var effective = _effective();
         if (string.Equals(argument, "off", StringComparison.OrdinalIgnoreCase))
         {
-            _transcript.Notice(_cameraWatch.Stop() ? CameraText.WatchOff : CameraText.WatchNotOn);
-            _watchNudge = false;
+            _transcript.Notice(StopWatch() ? CameraText.WatchOff : CameraText.WatchNotOn);
             return;
         }
 

@@ -808,6 +808,9 @@ public enum SettingsField
 
     /// <summary>A toggle: whether the <c>/botchat</c> bots see the user's camera (<see cref="Settings.AppSettingsData.BotChatCamera"/>). The Botchat tab's last row (2026-10-02); no reconnect (read at the chat's start). Last in the enum, as every newcomer.</summary>
     BotChatCamera,
+
+    /// <summary>Typed: the folder under the working directory the camera's photos are saved in (<see cref="Settings.AppSettingsData.CameraOutputFolder"/>). The Camera tab (2026-10-02), the ComfyUI output folder's shape; no reconnect. Last in the enum, as every newcomer.</summary>
+    CameraOutputFolder,
 }
 
 /// <summary>The tabs of <c>/settings</c> on the pane, in strip order (General, Embedded, LLM, TTS, STT, Sessions, Botchat — the user's order, 2026-09-29; Sessions right after General — the user's order, 2026-09-18 — until then; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
@@ -1176,7 +1179,7 @@ internal sealed partial class SettingsMenu
         [SettingsField.FileTools, SettingsField.FileTreeMaxLength, SettingsField.FileTreeShowSizes, SettingsField.FileMentionFolderMode, SettingsField.FileBrowserMode, SettingsField.FileViewImageMaxPerCall, SettingsField.FileSearchMaxResults],
         [SettingsField.ShellCommandPolicy, SettingsField.ShellCommandAllowed, SettingsField.ShellPoliceOutsidePaths, SettingsField.ShellPreferNative, SettingsField.ShellDefault, SettingsField.ShellTimeoutSeconds, SettingsField.ShellForegroundCapSeconds, SettingsField.ShellOutputMaxChars, SettingsField.ShellCodeLanguages, SettingsField.ShellCodeTimeoutSeconds, SettingsField.ShellToolBridge, SettingsField.ShellCodeMaxToolCalls],
         [SettingsField.AskUser, SettingsField.AskMaxQuestions, SettingsField.AskMaxChoices],
-        [SettingsField.CameraTools, SettingsField.CameraShutter, SettingsField.CameraPreview, SettingsField.CameraDevice, SettingsField.CameraResolution, SettingsField.CameraKeepInSessions, SettingsField.CameraWatchSeconds, SettingsField.CameraWatchThreshold, SettingsField.CameraWatchUnprompted, SettingsField.CameraWatchMinGapSeconds],
+        [SettingsField.CameraTools, SettingsField.CameraShutter, SettingsField.CameraPreview, SettingsField.CameraDevice, SettingsField.CameraResolution, SettingsField.CameraOutputFolder, SettingsField.CameraKeepInSessions, SettingsField.CameraWatchSeconds, SettingsField.CameraWatchThreshold, SettingsField.CameraWatchUnprompted, SettingsField.CameraWatchMinGapSeconds],
         [SettingsField.ClaudeExecutable, SettingsField.ClaudePermissions, SettingsField.ClaudeModel, SettingsField.ClaudeEffort, SettingsField.ClaudeAdvisor, SettingsField.ClaudeAdvisorContext, SettingsField.ClaudeAdvisorCallsPerTurn, SettingsField.ClaudeAdvisorModel, SettingsField.ClaudeAdvisorEffort, SettingsField.ClaudeAdvisorConfirm, SettingsField.ClaudeApi, SettingsField.ClaudeApiKey, SettingsField.ClaudeApiMaxTokens, SettingsField.ClaudeApiPromptCaching, SettingsField.ClaudeCliServer],
         [SettingsField.PrintTools, SettingsField.PrintActionPolicy, SettingsField.PrintDefaultPrinter, SettingsField.PrintFontSize],
         [SettingsField.ObsidianTools, SettingsField.ObsidianVault, SettingsField.ObsidianAllowDelete],
@@ -1587,6 +1590,7 @@ internal sealed partial class SettingsMenu
         SettingsField.CameraDevice => "Camera device",
         SettingsField.CameraResolution => "Camera resolution",
         SettingsField.CameraKeepInSessions => "Camera keep in sessions",
+        SettingsField.CameraOutputFolder => "Camera output folder",
         SettingsField.CameraWatchSeconds => "Camera watch interval (s)",
         SettingsField.CameraWatchThreshold => "Camera watch change (%)",
         SettingsField.CameraWatchUnprompted => "Camera watch speaks up",
@@ -1868,6 +1872,7 @@ internal sealed partial class SettingsMenu
             SettingsField.CameraDevice => string.IsNullOrWhiteSpace(data.CameraDevice) ? FirstCameraLabel : data.CameraDevice,
             SettingsField.CameraResolution => data.CameraResolution,
             SettingsField.CameraKeepInSessions => OnOff(data.CameraKeepInSessions),
+            SettingsField.CameraOutputFolder => string.IsNullOrWhiteSpace(data.CameraOutputFolder) ? CameraOutputHereLabel : data.CameraOutputFolder,
             SettingsField.CameraWatchSeconds => Seconds(data.CameraWatchSeconds),
             SettingsField.CameraWatchThreshold => data.CameraWatchThreshold.ToString(CultureInfo.InvariantCulture) + "%",
             SettingsField.CameraWatchUnprompted => OnOff(data.CameraWatchUnprompted),
@@ -2743,6 +2748,7 @@ internal sealed partial class SettingsMenu
         SettingsField.ObsidianVault => data.ObsidianVault,
         SettingsField.AskMaxQuestions => data.AskMaxQuestions.ToString(CultureInfo.InvariantCulture),
         SettingsField.CameraWatchSeconds => data.CameraWatchSeconds.ToString(CultureInfo.InvariantCulture),
+        SettingsField.CameraOutputFolder => data.CameraOutputFolder,
         SettingsField.CameraWatchThreshold => data.CameraWatchThreshold.ToString(CultureInfo.InvariantCulture),
         SettingsField.CameraWatchMinGapSeconds => data.CameraWatchMinGapSeconds.ToString(CultureInfo.InvariantCulture),
         SettingsField.AskMaxChoices => data.AskMaxChoices.ToString(CultureInfo.InvariantCulture),
@@ -3838,7 +3844,7 @@ internal sealed partial class SettingsMenu
         }
 
         bool allowEmpty = field is SettingsField.LlmUrl or SettingsField.LlmModel or SettingsField.TtsVoice2 or SettingsField.WorkingDirectory or SettingsField.WebBrowserPath or SettingsField.WebSearxngUrl or SettingsField.DraftEditor or SettingsField.ImageEditor or SettingsField.GitLibEmail or SettingsField.GitLibName or SettingsField.ObsidianVault or SettingsField.ComfyUrl or SettingsField.ComfyOutputFolder or SettingsField.ClaudeExecutable or SettingsField.ClaudeModel or SettingsField.ClaudeAdvisorModel or SettingsField.ClaudeApiKey
-            or SettingsField.HomeAssistantUrl or SettingsField.HomeAssistantAssistAgent or SettingsField.DockerEnginePipe;
+            or SettingsField.HomeAssistantUrl or SettingsField.HomeAssistantAssistAgent or SettingsField.DockerEnginePipe or SettingsField.CameraOutputFolder;
         var result = await EditTextAsync(field, page, row, EditableValue(field, saved), allowEmpty, cancellationToken).ConfigureAwait(false);
         if (result is not InputResult.Submitted submitted)
         {
@@ -4473,6 +4479,17 @@ internal sealed partial class SettingsMenu
                 }
 
                 Apply(field, d => d.ComfyOutputFolder = text);
+                return true;
+
+            case SettingsField.CameraOutputFolder:
+                // The ComfyUI output folder's rule (2026-10-02): under the sandbox only, refused here once rather than at every shot.
+                if (Path.IsPathRooted(text) || text.Replace('\\', '/').Split('/').Contains(".."))
+                {
+                    Sink.Error($"{FieldName(field)} {CameraOutputFolderError}; keeping {FieldValue(field, saved, _settings.ProfileDirectory)}.");
+                    return false;
+                }
+
+                Apply(field, d => d.CameraOutputFolder = text);
                 return true;
 
             case SettingsField.ImageEditor:

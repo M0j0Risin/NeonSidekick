@@ -2,6 +2,7 @@ using Microsoft.Extensions.AI;
 using NeonSidekick.App;
 using NeonSidekick.Camera;
 using NeonSidekick.Files;
+using NeonSidekick.Settings;
 using NeonSidekick.Llm;
 using NeonSidekick.Llm.Tools;
 using NeonSidekick.Tests.Fakes;
@@ -18,7 +19,7 @@ public partial class ChatScreenTests
     /// <summary>The shots the <c>post</c> preview opened the viewer on.</summary>
     private readonly List<string> _shotsShown = [];
 
-    private string CameraFolder => Path.Combine(WorkingDirectory.Resolve("", _settings.ProfileDirectory), CameraCapture.Folder);
+    private string CameraFolder => Path.Combine(WorkingDirectory.Resolve("", _settings.ProfileDirectory), _settings.Current.CameraOutputFolder);
 
     private string[] CameraFiles() => Directory.Exists(CameraFolder) ? Directory.GetFiles(CameraFolder) : [];
 
@@ -115,13 +116,28 @@ public partial class ChatScreenTests
         string file = Assert.Single(CameraFiles());
         Assert.Contains("\n" + Titled(CameraText.PaneTitle + "   " + CameraText.SnapButton + "    " + CameraText.RetakeButton + " "), output);
         Assert.Contains(CameraText.OwnPrompt, output);
-        Assert.Contains(CameraText.Attached(Path.Combine(CameraCapture.Folder, Path.GetFileName(file))), output);
+        Assert.Contains(CameraText.Attached(Path.Combine(AppSettingsData.DefaultCameraOutputFolder, Path.GetFileName(file))), output);
         Assert.Equal([file], _shotsShown);   // post: the viewer on the shot
         var user = _chat.Requests[0].Last(m => m.Role == ChatRole.User);
         Assert.StartsWith("[Image #1] what is this?", user.Text);
         var picture = Assert.Single(user.Contents.OfType<DataContent>());
         Assert.Equal(file, ConversationHistory.CameraPath(picture));
         Assert.Equal(1, _cameraSystem!.Opens);
+    }
+
+    [Fact]
+    public async Task CameraSnap_SavesInTheCameraOutputFolder_EvenTheComfyOne()
+    {
+        _cameraSystem = new FakeCameraSystem();
+        _settings.Update(d => d.CameraOutputFolder = d.ComfyOutputFolder);
+        PushLine("/camera snap");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        string file = Assert.Single(CameraFiles());
+        Assert.Equal(Path.Combine(WorkingDirectory.Resolve("", _settings.ProfileDirectory), AppSettingsData.DefaultComfyOutputFolder), Path.GetDirectoryName(file));
+        Assert.Contains(CameraText.Attached(Path.Combine(AppSettingsData.DefaultComfyOutputFolder, Path.GetFileName(file))), output);
     }
 
     [Fact]
@@ -167,7 +183,7 @@ public partial class ChatScreenTests
         string output = await RunAsync();
 
         string file = Assert.Single(CameraFiles());
-        Assert.Contains(CameraText.Attached(Path.Combine(CameraCapture.Folder, Path.GetFileName(file))), output);
+        Assert.Contains(CameraText.Attached(Path.Combine(AppSettingsData.DefaultCameraOutputFolder, Path.GetFileName(file))), output);
     }
 
     [Fact]
@@ -295,6 +311,72 @@ public partial class ChatScreenTests
         Assert.Empty(CameraFiles());   // memory only
     }
 
+    private string WatchFolder => Path.Combine(CameraFolder, CameraWatch.FolderName);
+
+    [Fact]
+    public async Task Watch_APicturesThumbnail_DoubleClicked_OpensFromCameraWatch_AndWatchOffClearsIt()
+    {
+        // The fixture's clock names the picture; an older build wrote it to the system temp folder, so a copy there would prove nothing.
+        File.Delete(Path.Combine(ChatScreen.PictureTempFolder, CameraWatch.PictureName(TimeZoneInfo.ConvertTime(_time.GetUtcNow(), _time.LocalTimeZone))));
+        _chat.EnqueueText("I see you.");
+        string? seen = null;
+        WatchFixture(input =>
+        {
+            SpinWait.SpinUntil(() => _cameraSystem!.Reads >= 2, 5000);
+            Thread.Sleep(200);
+            PushLine(input, "what now?");
+        }, DoubleClickDown(4), DoubleClickDown(10), input =>
+        {
+            // Opened and still there before watch mode stops.
+            seen = Directory.Exists(WatchFolder) ? string.Join("|", Directory.GetFiles(WatchFolder)) : null;
+            PushLine(input, "/camera watch off");
+        }, Line("/exit"));
+        PaneOf40Rows();
+
+        string output = await RunAsync();
+
+        string opened = Assert.Single(_openedFiles.Distinct());
+        Assert.Equal(WatchFolder, Path.GetDirectoryName(opened));
+        Assert.StartsWith("camera-watch-", Path.GetFileName(opened));
+        Assert.EndsWith(".jpg", opened);
+        Assert.Equal(opened, seen);
+        Assert.False(Directory.Exists(WatchFolder));   // cleared by /camera watch off
+        Assert.Contains(CameraText.WatchOff, output);
+        Assert.DoesNotContain("Could not open", output);
+        Assert.False(File.Exists(Path.Combine(ChatScreen.PictureTempFolder, Path.GetFileName(opened))));
+    }
+
+    [Fact]
+    public async Task TheWatchFolder_IsClearedAsTheProfileLoads_AndCameraOffClearsItToo()
+    {
+        Directory.CreateDirectory(WatchFolder);
+        await File.WriteAllBytesAsync(Path.Combine(WatchFolder, "camera-watch-101010.jpg"), [1, 2, 3]);
+        _cameraSystem = new FakeCameraSystem();
+        bool clearedAtStart = false;
+        var input = Scripted();
+        int step = 0;
+        input.OnWait = () =>
+        {
+            switch (step++)
+            {
+                case 0:
+                    clearedAtStart = !Directory.Exists(WatchFolder);
+                    Directory.CreateDirectory(WatchFolder);   // as a double-click would have left it
+                    PushLine(input, "/camera off");
+                    break;
+                case 1:
+                    PushLine(input, "/exit");
+                    break;
+            }
+        };
+
+        await RunAsync();
+
+        Assert.True(clearedAtStart);
+        Assert.False(Directory.Exists(WatchFolder));
+        Assert.True(Directory.Exists(CameraFolder) || !Directory.Exists(CameraFolder));   // the camera folder itself is left alone
+    }
+
     [Fact]
     public async Task Watch_SpeaksUp_WhenAllowed_TheModelShownTheChangeUnasked()
     {
@@ -355,7 +437,8 @@ public partial class ChatScreenTests
         {
             var turn = request[^1];
             Assert.NotNull(ConversationHistory.CameraPath(Assert.Single(turn.Contents.OfType<DataContent>())));
-            Assert.EndsWith(BotChat.CameraCaption, turn.Text, StringComparison.Ordinal);
+            Assert.EndsWith(BotChat.CameraCaption(1, 1), turn.Text, StringComparison.Ordinal);
+            Assert.EndsWith(BotChat.CameraRule, request.Single(m => m.Role == ChatRole.System).Text, StringComparison.Ordinal);
         });
         Assert.Equal(1, _cameraSystem.Opens);
         Assert.Empty(CameraFiles());   // memory only
@@ -460,6 +543,47 @@ public partial class ChatScreenTests
         await RunAsync();
 
         Assert.DoesNotContain(CameraCaptureTool.ToolName, _chat.Options[0]!.Tools!.Cast<AIFunction>().Select(t => t.Name));
+    }
+
+    [Theory]
+    [InlineData("live", MidTurnClass.Quick)]
+    [InlineData("watch", MidTurnClass.Quick)]
+    [InlineData("watch 5", MidTurnClass.Quick)]
+    [InlineData("watch off", MidTurnClass.Quick)]
+    [InlineData("off", MidTurnClass.Quick)]
+    [InlineData("list", MidTurnClass.Quick)]
+    [InlineData("use 2", MidTurnClass.Quick)]
+    [InlineData("zoom", MidTurnClass.Quick)]   // a word /camera does not know: its error at once
+    [InlineData("", MidTurnClass.Deferred)]    // the pane would take the keys from the reply
+    [InlineData("snap", MidTurnClass.Deferred)]   // the photo goes on the idle line
+    public void Camera_UnderAReply_RunsAtOnce_ButThePaneAndSnapWait(string args, MidTurnClass expected) =>
+        Assert.Equal(expected, ChatScreen.MidTurnPolicy(SlashCommand.Camera, args));
+
+    [Fact]
+    public async Task MidTurn_CameraWatchAndOff_RunWhileTheReplyStreams()
+    {
+        _cameraSystem = new FakeCameraSystem();
+        MidTurnFixture(i =>
+        {
+            if (i == 1)
+            {
+                PushLine("/camera watch 5");
+                PushLine("/camera list");
+            }
+            else if (i == 2)
+            {
+                PushLine("/camera off");
+            }
+        });
+
+        string output = await RunAsync();
+
+        Assert.Contains(CameraText.WatchOn(5, 8, false), output);
+        Assert.Contains("  1. Fake Cam  ← chosen", output);
+        Assert.Contains(CameraText.Off(1), output);
+        Assert.DoesNotContain(ChatScreen.MidTurnDeferredNotice("/camera"), output);
+        Assert.DoesNotContain(ChatScreen.CancelledNotice, output);
+        Assert.Single(_chat.Requests);
     }
 
     [Fact]

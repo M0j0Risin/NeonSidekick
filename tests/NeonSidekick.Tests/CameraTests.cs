@@ -314,7 +314,34 @@ public sealed class CameraPureTests
 
         Assert.Equal(["p2", "p3", "p4", "cam"], withCamera.Select(i => i.Path));
         Assert.Equal(["cam"], BotChat.WithCamera([], camera).Select(i => i.Path));
-        Assert.Contains("the user's camera", BotChat.CameraCaption);
+        Assert.Equal("(Picture 3 of 3, attached last: a live photo of User, the human in this chat, from their webcam just now — not from any of the bots.)", BotChat.CameraCaption(3, 3));
+        Assert.EndsWith(BotChat.CameraRule, BotChat.Rules("ada", ["neon"], "", camera: true));
+        Assert.DoesNotContain(BotChat.CameraRule, BotChat.Rules("ada", ["neon"], ""));
+        Assert.Contains("It shows User", BotChat.CameraRule);
+        Assert.EndsWith(BotChat.CameraRule, BotChat.SystemPrompt(null, "ada", ["neon"], "", false, null, false, camera: true));
+    }
+
+    [Fact]
+    public void BotChat_TurnPictures_LeaveTheCameraTheLastSlot_SoTheCaptionNamesWhatIsAttached()
+    {
+        var camera = new ImageAttachment("cam", [9], ImageFile.Jpeg, 1, 1) { Camera = true };
+        IReadOnlyList<BotPicture> log = Enumerable.Range(1, 4).Select(i => new BotPicture(i, "ada", false, [new ImageAttachment("p" + i, [1], ImageFile.Png, 1, 1)])).ToList();
+
+        var (images, captions) = BotChat.TurnPictures("neon", log, 0, vision: true, camera);
+        var (alone, aloneCaptions) = BotChat.TurnPictures("neon", log, 0, vision: false, camera);
+        var (noCamera, noCameraCaptions) = BotChat.TurnPictures("neon", log, 0, vision: true, null);
+        var (nothing, nothingCaptions) = BotChat.TurnPictures("neon", null, 0, vision: true, null);
+
+        Assert.Equal(["p2", "p3", "p4", "cam"], images.Select(i => i.Path));
+        Assert.Contains(BotChat.PicturesCaption("neon", BotChat.PicturesFor("neon", log, 0, 3)), captions);
+        Assert.Equal(3, captions.Split("ada's reply").Length - 1);   // three named, three attached before the camera's
+        Assert.EndsWith(BotChat.CameraCaption(4, 4), captions);
+        Assert.Equal(["cam"], alone.Select(i => i.Path));
+        Assert.Equal("\n\n" + BotChat.CameraCaption(1, 1), aloneCaptions);
+        Assert.Equal(["p1", "p2", "p3", "p4"], noCamera.Select(i => i.Path));
+        Assert.DoesNotContain("Picture", noCameraCaptions);
+        Assert.Empty(nothing);
+        Assert.Equal("", nothingCaptions);
     }
 
     [Fact]
@@ -690,7 +717,7 @@ public sealed class CameraCaptureTests : IDisposable
         }
     }
 
-    private CameraCapture Capture() => new(_session, () => _files, () => CameraSettings.Options(_settings), _time);
+    private CameraCapture Capture() => new(_session, () => _files, () => _settings.CameraOutputFolder, () => CameraSettings.Options(_settings), _time);
 
     [Fact]
     public async Task ASnap_IsSavedUnderCamera_StampedLocally_AClashNumbered_AndADiscardDeletesIt()
@@ -702,9 +729,9 @@ public sealed class CameraCaptureTests : IDisposable
         var second = await capture.SnapAsync(lease, CancellationToken.None);
 
         string stem = CameraCapture.Stem(TimeZoneInfo.ConvertTime(_time.GetUtcNow(), _time.LocalTimeZone));
-        Assert.Equal(Path.Combine("camera", stem + ".jpg"), first.RelativePath);   // the sandbox's own spelling of a relative path
-        Assert.Equal(Path.Combine("camera", stem + "-2.jpg"), second.RelativePath);
-        Assert.Equal(Path.Combine(_dir, "camera", stem + ".jpg"), first.FullPath);
+        Assert.Equal(Path.Combine("camera_images", stem + ".jpg"), first.RelativePath);   // the sandbox's own spelling of a relative path
+        Assert.Equal(Path.Combine("camera_images", stem + "-2.jpg"), second.RelativePath);
+        Assert.Equal(Path.Combine(_dir, "camera_images", stem + ".jpg"), first.FullPath);
         Assert.Equal(first.FullPath, first.Image.Path);
         Assert.True(first.Image.Camera);
         Assert.Equal("Fake Cam", first.Device);
@@ -715,6 +742,39 @@ public sealed class CameraCaptureTests : IDisposable
         Assert.False(File.Exists(second.FullPath));
         capture.Discard(second);   // gone already: only logged
         Assert.Equal("20260911-140530", CameraCapture.Stem(new DateTimeOffset(2026, 9, 11, 14, 5, 30, TimeSpan.Zero)));
+    }
+
+    [Fact]
+    public async Task ASnap_GoesToTheOutputFolderSetting_EvenComfysOrTheWorkingDirectoryItself()
+    {
+        var capture = Capture();
+        using var lease = _session.Acquire("test");
+
+        _settings.CameraOutputFolder = AppSettingsData.DefaultComfyOutputFolder;
+        var shared = await capture.SnapAsync(lease, CancellationToken.None);
+        _settings.CameraOutputFolder = " shots/today ";
+        var nested = await capture.SnapAsync(lease, CancellationToken.None);
+        _settings.CameraOutputFolder = "";
+        var here = await capture.SnapAsync(lease, CancellationToken.None);
+
+        Assert.Equal(Path.Combine(_dir, "comfy_images"), Path.GetDirectoryName(shared.FullPath));
+        Assert.Equal(Path.Combine(_dir, "shots", "today"), Path.GetDirectoryName(nested.FullPath));
+        Assert.Equal(_dir, Path.GetDirectoryName(here.FullPath));
+        Assert.True(File.Exists(here.FullPath));
+    }
+
+    [Fact]
+    public void TheOutputFolder_AndTheWatchFolderUnderIt_ReadTheSetting()
+    {
+        Assert.Equal("camera_images", new AppSettingsData().CameraOutputFolder);
+        Assert.Equal("camera_images", CameraCapture.OutputFolder("camera_images"));
+        Assert.Equal(".", CameraCapture.OutputFolder("  "));
+        Assert.Equal(".", CameraCapture.OutputFolder(null));
+        Assert.Equal("x.jpg", CameraCapture.Under(".", "x.jpg"));
+        Assert.Equal("a/b/x.jpg", CameraCapture.Under("a/b/", "x.jpg"));
+        Assert.Equal("camera_images/.watch", CameraWatch.FolderFor("camera_images"));
+        Assert.Equal("comfy_images/.watch", CameraWatch.FolderFor("comfy_images"));
+        Assert.Equal(".watch", CameraWatch.FolderFor(""));
     }
 
     [Fact]
@@ -733,7 +793,7 @@ public sealed class CameraCaptureTests : IDisposable
     [Fact]
     public async Task ASaveTheSandboxRefuses_IsACameraFailure()
     {
-        await File.WriteAllTextAsync(Path.Combine(_dir, "camera"), "a file where the folder goes");
+        await File.WriteAllTextAsync(Path.Combine(_dir, "camera_images"), "a file where the folder goes");
         var capture = Capture();
         using var lease = _session.Acquire("test");
 
@@ -828,7 +888,10 @@ public sealed class CameraCaptureTests : IDisposable
         Assert.Equal(1, changed);
         var first = watch.TakePending();
         Assert.True(first!.Value.Image.Camera);
-        Assert.StartsWith("camera (watch) ", first.Value.Image.Path);
+        Assert.Equal(CameraWatch.PictureName(first.Value.At), first.Value.Image.Path);
+        Assert.Equal("camera-watch-150210.jpg", CameraWatch.PictureName(new DateTimeOffset(2026, 10, 2, 15, 2, 10, TimeSpan.Zero)));
+        Assert.True(ImageFile.IsImagePath(first.Value.Image.Path));
+        Assert.Equal(-1, first.Value.Image.Path.IndexOfAny(Path.GetInvalidFileNameChars()));
         Assert.Null(watch.TakePending());
 
         await watch.SampleAsync();   // the same picture: nothing kept

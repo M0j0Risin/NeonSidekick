@@ -164,7 +164,7 @@ Commands typed while a reply runs:
 | Behaviour | Commands |
 |---|---|
 | Open their pane over the reply | `/help`, `/settings`, `/tools`, `/mcp`, `/sys`, `/usage`, `/about`, `/memory`, `/queue`, `/sessions`, `/sessions title`, `/skills`, `/reasoning`, `/sampling`, `/cmdlist`, `/police`, `/cmdclear`, `/tree`, `/vault`, `/cmdcopy`, `/keycopy`, `/persona`, `/operata`, `/vocalia` |
-| Run at once | `/ha`, `/tts`, `/stt`, `/wake`, `/interrupt`, `/perf`, `/tb`, `/reasoning <level>`, `/sampling <field> <value>`, `/queue clear`, `/copy`, `/remember`, `/explore`, `/log`, `/timer`, `/expand`, `/collapse`, `/window`, `/cwd`, `/comfy view`, `/view <path>` |
+| Run at once | `/ha`, `/camera live`, `/camera watch`, `/camera off`, `/camera list`, `/camera use`, `/tts`, `/stt`, `/wake`, `/interrupt`, `/perf`, `/tb`, `/reasoning <level>`, `/sampling <field> <value>`, `/queue clear`, `/copy`, `/remember`, `/explore`, `/log`, `/timer`, `/expand`, `/collapse`, `/window`, `/cwd`, `/comfy view`, `/view <path>` |
 | Stop the reply first | `/clear`, `/new`, `/splash`, `/rewind`, `/exit` |
 | Everything else | Waits for the reply to end, queued behind any earlier messages (so *Queue cancel mode* applies) |
 
@@ -176,7 +176,7 @@ Commands typed while a reply runs:
   * 🖼️/🎨 and its timer while ComfyUI renders → cancel the pictures (the reply goes on; ESC still ends it)
   * 📥 / 🔌 / 🎧 / 🔈 while an embedded download, the MCP servers, voice input or speech output are setting up → cancel that one
   * the queued count → `/queue`
-  * 📷 while the camera is on → `/camera off` (lets go of `/camera live` and watch mode)
+  * 📷 while the camera is on → `/camera off` (lets go of `/camera live` and watch mode; also while a reply runs)
   * blank space → `/settings`
 * **Long setups run in the background:** an embedded model's download, the MCP servers connecting, and the first-use download and load of voice input and speech output. If one takes longer than half a second, the input line stays yours: its glyph (📥, 🔌, 🎧 or 🔈) shows its progress on the hint row, menus, commands and chat keep working, and a status line prints when it finishes.
 * **Rule over the input row:** the session's name → `/sessions title` (rename it).
@@ -458,7 +458,7 @@ Voice input sets up in the background (🎧 on the hint row), so the first-use W
 | Botchat preloaded skills | Skills the app loads itself, so no `load_skill` call is needed. Tick them in the checklist (**A** / **N** for all or none), or name one as a whole word in the topic (`/botchat use pony-prompts for the pictures`). Each comes with its bundled text files, up to 64,000 characters of them per skill (the rest stay listed by name). Needs *Agent skills*, but not *Botchat skills enabled*. With both on, a preloaded skill is not offered to load again wherever its content is already given, and a `load_skill` call for it there is answered that it is loaded already; its files can still be read, and `load_skill` stays offered for that when a file was left out past the cap, even with every skill preloaded. With *Botchat skills enabled* off, a file left out can't be read. The chat says which were loaded. | none |
 | Botchat skill mode | Who gets the preloaded skills: `prompt-writer-and-bots` (the picture prompt writer and every bot's system prompt) or `prompt-writer-only`. | `prompt-writer-and-bots` |
 | Botchat vision enabled | On its turn, shows each bot the newest 4 pictures since it last spoke (not the ones it drew itself), each captioned with whose it is. Only for models that read images: a text-only server fails the turn (in `multi` mode, every bot's model counts). Pictures aren't kept for `/botchat --resume` or the saved session. | off |
-| Botchat camera | The bots see you: the camera stays on for the chat, and each bot's turn gets a fresh picture from it, last after the chat's own pictures (4 in all), captioned as you, just now. The pictures are kept in memory only, never saved. Only for models that read images; a camera that fails is one warning and the chat goes on without it. Read when a chat starts. | off |
+| Botchat camera | The bots see you: the camera stays on for the chat, and each bot's turn gets a fresh picture from it, last after the chat's own pictures (4 in all), captioned as a photo of you (User, as the chat names you) and not from any bot; the bots' instructions say the same. The pictures are kept in memory only, never saved. Only for models that read images; a camera that fails is one warning and the chat goes on without it. Read when a chat starts. | off |
 
 ##### Botchat pictures
 
@@ -650,7 +650,8 @@ Every tool, grouped (Clock, Timers, Files, GitLib, Shell, Obsidian, SQL, ComfyUI
 | Camera preview | `live`: the picture viewer shows the camera live (mirrored, like a mirror) while you frame the shot, then holds the photo taken. `post`: the viewer opens on the photo once it's taken. `disabled`: no window. The viewer never takes the keyboard from the terminal. | `live` |
 | Camera device | The camera, by the name Windows lists it under, picked from the ones connected. `(first camera)` uses the first; a camera that isn't connected uses the first, with a notice. | (first camera) |
 | Camera resolution | The size the camera is asked for (`640x480`, `1280x720` or `1920x1080`). The camera runs at its own size nearest it, and a photo is scaled to fit the longer side. | `1280x720` |
-| Camera keep in sessions | Off: a stored session keeps a line naming the photo instead of the picture (the file stays in the working directory's `camera\` folder), so a resumed session doesn't carry your face. On: photos are stored like any picture. | off |
+| Camera output folder | The folder under the working directory the photos are saved in, made on first use. Empty means the working directory itself; it may be any folder under it, even the ComfyUI output folder. Watch mode's double-clicked pictures go in its `.watch` subfolder. | `camera_images` |
+| Camera keep in sessions | Off: a stored session keeps a line naming the photo instead of the picture (the file stays in the *Camera output folder*), so a resumed session doesn't carry your face. On: photos are stored like any picture. | off |
 | Camera watch interval (s) | How often `/camera watch` looks (2–3600). | 10 |
 | Camera watch change (%) | How much of the picture must change for watch mode to keep a frame (1–100). Shifts in brightness don't count. `--camera-check` prints your camera's own noise. | 8% |
 | Camera watch speaks up | Off: a changed picture rides your next message. On: the model is shown it unasked, no more often than the gap below, and only while no reply runs, nothing speaks and the input line is empty. | off |
@@ -899,7 +900,7 @@ Type `/` to list every command with a short summary. After a command and a space
 | `/compact [focus]` | Shrink the current context. A focus tells the summary what to concentrate on. |
 | `/copy [n \| all] [--thinking]` | Copy the last reply (or the last *n*, or the whole transcript) to the clipboard as Markdown. `--thinking` includes the model's thinking, quoted under `💭 **Thinking**` where it happened. |
 | `/cwd [path \| ~ \| browse]` | Show or change the working directory. `~` returns to the profile's `files\` folder; `browse` opens the folder picker. |
-| `/camera` | Open the camera pane: frame the shot (live in the picture viewer under *Camera preview* `live`), Space takes it, R takes it again, Enter puts it on the input line as `[Image #N]`, ESC drops it. The photo is saved in the working directory's `camera\` folder. Without the pane it takes one at once. See Camera. |
+| `/camera` | Open the camera pane: frame the shot (live in the picture viewer under *Camera preview* `live`), Space takes it, R takes it again, Enter puts it on the input line as `[Image #N]`, ESC drops it. The photo is saved in the *Camera output folder* (`camera_images` by default). Without the pane it takes one at once. See Camera. |
 | `/camera snap` | Take a photo at once and put it on the input line. |
 | `/camera list` | List the cameras Windows sees, numbered, the chosen one marked. |
 | `/camera use <n\|name>` | Choose the camera by its number in the list or its name (*Camera device*). |
@@ -1121,7 +1122,7 @@ The camera is a USB webcam (or a laptop's) read through Windows' own Media Found
 
 * **One stream, shared.** The camera pane, the live view, a botchat and watch mode all share one open camera. It opens when the first needs it and closes a few seconds after the last lets go, so a retake doesn't wait for it again. Its first frames are dark while the exposure settles, so a photo always waits for that (about a second after the camera opens).
 * **📷 on the hint row** shows whenever the camera is on, whatever else the row shows. Double-click it to let go of `/camera live` and watch mode. The camera's own light (and Windows' camera indicator) is on at the same time.
-* **Photos** are JPEGs in the working directory's `camera\` folder, named for the moment they were taken (`20261002-140203.jpg`). A photo you retake or decline is deleted again. Botchat and watch-mode pictures are never saved.
+* **Photos** are JPEGs in the *Camera output folder* under the working directory (`camera_images` by default), named for the moment they were taken (`20261002-140203.jpg`). A photo you retake or decline is deleted again. Botchat and watch-mode pictures are never saved; double-clicking a watch picture's thumbnail writes it to the output folder's `.watch` subfolder (`camera_images\.watch\camera-watch-150210.jpg`) and opens it there. That folder is cleared when watch mode stops and whenever a profile loads.
 * **Stored sessions** keep a line naming the photo instead of the picture unless *Camera keep in sessions* is on. The picture stays in the conversation until it ends.
 * **When it fails**, the message says why: Windows' privacy setting *Let desktop apps access your camera* is off (Settings › Privacy & security › Camera), another app (a video call, the Camera app) is using the camera, it was unplugged, or Media Foundation isn't installed (Windows N needs the Media Feature Pack).
 * **Watching** is pictures, not video: the models take still images. Watch mode compares each picture with the last one the model saw, on your machine, and sends one only when enough of it changed.
@@ -1901,7 +1902,7 @@ Get-Content job.txt | NeonSidekick.exe --headless --profile work
 
 | Tool | Arguments | What it does |
 |---|---|---|
-| `camera_capture` | `prompt` | Offered while *Camera tool* is on, with the pane and a model that reads pictures. Shows the model's sentence ("Hold the label up to the camera.") and, under *Camera shutter* `user`, waits for you to take the photo (Space, R to retake, Enter to send, ESC to decline); under `model`, asks you to allow it and then takes it. The photo is saved in `camera\` and attached to the message after the result. A decline is passed on, and the model isn't asked to try again in that turn. Allowed in plan mode, as `ask_user` is. |
+| `camera_capture` | `prompt` | Offered while *Camera tool* is on, with the pane and a model that reads pictures. Shows the model's sentence ("Hold the label up to the camera.") and, under *Camera shutter* `user`, waits for you to take the photo (Space, R to retake, Enter to send, ESC to decline); under `model`, asks you to allow it and then takes it. The photo is saved in the *Camera output folder* and attached to the message after the result. A decline is passed on, and the model isn't asked to try again in that turn. Allowed in plan mode, as `ask_user` is. |
 
 ### Questions
 

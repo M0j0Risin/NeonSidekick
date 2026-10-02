@@ -12,19 +12,21 @@ public partial class ToolsMenuTests
     private void OpenCameraRow(int row) => Push([Keys.Right, Keys.Right, Keys.Right, Keys.Right, Keys.Right, .. Enumerable.Repeat(Keys.Down, row), Keys.Enter]);
 
     [Fact]
-    public void TheCameraTab_SitsAfterAsk_WithItsTenRows()
+    public void TheCameraTab_SitsAfterAsk_WithItsElevenRows()
     {
         int tab = ToolsText.TabTitles.ToList().IndexOf(ToolsText.CameraTabTitle);
 
         Assert.Equal(ToolsText.TabTitles.ToList().IndexOf(ToolsText.AskTabTitle) + 1, tab);
         Assert.Equal(
-            ["Camera tool", "Camera shutter", "Camera preview", "Camera device", "Camera resolution", "Camera keep in sessions", "Camera watch interval (s)", "Camera watch change (%)", "Camera watch speaks up", "Camera watch min gap (s)"],
+            ["Camera tool", "Camera shutter", "Camera preview", "Camera device", "Camera resolution", "Camera output folder", "Camera keep in sessions", "Camera watch interval (s)", "Camera watch change (%)", "Camera watch speaks up", "Camera watch min gap (s)"],
             SettingsMenu.ToolsTabFields[tab - 1].Select(SettingsMenu.FieldName));
         Assert.Equal([SettingsField.CameraTools, SettingsField.CameraKeepInSessions, SettingsField.CameraWatchUnprompted], SettingsMenu.ToolsTabFields[tab - 1].Where(SettingsMenu.IsToggle));
         Assert.DoesNotContain(SettingsMenu.ToolsTabFields[tab - 1], SettingsMenu.RefusedMidTurn);
         var data = new AppSettingsData();
         Assert.Equal(SettingsMenu.FirstCameraLabel, SettingsMenu.FieldValue(SettingsField.CameraDevice, data, _settings.ProfileDirectory));
         Assert.Equal("8%", SettingsMenu.FieldValue(SettingsField.CameraWatchThreshold, data, _settings.ProfileDirectory));
+        Assert.Equal("camera_images", SettingsMenu.FieldValue(SettingsField.CameraOutputFolder, data, _settings.ProfileDirectory));
+        Assert.Equal(SettingsMenu.CameraOutputHereLabel, SettingsMenu.FieldValue(SettingsField.CameraOutputFolder, new AppSettingsData { CameraOutputFolder = "" }, _settings.ProfileDirectory));
         Assert.Equal("off", SettingsMenu.FieldValue(SettingsField.BotChatCamera, data, _settings.ProfileDirectory));
         Assert.Equal("Botchat camera", SettingsMenu.FieldName(SettingsField.BotChatCamera));
     }
@@ -88,10 +90,31 @@ public partial class ToolsMenuTests
     }
 
     [Fact]
+    public async Task OnThePane_TheOutputFolder_IsTyped_AFolderOutsideRefused_EmptyAllowed()
+    {
+        var (menu, pane, _) = PaneMenu();
+        OpenCameraRow(5);
+        Push([.. Enumerable.Repeat(Keys.Backspace, 20)]);
+        Type("../elsewhere");                      // refused: it climbs out
+        Push([Keys.Enter, .. Enumerable.Repeat(Keys.Backspace, 20)]);
+        Type("comfy_images");                      // the ComfyUI folder is fine
+        Push([Keys.Enter, .. Enumerable.Repeat(Keys.Backspace, 20)]);
+        Push(Keys.Enter);                          // empty: the working directory
+        Push(Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Equal("", _settings.Current.CameraOutputFolder);
+        Assert.Contains("Camera output folder " + SettingsMenu.CameraOutputFolderError + "; keeping camera_images.", _console.Output);
+        Assert.Contains("  · Camera output folder: comfy_images", _console.Output);
+        pane.Dispose();
+    }
+
+    [Fact]
     public async Task OnThePane_TheWatchValues_AreTyped_OutOfRangeRefused()
     {
         var (menu, pane, _) = PaneMenu();
-        OpenCameraRow(6);
+        OpenCameraRow(7);
         Push([.. Enumerable.Repeat(Keys.Backspace, 3)]);
         Type("1");                                 // refused: under 2
         Push([Keys.Enter, .. Enumerable.Repeat(Keys.Backspace, 3)]);

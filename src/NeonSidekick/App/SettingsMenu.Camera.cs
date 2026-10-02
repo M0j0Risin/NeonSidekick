@@ -16,6 +16,12 @@ internal sealed partial class SettingsMenu
     /// </summary>
     public Func<IReadOnlyList<CameraDevice>>? Cameras { get; set; }
 
+    /// <summary>How the menu shows an empty <c>Camera output folder</c> (2026-10-02): the photos land in the working directory itself. Pinned.</summary>
+    public const string CameraOutputHereLabel = "(the working directory)";
+
+    /// <summary>The settings-menu wording for a bad <c>Camera output folder</c>. Pinned.</summary>
+    public const string CameraOutputFolderError = "must be a folder under the working directory (a relative path), or empty";
+
     /// <summary>The <c>Camera device</c> value with none saved: the first camera. Pinned.</summary>
     public const string FirstCameraLabel = "(first camera)";
 

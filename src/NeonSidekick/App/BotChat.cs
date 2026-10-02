@@ -244,12 +244,12 @@ public static partial class BotChat
     /// <paramref name="preloaded"/> (<see cref="PreloadedSkillsSection"/>, 2026-09-27, <c>Botchat skill mode</c>
     /// <c>prompt-writer-and-bots</c>) follows that block, before the rules. Pure.
     /// </summary>
-    public static string SystemPrompt(string? persona, string speaker, IReadOnlyList<string> others, string topic, bool speechOutput, string? voiceDirective, bool markdown, string? pronouns = null, bool images = false, IReadOnlyList<Skills.Skill>? skills = null, string? preloaded = null) =>
+    public static string SystemPrompt(string? persona, string speaker, IReadOnlyList<string> others, string topic, bool speechOutput, string? voiceDirective, bool markdown, string? pronouns = null, bool images = false, IReadOnlyList<Skills.Skill>? skills = null, string? preloaded = null, bool camera = false) =>
         Assistant.SystemPrompt(speechOutput, memories: null, persona: string.IsNullOrWhiteSpace(persona) ? null : persona, voiceDirective: voiceDirective,
             tools: false, files: false, timers: false, markdown: markdown)
         + (skills is { Count: > 0 } ? "\n\n" + Skills.SkillsPrompt.LoadOnlySection(skills) : "")
         + (string.IsNullOrEmpty(preloaded) ? "" : "\n\n" + preloaded)
-        + "\n\n" + Rules(speaker, others, topic, pronouns, images);
+        + "\n\n" + Rules(speaker, others, topic, pronouns, images, camera);
 
     // ── Preloaded skills (2026-09-27) ───────────────────────────────────────
 
@@ -320,7 +320,7 @@ public static partial class BotChat
     /// sentence when given; <paramref name="images"/> (the bots offered <c>generate_image</c>, 2026-09-25) closes
     /// it with <see cref="ImageRule"/>. Pinned: it is prompt text.
     /// </summary>
-    public static string Rules(string speaker, IReadOnlyList<string> others, string topic, string? pronouns = null, bool images = false)
+    public static string Rules(string speaker, IReadOnlyList<string> others, string topic, string? pronouns = null, bool images = false, bool camera = false)
     {
         ArgumentNullException.ThrowIfNull(others);
         var text = new StringBuilder().Append(CultureInfo.InvariantCulture, $"You are {speaker}, in a group chat with {JoinNames(others)} and the user, who may join in at any time. ");
@@ -341,8 +341,22 @@ public static partial class BotChat
             text.Append(' ').Append(ImageRule);
         }
 
+        if (camera)
+        {
+            text.Append(' ').Append(CameraRule);
+        }
+
         return text.ToString();
     }
+
+    /// <summary>
+    /// The rules' last sentence while the bots see the user (<c>Botchat camera</c>, later on 2026-10-02, the user's report: the
+    /// bots took the webcam picture, attached to the message of the others' lines, for one of the others'). It names the
+    /// user as the chat signs them (<see cref="UserName"/>). Pinned: it is prompt text.
+    /// </summary>
+    public const string CameraRule = "Each of your turns also comes with a live photo from the user's webcam, taken just now and attached last. "
+        + "It shows " + UserName + " — the human in this chat — not a picture from you or the others. "
+        + "Mention what you see only when it adds something, and never say another participant sent it.";
 
     /// <summary>
     /// The rules' last sentence while the bots are offered <c>generate_image</c> (2026-09-25, <c>Botchat image mode</c>
@@ -905,8 +919,44 @@ public static partial class BotChat
     /// <summary>How long a bot's turn waits for the camera's picture before it goes without (2026-10-02).</summary>
     public static readonly TimeSpan CameraWait = TimeSpan.FromSeconds(3);
 
-    /// <summary>The line the turn text ends with when the camera's picture rides along (2026-10-02). Pinned: it is prompt text.</summary>
-    public const string CameraCaption = "(Attached last: the user's camera, just now — what they are doing as you speak. React to it only when it adds something.)";
+    /// <summary>
+    /// The line the turn text ends with when the camera's picture rides along (2026-10-02): its place among the attached pictures
+    /// (<paramref name="number"/> of <paramref name="count"/>, always the last) and whose it is — a photo of <see cref="UserName"/>,
+    /// not from any bot (later that day, the user's report: "the user's camera" alone was read as another bot's picture). Pinned:
+    /// it is prompt text.
+    /// </summary>
+    public static string CameraCaption(int number, int count) =>
+        string.Create(CultureInfo.InvariantCulture, $"(Picture {number} of {count}, attached last: a live photo of {UserName}, the human in this chat, from their webcam just now — not from any of the bots.)");
+
+    /// <summary>
+    /// What one bot's turn message carries (later on 2026-10-02): the chat's pictures since it last spoke when
+    /// <paramref name="vision"/> is on (<see cref="PicturesFor"/>, one slot fewer when <paramref name="camera"/> is there, so the
+    /// caption names exactly the pictures attached), then the camera's picture last, and the captions to add to the turn text
+    /// (empty when nothing rides along). Pure.
+    /// </summary>
+    public static (IReadOnlyList<Files.ImageAttachment> Images, string Captions) TurnPictures(string speaker, IReadOnlyList<BotPicture>? log, int seen, bool vision, Files.ImageAttachment? camera)
+    {
+        ArgumentNullException.ThrowIfNull(speaker);
+        IReadOnlyList<Files.ImageAttachment> images = [];
+        string captions = "";
+        if (vision && log is { Count: > 0 })
+        {
+            var shown = PicturesFor(speaker, log, seen, camera is null ? MaxVisionPictures : MaxVisionPictures - 1);
+            if (shown.Count > 0)
+            {
+                captions = "\n\n" + PicturesCaption(speaker, shown);
+                images = shown.SelectMany(p => p.Images).ToList();
+            }
+        }
+
+        if (camera is not null)
+        {
+            images = WithCamera(images, camera);
+            captions += "\n\n" + CameraCaption(images.Count, images.Count);
+        }
+
+        return (images, captions);
+    }
 
     /// <summary>
     /// The chat's pictures with the camera's after them (2026-10-02): the camera's last, the newest of the others kept so the

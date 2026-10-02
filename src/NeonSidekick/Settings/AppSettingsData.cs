@@ -1182,6 +1182,16 @@ public sealed class AppSettingsData
     /// </summary>
     public bool CameraKeepInSessions { get; set; }
 
+    /// <summary>
+    /// The folder under the working directory the camera's photos are saved in (2026-10-02, the user's call: the
+    /// <see cref="ComfyOutputFolder"/> shape, so it may even be the same folder), made on first use; empty = the working
+    /// directory itself. Watch mode's double-clicked pictures go in its <c>.watch</c> subfolder. A path that leaves the sandbox
+    /// is refused on the settings row and at every save. <c>camera_images</c>, after <c>comfy_images</c>.
+    /// </summary>
+    public string CameraOutputFolder { get; set; } = DefaultCameraOutputFolder;
+
+    public const string DefaultCameraOutputFolder = "camera_images";
+
     /// <summary>Watch mode's sampling interval in seconds (2026-10-02): <see cref="MinCameraWatchSeconds"/>–<see cref="MaxCameraWatchSeconds"/>.</summary>
     public int CameraWatchSeconds { get; set; } = DefaultCameraWatchSeconds;
 

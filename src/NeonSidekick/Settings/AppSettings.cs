@@ -735,6 +735,7 @@ public sealed class AppSettings : IDisposable
         CameraDevice = source.CameraDevice,
         CameraResolution = source.CameraResolution,
         CameraKeepInSessions = source.CameraKeepInSessions,
+        CameraOutputFolder = source.CameraOutputFolder,
         CameraWatchSeconds = source.CameraWatchSeconds,
         CameraWatchThreshold = source.CameraWatchThreshold,
         CameraWatchUnprompted = source.CameraWatchUnprompted,

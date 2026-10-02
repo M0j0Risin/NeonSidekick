@@ -184,10 +184,16 @@ internal sealed partial class ChatScreen
     /// <c>/view --chat</c> draws in the transcript the turn owns, and the bare <c>/view</c> is refused as before. The bare
     /// <c>/sessions title</c> (2026-09-28, the rename box a double-click on the upper rule's session name opens) is a
     /// <see cref="MidTurnClass.Pane"/>: the store holds its own lock and the model's title never lands over a typed one;
-    /// <c>/sessions title &lt;text&gt;</c> still waits. Pure.
+    /// <c>/sessions title &lt;text&gt;</c> still waits. <c>/camera live</c>, <c>watch</c>, <c>off</c>, <c>list</c> and <c>use</c>
+    /// (2026-10-02, the user's ask: <c>/camera off</c> waited for the reply, and an ESC under <c>Queue cancel mode</c> <c>empty</c>
+    /// dropped it) are <see cref="MidTurnClass.Quick"/>: the camera has its own thread and the viewer its own window, and none
+    /// of them opens a pane or touches the line; a word <c>/camera</c> does not know is its error at once. The bare
+    /// <c>/camera</c> (its pane would take the keys from the reply) and <c>/camera snap</c> (the photo goes on the idle line) still
+    /// wait. Pure.
     /// </summary>
     public static MidTurnClass MidTurnPolicy(SlashCommand command, string args) => command switch
     {
+        SlashCommand.Camera when Camera.CameraCommand.Parse(args).Verb is not (Camera.CameraVerb.Shutter or Camera.CameraVerb.Snap) => MidTurnClass.Quick,
         SlashCommand.Comfy when string.Equals(args.Trim(), Viewer.ViewerText.ViewWord, StringComparison.OrdinalIgnoreCase) => MidTurnClass.Quick,
         SlashCommand.View when ParseViewArgs(args) is { Chat: false, Path.Length: > 0 } => MidTurnClass.Quick,
         SlashCommand.Session when ParseSessionArgs(args).Kind == SessionActionKind.TitlePane => MidTurnClass.Pane,
@@ -554,6 +560,11 @@ internal sealed partial class ChatScreen
             case SlashCommand.View:
                 // /view <path> alone reaches here (later on 2026-09-27): the window, never the transcript the turn owns.
                 OpenInViewer(ParseViewArgs(args).Path);
+                break;
+            case SlashCommand.Camera:
+                // /camera live | watch | off | list | use alone reach here (2026-10-02, MidTurnPolicy's string form): the camera's
+                // own thread and window; nothing of the turn's is touched.
+                await HandleCameraAsync(args, cancellationToken).ConfigureAwait(false);
                 break;
             case SlashCommand.Unknown:
                 _transcript.Error(UnknownCommandError(CommandWord(text)));

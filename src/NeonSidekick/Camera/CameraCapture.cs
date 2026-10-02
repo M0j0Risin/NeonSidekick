@@ -8,27 +8,34 @@ public sealed record CameraShot(ImageAttachment Image, string RelativePath, stri
 
 /// <summary>
 /// Taking a photo (2026-10-02): a settled frame through the lease, encoded as JPEG at the size the settings ask for (its
-/// longer side), saved into the working directory's <see cref="Folder"/> as <c>yyyyMMdd-HHmmss.jpg</c> (a <c>-2</c>, <c>-3</c>…
+/// longer side), saved into the working directory's <c>Camera output folder</c> (<see cref="OutputFolder"/>; <c>camera_images</c> by
+/// default) as <c>yyyyMMdd-HHmmss.jpg</c> (a <c>-2</c>, <c>-3</c>…
 /// on a clash), the sandbox's own write (atomic, refused outside the root). A retaken or declined shot is deleted again
 /// (<see cref="Discard"/>), so the folder keeps only what was sent or attached.
 /// </summary>
 public sealed class CameraCapture
 {
-    /// <summary>The folder under the working directory the photos go to.</summary>
-    public const string Folder = "camera";
-
     private readonly CameraSession _session;
     private readonly Func<WorkingDirectory> _files;
+    private readonly Func<string?> _folder;
     private readonly Func<CameraOptions> _options;
     private readonly TimeProvider _time;
 
-    public CameraCapture(CameraSession session, Func<WorkingDirectory> files, Func<CameraOptions> options, TimeProvider time)
+    /// <param name="folder">The <c>Camera output folder</c> setting, read at every shot.</param>
+    public CameraCapture(CameraSession session, Func<WorkingDirectory> files, Func<string?> folder, Func<CameraOptions> options, TimeProvider time)
     {
         _session = session ?? throw new ArgumentNullException(nameof(session));
         _files = files ?? throw new ArgumentNullException(nameof(files));
+        _folder = folder ?? throw new ArgumentNullException(nameof(folder));
         _options = options ?? throw new ArgumentNullException(nameof(options));
         _time = time ?? throw new ArgumentNullException(nameof(time));
     }
+
+    /// <summary>The setting's folder relative to the working directory: trimmed, <c>.</c> (the working directory) when empty. Pure, the ComfyUI shape.</summary>
+    public static string OutputFolder(string? setting) => string.IsNullOrWhiteSpace(setting) ? "." : setting.Trim();
+
+    /// <summary><paramref name="name"/> under <paramref name="folder"/> (an <see cref="OutputFolder"/>), relative to the working directory. Pure.</summary>
+    public static string Under(string folder, string name) => folder == "." ? name : folder.TrimEnd('/', '\\') + "/" + name;
 
     public CameraSession Session => _session;
 
@@ -47,7 +54,7 @@ public sealed class CameraCapture
         int maxSide = Math.Max(target.Width, target.Height);
         var image = await Task.Run(() => CameraJpeg.Attachment(frame, "camera.jpg", maxSide), cancellationToken).ConfigureAwait(false);
         var files = _files();
-        string stem = Folder + "/" + Stem(TimeZoneInfo.ConvertTime(frame.At, _time.LocalTimeZone));
+        string stem = Under(OutputFolder(_folder()), Stem(TimeZoneInfo.ConvertTime(frame.At, _time.LocalTimeZone)));
         for (int n = 1; ; n++)
         {
             string relative = n == 1 ? stem + ".jpg" : stem + "-" + n.ToString(CultureInfo.InvariantCulture) + ".jpg";

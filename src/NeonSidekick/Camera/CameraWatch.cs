@@ -13,6 +13,17 @@ namespace NeonSidekick.Camera;
 /// </summary>
 public sealed class CameraWatch : IDisposable
 {
+    /// <summary>The subfolder of the <c>Camera output folder</c> a double-clicked watch picture is written into.</summary>
+    public const string FolderName = ".watch";
+
+    /// <summary>
+    /// The folder, relative to the working directory, a watch picture is written into when its thumbnail is double-clicked
+    /// (2026-10-02, the user's call: under the camera's own folder, not the system's temp): <see cref="FolderName"/> in the
+    /// <c>Camera output folder</c> (<c>camera_images/.watch</c> by default). Only a clicked picture lands there; it is cleared
+    /// when watch mode stops and when a profile loads (<c>ChatScreen.ClearWatchFolder</c>). Pure.
+    /// </summary>
+    public static string FolderFor(string? outputFolder) => CameraCapture.Under(CameraCapture.OutputFolder(outputFolder), FolderName);
+
     /// <summary>The longer side a watch picture is sent at: enough to see what happens, light on the context.</summary>
     public const int MaxSide = 1280;
 
@@ -100,6 +111,14 @@ public sealed class CameraWatch : IDisposable
         return lease is not null;
     }
 
+    /// <summary>
+    /// What a watch picture is called, for the local time it was taken: <c>camera-watch-150210.jpg</c> (2026-10-02). A file name
+    /// Windows takes (no colon) with the extension the viewer reads, since a double-click on its thumbnail writes the bytes to
+    /// <see cref="FolderFor"/> under it and opens that; <c>camera (watch) 15:02:10</c> until then, which neither could. Pinned.
+    /// </summary>
+    public static string PictureName(DateTimeOffset local) =>
+        "camera-watch-" + local.ToString("HHmmss", System.Globalization.CultureInfo.InvariantCulture) + ".jpg";
+
     /// <summary>The changed frame waiting, as the attachment a message carries (marked as the camera's), and the time it was taken; null for none. Taking it makes it the reference.</summary>
     public (ImageAttachment Image, DateTimeOffset At)? TakePending()
     {
@@ -116,8 +135,7 @@ public sealed class CameraWatch : IDisposable
         }
 
         var local = TimeZoneInfo.ConvertTime(frame.At, _time.LocalTimeZone);
-        string name = "camera (watch) " + local.ToString("HH:mm:ss", System.Globalization.CultureInfo.InvariantCulture);
-        return (CameraJpeg.Attachment(frame, name, MaxSide), local);
+        return (CameraJpeg.Attachment(frame, PictureName(local), MaxSide), local);
     }
 
     /// <summary>One sample: skipped while the last is still being read; a failure is logged and the watch goes on.</summary>
