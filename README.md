@@ -473,12 +473,12 @@ Lists the loaded skills with their scope (`profile`, `global` or `external`) and
 | Reflection window | How many of the last turns a reflection reads (1–5; the last in full, the earlier ones trimmed). | 3 |
 | Reflection min tool calls | How many of the model's own tool calls, counted since the last reflection, make a task worth a skill (3–20). | 4 |
 | Reflection max requests | How many model requests one reflection may spend before it gives up (1–20). | 4 |
-| Reflection cooldown (minutes) | How long an automatic reflection waits after a skill was written (0–1440; 0 = off). | 5 |
+| Reflection cooldown (minutes) | How long an automatic reflection waits after a reflection wrote a skill (0–1440; 0 = off). Turns that loaded that skill and hit an error after loading it never wait: a fresh skill that failed is worth fixing at once. | 5 |
 | Reflection cooldown mode | `last-written-skill` makes only a turn that used the skill just written wait; `all-skills` makes every automatic reflection wait. | `last-written-skill` |
 | Reflection includes sessions | The reflection starts with the earlier sessions that match the turn, and can search them. | on |
 | Reflection yields to turns | A message sent while a reflection runs pauses it, so the reply gets the server. The same reflection runs again once the reply and any queued messages are done. Turn it off if your server handles requests in parallel. | on |
 | Reflection edit supporting files | Lets a reflection also change a skill's supporting files (the data, examples or scripts beside its `SKILL.md`) with `skill_editor`'s `write_file` and `edit_file`. When off, a reflection writes the `SKILL.md` alone; the main chat may always write them. | off |
-| Reflection installed skills | What a reflection may do to a skill installed with `/skills add`. `read-only` refuses any change and asks it to write a companion skill instead, so a later update from the same source stays clean. `allow-and-mark` lets it change the skill; an update from its source then warns first, and `/skills revert` can bring the reflection's version back. | `read-only` |
+| Reflection AgentSkills.io skills | What a reflection may do to a skill installed with `/skills add`. `read-only` refuses any change and asks it to write a companion skill instead, so a later update from the same source stays clean. `allow-and-mark` lets it change the skill; an update from its source then warns first, and `/skills revert` can bring the reflection's version back. | `read-only` |
 
 A reflection must load a skill with `load_skill` before it rewrites the instructions or a supporting file. If the skill changed after that load (your own turn, or an edit by hand), the rewrite is refused and the reflection is told to load it again. A change to the description alone needs no load.
 

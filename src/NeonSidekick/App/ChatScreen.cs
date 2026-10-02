@@ -2300,6 +2300,13 @@ internal sealed partial class ChatScreen
         return string.Create(CultureInfo.InvariantCulture, $"No reflection: cooling down ({mark.Skill} {mark.Action} {Math.Max(0, (int)age.TotalMinutes)} minutes ago; {Math.Max(1, (int)Math.Ceiling(remaining.TotalMinutes))} minutes to go{(loaded ? "; the turns loaded it" : "")}).");
     }
 
+    /// <summary><c>Reflection inside the cooldown: docker-deploy updated 2 minutes ago, 1 error followed its load.</c> — the Debug line when an error after the fresh skill's load lets one through (later on 2026-10-02). Pinned.</summary>
+    public static string CooldownErrorLogLine(ReflectionMark mark, TimeSpan age, int errors)
+    {
+        ArgumentNullException.ThrowIfNull(mark);
+        return string.Create(CultureInfo.InvariantCulture, $"Reflection inside the cooldown: {mark.Skill} {mark.Action} {Math.Max(0, (int)age.TotalMinutes)} minutes ago, {errors} {(errors == 1 ? "error" : "errors")} followed its load.");
+    }
+
     /// <summary>What <c>/learn</c>'s argument asked for (<see cref="ParseLearnArgs"/>).</summary>
     public enum LearnKind
     {
@@ -2455,7 +2462,8 @@ internal sealed partial class ChatScreen
         }
 
         // The cooldown (2026-09-19): a skill written a moment ago by a reflection holds the next
-        // automatic one back; the tally stands, so the next qualifying turn past it fires.
+        // automatic one back; the tally stands, so the next qualifying turn past it fires. Turns whose
+        // load of that skill was followed by an error go through (later on 2026-10-02).
         if (!forced && CoolingDown(effective, tally, out string cooling))
         {
             DiagnosticLog.Debug(SkillCatalog.Category, cooling);
@@ -2518,6 +2526,9 @@ internal sealed partial class ChatScreen
     /// <c>last-written-skill</c> only when <paramref name="tally"/> (the turns since the last
     /// reflection) loaded that skill. Nothing at 0. The mark is the skill records' since 2026-10-02 (the session store's until then,
     /// so <c>Session logging</c> off meant no cooldown and a session purge forgot it); the skill's name is its name now, a rename followed.
+    /// Under either mode, turns that loaded the skill just written and met an error after the load never wait (later on 2026-10-02,
+    /// the user's call): the fresh skill failed in use, the one case a rewrite is surely worth, and the other churn guards (the usage
+    /// line's wording, load-before-rewrite, changed-since-load, <c>/skills revert</c>) carry the rest.
     /// </summary>
     private bool CoolingDown(AppSettingsData effective, TurnTrace tally, out string detail)
     {
@@ -2533,6 +2544,12 @@ internal sealed partial class ChatScreen
         var age = _time.GetUtcNow() - mark.At;
         if (age >= cooldown)
         {
+            return false;
+        }
+
+        if (tally.ErrorsAfterLoad.TryGetValue(mark.Skill, out int errors) && errors > 0)
+        {
+            DiagnosticLog.Debug(SkillCatalog.Category, CooldownErrorLogLine(mark, age, errors));
             return false;
         }
 

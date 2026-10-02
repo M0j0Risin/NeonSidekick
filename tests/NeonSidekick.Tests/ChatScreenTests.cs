@@ -120,7 +120,7 @@ public partial class ChatScreenTests : IDisposable
         _settings.Update(d => d.ToolCollapseCount = 0);
         // Code collapse count is 20 by default (later on 2026-09-22): the same opt-out for a reply's long code block.
         _settings.Update(d => d.CodeCollapseCount = 0);
-        // The reflection cooldown is 30 minutes by default (2026-09-19) and the clock here never moves, so a second automatic
+        // The reflection cooldown is 5 minutes by default (30 for an hour on 2026-09-19) and the clock here never moves, so a second automatic
         // reflection after a learned one would be skipped for good; the fixture opts out and the cooldown tests opt in. The same
         // day a reflection opens with the earlier sessions found for the turn and gets session_manager (Reflection includes
         // sessions, on by default): the learning tests pin the bare request, so the fixture opts out and the evidence tests opt in.
@@ -17112,7 +17112,7 @@ public partial class ChatScreenTests : IDisposable
 
         Assert.Contains("  · Offered\n  ·   haiku  profile  Writes haiku. Use when asked for one.\n  · Reflection\n", output);   // Reflection right after Offered since 2026-09-22
         Assert.Contains("  · Options\n  ·   Agent skills: on\n  ·   Use external skills (.agents\\skills): off\n  ·   Project file: on\n", output);   // the Options section last (2026-09-22; between Offered and Reflection from 2026-09-19), the Project file row among it since 2026-10-01
-        Assert.Contains("  · Reflection\n  ·   Reflection (auto-learn): off\n  ·   Reflection reasoning: none\n  ·   Reflection window: 3 turns\n  ·   Reflection min tool calls: 4 tool calls\n  ·   Reflection max requests: 4 requests\n  ·   Reflection cooldown (minutes): off\n  ·   Reflection cooldown mode: last-written-skill\n  ·   Reflection includes sessions: off\n  ·   Reflection yields to turns: off\n  ·   Reflection edit supporting files: off\n  ·   Reflection installed skills: read-only\n  · Options\n", output);   // the fixture turns the auto-learn off, the verbose lines on, the cooldown and the sessions evidence off
+        Assert.Contains("  · Reflection\n  ·   Reflection (auto-learn): off\n  ·   Reflection reasoning: none\n  ·   Reflection window: 3 turns\n  ·   Reflection min tool calls: 4 tool calls\n  ·   Reflection max requests: 4 requests\n  ·   Reflection cooldown (minutes): off\n  ·   Reflection cooldown mode: last-written-skill\n  ·   Reflection includes sessions: off\n  ·   Reflection yields to turns: off\n  ·   Reflection edit supporting files: off\n  ·   Reflection AgentSkills.io skills: read-only\n  · Options\n", output);   // the fixture turns the auto-learn off, the verbose lines on, the cooldown and the sessions evidence off
         Assert.DoesNotContain("  · Project\n", output);   // the Project section, the toggle row alone from later on 2026-09-19, went on 2026-10-01
         Assert.DoesNotContain("Roots", output);
         Assert.DoesNotContain("Working directory", output);
@@ -18264,7 +18264,7 @@ public partial class ChatScreenTests : IDisposable
     public async Task AutoLearn_TheCooldown_SkipsTheNextReflection_KeepsTheTally_AndFiresOnceItHasPassed()
     {
         // Reflection cooldown (minutes) under all-skills: a skill written by a reflection holds the next automatic one back for
-        // 30 minutes (the newest learned row of the store's reflections table); the tally stands, so the first qualifying turn
+        // 30 minutes (the skill records' newest reflection write); the tally stands, so the first qualifying turn
         // past the cooldown fires. A /learn never waits (it is forced).
         _settings.Update(d => { d.TtsOutput = false; d.ReflectionAutoLearn = true; d.ReflectionCooldownMinutes = 30; d.ReflectionCooldownMode = "all-skills"; });
         EnqueueFiveCallTurn();                                                                          // 0, 1
@@ -18377,6 +18377,56 @@ public partial class ChatScreenTests : IDisposable
         // The third reflection's window carries c and d: the tally over both fired it once the cooldown had passed.
         Assert.Equal(["b", "c", "d"], Asks(_chat.Requests[10]));
         Assert.True(File.Exists(Path.Combine(ProfileSkills, "clock-check-3", SkillCatalog.FileName)));
+    }
+
+    [Theory]
+    [InlineData("last-written-skill")]
+    [InlineData("all-skills")]
+    public async Task AutoLearn_TheCooldown_LetsThroughTurnsWhoseLoadOfTheFreshSkillWasFollowedByAnError(string mode)
+    {
+        // Later on 2026-10-02 (the user's call): a skill a reflection just wrote, loaded and followed by an error, is the one case
+        // a rewrite is surely worth, so under either mode those turns reflect at once, inside the cooldown, the clock never moving.
+        _settings.Update(d => { d.TtsOutput = false; d.ReflectionAutoLearn = true; d.ReflectionCooldownMinutes = 30; d.ReflectionCooldownMode = mode; });
+        EnqueueFiveCallTurn();                                                                          // 0, 1: a
+        _chat.Enqueue(FakeChatClient.Call("r1", SkillEditorTool.ToolName, CreateSkillArgs("clock-check")));   // 2: the reflection writes clock-check
+        _chat.Enqueue(FakeChatClient.Call("l1", LoadSkillTool.ToolName, new Dictionary<string, object?> { ["name"] = "clock-check" }));   // 3: b loads it
+        _chat.Enqueue([FakeChatClient.Call("x1", "no_such_tool"), .. Enumerable.Range(1, 3).Select(i => FakeChatClient.Call("d" + i, GetCurrentTimeTool.ToolName))]);   // 4: an error after the load, then recovered
+        _chat.EnqueueText("Checked five times.");                                                      // 5 → inside the cooldown, yet the reflection
+        _chat.Enqueue(FakeChatClient.Call("r2", SkillEditorTool.ToolName, CreateSkillArgs("clock-check-2")));   // 6
+        var events = new List<DiagnosticEvent>();
+        Action<DiagnosticEvent> capture = e => { if (e.Category == SkillCatalog.Category) { events.Add(e); } };
+        DiagnosticLog.Emitted += capture;
+        var input = Scripted();
+        int step = 0;
+        input.OnWait = () =>
+        {
+            switch (step)
+            {
+                case 0: step++; PushLine(input, "a"); break;
+                case 1:
+                    if (Output.Contains("(🧠 learned: created skill 'clock-check'", StringComparison.Ordinal)) { step++; PushLine(input, "b"); }
+                    break;
+                case 2:
+                    if (Output.Contains("(🧠 learned: created skill 'clock-check-2'", StringComparison.Ordinal)) { step++; PushLine(input, "/exit"); }
+                    break;
+            }
+        };
+
+        string output;
+        try
+        {
+            output = await RunAsync();
+        }
+        finally
+        {
+            DiagnosticLog.Emitted -= capture;
+        }
+
+        Assert.Equal(7, _chat.Requests.Count);
+        Assert.Equal(2, CountOf(output, "(🧠 learned:"));
+        Assert.DoesNotContain(events, e => e.Message.StartsWith("No reflection: cooling down", StringComparison.Ordinal));
+        var through = Assert.Single(events, e => e.Message.StartsWith("Reflection inside the cooldown", StringComparison.Ordinal));
+        Assert.Equal((DiagnosticLevel.Debug, "Reflection inside the cooldown: clock-check created 0 minutes ago, 1 error followed its load."), (through.Level, through.Message));
     }
 
     [Fact]
@@ -18621,6 +18671,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("(🧠 learning from the sessions follows the one running)", ChatScreen.LearnSessionsQueuedNotice);
         Assert.Equal("No reflection: cooling down (docker-deploy updated 12 minutes ago; 18 minutes to go).", ChatScreen.CooldownLogLine(new ReflectionMark(DateTimeOffset.UnixEpoch, "docker-deploy", "updated"), TimeSpan.FromMinutes(12.5), TimeSpan.FromMinutes(17.5)));
         Assert.Equal("No reflection: cooling down (docker-deploy updated 2 minutes ago; 3 minutes to go; the turns loaded it).", ChatScreen.CooldownLogLine(new ReflectionMark(DateTimeOffset.UnixEpoch, "docker-deploy", "updated"), TimeSpan.FromMinutes(2), TimeSpan.FromMinutes(3), loaded: true));
+        Assert.Equal("Reflection inside the cooldown: docker-deploy updated 2 minutes ago, 3 errors followed its load.", ChatScreen.CooldownErrorLogLine(new ReflectionMark(DateTimeOffset.UnixEpoch, "docker-deploy", "updated"), TimeSpan.FromMinutes(2.5), 3));
         // The completion list: sessions after /learn, the note beside it.
         Assert.Equal([new CompletionItem("sessions", ChatScreen.LearnSessionsNote)], ChatScreen.ArgumentItems("/learn", "se", Sources()));
         Assert.Empty(ChatScreen.ArgumentItems("/learn", "keep", Sources()));

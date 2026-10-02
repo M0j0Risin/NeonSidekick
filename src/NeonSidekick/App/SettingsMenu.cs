@@ -1702,7 +1702,7 @@ internal sealed partial class SettingsMenu
         SettingsField.ReflectionIncludesSessions => "Reflection includes sessions",
         SettingsField.ReflectionYieldsToTurns => "Reflection yields to turns",
         SettingsField.ReflectionEditsSupportingFiles => "Reflection edit supporting files",   // the user's name (2026-09-27)
-        SettingsField.ReflectionInstalledSkills => "Reflection installed skills",
+        SettingsField.ReflectionInstalledSkills => "Reflection AgentSkills.io skills",
         SettingsField.HideExitAutocomplete => "Hide /exit autocomplete",
         SettingsField.CommandTypoIntercept => "Command typo intercept",
         SettingsField.KeepCommandHistory => "Keep command history",
@@ -4979,7 +4979,7 @@ internal sealed partial class SettingsMenu
         return true;
     }
 
-    /// <summary>A <c>Reflection installed skills</c> choice and its hint (2026-10-02), the cooldown mode's shape. Pinned.</summary>
+    /// <summary>A <c>Reflection AgentSkills.io skills</c> choice and its hint (2026-10-02), the cooldown mode's shape. Pinned.</summary>
     public static string ReflectionInstalledSkillsLabel(string name) =>
         Markup.Escape(name.PadRight(20)) + Theme.DimMarkup(Skills.ReflectionInstalledSkills.Describe(name));
 

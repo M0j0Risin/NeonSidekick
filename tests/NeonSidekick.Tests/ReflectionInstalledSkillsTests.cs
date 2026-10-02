@@ -4,7 +4,7 @@ using NeonSidekick.Skills;
 
 namespace NeonSidekick.Tests;
 
-/// <summary><c>Reflection installed skills</c> (2026-10-02, the reflection audit): the cooldown mode's shape.</summary>
+/// <summary><c>Reflection AgentSkills.io skills</c> (2026-10-02, the reflection audit): the cooldown mode's shape.</summary>
 public class ReflectionInstalledSkillsTests
 {
     [Fact]

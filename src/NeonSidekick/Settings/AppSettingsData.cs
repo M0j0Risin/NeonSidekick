@@ -875,9 +875,11 @@ public sealed class AppSettingsData
     /// <summary>
     /// The cooldown after a reflection wrote a skill (<c>Skills.ReflectionCooldown</c>, 2026-09-19,
     /// the user's call): an automatic reflection is skipped — its tally kept, so the next qualifying
-    /// turn past the cooldown fires — while the newest <c>reflections</c> row that wrote a skill is
-    /// younger than this many minutes; 0 = no cooldown. A <c>/learn</c> never waits. Read from the
-    /// session store, so nothing while <c>Session logging</c> is off. <see cref="MinReflectionCooldownMinutes"/>
+    /// turn past the cooldown fires — while the newest skill a reflection wrote is younger than this
+    /// many minutes; 0 = no cooldown. A <c>/learn</c> never waits, nor do turns that loaded the skill
+    /// just written and met an error after the load (later on 2026-10-02, the user's call). Read from
+    /// the skill records (<c>skills.db</c>) since 2026-10-02, so it holds with <c>Session logging</c> off
+    /// (the session store's <c>reflections</c> table until then). <see cref="MinReflectionCooldownMinutes"/>
     /// to <see cref="MaxReflectionCooldownMinutes"/>, a value outside warned and replaced by the default,
     /// never clamped. Read at each reply's end, no reconnect; the Reflection tab of <c>/skills</c> (its Options tab until later on 2026-09-19), after
     /// <c>Reflection max requests</c>, labelled <c>Reflection cooldown (minutes)</c>. No variable.
@@ -891,7 +893,8 @@ public sealed class AppSettingsData
     /// call): <c>last-written-skill</c> (the default) skips an automatic reflection only when the
     /// turns since the last reflection loaded the skill the newest reflection wrote — another
     /// lesson reflects at once; <c>all-skills</c> holds every automatic reflection back while the
-    /// cooldown runs. Read at each reply's end, no reconnect; the Reflection tab of <c>/skills</c> (its Options tab until later on 2026-09-19),
+    /// cooldown runs. Under both, an error after a load of the skill just written lets the reflection through
+    /// (later on 2026-10-02). Read at each reply's end, no reconnect; the Reflection tab of <c>/skills</c> (its Options tab until later on 2026-09-19),
     /// the row after <c>Reflection cooldown (minutes)</c>, labelled <c>Reflection cooldown mode</c>. No variable.
     /// </summary>
     public string ReflectionCooldownMode { get; set; } = Skills.ReflectionCooldownMode.Default;
@@ -938,7 +941,7 @@ public sealed class AppSettingsData
     /// companion skill instead, so a later update from the same origin stays clean; <c>allow-and-mark</c> lets it write, the skill records
     /// keep the change, and the install's update page warns that updating replaces it. The main chat and <c>/skills revert</c> are
     /// unaffected. Read when a reflection is decided, no reconnect; the Reflection tab of <c>/skills</c>, last row, labelled
-    /// <c>Reflection installed skills</c>. No variable.
+    /// <c>Reflection AgentSkills.io skills</c> (<c>Reflection installed skills</c> until later on 2026-10-02, the user's call). No variable.
     /// </summary>
     public string ReflectionInstalledSkills { get; set; } = Skills.ReflectionInstalledSkills.Default;
 
