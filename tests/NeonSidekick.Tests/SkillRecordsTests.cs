@@ -40,6 +40,13 @@ public class SkillRecordsTests : IDisposable
         return dir;
     }
 
+    /// <summary>What an app write of <paramref name="file"/> is recorded at (2026-10-02): the clock, or the file's own time when the clock is behind it.</summary>
+    private DateTimeOffset WrittenAt(string file)
+    {
+        var written = new DateTimeOffset(File.GetLastWriteTimeUtc(file), TimeSpan.Zero);
+        return written > _time.GetUtcNow() ? written : _time.GetUtcNow();
+    }
+
     private SkillReconcile Reconcile()
     {
         var catalog = new SkillCatalog(() => _roots);
@@ -154,13 +161,15 @@ public class SkillRecordsTests : IDisposable
         var editor = new SkillEditorTool(() => _roots, () => false, edited: _records.Edited);
         editor.Describe("create", "global", "haiku", "Writes haiku.", "Count the syllables.");
         var created = Assert.Single(_store.All());
-        Assert.Equal((SkillScope.Global, "haiku", _time.GetUtcNow()), (created.Scope, created.Folder, created.Created));
+        string file = Path.Combine(_roots.Global, "haiku", SkillCatalog.FileName);
+        Assert.Equal((SkillScope.Global, "haiku", WrittenAt(file)), (created.Scope, created.Folder, created.Created));
 
         _time.Advance(TimeSpan.FromHours(1));
         editor.Describe("update", "", "haiku", null, "Count them twice.");
         editor.Describe("create", "global", "haiku", "Again.", "x");   // refused: no record change
         var modified = Assert.Single(_store.All());
-        Assert.Equal((created.Created, _time.GetUtcNow()), (modified.Created, modified.Modified));
+        Assert.Equal((created.Created, WrittenAt(file)), (modified.Created, modified.Modified));
+        Assert.Equal(default, Reconcile());   // the app's own writes are never taken for a hand edit
 
         var catalog = new SkillCatalog(() => _roots);
         catalog.Scan(external: false);
@@ -177,11 +186,11 @@ public class SkillRecordsTests : IDisposable
     {
         string dir = Write(_roots.Profile, "pdf");
         _records.Installed(SkillScope.Profile, dir, updated: false);
-        var at = _time.GetUtcNow();
+        var at = WrittenAt(Path.Combine(dir, SkillCatalog.FileName));
         Assert.Equal(("neon", at), (Assert.Single(_store.All()).Profile, Assert.Single(_store.All()).Created));
         _time.Advance(TimeSpan.FromDays(1));
         _records.Installed(SkillScope.Profile, dir, updated: true);
-        Assert.Equal(_time.GetUtcNow(), Assert.Single(_store.All()).Modified);
+        Assert.Equal(WrittenAt(Path.Combine(dir, SkillCatalog.FileName)), Assert.Single(_store.All()).Modified);
 
         var skill = new Skill("pdf", "", SkillScope.Profile, dir);
         _records.Moved(skill, SkillScope.Global);
@@ -193,6 +202,205 @@ public class SkillRecordsTests : IDisposable
 
         _records.Used(new Skill("outside", "", SkillScope.External, Path.Combine(_roots.External, "outside")));
         Assert.Empty(_store.All());   // external: never recorded
+    }
+
+    // ── The skills' history (2026-10-02, the reflection audit) ──────────────
+
+    private Skill SkillOf(string folder)
+    {
+        var catalog = new SkillCatalog(() => _roots);
+        catalog.Scan(external: false);
+        return catalog.Find(folder)!;
+    }
+
+    private SkillEditorTool Editor(string actor) =>
+        new(() => _roots, () => false, new SkillFileAccess(_time), (roots, result) => _records.Edited(roots, result, actor));
+
+    [Fact]
+    public void Store_EventsAndRevisions_HangOffTheRow_TheNewestTenKept_AndGoWithIt()
+    {
+        var at = _time.GetUtcNow();
+        _store.Created(SkillScope.Profile, "neon", "haiku", "haiku", at);
+        Assert.True(_store.AddEvent(SkillScope.Profile, "neon", "haiku", SkillEventKinds.Used, SkillActors.Model, "neon", at, 7, 2));
+        Assert.False(_store.AddEvent(SkillScope.Profile, "neon", "nothing", SkillEventKinds.Used, SkillActors.Model, "neon", at));   // no row, no event
+        for (int i = 0; i < 12; i++)
+        {
+            _store.AddRevision(SkillScope.Profile, "neon", "haiku", SkillCatalog.FileName, "v" + i, SkillActors.Model, at.AddMinutes(i));
+        }
+
+        long id = _store.Find(SkillScope.Profile, "neon", "haiku")!.Id;
+        var revisions = _store.Revisions(id);
+        Assert.Equal(SkillRecordStore.MaxRevisions, revisions.Count);
+        Assert.Equal(("v11", "v2"), (revisions[0].Content, revisions[^1].Content));   // newest first, the two oldest gone
+        var used = Assert.Single(_store.Events(id));
+        Assert.Equal((SkillEventKinds.Used, (long?)7, (int?)2), (used.Kind, used.SessionId, used.ErrorsAfter));
+        Assert.Equal(new SkillUseFacts(1, 1, 1, at), _store.UseFacts(id));
+
+        _store.Created(SkillScope.Profile, "neon", "haiku", "haiku", at.AddDays(1));   // a new folder of the same name starts over
+        Assert.Empty(_store.Events(id));
+        Assert.Empty(_store.Revisions(id));
+
+        _store.AddEvent(SkillScope.Profile, "neon", "haiku", SkillEventKinds.Used, SkillActors.Model, "neon", at);
+        Assert.True(_store.Delete(SkillScope.Profile, "neon", "haiku"));
+        Assert.Empty(_store.Events(id));   // foreign keys on: the events went with the row
+        Assert.Equal(256 * 1024, SkillRecordStore.MaxRevisionChars);
+    }
+
+    [Fact]
+    public void Edited_ByAReflection_IsAnEvent_TheReplacedTextARevision_AndTheUsageLineSaysSo()
+    {
+        Write(_roots.Profile, "haiku");
+        Reconcile();
+        string before = File.ReadAllText(Path.Combine(_roots.Profile, "haiku", SkillCatalog.FileName));
+        Editor(SkillActors.Reflection).Describe("update", "", "haiku", null, "Count them twice.", "Counted twice.");
+        Editor(SkillActors.Reflection).DescribeWrite("haiku", "data/forms.txt", "5-7-5");
+
+        var skill = SkillOf("haiku");
+        var facts = _records.FactsOf(skill)!;
+        Assert.Equal(2, facts.ReflectionWrites);
+        Assert.Equal(SkillEventKinds.File, facts.LastReflectionWrite!.Kind);
+        Assert.Equal("data/forms.txt", facts.LastReflectionWrite.Detail);
+        Assert.Null(facts.HandEditedAt);
+        Assert.Equal("written by a reflection 2× (updated " + Sessions.SessionText.Moment(_time.GetUtcNow(), _time.LocalTimeZone) + ")", _records.UsageLine(skill, _time.LocalTimeZone));
+        var mark = _records.LastReflectionWrite()!;
+        Assert.Equal(("haiku", SkillEventKinds.File), (mark.Skill.Name, mark.Event.Kind));
+
+        long id = _store.Find(SkillScope.Profile, "neon", "haiku")!.Id;
+        var revisions = _store.Revisions(id);
+        Assert.Equal(("data/forms.txt", (string?)null), (revisions[0].Path, revisions[0].Content));   // the file was new
+        Assert.Equal((SkillCatalog.FileName, before, SkillActors.Reflection), (revisions[1].Path, revisions[1].Content, revisions[1].Actor));
+        Assert.Equal("Counted twice.", _store.Events(id).Single(e => e.Kind == SkillEventKinds.Updated).Detail);
+
+        // The pane's rename: the row, its history and the mark follow.
+        _records.Renamed(skill, "haiku-forms");
+        Assert.Equal("haiku-forms", _records.LastReflectionWrite()!.Skill.Folder);
+    }
+
+    [Fact]
+    public void Revert_PutsTheNewestVersionBack_ThenOneFurther_ThenNothing_AndANewFileGoes()
+    {
+        Write(_roots.Profile, "haiku");
+        Reconcile();
+        string path = Path.Combine(_roots.Profile, "haiku", SkillCatalog.FileName);
+        string v0 = File.ReadAllText(path);
+        var editor = Editor(SkillActors.Model);
+        editor.Describe("update", "", "haiku", null, "Version one.");
+        string v1 = File.ReadAllText(path);
+        editor.Describe("update", "", "haiku", null, "Version two.");
+        editor.DescribeWrite("haiku", "notes.md", "new");
+        var skill = SkillOf("haiku");
+
+        var first = _records.Revert(skill);
+        Assert.Equal((SkillRevertOutcome.Reverted, "notes.md"), (first.Outcome, first.Revision!.Path));
+        Assert.False(File.Exists(Path.Combine(_roots.Profile, "haiku", "notes.md")));   // the write created it: the revert removes it
+        Assert.Equal("(↩️ haiku: notes.md is removed, as before the model's change at " + Sessions.SessionText.Moment(_time.GetUtcNow(), _time.LocalTimeZone) + ")",
+            SkillRecordText.RevertText("haiku", first, _time.LocalTimeZone).Text);
+
+        Assert.Equal(SkillRevertOutcome.Reverted, _records.Revert(skill).Outcome);
+        Assert.Equal(v1, File.ReadAllText(path));
+        Assert.Equal(SkillRevertOutcome.Reverted, _records.Revert(skill).Outcome);
+        Assert.Equal(v0, File.ReadAllText(path));
+        var none = _records.Revert(skill);
+        Assert.Equal(SkillRevertOutcome.NoRevision, none.Outcome);
+        Assert.Equal((false, SkillRecordText.NoRevisionError("haiku")), SkillRecordText.RevertText("haiku", none, _time.LocalTimeZone));
+        Assert.Equal(default, Reconcile());   // the reverts are the app's own writes, never a hand edit
+        long id = _store.Find(SkillScope.Profile, "neon", "haiku")!.Id;
+        Assert.Equal(3, _store.Events(id).Count(e => e.Kind == SkillEventKinds.Reverted));
+    }
+
+    [Fact]
+    public void AHandEdit_IsAnEvent_TheUsageLineSaysSo_AndARevertIsRefused()
+    {
+        Write(_roots.Profile, "haiku");
+        Reconcile();
+        Editor(SkillActors.Reflection).Describe("update", "", "haiku", null, "The reflection's text.");
+        string path = Path.Combine(_roots.Profile, "haiku", SkillCatalog.FileName);
+        File.WriteAllText(path, "---\nname: haiku\ndescription: Does things.\n---\nMy own words.\n");
+        var edited = DateTimeOffset.UtcNow.AddMinutes(10);
+        File.SetLastWriteTimeUtc(path, edited.UtcDateTime);
+
+        Assert.Equal(1, Reconcile().Modified);
+        var skill = SkillOf("haiku");
+        var facts = _records.FactsOf(skill)!;
+        Assert.NotNull(facts.HandEditedAt);
+        Assert.Contains("; edited by hand ", _records.UsageLine(skill, _time.LocalTimeZone), StringComparison.Ordinal);
+
+        var refused = _records.Revert(skill);
+        Assert.Equal(SkillRevertOutcome.HandEdited, refused.Outcome);
+        Assert.Contains("My own words.", File.ReadAllText(path), StringComparison.Ordinal);
+        Assert.Equal((false, SkillRecordText.RevertHandEditedError("haiku")), SkillRecordText.RevertText("haiku", refused, _time.LocalTimeZone));
+
+        // A later app write makes the latest change the app's again.
+        _time.Advance(TimeSpan.FromMinutes(1));
+        Editor(SkillActors.Model).Describe("update", "", "haiku", "New description.", null);
+        Assert.Null(_records.FactsOf(skill)!.HandEditedAt);
+    }
+
+    [Fact]
+    public void TurnUsed_RecordsEachLoadedSkill_WithTheErrorsAfterItsLoad_AndPreloadedOneWithNone()
+    {
+        Write(_roots.Profile, "haiku");
+        Write(_roots.Global, "pdf");
+        Reconcile();
+        var trace = new Llm.TurnTrace();
+        trace.Observe(new Llm.TurnEvent.ToolCall(LoadSkillTool.ToolName, "c1", "{}"));
+        trace.Observe(new Llm.TurnEvent.ToolResult(LoadSkillTool.ToolName, "c1", "<skill_content name=\"haiku\">\nx\n</skill_content>"));
+        trace.Observe(new Llm.TurnEvent.ToolCall("run_command", "c2", "{}"));
+        trace.Observe(new Llm.TurnEvent.ToolResult("run_command", "c2", "Error: exit 1"));
+        var catalog = new SkillCatalog(() => _roots);
+        catalog.Scan(external: false);
+
+        _records.TurnUsed(trace, catalog.Skills, 4);
+        _records.TurnUsed(trace, catalog.Skills, 5);
+        _records.Preloaded(catalog.Find("pdf")!);
+
+        Assert.Equal(new SkillUseFacts(2, 2, 2, _time.GetUtcNow()), _store.UseFacts(_store.Find(SkillScope.Profile, "neon", "haiku")!.Id));
+        Assert.Equal(new SkillUseFacts(1, 0, 0, _time.GetUtcNow()), _store.UseFacts(_store.Find(SkillScope.Global, "", "pdf")!.Id));
+        Assert.Equal("loaded 2 times across 2 sessions, 2 followed by errors; last loaded " + Sessions.SessionText.Moment(_time.GetUtcNow(), _time.LocalTimeZone), _records.UsageLine(catalog.Find("haiku")!, _time.LocalTimeZone));
+    }
+
+    [Fact]
+    public void Installed_KeepsTheOrigin_TheReplacedSkillMd_AndCountsTheReflectionsChangesSince()
+    {
+        string dir = Write(_roots.Profile, "pdf");
+        File.WriteAllText(Path.Combine(dir, SkillProvenance.FileName), new SkillProvenance { Repo = "owner/repo" }.ToJson());
+        _records.Installed(new SkillInstallResult(true, false, SkillScope.Profile, dir));
+        var skill = SkillOf("pdf");
+        Assert.Equal("installed from owner/repo", _records.UsageLine(skill, _time.LocalTimeZone));
+
+        _time.Advance(TimeSpan.FromMinutes(1));
+        Editor(SkillActors.Reflection).Describe("update", "", "pdf", null, "Reflected.");
+        Assert.Equal(1, _records.ReflectionChangesSinceInstall(skill));
+        Assert.EndsWith("; installed from owner/repo, changed by a reflection since", _records.UsageLine(skill, _time.LocalTimeZone), StringComparison.Ordinal);
+
+        _time.Advance(TimeSpan.FromMinutes(1));
+        _records.Installed(new SkillInstallResult(true, true, SkillScope.Profile, dir) { Previous = "the reflected text" });
+        Assert.Equal(0, _records.ReflectionChangesSinceInstall(skill));
+        var revision = _records.LatestRevision(skill)!;
+        Assert.Equal(("the reflected text", SkillActors.Install), (revision.Content, revision.Actor));
+        Assert.Equal("A reflection changed this skill 2× since it was installed; updating replaces that (/skills revert brings the SKILL.md back).", SkillRecordText.ChangedSinceInstallWarning(2));
+    }
+
+    [Fact]
+    public void ImportFrom_CopiesTheSessionStoresHistoryOnce_SkippingSkillsGoneSince()
+    {
+        Write(_roots.Profile, "haiku");
+        Reconcile();
+        using var sessions = new Sessions.SessionStore(Path.Combine(_dir, "profiles", "neon"), _time);
+        long id = sessions.Begin("t", "m")!.Value;
+        sessions.AppendTurn(id, "write a haiku", "Done.", 2, ["load_skill"], ["haiku", "gone"], 1, 1, 1, false);
+        sessions.RecordReflection(new Sessions.ReflectionRow(id, 1, false, Sessions.ReflectionRow.Learned, "haiku", Sessions.ReflectionRow.Updated, 1, 1, 1));
+        sessions.RecordReflection(new Sessions.ReflectionRow(id, 1, false, Sessions.ReflectionRow.Learned, "gone", Sessions.ReflectionRow.Created, 1, 1, 1));
+        var catalog = new SkillCatalog(() => _roots);
+        catalog.Scan(external: false);
+
+        Assert.Equal(2, _records.ImportFrom(sessions, catalog.Skills));
+        Assert.Equal(0, _records.ImportFrom(sessions, catalog.Skills));
+        var facts = _records.FactsOf(catalog.Find("haiku")!)!;
+        Assert.Equal(1, facts.ReflectionWrites);
+        Assert.Equal(new SkillUseFacts(1, 1, 1, _time.GetUtcNow()), facts.Uses);
+        Assert.Equal("imported-sessions:neon", SkillRecords.ImportFlag("neon"));
+        Assert.Equal("Skill records: imported 2 events from profile \"neon\"'s sessions.db", SkillRecordText.ImportedLogLine("neon", 2));
     }
 
     [Fact]
@@ -270,7 +478,7 @@ public class SkillRecordsTests : IDisposable
         Assert.Equal("Skills reconciled: 2 added, 1 removed, 0 modified (global + profile neon)", SkillRecordText.ReconciledLogLine(new SkillReconcile(2, 1, 0, 0), "neon"));
         Assert.Equal("Skills purge: 2 deleted, 0 failed, unused for 30 days", SkillRecordText.PurgeSummaryLogLine(2, 0, days));
         Assert.Equal("Skill purged: profile/haiku (last used never, modified 2026-08-01T14:05:00.0000000Z)", SkillRecordText.PurgedLogLine(never));
-        Assert.Equal(SkillInstallText.UsageError + ", or /skills purge list|commit <age>", SkillRecordText.SkillsUsageError);
+        Assert.Equal(SkillInstallText.UsageError + ", /skills purge list|commit <age>, or /skills revert <name>", SkillRecordText.SkillsUsageError);
         Assert.Equal(at, never.Reference);
         Assert.Equal(at, used.Reference);
     }

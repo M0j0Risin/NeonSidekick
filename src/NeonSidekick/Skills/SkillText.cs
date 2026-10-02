@@ -195,7 +195,19 @@ public static class SkillText
     public static string ExternalReadOnly(string name) =>
         $"Error: skill '{name}' exists in the external skills ({SkillRoots.ExternalDirectoryName}\\{SkillRoots.DirectoryName}), which this app never writes; edit it by hand or pick another name";
 
-    public static string EmptyDescription => "Error: description is empty; say what the skill does and when to use it";
+    /// <summary>A reflection's write refused for an installed skill under <c>Reflection installed skills</c> = <c>read-only</c> (2026-10-02). Pinned.</summary>
+    public static string InstalledReadOnly(string name, string origin) =>
+        $"Error: skill '{name}' was installed from {(string.IsNullOrWhiteSpace(origin) ? "a skill source" : origin)}, and a reflection leaves an installed skill as it is; to keep what these turns taught, create a companion skill (a new name) instead";
+
+    /// <summary>A reflection's rewrite refused for a skill it did not load first (2026-10-02). Pinned.</summary>
+    public static string LoadBeforeRewrite(string name) =>
+        $"Error: load skill '{name}' with load_skill before rewriting it, then keep what still holds";
+
+    /// <summary>A reflection's rewrite refused for a skill changed since its load served it (2026-10-02). Pinned.</summary>
+    public static string ChangedSinceLoad(string name) =>
+        $"Error: skill '{name}' changed since you loaded it; load it again and build on the new text";
+
+    public static string EmptyDescription =>"Error: description is empty; say what the skill does and when to use it";
 
     public static string DescriptionTooLong(int length) =>
         $"Error: the description is {length.ToString("N0", CultureInfo.InvariantCulture)} characters; the limit is {SkillFrontmatter.MaxDescriptionLength.ToString("N0", CultureInfo.InvariantCulture)}";
@@ -211,32 +223,45 @@ public static class SkillText
         $"Error: the SKILL.md of '{name}' ({SkillScopes.Name(scope)}) could not be read: {problem}; give both a description and instructions to rewrite it";
 
     /// <summary>
-    /// How the stored sessions used a skill, for the reflection's catalog and the <c>Skills › name</c>
-    /// page (2026-09-19): <c>loaded in 12 turns across 6 sessions, 4 with errors; last loaded 2026-09-18 14:05;
-    /// written by a reflection 2× (updated 2026-09-18 14:05)</c> — each part only with a fact behind
-    /// it, the parts joined by <c>; </c>; <see cref="NeverLoaded"/> when neither the usage nor a
-    /// reflection exists. Pinned.
+    /// What the skill records know of a skill, for the reflection's catalog and the <c>Skills › name</c> page (2026-09-19 over the
+    /// session store; over <c>skills.db</c> since 2026-10-02): <c>loaded 12 times across 6 sessions, 3 followed by errors; last loaded
+    /// 2026-09-18 14:05; written by a reflection 2× (updated 2026-09-18 14:05); edited by hand 2026-09-20 09:30; installed from
+    /// owner/repo, changed by a reflection since</c> — each part only with a fact behind it, the parts joined by <c>; </c>;
+    /// <see cref="NeverLoaded"/> when there is none. "Followed by errors" counts the turns with an error after the load. Pinned.
     /// </summary>
-    public static string UsageLine(SkillUsage? usage, ReflectionMark? mark, int writes, TimeZoneInfo zone)
+    public static string UsageLine(SkillFacts facts, TimeZoneInfo zone)
     {
+        ArgumentNullException.ThrowIfNull(facts);
         ArgumentNullException.ThrowIfNull(zone);
-        var parts = new List<string>(3);
-        if (usage is not null)
+        var parts = new List<string>(5);
+        if (facts.Uses is { } uses)
         {
-            parts.Add("loaded in " + Count(usage.Turns, "turn") + " across " + Count(usage.Sessions, "session") + (usage.WithErrors > 0 ? ", " + usage.WithErrors.ToString(CultureInfo.InvariantCulture) + " with errors" : ""));
-            parts.Add("last loaded " + SessionText.Moment(usage.LastAt, zone));
+            parts.Add("loaded " + Count(uses.Loads, "time") + (uses.Sessions > 0 ? " across " + Count(uses.Sessions, "session") : "")
+                + (uses.FollowedByErrors > 0 ? ", " + uses.FollowedByErrors.ToString(CultureInfo.InvariantCulture) + " followed by errors" : ""));
+            parts.Add("last loaded " + SessionText.Moment(uses.LastAt, zone));
         }
 
-        if (mark is not null && writes > 0)
+        if (facts.ReflectionWrites > 0 && facts.LastReflectionWrite is { } mark)
         {
-            parts.Add("written by a reflection " + writes.ToString(CultureInfo.InvariantCulture) + "× (" + mark.Action + " " + SessionText.Moment(mark.At, zone) + ")");
+            string action = mark.Kind == SkillEventKinds.Created ? "created" : "updated";
+            parts.Add("written by a reflection " + facts.ReflectionWrites.ToString(CultureInfo.InvariantCulture) + "× (" + action + " " + SessionText.Moment(mark.At, zone) + ")");
+        }
+
+        if (facts.HandEditedAt is { } edited)
+        {
+            parts.Add("edited by hand " + SessionText.Moment(edited, zone));
+        }
+
+        if (facts.InstalledFrom is { } origin)
+        {
+            parts.Add("installed from " + origin + (facts.ReflectionWritesSinceInstall > 0 ? ", changed by a reflection since" : ""));
         }
 
         return parts.Count == 0 ? NeverLoaded : string.Join("; ", parts);
     }
 
-    /// <summary>The usage line of a skill no stored turn loaded and no reflection wrote. Pinned.</summary>
-    public const string NeverLoaded = "never loaded in a stored session";
+    /// <summary>The usage line of a skill nothing loaded, wrote, edited or installed. Pinned.</summary>
+    public const string NeverLoaded = "never loaded";
 
     private static string Count(int value, string unit) => value.ToString(CultureInfo.InvariantCulture) + " " + unit + (value == 1 ? "" : "s");
 

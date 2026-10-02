@@ -23,7 +23,11 @@ public enum SkillInstallOption
 public sealed record SkillInstallCheck(SkillInstallOption Option, SkillScope? Scope = null);
 
 /// <summary>How an install ended: the scope and folder it went to, or the error.</summary>
-public sealed record SkillInstallResult(bool Ok, bool Updated, SkillScope Scope, string Directory, string? Error = null);
+public sealed record SkillInstallResult(bool Ok, bool Updated, SkillScope Scope, string Directory, string? Error = null)
+{
+    /// <summary>The SKILL.md an update replaced (2026-10-02, kept as a revision for <c>/skills revert</c>); null for a new install or one too long to keep.</summary>
+    public string? Previous { get; init; }
+}
 
 /// <summary>
 /// The file side of <c>/skills add</c> (2026-09-26), <see cref="SkillEditor"/>'s rules for a whole
@@ -126,8 +130,16 @@ public static class SkillInstaller
 
             File.WriteAllText(Path.Combine(stage, SkillProvenance.FileName), provenance.ToJson(), Utf8NoBom);
             Directory.CreateDirectory(root);
+            string? previous = null;
             if (exists)
             {
+                // What the update replaces, for the revision (2026-10-02): the SKILL.md alone, the supporting files go with the folder.
+                string old = Path.Combine(target, SkillCatalog.FileName);
+                if (File.Exists(old) && new FileInfo(old).Length <= SkillRecordStore.MaxRevisionChars)
+                {
+                    previous = WorkingDirectory.Decode(File.ReadAllBytes(old), out _);
+                }
+
                 parked = Path.Combine(parent, ".skill-old-" + Guid.NewGuid().ToString("N"));
                 Directory.Move(target, parked);
             }
@@ -144,7 +156,7 @@ public static class SkillInstaller
                 throw;
             }
 
-            return new SkillInstallResult(true, exists, scope, target);
+            return new SkillInstallResult(true, exists, scope, target) { Previous = previous };
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException or ArgumentException or InvalidDataException)
         {

@@ -48,6 +48,9 @@ public interface ISkillInstallHost
     void Installed(SkillInstallResult result)
     {
     }
+
+    /// <summary>How many times a reflection changed the installed skill <paramref name="name"/> in <paramref name="scope"/> since its install (2026-10-02, <see cref="SkillRecords.ReflectionChangesSinceInstall"/>): an update warns first. 0 by default.</summary>
+    int ReflectionChangesSinceInstall(SkillScope scope, string name) => 0;
 }
 
 /// <summary>
@@ -217,6 +220,12 @@ public sealed class SkillInstallFlow
                 case SkillInstallOption.ExternalReadOnly:
                     host.Error(SkillInstallText.ExternalReadOnlyError(candidate.Name));
                     return false;
+            }
+
+            // An update over what reflections changed says so before the question (2026-10-02, Reflection installed skills = allow-and-mark).
+            if (check.Option == SkillInstallOption.Update && check.Scope is { } updating && host.ReflectionChangesSinceInstall(updating, candidate.Name) is > 0 and var changes)
+            {
+                host.Warning(SkillRecordText.ChangedSinceInstallWarning(changes));
             }
 
             SkillScope scope;

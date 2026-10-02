@@ -718,6 +718,7 @@ public sealed class AppSettings : IDisposable
         ReflectionWindow = source.ReflectionWindow,
         ReflectionYieldsToTurns = source.ReflectionYieldsToTurns,
         ReflectionEditsSupportingFiles = source.ReflectionEditsSupportingFiles,
+        ReflectionInstalledSkills = source.ReflectionInstalledSkills,
         SkillCompactMode = source.SkillCompactMode,
         SkillHashMention = source.SkillHashMention,
         ToolsDisabled = [.. source.ToolsDisabled],

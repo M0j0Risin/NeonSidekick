@@ -9,6 +9,35 @@ public readonly record struct SkillReconcile(int Added, int Removed, int Modifie
 }
 
 /// <summary>
+/// What the skill records know of one skill (2026-10-02, <see cref="SkillRecords.FactsOf"/>), for the reflection's catalog and the Skills
+/// pane's caption: the turns' uses, how many times a reflection wrote it and its newest such write, when the user last changed it by hand
+/// (only while that is its latest change), the repository it was installed from and the reflections' writes since that install.
+/// </summary>
+public sealed record SkillFacts(SkillUseFacts? Uses, int ReflectionWrites, SkillEvent? LastReflectionWrite, DateTimeOffset? HandEditedAt, string? InstalledFrom, int ReflectionWritesSinceInstall)
+{
+    /// <summary>Nothing worth a line: never loaded, never written by a reflection, not edited by hand, not installed.</summary>
+    public bool IsEmpty => Uses is null && ReflectionWrites == 0 && HandEditedAt is null && InstalledFrom is null;
+}
+
+/// <summary>What a <see cref="SkillRecords.Revert"/> came to.</summary>
+public enum SkillRevertOutcome
+{
+    Reverted,
+
+    /// <summary>No earlier version is kept.</summary>
+    NoRevision,
+
+    /// <summary>The skill was edited by hand since the app last changed it: refused, the edit would be lost.</summary>
+    HandEdited,
+
+    /// <summary>The editor could not write it back; the edit result's detail says why.</summary>
+    Failed,
+}
+
+/// <summary>The outcome, the revision it read (null for none) and the editor's result when it wrote.</summary>
+public sealed record SkillRevert(SkillRevertOutcome Outcome, SkillRevision? Revision, SkillEditResult? Edit);
+
+/// <summary>
 /// The app's record of its skills (2026-09-30, the user's ask): when each was created, modified and last used, over
 /// <see cref="SkillRecordStore"/>. The writers tell it what they did:
 /// <list type="bullet">
@@ -24,6 +53,10 @@ public readonly record struct SkillReconcile(int Added, int Removed, int Modifie
 /// before a profile switch therefore records under the profile it wrote into. External skills are never recorded (the
 /// user's pick: the app treats that folder as read-only). Each change is a Debug line under <c>Skills</c>, and a reconcile
 /// that changed anything is one Info line.</para>
+/// <para>Since 2026-10-02 (the reflection audit) the records are also the skills' history: who wrote each change (the model, a
+/// reflection, the user by hand, an install), every turn that loaded a skill with the errors after the load, and the text each app write
+/// replaced (the revisions <see cref="Revert"/> puts back). The reflection reads its usage lines and its cooldown mark from here, so
+/// they survive a session purge and a rename, and work with <c>Session logging</c> off.</para>
 /// </summary>
 public sealed class SkillRecords
 {
@@ -43,6 +76,9 @@ public sealed class SkillRecords
 
     public SkillRecordStore Store => _store;
 
+    /// <summary>The zone the records' moments show in: the clock's.</summary>
+    public TimeZoneInfo Zone => _time.LocalTimeZone;
+
     /// <summary>The profile <paramref name="roots"/>' profile root belongs to: the name of the folder it sits in.</summary>
     public static string ProfileOf(SkillRoots roots)
     {
@@ -53,15 +89,20 @@ public sealed class SkillRecords
     /// <summary>The profile of the roots in force.</summary>
     public string CurrentProfile => ProfileOf(_roots());
 
+    /// <summary>The main chat's <c>skill_editor</c> result (the tool's listener): <see cref="Edited(SkillRoots, SkillEditResult, string, long?)"/> with the model as the actor.</summary>
+    public void Edited(SkillRoots roots, SkillEditResult result) => Edited(roots, result, SkillActors.Model);
+
     /// <summary>
-    /// A <c>skill_editor</c> result, the model's or a reflection's, written under <paramref name="roots"/>. A create is
-    /// <see cref="SkillRecordStore.Created"/>, and an update or a bundled file written is <see cref="SkillRecordStore.Modified"/>.
-    /// Every refusal is nothing. The folder is the result's name: the editor finds a skill by its folder.
+    /// A <c>skill_editor</c> result, the model's or a reflection's (<paramref name="actor"/>), written under <paramref name="roots"/>. A
+    /// create is <see cref="SkillRecordStore.Created"/>, and an update or a bundled file written is <see cref="SkillRecordStore.Modified"/>.
+    /// Since 2026-10-02 each write is an event too (the summary, or the file's path, as its detail) and, when the write replaced a file,
+    /// the text it held is a revision. Every refusal is nothing. The folder is the result's name: the editor finds a skill by its folder.
     /// </summary>
-    public void Edited(SkillRoots roots, SkillEditResult result)
+    public void Edited(SkillRoots roots, SkillEditResult result, string actor, long? sessionId = null)
     {
         ArgumentNullException.ThrowIfNull(roots);
         ArgumentNullException.ThrowIfNull(result);
+        ArgumentNullException.ThrowIfNull(actor);
         if (result.Scope == SkillScope.External || result.Name.Length == 0)
         {
             return;
@@ -69,41 +110,108 @@ public sealed class SkillRecords
 
         string profile = ProfileOf(roots);
         var now = _time.GetUtcNow();
+        string kind;
         switch (result.Outcome)
         {
             case SkillEditOutcome.Created:
-                _store.Created(result.Scope, profile, result.Name, result.Name, now);
+                _store.Created(result.Scope, profile, result.Name, result.Name, WrittenAt(roots, result.Scope, result.Name, now));
                 DiagnosticLog.Debug(SkillCatalog.Category, SkillRecordText.CreatedLogLine(result.Scope, result.Name));
+                kind = SkillEventKinds.Created;
                 break;
-            case SkillEditOutcome.Updated or SkillEditOutcome.FileWritten or SkillEditOutcome.FileEdited:
+            case SkillEditOutcome.Updated:
+                _store.Modified(result.Scope, profile, result.Name, result.Name, WrittenAt(roots, result.Scope, result.Name, now));
+                DiagnosticLog.Debug(SkillCatalog.Category, SkillRecordText.ModifiedLogLine(result.Scope, result.Name));
+                kind = SkillEventKinds.Updated;
+                break;
+            case SkillEditOutcome.FileWritten or SkillEditOutcome.FileEdited:
                 _store.Modified(result.Scope, profile, result.Name, result.Name, now);
                 DiagnosticLog.Debug(SkillCatalog.Category, SkillRecordText.ModifiedLogLine(result.Scope, result.Name));
+                kind = SkillEventKinds.File;
                 break;
+            default:
+                return;
+        }
+
+        string detail = result.Path.Length == 0 ? result.Summary : result.Summary.Length == 0 ? result.Path : result.Path + ": " + result.Summary;
+        _store.AddEvent(result.Scope, profile, result.Name, kind, actor, profile, now, sessionId, detail: detail);
+        if (kind != SkillEventKinds.Created)
+        {
+            KeepRevision(result.Scope, profile, result.Name, result.Path.Length == 0 ? SkillCatalog.FileName : result.Path, result, actor, now);
         }
     }
 
-    /// <summary><c>/skills add</c> put a skill in <paramref name="directory"/>: created, or modified when it replaced one.</summary>
-    public void Installed(SkillScope scope, string directory, bool updated)
+    /// <summary>The replaced text as a revision: a file the write created is one with no text; an old text too long to keep is none (a Debug line).</summary>
+    private void KeepRevision(SkillScope scope, string profile, string folder, string path, SkillEditResult result, string actor, DateTimeOffset at)
     {
-        ArgumentNullException.ThrowIfNull(directory);
-        if (scope == SkillScope.External)
+        if (result.Existed && result.Previous is null)
+        {
+            DiagnosticLog.Debug(SkillCatalog.Category, SkillRecordText.RevisionSkippedLogLine(scope, folder, path));
+            return;
+        }
+
+        _store.AddRevision(scope, profile, folder, path, result.Existed ? result.Previous : null, actor, at);
+    }
+
+    /// <summary>
+    /// The moment an app write of a SKILL.md is recorded at: now, or the file's own write time when the clock is behind it, so the
+    /// reconcile never takes the app's own write for a hand edit (its test is the file being newer than the row).
+    /// </summary>
+    private static DateTimeOffset WrittenAt(SkillRoots roots, SkillScope scope, string folder, DateTimeOffset now)
+    {
+        try
+        {
+            string file = Path.Combine(roots.Of(scope), folder, SkillCatalog.FileName);
+            if (File.Exists(file))
+            {
+                var written = new DateTimeOffset(File.GetLastWriteTimeUtc(file), TimeSpan.Zero);
+                return written > now ? written : now;
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            // The clock's moment stands.
+        }
+
+        return now;
+    }
+
+    /// <summary><c>/skills add</c> put a skill in <paramref name="directory"/>: created, or modified when it replaced one.</summary>
+    public void Installed(SkillScope scope, string directory, bool updated) => Installed(new SkillInstallResult(true, updated, scope, directory));
+
+    /// <summary>
+    /// <c>/skills add</c> put a skill in place: created, or modified when it replaced one; an <c>installed</c> event carrying the origin
+    /// (2026-10-02), and on an update the replaced SKILL.md as a revision.
+    /// </summary>
+    public void Installed(SkillInstallResult result)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+        if (result.Scope == SkillScope.External)
         {
             return;
         }
 
-        string folder = Path.GetFileName(Path.TrimEndingDirectorySeparator(directory));
-        string profile = CurrentProfile;
+        var roots = _roots();
+        string folder = Path.GetFileName(Path.TrimEndingDirectorySeparator(result.Directory));
+        string profile = ProfileOf(roots);
         var now = _time.GetUtcNow();
-        if (updated)
+        var at = WrittenAt(roots, result.Scope, folder, now);
+        if (result.Updated)
         {
-            _store.Modified(scope, profile, folder, folder, now);
-            DiagnosticLog.Debug(SkillCatalog.Category, SkillRecordText.ModifiedLogLine(scope, folder));
+            _store.Modified(result.Scope, profile, folder, folder, at);
+            DiagnosticLog.Debug(SkillCatalog.Category, SkillRecordText.ModifiedLogLine(result.Scope, folder));
+            if (result.Previous is not null)
+            {
+                _store.AddRevision(result.Scope, profile, folder, SkillCatalog.FileName, result.Previous, SkillActors.Install, now);
+            }
         }
         else
         {
-            _store.Created(scope, profile, folder, folder, now);
-            DiagnosticLog.Debug(SkillCatalog.Category, SkillRecordText.CreatedLogLine(scope, folder));
+            _store.Created(result.Scope, profile, folder, folder, at);
+            DiagnosticLog.Debug(SkillCatalog.Category, SkillRecordText.CreatedLogLine(result.Scope, folder));
         }
+
+        string origin = SkillProvenance.Read(result.Directory)?.Repo ?? "";
+        _store.AddEvent(result.Scope, profile, folder, SkillEventKinds.Installed, SkillActors.Install, profile, now, detail: origin);
     }
 
     /// <summary>The skill's instructions were loaded (<c>load_skill</c>, a <c>/botchat</c> preload): last used now.</summary>
@@ -117,6 +225,180 @@ public sealed class SkillRecords
 
         _store.Used(skill.Scope, CurrentProfile, skill.FolderName, skill.Name, _time.GetUtcNow());
         DiagnosticLog.Debug(SkillCatalog.Category, SkillRecordText.UsedLogLine(skill.Scope, skill.FolderName));
+    }
+
+    /// <summary>A <c>/botchat</c> preload (2026-10-02): last used now, and a <c>used</c> event with no error count (no turn of the model's followed it).</summary>
+    public void Preloaded(Skill skill)
+    {
+        ArgumentNullException.ThrowIfNull(skill);
+        Used(skill);
+        if (skill.Scope != SkillScope.External)
+        {
+            string profile = CurrentProfile;
+            _store.AddEvent(skill.Scope, profile, skill.FolderName, SkillEventKinds.Used, SkillActors.User, profile, _time.GetUtcNow());
+        }
+    }
+
+    /// <summary>
+    /// A turn's end (2026-10-02): one <c>used</c> event per skill the model loaded in it, found in <paramref name="skills"/> by name, with the
+    /// error results after its first load (<see cref="Llm.TurnTrace.ErrorsAfterLoad"/>) and the session the turn went into
+    /// (<paramref name="sessionId"/>, null with <c>Session logging</c> off). A name the catalog no longer has, or an external skill, is skipped.
+    /// </summary>
+    public void TurnUsed(Llm.TurnTrace trace, IEnumerable<Skill> skills, long? sessionId)
+    {
+        ArgumentNullException.ThrowIfNull(trace);
+        ArgumentNullException.ThrowIfNull(skills);
+        if (trace.ErrorsAfterLoad.Count == 0)
+        {
+            return;
+        }
+
+        string profile = CurrentProfile;
+        var now = _time.GetUtcNow();
+        var known = skills.ToList();
+        foreach (var (name, errors) in trace.ErrorsAfterLoad)
+        {
+            if (known.Find(s => string.Equals(s.Name, name, StringComparison.Ordinal)) is { Scope: not SkillScope.External } skill)
+            {
+                _store.AddEvent(skill.Scope, profile, skill.FolderName, SkillEventKinds.Used, SkillActors.Model, profile, now, sessionId, errors);
+            }
+        }
+    }
+
+    /// <summary>
+    /// What the records know of <paramref name="skill"/> (2026-10-02): its uses, the reflections' writes, a hand edit as its latest
+    /// change, where it was installed from and whether a reflection changed it since. Null for an external skill or one with no row.
+    /// </summary>
+    public SkillFacts? FactsOf(Skill skill)
+    {
+        ArgumentNullException.ThrowIfNull(skill);
+        if (skill.Scope == SkillScope.External || _store.Find(skill.Scope, CurrentProfile, skill.FolderName) is not { } row)
+        {
+            return null;
+        }
+
+        var events = _store.Events(row.Id);
+        var reflectionWrites = events.Where(e => e.Actor == SkillActors.Reflection && SkillEventKinds.Written.Contains(e.Kind)).ToList();
+        var lastChange = events.LastOrDefault(e => SkillEventKinds.Written.Contains(e.Kind) || e.Kind is SkillEventKinds.HandEdit or SkillEventKinds.Installed or SkillEventKinds.Reverted);
+        var installed = events.LastOrDefault(e => e.Kind == SkillEventKinds.Installed);
+        string? origin = SkillProvenance.Read(skill.Directory)?.Repo;
+        int sinceInstall = origin is null ? 0 : reflectionWrites.Count(e => installed is null || e.At >= installed.At);
+        return new SkillFacts(
+            _store.UseFacts(row.Id),
+            reflectionWrites.Count,
+            reflectionWrites.LastOrDefault(),
+            lastChange is { Kind: SkillEventKinds.HandEdit } ? lastChange.At : null,
+            string.IsNullOrEmpty(origin) ? null : origin,
+            sinceInstall);
+    }
+
+    /// <summary>The usage line of <paramref name="skill"/> (<see cref="SkillText.UsageLine(SkillFacts, TimeZoneInfo)"/>), null when the records know nothing of it.</summary>
+    public string? UsageLine(Skill skill, TimeZoneInfo zone)
+    {
+        ArgumentNullException.ThrowIfNull(zone);
+        return FactsOf(skill) is { IsEmpty: false } facts ? SkillText.UsageLine(facts, zone) : null;
+    }
+
+    /// <summary>The newest skill a reflection wrote in the current profile's view (the cooldown's mark), followed through a rename; null for none.</summary>
+    public SkillWriteMark? LastReflectionWrite() => _store.LastWrite(CurrentProfile, SkillActors.Reflection);
+
+    /// <summary>How many times a reflection changed the installed skill <paramref name="skill"/> since its install (the update page's warning).</summary>
+    public int ReflectionChangesSinceInstall(Skill skill) => FactsOf(skill)?.ReflectionWritesSinceInstall ?? 0;
+
+    /// <summary>The newest revision of <paramref name="skill"/>, or null when there is none.</summary>
+    public SkillRevision? LatestRevision(Skill skill)
+    {
+        ArgumentNullException.ThrowIfNull(skill);
+        return skill.Scope == SkillScope.External || _store.Find(skill.Scope, CurrentProfile, skill.FolderName) is not { } row
+            ? null
+            : _store.Revisions(row.Id).FirstOrDefault();
+    }
+
+    /// <summary>
+    /// <c>/skills revert</c> (2026-10-02): the newest revision of <paramref name="skill"/> put back (<see cref="SkillEditor.Restore"/>) and
+    /// taken off the list, so the next revert goes one further back; the row's modified moment moves and a <c>reverted</c> event says
+    /// what came back. Refused while the skill's latest change is a hand edit (the reconcile's, so the caller reconciles first): that
+    /// text was never the app's to keep, and a revert would lose it for good.
+    /// </summary>
+    public SkillRevert Revert(Skill skill)
+    {
+        ArgumentNullException.ThrowIfNull(skill);
+        if (LatestRevision(skill) is not { } revision)
+        {
+            return new SkillRevert(SkillRevertOutcome.NoRevision, null, null);
+        }
+
+        if (FactsOf(skill) is { HandEditedAt: not null })
+        {
+            return new SkillRevert(SkillRevertOutcome.HandEdited, revision, null);
+        }
+
+        var roots = _roots();
+        var result = SkillEditor.Restore(roots, skill.Scope, skill.Directory, skill.FolderName, revision.Path, revision.Content);
+        if (result.Outcome is not (SkillEditOutcome.Updated or SkillEditOutcome.FileWritten))
+        {
+            return new SkillRevert(SkillRevertOutcome.Failed, revision, result);
+        }
+
+        string profile = ProfileOf(roots);
+        var now = _time.GetUtcNow();
+        bool skillFile = string.Equals(revision.Path, SkillCatalog.FileName, StringComparison.OrdinalIgnoreCase);
+        _store.Modified(skill.Scope, profile, skill.FolderName, skill.Name, skillFile ? WrittenAt(roots, skill.Scope, skill.FolderName, now) : now);
+        _store.DeleteRevision(revision.Id);
+        _store.AddEvent(skill.Scope, profile, skill.FolderName, SkillEventKinds.Reverted, SkillActors.User, profile, now,
+            detail: revision.Path + " as before a " + revision.Actor + " write at " + Sessions.SessionStore.Stamp(revision.At));
+        DiagnosticLog.Info(SkillCatalog.Category, SkillRecordText.RevertedLogLine(skill.Scope, skill.FolderName, revision));
+        return new SkillRevert(SkillRevertOutcome.Reverted, revision, result);
+    }
+
+    /// <summary>The <c>meta</c> flag of the one-time import for <paramref name="profile"/>.</summary>
+    public static string ImportFlag(string profile) => "imported-sessions:" + profile;
+
+    /// <summary>
+    /// The one-time import of a profile's <c>sessions.db</c> into the events (2026-10-02, the skills' history moving to <c>skills.db</c>):
+    /// every reflection that wrote a skill as a <c>created</c>/<c>updated</c> event of the reflection, and every stored turn that loaded a
+    /// skill as a <c>used</c> event (the turn's errors standing in for the errors after the load, which the old rows never kept). Names are
+    /// found among <paramref name="skills"/>; a skill gone since is skipped. Once per profile (<see cref="ImportFlag"/>); nothing while
+    /// either store is off, and nothing (no flag either) while the profile has no <c>sessions.db</c> yet. The count of events added.
+    /// </summary>
+    public int ImportFrom(Sessions.SessionStore sessions, IEnumerable<Skill> skills)
+    {
+        ArgumentNullException.ThrowIfNull(sessions);
+        ArgumentNullException.ThrowIfNull(skills);
+        string profile = CurrentProfile;
+        string flag = ImportFlag(profile);
+        // A sessions.db that is not there has nothing to give, and opening it would make one (Session logging off writes no file).
+        if (!File.Exists(sessions.FilePath) || !_store.Available || !sessions.Available || _store.HasFlag(flag))
+        {
+            return 0;
+        }
+
+        var known = skills.Where(s => s.Scope != SkillScope.External).ToList();
+        Skill? Of(string name) => known.Find(s => string.Equals(s.Name, name, StringComparison.Ordinal));
+        int added = 0;
+        foreach (var (at, name, action, sessionId) in sessions.LearnedReflections())
+        {
+            if (Of(name) is { } skill)
+            {
+                string kind = action == Sessions.ReflectionRow.Created ? SkillEventKinds.Created : SkillEventKinds.Updated;
+                added += _store.AddEvent(skill.Scope, profile, skill.FolderName, kind, SkillActors.Reflection, profile, at, sessionId) ? 1 : 0;
+            }
+        }
+
+        foreach (var (at, sessionId, names, errors) in sessions.SkillLoads())
+        {
+            foreach (string name in names.Distinct(StringComparer.Ordinal))
+            {
+                if (Of(name) is { } skill)
+                {
+                    added += _store.AddEvent(skill.Scope, profile, skill.FolderName, SkillEventKinds.Used, SkillActors.Model, profile, at, sessionId, errors) ? 1 : 0;
+                }
+            }
+        }
+
+        _store.SetFlag(flag);
+        DiagnosticLog.Info(SkillCatalog.Category, SkillRecordText.ImportedLogLine(profile, added));
+        return added;
     }
 
     /// <summary>The pane moved <paramref name="skill"/> to the <paramref name="to"/> root: the row follows, keeping its moments.</summary>
@@ -233,6 +515,8 @@ public sealed class SkillRecords
                     {
                         modified++;
                         DiagnosticLog.Debug(SkillCatalog.Category, SkillRecordText.ModifiedLogLine(scope, folder));
+                        // An edit the app did not make (2026-10-02): the reflection is told the text is the user's.
+                        _store.AddEvent(row.Id, SkillEventKinds.HandEdit, SkillActors.User, profile, written);
                     }
                 }
             }

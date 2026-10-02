@@ -1113,7 +1113,7 @@ internal sealed partial class ChatScreen
             Flow = _flow,
         };
         // Built once: the roots ride the facts, so a profile switch needs no rebind; the Options rows through the settings menu (2026-09-19).
-        _skillsMenu = new SkillsMenu(SkillsFacts, settings, _menu, _flow, _menuPane, _input, _openFile, name => SkillsMenu.UsageCaption(_sessions, name, _effective().SessionLogging, _time.LocalTimeZone), _skillRecords);
+        _skillsMenu = new SkillsMenu(SkillsFacts, settings, _menu, _flow, _menuPane, _input, _openFile, name => SkillsMenu.UsageCaption(_skillRecords, _catalog.Find(name), _time.LocalTimeZone), _skillRecords, RevertSkill);
         // The /tools pane (2026-09-19): the tool list over the live facts, the Ask / Files / Web rows through the settings menu.
         _toolsMenu = new ToolsMenu(ToolsFacts, settings, _menu, _flow, _menuPane);
         // The /mcp pane (2026-09-20): the servers and their tools over the session's snapshot, the Options rows through the settings menu.
@@ -2379,7 +2379,7 @@ internal sealed partial class ChatScreen
     /// while a reflection runs (<see cref="_pendingLearn"/>). <c>Files</c>: the supporting-file actions when
     /// <c>Reflection edit supporting files</c> was on at the decision (2026-09-27), null otherwise.
     /// </summary>
-    private sealed record PendingLearn(ReflectionMaterial Material, bool Forced, SkillRoots Roots, bool External, ReasoningEffort Effort, int MaxRequests, CancellationToken Token, SessionEvidence? Sessions, SessionStore? Store, long? SessionId, int TurnOrdinal, SkillFileAccess? Files = null)
+    private sealed record PendingLearn(ReflectionMaterial Material, bool Forced, SkillRoots Roots, bool External, ReasoningEffort Effort, int MaxRequests, CancellationToken Token, SessionEvidence? Sessions, SessionStore? Store, long? SessionId, int TurnOrdinal, SkillFileAccess? Files = null, ReflectionInstalledPolicy Installed = ReflectionInstalledPolicy.ReadOnly)
     {
         /// <summary>The queued line: the turn's or the pass's — the one progress line (a start prints nothing since later still on 2026-09-19).</summary>
         public string QueuedNotice => Material is ReflectionMaterial.Sessions ? LearnSessionsQueuedNotice : LearnQueuedNotice;
@@ -2473,13 +2473,15 @@ internal sealed partial class ChatScreen
             return;
         }
 
+        // A hand edit since the last reconcile is known to the reflection's usage lines (2026-10-02).
+        ReconcileSkills();
         // The evidence (2026-09-19): the earlier sessions found for the turn's user line, read here
-        // on the turn task, and the store itself for the tool and the catalog's usage lines.
+        // on the turn task, and the store itself for the tool.
         var evidence = SessionEvidenceFor(effective);
         var (query, result) = evidence is null ? (null, null) : SkillLearner.Evidence(evidence, LastUserLine(turn));
         var material = new ReflectionMaterial.Turn(turn, focus, query, result);
         var pending = new PendingLearn(material, forced, _catalog.Roots, effective.ExternalSkills, ReflectionReasoning.Resolve(effective), ReflectionMaxRequests.Resolve(effective), cancellationToken,
-            evidence, effective.SessionLogging ? _sessions : null, _sessionId, _sessionId is { } sessionId ? _sessions.Summary(sessionId)?.Turns ?? 0 : 0, ReflectionFiles(effective));
+            evidence, effective.SessionLogging ? _sessions : null, _sessionId, _sessionId is { } sessionId ? _sessions.Summary(sessionId)?.Turns ?? 0 : 0, ReflectionFiles(effective), ReflectionInstalledSkills.Resolve(effective));
         string log = tally + (result is null ? "" : "; with the earlier sessions found for the turn");
         if (QueueOrStart(pending, log))
         {
@@ -2514,16 +2516,19 @@ internal sealed partial class ChatScreen
     /// Whether the newest reflection that wrote a skill is younger than <c>Reflection cooldown (minutes)</c>
     /// and <c>Reflection cooldown mode</c> says that holds this one back: <c>all-skills</c> always,
     /// <c>last-written-skill</c> only when <paramref name="tally"/> (the turns since the last
-    /// reflection) loaded that skill. Nothing without the store (<c>Session logging</c> off) or at 0.
+    /// reflection) loaded that skill. Nothing at 0. The mark is the skill records' since 2026-10-02 (the session store's until then,
+    /// so <c>Session logging</c> off meant no cooldown and a session purge forgot it); the skill's name is its name now, a rename followed.
     /// </summary>
     private bool CoolingDown(AppSettingsData effective, TurnTrace tally, out string detail)
     {
         detail = "";
         var cooldown = ReflectionCooldown.Resolve(effective);
-        if (!effective.SessionLogging || cooldown <= TimeSpan.Zero || _sessions.LastReflectionWrite() is not { } mark)
+        if (cooldown <= TimeSpan.Zero || _skillRecords.LastReflectionWrite() is not { } write)
         {
             return false;
         }
+
+        var mark = new ReflectionMark(write.Event.At, write.Skill.Name, write.Event.Kind == SkillEventKinds.Created ? ReflectionRow.Created : ReflectionRow.Updated);
 
         var age = _time.GetUtcNow() - mark.At;
         if (age >= cooldown)
@@ -2676,7 +2681,9 @@ internal sealed partial class ChatScreen
     /// </summary>
     private void StartLearn(PendingLearn pending)
     {
-        var job = _session.StartLearning((a, token) => SkillLearner.RunAsync(a, pending.Material, pending.Roots, pending.External, pending.Effort, token, pending.MaxRequests, pending.Sessions, pending.Files), pending.Token);
+        // A guard of its own each run (2026-10-02): a paused reflection run again loads afresh before it may rewrite.
+        var guard = new ReflectionWriteGuard(() => pending.Roots, pending.External, pending.Installed);
+        var job = _session.StartLearning((a, token) => SkillLearner.RunAsync(a, pending.Material, pending.Roots, pending.External, pending.Effort, token, pending.MaxRequests, pending.Sessions, pending.Files, _skillRecords, guard), pending.Token);
         if (job is null)
         {
             return;
@@ -2692,10 +2699,11 @@ internal sealed partial class ChatScreen
                 store.RecordReflection(row);
             }
 
-            // The skill it wrote into the skill records (2026-09-30), under the roots the reflection wrote to.
+            // The skill it wrote into the skill records (2026-09-30), under the roots the reflection wrote to; as the reflection's,
+            // with the text it replaced kept as a revision (2026-10-02).
             if (result.Edit is { } written)
             {
-                _skillRecords.Edited(pending.Roots, written);
+                _skillRecords.Edited(pending.Roots, written, SkillActors.Reflection, pending.SessionId);
             }
 
             if (LearnNotice(result) is { } notice)
@@ -2812,9 +2820,10 @@ internal sealed partial class ChatScreen
             return;
         }
 
+        ReconcileSkills();
         var material = new ReflectionMaterial.Sessions(records, action.Query);
         var evidence = new SessionEvidence(_sessions, _effective, _sessionId, _time);
-        var pending = new PendingLearn(material, true, _catalog.Roots, effective.ExternalSkills, ReflectionReasoning.Resolve(effective), ReflectionMaxRequests.Resolve(effective), cancellationToken, evidence, _sessions, null, 0, ReflectionFiles(effective));
+        var pending = new PendingLearn(material, true, _catalog.Roots, effective.ExternalSkills, ReflectionReasoning.Resolve(effective), ReflectionMaxRequests.Resolve(effective), cancellationToken, evidence, _sessions, null, 0, ReflectionFiles(effective), ReflectionInstalledSkills.Resolve(effective));
         QueueOrStart(pending, action.Query is null ? "the last " + SessionText.Sessions(records.Count) : SessionText.Sessions(records.Count) + " matching " + LogText.Quoted(action.Query));
     }
 
@@ -3597,7 +3606,14 @@ internal sealed partial class ChatScreen
                     ], argText);
                 }
 
-                return argText.Contains(' ', StringComparison.Ordinal) ? [] : MentionCompleter.Matches([new(SkillInstallText.AddWord, SkillInstallText.AddNote), new(SkillRecordText.PurgeWord, SkillRecordText.PurgeNote)], argText);
+                // revert (2026-10-02): the catalog's names after it.
+                if (argText.StartsWith(SkillRecordText.RevertWord + " ", StringComparison.OrdinalIgnoreCase))
+                {
+                    return argText.Count(c => c == ' ') > 1 || sources.Skills is null ? [] : MentionCompleter.Matches(
+                        sources.Skills().Select(item => new CompletionItem(SkillRecordText.RevertWord + " " + item.Text, item.Note)).ToList(), argText);
+                }
+
+                return argText.Contains(' ', StringComparison.Ordinal) ? [] : MentionCompleter.Matches([new(SkillInstallText.AddWord, SkillInstallText.AddNote), new(SkillRecordText.PurgeWord, SkillRecordText.PurgeNote), new(SkillRecordText.RevertWord, SkillRecordText.RevertNote)], argText);
 
             case SlashCommand.HomeAssistant:
                 // The verbs, then the rooms, names, scenes and TV words of the last snapshot (2026-09-28).
@@ -3858,12 +3874,16 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// The skill records brought in line with the folders (2026-09-30, <see cref="SkillRecords.Reconcile"/>): at startup, after
-    /// every profile switch, and before a purge. The catalog is scanned first, for the frontmatter names.
+    /// every profile switch, and before a purge; since 2026-10-02 before every reflection too, so a hand edit made since is known to
+    /// it, and with the profile's one-time import of its <c>sessions.db</c> history (<see cref="SkillRecords.ImportFrom"/>). The catalog
+    /// is scanned first, for the frontmatter names.
     /// </summary>
     private void ReconcileSkills()
     {
         _catalog.Scan(_effective().ExternalSkills);
-        _skillRecords.Reconcile(_catalog.Skills.Concat(_catalog.Shadowed));
+        var known = _catalog.Skills.Concat(_catalog.Shadowed).ToList();
+        _skillRecords.Reconcile(known);
+        _skillRecords.ImportFrom(_sessions, known);
     }
 
     /// <summary>
@@ -11318,7 +11338,7 @@ internal sealed partial class ChatScreen
 
             contents.Add(content.ToString());
             names.Add(skill.Name);
-            _skillRecords.Used(skill);   // a preload is a use (2026-09-30, the skill records' last use)
+            _skillRecords.Preloaded(skill);   // a preload is a use (2026-09-30, the skill records' last use; an event too since 2026-10-02)
         }
 
         return (names, BotChat.PreloadedSkillsSection(contents), anyLeftOut);
@@ -12596,6 +12616,8 @@ internal sealed partial class ChatScreen
             if (outcome != TurnOutcome.Withdrawn && bot is null)
             {
                 LogTurn(assistant, text, reply.ToString(), trace, cancelled, effective, cancellationToken);
+                // The skills the turn loaded, each with the errors after its load (2026-10-02, the skill records' uses).
+                _skillRecords.TurnUsed(trace, _catalog.Skills, effective.SessionLogging ? _sessionId : null);
             }
 
             DrainDiagnostics();

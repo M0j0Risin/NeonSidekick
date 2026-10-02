@@ -425,7 +425,9 @@ public class SkillLearnerTests : IDisposable
         Assert.Equal(SkillLearner.SessionsOpening + SkillLearner.InstructionBody, SkillLearner.SessionsPassInstruction);
         Assert.StartsWith("You are reviewing several earlier conversations between a user and Neon", SkillLearner.SessionsOpening, StringComparison.Ordinal);
         Assert.StartsWith("The earlier sessions found for this turn close the transcript, as a session_manager search:", SkillLearner.SessionsInstruction, StringComparison.Ordinal);
-        Assert.Contains("A skill's usage line says how the stored sessions used it", SkillLearner.SessionsInstruction, StringComparison.Ordinal);
+        Assert.DoesNotContain("usage line", SkillLearner.SessionsInstruction, StringComparison.Ordinal);   // the usage sentence is its own since 2026-10-02
+        Assert.StartsWith("A skill's usage line says what is known of it: a skill loaded often and still followed by errors needs its steps fixed", SkillLearner.UsageInstruction, StringComparison.Ordinal);
+        Assert.Contains("A skill edited by hand carries the user's own wording", SkillLearner.UsageInstruction, StringComparison.Ordinal);
         Assert.Equal("Reflect on the sessions above. Find the procedure that recurs or the pitfall met more than once; update or create ONE skill for it, or answer nothing.", SkillLearner.SessionsRequest(null));
         Assert.EndsWith(" The sessions were found by searching for: docker", SkillLearner.SessionsRequest(" docker "), StringComparison.Ordinal);
     }
@@ -448,20 +450,17 @@ public class SkillLearnerTests : IDisposable
     [Fact]
     public void Build_WithASeededSearch_AddsTheSessionsInstruction_ThePair_AndTheUsageLines()
     {
-        using var store = Store();
-        store.RecordReflection(new ReflectionRow(1, 1, false, ReflectionRow.Learned, "docker-deploy", ReflectionRow.Created, 2, 100, 10));
         var skills = new List<Skill> { new("docker-deploy", "Deploys the stack.", SkillScope.Profile, "d"), new("unused", "Nothing loads it.", SkillScope.Global, "u") };
-        var usage = SkillLearner.UsageLines(Evidence(store), skills);
+        // The lines come from the skill records since 2026-10-02 (SkillRecordsTests reads them); here, one as they give it.
+        var usage = new Dictionary<string, string> { ["docker-deploy"] = "loaded 1 time across 1 session, 1 followed by errors" };
         var turn = Turn(new ChatMessage(ChatRole.User, "deploy the docker stack again"), new ChatMessage(ChatRole.Assistant, "Done."));
         var material = new ReflectionMaterial.Turn(turn, null, "deploy docker stack again", SessionText.NoHits("deploy docker stack again"));
 
         var request = SkillLearner.Build(material, skills, usage, _time.LocalTimeZone);
 
         Assert.Equal(6, request.Count);
-        Assert.Equal(SkillLearner.Instruction + "\n\n" + SkillLearner.SessionsInstruction + "\n\n" + SkillsPrompt.Catalog(skills, usage), request[0].Text);
-        string moment = SessionText.Moment(_time.GetUtcNow(), _time.LocalTimeZone);
-        Assert.Contains("<usage>loaded in 1 turn across 1 session, 1 with errors; last loaded " + moment + "; written by a reflection 1× (created " + moment + ")</usage>", request[0].Text, StringComparison.Ordinal);
-        Assert.Single(usage);   // the unused skill has no line
+        Assert.Equal(SkillLearner.Instruction + "\n\n" + SkillLearner.SessionsInstruction + "\n\n" + SkillLearner.UsageInstruction + "\n\n" + SkillsPrompt.Catalog(skills, usage), request[0].Text);
+        Assert.Contains("<usage>loaded 1 time across 1 session, 1 followed by errors</usage>", request[0].Text, StringComparison.Ordinal);
         Assert.Equal("deploy the docker stack again", request[1].Text);
         Assert.Equal("Done.", request[2].Text);
         var call = Assert.IsType<FunctionCallContent>(Assert.Single(request[3].Contents));
@@ -474,10 +473,13 @@ public class SkillLearnerTests : IDisposable
         // The seeded call round-trips through the session store's JSON shape (the AOT wire shape).
         Assert.Equal("{\"action\":\"search\",\"query\":\"deploy docker stack again\"}", Assistant.SerializeArguments(call.Arguments));
 
-        // Without a seeded search the bare shape stands, whatever the usage lines.
+        // Without a seeded search the bare shape stands; the usage sentence rides with the lines whatever the sessions say.
         var bare = SkillLearner.Build(new ReflectionMaterial.Turn(turn, null), skills, usage, _time.LocalTimeZone);
         Assert.Equal(4, bare.Count);
-        Assert.Equal(SkillLearner.Instruction + "\n\n" + SkillsPrompt.Catalog(skills, usage), bare[0].Text);
+        Assert.Equal(SkillLearner.Instruction + "\n\n" + SkillLearner.UsageInstruction + "\n\n" + SkillsPrompt.Catalog(skills, usage), bare[0].Text);
+        // No line at all: no usage sentence either.
+        var plain = SkillLearner.Build(new ReflectionMaterial.Turn(turn, null), skills, new Dictionary<string, string>(), _time.LocalTimeZone);
+        Assert.Equal(SkillLearner.Instruction + "\n\n" + SkillsPrompt.Catalog(skills), plain[0].Text);
     }
 
     [Fact]
@@ -503,15 +505,24 @@ public class SkillLearnerTests : IDisposable
         var (query, result) = SkillLearner.Evidence(Evidence(store), "deploy the docker stack again");
         _client.Enqueue(FakeChatClient.Call("r1", SessionManagerTool.ToolName, new Dictionary<string, object?> { [SessionManagerTool.ActionArgument] = SessionManagerTool.ReadAction, [SessionManagerTool.IdArgument] = 1 }));
         _client.EnqueueText("nothing");
+        // The usage lines come from the skill records (2026-10-02): the store's history imported once, as the screen does at a profile's load.
+        using var skillStore = new SkillRecordStore(_dir);
+        var records = new SkillRecords(skillStore, () => _roots, _time);
+        var catalog = new SkillCatalog(() => _roots);
+        catalog.Scan(external: false);
+        records.Reconcile(catalog.Skills);
+        Assert.Equal(1, records.ImportFrom(store, catalog.Skills));
+        Assert.Equal(0, records.ImportFrom(store, catalog.Skills));   // once per profile
 
-        var outcome = await SkillLearner.RunAsync(_assistant, new ReflectionMaterial.Turn(turn, null, query, result), _roots, false, ReasoningEffort.None, CancellationToken.None, 4, Evidence(store));
+        var outcome = await SkillLearner.RunAsync(_assistant, new ReflectionMaterial.Turn(turn, null, query, result), _roots, false, ReasoningEffort.None, CancellationToken.None, 4, Evidence(store), records: records);
 
         Assert.Equal(SkillLearnOutcome.Nothing, outcome.Outcome);
         Assert.Equal([LoadSkillTool.ToolName, SkillEditorTool.ToolName, SessionManagerTool.ToolName], _client.Options[0]!.Tools!.Select(t => t.Name));
         var read = _client.Requests[1].SelectMany(m => m.Contents).OfType<FunctionResultContent>().Single(r => r.CallId == "r1");
         Assert.StartsWith("Session #1 \"earlier deploy\"", (string)read.Result!, StringComparison.Ordinal);
         Assert.Contains("the compose file needed the network first", (string)read.Result!, StringComparison.Ordinal);
-        Assert.Contains("<usage>loaded in 1 turn across 1 session, 1 with errors", _client.Requests[0][0].Text, StringComparison.Ordinal);
+        Assert.Contains("<usage>loaded 1 time across 1 session, 1 followed by errors", _client.Requests[0][0].Text, StringComparison.Ordinal);
+        Assert.Contains(SkillLearner.UsageInstruction, _client.Requests[0][0].Text, StringComparison.Ordinal);
 
         // Without evidence: the two tools, the bare instruction.
         _client.EnqueueText("nothing");

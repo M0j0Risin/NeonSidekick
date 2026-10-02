@@ -22,7 +22,8 @@ namespace NeonSidekick.App;
 /// a skill's row (a loaded one, or a shadowed one — the duplicate is the thing to clean up) opens the
 /// scope page under the list: <c>profile</c>, <c>global</c>, <c>rename</c> (2026-09-21, the user's ask), <c>edit</c>
 /// (2026-09-23, the user's ask: it opens the skill's <c>SKILL.md</c> in the editor, the status line saying so, and took
-/// over from <c>/skills edit &lt;name&gt;</c>, which went) and <c>delete</c> (always, since 2026-09-23, the user's call;
+/// over from <c>/skills edit &lt;name&gt;</c>, which went), <c>revert</c> (2026-10-02, only while the skill records keep an earlier version:
+/// <c>/skills revert</c>'s twin) and <c>delete</c> (always, since 2026-09-23, the user's call;
 /// behind the <c>Allow skill delete</c> setting from 2026-09-18 until then, which went), the cursor on the scope it is in. Picking the other root moves the folder
 /// (<see cref="SkillEditor.Move"/>) after a yes/no confirmation kept under the list; picking
 /// <c>delete</c> removes it (<see cref="SkillEditor.Delete"/>) after one; the scope it is in already
@@ -74,6 +75,7 @@ internal sealed class SkillsMenu
     private readonly Action<string> _openFile;
     private readonly Func<string, string?> _usage;
     private readonly SkillRecords? _records;
+    private readonly Func<Skill, SkillRevert>? _revert;
 
     /// <param name="facts">The catalog as of a fresh scan and the rest the tabs show; read when the list opens and again after every change.</param>
     /// <param name="settings">The store the Options tab's rows show and save to.</param>
@@ -84,9 +86,11 @@ internal sealed class SkillsMenu
     /// <param name="openFile">Opens a file in the user's editor: the <c>edit</c> row's <c>SKILL.md</c> (2026-09-23; the screen's <c>/profile edit</c> seam).</param>
     /// <param name="usage">The scope page's caption for a skill by name (<see cref="UsageCaption"/>; the session store's usage line, 2026-09-19), null for none — read when the page opens; tests pass nothing.</param>
     /// <param name="records">The skill records (2026-09-30): a move, a rename and a delete keep them in step. Null for none.</param>
-    public SkillsMenu(Func<SkillsFacts> facts, AppSettings settings, SettingsMenu menu, INoticeSink transcript, MenuPane pane, InputLine input, Action<string> openFile, Func<string, string?>? usage = null, SkillRecords? records = null)
+    /// <param name="revert">The <c>revert</c> row's act (2026-10-02, the screen's: a reconcile, then <see cref="SkillRecords.Revert"/>); null = no row.</param>
+    public SkillsMenu(Func<SkillsFacts> facts, AppSettings settings, SettingsMenu menu, INoticeSink transcript, MenuPane pane, InputLine input, Action<string> openFile, Func<string, string?>? usage = null, SkillRecords? records = null, Func<Skill, SkillRevert>? revert = null)
     {
         _records = records;
+        _revert = revert;
         _facts = facts ?? throw new ArgumentNullException(nameof(facts));
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));
         _menu = menu ?? throw new ArgumentNullException(nameof(menu));
@@ -98,24 +102,20 @@ internal sealed class SkillsMenu
     }
 
     /// <summary>
-    /// The scope page's caption (2026-09-19): how the stored sessions used the skill, in the store's
-    /// words (<see cref="SkillText.UsageLine"/>); null while <c>Session logging</c> is off, so the
-    /// page shows none. Read on open, three light queries.
+    /// The scope page's caption (2026-09-19): what is known of the skill, in the records' words (<see cref="SkillText.UsageLine"/>; the
+    /// session store's, and none while <c>Session logging</c> was off, until 2026-10-02); <see cref="SkillText.NeverLoaded"/> for a skill
+    /// the records know nothing of, null for no skill or an external one (never recorded). Read on open, a few light queries.
     /// </summary>
-    public static string? UsageCaption(SessionStore store, string name, bool logging, TimeZoneInfo zone)
+    public static string? UsageCaption(SkillRecords records, Skill? skill, TimeZoneInfo zone)
     {
-        ArgumentNullException.ThrowIfNull(store);
-        ArgumentNullException.ThrowIfNull(name);
+        ArgumentNullException.ThrowIfNull(records);
         ArgumentNullException.ThrowIfNull(zone);
-        if (!logging)
+        if (skill is null || skill.Scope == SkillScope.External)
         {
             return null;
         }
 
-        var usage = store.SkillUsageOf(name);
-        var mark = store.LastReflectionOf(name);
-        int writes = mark is null ? 0 : store.ReflectionWrites(name);
-        return SkillText.UsageLine(usage, mark, writes, zone);
+        return records.UsageLine(skill, zone) ?? SkillText.NeverLoaded;
     }
 
     /// <summary>Where a notice goes: the pane's status line while the list is open there, else the transcript.</summary>
@@ -138,6 +138,9 @@ internal sealed class SkillsMenu
 
     /// <summary>The edit row (2026-09-23): the word padded to nine, what it does dim after it.</summary>
     public static string EditRow => Markup.Escape(EditWord.PadRight(9)) + Theme.DimMarkup("open its SKILL.md in your editor");
+
+    /// <summary>The scope page's row before delete while the records keep an earlier version (2026-10-02, <c>/skills revert</c>'s twin). Pinned.</summary>
+    public static string RevertRow => Markup.Escape(SkillRecordText.RevertWord.PadRight(9)) + Theme.DimMarkup("put it back as it was before its last change");
 
     /// <summary>What the status line says once the edit row opened the file (<c>/skills edit</c>'s words until 2026-09-23). Pinned.</summary>
     public static string EditOpenedNotice(string name, string path) => $"({NoticeGlyphs.Skill}opened skill \"{name}\"'s SKILL.md in your editor: {path})";
@@ -349,6 +352,13 @@ internal sealed class SkillsMenu
         var rows = ScopeRows.Select(scope => ScopeRow(scope, roots)).ToList();
         rows.Add(RenameRow);
         rows.Add(EditRow);
+        // The revert row only while an earlier version is kept (2026-10-02).
+        int revertRow = _revert is not null && _records?.LatestRevision(skill) is not null ? rows.Count : -1;
+        if (revertRow >= 0)
+        {
+            rows.Add(RevertRow);
+        }
+
         rows.Add(DeleteRow);
 
         var page = new MenuPage(ScopeTitle(skill.Name), rows, ScopeKeys) { Caption = _usage(skill.Name) };
@@ -366,6 +376,19 @@ internal sealed class SkillsMenu
         if (row == ScopeRows.Count + 1)
         {
             Edit(skill);
+            return false;
+        }
+
+        if (row == revertRow)
+        {
+            var (ok, text) = SkillRecordText.RevertText(skill.Name, _revert!(skill), _records!.Zone);
+            if (ok)
+            {
+                Sink.Notice(text);
+                return true;
+            }
+
+            Sink.Error(text);
             return false;
         }
 

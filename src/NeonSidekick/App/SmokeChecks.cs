@@ -829,15 +829,21 @@ public static partial class SmokeChecks
                 int purged = store.PurgeAll();
                 bool telemetry = loaded is { Turns: [{ ToolNames: ["read_file", "patch_file"], SkillsLoaded: ["smoke-skill"], Errors: 1 }] }
                     && usage is { Turns: 1, Sessions: 1, WithErrors: 1 } && mark is { Skill: "smoke-skill" } && store.LastReflectionWrite() is null;
-                // The skill records (2026-09-30): skills.db on the same SQLite, a row created, used, read back and deleted.
+                // The skill records (2026-09-30): skills.db on the same SQLite, a row created, used, read back and deleted; since
+                // 2026-10-02 an event and a revision on it too, gone with the row (the foreign keys on).
                 bool records;
                 using (var skills = new Skills.SkillRecordStore(dir))
                 {
                     var at = DateTimeOffset.UtcNow;
                     skills.Created(Skills.SkillScope.Global, "", "smoke-skill", "smoke-skill", at);
                     skills.Used(Skills.SkillScope.Global, "", "SMOKE-SKILL", "smoke-skill", at);
+                    skills.AddEvent(Skills.SkillScope.Global, "", "smoke-skill", Skills.SkillEventKinds.Used, Skills.SkillActors.Model, "smoke", at, 1, 0);
+                    skills.AddRevision(Skills.SkillScope.Global, "", "smoke-skill", Skills.SkillCatalog.FileName, "before", Skills.SkillActors.Model, at);
                     var rows = skills.All();
-                    records = rows is [{ Folder: "smoke-skill", LastUsed: not null, Category: null }] && skills.Delete(Skills.SkillScope.Global, "", "smoke-skill") && skills.All().Count == 0;
+                    long row = rows.Count == 1 ? rows[0].Id : -1;
+                    bool kept = skills.Events(row).Count == 1 && skills.Revisions(row) is [{ Content: "before" }];
+                    records = rows is [{ Folder: "smoke-skill", LastUsed: not null, Category: null }] && kept && skills.Delete(Skills.SkillScope.Global, "", "smoke-skill")
+                        && skills.All().Count == 0 && skills.Events(row).Count == 0 && skills.Revisions(row).Count == 0;
                 }
 
                 bool ok = hits.Count == 1 && hits[0].Turn == 1 && any.Count == 1 && restored == 2 && purged == 1 && telemetry && records;
@@ -852,7 +858,7 @@ public static partial class SmokeChecks
                 }
             }
 
-            return new SmokeCheck(name, true, $"SQLite {version}; 1 FTS5 hit, 1 OR hit, a skill's usage and a reflection recorded, 2 messages restored, 1 purged, skills.db written and read");
+            return new SmokeCheck(name, true, $"SQLite {version}; 1 FTS5 hit, 1 OR hit, a skill's usage and a reflection recorded, 2 messages restored, 1 purged, skills.db written and read with its history");
         }
         catch (Exception ex)
         {

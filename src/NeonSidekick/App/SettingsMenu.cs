@@ -742,6 +742,9 @@ public enum SettingsField
 
     /// <summary>Typed: the most characters of table a <c>sql_query</c>, <c>oracle_query</c> or <c>mysql_query</c> answer carries, 1,000 to 1,000,000 (<see cref="Settings.AppSettingsData.QueryResultMaxChars"/>). On the SQL tab under the timeout, the three engines' one row (2026-10-01, the user's ask; the file tools' 32,000 until then); no reconnect (read at each call).</summary>
     QueryResultMaxChars,
+
+    /// <summary>A picker: what a reflection may do to a skill installed with <c>/skills add</c> — <c>read-only</c> / <c>allow-and-mark</c> (<see cref="Settings.AppSettingsData.ReflectionInstalledSkills"/>). The Reflection tab of <c>/skills</c>' last row (2026-10-02, the user's call in the reflection audit); no reconnect (read when a reflection is decided). Last in the enum, as every newcomer.</summary>
+    ReflectionInstalledSkills,
 }
 
 /// <summary>The tabs of <c>/settings</c> on the pane, in strip order (General, Embedded, LLM, TTS, STT, Sessions, Botchat — the user's order, 2026-09-29; Sessions right after General — the user's order, 2026-09-18 — until then; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
@@ -1077,7 +1080,7 @@ internal sealed partial class SettingsMenu
     public static readonly IReadOnlyList<IReadOnlyList<SettingsField>> SkillsTabFields =
     [
         [SettingsField.AgentSkills, SettingsField.ExternalSkills, SettingsField.ProjectFile, SettingsField.SkillCompactMode, SettingsField.SkillHashMention],
-        [SettingsField.ReflectionAutoLearn, SettingsField.ReflectionReasoning, SettingsField.ReflectionWindow, SettingsField.ReflectionMinToolCalls, SettingsField.ReflectionMaxRequests, SettingsField.ReflectionCooldownMinutes, SettingsField.ReflectionCooldownMode, SettingsField.ReflectionIncludesSessions, SettingsField.ReflectionYieldsToTurns, SettingsField.ReflectionEditsSupportingFiles],
+        [SettingsField.ReflectionAutoLearn, SettingsField.ReflectionReasoning, SettingsField.ReflectionWindow, SettingsField.ReflectionMinToolCalls, SettingsField.ReflectionMaxRequests, SettingsField.ReflectionCooldownMinutes, SettingsField.ReflectionCooldownMode, SettingsField.ReflectionIncludesSessions, SettingsField.ReflectionYieldsToTurns, SettingsField.ReflectionEditsSupportingFiles, SettingsField.ReflectionInstalledSkills],
     ];
 
     /// <summary>
@@ -1699,6 +1702,7 @@ internal sealed partial class SettingsMenu
         SettingsField.ReflectionIncludesSessions => "Reflection includes sessions",
         SettingsField.ReflectionYieldsToTurns => "Reflection yields to turns",
         SettingsField.ReflectionEditsSupportingFiles => "Reflection edit supporting files",   // the user's name (2026-09-27)
+        SettingsField.ReflectionInstalledSkills => "Reflection installed skills",
         SettingsField.HideExitAutocomplete => "Hide /exit autocomplete",
         SettingsField.CommandTypoIntercept => "Command typo intercept",
         SettingsField.KeepCommandHistory => "Keep command history",
@@ -1955,6 +1959,7 @@ internal sealed partial class SettingsMenu
             SettingsField.ReflectionMaxRequests => Requests(data.ReflectionMaxRequests),
             SettingsField.ReflectionCooldownMinutes => Minutes(data.ReflectionCooldownMinutes),
             SettingsField.ReflectionCooldownMode => data.ReflectionCooldownMode,
+            SettingsField.ReflectionInstalledSkills => data.ReflectionInstalledSkills,
             SettingsField.ReflectionIncludesSessions => OnOff(data.ReflectionIncludesSessions),
             SettingsField.ReflectionYieldsToTurns => OnOff(data.ReflectionYieldsToTurns),
             SettingsField.ReflectionEditsSupportingFiles => OnOff(data.ReflectionEditsSupportingFiles),
@@ -3384,6 +3389,11 @@ internal sealed partial class SettingsMenu
         if (field == SettingsField.ReflectionCooldownMode)
         {
             return await PickReflectionCooldownModeAsync(saved, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (field == SettingsField.ReflectionInstalledSkills)
+        {
+            return await PickReflectionInstalledSkillsAsync(saved, cancellationToken).ConfigureAwait(false);
         }
 
         if (field == SettingsField.WebBrowserMode)
@@ -4966,6 +4976,25 @@ internal sealed partial class SettingsMenu
 
         string name = Skills.ReflectionCooldownMode.Names[index];
         Apply(SettingsField.ReflectionCooldownMode, d => d.ReflectionCooldownMode = name);
+        return true;
+    }
+
+    /// <summary>A <c>Reflection installed skills</c> choice and its hint (2026-10-02), the cooldown mode's shape. Pinned.</summary>
+    public static string ReflectionInstalledSkillsLabel(string name) =>
+        Markup.Escape(name.PadRight(20)) + Theme.DimMarkup(Skills.ReflectionInstalledSkills.Describe(name));
+
+    /// <summary>The installed-skills picker under the settings list: one <see cref="ReflectionInstalledSkillsLabel"/> row per <see cref="Skills.ReflectionInstalledSkills.Names"/> entry, the saved one under the cursor.</summary>
+    private async Task<bool> PickReflectionInstalledSkillsAsync(AppSettingsData saved, CancellationToken cancellationToken)
+    {
+        var page = new MenuPage(Crumb(FieldName(SettingsField.ReflectionInstalledSkills)), Skills.ReflectionInstalledSkills.Names.Select(ReflectionInstalledSkillsLabel).ToList(), PickKeys);
+        int? picked = await PickAsync(page, Array.IndexOf(Skills.ReflectionInstalledSkills.Names, saved.ReflectionInstalledSkills), cancellationToken).ConfigureAwait(false);
+        if (picked is not { } index)
+        {
+            return Unchanged();
+        }
+
+        string name = Skills.ReflectionInstalledSkills.Names[index];
+        Apply(SettingsField.ReflectionInstalledSkills, d => d.ReflectionInstalledSkills = name);
         return true;
     }
 

@@ -17112,7 +17112,7 @@ public partial class ChatScreenTests : IDisposable
 
         Assert.Contains("  · Offered\n  ·   haiku  profile  Writes haiku. Use when asked for one.\n  · Reflection\n", output);   // Reflection right after Offered since 2026-09-22
         Assert.Contains("  · Options\n  ·   Agent skills: on\n  ·   Use external skills (.agents\\skills): off\n  ·   Project file: on\n", output);   // the Options section last (2026-09-22; between Offered and Reflection from 2026-09-19), the Project file row among it since 2026-10-01
-        Assert.Contains("  · Reflection\n  ·   Reflection (auto-learn): off\n  ·   Reflection reasoning: none\n  ·   Reflection window: 3 turns\n  ·   Reflection min tool calls: 4 tool calls\n  ·   Reflection max requests: 4 requests\n  ·   Reflection cooldown (minutes): off\n  ·   Reflection cooldown mode: last-written-skill\n  ·   Reflection includes sessions: off\n  ·   Reflection yields to turns: off\n  ·   Reflection edit supporting files: off\n  · Options\n", output);   // the fixture turns the auto-learn off, the verbose lines on, the cooldown and the sessions evidence off
+        Assert.Contains("  · Reflection\n  ·   Reflection (auto-learn): off\n  ·   Reflection reasoning: none\n  ·   Reflection window: 3 turns\n  ·   Reflection min tool calls: 4 tool calls\n  ·   Reflection max requests: 4 requests\n  ·   Reflection cooldown (minutes): off\n  ·   Reflection cooldown mode: last-written-skill\n  ·   Reflection includes sessions: off\n  ·   Reflection yields to turns: off\n  ·   Reflection edit supporting files: off\n  ·   Reflection installed skills: read-only\n  · Options\n", output);   // the fixture turns the auto-learn off, the verbose lines on, the cooldown and the sessions evidence off
         Assert.DoesNotContain("  · Project\n", output);   // the Project section, the toggle row alone from later on 2026-09-19, went on 2026-10-01
         Assert.DoesNotContain("Roots", output);
         Assert.DoesNotContain("Working directory", output);
@@ -18388,6 +18388,8 @@ public partial class ChatScreenTests : IDisposable
         long earlier = SeedSession("what time is it in Tokyo", "Late.");
         PutSkill(ProfileSkills, "clock-check");
         EnqueueFiveCallTurn();
+        // The reflection reads the skill before it rewrites it: its guard refuses a blind rewrite (2026-10-02).
+        _chat.Enqueue(FakeChatClient.Call("r0", LoadSkillTool.ToolName, new Dictionary<string, object?> { ["name"] = "clock-check" }));
         _chat.Enqueue(FakeChatClient.Call("r1", SkillEditorTool.ToolName, new Dictionary<string, object?>
         {
             [SkillEditorTool.ActionArgument] = SkillEditorTool.UpdateAction,
@@ -18410,12 +18412,107 @@ public partial class ChatScreenTests : IDisposable
         Assert.StartsWith(SessionText.SearchHeader("what time twice", 1) + "\n#" + earlier + " · ", (string)seeded.Result!, StringComparison.Ordinal);
         Assert.Equal(SkillLearner.Request(null), reflection[^1].Text);
         Assert.Equal([LoadSkillTool.ToolName, SkillEditorTool.ToolName, SessionManagerTool.ToolName], _chat.Options[2]!.Tools!.Select(t => t.Name));
-        // The next reflection would carry the usage line: the row is in the store.
+        // The next reflection would carry the usage line: the write is in the skill records (2026-10-02), and the text it
+        // replaced is a revision; the session store keeps its row of the reflection as before.
         using var store = OpenSessions();
         Assert.Equal(("clock-check", ReflectionRow.Updated), store.LastReflectionOf("clock-check") is { } mark ? (mark.Skill, mark.Action) : default);
-        Assert.Equal("written by a reflection 1× (updated " + SessionText.Moment(_time.GetUtcNow(), _time.LocalTimeZone) + ")", SkillsMenu.UsageCaption(store, "clock-check", true, _time.LocalTimeZone));
-        Assert.Equal(SkillText.NeverLoaded, SkillsMenu.UsageCaption(store, "nothing", true, _time.LocalTimeZone));
-        Assert.Null(SkillsMenu.UsageCaption(store, "clock-check", false, _time.LocalTimeZone));
+        var (records, catalog) = OpenSkillHistory();
+        using (records.Store)
+        {
+            var skill = catalog.Find("clock-check")!;
+            Assert.Equal("written by a reflection 1× (updated " + SessionText.Moment(_time.GetUtcNow(), _time.LocalTimeZone) + ")", SkillsMenu.UsageCaption(records, skill, _time.LocalTimeZone));
+            Assert.Null(SkillsMenu.UsageCaption(records, null, _time.LocalTimeZone));
+            var revision = records.LatestRevision(skill);
+            Assert.NotNull(revision);
+            Assert.Equal((SkillCatalog.FileName, SkillActors.Reflection), (revision.Path, revision.Actor));
+            Assert.DoesNotContain("1. Better.", revision.Content, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
+    public async Task AutoLearn_ABlindRewrite_IsRefusedByTheGuard_AndTheSkillIsKept()
+    {
+        // The reflection's write guard (2026-10-02): an update of the instructions with no load_skill before it is an Error the
+        // model reads; it may load and try again within its requests. Here it gives up, and the skill stays as it was.
+        _settings.Update(d => { d.TtsOutput = false; d.ReflectionAutoLearn = true; });
+        PutSkill(ProfileSkills, "clock-check");
+        string before = File.ReadAllText(Path.Combine(ProfileSkills, "clock-check", SkillCatalog.FileName));
+        EnqueueFiveCallTurn();
+        _chat.Enqueue(FakeChatClient.Call("r1", SkillEditorTool.ToolName, new Dictionary<string, object?>
+        {
+            [SkillEditorTool.ActionArgument] = SkillEditorTool.UpdateAction,
+            [SkillEditorTool.NameArgument] = "clock-check",
+            [SkillEditorTool.InstructionsArgument] = "1. Blind.",
+        }));
+        _chat.EnqueueText("nothing");
+        var input = Scripted();
+        int step = 0;
+        input.OnWait = () =>
+        {
+            switch (step)
+            {
+                case 0: step++; PushLine(input, "what time is it, twice"); break;
+                case 1:
+                    if (_chat.Requests.Count >= 4 && _session.Learning is { IsCompleted: true }) { step++; PushLine(input, "/exit"); }
+                    break;
+            }
+        };
+
+        await RunAsync();
+
+        var refused = _chat.Requests[3][^1].Contents.OfType<FunctionResultContent>().Single();
+        Assert.Equal(SkillText.LoadBeforeRewrite("clock-check"), (string)refused.Result!);
+        Assert.Equal(before, File.ReadAllText(Path.Combine(ProfileSkills, "clock-check", SkillCatalog.FileName)));
+    }
+
+    [Fact]
+    public async Task SkillsRevert_PutsTheLastVersionBack_ThenSaysNothingIsKept()
+    {
+        // /skills revert (2026-10-02): the main chat's update kept the text it replaced; the revert writes it back.
+        _settings.Update(d => d.TtsOutput = false);
+        PutSkill(ProfileSkills, "clock-check");
+        string path = Path.Combine(ProfileSkills, "clock-check", SkillCatalog.FileName);
+        string before = File.ReadAllText(path);
+        _chat.Enqueue(FakeChatClient.Call("u1", SkillEditorTool.ToolName, new Dictionary<string, object?>
+        {
+            [SkillEditorTool.ActionArgument] = SkillEditorTool.UpdateAction,
+            [SkillEditorTool.NameArgument] = "clock-check",
+            [SkillEditorTool.InstructionsArgument] = "1. Changed.",
+        }));
+        _chat.EnqueueText("Changed it.");
+        var input = Scripted();
+        int step = 0;
+        input.OnWait = () =>
+        {
+            switch (step)
+            {
+                case 0: step++; PushLine(input, "change the clock skill"); break;
+                case 1:
+                    if (Output.Contains("Changed it.", StringComparison.Ordinal)) { step++; PushLine(input, "/skills revert clock-check"); }
+                    break;
+                case 2:
+                    if (Output.Contains("is back as it was", StringComparison.Ordinal)) { step++; PushLine(input, "/skills revert clock-check"); }
+                    break;
+                case 3:
+                    if (Output.Contains("Nothing to revert", StringComparison.Ordinal)) { step++; PushLine(input, "/exit"); }
+                    break;
+            }
+        };
+
+        string output = await RunAsync();
+
+        Assert.Contains("(↩️ clock-check: SKILL.md is back as it was before the model's change at ", output);
+        Assert.Contains(SkillRecordText.NoRevisionError("clock-check"), output);
+        Assert.Equal(before, File.ReadAllText(path));
+    }
+
+    /// <summary>The skill records as the screen keeps them, over a fresh store on the same file, and a catalog of the roots.</summary>
+    private (SkillRecords Records, SkillCatalog Catalog) OpenSkillHistory()
+    {
+        var roots = new SkillRoots(ProfileSkills, GlobalSkills, ExternalSkills);
+        var catalog = new SkillCatalog(() => roots);
+        catalog.Scan(external: false);
+        return (new SkillRecords(new SkillRecordStore(_settings.StorageDirectory), () => roots, _time), catalog);
     }
 
     [Fact]
@@ -19671,7 +19768,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Empty(ChatScreen.ArgumentItems("/persona", "copy ghost ", sources));
         // /skill took nothing from later on 2026-09-18 (the catalog listed under it from 2026-09-16 until then); edit, then the catalog after it, from 2026-09-21
         // until 2026-09-23 (the scope page's edit row since): nothing again until add came on 2026-09-26, the one word.
-        Assert.Equal([new CompletionItem(SkillInstallText.AddWord, SkillInstallText.AddNote), new CompletionItem(SkillRecordText.PurgeWord, SkillRecordText.PurgeNote)], ChatScreen.ArgumentItems("/skills", "", sources));   // purge 2026-09-30
+        Assert.Equal([new CompletionItem(SkillInstallText.AddWord, SkillInstallText.AddNote), new CompletionItem(SkillRecordText.PurgeWord, SkillRecordText.PurgeNote), new CompletionItem(SkillRecordText.RevertWord, SkillRecordText.RevertNote)], ChatScreen.ArgumentItems("/skills", "", sources));   // purge 2026-09-30, revert 2026-10-02
         Assert.Equal([new CompletionItem("purge list", SkillRecordText.ListNote), new CompletionItem("purge commit", SkillRecordText.CommitNote)], ChatScreen.ArgumentItems("/skills", "purge ", sources));
         Assert.Equal([new CompletionItem("purge commit", SkillRecordText.CommitNote)], ChatScreen.ArgumentItems("/skills", "purge c", sources));
         Assert.Empty(ChatScreen.ArgumentItems("/skills", "purge list 3", sources));   // the age is free text

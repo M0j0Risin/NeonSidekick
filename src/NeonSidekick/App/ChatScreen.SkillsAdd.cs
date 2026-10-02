@@ -30,6 +30,12 @@ internal sealed partial class ChatScreen
         }
 
         string[] parts = args.Split(' ', 2, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (parts.Length > 0 && parts[0].Equals(SkillRecordText.RevertWord, StringComparison.OrdinalIgnoreCase))
+        {
+            HandleSkillRevert(parts.Length < 2 ? "" : parts[1]);
+            return;
+        }
+
         if (!parts[0].Equals(SkillInstallText.AddWord, StringComparison.OrdinalIgnoreCase) || parts.Length < 2)
         {
             _transcript.Error(SkillRecordText.SkillsUsageError);
@@ -37,6 +43,45 @@ internal sealed partial class ChatScreen
         }
 
         await _skillInstall.RunAsync(parts[1], new ScreenSkillHost(this), cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// <c>/skills revert &lt;name&gt;</c> (2026-10-02, the reflection audit): the skill put back as it was before its last change the app
+    /// made (<see cref="RevertSkill"/>), the notice saying what came back; a name the catalog lacks, nothing kept, or a hand edit since
+    /// is an error. External skills are never recorded, so never reverted.
+    /// </summary>
+    private void HandleSkillRevert(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            _transcript.Error(SkillRecordText.RevertUsageError);
+            return;
+        }
+
+        _catalog.Scan(_effective().ExternalSkills);
+        if (_catalog.Find(name.Trim()) is not { Scope: not SkillScope.External } skill)
+        {
+            _transcript.Error(SkillRecordText.RevertUnknownError(name.Trim()));
+            return;
+        }
+
+        var (ok, text) = SkillRecordText.RevertText(skill.Name, RevertSkill(skill), _time.LocalTimeZone);
+        if (ok)
+        {
+            _transcript.Notice(text);
+            _catalog.Scan(_effective().ExternalSkills);
+        }
+        else
+        {
+            _transcript.Error(text);
+        }
+    }
+
+    /// <summary>The revert itself, the command's and the pane's: a reconcile first, so a hand edit since is known and refuses it.</summary>
+    private SkillRevert RevertSkill(Skill skill)
+    {
+        ReconcileSkills();
+        return _skillRecords.Revert(skill);
     }
 
     /// <summary>The flow's host on the screen.</summary>
@@ -100,6 +145,9 @@ internal sealed partial class ChatScreen
 
         public void Rescan() => screen._catalog.Scan(screen._effective().ExternalSkills);
 
-        public void Installed(SkillInstallResult result) => screen._skillRecords.Installed(result.Scope, result.Directory, result.Updated);
+        public void Installed(SkillInstallResult result) => screen._skillRecords.Installed(result);
+
+        public int ReflectionChangesSinceInstall(SkillScope scope, string name) =>
+            screen._catalog.Find(name) is { } skill && skill.Scope == scope ? screen._skillRecords.ReflectionChangesSinceInstall(skill) : 0;
     }
 }

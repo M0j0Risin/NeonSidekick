@@ -933,6 +933,16 @@ public sealed class AppSettingsData
     public bool ReflectionEditsSupportingFiles { get; set; }
 
     /// <summary>
+    /// What a reflection may do to a skill installed with <c>/skills add</c> (<c>Skills.ReflectionInstalledSkills</c>, 2026-10-02, the
+    /// user's call in the reflection audit): <c>read-only</c> (the default) refuses its <c>skill_editor</c> any change to one and asks for a
+    /// companion skill instead, so a later update from the same origin stays clean; <c>allow-and-mark</c> lets it write, the skill records
+    /// keep the change, and the install's update page warns that updating replaces it. The main chat and <c>/skills revert</c> are
+    /// unaffected. Read when a reflection is decided, no reconnect; the Reflection tab of <c>/skills</c>, last row, labelled
+    /// <c>Reflection installed skills</c>. No variable.
+    /// </summary>
+    public string ReflectionInstalledSkills { get; set; } = Skills.ReflectionInstalledSkills.Default;
+
+    /// <summary>
     /// How many model requests one reflection may make before it is given up as exhausted
     /// (<c>Skills.ReflectionMaxRequests</c>; a load or two, then the write — the reflection's own
     /// cap, never <see cref="LlmMaxToolIterations"/>, the turn's). <see cref="MinReflectionMaxRequests"/>

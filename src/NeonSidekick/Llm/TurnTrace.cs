@@ -36,6 +36,14 @@ public sealed class TurnTrace
     /// <summary>The skills the model loaded itself, in order, for the log line.</summary>
     public IReadOnlyList<string> LoadedSkills => _loaded;
 
+    private readonly Dictionary<string, int> _errorsAfter = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Each skill the model loaded, by name, and the error results that came after its first load (2026-10-02, the reflection
+    /// audit: a turn's errors before the load say nothing about the skill). What the skill records' <c>used</c> event keeps.
+    /// </summary>
+    public IReadOnlyDictionary<string, int> ErrorsAfterLoad => _errorsAfter;
+
     /// <summary>The distinct names of the model's own calls in first-call order (seeded pairs excluded) — the session store's <c>tool_names</c> (2026-09-19).</summary>
     public IReadOnlyList<string> ToolNames => _names;
 
@@ -72,6 +80,10 @@ public sealed class TurnTrace
                 {
                     Errors++;
                     Recovered = false;
+                    foreach (string loaded in _errorsAfter.Keys.ToList())
+                    {
+                        _errorsAfter[loaded]++;
+                    }
                 }
                 else
                 {
@@ -87,6 +99,7 @@ public sealed class TurnTrace
                     else if (string.Equals(result.Name, LoadSkillTool.ToolName, StringComparison.Ordinal) && LoadedName(result.Text) is { } name)
                     {
                         _loaded.Add(name);
+                        _errorsAfter.TryAdd(name, 0);
                     }
                 }
 
@@ -117,6 +130,11 @@ public sealed class TurnTrace
 
         WroteSkill |= turn.WroteSkill;
         _loaded.AddRange(turn._loaded);
+        foreach (var (name, errors) in turn._errorsAfter)
+        {
+            _errorsAfter[name] = _errorsAfter.GetValueOrDefault(name) + errors;
+        }
+
         foreach (string name in turn._names)
         {
             if (!_names.Contains(name, StringComparer.Ordinal))

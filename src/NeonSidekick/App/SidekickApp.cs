@@ -1564,7 +1564,7 @@ public sealed class SidekickApp
         {
         }
 
-        public void Installed(Skills.SkillInstallResult result) => app._headlessSkillRecords?.Installed(result.Scope, result.Directory, result.Updated);
+        public void Installed(Skills.SkillInstallResult result) => app._headlessSkillRecords?.Installed(result);
     }
 
     /// <summary>

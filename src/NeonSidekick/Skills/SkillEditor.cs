@@ -53,7 +53,18 @@ public enum SkillEditOutcome
 /// <c>summary</c> argument (2026-09-19; empty when it gave none), never part of the skill.
 /// <paramref name="Path"/> is the supporting file a <c>write_file</c> / <c>edit_file</c> named (2026-09-27), relative to the skill folder.
 /// </summary>
-public sealed record SkillEditResult(SkillEditOutcome Outcome, string Name, SkillScope Scope, long Bytes = 0, string Detail = "", int Length = 0, string Summary = "", string Path = "");
+public sealed record SkillEditResult(SkillEditOutcome Outcome, string Name, SkillScope Scope, long Bytes = 0, string Detail = "", int Length = 0, string Summary = "", string Path = "")
+{
+    /// <summary>
+    /// What a write replaced (2026-10-02, the revisions <c>/skills revert</c> puts back): the SKILL.md's text before an update, a
+    /// supporting file's before a <c>write_file</c> / <c>edit_file</c>. Null when nothing was there (<see cref="Existed"/> false) or the old
+    /// text was longer than <see cref="SkillRecordStore.MaxRevisionChars"/> and not read.
+    /// </summary>
+    public string? Previous { get; init; }
+
+    /// <summary>Whether the file the write replaced was there before it (false for a create, a new supporting file).</summary>
+    public bool Existed { get; init; }
+}
 
 /// <summary>
 /// The write side of the skills, used by <c>skill_editor</c> (<see cref="Create"/>, <see cref="Update"/>)
@@ -223,7 +234,76 @@ public static class SkillEditor
             return new SkillEditResult(SkillEditOutcome.Unparseable, name, scope, Detail: problem ?? "");
         }
 
-        return Write(directory, name, scope, SkillFrontmatter.Write(name, flat ?? current, other, hasInstructions ? instructions! : body), SkillEditOutcome.Updated);
+        var written = Write(directory, name, scope, SkillFrontmatter.Write(name, flat ?? current, other, hasInstructions ? instructions! : body), SkillEditOutcome.Updated);
+        return written.Outcome == SkillEditOutcome.Updated ? written with { Previous = Kept(text), Existed = true } : written;
+    }
+
+    /// <summary>A replaced text as a revision keeps it: null past <see cref="SkillRecordStore.MaxRevisionChars"/>.</summary>
+    private static string? Kept(string? text) => text is null || text.Length > SkillRecordStore.MaxRevisionChars ? null : text;
+
+    /// <summary>
+    /// <c>/skills revert</c> (2026-10-02): <paramref name="content"/> put back as the whole of <paramref name="path"/> (<c>SKILL.md</c> or a
+    /// supporting file, relative to the folder) of the skill in <paramref name="directory"/>, or the file removed when
+    /// <paramref name="content"/> is null (the write being undone created it). Raw text, no frontmatter check: the revision was the
+    /// file as it was. The external root is never written (<see cref="SkillEditOutcome.ExternalReadOnly"/>); a path outside the
+    /// folder is <see cref="SkillEditOutcome.FileRefused"/>. The result carries what it replaced, as every write does.
+    /// </summary>
+    public static SkillEditResult Restore(SkillRoots roots, SkillScope scope, string directory, string name, string path, string? content)
+    {
+        ArgumentNullException.ThrowIfNull(roots);
+        ArgumentNullException.ThrowIfNull(directory);
+        ArgumentNullException.ThrowIfNull(name);
+        ArgumentNullException.ThrowIfNull(path);
+        if (scope == SkillScope.External)
+        {
+            return new SkillEditResult(SkillEditOutcome.ExternalReadOnly, name, SkillScope.External);
+        }
+
+        bool skillFile = string.Equals(path, SkillCatalog.FileName, StringComparison.OrdinalIgnoreCase);
+        try
+        {
+            string root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(directory));
+            string full = Path.GetFullPath(Path.Combine(root, path));
+            if (!full.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+            {
+                return new SkillEditResult(SkillEditOutcome.FileRefused, name, scope, Detail: path, Path: path);
+            }
+
+            bool existed = File.Exists(full);
+            string? previous = existed ? Kept(WorkingDirectory.Decode(File.ReadAllBytes(full), out _)) : null;
+            var done = skillFile ? SkillEditOutcome.Updated : SkillEditOutcome.FileWritten;
+            if (content is null)
+            {
+                if (skillFile)
+                {
+                    // A skill always has its SKILL.md; a revision never says it had none.
+                    return new SkillEditResult(SkillEditOutcome.FileRefused, name, scope, Detail: path, Path: path);
+                }
+
+                File.Delete(full);
+                return new SkillEditResult(done, name, scope, Path: path) { Previous = previous, Existed = existed };
+            }
+
+            Directory.CreateDirectory(Path.GetDirectoryName(full)!);
+            string temp = $"{full}.{Guid.NewGuid():N}.tmp";
+            byte[] bytes = Utf8NoBom.GetBytes(content);
+            try
+            {
+                File.WriteAllBytes(temp, bytes);
+                File.Move(temp, full, overwrite: true);
+            }
+            catch
+            {
+                try { File.Delete(temp); } catch { /* best effort */ }
+                throw;
+            }
+
+            return new SkillEditResult(done, name, scope, bytes.Length, Path: skillFile ? "" : path) { Previous = previous, Existed = existed };
+        }
+        catch (Exception ex) when (IsFileFailure(ex))
+        {
+            return new SkillEditResult(SkillEditOutcome.Failed, name, scope, Detail: ex.Message, Path: path);
+        }
     }
 
     /// <summary>
@@ -306,7 +386,25 @@ public static class SkillEditor
             return new SkillEditResult(SkillEditOutcome.ProtectedFile, name, scope, Path: relative);
         }
 
-        return act(files, relative, (name, scope));
+        // What the write replaces, read first (2026-10-02, the revisions): a file past the revision cap is not read at all.
+        bool existed = false;
+        string? previous = null;
+        try
+        {
+            var info = new FileInfo(full);
+            existed = info.Exists;
+            if (existed && info.Length <= SkillRecordStore.MaxRevisionChars * 4L)
+            {
+                previous = Kept(WorkingDirectory.Decode(File.ReadAllBytes(full), out _));
+            }
+        }
+        catch (Exception ex) when (IsFileFailure(ex))
+        {
+            previous = null;
+        }
+
+        var result = act(files, relative, (name, scope));
+        return result.Outcome is SkillEditOutcome.FileWritten or SkillEditOutcome.FileEdited ? result with { Previous = previous, Existed = existed } : result;
     }
 
     /// <summary>

@@ -723,6 +723,72 @@ public sealed class SessionStore : IDisposable
         }
     }
 
+    /// <summary>
+    /// Every reflection that wrote a skill, oldest first (2026-10-02): what <c>skills.db</c>'s one-time import reads, the skills' history
+    /// moving there (<c>SkillRecords.ImportFrom</c>). Empty while unavailable.
+    /// </summary>
+    public IReadOnlyList<(DateTimeOffset At, string Skill, string Action, long? SessionId)> LearnedReflections()
+    {
+        lock (_gate)
+        {
+            if (Open() is not { } connection)
+            {
+                return [];
+            }
+
+            try
+            {
+                using var command = connection.CreateCommand();
+                command.CommandText = "SELECT at, skill, action, session_id FROM reflections WHERE outcome = $learned AND skill <> '' ORDER BY at, id";
+                command.Parameters.AddWithValue("$learned", ReflectionRow.Learned);
+                using var reader = command.ExecuteReader();
+                var rows = new List<(DateTimeOffset, string, string, long?)>();
+                while (reader.Read())
+                {
+                    rows.Add((Parse(reader.GetString(0)), reader.GetString(1), reader.GetString(2), reader.IsDBNull(3) ? null : reader.GetInt64(3)));
+                }
+
+                return rows;
+            }
+            catch (SqliteException ex)
+            {
+                Fail("read the reflections", ex);
+                return [];
+            }
+        }
+    }
+
+    /// <summary>Every stored turn that loaded a skill, oldest first (2026-10-02, the same import): when, the session, the names, the turn's errors.</summary>
+    public IReadOnlyList<(DateTimeOffset At, long SessionId, IReadOnlyList<string> Skills, int Errors)> SkillLoads()
+    {
+        lock (_gate)
+        {
+            if (Open() is not { } connection)
+            {
+                return [];
+            }
+
+            try
+            {
+                using var command = connection.CreateCommand();
+                command.CommandText = "SELECT at, session_id, skills_loaded, errors FROM turns WHERE skills_loaded <> '' ORDER BY at, id";
+                using var reader = command.ExecuteReader();
+                var rows = new List<(DateTimeOffset, long, IReadOnlyList<string>, int)>();
+                while (reader.Read())
+                {
+                    rows.Add((Parse(reader.GetString(0)), reader.GetInt64(1), SplitNames(reader.GetString(2)), reader.GetInt32(3)));
+                }
+
+                return rows;
+            }
+            catch (SqliteException ex)
+            {
+                Fail("read the skill loads", ex);
+                return [];
+            }
+        }
+    }
+
     /// <summary><c>Reflection recorded: learned docker-deploy (updated) on session 12 turn 4</c> / <c>… nothing on a /learn sessions pass</c>. Pinned.</summary>
     public static string ReflectionRecordedLogLine(ReflectionRow row)
     {

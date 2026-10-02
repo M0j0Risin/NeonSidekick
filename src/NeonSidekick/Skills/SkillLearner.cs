@@ -55,8 +55,8 @@ public abstract record ReflectionMaterial
 }
 
 /// <summary>
-/// The session store's side of a reflection (2026-09-19): the store to read each skill's usage
-/// from and to hand <c>session_manager</c>, the settings the tool reads, the session on screen
+/// The session store's side of a reflection (2026-09-19): the store to hand <c>session_manager</c> (each skill's usage came from it
+/// too until 2026-10-02, when the skill records took that over: <see cref="SkillLearner.UsageLines"/>), the settings the tool reads, the session on screen
 /// (left out of the tool's answers), and the clock whose zone the moments show in. Null = the
 /// reflection reads the conversation alone (the switch off, <c>Session logging</c> off, headless).
 /// </summary>
@@ -125,8 +125,17 @@ public static class SkillLearner
     public const string SessionsInstruction =
         "The earlier sessions found for this turn close the transcript, as a session_manager search: a procedure this user has needed in more than one session is worth a skill even when this turn was short, " +
         "and a pitfall met in an earlier session belongs in the skill's body; call session_manager with action read when a hit needs its detail. " +
-        "A task seen once here that no earlier session shares is not worth a skill unless this turn taught it fully. " +
-        "A skill's usage line says how the stored sessions used it: a skill loaded often and still followed by errors needs its steps fixed, and one a reflection wrote a moment ago needs a real reason to be rewritten.";
+        "A task seen once here that no earlier session shares is not worth a skill unless this turn taught it fully.";
+
+    /// <summary>
+    /// Appended to the instruction whenever the catalog carries a usage line (2026-10-02, the skill records: the sentence was
+    /// <see cref="SessionsInstruction"/>'s last until then, read only with the sessions): what the line says and what to make of it —
+    /// errors after a load, a reflection's fresh write, the user's own wording, an installed skill. Pinned.
+    /// </summary>
+    public const string UsageInstruction =
+        "A skill's usage line says what is known of it: a skill loaded often and still followed by errors needs its steps fixed, and one a reflection wrote a moment ago needs a real reason to be rewritten. " +
+        "A skill edited by hand carries the user's own wording: keep it, and change it only for a reason these turns show. " +
+        "A skill installed from a source is someone else's: prefer a companion skill for what is yours to add.";
 
     /// <summary>The rest of the instruction, shared by the turn and the pass. Pinned.</summary>
     public const string InstructionBody =
@@ -249,7 +258,8 @@ public static class SkillLearner
         ArgumentNullException.ThrowIfNull(material);
         ArgumentNullException.ThrowIfNull(catalog);
         ArgumentNullException.ThrowIfNull(zone);
-        string catalogBlock = (files ? SupportingFilesInstruction + "\n\n" : "") + (catalog.Count == 0 ? NoSkillsLine : SkillsPrompt.Catalog(catalog, usage));
+        bool usageLines = usage is not null && catalog.Any(s => usage.TryGetValue(s.Name, out string? line) && line.Length > 0);
+        string catalogBlock = (usageLines ? UsageInstruction + "\n\n" : "") + (files ? SupportingFilesInstruction + "\n\n" : "") + (catalog.Count == 0 ? NoSkillsLine : SkillsPrompt.Catalog(catalog, usage));
         switch (material)
         {
             case ReflectionMaterial.Turn turn:
@@ -326,21 +336,20 @@ public static class SkillLearner
         return (query, SessionText.SearchResults(query, hits, sessions.Time.LocalTimeZone));
     }
 
-    /// <summary>Each catalog skill's <see cref="SkillText.UsageLine"/> from the store, keyed by name; a skill with no facts is left out.</summary>
-    public static Dictionary<string, string> UsageLines(SessionEvidence sessions, IReadOnlyList<Skill> catalog)
+    /// <summary>
+    /// Each catalog skill's usage line from the skill records (<see cref="SkillRecords.UsageLine"/>; the session store's until
+    /// 2026-10-02), keyed by name; a skill the records know nothing of is left out.
+    /// </summary>
+    public static Dictionary<string, string> UsageLines(SkillRecords records, IReadOnlyList<Skill> catalog)
     {
-        ArgumentNullException.ThrowIfNull(sessions);
+        ArgumentNullException.ThrowIfNull(records);
         ArgumentNullException.ThrowIfNull(catalog);
-        var zone = sessions.Time.LocalTimeZone;
         var lines = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var skill in catalog)
         {
-            var usage = sessions.Store.SkillUsageOf(skill.Name);
-            var mark = sessions.Store.LastReflectionOf(skill.Name);
-            int writes = mark is null ? 0 : sessions.Store.ReflectionWrites(skill.Name);
-            if (usage is not null || mark is not null)
+            if (records.UsageLine(skill, records.Zone) is { } line)
             {
-                lines[skill.Name] = SkillText.UsageLine(usage, mark, writes, zone);
+                lines[skill.Name] = line;
             }
         }
 
@@ -362,8 +371,11 @@ public static class SkillLearner
     /// <paramref name="files"/> (2026-09-27, <c>Reflection edit supporting files</c> on): the editor offers
     /// <c>write_file</c> / <c>edit_file</c> too, the instruction says so, and a file written ends the pass
     /// as a SKILL.md write does; null keeps the reflection to the SKILL.md.
+    /// <paramref name="records"/> (2026-10-02): the skill records the catalog's usage lines come from, whatever <paramref name="sessions"/>
+    /// says; null = no usage lines. <paramref name="guard"/> (the same day): what the editor may write (<see cref="ReflectionWriteGuard"/>),
+    /// its <c>load_skill</c> telling it each load; null = no guard.
     /// </summary>
-    public static async Task<SkillLearnResult> RunAsync(Assistant assistant, ReflectionMaterial material, SkillRoots roots, bool external, ReasoningEffort effort, CancellationToken cancellationToken, int maxRequests, SessionEvidence? sessions, SkillFileAccess? files = null)
+    public static async Task<SkillLearnResult> RunAsync(Assistant assistant, ReflectionMaterial material, SkillRoots roots, bool external, ReasoningEffort effort, CancellationToken cancellationToken, int maxRequests, SessionEvidence? sessions, SkillFileAccess? files = null, SkillRecords? records = null, ReflectionWriteGuard? guard = null)
     {
         ArgumentNullException.ThrowIfNull(assistant);
         ArgumentNullException.ThrowIfNull(material);
@@ -372,11 +384,11 @@ public static class SkillLearner
 
         var catalog = new SkillCatalog(() => roots);
         catalog.Scan(external);
-        var editor = new SkillEditorTool(() => roots, () => external, files);
+        var editor = new SkillEditorTool(() => roots, () => external, files, guard: guard);
         var tools = new List<AIFunction>(3);
         if (catalog.Skills.Count > 0)
         {
-            tools.Add(new LoadSkillTool(catalog));
+            tools.Add(new LoadSkillTool(catalog, used: guard is null ? null : guard.Loaded));
         }
 
         tools.Add(editor);
@@ -385,8 +397,8 @@ public static class SkillLearner
             tools.Add(new SessionManagerTool(sessions.Store, sessions.Effective, () => sessions.Current, sessions.Time));
         }
 
-        var usage0 = sessions is null ? null : UsageLines(sessions, catalog.Skills);
-        var messages = Build(material, catalog.Skills, usage0, sessions?.Time.LocalTimeZone ?? TimeZoneInfo.Utc, files is not null);
+        var usage0 = records is null ? null : UsageLines(records, catalog.Skills);
+        var messages = Build(material, catalog.Skills, usage0, sessions?.Time.LocalTimeZone ?? records?.Zone ?? TimeZoneInfo.Utc, files is not null);
         var usage = TokenUsage.Zero;
         int requests = 0;
         try

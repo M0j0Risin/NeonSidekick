@@ -461,6 +461,7 @@ Lists the loaded skills with their scope (`profile`, `global` or `external`) and
 * move it between the profile and global skill folders;
 * rename it (forced to lower-case-with-hyphens; a name already taken is refused);
 * edit its `SKILL.md` in your editor (the change applies the next time the skill loads);
+* revert it to the version before its last change, when the app kept one (see Skill history);
 * delete it (after a confirmation).
 
 #### Reflection
@@ -477,6 +478,9 @@ Lists the loaded skills with their scope (`profile`, `global` or `external`) and
 | Reflection includes sessions | The reflection starts with the earlier sessions that match the turn, and can search them. | on |
 | Reflection yields to turns | A message sent while a reflection runs pauses it, so the reply gets the server. The same reflection runs again once the reply and any queued messages are done. Turn it off if your server handles requests in parallel. | on |
 | Reflection edit supporting files | Lets a reflection also change a skill's supporting files (the data, examples or scripts beside its `SKILL.md`) with `skill_editor`'s `write_file` and `edit_file`. When off, a reflection writes the `SKILL.md` alone; the main chat may always write them. | off |
+| Reflection installed skills | What a reflection may do to a skill installed with `/skills add`. `read-only` refuses any change and asks it to write a companion skill instead, so a later update from the same source stays clean. `allow-and-mark` lets it change the skill; an update from its source then warns first, and `/skills revert` can bring the reflection's version back. | `read-only` |
+
+A reflection must load a skill with `load_skill` before it rewrites the instructions or a supporting file. If the skill changed after that load (your own turn, or an edit by hand), the rewrite is refused and the reflection is told to load it again. A change to the description alone needs no load.
 
 #### Options
 
@@ -520,6 +524,16 @@ The app keeps a record of every global and profile skill in `skills.db` in the h
 - **When records change:** the model's `skill_editor`, a reflection, `/skills add` and the `/skills` pane's move, rename and delete update the record as they act.
 - **Catching outside changes:** at startup and whenever a profile loads, the app checks the folders. A skill folder with no record gets one, dated from its `SKILL.md`'s created and modified times. A newer `SKILL.md` moves the modified date (an edit in your editor). A record whose folder is gone is removed. Folders are matched by name.
 - **External skills** (`.agents\skills`) are not recorded and never purged.
+
+#### Skill history
+
+`skills.db` also keeps each skill's history, and the reflection reads it:
+
+- **Who changed it:** every change the app makes is logged with who made it: the model in a turn, a reflection, an install, or a revert. A newer `SKILL.md` that the app didn't write counts as an edit by hand. The check runs at startup, at a profile load, and before every reflection and revert.
+- **How it was used:** each turn that loaded a skill is logged, with the number of tool errors that came *after* the load (errors before it say nothing about the skill).
+- **What the reflection sees:** each skill in its catalog carries a usage line, for example `loaded 12 times across 6 sessions, 3 followed by errors; last loaded …; written by a reflection 2× (updated …); edited by hand …; installed from owner/repo`. The reflection is asked to fix a skill that keeps being followed by errors, to keep your wording in a skill you edited by hand, and to prefer a companion skill over changing an installed one. The same line is the caption of the skill's page on `/skills`.
+- **Earlier versions:** before the app overwrites a skill's `SKILL.md` or a supporting file, the old text is kept (the last 10 per skill, up to 256 KB each). `/skills revert <name>` (or *revert* on the skill's page) puts the newest one back, and each revert goes one version further back. A revert is refused when you edited the skill by hand since the app last changed it, because your edit was never kept and would be lost. An update over `/skills add` keeps the old `SKILL.md` only (its other files are replaced).
+- **Older history:** the first time a profile loads with this version, its reflections and skill loads from `sessions.db` are copied in once. From then on the history lives in `skills.db`, so purging sessions, turning Session logging off or renaming a skill no longer loses it, and the reflection cooldown works with Session logging off.
 
 `/skills purge list <age>` lists the skills not used for that long, and changes nothing. `/skills purge commit <age>` deletes them, the folder and the record, after a yes/no that lists them. The age is days (`30`) or a duration (`12h`, `90m`, `1d 6h`), as `/sessions purge older` takes it. A skill that was never used counts from its last change, so one you just wrote isn't purged before it gets a chance. Only the global skills and the loaded profile's own are considered. A global skill used in any profile counts as used. There is no `purge all`: delete the folders yourself.
 
@@ -885,6 +899,7 @@ Type `/` to list every command with a short summary. After a command and a space
 | `/skills add <search words \| owner/repo[/skill] \| github url \| zip url> [--global \| --profile]` | Install an [Agent Skill](https://agentskills.io) from the web, with a preview first. A pane asks where it goes (the cursor starts on Cancel). Refused while a reply runs. See Installing skills. |
 | `/skills purge list <age>` | List the skills not used for that long (`30` days, `12h`, `90m`). Nothing is deleted. See Skill records. |
 | `/skills purge commit <age>` | Delete the skills not used for that long, folder and record, after a yes/no that lists them. |
+| `/skills revert <name>` | Put a skill back as it was before the app's last change to it (a model's, a reflection's or an install's). Each revert goes one version further back. Refused after an edit by hand. See Skill history. |
 | `/speak [file [n] \| n]` | Read a text file from the working directory aloud as a reply. On its own it resumes; a number starts from that sentence. |
 | `/splash` | Start a new conversation and show the splash screen. |
 | `/stt [on\|off]` | Toggle speech input. |

@@ -90,6 +90,7 @@ public sealed class SkillEditorTool : AIFunction
     private readonly Func<bool> _external;
     private readonly SkillFileAccess? _files;
     private readonly Action<SkillRoots, SkillEditResult>? _edited;
+    private readonly ReflectionWriteGuard? _guard;
 
     /// <param name="roots">Read per call: the profile root moves with a profile switch.</param>
     /// <param name="external">Read per call: whether the external folder is in the catalog (<c>Agent skills</c> and <c>Use external skills</c> both on), so a skill there blocks its name.</param>
@@ -98,10 +99,12 @@ public sealed class SkillEditorTool : AIFunction
     /// Told every result with the roots it was written under (2026-09-30, the skill records, <see cref="SkillRecords.Edited"/>):
     /// a refusal is told as well, and the listener keeps only the writes.
     /// </param>
-    public SkillEditorTool(Func<SkillRoots> roots, Func<bool> external, SkillFileAccess? files = null, Action<SkillRoots, SkillEditResult>? edited = null)
+    /// <param name="guard">A reflection's rules on what it may write (2026-10-02, <see cref="ReflectionWriteGuard"/>): a change it refuses never reaches the editor. Null in the main chat.</param>
+    public SkillEditorTool(Func<SkillRoots> roots, Func<bool> external, SkillFileAccess? files = null, Action<SkillRoots, SkillEditResult>? edited = null, ReflectionWriteGuard? guard = null)
     {
         _roots = roots ?? throw new ArgumentNullException(nameof(roots));
         _edited = edited;
+        _guard = guard;
         _external = external ?? throw new ArgumentNullException(nameof(external));
         _files = files;
     }
@@ -152,27 +155,34 @@ public sealed class SkillEditorTool : AIFunction
             return SkillText.BadScope(scope);
         }
 
+        // A reflection's update first passes its guard (2026-10-02): an instructions rewrite only over what its load served.
+        if (!create && _guard?.Refusal(name, !string.IsNullOrWhiteSpace(instructions)) is { } refusal)
+        {
+            return refusal;
+        }
+
         bool external = _external();
         var roots = _roots();
         var result = create
             ? SkillEditor.Create(roots, where, name, description ?? "", instructions ?? "", external)
             : SkillEditor.Update(roots, where, name, description, instructions, external);
         LastResult = result with { Summary = SkillText.CleanSummary(summary) };
-        _edited?.Invoke(roots, result);
+        _edited?.Invoke(roots, LastResult);   // with the summary: the skill records keep it as the event's detail (2026-10-02)
         return SkillText.Edited(result);
     }
 
     /// <summary><c>write_file</c>: <paramref name="content"/> as the whole of <paramref name="path"/> in skill <paramref name="name"/> (2026-09-27).</summary>
     public string DescribeWrite(string name, string path, string content, string? summary = null) =>
-        DescribeFile(path, files => SkillEditor.WriteFile(_roots(), SkillScope.Profile, name, path, content, _external(), files.Time), summary);
+        DescribeFile(name, path, files => SkillEditor.WriteFile(_roots(), SkillScope.Profile, name, path, content, _external(), files.Time), summary);
 
     /// <summary><c>edit_file</c>: <paramref name="oldText"/> → <paramref name="newText"/> in <paramref name="path"/> of skill <paramref name="name"/> (2026-09-27).</summary>
     public string DescribeEdit(string name, string path, string oldText, string newText, bool replaceAll, string? summary = null) =>
-        DescribeFile(path, files => SkillEditor.EditFile(_roots(), SkillScope.Profile, name, path, oldText, newText, replaceAll, _external(), files.Time), summary);
+        DescribeFile(name, path, files => SkillEditor.EditFile(_roots(), SkillScope.Profile, name, path, oldText, newText, replaceAll, _external(), files.Time), summary);
 
     /// <summary>A file action under the tool's rules: refused as an unknown action when files are not offered, and for a blank path; the skill is found where it lives (the profile first).</summary>
-    private string DescribeFile(string path, Func<SkillFileAccess, SkillEditResult> act, string? summary)
+    private string DescribeFile(string name, string path, Func<SkillFileAccess, SkillEditResult> act, string? summary)
     {
+        ArgumentNullException.ThrowIfNull(name);
         ArgumentNullException.ThrowIfNull(path);
         LastResult = null;
         if (_files is null)
@@ -185,9 +195,14 @@ public sealed class SkillEditorTool : AIFunction
             return SkillText.NoPath;
         }
 
+        if (_guard?.Refusal(name, rewrite: true) is { } refusal)
+        {
+            return refusal;
+        }
+
         var result = act(_files);
         LastResult = result with { Summary = SkillText.CleanSummary(summary) };
-        _edited?.Invoke(_roots(), result);
+        _edited?.Invoke(_roots(), LastResult);
         return SkillText.Edited(result);
     }
 

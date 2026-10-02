@@ -45,6 +45,34 @@ public class TurnTraceTests
     }
 
     [Fact]
+    public void ErrorsAfterLoad_CountOnlyTheErrorsAfterEachSkillsFirstLoad_AndAbsorbAddsThemUp()
+    {
+        // 2026-10-02, the skill records' uses: an error before the load says nothing about the skill.
+        var trace = new TurnTrace();
+        trace.Observe(Call("read_file", "c1"));
+        trace.Observe(Result("read_file", "c1", "Error: before any load"));
+        trace.Observe(Call(LoadSkillTool.ToolName, "c2"));
+        trace.Observe(Result(LoadSkillTool.ToolName, "c2", "<skill_content name=\"docker\">\nbody\n</skill_content>"));
+        trace.Observe(Call("run_command", "c3"));
+        trace.Observe(Result("run_command", "c3", "Error: exit 1"));
+        trace.Observe(Call(LoadSkillTool.ToolName, "c4"));
+        trace.Observe(Result(LoadSkillTool.ToolName, "c4", "<skill_content name=\"git-push\">\nbody\n</skill_content>"));
+        trace.Observe(Call(LoadSkillTool.ToolName, "c5"));
+        trace.Observe(Result(LoadSkillTool.ToolName, "c5", "<skill_content name=\"docker\">\nbody\n</skill_content>"));   // a second load: its count goes on
+        trace.Observe(Call("run_command", "c6"));
+        trace.Observe(Result("run_command", "c6", "Error: exit 2"));
+
+        Assert.Equal(new Dictionary<string, int> { ["docker"] = 2, ["git-push"] = 1 }, trace.ErrorsAfterLoad);
+        Assert.Equal(3, trace.Errors);
+
+        var tally = new TurnTrace();
+        tally.Absorb(trace);
+        tally.Absorb(trace);
+        Assert.Equal(new Dictionary<string, int> { ["docker"] = 4, ["git-push"] = 2 }, tally.ErrorsAfterLoad);
+        Assert.Empty(new TurnTrace().ErrorsAfterLoad);
+    }
+
+    [Fact]
     public void AnErrorResult_ThenASuccess_IsARecovery_AnotherErrorUndoesIt()
     {
         var trace = new TurnTrace();

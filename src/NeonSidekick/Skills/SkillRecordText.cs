@@ -15,7 +15,7 @@ public static class SkillRecordText
     public const string CommitWord = "commit";
 
     /// <summary>The screen's <c>/skills</c> usage error: the installer's, and the purge's two forms. Pinned.</summary>
-    public const string SkillsUsageError = SkillInstallText.UsageError + ", or /skills purge list|commit <age>";
+    public const string SkillsUsageError = SkillInstallText.UsageError + ", /skills purge list|commit <age>, or /skills revert <name>";
 
     /// <summary>The completion notes on <c>purge list</c> and <c>purge commit</c>. Pinned.</summary>
     public const string ListNote = "show the skills not used for that long: an age, 30 (days), 12h, 90m";
@@ -193,6 +193,85 @@ public static class SkillRecordText
         string.Create(CultureInfo.InvariantCulture, $"Skill records: profile \"{from}\" renamed to \"{to}\" ({rows} rows)");
 
     public static string ProfileForgottenLogLine(string profile) => "Skill records: profile \"" + profile + "\" no longer exists, its rows removed";
+
+    /// <summary><c>Skill record: global/pdf data/big.json's earlier text is too long to keep as a revision</c>. Pinned.</summary>
+    public static string RevisionSkippedLogLine(SkillScope scope, string folder, string path) =>
+        "Skill record: " + Key(scope, folder) + " " + path + "'s earlier text is too long to keep as a revision";
+
+    /// <summary><c>Skill reverted: profile/haiku SKILL.md to before a reflection write at 2026-10-02T…</c>. Pinned.</summary>
+    public static string RevertedLogLine(SkillScope scope, string folder, SkillRevision revision)
+    {
+        ArgumentNullException.ThrowIfNull(revision);
+        return "Skill reverted: " + Key(scope, folder) + " " + revision.Path + " to before a " + revision.Actor + " write at " + SessionStore.Stamp(revision.At);
+    }
+
+    /// <summary><c>Skill records: imported 14 events from profile "neon"'s sessions.db</c>. Pinned.</summary>
+    public static string ImportedLogLine(string profile, int events) =>
+        string.Create(CultureInfo.InvariantCulture, $"Skill records: imported {events} events from profile \"{profile}\"'s {SessionStore.FileName}");
+
+    // ── /skills revert (2026-10-02) ─────────────────────────────────────────
+
+    public const string RevertWord = "revert";
+
+    /// <summary>The completion note on <c>revert</c>. Pinned.</summary>
+    public const string RevertNote = "put a skill back as it was before its last change (a model's, a reflection's, an install's)";
+
+    /// <summary>
+    /// The one place a revert's outcome becomes words (the command's and the pane's): the notice for a revert done, else the error. The
+    /// bool says which.
+    /// </summary>
+    public static (bool Ok, string Text) RevertText(string name, SkillRevert revert, TimeZoneInfo zone)
+    {
+        ArgumentNullException.ThrowIfNull(revert);
+        return revert.Outcome switch
+        {
+            SkillRevertOutcome.Reverted => (true, RevertedNotice(name, revert.Revision!, zone)),
+            SkillRevertOutcome.NoRevision => (false, NoRevisionError(name)),
+            SkillRevertOutcome.HandEdited => (false, RevertHandEditedError(name)),
+            _ => (false, RevertFailedError(name, revert.Edit?.Detail ?? "")),
+        };
+    }
+
+    /// <summary>The usage error for <c>/skills revert</c> with no name. Pinned.</summary>
+    public const string RevertUsageError = "/skills revert <name>: the skill to put back as it was before its last change.";
+
+    /// <summary>The undo glyph the revert's notice wears.</summary>
+    public const string RevertGlyph = "↩️ ";
+
+    /// <summary>A name no skill in the catalog has. Pinned.</summary>
+    public static string RevertUnknownError(string name) => "No skill named " + name + ".";
+
+    /// <summary>A skill with nothing to put back. Pinned.</summary>
+    public static string NoRevisionError(string name) => "Nothing to revert for " + name + ": no earlier version is kept (only the app's own changes keep one).";
+
+    /// <summary>After the revert: <c>(↩️ haiku: SKILL.md is back as it was before a reflection's change at 2026-10-02 14:05)</c>; <c>… removed, as before …</c> for a file the change created. Pinned.</summary>
+    public static string RevertedNotice(string name, SkillRevision revision, TimeZoneInfo zone)
+    {
+        ArgumentNullException.ThrowIfNull(revision);
+        ArgumentNullException.ThrowIfNull(zone);
+        string what = revision.Content is null ? revision.Path + " is removed, as" : revision.Path + " is back as it was";
+        return "(" + RevertGlyph + name + ": " + what + " before " + ActorPhrase(revision.Actor) + " change at " + SessionText.Moment(revision.At, zone) + ")";
+    }
+
+    /// <summary>The revert refused over a hand edit. Pinned.</summary>
+    public static string RevertHandEditedError(string name) =>
+        "Not reverted: " + name + " was edited by hand since the app last changed it, and a revert would lose that edit; change it by hand instead.";
+
+    /// <summary>The revert that could not write: <c>Could not revert haiku: …</c>. Pinned.</summary>
+    public static string RevertFailedError(string name, string detail) => "Could not revert " + name + (string.IsNullOrWhiteSpace(detail) ? "." : ": " + detail);
+
+    /// <summary><c>a reflection's</c>, <c>the model's</c>, <c>an install's</c>, <c>your</c>.</summary>
+    public static string ActorPhrase(string actor) => actor switch
+    {
+        SkillActors.Reflection => "a reflection's",
+        SkillActors.Model => "the model's",
+        SkillActors.Install => "an install's",
+        _ => "your",
+    };
+
+    /// <summary>The install update page's warning when reflections changed the installed skill (2026-10-02). Pinned.</summary>
+    public static string ChangedSinceInstallWarning(int writes) =>
+        string.Create(CultureInfo.InvariantCulture, $"A reflection changed this skill {writes}× since it was installed; updating replaces that (/skills revert brings the SKILL.md back).");
 
     /// <summary><c>Skills reconciled: 2 added, 1 removed, 1 modified (global + profile neon)</c>. Pinned.</summary>
     public static string ReconciledLogLine(SkillReconcile result, string profile) =>
