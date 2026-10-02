@@ -373,7 +373,7 @@ public class SlashCommandsTests
             SlashCommand.Persona, SlashCommand.Operata, SlashCommand.Vocalia,
             SlashCommand.Remember, SlashCommand.Memory, SlashCommand.CmdCopy, SlashCommand.KeyCopy, SlashCommand.Profile, SlashCommand.Timer,   // /cmdcopy 2026-09-21; /keycopy 2026-09-28; /memory 2026-09-22 (forget, then copy <profile> [overwrite], the folded /memcopy)
             SlashCommand.Cwd, SlashCommand.Tree, SlashCommand.Vault, SlashCommand.Explore, SlashCommand.Copy, SlashCommand.Session, SlashCommand.GitUser,   // /vault [path] 2026-09-23
-            SlashCommand.Loop, SlashCommand.Plan, SlashCommand.BotChat, SlashCommand.Claude, SlashCommand.Queue, SlashCommand.Skills, SlashCommand.Test, SlashCommand.HomeAssistant, SlashCommand.Print, SlashCommand.Perf, SlashCommand.Tb, SlashCommand.Rewind,   // /tb [on|off] later on 2026-09-30; /rewind [n] 2026-09-30; /perf later on 2026-09-29; /print 2026-09-28; /ha 2026-09-28; /test 2026-09-28; /claude 2026-09-27; /skills add 2026-09-26; /plan 2026-09-26; /botchat 2026-09-24; 2026-09-21 (/queue clear later that day; /skills with edit <name> from then until 2026-09-23); /tools off the list later on 2026-09-22, its expand and collapse root words
+            SlashCommand.Loop, SlashCommand.Plan, SlashCommand.BotChat, SlashCommand.Claude, SlashCommand.Queue, SlashCommand.Skills, SlashCommand.Test, SlashCommand.HomeAssistant, SlashCommand.Print, SlashCommand.Perf, SlashCommand.Tb, SlashCommand.Header, SlashCommand.Rewind,   // /header [on|off] later still on 2026-10-01; /tb [on|off] later on 2026-09-30; /rewind [n] 2026-09-30; /perf later on 2026-09-29; /print 2026-09-28; /ha 2026-09-28; /test 2026-09-28; /claude 2026-09-27; /skills add 2026-09-26; /plan 2026-09-26; /botchat 2026-09-24; 2026-09-21 (/queue clear later that day; /skills with edit <name> from then until 2026-09-23); /tools off the list later on 2026-09-22, its expand and collapse root words
         ];
         foreach (var command in Enum.GetValues<SlashCommand>())
         {
@@ -546,7 +546,7 @@ public class SlashCommandsTests
         Assert.DoesNotContain("Ctrl+Q", SlashCommands.HelpText);
         Assert.DoesNotContain("(also", SlashCommands.HelpText);
         Assert.StartsWith("Commands:\n" + Row("/about", "show general information about the app and profile") + Row("/botchat", SlashCommands.HelpEntries.Single(e => e.Command == "/botchat").Summary), SlashCommands.HelpText);   // A to Z since 2026-09-27 (the user's call); /settings led the grouped list until then
-        Assert.Contains(Row("/gituser", "write the GitLib email and GitLib name into the working directory's repository") + Row("/ha", SlashCommands.HelpEntries.Single(e => e.Command == "/ha").Summary) + Row("/help", "show help") + Row("/imagine", SlashCommands.HelpEntries.Single(e => e.Command == "/imagine").Summary), SlashCommands.HelpText);   // neighbours by the alphabet since 2026-09-27
+        Assert.Contains(Row("/gituser", "write the GitLib email and GitLib name into the working directory's repository") + Row("/ha", SlashCommands.HelpEntries.Single(e => e.Command == "/ha").Summary) + Row("/header", "show or hide the header at the next clear, or /header on|off") + Row("/help", "show help") + Row("/imagine", SlashCommands.HelpEntries.Single(e => e.Command == "/imagine").Summary), SlashCommands.HelpText);   // neighbours by the alphabet since 2026-09-27
         Assert.Contains(Row("/settings, //", "edit and save settings"), SlashCommands.HelpText);
         Assert.Contains(Row("/profile", "switch profiles, or /profile <name> | add <name> | delete <name> | rename <name> <new-name> | reset [name] | push <name> | pull <name> | edit | reload"), SlashCommands.HelpText);   // edit and reload 2026-09-21, push and pull 2026-09-28
         Assert.Contains(Row("/exit", "exit/quit the application"), SlashCommands.HelpText);
@@ -610,11 +610,11 @@ public class SlashCommandsTests
     {
         // One list, A to Z by the command (ordinal), no groups (2026-09-27, the user's call: the Commands tab had grown
         // cramped; nine hand-ordered groups until then — their history is in git).
-        Assert.Equal(62, SlashCommands.HelpEntries.Count);   // /emptytrash went 2026-10-01   // /tb later on 2026-09-30   // /rewind 2026-09-30   // /keycopy, then /sampling, then /test, then /ha, then /print, since 2026-09-28; /perf later on 2026-09-29
+        Assert.Equal(63, SlashCommands.HelpEntries.Count);   // /header later still on 2026-10-01   // /emptytrash went 2026-10-01   // /tb later on 2026-09-30   // /rewind 2026-09-30   // /keycopy, then /sampling, then /test, then /ha, then /print, since 2026-09-28; /perf later on 2026-09-29
         Assert.Equal(
         [
             "/about", "/botchat", "/claude", "/clear", "/cmdclear", "/cmdcopy", "/cmdlist", "/collapse", "/comfy", "/compact", "/copy", "/cwd",
-            "/draft", "/echo", "/exit", "/expand", "/explore", "/gituser", "/ha", "/help", "/imagine", "/interrupt", "/keycopy", "/learn",
+            "/draft", "/echo", "/exit", "/expand", "/explore", "/gituser", "/ha", "/header", "/help", "/imagine", "/interrupt", "/keycopy", "/learn",
             "/loop", "/mcp", "/memory", "/model", "/new", "/operata", "/perf", "/persona", "/plan", "/police", "/print", "/profile", "/queue", "/reasoning",
             "/remember", "/rewind", "/sampling", "/server", "/sessions", "/settings", "/skills", "/speak", "/splash", "/stt", "/sys", "/tb", "/test", "/theme", "/timer", "/tools",
             "/tree", "/tts", "/usage", "/vault", "/view", "/vocalia", "/wake", "/window",

@@ -865,6 +865,7 @@ public partial class SettingsMenuTests : IDisposable
                 SettingsField.EmbeddedVramOnly,
                 SettingsField.MenuMaxHeight,
                 SettingsField.ProjectFile,   // 2026-10-01, the /skills Project tab's toggle as an Options row
+                SettingsField.FileSearchMaxResults, SettingsField.WebDownloadMaxMegabytes, SettingsField.QueryResultMaxChars,   // later on 2026-10-01, three tool caps made settings
             },
             Enum.GetValues<SettingsField>());
         // The compact rows: on the LLM tab after the context length but no reconnect; the type a picker, the two others typed.
@@ -1166,7 +1167,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("folder-remain " + Theme.DimMarkup("insert @folder/ and keep listing inside it"), SettingsMenu.MentionFolderModeLabel("folder-remain"));
         // The Files tab (2026-09-15; /tools' second since 2026-09-19): the file-tools switch first (the Safe edits switch under it from 2026-09-17 until 2026-10-01, when File safe edits went),
         // then the two /tree rows that were General's last two, then the @-mention folder mode (General's until 2026-09-17); none a reconnect, none refused mid-turn (read at each tool call).
-        Assert.Equal(new[] { SettingsField.FileTools, SettingsField.FileTreeMaxLength, SettingsField.FileTreeShowSizes, SettingsField.FileMentionFolderMode, SettingsField.FileBrowserMode, SettingsField.FileViewImageMaxPerCall }, SettingsMenu.ToolsTabFields[1]);   // the view_image cap last, 2026-09-19; the browser mode under the folder mode, 2026-09-21
+        Assert.Equal(new[] { SettingsField.FileTools, SettingsField.FileTreeMaxLength, SettingsField.FileTreeShowSizes, SettingsField.FileMentionFolderMode, SettingsField.FileBrowserMode, SettingsField.FileViewImageMaxPerCall, SettingsField.FileSearchMaxResults }, SettingsMenu.ToolsTabFields[1]);   // the search cap last (2026-10-01), the view_image cap before it (2026-09-19); the browser mode under the folder mode, 2026-09-21
         Assert.True(SettingsMenu.IsToggle(SettingsField.FileTools));
         Assert.False(SettingsMenu.RefusedMidTurn(SettingsField.FileTools));
         Assert.Equal("File tools", SettingsMenu.FieldName(SettingsField.FileTools));
@@ -1175,7 +1176,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.DoesNotContain(SettingsMenu.ToolsTabFields[1], f => SettingsMenu.FieldName(f).Contains("safe edits", StringComparison.OrdinalIgnoreCase));   // gone 2026-10-01
         Assert.Equal(SettingsMenu.ToolsTabFields[1].Max(f => SettingsMenu.FieldName(f).Length) + 2, SettingsMenu.LabelWidthOf(SettingsMenu.ToolsTabFields[1]));
         // The web rows (2026-09-15): the Web tab (titled Browser until later that day; /tools' last from 2026-09-19, third since later on 2026-09-21), in this order, none a reconnect — one toggle, three pickers (the network mode in the LAN switch's slot since 2026-09-18; the search method above the URL it governs), two typed rows that may be empty, a typed count.
-        Assert.Equal(new[] { SettingsField.WebTools, SettingsField.WebBrowserMode, SettingsField.WebBrowserPath, SettingsField.WebBrowserNetworkMode, SettingsField.WebSearchMethod, SettingsField.WebSearxngUrl, SettingsField.WebSearchMaxResults }, SettingsMenu.ToolsTabFields[0]);
+        Assert.Equal(new[] { SettingsField.WebTools, SettingsField.WebBrowserMode, SettingsField.WebBrowserPath, SettingsField.WebBrowserNetworkMode, SettingsField.WebSearchMethod, SettingsField.WebSearxngUrl, SettingsField.WebSearchMaxResults, SettingsField.WebDownloadMaxMegabytes }, SettingsMenu.ToolsTabFields[0]);   // the download cap last (2026-10-01)
         // The shell rows (2026-09-21): the Shell tab (between Git and Web that day, between Files and Ask since later on) — the policy (the group's switch, a picker), the allowed list, the default shell (a picker), then the three typed caps,
         // the languages, their timeout, the tool bridge (the tab's one toggle, later that day) above the tool-call cap it governs; none a reconnect. The outside-paths police (2026-09-22) sits third, under the list it guards beside.
         // Shell prefer native tools (2026-09-26) sits under the police, the other guard in front of the gate.
@@ -1357,6 +1358,29 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("must be 1 to 100 pictures", SettingsMenu.ViewImageMaxPerCallRangeError);
         Assert.False(SettingsMenu.RefusedMidTurn(SettingsField.FileViewImageMaxPerCall));
         Assert.False(SettingsMenu.IsLlmField(SettingsField.FileViewImageMaxPerCall) || SettingsMenu.IsTtsField(SettingsField.FileViewImageMaxPerCall) || SettingsMenu.IsVoiceField(SettingsField.FileViewImageMaxPerCall));
+        // Three tool caps made settings (2026-10-01, the user's ask): search_files' and unc_search's rows (200 until then), download_file's size (50 MB), the query tools' text (32,000);
+        // each typed, none a reconnect, all allowed mid-turn (read at each call).
+        foreach (var field in new[] { SettingsField.FileSearchMaxResults, SettingsField.WebDownloadMaxMegabytes, SettingsField.QueryResultMaxChars })
+        {
+            Assert.False(SettingsMenu.IsToggle(field));
+            Assert.False(SettingsMenu.RefusedMidTurn(field));
+            Assert.False(SettingsMenu.IsLlmField(field) || SettingsMenu.IsTtsField(field) || SettingsMenu.IsVoiceField(field));
+        }
+
+        Assert.Equal("File search max results", SettingsMenu.FieldName(SettingsField.FileSearchMaxResults));
+        Assert.Equal("200 results", SettingsMenu.FieldValue(SettingsField.FileSearchMaxResults, data, _settings.ProfileDirectory));
+        Assert.Equal("200", SettingsMenu.EditableValue(SettingsField.FileSearchMaxResults, data));
+        Assert.Equal("must be 1 to 5000 results", SettingsMenu.FileSearchMaxResultsRangeError);
+        Assert.Equal("Web download max (MB)", SettingsMenu.FieldName(SettingsField.WebDownloadMaxMegabytes));
+        Assert.Equal("50 MB", SettingsMenu.FieldValue(SettingsField.WebDownloadMaxMegabytes, data, _settings.ProfileDirectory));
+        Assert.Equal("2,000 MB", SettingsMenu.FieldValue(SettingsField.WebDownloadMaxMegabytes, new AppSettingsData { WebDownloadMaxMegabytes = 2000 }, _settings.ProfileDirectory));
+        Assert.Equal("50", SettingsMenu.EditableValue(SettingsField.WebDownloadMaxMegabytes, data));
+        Assert.Equal("must be 1 to 102400 MB", SettingsMenu.WebDownloadMaxMegabytesRangeError);
+        Assert.Equal("Query result max chars", SettingsMenu.FieldName(SettingsField.QueryResultMaxChars));
+        Assert.Equal("32,000 chars", SettingsMenu.FieldValue(SettingsField.QueryResultMaxChars, data, _settings.ProfileDirectory));
+        Assert.Equal("32000", SettingsMenu.EditableValue(SettingsField.QueryResultMaxChars, data));
+        Assert.Equal("must be 1000 to 1000000 characters", SettingsMenu.QueryResultMaxCharsRangeError);
+        Assert.Equal("must be 1 to 100000 rows", SettingsMenu.SqlQueryMaxRowsRangeError);   // 1000 until 2026-10-01
         // The profile name on the hint row: the last enum member (the flat list's last row), on the General tab under the new-profile mode, a toggle on by default, no reconnect.
         // The fun verbs: the LLM tab's last row (alone there since 2026-10-01, the thinking and sampling rows under it before; General's until 2026-09-15, "Thinking use fun verbs" then), a toggle off by default, no reconnect; the member and the JSON key keep the old name.
         Assert.True(SettingsMenu.IsToggle(SettingsField.LlmUseFunVerbs));

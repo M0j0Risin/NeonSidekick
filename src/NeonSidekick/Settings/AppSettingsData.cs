@@ -1151,6 +1151,20 @@ public sealed class AppSettingsData
     public const int MaxViewImageMaxPerCall = 100;
     public const int DefaultViewImageMaxPerCall = 10;
 
+    /// <summary>
+    /// The most rows one <c>search_files</c> or <c>unc_search</c> call returns, whatever its <c>limit</c> asks (2026-10-01,
+    /// the user's ask; a constant 200 until then): <see cref="MinFileSearchMaxResults"/> to <see cref="MaxFileSearchMaxResults"/>,
+    /// over every shape — hits, files with their counts, the listing, the tree, the name find and the recent list. The
+    /// defaults a call without <c>limit</c> gets stay as they were (50 hits, 100 found, 200 entries, 10 recent), never past
+    /// this. The schemas quote it, a bigger <c>limit</c> is clamped to it, and the tools clamp a hand-edited value. Read at
+    /// each call, no reconnect. No variable.
+    /// </summary>
+    public int FileSearchMaxResults { get; set; } = DefaultFileSearchMaxResults;
+
+    public const int MinFileSearchMaxResults = 1;
+    public const int MaxFileSearchMaxResults = 5000;
+    public const int DefaultFileSearchMaxResults = 200;
+
     // ─── GitLib ─────────────────────────────────────────────────────────────────
     // Renamed Git native … on 2026-09-21 (the user's call): the in-process LibGit2Sharp tools as
     // against git through the shell. The five keys followed their labels (no migration: the old
@@ -1280,12 +1294,14 @@ public sealed class AppSettingsData
     /// <summary>
     /// The most rows one <c>sql_query</c> returns (2026-09-23): <see cref="MinSqlQueryMaxRows"/> to
     /// <see cref="MaxSqlQueryMaxRows"/>; the argument <c>max_rows</c> overrides it up to the same cap. Past it the
-    /// header says more exist and the server stops (the reader never drains the rest).
+    /// header says more exist and the server stops (the reader never drains the rest). The cap was 1000 until 2026-10-01
+    /// (the user's ask): the rows of a call are held in memory (each cell cut at <see cref="Sql.SqlText.MaxCellChars"/>),
+    /// tens of MB at the worst at 100,000, and what reaches the model is cut again at <see cref="QueryResultMaxChars"/>.
     /// </summary>
     public int SqlQueryMaxRows { get; set; } = DefaultSqlQueryMaxRows;
 
     public const int MinSqlQueryMaxRows = 1;
-    public const int MaxSqlQueryMaxRows = 1000;
+    public const int MaxSqlQueryMaxRows = 100_000;
     public const int DefaultSqlQueryMaxRows = 100;
 
     /// <summary>
@@ -1297,6 +1313,19 @@ public sealed class AppSettingsData
     public const int MinSqlQueryTimeoutSeconds = 1;
     public const int MaxSqlQueryTimeoutSeconds = 600;
     public const int DefaultSqlQueryTimeoutSeconds = 30;
+
+    /// <summary>
+    /// The most characters of table one <c>sql_query</c>, <c>oracle_query</c> or <c>mysql_query</c> answer carries (2026-10-01,
+    /// the user's ask; the file tools' <see cref="Files.WorkingDirectory.MaxReadChars"/>, 32,000, until then, which cut a wide
+    /// result long before its row cap): <see cref="MinQueryResultMaxChars"/> to <see cref="MaxQueryResultMaxChars"/>. The rows
+    /// past it are left off and the header says how many fit. One setting for the three engines, on the SQL tab; the catalog
+    /// tools (tables, columns, describe, …) keep the file tools' cap. Read at each call, no reconnect. No variable.
+    /// </summary>
+    public int QueryResultMaxChars { get; set; } = DefaultQueryResultMaxChars;
+
+    public const int MinQueryResultMaxChars = 1_000;
+    public const int MaxQueryResultMaxChars = 1_000_000;
+    public const int DefaultQueryResultMaxChars = Files.WorkingDirectory.MaxReadChars;
 
     // ─── Oracle ─────────────────────────────────────────────────────────────────
     // The Oracle tools (2026-09-30, the user's ask: "mirror what we did for SQL server, but for Oracle", read-only by
@@ -1333,8 +1362,8 @@ public sealed class AppSettingsData
 
     /// <summary>
     /// The most rows one <c>oracle_query</c> returns (2026-09-30): <see cref="MinSqlQueryMaxRows"/> to
-    /// <see cref="MaxSqlQueryMaxRows"/>, the SQL tools' range; the argument <c>max_rows</c> overrides it up to the same cap.
-    /// Past it the header says more exist and the cursor is closed (the rest is never fetched).
+    /// <see cref="MaxSqlQueryMaxRows"/>, the SQL tools' range (1000 until 2026-10-01); the argument <c>max_rows</c> overrides it
+    /// up to the same cap. Past it the header says more exist and the cursor is closed (the rest is never fetched).
     /// </summary>
     public int OracleQueryMaxRows { get; set; } = DefaultSqlQueryMaxRows;
 
@@ -1683,6 +1712,19 @@ public sealed class AppSettingsData
     public const int MinWebSearchMaxResults = 1;
     public const int MaxWebSearchMaxResults = 20;
     public const int DefaultWebSearchMaxResults = 20;
+
+    /// <summary>
+    /// The largest file one <c>download_file</c> saves, in megabytes of 1,000,000 bytes (2026-10-01, the user's ask; a constant
+    /// 50 MB held in memory until then): <see cref="MinWebDownloadMaxMegabytes"/> to <see cref="MaxWebDownloadMaxMegabytes"/>.
+    /// The file streams to a temporary sibling under the working directory and takes its name only when whole, so a bigger
+    /// cap costs disk, not memory; a declared <c>Content-Length</c> over it is refused unread, a body that outgrows it is
+    /// refused and its partial file deleted. The tool's description quotes it. Read at each call, no reconnect. No variable.
+    /// </summary>
+    public int WebDownloadMaxMegabytes { get; set; } = DefaultWebDownloadMaxMegabytes;
+
+    public const int MinWebDownloadMaxMegabytes = 1;
+    public const int MaxWebDownloadMaxMegabytes = 102_400;
+    public const int DefaultWebDownloadMaxMegabytes = 50;
 
     /// <summary>
     /// Which engine <c>web_search</c> asks: one of <see cref="Web.SearchMethod.Names"/> —

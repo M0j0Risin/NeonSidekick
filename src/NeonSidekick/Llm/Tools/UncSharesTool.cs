@@ -48,7 +48,7 @@ public sealed class UncSharesTool : UncTool
 
         var probes = catalog.Shares.Select(async share =>
         {
-            var result = await Unc.RunAsync(share, write: false, files => files.List("", Files.WorkingDirectory.MaxListLimit).Entries.Count, cancellationToken).ConfigureAwait(false);
+            var result = await Unc.RunAsync(share, write: false, files => files.List("", Files.WorkingDirectory.ProbeListLimit).Entries.Count, cancellationToken).ConfigureAwait(false);
             return (share.Name, Reach: result.Error ?? UncText.Reached(result.Value));
         });
         var reach = (await Task.WhenAll(probes).ConfigureAwait(false)).ToDictionary(r => r.Name, r => r.Reach, StringComparer.OrdinalIgnoreCase);

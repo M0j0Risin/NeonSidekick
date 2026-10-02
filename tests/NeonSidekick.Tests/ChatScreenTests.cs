@@ -3808,7 +3808,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.DoesNotContain(" restore ", prompt, StringComparison.Ordinal);   // the old tool's name; SessionRule's "The user restores" is another word
         Assert.DoesNotContain("trash", prompt, StringComparison.OrdinalIgnoreCase);
         Assert.Equal(DeleteTool.DescriptionText, tools.Single(t => t.Name == DeleteTool.ToolName).Description);
-        Assert.Equal(DownloadFileTool.DescriptionText, tools.Single(t => t.Name == DownloadFileTool.ToolName).Description);
+        Assert.Equal(DownloadFileTool.DescriptionFor(50_000_000), tools.Single(t => t.Name == DownloadFileTool.ToolName).Description);
         Assert.All(tools, t => Assert.DoesNotContain("trash", t.Description, StringComparison.OrdinalIgnoreCase));
     }
 
@@ -4253,7 +4253,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("\n▸ GitLib tools            on\n  GitLib diff max lines   500 lines\n  GitLib log max commits  20 commits\n  GitLib email            (not set)\n  GitLib name             (not set)\n", output);
         Assert.Contains("\n▸ Shell command policy         ask\n  Shell allowed commands       none\n  Shell police outside paths   on\n  Shell prefer native tools    on\n  Shell default                powershell\n  Shell timeout (s)            180\n  Shell foreground cap (s)     600\n  Shell output max chars       30,000 chars\n  Shell code languages         powershell, python, node\n  Shell code timeout (s)       300\n  Shell tool bridge            off\n  Shell tool bridge max calls  50 tool calls\n", output);
         Assert.Contains("\n▸ Web tools                 on\n", output);
-        Assert.Contains("\n▸ SQL tools                  on\n  SQL connections offered    none of 0\n  SQL default connection     (the first connection)\n  SQL set password           Enter to set password for a connection\n  SQL add connection         Enter to start connection wizard\n  SQL %-mention enabled      on\n  SQL max rows               100 rows\n  SQL query timeout (s)      30\n  SQL connections (profile)  (none) · Enter edits sql.json\n", output);   // 2026-09-23
+        Assert.Contains("\n▸ SQL tools                  on\n  SQL connections offered    none of 0\n  SQL default connection     (the first connection)\n  SQL set password           Enter to set password for a connection\n  SQL add connection         Enter to start connection wizard\n  SQL %-mention enabled      on\n  SQL max rows               100 rows\n  SQL query timeout (s)      30\n  Query result max chars     32,000 chars\n  SQL connections (profile)  (none) · Enter edits sql.json\n", output);   // 2026-09-23; the query text cap under the timeout, 2026-10-01
         Assert.Contains("\n" + SettingsMenu.TabKeys, output);
         Assert.Empty(_chat.Requests);
     }
@@ -9929,9 +9929,9 @@ public partial class ChatScreenTests : IDisposable
     }
 
     [Theory]
-    [InlineData(false, false, 36)]   // Ctrl+/ joined later still on 2026-10-01
-    [InlineData(true, false, 37)]
-    [InlineData(true, true, 38)]
+    [InlineData(false, false, 37)]   // Ctrl+Alt+H (/header) joined later still on 2026-10-01; Ctrl+/ before it
+    [InlineData(true, false, 38)]
+    [InlineData(true, true, 39)]
     public void KeyRows_ListWhatApplies(bool voiceOn, bool wakeReady, int count)
     {
         var rows = ChatScreen.KeyRows(voiceOn, ConsoleKey.F8, wakeReady, "hey neon");
@@ -9947,9 +9947,9 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(("Home / End", "hold Shift to select text to the beginning or end of the line starting from the cursor"), rows[6]);
         Assert.Equal(("PgUp / PgDn", "scroll the transcript a page at a time"), rows[7]);
         Assert.DoesNotContain(rows, r => r.Key is "Mouse" or "Drag" or "Drop" or "@" or "#" or "$");
-        Assert.Equal(("Alt+V", "paste content (text or images)"), rows[^28]);   // ahead of Ctrl+Home since 2026-09-27 (the user's order)
-        Assert.Equal(("Ctrl+Home", "scroll to top of the chat pane"), rows[^27]);
-        Assert.Equal(("Ctrl+End", "scroll to bottom of the chat pane"), rows[^26]);
+        Assert.Equal(("Alt+V", "paste content (text or images)"), rows[^29]);   // ahead of Ctrl+Home since 2026-09-27 (the user's order)
+        Assert.Equal(("Ctrl+Home", "scroll to top of the chat pane"), rows[^28]);
+        Assert.Equal(("Ctrl+End", "scroll to bottom of the chat pane"), rows[^27]);
         // The Ctrl+letter rows A to Z by the letter since 2026-10-01 (the user's ask), Ctrl+/ ahead of them.
         Assert.Equal(
         [
@@ -9967,9 +9967,9 @@ public partial class ChatScreenTests : IDisposable
             ("Ctrl+T", "show or hide the toolbar (/tb)"),   // from Ctrl+Alt+B
             ("Ctrl+U", "open the usage pane (/usage)"),   // from Ctrl+Alt+G
             ("Ctrl+X", "cut the selected text"),   // 2026-09-25
-        ], rows[^25..^11]);
+        ], rows[^26..^12]);
         // Each plain-Ctrl chord's row names its command.
-        foreach (var (row, key) in new[] { (rows[^25], Keys.CtrlSlash), (rows[^22], Keys.CtrlE), (rows[^21], Keys.CtrlF), (rows[^20], Keys.CtrlH), (rows[^19], Keys.CtrlM), (rows[^17], Keys.CtrlP), (rows[^16], Keys.CtrlR), (rows[^15], Keys.CtrlS), (rows[^14], Keys.CtrlT), (rows[^13], Keys.CtrlU) })
+        foreach (var (row, key) in new[] { (rows[^26], Keys.CtrlSlash), (rows[^23], Keys.CtrlE), (rows[^22], Keys.CtrlF), (rows[^21], Keys.CtrlH), (rows[^20], Keys.CtrlM), (rows[^18], Keys.CtrlP), (rows[^17], Keys.CtrlR), (rows[^16], Keys.CtrlS), (rows[^15], Keys.CtrlT), (rows[^14], Keys.CtrlU) })
         {
             Assert.Equal(Keys.ShortcutLine(key), row.Meaning[(row.Meaning.LastIndexOf('(') + 1)..^1]);
         }
@@ -9980,6 +9980,7 @@ public partial class ChatScreenTests : IDisposable
         [
             ("Ctrl+Alt+C", "start a new conversation and clear the screen (/clear)"),
             ("Ctrl+Alt+D", "open the MCP pane (/mcp)"),
+            ("Ctrl+Alt+H", "show or hide the header at the next clear (/header)"),   // later still on 2026-10-01, the user's ask
             ("Ctrl+Alt+L", "open the allowed commands list (/cmdlist)"),
             ("Ctrl+Alt+M", "open the memory pane (/memory)"),
             ("Ctrl+Alt+N", "start a new conversation but do not clear the screen (/new)"),
@@ -9989,9 +9990,9 @@ public partial class ChatScreenTests : IDisposable
             ("Ctrl+Alt+T", "open the tools pane (/tools)"),
             ("Ctrl+Alt+X", "kill switch to immediately unload an embedded model (press twice)"),   // 2026-10-01, the user's place and wording
             ("Ctrl+Alt+Y", "open the system prompt pane (/sys)"),
-        ], rows[^11..]);
+        ], rows[^12..]);
         // Each row names its chord's command; the kill switch has none (2026-10-01).
-        Assert.All(rows[^11..].Where(row => row.Key != "Ctrl+Alt+X"), row => Assert.Equal(Keys.ShortcutLine(Keys.CtrlAlt(Enum.Parse<ConsoleKey>(row.Key[^1..]))), row.Meaning[(row.Meaning.LastIndexOf('(') + 1)..^1]));
+        Assert.All(rows[^12..].Where(row => row.Key != "Ctrl+Alt+X"), row => Assert.Equal(Keys.ShortcutLine(Keys.CtrlAlt(Enum.Parse<ConsoleKey>(row.Key[^1..]))), row.Meaning[(row.Meaning.LastIndexOf('(') + 1)..^1]));
         Assert.Null(Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.X)));
         Assert.Equal(voiceOn, rows.Any(r => r.Key == "F8"));
         if (voiceOn)
@@ -15112,9 +15113,10 @@ public partial class ChatScreenTests : IDisposable
     }
 
     [Fact]
-    public async Task CtrlAltH_IsRetired_NoHelpPane_TheDraftSentIntact()
+    public async Task CtrlAltH_FlipsShowHeader_NoHelpPane_TheDraftSentIntact()
     {
-        // Ctrl+Alt+H, G and P went when their commands moved to plain Ctrl+H, U and P (later still on 2026-10-01, the user's ask).
+        // Ctrl+Alt+H was /help until plain Ctrl+H took it, and /header since later still on 2026-10-01 (the user's ask): Show header
+        // flipped and saved, the notice saying when, the draft on the row kept and nothing redrawn.
         _settings.Update(d => d.TtsOutput = false);
         _chat.EnqueueText("one");
         StepsWhenIdle(
@@ -15125,6 +15127,40 @@ public partial class ChatScreenTests : IDisposable
 
         Assert.DoesNotContain(InfoPane.Title + "   Commands (basic)", output);
         Assert.Equal("keep", UserText(Assert.Single(_chat.Requests)));
+        Assert.False(_settings.Current.ShowHeader);
+        Assert.Contains(HeaderToggle.Notice(false), output);
+    }
+
+    [Fact]
+    public async Task Header_TogglesOrSetsShowHeader_ABadWordIsTheUsage_AndTheNextClearFollows()
+    {
+        // /header (later still on 2026-10-01, the user's ask): bare flips, on and off set; the banner goes at the next wipe, not before.
+        StepsWhenIdle(
+            Line("/header"),
+            Line("/header sideways"),
+            Line("/header on"),
+            Line("/header off"),
+            Line("/clear"),
+            Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.False(_settings.Current.ShowHeader);
+        Assert.Contains(HeaderToggle.Notice(false), output);
+        Assert.Contains(HeaderToggle.Notice(true), output);
+        Assert.Contains(HeaderToggle.UsageError, output);
+        Assert.Equal(true, HeaderToggle.Toggle("", false));
+        Assert.Equal(false, HeaderToggle.Toggle(" ", true));
+        Assert.Equal(true, HeaderToggle.Toggle("ON", false));
+        Assert.Equal(false, HeaderToggle.Toggle("off", true));
+        Assert.Null(HeaderToggle.Toggle("maybe", true));
+        Assert.Equal("(header off: gone from the next clear)", HeaderToggle.Notice(false));
+        Assert.Equal("(header on: drawn from the next clear)", HeaderToggle.Notice(true));
+        Assert.Equal("/header takes on or off, or nothing to toggle.", HeaderToggle.UsageError);
+        Assert.Equal(SlashCommand.Header, SlashCommands.Parse("/header off").Command);
+        Assert.Contains("/header", SlashCommands.Words);
+        Assert.Equal(MidTurnClass.Quick, ChatScreen.MidTurnPolicy(SlashCommand.Header, ""));
+        Assert.Equal(MidTurnClass.Quick, ChatScreen.MidTurnPolicyUnderLoad(SlashCommand.Header, "off"));
     }
 
     [Fact]

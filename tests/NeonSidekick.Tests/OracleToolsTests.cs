@@ -113,7 +113,9 @@ public sealed class OracleToolsTests
         Assert.Equal(OracleText.NotASelect("UPDATE"), await Invoke<OracleQueryTool>(("sql", "UPDATE t SET x = 1")));
         Assert.Equal(OracleText.Forbidden("FOR UPDATE (it locks rows)"), await Invoke<OracleQueryTool>(("sql", "SELECT * FROM t FOR UPDATE")));
         Assert.Equal(OracleText.NoSql, await Invoke<OracleQueryTool>());
-        Assert.Equal(SqlText.BadMaxRows(1, 1000), await Invoke<OracleQueryTool>(("sql", "SELECT 1 FROM dual"), ("max_rows", 0)));
+        Assert.Equal(SqlText.BadMaxRows(1, 100_000), await Invoke<OracleQueryTool>(("sql", "SELECT 1 FROM dual"), ("max_rows", 0)));
+        Assert.Equal(SqlText.BadMaxRows(1, 100_000), await Invoke<OracleQueryTool>(("sql", "SELECT 1 FROM dual"), ("max_rows", 100_001)));
+        Assert.Contains("1 to 100000", Tool<OracleQueryTool>().JsonSchema.GetProperty("properties").GetProperty("max_rows").GetProperty("description").GetString(), StringComparison.Ordinal);
         Assert.Equal(ClockText.BadInteger("max_rows", "lots"), await Invoke<OracleQueryTool>(("sql", "SELECT 1 FROM dual"), ("max_rows", "lots")));
         Assert.Equal(OracleText.BadParams("[1,2]"), await Invoke<OracleQueryTool>(("sql", "SELECT 1 FROM dual"), ("params", Json("[1,2]"))));
         Assert.Equal("Error: '1x' is no parameter name; use letters, digits and _ (bound as :name)", await Invoke<OracleQueryTool>(("sql", "SELECT 1 FROM dual"), ("params", Json("""{"1x": 1}"""))));
@@ -163,7 +165,8 @@ public sealed class OracleToolsTests
     public void TheCaps_ComeFromTheSettings_Clamped()
     {
         Assert.Equal(100, OracleQueryTool.DefaultRows(new AppSettingsData()));
-        Assert.Equal(1000, OracleQueryTool.DefaultRows(new AppSettingsData { OracleQueryMaxRows = 99_999 }));
+        Assert.Equal(99_999, OracleQueryTool.DefaultRows(new AppSettingsData { OracleQueryMaxRows = 99_999 }));
+        Assert.Equal(100_000, OracleQueryTool.DefaultRows(new AppSettingsData { OracleQueryMaxRows = 999_999 }));
         Assert.Equal(30, OracleTool.TimeoutSeconds(new AppSettingsData()));
         Assert.Equal(600, OracleTool.TimeoutSeconds(new AppSettingsData { OracleQueryTimeoutSeconds = 9_999 }));
         Assert.Null(OracleTablesTool.LikePattern(" "));

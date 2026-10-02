@@ -153,6 +153,28 @@ public sealed class UncToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task UncSearch_Limit_FollowsFileSearchMaxResults_AndTheSchemaQuotesIt()
+    {
+        // search_files' setting is unc_search's too (2026-10-01, the user's ask); the share's budgets stay fixed.
+        string bulk = Path.Combine(_eng, "bulk");
+        Directory.CreateDirectory(bulk);
+        for (int i = 0; i < 250; i++)
+        {
+            File.WriteAllText(Path.Combine(bulk, $"n{i:000}.txt"), "needle");
+        }
+
+        static string Limit(AIFunction tool) => tool.JsonSchema.GetProperty("properties").GetProperty("limit").GetProperty("description").GetString()!;
+        static int Rows(string text) => text.Split('\n').Count(line => line.Contains(@"bulk\n", StringComparison.Ordinal));
+        Assert.Equal(SearchFilesTool.LimitDescription(200), Limit(Tool<UncSearchTool>()));
+        Assert.Equal(200, Rows(await Invoke<UncSearchTool>(("text", "needle"), ("path", "bulk"), ("limit", 250))));
+
+        _settings.FileSearchMaxResults = 2000;
+        Assert.Equal(SearchFilesTool.LimitDescription(2000), Limit(Tool<UncSearchTool>()));
+        Assert.Equal(250, Rows(await Invoke<UncSearchTool>(("text", "needle"), ("path", "bulk"), ("limit", 250))));
+        Assert.Equal(250, Rows(await Invoke<UncSearchTool>(("files", "*.txt"), ("path", "bulk"), ("limit", 250))));
+    }
+
+    [Fact]
     public async Task UncFetch_CopiesIntoTheWorkingDirectory_ReplacingOnlyWithOverwrite()
     {
         string fetched = await Invoke<UncFetchTool>(("share", "eng"), ("path", @"specs\a.md"));

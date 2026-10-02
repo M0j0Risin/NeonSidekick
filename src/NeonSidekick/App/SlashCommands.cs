@@ -101,6 +101,13 @@ public enum SlashCommand
     /// </summary>
     Tb,
 
+    /// <summary>
+    /// <c>/header [on|off]</c> (2026-10-01, the user's ask, with Ctrl+Alt+H): <c>Show header</c> flipped, or set by the word, and
+    /// saved; the banner comes or goes at the next wipe, nothing redrawn now (<see cref="HeaderToggle"/>). A setting alone, so it
+    /// runs at once under a reply, and a pane stays open over it.
+    /// </summary>
+    Header,
+
     /// <summary><c>/profile</c>: pick, switch to, add, delete, rename or reset a profile; since 2026-09-21 <c>edit</c> opens its <c>profile.json</c> and <c>reload</c> reads it back.</summary>
     Profile,
 
@@ -265,6 +272,7 @@ public static class SlashCommands
             new("/explore", "open the working directory in your file browser, or /explore <path>"),
             new("/gituser", "write the GitLib email and GitLib name into the working directory's repository"),
             new("/ha", "Home Assistant: /ha for the overview, /ha on|off|toggle <room or light> [brightness%], /ha scene <name>, /ha tv on|off|mute|unmute|up|down|vol <n>|source <name>, /ha states [filter], /ha say <sentence> (Assist)"),
+            new("/header", HeaderToggle.HelpSummary),
             new("/help", "show help"),
             new("/imagine", "generate a picture on ComfyUI from your own prompt, sent as typed: /imagine [workflow] <prompt> [-- <negative>] [--seed N] [--size WxH]"),
             new("/interrupt", "toggle the speech input wake word interrupt, or /interrupt on|off"),
@@ -399,7 +407,7 @@ public static class SlashCommands
     }
 
     /// <summary>Every command word, for help and completion.</summary>
-    public static readonly string[] Words = { "/help", "/clear", "/new", "/splash", "/rewind", "/theme", "/queue", "/sessions", "/compact", "/server", "/model", "/reasoning", "/sampling", "/settings", "//", "/tools", "/mcp", "/tts", "/stt", "/wake", "/interrupt", "/speak", "/remember", "/memory", "/cmdcopy", "/keycopy", "/cmdclear", "/cmdlist", "/police", "/persona", "/operata", "/vocalia", "/sys", "/usage", "/perf", "/tb", "/profile", "/timer", "/cwd", "/tree", "/vault", "/explore", "/view", "/imagine", "/comfy", "/ha", "/print", "/echo", "/gituser", "/copy", "/draft", "/loop", "/plan", "/botchat", "/claude", "/test", "/expand", "/collapse", "/window", "/skills", "/learn", "/about", "/exit" };
+    public static readonly string[] Words = { "/help", "/clear", "/new", "/splash", "/rewind", "/theme", "/queue", "/sessions", "/compact", "/server", "/model", "/reasoning", "/sampling", "/settings", "//", "/tools", "/mcp", "/tts", "/stt", "/wake", "/interrupt", "/speak", "/remember", "/memory", "/cmdcopy", "/keycopy", "/cmdclear", "/cmdlist", "/police", "/persona", "/operata", "/vocalia", "/sys", "/usage", "/perf", "/tb", "/header", "/profile", "/timer", "/cwd", "/tree", "/vault", "/explore", "/view", "/imagine", "/comfy", "/ha", "/print", "/echo", "/gituser", "/copy", "/draft", "/loop", "/plan", "/botchat", "/claude", "/test", "/expand", "/collapse", "/window", "/skills", "/learn", "/about", "/exit" };
 
     /// <summary>The <c>/queue</c> word: what a double-click on the hint row's queued part sends through the mid-turn line hook, so the pane opens exactly as the typed command's does (2026-09-18). Pinned.</summary>
     public const string QueueWord = "/queue";
@@ -477,6 +485,7 @@ public static class SlashCommands
             "/usage" => SlashCommand.Usage,
             "/perf" => SlashCommand.Perf,
             "/tb" => SlashCommand.Tb,
+            "/header" => SlashCommand.Header,
             "/profile" => SlashCommand.Profile,
             "/timer" => SlashCommand.Timer,
             "/cwd" => SlashCommand.Cwd,
@@ -531,5 +540,5 @@ public static class SlashCommands
         or SlashCommand.Remember or SlashCommand.Memory or SlashCommand.CmdCopy or SlashCommand.KeyCopy or SlashCommand.Profile or SlashCommand.Timer
         or SlashCommand.Cwd or SlashCommand.Tree or SlashCommand.Vault or SlashCommand.Explore or SlashCommand.Copy or SlashCommand.Session or SlashCommand.GitUser
         or SlashCommand.Loop or SlashCommand.Plan or SlashCommand.BotChat or SlashCommand.Claude or SlashCommand.Queue or SlashCommand.Skills or SlashCommand.Test
-        or SlashCommand.HomeAssistant or SlashCommand.Print or SlashCommand.Perf or SlashCommand.Tb or SlashCommand.Rewind;
+        or SlashCommand.HomeAssistant or SlashCommand.Print or SlashCommand.Perf or SlashCommand.Tb or SlashCommand.Header or SlashCommand.Rewind;
 }

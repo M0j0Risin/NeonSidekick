@@ -1,6 +1,8 @@
+using System.Globalization;
 using System.Text.Json;
 using Microsoft.Extensions.AI;
 using NeonSidekick.Files;
+using NeonSidekick.Settings;
 
 namespace NeonSidekick.Llm.Tools;
 
@@ -13,7 +15,9 @@ namespace NeonSidekick.Llm.Tools;
 /// it lists (2026-09-19, when <c>list_directory</c> and <c>recent_files</c> folded in): the folder's
 /// own entries, folders first with sizes, nested to <c>depth</c> levels; the files whose names match
 /// <c>files</c>, every level; or under <c>order</c> modified the most recently changed files, newest
-/// first. <c>limit</c> caps every shape. The one file tool that honours the turn's token: ESC ends a long search.
+/// first. <c>limit</c> caps every shape, up to the <c>File search max results</c> setting (2026-10-01, the user's ask; a
+/// constant 200 until then), which the schema quotes (<see cref="LimitOf"/>). The one file tool that honours the turn's token:
+/// ESC ends a long search.
 /// </summary>
 public sealed class SearchFilesTool : FileTool
 {
@@ -37,8 +41,16 @@ public sealed class SearchFilesTool : FileTool
     public const string OutputChoices = "content or files";
     public const string OrderChoices = "name or modified";
 
-    private static readonly JsonElement Schema = ToolSchema.Parse(
-        """
+    private readonly Func<AppSettingsData> _effective;
+
+    // The schema for the cap last asked for: a request reads JsonSchema once per tool, and the cap
+    // changes only when the user edits the row, so one parse per edit (view_image's shape).
+    private int _schemaLimit;
+    private JsonElement _schema;
+
+    /// <summary>The schema under the given cap: <c>limit</c>'s description quotes it (<see cref="LimitDescription"/>). Pinned.</summary>
+    public static JsonElement SchemaFor(int max) => ToolSchema.Parse(
+        $$"""
         {
           "type": "object",
           "properties": {
@@ -49,15 +61,39 @@ public sealed class SearchFilesTool : FileTool
             "context": { "type": "integer", "description": "Lines to show before and after each hit, 0 to 5 (default 0). Context lines read file-11- text around the hit's file:12: text." },
             "output": { "type": "string", "enum": ["content", "files"], "description": "With text: content (the default) shows every matching line; files shows one row per file with how many lines matched." },
             "order": { "type": "string", "enum": ["name", "modified"], "description": "Without text: name (the default) lists by name; modified lists the most recently changed files, newest first with their times, at every level. Ignored with text." },
-            "limit": { "type": "integer", "description": "The most rows to return: hits or files with text (default 50, up to 200); entries, matching files or recent files without it (default 200, 100 or 10; up to 200)." },
+            "limit": { "type": "integer", "description": "{{LimitDescription(max)}}" },
             "depth": { "type": "integer", "description": "How many folder levels to walk, 1 being the folder's own entries. Without text and files it defaults to 1 and 2 to 4 nest the subfolders' entries under them; with files, order modified or text it defaults to every level." }
           }
         }
         """);
 
-    public SearchFilesTool(WorkingDirectory files) : base(files)
+    /// <summary>
+    /// <c>limit</c>'s description under the cap <paramref name="max"/>, shared with <c>unc_search</c> so the two never drift
+    /// (2026-10-01): each default as a call without <c>limit</c> gets it, never past the cap. At 200 it is the text the
+    /// schemas carried when 200 was a constant. Pinned.
+    /// </summary>
+    public static string LimitDescription(int max) =>
+        "The most rows to return: hits or files with text (default " + N(Math.Min(WorkingDirectory.DefaultSearchLimit, max)) + ", up to " + N(max) + "); " +
+        "entries, matching files or recent files without it (default " + N(Math.Min(WorkingDirectory.MaxEntries, max)) + ", " + N(Math.Min(WorkingDirectory.DefaultFindLimit, max)) + " or " + N(Math.Min(WorkingDirectory.DefaultRecent, max)) + "; up to " + N(max) + ").";
+
+    private static string N(int value) => value.ToString(CultureInfo.InvariantCulture);
+
+    /// <summary>The cap <paramref name="effective"/> holds (<c>File search max results</c>), clamped into <see cref="AppSettingsData.MinFileSearchMaxResults"/>–<see cref="AppSettingsData.MaxFileSearchMaxResults"/>. Pure.</summary>
+    public static int LimitOf(AppSettingsData effective)
     {
+        ArgumentNullException.ThrowIfNull(effective);
+        return Math.Clamp(effective.FileSearchMaxResults, AppSettingsData.MinFileSearchMaxResults, AppSettingsData.MaxFileSearchMaxResults);
     }
+
+    /// <param name="files">The sandbox searched and listed.</param>
+    /// <param name="effective">The settings the cap (<c>File search max results</c>) is read from at every use.</param>
+    public SearchFilesTool(WorkingDirectory files, Func<AppSettingsData> effective) : base(files)
+    {
+        _effective = effective ?? throw new ArgumentNullException(nameof(effective));
+    }
+
+    /// <summary>The most rows one call returns, as the settings stand now (<see cref="LimitOf"/>).</summary>
+    public int Limit => LimitOf(_effective());
 
     public override string Name => ToolName;
 
@@ -67,11 +103,24 @@ public sealed class SearchFilesTool : FileTool
         "Without text it lists instead: the folder's files and folders with sizes (depth 2 to 4 shows a tree), the files whose names match files at every level, or with order modified the most recently changed files newest first with their times. " +
         "limit caps every list.";
 
-    public override JsonElement JsonSchema => Schema;
+    public override JsonElement JsonSchema
+    {
+        get
+        {
+            int limit = Limit;
+            if (_schema.ValueKind == JsonValueKind.Undefined || limit != _schemaLimit)
+            {
+                _schema = SchemaFor(limit);
+                _schemaLimit = limit;
+            }
+
+            return _schema;
+        }
+    }
 
     /// <summary>The dispatch: a content search with <paramref name="text"/>, else one of the three listing shapes.</summary>
     public string Describe(string text, string path, string? files, bool regex, CancellationToken cancellationToken, int context = 0, string output = ContentOutput, string order = NameOrder, int? limit = null, int? depth = null) =>
-        Run(Files, new SearchRequest(text, path, files ?? "", regex, context, output, order, limit, depth), cancellationToken).Text;
+        Run(Files, new SearchRequest(text, path, files ?? "", regex, context, output, order, limit, depth), Limit, cancellationToken).Text;
 
     /// <summary>One <c>search_files</c> call's arguments, read and checked (<see cref="TryRead"/>).</summary>
     public sealed record SearchRequest(string Text, string Path, string Files, bool Regex, int Context, string Output, string Order, int? Limit, int? Depth);
@@ -79,40 +128,42 @@ public sealed class SearchFilesTool : FileTool
     /// <summary>
     /// <see cref="Describe"/>'s dispatch over any sandbox (2026-09-30: <c>unc_search</c> runs it over a share): a content search
     /// with text, else one of the three listing shapes; <c>Budgeted</c> when a share's walk stopped at its budget
-    /// (<see cref="SearchResult.Budgeted"/>, <see cref="RecentResult.Budgeted"/>).
+    /// (<see cref="SearchResult.Budgeted"/>, <see cref="RecentResult.Budgeted"/>). <paramref name="maxLimit"/> is the cap of the
+    /// call (<see cref="LimitOf"/>, 2026-10-01): a bigger <c>limit</c> is clamped to it, as it was to 200, and every default with it.
     /// </summary>
-    public static (string Text, bool Budgeted) Run(WorkingDirectory sandbox, SearchRequest request, CancellationToken cancellationToken)
+    public static (string Text, bool Budgeted) Run(WorkingDirectory sandbox, SearchRequest request, int maxLimit, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(sandbox);
         ArgumentNullException.ThrowIfNull(request);
+        maxLimit = Math.Clamp(maxLimit, 1, WorkingDirectory.MaxResultLimit);
         string needle = (request.Text ?? "").Trim();
         string path = request.Path;
         string files = request.Files;
-        int? limit = request.Limit;
+        int? limit = request.Limit is { } asked ? Math.Clamp(asked, 1, maxLimit) : null;
         int? depth = request.Depth;
         int walkDepth = depth is { } d ? Math.Max(1, d) : int.MaxValue;
         if (needle.Length > 0)
         {
             bool countFiles = string.Equals((request.Output ?? "").Trim(), FilesOutput, StringComparison.OrdinalIgnoreCase);
-            var result = sandbox.Search(needle, path, files, request.Regex, cancellationToken, request.Context, limit ?? WorkingDirectory.DefaultSearchLimit, walkDepth, countFiles ? SearchOutput.Files : SearchOutput.Content);
+            var result = sandbox.Search(needle, path, files, request.Regex, cancellationToken, request.Context, limit ?? Math.Min(WorkingDirectory.DefaultSearchLimit, maxLimit), walkDepth, countFiles ? SearchOutput.Files : SearchOutput.Content);
             return (countFiles ? FileText.SearchFiles(result, needle) : FileText.SearchHits(result, needle), result.Budgeted);
         }
 
         if (string.Equals((request.Order ?? "").Trim(), ModifiedOrder, StringComparison.OrdinalIgnoreCase))
         {
-            var recent = sandbox.Recent(path, limit ?? WorkingDirectory.DefaultRecent, walkDepth);
+            var recent = sandbox.Recent(path, limit ?? Math.Min(WorkingDirectory.DefaultRecent, maxLimit), walkDepth);
             return (FileText.Recent(recent), recent.Budgeted);
         }
 
         if (!string.IsNullOrWhiteSpace(files))
         {
-            return (FileText.Found(sandbox.Find(files, path, limit ?? WorkingDirectory.DefaultFindLimit, walkDepth), files.Trim()), false);
+            return (FileText.Found(sandbox.Find(files, path, limit ?? Math.Min(WorkingDirectory.DefaultFindLimit, maxLimit), walkDepth), files.Trim()), false);
         }
 
         int levels = Math.Clamp(depth ?? 1, 1, WorkingDirectory.MaxTreeDepth);
         return levels == 1
-            ? (FileText.Listing(sandbox.List(path, limit ?? WorkingDirectory.MaxEntries)), false)
-            : (FileText.Listing(sandbox.FileTree(path, Math.Clamp(limit ?? WorkingDirectory.MaxEntries, 1, WorkingDirectory.MaxListLimit), levels), levels), false);
+            ? (FileText.Listing(sandbox.List(path, limit ?? Math.Min(WorkingDirectory.MaxEntries, maxLimit))), false)
+            : (FileText.Listing(sandbox.FileTree(path, limit ?? Math.Min(WorkingDirectory.MaxEntries, maxLimit), levels), levels), false);
     }
 
     /// <summary>
@@ -176,6 +227,7 @@ public sealed class SearchFilesTool : FileTool
         }
 
         // Off the caller's thread: the walk is synchronous and parallel, and the turn loop is the UI's.
-        return await Task.Run(() => Run(Files, request!, cancellationToken).Text, cancellationToken).ConfigureAwait(false);
+        int limit = Limit;
+        return await Task.Run(() => Run(Files, request!, limit, cancellationToken).Text, cancellationToken).ConfigureAwait(false);
     }
 }

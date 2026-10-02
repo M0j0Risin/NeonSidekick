@@ -92,7 +92,9 @@ public sealed class MySqlToolsTests
         Assert.Equal(MySqlText.SelectInto, await Invoke<MySqlQueryTool>(("sql", "SELECT 1 INTO OUTFILE '/tmp/x'")));
         Assert.Equal(MySqlText.ExecutableComment(1, 8), await Invoke<MySqlQueryTool>(("sql", "SELECT /*! 1 */ 1")));
         Assert.Equal(MySqlText.NoSql, await Invoke<MySqlQueryTool>());
-        Assert.Equal(SqlText.BadMaxRows(1, 1000), await Invoke<MySqlQueryTool>(("sql", "SELECT 1"), ("max_rows", 0)));
+        Assert.Equal(SqlText.BadMaxRows(1, 100_000), await Invoke<MySqlQueryTool>(("sql", "SELECT 1"), ("max_rows", 0)));
+        Assert.Equal(SqlText.BadMaxRows(1, 100_000), await Invoke<MySqlQueryTool>(("sql", "SELECT 1"), ("max_rows", 100_001)));
+        Assert.Contains("1 to 100000", Tool<MySqlQueryTool>().JsonSchema.GetProperty("properties").GetProperty("max_rows").GetProperty("description").GetString(), StringComparison.Ordinal);
         Assert.Equal(MySqlText.BadParams("[1,2]"), await Invoke<MySqlQueryTool>(("sql", "SELECT 1"), ("params", Json("[1,2]"))));
         Assert.Equal(MySqlText.NoTable, await Invoke<MySqlDescribeTool>(("table", " ")));
         Assert.Equal(MySqlText.BadTable("a.b.c"), await Invoke<MySqlDescribeTool>(("table", "a.b.c")));

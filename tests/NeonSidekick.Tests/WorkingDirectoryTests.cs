@@ -610,9 +610,11 @@ public sealed class WorkingDirectoryTests : IDisposable
         Assert.True(result.FilesSearched < 500, $"searched {result.FilesSearched}");
         Assert.Equal(result.Hits.OrderBy(h => h.RelativePath, StringComparer.OrdinalIgnoreCase).ThenBy(h => h.Line), result.Hits);
 
-        // limit (2026-09-19): the model's cap, clamped to MaxSearchLimit.
+        // limit (2026-09-19): the model's cap, clamped to MaxResultLimit (200 until 2026-10-01; the tools clamp to the setting first).
         Assert.Equal(7, _files.Search("needle", "", null, false, CancellationToken.None, limit: 7).Hits.Count);
-        Assert.Equal(WorkingDirectory.MaxSearchLimit, _files.Search("needle", "", null, false, CancellationToken.None, limit: 5000).Hits.Count);
+        Assert.Equal(300, _files.Search("needle", "", null, false, CancellationToken.None, limit: 300).Hits.Count);
+        Assert.Equal(1000, _files.Search("needle", "", null, false, CancellationToken.None, limit: 99_999).Hits.Count);
+        Assert.Equal(Settings.AppSettingsData.MaxFileSearchMaxResults, WorkingDirectory.MaxResultLimit);
         Assert.Single(_files.Search("needle", "", null, false, CancellationToken.None, limit: 0).Hits);
     }
 
@@ -886,6 +888,67 @@ public sealed class WorkingDirectoryTests : IDisposable
         Assert.False(_files.IsExistingDirectory("img/cat.png"));
         Assert.False(_files.IsExistingDirectory("nowhere"));
         Assert.False(_files.IsExistingDirectory(".."));
+    }
+
+    [Fact]
+    public void BeginWrite_GuardsAsWriteBytes_WritesASibling_CommitsInPlace_OrLeavesNothing()
+    {
+        // 2026-10-01, download_file streamed to disk: WriteBytes' guards up front, the bytes in a temporary sibling, the target only at the commit.
+        Assert.Equal(FileOutcome.OutsideRoot, _files.BeginWrite(@"..\x.bin", true, out var none).Outcome);
+        Assert.Null(none);
+        Directory.CreateDirectory(Full("dir"));
+        Assert.Equal(FileOutcome.IsDirectory, _files.BeginWrite("dir", true, out none).Outcome);
+        Assert.Null(none);
+
+        var begun = _files.BeginWrite(@"deep\new\a.bin", overwrite: false, out var pending);
+        Assert.Equal(FileOutcome.Ok, begun.Outcome);
+        using (pending)
+        {
+            pending!.Stream.Write([1, 2, 3]);
+            Assert.False(File.Exists(Full(@"deep\new\a.bin")));   // not yet: only the sibling
+            Assert.Single(Directory.GetFiles(Full(@"deep\new"), "*.tmp"));
+            var done = pending.Commit();
+            Assert.Equal(new WriteResult(FileOutcome.Ok, @"deep\new\a.bin", 3, false), done);
+        }
+
+        Assert.Equal(new byte[] { 1, 2, 3 }, File.ReadAllBytes(Full(@"deep\new\a.bin")));
+        Assert.Empty(Directory.GetFiles(Full(@"deep\new"), "*.tmp"));
+
+        // A file there: refused without overwrite; with it, replaced at the commit.
+        Assert.Equal(FileOutcome.Exists, _files.BeginWrite(@"deep\new\a.bin", false, out none).Outcome);
+        using (var again = Begin(@"deep\new\a.bin", overwrite: true))
+        {
+            again.Stream.Write([9]);
+            Assert.Equal(new WriteResult(FileOutcome.Ok, @"deep\new\a.bin", 1, true), again.Commit());
+        }
+
+        Assert.Equal(new byte[] { 9 }, File.ReadAllBytes(Full(@"deep\new\a.bin")));
+
+        // Disposed without a commit (a cancel, a stall, an oversize): the sibling goes and the target is untouched.
+        using (var dropped = Begin(@"deep\new\a.bin", overwrite: true))
+        {
+            dropped.Stream.Write([7, 7]);
+        }
+
+        Assert.Equal(new byte[] { 9 }, File.ReadAllBytes(Full(@"deep\new\a.bin")));
+        Assert.Empty(Directory.GetFiles(Full(@"deep\new"), "*.tmp"));
+
+        // A file that appeared meanwhile is not clobbered without overwrite.
+        using (var raced = Begin("late.bin", overwrite: false))
+        {
+            File.WriteAllBytes(Full("late.bin"), [5]);
+            raced.Stream.Write([6]);
+            Assert.Equal(FileOutcome.Exists, raced.Commit().Outcome);
+        }
+
+        Assert.Equal(new byte[] { 5 }, File.ReadAllBytes(Full("late.bin")));
+        Assert.Empty(Directory.GetFiles(_root, "*.tmp"));
+    }
+
+    private PendingWrite Begin(string relative, bool overwrite)
+    {
+        Assert.Equal(FileOutcome.Ok, _files.BeginWrite(relative, overwrite, out var pending).Outcome);
+        return pending!;
     }
 
     [Fact]

@@ -505,7 +505,7 @@ internal sealed partial class SettingsMenu
     /// <summary>The app's test: the draft's root listed under its account through <see cref="UncAccess.RunAsync{T}"/>, the entries counted. Never writes.</summary>
     private Task<UncResult<int>> TestUncShareAsync(UncNamedShare share, CancellationToken cancellationToken) =>
         new UncAccess(() => new UncCatalog([share], []), TimeProvider.System)
-            .RunAsync(share, write: false, files => files.List("", Files.WorkingDirectory.MaxListLimit).Entries.Count, cancellationToken);
+            .RunAsync(share, write: false, files => files.List("", Files.WorkingDirectory.ProbeListLimit).Entries.Count, cancellationToken);
 
     /// <summary>
     /// Writes the draft: the entry (<see cref="UncConfigFile.AddShare"/>), then under runas its password to its store, then — when

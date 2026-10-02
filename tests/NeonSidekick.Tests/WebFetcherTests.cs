@@ -629,6 +629,44 @@ public class WebFetcherTests
     }
 
     [Fact]
+    public async Task Save_StreamsTheBody_UnderTheCap_ElseTooBig_AndAQuietServer_IsAStall()
+    {
+        // 2026-10-01 (download_file streamed to disk): no ceiling on the whole body, a stall timeout between reads instead.
+        _http.Map("https://example.com/file.bin", (_, _) => Task.FromResult(TrickleStream.Response(new TrickleStream(new byte[200_000]), "application/octet-stream")));
+        _http.Map("https://example.com/quiet.bin", (_, _) => Task.FromResult(TrickleStream.Response(new TrickleStream(new byte[10], hang: true), "application/octet-stream")));
+        var fetcher = new WebFetcher(new HttpClient(_http), _browser, (host, _) => Task.FromResult(_dns[host])) { DownloadStallTimeout = TimeSpan.FromMilliseconds(200) };
+
+        using (var opened = await fetcher.OpenDownloadAsync(new Uri("https://example.com/file.bin"), Options(), 1_000_000, CancellationToken.None))
+        {
+            Assert.True(opened.Ok);
+            Assert.Equal(0, opened.Declared);
+            using var target = new MemoryStream();
+            var saved = await fetcher.SaveAsync(opened, target, 1_000_000, CancellationToken.None);
+            Assert.True(saved.Ok);
+            Assert.Equal(200_000, saved.Bytes);
+            Assert.Equal(200_000, target.Length);
+        }
+
+        using (var opened = await fetcher.OpenDownloadAsync(new Uri("https://example.com/file.bin"), Options(), 100_000, CancellationToken.None))
+        {
+            var saved = await fetcher.SaveAsync(opened, Stream.Null, 100_000, CancellationToken.None);
+            Assert.Equal(FetchOutcome.TooBig, saved.Outcome);
+            Assert.Equal("Error: 'https://example.com/file.bin' is over the 100 KB download limit", saved.Error);
+        }
+
+        using (var opened = await fetcher.OpenDownloadAsync(new Uri("https://example.com/quiet.bin"), Options(), 1_000_000, CancellationToken.None))
+        {
+            var saved = await fetcher.SaveAsync(opened, Stream.Null, 1_000_000, CancellationToken.None);
+            Assert.Equal(FetchOutcome.Timeout, saved.Outcome);
+            Assert.Equal(WebText.Stalled("https://example.com/quiet.bin", TimeSpan.FromMilliseconds(200)), saved.Error);
+        }
+
+        Assert.Equal(TimeSpan.FromSeconds(60), WebFetcher.DefaultDownloadStallTimeout);
+        Assert.Equal(TimeSpan.FromSeconds(60), Fetcher().DownloadStallTimeout);
+        Assert.Equal("Error: 'https://example.com/x.bin' sent nothing for 60s; the download was dropped", WebText.Stalled("https://example.com/x.bin", TimeSpan.FromSeconds(60)));
+    }
+
+    [Fact]
     public async Task Download_TheCallersCancel_Escapes()
     {
         _http.Map("https://example.com/slow", async (_, ct) => { await Task.Delay(Timeout.InfiniteTimeSpan, ct); return Bytes([1], "image/png"); });

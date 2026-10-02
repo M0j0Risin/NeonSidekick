@@ -36,6 +36,17 @@ public abstract class SqlTool : AIFunction
 
     protected AppSettingsData Effective => _effective();
 
+    /// <summary>
+    /// The characters of table a query tool's answer may carry (2026-10-01, the user's ask): <c>Query result max chars</c>
+    /// (<see cref="AppSettingsData.QueryResultMaxChars"/>), clamped; one setting for <c>sql_query</c>, <c>oracle_query</c> and
+    /// <c>mysql_query</c>. The catalog tools keep <see cref="Files.WorkingDirectory.MaxReadChars"/>.
+    /// </summary>
+    public static int ResultChars(AppSettingsData effective)
+    {
+        ArgumentNullException.ThrowIfNull(effective);
+        return Math.Clamp(effective.QueryResultMaxChars, AppSettingsData.MinQueryResultMaxChars, AppSettingsData.MaxQueryResultMaxChars);
+    }
+
     /// <summary>The batch timeout: the setting, clamped to the range a hand-edited value may have left.</summary>
     public static int TimeoutSeconds(AppSettingsData effective)
     {

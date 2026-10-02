@@ -33,7 +33,7 @@ internal static class UncCheck
 
         checks.Add(new SmokeCheck("unc:share", true, $"{share.Config.Root} as {UncAccess.Account(share)}{(share.Config.IsReadWrite ? ", readwrite" : ", read")}"));
         var access = new UncAccess(() => catalog, time);
-        var reach = await access.RunAsync(share, write: false, files => files.List("", Files.WorkingDirectory.MaxListLimit), cancellationToken).ConfigureAwait(false);
+        var reach = await access.RunAsync(share, write: false, files => files.List("", Files.WorkingDirectory.ProbeListLimit), cancellationToken).ConfigureAwait(false);
         if (reach.Error is { } refused)
         {
             checks.Add(new SmokeCheck("unc:reach", false, refused));

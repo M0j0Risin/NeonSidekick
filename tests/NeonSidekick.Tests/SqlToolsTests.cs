@@ -137,8 +137,11 @@ public sealed class SqlToolsTests
         Assert.Equal(SqlText.NotOneStatement(2), await Invoke<SqlQueryTool>(("sql", "SELECT 1 DELETE FROM t")));
         Assert.Equal(SqlText.NotASelect("UPDATE"), await Invoke<SqlQueryTool>(("sql", "UPDATE t SET x = 1")));
         Assert.Equal(SqlText.NoSql, await Invoke<SqlQueryTool>());
-        Assert.Equal(SqlText.BadMaxRows(1, 1000), await Invoke<SqlQueryTool>(("sql", "SELECT 1"), ("max_rows", 0)));
-        Assert.Equal(SqlText.BadMaxRows(1, 1000), await Invoke<SqlQueryTool>(("sql", "SELECT 1"), ("max_rows", 1001)));
+        Assert.Equal(SqlText.BadMaxRows(1, 100_000), await Invoke<SqlQueryTool>(("sql", "SELECT 1"), ("max_rows", 0)));
+        Assert.Equal(SqlText.BadMaxRows(1, 100_000), await Invoke<SqlQueryTool>(("sql", "SELECT 1"), ("max_rows", 100_001)));
+        Assert.Equal("Error: max_rows must be 1 to 100000", SqlText.BadMaxRows(1, 100_000));
+        // 1000 was the cap until 2026-10-01 (the user's ask): past it the call goes on to connect now.
+        Assert.StartsWith("Error: could not connect", await Invoke<SqlQueryTool>(("sql", "SELECT 1"), ("max_rows", 5000)), StringComparison.Ordinal);
         Assert.Equal(ClockText.BadInteger("max_rows", "lots"), await Invoke<SqlQueryTool>(("sql", "SELECT 1"), ("max_rows", "lots")));
         Assert.Equal(SqlText.BadParams("[1,2]"), await Invoke<SqlQueryTool>(("sql", "SELECT 1"), ("params", Json("[1,2]"))));
         Assert.Equal(SqlText.BadParams("5"), await Invoke<SqlQueryTool>(("sql", "SELECT 1"), ("params", Json("5"))));
@@ -219,10 +222,35 @@ public sealed class SqlToolsTests
     }
 
     [Fact]
+    public void AWideResult_CutAtTheDefaultTextCap_ComesBackWhole_UnderARaisedOne()
+    {
+        // 1000 rows of ~100 characters: the 32,000 default cut it at about a third (the user's report, 2026-10-01).
+        var rows = Enumerable.Range(0, 1000).Select(i => new[] { i.ToString(System.Globalization.CultureInfo.InvariantCulture), new string('x', 100) }).ToList();
+        var run = new SqlRun(SqlOutcome.Ok, "", "prod", "db", [new SqlGrid(["id", "text"], rows, false)], TimeSpan.Zero);
+
+        string cut = SqlText.Query(run, 1000, SqlTool.ResultChars(new AppSettingsData()));
+        Assert.Contains(" fit the text cap; select fewer columns or rows for the rest", cut, StringComparison.Ordinal);
+        Assert.DoesNotContain("| 999 |", cut, StringComparison.Ordinal);
+
+        string whole = SqlText.Query(run, 1000, SqlTool.ResultChars(new AppSettingsData { QueryResultMaxChars = 200_000 }));
+        Assert.DoesNotContain("fit the text cap", whole, StringComparison.Ordinal);
+        Assert.Contains("| 999 |", whole, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void TheCaps_ComeFromTheSettings_Clamped()
     {
         Assert.Equal(100, SqlQueryTool.DefaultRows(new AppSettingsData()));
-        Assert.Equal(1000, SqlQueryTool.DefaultRows(new AppSettingsData { SqlQueryMaxRows = 99_999 }));
+        Assert.Equal(99_999, SqlQueryTool.DefaultRows(new AppSettingsData { SqlQueryMaxRows = 99_999 }));
+        Assert.Equal(100_000, SqlQueryTool.DefaultRows(new AppSettingsData { SqlQueryMaxRows = 999_999 }));
+        Assert.Equal(100_000, AppSettingsData.MaxSqlQueryMaxRows);
+        Assert.Contains("1 to 100000", Tool<SqlQueryTool>().JsonSchema.GetProperty("properties").GetProperty("max_rows").GetProperty("description").GetString(), StringComparison.Ordinal);
+
+        // Query result max chars (2026-10-01, the user's ask): the file tools' 32,000 by default, clamped.
+        Assert.Equal(32_000, AppSettingsData.DefaultQueryResultMaxChars);
+        Assert.Equal(32_000, SqlTool.ResultChars(new AppSettingsData()));
+        Assert.Equal(1_000, SqlTool.ResultChars(new AppSettingsData { QueryResultMaxChars = 5 }));
+        Assert.Equal(1_000_000, SqlTool.ResultChars(new AppSettingsData { QueryResultMaxChars = int.MaxValue }));
         Assert.Equal(30, SqlTool.TimeoutSeconds(new AppSettingsData()));
         Assert.Equal(1, SqlTool.TimeoutSeconds(new AppSettingsData { SqlQueryTimeoutSeconds = -3 }));
         Assert.Null(SqlTablesTool.LikePattern(" "));

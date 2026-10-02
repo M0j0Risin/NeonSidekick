@@ -1377,9 +1377,26 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>
+    /// <c>/header</c> (2026-10-01, the user's ask, with Ctrl+Alt+H): <c>Show header</c> flipped or set and saved
+    /// (<see cref="HeaderToggle.Toggle"/>); the banner is rows of the transcript, so it comes or goes at the next wipe and the
+    /// notice says so (the user's pick: no redraw that would wipe what is on the screen).
+    /// </summary>
+    private void HandleHeader(string args)
+    {
+        if (HeaderToggle.Toggle(args, _settings.Current.ShowHeader) is not { } shown)
+        {
+            _transcript.Error(HeaderToggle.UsageError);
+            return;
+        }
+
+        _settings.Update(d => d.ShowHeader = shown);
+        _transcript.Notice(HeaderToggle.Notice(shown));
+    }
+
+    /// <summary>
     /// A command chord pressed in a pane that leaves it open (2026-10-01, the user's call): Ctrl+F <c>/perf</c> and Ctrl+T
     /// <c>/tb</c> (Ctrl+Alt+E and B until later still that day) toggle their bar as typed — here at the idle line, posted to the turn task under a reply — and the tick
-    /// repaints the pane's new shape. Ctrl+E <c>/explore</c> the same (later on 2026-10-01): it opens a window outside the
+    /// repaints the pane's new shape. Ctrl+Alt+H <c>/header</c> the same (later still that day): a setting saved, nothing on the pane. Ctrl+E <c>/explore</c> the same (later on 2026-10-01): it opens a window outside the
     /// terminal, so the pane has no reason to close. False for every other chord: the pane closes and the screen runs it
     /// (<see cref="ScreenPane.Chord"/>, <see cref="OffPaneLine"/>).
     /// </summary>
@@ -1395,6 +1412,9 @@ internal sealed partial class ChatScreen
                 return true;
             case SlashCommand.Tb:
                 RunOrPost(() => HandleToolbar(""));
+                return true;
+            case SlashCommand.Header:
+                RunOrPost(() => HandleHeader(""));
                 return true;
             default:
                 return false;
@@ -1707,6 +1727,7 @@ internal sealed partial class ChatScreen
         rows.Add(("Ctrl+X", "cut the selected text"));
         rows.Add(("Ctrl+Alt+C", "start a new conversation and clear the screen (/clear)"));
         rows.Add(("Ctrl+Alt+D", "open the MCP pane (/mcp)"));
+        rows.Add(("Ctrl+Alt+H", "show or hide the header at the next clear (/header)"));
         rows.Add(("Ctrl+Alt+L", "open the allowed commands list (/cmdlist)"));
         rows.Add(("Ctrl+Alt+M", "open the memory pane (/memory)"));
         rows.Add(("Ctrl+Alt+N", "start a new conversation but do not clear the screen (/new)"));
@@ -3353,6 +3374,9 @@ internal sealed partial class ChatScreen
             case SlashCommand.Tb:
                 return MentionCompleter.Matches(ToolbarItems.Words.Select(word => new CompletionItem(word, ToolbarItems.DescribeWord(word))).ToList(), argText);
 
+            case SlashCommand.Header:
+                return MentionCompleter.Matches(HeaderToggle.Words.Select(word => new CompletionItem(word, HeaderToggle.DescribeWord(word))).ToList(), argText);
+
             case SlashCommand.Profile:
             {
                 foreach (var verb in ProfileVerbs)
@@ -3967,7 +3991,7 @@ internal sealed partial class ChatScreen
     public static IReadOnlyList<AIFunction> FileTools(WorkingDirectory files, Func<bool> isDefault, Action<string> openFile, Func<AppSettingsData> effective, UncAccess? unc = null) => new AIFunction[]
     {
         new GetWorkingDirectoryTool(files, isDefault),
-        new SearchFilesTool(files),
+        new SearchFilesTool(files, effective),
         new FileInfoTool(files),
         new ReadFileTool(files),
         new ViewImageTool(files, effective),
@@ -9710,6 +9734,10 @@ internal sealed partial class ChatScreen
 
             case SlashCommand.Tb:
                 HandleToolbar(args);
+                return false;
+
+            case SlashCommand.Header:
+                HandleHeader(args);
                 return false;
 
             case SlashCommand.Expand or SlashCommand.Collapse:

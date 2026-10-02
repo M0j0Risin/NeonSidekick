@@ -47,6 +47,61 @@ public sealed record DownloadResult(FetchOutcome Outcome, string Url, string Fin
 }
 
 /// <summary>
+/// A download's head, its body not yet read (<see cref="WebFetcher.OpenDownloadAsync"/>, 2026-10-01): the outcome of the
+/// walk, the final URL and status, the media type, the <c>Content-Disposition</c> name and the declared length (0 when none
+/// was given). An Ok one holds the response — <see cref="WebFetcher.SaveAsync"/> streams its body — until disposed.
+/// </summary>
+public sealed class OpenedDownload : IDisposable
+{
+    private readonly HttpResponseMessage? _response;
+    private readonly IDisposable? _owner;
+
+    internal OpenedDownload(FetchOutcome outcome, string url, string finalUrl, int status, string mediaType, string fileName, long declared, string detail, HttpResponseMessage? response = null, IDisposable? owner = null)
+    {
+        Outcome = outcome;
+        Url = url;
+        FinalUrl = finalUrl;
+        Status = status;
+        MediaType = mediaType;
+        FileName = fileName;
+        Declared = declared;
+        Detail = detail;
+        _response = response;
+        _owner = owner;
+    }
+
+    internal static OpenedDownload Fail(FetchOutcome outcome, string url, string detail, int status = 0) =>
+        new(outcome, url, url, status, "", "", 0, detail);
+
+    public FetchOutcome Outcome { get; }
+    public string Url { get; }
+    public string FinalUrl { get; }
+    public int Status { get; }
+    public string MediaType { get; }
+    public string FileName { get; }
+    public long Declared { get; }
+    public string Detail { get; }
+
+    public bool Ok => Outcome == FetchOutcome.Ok;
+
+    /// <summary>The tool's sentence for a failed download.</summary>
+    public string Error => WebText.Error(Outcome, Url, Detail);
+
+    internal HttpResponseMessage Response => _response ?? throw new InvalidOperationException("The download did not open.");
+
+    public void Dispose() => _owner?.Dispose();
+}
+
+/// <summary>What <see cref="WebFetcher.SaveAsync"/> did with a body (2026-10-01): Ok with the bytes written, or the outcome and its sentence.</summary>
+public sealed record SavedBody(FetchOutcome Outcome, string Url, long Bytes, string Detail)
+{
+    public bool Ok => Outcome == FetchOutcome.Ok;
+
+    /// <summary>The tool's sentence for a failed save.</summary>
+    public string Error => WebText.Error(Outcome, Url, Detail);
+}
+
+/// <summary>
 /// The fetch behind <c>web_fetch</c> and the search engines' pages: an HTTP client that looks like
 /// Chrome (<see cref="BrowserHeaders"/>), redirects followed by hand so every hop is judged by the
 /// LAN rule and re-headed, the body read to <see cref="MaxDownloadBytes"/> and decoded by
@@ -63,11 +118,20 @@ public sealed class WebFetcher
     /// <summary>How much of a page's body is read; the rest is cut and the result marked truncated.</summary>
     public const int MaxDownloadBytes = 5_000_000;
 
-    /// <summary>The largest file <see cref="DownloadAsync"/> saves (2026-09-18); over it the download is refused, never cut.</summary>
+    /// <summary>The largest file <see cref="DownloadAsync"/> holds (2026-09-18; <c>download_file</c>'s too until 2026-10-01, when the <c>Web download max (MB)</c> setting took its place); over it the download is refused, never cut.</summary>
     public const long MaxFileDownloadBytes = 50_000_000;
 
-    /// <summary>The ceiling on reading a file's body once its headers arrived (the headers under <see cref="FetchTimeout"/> as every leg).</summary>
+    /// <summary>The ceiling on reading a file's body into memory once its headers arrived (<see cref="DownloadAsync"/>; the headers under <see cref="FetchTimeout"/> as every leg).</summary>
     public static readonly TimeSpan DownloadTimeout = TimeSpan.FromMinutes(2);
+
+    /// <summary>
+    /// How long <see cref="SaveAsync"/> waits for the next byte before it drops the download (2026-10-01, the user's ask: the
+    /// two-minute ceiling on the whole body went with the 50 MB cap, since a file of gigabytes takes longer than that on any link).
+    /// </summary>
+    public static readonly TimeSpan DefaultDownloadStallTimeout = TimeSpan.FromSeconds(60);
+
+    /// <summary><see cref="DefaultDownloadStallTimeout"/>, shorter in a test.</summary>
+    public TimeSpan DownloadStallTimeout { get; init; } = DefaultDownloadStallTimeout;
 
     public const int MaxRedirects = 10;
 
@@ -455,77 +519,173 @@ public sealed class WebFetcher
     }
 
     /// <summary>
-    /// The download behind <c>download_file</c> (2026-09-18): the HTTP leg's walk (<see cref="FollowAsync"/>,
-    /// the LAN rule at every hop and at the socket) and the body whole, whatever its media type, up
-    /// to <see cref="MaxFileDownloadBytes"/> — a <c>Content-Length</c> over it is refused unread, a
-    /// body that outgrows it is refused after (<see cref="FetchOutcome.TooBig"/>; a cut file is a
-    /// broken file). The body is read under <see cref="DownloadTimeout"/>. The headless browser is
-    /// never tried (it dumps a DOM, it hands back no bytes) and no page cache is consulted. A 4xx / 5xx
-    /// answer is <see cref="FetchOutcome.Blocked"/> or <see cref="FetchOutcome.Failed"/> as a page's is.
+    /// The download behind <c>SkillHub</c>'s files (<c>download_file</c>'s until 2026-10-01, when it went to
+    /// <see cref="OpenDownloadAsync"/> and <see cref="SaveAsync"/>, streamed to disk): the head as <see cref="OpenDownloadAsync"/>
+    /// reads it under <see cref="MaxFileDownloadBytes"/>, then the body whole in memory, whatever its media type — a body that
+    /// outgrows the cap is refused after (<see cref="FetchOutcome.TooBig"/>; a cut file is a broken file). The body is read
+    /// under <see cref="DownloadTimeout"/>. No page cache is consulted.
     /// </summary>
     public async Task<DownloadResult> DownloadAsync(Uri url, FetchOptions options, CancellationToken cancellationToken)
+    {
+        using var opened = await OpenDownloadAsync(url, options, MaxFileDownloadBytes, cancellationToken).ConfigureAwait(false);
+        if (!opened.Ok)
+        {
+            return new DownloadResult(opened.Outcome, opened.Url, opened.FinalUrl, opened.Status, opened.MediaType, opened.FileName, [], opened.Detail);
+        }
+
+        var current = new Uri(opened.FinalUrl);
+        var watch = Stopwatch.StartNew();
+        try
+        {
+            using var reading = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            reading.CancelAfter(DownloadTimeout);
+            var (bytes, truncated) = await ReadAsync(opened.Response, MaxFileDownloadBytes, reading.Token).ConfigureAwait(false);
+            if (truncated)
+            {
+                DiagnosticLog.Info(Category, $"GET {current} → {opened.Status.ToString(CultureInfo.InvariantCulture)} {opened.MediaType}: the body outgrew the cap.");
+                return DownloadResult.Fail(FetchOutcome.TooBig, url.AbsoluteUri, WebText.TooBig(url.AbsoluteUri, opened.Declared, MaxFileDownloadBytes), opened.Status);
+            }
+
+            DiagnosticLog.Info(Category, $"GET {current} → {opened.Status.ToString(CultureInfo.InvariantCulture)} {(opened.MediaType.Length == 0 ? "(no type)" : opened.MediaType)}, {bytes.Length.ToString(CultureInfo.InvariantCulture)} B downloaded in {watch.ElapsedMilliseconds.ToString(CultureInfo.InvariantCulture)} ms.");
+            return new DownloadResult(FetchOutcome.Ok, url.AbsoluteUri, current.AbsoluteUri, opened.Status, opened.MediaType, opened.FileName, bytes, "");
+        }
+        catch (Exception ex) when (IsFetchFailure(ex, cancellationToken))
+        {
+            var failed = Failure(ex, url, current, DownloadTimeout);
+            return new DownloadResult(failed.Outcome, failed.Url, failed.FinalUrl, failed.Status, "", "", [], failed.Detail);
+        }
+    }
+
+    /// <summary>
+    /// A download's head (2026-10-01, split from <see cref="DownloadAsync"/> when <c>download_file</c> went to disk): the HTTP
+    /// leg's walk (<see cref="FollowAsync"/>, the LAN rule at every hop and at the socket) to the final answer, its headers
+    /// read and its body not yet — a 4xx / 5xx answer is <see cref="FetchOutcome.Blocked"/> or <see cref="FetchOutcome.Failed"/>
+    /// as a page's is, a <c>Content-Length</c> over <paramref name="maxBytes"/> is refused unread
+    /// (<see cref="FetchOutcome.TooBig"/>). The headless browser is never tried (it dumps a DOM, it hands back no bytes). An
+    /// open one holds the response until disposed; <see cref="SaveAsync"/> streams its body.
+    /// </summary>
+    public async Task<OpenedDownload> OpenDownloadAsync(Uri url, FetchOptions options, long maxBytes, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(url);
         ArgumentNullException.ThrowIfNull(options);
         if (!IsHttp(url))
         {
-            return DownloadResult.Fail(FetchOutcome.NotHttp, url.OriginalString, "");
+            return OpenedDownload.Fail(FetchOutcome.NotHttp, url.OriginalString, "");
         }
 
         if (await RefusalAsync(url.Host, options, cancellationToken).ConfigureAwait(false) is { } refused)
         {
-            return DownloadResult.Fail(refused, url.AbsoluteUri, url.Host);
+            return OpenedDownload.Fail(refused, url.AbsoluteUri, url.Host);
         }
 
         var current = url;
-        var ceiling = FetchTimeout;
-        var watch = Stopwatch.StartNew();
         try
         {
             var (arrived, failed) = await FollowAsync(url, options, cancellationToken).ConfigureAwait(false);
             if (failed is not null)
             {
-                return new DownloadResult(failed.Outcome, failed.Url, failed.FinalUrl, failed.Status, "", "", [], failed.Detail);
+                return new OpenedDownload(failed.Outcome, failed.Url, failed.FinalUrl, failed.Status, "", "", 0, failed.Detail);
             }
 
-            using var arrival = arrived!;
-            var response = arrival.Response;
-            current = arrival.Final;
-            int status = (int)response.StatusCode;
-            string mediaType = response.Content.Headers.ContentType?.MediaType?.Trim().ToLowerInvariant() ?? "";
-            string fileName = FileNameOf(response);
-            if (status >= 400)
+            var arrival = arrived!;
+            bool kept = false;
+            try
             {
-                string detail = $"HTTP {status.ToString(CultureInfo.InvariantCulture)} {response.ReasonPhrase}".TrimEnd();
-                DiagnosticLog.Info(Category, $"GET {current} → {detail}.");
-                var outcome = IsBlockedStatus(status) ? FetchOutcome.Blocked : FetchOutcome.Failed;
-                return new DownloadResult(outcome, url.AbsoluteUri, current.AbsoluteUri, status, mediaType, fileName, [], detail);
-            }
+                var response = arrival.Response;
+                current = arrival.Final;
+                int status = (int)response.StatusCode;
+                string mediaType = response.Content.Headers.ContentType?.MediaType?.Trim().ToLowerInvariant() ?? "";
+                string fileName = FileNameOf(response);
+                if (status >= 400)
+                {
+                    string detail = $"HTTP {status.ToString(CultureInfo.InvariantCulture)} {response.ReasonPhrase}".TrimEnd();
+                    DiagnosticLog.Info(Category, $"GET {current} → {detail}.");
+                    var outcome = IsBlockedStatus(status) ? FetchOutcome.Blocked : FetchOutcome.Failed;
+                    return new OpenedDownload(outcome, url.AbsoluteUri, current.AbsoluteUri, status, mediaType, fileName, 0, detail);
+                }
 
-            long declared = response.Content.Headers.ContentLength ?? 0;
-            if (declared > MaxFileDownloadBytes)
+                long declared = response.Content.Headers.ContentLength ?? 0;
+                if (declared > maxBytes)
+                {
+                    DiagnosticLog.Info(Category, $"GET {current} → {status.ToString(CultureInfo.InvariantCulture)} {mediaType}, {declared.ToString(CultureInfo.InvariantCulture)} B declared: over the cap.");
+                    return OpenedDownload.Fail(FetchOutcome.TooBig, url.AbsoluteUri, WebText.TooBig(url.AbsoluteUri, declared, maxBytes), status);
+                }
+
+                // The hop's budget timed the headers; the body has its own clock (DownloadTimeout, or SaveAsync's stall).
+                arrival.Budget.CancelAfter(Timeout.InfiniteTimeSpan);
+                kept = true;
+                return new OpenedDownload(FetchOutcome.Ok, url.AbsoluteUri, current.AbsoluteUri, status, mediaType, fileName, declared, "", response, arrival);
+            }
+            finally
             {
-                DiagnosticLog.Info(Category, $"GET {current} → {status.ToString(CultureInfo.InvariantCulture)} {mediaType}, {declared.ToString(CultureInfo.InvariantCulture)} B declared: over the cap.");
-                return DownloadResult.Fail(FetchOutcome.TooBig, url.AbsoluteUri, WebText.TooBig(url.AbsoluteUri, declared, MaxFileDownloadBytes), status);
+                if (!kept)
+                {
+                    arrival.Dispose();
+                }
             }
-
-            ceiling = DownloadTimeout;
-            using var reading = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            reading.CancelAfter(DownloadTimeout);
-            var (bytes, truncated) = await ReadAsync(response, MaxFileDownloadBytes, reading.Token).ConfigureAwait(false);
-            if (truncated)
-            {
-                DiagnosticLog.Info(Category, $"GET {current} → {status.ToString(CultureInfo.InvariantCulture)} {mediaType}: the body outgrew the cap.");
-                return DownloadResult.Fail(FetchOutcome.TooBig, url.AbsoluteUri, WebText.TooBig(url.AbsoluteUri, declared, MaxFileDownloadBytes), status);
-            }
-
-            DiagnosticLog.Info(Category, $"GET {current} → {status.ToString(CultureInfo.InvariantCulture)} {(mediaType.Length == 0 ? "(no type)" : mediaType)}, {bytes.Length.ToString(CultureInfo.InvariantCulture)} B downloaded in {watch.ElapsedMilliseconds.ToString(CultureInfo.InvariantCulture)} ms.");
-            return new DownloadResult(FetchOutcome.Ok, url.AbsoluteUri, current.AbsoluteUri, status, mediaType, fileName, bytes, "");
         }
         catch (Exception ex) when (IsFetchFailure(ex, cancellationToken))
         {
-            var failed = Failure(ex, url, current, ceiling);
-            return new DownloadResult(failed.Outcome, failed.Url, failed.FinalUrl, failed.Status, "", "", [], failed.Detail);
+            var failed = Failure(ex, url, current, FetchTimeout);
+            return new OpenedDownload(failed.Outcome, failed.Url, failed.FinalUrl, failed.Status, "", "", 0, failed.Detail);
+        }
+    }
+
+    /// <summary>
+    /// <paramref name="opened"/>'s body copied into <paramref name="target"/> (2026-10-01, <c>download_file</c> streamed to disk,
+    /// the user's ask): a chunk at a time, never held whole, so the cap (<paramref name="maxBytes"/>, the <c>Web download max
+    /// (MB)</c> setting) is disk, not memory. A body that outgrows it stops there (<see cref="FetchOutcome.TooBig"/>; the caller
+    /// drops what was written). No total ceiling: a read that waits <see cref="DownloadStallTimeout"/> for a byte ends it
+    /// (<see cref="FetchOutcome.Timeout"/>, <see cref="WebText.Stalled"/>), so a big file on a slow link finishes and a dead one
+    /// does not hang the turn. The caller's cancel (ESC) escapes.
+    /// </summary>
+    public async Task<SavedBody> SaveAsync(OpenedDownload opened, Stream target, long maxBytes, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(opened);
+        ArgumentNullException.ThrowIfNull(target);
+        var current = new Uri(opened.FinalUrl);
+        var watch = Stopwatch.StartNew();
+        long total = 0;
+        using var stall = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        try
+        {
+            stall.CancelAfter(DownloadStallTimeout);
+            using var body = await opened.Response.Content.ReadAsStreamAsync(stall.Token).ConfigureAwait(false);
+            var chunk = new byte[64 * 1024];
+            while (true)
+            {
+                stall.CancelAfter(DownloadStallTimeout);
+                int read = await body.ReadAsync(chunk, stall.Token).ConfigureAwait(false);
+                if (read <= 0)
+                {
+                    break;
+                }
+
+                // The disk's time is no stall of the server's.
+                stall.CancelAfter(Timeout.InfiniteTimeSpan);
+                total += read;
+                if (total > maxBytes)
+                {
+                    DiagnosticLog.Info(Category, $"GET {current} → {opened.Status.ToString(CultureInfo.InvariantCulture)} {opened.MediaType}: the body outgrew the cap.");
+                    return new SavedBody(FetchOutcome.TooBig, opened.Url, 0, WebText.TooBig(opened.Url, 0, maxBytes));
+                }
+
+                await target.WriteAsync(chunk.AsMemory(0, read), cancellationToken).ConfigureAwait(false);
+            }
+
+            await target.FlushAsync(cancellationToken).ConfigureAwait(false);
+            DiagnosticLog.Info(Category, $"GET {current} → {opened.Status.ToString(CultureInfo.InvariantCulture)} {(opened.MediaType.Length == 0 ? "(no type)" : opened.MediaType)}, {total.ToString(CultureInfo.InvariantCulture)} B saved in {watch.ElapsedMilliseconds.ToString(CultureInfo.InvariantCulture)} ms.");
+            return new SavedBody(FetchOutcome.Ok, opened.Url, total, "");
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            DiagnosticLog.Info(Category, $"GET {current}: nothing for {Llm.LlmTimeouts.Format(DownloadStallTimeout)} after {total.ToString(CultureInfo.InvariantCulture)} B; dropped.");
+            return new SavedBody(FetchOutcome.Timeout, opened.Url, 0, WebText.Stalled(opened.Url, DownloadStallTimeout));
+        }
+        catch (Exception ex) when (IsFetchFailure(ex, cancellationToken))
+        {
+            var failed = Failure(ex, new Uri(opened.Url), current, DownloadStallTimeout);
+            return new SavedBody(failed.Outcome, opened.Url, 0, failed.Detail);
         }
     }
 

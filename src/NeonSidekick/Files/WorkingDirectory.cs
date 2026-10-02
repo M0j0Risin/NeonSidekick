@@ -165,6 +165,81 @@ public sealed record ImageResult(FileOutcome Outcome, string Relative, ImageAtta
 public sealed record WriteResult(FileOutcome Outcome, string Relative, long Bytes, bool Replaced, string Detail = "", int? Lines = null, int? Words = null);
 
 /// <summary>
+/// A file being written a piece at a time (2026-10-01, <c>download_file</c> streamed to disk, the user's ask: a cap past what
+/// memory should hold): <see cref="Stream"/> writes a temporary sibling of the target, <see cref="Commit"/> puts it in the
+/// target's place the way <see cref="WorkingDirectory.WriteBytes"/> does (a replace in place under
+/// <see cref="WorkingDirectoryOptions.PreserveOnReplace"/>, else a move), and a dispose without a commit deletes it, so a
+/// cancel, a stall or a refusal leaves nothing behind. Made by <see cref="WorkingDirectory.BeginWrite"/>.
+/// </summary>
+public sealed class PendingWrite : IDisposable
+{
+    private readonly string _full;
+    private readonly string _temp;
+    private readonly bool _overwrite;
+    private readonly bool _preserve;
+    private readonly FileStream _stream;
+    private bool _done;
+
+    internal PendingWrite(string full, string display, bool overwrite, bool preserve)
+    {
+        _full = full;
+        _overwrite = overwrite;
+        _preserve = preserve;
+        Relative = display;
+        _temp = WorkingDirectory.TempSibling(full);
+        _stream = new FileStream(_temp, FileMode.CreateNew, FileAccess.Write, FileShare.None, 64 * 1024, useAsync: true);
+    }
+
+    /// <summary>The target as the result names it.</summary>
+    public string Relative { get; }
+
+    /// <summary>Where the bytes go: the temporary sibling, never the target.</summary>
+    public Stream Stream => _stream;
+
+    /// <summary>
+    /// The written file in the target's place: <see cref="FileOutcome.Ok"/> with its length (<c>Replaced</c> when a file was
+    /// there), <see cref="FileOutcome.Exists"/> when one appeared meanwhile and <c>overwrite</c> was not given, or
+    /// <see cref="FileOutcome.Failed"/> with the file system's message. The temporary file goes either way.
+    /// </summary>
+    public WriteResult Commit()
+    {
+        ObjectDisposedException.ThrowIf(_done, this);
+        _done = true;
+        try
+        {
+            long length = _stream.Length;
+            _stream.Dispose();
+            bool existed = File.Exists(_full);
+            if (existed && !_overwrite)
+            {
+                return new WriteResult(FileOutcome.Exists, Relative, 0, false);
+            }
+
+            WorkingDirectory.MoveIntoPlace(_temp, _full, _preserve);
+            return new WriteResult(FileOutcome.Ok, Relative, length, existed);
+        }
+        catch (Exception ex) when (WorkingDirectory.IsFileFailure(ex))
+        {
+            return new WriteResult(FileOutcome.Failed, Relative, 0, false, Detail: ex.Message);
+        }
+        finally
+        {
+            WorkingDirectory.DeleteQuietly(_temp);
+        }
+    }
+
+    public void Dispose()
+    {
+        _stream.Dispose();
+        if (!_done)
+        {
+            _done = true;
+            WorkingDirectory.DeleteQuietly(_temp);
+        }
+    }
+}
+
+/// <summary>
 /// What an edit did. <paramref name="Line"/> is the first line touched (the match's line);
 /// <paramref name="Count"/> the occurrences replaced (a <c>replace_all</c> over several), or the matches found
 /// under <see cref="FileOutcome.EditAmbiguous"/> / <see cref="FileOutcome.ApproximateAll"/>. After a successful edit <paramref name="NewFrom"/>–<paramref name="NewTo"/>
@@ -271,8 +346,16 @@ public sealed class WorkingDirectory
     /// <summary>Entries a directory listing shows by default (<c>search_files</c> with no <c>text</c> and no <c>files</c>; <c>/tree</c>'s neighbour).</summary>
     public const int MaxEntries = 200;
 
-    /// <summary>The most entries any no-<c>text</c> shape of <c>search_files</c> lists — the listing, the find and the recent list share it as their <c>limit</c> cap (2026-09-19).</summary>
-    public const int MaxListLimit = 200;
+    /// <summary>
+    /// The most rows any shape of <c>search_files</c> returns whatever its <c>limit</c> asks — hits, files with counts, the
+    /// listing, the find and the recent list (2026-10-01, the user's ask: <c>MaxListLimit</c> and <c>MaxSearchLimit</c>, 200
+    /// each, until then). The tools clamp a call to the <c>File search max results</c> setting first
+    /// (<see cref="Settings.AppSettingsData.FileSearchMaxResults"/>), whose ceiling this is.
+    /// </summary>
+    public const int MaxResultLimit = 5000;
+
+    /// <summary>The entries a reachability probe lists to count them (<c>unc_shares</c>, <c>--unc-check</c>, the UNC wizard's test): <c>MaxListLimit</c>'s old 200, fixed (2026-10-01).</summary>
+    public const int ProbeListLimit = 200;
 
     /// <summary>The deepest a nested listing goes (<c>search_files</c>'s <c>depth</c> over the tree shape; <c>list_directory</c>'s until 2026-09-19).</summary>
     public const int MaxTreeDepth = 4;
@@ -282,9 +365,6 @@ public sealed class WorkingDirectory
 
     /// <summary>Hits a content search returns by default (<c>MaxSearchMatches</c> until 2026-09-19, when <c>limit</c> came).</summary>
     public const int DefaultSearchLimit = 50;
-
-    /// <summary>The most hits (or files, under <see cref="SearchOutput.Files"/>) a content search returns whatever <c>limit</c> asks.</summary>
-    public const int MaxSearchLimit = 200;
 
     /// <summary>Files the recent list names by default (<c>search_files</c> with <c>order</c> modified).</summary>
     public const int DefaultRecent = 10;
@@ -441,10 +521,10 @@ public sealed class WorkingDirectory
 
     // ---- read side ----
 
-    /// <summary>The folder's own entries, folders first; at most <paramref name="limit"/> (clamped to <see cref="MaxListLimit"/>), <c>Truncated</c> past it.</summary>
+    /// <summary>The folder's own entries, folders first; at most <paramref name="limit"/> (clamped to <see cref="MaxResultLimit"/>), <c>Truncated</c> past it.</summary>
     public ListResult List(string relative, int limit = MaxEntries)
     {
-        limit = Math.Clamp(limit, 1, MaxListLimit);
+        limit = Math.Clamp(limit, 1, MaxResultLimit);
         var outcome = Resolve(relative, forWrite: false, out string full);
         if (outcome != FileOutcome.Ok)
         {
@@ -584,10 +664,10 @@ public sealed class WorkingDirectory
         return true;
     }
 
-    /// <summary>The files whose names (or paths, under a path glob) match, every level down to <paramref name="maxDepth"/>, at most <paramref name="limit"/> (clamped to <see cref="MaxListLimit"/>).</summary>
+    /// <summary>The files whose names (or paths, under a path glob) match, every level down to <paramref name="maxDepth"/>, at most <paramref name="limit"/> (clamped to <see cref="MaxResultLimit"/>).</summary>
     public FindResult Find(string namePattern, string relative, int limit = DefaultFindLimit, int maxDepth = int.MaxValue)
     {
-        limit = Math.Clamp(limit, 1, MaxListLimit);
+        limit = Math.Clamp(limit, 1, MaxResultLimit);
         var outcome = Resolve(relative, forWrite: false, out string full);
         if (outcome != FileOutcome.Ok)
         {
@@ -705,7 +785,7 @@ public sealed class WorkingDirectory
     /// <summary>
     /// A parallel, bounded content search: every text file under the path (≤ <see cref="MaxTextFileBytes"/>,
     /// no NUL in its head) scanned line by line for <paramref name="text"/>, case-insensitive; the
-    /// walk stops once <paramref name="limit"/> hits (clamped to <see cref="MaxSearchLimit"/>) are in hand. Cancellation throws.
+    /// walk stops once <paramref name="limit"/> hits (clamped to <see cref="MaxResultLimit"/>) are in hand. Cancellation throws.
     /// <paramref name="context"/> lines (0–<see cref="MaxSearchContext"/>) on each side ride every hit
     /// (2026-09-17); they count toward nothing. <paramref name="filesPattern"/> is a name glob, or a
     /// path glob over the file's path under the searched folder (or under the root) when it holds a
@@ -716,7 +796,7 @@ public sealed class WorkingDirectory
     public SearchResult Search(string text, string relative, string? filesPattern, bool regex, CancellationToken cancellationToken, int context = 0, int limit = DefaultSearchLimit, int maxDepth = int.MaxValue, SearchOutput output = SearchOutput.Content)
     {
         context = Math.Clamp(context, 0, MaxSearchContext);
-        limit = Math.Clamp(limit, 1, MaxSearchLimit);
+        limit = Math.Clamp(limit, 1, MaxResultLimit);
         bool countOnly = output == SearchOutput.Files;
         var outcome = Resolve(relative, forWrite: false, out string full);
         if (outcome != FileOutcome.Ok)
@@ -932,7 +1012,7 @@ public sealed class WorkingDirectory
             new(outcome, relative, [], 0, 0, 0, false, TimeSpan.Zero, detail);
     }
 
-    /// <summary>The <paramref name="count"/> most recently written files under the path (down to <paramref name="maxDepth"/> levels), newest first: one pass, a bounded top-N, at most <see cref="MaxListLimit"/>.</summary>
+    /// <summary>The <paramref name="count"/> most recently written files under the path (down to <paramref name="maxDepth"/> levels), newest first: one pass, a bounded top-N, at most <see cref="MaxResultLimit"/>.</summary>
     public RecentResult Recent(string relative, int count, int maxDepth = int.MaxValue)
     {
         var outcome = Resolve(relative, forWrite: false, out string full);
@@ -942,7 +1022,7 @@ public sealed class WorkingDirectory
         }
 
         string display = Relative(full, isDirectory: true);
-        int limit = Math.Clamp(count, 1, MaxListLimit);
+        int limit = Math.Clamp(count, 1, MaxResultLimit);
         try
         {
             EnsureExists();
@@ -1261,6 +1341,46 @@ public sealed class WorkingDirectory
 
             long written = WriteAtomically(full, bytes, _options.PreserveOnReplace);
             return new WriteResult(FileOutcome.Ok, display, written, existed);
+        }
+        catch (Exception ex) when (IsFileFailure(ex))
+        {
+            return new WriteResult(FileOutcome.Failed, display, 0, false, Detail: ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// <see cref="WriteBytes"/> a piece at a time (2026-10-01, <c>download_file</c> streamed to disk): the same guards — the
+    /// sandbox, a folder in the way, a file there unless <paramref name="overwrite"/> — checked now, the missing folders made,
+    /// and <paramref name="pending"/> the write to fill and commit (<see cref="PendingWrite"/>); null with the refusal as the
+    /// result otherwise. The result of a write begun is <see cref="FileOutcome.Ok"/> with no bytes yet.
+    /// </summary>
+    public WriteResult BeginWrite(string relative, bool overwrite, out PendingWrite? pending)
+    {
+        pending = null;
+        var outcome = Resolve(relative, forWrite: true, out string full);
+        if (outcome != FileOutcome.Ok)
+        {
+            return new WriteResult(outcome, relative, 0, false);
+        }
+
+        string display = Relative(full);
+        try
+        {
+            EnsureExists();
+            if (Directory.Exists(full))
+            {
+                return new WriteResult(FileOutcome.IsDirectory, Relative(full, isDirectory: true), 0, false);
+            }
+
+            bool existed = File.Exists(full);
+            if (existed && !overwrite)
+            {
+                return new WriteResult(FileOutcome.Exists, display, 0, false);
+            }
+
+            Directory.CreateDirectory(Path.GetDirectoryName(full)!);
+            pending = new PendingWrite(full, display, overwrite, _options.PreserveOnReplace);
+            return new WriteResult(FileOutcome.Ok, display, 0, existed);
         }
         catch (Exception ex) when (IsFileFailure(ex))
         {
@@ -2354,10 +2474,7 @@ public sealed class WorkingDirectory
         try
         {
             File.WriteAllBytes(temp, bytes);
-            if (!preserve || !File.Exists(full) || !TryReplace(temp, full))
-            {
-                File.Move(temp, full, overwrite: true);
-            }
+            MoveIntoPlace(temp, full, preserve);
         }
         finally
         {
@@ -2365,6 +2482,15 @@ public sealed class WorkingDirectory
         }
 
         return bytes.LongLength;
+    }
+
+    /// <summary>The written <paramref name="temp"/> in <paramref name="full"/>'s place: replaced in place under <paramref name="preserve"/> when a file is there, else moved over it (<see cref="WriteAtomically"/>'s step, shared with <see cref="PendingWrite.Commit"/> since 2026-10-01).</summary>
+    internal static void MoveIntoPlace(string temp, string full, bool preserve)
+    {
+        if (!preserve || !File.Exists(full) || !TryReplace(temp, full))
+        {
+            File.Move(temp, full, overwrite: true);
+        }
     }
 
     /// <summary><see cref="File.Replace(string, string, string?, bool)"/> of <paramref name="full"/> by <paramref name="temp"/>; false (logged) when the file system refuses it.</summary>
@@ -2382,9 +2508,9 @@ public sealed class WorkingDirectory
         }
     }
 
-    private static string TempSibling(string full) => full + "." + Guid.NewGuid().ToString("N") + ".tmp";
+    internal static string TempSibling(string full) => full + "." + Guid.NewGuid().ToString("N") + ".tmp";
 
-    private static void DeleteQuietly(string path)
+    internal static void DeleteQuietly(string path)
     {
         try
         {
@@ -2445,7 +2571,7 @@ public sealed class WorkingDirectory
         }
     }
 
-    private static bool IsFileFailure(Exception ex) =>
+    internal static bool IsFileFailure(Exception ex) =>
         ex is IOException or UnauthorizedAccessException or NotSupportedException or ArgumentException;
 
     /// <summary>Lines by <c>\n</c> with a <c>\r</c> before it dropped; a trailing newline adds no empty last line.</summary>

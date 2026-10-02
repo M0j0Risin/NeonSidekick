@@ -202,7 +202,7 @@ public enum SettingsField
     /// <summary>A picker: how the splash greets you under the banner at startup — <c>fullsize</c> / <c>tiled</c> / <c>disabled</c> (<see cref="Settings.AppSettingsData.WelcomeSplashMode"/>; a toggle until 2026-09-24). The General tab's row under Theme (2026-10-01; before Show working directory from 2026-09-18, the user's order); no reconnect (read at each show).</summary>
     WelcomeSplash,
 
-    /// <summary>A toggle: whether the banner is drawn at all — startup, <c>/clear</c>, <c>/splash</c>, <c>/theme</c>, a profile switch (<see cref="Settings.AppSettingsData.ShowHeader"/>, on by default). The General tab's row under Welcome splash (2026-10-01, the user's ask); no reconnect (read at each banner draw).</summary>
+    /// <summary>A toggle: whether the banner is drawn at all — startup, <c>/clear</c>, <c>/splash</c>, <c>/theme</c>, a profile switch (<see cref="Settings.AppSettingsData.ShowHeader"/>, on by default). The General tab's row under Welcome splash (2026-10-01, the user's ask); no reconnect (read at each banner draw). <c>/header</c> and Ctrl+Alt+H flip it too (later that day).</summary>
     ShowHeader,
 
     /// <summary>A toggle: whether the working directory sits at the right edge of the banner's title line (<see cref="Settings.AppSettingsData.ShowWorkingDirectory"/>). The General tab's row under Show header (2026-10-01; before Draft editor from 2026-09-19, its last row until then); no reconnect (read at each banner draw).</summary>
@@ -334,7 +334,7 @@ public enum SettingsField
     /// <summary>A pick: the connection a SQL tool uses when the call names none (<see cref="Settings.AppSettingsData.SqlDefaultConnection"/>), from the names in <c>sql.json</c> or the first. The SQL tab's second row (2026-09-23); no reconnect (read at each call).</summary>
     SqlDefaultConnection,
 
-    /// <summary>Typed: how many rows a <c>sql_query</c> without <c>max_rows</c> returns, 1 to 1000 (<see cref="Settings.AppSettingsData.SqlQueryMaxRows"/>). The SQL tab's third row (2026-09-23); no reconnect.</summary>
+    /// <summary>Typed: how many rows a <c>sql_query</c> without <c>max_rows</c> returns, 1 to 100,000 (1000 until 2026-10-01) (<see cref="Settings.AppSettingsData.SqlQueryMaxRows"/>). The SQL tab's third row (2026-09-23); no reconnect.</summary>
     SqlQueryMaxRows,
 
     /// <summary>Typed: seconds a SQL tool's batch may run, 1 to 600 (<see cref="Settings.AppSettingsData.SqlQueryTimeoutSeconds"/>). The SQL tab's fourth row (2026-09-23); no reconnect.</summary>
@@ -647,7 +647,7 @@ public enum SettingsField
     /// <summary>A toggle: whether <c>%</c> and part of a name lists the Oracle connections too (<see cref="Settings.AppSettingsData.OraclePercentMention"/>). The Oracle tab's sixth row (2026-09-30); no reconnect.</summary>
     OraclePercentMention,
 
-    /// <summary>Typed: how many rows an <c>oracle_query</c> without <c>max_rows</c> returns, 1 to 1000 (<see cref="Settings.AppSettingsData.OracleQueryMaxRows"/>). The Oracle tab (2026-09-30); no reconnect.</summary>
+    /// <summary>Typed: how many rows an <c>oracle_query</c> without <c>max_rows</c> returns, 1 to 100,000 (<see cref="Settings.AppSettingsData.OracleQueryMaxRows"/>). The Oracle tab (2026-09-30); no reconnect.</summary>
     OracleQueryMaxRows,
 
     /// <summary>Typed: seconds an Oracle tool's statement may run, 1 to 600 (<see cref="Settings.AppSettingsData.OracleQueryTimeoutSeconds"/>). The Oracle tab (2026-09-30); no reconnect.</summary>
@@ -677,7 +677,7 @@ public enum SettingsField
     /// <summary>A toggle: whether <c>%</c> and part of a name lists the MySQL connections too (<see cref="Settings.AppSettingsData.MySqlPercentMention"/>). The MySQL tab (2026-09-30).</summary>
     MySqlPercentMention,
 
-    /// <summary>Typed: how many rows a <c>mysql_query</c> without <c>max_rows</c> returns, 1 to 1000 (<see cref="Settings.AppSettingsData.MySqlQueryMaxRows"/>). The MySQL tab (2026-09-30).</summary>
+    /// <summary>Typed: how many rows a <c>mysql_query</c> without <c>max_rows</c> returns, 1 to 100,000 (<see cref="Settings.AppSettingsData.MySqlQueryMaxRows"/>). The MySQL tab (2026-09-30).</summary>
     MySqlQueryMaxRows,
 
     /// <summary>Typed: seconds a MySQL tool's statement may run, 1 to 600 (<see cref="Settings.AppSettingsData.MySqlQueryTimeoutSeconds"/>). The MySQL tab (2026-09-30).</summary>
@@ -731,8 +731,17 @@ public enum SettingsField
     /// </summary>
     MenuMaxHeight,
 
-    /// <summary>A toggle: whether the working directory's <c>NEON.md</c> / <c>AGENTS.md</c> is read into the prompt as project notes (<see cref="Settings.AppSettingsData.ProjectFile"/>), read only while <see cref="AgentSkills"/> is on. The Options tab of <c>/skills</c>' third row since 2026-10-01 (the user's ask: the one row of the Project tab from later on 2026-09-19 until then, which went); no reconnect (read at each turn). Last in the enum, as every newcomer.</summary>
+    /// <summary>A toggle: whether the working directory's <c>NEON.md</c> / <c>AGENTS.md</c> is read into the prompt as project notes (<see cref="Settings.AppSettingsData.ProjectFile"/>), read only while <see cref="AgentSkills"/> is on. The Options tab of <c>/skills</c>' third row since 2026-10-01 (the user's ask: the one row of the Project tab from later on 2026-09-19 until then, which went); no reconnect (read at each turn). Last in the enum until <see cref="FileSearchMaxResults"/>.</summary>
     ProjectFile,
+
+    /// <summary>Typed: the most rows one <c>search_files</c> or <c>unc_search</c> call returns, 1 to 5000 (<see cref="Settings.AppSettingsData.FileSearchMaxResults"/>). The Files tab of <c>/tools</c>' last row (2026-10-01, the user's ask; a constant 200 until then), <c>unc_search</c>'s too; no reconnect (read at each call).</summary>
+    FileSearchMaxResults,
+
+    /// <summary>Typed: the largest file one <c>download_file</c> saves, 1 to 102400 MB (<see cref="Settings.AppSettingsData.WebDownloadMaxMegabytes"/>). The Web tab's last row (2026-10-01, the user's ask; a constant 50 MB until then); no reconnect (read at each call).</summary>
+    WebDownloadMaxMegabytes,
+
+    /// <summary>Typed: the most characters of table a <c>sql_query</c>, <c>oracle_query</c> or <c>mysql_query</c> answer carries, 1,000 to 1,000,000 (<see cref="Settings.AppSettingsData.QueryResultMaxChars"/>). On the SQL tab under the timeout, the three engines' one row (2026-10-01, the user's ask; the file tools' 32,000 until then); no reconnect (read at each call).</summary>
+    QueryResultMaxChars,
 }
 
 /// <summary>The tabs of <c>/settings</c> on the pane, in strip order (General, Embedded, LLM, TTS, STT, Sessions, Botchat — the user's order, 2026-09-29; Sessions right after General — the user's order, 2026-09-18 — until then; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
@@ -1088,8 +1097,8 @@ internal sealed partial class SettingsMenu
     /// </summary>
     public static readonly IReadOnlyList<IReadOnlyList<SettingsField>> ToolsTabFields =
     [
-        [SettingsField.WebTools, SettingsField.WebBrowserMode, SettingsField.WebBrowserPath, SettingsField.WebBrowserNetworkMode, SettingsField.WebSearchMethod, SettingsField.WebSearxngUrl, SettingsField.WebSearchMaxResults],
-        [SettingsField.FileTools, SettingsField.FileTreeMaxLength, SettingsField.FileTreeShowSizes, SettingsField.FileMentionFolderMode, SettingsField.FileBrowserMode, SettingsField.FileViewImageMaxPerCall],
+        [SettingsField.WebTools, SettingsField.WebBrowserMode, SettingsField.WebBrowserPath, SettingsField.WebBrowserNetworkMode, SettingsField.WebSearchMethod, SettingsField.WebSearxngUrl, SettingsField.WebSearchMaxResults, SettingsField.WebDownloadMaxMegabytes],
+        [SettingsField.FileTools, SettingsField.FileTreeMaxLength, SettingsField.FileTreeShowSizes, SettingsField.FileMentionFolderMode, SettingsField.FileBrowserMode, SettingsField.FileViewImageMaxPerCall, SettingsField.FileSearchMaxResults],
         [SettingsField.ShellCommandPolicy, SettingsField.ShellCommandAllowed, SettingsField.ShellPoliceOutsidePaths, SettingsField.ShellPreferNative, SettingsField.ShellDefault, SettingsField.ShellTimeoutSeconds, SettingsField.ShellForegroundCapSeconds, SettingsField.ShellOutputMaxChars, SettingsField.ShellCodeLanguages, SettingsField.ShellCodeTimeoutSeconds, SettingsField.ShellToolBridge, SettingsField.ShellCodeMaxToolCalls],
         [SettingsField.AskUser, SettingsField.AskMaxQuestions, SettingsField.AskMaxChoices],
         [SettingsField.ClaudeExecutable, SettingsField.ClaudePermissions, SettingsField.ClaudeModel, SettingsField.ClaudeEffort, SettingsField.ClaudeAdvisor, SettingsField.ClaudeAdvisorContext, SettingsField.ClaudeAdvisorCallsPerTurn, SettingsField.ClaudeAdvisorModel, SettingsField.ClaudeAdvisorEffort, SettingsField.ClaudeAdvisorConfirm, SettingsField.ClaudeApi, SettingsField.ClaudeApiKey, SettingsField.ClaudeApiMaxTokens, SettingsField.ClaudeApiPromptCaching, SettingsField.ClaudeCliServer],
@@ -1097,7 +1106,7 @@ internal sealed partial class SettingsMenu
         [SettingsField.PrintTools, SettingsField.PrintActionPolicy, SettingsField.PrintDefaultPrinter, SettingsField.PrintFontSize],
         [SettingsField.ObsidianTools, SettingsField.ObsidianVault, SettingsField.ObsidianAllowDelete],
         [SettingsField.ComfyTools, SettingsField.ComfyUrl, SettingsField.ComfyWorkflowsOffered, SettingsField.ComfyAddWorkflow, SettingsField.ComfyCaretMention, SettingsField.ComfyTimeoutSeconds, SettingsField.ComfyMaxPicturesPerCall, SettingsField.ComfyReinforceNegatives, SettingsField.ComfyShowPrompts, SettingsField.ComfyPictureStrip, SettingsField.ComfyOutputFolder],
-        [SettingsField.SqlTools, SettingsField.SqlConnectionsOffered, SettingsField.SqlDefaultConnection, SettingsField.SqlSetPassword, SettingsField.SqlAddConnection, SettingsField.SqlPercentMention, SettingsField.SqlQueryMaxRows, SettingsField.SqlQueryTimeoutSeconds, SettingsField.SqlConnectionsProfile, SettingsField.SqlConnectionsGlobal],
+        [SettingsField.SqlTools, SettingsField.SqlConnectionsOffered, SettingsField.SqlDefaultConnection, SettingsField.SqlSetPassword, SettingsField.SqlAddConnection, SettingsField.SqlPercentMention, SettingsField.SqlQueryMaxRows, SettingsField.SqlQueryTimeoutSeconds, SettingsField.QueryResultMaxChars, SettingsField.SqlConnectionsProfile, SettingsField.SqlConnectionsGlobal],
         [SettingsField.OracleTools, SettingsField.OracleConnectionsOffered, SettingsField.OracleDefaultConnection, SettingsField.OracleSetPassword, SettingsField.OracleAddConnection, SettingsField.OraclePercentMention, SettingsField.OracleQueryMaxRows, SettingsField.OracleQueryTimeoutSeconds, SettingsField.OracleConnectionsProfile, SettingsField.OracleConnectionsGlobal],
         [SettingsField.MySqlTools, SettingsField.MySqlConnectionsOffered, SettingsField.MySqlDefaultConnection, SettingsField.MySqlSetPassword, SettingsField.MySqlAddConnection, SettingsField.MySqlPercentMention, SettingsField.MySqlQueryMaxRows, SettingsField.MySqlQueryTimeoutSeconds, SettingsField.MySqlConnectionsProfile, SettingsField.MySqlConnectionsGlobal],
         [SettingsField.UncTools, SettingsField.UncWrites, SettingsField.UncSharesOffered, SettingsField.UncDefaultShare, SettingsField.UncSetPassword, SettingsField.UncAddShare, SettingsField.UncStarMention, SettingsField.UncSharesProfile, SettingsField.UncSharesGlobal],
@@ -1503,6 +1512,7 @@ internal sealed partial class SettingsMenu
         SettingsField.DraftEditor => "Draft editor",
         SettingsField.ImageEditor => "Image viewer",   // "Image editor" until later still on 2026-09-24 (the user's call); the field and the setting keep the old name
         SettingsField.FileViewImageMaxPerCall => "File view image max (per call)",
+        SettingsField.FileSearchMaxResults => "File search max results",
         SettingsField.McpServers => "MCP servers",
         SettingsField.McpConnectTimeoutSeconds => "MCP connect timeout (s)",
         SettingsField.ShowImageThumbnails => "Show image thumbnails",
@@ -1601,6 +1611,7 @@ internal sealed partial class SettingsMenu
         SettingsField.SqlPercentMention => "SQL %-mention enabled",
         SettingsField.SqlQueryMaxRows => "SQL max rows",
         SettingsField.SqlQueryTimeoutSeconds => "SQL query timeout (s)",
+        SettingsField.QueryResultMaxChars => "Query result max chars",
         SettingsField.SqlConnectionsProfile => "SQL connections (profile)",
         SettingsField.SqlConnectionsGlobal => "SQL connections (global)",
         SettingsField.OracleTools => "Oracle tools",
@@ -1638,6 +1649,7 @@ internal sealed partial class SettingsMenu
         SettingsField.WebBrowserNetworkMode => "Web browser network mode",
         SettingsField.WebSearxngUrl => "Web SearXNG URL",
         SettingsField.WebSearchMaxResults => "Web search max results",
+        SettingsField.WebDownloadMaxMegabytes => "Web download max (MB)",
         SettingsField.TtsVoicePreview => "TTS voice preview",
         SettingsField.FileTools => "File tools",
         SettingsField.WebSearchMethod => "Web search method",
@@ -1868,6 +1880,7 @@ internal sealed partial class SettingsMenu
             SettingsField.SqlPercentMention => OnOff(data.SqlPercentMention),
             SettingsField.SqlQueryMaxRows => SqlRows(data.SqlQueryMaxRows),
             SettingsField.SqlQueryTimeoutSeconds => Seconds(data.SqlQueryTimeoutSeconds),
+            SettingsField.QueryResultMaxChars => Chars(data.QueryResultMaxChars),
             SettingsField.SqlConnectionsProfile => SqlConnectionsLabel(Sql.SqlConfigFile.ProfilePath(profileDirectory)),
             SettingsField.SqlConnectionsGlobal => SqlConnectionsLabel(Sql.SqlConfigFile.GlobalPath(Profiles.HomeOf(profileDirectory))),
             SettingsField.OracleTools => OnOff(data.OracleTools),
@@ -1905,11 +1918,13 @@ internal sealed partial class SettingsMenu
             SettingsField.DraftEditor => string.IsNullOrWhiteSpace(data.DraftEditor) ? DefaultDraftEditorLabel : data.DraftEditor,
             SettingsField.ImageEditor => string.IsNullOrWhiteSpace(data.ImageEditor) ? DefaultImageEditorLabel : data.ImageEditor,
             SettingsField.FileViewImageMaxPerCall => Pictures(data.FileViewImageMaxPerCall),
+            SettingsField.FileSearchMaxResults => Results(data.FileSearchMaxResults),
             SettingsField.McpServers => OnOff(data.McpServers),
             SettingsField.McpConnectTimeoutSeconds => Seconds(data.McpConnectTimeoutSeconds),
             SettingsField.WebBrowserNetworkMode => data.WebBrowserNetworkMode,
             SettingsField.WebSearxngUrl => string.IsNullOrWhiteSpace(data.WebSearxngUrl) ? NoSearxngUrlLabel : data.WebSearxngUrl,
             SettingsField.WebSearchMaxResults => Results(data.WebSearchMaxResults),
+            SettingsField.WebDownloadMaxMegabytes => Megabytes(data.WebDownloadMaxMegabytes),
             SettingsField.TtsVoicePreview => OnOff(data.TtsVoicePreview),
             SettingsField.FileTools => OnOff(data.FileTools),
             SettingsField.WebSearchMethod => data.WebSearchMethod,
@@ -2211,6 +2226,18 @@ internal sealed partial class SettingsMenu
     /// <summary>The settings-menu wording for a bad <see cref="SettingsField.FileViewImageMaxPerCall"/>. Pinned.</summary>
     public static readonly string ViewImageMaxPerCallRangeError =
         "must be " + AppSettingsData.MinViewImageMaxPerCall.ToString(CultureInfo.InvariantCulture) + " to " + AppSettingsData.MaxViewImageMaxPerCall.ToString(CultureInfo.InvariantCulture) + " pictures";
+
+    /// <summary>The settings-menu wording for a bad <see cref="SettingsField.FileSearchMaxResults"/> (2026-10-01). Pinned.</summary>
+    public static readonly string FileSearchMaxResultsRangeError =
+        "must be " + AppSettingsData.MinFileSearchMaxResults.ToString(CultureInfo.InvariantCulture) + " to " + AppSettingsData.MaxFileSearchMaxResults.ToString(CultureInfo.InvariantCulture) + " results";
+
+    /// <summary>The settings-menu wording for a bad <see cref="SettingsField.WebDownloadMaxMegabytes"/> (2026-10-01). Pinned.</summary>
+    public static readonly string WebDownloadMaxMegabytesRangeError =
+        "must be " + AppSettingsData.MinWebDownloadMaxMegabytes.ToString(CultureInfo.InvariantCulture) + " to " + AppSettingsData.MaxWebDownloadMaxMegabytes.ToString(CultureInfo.InvariantCulture) + " MB";
+
+    /// <summary>The settings-menu wording for a bad <see cref="SettingsField.QueryResultMaxChars"/> (2026-10-01). Pinned.</summary>
+    public static readonly string QueryResultMaxCharsRangeError =
+        "must be " + AppSettingsData.MinQueryResultMaxChars.ToString(CultureInfo.InvariantCulture) + " to " + AppSettingsData.MaxQueryResultMaxChars.ToString(CultureInfo.InvariantCulture) + " characters";
 
     /// <summary>The settings-menu wording for a bad <see cref="SettingsField.McpConnectTimeoutSeconds"/>. Pinned.</summary>
     public static readonly string McpConnectTimeoutRangeError =
@@ -2544,8 +2571,10 @@ internal sealed partial class SettingsMenu
         SettingsField.ImageEditor => data.ImageEditor,
         SettingsField.Theme => data.Theme,
         SettingsField.FileViewImageMaxPerCall => data.FileViewImageMaxPerCall.ToString(CultureInfo.InvariantCulture),
+        SettingsField.FileSearchMaxResults => data.FileSearchMaxResults.ToString(CultureInfo.InvariantCulture),
         SettingsField.McpConnectTimeoutSeconds => data.McpConnectTimeoutSeconds.ToString(CultureInfo.InvariantCulture),
         SettingsField.WebSearchMaxResults => data.WebSearchMaxResults.ToString(CultureInfo.InvariantCulture),
+        SettingsField.WebDownloadMaxMegabytes => data.WebDownloadMaxMegabytes.ToString(CultureInfo.InvariantCulture),
         SettingsField.ToolCollapseCount => data.ToolCollapseCount.ToString(CultureInfo.InvariantCulture),
         SettingsField.CodeCollapseCount => data.CodeCollapseCount.ToString(CultureInfo.InvariantCulture),
         SettingsField.GitLibDiffMaxLines => data.GitLibDiffMaxLines.ToString(CultureInfo.InvariantCulture),
@@ -2557,6 +2586,7 @@ internal sealed partial class SettingsMenu
         SettingsField.GitLibLogMaxCommits => data.GitLibLogMaxCommits.ToString(CultureInfo.InvariantCulture),
         SettingsField.SqlQueryMaxRows => data.SqlQueryMaxRows.ToString(CultureInfo.InvariantCulture),
         SettingsField.SqlQueryTimeoutSeconds => data.SqlQueryTimeoutSeconds.ToString(CultureInfo.InvariantCulture),
+        SettingsField.QueryResultMaxChars => data.QueryResultMaxChars.ToString(CultureInfo.InvariantCulture),
         SettingsField.OracleQueryMaxRows => data.OracleQueryMaxRows.ToString(CultureInfo.InvariantCulture),
         SettingsField.OracleQueryTimeoutSeconds => data.OracleQueryTimeoutSeconds.ToString(CultureInfo.InvariantCulture),
         SettingsField.MySqlQueryMaxRows => data.MySqlQueryMaxRows.ToString(CultureInfo.InvariantCulture),
@@ -3813,6 +3843,16 @@ internal sealed partial class SettingsMenu
                 Apply(field, d => d.WebSearchMaxResults = hits);
                 return true;
 
+            case SettingsField.WebDownloadMaxMegabytes:
+                if (!int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out int megabytes) || megabytes < AppSettingsData.MinWebDownloadMaxMegabytes || megabytes > AppSettingsData.MaxWebDownloadMaxMegabytes)
+                {
+                    Sink.Error($"{FieldName(field)} {WebDownloadMaxMegabytesRangeError}; keeping {EditableValue(field, saved)}.");
+                    return false;
+                }
+
+                Apply(field, d => d.WebDownloadMaxMegabytes = megabytes);
+                return true;
+
             case SettingsField.GitLibDiffMaxLines:
                 if (!int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out int diffLines) || diffLines < AppSettingsData.MinGitLibDiffMaxLines || diffLines > AppSettingsData.MaxGitLibDiffMaxLines)
                 {
@@ -3851,6 +3891,16 @@ internal sealed partial class SettingsMenu
                 }
 
                 Apply(field, d => d.SqlQueryTimeoutSeconds = sqlTimeout);
+                return true;
+
+            case SettingsField.QueryResultMaxChars:
+                if (!int.TryParse(text, NumberStyles.Integer | NumberStyles.AllowThousands, CultureInfo.InvariantCulture, out int queryChars) || queryChars < AppSettingsData.MinQueryResultMaxChars || queryChars > AppSettingsData.MaxQueryResultMaxChars)
+                {
+                    Sink.Error($"{FieldName(field)} {QueryResultMaxCharsRangeError}; keeping {EditableValue(field, saved)}.");
+                    return false;
+                }
+
+                Apply(field, d => d.QueryResultMaxChars = queryChars);
                 return true;
 
             case SettingsField.OracleQueryMaxRows:
@@ -3971,6 +4021,16 @@ internal sealed partial class SettingsMenu
                 }
 
                 Apply(field, d => d.FileViewImageMaxPerCall = pictures);
+                return true;
+
+            case SettingsField.FileSearchMaxResults:
+                if (!int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out int searchRows) || searchRows < AppSettingsData.MinFileSearchMaxResults || searchRows > AppSettingsData.MaxFileSearchMaxResults)
+                {
+                    Sink.Error($"{FieldName(field)} {FileSearchMaxResultsRangeError}; keeping {EditableValue(field, saved)}.");
+                    return false;
+                }
+
+                Apply(field, d => d.FileSearchMaxResults = searchRows);
                 return true;
 
             case SettingsField.McpConnectTimeoutSeconds:
@@ -6504,6 +6564,9 @@ internal sealed partial class SettingsMenu
 
     /// <summary>The <c>Shell output max chars</c> row's value: <c>30,000 chars</c> (2026-09-21). Pinned.</summary>
     public static string Chars(int value) => value.ToString("N0", CultureInfo.InvariantCulture) + " chars";
+
+    /// <summary>The <c>Web download max (MB)</c> row's value: <c>50 MB</c>, <c>102,400 MB</c> (2026-10-01). Pinned.</summary>
+    public static string Megabytes(int value) => value.ToString("N0", CultureInfo.InvariantCulture) + " MB";
 
     /// <summary><c>20 commits</c> (the GitLib log cap, 2026-09-20).</summary>
     public static string Commits(int value) => value.ToString(CultureInfo.InvariantCulture) + (value == 1 ? " commit" : " commits");

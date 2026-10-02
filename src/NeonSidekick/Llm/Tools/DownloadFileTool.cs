@@ -9,9 +9,10 @@ namespace NeonSidekick.Llm.Tools;
 /// <summary>
 /// <c>download_file(url, path?, overwrite?)</c> (2026-09-18): a file from the web — a picture, a PDF,
 /// an archive, a data file, a page's source — saved under the working directory as it came, through
-/// <see cref="WebFetcher.DownloadAsync"/> (the HTTP leg alone, the LAN rule at every hop, up to
-/// <see cref="WebFetcher.MaxFileDownloadBytes"/>) and <see cref="WorkingDirectory.WriteBytes"/> (the
-/// sandbox, <c>overwrite</c>). <c>path</c> is the
+/// <see cref="WebFetcher.OpenDownloadAsync"/> (the HTTP leg alone, the LAN rule at every hop) and
+/// <see cref="WebFetcher.SaveAsync"/> into <see cref="WorkingDirectory.BeginWrite"/>'s temporary sibling (the sandbox,
+/// <c>overwrite</c>), streamed since 2026-10-01 (the user's ask: the size is the <c>Web download max (MB)</c> setting,
+/// <see cref="MaxBytesOf"/>, a constant 50 MB held in memory until then) and given its name only when whole. <c>path</c> is the
 /// file to write; a folder (an existing one, or a path ending in a separator) takes the file's own
 /// name inside it — from the server's <c>Content-Disposition</c>, else the URL's last segment
 /// (<see cref="FileNameFor"/>); no <c>path</c> is the top of the working directory. Offered while
@@ -51,14 +52,24 @@ public sealed class DownloadFileTool : AIFunction
 
     public override string Name => ToolName;
 
-    public override string Description => DescriptionText;
+    public override string Description => DescriptionFor(MaxBytesOf(_effective()));
 
-    /// <summary>The description; its <c>.trash</c> clause went with File safe edits (2026-10-01, the user's call). Pinned.</summary>
-    public static readonly string DescriptionText =
+    /// <summary>The largest file one call saves: <c>Web download max (MB)</c> in bytes (megabytes of 1,000,000), clamped (2026-10-01). Pure.</summary>
+    public static long MaxBytesOf(AppSettingsData effective)
+    {
+        ArgumentNullException.ThrowIfNull(effective);
+        return Math.Clamp(effective.WebDownloadMaxMegabytes, AppSettingsData.MinWebDownloadMaxMegabytes, AppSettingsData.MaxWebDownloadMaxMegabytes) * 1_000_000L;
+    }
+
+    /// <summary>
+    /// The description under the cap <paramref name="maxBytes"/> (2026-10-01; a constant <c>DescriptionText</c> under 50 MB until
+    /// then); its <c>.trash</c> clause went with File safe edits (2026-10-01, the user's call). Pinned.
+    /// </summary>
+    public static string DescriptionFor(long maxBytes) =>
         "Downloads a file from the web — a picture, a PDF, an archive, a data file, a page's source — and saves it under the working directory (the user's cwd / current directory), creating any missing folders; nothing is read or opened. " +
         "path is the file to write, or a folder to put it in under the file's own name; without it the file lands at the top under its own name. " +
         "A file that already exists is left alone unless overwrite is true. " +
-        "Up to " + WebText.Size(WebFetcher.MaxFileDownloadBytes) + ". To read a page use " + WebFetchTool.ToolName + "; to look at a saved picture use " + ViewImageTool.ToolName + ".";
+        "Up to " + WebText.Size(maxBytes) + ". To read a page use " + WebFetchTool.ToolName + "; to look at a saved picture use " + ViewImageTool.ToolName + ".";
 
     public override JsonElement JsonSchema => Schema;
 
@@ -132,21 +143,32 @@ public sealed class DownloadFileTool : AIFunction
         }
 
         var effective = _effective();
-        var download = await _web.Fetcher.DownloadAsync(parsed, WebAccess.Options(effective), cancellationToken).ConfigureAwait(false);
-        if (!download.Ok)
+        long maxBytes = MaxBytesOf(effective);
+        using var opened = await _web.Fetcher.OpenDownloadAsync(parsed, WebAccess.Options(effective), maxBytes, cancellationToken).ConfigureAwait(false);
+        if (!opened.Ok)
         {
-            return download.Error;
+            return opened.Error;
         }
 
-        var final = Uri.TryCreate(download.FinalUrl, UriKind.Absolute, out var finalUrl) ? finalUrl : parsed;
-        string? target = FileNameFor(path, download.FileName, final, _files.IsExistingDirectory);
+        var final = Uri.TryCreate(opened.FinalUrl, UriKind.Absolute, out var finalUrl) ? finalUrl : parsed;
+        string? target = FileNameFor(path, opened.FileName, final, _files.IsExistingDirectory);
         if (target is null)
         {
-            return WebText.NoFileName(download.Url);
+            return WebText.NoFileName(opened.Url);
         }
 
-        var written = _files.WriteBytes(target, download.Bytes, overwrite);
-        return WebText.Downloaded(written, download.Url, download.MediaType);
+        // The sandbox's refusals (outside, a folder in the way, a file there without overwrite) before a byte is read.
+        var begun = _files.BeginWrite(target, overwrite, out var pending);
+        if (pending is null)
+        {
+            return WebText.Downloaded(begun, opened.Url, opened.MediaType);
+        }
+
+        using (pending)
+        {
+            var saved = await _web.Fetcher.SaveAsync(opened, pending.Stream, maxBytes, cancellationToken).ConfigureAwait(false);
+            return saved.Ok ? WebText.Downloaded(pending.Commit(), opened.Url, opened.MediaType) : saved.Error;
+        }
     }
 
     protected override async ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)

@@ -9,14 +9,20 @@ namespace NeonSidekick.Llm.Tools;
 /// <c>unc_search(share?, text?, path?, files?, regex?, context?, output?, order?, limit?, depth?)</c> (2026-09-30):
 /// <c>search_files</c> on a share — the same arguments, the same shapes (<see cref="SearchFilesTool.Run"/>) — as the share's
 /// account, with a share's budgets: four readers, 256 MB read, 100,000 entries looked at (<see cref="Files.WorkingDirectoryOptions.Share"/>),
-/// a note when one stopped it. ESC ends it.
+/// a note when one stopped it. ESC ends it. <c>limit</c> goes up to the <c>File search max results</c> setting, as
+/// <c>search_files</c>' does (2026-10-01, <see cref="SearchFilesTool.LimitOf"/>); the share's budgets stay fixed (the user's call).
 /// </summary>
 public sealed class UncSearchTool : UncTool
 {
     public const string ToolName = "unc_search";
 
-    private static readonly JsonElement Schema = ToolSchema.Parse(
-        """
+    // The schema for the cap last asked for (search_files' shape).
+    private int _schemaLimit;
+    private JsonElement _schema;
+
+    /// <summary>The schema under the given cap: <c>limit</c>'s description is <c>search_files</c>' (<see cref="SearchFilesTool.LimitDescription"/>). Pinned.</summary>
+    public static JsonElement SchemaFor(int max) => ToolSchema.Parse(
+        $$"""
         {
           "type": "object",
           "properties": {
@@ -28,7 +34,7 @@ public sealed class UncSearchTool : UncTool
             "context": { "type": "integer", "description": "Lines to show before and after each hit, 0 to 5 (default 0)." },
             "output": { "type": "string", "enum": ["content", "files"], "description": "With text: content (the default) shows every matching line; files shows one row per file with how many lines matched." },
             "order": { "type": "string", "enum": ["name", "modified"], "description": "Without text: name (the default) lists by name; modified lists the most recently changed files, newest first, at every level." },
-            "limit": { "type": "integer", "description": "The most rows to return: hits or files with text (default 50, up to 200); entries, matching files or recent files without it (default 200, 100 or 10; up to 200)." },
+            "limit": { "type": "integer", "description": "{{SearchFilesTool.LimitDescription(max)}}" },
             "depth": { "type": "integer", "description": "How many folder levels to walk, 1 being the folder's own entries. Without text and files it defaults to 1 and 2 to 4 nest the subfolders' entries; otherwise every level." }
           }
         }
@@ -46,7 +52,20 @@ public sealed class UncSearchTool : UncTool
         "Without text it lists instead: a folder's files and folders with sizes (depth 2 to 4 shows a tree), the files whose names match files at every level, or with order modified the most recently changed files. " +
         "Paths in the result are relative to the share. A big share is searched in part: narrow with path, files or depth.";
 
-    public override JsonElement JsonSchema => Schema;
+    public override JsonElement JsonSchema
+    {
+        get
+        {
+            int limit = SearchFilesTool.LimitOf(Effective);
+            if (_schema.ValueKind == JsonValueKind.Undefined || limit != _schemaLimit)
+            {
+                _schema = SchemaFor(limit);
+                _schemaLimit = limit;
+            }
+
+            return _schema;
+        }
+    }
 
     protected override async ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
     {
@@ -56,9 +75,10 @@ public sealed class UncSearchTool : UncTool
             return refused;
         }
 
+        int limit = SearchFilesTool.LimitOf(Effective);
         return await ReadAsync(ReadShare(arguments), request!.Path, (files, relative) =>
         {
-            var (text, budgeted) = SearchFilesTool.Run(files, request with { Path = relative }, cancellationToken);
+            var (text, budgeted) = SearchFilesTool.Run(files, request with { Path = relative }, limit, cancellationToken);
             return budgeted ? text + "\n" + UncText.BudgetNote : text;
         }, cancellationToken).ConfigureAwait(false);
     }

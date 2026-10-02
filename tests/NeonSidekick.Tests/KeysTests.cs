@@ -72,6 +72,7 @@ public class KeysTests
     [InlineData(ConsoleKey.D, '\x04', "/mcp")]
     [InlineData(ConsoleKey.L, '\x0c', "/cmdlist")]
     [InlineData(ConsoleKey.O, '\x0f', "/police")]
+    [InlineData(ConsoleKey.H, '\x08', "/header")]   // later still on 2026-10-01 (the user's ask), free since /help moved to Ctrl+H
     public void ShortcutLine_ThePaneChords_AreTheirBareCommands(ConsoleKey key, char control, string line)
     {
         // Later on 2026-09-30 (the user's ask): the test factory's '\0' and the console's control character count; Shift,
@@ -151,7 +152,7 @@ public class KeysTests
         Assert.Null(Keys.ShortcutLine(new ConsoleKeyInfo('\b', ConsoleKey.Backspace, false, false, true)));   // Ctrl+Backspace
         // The Ctrl+Alt chords they replaced are gone (Ctrl+Alt+P came back as /splash), and Ctrl+Alt+K with /skills' move.
         Assert.Null(Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.G)));
-        Assert.Null(Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.H)));
+        Assert.Equal("/header", Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.H)));   // back later still on 2026-10-01 as /header (the user's ask)
         Assert.Null(Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.K)));
         Assert.Null(Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.B)));   // /tb on Ctrl+T, /perf on Ctrl+F since later still on 2026-10-01
         Assert.Null(Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.E)));

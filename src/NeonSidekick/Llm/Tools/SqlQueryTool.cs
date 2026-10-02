@@ -30,7 +30,7 @@ public sealed class SqlQueryTool : SqlTool
             {{ConnectionProperty}},
             {{DatabaseProperty}},
             "params": { "type": "object", "description": "Values for @name placeholders in the SQL, e.g. {\"id\": 43659} for @id; strings, numbers, true, false or null." },
-            "max_rows": { "type": "integer", "description": "How many rows at most, 1 to 1000. Leave it out for the user's default." }
+            "max_rows": { "type": "integer", "description": "How many rows at most, 1 to 100000. Leave it out for the user's default." }
           },
           "required": ["sql"]
         }
@@ -125,7 +125,7 @@ public sealed class SqlQueryTool : SqlTool
         }
 
         var run = await Sql.RunAsync(connection, Effective.SqlDefaultConnection, database, sql, parameters, rows, TimeoutSeconds(Effective), cancellationToken).ConfigureAwait(false);
-        return run.Outcome == SqlOutcome.Ok ? SqlText.Query(run, rows, Files.WorkingDirectory.MaxReadChars) : SqlText.Error(run);
+        return run.Outcome == SqlOutcome.Ok ? SqlText.Query(run, rows, ResultChars(Effective)) : SqlText.Error(run);
     }
 
     protected override async ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)

@@ -100,7 +100,14 @@ public sealed class WebToolsTests : IDisposable
             "A file that already exists is left alone unless overwrite is true. " +   // its .trash clause went with File safe edits (2026-10-01)
             "Up to 50 MB. To read a page use web_fetch; to look at a saved picture use view_image.",
             _download.Description);
-        Assert.Equal(DownloadFileTool.DescriptionText, _download.Description);
+        Assert.Equal(DownloadFileTool.DescriptionFor(50_000_000), _download.Description);
+        // The size is the Web download max (MB) setting since 2026-10-01 (a constant 50 MB until then), the description with it.
+        _settings.WebDownloadMaxMegabytes = 2000;
+        Assert.EndsWith("Up to 2000 MB. To read a page use web_fetch; to look at a saved picture use view_image.", _download.Description, StringComparison.Ordinal);
+        Assert.Equal(50, AppSettingsData.DefaultWebDownloadMaxMegabytes);
+        Assert.Equal(2_000_000_000L, DownloadFileTool.MaxBytesOf(_settings));
+        Assert.Equal(1_000_000L, DownloadFileTool.MaxBytesOf(new AppSettingsData { WebDownloadMaxMegabytes = 0 }));                 // a hand-edited value clamped
+        Assert.Equal(102_400_000_000L, DownloadFileTool.MaxBytesOf(new AppSettingsData { WebDownloadMaxMegabytes = int.MaxValue }));
     }
 
     // ── open_url ────────────────────────────────────────────────────────────
@@ -413,6 +420,46 @@ public sealed class WebToolsTests : IDisposable
         Assert.Equal("replaced cat.png (16 B, image/png) from https://example.com/cat.png; view_image shows it", await _download.DownloadAsync("https://example.com/cat.png", null, true, CancellationToken.None));
         Assert.Equal(Png, Saved("cat.png"));
         Assert.False(Directory.Exists(Path.Combine(_root, ".trash")));   // nothing kept (File safe edits went 2026-10-01)
+    }
+
+    [Fact]
+    public async Task Download_TheCap_IsTheSetting_TheBodyStreamedToDisk_AndAnOversizeLeavesNothing()
+    {
+        // 2026-10-01, the user's ask: the cap is Web download max (MB); the body goes to a temporary sibling, never held whole.
+        _settings.WebDownloadMaxMegabytes = 1;
+        _http.Map("https://example.com/big.bin", (_, _) => Task.FromResult(TrickleStream.Response(new TrickleStream(new byte[1_500_000]), "application/octet-stream")));
+        _http.Map("https://example.com/declared.bin", (_, _) => Task.FromResult(StubHttpMessageHandler.Bytes(HttpStatusCode.OK, new byte[1_600_000], "application/octet-stream")));
+
+        // No length declared: the body outgrows the cap mid-stream, and what was written goes.
+        Assert.Equal("Error: 'https://example.com/big.bin' is over the 1 MB download limit", await _download.DownloadAsync("https://example.com/big.bin", null, false, CancellationToken.None));
+        Assert.Empty(Directory.GetFiles(_root, "*", SearchOption.AllDirectories));
+        // A length over it: refused before a file is begun.
+        Assert.Equal("Error: 'https://example.com/declared.bin' is 1.6 MB, over the 1 MB download limit", await _download.DownloadAsync("https://example.com/declared.bin", null, false, CancellationToken.None));
+        Assert.Empty(Directory.GetFiles(_root, "*", SearchOption.AllDirectories));
+
+        // Raised, both come whole, past the old in-memory read's chunk.
+        _settings.WebDownloadMaxMegabytes = 2;
+        Assert.Equal("downloaded big.bin (1.5 MB, application/octet-stream) from https://example.com/big.bin", await _download.DownloadAsync("https://example.com/big.bin", null, false, CancellationToken.None));
+        Assert.Equal(1_500_000, new FileInfo(Path.Combine(_root, "big.bin")).Length);
+        Assert.Equal("downloaded declared.bin (1.6 MB, application/octet-stream) from https://example.com/declared.bin", await _download.DownloadAsync("https://example.com/declared.bin", null, false, CancellationToken.None));
+        Assert.Empty(Directory.GetFiles(_root, "*.tmp"));
+    }
+
+    [Fact]
+    public async Task Download_ACancelMidBody_Escapes_AndDeletesThePartialFile()
+    {
+        var firstRead = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _http.Map("https://example.com/slow.bin", (_, _) => Task.FromResult(TrickleStream.Response(new TrickleStream(new byte[100_000], hang: true, firstRead), "application/octet-stream")));
+        using var cts = new CancellationTokenSource();
+
+        var download = _download.DownloadAsync("https://example.com/slow.bin", null, false, cts.Token);
+        await firstRead.Task.WaitAsync(TimeSpan.FromSeconds(30));
+        await Task.Delay(50);
+        Assert.NotEmpty(Directory.GetFiles(_root, "*.tmp"));   // the partial file, beside where the file would go
+        cts.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => download);
+        Assert.Empty(Directory.GetFiles(_root, "*", SearchOption.AllDirectories));
     }
 
     [Fact]

@@ -116,6 +116,8 @@ public static class Keys
     /// whatever key sits there (# on a German one), since a "/" that needs Shift cannot be told from Ctrl+Shift.
     /// Later still on 2026-10-01 (the user's ask) <c>/tb</c> moved to plain Ctrl+T and <c>/perf</c> to Ctrl+F, and Ctrl+Alt+B
     /// and Ctrl+Alt+E went: their DC4 and ACK count as no character. Ctrl+Alt+T is still <c>/tools</c>.
+    /// Later still on 2026-10-01 (the user's ask) Ctrl+Alt+H is <c>/header</c>, free since <c>/help</c> left it for Ctrl+H: <c>Show
+    /// header</c> flipped, at the next wipe; its BS counts as no character, as it did for <c>/help</c>.
     /// </summary>
     public static string? ShortcutLine(ConsoleKeyInfo key)
     {
@@ -146,6 +148,7 @@ public static class Keys
         return (key.Key, key.KeyChar) switch
         {
             (ConsoleKey.C, '\0' or '\x03') => "/clear",
+            (ConsoleKey.H, '\0' or '\x08') => "/header",
             (ConsoleKey.N, '\0' or '\x0e') => "/new",
             (ConsoleKey.P, '\0' or '\x10') => "/splash",
             (ConsoleKey.T, '\0' or '\x14') => "/tools",

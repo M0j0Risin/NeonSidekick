@@ -417,7 +417,8 @@ public sealed class FileToolsTests : IDisposable
     [Fact]
     public void Constructors_RefuseNull()
     {
-        Assert.Throws<ArgumentNullException>(() => new SearchFilesTool(null!));
+        Assert.Throws<ArgumentNullException>(() => new SearchFilesTool(null!, () => _settings));
+        Assert.Throws<ArgumentNullException>(() => new SearchFilesTool(_files, null!));
         Assert.Throws<ArgumentNullException>(() => new GetWorkingDirectoryTool(_files, null!));
         Assert.Throws<ArgumentNullException>(() => new MoveTool(null!));
         Assert.Throws<ArgumentNullException>(() => new CopyTool(null!));
@@ -493,6 +494,67 @@ public sealed class FileToolsTests : IDisposable
         Assert.Equal(["a.bmp", "b.bmp"], five.Images.Select(i => i.Path));
         Assert.EndsWith("\n" + FileText.MorePictures(["a.bmp"]), five.Text, StringComparison.Ordinal);
         Assert.Equal(FileText.BadStringList("paths", "[1]"), await Invoke(view, ("paths", Json("[1]"))));
+    }
+
+    [Fact]
+    public void SearchFiles_Cap_IsTheSetting_Clamped_AndQuotedByTheSchema()
+    {
+        // File search max results (2026-10-01, the user's ask): a constant 200 until then, the default still.
+        Assert.Equal(200, AppSettingsData.DefaultFileSearchMaxResults);
+        Assert.Equal(1, AppSettingsData.MinFileSearchMaxResults);
+        Assert.Equal(5000, AppSettingsData.MaxFileSearchMaxResults);
+        Assert.Equal(200, SearchFilesTool.LimitOf(new AppSettingsData()));
+        Assert.Equal(1, SearchFilesTool.LimitOf(new AppSettingsData { FileSearchMaxResults = 0 }));          // a hand-edited value clamped
+        Assert.Equal(5000, SearchFilesTool.LimitOf(new AppSettingsData { FileSearchMaxResults = 99_999 }));
+
+        // At 200 the limit text is the one the schema carried when 200 was a constant; each default is capped by a smaller cap.
+        Assert.Equal(
+            "The most rows to return: hits or files with text (default 50, up to 200); entries, matching files or recent files without it (default 200, 100 or 10; up to 200).",
+            SearchFilesTool.LimitDescription(200));
+        Assert.Equal(
+            "The most rows to return: hits or files with text (default 30, up to 30); entries, matching files or recent files without it (default 30, 30 or 10; up to 30).",
+            SearchFilesTool.LimitDescription(30));
+
+        var search = Tool<SearchFilesTool>();
+        Assert.Equal(SearchFilesTool.LimitDescription(200), search.JsonSchema.GetProperty("properties").GetProperty("limit").GetProperty("description").GetString());
+        _settings.FileSearchMaxResults = 1000;
+        Assert.Equal(SearchFilesTool.LimitDescription(1000), search.JsonSchema.GetProperty("properties").GetProperty("limit").GetProperty("description").GetString());
+        Assert.Equal(SearchFilesTool.SchemaFor(1000).GetRawText(), search.JsonSchema.GetRawText());
+    }
+
+    [Fact]
+    public async Task SearchFiles_Limit_IsClampedToTheSetting()
+    {
+        for (int i = 0; i < 300; i++)
+        {
+            Put($"f{i:000}.txt", "needle");
+        }
+
+        var search = Tool<SearchFilesTool>();
+        static int Rows(string text) => text.Split('\n').Count(line => line.StartsWith('f'));
+
+        // The setting at its default: a limit of 300 is held to 200, as the constant did.
+        Assert.Equal(200, Rows(await Invoke(search, ("text", "needle"), ("limit", Json("300")))));
+        Assert.Equal(200, Rows(await Invoke(search, ("files", "*.txt"), ("limit", Json("300")))));
+        Assert.Equal(200, Rows(await Invoke(search, ("limit", Json("300")))));
+        Assert.Equal(200, Rows(await Invoke(search, ("order", "modified"), ("limit", Json("300")))));
+
+        // Raised, the same calls get what they asked; a call without limit keeps its default.
+        _settings.FileSearchMaxResults = 1000;
+        Assert.Equal(300, Rows(await Invoke(search, ("text", "needle"), ("limit", Json("300")))));
+        Assert.Equal(300, Rows(await Invoke(search, ("files", "*.txt"), ("limit", Json("300")))));
+        Assert.Equal(300, Rows(await Invoke(search, ("limit", Json("300")))));
+        Assert.Equal(300, Rows(await Invoke(search, ("order", "modified"), ("limit", Json("300")))));
+        Assert.Equal(300, Rows(await Invoke(search, ("depth", Json("2")), ("limit", Json("300")))));
+        Assert.Equal(WorkingDirectory.DefaultSearchLimit, Rows(await Invoke(search, ("text", "needle"))));
+        Assert.Equal(WorkingDirectory.DefaultFindLimit, Rows(await Invoke(search, ("files", "*.txt"))));
+
+        // Lowered under a default, the default goes with it.
+        _settings.FileSearchMaxResults = 20;
+        Assert.Equal(20, Rows(await Invoke(search, ("text", "needle"))));
+        Assert.Equal(20, Rows(await Invoke(search, ("files", "*.txt"))));
+        Assert.Equal(20, Rows(await Invoke(search)));
+        Assert.Equal(10, Rows(await Invoke(search, ("order", "modified"))));
     }
 
     [Fact]

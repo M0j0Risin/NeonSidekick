@@ -146,7 +146,7 @@ Both `--option value` and `--option=value` work.
 * The input row is always a full editor, even while a reply streams or `/botchat` runs. It has ←/→, Home/End and Delete; Shift+arrows, Ctrl+A or a drag to select; a double-click to select a word (letters, digits and `_`; a password field selects all); Ctrl+C / Ctrl+X to copy / cut; right-click or Alt+V to paste; a click to place the cursor; ↑/↓ for history; and the `/`, `@`, `#`, `$`, `%`, `^` and `*` lists. The mention lists work inside a slash command's text too (`/loop infinite 1s append the time to @notes.txt`), except for `/speak`, `/view` and `/print`, whose own file list completes their path.
 * To attach a picture from the ComfyUI picture strip or the transcript, drag it onto the input row. It is attached as if you had dropped its file from the desktop (a picture with no file goes in as a pasted one). While you drag, the hint row reads **🖼️ drop on line**; letting go anywhere else attaches nothing. This also works while a reply is running.
 * Three shortcuts start a new conversation: Ctrl+Alt+C also clears the screen (`/clear`), Ctrl+Alt+N leaves the screen as it is (`/new`), and Ctrl+Alt+P shows the splash screen (`/splash`). At the idle line, a draft on the row stays. While a reply runs, they cancel it first, just as the typed command does. An AltGr key that types a character on your keyboard layout still types that character.
-* More Ctrl+Alt shortcuts run a command as if you had typed it on its own: Ctrl+Alt+D `/mcp`, Ctrl+Alt+L `/cmdlist`, Ctrl+Alt+M `/memory`, Ctrl+Alt+O `/police`, Ctrl+Alt+S `/skills`, Ctrl+Alt+T `/tools` and Ctrl+Alt+Y `/sys`. A draft on the row stays. While a reply runs, a pane opens over it and the reply carries on, just as the typed command does. The Keys tab of `/help` lists them all.
+* More Ctrl+Alt shortcuts run a command as if you had typed it on its own: Ctrl+Alt+D `/mcp`, Ctrl+Alt+H `/header`, Ctrl+Alt+L `/cmdlist`, Ctrl+Alt+M `/memory`, Ctrl+Alt+O `/police`, Ctrl+Alt+S `/skills`, Ctrl+Alt+T `/tools` and Ctrl+Alt+Y `/sys`. A draft on the row stays. While a reply runs, a pane opens over it and the reply carries on, just as the typed command does. The Keys tab of `/help` lists them all.
 * Ten Ctrl shortcuts run a command as if you had typed it on its own: Ctrl+/ opens the settings (`/settings`), Ctrl+E opens the working directory in your file browser (`/explore`), Ctrl+F shows or hides the performance bar (`/perf`), Ctrl+H opens help (`/help`), Ctrl+M the model picker (`/model`), Ctrl+P the profile pane (`/profile`), Ctrl+R the reasoning picker (`/reasoning`), Ctrl+S the server picker (`/server`), Ctrl+T shows or hides the toolbar (`/tb`) and Ctrl+U the usage pane (`/usage`). At the idle line, a draft on the row stays. While a reply runs, Ctrl+E, Ctrl+F and Ctrl+T act at once and Ctrl+/, Ctrl+H, Ctrl+R and Ctrl+U open their pane over the reply, while Ctrl+M, Ctrl+P and Ctrl+S wait for the reply to end, just as the typed command does. Inside a pane, Ctrl+E, Ctrl+F and Ctrl+T leave the pane open; the others close it and open their own.
 * Ctrl+Alt+X is a kill switch for the embedded model: press it twice within two seconds and it unloads the model at once and frees its memory. The first press only shows a reminder on the hint row, so a stray press does nothing. It also cancels a reply, a load or a botchat that is using the model. Afterwards no server is connected until you pick one with `/server` (the saved *LLM URL* is kept, so the next start loads the model again). It works anywhere, including inside a pane. With any other server it does nothing.
 * Every Ctrl+Alt shortcut, and every Ctrl shortcut above, also works inside a pane you opened (a menu, `/help`, the folder picker, a value you are typing into a menu). The pane closes, every level of it, and the command runs as it would at the line, so Ctrl+Alt+S in `/tools` opens `/skills`. A pane's own shortcut just closes it (Ctrl+Alt+T in `/tools`). Ctrl+F and Ctrl+T toggle their bar and leave the pane open, and so does Ctrl+Alt+X, which works in every pane. A pane that a tool opens to ask you something (a command's approval, `ask_user`, the plan's approval, a confirmation) ignores the shortcuts, so one can never answer it by accident. So does the pane that asks whether a bare command name you typed meant the command, since closing it sends the line as typed.
@@ -220,7 +220,7 @@ Settings that an environment variable or flag can override for one launch are li
 | Copy user prompt | `/copy` includes your prompt above the reply. When off, it copies the reply alone. | on |
 | Theme | `synthwave`, `netrunner` (green phosphor), `nostromo` (amber phosphor), `noir` (greyscale), `cyberpunk` (colourful), `vaporwave` (pastel), `mainframe` (blue phosphor), `grid` (light cycle), `replicant` (smog and sodium) or `abyssal` (bioluminescent). | `synthwave` |
 | Welcome splash | Shows pictures under the banner at startup, until you send the first line: `fullsize`, `tiled` or `disabled`. See Welcome splash below. | `fullsize` |
-| Show header | Shows the banner (the title, the version and the rule under it) at startup and after `/clear`, `/splash`, `/theme` and a profile switch. Off, the screen starts with the transcript. `/new` keeps its own rule either way. | on |
+| Show header | Shows the banner (the title, the version and the rule under it) at startup and after `/clear`, `/splash`, `/theme` and a profile switch. Off, the screen starts with the transcript. `/new` keeps its own rule either way. `/header` and Ctrl+Alt+H flip it; the change shows at the next clear. | on |
 | Working directory in header | Prints the working directory at the right of the banner's title line. | off |
 | Show toolbar | Which items the toolbar under the hint row shows (see *Double-Click Shortcuts* above). It's a checklist of every glyph (🪪 Profile and 📈 Performance among them) and the working-directory path (📂). Enter or Space flips one; **A** / **N** / **D** (or the *select all* / *select none* / *default* buttons) pick all, none or the default five. With nothing checked the row is hidden. The row reads `all`, `off` or how many are checked. 💾, the lock and 👮 also need their own settings turned on. | Settings, Tools, Skills, Sessions, path (5 of 13) |
 | Show performance bar | A checklist of the meters the bar under the toolbar shows, updated once a second: **CPU**, **RAM**, **GPU**, **VRAM**, **NET** (network use, as a share of the link speed), **NET↓** and **NET↑** (the download and upload rates). Enter or Space flips one; with none checked there's no bar. **A** / **N** (or *select all* / *select none*) check all or none. The look is on the same screen's title row: **text** (T, the numbers), **gauge** (G, a bar per meter), **spark** (S, the last ten seconds as a sparkline) or **led** (L, ten segments in the theme's colours); the one in use is lit. Values turn amber from 60 % and red from 85 %. An NVIDIA GPU is read through its driver (NVML); any other through Windows' own GPU counters, for the card with the most memory. The network meters show the busiest of the adapters that are up and have a gateway, so a VPN on top of Wi-Fi, or Wi-Fi beside Ethernet, isn't counted twice and NET is the share of that adapter's own link; NET↓ and NET↑ show bits per second (`850K`, `12.4M`, `1.2G`), and their gauge, sparkline and LEDs are their share of the link speed. A meter the machine can't read (no GPU, no network) is left out. The bar is centred on its row, and each value keeps its width so nothing shifts as it changes. The row reads `off`, or the checked meters and the look (`CPU, RAM · gauge`). `/perf` or the toolbar's 📈 hides the bar, or shows it again with the meters it last had (CPU, RAM, GPU and VRAM the first time). | `off` (none checked), `text` |
@@ -542,6 +542,7 @@ Every tool, grouped (Clock, Timers, Files, GitLib, Shell, Obsidian, SQL, ComfyUI
 | Web search method | `duckduckgo` (built in, no setup) or `searxng` (the instance below). | `duckduckgo` |
 | Web SearXNG URL | A SearXNG instance's base URL, used while the method is `searxng`. | (not set) |
 | Web search max results | How many hits a search returns (1–20). | 20 |
+| Web download max (MB) | The largest file `download_file` saves (1–102400). The file streams to disk, so a big cap costs disk space, not memory. A download that sends nothing for 60 seconds is dropped, and a partial file never stays. | 50 |
 
 #### Files
 
@@ -553,6 +554,7 @@ Every tool, grouped (Clock, Timers, Files, GitLib, Shell, Obsidian, SQL, ComfyUI
 | File @-mention folder mode | What picking a folder from the `@` list does: `folder-remain` keeps the list open inside it; `folder-apply` writes `@folder/` and closes. | `folder-remain` |
 | File browser/tree mode | What the folder browsers (`/cwd browse`, the *Obsidian vault* row) and `/tree` list. `default` hides hidden and system entries and dot-folders (and, in `/tree`, dot-files). `show-hidden` lists them too, except that `/tree` always leaves out `.git` folders. | `default` |
 | File view image max (per call) | How many pictures one `view_image` call may load (1–100). | 10 |
+| File search max results | The most rows one `search_files` or `unc_search` call returns, whatever its `limit` asks (1–5000): hits, listed entries, matching names or recent files. A call without `limit` still gets 50 hits, 200 entries, 100 names or 10 recent files. | 200 |
 
 #### Shell
 
@@ -701,8 +703,9 @@ You can change which services run without asking under `ask` in `profile.json` (
 | SQL set password | Pick a connection that takes a password (`sql` or `runas`) and type it, masked. It is saved to that connection's store: encrypted in its `sql.json`, or in Windows Credential Manager. | — |
 | SQL add connection | A wizard for a new connection, one page per choice. It can **test** the draft (`SELECT @@VERSION`) before saving it. See Managing connections. | — |
 | SQL %-mention enabled | Typing `%` and part of a name on the input line lists the connections (server, database, description); a pick writes `%name` as text. | on |
-| SQL max rows | How many rows `sql_query` returns unless the call says otherwise (1–1000). Past that, the header says more exist. | 100 |
+| SQL max rows | How many rows `sql_query` returns unless the call says otherwise (1–100000). Past that, the header says more exist. | 100 |
 | SQL query timeout (s) | How long one SQL tool's batch may run on the server (1–600). | 30 |
+| Query result max chars | The most characters of table one `sql_query`, `oracle_query` or `mysql_query` answer carries (1000–1000000); the rows past it are left off and the header says how many fit. One setting for all three engines. | 32,000 |
 | SQL connections (profile) | Enter opens the profile's `sql.json` in your editor (created with a commented example of each sign-in kind). The value shows how many connections it has. | (none) |
 | SQL connections (global) | The same for the home folder's `sql.json`, which every profile reads. The profile's wins on a name clash. | (none) |
 
@@ -716,7 +719,7 @@ You can change which services run without asking under `ask` in `profile.json` (
 | Oracle set password | Pick a connection and type its password, masked. It is saved to that connection's store: encrypted in its `oracle.json`, or in Windows Credential Manager. | — |
 | Oracle add connection | A wizard for a new connection, one page per choice. It can **test** the draft before saving it: who it signs in as, the server's version, and a warning when the account could change data. See Oracle. | — |
 | Oracle %-mention enabled | Typing `%` and part of a name also lists the Oracle connections, each marked `Oracle ·`; a pick writes `%name` as text. | on |
-| Oracle max rows | How many rows `oracle_query` returns unless the call says otherwise (1–1000). Past that, the header says more exist. | 100 |
+| Oracle max rows | How many rows `oracle_query` returns unless the call says otherwise (1–100000). Past that, the header says more exist. | 100 |
 | Oracle query timeout (s) | How long one Oracle tool's statement may run on the server (1–600). | 30 |
 | Oracle connections (profile) | Enter opens the profile's `oracle.json` in your editor (created with commented examples). The value shows how many connections it has. | (none) |
 | Oracle connections (global) | The same for the home folder's `oracle.json`, which every profile reads. The profile's wins on a name clash. | (none) |
@@ -731,7 +734,7 @@ You can change which services run without asking under `ask` in `profile.json` (
 | MySQL set password | Pick a connection and type its password, masked. It is saved to that connection's store: encrypted in its `mysql.json`, or in Windows Credential Manager. | — |
 | MySQL add connection | A wizard for a new connection. It can **test** the draft before saving it: who it signs in as, the server's version, and a warning when the account's grants could change data. See MySQL. | — |
 | MySQL %-mention enabled | Typing `%` and part of a name also lists the MySQL connections, each marked `MySQL ·`. | on |
-| MySQL max rows | How many rows `mysql_query` returns unless the call says otherwise (1–1000). | 100 |
+| MySQL max rows | How many rows `mysql_query` returns unless the call says otherwise (1–100000). | 100 |
 | MySQL query timeout (s) | How long one MySQL tool's statement may run (1–600), enforced on the server and by the driver. | 30 |
 | MySQL connections (profile) | Enter opens the profile's `mysql.json` in your editor (created with commented examples). | (none) |
 | MySQL connections (global) | The same for the home folder's `mysql.json`, which every profile reads. The profile's wins on a name clash. | (none) |
@@ -848,6 +851,7 @@ Type `/` to list every command with a short summary. After a command and a space
 | `/ha tv on\|off\|mute\|unmute\|up\|down\|vol <0-100>\|source <name>` | Control the only media player (`/ha tv source hdmi 2`). |
 | `/ha states [domain \| words \| entity id]` | List entities with their ids and states. An entity id shows all of its attributes. |
 | `/ha say <sentence>` | Hand a sentence to Home Assistant's Assist agent. |
+| `/header [on \| off]` | Show or hide the header (*Show header*). On its own it flips the setting; `on` and `off` say which. The banner comes or goes at the next `/clear`, `/splash`, `/theme` or profile switch; nothing is redrawn now. Works while a reply runs; Ctrl+Alt+H runs it too. |
 | `/help` | Show the commands and keys: everyday commands on Commands (basic), the rest on Commands (advanced), then Keys. Ctrl+H runs it too. |
 | `/interrupt [on\|off]` | Toggle the wake-word interrupt during a spoken reply. |
 | `/learn [note \| sessions [N \| text]]` | Write or improve a skill in the background, from the last turn or from stored sessions. |
@@ -1089,7 +1093,7 @@ All paths are relative to the working directory. Nothing outside it can be reach
 | Tool | Arguments | What it does |
 |---|---|---|
 | `get_working_directory` | — | The working directory's path. It is seeded at the start of every conversation. |
-| `search_files` | `text?, path?, files?, regex?, context?, output?, order?, limit?, depth?` | Searches the text files for a word, phrase or regex, as `file:line: text` (with context lines when asked). Without `text`, it lists a folder, a tree (`depth` 2–4), the files matching a name pattern, or the most recently changed files. |
+| `search_files` | `text?, path?, files?, regex?, context?, output?, order?, limit?, depth?` | Searches the text files for a word, phrase or regex, as `file:line: text` (with context lines when asked). Without `text`, it lists a folder, a tree (`depth` 2–4), the files matching a name pattern, or the most recently changed files. `limit` goes up to *File search max results*. |
 | `file_info` | `path` | For a file: its size, modified time, line and word count, line ending and BOM. For a folder: its counts and total size. It is also the way to check that something exists. |
 | `read_file` | `path, start_line?, max_lines?` | Reads a text file or part of it (a negative `start_line` counts from the end). A partial read names the line to continue from. |
 | `view_image` | `path?, paths?` | Attaches image files to the next message so the model can see them: one, or up to *File view image max (per call)* at once. |
@@ -1235,7 +1239,7 @@ Read-only queries against SQL Server over named connections. The app talks to th
 | `sql_describe` | `table, connection?, database?` | One table or view in full: its description and its columns (type as declared, nullability, identity, computed, default, primary key, description). Also the foreign keys out of and into it, its indexes (UNIQUE constraints marked), its CHECK constraints and its triggers. A bare name finds the one schema that has it. |
 | `sql_relationships` | `connection?, database?, table?` | The foreign-key join paths as `from_table.from_column -> to_table.to_column`: every one, or those touching a table. |
 | `sql_indexes` | `connection?, database?, table?, schema?, missing?` | The indexes of a table, a schema or the whole database. Each shows its kind (clustered, PK, unique, unique constraint, disabled), key and included columns, filter and size. Then come its seeks, scans, lookups and updates since the server started; an unread nonclustered index is marked *(no reads since restart)*. `missing: true` adds the optimizer's missing-index suggestions. Usage and suggestions need `VIEW SERVER STATE`; without it, the indexes are still listed, with a line saying why the rest is missing. |
-| `sql_query` | `sql, connection?, database?, params?, max_rows?` | One read-only `SELECT`. `params` is an object (`{"id": 43659}` for `@id`); `max_rows` is 1–1000 (*SQL max rows* by default). |
+| `sql_query` | `sql, connection?, database?, params?, max_rows?` | One read-only `SELECT`. `params` is an object (`{"id": 43659}` for `@id`); `max_rows` is 1–100000 (*SQL max rows* by default). The table is cut at *Query result max chars*. |
 
 </details>
 
@@ -1303,7 +1307,7 @@ Values go in as `:name` parameters. Results come back as a Markdown table; a `NU
 | `oracle_describe` | `table, connection?, schema?` | One table or view in full: its comment and columns (type as declared, nullability, identity, virtual, default, primary key, comment), the foreign keys out and in, its indexes, CHECK constraints and triggers. A bare name finds the one in the call's schema, else the one schema that has it. |
 | `oracle_relationships` | `connection?, schema?, table?` | The foreign-key join paths: every one, those touching a schema, or those touching a table. |
 | `oracle_indexes` | `connection?, table?, schema?` | The indexes of a table, a schema or every schema: kind, key columns, status, visibility, the optimizer's counts. With `DBA_INDEX_USAGE` readable (`SELECT_CATALOG_ROLE`), also each one's recorded use, an index with none marked *(no use recorded)*. |
-| `oracle_query` | `sql, connection?, schema?, params?, max_rows?` | One read-only `SELECT` (`FETCH FIRST n ROWS ONLY`, no trailing `;`). `params` is an object (`{"id": 101}` for `:id`); `max_rows` is 1–1000 (*Oracle max rows* by default). |
+| `oracle_query` | `sql, connection?, schema?, params?, max_rows?` | One read-only `SELECT` (`FETCH FIRST n ROWS ONLY`, no trailing `;`). `params` is an object (`{"id": 101}` for `:id`); `max_rows` is 1–100000 (*Oracle max rows* by default). The table is cut at *Query result max chars*. |
 
 `--oracle-check <connection>` proves the tools against a real database on the published exe (every type, the read-only layers, a cancel and a timeout; it only reads).
 
@@ -1366,7 +1370,7 @@ Read-only queries against MySQL 8.0.16+ and MariaDB 10.2+ over named connections
 | `mysql_describe` | `table, connection?, database?` | One table or view: its comment and columns (type as declared, nullability, auto_increment, default, primary key, comment), foreign keys out and in, indexes, CHECK constraints and triggers. |
 | `mysql_relationships` | `connection?, database?, table?` | The foreign-key join paths: every one in a database, or those touching a table. |
 | `mysql_indexes` | `connection?, database?, table?` | The indexes of a table or database: kind, key columns, cardinality, and — when `performance_schema` allows — each one's reads and writes since the server started, an unread one marked. |
-| `mysql_query` | `sql, connection?, database?, params?, max_rows?` | One read-only `SELECT` (`LIMIT n`). `params` is an object (`{"id": 101}` for `@id`); `max_rows` is 1–1000. |
+| `mysql_query` | `sql, connection?, database?, params?, max_rows?` | One read-only `SELECT` (`LIMIT n`). `params` is an object (`{"id": 101}` for `@id`); `max_rows` is 1–100000. The table is cut at *Query result max chars*. |
 
 `--mysql-check <connection>` proves the tools against a real server on the published exe (every type, the gate, the session's string reading, the read-only transaction, a cancel and a timeout; it only reads).
 
@@ -1424,7 +1428,7 @@ The UNC tools reach named network shares (`\\server\share`, or a folder under on
 | Tool | Arguments | What it does |
 |---|---|---|
 | `unc_shares` | `check?` | The named shares: path, account, read-only or read-write, description, the default marked. `check` lists each root now. |
-| `unc_search` | `share?, text?, path?, files?, regex?, context?, output?, order?, limit?, depth?` | `search_files` on a share: search inside files, or list folders, matching names, or recent files. |
+| `unc_search` | `share?, text?, path?, files?, regex?, context?, output?, order?, limit?, depth?` | `search_files` on a share: search inside files, or list folders, matching names, or recent files. `limit` goes up to *File search max results*. |
 | `unc_info` | `share?, path?` | A file's size, dates, lines and words; a folder's counts. |
 | `unc_read` | `share?, path, start_line?, max_lines?` | Read a text file, whole or in part. |
 | `unc_fetch` | `share?, path, to?, overwrite?` | Copy a file or folder from a share into the working directory (with the File tools on), for `view_image`, `execute_code` and the file tools. At most 5,000 files and 500 MB. |
@@ -1636,7 +1640,7 @@ Get-Content job.txt | NeonSidekick.exe --headless --profile work
 | `web_search` | `query, max_results?` | Searches the web (DuckDuckGo or SearXNG) and returns the top results: title, URL, snippet. |
 | `web_fetch` | `url, offset?` | Fetches a page and returns its readable content as Markdown, 32,000 characters at a time. It also reads plain text, JSON, XML and CSV. |
 | `open_url` | `url?, urls?` | Opens a link — or up to five — in the user's own browser. |
-| `download_file` | `url, path?, overwrite?` | Downloads a file (a picture, a PDF, an archive…) into the working directory, up to 50 MB. Needs *File tools* on too. |
+| `download_file` | `url, path?, overwrite?` | Downloads a file (a picture, a PDF, an archive…) into the working directory, up to *Web download max (MB)* (50 MB by default), streamed to disk. Needs *File tools* on too. |
 
 </details>
 

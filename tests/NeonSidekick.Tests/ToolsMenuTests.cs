@@ -162,13 +162,13 @@ public partial class ToolsMenuTests : IDisposable
         Assert.Equal([SettingsField.ToolsDollarMention, SettingsField.ToolCollapseCount, SettingsField.CodeCollapseCount], SettingsMenu.ToolsTabFields[14]);
         Assert.Equal([SettingsField.HomeAssistantTools, SettingsField.HomeAssistantUrl, SettingsField.HomeAssistantToken, SettingsField.HomeAssistantTest, SettingsField.HomeAssistantActionPolicy, SettingsField.HomeAssistantAssistAgent, SettingsField.HomeAssistantTimeoutSeconds], SettingsMenu.ToolsTabFields[5]);   // the switch, the server and its token, the test, the policy, Assist's agent, the timeout (2026-09-28)   // the fold's count under the switch (2026-09-22, the user's place), the code fold's under it
         Assert.Equal([SettingsField.PrintTools, SettingsField.PrintActionPolicy, SettingsField.PrintDefaultPrinter, SettingsField.PrintFontSize], SettingsMenu.ToolsTabFields[6]);   // the switch, the policy, the printer, the size (later on 2026-09-28)
-        Assert.Equal([SettingsField.WebTools, SettingsField.WebBrowserMode, SettingsField.WebBrowserPath, SettingsField.WebBrowserNetworkMode, SettingsField.WebSearchMethod, SettingsField.WebSearxngUrl, SettingsField.WebSearchMaxResults], SettingsMenu.ToolsTabFields[0]);
-        Assert.Equal([SettingsField.FileTools, SettingsField.FileTreeMaxLength, SettingsField.FileTreeShowSizes, SettingsField.FileMentionFolderMode, SettingsField.FileBrowserMode, SettingsField.FileViewImageMaxPerCall], SettingsMenu.ToolsTabFields[1]);   // the view_image cap last, 2026-09-19; the browser mode under the folder mode, 2026-09-21
+        Assert.Equal([SettingsField.WebTools, SettingsField.WebBrowserMode, SettingsField.WebBrowserPath, SettingsField.WebBrowserNetworkMode, SettingsField.WebSearchMethod, SettingsField.WebSearxngUrl, SettingsField.WebSearchMaxResults, SettingsField.WebDownloadMaxMegabytes], SettingsMenu.ToolsTabFields[0]);   // the download cap last (2026-10-01)
+        Assert.Equal([SettingsField.FileTools, SettingsField.FileTreeMaxLength, SettingsField.FileTreeShowSizes, SettingsField.FileMentionFolderMode, SettingsField.FileBrowserMode, SettingsField.FileViewImageMaxPerCall, SettingsField.FileSearchMaxResults], SettingsMenu.ToolsTabFields[1]);   // the search cap last (2026-10-01), the view_image cap before it (2026-09-19); the browser mode under the folder mode, 2026-09-21
         Assert.Equal([SettingsField.ShellCommandPolicy, SettingsField.ShellCommandAllowed, SettingsField.ShellPoliceOutsidePaths, SettingsField.ShellPreferNative, SettingsField.ShellDefault, SettingsField.ShellTimeoutSeconds, SettingsField.ShellForegroundCapSeconds, SettingsField.ShellOutputMaxChars, SettingsField.ShellCodeLanguages, SettingsField.ShellCodeTimeoutSeconds, SettingsField.ShellToolBridge, SettingsField.ShellCodeMaxToolCalls], SettingsMenu.ToolsTabFields[2]);   // the policy (the switch) first, then the list, the shell, the caps, then execute_code's four (2026-09-21; the bridge switch later that day; the police toggle third, 2026-09-22; prefer native under it, 2026-09-26)
         Assert.Equal([SettingsField.AskUser, SettingsField.AskMaxQuestions, SettingsField.AskMaxChoices], SettingsMenu.ToolsTabFields[3]);
         Assert.Equal([SettingsField.GitLibTools, SettingsField.GitLibDiffMaxLines, SettingsField.GitLibLogMaxCommits, SettingsField.GitLibEmail, SettingsField.GitLibName], SettingsMenu.ToolsTabFields[13]);   // the switch first, then the limits, then the identity pair (2026-09-21); the GitLib labels later that day
         Assert.Equal([SettingsField.ObsidianTools, SettingsField.ObsidianVault, SettingsField.ObsidianAllowDelete], SettingsMenu.ToolsTabFields[7]);   // the switch, then the vault (2026-09-22), then the delete switch (later that day)
-        Assert.Equal([SettingsField.SqlTools, SettingsField.SqlConnectionsOffered, SettingsField.SqlDefaultConnection, SettingsField.SqlSetPassword, SettingsField.SqlAddConnection, SettingsField.SqlPercentMention, SettingsField.SqlQueryMaxRows, SettingsField.SqlQueryTimeoutSeconds, SettingsField.SqlConnectionsProfile, SettingsField.SqlConnectionsGlobal], SettingsMenu.ToolsTabFields[9]);   // the switch, the offered list (later that day), the default, the password prompt, the add-connection wizard and the %-mention switch (later that day), the two caps, the two edit rows (2026-09-23)
+        Assert.Equal([SettingsField.SqlTools, SettingsField.SqlConnectionsOffered, SettingsField.SqlDefaultConnection, SettingsField.SqlSetPassword, SettingsField.SqlAddConnection, SettingsField.SqlPercentMention, SettingsField.SqlQueryMaxRows, SettingsField.SqlQueryTimeoutSeconds, SettingsField.QueryResultMaxChars, SettingsField.SqlConnectionsProfile, SettingsField.SqlConnectionsGlobal], SettingsMenu.ToolsTabFields[9]);   // the switch, the offered list (later that day), the default, the password prompt, the add-connection wizard and the %-mention switch (later that day), the two caps, the three engines' text cap (2026-10-01), the two edit rows (2026-09-23)
         Assert.Equal([SettingsField.OracleTools, SettingsField.OracleConnectionsOffered, SettingsField.OracleDefaultConnection, SettingsField.OracleSetPassword, SettingsField.OracleAddConnection, SettingsField.OraclePercentMention, SettingsField.OracleQueryMaxRows, SettingsField.OracleQueryTimeoutSeconds, SettingsField.OracleConnectionsProfile, SettingsField.OracleConnectionsGlobal], SettingsMenu.ToolsTabFields[10]);   // the SQL tab's rows, in its order (2026-09-30)
         Assert.Equal([SettingsField.MySqlTools, SettingsField.MySqlConnectionsOffered, SettingsField.MySqlDefaultConnection, SettingsField.MySqlSetPassword, SettingsField.MySqlAddConnection, SettingsField.MySqlPercentMention, SettingsField.MySqlQueryMaxRows, SettingsField.MySqlQueryTimeoutSeconds, SettingsField.MySqlConnectionsProfile, SettingsField.MySqlConnectionsGlobal], SettingsMenu.ToolsTabFields[11]);   // the Oracle tab's rows, in its order (later on 2026-09-30)
         Assert.Equal([SettingsField.UncTools, SettingsField.UncWrites, SettingsField.UncSharesOffered, SettingsField.UncDefaultShare, SettingsField.UncSetPassword, SettingsField.UncAddShare, SettingsField.UncStarMention, SettingsField.UncSharesProfile, SettingsField.UncSharesGlobal], SettingsMenu.ToolsTabFields[12]);   // the two switches, the offered list, the default, the password prompt, the wizard, the %-mention switch, the two edit rows (later still on 2026-09-30)
@@ -332,7 +332,7 @@ public partial class ToolsMenuTests : IDisposable
 
         Assert.False(_settings.Current.FileTools);
         // The six rows (the view_image cap last, 2026-09-19; the @-mention folder mode before it, 2026-09-17, and the browser mode under that, 2026-09-21; Safe edits gone since 2026-10-01, folder-remain the default since then, Always return line numbers gone later that day and the stale line number guard later still, with edit_lines) padded to the tab's own column (32), the toggle's notice on the status line under the strip.
-        AssertTabEnds("\n" + Titled(Strip) + "\n \n▸ File tools                      on\n  File /tree max length           500 entries\n  File /tree show sizes           on\n  File @-mention folder mode      folder-remain\n  File browser/tree mode          default\n  File view image max (per call)  10 pictures\n", 100);
+        AssertTabEnds("\n" + Titled(Strip) + "\n \n▸ File tools                      on\n  File /tree max length           500 entries\n  File /tree show sizes           on\n  File @-mention folder mode      folder-remain\n  File browser/tree mode          default\n  File view image max (per call)  10 pictures\n  File search max results         200 results\n", 100);
         Assert.Contains("\n" + Titled(Strip) + "\n  · File tools: off\n▸ File tools                      off\n", _console.Output);
         Assert.Contains("\n▸ GitLib tools            on\n", _console.Output);
         pane.Dispose();
@@ -1134,7 +1134,7 @@ public partial class ToolsMenuTests : IDisposable
 
         Assert.False(_settings.Current.WebTools);
         // The seven rows padded to the tab's own column (26), the toggle's notice on the status line under the strip.
-        AssertTabEnds("\n" + Titled(Strip) + "\n \n▸ Web tools                 on\n  Web browser mode          default\n  Web browser path          (auto: msedge.exe)\n  Web browser network mode  internet\n  Web search method         duckduckgo\n  Web SearXNG URL           (not set)\n  Web search max results    20 results\n", 100);
+        AssertTabEnds("\n" + Titled(Strip) + "\n \n▸ Web tools                 on\n  Web browser mode          default\n  Web browser path          (auto: msedge.exe)\n  Web browser network mode  internet\n  Web search method         duckduckgo\n  Web SearXNG URL           (not set)\n  Web search max results    20 results\n  Web download max (MB)     50 MB\n", 100);
         Assert.Contains("\n" + Titled(Strip) + "\n  · Web tools: off\n▸ Web tools                 off\n", _console.Output);
         pane.Dispose();
     }
@@ -1274,6 +1274,63 @@ public partial class ToolsMenuTests : IDisposable
     }
 
     [Fact]
+    public async Task OnThePane_FileSearchMaxResults_IsTheFilesTabsLastRow_Typed_OutOfRangeRefused()
+    {
+        // 2026-10-01, the user's ask: 1 to 5000, 200 by default (the constant until then); search_files and unc_search read it at their next call.
+        var (menu, pane, _) = PaneMenu();
+        Push(Keys.Right, Keys.Right);   // Files
+        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter);   // the seventh row, after the view_image cap: the typed slot with "200"
+        Push(Keys.Backspace, Keys.Backspace, Keys.Backspace, Keys.Char('0'), Keys.Enter);   // refused: 0
+        Push(Keys.Enter, Keys.Backspace, Keys.Backspace, Keys.Backspace, Keys.Char('1'), Keys.Char('0'), Keys.Char('0'), Keys.Char('0'), Keys.Enter);   // 1000
+        Push(Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Equal(1000, _settings.Current.FileSearchMaxResults);
+        Assert.Contains("File search max results " + SettingsMenu.FileSearchMaxResultsRangeError + "; keeping 200.", _console.Output);
+        Assert.Contains("  · File search max results: 1000 results\n", _console.Output);
+        pane.Dispose();
+    }
+
+    [Fact]
+    public async Task OnThePane_WebDownloadMax_IsTheWebTabsLastRow_Typed_OutOfRangeRefused()
+    {
+        // 2026-10-01, the user's ask: 1 to 102400 MB, 50 by default (the constant until then).
+        var (menu, pane, _) = PaneMenu();
+        Push(Keys.Right);   // Web
+        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter);   // the eighth row, after the search count: the typed slot with "50"
+        Push(Keys.Backspace, Keys.Backspace, Keys.Char('0'), Keys.Enter);   // refused: 0
+        Push(Keys.Enter, Keys.Backspace, Keys.Backspace, Keys.Char('2'), Keys.Char('0'), Keys.Char('0'), Keys.Char('0'), Keys.Enter);   // 2000
+        Push(Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Equal(2000, _settings.Current.WebDownloadMaxMegabytes);
+        Assert.Contains("Web download max (MB) " + SettingsMenu.WebDownloadMaxMegabytesRangeError + "; keeping 50.", _console.Output);
+        Assert.Contains("  · Web download max (MB): 2,000 MB\n", _console.Output);
+        pane.Dispose();
+    }
+
+    [Fact]
+    public async Task OnThePane_QueryResultMaxChars_IsOnTheSqlTab_UnderTheTimeout_Typed_OutOfRangeRefused()
+    {
+        // 2026-10-01, the user's ask: 1,000 to 1,000,000, 32,000 by default (the file tools' cap until then); the three query tools read it at their next call.
+        var (menu, pane, _) = PaneMenu();
+        Push(Enumerable.Repeat(Keys.Right, 10).ToArray());   // SQL
+        Push(Enumerable.Repeat(Keys.Down, 8).Append(Keys.Enter).ToArray());   // the ninth row, under the timeout: the typed slot with "32000"
+        Push(Enumerable.Repeat(Keys.Backspace, 5).Append(Keys.Char('9')).Append(Keys.Enter).ToArray());   // refused: 9
+        Push(new[] { Keys.Enter }.Concat(Enumerable.Repeat(Keys.Backspace, 5)).Concat("200,000".Select(Keys.Char)).Append(Keys.Enter).ToArray());   // 200,000, the separator allowed
+        Push(Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Equal(200_000, _settings.Current.QueryResultMaxChars);
+        Assert.Contains("Query result max chars " + SettingsMenu.QueryResultMaxCharsRangeError + "; keeping 32000.", _console.Output);
+        Assert.Contains("  · Query result max chars: 200,000 chars\n", _console.Output);
+        pane.Dispose();
+    }
+
+    [Fact]
     public async Task OnThePane_SpaceOnASettingsRow_IsNothing()
     {
         var (menu, pane, _) = PaneMenu();
@@ -1346,9 +1403,10 @@ public partial class ToolsMenuTests : IDisposable
         Assert.Contains("  ·   Questions (1) (off: no pane)\n", _console.Output);
         // The tabs in strip order: Web right after Offered, then Files, Shell, Ask (the user's order, later on 2026-09-21), Claude (Claude (CLI) until 2026-09-29, the Claude API's four rows last since), Home Assistant (2026-09-28), Obsidian, ComfyUI, SQL, Git (native) (the user's order, 2026-09-27) and Options last (2026-09-22).
         Assert.Contains("  · Web\n  ·   Web tools: on\n  ·   Web browser mode: default\n  ·   Web browser path: (auto: msedge.exe)\n", _console.Output);
-        Assert.Contains("  ·   Web search max results: 20 results\n  · Files\n  ·   File tools: on\n", _console.Output);
+        Assert.Contains("  ·   Web search max results: 20 results\n  ·   Web download max (MB): 50 MB\n  · Files\n  ·   File tools: on\n", _console.Output);
+        Assert.Contains("  ·   File view image max (per call): 10 pictures\n  ·   File search max results: 200 results\n  · Shell\n", _console.Output);
         Assert.Contains("  · Shell\n  ·   Shell command policy: ask\n", _console.Output);
-        Assert.Contains("  · Ask\n  ·   Ask user: on\n  ·   Ask max questions: 10 questions\n  ·   Ask max choices per question: 10 choices\n  · Claude\n  ·   Claude executable: (looked up)\n  ·   Claude slash command permissions: read-only\n  ·   Claude slash command model: (Claude Code's default)\n  ·   Claude slash command effort: (Claude Code's default)\n  ·   Claude advisor tool: off\n  ·   Claude advisor tool context: brief\n  ·   Claude advisor tool calls per turn: 2 calls\n  ·   Claude advisor tool model: (as Claude slash command model)\n  ·   Claude advisor tool effort: (as Claude slash command effort)\n  ·   Claude advisor tool confirm: off\n  ·   Claude API: off\n  ·   Claude API key: (none)\n  ·   Claude API max tokens: 32,000 tokens\n  ·   Claude API prompt caching: on\n  ·   Claude CLI server: off\n  · HA\n  ·   Home Assistant tools: on\n  ·   Home Assistant URL: (not set)\n  ·   Home Assistant API key: (none)\n  ·   Home Assistant test connection: Enter to ask the server for its version\n  ·   Home Assistant action policy: ask\n  ·   Home Assistant Assist agent: (Home Assistant's default)\n  ·   Home Assistant timeout (s): 10\n  · Print\n  ·   Print tools: off\n  ·   Print action policy: ask\n  ·   Print default printer: (Windows default)\n  ·   Print font size (pt): 10 pt\n  · Obsidian\n  ·   Obsidian tools: on\n  ·   Obsidian vault: (not set)\n  ·   Obsidian allow delete (.trash): on\n  · ComfyUI\n  ·   ComfyUI tools: on\n  ·   ComfyUI URL: (not set)\n  ·   ComfyUI workflows offered: none of 0\n  ·   ComfyUI add workflow: Enter to start workflow wizard\n  ·   ComfyUI ^-mention enabled: on\n  ·   ComfyUI timeout (s): 300\n  ·   ComfyUI max pictures per call: 5 pictures\n  ·   ComfyUI reinforce negatives: on\n  ·   ComfyUI show prompts: on\n  ·   ComfyUI picture strip: on\n  ·   ComfyUI output folder: comfy_images\n  · SQL\n  ·   SQL tools: on\n  ·   SQL connections offered: none of 0\n  ·   SQL default connection: (the first connection)\n  ·   SQL set password: Enter to set password for a connection\n  ·   SQL add connection: Enter to start connection wizard\n  ·   SQL %-mention enabled: on\n  ·   SQL max rows: 100 rows\n  ·   SQL query timeout (s): 30\n  ·   SQL connections (profile): (none) · Enter edits sql.json\n  ·   SQL connections (global): (none) · Enter edits sql.json\n  · Oracle\n  ·   Oracle tools: off\n  ·   Oracle connections offered: none of 0\n  ·   Oracle default connection: (the first connection)\n  ·   Oracle set password: Enter to set password for a connection\n  ·   Oracle add connection: Enter to start connection wizard\n  ·   Oracle %-mention enabled: on\n  ·   Oracle max rows: 100 rows\n  ·   Oracle query timeout (s): 30\n  ·   Oracle connections (profile): (none) · Enter edits oracle.json\n  ·   Oracle connections (global): (none) · Enter edits oracle.json\n  · MySQL\n  ·   MySQL tools: off\n  ·   MySQL connections offered: none of 0\n  ·   MySQL default connection: (the first connection)\n  ·   MySQL set password: Enter to set password for a connection\n  ·   MySQL add connection: Enter to start connection wizard\n  ·   MySQL %-mention enabled: on\n  ·   MySQL max rows: 100 rows\n  ·   MySQL query timeout (s): 30\n  ·   MySQL connections (profile): (none) · Enter edits mysql.json\n  ·   MySQL connections (global): (none) · Enter edits mysql.json\n  · UNC\n  ·   UNC tools: off\n  ·   UNC writes: off\n  ·   UNC shares offered: none of 0\n  ·   UNC default share: (the first share)\n  ·   UNC set password: Enter to set password for a runas share\n  ·   UNC add share: Enter to start share wizard\n  ·   UNC *-mention enabled: on\n  ·   UNC shares (profile): (none) · Enter edits unc.json\n  ·   UNC shares (global): (none) · Enter edits unc.json\n  · GitLib\n  ·   GitLib tools: on\n  ·   GitLib diff max lines: 500 lines\n  ·   GitLib log max commits: 20 commits\n  ·   GitLib email: (not set)\n  ·   GitLib name: (not set)\n  · Options\n  ·   $-mention enabled: on\n  ·   Tool collapse count: 2 lines\n  ·   Code collapse count: 20 lines\n", _console.Output);
+        Assert.Contains("  · Ask\n  ·   Ask user: on\n  ·   Ask max questions: 10 questions\n  ·   Ask max choices per question: 10 choices\n  · Claude\n  ·   Claude executable: (looked up)\n  ·   Claude slash command permissions: read-only\n  ·   Claude slash command model: (Claude Code's default)\n  ·   Claude slash command effort: (Claude Code's default)\n  ·   Claude advisor tool: off\n  ·   Claude advisor tool context: brief\n  ·   Claude advisor tool calls per turn: 2 calls\n  ·   Claude advisor tool model: (as Claude slash command model)\n  ·   Claude advisor tool effort: (as Claude slash command effort)\n  ·   Claude advisor tool confirm: off\n  ·   Claude API: off\n  ·   Claude API key: (none)\n  ·   Claude API max tokens: 32,000 tokens\n  ·   Claude API prompt caching: on\n  ·   Claude CLI server: off\n  · HA\n  ·   Home Assistant tools: on\n  ·   Home Assistant URL: (not set)\n  ·   Home Assistant API key: (none)\n  ·   Home Assistant test connection: Enter to ask the server for its version\n  ·   Home Assistant action policy: ask\n  ·   Home Assistant Assist agent: (Home Assistant's default)\n  ·   Home Assistant timeout (s): 10\n  · Print\n  ·   Print tools: off\n  ·   Print action policy: ask\n  ·   Print default printer: (Windows default)\n  ·   Print font size (pt): 10 pt\n  · Obsidian\n  ·   Obsidian tools: on\n  ·   Obsidian vault: (not set)\n  ·   Obsidian allow delete (.trash): on\n  · ComfyUI\n  ·   ComfyUI tools: on\n  ·   ComfyUI URL: (not set)\n  ·   ComfyUI workflows offered: none of 0\n  ·   ComfyUI add workflow: Enter to start workflow wizard\n  ·   ComfyUI ^-mention enabled: on\n  ·   ComfyUI timeout (s): 300\n  ·   ComfyUI max pictures per call: 5 pictures\n  ·   ComfyUI reinforce negatives: on\n  ·   ComfyUI show prompts: on\n  ·   ComfyUI picture strip: on\n  ·   ComfyUI output folder: comfy_images\n  · SQL\n  ·   SQL tools: on\n  ·   SQL connections offered: none of 0\n  ·   SQL default connection: (the first connection)\n  ·   SQL set password: Enter to set password for a connection\n  ·   SQL add connection: Enter to start connection wizard\n  ·   SQL %-mention enabled: on\n  ·   SQL max rows: 100 rows\n  ·   SQL query timeout (s): 30\n  ·   Query result max chars: 32,000 chars\n  ·   SQL connections (profile): (none) · Enter edits sql.json\n  ·   SQL connections (global): (none) · Enter edits sql.json\n  · Oracle\n  ·   Oracle tools: off\n  ·   Oracle connections offered: none of 0\n  ·   Oracle default connection: (the first connection)\n  ·   Oracle set password: Enter to set password for a connection\n  ·   Oracle add connection: Enter to start connection wizard\n  ·   Oracle %-mention enabled: on\n  ·   Oracle max rows: 100 rows\n  ·   Oracle query timeout (s): 30\n  ·   Oracle connections (profile): (none) · Enter edits oracle.json\n  ·   Oracle connections (global): (none) · Enter edits oracle.json\n  · MySQL\n  ·   MySQL tools: off\n  ·   MySQL connections offered: none of 0\n  ·   MySQL default connection: (the first connection)\n  ·   MySQL set password: Enter to set password for a connection\n  ·   MySQL add connection: Enter to start connection wizard\n  ·   MySQL %-mention enabled: on\n  ·   MySQL max rows: 100 rows\n  ·   MySQL query timeout (s): 30\n  ·   MySQL connections (profile): (none) · Enter edits mysql.json\n  ·   MySQL connections (global): (none) · Enter edits mysql.json\n  · UNC\n  ·   UNC tools: off\n  ·   UNC writes: off\n  ·   UNC shares offered: none of 0\n  ·   UNC default share: (the first share)\n  ·   UNC set password: Enter to set password for a runas share\n  ·   UNC add share: Enter to start share wizard\n  ·   UNC *-mention enabled: on\n  ·   UNC shares (profile): (none) · Enter edits unc.json\n  ·   UNC shares (global): (none) · Enter edits unc.json\n  · GitLib\n  ·   GitLib tools: on\n  ·   GitLib diff max lines: 500 lines\n  ·   GitLib log max commits: 20 commits\n  ·   GitLib email: (not set)\n  ·   GitLib name: (not set)\n  · Options\n  ·   $-mention enabled: on\n  ·   Tool collapse count: 2 lines\n  ·   Code collapse count: 20 lines\n", _console.Output);
         Assert.False(pane.OverlayOpen);
         pane.Dispose();
     }

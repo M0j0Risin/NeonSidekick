@@ -86,6 +86,9 @@ public static class WebText
     public static string TooBig(string url, long bytes, long cap) =>
         bytes > 0 ? $"Error: '{url}' is {Size(bytes)}, over the {Size(cap)} download limit" : $"Error: '{url}' is over the {Size(cap)} download limit";
 
+    /// <summary>A streamed download whose server sent nothing for <paramref name="after"/> (<see cref="WebFetcher.DownloadStallTimeout"/>, 2026-10-01): dropped, its partial file deleted. Pinned.</summary>
+    public static string Stalled(string url, TimeSpan after) => $"Error: '{url}' sent nothing for {Llm.LlmTimeouts.Format(after)}; the download was dropped";
+
     /// <summary>A download whose URL ends in no file name and came with none (2026-09-18). Pinned.</summary>
     public static string NoFileName(string url) => $"Error: '{url}' names no file; give a path to save it as";
     public static string BrowserFailed(string url, string detail) => $"Error: the headless browser could not load '{url}': {detail}";
