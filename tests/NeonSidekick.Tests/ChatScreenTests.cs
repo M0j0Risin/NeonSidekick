@@ -4994,8 +4994,8 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains("\n" + Titled(ChatScreen.PromptFileResetPrompt("persona.md", "persona")) + "\n \n▸ No\n  Yes\n", output);
-        Assert.Contains("  · " + ChatScreen.PromptFileResetNotice("persona.md", "persona", spoken: false), output);
+        Assert.Contains("\n" + Titled(ChatScreen.PromptFileResetPrompt("persona.md", "the default persona")) + "\n \n▸ No\n  Yes\n", output);
+        Assert.Contains("  · " + ChatScreen.PromptFileResetNotice("persona.md", "the default persona", spoken: false), output);
         Assert.False(File.Exists(path));
         Assert.Empty(_openedFiles);
         Assert.Empty(_chat.Requests);
@@ -5028,7 +5028,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Equal(2, output.Split("  · " + ChatScreen.PromptFileAbsentNotice("persona.md", "persona")).Length - 1);
+        Assert.Equal(2, output.Split("  · " + ChatScreen.PromptFileAbsentNotice("persona.md", "the default persona")).Length - 1);
         Assert.Contains("  ✗ " + ChatScreen.PromptFileUsageError("/persona", "persona.md"), output);
         Assert.Empty(_openedFiles);
         Assert.False(File.Exists(Path.Combine(_settings.ProfileDirectory, PersonaFile.FileName)));
@@ -5039,14 +5039,14 @@ public partial class ChatScreenTests : IDisposable
     {
         Assert.Equal("reset", ChatScreen.ResetWord);
         Assert.Equal("/operata takes nothing (open operata.md in your editor), reset, or copy <profile> [force].", ChatScreen.PromptFileUsageError("/operata", "operata.md"));   // copy 2026-09-21
-        Assert.Equal("🗣️ Remove vocalia.md and go back to the default voice directive?", ChatScreen.PromptFileResetPrompt("vocalia.md", "voice directive"));
-        Assert.Equal("(📋 removed operata.md; the next reply uses the default operating rules)", ChatScreen.PromptFileResetNotice("operata.md", "operating rules", spoken: false));
-        Assert.Equal("(🗣️ removed vocalia.md; the next spoken reply uses the default voice directive)", ChatScreen.PromptFileResetNotice("vocalia.md", "voice directive", spoken: true));
-        Assert.Equal("(📋 operata.md is not there; the default operating rules is already in use)", ChatScreen.PromptFileAbsentNotice("operata.md", "operating rules"));
+        Assert.Equal("🗣️ Remove vocalia.md and go back to no voice directive?", ChatScreen.PromptFileResetPrompt("vocalia.md", "no voice directive"));
+        Assert.Equal("(📋 removed operata.md; the next reply uses the default operating rules)", ChatScreen.PromptFileResetNotice("operata.md", "the default operating rules", spoken: false));
+        Assert.Equal("(🗣️ removed vocalia.md; the next spoken reply uses no voice directive)", ChatScreen.PromptFileResetNotice("vocalia.md", "no voice directive", spoken: true));
+        Assert.Equal("(📋 operata.md is not there; the default operating rules is already in use)", ChatScreen.PromptFileAbsentNotice("operata.md", "the default operating rules"));
         Assert.Equal("Could not remove persona.md: locked", ChatScreen.PromptFileResetFailedError("persona.md", "locked"));
         Assert.EndsWith("; /persona reset goes back to the default)", ChatScreen.PersonaCreatedNotice);
         Assert.EndsWith("; /operata reset goes back to the default)", ChatScreen.OperataCreatedNotice);
-        Assert.EndsWith("; /vocalia reset goes back to the default)", ChatScreen.VocaliaCreatedNotice);
+        Assert.EndsWith("; /vocalia reset removes it)", ChatScreen.VocaliaCreatedNotice);
     }
 
     // ── /persona copy <profile> [force] and its siblings (2026-09-21) ───────
@@ -5161,7 +5161,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(3, output.Split("  ✗ " + ChatScreen.PromptFileUsageError("/persona", "persona.md")).Length - 1);
         Assert.Contains("  ✗ " + ChatScreen.ProfileMissingError("ghost"), output);
         Assert.Contains("  ✗ " + ChatScreen.PromptFileCopySelfError("/persona"), output);
-        Assert.Contains("  · " + ChatScreen.PromptFileNothingToCopyNotice("persona.md", "persona"), output);
+        Assert.Contains("  · " + ChatScreen.PromptFileNothingToCopyNotice("persona.md", "the default persona"), output);
         Assert.DoesNotContain("Copy ", output);
         Assert.False(File.Exists(Path.Combine(ProfileDir("work"), PersonaFile.FileName)));
         Assert.Empty(_openedFiles);
@@ -5208,7 +5208,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("force", ChatScreen.ForceWord);
         Assert.Equal(ChatScreen.ForceWord, ChatScreen.GitForceWord);
         Assert.Equal("/persona copy copies into another profile; that one is loaded.", ChatScreen.PromptFileCopySelfError("/persona"));
-        Assert.Equal("(📋 operata.md is not there; the default operating rules is in use, so there is nothing to copy)", ChatScreen.PromptFileNothingToCopyNotice("operata.md", "operating rules"));
+        Assert.Equal("(📋 operata.md is not there; the default operating rules is in use, so there is nothing to copy)", ChatScreen.PromptFileNothingToCopyNotice("operata.md", "the default operating rules"));
         Assert.Equal("\"work\" already has a vocalia.md; /vocalia copy work force replaces it.", ChatScreen.PromptFileTargetExistsError("/vocalia", "vocalia.md", "work"));
         Assert.Equal("Copy persona.md into \"work\"?", ChatScreen.PromptFileCopyPrompt("persona.md", "work", replacing: false));
         Assert.Equal("Replace \"work\"'s persona.md with this one?", ChatScreen.PromptFileCopyPrompt("persona.md", "work", replacing: true));
@@ -5232,8 +5232,8 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains(SettingsMenu.PromptTitle(ChatScreen.PromptFileResetPrompt("operata.md", "operating rules"), SettingsMenu.ConfirmKeys), output);
-        Assert.Contains("  · " + ChatScreen.PromptFileResetNotice("operata.md", "operating rules", spoken: false), output);
+        Assert.Contains(SettingsMenu.PromptTitle(ChatScreen.PromptFileResetPrompt("operata.md", "the default operating rules"), SettingsMenu.ConfirmKeys), output);
+        Assert.Contains("  · " + ChatScreen.PromptFileResetNotice("operata.md", "the default operating rules", spoken: false), output);
         Assert.False(File.Exists(path));
         Assert.Equal(SkilledPrompt(false, Array.Empty<string>(), web: true), _chat.Requests[0][0].Text);
         Assert.DoesNotContain("rhyme", _chat.Requests[0][0].Text!);
@@ -5251,7 +5251,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains("  · " + ChatScreen.PromptFileResetNotice("vocalia.md", "voice directive", spoken: true), output);
+        Assert.Contains("  · " + ChatScreen.PromptFileResetNotice("vocalia.md", "no voice directive", spoken: true), output);
         Assert.False(File.Exists(path));
         Assert.Empty(_openedFiles);
     }
@@ -5441,9 +5441,9 @@ public partial class ChatScreenTests : IDisposable
     }
 
     [Fact]
-    public async Task Turn_VocaliaFile_ReplacesTheDirective_Last_PerSpokenTurn_AndDeletionRestoresTheDefault()
+    public async Task Turn_VocaliaFile_IsTheDirective_Last_PerSpokenTurn_AndDeletionLeavesNone()
     {
-        // The fixture speaks (speech output on, the fake synthesizer ready), so the directive is in every prompt.
+        // The fixture speaks (speech output on, the fake synthesizer ready), so the file's directive is in every prompt while it is there.
         Directory.CreateDirectory(_settings.ProfileDirectory);
         string vocaliaPath = Path.Combine(_settings.ProfileDirectory, VocaliaFile.FileName);
         File.WriteAllText(vocaliaPath, "Speak like a pirate.\r\n");
@@ -5465,9 +5465,10 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(2, _chat.Requests.Count);
         Assert.Equal(SkilledPrompt(true, Array.Empty<string>(), null, null, "Speak like a pirate.", web: true), _chat.Requests[0][0].Text);
         Assert.EndsWith("\n\nSpeak like a pirate.", _chat.Requests[0][0].Text!, StringComparison.Ordinal);
-        Assert.DoesNotContain(Assistant.VoiceDirective, _chat.Requests[0][0].Text!, StringComparison.Ordinal);
+        // The file gone, the spoken turn carries no directive at all: there is no default since 2026-10-03.
         Assert.Equal(SkilledPrompt(true, Array.Empty<string>(), web: true), _chat.Requests[1][0].Text);
-        Assert.EndsWith("\n\n" + Assistant.VoiceDirective, _chat.Requests[1][0].Text!, StringComparison.Ordinal);
+        Assert.Equal(SkilledPrompt(false, Array.Empty<string>(), web: true), _chat.Requests[1][0].Text);
+        Assert.DoesNotContain("pirate", _chat.Requests[1][0].Text!);
     }
 
     [Fact]
@@ -5487,7 +5488,7 @@ public partial class ChatScreenTests : IDisposable
     }
 
     [Fact]
-    public async Task Vocalia_NoFile_CreatesItWithTheDefaultDirective_OpensIt_AndSaysSo()
+    public async Task Vocalia_NoFile_CreatesItEmpty_OpensIt_AndSaysSo()
     {
         PushLine("/vocalia");
         PushLine("/exit");
@@ -5496,7 +5497,7 @@ public partial class ChatScreenTests : IDisposable
 
         string path = Path.Combine(_settings.ProfileDirectory, VocaliaFile.FileName);
         Assert.Equal(new[] { path }, _openedFiles);
-        Assert.Equal(Assistant.VoiceDirective + Environment.NewLine, File.ReadAllText(path));
+        Assert.Equal("", File.ReadAllText(path));   // no default voice directive since 2026-10-03
         Assert.Contains("  · " + ChatScreen.VocaliaCreatedNotice, output);
         Assert.DoesNotContain(ChatScreen.VocaliaOpenedNotice, output);
         Assert.False(File.Exists(Path.Combine(_settings.ProfileDirectory, PersonaFile.FileName)));
@@ -5554,7 +5555,7 @@ public partial class ChatScreenTests : IDisposable
     public void VocaliaStrings_ArePinned()
     {
         Assert.Equal("(🗣️ opened vocalia.md in your editor; save it and the next spoken reply uses it)", ChatScreen.VocaliaOpenedNotice);
-        Assert.Equal("(🗣️ created vocalia.md with the default voice directive and opened it in your editor; edit it, save, and the next spoken reply uses it; /vocalia reset goes back to the default)", ChatScreen.VocaliaCreatedNotice);
+        Assert.Equal("(🗣️ created an empty vocalia.md and opened it in your editor; write the voice directive, save, and the next spoken reply uses it; /vocalia reset removes it)", ChatScreen.VocaliaCreatedNotice);
         Assert.Equal("Could not open vocalia.md: why", ChatScreen.VocaliaOpenFailedError("why"));
     }
 
@@ -9406,9 +9407,10 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public async Task WithGeometry_SysPromptScrolls_AndReadsTheLiveState()
     {
-        // A persona file, a remembered fact, speech on with the TTS ready (the fixture's default).
+        // A persona file, a voice directive (no default one since 2026-10-03), a remembered fact, speech on with the TTS ready (the fixture's default).
         Directory.CreateDirectory(_settings.ProfileDirectory);
         File.WriteAllText(Path.Combine(_settings.ProfileDirectory, PersonaFile.FileName), "You are Rex, a [pirate].\n");
+        File.WriteAllText(Path.Combine(_settings.ProfileDirectory, VocaliaFile.FileName), "Speak like a pirate.");
         _memory.Add("Their name is Chris.");
         _settings.Update(d => d.MenuMaxHeight = "full-screen");   // the 12-row window's pages as they were (2026-10-01)
         _console.Profile.Height = 12;
@@ -9431,7 +9433,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.DoesNotContain("Memory — on", output[..output.IndexOf(MenuPane.MoreHint, StringComparison.Ordinal)]);
         // Paged to the end: the memory on the way, the voice directive last (speech on); the list rides the opening call, never the Prompt tab (2026-09-26).
         Assert.Contains("Memory — on, directive (the list rides the opening recall_memory call)", output);
-        Assert.Contains("Voice directive — default, included (speech output on, TTS ready), always last", output);
+        Assert.Contains("Voice directive — vocalia.md (20 chars), included (speech output on, TTS ready), always last", output);
         Assert.DoesNotContain("Their name is Chris.", output);
         Assert.DoesNotContain("Request — ", output);
     }
@@ -10294,9 +10296,10 @@ public partial class ChatScreenTests : IDisposable
             ("Ctrl+T", "show or hide the toolbar (/tb)"),   // from Ctrl+Alt+B
             ("Ctrl+U", "open the usage pane (/usage)"),   // from Ctrl+Alt+G
             ("Ctrl+X", "cut the selected text"),   // 2026-09-25
-        ], rows[^29..^15]);
+            ("Ctrl+Y", "open the system prompt pane (/sys)"),   // from Ctrl+Alt+Y on 2026-10-03, the user's ask
+        ], rows[^29..^14]);
         // Each plain-Ctrl chord's row names its command.
-        foreach (var (row, key) in new[] { (rows[^29], Keys.CtrlSlash), (rows[^26], Keys.CtrlE), (rows[^25], Keys.CtrlF), (rows[^24], Keys.CtrlH), (rows[^23], Keys.CtrlM), (rows[^21], Keys.CtrlP), (rows[^20], Keys.CtrlR), (rows[^19], Keys.CtrlS), (rows[^18], Keys.CtrlT), (rows[^17], Keys.CtrlU) })
+        foreach (var (row, key) in new[] { (rows[^29], Keys.CtrlSlash), (rows[^26], Keys.CtrlE), (rows[^25], Keys.CtrlF), (rows[^24], Keys.CtrlH), (rows[^23], Keys.CtrlM), (rows[^21], Keys.CtrlP), (rows[^20], Keys.CtrlR), (rows[^19], Keys.CtrlS), (rows[^18], Keys.CtrlT), (rows[^17], Keys.CtrlU), (rows[^15], Keys.Ctrl(ConsoleKey.Y)) })
         {
             Assert.Equal(Keys.ShortcutLine(key), row.Meaning[(row.Meaning.LastIndexOf('(') + 1)..^1]);
         }
@@ -10319,10 +10322,9 @@ public partial class ChatScreenTests : IDisposable
             ("Ctrl+Alt+U", "open or close the ComfyUI image viewer (/comfy view)"),   // 2026-10-02, the user's ask
             ("Ctrl+Alt+V", "open or close the camera live view (/camera live)"),      // 2026-10-02, the user's ask
             ("Ctrl+Alt+X", "kill switch to immediately unload an embedded model (press twice)"),   // 2026-10-01, the user's place and wording
-            ("Ctrl+Alt+Y", "open the system prompt pane (/sys)"),
-        ], rows[^15..]);
+        ], rows[^14..]);
         // Each row names its chord's command; the kill switch has none (2026-10-01).
-        Assert.All(rows[^15..].Where(row => row.Key != "Ctrl+Alt+X"), row => Assert.Equal(Keys.ShortcutLine(Keys.CtrlAlt(Enum.Parse<ConsoleKey>(row.Key[^1..]))), row.Meaning[(row.Meaning.LastIndexOf('(') + 1)..^1]));
+        Assert.All(rows[^14..].Where(row => row.Key != "Ctrl+Alt+X"), row => Assert.Equal(Keys.ShortcutLine(Keys.CtrlAlt(Enum.Parse<ConsoleKey>(row.Key[^1..]))), row.Meaning[(row.Meaning.LastIndexOf('(') + 1)..^1]));
         Assert.Null(Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.X)));
         Assert.Equal(voiceOn, rows.Any(r => r.Key == "F8"));
         if (voiceOn)
@@ -15484,12 +15486,12 @@ public partial class ChatScreenTests : IDisposable
     }
 
     [Fact]
-    public async Task CtrlAltY_OpensTheSystemPromptPane_AsSlashSys()
+    public async Task CtrlY_OpensTheSystemPromptPane_AsSlashSys()
     {
         _settings.Update(d => { d.TtsOutput = false; d.MenuMaxHeight = "full-screen"; });   // the whole tab (2026-10-01)
         _console.Profile.Height = 112;
         _geometry = new ScreenGeometry(() => null);
-        StepsWhenIdle(Key(Keys.CtrlAlt(ConsoleKey.Y)), Key(Keys.Escape), Line("/exit"));
+        StepsWhenIdle(Key(Keys.Ctrl(ConsoleKey.Y)), Key(Keys.Escape), Line("/exit"));   // Ctrl+Alt+Y until 2026-10-03
 
         string output = await RunAsync();
 
@@ -15610,13 +15612,13 @@ public partial class ChatScreenTests : IDisposable
     // ── The chords in a pane (2026-10-01, the user's ask: as everywhere else) ──
 
     [Fact]
-    public async Task CtrlAltY_InTheHelpPane_ClosesIt_AndOpensTheSystemPromptPane()
+    public async Task CtrlY_InTheHelpPane_ClosesIt_AndOpensTheSystemPromptPane()
     {
         _settings.Update(d => { d.TtsOutput = false; d.MenuMaxHeight = "full-screen"; });   // the whole tab (2026-10-01)
         _console.Profile.Height = 112;
         _geometry = new ScreenGeometry(() => null);
         StepsWhenIdle(
-            input => { PushLine(input, "/help"); input.Push(Keys.CtrlAlt(ConsoleKey.Y)); },
+            input => { PushLine(input, "/help"); input.Push(Keys.Ctrl(ConsoleKey.Y)); },
             Key(Keys.Escape),                   // the one ESC: the system prompt's pane, help already gone
             Line("/exit"));
 

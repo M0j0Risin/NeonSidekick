@@ -1896,6 +1896,7 @@ internal sealed partial class ChatScreen
     /// letter's place: A, C, E, M, O, R, S, X. Then <c>/help</c>, <c>/profile</c> and <c>/usage</c> moved from Ctrl+Alt+H, P and G
     /// to plain Ctrl+H, P and U (the user's ask), their rows' wording kept: A, C, E, H, M, O, P, R, S, U, X.
     /// Ctrl+Alt+G (<c>/log</c>), U (<c>/comfy view</c>) and V (<c>/camera live</c>) on 2026-10-02, the user's ask, each in its letter's place.
+    /// <c>/sys</c> moved from Ctrl+Alt+Y to plain Ctrl+Y on 2026-10-03 (the user's ask), its row's wording kept, after Ctrl+X.
     /// </summary>
     public static (string Key, string Meaning)[] KeyRows(bool voiceOn, ConsoleKey pushToTalk, bool wakeReady, string wakePhrase)
     {
@@ -1937,6 +1938,7 @@ internal sealed partial class ChatScreen
         rows.Add(("Ctrl+T", "show or hide the toolbar (/tb)"));
         rows.Add(("Ctrl+U", "open the usage pane (/usage)"));
         rows.Add(("Ctrl+X", "cut the selected text"));
+        rows.Add(("Ctrl+Y", "open the system prompt pane (/sys)"));
         rows.Add(("Ctrl+Alt+C", "start a new conversation and clear the screen (/clear)"));
         rows.Add(("Ctrl+Alt+D", "open the MCP pane (/mcp)"));
         rows.Add(("Ctrl+Alt+G", "open or close the log viewer (/log)"));
@@ -1951,7 +1953,6 @@ internal sealed partial class ChatScreen
         rows.Add(("Ctrl+Alt+U", "open or close the ComfyUI image viewer (/comfy view)"));
         rows.Add(("Ctrl+Alt+V", "open or close the camera live view (/camera live)"));
         rows.Add(("Ctrl+Alt+X", "kill switch to immediately unload an embedded model (press twice)"));
-        rows.Add(("Ctrl+Alt+Y", "open the system prompt pane (/sys)"));
         return rows.ToArray();
     }
 
@@ -5032,8 +5033,7 @@ internal sealed partial class ChatScreen
     /// <summary>
     /// Whether a turn's reply is <em>asked for</em> as light Markdown (<see cref="Assistant.MarkdownRule"/>):
     /// the setting <c>Transcript markdown</c>, the pane on the screen, and no speaker — a spoken turn
-    /// keeps the plain-text rule, since the voice directive forbids Markdown and the prompt must not
-    /// contradict itself. The screen is a separate question (<see cref="StyledReply"/>): what a model
+    /// keeps the plain-text rule, since the reply is read aloud. The screen is a separate question (<see cref="StyledReply"/>): what a model
     /// writes anyway is styled whatever the prompt asked for. Pure; pinned by tests.
     /// </summary>
     public static bool MarkdownTurn(bool transcriptMarkdown, bool paneEnabled, bool spoken) =>
@@ -5120,8 +5120,8 @@ internal sealed partial class ChatScreen
     /// <summary>After <c>/vocalia</c> opened an existing file. Pinned.</summary>
     public const string VocaliaOpenedNotice = "(" + NoticeGlyphs.Vocalia + "opened vocalia.md in your editor; save it and the next spoken reply uses it)";
 
-    /// <summary>After <c>/vocalia</c> created the file with the default voice directive and opened it. Pinned.</summary>
-    public const string VocaliaCreatedNotice = "(" + NoticeGlyphs.Vocalia + "created vocalia.md with the default voice directive and opened it in your editor; edit it, save, and the next spoken reply uses it; /vocalia reset goes back to the default)";
+    /// <summary>After <c>/vocalia</c> created the file, empty since 2026-10-03 (there is no default voice directive), and opened it. Pinned.</summary>
+    public const string VocaliaCreatedNotice = "(" + NoticeGlyphs.Vocalia + "created an empty vocalia.md and opened it in your editor; write the voice directive, save, and the next spoken reply uses it; /vocalia reset removes it)";
 
     public static string VocaliaOpenFailedError(string detail) => $"Could not open vocalia.md: {detail}";
 
@@ -5138,7 +5138,7 @@ internal sealed partial class ChatScreen
     public static string PromptFileCopySelfError(string command) => $"{command} {CopyWord} copies into another profile; that one is loaded.";
 
     /// <summary>A copy with no file to copy: the default is in use here. Pinned.</summary>
-    public static string PromptFileNothingToCopyNotice(string fileName, string defaultLabel) => $"({NoticeGlyphs.PromptFile(fileName)}{fileName} is not there; the default {defaultLabel} is in use, so there is nothing to copy)";
+    public static string PromptFileNothingToCopyNotice(string fileName, string inUse) => $"({NoticeGlyphs.PromptFile(fileName)}{fileName} is not there; {inUse} is in use, so there is nothing to copy)";
 
     /// <summary>The target has the file and <c>force</c> was not given (the user's rule, 2026-09-21): an error naming the way past it, nothing written. Pinned.</summary>
     public static string PromptFileTargetExistsError(string command, string fileName, string profile) => $"\"{profile}\" already has a {fileName}; {command} {CopyWord} {profile} {ForceWord} replaces it.";
@@ -5153,14 +5153,14 @@ internal sealed partial class ChatScreen
 
     public static string PromptFileCopyFailedError(string fileName, string detail) => $"Could not copy {fileName}: {detail}";
 
-    /// <summary>The question before a <c>/persona reset</c> (the yes/no pane's title; <see cref="TypedConfirm"/> where menus cannot open); <c>y</c> or <c>yes</c> removes, anything else keeps. Pinned.</summary>
-    public static string PromptFileResetPrompt(string fileName, string defaultLabel) => $"{NoticeGlyphs.PromptFile(fileName)}Remove {fileName} and go back to the default {defaultLabel}?";
+    /// <summary>The question before a <c>/persona reset</c> (the yes/no pane's title; <see cref="TypedConfirm"/> where menus cannot open); <c>y</c> or <c>yes</c> removes, anything else keeps. <paramref name="inUse"/> here and in the notices around it is <see cref="PromptFile.DefaultInUse"/> (<c>the default persona</c>, <c>no voice directive</c> since 2026-10-03). Pinned.</summary>
+    public static string PromptFileResetPrompt(string fileName, string inUse) => $"{NoticeGlyphs.PromptFile(fileName)}Remove {fileName} and go back to {inUse}?";
 
     /// <summary>The notice after the file went; <paramref name="spoken"/> for the voice directive, which only a spoken reply carries. Pinned.</summary>
-    public static string PromptFileResetNotice(string fileName, string defaultLabel, bool spoken) => $"({NoticeGlyphs.PromptFile(fileName)}removed {fileName}; the next {(spoken ? "spoken " : "")}reply uses the default {defaultLabel})";
+    public static string PromptFileResetNotice(string fileName, string inUse, bool spoken) => $"({NoticeGlyphs.PromptFile(fileName)}removed {fileName}; the next {(spoken ? "spoken " : "")}reply uses {inUse})";
 
     /// <summary>The notice for a reset with no file to remove. Pinned.</summary>
-    public static string PromptFileAbsentNotice(string fileName, string defaultLabel) => $"({NoticeGlyphs.PromptFile(fileName)}{fileName} is not there; the default {defaultLabel} is already in use)";
+    public static string PromptFileAbsentNotice(string fileName, string inUse) => $"({NoticeGlyphs.PromptFile(fileName)}{fileName} is not there; {inUse} is already in use)";
 
     public static string PromptFileResetFailedError(string fileName, string detail) => $"Could not remove {fileName}: {detail}";
 
@@ -5199,11 +5199,11 @@ internal sealed partial class ChatScreen
 
         if (!File.Exists(file.FilePath))
         {
-            _flow.Notice(PromptFileAbsentNotice(fileName, file.DefaultLabel));
+            _flow.Notice(PromptFileAbsentNotice(fileName, file.DefaultInUse));
             return;
         }
 
-        if (!await ConfirmAsync(PromptFileResetPrompt(fileName, file.DefaultLabel), cancellationToken).ConfigureAwait(false))
+        if (!await ConfirmAsync(PromptFileResetPrompt(fileName, file.DefaultInUse), cancellationToken).ConfigureAwait(false))
         {
             _flow.Notice(KeptNotice);
             return;
@@ -5212,7 +5212,7 @@ internal sealed partial class ChatScreen
         try
         {
             file.Delete();
-            _flow.Notice(PromptFileResetNotice(fileName, file.DefaultLabel, spoken));
+            _flow.Notice(PromptFileResetNotice(fileName, file.DefaultInUse, spoken));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -5246,7 +5246,7 @@ internal sealed partial class ChatScreen
 
         if (!File.Exists(file.FilePath))
         {
-            _flow.Notice(PromptFileNothingToCopyNotice(fileName, file.DefaultLabel));
+            _flow.Notice(PromptFileNothingToCopyNotice(fileName, file.DefaultInUse));
             return;
         }
 
@@ -5276,7 +5276,7 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>
-    /// <c>/persona</c>, <c>/operata</c> and <c>/vocalia</c>: make sure the file exists (seeded with its default), then
+    /// <c>/persona</c>, <c>/operata</c> and <c>/vocalia</c>: make sure the file exists (seeded with its default, if it has one), then
     /// hand it to the editor. Nothing waits; the next turn reads whatever was saved.
     /// </summary>
     private void OpenPromptFile(PromptFile file, string createdNotice, string openedNotice, Func<string, string> openFailedError)

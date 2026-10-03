@@ -145,8 +145,8 @@ public class VocaliaFileTests : IDisposable
         }
 
         string warning = Assert.Single(warnings);
-        Assert.StartsWith("Could not read vocalia.md; using the default voice directive: ", warning, StringComparison.Ordinal);
-        Assert.Equal("Could not read vocalia.md; using the default voice directive: x", VocaliaFile.UnreadableWarning("x"));
+        Assert.StartsWith("Could not read vocalia.md; using no voice directive: ", warning, StringComparison.Ordinal);
+        Assert.Equal("Could not read vocalia.md; using no voice directive: x", VocaliaFile.UnreadableWarning("x"));
     }
 
     [Fact]
@@ -168,17 +168,19 @@ public class VocaliaFileTests : IDisposable
             DiagnosticLog.Emitted -= capture;
         }
 
-        Assert.Equal(["Voice directive loaded from vocalia.md (16 characters).", "vocalia.md is blank; using the default voice directive."], infos);
+        Assert.Equal(["Voice directive loaded from vocalia.md (16 characters).", "vocalia.md is blank; using no voice directive."], infos);
     }
 
     [Fact]
-    public void EnsureExists_CreatesTheFileWithTheDefaultDirective_Once()
+    public void EnsureExists_CreatesAnEmptyFile_Once()
     {
+        // No default voice directive since 2026-10-03 (the user's call): the file starts empty, and empty is no directive.
         var vocalia = new VocaliaFile(_dir);
         Assert.True(vocalia.EnsureExists());
-        Assert.Equal(Assistant.VoiceDirective + Environment.NewLine, File.ReadAllText(FilePath));
-        // The seeded file is the default directive, so a spoken prompt now carries it as a custom directive of the same words.
-        Assert.Equal(Assistant.VoiceDirective, vocalia.Read());
+        Assert.Equal("", File.ReadAllText(FilePath));
+        Assert.Null(vocalia.Read());
+        Assert.False(vocalia.IsActive);
+        Assert.Equal("no voice directive", vocalia.DefaultInUse);
 
         File.WriteAllText(FilePath, "Answer in haiku.");
         Assert.False(vocalia.EnsureExists());

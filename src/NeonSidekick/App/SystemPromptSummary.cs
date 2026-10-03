@@ -19,7 +19,7 @@ namespace NeonSidekick.App;
 /// </summary>
 /// <param name="Persona">The <c>persona.md</c> text, null for the default persona.</param>
 /// <param name="OperatingRules">The <c>operata.md</c> text, null for the default operating rules.</param>
-/// <param name="VoiceDirective">The <c>vocalia.md</c> text, null for the default voice directive; only in the prompt while the turn speaks.</param>
+/// <param name="VoiceDirective">The <c>vocalia.md</c> text, null for none (there is no default since 2026-10-03); only in the prompt while the turn speaks.</param>
 /// <param name="Memory">The memory switch; off means no memory section, no <c>save_memory</c> / <c>recall_memory</c> tool and no opening memory call.</param>
 /// <param name="Memories">What is remembered, oldest first (empty when memory is off).</param>
 /// <param name="TtsOutput">The speech-output switch.</param>
@@ -399,12 +399,11 @@ public static class SystemPromptSummary
         }
 
         // The voice directive only while it is in the prompt (2026-09-26): a "not included" heading on every silent turn was noise.
-        if (facts.TtsOutput && facts.SpeechReady)
+        // Since 2026-10-03 there is no default one, so it is in the prompt only when vocalia.md has text.
+        if (facts.TtsOutput && facts.SpeechReady && !string.IsNullOrWhiteSpace(facts.VoiceDirective))
         {
-            bool customVoice = !string.IsNullOrWhiteSpace(facts.VoiceDirective);
-            string voice = customVoice ? facts.VoiceDirective!.Trim() : facts.ToolsEnabled ? Assistant.VoiceDirective : Assistant.VoiceDirectiveWithoutTools;
-            string source = customVoice ? $"{VocaliaFile.FileName} ({voice.Length.ToString(CultureInfo.InvariantCulture)} chars)" : defaultLabel;
-            sections.Add(new($"Voice directive — {source}, included (speech output on, TTS ready), always last", voice));
+            string voice = facts.VoiceDirective.Trim();
+            sections.Add(new($"Voice directive — {VocaliaFile.FileName} ({voice.Length.ToString(CultureInfo.InvariantCulture)} chars), included (speech output on, TTS ready), always last", voice));
         }
 
         return sections;

@@ -557,7 +557,7 @@ public class SlashCommandsTests
         Assert.Contains(Row("/window", "show the terminal window's width and height"), SlashCommands.HelpText);
         Assert.Contains(Row("/persona", "export and manage persona.md (the personality) in your editor, or /persona reset to go back to the default, or /persona copy <profile> [force] to copy it into another profile"), SlashCommands.HelpText);   // copy 2026-09-21
         Assert.Contains(Row("/operata", "export and manage operata.md (the operating rules) in your editor, or /operata reset to go back to the default, or /operata copy <profile> [force] to copy it into another profile"), SlashCommands.HelpText);
-        Assert.Contains(Row("/vocalia", "export and manage vocalia.md (the spoken-reply directive) in your editor, or /vocalia reset to go back to the default, or /vocalia copy <profile> [force] to copy it into another profile"), SlashCommands.HelpText);
+        Assert.Contains(Row("/vocalia", "export and manage vocalia.md (the spoken-reply directive) in your editor, or /vocalia reset to remove it, or /vocalia copy <profile> [force] to copy it into another profile"), SlashCommands.HelpText);
         Assert.Contains(Row("/about", "show general information about the app and profile"), SlashCommands.HelpText);
         Assert.DoesNotContain("M5", SlashCommands.HelpText);
         Assert.EndsWith("F4 = talk (push-to-talk key)", SlashCommands.HelpText);

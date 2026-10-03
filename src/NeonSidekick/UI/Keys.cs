@@ -88,7 +88,7 @@ public static class Keys
     /// the console's own control one for the letter (ETX, SO, DC3; a test builds <c>'\0'</c>): AltGr is Ctrl+Alt, and an AltGr
     /// key that types a character (ć, ń, ś on some layouts) stays that character. Null for every other key.
     /// Eleven more came later on 2026-09-30 (the user's ask), each its bare command as typed: Ctrl+Alt+T <c>/tools</c>, K
-    /// <c>/skills</c>, P <c>/profile</c>, Y <c>/sys</c>, G <c>/usage</c>, E <c>/perf</c> (the performance bar shown or hidden),
+    /// <c>/skills</c>, P <c>/profile</c>, Y <c>/sys</c> (plain Ctrl+Y since 2026-10-03, below), G <c>/usage</c>, E <c>/perf</c> (the performance bar shown or hidden),
     /// M <c>/memory</c>, D <c>/mcp</c>, L <c>/cmdlist</c>, O <c>/police</c> (the Shell police page) and B <c>/tb</c> (the
     /// toolbar shown or hidden). Under a reply each goes where its typed line would: a pane over the reply, <c>/perf</c> and
     /// <c>/tb</c> at once, <c>/profile</c> left for the idle line. Their control characters (DC4, VT, DLE, EM, BEL, ENQ, CR,
@@ -124,6 +124,7 @@ public static class Keys
     /// an AltGr key that types one (@ on AltGr+V, € on AltGr+U on some layouts) stays that character. Ctrl+Alt+V was never
     /// the line's paste (Ctrl+V or Alt+V, one of the two). Later on 2026-10-02 (the user's ask) each closes its window when it
     /// is open (<c>ChatScreen.CloseByChord</c>); the typed command still opens it or brings it forward.
+    /// On 2026-10-03 (the user's ask) <c>/sys</c> moved to plain Ctrl+Y and Ctrl+Alt+Y went: its EM counts as no character.
     /// </summary>
     public static string? ShortcutLine(ConsoleKeyInfo key)
     {
@@ -141,6 +142,7 @@ public static class Keys
                 (ConsoleKey.S, '\0' or '\x13') => "/server",
                 (ConsoleKey.T, '\0' or '\x14') => "/tb",
                 (ConsoleKey.U, '\0' or '\x15') => "/usage",
+                (ConsoleKey.Y, '\0' or '\x19') => "/sys",
                 (ConsoleKey.Oem2, '\0' or '\x1f') => "/settings",
                 _ => null,
             };
@@ -160,7 +162,6 @@ public static class Keys
             (ConsoleKey.P, '\0' or '\x10') => "/splash",
             (ConsoleKey.T, '\0' or '\x14') => "/tools",
             (ConsoleKey.S, '\0' or '\x13') => "/skills",
-            (ConsoleKey.Y, '\0' or '\x19') => "/sys",
             (ConsoleKey.M, '\0' or '\r') => "/memory",
             (ConsoleKey.D, '\0' or '\x04') => "/mcp",
             (ConsoleKey.L, '\0' or '\x0c') => "/cmdlist",

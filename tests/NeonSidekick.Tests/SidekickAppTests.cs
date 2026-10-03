@@ -907,7 +907,6 @@ public partial class SidekickAppTests : IDisposable
         Assert.Contains("Neon: Hi.", output);
         Assert.Equal(SkilledPrompt(false, Array.Empty<string>(), web: true), _chat.Requests[0][0].Text);
         Assert.DoesNotContain("pirate", _chat.Requests[0][0].Text!);
-        Assert.DoesNotContain(Assistant.VoiceDirective, _chat.Requests[0][0].Text!);
     }
 
     [Fact]

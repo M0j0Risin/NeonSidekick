@@ -83,6 +83,13 @@ public abstract class PromptFile
     public string DefaultLabel => _defaultLabel;
 
     /// <summary>
+    /// What is in force without the file, for the middle of a sentence: <c>the default persona</c>; <see cref="VocaliaFile"/>'s is
+    /// <c>no voice directive</c> since it lost its default (2026-10-03). The notices of <c>/persona reset</c> and its siblings and
+    /// the blank and unreadable log lines name it.
+    /// </summary>
+    public virtual string DefaultInUse => "the default " + _defaultLabel;
+
+    /// <summary>
     /// Removes the file, so the default applies from the next turn (<c>/persona reset</c> and its
     /// siblings, after their confirmation). Returns false when there was no file. Throws
     /// <see cref="IOException"/> / <see cref="UnauthorizedAccessException"/> like any delete; the
@@ -167,7 +174,7 @@ public abstract class PromptFile
 
             _cached = text.Length == 0 ? null : text;
             DiagnosticLog.Info(_category, _cached is null
-                ? $"{CurrentFileName} is blank; using the default {_defaultLabel}."
+                ? $"{CurrentFileName} is blank; using {DefaultInUse}."
                 : $"{_label} loaded from {CurrentFileName} ({_cached.Length.ToString(CultureInfo.InvariantCulture)} characters).");
             return _cached;
         }
@@ -177,7 +184,7 @@ public abstract class PromptFile
             if (!_warnedUnreadable)
             {
                 _warnedUnreadable = true;
-                DiagnosticLog.Warn(_category, UnreadableWarning(CurrentFileName, _defaultLabel, ex.Message));
+                DiagnosticLog.Warn(_category, UnreadableWarningUsing(CurrentFileName, DefaultInUse, ex.Message));
             }
 
             return null;
@@ -186,7 +193,8 @@ public abstract class PromptFile
 
     /// <summary>
     /// Creates the file with the default text when it is missing, so an editor opens on what is
-    /// being replaced rather than on nothing; an existing file is left alone. Returns true when it
+    /// being replaced rather than on nothing (empty, for a file with no default: <see cref="VocaliaFile"/>
+    /// since 2026-10-03); an existing file is left alone. Returns true when it
     /// was created. Throws <see cref="IOException"/> / <see cref="UnauthorizedAccessException"/>
     /// like any write; the slash command reports those.
     /// </summary>
@@ -199,7 +207,7 @@ public abstract class PromptFile
         }
 
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        File.WriteAllText(path, _defaultText + Environment.NewLine);
+        File.WriteAllText(path, _defaultText.Length == 0 ? "" : _defaultText + Environment.NewLine);
         return true;
     }
 
@@ -221,7 +229,11 @@ public abstract class PromptFile
         $"{fileName} is {length.ToString(CultureInfo.InvariantCulture)} characters; using the first {maxLength.ToString(CultureInfo.InvariantCulture)}.";
 
     protected static string UnreadableWarning(string fileName, string defaultLabel, string detail) =>
-        $"Could not read {fileName}; using the default {defaultLabel}: {detail}";
+        UnreadableWarningUsing(fileName, "the default " + defaultLabel, detail);
+
+    /// <summary>The unreadable warning naming what is in force instead (<see cref="DefaultInUse"/>). Pinned.</summary>
+    protected static string UnreadableWarningUsing(string fileName, string inUse, string detail) =>
+        $"Could not read {fileName}; using {inUse}: {detail}";
 
     private void Forget()
     {

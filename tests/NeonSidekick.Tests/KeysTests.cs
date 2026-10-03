@@ -67,7 +67,6 @@ public class KeysTests
     [Theory]
     [InlineData(ConsoleKey.T, '\x14', "/tools")]
     [InlineData(ConsoleKey.S, '\x13', "/skills")]   // from Ctrl+Alt+K later still on 2026-10-01 (the user's ask)
-    [InlineData(ConsoleKey.Y, '\x19', "/sys")]
     [InlineData(ConsoleKey.M, '\r', "/memory")]
     [InlineData(ConsoleKey.D, '\x04', "/mcp")]
     [InlineData(ConsoleKey.L, '\x0c', "/cmdlist")]
@@ -113,6 +112,7 @@ public class KeysTests
     [InlineData(ConsoleKey.S, '\x13', "/server")]
     [InlineData(ConsoleKey.T, '\x14', "/tb")]       // from Ctrl+Alt+B
     [InlineData(ConsoleKey.U, '\x15', "/usage")]     // from Ctrl+Alt+G
+    [InlineData(ConsoleKey.Y, '\x19', "/sys")]       // from Ctrl+Alt+Y on 2026-10-03 (the user's ask)
     public void ShortcutLine_ThePlainCtrlChords_AreTheirBareCommands_AndATypedLetterStaysALetter(ConsoleKey key, char control, string line)
     {
         // Later still on 2026-10-01 (the user's ask): Ctrl+M, R and S, then H, P and U, Ctrl+E's shape — the console's CR, DC2 and DC3 and the
@@ -156,6 +156,7 @@ public class KeysTests
         Assert.Null(Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.K)));
         Assert.Null(Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.B)));   // /tb on Ctrl+T, /perf on Ctrl+F since later still on 2026-10-01
         Assert.Null(Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.E)));
+        Assert.Null(Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.Y)));   // /sys on Ctrl+Y since 2026-10-03
         Assert.Equal("/tools", Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.T)));
     }
 

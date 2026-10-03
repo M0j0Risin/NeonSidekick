@@ -76,10 +76,11 @@ public class SystemPromptSummaryTests : IDisposable
         Assert.Equal(SkillsPrompt.DirectiveWithoutSkills, sections[4].Body);
         Assert.Equal([true, true, false, true, true], sections.Select(s => s.InPrompt));
 
-        // A spoken turn with TTS ready adds the voice directive, last; every tool group, on or off, adds nothing.
-        var speaking = Headings(Facts(speechOutput: true, speechReady: true, gitTools: 11, shellTools: 1) with { McpTools = 3, ObsidianEnabled = true, ObsidianTools = 8, SqlEnabled = true, SqlTools = 6 });
+        // A spoken turn with TTS ready adds vocalia.md's directive, last (there is no default one since 2026-10-03); every tool group, on or off, adds nothing.
+        var speaking = Headings(Facts(speechOutput: true, speechReady: true, gitTools: 11, shellTools: 1, voiceDirective: "Speak like a pirate.") with { McpTools = 3, ObsidianEnabled = true, ObsidianTools = 8, SqlEnabled = true, SqlTools = 6 });
         Assert.Equal(6, speaking.Length);
-        Assert.Equal("Voice directive — default, included (speech output on, TTS ready), always last", speaking[5]);
+        Assert.Equal("Voice directive — vocalia.md (20 chars), included (speech output on, TTS ready), always last", speaking[5]);
+        Assert.Equal(5, Headings(Facts(speechOutput: true, speechReady: true, gitTools: 11, shellTools: 1)).Length);
         Assert.Equal(5, Headings(Facts(tools: false) with { GitEnabled = false, ShellEnabled = false, McpEnabled = false }).Length);
     }
 
@@ -130,9 +131,9 @@ public class SystemPromptSummaryTests : IDisposable
         Assert.Equal("Memory — on, directive (the list rides the opening recall_memory call)", sections[3].Heading);
         Assert.Equal(MemoryPrompt.Directive, sections[3].Body);
         Assert.DoesNotContain("Their name is Chris.", sections[3].Body);
-        Assert.Equal("Voice directive — default, included (speech output on, TTS ready), always last", sections[5].Heading);
-        Assert.Equal(Assistant.VoiceDirective, sections[5].Body);
-        Assert.Equal(6, sections.Count);
+        // No vocalia.md, no voice section, spoken or not (2026-10-03: there is no default directive).
+        Assert.Equal(5, sections.Count);
+        Assert.DoesNotContain(sections, s => s.Heading.StartsWith("Voice directive", StringComparison.Ordinal));
 
         Assert.Equal("Memory — off, not included", Headings(Facts(memoryEnabled: false))[3]);
         Assert.Equal("", SystemPromptSummary.PromptSections(Facts(memoryEnabled: false))[3].Body);
@@ -147,7 +148,8 @@ public class SystemPromptSummaryTests : IDisposable
         var speaking = SystemPromptSummary.PromptSections(Facts(speechOutput: true, speechReady: true, voiceDirective: "  Speak like a [pirate].\n"));
         Assert.Equal("Voice directive — vocalia.md (22 chars), included (speech output on, TTS ready), always last", speaking[5].Heading);
         Assert.Equal("Speak like a [pirate].", speaking[5].Body);
-        Assert.Equal("Voice directive — default, included (speech output on, TTS ready), always last", Headings(Facts(speechOutput: true, speechReady: true, voiceDirective: " \n"))[5]);
+        // A blank file is no directive (2026-10-03): no section.
+        Assert.Equal(5, Headings(Facts(speechOutput: true, speechReady: true, voiceDirective: " \n")).Length);
 
         // The file changes what is appended, never whether: a silent turn has no voice section at all (2026-09-26).
         Assert.Equal(5, Headings(Facts(speechOutput: false, voiceDirective: "Speak like a pirate.")).Length);
@@ -373,7 +375,6 @@ public class SystemPromptSummaryTests : IDisposable
                 NoNotesHeading,
                 "Memory — on, 1 fact remembered",
                 "Skills — not included (LLM offer tools is off)",
-                "Voice directive — default (LLM offer tools is off), included (speech output on, TTS ready), always last",
             ],
             sections.Select(s => s.Heading));
         Assert.Equal(Assistant.PlainTextRule, sections[1].Body);
@@ -381,7 +382,6 @@ public class SystemPromptSummaryTests : IDisposable
         Assert.Equal(MemoryPrompt.Section(["Their name is Chris."], tools: false), sections[3].Body);
         Assert.Contains("- Their name is Chris.", sections[3].Body);
         Assert.Equal("", sections[4].Body);
-        Assert.Equal(Assistant.VoiceDirectiveWithoutTools, sections[5].Body);
 
         // A custom file keeps its own heading and text.
         var custom = Headings(Facts(operatingRules: "Answer in haiku.", voiceDirective: "Speak like a pirate.", speechOutput: true, speechReady: true, tools: false));

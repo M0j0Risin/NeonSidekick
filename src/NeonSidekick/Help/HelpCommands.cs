@@ -301,7 +301,7 @@ public static class HelpCommands
         ]),
         new("/vocalia",
         [
-            new("/vocalia [reset | copy <profile> [force]]", "The same as `/operata`, for `vocalia.md` (the spoken-reply directive)."),
+            new("/vocalia [reset | copy <profile> [force]]", "Edit `vocalia.md` (the spoken-reply directive: empty by default, its text added last to every spoken reply) in your editor, remove it, or copy it to another profile (`force` replaces theirs)."),
         ]),
         new("/wake",
         [

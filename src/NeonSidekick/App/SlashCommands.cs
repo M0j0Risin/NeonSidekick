@@ -335,7 +335,7 @@ public static class SlashCommands
             new("/usage", "show token usage and performance statistics"),
             new("/vault", "print a tree of the Obsidian vault's folders and notes, or /vault <path>"),
             new("/view", "open an image, or a folder of images, from the working directory in the picture viewer; --chat draws the image in the transcript instead: /view <image or folder> [--chat]"),
-            new("/vocalia", "export and manage vocalia.md (the spoken-reply directive) in your editor, or /vocalia reset to go back to the default, or /vocalia copy <profile> [force] to copy it into another profile"),
+            new("/vocalia", "export and manage vocalia.md (the spoken-reply directive) in your editor, or /vocalia reset to remove it, or /vocalia copy <profile> [force] to copy it into another profile"),
             new("/wake", "toggle the speech input wake word, or /wake on|off"),
             new("/window", "show the terminal window's width and height"),
         }.OrderBy(entry => entry.Command, StringComparer.Ordinal).ToArray();

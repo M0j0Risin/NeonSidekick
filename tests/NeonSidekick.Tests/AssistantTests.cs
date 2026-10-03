@@ -15,6 +15,9 @@ public class AssistantTests
 {
     private static readonly LlmTimeouts Timeouts = new(TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(10));
 
+    /// <summary>A vocalia.md text: there is no default voice directive since 2026-10-03, so a spoken prompt's tail is only ever a file's.</summary>
+    private const string Pirate = "Speak like a pirate.";
+
     /// <summary>What a fresh profile sends (the web and file tools on by default): the default prompt with the web and download rules on its end. A test-side oracle since 2026-09-24; src never needed the name.</summary>
     private const string DefaultWebSystemPrompt = Assistant.DefaultSystemPrompt + " " + Assistant.WebRule + " " + Assistant.DownloadRule;
 
@@ -91,26 +94,27 @@ public class AssistantTests
     }
 
     [Fact]
-    public void SystemPrompt_VoiceMode_AppendsTheDirectiveLast()
+    public void SystemPrompt_VoiceMode_AddsNothing_WithoutADirective_AndAppendsOneLast()
     {
-        string prompt = Assistant.SystemPrompt(true);
-        Assert.StartsWith(Assistant.DefaultSystemPrompt, prompt, StringComparison.Ordinal);
-        Assert.EndsWith(Assistant.VoiceDirective, prompt, StringComparison.Ordinal);
-        Assert.True(prompt.LastIndexOf(Assistant.VoiceDirective, StringComparison.Ordinal) > prompt.IndexOf("Use a tool", StringComparison.Ordinal));
+        // No default voice directive since 2026-10-03 (the user's call): a spoken turn is the silent prompt unless vocalia.md has text.
+        Assert.Equal(Assistant.DefaultSystemPrompt, Assistant.SystemPrompt(true));
+        string prompt = Assistant.SystemPrompt(true, null, voiceDirective: Pirate);
+        Assert.Equal(Assistant.DefaultSystemPrompt + "\n\n" + Pirate, prompt);
+        Assert.True(prompt.LastIndexOf(Pirate, StringComparison.Ordinal) > prompt.IndexOf("Use a tool", StringComparison.Ordinal));
     }
 
     [Fact]
     public void SystemPrompt_MemoryOn_SitsBetweenThePersonaAndTheVoiceDirective_TheListNotInIt()
     {
         var memories = new[] { "Their name is Chris.", "They live in Leeds." };
-        string prompt = Assistant.SystemPrompt(true, memories);
+        string prompt = Assistant.SystemPrompt(true, memories, voiceDirective: Pirate);
 
         // The directive alone: the list rides the opening recall_memory pair (2026-09-17).
         Assert.StartsWith(Assistant.DefaultSystemPrompt + "\n\n" + MemoryPrompt.Directive, prompt, StringComparison.Ordinal);
         Assert.DoesNotContain(MemoryPrompt.Heading, prompt, StringComparison.Ordinal);
         Assert.DoesNotContain("Their name is Chris.", prompt, StringComparison.Ordinal);
-        Assert.EndsWith("\n\n" + Assistant.VoiceDirective, prompt, StringComparison.Ordinal);
-        Assert.True(prompt.IndexOf(MemoryPrompt.Directive, StringComparison.Ordinal) < prompt.IndexOf(Assistant.VoiceDirective, StringComparison.Ordinal));
+        Assert.EndsWith("\n\n" + Pirate, prompt, StringComparison.Ordinal);
+        Assert.True(prompt.IndexOf(MemoryPrompt.Directive, StringComparison.Ordinal) < prompt.IndexOf(Pirate, StringComparison.Ordinal));
     }
 
     [Fact]
@@ -154,18 +158,13 @@ public class AssistantTests
         Assert.Equal("Reply in plain text: no markdown headings, tables or code fences unless the user asks for code.", Assistant.PlainTextRule);
         Assert.StartsWith(Assistant.PlainTextRule + " ", Assistant.OperatingRules, StringComparison.Ordinal);
         Assert.DoesNotContain("_", Assistant.PlainTextRule);   // no tool name
-        Assert.Equal(
-            "Your reply is shown on screen and also read aloud by a text-to-speech engine, so keep it short and in plain spoken language.",
-            Assistant.VoiceDirectiveWithoutTools);
-        Assert.Equal(Assistant.ToolChannelExemption + " " + Assistant.VoiceDirectiveWithoutTools, Assistant.VoiceDirective);
-        Assert.DoesNotContain("tool", Assistant.VoiceDirectiveWithoutTools);
 
         // Both defaults: one paragraph, as with tools. A custom file stands verbatim either way.
         Assert.Equal(Assistant.DefaultPersona + " " + Assistant.PlainTextRule, Assistant.SystemPrompt(false, null, tools: false));
         Assert.Equal("Be terse.\n\n" + Assistant.PlainTextRule, Assistant.SystemPrompt(false, null, persona: "Be terse.", tools: false));
         Assert.Equal(Assistant.DefaultPersona + "\n\nAlways end with a haiku, then call view_image.", Assistant.SystemPrompt(false, null, operatingRules: "Always end with a haiku, then call view_image.", tools: false));
         Assert.Equal(
-            Assistant.DefaultPersona + " " + Assistant.PlainTextRule + "\n\n" + MemoryPrompt.DirectiveWithoutTool + "\n\n" + Assistant.VoiceDirectiveWithoutTools,
+            Assistant.DefaultPersona + " " + Assistant.PlainTextRule + "\n\n" + MemoryPrompt.DirectiveWithoutTool,
             Assistant.SystemPrompt(true, [], tools: false));
         Assert.Equal(
             Assistant.DefaultPersona + " " + Assistant.PlainTextRule + "\n\n" + MemoryPrompt.DirectiveWithoutTool + "\n\nSpeak like a pirate.",
@@ -188,7 +187,7 @@ public class AssistantTests
         Assert.Equal(Assistant.DefaultSystemPrompt, Assistant.SystemPrompt(false, null, web: false));
         Assert.Equal(Assistant.DefaultSystemPrompt, Assistant.SystemPrompt(false, null));
         // The sentence rides the rules block, ahead of the memory section and the directive.
-        Assert.Equal(DefaultWebSystemPrompt + "\n\n" + MemoryPrompt.Directive + "\n\n" + Assistant.VoiceDirective, Assistant.SystemPrompt(true, [], web: true));
+        Assert.Equal(DefaultWebSystemPrompt + "\n\n" + MemoryPrompt.Directive + "\n\n" + Pirate, Assistant.SystemPrompt(true, [], voiceDirective: Pirate, web: true));
         Assert.Equal("Be terse.\n\n" + Assistant.OperatingRules + " " + Assistant.WebRule + " " + Assistant.DownloadRule, Assistant.SystemPrompt(false, null, persona: "Be terse.", web: true));
         // A custom operata.md stands verbatim: it names the tools itself or not at all.
         Assert.Equal(Assistant.DefaultPersona + "\n\nAnswer in haiku.", Assistant.SystemPrompt(false, null, operatingRules: "Answer in haiku.", web: true));
@@ -227,7 +226,7 @@ public class AssistantTests
         Assert.Equal(Assistant.DefaultSystemPrompt + " " + Assistant.SessionRule, Assistant.SystemPrompt(false, null, sessions: true));
         Assert.Equal(DefaultWebSystemPrompt, Assistant.SystemPrompt(false, null, web: true));
         // After the ask sentence, ahead of the memory section and the directive.
-        Assert.Equal(DefaultWebSystemPrompt + " " + Assistant.AskRule(AskLimits.Default) + " " + Assistant.SessionRule + "\n\n" + MemoryPrompt.Directive + "\n\n" + Assistant.VoiceDirective, Assistant.SystemPrompt(true, [], web: true, ask: AskLimits.Default, sessions: true));
+        Assert.Equal(DefaultWebSystemPrompt + " " + Assistant.AskRule(AskLimits.Default) + " " + Assistant.SessionRule + "\n\n" + MemoryPrompt.Directive + "\n\n" + Pirate, Assistant.SystemPrompt(true, [], voiceDirective: Pirate, web: true, ask: AskLimits.Default, sessions: true));
         // A custom operata.md stands verbatim; LLM offer tools off drops it whatever the switch says.
         Assert.Equal(Assistant.DefaultPersona + "\n\nAnswer in haiku.", Assistant.SystemPrompt(false, null, operatingRules: "Answer in haiku.", sessions: true));
         Assert.Equal(Assistant.DefaultPersona + " " + Assistant.PlainTextRule, Assistant.SystemPrompt(false, null, tools: false, sessions: true));
@@ -390,7 +389,7 @@ public class AssistantTests
             Assistant.McpRule);
         Assert.Equal(Assistant.DefaultSystemPrompt + " " + Assistant.McpRule, Assistant.SystemPrompt(false, null, mcp: true));
         Assert.Equal(Assistant.DefaultSystemPrompt + " " + Assistant.SessionRule + " " + Assistant.McpRule, Assistant.SystemPrompt(false, null, sessions: true, mcp: true));
-        Assert.Equal(DefaultWebSystemPrompt + " " + Assistant.AskRule(AskLimits.Default) + " " + Assistant.SessionRule + " " + Assistant.McpRule + "\n\n" + MemoryPrompt.Directive + "\n\n" + Assistant.VoiceDirective, Assistant.SystemPrompt(true, [], web: true, ask: AskLimits.Default, sessions: true, mcp: true));
+        Assert.Equal(DefaultWebSystemPrompt + " " + Assistant.AskRule(AskLimits.Default) + " " + Assistant.SessionRule + " " + Assistant.McpRule + "\n\n" + MemoryPrompt.Directive + "\n\n" + Pirate, Assistant.SystemPrompt(true, [], voiceDirective: Pirate, web: true, ask: AskLimits.Default, sessions: true, mcp: true));
         Assert.Equal(Assistant.DefaultSystemPrompt, Assistant.SystemPrompt(false, null));
         Assert.Equal(Assistant.DefaultPersona + "\n\nAnswer in haiku.", Assistant.SystemPrompt(false, null, operatingRules: "Answer in haiku.", mcp: true));
         Assert.Equal(Assistant.DefaultPersona + " " + Assistant.PlainTextRule, Assistant.SystemPrompt(false, null, tools: false, mcp: true));
@@ -415,7 +414,7 @@ public class AssistantTests
         Assert.Equal(Assistant.DefaultSystemPrompt, Assistant.SystemPrompt(false, null, ask: null));
         Assert.Equal(Assistant.DefaultPersona + " " + Assistant.OperatingRulesWithoutFiles + " " + rule, Assistant.SystemPrompt(false, null, files: false, ask: limits));
         // The sentence rides the rules block, ahead of the memory section and the directive.
-        Assert.Equal(DefaultWebSystemPrompt + " " + rule + "\n\n" + MemoryPrompt.Directive + "\n\n" + Assistant.VoiceDirective, Assistant.SystemPrompt(true, [], web: true, ask: limits));
+        Assert.Equal(DefaultWebSystemPrompt + " " + rule + "\n\n" + MemoryPrompt.Directive + "\n\n" + Pirate, Assistant.SystemPrompt(true, [], voiceDirective: Pirate, web: true, ask: limits));
         Assert.Equal("Be terse.\n\n" + Assistant.OperatingRules + " " + rule, Assistant.SystemPrompt(false, null, persona: "Be terse.", ask: limits));
         // A custom operata.md stands verbatim; LLM offer tools off wins over everything.
         Assert.Equal(Assistant.DefaultPersona + "\n\nAnswer in haiku.", Assistant.SystemPrompt(false, null, operatingRules: "Answer in haiku.", ask: limits));
@@ -481,7 +480,7 @@ public class AssistantTests
         Assert.Equal(Assistant.DefaultSystemPrompt, Assistant.SystemPrompt(false, null, markdown: false));
         // A custom operata.md stands verbatim; the voice directive still goes last when the turn speaks.
         Assert.Equal(Assistant.DefaultPersona + "\n\nAnswer in haiku.", Assistant.SystemPrompt(false, null, operatingRules: "Answer in haiku.", markdown: true));
-        Assert.Equal(Assistant.DefaultPersona + " " + Assistant.MarkdownRule + " " + Assistant.ToolRules + " " + Assistant.FileRule + "\n\n" + Assistant.VoiceDirective, Assistant.SystemPrompt(true, null, markdown: true));
+        Assert.Equal(Assistant.DefaultPersona + " " + Assistant.MarkdownRule + " " + Assistant.ToolRules + " " + Assistant.FileRule + "\n\n" + Pirate, Assistant.SystemPrompt(true, null, voiceDirective: Pirate, markdown: true));
     }
 
     [Fact]
@@ -502,7 +501,7 @@ public class AssistantTests
         Assert.Equal(Assistant.DefaultSystemPrompt, Assistant.SystemPrompt(false, null, files: true));
         // The web sentence still follows the shortened rules.
         Assert.Equal(Assistant.DefaultPersona + " " + Assistant.OperatingRulesWithoutFiles + " " + Assistant.WebRule, Assistant.SystemPrompt(false, null, web: true, files: false));
-        Assert.Equal(Assistant.DefaultPersona + " " + Assistant.OperatingRulesWithoutFiles + "\n\n" + MemoryPrompt.Directive + "\n\n" + Assistant.VoiceDirective, Assistant.SystemPrompt(true, [], files: false));
+        Assert.Equal(Assistant.DefaultPersona + " " + Assistant.OperatingRulesWithoutFiles + "\n\n" + MemoryPrompt.Directive + "\n\n" + Pirate, Assistant.SystemPrompt(true, [], voiceDirective: Pirate, files: false));
         Assert.Equal("Be terse.\n\n" + Assistant.OperatingRulesWithoutFiles, Assistant.SystemPrompt(false, null, persona: "Be terse.", files: false));
         // A custom operata.md stands verbatim; LLM offer tools off wins over everything.
         Assert.Equal(Assistant.DefaultPersona + "\n\nAnswer in haiku.", Assistant.SystemPrompt(false, null, operatingRules: "Answer in haiku.", files: false));
@@ -559,11 +558,11 @@ public class AssistantTests
     public void SystemPrompt_CustomPersona_KeepsTheOrder_PersonaRulesMemoryDirective()
     {
         const string persona = "You are Rex.";
-        string prompt = Assistant.SystemPrompt(true, new[] { "Their name is Chris." }, persona);
+        string prompt = Assistant.SystemPrompt(true, new[] { "Their name is Chris." }, persona, voiceDirective: Pirate);
 
         Assert.StartsWith(persona + "\n\n" + Assistant.OperatingRules + "\n\n" + MemoryPrompt.Directive, prompt, StringComparison.Ordinal);
         Assert.DoesNotContain(MemoryPrompt.Heading, prompt, StringComparison.Ordinal);
-        Assert.EndsWith("\n\n" + Assistant.VoiceDirective, prompt, StringComparison.Ordinal);
+        Assert.EndsWith("\n\n" + Pirate, prompt, StringComparison.Ordinal);
     }
 
     [Theory]
@@ -595,10 +594,10 @@ public class AssistantTests
     [Fact]
     public void SystemPrompt_CustomPersonaAndRules_KeepTheOrder_PersonaRulesMemoryDirective()
     {
-        string prompt = Assistant.SystemPrompt(true, new[] { "Their name is Chris." }, "You are Rex.", "Answer in haiku.");
+        string prompt = Assistant.SystemPrompt(true, new[] { "Their name is Chris." }, "You are Rex.", "Answer in haiku.", Pirate);
 
         Assert.StartsWith("You are Rex.\n\nAnswer in haiku.\n\n" + MemoryPrompt.Directive, prompt, StringComparison.Ordinal);
-        Assert.EndsWith("\n\n" + Assistant.VoiceDirective, prompt, StringComparison.Ordinal);
+        Assert.EndsWith("\n\n" + Pirate, prompt, StringComparison.Ordinal);
         Assert.DoesNotContain(Assistant.OperatingRules, prompt, StringComparison.Ordinal);
     }
 
@@ -619,14 +618,13 @@ public class AssistantTests
     }
 
     [Fact]
-    public void SystemPrompt_CustomVoiceDirective_ReplacesTheDefault_Last_WhenSpeaking()
+    public void SystemPrompt_CustomVoiceDirective_GoesLast_WhenSpeaking()
     {
         const string directive = "Speak like a pirate.\n\nKeep it to one breath.";
         string prompt = Assistant.SystemPrompt(true, new[] { "Their name is Chris." }, "You are Rex.", "Answer in haiku.", directive);
 
         Assert.StartsWith("You are Rex.\n\nAnswer in haiku.\n\n" + MemoryPrompt.Directive, prompt, StringComparison.Ordinal);
         Assert.EndsWith("\n\n" + directive, prompt, StringComparison.Ordinal);
-        Assert.DoesNotContain(Assistant.VoiceDirective, prompt, StringComparison.Ordinal);
         Assert.Equal(Assistant.DefaultSystemPrompt + "\n\n" + directive, Assistant.SystemPrompt(true, null, null, null, directive));
     }
 
@@ -641,10 +639,11 @@ public class AssistantTests
     [InlineData(null)]
     [InlineData("")]
     [InlineData("  \n ")]
-    public void SystemPrompt_BlankVoiceDirective_IsTheDefault(string? directive)
+    public void SystemPrompt_BlankVoiceDirective_AddsNothing(string? directive)
     {
-        Assert.Equal(Assistant.SystemPrompt(true), Assistant.SystemPrompt(true, null, null, null, directive));
-        Assert.EndsWith("\n\n" + Assistant.VoiceDirective, Assistant.SystemPrompt(true, null, null, null, directive), StringComparison.Ordinal);
+        // No default to fall back on since 2026-10-03: a blank file is no directive, with tools or without.
+        Assert.Equal(Assistant.DefaultSystemPrompt, Assistant.SystemPrompt(true, null, null, null, directive));
+        Assert.Equal(Assistant.SystemPrompt(false, null, tools: false), Assistant.SystemPrompt(true, null, null, null, directive, tools: false));
     }
 
     [Fact]
@@ -716,26 +715,6 @@ public class AssistantTests
         Assert.Empty(echo.Received);
         Assert.Empty(events.OfType<TurnEvent.ToolCall>());
         Assert.Equal("Try echo(text=\"hi\") yourself.", string.Concat(Deltas(events)));
-    }
-
-    [Fact]
-    public void VoiceDirective_FirstSentence_ExemptsToolCalls()
-    {
-        string first = Assistant.VoiceDirective.Split(". ")[0];
-        Assert.Contains("tool calls", first);
-        Assert.Contains("never", first);
-    }
-
-    [Fact]
-    public void VoiceDirective_SaysItIsReadAloud_AndNoLongerBansFormatting()
-    {
-        // 2026-09-26: the voice skips code, tables and emoji itself, so the directive no longer forbids them.
-        Assert.Contains("read aloud", Assistant.VoiceDirective);
-        Assert.Contains("short", Assistant.VoiceDirective);
-        Assert.Contains("plain spoken language", Assistant.VoiceDirective);
-        Assert.DoesNotContain("markdown", Assistant.VoiceDirective);
-        Assert.DoesNotContain("emoji", Assistant.VoiceDirective);
-        Assert.DoesNotContain("file paths", Assistant.VoiceDirective);
     }
 
     [Fact]
@@ -1409,8 +1388,8 @@ public class AssistantTests
         Assert.Equal(Assistant.DefaultSystemPrompt + "\n\n" + Assistant.ProjectNotesSection(notes), Assistant.SystemPrompt(false, null, project: notes));
         // After the rules, before the memory section, the skills and the directive.
         Assert.Equal(
-            Assistant.DefaultSystemPrompt + "\n\n" + Assistant.ProjectNotesSection(notes) + "\n\n" + MemoryPrompt.Directive + "\n\n" + SkillsPrompt.Section([Haiku]) + "\n\n" + Assistant.VoiceDirective,
-            Assistant.SystemPrompt(true, [], project: notes, skills: [Haiku]));
+            Assistant.DefaultSystemPrompt + "\n\n" + Assistant.ProjectNotesSection(notes) + "\n\n" + MemoryPrompt.Directive + "\n\n" + SkillsPrompt.Section([Haiku]) + "\n\n" + Pirate,
+            Assistant.SystemPrompt(true, [], voiceDirective: Pirate, project: notes, skills: [Haiku]));
         Assert.Equal("Be terse.\n\nAnswer in haiku.\n\n" + Assistant.ProjectNotesSection(notes), Assistant.SystemPrompt(false, null, persona: "Be terse.", operatingRules: "Answer in haiku.", project: notes));
         // LLM offer tools off keeps the notes: they are context, not a tool.
         Assert.Equal(Assistant.DefaultPersona + " " + Assistant.PlainTextRule + "\n\n" + Assistant.ProjectNotesSection(notes), Assistant.SystemPrompt(false, null, tools: false, project: notes));
@@ -1424,7 +1403,7 @@ public class AssistantTests
         Assert.Equal(Assistant.DefaultSystemPrompt + "\n\n" + SkillsPrompt.DirectiveWithoutSkills, Assistant.SystemPrompt(false, null, skills: []));
         Assert.Equal(Assistant.DefaultSystemPrompt, Assistant.SystemPrompt(false, null, skills: null));
         Assert.Equal(Assistant.DefaultSystemPrompt + "\n\n" + MemoryPrompt.Directive + "\n\n" + SkillsPrompt.Section([Haiku]), Assistant.SystemPrompt(false, [], skills: [Haiku]));
-        Assert.Equal(Assistant.DefaultSystemPrompt + "\n\n" + SkillsPrompt.Section([Haiku]) + "\n\n" + Assistant.VoiceDirective, Assistant.SystemPrompt(true, null, skills: [Haiku]));
+        Assert.Equal(Assistant.DefaultSystemPrompt + "\n\n" + SkillsPrompt.Section([Haiku]) + "\n\n" + Pirate, Assistant.SystemPrompt(true, null, voiceDirective: Pirate, skills: [Haiku]));
         // LLM offer tools off: nothing could load one, so the block is dropped whatever was passed.
         Assert.Equal(Assistant.DefaultPersona + " " + Assistant.PlainTextRule, Assistant.SystemPrompt(false, null, tools: false, skills: [Haiku]));
         // A custom operata.md leaves the block in place: it is not a rule sentence.

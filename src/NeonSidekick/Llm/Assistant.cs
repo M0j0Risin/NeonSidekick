@@ -456,37 +456,7 @@ public sealed class Assistant
     /// <summary>The system prompt with the default persona: one paragraph, the persona and the rules.</summary>
     public const string DefaultSystemPrompt = DefaultPersona + " " + OperatingRules;
 
-    /// <summary>
-    /// Appended <em>last</em> to the system prompt while speech output is in force, so it wins
-    /// against everything above it.
-    ///
-    /// <para><b>The first sentence exempts the tool channel</b>, and it is not padding. The rest
-    /// once forbade markdown, code and file paths — a precise description of what a tool call looks
-    /// like — and a small model obeys the strongest instruction in the prompt; "short and in plain
-    /// spoken language" still reads as a rule a tool call could break. Without the exemption the
-    /// failure is a spoken answer <em>invented</em> instead of looked up.</para>
-    ///
-    /// <para>No formatting ban since 2026-09-26 (the user's call): the voice skips fenced code
-    /// (<see cref="Speech.CodeBlockFilter"/>) and tables (<see cref="Speech.TableFilter"/>) and strips
-    /// emoji and markdown (<see cref="Speech.SpeakableText"/>) on its own, so forbidding them only cost
-    /// the reply its formatting on screen.</para>
-    /// </summary>
-    public const string VoiceDirective = ToolChannelExemption + " " + VoiceDirectiveWithoutTools;
-
-    /// <summary>The first sentence of <see cref="VoiceDirective"/>: the tool channel is exempt. Only with tools to exempt.</summary>
-    public const string ToolChannelExemption =
-        "The rules that follow apply to what you say to the user and never to tool calls, which are not spoken; " +
-        "call tools exactly as instructed above whenever a question concerns real state.";
-
-    /// <summary>
-    /// The default voice directive for a turn that offers no tools (<c>LLM offer tools</c> off):
-    /// <see cref="VoiceDirective"/> without its tool-channel sentence, which would name something the
-    /// turn does not have. Pinned.
-    /// </summary>
-    public const string VoiceDirectiveWithoutTools =
-        "Your reply is shown on screen and also read aloud by a text-to-speech engine, so keep it short and in plain spoken language.";
-
-    /// <summary>The system prompt for a turn: the persona alone, or with <see cref="VoiceDirective"/> last.</summary>
+    /// <summary>The system prompt for a turn with every default: no voice directive either way, since there is no default one (2026-10-03).</summary>
     public static string SystemPrompt(bool speechOutput) => SystemPrompt(speechOutput, null);
 
     /// <summary>
@@ -524,13 +494,14 @@ public sealed class Assistant
     /// (<see cref="MemoryPrompt.Section"/>) when <paramref name="memories"/> is not null — null
     /// means memory is off, an empty list means on with nothing stored yet; the list itself is in the
     /// section only without tools, with them it rides the opening <c>recall_memory</c> pair
-    /// (<see cref="OpeningMemoryCallId"/>); and the voice directive
-    /// (<paramref name="voiceDirective"/> from <c>vocalia.md</c>, or <see cref="VoiceDirective"/> when
-    /// null or blank) last when <paramref name="speechOutput"/> is on, so it still wins — the file
-    /// changes what is appended, never whether. With <paramref name="tools"/> false (the setting
+    /// (<see cref="OpeningMemoryCallId"/>); and the voice directive (<paramref name="voiceDirective"/>
+    /// from <c>vocalia.md</c>) last when <paramref name="speechOutput"/> is on and it has text, so it
+    /// still wins. There is no default directive since 2026-10-03 (the user's call): null or blank
+    /// appends nothing, spoken or not (<see cref="VocaliaFile"/> keeps the why of what one should say).
+    /// With <paramref name="tools"/> false (the setting
     /// <c>LLM offer tools</c> off) every <em>default</em> swaps for its tool-free form
-    /// (<see cref="PlainTextRule"/>, <see cref="MemoryPrompt.DirectiveWithoutTool"/>,
-    /// <see cref="VoiceDirectiveWithoutTools"/>); a custom file stands verbatim either way. With
+    /// (<see cref="PlainTextRule"/>, <see cref="MemoryPrompt.DirectiveWithoutTool"/>); a custom file
+    /// stands verbatim either way. With
     /// <paramref name="web"/> true (the web tools offered) the default rules end with <see cref="WebRule"/>;
     /// with <paramref name="files"/> false (the setting <c>File tools</c> off, the file tools not offered)
     /// they lose <see cref="FileRule"/> (<see cref="OperatingRulesWithoutFiles"/>); with <paramref name="ask"/>
@@ -582,9 +553,9 @@ public sealed class Assistant
             sb.Append("\n\n").Append(plan.Trim());
         }
 
-        if (speechOutput)
+        if (speechOutput && !string.IsNullOrWhiteSpace(voiceDirective))
         {
-            sb.Append("\n\n").Append(string.IsNullOrWhiteSpace(voiceDirective) ? (tools ? VoiceDirective : VoiceDirectiveWithoutTools) : voiceDirective.Trim());
+            sb.Append("\n\n").Append(voiceDirective.Trim());
         }
 
         return sb.ToString();
