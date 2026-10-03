@@ -175,10 +175,15 @@ public sealed record SystemPromptFacts(
 /// <summary>
 /// One section of the system message: a status heading and the text under it (empty when the section is
 /// left out). Every section is a part of the system message since 2026-09-26 — the opening calls and the
-/// request fields are no longer on the tab, so the Prompt / Request split went with them.
+/// request fields are no longer on the tab, so the Prompt / Request split went with them. The heading in two parts
+/// since 2026-10-03 — <paramref name="Label"/> (<c>Memory</c>) and <paramref name="Status"/> (<c>on, 3 facts remembered</c>) —
+/// so the pane's rule can set them apart; <see cref="Heading"/> joins them as the plain lines always had them.
 /// </summary>
-public sealed record SystemPromptSection(string Heading, string Body)
+public sealed record SystemPromptSection(string Label, string Status, string Body)
 {
+    /// <summary>The plain heading: <c>Memory — on, 3 facts remembered</c>, the label alone with no status. Pinned.</summary>
+    public string Heading => Status.Length > 0 ? $"{Label} — {Status}" : Label;
+
     /// <summary>True for a section whose text is in the system message.</summary>
     public bool InPrompt => Body.Length > 0;
 }
@@ -204,6 +209,9 @@ public sealed record ToolGroup(string Name, string Note, IReadOnlyList<AIFunctio
 
     /// <summary>The group's bare name, without the count (<c>Files</c>, <c>MCP chrome</c>): what <see cref="SystemPromptSummary.OfferedOnly"/> recounts from (2026-09-26).</summary>
     public string Label { get; init; } = Name;
+
+    /// <summary>The count in <see cref="Name"/> alone (<c>14</c>, <c>12 of 14</c>, <see cref="SystemPromptSummary.GroupCount"/>): what the pane's heading rule shows after the label (2026-10-03). Every tool by default.</summary>
+    public string Count { get; init; } = Tools.Count.ToString(CultureInfo.InvariantCulture);
 
     /// <summary>Whether the next turn offers <paramref name="tool"/>: the group offered and no note on the tool.</summary>
     public bool Offers(string tool) => Offered && !ToolNotes.ContainsKey(tool);
@@ -326,62 +334,64 @@ public static class SystemPromptSummary
         bool custom = !string.IsNullOrWhiteSpace(facts.Persona);
         string persona = custom ? facts.Persona!.Trim() : Assistant.DefaultPersona;
         sections.Add(new(
-            custom ? $"Persona — {PersonaFile.FileName} ({persona.Length.ToString(CultureInfo.InvariantCulture)} chars)" : "Persona — default",
+            "Persona",
+            custom ? $"{PersonaFile.FileName} ({persona.Length.ToString(CultureInfo.InvariantCulture)} chars)" : "default",
             persona));
 
         bool customRules = !string.IsNullOrWhiteSpace(facts.OperatingRules);
         string defaultLabel = !facts.ToolsEnabled ? $"default ({ToolsOffSuffix})" : !facts.FilesEnabled ? $"default ({FilesOffSuffix})" : "default";
         string rules = customRules ? facts.OperatingRules!.Trim() : Assistant.DefaultRules(facts.Markdown, facts.ToolsEnabled, facts.FilesEnabled, delete: !facts.Off(DeleteTool.ToolName), mcp: facts.Mcp, timers: facts.Timers, git: facts.Git, shell: facts.Shell, bridge: facts.Bridge, police: facts.Police, obsidian: facts.Obsidian, obsidianDelete: facts.ObsidianDelete, sql: facts.Sql, native: facts.Native, advisor: facts.Advisor, homeAssistant: facts.HomeAssistant, oracle: facts.Oracle, mysql: facts.MySql, unc: facts.Unc, uncFetch: facts.Unc && facts.UncFetch, uncWrite: facts.Unc && facts.UncWrite, docker: facts.Docker, dockerWrite: facts.Docker && facts.DockerWrite, help: facts.Help);
         sections.Add(new(
-            customRules ? $"Operating rules — {OperataFile.FileName} ({rules.Length.ToString(CultureInfo.InvariantCulture)} chars)" : $"Operating rules — {defaultLabel}",
+            "Operating rules",
+            customRules ? $"{OperataFile.FileName} ({rules.Length.ToString(CultureInfo.InvariantCulture)} chars)" : defaultLabel,
             rules));
 
         // The project notes (2026-09-16): after the rules, tools or not, while Agent skills is on.
         if (!facts.SkillsEnabled)
         {
-            sections.Add(new($"Project notes — off ({SkillsOffSuffix})", ""));
+            sections.Add(new(ProjectNotesLabel, $"off ({SkillsOffSuffix})", ""));
         }
         else if (!facts.ProjectFile)
         {
-            sections.Add(new($"Project notes — off ({ProjectFileOffSuffix})", ""));
+            sections.Add(new(ProjectNotesLabel, $"off ({ProjectFileOffSuffix})", ""));
         }
         else if (facts.Project is { } project)
         {
-            sections.Add(new($"Project notes — {project.FileName} ({project.Text.Length.ToString(CultureInfo.InvariantCulture)} chars)", Assistant.ProjectNotesSection(project)));
+            sections.Add(new(ProjectNotesLabel, $"{project.FileName} ({project.Text.Length.ToString(CultureInfo.InvariantCulture)} chars)", Assistant.ProjectNotesSection(project)));
         }
         else
         {
-            sections.Add(new($"Project notes — none ({string.Join(" / ", ProjectFile.FileNames)} not in the working directory)", ""));
+            sections.Add(new(ProjectNotesLabel, $"none ({string.Join(" / ", ProjectFile.FileNames)} not in the working directory)", ""));
         }
 
         string remembered = facts.Memories.Count == 1 ? "1 fact remembered" : $"{facts.Memories.Count.ToString(CultureInfo.InvariantCulture)} facts remembered";
         if (facts.Memory && facts.ToolsEnabled && facts.Recall)
         {
             // The list rides the opening call (2026-09-17): the section is the directive alone, the facts are under Also sent.
-            sections.Add(new($"Memory — on, directive (the list rides the opening {RecallMemoryTool.ToolName} call)", MemoryPrompt.Section(facts.Memories, tools: true)));
+            sections.Add(new(MemoryLabel, $"on, directive (the list rides the opening {RecallMemoryTool.ToolName} call)", MemoryPrompt.Section(facts.Memories, tools: true)));
         }
         else if (facts.Memory && facts.ToolsEnabled)
         {
             // recall_memory switched off on /tools (2026-09-19): nothing can carry the list, so it rides the prompt as under LLM offer tools off.
-            sections.Add(new($"Memory — on, {remembered} (in the prompt: {ToolOff(RecallMemoryTool.ToolName)})", MemoryPrompt.Section(facts.Memories, tools: false)));
+            sections.Add(new(MemoryLabel, $"on, {remembered} (in the prompt: {ToolOff(RecallMemoryTool.ToolName)})", MemoryPrompt.Section(facts.Memories, tools: false)));
         }
         else if (facts.Memory)
         {
-            sections.Add(new($"Memory — on, {remembered}", MemoryPrompt.Section(facts.Memories, tools: false)));
+            sections.Add(new(MemoryLabel, $"on, {remembered}", MemoryPrompt.Section(facts.Memories, tools: false)));
         }
         else
         {
-            sections.Add(new("Memory — off, not included", ""));
+            sections.Add(new(MemoryLabel, "off, not included", ""));
         }
 
         // The skills block (2026-09-16): after the memory section, only with tools to load one.
         if (!facts.SkillsEnabled)
         {
-            sections.Add(new($"Skills — off ({SkillsOffSuffix})", ""));
+            sections.Add(new(SkillsLabel, $"off ({SkillsOffSuffix})", ""));
         }
         else if (!facts.ToolsEnabled)
         {
-            sections.Add(new($"Skills — not included ({ToolsOffSuffix})", ""));
+            sections.Add(new(SkillsLabel, $"not included ({ToolsOffSuffix})", ""));
         }
         else
         {
@@ -389,13 +399,13 @@ public static class SystemPromptSummary
             int external = skills.Count(s => s.Scope == SkillScope.External);
             string count = skills.Count == 0 ? "none installed"
                 : (skills.Count == 1 ? "1 skill" : $"{skills.Count.ToString(CultureInfo.InvariantCulture)} skills") + (external > 0 ? $" ({external.ToString(CultureInfo.InvariantCulture)} external)" : "");
-            sections.Add(new($"Skills — on, {count}", SkillsPrompt.Section(skills)));
+            sections.Add(new(SkillsLabel, $"on, {count}", SkillsPrompt.Section(skills)));
         }
 
         // Plan mode's directive only while planning (2026-09-26), where the prompt carries it: after the skills, ahead of the voice.
         if (facts.ToolsEnabled && !string.IsNullOrWhiteSpace(facts.PlanDirective))
         {
-            sections.Add(new(PlanModeHeading, facts.PlanDirective.Trim()));
+            sections.Add(new(PlanModeLabel, PlanModeStatus, facts.PlanDirective.Trim()));
         }
 
         // The voice directive only while it is in the prompt (2026-09-26): a "not included" heading on every silent turn was noise.
@@ -403,7 +413,7 @@ public static class SystemPromptSummary
         if (facts.TtsOutput && facts.SpeechReady && !string.IsNullOrWhiteSpace(facts.VoiceDirective))
         {
             string voice = facts.VoiceDirective.Trim();
-            sections.Add(new($"Voice directive — {VocaliaFile.FileName} ({voice.Length.ToString(CultureInfo.InvariantCulture)} chars), included (speech output on, TTS ready), always last", voice));
+            sections.Add(new("Voice directive", $"{VocaliaFile.FileName} ({voice.Length.ToString(CultureInfo.InvariantCulture)} chars), included (speech output on, TTS ready), always last", voice));
         }
 
         return sections;
@@ -449,19 +459,33 @@ public static class SystemPromptSummary
             help: facts.Help);
     }
 
-    /// <summary>The Prompt tab's heading over plan mode's directive (2026-09-26). Pinned.</summary>
-    public const string PlanModeHeading = "Plan mode — on, read-only tools until the plan is approved";
+    /// <summary>The Prompt tab's heading over plan mode's directive (2026-09-26): <see cref="PlanModeLabel"/> and <see cref="PlanModeStatus"/> as <see cref="SystemPromptSection.Heading"/> joins them. Pinned.</summary>
+    public const string PlanModeHeading = PlanModeLabel + " — " + PlanModeStatus;
 
-    /// <summary>The Prompt tab: every section's heading and, when it has one, its text.</summary>
+    /// <summary>The label of plan mode's section, the rule's (2026-10-03).</summary>
+    public const string PlanModeLabel = "Plan mode";
+
+    /// <summary>The status of plan mode's section, dim on the rule after <see cref="PlanModeLabel"/> (2026-10-03).</summary>
+    public const string PlanModeStatus = "on, read-only tools until the plan is approved";
+
+    private const string ProjectNotesLabel = "Project notes";
+    private const string MemoryLabel = "Memory";
+    private const string SkillsLabel = "Skills";
+
+    /// <summary>
+    /// The Prompt tab: every section's heading as a rule (<see cref="SectionRule"/>, 2026-10-03, the user's ask: the
+    /// Tools tab's look) — its label, then its status dim between two runs of the rule — and, when it has one, its text
+    /// <see cref="BodyIndent"/> cells in under it.
+    /// </summary>
     public static IRenderable PromptTab(SystemPromptFacts facts)
     {
         var rows = new List<IRenderable>();
         foreach (var section in PromptSections(facts))
         {
-            rows.Add(new Text(section.Heading, Theme.SectionHeading));
+            rows.Add(new SectionRule(SectionRule.Markup(section.Label, note: section.Status)));
             if (section.Body.Length > 0)
             {
-                rows.Add(new Text(section.Body, Theme.Body));
+                rows.Add(new Indented(new Text(section.Body, Theme.Body), BodyIndent));
             }
 
             // A space, not an empty Text: Rows adds a line break only after a child that rendered something.
@@ -723,6 +747,7 @@ public static class SystemPromptSummary
         int left = disabled is null ? tools.Count : tools.Count(t => !disabled.Contains(t.Name));
         return new ToolGroup(GroupName(name, left, tools.Count), note, tools, offered)
         {
+            Count = GroupCount(left, tools.Count),
             ToolNotes = notes ?? new Dictionary<string, string>(0, StringComparer.Ordinal),
             Switch = @switch,
             Label = name,
@@ -750,7 +775,7 @@ public static class SystemPromptSummary
             var tools = group.Tools.Where(t => group.Offers(t.Name)).ToList();
             if (tools.Count > 0)
             {
-                kept.Add(new ToolGroup(GroupName(group.Label, tools.Count, tools.Count), "", tools, true) { Switch = group.Switch, Label = group.Label });
+                kept.Add(new ToolGroup(GroupName(group.Label, tools.Count, tools.Count), "", tools, true) { Switch = group.Switch, Label = group.Label, Count = GroupCount(tools.Count, tools.Count) });
             }
         }
 
@@ -764,21 +789,26 @@ public static class SystemPromptSummary
     public static string NoToolsLine(bool toolsEnabled) => toolsEnabled ? NoToolsOffered : $"{NoToolsOffered} ({ToolsOffSuffix})";
 
     /// <summary>The group's name and count: <c>Files (14)</c> with every tool offered, <c>Files (12 of 14)</c> with some switched off by name (2026-09-19). Pinned.</summary>
-    public static string GroupName(string name, int offered, int total) =>
+    public static string GroupName(string name, int offered, int total) => $"{name} ({GroupCount(offered, total)})";
+
+    /// <summary>The count alone: <c>14</c> with every tool offered, <c>12 of 14</c> with some switched off by name — <see cref="GroupName"/>'s brackets and the heading rule's tail (2026-10-03). Pinned.</summary>
+    public static string GroupCount(int offered, int total) =>
         offered == total
-            ? $"{name} ({total.ToString(CultureInfo.InvariantCulture)})"
-            : $"{name} ({offered.ToString(CultureInfo.InvariantCulture)} of {total.ToString(CultureInfo.InvariantCulture)})";
+            ? total.ToString(CultureInfo.InvariantCulture)
+            : $"{offered.ToString(CultureInfo.InvariantCulture)} of {total.ToString(CultureInfo.InvariantCulture)}";
 
     /// <summary>A group's note while it is not offered: <c>not offered: memory is off</c>. Pinned.</summary>
     public static string NotOffered(string why) => $"not offered: {why}";
 
     /// <summary>
-    /// The Tools tab: a heading row per group — its name in the section style whether the group is
-    /// offered or not (a heading never dims, later on 2026-09-20, the user's call; the /tools rule), its
-    /// note (if any) dim in the description column — then its tools as name and description, all dim
-    /// when the group is not offered. One grid for every group, so the description column sits at the same place under
-    /// every heading (a grid per group sized its name column to its own longest tool name and the
-    /// descriptions jumped between groups, 2026-09-16); a one-space row parts the groups.
+    /// The Tools tab: per group a heading rule (<see cref="SectionRule"/>, 2026-10-03, the user's call: the bare
+    /// violet name looked poor) — its label in the section style whether the group is offered or not (a heading never
+    /// dims, later on 2026-09-20, the user's call; the /tools rule), its count and its note (if any) dim — then its tools
+    /// as name and description, <see cref="BodyIndent"/> cells in under the rule, all dim when the group is not offered; a
+    /// one-space row parts the groups. A grid per group, every one's name column as wide as the longest tool name of them
+    /// all, so the description column sits at the same place under every heading (a grid per group sized to its own
+    /// longest name made the descriptions jump between groups, 2026-09-16; one grid for every group until 2026-10-03,
+    /// its name column widened by the longest heading).
     /// </summary>
     public static IRenderable ToolsTab(IReadOnlyList<ToolGroup> groups, bool toolsEnabled = true)
     {
@@ -789,19 +819,26 @@ public static class SystemPromptSummary
             return new Text(NoToolsLine(toolsEnabled), Theme.DimText);
         }
 
-        var grid = ChatScreen.TwoColumns();
+        int names = groups.SelectMany(g => g.Tools).Select(t => TextCells.Width(t.Name)).DefaultIfEmpty(0).Max();
+        var rows = new List<IRenderable>(groups.Count * 3);
         for (int i = 0; i < groups.Count; i++)
         {
             if (i > 0)
             {
-                // A one-space cell, as the Commands tab: an empty row renders no line and would collapse.
-                grid.AddRow(new Text(" "), Text.Empty);
+                // A one-space line, as the Commands tab: an empty Text renders no line and would collapse.
+                rows.Add(new Text(" "));
             }
 
             var group = groups[i];
-            grid.AddRow(
-                new Text(group.Name, Theme.SectionHeading),
-                new Text(group.Note, Theme.DimText));
+            rows.Add(new SectionRule(SectionRule.Markup(group.Label, group.Count, group.Note)));
+            if (group.Tools.Count == 0)
+            {
+                continue;
+            }
+
+            var grid = new Grid()
+                .AddColumn(new GridColumn().NoWrap().Width(names).PadRight(SlashCommands.HelpColumnGap))
+                .AddColumn(new GridColumn().PadRight(0));
             foreach (var tool in group.Tools)
             {
                 // A tool the group offers but the turn does not (2026-09-19): dim like an unoffered group, its reason after the description.
@@ -812,10 +849,15 @@ public static class SystemPromptSummary
                         ? new Text(tool.Description + "  " + toolNote, Theme.DimText)
                         : new Text(tool.Description, offered ? Theme.Body : Theme.DimText));
             }
+
+            rows.Add(new Indented(grid, BodyIndent));
         }
 
-        return grid;
+        return new Rows(rows);
     }
+
+    /// <summary>The cells a section's lines sit in under its heading rule on the Prompt and Tools tabs (2026-10-03): the menu's pointer gutter, so the tabs line up with <c>/tools</c>' rows.</summary>
+    public const int BodyIndent = 2;
 
     /// <summary>The name column of the plain tool lines (and of the <c>/tools</c> list).</summary>
     public const int ToolNameWidth = 22;

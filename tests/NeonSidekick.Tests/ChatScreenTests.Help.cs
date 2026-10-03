@@ -70,9 +70,9 @@ public partial class ChatScreenTests
 
         string output = await RunAsync();
 
-        int timers = output.IndexOf("  Timers (3)\n", StringComparison.Ordinal);
-        int help = output.IndexOf("  " + HelpText.GroupTitle + " (1)\n", StringComparison.Ordinal);
-        int files = output.IndexOf("  Files (", StringComparison.Ordinal);
+        int timers = output.IndexOf("\n── Timers · 3 ─", StringComparison.Ordinal);
+        int help = output.IndexOf("\n── " + HelpText.GroupTitle + " · 1 ─", StringComparison.Ordinal);
+        int files = output.IndexOf("\n── Files · ", StringComparison.Ordinal);
         Assert.True(timers >= 0 && timers < help && help < files, $"timers {timers}, help {help}, files {files}");
         Assert.Contains("\n  " + NeonHelpTool.ToolName + " ", output);
     }
@@ -84,9 +84,9 @@ public partial class ChatScreenTests
         _console.Profile.Height = 60;
         _geometry = new ScreenGeometry(() => null);
         PushLine("/tools");
-        for (int i = 0; i < 8; i++)
+        for (int i = 0; i < 6; i++)
         {
-            // From get_current_time: the two clock rows, the Timers heading and its three, the Help heading, neon_help.
+            // From get_current_time: the two clock rows, the three timers, neon_help (the gaps and the headings no stops, 2026-10-03).
             _console.Input.PushKey(Keys.Down);
         }
 

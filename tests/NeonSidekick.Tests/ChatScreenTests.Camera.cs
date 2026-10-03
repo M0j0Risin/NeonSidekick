@@ -546,7 +546,7 @@ public partial class ChatScreenTests
 
         string output = await RunAsync();
 
-        Assert.Contains("  Camera (1)\n", output);
+        Assert.Contains("\n── Camera · 1 ─", output);
         Assert.Contains("\n  " + CameraCaptureTool.ToolName + " ", output);
         Assert.DoesNotContain(SystemPromptSummary.CameraOffSuffix, output);
     }
@@ -562,7 +562,7 @@ public partial class ChatScreenTests
         string output = await RunAsync();
 
         Assert.Contains("\n  " + CameraCaptureTool.ToolName + " ", output);
-        Assert.Contains("Camera (1) " + ToolsText.CameraOffSuffix, output);
+        Assert.Contains("── Camera · 1 ── " + ToolsText.Bare(ToolsText.CameraOffSuffix) + " ─", output);
     }
 
     [Fact]
@@ -576,7 +576,7 @@ public partial class ChatScreenTests
 
         string output = await RunAsync();
 
-        Assert.Contains("Camera (1)", output);
+        Assert.Contains("── Camera · 1 ─", output);
         Assert.Contains(CameraCaptureTool.ToolName, output);
     }
 

@@ -1444,4 +1444,119 @@ public class MenuPaneTests : IDisposable
         Assert.Equal(TranscriptRenderer.WarningMarkup("w"), MenuPane.StatusMarkup(MenuPane.NoticeKind.Warning, "w"));
         Assert.Equal(TranscriptRenderer.ErrorMarkup("e"), MenuPane.StatusMarkup(MenuPane.NoticeKind.Error, "e"));
     }
+
+    // ── Headings (2026-10-03, /tools' Offered tab) ──────────────────────────
+
+    /// <summary>Two sections: a heading, two rows, a gap; a heading, one row.</summary>
+    private static MenuPage Sectioned() =>
+        Page(SectionRule.Markup("Alpha", "2"), "a", "b", "", SectionRule.Markup("Beta", "1"), "c") with { Headings = new HashSet<int> { 0, 4 } };
+
+    /// <summary>A heading as the pane prints it at 40 columns: the text, a space, the rule to the edge.</summary>
+    private static string HeadingLine(string text) => text + " " + Rule(40 - TextCells.Width(text) - 1);
+
+    [Fact]
+    public void Stops_SkipHeadingsAndGaps_OnlyOnAPageWithHeadings()
+    {
+        var page = Sectioned();
+        Assert.Equal([false, true, true, false, false, true], Enumerable.Range(0, 6).Select(page.IsStop));
+        Assert.True(Page("a", "", "b").IsStop(1));   // no headings: an empty row is a row like any other
+        Assert.Equal(1, page.StopFrom(0, +1));
+        Assert.Equal(5, page.StopFrom(3, +1));
+        Assert.Equal(2, page.StopFrom(3, -1));
+        Assert.Equal(1, page.StopFrom(0, -1));        // none up from the top: the first down
+        Assert.Equal(5, page.StopFrom(-1, -1, wrap: true));
+        Assert.Equal(1, page.StopFrom(6, +1, wrap: true));
+        Assert.Equal(5, page.StopFrom(99, +1));       // clamped to the last row, a stop
+        Assert.Equal(0, Page().StopFrom(3, +1));
+        Assert.Equal(2, (Page(SectionRule.Markup("Only"), "", "") with { Headings = new HashSet<int> { 0 } }).StopFrom(2, +1));   // no stop at all: the row itself
+        Assert.Equal(2, (Page(SectionRule.Markup("Only"), "", "") with { Headings = new HashSet<int> { 0 } }).StopFrom(9, +1));   // clamped
+        Assert.Equal(0, page.LeadRow(1));
+        Assert.Equal(2, page.LeadRow(2));
+        Assert.Equal(3, page.LeadRow(5));
+        Assert.Equal(5, Page("a", "", "b", "c", "d", "e").LeadRow(5));   // no headings: the row itself
+    }
+
+    [Fact]
+    public async Task Headings_AreRulesWithNoPointer_AndTheKeysStepOverThemAndTheGaps()
+    {
+        using var pane = Pane();
+        pane.Show();
+        var menu = new MenuPane(pane, _keys);
+        Push(Keys.Down, Keys.Down, Keys.Enter);   // a (the opening row, past the heading) → b → over the gap and Beta → c
+        Assert.Equal(new MenuPick(0, 5), await menu.PickAsync(Sectioned(), 0, CancellationToken.None));
+        Assert.Contains("\n \n" + HeadingLine("── Alpha · 2") + "\n▸ a\n  b\n  \n" + HeadingLine("── Beta · 1") + "\n  c\n", Output);
+
+        Push(Keys.Up, Keys.Enter);                // from a up past Alpha: wraps to c
+        Assert.Equal(new MenuPick(0, 5), await menu.PickAsync(Sectioned(), 1, CancellationToken.None));
+        Push(Keys.Down, Keys.Enter);              // from c down: wraps past Alpha to a
+        Assert.Equal(new MenuPick(0, 1), await menu.PickAsync(Sectioned(), 5, CancellationToken.None));
+        Push(Keys.End, Keys.Home, Keys.Enter);
+        Assert.Equal(new MenuPick(0, 1), await menu.PickAsync(Sectioned(), 2, CancellationToken.None));
+        Push(Keys.PageDown, Keys.Enter);          // the page key lands on the last stop it reaches
+        Assert.Equal(new MenuPick(0, 5), await menu.PickAsync(Sectioned(), 1, CancellationToken.None));
+        Push(Keys.Enter);                         // opened on the gap: the next stop down
+        Assert.Equal(new MenuPick(0, 5), await menu.PickAsync(Sectioned(), 3, CancellationToken.None));
+        Assert.DoesNotContain("▸ ──", Output);
+        menu.Close();
+    }
+
+    [Fact]
+    public async Task AClickOnAHeadingOrAGap_IsAMiss_EvenTwice()
+    {
+        // The strip at 100, the spacer at 101, the rows from 102: Alpha 102, a 103, b 104, the gap 105, Beta 106, c 107.
+        var (pane, input, keys) = ClickablePane(cursorTop: 100);
+        using var _ = pane;
+        pane.Show();
+        var menu = new MenuPane(pane, keys);
+        input.Push(Keys.Down);                    // b
+        input.PushClick(0, 102);                  // Alpha, twice: nothing
+        input.PushClick(0, 102);
+        input.PushClick(0, 105);                  // the gap
+        input.Push(Keys.Enter);
+
+        Assert.Equal(new MenuPick(0, 2), await menu.PickAsync(Sectioned(), 0, CancellationToken.None));
+
+        input.PushClick(0, 107);                  // c, twice: picked
+        input.PushClick(0, 107);
+        Assert.Equal(new MenuPick(0, 5), await menu.PickAsync(Sectioned(), 0, CancellationToken.None));
+        menu.Close();
+    }
+
+    [Fact]
+    public async Task ReachingTheTopOfASection_BringsItsHeadingIntoView()
+    {
+        // Twenty rows under one heading at the fixture's 12 lines: End scrolls the heading away, Home brings it back
+        // with the first row (the viewport alone would stop at the row and leave the heading above it).
+        var rows = new[] { SectionRule.Markup("Alpha") }.Concat(Enumerable.Range(1, 20).Select(i => "r" + i.ToString(System.Globalization.CultureInfo.InvariantCulture))).ToArray();
+        var page = Page(rows) with { Headings = new HashSet<int> { 0 } };
+        using var pane = Pane();
+        pane.Show();
+        var menu = new MenuPane(pane, _keys);
+        Push(Keys.End, Keys.Home, Keys.Enter);
+
+        Assert.Equal(new MenuPick(0, 1), await menu.PickAsync(page, 0, CancellationToken.None));
+
+        Assert.Contains("\n▸ r20\n", Output);
+        Assert.EndsWith(HeadingLine("── Alpha") + "\n", Output[..Output.LastIndexOf("▸ r1\n", StringComparison.Ordinal)]);
+        menu.Close();
+    }
+
+    [Fact]
+    public async Task ATabsHeadings_FollowItsSwitch()
+    {
+        var tabs = new[]
+        {
+            new MenuTab("One", ["x", "y"]),
+            new MenuTab("Two", Sectioned().Rows) { Headings = Sectioned().Headings },
+        };
+        using var pane = Pane();
+        pane.Show();
+        var menu = new MenuPane(pane, _keys);
+        Push(Keys.Right, Keys.Enter);             // Two: the cursor past its heading
+
+        Assert.Equal(new MenuPick(1, 1), await menu.PickAsync(MenuPage.Tabbed("Settings", tabs, 0, "keys"), 0, CancellationToken.None));
+        Assert.Null(MenuPage.Tabbed("Settings", tabs, 0, "keys").Headings);
+        Assert.Equal(tabs[1].Headings, MenuPage.Tabbed("Settings", tabs, 1, "keys").Headings);
+        menu.Close();
+    }
 }

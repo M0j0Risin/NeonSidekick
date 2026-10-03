@@ -57,7 +57,7 @@ internal sealed class McpMenu
     private INoticeSink Sink => _pane.IsOpen ? _pane : _transcript;
 
     /// <summary>The tabbed page: the Servers rows, the Tools rows, the Options fields; Space a flip on the first two.</summary>
-    public static MenuPage Page(IReadOnlyList<(string Markup, McpRow? Row)> servers, IReadOnlyList<(string Markup, string? Tool)> tools, AppSettingsData saved, SettingsMenu menu, int tab)
+    public static MenuPage Page(IReadOnlyList<(string Markup, McpRow? Row)> servers, IReadOnlyList<(string Markup, string? Tool, bool Heading)> tools, AppSettingsData saved, SettingsMenu menu, int tab)
     {
         ArgumentNullException.ThrowIfNull(servers);
         ArgumentNullException.ThrowIfNull(tools);
@@ -66,7 +66,7 @@ internal sealed class McpMenu
         var tabs = new MenuTab[]
         {
             new(McpText.ServersTabTitle, servers.Select(r => r.Markup).ToList()) { Hint = McpText.ServersKeys },
-            new(McpText.ToolsTabTitle, tools.Select(r => r.Markup).ToList()) { Hint = ToolsText.OfferedKeys },
+            new(McpText.ToolsTabTitle, tools.Select(r => r.Markup).ToList()) { Hint = ToolsText.OfferedKeys, Headings = ToolsText.HeadingRows(tools) },
             menu.FieldsTab(McpText.OptionsTabTitle, SettingsMenu.McpTabFields[0], saved),
         };
         return MenuPage.Tabbed(McpText.Label, tabs, tab, SettingsMenu.TabKeys) with

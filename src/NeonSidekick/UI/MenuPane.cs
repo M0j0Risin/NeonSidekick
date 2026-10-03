@@ -25,6 +25,9 @@ public sealed record MenuTab(string Title, IReadOnlyList<string> Rows)
 
     /// <summary>The tab's hint row; null for the page's.</summary>
     public string? Hint { get; init; }
+
+    /// <summary>The tab's <see cref="MenuPage.Headings"/>; null for none.</summary>
+    public IReadOnlySet<int>? Headings { get; init; }
 }
 
 /// <summary>
@@ -102,6 +105,15 @@ public sealed record MenuPage(string Title, IReadOnlyList<string> Rows, string H
     public Func<int, int, int, IReadOnlyList<IRenderable>>? Side { get; init; }
 
     /// <summary>
+    /// The rows of <see cref="Rows"/> that are section headings (2026-10-03, the user's call: <c>/tools</c>' Offered
+    /// tab and <c>/mcp</c>'s Tools tab): each one's markup is a <see cref="SectionRule.Markup(string, string?, string?)"/>,
+    /// drawn as a <see cref="SectionRule"/> to the list's edge with no pointer, and never a cursor stop — nor is an empty
+    /// row (<c>""</c>, the gap before a heading) on such a page (<see cref="IsStop"/>). Null for none: every row a stop,
+    /// an empty one too, as every page was before.
+    /// </summary>
+    public IReadOnlySet<int>? Headings { get; init; }
+
+    /// <summary>
     /// A page over <paramref name="tabs"/> showing <paramref name="tab"/>: the strip labelled
     /// <paramref name="title"/>, that tab's rows, its caption, and its hint when it has one else
     /// <paramref name="hint"/> (kept as <see cref="BaseHint"/> for the tabs without).
@@ -115,7 +127,75 @@ public sealed record MenuPage(string Title, IReadOnlyList<string> Rows, string H
         }
 
         tab = Math.Clamp(tab, 0, tabs.Count - 1);
-        return new MenuPage(title, tabs[tab].Rows, tabs[tab].Hint ?? hint) { Tabs = tabs, Tab = tab, Caption = tabs[tab].Caption, BaseHint = hint };
+        return new MenuPage(title, tabs[tab].Rows, tabs[tab].Hint ?? hint) { Tabs = tabs, Tab = tab, Caption = tabs[tab].Caption, BaseHint = hint, Headings = tabs[tab].Headings };
+    }
+
+    /// <summary>Whether the cursor may rest on <paramref name="row"/>: any row of a page without <see cref="Headings"/>; on one with them, a row neither a heading nor empty. Pure.</summary>
+    public bool IsStop(int row) =>
+        Headings is not { } headings || (row >= 0 && row < Rows.Count && !headings.Contains(row) && Rows[row].Length > 0);
+
+    /// <summary>
+    /// The first stop (<see cref="IsStop"/>) from <paramref name="row"/> on in <paramref name="step"/>'s direction (+1 down,
+    /// −1 up), <paramref name="row"/> itself included, wrapping past the ends when <paramref name="wrap"/>, else the first
+    /// stop the other way; <paramref name="row"/> clamped when the page has none. Pure.
+    /// </summary>
+    public int StopFrom(int row, int step, bool wrap = false)
+    {
+        int count = Rows.Count;
+        if (count == 0)
+        {
+            return 0;
+        }
+
+        step = step < 0 ? -1 : 1;
+        row = wrap ? ((row % count) + count) % count : Math.Clamp(row, 0, count - 1);
+        for (int i = 0, r = row; i < count; i++)
+        {
+            if (IsStop(r))
+            {
+                return r;
+            }
+
+            r += step;
+            if (r < 0 || r >= count)
+            {
+                if (!wrap)
+                {
+                    break;
+                }
+
+                r = (r + count) % count;
+            }
+        }
+
+        if (!wrap)
+        {
+            for (int r = row - step; r >= 0 && r < count; r -= step)
+            {
+                if (IsStop(r))
+                {
+                    return r;
+                }
+            }
+        }
+
+        return row;
+    }
+
+    /// <summary>
+    /// The row a view showing <paramref name="cursor"/> should start at or above: the first of the rows directly over it
+    /// that are no stop — the gap and the heading of its section — so reaching the top of a section shows its heading
+    /// (2026-10-03). <paramref name="cursor"/> itself on a page without <see cref="Headings"/>. Pure.
+    /// </summary>
+    public int LeadRow(int cursor)
+    {
+        int top = cursor;
+        while (Headings is not null && top > 0 && top - 1 < Rows.Count && !IsStop(top - 1))
+        {
+            top--;
+        }
+
+        return top;
     }
 }
 
@@ -151,7 +231,10 @@ public readonly record struct MenuPick(int Tab, int Row, bool Toggle = false, in
 /// <see cref="MenuPick.Toggle"/> set (a checkbox list); a switch to a tab lands on its
 /// <see cref="MenuPage.TabCursors"/> row when the page has them, and a tab's own caption and hint
 /// (<see cref="MenuTab.Caption"/>, <see cref="MenuTab.Hint"/>) follow it;
-/// every other key is swallowed.
+/// every other key is swallowed. On a page with <see cref="MenuPage.Headings"/> (2026-10-03) every move lands on a
+/// stop (<see cref="MenuPage.StopFrom"/>): the arrows step past a heading and its gap, Home / End and the page keys
+/// and the wheel take the nearest stop the way they went, a click on a heading or a gap is a miss, and reaching the
+/// top of a section brings its heading into view.
 /// A left click on a row moves the cursor there, exactly as the arrows would, and a second on the
 /// same row within <see cref="DoubleClick.Interval"/> picks it exactly as Enter would (2026-09-18);
 /// one on a tab's title switches to that tab exactly as the tab keys would, a double-click there
@@ -393,7 +476,8 @@ public sealed class MenuPane : INoticeSink
         _page = page;
         _open = true;
         int count = page.Rows.Count;
-        _cursor = count == 0 ? 0 : Math.Clamp(cursor, 0, count - 1);
+        // On a heading or a gap (2026-10-03): the next stop down, else up.
+        _cursor = count == 0 ? 0 : page.StopFrom(cursor, +1);
         _inputRows = 0;
         _clicks.Reset();
         _mouse?.Invoke(true);
@@ -465,8 +549,9 @@ public sealed class MenuPane : INoticeSink
                         // The side column (2026-10-02): it shows, it picks nothing.
                         _clicks.Reset();
                     }
-                    else if (at - Header is int i && i >= 0 && i < _shown)
+                    else if (at - Header is int i && i >= 0 && i < _shown && page.IsStop(_first + i))
                     {
+                        // A heading or a gap (2026-10-03) is no row to land on: the else below, as a miss.
                         int hitRow = _first + i;
                         MoveTo(hitRow);
                         if (count > 0 && _clicks.Second(hitRow))
@@ -508,7 +593,7 @@ public sealed class MenuPane : INoticeSink
                     // notch, away from the user is up — that never wraps: the list's end is where the wheel stops.
                     if (count > 0)
                     {
-                        MoveTo(Math.Clamp(_cursor - wheel.Notches, 0, count - 1));
+                        MoveTo(page.StopFrom(Math.Clamp(_cursor - wheel.Notches, 0, count - 1), -Math.Sign(wheel.Notches)));
                     }
 
                     continue;
@@ -565,12 +650,13 @@ public sealed class MenuPane : INoticeSink
 
                 switch (k.Key)
                 {
-                    case ConsoleKey.DownArrow: next = count == 0 ? 0 : (_cursor + 1) % count; break;
-                    case ConsoleKey.UpArrow: next = count == 0 ? 0 : (_cursor + count - 1) % count; break;
-                    case ConsoleKey.Home: next = 0; break;
-                    case ConsoleKey.End: next = Math.Max(0, count - 1); break;
-                    case ConsoleKey.PageDown: next = Math.Min(Math.Max(0, count - 1), _cursor + Math.Max(1, _shown)); break;
-                    case ConsoleKey.PageUp: next = Math.Max(0, _cursor - Math.Max(1, _shown)); break;
+                    // Each move lands on a stop (2026-10-03): past a heading and its gap, the way it was going.
+                    case ConsoleKey.DownArrow: next = count == 0 ? 0 : page.StopFrom(_cursor + 1, +1, wrap: true); break;
+                    case ConsoleKey.UpArrow: next = count == 0 ? 0 : page.StopFrom(_cursor - 1, -1, wrap: true); break;
+                    case ConsoleKey.Home: next = page.StopFrom(0, +1); break;
+                    case ConsoleKey.End: next = page.StopFrom(count - 1, -1); break;
+                    case ConsoleKey.PageDown: next = page.StopFrom(Math.Min(Math.Max(0, count - 1), _cursor + Math.Max(1, _shown)), +1); break;
+                    case ConsoleKey.PageUp: next = page.StopFrom(Math.Max(0, _cursor - Math.Max(1, _shown)), -1); break;
                     case ConsoleKey.Backspace when page.BackspaceRow is { } none && none >= 0 && none < count: next = none; break;
                 }
 
@@ -634,9 +720,9 @@ public sealed class MenuPane : INoticeSink
     private int SwitchTab(MenuPage page, IReadOnlyList<MenuTab> tabs, int tab)
     {
         // A `with`, never Tabbed() again: the hotkeys, the toggle and the cursors would go with a rebuild.
-        _page = page with { Rows = tabs[tab].Rows, Tab = tab, Caption = tabs[tab].Caption, Hint = tabs[tab].Hint ?? page.BaseHint ?? page.Hint };
+        _page = page with { Rows = tabs[tab].Rows, Tab = tab, Caption = tabs[tab].Caption, Hint = tabs[tab].Hint ?? page.BaseHint ?? page.Hint, Headings = tabs[tab].Headings };
         int count = _page.Rows.Count;
-        _cursor = page.TabCursors is { } cursors && tab < cursors.Count && count > 0 ? Math.Clamp(cursors[tab], 0, count - 1) : 0;
+        _cursor = _page.StopFrom(page.TabCursors is { } cursors && tab < cursors.Count && count > 0 ? cursors[tab] : 0, +1);
         _first = 0;
         _status.Clear();
         Show();
@@ -781,6 +867,12 @@ public sealed class MenuPane : INoticeSink
         _stripRows = top.Count;
         int header = Header;
         int capacity = _pane.MenuContentRows(Height, _inputRows) - header;
+        if (page.LeadRow(_cursor) is int lead && lead < _first && _cursor - lead < capacity - 1)
+        {
+            // The cursor at the top of a section (2026-10-03): its heading and gap come into view with it.
+            _first = lead;
+        }
+
         (_first, _shown) = Viewport(page.Rows.Count, _cursor, capacity, _first);
         bool more = _shown < page.Rows.Count;
         int pad = Math.Min(TabBodyRows(page, Width), _captionRows + Math.Max(0, capacity)) - (_captionRows + _shown + (more ? 1 : 0));
@@ -819,8 +911,11 @@ public sealed class MenuPane : INoticeSink
         for (int i = 0; i < _shown; i++)
         {
             int r = _first + i;
-            // One line per row whatever its length (FittedMarkup, 2026-09-18): the viewport's count holds.
-            lines.Add(new FittedMarkup(RowMarkup(page.Rows[r], r == _cursor)));
+            // One line per row whatever its length (FittedMarkup, 2026-09-18): the viewport's count holds. A heading
+            // (2026-10-03) is a rule to the list's edge with no pointer: the cursor never rests there.
+            lines.Add(page.Headings is { } headings && headings.Contains(r)
+                ? new SectionRule(page.Rows[r])
+                : new FittedMarkup(RowMarkup(page.Rows[r], r == _cursor)));
         }
 
         if (more)

@@ -3864,7 +3864,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains("Operating rules — default (file tools is off)", output);
+        Assert.Contains("── Operating rules ── default (file tools is off) ─", output);
         Assert.DoesNotContain("Opening working-directory call", output);   // the opening calls left the Prompt tab (2026-09-26)
         Assert.DoesNotMatch(GroupHeading("Files"), output);   // a group not offered is left out of /sys' Tools tab (2026-09-26)
         Assert.Matches(ToolsHeading("Web (3)", null, "web_search"), output);
@@ -3889,7 +3889,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Matches(ToolsHeading("GitLib (11)", null, "gitlib_status"), output);   // between Files and Web (2026-09-20; the fixture opts every tool on; the tab's word since 2026-09-21)
         Assert.Matches(ToolsHeading("Web (4)", null, "web_search"), output);
         Assert.Matches(ToolsHeading("Sessions (1)", null, "session_manager"), output);   // 2026-09-18, ahead of the questions
-        Assert.Contains("Operating rules — default\n", output);
+        Assert.Contains("── Operating rules ── default ─", output);
     }
 
     [Fact]
@@ -4052,7 +4052,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.DoesNotContain(Assistant.FileRuleWithoutDelete, prompt, StringComparison.Ordinal);
         Assert.Contains(_chat.Requests[0], m => m.Contents.OfType<FunctionCallContent>().Any(c => c.CallId == Assistant.OpeningCwdCallId));   // the group stands: the cwd call rides
         Assert.Matches(ToolsHeading("Files (12)", null, "get_working_directory"), output);   // the tab counts what is sent (2026-09-26); 13 until restore went, 2026-10-01
-        Assert.Contains("Operating rules — default\n", output);
+        Assert.Contains("── Operating rules ── default ─", output);
     }
 
     [Fact]
@@ -4172,8 +4172,8 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         Assert.DoesNotContain("Opening working-directory call", output);   // the opening calls left the Prompt tab (2026-09-26)
-        Assert.Contains("Memory — on, 0 facts remembered (in the prompt: recall_memory is off in /tools)", output);
-        Assert.Contains("Operating rules — default\n", output);   // the group stands
+        Assert.Contains("── Memory ── on, 0 facts remembered (in the prompt: recall_memory is off in /tools) ─", output);
+        Assert.Contains("── Operating rules ── default ─", output);   // the group stands
         // The Tools tab leaves a disabled tool out (2026-09-26): the group counts what is left, the first row is the next tool, no note anywhere.
         Assert.Matches(ToolsHeading("Files (12)", null, "search_files"), output);
         Assert.Equal(0, CountOf(output, "not offered: switched off in /tools"));
@@ -4434,8 +4434,8 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Camera    Claude    Print    Obsidian    ComfyUI    SQL    Oracle    MySQL    UNC    Docker    GitLib    HA    Options ", output);
         Assert.Contains("\n▸ ComfyUI tools                  on\n  ComfyUI URL                    (not set)\n  ComfyUI workflows offered      none of 0\n  ComfyUI add workflow           Enter to start workflow wizard\n  ComfyUI ^-mention enabled      on\n  ComfyUI timeout (s)            300\n  ComfyUI max pictures per call  5 pictures\n  ComfyUI reinforce negatives    on\n  ComfyUI show prompts           on\n  ComfyUI picture strip          on\n  ComfyUI output folder          comfy_images\n", output);   // 2026-09-24; the offered checklist and the wizard later that day, the ^-mention switch later still
         Assert.Contains("\n▸ Claude executable                   (looked up)\n  Claude slash command permissions    read-only\n  Claude slash command model          (Claude Code's default)\n  Claude slash command effort         (Claude Code's default)\n  Claude advisor tool                 off\n  Claude advisor tool context         brief\n  Claude advisor tool calls per turn  2 calls\n  Claude advisor tool model           (as Claude slash command model)\n  Claude advisor tool effort          (as Claude slash command effort)\n  Claude advisor tool confirm         off\n", output);   // 2026-09-27: /claude's rows off /settings, then the advisor's
-        Assert.Contains("\n  Clock (3)\n▸ get_current_time      on   ", output);
-        Assert.Contains("\n  · get_current_time: off\n  Clock (2 of 3)\n▸ get_current_time      off  ", output);
+        Assert.Contains("\n" + HeadingRow("── Clock · 3") + "\n▸ get_current_time      on   ", output);
+        Assert.Contains("\n  · get_current_time: off\n" + HeadingRow("── Clock · 2 of 3") + "\n▸ get_current_time      off  ", output);
         Assert.Equal(["get_current_time"], _settings.Current.ToolsDisabled);
         Assert.Contains("\n" + ToolsText.OfferedKeys, output);
         Assert.Contains("\n▸ $-mention enabled    on\n  Tool collapse count  off\n  Code collapse count  off\n", output);   // the fixture's 0s (2026-09-22)
@@ -5996,8 +5996,8 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains("\nOperating rules — default (LLM offer tools is off)\n" + Assistant.MarkdownRule + "\n \n", output);
-        Assert.Contains("\nMemory — on, 0 facts remembered\n" + MemoryPrompt.DirectiveWithoutTool + "\n", output);
+        Assert.Contains("\n" + HeadingRow("── Operating rules ── default (LLM offer tools is off)") + "\n" + Indent(Assistant.MarkdownRule) + "\n \n", output);
+        Assert.Contains("\n" + HeadingRow("── Memory ── on, 0 facts remembered") + "\n" + Indent(MemoryPrompt.DirectiveWithoutTool) + "\n", output);
         Assert.DoesNotContain("Reply format", output);   // 2026-09-26: the rules say it
         Assert.DoesNotContain("Opening clock call", output);
         // No tool offered (2026-09-26): no group at all, the tab's one line says why.
@@ -9355,17 +9355,17 @@ public partial class ChatScreenTests : IDisposable
 
         string rule = new(ScreenPane.RuleGlyph, 240);
         // The Prompt tab: the default persona, the rules, memory on with nothing stored — and nothing after the skills (2026-09-26): no voice heading on a silent turn, no Also sent part.
-        Assert.Contains(rule + "\n" + Titled(SystemPromptSummary.Label + "   Prompt    Tools ") + "\n \nPersona — default\n" + Assistant.DefaultPersona.Split('\n')[0] + "\n", output);
-        Assert.Contains("\n" + Assistant.DefaultPersona.Split('\n')[^1] + "\n \nOperating rules — default\n", output);   // the persona is lines since 2026-10-03
-        Assert.Contains("\nMemory — on, directive (the list rides the opening recall_memory call)\n" + MemoryPrompt.Directive[..120], output);
-        Assert.Contains("\nSkills — on, none installed\n", output);
+        Assert.Contains(rule + "\n" + Titled(SystemPromptSummary.Label + "   Prompt    Tools ") + "\n \n" + HeadingRow("── Persona ── default") + "\n" + Indent(Assistant.DefaultPersona.Split('\n')[0]) + "\n", output);
+        Assert.Contains("\n" + Indent(Assistant.DefaultPersona.Split('\n')[^1]) + "\n \n" + HeadingRow("── Operating rules ── default") + "\n", output);   // the persona is lines since 2026-10-03; the headings rules, the text two cells in, since later that day
+        Assert.Contains("\n" + HeadingRow("── Memory ── on, directive (the list rides the opening recall_memory call)") + "\n" + Indent(MemoryPrompt.Directive[..120]), output);
+        Assert.Contains("\n" + HeadingRow("── Skills ── on, none installed") + "\n", output);
         Assert.DoesNotContain("Voice directive", output);
         Assert.DoesNotContain("Also sent", output);
         Assert.DoesNotContain("Opening clock call", output);
         Assert.DoesNotContain("Request — ", output);
         Assert.Contains(rule + "\n" + Row(InfoPane.HintText) + "\n", output);
         // → the Tools tab: every group, the memory group offered.
-        Assert.Contains(rule + "\n" + Titled(SystemPromptSummary.Label + "   Prompt    Tools ") + "\n \nClock (3)", output);
+        Assert.Contains(rule + "\n" + Titled(SystemPromptSummary.Label + "   Prompt    Tools ") + "\n \n" + HeadingRow("── Clock · 3"), output);
         Assert.Matches(ToolsHeading("Clock (3)", null, "get_current_time"), output);
         Assert.Matches(ToolsHeading("Timers (3)", null, "start_timer"), output);
         Assert.Matches(ToolsHeading("Files (14)", null, "get_working_directory"), output);
@@ -9429,12 +9429,12 @@ public partial class ChatScreenTests : IDisposable
 
         string rule = new(ScreenPane.RuleGlyph, 240);
         // 12 rows: 8 overlay rows, 6 of content, one of them the more row: the first page is five lines.
-        Assert.Contains(rule + "\n" + Titled(SystemPromptSummary.Label + "   Prompt    Tools ") + "\n \nPersona — persona.md (24 chars)\nYou are Rex, a [pirate].\n \nOperating rules — default\n", output);
+        Assert.Contains(rule + "\n" + Titled(SystemPromptSummary.Label + "   Prompt    Tools ") + "\n \n" + HeadingRow("── Persona ── persona.md (24 chars)") + "\n  You are Rex, a [pirate].\n \n" + HeadingRow("── Operating rules ── default") + "\n", output);
         Assert.Contains("\n" + MenuPane.MoreHint + "\n" + rule + "\n" + Row(InfoPane.HintText, strip: ChatScreen.TtsGlyph) + "\n", output);   // speech on here: the strip stays under the pane's hint
-        Assert.DoesNotContain("Memory — on", output[..output.IndexOf(MenuPane.MoreHint, StringComparison.Ordinal)]);
+        Assert.DoesNotContain("── Memory ── on", output[..output.IndexOf(MenuPane.MoreHint, StringComparison.Ordinal)]);
         // Paged to the end: the memory on the way, the voice directive last (speech on); the list rides the opening call, never the Prompt tab (2026-09-26).
-        Assert.Contains("Memory — on, directive (the list rides the opening recall_memory call)", output);
-        Assert.Contains("Voice directive — vocalia.md (20 chars), included (speech output on, TTS ready), always last", output);
+        Assert.Contains("── Memory ── on, directive (the list rides the opening recall_memory call) ─", output);
+        Assert.Contains("── Voice directive ── vocalia.md (20 chars), included (speech output on, TTS ready), always last ─", output);
         Assert.DoesNotContain("Their name is Chris.", output);
         Assert.DoesNotContain("Request — ", output);
     }
@@ -9452,7 +9452,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains("\nMemory — off, not included\n \nSkills — on, none installed\n", output);
+        Assert.Contains("\n" + HeadingRow("── Memory ── off, not included") + "\n \n" + HeadingRow("── Skills ── on, none installed") + "\n", output);
         Assert.DoesNotContain("Opening memory call", output);   // 2026-09-26
         Assert.DoesNotContain(MemoryPrompt.Directive, output);
         Assert.DoesNotContain(RecallMemoryTool.ToolName + " →", output);
@@ -10400,16 +10400,26 @@ public partial class ChatScreenTests : IDisposable
         label.PadRight(SlashCommands.LabelWidth + SlashCommands.HelpColumnGap) + summary;
 
     /// <summary>
-    /// A group heading of the Tools tab as the pane lays it out (2026-09-16): the name, then — padded to the
-    /// grid's measured column — its note when it has one, the pane's padding to the row's end, and its first
-    /// tool opening the next row. Matched as a pattern: the column is measured from the tool names, never a literal.
+    /// A group heading of the Tools tab as the pane lays it out (a rule since 2026-10-03): <c>── Web · 3</c> for the
+    /// <paramref name="name"/> <c>Web (3)</c>, its note after another run of the rule when it has one, the rule to the
+    /// row's end, and its first tool opening the next row two cells in. Matched as a pattern: the rule's length is the
+    /// pane's width, never a literal.
     /// </summary>
-    private static Regex ToolsHeading(string name, string? note, string firstTool) =>
-        new("\n" + Regex.Escape(name) + (note is null ? "" : " {2,}" + Regex.Escape(note)) + " *\n" + Regex.Escape(firstTool) + " {2,}");
+    private static Regex ToolsHeading(string name, string? note, string firstTool)
+    {
+        var parts = Regex.Match(name, @"^(.*) \((.+)\)$");
+        return new("\n" + Regex.Escape("── " + parts.Groups[1].Value + " · " + parts.Groups[2].Value) + (note is null ? "" : Regex.Escape(" ── " + note)) + " ─*\n  " + Regex.Escape(firstTool) + " {2,}");
+    }
 
-    /// <summary>Any Tools-tab heading of the group <paramref name="label"/>, whatever its count (2026-09-26): a group not offered is left out, so this must not match.</summary>
+    /// <summary>Any Tools-tab heading of the group <paramref name="label"/>, whatever its count (2026-09-26; a rule since 2026-10-03): a group not offered is left out, so this must not match.</summary>
     private static Regex GroupHeading(string label) =>
-        new("\n" + Regex.Escape(label) + @" \(\d+( of \d+)?\)");
+        new("\n── " + Regex.Escape(label) + @" · \d+( of \d+)?");
+
+    /// <summary>A heading rule as the pane prints it (2026-10-03): <paramref name="text"/> (<c>── Memory ── off, not included</c>), a space, the rule to the fixture's 240 columns.</summary>
+    private static string HeadingRow(string text, int width = 240) => text + " " + new string(ScreenPane.RuleGlyph, width - TextCells.Width(text) - 1);
+
+    /// <summary>Text under a Prompt-tab heading as the pane prints it (2026-10-03): every line two cells in.</summary>
+    private static string Indent(string text) => "  " + text.Replace("\n", "\n  ", StringComparison.Ordinal);
 
     [Theory]
     [InlineData(null, null, "")]

@@ -124,29 +124,30 @@ public static class McpRows
     }
 
     /// <summary>
-    /// The Tools tab: a heading per connected server (<c>docker (14)</c>, <c>docker (12 of 14)</c>) in the
+    /// The Tools tab: a heading per connected server (<c>── docker · 14 ───…</c>, <c>── docker · 12 of 14 ───…</c>, a
+    /// <see cref="SectionRule"/> with an empty row before every one but the first since 2026-10-03, the <c>/tools</c> look) in the
     /// section colour whatever the switches say (the <c>/tools</c> rule, later on 2026-09-20), then a row per tool in the <c>/tools</c> Offered shape — the prefixed name, <c>on</c> /
     /// <c>off</c>, the description dim — the whole row dim while the turn would not offer it;
     /// <see cref="McpText.NoToolsLine"/> with no server connected. The tool's prefixed name beside every tool row.
     /// </summary>
-    public static IReadOnlyList<(string Markup, string? Tool)> ToolRows(McpFacts facts)
+    public static IReadOnlyList<(string Markup, string? Tool, bool Heading)> ToolRows(McpFacts facts)
     {
         ArgumentNullException.ThrowIfNull(facts);
-        var rows = new List<(string, string?)>(32);
+        var rows = new List<(string, string?, bool)>(32);
         var connected = facts.Servers.Where(s => s.State == McpState.Connected).ToList();
         if (!facts.ToolsEnabled)
         {
-            rows.Add((Theme.DimMarkup(ToolsText.OffLine), null));
+            rows.Add((Theme.DimMarkup(ToolsText.OffLine), null, false));
         }
 
         if (!facts.Enabled)
         {
-            rows.Add((Theme.DimMarkup(McpText.OffLine), null));
+            rows.Add((Theme.DimMarkup(McpText.OffLine), null, false));
         }
 
         if (connected.Count == 0)
         {
-            rows.Add((Theme.DimMarkup(McpText.NoToolsLine), null));
+            rows.Add((Theme.DimMarkup(McpText.NoToolsLine), null, false));
             return rows;
         }
 
@@ -154,15 +155,20 @@ public static class McpRows
         int width = NameWidth(connected.SelectMany(s => s.Tools).Select(t => t.Name));
         foreach (var server in connected)
         {
+            if (!ReferenceEquals(server, connected[0]))
+            {
+                rows.Add(("", null, false));
+            }
+
             int left = server.Tools.Count(t => !facts.Disabled.Contains(t.Name));
-            rows.Add((Styled(Theme.SectionHeading, SystemPromptSummary.GroupName(server.Name, left, server.Tools.Count)), null));
+            rows.Add((SectionRule.Markup(server.Name, SystemPromptSummary.GroupCount(left, server.Tools.Count)), null, true));
             foreach (var tool in server.Tools)
             {
                 bool on = !facts.Disabled.Contains(tool.Name);
                 string row = offered && on
                     ? Styled(Theme.AccentSecondary, tool.Name.PadRight(width)) + Theme.ColorMarkup(Theme.Ink, ToolsText.State(on).PadRight(StateWidth)) + Theme.DimMarkup(tool.Description)
                     : Theme.DimMarkup(tool.Name.PadRight(width) + ToolsText.State(on).PadRight(StateWidth) + tool.Description);
-                rows.Add((row, tool.Name));
+                rows.Add((row, tool.Name, false));
             }
         }
 

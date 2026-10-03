@@ -58,15 +58,15 @@ internal sealed class ToolsMenu
     /// The tabbed page: the Offered rows under <see cref="ToolsText.OfferedKeys"/>, then the four
     /// settings tabs (<see cref="SettingsMenu.TabKeys"/>), Space a flip (<see cref="MenuPage.SpaceToggles"/> —
     /// page-wide, so the host ignores it on the settings tabs), the Offered cursor opening on the first
-    /// tool row past its heading.
+    /// tool row past its heading; the headings are rules the cursor never rests on (<see cref="MenuTab.Headings"/>, 2026-10-03).
     /// </summary>
-    public static MenuPage Page(IReadOnlyList<(string Markup, string? Tool)> offered, AppSettingsData saved, SettingsMenu menu, int tab)
+    public static MenuPage Page(IReadOnlyList<(string Markup, string? Tool, bool Heading)> offered, AppSettingsData saved, SettingsMenu menu, int tab)
     {
         ArgumentNullException.ThrowIfNull(offered);
         ArgumentNullException.ThrowIfNull(saved);
         ArgumentNullException.ThrowIfNull(menu);
         var tabs = new MenuTab[ToolsText.TabTitles.Count];
-        tabs[0] = new MenuTab(ToolsText.OfferedTabTitle, offered.Select(r => r.Markup).ToList()) { Hint = ToolsText.OfferedKeys };
+        tabs[0] = new MenuTab(ToolsText.OfferedTabTitle, offered.Select(r => r.Markup).ToList()) { Hint = ToolsText.OfferedKeys, Headings = ToolsText.HeadingRows(offered) };
         for (int t = 1; t < tabs.Length; t++)
         {
             tabs[t] = menu.FieldsTab(ToolsText.TabTitles[t], SettingsMenu.ToolsTabFields[t - 1], saved);
@@ -139,7 +139,7 @@ internal sealed class ToolsMenu
                 {
                     if (cursor >= offered.Count || offered[cursor].Tool is not { } tool)
                     {
-                        continue;   // a heading, the off line
+                        continue;   // the off line (a heading or a gap is no stop since 2026-10-03)
                     }
 
                     bool on = facts.Disabled.Contains(tool);   // off now → on

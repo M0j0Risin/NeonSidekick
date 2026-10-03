@@ -153,12 +153,15 @@ public class McpRowsTests : IAsyncDisposable
         await using var session = await ConnectedAsync(Two);
         var rows = McpRows.ToolRows(Facts(session, disabled: ["docker__fail", "read_file"]));
 
-        Assert.Equal("docker (1 of 2)", Plain(rows[0].Markup));
+        Assert.Equal("── docker · 1 of 2", Plain(rows[0].Markup));   // a rule heading (2026-10-03), the /tools look
         Assert.Null(rows[0].Tool);
+        Assert.True(rows[0].Heading);
         Assert.Equal("docker__echo      on   Echoes the text back.", Plain(rows[1].Markup));
         Assert.Equal("docker__fail      off  Always fails.", Plain(rows[2].Markup));
-        Assert.Equal("chrome (1)", Plain(rows[3].Markup));
-        Assert.Equal("chrome__navigate  on   Opens a page.", Plain(rows[4].Markup));
+        Assert.Equal(("", (string?)null, false), rows[3]);   // the gap before the second server
+        Assert.Equal("── chrome · 1", Plain(rows[4].Markup));
+        Assert.Equal("chrome__navigate  on   Opens a page.", Plain(rows[5].Markup));
+        Assert.Equal([0, 4], ToolsText.HeadingRows(rows).Order());
         Assert.Equal(["docker__echo", "docker__fail", "chrome__navigate"], rows.Where(r => r.Tool is not null).Select(r => r.Tool));
         Assert.Equal(1, ToolsText.FirstToolRow(rows));
         Assert.Contains(Theme.SectionHeading.ToMarkup(), rows[0].Markup);
@@ -175,7 +178,7 @@ public class McpRowsTests : IAsyncDisposable
         await using var live = await ConnectedAsync(Two);
         var rows = McpRows.ToolRows(Facts(live, enabled: false));
         Assert.Equal(McpText.OffLine, Plain(rows[0].Markup));
-        Assert.Equal("docker (2)", Plain(rows[1].Markup));
+        Assert.Equal("── docker · 2", Plain(rows[1].Markup));
         Assert.Contains(Theme.SectionHeading.ToMarkup(), rows[1].Markup);   // the heading keeps its colour with the switch off (the /tools rule, later on 2026-09-20)
         Assert.DoesNotContain(Theme.AccentSecondary.ToMarkup(), rows[2].Markup);
     }

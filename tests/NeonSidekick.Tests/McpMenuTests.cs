@@ -80,6 +80,9 @@ public class McpMenuTests : IAsyncDisposable
 
     private static string Rule(int width) => new(ScreenPane.RuleGlyph, width);
 
+    /// <summary>A heading row as the pane prints it at the fixture's 100 columns (2026-10-03): <paramref name="text"/>, a space, the rule to the edge.</summary>
+    private static string Heading(string text) => text + " " + Rule(100 - TextCells.Width(text) - 1);
+
     /// <summary>A tab's rows, then the blank rows that hold every tab at its pane's tallest tab's height (2026-10-01), then the rule under the list.</summary>
     private void AssertTabEnds(string rows, int width) =>
         Assert.Matches(new System.Text.RegularExpressions.Regex(System.Text.RegularExpressions.Regex.Escape(rows) + "(?: \n)*" + System.Text.RegularExpressions.Regex.Escape(Rule(width))), _console.Output);
@@ -98,7 +101,7 @@ public class McpMenuTests : IAsyncDisposable
 
         Assert.Equal(SettingsChanges.None, await menu.ShowAsync(CancellationToken.None));
 
-        Assert.Contains("\n" + Titled(Strip) + "\n \n▸ docker      on   connected · 2 tools  stdio: docker mcp gateway run\n  chrome      on   connected · 1 tool  http: http://localhost:9/mcp\n  edit profile mcp.json\n  edit global mcp.json\n  reload\n" + Rule(100), _console.Output);
+        Assert.Contains("\n" + Titled(Strip) + "\n \n▸ docker      on   connected · 2 tools  stdio: docker mcp gateway run\n  chrome      on   connected · 1 tool  http: http://localhost:9/mcp\n  edit profile mcp.json\n  edit global mcp.json\n  reload\n \n" + Rule(100), _console.Output);   // a blank row to the Tools tab's height (its gap row, 2026-10-03)
         Assert.Contains(McpText.ServersKeys, _console.Output);
         Assert.Equal(SettingsMenu.Title, settings.Root);
         Assert.False(pane.OverlayOpen);
@@ -257,8 +260,9 @@ public class McpMenuTests : IAsyncDisposable
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Equal(["docker__fail"], _settings.Current.ToolsDisabled);
-        Assert.Contains("\n" + Titled(Strip) + "\n  · 🔌 docker__fail: off\n  docker (1 of 2)\n  docker__echo      on   Echoes the text back.\n▸ docker__fail      off  Always fails.\n  chrome (1)\n  chrome__navigate  on   Opens a page.\n" + Rule(100), _console.Output);
-        Assert.Contains("  · 🔌 docker__fail: on\n  docker (2)\n", _console.Output);
+        // The servers' headings are rules with a gap between them (2026-10-03), the /tools look.
+        Assert.Contains("\n" + Titled(Strip) + "\n  · 🔌 docker__fail: off\n" + Heading("── docker · 1 of 2") + "\n  docker__echo      on   Echoes the text back.\n▸ docker__fail      off  Always fails.\n  \n" + Heading("── chrome · 1") + "\n  chrome__navigate  on   Opens a page.\n" + Rule(100), _console.Output);
+        Assert.Contains("  · 🔌 docker__fail: on\n" + Heading("── docker · 2") + "\n", _console.Output);
         Assert.Contains(ToolsText.OfferedKeys, _console.Output);
         pane.Dispose();
     }

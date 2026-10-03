@@ -7,6 +7,7 @@ using NeonSidekick.Tests.Fakes;
 using NeonSidekick.Settings;
 using NeonSidekick.Skills;
 using NeonSidekick.Timers;
+using NeonSidekick.UI;
 using NeonSidekick.Web;
 using Spectre.Console.Testing;
 
@@ -432,15 +433,19 @@ public class SystemPromptSummaryTests : IDisposable
         console.Profile.Width = 2000;
         console.Write(SystemPromptSummary.PromptTab(Facts(persona: "You are [Rex].")));
 
+        // Each heading a rule to the edge, its status between two runs of it, the text two cells in (2026-10-03).
         string[] lines = console.Output.Split('\n');
-        Assert.Equal("Persona — persona.md (14 chars)", lines[0]);
-        Assert.Equal("You are [Rex].", lines[1]);
+        Assert.Equal(RuleLine("── Persona ── persona.md (14 chars)", 2000), lines[0]);
+        Assert.Equal("  You are [Rex].", lines[1]);
         Assert.Equal(" ", lines[2]);
-        Assert.Equal("Operating rules — default", lines[3]);
-        Assert.Equal(Assistant.OperatingRules, lines[4]);
-        Assert.Contains(NoSkillsHeading, lines);
+        Assert.Equal(RuleLine("── Operating rules ── default", 2000), lines[3]);
+        Assert.Equal("  " + Assistant.OperatingRules, lines[4]);
+        Assert.Contains(RuleLine("── Skills ── on, none installed", 2000), lines);
         Assert.DoesNotContain(lines, l => l.StartsWith("Request", StringComparison.Ordinal) || l.StartsWith("Opening", StringComparison.Ordinal) || l.StartsWith("Also sent", StringComparison.Ordinal));
     }
+
+    /// <summary>A heading rule as a console <paramref name="width"/> cells wide prints it (2026-10-03): <paramref name="text"/>, a space, the rule to the edge.</summary>
+    private static string RuleLine(string text, int width) => text + " " + new string(ScreenPane.RuleGlyph, width - TextCells.Width(text) - 1);
 
     private (IReadOnlyList<AIFunction> Clock, IReadOnlyList<AIFunction> Timers, IReadOnlyList<AIFunction> Files, IReadOnlyList<AIFunction> Memory) Tools()
     {
@@ -692,37 +697,38 @@ public class SystemPromptSummaryTests : IDisposable
         string output = console.Output;
         foreach (var tool in clock.Concat(timers).Concat(files).Concat(memory))
         {
-            Assert.Contains("\n" + tool.Name + "  ", "\n" + output);
+            Assert.Contains("\n  " + tool.Name + "  ", "\n" + output);
             Assert.Contains(tool.Description, output);
         }
 
-        // One grid for every group (2026-09-16): the description column starts where the longest
-        // tool name puts it, under every heading alike — measured, never a literal width.
-        int column = groups.SelectMany(g => g.Tools).Max(t => t.Name.Length) + SlashCommands.HelpColumnGap;
+        // A grid per group, every name column as wide as the longest tool name of all (2026-10-03; one grid for every
+        // group since 2026-09-16): the description column starts at the same place under every heading — measured,
+        // never a literal width — two cells in under the rule.
+        int column = SystemPromptSummary.BodyIndent + groups.SelectMany(g => g.Tools).Max(t => t.Name.Length) + SlashCommands.HelpColumnGap;
         string[] rendered = output.TrimEnd('\n').Split('\n').Select(l => l.TrimEnd()).ToArray();
-        Assert.Equal("Clock (3)", rendered[0]);
-        Assert.Equal("get_current_time".PadRight(column) + clock[0].Description, rendered[1]);
+        Assert.Equal(RuleLine("── Clock · 3", 900), rendered[0]);
+        Assert.Equal(("  get_current_time").PadRight(column) + clock[0].Description, rendered[1]);
         Assert.Equal("", rendered[4]);   // a one-space row parts the groups
-        Assert.Equal("Timers (3)", rendered[5]);
-        Assert.Equal("Files (14)", rendered[10]);
-        Assert.Equal("get_working_directory".PadRight(column) + files[0].Description, rendered[11]);
-        Assert.Equal("Memory (2)", rendered[^3]);
-        Assert.Equal("save_memory".PadRight(column) + memory[0].Description, rendered[^2]);
-        Assert.Equal("recall_memory".PadRight(column) + memory[1].Description, rendered[^1]);
-        foreach (var line in rendered.Where(l => l.Length > column))
+        Assert.Equal(RuleLine("── Timers · 3", 900), rendered[5]);
+        Assert.Equal(RuleLine("── Files · 14", 900), rendered[10]);
+        Assert.Equal("  get_working_directory".PadRight(column) + files[0].Description, rendered[11]);
+        Assert.Equal(RuleLine("── Memory · 2", 900), rendered[^3]);
+        Assert.Equal("  save_memory".PadRight(column) + memory[0].Description, rendered[^2]);
+        Assert.Equal("  recall_memory".PadRight(column) + memory[1].Description, rendered[^1]);
+        foreach (var line in rendered.Where(l => l.Length > column && !l.StartsWith(SectionRule.Lead, StringComparison.Ordinal)))
         {
             Assert.Equal(' ', line[column - 1]);
             Assert.NotEqual(' ', line[column]);
         }
 
-        // A group that is not offered: its reason dim in the description column, not on the name.
+        // A group that is not offered: its reason dim on the rule after the count, never widening the name column.
         using var off = new TestConsole();
         off.Profile.Width = 400;
         off.Write(SystemPromptSummary.ToolsTab(SystemPromptSummary.ToolGroups(clock, timers, files, memory, memoryEnabled: false)));
-        Assert.Equal("Memory (2)".PadRight(column) + SystemPromptSummary.NotOffered("memory is off"), off.Output.TrimEnd('\n').Split('\n').Select(l => l.TrimEnd()).ToArray()[^3]);
+        Assert.Equal(RuleLine("── Memory · 2 ── " + SystemPromptSummary.NotOffered("memory is off"), 400), off.Output.TrimEnd('\n').Split('\n').Select(l => l.TrimEnd()).ToArray()[^3]);
 
         // The heading keeps the section colour whether the group is offered or not (later on 2026-09-20,
-        // the user's call, the /tools rule): the same escape sequence leads "Memory (2)" on and off.
+        // the user's call, the /tools rule): the same escape sequence leads "Memory" on and off.
         using var ansi = new TestConsole();
         ansi.Profile.Width = 400;
         ansi.EmitAnsiSequences();
@@ -733,8 +739,8 @@ public class SystemPromptSummaryTests : IDisposable
         ansiOn.EmitAnsiSequences();
         ansiOn.Write(SystemPromptSummary.ToolsTab(groups));
         static string Lead(string output, string heading) => output[(output.LastIndexOf('\n', output.IndexOf(heading, StringComparison.Ordinal)) + 1)..output.IndexOf(heading, StringComparison.Ordinal)];
-        Assert.Equal(Lead(ansiOn.Output, "Memory (2)"), Lead(dimmed, "Memory (2)"));
-        Assert.Equal(Lead(ansiOn.Output, "Clock (3)"), Lead(dimmed, "Memory (2)"));
+        Assert.Equal(Lead(ansiOn.Output, "Memory"), Lead(dimmed, "Memory"));
+        Assert.Equal(Lead(ansiOn.Output, "Clock"), Lead(dimmed, "Memory"));
         Assert.NotEqual(Lead(ansiOn.Output, "save_memory"), Lead(dimmed, "save_memory"));   // the rows under it still dim
     }
 }

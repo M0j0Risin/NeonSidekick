@@ -280,28 +280,34 @@ public static class ToolsText
 
     /// <summary>
     /// The Offered tab as menu rows: <see cref="OffLine"/> dim first while <c>LLM offer tools</c> is off;
-    /// then per group its name (<c>Files (15)</c>, <c>Files (13 of 15)</c>) in the section colour — whether
-    /// the group is offered or not (a heading never dims, later on 2026-09-20, the user's call) — with
-    /// <see cref="HeadingSuffix"/> dim after it, and a row per tool — the name in the label colour
+    /// then per group an empty row (a gap, the first group none — 2026-10-03, the user's call) and its heading — a
+    /// <see cref="SectionRule"/> of its label, its count (<c>15</c>, <c>13 of 15</c>) and <see cref="HeadingSuffix"/>
+    /// without its brackets (<see cref="Bare"/>), the label never dimmed whether the group is offered or not (later on
+    /// 2026-09-20, the user's call) — and a row per tool — the name in the label colour
     /// padded to <see cref="NameWidth"/>, <c>on</c> / <c>off</c> padded to <see cref="StateWidth"/>, the
     /// description dim with the tool's note after it when it has one — the whole row dim while the
     /// turn would not offer it (the group off, the list off, or a note). The tool's name beside every
-    /// tool row, null beside a heading and the off line.
+    /// tool row, null beside a heading, a gap and the off line; <c>Heading</c> true beside a heading alone
+    /// (<see cref="HeadingRows"/>, the pane's <see cref="MenuTab.Headings"/>).
     /// </summary>
-    public static IReadOnlyList<(string Markup, string? Tool)> OfferedRows(ToolsFacts facts)
+    public static IReadOnlyList<(string Markup, string? Tool, bool Heading)> OfferedRows(ToolsFacts facts)
     {
         ArgumentNullException.ThrowIfNull(facts);
-        var rows = new List<(string, string?)>(48);
+        var rows = new List<(string, string?, bool)>(64);
         if (!facts.ToolsEnabled)
         {
-            rows.Add((Theme.DimMarkup(OffLine), null));
+            rows.Add((Theme.DimMarkup(OffLine), null, false));
         }
 
-        foreach (var group in facts.Groups)
+        for (int g = 0; g < facts.Groups.Count; g++)
         {
-            string suffix = HeadingSuffix(group, facts.ToolsEnabled);
-            string heading = Styled(Theme.SectionHeading, group.Name);
-            rows.Add((suffix.Length > 0 ? heading + Theme.DimMarkup(" " + suffix) : heading, null));
+            var group = facts.Groups[g];
+            if (g > 0)
+            {
+                rows.Add(("", null, false));
+            }
+
+            rows.Add((SectionRule.Markup(group.Label, group.Count, Bare(HeadingSuffix(group, facts.ToolsEnabled))), null, true));
             foreach (var tool in group.Tools)
             {
                 bool on = IsOn(facts, tool.Name);
@@ -310,15 +316,38 @@ public static class ToolsText
                 string row = offered
                     ? Styled(Theme.AccentSecondary, tool.Name.PadRight(NameWidth)) + Theme.ColorMarkup(Theme.Ink, State(on).PadRight(StateWidth)) + Theme.DimMarkup(tool.Description)
                     : Theme.DimMarkup(tool.Name.PadRight(NameWidth) + State(on).PadRight(StateWidth) + tool.Description + note);
-                rows.Add((row, tool.Name));
+                rows.Add((row, tool.Name, false));
             }
         }
 
         return rows;
     }
 
+    /// <summary>The indices of the heading rows of <paramref name="rows"/>: the pane's <see cref="MenuTab.Headings"/>.</summary>
+    public static IReadOnlySet<int> HeadingRows(IReadOnlyList<(string Markup, string? Tool, bool Heading)> rows)
+    {
+        ArgumentNullException.ThrowIfNull(rows);
+        var headings = new HashSet<int>();
+        for (int i = 0; i < rows.Count; i++)
+        {
+            if (rows[i].Heading)
+            {
+                headings.Add(i);
+            }
+        }
+
+        return headings;
+    }
+
+    /// <summary>A heading suffix without the one pair of brackets around it, for the rule (<c>(off: File tools is off)</c> → <c>off: File tools is off</c>); anything else as it is. Pure.</summary>
+    public static string Bare(string suffix)
+    {
+        ArgumentNullException.ThrowIfNull(suffix);
+        return suffix.Length >= 2 && suffix[0] == '(' && suffix[^1] == ')' ? suffix[1..^1] : suffix;
+    }
+
     /// <summary>The first tool row of <paramref name="rows"/> (the cursor's opening place, past the first heading); 0 when there is none.</summary>
-    public static int FirstToolRow(IReadOnlyList<(string Markup, string? Tool)> rows)
+    public static int FirstToolRow(IReadOnlyList<(string Markup, string? Tool, bool Heading)> rows)
     {
         ArgumentNullException.ThrowIfNull(rows);
         for (int i = 0; i < rows.Count; i++)

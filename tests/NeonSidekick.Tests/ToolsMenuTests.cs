@@ -135,6 +135,9 @@ public partial class ToolsMenuTests : IDisposable
     /// <summary>A tool row as the pane prints it at width 120 (the markup rendered): the name padded to 22, the state to 5, then the description, cut to 119 cells and an ellipsis (FittedMarkup; every description is longer).</summary>
     private string Row(string name, bool on, string mark = "  ") => Fitted(mark + name.PadRight(22) + (on ? "on" : "off").PadRight(5) + Description(name, on));
 
+    /// <summary>A heading row as the pane prints it (2026-10-03): <paramref name="text"/> (<c>── Clock · 3</c>), a space and the rule to the fixture's width.</summary>
+    private string Heading(string text) => text + " " + Rule(_console.Profile.Width - TextCells.Width(text) - 1);
+
     private static string Fitted(string row) => row.Length <= 190 ? row : row[..189] + "…";   // the fixture's width (180 until the Docker tab, 2026-10-02; 170 until the MySQL tab, 160 until the Oracle tab, 2026-09-30; 150 until the Print tab, later on 2026-09-28)
 
     /// <summary>
@@ -201,9 +204,10 @@ public partial class ToolsMenuTests : IDisposable
         await menu.ShowAsync(CancellationToken.None);
 
         // The strip, the Clock heading, the cursor on get_current_time (the first tool row, past its heading), the hint with the flip keys; nothing reached the transcript.
-        Assert.Contains("\n" + Titled(Strip) + "\n \n  Clock (3)\n" + Row(GetCurrentTimeTool.ToolName, true, "▸ ") + "\n" + Row(ShiftDateTool.ToolName, true) + "\n" + Row(DaysBetweenTool.ToolName, true) + "\n  Timers (3)\n", _console.Output);
+        // The headings are rules with a gap before each but the first (2026-10-03).
+        Assert.Contains("\n" + Titled(Strip) + "\n \n" + Heading("── Clock · 3") + "\n" + Row(GetCurrentTimeTool.ToolName, true, "▸ ") + "\n" + Row(ShiftDateTool.ToolName, true) + "\n" + Row(DaysBetweenTool.ToolName, true) + "\n  \n" + Heading("── Timers · 3") + "\n", _console.Output);
         Assert.Contains("\n" + ToolsText.OfferedKeys + "\n", _console.Output);
-        Assert.Contains("  Files (14)\n" + Row(GetWorkingDirectoryTool.ToolName, true) + "\n", _console.Output);
+        Assert.Contains("\n" + Heading("── Files · 14") + "\n" + Row(GetWorkingDirectoryTool.ToolName, true) + "\n", _console.Output);
         Assert.Contains(MenuPane.MoreHint, _console.Output);   // 39 rows over 30: the list scrolls
         Assert.False(pane.OverlayOpen);
         Assert.Equal(0, pane.FlowRow);
@@ -225,24 +229,26 @@ public partial class ToolsMenuTests : IDisposable
 
         Assert.Equal(["shift_date"], _settings.Current.ToolsDisabled);
         // The row reads off where it stands, the cursor on it, the notice on the status line under the strip.
-        Assert.Contains("\n" + Titled(Strip) + "\n  · shift_date: off\n  Clock (2 of 3)\n" + Row(GetCurrentTimeTool.ToolName, true) + "\n" + Row(ShiftDateTool.ToolName, false, "▸ ") + "\n", _console.Output);
-        Assert.Contains("\n" + Titled(Strip) + "\n  · shift_date: on\n  Clock (3)\n" + Row(GetCurrentTimeTool.ToolName, true) + "\n" + Row(ShiftDateTool.ToolName, true, "▸ ") + "\n", _console.Output);
+        Assert.Contains("\n" + Titled(Strip) + "\n  · shift_date: off\n" + Heading("── Clock · 2 of 3") + "\n" + Row(GetCurrentTimeTool.ToolName, true) + "\n" + Row(ShiftDateTool.ToolName, false, "▸ ") + "\n", _console.Output);
+        Assert.Contains("\n" + Titled(Strip) + "\n  · shift_date: on\n" + Heading("── Clock · 3") + "\n" + Row(GetCurrentTimeTool.ToolName, true) + "\n" + Row(ShiftDateTool.ToolName, true, "▸ ") + "\n", _console.Output);
         Assert.Equal(0, pane.FlowRow);
         pane.Dispose();
     }
 
     [Fact]
-    public async Task OnThePane_EnterOnAHeading_DoesNothing()
+    public async Task OnThePane_TheCursorNeverRestsOnAHeadingOrAGap()
     {
+        // A heading is no stop (2026-10-03): Up from the first tool wraps past the Clock heading to the last tool, Down from
+        // the last clock row steps over the gap and the Timers heading, Home is the first tool again.
         var (menu, pane, _) = PaneMenu();
-        Push(Keys.Up);                            // the Clock heading
-        Push(Keys.Enter, Keys.Char(' '));
+        Push(Keys.Up, Keys.Enter);                // ask_user, the last row
+        Push(Keys.Home, Keys.Down, Keys.Down, Keys.Down, Keys.Enter);   // start_timer
         Push(Keys.Escape);
 
         await menu.ShowAsync(CancellationToken.None);
 
-        Assert.Empty(_settings.Current.ToolsDisabled);
-        Assert.DoesNotContain("  · ", _console.Output);
+        Assert.Equal([AskUserTool.ToolName, StartTimerTool.ToolName], _settings.Current.ToolsDisabled);
+        Assert.DoesNotContain("▸ ──", _console.Output);
         pane.Dispose();
     }
 
@@ -251,16 +257,16 @@ public partial class ToolsMenuTests : IDisposable
     {
         _settings.Update(d => d.FileTools = false);
         var (menu, pane, _) = PaneMenu();
-        Down(8);                                  // past the two other clock rows, the Timers heading and its three rows, the Files heading: get_working_directory
+        Down(6);                                  // past the two other clock rows and the three timers (the gaps and headings no stops, 2026-10-03): get_working_directory
         Push(Keys.Enter);
         Push(Keys.Escape);
 
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Equal([GetWorkingDirectoryTool.ToolName], _settings.Current.ToolsDisabled);
-        Assert.Contains("  Files (14) (off: File tools is off)\n", _console.Output);
+        Assert.Contains("\n" + Heading("── Files · 14 ── off: File tools is off") + "\n", _console.Output);
         Assert.Contains("  · get_working_directory: off\n", _console.Output);
-        Assert.Contains("  Files (13 of 14) (off: File tools is off)\n" + Row(GetWorkingDirectoryTool.ToolName, false, "▸ ") + "\n", _console.Output);
+        Assert.Contains("\n" + Heading("── Files · 13 of 14 ── off: File tools is off") + "\n" + Row(GetWorkingDirectoryTool.ToolName, false, "▸ ") + "\n", _console.Output);
         pane.Dispose();
     }
 
@@ -275,8 +281,8 @@ public partial class ToolsMenuTests : IDisposable
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Equal([GetCurrentTimeTool.ToolName], _settings.Current.ToolsDisabled);
-        Assert.Contains("\n" + Titled(Strip) + "\n \n" + Fitted("  " + ToolsText.OffLine) + "\n  Clock (3)\n" + Row(GetCurrentTimeTool.ToolName, true, "▸ ") + "\n", _console.Output);
-        Assert.Contains("\n" + Titled(Strip) + "\n  · get_current_time: off\n" + Fitted("  " + ToolsText.OffLine) + "\n  Clock (2 of 3)\n" + Row(GetCurrentTimeTool.ToolName, false, "▸ ") + "\n", _console.Output);
+        Assert.Contains("\n" + Titled(Strip) + "\n \n" + Fitted("  " + ToolsText.OffLine) + "\n" + Heading("── Clock · 3") + "\n" + Row(GetCurrentTimeTool.ToolName, true, "▸ ") + "\n", _console.Output);
+        Assert.Contains("\n" + Titled(Strip) + "\n  · get_current_time: off\n" + Fitted("  " + ToolsText.OffLine) + "\n" + Heading("── Clock · 2 of 3") + "\n" + Row(GetCurrentTimeTool.ToolName, false, "▸ ") + "\n", _console.Output);
         pane.Dispose();
     }
 
