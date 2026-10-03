@@ -1123,7 +1123,7 @@ public partial class SettingsMenuTests : IDisposable
         // Show toolbar (2026-09-21): the General row after it, a toggle, no reconnect (the pane reads it at each draw).
         Assert.False(SettingsMenu.IsToggle(SettingsField.ToolbarItems));   // a checklist since 2026-09-29, the user's ask
         Assert.Equal("Show toolbar", SettingsMenu.FieldName(SettingsField.ToolbarItems));
-        Assert.Equal("3 of 30", SettingsMenu.FieldValue(SettingsField.ToolbarItems, data, _settings.ProfileDirectory));   // the defaults: 5 of 13 from later on 2026-09-29, 3 since 2026-10-02; of 30 since 2026-10-03
+        Assert.Equal("7 of 30", SettingsMenu.FieldValue(SettingsField.ToolbarItems, data, _settings.ProfileDirectory));   // the defaults: 5 of 13 from later on 2026-09-29, 3 from 2026-10-02; of 30 and 7 since 2026-10-03
         Assert.Equal("off", SettingsMenu.FieldValue(SettingsField.ToolbarItems, new AppSettingsData { ToolbarItems = [] }, _settings.ProfileDirectory));
         Assert.Equal("3 of 30", SettingsMenu.FieldValue(SettingsField.ToolbarItems, new AppSettingsData { ToolbarItems = ["usage", "PATH", " tools ", "nonsense"] }, _settings.ProfileDirectory));
         Assert.Equal("all", SettingsMenu.FieldValue(SettingsField.ToolbarItems, new AppSettingsData { ToolbarItems = [.. ToolbarItems.Names] }, _settings.ProfileDirectory));
@@ -3106,7 +3106,7 @@ public partial class SettingsMenuTests : IDisposable
         string cwd = SettingsMenu.DefaultWorkingDirectoryLabel(_settings.ProfileDirectory);
         Assert.StartsWith("(", cwd);
         Assert.EndsWith(@"\profiles\default\files)", cwd);
-        Assert.Contains(Rule(240) + "\n" + Titled(Strip) + "\n \n▸ Profile                      default (" + _settings.ProfileDirectory + ")\n  New profile mode             basic\n  Working directory (cwd)      " + cwd + "\n  Memory                       on\n  Queue messages               on\n  Queue cancel mode            empty\n  Keep command history         on\n  Command typo intercept       on\n  Hide /exit autocomplete      on\n  Transcript markdown          on\n  Paste preview lines          25 lines\n  Show image thumbnails        on\n  Image thumbnail size         small\n  Copy user prompt             on\n  Theme                        synthwave\n  Themed background            on\n  Welcome splash               fullsize\n  Show header                  on\n  Working directory in header  off\n  Show toolbar                 3 of 30\n  Show performance bar         CPU, RAM, GPU, VRAM · led\n  Menus max height             full-screen\n  Draft editor                 (default .txt editor)\n  Image viewer                 (built-in viewer)\n  Themed image viewer          on\n" + Rule(240) + "\n" + SettingsMenu.TabKeys + "\n", _console.Output);
+        Assert.Contains(Rule(240) + "\n" + Titled(Strip) + "\n \n▸ Profile                      default (" + _settings.ProfileDirectory + ")\n  New profile mode             basic\n  Working directory (cwd)      " + cwd + "\n  Memory                       on\n  Queue messages               on\n  Queue cancel mode            empty\n  Keep command history         on\n  Command typo intercept       on\n  Hide /exit autocomplete      on\n  Transcript markdown          on\n  Paste preview lines          25 lines\n  Show image thumbnails        on\n  Image thumbnail size         small\n  Copy user prompt             on\n  Theme                        synthwave\n  Themed background            on\n  Welcome splash               fullsize\n  Show header                  on\n  Working directory in header  off\n  Show toolbar                 7 of 30\n  Show performance bar         CPU, RAM, GPU, VRAM · led\n  Menus max height             full-screen\n  Draft editor                 (default .txt editor)\n  Image viewer                 (built-in viewer)\n  Themed image viewer          on\n" + Rule(240) + "\n" + SettingsMenu.TabKeys + "\n", _console.Output);
         Assert.DoesNotContain("File /tree max length", _console.Output);   // the Files tab's since 2026-09-15
         Assert.DoesNotContain("LLM URL", _console.Output);
         Assert.False(pane.OverlayOpen);
@@ -4392,7 +4392,7 @@ public partial class SettingsMenuTests : IDisposable
 
     /// <summary>
     /// Show toolbar is a checklist (2026-09-29, the user's ask; a switch at row 105 until then): the defaults checked at
-    /// first (the lock, the officer and the path since 2026-10-02), Enter or Space flipping one and saving at once in strip
+    /// first (Tools, the lock, the officer, Shell, Files, Web and the path since 2026-10-03), Enter or Space flipping one and saving at once in strip
     /// order, ESC back; the row reads how many are checked.
     /// </summary>
     [Fact]
@@ -4409,7 +4409,7 @@ public partial class SettingsMenuTests : IDisposable
 
         Assert.Equal(SettingsChanges.None, await menu.ShowAsync(CancellationToken.None));
 
-        Assert.Equal(["settings", "cmdlist", "police"], _settings.Current.ToolbarItems);
+        Assert.Equal(["settings", "tools", "cmdlist", "police", "shell", "files", "web"], _settings.Current.ToolbarItems);
         Assert.Contains("[x] ⚙️  Settings", _console.Output);
         Assert.Contains("[ ] ⚙️  Settings", _console.Output);
         Assert.Contains("[x] 📂  Working directory path", _console.Output);
@@ -4417,8 +4417,8 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Contains("[ ] 🔌  MCP", _console.Output);
         Assert.Contains("[ ] 🪪  Profile", _console.Output);
         Assert.Contains("[ ] 📈  Performance", _console.Output);
-        Assert.Contains("  · Show toolbar: 4 of 30", _console.Output);
-        Assert.Contains("  · Show toolbar: 3 of 30", _console.Output);
+        Assert.Contains("  · Show toolbar: 8 of 30", _console.Output);
+        Assert.Contains("  · Show toolbar: 7 of 30", _console.Output);
         pane.Dispose();
     }
 
@@ -4626,7 +4626,7 @@ public partial class SettingsMenuTests : IDisposable
     [Fact]
     public async Task OnThePane_ShowToolbar_TheDefaultsAgain_SaveNull()
     {
-        _settings.Update(d => d.ToolbarItems = ["cmdlist", "police"]);
+        _settings.Update(d => d.ToolbarItems = ["tools", "cmdlist", "police", "shell", "files", "web"]);
         var (menu, pane) = PaneMenu();
         Down(SettingsMenu.TabFields[(int)SettingsTab.General].ToList().IndexOf(SettingsField.ToolbarItems));
         Push(Keys.Enter);
@@ -4637,7 +4637,7 @@ public partial class SettingsMenuTests : IDisposable
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Null(_settings.Current.ToolbarItems);
-        Assert.Contains("  · Show toolbar: 3 of 30", _console.Output);
+        Assert.Contains("  · Show toolbar: 7 of 30", _console.Output);
         pane.Dispose();
     }
 
