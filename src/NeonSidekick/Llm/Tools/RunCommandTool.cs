@@ -258,7 +258,7 @@ public sealed class RunCommandTool : AIFunction
 
         var request = new CommandRequest(ShellKinds.Name(kind), command, CommandPrefix.All(command));
         // The police before the gate (Shell police outside paths, 2026-09-22): a line naming a path outside the working directory is refused, and the pane is never asked about it.
-        if (effective.ShellPoliceOutsidePaths && PathPolice.Judge(command, _files, workdir, isScript: false) is { } outside)
+        if (effective.ShellPoliceOutsidePaths && PathPolice.Judge(command, _files, workdir, isScript: false, request.Kind) is { } outside)
         {
             DiagnosticLog.Info(ShellKinds.Category, ShellText.PolicedLogLine(request, outside));
             _gate.NoteRefused(request);
@@ -268,7 +268,7 @@ public sealed class RunCommandTool : AIFunction
         // Then a native tool's own line (Shell prefer native tools, 2026-09-26): sent back once a turn, before the pane is asked. A path outside the working directory
         // with the police off is the shell's alone, no native tool reaching there.
         if (effective.ShellPreferNative
-            && (effective.ShellPoliceOutsidePaths || PathPolice.Judge(command, _files, workdir, isScript: false) is null)
+            && (effective.ShellPoliceOutsidePaths || PathPolice.Judge(command, _files, workdir, isScript: false, request.Kind) is null)
             && Redirect(command) is { } native)
         {
             DiagnosticLog.Info(ShellKinds.Category, ShellText.NativeLogLine(request, native.Prefix, native.Tool));

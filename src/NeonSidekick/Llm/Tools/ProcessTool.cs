@@ -205,7 +205,7 @@ public sealed class ProcessTool : AIFunction
                 }
 
                 // The police (Shell police outside paths, 2026-09-22): what goes to a process's stdin is read like a command line, relative paths from where it started.
-                if (_effective().ShellPoliceOutsidePaths && PathPolice.Judge(data, _files, session.Launch.WorkingDirectory, isScript: false) is { } outside)
+                if (_effective().ShellPoliceOutsidePaths && PathPolice.Judge(data, _files, session.Launch.WorkingDirectory, isScript: false, session.Kind) is { } outside)
                 {
                     var refused = new CommandRequest(session.Kind, data, []);
                     DiagnosticLog.Info(ShellKinds.Category, ShellText.PolicedLogLine(refused, outside));

@@ -619,7 +619,7 @@ Every tool, grouped, with the description the model reads. Enter or Space switch
 
 | Setting | What it does | Default |
 |---|---|---|
-| File tools | Offers the sandboxed file tools (read, write, patch, search, move, copy, zip, view_image…), which reach only the working directory. | off |
+| File tools | Offers the sandboxed file tools (read, write, patch, search, move, copy, zip, view_image…), which reach only the working directory (a junction or symlink in it that leads outside is refused). | off |
 | File /tree max length | Entries `/tree` prints before it stops (1–10000). | 500 |
 | File /tree show sizes | `/tree` shows file sizes. | on |
 | File @-mention folder mode | Picking a folder from the `@` list: `folder-remain` opens it in the list; `folder-apply` writes `@folder/` and closes. | `folder-remain` |
@@ -648,7 +648,9 @@ Every tool, grouped, with the description the model reads. Enter or Space switch
 
 * **Approval (`ask`):** the pane offers Deny, Allow once, Allow the prefixes for this session, or Allow them always. A prefix is the program plus its subcommand for git, dotnet, npm, pip, gh, docker, cargo, go, winget and the like, otherwise the program alone. `--yolo` and `NEONSIDEKICK_COMMAND_POLICY` override the policy for one launch.
 * **Path police** reads the text of a `run_command` line, an `execute_code` script, or `process` input, and refuses an absolute path outside the working directory (`C:\…`, a UNC share, `/etc/hosts`), a `..` that climbs out, `~`, or a folder variable (`%USERPROFILE%`, `$env:TEMP`, `$HOME`, `Path.home()`…). The model gets `Error: outside the working directory: '…'` and the transcript shows 👮.
-  * It reads text, not what runs: a computed path isn't seen, and a cmd switch (`dir /s`) or URL isn't a path.
+  * It also refuses a path inside a switch or a URL (`-out:C:\x`, `@C:\x.rsp`, `file:///C:/x`), a bare drive (`C:`, `cd /d E:`), a bare `cd` or `Set-Location` in PowerShell or bash (it goes home there; cmd's only prints the folder), and a junction or symlink in the working directory that leads outside.
+  * A quoted path with a space that stays inside passes (`"D:\My Projects\app\a.txt"`), and a `cd` earlier in the line moves where later relative paths start (`cd src && type ..\README.md`).
+  * It reads text, not what runs: a computed path isn't seen, and a cmd switch (`dir /s`), a URL or a device (`>nul`, `/dev/null`) isn't a path.
   * `--no-police` and `NEONSIDEKICK_SHELL_POLICE` override it; `--yolo` never does.
 * **Prefer native tools:** the operating rules name the tools offered that turn and the commands each replaces:
   * `cat`/`type`/`Get-Content`/`dir`/`ls`/`grep` → `read_file`/`search_files`

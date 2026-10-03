@@ -15,9 +15,12 @@ public sealed class PathPoliceTests
     private static bool Exists(string path) =>
         string.Equals(path, @"D:\Users", StringComparison.OrdinalIgnoreCase) || string.Equals(path, @"D:\Windows", StringComparison.OrdinalIgnoreCase);
 
-    private static string? Command(string text, string baseFolder = Root) => PathPolice.FirstOutside(text, Root, baseFolder, isScript: false, Exists);
+    /// <summary>No links anywhere: the disk the rules before 2026-10-03 assumed.</summary>
+    private static string? NoLinks(string path) => null;
 
-    private static string? Script(string text) => PathPolice.FirstOutside(text, Root, Root, isScript: true, Exists);
+    private static string? Command(string text, string baseFolder = Root) => PathPolice.FirstOutside(text, Root, baseFolder, isScript: false, Exists, NoLinks);
+
+    private static string? Script(string text) => PathPolice.FirstOutside(text, Root, Root, isScript: true, Exists, NoLinks);
 
     [Theory]
     [InlineData(@"type C:\Windows\win.ini", @"C:\Windows\win.ini")]
@@ -145,8 +148,171 @@ public sealed class PathPoliceTests
     {
         Assert.Equal(["dir", @"C:\x", "y", "--out", @"C:\z", "a", "b", "."], PathPolice.Tokens(@"dir ""C:\x"" 'y' --out=C:\z (a, b)."));
         Assert.Equal(["..", "...", "x..", "..", @"..\..", @"C:\x", "y"], PathPolice.Tokens(@".. ... x.. ..; ..\.. C:\x. y.,"));   // one sentence-ending dot goes, the dots of .. never
+        Assert.Equal(["cd", "/d", "C:", "Note", "ab"], PathPolice.Tokens("cd /d C: Note: ab:"));   // a bare drive keeps its colon, a word's goes
         Assert.Empty(PathPolice.Tokens("  \n\t "));
         Assert.Equal("\"'`(),;=<>|&[]{}", PathPolice.Delimiters);
+    }
+
+    // ---- 2026-10-03: paths inside a token, bare drives, bare cd, quoted paths with a space, cd earlier in the line, links ----
+
+    [Theory]
+    [InlineData(@"csc -out:C:\x\a.exe a.cs", @"-out:C:\x\a.exe")]
+    [InlineData(@"csc /out:C:\x\a.exe a.cs", @"/out:C:\x\a.exe")]
+    [InlineData(@"cmd @C:\x\args.rsp", @"@C:\x\args.rsp")]
+    [InlineData(@"curl file:///C:/Windows/win.ini", "file:///C:/Windows/win.ini")]
+    [InlineData(@"curl file://server/share/x", "file://server/share/x")]
+    [InlineData(@"curl file:///etc/passwd", "file:///etc/passwd")]
+    [InlineData(@"Get-Content FileSystem::C:\x", @"FileSystem::C:\x")]
+    [InlineData(@"Get-Content Microsoft.PowerShell.Core\FileSystem::\\server\share\x", @"Microsoft.PowerShell.Core\FileSystem::\\server\share\x")]
+    [InlineData(@"tool -o:..\x", @"-o:..\x")]
+    [InlineData(@"C: && dir", "C:")]
+    [InlineData(@"cd /d C:", "C:")]
+    [InlineData(@"Set-Location E:", "E:")]
+    [InlineData(@"echo a:", "a:")]   // the price of the bare-drive rule, pinned
+    [InlineData(@"cd \", @"\")]   // the drive root, as cd / is
+    [InlineData(@"cd /d \", @"\")]   // a one-letter switch before it is an option
+    [InlineData(@"cd", "cd")]   // PowerShell 7 and bash go home
+    [InlineData(@"dotnet build && Set-Location", "Set-Location")]
+    [InlineData(@"SL", "SL")]
+    public void ACommandLine_NamingAnOutsidePath_TheNewWays_IsRefused(string command, string token) =>
+        Assert.Equal(token, Command(command));
+
+    [Theory]
+    [InlineData(@"csc /out:D:\Repo\Project\bin\a.exe a.cs")]   // refused by the rooted rule until 2026-10-03
+    [InlineData(@"csc -out:sub\a.exe a.cs")]
+    [InlineData(@"curl file:///D:/Repo/Project/x")]
+    [InlineData(@"D: && dir")]   // the root's own drive
+    [InlineData(@"cd sub && type ..\notes.txt")]
+    [InlineData(@"pushd sub && type ..\x")]
+    [InlineData(@"Set-Location -Path sub; Get-Content ..\x")]
+    [InlineData(@"cd /d D:\Repo\Project\sub && type ..\x")]
+    [InlineData(@"cd sub && cd deeper && type ..\..\x")]
+    [InlineData(@"git diff main..feature HEAD@{1}..HEAD")]
+    [InlineData(@"docker run -v .\data:/data image")]
+    [InlineData(@"scp a.txt user@host:/tmp")]
+    [InlineData(@"Get-ChildItem HKLM:\Software")]
+    [InlineData(@"cd -")]
+    [InlineData(@"ping -n 30 127.0.0.1 >nul")]   // a device, not a path: made full it is \\.\nul
+    [InlineData(@"dir x 2>NUL")]
+    [InlineData(@"echo x > nul.txt")]   // Windows reads any extension as the device too
+    [InlineData(@"type con")]
+    [InlineData(@"ls > /dev/null 2>&1")]   // refused by the rooted rule until 2026-10-03
+    [InlineData(@"cat /dev/stdin | sort")]
+    public void ACommandLine_UnderTheRoot_TheNewWays_Passes(string command) =>
+        Assert.Null(Command(command));
+
+    [Fact]
+    public void ABareCd_InCmd_OnlyPrintsTheFolder_AndPasses()
+    {
+        Assert.Null(PathPolice.FirstOutside("cd", Root, Root, isScript: false, Exists, NoLinks, bareCdGoesHome: false));
+        Assert.Equal("cd", PathPolice.FirstOutside("cd", Root, Root, isScript: false, Exists, NoLinks));
+        Assert.Equal("..", PathPolice.FirstOutside("cd ..", Root, Root, isScript: false, Exists, NoLinks, bareCdGoesHome: false));   // only the bare one
+    }
+
+    [Fact]
+    public void TheDevices_ArePinned() =>
+        Assert.Equal(
+            ["nul", "con", "prn", "aux", "conin$", "conout$", "com1", "com2", "com3", "com4", "com5", "com6", "com7", "com8", "com9",
+             "lpt1", "lpt2", "lpt3", "lpt4", "lpt5", "lpt6", "lpt7", "lpt8", "lpt9", "/dev/null", "/dev/stdin", "/dev/stdout", "/dev/stderr", "/dev/tty"],
+            PathPolice.Devices);
+
+    [Fact]
+    public void ACdEarlierInTheLine_MovesWhereLaterPathsResolveFrom_OnlyInsideTheRoot()
+    {
+        Assert.Equal(@"..\..\x", Command(@"cd sub && type ..\..\x"));   // sub\..\.. is the root's parent
+        Assert.Equal(@"..\x", Command(@"cd sub; cd ..; type ..\x"));   // back at the root, .. leaves it
+        Assert.Equal(@"..\x", Command(@"cd $env:CI && type ..\x"));   // a variable is not followed: the root stays the base
+        Assert.Equal(@"..\x", Command(@"type ..\x && cd sub"));   // a cd counts only for what comes after it
+        Assert.Null(Command(@"cd sub && type ..\x", Sub));   // from the workdir: sub\sub\..\x is sub\x
+    }
+
+    [Theory]
+    [InlineData(@"type ""D:\Repo\My Project\a.txt""")]
+    [InlineData(@"type 'D:\Repo\My Project\sub dir\a.txt'")]
+    [InlineData(@"cd ""D:\Repo\My Project\sub"" && type ..\a.txt")]   // joined, then followed by the cd
+    [InlineData(@"type ""..\My Project\a.txt""")]   // relative too: ..\My alone would be D:\Repo\My
+    public void AQuotedPathWithASpace_UnderARootWithASpace_Passes(string command) =>
+        Assert.Null(PathPolice.FirstOutside(command, SpacedRoot, SpacedRoot, isScript: false, Exists, NoLinks));
+
+    [Theory]
+    [InlineData(@"type ""D:\Repo\My Project 2\a.txt""", @"D:\Repo\My")]   // outside: cut as before, the first piece named
+    [InlineData(@"type ""D:\Repo\My Project\a C:\x""", @"D:\Repo\My")]   // a later word that is a path is never hidden in a join: cut, as before
+    [InlineData(@"type ""D:\Repo\My Project\a ..\..\..\x""", @"D:\Repo\My")]
+    [InlineData(@"type ""C:\Program Files\x""", @"C:\Program")]
+    public void AQuotedPathWithASpace_Outside_IsStillRefused(string command, string token) =>
+        Assert.Equal(token, PathPolice.FirstOutside(command, SpacedRoot, SpacedRoot, isScript: false, Exists, NoLinks));
+
+    [Fact]
+    public void AQuotedPathWithASpace_InAScript_Passes()
+    {
+        Assert.Null(PathPolice.FirstOutside("open(\"D:\\\\Repo\\\\My Project\\\\a.txt\").read()", SpacedRoot, SpacedRoot, isScript: true, Exists, NoLinks));
+        Assert.Equal(@"D:\\Repo\\My", PathPolice.FirstOutside("open(\"D:\\\\Repo\\\\My Projects\\\\a.txt\")", SpacedRoot, SpacedRoot, isScript: true, Exists, NoLinks));
+    }
+
+    private const string SpacedRoot = @"D:\Repo\My Project";
+
+    /// <summary>The links of the link tests: <c>out</c> leads to <c>C:\</c>, <c>in</c> to the root's <c>sub</c>, <c>loop</c> to itself, <c>hop</c> to <c>in</c>'s sibling link <c>out</c>.</summary>
+    private static string? Links(string path) => path switch
+    {
+        @"D:\Repo\Project\out" => @"C:\",
+        @"D:\Repo\Project\in" => Sub,
+        @"D:\Repo\Project\loop" => @"D:\Repo\Project\loop",
+        @"D:\Repo\Project\hop" => @"D:\Repo\Project\out",
+        _ => null,
+    };
+
+    [Theory]
+    [InlineData(@"type out\x", @"out\x")]
+    [InlineData(@"dir out", "out")]
+    [InlineData(@"type D:\Repo\Project\out\x", @"D:\Repo\Project\out\x")]
+    [InlineData(@"type hop\x", @"hop\x")]   // a link to a link that leads out
+    [InlineData(@"type loop\x", @"loop\x")]   // a loop is given up on, and refused
+    [InlineData(@"cd in && type ..\..\x", @"..\..\x")]   // in is sub: two up from it leaves the root
+    public void ALinkLeadingOutside_IsRefused(string command, string token) =>
+        Assert.Equal(token, PathPolice.FirstOutside(command, Root, Root, isScript: false, Exists, Links));
+
+    [Theory]
+    [InlineData(@"type in\x")]
+    [InlineData(@"type in\..\notes.txt")]   // .. is spelling, as Win32 reads it: the root's notes.txt
+    [InlineData(@"cd in && type ..\notes.txt")]
+    [InlineData(@"dir outer")]   // a name that merely starts like a link's
+    public void ALinkLeadingInside_Passes(string command) =>
+        Assert.Null(PathPolice.FirstOutside(command, Root, Root, isScript: false, Exists, Links));
+
+    [Fact]
+    public void ALinkLeadingOutside_InAScript_IsRefused() =>
+        Assert.Equal(@"out/x.txt", PathPolice.FirstOutside("open('out/x.txt').read()", Root, Root, isScript: true, Exists, Links));
+
+    [Fact]
+    public void TheCdLists_ArePinned()
+    {
+        Assert.Equal(["cd", "chdir", "pushd", "Set-Location", "sl", "Push-Location"], PathPolice.CdCommands);
+        Assert.Equal(["cd", "chdir", "Set-Location", "sl"], PathPolice.BareCdCommands);
+    }
+
+    [Fact]
+    public void Judge_SeesARealJunctionLeadingOutside()
+    {
+        string dir = Path.Combine(Path.GetTempPath(), "neon-police-" + Guid.NewGuid().ToString("N"));
+        string root = Path.Combine(dir, "root");
+        string outside = Path.Combine(dir, "outside");
+        Directory.CreateDirectory(root);
+        Directory.CreateDirectory(Path.Combine(root, "sub"));
+        Directory.CreateDirectory(outside);
+        try
+        {
+            Junction.Make(Path.Combine(root, "link"), outside);
+            Junction.Make(Path.Combine(root, "near"), Path.Combine(root, "sub"));
+            var files = new Files.WorkingDirectory(() => root, TimeProvider.System);
+            Assert.Equal(@"link\x", PathPolice.Judge(@"type link\x", files, root, isScript: false));
+            Assert.Null(PathPolice.Judge(@"type near\x", files, root, isScript: false));
+            Assert.Equal(Files.FileOutcome.OutsideRoot, files.Resolve(@"link\x", forWrite: false, out _));
+            Assert.Equal(Files.FileOutcome.Ok, files.Resolve(@"near\x", forWrite: false, out _));
+        }
+        finally
+        {
+            Junction.DeleteTree(dir);
+        }
     }
 
     [Fact]

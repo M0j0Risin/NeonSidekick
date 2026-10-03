@@ -20,7 +20,7 @@ public sealed class WorkingDirectoryTests : IDisposable
 
     public void Dispose()
     {
-        try { Directory.Delete(_dir, recursive: true); } catch { /* best effort */ }
+        try { Junction.DeleteTree(_dir); } catch { /* best effort */ }
     }
 
     private string Put(string relative, string text)
@@ -57,6 +57,77 @@ public sealed class WorkingDirectoryTests : IDisposable
     }
 
     // ---- the sandbox ----
+
+    // The links of the LinkEscape tests (2026-10-03): out leads to C:\x, in to the root's sub, hop to out, loop to itself.
+    private static string? Links(string path) => path switch
+    {
+        @"D:\r\out" => @"C:\x",
+        @"D:\r\in" => @"D:\r\sub",
+        @"D:\r\hop" => @"D:\r\out",
+        @"D:\r\loop" => @"D:\r\loop",
+        @"D:\r" => @"C:\elsewhere",   // the root itself: never asked
+        _ => null,
+    };
+
+    [Theory]
+    [InlineData(@"D:\r\out", @"D:\r\out")]
+    [InlineData(@"D:\r\out\a\b.txt", @"D:\r\out")]
+    [InlineData(@"D:\r\hop\a", @"D:\r\out")]   // followed into the root, then out
+    [InlineData(@"D:\r\in\..\out\a", @"D:\r\out")]
+    public void LinkEscape_NamesTheLinkThatLeadsOutside(string candidate, string link) =>
+        Assert.Equal(link, WorkingDirectory.LinkEscape(@"D:\r", Path.GetFullPath(candidate), Links));
+
+    [Theory]
+    [InlineData(@"D:\r")]
+    [InlineData(@"D:\r\a\b.txt")]
+    [InlineData(@"D:\r\in\a.txt")]
+    [InlineData(@"D:\r\outer\a.txt")]
+    [InlineData(@"D:\r\new\not\there\yet.txt")]
+    public void LinkEscape_IsNull_WhenNoLinkLeadsOutside(string candidate) =>
+        Assert.Null(WorkingDirectory.LinkEscape(@"D:\r", candidate, Links));
+
+    [Fact]
+    public void LinkEscape_GivesUpOnALoop()
+    {
+        Assert.Equal(@"D:\r\loop", WorkingDirectory.LinkEscape(@"D:\r", @"D:\r\loop\a", Links));
+        Assert.Equal(32, WorkingDirectory.MaxLinkHops);
+    }
+
+    [Fact]
+    public void RealLinkTarget_IsNull_ForAPlainFileAFolderAndNothing()
+    {
+        string file = Put("plain.txt", "x");
+        Assert.Null(WorkingDirectory.RealLinkTarget(file));
+        Assert.Null(WorkingDirectory.RealLinkTarget(_root));
+        Assert.Null(WorkingDirectory.RealLinkTarget(Full("missing")));
+    }
+
+    [Fact]
+    public void Resolve_RefusesAJunctionThatLeadsOutside_AndFollowsOneThatStaysIn()
+    {
+        string outside = Path.Combine(_dir, "outside");
+        Directory.CreateDirectory(outside);
+        Directory.CreateDirectory(Full("sub"));
+        Junction.Make(Full("away"), outside);
+        Junction.Make(Full("near"), Full("sub"));
+        Assert.Equal(outside, WorkingDirectory.RealLinkTarget(Full("away")));
+        Assert.Equal(FileOutcome.OutsideRoot, _files.Resolve(@"away\x.txt", forWrite: true, out _));
+        Assert.Equal(FileOutcome.OutsideRoot, _files.Resolve("away", forWrite: false, out _));
+        Assert.Equal(FileOutcome.Ok, _files.Resolve(@"near\x.txt", forWrite: true, out string full));
+        Assert.Equal(Full(@"near\x.txt"), full);   // the spelling is kept: the link stays in
+        Assert.Equal(FileOutcome.OutsideRoot, _files.WriteText(@"away\planted.txt", "x", overwrite: true).Outcome);
+        Assert.False(File.Exists(Path.Combine(outside, "planted.txt")));   // nothing written through it
+    }
+
+    [SymlinkFact]
+    public void Resolve_RefusesAFileSymlinkWhoseTargetIsMissing()
+    {
+        string outside = Path.Combine(_dir, "outside");
+        Directory.CreateDirectory(outside);
+        _files.EnsureExists();
+        File.CreateSymbolicLink(Full("secret.txt"), Path.Combine(outside, "secret.txt"));   // its target missing: still a link, still outside
+        Assert.Equal(FileOutcome.OutsideRoot, _files.Resolve("secret.txt", forWrite: true, out _));
+    }
 
     [Theory]
     [InlineData("", "")]

@@ -1823,7 +1823,8 @@ public sealed class AppSettingsData
     /// may leave (neither wording says a command can reach outside), so it does not try unless asked.
     /// The toolbar wears 👮 while it is on (later that day); its double-click is <c>/police</c>, this row's on/off page (later still that day).
     /// While it is off the toolbar wears 🥷 in the officer's place (2026-10-02, the user's ask), the same double-click; neither under policy off.
-    /// Read at each call and at each turn's prompt, no reconnect. No variable.
+    /// Read at each call and at each turn's prompt, no reconnect. <see cref="EnvironmentOverrides.ShellPoliceVariable"/>
+    /// outranks it for a launch, and <c>--no-police</c> outranks both (2026-09-26).
     /// </summary>
     public bool ShellPoliceOutsidePaths { get; set; } = true;
 

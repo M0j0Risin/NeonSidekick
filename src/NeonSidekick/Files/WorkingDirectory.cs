@@ -476,7 +476,9 @@ public sealed class WorkingDirectory
     /// <summary>
     /// The sandbox: <paramref name="relative"/> against the root, accepted only when it stays
     /// inside. The one place a path is judged; <paramref name="forWrite"/> marks a caller that will write (no refusal of its own
-    /// since the <c>.trash</c> went, 2026-10-01).
+    /// since the <c>.trash</c> went, 2026-10-01). Since 2026-10-03 (the user's pick) inside means by the links too: a junction
+    /// or symlink under the root whose target lies outside it (<see cref="LinkEscape"/>) is <see cref="FileOutcome.OutsideRoot"/>,
+    /// so <c>link\x</c> with <c>link → C:\</c> is refused as <c>C:\x</c> would be; until that day the spelling alone decided.
     /// </summary>
     public FileOutcome Resolve(string relative, bool forWrite, out string full)
     {
@@ -503,13 +505,111 @@ public sealed class WorkingDirectory
             return FileOutcome.OutsideRoot;
         }
 
-        if (!IsInside(root, candidate))
+        if (!IsInside(root, candidate) || LinkEscape(root, candidate, RealLinkTarget) is not null)
         {
             return FileOutcome.OutsideRoot;
         }
 
         full = candidate;
         return FileOutcome.Ok;
+    }
+
+    /// <summary>How many links one judgement follows before it gives up and calls the path outside (a loop of links never ends otherwise).</summary>
+    internal const int MaxLinkHops = 32;
+
+    /// <summary>
+    /// The link under <paramref name="root"/> that takes <paramref name="candidate"/> outside it, or null when none does
+    /// (2026-10-03, the user's pick; the file tools through <see cref="Resolve"/>, the shell police through
+    /// <see cref="Shell.PathPolice"/>). <paramref name="candidate"/> is full and inside the root by its spelling. Its folders are
+    /// walked down from the root, each asked of <paramref name="linkTarget"/> (a link's full final target, else null): a link
+    /// leading outside is named; one leading inside is followed — the rest of the path moved onto its target and the walk
+    /// begun again, so a link inside the target is seen too — up to <see cref="MaxLinkHops"/>. The root itself is never
+    /// asked: a working directory that is itself a link is the user's own pick. Pure but for <paramref name="linkTarget"/>
+    /// (<see cref="RealLinkTarget"/> in the app, a fake in the tests).
+    /// </summary>
+    internal static string? LinkEscape(string root, string candidate, Func<string, string?> linkTarget)
+    {
+        ArgumentNullException.ThrowIfNull(root);
+        ArgumentNullException.ThrowIfNull(candidate);
+        ArgumentNullException.ThrowIfNull(linkTarget);
+        string path = candidate;
+        int hops = 0;
+        while (true)
+        {
+            if (path.Length <= root.Length + 1 || !IsInside(root, path))
+            {
+                return null;
+            }
+
+            string[] parts = path[(root.Length + 1)..].Split(['\\', '/'], StringSplitOptions.RemoveEmptyEntries);
+            string current = root;
+            string? moved = null;
+            for (int i = 0; i < parts.Length; i++)
+            {
+                string next = Path.Join(current, parts[i]);
+                if (linkTarget(next) is { } target)
+                {
+                    string landed = Path.TrimEndingDirectorySeparator(target);
+                    if (!IsInside(root, landed) || ++hops > MaxLinkHops)
+                    {
+                        return next;
+                    }
+
+                    moved = i + 1 < parts.Length ? Path.Join(landed, string.Join(Path.DirectorySeparatorChar, parts[(i + 1)..])) : landed;
+                    break;
+                }
+
+                current = next;
+            }
+
+            if (moved is null)
+            {
+                return null;
+            }
+
+            path = moved;
+        }
+    }
+
+    /// <summary>
+    /// The full final target of the junction or symlink at <paramref name="path"/>, or null when it is not one — missing, a
+    /// plain file or folder, or another kind of reparse point (a OneDrive placeholder, a deduplicated file), which
+    /// <see cref="FileSystemInfo.LinkTarget"/> does not name. The attributes are the link's own, so a link whose target is
+    /// missing is still seen. A link whose target cannot be worked out is the empty string, which no root contains: refused,
+    /// never followed blind.
+    /// </summary>
+    internal static string? RealLinkTarget(string path)
+    {
+        FileAttributes attributes;
+        try
+        {
+            attributes = File.GetAttributes(path);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            return null;
+        }
+
+        if ((attributes & FileAttributes.ReparsePoint) == 0)
+        {
+            return null;
+        }
+
+        FileSystemInfo info = (attributes & FileAttributes.Directory) != 0 ? new DirectoryInfo(path) : new FileInfo(path);
+        try
+        {
+            if (info.LinkTarget is not { } target)
+            {
+                return null;
+            }
+
+            return info.ResolveLinkTarget(returnFinalTarget: true)?.FullName
+                ?? Path.GetFullPath(target, Path.GetDirectoryName(path) ?? path);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            return "";
+        }
     }
 
     /// <summary>The display form: relative to the root, <c>\</c> separated, a trailing <c>\</c> for a folder, empty for the root itself.</summary>
