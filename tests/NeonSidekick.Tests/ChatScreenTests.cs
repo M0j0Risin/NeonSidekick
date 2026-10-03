@@ -4431,7 +4431,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Camera    Claude    Print    Obsidian    ComfyUI    SQL    Oracle    MySQL    UNC    Docker    GitLib    HA    Options ", output);
+        Assert.Contains(ToolsText.Label + "   Offered    Ask    Web    Shell    Files    UNC    Print    Camera    Obsidian    SQL    MySQL    Oracle    Claude    Docker    HA    ComfyUI    GitLib    Options ", output);
         Assert.Contains("\n▸ ComfyUI tools                  on\n  ComfyUI URL                    (not set)\n  ComfyUI workflows offered      none of 0\n  ComfyUI add workflow           Enter to start workflow wizard\n  ComfyUI ^-mention enabled      on\n  ComfyUI timeout (s)            300\n  ComfyUI max pictures per call  5 pictures\n  ComfyUI reinforce negatives    on\n  ComfyUI show prompts           on\n  ComfyUI picture strip          on\n  ComfyUI output folder          comfy_images\n", output);   // 2026-09-24; the offered checklist and the wizard later that day, the ^-mention switch later still
         Assert.Contains("\n▸ Claude executable                   (looked up)\n  Claude slash command permissions    read-only\n  Claude slash command model          (Claude Code's default)\n  Claude slash command effort         (Claude Code's default)\n  Claude advisor tool                 off\n  Claude advisor tool context         brief\n  Claude advisor tool calls per turn  2 calls\n  Claude advisor tool model           (as Claude slash command model)\n  Claude advisor tool effort          (as Claude slash command effort)\n  Claude advisor tool confirm         off\n", output);   // 2026-09-27: /claude's rows off /settings, then the advisor's
         Assert.Contains("\n" + HeadingRow("── Clock · 3") + "\n▸ get_current_time      on   ", output);
@@ -4840,7 +4840,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Camera    Claude    Print    Obsidian    ComfyUI    SQL    Oracle    MySQL    UNC    Docker    GitLib    HA    Options ", output);
+        Assert.Contains(ToolsText.Label + "   Offered    Ask    Web    Shell    Files    UNC    Print    Camera    Obsidian    SQL    MySQL    Oracle    Claude    Docker    HA    ComfyUI    GitLib    Options ", output);
         Assert.Contains("  · get_current_time: off", output);
         Assert.Equal(["get_current_time"], _settings.Current.ToolsDisabled);
         Assert.DoesNotContain(ChatScreen.MidTurnDeferredNotice("/tools"), output);
@@ -8678,7 +8678,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.False(_settings.Current.ShellPoliceOutsidePaths);
         string memory = "\n" + Titled(MemoryMenu.Title) + "\n";
         string settings = "\n" + Titled(SettingsMenu.Title + "   General    Embedded    Docker    LLM    TTS    STT    Sessions    Botchat ") + "\n";
-        string tools = "\n" + Titled(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Camera    Claude    Print    Obsidian    ComfyUI    SQL    Oracle    MySQL    UNC    Docker    GitLib    HA    Options ") + "\n";
+        string tools = "\n" + Titled(ToolsText.Label + "   Offered    Ask    Web    Shell    Files    UNC    Print    Camera    Obsidian    SQL    MySQL    Oracle    Claude    Docker    HA    ComfyUI    GitLib    Options ") + "\n";
         string allowed = "\n" + Titled(AllowedCommandsTitle) + "\n";
         Assert.Equal(1, output.Split(memory).Length - 1);
         Assert.Equal(1, output.Split(allowed).Length - 1);
@@ -9252,7 +9252,7 @@ public partial class ChatScreenTests : IDisposable
     public async Task WithGeometry_HelpOpensTheInfoPane_AndEscClosesIt()
     {
         _settings.Update(d => d.TtsOutput = false);
-        _console.Profile.Height = 58;   // the advanced tab's 34 rows (the one Commands tab's 54 until later on 2026-09-27) and the pane's four; the pane scrolls past 40
+        _console.Profile.Height = 58;   // the basic tab's 29 rows (2026-10-03; the advanced tab's 34 the tallest until then) (the one Commands tab's 54 until later on 2026-09-27) and the pane's four; the pane scrolls past 40
         _geometry = new ScreenGeometry(() => null);
         PushLine("/help");
         _console.Input.PushKey(Keys.Right);   // Commands (advanced), since later on 2026-09-27
@@ -9265,10 +9265,10 @@ public partial class ChatScreenTests : IDisposable
         // Nothing in the transcript: the list is in the pane, under the rule, with its own hint.
         Assert.DoesNotContain("  · Commands:", output);
         string rule = new(ScreenPane.RuleGlyph, 240);
-        Assert.Contains(rule + "\n" + Titled(InfoPane.Title + "   Commands (basic)    Commands (advanced)    Keys ") + "\n \n/clear ", output);   // the basic tab first, A to Z (later on 2026-09-27; one Commands tab from /about until then)
+        Assert.Contains(rule + "\n" + Titled(InfoPane.Title + "   Commands (basic)    Commands (advanced)    Keys ") + "\n \n/about ", output);   // the basic tab first, A to Z (later on 2026-09-27; one Commands tab from /about until then; /clear first until /about joined it, 2026-10-03)
         Assert.Contains(HelpRow("/sessions", SlashCommands.HelpEntries.Single(e => e.Command == "/sessions").Summary), output);   // the column is the widest label of all; the cell is padded out to the longest summary
         // → the advanced tab: the rest, A to Z, in the same label column.
-        Assert.Contains(rule + "\n" + Titled(InfoPane.Title + "   Commands (basic)    Commands (advanced)    Keys ") + "\n \n/about ", output);
+        Assert.Contains(rule + "\n" + Titled(InfoPane.Title + "   Commands (basic)    Commands (advanced)    Keys ") + "\n \n/botchat ", output);   // /about first until 2026-10-03, when it moved to the basic tab
         Assert.Contains(HelpRow("/timer", "list timers, or /timer <duration> [name] (10m, 90s, 1h30m) | stop <name> | stop all"), output);
         Assert.Contains(rule + "\n" + Row(InfoPane.HintText) + "\n", output);
         // → showed the Keys tab, with the keys that apply (voice off: no push-to-talk row).
@@ -9730,7 +9730,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("\n" + ScreenPane.ToolbarRow(ChatScreen.ToolbarStripFor(true, CommandPolicyMode.Ask, true), cwd, 239), output);
         Assert.DoesNotContain("\n" + ScreenPane.ToolbarRow(ChatScreen.ToolbarStrip, cwd, 239), output);   // never the fixed glyphs alone: memory, the policy and the police are on
         int settings = output.IndexOf("\n" + Titled(SettingsMenu.Title + "   General    Embedded    Docker    LLM    TTS    STT    Sessions    Botchat ") + "\n", StringComparison.Ordinal);
-        int tools = output.IndexOf(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Camera    Claude    Print    Obsidian    ComfyUI    SQL    Oracle    MySQL    UNC    Docker    GitLib    HA    Options ", StringComparison.Ordinal);
+        int tools = output.IndexOf(ToolsText.Label + "   Offered    Ask    Web    Shell    Files    UNC    Print    Camera    Obsidian    SQL    MySQL    Oracle    Claude    Docker    HA    ComfyUI    GitLib    Options ", StringComparison.Ordinal);
         int mcp = output.IndexOf(McpText.Label + "   Servers    Tools    Options ", StringComparison.Ordinal);
         int skills = output.IndexOf(SkillsText.Label + "   Offered    Reflection    Options ", StringComparison.Ordinal);
         int sys = output.IndexOf("\n" + Titled(SystemPromptSummary.Label + "   Prompt    Tools ") + "\n", StringComparison.Ordinal);
@@ -9829,7 +9829,7 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         string settings = "\n" + Titled(SettingsMenu.Title + "   General    Embedded    Docker    LLM    TTS    STT    Sessions    Botchat ") + "\n";
-        string tools = "\n" + Titled(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Camera    Claude    Print    Obsidian    ComfyUI    SQL    Oracle    MySQL    UNC    Docker    GitLib    HA    Options ") + "\n";
+        string tools = "\n" + Titled(ToolsText.Label + "   Offered    Ask    Web    Shell    Files    UNC    Print    Camera    Obsidian    SQL    MySQL    Oracle    Claude    Docker    HA    ComfyUI    GitLib    Options ") + "\n";
         string help = "\n" + Titled(InfoPane.Title + "   Commands (basic)    Commands (advanced)    Keys ") + "\n";
         string sys = "\n" + Titled(SystemPromptSummary.Label + "   Prompt    Tools ") + "\n";
         string sessions = "\n" + Titled(SessionsMenu.Title) + "\n";
@@ -10351,7 +10351,7 @@ public partial class ChatScreenTests : IDisposable
         string[] advanced = CommandsTabLines(advanced: true);
         var basicEntries = SlashCommands.HelpEntries.Where(SlashCommands.IsBasic).ToArray();
         var advancedEntries = SlashCommands.HelpEntries.Where(e => !SlashCommands.IsBasic(e)).ToArray();
-        Assert.Equal(22, basicEntries.Length);
+        Assert.Equal(29, basicEntries.Length);   // seven more from the advanced tab on 2026-10-03, the user's pick
         Assert.Equal(SlashCommands.HelpEntries.Count, basicEntries.Length + advancedEntries.Length);
         Assert.Equal(basicEntries.Length, basic.Length);
         Assert.Equal(advancedEntries.Length, advanced.Length);
@@ -10367,16 +10367,16 @@ public partial class ChatScreenTests : IDisposable
 
         Assert.Equal(
         [
-            "/clear", "/compact", "/copy", "/cwd", "/draft", "/exit", "/help", "/memory", "/model", "/new", "/profile",
-            "/queue", "/reasoning", "/remember", "/rewind", "/server", "/sessions", "/settings", "/skills", "/sys", "/tools", "/tree",
+            "/about", "/clear", "/compact", "/copy", "/cwd", "/draft", "/exit", "/explore", "/help", "/memory", "/model", "/new", "/perf", "/profile",
+            "/queue", "/reasoning", "/remember", "/rewind", "/server", "/sessions", "/settings", "/skills", "/stt", "/sys", "/tb", "/tools", "/tree", "/tts", "/wake",
         ], basicEntries.Select(e => e.Command));
         Assert.DoesNotContain(basic, string.IsNullOrWhiteSpace);
         Assert.DoesNotContain(advanced, string.IsNullOrWhiteSpace);
-        Assert.StartsWith(HelpRow("/settings, //", "edit and save settings"), basic[17]);   // sorted by the command, not the label
-        Assert.StartsWith(HelpRow("/about", "show general information about the app and profile"), advanced[0]);
-        Assert.StartsWith(HelpRow("/botchat", "let the profiles talk to each other, each in its own persona, until ESC: /botchat [profile ...] [[--] topic]"), advanced[1]);
-        Assert.StartsWith(HelpRow(NeonSidekick.Camera.CameraText.Word, NeonSidekick.Camera.CameraText.HelpSummary), advanced[2]);   // /camera 2026-10-02
-        Assert.StartsWith(HelpRow("/claude", "send a message to Claude Code and add its reply to the conversation"), advanced[3]);
+        Assert.StartsWith(HelpRow("/about", "show general information about the app and profile"), basic[0]);   // advanced[0] until 2026-10-03
+        Assert.StartsWith(HelpRow("/settings, //", "edit and save settings"), basic[20]);   // sorted by the command, not the label
+        Assert.StartsWith(HelpRow("/botchat", "let the profiles talk to each other, each in its own persona, until ESC: /botchat [profile ...] [[--] topic]"), advanced[0]);
+        Assert.StartsWith(HelpRow(NeonSidekick.Camera.CameraText.Word, NeonSidekick.Camera.CameraText.HelpSummary), advanced[1]);   // /camera 2026-10-02
+        Assert.StartsWith(HelpRow("/claude", "send a message to Claude Code and add its reply to the conversation"), advanced[2]);
         Assert.StartsWith(HelpRow("/window", "show the terminal window's width and height"), advanced[^1]);
         string all = string.Join("\n", basic.Concat(advanced));
         Assert.DoesNotContain("/windowsize", all);
@@ -11782,7 +11782,7 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         output = string.Join("\n", output.Split('\n').Select(l => l.TrimEnd()));
-        string tools = "\n" + Titled(ToolsText.Label + "   Offered    Web    Files    Shell    Ask    Camera    Claude    Print    Obsidian    ComfyUI    SQL    Oracle    MySQL    UNC    Docker    GitLib    HA    Options ") + "\n";
+        string tools = "\n" + Titled(ToolsText.Label + "   Offered    Ask    Web    Shell    Files    UNC    Print    Camera    Obsidian    SQL    MySQL    Oracle    Claude    Docker    HA    ComfyUI    GitLib    Options ") + "\n";
         string sys = "\n" + Titled(SystemPromptSummary.Label + "   Prompt    Tools ") + "\n";
         string sessions = "\n" + Titled(SessionsMenu.Title) + "\n";
         string settings = "\n" + Titled(SettingsMenu.Title + "   General    Embedded    Docker    LLM    TTS    STT    Sessions    Botchat ") + "\n";
@@ -15453,7 +15453,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains(ToolsText.Label + "   Offered    Web ", output);
+        Assert.Contains(ToolsText.Label + "   Offered    Ask ", output);
         Assert.DoesNotContain("› /tools", output);
         Assert.Single(_chat.Requests);
         Assert.Equal("keep", UserText(_chat.Requests[0]));
@@ -15522,7 +15522,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains(Titled(InfoPane.Title + "   Commands (basic)    Commands (advanced)    Keys ") + "\n \n/clear ", output);
+        Assert.Contains(Titled(InfoPane.Title + "   Commands (basic)    Commands (advanced)    Keys ") + "\n \n/about ", output);   // /clear first until 2026-10-03
         Assert.DoesNotContain("› /help", output);
         Assert.Empty(_chat.Requests);
     }
@@ -15676,7 +15676,7 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         Assert.Equal(1, Refreshes(output));     // /clear's wipe
-        Assert.Contains(ToolsText.Label + "   Offered    Web ", output);
+        Assert.Contains(ToolsText.Label + "   Offered    Ask ", output);
         Assert.Equal(2, _chat.Requests.Count);
         Assert.Equal("b", UserText(_chat.Requests[1]));   // the one user message: the conversation forgotten
     }

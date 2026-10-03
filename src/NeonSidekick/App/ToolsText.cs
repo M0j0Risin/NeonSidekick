@@ -87,44 +87,44 @@ public static class ToolsText
     public const string ShellTabTitle = "Shell";
     public const string WebTabTitle = "Web";
 
-    /// <summary>The vault tools' tab and group (2026-09-22), after Claude, before ComfyUI (the user's order, 2026-09-27).</summary>
+    /// <summary>The vault tools' tab and group (2026-09-22), after Camera, before SQL, since 2026-10-03 (the user's order; after Claude, before ComfyUI, from 2026-09-27).</summary>
     public const string ObsidianTabTitle = "Obsidian";
 
-    /// <summary>The SQL tools' tab and group (2026-09-23), after ComfyUI, before Git (native) (the user's order, 2026-09-27).</summary>
+    /// <summary>The SQL tools' tab and group (2026-09-23), after Obsidian, before MySQL, since 2026-10-03 (the user's order; after ComfyUI, before Git (native), from 2026-09-27).</summary>
     public const string SqlTabTitle = "SQL";
 
-    /// <summary>The Oracle tools' tab and group (2026-09-30), right after SQL, before Git: the two database tabs together.</summary>
+    /// <summary>The Oracle tools' tab and group (2026-09-30), after MySQL, before Claude, since 2026-10-03 (the user's order; right after SQL before): the database tabs together.</summary>
     public const string OracleTabTitle = "Oracle";
 
-    /// <summary>The MySQL tools' tab and group (2026-09-30), after Oracle, before Git: the database tabs together.</summary>
+    /// <summary>The MySQL tools' tab and group (2026-09-30), after SQL, before Oracle, since 2026-10-03 (the user's order; after Oracle before): the database tabs together.</summary>
     public const string MySqlTabTitle = "MySQL";
 
-    /// <summary>The UNC tools' tab and group (2026-09-30), after MySQL, before GitLib: the outside places the model reaches, together.</summary>
+    /// <summary>The UNC tools' tab and group (2026-09-30), after Files, before Print, since 2026-10-03 (the user's order; after MySQL, before Docker, until then).</summary>
     public const string UncTabTitle = "UNC";
 
-    /// <summary>The camera's tab and group (2026-10-02, <c>camera_capture</c> and the camera's rows), right after Ask: the model asking the user, together.</summary>
+    /// <summary>The camera's tab and group (2026-10-02, <c>camera_capture</c> and the camera's rows), after Print, before Obsidian, since 2026-10-03 (the user's order; right after Ask until then).</summary>
     public const string CameraTabTitle = "Camera";
 
-    /// <summary>The Docker tools' tab and group (2026-10-02), after UNC, before GitLib: the outside places and services the model reaches, together.</summary>
+    /// <summary>The Docker tools' tab and group (2026-10-02), after Claude, before HA, since 2026-10-03 (the user's order; after UNC, before GitLib, until then).</summary>
     public const string DockerTabTitle = "Docker";
 
-    /// <summary>The image tools' tab and group (2026-09-24), after Obsidian, before SQL (the user's order, 2026-09-27); "Images" until later on 2026-09-24 (the user's call: it is ComfyUI's tab).</summary>
+    /// <summary>The image tools' tab and group (2026-09-24), after HA, before GitLib, since 2026-10-03 (the user's order; after Obsidian, before SQL, from 2026-09-27); "Images" until later on 2026-09-24 (the user's call: it is ComfyUI's tab).</summary>
     public const string ComfyTabTitle = "ComfyUI";
 
-    /// <summary>The Claude tab and the advisor's group (2026-09-27): <c>/claude</c>'s rows (off <c>/settings</c>, the user's call) and <c>claude_advisor</c>'s, after Ask, before Obsidian (the user's order, later that day; after ComfyUI before). Titled "Claude (CLI)" from later on 2026-09-27 (the user's call: the pair of /settings' Claude (API) tab) and "Claude" again since 2026-09-29, when that tab's four rows came here under the advisor's (the user's call: one Claude tab).</summary>
+    /// <summary>The Claude tab and the advisor's group (2026-09-27): <c>/claude</c>'s rows (off <c>/settings</c>, the user's call) and <c>claude_advisor</c>'s, after Oracle, before Docker, since 2026-10-03 (the user's order; after Ask, before Obsidian, from later on 2026-09-27; after ComfyUI before). Titled "Claude (CLI)" from later on 2026-09-27 (the user's call: the pair of /settings' Claude (API) tab) and "Claude" again since 2026-09-29, when that tab's four rows came here under the advisor's (the user's call: one Claude tab).</summary>
     public const string ClaudeTabTitle = "Claude";
 
-    /// <summary>The Home Assistant tools' tab (2026-09-28), second to last, after GitLib, before Options, since later on 2026-10-01 (the user's ask; after Claude, before Print, until then). "HA" since 2026-10-01 (the user's call: strip width); "Home Assistant" until then, which the group keeps (<see cref="HomeAssistantGroupTitle"/>).</summary>
+    /// <summary>The Home Assistant tools' tab (2026-09-28), after Docker, before ComfyUI, since 2026-10-03 (the user's order; second to last, after GitLib, before Options, from later on 2026-10-01; after Claude, before Print, until then). "HA" since 2026-10-01 (the user's call: strip width); "Home Assistant" until then, which the group keeps (<see cref="HomeAssistantGroupTitle"/>).</summary>
     public const string HomeAssistantTabTitle = "HA";
 
     /// <summary>The Home Assistant tools' group on <c>/sys</c> and the Offered tab (2026-09-28): the full name, the tab's short one being for the strip alone (2026-10-01).</summary>
     public const string HomeAssistantGroupTitle = "Home Assistant";
 
-    /// <summary>The print tools' tab and group (2026-09-28), after Claude, before Obsidian (after Home Assistant until later on 2026-10-01, when that tab moved to second to last).</summary>
+    /// <summary>The print tools' tab and group (2026-09-28), after UNC, before Camera, since 2026-10-03 (the user's order; after Claude, before Obsidian, from later on 2026-10-01; after Home Assistant until then).</summary>
     public const string PrintTabTitle = "Print";
 
-    /// <summary>The eighteen tabs in strip order (Camera after Ask since 2026-10-02; Docker after UNC since 2026-10-02; Home Assistant second to last, before Options, since later on 2026-10-01, the user's ask, and Print after Claude with it; Home Assistant after Claude from 2026-09-28 and Print after it later that day; Oracle after SQL, MySQL after Oracle and UNC after MySQL since 2026-09-30): Offered, Web, Files, Shell, Ask, Claude, Obsidian, ComfyUI, SQL, Oracle, Git (native), Options — the user's order since 2026-09-27 (Ask, Git (native), Obsidian, SQL, ComfyUI, Claude before); Options last since later on 2026-09-22 (the user's ask; second, after Offered, before); alphabetical before 2026-09-21; the last ten index <see cref="SettingsMenu.ToolsTabFields"/> one down.</summary>
-    public static readonly IReadOnlyList<string> TabTitles = [OfferedTabTitle, WebTabTitle, FilesTabTitle, ShellTabTitle, AskTabTitle, CameraTabTitle, ClaudeTabTitle, PrintTabTitle, ObsidianTabTitle, ComfyTabTitle, SqlTabTitle, OracleTabTitle, MySqlTabTitle, UncTabTitle, DockerTabTitle, GitTabTitle, HomeAssistantTabTitle, OptionsTabTitle];
+    /// <summary>The eighteen tabs in strip order — Offered, Ask, Web, Shell, Files, UNC, Print, Camera, Obsidian, SQL, MySQL, Oracle, Claude, Docker, HA, ComfyUI, GitLib, Options, the user's order since 2026-10-03; before it (Camera after Ask since 2026-10-02; Docker after UNC since 2026-10-02; Home Assistant second to last, before Options, since later on 2026-10-01, the user's ask, and Print after Claude with it; Home Assistant after Claude from 2026-09-28 and Print after it later that day; Oracle after SQL, MySQL after Oracle and UNC after MySQL since 2026-09-30): Offered, Web, Files, Shell, Ask, Claude, Obsidian, ComfyUI, SQL, Oracle, Git (native), Options — the user's order since 2026-09-27 (Ask, Git (native), Obsidian, SQL, ComfyUI, Claude before); Options last since later on 2026-09-22 (the user's ask; second, after Offered, before); alphabetical before 2026-09-21; the last ten index <see cref="SettingsMenu.ToolsTabFields"/> one down.</summary>
+    public static readonly IReadOnlyList<string> TabTitles = [OfferedTabTitle, AskTabTitle, WebTabTitle, ShellTabTitle, FilesTabTitle, UncTabTitle, PrintTabTitle, CameraTabTitle, ObsidianTabTitle, SqlTabTitle, MySqlTabTitle, OracleTabTitle, ClaudeTabTitle, DockerTabTitle, HomeAssistantTabTitle, ComfyTabTitle, GitTabTitle, OptionsTabTitle];
 
     /// <summary>The Offered tab's hint row. Pinned.</summary>
     public const string OfferedKeys = "Enter / Space = on or off · ←/→ tabs · ESC = close";

@@ -580,7 +580,7 @@ public class SlashCommandsTests
     public void BasicCommands_AreRealCommands_AndTheTabTitlesArePinned()
     {
         // The basic tab's list (later on 2026-09-27, the user's): a rename or a typo would drop a row silently.
-        Assert.Equal(22, SlashCommands.BasicCommands.Count);   // /rewind 2026-09-30, the user's pick
+        Assert.Equal(29, SlashCommands.BasicCommands.Count);   // /about, /explore, /perf, /stt, /tb, /tts and /wake 2026-10-03; /rewind 2026-09-30, the user's picks
         Assert.All(SlashCommands.BasicCommands, c => Assert.Contains(SlashCommands.HelpEntries, e => e.Command == c));
         Assert.Equal("Commands (basic)", SlashCommands.BasicTabTitle);
         Assert.Equal("Commands (advanced)", SlashCommands.AdvancedTabTitle);

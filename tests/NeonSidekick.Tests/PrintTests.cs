@@ -613,7 +613,7 @@ public sealed class PrintTests : IDisposable
     public void Settings_ThePrintTab()
     {
         int tab = ToolsText.TabTitles.ToList().IndexOf(ToolsText.PrintTabTitle);
-        Assert.Equal(ToolsText.TabTitles.ToList().IndexOf(ToolsText.ClaudeTabTitle) + 1, tab);   // after Claude since later on 2026-10-01, when HA moved to second to last
+        Assert.Equal(ToolsText.TabTitles.ToList().IndexOf(ToolsText.UncTabTitle) + 1, tab);   // after UNC since 2026-10-03, the user's order (after Claude from later on 2026-10-01)
         Assert.Equal([SettingsField.PrintTools, SettingsField.PrintActionPolicy, SettingsField.PrintDefaultPrinter, SettingsField.PrintFontSize], SettingsMenu.ToolsTabFields[tab - 1]);
         Assert.True(SettingsMenu.IsToggle(SettingsField.PrintTools));
 

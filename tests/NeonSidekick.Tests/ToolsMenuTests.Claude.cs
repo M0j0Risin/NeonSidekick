@@ -9,8 +9,8 @@ namespace NeonSidekick.Tests;
 /// <summary>The Claude tab's model pickers (2026-09-27, the user's ask: pick, don't type).</summary>
 public partial class ToolsMenuTests
 {
-    /// <summary>Offered → Web → Files → Shell → Ask → Camera → Claude (after Ask since 2026-09-27, after Camera since 2026-10-02), then the row (2 the command's model, 7 the advisor's) and Enter: its picker.</summary>
-    private void OpenClaudeRow(int row) => Push([Keys.Right, Keys.Right, Keys.Right, Keys.Right, Keys.Right, Keys.Right, .. Enumerable.Repeat(Keys.Down, row), Keys.Enter]);
+    /// <summary>The Claude tab (<see cref="ToTab"/>; after Oracle since 2026-10-03), then the row (2 the command's model, 7 the advisor's) and Enter: its picker.</summary>
+    private void OpenClaudeRow(int row) => Push([.. ToTab(ToolsText.ClaudeTabTitle), .. Enumerable.Repeat(Keys.Down, row), Keys.Enter]);
 
     [Fact]
     public async Task OnThePane_ClaudeCommandModel_IsAPicker_TheAliasSaves()

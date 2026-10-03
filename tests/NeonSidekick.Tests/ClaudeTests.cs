@@ -257,7 +257,7 @@ public class ClaudeTests
         int tab = ToolsText.TabTitles.ToList().IndexOf(ToolsText.ClaudeTabTitle);
 
         // On /tools since later on 2026-09-27 (the user's call), after Ask, before Obsidian since later still that day (the user's order; after ComfyUI, before Options, before); gone from /settings.
-        Assert.Equal(ToolsText.TabTitles.ToList().IndexOf(ToolsText.CameraTabTitle) + 1, tab);   // after Camera since 2026-10-02, which follows Ask
+        Assert.Equal(ToolsText.TabTitles.ToList().IndexOf(ToolsText.OracleTabTitle) + 1, tab);   // after Oracle since 2026-10-03, the user's order (after Camera from 2026-10-02)
         Assert.DoesNotContain(SettingsMenu.TabTitles, t => t.StartsWith("Claude", StringComparison.Ordinal));   // the Claude (API) tab too, since 2026-09-29
         Assert.Equal("Claude", ToolsText.ClaudeTabTitle);   // "Claude (CLI)" until 2026-09-29 (the user's call: one Claude tab)
         Assert.Equal(

@@ -57,7 +57,7 @@ public partial class ChatScreenTests
 
         string output = await RunAsync();
 
-        Assert.Contains(ToolsText.Label + "   Offered    Web", output);
+        Assert.Contains(ToolsText.Label + "   Offered    Ask", output);
         Assert.Equal(["get_current_time"], _settings.Current.ToolsDisabled);
         Assert.Contains("✓ mind", output);
         var run = Assert.Single(new BenchHistory(_settings.ProfileDirectory).Runs());

@@ -8,15 +8,15 @@ namespace NeonSidekick.Tests;
 /// <summary>The Camera tab of <c>/tools</c> (2026-10-02): after Ask, its rows, the pickers and the typed watch values.</summary>
 public partial class ToolsMenuTests
 {
-    /// <summary>Offered → Web → Files → Shell → Ask → Camera, then the row and Enter.</summary>
-    private void OpenCameraRow(int row) => Push([Keys.Right, Keys.Right, Keys.Right, Keys.Right, Keys.Right, .. Enumerable.Repeat(Keys.Down, row), Keys.Enter]);
+    /// <summary>The Camera tab (<see cref="ToTab"/>), then the row and Enter.</summary>
+    private void OpenCameraRow(int row) => Push([.. ToTab(ToolsText.CameraTabTitle), .. Enumerable.Repeat(Keys.Down, row), Keys.Enter]);
 
     [Fact]
-    public void TheCameraTab_SitsAfterAsk_WithItsElevenRows()
+    public void TheCameraTab_SitsAfterPrint_WithItsElevenRows()
     {
         int tab = ToolsText.TabTitles.ToList().IndexOf(ToolsText.CameraTabTitle);
 
-        Assert.Equal(ToolsText.TabTitles.ToList().IndexOf(ToolsText.AskTabTitle) + 1, tab);
+        Assert.Equal(ToolsText.TabTitles.ToList().IndexOf(ToolsText.PrintTabTitle) + 1, tab);   // the user's order since 2026-10-03 (after Ask from 2026-10-02)
         Assert.Equal(
             ["Camera tool", "Camera shutter", "Camera preview", "Camera device", "Camera resolution", "Camera output folder", "Camera keep in sessions", "Camera watch interval (s)", "Camera watch change (%)", "Camera watch speaks up", "Camera watch min gap (s)"],
             SettingsMenu.ToolsTabFields[tab - 1].Select(SettingsMenu.FieldName));
