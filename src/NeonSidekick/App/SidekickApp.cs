@@ -86,6 +86,9 @@ public sealed class SidekickApp
     private readonly Func<string, Action, Viewer.ILiveView>? _liveView;
     private readonly Action<string>? _showShot;
     private readonly Func<Docker.IDockerServers>? _dockerServers;
+
+    // The run's session while one is live (2026-10-02): what ConsoleClosing stops the container through, from the console's control thread.
+    private volatile LlmSession? _liveSession;
     private readonly Printing.IPrintSpooler _printSpooler;
     private readonly Func<Perf.IPerfSource>? _perfSource;
     private readonly UI.IFrameHold? _frames;
@@ -659,6 +662,7 @@ public sealed class SidekickApp
         var plan = new Plans.PlanSession();
         var presentPlan = new Llm.Tools.PresentPlanTool(plan, files, _time, (_, _) => Task.FromResult(new Plans.PlanVerdict(Plans.PlanChoice.Saved)));
         var planState = new HeadlessPlanState();
+        _liveSession = session;
         try
         {
             await HeadlessLineAsync(VersionLine).ConfigureAwait(false);
@@ -997,8 +1001,9 @@ public sealed class SidekickApp
         }
         finally
         {
+            _liveSession = null;
             // Docker server stop on exit (2026-10-02): off by default, the container keeps running.
-            foreach (string stopped in await StopDockerAtExitAsync(session).ConfigureAwait(false))
+            foreach (string stopped in await StopDockerAtExitAsync(session, DockerExitBudget).ConfigureAwait(false))
             {
                 await HeadlessNoticeLineAsync("[notice] " + DockerServerExitNotice(stopped)).ConfigureAwait(false);
             }
@@ -1693,11 +1698,11 @@ public sealed class SidekickApp
     /// <c>Docker server stop on exit</c> at the run's end (2026-10-02), under its own deadline rather than the app's token (which
     /// may be the one that ended the run): the names stopped; empty when off, none in use, or anything went wrong (logged).
     /// </summary>
-    private async Task<IReadOnlyList<string>> StopDockerAtExitAsync(LlmSession session)
+    private async Task<IReadOnlyList<string>> StopDockerAtExitAsync(LlmSession session, TimeSpan deadline)
     {
         try
         {
-            using var budget = new CancellationTokenSource(DockerExitBudget);
+            using var budget = new CancellationTokenSource(deadline);
             return await session.StopDockerAtExitAsync(EffectiveSettings, budget.Token).ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
@@ -1709,6 +1714,44 @@ public sealed class SidekickApp
 
     /// <summary>The exit's notice for a container it stopped (<c>Docker server stop on exit</c>). Pinned.</summary>
     public static string DockerServerExitNotice(string name) => Docker.DockerText.Glyph + " stopped " + name + " (Docker server stop on exit)";
+
+    /// <summary>
+    /// How long the window's close waits for <c>Docker server stop on exit</c> (2026-10-02): inside the 5 s Windows gives a
+    /// console process after <c>CTRL_CLOSE_EVENT</c>, and long enough for the list and the stop request. The engine finishes a
+    /// stop whose request was dropped (moby's <c>containerStop</c> runs under <c>context.WithoutCancel</c>), kill after the
+    /// timeout included, so a container still stopping when this runs out stops all the same.
+    /// </summary>
+    public static readonly TimeSpan CloseBudget = TimeSpan.FromSeconds(3);
+
+    /// <summary>The log line as the window's close asks the engine to stop the container in use. Pinned.</summary>
+    public static string DockerServerClosingLine(string name) => Docker.DockerText.Glyph + " the window closed: asking Docker to stop " + name;
+
+    /// <summary>
+    /// The console window closing (2026-10-02, the user's report: its X button never stopped the container): Program's
+    /// <c>SIGHUP</c> registration, which is <c>CTRL_CLOSE_EVENT</c> on Windows, calls this on the console's control thread,
+    /// and the process lives until it returns — no <c>finally</c> of the run's will. With <c>Docker server stop on exit</c> on
+    /// and a container in use, the stop is asked under <see cref="CloseBudget"/>. Blocks; never throws. Nothing when no run is live.
+    /// </summary>
+    public void ConsoleClosing()
+    {
+        if (_liveSession is not { } session || !EffectiveSettings.DockerServerStopOnExit || session.DockerInUse is not { } name)
+        {
+            return;
+        }
+
+        try
+        {
+            DiagnosticLog.Info(ChatScreen.AppCategory, DockerServerClosingLine(name));
+            foreach (string stopped in Task.Run(() => StopDockerAtExitAsync(session, CloseBudget)).GetAwaiter().GetResult())
+            {
+                DiagnosticLog.Info(ChatScreen.AppCategory, DockerServerExitNotice(stopped));
+            }
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            DiagnosticLog.Warn(ChatScreen.AppCategory, "Docker server stop on exit: " + Llm.Assistant.Explain(ex));
+        }
+    }
 
     /// <summary>A Docker switch's step, headless (2026-10-02): a notice line, written as it happens (the connect awaits nothing between).</summary>
     private void HeadlessDockerPhase(string phase)
@@ -1795,12 +1838,14 @@ public sealed class SidekickApp
         }
 
         _screen = screen;
+        _liveSession = session;
         try
         {
             return await screen.RunAsync(cancellationToken).ConfigureAwait(false);
         }
         finally
         {
+            _liveSession = null;
             _screen = null;
             if (mouse is not null)
             {

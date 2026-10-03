@@ -159,6 +159,24 @@ bool interactive = !options.Headless && !options.IsCheck;
 using var consoleInput = interactive && geometry is not null ? WindowsConsoleInput.TryCreate() : null;
 var app = new SidekickApp(console, settings, environment, geometry: geometry, input: consoleInput, clipboard: WindowsClipboard.TryReadText, copyToClipboard: WindowsClipboard.TrySetText, clipboardImage: WindowsClipboard.TryReadImage, setTitle: title => ConsoleTitle.TrySet(title), openViewer: NeonSidekick.Viewer.PictureWindow.IsAvailable ? NeonSidekick.Viewer.PictureWindow.Open : null, viewPicture: NeonSidekick.Viewer.PictureWindow.IsAvailable ? NeonSidekick.Viewer.PictureWindow.OpenAt : null, followViewer: NeonSidekick.Viewer.PictureWindow.IsAvailable ? NeonSidekick.Viewer.PictureWindow.Follow : null, printSpooler: OperatingSystem.IsWindows() ? new NeonSidekick.Printing.WindowsPrintSpooler() : null, embeddedLlm: NeonSidekick.EmbeddedLlm.EmbeddedEndpoint.Offered ? () => NeonSidekick.EmbeddedLlm.EmbeddedLlmService.Create(settings.EmbeddedModelsDirectory, settings.LlamaDirectory) : null, perfSource: NeonSidekick.Perf.PerfSources.CreateDefault, frames: frames, camera: OperatingSystem.IsWindows() ? new NeonSidekick.Camera.MediaFoundationCameraSystem() : null, liveView: NeonSidekick.Viewer.PictureWindow.IsAvailable ? NeonSidekick.Viewer.PictureWindow.ShowLive : null, showShot: NeonSidekick.Viewer.PictureWindow.IsAvailable ? picture => NeonSidekick.Viewer.PictureWindow.OpenAt(picture, activate: false) : null);
 
+// The console window closed by its X button (2026-10-02, the user's report: Docker server stop on exit never ran then).
+// SIGHUP is CTRL_CLOSE_EVENT on Windows (a hangup elsewhere): no finally of the run's runs after it, and Windows ends the
+// process about 5 s on, so the handler does the exit's work itself, on the console's control thread, the process alive
+// until it returns. Cancel stays unset: the window still closes. Ctrl+C, Ctrl+Break and /exit take the usual way out.
+using var closing = System.Runtime.InteropServices.PosixSignalRegistration.Create(System.Runtime.InteropServices.PosixSignal.SIGHUP, _ =>
+{
+    app.ConsoleClosing();
+    // The debounced save the normal exit flushes below, as the quarter-second rule asks. A failure must not throw here.
+    try
+    {
+        settings.FlushAsync().GetAwaiter().GetResult();
+    }
+    catch (Exception ex)
+    {
+        DiagnosticLog.Warn(AppSettings.Category, "Settings flush on window close: " + ex.Message);
+    }
+});
+
 // The viewer's Themed image viewer switch (later on 2026-09-27), read from the effective settings on the viewer's thread.
 NeonSidekick.Viewer.PictureWindow.Themed = () => app.EffectiveSettings.ThemedViewer;
 // The viewer's keys highlight the same picture in the strip (2026-09-28).

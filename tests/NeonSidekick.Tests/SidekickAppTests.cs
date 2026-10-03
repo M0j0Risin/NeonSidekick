@@ -68,7 +68,8 @@ public partial class SidekickAppTests : IDisposable
         Func<string, ISpeechRecognizer>? recognizer = null,
         Func<string, VadOptions, IVoiceActivityDetector>? vad = null,
         Func<int>? microphones = null,
-        Func<string, string, IWakeWordDetector>? wake = null)
+        Func<string, string, IWakeWordDetector>? wake = null,
+        Func<NeonSidekick.Docker.IDockerServers>? dockerServers = null)
         => new(
             _console,
             _settings,
@@ -102,7 +103,9 @@ public partial class SidekickAppTests : IDisposable
             // The Docker engine over the same stub (2026-10-02): no test reaches the real pipe; unmapped, the engine is unreachable.
             dockerClient: pipe => new NeonSidekick.Docker.DockerClient(pipe, new HttpClient(_http)),
             // The camera (2026-10-02): none unless a test hands in the fake.
-            camera: _camera);
+            camera: _camera,
+            // The Docker servers' switcher (2026-10-02): the real host over the stub unless a test hands in the fake.
+            dockerServers: dockerServers);
 
     private FakeCameraSystem? _camera;
 
