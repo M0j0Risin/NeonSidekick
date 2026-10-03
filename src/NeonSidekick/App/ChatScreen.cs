@@ -1298,61 +1298,136 @@ internal sealed partial class ChatScreen
     /// lock is, the officer while on and the ninja while off). Its double-click is <c>/police</c> as the officer's is. Pinned.
     /// </summary>
     public const string NinjaToolGlyph = "🥷";
-    public static readonly string ToolbarStrip = string.Join(GlyphSeparator, SettingsToolGlyph, ProfileToolGlyph, ToolsToolGlyph, McpToolGlyph, SkillsToolGlyph, SysToolGlyph, SessionsToolGlyph, UsageToolGlyph, PerfToolGlyph);
 
     /// <summary>
-    /// The strip drawn for the switches, in the strip's order: <see cref="ToolbarStrip"/>, the disk
-    /// while <paramref name="memory"/> is on, the closed lock under <c>ask</c> or the open one under
-    /// <c>yolo</c> (neither under <c>off</c>), the officer while <paramref name="police"/> is on and the policy is not <c>off</c>
-    /// (later on 2026-09-22, the user's ask: with no shell tool offered there is nothing to police) — and the ninja while it is
-    /// off (2026-10-02, the user's ask: the item stays, as the lock does, its glyph telling which; still none under <c>off</c>).
-    /// The nine alone with everything off. Every item checked (not the saved default, which narrowed on 2026-09-29). Pinned.
+    /// The tool switches (2026-10-03, the user's picks): each always drawn, on the off slab while its switch is off
+    /// (<see cref="ToolbarStripFor(IReadOnlySet{string}, AppSettingsData)"/>), its double-click the switch's page
+    /// (<see cref="ToolsText.SwitchLine"/>). The shell is <c>Shell command policy</c>, on the slab under <c>off</c>. Pinned.
+    /// </summary>
+    public const string ShellToolGlyph = "🐚";
+    public const string FilesToolGlyph = "📁";
+    public const string WebToolGlyph = "🌐";
+    public const string ClaudeToolGlyph = "✴️";
+    public const string DockerToolGlyph = DockerText.Glyph;
+    public const string ObsidianToolGlyph = "💎";
+    public const string SqlToolGlyph = "🪟";
+    public const string OracleToolGlyph = "🔮";
+    public const string MySqlToolGlyph = "🐬";
+    public const string UncToolGlyph = "🔗";
+    public const string HaToolGlyph = "🏠";
+    public const string ComfyToolGlyph = "🎨";
+    public const string CameraToolGlyph = "📸";
+    public const string PrintToolGlyph = "🖨️";
+
+    /// <summary>
+    /// The windows (2026-10-03, the user's picks): the log, <c>/camera live</c>'s window and the picture viewer (the picture
+    /// strip's button glyph), always drawn; a double-click opens the window, or closes it while it is open, as Ctrl+Alt+G, V
+    /// and U do (<see cref="CloseByChord"/>). Pinned.
+    /// </summary>
+    public const string LogToolGlyph = "📄";
+    public const string LiveViewToolGlyph = "📺";
+    public const string ComfyViewToolGlyph = ViewerText.StripButton;
+
+    /// <summary>The lines the window items run (2026-10-03): the typed commands their chords run. Pinned.</summary>
+    public const string LogToolLine = "/log";
+    public const string LiveViewToolLine = "/camera live";
+    public const string ComfyViewToolLine = "/comfy " + ViewerText.ViewWord;
+
+    /// <summary>Whether <paramref name="line"/> is a window item's (<see cref="LogToolLine"/> and the two viewers'): its double-click closes the window while it is open, as the chord's second press does.</summary>
+    public static bool TogglesWindow(string? line) => line is LogToolLine or LiveViewToolLine or ComfyViewToolLine;
+
+    /// <summary>
+    /// The glyphs every item checked always draws, in strip order: all but the disk, the lock and the officer, which come and
+    /// go with their switches (the tool switches since 2026-10-03 are drawn on or off, never gone). Pinned.
+    /// </summary>
+    public static readonly string ToolbarStrip = string.Join(GlyphSeparator, ToolbarItems.Names
+        .Where(id => id is not (ToolbarItems.Memory or ToolbarItems.CmdList or ToolbarItems.Police or ToolbarItems.Path))
+        .Select(ToolbarItems.Glyph));
+
+    /// <summary>
+    /// The strip drawn for the switches, in the strip's order (the user's, 2026-10-03): the disk while <paramref name="memory"/>
+    /// is on, the closed lock under <c>ask</c> or the open one under <c>yolo</c> (neither under <c>off</c>), the officer while
+    /// <paramref name="police"/> is on and the policy is not <c>off</c> (later on 2026-09-22, the user's ask: with no shell tool
+    /// offered there is nothing to police) — and the ninja while it is off (2026-10-02, the user's ask: the item stays, as the
+    /// lock does, its glyph telling which; still none under <c>off</c>); every other glyph always. <see cref="ToolbarStrip"/>
+    /// alone with everything off. Every item checked (not the saved default, which narrowed on 2026-09-29). Pinned.
     /// </summary>
     public static string ToolbarStripFor(bool memory, Shell.CommandPolicyMode policy, bool police) =>
         ToolbarStripFor(ToolbarItems.Names.ToHashSet(StringComparer.Ordinal), memory, policy, police);
 
     /// <summary>
-    /// The strip for the items Show toolbar checks (2026-09-29, the user's ask): each checked fixed glyph in strip order,
-    /// then the disk, the lock and the officer (or the ninja, 2026-10-02) where they are checked and their switches allow them;
-    /// empty when none is.
-    /// Pinned.
+    /// The strip for the items Show toolbar checks (2026-09-29, the user's ask): each checked glyph in strip order, the disk,
+    /// the lock and the officer (or the ninja, 2026-10-02) where their switches allow them; empty when none is. Pinned.
     /// </summary>
-    public static string ToolbarStripFor(IReadOnlySet<string> items, bool memory, Shell.CommandPolicyMode policy, bool police)
+    public static string ToolbarStripFor(IReadOnlySet<string> items, bool memory, Shell.CommandPolicyMode policy, bool police) =>
+        ToolbarGlyphs(items, memory, policy, police, static _ => false).Strip;
+
+    /// <summary>
+    /// The strip for the items Show toolbar checks under <paramref name="shown"/>, and the glyphs in it drawn on the off slab
+    /// (2026-10-03, the user's ask): by their place among the strip's glyphs, from 0 — each tool switch whose setting is off,
+    /// the shell under <c>off</c> (<see cref="ToolbarItemOff"/>). Pinned.
+    /// </summary>
+    public static (string Strip, IReadOnlyList<int> Off) ToolbarStripFor(IReadOnlySet<string> items, AppSettingsData shown)
+    {
+        ArgumentNullException.ThrowIfNull(shown);
+        return ToolbarGlyphs(items, shown.Memory, ToolbarPolicy(shown), shown.ShellPoliceOutsidePaths, id => ToolbarItemOff(id, shown));
+    }
+
+    /// <summary>
+    /// Whether item <paramref name="id"/> is drawn on the off slab under <paramref name="shown"/> (2026-10-03, the user's ask: a
+    /// dark slab behind the glyph, the one look that reads on a colour emoji): a tool switch that is off, the shell under the
+    /// policy <c>off</c>; never any other item. Pinned.
+    /// </summary>
+    public static bool ToolbarItemOff(string id, AppSettingsData shown)
+    {
+        ArgumentNullException.ThrowIfNull(shown);
+        return ToolsText.SwitchField(id) switch
+        {
+            null => false,
+            SettingsField.ShellCommandPolicy => ToolbarPolicy(shown) == Shell.CommandPolicyMode.Off,
+            { } field => !SettingsMenu.IsOn(field, shown),
+        };
+    }
+
+    /// <summary>The one walk over <see cref="ToolbarItems.Names"/> the strips share: the glyphs drawn and the places of the ones <paramref name="off"/> names.</summary>
+    private static (string Strip, IReadOnlyList<int> Off) ToolbarGlyphs(IReadOnlySet<string> items, bool memory, Shell.CommandPolicyMode policy, bool police, Func<string, bool> off)
     {
         ArgumentNullException.ThrowIfNull(items);
         var glyphs = new List<string>();
-        foreach (string id in new[] { ToolbarItems.Settings, ToolbarItems.Profile, ToolbarItems.Tools, ToolbarItems.Mcp, ToolbarItems.Skills, ToolbarItems.Sys, ToolbarItems.Sessions, ToolbarItems.Usage, ToolbarItems.Perf })
+        var dim = new List<int>();
+        foreach (string id in ToolbarItems.Names)
         {
-            if (items.Contains(id))
+            if (id == ToolbarItems.Path || !items.Contains(id))
             {
-                glyphs.Add(ToolbarItems.Glyph(id));
+                continue;
             }
-        }
 
-        if (memory && items.Contains(ToolbarItems.Memory))
-        {
-            glyphs.Add(MemoryToolGlyph);
-        }
-
-        if (items.Contains(ToolbarItems.CmdList))
-        {
-            switch (policy)
+            string? glyph = id switch
             {
-                case Shell.CommandPolicyMode.Ask:
-                    glyphs.Add(CmdAskToolGlyph);
-                    break;
-                case Shell.CommandPolicyMode.Yolo:
-                    glyphs.Add(CmdYoloToolGlyph);
-                    break;
+                ToolbarItems.Memory => memory ? MemoryToolGlyph : null,
+                ToolbarItems.CmdList => policy switch
+                {
+                    Shell.CommandPolicyMode.Ask => CmdAskToolGlyph,
+                    Shell.CommandPolicyMode.Yolo => CmdYoloToolGlyph,
+                    _ => null,
+                },
+                ToolbarItems.Police => policy == Shell.CommandPolicyMode.Off ? null : police ? PoliceToolGlyph : NinjaToolGlyph,
+                _ => ToolbarItems.Glyph(id),
+            };
+            if (glyph is null)
+            {
+                continue;
             }
+
+            if (off(id))
+            {
+                dim.Add(glyphs.Count);
+            }
+
+            glyphs.Add(glyph);
         }
 
-        if (policy != Shell.CommandPolicyMode.Off && items.Contains(ToolbarItems.Police))
-        {
-            glyphs.Add(police ? PoliceToolGlyph : NinjaToolGlyph);
-        }
-
-        return string.Join(GlyphSeparator, glyphs);
+        return (string.Join(GlyphSeparator, glyphs), dim);
     }
 
     /// <summary>
@@ -1493,6 +1568,12 @@ internal sealed partial class ChatScreen
     /// window the user closed in between is opened again. A chord held under a spinner waits for the idle line as a typed line
     /// and opens, as every chord there runs as typed. True when a window closed (and the notice is out); false runs the opener.
     /// </summary>
+    private bool CloseByChord(string line)
+    {
+        var (command, args) = ParseLine(line);
+        return CloseByChord(command, args);
+    }
+
     private bool CloseByChord(SlashCommand command, string args)
     {
         switch (command)
@@ -1516,9 +1597,9 @@ internal sealed partial class ChatScreen
     {
         var shown = _effective();
         var items = ToolbarItems.Resolve(shown.ToolbarItems);
-        string strip = ToolbarStripFor(items, shown.Memory, ToolbarPolicy(shown), shown.ShellPoliceOutsidePaths);
+        var (strip, off) = ToolbarStripFor(items, shown);
         string path = items.Contains(ToolbarItems.Path) ? WorkingDirectory.Resolve(shown.WorkingDirectory, _settings.ProfileDirectory) : "";
-        return strip.Length == 0 && path.Length == 0 ? null : new ScreenPane.ToolbarParts(strip, path);
+        return strip.Length == 0 && path.Length == 0 ? null : new ScreenPane.ToolbarParts(strip, path, off);
     }
 
     /// <summary>The policy the toolbar's lock shows for <paramref name="shown"/>: the saved word parsed, a hand-edited one read as <c>ask</c> without a warning (<see cref="Shell.CommandPolicy.Resolve"/> warns once, at the turn).</summary>
@@ -1568,10 +1649,30 @@ internal sealed partial class ChatScreen
     {
         string? chord = _pane.TakeDismissChord();
         var hit = _pane.TakeDismissHit();
-        return chord is not null ? (chord, true) : (hit is { } h ? OffPaneLine(h) : null, false);
+        if (chord is not null)
+        {
+            return (chord, true);
+        }
+
+        // A window item's double-click (2026-10-03) counts as its chord: it closes the window while it is open, and under a
+        // reply it reaches the live row's quick path as the chord would, where a click that names no pane is the close alone.
+        string? clicked = hit is { } h ? OffPaneLine(h) : null;
+        return (clicked, TogglesWindow(clicked));
     }
 
-    /// <summary>The command a double-click on a toolbar glyph runs (2026-09-21), as the typed word; null for anything else. The officer's is <c>/police</c> since later on 2026-09-22 (nothing until then), and the ninja's the same (2026-10-02). Pinned.</summary>
+    /// <summary>
+    /// Whether the line off a pane names the pane's own command, so it ends there, the pane closed: the same command with the
+    /// same words (2026-10-03: the command alone until then — <c>/tools web</c> off the Tools pane, the toolbar's 🌐, is another
+    /// page to open, as <c>/camera live</c> off the camera pane is the live window to open).
+    /// </summary>
+    private static bool SameCommandLine(string next, string current)
+    {
+        var (nextCommand, nextArgs) = ParseLine(next);
+        var (command, args) = ParseLine(current);
+        return nextCommand == command && string.Equals(nextArgs.Trim(), args.Trim(), StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>The command a double-click on a toolbar glyph runs (2026-09-21), as the typed word; null for anything else. The officer's is <c>/police</c> since later on 2026-09-22 (nothing until then), and the ninja's the same (2026-10-02). A tool switch's is its <c>/tools &lt;group&gt;</c> line and a window's its command (2026-10-03): <see cref="TogglesWindow"/> names the window lines, which close an open window. Pinned.</summary>
     public static string? ToolbarWord(string glyph) => glyph switch
     {
         SettingsToolGlyph => SlashCommands.SettingsWord,
@@ -1586,6 +1687,23 @@ internal sealed partial class ChatScreen
         MemoryToolGlyph => SlashCommands.MemoryWord,
         CmdAskToolGlyph or CmdYoloToolGlyph => SlashCommands.CmdListWord,
         PoliceToolGlyph or NinjaToolGlyph => SlashCommands.PoliceWord,
+        ShellToolGlyph => ToolsText.SwitchLine(ToolbarItems.Shell),
+        FilesToolGlyph => ToolsText.SwitchLine(ToolbarItems.Files),
+        WebToolGlyph => ToolsText.SwitchLine(ToolbarItems.Web),
+        ClaudeToolGlyph => ToolsText.SwitchLine(ToolbarItems.Claude),
+        DockerToolGlyph => ToolsText.SwitchLine(ToolbarItems.Docker),
+        ObsidianToolGlyph => ToolsText.SwitchLine(ToolbarItems.Obsidian),
+        SqlToolGlyph => ToolsText.SwitchLine(ToolbarItems.Sql),
+        OracleToolGlyph => ToolsText.SwitchLine(ToolbarItems.Oracle),
+        MySqlToolGlyph => ToolsText.SwitchLine(ToolbarItems.MySql),
+        UncToolGlyph => ToolsText.SwitchLine(ToolbarItems.Unc),
+        HaToolGlyph => ToolsText.SwitchLine(ToolbarItems.Ha),
+        ComfyToolGlyph => ToolsText.SwitchLine(ToolbarItems.Comfy),
+        CameraToolGlyph => ToolsText.SwitchLine(ToolbarItems.Camera),
+        PrintToolGlyph => ToolsText.SwitchLine(ToolbarItems.Print),
+        LogToolGlyph => LogToolLine,
+        LiveViewToolGlyph => LiveViewToolLine,
+        ComfyViewToolGlyph => ComfyViewToolLine,
         _ => null,
     };
 
@@ -3511,6 +3629,9 @@ internal sealed partial class ChatScreen
 
             case SlashCommand.Perf:
                 return MentionCompleter.Matches(PerfBarMode.Words.Select(name => new CompletionItem(name, PerfBarMode.Describe(name))).ToList(), argText);
+
+            case SlashCommand.Tools:
+                return MentionCompleter.Matches(ToolsText.SwitchWords.Select(word => new CompletionItem(word, ToolsText.DescribeSwitch(word))).ToList(), argText);
 
             case SlashCommand.Tb:
                 return MentionCompleter.Matches(ToolbarItems.Words.Select(word => new CompletionItem(word, ToolbarItems.DescribeWord(word))).ToList(), argText);
@@ -7671,7 +7792,7 @@ internal sealed partial class ChatScreen
                     return 0;
                 }
 
-                if (TakeOffPane().Line is { } offPane)
+                if (TakeOffPane() is { Line: { } offPane } offPaneHit)
                 {
                     // A pane opened outside the dispatch (the startup's server picker, a job's, the read's own) that a command
                     // chord or a double-click off it closed (2026-10-01, the review's finding: it lay there until the next dispatch
@@ -7680,6 +7801,11 @@ internal sealed partial class ChatScreen
                     _timers.Acknowledge();
                     DisarmExit();
                     await _speech.StopAsync().ConfigureAwait(false);
+                    if (offPaneHit.Chord && CloseByChord(offPane))
+                    {
+                        continue;
+                    }
+
                     if (await HandleAsync(offPane, [], cancellationToken).ConfigureAwait(false))
                     {
                         return 0;
@@ -7911,6 +8037,12 @@ internal sealed partial class ChatScreen
                             ScreenPane.ToolbarZone.Row => SlashCommands.SettingsWord,
                             _ => ToolbarWord(tool.Hit.Glyph),
                         };
+                        if (TogglesWindow(toolbarLine) && CloseByChord(toolbarLine!))
+                        {
+                            // A window item's double-click while its window is open (2026-10-03): closed, as the chord's second press.
+                            break;
+                        }
+
                         if (toolbarLine is not null && await HandleAsync(toolbarLine, [], cancellationToken).ConfigureAwait(false))
                         {
                             return 0;
@@ -9749,15 +9881,20 @@ internal sealed partial class ChatScreen
     {
         while (true)
         {
-            var (command, _) = ParseLine(text);
             if (await HandleOnceAsync(text, images, cancellationToken).ConfigureAwait(false))
             {
                 return true;
             }
 
-            if (TakeOffPane().Line is not { } next || ParseLine(next).Command == command)
+            var (offPane, chord) = TakeOffPane();
+            if (offPane is not { } next || SameCommandLine(next, text))
             {
                 return false;
+            }
+
+            if (chord && CloseByChord(next))
+            {
+                return false;   // a window chord or item off the pane while its window was open (2026-10-03): closed
             }
 
             text = next;
@@ -10054,6 +10191,19 @@ internal sealed partial class ChatScreen
             case SlashCommand.Expand or SlashCommand.Collapse:
                 // The transcript's tool runs and code blocks (2026-09-22; /tools expand|collapse until later that day), no pane.
                 SetFolds(command == SlashCommand.Expand);
+                return false;
+
+            case SlashCommand.Tools when args.Trim().Length > 0:
+                // /tools <group> (2026-10-03, the toolbar's tool switches): the group's switch straight, as /police opens its row.
+                if (ToolsText.SwitchField(args) is { } switchField)
+                {
+                    await _toolsMenu.ShowSwitchAsync(switchField, cancellationToken).ConfigureAwait(false);
+                }
+                else
+                {
+                    _transcript.Error(ToolsText.SwitchUsageError);
+                }
+
                 return false;
 
             case SlashCommand.Tools:

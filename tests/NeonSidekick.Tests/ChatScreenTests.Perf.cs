@@ -101,7 +101,7 @@ public partial class ChatScreenTests
 
         string output = await RunAsync();
 
-        Assert.Equal(["off", "2 of 13", "off", "2 of 13", "2 of 13"], shown);
+        Assert.Equal(["off", "2 of 30", "off", "2 of 30", "2 of 30"], shown);
         Assert.Contains(ToolbarItems.Notice(false), output);
         Assert.Contains(ToolbarItems.Notice(true), output);
         Assert.Contains(ToolbarItems.UsageError, output);

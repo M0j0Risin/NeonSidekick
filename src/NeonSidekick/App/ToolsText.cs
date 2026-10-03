@@ -1,3 +1,4 @@
+using NeonSidekick.Settings;
 using NeonSidekick.UI;
 using Spectre.Console;
 
@@ -27,6 +28,55 @@ public static class ToolsText
 
     /// <summary>The first tab: <c>Offered</c> (the same word heads the Skills pane's catalog since 2026-09-19, the user's call).</summary>
     public const string OfferedTabTitle = "Offered";
+
+    /// <summary>
+    /// <c>/tools &lt;group&gt;</c>'s words (2026-10-03, the user's ask: the toolbar's tool switches): each opens its group's
+    /// switch straight, as <c>/police</c> opens Shell police's page — <c>shell</c> the <c>Shell command policy</c> picker, the
+    /// others their on/off page. In the toolbar's order; each is also its toolbar item's id. Pinned.
+    /// </summary>
+    public static readonly string[] SwitchWords =
+    [
+        ToolbarItems.Shell, ToolbarItems.Files, ToolbarItems.Web, ToolbarItems.Claude, ToolbarItems.Docker, ToolbarItems.Obsidian,
+        ToolbarItems.Sql, ToolbarItems.Oracle, ToolbarItems.MySql, ToolbarItems.Unc, ToolbarItems.Ha, ToolbarItems.Comfy,
+        ToolbarItems.Camera, ToolbarItems.Print,
+    ];
+
+    /// <summary>The setting a <see cref="SwitchWords"/> word opens (any case, trimmed); null for any other word. Pinned.</summary>
+    public static SettingsField? SwitchField(string word) => word.Trim().ToLowerInvariant() switch
+    {
+        ToolbarItems.Shell => SettingsField.ShellCommandPolicy,
+        ToolbarItems.Files => SettingsField.FileTools,
+        ToolbarItems.Web => SettingsField.WebTools,
+        ToolbarItems.Claude => SettingsField.ClaudeAdvisor,
+        ToolbarItems.Docker => SettingsField.DockerTools,
+        ToolbarItems.Obsidian => SettingsField.ObsidianTools,
+        ToolbarItems.Sql => SettingsField.SqlTools,
+        ToolbarItems.Oracle => SettingsField.OracleTools,
+        ToolbarItems.MySql => SettingsField.MySqlTools,
+        ToolbarItems.Unc => SettingsField.UncTools,
+        ToolbarItems.Ha => SettingsField.HomeAssistantTools,
+        ToolbarItems.Comfy => SettingsField.ComfyTools,
+        ToolbarItems.Camera => SettingsField.CameraTools,
+        ToolbarItems.Print => SettingsField.PrintTools,
+        _ => null,
+    };
+
+    /// <summary>The typed line that opens <paramref name="word"/>'s switch: <c>/tools web</c>. The toolbar item's double-click and its checklist note. Pinned.</summary>
+    public static string SwitchLine(string word) => SlashCommands.ToolsWord + " " + word;
+
+    /// <summary><c>/tools</c>' completion hint beside a group word: the setting it opens. Pinned.</summary>
+    public static string DescribeSwitch(string word) => SwitchField(word) is { } field ? SettingsMenu.FieldName(field) : "";
+
+    /// <summary>What <c>/tools &lt;group&gt;</c> prints without the pane: the setting and its value, <c>Web tools: on</c>. Pinned.</summary>
+    public static string SwitchStateLine(SettingsField field, AppSettingsData saved)
+    {
+        ArgumentNullException.ThrowIfNull(saved);
+        string value = field == SettingsField.ShellCommandPolicy ? saved.ShellCommandPolicy : State(SettingsMenu.IsOn(field, saved));
+        return SettingsMenu.FieldName(field) + ": " + value;
+    }
+
+    /// <summary><c>/tools</c> given a word that is no group. Pinned.</summary>
+    public static readonly string SwitchUsageError = "/tools takes one of " + string.Join(", ", SwitchWords) + ", or nothing for the pane.";
 
     /// <summary>The last tab (second from later on 2026-09-19, the user's ask, until 2026-09-22, the user's ask again): the pane's own settings — the <c>$</c>-mention switch and the two folds — in the <c>/skills</c> Options tab's shape (<see cref="SettingsMenu.ToolsTabFields"/>' last list).</summary>
     public const string OptionsTabTitle = "Options";

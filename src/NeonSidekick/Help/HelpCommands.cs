@@ -277,6 +277,7 @@ public static class HelpCommands
         new("/tools",
         [
             new("/tools", "Switch the model's tools on or off and edit their settings (Web, Files, Shell, Ask, Claude, Home Assistant, Print, Obsidian, ComfyUI, SQL, Oracle, MySQL, UNC, Git)."),
+            new("/tools <group>", "Open one group's switch on its own: `shell` (the *Shell command policy* picker; yolo asks first), `files`, `web`, `claude` (*Claude advisor tool*), `docker`, `obsidian`, `sql`, `oracle`, `mysql`, `unc`, `ha`, `comfy`, `camera` or `print` (each tool group's on/off page). The toolbar's tool items run it."),
         ]),
         new("/tree",
         [

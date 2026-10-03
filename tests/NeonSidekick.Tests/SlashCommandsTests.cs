@@ -91,12 +91,14 @@ public class SlashCommandsTests
     }
 
     [Fact]
-    public void ExpandAndCollapse_TakeNothing_NorDoesTools()
+    public void ExpandAndCollapse_TakeNothing_ToolsTakesAGroup()
     {
-        // Later on 2026-09-22 (the user's ask): /tools expand | collapse became the root /expand and /collapse.
+        // Later on 2026-09-22 (the user's ask): /tools expand | collapse became the root /expand and /collapse. /tools takes a
+        // word again since 2026-10-03 (/tools <group>, the toolbar's tool switches): the handler judges it, expand its usage error.
         Assert.Equal((SlashCommand.Overloaded, "now"), SlashCommands.Parse("/expand now"));
         Assert.Equal((SlashCommand.Overloaded, "all"), SlashCommands.Parse("/collapse all"));
-        Assert.Equal((SlashCommand.Overloaded, "expand"), SlashCommands.Parse("/tools expand"));
+        Assert.Equal((SlashCommand.Tools, "expand"), SlashCommands.Parse("/tools expand"));
+        Assert.Equal((SlashCommand.Tools, "web"), SlashCommands.Parse("/tools web"));
     }
 
     [Fact]
@@ -373,7 +375,7 @@ public class SlashCommandsTests
             SlashCommand.Persona, SlashCommand.Operata, SlashCommand.Vocalia,
             SlashCommand.Remember, SlashCommand.Memory, SlashCommand.CmdCopy, SlashCommand.KeyCopy, SlashCommand.Profile, SlashCommand.Timer,   // /cmdcopy 2026-09-21; /keycopy 2026-09-28; /memory 2026-09-22 (forget, then copy <profile> [overwrite], the folded /memcopy)
             SlashCommand.Cwd, SlashCommand.Tree, SlashCommand.Vault, SlashCommand.Explore, SlashCommand.Copy, SlashCommand.Session, SlashCommand.GitUser,   // /vault [path] 2026-09-23
-            SlashCommand.Loop, SlashCommand.Plan, SlashCommand.BotChat, SlashCommand.Claude, SlashCommand.Queue, SlashCommand.Skills, SlashCommand.Test, SlashCommand.HomeAssistant, SlashCommand.Docker, SlashCommand.Camera, SlashCommand.Print, SlashCommand.Perf, SlashCommand.Tb, SlashCommand.Header, SlashCommand.Rewind, SlashCommand.Log,   // /log [--file] later on 2026-10-02; /camera and /docker 2026-10-02; /header [on|off] later still on 2026-10-01; /tb [on|off] later on 2026-09-30; /rewind [n] 2026-09-30; /perf later on 2026-09-29; /print 2026-09-28; /ha 2026-09-28; /test 2026-09-28; /claude 2026-09-27; /skills add 2026-09-26; /plan 2026-09-26; /botchat 2026-09-24; 2026-09-21 (/queue clear later that day; /skills with edit <name> from then until 2026-09-23); /tools off the list later on 2026-09-22, its expand and collapse root words
+            SlashCommand.Loop, SlashCommand.Plan, SlashCommand.BotChat, SlashCommand.Claude, SlashCommand.Queue, SlashCommand.Skills, SlashCommand.Test, SlashCommand.HomeAssistant, SlashCommand.Docker, SlashCommand.Camera, SlashCommand.Print, SlashCommand.Perf, SlashCommand.Tb, SlashCommand.Header, SlashCommand.Rewind, SlashCommand.Log, SlashCommand.Tools,   // /tools <group> 2026-10-03; /log [--file] later on 2026-10-02; /camera and /docker 2026-10-02; /header [on|off] later still on 2026-10-01; /tb [on|off] later on 2026-09-30; /rewind [n] 2026-09-30; /perf later on 2026-09-29; /print 2026-09-28; /ha 2026-09-28; /test 2026-09-28; /claude 2026-09-27; /skills add 2026-09-26; /plan 2026-09-26; /botchat 2026-09-24; 2026-09-21 (/queue clear later that day; /skills with edit <name> from then until 2026-09-23); /tools off the list later on 2026-09-22, its expand and collapse root words
         ];
         foreach (var command in Enum.GetValues<SlashCommand>())
         {
@@ -602,7 +604,7 @@ public class SlashCommandsTests
 
         string Summary(string command) => SlashCommands.HelpEntries.Single(e => e.Command == command).Summary;
         Assert.Equal("list, restore, rename and purge sessions: /sessions [<id> | purge <id> | purge older <age> | purge all | title [<text>]]", Summary("/sessions"));
-        Assert.Equal("switch the model's tools on or off and edit the Options, Ask, Files and Web settings on a pane", Summary("/tools"));   // expand | collapse came and went on 2026-09-22 (the root /expand and /collapse now)
+        Assert.Equal("switch the model's tools on or off and edit the Options, Ask, Files and Web settings on a pane, or /tools <group> for one group's switch", Summary("/tools"));   // expand | collapse came and went on 2026-09-22 (the root /expand and /collapse now); <group> 2026-10-03
         Assert.Equal("connect external MCP servers and switch their tools on or off on a pane", Summary("/mcp"));
         Assert.Equal("list the skills (Enter on one moves, renames, edits or deletes it), edit the skill settings and the project file on a pane; /skills add <search words | owner/repo[/skill] | url> installs one from skills.sh or GitHub", Summary("/skills"));   // add 2026-09-26; edit 2026-09-21, the scope page's edit row in its place 2026-09-23
         Assert.Equal("write or improve a skill from the last turn or the stored sessions, in the background: /learn [what to keep] | sessions [N | what to search]", Summary("/learn"));   // the sessions form 2026-09-19

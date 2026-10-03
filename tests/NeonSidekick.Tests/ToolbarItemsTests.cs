@@ -10,13 +10,20 @@ public sealed class ToolbarItemsTests
     [Fact]
     public void TheItems_AreTheStripInOrder_ThePathLast()
     {
-        // The ID card after the gear and the rising chart after the Usage chart (later on 2026-09-29, the user's ask).
-        Assert.Equal(["settings", "profile", "tools", "mcp", "skills", "sys", "sessions", "usage", "perf", "memory", "cmdlist", "police", "path"], ToolbarItems.Names);
-        Assert.Equal(ChatScreen.ToolbarStrip, string.Join(" ", ToolbarItems.Names.Take(9).Select(ToolbarItems.Glyph)));   // one source for the glyphs
-        Assert.Equal([ChatScreen.MemoryToolGlyph, ChatScreen.CmdAskToolGlyph, ChatScreen.PoliceToolGlyph, "📂"], ToolbarItems.Names.Skip(9).Select(ToolbarItems.Glyph));   // the folder since 2026-09-29
+        // The ID card after the gear and the rising chart after the Usage chart (later on 2026-09-29, the user's ask); the tool
+        // switches, the log and the two viewers in the user's order, the chart moved behind the log (2026-10-03).
+        Assert.Equal(
+        [
+            "settings", "profile", "tools", "mcp", "skills", "sys", "sessions", "usage", "memory", "cmdlist", "police",
+            "shell", "files", "web", "claude", "docker", "obsidian", "sql", "oracle", "mysql", "unc", "ha", "comfy", "camera", "print",
+            "log", "perf", "liveview", "comfyview", "path",
+        ], ToolbarItems.Names);
+        Assert.Equal("⚙️ 🪪 🛠️ 🔌 🎓 🎭 💬 📊 💾 🔒 👮 🐚 📁 🌐 ✴️ 🐳 💎 🪟 🔮 🐬 🔗 🏠 🎨 📸 🖨️ 📄 📈 📺 🎞️ 📂", string.Join(" ", ToolbarItems.Names.Select(ToolbarItems.Glyph)));   // the folder since 2026-09-29
+        Assert.Equal(ChatScreen.ToolbarStrip, string.Join(" ", ToolbarItems.Names.Where(id => id is not ("memory" or "cmdlist" or "police" or "path")).Select(ToolbarItems.Glyph)));   // one source for the glyphs
         Assert.Equal(FolderText.FolderGlyph, ToolbarItems.Glyph(ToolbarItems.Path));   // the Folders pane's, one source
-        Assert.All(ToolbarItems.Names.Take(12), id => Assert.Equal(ChatScreen.ToolbarWord(ToolbarItems.Glyph(id)), ToolbarItems.Describe(id).Split(' ')[0]));   // the note names what the glyph opens
-        Assert.Equal(ChatScreen.CwdBrowseLine, ToolbarItems.Describe(ToolbarItems.Path)[..ChatScreen.CwdBrowseLine.Length]);
+        Assert.All(ToolbarItems.Names.SkipLast(1), id => Assert.Equal(ChatScreen.ToolbarWord(ToolbarItems.Glyph(id)), ToolbarItems.Describe(id)));   // the note is the line the glyph runs
+        Assert.Equal(ChatScreen.CwdBrowseLine, ToolbarItems.Describe(ToolbarItems.Path));
+        Assert.Equal(ToolsText.SwitchWords, ToolbarItems.Names.Where(id => ToolsText.SwitchField(id) is not null));   // each switch's id is its /tools word
     }
 
     [Fact]
@@ -69,14 +76,23 @@ public sealed class ToolbarItemsTests
     [Fact]
     public void Value_AndLabels_ArePinned()
     {
-        Assert.Equal("3 of 13", ToolbarItems.Value(null));   // the defaults (2026-10-02)
+        Assert.Equal("3 of 30", ToolbarItems.Value(null));   // the defaults (2026-10-02; of 13 until 2026-10-03)
         Assert.Equal("all", ToolbarItems.Value([.. ToolbarItems.Names]));
         Assert.Equal("off", ToolbarItems.Value([]));
-        Assert.Equal("2 of 13", ToolbarItems.Value(["usage", "path"]));
+        Assert.Equal("2 of 30", ToolbarItems.Value(["usage", "path"]));
         Assert.Equal("[[x]] ⚙️  Settings                " + Theme.DimMarkup("/settings"), ToolbarItems.Label("settings", true));
         Assert.Equal("[[ ]] 📂  Working directory path  " + Theme.DimMarkup("/cwd browse"), ToolbarItems.Label("path", false));
         Assert.Equal("[[x]] 💾  Memory                  " + Theme.DimMarkup("/memory"), ToolbarItems.Label("memory", true));
         Assert.Equal("[[x]] 🪪  Profile                 " + Theme.DimMarkup("/profile"), ToolbarItems.Label("profile", true));
         Assert.Equal("[[ ]] 📈  Performance             " + Theme.DimMarkup("/perf"), ToolbarItems.Label("perf", false));   // the command alone (2026-10-02)
+        // The tool switches, the log and the viewers (2026-10-03, the user's names).
+        Assert.Equal("[[x]] 🐚  Shell                   " + Theme.DimMarkup("/tools shell"), ToolbarItems.Label("shell", true));
+        Assert.Equal("[[ ]] ✴️  Claude                  " + Theme.DimMarkup("/tools claude"), ToolbarItems.Label("claude", false));
+        Assert.Equal("[[ ]] 🪟  SQL                     " + Theme.DimMarkup("/tools sql"), ToolbarItems.Label("sql", false));
+        Assert.Equal("[[ ]] 🏠  HA                      " + Theme.DimMarkup("/tools ha"), ToolbarItems.Label("ha", false));
+        Assert.Equal("[[ ]] 🎨  ComfyUI                 " + Theme.DimMarkup("/tools comfy"), ToolbarItems.Label("comfy", false));
+        Assert.Equal("[[ ]] 📄  Log                     " + Theme.DimMarkup("/log"), ToolbarItems.Label("log", false));
+        Assert.Equal("[[ ]] 📺  Live viewer             " + Theme.DimMarkup("/camera live"), ToolbarItems.Label("liveview", false));
+        Assert.Equal("[[ ]] 🎞️  Comfy viewer            " + Theme.DimMarkup("/comfy view"), ToolbarItems.Label("comfyview", false));
     }
 }

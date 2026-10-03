@@ -253,6 +253,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     private Func<ToolbarParts?> _toolbar = static () => null;
     private int _toolbarRows;
     private string? _shownToolbar;
+    private string _shownToolbarOff = "";
     private string _toolbarStrip = "";
     private int _toolbarPathColumn = -1;
     private int _toolbarPathCells;
@@ -349,9 +350,10 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     /// the text pinned at the right edge — the working directory, cut from the front to what is
     /// left (<see cref="ToolbarRow"/>) — and a target of its own (<see cref="ToolbarZone.Path"/>):
     /// a folder glyph sat beside it as the button until later that day, when the user made the
-    /// path the button.
+    /// path the button. <paramref name="Off"/> (2026-10-03, the user's ask) names the strip's glyphs drawn on the off slab
+    /// (<see cref="Theme.ToolbarOff"/>) by their place among its glyphs, from 0: a tool switch that is off. Null or empty, none.
     /// </summary>
-    public readonly record struct ToolbarParts(string Strip, string Path);
+    public readonly record struct ToolbarParts(string Strip, string Path, IReadOnlyList<int>? Off = null);
 
     /// <summary>The part of the toolbar a click landed on (<see cref="TryHitToolbar"/>).</summary>
     public enum ToolbarZone
@@ -4674,19 +4676,90 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         string row = ToolbarRow(toolbar.Strip, toolbar.Path, cells);
         string strip = Fit(toolbar.Strip, cells);   // as ToolbarRow placed it: the path is what follows the blanks
         string path = row[strip.Length..].TrimStart(' ');
-        _inner.Write(new RawText(strip, Theme.Hint));
+        foreach (var (text, off) in ToolbarStripRuns(strip, toolbar.Off))
+        {
+            _inner.Write(new RawText(text, off ? Theme.ToolbarOff : Theme.Hint));
+        }
+
         _inner.Write(new RawText(row[strip.Length..], Theme.DimText));
         _inner.Write(EraseLineEnd);
         _shownToolbar = row;
+        _shownToolbarOff = OffKey(toolbar.Off);
         _toolbarStrip = strip;
         _toolbarPathCells = TextCells.Width(path);
         _toolbarPathColumn = path.Length == 0 ? -1 : cells - _toolbarPathCells;
     }
 
+    /// <summary>
+    /// The toolbar's strip as drawn (2026-10-03, the user's ask: a tool switch that is off sits on a dark slab, the one look
+    /// that reads on a colour emoji — faint and a grey colour leave it as it was): runs of <paramref name="strip"/> in order,
+    /// each glyph <paramref name="off"/> names (by its place among the glyphs, from 0) a run of its own on the slab, its
+    /// variation selector with it (<see cref="TryStripGlyphAt"/>'s walk); the separators and every other glyph in the plain
+    /// runs between. The cut's <c>…</c> is never on the slab. Pinned.
+    /// </summary>
+    public static IReadOnlyList<(string Text, bool Off)> ToolbarStripRuns(string strip, IReadOnlyList<int>? off)
+    {
+        ArgumentNullException.ThrowIfNull(strip);
+        var runs = new List<(string Text, bool Off)>();
+        if (off is null || off.Count == 0)
+        {
+            if (strip.Length > 0)
+            {
+                runs.Add((strip, false));
+            }
+
+            return runs;
+        }
+
+        int plainStart = 0;
+        int glyph = 0;
+        int i = 0;
+        while (i < strip.Length)
+        {
+            TextCells.ElementWidth(strip, i, out int length);
+            length = Math.Max(1, length);
+            if (i + length < strip.Length && strip[i + length] is '\uFE0F' or '\uFE0E')
+            {
+                TextCells.ElementWidth(strip, i + length, out int selector);
+                length += Math.Max(1, selector);
+            }
+
+            string element = strip.Substring(i, length);
+            if (!string.IsNullOrWhiteSpace(element))
+            {
+                if (off.Contains(glyph) && element != "…")
+                {
+                    if (i > plainStart)
+                    {
+                        runs.Add((strip[plainStart..i], false));
+                    }
+
+                    runs.Add((element, true));
+                    plainStart = i + length;
+                }
+
+                glyph++;
+            }
+
+            i += length;
+        }
+
+        if (plainStart < strip.Length)
+        {
+            runs.Add((strip[plainStart..], false));
+        }
+
+        return runs;
+    }
+
+    /// <summary>The off glyphs as one comparable word, so the tick redraws a flip that leaves the row's text as it was.</summary>
+    private static string OffKey(IReadOnlyList<int>? off) => off is null || off.Count == 0 ? "" : string.Join(',', off);
+
     /// <summary>No toolbar drawn: nothing for the tick to compare, no zones for the hit test.</summary>
     private void ForgetToolbar()
     {
         _shownToolbar = null;
+        _shownToolbarOff = "";
         _toolbarStrip = "";
         _toolbarPathColumn = -1;
         _toolbarPathCells = 0;
@@ -4965,8 +5038,10 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         }
     }
 
-    /// <summary>The toolbar <see cref="Toolbar"/> answers now is not the drawn one (its text — a presence change is <see cref="ToolbarRowsFor"/> against the drawn rows).</summary>
-    private bool ToolbarChanged() => _toolbarRows > 0 && _toolbar() is { } toolbar && !string.Equals(ToolbarRow(toolbar.Strip, toolbar.Path, Math.Max(1, Width - 1)), _shownToolbar, StringComparison.Ordinal);
+    /// <summary>The toolbar <see cref="Toolbar"/> answers now is not the drawn one (its text, or its off slabs since 2026-10-03 — a presence change is <see cref="ToolbarRowsFor"/> against the drawn rows).</summary>
+    private bool ToolbarChanged() => _toolbarRows > 0 && _toolbar() is { } toolbar
+        && (!string.Equals(ToolbarRow(toolbar.Strip, toolbar.Path, Math.Max(1, Width - 1)), _shownToolbar, StringComparison.Ordinal)
+            || !string.Equals(OffKey(toolbar.Off), _shownToolbarOff, StringComparison.Ordinal));
 
     /// <summary>The performance bar <see cref="Perf"/> answers now is not the drawn one (its text — a presence change is <see cref="PerfRowsFor"/> against the drawn rows).</summary>
     private bool PerfChanged() => _perfRows > 0 && _perf(Math.Max(1, Width - 1)) is { } row && !string.Equals(row.Text, _shownPerf, StringComparison.Ordinal);

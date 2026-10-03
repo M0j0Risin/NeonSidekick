@@ -11,6 +11,9 @@ namespace NeonSidekick.App;
 /// a new one too, until later on 2026-09-29, the user's call); an empty list is no toolbar row at all. <see cref="Resolve"/> is the one place the saved list becomes the set: a display
 /// setting, so an unknown word is dropped without a warning. The glyphs are <see cref="ChatScreen"/>'s, one source; the
 /// memory, lock and police items keep the switches they followed before (<see cref="ChatScreen.ToolbarStripFor(IReadOnlySet{string}, bool, Shell.CommandPolicyMode, bool)"/>).
+/// Seventeen more on 2026-10-03 (the user's ask, their glyphs and names): the tool switches, each opening its group's switch
+/// (<c>/tools &lt;group&gt;</c>) and drawn on the off slab while it is off, and the log and the two viewers, each opening its
+/// window or closing it as its chord does; the user's order with them, the chart moved behind the log.
 /// </summary>
 public static class ToolbarItems
 {
@@ -26,10 +29,41 @@ public static class ToolbarItems
     public const string Memory = "memory";
     public const string CmdList = "cmdlist";
     public const string Police = "police";
+
+    // The tool switches (2026-10-03, the user's ask): each opens its group's switch on a pane (/tools <group>), and is drawn
+    // on the off slab while the switch is off; Shell is the command policy, off/ask/yolo, on the slab under off. Each id is
+    // the group's /tools word (ToolsText.SwitchWords).
+    public const string Shell = "shell";
+    public const string Files = "files";
+    public const string Web = "web";
+    public const string Claude = "claude";
+    public const string Docker = "docker";
+    public const string Obsidian = "obsidian";
+    public const string Sql = "sql";
+    public const string Oracle = "oracle";
+    public const string MySql = "mysql";
+    public const string Unc = "unc";
+    public const string Ha = "ha";
+    public const string Comfy = "comfy";
+    public const string Camera = "camera";
+    public const string Print = "print";
+
+    // The windows (2026-10-03, the user's ask): each opens or closes its window as its Ctrl+Alt chord does.
+    public const string Log = "log";
+    public const string LiveView = "liveview";
+    public const string ComfyView = "comfyview";
     public const string Path = "path";
 
-    /// <summary>Every item in strip order, the path last (it sits at the row's right). Pinned.</summary>
-    public static readonly string[] Names = [Settings, Profile, Tools, Mcp, Skills, Sys, Sessions, Usage, Perf, Memory, CmdList, Police, Path];
+    /// <summary>
+    /// Every item in strip order, the path last (it sits at the row's right). The order is the user's (2026-10-03): the panes,
+    /// the disk, the lock and the officer, the tool switches, the log, the chart, the two viewers. Pinned.
+    /// </summary>
+    public static readonly string[] Names =
+    [
+        Settings, Profile, Tools, Mcp, Skills, Sys, Sessions, Usage, Memory, CmdList, Police,
+        Shell, Files, Web, Claude, Docker, Obsidian, Sql, Oracle, MySql, Unc, Ha, Comfy, Camera, Print,
+        Log, Perf, LiveView, ComfyView, Path,
+    ];
 
     /// <summary>
     /// What a profile that never chose shows (2026-10-02, the user's pick): Shell allowed commands, Shell police and the
@@ -56,6 +90,23 @@ public static class ToolbarItems
         Memory => ChatScreen.MemoryToolGlyph,
         CmdList => ChatScreen.CmdAskToolGlyph,
         Police => ChatScreen.PoliceToolGlyph,
+        Shell => ChatScreen.ShellToolGlyph,
+        Files => ChatScreen.FilesToolGlyph,
+        Web => ChatScreen.WebToolGlyph,
+        Claude => ChatScreen.ClaudeToolGlyph,
+        Docker => ChatScreen.DockerToolGlyph,
+        Obsidian => ChatScreen.ObsidianToolGlyph,
+        Sql => ChatScreen.SqlToolGlyph,
+        Oracle => ChatScreen.OracleToolGlyph,
+        MySql => ChatScreen.MySqlToolGlyph,
+        Unc => ChatScreen.UncToolGlyph,
+        Ha => ChatScreen.HaToolGlyph,
+        Comfy => ChatScreen.ComfyToolGlyph,
+        Camera => ChatScreen.CameraToolGlyph,
+        Print => ChatScreen.PrintToolGlyph,
+        Log => ChatScreen.LogToolGlyph,
+        LiveView => ChatScreen.LiveViewToolGlyph,
+        ComfyView => ChatScreen.ComfyViewToolGlyph,
         Path => FolderText.FolderGlyph,
         _ => "",
     };
@@ -75,6 +126,23 @@ public static class ToolbarItems
         Memory => "Memory",
         CmdList => "Shell allowed commands",
         Police => "Shell police",
+        Shell => "Shell",
+        Files => "Files",
+        Web => "Web",
+        Claude => "Claude",
+        Docker => "Docker",
+        Obsidian => "Obsidian",
+        Sql => "SQL",
+        Oracle => "Oracle",
+        MySql => "MySQL",
+        Unc => "UNC",
+        Ha => "HA",
+        Comfy => "ComfyUI",
+        Camera => "Camera",
+        Print => "Print",
+        Log => "Log",
+        LiveView => "Live viewer",
+        ComfyView => "Comfy viewer",
         Path => "Working directory path",
         _ => id,
     };
@@ -97,8 +165,11 @@ public static class ToolbarItems
         Memory => "/memory",
         CmdList => "/cmdlist",
         Police => "/police",
+        Log => ChatScreen.LogToolLine,
+        LiveView => ChatScreen.LiveViewToolLine,
+        ComfyView => ChatScreen.ComfyViewToolLine,
         Path => "/cwd browse",
-        _ => "",
+        _ => ToolsText.SwitchField(id) is null ? "" : ToolsText.SwitchLine(id),
     };
 
     /// <summary>The checklist's name column: "Working directory path" (22) plus two.</summary>
@@ -199,7 +270,7 @@ public static class ToolbarItems
         return new(last is null || Resolve(last).Count == 0 ? null : Save(Resolve(last)), last?.ToList());
     }
 
-    /// <summary>The <c>Show toolbar</c> row's value: <c>all</c>, <c>off</c> with nothing checked, else <c>4 of 13</c>. Pinned.</summary>
+    /// <summary>The <c>Show toolbar</c> row's value: <c>all</c>, <c>off</c> with nothing checked, else <c>4 of 30</c>. Pinned.</summary>
     public static string Value(IReadOnlyList<string>? saved)
     {
         int count = Resolve(saved).Count;

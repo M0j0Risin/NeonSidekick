@@ -4290,6 +4290,52 @@ public class ScreenPaneTests : IDisposable
         Assert.Equal(new ScreenPane.HintHit(ScreenPane.HintZone.Strip, "🔊", 3), ScreenPane.HintHitAt("🏷️ 🔊", -1, 3));
     }
 
+    /// <summary>
+    /// The toolbar's off slab (2026-10-03, the user's ask): each glyph the parts name off a run of its own, its selector with
+    /// it, the separators and the rest plain; the cut's ellipsis never on the slab.
+    /// </summary>
+    [Fact]
+    public void ToolbarStripRuns_IsPinned()
+    {
+        const string strip = "⚙️ 🌐 🐳";
+        Assert.Equal(new (string, bool)[] { (strip, false) }, ScreenPane.ToolbarStripRuns(strip, null));
+        Assert.Equal(new (string, bool)[] { (strip, false) }, ScreenPane.ToolbarStripRuns(strip, []));
+        Assert.Empty(ScreenPane.ToolbarStripRuns("", null));
+        Assert.Equal(new (string, bool)[] { ("⚙️ ", false), ("🌐", true), (" 🐳", false) }, ScreenPane.ToolbarStripRuns(strip, [1]));
+        Assert.Equal(new (string, bool)[] { ("⚙️", true), (" 🌐 ", false), ("🐳", true) }, ScreenPane.ToolbarStripRuns(strip, [0, 2]));
+        Assert.Equal(new (string, bool)[] { ("⚙️ 🌐 …", false) }, ScreenPane.ToolbarStripRuns("⚙️ 🌐 …", [2]));
+    }
+
+    /// <summary>
+    /// An off glyph is drawn on <see cref="Theme.ToolbarOff"/>'s fill (2026-10-03), and a flip that leaves the row's text as it
+    /// was still draws the row again on the tick.
+    /// </summary>
+    [Fact]
+    public void Toolbar_AnOffGlyph_IsOnTheSlab_AndAFlipIsRedrawnOnTheTick()
+    {
+        _console.EmitAnsiSequences();
+        IReadOnlyList<int> off = [1];
+        using var pane = Pane();
+        pane.Hint = () => "idle";
+        pane.Toolbar = () => new ScreenPane.ToolbarParts("🔧 🌐", "", off);
+        pane.Show();
+
+        var fill = Theme.ToolbarOff.Background;
+        string slab = $"48;2;{fill.R};{fill.G};{fill.B}m";
+        Assert.Contains(slab + "🌐", Output);
+        Assert.DoesNotContain(slab + "🔧", Output);
+
+        int mark = Output.Length;
+        off = [];
+        _time.Advance(ScreenPane.Tick);
+        Assert.Contains("🌐", Output[mark..]);
+        Assert.DoesNotContain(slab, Output[mark..]);
+
+        mark = Output.Length;
+        _time.Advance(ScreenPane.Tick);
+        Assert.DoesNotContain("🌐", Output[mark..]);   // the same again: nothing
+    }
+
     /// <summary>The row under the hint row while the provider answers: the pane one row taller (the padding one less), the path rewritten in place on the tick, the whole pane again when the row goes or comes.</summary>
     [Fact]
     public void Toolbar_IsDrawnUnderTheHintRow_AndFollowsOnTheTick()

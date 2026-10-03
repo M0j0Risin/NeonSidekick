@@ -145,6 +145,12 @@ public static class Theme
     public static Style PaneRule => s_current[ThemeStyleSlot.PaneRule];
     /// <summary>The hint row under the input row.</summary>
     public static Style Hint => s_current[ThemeStyleSlot.Hint];
+    /// <summary>
+    /// A toolbar tool switch that is off (2026-10-03, the user's pick after trying faint, a grey colour and the text
+    /// presentation in Windows Terminal: only a background reads on a colour emoji): the hint's colour on the palette's panel
+    /// fill, the slab a code block sits on, so every theme has its own.
+    /// </summary>
+    public static Style ToolbarOff => new(Hint.Foreground, MarkdownCodeBlock.Background);
     /// <summary>The mark after the trailer on the hint row (the reasoning glyph beside the model): violet, plain — the user's call, 2026-09-15.</summary>
     public static Style TrailerMark => s_current[ThemeStyleSlot.TrailerMark];
     /// <summary>The highlighted row of a selection menu.</summary>

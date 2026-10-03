@@ -288,8 +288,10 @@ internal sealed partial class ChatScreen
 
                 return true;
             case MidTurnClass.Quick:
-                // A window chord pressed again closes its window (later on 2026-10-02, CloseByChord), asked as the act runs.
-                Post(() => line.Chord && CloseByChord(command, args) ? Task.CompletedTask : HandleQuickAsync(command, args, text, paneToken));
+                // A window chord pressed again closes its window (later on 2026-10-02, CloseByChord), asked as the act runs; a window
+                // item's double-click on the toolbar the same (2026-10-03) — a clicked word is the one line with no live row behind it.
+                bool closes = line.Chord || (line.Line is null && TogglesWindow(text));
+                Post(() => closes && CloseByChord(command, args) ? Task.CompletedTask : HandleQuickAsync(command, args, text, paneToken));
                 return true;
             default:
                 if (await RunPaneAsync(command, args, paneToken).ConfigureAwait(false) is { } chord)
@@ -371,9 +373,9 @@ internal sealed partial class ChatScreen
             }
 
             var (nextCommand, nextArgs) = ParseLine(next);
-            if (nextCommand == command)
+            if (nextCommand == command && string.Equals(nextArgs.Trim(), args.Trim(), StringComparison.OrdinalIgnoreCase))
             {
-                return null;
+                return null;   // the pane's own word (the words too since 2026-10-03: /tools web off the Tools pane is another page)
             }
 
             if (MidTurnPolicy(nextCommand, nextArgs) != MidTurnClass.Pane)
@@ -405,6 +407,19 @@ internal sealed partial class ChatScreen
             case SlashCommand.Skills:
                 // A bare /skills: the list shows; a scope pick is refused under the reply (a move could race load_skill).
                 await _skillsMenu.ShowAsync(cancellationToken, midTurn: true).ConfigureAwait(false);
+                break;
+            case SlashCommand.Tools when args.Trim().Length > 0:
+                // /tools <group> (2026-10-03, the toolbar's tool switches): the switch alone, which /tools edits under a reply already;
+                // a flip is read at the next turn. A word that is no group is its error through the flow sink.
+                if (ToolsText.SwitchField(args) is { } field)
+                {
+                    await _toolsMenu.ShowSwitchAsync(field, cancellationToken).ConfigureAwait(false);
+                }
+                else
+                {
+                    _flow.Error(ToolsText.SwitchUsageError);
+                }
+
                 break;
             case SlashCommand.Tools:
                 // /tools (2026-09-19): a flip saves and is read at the next turn; the settings rows edit as on /settings mid-turn (the

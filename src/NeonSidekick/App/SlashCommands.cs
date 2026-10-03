@@ -39,7 +39,7 @@ public enum SlashCommand
     Sampling,
     Settings,
 
-    /// <summary><c>/tools</c>: the Tools pane (2026-09-19, the user's ask) — every tool the model can be offered, on or off one by one (the Offered tab), then its Options tab (the <c>$</c>-mention switch, later that day) and the Ask, Files and Web settings rows that sat on <c>/settings</c> until then. No argument: bare like <see cref="Skills"/>. <c>///</c> is its alias (2026-09-21, the user's ask, beside <c>//</c>).</summary>
+    /// <summary><c>/tools</c>: the Tools pane (2026-09-19, the user's ask) — every tool the model can be offered, on or off one by one (the Offered tab), then its Options tab (the <c>$</c>-mention switch, later that day) and the Ask, Files and Web settings rows that sat on <c>/settings</c> until then. Bare like <see cref="Skills"/> until 2026-10-03, when <c>/tools &lt;group&gt;</c> came with the toolbar's tool switches (the user's ask): a group's switch opened straight (<see cref="ToolsText.SwitchWords"/>), as <see cref="Police"/> opens its row. <c>///</c> is its alias (2026-09-21, the user's ask, beside <c>//</c>).</summary>
     Tools,
 
     /// <summary><c>/mcp</c>: the MCP pane (2026-09-20, the user's ask) — the servers the two <c>mcp.json</c> files name, on or off one by one and connected or not (the Servers tab), their tools on or off by their prefixed names (the Tools tab), then its Options tab (the master switch and the connect timeout). No argument: bare like <see cref="Tools"/>.</summary>
@@ -329,7 +329,7 @@ public static class SlashCommands
             new("/test", "run LLM benchmark tests against the connected model and save the results: /test <id | reasoning | structured | long | all> | history, or /test to list them"),
             new("/theme", "switch the colour theme, starting a new conversation with the splash screen, or /theme <name>"),
             new("/timer", "list timers, or /timer <duration> [name] (10m, 90s, 1h30m) | stop <name> | stop all"),
-            new("/tools", "switch the model's tools on or off and edit the Options, Ask, Files and Web settings on a pane"),
+            new("/tools", "switch the model's tools on or off and edit the Options, Ask, Files and Web settings on a pane, or /tools <group> for one group's switch"),
             new("/tree", "print a tree of the working directory's folders and files, or /tree <path>"),
             new("/tts", "toggle speech output, or /tts on|off"),
             new("/usage", "show token usage and performance statistics"),
@@ -540,5 +540,5 @@ public static class SlashCommands
         or SlashCommand.Cwd or SlashCommand.Tree or SlashCommand.Vault or SlashCommand.Explore or SlashCommand.Copy or SlashCommand.Session or SlashCommand.GitUser
         or SlashCommand.Loop or SlashCommand.Plan or SlashCommand.BotChat or SlashCommand.Claude or SlashCommand.Queue or SlashCommand.Skills or SlashCommand.Test
         or SlashCommand.HomeAssistant or SlashCommand.Docker or SlashCommand.Camera or SlashCommand.Print or SlashCommand.Perf or SlashCommand.Tb or SlashCommand.Header or SlashCommand.Rewind
-        or SlashCommand.Log;
+        or SlashCommand.Log or SlashCommand.Tools;
 }

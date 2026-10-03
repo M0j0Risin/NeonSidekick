@@ -22,8 +22,9 @@ namespace NeonSidekick.App;
 /// one exception is the Claude tab's four Claude API rows (2026-09-29, off <c>/settings</c>): each is a reconnect
 /// (<see cref="SettingsMenu.IsLlmField"/>), refused mid-turn like there, and <see cref="ShowAsync"/> returns
 /// <see cref="SettingsChanges.Llm"/> when one saved, so the screen reconnects once the pane closes — <c>/mcp</c>'s shape.
-/// Without the pane the tabs print as plain lines. <c>/tools</c> takes no argument: <c>/tools expand</c> and
-/// <c>/tools collapse</c> (2026-09-22) became the root <c>/expand</c> and <c>/collapse</c> later that day, the user's ask.
+/// Without the pane the tabs print as plain lines. <c>/tools expand</c> and <c>/tools collapse</c> (2026-09-22) became the
+/// root <c>/expand</c> and <c>/collapse</c> later that day, the user's ask; since 2026-10-03 <c>/tools &lt;group&gt;</c> opens one
+/// group's switch straight (<see cref="ShowSwitchAsync"/>, the toolbar's tool switches).
 /// The Shell tab's allowed-commands row has a door of its own since later on 2026-09-21:
 /// <see cref="ShowAllowedCommandsAsync"/> (<c>/cmdlist</c>, the toolbar's lock glyph); its <c>Shell police outside paths</c>
 /// row since 2026-09-22: <see cref="ShowPoliceAsync"/> (<c>/police</c>, the toolbar's officer).
@@ -265,6 +266,36 @@ internal sealed class ToolsMenu
         try
         {
             await _menu.EditToggleAsync(SettingsField.ShellPoliceOutsidePaths, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            _menu.Root = SettingsMenu.Title;
+            _pane.Close();
+        }
+    }
+
+    /// <summary>
+    /// <c>/tools &lt;group&gt;</c> and the toolbar's tool switches (2026-10-03, the user's ask): a group's switch opened straight
+    /// (<see cref="ToolsText.SwitchField"/>), <see cref="ShowPoliceAsync"/>'s shape — a tool group's on/off page, or for
+    /// <c>shell</c> the <c>Shell command policy</c> picker (yolo after a yes), under the crumb <c>Tools › …</c>, nothing of the
+    /// Tools pane around it, so ESC closes the pane. The strip follows the switch at each draw, so the item leaves or takes
+    /// its off slab as the pane closes. Without the pane the value prints (<see cref="ToolsText.SwitchStateLine"/>). Mid-turn
+    /// as at idle: none of these rows is refused under a reply, and each is read at the next turn.
+    /// </summary>
+    public async Task ShowSwitchAsync(SettingsField field, CancellationToken cancellationToken)
+    {
+        if (!_pane.Enabled)
+        {
+            _transcript.Notice(ToolsText.SwitchStateLine(field, _settings.Current));
+            return;
+        }
+
+        _menu.Root = ToolsText.Label;
+        try
+        {
+            _ = field == SettingsField.ShellCommandPolicy
+                ? await _menu.EditCommandPolicyAsync(cancellationToken).ConfigureAwait(false)
+                : await _menu.EditToggleAsync(field, cancellationToken).ConfigureAwait(false);
         }
         finally
         {

@@ -1037,7 +1037,7 @@ public partial class ToolsMenuTests : IDisposable
         _settings.Update(d => d.ShellCommandAllowed = ["git push", "dotnet build"]);
         var (menu, pane, _) = PaneMenu();
         Push(Keys.Right, Keys.Right, Keys.Right);   // Web, Files, Shell
-        Push(Keys.Enter, Keys.Down, Keys.Enter);                            // Shell command policy: the picker opens on ask, yolo picked
+        Push(Keys.Enter, Keys.Down, Keys.Enter, Keys.Char('y'), Keys.Enter);   // Shell command policy: the picker opens on ask, yolo picked and confirmed (2026-10-03)
         Push(Keys.Down, Keys.Enter, Keys.Enter, Keys.Escape);               // Shell allowed commands: the list, dotnet build removed, back
         Push(Keys.Down, Keys.Down, Keys.Down, Keys.Enter, Keys.Down, Keys.Enter);      // past Shell police outside paths (2026-09-22) and Shell prefer native tools (2026-09-26); Shell default: the picker, cmd picked
         Push(Keys.Down, Keys.Enter);                                        // Shell timeout (s): the typed slot, pre-filled with 180; 0 is out of range, kept
@@ -1147,6 +1147,51 @@ public partial class ToolsMenuTests : IDisposable
 
         Assert.True(_settings.Current.ShellPoliceOutsidePaths);
         Assert.DoesNotContain(SettingsMenu.PoliceOffConfirmQuestion, _console.Output);
+        Assert.False(pane.OverlayOpen);
+        pane.Dispose();
+    }
+
+    /// <summary>
+    /// <c>/tools &lt;group&gt;</c> (2026-10-03, the toolbar's tool switches): a group's on/off page straight under the Tools
+    /// crumb, the save on the status line, ESC closing the pane — never the tabs.
+    /// </summary>
+    [Fact]
+    public async Task ShowSwitch_ATool_IsItsOnOffPage_PickingSaves()
+    {
+        _settings.Update(d => d.DockerTools = false);
+        var (menu, pane, _) = PaneMenu();
+        Push(Keys.Up, Keys.Enter);   // on is the row above
+
+        await menu.ShowSwitchAsync(SettingsField.DockerTools, CancellationToken.None);
+
+        Assert.True(_settings.Current.DockerTools);
+        Assert.Contains("\n" + Titled(ToolsText.Label + " › " + SettingsMenu.FieldName(SettingsField.DockerTools)) + "\n", _console.Output);
+        Assert.DoesNotContain(ToolsText.OfferedTabTitle + "    Web", _console.Output);
+        Assert.False(pane.OverlayOpen);
+        pane.Dispose();
+    }
+
+    /// <summary>The shell's is the policy picker (2026-10-03): a move into yolo asks first, No keeps the policy; off asks nothing.</summary>
+    [Fact]
+    public async Task ShowSwitch_TheShell_IsThePolicyPicker_YoloAsksFirst()
+    {
+        var (menu, pane, _) = PaneMenu();
+        Push(Keys.Down, Keys.Enter, Keys.Enter);   // yolo picked; Enter on No
+
+        await menu.ShowSwitchAsync(SettingsField.ShellCommandPolicy, CancellationToken.None);
+
+        Assert.Equal("ask", _settings.Current.ShellCommandPolicy);
+        Assert.Contains("\n" + Titled(SettingsMenu.YoloConfirmQuestion) + "\n", _console.Output);
+
+        Push(Keys.Down, Keys.Enter, Keys.Char('y'), Keys.Enter);   // yolo picked; yes
+        await menu.ShowSwitchAsync(SettingsField.ShellCommandPolicy, CancellationToken.None);
+        Assert.Equal("yolo", _settings.Current.ShellCommandPolicy);
+
+        int mark = _console.Output.Length;
+        Push(Keys.Up, Keys.Up, Keys.Enter);   // off: nothing asked
+        await menu.ShowSwitchAsync(SettingsField.ShellCommandPolicy, CancellationToken.None);
+        Assert.Equal("off", _settings.Current.ShellCommandPolicy);
+        Assert.DoesNotContain(SettingsMenu.YoloConfirmQuestion, _console.Output[mark..]);
         Assert.False(pane.OverlayOpen);
         pane.Dispose();
     }

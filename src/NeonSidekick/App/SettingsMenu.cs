@@ -5905,7 +5905,19 @@ internal sealed partial class SettingsMenu
         return true;
     }
 
-    /// <summary>The command-policy picker under the settings list (2026-09-21): one <see cref="CommandPolicyLabel"/> row per <see cref="Shell.CommandPolicy.Names"/> entry, the saved one under the cursor.</summary>
+    /// <summary>
+    /// The command-policy picker opened straight, over the saved values (2026-10-03, for <see cref="ToolsMenu.ShowSwitchAsync"/>:
+    /// <c>/tools shell</c>, the toolbar's shell), under whatever <see cref="Root"/> the caller set. True when the value saved.
+    /// </summary>
+    internal Task<bool> EditCommandPolicyAsync(CancellationToken cancellationToken) =>
+        PickCommandPolicyAsync(_settings.Current, cancellationToken);
+
+    /// <summary>
+    /// The command-policy picker under the settings list (2026-09-21): one <see cref="CommandPolicyLabel"/> row per
+    /// <see cref="Shell.CommandPolicy.Names"/> entry, the saved one under the cursor. A move into <c>yolo</c> asks
+    /// <see cref="YoloConfirmQuestion"/> on the same pane first (2026-10-03, with the toolbar's shell: every way into yolo asks,
+    /// as the allowed-commands list's button does); No or ESC leaves the policy.
+    /// </summary>
     private async Task<bool> PickCommandPolicyAsync(AppSettingsData saved, CancellationToken cancellationToken)
     {
         var page = new MenuPage(Crumb(FieldName(SettingsField.ShellCommandPolicy)), Shell.CommandPolicy.Names.Select(CommandPolicyLabel).ToList(), PickKeys);
@@ -5916,6 +5928,15 @@ internal sealed partial class SettingsMenu
         }
 
         string name = Shell.CommandPolicy.Names[index];
+        if (name == "yolo" && !string.Equals(saved.ShellCommandPolicy, name, StringComparison.Ordinal))
+        {
+            var question = new MenuPage(YoloConfirmQuestion, ConfirmRows, ConfirmKeys) { Hotkeys = ConfirmHotkeys };
+            if (await PickAsync(question, 0, cancellationToken).ConfigureAwait(false) != 1)
+            {
+                return Unchanged();
+            }
+        }
+
         Apply(SettingsField.ShellCommandPolicy, d => d.ShellCommandPolicy = name);
         return true;
     }
