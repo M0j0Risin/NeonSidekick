@@ -42,20 +42,22 @@ public class PerfBarTests
     }
 
     [Fact]
-    public void TheMeters_ArePinned_NoneByDefault()
+    public void TheMeters_ArePinned_TheFourByDefault()
     {
         Assert.Equal(["cpu", "ram", "gpu", "vram", "net", "netdown", "netup"], PerfBarItems.Names);
         Assert.Equal(["CPU", "RAM", "GPU", "VRAM", "NET", "NET↓", "NET↑"], PerfBarItems.Names.Select(PerfBarItems.Title));
         Assert.Equal(["cpu", "ram", "gpu", "vram"], PerfBarItems.Defaults);
         Assert.Null(new AppSettingsData().PerformanceBarItems);
-        Assert.Empty(PerfBarItems.Resolve(null));
-        Assert.Empty(PerfBarItems.Resolve([]));
+        Assert.Equal(PerfBarItems.Defaults, PerfBarItems.Names.Where(PerfBarItems.Resolve(null).Contains));   // null: the four (2026-10-02; none before)
+        Assert.Empty(PerfBarItems.Resolve([]));                                                               // empty: no bar
         var resolved = PerfBarItems.Resolve([" NETUP ", "Ram", "bogus"]);
         Assert.Equal(["ram", "netup"], PerfBarItems.Names.Where(resolved.Contains));
         Assert.Equal(["cpu"], PerfBarItems.Names.Where(PerfBarItems.Resolve(["cpu", null!]).Contains));   // a hand-edited null: skipped
-        Assert.Null(PerfBarItems.Save(Only()));
+        Assert.Empty(PerfBarItems.Save(Only()));   // none saves as the empty list, never null (the four since 2026-10-02)
+        Assert.Equal(PerfBarItems.Defaults, PerfBarItems.Save(Only("vram", "gpu", "ram", "cpu")));   // the four as the list
         Assert.Equal(["cpu", "netdown"], PerfBarItems.Save(Only("netdown", "cpu")));   // the bar's order
-        Assert.Equal("off", PerfBarItems.Value(null, "gauge"));
+        Assert.Equal("off", PerfBarItems.Value([], "gauge"));
+        Assert.Equal("CPU, RAM, GPU, VRAM · gauge", PerfBarItems.Value(null, "gauge"));
         Assert.Equal("CPU, RAM, NET↓ · gauge", PerfBarItems.Value(["netdown", "ram", "cpu"], "gauge"));
         Assert.Equal("all · led", PerfBarItems.Value([.. PerfBarItems.Names], "bars"));   // an unknown look reads as the default, led since 2026-10-02
         Assert.Equal("[[x]] CPU     " + Theme.DimMarkup("processor load"), PerfBarItems.Label("cpu", true));   // markup: the brackets escaped
@@ -71,7 +73,7 @@ public class PerfBarTests
     public void Perf_Bare_HidesKeepingTheMeters_ThenBringsThemBack()
     {
         var hidden = PerfBarMode.Toggle("", ["cpu", "net"], null, "gauge")!;
-        Assert.Null(hidden.Items);
+        Assert.Empty(hidden.Items!);   // the empty list, no bar (null is the four since 2026-10-02)
         Assert.Equal(["cpu", "net"], hidden.LastItems);
         Assert.Equal("gauge", hidden.Look);
 
@@ -79,8 +81,13 @@ public class PerfBarTests
         Assert.Equal(["cpu", "net"], shown.Items);
         Assert.Equal("gauge", shown.Look);
 
-        // Never picked: the bar as it was before the checklist; a hand-edited look reads as the default (led since 2026-10-02).
-        var first = PerfBarMode.Toggle("", null, null, "bogus")!;
+        // Never picked: the four show (2026-10-02, the user's ask), so a bare /perf hides them and keeps them to come back.
+        var never = PerfBarMode.Toggle("", null, null, "text")!;
+        Assert.Empty(never.Items!);
+        Assert.Equal(["cpu", "ram", "gpu", "vram"], never.LastItems);
+
+        // Hidden with nothing to bring back: the bar as it was before the checklist; a hand-edited look reads as the default (led since 2026-10-02).
+        var first = PerfBarMode.Toggle("", [], null, "bogus")!;
         Assert.Equal(["cpu", "ram", "gpu", "vram"], first.Items);
         Assert.Equal("led", first.Look);
     }
@@ -88,18 +95,18 @@ public class PerfBarTests
     [Fact]
     public void Perf_ALook_SetsItAndShowsTheBar_OffHides_AnythingElseIsTheUsage()
     {
-        var led = PerfBarMode.Toggle(" LED ", null, ["gpu"], "text")!;
+        var led = PerfBarMode.Toggle(" LED ", [], ["gpu"], "text")!;
         Assert.Equal(["gpu"], led.Items);
         Assert.Equal("led", led.Look);
         var spark = PerfBarMode.Toggle("spark", ["ram"], null, "gauge")!;
         Assert.Equal(["ram"], spark.Items);   // shown already: its meters kept
         Assert.Equal("spark", spark.Look);
         var off = PerfBarMode.Toggle("OFF", ["ram"], null, "gauge")!;
-        Assert.Null(off.Items);
+        Assert.Empty(off.Items!);
         Assert.Equal(["ram"], off.LastItems);
         Assert.Equal("gauge", off.Look);
-        var stillOff = PerfBarMode.Toggle("off", null, ["vram"], "gauge")!;
-        Assert.Null(stillOff.Items);
+        var stillOff = PerfBarMode.Toggle("off", [], ["vram"], "gauge")!;
+        Assert.Empty(stillOff.Items!);
         Assert.Equal(["vram"], stillOff.LastItems);   // hidden already: the last meters kept
         Assert.Null(PerfBarMode.Toggle("bogus", null, null, "text"));
     }

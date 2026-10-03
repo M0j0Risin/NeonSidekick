@@ -18,7 +18,7 @@ public enum PerfBarStyle
     Led,
 }
 
-/// <summary>What <c>/perf</c> saves (<see cref="PerfBarMode.Toggle"/>): the meters shown (null: the bar hidden), the ones a later show brings back, and the look.</summary>
+/// <summary>What <c>/perf</c> saves (<see cref="PerfBarMode.Toggle"/>): the meters shown (empty: the bar hidden; null until 2026-10-02, when null became the defaults), the ones a later show brings back, and the look.</summary>
 public sealed record PerfToggle(List<string>? Items, List<string>? LastItems, string Look);
 
 /// <summary>
@@ -108,7 +108,7 @@ public static class PerfBarMode
 
         return TryParse(word, out var picked) ? Show(Name(picked)) : null;
 
-        PerfToggle Hide() => new(null, shown.Count > 0 ? PerfBarItems.Save(shown) : last?.ToList(), Name(Parse(look)));
+        PerfToggle Hide() => new([], shown.Count > 0 ? PerfBarItems.Save(shown) : last?.ToList(), Name(Parse(look)));
 
         PerfToggle Show(string name)
         {

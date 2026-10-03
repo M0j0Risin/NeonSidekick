@@ -25,7 +25,7 @@ public partial class ChatScreenTests
             _time.Advance(ScreenPane.Tick);   // the sampler's first reading
             _time.Advance(ScreenPane.Tick);   // the pane's tick draws it
             shown = Output.Contains("CPU  34% · VRAM  91%", StringComparison.Ordinal);   // RAM unchecked, GPU unread
-            _settings.Update(d => d.PerformanceBarItems = null);
+            _settings.Update(d => d.PerformanceBarItems = []);
             _time.Advance(ScreenPane.Tick);   // the row goes, the sampler stops
             PushLine(input, "/exit");
         };

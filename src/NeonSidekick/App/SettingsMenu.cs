@@ -2515,9 +2515,16 @@ internal sealed partial class SettingsMenu
 
     /// <summary>
     /// The yes/no asked before <see cref="PolicyYoloButton"/> saves (2026-10-02, the user's call: a move into <c>yolo</c> asks
-    /// first, from <c>ask</c> or from <c>off</c>; a move to <c>ask</c> never does). Pinned.
+    /// first, from <c>ask</c> or from <c>off</c>; a move to <c>ask</c> never does; reworded later that day, the user's). Pinned.
     /// </summary>
-    public const string YoloConfirmQuestion = "Shell command policy to yolo? Every command the model runs will run without asking.";
+    public const string YoloConfirmQuestion = "Change shell command policy to yolo (all commands accepted)?";
+
+    /// <summary>
+    /// The yes/no asked before <c>Shell police outside paths</c> goes from on to off (2026-10-02, the user's ask), on its
+    /// on/off page wherever that opens — <c>/police</c>, Ctrl+Alt+O, the toolbar's officer, the Tools pane's Shell tab; a move
+    /// to on never asks. Pinned.
+    /// </summary>
+    public const string PoliceOffConfirmQuestion = "Disable shell police (scripts run unchecked)?";
 
     /// <summary>The notice after a prefix is removed from the allowed list: <c>Shell allowed commands: git push removed</c>. Pinned.</summary>
     public static string PrefixRemovedNotice(string prefix) => FieldName(SettingsField.ShellCommandAllowed) + ": " + prefix + " removed";
@@ -5307,7 +5314,7 @@ internal sealed partial class SettingsMenu
     /// <summary>
     /// A toggle's on/off page opened straight, over the saved values (2026-09-22, for <see cref="ToolsMenu.ShowPoliceAsync"/>:
     /// <c>/police</c>, the toolbar's officer) — the page its row's Enter opens, under whatever <see cref="Root"/> the caller set.
-    /// True when the value changed.
+    /// Police going off asks <see cref="PoliceOffConfirmQuestion"/> on the same pane first (2026-10-02). True when the value changed.
     /// </summary>
     internal Task<bool> EditToggleAsync(SettingsField field, CancellationToken cancellationToken) =>
         PickToggleAsync(field, _settings.Current, cancellationToken);
@@ -5330,6 +5337,16 @@ internal sealed partial class SettingsMenu
         }
 
         bool on = index == 0;
+        if (field == SettingsField.ShellPoliceOutsidePaths && !on)
+        {
+            // Police off asks first (2026-10-02, the user's ask), on the same pane as the yolo button's question.
+            var question = new MenuPage(PoliceOffConfirmQuestion, ConfirmRows, ConfirmKeys) { Hotkeys = ConfirmHotkeys };
+            if (await PickAsync(question, 0, cancellationToken).ConfigureAwait(false) != 1)
+            {
+                return Unchanged();
+            }
+        }
+
         bool takesInterrupt = field == SettingsField.SttWake && !on && saved.SttInterrupt;
         Apply(field, data =>
         {

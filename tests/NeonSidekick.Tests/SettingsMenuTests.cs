@@ -1067,10 +1067,11 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(2, SettingsMenu.SkillsTabFields.Count);   // Options and Reflection, since later on 2026-09-19 (one list of 11, then 14, before)
         Assert.Equal(16, SettingsMenu.SkillsTabFields.Sum(t => t.Count));   // 15 until Reflection downloaded skills (then Reflection installed skills) came on 2026-10-02; 14 until Project file came off the Project tab on 2026-10-01; 13 until Reflection edit supporting files came on 2026-09-27; 12 until Reflection yields to turns came on 2026-09-24; 13 until Allow skill delete went on 2026-09-23; 14 until Reflection verbose went later still on 2026-09-19
         Assert.Equal(new[] { SettingsField.Profile, SettingsField.NewProfileMode, SettingsField.WorkingDirectory, SettingsField.Memory, SettingsField.QueueMessages, SettingsField.QueueCancelMode, SettingsField.KeepCommandHistory, SettingsField.CommandTypoIntercept, SettingsField.HideExitAutocomplete, SettingsField.TranscriptMarkdown, SettingsField.PastePreviewLines, SettingsField.ShowImageThumbnails, SettingsField.ImageThumbnailSize, SettingsField.CopyUserPrompt, SettingsField.Theme, SettingsField.WelcomeSplash, SettingsField.ShowHeader, SettingsField.ShowWorkingDirectory, SettingsField.ToolbarItems, SettingsField.ShowPerformanceBar, SettingsField.MenuMaxHeight, SettingsField.DraftEditor, SettingsField.ImageEditor, SettingsField.ThemedViewer }, SettingsMenu.TabFields[(int)SettingsTab.General]);   // five runs since 2026-10-01 (the user's call): who and where, the input line, the transcript, the screen, the outside apps; before that: Menus max height under Theme, 2026-10-01; Image editor under Draft editor, later on 2026-09-24; Keep command history under the typo intercept, 2026-09-25; Theme under Show toolbar and Themed image viewer last, later on 2026-09-27; Show performance bar under Show toolbar, 2026-09-29
-        // Show performance bar (2026-09-29): a picker of five looks, off by default, no reconnect.
+        // Show performance bar (2026-09-29): a picker of five looks, off by default, no reconnect; the four in led by default since 2026-10-02 (the user's ask).
         Assert.False(SettingsMenu.IsToggle(SettingsField.ShowPerformanceBar));
         Assert.Equal("Show performance bar", SettingsMenu.FieldName(SettingsField.ShowPerformanceBar));
-        Assert.Equal("off", SettingsMenu.FieldValue(SettingsField.ShowPerformanceBar, data, _settings.ProfileDirectory));
+        Assert.Equal("CPU, RAM, GPU, VRAM · led", SettingsMenu.FieldValue(SettingsField.ShowPerformanceBar, data, _settings.ProfileDirectory));
+        Assert.Equal("off", SettingsMenu.FieldValue(SettingsField.ShowPerformanceBar, new AppSettingsData { PerformanceBarItems = [] }, _settings.ProfileDirectory));
         // A checklist since 2026-09-30: the checked meters and the look.
         Assert.Equal("CPU, NET↑ · gauge", SettingsMenu.FieldValue(SettingsField.ShowPerformanceBar, new AppSettingsData { PerformanceBarItems = ["netup", "cpu"], PerformanceBarLook = "gauge" }, _settings.ProfileDirectory));
         // Draft editor (2026-09-19): typed, the General tab's last row, blank = the shell's default for .txt, no reconnect (read at each /draft).
@@ -1115,7 +1116,7 @@ public partial class SettingsMenuTests : IDisposable
         // Show toolbar (2026-09-21): the General row after it, a toggle, no reconnect (the pane reads it at each draw).
         Assert.False(SettingsMenu.IsToggle(SettingsField.ToolbarItems));   // a checklist since 2026-09-29, the user's ask
         Assert.Equal("Show toolbar", SettingsMenu.FieldName(SettingsField.ToolbarItems));
-        Assert.Equal("5 of 13", SettingsMenu.FieldValue(SettingsField.ToolbarItems, data, _settings.ProfileDirectory));   // the defaults since later on 2026-09-29
+        Assert.Equal("3 of 13", SettingsMenu.FieldValue(SettingsField.ToolbarItems, data, _settings.ProfileDirectory));   // the defaults: 5 of 13 from later on 2026-09-29, 3 since 2026-10-02
         Assert.Equal("off", SettingsMenu.FieldValue(SettingsField.ToolbarItems, new AppSettingsData { ToolbarItems = [] }, _settings.ProfileDirectory));
         Assert.Equal("3 of 13", SettingsMenu.FieldValue(SettingsField.ToolbarItems, new AppSettingsData { ToolbarItems = ["usage", "PATH", " tools ", "nonsense"] }, _settings.ProfileDirectory));
         Assert.Equal("all", SettingsMenu.FieldValue(SettingsField.ToolbarItems, new AppSettingsData { ToolbarItems = [.. ToolbarItems.Names] }, _settings.ProfileDirectory));
@@ -3082,7 +3083,7 @@ public partial class SettingsMenuTests : IDisposable
         string cwd = SettingsMenu.DefaultWorkingDirectoryLabel(_settings.ProfileDirectory);
         Assert.StartsWith("(", cwd);
         Assert.EndsWith(@"\profiles\default\files)", cwd);
-        Assert.Contains(Rule(240) + "\n" + Titled(Strip) + "\n \n▸ Profile                      default (" + _settings.ProfileDirectory + ")\n  New profile mode             basic\n  Working directory (cwd)      " + cwd + "\n  Memory                       on\n  Queue messages               on\n  Queue cancel mode            empty\n  Keep command history         on\n  Command typo intercept       on\n  Hide /exit autocomplete      on\n  Transcript markdown          on\n  Paste preview lines          25 lines\n  Show image thumbnails        on\n  Image thumbnail size         small\n  Copy user prompt             on\n  Theme                        synthwave\n  Welcome splash               fullsize\n  Show header                  on\n  Working directory in header  off\n  Show toolbar                 5 of 13\n  Show performance bar         off\n  Menus max height             full-screen\n  Draft editor                 (default .txt editor)\n  Image viewer                 (built-in viewer)\n  Themed image viewer          on\n" + Rule(240) + "\n" + SettingsMenu.TabKeys + "\n", _console.Output);
+        Assert.Contains(Rule(240) + "\n" + Titled(Strip) + "\n \n▸ Profile                      default (" + _settings.ProfileDirectory + ")\n  New profile mode             basic\n  Working directory (cwd)      " + cwd + "\n  Memory                       on\n  Queue messages               on\n  Queue cancel mode            empty\n  Keep command history         on\n  Command typo intercept       on\n  Hide /exit autocomplete      on\n  Transcript markdown          on\n  Paste preview lines          25 lines\n  Show image thumbnails        on\n  Image thumbnail size         small\n  Copy user prompt             on\n  Theme                        synthwave\n  Welcome splash               fullsize\n  Show header                  on\n  Working directory in header  off\n  Show toolbar                 3 of 13\n  Show performance bar         CPU, RAM, GPU, VRAM · led\n  Menus max height             full-screen\n  Draft editor                 (default .txt editor)\n  Image viewer                 (built-in viewer)\n  Themed image viewer          on\n" + Rule(240) + "\n" + SettingsMenu.TabKeys + "\n", _console.Output);
         Assert.DoesNotContain("File /tree max length", _console.Output);   // the Files tab's since 2026-09-15
         Assert.DoesNotContain("LLM URL", _console.Output);
         Assert.False(pane.OverlayOpen);
@@ -4366,8 +4367,8 @@ public partial class SettingsMenuTests : IDisposable
 
     /// <summary>
     /// Show toolbar is a checklist (2026-09-29, the user's ask; a switch at row 105 until then): the defaults checked at
-    /// first (Settings, Tools, Skills, Sessions and the path since later that day), Enter or Space flipping one and saving at
-    /// once in strip order, ESC back; the row reads how many are checked.
+    /// first (the lock, the officer and the path since 2026-10-02), Enter or Space flipping one and saving at once in strip
+    /// order, ESC back; the row reads how many are checked.
     /// </summary>
     [Fact]
     public async Task OnThePane_ShowToolbar_IsAChecklist_SavedInStripOrder_NeedingNoReconnect()
@@ -4376,14 +4377,14 @@ public partial class SettingsMenuTests : IDisposable
         var (menu, pane) = PaneMenu();
         Down(SettingsMenu.TabFields[(int)SettingsTab.General].ToList().IndexOf(SettingsField.ToolbarItems));
         Push(Keys.Enter);                       // the checklist, on Settings
-        Push(Keys.Char(' '));                   // Settings off
+        Push(Keys.Char(' '));                   // Settings on
         Down(12);
         Push(Keys.Enter);                       // the path off (the thirteenth since the ID card and the rising chart, later on 2026-09-29)
         Push(Keys.Escape, Keys.Escape);
 
         Assert.Equal(SettingsChanges.None, await menu.ShowAsync(CancellationToken.None));
 
-        Assert.Equal(["tools", "skills", "sessions"], _settings.Current.ToolbarItems);
+        Assert.Equal(["settings", "cmdlist", "police"], _settings.Current.ToolbarItems);
         Assert.Contains("[x] ⚙️  Settings", _console.Output);
         Assert.Contains("[ ] ⚙️  Settings", _console.Output);
         Assert.Contains("[x] 📂  Working directory path", _console.Output);
@@ -4459,11 +4460,12 @@ public partial class SettingsMenuTests : IDisposable
     /// <summary>
     /// Show performance bar as a checklist (2026-09-30, the user's ask): Enter flips a meter and saves at once, in the bar's
     /// order; the look is a title-row button (T, G, S, L), the one in force lit, and pressing it again saves nothing; N
-    /// unchecks every meter, which saves null — no bar.
+    /// unchecks every meter, which saves the empty list — no bar (null until 2026-10-02, when null became the four).
     /// </summary>
     [Fact]
     public async Task OnThePane_ShowPerformanceBar_ChecksMeters_AndTheLookIsATitleRowButton()
     {
+        _settings.Update(d => d.PerformanceBarItems = []);   // from no bar (the four show by default since 2026-10-02)
         var (menu, pane) = PaneMenu();
         Down(SettingsMenu.TabFields[(int)SettingsTab.General].ToList().IndexOf(SettingsField.ShowPerformanceBar));
         Push(Keys.Enter);
@@ -4493,7 +4495,7 @@ public partial class SettingsMenuTests : IDisposable
 
         await menu.ShowAsync(CancellationToken.None);
 
-        Assert.Null(_settings.Current.PerformanceBarItems);
+        Assert.Empty(_settings.Current.PerformanceBarItems!);   // none saves as the empty list (null is the four since 2026-10-02)
         Assert.Equal("gauge", _settings.Current.PerformanceBarLook);   // the look stays for the next meter checked
         pane.Dispose();
     }
@@ -4599,7 +4601,7 @@ public partial class SettingsMenuTests : IDisposable
     [Fact]
     public async Task OnThePane_ShowToolbar_TheDefaultsAgain_SaveNull()
     {
-        _settings.Update(d => d.ToolbarItems = ["settings", "tools", "skills", "sessions"]);
+        _settings.Update(d => d.ToolbarItems = ["cmdlist", "police"]);
         var (menu, pane) = PaneMenu();
         Down(SettingsMenu.TabFields[(int)SettingsTab.General].ToList().IndexOf(SettingsField.ToolbarItems));
         Push(Keys.Enter);
@@ -4610,7 +4612,7 @@ public partial class SettingsMenuTests : IDisposable
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Null(_settings.Current.ToolbarItems);
-        Assert.Contains("  · Show toolbar: 5 of 13", _console.Output);
+        Assert.Contains("  · Show toolbar: 3 of 13", _console.Output);
         pane.Dispose();
     }
 

@@ -247,8 +247,9 @@ internal sealed class ToolsMenu
     /// <c>/police</c> and the toolbar's officer (2026-09-22, the user's ask): the Shell tab's
     /// <c>Shell police outside paths</c> row opened straight — its on/off page under the crumb
     /// <c>Tools › Shell police outside paths</c> — with nothing of the Tools pane around it, so ESC
-    /// closes the pane, as <see cref="ShowAllowedCommandsAsync"/> does for the lock. Picking off takes
-    /// the officer off the toolbar as the pane closes (the strip follows the switch at each draw).
+    /// closes the pane, as <see cref="ShowAllowedCommandsAsync"/> does for the lock. Picking off asks first
+    /// (<see cref="SettingsMenu.PoliceOffConfirmQuestion"/>, 2026-10-02) and then puts the ninja in the officer's place on
+    /// the toolbar as the pane closes (the strip follows the switch at each draw).
     /// Without the pane the value prints (<see cref="PoliceLine"/>). Mid-turn as at idle: the row is
     /// never refused under a reply.
     /// </summary>

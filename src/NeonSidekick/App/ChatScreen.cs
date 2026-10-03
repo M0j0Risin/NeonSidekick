@@ -1403,7 +1403,7 @@ internal sealed partial class ChatScreen
             d.PerformanceBarLastItems = next.LastItems;
             d.PerformanceBarLook = next.Look;
         });
-        _transcript.Notice(Perf.PerfText.BarNotice(next.Items is null ? PerfBarMode.OffWord : next.Look));
+        _transcript.Notice(Perf.PerfText.BarNotice(PerfBarItems.Resolve(next.Items).Count == 0 ? PerfBarMode.OffWord : next.Look));
     }
 
     /// <summary>

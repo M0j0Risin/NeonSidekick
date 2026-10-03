@@ -22,8 +22,9 @@ public sealed class ToolbarItemsTests
     [Fact]
     public void Resolve_NullIsTheDefaults_EmptyIsNone_UnknownWordsGo()
     {
-        // The defaults narrowed later on 2026-09-29 (the user's pick; every item before).
-        Assert.Equal(["settings", "tools", "skills", "sessions", "path"], ToolbarItems.Defaults);
+        // The lock, the officer and the path since 2026-10-02 (the user's pick; Settings, Tools, Skills, Sessions and the path
+        // from later on 2026-09-29, every item before).
+        Assert.Equal(["cmdlist", "police", "path"], ToolbarItems.Defaults);
         Assert.Equal(ToolbarItems.Defaults, ToolbarItems.Names.Where(ToolbarItems.Resolve(null).Contains));
         Assert.Equal(ToolbarItems.Names, ToolbarItems.Names.Where(ToolbarItems.Resolve([.. ToolbarItems.Names]).Contains));
         Assert.Empty(ToolbarItems.Resolve([]));
@@ -59,7 +60,7 @@ public sealed class ToolbarItemsTests
     [Fact]
     public void Save_TheDefaultsAreNull_ElseStripOrder_EveryItemAFullList()
     {
-        Assert.Null(ToolbarItems.Save(new HashSet<string> { "path", "sessions", "skills", "tools", "settings" }));
+        Assert.Null(ToolbarItems.Save(new HashSet<string> { "path", "police", "cmdlist" }));
         Assert.Equal(ToolbarItems.Names, ToolbarItems.Save(ToolbarItems.Names.ToHashSet()));
         Assert.Equal([], ToolbarItems.Save(new HashSet<string>()));
         Assert.Equal(["usage", "path"], ToolbarItems.Save(new HashSet<string> { "path", "usage" }));
@@ -68,14 +69,14 @@ public sealed class ToolbarItemsTests
     [Fact]
     public void Value_AndLabels_ArePinned()
     {
-        Assert.Equal("5 of 13", ToolbarItems.Value(null));   // the defaults (2026-09-29)
+        Assert.Equal("3 of 13", ToolbarItems.Value(null));   // the defaults (2026-10-02)
         Assert.Equal("all", ToolbarItems.Value([.. ToolbarItems.Names]));
         Assert.Equal("off", ToolbarItems.Value([]));
         Assert.Equal("2 of 13", ToolbarItems.Value(["usage", "path"]));
         Assert.Equal("[[x]] ⚙️  Settings                " + Theme.DimMarkup("/settings"), ToolbarItems.Label("settings", true));
-        Assert.Equal("[[ ]] 📂  Working directory path  " + Theme.DimMarkup("/cwd browse · at the row's right"), ToolbarItems.Label("path", false));
-        Assert.Equal("[[x]] 💾  Memory                  " + Theme.DimMarkup("/memory · while Memory is on"), ToolbarItems.Label("memory", true));
+        Assert.Equal("[[ ]] 📂  Working directory path  " + Theme.DimMarkup("/cwd browse"), ToolbarItems.Label("path", false));
+        Assert.Equal("[[x]] 💾  Memory                  " + Theme.DimMarkup("/memory"), ToolbarItems.Label("memory", true));
         Assert.Equal("[[x]] 🪪  Profile                 " + Theme.DimMarkup("/profile"), ToolbarItems.Label("profile", true));
-        Assert.Equal("[[ ]] 📈  Performance             " + Theme.DimMarkup("/perf · shows or hides the performance bar"), ToolbarItems.Label("perf", false));
+        Assert.Equal("[[ ]] 📈  Performance             " + Theme.DimMarkup("/perf"), ToolbarItems.Label("perf", false));   // the command alone (2026-10-02)
     }
 }

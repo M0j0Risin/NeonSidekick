@@ -1380,7 +1380,7 @@ public class AppSettingsTests : IDisposable
         Assert.True(s.ShowHeader);   // 2026-10-01, the user's ask
         Assert.Null(s.ToolbarItems);   // 2026-09-21 as a switch, on; every item since the checklist, 2026-09-29
         Assert.Null(s.ToolbarLastItems);   // what a bare /tb brings back: the defaults until it hides a list (later on 2026-09-30)
-        Assert.Null(s.PerformanceBarItems);   // the performance bar (2026-09-29): off, the user's call; no meter checked since the checklist, 2026-09-30
+        Assert.Null(s.PerformanceBarItems);   // the performance bar (2026-09-29): off, the user's call; no meter checked since the checklist, 2026-09-30; null the four since 2026-10-02, the user's ask
         Assert.Null(s.PerformanceBarLastItems);   // what a bare /perf brings back: CPU, RAM, GPU and VRAM until it hides one (2026-09-30)
         Assert.Equal("led", s.PerformanceBarLook);   // the look (later on 2026-09-29); led since 2026-10-02, the user's ask (text before)
         Assert.Equal(91, s.EmbeddedVramBudget);       // 91 since 2026-09-30 (the user's call; off from later on 2026-09-29)

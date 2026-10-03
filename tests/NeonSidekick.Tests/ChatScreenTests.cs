@@ -141,6 +141,9 @@ public partial class ChatScreenTests : IDisposable
         // The toolbar under the hint row is on by default (2026-09-21) and takes a row of every pane drawn here — the scroll
         // tests count rows at height 10, the menu tests their tab's rows — so the fixture opts out and the toolbar tests opt in.
         _settings.Update(d => d.ToolbarItems = []);
+        // The performance bar shows by default since 2026-10-02 (the user's ask): the same row-counting reason, the same opt-out; the
+        // bar's tests opt in.
+        _settings.Update(d => d.PerformanceBarItems = []);
         // A fresh profile switches some tools off by name (gitlib_delete, zip, unzip, unc_delete): the scripts here pin every file tool
         // offered, so the fixture opts them back on; the fresh-profile tests pin that picture themselves.
         _settings.Update(d => { d.ToolsDisabled = []; d.GitLibTools = true; });   // GitLib tools off by default since 2026-09-21: the fixture opts in, the git-off test flips it back
@@ -8441,7 +8444,7 @@ public partial class ChatScreenTests : IDisposable
         _geometry = new ScreenGeometry(() => null, () => 100);
         StepsWhenIdle(
             Line("/police"),
-            input => input.Push(Keys.Down, Keys.Enter),            // off picked: saved, the pane closed
+            input => input.Push(Keys.Down, Keys.Enter, Keys.Char('y'), Keys.Enter),   // off picked, yes to the question (2026-10-02): saved, the pane closed
             Line("/police"),
             Key(Keys.Escape),                                      // opened on "off", closed unchanged
             Line("/exit"));
@@ -8455,6 +8458,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains(page + "▸ " + on + "\n  " + off + "\n", output);    // the first time on "on"
         Assert.Contains(page + "  " + on + "\n▸ " + off + "\n", output);    // the second on "off"
         Assert.False(_settings.Current.ShellPoliceOutsidePaths);
+        Assert.Contains("\n" + Titled(SettingsMenu.PoliceOffConfirmQuestion) + "\n", output);   // off asks first (2026-10-02)
         Assert.DoesNotContain(ToolsText.Label + "   Offered", output);      // the crumb, never the tabs: ESC closes
         Assert.Empty(_chat.Requests);
     }
@@ -8558,7 +8562,7 @@ public partial class ChatScreenTests : IDisposable
             input => { input.PushClick(27, 103); input.PushClick(27, 103); },    // 🔒 back at 27: the list
             Key(Keys.Escape),
             Line("/tools"),
-            input => input.Push(Keys.Right, Keys.Right, Keys.Right, Keys.Down, Keys.Down, Keys.Enter, Keys.Down, Keys.Enter, Keys.Escape),   // the Shell tab's third row, Shell police outside paths: its page on "on", off picked; the pane closed: the officer gone
+            input => input.Push(Keys.Right, Keys.Right, Keys.Right, Keys.Down, Keys.Down, Keys.Enter, Keys.Down, Keys.Enter, Keys.Char('y'), Keys.Enter, Keys.Escape),   // the Shell tab's third row, Shell police outside paths: its page on "on", off picked and confirmed (2026-10-02); the pane closed: the officer gone
             input => { input.PushClick(30, 103); input.PushClick(30, 103); },    // 🥷 now (2026-10-02): the police page again
             Key(Keys.Escape),
             Line("/exit"));
@@ -11752,7 +11756,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("  🛠️ Toppings? — cheese, olives\n", output);
         Assert.DoesNotContain(ChatScreen.CancelledNotice, output);
         Assert.Equal(0, Refreshes(output));
-        Assert.Null(_settings.Current.PerformanceBarItems);
+        Assert.Empty(_settings.Current.PerformanceBarItems!);   // the fixture's no bar, untouched
         Assert.Equal(2, _chat.Requests.Count);
     }
 
@@ -15929,7 +15933,7 @@ public partial class ChatScreenTests : IDisposable
             else if (step == 2)
             {
                 // The pane reads on (the chord was done in place): the bar must be on before it closes.
-                barWhileOpen = SpinWait.SpinUntil(() => _settings.Current.PerformanceBarItems is not null, TimeSpan.FromSeconds(5));
+                barWhileOpen = SpinWait.SpinUntil(() => _settings.Current.PerformanceBarItems is { Count: > 0 }, TimeSpan.FromSeconds(5));
                 input.Push(Keys.Escape);
                 step++;
             }

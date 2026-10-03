@@ -207,9 +207,9 @@ public sealed class AppSettingsData
     /// <c>/usage</c> (📊, since 2026-09-29), then 💾 <c>/memory</c> while <see cref="Memory"/> is on, the lock
     /// <c>/cmdlist</c> that follows <see cref="ShellCommandPolicy"/>, and 👮 while <see cref="ShellPoliceOutsidePaths"/>
     /// is on, 🥷 while it is off (2026-10-02) — the lock since later that day, the disk and the officer since 2026-09-22), the working directory in force
-    /// (<c>/cwd browse</c>) at its right. Null is <see cref="App.ToolbarItems.Defaults"/> — Settings, Tools, Skills, Sessions
-    /// and the path since later on 2026-09-29 (the user's pick; every item, one added later too, before); an empty list draws
-    /// no row at all.
+    /// (<c>/cwd browse</c>) at its right. Null is <see cref="App.ToolbarItems.Defaults"/> — Shell allowed commands, Shell
+    /// police and the path since 2026-10-02 (the user's pick; Settings, Tools, Skills, Sessions and the path from later on
+    /// 2026-09-29, every item before); an empty list draws no row at all.
     /// Read on every pane draw and on its tick, so a change shows when the settings pane closes. No variable.
     /// </summary>
     public List<string>? ToolbarItems { get; set; }
@@ -227,7 +227,9 @@ public sealed class AppSettingsData
     /// none by default, in place of the one word — <c>ShowPerformanceBar</c>, off or a look, from 2026-09-29 — that was both
     /// the switch and the look; that key is retired, so a profile saved with it shows no bar until a meter is checked): the
     /// ids of <see cref="App.PerfBarItems.Names"/> — CPU, RAM, GPU, VRAM, and the network's NET, NET↓ and NET↑ — in that order.
-    /// Null (the default) is none: no row, nothing sampled. The GPU meters read NVIDIA's NVML where an NVIDIA GPU answers, else
+    /// Null (the default) is <see cref="App.PerfBarItems.Defaults"/>, CPU, RAM, GPU and VRAM (2026-10-02, the user's ask: the
+    /// bar shown by default; none until then, so a profile that saved null shows the four from then on); an empty list is
+    /// none: no row, nothing sampled. The GPU meters read NVIDIA's NVML where an NVIDIA GPU answers, else
     /// Windows' own counters (PDH) for the adapter with the most dedicated memory (DXGI); the network's, .NET's own counters of
     /// the adapters with a gateway. A meter the machine cannot read is left out. Read on every pane tick, so a change shows at
     /// once; sampled once a second while any is checked. The row keeps the label <c>Show performance bar</c> (the key differs,

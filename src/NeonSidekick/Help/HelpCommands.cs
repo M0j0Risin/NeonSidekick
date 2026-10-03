@@ -190,7 +190,7 @@ public static class HelpCommands
         ]),
         new("/police",
         [
-            new("/police", "Open the on/off page for *Shell police outside paths*."),
+            new("/police", "Open the on/off page for *Shell police outside paths*. Turning it off asks first."),
         ]),
         new("/print",
         [
@@ -260,7 +260,7 @@ public static class HelpCommands
         ]),
         new("/tb",
         [
-            new("/tb [on | off]", "Show or hide the toolbar (*Show toolbar*). On its own it hides the toolbar, or shows it again with the items it last had (the default five the first time); `on` and `off` say which. Works while a reply runs; Ctrl+T runs it too."),
+            new("/tb [on | off]", "Show or hide the toolbar (*Show toolbar*). On its own it hides the toolbar, or shows it again with the items it last had (the default three the first time); `on` and `off` say which. Works while a reply runs; Ctrl+T runs it too."),
         ]),
         new("/test",
         [

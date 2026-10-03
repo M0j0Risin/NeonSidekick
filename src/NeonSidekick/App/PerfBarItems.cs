@@ -7,8 +7,9 @@ namespace NeonSidekick.App;
 /// <summary>
 /// The setting <c>Show performance bar</c> as a checklist (2026-09-30, the user's ask: the toolbar's shape — pick the
 /// meters, none picked is no bar — in place of the one word that was both the switch and the look): one id per meter, in
-/// the bar's order, saved in <see cref="Settings.AppSettingsData.PerformanceBarItems"/>. Null there is none (the default:
-/// no row, nothing sampled). The network's three (NET, NET↓, NET↑) came with it, each a choice of its own (the user's
+/// the bar's order, saved in <see cref="Settings.AppSettingsData.PerformanceBarItems"/>. Null there is <see cref="Defaults"/>
+/// (2026-10-02, the user's ask: the bar shown by default, the toolbar's shape; none until then) and an empty list is none:
+/// no row, nothing sampled. The network's three (NET, NET↓, NET↑) came with it, each a choice of its own (the user's
 /// pick). The look is <see cref="Settings.AppSettingsData.PerformanceBarLook"/>, picked on the same page's title row.
 /// <see cref="Resolve"/> is the one place the saved list becomes the set: a display setting, so an unknown word is dropped
 /// without a warning.
@@ -29,8 +30,8 @@ public static class PerfBarItems
     /// <summary>
     /// The default meters: what a bare <c>/perf</c> (or the toolbar's 📈) shows when nothing was ever picked — the bar as it
     /// was before the checklist, CPU, RAM, GPU and VRAM — and, since 2026-10-02 (the user's ask, Show toolbar's shape), what
-    /// the checklist's <c>⊡ default</c> button checks. <c>Restored</c> until then. Saved as the list, not as null: null is no
-    /// bar here. Pinned.
+    /// the checklist's <c>⊡ default</c> button checks. <c>Restored</c> until then. What a profile that never chose shows since
+    /// later that day (null). Pinned.
     /// </summary>
     public static readonly string[] Defaults = [Cpu, Ram, Gpu, Vram];
 
@@ -90,12 +91,12 @@ public static class PerfBarItems
     public static string Label(string id, bool on) =>
         Markup.Escape((on ? "[x] " : "[ ] ") + Title(id).PadRight(TitleWidth)) + Theme.DimMarkup(Describe(id));
 
-    /// <summary>The meters <paramref name="saved"/> names: none when null, the known ids (trimmed, any case) otherwise.</summary>
+    /// <summary>The meters <paramref name="saved"/> names: <see cref="Defaults"/> when null (2026-10-02), the known ids (trimmed, any case) otherwise.</summary>
     public static IReadOnlySet<string> Resolve(IReadOnlyList<string>? saved)
     {
         if (saved is null)
         {
-            return new HashSet<string>(StringComparer.Ordinal);
+            return Defaults.ToHashSet(StringComparer.Ordinal);
         }
 
         // A null in a hand-edited list is skipped (later on 2026-09-30): this runs on the pane's tick, where a throw repeats.
@@ -103,12 +104,14 @@ public static class PerfBarItems
         return Names.Where(wanted.Contains).ToHashSet(StringComparer.Ordinal);
     }
 
-    /// <summary>What saves for <paramref name="on"/>: null for none, else the ids in <see cref="Names"/> order.</summary>
-    public static List<string>? Save(IReadOnlySet<string> on)
+    /// <summary>
+    /// What saves for <paramref name="on"/>: the ids in <see cref="Names"/> order, an empty list for none — never null, which
+    /// is <see cref="Defaults"/> since 2026-10-02 (null was none until then).
+    /// </summary>
+    public static List<string> Save(IReadOnlySet<string> on)
     {
         ArgumentNullException.ThrowIfNull(on);
-        var chosen = Names.Where(on.Contains).ToList();
-        return chosen.Count == 0 ? null : chosen;
+        return Names.Where(on.Contains).ToList();
     }
 
     /// <summary>

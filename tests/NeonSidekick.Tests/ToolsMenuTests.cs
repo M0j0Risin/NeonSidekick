@@ -1089,14 +1089,65 @@ public partial class ToolsMenuTests : IDisposable
         Push(Keys.Right, Keys.Right, Keys.Right);   // Shell
         Push(Keys.Down, Keys.Down, Keys.Enter);                 // Shell police outside paths: the picker opens on on
         Push(Keys.Down, Keys.Enter);                            // off is the row below
+        Push(Keys.Char('y'), Keys.Enter);                       // yes to the question (2026-10-02)
         Push(Keys.Escape);
 
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.False(_settings.Current.ShellPoliceOutsidePaths);
+        Assert.Contains("\n" + Titled(SettingsMenu.PoliceOffConfirmQuestion) + "\n", _console.Output);
         Assert.Contains("\n" + Titled(ToolsText.Label + " › Shell police outside paths") + "\n \n▸ on  paths outside the working directory are denied\n  off paths anywhere on the computer are allowed\n", _console.Output);
         Assert.Contains("  · Shell police outside paths: off", _console.Output);
         Assert.Contains("\n▸ Shell police outside paths   off\n  Shell prefer native tools    on\n  Shell default                powershell\n", _console.Output);
+        pane.Dispose();
+    }
+
+    /// <summary>
+    /// <c>/police</c>'s page (2026-10-02, the user's ask): off asks <see cref="SettingsMenu.PoliceOffConfirmQuestion"/> on the
+    /// same pane first; No (or ESC) leaves the police on.
+    /// </summary>
+    [Fact]
+    public async Task ShowPolice_OffRefused_KeepsItOn()
+    {
+        var (menu, pane, _) = PaneMenu();
+        Push(Keys.Down, Keys.Enter, Keys.Enter);   // off picked; Enter on No
+
+        await menu.ShowPoliceAsync(CancellationToken.None);
+
+        Assert.True(_settings.Current.ShellPoliceOutsidePaths);
+        Assert.Contains("\n" + Titled(SettingsMenu.PoliceOffConfirmQuestion) + "\n", _console.Output);
+        Assert.DoesNotContain("Shell police outside paths: off", _console.Output);
+        Assert.False(pane.OverlayOpen);
+        pane.Dispose();
+    }
+
+    [Fact]
+    public async Task ShowPolice_OffConfirmed_Saves()
+    {
+        var (menu, pane, _) = PaneMenu();
+        Push(Keys.Down, Keys.Enter, Keys.Char('y'), Keys.Enter);   // off picked; yes
+
+        await menu.ShowPoliceAsync(CancellationToken.None);
+
+        Assert.False(_settings.Current.ShellPoliceOutsidePaths);
+        Assert.Contains(SettingsMenu.PoliceOffConfirmQuestion, _console.Output);
+        Assert.False(pane.OverlayOpen);
+        pane.Dispose();
+    }
+
+    /// <summary>Back on never asks (2026-10-02).</summary>
+    [Fact]
+    public async Task ShowPolice_OnAsksNothing()
+    {
+        _settings.Update(d => d.ShellPoliceOutsidePaths = false);
+        var (menu, pane, _) = PaneMenu();
+        Push(Keys.Up, Keys.Enter);   // on is the row above
+
+        await menu.ShowPoliceAsync(CancellationToken.None);
+
+        Assert.True(_settings.Current.ShellPoliceOutsidePaths);
+        Assert.DoesNotContain(SettingsMenu.PoliceOffConfirmQuestion, _console.Output);
+        Assert.False(pane.OverlayOpen);
         pane.Dispose();
     }
 

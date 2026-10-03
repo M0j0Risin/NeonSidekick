@@ -32,10 +32,11 @@ public static class ToolbarItems
     public static readonly string[] Names = [Settings, Profile, Tools, Mcp, Skills, Sys, Sessions, Usage, Perf, Memory, CmdList, Police, Path];
 
     /// <summary>
-    /// What a profile that never chose shows (later on 2026-09-29, the user's pick): Settings, Tools, Skills, Sessions and
-    /// the path. Every item before, so a profile that had saved "all" as null shows these five from then on. Pinned.
+    /// What a profile that never chose shows (2026-10-02, the user's pick): Shell allowed commands, Shell police and the
+    /// path — the lock and the officer still only under a policy other than off. Settings, Tools, Skills, Sessions and the
+    /// path from later on 2026-09-29, every item before; a profile that saved the defaults as null follows. Pinned.
     /// </summary>
-    public static readonly string[] Defaults = [Settings, Tools, Skills, Sessions, Path];
+    public static readonly string[] Defaults = [CmdList, Police, Path];
 
     /// <summary>
     /// The glyph an item draws on the checklist (the lock's closed one for <see cref="CmdList"/>; the folder for the path
@@ -78,7 +79,10 @@ public static class ToolbarItems
         _ => id,
     };
 
-    /// <summary>The dim note after an item's name: what a double-click opens, and when the item shows at all. Pinned.</summary>
+    /// <summary>
+    /// The dim note after an item's name: what a double-click opens, nothing more (2026-10-02, the user's ask; when the
+    /// item shows at all was said there too until then). Pinned.
+    /// </summary>
     public static string Describe(string id) => id switch
     {
         Settings => "/settings",
@@ -89,11 +93,11 @@ public static class ToolbarItems
         Sys => "/sys",
         Sessions => "/sessions",
         Usage => "/usage",
-        Perf => "/perf · shows or hides the performance bar",
-        Memory => "/memory · while Memory is on",
-        CmdList => "/cmdlist · " + ChatScreen.CmdAskToolGlyph + " under ask, " + ChatScreen.CmdYoloToolGlyph + " under yolo, none under off",
-        Police => "/police · " + ChatScreen.PoliceToolGlyph + " while Shell police outside paths is on, " + ChatScreen.NinjaToolGlyph + " while off, none under policy off",
-        Path => "/cwd browse · at the row's right",
+        Perf => "/perf",
+        Memory => "/memory",
+        CmdList => "/cmdlist",
+        Police => "/police",
+        Path => "/cwd browse",
         _ => "",
     };
 
