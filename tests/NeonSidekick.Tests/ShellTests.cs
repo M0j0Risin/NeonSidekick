@@ -61,6 +61,8 @@ public sealed class ShellTests
     [InlineData("FOO=1 BAR=2 make test", "make test")]
     [InlineData("Get-ChildItem -Recurse", "get-childitem")]
     [InlineData("npm run dev", "npm run")]
+    [InlineData("net use Z: \\\\nas\\x", "net use")]   // net a verb program since 2026-10-03
+    [InlineData("NET.EXE user bob /add", "net user")]
     [InlineData("   ", "")]
     public void CommandPrefix_Of_IsTheProgram_AndTheVerbForVerbPrograms(string command, string prefix)
     {

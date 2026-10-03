@@ -282,7 +282,10 @@ public sealed class UncToolsTests : IDisposable
         string all = Assistant.DefaultRules(markdown: false, tools: true, unc: true, uncFetch: true, uncWrite: true);
         Assert.Contains(Assistant.UncRule + " " + Assistant.UncFetchRule + " " + Assistant.UncWriteRule, all);
         Assert.DoesNotContain(Assistant.UncWriteRule, Assistant.DefaultRules(markdown: false, tools: true, uncWrite: true));   // no group, no sentence
-        Assert.Contains(@"the unc_ tools reach the user's network shares (not net use, dir \\server or copy \\server)", Assistant.ShellNativeRule(false, false, false, false, unc: true));
+        Assert.Contains(@"the unc_ tools list and reach the user's network shares (not net use, net share, net view, Get-SmbShare, dir \\server or copy \\server)", Assistant.ShellNativeRule(false, false, false, false, unc: true));
+        Assert.Contains("never net use, net share or net view", Assistant.UncRule);   // 2026-10-03: "my UNC shares" went to net use
+        Assert.StartsWith("When the user asks about their UNC shares", Tool<UncSharesTool>().Description, StringComparison.Ordinal);
+        Assert.Contains("net use, net share, net view and Get-SmbShare", Tool<UncSharesTool>().Description);
 
         var facts = new SystemPromptFacts(null, null, null, false, [], false, false, UncEnabled: true, UncTools: 4);
         Assert.True(facts.Unc);

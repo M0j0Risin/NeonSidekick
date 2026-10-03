@@ -9,6 +9,9 @@ namespace NeonSidekick.Llm.Tools;
 /// <c>unc_shares(check?)</c> (2026-09-30): the named shares of <c>unc.json</c> — where each points, who it is reached as, read-only
 /// or read-write, what it holds, the default marked; never a password. Touches no share unless <c>check</c> asks: then every
 /// share's root is listed under its own account, at once, each bounded by <see cref="UncAccess.ReachTimeout"/>.
+/// Since 2026-10-03 (the user's ask: asked to list "my UNC shares", the model ran <c>net use</c> or <c>net share</c> through
+/// <c>run_command</c>) the description opens with the words a user says for these and names the commands that list something
+/// else — this computer's mapped drives and its own shares; <see cref="Shell.NativeRedirect"/> backs it at the call.
 /// </summary>
 public sealed class UncSharesTool : UncTool
 {
@@ -32,7 +35,8 @@ public sealed class UncSharesTool : UncTool
     public override string Name => ToolName;
 
     public override string Description =>
-        "Lists the network shares and outside folders the user has set up for the unc_ tools: each one's name, path, the account it is reached as, whether it is read-only or read-write, and what it holds, the default marked. " +
+        "When the user asks about their UNC shares, network shares or shares, call this: it lists the network shares and outside folders they set up for the unc_ tools — each one's name, path, the account it is reached as, whether it is read-only or read-write, and what it holds, the default marked. " +
+        "net use, net share, net view and Get-SmbShare list this computer's mapped drives and its own shares, not these. " +
         "Pass a name as \"share\" to the other unc_ tools, or a full path under one. check true tries each share now.";
 
     public override JsonElement JsonSchema => Schema;

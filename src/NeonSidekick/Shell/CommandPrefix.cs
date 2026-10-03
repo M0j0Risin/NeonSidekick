@@ -17,12 +17,14 @@ public static class CommandPrefix
     /// <summary>
     /// The programs whose first argument is a verb the prefix keeps: allowing <c>git status</c> is
     /// not allowing <c>git push</c>. Shells and interpreters are not here on purpose: <c>python -c …</c>
-    /// allows exactly <c>python</c>, which is what the pane shows.
+    /// allows exactly <c>python</c>, which is what the pane shows. <c>net</c> since 2026-10-03, so
+    /// <see cref="NativeRedirect"/> can send <c>net use</c> to <c>unc_shares</c> and leave <c>net start</c>
+    /// the shell's — and allowing <c>net view</c> is no longer allowing <c>net user</c>.
     /// </summary>
     public static readonly IReadOnlySet<string> VerbPrograms = new HashSet<string>(StringComparer.Ordinal)
     {
         "git", "dotnet", "npm", "npx", "pnpm", "yarn", "pip", "pip3", "uv", "poetry", "gh", "docker", "podman",
-        "cargo", "go", "winget", "choco", "scoop", "kubectl", "az", "aws", "gcloud", "terraform", "make",
+        "cargo", "go", "winget", "choco", "scoop", "kubectl", "az", "aws", "gcloud", "terraform", "make", "net",
     };
 
     /// <summary>The extensions stripped from a first token: <c>build.ps1</c> reads as <c>build</c>, <c>Foo.EXE</c> as <c>foo</c>.</summary>

@@ -647,7 +647,7 @@ Every tool, grouped, with the description the model reads. Enter or Space switch
 
 ##### Shell guards
 
-* **Approval (`ask`):** the pane offers Deny, Allow once, Allow the prefixes for this session, or Allow them always. A prefix is the program plus its subcommand for git, dotnet, npm, pip, gh, docker, cargo, go, winget and the like, otherwise the program alone. `--yolo` and `NEONSIDEKICK_COMMAND_POLICY` override the policy for one launch.
+* **Approval (`ask`):** the pane offers Deny, Allow once, Allow the prefixes for this session, or Allow them always. A prefix is the program plus its subcommand for git, dotnet, npm, pip, gh, docker, cargo, go, winget, net and the like, otherwise the program alone. `--yolo` and `NEONSIDEKICK_COMMAND_POLICY` override the policy for one launch.
 * **Path police** reads the text of a `run_command` line, an `execute_code` script, or `process` input, and refuses an absolute path outside the working directory (`C:\…`, a UNC share, `/etc/hosts`), a `..` that climbs out, `~`, or a folder variable (`%USERPROFILE%`, `$env:TEMP`, `$HOME`, `Path.home()`…). The model gets `Error: outside the working directory: '…'` and the transcript shows 👮.
   * It also refuses a path inside a switch or a URL (`-out:C:\x`, `@C:\x.rsp`, `7z -oC:\x`, `-I..\x`, `file:///C:/x`), a bare drive (`C:`, `cd /d E:`), a `cd` to a folder at the drive's root (`cd /etc`; in bash `/c` is the C drive), a bare `cd` or `Set-Location` in PowerShell or bash, also with only options or a redirect (`cd -P`, `cd >/dev/null`; it goes home there; cmd's only prints the folder), and a junction or symlink in the working directory that leads outside.
   * A quoted path with a space that stays inside passes (`"D:\My Projects\app\a.txt"`), and a `cd` earlier in the line moves where later relative paths start (`cd src && type ..\README.md`) when the next command surely runs there: after `&&` or `;` (cmd's `&` too), outside a subshell, to a folder that exists. After a pipe, `||` or a `cd` that may fail, a later path must stay inside from both folders.
@@ -659,7 +659,7 @@ Every tool, grouped, with the description the model reads. Enter or Space switch
   * `git status`/`log`/`diff`/`add`/`commit` → the GitLib tools
   * `curl`/`Invoke-WebRequest` → `web_fetch`
   * `sqlcmd` → `sql_query`, `sqlplus` → `oracle_query`, `mysql` / `mariadb` → `mysql_query`
-  * `net use`, `dir \\server`, `copy \\server` → the UNC tools
+  * `net use` / `net share` / `net view` / `Get-SmbShare` / `Get-SmbMapping` → `unc_shares`; `dir \\server`, `copy \\server` → the UNC tools
 
   A lone command such a tool covers comes back as `Not run: 'cat' has a tool of its own — call read_file instead…`, once a turn (sent again, it goes to the pane). Pipes and compound lines, commands with no tool (`git push`) and tools switched off are never sent back.
 

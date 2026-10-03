@@ -35,6 +35,11 @@ public sealed class NativeRedirectTests
     [InlineData("sqlplus -s hr/x@db @q.sql", "sqlplus", "oracle_query")]
     [InlineData("mysql -u shop_reader -p shop", "mysql", "mysql_query")]
     [InlineData("& git status", "git status", "gitlib_status")]   // PowerShell's call operator leaves one segment
+    [InlineData("net use", "net use", "unc_shares")]   // 2026-10-03: "my UNC shares" went to net use
+    [InlineData("net share", "net share", "unc_shares")]
+    [InlineData("net view \\\\nas", "net view", "unc_shares")]
+    [InlineData("Get-SmbShare", "get-smbshare", "unc_shares")]
+    [InlineData("Get-SmbMapping", "get-smbmapping", "unc_shares")]
     public void AMappedLine_NamesItsTool(string command, string prefix, string tool)
     {
         Assert.Equal((prefix, tool), NativeRedirect.For(command, Everything));
@@ -45,6 +50,8 @@ public sealed class NativeRedirectTests
     [InlineData("git -C sub status")]     // an option before the verb reads as bare git
     [InlineData("dotnet build")]
     [InlineData("python script.py")]
+    [InlineData("net start spooler")]     // net's other verbs stay the shell's
+    [InlineData("net user")]
     [InlineData("cat a.txt | sort")]      // a pipe is shell work
     [InlineData("mkdir out && cd out")]
     [InlineData("type a.txt; type b.txt")]
@@ -72,6 +79,7 @@ public sealed class NativeRedirectTests
             ReadFileTool.ToolName, SearchFilesTool.ToolName, CopyTool.ToolName, MoveTool.ToolName, DeleteTool.ToolName, CreateDirectoryTool.ToolName,
             ZipTool.ToolName, UnzipTool.ToolName, GitStatusTool.ToolName, GitLogTool.ToolName, GitDiffTool.ToolName, GitShowTool.ToolName, GitBlameTool.ToolName,
             GitStageTool.ToolName, GitCommitTool.ToolName, GitBranchTool.ToolName, GitStashTool.ToolName, WebFetchTool.ToolName, SqlQueryTool.ToolName, OracleQueryTool.ToolName, MySqlQueryTool.ToolName,
+            UncSharesTool.ToolName,
         ];
         Assert.All(NativeRedirect.Table.Values, tool => Assert.Contains(tool, known));
         // Every key reads as CommandPrefix would give it, so a lookup can hit.

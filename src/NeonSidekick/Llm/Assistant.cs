@@ -258,11 +258,12 @@ public sealed class Assistant
     /// The sentence the default rules gain while the UNC tools are offered (the setting <c>UNC tools</c> on and a share in
     /// <c>unc.json</c>, 2026-09-30): appended after <see cref="MySqlRule"/> by <see cref="DefaultRules"/> — what the shares are, the
     /// read tools, how a path is given, and that a share is neither the working directory nor the shell's. <see cref="UncFetchRule"/>
-    /// follows it while <c>unc_fetch</c> is offered, <see cref="UncWriteRule"/> while a change is. Pinned.
+    /// follows it while <c>unc_fetch</c> is offered, <see cref="UncWriteRule"/> while a change is. Since 2026-10-03 (the user's ask:
+    /// "list my UNC shares" went to <c>net use</c>) it says these are the shares the user means and names the commands that are not. Pinned.
     /// </summary>
     public const string UncRule =
         "The unc_ tools reach the user's named network shares and outside folders, each signed in as the account the user set for it: " +
-        NeonSidekick.Llm.Tools.UncSharesTool.ToolName + " lists them — where each points and whether it is read-only; " +
+        NeonSidekick.Llm.Tools.UncSharesTool.ToolName + " lists them — where each points and whether it is read-only; when the user speaks of their shares or UNC shares, these are the ones, never net use, net share or net view; " +
         NeonSidekick.Llm.Tools.UncSearchTool.ToolName + " searches and lists a share as search_files does, " +
         NeonSidekick.Llm.Tools.UncInfoTool.ToolName + " and " + NeonSidekick.Llm.Tools.UncReadTool.ToolName + " look at a file; " +
         "a path is relative to the share named in share, or a full \\\\server\\share path under one. A share is not the working directory, and the shell cannot reach it.";
@@ -384,7 +385,7 @@ public sealed class Assistant
 
         if (unc)
         {
-            parts.Add("the unc_ tools reach the user's network shares (not net use, dir \\\\server or copy \\\\server)");
+            parts.Add("the unc_ tools list and reach the user's network shares (not net use, net share, net view, Get-SmbShare, dir \\\\server or copy \\\\server)");
         }
 
         return parts.Count == 0
