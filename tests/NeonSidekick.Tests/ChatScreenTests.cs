@@ -4959,7 +4959,7 @@ public partial class ChatScreenTests : IDisposable
 
         string path = Path.Combine(_settings.ProfileDirectory, PersonaFile.FileName);
         Assert.Equal(new[] { path }, _openedFiles);
-        Assert.Equal(Assistant.DefaultPersona + Environment.NewLine, File.ReadAllText(path));
+        Assert.Equal(Assistant.DefaultPersona.ReplaceLineEndings() + Environment.NewLine, File.ReadAllText(path));
         Assert.Contains("  · " + ChatScreen.PersonaCreatedNotice, output);
         Assert.DoesNotContain(ChatScreen.PersonaOpenedNotice, output);
     }
@@ -5664,7 +5664,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal([ChatRole.System, ChatRole.User], _chat.Requests[0].Select(m => m.Role));
         Assert.Equal([ChatRole.System, ChatRole.User, ChatRole.Assistant, ChatRole.User], _chat.Requests[1].Select(m => m.Role));
         Assert.All(_chat.Options, o => Assert.Null(o!.Tools));
-        Assert.Equal(Assistant.DefaultPersona + " " + Assistant.PlainTextRule + "\n\n" + MemoryPrompt.DirectiveWithoutTool, _chat.Requests[0][0].Text);
+        Assert.Equal(Assistant.DefaultPersona + "\n\n" + Assistant.PlainTextRule + "\n\n" + MemoryPrompt.DirectiveWithoutTool, _chat.Requests[0][0].Text);
         Assert.DoesNotContain(GetCurrentTimeTool.ToolName, _chat.Requests[0][0].Text!);
     }
 
@@ -5682,7 +5682,7 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         Assert.Equal(SkilledPrompt(false, Array.Empty<string>(), web: true, ask: AskLimits.Default, markdown: true), _chat.Requests[0][0].Text);
-        Assert.StartsWith(Assistant.DefaultPersona + " " + Assistant.MarkdownRule + " ", _chat.Requests[0][0].Text);
+        Assert.StartsWith(Assistant.DefaultPersona + "\n\n" + Assistant.MarkdownRule + " ", _chat.Requests[0][0].Text);
         // The block is committed at the reply's end (the tests never tick the pane): the glyph, the bold text without its stars, the list with its glyphs under the indent.
         Assert.Contains("● Bold and:\n   \n  • one\n  • two\n\n", output);
         Assert.DoesNotContain("**Bold**", output);
@@ -9355,7 +9355,8 @@ public partial class ChatScreenTests : IDisposable
 
         string rule = new(ScreenPane.RuleGlyph, 240);
         // The Prompt tab: the default persona, the rules, memory on with nothing stored — and nothing after the skills (2026-09-26): no voice heading on a silent turn, no Also sent part.
-        Assert.Contains(rule + "\n" + Titled(SystemPromptSummary.Label + "   Prompt    Tools ") + "\n \nPersona — default\n" + Assistant.DefaultPersona + "\n \nOperating rules — default\n", output);
+        Assert.Contains(rule + "\n" + Titled(SystemPromptSummary.Label + "   Prompt    Tools ") + "\n \nPersona — default\n" + Assistant.DefaultPersona.Split('\n')[0] + "\n", output);
+        Assert.Contains("\n" + Assistant.DefaultPersona.Split('\n')[^1] + "\n \nOperating rules — default\n", output);   // the persona is lines since 2026-10-03
         Assert.Contains("\nMemory — on, directive (the list rides the opening recall_memory call)\n" + MemoryPrompt.Directive[..120], output);
         Assert.Contains("\nSkills — on, none installed\n", output);
         Assert.DoesNotContain("Voice directive", output);
@@ -9468,7 +9469,8 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         Assert.Contains("  · Persona — default", output);
-        Assert.Contains("  ·   " + Assistant.DefaultPersona, output);
+        Assert.Contains("  ·   " + Assistant.DefaultPersona.Split('\n')[0] + "\n", output);   // a line per notice: the persona is lines since 2026-10-03
+        Assert.Contains("  ·   " + Assistant.DefaultPersona.Split('\n')[^1] + "\n", output);
         Assert.Contains("  · Operating rules — default", output);
         Assert.Contains("  · Memory — on, directive (the list rides the opening recall_memory call)", output);
         Assert.DoesNotContain("Also sent", output);   // the system message alone since 2026-09-26

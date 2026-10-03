@@ -5,7 +5,7 @@ namespace NeonSidekick.Llm;
 
 /// <summary>
 /// An editable piece of the system prompt kept as a file in the profile directory: the mechanics
-/// shared by <see cref="PersonaFile"/> (<c>persona.md</c>, the identity sentence),
+/// shared by <see cref="PersonaFile"/> (<c>persona.md</c>, the persona),
 /// <see cref="OperataFile"/> (<c>operata.md</c>, the operating rules) and <see cref="VocaliaFile"/>
 /// (<c>vocalia.md</c>, the voice directive). When the file exists and has text, that text replaces
 /// the default; absent or blank, the default applies.
@@ -207,7 +207,8 @@ public abstract class PromptFile
         }
 
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        File.WriteAllText(path, _defaultText.Length == 0 ? "" : _defaultText + Environment.NewLine);
+        // ReplaceLineEndings: the default persona is lines since 2026-10-03, held LF; the file gets the platform's breaks throughout.
+        File.WriteAllText(path, _defaultText.Length == 0 ? "" : _defaultText.ReplaceLineEndings() + Environment.NewLine);
         return true;
     }
 

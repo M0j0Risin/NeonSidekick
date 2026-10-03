@@ -871,7 +871,7 @@ A read-only view of exactly what the next reply will send, nothing paraphrased.
 
 The system prompt section by section, each with its status:
 
-* **Persona** (default or `persona.md`)
+* **Persona** (default or `persona.md`; the default is the repo's `assets/prompts/persona.md`, built into the exe)
 * **Operating rules** (default or `operata.md`; the reply-format and tool sentences live here)
 * **Project notes** (`NEON.md` / `AGENTS.md`)
 * **Memory**
@@ -943,7 +943,7 @@ Type `/` to list every command with a short summary. After a command and a space
 | `/new` | Start a new conversation without clearing the screen. |
 | `/operata [reset \| copy <profile> [force]]` | Edit `operata.md` (the operating rules) in your editor, reset it to the default, or copy it to another profile (`force` replaces theirs). |
 | `/perf [off \| text \| gauge \| spark \| led]` | Show or hide the performance bar (*Show performance bar*). On its own it hides the bar, or shows it again with the meters it last had (CPU, RAM, GPU and VRAM the first time); `off` hides it; a look name sets that look and shows the bar. Works while a reply runs; the toolbar's 📈 and Ctrl+F run it too. |
-| `/persona [reset \| copy <profile> [force]]` | The same for `persona.md` (the personality). |
+| `/persona [reset \| copy <profile> [force]]` | The same for `persona.md` (the personality; created with the built-in default persona). |
 | `/print <file> [printer=<name>] [copies=N] [pages=1-3] [landscape]` | Print a file from the working directory. Text and code print as a listing, markdown prints formatted, and a picture is fitted to one page; each page is headed with the file's name, the time and *page N of M*. Anything else (a PDF, a Word or Excel file) goes to the program Windows has for it, on the default printer. The printer is matched by its name or part of it (`printer=color`); put a name with spaces in quotes. *Print action policy* never applies to this command. See Printing. |
 | `/print reply [options]` | Print the last reply, formatted as markdown. |
 | `/print printers` | List the installed printers, marking the Windows default and *Print default printer*. |

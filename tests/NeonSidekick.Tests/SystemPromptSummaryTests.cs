@@ -188,10 +188,8 @@ public class SystemPromptSummaryTests : IDisposable
         var facts = Facts(persona, memoryEnabled, ["Their name is Chris."], speechOutput: speaking, speechReady: speaking, operatingRules: rules, voiceDirective: voice, tools: tools);
         var included = SystemPromptSummary.PromptSections(facts).Where(s => s.InPrompt).Select(s => s.Body).ToList();
 
-        // The default persona and the default rules are one paragraph in the prompt; a custom one is its own block.
-        string joined = persona is null && rules is null
-            ? included[0] + " " + string.Join("\n\n", included.Skip(1))
-            : string.Join("\n\n", included);
+        // Every section its own block, the default persona and rules too since 2026-10-03 (one paragraph before).
+        string joined = string.Join("\n\n", included);
         string expected = Assistant.SystemPrompt(speaking, memoryEnabled ? facts.Memories : null, persona, rules, voice, tools, skills: []);
         Assert.Equal(expected, joined);
         Assert.Equal(expected, SystemPromptSummary.SystemPrompt(facts));
@@ -415,7 +413,7 @@ public class SystemPromptSummaryTests : IDisposable
         Assert.Equal(
             [
                 "Persona — default",
-                "  " + Assistant.DefaultPersona,
+                .. Assistant.DefaultPersona.Split('\n').Select(line => "  " + line),   // lines since 2026-10-03
                 "Operating rules — default",
                 "  " + Assistant.OperatingRules,
                 NoNotesHeading,

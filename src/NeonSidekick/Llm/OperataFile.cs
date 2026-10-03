@@ -11,7 +11,7 @@ public sealed class OperataFile : PromptFile
 {
     public const string FileName = "operata.md";
 
-    /// <summary>Characters kept. Rules run longer than an identity sentence (the default is about 1,150); the prompt goes out on every request.</summary>
+    /// <summary>Characters kept. Rules can run longer than a persona (the default is about 1,150); the prompt goes out on every request.</summary>
     public const int MaxLength = 8000;
 
     public const string Category = "Operata";

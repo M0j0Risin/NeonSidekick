@@ -39,11 +39,27 @@ namespace NeonSidekick.Llm;
 public sealed class Assistant
 {
     /// <summary>
-    /// The identity sentence: the one part of the prompt <c>persona.md</c> (<see cref="PersonaFile"/>)
-    /// replaces. Short on purpose; the voice-response directive (M3+) is appended <em>last</em>
-    /// so it wins against anything here.
+    /// The default persona: the one part of the prompt <c>persona.md</c> (<see cref="PersonaFile"/>)
+    /// replaces, and what <c>/persona</c> seeds that file with. Since 2026-10-03 (the user's ask) it is the repo's
+    /// <c>assets/prompts/persona.md</c>, embedded by the project file as <see cref="DefaultPersonaResourceName"/> and read
+    /// once: CRLF folded to LF and trimmed, as <see cref="PersonaFile.Normalize(string)"/> reads a file, so a seeded
+    /// <c>persona.md</c> reads back as this text. It was one identity sentence before, joined to the rules with a space;
+    /// a persona of headed sections is its own block now (<see cref="SystemPrompt(bool, IReadOnlyList{string}?, string?, string?, string?, bool, bool, bool, AskLimits?, ProjectNotes?, IReadOnlyList{Skills.Skill}?, bool)"/>).
+    /// It must stay under <see cref="PersonaFile.MaxLength"/>, or a seeded file is cut; a test checks. The voice directive
+    /// is appended <em>last</em> so it wins against anything here.
     /// </summary>
-    public const string DefaultPersona = "You are Neon, a friendly and concise terminal sidekick.";
+    public static readonly string DefaultPersona = ReadDefaultPersona();
+
+    /// <summary>The manifest name <c>assets/prompts/persona.md</c> is embedded under.</summary>
+    public const string DefaultPersonaResourceName = "prompts/persona.md";
+
+    private static string ReadDefaultPersona()
+    {
+        using var stream = typeof(Assistant).Assembly.GetManifestResourceStream(DefaultPersonaResourceName)
+            ?? throw new InvalidOperationException("The default persona " + DefaultPersonaResourceName + " is not embedded.");
+        using var reader = new StreamReader(stream, Encoding.UTF8);
+        return PersonaFile.Normalize(reader.ReadToEnd());
+    }
 
     /// <summary>
     /// The one operating rule that names no tool: the whole of the default rules while the
@@ -453,8 +469,8 @@ public sealed class Assistant
         "Tools named <server>" + NeonSidekick.Mcp.McpToolName.Separator + "<tool> belong to external MCP servers the user connected; each does what its own description says — " +
         "read it before calling, pass exactly the arguments its schema names, and answer from its result.";
 
-    /// <summary>The system prompt with the default persona: one paragraph, the persona and the rules.</summary>
-    public const string DefaultSystemPrompt = DefaultPersona + " " + OperatingRules;
+    /// <summary>The system prompt with the default persona: the persona and the rules, each its own block (2026-10-03).</summary>
+    public static readonly string DefaultSystemPrompt = DefaultPersona + "\n\n" + OperatingRules;
 
     /// <summary>The system prompt for a turn with every default: no voice directive either way, since there is no default one (2026-10-03).</summary>
     public static string SystemPrompt(bool speechOutput) => SystemPrompt(speechOutput, null);
@@ -489,8 +505,8 @@ public sealed class Assistant
     /// The system prompt for a turn, in this order: the persona (<paramref name="persona"/> from
     /// <c>persona.md</c>, or <see cref="DefaultPersona"/> when it is null or blank) followed by the
     /// operating rules (<paramref name="operatingRules"/> from <c>operata.md</c>, or
-    /// <see cref="OperatingRules"/> when null or blank) — <see cref="DefaultSystemPrompt"/>'s single
-    /// paragraph when both are the default, else each as its own block; the memory section
+    /// <see cref="OperatingRules"/> when null or blank), each as its own block (since 2026-10-03; both default
+    /// had been one paragraph, which the sectioned default persona would have run into the rules); the memory section
     /// (<see cref="MemoryPrompt.Section"/>) when <paramref name="memories"/> is not null — null
     /// means memory is off, an empty list means on with nothing stored yet; the list itself is in the
     /// section only without tools, with them it rides the opening <c>recall_memory</c> pair
@@ -528,9 +544,7 @@ public sealed class Assistant
         bool customPersona = !string.IsNullOrWhiteSpace(persona);
         bool customRules = !string.IsNullOrWhiteSpace(operatingRules);
         string defaultRules = DefaultRules(markdown, tools, files, web, ask, sessions, download, delete, mcp, timers, git, shell, bridge, police, obsidian, obsidianDelete, sql, native, advisor, homeAssistant, oracle, mysql, unc, uncFetch, uncWrite, docker, dockerWrite, help);
-        var sb = new StringBuilder(!customPersona && !customRules
-            ? DefaultPersona + " " + defaultRules
-            : (customPersona ? persona!.Trim() : DefaultPersona) + "\n\n" + (customRules ? operatingRules!.Trim() : defaultRules));
+        var sb = new StringBuilder((customPersona ? persona!.Trim() : DefaultPersona) + "\n\n" + (customRules ? operatingRules!.Trim() : defaultRules));
         if (project is not null)
         {
             sb.Append("\n\n").Append(ProjectNotesSection(project));

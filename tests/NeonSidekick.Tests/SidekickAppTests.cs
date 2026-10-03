@@ -837,7 +837,7 @@ public partial class SidekickAppTests : IDisposable
 
         Assert.Null(_chat.Options[0]!.Tools);
         Assert.Equal([ChatRole.System, ChatRole.User], _chat.Requests[0].Select(m => m.Role));
-        Assert.Equal(Assistant.DefaultPersona + " " + Assistant.PlainTextRule + "\n\n" + MemoryPrompt.DirectiveWithoutTool, _chat.Requests[0][0].Text);
+        Assert.Equal(Assistant.DefaultPersona + "\n\n" + Assistant.PlainTextRule + "\n\n" + MemoryPrompt.DirectiveWithoutTool, _chat.Requests[0][0].Text);
         Assert.Contains("Neon: Hi.", output);
     }
 

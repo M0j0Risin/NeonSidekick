@@ -210,6 +210,9 @@
          built-in since 2026-10-02 (the user's call); a <home>\voices\<name>.json of the user's overrides the built-in of
          that name or adds a preset, as the themes folder does. -->
     <EmbeddedResource Include="..\..\assets\voices\built-in\*.json" LogicalName="voices/built-in/%(Filename)%(Extension)" Visible="false" />
+    <!-- The default persona (2026-10-03, the user's ask): assets\prompts\persona.md is Assistant.DefaultPersona, what the
+         prompt carries without a persona.md and what /persona seeds the file with. Edit the asset; the next build has it. -->
+    <EmbeddedResource Include="..\..\assets\prompts\persona.md" LogicalName="prompts/persona.md" Visible="false" />
   </ItemGroup>
 
   <!--

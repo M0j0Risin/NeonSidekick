@@ -191,8 +191,8 @@ public class PersonaFileTests : IDisposable
     {
         var persona = new PersonaFile(_dir);
         Assert.True(persona.EnsureExists());
-        Assert.Equal(Assistant.DefaultPersona + Environment.NewLine, File.ReadAllText(FilePath));
-        // The seeded file is the default sentence, so the prompt now carries it as a custom persona of the same words.
+        Assert.Equal(Assistant.DefaultPersona.ReplaceLineEndings() + Environment.NewLine, File.ReadAllText(FilePath));   // the platform's breaks throughout (2026-10-03)
+        // The seeded file is the default persona, so the prompt now carries it as a custom persona of the same words.
         Assert.Equal(Assistant.DefaultPersona, persona.Read());
 
         File.WriteAllText(FilePath, "You are Rex.");
