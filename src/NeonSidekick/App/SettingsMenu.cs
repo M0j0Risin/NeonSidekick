@@ -595,16 +595,10 @@ public enum SettingsField
     EmbeddedVramBudget,
 
     /// <summary>
-    /// A picker: <c>file</c> / <c>gguf</c>, which size the embedded model lists' filter buttons measure
-    /// (<see cref="Settings.AppSettingsData.EmbeddedFilterType"/>, later on 2026-09-29, the user's ask). The Embedded tab's
-    /// row after Embedded models; no reconnect (read when a list opens).
-    /// </summary>
-    EmbeddedFilterType,
-
-    /// <summary>
     /// A picker: <c>single</c> / <c>parallel</c>, how the embedded models' files come down from Hugging Face
     /// (<see cref="Settings.AppSettingsData.EmbeddedHfDownloadType"/>, 2026-09-30, the user's ask). The Embedded tab's row
-    /// after Embedded filter type; no reconnect (read as each download starts).
+    /// after Embedded models (after Embedded filter type until 2026-10-02, when that setting went, the user's call); no
+    /// reconnect (read as each download starts).
     /// </summary>
     EmbeddedHfDownloadType,
 
@@ -1123,7 +1117,7 @@ internal sealed partial class SettingsMenu
          SettingsField.TranscriptMarkdown, SettingsField.PastePreviewLines, SettingsField.ShowImageThumbnails, SettingsField.ImageThumbnailSize, SettingsField.CopyUserPrompt,
          SettingsField.Theme, SettingsField.WelcomeSplash, SettingsField.ShowHeader, SettingsField.ShowWorkingDirectory, SettingsField.ToolbarItems, SettingsField.ShowPerformanceBar, SettingsField.MenuMaxHeight,
          SettingsField.DraftEditor, SettingsField.ImageEditor, SettingsField.ThemedViewer],
-        [SettingsField.EmbeddedLlmServer, SettingsField.EmbeddedModels, SettingsField.EmbeddedFilterType, SettingsField.EmbeddedHfDownloadType, SettingsField.EmbeddedBackend, SettingsField.EmbeddedContextSize, SettingsField.EmbeddedGpuLayers, SettingsField.EmbeddedVramBudget, SettingsField.EmbeddedVramOnly, SettingsField.EmbeddedVision, SettingsField.EmbeddedDrafter],
+        [SettingsField.EmbeddedLlmServer, SettingsField.EmbeddedModels, SettingsField.EmbeddedHfDownloadType, SettingsField.EmbeddedBackend, SettingsField.EmbeddedContextSize, SettingsField.EmbeddedGpuLayers, SettingsField.EmbeddedVramBudget, SettingsField.EmbeddedVramOnly, SettingsField.EmbeddedVision, SettingsField.EmbeddedDrafter],
         [SettingsField.DockerServers, SettingsField.DockerServerContainers, SettingsField.DockerServerStopTimeoutSeconds, SettingsField.DockerServerPostStopDelaySeconds, SettingsField.DockerServerReadyTimeoutSeconds, SettingsField.DockerServerStopOnExit],
         [SettingsField.LlmScanMode, SettingsField.LlmUrl, SettingsField.LlmModel, SettingsField.LlmApiKey,
          SettingsField.LlmReasoning, SettingsField.LlmShowThinking, SettingsField.LlmPreserveThinking, SettingsField.LlmReasoningEstimate, SettingsField.LlmSampling, SettingsField.LlmSamplingFromHuggingFace,
@@ -1775,7 +1769,6 @@ internal sealed partial class SettingsMenu
         SettingsField.EmbeddedGpuLayers => "Embedded GPU layers",
         SettingsField.EmbeddedVramBudget => "Embedded VRAM budget",
         SettingsField.EmbeddedVramOnly => "Embedded VRAM only",
-        SettingsField.EmbeddedFilterType => "Embedded filter type",
         SettingsField.EmbeddedHfDownloadType => "Embedded HF download type",
         SettingsField.EmbeddedVision => "Embedded vision",
         SettingsField.EmbeddedLlmServer => "Embedded servers enabled",
@@ -1933,7 +1926,6 @@ internal sealed partial class SettingsMenu
             SettingsField.EmbeddedContextSize => data.EmbeddedContextSize == 0 ? EmbeddedContextFitLabel : Tokens(data.EmbeddedContextSize),
             SettingsField.EmbeddedGpuLayers => data.EmbeddedGpuLayers,
             SettingsField.EmbeddedVramBudget => data.EmbeddedVramBudget == NeonSidekick.EmbeddedLlm.EmbeddedVramBudget.Off ? NeonSidekick.EmbeddedLlm.EmbeddedVramBudget.OffWord : Percent(data.EmbeddedVramBudget),
-            SettingsField.EmbeddedFilterType => data.EmbeddedFilterType,
             SettingsField.EmbeddedHfDownloadType => data.EmbeddedHfDownloadType,
             SettingsField.EmbeddedVision => OnOff(data.EmbeddedVision),
             SettingsField.EmbeddedVramOnly => OnOff(data.EmbeddedVramOnly),
@@ -3300,7 +3292,6 @@ internal sealed partial class SettingsMenu
     /// </summary>
     private async Task<LlmServer?> PickFilteredServerAsync(IReadOnlyList<LlmServer> servers, string title, string keys, int cursor, CancellationToken cancellationToken)
     {
-        var type = NeonSidekick.EmbeddedLlm.EmbeddedFilterTypes.Resolve(EffectiveNow());
         // Uncensored lit when the row the pane opens on is an uncensored build (later on 2026-09-30, the user's pick), so it shows.
         var filter = NeonSidekick.EmbeddedLlm.EmbeddedModelFilter.For(
             cursor >= 0 && cursor < servers.Count && NeonSidekick.EmbeddedLlm.EmbeddedEndpoint.IsEmbedded(servers[cursor].BaseUrl) ? EmbeddedRowModel(servers[cursor]) : null);
@@ -3310,7 +3301,7 @@ internal sealed partial class SettingsMenu
         {
             while (true)
             {
-                var shown = filter.Arrange(Enumerable.Range(0, servers.Count).Where(i => Passes(servers[i])).ToList(), i => NeonSidekick.EmbeddedLlm.EmbeddedEndpoint.IsEmbedded(servers[i].BaseUrl) ? EmbeddedRowModel(servers[i]) : null, type);
+                var shown = filter.Arrange(Enumerable.Range(0, servers.Count).Where(i => Passes(servers[i])).ToList(), i => NeonSidekick.EmbeddedLlm.EmbeddedEndpoint.IsEmbedded(servers[i].BaseUrl) ? EmbeddedRowModel(servers[i]) : null);
                 var page = new MenuPage(title, FilteredRows(labels, shown), hint);
                 if (await PickChecklistAsync(page, Math.Max(0, shown.IndexOf(cursor)), cancellationToken, filter.Buttons()).ConfigureAwait(false) is not { } pick)
                 {
@@ -3341,7 +3332,7 @@ internal sealed partial class SettingsMenu
 
         bool Passes(LlmServer server) =>
             !NeonSidekick.EmbeddedLlm.EmbeddedEndpoint.IsEmbedded(server.BaseUrl)
-            || (EmbeddedRowModel(server) is { } model ? filter.Matches(model, type) : !filter.Active);
+            || (EmbeddedRowModel(server) is { } model ? filter.Matches(model) : !filter.Active);
     }
 
     /// <summary>
@@ -3647,11 +3638,6 @@ internal sealed partial class SettingsMenu
         if (field == SettingsField.ShowPerformanceBar)
         {
             return await EditPerfBarAsync(cancellationToken).ConfigureAwait(false);
-        }
-
-        if (field == SettingsField.EmbeddedFilterType)
-        {
-            return await PickEmbeddedFilterTypeAsync(saved, cancellationToken).ConfigureAwait(false);
         }
 
         if (field == SettingsField.EmbeddedHfDownloadType)
@@ -5702,7 +5688,6 @@ internal sealed partial class SettingsMenu
         }
 
         var effective = EffectiveNow();
-        var type = NeonSidekick.EmbeddedLlm.EmbeddedFilterTypes.Resolve(effective);
         // The saved embedded model, when there is one (later on 2026-09-30, the user's pick): the cursor starts on it, and an
         // uncensored build lights uncensored, so its row shows.
         var inUse = NeonSidekick.EmbeddedLlm.EmbeddedEndpoint.IsEmbedded(effective.LlmUrl) ? NeonSidekick.EmbeddedLlm.EmbeddedModelCatalog.Find(effective.LlmModel, embedded.Catalog) : null;
@@ -5712,7 +5697,7 @@ internal sealed partial class SettingsMenu
         {
             // Every row laid out over the whole catalog, so a filter does not move the columns.
             var labels = EmbeddedModelLabels(embedded.Catalog, embedded.State);
-            var shown = filter.Arrange(Enumerable.Range(0, embedded.Catalog.Count).Where(i => filter.Matches(embedded.Catalog[i], type, embedded.State(embedded.Catalog[i]).IsInstalled)).ToList(), i => embedded.Catalog[i], type);
+            var shown = filter.Arrange(Enumerable.Range(0, embedded.Catalog.Count).Where(i => filter.Matches(embedded.Catalog[i], embedded.State(embedded.Catalog[i]).IsInstalled)).ToList(), i => embedded.Catalog[i]);
             var page = new MenuPage(Crumb(FieldName(SettingsField.EmbeddedModels)), FilteredRows(labels, shown), EmbeddedModelsKeys);
             if (await PickChecklistAsync(page, Math.Max(0, shown.IndexOf(cursor)), cancellationToken, filter.Buttons(withInstalled: true)).ConfigureAwait(false) is not { } pick)
             {
@@ -6323,26 +6308,6 @@ internal sealed partial class SettingsMenu
             changed = true;
         }
     }
-
-    /// <summary>The filter-type picker under the settings list (later on 2026-09-29): one <see cref="EmbeddedFilterTypeLabel"/> row per <see cref="NeonSidekick.EmbeddedLlm.EmbeddedFilterTypes.Names"/> entry, the saved one under the cursor.</summary>
-    private async Task<bool> PickEmbeddedFilterTypeAsync(AppSettingsData saved, CancellationToken cancellationToken)
-    {
-        var names = NeonSidekick.EmbeddedLlm.EmbeddedFilterTypes.Names;
-        var page = new MenuPage(Crumb(FieldName(SettingsField.EmbeddedFilterType)), names.Select(EmbeddedFilterTypeLabel).ToList(), PickKeys);
-        int? picked = await PickAsync(page, Math.Max(0, Array.FindIndex(names, n => string.Equals(n, saved.EmbeddedFilterType, StringComparison.OrdinalIgnoreCase))), cancellationToken).ConfigureAwait(false);
-        if (picked is not { } index)
-        {
-            return Unchanged();
-        }
-
-        string name = names[index];
-        Apply(SettingsField.EmbeddedFilterType, d => d.EmbeddedFilterType = name);
-        return true;
-    }
-
-    /// <summary>A filter-type picker row: the name padded, then what it measures, dim. Pinned.</summary>
-    public static string EmbeddedFilterTypeLabel(string name) =>
-        Markup.Escape(name.PadRight(6)) + Theme.DimMarkup(NeonSidekick.EmbeddedLlm.EmbeddedFilterTypes.Describe(name));
 
     /// <summary>The HF download type picker under the settings list (2026-09-30): one <see cref="EmbeddedHfDownloadTypeLabel"/> row per <see cref="NeonSidekick.EmbeddedLlm.EmbeddedHfDownloadTypes.Names"/> entry, the saved one under the cursor.</summary>
     private async Task<bool> PickEmbeddedHfDownloadTypeAsync(AppSettingsData saved, CancellationToken cancellationToken)

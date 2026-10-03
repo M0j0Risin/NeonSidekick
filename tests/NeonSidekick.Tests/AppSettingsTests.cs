@@ -31,7 +31,6 @@ public class AppSettingsTests : IDisposable
         EmbeddedContextSize = 8192,
         EmbeddedGpuLayers = "20",
         EmbeddedVramBudget = 92,
-        EmbeddedFilterType = "gguf",
         EmbeddedHfDownloadType = "single",
         EmbeddedVision = false,
         EmbeddedLlmServer = false,
@@ -295,7 +294,6 @@ public class AppSettingsTests : IDisposable
         Assert.Equal(expected.EmbeddedContextSize, actual.EmbeddedContextSize);
         Assert.Equal(expected.EmbeddedGpuLayers, actual.EmbeddedGpuLayers);
         Assert.Equal(expected.EmbeddedVramBudget, actual.EmbeddedVramBudget);
-        Assert.Equal(expected.EmbeddedFilterType, actual.EmbeddedFilterType);
         Assert.Equal(expected.EmbeddedHfDownloadType, actual.EmbeddedHfDownloadType);
         Assert.Equal(expected.EmbeddedVision, actual.EmbeddedVision);
         Assert.Equal(expected.EmbeddedLlmServer, actual.EmbeddedLlmServer);
@@ -321,7 +319,6 @@ public class AppSettingsTests : IDisposable
             d.EmbeddedContextSize = full.EmbeddedContextSize;
             d.EmbeddedGpuLayers = full.EmbeddedGpuLayers;
             d.EmbeddedVramBudget = full.EmbeddedVramBudget;
-            d.EmbeddedFilterType = full.EmbeddedFilterType;
             d.EmbeddedHfDownloadType = full.EmbeddedHfDownloadType;
             d.EmbeddedVision = full.EmbeddedVision;
             d.EmbeddedLlmServer = full.EmbeddedLlmServer;
@@ -457,7 +454,6 @@ public class AppSettingsTests : IDisposable
                 d.EmbeddedContextSize = full.EmbeddedContextSize;
                 d.EmbeddedGpuLayers = full.EmbeddedGpuLayers;
                 d.EmbeddedVramBudget = full.EmbeddedVramBudget;
-                d.EmbeddedFilterType = full.EmbeddedFilterType;
                 d.EmbeddedHfDownloadType = full.EmbeddedHfDownloadType;
                 d.EmbeddedVision = full.EmbeddedVision;
                 d.EmbeddedLlmServer = full.EmbeddedLlmServer;
@@ -1384,7 +1380,6 @@ public class AppSettingsTests : IDisposable
         Assert.Null(s.PerformanceBarLastItems);   // what a bare /perf brings back: CPU, RAM, GPU and VRAM until it hides one (2026-09-30)
         Assert.Equal("led", s.PerformanceBarLook);   // the look (later on 2026-09-29); led since 2026-10-02, the user's ask (text before)
         Assert.Equal(91, s.EmbeddedVramBudget);       // 91 since 2026-09-30 (the user's call; off from later on 2026-09-29)
-        Assert.Equal("file", s.EmbeddedFilterType);   // the user's pick "for now"
         Assert.Equal("parallel", s.EmbeddedHfDownloadType);   // 2026-09-30, the user's pick
         Assert.Equal(0, s.EmbeddedContextSize);       // fit (later on 2026-09-29; 32768 until then)
         Assert.True(s.ThemedViewer);   // later on 2026-09-27

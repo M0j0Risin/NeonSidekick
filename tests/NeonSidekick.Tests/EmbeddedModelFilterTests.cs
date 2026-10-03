@@ -5,7 +5,7 @@ namespace NeonSidekick.Tests;
 
 /// <summary>
 /// The embedded model lists' filters (later on 2026-09-29, the user's ask): the 8GB / 16GB / 32GB radio buttons, the
-/// uncensored switch, what they keep and which size <c>Embedded filter type</c> measures.
+/// uncensored switch, what they keep, measured by the size a row shows (<c>Embedded filter type</c> chose until 2026-10-02).
 /// </summary>
 public class EmbeddedModelFilterTests
 {
@@ -69,40 +69,25 @@ public class EmbeddedModelFilterTests
         Assert.True(uninstalled.Active);
 
         var small = new EmbeddedModelFilter(8, false, true);
-        Assert.True(small.Matches(Model("A", 5_000_000_000), EmbeddedFilterType.File, installed: true));
-        Assert.False(small.Matches(Model("A", 5_000_000_000), EmbeddedFilterType.File, installed: false));
-        Assert.False(small.Matches(Model("A", 9_000_000_000), EmbeddedFilterType.File, installed: true));
-        Assert.True(new EmbeddedModelFilter(null, false, false).Matches(Model("A", 5_000_000_000), EmbeddedFilterType.File, installed: false));
+        Assert.True(small.Matches(Model("A", 5_000_000_000), installed: true));
+        Assert.False(small.Matches(Model("A", 5_000_000_000), installed: false));
+        Assert.False(small.Matches(Model("A", 9_000_000_000), installed: true));
+        Assert.True(new EmbeddedModelFilter(null, false, false).Matches(Model("A", 5_000_000_000), installed: false));
     }
 
     [Fact]
     public void ASize_KeepsTheModelsAtMostThatBig_AsTheRowReadsThem()
     {
         var filter = new EmbeddedModelFilter(8, false);
-        Assert.True(filter.Matches(Model("A", 6_900_000_000), EmbeddedFilterType.File));    // 7.9 GB
-        Assert.True(filter.Matches(Model("A", 7_040_000_000), EmbeddedFilterType.File));    // 8.04 GB reads "8 GB": it passes
-        Assert.False(filter.Matches(Model("A", 7_060_000_000), EmbeddedFilterType.File));   // "8.1 GB"
-        Assert.True(new EmbeddedModelFilter(16, false).Matches(Model("A", 7_060_000_000), EmbeddedFilterType.File));
-        Assert.True(EmbeddedModelFilter.None.Matches(Model("A", 90_000_000_000), EmbeddedFilterType.File));
-    }
+        Assert.True(filter.Matches(Model("A", 6_900_000_000)));    // 7.9 GB
+        Assert.True(filter.Matches(Model("A", 7_040_000_000)));    // 8.04 GB reads "8 GB": it passes
+        Assert.False(filter.Matches(Model("A", 7_060_000_000)));   // "8.1 GB"
+        Assert.True(new EmbeddedModelFilter(16, false).Matches(Model("A", 7_060_000_000)));
+        Assert.True(EmbeddedModelFilter.None.Matches(Model("A", 90_000_000_000)));
 
-    [Fact]
-    public void TheFilterType_SaysWhichBytes_TheRowsOrTheWeights()
-    {
-        // 7.5 GB of weights, 1 GB of projector, 0.5 GB of drafter: 9 GB on the row.
-        var model = Model("A", 7_500_000_000, 500_000_000);
-        var eight = new EmbeddedModelFilter(8, false);
-        Assert.False(eight.Matches(model, EmbeddedFilterType.File));
-        Assert.True(eight.Matches(model, EmbeddedFilterType.Gguf));
-
-        Assert.Equal("file", EmbeddedFilterTypes.Default);
-        Assert.Equal(["file", "gguf"], EmbeddedFilterTypes.Names);
-        Assert.Equal("file", new AppSettingsData().EmbeddedFilterType);
-        Assert.Equal(EmbeddedFilterType.Gguf, EmbeddedFilterTypes.Resolve(new AppSettingsData { EmbeddedFilterType = " GGUF " }));
-        Assert.Equal(EmbeddedFilterType.File, EmbeddedFilterTypes.Resolve(new AppSettingsData { EmbeddedFilterType = "bytes" }));   // a hand-edited word: the default
-        Assert.Equal("the size the row shows: weights, vision projector and drafter", EmbeddedFilterTypes.Describe("file"));
-        Assert.Equal("the weights' GGUF alone", EmbeddedFilterTypes.Describe("gguf"));
-        Assert.Equal("gguf", AppSettings.Copy(new AppSettingsData { EmbeddedFilterType = "gguf" }).EmbeddedFilterType);
+        // The row's bytes, the drafter and projector too (the weights alone were a choice until 2026-10-02): 7.5 + 1 + 0.5 is 9 GB.
+        Assert.False(filter.Matches(Model("A", 7_500_000_000, 500_000_000)));
+        Assert.Equal(9_000_000_000, EmbeddedModelFilter.Bytes(Model("A", 7_500_000_000, 500_000_000)));
     }
 
     [Fact]
@@ -121,18 +106,18 @@ public class EmbeddedModelFilterTests
         Assert.All(EmbeddedModelCatalog.Models.Where(m => !m.Uncensored), m => Assert.Equal(UncensoredKind.None, m.UncensoredKind));
 
         var filter = new EmbeddedModelFilter(null, true);
-        Assert.True(filter.Matches(Model("B Uncensored", 1_000_000_000), EmbeddedFilterType.File));
-        Assert.False(filter.Matches(Model("B", 1_000_000_000), EmbeddedFilterType.File));
+        Assert.True(filter.Matches(Model("B Uncensored", 1_000_000_000)));
+        Assert.False(filter.Matches(Model("B", 1_000_000_000)));
 
         // Dark, the other half (later on 2026-09-30, the user's ask): the uncensored builds are left out by default.
-        Assert.False(EmbeddedModelFilter.None.Matches(Model("B Uncensored", 1_000_000_000), EmbeddedFilterType.File));
-        Assert.True(EmbeddedModelFilter.None.Matches(Model("B", 1_000_000_000), EmbeddedFilterType.File));
-        Assert.All(EmbeddedModelCatalog.Models, m => Assert.NotEqual(m.Uncensored, EmbeddedModelFilter.None.Matches(m, EmbeddedFilterType.File)));
+        Assert.False(EmbeddedModelFilter.None.Matches(Model("B Uncensored", 1_000_000_000)));
+        Assert.True(EmbeddedModelFilter.None.Matches(Model("B", 1_000_000_000)));
+        Assert.All(EmbeddedModelCatalog.Models, m => Assert.NotEqual(m.Uncensored, EmbeddedModelFilter.None.Matches(m)));
 
         var small = new EmbeddedModelFilter(8, true);
-        Assert.True(small.Matches(Model("B Uncensored", 5_000_000_000), EmbeddedFilterType.File));
-        Assert.False(small.Matches(Model("B Uncensored", 9_000_000_000), EmbeddedFilterType.File));
-        Assert.False(small.Matches(Model("B", 5_000_000_000), EmbeddedFilterType.File));
+        Assert.True(small.Matches(Model("B Uncensored", 5_000_000_000)));
+        Assert.False(small.Matches(Model("B Uncensored", 9_000_000_000)));
+        Assert.False(small.Matches(Model("B", 5_000_000_000)));
     }
 
     [Fact]
@@ -183,12 +168,12 @@ public class EmbeddedModelFilterTests
         Assert.True(drafter.Press(0).Press(5).Press(4) is { MaxGb: 8, Uncensored: true, SortSize: true, Drafter: true });   // the others left be
         Assert.True(EmbeddedModelFilter.None.Press(5, withInstalled: true).Press(3, withInstalled: true) is { Drafter: true, Installed: true });
 
-        Assert.True(drafter.Matches(Model("A", 5_000_000_000, 500_000_000), EmbeddedFilterType.File));   // its own drafter file
-        Assert.True(drafter.Matches(Model("A", 5_000_000_000, mtpHead: true), EmbeddedFilterType.File));  // built in
-        Assert.False(drafter.Matches(Model("A", 5_000_000_000), EmbeddedFilterType.File));
-        Assert.False(new EmbeddedModelFilter(8, false, Drafter: true).Matches(Model("A", 9_000_000_000, mtpHead: true), EmbeddedFilterType.File));
+        Assert.True(drafter.Matches(Model("A", 5_000_000_000, 500_000_000)));   // its own drafter file
+        Assert.True(drafter.Matches(Model("A", 5_000_000_000, mtpHead: true)));  // built in
+        Assert.False(drafter.Matches(Model("A", 5_000_000_000)));
+        Assert.False(new EmbeddedModelFilter(8, false, Drafter: true).Matches(Model("A", 9_000_000_000, mtpHead: true)));
         // Each half by its own uncensored state (later on 2026-09-30).
-        Assert.All(EmbeddedModelCatalog.Models, m => Assert.Equal(m.HasMtp, (drafter with { Uncensored = m.Uncensored }).Matches(m, EmbeddedFilterType.File)));
+        Assert.All(EmbeddedModelCatalog.Models, m => Assert.Equal(m.HasMtp, (drafter with { Uncensored = m.Uncensored }).Matches(m)));
     }
 
     [Fact]
@@ -198,16 +183,16 @@ public class EmbeddedModelFilterTests
         EmbeddedModel?[] rows = [null, Model("Big", 8_000_000_000), Model("Small", 2_000_000_000), null, Model("Mid", 4_000_000_000), Model("Small too", 2_000_000_000)];
         List<int> shown = [0, 1, 2, 3, 4, 5];
 
-        Assert.Equal(shown, EmbeddedModelFilter.None.Arrange(shown, i => rows[i], EmbeddedFilterType.File));
+        Assert.Equal(shown, EmbeddedModelFilter.None.Arrange(shown, i => rows[i]));
 
         var sorted = new EmbeddedModelFilter(null, false, SortSize: true);
-        Assert.Equal([0, 2, 5, 3, 4, 1], sorted.Arrange(shown, i => rows[i], EmbeddedFilterType.File));   // equal sizes keep their order
-        Assert.Equal([2, 4], sorted.Arrange([4, 2], i => rows[i], EmbeddedFilterType.File));             // a filtered list sorts too
-        Assert.Equal([0, 6], sorted.Arrange([0, 6], i => i < rows.Length ? rows[i] : null, EmbeddedFilterType.File));
+        Assert.Equal([0, 2, 5, 3, 4, 1], sorted.Arrange(shown, i => rows[i]));   // equal sizes keep their order
+        Assert.Equal([2, 4], sorted.Arrange([4, 2], i => rows[i]));             // a filtered list sorts too
+        Assert.Equal([0, 6], sorted.Arrange([0, 6], i => i < rows.Length ? rows[i] : null));
 
-        // The filter type's bytes: 7.5 GB of weights + 1 GB of projector + 2 GB of drafter is 10.5 GB on the row, 7.5 GB alone.
+        // The row's bytes, never the weights alone (the only way since 2026-10-02): 7.5 GB of weights + 1 GB of projector + 2 GB
+        // of drafter is 10.5 GB on the row, so it sorts after 9 GB.
         EmbeddedModel[] pair = [Model("Drafted", 7_500_000_000, 2_000_000_000), Model("Plain", 8_000_000_000)];
-        Assert.Equal([1, 0], sorted.Arrange([0, 1], i => pair[i], EmbeddedFilterType.File));
-        Assert.Equal([0, 1], sorted.Arrange([0, 1], i => pair[i], EmbeddedFilterType.Gguf));
+        Assert.Equal([1, 0], sorted.Arrange([0, 1], i => pair[i]));
     }
 }

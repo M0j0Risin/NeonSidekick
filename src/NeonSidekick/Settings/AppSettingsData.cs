@@ -2177,14 +2177,6 @@ public sealed class AppSettingsData
     public bool EmbeddedVramOnly { get; set; } = true;
 
     /// <summary>
-    /// Which size the embedded model lists' 8GB / 16GB / 32GB filter buttons measure (later on 2026-09-29, the user's ask and
-    /// names): <c>file</c> (the default "for now": the size the row shows — weights, vision projector and drafter) or
-    /// <c>gguf</c> (the weights alone), <see cref="EmbeddedLlm.EmbeddedFilterTypes.Names"/>. Display only: no reconnect, no
-    /// variable.
-    /// </summary>
-    public string EmbeddedFilterType { get; set; } = EmbeddedLlm.EmbeddedFilterTypes.Default;
-
-    /// <summary>
     /// How the embedded models' files come down from Hugging Face (2026-09-30, the user's ask and names): <c>parallel</c> (the
     /// default: each file over <see cref="Speech.ModelStore.ParallelConnections"/> ranged connections, about twice one stream's
     /// speed as measured that day) or <c>single</c> (one connection per file, as before), <see cref="EmbeddedLlm.EmbeddedHfDownloadTypes.Names"/>.

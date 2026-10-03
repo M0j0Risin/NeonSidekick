@@ -1,81 +1,13 @@
-using NeonSidekick.Diagnostics;
-using NeonSidekick.Settings;
 using NeonSidekick.UI;
 
 namespace NeonSidekick.EmbeddedLlm;
-
-/// <summary>Which size the embedded model filters' 8GB / 16GB / 32GB buttons measure (<see cref="EmbeddedFilterTypes"/>).</summary>
-public enum EmbeddedFilterType
-{
-    /// <summary>The size the row shows: the weights, the vision projector and the drafter (<see cref="EmbeddedModelCatalog.TotalBytes"/>).</summary>
-    File,
-
-    /// <summary>The weights' GGUF alone (<see cref="EmbeddedModel.Model"/>).</summary>
-    Gguf,
-}
-
-/// <summary>
-/// The setting <c>Embedded filter type</c> (later on 2026-09-29, the user's ask and names): <c>file</c> — the default, "for
-/// now" — measures a model by the size its row shows, <c>gguf</c> by its weights alone; the <see cref="App.PerfBarMode"/> shape.
-/// <see cref="Resolve"/> is the one place the saved word becomes the enum: a hand-edited value that is neither falls back to
-/// <see cref="Default"/> with a warning, once per value.
-/// </summary>
-public static class EmbeddedFilterTypes
-{
-    /// <summary>The user's pick. Pinned.</summary>
-    public const string Default = "file";
-
-    /// <summary>The types in menu order.</summary>
-    public static readonly string[] Names = ["file", "gguf"];
-
-    private const string Category = "EmbeddedLlm";
-
-    /// <summary>Trims and ignores case; false (and <see cref="EmbeddedFilterType.File"/>) for anything that is not one of <see cref="Names"/>.</summary>
-    public static bool TryParse(string? text, out EmbeddedFilterType type)
-    {
-        switch (text?.Trim().ToLowerInvariant())
-        {
-            case "file": type = EmbeddedFilterType.File; return true;
-            case "gguf": type = EmbeddedFilterType.Gguf; return true;
-            default: type = EmbeddedFilterType.File; return false;
-        }
-    }
-
-    /// <summary>The menu hint next to a type. Pinned.</summary>
-    public static string Describe(string name) => name switch
-    {
-        "file" => "the size the row shows: weights, vision projector and drafter",
-        "gguf" => "the weights' GGUF alone",
-        _ => "",
-    };
-
-    // The last unknown value warned about: every pane visit asks, the log hears once per value.
-    private static string? _warned;
-
-    /// <summary>The type in force for <paramref name="effective"/>; an unknown saved value warns once and uses <see cref="Default"/>.</summary>
-    public static EmbeddedFilterType Resolve(AppSettingsData effective)
-    {
-        ArgumentNullException.ThrowIfNull(effective);
-        if (TryParse(effective.EmbeddedFilterType, out var type))
-        {
-            return type;
-        }
-
-        if (!string.Equals(Interlocked.Exchange(ref _warned, effective.EmbeddedFilterType), effective.EmbeddedFilterType, StringComparison.Ordinal))
-        {
-            DiagnosticLog.Warn(Category,
-                $"{nameof(AppSettingsData.EmbeddedFilterType)}='{effective.EmbeddedFilterType}' is not one of {string.Join(", ", Names)}. Using {Default}.");
-        }
-
-        return EmbeddedFilterType.File;
-    }
-}
 
 /// <summary>
 /// The embedded model lists' filters (later on 2026-09-29, the user's ask): the buttons on the title row of Settings ›
 /// Embedded models, <c>/server</c>'s LLM server pane and the startup picker — <c>8GB</c>, <c>16GB</c> and <c>32GB</c> as
 /// radio buttons (one at a time; the lit one pressed again goes dark), <c>uncensored</c> on its own. A size keeps the models
-/// at most that big (<see cref="EmbeddedFilterTypes"/> says which bytes), uncensored the <see cref="EmbeddedModel.Uncensored"/>
+/// at most that big by the size their row shows (<see cref="Bytes"/>; the weights alone were a choice, the setting
+/// <c>Embedded filter type</c>, from later on 2026-09-29 until 2026-10-02, the user's call), uncensored the <see cref="EmbeddedModel.Uncensored"/>
 /// ones; both together, both. Nothing is saved: every visit to a pane starts at <see cref="None"/> (or <see cref="For"/>).
 /// The catalog alone (later still on 2026-09-29, the user's ask) carries <c>installed</c> and <c>uninstalled</c> between the
 /// sizes and uncensored, a radio pair of their own (<see cref="Installed"/>; <c>/server</c> lists installed models only).
@@ -227,7 +159,7 @@ public sealed record EmbeddedModelFilter(int? MaxGb, bool Uncensored, bool? Inst
     /// model's state on disk (a paused download is not installed); <c>/server</c>'s rows are all installed. Uncensored picks a
     /// half (later on 2026-09-30): lit, the uncensored builds alone; dark, the others alone.
     /// </summary>
-    public bool Matches(EmbeddedModel model, EmbeddedFilterType type, bool installed = true)
+    public bool Matches(EmbeddedModel model, bool installed = true)
     {
         ArgumentNullException.ThrowIfNull(model);
         if (Uncensored != model.Uncensored)
@@ -250,14 +182,17 @@ public sealed record EmbeddedModelFilter(int? MaxGb, bool Uncensored, bool? Inst
             return true;
         }
 
-        return Math.Round(Bytes(model, type) / 1_000_000_000.0, 1, MidpointRounding.AwayFromZero) <= max;
+        return Math.Round(Bytes(model) / 1_000_000_000.0, 1, MidpointRounding.AwayFromZero) <= max;
     }
 
-    /// <summary>The bytes <paramref name="type"/> measures <paramref name="model"/> by: its weights alone, or the size its row shows.</summary>
-    public static long Bytes(EmbeddedModel model, EmbeddedFilterType type)
+    /// <summary>
+    /// The bytes the sizes and sort size measure <paramref name="model"/> by: the size its row shows — the weights, the vision
+    /// projector and the drafter (<see cref="EmbeddedModelCatalog.TotalBytes"/>; the only way since 2026-10-02).
+    /// </summary>
+    public static long Bytes(EmbeddedModel model)
     {
         ArgumentNullException.ThrowIfNull(model);
-        return type == EmbeddedFilterType.Gguf ? model.Model.Bytes : EmbeddedModelCatalog.TotalBytes(model);
+        return EmbeddedModelCatalog.TotalBytes(model);
     }
 
     /// <summary>
@@ -266,7 +201,7 @@ public sealed record EmbeddedModelFilter(int? MaxGb, bool Uncensored, bool? Inst
     /// <see cref="Bytes"/> and the list's order between equals, and every other entry (a server on the network, the Claude
     /// API) keeps its place.
     /// </summary>
-    public List<int> Arrange(List<int> shown, Func<int, EmbeddedModel?> modelAt, EmbeddedFilterType type)
+    public List<int> Arrange(List<int> shown, Func<int, EmbeddedModel?> modelAt)
     {
         ArgumentNullException.ThrowIfNull(shown);
         ArgumentNullException.ThrowIfNull(modelAt);
@@ -282,7 +217,7 @@ public sealed record EmbeddedModelFilter(int? MaxGb, bool Uncensored, bool? Inst
             if (modelAt(shown[position]) is { } model)
             {
                 slots.Add(position);
-                models.Add((shown[position], Bytes(model, type)));
+                models.Add((shown[position], Bytes(model)));
             }
         }
 

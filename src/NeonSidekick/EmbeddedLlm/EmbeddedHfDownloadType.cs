@@ -19,9 +19,9 @@ public enum EmbeddedHfDownloadType
 /// each embedded model file over <see cref="ModelStore.ParallelConnections"/> ranged connections, <c>single</c> over one. Measured
 /// that day on the user's line against a 1 GB catalog file: one stream ~112 MB/s, eight ranges ~206 MB/s, <c>hf download</c>
 /// ~217 MB/s — the speed is the connections, not the <c>hf</c> executable or a token, so neither is used. The weights, the
-/// vision projector and the drafter alone; the llama.cpp runtime (GitHub) and the voice models keep one stream. The
-/// <see cref="EmbeddedFilterTypes"/> shape: <see cref="Resolve"/> is the one place the saved word becomes the enum, and a
-/// hand-edited value that is neither falls back to <see cref="Default"/> with a warning, once per value.
+/// vision projector and the drafter alone; the llama.cpp runtime (GitHub) and the voice models keep one stream.
+/// <see cref="Resolve"/> is the one place the saved word becomes the enum, and a hand-edited value that is neither falls back
+/// to <see cref="Default"/> with a warning, once per value (the shape <c>Embedded filter type</c> had until 2026-10-02).
 /// </summary>
 public static class EmbeddedHfDownloadTypes
 {
