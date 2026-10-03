@@ -150,13 +150,32 @@ public class KeysTests
         Assert.Equal(ConsoleKey.H, Keys.CtrlH.Key);   // the BS rides on the H key: never Backspace
         Assert.Null(Keys.ShortcutLine(Keys.Backspace));
         Assert.Null(Keys.ShortcutLine(new ConsoleKeyInfo('\b', ConsoleKey.Backspace, false, false, true)));   // Ctrl+Backspace
-        // The Ctrl+Alt chords they replaced are gone (Ctrl+Alt+P came back as /splash), and Ctrl+Alt+K with /skills' move.
-        Assert.Null(Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.G)));
+        // The Ctrl+Alt chords they replaced are gone (Ctrl+Alt+P came back as /splash, Ctrl+Alt+G as /log on 2026-10-02), and Ctrl+Alt+K with /skills' move.
+        Assert.Equal("/log", Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.G)));
         Assert.Equal("/header", Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.H)));   // back later still on 2026-10-01 as /header (the user's ask)
         Assert.Null(Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.K)));
         Assert.Null(Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.B)));   // /tb on Ctrl+T, /perf on Ctrl+F since later still on 2026-10-01
         Assert.Null(Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.E)));
         Assert.Equal("/tools", Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.T)));
+    }
+
+    [Theory]
+    [InlineData(ConsoleKey.G, '\x07', "/log")]
+    [InlineData(ConsoleKey.U, '\x15', "/comfy view")]
+    [InlineData(ConsoleKey.V, '\x16', "/camera live")]
+    public void ShortcutLine_TheWindowChords_AreTheirLines_AndAnAltGrCharacterStaysACharacter(ConsoleKey key, char control, string line)
+    {
+        // 2026-10-02 (the user's ask): the log window, the picture viewer and the camera's live view. The console's BEL, NAK and SYN
+        // and the test factory's '\0' count; Shift, Alt alone, plain Ctrl (Ctrl+U is /usage, Ctrl+V the paste) and an AltGr key that
+        // types a character do not.
+        Assert.Equal(line, Keys.ShortcutLine(new ConsoleKeyInfo(control, key, shift: false, alt: true, control: true)));
+        Assert.Equal(line, Keys.ShortcutLine(Keys.CtrlAlt(key)));
+        Assert.Contains(line.Split(' ')[0], NeonSidekick.App.SlashCommands.Words);
+        Assert.Null(Keys.ShortcutLine(new ConsoleKeyInfo('\0', key, shift: true, alt: true, control: true)));
+        Assert.Null(Keys.ShortcutLine(new ConsoleKeyInfo('\0', key, shift: false, alt: true, control: false)));
+        Assert.NotEqual(line, Keys.ShortcutLine(Keys.Ctrl(key)));
+        Assert.Null(Keys.ShortcutLine(new ConsoleKeyInfo('@', key, shift: false, alt: true, control: true)));
+        Assert.False(Keys.IsKillSwitch(Keys.CtrlAlt(key)));
     }
 
     [Fact]

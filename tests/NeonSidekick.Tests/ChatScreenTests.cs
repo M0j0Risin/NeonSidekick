@@ -8530,7 +8530,7 @@ public partial class ChatScreenTests : IDisposable
     /// prunes; the officer last while Shell police outside paths is on, its pair /police — the row's
     /// on/off page, ESC closing it, the draft kept (nothing until later on 2026-09-22). Memory flipped off on the General tab: the disk gone as
     /// the pane closes and the lock back at the fixed glyphs' end; the police flipped off on the Tools ›
-    /// Shell tab: the officer gone the same way.
+    /// Shell tab: the officer gone the same way, the ninja in its place (2026-10-02, the user's ask), whose pair is the same page.
     /// </summary>
     [Fact]
     public async Task TheToolbarDisk_AndTheOfficer_FollowMemory_AndShellPolice_AndTheOfficersPairIsThePolicePage()
@@ -8557,7 +8557,7 @@ public partial class ChatScreenTests : IDisposable
             Key(Keys.Escape),
             Line("/tools"),
             input => input.Push(Keys.Right, Keys.Right, Keys.Right, Keys.Down, Keys.Down, Keys.Enter, Keys.Down, Keys.Enter, Keys.Escape),   // the Shell tab's third row, Shell police outside paths: its page on "on", off picked; the pane closed: the officer gone
-            input => { input.PushClick(30, 103); input.PushClick(30, 103); },    // the blanks now: /settings
+            input => { input.PushClick(30, 103); input.PushClick(30, 103); },    // 🥷 now (2026-10-02): the police page again
             Key(Keys.Escape),
             Line("/exit"));
 
@@ -8581,8 +8581,12 @@ public partial class ChatScreenTests : IDisposable
         Assert.True(output.IndexOf("› hi!", StringComparison.Ordinal) < output.IndexOf(settings, StringComparison.Ordinal), output);
         Assert.True(output.IndexOf(settings, StringComparison.Ordinal) < output.IndexOf(allowed, StringComparison.Ordinal), output);
         Assert.True(output.IndexOf(allowed, StringComparison.Ordinal) < output.IndexOf(tools, StringComparison.Ordinal), output);
-        Assert.True(output.IndexOf(tools, StringComparison.Ordinal) < output.LastIndexOf(settings, StringComparison.Ordinal), output);
-        Assert.DoesNotContain(ChatScreen.PoliceToolGlyph, output[output.LastIndexOf(settings, StringComparison.Ordinal)..]);   // the row under the last pane and after it: no officer
+        Assert.True(output.IndexOf(tools, StringComparison.Ordinal) < output.LastIndexOf(police, StringComparison.Ordinal), output);
+        Assert.DoesNotContain(ChatScreen.PoliceToolGlyph, output[output.LastIndexOf(police, StringComparison.Ordinal)..]);   // the row under the last pane and after it: no officer
+        Assert.Contains(ChatScreen.NinjaToolGlyph, output[output.LastIndexOf(police, StringComparison.Ordinal)..]);           // the ninja instead
+        string ninjaRow = "\n" + ScreenPane.ToolbarRow(ChatScreen.ToolbarStripFor(false, CommandPolicyMode.Ask, false), cwd, 239);
+        Assert.True(output.IndexOf(ninjaRow, StringComparison.Ordinal) < output.LastIndexOf(police, StringComparison.Ordinal), output);   // the ninja's pair: the page again
+        Assert.True(output.LastIndexOf(settings, StringComparison.Ordinal) < output.LastIndexOf(police, StringComparison.Ordinal), output);   // the click no longer lands on the blanks (/settings until 2026-10-02)
         Assert.All(new[] { "/memory", "/cmdlist", "/police" }, word => Assert.DoesNotContain("› " + word, output));
         Assert.Equal(ToolbarItems.Names, _settings.Current.ToolbarItems);   // untouched: every item, as the test set it
         Assert.Equal("hi!", Assert.Single(_chat.Requests).Last(m => m.Role == ChatRole.User).Text);
@@ -9908,18 +9912,19 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("⚙️ 🪪 🛠️ 🔌 🎓 🎭 💬 📊 📈", ChatScreen.ToolbarStrip);   // the masks since later on 2026-09-21 (the detective before); the sessions' balloon later still that day; the chart 2026-09-29; the ID card and the rising chart later that day
         Assert.Equal("⚙️ 🪪 🛠️ 🔌 🎓 🎭 💬 📊 📈", ChatScreen.ToolbarStripFor(false, CommandPolicyMode.Off, false));
         Assert.Equal("⚙️ 🪪 🛠️ 🔌 🎓 🎭 💬 📊 📈 💾", ChatScreen.ToolbarStripFor(true, CommandPolicyMode.Off, false));
-        Assert.Equal("⚙️ 🪪 🛠️ 🔌 🎓 🎭 💬 📊 📈 🔒", ChatScreen.ToolbarStripFor(false, CommandPolicyMode.Ask, false));
-        Assert.Equal("⚙️ 🪪 🛠️ 🔌 🎓 🎭 💬 📊 📈 🔓", ChatScreen.ToolbarStripFor(false, CommandPolicyMode.Yolo, false));
+        Assert.Equal("⚙️ 🪪 🛠️ 🔌 🎓 🎭 💬 📊 📈 🔒 🥷", ChatScreen.ToolbarStripFor(false, CommandPolicyMode.Ask, false));   // the ninja while the police is off (2026-10-02, the user's ask)
+        Assert.Equal("⚙️ 🪪 🛠️ 🔌 🎓 🎭 💬 📊 📈 🔓 🥷", ChatScreen.ToolbarStripFor(false, CommandPolicyMode.Yolo, false));
         Assert.Equal("⚙️ 🪪 🛠️ 🔌 🎓 🎭 💬 📊 📈", ChatScreen.ToolbarStripFor(false, CommandPolicyMode.Off, true));   // no officer while the shell is off (later on 2026-09-22, the user's ask)
         Assert.Equal("⚙️ 🪪 🛠️ 🔌 🎓 🎭 💬 📊 📈 💾", ChatScreen.ToolbarStripFor(true, CommandPolicyMode.Off, true));
         Assert.Equal("⚙️ 🪪 🛠️ 🔌 🎓 🎭 💬 📊 📈 💾 🔒 👮", ChatScreen.ToolbarStripFor(true, CommandPolicyMode.Ask, true));   // the defaults
         Assert.Equal("⚙️ 🪪 🛠️ 🔌 🎓 🎭 💬 📊 📈 🔓 👮", ChatScreen.ToolbarStripFor(false, CommandPolicyMode.Yolo, true));
-        Assert.Equal("⚙️ 🪪 🛠️ 🔌 🎓 🎭 💬 📊 📈 💾 🔓", ChatScreen.ToolbarStripFor(true, CommandPolicyMode.Yolo, false));
+        Assert.Equal("⚙️ 🪪 🛠️ 🔌 🎓 🎭 💬 📊 📈 💾 🔓 🥷", ChatScreen.ToolbarStripFor(true, CommandPolicyMode.Yolo, false));
         Assert.Equal("📊", ChatScreen.UsageToolGlyph);
         Assert.Equal("💾", ChatScreen.MemoryToolGlyph);
         Assert.Equal("🔒", ChatScreen.CmdAskToolGlyph);
         Assert.Equal("🔓", ChatScreen.CmdYoloToolGlyph);
         Assert.Equal("👮", ChatScreen.PoliceToolGlyph);
+        Assert.Equal("🥷", ChatScreen.NinjaToolGlyph);
         Assert.Equal("  " + ChatScreen.PoliceToolGlyph + " ", TranscriptRenderer.PoliceGlyph);   // the officer the refusal line wears
         Assert.Equal("/usage", ChatScreen.ToolbarWord(ChatScreen.UsageToolGlyph));
         // The ID card and the rising chart (later on 2026-09-29, the user's ask): the profile picker, the performance bar.
@@ -9935,6 +9940,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("/cmdlist", ChatScreen.ToolbarWord(ChatScreen.CmdAskToolGlyph));
         Assert.Equal("/cmdlist", ChatScreen.ToolbarWord(ChatScreen.CmdYoloToolGlyph));
         Assert.Equal("/police", ChatScreen.ToolbarWord(ChatScreen.PoliceToolGlyph));   // later on 2026-09-22: nothing until then
+        Assert.Equal("/police", ChatScreen.ToolbarWord(ChatScreen.NinjaToolGlyph));   // 2026-10-02
         Assert.Equal(McpText.Glyph, ChatScreen.McpToolGlyph);
         Assert.Equal("/cwd browse", ChatScreen.CwdBrowseLine);
         Assert.Equal("/settings", ChatScreen.ToolbarWord(ChatScreen.SettingsToolGlyph));
@@ -9959,6 +9965,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(ScreenPane.ToolbarZone.Row, ScreenPane.ToolbarHitAt(ChatScreen.ToolbarStrip, -1, 0, 26).Zone);   // past it
         Assert.Equal(2, TextCells.Width(ChatScreen.MemoryToolGlyph));
         Assert.Equal(2, TextCells.Width(ChatScreen.PoliceToolGlyph));
+        Assert.Equal(2, TextCells.Width(ChatScreen.NinjaToolGlyph));
         foreach (var (policy, padlock) in new[] { (CommandPolicyMode.Ask, ChatScreen.CmdAskToolGlyph), (CommandPolicyMode.Yolo, ChatScreen.CmdYoloToolGlyph) })
         {
             Assert.Equal(2, TextCells.Width(padlock));
@@ -9967,6 +9974,7 @@ public partial class ChatScreenTests : IDisposable
             Assert.Equal(new ScreenPane.ToolbarHit(ScreenPane.ToolbarZone.Glyph, padlock, 27), ScreenPane.ToolbarHitAt(strip, -1, 0, 27));
             Assert.Equal(new ScreenPane.ToolbarHit(ScreenPane.ToolbarZone.Glyph, padlock, 27), ScreenPane.ToolbarHitAt(strip, -1, 0, 28));
             Assert.Equal(ScreenPane.ToolbarZone.Row, ScreenPane.ToolbarHitAt(strip, -1, 0, 29).Zone);   // past it
+            Assert.Equal(new ScreenPane.ToolbarHit(ScreenPane.ToolbarZone.Glyph, ChatScreen.NinjaToolGlyph, 30), ScreenPane.ToolbarHitAt(strip, -1, 0, 31));   // the ninja after it (2026-10-02)
 
             string full = ChatScreen.ToolbarStripFor(true, policy, true);   // the disk moves the lock to 30, the officer after at 33 (2026-09-22; three on since the chart, 2026-09-29, six more since the ID card and the rising chart later that day)
             Assert.Equal(new ScreenPane.ToolbarHit(ScreenPane.ToolbarZone.Glyph, ChatScreen.MemoryToolGlyph, 27), ScreenPane.ToolbarHitAt(full, -1, 0, 27));
@@ -10118,9 +10126,9 @@ public partial class ChatScreenTests : IDisposable
     }
 
     [Theory]
-    [InlineData(false, false, 37)]   // Ctrl+Alt+H (/header) joined later still on 2026-10-01; Ctrl+/ before it
-    [InlineData(true, false, 38)]
-    [InlineData(true, true, 39)]
+    [InlineData(false, false, 40)]   // Ctrl+Alt+H (/header) joined later still on 2026-10-01; Ctrl+/ before it; Ctrl+Alt+G, U and V on 2026-10-02
+    [InlineData(true, false, 41)]
+    [InlineData(true, true, 42)]
     public void KeyRows_ListWhatApplies(bool voiceOn, bool wakeReady, int count)
     {
         var rows = ChatScreen.KeyRows(voiceOn, ConsoleKey.F8, wakeReady, "hey neon");
@@ -10136,9 +10144,9 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(("Home / End", "hold Shift to select text to the beginning or end of the line starting from the cursor"), rows[6]);
         Assert.Equal(("PgUp / PgDn", "scroll the transcript a page at a time"), rows[7]);
         Assert.DoesNotContain(rows, r => r.Key is "Mouse" or "Drag" or "Drop" or "@" or "#" or "$");
-        Assert.Equal(("Alt+V", "paste content (text or images)"), rows[^29]);   // ahead of Ctrl+Home since 2026-09-27 (the user's order)
-        Assert.Equal(("Ctrl+Home", "scroll to top of the chat pane"), rows[^28]);
-        Assert.Equal(("Ctrl+End", "scroll to bottom of the chat pane"), rows[^27]);
+        Assert.Equal(("Alt+V", "paste content (text or images)"), rows[^32]);   // ahead of Ctrl+Home since 2026-09-27 (the user's order)
+        Assert.Equal(("Ctrl+Home", "scroll to top of the chat pane"), rows[^31]);
+        Assert.Equal(("Ctrl+End", "scroll to bottom of the chat pane"), rows[^30]);
         // The Ctrl+letter rows A to Z by the letter since 2026-10-01 (the user's ask), Ctrl+/ ahead of them.
         Assert.Equal(
         [
@@ -10156,9 +10164,9 @@ public partial class ChatScreenTests : IDisposable
             ("Ctrl+T", "show or hide the toolbar (/tb)"),   // from Ctrl+Alt+B
             ("Ctrl+U", "open the usage pane (/usage)"),   // from Ctrl+Alt+G
             ("Ctrl+X", "cut the selected text"),   // 2026-09-25
-        ], rows[^26..^12]);
+        ], rows[^29..^15]);
         // Each plain-Ctrl chord's row names its command.
-        foreach (var (row, key) in new[] { (rows[^26], Keys.CtrlSlash), (rows[^23], Keys.CtrlE), (rows[^22], Keys.CtrlF), (rows[^21], Keys.CtrlH), (rows[^20], Keys.CtrlM), (rows[^18], Keys.CtrlP), (rows[^17], Keys.CtrlR), (rows[^16], Keys.CtrlS), (rows[^15], Keys.CtrlT), (rows[^14], Keys.CtrlU) })
+        foreach (var (row, key) in new[] { (rows[^29], Keys.CtrlSlash), (rows[^26], Keys.CtrlE), (rows[^25], Keys.CtrlF), (rows[^24], Keys.CtrlH), (rows[^23], Keys.CtrlM), (rows[^21], Keys.CtrlP), (rows[^20], Keys.CtrlR), (rows[^19], Keys.CtrlS), (rows[^18], Keys.CtrlT), (rows[^17], Keys.CtrlU) })
         {
             Assert.Equal(Keys.ShortcutLine(key), row.Meaning[(row.Meaning.LastIndexOf('(') + 1)..^1]);
         }
@@ -10169,6 +10177,7 @@ public partial class ChatScreenTests : IDisposable
         [
             ("Ctrl+Alt+C", "start a new conversation and clear the screen (/clear)"),
             ("Ctrl+Alt+D", "open the MCP pane (/mcp)"),
+            ("Ctrl+Alt+G", "open the log viewer (/log)"),   // 2026-10-02, the user's ask
             ("Ctrl+Alt+H", "show or hide the header at the next clear (/header)"),   // later still on 2026-10-01, the user's ask
             ("Ctrl+Alt+L", "open the allowed commands list (/cmdlist)"),
             ("Ctrl+Alt+M", "open the memory pane (/memory)"),
@@ -10177,11 +10186,13 @@ public partial class ChatScreenTests : IDisposable
             ("Ctrl+Alt+P", "start a new conversation and show the splash screen (/splash)"),   // from Ctrl+Alt+S, later still on 2026-10-01
             ("Ctrl+Alt+S", "open the skills pane (/skills)"),   // from Ctrl+Alt+K
             ("Ctrl+Alt+T", "open the tools pane (/tools)"),
+            ("Ctrl+Alt+U", "open the ComfyUI image viewer (/comfy view)"),   // 2026-10-02, the user's ask
+            ("Ctrl+Alt+V", "open the camera live view (/camera live)"),      // 2026-10-02, the user's ask
             ("Ctrl+Alt+X", "kill switch to immediately unload an embedded model (press twice)"),   // 2026-10-01, the user's place and wording
             ("Ctrl+Alt+Y", "open the system prompt pane (/sys)"),
-        ], rows[^12..]);
+        ], rows[^15..]);
         // Each row names its chord's command; the kill switch has none (2026-10-01).
-        Assert.All(rows[^12..].Where(row => row.Key != "Ctrl+Alt+X"), row => Assert.Equal(Keys.ShortcutLine(Keys.CtrlAlt(Enum.Parse<ConsoleKey>(row.Key[^1..]))), row.Meaning[(row.Meaning.LastIndexOf('(') + 1)..^1]));
+        Assert.All(rows[^15..].Where(row => row.Key != "Ctrl+Alt+X"), row => Assert.Equal(Keys.ShortcutLine(Keys.CtrlAlt(Enum.Parse<ConsoleKey>(row.Key[^1..]))), row.Meaning[(row.Meaning.LastIndexOf('(') + 1)..^1]));
         Assert.Null(Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.X)));
         Assert.Equal(voiceOn, rows.Any(r => r.Key == "F8"));
         if (voiceOn)
@@ -15587,6 +15598,31 @@ public partial class ChatScreenTests : IDisposable
     }
 
     [Fact]
+    public async Task CtrlAltG_OpensTheLogWindow_AtTheIdleLine_AndInThePane_WithThePaneLeftOpen()
+    {
+        // 2026-10-02 (the user's ask): /log as typed at the idle line, the draft kept; in a pane in place, as Ctrl+E, so the "x" after
+        // the chord is the pane's (nothing), never a draft the Enter after the ESC would send.
+        _settings.Update(d => { d.TtsOutput = false; d.MenuMaxHeight = "full-screen"; });
+        _console.Profile.Height = 112;
+        _geometry = new ScreenGeometry(() => null);
+        int opened = 0;
+        _openLogWindow = () => opened++;
+        _chat.EnqueueText("one");
+        StepsWhenIdle(
+            input => { input.Push("keep".Select(Keys.Char).ToArray()); input.Push(Keys.CtrlAlt(ConsoleKey.G)); },
+            Key(Keys.Enter),
+            input => { PushLine(input, "/help"); input.Push(Keys.CtrlAlt(ConsoleKey.G), Keys.Char('x'), Keys.Escape, Keys.Enter); },
+            Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.Equal(2, opened);
+        Assert.Contains(LogViewText.WindowOpenedNotice, output);
+        Assert.DoesNotContain("› /log", output);
+        Assert.Equal("keep", UserText(Assert.Single(_chat.Requests)));
+    }
+
+    [Fact]
     public async Task CtrlR_OpensTheReasoningPicker_AsSlashReasoning_TheDraftKept()
     {
         // Later still on 2026-10-01 (the user's ask): the plain-Ctrl picker chords through the dispatch as the bare command, no
@@ -19974,6 +20010,20 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(["off"], Texts(ChatScreen.ArgumentItems(command, "of", Sources())));
         Assert.Empty(ChatScreen.ArgumentItems(command, "on", Sources()));     // typed in full: the list closes
         Assert.Empty(ChatScreen.ArgumentItems(command, "on x", Sources()));
+    }
+
+    [Fact]
+    public void ArgumentItems_Profile_LeavesTheTemporaryProfilesOff_ButTheVerbsAndTheLoadedOneKeepThem()
+    {
+        // 2026-10-02 (the user's ask): a _ name is off /profile's list and the picker, unless loaded; the verbs' lists keep it.
+        var sources = Sources() with { Profiles = () => ["_scratch", "chef", "default", "_test"] };
+        Assert.Equal(["chef", "default"], Texts(ChatScreen.ArgumentItems("/profile", "", sources)).Take(2));
+        Assert.DoesNotContain(Texts(ChatScreen.ArgumentItems("/profile", "", sources)), t => t.StartsWith('_'));
+        Assert.Empty(ChatScreen.ArgumentItems("/profile", "_", sources));
+        Assert.Equal(["delete _scratch", "delete _test", "delete chef"], Texts(ChatScreen.ArgumentItems("/profile", "delete ", sources)).Order(StringComparer.Ordinal));
+        Assert.Contains("_test", Texts(ChatScreen.ArgumentItems("/profile", "", sources with { LoadedProfile = "_test" })));
+        Assert.Equal(["chef", "default", "_test"], SettingsMenu.PickerNames(["_scratch", "chef", "default", "_test"], "_TEST"));
+        Assert.Equal(["chef", "default"], SettingsMenu.PickerNames(["_scratch", "chef", "default", "_test"], "default"));
     }
 
     [Fact]

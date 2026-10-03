@@ -206,7 +206,7 @@ public sealed class AppSettingsData
     /// double-click opens <c>/settings</c>, <c>/tools</c>, <c>/mcp</c>, <c>/skills</c>, <c>/sys</c>, <c>/sessions</c>,
     /// <c>/usage</c> (📊, since 2026-09-29), then 💾 <c>/memory</c> while <see cref="Memory"/> is on, the lock
     /// <c>/cmdlist</c> that follows <see cref="ShellCommandPolicy"/>, and 👮 while <see cref="ShellPoliceOutsidePaths"/>
-    /// is on — the lock since later that day, the disk and the officer since 2026-09-22), the working directory in force
+    /// is on, 🥷 while it is off (2026-10-02) — the lock since later that day, the disk and the officer since 2026-09-22), the working directory in force
     /// (<c>/cwd browse</c>) at its right. Null is <see cref="App.ToolbarItems.Defaults"/> — Settings, Tools, Skills, Sessions
     /// and the path since later on 2026-09-29 (the user's pick; every item, one added later too, before); an empty list draws
     /// no row at all.
@@ -1788,6 +1788,7 @@ public sealed class AppSettingsData
     /// script that computes a path is not seen. Off, any path goes — and nothing tells the model it
     /// may leave (neither wording says a command can reach outside), so it does not try unless asked.
     /// The toolbar wears 👮 while it is on (later that day); its double-click is <c>/police</c>, this row's on/off page (later still that day).
+    /// While it is off the toolbar wears 🥷 in the officer's place (2026-10-02, the user's ask), the same double-click; neither under policy off.
     /// Read at each call and at each turn's prompt, no reconnect. No variable.
     /// </summary>
     public bool ShellPoliceOutsidePaths { get; set; } = true;

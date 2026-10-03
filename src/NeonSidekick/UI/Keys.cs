@@ -118,6 +118,11 @@ public static class Keys
     /// and Ctrl+Alt+E went: their DC4 and ACK count as no character. Ctrl+Alt+T is still <c>/tools</c>.
     /// Later still on 2026-10-01 (the user's ask) Ctrl+Alt+H is <c>/header</c>, free since <c>/help</c> left it for Ctrl+H: <c>Show
     /// header</c> flipped, at the next wipe; its BS counts as no character, as it did for <c>/help</c>.
+    /// On 2026-10-02 (the user's ask) three windows outside the terminal: Ctrl+Alt+G <c>/log</c> (the log window; G free since
+    /// <c>/usage</c> left it), Ctrl+Alt+U <c>/comfy view</c> (the picture viewer) and Ctrl+Alt+V <c>/camera live</c> (the camera's
+    /// live view) — the first lines with a word after the command, run as typed. Their BEL, NAK and SYN count as no character;
+    /// an AltGr key that types one (@ on AltGr+V, € on AltGr+U on some layouts) stays that character. Ctrl+Alt+V was never
+    /// the line's paste (Ctrl+V or Alt+V, one of the two).
     /// </summary>
     public static string? ShortcutLine(ConsoleKeyInfo key)
     {
@@ -148,6 +153,7 @@ public static class Keys
         return (key.Key, key.KeyChar) switch
         {
             (ConsoleKey.C, '\0' or '\x03') => "/clear",
+            (ConsoleKey.G, '\0' or '\x07') => "/log",
             (ConsoleKey.H, '\0' or '\x08') => "/header",
             (ConsoleKey.N, '\0' or '\x0e') => "/new",
             (ConsoleKey.P, '\0' or '\x10') => "/splash",
@@ -158,6 +164,8 @@ public static class Keys
             (ConsoleKey.D, '\0' or '\x04') => "/mcp",
             (ConsoleKey.L, '\0' or '\x0c') => "/cmdlist",
             (ConsoleKey.O, '\0' or '\x0f') => "/police",
+            (ConsoleKey.U, '\0' or '\x15') => "/comfy view",
+            (ConsoleKey.V, '\0' or '\x16') => "/camera live",
             _ => null,
         };
     }

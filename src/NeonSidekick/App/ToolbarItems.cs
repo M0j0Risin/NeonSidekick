@@ -92,7 +92,7 @@ public static class ToolbarItems
         Perf => "/perf · shows or hides the performance bar",
         Memory => "/memory · while Memory is on",
         CmdList => "/cmdlist · " + ChatScreen.CmdAskToolGlyph + " under ask, " + ChatScreen.CmdYoloToolGlyph + " under yolo, none under off",
-        Police => "/police · while Shell police outside paths is on",
+        Police => "/police · " + ChatScreen.PoliceToolGlyph + " while Shell police outside paths is on, " + ChatScreen.NinjaToolGlyph + " while off, none under policy off",
         Path => "/cwd browse · at the row's right",
         _ => "",
     };

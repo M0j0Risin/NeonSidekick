@@ -200,7 +200,7 @@ public static class HelpCommands
         ]),
         new("/profile",
         [
-            new("/profile [name | add <name> | delete <name> | rename <name> <new> | reset [name] [--all] | push <name> | pull <name> | edit | reload]", "Switch, create, delete, rename or reset a profile, or copy its settings to another (`push`) or from another (`pull`). `edit` opens `profile.json` in your editor; `reload` reads it back and reconnects only what changed. See Profiles. Ctrl+P runs the bare `/profile` too."),
+            new("/profile [name | add <name> | delete <name> | rename <name> <new> | reset [name] [--all] | push <name> | pull <name> | edit | reload]", "Switch, create, delete, rename or reset a profile, or copy its settings to another (`push`) or from another (`pull`). `edit` opens `profile.json` in your editor; `reload` reads it back and reconnects only what changed. Profiles whose name starts with `_` are left off the picker and the name list (unless loaded); `/profile _name` still switches to one. See Profiles. Ctrl+P runs the bare `/profile` too."),
         ]),
         new("/queue",
         [

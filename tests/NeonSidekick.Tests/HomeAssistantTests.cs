@@ -618,6 +618,22 @@ public sealed class HomeAssistantTests : IDisposable
         Assert.Equal("""{"entity_id":"light.den_den","brightness_pct":40}""", ServiceCalls().Single().Body);
     }
 
+    [Theory]
+    [InlineData("toggle kitchen prep 1", "light.toggle → Kitchen Prep 1", """{"entity_id":"light.kitchen_kitchen_prep_1"}""")]
+    [InlineData("on Kitchen Prep 1", "light.turn_on → Kitchen Prep 1", """{"entity_id":"light.kitchen_kitchen_prep_1"}""")]
+    [InlineData("on kitchen prep 1 40", "light.turn_on → Kitchen Prep 1 · 40%", """{"entity_id":"light.kitchen_kitchen_prep_1","brightness_pct":40}""")]
+    [InlineData("on kitchen prep 1 40%", "light.turn_on → Kitchen Prep 1 · 40%", """{"entity_id":"light.kitchen_kitchen_prep_1","brightness_pct":40}""")]
+    public async Task Command_ANameEndingInANumber_IsThatName_NotABrightness(string args, string line, string body)
+    {
+        // 2026-10-02 (the user's report): "/ha toggle Den Piano 1" read the 1 as a brightness and asked which Den Piano; the whole
+        // text is tried first now, the split only when it names nothing.
+        var result = await HaCommand.RunAsync(_ha, args, CancellationToken.None);
+
+        Assert.False(result.Failed, string.Join("\n", result.Lines));
+        Assert.Equal([line], result.Lines);
+        Assert.Equal(body, ServiceCalls().Single().Body);
+    }
+
     [Fact]
     public async Task Command_OffOnASwitch_IsTheGenericService()
     {

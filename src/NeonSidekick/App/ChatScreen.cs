@@ -1282,13 +1282,20 @@ internal sealed partial class ChatScreen
     public const string CmdAskToolGlyph = "🔒";
     public const string CmdYoloToolGlyph = "🔓";
     public const string PoliceToolGlyph = "👮";
+
+    /// <summary>
+    /// The police item while <c>Shell police outside paths</c> is off (2026-10-02, the user's ask: the item always shown, as the
+    /// lock is, the officer while on and the ninja while off). Its double-click is <c>/police</c> as the officer's is. Pinned.
+    /// </summary>
+    public const string NinjaToolGlyph = "🥷";
     public static readonly string ToolbarStrip = string.Join(GlyphSeparator, SettingsToolGlyph, ProfileToolGlyph, ToolsToolGlyph, McpToolGlyph, SkillsToolGlyph, SysToolGlyph, SessionsToolGlyph, UsageToolGlyph, PerfToolGlyph);
 
     /// <summary>
     /// The strip drawn for the switches, in the strip's order: <see cref="ToolbarStrip"/>, the disk
     /// while <paramref name="memory"/> is on, the closed lock under <c>ask</c> or the open one under
     /// <c>yolo</c> (neither under <c>off</c>), the officer while <paramref name="police"/> is on and the policy is not <c>off</c>
-    /// (later on 2026-09-22, the user's ask: with no shell tool offered there is nothing to police).
+    /// (later on 2026-09-22, the user's ask: with no shell tool offered there is nothing to police) — and the ninja while it is
+    /// off (2026-10-02, the user's ask: the item stays, as the lock does, its glyph telling which; still none under <c>off</c>).
     /// The nine alone with everything off. Every item checked (not the saved default, which narrowed on 2026-09-29). Pinned.
     /// </summary>
     public static string ToolbarStripFor(bool memory, Shell.CommandPolicyMode policy, bool police) =>
@@ -1296,7 +1303,8 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// The strip for the items Show toolbar checks (2026-09-29, the user's ask): each checked fixed glyph in strip order,
-    /// then the disk, the lock and the officer where they are checked and their switches allow them; empty when none is.
+    /// then the disk, the lock and the officer (or the ninja, 2026-10-02) where they are checked and their switches allow them;
+    /// empty when none is.
     /// Pinned.
     /// </summary>
     public static string ToolbarStripFor(IReadOnlySet<string> items, bool memory, Shell.CommandPolicyMode policy, bool police)
@@ -1329,9 +1337,9 @@ internal sealed partial class ChatScreen
             }
         }
 
-        if (police && policy != Shell.CommandPolicyMode.Off && items.Contains(ToolbarItems.Police))
+        if (policy != Shell.CommandPolicyMode.Off && items.Contains(ToolbarItems.Police))
         {
-            glyphs.Add(PoliceToolGlyph);
+            glyphs.Add(police ? PoliceToolGlyph : NinjaToolGlyph);
         }
 
         return string.Join(GlyphSeparator, glyphs);
@@ -1430,15 +1438,26 @@ internal sealed partial class ChatScreen
     /// A command chord pressed in a pane that leaves it open (2026-10-01, the user's call): Ctrl+F <c>/perf</c> and Ctrl+T
     /// <c>/tb</c> (Ctrl+Alt+E and B until later still that day) toggle their bar as typed — here at the idle line, posted to the turn task under a reply — and the tick
     /// repaints the pane's new shape. Ctrl+Alt+H <c>/header</c> the same (later still that day): a setting saved, nothing on the pane. Ctrl+E <c>/explore</c> the same (later on 2026-10-01): it opens a window outside the
-    /// terminal, so the pane has no reason to close. False for every other chord: the pane closes and the screen runs it
-    /// (<see cref="ScreenPane.Chord"/>, <see cref="OffPaneLine"/>).
+    /// terminal, so the pane has no reason to close. Ctrl+Alt+G <c>/log</c>, Ctrl+Alt+U <c>/comfy view</c> and Ctrl+Alt+V
+    /// <c>/camera live</c> the same (2026-10-02, the user's ask): each opens a window of its own. False for every other chord:
+    /// the pane closes and the screen runs it (<see cref="ScreenPane.Chord"/>, <see cref="OffPaneLine"/>).
     /// </summary>
     private bool ChordInPlace(string line)
     {
-        switch (ParseLine(line).Command)
+        var (command, args) = ParseLine(line);
+        switch (command)
         {
             case SlashCommand.Explore:
                 RunOrPost(() => HandleExplore(""));
+                return true;
+            case SlashCommand.Log:
+                RunOrPost(() => HandleLog(""));
+                return true;
+            case SlashCommand.Comfy when string.Equals(args.Trim(), ViewerText.ViewWord, StringComparison.OrdinalIgnoreCase):
+                RunOrPost(() => OpenViewer(notice: true));
+                return true;
+            case SlashCommand.Camera when Camera.CameraCommand.Parse(args).Verb == Camera.CameraVerb.Live:
+                RunOrPost(StartLive);
                 return true;
             case SlashCommand.Perf:
                 RunOrPost(() => HandlePerf(""));
@@ -1513,7 +1532,7 @@ internal sealed partial class ChatScreen
         return chord is not null ? (chord, true) : (hit is { } h ? OffPaneLine(h) : null, false);
     }
 
-    /// <summary>The command a double-click on a toolbar glyph runs (2026-09-21), as the typed word; null for anything else. The officer's is <c>/police</c> since later on 2026-09-22 (nothing until then). Pinned.</summary>
+    /// <summary>The command a double-click on a toolbar glyph runs (2026-09-21), as the typed word; null for anything else. The officer's is <c>/police</c> since later on 2026-09-22 (nothing until then), and the ninja's the same (2026-10-02). Pinned.</summary>
     public static string? ToolbarWord(string glyph) => glyph switch
     {
         SettingsToolGlyph => SlashCommands.SettingsWord,
@@ -1527,7 +1546,7 @@ internal sealed partial class ChatScreen
         PerfToolGlyph => SlashCommands.PerfWord,
         MemoryToolGlyph => SlashCommands.MemoryWord,
         CmdAskToolGlyph or CmdYoloToolGlyph => SlashCommands.CmdListWord,
-        PoliceToolGlyph => SlashCommands.PoliceWord,
+        PoliceToolGlyph or NinjaToolGlyph => SlashCommands.PoliceWord,
         _ => null,
     };
 
@@ -1717,6 +1736,7 @@ internal sealed partial class ChatScreen
     /// Ctrl+M, R and S (<c>/model</c>, <c>/reasoning</c>, <c>/server</c>) later still, the user's ask and wording, each in its
     /// letter's place: A, C, E, M, O, R, S, X. Then <c>/help</c>, <c>/profile</c> and <c>/usage</c> moved from Ctrl+Alt+H, P and G
     /// to plain Ctrl+H, P and U (the user's ask), their rows' wording kept: A, C, E, H, M, O, P, R, S, U, X.
+    /// Ctrl+Alt+G (<c>/log</c>), U (<c>/comfy view</c>) and V (<c>/camera live</c>) on 2026-10-02, the user's ask, each in its letter's place.
     /// </summary>
     public static (string Key, string Meaning)[] KeyRows(bool voiceOn, ConsoleKey pushToTalk, bool wakeReady, string wakePhrase)
     {
@@ -1760,6 +1780,7 @@ internal sealed partial class ChatScreen
         rows.Add(("Ctrl+X", "cut the selected text"));
         rows.Add(("Ctrl+Alt+C", "start a new conversation and clear the screen (/clear)"));
         rows.Add(("Ctrl+Alt+D", "open the MCP pane (/mcp)"));
+        rows.Add(("Ctrl+Alt+G", "open the log viewer (/log)"));
         rows.Add(("Ctrl+Alt+H", "show or hide the header at the next clear (/header)"));
         rows.Add(("Ctrl+Alt+L", "open the allowed commands list (/cmdlist)"));
         rows.Add(("Ctrl+Alt+M", "open the memory pane (/memory)"));
@@ -1768,6 +1789,8 @@ internal sealed partial class ChatScreen
         rows.Add(("Ctrl+Alt+P", "start a new conversation and show the splash screen (/splash)"));
         rows.Add(("Ctrl+Alt+S", "open the skills pane (/skills)"));
         rows.Add(("Ctrl+Alt+T", "open the tools pane (/tools)"));
+        rows.Add(("Ctrl+Alt+U", "open the ComfyUI image viewer (/comfy view)"));
+        rows.Add(("Ctrl+Alt+V", "open the camera live view (/camera live)"));
         rows.Add(("Ctrl+Alt+X", "kill switch to immediately unload an embedded model (press twice)"));
         rows.Add(("Ctrl+Alt+Y", "open the system prompt pane (/sys)"));
         return rows.ToArray();
@@ -3495,7 +3518,8 @@ internal sealed partial class ChatScreen
                     }
                 }
 
-                var items = sources.Profiles().Select(name => new CompletionItem(name, ProfileNote(name, sources.LoadedProfile))).Concat(ProfileVerbs).ToList();
+                // The temporary profiles (a _ name) left off, as the picker leaves them (2026-10-02, the user's ask); typed, they still switch.
+                var items = SettingsMenu.PickerNames(sources.Profiles(), sources.LoadedProfile).Select(name => new CompletionItem(name, ProfileNote(name, sources.LoadedProfile))).Concat(ProfileVerbs).ToList();
                 return MentionCompleter.Matches(items, argText);
             }
 

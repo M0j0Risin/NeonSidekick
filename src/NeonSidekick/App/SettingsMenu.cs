@@ -3335,6 +3335,8 @@ internal sealed partial class SettingsMenu
     /// profile, opened on the loaded one; Enter on another switches it in place
     /// (<see cref="AppSettings.SwitchProfileAsync"/>) and returns true. The caller rebinds what
     /// depends on the profile. Without menus the list is printed and nothing switches.
+    /// A temporary profile (<see cref="Profiles.IsTemporary"/>, a <c>_</c> name) is left off unless it is the loaded one
+    /// (2026-10-02, the user's ask); <c>/profile _name</c> still switches to it (<see cref="PickerNames"/>).
     /// </summary>
     public Task<bool> PickProfileAsync(CancellationToken cancellationToken) =>
         PickProfileAsync(ProfileTitle, ProfileKeys, close: true, cancellationToken);
@@ -3343,7 +3345,7 @@ internal sealed partial class SettingsMenu
     private async Task<bool> PickProfileAsync(string label, string keys, bool close, CancellationToken cancellationToken)
     {
         string current = _settings.ProfileName;
-        var names = Profiles.List(_settings.StorageDirectory);
+        var names = PickerNames(Profiles.List(_settings.StorageDirectory), current);
         if (!CanShowMenus())
         {
             Flow.Notice(ProfileListLine(names, current));
@@ -3361,6 +3363,17 @@ internal sealed partial class SettingsMenu
         }
 
         return await SwitchProfileAsync(names[i]).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// The profiles the picker and <c>/profile</c>'s name list offer (2026-10-02, the user's ask): every one but the temporary
+    /// ones (<see cref="Profiles.IsTemporary"/>, a <c>_</c> name), the loaded one always (the picker opens on it). Typed by
+    /// name, a temporary profile still switches: <see cref="Profiles.Resolve"/> reads the whole list. Pure.
+    /// </summary>
+    public static IReadOnlyList<string> PickerNames(IReadOnlyList<string> names, string? loaded)
+    {
+        ArgumentNullException.ThrowIfNull(names);
+        return names.Where(name => !Profiles.IsTemporary(name) || Profiles.NameEquals(name, loaded)).ToList();
     }
 
     /// <summary>

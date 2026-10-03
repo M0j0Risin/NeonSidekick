@@ -124,7 +124,12 @@ public static class HaCommand
         }
     }
 
-    /// <summary><c>on|off|toggle &lt;name&gt; [n%]</c>: a trailing number (with or without %) is the brightness, on only.</summary>
+    /// <summary>
+    /// <c>on|off|toggle &lt;name&gt; [n%]</c>: a trailing number (with or without %) is the brightness, on only — unless the whole
+    /// text names something (2026-10-02, the user's report: <c>/ha toggle Den Piano 1</c> read the 1 as a brightness and asked
+    /// which of Den Piano 1 and 2; the quoted name worked only because <c>1"</c> is no number). The whole text is tried first
+    /// and the split only when it names nothing, so <c>on den 40</c> is still the den at 40% and a miss reports the split's target.
+    /// </summary>
     private static async Task<HaCommandResult> SwitchAsync(HaSession ha, string verb, string rest, CancellationToken cancellationToken)
     {
         var (target, brightness) = SplitBrightness(rest);
@@ -139,17 +144,16 @@ public static class HaCommand
             return HaCommandResult.Error(error!);
         }
 
-        var match = snapshot.Resolve(target, ["light"]);
+        HaMatch? whole = brightness is null ? null : ResolveSwitchable(snapshot, rest.Trim());
+        if (whole is { Error: null })
+        {
+            brightness = null;
+        }
+
+        var match = whole is { Error: null } ? whole : ResolveSwitchable(snapshot, target);
         if (match.Error is not null)
         {
-            // Not a light: a switch, a fan, the TV.
-            var other = snapshot.Resolve(target, SwitchableDomains);
-            if (other.Error is not null)
-            {
-                return HaCommandResult.Error(match.Error);
-            }
-
-            match = other;
+            return HaCommandResult.Error(match.Error);
         }
 
         string service = verb switch { "on" => "turn_on", "off" => "turn_off", _ => "toggle" };
@@ -159,7 +163,23 @@ public static class HaCommand
         return await CallAsync(ha, lights ? "light" : "homeassistant", service, match.Entities, data, level is { } l ? l.ToString(CultureInfo.InvariantCulture) + "%" : null, cancellationToken).ConfigureAwait(false);
     }
 
-    /// <summary>A target and its trailing brightness — <c>den 40%</c>, <c>den 40</c> — the number 0 to 100. Pure.</summary>
+    /// <summary>A light by <paramref name="target"/>, else any switchable entity (a switch, a fan, the TV); a miss is the light's error.</summary>
+    private static HaMatch ResolveSwitchable(HaSnapshot snapshot, string target)
+    {
+        var match = snapshot.Resolve(target, ["light"]);
+        if (match.Error is null)
+        {
+            return match;
+        }
+
+        var other = snapshot.Resolve(target, SwitchableDomains);
+        return other.Error is null ? other : match;
+    }
+
+    /// <summary>
+    /// A target and its trailing brightness — <c>den 40%</c>, <c>den 40</c> — the number 0 to 100. Pure: a name that ends in a
+    /// number (<c>Den Piano 1</c>) splits too, and <see cref="SwitchAsync"/> tries the whole text first (2026-10-02).
+    /// </summary>
     public static (string Target, int? Brightness) SplitBrightness(string text)
     {
         ArgumentNullException.ThrowIfNull(text);
