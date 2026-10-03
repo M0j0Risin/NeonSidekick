@@ -21,7 +21,7 @@ public sealed class LlmSessionDockerTests
     /// <summary>No spinner: typed, since a bare null would fit the endpoint overload too.</summary>
     private static readonly Action<string>? NoPhase = null;
 
-    private LlmSession Session() => new(
+    private LlmSession Session(FakeEmbeddedLlm? embedded = null) => new(
         new LlmEndpointProbe(new HttpClient(_http), TimeSpan.FromMilliseconds(500)),
         new ContextLengthProbe(new HttpClient(_http), TimeSpan.FromMilliseconds(500)),
         (endpoint, _) =>
@@ -29,6 +29,7 @@ public sealed class LlmSessionDockerTests
             _endpoints.Add(endpoint);
             return new FakeChatClient();
         },
+        embedded: embedded,
         dockerServers: _docker);
 
     private static AppSettingsData Docker(string name, string model = "", bool on = true) => new()
@@ -137,6 +138,70 @@ public sealed class LlmSessionDockerTests
         Assert.Equal("stop-all", _docker.Calls[^1]);
         await session.ConnectAsync(lm, NoPhase, CancellationToken.None);
         Assert.Equal(5, _docker.Calls.Count);
+    }
+
+    [Fact]
+    public async Task AProfileSwitch_ToAContainerItsListAloneNames_StopsTheOldProfilesFirst_ByItsList_AndSettles()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        using var session = Session();
+        await session.ConnectAsync(Docker("sglang_a"), NoPhase, CancellationToken.None);
+
+        // Profile B chooses vllm_c alone: its own switch would never stop sglang_a.
+        var other = new AppSettingsData { DockerServers = true, DockerServerContainers = ["vllm_c"], LlmUrl = "docker:vllm_c", LlmScanMode = "disabled" };
+        Assert.True(await session.ConnectAsync(other, NoPhase, CancellationToken.None));
+
+        Assert.Equal(["switch sglang_a", "stop-all except vllm_c settle", "switch vllm_c"], _docker.Calls);
+        Assert.Equal(["sglang_a", "vllm_b"], _docker.StopNames.Single());   // profile A's list
+        Assert.Equal("vllm_c", session.DockerInUse);
+    }
+
+    [Fact]
+    public async Task AProfileSwitch_ToTheEmbeddedModel_WithDockerOff_StopsTheOldProfilesContainer_BeforeTheLoad()
+    {
+        if (!EmbeddedLlm.EmbeddedEndpoint.Offered)
+        {
+            return;
+        }
+
+        var embedded = new FakeEmbeddedLlm().Installed("gemma-4-e2b");
+        embedded.StartGate = _ =>
+        {
+            _docker.Calls.Add("embedded start");
+            return Task.CompletedTask;
+        };
+        using var session = Session(embedded);
+        await session.ConnectAsync(Docker("sglang_a"), NoPhase, CancellationToken.None);
+
+        var gemma = new AppSettingsData { LlmUrl = "embedded", LlmModel = "gemma-4-e2b", LlmContextLength = 8192, LlmScanMode = "disabled" };
+        Assert.True(await session.ConnectAsync(gemma, NoPhase, CancellationToken.None));
+
+        Assert.Equal(["switch sglang_a", "stop-all settle", "embedded start"], _docker.Calls);
+        Assert.Equal(["sglang_a", "vllm_b"], _docker.StopNames.Single());   // profile A's list; B's is empty
+        Assert.Null(session.DockerInUse);
+    }
+
+    [Fact]
+    public async Task AProfileSwitch_ToABlankUrl_StopsTheContainerBeforeTheScan()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        using var session = Session();
+        await session.ConnectAsync(Docker("sglang_a"), NoPhase, CancellationToken.None);
+
+        // The scan would find the old container's port; it is stopped before anything is asked.
+        await session.DiscoverAsync(new AppSettingsData { LlmScanMode = "disabled" }, CancellationToken.None);
+
+        Assert.Equal(["switch sglang_a", "stop-all"], _docker.Calls);
+        Assert.Equal(["sglang_a", "vllm_b"], _docker.StopNames.Single());
+        Assert.Null(session.DockerInUse);
     }
 
     [Fact]

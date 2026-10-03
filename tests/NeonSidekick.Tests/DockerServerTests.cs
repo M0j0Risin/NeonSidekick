@@ -202,12 +202,30 @@ public sealed class DockerServerTests : IDisposable
     [Fact]
     public async Task StopAll_StopsTheRunningChosenOnes_AndNothingElse()
     {
-        var left = await _host.StopAllAsync(_settings, except: null, _phases.Add, CancellationToken.None);
+        var left = await _host.StopAllAsync(_settings, except: null, settle: false, _phases.Add, CancellationToken.None);
         Assert.Equal(["sglang_a", "paused_c"], left.Stopped);
         Assert.Empty(left.Errors);
         Assert.Equal("running", _engine.State("mysql_dev"));
         Assert.Equal("exited", _engine.State("sglang_a"));
         Assert.DoesNotContain(TimeSpan.FromSeconds(2), _waits);   // no settle: nothing starts after
+    }
+
+    [Fact]
+    public async Task StopAll_ToSettle_WaitsThePostStopDelay_OnlyWhenItStoppedOne()
+    {
+        // A model loads next (an embedded one, another profile's container): the GPU's memory is given the delay, as a switch gives it.
+        var left = await _host.StopAllAsync(_settings, except: "paused_c", settle: true, _phases.Add, CancellationToken.None);
+        Assert.Equal(["sglang_a"], left.Stopped);
+        Assert.Equal("paused", _engine.State("paused_c"));
+        Assert.Equal(["stopping sglang_a", "letting the GPU's memory settle"], _phases);
+        Assert.Equal(TimeSpan.FromSeconds(2), _waits[^1]);
+
+        _phases.Clear();
+        _waits.Clear();
+        var none = await _host.StopAllAsync(_settings, except: "paused_c", settle: true, _phases.Add, CancellationToken.None);
+        Assert.Empty(none.Stopped);
+        Assert.Empty(_phases);
+        Assert.Empty(_waits);
     }
 
     [Fact]

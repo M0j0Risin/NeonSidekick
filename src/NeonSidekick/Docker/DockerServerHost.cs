@@ -25,8 +25,12 @@ public interface IDockerServers : IDisposable
     /// <summary>Stops every other chosen container, starts <paramref name="name"/> and waits for its API; <paramref name="phase"/> is told each step.</summary>
     Task<DockerSwitch> SwitchToAsync(string name, AppSettingsData effective, Action<string>? phase, CancellationToken cancellationToken);
 
-    /// <summary>Stops every running chosen container but <paramref name="except"/> (another server picked, the app's exit).</summary>
-    Task<DockerStopAll> StopAllAsync(AppSettingsData effective, string? except, Action<string>? phase, CancellationToken cancellationToken);
+    /// <summary>
+    /// Stops every running chosen container but <paramref name="except"/> (another server picked, a profile switch, the app's
+    /// exit). With <paramref name="settle"/> (a model about to load next: the embedded one or another container, 2026-10-02)
+    /// and any stopped, <c>Docker server post-stop delay</c> is waited after, as a switch waits it.
+    /// </summary>
+    Task<DockerStopAll> StopAllAsync(AppSettingsData effective, string? except, bool settle, Action<string>? phase, CancellationToken cancellationToken);
 }
 
 /// <summary>
@@ -166,12 +170,7 @@ public sealed class DockerServerHost : IDockerServers
                 stopped.Add(other.Name);
             }
 
-            if (stopped.Count > 0 && effective.DockerServerPostStopDelaySeconds > 0)
-            {
-                phase?.Invoke(DockerServerText.Settling);
-                await _delay(TimeSpan.FromSeconds(Math.Min(effective.DockerServerPostStopDelaySeconds, AppSettingsData.MaxDockerServerPostStopDelaySeconds)), cancellationToken).ConfigureAwait(false);
-            }
-
+            await SettleAsync(stopped, effective, phase, cancellationToken).ConfigureAwait(false);
             phase?.Invoke(DockerServerText.Starting(name));
             if (!target.Running)
             {
@@ -190,7 +189,7 @@ public sealed class DockerServerHost : IDockerServers
         }
     }
 
-    public async Task<DockerStopAll> StopAllAsync(AppSettingsData effective, string? except, Action<string>? phase, CancellationToken cancellationToken)
+    public async Task<DockerStopAll> StopAllAsync(AppSettingsData effective, string? except, bool settle, Action<string>? phase, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(effective);
         var names = DockerEndpoint.ChosenNames(effective);
@@ -223,11 +222,26 @@ public sealed class DockerServerHost : IDockerServers
                 }
             }
 
+            if (settle)
+            {
+                await SettleAsync(stopped, effective, phase, cancellationToken).ConfigureAwait(false);
+            }
+
             return new DockerStopAll(stopped, errors);
         }
         finally
         {
             _gate.Release();
+        }
+    }
+
+    /// <summary>When any container was stopped, <c>Docker server post-stop delay</c> for the GPU's memory to settle before the next model loads.</summary>
+    private async Task SettleAsync(IReadOnlyList<string> stopped, AppSettingsData effective, Action<string>? phase, CancellationToken cancellationToken)
+    {
+        if (stopped.Count > 0 && effective.DockerServerPostStopDelaySeconds > 0)
+        {
+            phase?.Invoke(DockerServerText.Settling);
+            await _delay(TimeSpan.FromSeconds(Math.Min(effective.DockerServerPostStopDelaySeconds, AppSettingsData.MaxDockerServerPostStopDelaySeconds)), cancellationToken).ConfigureAwait(false);
         }
     }
 

@@ -6,7 +6,7 @@ namespace NeonSidekick.Tests.Fakes;
 
 /// <summary>
 /// The Docker servers' switcher for the session and screen tests (2026-10-02): no engine, every call recorded in order
-/// (<c>list</c>, <c>switch &lt;name&gt;</c>, <c>stop-all</c>), each switch answering <see cref="Answer"/> after telling the phase
+/// (<c>list</c>, <c>switch &lt;name&gt;</c>, <c>stop-all[ except &lt;name&gt;][ settle]</c>), each switch answering <see cref="Answer"/> after telling the phase
 /// <c>starting &lt;name&gt;</c>.
 /// </summary>
 internal sealed class FakeDockerServers : IDockerServers
@@ -39,9 +39,13 @@ internal sealed class FakeDockerServers : IDockerServers
         return Task.FromResult(Answer(name));
     }
 
-    public Task<DockerStopAll> StopAllAsync(AppSettingsData effective, string? except, Action<string>? phase, CancellationToken cancellationToken)
+    /// <summary>The chosen names each <see cref="StopAllAsync"/> was asked with, in order: whose list the stop went by.</summary>
+    public List<IReadOnlyList<string>> StopNames { get; } = [];
+
+    public Task<DockerStopAll> StopAllAsync(AppSettingsData effective, string? except, bool settle, Action<string>? phase, CancellationToken cancellationToken)
     {
-        Calls.Add("stop-all");
+        Calls.Add("stop-all" + (except is null ? "" : " except " + except) + (settle ? " settle" : ""));
+        StopNames.Add(DockerEndpoint.ChosenNames(effective));
         return Task.FromResult(Stopped);
     }
 

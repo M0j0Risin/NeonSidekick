@@ -77,6 +77,11 @@ internal sealed class LlmSession : IDisposable
     // The chosen Docker container this session last switched to (2026-10-02): set before the switch, since a failed one may still
     // have started it; cleared when another server is picked and the containers are stopped.
     private string? _dockerInUse;
+
+    // The settings that container was switched to under (2026-10-02, the user's ask): a profile switch leaves it by the old
+    // profile's chosen list, stop timeout and post-stop delay — the new profile's list may not name it at all, and a stop by
+    // that list stopped nothing while the next model loaded beside it.
+    private AppSettingsData? _dockerSettings;
     private IChatClient? _client;
     private AppSettingsData _effective = new();
     private string _apiKey = LlmEndpoint.DefaultApiKey;
@@ -182,11 +187,19 @@ internal sealed class LlmSession : IDisposable
         Remember(effective);
 
         // Another server than a chosen container (2026-10-02, the user's call): the running one stops first, before an embedded
-        // model loads, so the GPU never holds the two.
+        // model loads, so the GPU never holds the two — and the GPU's memory is given the post-stop delay before that load.
         bool docker = _docker is not null && DockerEndpoint.Chosen(effective);
         if (!docker)
         {
-            await LeaveDockerAsync(effective, phase, cancellationToken).ConfigureAwait(false);
+            await LeaveDockerAsync(effective, except: null, settle: EmbeddedEndpoint.Chosen(effective), phase, cancellationToken).ConfigureAwait(false);
+        }
+        else if (_dockerInUse is { } inUse && DockerEndpoint.ContainerOf(effective.LlmUrl) is { } target
+            && !string.Equals(inUse, target, StringComparison.Ordinal) && !DockerEndpoint.ChosenNames(effective).Contains(inUse, StringComparer.Ordinal))
+        {
+            // A profile switch to another container (2026-10-02, the user's ask): the new profile's switch stops only the ones
+            // its own list names, so the old profile's container, not among them, stops here first. One both lists name is the
+            // switch's to stop, as within one profile.
+            await LeaveDockerAsync(effective, except: target, settle: true, phase, cancellationToken).ConfigureAwait(false);
         }
 
         if (EmbeddedEndpoint.Chosen(effective))
@@ -310,6 +323,7 @@ internal sealed class LlmSession : IDisposable
         }
 
         _dockerInUse = name;
+        _dockerSettings = effective;
         var result = await _docker!.SwitchToAsync(name, effective, phase, cancellationToken).ConfigureAwait(false);
         if (!result.Ok)
         {
@@ -326,17 +340,21 @@ internal sealed class LlmSession : IDisposable
 
     /// <summary>
     /// Another server picked while a chosen container was in use (2026-10-02, the user's call): every running chosen container
-    /// stops, so the GPU is free for what comes next. A container that would not stop is a warning; the connect goes on.
+    /// but <paramref name="except"/> stops, so the GPU is free for what comes next. The chosen ones are those of the settings the
+    /// container was switched to under (later that day, the user's ask: a profile switch's new list may not name it), and so is
+    /// the post-stop delay <paramref name="settle"/> waits when a model loads next. A container that would not stop is a
+    /// warning; the connect goes on.
     /// </summary>
-    private async Task LeaveDockerAsync(AppSettingsData effective, Action<string>? phase, CancellationToken cancellationToken)
+    private async Task LeaveDockerAsync(AppSettingsData effective, string? except, bool settle, Action<string>? phase, CancellationToken cancellationToken)
     {
         if (_docker is null || _dockerInUse is null)
         {
             return;
         }
 
-        var left = await _docker.StopAllAsync(effective, except: null, phase, cancellationToken).ConfigureAwait(false);
+        var left = await _docker.StopAllAsync(_dockerSettings ?? effective, except, settle, phase, cancellationToken).ConfigureAwait(false);
         _dockerInUse = null;
+        _dockerSettings = null;
         if (left.Stopped.Count > 0)
         {
             DiagnosticLog.Info(Category, DockerServerText.Left(left.Stopped));
@@ -363,8 +381,10 @@ internal sealed class LlmSession : IDisposable
             return [];
         }
 
-        var left = await _docker.StopAllAsync(effective, except: null, null, cancellationToken).ConfigureAwait(false);
+        // The chosen list it was switched to under: the profile now loaded may not name it (2026-10-02).
+        var left = await _docker.StopAllAsync(_dockerSettings ?? effective, except: null, settle: false, null, cancellationToken).ConfigureAwait(false);
         _dockerInUse = null;
+        _dockerSettings = null;
         foreach (string error in left.Errors)
         {
             DiagnosticLog.Warn(Category, error);
@@ -505,8 +525,8 @@ internal sealed class LlmSession : IDisposable
         ArgumentNullException.ThrowIfNull(endpoint);
         if (!DockerEndpoint.IsDocker(endpoint.BaseUrl))
         {
-            // A scan row picked (2026-10-02): a chosen container in use stops first, the user's call.
-            await LeaveDockerAsync(effective, phase, cancellationToken).ConfigureAwait(false);
+            // A scan row picked (2026-10-02): a chosen container in use stops first, the user's call. Its server runs already: no settle.
+            await LeaveDockerAsync(effective, except: null, settle: false, phase, cancellationToken).ConfigureAwait(false);
         }
 
         if (!Connect(effective, endpoint))
@@ -537,15 +557,18 @@ internal sealed class LlmSession : IDisposable
     /// The discovery half of a connect for a blank URL, for a screen that lets the user choose:
     /// drops the current client and returns every server that answered under the settings' scan
     /// mode, in list order (<see cref="LlmEndpointProbe.DiscoverAllAsync"/>). <see cref="Endpoint"/>
-    /// is null until <see cref="Connect"/> lands one.
+    /// is null until <see cref="Connect"/> lands one. A chosen container in use stops before the scan (2026-10-02, the user's
+    /// ask): a blank URL is another server, and after a profile switch the new list would not hide the old container's port —
+    /// the scan would offer it, and the pick's own leave then stop the server just picked.
     /// </summary>
-    public Task<IReadOnlyList<LlmServer>> DiscoverAsync(AppSettingsData effective, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<LlmServer>> DiscoverAsync(AppSettingsData effective, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(effective);
         Reconnecting();
         Endpoint = null;
         Remember(effective);
-        return WithExtraRowsAsync(effective, _probe.DiscoverAllAsync(LlmEndpoint.KeyOf(effective), extra: null, LlmScanMode.Resolve(effective), cancellationToken), cancellationToken);
+        await LeaveDockerAsync(effective, except: null, settle: false, phase: null, cancellationToken).ConfigureAwait(false);
+        return await WithExtraRowsAsync(effective, _probe.DiscoverAllAsync(LlmEndpoint.KeyOf(effective), extra: null, LlmScanMode.Resolve(effective), cancellationToken), cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
