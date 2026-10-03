@@ -396,6 +396,13 @@ public sealed class SidekickApp
             return await VoiceCheck.RunAsync(_console, voice, EffectiveSettings, cancellationToken: cancellationToken).ConfigureAwait(false);
         }
 
+        if (options.SqlCheck is { } sqlConnection)
+        {
+            // The whole catalog, as the Oracle and MySQL checks (2026-10-03): the check proves the driver, whatever this profile offers the model.
+            var catalog = Sql.SqlConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory);
+            return await SqlCheck.RunAsync(_console, catalog, sqlConnection, EffectiveSettings.SqlQueryTimeoutSeconds, cancellationToken).ConfigureAwait(false);
+        }
+
         if (options.OracleCheck is { } oracleConnection)
         {
             // The whole catalog, not the offered list: the check proves the driver, whatever this profile offers the model.

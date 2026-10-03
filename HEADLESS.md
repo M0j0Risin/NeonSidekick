@@ -702,7 +702,7 @@ Flags beat variables; variables beat the profile's saved values.
 
 ## Flags that don't combine with `--headless`
 
-`--smoke`, `--audio-check`, `--voice-check`, `--oracle-check <connection>`, `--mysql-check <connection>`, `--unc-check <share>`, `--docker-check` and `--camera-check` are separate modes; given together with
+`--smoke`, `--audio-check`, `--voice-check`, `--sql-check <connection>`, `--oracle-check <connection>`, `--mysql-check <connection>`, `--unc-check <share>`, `--docker-check` and `--camera-check` are separate modes; given together with
 `--headless`, headless wins and they are ignored. `--help` and `--version` print and exit before
 any mode runs.
 

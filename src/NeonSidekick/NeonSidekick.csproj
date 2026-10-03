@@ -128,7 +128,8 @@
       On Windows it brings Microsoft.Data.SqlClient.SNI.dll (the native network layer, from the
       .SNI.runtime package) beside the exe; it cannot run under InvariantGlobalization (see above).
       ScriptDom is the T-SQL parser behind the read-only gate (Sql/SqlReadOnlyGate.cs): fully managed,
-      MIT. The smoke probe sql:parse-and-sni is the proof on the published binary.
+      MIT. The smoke probe sql:parse-and-sni is the proof on the published binary, and since 2026-10-03 the check
+      mode sql-check against a server (the Oracle and MySQL checks' shape, come late).
     -->
     <PackageReference Include="Microsoft.Data.SqlClient" Version="7.1.0" />
     <PackageReference Include="Microsoft.SqlServer.TransactSql.ScriptDom" Version="180.107.0" />

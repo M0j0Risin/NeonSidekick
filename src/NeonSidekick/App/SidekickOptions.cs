@@ -62,6 +62,7 @@ public sealed record SidekickOptions(
     public const string ProfileFlag = "--profile";
     public const string YoloFlag = "--yolo";
     public const string NoPoliceFlag = "--no-police";
+    public const string SqlCheckFlag = "--sql-check";
     public const string OracleCheckFlag = "--oracle-check";
     public const string MySqlCheckFlag = "--mysql-check";
     public const string UncCheckFlag = "--unc-check";
@@ -84,6 +85,13 @@ public sealed record SidekickOptions(
     /// <summary><c>--unc-check &lt;share&gt;</c> (2026-09-30): run <see cref="UncCheck"/> over that share of <c>unc.json</c> and exit 0/1 — the UNC tools' proof, reads only.</summary>
     public string? UncCheck { get; init; }
 
+    /// <summary>
+    /// <c>--sql-check &lt;connection&gt;</c> (2026-10-03, the user's ask): run <see cref="SqlCheck"/> over that connection of
+    /// <c>sql.json</c> and exit 0/1. The SQL tools came a week before the check modes and had only <c>--smoke</c>'s
+    /// server-less probes on the published binary, though SqlClient declares no AOT support either; this is their live proof.
+    /// </summary>
+    public string? SqlCheck { get; init; }
+
     /// <summary><c>--mysql-check &lt;connection&gt;</c> (2026-09-30): run <see cref="MySqlCheck"/> over that connection of <c>mysql.json</c> and exit 0/1, <see cref="OracleCheck"/>'s twin.</summary>
     public string? MySqlCheck { get; init; }
 
@@ -97,13 +105,14 @@ public sealed record SidekickOptions(
 
     /// <summary>The help text. Pinned wording; tests assert on it.</summary>
     public const string Usage =
-        "Usage: NeonSidekick [--headless] [--smoke] [--audio-check] [--voice-check] [--oracle-check <connection>] [--mysql-check <connection>] [--unc-check <share>] [--docker-check] [--camera-check] [--url <url>] [--model <id>] [--cwd <path>] [--profile <name>] [--yolo] [--no-police] [--log <path>] [--version] [--help]\n" +
+        "Usage: NeonSidekick [--headless] [--smoke] [--audio-check] [--voice-check] [--sql-check <connection>] [--oracle-check <connection>] [--mysql-check <connection>] [--unc-check <share>] [--docker-check] [--camera-check] [--url <url>] [--model <id>] [--cwd <path>] [--profile <name>] [--yolo] [--no-police] [--log <path>] [--version] [--help]\n" +
         "\n" +
         "  (no flags)     interactive TUI\n" +
         "  --headless     stdin/stdout REPL, no TUI (profile \"default\" unless --profile or NEONSIDEKICK_PROFILE names one)\n" +
         "  --smoke        render the banner, verify native dependencies, exit 0/1\n" +
         "  --audio-check  play a 440 Hz tone through the speech output path, exit 0/1\n" +
         "  --voice-check  record up to 5 s from the microphone, transcribe it, exit 0/1\n" +
+        "  --sql-check <connection>     prove the SQL tools against that connection of sql.json (nothing kept), exit 0/1\n" +
         "  --oracle-check <connection>  prove the Oracle tools against that connection of oracle.json (reads only), exit 0/1\n" +
         "  --mysql-check <connection>   prove the MySQL tools against that connection of mysql.json (reads only), exit 0/1\n" +
         "  --unc-check <share>          prove the UNC tools against that share of unc.json (reads only), exit 0/1\n" +
@@ -189,6 +198,17 @@ public sealed record SidekickOptions(
                 }
 
                 result = result with { Profile = profile };
+                continue;
+            }
+
+            if (TryValueFlag(SqlCheckFlag, args, ref i, arg, lower, out var sql, out error))
+            {
+                if (error is not null)
+                {
+                    return result with { Error = error };
+                }
+
+                result = result with { SqlCheck = sql };
                 continue;
             }
 
@@ -317,12 +337,13 @@ public sealed record SidekickOptions(
     public string? LaunchProfile(string? environmentProfile) =>
         Profile ?? environmentProfile ?? (Headless ? Profiles.DefaultName : null);
 
-    /// <summary>The mode this launch runs: <c>interactive</c>, <c>headless</c>, <c>smoke</c>, <c>audio-check</c>, <c>voice-check</c>, <c>oracle-check</c>, <c>mysql-check</c>, <c>unc-check</c>, <c>docker-check</c>, <c>camera-check</c>.</summary>
+    /// <summary>The mode this launch runs: <c>interactive</c>, <c>headless</c>, <c>smoke</c>, <c>audio-check</c>, <c>voice-check</c>, <c>sql-check</c>, <c>oracle-check</c>, <c>mysql-check</c>, <c>unc-check</c>, <c>docker-check</c>, <c>camera-check</c>.</summary>
     public string Mode =>
         Headless ? "headless"
         : Smoke ? "smoke"
         : AudioCheck ? "audio-check"
         : VoiceCheck ? "voice-check"
+        : SqlCheck is not null ? "sql-check"
         : OracleCheck is not null ? "oracle-check"
         : MySqlCheck is not null ? "mysql-check"
         : UncCheck is not null ? "unc-check"
@@ -330,8 +351,8 @@ public sealed record SidekickOptions(
         : CameraCheck ? "camera-check"
         : "interactive";
 
-    /// <summary>Whether this launch runs one of the check modes (<c>--smoke</c>, <c>--audio-check</c>, <c>--voice-check</c>, <c>--oracle-check</c>, <c>--mysql-check</c>, <c>--unc-check</c>, <c>--docker-check</c>, <c>--camera-check</c>): no screen, no input reader.</summary>
-    public bool IsCheck => Smoke || AudioCheck || VoiceCheck || OracleCheck is not null || MySqlCheck is not null || UncCheck is not null || DockerCheck || CameraCheck;
+    /// <summary>Whether this launch runs one of the check modes (<c>--smoke</c>, <c>--audio-check</c>, <c>--voice-check</c>, <c>--sql-check</c>, <c>--oracle-check</c>, <c>--mysql-check</c>, <c>--unc-check</c>, <c>--docker-check</c>, <c>--camera-check</c>): no screen, no input reader.</summary>
+    public bool IsCheck => Smoke || AudioCheck || VoiceCheck || SqlCheck is not null || OracleCheck is not null || MySqlCheck is not null || UncCheck is not null || DockerCheck || CameraCheck;
 
     /// <summary>
     /// The value flags as typed, for the log at startup: <c>--cwd D:\x --log C:\t.log</c>; null when

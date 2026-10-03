@@ -127,14 +127,15 @@ Options that set something apply to this launch only. Both `--option value` and 
 | `--smoke` | Checks the native parts load, then exits. |
 | `--audio-check` | Plays a test tone through the speech output, then exits. |
 | `--voice-check` | Records up to 5 seconds from the microphone and transcribes it, then exits. |
-| `--oracle-check <connection>` | Proves the Oracle tools against a connection of `oracle.json`, then exits. |
+| `--sql-check <connection>` | Proves the SQL tools against a connection of `sql.json`, then exits. |
+| `--oracle-check <connection>` | The same for a connection of `oracle.json`. |
 | `--mysql-check <connection>` | The same for a connection of `mysql.json`. |
 | `--unc-check <share>` | The same for a share of `unc.json`. |
 | `--docker-check` | The same for Docker Desktop's engine. |
 | `--camera-check` | Opens the camera until the picture settles, reports its brightness and noise and encodes a test photo (nothing is saved; the light comes on briefly), then exits. |
 | `--version` / `--help` | Prints the version or the help text. |
 
-The `--*-check` modes only read; see each tool's section for what they cover.
+The `--*-check` modes keep nothing (`--sql-check` makes one temporary table inside a transaction to prove the rollback); see each tool's section for what they cover.
 
 ## Settings & menus
 [↑ Back to top](#neon-sidekick)
@@ -1446,6 +1447,8 @@ Read-only queries against SQL Server over named connections, with no ODBC driver
 | `sql_relationships` | `connection?, database?, table?` | Foreign-key join paths as `from_table.from_column -> to_table.to_column`, all or touching a table. |
 | `sql_indexes` | `connection?, database?, table?, schema?, missing?` | The indexes of a table, schema or database: kind, key and included columns, filter, size, and seeks, scans, lookups and updates since restart (unread ones marked). `missing: true` adds the optimizer's suggestions. Usage needs `VIEW SERVER STATE`. |
 | `sql_query` | `sql, connection?, database?, params?, max_rows?` | One read-only `SELECT`. `params` is an object (`{"id": 43659}` for `@id`); `max_rows` is 1–100000 (*SQL max rows* by default). Cut at *Query result max chars*. |
+
+`--sql-check <connection>` proves the tools against a real server on the published exe (the sign-in, every type, the gate, the rollback, a cancel and a timeout).
 
 </details>
 

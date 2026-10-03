@@ -71,6 +71,13 @@ public class SidekickOptionsTests
         Assert.True(mysql.IsCheck);
         Assert.Equal("mysql-check", mysql.Mode);
         Assert.NotNull(SidekickOptions.Parse(new[] { "--mysql-check" }).Error);
+        var sql = SidekickOptions.Parse(new[] { "--sql-check", "aw" });   // 2026-10-03: the SQL tools' own, come late
+        Assert.Equal("aw", sql.SqlCheck);
+        Assert.True(sql.IsCheck);
+        Assert.Equal("sql-check", sql.Mode);
+        Assert.Equal("aw", SidekickOptions.Parse(new[] { "--sql-check=aw" }).SqlCheck);
+        Assert.NotNull(SidekickOptions.Parse(new[] { "--sql-check" }).Error);
+        Assert.Contains("--sql-check <connection>", SidekickOptions.Usage);
         var unc = SidekickOptions.Parse(new[] { "--unc-check", "eng" });   // later still on 2026-09-30
         Assert.Equal("eng", unc.UncCheck);
         Assert.True(unc.IsCheck);

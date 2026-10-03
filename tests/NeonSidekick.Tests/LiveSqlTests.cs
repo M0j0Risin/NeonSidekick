@@ -88,8 +88,8 @@ public sealed class LiveSqlTests
     private async Task<string> Invoke<T>(params (string Name, object? Value)[] pairs) where T : AIFunction =>
         (string)(await _tools.OfType<T>().Single().InvokeAsync(new AIFunctionArguments(pairs.ToDictionary(p => p.Name, p => p.Value))))!;
 
-    /// <summary>A cross join big enough to run for minutes: what a timeout and a cancel stop.</summary>
-    private const string Heavy = "SELECT MAX(CHECKSUM(a.name, b.name, c.name)) AS n FROM sys.all_objects AS a CROSS JOIN sys.all_objects AS b CROSS JOIN sys.all_objects AS c";   // not COUNT_BIG(*): the optimizer answers that without the rows
+    /// <summary>A cross join big enough to run for minutes: what a timeout and a cancel stop (<c>--sql-check</c>'s too, since 2026-10-03).</summary>
+    private const string Heavy = SqlCheck.SlowQuery;
 
     [LiveSqlFact]
     public async Task TheCatalog_FromServerToTable()
@@ -216,6 +216,28 @@ public sealed class LiveSqlTests
         Assert.Equal(SqlOutcome.Ok, during.Outcome);
         Assert.Equal(before.Grids[0].Rows[0][0] + " (changed)", during.Grids[0].Rows[0][0]);   // the write happened inside the transaction
         Assert.Equal(before.Grids[0].Rows[0][0], after.Grids[0].Rows[0][0]);                    // and was rolled back
+    }
+
+    [LiveSqlFact]
+    public async Task SqlCheck_PassesEveryLine()
+    {
+        // 2026-10-03: --sql-check under the JIT; the published exe is where it earns its keep.
+        var console = new Spectre.Console.Testing.TestConsole();
+        console.Profile.Width = 400;
+        int exit = await SqlCheck.RunAsync(console, new SqlCatalog([new SqlNamedConnection("aw", LiveSql.Config!, "test")], []), "aw", 30, CancellationToken.None);
+        Assert.True(exit == 0, console.Output);
+        Assert.Contains("SQL CHECK PASS  6 checks", console.Output);   // sql:types passes only with geography read as the unreadable marker
+    }
+
+    [Fact]
+    public async Task SqlCheck_WithNoSuchConnection_FailsAtOnce()
+    {
+        var console = new Spectre.Console.Testing.TestConsole();
+        console.Profile.Width = 400;
+        Assert.Equal(1, await SqlCheck.RunAsync(console, SqlCatalog.Empty, "nope", 30, CancellationToken.None));
+        Assert.Contains("sql:connection", console.Output);
+        Assert.Contains(SqlText.NoConnections, console.Output);
+        Assert.Contains("SQL CHECK FAIL  1 of 1 checks failed", console.Output);
     }
 }
 
