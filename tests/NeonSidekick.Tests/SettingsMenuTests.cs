@@ -877,6 +877,7 @@ public partial class SettingsMenuTests : IDisposable
                 SettingsField.CameraOutputFolder,   // later on 2026-10-02, the Camera tab's photo folder
                 SettingsField.ThemedBackground,   // 2026-10-03, the General tab under Theme
                 SettingsField.ShowFileDiffs, SettingsField.DiffMaxLines,   // later on 2026-10-03, /tools' Options tab: the diff under a file edit
+                SettingsField.ShellPoliceForbiddenStrings,   // later still on 2026-10-03, /tools' Shell tab under the police: the strings it refuses
             },
             Enum.GetValues<SettingsField>());
         // The compact rows: on the LLM tab after the context length but no reconnect; the type a picker, the two others typed.
@@ -1204,8 +1205,8 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(new[] { SettingsField.WebTools, SettingsField.WebBrowserMode, SettingsField.WebBrowserPath, SettingsField.WebBrowserNetworkMode, SettingsField.WebSearchMethod, SettingsField.WebSearxngUrl, SettingsField.WebSearchMaxResults, SettingsField.WebDownloadMaxMegabytes }, ToolsMenuTests.TabFields(ToolsText.WebTabTitle));   // the download cap last (2026-10-01)
         // The shell rows (2026-09-21): the Shell tab (between Git and Web that day, between Files and Ask since later on) — the policy (the group's switch, a picker), the allowed list, the default shell (a picker), then the three typed caps,
         // the languages, their timeout, the tool bridge (the tab's one toggle, later that day) above the tool-call cap it governs; none a reconnect. The outside-paths police (2026-09-22) sits third, under the list it guards beside.
-        // Shell prefer native tools (2026-09-26) sits under the police, the other guard in front of the gate.
-        Assert.Equal(new[] { SettingsField.ShellCommandPolicy, SettingsField.ShellCommandAllowed, SettingsField.ShellPoliceOutsidePaths, SettingsField.ShellPreferNative, SettingsField.ShellDefault, SettingsField.ShellTimeoutSeconds, SettingsField.ShellForegroundCapSeconds, SettingsField.ShellOutputMaxChars, SettingsField.ShellCodeLanguages, SettingsField.ShellCodeTimeoutSeconds, SettingsField.ShellToolBridge, SettingsField.ShellCodeMaxToolCalls }, ToolsMenuTests.TabFields(ToolsText.ShellTabTitle));
+        // Shell prefer native tools (2026-09-26) sits under the police, the other guard in front of the gate; the forbidden strings (2026-10-03) between them, the police's own list.
+        Assert.Equal(new[] { SettingsField.ShellCommandPolicy, SettingsField.ShellCommandAllowed, SettingsField.ShellPoliceOutsidePaths, SettingsField.ShellPoliceForbiddenStrings, SettingsField.ShellPreferNative, SettingsField.ShellDefault, SettingsField.ShellTimeoutSeconds, SettingsField.ShellForegroundCapSeconds, SettingsField.ShellOutputMaxChars, SettingsField.ShellCodeLanguages, SettingsField.ShellCodeTimeoutSeconds, SettingsField.ShellToolBridge, SettingsField.ShellCodeMaxToolCalls }, ToolsMenuTests.TabFields(ToolsText.ShellTabTitle));
         Assert.Equal("Shell tool bridge", SettingsMenu.FieldName(SettingsField.ShellToolBridge));
         Assert.True(SettingsMenu.IsToggle(SettingsField.ShellToolBridge));
         Assert.False(SettingsMenu.IsLlmField(SettingsField.ShellToolBridge));
@@ -1585,7 +1586,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(21, SettingsMenu.LabelWidthOf(ToolsMenuTests.TabFields(ToolsText.OptionsTabTitle)));   // the Options tab (index 7 since SQL, 2026-09-23): "Tool collapse count" (2026-09-22; "$-mention enabled", 19, the Options tab's one row from later on 2026-09-19)
         Assert.Equal(26, SettingsMenu.LabelWidthOf(ToolsMenuTests.TabFields(ToolsText.WebTabTitle)));   // "Web browser network mode" (the Web-prefixed labels, later still on 2026-09-19; "Web search max results", 24, before)
         Assert.Equal(32, SettingsMenu.LabelWidthOf(ToolsMenuTests.TabFields(ToolsText.FilesTabTitle)));   // "File view image max (per call)" (the File-prefixed labels, later still on 2026-09-19; "Stale line number guard", 25, that morning; "Always return line numbers", 28, from 2026-09-17 until it went; "Tree max length", 17, before)
-        Assert.Equal(29, SettingsMenu.LabelWidthOf(ToolsMenuTests.TabFields(ToolsText.ShellTabTitle)));   // "Shell tool bridge max calls" (the Shell tab, 2026-09-21; the row was "Shell code max tool calls", 27, until later that day)
+        Assert.Equal(32, SettingsMenu.LabelWidthOf(ToolsMenuTests.TabFields(ToolsText.ShellTabTitle)));   // "Shell police forbidden strings" (2026-10-03; "Shell tool bridge max calls", 29, before) (the Shell tab, 2026-09-21; the row was "Shell code max tool calls", 27, until later that day)
         Assert.Equal(30, SettingsMenu.LabelWidthOf(ToolsMenuTests.TabFields(ToolsText.AskTabTitle)));   // "Ask max choices per question"
         Assert.Equal(24, SettingsMenu.LabelWidthOf(ToolsMenuTests.TabFields(ToolsText.GitTabTitle)));   // "GitLib log max commits" (2026-09-30; "Git native log max commits", 28, from later on 2026-09-21; "Git log max commits", 21, from 2026-09-20)
         Assert.Equal(38, SettingsMenu.LabelWidthOf(SettingsMenu.SkillsTabFields[0]));   // "Use external skills (.agents\\skills)"

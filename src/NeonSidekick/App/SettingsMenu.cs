@@ -814,6 +814,9 @@ public enum SettingsField
 
     /// <summary>Typed: the most rows of an edit's diff the transcript shows, 0 (the header alone) to 500 (<see cref="Settings.AppSettingsData.DiffMaxLines"/>). The Options tab of <c>/tools</c>, under <see cref="ShowFileDiffs"/> (2026-10-03); no reconnect. Last in the enum, as every newcomer.</summary>
     DiffMaxLines,
+
+    /// <summary>A list the user types into: the strings the shell police refuses (<see cref="Settings.AppSettingsData.ShellPoliceForbiddenStrings"/>), its top row adding one and Enter on one removing it. The Shell tab, under <see cref="ShellPoliceOutsidePaths"/>, whose switch it rides (2026-10-03, the user's idea); also <c>/police</c>' strings button. No reconnect (read at each call). Last in the enum, as every newcomer.</summary>
+    ShellPoliceForbiddenStrings,
 }
 
 /// <summary>The tabs of <c>/settings</c> on the pane, in strip order (General, Embedded, LLM, TTS, STT, Sessions, Botchat — the user's order, 2026-09-29; Sessions right after General — the user's order, 2026-09-18 — until then; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
@@ -1184,7 +1187,7 @@ internal sealed partial class SettingsMenu
     [
         [SettingsField.AskUser, SettingsField.AskMaxQuestions, SettingsField.AskMaxChoices],
         [SettingsField.WebTools, SettingsField.WebBrowserMode, SettingsField.WebBrowserPath, SettingsField.WebBrowserNetworkMode, SettingsField.WebSearchMethod, SettingsField.WebSearxngUrl, SettingsField.WebSearchMaxResults, SettingsField.WebDownloadMaxMegabytes],
-        [SettingsField.ShellCommandPolicy, SettingsField.ShellCommandAllowed, SettingsField.ShellPoliceOutsidePaths, SettingsField.ShellPreferNative, SettingsField.ShellDefault, SettingsField.ShellTimeoutSeconds, SettingsField.ShellForegroundCapSeconds, SettingsField.ShellOutputMaxChars, SettingsField.ShellCodeLanguages, SettingsField.ShellCodeTimeoutSeconds, SettingsField.ShellToolBridge, SettingsField.ShellCodeMaxToolCalls],
+        [SettingsField.ShellCommandPolicy, SettingsField.ShellCommandAllowed, SettingsField.ShellPoliceOutsidePaths, SettingsField.ShellPoliceForbiddenStrings, SettingsField.ShellPreferNative, SettingsField.ShellDefault, SettingsField.ShellTimeoutSeconds, SettingsField.ShellForegroundCapSeconds, SettingsField.ShellOutputMaxChars, SettingsField.ShellCodeLanguages, SettingsField.ShellCodeTimeoutSeconds, SettingsField.ShellToolBridge, SettingsField.ShellCodeMaxToolCalls],
         [SettingsField.FileTools, SettingsField.FileTreeMaxLength, SettingsField.FileTreeShowSizes, SettingsField.FileMentionFolderMode, SettingsField.FileBrowserMode, SettingsField.FileViewImageMaxPerCall, SettingsField.FileSearchMaxResults],
         [SettingsField.UncTools, SettingsField.UncWrites, SettingsField.UncSharesOffered, SettingsField.UncDefaultShare, SettingsField.UncSetPassword, SettingsField.UncAddShare, SettingsField.UncStarMention, SettingsField.UncSharesProfile, SettingsField.UncSharesGlobal],
         [SettingsField.PrintTools, SettingsField.PrintActionPolicy, SettingsField.PrintDefaultPrinter, SettingsField.PrintFontSize],
@@ -1661,6 +1664,7 @@ internal sealed partial class SettingsMenu
         SettingsField.ShellCommandPolicy => "Shell command policy",
         SettingsField.ShellCommandAllowed => "Shell allowed commands",
         SettingsField.ShellPoliceOutsidePaths => "Shell police outside paths",
+        SettingsField.ShellPoliceForbiddenStrings => "Shell police forbidden strings",
         SettingsField.ShellPreferNative => "Shell prefer native tools",
         SettingsField.ShellDefault => "Shell default",
         SettingsField.ShellTimeoutSeconds => "Shell timeout (s)",
@@ -1955,6 +1959,7 @@ internal sealed partial class SettingsMenu
             SettingsField.ShellCommandPolicy => data.ShellCommandPolicy,
             SettingsField.ShellCommandAllowed => Prefixes(data.ShellCommandAllowed.Count),
             SettingsField.ShellPoliceOutsidePaths => OnOff(data.ShellPoliceOutsidePaths),
+            SettingsField.ShellPoliceForbiddenStrings => Strings(Shell.ForbiddenStrings.Sorted(data.ShellPoliceForbiddenStrings).Count),
             SettingsField.ShellPreferNative => OnOff(data.ShellPreferNative),
             SettingsField.ShellDefault => data.ShellDefault,
             SettingsField.ShellTimeoutSeconds => Seconds(data.ShellTimeoutSeconds),
@@ -2536,6 +2541,36 @@ internal sealed partial class SettingsMenu
     /// to on never asks. Pinned.
     /// </summary>
     public const string PoliceOffConfirmQuestion = "Disable shell police (scripts run unchecked)?";
+
+    /// <summary>The forbidden-strings list's first row, always there (2026-10-03): Enter on it opens the slot to type one into. Pinned.</summary>
+    public const string AddForbiddenRow = "+ Add a string…";
+
+    /// <summary>The forbidden-strings list's hint: the top row adds, a string's row removes it. Pinned.</summary>
+    public const string ForbiddenKeys = "Enter = add or remove · ESC = back";
+
+    /// <summary>The notice after a string is added: <c>Shell police forbidden strings: rm -rf added</c>. Pinned.</summary>
+    public static string ForbiddenAddedNotice(string entry) => FieldName(SettingsField.ShellPoliceForbiddenStrings) + ": " + entry + " added";
+
+    /// <summary>The notice when the typed string is in the list already (case and spacing ignored, as the police matches): nothing saved. Pinned.</summary>
+    public static string ForbiddenDuplicateNotice(string entry) => FieldName(SettingsField.ShellPoliceForbiddenStrings) + ": " + entry + " is already in the list";
+
+    /// <summary>The notice after a string is removed: <c>Shell police forbidden strings: rm -rf removed</c>. Pinned.</summary>
+    public static string ForbiddenRemovedNotice(string entry) => FieldName(SettingsField.ShellPoliceForbiddenStrings) + ": " + entry + " removed";
+
+    /// <summary>
+    /// The police's on/off page's button (2026-10-03, the user's pick): the forbidden-strings list, opened from wherever that page
+    /// opens — <c>/police</c>, Ctrl+Alt+O, the toolbar's officer, the Shell tab's row. Never lit: it opens, it does not switch. Pinned.
+    /// </summary>
+    public const string PoliceStringsButton = "strings";
+
+    /// <summary>The key that is <see cref="PoliceStringsButton"/>.</summary>
+    public const char PoliceStringsKey = 's';
+
+    /// <summary>The police's on/off page's hint: <see cref="PickKeys"/> with the strings button's key. Pinned.</summary>
+    public const string PoliceToggleKeys = "Enter = choose · S = strings · ESC = back";
+
+    /// <summary>The police's on/off page's one button, <see cref="PoliceStringsButton"/> (2026-10-03). Pinned.</summary>
+    public static IReadOnlyList<MenuButton> PoliceButtons { get; } = [new(PoliceStringsButton, PoliceStringsKey, false)];
 
     /// <summary>The notice after a prefix is removed from the allowed list: <c>Shell allowed commands: git push removed</c>. Pinned.</summary>
     public static string PrefixRemovedNotice(string prefix) => FieldName(SettingsField.ShellCommandAllowed) + ": " + prefix + " removed";
@@ -3628,6 +3663,11 @@ internal sealed partial class SettingsMenu
         if (field == SettingsField.ShellCommandAllowed)
         {
             return await EditAllowedCommandsAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        if (field == SettingsField.ShellPoliceForbiddenStrings)
+        {
+            return await EditForbiddenStringsAsync(cancellationToken).ConfigureAwait(false);
         }
 
         if (field == SettingsField.ShellCodeLanguages)
@@ -5330,7 +5370,8 @@ internal sealed partial class SettingsMenu
     /// <summary>
     /// A toggle's on/off page opened straight, over the saved values (2026-09-22, for <see cref="ToolsMenu.ShowPoliceAsync"/>:
     /// <c>/police</c>, the toolbar's officer) — the page its row's Enter opens, under whatever <see cref="Root"/> the caller set.
-    /// Police going off asks <see cref="PoliceOffConfirmQuestion"/> on the same pane first (2026-10-02). True when the value changed.
+    /// Police going off asks <see cref="PoliceOffConfirmQuestion"/> on the same pane first (2026-10-02). The police's page carries
+    /// <see cref="PoliceButtons"/> (2026-10-03): S opens the forbidden-strings list, ESC there comes back here. True when the value changed.
     /// </summary>
     internal Task<bool> EditToggleAsync(SettingsField field, CancellationToken cancellationToken) =>
         PickToggleAsync(field, _settings.Current, cancellationToken);
@@ -5345,8 +5386,32 @@ internal sealed partial class SettingsMenu
         }
 
         bool was = IsOn(field, saved);
-        var page = new MenuPage(Crumb(FieldName(field)), [ToggleLabel(field, true), ToggleLabel(field, false)], PickKeys);
-        int? picked = await PickAsync(page, was ? 0 : 1, cancellationToken).ConfigureAwait(false);
+        int? picked;
+        if (field == SettingsField.ShellPoliceOutsidePaths)
+        {
+            // The police's page carries the forbidden-strings button (2026-10-03, the user's pick): the list, then the page again.
+            var police = new MenuPage(Crumb(FieldName(field)), [ToggleLabel(field, true), ToggleLabel(field, false)], _pane.Enabled ? PoliceToggleKeys : PickKeys);
+            int cursor = was ? 0 : 1;
+            while (true)
+            {
+                var pressed = await PickChecklistAsync(police, cursor, cancellationToken, PoliceButtons).ConfigureAwait(false);
+                if (pressed is { Button: >= 0 } button)
+                {
+                    cursor = button.Row;
+                    await EditForbiddenStringsAsync(cancellationToken).ConfigureAwait(false);
+                    continue;
+                }
+
+                picked = pressed?.Row;
+                break;
+            }
+        }
+        else
+        {
+            var page = new MenuPage(Crumb(FieldName(field)), [ToggleLabel(field, true), ToggleLabel(field, false)], PickKeys);
+            picked = await PickAsync(page, was ? 0 : 1, cancellationToken).ConfigureAwait(false);
+        }
+
         if (picked is not { } index || (index == 0) == was)
         {
             return Unchanged();
@@ -6204,6 +6269,72 @@ internal sealed partial class SettingsMenu
             Sink.Notice(PrefixRemovedNotice(prefix));
             changed = true;
             cursor = index;
+        }
+    }
+
+    /// <summary>
+    /// The <c>Shell police forbidden strings</c> list (2026-10-03, the user's idea): <see cref="AddForbiddenRow"/> on top, then each
+    /// string (<see cref="Shell.ForbiddenStrings.Sorted"/>). Enter on the top row opens the input slot under it (without the pane, the
+    /// prompt line) and a typed string is saved at once (<see cref="ForbiddenAddedNotice"/>, or <see cref="ForbiddenDuplicateNotice"/> and
+    /// nothing saved); Enter on a string removes it (<see cref="ForbiddenRemovedNotice"/>). The list is shown again until ESC. The
+    /// <c>EditAllowedCommandsAsync</c> shape, opened from the Shell tab's row and the police page's strings button. True when anything changed.
+    /// </summary>
+    internal async Task<bool> EditForbiddenStringsAsync(CancellationToken cancellationToken)
+    {
+        bool changed = false;
+        int cursor = 0;
+        string title = FieldName(SettingsField.ShellPoliceForbiddenStrings);
+        while (true)
+        {
+            var forbidden = Shell.ForbiddenStrings.Sorted(_settings.Current.ShellPoliceForbiddenStrings);
+            IReadOnlyList<string> rows = [Markup.Escape(AddForbiddenRow), .. forbidden.Select(Markup.Escape)];
+            var page = new MenuPage(Crumb(title), rows, ForbiddenKeys);
+            if (await PickAsync(page, Math.Min(cursor, rows.Count - 1), cancellationToken).ConfigureAwait(false) is not { } index)
+            {
+                if (!changed)
+                {
+                    Sink.Notice(UnchangedNotice);
+                }
+
+                return changed;
+            }
+
+            cursor = index;
+            if (index > 0)
+            {
+                string entry = forbidden[index - 1];
+                _settings.Update(d => d.ShellPoliceForbiddenStrings = Shell.ForbiddenStrings.Without(d.ShellPoliceForbiddenStrings, entry));
+                Sink.Notice(ForbiddenRemovedNotice(entry));
+                changed = true;
+                continue;
+            }
+
+            InputResult result;
+            if (_pane.Enabled)
+            {
+                result = await _pane.EditAsync(page with { Hint = EditKeys }, 0, _input, "", allowEmpty: false, cancellationToken).ConfigureAwait(false);
+            }
+            else
+            {
+                Flow.Notice(PromptTitle(title, EditKeys));
+                result = await _input.ReadAsync("", remember: false, allowEmpty: false, cancellationToken: cancellationToken, escapeCancels: true).ConfigureAwait(false);
+            }
+
+            string typed = result is InputResult.Submitted submitted ? Shell.ForbiddenStrings.Normalize(submitted.Text) : "";
+            if (typed.Length == 0)
+            {
+                continue;   // ESC or a blank line: back on the list, nothing saved
+            }
+
+            if (Shell.ForbiddenStrings.Contains(_settings.Current.ShellPoliceForbiddenStrings, typed))
+            {
+                Sink.Notice(ForbiddenDuplicateNotice(typed));
+                continue;
+            }
+
+            _settings.Update(d => d.ShellPoliceForbiddenStrings = Shell.ForbiddenStrings.Add(d.ShellPoliceForbiddenStrings, typed));
+            Sink.Notice(ForbiddenAddedNotice(typed));
+            changed = true;
         }
     }
 
@@ -7089,6 +7220,9 @@ internal sealed partial class SettingsMenu
 
     /// <summary>The <c>Shell allowed commands</c> row's value: <c>3 prefixes</c>, <c>1 prefix</c>, <c>none</c> at 0 (2026-09-21). Pinned.</summary>
     public static string Prefixes(int value) => value == 0 ? "none" : value.ToString(CultureInfo.InvariantCulture) + (value == 1 ? " prefix" : " prefixes");
+
+    /// <summary>The <c>Shell police forbidden strings</c> row's value: <c>3 strings</c>, <c>1 string</c>, <c>none</c> at 0 (2026-10-03). Pinned.</summary>
+    public static string Strings(int value) => value == 0 ? "none" : value.ToString(CultureInfo.InvariantCulture) + (value == 1 ? " string" : " strings");
 
     /// <summary>The <c>Shell output max chars</c> row's value: <c>30,000 chars</c> (2026-09-21). Pinned.</summary>
     public static string Chars(int value) => value.ToString("N0", CultureInfo.InvariantCulture) + " chars";

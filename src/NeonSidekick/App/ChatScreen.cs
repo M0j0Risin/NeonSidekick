@@ -13716,9 +13716,10 @@ internal sealed partial class ChatScreen
                 // A table of rows is the model's to read; the line is the result's header (SqlText.Note, 2026-09-23).
                 _transcript.ToolNote(SqlText.Note(result.Text));
                 break;
-            case TurnEvent.ToolResult result when ShellToolNames.Contains(result.Name) && ShellText.IsOutside(result.Text):
-                // The outside-paths police refused it (2026-09-22): the same one line, behind the officer rather than the tools' glyph.
-                _transcript.PoliceNote(ShellText.Note(result.Text));
+            case TurnEvent.ToolResult result when ShellToolNames.Contains(result.Name) && ShellText.IsPoliced(result.Text):
+                // The police refused it (2026-09-22): the same one line, behind the officer rather than the tools' glyph. A forbidden string's
+                // line is the user's own (2026-10-03, TurnEvent.ToolResult.Shown): it names the string the model was not told.
+                _transcript.PoliceNote(result.Shown ?? ShellText.Note(result.Text));
                 break;
             case TurnEvent.ToolResult result when ShellToolNames.Contains(result.Name):
                 // A command's output is the model's to read; the line is the result's header: the exit code, the time, the command (ShellText.Note, 2026-09-21).

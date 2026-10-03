@@ -214,6 +214,14 @@ public sealed class ExecuteCodeTool : AIFunction
         }
 
         var request = new CommandRequest(name, code, [ShellText.ScriptPrefix(name)], IsScript: true);
+        // The forbidden strings first (Shell police forbidden strings, 2026-10-03), anywhere in the script, under the police's own switch.
+        if (effective.ShellPoliceOutsidePaths && ForbiddenStrings.Find(code, effective.ShellPoliceForbiddenStrings) is { } forbidden)
+        {
+            DiagnosticLog.Info(ShellKinds.Category, ShellText.ForbiddenLogLine(request, forbidden));
+            _gate.NoteRefused(request);
+            return new ToolShownResult(ShellText.Forbidden, ShellText.ForbiddenShown(forbidden));
+        }
+
         // The police before the gate (Shell police outside paths, 2026-09-22): a script naming a path outside the working directory is refused, and the pane is never asked about it.
         if (effective.ShellPoliceOutsidePaths && PathPolice.Judge(code, _files, workingDirectory, isScript: true) is { } outside)
         {

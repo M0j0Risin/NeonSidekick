@@ -245,20 +245,48 @@ internal sealed class ToolsMenu
     }
 
     /// <summary>
+    /// The <c>Shell police forbidden strings</c> list as plain lines for a console without the pane (2026-10-03, after
+    /// <see cref="PoliceLine"/> on <c>/police</c>): the row's name as a heading, each string indented under it,
+    /// <see cref="SettingsMenu.NoAllowedCommandsRow"/> while there is none — <see cref="AllowedCommandLines"/>' shape. Pinned.
+    /// </summary>
+    public static IEnumerable<string> ForbiddenStringLines(AppSettingsData saved)
+    {
+        ArgumentNullException.ThrowIfNull(saved);
+        yield return SettingsMenu.FieldName(SettingsField.ShellPoliceForbiddenStrings);
+        var forbidden = Shell.ForbiddenStrings.Sorted(saved.ShellPoliceForbiddenStrings);
+        if (forbidden.Count == 0)
+        {
+            yield return "  " + SettingsMenu.NoAllowedCommandsRow;
+            yield break;
+        }
+
+        foreach (var entry in forbidden)
+        {
+            yield return "  " + entry;
+        }
+    }
+
+    /// <summary>
     /// <c>/police</c> and the toolbar's officer (2026-09-22, the user's ask): the Shell tab's
     /// <c>Shell police outside paths</c> row opened straight — its on/off page under the crumb
     /// <c>Tools › Shell police outside paths</c> — with nothing of the Tools pane around it, so ESC
     /// closes the pane, as <see cref="ShowAllowedCommandsAsync"/> does for the lock. Picking off asks first
     /// (<see cref="SettingsMenu.PoliceOffConfirmQuestion"/>, 2026-10-02) and then puts the ninja in the officer's place on
-    /// the toolbar as the pane closes (the strip follows the switch at each draw).
-    /// Without the pane the value prints (<see cref="PoliceLine"/>). Mid-turn as at idle: the row is
-    /// never refused under a reply.
+    /// the toolbar as the pane closes (the strip follows the switch at each draw). The page's strings button (S, 2026-10-03,
+    /// <see cref="SettingsMenu.PoliceButtons"/>) opens the forbidden-strings list and comes back to it.
+    /// Without the pane the value prints (<see cref="PoliceLine"/>), then the forbidden strings (<see cref="ForbiddenStringLines"/>).
+    /// Mid-turn as at idle: the row is never refused under a reply.
     /// </summary>
     public async Task ShowPoliceAsync(CancellationToken cancellationToken)
     {
         if (!_pane.Enabled)
         {
             _transcript.Notice(PoliceLine(_settings.Current));
+            foreach (var line in ForbiddenStringLines(_settings.Current))
+            {
+                _transcript.Notice(line);
+            }
+
             return;
         }
 

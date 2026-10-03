@@ -147,6 +147,17 @@ public sealed class ProcessToolTests : IDisposable
         _settings.ShellPoliceOutsidePaths = true;
         Assert.Equal([@"cd C:\", "cd .."], _gate.Refusals);   // the two policed writes, noted on the gate (2026-09-26)
 
+        // A forbidden string in what goes to stdin (2026-10-03): refused, nothing sent, noted on the gate; the user's line names it.
+        _settings.ShellPoliceForbiddenStrings = ["shutdown"];
+        var guarded = Start("set /p name=&& call echo hello %name%");
+        var shown = Assert.IsType<ToolShownResult>(await _tool.InvokeAsync(Args(("action", "submit"), ("session_id", guarded.Id), ("data", "SHUTDOWN /s"))));
+        Assert.Equal(ShellText.Forbidden, shown.Text);
+        Assert.Equal(ShellText.ForbiddenShown("shutdown"), shown.Shown);
+        Assert.Equal("sent a line to " + guarded.Id, await Invoke(("action", "submit"), ("session_id", guarded.Id), ("data", "sub")));
+        Assert.Equal(guarded.Id + " exited 0 after 0.0 s (cmd): set /p name=&& call echo hello %name% — 1 new line\nhello sub", await Invoke(("action", "wait"), ("session_id", guarded.Id), ("timeout", 30)));
+        Assert.Equal([@"cd C:\", "cd ..", "SHUTDOWN /s"], _gate.Refusals);
+        _settings.ShellPoliceForbiddenStrings = [];
+
         var sleeper = Start("ping -n 30 127.0.0.1 >nul");
         var wait = _tool.InvokeAsync(Args(("action", "wait"), ("session_id", sleeper.Id), ("timeout", 5)));
         await Task.Delay(100);
@@ -158,7 +169,7 @@ public sealed class ProcessToolTests : IDisposable
         string killed = await Invoke(("action", "kill"), ("session_id", sleeper.Id));
         Assert.Matches("^killed " + sleeper.Id + " \\(cmd, pid [0-9]+\\) after 6\\.0 s: ping -n 30 127\\.0\\.0\\.1 >nul$", killed);
         Assert.True(sleeper.Killed);
-        Assert.Contains("4 processes (0 running)", await Invoke(("action", "list")));   // the two typed-at ones above too (2026-09-22)
+        Assert.Contains("5 processes (0 running)", await Invoke(("action", "list")));   // the two typed-at ones above too (2026-09-22), and the forbidden string's (2026-10-03)
     }
 
     [Fact]

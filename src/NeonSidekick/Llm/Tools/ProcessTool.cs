@@ -204,8 +204,18 @@ public sealed class ProcessTool : AIFunction
                     return ShellText.DataRequired;
                 }
 
+                // The forbidden strings first (Shell police forbidden strings, 2026-10-03), under the police's own switch: a shell's stdin is a command line too.
+                var effective = _effective();
+                if (effective.ShellPoliceOutsidePaths && ForbiddenStrings.Find(data, effective.ShellPoliceForbiddenStrings) is { } forbidden)
+                {
+                    var refused = new CommandRequest(session.Kind, data, []);
+                    DiagnosticLog.Info(ShellKinds.Category, ShellText.ForbiddenLogLine(refused, forbidden));
+                    _gate?.NoteRefused(refused);
+                    return new ToolShownResult(ShellText.Forbidden, ShellText.ForbiddenShown(forbidden));
+                }
+
                 // The police (Shell police outside paths, 2026-09-22): what goes to a process's stdin is read like a command line, relative paths from where it started.
-                if (_effective().ShellPoliceOutsidePaths && PathPolice.Judge(data, _files, session.Launch.WorkingDirectory, isScript: false, session.Kind) is { } outside)
+                if (effective.ShellPoliceOutsidePaths && PathPolice.Judge(data, _files, session.Launch.WorkingDirectory, isScript: false, session.Kind) is { } outside)
                 {
                     var refused = new CommandRequest(session.Kind, data, []);
                     DiagnosticLog.Info(ShellKinds.Category, ShellText.PolicedLogLine(refused, outside));

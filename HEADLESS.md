@@ -381,6 +381,8 @@ policy means headless:
 `yolo` does **not** switch off the path police. With *Shell police outside paths* on (the default),
 a command that names a path outside the working directory is still refused, and the run still ends
 with exit code 3. Keep `--cwd` narrow, or see [Turning off the path police](#turning-off-the-path-police).
+The same holds for the profile's *Shell police forbidden strings*: while the police is on, a command,
+script or `process` write containing one (case and spacing ignored) is refused and counts toward exit code 3.
 
 ### With the flag
 
@@ -495,7 +497,8 @@ working directory (`C:\…`, a `..` that climbs out, `~`, `%USERPROFILE%`, `$env
 separate switch from the command policy, so `--yolo` leaves it on. Its setting for a run comes
 from, in order: the `--no-police` flag, the `NEONSIDEKICK_SHELL_POLICE` variable (`on`/`off`, also
 `true`/`false`, `1`/`0`, `yes`/`no`), then the profile's saved *Shell police outside paths*.
-Neither the flag nor the variable is saved.
+Neither the flag nor the variable is saved. Turning the police off also stops the profile's
+*Shell police forbidden strings*.
 
 > **Warning:** `--yolo --no-police` together leave no guard at all. The model can run any command
 > against any path on the machine, with your account's rights. Use it only for jobs and machines

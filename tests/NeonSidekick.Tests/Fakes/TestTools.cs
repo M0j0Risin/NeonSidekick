@@ -109,5 +109,10 @@ public sealed class PictureTool(IReadOnlyList<ImageAttachment> images, string na
 /// <summary>A tool's answer as the model reads it: the sentence of a <see cref="ToolDiffResult"/> (2026-10-03, the file-writing tools), else the string.</summary>
 public static class ToolAnswers
 {
-    public static string Text(object? answer) => answer is ToolDiffResult changed ? changed.Text : (string)answer!;
+    public static string Text(object? answer) => answer switch
+    {
+        ToolDiffResult changed => changed.Text,
+        ToolShownResult shown => shown.Text,
+        _ => (string)answer!,
+    };
 }

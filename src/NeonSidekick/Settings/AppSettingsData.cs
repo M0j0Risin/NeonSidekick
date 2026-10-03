@@ -1829,6 +1829,20 @@ public sealed class AppSettingsData
     public bool ShellPoliceOutsidePaths { get; set; } = true;
 
     /// <summary>
+    /// The strings the shell police refuses outright (2026-10-03, the user's idea): a <c>run_command</c> line, an
+    /// <c>execute_code</c> script or the text <c>process</c> writes that contains one (<see cref="Shell.ForbiddenStrings.Find"/>:
+    /// case ignored, every run of whitespace one space, so <c>rm -rf</c> catches <c>RM   -RF</c>) is refused before the gate
+    /// is asked — <c>yolo</c> never skips it. Under the police's own switch (the user's call): enforced only while
+    /// <see cref="ShellPoliceOutsidePaths"/> is on, so <c>/police</c> off, <see cref="EnvironmentOverrides.ShellPoliceVariable"/>
+    /// and <c>--no-police</c> stop it too. The model is told it was refused, never which string (the user's call: a named
+    /// string is one to spell around); the transcript's 👮 line and the log name it for the user. A tripwire, not a sandbox:
+    /// a model that builds the text in pieces gets past it. Kept as typed, the user's case, no duplicates ignoring case
+    /// (<see cref="Shell.ForbiddenStrings.Add"/>); empty by default. The Shell tab's row and <c>/police</c>' strings button
+    /// (S) edit it. Read at each call. No variable.
+    /// </summary>
+    public List<string> ShellPoliceForbiddenStrings { get; set; } = [];
+
+    /// <summary>
     /// Whether the shell steps aside for a native tool (2026-09-26, the user's ask: the model kept reaching for
     /// <c>cat</c>, <c>dir</c>, <c>git status</c> or <c>curl</c> through <c>run_command</c> when a tool of its own
     /// did the job, which cost the user an approval and the tool's guarantees; on by default). On, the operating

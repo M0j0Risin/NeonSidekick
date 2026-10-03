@@ -121,6 +121,37 @@ public sealed class RunCommandToolTests : IDisposable
     }
 
     [Fact]
+    public async Task ForbiddenStrings_AreRefusedBeforeTheGate_EvenUnderYolo_TheModelNeverToldWhich()
+    {
+        // Shell police forbidden strings (2026-10-03): case and spacing ignored, refused before the gate (yolo here, so nothing would ask anyway).
+        _settings.ShellPoliceForbiddenStrings = ["rd /s", "format"];
+        var answer = await _tool.InvokeAsync(Args(("command", "RD   /S /Q build")));
+        var shown = Assert.IsType<ToolShownResult>(answer);
+        Assert.Equal(ShellText.Forbidden, shown.Text);
+        Assert.Equal("forbidden string 'rd /s' — not run", shown.Shown);
+        Assert.DoesNotContain("rd", shown.Text, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(["RD   /S /Q build"], _gate.Refusals);   // counted: headless's exit 3
+
+        // Under ask the pane is never put to it; a line with none of them still is (denied here).
+        _settings.ShellCommandPolicy = "ask";
+        Assert.IsType<ToolShownResult>(await _tool.InvokeAsync(Args(("command", "echo x & format build"))));
+        Assert.Empty(_asked);
+        Assert.StartsWith("Error: the command was denied by the user", await Invoke(("command", "echo fine")));
+        Assert.Single(_asked);
+
+        // Under the police's own switch (the user's call): off, the line goes to the gate.
+        _settings.ShellPoliceOutsidePaths = false;
+        Assert.StartsWith("Error: the command was denied by the user", await Invoke(("command", "format build")));
+        Assert.Equal(2, _asked.Count);
+
+        // An empty list refuses nothing.
+        _settings.ShellPoliceOutsidePaths = true;
+        _settings.ShellPoliceForbiddenStrings = [];
+        Assert.StartsWith("Error: the command was denied by the user", await Invoke(("command", "format build")));
+        Assert.Equal(3, _asked.Count);
+    }
+
+    [Fact]
     public async Task PreferNative_SendsALineBackToItsTool_OnceATurn_BeforeTheGate()
     {
         // Shell prefer native tools (2026-09-26): under ask, a line a tool the turn offers covers comes back not run, and the asker is never called.

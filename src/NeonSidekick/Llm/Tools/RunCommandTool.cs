@@ -257,6 +257,14 @@ public sealed class RunCommandTool : AIFunction
         var timeout = TimeSpan.FromSeconds(seconds);
 
         var request = new CommandRequest(ShellKinds.Name(kind), command, CommandPrefix.All(command));
+        // The forbidden strings first (Shell police forbidden strings, 2026-10-03), under the police's own switch: the model is told it was refused, never which string.
+        if (effective.ShellPoliceOutsidePaths && ForbiddenStrings.Find(command, effective.ShellPoliceForbiddenStrings) is { } forbidden)
+        {
+            DiagnosticLog.Info(ShellKinds.Category, ShellText.ForbiddenLogLine(request, forbidden));
+            _gate.NoteRefused(request);
+            return new ToolShownResult(ShellText.Forbidden, ShellText.ForbiddenShown(forbidden));
+        }
+
         // The police before the gate (Shell police outside paths, 2026-09-22): a line naming a path outside the working directory is refused, and the pane is never asked about it.
         if (effective.ShellPoliceOutsidePaths && PathPolice.Judge(command, _files, workdir, isScript: false, request.Kind) is { } outside)
         {

@@ -1063,7 +1063,7 @@ public sealed class Assistant
             yield return new TurnEvent.ToolCall(call.Name, call.CallId, openingJson);
 
             // An opening tool answers with text; a picture from one would have no carrier.
-            var (result, _, _) = await InvokeAsync(tool, call, cancellationToken).ConfigureAwait(false);
+            var (result, _, _, _) = await InvokeAsync(tool, call, cancellationToken).ConfigureAwait(false);
             _history.AddToolResults([ResultContent(call, result)]);
             yield return new TurnEvent.ToolResult(call.Name, call.CallId, result);
         }
@@ -1355,7 +1355,7 @@ public sealed class Assistant
                 DiagnosticLog.Debug(Category, ToolCallLogLine(call.Name, argumentsJson));
                 yield return new TurnEvent.ToolCall(call.Name, call.CallId, argumentsJson);
 
-                var (result, pictures, diff) = await InvokeToolWithDiffAsync(_tools, call, cancellationToken).ConfigureAwait(false);
+                var (result, pictures, diff, shown) = await InvokeToolWithDiffAsync(_tools, call, cancellationToken).ConfigureAwait(false);
                 results.Add(ResultContent(call, result));
                 fetched.AddRange(pictures);
                 if (pictures.Count > 0 && !fetchers.Contains(call.Name, StringComparer.Ordinal))
@@ -1363,7 +1363,7 @@ public sealed class Assistant
                     fetchers.Add(call.Name);
                 }
 
-                yield return new TurnEvent.ToolResult(call.Name, call.CallId, result, pictures.Count > 0 ? pictures : null, diff);
+                yield return new TurnEvent.ToolResult(call.Name, call.CallId, result, pictures.Count > 0 ? pictures : null, diff, shown);
             }
 
             _history.AddToolResults(results);
@@ -1947,15 +1947,16 @@ public sealed class Assistant
 
     public static async Task<(string Text, IReadOnlyList<ImageAttachment> Images)> InvokeToolAsync(IReadOnlyList<AIFunction> tools, FunctionCallContent call, CancellationToken cancellationToken)
     {
-        var (text, images, _) = await InvokeToolWithDiffAsync(tools, call, cancellationToken).ConfigureAwait(false);
+        var (text, images, _, _) = await InvokeToolWithDiffAsync(tools, call, cancellationToken).ConfigureAwait(false);
         return (text, images);
     }
 
     /// <summary>
     /// <see cref="InvokeToolAsync"/> with the <see cref="FileDiff"/> a <see cref="ToolDiffResult"/> carried (2026-10-03), for the
-    /// turn's own calls, whose host draws it; a side loop has nowhere to and calls the two-part form.
+    /// turn's own calls, whose host draws it; a side loop has nowhere to and calls the two-part form. <c>Shown</c> is a
+    /// <see cref="ToolShownResult"/>'s line for the user alone (later on 2026-10-03, the forbidden strings), null otherwise.
     /// </summary>
-    public static async Task<(string Text, IReadOnlyList<ImageAttachment> Images, FileDiff? Diff)> InvokeToolWithDiffAsync(IReadOnlyList<AIFunction> tools, FunctionCallContent call, CancellationToken cancellationToken)
+    public static async Task<(string Text, IReadOnlyList<ImageAttachment> Images, FileDiff? Diff, string? Shown)> InvokeToolWithDiffAsync(IReadOnlyList<AIFunction> tools, FunctionCallContent call, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(tools);
         ArgumentNullException.ThrowIfNull(call);
@@ -1967,35 +1968,36 @@ public sealed class Assistant
         if (tool is null)
         {
             DiagnosticLog.Info(Category, $"The model called unknown tool '{call.Name}'.");
-            return ($"Error: unknown tool '{call.Name}'.", [], null);
+            return ($"Error: unknown tool '{call.Name}'.", [], null, null);
         }
 
         if (call.Exception is not null)
         {
             // The adapter puts a JSON parse failure here instead of throwing.
             DiagnosticLog.Info(Category, $"Arguments for tool '{call.Name}' could not be parsed: {call.Exception.Message}");
-            return ($"Error: the arguments for '{call.Name}' could not be parsed: {call.Exception.Message}", [], null);
+            return ($"Error: the arguments for '{call.Name}' could not be parsed: {call.Exception.Message}", [], null, null);
         }
 
         return await InvokeAsync(tool, call, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>The invocation itself, shared by the model's calls and the opening call: a throwing tool is a sentence, only cancellation escapes.</summary>
-    private static async Task<(string Text, IReadOnlyList<ImageAttachment> Images, FileDiff? Diff)> InvokeAsync(AIFunction tool, FunctionCallContent call, CancellationToken cancellationToken)
+    private static async Task<(string Text, IReadOnlyList<ImageAttachment> Images, FileDiff? Diff, string? Shown)> InvokeAsync(AIFunction tool, FunctionCallContent call, CancellationToken cancellationToken)
     {
         long started = Stopwatch.GetTimestamp();
-        (string Text, IReadOnlyList<ImageAttachment> Images, FileDiff? Diff) answer;
+        (string Text, IReadOnlyList<ImageAttachment> Images, FileDiff? Diff, string? Shown) answer;
         try
         {
             var arguments = new AIFunctionArguments(call.Arguments ?? new Dictionary<string, object?>());
             object? value = await tool.InvokeAsync(arguments, cancellationToken).ConfigureAwait(false);
             answer = value switch
             {
-                null => ("(no result)", [], null),
-                string s => (s, [], null),
-                ToolImageResult pictures => (pictures.Text, pictures.Images, null),
-                ToolDiffResult changed => (changed.Text, [], changed.Diff),
-                _ => (value.ToString() ?? "(no result)", [], null),
+                null => ("(no result)", [], null, null),
+                string s => (s, [], null, null),
+                ToolImageResult pictures => (pictures.Text, pictures.Images, null, null),
+                ToolDiffResult changed => (changed.Text, [], changed.Diff, null),
+                ToolShownResult shown => (shown.Text, [], null, shown.Shown),
+                _ => (value.ToString() ?? "(no result)", [], null, null),
             };
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -2005,7 +2007,7 @@ public sealed class Assistant
         catch (Exception ex)
         {
             DiagnosticLog.Warn(Category, $"Tool '{call.Name}' threw.", ex);
-            answer = (ToolFailed(call.Name, ex.Message), [], null);
+            answer = (ToolFailed(call.Name, ex.Message), [], null, null);
         }
 
         // The result's shape for the log (2026-09-19): every call — the model's, the opening

@@ -325,11 +325,31 @@ public static class ShellText
     /// <summary><c>Error: outside the working directory: 'C:\Windows\win.ini' — a command or a script may only name paths under it</c>. Pinned.</summary>
     public static string OutsidePath(string token) => OutsideHead + $"'{token}' — a command or a script may only name paths under it";
 
-    /// <summary>Whether <paramref name="result"/> is the police's refusal: the transcript draws it behind 👮 rather than 🛠️.</summary>
+    /// <summary>Whether <paramref name="result"/> is the outside-paths police's refusal.</summary>
     public static bool IsOutside(string result)
     {
         ArgumentNullException.ThrowIfNull(result);
         return result.StartsWith(OutsideHead, StringComparison.Ordinal);
+    }
+
+    /// <summary>What a result the forbidden-strings police refused opens with (<see cref="ForbiddenStrings"/>, 2026-10-03).</summary>
+    public const string ForbiddenHead = "Error: forbidden by the shell police";
+
+    /// <summary>
+    /// What the model is told when a <c>Shell police forbidden strings</c> entry tripped (2026-10-03): refused, by the user, and
+    /// not to be worked around — never the string (the user's call: a named string is one to spell around), never the setting.
+    /// The user reads the string on the 👮 line (<see cref="ForbiddenShown"/>). Pinned.
+    /// </summary>
+    public const string Forbidden = ForbiddenHead + " — the user does not allow this command or script. Do not try another way to do the same thing; tell the user it was refused.";
+
+    /// <summary>The 👮 line the user reads for <see cref="Forbidden"/>, the string named: <c>forbidden string 'rm -rf' — not run</c>. Never the model's. Pinned.</summary>
+    public static string ForbiddenShown(string entry) => $"forbidden string '{entry}' — not run";
+
+    /// <summary>Whether <paramref name="result"/> is either police's refusal: the transcript draws it behind 👮 rather than 🛠️.</summary>
+    public static bool IsPoliced(string result)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+        return IsOutside(result) || result.StartsWith(ForbiddenHead, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -367,6 +387,13 @@ public static class ShellText
     {
         ArgumentNullException.ThrowIfNull(request);
         return $"police: refused ('{token}') — {request.Kind} {Quote(request.Command)}";
+    }
+
+    /// <summary><c>police: forbidden ('rm -rf') — powershell "rm -rf build"</c>: a forbidden string's line, before the gate is asked (2026-10-03).</summary>
+    public static string ForbiddenLogLine(CommandRequest request, string entry)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        return $"police: forbidden ('{entry}') — {request.Kind} {Quote(request.Command)}";
     }
 
     /// <summary><c>native: read_file for 'cat' — powershell "cat README.md"</c>: a line sent back to its tool, before the gate is asked (2026-09-26).</summary>

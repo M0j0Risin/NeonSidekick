@@ -2807,7 +2807,7 @@ public partial class ChatScreenTests : IDisposable
 
     /// <summary>The allowed-commands list's title (later still on 2026-09-21): the Tools crumb over the row's name, straight from /cmdlist or the toolbar's lock as from the Shell tab; the policy buttons after it since 2026-10-02.</summary>
     private static readonly string AllowedCommandsTitle = ToolsText.Label + " › " + SettingsMenu.FieldName(SettingsField.ShellCommandAllowed) + "   " + SettingsMenu.PolicyAskButton + "    " + SettingsMenu.PolicyYoloButton + " ";
-    private static readonly string PoliceTitle = ToolsText.Label + " › " + SettingsMenu.FieldName(SettingsField.ShellPoliceOutsidePaths);   // /police, the officer (2026-09-22)
+    private static readonly string PoliceTitle = ToolsText.Label + " › " + SettingsMenu.FieldName(SettingsField.ShellPoliceOutsidePaths) + "   " + SettingsMenu.PoliceStringsButton + " ";   // /police, the officer (2026-09-22); the strings button since 2026-10-03
 
     /// <summary>
     /// The rows of the pane drawn last (its title row, ending with the × glyph, to the rule under
@@ -4442,7 +4442,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("\n▸ Ask user                      on\n", output);
         Assert.Contains("\n▸ File tools                      on\n", output);
         Assert.Contains("\n▸ GitLib tools            on\n  GitLib diff max lines   500 lines\n  GitLib log max commits  20 commits\n  GitLib email            (not set)\n  GitLib name             (not set)\n", output);
-        Assert.Contains("\n▸ Shell command policy         ask\n  Shell allowed commands       none\n  Shell police outside paths   on\n  Shell prefer native tools    on\n  Shell default                powershell\n  Shell timeout (s)            180\n  Shell foreground cap (s)     600\n  Shell output max chars       30,000 chars\n  Shell code languages         powershell, python, node\n  Shell code timeout (s)       300\n  Shell tool bridge            off\n  Shell tool bridge max calls  50 tool calls\n", output);
+        Assert.Contains("\n▸ Shell command policy            ask\n  Shell allowed commands          none\n  Shell police outside paths      on\n  Shell police forbidden strings  none\n  Shell prefer native tools       on\n  Shell default                   powershell\n  Shell timeout (s)               180\n  Shell foreground cap (s)        600\n  Shell output max chars          30,000 chars\n  Shell code languages            powershell, python, node\n  Shell code timeout (s)          300\n  Shell tool bridge               off\n  Shell tool bridge max calls     50 tool calls\n", output);
         Assert.Contains("\n▸ Web tools                 on\n", output);
         Assert.Contains("\n▸ SQL tools                  on\n  SQL connections offered    none of 0\n  SQL default connection     (the first connection)\n  SQL set password           Enter to set password for a connection\n  SQL add connection         Enter to start connection wizard\n  SQL %-mention enabled      on\n  SQL max rows               100 rows\n  SQL query timeout (s)      30\n  Query result max chars     32,000 chars\n  SQL connections (profile)  (none) · Enter edits sql.json\n", output);   // 2026-09-23; the query text cap under the timeout, 2026-10-01
         Assert.Contains("\n" + SettingsMenu.TabKeys, output);

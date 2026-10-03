@@ -89,6 +89,7 @@ public class AppSettingsTests : IDisposable
         GitLibName = "Some User",
         ShellToolBridge = true,
         ShellPoliceOutsidePaths = false,
+        ShellPoliceForbiddenStrings = ["rm -rf", "Format"],
         ShellPreferNative = false,
         LlmCompactType = "prune",
         LlmContextLength = 32_768,
@@ -216,6 +217,7 @@ public class AppSettingsTests : IDisposable
         Assert.Equal(expected.GitLibName, actual.GitLibName);
         Assert.Equal(expected.ShellToolBridge, actual.ShellToolBridge);
         Assert.Equal(expected.ShellPoliceOutsidePaths, actual.ShellPoliceOutsidePaths);
+        Assert.Equal(expected.ShellPoliceForbiddenStrings, actual.ShellPoliceForbiddenStrings);
         Assert.Equal(expected.ShellPreferNative, actual.ShellPreferNative);
         Assert.Equal(expected.LlmCompactType, actual.LlmCompactType);
         Assert.Equal(expected.LlmContextLength, actual.LlmContextLength);
@@ -366,6 +368,7 @@ public class AppSettingsTests : IDisposable
             d.GitLibName = full.GitLibName;
             d.ShellToolBridge = full.ShellToolBridge;
             d.ShellPoliceOutsidePaths = full.ShellPoliceOutsidePaths;
+            d.ShellPoliceForbiddenStrings = [.. full.ShellPoliceForbiddenStrings];
             d.ShellPreferNative = full.ShellPreferNative;
             d.LlmCompactType = full.LlmCompactType;
             d.LlmContextLength = full.LlmContextLength;
@@ -502,6 +505,7 @@ public class AppSettingsTests : IDisposable
                 d.GitLibName = full.GitLibName;
                 d.ShellToolBridge = full.ShellToolBridge;
                 d.ShellPoliceOutsidePaths = full.ShellPoliceOutsidePaths;
+                d.ShellPoliceForbiddenStrings = [.. full.ShellPoliceForbiddenStrings];
                 d.ShellPreferNative = full.ShellPreferNative;
                 d.LlmCompactType = full.LlmCompactType;
                 d.LlmContextLength = full.LlmContextLength;
@@ -1439,6 +1443,7 @@ public class AppSettingsTests : IDisposable
         Assert.Equal(1, AppSettingsData.MinShellCodeTimeoutSeconds);
         Assert.Equal(3600, AppSettingsData.MaxShellCodeTimeoutSeconds);
         Assert.False(s.ShellToolBridge);   // later on 2026-09-21: a script does everything itself unless asked
+        Assert.Empty(s.ShellPoliceForbiddenStrings);   // 2026-10-03: nothing forbidden until the user types it
         Assert.True(s.ShellPoliceOutsidePaths);   // 2026-09-22: a command, a script or text to a process stays under the working directory unless the user turns it off
         Assert.True(s.ShellPreferNative);   // 2026-09-26: a line a native tool covers goes back to that tool unless the user turns it off
         Assert.Equal(50, s.ShellCodeMaxToolCalls);

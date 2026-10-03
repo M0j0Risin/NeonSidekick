@@ -181,6 +181,25 @@ public sealed class ExecuteCodeToolTests : IDisposable
     }
 
     [Fact]
+    public async Task ForbiddenStrings_AnywhereInTheScript_AreRefusedBeforeTheGate()
+    {
+        // Shell police forbidden strings (2026-10-03): a line break counts as one space, so the words split over two lines still match.
+        _settings.ShellPoliceForbiddenStrings = ["Remove-Item -Recurse"];
+        var answer = await _tool.InvokeAsync(Args(("language", "powershell"), ("code", "Write-Output 1\nremove-item\n  -recurse build")));
+        var shown = Assert.IsType<ToolShownResult>(answer);
+        Assert.Equal(ShellText.Forbidden, shown.Text);
+        Assert.Equal(ShellText.ForbiddenShown("Remove-Item -Recurse"), shown.Shown);
+        Assert.Equal(["powershell script"], _gate.Refusals);
+
+        // Off with the police: the gate's turn (denied here).
+        _settings.ShellCommandPolicy = "ask";
+        _answer = CommandChoice.Deny;
+        _settings.ShellPoliceOutsidePaths = false;
+        Assert.Equal("Error: the script was denied by the user (powershell); do not retry it or work around the refusal", await Invoke(("language", "powershell"), ("code", "Remove-Item -Recurse build")));
+        Assert.Single(_asked);
+    }
+
+    [Fact]
     public async Task Police_RefusesAScriptNamingAnOutsidePath_BeforeTheGate()
     {
         // Shell police outside paths (2026-09-22): the script's text is read before the gate; a refusal never asks, and off it goes through to the gate.

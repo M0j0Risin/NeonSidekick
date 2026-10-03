@@ -39,8 +39,10 @@ public abstract record TurnEvent
     /// model in the message after the results (<see cref="ConversationHistory.AddToolImages"/>) and
     /// here so a host can draw them; null (read as none) for every other tool. <paramref name="Diff"/> is what a file-writing
     /// tool changed (2026-10-03, <see cref="Tools.ToolDiffResult"/>): the host's to draw, never in the history; null otherwise.
+    /// <paramref name="Shown"/> is a line for the user in the text's place (later on 2026-10-03, <see cref="Tools.ToolShownResult"/>:
+    /// the forbidden string the model is not told); the history keeps the text; null otherwise.
     /// </summary>
-    public sealed record ToolResult(string Name, string CallId, string Text, IReadOnlyList<ImageAttachment>? Images = null, FileDiff? Diff = null) : TurnEvent;
+    public sealed record ToolResult(string Name, string CallId, string Text, IReadOnlyList<ImageAttachment>? Images = null, FileDiff? Diff = null, string? Shown = null) : TurnEvent;
 
     /// <summary>Something the user should see that is not reply text: a timeout, a server error, an iteration cap.</summary>
     public sealed record Notice(string Text, bool IsError) : TurnEvent;

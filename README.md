@@ -633,7 +633,8 @@ Every tool, grouped, with the description the model reads. Enter or Space switch
 |---|---|---|
 | Shell command policy | How the model may run shell commands: `off` (no shell tools), `ask` (anything not on the allowed list goes to the approval pane; refused with no pane) or `yolo` (everything runs). See Shell guards. | `off` |
 | Shell allowed commands | Command prefixes allowed for good (`git status`, `dotnet build`, `python`). Enter removes one; the pane's *Allow … always* adds one. The ask and yolo buttons (A, Y) switch the policy. `/cmdlist` opens it; `/cmdcopy` copies it to another profile. | none |
-| Shell police outside paths | Refuses a command, script or process input naming a path outside the working directory, before it runs or asks. Turning it off asks first; `/police` opens it. See Shell guards. | on |
+| Shell police outside paths | Refuses a command, script or process input naming a path outside the working directory, before it runs or asks. Turning it off asks first, and also stops the forbidden strings; `/police` opens it. See Shell guards. | on |
+| Shell police forbidden strings | Strings the police refuses outright in a command, script or process input, case and spacing ignored. Enforced only while *Shell police outside paths* is on. The top row adds one, Enter removes one; `/police`'s strings button (S) opens it too. See Shell guards. | none |
 | Shell prefer native tools | Steers the model to the app's own tools: a lone shell command one of them covers is sent back (once a turn). See Shell guards. | on |
 | Shell default | The shell when a call names none: `powershell` (pwsh if installed, else 5.1), `cmd`, or `bash` (Git Bash). | `powershell` |
 | Shell timeout (s) | How long a foreground command without its own `timeout` may run (1–3600). | 180 |
@@ -652,6 +653,7 @@ Every tool, grouped, with the description the model reads. Enter or Space switch
   * A quoted path with a space that stays inside passes (`"D:\My Projects\app\a.txt"`), and a `cd` earlier in the line moves where later relative paths start (`cd src && type ..\README.md`) when the next command surely runs there: after `&&` or `;` (cmd's `&` too), outside a subshell, to a folder that exists. After a pipe, `||` or a `cd` that may fail, a later path must stay inside from both folders.
   * It reads text, not what runs: a computed path isn't seen, and a cmd switch (`dir /s`), a URL or a device (`>nul`, `/dev/null`) isn't a path.
   * `--no-police` and `NEONSIDEKICK_SHELL_POLICE` override it; `--yolo` never does.
+* **Forbidden strings:** while the path police is on, a `run_command` line, `execute_code` script or `process` input that contains a string on *Shell police forbidden strings* is refused before it runs or asks, even under `--yolo`. Case is ignored and any run of spaces, tabs or line breaks counts as one space (`rm -rf` catches `RM   -RF`). The model gets `Error: forbidden by the shell police — the user does not allow this command or script…`, never the string; the 👮 line shows it to you (`forbidden string 'rm -rf' — not run`) and the log names it. It reads text, so a command built in pieces gets past it: a tripwire, not a sandbox.
 * **Prefer native tools:** the operating rules name the tools offered that turn and the commands each replaces:
   * `cat`/`type`/`Get-Content`/`dir`/`ls`/`grep` → `read_file`/`search_files`
   * `git status`/`log`/`diff`/`add`/`commit` → the GitLib tools
@@ -922,7 +924,7 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | `/keycopy <profile>` | Copies the *LLM API key*, *Claude API key* and *Home Assistant API key* into another profile after a confirmation, mirrored: a key unset here clears theirs. Keys set only by environment variable aren't copied. |
 | `/cmdclear` | Clears the command history, stored and in memory, after a confirmation. |
 | `/cmdlist` | Opens *Shell allowed commands*: Enter removes a prefix; the ask and yolo buttons (A, Y) switch *Shell command policy*. |
-| `/police` | Opens the on/off page for *Shell police outside paths*. |
+| `/police` | Opens the on/off page for *Shell police outside paths*; its strings button (S) opens *Shell police forbidden strings*. |
 | `/compact [focus]` | Shrinks the context; a focus tells the summary what to concentrate on. |
 | `/copy [n \| all] [--thinking]` | Copies the last reply (or the last *n*, or the whole transcript) as Markdown. `--thinking` includes the thinking, quoted under `💭 **Thinking**`. |
 | `/cwd [path \| ~ \| browse]` | Shows or changes the working directory. `~` returns to the profile's `files\`; `browse` opens the [folder picker](#folder-picker). |

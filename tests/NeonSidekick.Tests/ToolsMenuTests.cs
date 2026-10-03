@@ -176,7 +176,7 @@ public partial class ToolsMenuTests : IDisposable
         Assert.Equal([SettingsField.PrintTools, SettingsField.PrintActionPolicy, SettingsField.PrintDefaultPrinter, SettingsField.PrintFontSize], TabFields(ToolsText.PrintTabTitle));   // the switch, the policy, the printer, the size (later on 2026-09-28)
         Assert.Equal([SettingsField.WebTools, SettingsField.WebBrowserMode, SettingsField.WebBrowserPath, SettingsField.WebBrowserNetworkMode, SettingsField.WebSearchMethod, SettingsField.WebSearxngUrl, SettingsField.WebSearchMaxResults, SettingsField.WebDownloadMaxMegabytes], TabFields(ToolsText.WebTabTitle));   // the download cap last (2026-10-01)
         Assert.Equal([SettingsField.FileTools, SettingsField.FileTreeMaxLength, SettingsField.FileTreeShowSizes, SettingsField.FileMentionFolderMode, SettingsField.FileBrowserMode, SettingsField.FileViewImageMaxPerCall, SettingsField.FileSearchMaxResults], TabFields(ToolsText.FilesTabTitle));   // the search cap last (2026-10-01), the view_image cap before it (2026-09-19); the browser mode under the folder mode, 2026-09-21
-        Assert.Equal([SettingsField.ShellCommandPolicy, SettingsField.ShellCommandAllowed, SettingsField.ShellPoliceOutsidePaths, SettingsField.ShellPreferNative, SettingsField.ShellDefault, SettingsField.ShellTimeoutSeconds, SettingsField.ShellForegroundCapSeconds, SettingsField.ShellOutputMaxChars, SettingsField.ShellCodeLanguages, SettingsField.ShellCodeTimeoutSeconds, SettingsField.ShellToolBridge, SettingsField.ShellCodeMaxToolCalls], TabFields(ToolsText.ShellTabTitle));   // the policy (the switch) first, then the list, the shell, the caps, then execute_code's four (2026-09-21; the bridge switch later that day; the police toggle third, 2026-09-22; prefer native under it, 2026-09-26)
+        Assert.Equal([SettingsField.ShellCommandPolicy, SettingsField.ShellCommandAllowed, SettingsField.ShellPoliceOutsidePaths, SettingsField.ShellPoliceForbiddenStrings, SettingsField.ShellPreferNative, SettingsField.ShellDefault, SettingsField.ShellTimeoutSeconds, SettingsField.ShellForegroundCapSeconds, SettingsField.ShellOutputMaxChars, SettingsField.ShellCodeLanguages, SettingsField.ShellCodeTimeoutSeconds, SettingsField.ShellToolBridge, SettingsField.ShellCodeMaxToolCalls], TabFields(ToolsText.ShellTabTitle));   // the policy (the switch) first, then the list, the shell, the caps, then execute_code's four (2026-09-21; the bridge switch later that day; the police toggle third, 2026-09-22; prefer native under it, 2026-09-26; the forbidden strings under the police, 2026-10-03)
         Assert.Equal([SettingsField.AskUser, SettingsField.AskMaxQuestions, SettingsField.AskMaxChoices], TabFields(ToolsText.AskTabTitle));
         Assert.Equal([SettingsField.GitLibTools, SettingsField.GitLibDiffMaxLines, SettingsField.GitLibLogMaxCommits, SettingsField.GitLibEmail, SettingsField.GitLibName], TabFields(ToolsText.GitTabTitle));   // the switch first, then the limits, then the identity pair (2026-09-21); the GitLib labels later that day
         Assert.Equal([SettingsField.ObsidianTools, SettingsField.ObsidianVault, SettingsField.ObsidianAllowDelete], TabFields(ToolsText.ObsidianTabTitle));   // the switch, then the vault (2026-09-22), then the delete switch (later that day)
@@ -190,7 +190,7 @@ public partial class ToolsMenuTests : IDisposable
         Assert.Equal(21, SettingsMenu.LabelWidthOf(TabFields(ToolsText.OptionsTabTitle)));   // "Tool collapse count" (2026-09-22; "$-mention enabled", 19, before)
         Assert.Equal(26, SettingsMenu.LabelWidthOf(TabFields(ToolsText.WebTabTitle)));   // "Web browser network mode" (the Web-prefixed labels, later still on 2026-09-19; "Web search max results", 24, before)
         Assert.Equal(32, SettingsMenu.LabelWidthOf(TabFields(ToolsText.FilesTabTitle)));   // "File view image max (per call)" (later still on 2026-09-19; "Stale line number guard", 25, that morning; "Always return line numbers", 28, before)
-        Assert.Equal(29, SettingsMenu.LabelWidthOf(TabFields(ToolsText.ShellTabTitle)));   // "Shell tool bridge max calls" (the Shell tab, 2026-09-21; the row was "Shell code max tool calls", 27, until later that day)
+        Assert.Equal(32, SettingsMenu.LabelWidthOf(TabFields(ToolsText.ShellTabTitle)));   // "Shell police forbidden strings" (2026-10-03; "Shell tool bridge max calls", 29, before) (the Shell tab, 2026-09-21; the row was "Shell code max tool calls", 27, until later that day)
         Assert.Equal(30, SettingsMenu.LabelWidthOf(TabFields(ToolsText.AskTabTitle)));   // "Ask max choices per question"
         Assert.Equal(24, SettingsMenu.LabelWidthOf(TabFields(ToolsText.GitTabTitle)));   // "GitLib log max commits" (2026-09-30; "Git native log max commits", 28, from later on 2026-09-21; "Git log max commits", 21, from 2026-09-20)
         Assert.Equal(27, SettingsMenu.LabelWidthOf(TabFields(ToolsText.SqlTabTitle)));   // "SQL connections (profile)" (2026-09-23)
@@ -1053,7 +1053,7 @@ public partial class ToolsMenuTests : IDisposable
         Push(ToTab(ToolsText.ShellTabTitle));   // Ask, Web, Shell
         Push(Keys.Enter, Keys.Down, Keys.Enter, Keys.Char('y'), Keys.Enter);   // Shell command policy: the picker opens on ask, yolo picked and confirmed (2026-10-03)
         Push(Keys.Down, Keys.Enter, Keys.Enter, Keys.Escape);               // Shell allowed commands: the list, dotnet build removed, back
-        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Enter, Keys.Down, Keys.Enter);      // past Shell police outside paths (2026-09-22) and Shell prefer native tools (2026-09-26); Shell default: the picker, cmd picked
+        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter, Keys.Down, Keys.Enter);      // past Shell police outside paths (2026-09-22), its forbidden strings (2026-10-03) and Shell prefer native tools (2026-09-26); Shell default: the picker, cmd picked
         Push(Keys.Down, Keys.Enter);                                        // Shell timeout (s): the typed slot, pre-filled with 180; 0 is out of range, kept
         Push(Keys.Backspace, Keys.Backspace, Keys.Backspace, Keys.Char('0'), Keys.Enter);
         Push(Keys.Escape);
@@ -1065,7 +1065,7 @@ public partial class ToolsMenuTests : IDisposable
         Assert.Equal("cmd", _settings.Current.ShellDefault);
         Assert.Equal(180, _settings.Current.ShellTimeoutSeconds);
         // The ten rows padded to the tab's own column (27), then the picker's rows, the list's, and the notices on the status line.
-        AssertTabEnds("\n" + Titled(Strip) + "\n \n▸ Shell command policy         ask\n  Shell allowed commands       2 prefixes\n  Shell police outside paths   on\n  Shell prefer native tools    on\n  Shell default                powershell\n  Shell timeout (s)            180\n  Shell foreground cap (s)     600\n  Shell output max chars       30,000 chars\n  Shell code languages         powershell, python, node\n  Shell code timeout (s)       300\n  Shell tool bridge            off\n  Shell tool bridge max calls  50 tool calls\n", 100);
+        AssertTabEnds("\n" + Titled(Strip) + "\n \n▸ Shell command policy            ask\n  Shell allowed commands          2 prefixes\n  Shell police outside paths      on\n  Shell police forbidden strings  none\n  Shell prefer native tools       on\n  Shell default                   powershell\n  Shell timeout (s)               180\n  Shell foreground cap (s)        600\n  Shell output max chars          30,000 chars\n  Shell code languages            powershell, python, node\n  Shell code timeout (s)          300\n  Shell tool bridge               off\n  Shell tool bridge max calls     50 tool calls\n", 100);
         Assert.Contains("\n" + Titled(ToolsText.Label + " › Shell command policy") + "\n \n  off  no shell or script tool is offered\n▸ ask  you approve each command not on the allow list\n  yolo every command runs, nothing is asked\n", _console.Output);
         Assert.Contains("  · Shell command policy: yolo\n", _console.Output);
         Assert.Contains("\n" + Titled(ToolsText.Label + " › Shell allowed commands   " + SettingsMenu.PolicyAskButton + "    " + SettingsMenu.PolicyYoloButton + " ") + "\n \n▸ dotnet build\n  git push\n", _console.Output);
@@ -1082,7 +1082,7 @@ public partial class ToolsMenuTests : IDisposable
     {
         var (menu, pane, _) = PaneMenu();
         Push(ToTab(ToolsText.ShellTabTitle));   // Shell
-        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter);   // Shell tool bridge: the picker opens on off (one more Down since the police row, 2026-09-22, one more since prefer native, 2026-09-26)
+        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter);   // Shell tool bridge: the picker opens on off (one more Down since the police row, 2026-09-22, one more since prefer native, 2026-09-26, one more since the forbidden strings, 2026-10-03)
         Push(Keys.Up, Keys.Enter);                                          // on is the row above
         Push(Keys.Escape);
 
@@ -1091,7 +1091,7 @@ public partial class ToolsMenuTests : IDisposable
         Assert.True(_settings.Current.ShellToolBridge);
         Assert.Contains("\n" + Titled(ToolsText.Label + " › Shell tool bridge") + "\n \n  on  a script may call this app's other tools through its neon_tools module\n▸ off a script does everything itself: no neon_tools module, no tool calls\n", _console.Output);
         Assert.Contains("  · Shell tool bridge: on", _console.Output);
-        Assert.Contains("\n▸ Shell tool bridge            on\n  Shell tool bridge max calls  50 tool calls\n", _console.Output);
+        Assert.Contains("\n▸ Shell tool bridge               on\n  Shell tool bridge max calls     50 tool calls\n", _console.Output);
         pane.Dispose();
     }
 
@@ -1110,9 +1110,9 @@ public partial class ToolsMenuTests : IDisposable
 
         Assert.False(_settings.Current.ShellPoliceOutsidePaths);
         Assert.Contains("\n" + Titled(SettingsMenu.PoliceOffConfirmQuestion) + "\n", _console.Output);
-        Assert.Contains("\n" + Titled(ToolsText.Label + " › Shell police outside paths") + "\n \n▸ on  shell police enabled\n  off shell police disabled\n", _console.Output);
+        Assert.Contains("\n" + Titled(ToolsText.Label + " › Shell police outside paths   " + SettingsMenu.PoliceStringsButton + " ") + "\n \n▸ on  shell police enabled\n  off shell police disabled\n", _console.Output);
         Assert.Contains("  · Shell police outside paths: off", _console.Output);
-        Assert.Contains("\n▸ Shell police outside paths   off\n  Shell prefer native tools    on\n  Shell default                powershell\n", _console.Output);
+        Assert.Contains("\n▸ Shell police outside paths      off\n  Shell police forbidden strings  none\n  Shell prefer native tools       on\n  Shell default                   powershell\n", _console.Output);
         pane.Dispose();
     }
 
@@ -1216,7 +1216,7 @@ public partial class ToolsMenuTests : IDisposable
     {
         var (menu, pane, _) = PaneMenu();
         Push(ToTab(ToolsText.ShellTabTitle));   // Shell
-        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter);   // Shell code languages: the list (one more Down since the police row, 2026-09-22, one more since prefer native, 2026-09-26)
+        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter);   // Shell code languages: the list (one more Down since the police row, 2026-09-22, one more since prefer native, 2026-09-26, one more since the forbidden strings, 2026-10-03)
         Push(Keys.Char(' '));                                               // powershell off
         Push(Keys.Down, Keys.Enter);                                        // python off
         Push(Keys.Down, Keys.Enter);                                        // node: the last one, refused
@@ -1229,7 +1229,7 @@ public partial class ToolsMenuTests : IDisposable
         Assert.Contains("  · Shell code languages: python, node\n", _console.Output);
         Assert.Contains("  · Shell code languages: node\n", _console.Output);
         Assert.Contains("At least one language stays on.", _console.Output);
-        Assert.Contains("\n▸ Shell code languages         node\n  Shell code timeout (s)       300\n", _console.Output);
+        Assert.Contains("\n▸ Shell code languages            node\n  Shell code timeout (s)          300\n", _console.Output);
         pane.Dispose();
     }
 
@@ -1677,6 +1677,86 @@ public partial class ToolsMenuTests : IDisposable
         pane.Dispose();
     }
 
+    private static ConsoleKeyInfo[] Typed(string text) => [.. text.Select(Keys.Char), Keys.Enter];
+
+    /// <summary>
+    /// The forbidden-strings row (2026-10-03, the user's idea): under the police row on the Shell tab; the list's top row opens the
+    /// slot and a typed string saves at once (spacing collapsed, case kept), a duplicate ignoring case and spacing is refused, ESC in
+    /// the slot is back on the list, Enter on a string removes it.
+    /// </summary>
+    [Fact]
+    public async Task OnThePane_TheForbiddenStringsRow_AddsTyped_RefusesADuplicate_EnterRemoves()
+    {
+        var (menu, pane, _) = PaneMenu();
+        Push(ToTab(ToolsText.ShellTabTitle));
+        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Enter);   // under Shell police outside paths: the list, on its add row
+        Push(Keys.Enter);
+        Push(Typed("rm  -rf"));                              // added as "rm -rf"
+        Push(Keys.Enter);
+        Push(Typed("Format"));                               // added; A to Z ignoring case puts it first
+        Push(Keys.Enter);
+        Push(Typed("RM -RF"));                               // already there
+        Push(Keys.Enter, Keys.Escape);                       // the slot, ESC: back on the list
+        Push(Keys.Down, Keys.Down, Keys.Enter);              // rm -rf removed
+        Push(Keys.Escape, Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Equal(["Format"], _settings.Current.ShellPoliceForbiddenStrings);
+        Assert.Contains("\n" + Titled(ToolsText.Label + " › Shell police forbidden strings") + "\n \n▸ " + SettingsMenu.AddForbiddenRow + "\n", _console.Output);
+        Assert.Contains(SettingsMenu.ForbiddenKeys, _console.Output);
+        Assert.Contains("  · " + SettingsMenu.ForbiddenAddedNotice("rm -rf") + "\n▸ " + SettingsMenu.AddForbiddenRow + "\n  rm -rf\n", _console.Output);
+        Assert.Contains("  · " + SettingsMenu.ForbiddenAddedNotice("Format") + "\n▸ " + SettingsMenu.AddForbiddenRow + "\n  Format\n  rm -rf\n", _console.Output);
+        Assert.Contains("  · Shell police forbidden strings: RM -RF is already in the list\n", _console.Output);
+        Assert.Contains("  · Shell police forbidden strings: rm -rf removed\n", _console.Output);
+        Assert.Contains("\n▸ Shell police forbidden strings  1 string\n  Shell prefer native tools       on\n", _console.Output);
+        pane.Dispose();
+    }
+
+    /// <summary>
+    /// <c>/police</c>' strings button (2026-10-03, the user's pick): S opens the forbidden-strings list over the police page, ESC
+    /// there comes back to the page, the switch untouched.
+    /// </summary>
+    [Fact]
+    public async Task ShowPolice_TheStringsButton_OpensTheList_AndComesBack()
+    {
+        var (menu, pane, _) = PaneMenu();
+        Push(Keys.Char('s'), Keys.Enter);
+        Push(Typed("shutdown"));
+        Push(Keys.Escape, Keys.Escape);   // the list, then the police page
+
+        await menu.ShowPoliceAsync(CancellationToken.None);
+
+        Assert.Equal(["shutdown"], _settings.Current.ShellPoliceForbiddenStrings);
+        Assert.True(_settings.Current.ShellPoliceOutsidePaths);
+        string police = "\n" + Titled(ToolsText.Label + " › Shell police outside paths   " + SettingsMenu.PoliceStringsButton + " ") + "\n";
+        string list = "\n" + Titled(ToolsText.Label + " › Shell police forbidden strings") + "\n";
+        Assert.Contains(SettingsMenu.PoliceToggleKeys, _console.Output);
+        Assert.True(_console.Output.IndexOf(police, StringComparison.Ordinal) < _console.Output.IndexOf(list, StringComparison.Ordinal), _console.Output);
+        Assert.True(_console.Output.IndexOf(list, StringComparison.Ordinal) < _console.Output.LastIndexOf(police, StringComparison.Ordinal), _console.Output);   // back on the page
+        Assert.Contains("  · " + SettingsMenu.ForbiddenAddedNotice("shutdown") + "\n", _console.Output);
+        Assert.False(pane.OverlayOpen);
+        pane.Dispose();
+    }
+
+    [Fact]
+    public async Task ShowPolice_WithoutThePane_PrintsTheSwitchAndTheStrings()
+    {
+        _settings.Update(d => d.ShellPoliceForbiddenStrings = ["rm -rf", "Format"]);
+        _paneOn = false;
+        var pane = new ScreenPane(_console, geometry: null, _time);
+        var keys = new KeySource(_console.Input, TimeSpan.FromMilliseconds(1));
+        var menuPane = new MenuPane(pane, keys);
+        var settings = new SettingsMenu(_console, _settings, _ => null, new InputLine(_console, keys), new TranscriptRenderer(_console), _speech, menuPane, _ => FakeBrowserPath);
+        var menu = new ToolsMenu(Facts, _settings, settings, new TranscriptRenderer(_console), menuPane);
+
+        await menu.ShowPoliceAsync(CancellationToken.None);
+
+        Assert.Contains("  · Shell police outside paths: on\n  · Shell police forbidden strings\n  ·   Format\n  ·   rm -rf\n", _console.Output);
+        Assert.Equal(["Shell police forbidden strings", "  " + SettingsMenu.NoAllowedCommandsRow], ToolsMenu.ForbiddenStringLines(new AppSettingsData()));
+        pane.Dispose();
+    }
+
     // ── The ComfyUI tab (Images until later on 2026-09-24): workflows offered and the add-workflow wizard (later on 2026-09-24) ─
 
     private const string ComfyServer = "http://comfy.lan:8188";
@@ -1707,7 +1787,7 @@ public partial class ToolsMenuTests : IDisposable
         _settings.Update(d => d.ShellCodeLanguages = ["node"]);
         var (menu, pane, _) = PaneMenu();
         Push(ToTab(ToolsText.ShellTabTitle));   // Shell
-        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter);   // Shell code languages
+        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter);   // Shell code languages
         Push(Keys.Char('n'));                       // refused
         Push(Keys.Char('a'));                       // all three
         Push(Keys.Escape, Keys.Escape);

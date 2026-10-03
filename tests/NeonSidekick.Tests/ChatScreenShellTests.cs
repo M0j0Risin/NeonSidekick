@@ -115,6 +115,26 @@ public partial class ChatScreenTests
         Assert.DoesNotContain("reach the whole computer", _chat.Requests[0][0].Text!, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// A forbidden string (2026-10-03): refused before the pane, even under yolo; the 👮 line names the string for the user, and the
+    /// model's result is the generic sentence that never names it.
+    /// </summary>
+    [Fact]
+    public async Task RunCommand_AForbiddenString_IsRefused_TheOfficerNamesIt_TheModelIsNotTold()
+    {
+        _settings.Update(d => { d.ShellCommandPolicy = "yolo"; d.ShellPoliceForbiddenStrings = ["rd /s"]; });
+        ShellFixture([], "Not then.", command: "RD   /S /Q build");
+
+        string output = await RunAsync();
+
+        Assert.Contains("👮 " + ShellText.ForbiddenShown("rd /s") + "\n", output);
+        Assert.DoesNotContain("🛠️ Error: forbidden", output);
+        Assert.DoesNotContain(ShellText.ApprovalTitle, output);
+        Assert.Equal(ShellText.Forbidden, ToolResult(_chat.Requests[1], "c1"));
+        Assert.DoesNotContain("rd /s", ToolResult(_chat.Requests[1], "c1"), StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Not then.", output);
+    }
+
     [Fact]
     public async Task RunCommand_PoliceOff_TheLineReachesThePane_AndTheRulesSayOnlyWhereACommandStarts()
     {
