@@ -14314,7 +14314,8 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.DoesNotContain(NeonSidekick.Viewer.ViewerText.StripButton, output);
+        // The strip's rule has no viewer button (the click, on its ×, puts the upper rule's 🎞️ up — that one brings the strip back, 2026-10-03).
+        Assert.DoesNotContain(ScreenPane.StripRule(NeonSidekick.Viewer.ViewerText.StripButton, _console.Profile.Width).Text, output);
         Assert.Contains(ScreenPane.StripRule(null, _console.Profile.Width).Text, output);   // the × stays
     }
 
@@ -14344,6 +14345,34 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(ComfyPicture("pony-5.png"), Assert.Single(opened).Path);
         Assert.Contains(NeonSidekick.Comfy.ComfyText.StripSelectedHint(2, 2), output);
         Assert.True(_settings.Current.ComfyPictureStrip);   // the setting untouched
+    }
+
+    /// <summary>
+    /// The 🎞️ the upper rule carries while the × has the strip put away (2026-10-03, the user's ask): one click brings the
+    /// strip back with its pictures, so → and Enter open one again with no new picture made.
+    /// </summary>
+    [Fact]
+    public async Task PictureStrip_TheUpperRulesFilm_OneClick_BringsAClosedStripBack()
+    {
+        ComfyServer();
+        PaneOf40Rows();
+        var opened = new List<(string Path, string Editor)>();
+        _openImage = (path, editor) => opened.Add((path, editor));
+        string film = NeonSidekick.Viewer.ViewerText.StripButton;
+        var rule = ScreenPane.StripRule(null, _console.Profile.Width);
+        var upper = ScreenPane.UpperRule("", folds: false, _console.Profile.Width, film);
+        StepsWhenIdle(
+            Line("/imagine a cat --seed 5"),
+            input => input.PushClick(rule.CloseColumn, 99 - ScreenPane.StripPaneRows),
+            input => input.PushClick(upper.ReopenColumn, 99),
+            Key(Keys.Right), Key(Keys.Enter),
+            Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.Contains(ScreenPane.RuleGlyph + " " + film + " ", output);   // no viewer here, so the only 🎞️ is the upper rule's
+        Assert.Equal(ComfyPicture("pony-5.png"), Assert.Single(opened).Path);
+        Assert.True(_settings.Current.ComfyPictureStrip);
     }
 
     /// <summary><c>/comfy view</c> opens the viewer on the output folder, made first when it is not there yet, and says so; with no viewer it is an error.</summary>

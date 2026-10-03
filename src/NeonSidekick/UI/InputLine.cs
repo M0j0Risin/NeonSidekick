@@ -357,6 +357,9 @@ public sealed partial class InputLine
     /// <summary>What a click on the picture strip's close × does (2026-09-28, <see cref="ScreenPane.TryHitStripClose"/>): the screen puts the strip away until the next picture; null = nothing.</summary>
     public Action? CloseStrip { get; set; }
 
+    /// <summary>What a click on the upper rule's 🎞️ does (2026-10-03, <see cref="ScreenPane.TryHitStripReopen"/>): the screen brings its closed strip back; null = nothing.</summary>
+    public Action? ReopenStrip { get; set; }
+
     /// <summary>
     /// The picture behind an id (<see cref="ScreenPane.PictureAt"/>'s, the strip's and the transcript's alike) for a drag
     /// that ends on the input rows (2026-09-28, the user's ask: "drag one of the images from the ComfyUI picture strip on to

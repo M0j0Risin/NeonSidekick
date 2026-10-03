@@ -169,6 +169,12 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     private bool _drawnFolds;
     private int _foldColumn = -1;
 
+    // The upper rule's 🎞️ (2026-10-03, StripReopen): the label the last draw put there (null = none), and the column it
+    // landed at (-1 = none drawn), for TryHitStripReopen and the tick.
+    private Func<string?> _stripReopen = static () => null;
+    private string? _drawnReopen;
+    private int _reopenColumn = -1;
+
     // The upper rule's title (2026-09-28): the column it landed at (-1 = none drawn) and its cells, for TryHitRuleTitle.
     private int _ruleTitleColumn = -1;
     private int _ruleTitleCells;
@@ -842,6 +848,20 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     }
 
     /// <summary>
+    /// The label of the upper rule's button that brings a closed picture strip back (2026-10-03, the user's ask: the strip's ×
+    /// left no way back short of another picture): drawn right of ⤡, or in its place without it (<see cref="UpperRule"/>), in
+    /// <see cref="Theme.AccentSecondary"/> as the strip's own button. Null or empty = no button (the default); the screen
+    /// answers one only while its strip is closed with pictures in it. Not drawn under an overlay, nor in a window with no
+    /// room for the strip (it would bring back nothing to see). Read at each draw and on the tick; a click on it is
+    /// <see cref="TryHitStripReopen"/>.
+    /// </summary>
+    public Func<string?> StripReopen
+    {
+        get => _stripReopen;
+        set => _stripReopen = value ?? throw new ArgumentNullException(nameof(value));
+    }
+
+    /// <summary>
     /// Whether a click at buffer cell (<paramref name="x"/>, <paramref name="y"/>) landed on <see cref="StripButton"/>'s
     /// label on the drawn strip's rule, or the space either side of it (2026-09-28: the glyph alone is a small target).
     /// False with no strip or no button drawn, the pane lifted or disabled, or no geometry.
@@ -909,6 +929,36 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     }
 
     /// <summary>
+    /// Whether a click at buffer cell (<paramref name="x"/>, <paramref name="y"/>) landed on the upper rule's
+    /// <see cref="StripReopen"/> button (2026-10-03): its cells and the space after them, and the space before them too when
+    /// no ⤡ is drawn — beside ⤡ that space is ⤡'s (<see cref="TryHitFoldButton"/>). The caller opens the strip again
+    /// (<see cref="UI.PictureStrip.Open"/>). False as <see cref="TryHitFoldButton"/> is.
+    /// </summary>
+    public bool TryHitStripReopen(int x, int y)
+    {
+        if (!Enabled)
+        {
+            return false;
+        }
+
+        lock (_gate)
+        {
+            if (!_drawn || _drawnOverlay || _reopenColumn < 0 || _drawnReopen is not { } label || _batch > 0 || _modal > 0 || _geometry?.CursorTop() is not int top)
+            {
+                return false;
+            }
+
+            if (y != top - CursorDepth - 1)
+            {
+                return false;
+            }
+
+            int from = _foldColumn < 0 ? _reopenColumn - 1 : _reopenColumn;
+            return x >= from && x <= _reopenColumn + TextCells.Width(label);
+        }
+    }
+
+    /// <summary>
     /// Whether a click at buffer cell (<paramref name="x"/>, <paramref name="y"/>) landed on the session's name at the upper
     /// rule's right edge (2026-09-28, the user's ask: a double-click there renames the session, <see cref="UpperRuleParts.TitleColumn"/>),
     /// the space either side of it included. False with no title drawn, an overlay drawn, the pane lifted or disabled, or no geometry.
@@ -952,9 +1002,11 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
 
     /// <summary>The rows the strip takes in a window of <paramref name="width"/> × <paramref name="height"/> with <paramref name="toolbarRows"/> for the toolbar, as things stand: <see cref="PictureStrip"/>'s rule.</summary>
     private int StripRowsFor(int width, int height, int toolbarRows) =>
-        _overlay is null && _pictureStrip() is { Count: > 0 } && height >= PaneRows + toolbarRows + StripPaneRows + StripTranscriptRows && width - 1 >= UI.PictureStrip.MinCells
-            ? StripPaneRows
-            : 0;
+        _overlay is null && _pictureStrip() is { Count: > 0 } && StripFits(width, height, toolbarRows) ? StripPaneRows : 0;
+
+    /// <summary>Whether a window of <paramref name="width"/> × <paramref name="height"/> with <paramref name="toolbarRows"/> for the toolbar has room for the strip: <see cref="StripTranscriptRows"/> kept over it and the smallest pane, and <see cref="UI.PictureStrip.MinCells"/> across.</summary>
+    private static bool StripFits(int width, int height, int toolbarRows) =>
+        height >= PaneRows + toolbarRows + StripPaneRows + StripTranscriptRows && width - 1 >= UI.PictureStrip.MinCells;
 
     /// <summary>The strip the provider answers now is not the drawn one: it came or went, changed, or its highlight did.</summary>
     private bool StripChanged()
@@ -968,8 +1020,9 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     }
 
     /// <summary>
-    /// The pane again now if the strip changed (<see cref="StripChanged"/>): the screen calls it after a step or a new
-    /// picture so the strip follows the key, not the next tick. Nothing lifted, under a batch or a modal, or disabled.
+    /// The pane again now if the strip changed (<see cref="StripChanged"/>), or the upper rule's buttons with it (the 🎞️ that
+    /// a close puts there and a reopen takes away, 2026-10-03): the screen calls it after a step or a new picture so the strip
+    /// follows the key, not the next tick. Nothing lifted, under a batch or a modal, or disabled.
     /// </summary>
     public void RedrawStrip()
     {
@@ -980,7 +1033,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
 
         lock (_gate)
         {
-            if (_drawn && StripChanged())
+            if (_drawn && (StripChanged() || RuleButtonsChanged()))
             {
                 Redraw();
             }
@@ -4463,17 +4516,20 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     /// <summary>
     /// The upper rule with <see cref="RuleTitle"/> at its right edge and, while something in the transcript folds and no
     /// overlay is up, ⤡ at its left (<see cref="UpperRule"/>) in the strip button's style; the title, whether the button
-    /// was wanted and where it landed are remembered for the tick and <see cref="TryHitFoldButton"/>.
+    /// was wanted and where it landed are remembered for the tick and <see cref="TryHitFoldButton"/>. The closed strip's 🎞️
+    /// (<see cref="StripReopen"/>, 2026-10-03) the same, for <see cref="TryHitStripReopen"/>.
     /// </summary>
     private void WriteUpperRule(int width)
     {
         _drawnRuleTitle = _ruleTitle();
         _drawnFolds = FoldsWanted();
-        var parts = UpperRule(_drawnRuleTitle, _drawnFolds, width);
+        _drawnReopen = ReopenWanted();
+        var parts = UpperRule(_drawnRuleTitle, _drawnFolds, width, _drawnReopen);
         _foldColumn = parts.FoldColumn;
+        _reopenColumn = parts.ReopenColumn;
         _ruleTitleColumn = parts.TitleColumn;
         _ruleTitleCells = parts.TitleCells;
-        foreach (var (text, style) in new[] { (parts.Lead, Theme.PaneRule), (parts.Button, Theme.AccentSecondary), (parts.Rest, Theme.PaneRule) })
+        foreach (var (text, style) in new[] { (parts.Lead, Theme.PaneRule), (parts.Button, Theme.AccentSecondary), (parts.Reopen, Theme.AccentSecondary), (parts.Rest, Theme.PaneRule) })
         {
             if (text.Length > 0)
             {
@@ -4487,8 +4543,15 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     /// <summary>The upper rule's ⤡ is wanted: something in the store folds (<see cref="Scrollback.AnyFolds"/>) and no overlay is up — under one they go, as the strip does.</summary>
     private bool FoldsWanted() => _overlay is null && _store.AnyFolds;
 
-    /// <summary>Whether the upper rule's button is wanted now is not what the drawn rule shows: a run came to fold, or the last fold went.</summary>
-    private bool FoldsChanged() => FoldsWanted() != _drawnFolds;
+    /// <summary>The upper rule's <see cref="StripReopen"/> label, or null: one answered, no overlay up and room in the window for the strip it brings back.</summary>
+    private string? ReopenWanted() =>
+        _overlay is null && _stripReopen() is { Length: > 0 } label && StripFits(Width, Height, BarRowsFor(Height)) ? label : null;
+
+    /// <summary>
+    /// Whether the upper rule's buttons wanted now are not what the drawn rule shows: a run came to fold, or the last fold
+    /// went; the strip was closed or opened again, the setting flipped, the window's room for the strip changed (2026-10-03).
+    /// </summary>
+    private bool RuleButtonsChanged() => FoldsWanted() != _drawnFolds || !string.Equals(ReopenWanted(), _drawnReopen, StringComparison.Ordinal);
 
     /// <summary>
     /// The upper rule cut in the pieces <see cref="UpperRule"/> draws in their own styles, left to right — the rule's
@@ -4496,10 +4559,14 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     /// (<see cref="RuleWithTitle"/>'s) — and the column ⤡ is at (−1 = not drawn); the column the title starts at (−1 = none
     /// drawn) and its cells (2026-09-28, for <see cref="TryHitRuleTitle"/>).
     /// </summary>
-    public readonly record struct UpperRuleParts(string Lead, string Button, string Rest, int FoldColumn, int TitleColumn = -1, int TitleCells = 0)
+    /// <remarks>
+    /// <see cref="Reopen"/> is the strip's 🎞️ and the space after it (2026-10-03, <see cref="StripReopen"/>), drawn between
+    /// the <see cref="Button"/> and the <see cref="Rest"/>, at <see cref="ReopenColumn"/> (−1 = not drawn).
+    /// </remarks>
+    public readonly record struct UpperRuleParts(string Lead, string Button, string Rest, int FoldColumn, int TitleColumn = -1, int TitleCells = 0, string Reopen = "", int ReopenColumn = -1)
     {
         /// <summary>The whole rule as one string.</summary>
-        public string Text => Lead + Button + Rest;
+        public string Text => Lead + Button + Reopen + Rest;
     }
 
     /// <summary>
@@ -4507,24 +4574,46 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     /// <see cref="FoldGlyph"/> after the rule's first glyph with a space either side, then <see cref="RuleWithTitle"/> over the
     /// rest — <c>─ ⤡ ──────── title ─</c>. Until 2026-09-29 it was the ↘️ ↖️ pair with the space at their left alone (Windows
     /// Terminal drew each emoji with room of its own at its right); the one-cell ⤡ has no such room, so it is spaced as the
-    /// title is. A width that cannot keep <see cref="RuleTitleMinRule"/> glyphs after it drops the button; without
-    /// <paramref name="folds"/> it is <see cref="RuleWithTitle"/> alone. Pure, pinned.
+    /// title is. With a <paramref name="reopen"/> label (2026-10-03, the user's ask: the closed picture strip's way back) it
+    /// follows ⤡ with a space after it, or takes ⤡'s place without folds — <c>─ ⤡ 🎞️ ──────── title ─</c>,
+    /// <c>─ 🎞️ ──────── title ─</c>. A width that cannot keep <see cref="RuleTitleMinRule"/> glyphs after the buttons drops
+    /// the reopen first, then ⤡; with neither it is <see cref="RuleWithTitle"/> alone. Pure, pinned.
     /// </summary>
-    public static UpperRuleParts UpperRule(string title, bool folds, int width)
+    public static UpperRuleParts UpperRule(string title, bool folds, int width, string? reopen = null)
     {
         ArgumentNullException.ThrowIfNull(title);
         width = Math.Max(0, width);
         string lead = RuleGlyph + " ";
-        string button = FoldGlyph + " ";
-        int used = TextCells.Width(lead) + TextCells.Width(button);
-        if (!folds || width - used < RuleTitleMinRule)
+        string button = folds ? FoldGlyph + " " : "";
+        string again = string.IsNullOrEmpty(reopen) ? "" : reopen + " ";
+        if (again.Length > 0 && width - TextCells.Width(lead + button + again) < RuleTitleMinRule)
+        {
+            again = "";
+        }
+
+        if (button.Length > 0 && width - TextCells.Width(lead + button) < RuleTitleMinRule)
+        {
+            button = "";
+        }
+
+        if (button.Length == 0 && again.Length == 0)
         {
             var (plainColumn, plainCells) = TitleSpan(title, width, 0);
             return new UpperRuleParts("", "", RuleWithTitle(title, width), -1, plainColumn, plainCells);
         }
 
+        int leadCells = TextCells.Width(lead);
+        int used = leadCells + TextCells.Width(button) + TextCells.Width(again);
         var (titleColumn, titleCells) = TitleSpan(title, width - used, used);
-        return new UpperRuleParts(lead, button, RuleWithTitle(title, width - used), TextCells.Width(lead), titleColumn, titleCells);
+        return new UpperRuleParts(
+            lead,
+            button,
+            RuleWithTitle(title, width - used),
+            button.Length > 0 ? leadCells : -1,
+            titleColumn,
+            titleCells,
+            again,
+            again.Length > 0 ? leadCells + TextCells.Width(button) : -1);
     }
 
     /// <summary>Where <see cref="RuleWithTitle"/> of <paramref name="width"/> cells, drawn from column <paramref name="offset"/>, puts its title: the column and the cells, (−1, 0) with none.</summary>
@@ -4992,11 +5081,12 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
                 return;
             }
 
-            if (RuleTitleChanged() || FoldsChanged())
+            if (RuleTitleChanged() || RuleButtonsChanged())
             {
                 // The session's name landed or went (the model's title arrives off-thread), or the
-                // rule's ⤡ came or went (a run came to fold, the last fold went; 2026-09-28): the
-                // whole pane again, as a grown reply gets — the rule is drawn in every state.
+                // rule's ⤡ came or went (a run came to fold, the last fold went; 2026-09-28), or its
+                // 🎞️ (the strip closed or back, the setting flipped; 2026-10-03): the whole pane
+                // again, as a grown reply gets — the rule is drawn in every state.
                 if (_busyLabel is not null)
                 {
                     _frame++;

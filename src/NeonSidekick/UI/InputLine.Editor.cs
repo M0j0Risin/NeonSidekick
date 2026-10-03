@@ -950,6 +950,13 @@ public sealed partial class InputLine
                 hintClicks.Reset();
                 _line.CloseStrip?.Invoke();
             }
+            else if (pane.TryHitStripReopen(click.X, click.Y))
+            {
+                // The upper rule's 🎞️ (2026-10-03): one click brings the closed strip back.
+                _anchor = -1;
+                hintClicks.Reset();
+                _line.ReopenStrip?.Invoke();
+            }
             else if (pane.TryHitFoldButton(click.X, click.Y))
             {
                 // The upper rule's ⤡ (2026-09-28 as ↘️ / ↖️; one button since 2026-09-29, the user's call): one click is

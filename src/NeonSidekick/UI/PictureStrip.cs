@@ -75,7 +75,8 @@ public sealed class PictureStrip
     /// <summary>
     /// Whether the × on the strip's rule put it away (2026-09-28, the user's ask: "the X to close is just until the next
     /// generation"): the screen shows no strip while it is, and the next <see cref="Add"/> — or a <see cref="Clear"/> — opens
-    /// it again. Not the <c>ComfyUI picture strip</c> setting, which hides it for good; the pictures are kept either way.
+    /// it again; so does <see cref="Open"/>, the 🎞️ on the upper rule (2026-10-03). Not the <c>ComfyUI picture strip</c>
+    /// setting, which hides it for good; the pictures are kept either way.
     /// </summary>
     public bool Closed
     {
@@ -94,6 +95,24 @@ public sealed class PictureStrip
 
             _closed = true;
             _selected = -1;
+            _version++;
+        }
+    }
+
+    /// <summary>
+    /// A closed strip shown again (2026-10-03, the user's ask: the × had left no way back short of another picture; the 🎞️ the
+    /// upper rule carries while the strip is closed calls this), as it stood with nothing highlighted. Nothing unless <see cref="Closed"/>.
+    /// </summary>
+    public void Open()
+    {
+        lock (_gate)
+        {
+            if (!_closed)
+            {
+                return;
+            }
+
+            _closed = false;
             _version++;
         }
     }

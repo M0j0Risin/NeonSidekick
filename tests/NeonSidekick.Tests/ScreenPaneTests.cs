@@ -177,6 +177,38 @@ public class ScreenPaneTests : IDisposable
     }
 
     /// <summary>
+    /// The closed picture strip's 🎞️ on the upper rule (2026-10-03, the user's ask): right of ⤡ with a space after it, or in
+    /// ⤡'s place without folds; the title keeps to the right edge; a narrow rule drops the 🎞️ first, then ⤡; an empty label is none.
+    /// </summary>
+    [Fact]
+    public void UpperRule_CarriesTheStripsReopen_RightOfTheFold()
+    {
+        string film = NeonSidekick.Viewer.ViewerText.StripButton;
+        Assert.Equal(2, TextCells.Width(film));
+
+        var both = ScreenPane.UpperRule("", folds: true, 40, film);
+        Assert.Equal("─ ⤡ " + film + " " + Rule(33), both.Text);
+        Assert.Equal(40, TextCells.Width(both.Text));
+        Assert.Equal(("⤡ ", film + " ", 2, 4), (both.Button, both.Reopen, both.FoldColumn, both.ReopenColumn));
+
+        var alone = ScreenPane.UpperRule("", folds: false, 40, film);
+        Assert.Equal("─ " + film + " " + Rule(35), alone.Text);
+        Assert.Equal(("", -1, 2), (alone.Button, alone.FoldColumn, alone.ReopenColumn));
+
+        var titled = ScreenPane.UpperRule("notes", folds: true, 40, film);
+        Assert.Equal("─ ⤡ " + film + " " + ScreenPane.RuleWithTitle("notes", 33), titled.Text);
+        Assert.Equal((33, 5), (titled.TitleColumn, titled.TitleCells));
+
+        Assert.Equal(4, ScreenPane.UpperRule("", folds: true, 7 + ScreenPane.RuleTitleMinRule, film).ReopenColumn);
+        var tight = ScreenPane.UpperRule("", folds: true, 6 + ScreenPane.RuleTitleMinRule, film);   // the 🎞️ goes, ⤡ stays
+        Assert.Equal(("─ ⤡ " + Rule(2 + ScreenPane.RuleTitleMinRule), 2, -1), (tight.Text, tight.FoldColumn, tight.ReopenColumn));
+        var bare = ScreenPane.UpperRule("", folds: false, 4 + ScreenPane.RuleTitleMinRule, film);   // no room for the 🎞️ alone
+        Assert.Equal((Rule(4 + ScreenPane.RuleTitleMinRule), -1), (bare.Text, bare.ReopenColumn));
+
+        Assert.Equal(ScreenPane.UpperRule("notes", folds: false, 40), ScreenPane.UpperRule("notes", folds: false, 40, ""));
+    }
+
+    /// <summary>
     /// Where the upper rule's title lands (2026-09-28, for the double-click that renames the session): the column after
     /// <see cref="ScreenPane.RuleWithTitle"/>'s space, the same with the fold buttons or without (the title keeps to the
     /// right edge), the cut title's cells; none for an empty title or a width with no room for one.
