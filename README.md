@@ -124,7 +124,7 @@ Speech output (`/tts`) and voice input (`/stt`) start off. The first time you tu
 | `--profile <name>` | Opens this profile for this launch. |
 | `--yolo` | Runs every shell command without asking, this launch only. |
 | `--no-police` | Allows shell commands to touch paths outside the working directory, this launch only. |
-| `--log <path>` | Writes every diagnostic line to a file. |
+| `--log <path>` | Writes every diagnostic line to a file; `/log --file` opens it in your editor. (`/log`'s window works without it.) |
 | `--headless` | Runs as a plain text prompt over standard input and output, with no TUI. See [HEADLESS.md](HEADLESS.md). |
 | `--smoke` | Checks the native parts load, then exits. |
 | `--audio-check` | Plays a test tone through the speech output, then exits. |
@@ -233,7 +233,7 @@ Settings that an environment variable or flag can override for one launch are li
 | Menus max height | The most of the window a menu or info pane (`/settings`, `/tools`, `/skills`, `/mcp`, `/help`, `/usage`, `/cwd browse`…) may take, its rules and hint row included: `half-screen`, `three-quarters` or `full-screen` (all but one row). A longer list scrolls inside it. Every tab of a pane keeps the height of its tallest tab, so the pane doesn't jump as you tab through it. | `full-screen` |
 | Draft editor | The program `/draft` opens its temporary file with (`code --wait`, `notepad`…). Empty uses the app Windows opens `.txt` files with. | (default .txt editor) |
 | Image viewer | Where a double-clicked picture opens. Empty: the built-in picture viewer. `system`: the app Windows registers for the file type (Paint for png, jpg and bmp). Anything else is a command, with the file's path appended (`mspaint`, `"C:\Program Files\GIMP 3\bin\gimp-3.exe"`). | (built-in viewer) |
-| Themed image viewer | The built-in viewer wears the theme: a themed dark title bar (Windows 11; Windows 10 gets a plain dark one) and the theme's background. When off, it stays black. | on |
+| Themed image viewer | The built-in viewer, the camera's window and the log window wear the theme: a themed dark title bar (Windows 11; Windows 10 gets a plain dark one) and the theme's background and colours. When off, they stay black. | on |
 
 ##### Welcome splash
 
@@ -925,7 +925,8 @@ Type `/` to list every command with a short summary. After a command and a space
 | `/help` | Show the commands and keys: everyday commands on Commands (basic), the rest on Commands (advanced), then Keys. Ctrl+H runs it too. |
 | `/interrupt [on\|off]` | Toggle the wake-word interrupt during a spoken reply. |
 | `/learn [note \| sessions [N \| text]]` | Write or improve a skill in the background, from the last turn or from stored sessions. |
-| `/log` | Open the diagnostic log in your editor. Only available when the app was started with `--log <path>`. |
+| `/log` | Open the log window: this run's diagnostic lines, following the newest. See Log window. Works without `--log`. |
+| `/log --file` | Open the diagnostic log file in your editor. Only available when the app was started with `--log <path>`. |
 | `/loop <count> [delay] <message>`, `/loop infinite [delay] <message>` | Send the message that many times, or until ESC or Ctrl+C, waiting for each reply. See Loops. |
 | `/plan <requirement>` | Have the model research with read-only tools and present a plan before anything changes. See Plan mode. |
 | `/botchat [profile ...] [topic]` | Let profiles talk to each other until you stop them. See Bot conversations. |
@@ -1117,6 +1118,24 @@ The viewer and the ComfyUI picture strip follow each other:
 * ←/→ on the strip, or a click on one of its pictures, moves an open viewer on the strip's folder to that picture, without bringing the viewer to the front.
 
 The camera's live picture (*Camera preview* `live`, or `/camera live`) has a window of its own, not this one, so the two can be open side by side. It shows the camera mirrored, then the photo once taken; it doesn't take the keyboard from the terminal, only F11, a double-click and Esc work in it, it opens 16:9, and it remembers its own place on screen.
+
+#### Log window
+
+`/log` opens the diagnostic log in a window of its own (Windows only), beside the picture viewer and the camera's window. It shows every line of this run from the start, Trace and up, as `--log` would write them, in any run: no `--log` needed. The newest 20,000 lines are kept. Lines are coloured by level: Trace and Debug dim, Info in the body colour, warnings and errors in the theme's warning and error colours. Long lines wrap.
+
+* **Following.** While the view is at the bottom it follows the log as lines arrive. Scroll up and it holds still so you can read; the title says *paused*. Scrolling back to the bottom (the wheel, ↓, PgDn, the scroll bar), Ctrl+E or Ctrl+End follows again.
+* **Copying.** Drag to select (Shift+click extends), Ctrl+A selects everything, Ctrl+C copies the selection.
+
+| Key | Action |
+|---|---|
+| ↑ / ↓, PgUp / PgDn, the wheel | Scroll a row or a page; reaching the bottom follows again |
+| Ctrl+Home | The first line, following paused |
+| Ctrl+End or Ctrl+E | The last line, following again |
+| Ctrl+A / Ctrl+C | Select everything / copy the selection |
+| F11 or double-click | Toggle full screen |
+| Esc | Leave full screen, then close |
+
+Like the viewer it follows the theme (unless *Themed image viewer* is off), opens where it was last closed, and closes with the app. A second `/log` brings the open window to the front. `/log --file` opens the `--log` file in your editor instead, as `/log` did before.
 
 #### Camera
 

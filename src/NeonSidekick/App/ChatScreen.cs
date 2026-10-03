@@ -513,8 +513,11 @@ internal sealed partial class ChatScreen
     private readonly bool _ownsMcp;
     private readonly Action<string> _openFile;
 
-    /// <summary>The <c>--log</c> file, full path (2026-09-22): <c>/log</c> opens it, and only while it is set is <c>/log</c> a command, in <c>/help</c> and in the completion list. Null = started without <c>--log</c>.</summary>
+    /// <summary>The <c>--log</c> file, full path (2026-09-22): <c>/log --file</c> opens it (the bare <c>/log</c> until 2026-10-02, and only a command while it was set). Null = started without <c>--log</c>.</summary>
     private readonly string? _logFile;
+
+    /// <summary>The log window opened, or the open one brought forward (2026-10-02, <c>/log</c>; <c>Viewer.LogWindow.Show</c> over the run's buffer). Null = no window here: <c>/log</c> says so.</summary>
+    private readonly Action? _openLogWindow;
     private readonly Func<string, string, CancellationToken, Task>? _editDraft;
     private readonly Random _random;
     private readonly SplashSource? _splash;
@@ -915,9 +918,11 @@ internal sealed partial class ChatScreen
         Func<string, DockerClient>? dockerClient = null,
         ICameraSystem? camera = null,
         Func<string, Action, Viewer.ILiveView>? liveView = null,
-        Action<string>? showShot = null)
+        Action<string>? showShot = null,
+        Action? openLogWindow = null)
     {
         _logFile = logFile;
+        _openLogWindow = openLogWindow;
         ArgumentNullException.ThrowIfNull(time);
         _time = time;
         _random = random ?? Random.Shared;
@@ -1771,25 +1776,24 @@ internal sealed partial class ChatScreen
     /// <summary>The tabs <c>/help</c> opens; each builds its content when shown, from the live state. The one Commands tab split in two on 2026-09-27 (the user's call).</summary>
     private IReadOnlyList<InfoTab> HelpTabs() =>
     [
-        new(SlashCommands.BasicTabTitle, () => CommandsTab(advanced: false, log: _logFile is not null)),
-        new(SlashCommands.AdvancedTabTitle, () => CommandsTab(advanced: true, log: _logFile is not null)),
+        new(SlashCommands.BasicTabTitle, () => CommandsTab(advanced: false)),
+        new(SlashCommands.AdvancedTabTitle, () => CommandsTab(advanced: true)),
         new("Keys", KeysTab),
     ];
 
     /// <summary>
     /// A Commands tab: <see cref="SlashCommands.HelpEntries"/> as two columns, A to Z with no blank rows (2026-09-27,
-    /// the user's call; the groups with a blank row between them until then) — <see cref="SlashCommands.HelpEntriesWithLog"/>
-    /// under <paramref name="log"/>, the app started with <c>--log</c> (2026-09-22). Since later on 2026-09-27 the entries are
-    /// split over two tabs: <see cref="SlashCommands.BasicCommands"/>, or every other one under <paramref name="advanced"/>
-    /// (<c>/log</c> among them). The label column is <see cref="SlashCommands.LabelWidth"/> on both, so switching tabs never
-    /// moves the summaries.
+    /// the user's call; the groups with a blank row between them until then; <c>/log</c> joined only under <c>--log</c> from
+    /// 2026-09-22 until 2026-10-02). Since later on 2026-09-27 the entries are split over two tabs:
+    /// <see cref="SlashCommands.BasicCommands"/>, or every other one under <paramref name="advanced"/> (<c>/log</c> among them).
+    /// The label column is <see cref="SlashCommands.LabelWidth"/> on both, so switching tabs never moves the summaries.
     /// </summary>
-    public static IRenderable CommandsTab(bool advanced, bool log = false)
+    public static IRenderable CommandsTab(bool advanced)
     {
         var grid = new Grid()
             .AddColumn(new GridColumn().NoWrap().Width(SlashCommands.LabelWidth).PadRight(SlashCommands.HelpColumnGap))
             .AddColumn(new GridColumn().PadRight(0));
-        foreach (var entry in SlashCommands.HelpEntriesFor(log).Where(entry => SlashCommands.IsBasic(entry) != advanced))
+        foreach (var entry in SlashCommands.HelpEntries.Where(entry => SlashCommands.IsBasic(entry) != advanced))
         {
             grid.AddRow(new Text(entry.Label, Theme.AccentSecondary), new Text(entry.Summary, Theme.Body));
         }
@@ -3116,24 +3120,17 @@ internal sealed partial class ChatScreen
     private IReadOnlyList<CompletionItem> CommandChoices()
     {
         var effective = _effective();
-        return CommandItems(effective.HideExitAutocomplete, hideQueue: !effective.QueueMessages, showLog: _logFile is not null);
+        return CommandItems(effective.HideExitAutocomplete, hideQueue: !effective.QueueMessages);
     }
 
     /// <summary>
     /// <see cref="SlashCommands.Completions"/> (or <see cref="SlashCommands.CompletionsWithoutExit"/>
     /// under <paramref name="hideExit"/>; less <see cref="SlashCommands.QueueWord"/> under
-    /// <paramref name="hideQueue"/>; the <c>…WithLog</c> lists, <c>/log</c> in them, under
-    /// <paramref name="showLog"/> — the app started with <c>--log</c>, 2026-09-22). With no flag the base list itself comes back. Pure; pinned.
+    /// <paramref name="hideQueue"/>). With no flag the base list itself comes back. Pure; pinned.
     /// </summary>
-    public static IReadOnlyList<CompletionItem> CommandItems(bool hideExit = false, bool hideQueue = false, bool showLog = false)
+    public static IReadOnlyList<CompletionItem> CommandItems(bool hideExit = false, bool hideQueue = false)
     {
-        var baseList = (hideExit, showLog) switch
-        {
-            (false, false) => SlashCommands.Completions,
-            (true, false) => SlashCommands.CompletionsWithoutExit,
-            (false, true) => SlashCommands.CompletionsWithLog,
-            (true, true) => SlashCommands.CompletionsWithoutExitWithLog,
-        };
+        var baseList = hideExit ? SlashCommands.CompletionsWithoutExit : SlashCommands.Completions;
         if (hideQueue)
         {
             baseList = baseList.Where(item => item.Text != SlashCommands.QueueWord).ToArray();
@@ -4026,42 +4023,68 @@ internal sealed partial class ChatScreen
 
     public static string UnknownCommandError(string token) => $"Unknown command {token}. /help lists them.";
 
-    /// <summary><c>/log</c>'s notice once the <c>--log</c> file is handed to the editor (2026-09-22). Pinned.</summary>
-    public static string LogOpenedNotice(string path) => $"({NoticeGlyphs.Log}opened the log {path} in your editor)";
-
-    /// <summary><c>/log</c> when the <c>--log</c> file is not there — it could not be opened at startup, or was deleted since. Pinned.</summary>
-    public static string LogMissingError(string path) => $"The log file {path} does not exist; --log could not open it.";
-
-    /// <summary><c>/log</c> when the editor launch fails. Pinned.</summary>
-    public static string LogOpenFailedError(string detail) => $"Could not open the log file: {detail}";
-
     /// <summary>
-    /// <c>/log</c> (2026-09-22, the user's ask): the <c>--log</c> file in the editor Windows associates with it,
-    /// through the same opener as <c>/persona</c> — no wait, the file keeps growing while it is read (the sink
-    /// shares it for reading and flushes per line). Only reached under <c>--log</c>: without it <c>/log</c> parses as unknown.
-    /// Quick under a reply, as <c>/explore</c> is.
+    /// <c>/log</c> (2026-10-02, the user's ask): the log window — the run's diagnostic lines in memory, following the newest
+    /// (<see cref="Viewer.LogWindow"/>) — opened, or brought forward when it is open; in any run, <c>--log</c> or not.
+    /// <c>/log --file</c> is what <c>/log</c> was from 2026-09-22: the <c>--log</c> file in the editor Windows associates with
+    /// it, through the same opener as <c>/persona</c> — no wait, the file keeps growing while it is read (the sink shares it
+    /// for reading and flushes per line) — and without <c>--log</c> there is no file to open. Quick under a reply, as
+    /// <c>/explore</c> is: the window has its own thread.
     /// </summary>
-    private void HandleLog()
+    private void HandleLog(string args)
     {
+        string word = args.Trim();
+        if (word.Length == 0)
+        {
+            OpenLogWindow();
+            return;
+        }
+
+        if (!string.Equals(word, LogViewText.FileSwitch, StringComparison.OrdinalIgnoreCase))
+        {
+            _transcript.Error(LogViewText.UsageError(word));
+            return;
+        }
+
         if (_logFile is not { } path)
         {
+            _transcript.Error(LogViewText.FileNeedsFlag);
             return;
         }
 
         if (!File.Exists(path))
         {
-            _transcript.Error(LogMissingError(path));
+            _transcript.Error(LogViewText.FileMissingError(path));
             return;
         }
 
         try
         {
             _openFile(path);
-            _transcript.Notice(LogOpenedNotice(path));
+            _transcript.Notice(LogViewText.FileOpenedNotice(path));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.ComponentModel.Win32Exception or InvalidOperationException)
         {
-            _transcript.Error(LogOpenFailedError(ex.Message));
+            _transcript.Error(LogViewText.FileOpenFailedError(ex.Message));
+        }
+    }
+
+    private void OpenLogWindow()
+    {
+        if (_openLogWindow is null)
+        {
+            _transcript.Error(LogViewText.Unavailable);
+            return;
+        }
+
+        try
+        {
+            _openLogWindow();
+            _transcript.Notice(LogViewText.WindowOpenedNotice);
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or PlatformNotSupportedException)
+        {
+            _transcript.Error(LogViewText.WindowFailedError(ex.Message));
         }
     }
 
@@ -9641,8 +9664,8 @@ internal sealed partial class ChatScreen
         }
     }
 
-    /// <summary>A typed line classified, <c>/log</c> a command only under <c>--log</c> (<see cref="_logFile"/>, 2026-09-22).</summary>
-    private (SlashCommand Command, string Args) ParseLine(string text) => SlashCommands.Parse(text, _logFile is not null);
+    /// <summary>A typed line classified (<c>/log</c> a command only under <c>--log</c> from 2026-09-22 until 2026-10-02).</summary>
+    private static (SlashCommand Command, string Args) ParseLine(string text) => SlashCommands.Parse(text);
 
     /// <summary>
     /// Dispatches one submitted line (<see cref="HandleOnceAsync"/>), then what a double-click off
@@ -9702,7 +9725,7 @@ internal sealed partial class ChatScreen
                 }
 
                 // No pane to open (a redirected console): the list in the transcript.
-                foreach (var line in (_logFile is null ? SlashCommands.HelpText : SlashCommands.HelpTextWithLog).Split('\n'))
+                foreach (var line in SlashCommands.HelpText.Split('\n'))
                 {
                     _transcript.Notice(line);
                 }
@@ -9935,7 +9958,7 @@ internal sealed partial class ChatScreen
                 return false;
 
             case SlashCommand.Log:
-                HandleLog();
+                HandleLog(args);
                 return false;
 
             case SlashCommand.Window:

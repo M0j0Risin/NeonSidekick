@@ -24,6 +24,7 @@ using NeonSidekick.Web;
 using LibGit2Sharp;
 using Spectre.Console;
 using Spectre.Console.Testing;
+using LogViewText = NeonSidekick.Viewer.LogViewText;
 
 namespace NeonSidekick.Tests;
 
@@ -83,7 +84,8 @@ public partial class ChatScreenTests : IDisposable
     private readonly FakePerfSource _perfSource = new();   // the performance bar (2026-09-29): what the fake machine reads
     private ChatScreen? _running;   // the screen RunAsync built, for a step that plays the viewer (2026-09-28)
     private Action<string, string>? _openImage;   // a double-clicked picture (later on 2026-09-24): null = the plain opener, _openedFiles   // /imagine and the image tools (2026-09-24): a client over a stub server
-    private string? _logFile;   // /log (2026-09-22): the --log file the screen is handed; null = started without --log
+    private string? _logFile;   // /log --file (2026-09-22): the --log file the screen is handed; null = started without --log
+    private Action? _openLogWindow;   // /log (2026-10-02): the log window's opener; null = no window here
     private Action<bool>? _mouse;
     private Action<bool>? _holdWheel;
     private readonly List<string> _copied = new();
@@ -278,7 +280,7 @@ public partial class ChatScreenTests : IDisposable
     private async Task<string> RunAsync(IAnsiConsoleInput input, CancellationToken cancellationToken = default)
     {
         _keys = new KeySource(input, TimeSpan.FromMilliseconds(1));
-        var screen = new ChatScreen(_console, _settings, () => _settings.Current, _overriddenBy, _session, _speech, _keys, _voice, _openFile ?? _openedFiles.Add, RenderScreen, _time, _geometry, mouse: _mouse, copyToClipboard: CopyToClipboard, random: _random, clipboardImage: _clipboardImage, web: _web, setTitle: _titles.Add, externalSkills: Path.Combine(_dir, "agents-skills"), holdWheel: _holdWheel, splash: _splash, editDraft: _editDraft, mcp: _mcp, logFile: _logFile, comfyClient: _comfyClient, openImage: _openImage, claude: _claudeCli, openViewer: _openViewer, viewPicture: _viewPicture, followViewer: _followViewer, printSpooler: _printSpooler, perfSource: () => _perfSource, haClient: _haClient, dockerClient: _dockerClient, camera: _cameraSystem, showShot: _shotsShown.Add);
+        var screen = new ChatScreen(_console, _settings, () => _settings.Current, _overriddenBy, _session, _speech, _keys, _voice, _openFile ?? _openedFiles.Add, RenderScreen, _time, _geometry, mouse: _mouse, copyToClipboard: CopyToClipboard, random: _random, clipboardImage: _clipboardImage, web: _web, setTitle: _titles.Add, externalSkills: Path.Combine(_dir, "agents-skills"), holdWheel: _holdWheel, splash: _splash, editDraft: _editDraft, mcp: _mcp, logFile: _logFile, comfyClient: _comfyClient, openImage: _openImage, claude: _claudeCli, openViewer: _openViewer, viewPicture: _viewPicture, followViewer: _followViewer, printSpooler: _printSpooler, perfSource: () => _perfSource, haClient: _haClient, dockerClient: _dockerClient, camera: _cameraSystem, showShot: _shotsShown.Add, openLogWindow: _openLogWindow);
         _running = screen;
         int code = await screen.RunAsync(cancellationToken);
         Assert.Equal(0, code);
@@ -10240,11 +10242,11 @@ public partial class ChatScreenTests : IDisposable
     }
 
     /// <summary>A Commands tab's rows, drawn wide enough that no summary wraps (the /profile row is the longest, 125 cells with its label).</summary>
-    private string[] CommandsTabLines(bool advanced, bool log = false)
+    private string[] CommandsTabLines(bool advanced)
     {
         var console = new TestConsole();
         console.Profile.Width = 240;
-        console.Write(ChatScreen.CommandsTab(advanced, log));
+        console.Write(ChatScreen.CommandsTab(advanced));
         return console.Output.TrimEnd('\n').Split('\n');
     }
 
@@ -13155,76 +13157,107 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("  ✗ " + ChatScreen.VaultNotAVaultError(plain), output);
     }
 
-    // ── /log (2026-09-22) ───────────────────────────────────────────────────
+    // ── /log (2026-09-22; the window since 2026-10-02) ──────────────────────
+
+    private static string LogSummary => SlashCommands.HelpEntries.Single(e => e.Command == "/log").Summary;
 
     [Fact]
-    public async Task Log_WithoutTheFlag_IsAnUnknownCommand_AndNoListNamesIt()
+    public async Task Log_OpensTheWindow_InAnyRun_AndHelpListsIt()
     {
+        int opened = 0;
+        _openLogWindow = () => opened++;
         PushLine("/log");
-        PushLine("/log now");
+        PushLine("/LOG");
         PushLine("/help");
         PushLine("/exit");
 
         string output = await RunAsync();
 
-        Assert.Contains("  ✗ " + ChatScreen.UnknownCommandError("/log"), output);
-        Assert.DoesNotContain(ChatScreen.NoArgumentError("/log"), output);   // no hint that the command exists
-        Assert.DoesNotContain(SlashCommands.LogEntry.Summary, output);        // /help printed without its row
-        Assert.Empty(_openedFiles);
-        Assert.DoesNotContain(ChatScreen.CommandItems(), i => i.Text == "/log");
-        Assert.DoesNotContain(ChatScreen.CommandItems(hideExit: true), i => i.Text == "/log");
+        Assert.Equal(2, opened);
+        Assert.Contains("  · " + LogViewText.WindowOpenedNotice, output);
+        Assert.Contains(LogSummary, output);   // /help's printed list has the row without --log
+        Assert.Empty(_openedFiles);            // the window, never the editor
+        Assert.Contains(ChatScreen.CommandItems(), i => i.Text == "/log");
+        Assert.Contains(ChatScreen.CommandItems(hideExit: true), i => i.Text == "/log");
     }
 
     [Fact]
-    public async Task Log_WithTheFlag_OpensTheFile_HelpListsIt_AndAMissingFileOrFailedEditorIsTheError()
+    public async Task Log_WithNoWindow_OrAWindowThatFails_SaysSo()
     {
+        PushLine("/log");
+        PushLine("/exit");
+        string output = await RunAsync();
+        Assert.Contains("  ✗ " + LogViewText.Unavailable, output);
+
+        _openLogWindow = () => throw new InvalidOperationException("no thread");
+        PushLine("/log");
+        PushLine("/exit");
+        output = await RunAsync();
+        Assert.Contains("  ✗ " + LogViewText.WindowFailedError("no thread"), output);
+        Assert.DoesNotContain(LogViewText.WindowOpenedNotice, output);
+    }
+
+    [Fact]
+    public async Task LogFile_UnderTheFlag_OpensTheFile_AndAMissingFileOrFailedEditorIsTheError()
+    {
+        int windows = 0;
+        _openLogWindow = () => windows++;
         _logFile = Path.Combine(_dir, "neon.log");
         File.WriteAllText(_logFile, "--- log opened ---\n");
-        PushLine("/log");
+        PushLine("/log --file");
         PushLine("/log now");
-        PushLine("/help");
         PushLine("/exit");
 
         string output = await RunAsync();
 
         Assert.Equal([_logFile], _openedFiles);
-        Assert.Contains("  · " + ChatScreen.LogOpenedNotice(_logFile), output);
-        Assert.Contains("  ✗ " + ChatScreen.NoArgumentError("/log"), output);
-        Assert.Contains(SlashCommands.LogEntry.Summary, output);   // /help's printed list has the row
+        Assert.Equal(0, windows);   // --file is the editor's, never the window's
+        Assert.Contains("  · " + LogViewText.FileOpenedNotice(_logFile), output);
+        Assert.Contains("  ✗ " + LogViewText.UsageError("now"), output);
 
         _openFile = _ => throw new System.ComponentModel.Win32Exception("no editor");
-        PushLine("/log");
+        PushLine("/log --FILE");
         PushLine("/exit");
         output = await RunAsync();
-        Assert.Contains("  ✗ " + ChatScreen.LogOpenFailedError("no editor"), output);
+        Assert.Contains("  ✗ " + LogViewText.FileOpenFailedError("no editor"), output);
 
         File.Delete(_logFile);
         _openFile = null;
-        PushLine("/log");
+        PushLine("/log --file");
         PushLine("/exit");
         output = await RunAsync();
-        Assert.Contains("  ✗ " + ChatScreen.LogMissingError(_logFile), output);
+        Assert.Contains("  ✗ " + LogViewText.FileMissingError(_logFile), output);
         Assert.Single(_openedFiles);   // the missing file never reached the editor
     }
 
     [Fact]
-    public void Log_IsQuickUnderAReply_AndCommandItemsListIt_OnlyUnderTheFlag()
+    public async Task LogFile_WithoutTheFlag_SaysTheFlagIsNeeded()
     {
-        Assert.Equal(MidTurnClass.Quick, ChatScreen.MidTurnPolicy(SlashCommand.Log, hasArgs: false));
-        Assert.Same(SlashCommands.CompletionsWithLog, ChatScreen.CommandItems(showLog: true));
-        Assert.Same(SlashCommands.CompletionsWithoutExitWithLog, ChatScreen.CommandItems(hideExit: true, showLog: true));
-        Assert.DoesNotContain(ChatScreen.CommandItems(hideQueue: true, showLog: true), i => i.Text == "/queue");
-        Assert.Contains(ChatScreen.CommandItems(hideQueue: true, showLog: true), i => i.Text == "/log");
+        PushLine("/log --file");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains("  ✗ " + LogViewText.FileNeedsFlag, output);
+        Assert.Empty(_openedFiles);
     }
 
     [Fact]
-    public void CommandsTab_UnderTheFlag_HasTheLogRow_InItsSortedPlace()
+    public void Log_IsQuickUnderAReply_WithOrWithoutTheSwitch()
+    {
+        Assert.Equal(MidTurnClass.Quick, ChatScreen.MidTurnPolicy(SlashCommand.Log, hasArgs: false));
+        Assert.Equal(MidTurnClass.Quick, ChatScreen.MidTurnPolicy(SlashCommand.Log, LogViewText.FileSwitch));
+        Assert.DoesNotContain(ChatScreen.CommandItems(hideQueue: true), i => i.Text == "/queue");
+        Assert.Contains(ChatScreen.CommandItems(hideQueue: true), i => i.Text == "/log");
+    }
+
+    [Fact]
+    public void CommandsTab_HasTheLogRow_InItsSortedPlace()
     {
         // On the advanced tab since later on 2026-09-27 (the one Commands tab until then); never on the basic one.
-        string[] lines = CommandsTabLines(advanced: true, log: true);
-        Assert.Equal(SlashCommands.HelpEntries.Count(e => !SlashCommands.IsBasic(e)) + 1, lines.Length);   // the advanced rows and the /log row
-        Assert.DoesNotContain(CommandsTabLines(advanced: false, log: true), l => l.StartsWith("/log", StringComparison.Ordinal));
-        int log = Array.FindIndex(lines, l => l.StartsWith(HelpRow("/log", SlashCommands.LogEntry.Summary), StringComparison.Ordinal));
+        string[] lines = CommandsTabLines(advanced: true);
+        Assert.DoesNotContain(CommandsTabLines(advanced: false), l => l.StartsWith("/log", StringComparison.Ordinal));
+        int log = Array.FindIndex(lines, l => l.StartsWith(HelpRow("/log", LogSummary), StringComparison.Ordinal));
         Assert.StartsWith(HelpRow("/learn", "write or improve a skill"), lines[log - 1]);   // A to Z since 2026-09-27 (directly above /help until then)
         Assert.StartsWith(HelpRow("/loop", "repeat a message"), lines[log + 1]);
     }

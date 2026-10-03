@@ -640,6 +640,8 @@ public sealed class AppSettings : IDisposable
         ViewerTop = source.ViewerTop,
         CameraWindowLeft = source.CameraWindowLeft,
         CameraWindowTop = source.CameraWindowTop,
+        LogWindowLeft = source.LogWindowLeft,
+        LogWindowTop = source.LogWindowTop,
         HideExitAutocomplete = source.HideExitAutocomplete,
         ImageThumbnailSize = source.ImageThumbnailSize,
         Memory = source.Memory,

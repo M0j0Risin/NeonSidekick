@@ -239,6 +239,7 @@ internal sealed unsafe class PictureWindowThread
     private readonly ConcurrentQueue<Change> _changes = new();
     private readonly ManualResetEventSlim _ready = new();
     private readonly Lock _gate = new();
+    private readonly WindowChrome _chrome = new("picture viewer");
     private readonly string? _startFolder;
     private readonly string? _startSelect;
     private readonly bool _startActivate;
@@ -266,11 +267,8 @@ internal sealed unsafe class PictureWindowThread
     private int _loadVersion;
     private CancellationTokenSource? _load;
     private (int Version, string Path, ViewerBitmap? Bitmap)? _loaded;
-    private bool _fullScreen;
     private ViewerStyle? _style;
     private IntPtr _background;
-    private IntPtr _savedStyle;
-    private WindowPlacement _savedPlacement;
     private bool _ole;
     private (int X, int Y)? _press;
 
@@ -549,17 +547,15 @@ internal sealed unsafe class PictureWindowThread
             }
 
             // Where it last closed first (2026-09-28), so the size below is the DPI of the monitor it opens on.
-            RestorePosition();
-            uint dpi = Math.Max(96u, GetDpiForWindow(_hwnd));
-            int width = _camera ? LiveWidth : DefaultWidth;
-            int height = _camera ? LiveHeight : DefaultHeight;
-            SetWindowPos(_hwnd, HwndTop, 0, 0, (int)(width * dpi / 96), (int)(height * dpi / 96), SwpNoMove | SwpNoZOrder | SwpNoActivate);
+            _chrome.Window = _hwnd;
+            _chrome.RestorePosition(_camera ? PictureWindow.LivePosition : PictureWindow.Position);
+            _chrome.SizeForDpi(_camera ? LiveWidth : DefaultWidth, _camera ? LiveHeight : DefaultHeight);
             ApplyStyle();   // before it is shown: the bar is never light first
             if (_live is { } live)
             {
                 SetWindowTextW(_hwnd, live.Title);
                 ShowWindow(_hwnd, SwShowNoActivate);
-                RaiseQuietly();
+                _chrome.RaiseQuietly();
                 DiagnosticLog.Info("Viewer", "Camera window opened.");
             }
             else
@@ -569,12 +565,12 @@ internal sealed unsafe class PictureWindowThread
                 if (_startActivate)
                 {
                     ShowWindow(_hwnd, SwShow);
-                    BringForward();
+                    _chrome.BringForward();
                 }
                 else
                 {
                     ShowWindow(_hwnd, SwShowNoActivate);
-                    RaiseQuietly();
+                    _chrome.RaiseQuietly();
                 }
 
                 DiagnosticLog.Info("Viewer", $"Picture viewer opened on {_startFolder}.");
@@ -643,7 +639,7 @@ internal sealed unsafe class PictureWindowThread
             case WmKeyDown:
             case WmSysKeyDown when (int)wParam == ViewerState.VkF10:   // F10 (random order) is the menu key: a system key, its menu mode not wanted
             {
-                var action = ViewerState.ActionFor((int)wParam, _fullScreen, _state.SlideShow);
+                var action = ViewerState.ActionFor((int)wParam, _chrome.FullScreen, _state.SlideShow);
                 if (_live is not null)
                 {
                     // A camera's picture (2026-10-02): full screen and closing only.
@@ -737,12 +733,12 @@ internal sealed unsafe class PictureWindowThread
 
                 if (activate)
                 {
-                    BringForward();
+                    _chrome.BringForward();
                 }
                 else
                 {
                     ShowWindow(_hwnd, SwShowNoActivate);
-                    RaiseQuietly();
+                    _chrome.RaiseQuietly();
                 }
 
                 return IntPtr.Zero;
@@ -828,7 +824,7 @@ internal sealed unsafe class PictureWindowThread
 
             case WmClose:
                 LeaveLive();
-                RememberPosition();
+                _chrome.RememberPosition(_camera ? PictureWindow.LivePlaced : PictureWindow.Placed);
                 DestroyWindow(hwnd);
                 return IntPtr.Zero;
             case WmDestroy:
@@ -860,7 +856,7 @@ internal sealed unsafe class PictureWindowThread
         SetWindowTextW(_hwnd, view.Title);
         InvalidateRect(_hwnd, null, false);
         ShowWindow(_hwnd, SwShowNoActivate);
-        RaiseQuietly();
+        _chrome.RaiseQuietly();
     }
 
     // The newest frame (or held shot, or title) of the live use: painted; the frame it replaces goes back for reuse.
@@ -911,22 +907,15 @@ internal sealed unsafe class PictureWindowThread
         return true;
     }
 
-    // Above the other windows without the keyboard (2026-10-02): the camera pane in the terminal keeps its keys.
-    private void RaiseQuietly()
-    {
-        SetWindowPos(_hwnd, HwndTopmost, 0, 0, 0, 0, SwpNoMove | SwpNoSize | SwpNoActivate);
-        SetWindowPos(_hwnd, HwndNoTopmost, 0, 0, 0, 0, SwpNoMove | SwpNoSize | SwpNoActivate);
-    }
-
     private void Do(ViewerAction action)
     {
         switch (action)
         {
             case ViewerAction.ToggleFullScreen:
-                SetFullScreen(!_fullScreen);
+                _chrome.SetFullScreen(!_chrome.FullScreen);
                 break;
             case ViewerAction.LeaveFullScreen:
-                SetFullScreen(false);
+                _chrome.SetFullScreen(false);
                 break;
             case ViewerAction.Close:
                 PostMessageW(_hwnd, WmClose, IntPtr.Zero, IntPtr.Zero);
@@ -1293,30 +1282,14 @@ internal sealed unsafe class PictureWindowThread
     // changed. The HRESULTs are ignored: an older Windows refuses the colours and keeps its bar.
     private void ApplyStyle()
     {
-        bool themed;
-        try
-        {
-            themed = PictureWindow.Themed();
-        }
-        catch (Exception ex)
-        {
-            DiagnosticLog.Warn("Viewer", $"Could not read Themed image viewer: {ex.Message}");
-            themed = true;
-        }
-
-        var style = ViewerStyle.For(NeonSidekick.UI.Theme.Current, themed);
+        var style = ViewerStyle.For(NeonSidekick.UI.Theme.Current, _chrome.Themed());
         if (_style == style)
         {
             return;
         }
 
         _style = style;
-        int dark = 1;
-        uint caption = style.Caption, text = style.CaptionText, border = style.Border;
-        DwmSetWindowAttribute(_hwnd, DwmwaUseImmersiveDarkMode, &dark, sizeof(int));
-        DwmSetWindowAttribute(_hwnd, DwmwaCaptionColor, &caption, sizeof(uint));
-        DwmSetWindowAttribute(_hwnd, DwmwaTextColor, &text, sizeof(uint));
-        DwmSetWindowAttribute(_hwnd, DwmwaBorderColor, &border, sizeof(uint));
+        _chrome.ApplyCaption(style);
 
         IntPtr old = _background;
         _background = CreateSolidBrush(style.Background);
@@ -1326,125 +1299,5 @@ internal sealed unsafe class PictureWindowThread
         }
 
         InvalidateRect(_hwnd, null, false);
-    }
-
-    // The window, not yet shown, moved to where the last one closed (PictureWindow.Position): its placement's restored
-    // rectangle carried to the corner at its own size, the show state left hidden for the ShowWindow that follows.
-    // SetWindowPlacement keeps a window that would land off every monitor on one, so a corner saved on a monitor since
-    // unplugged still opens in view.
-    private void RestorePosition()
-    {
-        (int X, int Y)? at;
-        try
-        {
-            at = (_camera ? PictureWindow.LivePosition : PictureWindow.Position)?.Invoke();
-        }
-        catch (Exception ex) when (ex is not OutOfMemoryException)
-        {
-            DiagnosticLog.Warn("Viewer", $"Could not read the viewer's last position: {ex.Message}");
-            return;
-        }
-
-        var placement = new WindowPlacement { length = (uint)sizeof(WindowPlacement) };
-        if (at is not { } corner || !GetWindowPlacement(_hwnd, &placement))
-        {
-            return;
-        }
-
-        var r = placement.rcNormalPosition;
-        placement.rcNormalPosition = new Rect { Left = corner.X, Top = corner.Y, Right = corner.X + (r.Right - r.Left), Bottom = corner.Y + (r.Bottom - r.Top) };
-        placement.flags = 0;
-        placement.showCmd = (uint)SwHide;
-        SetWindowPlacement(_hwnd, &placement);
-    }
-
-    // Where the window is as it closes, for the next one (PictureWindow.Placed): the restored placement's corner — the one
-    // saved before F11 when it is full screen — never the maximized or minimized frame.
-    private void RememberPosition()
-    {
-        if ((_camera ? PictureWindow.LivePlaced : PictureWindow.Placed) is not { } placed)
-        {
-            return;
-        }
-
-        var placement = _savedPlacement;
-        if (!_fullScreen)
-        {
-            placement = new WindowPlacement { length = (uint)sizeof(WindowPlacement) };
-            if (!GetWindowPlacement(_hwnd, &placement))
-            {
-                return;
-            }
-        }
-
-        try
-        {
-            placed(placement.rcNormalPosition.Left, placement.rcNormalPosition.Top);
-        }
-        catch (Exception ex) when (ex is not OutOfMemoryException)
-        {
-            DiagnosticLog.Warn("Viewer", $"Could not keep the viewer's position: {ex.Message}");
-        }
-    }
-
-    // Borderless over the whole monitor and back to the placement it had (FolderPictureViewer's F11).
-    private void SetFullScreen(bool on)
-    {
-        if (on == _fullScreen)
-        {
-            return;
-        }
-
-        if (on)
-        {
-            _savedStyle = GetWindowLongPtr(_hwnd, GwlStyle);
-            var placement = new WindowPlacement { length = (uint)sizeof(WindowPlacement) };
-            GetWindowPlacement(_hwnd, &placement);
-            _savedPlacement = placement;
-            var monitor = new MonitorInfo { cbSize = (uint)sizeof(MonitorInfo) };
-            GetMonitorInfoW(MonitorFromWindow(_hwnd, MonitorDefaultToNearest), &monitor);
-            SetWindowLongPtr(_hwnd, GwlStyle, new IntPtr((long)(WsPopup | WsVisible)));
-            var r = monitor.rcMonitor;
-            SetWindowPos(_hwnd, HwndTop, r.Left, r.Top, r.Right - r.Left, r.Bottom - r.Top, SwpFrameChanged | SwpShowWindow);
-        }
-        else
-        {
-            SetWindowLongPtr(_hwnd, GwlStyle, _savedStyle);
-            var placement = _savedPlacement;
-            SetWindowPlacement(_hwnd, &placement);
-            SetWindowPos(_hwnd, IntPtr.Zero, 0, 0, 0, 0, SwpNoMove | SwpNoSize | SwpNoZOrder | SwpFrameChanged | SwpShowWindow);
-        }
-
-        _fullScreen = on;
-    }
-
-    // In front of the terminal. Windows lets only the foreground thread take the foreground, and that is the terminal's,
-    // not ours (the click reached it, not us): the input is shared with it for the call, and a moment on top covers the
-    // case where even that is refused.
-    private void BringForward()
-    {
-        if (IsIconic(_hwnd))
-        {
-            ShowWindow(_hwnd, SwRestore);
-        }
-
-        IntPtr foreground = GetForegroundWindow();
-        uint theirs = foreground == IntPtr.Zero ? 0 : GetWindowThreadProcessId(foreground, IntPtr.Zero);
-        uint ours = GetCurrentThreadId();
-        bool attached = theirs != 0 && theirs != ours && AttachThreadInput(ours, theirs, true);
-        try
-        {
-            SetWindowPos(_hwnd, HwndTopmost, 0, 0, 0, 0, SwpNoMove | SwpNoSize);
-            SetWindowPos(_hwnd, HwndNoTopmost, 0, 0, 0, 0, SwpNoMove | SwpNoSize);
-            BringWindowToTop(_hwnd);
-            SetForegroundWindow(_hwnd);
-        }
-        finally
-        {
-            if (attached)
-            {
-                AttachThreadInput(ours, theirs, false);
-            }
-        }
     }
 }

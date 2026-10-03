@@ -154,7 +154,12 @@ public enum SlashCommand
     /// <summary><c>/window</c> (<c>/windowsize</c> until later on 2026-09-19): the terminal window's width and height, for information.</summary>
     Window,
 
-    /// <summary><c>/log</c> (2026-09-22, the user's ask): the <c>--log</c> file opened in the editor Windows associates with it. Only a command when the app was started with <c>--log</c> — without the flag it parses as <see cref="Unknown"/> and neither <c>/help</c> nor the completion list names it (<see cref="SlashCommands.Parse(string, bool)"/>). No argument.</summary>
+    /// <summary>
+    /// <c>/log</c> (2026-09-22, the user's ask): the <c>--log</c> file opened in the editor Windows associates with it, and only
+    /// a command under <c>--log</c>. Since 2026-10-02 (the user's ask) a command in every run: the bare word opens the log window
+    /// (<see cref="Viewer.LogWindow"/>, over the run's lines in memory), and <c>/log --file</c> the <c>--log</c> file in the
+    /// editor as before.
+    /// </summary>
     Log,
 
     /// <summary><c>/about</c>: the app's version, runtime, folders, servers, third-party components and licence, in the info pane.</summary>
@@ -295,6 +300,7 @@ public static class SlashCommands
             new("/interrupt", "toggle the speech input wake word interrupt, or /interrupt on|off"),
             new("/keycopy", "copy this profile's LLM API key, Claude API key and Home Assistant API key into another profile, replacing its own (asks first): /keycopy <profile>"),
             new("/learn", "write or improve a skill from the last turn or the stored sessions, in the background: /learn [what to keep] | sessions [N | what to search]"),
+            new("/log", "open the diagnostic log in a window that follows it, or /log --file for the --log file in your editor"),
             new("/loop", "repeat a message, each reply waited for: /loop <count> [delay] <message> | infinite [delay] <message> (ESC ends it)"),
             new("/mcp", "connect external MCP servers and switch their tools on or off on a pane"),
             new("/memory", "list and prune memory items, or /memory forget | edit | copy <profile> [overwrite]"),
@@ -334,23 +340,9 @@ public static class SlashCommands
             new("/window", "show the terminal window's width and height"),
         }.OrderBy(entry => entry.Command, StringComparer.Ordinal).ToArray();
 
-    /// <summary><c>/log</c>'s row (2026-09-22, the user's ask): listed only when the app was started with <c>--log</c>, in its sorted place (<see cref="HelpEntriesWithLog"/>; directly above <c>/help</c> until the list went alphabetical on 2026-09-27). Pinned.</summary>
-    public static readonly HelpEntry LogEntry = new("/log", "open the diagnostic log file (--log) in your editor");
-
-    /// <summary>
-    /// <see cref="HelpEntries"/> with <see cref="LogEntry"/> in its sorted place — the list under <c>--log</c> (2026-09-22).
-    /// <see cref="HelpEntries"/>, <see cref="HelpText"/>, <see cref="Completions"/> and <see cref="Words"/> stay the
-    /// list without the flag. Pinned.
-    /// </summary>
-    public static readonly IReadOnlyList<HelpEntry> HelpEntriesWithLog =
-        HelpEntries.Append(LogEntry).OrderBy(entry => entry.Command, StringComparer.Ordinal).ToArray();
-
-    /// <summary><see cref="HelpEntriesWithLog"/> when <paramref name="log"/> (the app started with <c>--log</c>), else <see cref="HelpEntries"/>.</summary>
-    public static IReadOnlyList<HelpEntry> HelpEntriesFor(bool log) => log ? HelpEntriesWithLog : HelpEntries;
-
     /// <summary>
     /// The commands on <c>/help</c>'s <see cref="BasicTabTitle"/> tab (2026-09-27, the user's list): the everyday ones, so the
-    /// first tab fits without scrolling. Every other command — and <c>/log</c> under <c>--log</c> — is on
+    /// first tab fits without scrolling. Every other command (<c>/log</c> among them) is on
     /// <see cref="AdvancedTabTitle"/>. Only the pane is split: <see cref="HelpText"/>, <see cref="Completions"/> and
     /// <see cref="LabelWidth"/> stay the one A-to-Z list. Pinned.
     /// </summary>
@@ -385,14 +377,6 @@ public static class SlashCommands
     public static readonly IReadOnlyList<UI.CompletionItem> CompletionsWithoutExit =
         Completions.Where(item => item.Text != "/exit").ToArray();
 
-    /// <summary><see cref="Completions"/> with <c>/log</c> in its sorted place: the list under <c>--log</c> (2026-09-22). Pinned.</summary>
-    public static readonly IReadOnlyList<UI.CompletionItem> CompletionsWithLog =
-        Completions.Append(new UI.CompletionItem(LogEntry.Command, LogEntry.Summary)).OrderBy(item => item.Text, StringComparer.Ordinal).ToArray();
-
-    /// <summary><see cref="CompletionsWithLog"/> less <c>/exit</c>, as <see cref="CompletionsWithoutExit"/> is <see cref="Completions"/> less it. Pinned.</summary>
-    public static readonly IReadOnlyList<UI.CompletionItem> CompletionsWithoutExitWithLog =
-        CompletionsWithLog.Where(item => item.Text != "/exit").ToArray();
-
     /// <summary>The blank cells between the label column and the summary, on the pane and in <see cref="HelpText"/> alike.</summary>
     public const int HelpColumnGap = 2;
 
@@ -409,9 +393,6 @@ public static class SlashCommands
     /// <summary>Printed by <c>/help</c> when there is no pane to open (a redirected console): a line per command, A to Z, no blank lines (the groups with a blank line between them until 2026-09-27). Pinned by tests.</summary>
     public static readonly string HelpText = BuildHelpText(HelpEntries);
 
-    /// <summary><see cref="HelpText"/> over <see cref="HelpEntriesWithLog"/>: what <c>/help</c> prints under <c>--log</c> with no pane to open (2026-09-22). Pinned.</summary>
-    public static readonly string HelpTextWithLog = BuildHelpText(HelpEntriesWithLog);
-
     private static string BuildHelpText(IReadOnlyList<HelpEntry> entries)
     {
         var text = new System.Text.StringBuilder("Commands:\n");
@@ -424,7 +405,7 @@ public static class SlashCommands
     }
 
     /// <summary>Every command word, for help and completion.</summary>
-    public static readonly string[] Words = { "/help", "/clear", "/new", "/splash", "/rewind", "/theme", "/queue", "/sessions", "/compact", "/server", "/model", "/reasoning", "/sampling", "/settings", "//", "/tools", "/mcp", "/tts", "/stt", "/wake", "/interrupt", "/speak", "/remember", "/memory", "/cmdcopy", "/keycopy", "/cmdclear", "/cmdlist", "/police", "/persona", "/operata", "/vocalia", "/sys", "/usage", "/perf", "/tb", "/header", "/profile", "/timer", "/cwd", "/tree", "/vault", "/explore", "/view", "/imagine", "/comfy", "/ha", "/docker", "/camera", "/print", "/echo", "/gituser", "/copy", "/draft", "/loop", "/plan", "/botchat", "/claude", "/test", "/expand", "/collapse", "/window", "/skills", "/learn", "/about", "/exit" };
+    public static readonly string[] Words = { "/help", "/clear", "/new", "/splash", "/rewind", "/theme", "/queue", "/sessions", "/compact", "/server", "/model", "/reasoning", "/sampling", "/settings", "//", "/tools", "/mcp", "/tts", "/stt", "/wake", "/interrupt", "/speak", "/remember", "/memory", "/cmdcopy", "/keycopy", "/cmdclear", "/cmdlist", "/police", "/persona", "/operata", "/vocalia", "/sys", "/usage", "/perf", "/tb", "/header", "/profile", "/timer", "/cwd", "/tree", "/vault", "/explore", "/log", "/view", "/imagine", "/comfy", "/ha", "/docker", "/camera", "/print", "/echo", "/gituser", "/copy", "/draft", "/loop", "/plan", "/botchat", "/claude", "/test", "/expand", "/collapse", "/window", "/skills", "/learn", "/about", "/exit" };
 
     /// <summary>The <c>/queue</c> word: what a double-click on the hint row's queued part sends through the mid-turn line hook, so the pane opens exactly as the typed command's does (2026-09-18). Pinned.</summary>
     public const string QueueWord = "/queue";
@@ -451,10 +432,9 @@ public static class SlashCommands
 
     /// <summary>
     /// Classifies <paramref name="line"/>; <c>Args</c> is the trimmed remainder — meaningful for the commands <see cref="TakesArgument"/> names, and carried by <see cref="SlashCommand.Overloaded"/> for the error line.
-    /// <paramref name="log"/> is whether the app was started with <c>--log</c> (2026-09-22): only then is <c>/log</c> <see cref="SlashCommand.Log"/>;
-    /// without it <c>/log</c>, argument or not, is <see cref="SlashCommand.Unknown"/>, so no error hints the command exists.
+    /// <c>/log</c> was a command only under <c>--log</c> from 2026-09-22 until 2026-10-02, when it took to the log window.
     /// </summary>
-    public static (SlashCommand Command, string Args) Parse(string line, bool log = false)
+    public static (SlashCommand Command, string Args) Parse(string line)
     {
         ArgumentNullException.ThrowIfNull(line);
         string trimmed = line.Trim();
@@ -530,7 +510,7 @@ public static class SlashCommands
             "/collapse" => SlashCommand.Collapse,
             "/gituser" => SlashCommand.GitUser,
             "/window" => SlashCommand.Window,
-            "/log" => log ? SlashCommand.Log : SlashCommand.Unknown,
+            "/log" => SlashCommand.Log,
             "/about" => SlashCommand.About,
             "/skills" => SlashCommand.Skills,
             "/learn" => SlashCommand.Learn,
@@ -559,5 +539,6 @@ public static class SlashCommands
         or SlashCommand.Remember or SlashCommand.Memory or SlashCommand.CmdCopy or SlashCommand.KeyCopy or SlashCommand.Profile or SlashCommand.Timer
         or SlashCommand.Cwd or SlashCommand.Tree or SlashCommand.Vault or SlashCommand.Explore or SlashCommand.Copy or SlashCommand.Session or SlashCommand.GitUser
         or SlashCommand.Loop or SlashCommand.Plan or SlashCommand.BotChat or SlashCommand.Claude or SlashCommand.Queue or SlashCommand.Skills or SlashCommand.Test
-        or SlashCommand.HomeAssistant or SlashCommand.Docker or SlashCommand.Camera or SlashCommand.Print or SlashCommand.Perf or SlashCommand.Tb or SlashCommand.Header or SlashCommand.Rewind;
+        or SlashCommand.HomeAssistant or SlashCommand.Docker or SlashCommand.Camera or SlashCommand.Print or SlashCommand.Perf or SlashCommand.Tb or SlashCommand.Header or SlashCommand.Rewind
+        or SlashCommand.Log;
 }

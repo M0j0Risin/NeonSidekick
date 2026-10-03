@@ -88,6 +88,10 @@ if (options.ShowVersion)
     return 0;
 }
 
+// The run's diagnostic lines in memory (2026-10-02): /log's window shows them, --log or not. Attached before the --log sink
+// opens, so the window starts at the run's first line; the interactive screen alone has the window.
+using var logBuffer = !options.Headless && !options.IsCheck ? DiagnosticBuffer.Attach() : null;
+
 // --log <path>: every diagnostic line, Trace and up, appended to a file. The TUI shows only
 // warnings, so this is how "what did the wake recogniser hear" is answered in the field. A path
 // that cannot be opened is reported once and the run goes on without it.
@@ -157,7 +161,7 @@ Console.CancelKeyPress += (_, e) =>
 var geometry = ScreenGeometry.ForConsole();
 bool interactive = !options.Headless && !options.IsCheck;
 using var consoleInput = interactive && geometry is not null ? WindowsConsoleInput.TryCreate() : null;
-var app = new SidekickApp(console, settings, environment, geometry: geometry, input: consoleInput, clipboard: WindowsClipboard.TryReadText, copyToClipboard: WindowsClipboard.TrySetText, clipboardImage: WindowsClipboard.TryReadImage, setTitle: title => ConsoleTitle.TrySet(title), openViewer: NeonSidekick.Viewer.PictureWindow.IsAvailable ? NeonSidekick.Viewer.PictureWindow.Open : null, viewPicture: NeonSidekick.Viewer.PictureWindow.IsAvailable ? NeonSidekick.Viewer.PictureWindow.OpenAt : null, followViewer: NeonSidekick.Viewer.PictureWindow.IsAvailable ? NeonSidekick.Viewer.PictureWindow.Follow : null, printSpooler: OperatingSystem.IsWindows() ? new NeonSidekick.Printing.WindowsPrintSpooler() : null, embeddedLlm: NeonSidekick.EmbeddedLlm.EmbeddedEndpoint.Offered ? () => NeonSidekick.EmbeddedLlm.EmbeddedLlmService.Create(settings.EmbeddedModelsDirectory, settings.LlamaDirectory) : null, perfSource: NeonSidekick.Perf.PerfSources.CreateDefault, frames: frames, camera: OperatingSystem.IsWindows() ? new NeonSidekick.Camera.MediaFoundationCameraSystem() : null, liveView: NeonSidekick.Viewer.PictureWindow.IsAvailable ? NeonSidekick.Viewer.PictureWindow.ShowLive : null, showShot: NeonSidekick.Viewer.PictureWindow.IsAvailable ? picture => NeonSidekick.Viewer.PictureWindow.OpenAt(picture, activate: false) : null);
+var app = new SidekickApp(console, settings, environment, geometry: geometry, input: consoleInput, clipboard: WindowsClipboard.TryReadText, copyToClipboard: WindowsClipboard.TrySetText, clipboardImage: WindowsClipboard.TryReadImage, setTitle: title => ConsoleTitle.TrySet(title), openViewer: NeonSidekick.Viewer.PictureWindow.IsAvailable ? NeonSidekick.Viewer.PictureWindow.Open : null, viewPicture: NeonSidekick.Viewer.PictureWindow.IsAvailable ? NeonSidekick.Viewer.PictureWindow.OpenAt : null, followViewer: NeonSidekick.Viewer.PictureWindow.IsAvailable ? NeonSidekick.Viewer.PictureWindow.Follow : null, printSpooler: OperatingSystem.IsWindows() ? new NeonSidekick.Printing.WindowsPrintSpooler() : null, embeddedLlm: NeonSidekick.EmbeddedLlm.EmbeddedEndpoint.Offered ? () => NeonSidekick.EmbeddedLlm.EmbeddedLlmService.Create(settings.EmbeddedModelsDirectory, settings.LlamaDirectory) : null, perfSource: NeonSidekick.Perf.PerfSources.CreateDefault, frames: frames, camera: OperatingSystem.IsWindows() ? new NeonSidekick.Camera.MediaFoundationCameraSystem() : null, liveView: NeonSidekick.Viewer.PictureWindow.IsAvailable ? NeonSidekick.Viewer.PictureWindow.ShowLive : null, showShot: NeonSidekick.Viewer.PictureWindow.IsAvailable ? picture => NeonSidekick.Viewer.PictureWindow.OpenAt(picture, activate: false) : null, openLogWindow: NeonSidekick.Viewer.LogWindow.IsAvailable && logBuffer is not null ? () => NeonSidekick.Viewer.LogWindow.Show(logBuffer) : null);
 
 // The console window closed by its X button (2026-10-02, the user's report: Docker server stop on exit never ran then).
 // SIGHUP is CTRL_CLOSE_EVENT on Windows (a hangup elsewhere): no finally of the run's runs after it, and Windows ends the
@@ -208,6 +212,19 @@ NeonSidekick.Viewer.PictureWindow.LivePlaced = (x, y) =>
         });
     }
 };
+// The log window keeps a place of its own too (2026-10-02).
+NeonSidekick.Viewer.LogWindow.Position = () => settings.Current is { LogWindowLeft: int x, LogWindowTop: int y } ? (x, y) : null;
+NeonSidekick.Viewer.LogWindow.Placed = (x, y) =>
+{
+    if (settings.Current is not { LogWindowLeft: int left, LogWindowTop: int top } || left != x || top != y)
+    {
+        settings.Update(d =>
+        {
+            d.LogWindowLeft = x;
+            d.LogWindowTop = y;
+        });
+    }
+};
 int exitCode;
 try
 {
@@ -225,8 +242,10 @@ catch (Exception ex) when (ex is not OperationCanceledException)
     exitCode = 1;
 }
 
-// The picture viewer (2026-09-27) closes with the app; its thread is a background one, this is the tidy way.
+// The picture viewer (2026-09-27) and the log window (2026-10-02) close with the app; their threads are background ones,
+// this is the tidy way (and the log window remembers its place).
 NeonSidekick.Viewer.PictureWindow.CloseAll();
+NeonSidekick.Viewer.LogWindow.Close();
 
 // A change made in the last quarter-second before quitting must not be lost to the debounce.
 await settings.FlushAsync().ConfigureAwait(false);

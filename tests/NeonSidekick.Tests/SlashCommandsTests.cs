@@ -373,7 +373,7 @@ public class SlashCommandsTests
             SlashCommand.Persona, SlashCommand.Operata, SlashCommand.Vocalia,
             SlashCommand.Remember, SlashCommand.Memory, SlashCommand.CmdCopy, SlashCommand.KeyCopy, SlashCommand.Profile, SlashCommand.Timer,   // /cmdcopy 2026-09-21; /keycopy 2026-09-28; /memory 2026-09-22 (forget, then copy <profile> [overwrite], the folded /memcopy)
             SlashCommand.Cwd, SlashCommand.Tree, SlashCommand.Vault, SlashCommand.Explore, SlashCommand.Copy, SlashCommand.Session, SlashCommand.GitUser,   // /vault [path] 2026-09-23
-            SlashCommand.Loop, SlashCommand.Plan, SlashCommand.BotChat, SlashCommand.Claude, SlashCommand.Queue, SlashCommand.Skills, SlashCommand.Test, SlashCommand.HomeAssistant, SlashCommand.Docker, SlashCommand.Camera, SlashCommand.Print, SlashCommand.Perf, SlashCommand.Tb, SlashCommand.Header, SlashCommand.Rewind,   // /camera and /docker 2026-10-02; /header [on|off] later still on 2026-10-01; /tb [on|off] later on 2026-09-30; /rewind [n] 2026-09-30; /perf later on 2026-09-29; /print 2026-09-28; /ha 2026-09-28; /test 2026-09-28; /claude 2026-09-27; /skills add 2026-09-26; /plan 2026-09-26; /botchat 2026-09-24; 2026-09-21 (/queue clear later that day; /skills with edit <name> from then until 2026-09-23); /tools off the list later on 2026-09-22, its expand and collapse root words
+            SlashCommand.Loop, SlashCommand.Plan, SlashCommand.BotChat, SlashCommand.Claude, SlashCommand.Queue, SlashCommand.Skills, SlashCommand.Test, SlashCommand.HomeAssistant, SlashCommand.Docker, SlashCommand.Camera, SlashCommand.Print, SlashCommand.Perf, SlashCommand.Tb, SlashCommand.Header, SlashCommand.Rewind, SlashCommand.Log,   // /log [--file] later on 2026-10-02; /camera and /docker 2026-10-02; /header [on|off] later still on 2026-10-01; /tb [on|off] later on 2026-09-30; /rewind [n] 2026-09-30; /perf later on 2026-09-29; /print 2026-09-28; /ha 2026-09-28; /test 2026-09-28; /claude 2026-09-27; /skills add 2026-09-26; /plan 2026-09-26; /botchat 2026-09-24; 2026-09-21 (/queue clear later that day; /skills with edit <name> from then until 2026-09-23); /tools off the list later on 2026-09-22, its expand and collapse root words
         ];
         foreach (var command in Enum.GetValues<SlashCommand>())
         {
@@ -436,51 +436,31 @@ public class SlashCommandsTests
     }
 
     [Fact]
-    public void Log_IsACommand_OnlyUnderTheFlag()
+    public void Log_IsACommand_InAnyRun_AndTakesTheFileSwitch()
     {
-        // /log (2026-09-22, the user's ask): only with --log; without it the word, argument or not, is unknown.
-        Assert.Equal((SlashCommand.Unknown, ""), SlashCommands.Parse("/log"));
-        Assert.Equal(SlashCommand.Unknown, SlashCommands.Parse("/log now").Command);
-        Assert.Equal((SlashCommand.Log, ""), SlashCommands.Parse("/log", log: true));
-        Assert.Equal((SlashCommand.Log, ""), SlashCommands.Parse("  /LOG  ", log: true));
-        Assert.Equal((SlashCommand.Overloaded, "now"), SlashCommands.Parse("/log now", log: true));
-        Assert.False(SlashCommands.TakesArgument(SlashCommand.Log));
-        Assert.Equal(SlashCommand.Help, SlashCommands.Parse("/help", log: true).Command);   // the flag changes nothing else
+        // /log (2026-09-22, the user's ask): only with --log until 2026-10-02, when the bare word took to the log window and
+        // the file moved to /log --file; a command in every run since, its argument the handler's to judge.
+        Assert.Equal((SlashCommand.Log, ""), SlashCommands.Parse("/log"));
+        Assert.Equal((SlashCommand.Log, ""), SlashCommands.Parse("  /LOG  "));
+        Assert.Equal((SlashCommand.Log, "--file"), SlashCommands.Parse("/log --file"));
+        Assert.Equal((SlashCommand.Log, "now"), SlashCommands.Parse("/log now"));
+        Assert.True(SlashCommands.TakesArgument(SlashCommand.Log));
     }
 
     [Fact]
-    public void HelpWithLog_HasTheLogRow_InItsSortedPlace_AndNothingElseChanges()
+    public void Help_HasTheLogRow_InItsSortedPlace()
     {
-        Assert.Equal("/log", SlashCommands.LogEntry.Command);
-        Assert.Equal("open the diagnostic log file (--log) in your editor", SlashCommands.LogEntry.Summary);
-        Assert.Equal(SlashCommands.HelpEntries.Count + 1, SlashCommands.HelpEntriesWithLog.Count);
-        Assert.Equal(SlashCommands.HelpEntries, SlashCommands.HelpEntriesWithLog.Where(e => e.Command != "/log"));
-        Assert.Equal(SlashCommands.HelpEntriesWithLog.Select(e => e.Command).OrderBy(c => c, StringComparer.Ordinal), SlashCommands.HelpEntriesWithLog.Select(e => e.Command));
-        int log = SlashCommands.HelpEntriesWithLog.ToList().IndexOf(SlashCommands.LogEntry);
-        Assert.Equal("/learn", SlashCommands.HelpEntriesWithLog[log - 1].Command);   // A to Z since 2026-09-27 (directly above /help until then)
-        Assert.Equal("/loop", SlashCommands.HelpEntriesWithLog[log + 1].Command);
-
-        Assert.Same(SlashCommands.HelpEntries, SlashCommands.HelpEntriesFor(false));
-        Assert.Same(SlashCommands.HelpEntriesWithLog, SlashCommands.HelpEntriesFor(true));
-        Assert.DoesNotContain(SlashCommands.HelpEntries, e => e.Command == "/log");
-        Assert.DoesNotContain("/log", SlashCommands.Words);
-        Assert.DoesNotContain("/log ", SlashCommands.HelpText);
-        Assert.Contains(Row("/learn", SlashCommands.HelpEntries.Single(e => e.Command == "/learn").Summary) + Row("/log", SlashCommands.LogEntry.Summary) + Row("/loop", SlashCommands.HelpEntries.Single(e => e.Command == "/loop").Summary), SlashCommands.HelpTextWithLog);
-        Assert.Equal(SlashCommands.HelpText.Length + Row("/log", SlashCommands.LogEntry.Summary).Length, SlashCommands.HelpTextWithLog.Length);
-    }
-
-    [Fact]
-    public void CompletionsWithLog_AreCompletionsAndLog_Sorted()
-    {
-        var items = SlashCommands.CompletionsWithLog;
-
-        Assert.Equal(SlashCommands.Completions.Count + 1, items.Count);
-        Assert.Equal(items.Select(i => i.Text).OrderBy(t => t, StringComparer.Ordinal), items.Select(i => i.Text));
-        Assert.Equal(SlashCommands.Completions, items.Where(i => i.Text != "/log"));
-        Assert.Contains(new NeonSidekick.UI.CompletionItem("/log", SlashCommands.LogEntry.Summary), items);
-        Assert.Equal(items.Where(i => i.Text != "/exit"), SlashCommands.CompletionsWithoutExitWithLog);
-        Assert.DoesNotContain(SlashCommands.Completions, i => i.Text == "/log");
-        Assert.DoesNotContain(SlashCommands.CompletionsWithoutExit, i => i.Text == "/log");
+        var entries = SlashCommands.HelpEntries.ToList();
+        int log = entries.FindIndex(e => e.Command == "/log");
+        Assert.True(log > 0);
+        Assert.Equal("open the diagnostic log in a window that follows it, or /log --file for the --log file in your editor", entries[log].Summary);
+        Assert.Equal("/learn", entries[log - 1].Command);   // A to Z since 2026-09-27 (directly above /help until then)
+        Assert.Equal("/loop", entries[log + 1].Command);
+        Assert.Contains("/log", SlashCommands.Words);
+        Assert.Contains(Row("/learn", entries[log - 1].Summary) + Row("/log", entries[log].Summary) + Row("/loop", entries[log + 1].Summary), SlashCommands.HelpText);
+        Assert.Contains(new NeonSidekick.UI.CompletionItem("/log", entries[log].Summary), SlashCommands.Completions);
+        Assert.Contains(SlashCommands.CompletionsWithoutExit, i => i.Text == "/log");
+        Assert.False(SlashCommands.IsBasic(entries[log]));
     }
 
     [Fact]
@@ -600,7 +580,6 @@ public class SlashCommandsTests
         // The basic tab's list (later on 2026-09-27, the user's): a rename or a typo would drop a row silently.
         Assert.Equal(22, SlashCommands.BasicCommands.Count);   // /rewind 2026-09-30, the user's pick
         Assert.All(SlashCommands.BasicCommands, c => Assert.Contains(SlashCommands.HelpEntries, e => e.Command == c));
-        Assert.False(SlashCommands.IsBasic(SlashCommands.LogEntry));
         Assert.Equal("Commands (basic)", SlashCommands.BasicTabTitle);
         Assert.Equal("Commands (advanced)", SlashCommands.AdvancedTabTitle);
     }
@@ -610,11 +589,11 @@ public class SlashCommandsTests
     {
         // One list, A to Z by the command (ordinal), no groups (2026-09-27, the user's call: the Commands tab had grown
         // cramped; nine hand-ordered groups until then — their history is in git).
-        Assert.Equal(65, SlashCommands.HelpEntries.Count);   // /camera and /docker 2026-10-02   // /header later still on 2026-10-01   // /emptytrash went 2026-10-01   // /tb later on 2026-09-30   // /rewind 2026-09-30   // /keycopy, then /sampling, then /test, then /ha, then /print, since 2026-09-28; /perf later on 2026-09-29
+        Assert.Equal(66, SlashCommands.HelpEntries.Count);   // /log in every run later on 2026-10-02   // /camera and /docker 2026-10-02   // /header later still on 2026-10-01   // /emptytrash went 2026-10-01   // /tb later on 2026-09-30   // /rewind 2026-09-30   // /keycopy, then /sampling, then /test, then /ha, then /print, since 2026-09-28; /perf later on 2026-09-29
         Assert.Equal(
         [
             "/about", "/botchat", "/camera", "/claude", "/clear", "/cmdclear", "/cmdcopy", "/cmdlist", "/collapse", "/comfy", "/compact", "/copy", "/cwd",
-            "/docker", "/draft", "/echo", "/exit", "/expand", "/explore", "/gituser", "/ha", "/header", "/help", "/imagine", "/interrupt", "/keycopy", "/learn",
+            "/docker", "/draft", "/echo", "/exit", "/expand", "/explore", "/gituser", "/ha", "/header", "/help", "/imagine", "/interrupt", "/keycopy", "/learn", "/log",
             "/loop", "/mcp", "/memory", "/model", "/new", "/operata", "/perf", "/persona", "/plan", "/police", "/print", "/profile", "/queue", "/reasoning",
             "/remember", "/rewind", "/sampling", "/server", "/sessions", "/settings", "/skills", "/speak", "/splash", "/stt", "/sys", "/tb", "/test", "/theme", "/timer", "/tools",
             "/tree", "/tts", "/usage", "/vault", "/view", "/vocalia", "/wake", "/window",

@@ -46,7 +46,7 @@ internal static class NeonHelp
 
         if (kind == "command" && q.Length == 0)
         {
-            return HelpText.CommandList(SlashCommands.HelpEntriesFor(log: true));
+            return HelpText.CommandList(SlashCommands.HelpEntries);
         }
 
         if (q.Length == 0)
@@ -89,7 +89,7 @@ internal static class NeonHelp
     }
 
     /// <summary>The overview: every pane and its tabs, every command (<c>/log</c> among them) and how to ask.</summary>
-    public static string Overview() => HelpText.Overview(HelpLocation.Panes, SlashCommands.HelpEntriesFor(log: true));
+    public static string Overview() => HelpText.Overview(HelpLocation.Panes, SlashCommands.HelpEntries);
 
     /// <summary>A setting in full (<see cref="HelpText.Setting"/>).</summary>
     public static string Setting(SettingsField field) =>
@@ -110,7 +110,7 @@ internal static class NeonHelp
         }
 
         string word = slashed ? first : "/" + first;
-        var alias = SlashCommands.HelpEntriesFor(log: true).FirstOrDefault(e => e.Aliases.Contains(word, StringComparer.Ordinal));
+        var alias = SlashCommands.HelpEntries.FirstOrDefault(e => e.Aliases.Contains(word, StringComparer.Ordinal));
         word = alias?.Command ?? word;
         return HelpCommands.Commands.FirstOrDefault(c => string.Equals(c.Command, word, StringComparison.Ordinal));
     }

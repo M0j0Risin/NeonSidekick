@@ -49,7 +49,7 @@ public class NeonHelpTests
     [Fact]
     public void EveryCommand_HasItsForms_AndNoFormNamesACommandThatIsNotThere()
     {
-        var commands = SlashCommands.HelpEntriesFor(log: true).Select(e => e.Command).Order(StringComparer.Ordinal).ToArray();
+        var commands = SlashCommands.HelpEntries.Select(e => e.Command).Order(StringComparer.Ordinal).ToArray();
         Assert.Equal(commands, HelpCommands.Commands.Select(c => c.Command).ToArray());   // A to Z, one each
         foreach (var command in HelpCommands.Commands)
         {
@@ -87,7 +87,7 @@ public class NeonHelpTests
             Assert.Contains("- " + pane.Command + ": " + pane.Summary + ". Tabs: " + string.Join(", ", pane.Tabs) + "\n", text);
         }
 
-        Assert.Contains("\nSlash commands: " + string.Join(", ", SlashCommands.HelpEntriesFor(log: true).Select(e => e.Label)) + "\n", text);
+        Assert.Contains("\nSlash commands: " + string.Join(", ", SlashCommands.HelpEntries.Select(e => e.Label)) + "\n", text);
         Assert.True(text.Length < 3000, text.Length.ToString(System.Globalization.CultureInfo.InvariantCulture));   // a first look a small model can afford
     }
 
@@ -97,7 +97,7 @@ public class NeonHelpTests
         string text = Invoke(kind: "command");
 
         Assert.StartsWith(HelpText.CommandListHeading + "\n", text, StringComparison.Ordinal);
-        foreach (var entry in SlashCommands.HelpEntriesFor(log: true))
+        foreach (var entry in SlashCommands.HelpEntries)
         {
             Assert.Contains("\n- " + entry.Label + ": " + HelpText.FirstSentence(entry.Summary), text);
         }

@@ -109,6 +109,7 @@ public static partial class SmokeChecks
         results.Add(ProbeImageResize());
         results.Add(ProbeViewerWindow());
         results.Add(ProbeViewerDrag());
+        results.Add(ProbeLogWindow());
         results.Add(ProbeCameraMf());
         results.Add(ProbeCameraEncode());
         results.Add(ProbePrintSpooler());
@@ -579,6 +580,26 @@ public static partial class SmokeChecks
             {
                 // A temp file left behind is harmless.
             }
+        }
+    }
+
+    /// <summary>
+    /// <c>viewer:log-window</c> (2026-10-02): <c>/log</c>'s window in the published binary — its class registered, a hidden
+    /// window answering through its own <c>[UnmanagedCallersOnly]</c> procedure, and the text side of gdi32 it draws with:
+    /// Consolas made and measured, a line drawn into a memory DC and copied out (<see cref="Viewer.LogWindow.Probe"/>).
+    /// Nothing is shown.
+    /// </summary>
+    public static SmokeCheck ProbeLogWindow()
+    {
+        const string name = "viewer:log-window";
+        try
+        {
+            var (ok, detail) = Viewer.LogWindow.Probe();
+            return new SmokeCheck(name, ok, detail);
+        }
+        catch (Exception ex)
+        {
+            return new SmokeCheck(name, false, $"{ex.GetType().Name}: {ex.Message}");
         }
     }
 

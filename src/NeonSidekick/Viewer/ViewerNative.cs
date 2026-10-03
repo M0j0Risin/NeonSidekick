@@ -10,7 +10,9 @@ namespace NeonSidekick.Viewer;
 /// delegate is marshalled, so nothing here behaves differently once published (the smoke's <c>viewer:window</c> proves it).
 /// All six are system libraries: nothing joins <c>SmokeChecks.RequiredNativeLibraries</c>. The drag's one COM object is the
 /// shell's own, held as an <see cref="IntPtr"/> and called through its vtable (<see cref="PictureWindowDrag"/>): no COM
-/// class of ours, no <c>ComWrappers</c>.
+/// class of ours, no <c>ComWrappers</c>. The log window (2026-10-02, <c>LogWindow</c>) adds the text side of gdi32 — a
+/// monospace font, its metrics, a memory DC drawn and copied in one go — and the wheel, cursor and DPI messages; the smoke's
+/// <c>viewer:log-window</c> proves those.
 /// </summary>
 internal static unsafe partial class ViewerNative
 {
@@ -30,6 +32,9 @@ internal static unsafe partial class ViewerNative
     public const uint WmLeftButtonUp = 0x0202;
     public const uint WmLeftButtonDoubleClick = 0x0203;
     public const uint WmCaptureChanged = 0x0215;
+    public const uint WmSetCursor = 0x0020;
+    public const uint WmMouseWheel = 0x020A;
+    public const uint WmDpiChanged = 0x02E0;
     public const uint WmApp = 0x8000;
 
     public const uint CsVRedraw = 0x0001;
@@ -84,6 +89,30 @@ internal static unsafe partial class ViewerNative
 
     /// <summary>MK_LBUTTON: the left button is down, in a mouse message's wParam.</summary>
     public const int MkLeftButton = 0x0001;
+
+    /// <summary>MK_SHIFT: Shift is down, in a mouse message's wParam.</summary>
+    public const int MkShift = 0x0004;
+
+    /// <summary>The idc ibeam cursor: over the log window's text.</summary>
+    public const int IdcIBeam = 32513;
+
+    /// <summary>HTCLIENT: WM_SETCURSOR's hit-test code for the client area.</summary>
+    public const int HtClient = 1;
+
+    /// <summary>VK_CONTROL, for GetKeyState.</summary>
+    public const int VkControl = 0x11;
+
+    /// <summary>SPI_GETWHEELSCROLLLINES: the rows a wheel notch scrolls (WHEEL_PAGESCROLL, uint.MaxValue, a page).</summary>
+    public const uint SpiGetWheelScrollLines = 0x0068;
+
+    /// <summary>ETO_OPAQUE: ExtTextOutW fills its rectangle with the background colour first (the log window's fills, no brushes).</summary>
+    public const uint EtoOpaque = 0x0002;
+
+    /// <summary>CreateFontW's weight, character set, quality and pitch for the log window's Consolas.</summary>
+    public const int FwNormal = 400;
+    public const uint DefaultCharset = 1;
+    public const uint ClearTypeQuality = 5;
+    public const uint FixedPitchModern = 0x01 | 0x30;
 
     /// <summary>SM_CXDRAG / SM_CYDRAG: the rectangle, centred on a press, a move must leave before it is a drag.</summary>
     public const int SmCxDrag = 68;
@@ -227,6 +256,31 @@ internal static unsafe partial class ViewerNative
         public Point ptMinPosition;
         public Point ptMaxPosition;
         public Rect rcNormalPosition;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct TextMetric
+    {
+        public int tmHeight;
+        public int tmAscent;
+        public int tmDescent;
+        public int tmInternalLeading;
+        public int tmExternalLeading;
+        public int tmAveCharWidth;
+        public int tmMaxCharWidth;
+        public int tmWeight;
+        public int tmOverhang;
+        public int tmDigitizedAspectX;
+        public int tmDigitizedAspectY;
+        public ushort tmFirstChar;
+        public ushort tmLastChar;
+        public ushort tmDefaultChar;
+        public ushort tmBreakChar;
+        public byte tmItalic;
+        public byte tmUnderlined;
+        public byte tmStruckOut;
+        public byte tmPitchAndFamily;
+        public byte tmCharSet;
     }
 
     [LibraryImport("kernel32.dll", EntryPoint = "GetModuleHandleW")]
@@ -404,6 +458,57 @@ internal static unsafe partial class ViewerNative
 
     [LibraryImport("user32.dll")]
     public static partial int GetSystemMetrics(int nIndex);
+
+    [LibraryImport("user32.dll")]
+    public static partial short GetKeyState(int nVirtKey);
+
+    [LibraryImport("user32.dll")]
+    public static partial uint GetMessagePos();
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool ScreenToClient(IntPtr hWnd, Point* lpPoint);
+
+    [LibraryImport("user32.dll")]
+    public static partial IntPtr SetCursor(IntPtr hCursor);
+
+    [LibraryImport("user32.dll")]
+    public static partial IntPtr GetDC(IntPtr hWnd);
+
+    [LibraryImport("user32.dll")]
+    public static partial int ReleaseDC(IntPtr hWnd, IntPtr hDC);
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool SystemParametersInfoW(uint uiAction, uint uiParam, void* pvParam, uint fWinIni);
+
+    [LibraryImport("gdi32.dll")]
+    public static partial IntPtr CreateFontW(int cHeight, int cWidth, int cEscapement, int cOrientation, int cWeight, uint bItalic, uint bUnderline, uint bStrikeOut, uint iCharSet, uint iOutPrecision, uint iClipPrecision, uint iQuality, uint iPitchAndFamily, char* pszFaceName);
+
+    [LibraryImport("gdi32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool GetTextMetricsW(IntPtr hdc, TextMetric* lptm);
+
+    [LibraryImport("gdi32.dll")]
+    public static partial IntPtr CreateCompatibleDC(IntPtr hdc);
+
+    [LibraryImport("gdi32.dll")]
+    public static partial IntPtr CreateCompatibleBitmap(IntPtr hdc, int cx, int cy);
+
+    [LibraryImport("gdi32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool DeleteDC(IntPtr hdc);
+
+    [LibraryImport("gdi32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool BitBlt(IntPtr hdc, int x, int y, int cx, int cy, IntPtr hdcSrc, int x1, int y1, uint rop);
+
+    [LibraryImport("gdi32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool ExtTextOutW(IntPtr hdc, int x, int y, uint options, Rect* lprect, char* lpString, uint c, int* lpDx);
+
+    [LibraryImport("gdi32.dll")]
+    public static partial uint SetBkColor(IntPtr hdc, uint color);
 
     [LibraryImport("ole32.dll")]
     public static partial int OleInitialize(IntPtr pvReserved);

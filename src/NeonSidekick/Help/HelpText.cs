@@ -68,7 +68,7 @@ public static class HelpText
 
     /// <summary>
     /// The overview: each pane with its tabs (<see cref="HelpLocation.Panes"/>), then every command's word on one line
-    /// (<see cref="SlashCommands.HelpEntriesFor"/>; a line on each is <see cref="CommandList"/>, which alone runs past 8,000
+    /// (<see cref="SlashCommands.HelpEntries"/>; a line on each is <see cref="CommandList"/>, which alone runs past 8,000
     /// characters — too much for a small model's context on a first look), then <see cref="OverviewTail"/>.
     /// </summary>
     public static string Overview(IReadOnlyList<HelpPane> panes, IReadOnlyList<SlashCommands.HelpEntry> commands)

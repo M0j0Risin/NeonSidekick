@@ -109,6 +109,15 @@ public sealed class AppSettingsData
     public int? CameraWindowTop { get; set; }
 
     /// <summary>
+    /// The log window's top-left corner as it last closed (2026-10-02, <c>/log</c>'s window): the <see cref="ViewerLeft"/>
+    /// pair's twin, set by the window itself (<see cref="Viewer.LogWindow.Placed"/>). No menu row; null opens it where Windows puts it.
+    /// </summary>
+    public int? LogWindowLeft { get; set; }
+
+    /// <summary>The top of that corner; see <see cref="LogWindowLeft"/>.</summary>
+    public int? LogWindowTop { get; set; }
+
+    /// <summary>
     /// Whether the <c>/</c> completion list leaves <c>/exit</c> out (on by default, 2026-09-18) so a
     /// pick never ends the app by mistake; typed in full it exits as ever. Read at each keystroke. No variable.
     /// </summary>

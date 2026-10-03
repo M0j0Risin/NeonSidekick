@@ -540,7 +540,7 @@ internal sealed partial class ChatScreen
                 HandleExplore(args);
                 break;
             case SlashCommand.Log:
-                HandleLog();
+                HandleLog(args);
                 break;
             case SlashCommand.Timer:
                 HandleTimer(args);

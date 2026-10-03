@@ -598,6 +598,16 @@ public sealed class ViewerTests : IDisposable
         Assert.Equal("viewer:window", check.Name);
     }
 
+    /// <summary>The log window's Win32 layer (2026-10-02): its own class and procedure, and Consolas drawn into a memory DC.</summary>
+    [Fact]
+    public void ProbeLogWindow_MakesAHiddenWindow_AndDrawsText()
+    {
+        var check = SmokeChecks.ProbeLogWindow();
+
+        Assert.True(check.Passed, check.Detail);
+        Assert.Equal("viewer:log-window", check.Name);
+    }
+
     /// <summary>The drag out's shell data object (2026-09-28): made for a real file on an STA thread, it offers CF_HDROP.</summary>
     [Fact]
     public void ProbeDrag_TheShellsDataObject_OffersTheFile()

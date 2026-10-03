@@ -77,6 +77,8 @@ public class AppSettingsTests : IDisposable
         ThemedViewer = false,
         ViewerLeft = -1200,
         ViewerTop = 140,
+        LogWindowLeft = 300,
+        LogWindowTop = -20,
         WorkingDirectory = @"D:\elsewhere\files",
         LlmApiKey = "dpapi:c2stdGVzdA==",   // stored encrypted: a plain key is encrypted as the file loads (2026-09-28), so the round trip would not be exact
         LlmAutoCompactPercent = 65,
@@ -201,6 +203,8 @@ public class AppSettingsTests : IDisposable
         Assert.Equal(expected.ThemedViewer, actual.ThemedViewer);
         Assert.Equal(expected.ViewerLeft, actual.ViewerLeft);
         Assert.Equal(expected.ViewerTop, actual.ViewerTop);
+        Assert.Equal(expected.LogWindowLeft, actual.LogWindowLeft);
+        Assert.Equal(expected.LogWindowTop, actual.LogWindowTop);
         Assert.Equal(expected.WorkingDirectory, actual.WorkingDirectory);
         Assert.Equal(expected.LlmApiKey, actual.LlmApiKey);
         Assert.Equal(expected.LlmAutoCompactPercent, actual.LlmAutoCompactPercent);
@@ -350,6 +354,8 @@ public class AppSettingsTests : IDisposable
             d.ThemedViewer = full.ThemedViewer;
             d.ViewerLeft = full.ViewerLeft;
             d.ViewerTop = full.ViewerTop;
+            d.LogWindowLeft = full.LogWindowLeft;
+            d.LogWindowTop = full.LogWindowTop;
             d.WorkingDirectory = full.WorkingDirectory;
             d.LlmApiKey = full.LlmApiKey;
             d.LlmAutoCompactPercent = full.LlmAutoCompactPercent;
@@ -484,6 +490,8 @@ public class AppSettingsTests : IDisposable
                 d.ThemedViewer = full.ThemedViewer;
                 d.ViewerLeft = full.ViewerLeft;
                 d.ViewerTop = full.ViewerTop;
+                d.LogWindowLeft = full.LogWindowLeft;
+                d.LogWindowTop = full.LogWindowTop;
                 d.WorkingDirectory = full.WorkingDirectory;
                 d.LlmApiKey = full.LlmApiKey;
                 d.LlmAutoCompactPercent = full.LlmAutoCompactPercent;
@@ -1382,6 +1390,8 @@ public class AppSettingsTests : IDisposable
         Assert.True(s.ThemedViewer);   // later on 2026-09-27
         Assert.Null(s.ViewerLeft);   // 2026-09-28: Windows' own place until the viewer first closes
         Assert.Null(s.ViewerTop);
+        Assert.Null(s.LogWindowLeft);   // 2026-10-02: Windows' own place until the log window first closes
+        Assert.Null(s.LogWindowTop);
         Assert.Equal("", s.DraftEditor);   // 2026-09-19: the shell's default for .txt
         // The Sessions tab (2026-09-18): logging and the tool on, the model writes the title (the first line until later that day), kept forever, ten hits.
         Assert.True(s.SessionLogging);
