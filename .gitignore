@@ -50,8 +50,8 @@ nunit-*.xml
 # NeonSidekick: build.ps1 publish output and logs
 publish/
 
-# temp docs folder
-.docs/
+# temp notes folder
+.notes/
 
 #agents
 AGENTS.md
