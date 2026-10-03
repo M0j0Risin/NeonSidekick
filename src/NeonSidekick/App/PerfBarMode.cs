@@ -74,6 +74,19 @@ public static class PerfBarMode
         _ => "text",
     };
 
+    /// <summary>
+    /// A look's button on the <c>Show performance bar</c> checklist: a glyph that hints at the look, then its name (2026-10-03,
+    /// the user's ask and picks: every header button a monochrome glyph to its left). The saved word stays the bare name. Pinned.
+    /// </summary>
+    public static string ButtonTitle(string name) => name switch
+    {
+        "text" => "≡ text",
+        "gauge" => "◔ gauge",
+        "spark" => "▁ spark",
+        "led" => "● led",
+        _ => name,
+    };
+
     /// <summary><c>/perf</c>'s completion hint beside a word. Pinned.</summary>
     public static string Describe(string name) => name switch
     {

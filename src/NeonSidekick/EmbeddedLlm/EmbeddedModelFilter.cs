@@ -36,10 +36,10 @@ public sealed record EmbeddedModelFilter(int? MaxGb, bool Uncensored, bool? Inst
     /// </summary>
     public static EmbeddedModelFilter For(EmbeddedModel? inUse) => inUse is { Uncensored: true } ? None with { Uncensored = true } : None;
 
-    /// <summary>The installed and uninstalled buttons' titles (the catalog's, later on 2026-09-29). Pinned.</summary>
-    public const string InstalledButton = "installed";
+    /// <summary>The installed and uninstalled buttons' titles (the catalog's, later on 2026-09-29; a glyph to the left of each since 2026-10-03, the user's ask, as of every filter button but the sizes). Pinned.</summary>
+    public const string InstalledButton = "✓ installed";
 
-    public const string UninstalledButton = "uninstalled";
+    public const string UninstalledButton = "⤓ uninstalled";
 
     /// <summary>Their keys: I and U (N for not installed until later on 2026-09-30, when uncensored gave U up).</summary>
     public const char InstalledKey = 'i';
@@ -50,7 +50,7 @@ public sealed record EmbeddedModelFilter(int? MaxGb, bool Uncensored, bool? Inst
     public static readonly int[] Sizes = [8, 16, 32];
 
     /// <summary>The uncensored button's title. Pinned.</summary>
-    public const string UncensoredButton = "uncensored";
+    public const string UncensoredButton = "◌ uncensored";
 
     /// <summary>The uncensored button's key: X (U until later on 2026-09-30).</summary>
     public const char UncensoredKey = 'x';
@@ -62,16 +62,16 @@ public sealed record EmbeddedModelFilter(int? MaxGb, bool Uncensored, bool? Inst
     /// The sort button's title while sorted by size: the order shown (2026-10-02, the user's ask; <c>sort size</c>, then the
     /// name-order title, until then). Pinned.
     /// </summary>
-    public const string SortSizeButton = "sort (size)";
+    public const string SortSizeButton = "⇅ sort (size)";
 
     /// <summary>The sort button's title in the catalog's (name) order: the order shown (2026-10-02, the user's ask). Pinned.</summary>
-    public const string SortNameButton = "sort (name)";
+    public const string SortNameButton = "⇅ sort (name)";
 
     /// <summary>The sort size button's key.</summary>
     public const char SortSizeKey = 's';
 
     /// <summary>The drafter button's title (later on 2026-09-30). Pinned.</summary>
-    public const string DrafterButton = "drafter";
+    public const string DrafterButton = "⇉ drafter";
 
     /// <summary>The drafter button's key.</summary>
     public const char DrafterKey = 'd';

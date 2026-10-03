@@ -41,6 +41,17 @@ public class PerfBarTests
         Assert.Equal("", PerfBarMode.Describe("bars"));
     }
 
+    /// <summary>The looks' buttons on the checklist (2026-10-03, the user's picks): a glyph left of each name; the saved words stay bare.</summary>
+    [Fact]
+    public void TheLooksButtons_CarryAGlyph_TheSavedWordsStayBare()
+    {
+        Assert.Equal(["≡ text", "◔ gauge", "▁ spark", "● led"], PerfBarMode.Names.Select(PerfBarMode.ButtonTitle));
+        Assert.Equal("bars", PerfBarMode.ButtonTitle("bars"));
+        Assert.Equal(["≡ text", "◔ gauge", "▁ spark", "● led"], SettingsMenu.PerfBarButtons(PerfBarStyle.Led).Skip(3).Select(b => b.Title));
+        Assert.Equal(["● led"], SettingsMenu.PerfBarButtons(PerfBarStyle.Led).Where(b => b.On).Select(b => b.Title));
+        Assert.Equal(['t', 'g', 's', 'l'], SettingsMenu.PerfBarButtons(PerfBarStyle.Led).Skip(3).Select(b => b.Key!.Value));   // the keys stay the names' first letters
+    }
+
     [Fact]
     public void TheMeters_ArePinned_TheFourByDefault()
     {

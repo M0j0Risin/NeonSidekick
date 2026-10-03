@@ -2469,7 +2469,7 @@ internal sealed partial class SettingsMenu
     /// size filters are. Pinned.
     /// </summary>
     public static IReadOnlyList<MenuButton> PerfBarButtons(PerfBarStyle look) =>
-        [.. ChecklistButtons, new(DefaultsButton, DefaultsKey), .. PerfBarMode.Names.Select(name => new MenuButton(name, name[0], PerfBarMode.Name(look) == name))];
+        [.. ChecklistButtons, new(DefaultsButton, DefaultsKey), .. PerfBarMode.Names.Select(name => new MenuButton(PerfBarMode.ButtonTitle(name), name[0], PerfBarMode.Name(look) == name))];
 
     private static readonly int PerfBarLookIndex = DefaultsIndex + 1;
 
@@ -2502,15 +2502,16 @@ internal sealed partial class SettingsMenu
     /// <summary>
     /// The allowed-commands list's first title-row button (2026-10-02, the user's ask: switch <c>Shell command policy</c> from the
     /// list <c>/cmdlist</c> opens, without going through the Shell tab's picker): the policy to <c>ask</c>, at once. The bare word:
-    /// the toolbar lock's glyph here would be a second lock on the screen, a click on it no click on the toolbar's. Pinned.
+    /// the toolbar lock's glyph here would be a second lock on the screen, a click on it no click on the toolbar's. A check before
+    /// it since 2026-10-03 (the user's ask: every header button a glyph to its left, monochrome as the checklists' ⊞ ⊠ ⊡). Pinned.
     /// </summary>
-    public const string PolicyAskButton = "ask";
+    public const string PolicyAskButton = "✓ ask";
 
     /// <summary>The key that is <see cref="PolicyAskButton"/>.</summary>
     public const char PolicyAskKey = 'a';
 
-    /// <summary>The allowed-commands list's second button (2026-10-02): the policy to <c>yolo</c>, after a yes to <see cref="YoloConfirmQuestion"/>. Pinned.</summary>
-    public const string PolicyYoloButton = "yolo";
+    /// <summary>The allowed-commands list's second button (2026-10-02): the policy to <c>yolo</c>, after a yes to <see cref="YoloConfirmQuestion"/>; the warning sign before it since 2026-10-03. Pinned.</summary>
+    public const string PolicyYoloButton = "⚠ yolo";
 
     /// <summary>The key that is <see cref="PolicyYoloButton"/>.</summary>
     public const char PolicyYoloKey = 'y';
@@ -2559,9 +2560,10 @@ internal sealed partial class SettingsMenu
 
     /// <summary>
     /// The police's on/off page's button (2026-10-03, the user's pick): the forbidden-strings list, opened from wherever that page
-    /// opens — <c>/police</c>, Ctrl+Alt+O, the toolbar's officer, the Shell tab's row. Never lit: it opens, it does not switch. Pinned.
+    /// opens — <c>/police</c>, Ctrl+Alt+O, the toolbar's officer, the Shell tab's row. Never lit: it opens, it does not switch. The list
+    /// glyph before it since later on 2026-10-03. Pinned.
     /// </summary>
-    public const string PoliceStringsButton = "strings";
+    public const string PoliceStringsButton = "≡ strings";
 
     /// <summary>The key that is <see cref="PoliceStringsButton"/>.</summary>
     public const char PoliceStringsKey = 's';

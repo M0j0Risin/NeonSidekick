@@ -1266,10 +1266,10 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("cmd        [#9A8BB8]cmd.exe: batch syntax[/]", SettingsMenu.ShellLabel("cmd", installed: true));
         Assert.Equal("Shell allowed commands: git push removed", SettingsMenu.PrefixRemovedNotice("git push"));
         // The allowed list's policy buttons (2026-10-02): ask then yolo, keys A and Y, the saved policy lit, neither under off.
-        Assert.Equal(["ask", "yolo"], SettingsMenu.CommandPolicyButtons("ask").Select(b => b.Title));
+        Assert.Equal(["✓ ask", "⚠ yolo"], SettingsMenu.CommandPolicyButtons("ask").Select(b => b.Title));   // the glyphs since 2026-10-03
         Assert.Equal(['a', 'y'], SettingsMenu.CommandPolicyButtons("ask").Select(b => b.Key!.Value));
-        Assert.Equal(["ask"], SettingsMenu.CommandPolicyButtons("ask").Where(b => b.On).Select(b => b.Title));
-        Assert.Equal(["yolo"], SettingsMenu.CommandPolicyButtons("yolo").Where(b => b.On).Select(b => b.Title));
+        Assert.Equal(["✓ ask"], SettingsMenu.CommandPolicyButtons("ask").Where(b => b.On).Select(b => b.Title));
+        Assert.Equal(["⚠ yolo"], SettingsMenu.CommandPolicyButtons("yolo").Where(b => b.On).Select(b => b.Title));
         Assert.DoesNotContain(SettingsMenu.CommandPolicyButtons("off"), b => b.On);
         // The git rows (2026-09-20): the Git tab (Git (native), the last, since later on 2026-09-21) — the switch, then the two caps alphabetically; typed, none a reconnect.
         Assert.Equal(new[] { SettingsField.GitLibTools, SettingsField.GitLibDiffMaxLines, SettingsField.GitLibLogMaxCommits, SettingsField.GitLibEmail, SettingsField.GitLibName }, ToolsMenuTests.TabFields(ToolsText.GitTabTitle));
@@ -2755,7 +2755,7 @@ public partial class SettingsMenuTests : IDisposable
         Push(Keys.Char('1'));                   // 8GB: the 31B goes, LM Studio stays
         Push(Keys.Down, Keys.Enter);            // the second row left: E2B
         Assert.Same(servers[2], await menu.PickServerAsync(servers, null, SettingsMenu.StartupServerTitle, CancellationToken.None));
-        Assert.Contains(" 8GB    16GB    32GB    drafter    sort (name)    uncensored ", _console.Output);   // uncensored last (later on 2026-09-30)
+        Assert.Contains(" 8GB    16GB    32GB    ⇉ drafter    ⇅ sort (name)    ◌ uncensored ", _console.Output);   // uncensored last (later on 2026-09-30); the glyphs since 2026-10-03
         Assert.Contains("ESC = the first listed", _console.Output);
 
         Push(Keys.Char('x'), Keys.Enter);       // uncensored (X since later on 2026-09-30): no embedded row passes, LM Studio is still there to pick
@@ -4516,8 +4516,8 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Contains(SettingsMenu.PerfBarToggleKeys, _console.Output);
         Assert.Contains(SettingsMenu.SelectAllButton, _console.Output);
         Assert.Contains("  · Show performance bar: CPU, RAM · gauge", _console.Output);
-        Assert.Equal(["gauge"], SettingsMenu.PerfBarButtons(PerfBarStyle.Gauge).Where(b => b.On).Select(b => b.Title));
-        Assert.Equal(["⊞ select all", "⊠ select none", "⊡ default", "text", "gauge", "spark", "led"], SettingsMenu.PerfBarButtons(PerfBarStyle.Text).Select(b => b.Title));
+        Assert.Equal(["◔ gauge"], SettingsMenu.PerfBarButtons(PerfBarStyle.Gauge).Where(b => b.On).Select(b => b.Title));
+        Assert.Equal(["⊞ select all", "⊠ select none", "⊡ default", "≡ text", "◔ gauge", "▁ spark", "● led"], SettingsMenu.PerfBarButtons(PerfBarStyle.Text).Select(b => b.Title));   // the looks' glyphs since 2026-10-03
         Assert.Equal(['a', 'n', 'd', 't', 'g', 's', 'l'], SettingsMenu.PerfBarButtons(PerfBarStyle.Text).Select(b => b.Key!.Value));
         pane.Dispose();
 

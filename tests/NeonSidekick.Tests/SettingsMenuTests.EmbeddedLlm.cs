@@ -168,7 +168,7 @@ public partial class SettingsMenuTests
         var first = EmbeddedModelCatalog.Models.First(m => filter.Matches(m));
         Assert.True(first.Uncensored);
         Assert.Equal(first.Id, menu.TakePendingEmbeddedModel()!.Id);
-        Assert.Contains(" 8GB    16GB    32GB    installed    uninstalled    drafter    sort (name)    uncensored ", _console.Output);   // the catalog's pair after the sizes (later on 2026-09-29), uncensored last (later on 2026-09-30)
+        Assert.Contains(" 8GB    16GB    32GB    ✓ installed    ⤓ uninstalled    ⇉ drafter    ⇅ sort (name)    ◌ uncensored ", _console.Output);   // the catalog's pair after the sizes (later on 2026-09-29), uncensored last (later on 2026-09-30)
         Assert.Contains(EmbeddedModelFilter.CatalogKeys, _console.Output);
         pane.Dispose();
     }
@@ -193,8 +193,8 @@ public partial class SettingsMenuTests
 
         Assert.Equal(big.Id, menu.TakePendingEmbeddedModel()!.Id);
         Assert.Contains(" › " + small.Display, _console.Output);   // the sorted top row's page came first
-        Assert.Contains(" drafter    sort (name)    uncensored ", _console.Output);   // uncensored last (later on 2026-09-30)
-        Assert.Contains(" drafter    sort (size)    uncensored ", _console.Output);   // while sorted by size
+        Assert.Contains(" ⇉ drafter    ⇅ sort (name)    ◌ uncensored ", _console.Output);   // uncensored last (later on 2026-09-30)
+        Assert.Contains(" ⇉ drafter    ⇅ sort (size)    ◌ uncensored ", _console.Output);   // while sorted by size
         pane.Dispose();
     }
 
