@@ -22,7 +22,8 @@ namespace NeonSidekick.UI;
 /// a summary line the store keeps ahead of its members (<see cref="BeginGroup"/>, the members through
 /// <see cref="Append(IReadOnlyList{Segment}, int, bool)"/> with <c>member</c>). Once a group holds more
 /// members than its <c>keep</c> (the <c>Tool collapse count</c> it opened with; 0 never collapses) the
-/// summary shows and the members fold: while the run is live only its last <c>keep</c> stay, after
+/// summary shows and the members fold — a member counted by the write it came in with since 2026-10-03, so
+/// an edit's note and its diff are one: while the run is live only its last <c>keep</c> stay, after
 /// <see cref="EndGroup"/> none — unless the group is expanded (<see cref="Toggle"/>, or the pane-wide
 /// <see cref="ExpandAll"/> it follows until toggled on its own). A hidden line takes no rows, so the
 /// rows, the scroll and the pane's hit-tests all read the folded shape. Any change to rows other than
@@ -67,6 +68,13 @@ public sealed class Scrollback
         /// <summary>The member's place in its group; −1 for the summary.</summary>
         public int Member = -1;
 
+        /// <summary>
+        /// The write the member came in with, its place among the group's <see cref="Group.Units"/> (2026-10-03, the diffs under file
+        /// edits): what a run's keep count counts, so a write of many lines — an edit's note and its diff — is one, as every
+        /// one-line tool note always was.
+        /// </summary>
+        public int Unit;
+
         /// <summary>The pictures drawn on this line and their columns (later on 2026-09-24): what a double-click there opens. Null for any other line.</summary>
         public IReadOnlyList<PictureSpan>? Pictures;
     }
@@ -78,6 +86,9 @@ public sealed class Scrollback
         public readonly int Keep = keep;
         public readonly Line Summary = summary;
         public readonly List<Line> Members = new();
+
+        /// <summary>The writes the members came in with (<see cref="Line.Unit"/>): one per line for a one-line note, one for a diff's block.</summary>
+        public int Units;
         public readonly IReadOnlyList<Segment> Lead = lead;
         public bool Live = true;
         public bool? Expanded;
@@ -99,8 +110,8 @@ public sealed class Scrollback
         /// <summary>The code block's source lines, measured against <see cref="Keep"/> in place of the member rows; null for a tool run.</summary>
         public int? Size;
 
-        /// <summary>More members (or source lines) than it keeps: the summary shows and the members fold.</summary>
-        public bool Over => Thinking || (Keep > 0 && (Size ?? Members.Count) > Keep);
+        /// <summary>More writes (or source lines) than it keeps: the summary shows and the members fold.</summary>
+        public bool Over => Thinking || (Keep > 0 && (Size ?? Units) > Keep);
 
         /// <summary>Folded or unfolded as the summary reads it: over, and — a code or thinking block — no longer live.</summary>
         public bool Folds => Over && !(Streamed && Live);
@@ -214,6 +225,7 @@ public sealed class Scrollback
         }
 
         _tagging = member ? _open : null;
+        _unitTaken = false;
 
         foreach (var segment in segments)
         {
@@ -544,6 +556,9 @@ public sealed class Scrollback
     // The run the lines an append opens belong to (members), null for a plain append.
     private Group? _tagging;
 
+    // Whether the append's first new member has counted its write among the run's units (2026-10-03).
+    private bool _unitTaken;
+
     // The picture spans for the lines an append opens, in order, and how many were given out (later on 2026-09-24).
     private IReadOnlyList<IReadOnlyList<PictureSpan>>? _picturing;
     private int _pictured;
@@ -561,6 +576,13 @@ public sealed class Scrollback
         {
             line.Group = group;
             line.Member = group.Members.Count;
+            if (!_unitTaken)
+            {
+                group.Units++;
+                _unitTaken = true;
+            }
+
+            line.Unit = group.Units - 1;
             group.Members.Add(line);
         }
 
@@ -633,7 +655,7 @@ public sealed class Scrollback
         }
         else
         {
-            if (over && !expanded && !(group.Live && (group.Streamed || line.Member >= group.Members.Count - group.Keep)))
+            if (over && !expanded && !(group.Live && (group.Streamed || line.Unit >= group.Units - group.Keep)))
             {
                 return null;
             }

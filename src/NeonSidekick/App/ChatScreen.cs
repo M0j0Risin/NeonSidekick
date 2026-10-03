@@ -13754,6 +13754,11 @@ internal sealed partial class ChatScreen
                 }
 
                 break;
+            case TurnEvent.ToolResult { Diff: { } diff } result when _effective().ShowFileDiffs:
+                // An edit's note and its diff under it, one write the run counts once (2026-10-03, the user's ask: Claude Code's look);
+                // the numbered region in the result is the model's to read.
+                _transcript.ToolDiff(FileText.DiffNote(result.Text), diff, Math.Clamp(_effective().DiffMaxLines, AppSettingsData.MinDiffMaxLines, AppSettingsData.MaxDiffMaxLines));
+                break;
             case TurnEvent.ToolResult result when QuietTools.Contains(result.Name):
                 _transcript.ToolNote(result.Text);
                 ToolThumbnails(result, thumbnails);

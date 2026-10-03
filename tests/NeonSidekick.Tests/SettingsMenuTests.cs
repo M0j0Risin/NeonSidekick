@@ -876,6 +876,7 @@ public partial class SettingsMenuTests : IDisposable
                 SettingsField.BotChatCamera,   // the Botchat tab's last row
                 SettingsField.CameraOutputFolder,   // later on 2026-10-02, the Camera tab's photo folder
                 SettingsField.ThemedBackground,   // 2026-10-03, the General tab under Theme
+                SettingsField.ShowFileDiffs, SettingsField.DiffMaxLines,   // later on 2026-10-03, /tools' Options tab: the diff under a file edit
             },
             Enum.GetValues<SettingsField>());
         // The compact rows: on the LLM tab after the context length but no reconnect; the type a picker, the two others typed.
@@ -1120,6 +1121,13 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("on", SettingsMenu.FieldValue(SettingsField.ThemedBackground, data, _settings.ProfileDirectory));
         Assert.Equal("off", SettingsMenu.FieldValue(SettingsField.ThemedBackground, new AppSettingsData { ThemedBackground = false }, _settings.ProfileDirectory));
         Assert.False(SettingsMenu.RefusedMidTurn(SettingsField.ThemedBackground) || SettingsMenu.IsLlmField(SettingsField.ThemedBackground) || SettingsMenu.IsTtsField(SettingsField.ThemedBackground) || SettingsMenu.IsVoiceField(SettingsField.ThemedBackground));
+        // Show file diffs and Diff max lines (later on 2026-10-03): a toggle on by default, then the typed cap, 0 the header alone.
+        Assert.True(SettingsMenu.IsToggle(SettingsField.ShowFileDiffs));
+        Assert.False(SettingsMenu.IsToggle(SettingsField.DiffMaxLines));
+        Assert.Equal("on", SettingsMenu.FieldValue(SettingsField.ShowFileDiffs, data, _settings.ProfileDirectory));
+        Assert.Equal("40 lines", SettingsMenu.FieldValue(SettingsField.DiffMaxLines, data, _settings.ProfileDirectory));
+        Assert.Equal("header only", SettingsMenu.FieldValue(SettingsField.DiffMaxLines, new AppSettingsData { DiffMaxLines = 0 }, _settings.ProfileDirectory));
+        Assert.False(SettingsMenu.RefusedMidTurn(SettingsField.ShowFileDiffs) || SettingsMenu.IsLlmField(SettingsField.DiffMaxLines));
         // Show toolbar (2026-09-21): the General row after it, a toggle, no reconnect (the pane reads it at each draw).
         Assert.False(SettingsMenu.IsToggle(SettingsField.ToolbarItems));   // a checklist since 2026-09-29, the user's ask
         Assert.Equal("Show toolbar", SettingsMenu.FieldName(SettingsField.ToolbarItems));
@@ -1548,7 +1556,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("unprotected", SettingsMenu.FieldValue(SettingsField.SkillCompactMode, new AppSettingsData { SkillCompactMode = "unprotected" }, _settings.ProfileDirectory));
         Assert.Equal("protected   [#9A8BB8]loaded skills survive a prune and the mid-turn guard[/]", SettingsMenu.SkillCompactModeLabel("protected"));
         Assert.Equal("unprotected [#9A8BB8]loaded skills prune like any tool result[/]", SettingsMenu.SkillCompactModeLabel("unprotected"));
-        Assert.Equal([SettingsField.ToolsDollarMention, SettingsField.ToolCollapseCount, SettingsField.CodeCollapseCount], SettingsMenu.ToolsTabFields[16]);   // the Options tab, later on 2026-09-19 (index 7 since the SQL tab, 2026-09-23, 9 since the Claude tab, 2026-09-27, 11 since the Print tab, 2026-09-28); the fold's count under the switch 2026-09-22, the code fold's under it later that day
+        Assert.Equal([SettingsField.ToolsDollarMention, SettingsField.ToolCollapseCount, SettingsField.CodeCollapseCount, SettingsField.ShowFileDiffs, SettingsField.DiffMaxLines], SettingsMenu.ToolsTabFields[16]);   // the Options tab, later on 2026-09-19 (index 7 since the SQL tab, 2026-09-23, 9 since the Claude tab, 2026-09-27, 11 since the Print tab, 2026-09-28); the fold's count under the switch 2026-09-22, the code fold's under it later that day
         Assert.Equal([SettingsField.AskUser, SettingsField.AskMaxQuestions, SettingsField.AskMaxChoices], SettingsMenu.ToolsTabFields[3]);   // the Ask tab: second after Options until later on 2026-09-21, between Shell and Git (native) since
         Assert.True(SettingsMenu.IsToggle(SettingsField.AskUser));
         Assert.False(SettingsMenu.IsToggle(SettingsField.AskMaxQuestions) || SettingsMenu.IsToggle(SettingsField.AskMaxChoices));

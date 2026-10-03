@@ -60,16 +60,14 @@ public sealed class UncWriteTool : UncTool
 
         string content = ToolArguments.ReadString(arguments, ContentArgument);
         string action = mode == WriteMode.Append ? "appended to" : mode == WriteMode.Overwrite ? "wrote over" : "wrote";
-        return await WriteAsync(ReadShare(arguments), path, action, (files, relative) =>
+        // The diff beside the sentence for the transcript (2026-10-03, ToolDiffResult), kept only when the write was done.
+        FileDiff? diff = null;
+        string text = await WriteAsync(ReadShare(arguments), path, action, (files, relative) =>
         {
-            if (mode == WriteMode.Append)
-            {
-                var appended = files.AppendText(relative, content);
-                return (FileText.Appended(appended), appended.Outcome == FileOutcome.Ok);
-            }
-
-            var wrote = files.WriteText(relative, content, overwrite: mode == WriteMode.Overwrite);
-            return (FileText.Wrote(wrote), wrote.Outcome == FileOutcome.Ok);
+            var (sentence, done, changed) = WriteFileTool.Write(files, relative, content, mode);
+            diff = done ? changed : null;
+            return (sentence, done);
         }, cancellationToken).ConfigureAwait(false);
+        return ToolDiffResult.Of(text, diff);
     }
 }

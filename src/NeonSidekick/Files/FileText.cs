@@ -865,4 +865,43 @@ public static class FileText
     /// <summary>The tail of a cut list: <c>… only the first 50 matches are shown</c>. Pinned.</summary>
     public static string OnlyFirst(int n, string what) =>
         "… only the first " + n.ToString(CultureInfo.InvariantCulture) + " " + what + " are shown";
+
+    // ---- the transcript's diff under an edit (2026-10-03) ----
+
+    /// <summary>
+    /// The 🛠️ line above an edit's diff: the result's first line, its trailing colon dropped — <c>edited x.cs (lines 12–16, now 48
+    /// lines, 210 words)</c> — since the numbered region under it is the model's to read and the diff shows the change.
+    /// </summary>
+    public static string DiffNote(string result)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+        int end = result.IndexOf('\n', StringComparison.Ordinal);
+        string first = (end < 0 ? result : result[..end]).TrimEnd();
+        return first.EndsWith(':') ? first[..^1] : first;
+    }
+
+    /// <summary>
+    /// The diff's own header, Claude Code's words: <c>Added 3 lines, removed 1 line</c>, either half alone when the other is
+    /// nothing, and <c>Wrote 12 lines</c> for a file that was not there.
+    /// </summary>
+    public static string DiffSummary(FileDiff diff)
+    {
+        ArgumentNullException.ThrowIfNull(diff);
+        if (diff.Created)
+        {
+            return "Wrote " + Count(diff.Added, "line", "lines");
+        }
+
+        if (diff.Removed == 0)
+        {
+            return "Added " + Count(diff.Added, "line", "lines");
+        }
+
+        return diff.Added == 0
+            ? "Removed " + Count(diff.Removed, "line", "lines")
+            : "Added " + Count(diff.Added, "line", "lines") + ", removed " + Count(diff.Removed, "line", "lines");
+    }
+
+    /// <summary>The last row of a diff cut at <c>Diff max lines</c>: <c>… 12 more lines</c>.</summary>
+    public static string DiffMore(int n) => "… " + Count(n, "more line", "more lines");
 }

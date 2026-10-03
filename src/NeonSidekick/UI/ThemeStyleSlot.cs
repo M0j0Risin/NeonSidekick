@@ -87,6 +87,8 @@ public enum ThemeStyleSlot
     CodeHeading,
     CodeInserted,
     CodeDeleted,
+    DiffAdded,
+    DiffRemoved,
 }
 
 /// <summary>
@@ -133,6 +135,7 @@ public static class ThemeKeys
         "markdownCodeBlock", "markdownCodeLabel", "thinking", "markdownHeading1", "markdownHeading", "markdownBullet", "markdownQuoteBar",
         "markdownQuote", "markdownLinkUrl", "markdownRule", "codeKeyword", "codeType", "codeString", "codeNumber", "codeComment",
         "codePunctuation", "codeFunction", "codeVariable", "codeAttribute", "codeTag", "codeHeading", "codeInserted", "codeDeleted",
+        "diffAdded", "diffRemoved",
     ];
 
     /// <summary>The word of <paramref name="slot"/>.</summary>

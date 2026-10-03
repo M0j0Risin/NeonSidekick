@@ -105,3 +105,9 @@ public sealed class PictureTool(IReadOnlyList<ImageAttachment> images, string na
     protected override ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
         => new(new ToolImageResult("saw " + string.Join(", ", images.Select(i => i.Path)), images));
 }
+
+/// <summary>A tool's answer as the model reads it: the sentence of a <see cref="ToolDiffResult"/> (2026-10-03, the file-writing tools), else the string.</summary>
+public static class ToolAnswers
+{
+    public static string Text(object? answer) => answer is ToolDiffResult changed ? changed.Text : (string)answer!;
+}

@@ -1,6 +1,8 @@
 using NeonSidekick.Diagnostics;
+using NeonSidekick.Files;
 using NeonSidekick.UI.Markdown;
 using Spectre.Console;
+using Spectre.Console.Rendering;
 
 namespace NeonSidekick.UI;
 
@@ -317,6 +319,20 @@ public sealed class TranscriptRenderer : INoticeSink
                 ToolLine(Theme.ColorMarkup(color, ToolAnswerIndent + line.TrimEnd()), Theme.ColorMarkup(color, line.Trim()));
             }
         }
+    }
+
+    /// <summary>
+    /// A file edit's note and its diff under it (2026-10-03, the user's ask: Claude Code's look): <paramref name="note"/> as
+    /// <see cref="ToolNote"/> draws it, then <see cref="DiffView"/>'s rows, cut at <paramref name="maxLines"/>. One write, so a
+    /// tool run counts it once and folds it whole past <c>Tool collapse count</c>, Ctrl+O and <c>/expand</c> opening it again.
+    /// </summary>
+    public void ToolDiff(string note, FileDiff diff, int maxLines)
+    {
+        ArgumentNullException.ThrowIfNull(note);
+        ArgumentNullException.ThrowIfNull(diff);
+        var full = new DiffView(new Markup(ToolNoteMarkup(note)), diff, maxLines);
+        var inline = new DiffView(new Markup(Theme.ColorMarkup(Theme.Dim, ToolGlyph.TrimStart() + Truncate(note, ToolTextLimit))), diff, maxLines);
+        ToolWrite(full, () => WriteBlock(full, inline));
     }
 
     /// <summary>What stands before each line of a <see cref="ToolAnswer"/>: the width of <see cref="ToolGlyph"/>, blank.</summary>
@@ -710,7 +726,14 @@ public sealed class TranscriptRenderer : INoticeSink
     /// (dropped from the slot, or taken back out of the flow on the plain path) — and past the count
     /// the pane folds the run under its summary. Otherwise the plain line it always was.
     /// </summary>
-    private void ToolLine(string fullMarkup, string inlineMarkup)
+    private void ToolLine(string fullMarkup, string inlineMarkup) =>
+        ToolWrite(new Markup(fullMarkup + "\n"), () => WriteLine(fullMarkup, inlineMarkup));
+
+    /// <summary>
+    /// <see cref="ToolLine"/> for any write (2026-10-03, an edit's diff of many rows): <paramref name="member"/> joins the run —
+    /// it must end with a line break — or, with no run to join, <paramref name="alone"/> writes it the way it always was.
+    /// </summary>
+    private void ToolWrite(IRenderable member, Action alone)
     {
         EndThinking();
         bool open = _run && _pane!.ToolGroupOpen;
@@ -718,7 +741,7 @@ public sealed class TranscriptRenderer : INoticeSink
         if (!open && (_pane is not { Enabled: true } || keep <= 0))
         {
             _run = false;
-            WriteLine(fullMarkup, inlineMarkup);
+            alone();
             return;
         }
 
@@ -751,7 +774,37 @@ public sealed class TranscriptRenderer : INoticeSink
                 BreakIfMidText();
             }
 
-            _pane.WriteToolLine(new Markup(fullMarkup + "\n"));
+            _pane.WriteToolLine(member);
+        }
+
+        _state = LineState.AtLineStart;
+    }
+
+    /// <summary><see cref="WriteLine"/> for a block that renders its own rows and line breaks (<see cref="ToolDiff"/>).</summary>
+    private void WriteBlock(IRenderable full, IRenderable inline)
+    {
+        EndThinking();
+        _heldWhitespace.Clear();
+        if (_state == LineState.GlyphOnly)
+        {
+            if (_slot)
+            {
+                using (_pane!.Batch())
+                {
+                    DropSlot();
+                    _console.Write(new RawText(AssistantGlyph, Theme.Accent));
+                    _console.Write(inline);
+                }
+            }
+            else
+            {
+                _console.Write(inline);
+            }
+        }
+        else
+        {
+            BreakIfMidText();
+            _console.Write(full);
         }
 
         _state = LineState.AtLineStart;

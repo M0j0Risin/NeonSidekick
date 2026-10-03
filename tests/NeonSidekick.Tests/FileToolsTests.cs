@@ -52,7 +52,7 @@ public sealed class FileToolsTests : IDisposable
     }
 
     private static async Task<string> Invoke(AIFunction tool, params (string Name, object? Value)[] values) =>
-        (string)(await tool.InvokeAsync(Args(values), CancellationToken.None))!;
+        ToolAnswers.Text(await tool.InvokeAsync(Args(values), CancellationToken.None));
 
     private void Put(string relative, string text)
     {

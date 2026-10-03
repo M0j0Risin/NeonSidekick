@@ -65,10 +65,12 @@ public sealed class PatchFileTool : FileTool
             return new ValueTask<object?>(error);
         }
 
-        return new ValueTask<object?>(Describe(
+        // The diff beside the sentence for the transcript (2026-10-03, ToolDiffResult); the model gets the sentence alone.
+        var edited = Files.EditText(
             path,
             ToolArguments.ReadString(arguments, OldTextArgument),
             ToolArguments.ReadString(arguments, NewTextArgument),
-            replaceAll));
+            replaceAll);
+        return new ValueTask<object?>(ToolDiffResult.Of(FileText.Edited(edited), edited.Diff));
     }
 }

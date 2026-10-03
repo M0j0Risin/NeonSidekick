@@ -1130,7 +1130,29 @@ public sealed class AppSettingsData
     public const int MinCodeCollapseCount = 0;
     public const int MaxCodeCollapseCount = 100;
 
-    // ─── Ask ────────────────────────────────────────────────────────────────────
+    /// <summary>
+    /// Whether a file edit shows its diff under its 🛠️ line (2026-10-03, the user's ask: Claude Code's look) — <c>patch_file</c>,
+    /// <c>write_file</c>, <c>unc_patch</c>, <c>unc_write</c>: <c>└ Added 3 lines, removed 1 line</c>, then the changed lines numbered with
+    /// three of context, added ones on a green slab and removed ones on a red, coloured by the file's language. Part of the tool run,
+    /// so it folds with it past <see cref="ToolCollapseCount"/> (the note and its diff count once). Display only: the model's result is
+    /// the same either way. Off, the one-line note it always was. The Options tab of <c>/tools</c>, under
+    /// <see cref="CodeCollapseCount"/>; read at each result, no reconnect. No variable.
+    /// </summary>
+    public bool ShowFileDiffs { get; set; } = true;
+
+    /// <summary>
+    /// The most rows of an edit's diff (<see cref="ShowFileDiffs"/>) the transcript shows (2026-10-03): past it a
+    /// <c>… 12 more lines</c> row ends it; a wrapped line counts once. <see cref="MinDiffMaxLines"/> to <see cref="MaxDiffMaxLines"/>;
+    /// 0 = the header line alone. The Options tab of <c>/tools</c>, under <see cref="ShowFileDiffs"/>. No variable.
+    /// </summary>
+    public int DiffMaxLines { get; set; } = DefaultDiffMaxLines;
+
+    /// <summary>The default, the least and the most <see cref="DiffMaxLines"/> may be (0 = the header alone).</summary>
+    public const int DefaultDiffMaxLines = 40;
+    public const int MinDiffMaxLines = 0;
+    public const int MaxDiffMaxLines = 500;
+
+    // ─── Ask────────────────────────────────────────────────────────────────────
 
     /// <summary>
     /// The most options one <c>ask_user</c> question may offer: <see cref="MinAskMaxChoices"/> to

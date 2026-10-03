@@ -224,6 +224,17 @@ public static class Theme
     public static Style CodeInserted => s_current[ThemeStyleSlot.CodeInserted];
     /// <summary>A diff's removed line.</summary>
     public static Style CodeDeleted => s_current[ThemeStyleSlot.CodeDeleted];
+    /// <summary>
+    /// An added line under a file edit (2026-10-03, the user's ask: diffs in the transcript, Claude Code's look): a slab of the
+    /// palette's own good colour a quarter of the way up from the page, so every theme has its own green; the line's text keeps
+    /// its code colours over it (<see cref="DiffView"/> takes only the background).
+    /// </summary>
+    public static Style DiffAdded => s_current[ThemeStyleSlot.DiffAdded];
+    /// <summary>A removed line under a file edit: <see cref="DiffAdded"/>'s slab in the palette's bad colour.</summary>
+    public static Style DiffRemoved => s_current[ThemeStyleSlot.DiffRemoved];
+
+    /// <summary>How far a diff slab goes from the page colour toward good or bad: enough to read, faint enough for code over it.</summary>
+    private const double DiffSlabShare = 0.28;
 
     /// <summary>The style of a <see cref="CodeTokenKind"/>; plain text is <see cref="MarkdownCodeBlock"/>.</summary>
     public static Style CodeStyle(CodeTokenKind kind) => kind switch
@@ -472,6 +483,8 @@ public static class Theme
             ThemeStyleSlot.CodeHeading => new(foreground: p.Tertiary, background: p.PanelBg, decoration: Decoration.Bold),
             ThemeStyleSlot.CodeInserted => new(foreground: p.Good, background: p.PanelBg),
             ThemeStyleSlot.CodeDeleted => new(foreground: p.Bad, background: p.PanelBg),
+            ThemeStyleSlot.DiffAdded => new(foreground: p.Ink, background: Lerp(p.Bg, p.Good, DiffSlabShare)),
+            ThemeStyleSlot.DiffRemoved => new(foreground: p.Ink, background: Lerp(p.Bg, p.Bad, DiffSlabShare)),
             _ => throw new ArgumentOutOfRangeException(nameof(slot), slot, "An alias slot has no style of its own."),
         };
     }

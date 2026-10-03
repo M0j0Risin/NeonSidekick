@@ -808,6 +808,12 @@ public enum SettingsField
 
     /// <summary>A toggle (the <c>Themed background</c> row): whether the terminal's page wears the theme's background (<see cref="Settings.AppSettingsData.ThemedBackground"/>). The General tab, under <see cref="Theme"/> (2026-10-03, the user's ask, name and place); no reconnect (read on every frame). Last in the enum, as every newcomer.</summary>
     ThemedBackground,
+
+    /// <summary>A toggle: whether a file edit shows its diff under its 🛠️ line (<see cref="Settings.AppSettingsData.ShowFileDiffs"/>). The Options tab of <c>/tools</c>, under <see cref="CodeCollapseCount"/> (2026-10-03, the user's ask); no reconnect (read at each result). Last in the enum, as every newcomer.</summary>
+    ShowFileDiffs,
+
+    /// <summary>Typed: the most rows of an edit's diff the transcript shows, 0 (the header alone) to 500 (<see cref="Settings.AppSettingsData.DiffMaxLines"/>). The Options tab of <c>/tools</c>, under <see cref="ShowFileDiffs"/> (2026-10-03); no reconnect. Last in the enum, as every newcomer.</summary>
+    DiffMaxLines,
 }
 
 /// <summary>The tabs of <c>/settings</c> on the pane, in strip order (General, Embedded, LLM, TTS, STT, Sessions, Botchat — the user's order, 2026-09-29; Sessions right after General — the user's order, 2026-09-18 — until then; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
@@ -1004,6 +1010,10 @@ internal sealed partial class SettingsMenu
     public static readonly string ToolCollapseCountRangeError =
         "must be " + AppSettingsData.MinToolCollapseCount.ToString(CultureInfo.InvariantCulture) + " to " + AppSettingsData.MaxToolCollapseCount.ToString(CultureInfo.InvariantCulture) + " lines (0 = off)";
 
+    /// <summary>The settings-menu wording for a bad <see cref="SettingsField.DiffMaxLines"/> (2026-10-03).</summary>
+    public static readonly string DiffMaxLinesRangeError =
+        "must be " + AppSettingsData.MinDiffMaxLines.ToString(CultureInfo.InvariantCulture) + " to " + AppSettingsData.MaxDiffMaxLines.ToString(CultureInfo.InvariantCulture) + " lines (0 = the header alone)";
+
     /// <summary>The settings-menu wording for a bad <see cref="SettingsField.CodeCollapseCount"/>. Pinned.</summary>
     public static readonly string CodeCollapseCountRangeError =
         "must be " + AppSettingsData.MinCodeCollapseCount.ToString(CultureInfo.InvariantCulture) + " to " + AppSettingsData.MaxCodeCollapseCount.ToString(CultureInfo.InvariantCulture) + " lines (0 = off)";
@@ -1188,7 +1198,7 @@ internal sealed partial class SettingsMenu
         [SettingsField.DockerTools, SettingsField.DockerWrites, SettingsField.DockerEnginePipe],
         [SettingsField.GitLibTools, SettingsField.GitLibDiffMaxLines, SettingsField.GitLibLogMaxCommits, SettingsField.GitLibEmail, SettingsField.GitLibName],
         [SettingsField.HomeAssistantTools, SettingsField.HomeAssistantUrl, SettingsField.HomeAssistantToken, SettingsField.HomeAssistantTest, SettingsField.HomeAssistantActionPolicy, SettingsField.HomeAssistantAssistAgent, SettingsField.HomeAssistantTimeoutSeconds],
-        [SettingsField.ToolsDollarMention, SettingsField.ToolCollapseCount, SettingsField.CodeCollapseCount],
+        [SettingsField.ToolsDollarMention, SettingsField.ToolCollapseCount, SettingsField.CodeCollapseCount, SettingsField.ShowFileDiffs, SettingsField.DiffMaxLines],
     ];
 
     /// <summary>
@@ -1555,7 +1565,7 @@ internal sealed partial class SettingsMenu
             or SettingsField.SkillHashMention or SettingsField.ReflectionAutoLearn
             or SettingsField.HideExitAutocomplete or SettingsField.CommandTypoIntercept or SettingsField.KeepCommandHistory or SettingsField.ShowHeader or SettingsField.ShowWorkingDirectory or SettingsField.ThemedViewer or SettingsField.ThemedBackground
             or SettingsField.QueueMessages or SettingsField.SessionLogging or SettingsField.SessionTool or SettingsField.SessionSaveThinking
-            or SettingsField.ToolsDollarMention or SettingsField.ReflectionIncludesSessions or SettingsField.ReflectionYieldsToTurns or SettingsField.ReflectionEditsSupportingFiles or SettingsField.McpServers or SettingsField.GitLibTools
+            or SettingsField.ToolsDollarMention or SettingsField.ShowFileDiffs or SettingsField.ReflectionIncludesSessions or SettingsField.ReflectionYieldsToTurns or SettingsField.ReflectionEditsSupportingFiles or SettingsField.McpServers or SettingsField.GitLibTools
             or SettingsField.LlmCompactShowSummary or SettingsField.ShellToolBridge or SettingsField.ShellPoliceOutsidePaths or SettingsField.ShellPreferNative
             or SettingsField.ObsidianTools or SettingsField.ObsidianAllowDelete or SettingsField.SqlTools or SettingsField.SqlPercentMention or SettingsField.ComfyTools or SettingsField.ComfyReinforceNegatives or SettingsField.ComfyShowPrompts or SettingsField.ComfyCaretMention or SettingsField.ComfyPictureStrip
             or SettingsField.BotChatImages or SettingsField.BotChatImageAsync or SettingsField.BotChatSkills or SettingsField.BotChatVision or SettingsField.BotChatMultiEmbeddedKill or SettingsField.ClaudeAdvisor or SettingsField.ClaudeAdvisorConfirm
@@ -1791,6 +1801,8 @@ internal sealed partial class SettingsMenu
         SettingsField.ToolsDollarMention => "$-mention enabled",
         SettingsField.ToolCollapseCount => "Tool collapse count",
         SettingsField.CodeCollapseCount => "Code collapse count",
+        SettingsField.ShowFileDiffs => "Show file diffs",
+        SettingsField.DiffMaxLines => "Diff max lines",
         SettingsField.ReflectionAutoLearn => "Reflection (auto-learn)",
         SettingsField.ReflectionReasoning => "Reflection reasoning",
         SettingsField.ReflectionWindow => "Reflection window",
@@ -2074,6 +2086,8 @@ internal sealed partial class SettingsMenu
             SettingsField.ToolsDollarMention => OnOff(data.ToolsDollarMention),
             SettingsField.ToolCollapseCount => Lines(data.ToolCollapseCount),
             SettingsField.CodeCollapseCount => Lines(data.CodeCollapseCount),
+            SettingsField.ShowFileDiffs => OnOff(data.ShowFileDiffs),
+            SettingsField.DiffMaxLines => DiffLines(data.DiffMaxLines),
             SettingsField.ReflectionAutoLearn => OnOff(data.ReflectionAutoLearn),
             SettingsField.ReflectionReasoning => data.ReflectionReasoning,
             SettingsField.ReflectionWindow => Turns(data.ReflectionWindow),
@@ -2772,6 +2786,7 @@ internal sealed partial class SettingsMenu
         SettingsField.WebDownloadMaxMegabytes => data.WebDownloadMaxMegabytes.ToString(CultureInfo.InvariantCulture),
         SettingsField.ToolCollapseCount => data.ToolCollapseCount.ToString(CultureInfo.InvariantCulture),
         SettingsField.CodeCollapseCount => data.CodeCollapseCount.ToString(CultureInfo.InvariantCulture),
+        SettingsField.DiffMaxLines => data.DiffMaxLines.ToString(CultureInfo.InvariantCulture),
         SettingsField.GitLibDiffMaxLines => data.GitLibDiffMaxLines.ToString(CultureInfo.InvariantCulture),
         SettingsField.ShellTimeoutSeconds => data.ShellTimeoutSeconds.ToString(CultureInfo.InvariantCulture),
         SettingsField.ShellForegroundCapSeconds => data.ShellForegroundCapSeconds.ToString(CultureInfo.InvariantCulture),
@@ -4057,6 +4072,16 @@ internal sealed partial class SettingsMenu
                 }
 
                 Apply(field, d => d.CodeCollapseCount = codeCollapse);
+                return true;
+
+            case SettingsField.DiffMaxLines:
+                if (!int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out int diffRows) || diffRows < AppSettingsData.MinDiffMaxLines || diffRows > AppSettingsData.MaxDiffMaxLines)
+                {
+                    Sink.Error($"{FieldName(field)} {DiffMaxLinesRangeError}; keeping {EditableValue(field, saved)}.");
+                    return false;
+                }
+
+                Apply(field, d => d.DiffMaxLines = diffRows);
                 return true;
 
             case SettingsField.WebSearchMaxResults:
@@ -5427,6 +5452,7 @@ internal sealed partial class SettingsMenu
             SettingsField.TranscriptMarkdown => data.TranscriptMarkdown,
             SettingsField.SkillHashMention => data.SkillHashMention,
             SettingsField.ToolsDollarMention => data.ToolsDollarMention,
+            SettingsField.ShowFileDiffs => data.ShowFileDiffs,
             SettingsField.McpServers => data.McpServers,
             SettingsField.ReflectionAutoLearn => data.ReflectionAutoLearn,
             SettingsField.ReflectionIncludesSessions => data.ReflectionIncludesSessions,
@@ -5520,6 +5546,7 @@ internal sealed partial class SettingsMenu
             case SettingsField.TranscriptMarkdown: data.TranscriptMarkdown = on; break;
             case SettingsField.SkillHashMention: data.SkillHashMention = on; break;
             case SettingsField.ToolsDollarMention: data.ToolsDollarMention = on; break;
+            case SettingsField.ShowFileDiffs: data.ShowFileDiffs = on; break;
             case SettingsField.McpServers: data.McpServers = on; break;
             case SettingsField.ReflectionAutoLearn: data.ReflectionAutoLearn = on; break;
             case SettingsField.ReflectionIncludesSessions: data.ReflectionIncludesSessions = on; break;
@@ -5617,6 +5644,7 @@ internal sealed partial class SettingsMenu
         SettingsField.ProjectFile => on ? "use project file (NEON.md or AGENTS.md in the working directory)" : "project files in the working directory are ignored",   // the user's wording, 2026-10-01
         SettingsField.SkillHashMention => on ? "# and part of a name lists the loaded skills on the line" : "# is ordinary text",
         SettingsField.ToolsDollarMention => on ? "$ and part of a name lists the offered tools on the line" : "$ is ordinary text",
+        SettingsField.ShowFileDiffs => on ? "a file edit shows its diff under its line" : "a file edit shows its one line",
         SettingsField.McpServers => on ? "the configured MCP servers connect and their tools are offered" : "no MCP server is started; the pane still lists the config",
         SettingsField.ReflectionAutoLearn => on ? "automatic reflection enabled" : "automatic reflection disabled",
         SettingsField.ReflectionIncludesSessions => on ? "a reflection can read past sessions for insights" : "a reflection reads the conversation on screen alone",
@@ -7043,6 +7071,9 @@ internal sealed partial class SettingsMenu
 
     /// <summary><c>25 lines</c>, <c>1 line</c>, <c>off</c> at 0: the paste preview count as the row shows it. Pinned.</summary>
     public static string Lines(int value) => value == 0 ? "off" : value.ToString(CultureInfo.InvariantCulture) + (value == 1 ? " line" : " lines");
+
+    /// <summary><c>40 lines</c>, <c>header only</c> at 0: <c>Diff max lines</c> as the row shows it (2026-10-03).</summary>
+    public static string DiffLines(int value) => value == 0 ? "header only" : Lines(value);
 
     /// <summary><c>30 days</c>, <c>1 day</c>, <c>forever</c> at 0: the session retention as the row shows it. Pinned.</summary>
     public static string Days(int value) => value == 0 ? "forever" : value.ToString(CultureInfo.InvariantCulture) + (value == 1 ? " day" : " days");

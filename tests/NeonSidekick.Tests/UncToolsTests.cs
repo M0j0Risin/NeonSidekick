@@ -63,7 +63,7 @@ public sealed class UncToolsTests : IDisposable
     private T Tool<T>() where T : AIFunction => _tools.OfType<T>().Single();
 
     private async Task<string> Invoke<T>(params (string Name, object? Value)[] pairs) where T : AIFunction =>
-        (string)(await Tool<T>().InvokeAsync(new AIFunctionArguments(pairs.ToDictionary(p => p.Name, p => p.Value))))!;
+        ToolAnswers.Text(await Tool<T>().InvokeAsync(new AIFunctionArguments(pairs.ToDictionary(p => p.Name, p => p.Value))));
 
     private string EngName => UncText.ShareName(_catalog.Shares[0]);
 
@@ -343,7 +343,7 @@ public sealed class UncToolsTests : IDisposable
         var opened = new List<string>();
         var open = new OpenTool(_sandbox, opened.Add, new UncAccess(() => _catalog, _time), () => _settings);
         async Task<string> Open(params (string Name, object? Value)[] pairs) =>
-            (string)(await open.InvokeAsync(new AIFunctionArguments(pairs.ToDictionary(p => p.Name, p => p.Value))))!;
+            ToolAnswers.Text(await open.InvokeAsync(new AIFunctionArguments(pairs.ToDictionary(p => p.Name, p => p.Value))));
         static string[] Properties(AIFunction tool) => tool.JsonSchema.GetProperty("properties").EnumerateObject().Select(p => p.Name).ToArray();
 
         Assert.Equal(["path", "share"], Properties(open));

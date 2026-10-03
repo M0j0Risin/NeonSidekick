@@ -731,6 +731,8 @@ public sealed class AppSettings : IDisposable
         ToolsDollarMention = source.ToolsDollarMention,
         ToolCollapseCount = source.ToolCollapseCount,
         CodeCollapseCount = source.CodeCollapseCount,
+        ShowFileDiffs = source.ShowFileDiffs,
+        DiffMaxLines = source.DiffMaxLines,
         AskMaxChoices = source.AskMaxChoices,
         AskMaxQuestions = source.AskMaxQuestions,
         AskUser = source.AskUser,

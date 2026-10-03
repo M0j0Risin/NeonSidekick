@@ -227,7 +227,7 @@ public static class CodeLanguages
 
     public static readonly CodeLanguage Diff = new("diff") { Mode = CodeLexMode.Diff };
 
-    /// <summary>Fence names (case-insensitive) → language.</summary>
+    /// <summary>Fence names (case-insensitive) → language; a file's extension too, for the diff under an edit (<see cref="DiffView.LanguageOf"/>, 2026-10-03, which added the module and MSBuild ones).</summary>
     private static readonly FrozenDictionary<string, CodeLanguage> Aliases = new Dictionary<string, CodeLanguage>(StringComparer.OrdinalIgnoreCase)
     {
         ["csharp"] = CSharp, ["cs"] = CSharp, ["c#"] = CSharp,
@@ -235,7 +235,7 @@ public static class CodeLanguages
         ["typescript"] = TypeScript, ["ts"] = TypeScript, ["tsx"] = TypeScript,
         ["python"] = Python, ["py"] = Python, ["python3"] = Python,
         ["bash"] = Shell, ["sh"] = Shell, ["shell"] = Shell, ["zsh"] = Shell, ["console"] = Shell,
-        ["powershell"] = PowerShell, ["pwsh"] = PowerShell, ["ps1"] = PowerShell, ["ps"] = PowerShell,
+        ["powershell"] = PowerShell, ["pwsh"] = PowerShell, ["ps1"] = PowerShell, ["ps"] = PowerShell, ["psm1"] = PowerShell, ["psd1"] = PowerShell,
         ["json"] = Json, ["jsonc"] = Json, ["json5"] = Json,
         ["yaml"] = Yaml, ["yml"] = Yaml,
         ["toml"] = Toml, ["ini"] = Toml, ["cfg"] = Toml,
@@ -247,6 +247,7 @@ public static class CodeLanguages
         ["rust"] = Rust, ["rs"] = Rust,
         ["css"] = Css, ["scss"] = Css, ["less"] = Css,
         ["xml"] = Markup, ["html"] = Markup, ["htm"] = Markup, ["xaml"] = Markup, ["svg"] = Markup, ["csproj"] = Markup, ["xhtml"] = Markup,
+        ["props"] = Markup, ["targets"] = Markup, ["slnx"] = Markup, ["resx"] = Markup, ["xsd"] = Markup,
         ["diff"] = Diff, ["patch"] = Diff,
     }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
 

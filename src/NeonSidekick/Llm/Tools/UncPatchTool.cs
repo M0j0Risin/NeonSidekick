@@ -57,10 +57,14 @@ public sealed class UncPatchTool : UncTool
 
         string oldText = ToolArguments.ReadString(arguments, OldTextArgument);
         string newText = ToolArguments.ReadString(arguments, NewTextArgument);
-        return await WriteAsync(ReadShare(arguments), path, "patched", (files, relative) =>
+        // The diff beside the sentence for the transcript (2026-10-03, ToolDiffResult).
+        FileDiff? diff = null;
+        string text = await WriteAsync(ReadShare(arguments), path, "patched", (files, relative) =>
         {
             var edited = files.EditText(relative, oldText, newText, replaceAll ?? false);
+            diff = edited.Diff;
             return (FileText.Edited(edited), edited.Outcome == FileOutcome.Ok);
         }, cancellationToken).ConfigureAwait(false);
+        return ToolDiffResult.Of(text, diff);
     }
 }

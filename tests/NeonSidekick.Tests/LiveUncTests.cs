@@ -58,7 +58,7 @@ public sealed class LiveUncTests
         ChatScreen.UncTools(new UncAccess(() => new UncCatalog([share], []), _time), new WorkingDirectory(() => Path.GetTempPath(), _time), () => _settings);
 
     private static async Task<string> Invoke<T>(IReadOnlyList<AIFunction> tools, params (string Name, object? Value)[] pairs) where T : AIFunction =>
-        (string)(await tools.OfType<T>().Single().InvokeAsync(new AIFunctionArguments(pairs.ToDictionary(p => p.Name, p => p.Value))))!;
+        ToolAnswers.Text(await tools.OfType<T>().Single().InvokeAsync(new AIFunctionArguments(pairs.ToDictionary(p => p.Name, p => p.Value))));
 
     [LiveUncFact]
     public async Task AsTheUser_TheShareIsReached_Listed_AndSearched_OverSmb()

@@ -233,7 +233,8 @@ public class ScrollbackTests
         // A new run follows it: every line, under its unfolded summary.
         store.BeginGroup(1);
         store.SetGroupSummary(Segments("  S2"), Segments("  E2"));
-        store.Append(Segments("  n1\n", "  n2\n"), 40, member: true);
+        store.Append(Segments("  n1\n"), 40, member: true);
+        store.Append(Segments("  n2\n"), 40, member: true);   // two writes: a run counts writes, not lines (2026-10-03)
         store.EndGroup();
         Assert.Equal(new[] { "before", "  E", "  m1", "  m2", "  E2", "  n1", "  n2" }, Texts(store.Rows(40)));
     }

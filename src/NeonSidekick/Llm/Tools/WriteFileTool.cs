@@ -81,11 +81,23 @@ public sealed class WriteFileTool : FileTool
         return false;
     }
 
-    public string Describe(string path, string content, WriteMode mode = WriteMode.Create)
+    public string Describe(string path, string content, WriteMode mode = WriteMode.Create) => Write(Files, path, content, mode).Text;
+
+    /// <summary>
+    /// The write and its sentence, with what it changed for the transcript (2026-10-03, <see cref="FileDiff"/>); shared with
+    /// <c>unc_write</c>, whose sandbox is a share's.
+    /// </summary>
+    public static (string Text, bool Done, FileDiff? Diff) Write(WorkingDirectory files, string path, string content, WriteMode mode)
     {
-        return mode == WriteMode.Append
-            ? FileText.Appended(Files.AppendText(path, content))
-            : FileText.Wrote(Files.WriteText(path, content, overwrite: mode == WriteMode.Overwrite));
+        ArgumentNullException.ThrowIfNull(files);
+        if (mode == WriteMode.Append)
+        {
+            var appended = files.AppendText(path, content);
+            return (FileText.Appended(appended), appended.Outcome == FileOutcome.Ok, appended.Diff);
+        }
+
+        var wrote = files.WriteText(path, content, overwrite: mode == WriteMode.Overwrite);
+        return (FileText.Wrote(wrote), wrote.Outcome == FileOutcome.Ok, wrote.Diff);
     }
 
     protected override ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
@@ -102,7 +114,8 @@ public sealed class WriteFileTool : FileTool
             return new ValueTask<object?>(error);
         }
 
-        return new ValueTask<object?>(Describe(path, ToolArguments.ReadString(arguments, ContentArgument), mode));
+        var (text, _, diff) = Write(Files, path, ToolArguments.ReadString(arguments, ContentArgument), mode);
+        return new ValueTask<object?>(ToolDiffResult.Of(text, diff));
     }
 }
 

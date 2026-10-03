@@ -17395,6 +17395,65 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("drafts\\haiku.txt (2 lines):\nold pond\nfrog jumps in", results.Single().Result);
     }
 
+    [Fact]
+    public async Task Turn_ModelWritesThenPatchesAFile_ShowsEachDiffUnderItsNote()
+    {
+        // 2026-10-03, the user's ask (Claude Code's look): the note's first line, then the header and the numbered rows.
+        _settings.Update(d => d.TtsOutput = false);
+        _chat.Enqueue(FakeChatClient.Call("c1", WriteFileTool.ToolName, new Dictionary<string, object?> { ["path"] = "haiku.txt", ["content"] = "old pond\nfrog jumps in" }));
+        _chat.Enqueue(FakeChatClient.Call("c2", PatchFileTool.ToolName, new Dictionary<string, object?> { ["path"] = "haiku.txt", ["old_text"] = "jumps", ["new_text"] = "leaps" }));
+        _chat.EnqueueText("Changed.");
+        PushLine("write and fix a haiku");
+        PushLine("/exit");
+
+        // A slab row is filled to the window's edge: compared with its trailing spaces trimmed.
+        string output = string.Join("\n", (await RunAsync()).Split('\n').Select(l => l.TrimEnd()));
+
+        Assert.Contains("🛠️ wrote haiku.txt (22 bytes, 2 lines, 5 words)\n     └ Wrote 2 lines\n     1 + old pond\n     2 + frog jumps in\n", output);
+        Assert.Contains("🛠️ edited haiku.txt (line 2; now 2 lines, 5 words)\n     └ Added 1 line, removed 1 line\n     1   old pond\n     2 - frog jumps in\n     2 + frog leaps in\n", output);
+        Assert.DoesNotContain("1: old pond", output);   // the numbered region is the model's to read
+
+        // The model's result is as it always was.
+        var result = Assert.Single(_chat.Requests[2][^1].Contents.OfType<FunctionResultContent>());
+        Assert.StartsWith("edited haiku.txt (line 2; now 2 lines, 5 words):\n1: old pond\n2: frog leaps in", (string)result.Result!);
+    }
+
+    [Fact]
+    public async Task Turn_WithShowFileDiffsOff_AnEditIsItsOneLine()
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.ShowFileDiffs = false; });
+        _chat.Enqueue(FakeChatClient.Call("c1", WriteFileTool.ToolName, new Dictionary<string, object?> { ["path"] = "a.txt", ["content"] = "one\n" }));
+        _chat.EnqueueText("Saved.");
+        PushLine("save it");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains("🛠️ wrote a.txt (4 bytes, 1 line, 1 word)\n", output);
+        Assert.DoesNotContain(DiffView.Elbow, output);
+    }
+
+    [Fact]
+    public async Task ToolRun_AnEditsNoteAndDiff_CountOnce_SoTheRunStaysOpenWithinTheCount()
+    {
+        // A run counts writes (2026-10-03): the note and its four-row diff are one, so with the opening calls' two a keep of 3 leaves
+        // it unfolded; counted by lines (six) it folded.
+        _settings.Update(d => { d.TtsOutput = false; d.ToolCollapseCount = 3; });
+        _console.Profile.Height = 40;
+        _geometry = new ScreenGeometry(() => null);
+        _chat.Enqueue(FakeChatClient.Call("c1", WriteFileTool.ToolName, new Dictionary<string, object?> { ["path"] = "a.txt", ["content"] = "one\ntwo\nthree\n" }));
+        _chat.EnqueueText("Saved.");
+        PushLine("save it");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        int reply = output.LastIndexOf("Saved.", StringComparison.Ordinal);
+        int rows = output.LastIndexOf("     3 + three", StringComparison.Ordinal);
+        Assert.True(rows >= 0 && rows < reply, output);
+        Assert.DoesNotContain(ToolGroupText.CollapsedGlyph + " 🛠️ ", output);
+    }
+
     /// <summary>The model's own way to a picture: the 🛠️ note, the thumbnail under it, the carrier after the tool message, and the picture still there for a follow-up.</summary>
     [Fact]
     public async Task Turn_ModelViewsAnImage_ShowsTheNoteAndTheThumbnail_AndTheCarrierFollowsTheResult()

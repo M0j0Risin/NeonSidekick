@@ -162,7 +162,11 @@ public sealed record ImageResult(FileOutcome Outcome, string Relative, ImageAtta
 /// <param name="Replaced">A write replaced an existing file; an append created a new one when false.</param>
 /// <param name="Lines">The file's line count after the write (2026-09-18, so the model needs no <c>file_info</c> to count); null for bytes or a file too big to count.</param>
 /// <param name="Words">The file's whitespace-separated word count after the write, the same way.</param>
-public sealed record WriteResult(FileOutcome Outcome, string Relative, long Bytes, bool Replaced, string Detail = "", int? Lines = null, int? Words = null);
+public sealed record WriteResult(FileOutcome Outcome, string Relative, long Bytes, bool Replaced, string Detail = "", int? Lines = null, int? Words = null)
+{
+    /// <summary>What the write changed, for the transcript (2026-10-03, <see cref="FileDiff"/>); null for bytes, a failure, or a replaced file that was not text.</summary>
+    public FileDiff? Diff { get; init; }
+}
 
 /// <summary>
 /// A file being written a piece at a time (2026-10-01, <c>download_file</c> streamed to disk, the user's ask: a cap past what
@@ -273,6 +277,9 @@ public sealed record EditResult(
     public IReadOnlyList<string> Region { get; init; } = Region ?? [];
     public IReadOnlyList<int> Lines { get; init; } = Lines ?? [];
     public IReadOnlyList<MatchLocation> Locations { get; init; } = Locations ?? [];
+
+    /// <summary>What the edit changed, for the transcript (2026-10-03, <see cref="FileDiff"/>); null unless <see cref="FileOutcome.Ok"/>.</summary>
+    public FileDiff? Diff { get; init; }
 }
 
 public sealed record CreateResult(FileOutcome Outcome, string Relative, string Detail = "");
@@ -1300,9 +1307,12 @@ public sealed class WorkingDirectory
                 return new WriteResult(FileOutcome.Exists, display, 0, false);
             }
 
+            // The text it replaces, for the transcript's diff (2026-10-03): only a file that reads as text within the cap.
+            string? before = existed ? PreviousText(full) : null;
             long bytes = WriteAtomically(full, Utf8NoBom.GetBytes(text), _options.PreserveOnReplace);
             Count(text, out int lines, out int words);
-            return new WriteResult(FileOutcome.Ok, display, bytes, existed, Lines: lines, Words: words);
+            var diff = !existed || before is not null ? FileDiff.Of(display, before, text) : null;
+            return new WriteResult(FileOutcome.Ok, display, bytes, existed, Lines: lines, Words: words) { Diff = diff };
         }
         catch (Exception ex) when (IsFileFailure(ex))
         {
@@ -1469,7 +1479,15 @@ public sealed class WorkingDirectory
                 words = w;
             }
 
-            return new WriteResult(FileOutcome.Ok, display, written, existed, Lines: lines, Words: words);
+            // The added lines numbered from where they landed (2026-10-03): the file's lines less the appended text's own.
+            FileDiff? diff = null;
+            if (lines is { } total)
+            {
+                Count(text, out int addedLines, out _);
+                diff = FileDiff.Appended(display, Math.Max(0, total - addedLines), text);
+            }
+
+            return new WriteResult(FileOutcome.Ok, display, written, existed, Lines: lines, Words: words) { Diff = diff };
         }
         catch (Exception ex) when (IsFileFailure(ex))
         {
@@ -1545,12 +1563,13 @@ public sealed class WorkingDirectory
 
             string edited = match.Content;
             Save(full, edited, bom, ending);
+            var diff = FileDiff.Of(display, content, edited);
 
             if (match.Count > 1)
             {
                 var lines = match.Spans.Select(s => 1 + content.AsSpan(0, s.Start).Count('\n')).ToList();
                 Count(edited, out int totalLines, out int words);
-                return new EditResult(FileOutcome.Ok, display, lines[0], match.Count, 0, 0, totalLines, null, 0, lines, Words: words, Strategy: match.Strategy);
+                return new EditResult(FileOutcome.Ok, display, lines[0], match.Count, 0, 0, totalLines, null, 0, lines, Words: words, Strategy: match.Strategy) { Diff = diff };
             }
 
             // The new text's lines: from the placed replacement's first line through the last it reaches.
@@ -1562,7 +1581,7 @@ public sealed class WorkingDirectory
                 newTo = newFrom - 1;
             }
 
-            return Done(display, edited, newFrom, newTo, 1, match.Strategy);
+            return Done(display, edited, newFrom, newTo, 1, match.Strategy) with { Diff = diff };
         }
         catch (Exception ex) when (IsFileFailure(ex))
         {
@@ -1602,6 +1621,28 @@ public sealed class WorkingDirectory
         ending = DetectLineEnding(raw);
         content = NormalizeNewlines(raw);
         return null;
+    }
+
+    /// <summary>
+    /// A file's text before an overwrite replaces it, for the transcript's diff (2026-10-03): null for one over
+    /// <see cref="MaxTextFileBytes"/>, one that looks binary, or one that cannot be read — the write goes on regardless.
+    /// </summary>
+    private static string? PreviousText(string full)
+    {
+        try
+        {
+            if (new FileInfo(full).Length > MaxTextFileBytes)
+            {
+                return null;
+            }
+
+            byte[] bytes = File.ReadAllBytes(full);
+            return LooksBinary(bytes) ? null : Decode(bytes, out _);
+        }
+        catch (Exception ex) when (IsFileFailure(ex))
+        {
+            return null;
+        }
     }
 
     /// <summary>Writes an LF-normalised text back with the file's ending and its BOM.</summary>
