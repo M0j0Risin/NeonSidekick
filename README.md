@@ -21,7 +21,7 @@ Neon Sidekick is an agentic terminal client for local LLMs, built on .NET 10. It
 
 ## Why "Neon"
 
-Early on I was trying synthwave-style themes in Spectre.Console while testing the Vosk voice integration. I needed a short, punchy wake word, and "Neon" fit the look. The name stuck. Today you can create as many profiles, personas and wake words as you like.
+Early on I was trying synthwave-style themes in Spectre.Console while testing the Vosk voice integration. I needed a short, punchy wake word, and "Neon" fit the look. The name stuck. Today you can create as many themes, profiles, personas and wake words as you like.
 
 ## Contents
 
