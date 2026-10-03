@@ -80,14 +80,6 @@ public sealed class AppSettingsData
     public string ImageEditor { get; set; } = "";
 
     /// <summary>
-    /// Whether the built-in picture viewer wears the theme (later on 2026-09-27, the user's ask; the menu's <c>Themed image
-    /// viewer</c> row): on (the default), a dark title bar in the theme's colours and its background round the picture
-    /// (<see cref="Viewer.ViewerStyle"/>); off, a black bar and black round the picture, the look before the theme reached it.
-    /// Read each time the viewer opens or is focused, no reconnect. No variable.
-    /// </summary>
-    public bool ThemedViewer { get; set; } = true;
-
-    /// <summary>
     /// Whether the terminal's page wears the theme's <c>bg</c> (2026-10-03, the user's ask: Windows Terminal never showed it;
     /// the General tab's <c>Themed background</c> row, under <c>Theme</c>): on (the default), the screen sets the terminal's default background
     /// to the palette's <see cref="UI.ThemePalette.Bg"/> while it holds the alternate buffer (OSC 11) and gives the profile's
@@ -95,6 +87,17 @@ public sealed class AppSettingsData
     /// stays. Read on every frame, so a flip shows at once. No variable.
     /// </summary>
     public bool ThemedBackground { get; set; } = true;
+
+    /// <summary>
+    /// Whether the app's own windows wear the theme — the built-in picture viewer, the camera's live window and the log
+    /// window (later on 2026-09-27 for the viewer, the user's ask; the menu's <c>Themed external windows</c> row under
+    /// <c>Themed background</c> since 2026-10-03, the user's ask, name and place: <c>ThemedViewer</c> and <c>Themed image
+    /// viewer</c> under <c>Image viewer</c> before, no migration, so a saved off reads as on once): on (the default), a dark
+    /// title bar in the theme's colours and its background (<see cref="Viewer.ViewerStyle"/>, <see cref="Viewer.LogViewStyle"/>);
+    /// off, a black bar and black, the look before the theme reached them. Read each time a window opens or is focused, no
+    /// reconnect. No variable.
+    /// </summary>
+    public bool ThemedExternalWindows { get; set; } = true;
 
     /// <summary>
     /// Where the built-in picture viewer last closed (2026-09-28, the user's ask: it opens there the next time; position

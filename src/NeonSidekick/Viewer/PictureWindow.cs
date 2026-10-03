@@ -27,7 +27,7 @@ public static class PictureWindow
     private static PictureWindowThread? s_live;
 
     /// <summary>
-    /// Whether the window wears the theme (later on 2026-09-27, the <c>Themed image viewer</c> setting): asked on the window's
+    /// Whether the window wears the theme (later on 2026-09-27, the <c>Themed external windows</c> setting since 2026-10-03, <c>Themed image viewer</c> before): asked on the window's
     /// thread each time it opens or is focused. The app supplies it (<c>Program</c>, over the effective settings) — the viewer
     /// never reads settings itself; on until then.
     /// </summary>

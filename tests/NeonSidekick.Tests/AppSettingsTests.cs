@@ -73,8 +73,8 @@ public class AppSettingsTests : IDisposable
         BotChatMultiEmbedded = "multi-server",
         BotChatMultiEmbeddedKill = false,
         PerformanceBarLook = "led",
-        ThemedViewer = false,
         ThemedBackground = false,
+        ThemedExternalWindows = false,
         ViewerLeft = -1200,
         ViewerTop = 140,
         LogWindowLeft = 300,
@@ -203,8 +203,8 @@ public class AppSettingsTests : IDisposable
         Assert.Equal(expected.BotChatMultiEmbedded, actual.BotChatMultiEmbedded);
         Assert.Equal(expected.BotChatMultiEmbeddedKill, actual.BotChatMultiEmbeddedKill);
         Assert.Equal(expected.PerformanceBarLook, actual.PerformanceBarLook);
-        Assert.Equal(expected.ThemedViewer, actual.ThemedViewer);
         Assert.Equal(expected.ThemedBackground, actual.ThemedBackground);
+        Assert.Equal(expected.ThemedExternalWindows, actual.ThemedExternalWindows);
         Assert.Equal(expected.ViewerLeft, actual.ViewerLeft);
         Assert.Equal(expected.ViewerTop, actual.ViewerTop);
         Assert.Equal(expected.LogWindowLeft, actual.LogWindowLeft);
@@ -356,8 +356,8 @@ public class AppSettingsTests : IDisposable
             d.BotChatMultiEmbedded = full.BotChatMultiEmbedded;
             d.BotChatMultiEmbeddedKill = full.BotChatMultiEmbeddedKill;
             d.PerformanceBarLook = full.PerformanceBarLook;
-            d.ThemedViewer = full.ThemedViewer;
             d.ThemedBackground = full.ThemedBackground;
+            d.ThemedExternalWindows = full.ThemedExternalWindows;
             d.ViewerLeft = full.ViewerLeft;
             d.ViewerTop = full.ViewerTop;
             d.LogWindowLeft = full.LogWindowLeft;
@@ -495,8 +495,8 @@ public class AppSettingsTests : IDisposable
                 d.BotChatMultiEmbedded = full.BotChatMultiEmbedded;
                 d.BotChatMultiEmbeddedKill = full.BotChatMultiEmbeddedKill;
                 d.PerformanceBarLook = full.PerformanceBarLook;
-                d.ThemedViewer = full.ThemedViewer;
                 d.ThemedBackground = full.ThemedBackground;
+                d.ThemedExternalWindows = full.ThemedExternalWindows;
                 d.ViewerLeft = full.ViewerLeft;
                 d.ViewerTop = full.ViewerTop;
                 d.LogWindowLeft = full.LogWindowLeft;
@@ -1398,8 +1398,8 @@ public class AppSettingsTests : IDisposable
         Assert.Equal(91, s.EmbeddedVramBudget);       // 91 since 2026-09-30 (the user's call; off from later on 2026-09-29)
         Assert.Equal("parallel", s.EmbeddedHfDownloadType);   // 2026-09-30, the user's pick
         Assert.Equal(0, s.EmbeddedContextSize);       // fit (later on 2026-09-29; 32768 until then)
-        Assert.True(s.ThemedViewer);   // later on 2026-09-27
         Assert.True(s.ThemedBackground);   // 2026-10-03
+        Assert.True(s.ThemedExternalWindows);   // later on 2026-09-27 (ThemedViewer until 2026-10-03)
         Assert.Null(s.ViewerLeft);   // 2026-09-28: Windows' own place until the viewer first closes
         Assert.Null(s.ViewerTop);
         Assert.Null(s.LogWindowLeft);   // 2026-10-02: Windows' own place until the log window first closes

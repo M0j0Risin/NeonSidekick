@@ -400,7 +400,7 @@ public sealed class ViewerTests : IDisposable
         Assert.Equal(0x00030201u, ViewerStyle.ColorRef(new Spectre.Console.Color(1, 2, 3)));
     }
 
-    /// <summary>Themed image viewer off (later on 2026-09-27): black whatever the theme; the default stays themed.</summary>
+    /// <summary>Themed external windows off (Themed image viewer, later on 2026-09-27): black whatever the theme; the default stays themed.</summary>
     [Fact]
     public void ViewerStyle_Unthemed_IsBlack()
     {

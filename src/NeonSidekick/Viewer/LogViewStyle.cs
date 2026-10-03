@@ -8,7 +8,7 @@ namespace NeonSidekick.Viewer;
 /// force: the page background, body text for Info, the dim text for Trace and Debug, the theme's warning and error
 /// colours, the main accent behind a selection with the background's colour on it, and the lifted fill for the scroll
 /// bar's track under a dim thumb. The title bar is <see cref="ViewerStyle"/>'s, so the app's windows share one look; with
-/// <c>Themed image viewer</c> off, <see cref="Black"/>, the viewer's black look's twin. Pure; <c>LogWindow</c> applies it.
+/// <c>Themed external windows</c> off, <see cref="Black"/>, the viewer's black look's twin. Pure; <c>LogWindow</c> applies it.
 /// </summary>
 public readonly record struct LogViewStyle(
     uint Background,
@@ -22,7 +22,7 @@ public readonly record struct LogViewStyle(
     uint Thumb,
     uint ThumbActive)
 {
-    /// <summary>The look with <c>Themed image viewer</c> off: grey on black, yellow warnings, red errors, a blue selection.</summary>
+    /// <summary>The look with <c>Themed external windows</c> off: grey on black, yellow warnings, red errors, a blue selection.</summary>
     public static readonly LogViewStyle Black = new(
         Background: 0,
         Text: 0x00D0D0D0,

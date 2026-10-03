@@ -14,7 +14,7 @@ namespace NeonSidekick.Viewer;
 public readonly record struct ViewerStyle(uint Caption, uint CaptionText, uint Border, uint Background, uint Text)
 {
     /// <summary>
-    /// The look with <c>Themed image viewer</c> off (later on 2026-09-27, the user's ask): a black bar with white text, black
+    /// The look with <c>Themed external windows</c> off (later on 2026-09-27, the user's ask): a black bar with white text, black
     /// round the picture and the grey line the window had before the theme reached it.
     /// </summary>
     public static readonly ViewerStyle Black = new(Caption: 0, CaptionText: 0x00FFFFFF, Border: 0, Background: 0, Text: 0x00A0A0A0);

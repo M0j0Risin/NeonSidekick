@@ -181,8 +181,8 @@ using var closing = System.Runtime.InteropServices.PosixSignalRegistration.Creat
     }
 });
 
-// The viewer's Themed image viewer switch (later on 2026-09-27), read from the effective settings on the viewer's thread.
-NeonSidekick.Viewer.PictureWindow.Themed = () => app.EffectiveSettings.ThemedViewer;
+// The Themed external windows switch (later on 2026-09-27 for the viewer; every window of ours since 2026-10-03), read from the effective settings on the window's thread.
+NeonSidekick.Viewer.PictureWindow.Themed = () => app.EffectiveSettings.ThemedExternalWindows;
 // The viewer's keys highlight the same picture in the strip (2026-09-28).
 NeonSidekick.Viewer.PictureWindow.Browsed = app.ViewerBrowsed;
 // The app's own windows hand back what they have no use for (2026-10-03): TAB brings the terminal forward, found now, while

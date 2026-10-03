@@ -146,7 +146,7 @@ internal sealed unsafe class WindowChrome(string owner)
         }
         catch (Exception ex)
         {
-            DiagnosticLog.Warn("Viewer", $"Could not read Themed image viewer: {ex.Message}");
+            DiagnosticLog.Warn("Viewer", $"Could not read Themed external windows: {ex.Message}");
             return true;
         }
     }
