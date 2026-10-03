@@ -142,7 +142,7 @@ public static class HelpCommands
         ]),
         new("/log",
         [
-            new("/log", "Open the log window: this run's diagnostic lines, coloured by level, following the newest while it is at the bottom. Scrolling away pauses it; Ctrl+E, Ctrl+End or scrolling back to the bottom follows again, Ctrl+Home goes to the top. Drag to select, Ctrl+A selects all, Ctrl+C copies. F11 or a double-click is full screen, Esc leaves full screen and then closes it."),
+            new("/log", "Open the log window: this run's diagnostic lines, coloured by level, following the newest while it is at the bottom. Scrolling away pauses it; Ctrl+E, Ctrl+End or scrolling back to the bottom follows again, Ctrl+Home goes to the top. Drag to select, Ctrl+A selects all, Ctrl+C copies. F11 or a double-click is full screen, Esc leaves full screen and then closes it. TAB brings the terminal forward, and any other Ctrl or Alt chord runs in the chat as if pressed there (Ctrl+Alt+G closes the window)."),
             new("/log --file", "Open the diagnostic log file in your editor. Only available when the app was started with `--log <path>`."),
         ]),
         new("/loop",

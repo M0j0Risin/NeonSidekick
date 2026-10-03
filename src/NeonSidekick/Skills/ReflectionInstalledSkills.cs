@@ -21,8 +21,9 @@ public enum ReflectionInstalledPolicy
 /// </summary>
 public static class ReflectionInstalledSkills
 {
-    /// <summary>The compiled default, pinned by <c>AppSettingsTests</c>.</summary>
-    public const string Default = "read-only";
+    /// <summary>The compiled default, pinned by <c>ReflectionInstalledSkillsTests</c>: <c>read-only</c> at first, <c>allow-and-mark</c> since
+    /// 2026-10-03 (the user's call; a saved profile keeps its own word, no migration).</summary>
+    public const string Default = "allow-and-mark";
 
     /// <summary>The choices in menu order.</summary>
     public static readonly string[] Names = { "read-only", "allow-and-mark" };

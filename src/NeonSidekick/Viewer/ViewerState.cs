@@ -8,17 +8,18 @@ public enum ViewerAction
 {
     None,
 
-    /// <summary>← : the picture before the shown one (the live picture held first).</summary>
-    Previous,
+    /// <summary>→ : the picture older than the shown one (the live picture held first). The viewer runs newest at the left since
+    /// 2026-10-03 (the user's ask), as the picture strip does; → was the newer one before.</summary>
+    Older,
 
-    /// <summary>→ : the picture after the shown one; reaching the newest follows new pictures again.</summary>
-    Next,
+    /// <summary>← : the picture newer than the shown one; reaching the newest follows new pictures again.</summary>
+    Newer,
 
-    /// <summary>Home: the oldest picture.</summary>
-    First,
+    /// <summary>End: the oldest picture (Home's until 2026-10-03).</summary>
+    Oldest,
 
-    /// <summary>End: the newest picture, following again.</summary>
-    Last,
+    /// <summary>Home: the newest picture, following again (End's until 2026-10-03).</summary>
+    Newest,
 
     /// <summary>F11 (or a double-click): full screen on or off.</summary>
     ToggleFullScreen,
@@ -51,7 +52,7 @@ public enum ViewerAction
 /// <summary>
 /// The picture viewer's state, with no window in it (2026-09-27, the user's ask: FolderPictureViewer's behaviour inside the
 /// app, opened from the ComfyUI picture strip): the folder's pictures oldest first by creation time, and which one is
-/// shown — <see cref="Live"/> (the newest, and whichever arrives next) or a held index once ← or Home moved off it. A
+/// shown — <see cref="Live"/> (the newest, and whichever arrives next) or a held index once → or End moved off it. A
 /// new picture while live is shown; while held it is only counted, so browsing older pictures is never yanked away. A
 /// picture written again (ComfyUI never does, a hand copy may) moves to the newest. A deleted one leaves the list, the
 /// shown index kept on the same picture where it can be. FolderPictureViewer's double-Del delete, first left out, is
@@ -61,7 +62,9 @@ public enum ViewerAction
 /// is decided here, so it is tested without a window. The slide show (later on 2026-09-27, the user's ask): F9 starts
 /// and stops it, it loops until stopped, <see cref="DefaultSlideSeconds"/> a slide with ↑ / ↓ a second more or less, the
 /// folder's order or, after F10, a random one that shows every picture once a round; Esc stops it before it leaves full
-/// screen or closes. Pure; one thread (the window's).
+/// screen or closes. Since 2026-10-03 (the user's ask) the keys, the title and the slide show run newest at the left, the
+/// picture strip's way: ← newer, → older, Home the newest (live), End the oldest, the title counting the newest 1, and the
+/// slide show stepping older; the list itself is still kept oldest first. Pure; one thread (the window's).
 /// </summary>
 public sealed class ViewerState
 {
@@ -164,9 +167,10 @@ public sealed class ViewerState
     }
 
     /// <summary>
-    /// The slide show's next picture: in order the one after the shown one, the newest wrapping to the oldest (live on the
-    /// newest, as <see cref="Browse"/> is, so a picture that just arrived is the next slide); shuffled a random one not shown
-    /// yet this round and never the shown one, the round refilled when it runs out. False with fewer than two pictures.
+    /// The slide show's next picture: in order the one older than the shown one, a step to the right, the oldest wrapping to
+    /// the newest (live there, as <see cref="Browse"/> is, so a picture that arrived meanwhile is the slide after the oldest;
+    /// the show ran oldest to newest until 2026-10-03, the user's call); shuffled a random one not shown yet this round and
+    /// never the shown one, the round refilled when it runs out. False with fewer than two pictures.
     /// </summary>
     public bool NextSlide(Random random)
     {
@@ -192,7 +196,7 @@ public sealed class ViewerState
         }
         else
         {
-            to = from == _pictures.Count - 1 ? 0 : from + 1;
+            to = from == 0 ? _pictures.Count - 1 : from - 1;
         }
 
         _held = to == _pictures.Count - 1 ? null : to;
@@ -273,10 +277,10 @@ public sealed class ViewerState
         return !string.Equals(before, Current, StringComparison.OrdinalIgnoreCase);
     }
 
-    /// <summary>A browsing action (<see cref="ViewerAction.Previous"/>, <see cref="ViewerAction.Next"/>, <see cref="ViewerAction.First"/>, <see cref="ViewerAction.Last"/>); true when the shown picture or the live state changed. Anything else does nothing here.</summary>
+    /// <summary>A browsing action (<see cref="ViewerAction.Older"/>, <see cref="ViewerAction.Newer"/>, <see cref="ViewerAction.Oldest"/>, <see cref="ViewerAction.Newest"/>); true when the shown picture or the live state changed. Anything else does nothing here.</summary>
     public bool Browse(ViewerAction action)
     {
-        if (_pictures.Count == 0 || action is not (ViewerAction.Previous or ViewerAction.Next or ViewerAction.First or ViewerAction.Last))
+        if (_pictures.Count == 0 || action is not (ViewerAction.Older or ViewerAction.Newer or ViewerAction.Oldest or ViewerAction.Newest))
         {
             return false;
         }
@@ -286,9 +290,9 @@ public sealed class ViewerState
         bool wasLive = Live;
         int to = action switch
         {
-            ViewerAction.Previous => Math.Max(0, from - 1),
-            ViewerAction.Next => Math.Min(last, from + 1),
-            ViewerAction.First => 0,
+            ViewerAction.Older => Math.Max(0, from - 1),
+            ViewerAction.Newer => Math.Min(last, from + 1),
+            ViewerAction.Oldest => 0,
             _ => last,
         };
 
@@ -319,10 +323,10 @@ public sealed class ViewerState
         return !string.Equals(before, Current, StringComparison.OrdinalIgnoreCase) || wasLive != Live;
     }
 
-    /// <summary>The window's title as things stand (<see cref="ViewerText.Title"/>).</summary>
+    /// <summary>The window's title as things stand (<see cref="ViewerText.Title"/>): the newest is 1, the strip's count (2026-10-03).</summary>
     public string Title() =>
         Index is int index
-            ? ViewerText.Title(System.IO.Path.GetFileName(_pictures[index].Path), index + 1, _pictures.Count, Live, Folder, DeleteArmed, SlideShow ? SlideSeconds : null, Shuffle)
+            ? ViewerText.Title(System.IO.Path.GetFileName(_pictures[index].Path), _pictures.Count - index, _pictures.Count, Live, Folder, DeleteArmed, SlideShow ? SlideSeconds : null, Shuffle)
             : ViewerText.Title(null, 0, 0, true, Folder);
 
     // Virtual-key codes (winuser.h), the only keys the window answers.
@@ -338,7 +342,7 @@ public sealed class ViewerState
     public const int VkF10 = 0x79;
     public const int VkF11 = 0x7A;
 
-    /// <summary>What a key does: ←/→, Home/End, F9–F11, ↑/↓, Del, and Esc — the slide show stopped first, then out of full screen, then the window closed. Pure.</summary>
+    /// <summary>What a key does: ← newer / → older, Home newest / End oldest (the strip's way since 2026-10-03), F9–F11, ↑/↓, Del, and Esc — the slide show stopped first, then out of full screen, then the window closed. Pure.</summary>
     public static ViewerAction ActionFor(int virtualKey, bool fullScreen, bool slideShow = false) => virtualKey switch
     {
         VkEscape when slideShow => ViewerAction.StopSlideShow,
@@ -346,10 +350,10 @@ public sealed class ViewerState
         VkF10 => ViewerAction.ToggleShuffle,
         VkUp => ViewerAction.LongerSlides,
         VkDown => ViewerAction.ShorterSlides,
-        VkLeft => ViewerAction.Previous,
-        VkRight => ViewerAction.Next,
-        VkHome => ViewerAction.First,
-        VkEnd => ViewerAction.Last,
+        VkLeft => ViewerAction.Newer,
+        VkRight => ViewerAction.Older,
+        VkHome => ViewerAction.Newest,
+        VkEnd => ViewerAction.Oldest,
         VkF11 => ViewerAction.ToggleFullScreen,
         VkDelete => ViewerAction.Delete,
         VkEscape => fullScreen ? ViewerAction.LeaveFullScreen : ViewerAction.Close,

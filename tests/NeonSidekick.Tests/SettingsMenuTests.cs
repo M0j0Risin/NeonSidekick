@@ -1126,7 +1126,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.True(SettingsMenu.IsToggle(SettingsField.ShowFileDiffs));
         Assert.False(SettingsMenu.IsToggle(SettingsField.DiffMaxLines));
         Assert.Equal("on", SettingsMenu.FieldValue(SettingsField.ShowFileDiffs, data, _settings.ProfileDirectory));
-        Assert.Equal("40 lines", SettingsMenu.FieldValue(SettingsField.DiffMaxLines, data, _settings.ProfileDirectory));
+        Assert.Equal("10 lines", SettingsMenu.FieldValue(SettingsField.DiffMaxLines, data, _settings.ProfileDirectory));
         Assert.Equal("header only", SettingsMenu.FieldValue(SettingsField.DiffMaxLines, new AppSettingsData { DiffMaxLines = 0 }, _settings.ProfileDirectory));
         Assert.False(SettingsMenu.RefusedMidTurn(SettingsField.ShowFileDiffs) || SettingsMenu.IsLlmField(SettingsField.DiffMaxLines));
         // Show toolbar (2026-09-21): the General row after it, a toggle, no reconnect (the pane reads it at each draw).

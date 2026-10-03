@@ -11,7 +11,7 @@ public class ReflectionInstalledSkillsTests
     public void Names_Default_AndDescriptions_ArePinned()
     {
         Assert.Equal(["read-only", "allow-and-mark"], ReflectionInstalledSkills.Names);
-        Assert.Equal("read-only", ReflectionInstalledSkills.Default);
+        Assert.Equal("allow-and-mark", ReflectionInstalledSkills.Default);   // read-only until 2026-10-03 (the user's call)
         Assert.Equal(ReflectionInstalledSkills.Default, new AppSettingsData().ReflectionInstalledSkills);
         Assert.Equal("a reflection never changes a skill installed with /skills add; it may write a companion skill", ReflectionInstalledSkills.Describe("read-only"));
         Assert.Equal("a reflection may change an installed skill; an update from its source warns before replacing that", ReflectionInstalledSkills.Describe("allow-and-mark"));
@@ -35,12 +35,13 @@ public class ReflectionInstalledSkillsTests
     public void Resolve_ReadsTheSavedWord_AndAnUnknownOne_WarnsAndUsesTheDefault()
     {
         Assert.Equal(ReflectionInstalledPolicy.AllowAndMark, ReflectionInstalledSkills.Resolve(new AppSettingsData { ReflectionInstalledSkills = "allow-and-mark" }));
+        Assert.Equal(ReflectionInstalledPolicy.ReadOnly, ReflectionInstalledSkills.Resolve(new AppSettingsData { ReflectionInstalledSkills = "read-only" }));
         var warnings = new List<DiagnosticEvent>();
         Action<DiagnosticEvent> capture = e => { if (e.Category == SkillCatalog.Category && e.Level == DiagnosticLevel.Warning) warnings.Add(e); };
         DiagnosticLog.Emitted += capture;
         try
         {
-            Assert.Equal(ReflectionInstalledPolicy.ReadOnly, ReflectionInstalledSkills.Resolve(new AppSettingsData { ReflectionInstalledSkills = "always" }));
+            Assert.Equal(ReflectionInstalledPolicy.AllowAndMark, ReflectionInstalledSkills.Resolve(new AppSettingsData { ReflectionInstalledSkills = "always" }));
         }
         finally
         {
@@ -48,6 +49,6 @@ public class ReflectionInstalledSkillsTests
         }
 
         var warning = Assert.Single(warnings);
-        Assert.Equal("ReflectionInstalledSkills='always' is not one of read-only, allow-and-mark. Using read-only.", warning.Message);
+        Assert.Equal("ReflectionInstalledSkills='always' is not one of read-only, allow-and-mark. Using allow-and-mark.", warning.Message);
     }
 }

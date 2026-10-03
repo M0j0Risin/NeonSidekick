@@ -209,7 +209,8 @@ public static class PictureWindow
     /// <summary>
     /// <c>viewer:window</c> for the smoke: the class registered, a hidden window made, a private message sent through the
     /// <c>[UnmanagedCallersOnly]</c> window procedure and answered, the window destroyed. Proves the imports and the
-    /// callback in the published exe without showing anything.
+    /// callback in the published exe without showing anything. The terminal's window is looked up first (2026-10-03,
+    /// <see cref="TerminalHandoff.Remember"/>), so its kernel32/user32 imports bind here too.
     /// </summary>
     public static (bool Ok, string Detail) Probe()
     {
@@ -218,6 +219,7 @@ public static class PictureWindow
             return (true, "skipped: not Windows");
         }
 
+        TerminalHandoff.Remember();
         return PictureWindowThread.Probe();
     }
 }
@@ -655,9 +657,10 @@ internal sealed unsafe class PictureWindowThread
                 ApplyStyle();
                 break;
             case WmKeyDown:
-            case WmSysKeyDown when (int)wParam == ViewerState.VkF10:   // F10 (random order) is the menu key: a system key, its menu mode not wanted
+            case WmSysKeyDown:   // F10 (random order) is the menu key, a system key, its menu mode not wanted; Alt chords too
             {
-                var action = ViewerState.ActionFor((int)wParam, _chrome.FullScreen, _state.SlideShow);
+                // A key with Alt held is never the viewer's (2026-10-03): it goes to the terminal (TerminalHandoff) with the rest.
+                var action = TerminalHandoff.AltHeld() ? ViewerAction.None : ViewerState.ActionFor((int)wParam, _chrome.FullScreen, _state.SlideShow);
                 if (_live is not null)
                 {
                     // A camera's picture (2026-10-02): full screen and closing only.
@@ -673,12 +676,22 @@ internal sealed unsafe class PictureWindowThread
 
                 if (action == ViewerAction.None)
                 {
+                    // TAB to the terminal, a Ctrl or Alt chord to the chat (2026-10-03); Alt+F4 and the rest to the default.
+                    if (TerminalHandoff.Take((int)wParam))
+                    {
+                        return IntPtr.Zero;
+                    }
+
                     break;
                 }
 
                 Do(action);
                 return IntPtr.Zero;
             }
+
+            // A passed Alt chord's character: the default would look for a menu mnemonic and beep. Alt+Space keeps the system menu.
+            case WmSysChar when (int)wParam != ' ':
+                return IntPtr.Zero;
 
             case WmLeftButtonDoubleClick:
                 Do(ViewerAction.ToggleFullScreen);

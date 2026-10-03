@@ -544,7 +544,7 @@ The loaded skills with their scope (`profile`, `global` or `external`) and descr
 | Reflection includes sessions | The reflection starts from earlier sessions that match the turn, and can search them. | on |
 | Reflection yields to turns | A message sent during a reflection pauses it so the reply gets the server; it reruns afterwards. Turn off if your server handles parallel requests. | on |
 | Reflection edit supporting files | Lets a reflection change a skill's supporting files too (with `skill_editor`'s `write_file` and `edit_file`), not just `SKILL.md`. The main chat always may. | off |
-| Reflection downloaded skills | For skills from `/skills add`: `read-only` makes the reflection write a companion skill instead, so updates stay clean; `allow-and-mark` lets it change the skill, and a later update warns first. | `read-only` |
+| Reflection downloaded skills | For skills from `/skills add`: `read-only` makes the reflection write a companion skill instead, so updates stay clean; `allow-and-mark` lets it change the skill, and a later update warns first. | `allow-and-mark` |
 
 A reflection must `load_skill` a skill before rewriting its instructions or a supporting file, and is refused if the skill changed since that load. A description-only change needs no load.
 
@@ -860,7 +860,7 @@ The Oracle, MySQL and UNC tabs work like the SQL tab, over `oracle.json`, `mysql
 | Tool collapse count | A run of more tool calls than this folds to one summary line (`▸ 🛠️ 7 tool calls — read_file ×3, …`); 0 never folds (0–100). | 2 |
 | Code collapse count | A code block longer than this folds to its label (`▸ 📜 csharp · 57 lines`) once complete; while streaming, only its last lines show (0–100; 0 never folds). Needs *Transcript markdown*. | 20 |
 | Show file diffs | A file edit (`patch_file`, `write_file`, `unc_patch`, `unc_write`) shows its diff under its line: `└ Added 3 lines, removed 1 line`, then the changed lines numbered with three of context, added ones on a green slab, removed ones on a red, coloured by the file's language. It folds with the tool run (the note and its diff count as one). The model's result is the same either way. | on |
-| Diff max lines | The most rows of an edit's diff shown; past it `… 12 more lines` ends it (0–500; 0 = the header line alone). | 40 |
+| Diff max lines | The most rows of an edit's diff shown; past it `… 12 more lines` ends it (0–500; 0 = the header line alone). | 10 |
 
 To see a folded block, click it, press Ctrl+O, click **⤡** or use `/expand`.
 
@@ -1118,20 +1118,22 @@ The picture viewer is a window of its own (Windows only; elsewhere the file's re
 
 | Key | Action |
 |---|---|
-| ← / → | Browse; reaching the newest follows new pictures again |
-| Home / End | First / newest picture |
+| ← / → | Newer / older picture, the strip's way (the newest is at the left and counts 1 in the title); reaching the newest follows new pictures again |
+| Home / End | Newest (following again) / oldest picture |
 | F11 or double-click | Toggle full screen |
 | Drag the picture | Copy it to wherever you drop it: the desktop, an Explorer folder, or any app that takes a dropped file (never a move) |
 | Del, Del (within 2 s) | Permanently delete the shown picture (the title says "Del again to delete" after the first) |
-| F9 | Start or stop a looping slide show (5 s a slide; the title shows `▶ 5 s`) |
+| F9 | Start or stop a looping slide show, stepping to the right (older), the oldest wrapping to the newest (5 s a slide; the title shows `▶ 5 s`) |
 | ↑ / ↓ | Slide show: a second more or less per slide (1–60) |
 | F10 | Slide show: switch between the folder's order and a random one |
 | Esc | Stop the slide show, then leave full screen, then close |
+| Tab | Bring the terminal to the front |
+| Any other Ctrl or Alt chord | Runs in the chat as if pressed there (Ctrl+Alt+T opens `/tools`, Ctrl+Alt+U closes the viewer); the keyboard stays in the window. Ctrl+C there cancels a reply. Alt+F4 still closes the window |
 
 * It wears the theme unless *Themed image viewer* is off (a `/theme` change shows when it is next focused). There is one viewer, and it closes with the app.
 * It reopens where it was last closed (saved in the profile), at the default size.
 * It and the ComfyUI picture strip follow each other: browsing the viewer highlights the same picture in the strip, and picking one on the strip moves the viewer to it without bringing it forward.
-* The camera's live view (*Camera preview* `live`, `/camera live`) is a separate window, so both can be open. It shows the camera mirrored, then the photo, never takes the keyboard, answers only F11, a double-click and Esc, and remembers its own place.
+* The camera's live view (*Camera preview* `live`, `/camera live`) is a separate window, so both can be open. It shows the camera mirrored, then the photo, never takes the keyboard, answers only F11, a double-click and Esc (plus Tab and the chords that go to the chat, as in the viewer; Ctrl+Alt+V closes it), and remembers its own place.
 
 #### Log window
 
@@ -1148,6 +1150,8 @@ The picture viewer is a window of its own (Windows only; elsewhere the file's re
 | Ctrl+A / Ctrl+C | Select everything / copy the selection |
 | F11 or double-click | Toggle full screen |
 | Esc | Leave full screen, then close |
+| Tab | Bring the terminal to the front |
+| Any other Ctrl or Alt chord | Runs in the chat as if pressed there (Ctrl+Alt+G closes this window); the keyboard stays in the window |
 
 Like the viewer, it follows the theme, reopens where it was closed, and closes with the app. A second `/log` brings it forward; `/log --file` opens the `--log` file instead.
 

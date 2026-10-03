@@ -372,7 +372,7 @@ public sealed class CameraPureTests
         Assert.Equal(ViewerAction.ToggleFullScreen, LiveViewState.Filter(ViewerAction.ToggleFullScreen));
         Assert.Equal(ViewerAction.LeaveFullScreen, LiveViewState.Filter(ViewerAction.LeaveFullScreen));
         Assert.Equal(ViewerAction.None, LiveViewState.Filter(ViewerAction.Delete));
-        Assert.Equal(ViewerAction.None, LiveViewState.Filter(ViewerAction.Next));
+        Assert.Equal(ViewerAction.None, LiveViewState.Filter(ViewerAction.Newer));
         Assert.True(LiveViewState.Due(TimeSpan.FromMilliseconds(66)));
         Assert.False(LiveViewState.Due(TimeSpan.FromMilliseconds(30)));
     }

@@ -2625,7 +2625,7 @@ internal sealed partial class ChatScreen
     /// while a reflection runs (<see cref="_pendingLearn"/>). <c>Files</c>: the supporting-file actions when
     /// <c>Reflection edit supporting files</c> was on at the decision (2026-09-27), null otherwise.
     /// </summary>
-    private sealed record PendingLearn(ReflectionMaterial Material, bool Forced, SkillRoots Roots, bool External, ReasoningEffort Effort, int MaxRequests, CancellationToken Token, SessionEvidence? Sessions, SessionStore? Store, long? SessionId, int TurnOrdinal, SkillFileAccess? Files = null, ReflectionInstalledPolicy Installed = ReflectionInstalledPolicy.ReadOnly)
+    private sealed record PendingLearn(ReflectionMaterial Material, bool Forced, SkillRoots Roots, bool External, ReasoningEffort Effort, int MaxRequests, CancellationToken Token, SessionEvidence? Sessions, SessionStore? Store, long? SessionId, int TurnOrdinal, SkillFileAccess? Files = null, ReflectionInstalledPolicy Installed = ReflectionInstalledPolicy.AllowAndMark)
     {
         /// <summary>The queued line: the turn's or the pass's — the one progress line (a start prints nothing since later still on 2026-09-19).</summary>
         public string QueuedNotice => Material is ReflectionMaterial.Sessions ? LearnSessionsQueuedNotice : LearnQueuedNotice;

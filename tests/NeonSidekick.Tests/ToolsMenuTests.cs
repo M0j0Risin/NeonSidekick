@@ -308,7 +308,7 @@ public partial class ToolsMenuTests : IDisposable
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.False(_settings.Current.ToolsDollarMention);
-        AssertTabEnds("\n" + Titled(Strip) + "\n \n▸ $-mention enabled    on\n  Tool collapse count  2 lines\n  Code collapse count  20 lines\n  Show file diffs      on\n  Diff max lines       40 lines\n", 100);
+        AssertTabEnds("\n" + Titled(Strip) + "\n \n▸ $-mention enabled    on\n  Tool collapse count  2 lines\n  Code collapse count  20 lines\n  Show file diffs      on\n  Diff max lines       10 lines\n", 100);
         Assert.Contains(ToolsText.Label + " › $-mention enabled", _console.Output);
         Assert.Contains("$ is ordinary text", _console.Output);
         Assert.Contains("\n" + Titled(Strip) + "\n  · $-mention enabled: off\n▸ $-mention enabled    off\n", _console.Output);
@@ -1312,10 +1312,10 @@ public partial class ToolsMenuTests : IDisposable
     [Fact]
     public async Task OnThePane_DiffMaxLines_IsTheOptionsTabsLastRow_Typed_ZeroIsTheHeaderAlone_OutOfRangeRefused()
     {
-        // Later on 2026-10-03: under Show file diffs; 0 to 500, 40 by default, 0 = the header line alone.
+        // Later on 2026-10-03: under Show file diffs; 0 to 500, 10 by default (40 until later that day), 0 = the header line alone.
         var (menu, pane, _) = PaneMenu();
         Push(Keys.Left);                                                                     // Options, the strip wrapped
-        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter);                        // Diff max lines: the typed slot with "40"
+        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter);                        // Diff max lines: the typed slot with "10"
         Push(Keys.Backspace, Keys.Backspace, Keys.Char('5'), Keys.Char('0'), Keys.Char('1'), Keys.Enter);   // refused: 501
         Push(Keys.Enter, Keys.Backspace, Keys.Backspace, Keys.Char('0'), Keys.Enter);        // 0: the header alone
         Push(Keys.Enter, Keys.Backspace, Keys.Char('1'), Keys.Char('2'), Keys.Enter);        // 12
@@ -1324,7 +1324,7 @@ public partial class ToolsMenuTests : IDisposable
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Equal(12, _settings.Current.DiffMaxLines);
-        Assert.Contains("Diff max lines " + SettingsMenu.DiffMaxLinesRangeError + "; keeping 40.", _console.Output);
+        Assert.Contains("Diff max lines " + SettingsMenu.DiffMaxLinesRangeError + "; keeping 10.", _console.Output);
         Assert.Contains("  · Diff max lines: header only\n", _console.Output);
         Assert.Contains("  · Diff max lines: 12 lines\n", _console.Output);
         pane.Dispose();

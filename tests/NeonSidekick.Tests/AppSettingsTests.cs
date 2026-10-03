@@ -159,6 +159,8 @@ public class AppSettingsTests : IDisposable
         ReflectionWindow = 5,
         ReflectionYieldsToTurns = false,
         ReflectionEditsSupportingFiles = true,
+        ReflectionInstalledSkills = "read-only",
+        DiffMaxLines = 33,
         SkillCompactMode = "unprotected",
         SkillHashMention = false,
         SessionLogging = false,
@@ -285,6 +287,8 @@ public class AppSettingsTests : IDisposable
         Assert.Equal(expected.ReflectionWindow, actual.ReflectionWindow);
         Assert.Equal(expected.ReflectionYieldsToTurns, actual.ReflectionYieldsToTurns);
         Assert.Equal(expected.ReflectionEditsSupportingFiles, actual.ReflectionEditsSupportingFiles);
+        Assert.Equal(expected.ReflectionInstalledSkills, actual.ReflectionInstalledSkills);
+        Assert.Equal(expected.DiffMaxLines, actual.DiffMaxLines);
         Assert.Equal(expected.SkillCompactMode, actual.SkillCompactMode);
         Assert.Equal(expected.SkillHashMention, actual.SkillHashMention);
         Assert.Equal(expected.SessionLogging, actual.SessionLogging);
@@ -433,6 +437,8 @@ public class AppSettingsTests : IDisposable
             d.ReflectionWindow = full.ReflectionWindow;
             d.ReflectionYieldsToTurns = full.ReflectionYieldsToTurns;
             d.ReflectionEditsSupportingFiles = full.ReflectionEditsSupportingFiles;
+            d.ReflectionInstalledSkills = full.ReflectionInstalledSkills;
+            d.DiffMaxLines = full.DiffMaxLines;
             d.SkillCompactMode = full.SkillCompactMode;
             d.SkillHashMention = full.SkillHashMention;
             d.SessionLogging = full.SessionLogging;
@@ -570,6 +576,8 @@ public class AppSettingsTests : IDisposable
                 d.ReflectionWindow = full.ReflectionWindow;
                 d.ReflectionYieldsToTurns = full.ReflectionYieldsToTurns;
                 d.ReflectionEditsSupportingFiles = full.ReflectionEditsSupportingFiles;
+                d.ReflectionInstalledSkills = full.ReflectionInstalledSkills;
+                d.DiffMaxLines = full.DiffMaxLines;
                 d.SkillCompactMode = full.SkillCompactMode;
                 d.SkillHashMention = full.SkillHashMention;
                 d.SessionLogging = full.SessionLogging;
@@ -1477,6 +1485,8 @@ public class AppSettingsTests : IDisposable
         Assert.True(s.ReflectionIncludesSessions);
         Assert.True(s.ReflectionYieldsToTurns);
         Assert.False(s.ReflectionEditsSupportingFiles);   // 2026-09-27: off for now, the user's call
+        Assert.Equal("allow-and-mark", s.ReflectionInstalledSkills);   // 2026-10-03: read-only before, the user's call
+        Assert.Equal(10, s.DiffMaxLines);   // later on 2026-10-03: 40 before, the user's call
         Assert.Equal(1, AppSettingsData.MinAskMaxQuestions);
         Assert.Equal(10, AppSettingsData.MaxAskMaxQuestions);
         Assert.Equal(10, AppSettingsData.DefaultAskMaxQuestions);

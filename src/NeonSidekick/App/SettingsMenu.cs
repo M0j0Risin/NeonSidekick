@@ -7203,7 +7203,7 @@ internal sealed partial class SettingsMenu
     /// <summary><c>25 lines</c>, <c>1 line</c>, <c>off</c> at 0: the paste preview count as the row shows it. Pinned.</summary>
     public static string Lines(int value) => value == 0 ? "off" : value.ToString(CultureInfo.InvariantCulture) + (value == 1 ? " line" : " lines");
 
-    /// <summary><c>40 lines</c>, <c>header only</c> at 0: <c>Diff max lines</c> as the row shows it (2026-10-03).</summary>
+    /// <summary><c>10 lines</c>, <c>header only</c> at 0: <c>Diff max lines</c> as the row shows it (2026-10-03).</summary>
     public static string DiffLines(int value) => value == 0 ? "header only" : Lines(value);
 
     /// <summary><c>30 days</c>, <c>1 day</c>, <c>forever</c> at 0: the session retention as the row shows it. Pinned.</summary>

@@ -985,9 +985,10 @@ public sealed class AppSettingsData
 
     /// <summary>
     /// What a reflection may do to a skill installed with <c>/skills add</c> (<c>Skills.ReflectionInstalledSkills</c>, 2026-10-02, the
-    /// user's call in the reflection audit): <c>read-only</c> (the default) refuses its <c>skill_editor</c> any change to one and asks for a
-    /// companion skill instead, so a later update from the same origin stays clean; <c>allow-and-mark</c> lets it write, the skill records
-    /// keep the change, and the install's update page warns that updating replaces it. The main chat and <c>/skills revert</c> are
+    /// user's call in the reflection audit): <c>read-only</c> refuses its <c>skill_editor</c> any change to one and asks for a companion skill
+    /// instead, so a later update from the same origin stays clean; <c>allow-and-mark</c> (the default since 2026-10-03, the user's call;
+    /// <c>read-only</c> before, and a saved profile keeps its word) lets it write, the skill records keep the change, and the install's
+    /// update page warns that updating replaces it. The main chat and <c>/skills revert</c> are
     /// unaffected. Read when a reflection is decided, no reconnect; the Reflection tab of <c>/skills</c>, last row, labelled
     /// <c>Reflection downloaded skills</c> (<c>Reflection installed skills</c> until later on 2026-10-02, briefly <c>Reflection AgentSkills.io skills</c>
     /// that day, the user's calls; agentskills.io is the format every skill here follows, not where these come from). No variable.
@@ -1143,12 +1144,13 @@ public sealed class AppSettingsData
     /// <summary>
     /// The most rows of an edit's diff (<see cref="ShowFileDiffs"/>) the transcript shows (2026-10-03): past it a
     /// <c>… 12 more lines</c> row ends it; a wrapped line counts once. <see cref="MinDiffMaxLines"/> to <see cref="MaxDiffMaxLines"/>;
-    /// 0 = the header line alone. The Options tab of <c>/tools</c>, under <see cref="ShowFileDiffs"/>. No variable.
+    /// 0 = the header line alone. 40 by default at first, 10 since later on 2026-10-03 (the user's call; a saved profile keeps its
+    /// number). The Options tab of <c>/tools</c>, under <see cref="ShowFileDiffs"/>. No variable.
     /// </summary>
     public int DiffMaxLines { get; set; } = DefaultDiffMaxLines;
 
     /// <summary>The default, the least and the most <see cref="DiffMaxLines"/> may be (0 = the header alone).</summary>
-    public const int DefaultDiffMaxLines = 40;
+    public const int DefaultDiffMaxLines = 10;
     public const int MinDiffMaxLines = 0;
     public const int MaxDiffMaxLines = 500;
 

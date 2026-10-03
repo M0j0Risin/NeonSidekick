@@ -26,6 +26,7 @@ internal static unsafe partial class ViewerNative
     public const uint WmNcCreate = 0x0081;
     public const uint WmKeyDown = 0x0100;
     public const uint WmSysKeyDown = 0x0104;
+    public const uint WmSysChar = 0x0106;
     public const uint WmTimer = 0x0113;
     public const uint WmMouseMove = 0x0200;
     public const uint WmLeftButtonDown = 0x0201;
@@ -101,6 +102,13 @@ internal static unsafe partial class ViewerNative
 
     /// <summary>VK_CONTROL, for GetKeyState.</summary>
     public const int VkControl = 0x11;
+
+    /// <summary>VK_SHIFT and VK_MENU (Alt), for GetKeyState: a chord passed back to the terminal (2026-10-03, <see cref="TerminalHandoff"/>).</summary>
+    public const int VkShift = 0x10;
+    public const int VkMenu = 0x12;
+
+    /// <summary>GA_ROOTOWNER: the top window a window's owners lead to (the terminal over its ConPTY pseudo-window).</summary>
+    public const uint GaRootOwner = 3;
 
     /// <summary>SPI_GETWHEELSCROLLLINES: the rows a wheel notch scrolls (WHEEL_PAGESCROLL, uint.MaxValue, a page).</summary>
     public const uint SpiGetWheelScrollLines = 0x0068;
@@ -346,6 +354,16 @@ internal static unsafe partial class ViewerNative
 
     [LibraryImport("user32.dll")]
     public static partial IntPtr GetForegroundWindow();
+
+    [LibraryImport("kernel32.dll")]
+    public static partial IntPtr GetConsoleWindow();
+
+    [LibraryImport("user32.dll")]
+    public static partial IntPtr GetAncestor(IntPtr hwnd, uint gaFlags);
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool IsWindowVisible(IntPtr hWnd);
 
     [LibraryImport("user32.dll")]
     public static partial uint GetWindowThreadProcessId(IntPtr hWnd, IntPtr lpdwProcessId);

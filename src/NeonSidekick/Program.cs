@@ -185,6 +185,10 @@ using var closing = System.Runtime.InteropServices.PosixSignalRegistration.Creat
 NeonSidekick.Viewer.PictureWindow.Themed = () => app.EffectiveSettings.ThemedViewer;
 // The viewer's keys highlight the same picture in the strip (2026-09-28).
 NeonSidekick.Viewer.PictureWindow.Browsed = app.ViewerBrowsed;
+// The app's own windows hand back what they have no use for (2026-10-03): TAB brings the terminal forward, found now, while
+// it is still the window in front, and a Ctrl or Alt chord is queued on the console input as though typed there.
+NeonSidekick.Viewer.TerminalHandoff.Remember();
+NeonSidekick.Viewer.TerminalHandoff.Passed = consoleInput is null ? null : consoleInput.Inject;
 // The viewer opens where it last closed (2026-09-28): the profile keeps the corner, written only when it moved, so a close
 // in place logs no change. On the viewer's thread; Update is locked and nothing listens to Changed.
 NeonSidekick.Viewer.PictureWindow.Position = () => settings.Current is { ViewerLeft: int x, ViewerTop: int y } ? (x, y) : null;

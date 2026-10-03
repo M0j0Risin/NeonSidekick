@@ -63,7 +63,8 @@ public sealed class WindowsConsoleInput : IAnsiConsoleInput, IInputEvents, IDisp
 
     private readonly IntPtr _handle;
     private readonly uint _originalMode;
-    private readonly Channel<InputEvent> _events = Channel.CreateUnbounded<InputEvent>(new UnboundedChannelOptions { SingleWriter = true });
+    // Two writers since 2026-10-03: the reader thread and Inject (a chord passed back from one of the app's own windows).
+    private readonly Channel<InputEvent> _events = Channel.CreateUnbounded<InputEvent>(new UnboundedChannelOptions { SingleWriter = false });
     private readonly object _gate = new();
     private Thread? _thread;
     private volatile bool _stop;
@@ -111,6 +112,14 @@ public sealed class WindowsConsoleInput : IAnsiConsoleInput, IInputEvents, IDisp
     /// take, a pane clears and sets it with its release and re-take; it means nothing while the mouse is released.
     /// </summary>
     public void HoldWheel(bool on) => _wheelWanted = on;
+
+    /// <summary>
+    /// A key queued as though the console had delivered it (2026-10-03, the user's ask): a Ctrl or Alt chord pressed in the
+    /// picture viewer, the camera's window or the log window that the window has no use for (<c>Viewer.TerminalHandoff</c>),
+    /// so <see cref="KeySource"/> reads it as typed here — a chord line, the kill switch, Ctrl+C. Any thread (the window's);
+    /// never blocks. It skips <see cref="PasteBurst"/> (one key is no paste) and leaves the mouse as it is.
+    /// </summary>
+    public void Inject(ConsoleKeyInfo key) => _events.Writer.TryWrite(new InputEvent.Key(key));
 
     /// <summary>
     /// The reader over the real console's input, or null when there is none to take: not

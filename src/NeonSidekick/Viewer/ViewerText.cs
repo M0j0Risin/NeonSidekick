@@ -23,8 +23,9 @@ public static class ViewerText
     public const string ViewNote = "open a window that shows the output folder's newest picture and follows new ones";
 
     /// <summary>
-    /// The window's title: the picture's name, where it stands in the folder, and whether the window is following the newest
-    /// picture (<c>live</c>) or held on an older one (<c>paused</c>) — <c>0001.png — 3/12 (paused) · NeonSidekick pictures</c>.
+    /// The window's title: the picture's name, where it stands in the folder (the newest 1, as the picture strip counts, since
+    /// 2026-10-03), and whether the window is following the newest picture (<c>live</c>) or held on an older one (<c>paused</c>) —
+    /// <c>0001.png — 3/12 (paused) · NeonSidekick pictures</c>.
     /// With no picture, the app's title and the folder. While a Del has armed the picture (<paramref name="deleteArmed"/>),
     /// <see cref="DeleteArmedHint"/> takes the app title's place, so it is not cut off a narrow title bar; while the slide
     /// show runs (<paramref name="slideSeconds"/> not null), <see cref="SlideShowTail"/> does. Pinned.
@@ -74,8 +75,9 @@ public static class ViewerText
     /// <summary>Ctrl+Alt+U's notice when it closes the open viewer (later on 2026-10-02, the user's ask: the chord toggles). Pinned.</summary>
     public const string Closed = "(🖼️ picture viewer closed)";
 
-    /// <summary>The viewer's keys, the line under <see cref="Opened"/> (later on 2026-09-27). Pinned.</summary>
-    public const string Keys = "(← → browse · Home/End · F9 slide show · F10 random · ↑ ↓ slide time · F11 full screen · DEL twice delete · ESC close)";
+    /// <summary>The viewer's keys, the line under <see cref="Opened"/> (later on 2026-09-27): newest at the left since 2026-10-03,
+    /// TAB back to the terminal. Pinned.</summary>
+    public const string Keys = "(← newer · → older · Home newest · End oldest · F9 slide show · F10 random · ↑ ↓ slide time · F11 full screen · DEL twice delete · TAB terminal · ESC close)";
 
     /// <summary>
     /// The <c>Image viewer</c> setting's word for the app Windows registers (2026-09-27, the user's call): an empty setting

@@ -458,16 +458,28 @@ internal sealed unsafe class LogWindowThread
             }
 
             case WmKeyDown:
+            case WmSysKeyDown:
             {
-                var action = LogViewState.ActionFor((int)wParam, GetKeyState(VkControl) < 0, _chrome.FullScreen);
+                // A key with Alt held is never the log's (2026-10-03): Ctrl+Alt+C is /clear, not a copy.
+                var action = TerminalHandoff.AltHeld() ? LogViewAction.None : LogViewState.ActionFor((int)wParam, GetKeyState(VkControl) < 0, _chrome.FullScreen);
                 if (action == LogViewAction.None)
                 {
+                    // TAB to the terminal, a Ctrl or Alt chord to the chat (2026-10-03); Alt+F4 and the rest to the default.
+                    if (TerminalHandoff.Take((int)wParam))
+                    {
+                        return IntPtr.Zero;
+                    }
+
                     break;
                 }
 
                 Do(action);
                 return IntPtr.Zero;
             }
+
+            // A passed Alt chord's character: the default would look for a menu mnemonic and beep. Alt+Space keeps the system menu.
+            case WmSysChar when (int)wParam != ' ':
+                return IntPtr.Zero;
 
             case WmSetCursor when ((long)lParam & 0xFFFF) == HtClient:
             {

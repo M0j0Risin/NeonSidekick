@@ -38,7 +38,7 @@ public sealed class ViewerTests : IDisposable
         Assert.True(state.Live);
         Assert.Equal(2, state.Index);
         Assert.Equal(@"D:\pics\c.png", state.Current);
-        Assert.Equal("c.png — 3/3 (live) · NeonSidekick pictures", state.Title());
+        Assert.Equal("c.png — 1/3 (live) · NeonSidekick pictures", state.Title());   // the newest counts 1, as the strip does (2026-10-03)
     }
 
     [Fact]
@@ -58,7 +58,7 @@ public sealed class ViewerTests : IDisposable
 
         Assert.Null(state.Index);
         Assert.Null(state.Current);
-        Assert.False(state.Browse(ViewerAction.Previous));
+        Assert.False(state.Browse(ViewerAction.Older));
         Assert.Equal(@"NeonSidekick pictures — D:\empty", state.Title());
     }
 
@@ -76,12 +76,12 @@ public sealed class ViewerTests : IDisposable
     public void Add_WhileHeld_OnlyCountsIt()
     {
         var state = ThreePictures();
-        Assert.True(state.Browse(ViewerAction.Previous));
+        Assert.True(state.Browse(ViewerAction.Older));
 
         Assert.False(state.Add(@"D:\pics\d.png", T0.AddMinutes(4)));
         Assert.Equal(@"D:\pics\b.png", state.Current);
         Assert.False(state.Live);
-        Assert.Equal("b.png — 2/4 (paused) · NeonSidekick pictures", state.Title());
+        Assert.Equal("b.png — 3/4 (paused) · NeonSidekick pictures", state.Title());   // d, c, b: the third from the newest
     }
 
     [Fact]
@@ -98,7 +98,7 @@ public sealed class ViewerTests : IDisposable
     public void Add_OfTheHeldPicture_MovesItAway_AndTheShownOneChanges()
     {
         var state = ThreePictures();
-        state.Browse(ViewerAction.First);
+        state.Browse(ViewerAction.Oldest);
 
         Assert.True(state.Add(@"D:\pics\a.png", T0.AddMinutes(9)));
         Assert.Equal(@"D:\pics\b.png", state.Current);
@@ -109,7 +109,7 @@ public sealed class ViewerTests : IDisposable
     public void Add_OfTheNewestAgain_WhileHeld_KeepsTheHeldPicture()
     {
         var state = ThreePictures();
-        Assert.True(state.Browse(ViewerAction.Previous));
+        Assert.True(state.Browse(ViewerAction.Older));
 
         Assert.False(state.Add(@"D:\pics\c.png", T0.AddMinutes(9)));
         Assert.Equal(@"D:\pics\b.png", state.Current);
@@ -120,7 +120,7 @@ public sealed class ViewerTests : IDisposable
     public void Add_OfTheHeldSecondNewest_ShowsTheOneAfter_StillHeld()
     {
         var state = ThreePictures();
-        Assert.True(state.Browse(ViewerAction.Previous));
+        Assert.True(state.Browse(ViewerAction.Older));
 
         Assert.True(state.Add(@"D:\pics\b.png", T0.AddMinutes(9)));
         Assert.Equal(@"D:\pics\c.png", state.Current);
@@ -131,7 +131,7 @@ public sealed class ViewerTests : IDisposable
     public void Remove_KeepsTheHeldPicture_WhenAnOlderOneGoes()
     {
         var state = ThreePictures();
-        state.Browse(ViewerAction.Previous);   // b
+        state.Browse(ViewerAction.Older);   // b
 
         Assert.False(state.Remove(@"D:\pics\a.png"));
         Assert.Equal(@"D:\pics\b.png", state.Current);
@@ -153,7 +153,7 @@ public sealed class ViewerTests : IDisposable
     public void Remove_OfTheHeldPicture_ShowsTheNext_AndLiveWhenThatIsTheNewest()
     {
         var state = ThreePictures();
-        state.Browse(ViewerAction.Previous);   // b
+        state.Browse(ViewerAction.Older);   // b
 
         Assert.True(state.Remove(@"D:\pics\b.png"));
         Assert.Equal(@"D:\pics\c.png", state.Current);
@@ -164,23 +164,27 @@ public sealed class ViewerTests : IDisposable
         Assert.Null(state.Current);
     }
 
+    /// <summary>Newest at the left since 2026-10-03 (the user's ask, the strip's way): → older, ← newer, End the oldest, Home the newest and live.</summary>
     [Fact]
     public void Browse_WalksAndClamps_AndTheNewestFollowsAgain()
     {
         var state = ThreePictures();
 
-        Assert.False(state.Browse(ViewerAction.Next));   // already the newest, live
-        Assert.True(state.Browse(ViewerAction.Previous));
-        Assert.Equal(1, state.Index);
+        Assert.False(state.Browse(ViewerState.ActionFor(ViewerState.VkLeft, false)));   // ← : already the newest, live
+        Assert.True(state.Browse(ViewerState.ActionFor(ViewerState.VkRight, false)));   // → : older
+        Assert.Equal(@"D:\pics\b.png", state.Current);
         Assert.False(state.Live);
-        Assert.True(state.Browse(ViewerAction.First));
-        Assert.Equal(0, state.Index);
-        Assert.False(state.Browse(ViewerAction.Previous));   // clamped at the oldest
-        Assert.True(state.Browse(ViewerAction.Next));
-        Assert.True(state.Browse(ViewerAction.Next));
+        Assert.Equal("b.png — 2/3 (paused) · NeonSidekick pictures", state.Title());
+        Assert.True(state.Browse(ViewerState.ActionFor(ViewerState.VkEnd, false)));   // End: the oldest
+        Assert.Equal(@"D:\pics\a.png", state.Current);
+        Assert.Equal("a.png — 3/3 (paused) · NeonSidekick pictures", state.Title());
+        Assert.False(state.Browse(ViewerAction.Older));   // clamped at the oldest
+        Assert.True(state.Browse(ViewerAction.Newer));
+        Assert.True(state.Browse(ViewerAction.Newer));
         Assert.True(state.Live);
-        Assert.True(state.Browse(ViewerAction.First));
-        Assert.True(state.Browse(ViewerAction.Last));
+        Assert.True(state.Browse(ViewerAction.Oldest));
+        Assert.True(state.Browse(ViewerState.ActionFor(ViewerState.VkHome, false)));   // Home: the newest, live again
+        Assert.Equal(@"D:\pics\c.png", state.Current);
         Assert.True(state.Live);
         Assert.False(state.Browse(ViewerAction.ToggleFullScreen));
     }
@@ -195,7 +199,7 @@ public sealed class ViewerTests : IDisposable
         Assert.Equal(0, state.Index);
         Assert.False(state.Live);
         Assert.False(state.Select(@"D:\pics\a.png", T0));   // already shown
-        Assert.True(state.Browse(ViewerAction.Next));
+        Assert.True(state.Browse(ViewerAction.Newer));
         Assert.Equal(@"D:\pics\b.png", state.Current);
         Assert.True(state.Select(@"D:\pics\c.png", T0));
         Assert.True(state.Live);
@@ -207,7 +211,7 @@ public sealed class ViewerTests : IDisposable
     public void Select_OfAPictureNotListedYet_AddsIt_AsTheNewest()
     {
         var state = ThreePictures();
-        state.Browse(ViewerAction.First);
+        state.Browse(ViewerAction.Oldest);
 
         Assert.True(state.Select(@"D:\pics\d.png", T0.AddMinutes(4)));
 
@@ -229,10 +233,11 @@ public sealed class ViewerTests : IDisposable
         Assert.Equal(expected, ChatScreen.PictureOpenerFor(setting, viewerAvailable).ToString());
 
     [Theory]
-    [InlineData(ViewerState.VkLeft, false, ViewerAction.Previous)]
-    [InlineData(ViewerState.VkRight, false, ViewerAction.Next)]
-    [InlineData(ViewerState.VkHome, false, ViewerAction.First)]
-    [InlineData(ViewerState.VkEnd, false, ViewerAction.Last)]
+    [InlineData(ViewerState.VkLeft, false, ViewerAction.Newer)]     // newest at the left since 2026-10-03
+    [InlineData(ViewerState.VkRight, false, ViewerAction.Older)]
+    [InlineData(ViewerState.VkHome, false, ViewerAction.Newest)]
+    [InlineData(ViewerState.VkEnd, false, ViewerAction.Oldest)]
+    [InlineData(0x09, false, ViewerAction.None)]   // TAB: the terminal's (TerminalHandoff), not the viewer's
     [InlineData(ViewerState.VkF11, false, ViewerAction.ToggleFullScreen)]
     [InlineData(ViewerState.VkEscape, false, ViewerAction.Close)]
     [InlineData(ViewerState.VkEscape, true, ViewerAction.LeaveFullScreen)]
@@ -268,7 +273,7 @@ public sealed class ViewerTests : IDisposable
 
         Assert.True(state.Slides(ViewerAction.ToggleSlideShow));
         Assert.True(state.SlideShow);
-        Assert.Equal("c.png — 3/3 (live) · ▶ 5 s", state.Title());
+        Assert.Equal("c.png — 1/3 (live) · ▶ 5 s", state.Title());
 
         Assert.True(state.Slides(ViewerAction.LongerSlides));
         Assert.Equal(6, state.SlideSeconds);
@@ -287,11 +292,11 @@ public sealed class ViewerTests : IDisposable
         Assert.Equal(ViewerState.MaxSlideSeconds, state.SlideSeconds);
 
         Assert.True(state.Slides(ViewerAction.ToggleShuffle));
-        Assert.Equal("c.png — 3/3 (live) · ▶ 60 s · random", state.Title());
+        Assert.Equal("c.png — 1/3 (live) · ▶ 60 s · random", state.Title());
         Assert.True(state.Slides(ViewerAction.StopSlideShow));
         Assert.False(state.SlideShow);
         Assert.True(state.Shuffle);   // remembered
-        Assert.Equal("c.png — 3/3 (live) · NeonSidekick pictures", state.Title());
+        Assert.Equal("c.png — 1/3 (live) · NeonSidekick pictures", state.Title());
     }
 
     [Fact]
@@ -301,25 +306,27 @@ public sealed class ViewerTests : IDisposable
         state.Slides(ViewerAction.ToggleSlideShow);
         state.PressDelete(1_000);
 
-        Assert.Equal("c.png — 3/3 (live) · Del again to delete", state.Title());
+        Assert.Equal("c.png — 1/3 (live) · Del again to delete", state.Title());
     }
 
+    /// <summary>The show steps to the right since 2026-10-03 (the user's call), older each slide, the oldest wrapping to the newest, live.</summary>
     [Fact]
-    public void NextSlide_InOrder_WrapsFromTheNewestToTheOldest()
+    public void NextSlide_InOrder_StepsOlder_AndWrapsFromTheOldestToTheNewest()
     {
         var state = ThreePictures();
         state.Slides(ViewerAction.ToggleSlideShow);
 
         Assert.True(state.NextSlide(new Random(1)));
-        Assert.Equal(@"D:\pics\a.png", state.Current);
+        Assert.Equal(@"D:\pics\b.png", state.Current);
         Assert.False(state.Live);
         Assert.True(state.NextSlide(new Random(1)));
-        Assert.Equal(@"D:\pics\b.png", state.Current);
+        Assert.Equal(@"D:\pics\a.png", state.Current);
+        Assert.False(state.Add(@"D:\pics\d.png", T0.AddMinutes(4)));   // held on the oldest: only counted
+        Assert.True(state.NextSlide(new Random(1)));
+        Assert.Equal(@"D:\pics\d.png", state.Current);   // the wrap lands on the newest, the one that arrived meanwhile
+        Assert.True(state.Live);
         Assert.True(state.NextSlide(new Random(1)));
         Assert.Equal(@"D:\pics\c.png", state.Current);
-        Assert.True(state.Live);   // on the newest: a picture that arrives is the next slide
-        Assert.True(state.Add(@"D:\pics\d.png", T0.AddMinutes(4)));
-        Assert.Equal(@"D:\pics\d.png", state.Current);
     }
 
     [Fact]
@@ -422,11 +429,11 @@ public sealed class ViewerTests : IDisposable
 
         Assert.Null(state.PressDelete(1_000));
         Assert.True(state.DeleteArmed);
-        Assert.Equal("c.png — 3/3 (live) · Del again to delete", state.Title());
+        Assert.Equal("c.png — 1/3 (live) · Del again to delete", state.Title());
 
         Assert.Equal(@"D:\pics\c.png", state.PressDelete(1_000 + ViewerState.DeleteArmMilliseconds));
         Assert.False(state.DeleteArmed);
-        Assert.Equal("c.png — 3/3 (live) · NeonSidekick pictures", state.Title());
+        Assert.Equal("c.png — 1/3 (live) · NeonSidekick pictures", state.Title());
     }
 
     [Fact]
@@ -447,12 +454,12 @@ public sealed class ViewerTests : IDisposable
         var state = ThreePictures();
 
         Assert.Null(state.PressDelete(1_000));
-        state.Browse(ViewerAction.Previous);
+        state.Browse(ViewerAction.Older);
         Assert.False(state.DeleteArmed);
         Assert.Null(state.PressDelete(1_100));
         Assert.True(state.DeleteArmed);
 
-        state.Browse(ViewerAction.Last);
+        state.Browse(ViewerAction.Newest);
         Assert.Null(state.PressDelete(1_200));
         state.Add(@"D:\pics\d.png", T0.AddMinutes(4));   // live: d is shown now
         Assert.False(state.DeleteArmed);
@@ -505,6 +512,8 @@ public sealed class ViewerTests : IDisposable
         Assert.Equal("(\U0001F5BC\uFE0F picture viewer on D:\\p)", ViewerText.Opened(@"D:\p"));   // the selector: two cells, one space
         Assert.Contains("F9 slide show", ViewerText.Keys);
         Assert.Contains("F10 random", ViewerText.Keys);
+        Assert.Contains("← newer · → older · Home newest · End oldest", ViewerText.Keys);   // 2026-10-03
+        Assert.Contains("TAB terminal", ViewerText.Keys);
         Assert.Equal("▶ 5 s", ViewerText.SlideShowTail(5, false));
         Assert.Equal("▶ 5 s · random", ViewerText.SlideShowTail(5, true));
     }
