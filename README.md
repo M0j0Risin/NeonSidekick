@@ -1355,7 +1355,7 @@ Git inside the app (LibGit2Sharp), for when the shell is off or the model should
 </details>
 
 <details>
-<summary><b>📓 Obsidian</b></summary>
+<summary><b>💎 Obsidian</b></summary>
 
 ### Obsidian
 
@@ -1376,7 +1376,7 @@ The vault tools work on the vault's files directly: no plugin, no network, and O
 </details>
 
 <details>
-<summary><b>🗄️ SQL</b></summary>
+<summary><b>🪟 SQL</b></summary>
 
 ### SQL
 
@@ -1450,7 +1450,7 @@ Read-only queries against SQL Server over named connections, with no ODBC driver
 </details>
 
 <details>
-<summary><b>🗄️ Oracle</b></summary>
+<summary><b>🔮 Oracle</b></summary>
 
 ### Oracle
 
@@ -1516,7 +1516,7 @@ Values go in as `:name` parameters. A `NUMBER` past 28 digits keeps every digit;
 </details>
 
 <details>
-<summary><b>🗄️ MySQL and MariaDB</b></summary>
+<summary><b>🐬 MySQL and MariaDB</b></summary>
 
 ### MySQL and MariaDB
 
@@ -1577,7 +1577,7 @@ The same tools for MySQL 8.0.16+ and MariaDB 10.2+, through MySqlConnector (full
 </details>
 
 <details>
-<summary><b>📂 UNC shares and outside folders</b></summary>
+<summary><b>🔗 UNC shares and outside folders</b></summary>
 
 ### UNC shares and outside folders
 
