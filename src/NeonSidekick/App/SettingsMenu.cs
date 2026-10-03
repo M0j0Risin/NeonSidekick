@@ -2510,8 +2510,8 @@ internal sealed partial class SettingsMenu
     /// <summary>The key that is <see cref="PolicyAskButton"/>.</summary>
     public const char PolicyAskKey = 'a';
 
-    /// <summary>The allowed-commands list's second button (2026-10-02): the policy to <c>yolo</c>, after a yes to <see cref="YoloConfirmQuestion"/>; the warning sign before it since 2026-10-03. Pinned.</summary>
-    public const string PolicyYoloButton = "⚠ yolo";
+    /// <summary>The allowed-commands list's second button (2026-10-02): the policy to <c>yolo</c>, after a yes to <see cref="YoloConfirmQuestion"/>; the warning sign before it since 2026-10-03, two spaces after it (later that day, the user's ask: Windows Terminal gives ⚠ one cell, as <see cref="UI.TextCells"/> counts it, but draws it from the colour emoji font two cells wide over the space after it, so the second space is the one that shows). Pinned.</summary>
+    public const string PolicyYoloButton = "⚠  yolo";
 
     /// <summary>The key that is <see cref="PolicyYoloButton"/>.</summary>
     public const char PolicyYoloKey = 'y';
