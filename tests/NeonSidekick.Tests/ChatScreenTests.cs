@@ -5889,8 +5889,25 @@ public partial class ChatScreenTests : IDisposable
         int enter = output.IndexOf("\e[?1049h\e[?1007l", StringComparison.Ordinal);
         int banner = output.IndexOf(ScreenMarker, StringComparison.Ordinal);
         Assert.True(enter >= 0 && enter < banner, "the banner is drawn inside the alternate buffer");
-        Assert.EndsWith("\e[?1007h\e[?1049l", output);
+        Assert.EndsWith(ScreenPane.PageBackgroundResetSequence + "\e[?1007h\e[?1049l", output);
         Assert.Equal(1, Count(output, "\e[?1049h"));
+        // Themed background (2026-10-03, on by default): the theme's bg is the terminal's page from the buffer's entry.
+        Assert.StartsWith("\e[?1049h\e[?1007l" + ScreenPane.PageBackgroundSequence(Theme.Bg), output[enter..]);
+    }
+
+    [Fact]
+    public async Task WithGeometry_ThemedBackgroundOff_LeavesTheTerminalsOwn()
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.ThemedBackground = false; });
+        _console.EmitAnsiSequences();
+        _console.Profile.Height = 20;
+        _geometry = new ScreenGeometry(() => null);
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.DoesNotContain("\e]11;", output);
+        Assert.DoesNotContain(ScreenPane.PageBackgroundResetSequence, output);
     }
 
     [Fact]

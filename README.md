@@ -230,6 +230,7 @@ Settings that an environment variable or flag can override for one launch are li
 | Image thumbnail size | `tiny` (32×8), `small` (48×12), `medium` (64×16), `large` (80×20) or `xlarge` (96×24) columns × rows, or `fullsize`: each picture as large as the transcript allows, stacked. | `small` |
 | Copy user prompt | `/copy` includes your prompt above the reply. When off, it copies the reply alone. | on |
 | Theme | `synthwave`, `netrunner` (green phosphor), `nostromo` (amber phosphor), `noir` (greyscale), `cyberpunk` (colourful), `vaporwave` (pastel), `mainframe` (blue phosphor), `grid` (light cycle), `replicant` (smog and sodium) or `abyssal` (bioluminescent), followed by your own themes from the `themes` folder (see [Custom themes](#custom-themes)). When the window is wide enough, the picker shows a preview of the highlighted theme beside the list. | `synthwave` |
+| Themed background | The terminal's page takes the theme's background colour while the app runs, and gets its own back when the app exits. When off, the terminal profile's background (a colour scheme, acrylic or a picture) stays as it is. | on |
 | Welcome splash | Shows pictures under the banner at startup, until you send the first line: `fullsize`, `tiled` or `disabled`. See Welcome splash below. | `fullsize` |
 | Show header | Shows the banner (the title, the version and the rule under it) at startup and after `/clear`, `/splash`, `/theme` and a profile switch. Off, the screen starts with the transcript. `/new` keeps its own rule either way. `/header` and Ctrl+Alt+H flip it; the change shows at the next clear. | on |
 | Working directory in header | Prints the working directory at the right of the banner's title line. | off |
@@ -1217,7 +1218,7 @@ The easiest start is `/theme export <name> [new-name]`. It writes any theme to `
 | `ink` | Body text. |
 | `dim` | Secondary, dim text and the hint row. |
 | `dimmer` | A step darker than `dim`: the input row's ghost text. |
-| `bg` | The page background (the selection's text, disabled menu rows, a picture's transparent pixels, the viewer). |
+| `bg` | The page background: the terminal's (unless *Themed background* is off), the selection's text, disabled menu rows, a picture's transparent pixels, the viewer. |
 | `panelBg` | The lifted fill: code blocks, the highlighted menu row. |
 | `good` | Success, enabled, connected. |
 | `bad` | Failure, error. |

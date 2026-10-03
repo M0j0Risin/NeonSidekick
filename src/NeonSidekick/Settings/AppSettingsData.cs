@@ -88,6 +88,15 @@ public sealed class AppSettingsData
     public bool ThemedViewer { get; set; } = true;
 
     /// <summary>
+    /// Whether the terminal's page wears the theme's <c>bg</c> (2026-10-03, the user's ask: Windows Terminal never showed it;
+    /// the General tab's <c>Themed background</c> row, under <c>Theme</c>): on (the default), the screen sets the terminal's default background
+    /// to the palette's <see cref="UI.ThemePalette.Bg"/> while it holds the alternate buffer (OSC 11) and gives the profile's
+    /// own back as it leaves (OSC 111); off, nothing is written and the terminal profile's background (an acrylic, a picture)
+    /// stays. Read on every frame, so a flip shows at once. No variable.
+    /// </summary>
+    public bool ThemedBackground { get; set; } = true;
+
+    /// <summary>
     /// Where the built-in picture viewer last closed (2026-09-28, the user's ask: it opens there the next time; position
     /// only, always on — the user's calls): the top-left corner of its restored placement in workspace coordinates, set by
     /// the viewer itself as it closes (<see cref="Viewer.PictureWindow.Placed"/>), never by a menu row. Null, as until the

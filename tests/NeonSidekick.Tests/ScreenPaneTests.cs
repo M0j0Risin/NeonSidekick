@@ -1830,6 +1830,61 @@ public class ScreenPaneTests : IDisposable
         Assert.EndsWith("\e[?1007h\e[?1049l", Output);
     }
 
+    /// <summary>
+    /// Themed background (2026-10-03): the page's colour set (OSC 11) as the buffer is entered, again on a frame only when
+    /// the answer changes, given back (OSC 111) on a null and before the buffer is left.
+    /// </summary>
+    [Fact]
+    public void PageBackground_IsSetOnOpen_FollowsAChange_AndIsGivenBackOnClose()
+    {
+        _console.EmitAnsiSequences();
+        Color? page = new Color(0x0D, 0x02, 0x21);
+        using var pane = Pane();
+        pane.PageBackground = () => page;
+        pane.Open();
+        Assert.Equal("\e[?1049h\e[?1007l\e]11;rgb:0d/02/21\e\\", Output);
+
+        pane.Show();
+        Assert.Equal(1, Count(Output, "\e]11;"));   // a frame with the same answer writes nothing
+
+        page = new Color(0xFF, 0xFF, 0xFF);
+        pane.WriteLine("x");
+        Assert.Contains("\e[?2026h\e]11;rgb:ff/ff/ff\e\\", Output);
+
+        page = null;
+        pane.WriteLine("x");
+        Assert.Equal(1, Count(Output, ScreenPane.PageBackgroundResetSequence));
+
+        page = new Color(0x10, 0x20, 0x30);
+        pane.WriteLine("x");
+        pane.Close();
+        Assert.EndsWith(ScreenPane.PageBackgroundResetSequence + "\e[?1007h\e[?1049l", Output);
+        Assert.Equal(2, Count(Output, ScreenPane.PageBackgroundResetSequence));
+    }
+
+    [Fact]
+    public void PageBackground_Null_WritesNoCode()
+    {
+        _console.EmitAnsiSequences();
+        using var pane = Pane();
+        pane.Open();
+        pane.Show();
+        pane.Close();
+        Assert.DoesNotContain("\e]11", Output);
+        Assert.DoesNotContain("\e]111", Output);
+    }
+
+    [Fact]
+    public void PageBackground_IsGivenBack_OnADisposeWithoutAClose()
+    {
+        _console.EmitAnsiSequences();
+        var pane = Pane();
+        pane.PageBackground = () => new Color(1, 2, 3);
+        pane.Open();
+        pane.Dispose();
+        Assert.EndsWith(ScreenPane.PageBackgroundResetSequence + "\e[?1007h\e[?1049l", Output);
+    }
+
     [Fact]
     public void Disabled_Open_WritesNothing()
     {

@@ -1042,6 +1042,8 @@ internal sealed partial class ChatScreen
         {
             Frames = frames,
             Hint = HintText,
+            // The theme's bg as the terminal's page (2026-10-03, the user's ask), per frame so /theme and the switch show at once.
+            PageBackground = () => _effective().ThemedBackground ? Theme.Bg : null,
             // The strip at the row's start in every state (the spinner and a menu's hint included):
             // the brain while a reflection runs, the tag while the model writes a session title,
             // then the speech switches as of the last connect, the wake word and the interrupt

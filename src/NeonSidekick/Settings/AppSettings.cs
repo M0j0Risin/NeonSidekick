@@ -636,6 +636,7 @@ public sealed class AppSettings : IDisposable
         DraftEditor = source.DraftEditor,
         ImageEditor = source.ImageEditor,
         ThemedViewer = source.ThemedViewer,
+        ThemedBackground = source.ThemedBackground,
         ViewerLeft = source.ViewerLeft,
         ViewerTop = source.ViewerTop,
         CameraWindowLeft = source.CameraWindowLeft,

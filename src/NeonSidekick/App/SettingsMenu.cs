@@ -805,6 +805,9 @@ public enum SettingsField
 
     /// <summary>Typed: the folder under the working directory the camera's photos are saved in (<see cref="Settings.AppSettingsData.CameraOutputFolder"/>). The Camera tab (2026-10-02), the ComfyUI output folder's shape; no reconnect. Last in the enum, as every newcomer.</summary>
     CameraOutputFolder,
+
+    /// <summary>A toggle (the <c>Themed background</c> row): whether the terminal's page wears the theme's background (<see cref="Settings.AppSettingsData.ThemedBackground"/>). The General tab, under <see cref="Theme"/> (2026-10-03, the user's ask, name and place); no reconnect (read on every frame). Last in the enum, as every newcomer.</summary>
+    ThemedBackground,
 }
 
 /// <summary>The tabs of <c>/settings</c> on the pane, in strip order (General, Embedded, LLM, TTS, STT, Sessions, Botchat — the user's order, 2026-09-29; Sessions right after General — the user's order, 2026-09-18 — until then; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
@@ -1115,7 +1118,7 @@ internal sealed partial class SettingsMenu
         [SettingsField.Profile, SettingsField.NewProfileMode, SettingsField.WorkingDirectory, SettingsField.Memory,
          SettingsField.QueueMessages, SettingsField.QueueCancelMode, SettingsField.KeepCommandHistory, SettingsField.CommandTypoIntercept, SettingsField.HideExitAutocomplete,
          SettingsField.TranscriptMarkdown, SettingsField.PastePreviewLines, SettingsField.ShowImageThumbnails, SettingsField.ImageThumbnailSize, SettingsField.CopyUserPrompt,
-         SettingsField.Theme, SettingsField.WelcomeSplash, SettingsField.ShowHeader, SettingsField.ShowWorkingDirectory, SettingsField.ToolbarItems, SettingsField.ShowPerformanceBar, SettingsField.MenuMaxHeight,
+         SettingsField.Theme, SettingsField.ThemedBackground, SettingsField.WelcomeSplash, SettingsField.ShowHeader, SettingsField.ShowWorkingDirectory, SettingsField.ToolbarItems, SettingsField.ShowPerformanceBar, SettingsField.MenuMaxHeight,
          SettingsField.DraftEditor, SettingsField.ImageEditor, SettingsField.ThemedViewer],
         [SettingsField.EmbeddedLlmServer, SettingsField.EmbeddedModels, SettingsField.EmbeddedHfDownloadType, SettingsField.EmbeddedBackend, SettingsField.EmbeddedContextSize, SettingsField.EmbeddedGpuLayers, SettingsField.EmbeddedVramBudget, SettingsField.EmbeddedVramOnly, SettingsField.EmbeddedVision, SettingsField.EmbeddedDrafter],
         [SettingsField.DockerServers, SettingsField.DockerServerContainers, SettingsField.DockerServerStopTimeoutSeconds, SettingsField.DockerServerPostStopDelaySeconds, SettingsField.DockerServerReadyTimeoutSeconds, SettingsField.DockerServerStopOnExit],
@@ -1550,7 +1553,7 @@ internal sealed partial class SettingsMenu
             or SettingsField.WebTools or SettingsField.TtsVoicePreview or SettingsField.FileTools or SettingsField.AskUser
             or SettingsField.AgentSkills or SettingsField.ExternalSkills or SettingsField.ProjectFile or SettingsField.TranscriptMarkdown
             or SettingsField.SkillHashMention or SettingsField.ReflectionAutoLearn
-            or SettingsField.HideExitAutocomplete or SettingsField.CommandTypoIntercept or SettingsField.KeepCommandHistory or SettingsField.ShowHeader or SettingsField.ShowWorkingDirectory or SettingsField.ThemedViewer
+            or SettingsField.HideExitAutocomplete or SettingsField.CommandTypoIntercept or SettingsField.KeepCommandHistory or SettingsField.ShowHeader or SettingsField.ShowWorkingDirectory or SettingsField.ThemedViewer or SettingsField.ThemedBackground
             or SettingsField.QueueMessages or SettingsField.SessionLogging or SettingsField.SessionTool or SettingsField.SessionSaveThinking
             or SettingsField.ToolsDollarMention or SettingsField.ReflectionIncludesSessions or SettingsField.ReflectionYieldsToTurns or SettingsField.ReflectionEditsSupportingFiles or SettingsField.McpServers or SettingsField.GitLibTools
             or SettingsField.LlmCompactShowSummary or SettingsField.ShellToolBridge or SettingsField.ShellPoliceOutsidePaths or SettingsField.ShellPreferNative
@@ -1810,6 +1813,7 @@ internal sealed partial class SettingsMenu
         SettingsField.ShowPerformanceBar => "Show performance bar",
         SettingsField.Theme => "Theme",
         SettingsField.ThemedViewer => "Themed image viewer",   // the user's name, beside "Image viewer" (later on 2026-09-27)
+        SettingsField.ThemedBackground => "Themed background",   // the user's name, under "Theme" (2026-10-03)
         SettingsField.QueueMessages => "Queue messages",
         SettingsField.QueueCancelMode => "Queue cancel mode",
         SettingsField.SessionLogging => "Session logging",
@@ -2097,6 +2101,7 @@ internal sealed partial class SettingsMenu
             SettingsField.ToolbarItems => App.ToolbarItems.Value(data.ToolbarItems),
             SettingsField.ShowPerformanceBar => PerfBarItems.Value(data.PerformanceBarItems, data.PerformanceBarLook),
             SettingsField.ThemedViewer => OnOff(data.ThemedViewer),
+            SettingsField.ThemedBackground => OnOff(data.ThemedBackground),
             SettingsField.Theme => data.Theme,
             SettingsField.QueueMessages => OnOff(data.QueueMessages),
             SettingsField.QueueCancelMode => data.QueueCancelMode,
@@ -5433,6 +5438,7 @@ internal sealed partial class SettingsMenu
             SettingsField.ShowHeader => data.ShowHeader,
             SettingsField.ShowWorkingDirectory => data.ShowWorkingDirectory,
             SettingsField.ThemedViewer => data.ThemedViewer,
+            SettingsField.ThemedBackground => data.ThemedBackground,
             SettingsField.QueueMessages => data.QueueMessages,
             SettingsField.SessionLogging => data.SessionLogging,
             SettingsField.SessionTool => data.SessionTool,
@@ -5525,6 +5531,7 @@ internal sealed partial class SettingsMenu
             case SettingsField.ShowHeader: data.ShowHeader = on; break;
             case SettingsField.ShowWorkingDirectory: data.ShowWorkingDirectory = on; break;
             case SettingsField.ThemedViewer: data.ThemedViewer = on; break;
+            case SettingsField.ThemedBackground: data.ThemedBackground = on; break;
             case SettingsField.QueueMessages: data.QueueMessages = on; break;
             case SettingsField.SessionLogging: data.SessionLogging = on; break;
             case SettingsField.SessionTool: data.SessionTool = on; break;
@@ -5621,6 +5628,7 @@ internal sealed partial class SettingsMenu
         SettingsField.ShowHeader => on ? "show the header" : "hide the header",
         SettingsField.ShowWorkingDirectory => on ? "show the working directory in the header" : "hide the working directory in the header",
         SettingsField.ThemedViewer => on ? "theme the picture viewer" : "keep the picture viewer black",
+        SettingsField.ThemedBackground => on ? "theme the terminal's background" : "keep the terminal profile's background",
         SettingsField.QueueMessages => on ? "a message sent while a reply runs is queued and sent when the reply ends" : "a message sent during a reply goes when it ends, unlisted; no /queue",
         SettingsField.SessionLogging => on ? "every completed turn is written to this profile's session store" : "nothing is written; what is stored still lists, restores and purges",
         SettingsField.SessionTool => on ? "the model can search, list and read this profile's earlier sessions" : "the model never sees an earlier session",

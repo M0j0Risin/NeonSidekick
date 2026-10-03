@@ -92,6 +92,8 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     // key records — history on the line — and the wheel is the terminal's anyway.
     private static readonly ControlCode EnterAlternate = new("\e[?1049h\e[?1007l");
     private static readonly ControlCode LeaveAlternate = new("\e[?1007h\e[?1049l");
+    // The terminal profile's default background back (OSC 111), written before the buffer is left when PageBackground set one.
+    private static readonly ControlCode PageBackgroundReset = new(PageBackgroundResetSequence);
 
     private readonly IAnsiConsole _inner;
     private readonly ScreenGeometry? _geometry;
@@ -251,6 +253,10 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     // comparison), and its zones: the strip at column 0 as the row cut it, and the path's first
     // column and width, −1 / 0 when the row had no room for it.
     private Func<ToolbarParts?> _toolbar = static () => null;
+    private Func<Color?> _pageBackground = static () => null;
+
+    // The page background last written (OSC 11) while in the alternate buffer; null when the profile's own is showing.
+    private Color? _pageBackgroundSent;
     private int _toolbarRows;
     private string? _shownToolbar;
     private string _shownToolbarOff = "";
@@ -743,6 +749,28 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         get => _toolbar;
         set => _toolbar = value ?? throw new ArgumentNullException(nameof(value));
     }
+
+    /// <summary>
+    /// The terminal's page background (2026-10-03, the user's ask: a theme's <c>bg</c> never reached Windows Terminal, every
+    /// unstyled cell kept the profile's colour scheme): asked at the start of every frame while the alternate buffer is up,
+    /// and when the answer differs from the one last written the terminal's default background is set to it (OSC 11,
+    /// <see cref="PageBackgroundSequence"/>), or given back (OSC 111) on a null. One code reaches every default cell, the
+    /// erased ones and the rest of a line included, where painting cells would miss them. <see cref="Close"/> and a dispose
+    /// give the profile's colour back. The screen answers the palette's <see cref="ThemePalette.Bg"/> under
+    /// <c>Themed background</c>, else null; the default is null, so a pane nobody asked writes nothing.
+    /// </summary>
+    public Func<Color?> PageBackground
+    {
+        get => _pageBackground;
+        set => _pageBackground = value ?? throw new ArgumentNullException(nameof(value));
+    }
+
+    /// <summary><c>ESC ] 11 ; rgb:rr/gg/bb ESC \</c>: the terminal's default background set to <paramref name="color"/>. Pinned.</summary>
+    public static string PageBackgroundSequence(Color color) =>
+        string.Create(System.Globalization.CultureInfo.InvariantCulture, $"\e]11;rgb:{color.R:x2}/{color.G:x2}/{color.B:x2}\e\\");
+
+    /// <summary><c>ESC ] 111 ESC \</c>: the terminal's default background back to the profile's. Pinned.</summary>
+    public const string PageBackgroundResetSequence = "\e]111\e\\";
 
     /// <summary>The rows the toolbar took in the last draw: 1 while drawn, else 0 (the thumbnail sizing adds it to <see cref="PaneRows"/> and <see cref="InputRows"/>).</summary>
     public int ToolbarRows
@@ -1299,6 +1327,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
 
             _inner.Write(EnterAlternate);
             _inAlternate = true;
+            SyncPageBackgroundLocked();
             _row = 0;
             _col = 0;
             _lineFull = false;
@@ -2605,6 +2634,12 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         if (!_inAlternate)
         {
             return;
+        }
+
+        if (_pageBackgroundSent is not null)
+        {
+            _inner.Write(PageBackgroundReset);
+            _pageBackgroundSent = null;
         }
 
         _inner.Write(LeaveAlternate);
@@ -5071,7 +5106,30 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         if (_syncDepth++ == 0)
         {
             _inner.Write(SyncBegin);
+            SyncPageBackgroundLocked();
         }
+    }
+
+    /// <summary>
+    /// The terminal's default background brought in step with <see cref="PageBackground"/> (a theme change, a profile's load
+    /// or a flip of <c>Themed background</c> shows on the next frame): OSC 11 for a new colour, OSC 111 when it turns null.
+    /// Only in the alternate buffer; nothing when the answer is the one last written.
+    /// </summary>
+    private void SyncPageBackgroundLocked()
+    {
+        if (!_inAlternate)
+        {
+            return;
+        }
+
+        Color? wanted = _pageBackground();
+        if (wanted == _pageBackgroundSent)
+        {
+            return;
+        }
+
+        _inner.Write(wanted is { } color ? new ControlCode(PageBackgroundSequence(color)) : PageBackgroundReset);
+        _pageBackgroundSent = wanted;
     }
 
     /// <summary>The matching end: the terminal's end on the outermost, then the held output let go.</summary>
