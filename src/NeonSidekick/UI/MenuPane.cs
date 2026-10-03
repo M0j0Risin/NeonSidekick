@@ -93,6 +93,15 @@ public sealed record MenuPage(string Title, IReadOnlyList<string> Rows, string H
     public string? BaseHint { get; init; }
 
     /// <summary>
+    /// A column drawn to the right of the list (2026-10-02, the user's ask: the theme pickers' preview, <see cref="ThemePreview"/>),
+    /// asked for afresh at every draw as (the cursor's row, the column's width, its rows): one renderable per row, each drawn one
+    /// row high at that width, from the row under the title down. The pane draws it only while the window leaves the list
+    /// <see cref="MenuPane.SideMinListWidth"/> cells and the column <see cref="MenuPane.SideMinWidth"/> (<see cref="MenuPane.SideWidth"/>);
+    /// narrower, the page is drawn as one without. A click on it does nothing. Null for none (every page but the themes').
+    /// </summary>
+    public Func<int, int, int, IReadOnlyList<IRenderable>>? Side { get; init; }
+
+    /// <summary>
     /// A page over <paramref name="tabs"/> showing <paramref name="tab"/>: the strip labelled
     /// <paramref name="title"/>, that tab's rows, its caption, and its hint when it has one else
     /// <paramref name="hint"/> (kept as <see cref="BaseHint"/> for the tabs without).
@@ -182,6 +191,21 @@ public sealed class MenuPane : INoticeSink
     /// <summary>The window height assumed when the console reports none (the mention list sizes by it too).</summary>
     public const int DefaultHeight = 24;
 
+    /// <summary>The fewest cells the list keeps beside a <see cref="MenuPage.Side"/> column (2026-10-02).</summary>
+    public const int SideMinListWidth = 36;
+
+    /// <summary>The blank cells between the list and a <see cref="MenuPage.Side"/> column.</summary>
+    public const int SideGap = 2;
+
+    /// <summary>The narrowest <see cref="MenuPage.Side"/> column drawn; a window that leaves less draws the page without it.</summary>
+    public const int SideMinWidth = 40;
+
+    /// <summary>The widest <see cref="MenuPage.Side"/> column: past it the list takes the room (the Theme Atlas's screen is 66 cells and its margins).</summary>
+    public const int SideMaxWidth = 72;
+
+    /// <summary>The fewest rows a <see cref="MenuPage.Side"/> column gets under the title: a short list is padded to it, within the pane's cap.</summary>
+    public const int SideMinRows = 8;
+
     private readonly ScreenPane _pane;
     private readonly KeySource _keys;
     private readonly Action<bool>? _mouse;
@@ -194,6 +218,8 @@ public sealed class MenuPane : INoticeSink
     private int _captionRows;
     private int _stripRows = 1;
     private int _inputRows;
+    private int _sideWidth;
+    private int _listWidth;
     private bool _open;
 
     /// <param name="mouse">Takes (true) or hands back (false) the console's mouse; null when the screen has none to take.</param>
@@ -231,6 +257,17 @@ public sealed class MenuPane : INoticeSink
     /// <summary>A row: the pointer and the menu highlight on the cursor's row, an indent on the others. <paramref name="row"/> is markup already.</summary>
     public static string RowMarkup(string row, bool active) =>
         active ? $"[{Theme.MenuHighlight.ToMarkup()}]{Pointer}{row}[/]" : NoPointer + row;
+
+    /// <summary>
+    /// The width of a <see cref="MenuPage.Side"/> column in a window <paramref name="width"/> cells wide (2026-10-02): what the
+    /// list's <see cref="SideMinListWidth"/>, the <see cref="SideGap"/> and the last column (never written, as the bars leave it)
+    /// leave, up to <see cref="SideMaxWidth"/>; 0, no column, under <see cref="SideMinWidth"/>. Pure.
+    /// </summary>
+    public static int SideWidth(int width)
+    {
+        int side = Math.Min(SideMaxWidth, width - 1 - SideMinListWidth - SideGap);
+        return side >= SideMinWidth ? side : 0;
+    }
 
     /// <summary>A status line: the transcript's glyph and colour for the kind. Escaped.</summary>
     public static string StatusMarkup(NoticeKind kind, string text) => kind switch
@@ -422,6 +459,11 @@ public sealed class MenuPane : INoticeSink
                             _status.Clear();
                             return new MenuPick(page.Tab, _cursor, Button: button);
                         }
+                    }
+                    else if (_sideWidth > 0 && click.X >= _listWidth)
+                    {
+                        // The side column (2026-10-02): it shows, it picks nothing.
+                        _clicks.Reset();
                     }
                     else if (at - Header is int i && i >= 0 && i < _shown)
                     {
@@ -731,7 +773,9 @@ public sealed class MenuPane : INoticeSink
     private void Show()
     {
         var page = _page!;
-        IReadOnlyList<string> caption = page.Caption is { } captionText ? CaptionRows(captionText, Width, CaptionMaxRows) : [];
+        _sideWidth = page.Side is not null && page.Rows.Count > 0 ? SideWidth(Width) : 0;
+        _listWidth = _sideWidth > 0 ? Width - 1 - _sideWidth - SideGap : Width;
+        IReadOnlyList<string> caption = page.Caption is { } captionText ? CaptionRows(captionText, _listWidth, CaptionMaxRows) : [];
         _captionRows = caption.Count;
         var top = TopRows(page, Width);
         _stripRows = top.Count;
@@ -740,6 +784,13 @@ public sealed class MenuPane : INoticeSink
         (_first, _shown) = Viewport(page.Rows.Count, _cursor, capacity, _first);
         bool more = _shown < page.Rows.Count;
         int pad = Math.Min(TabBodyRows(page, Width), _captionRows + Math.Max(0, capacity)) - (_captionRows + _shown + (more ? 1 : 0));
+        if (_sideWidth > 0)
+        {
+            // The side column's rows under the title, at least SideMinRows within the cap: a short list is padded to them.
+            int body = header - _stripRows + _shown + (more ? 1 : 0) + Math.Max(0, pad);
+            int room = header - _stripRows + Math.Max(0, capacity);
+            pad = Math.Max(0, pad) + Math.Clamp(SideMinRows - body, 0, Math.Max(0, room - body));
+        }
 
         var lines = new List<IRenderable>(header + _shown + 1 + Math.Max(0, pad));
         foreach (var row in top)
@@ -783,6 +834,47 @@ public sealed class MenuPane : INoticeSink
             lines.Add(new Text(" "));
         }
 
+        if (_sideWidth > 0)
+        {
+            // Under the title, each row is the list's part, the gap and the side's line (2026-10-02); the title row keeps
+            // the window's width, so the × keeps its corner.
+            int rows = lines.Count - top.Count;
+            var side = page.Side!(_cursor, _sideWidth, rows);
+            for (int i = 0; i < rows; i++)
+            {
+                lines[top.Count + i] = new SideBySide(lines[top.Count + i], _listWidth, SideGap, i < side.Count ? side[i] : null, _sideWidth);
+            }
+        }
+
         _pane.ShowOverlay(new Rows(lines), page.Hint, input: _inputRows > 0, close: true);
+    }
+
+    /// <summary>
+    /// One overlay row with a <see cref="MenuPage.Side"/> column (2026-10-02): <paramref name="left"/>'s first row cut to
+    /// <paramref name="leftWidth"/> and padded to it, <paramref name="gap"/> blanks, then <paramref name="right"/>'s first row
+    /// cut to <paramref name="rightWidth"/>.
+    /// </summary>
+    private sealed class SideBySide(IRenderable left, int leftWidth, int gap, IRenderable? right, int rightWidth) : IRenderable
+    {
+        public Measurement Measure(RenderOptions options, int maxWidth) => new(Math.Min(maxWidth, leftWidth + gap + rightWidth), maxWidth);
+
+        public IEnumerable<Segment> Render(RenderOptions options, int maxWidth)
+        {
+            var row = FirstRow(left, options, leftWidth);
+            int cells = Segment.CellCount(row);
+            if (right is not null)
+            {
+                row.Add(new Segment(new string(' ', Math.Max(0, leftWidth - cells) + gap)));
+                row.AddRange(FirstRow(right, options, rightWidth));
+            }
+
+            return row;
+        }
+
+        private static List<Segment> FirstRow(IRenderable renderable, RenderOptions options, int width)
+        {
+            var lines = Segment.SplitLines(renderable.Render(options, width), width);
+            return lines.Count > 0 ? [.. lines[0]] : [];
+        }
     }
 }

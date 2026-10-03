@@ -214,4 +214,38 @@ public class ThemeTests
 
         return 0.2126 * Channel(c.R) + 0.7152 * Channel(c.G) + 0.0722 * Channel(c.B);
     }
+
+    /// <summary>The pickers' preview (2026-10-02): a palette's styles as <see cref="Theme.Use"/> would give them, the one in force untouched.</summary>
+    [Fact]
+    public void StylesOf_IsWhatUseWouldGive_AndPutsNothingInForce()
+    {
+        using var scope = new ThemeScope();
+        foreach (var palette in ThemePalette.All)
+        {
+            var styles = Theme.StylesOf(palette);
+            Assert.Same(ThemePalette.Synthwave, Theme.Current);
+
+            Theme.Use(palette);
+            foreach (var slot in Enum.GetValues<ThemeStyleSlot>())
+            {
+                Assert.Equal(Theme.Of(slot), styles(slot));
+            }
+
+            Theme.Use(ThemePalette.Synthwave);
+        }
+    }
+
+    [Fact]
+    public void GradientAndRule_OverAPalettesStops_AreTheFormsInForce()
+    {
+        using var scope = new ThemeScope();
+        var other = ThemePalette.All[1];
+        string gradient = Theme.GradientMarkup("NEON", other.GradientStops);
+        string rule = Theme.Rule(17, other.GradientStops);
+
+        Theme.Use(other);
+
+        Assert.Equal(Theme.GradientMarkup("NEON"), gradient);
+        Assert.Equal(Theme.Rule(17), rule);
+    }
 }

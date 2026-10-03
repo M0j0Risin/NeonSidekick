@@ -6563,7 +6563,7 @@ internal sealed partial class SettingsMenu
     private async Task<bool> PickThemeRowAsync(AppSettingsData saved, CancellationToken cancellationToken)
     {
         var themes = ScanThemes().Themes;
-        var page = new MenuPage(Crumb(FieldName(SettingsField.Theme)), ThemeRows(themes), PickKeys);
+        var page = new MenuPage(Crumb(FieldName(SettingsField.Theme)), ThemeRows(themes), PickKeys) { Side = ThemeSide(themes) };
         int? picked = await PickAsync(page, ThemeCursor(saved.Theme, themes), cancellationToken).ConfigureAwait(false);
         if (picked is not { } index)
         {
@@ -6614,7 +6614,7 @@ internal sealed partial class SettingsMenu
             return false;
         }
 
-        var page = new MenuPage(ThemeTitle, ThemeRows(scan.Themes), KeepKeys);
+        var page = new MenuPage(ThemeTitle, ThemeRows(scan.Themes), KeepKeys) { Side = ThemeSide(scan.Themes) };
         int? picked = await PickOnceAsync(page, ThemeCursor(Theme.Current.Name, scan.Themes), cancellationToken).ConfigureAwait(false);
         return picked is { } index ? SaveTheme(scan.Themes[index]) : Unchanged();
     }
@@ -6706,6 +6706,14 @@ internal sealed partial class SettingsMenu
 
         return changed;
     }
+
+    /// <summary>
+    /// Both theme pickers' column beside the list (2026-10-02, the user's ask): the highlighted theme's
+    /// <see cref="ThemePreview"/>, in its own styles while the pane stays in the one in force, so the screen starts over only
+    /// on the pick, as before.
+    /// </summary>
+    private static Func<int, int, int, IReadOnlyList<Spectre.Console.Rendering.IRenderable>> ThemeSide(IReadOnlyList<ThemePalette> themes) =>
+        (row, width, rows) => ThemePreview.Lines(themes[row], width, rows, SidekickApp.BannerTitle.Trim(), SidekickApp.Version);
 
     /// <summary>One <see cref="ThemeLabel(string, IReadOnlyList{ThemePalette})"/> row per theme of <paramref name="themes"/>, in its order.</summary>
     private static List<string> ThemeRows(IReadOnlyList<ThemePalette> themes) => themes.Select(t => ThemeLabel(t.Name, themes)).ToList();

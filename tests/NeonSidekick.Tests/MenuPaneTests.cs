@@ -1,6 +1,7 @@
 using NeonSidekick.Tests.Fakes;
 using NeonSidekick.UI;
 using Spectre.Console;
+using Spectre.Console.Rendering;
 using Spectre.Console.Testing;
 
 namespace NeonSidekick.Tests;
@@ -707,6 +708,78 @@ public class MenuPaneTests : IDisposable
         var pane = new ScreenPane(_console, new ScreenGeometry(() => null, () => cursorTop), _time) { Hint = () => "idle" };
         var input = new ScriptedInput();
         return (pane, input, new KeySource(input, TimeSpan.FromMilliseconds(1)));
+    }
+
+    // ── The side column (2026-10-02, the theme pickers' preview) ─────────────
+
+    /// <summary>A side that names the row it was asked for and each of its own rows: "side 1:2" is the third row beside row 1.</summary>
+    private static MenuPage Sided(params string[] rows) =>
+        Page(rows) with { Side = (row, width, count) => Enumerable.Range(0, count).Select(i => (IRenderable)new Text($"side {row}:{i} w{width}")).ToList() };
+
+    [Fact]
+    public void SideWidth_LeavesTheListItsCells_UpToTheCap_AndNoneWhenNarrow()
+    {
+        Assert.Equal(0, MenuPane.SideWidth(40));
+        Assert.Equal(0, MenuPane.SideWidth(1 + MenuPane.SideMinListWidth + MenuPane.SideGap + MenuPane.SideMinWidth - 1));
+        Assert.Equal(MenuPane.SideMinWidth, MenuPane.SideWidth(1 + MenuPane.SideMinListWidth + MenuPane.SideGap + MenuPane.SideMinWidth));
+        Assert.Equal(61, MenuPane.SideWidth(100));
+        Assert.Equal(MenuPane.SideMaxWidth, MenuPane.SideWidth(240));
+    }
+
+    /// <summary>At 100 columns the side is 61 cells and the list 36: each row under the title is the list's part, two blanks, the side's line.</summary>
+    [Fact]
+    public async Task ASideColumn_ShowsBesideTheList_FollowsTheCursor_AndFillsItsRows()
+    {
+        _console.Profile.Width = 100;
+        _console.Profile.Height = 30;
+        using var pane = Pane();
+        pane.Show();
+        var menu = new MenuPane(pane, _keys);
+        Push(Keys.Down, Keys.Enter);
+
+        Assert.Equal(new MenuPick(0, 1), await menu.PickAsync(Sided("one", "two", "three"), 0, CancellationToken.None));
+
+        static string Beside(string list, string side) => list + new string(' ', 36 - TextCells.Width(list) + MenuPane.SideGap) + side + " w61";
+        Assert.Contains(Titled("Settings", 100) + "\n" + Beside(" ", "side 0:0") + "\n" + Beside("▸ one", "side 0:1") + "\n" + Beside("  two", "side 0:2") + "\n", Output);
+        Assert.Contains(Beside("  one", "side 1:1") + "\n" + Beside("▸ two", "side 1:2") + "\n", Output);
+        // Three rows and the spacer, padded to SideMinRows for the side.
+        Assert.Contains("side 1:" + (MenuPane.SideMinRows - 1) + " w61", Output);
+        Assert.DoesNotContain("side 1:" + MenuPane.SideMinRows + " ", Output);
+        menu.Close();
+    }
+
+    [Fact]
+    public async Task ANarrowWindow_DrawsASidedPage_AsOneWithout()
+    {
+        using var pane = Pane();
+        pane.Show();
+        var menu = new MenuPane(pane, _keys);
+        Push(Keys.Enter);
+
+        Assert.Equal(new MenuPick(0, 0), await menu.PickAsync(Sided("one", "two", "three"), 0, CancellationToken.None));
+
+        Assert.Contains(Rule(40) + "\n" + Titled("Settings") + "\n \n▸ one\n  two\n  three\n" + Rule(40) + "\nEnter = pick · ESC = back", Output);
+        Assert.DoesNotContain("side", Output);
+        menu.Close();
+    }
+
+    [Fact]
+    public async Task AClickOnTheSideColumn_DoesNothing_OneOnTheList_StillMoves()
+    {
+        _console.Profile.Width = 100;
+        _console.Profile.Height = 30;
+        var (pane, input, keys) = ClickablePane(cursorTop: 100);
+        using var _ = pane;
+        pane.Show();
+        var menu = new MenuPane(pane, keys);
+        input.PushClick(50, 103);                        // beside "two": the side
+        input.PushClick(50, 103);                        // and again: no double-click either
+        input.PushClick(3, 104);                         // "three"
+        input.Push(Keys.Enter);
+
+        Assert.Equal(new MenuPick(0, 2), await menu.PickAsync(Sided("one", "two", "three"), 0, CancellationToken.None));
+        Assert.DoesNotContain("side 1:", Output);
+        menu.Close();
     }
 
     /// <summary>The overlay's first row is the cursor's (buffer row 100): title 100, spacer 101, the rows from 102.</summary>

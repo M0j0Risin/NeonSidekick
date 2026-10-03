@@ -268,7 +268,7 @@ public static class HelpCommands
         ]),
         new("/theme",
         [
-            new("/theme [name]", "Switch the colour theme (the *Theme* setting), built-in or custom. During a reply, it runs when the reply ends. `/theme export <name> [new-name]` writes a theme to the `themes` folder as a file to edit (see Custom themes)."),
+            new("/theme [name]", "Switch the colour theme (the *Theme* setting), built-in or custom. On its own it opens a list of the themes, with a preview of the highlighted one beside it when the window is wide enough; nothing changes until Enter. During a reply, it runs when the reply ends. `/theme export <name> [new-name]` writes a theme to the `themes` folder as a file to edit (see Custom themes)."),
         ]),
         new("/timer",
         [

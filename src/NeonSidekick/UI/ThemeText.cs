@@ -43,4 +43,30 @@ public static class ThemeText
     public static string ExportNameTaken(string name) => $"A theme named \"{name}\" already exists; give another new name.";
     public static string ExportBadName(string name) => $"\"{name}\" is not a theme name: lower-case letters, digits, - and _, up to 32.";
     public static string ExportFailed(string message) => $"Could not write the theme: {message}";
+
+    // ── The pickers' preview (2026-10-02, the user's ask; ThemePreview) ──────
+    // A small mock screen in the highlighted theme, the Theme Atlas's in brief: words that put every role on show.
+    public const string PreviewUser = "› give the banner one colour per letter";
+    public const string PreviewHeading = "Letter-perfect gradients";
+    public const string PreviewProse1 = "Each letter takes a ";
+    public const string PreviewProseBold = "stop";
+    public const string PreviewProse2 = " of the ";
+    public const string PreviewProseCode = "gradient";
+    public const string PreviewProse3 = ", the ";
+    public const string PreviewProseItalic = "last";
+    public const string PreviewProse4 = " one too.";
+    public const string PreviewBullet = "stop 0 colours the rule's left end";
+    public const string PreviewQuote = "The rule samples five points.";
+    public const string PreviewCodeLabel = "csharp";
+    public const string PreviewThinking = "thinking: the seal should be the only red.";
+    public const string PreviewGood = "✓ 40 user themes loaded";
+    public const string PreviewWarn = "! orphan.json: skipped, its base is no theme";
+    public const string PreviewError = "✗ No theme named \"matrix\".";
+    public const string PreviewPaste = "[Pasted text #1 +12 lines]";
+    public const string PreviewHint = "esc to cancel · 1.2k tokens · ";
+    public const string PreviewTrailer = " gemma-4";
+    public const string PreviewPlaceholder = "Type a message or /help for more info";
+
+    /// <summary>The preview's notice line, naming the theme shown.</summary>
+    public static string PreviewNotice(string name) => "· Theme: " + name;
 }

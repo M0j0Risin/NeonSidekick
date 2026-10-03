@@ -22,6 +22,9 @@ public static class Theme
 {
     private static volatile ThemeStyles s_current = new(ThemePalette.Synthwave);
 
+    /// <summary>The last set <see cref="StylesOf"/> built for a palette not in force.</summary>
+    private static volatile ThemeStyles? s_other;
+
     /// <summary>The palette in force.</summary>
     public static ThemePalette Current => s_current.Palette;
 
@@ -82,6 +85,29 @@ public static class Theme
     /// that walks every slot of the shipped example themes in <c>assets/themes</c>).
     /// </summary>
     public static Style Of(ThemeStyleSlot slot) => s_current[slot];
+
+    /// <summary>
+    /// The styles <paramref name="palette"/> would hand out once in force, without putting it in force (2026-10-02, the user's
+    /// ask: the theme pickers' preview beside the list, <see cref="ThemePreview"/>): the same derivation, aliases and
+    /// <see cref="ThemePalette.Styles"/> changes as <see cref="Use"/>. The palette in force answers from its own set; any other
+    /// from the last one built, so a pane drawn again on the same row builds nothing.
+    /// </summary>
+    public static Func<ThemeStyleSlot, Style> StylesOf(ThemePalette palette)
+    {
+        ArgumentNullException.ThrowIfNull(palette);
+        var styles = s_current;
+        if (!ReferenceEquals(styles.Palette, palette))
+        {
+            styles = s_other;
+            if (styles is null || !ReferenceEquals(styles.Palette, palette))
+            {
+                styles = new ThemeStyles(palette);
+                s_other = styles;
+            }
+        }
+
+        return slot => styles[slot];
+    }
 
     public static Style Body => s_current[ThemeStyleSlot.Body];
     public static Style DimText => s_current[ThemeStyleSlot.DimText];
@@ -228,9 +254,12 @@ public static class Theme
 
     // ── Markup helpers ──────────────────────────────────────────────────────
     /// <summary>Renders a string as a per-character gradient. Used for the title.</summary>
-    public static string GradientMarkup(string text)
+    public static string GradientMarkup(string text) => GradientMarkup(text, GradientStops);
+
+    /// <summary>As <see cref="GradientMarkup(string)"/> over <paramref name="stops"/>, any palette's (2026-10-02, the theme preview).</summary>
+    public static string GradientMarkup(string text, Color[] stops)
     {
-        Color[] stops = GradientStops;
+        ArgumentNullException.ThrowIfNull(stops);
         var sb = new StringBuilder();
         int n = Math.Max(text.Length, 1);
         int idx = 0;
@@ -262,14 +291,17 @@ public static class Theme
     /// A horizontal gradient rule of <paramref name="width"/> cells, split into five
     /// segments. Used as the divider under the header.
     /// </summary>
-    public static string Rule(int width, char glyph = '─')
+    public static string Rule(int width, char glyph = '─') => Rule(width, GradientStops, glyph);
+
+    /// <summary>As <see cref="Rule(int, char)"/> over <paramref name="stops"/>, any palette's (2026-10-02, the theme preview).</summary>
+    public static string Rule(int width, Color[] stops, char glyph = '─')
     {
+        ArgumentNullException.ThrowIfNull(stops);
         if (width <= 0)
         {
             return string.Empty;
         }
 
-        Color[] stops = GradientStops;
         var sb = new StringBuilder();
         const int segments = 5;
         int per = Math.Max(1, width / segments);

@@ -1,0 +1,86 @@
+using NeonSidekick.Tests.Fakes;
+using NeonSidekick.UI;
+using Spectre.Console;
+using Spectre.Console.Rendering;
+using Spectre.Console.Testing;
+
+namespace NeonSidekick.Tests;
+
+/// <summary>The theme pickers' preview beside the list (2026-10-02, the user's ask).</summary>
+public class ThemePreviewTests
+{
+    private const string Banner = "N E O N   S I D E K I C K";
+
+    private static List<Segment> Row(IRenderable line, int width)
+    {
+        using var console = new TestConsole();
+        return line.Render(RenderOptions.Create(console, console.Profile.Capabilities), width).ToList();
+    }
+
+    private static string Text(IEnumerable<Segment> row) => string.Concat(row.Select(s => s.Text));
+
+    [Theory]
+    [InlineData(72, 40)]
+    [InlineData(40, 30)]
+    [InlineData(12, 5)]
+    public void EveryRow_IsTheWidth_AndEveryCellIsOnABackground(int width, int rows)
+    {
+        foreach (var palette in ThemePalette.All)
+        {
+            var lines = ThemePreview.Lines(palette, width, rows, Banner, "1.2.3");
+
+            Assert.Equal(rows, lines.Count);
+            foreach (var line in lines)
+            {
+                var row = Row(line, width);
+                Assert.Equal(width, Segment.CellCount(row));
+                Assert.All(row, s => Assert.NotEqual(Color.Default, s.Style.Background));
+                Assert.Equal(palette.Bg, row[0].Style.Background);
+                Assert.Equal(palette.Bg, row[^1].Style.Background);
+            }
+        }
+    }
+
+    [Fact]
+    public void ARoomyCard_IsTheWholeScreen_NamingTheTheme_ThenBlankRows()
+    {
+        var palette = ThemePalette.All[1];
+        var lines = ThemePreview.Lines(palette, 72, 60, Banner, "1.2.3").Select(line => Text(Row(line, 72))).ToList();
+
+        Assert.StartsWith(" " + Banner + "  v1.2.3", lines[0]);
+        Assert.Contains(ThemeText.PreviewNotice(palette.Name), string.Join("\n", lines));
+        Assert.Contains(ThemeText.PreviewPlaceholder, string.Join("\n", lines));
+        Assert.True(string.IsNullOrWhiteSpace(lines[^1]));
+    }
+
+    [Fact]
+    public void AShortCard_KeepsTheBannerAndTheRuleFirst_InScreenOrder()
+    {
+        var palette = ThemePalette.Synthwave;
+        var lines = ThemePreview.Lines(palette, 40, 4, Banner, "1.2.3").Select(line => Text(Row(line, 40))).ToList();
+
+        Assert.Equal(4, lines.Count);
+        Assert.StartsWith(" " + Banner, lines[0]);
+        Assert.Equal(" " + new string('─', 38) + " ", lines[1]);
+        Assert.Equal(" " + ThemeText.PreviewUser[..38] + " ", lines[2]);   // cut at the card's 38 inner cells, the margin after
+        Assert.DoesNotContain(lines, string.IsNullOrWhiteSpace);
+    }
+
+    [Fact]
+    public void TheCard_UsesThePalettesStyles_NotTheOneInForce()
+    {
+        using var scope = new ThemeScope();
+        var other = ThemePalette.All.First(p => p.Secondary != ThemePalette.Synthwave.Secondary);
+        var lines = ThemePreview.Lines(other, 72, 60, Banner, "1.2.3");
+
+        var user = lines.Select(line => Row(line, 72)).First(row => Text(row).Contains(ThemeText.PreviewUser, StringComparison.Ordinal));
+        Assert.Equal(Theme.StylesOf(other)(ThemeStyleSlot.User).Foreground, user.First(s => s.Text == ThemeText.PreviewUser).Style.Foreground);
+        Assert.Same(ThemePalette.Synthwave, Theme.Current);
+    }
+
+    [Fact]
+    public void NoRows_IsNoLines()
+    {
+        Assert.Empty(ThemePreview.Lines(ThemePalette.Synthwave, 40, 0, Banner, "1.2.3"));
+    }
+}

@@ -16075,6 +16075,28 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("synthwave", _settings.Current.Theme);
     }
 
+    /// <summary>The preview beside the list (2026-10-02, the user's ask): the highlighted theme's, the one in force untouched until a pick.</summary>
+    [Fact]
+    public async Task Theme_Bare_PreviewsTheHighlightedTheme_BesideTheList()
+    {
+        using var theme = new ThemeScope();
+        _console.Profile.Width = 120;
+        _geometry = new ScreenGeometry(() => null);   // the pane: the side column is the menu pane's
+        _settings.Update(d => d.TtsOutput = false);
+        string next = ThemeCatalog.BuiltIn.Themes[1].Name;
+        PushLine("/theme");
+        _console.Input.PushKey(Keys.Down);
+        _console.Input.PushKey(Keys.Escape);
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains(ThemeText.PreviewNotice("synthwave"), output);
+        Assert.Contains(ThemeText.PreviewNotice(next), output);
+        Assert.Contains("  · " + SettingsMenu.UnchangedNotice, output);
+        Assert.Same(ThemePalette.Synthwave, Theme.Current);
+    }
+
     // ── The user's themes (2026-10-01) ─────────────────────────────────────
 
     private void WriteUserTheme(string file, string json)
