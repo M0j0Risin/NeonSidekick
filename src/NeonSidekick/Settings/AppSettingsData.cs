@@ -100,6 +100,15 @@ public sealed class AppSettingsData
     public int? ViewerTop { get; set; }
 
     /// <summary>
+    /// The camera's live window's top-left corner as it last closed (2026-10-02, a window of its own since then): the
+    /// <see cref="ViewerLeft"/> pair's twin, so the two windows keep their own places. No menu row; null opens it where Windows puts it.
+    /// </summary>
+    public int? CameraWindowLeft { get; set; }
+
+    /// <summary>The top of that corner; see <see cref="CameraWindowLeft"/>.</summary>
+    public int? CameraWindowTop { get; set; }
+
+    /// <summary>
     /// Whether the <c>/</c> completion list leaves <c>/exit</c> out (on by default, 2026-09-18) so a
     /// pick never ends the app by mistake; typed in full it exits as ever. Read at each keystroke. No variable.
     /// </summary>
@@ -1150,7 +1159,7 @@ public sealed class AppSettingsData
     public string CameraShutter { get; set; } = Camera.CameraShutterMode.Default;
 
     /// <summary>
-    /// How a shot is previewed (2026-10-02, the user's call): <c>live</c> (the default: the picture viewer shows the camera
+    /// How a shot is previewed (2026-10-02, the user's call): <c>live</c> (the default: a camera window of its own shows the camera
     /// live while the shutter pane is open, and holds the shot taken), <c>post</c> (the viewer opens on the shot once it is
     /// taken) or <c>disabled</c> (no window). The viewer never takes the keyboard from the terminal. One of
     /// <see cref="Camera.CameraPreviewMode.Names"/>.

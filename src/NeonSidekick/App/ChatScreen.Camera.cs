@@ -380,7 +380,7 @@ internal sealed partial class ChatScreen
         _transcript.Notice(CameraText.Using(device.Name));
     }
 
-    /// <summary><c>/camera live</c>: the camera live in the picture viewer until the window closes or <c>/camera off</c>.</summary>
+    /// <summary><c>/camera live</c>: the camera live in its own window until the window closes or <c>/camera off</c>.</summary>
     private void StartLive()
     {
         if (_liveView is null)

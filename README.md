@@ -647,7 +647,7 @@ Every tool, grouped (Clock, Timers, Files, GitLib, Shell, Obsidian, SQL, ComfyUI
 |---|---|---|
 | Camera tool | Offers `camera_capture`, which lets the model ask you for a photo. Never offered without the pane, headless, or to an embedded model without vision. `/camera` works either way. | off |
 | Camera shutter | Who takes the model's photo. `user`: the camera pane shows the model's request; Space takes the photo, R takes it again, Enter sends it, ESC declines. `model`: a pane asks Deny / Allow once / Allow for this session (cleared by `/new`, `/clear` and a profile switch), and on a yes the app takes the photo at once. | `user` |
-| Camera preview | `live`: the picture viewer shows the camera live (mirrored, like a mirror) while you frame the shot, then holds the photo taken. `post`: the viewer opens on the photo once it's taken. `disabled`: no window. The viewer never takes the keyboard from the terminal. | `live` |
+| Camera preview | `live`: a camera window of its own (beside the picture viewer, never in its place) shows the camera live (mirrored, like a mirror) while you frame the shot, then holds the photo taken. `post`: the viewer opens on the photo once it's taken. `disabled`: no window. The viewer never takes the keyboard from the terminal. | `live` |
 | Camera device | The camera, by the name Windows lists it under, picked from the ones connected. `(first camera)` uses the first; a camera that isn't connected uses the first, with a notice. | (first camera) |
 | Camera resolution | The size the camera is asked for (`640x480`, `1280x720` or `1920x1080`). The camera runs at its own size nearest it, and a photo is scaled to fit the longer side. | `1280x720` |
 | Camera output folder | The folder under the working directory the photos are saved in, made on first use. Empty means the working directory itself; it may be any folder under it, even the ComfyUI output folder. Watch mode's double-clicked pictures go in its `.watch` subfolder. | `camera_images` |
@@ -900,11 +900,11 @@ Type `/` to list every command with a short summary. After a command and a space
 | `/compact [focus]` | Shrink the current context. A focus tells the summary what to concentrate on. |
 | `/copy [n \| all] [--thinking]` | Copy the last reply (or the last *n*, or the whole transcript) to the clipboard as Markdown. `--thinking` includes the model's thinking, quoted under `💭 **Thinking**` where it happened. |
 | `/cwd [path \| ~ \| browse]` | Show or change the working directory. `~` returns to the profile's `files\` folder; `browse` opens the folder picker. |
-| `/camera` | Open the camera pane: frame the shot (live in the picture viewer under *Camera preview* `live`), Space takes it, R takes it again, Enter puts it on the input line as `[Image #N]`, ESC drops it. The photo is saved in the *Camera output folder* (`camera_images` by default). Without the pane it takes one at once. See Camera. |
+| `/camera` | Open the camera pane: frame the shot (live in a camera window of its own under *Camera preview* `live`), Space takes it, R takes it again, Enter puts it on the input line as `[Image #N]`, ESC drops it. The photo is saved in the *Camera output folder* (`camera_images` by default). Without the pane it takes one at once. See Camera. |
 | `/camera snap` | Take a photo at once and put it on the input line. |
 | `/camera list` | List the cameras Windows sees, numbered, the chosen one marked. |
 | `/camera use <n\|name>` | Choose the camera by its number in the list or its name (*Camera device*). |
-| `/camera live` | Show the camera live in the picture viewer until you close the window or `/camera off`. |
+| `/camera live` | Show the camera live in its own window until you close the window or `/camera off`. |
 | `/camera watch [seconds\|off]` | Watch mode: the camera looks every *Camera watch interval* seconds (or the seconds given), and a picture that changed rides your next message (with *Camera watch speaks up*, the model may also be shown it unasked). Never on at startup; `/camera watch off` stops it. |
 | `/camera off` | Let go of `/camera live` and watch mode; the camera closes a few seconds later. |
 | `/docker` | Docker Desktop's containers on a pane, running first, with their state, health and ports. Enter on one offers what fits its state: stop, restart or pause (each asks first), start or unpause, its last 50 log lines, open a published port in the browser, copy the id. Without the pane it lists them. |
@@ -1094,7 +1094,6 @@ The picture viewer is a window of its own (Windows only). Elsewhere, the app reg
 * **A double-click on a picture in the transcript** (a sent one, one a tool fetched or generated, `/view --chat`, `/imagine`, the splash). The viewer opens on the picture's folder, showing that picture. A pasted picture or the built-in splash has no file, so it is written to `%TEMP%\NeonSidekick\pictures` first. Only a failure prints anything. *Image viewer* can send these to another program.
 * **`/view <image or folder>`**: it stays on the image, or on a folder's newest picture while following new ones.
 * **`/comfy view`**, or the **🎞️** at the left of the picture strip's rule: the ComfyUI output folder (created if missing), following new pictures as they are generated. It works while a reply runs.
-* **The camera** (*Camera preview* `live`, or `/camera live`): the live picture, mirrored, and the photo once taken. It doesn't take the keyboard from the terminal, and only F11, a double-click and Esc work in it. It takes over a viewer that is already open and goes back to that folder afterwards.
 
 | Key | Action |
 |---|---|
@@ -1116,6 +1115,8 @@ The viewer and the ComfyUI picture strip follow each other:
 
 * Browsing in the viewer (←/→, Home/End, the next picture after a delete) highlights the same picture in the strip. A picture the strip doesn't hold is ignored, and the slide show and newly arriving pictures leave the strip alone.
 * ←/→ on the strip, or a click on one of its pictures, moves an open viewer on the strip's folder to that picture, without bringing the viewer to the front.
+
+The camera's live picture (*Camera preview* `live`, or `/camera live`) has a window of its own, not this one, so the two can be open side by side. It shows the camera mirrored, then the photo once taken; it doesn't take the keyboard from the terminal, only F11, a double-click and Esc work in it, it opens 16:9, and it remembers its own place on screen.
 
 #### Camera
 

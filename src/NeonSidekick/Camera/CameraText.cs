@@ -156,7 +156,7 @@ public static class CameraText
 
     public const string NeedsScreen = "/camera needs the app's screen for that; headless has /camera list.";
 
-    public const string LiveOn = "The camera is live in the picture viewer (close it, or /camera off, to stop).";
+    public const string LiveOn = "The camera is live in its own window (close it, or /camera off, to stop).";
 
     public const string NoViewer = "There is no picture viewer here.";
 

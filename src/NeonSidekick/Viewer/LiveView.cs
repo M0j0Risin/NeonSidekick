@@ -5,8 +5,8 @@ namespace NeonSidekick.Viewer;
 /// <summary>
 /// The picture viewer showing a live picture (2026-10-02, the camera's <c>live</c> preview): frames posted as they come (the
 /// newest wins; one waiting is replaced, never queued), a shot held still over them (<see cref="Freeze"/>) and the live
-/// picture again (<see cref="Resume"/>). Disposing it ends the live picture: the window goes back to the folder it showed
-/// before, or closes when it was opened for this. Thread-safe: the camera's thread posts, the screen's thread freezes.
+/// picture again (<see cref="Resume"/>). Disposing it ends the live picture and closes the camera's window (a window of its own
+/// since later on 2026-10-02, never the picture viewer's). Thread-safe: the camera's thread posts, the screen's thread freezes.
 /// </summary>
 public interface ILiveView : IDisposable
 {

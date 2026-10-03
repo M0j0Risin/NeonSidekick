@@ -90,7 +90,7 @@ public static class CameraPreviewMode
     /// <summary>The menu hint next to a mode. Pinned.</summary>
     public static string Describe(string name) => name switch
     {
-        "live" => "the picture viewer shows the camera live while you frame the shot",
+        "live" => "a camera window shows the camera live while you frame the shot",
         "post" => "the picture viewer opens on the shot once it is taken",
         "disabled" => "no preview window",
         _ => "",

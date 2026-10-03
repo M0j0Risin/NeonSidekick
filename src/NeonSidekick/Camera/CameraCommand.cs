@@ -34,7 +34,7 @@ public static class CameraCommand
         ("snap", "take a photo at once and put it on the input line"),
         ("list", "the cameras Windows lists"),
         ("use", "choose a camera: /camera use <n|name>"),
-        ("live", "the camera live in the picture viewer"),
+        ("live", "the camera live in a window of its own"),
         ("watch", "watch the camera: a change rides your next message; /camera watch [seconds|off]"),
         ("off", "let the camera go (live and watch)"),
     ];

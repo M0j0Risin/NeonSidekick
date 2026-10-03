@@ -177,6 +177,19 @@ NeonSidekick.Viewer.PictureWindow.Placed = (x, y) =>
         });
     }
 };
+// The camera's live window keeps a place of its own (2026-10-02), the viewer's pair's twin.
+NeonSidekick.Viewer.PictureWindow.LivePosition = () => settings.Current is { CameraWindowLeft: int x, CameraWindowTop: int y } ? (x, y) : null;
+NeonSidekick.Viewer.PictureWindow.LivePlaced = (x, y) =>
+{
+    if (settings.Current is not { CameraWindowLeft: int left, CameraWindowTop: int top } || left != x || top != y)
+    {
+        settings.Update(d =>
+        {
+            d.CameraWindowLeft = x;
+            d.CameraWindowTop = y;
+        });
+    }
+};
 int exitCode;
 try
 {

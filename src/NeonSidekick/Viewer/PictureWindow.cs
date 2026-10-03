@@ -23,6 +23,9 @@ public static class PictureWindow
     private static readonly Lock s_gate = new();
     private static PictureWindowThread? s_open;
 
+    /// <summary>The camera's live window (2026-10-02, the user's call: a window of its own, never the picture viewer's), or null.</summary>
+    private static PictureWindowThread? s_live;
+
     /// <summary>
     /// Whether the window wears the theme (later on 2026-09-27, the <c>Themed image viewer</c> setting): asked on the window's
     /// thread each time it opens or is focused. The app supplies it (<c>Program</c>, over the effective settings) — the viewer
@@ -56,6 +59,16 @@ public static class PictureWindow
     /// </summary>
     public static Action<int, int>? Placed { get; set; }
 
+    /// <summary>
+    /// Where the camera's live window was when it last closed (2026-10-02): <see cref="Position"/>'s twin for that window alone,
+    /// so moving one never moves the other. The app supplies it (<c>Program</c>: the profile's <c>CameraWindowLeft</c> /
+    /// <c>CameraWindowTop</c>); null is Windows' own default place.
+    /// </summary>
+    public static Func<(int X, int Y)?>? LivePosition { get; set; }
+
+    /// <summary>Told the camera window's corner as it closes (<see cref="Placed"/>'s twin). It must not block.</summary>
+    public static Action<int, int>? LivePlaced { get; set; }
+
     /// <summary>Whether a window can be opened here at all: Windows only.</summary>
     public static bool IsAvailable => OperatingSystem.IsWindows();
 
@@ -85,10 +98,13 @@ public static class PictureWindow
     }
 
     /// <summary>
-    /// The window showing a live picture (2026-10-02, the camera's <c>live</c> preview): the open window taken over — its
-    /// folder remembered for when the live picture ends — or a new one, shown without taking the keyboard.
-    /// <paramref name="closed"/> runs (on the window's thread) when the user closes the window or another use takes it over.
-    /// Throws as <see cref="Open(string)"/> does.
+    /// The camera's live picture (2026-10-02, the camera's <c>live</c> preview and <c>/camera live</c>) in a window of its own —
+    /// since later that day (the user's call), never the picture viewer's, so the two never take each other's window and both
+    /// can be open: the live window already open is handed the new use (the old one told it ended), or a new one is made at
+    /// <see cref="PictureWindowThread.LiveWidth"/> × <see cref="PictureWindowThread.LiveHeight"/> where it last closed
+    /// (<see cref="LivePosition"/>), shown without taking the keyboard. <paramref name="closed"/> runs (on the window's thread)
+    /// when the user closes the window or another use takes it over; the use's end closes the window. Throws as
+    /// <see cref="Open(string)"/> does.
     /// </summary>
     public static ILiveView ShowLive(string title, Action closed)
     {
@@ -102,16 +118,16 @@ public static class PictureWindow
         var view = new LiveView(title, closed);
         lock (s_gate)
         {
-            if (s_open is { Alive: true } open && open.StartLive(view))
+            if (s_live is { Alive: true } live && live.StartLive(view))
             {
-                view.Window = open;
+                view.Window = live;
                 return view;
             }
 
             var window = new PictureWindowThread(null, null, view);
             view.Window = window;
             window.Start();
-            s_open = window;
+            s_live = window;
         }
 
         return view;
@@ -155,17 +171,21 @@ public static class PictureWindow
         }
     }
 
-    /// <summary>The open window closed, waited for briefly; nothing without one.</summary>
+    /// <summary>The open windows closed — the picture viewer and the camera's — each waited for briefly; nothing without one.</summary>
     public static void CloseAll()
     {
         PictureWindowThread? open;
+        PictureWindowThread? live;
         lock (s_gate)
         {
             open = s_open;
+            live = s_live;
             s_open = null;
+            s_live = null;
         }
 
         open?.Close();
+        live?.Close();
     }
 
     /// <summary>
@@ -207,6 +227,10 @@ internal sealed unsafe class PictureWindowThread
     public const int DefaultWidth = 1024;
     public const int DefaultHeight = 768;
 
+    /// <summary>The camera window's size at 96 DPI (2026-10-02): 16:9, a webcam's shape.</summary>
+    public const int LiveWidth = 960;
+    public const int LiveHeight = 540;
+
     private static readonly Lock s_classGate = new();
     private static IntPtr s_className;
     private static ushort s_atom;
@@ -221,7 +245,9 @@ internal sealed unsafe class PictureWindowThread
     private LiveView? _live;
     private LiveView? _pendingLive;
     private LiveView? _endingLive;
-    private string? _liveFolder;
+
+    /// <summary>The camera's window (made for a live use; its own size and place), never a folder's.</summary>
+    private readonly bool _camera;
     private (LiveView View, ViewerBitmap? Frame, string? Title)? _pendingFrame;
     private bool _framePosted;
     private bool _pendingActivate = true;
@@ -262,6 +288,7 @@ internal sealed unsafe class PictureWindowThread
         _startFolder = folder;
         _startSelect = select;
         _live = live;
+        _camera = live is not null;
         _startActivate = activate && live is null;
     }
 
@@ -524,14 +551,16 @@ internal sealed unsafe class PictureWindowThread
             // Where it last closed first (2026-09-28), so the size below is the DPI of the monitor it opens on.
             RestorePosition();
             uint dpi = Math.Max(96u, GetDpiForWindow(_hwnd));
-            SetWindowPos(_hwnd, HwndTop, 0, 0, (int)(DefaultWidth * dpi / 96), (int)(DefaultHeight * dpi / 96), SwpNoMove | SwpNoZOrder | SwpNoActivate);
+            int width = _camera ? LiveWidth : DefaultWidth;
+            int height = _camera ? LiveHeight : DefaultHeight;
+            SetWindowPos(_hwnd, HwndTop, 0, 0, (int)(width * dpi / 96), (int)(height * dpi / 96), SwpNoMove | SwpNoZOrder | SwpNoActivate);
             ApplyStyle();   // before it is shown: the bar is never light first
             if (_live is { } live)
             {
                 SetWindowTextW(_hwnd, live.Title);
                 ShowWindow(_hwnd, SwShowNoActivate);
                 RaiseQuietly();
-                DiagnosticLog.Info("Viewer", "Picture viewer opened on the camera.");
+                DiagnosticLog.Info("Viewer", "Camera window opened.");
             }
             else
             {
@@ -696,8 +725,7 @@ internal sealed unsafe class PictureWindowThread
                     _pendingActivate = true;
                 }
 
-                bool wasLive = LeaveLive();
-                if (folder is not null && (wasLive || !string.Equals(folder, _state.Folder, StringComparison.OrdinalIgnoreCase)))
+                if (folder is not null && !string.Equals(folder, _state.Folder, StringComparison.OrdinalIgnoreCase))
                 {
                     Show(folder);
                 }
@@ -790,17 +818,9 @@ internal sealed unsafe class PictureWindowThread
 
                 if (ending is not null && ending == _live)
                 {
-                    string? folder = _liveFolder;
+                    // The camera's window is the use's alone: it closes with it.
                     LeaveLive();
-                    if (folder is not null)
-                    {
-                        // Back to the folder the camera took the window from.
-                        Show(folder);
-                    }
-                    else
-                    {
-                        PostMessageW(_hwnd, WmClose, IntPtr.Zero, IntPtr.Zero);
-                    }
+                    PostMessageW(_hwnd, WmClose, IntPtr.Zero, IntPtr.Zero);
                 }
 
                 return IntPtr.Zero;
@@ -819,17 +839,13 @@ internal sealed unsafe class PictureWindowThread
         return DefWindowProcW(hwnd, message, wParam, lParam);
     }
 
-    // The camera takes the window (2026-10-02): the folder's watcher and slides stopped (the folder remembered for after),
-    // the picture blank until the first frame, the window raised without the keyboard. A live use already here is told it ended.
+    // A new live use of the camera's window (2026-10-02): the one before told it ended, the picture blank until the first frame,
+    // the window raised without the keyboard. Only ever the camera's window: the picture viewer is never handed a live use.
     private void TakeLive(LiveView view)
     {
         if (_live is { } old && old != view)
         {
             old.OnEnded();
-        }
-        else if (_live is null)
-        {
-            _liveFolder = _state.Folder;
         }
 
         _live = view;
@@ -881,7 +897,7 @@ internal sealed unsafe class PictureWindowThread
         }
     }
 
-    // The live use over (the window closing, a folder opened over it, the use ended): told once; true when there was one.
+    // The live use over (the window closing, the use ended): told once; true when there was one.
     private bool LeaveLive()
     {
         if (_live is not { } live)
@@ -890,7 +906,6 @@ internal sealed unsafe class PictureWindowThread
         }
 
         _live = null;
-        _liveFolder = null;
         _bitmap = null;
         live.OnEnded();
         return true;
@@ -1322,7 +1337,7 @@ internal sealed unsafe class PictureWindowThread
         (int X, int Y)? at;
         try
         {
-            at = PictureWindow.Position?.Invoke();
+            at = (_camera ? PictureWindow.LivePosition : PictureWindow.Position)?.Invoke();
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
@@ -1347,7 +1362,7 @@ internal sealed unsafe class PictureWindowThread
     // saved before F11 when it is full screen — never the maximized or minimized frame.
     private void RememberPosition()
     {
-        if (PictureWindow.Placed is not { } placed)
+        if ((_camera ? PictureWindow.LivePlaced : PictureWindow.Placed) is not { } placed)
         {
             return;
         }
