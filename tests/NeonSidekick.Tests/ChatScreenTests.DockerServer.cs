@@ -50,6 +50,83 @@ public partial class ChatScreenTests
     }
 
     [Fact]
+    public async Task Server_Docker_SavesTheContainersOneModel_AsTheLlmModel()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        UseDockerServers();
+        PushLine("/server docker:vllm_b");
+        _console.Input.PushKey(Keys.Escape);   // keep the reasoning
+        PushLine("/exit");
+
+        await RunAsync();
+
+        Assert.Equal("sglang-model", _settings.Current.LlmModel);   // the fake's one model, where (first listed) stood
+    }
+
+    [Fact]
+    public async Task Server_Docker_TwoModelsListed_SavesNone()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        var docker = UseDockerServers();
+        docker.Answer = _ => FakeDockerServers.Ready("a", "b");
+        PushLine("/server docker:vllm_b");
+        _console.Input.PushKey(Keys.Escape);
+        PushLine("/exit");
+
+        await RunAsync();
+
+        Assert.Equal("", _settings.Current.LlmModel);   // nothing to name: the URL's change cleared it, and it stays (first listed)
+    }
+
+    [Fact]
+    public async Task Server_Docker_ReplacesAStaleModel_WithTheOneListed()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        // The same container again, the URL unchanged so the save kept the stale id: the connect puts the listed one in.
+        var docker = UseDockerServers();
+        _settings.Update(d => { d.LlmUrl = DockerEndpoint.BaseUrl("sglang_a").ToString(); d.LlmModel = "stale"; });
+        docker.Answer = _ => FakeDockerServers.Ready("only");
+        PushLine("/server docker:sglang_a");
+        _console.Input.PushKey(Keys.Escape);
+        PushLine("/exit");
+
+        await RunAsync();
+
+        Assert.Equal("only", _settings.Current.LlmModel);
+    }
+
+    [Fact]
+    public async Task Server_Docker_UnderAModelOverride_SavesNothing()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        UseDockerServers();
+        _overriddenBy = f => f == SettingsField.LlmModel ? SidekickOptions.ModelFlag : null;
+        PushLine("/server docker:vllm_b");
+        _console.Input.PushKey(Keys.Escape);
+        PushLine("/exit");
+
+        await RunAsync();
+
+        Assert.Equal("", _settings.Current.LlmModel);   // --model names the model; the container's is never saved over it
+    }
+
+    [Fact]
     public async Task Server_Docker_ListsTheChosenRowsAlone_APickSwitches_AndTheExitStopsItWithTheSettingOn()
     {
         if (!OperatingSystem.IsWindows())

@@ -48,6 +48,9 @@ public static class DockerServerText
     /// <summary>The log line when a container answers.</summary>
     public static string Ready(string name, Uri url, string detail) => $"{name} answers on {url} ({detail}).";
 
+    /// <summary>The log line when the one model a container serves is saved as <c>LLM model</c> (2026-10-03). Pinned.</summary>
+    public static string ModelSaved(string name, string model) => $"LLM model set to {model}, the one model {name} serves.";
+
     /// <summary>The log line when the others are stopped on leaving the containers.</summary>
     public static string Left(IReadOnlyList<string> stopped) => "Stopped the Docker server" + (stopped.Count == 1 ? " " : "s ") + string.Join(", ", stopped) + ": another server was picked.";
 

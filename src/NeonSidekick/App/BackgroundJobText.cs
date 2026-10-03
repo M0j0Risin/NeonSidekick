@@ -14,8 +14,13 @@ public static class BackgroundJobText
     /// <summary>The MCP servers connecting (the glyph <c>/mcp</c> and the toolbar already wear).</summary>
     public const string McpGlyph = Mcp.McpText.Glyph;
 
-    /// <summary>Voice input setting up: a headset, not the <c>/stt</c> switch's microphone, whose click turns it off.</summary>
-    public const string VoiceGlyph = "🎧";
+    /// <summary>
+    /// Voice input setting up: the studio microphone, not the <c>/stt</c> switch's hand-held one (whose click turns it off),
+    /// as <see cref="SpeechGlyph"/> is to the <c>/tts</c> switch's speaker. A headset until 2026-10-03 (the user's call:
+    /// headphones read as output). U+1F399 with the variation selector, the <c>🏷️</c> shape: the strip's walk keeps the
+    /// selector with its glyph, so the double-click's hit is this whole string.
+    /// </summary>
+    public const string VoiceGlyph = "🎙️";
 
     /// <summary>Speech output setting up: the quiet speaker, not the <c>/tts</c> switch's loud one.</summary>
     public const string SpeechGlyph = "🔈";

@@ -177,11 +177,13 @@ public sealed class BackgroundJobsTests
         Assert.Equal("1/3", BackgroundJobs.Progress("connecting MCP servers (1 of 3)"));
         Assert.Null(BackgroundJobs.Progress("verifying Gemma 4 E2B…"));
         Assert.Null(BackgroundJobs.Progress(null));
-        Assert.Equal(("📥", "🔌", "🎧", "🔈"), (BackgroundJobText.Glyph(BackgroundJobKind.EmbeddedDownload), BackgroundJobText.Glyph(BackgroundJobKind.Mcp), BackgroundJobText.Glyph(BackgroundJobKind.Voice), BackgroundJobText.Glyph(BackgroundJobKind.Speech)));
+        Assert.Equal(("📥", "🔌", "🎙️", "🔈"), (BackgroundJobText.Glyph(BackgroundJobKind.EmbeddedDownload), BackgroundJobText.Glyph(BackgroundJobKind.Mcp), BackgroundJobText.Glyph(BackgroundJobKind.Voice), BackgroundJobText.Glyph(BackgroundJobKind.Speech)));
         Assert.Equal(BackgroundJobKind.Speech, BackgroundJobs.KindOfGlyph("🔈"));
         Assert.Null(BackgroundJobs.KindOfGlyph(ChatScreen.TtsGlyph));   // the switch's loud speaker is not the job's
-        Assert.Equal("voice input is still setting up (🎧 42%)", BackgroundJobText.VoiceSettingUp("42%"));
-        Assert.Equal("voice input is still setting up (🎧)", BackgroundJobText.VoiceSettingUp(null));
+        Assert.Equal(BackgroundJobKind.Voice, BackgroundJobs.KindOfGlyph("🎙️"));
+        Assert.Null(BackgroundJobs.KindOfGlyph(ChatScreen.SttGlyph));   // nor the switch's hand-held microphone
+        Assert.Equal("voice input is still setting up (🎙️ 42%)", BackgroundJobText.VoiceSettingUp("42%"));
+        Assert.Equal("voice input is still setting up (🎙️)", BackgroundJobText.VoiceSettingUp(null));
         Assert.Equal("🧠 📥 42% 🔊", ChatScreen.StripGlyphs(true, false, "", true, false, false, false, "📥 42%"));
     }
 }

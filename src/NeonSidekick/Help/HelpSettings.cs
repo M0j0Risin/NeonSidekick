@@ -17,7 +17,7 @@ public static class HelpSettings
         SettingsField.Profile => "Switches to another profile (each has its own settings, persona, memory, skills and sessions).",
         SettingsField.Memory => "Offers the model `save_memory` / `recall_memory` and opens every conversation with what it remembers.",
         SettingsField.LlmUrl => "The server's OpenAI-compatible base URL (`http://127.0.0.1:1234/v1`), `embedded` for the app's own embedded LLM (see *Embedded*), or `docker:<container>` for a chosen Docker container (see *Docker servers*). `/server` fills it in. When empty, the app scans as *LLM server scan mode* says and, at startup, lets you pick a server, model and reasoning level, and saves all three. ESC at that picker takes the first server without saving it.",
-        SettingsField.LlmModel => "The model id. Empty takes the first model the server lists; `/model` picks one.",
+        SettingsField.LlmModel => "The model id. Empty takes the first model the server lists; a Docker server serving one model saves its id here when it connects; `/model` picks one.",
         SettingsField.LlmApiKey => "The bearer token the server expects; `empty` for local servers that need no key. A real key is saved encrypted for your Windows account (DPAPI, Windows' built-in data protection) and shown as `(set, encrypted)`. Typing a new value replaces it (`empty` stays as it is).",
         SettingsField.LlmReasoning => "How hard the model thinks, sent with every request: `none` (thinking off), `low`, `medium`, `high` or `xhigh`. `/reasoning` opens the same list.",
         SettingsField.LlmRequestTimeoutSeconds => "The longest one HTTP request may take (up to 3600).",

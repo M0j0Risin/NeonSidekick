@@ -85,6 +85,46 @@ public sealed class LlmSessionDockerTests
     }
 
     [Fact]
+    public async Task TheServedModel_IsTheContainersOnlyOne_ElseNull()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        using var session = Session();
+        Assert.Null(session.DockerServedModel);
+
+        _docker.Answer = _ => FakeDockerServers.Ready("only");
+        await session.ConnectAsync(Docker("sglang_a", model: "stale"), NoPhase, CancellationToken.None);
+        Assert.Equal("only", session.DockerServedModel);   // the saved id not listed: the one listed
+
+        _docker.Answer = _ => FakeDockerServers.Ready("a", "b");
+        await session.ConnectAsync(Docker("sglang_a"), NoPhase, CancellationToken.None);
+        Assert.Null(session.DockerServedModel);   // two: nothing to name
+
+        _docker.Answer = _ => FakeDockerServers.Ready("only");
+        await session.ConnectAsync(Docker("sglang_a"), NoPhase, CancellationToken.None);
+        _docker.Answer = name => DockerSwitch.Failed(DockerServerText.NotReady(name, 900), []);
+        await session.ConnectAsync(Docker("vllm_b"), NoPhase, CancellationToken.None);
+        Assert.Null(session.DockerServedModel);   // a failed switch clears the last one's
+
+        _http.Map("http://127.0.0.1:1234/v1/models", HttpStatusCode.OK, StubHttpMessageHandler.ModelsJson("lm"));
+        _docker.Answer = _ => FakeDockerServers.Ready("only");
+        await session.ConnectAsync(Docker("sglang_a"), NoPhase, CancellationToken.None);
+        var lm = Docker("sglang_a");
+        lm.LlmUrl = "http://127.0.0.1:1234/v1";
+        await session.ConnectAsync(lm, NoPhase, CancellationToken.None);
+        Assert.Null(session.DockerServedModel);   // another server: none
+    }
+
+    [Fact]
+    public void ModelSaved_IsPinned()
+    {
+        Assert.Equal("LLM model set to Qwen/Qwen3-8B, the one model sglang_a serves.", DockerServerText.ModelSaved("sglang_a", "Qwen/Qwen3-8B"));
+    }
+
+    [Fact]
     public async Task AFailedSwitch_BuildsNoClient_AndSaysWhy()
     {
         if (!OperatingSystem.IsWindows())

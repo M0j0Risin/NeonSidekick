@@ -185,6 +185,7 @@ internal sealed class LlmSession : IDisposable
         ArgumentNullException.ThrowIfNull(effective);
         Reconnecting();
         Remember(effective);
+        DockerServedModel = null;
 
         // Another server than a chosen container (2026-10-02, the user's call): the running one stops first, before an embedded
         // model loads, so the GPU never holds the two — and the GPU's memory is given the post-stop delay before that load.
@@ -332,6 +333,7 @@ internal sealed class LlmSession : IDisposable
         }
 
         var listed = result.Models.ModelIds;
+        DockerServedModel = listed.Count == 1 ? listed[0] : null;
         string model = saved is not null && (listed.Count == 0 || listed.Contains(saved, StringComparer.Ordinal)) ? saved
             : listed.Count > 0 ? listed[0] : saved ?? LlmEndpoint.FallbackModelId;
         var window = result.Models.ModelsJson is { } json ? ContextLengthProbe.ParseModelsWindow(json, model) : null;
@@ -368,6 +370,14 @@ internal sealed class LlmSession : IDisposable
 
     /// <summary>The chosen container this session switched to and has not left (2026-10-02); null for none.</summary>
     public string? DockerInUse => _dockerInUse;
+
+    /// <summary>
+    /// The one model the chosen container listed at the last connect (2026-10-03, the user's ask): the screen saves it as
+    /// <c>LLM model</c>, so the setting names what the container serves rather than reading <c>(first listed)</c>. Null at
+    /// the start of every connect, and after one to anything but a container that started and listed exactly one model (a
+    /// failed switch, an empty list, several); the endpoint's own pick is unchanged by it.
+    /// </summary>
+    public string? DockerServedModel { get; private set; }
 
     /// <summary>
     /// The app's exit (2026-10-02): with <c>Docker server stop on exit</c> on and a chosen container in use, the running ones

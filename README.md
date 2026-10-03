@@ -200,7 +200,7 @@ Each shortcut runs its command as if typed on its own; a draft on the row stays.
 
 ### Hint row, rule and toolbar
 
-**Long setups run in the background:** an embedded model's download, the MCP servers connecting, and voice input's and speech output's first-use download and load. Past half a second, the input line stays yours: the glyph (📥, 🔌, 🎧 or 🔈) shows progress on the hint row, and a status line prints when it's done.
+**Long setups run in the background:** an embedded model's download, the MCP servers connecting, and voice input's and speech output's first-use download and load. Past half a second, the input line stays yours: the glyph (📥, 🔌, 🎙️ or 🔈) shows progress on the hint row, and a status line prints when it's done.
 
 | Double-click | Does |
 |---|---|
@@ -208,7 +208,7 @@ Each shortcut runs its command as if typed on its own; a draft on the row stays.
 | the reasoning glyph | `/reasoning` |
 | the tokens or spinner | `/usage` |
 | 🖼️/🎨 and its timer (ComfyUI rendering) | cancels the pictures; the reply goes on |
-| 📥 / 🔌 / 🎧 / 🔈 (setting up) | cancels that download or setup |
+| 📥 / 🔌 / 🎙️ / 🔈 (setting up) | cancels that download or setup |
 | the queued count | `/queue` |
 | 📷 (camera on) | `/camera off` |
 | blank space on the hint row | `/settings` |
@@ -398,7 +398,7 @@ Your own LLM containers (vLLM, SGLang, anything serving `/v1/models`) as `/serve
 |---|---|---|
 | LLM server scan mode | Where to look for a server while *LLM URL* is blank: `local` (the usual ports here), `remote` (the same ports across the LAN), `both`, or `disabled`. | `disabled` |
 | LLM URL | The server's OpenAI-compatible base URL (`http://127.0.0.1:1234/v1`), `embedded`, or `docker:<container>`. `/server` fills it in. Empty: the app scans and, at startup, lets you pick a server, model and reasoning level and saves all three (ESC takes the first server without saving). | (none) |
-| LLM model | The model id. Empty takes the first the server lists; `/model` picks one. | (first listed) |
+| LLM model | The model id. Empty takes the first the server lists; a Docker server serving one model saves its id here when it connects; `/model` picks one. | (first listed) |
 | LLM API key | The bearer token the server expects (`empty` for none). Saved encrypted for your Windows account (DPAPI) and shown as `(set, encrypted)`. | `empty` |
 | LLM reasoning | How hard the model thinks: `none`, `low`, `medium`, `high` or `xhigh`. `/reasoning` opens the same list. | `none` |
 | LLM show thinking | Streams a reasoning model's thinking as a dim block (its last five lines), folded to `▸ 💭 thought for 4.2s` when the answer starts. Click it, Ctrl+O or `/expand` to see it again. Needs *Transcript markdown*. Thinking is never spoken or logged; only `/copy --thinking` copies it. | on |
@@ -464,7 +464,7 @@ Speech output sets up in the background (🔈 on the hint row); replies are text
 
 #### STT
 
-Voice input sets up in the background (🎧 on the hint row); until it's ready, push-to-talk says so.
+Voice input sets up in the background (🎙️ on the hint row); until it's ready, push-to-talk says so.
 
 | Setting | What it does | Default |
 |---|---|---|
@@ -1688,7 +1688,7 @@ Containers serving an OpenAI-compatible API (vLLM, SGLang…) can be `/server` c
 * **Rows:** `/server` lists one **Docker** row per chosen container with its state, image and ports (`running · vllm/vllm-openai:latest · :8000`). `/server docker` lists them alone; `docker:<container>` (also for `--url` and `NEONSIDEKICK_LLM_URL`) picks one.
 * **Switching:** picking one stops every other chosen container still running (waiting up to *Docker server stop timeout* plus 15 s each), waits *Docker server post-stop delay*, then starts or unpauses it. If a stop fails, nothing starts. The spinner shows each step; Ctrl+C or a double-click on it cancels.
 * **Readiness:** the app polls `/v1/models` on the container's published TCP ports every second until one answers (minutes, for a large model). A container that exits while loading reports its exit code and last log lines; past *Docker server ready timeout* the switch fails and the container keeps running.
-* **Model:** whatever the container serves (the saved *LLM model* if listed, else its first), with the context window it reports.
+* **Model:** whatever the container serves (the saved *LLM model* if listed, else its first), with the context window it reports. A container serving just one model has its id saved as *LLM model* at each connect, so the setting names it; `--model` or `NEONSIDEKICK_LLM_MODEL` wins and is never saved over, and a headless run saves nothing.
 * **Leaving:** picking any other server stops the chosen containers first (before an embedded model loads), including one started outside the app. A profile switch does the same. *Docker server stop on exit* stops the one in use when the app exits.
 * **Bots:** a `/botchat` bot pointing at a container shares it if it's the one running, and never starts or stops one.
 

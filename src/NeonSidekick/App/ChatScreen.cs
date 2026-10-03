@@ -9055,6 +9055,29 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>
+    /// After a chosen container's connect (2026-10-03, the user's ask): the one model it serves
+    /// (<see cref="LlmSession.DockerServedModel"/>) saved as <c>LLM model</c>, so the setting names it rather than reading
+    /// <c>(first listed)</c>. Rewritten at every connect, so a container made again with another image puts its own in. Not
+    /// when the saved URL is not a container's, nor under a flag or variable for the URL or the model (what they name wins
+    /// and is never saved over), nor when the saved id already is it. Silent but for the log line: the report names the
+    /// model, and a direct save owes no reconnect. Headless never gets here, so a scripted run leaves the profile alone.
+    /// </summary>
+    private void SaveDockerModel()
+    {
+        if (_session.DockerServedModel is not { } model
+            || DockerEndpoint.ContainerOf(_settings.Current.LlmUrl) is not { } name
+            || _overriddenBy(SettingsField.LlmUrl) is not null
+            || _overriddenBy(SettingsField.LlmModel) is not null
+            || string.Equals(_settings.Current.LlmModel, model, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        _settings.Update(d => d.LlmModel = model);
+        DiagnosticLog.Info("Llm", DockerServerText.ModelSaved(name, model));
+    }
+
+    /// <summary>
     /// A connect that loads a model (the embedded server, 2026-09-29; a chosen Docker container, 2026-10-02, which shares it):
     /// <see cref="LlmSession.ConnectAsync(AppSettingsData, Action{string}, CancellationToken)"/> under a spinner whose label
     /// follows the load's steps, the screen living under it as under a reply (<see cref="LoadUnderWatchAsync"/>) — Ctrl+C or a
@@ -9077,6 +9100,7 @@ internal sealed partial class ChatScreen
         }
         else if (_session.Assistant is not null)
         {
+            SaveDockerModel();
             ReportLlm(quiet);
         }
 
