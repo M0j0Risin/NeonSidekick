@@ -191,9 +191,9 @@ Commands typed while a reply runs:
 | 🐚 | always; on the slab under `off` | `/tools shell`: the *Shell command policy* picker (off, ask, yolo; yolo asks first) |
 | 📁 🌐 ✴️ 🐳 💎 🪟 🔮 🐬 🔗 🏠 🎨 📸 🖨️ | always; on the slab while off | `/tools files`, `web`, `claude`, `docker`, `obsidian`, `sql`, `oracle`, `mysql`, `unc`, `ha`, `comfy`, `camera`, `print`: the on/off page of *File tools*, *Web tools*, *Claude advisor tool*, *Docker tools*, *Obsidian tools*, *SQL tools*, *Oracle tools*, *MySQL tools*, *UNC tools*, *Home Assistant tools*, *ComfyUI tools*, *Camera tool*, *Print tools* |
 | 📄 | always | `/log`: opens the log window, or closes it (as Ctrl+Alt+G) |
-| 📈 | always | `/perf`: hides the performance bar, or shows it again with the meters it last had |
 | 📺 | always | `/camera live`: opens the camera's live window, or closes it (as Ctrl+Alt+V) |
 | 🎞️ | always | `/comfy view`: opens the picture viewer, or closes it (as Ctrl+Alt+U) |
+| 📈 | always | `/perf`: hides the performance bar, or shows it again with the meters it last had |
 | working directory (right edge) | always | `/cwd browse` |
 | blank space | — | `/settings` |
 | performance bar (anywhere on it) | *Show performance bar* has a meter checked | `/settings` |

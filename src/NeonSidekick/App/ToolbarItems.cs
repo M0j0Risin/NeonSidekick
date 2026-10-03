@@ -13,7 +13,8 @@ namespace NeonSidekick.App;
 /// memory, lock and police items keep the switches they followed before (<see cref="ChatScreen.ToolbarStripFor(IReadOnlySet{string}, bool, Shell.CommandPolicyMode, bool)"/>).
 /// Seventeen more on 2026-10-03 (the user's ask, their glyphs and names): the tool switches, each opening its group's switch
 /// (<c>/tools &lt;group&gt;</c>) and drawn on the off slab while it is off, and the log and the two viewers, each opening its
-/// window or closing it as its chord does; the user's order with them, the chart moved behind the log.
+/// window or closing it as its chord does; the user's order with them, the chart moved behind the log, and later that day
+/// behind the two viewers, the last glyph on the row and the checklist.
 /// </summary>
 public static class ToolbarItems
 {
@@ -56,13 +57,14 @@ public static class ToolbarItems
 
     /// <summary>
     /// Every item in strip order, the path last (it sits at the row's right). The order is the user's (2026-10-03): the panes,
-    /// the disk, the lock and the officer, the tool switches, the log, the chart, the two viewers. Pinned.
+    /// the disk, the lock and the officer, the tool switches, the log, the two viewers, the chart (the last glyph, later on
+    /// 2026-10-03, the user's ask). Pinned.
     /// </summary>
     public static readonly string[] Names =
     [
         Settings, Profile, Tools, Mcp, Skills, Sys, Sessions, Usage, Memory, CmdList, Police,
         Shell, Files, Web, Claude, Docker, Obsidian, Sql, Oracle, MySql, Unc, Ha, Comfy, Camera, Print,
-        Log, Perf, LiveView, ComfyView, Path,
+        Log, LiveView, ComfyView, Perf, Path,
     ];
 
     /// <summary>

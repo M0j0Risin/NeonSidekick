@@ -5574,8 +5574,8 @@ internal sealed partial class SettingsMenu
         SettingsField.UncTools => on ? "UNC tools enabled" : "UNC tools disabled",
         SettingsField.UncWrites => on ? "read-write shares may write" : "read-only forced for all shares",
         SettingsField.UncStarMention => on ? "* and part of a name lists the UNC shares on the line" : "* is ordinary text",
-        SettingsField.DockerTools => on ? "Docker tools enabled; /docker works either way" : "Docker tools disabled; /docker still works",
-        SettingsField.CameraTools => on ? "the model may ask for a photo; /camera works either way" : "the model cannot ask for a photo; /camera still works",
+        SettingsField.DockerTools => on ? "docker tools enabled" : "docker tools disabled",   // the user's wording, 2026-10-03
+        SettingsField.CameraTools => on ? "camera tool enabled" : "camera tool disabled",   // the user's wording, 2026-10-03
         SettingsField.CameraKeepInSessions => on ? "stored sessions keep the camera's pictures" : "stored sessions name the camera's pictures, the files stay in camera/",
         SettingsField.CameraWatchUnprompted => on ? "watch mode shows the model a change by itself, now and then" : "watch mode's changes ride your next message",
         SettingsField.BotChatCamera => on ? "each bot sees a fresh picture from your camera (vision models)" : "the bots do not see your camera",
@@ -5583,13 +5583,13 @@ internal sealed partial class SettingsMenu
         SettingsField.DockerServers => on ? "/server offers the chosen containers, one running at a time" : "no Docker servers; one in use stops at the reconnect",
         SettingsField.DockerServerStopOnExit => on ? "the app's exit stops the container it was using" : "the container keeps running after the app exits",
         SettingsField.ComfyTools => on ? "ComfyUI tools enabled" : "ComfyUI tools disabled",
-        SettingsField.HomeAssistantTools => on ? "the model may read and switch Home Assistant, as the policy allows" : "no Home Assistant tools",
-        SettingsField.PrintTools => on ? "the model may list the printers and print, as the policy allows" : "no print tools; /print still prints",
+        SettingsField.HomeAssistantTools => on ? "ha tools enabled" : "ha tools disabled",   // the user's wording, 2026-10-03
+        SettingsField.PrintTools => on ? "print tool enabled" : "print tool disabled",   // the user's wording, 2026-10-03
         SettingsField.ComfyReinforceNegatives => on ? "the model adds a few opposite tags to a workflow's negative" : "the workflow's negative as it is",
         SettingsField.ComfyShowPrompts => on ? "the prompts and params sent to ComfyUI under each picture's line" : "just the picture's line",
         SettingsField.ComfyCaretMention => on ? "^ and part of a name lists the offered workflows on the line" : "^ is ordinary text",
         SettingsField.ComfyPictureStrip => on ? "the session's pictures in a strip above the line" : "no strip",
-        SettingsField.ClaudeAdvisor => on ? "the model may ask Claude for advice (claude_advisor, read-only)" : "no claude_advisor",
+        SettingsField.ClaudeAdvisor => on ? "claude advisor tool enabled" : "claude advisor tool disabled",   // the user's wording, 2026-10-03
         SettingsField.ClaudeAdvisorConfirm => on ? "each claude_advisor call waits for your yes" : "claude_advisor runs without asking",
         SettingsField.ClaudeApi => on ? "/server offers the Claude API while a key is set (billed per message)" : "the Claude API is not offered",
         SettingsField.ClaudeApiPromptCaching => on ? "the prompt and conversation are cached between requests (cheaper)" : "every request is billed in full",
@@ -5625,7 +5625,7 @@ internal sealed partial class SettingsMenu
         SettingsField.SessionLogging => on ? "every completed turn is written to this profile's session store" : "nothing is written; what is stored still lists, restores and purges",
         SettingsField.SessionTool => on ? "the model can search, list and read this profile's earlier sessions" : "the model never sees an earlier session",
         SettingsField.ShellToolBridge => on ? "a script may call this app's other tools through its neon_tools module" : "a script does everything itself: no neon_tools module, no tool calls",
-        SettingsField.ShellPoliceOutsidePaths => on ? "paths outside the working directory are denied" : "paths anywhere on the computer are allowed",
+        SettingsField.ShellPoliceOutsidePaths => on ? "shell police enabled" : "shell police disabled",   // the user's wording, 2026-10-03
         SettingsField.ShellPreferNative => on ? "a command a native tool covers is sent back to that tool first" : "the shell runs whatever it is given",
         _ => "",
     };

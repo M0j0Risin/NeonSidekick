@@ -125,7 +125,7 @@ public static class AboutText
         new("Microsoft.ML.OnnxRuntime", "1.22.0", "MIT", "the CPU inference runtime KokoroSharp runs on"),
         new("Microsoft.Data.Sqlite", "10.0.12", "MIT", "the session store; bundles SQLite (public domain) with FTS5 through SQLitePCLRaw (Apache-2.0)"),
         new("ModelContextProtocol.Core", "2.2.0", "Apache-2.0", "MCP client"),
-        new("LibGit2Sharp", "0.32.0", "MIT", "the git tools over the repository under the working directory"),
+        new("LibGit2Sharp", "0.32.0", "MIT", "sandboxed git tools"),   // the user's wording, 2026-10-03
         new("LibGit2Sharp.NativeBinaries", "2.0.324", "MIT", "libgit2 prebuilt for win-x64 (GPL-2.0 with the linking exception)"),
         new("Microsoft.Data.SqlClient", "7.1.0", "MIT", "the SQL tools' SQL Server client, with its native SNI network layer"),
         new("SqlServer.TransactSql.ScriptDom", "180.107.0", "MIT", "the T-SQL parser behind the SQL tools' read-only gate"),
@@ -140,9 +140,8 @@ public static class AboutText
         new("Silero VAD", "6.2.0", "MIT", "the voice-activity model, downloaded on first use"),
         new("PhotoSauce.MagicScaler", "0.15.0", "MIT", "image decode and downscale through Windows' WIC codecs"),
         new("Markdig", "1.3.2", "BSD-2-Clause", "the Markdown reader behind the styled transcript"),
-        new("llama.cpp (llama-server)", EmbeddedLlm.LlamaRelease.Tag, "MIT", "the embedded model's server, downloaded on first use (2026-09-29)"),
-        new("Gemma 4 (GGUF)", Unversioned, "Apache-2.0 / Gemma", "the embedded models (Unsloth's and HauhauCS's quantisations), downloaded when picked"),
-    ];
+        new("llama.cpp (llama-server)", EmbeddedLlm.LlamaRelease.Tag, "MIT", "embedded LLM server, downloaded on first use"),   // 2026-09-29; the user's wording 2026-10-03
+    ];   // the Gemma 4 (GGUF) row gone 2026-10-03, the user's call
 
     /// <summary>The manifest resource the project file embeds the repository's <c>LICENSE</c> as.</summary>
     public const string LicenseResourceName = "LICENSE";

@@ -11,14 +11,14 @@ public sealed class ToolbarItemsTests
     public void TheItems_AreTheStripInOrder_ThePathLast()
     {
         // The ID card after the gear and the rising chart after the Usage chart (later on 2026-09-29, the user's ask); the tool
-        // switches, the log and the two viewers in the user's order, the chart moved behind the log (2026-10-03).
+        // switches, the log and the two viewers in the user's order, the chart moved behind the log (2026-10-03) and behind the viewers later that day, the last glyph.
         Assert.Equal(
         [
             "settings", "profile", "tools", "mcp", "skills", "sys", "sessions", "usage", "memory", "cmdlist", "police",
             "shell", "files", "web", "claude", "docker", "obsidian", "sql", "oracle", "mysql", "unc", "ha", "comfy", "camera", "print",
-            "log", "perf", "liveview", "comfyview", "path",
+            "log", "liveview", "comfyview", "perf", "path",
         ], ToolbarItems.Names);
-        Assert.Equal("⚙️ 🪪 🛠️ 🔌 🎓 🎭 💬 📊 💾 🔒 👮 🐚 📁 🌐 ✴️ 🐳 💎 🪟 🔮 🐬 🔗 🏠 🎨 📸 🖨️ 📄 📈 📺 🎞️ 📂", string.Join(" ", ToolbarItems.Names.Select(ToolbarItems.Glyph)));   // the folder since 2026-09-29
+        Assert.Equal("⚙️ 🪪 🛠️ 🔌 🎓 🎭 💬 📊 💾 🔒 👮 🐚 📁 🌐 ✴️ 🐳 💎 🪟 🔮 🐬 🔗 🏠 🎨 📸 🖨️ 📄 📺 🎞️ 📈 📂", string.Join(" ", ToolbarItems.Names.Select(ToolbarItems.Glyph)));   // the folder since 2026-09-29
         Assert.Equal(ChatScreen.ToolbarStrip, string.Join(" ", ToolbarItems.Names.Where(id => id is not ("memory" or "cmdlist" or "police" or "path")).Select(ToolbarItems.Glyph)));   // one source for the glyphs
         Assert.Equal(FolderText.FolderGlyph, ToolbarItems.Glyph(ToolbarItems.Path));   // the Folders pane's, one source
         Assert.All(ToolbarItems.Names.SkipLast(1), id => Assert.Equal(ChatScreen.ToolbarWord(ToolbarItems.Glyph(id)), ToolbarItems.Describe(id)));   // the note is the line the glyph runs

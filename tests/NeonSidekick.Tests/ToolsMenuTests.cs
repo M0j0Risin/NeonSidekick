@@ -1096,7 +1096,7 @@ public partial class ToolsMenuTests : IDisposable
 
         Assert.False(_settings.Current.ShellPoliceOutsidePaths);
         Assert.Contains("\n" + Titled(SettingsMenu.PoliceOffConfirmQuestion) + "\n", _console.Output);
-        Assert.Contains("\n" + Titled(ToolsText.Label + " › Shell police outside paths") + "\n \n▸ on  paths outside the working directory are denied\n  off paths anywhere on the computer are allowed\n", _console.Output);
+        Assert.Contains("\n" + Titled(ToolsText.Label + " › Shell police outside paths") + "\n \n▸ on  shell police enabled\n  off shell police disabled\n", _console.Output);
         Assert.Contains("  · Shell police outside paths: off", _console.Output);
         Assert.Contains("\n▸ Shell police outside paths   off\n  Shell prefer native tools    on\n  Shell default                powershell\n", _console.Output);
         pane.Dispose();
