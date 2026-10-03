@@ -597,7 +597,7 @@ Every tool, grouped (Clock, Timers, Help, Files, GitLib, Shell, Obsidian, SQL, C
 | Setting | What it does | Default |
 |---|---|---|
 | Shell command policy | Whether and how the model may run shell commands through `run_command`. `off`: no shell tools are offered. `ask`: a command not on the allowed list goes to the approval pane first (with no pane, it is refused). `yolo`: everything runs and nothing is asked. See Shell guards. | `off` |
-| Shell allowed commands | The command prefixes allowed for good (`git status`, `dotnet build`, `python`). Enter on one removes it; the pane's *Allow … always* adds one. `/cmdlist` opens the list; `/cmdcopy` copies it to another profile. | none |
+| Shell allowed commands | The command prefixes allowed for good (`git status`, `dotnet build`, `python`). Enter on one removes it; the pane's *Allow … always* adds one. The list's ask and yolo buttons (A, Y) switch *Shell command policy*, yolo after a yes. `/cmdlist` opens the list; `/cmdcopy` copies it to another profile. | none |
 | Shell police outside paths | Refuses a shell command, script or background-process input that names a path outside the working directory. It checks before the command runs or the pane asks. `/police` opens this row. See Shell guards. | on |
 | Shell prefer native tools | Steers the model to the app's own tools. A single shell command that one of them covers is sent back to the model (once a turn). See Shell guards. | on |
 | Shell default | The shell `run_command` uses when the call gives no `shell`: `powershell` (pwsh when installed, else Windows PowerShell 5.1), `cmd`, or `bash` (Git Bash, when found). | `powershell` |
@@ -895,7 +895,7 @@ Type `/` to list every command with a short summary. After a command and a space
 | `/cmdcopy <profile> [--history] [overwrite]` | Copy this profile's *Shell allowed commands* into another profile. They are added to its list, or replace it with `overwrite`. `--history` copies the command history instead; this is refused while that profile has *Keep command history* off. |
 | `/keycopy <profile>` | Copy this profile's *LLM API key*, *Claude API key* and *Home Assistant API key* into another profile, replacing its own, after you confirm. The keys are mirrored: a key that isn't set here clears that profile's. Only saved keys are copied, and encrypted ones are copied as they are. A key set only by `NEONSIDEKICK_LLM_API_KEY`, `NEONSIDEKICK_CLAUDE_API_KEY` or `NEONSIDEKICK_HA_TOKEN` is not copied. |
 | `/cmdclear` | Clear this profile's command history, both stored and in memory, after you confirm. |
-| `/cmdlist` | Open the *Shell allowed commands* list. Enter removes a prefix; ESC closes it. |
+| `/cmdlist` | Open the *Shell allowed commands* list. Enter removes a prefix; the ask and yolo buttons at the top (A, Y) switch *Shell command policy*, yolo after a yes; ESC closes it. |
 | `/police` | Open the on/off page for *Shell police outside paths*. |
 | `/compact [focus]` | Shrink the current context. A focus tells the summary what to concentrate on. |
 | `/copy [n \| all] [--thinking]` | Copy the last reply (or the last *n*, or the whole transcript) to the clipboard as Markdown. `--thinking` includes the model's thinking, quoted under `💭 **Thinking**` where it happened. |

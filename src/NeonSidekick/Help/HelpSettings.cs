@@ -105,7 +105,7 @@ public static class HelpSettings
         SettingsField.GitLibDiffMaxLines => "Where a `gitlib_diff` patch is cut (20–5000).",
         SettingsField.GitLibLogMaxCommits => "How many commits `gitlib_log` returns unless the call says otherwise (1–200).",
         SettingsField.ShellCommandPolicy => "Whether and how the model may run shell commands through `run_command`. `off`: no shell tools are offered. `ask`: a command not on the allowed list goes to the approval pane first (with no pane, it is refused). `yolo`: everything runs and nothing is asked. See Shell guards.",
-        SettingsField.ShellCommandAllowed => "The command prefixes allowed for good (`git status`, `dotnet build`, `python`). Enter on one removes it; the pane's *Allow … always* adds one. `/cmdlist` opens the list; `/cmdcopy` copies it to another profile.",
+        SettingsField.ShellCommandAllowed => "The command prefixes allowed for good (`git status`, `dotnet build`, `python`). Enter on one removes it; the pane's *Allow … always* adds one. The list's ask and yolo buttons (A, Y) switch *Shell command policy*, yolo after a yes. `/cmdlist` opens the list; `/cmdcopy` copies it to another profile.",
         SettingsField.ShellDefault => "The shell `run_command` uses when the call gives no `shell`: `powershell` (pwsh when installed, else Windows PowerShell 5.1), `cmd`, or `bash` (Git Bash, when found).",
         SettingsField.ShellTimeoutSeconds => "How long a foreground command without its own `timeout` may run before it is killed (1–3600).",
         SettingsField.ShellForegroundCapSeconds => "The longest a foreground command may run, whatever its `timeout` says (10–3600).",

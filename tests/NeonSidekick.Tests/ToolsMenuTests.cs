@@ -1054,7 +1054,7 @@ public partial class ToolsMenuTests : IDisposable
         AssertTabEnds("\n" + Titled(Strip) + "\n \n▸ Shell command policy         ask\n  Shell allowed commands       2 prefixes\n  Shell police outside paths   on\n  Shell prefer native tools    on\n  Shell default                powershell\n  Shell timeout (s)            180\n  Shell foreground cap (s)     600\n  Shell output max chars       30,000 chars\n  Shell code languages         powershell, python, node\n  Shell code timeout (s)       300\n  Shell tool bridge            off\n  Shell tool bridge max calls  50 tool calls\n", 100);
         Assert.Contains("\n" + Titled(ToolsText.Label + " › Shell command policy") + "\n \n  off  no shell or script tool is offered\n▸ ask  you approve each command not on the allow list\n  yolo every command runs, nothing is asked\n", _console.Output);
         Assert.Contains("  · Shell command policy: yolo\n", _console.Output);
-        Assert.Contains("\n" + Titled(ToolsText.Label + " › Shell allowed commands") + "\n \n▸ dotnet build\n  git push\n", _console.Output);
+        Assert.Contains("\n" + Titled(ToolsText.Label + " › Shell allowed commands   " + SettingsMenu.PolicyAskButton + "    " + SettingsMenu.PolicyYoloButton + " ") + "\n \n▸ dotnet build\n  git push\n", _console.Output);
         Assert.Contains("  · Shell allowed commands: dotnet build removed\n▸ git push\n", _console.Output);
         Assert.Contains("\n" + Titled(ToolsText.Label + " › Shell default") + "\n \n▸ powershell pwsh when installed, else Windows PowerShell 5.1\n  cmd        cmd.exe: batch syntax\n  bash       Git Bash, when bash.exe is found\n", _console.Output);
         Assert.Contains("  · Shell default: cmd\n", _console.Output);
@@ -1429,10 +1429,97 @@ public partial class ToolsMenuTests : IDisposable
         await menu.ShowAllowedCommandsAsync(CancellationToken.None);
 
         Assert.Equal(["git push"], _settings.Current.ShellCommandAllowed);
-        Assert.Contains("\n" + Titled(ToolsText.Label + " › Shell allowed commands") + "\n \n▸ dotnet build\n  git push\n", _console.Output);
+        Assert.Contains("\n" + Titled(ToolsText.Label + " › Shell allowed commands   " + SettingsMenu.PolicyAskButton + "    " + SettingsMenu.PolicyYoloButton + " ") + "\n \n▸ dotnet build\n  git push\n", _console.Output);
         Assert.Contains("  · Shell allowed commands: dotnet build removed\n▸ git push\n", _console.Output);
         Assert.DoesNotContain(Strip, _console.Output);
         Assert.Equal(SettingsMenu.Title, settings.Root);
+        Assert.False(pane.OverlayOpen);
+        pane.Dispose();
+    }
+
+    /// <summary>
+    /// The list's policy buttons (2026-10-02, the user's ask): Y asks on the same pane before yolo saves, the save on the
+    /// list's status line.
+    /// </summary>
+    [Fact]
+    public async Task ShowAllowedCommands_YoloAsksFirst()
+    {
+        _settings.Update(d => d.ShellCommandAllowed = ["git push"]);
+        var (menu, pane, _) = PaneMenu();
+        Push(Keys.Char('y'), Keys.Char('y'), Keys.Enter, Keys.Escape);   // yolo, yes; close
+
+        await menu.ShowAllowedCommandsAsync(CancellationToken.None);
+
+        Assert.Equal("yolo", _settings.Current.ShellCommandPolicy);
+        Assert.Equal(["git push"], _settings.Current.ShellCommandAllowed);
+        Assert.Contains(SettingsMenu.AllowedCommandsKeys, _console.Output);
+        Assert.Contains("\n" + Titled(SettingsMenu.YoloConfirmQuestion) + "\n", _console.Output);
+        Assert.Contains("  · Shell command policy: yolo\n▸ git push\n", _console.Output);
+        Assert.False(pane.OverlayOpen);
+        pane.Dispose();
+    }
+
+    /// <summary>From yolo, A goes back to ask at once with nothing asked (2026-10-02).</summary>
+    [Fact]
+    public async Task ShowAllowedCommands_AskSavesAtOnce()
+    {
+        _settings.Update(d => d.ShellCommandPolicy = "yolo");
+        var (menu, pane, _) = PaneMenu();
+        Push(Keys.Char('a'), Keys.Escape);
+
+        await menu.ShowAllowedCommandsAsync(CancellationToken.None);
+
+        Assert.Equal("ask", _settings.Current.ShellCommandPolicy);
+        Assert.DoesNotContain(SettingsMenu.YoloConfirmQuestion, _console.Output);
+        Assert.Contains("  · Shell command policy: ask\n", _console.Output);
+        Assert.False(pane.OverlayOpen);
+        pane.Dispose();
+    }
+
+    [Fact]
+    public async Task ShowAllowedCommands_YoloRefused_KeepsAsk()
+    {
+        var (menu, pane, _) = PaneMenu();
+        Push(Keys.Char('y'), Keys.Escape, Keys.Char('y'), Keys.Enter, Keys.Escape);   // yolo, ESC; yolo, Enter on No; close
+
+        await menu.ShowAllowedCommandsAsync(CancellationToken.None);
+
+        Assert.Equal("ask", _settings.Current.ShellCommandPolicy);
+        Assert.Contains(SettingsMenu.AllowedCommandsEmptyKeys, _console.Output);   // the buttons work on the empty list
+        Assert.Contains(SettingsMenu.YoloConfirmQuestion, _console.Output);
+        Assert.Contains("  · " + SettingsMenu.UnchangedNotice + "\n", _console.Output);
+        Assert.DoesNotContain("Shell command policy: yolo", _console.Output);
+        Assert.False(pane.OverlayOpen);
+        pane.Dispose();
+    }
+
+    [Fact]
+    public async Task ShowAllowedCommands_FromOff_YoloAsksToo()
+    {
+        _settings.Update(d => d.ShellCommandPolicy = "off");
+        var (menu, pane, _) = PaneMenu();
+        Push(Keys.Char('y'), Keys.Char('y'), Keys.Enter, Keys.Escape);   // yolo, yes; close
+
+        await menu.ShowAllowedCommandsAsync(CancellationToken.None);
+
+        Assert.Equal("yolo", _settings.Current.ShellCommandPolicy);
+        Assert.Contains(SettingsMenu.YoloConfirmQuestion, _console.Output);
+        Assert.False(pane.OverlayOpen);
+        pane.Dispose();
+    }
+
+    [Fact]
+    public async Task ShowAllowedCommands_TheLitButtonSavesNothing()
+    {
+        _settings.Update(d => d.ShellCommandPolicy = "yolo");
+        var (menu, pane, _) = PaneMenu();
+        Push(Keys.Char('y'), Keys.Escape);   // yolo again (lit): nothing asked, nothing saved; close
+
+        await menu.ShowAllowedCommandsAsync(CancellationToken.None);
+
+        Assert.Equal("yolo", _settings.Current.ShellCommandPolicy);
+        Assert.DoesNotContain(SettingsMenu.YoloConfirmQuestion, _console.Output);
+        Assert.DoesNotContain("Shell command policy: yolo", _console.Output);
         Assert.False(pane.OverlayOpen);
         pane.Dispose();
     }

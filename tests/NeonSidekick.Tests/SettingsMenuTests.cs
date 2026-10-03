@@ -1248,6 +1248,12 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("bash       [#9A8BB8]Git Bash, when bash.exe is found — not found[/]", SettingsMenu.ShellLabel("bash", installed: false));
         Assert.Equal("cmd        [#9A8BB8]cmd.exe: batch syntax[/]", SettingsMenu.ShellLabel("cmd", installed: true));
         Assert.Equal("Shell allowed commands: git push removed", SettingsMenu.PrefixRemovedNotice("git push"));
+        // The allowed list's policy buttons (2026-10-02): ask then yolo, keys A and Y, the saved policy lit, neither under off.
+        Assert.Equal(["ask", "yolo"], SettingsMenu.CommandPolicyButtons("ask").Select(b => b.Title));
+        Assert.Equal(['a', 'y'], SettingsMenu.CommandPolicyButtons("ask").Select(b => b.Key!.Value));
+        Assert.Equal(["ask"], SettingsMenu.CommandPolicyButtons("ask").Where(b => b.On).Select(b => b.Title));
+        Assert.Equal(["yolo"], SettingsMenu.CommandPolicyButtons("yolo").Where(b => b.On).Select(b => b.Title));
+        Assert.DoesNotContain(SettingsMenu.CommandPolicyButtons("off"), b => b.On);
         // The git rows (2026-09-20): the Git tab (Git (native), the last, since later on 2026-09-21) — the switch, then the two caps alphabetically; typed, none a reconnect.
         Assert.Equal(new[] { SettingsField.GitLibTools, SettingsField.GitLibDiffMaxLines, SettingsField.GitLibLogMaxCommits, SettingsField.GitLibEmail, SettingsField.GitLibName }, SettingsMenu.ToolsTabFields[14]);
         // The identity pair (2026-09-21): typed, empty allowed and shown as (not set), no validation.

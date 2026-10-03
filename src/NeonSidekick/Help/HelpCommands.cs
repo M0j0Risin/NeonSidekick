@@ -52,7 +52,7 @@ public static class HelpCommands
         ]),
         new("/cmdlist",
         [
-            new("/cmdlist", "Open the *Shell allowed commands* list. Enter removes a prefix; ESC closes it."),
+            new("/cmdlist", "Open the *Shell allowed commands* list. Enter removes a prefix; the ask and yolo buttons at the top (A, Y) switch *Shell command policy*, yolo after a yes; ESC closes it."),
         ]),
         new("/collapse",
         [

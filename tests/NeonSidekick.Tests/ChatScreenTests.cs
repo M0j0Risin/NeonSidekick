@@ -2802,8 +2802,8 @@ public partial class ChatScreenTests : IDisposable
     /// <summary>A pane's title or strip row as it prints since 2026-09-18: the text, then the × close glyph in column width − 2 (the console's width as the test set it).</summary>
     private string Titled(string row) => row + new string(' ', _console.Profile.Width - 2 - TextCells.Width(row)) + ScreenPane.CloseGlyph;
 
-    /// <summary>The allowed-commands list's title (later still on 2026-09-21): the Tools crumb over the row's name, straight from /cmdlist or the toolbar's lock as from the Shell tab.</summary>
-    private static readonly string AllowedCommandsTitle = ToolsText.Label + " › " + SettingsMenu.FieldName(SettingsField.ShellCommandAllowed);
+    /// <summary>The allowed-commands list's title (later still on 2026-09-21): the Tools crumb over the row's name, straight from /cmdlist or the toolbar's lock as from the Shell tab; the policy buttons after it since 2026-10-02.</summary>
+    private static readonly string AllowedCommandsTitle = ToolsText.Label + " › " + SettingsMenu.FieldName(SettingsField.ShellCommandAllowed) + "   " + SettingsMenu.PolicyAskButton + "    " + SettingsMenu.PolicyYoloButton + " ";
     private static readonly string PoliceTitle = ToolsText.Label + " › " + SettingsMenu.FieldName(SettingsField.ShellPoliceOutsidePaths);   // /police, the officer (2026-09-22)
 
     /// <summary>

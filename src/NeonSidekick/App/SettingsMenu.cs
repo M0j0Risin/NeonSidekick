@@ -2477,8 +2477,47 @@ internal sealed partial class SettingsMenu
     /// <summary>The one row of the allowed-commands list while nothing is allowed for good; the bare word since 2026-09-23 (the user's call, the hint on how to add one dropped). Pinned.</summary>
     public const string NoAllowedCommandsRow = "(none)";
 
-    /// <summary>The allowed-commands list's hint. Pinned.</summary>
-    public const string RemoveKeys = "Enter = remove · ESC = back";
+    /// <summary>The allowed-commands list's hint: Enter removes, A and Y are the policy buttons (<see cref="CommandPolicyButtons"/>, 2026-10-02). Pinned.</summary>
+    public const string AllowedCommandsKeys = "Enter = remove · A = ask · Y = yolo · ESC = back";
+
+    /// <summary>The allowed-commands list's hint while nothing is allowed for good: no prefix to remove, the policy buttons still there (2026-10-02). Pinned.</summary>
+    public const string AllowedCommandsEmptyKeys = "A = ask · Y = yolo · ESC = back";
+
+    /// <summary>
+    /// The allowed-commands list's first title-row button (2026-10-02, the user's ask: switch <c>Shell command policy</c> from the
+    /// list <c>/cmdlist</c> opens, without going through the Shell tab's picker): the policy to <c>ask</c>, at once. The bare word:
+    /// the toolbar lock's glyph here would be a second lock on the screen, a click on it no click on the toolbar's. Pinned.
+    /// </summary>
+    public const string PolicyAskButton = "ask";
+
+    /// <summary>The key that is <see cref="PolicyAskButton"/>.</summary>
+    public const char PolicyAskKey = 'a';
+
+    /// <summary>The allowed-commands list's second button (2026-10-02): the policy to <c>yolo</c>, after a yes to <see cref="YoloConfirmQuestion"/>. Pinned.</summary>
+    public const string PolicyYoloButton = "yolo";
+
+    /// <summary>The key that is <see cref="PolicyYoloButton"/>.</summary>
+    public const char PolicyYoloKey = 'y';
+
+    private const int PolicyAskIndex = 0;
+    private const int PolicyYoloIndex = 1;
+
+    /// <summary>
+    /// The allowed-commands list's buttons (2026-10-02): <see cref="PolicyAskButton"/> (index 0) and <see cref="PolicyYoloButton"/>
+    /// (index 1), the saved <paramref name="policy"/> lit — a radio pair, as Show performance bar's looks are; under <c>off</c>
+    /// neither is. Pinned.
+    /// </summary>
+    public static IReadOnlyList<MenuButton> CommandPolicyButtons(string policy) =>
+    [
+        new(PolicyAskButton, PolicyAskKey, string.Equals(policy, "ask", StringComparison.Ordinal)),
+        new(PolicyYoloButton, PolicyYoloKey, string.Equals(policy, "yolo", StringComparison.Ordinal)),
+    ];
+
+    /// <summary>
+    /// The yes/no asked before <see cref="PolicyYoloButton"/> saves (2026-10-02, the user's call: a move into <c>yolo</c> asks
+    /// first, from <c>ask</c> or from <c>off</c>; a move to <c>ask</c> never does). Pinned.
+    /// </summary>
+    public const string YoloConfirmQuestion = "Shell command policy to yolo? Every command the model runs will run without asking.";
 
     /// <summary>The notice after a prefix is removed from the allowed list: <c>Shell allowed commands: git push removed</c>. Pinned.</summary>
     public static string PrefixRemovedNotice(string prefix) => FieldName(SettingsField.ShellCommandAllowed) + ": " + prefix + " removed";
@@ -6051,7 +6090,10 @@ internal sealed partial class SettingsMenu
     /// good, Enter removing it (the list re-shown until ESC); <see cref="NoAllowedCommandsRow"/> alone
     /// while it is empty. The session's own allows are not here: they live in the process, not the file.
     /// True when anything was removed. Internal since later on 2026-09-21 for <see cref="ToolsMenu.ShowAllowedCommandsAsync"/>,
-    /// which opens it straight under the Tools crumb (<c>/cmdlist</c>, the toolbar lock).
+    /// which opens it straight under the Tools crumb (<c>/cmdlist</c>, the toolbar lock). Since 2026-10-02 (the user's ask) its
+    /// title row carries <see cref="CommandPolicyButtons"/>, the saved <c>Shell command policy</c> lit: <c>ask</c> saves at once,
+    /// <c>yolo</c> after a yes to <see cref="YoloConfirmQuestion"/> asked on the same pane (not <see cref="ConfirmAsync"/>, which
+    /// closes it), so the save shows on the list's status line; the lit one saves nothing. They work on the empty list too.
     /// </summary>
     internal async Task<bool> EditAllowedCommandsAsync(CancellationToken cancellationToken)
     {
@@ -6061,9 +6103,34 @@ internal sealed partial class SettingsMenu
         {
             var allowed = Shell.CommandAllowList.Merge(_settings.Current.ShellCommandAllowed, []);
             IReadOnlyList<string> rows = allowed.Count == 0 ? [Markup.Escape(NoAllowedCommandsRow)] : allowed.Select(Markup.Escape).ToList();
-            var page = new MenuPage(Crumb(FieldName(SettingsField.ShellCommandAllowed)), rows, allowed.Count == 0 ? PickKeys : RemoveKeys);
-            int? picked = await PickAsync(page, Math.Min(cursor, rows.Count - 1), cancellationToken).ConfigureAwait(false);
-            if (picked is not { } index || allowed.Count == 0)
+            var page = new MenuPage(Crumb(FieldName(SettingsField.ShellCommandAllowed)), rows, allowed.Count == 0 ? AllowedCommandsEmptyKeys : AllowedCommandsKeys);
+            string policy = _settings.Current.ShellCommandPolicy;
+            var picked = await PickChecklistAsync(page, Math.Min(cursor, rows.Count - 1), cancellationToken, CommandPolicyButtons(policy)).ConfigureAwait(false);
+            if (picked is { Button: PolicyAskIndex or PolicyYoloIndex } pressed)
+            {
+                cursor = pressed.Row;
+                string next = pressed.Button == PolicyAskIndex ? "ask" : "yolo";
+                if (string.Equals(policy, next, StringComparison.Ordinal))
+                {
+                    continue;   // the lit one: nothing to save
+                }
+
+                if (next == "yolo")
+                {
+                    var question = new MenuPage(YoloConfirmQuestion, ConfirmRows, ConfirmKeys) { Hotkeys = ConfirmHotkeys };
+                    if (await PickAsync(question, 0, cancellationToken).ConfigureAwait(false) != 1)
+                    {
+                        Sink.Notice(UnchangedNotice);
+                        continue;
+                    }
+                }
+
+                Apply(SettingsField.ShellCommandPolicy, d => d.ShellCommandPolicy = next);
+                changed = true;
+                continue;
+            }
+
+            if (picked is not { Row: var index } || allowed.Count == 0)
             {
                 if (!changed)
                 {

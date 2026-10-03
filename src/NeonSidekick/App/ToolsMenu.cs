@@ -209,7 +209,8 @@ internal sealed class ToolsMenu
     /// around it, so ESC closes the pane rather than landing on the tab (the user's call: a shortcut,
     /// not a path). Without the pane the list prints (<see cref="AllowedCommandLines"/>). Mid-turn
     /// as at idle: the row is never refused under a reply (<see cref="ShowAsync"/> edits it there too),
-    /// so there is no flag to carry.
+    /// so there is no flag to carry. The list's title row switches <c>Shell command policy</c> between ask and yolo
+    /// (2026-10-02, <see cref="SettingsMenu.CommandPolicyButtons"/>), yolo after a yes.
     /// </summary>
     public async Task ShowAllowedCommandsAsync(CancellationToken cancellationToken)
     {
