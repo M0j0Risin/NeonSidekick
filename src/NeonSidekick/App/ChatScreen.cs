@@ -518,6 +518,12 @@ internal sealed partial class ChatScreen
 
     /// <summary>The log window opened, or the open one brought forward (2026-10-02, <c>/log</c>; <c>Viewer.LogWindow.Show</c> over the run's buffer). Null = no window here: <c>/log</c> says so.</summary>
     private readonly Action? _openLogWindow;
+
+    /// <summary>The log window closed, true when one was open (later on 2026-10-02, Ctrl+Alt+G's second press: <c>Viewer.LogWindow.Close</c>). Null = no window here.</summary>
+    private readonly Func<bool>? _closeLogWindow;
+
+    /// <summary>The picture viewer closed, the camera's window left alone, true when one was open (later on 2026-10-02, Ctrl+Alt+U's second press: <c>Viewer.PictureWindow.CloseViewer</c>). Null = no viewer here.</summary>
+    private readonly Func<bool>? _closeViewer;
     private readonly Func<string, string, CancellationToken, Task>? _editDraft;
     private readonly Random _random;
     private readonly SplashSource? _splash;
@@ -919,10 +925,14 @@ internal sealed partial class ChatScreen
         ICameraSystem? camera = null,
         Func<string, Action, Viewer.ILiveView>? liveView = null,
         Action<string>? showShot = null,
-        Action? openLogWindow = null)
+        Action? openLogWindow = null,
+        Func<bool>? closeLogWindow = null,
+        Func<bool>? closeViewer = null)
     {
         _logFile = logFile;
         _openLogWindow = openLogWindow;
+        _closeLogWindow = closeLogWindow;
+        _closeViewer = closeViewer;
         ArgumentNullException.ThrowIfNull(time);
         _time = time;
         _random = random ?? Random.Shared;
@@ -1451,13 +1461,13 @@ internal sealed partial class ChatScreen
                 RunOrPost(() => HandleExplore(""));
                 return true;
             case SlashCommand.Log:
-                RunOrPost(() => HandleLog(""));
+                RunOrPost(() => { if (!CloseByChord(command, args)) HandleLog(""); });
                 return true;
             case SlashCommand.Comfy when string.Equals(args.Trim(), ViewerText.ViewWord, StringComparison.OrdinalIgnoreCase):
-                RunOrPost(() => OpenViewer(notice: true));
+                RunOrPost(() => { if (!CloseByChord(command, args)) OpenViewer(notice: true); });
                 return true;
             case SlashCommand.Camera when Camera.CameraCommand.Parse(args).Verb == Camera.CameraVerb.Live:
-                RunOrPost(StartLive);
+                RunOrPost(() => { if (!CloseByChord(command, args)) StartLive(); });
                 return true;
             case SlashCommand.Perf:
                 RunOrPost(() => HandlePerf(""));
@@ -1467,6 +1477,35 @@ internal sealed partial class ChatScreen
                 return true;
             case SlashCommand.Header:
                 RunOrPost(() => HandleHeader(""));
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    /// <summary>
+    /// A window chord pressed while its window is open closes it (later on 2026-10-02, the user's ask: "close if they are
+    /// already open when their key chord is pressed"): Ctrl+Alt+G the log window, Ctrl+Alt+U the picture viewer (the camera's
+    /// window left alone) and Ctrl+Alt+V <c>/camera live</c>'s window — only while <c>/camera live</c> holds it; a live preview
+    /// another use opened (the shutter pane's, botchat's) is not the chord's to close, and the chord takes it over as before.
+    /// The chord alone toggles: the typed <c>/log</c>, <c>/comfy view</c> and <c>/camera live</c> still open the window or bring
+    /// it forward. Asked where the act runs (the idle line, or the turn task under a reply), never when the key is read, so a
+    /// window the user closed in between is opened again. A chord held under a spinner waits for the idle line as a typed line
+    /// and opens, as every chord there runs as typed. True when a window closed (and the notice is out); false runs the opener.
+    /// </summary>
+    private bool CloseByChord(SlashCommand command, string args)
+    {
+        switch (command)
+        {
+            case SlashCommand.Log when args.Trim().Length == 0 && _closeLogWindow?.Invoke() == true:
+                _transcript.Notice(LogViewText.WindowClosedNotice);
+                return true;
+            case SlashCommand.Comfy when string.Equals(args.Trim(), ViewerText.ViewWord, StringComparison.OrdinalIgnoreCase) && _closeViewer?.Invoke() == true:
+                _flow.Notice(ViewerText.Closed);
+                return true;
+            case SlashCommand.Camera when Camera.CameraCommand.Parse(args).Verb == Camera.CameraVerb.Live && _liveLease is not null:
+                StopLive();
+                _transcript.Notice(Camera.CameraText.LiveOff);
                 return true;
             default:
                 return false;
@@ -1780,7 +1819,7 @@ internal sealed partial class ChatScreen
         rows.Add(("Ctrl+X", "cut the selected text"));
         rows.Add(("Ctrl+Alt+C", "start a new conversation and clear the screen (/clear)"));
         rows.Add(("Ctrl+Alt+D", "open the MCP pane (/mcp)"));
-        rows.Add(("Ctrl+Alt+G", "open the log viewer (/log)"));
+        rows.Add(("Ctrl+Alt+G", "open or close the log viewer (/log)"));
         rows.Add(("Ctrl+Alt+H", "show or hide the header at the next clear (/header)"));
         rows.Add(("Ctrl+Alt+L", "open the allowed commands list (/cmdlist)"));
         rows.Add(("Ctrl+Alt+M", "open the memory pane (/memory)"));
@@ -1789,8 +1828,8 @@ internal sealed partial class ChatScreen
         rows.Add(("Ctrl+Alt+P", "start a new conversation and show the splash screen (/splash)"));
         rows.Add(("Ctrl+Alt+S", "open the skills pane (/skills)"));
         rows.Add(("Ctrl+Alt+T", "open the tools pane (/tools)"));
-        rows.Add(("Ctrl+Alt+U", "open the ComfyUI image viewer (/comfy view)"));
-        rows.Add(("Ctrl+Alt+V", "open the camera live view (/camera live)"));
+        rows.Add(("Ctrl+Alt+U", "open or close the ComfyUI image viewer (/comfy view)"));
+        rows.Add(("Ctrl+Alt+V", "open or close the camera live view (/camera live)"));
         rows.Add(("Ctrl+Alt+X", "kill switch to immediately unload an embedded model (press twice)"));
         rows.Add(("Ctrl+Alt+Y", "open the system prompt pane (/sys)"));
         return rows.ToArray();
@@ -7896,6 +7935,13 @@ internal sealed partial class ChatScreen
                         _timers.Acknowledge();
                         DisarmExit();
                         await _speech.StopAsync().ConfigureAwait(false);
+                        var (chordCommand, chordArgs) = ParseLine(shortcut.Line);
+                        if (CloseByChord(chordCommand, chordArgs))
+                        {
+                            // A window chord's second press (later on 2026-10-02): its open window closed, the draft back.
+                            break;
+                        }
+
                         if (await HandleAsync(shortcut.Line, [], cancellationToken).ConfigureAwait(false))
                         {
                             return 0;

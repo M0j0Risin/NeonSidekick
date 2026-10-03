@@ -171,6 +171,24 @@ public static class PictureWindow
         }
     }
 
+    /// <summary>
+    /// The picture viewer closed and waited for briefly, the camera's window left as it is (later on 2026-10-02, the user's ask:
+    /// Ctrl+Alt+U closes the viewer it opened). True when one was open, false when there was none or the user had closed it already.
+    /// </summary>
+    public static bool CloseViewer()
+    {
+        PictureWindowThread? open;
+        lock (s_gate)
+        {
+            open = s_open;
+            s_open = null;
+        }
+
+        bool alive = open is { Alive: true };
+        open?.Close();
+        return alive;
+    }
+
     /// <summary>The open windows closed — the picture viewer and the camera's — each waited for briefly; nothing without one.</summary>
     public static void CloseAll()
     {

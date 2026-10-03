@@ -30,6 +30,16 @@ public class KeySourceTests
     }
 
     [Fact]
+    public void ChordLine_IsMarkedAsAChord_ATypedLineIsNot()
+    {
+        // Later on 2026-10-02: a window chord pressed again closes its window under a reply, the typed command never does.
+        var chord = KeySource.ChordLine("/log");
+        Assert.True(chord.Chord);
+        Assert.Equal("/log", chord.Text);
+        Assert.False(new KeySource.WatchedLine("/log", []).Chord);
+    }
+
+    [Fact]
     public async Task ReadKey_NoInput_Throws()
     {
         var keys = new KeySource(new TestConsoleInput());

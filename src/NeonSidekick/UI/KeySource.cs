@@ -238,9 +238,10 @@ public sealed class KeySource : IAnsiConsoleInput
     /// events with its Enter last (what the buffer held since the previous Enter), <see cref="Text"/>
     /// is <see cref="LineText"/> of them — null when the line holds a paste, which is never a
     /// command — and <see cref="Label"/> what the line reads as on a pane row (<see cref="LineLabel"/>).
-    /// The events are what the screen keeps to send the line later, through the input line again.
+    /// The events are what the screen keeps to send the line later, through the input line again. <see cref="Chord"/> is a
+    /// command chord's line (<see cref="ChordLine"/>, later on 2026-10-02), never a typed one.
     /// </summary>
-    public sealed record WatchedLine(string? Text, IReadOnlyList<InputEvent> Events, SubmittedLine? Line = null)
+    public sealed record WatchedLine(string? Text, IReadOnlyList<InputEvent> Events, SubmittedLine? Line = null, bool Chord = false)
     {
         /// <summary>The line as a pane row shows it.</summary>
         public string Label => Line?.Label ?? LineLabel(Events);
@@ -250,11 +251,13 @@ public sealed class KeySource : IAnsiConsoleInput
     /// A command chord's line (<see cref="Keys.ShortcutLine"/>) as the line hook is offered it: its bare command as the text, no
     /// events, and a <see cref="SubmittedLine"/> so the screen can leave it for the idle line or open its pane. The watcher's
     /// chord and, since 2026-10-01, one pressed in a pane under a reply (the screen's re-offer) are the same line.
+    /// <see cref="WatchedLine.Chord"/> marks it (later on 2026-10-02): a window chord pressed again closes its window, where
+    /// the typed command brings it forward.
     /// </summary>
     public static WatchedLine ChordLine(string line)
     {
         ArgumentNullException.ThrowIfNull(line);
-        return new WatchedLine(line, [], new SubmittedLine(line, line, [], line));
+        return new WatchedLine(line, [], new SubmittedLine(line, line, [], line), Chord: true);
     }
 
     /// <summary>

@@ -71,6 +71,9 @@ public static class ViewerText
     /// </summary>
     public static string Opened(string folder) => $"(🖼️ picture viewer on {folder})";
 
+    /// <summary>Ctrl+Alt+U's notice when it closes the open viewer (later on 2026-10-02, the user's ask: the chord toggles). Pinned.</summary>
+    public const string Closed = "(🖼️ picture viewer closed)";
+
     /// <summary>The viewer's keys, the line under <see cref="Opened"/> (later on 2026-09-27). Pinned.</summary>
     public const string Keys = "(← → browse · Home/End · F9 slide show · F10 random · ↑ ↓ slide time · F11 full screen · DEL twice delete · ESC close)";
 

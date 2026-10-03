@@ -86,6 +86,8 @@ public partial class ChatScreenTests : IDisposable
     private Action<string, string>? _openImage;   // a double-clicked picture (later on 2026-09-24): null = the plain opener, _openedFiles   // /imagine and the image tools (2026-09-24): a client over a stub server
     private string? _logFile;   // /log --file (2026-09-22): the --log file the screen is handed; null = started without --log
     private Action? _openLogWindow;   // /log (2026-10-02): the log window's opener; null = no window here
+    private Func<bool>? _closeLogWindow;   // Ctrl+Alt+G's second press (later on 2026-10-02): true when a window was open
+    private Func<bool>? _closeViewer;      // Ctrl+Alt+U's second press (later on 2026-10-02): true when a viewer was open
     private Action<bool>? _mouse;
     private Action<bool>? _holdWheel;
     private readonly List<string> _copied = new();
@@ -280,7 +282,7 @@ public partial class ChatScreenTests : IDisposable
     private async Task<string> RunAsync(IAnsiConsoleInput input, CancellationToken cancellationToken = default)
     {
         _keys = new KeySource(input, TimeSpan.FromMilliseconds(1));
-        var screen = new ChatScreen(_console, _settings, () => _settings.Current, _overriddenBy, _session, _speech, _keys, _voice, _openFile ?? _openedFiles.Add, RenderScreen, _time, _geometry, mouse: _mouse, copyToClipboard: CopyToClipboard, random: _random, clipboardImage: _clipboardImage, web: _web, setTitle: _titles.Add, externalSkills: Path.Combine(_dir, "agents-skills"), holdWheel: _holdWheel, splash: _splash, editDraft: _editDraft, mcp: _mcp, logFile: _logFile, comfyClient: _comfyClient, openImage: _openImage, claude: _claudeCli, openViewer: _openViewer, viewPicture: _viewPicture, followViewer: _followViewer, printSpooler: _printSpooler, perfSource: () => _perfSource, haClient: _haClient, dockerClient: _dockerClient, camera: _cameraSystem, showShot: _shotsShown.Add, openLogWindow: _openLogWindow);
+        var screen = new ChatScreen(_console, _settings, () => _settings.Current, _overriddenBy, _session, _speech, _keys, _voice, _openFile ?? _openedFiles.Add, RenderScreen, _time, _geometry, mouse: _mouse, copyToClipboard: CopyToClipboard, random: _random, clipboardImage: _clipboardImage, web: _web, setTitle: _titles.Add, externalSkills: Path.Combine(_dir, "agents-skills"), holdWheel: _holdWheel, splash: _splash, editDraft: _editDraft, mcp: _mcp, logFile: _logFile, comfyClient: _comfyClient, openImage: _openImage, claude: _claudeCli, openViewer: _openViewer, viewPicture: _viewPicture, followViewer: _followViewer, printSpooler: _printSpooler, perfSource: () => _perfSource, haClient: _haClient, dockerClient: _dockerClient, camera: _cameraSystem, showShot: _shotsShown.Add, liveView: _liveView, openLogWindow: _openLogWindow, closeLogWindow: _closeLogWindow, closeViewer: _closeViewer);
         _running = screen;
         int code = await screen.RunAsync(cancellationToken);
         Assert.Equal(0, code);
@@ -10177,7 +10179,7 @@ public partial class ChatScreenTests : IDisposable
         [
             ("Ctrl+Alt+C", "start a new conversation and clear the screen (/clear)"),
             ("Ctrl+Alt+D", "open the MCP pane (/mcp)"),
-            ("Ctrl+Alt+G", "open the log viewer (/log)"),   // 2026-10-02, the user's ask
+            ("Ctrl+Alt+G", "open or close the log viewer (/log)"),   // 2026-10-02, the user's ask
             ("Ctrl+Alt+H", "show or hide the header at the next clear (/header)"),   // later still on 2026-10-01, the user's ask
             ("Ctrl+Alt+L", "open the allowed commands list (/cmdlist)"),
             ("Ctrl+Alt+M", "open the memory pane (/memory)"),
@@ -10186,8 +10188,8 @@ public partial class ChatScreenTests : IDisposable
             ("Ctrl+Alt+P", "start a new conversation and show the splash screen (/splash)"),   // from Ctrl+Alt+S, later still on 2026-10-01
             ("Ctrl+Alt+S", "open the skills pane (/skills)"),   // from Ctrl+Alt+K
             ("Ctrl+Alt+T", "open the tools pane (/tools)"),
-            ("Ctrl+Alt+U", "open the ComfyUI image viewer (/comfy view)"),   // 2026-10-02, the user's ask
-            ("Ctrl+Alt+V", "open the camera live view (/camera live)"),      // 2026-10-02, the user's ask
+            ("Ctrl+Alt+U", "open or close the ComfyUI image viewer (/comfy view)"),   // 2026-10-02, the user's ask
+            ("Ctrl+Alt+V", "open or close the camera live view (/camera live)"),      // 2026-10-02, the user's ask
             ("Ctrl+Alt+X", "kill switch to immediately unload an embedded model (press twice)"),   // 2026-10-01, the user's place and wording
             ("Ctrl+Alt+Y", "open the system prompt pane (/sys)"),
         ], rows[^15..]);
@@ -15620,6 +15622,85 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains(LogViewText.WindowOpenedNotice, output);
         Assert.DoesNotContain("› /log", output);
         Assert.Equal("keep", UserText(Assert.Single(_chat.Requests)));
+    }
+
+    [Fact]
+    public async Task CtrlAltG_ClosesTheLogWindow_WhenItIsOpen_AtTheIdleLineAndInAPane_TheTypedLogOnlyOpens()
+    {
+        // Later on 2026-10-02 (the user's ask): the chord toggles its window; the typed /log still opens it or brings it forward.
+        _settings.Update(d => { d.TtsOutput = false; d.MenuMaxHeight = "full-screen"; });
+        _console.Profile.Height = 112;
+        _geometry = new ScreenGeometry(() => null);
+        bool open = false;
+        int opened = 0, closed = 0;
+        _openLogWindow = () => { opened++; open = true; };
+        _closeLogWindow = () => { bool was = open; open = false; closed += was ? 1 : 0; return was; };
+        StepsWhenIdle(
+            Key(Keys.CtrlAlt(ConsoleKey.G)),   // opens
+            Key(Keys.CtrlAlt(ConsoleKey.G)),   // closes
+            Key(Keys.CtrlAlt(ConsoleKey.G)),   // opens again
+            Line("/log"),                      // typed: brought forward, never closed
+            input => { PushLine(input, "/help"); input.Push(Keys.CtrlAlt(ConsoleKey.G), Keys.CtrlAlt(ConsoleKey.G), Keys.Escape); },   // in the pane: closes, opens
+            Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.Equal(4, opened);
+        Assert.Equal(2, closed);
+        Assert.True(open);
+        Assert.Contains(LogViewText.WindowClosedNotice, output);
+        Assert.Empty(_chat.Requests);
+    }
+
+    [Fact]
+    public async Task CtrlAltU_ClosesThePictureViewer_WhenItIsOpen_TheTypedComfyViewOnlyOpens()
+    {
+        // Later on 2026-10-02 (the user's ask): Ctrl+Alt+G's toggle for the picture viewer.
+        _settings.Update(d => d.TtsOutput = false);
+        bool open = false;
+        var opened = new List<string>();
+        int closed = 0;
+        _openViewer = folder => { opened.Add(folder); open = true; };
+        _closeViewer = () => { bool was = open; open = false; closed += was ? 1 : 0; return was; };
+        StepsWhenIdle(
+            Key(Keys.CtrlAlt(ConsoleKey.U)),   // opens
+            Key(Keys.CtrlAlt(ConsoleKey.U)),   // closes
+            Line("/comfy view"),               // opens
+            Line("/comfy view"),               // brought forward, never closed
+            Key(Keys.CtrlAlt(ConsoleKey.U)),   // closes
+            Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.Equal(3, opened.Count);
+        Assert.Equal(2, closed);
+        Assert.False(open);
+        Assert.Contains(NeonSidekick.Viewer.ViewerText.Closed, output);
+    }
+
+    [Fact]
+    public async Task MidTurn_CtrlAltG_ClosesTheOpenLogWindow_ThenOpensIt_TheReplyRunsOn()
+    {
+        // Later on 2026-10-02: under a reply the chord's line is marked (WatchedLine.Chord), so it toggles there too.
+        bool open = true;
+        int opened = 0;
+        _openLogWindow = () => { opened++; open = true; };
+        _closeLogWindow = () => { bool was = open; open = false; return was; };
+        MidTurnFixture(i =>
+        {
+            if (i is 1 or 2)
+            {
+                _scripted!.Push(Keys.CtrlAlt(ConsoleKey.G));
+            }
+        });
+
+        string output = await RunAsync();
+
+        Assert.Equal(1, opened);
+        Assert.True(open);
+        Assert.Contains(LogViewText.WindowClosedNotice, output);
+        Assert.DoesNotContain(ChatScreen.CancelledNotice, output);
+        Assert.Equal(1, _session.History.TurnCount);
     }
 
     [Fact]

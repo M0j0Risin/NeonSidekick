@@ -25,6 +25,9 @@ public static class LogViewText
     /// <summary><c>/log</c>'s notice once the window is open (or brought forward). Pinned.</summary>
     public static string WindowOpenedNotice => $"({App.NoticeGlyphs.Log}opened the log window; /log {FileSwitch} opens the --log file in your editor)";
 
+    /// <summary>Ctrl+Alt+G's notice when it closes the open window (later on 2026-10-02, the user's ask: the chord toggles). Pinned.</summary>
+    public static string WindowClosedNotice => $"({App.NoticeGlyphs.Log}closed the log window)";
+
     /// <summary><c>/log</c> where no window can be made (not Windows, or no log kept in this run). Pinned.</summary>
     public const string Unavailable = "The log window needs Windows; start the app with --log <path> and use /log --file to read the log in your editor.";
 

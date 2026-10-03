@@ -122,7 +122,8 @@ public static class Keys
     /// <c>/usage</c> left it), Ctrl+Alt+U <c>/comfy view</c> (the picture viewer) and Ctrl+Alt+V <c>/camera live</c> (the camera's
     /// live view) — the first lines with a word after the command, run as typed. Their BEL, NAK and SYN count as no character;
     /// an AltGr key that types one (@ on AltGr+V, € on AltGr+U on some layouts) stays that character. Ctrl+Alt+V was never
-    /// the line's paste (Ctrl+V or Alt+V, one of the two).
+    /// the line's paste (Ctrl+V or Alt+V, one of the two). Later on 2026-10-02 (the user's ask) each closes its window when it
+    /// is open (<c>ChatScreen.CloseByChord</c>); the typed command still opens it or brings it forward.
     /// </summary>
     public static string? ShortcutLine(ConsoleKeyInfo key)
     {

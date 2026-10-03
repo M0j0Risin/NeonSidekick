@@ -7,6 +7,7 @@ using NeonSidekick.Llm;
 using NeonSidekick.Llm.Tools;
 using NeonSidekick.Tests.Fakes;
 using NeonSidekick.UI;
+using NeonSidekick.Viewer;
 
 namespace NeonSidekick.Tests;
 
@@ -18,6 +19,68 @@ public partial class ChatScreenTests
 
     /// <summary>The shots the <c>post</c> preview opened the viewer on.</summary>
     private readonly List<string> _shotsShown = [];
+
+    /// <summary>The camera's live window; null (the default) is a screen with no viewer, as off Windows.</summary>
+    private Func<string, Action, ILiveView>? _liveView;
+
+    /// <summary>A live window that remembers being let go.</summary>
+    private sealed class FakeLiveView : ILiveView
+    {
+        private volatile bool _disposed;
+
+        public bool Disposed => _disposed;
+
+        public bool Open => !_disposed;
+
+        public byte[] Rent(int length) => new byte[length];
+
+        public void Post(ViewerBitmap frame)
+        {
+        }
+
+        public void Freeze(ViewerBitmap shot, string title)
+        {
+        }
+
+        public void Resume(string title)
+        {
+        }
+
+        public void Dispose() => _disposed = true;
+    }
+
+    [Fact]
+    public async Task CtrlAltV_ClosesTheWindowCameraLiveOpened_AndOpensItAgain_TheTypedCommandOnlyOpens()
+    {
+        // Later on 2026-10-02 (the user's ask): Ctrl+Alt+V toggles /camera live's window; the typed /camera live only says it is live.
+        _cameraSystem = new FakeCameraSystem();
+        _settings.Update(d => d.TtsOutput = false);
+        var views = new List<FakeLiveView>();
+        _liveView = (_, _) =>
+        {
+            var view = new FakeLiveView();
+            lock (views)
+            {
+                views.Add(view);
+            }
+
+            return view;
+        };
+        StepsWhenIdle(
+            Key(Keys.CtrlAlt(ConsoleKey.V)),   // live
+            Key(Keys.CtrlAlt(ConsoleKey.V)),   // closed
+            Key(Keys.CtrlAlt(ConsoleKey.V)),   // live again
+            Line("/camera live"),              // still live, no new window
+            Line("/camera off"),
+            Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.Equal(2, views.Count);
+        Assert.All(views, v => Assert.True(v.Disposed));
+        Assert.Contains(CameraText.LiveOff, output);
+        Assert.Contains(CameraText.Off(1), output);
+    }
 
     private string CameraFolder => Path.Combine(WorkingDirectory.Resolve("", _settings.ProfileDirectory), _settings.Current.CameraOutputFolder);
 

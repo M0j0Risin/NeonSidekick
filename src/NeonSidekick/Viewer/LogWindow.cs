@@ -57,8 +57,11 @@ public static class LogWindow
         }
     }
 
-    /// <summary>The open window closed and waited for briefly; nothing without one.</summary>
-    public static void Close()
+    /// <summary>
+    /// The open window closed and waited for briefly; nothing without one. True when one was open (later on 2026-10-02, the
+    /// user's ask: Ctrl+Alt+G closes the window it opened), false when there was none or the user had closed it already.
+    /// </summary>
+    public static bool Close()
     {
         LogWindowThread? open;
         lock (s_gate)
@@ -67,7 +70,9 @@ public static class LogWindow
             s_open = null;
         }
 
+        bool alive = open is { Alive: true };
         open?.Close();
+        return alive;
     }
 
     /// <summary>

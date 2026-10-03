@@ -88,6 +88,10 @@ public sealed class SidekickApp
 
     /// <summary><c>/log</c>'s window (2026-10-02, <c>Viewer.LogWindow.Show</c> over the run's buffer), or null where there is none.</summary>
     private readonly Action? _openLogWindow;
+
+    /// <summary>The log window and the picture viewer closed, true when one was open (later on 2026-10-02, Ctrl+Alt+G and U close what they opened), or null where there is none.</summary>
+    private readonly Func<bool>? _closeLogWindow;
+    private readonly Func<bool>? _closeViewer;
     private readonly Func<Docker.IDockerServers>? _dockerServers;
 
     // The run's session while one is live (2026-10-02): what ConsoleClosing stops the container through, from the console's control thread.
@@ -191,7 +195,9 @@ public sealed class SidekickApp
         Camera.ICameraSystem? camera = null,
         Func<string, Action, Viewer.ILiveView>? liveView = null,
         Action<string>? showShot = null,
-        Action? openLogWindow = null)
+        Action? openLogWindow = null,
+        Func<bool>? closeLogWindow = null,
+        Func<bool>? closeViewer = null)
     {
         // The camera (2026-10-02): Media Foundation in the app on Windows, a fake in tests, none elsewhere; its previews in the
         // picture viewer (live, and a shot opened without the keyboard), none in tests.
@@ -199,6 +205,8 @@ public sealed class SidekickApp
         _liveView = liveView;
         _showShot = showShot;
         _openLogWindow = openLogWindow;
+        _closeLogWindow = closeLogWindow;
+        _closeViewer = closeViewer;
         // The Claude CLI server (2026-09-30): a host over the real CLI, with this executable as its MCP relay, unless a test gives its own.
         _claudeServerFactory = claudeServer ?? (() => new Claude.ClaudeServerHost(Claude.ClaudeServerHost.OwnRelayCommand));
         _frames = frames;
@@ -1836,7 +1844,7 @@ public sealed class SidekickApp
         // on the row and hands it back to the terminal otherwise, so the terminal's own selection
         // and right-click copy work whenever there is nothing to click into.
         var mouse = _input as WindowsConsoleInput;
-        var screen = new ChatScreen(_console, _settings, () => EffectiveSettings, OverriddenBy, session, speech, new KeySource(_input ?? _console.Input), voice, PersonaFile.OpenInEditor, RenderScreen, _time, _geometry, _clipboard, mouse is null ? null : mouse.Capture, _copyToClipboard, clipboardImage: _clipboardImage, web: _web, setTitle: _setTitle, externalSkills: _externalSkills, holdWheel: mouse is null ? null : mouse.HoldWheel, splash: SplashImages.Source, editDraft: PersonaFile.EditAndWaitAsync, mcp: mcp, environment: _environment.System, logFile: _options.LogPath is { } logPath ? Path.GetFullPath(logPath) : null, comfyClient: _comfyClient, openImage: PersonaFile.OpenImage, claude: _claude, openViewer: _openViewer, viewPicture: _viewPicture, followViewer: _followViewer, haClient: _haClient, printSpooler: _printSpooler, perfSource: _perfSource, frames: _frames, dockerClient: _dockerClient, camera: _camera, liveView: _liveView, showShot: _showShot, openLogWindow: _openLogWindow);
+        var screen = new ChatScreen(_console, _settings, () => EffectiveSettings, OverriddenBy, session, speech, new KeySource(_input ?? _console.Input), voice, PersonaFile.OpenInEditor, RenderScreen, _time, _geometry, _clipboard, mouse is null ? null : mouse.Capture, _copyToClipboard, clipboardImage: _clipboardImage, web: _web, setTitle: _setTitle, externalSkills: _externalSkills, holdWheel: mouse is null ? null : mouse.HoldWheel, splash: SplashImages.Source, editDraft: PersonaFile.EditAndWaitAsync, mcp: mcp, environment: _environment.System, logFile: _options.LogPath is { } logPath ? Path.GetFullPath(logPath) : null, comfyClient: _comfyClient, openImage: PersonaFile.OpenImage, claude: _claude, openViewer: _openViewer, viewPicture: _viewPicture, followViewer: _followViewer, haClient: _haClient, printSpooler: _printSpooler, perfSource: _perfSource, frames: _frames, dockerClient: _dockerClient, camera: _camera, liveView: _liveView, showShot: _showShot, openLogWindow: _openLogWindow, closeLogWindow: _closeLogWindow, closeViewer: _closeViewer);
         if (mouse is not null)
         {
             mouse.ModeChanged = screen.FlushConsole;

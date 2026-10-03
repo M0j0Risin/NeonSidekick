@@ -158,6 +158,9 @@ public static class CameraText
 
     public const string LiveOn = "The camera is live in its own window (close it, or /camera off, to stop).";
 
+    /// <summary>Ctrl+Alt+V's notice when it closes <c>/camera live</c>'s window (later on 2026-10-02, the user's ask: the chord toggles).</summary>
+    public const string LiveOff = "The camera's live window is closed (the camera closes in a few seconds).";
+
     public const string NoViewer = "There is no picture viewer here.";
 
     // ── Botchat ─────────────────────────────────────────────────────────────

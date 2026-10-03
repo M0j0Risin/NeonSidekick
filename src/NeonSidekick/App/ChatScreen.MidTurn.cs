@@ -288,7 +288,8 @@ internal sealed partial class ChatScreen
 
                 return true;
             case MidTurnClass.Quick:
-                Post(() => HandleQuickAsync(command, args, text, paneToken));
+                // A window chord pressed again closes its window (later on 2026-10-02, CloseByChord), asked as the act runs.
+                Post(() => line.Chord && CloseByChord(command, args) ? Task.CompletedTask : HandleQuickAsync(command, args, text, paneToken));
                 return true;
             default:
                 if (await RunPaneAsync(command, args, paneToken).ConfigureAwait(false) is { } chord)
