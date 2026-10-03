@@ -110,8 +110,8 @@ public partial class SidekickAppTests : IDisposable
     private readonly InProcessMcpServers _mcpServers = new();
 
     /// <summary>The prompt as headless builds it: Agent skills on by default, no skill installed, so every prompt with tools ends with the skills block over an empty catalog (2026-09-16); no timer tool, so the tool rules lose their timer sentence (2026-09-20).</summary>
-    private static string SkilledPrompt(bool speechOutput, IReadOnlyList<string>? memories, string? persona = null, string? operatingRules = null, string? voiceDirective = null, bool tools = true, bool web = false, bool files = true, AskLimits? ask = null, ProjectNotes? project = null, IReadOnlyList<Skill>? skills = null, bool sessions = true, bool mcp = false, bool git = true, bool shell = true) =>
-        Assistant.SystemPrompt(speechOutput, memories, persona, operatingRules, voiceDirective, tools, web, files, ask, project, skills ?? [], sessions: sessions && tools, mcp: mcp && tools, timers: false, git: git && tools, shell: shell && tools, native: shell && tools);   // Shell prefer native tools on by default (2026-09-26)
+    private static string SkilledPrompt(bool speechOutput, IReadOnlyList<string>? memories, string? persona = null, string? operatingRules = null, string? voiceDirective = null, bool tools = true, bool web = false, bool files = true, AskLimits? ask = null, ProjectNotes? project = null, IReadOnlyList<Skill>? skills = null, bool sessions = true, bool mcp = false, bool git = true, bool shell = true, bool help = true) =>
+        Assistant.SystemPrompt(speechOutput, memories, persona, operatingRules, voiceDirective, tools, web, files, ask, project, skills ?? [], sessions: sessions && tools, mcp: mcp && tools, timers: false, git: git && tools, shell: shell && tools, native: shell && tools, help: help && tools);   // Shell prefer native tools on by default (2026-09-26); neon_help standing (2026-10-02)
 
     /// <summary>Every window title the app set (the <c>setTitle</c> seam): the interactive screen's launch, never headless.</summary>
     private readonly List<string> _titles = new();
@@ -671,7 +671,7 @@ public partial class SidekickAppTests : IDisposable
         Assert.Contains("[tool] save_memory -> remembered: They live in Leeds.", output);
         Assert.Contains("Noted.", output);
         Assert.Contains("Neon: Leeds.", output);
-        Assert.Equal(11 + FileToolNames.All.Length + GitToolNames.All.Length + ShellToolNames.All.Length, _chat.Options[0]!.Tools!.Count);   // clock ×3, the files, the git tools (2026-09-20), the four web tools, the two memory tools, skill_editor, session_manager
+        Assert.Equal(12 + FileToolNames.All.Length + GitToolNames.All.Length + ShellToolNames.All.Length, _chat.Options[0]!.Tools!.Count);   // clock ×3, neon_help, the files, the git tools (2026-09-20), the four web tools, the two memory tools, skill_editor, session_manager
         Assert.Equal(SkilledPrompt(false, new[] { "Their name is Chris." }, web: true), _chat.Requests[0][0].Text);
         // The list rides the opening recall_memory pair, the last of the three (2026-09-17), and the
         // pair is kept current: the save of the first turn is in the second turn's result, in place.
@@ -707,9 +707,24 @@ public partial class SidekickAppTests : IDisposable
         await Headless("hello\n");
 
         Assert.Equal(
-            (string[])["get_current_time", "shift_date", "days_between", .. FileToolNames.All, .. GitToolNames.All, .. ShellToolNames.All, "save_memory", "recall_memory", "skill_editor", "session_manager"],
+            (string[])["get_current_time", "shift_date", "days_between", "neon_help", .. FileToolNames.All, .. GitToolNames.All, .. ShellToolNames.All, "save_memory", "recall_memory", "skill_editor", "session_manager"],
             _chat.Options[0]!.Tools!.Cast<AIFunction>().Select(t => t.Name).ToArray());
         Assert.DoesNotContain(Assistant.WebRule, _chat.Requests[0][0].Text!);
+    }
+
+    [Fact]
+    public async Task Headless_NeonHelpSwitchedOff_IsNotOffered_AndItsRuleGoes()
+    {
+        // neon_help stands beside the clock headless too (2026-10-02); /tools' list takes it out, and its sentence with it.
+        ServerOn1234("llama");
+        _settings.Update(d => d.ToolsDisabled = [NeonHelpTool.ToolName]);
+        _chat.EnqueueText("Hi.");
+
+        await Headless("hello\n");
+
+        Assert.DoesNotContain(NeonHelpTool.ToolName, _chat.Options[0]!.Tools!.Cast<AIFunction>().Select(t => t.Name));
+        Assert.Equal(SkilledPrompt(false, [], web: true, help: false), _chat.Requests[0][0].Text);
+        Assert.DoesNotContain(Assistant.HelpRule, _chat.Requests[0][0].Text!);
     }
 
     [Fact]
@@ -747,7 +762,7 @@ public partial class SidekickAppTests : IDisposable
         string output = await Headless("hello\n");
 
         Assert.Equal(
-            (string[])["get_current_time", "shift_date", "days_between", .. GitToolNames.All, .. ShellToolNames.All, "web_search", "web_fetch", "open_url", "save_memory", "recall_memory", "skill_editor", "session_manager"],
+            (string[])["get_current_time", "shift_date", "days_between", "neon_help", .. GitToolNames.All, .. ShellToolNames.All, "web_search", "web_fetch", "open_url", "save_memory", "recall_memory", "skill_editor", "session_manager"],
             _chat.Options[0]!.Tools!.Cast<AIFunction>().Select(t => t.Name).ToArray());
         var request = _chat.Requests[0];
         Assert.Equal(SkilledPrompt(false, [], web: true, files: false), request[0].Text);
@@ -777,10 +792,10 @@ public partial class SidekickAppTests : IDisposable
         string output = await Headless("a haiku\n");
 
         Assert.Equal(
-            (string[])["get_current_time", "shift_date", "days_between", .. FileToolNames.All, .. GitToolNames.All, .. ShellToolNames.All, "web_search", "web_fetch", "open_url", "download_file", "save_memory", "recall_memory", "load_skill", "skill_editor", "session_manager"],
+            (string[])["get_current_time", "shift_date", "days_between", "neon_help", .. FileToolNames.All, .. GitToolNames.All, .. ShellToolNames.All, "web_search", "web_fetch", "open_url", "download_file", "save_memory", "recall_memory", "load_skill", "skill_editor", "session_manager"],
             _chat.Options[0]!.Tools!.Cast<AIFunction>().Select(t => t.Name).ToArray());
         var haiku = new Skill("haiku", "Writes haiku.", SkillScope.Profile, skills);
-        Assert.Equal(Assistant.SystemPrompt(false, [], web: true, project: new ProjectNotes("AGENTS.md", "The notes."), skills: [haiku], sessions: true, timers: false, git: true, shell: true, native: true), _chat.Requests[0][0].Text);
+        Assert.Equal(Assistant.SystemPrompt(false, [], web: true, project: new ProjectNotes("AGENTS.md", "The notes."), skills: [haiku], sessions: true, timers: false, git: true, shell: true, native: true, help: true), _chat.Requests[0][0].Text);
         Assert.Contains("[tool] load_skill -> <skill_content name=\"haiku\">", output);
         Assert.True(ConversationHistory.IsSkillResult(Assert.Single(_chat.Requests[1][^1].Contents.OfType<FunctionResultContent>())));
         Assert.Contains("Old pond.", output);
@@ -790,7 +805,7 @@ public partial class SidekickAppTests : IDisposable
         _chat.EnqueueText("Hi.");
         await Headless("hello\n");
         Assert.DoesNotContain("skill_editor", _chat.Options[2]!.Tools!.Cast<AIFunction>().Select(t => t.Name));
-        Assert.Equal(Assistant.SystemPrompt(false, [], web: true, sessions: true, timers: false, git: true, shell: true, native: true), _chat.Requests[2][0].Text);
+        Assert.Equal(Assistant.SystemPrompt(false, [], web: true, sessions: true, timers: false, git: true, shell: true, native: true, help: true), _chat.Requests[2][0].Text);
     }
 
     [Fact]
@@ -803,7 +818,7 @@ public partial class SidekickAppTests : IDisposable
         await Headless("hello\n");
 
         Assert.Equal(
-            (string[])["get_current_time", "shift_date", "days_between", .. FileToolNames.All, .. GitToolNames.All, .. ShellToolNames.All, "web_search", "web_fetch", "open_url", "download_file", "skill_editor", "session_manager"],
+            (string[])["get_current_time", "shift_date", "days_between", "neon_help", .. FileToolNames.All, .. GitToolNames.All, .. ShellToolNames.All, "web_search", "web_fetch", "open_url", "download_file", "skill_editor", "session_manager"],
             _chat.Options[0]!.Tools!.Cast<AIFunction>().Select(t => t.Name).ToArray());
         Assert.Equal(SkilledPrompt(false, null, web: true), _chat.Requests[0][0].Text);
     }

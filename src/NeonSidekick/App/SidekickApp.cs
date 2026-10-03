@@ -594,7 +594,8 @@ public sealed class SidekickApp
         // The UNC shares' door first (2026-10-01): open reaches the offered shares too.
         var unc = new Unc.UncAccess(() => Unc.UncConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory).Offered(EffectiveSettings.UncSharesOffered), _time);
         var fileTools = ChatScreen.FileTools(files, () => WorkingDirectory.IsDefault(EffectiveSettings.WorkingDirectory), PersonaFile.OpenInEditor, () => EffectiveSettings, unc);
-        var standingTools = clockTools;
+        // The app's own manual beside the clock (2026-10-02): it reads documentation only, so headless offers it too.
+        IReadOnlyList<AIFunction> standingTools = [.. clockTools, .. ChatScreen.HelpTools()];
         // The skills need no console either (2026-09-16); the two settings decide per turn. The skill records (2026-09-30) are the home's.
         using var skillStore = new SkillRecordStore(_settings.StorageDirectory);
         _headlessSkillRecords = new SkillRecords(skillStore, () => SkillRoots.For(_settings, _externalSkills), _time);

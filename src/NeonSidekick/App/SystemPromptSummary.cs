@@ -1,6 +1,7 @@
 using System.Globalization;
 using Microsoft.Extensions.AI;
 using NeonSidekick.Git;
+using NeonSidekick.Help;
 using NeonSidekick.Llm;
 using NeonSidekick.Llm.Tools;
 using NeonSidekick.Mcp;
@@ -59,6 +60,7 @@ namespace NeonSidekick.App;
 /// <param name="DockerEnabled">Whether the Docker tools may be offered (2026-10-02): the setting <c>Docker tools</c> on, on Windows (<see cref="ChatScreen.DockerOffered"/>).</param>
 /// <param name="DockerTools">How many Docker tools the next turn offers (<see cref="ChatScreen.DockerToolsFor"/>, the ones switched off on <c>/tools</c> left out); the rules carry <see cref="Assistant.DockerRule"/> while any is.</param>
 /// <param name="DockerWrite">Whether a Docker change is among them (<c>Docker writes</c> on): the rules add <see cref="Assistant.DockerWriteRule"/>.</param>
+/// <param name="HelpTools">How many of the app's manual tools the next turn offers (<c>neon_help</c>, 2026-10-02, the one switched off on <c>/tools</c> left out); the rules carry <see cref="Assistant.HelpRule"/> while it is.</param>
 /// <param name="PlanDirective">Plan mode's directive while planning (2026-09-26, <see cref="Plans.PlanText.Directive"/>), else null: its own section, after the skills.</param>
 public sealed record SystemPromptFacts(
     string? Persona,
@@ -106,7 +108,8 @@ public sealed record SystemPromptFacts(
     bool UncWrite = false,
     bool DockerEnabled = false,
     int DockerTools = 0,
-    bool DockerWrite = false)
+    bool DockerWrite = false,
+    int HelpTools = 0)
 {
     /// <summary>Whether the rules carry <see cref="Assistant.HomeAssistantRule"/>: tools on, the server set with the switch on, and at least one Home Assistant tool offered (2026-09-28).</summary>
     public bool HomeAssistant => ToolsEnabled && HomeAssistantEnabled && HomeAssistantTools > 0;
@@ -152,6 +155,9 @@ public sealed record SystemPromptFacts(
 
     /// <summary>Whether the rules carry <see cref="Assistant.DockerRule"/>: tools on, the switch on, and at least one Docker tool offered (2026-10-02).</summary>
     public bool Docker => ToolsEnabled && DockerEnabled && DockerTools > 0;
+
+    /// <summary>Whether the rules carry <see cref="Assistant.HelpRule"/>: tools on and <c>neon_help</c> offered (2026-10-02).</summary>
+    public bool Help => ToolsEnabled && HelpTools > 0;
 
     /// <summary>The next turn's reply is styled Markdown and asked for as such (<see cref="ChatScreen.MarkdownTurn"/>): the setting, the pane, and the turn not spoken.</summary>
     public bool Markdown => ChatScreen.MarkdownTurn(TranscriptMarkdown, PaneOn, TtsOutput && SpeechReady);
@@ -325,7 +331,7 @@ public static class SystemPromptSummary
 
         bool customRules = !string.IsNullOrWhiteSpace(facts.OperatingRules);
         string defaultLabel = !facts.ToolsEnabled ? $"default ({ToolsOffSuffix})" : !facts.FilesEnabled ? $"default ({FilesOffSuffix})" : "default";
-        string rules = customRules ? facts.OperatingRules!.Trim() : Assistant.DefaultRules(facts.Markdown, facts.ToolsEnabled, facts.FilesEnabled, delete: !facts.Off(DeleteTool.ToolName), mcp: facts.Mcp, timers: facts.Timers, git: facts.Git, shell: facts.Shell, bridge: facts.Bridge, police: facts.Police, obsidian: facts.Obsidian, obsidianDelete: facts.ObsidianDelete, sql: facts.Sql, native: facts.Native, advisor: facts.Advisor, homeAssistant: facts.HomeAssistant, oracle: facts.Oracle, mysql: facts.MySql, unc: facts.Unc, uncFetch: facts.Unc && facts.UncFetch, uncWrite: facts.Unc && facts.UncWrite, docker: facts.Docker, dockerWrite: facts.Docker && facts.DockerWrite);
+        string rules = customRules ? facts.OperatingRules!.Trim() : Assistant.DefaultRules(facts.Markdown, facts.ToolsEnabled, facts.FilesEnabled, delete: !facts.Off(DeleteTool.ToolName), mcp: facts.Mcp, timers: facts.Timers, git: facts.Git, shell: facts.Shell, bridge: facts.Bridge, police: facts.Police, obsidian: facts.Obsidian, obsidianDelete: facts.ObsidianDelete, sql: facts.Sql, native: facts.Native, advisor: facts.Advisor, homeAssistant: facts.HomeAssistant, oracle: facts.Oracle, mysql: facts.MySql, unc: facts.Unc, uncFetch: facts.Unc && facts.UncFetch, uncWrite: facts.Unc && facts.UncWrite, docker: facts.Docker, dockerWrite: facts.Docker && facts.DockerWrite, help: facts.Help);
         sections.Add(new(
             customRules ? $"Operating rules — {OperataFile.FileName} ({rules.Length.ToString(CultureInfo.InvariantCulture)} chars)" : $"Operating rules — {defaultLabel}",
             rules));
@@ -440,7 +446,8 @@ public static class SystemPromptSummary
             uncFetch: facts.Unc && facts.UncFetch,
             uncWrite: facts.Unc && facts.UncWrite,
             docker: facts.Docker,
-            dockerWrite: facts.Docker && facts.DockerWrite);
+            dockerWrite: facts.Docker && facts.DockerWrite,
+            help: facts.Help);
     }
 
     /// <summary>The Prompt tab's heading over plan mode's directive (2026-09-26). Pinned.</summary>
@@ -540,7 +547,8 @@ public static class SystemPromptSummary
         IReadOnlyList<AIFunction>? docker = null,
         bool dockerEnabled = true,
         IReadOnlyList<AIFunction>? camera = null,
-        bool cameraEnabled = true)
+        bool cameraEnabled = true,
+        IReadOnlyList<AIFunction>? help = null)
     {
         ArgumentNullException.ThrowIfNull(clock);
         ArgumentNullException.ThrowIfNull(timers);
@@ -555,8 +563,14 @@ public static class SystemPromptSummary
         {
             Group("Clock", clock, standing, toolsEnabled, null, disabled),
             Group("Timers", timers, standing, toolsEnabled, null, disabled),
-            Group("Files", files, filesNote, filesEnabled && toolsEnabled, SettingsField.FileTools, disabled),
         };
+        if (help is not null)
+        {
+            // The app's own manual (2026-10-02): standing after the timers as the turn offers it, no switch of its own; /tools switches it off by name.
+            groups.Add(Group(HelpText.GroupTitle, help, standing, toolsEnabled, null, disabled));
+        }
+
+        groups.Add(Group("Files", files, filesNote, filesEnabled && toolsEnabled, SettingsField.FileTools, disabled));
         if (git is not null)
         {
             // The git tools (2026-09-20): right after the file tools, the sandbox's two groups together; offered while the setting GitLib tools says so.

@@ -18,6 +18,8 @@ public static class PlanTools
     {
         // clock and timers
         "get_current_time", "days_between", "shift_date", "list_timers",
+        // the app's own manual (2026-10-02): documentation only
+        "neon_help",
         // files
         "get_working_directory", "search_files", "file_info", "read_file", "view_image",
         // git

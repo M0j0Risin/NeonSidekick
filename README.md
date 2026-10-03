@@ -57,7 +57,7 @@ During early development, I was experimenting with synthwave-style themes in Spe
 * **Self-Learning:** A background reflection learns from your conversations and tool results, writing new skills and improving existing ones.
 
 ### Built-In Tooling & Voice
-* **Essential Tools:** Sandboxed file I/O, shell integration (powershell/cmd/bash), scripting (powershell/python/node), Git management, web search (DuckDuckGo/SearXNG), web browsing (httpClient/Chromium), clarifying questions asked in a pop-up pane, and clock/timers.
+* **Essential Tools:** Sandboxed file I/O, shell integration (powershell/cmd/bash), scripting (powershell/python/node), Git management, web search (DuckDuckGo/SearXNG), web browsing (httpClient/Chromium), clarifying questions asked in a pop-up pane, clock/timers, and `neon_help`, the app's own manual, so the model can answer how-to questions about NeonSidekick itself.
 * **MCP Server Support:** Connect Model Context Protocol (MCP) servers for more tools and external data sources.
 * **Native Voice Stack:** Whisper speech-to-text (STT) running inside the app, push-to-talk, and a Vosk wake word.
 * **Text-to-Speech:** Kokoro TTS running inside the app, or an external Kokoro HTTP server.
@@ -565,7 +565,7 @@ The app keeps a record of every global and profile skill in `skills.db` in the h
 
 #### Offered
 
-Every tool, grouped (Clock, Timers, Files, GitLib, Shell, Obsidian, SQL, ComfyUI, Claude, Web, Memory, Skills, Sessions, Questions), with the description the model reads. Enter or Space turns one tool on or off. A group whose switch is off is shown dim. In a new profile, `gitlib_delete` (loses branches, tags and stashes), `zip`, `unzip`, `unc_delete`, `docker_remove` and `docker_prune` start off.
+Every tool, grouped (Clock, Timers, Help, Files, GitLib, Shell, Obsidian, SQL, ComfyUI, Claude, Web, Memory, Skills, Sessions, Questions), with the description the model reads. Enter or Space turns one tool on or off. The Help group (`neon_help`) has no switch of its own, so turn it off here. A group whose switch is off is shown dim. In a new profile, `gitlib_delete` (loses branches, tags and stashes), `zip`, `unzip`, `unc_delete`, `docker_remove` and `docker_prune` start off.
 
 #### Web
 
@@ -875,7 +875,7 @@ The system prompt section by section, each with its status:
 
 #### Tools
 
-Every tool the reply may call, grouped (Clock, Timers, Files, GitLib, Shell, Obsidian, SQL, ComfyUI, Claude, Web, Memory, Skills, Sessions, one group per connected MCP server, Plan in plan mode, Questions), with the description the model reads. Tools and groups that are switched off are left out; `/tools` lists everything.
+Every tool the reply may call, grouped (Clock, Timers, Help, Files, GitLib, Shell, Obsidian, SQL, ComfyUI, Claude, Web, Memory, Skills, Sessions, one group per connected MCP server, Plan in plan mode, Questions), with the description the model reads. Tools and groups that are switched off are left out; `/tools` lists everything.
 
 </details>
 
@@ -1265,6 +1265,19 @@ These are the tools the model can call, grouped as `/tools` and `/sys` show them
 | `start_timer` | `name?, hours?, minutes?, seconds?` | Starts a named countdown and alerts the user when it ends. Several can run at once. |
 | `stop_timer` | `name` | Stops a running timer by name, or silences one that has gone off. |
 | `list_timers` | — | Lists every running timer and how long each has left. |
+
+</details>
+
+<details>
+<summary><b>❓ Help</b></summary>
+
+### Help
+
+| Tool | Arguments | What it does |
+|---|---|---|
+| `neon_help` | `query?, kind?` | NeonSidekick's own manual. It gives every form of a slash command; for a setting, what it does, its default and where it lives (pane › tab › row); a pane's or tab's rows; and the keys. `query` is a command (`/camera`), a setting's name, a pane or tab (`/tools camera`), a key (`Ctrl+H`) or plain words; with no query, it gives an overview. `kind` (`command`, `setting`, `pane`, `keys`) narrows the search, and `kind: command` with no query lists every command with a line on each. |
+
+It is offered on every turn, like the clock, including headless and plan mode. The rules then tell the model to call it for any question about the app instead of guessing. It reads only the app's built-in reference, never your settings' current values. It has no switch: to withhold it, turn it off on the Offered tab of `/tools`. Its text is in the code (`Help/HelpSettings.cs`, `Help/HelpCommands.cs`): a new setting or slash command needs its entry there, as it needs its row here.
 
 </details>
 

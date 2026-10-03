@@ -272,8 +272,8 @@ public partial class ChatScreenTests : IDisposable
     private static string MemoryResult(IReadOnlyList<ChatMessage> request) =>
         (string)Assert.Single(request.SelectMany(m => m.Contents.OfType<FunctionResultContent>()), r => r.CallId == Assistant.OpeningMemoryCallId).Result!;
 
-    private static string SkilledPrompt(bool speechOutput, IReadOnlyList<string>? memories, string? persona = null, string? operatingRules = null, string? voiceDirective = null, bool tools = true, bool web = false, bool files = true, AskLimits? ask = null, ProjectNotes? project = null, IReadOnlyList<Skill>? skills = null, bool markdown = false, bool sessions = true, bool download = true, bool recall = true, bool mcp = false, bool timers = true, bool git = true, bool shell = true) =>
-        Assistant.SystemPrompt(speechOutput, memories, persona, operatingRules, voiceDirective, tools, web, files, ask, project, skills ?? [], markdown, sessions: sessions && tools, download: download, recall: recall, mcp: mcp && tools, timers: timers, git: git && tools, shell: shell && tools, native: shell && tools);   // Shell prefer native tools on by default (2026-09-26)
+    private static string SkilledPrompt(bool speechOutput, IReadOnlyList<string>? memories, string? persona = null, string? operatingRules = null, string? voiceDirective = null, bool tools = true, bool web = false, bool files = true, AskLimits? ask = null, ProjectNotes? project = null, IReadOnlyList<Skill>? skills = null, bool markdown = false, bool sessions = true, bool download = true, bool recall = true, bool mcp = false, bool timers = true, bool git = true, bool shell = true, bool help = true) =>
+        Assistant.SystemPrompt(speechOutput, memories, persona, operatingRules, voiceDirective, tools, web, files, ask, project, skills ?? [], markdown, sessions: sessions && tools, download: download, recall: recall, mcp: mcp && tools, timers: timers, git: git && tools, shell: shell && tools, native: shell && tools, help: help && tools);   // Shell prefer native tools on by default (2026-09-26); neon_help standing (2026-10-02)
 
     private async Task<string> RunAsync(IAnsiConsoleInput input, CancellationToken cancellationToken = default)
     {
@@ -3803,7 +3803,7 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         Assert.Equal(
-            (string[])[GetCurrentTimeTool.ToolName, ShiftDateTool.ToolName, DaysBetweenTool.ToolName, StartTimerTool.ToolName, StopTimerTool.ToolName, ListTimersTool.ToolName, .. FileToolNames.All, .. GitToolNames.All, .. ShellToolNames.All, WebSearchTool.ToolName, WebFetchTool.ToolName, OpenUrlTool.ToolName, DownloadFileTool.ToolName, SaveMemoryTool.ToolName, RecallMemoryTool.ToolName, SkillEditorTool.ToolName, SessionManagerTool.ToolName],
+            (string[])[GetCurrentTimeTool.ToolName, ShiftDateTool.ToolName, DaysBetweenTool.ToolName, StartTimerTool.ToolName, StopTimerTool.ToolName, ListTimersTool.ToolName, NeonHelpTool.ToolName, .. FileToolNames.All, .. GitToolNames.All, .. ShellToolNames.All, WebSearchTool.ToolName, WebFetchTool.ToolName, OpenUrlTool.ToolName, DownloadFileTool.ToolName, SaveMemoryTool.ToolName, RecallMemoryTool.ToolName, SkillEditorTool.ToolName, SessionManagerTool.ToolName],
             _chat.Options[0]!.Tools!.Cast<AIFunction>().Select(t => t.Name).ToArray());
         // The prompt carries the directive, never the list (2026-09-17): the list is the recall_memory
         // pair's result, the last of the three opening pairs, so it is the freshest context before the reply.
@@ -3832,7 +3832,7 @@ public partial class ChatScreenTests : IDisposable
         await RunAsync();
 
         Assert.Equal(
-            (string[])[GetCurrentTimeTool.ToolName, ShiftDateTool.ToolName, DaysBetweenTool.ToolName, StartTimerTool.ToolName, StopTimerTool.ToolName, ListTimersTool.ToolName, .. GitToolNames.All, .. ShellToolNames.All, WebSearchTool.ToolName, WebFetchTool.ToolName, OpenUrlTool.ToolName, SaveMemoryTool.ToolName, RecallMemoryTool.ToolName, SkillEditorTool.ToolName, SessionManagerTool.ToolName],
+            (string[])[GetCurrentTimeTool.ToolName, ShiftDateTool.ToolName, DaysBetweenTool.ToolName, StartTimerTool.ToolName, StopTimerTool.ToolName, ListTimersTool.ToolName, NeonHelpTool.ToolName, .. GitToolNames.All, .. ShellToolNames.All, WebSearchTool.ToolName, WebFetchTool.ToolName, OpenUrlTool.ToolName, SaveMemoryTool.ToolName, RecallMemoryTool.ToolName, SkillEditorTool.ToolName, SessionManagerTool.ToolName],
             _chat.Options[0]!.Tools!.Cast<AIFunction>().Select(t => t.Name).ToArray());
         var request = _chat.Requests[0];
         Assert.Equal(SkilledPrompt(false, Array.Empty<string>(), web: true, files: false), request[0].Text);
@@ -3896,7 +3896,7 @@ public partial class ChatScreenTests : IDisposable
         await RunAsync();
 
         Assert.Equal(
-            (string[])[GetCurrentTimeTool.ToolName, ShiftDateTool.ToolName, DaysBetweenTool.ToolName, StartTimerTool.ToolName, StopTimerTool.ToolName, ListTimersTool.ToolName, .. FileToolNames.All, .. GitToolNames.All, .. ShellToolNames.All, SaveMemoryTool.ToolName, RecallMemoryTool.ToolName, SkillEditorTool.ToolName, SessionManagerTool.ToolName],
+            (string[])[GetCurrentTimeTool.ToolName, ShiftDateTool.ToolName, DaysBetweenTool.ToolName, StartTimerTool.ToolName, StopTimerTool.ToolName, ListTimersTool.ToolName, NeonHelpTool.ToolName, .. FileToolNames.All, .. GitToolNames.All, .. ShellToolNames.All, SaveMemoryTool.ToolName, RecallMemoryTool.ToolName, SkillEditorTool.ToolName, SessionManagerTool.ToolName],
             _chat.Options[0]!.Tools!.Cast<AIFunction>().Select(t => t.Name).ToArray());
         Assert.Equal(SkilledPrompt(false, Array.Empty<string>()), _chat.Requests[0][0].Text);
         Assert.DoesNotContain(WebSearchTool.ToolName, _chat.Requests[0][0].Text!);
@@ -4006,7 +4006,7 @@ public partial class ChatScreenTests : IDisposable
 
         // An emptied group reads as its switch off: the Turn_FilesOff shape with the switch still on.
         Assert.Equal(
-            (string[])[GetCurrentTimeTool.ToolName, ShiftDateTool.ToolName, DaysBetweenTool.ToolName, StartTimerTool.ToolName, StopTimerTool.ToolName, ListTimersTool.ToolName, .. GitToolNames.All, .. ShellToolNames.All, WebSearchTool.ToolName, WebFetchTool.ToolName, OpenUrlTool.ToolName, SaveMemoryTool.ToolName, RecallMemoryTool.ToolName, SkillEditorTool.ToolName, SessionManagerTool.ToolName],
+            (string[])[GetCurrentTimeTool.ToolName, ShiftDateTool.ToolName, DaysBetweenTool.ToolName, StartTimerTool.ToolName, StopTimerTool.ToolName, ListTimersTool.ToolName, NeonHelpTool.ToolName, .. GitToolNames.All, .. ShellToolNames.All, WebSearchTool.ToolName, WebFetchTool.ToolName, OpenUrlTool.ToolName, SaveMemoryTool.ToolName, RecallMemoryTool.ToolName, SkillEditorTool.ToolName, SessionManagerTool.ToolName],
             _chat.Options[0]!.Tools!.Cast<AIFunction>().Select(t => t.Name).ToArray());
         var request = _chat.Requests[0];
         Assert.Equal(SkilledPrompt(false, Array.Empty<string>(), web: true, files: false), request[0].Text);
@@ -4890,7 +4890,7 @@ public partial class ChatScreenTests : IDisposable
         await RunAsync();
 
         Assert.Equal(
-            (string[])[GetCurrentTimeTool.ToolName, ShiftDateTool.ToolName, DaysBetweenTool.ToolName, StartTimerTool.ToolName, StopTimerTool.ToolName, ListTimersTool.ToolName, .. FileToolNames.All, .. GitToolNames.All, .. ShellToolNames.All, WebSearchTool.ToolName, WebFetchTool.ToolName, OpenUrlTool.ToolName, DownloadFileTool.ToolName, SkillEditorTool.ToolName, SessionManagerTool.ToolName],
+            (string[])[GetCurrentTimeTool.ToolName, ShiftDateTool.ToolName, DaysBetweenTool.ToolName, StartTimerTool.ToolName, StopTimerTool.ToolName, ListTimersTool.ToolName, NeonHelpTool.ToolName, .. FileToolNames.All, .. GitToolNames.All, .. ShellToolNames.All, WebSearchTool.ToolName, WebFetchTool.ToolName, OpenUrlTool.ToolName, DownloadFileTool.ToolName, SkillEditorTool.ToolName, SessionManagerTool.ToolName],
             _chat.Options[0]!.Tools!.Cast<AIFunction>().Select(t => t.Name).ToArray());
         Assert.Equal(SkilledPrompt(false, null, web: true), _chat.Requests[0][0].Text);
         Assert.DoesNotContain("Chris", _chat.Requests[0][0].Text!);
@@ -4934,7 +4934,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(SkilledPrompt(false, Array.Empty<string>(), web: true), _chat.Requests[2][0].Text);
         Assert.StartsWith("You are Rex, a gruff pirate.\n\n" + Assistant.OperatingRules, _chat.Requests[0][0].Text!, StringComparison.Ordinal);
         Assert.Equal(
-            (string[])[GetCurrentTimeTool.ToolName, ShiftDateTool.ToolName, DaysBetweenTool.ToolName, StartTimerTool.ToolName, StopTimerTool.ToolName, ListTimersTool.ToolName, .. FileToolNames.All, .. GitToolNames.All, .. ShellToolNames.All, WebSearchTool.ToolName, WebFetchTool.ToolName, OpenUrlTool.ToolName, DownloadFileTool.ToolName, SaveMemoryTool.ToolName, RecallMemoryTool.ToolName, SkillEditorTool.ToolName, SessionManagerTool.ToolName],
+            (string[])[GetCurrentTimeTool.ToolName, ShiftDateTool.ToolName, DaysBetweenTool.ToolName, StartTimerTool.ToolName, StopTimerTool.ToolName, ListTimersTool.ToolName, NeonHelpTool.ToolName, .. FileToolNames.All, .. GitToolNames.All, .. ShellToolNames.All, WebSearchTool.ToolName, WebFetchTool.ToolName, OpenUrlTool.ToolName, DownloadFileTool.ToolName, SaveMemoryTool.ToolName, RecallMemoryTool.ToolName, SkillEditorTool.ToolName, SessionManagerTool.ToolName],
             _chat.Options[0]!.Tools!.Cast<AIFunction>().Select(t => t.Name).ToArray());
     }
 
@@ -17154,7 +17154,7 @@ public partial class ChatScreenTests : IDisposable
         return directory;
     }
 
-    private static readonly string[] StandingAndFileTools = [GetCurrentTimeTool.ToolName, ShiftDateTool.ToolName, DaysBetweenTool.ToolName, StartTimerTool.ToolName, StopTimerTool.ToolName, ListTimersTool.ToolName, .. FileToolNames.All, .. GitToolNames.All, .. ShellToolNames.All, WebSearchTool.ToolName, WebFetchTool.ToolName, OpenUrlTool.ToolName, DownloadFileTool.ToolName, SaveMemoryTool.ToolName, RecallMemoryTool.ToolName];
+    private static readonly string[] StandingAndFileTools = [GetCurrentTimeTool.ToolName, ShiftDateTool.ToolName, DaysBetweenTool.ToolName, StartTimerTool.ToolName, StopTimerTool.ToolName, ListTimersTool.ToolName, NeonHelpTool.ToolName, .. FileToolNames.All, .. GitToolNames.All, .. ShellToolNames.All, WebSearchTool.ToolName, WebFetchTool.ToolName, OpenUrlTool.ToolName, DownloadFileTool.ToolName, SaveMemoryTool.ToolName, RecallMemoryTool.ToolName];
 
     [Fact]
     public async Task Turn_SkillsInstalled_OffersBothSkillTools_AndListsThemInThePrompt()
@@ -17171,7 +17171,7 @@ public partial class ChatScreenTests : IDisposable
 
         Assert.Equal((string[])[.. StandingAndFileTools, LoadSkillTool.ToolName, SkillEditorTool.ToolName, SessionManagerTool.ToolName], _chat.Options[0]!.Tools!.Cast<AIFunction>().Select(t => t.Name).ToArray());
         var haiku = new Skill("haiku", "Writes haiku. Use when asked for one.", SkillScope.Profile, directory);
-        Assert.Equal(Assistant.SystemPrompt(false, [], web: true, skills: [haiku], sessions: true, git: true, shell: true, native: true), _chat.Requests[0][0].Text);
+        Assert.Equal(Assistant.SystemPrompt(false, [], web: true, skills: [haiku], sessions: true, git: true, shell: true, native: true, help: true), _chat.Requests[0][0].Text);
         Assert.Contains("<name>haiku</name>", _chat.Requests[0][0].Text);
         Assert.DoesNotContain("deploy", _chat.Requests[0][0].Text);
     }
@@ -17187,7 +17187,7 @@ public partial class ChatScreenTests : IDisposable
 
         await RunAsync();
 
-        Assert.Equal(Assistant.SystemPrompt(false, [], web: true, skills: [new Skill("deploy", "Deploys the site.", SkillScope.External, directory)], sessions: true, git: true, shell: true, native: true), _chat.Requests[0][0].Text);
+        Assert.Equal(Assistant.SystemPrompt(false, [], web: true, skills: [new Skill("deploy", "Deploys the site.", SkillScope.External, directory)], sessions: true, git: true, shell: true, native: true, help: true), _chat.Requests[0][0].Text);
     }
 
     [Fact]
@@ -17219,7 +17219,7 @@ public partial class ChatScreenTests : IDisposable
         await RunAsync();
 
         Assert.Equal((string[])[.. StandingAndFileTools, SessionManagerTool.ToolName], _chat.Options[0]!.Tools!.Cast<AIFunction>().Select(t => t.Name).ToArray());
-        Assert.Equal(Assistant.SystemPrompt(false, [], web: true, sessions: true, git: true, shell: true, native: true), _chat.Requests[0][0].Text);
+        Assert.Equal(Assistant.SystemPrompt(false, [], web: true, sessions: true, git: true, shell: true, native: true, help: true), _chat.Requests[0][0].Text);
     }
 
     [Fact]
