@@ -33,10 +33,17 @@ public static class CommandPrefix
     /// <c>|</c>, <c>&amp;</c>, <c>;</c> and line breaks outside single or double quotes, trimmed,
     /// the empty ones dropped (a leading PowerShell <c>&amp;</c> call operator leaves one).
     /// </summary>
-    public static IReadOnlyList<string> Segments(string command)
+    public static IReadOnlyList<string> Segments(string command) => JoinedSegments(command).Select(s => s.Segment).ToList();
+
+    /// <summary>
+    /// <see cref="Segments"/> with the separator that follows each one (2026-10-03, the shell police's <c>cd</c> rule needs to
+    /// know whether the next segment runs where the <c>cd</c> left it): <c>&amp;&amp;</c>, <c>||</c>, <c>|</c>, <c>&amp;</c>,
+    /// <c>;</c>, <c>\n</c> (a <c>\r</c> too), or empty after the last. An empty segment dropped leaves the join before it as it was.
+    /// </summary>
+    public static IReadOnlyList<(string Segment, string Join)> JoinedSegments(string command)
     {
         ArgumentNullException.ThrowIfNull(command);
-        var segments = new List<string>();
+        var segments = new List<(string, string)>();
         var current = new StringBuilder();
         char quote = '\0';
         for (int i = 0; i < command.Length; i++)
@@ -62,10 +69,16 @@ public static class CommandPrefix
                     break;
                 case '&':
                 case '|':
+                    bool doubled = i + 1 < command.Length && command[i + 1] == c;
+                    Flush(segments, current, doubled ? new string(c, 2) : c.ToString());
+                    i += doubled ? 1 : 0;
+                    break;
                 case ';':
+                    Flush(segments, current, ";");
+                    break;
                 case '\n':
                 case '\r':
-                    Flush(segments, current);
+                    Flush(segments, current, "\n");
                     break;
                 default:
                     current.Append(c);
@@ -73,17 +86,17 @@ public static class CommandPrefix
             }
         }
 
-        Flush(segments, current);
+        Flush(segments, current, "");
         return segments;
     }
 
-    private static void Flush(List<string> segments, StringBuilder current)
+    private static void Flush(List<(string, string)> segments, StringBuilder current, string join)
     {
         string segment = current.ToString().Trim();
         current.Clear();
         if (segment.Length > 0)
         {
-            segments.Add(segment);
+            segments.Add((segment, join));
         }
     }
 

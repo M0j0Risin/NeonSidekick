@@ -11,9 +11,14 @@ public sealed class PathPoliceTests
     private const string Root = @"D:\Repo\Project";
     private const string Sub = @"D:\Repo\Project\sub";
 
-    /// <summary>The disk as the single-segment rule sees it: <c>D:\Users</c> and <c>D:\Windows</c> exist, nothing else does.</summary>
-    private static bool Exists(string path) =>
-        string.Equals(path, @"D:\Users", StringComparison.OrdinalIgnoreCase) || string.Equals(path, @"D:\Windows", StringComparison.OrdinalIgnoreCase);
+    /// <summary>
+    /// The disk as the rules see it: <c>D:\Users</c> and <c>D:\Windows</c> at the drive's root (the single-segment rule), and the
+    /// folders a <c>cd</c> in the tests moves to (rule 11 follows a <c>cd</c> only to a folder that is there); nothing else exists.
+    /// </summary>
+    private static bool Exists(string path) => KnownFolders.Contains(path, StringComparer.OrdinalIgnoreCase);
+
+    private static readonly string[] KnownFolders =
+        [@"D:\Users", @"D:\Windows", Root, Sub, Sub + @"\deeper", Root + @"\in", SpacedRoot, SpacedRoot + @"\sub"];
 
     /// <summary>No links anywhere: the disk the rules before 2026-10-03 assumed.</summary>
     private static string? NoLinks(string path) => null;
@@ -67,7 +72,7 @@ public sealed class PathPoliceTests
     [InlineData(@"msbuild /t:Build /p:Configuration=Release /nologo")]
     [InlineData(@"robocopy src dst /MIR /XD .git")]
     [InlineData(@"findstr /i /c:""foo"" *.cs")]
-    [InlineData(@"cd /etc")]   // one segment, nothing by that name at the drive's root: a switch as far as the text says
+    [InlineData(@"robocopy a b /purge")]   // one segment, nothing by that name at the drive's root: a switch as far as the text says
     [InlineData(@"$x -replace '\\', '/'")]   // a bare / that is not the first argument, and \\ alone
     [InlineData(@"echo a / b")]
     [InlineData(@"git log --format=%H")]
@@ -204,9 +209,76 @@ public sealed class PathPoliceTests
     [Fact]
     public void ABareCd_InCmd_OnlyPrintsTheFolder_AndPasses()
     {
-        Assert.Null(PathPolice.FirstOutside("cd", Root, Root, isScript: false, Exists, NoLinks, bareCdGoesHome: false));
-        Assert.Equal("cd", PathPolice.FirstOutside("cd", Root, Root, isScript: false, Exists, NoLinks));
-        Assert.Equal("..", PathPolice.FirstOutside("cd ..", Root, Root, isScript: false, Exists, NoLinks, bareCdGoesHome: false));   // only the bare one
+        Assert.Null(In(ShellKind.Cmd, "cd"));
+        Assert.Null(In(ShellKind.Cmd, "cd /d"));
+        Assert.Equal("cd", In(ShellKind.PowerShell, "cd"));
+        Assert.Equal("cd", In(ShellKind.Bash, "cd"));
+        Assert.Equal("..", In(ShellKind.Cmd, "cd .."));   // only the bare one
+    }
+
+    private static string? In(ShellKind shell, string text, Func<string, string?>? links = null) =>
+        PathPolice.FirstOutside(text, Root, Root, isScript: false, Exists, links ?? NoLinks, shell);
+
+    // ---- 2026-10-03, the review of the day's rules: each way out it found, refused, and its near neighbour still passing ----
+
+    [Theory]
+    // A cd that may not have moved what follows it: a pipe, ||, a subshell, bash's & (cmd's runs in turn), a folder that is not there.
+    [InlineData(ShellKind.Cmd, @"cd sub | type ..\secret.txt", @"..\secret.txt")]
+    [InlineData(ShellKind.Bash, @"cd sub || cat ../x", "../x")]
+    [InlineData(ShellKind.Bash, @"(cd sub) && cat ../x", "../x")]
+    [InlineData(ShellKind.Bash, @"cd sub & cat ../x", "../x")]
+    [InlineData(ShellKind.Bash, @"cd nosuch; cat ../x", "../x")]
+    [InlineData(ShellKind.Cmd, @"cd nosuch & type ..\x", @"..\x")]
+    [InlineData(ShellKind.PowerShell, @"Set-Location sub | Get-Content ..\x", @"..\x")]
+    [InlineData(ShellKind.Bash, @"cd sub | echo; cat ../x", "../x")]   // once in doubt, in doubt for the rest of the line
+    // A bare cd behind options or a redirect still goes home.
+    [InlineData(ShellKind.Bash, @"cd -- && cat .ssh/id_rsa", "cd")]
+    [InlineData(ShellKind.Bash, @"cd -P; cat .bashrc", "cd")]
+    [InlineData(ShellKind.Bash, @"cd >/dev/null && cat .bashrc", "cd")]
+    [InlineData(ShellKind.Bash, @"cd 2>/dev/null; cat .bashrc", "cd")]
+    [InlineData(ShellKind.PowerShell, @"Set-Location -PassThru; gc .ssh\config", "Set-Location")]
+    // A device's name in front does not hide the .. after it.
+    [InlineData(ShellKind.Cmd, @"type con.x\..\..\secret.txt", @"con.x\..\..\secret.txt")]
+    [InlineData(ShellKind.Bash, @"cat aux.a/../../etc/x", "aux.a/../../etc/x")]
+    [InlineData(ShellKind.Cmd, @"type nul\..\..\x", @"nul\..\..\x")]
+    // A switch's letter glued to the path.
+    [InlineData(ShellKind.Cmd, @"7z x a.zip -oC:\Windows\Temp", @"-oC:\Windows\Temp")]
+    [InlineData(ShellKind.Cmd, @"cl -IC:\secret a.c", @"-IC:\secret")]
+    [InlineData(ShellKind.Cmd, @"7z x a.zip -o\\server\share\x", @"-o\\server\share\x")]
+    [InlineData(ShellKind.Bash, @"gcc -I../../inc a.c", "-I../../inc")]
+    // Git Bash's drive mounts, and a cd's argument, which is a folder and never a switch.
+    [InlineData(ShellKind.Bash, @"cd /c && cat Windows/win.ini", "/c")]
+    [InlineData(ShellKind.Bash, @"ls /c", "/c")]
+    [InlineData(ShellKind.Bash, @"cd /etc && cat passwd", "/etc")]
+    [InlineData(ShellKind.PowerShell, @"cd \tools; gc x", @"\tools")]
+    [InlineData(ShellKind.Cmd, @"cd /tools", "/tools")]
+    public void TheReviewsWaysOut_AreRefused(ShellKind shell, string command, string token) =>
+        Assert.Equal(token, In(shell, command));
+
+    [Theory]
+    [InlineData(ShellKind.Bash, @"cd sub && cat ../notes.txt")]
+    [InlineData(ShellKind.Bash, @"cd sub; cat ../notes.txt")]
+    [InlineData(ShellKind.PowerShell, @"Set-Location sub; Get-Content ..\x")]
+    [InlineData(ShellKind.Cmd, @"cd sub & type ..\x")]   // cmd's & runs the next command after it, in the folder it left
+    [InlineData(ShellKind.Cmd, @"cd /d sub && type ..\x")]
+    [InlineData(ShellKind.Bash, @"cd sub && echo x | cat ../x")]   // a pipe after a cd that moved runs where it moved to
+    [InlineData(ShellKind.Bash, @"cd - && ls")]   // the previous folder: not followed, not home
+    [InlineData(ShellKind.Bash, @"cd sub 2>/dev/null && ls")]
+    [InlineData(ShellKind.Cmd, @"type nul.txt")]
+    [InlineData(ShellKind.Cmd, @"7z x a.zip -oD:\Repo\Project\out")]
+    [InlineData(ShellKind.Cmd, @"cl -Iinclude a.c")]
+    [InlineData(ShellKind.Cmd, @"dir /c")]   // a switch in cmd
+    [InlineData(ShellKind.PowerShell, @"cmd /c dir")]
+    [InlineData(ShellKind.Bash, @"cmd //c dir")]   // Git Bash's own spelling of a switch
+    public void TheReviewsNeighbours_StillPass(ShellKind shell, string command) =>
+        Assert.Null(In(shell, command));
+
+    [Fact]
+    public void AQuotedStringWithASpace_IsNotJoined_WhenAWordOfItLeadsOutByALink()
+    {
+        // bash -c runs the words as separate arguments: link/secret on its own goes through the link, so the join may not hide it.
+        Assert.Equal("out/secret", In(ShellKind.Bash, @"bash -c ""./tool.sh out/secret""", Links));
+        Assert.Null(In(ShellKind.Bash, @"bash -c ""./tool.sh in/secret""", Links));
     }
 
     [Fact]
@@ -343,6 +415,9 @@ public sealed class PathPoliceTests
             Assert.Equal("..", PathPolice.Judge("cd ..", files, dir, isScript: false));
             Assert.Equal("/Windows", PathPolice.Judge("dir /Windows", files, dir, isScript: false));   // exists on every Windows system drive; the temp folder lives there
             Assert.Null(PathPolice.Judge("dir /nothing-here-" + Guid.NewGuid().ToString("N"), files, dir, isScript: false));
+            Assert.Equal("/c", PathPolice.Judge("cd /c", files, dir, isScript: false, "bash"));   // the shell's name reaches the rules
+            Assert.Null(PathPolice.Judge("cd /c", files, dir, isScript: false, "cmd"));   // a switch there, and a bare cd only prints
+            Assert.Equal("cd", PathPolice.Judge("cd /c", files, dir, isScript: false, "powershell"));
         }
         finally
         {

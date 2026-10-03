@@ -119,6 +119,74 @@ public sealed class WorkingDirectoryTests : IDisposable
         Assert.False(File.Exists(Path.Combine(outside, "planted.txt")));   // nothing written through it
     }
 
+    [Fact]
+    public void RealLinkTarget_ThrowsNothing_ForAMissingPath()
+    {
+        // The police asks it of every plain token of a script (2026-10-03, the review): a thrown and caught
+        // FileNotFoundException per name was the cost until it read the attributes without one.
+        int thread = Environment.CurrentManagedThreadId;
+        int thrown = 0;
+        void Count(object? sender, System.Runtime.ExceptionServices.FirstChanceExceptionEventArgs e)
+        {
+            if (Environment.CurrentManagedThreadId == thread)
+            {
+                thrown++;
+            }
+        }
+
+        AppDomain.CurrentDomain.FirstChanceException += Count;
+        try
+        {
+            Assert.Null(WorkingDirectory.RealLinkTarget(Full("missing")));
+            Assert.Null(WorkingDirectory.RealLinkTarget(Full(@"missing\deeper\x.txt")));
+        }
+        finally
+        {
+            AppDomain.CurrentDomain.FirstChanceException -= Count;
+        }
+
+        Assert.Equal(0, thrown);
+    }
+
+    [Fact]
+    public void ALinkLeadingOutside_CanBeDeletedAndMoved_ItsTargetUntouched()
+    {
+        string outside = Path.Combine(_dir, "outside");
+        Directory.CreateDirectory(outside);
+        File.WriteAllText(Path.Combine(outside, "keep.txt"), "mine");
+        _files.EnsureExists();
+        Junction.Make(Full("away"), outside);
+
+        var moved = _files.Move("away", "gone", overwrite: false);
+        Assert.Equal(FileOutcome.Ok, moved.Outcome);
+        Assert.False(Directory.Exists(Full("away")));
+        Assert.Equal(outside, WorkingDirectory.RealLinkTarget(Full("gone")));   // the link moved, still a link
+        Assert.Equal(FileOutcome.OutsideRoot, _files.Resolve(@"gone\keep.txt", forWrite: false, out _));   // and still refused to go through
+
+        Assert.Equal(FileOutcome.OutsideRoot, _files.Copy("gone", "copied", overwrite: false).Outcome);   // a copy reads through it: refused
+        Assert.Equal(FileOutcome.OutsideRoot, _files.Delete(@"gone\keep.txt").Outcome);   // what lies beyond it is still out of reach
+
+        var deleted = _files.Delete("gone");
+        Assert.Equal(FileOutcome.Ok, deleted.Outcome);
+        Assert.False(Directory.Exists(Full("gone")));
+        Assert.Equal("mine", File.ReadAllText(Path.Combine(outside, "keep.txt")));   // the target and its file untouched
+    }
+
+    [SymlinkFact]
+    public void AFileSymlinkLeadingOutside_CanBeDeleted_ItsTargetUntouched()
+    {
+        string outside = Path.Combine(_dir, "outside");
+        Directory.CreateDirectory(outside);
+        string secret = Path.Combine(outside, "secret.txt");
+        File.WriteAllText(secret, "mine");
+        _files.EnsureExists();
+        File.CreateSymbolicLink(Full("secret.txt"), secret);
+        Assert.Equal(FileOutcome.OutsideRoot, _files.ReadText("secret.txt", null, null).Outcome);
+        Assert.Equal(FileOutcome.Ok, _files.Delete("secret.txt").Outcome);
+        Assert.False(File.Exists(Full("secret.txt")));
+        Assert.Equal("mine", File.ReadAllText(secret));
+    }
+
     [SymlinkFact]
     public void Resolve_RefusesAFileSymlinkWhoseTargetIsMissing()
     {
@@ -1508,6 +1576,36 @@ public sealed class WorkingDirectoryTests : IDisposable
         Assert.Equal(FileOutcome.IsDirectory, _files.Unzip("src", null, false).Outcome);
         Put("f.txt", "");
         Assert.Equal(FileOutcome.IsAFile, _files.Unzip("src.zip", "f.txt", false).Outcome);
+    }
+
+    [Fact]
+    public void Unzip_RefusesAnEntryThatWouldLandThroughALinkLeadingOutside()
+    {
+        string outside = Path.Combine(_dir, "outside");
+        Directory.CreateDirectory(outside);
+        _files.EnsureExists();
+        Junction.Make(Full("out"), outside);
+        using (var evil = ZipFile.Open(Full("evil.zip"), ZipArchiveMode.Create))
+        {
+            evil.CreateEntry("fine.txt");
+            evil.CreateEntry("out/planted.txt");
+        }
+
+        var slip = _files.Unzip("evil.zip", ".", false);
+        Assert.Equal(FileOutcome.OutsideRoot, slip.Outcome);
+        Assert.Equal("out/planted.txt", slip.Detail);
+        Assert.False(File.Exists(Path.Combine(outside, "planted.txt")));
+        Assert.False(File.Exists(Full("fine.txt")));   // all or nothing
+
+        // A blank destination is the archive's own name beside it: a link by that name is no way out either.
+        using (var plain = ZipFile.Open(Full("away.zip"), ZipArchiveMode.Create))
+        {
+            plain.CreateEntry("planted.txt");
+        }
+
+        Junction.Make(Full("away"), outside);
+        Assert.Equal(FileOutcome.OutsideRoot, _files.Unzip("away.zip", null, false).Outcome);
+        Assert.False(File.Exists(Path.Combine(outside, "planted.txt")));
     }
 
     // ---- open ----

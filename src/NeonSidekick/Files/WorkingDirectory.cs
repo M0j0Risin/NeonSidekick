@@ -480,7 +480,15 @@ public sealed class WorkingDirectory
     /// or symlink under the root whose target lies outside it (<see cref="LinkEscape"/>) is <see cref="FileOutcome.OutsideRoot"/>,
     /// so <c>link\x</c> with <c>link → C:\</c> is refused as <c>C:\x</c> would be; until that day the spelling alone decided.
     /// </summary>
-    public FileOutcome Resolve(string relative, bool forWrite, out string full)
+    public FileOutcome Resolve(string relative, bool forWrite, out string full) => Resolve(relative, forWrite, linkItself: false, out full);
+
+    /// <summary>
+    /// <see cref="Resolve(string, bool, out string)"/>, with <paramref name="linkItself"/> for a caller that acts on the last
+    /// name itself and never through it (2026-10-03, the review: a delete or a move of a link that leads outside removes or
+    /// renames the link, its target untouched — refused until then, so the model could not clear away the very link the rule
+    /// complained of): that name is not asked where it leads; every folder before it still is.
+    /// </summary>
+    private FileOutcome Resolve(string relative, bool forWrite, bool linkItself, out string full)
     {
         full = "";
         string root = Root;
@@ -505,7 +513,8 @@ public sealed class WorkingDirectory
             return FileOutcome.OutsideRoot;
         }
 
-        if (!IsInside(root, candidate) || LinkEscape(root, candidate, RealLinkTarget) is not null)
+        string walked = linkItself ? Path.GetDirectoryName(candidate) ?? candidate : candidate;
+        if (!IsInside(root, candidate) || LinkEscape(root, walked, RealLinkTarget) is not null)
         {
             return FileOutcome.OutsideRoot;
         }
@@ -580,17 +589,19 @@ public sealed class WorkingDirectory
     /// </summary>
     internal static string? RealLinkTarget(string path)
     {
+        // FileSystemInfo.Attributes reads a missing path as -1 without throwing, where File.GetAttributes threw and was caught:
+        // the shell police asks this of every plain token of a script, most of them no file at all (2026-10-03, the review).
         FileAttributes attributes;
         try
         {
-            attributes = File.GetAttributes(path);
+            attributes = new FileInfo(path).Attributes;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
         {
             return null;
         }
 
-        if ((attributes & FileAttributes.ReparsePoint) == 0)
+        if ((int)attributes == -1 || (attributes & FileAttributes.ReparsePoint) == 0)
         {
             return null;
         }
@@ -1874,7 +1885,8 @@ public sealed class WorkingDirectory
 
     private MoveResult Transfer(string from, string to, bool overwrite, bool move)
     {
-        var outcome = Resolve(from, forWrite: move, out string source);
+        // A move renames a link itself (its target never moves); a copy reads through it, so a copy's source is judged whole.
+        var outcome = Resolve(from, forWrite: move, linkItself: move, out string source);
         if (outcome != FileOutcome.Ok)
         {
             return new MoveResult(outcome, from, to, false, false);
@@ -2094,7 +2106,7 @@ public sealed class WorkingDirectory
     /// </summary>
     public DeleteResult Delete(string relative)
     {
-        var outcome = Resolve(relative, forWrite: true, out string full);
+        var outcome = Resolve(relative, forWrite: true, linkItself: true, out string full);
         if (outcome != FileOutcome.Ok)
         {
             return new DeleteResult(outcome, relative, false);
@@ -2115,12 +2127,18 @@ public sealed class WorkingDirectory
                 return new DeleteResult(FileOutcome.IntoItself, display, true);
             }
 
-            if (IsGitPath(Relative(full)) || (isDirectory && HoldsGit(full)))
+            // A link (2026-10-03) goes alone: its target is neither searched for a .git nor emptied, only the link removed.
+            bool isLink = RealLinkTarget(full) is not null;
+            if (IsGitPath(Relative(full)) || (isDirectory && !isLink && HoldsGit(full)))
             {
                 return new DeleteResult(FileOutcome.GitProtected, display, isDirectory);
             }
 
-            if (isDirectory)
+            if (isDirectory && isLink)
+            {
+                Directory.Delete(full);
+            }
+            else if (isDirectory)
             {
                 Directory.Delete(full, recursive: true);
             }
@@ -2362,7 +2380,7 @@ public sealed class WorkingDirectory
     /// <summary>
     /// Extracts a zip into a folder (blank <paramref name="to"/> = one named after the archive,
     /// next to it). All or nothing: every entry's destination is checked to lie under the folder
-    /// (zip-slip) and, without <paramref name="overwrite"/>, to be free, before anything is written.
+    /// (zip-slip) with no link on its way leading outside, and, without <paramref name="overwrite"/>, to be free, before anything is written.
     /// </summary>
     public ZipResult Unzip(string relative, string? to, bool overwrite)
     {
@@ -2411,6 +2429,14 @@ public sealed class WorkingDirectory
                 return new ZipResult(FileOutcome.IsAFile, display, Relative(folder), 0, 0);
             }
 
+            // Inside by the links too (2026-10-03, the review): a blank destination is named after the archive and never went
+            // through Resolve, and an entry's folders may be links already there (out/x with out → C:\Users).
+            string root = Root;
+            if (LinkEscape(root, folder, RealLinkTarget) is not null)
+            {
+                return new ZipResult(FileOutcome.OutsideRoot, display, folderDisplay, 0, 0);
+            }
+
             using var zip = ZipFile.OpenRead(source);
             var plan = new List<(ZipArchiveEntry Entry, string Target)>();
             foreach (var entry in zip.Entries)
@@ -2421,7 +2447,7 @@ public sealed class WorkingDirectory
                 }
 
                 string target = Path.GetFullPath(Path.Combine(folder, entry.FullName));
-                if (!IsInside(folder, target))
+                if (!IsInside(folder, target) || LinkEscape(root, target, RealLinkTarget) is not null)
                 {
                     return new ZipResult(FileOutcome.OutsideRoot, display, folderDisplay, 0, 0, entry.FullName);
                 }

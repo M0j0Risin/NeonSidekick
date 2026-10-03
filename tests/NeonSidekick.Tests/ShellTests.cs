@@ -80,6 +80,9 @@ public sealed class ShellTests
         Assert.Empty(CommandPrefix.All(""));
         Assert.Equal(["a", "b"], CommandPrefix.Segments("a || b"));
         Assert.Equal(["\"C:\\x.exe\"", "y"], CommandPrefix.Segments("& \"C:\\x.exe\" & y"));
+        Assert.Equal(
+            [("a", "&&"), ("b", "||"), ("c", "|"), ("d", "&"), ("e", ";"), ("f", "\n"), ("g 'h && i'", "")],
+            CommandPrefix.JoinedSegments("a && b || c | d & e; f\r\ng 'h && i'"));
         Assert.Equal(["tool"], CommandPrefix.All("& 'C:\\x y\\tool.exe' run"));   // PowerShell's call operator: an empty segment, dropped
         Assert.Contains("git", CommandPrefix.VerbPrograms);
         Assert.DoesNotContain("python", CommandPrefix.VerbPrograms);
