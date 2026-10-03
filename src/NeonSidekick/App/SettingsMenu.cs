@@ -6788,10 +6788,10 @@ internal sealed partial class SettingsMenu
     /// <summary>
     /// Both theme pickers' column beside the list (2026-10-02, the user's ask): the highlighted theme's
     /// <see cref="ThemePreview"/>, in its own styles while the pane stays in the one in force, so the screen starts over only
-    /// on the pick, as before.
+    /// on the pick, as before. On the terminal's own background while <c>Themed background</c> is off (2026-10-03), read per draw.
     /// </summary>
-    private static Func<int, int, int, IReadOnlyList<Spectre.Console.Rendering.IRenderable>> ThemeSide(IReadOnlyList<ThemePalette> themes) =>
-        (row, width, rows) => ThemePreview.Lines(themes[row], width, rows, SidekickApp.BannerTitle.Trim(), SidekickApp.Version);
+    private Func<int, int, int, IReadOnlyList<Spectre.Console.Rendering.IRenderable>> ThemeSide(IReadOnlyList<ThemePalette> themes) =>
+        (row, width, rows) => ThemePreview.Lines(themes[row], width, rows, SidekickApp.BannerTitle.Trim(), SidekickApp.Version, EffectiveNow().ThemedBackground);
 
     /// <summary>One <see cref="ThemeLabel(string, IReadOnlyList{ThemePalette})"/> row per theme of <paramref name="themes"/>, in its order.</summary>
     private static List<string> ThemeRows(IReadOnlyList<ThemePalette> themes) => themes.Select(t => ThemeLabel(t.Name, themes)).ToList();

@@ -41,6 +41,24 @@ public class ThemePreviewTests
         }
     }
 
+    /// <summary>Themed background off (2026-10-03): the card on the terminal's own background; a style's own fill (the code block) stays.</summary>
+    [Fact]
+    public void TheCard_WithoutThemedBackground_LeavesTheTerminalsOwn()
+    {
+        var palette = ThemePalette.Synthwave;
+        var rows = ThemePreview.Lines(palette, 72, 60, Banner, "1.2.3", themedBackground: false).Select(line => Row(line, 72)).ToList();
+
+        foreach (var row in rows)
+        {
+            Assert.Equal(72, Segment.CellCount(row));
+            Assert.Equal(Color.Default, row[0].Style.Background);
+            Assert.Equal(Color.Default, row[^1].Style.Background);
+            Assert.DoesNotContain(row, s => s.Style.Background == palette.Bg);
+        }
+
+        Assert.Contains(rows.SelectMany(row => row), s => s.Style.Background == palette.PanelBg);
+    }
+
     [Fact]
     public void ARoomyCard_IsTheWholeScreen_NamingTheTheme_ThenBlankRows()
     {

@@ -10,7 +10,9 @@ namespace NeonSidekick.UI;
 /// reply with bold, code, italic, a bullet and a quote, a highlighted code block, the thinking slab, the notice, good, warning
 /// and error lines, the pane rule, a highlighted menu row, the input row with a selection, the spinner and a paste label, the
 /// hint row and the ghost text. Every cell is on the palette's <see cref="ThemePalette.Bg"/>, the way the Atlas paints each
-/// screen: the card reads as the theme's own window, apart from the list beside it.
+/// screen: the card reads as the theme's own window, apart from the list beside it. With <c>Themed background</c> off
+/// (2026-10-03, the user's ask) the card is on the terminal's own background instead, as the screen will be; the fills a style
+/// carries itself (the code block, the thinking slab, the highlighted row, the selection) stay.
 /// <para>
 /// <see cref="Lines"/> gives exactly the rows asked for: all of the screen and blank rows under it when there is room, else the
 /// lines that tell a theme apart most (the banner and the rule first, blank rows last), kept in screen order. Each line is one
@@ -30,9 +32,10 @@ public static class ThemePreview
 
     /// <summary>
     /// <paramref name="rows"/> lines of <paramref name="palette"/>'s preview for a card <paramref name="width"/> cells wide: the
-    /// banner reads <paramref name="banner"/> and <c>v</c><paramref name="version"/>. None for no rows.
+    /// banner reads <paramref name="banner"/> and <c>v</c><paramref name="version"/>. None for no rows. On the palette's
+    /// <see cref="ThemePalette.Bg"/> under <paramref name="themedBackground"/>, else on the terminal's default background.
     /// </summary>
-    public static IReadOnlyList<IRenderable> Lines(ThemePalette palette, int width, int rows, string banner, string version)
+    public static IReadOnlyList<IRenderable> Lines(ThemePalette palette, int width, int rows, string banner, string version, bool themedBackground = true)
     {
         ArgumentNullException.ThrowIfNull(palette);
         ArgumentNullException.ThrowIfNull(banner);
@@ -46,10 +49,11 @@ public static class ThemePreview
         IEnumerable<Line> kept = screen.Count <= rows
             ? screen
             : screen.Select((line, index) => (line, index)).OrderBy(x => x.line.Rank).ThenBy(x => x.index).Take(rows).OrderBy(x => x.index).Select(x => x.line);
-        var lines = kept.Select(line => (IRenderable)new PreviewLine(line.Pieces, palette.Bg)).ToList();
+        var bg = themedBackground ? palette.Bg : Color.Default;
+        var lines = kept.Select(line => (IRenderable)new PreviewLine(line.Pieces, bg)).ToList();
         while (lines.Count < rows)
         {
-            lines.Add(new PreviewLine([], palette.Bg));
+            lines.Add(new PreviewLine([], bg));
         }
 
         return lines;
