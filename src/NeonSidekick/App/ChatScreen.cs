@@ -11048,6 +11048,14 @@ internal sealed partial class ChatScreen
                 // The lines typed under the last reply join the chat as the user's, in order; then the pictures made meanwhile.
                 TakeInterjections(lines);
                 ShowReadyBotPictures(pictures);
+                // The user asked to talk (2026-10-02: the push-to-talk key, or the wake phrase with TTS off): the listen before the
+                // next bot, whose turn answers it; then the wake phrase armed again where it may be.
+                if (_botTalk && await BotListenAsync(lines, cancellationToken).ConfigureAwait(false))
+                {
+                    return true;
+                }
+
+                ArmBotWake(_effective());
 
                 // A bot the last line names answers next (2026-09-25); anyone but the last speaker otherwise.
                 int next = last is null ? 0 : BotChat.NextSpeaker(cast.Count, last, _random, BotChat.Addressed(lines, castNames));
@@ -11288,6 +11296,8 @@ internal sealed partial class ChatScreen
         finally
         {
             Volatile.Write(ref _botLadder, null);
+            DisarmBotWake();
+            _botTalk = false;
             _botChatRunning = false;
             _botChatCast = null;
             _botPictureLog = null;
@@ -11968,11 +11978,12 @@ internal sealed partial class ChatScreen
             return true;
         }
 
-        var watcher = StartReplyWatch(waitCts, stop.Token, cancellationToken, SkipSpeech);
+        var watcher = StartReplyWatch(waitCts, stop.Token, cancellationToken, SkipSpeech, spend: BotTalkKey);
         var cancelled = Task.Delay(Timeout.Infinite, waitCts.Token);
         try
         {
-            while (!done.IsCompleted && !waitCts.IsCancellationRequested)
+            // A talk asked for (2026-10-02, ChatScreen.BotVoice) ends the wait too: the chat listens before the next bot.
+            while (!done.IsCompleted && !waitCts.IsCancellationRequested && !_botTalk)
             {
                 var signal = Volatile.Read(ref _actSignal).Task;
                 // A picture still rendering (Botchat image async, 2026-09-25) is drawn the moment it is done, under the voice.
@@ -12552,8 +12563,10 @@ internal sealed partial class ChatScreen
         // The queued count's double-click (2026-09-18): the pair is timed here on the pane's
         // clock and a key or a notch between the two ends it — the spend hook sees every one.
         _queuedClicks.Reset();
+        // A /botchat turn (2026-10-02): the push-to-talk key (and the chat's wake phrase) cut it short to listen (ChatScreen.BotVoice).
+        using var botTurn = ladder is not null ? EnterBotTurn(ladder, ladderTurn, turnCts) : null;
         var watcher = _keys.WatchAsync(turnCts, stop.Token, null, null, _pane.Enabled ? text => OnMidTurnLineAsync(text, turnCts, paneToken) : null, ladder is not null ? LadderPress : speaker is null ? null : StopSpeechFirst,
-            SpendScroll, onClick: _pane.Enabled ? HintClickLine : null, editor: LiveEditor);
+            ladder is not null ? e => SpendScroll(e) || BotTalkKey(e) : SpendScroll, onClick: _pane.Enabled ? HintClickLine : null, editor: LiveEditor);
         bool markdown = MarkdownTurn(effective.TranscriptMarkdown, _pane.Enabled, speaker is not null);
         bool styled = StyledReply(effective.TranscriptMarkdown, _pane.Enabled);
         // The shells found are probed afresh per turn (2026-09-21): an install during the session shows without a restart, and the schema and the run agree.

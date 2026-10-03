@@ -101,6 +101,18 @@ internal sealed class BotEscLadder
     }
 
     /// <summary>Whether a press cut bot turn <paramref name="turn"/> short (<see cref="BotPress.SkipBot"/>), without taking it.</summary>
+    /// <summary>
+    /// Bot turn <paramref name="turn"/> cut short by the user's push-to-talk or wake phrase (2026-10-02): a skip as an ESC's, the chat
+    /// going on, but nothing armed — an ESC after the user spoke is a first press again, never the chat's end.
+    /// </summary>
+    public void Skip(int turn)
+    {
+        lock (_gate)
+        {
+            _skipped = turn;
+        }
+    }
+
     public bool Skipped(int turn)
     {
         lock (_gate)

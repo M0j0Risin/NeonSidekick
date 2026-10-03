@@ -1014,6 +1014,7 @@ Type `/` to list every command with a short summary. After a command and a space
 * **Turns**: each reply is in the speaker's persona (`persona.md`) and, with speech on, in its own voice. A bot named in the last line (yours or the last reply) speaks next. Otherwise the next speaker is random, but never the one who just spoke. All bots run on this profile's LLM, or each on its own under *Botchat LLM mode* `multi`.
 * **Tools**: none, except pictures (see Botchat pictures) and `load_skill` (*Botchat skills enabled*).
 * **Joining in**: a line you type joins the chat before the next reply.
+* **Talking**: with voice input on (*STT input*), the push-to-talk key stops the speaking bot's voice and cuts the replying bot short (its words so far stay), then listens. What you say follows *STT destination*: under `chat` it joins the chat as your line and the next bot answers it; under `draft` it lands on the input row, for you to edit and send with Enter. With *TTS output* off, the wake phrase (*STT wake word*) does the same; with the bots speaking aloud it would hear their voices, so it's push-to-talk only then. The wake phrase said while a bot speaks (*STT interrupt*) still ends the chat, as before.
 * **ESC** works in steps:
   * The first press stops the speaking bot's voice (with speech on).
   * The next cuts the replying bot short (its words so far stay), and the next bot answers.
