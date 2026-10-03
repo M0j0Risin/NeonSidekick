@@ -350,10 +350,18 @@ force. A path that can't be opened is reported once and the run carries on witho
 Get-Content job.txt | NeonSidekick.exe --headless --log C:\Logs\neon_job.log
 ```
 
-A dated log per run:
+A log per run: `{ts}` anywhere in the path becomes the run's start time, `yyyyMMdd-HHmmss` (local).
+The folder is created if it isn't there; two runs started in the same second share the file.
 
 ```powershell
-$log = "C:\Logs\neon_{0:yyyy-MM-dd_HHmm}.log" -f (Get-Date)
+Get-Content job.txt | NeonSidekick.exe --headless --log C:\Logs\neon_{ts}.log
+# writes C:\Logs\neon_20261003-142530.log
+```
+
+When something else needs the same name (the reply beside the log), build it in the script instead:
+
+```powershell
+$log = "C:\Logs\neon_{0:yyyyMMdd-HHmmss}.log" -f (Get-Date)
 Get-Content job.txt | NeonSidekick.exe --headless --log $log > "$log.out"
 ```
 

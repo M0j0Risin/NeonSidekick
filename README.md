@@ -122,7 +122,7 @@ Options that set something apply to this launch only. Both `--option value` and 
 | `--profile <name>` | Opens this profile. |
 | `--yolo` | Runs every shell command without asking. |
 | `--no-police` | Lets shell commands touch paths outside the working directory. |
-| `--log <path>` | Writes every diagnostic line to a file (`/log --file` opens it; `/log`'s window works without it). |
+| `--log <path>` | Writes every diagnostic line to a file (`/log --file` opens it; `/log`'s window works without it). `{ts}` in the path becomes the start time, so each run gets its own log: `--log logs\NeonSidekick_{ts}.log` → `logs\NeonSidekick_20261003-142530.log`. |
 | `--headless` | A plain text prompt over stdin/stdout, no TUI. See [HEADLESS.md](HEADLESS.md). |
 | `--smoke` | Checks the native parts load, then exits. |
 | `--audio-check` | Plays a test tone through the speech output, then exits. |

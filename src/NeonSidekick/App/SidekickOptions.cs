@@ -1,3 +1,4 @@
+using System.Globalization;
 using NeonSidekick.Settings;
 
 namespace NeonSidekick.App;
@@ -22,7 +23,8 @@ namespace NeonSidekick.App;
 /// launch directory (the point of the flag: start the app from a project folder); outranks the saved setting.</param>
 /// <param name="LogPath"><c>--log</c>: a file every diagnostic line (Trace and up) is appended to.
 /// The TUI shows only warnings and errors; the Debug and Info lines (what the wake recogniser
-/// heard, why a hit was ignored) are how a voice problem is diagnosed in the field.</param>
+/// heard, why a hit was ignored) are how a voice problem is diagnosed in the field. As typed, <see cref="LogStampToken"/>
+/// and all, until <see cref="WithLogStamp"/>.</param>
 /// <param name="Profile"><c>--profile</c>: the profile this launch loads (2026-09-26, the user's ask: a scripted
 /// headless run must not follow whichever profile was last clicked into). Outranks <c>NEONSIDEKICK_PROFILE</c> and
 /// the pointer in <c>settings.json</c>, and never rewrites that pointer. Not part of <see cref="ApplyTo"/>: it
@@ -124,7 +126,7 @@ public sealed record SidekickOptions(
         "  --profile <name>  profile for this launch (outranks NEONSIDEKICK_PROFILE and settings.json, which it leaves alone)\n" +
         "  --yolo         run every shell command without asking, this launch only (outranks NEONSIDEKICK_COMMAND_POLICY; the path police still applies unless --no-police)\n" +
         "  --no-police    let shell commands name paths outside the working directory, this launch only (outranks NEONSIDEKICK_SHELL_POLICE)\n" +
-        "  --log <path>   append every diagnostic line (Trace and up) to a file\n" +
+        "  --log <path>   append every diagnostic line (Trace and up) to a file; {ts} in the path becomes the start time (yyyyMMdd-HHmmss)\n" +
         "  --version      print the version and exit\n" +
         "  -h, --help     this text\n" +
         "\n" +
@@ -397,6 +399,34 @@ public sealed record SidekickOptions(
         }
 
         return parts.Count == 0 ? null : string.Join(" ", parts);
+    }
+
+    /// <summary>The placeholder in a <c>--log</c> path that becomes the run's start time (<see cref="WithLogStamp"/>). Pinned.</summary>
+    public const string LogStampToken = "{ts}";
+
+    /// <summary>The form of <see cref="LogStampToken"/>'s time: <c>20261003-142530</c>, local, sorting by name sorts by time. Pinned.</summary>
+    public const string LogStampFormat = "yyyyMMdd-HHmmss";
+
+    /// <summary>
+    /// A copy with every <see cref="LogStampToken"/> in <see cref="LogPath"/> (any case) replaced by
+    /// <paramref name="localNow"/> as <see cref="LogStampFormat"/>, so each run gets a log of its own:
+    /// <c>--log logs\NeonSidekick_{ts}.log</c> writes <c>logs\NeonSidekick_20261003-142530.log</c> (2026-10-03, the user's
+    /// ask and picks: before it a dated log took a name built by the calling script, HEADLESS.md's <c>-f (Get-Date)</c>).
+    /// Braces because a mid-word <c>{…}</c> passes through cmd and PowerShell as typed, where <c>&lt;ts&gt;</c> is
+    /// redirection in both and <c>$ts</c>/<c>%ts%</c> are the shells' own variables. Seconds only: two runs started in the
+    /// same second share the file, appended as any <c>--log</c> file is. <see cref="Parse"/> keeps the path as typed;
+    /// <c>Program</c> calls this once before the sink opens, so the startup line, <c>/log --file</c> and the
+    /// cannot-open message all name the file actually written. <c>this</c> when there is nothing to replace.
+    /// </summary>
+    public SidekickOptions WithLogStamp(DateTime localNow)
+    {
+        if (LogPath is null || !LogPath.Contains(LogStampToken, StringComparison.OrdinalIgnoreCase))
+        {
+            return this;
+        }
+
+        string stamp = localNow.ToString(LogStampFormat, CultureInfo.InvariantCulture);
+        return this with { LogPath = LogPath.Replace(LogStampToken, stamp, StringComparison.OrdinalIgnoreCase) };
     }
 
     /// <summary>

@@ -94,7 +94,9 @@ using var logBuffer = !options.Headless && !options.IsCheck ? DiagnosticBuffer.A
 
 // --log <path>: every diagnostic line, Trace and up, appended to a file. The TUI shows only
 // warnings, so this is how "what did the wake recogniser hear" is answered in the field. A path
-// that cannot be opened is reported once and the run goes on without it.
+// that cannot be opened is reported once and the run goes on without it. A {ts} in the path is the
+// run's start time (2026-10-03), stamped here once, so everything after names the file written.
+options = options.WithLogStamp(DateTime.Now);
 DiagnosticFileSink? logSink = null;
 if (options.LogPath is { } logPath)
 {

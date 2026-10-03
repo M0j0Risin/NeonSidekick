@@ -140,6 +140,35 @@ public class SidekickOptionsTests
     }
 
     [Theory]
+    [InlineData("--log", @"logs\NeonSidekick_{ts}.log")]
+    [InlineData(@"--log=logs\NeonSidekick_{ts}.log")]
+    public void Parse_Log_KeepsTheStampTokenAsTyped(params string[] args)
+    {
+        Assert.Equal(@"logs\NeonSidekick_{ts}.log", SidekickOptions.Parse(args).LogPath);
+    }
+
+    [Theory]
+    [InlineData(@"logs\NeonSidekick_{ts}.log", @"logs\NeonSidekick_20261003-142530.log")]
+    [InlineData(@"logs\NeonSidekick_{TS}.log", @"logs\NeonSidekick_20261003-142530.log")]
+    [InlineData(@"logs\{ts}\run_{Ts}.log", @"logs\20261003-142530\run_20261003-142530.log")]
+    [InlineData(@"C:\tmp\neon.log", @"C:\tmp\neon.log")]
+    [InlineData(@"C:\tmp\neon_{t}.log", @"C:\tmp\neon_{t}.log")]
+    public void WithLogStamp_ReplacesEveryToken_WithTheStartTime(string typed, string expected)
+    {
+        var o = SidekickOptions.Parse(["--log", typed]).WithLogStamp(new DateTime(2026, 10, 3, 14, 25, 30));
+        Assert.Equal(expected, o.LogPath);
+        Assert.Equal("--log " + expected, o.Describe());
+    }
+
+    [Fact]
+    public void WithLogStamp_WithoutLog_LeavesTheOptionsAlone()
+    {
+        var o = SidekickOptions.Parse(["--headless"]);
+        Assert.Same(o, o.WithLogStamp(new DateTime(2026, 10, 3, 14, 25, 30)));
+        Assert.Null(o.LogPath);
+    }
+
+    [Theory]
     [InlineData("--url")]
     [InlineData("--url", "--smoke")]
     [InlineData("--url=")]
@@ -311,7 +340,7 @@ public class SidekickOptionsTests
         Assert.Contains("--no-police    let shell commands name paths outside the working directory, this launch only (outranks NEONSIDEKICK_SHELL_POLICE)", SidekickOptions.Usage);
         Assert.Contains("Exit codes: 0 done, 2 bad argument or unknown profile, 3 headless run in which a shell command was refused", SidekickOptions.Usage);
         Assert.Contains("--profile <name>  profile for this launch (outranks NEONSIDEKICK_PROFILE and settings.json, which it leaves alone)", SidekickOptions.Usage);
-        Assert.Contains("--log <path>   append every diagnostic line (Trace and up) to a file", SidekickOptions.Usage);
+        Assert.Contains("--log <path>   append every diagnostic line (Trace and up) to a file; {ts} in the path becomes the start time (yyyyMMdd-HHmmss)", SidekickOptions.Usage);
         Assert.Contains("--version", SidekickOptions.Usage);
         Assert.Contains("--help", SidekickOptions.Usage);
         Assert.Contains("ESC = cancel/back", SidekickOptions.Usage);
