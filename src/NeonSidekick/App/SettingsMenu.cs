@@ -6796,9 +6796,13 @@ internal sealed partial class SettingsMenu
     /// <summary>One <see cref="ThemeLabel(string, IReadOnlyList{ThemePalette})"/> row per theme of <paramref name="themes"/>, in its order.</summary>
     private static List<string> ThemeRows(IReadOnlyList<ThemePalette> themes) => themes.Select(t => ThemeLabel(t.Name, themes)).ToList();
 
-    /// <summary>The row of <paramref name="name"/> among <paramref name="themes"/> (an unknown one reads as the default's, the first).</summary>
-    private static int ThemeCursor(string name, IReadOnlyList<ThemePalette> themes) =>
-        Math.Max(0, themes.ToList().FindIndex(t => string.Equals(t.Name, name.Trim(), StringComparison.OrdinalIgnoreCase)));
+    /// <summary>The row of <paramref name="name"/> among <paramref name="themes"/>; an unknown one reads as the default's (<see cref="ThemeName.Default"/>, no longer the first row since the list is A to Z, 2026-10-03), else the first.</summary>
+    private static int ThemeCursor(string name, IReadOnlyList<ThemePalette> themes)
+    {
+        int Row(string wanted) => themes.ToList().FindIndex(t => string.Equals(t.Name, wanted, StringComparison.OrdinalIgnoreCase));
+        int row = Row(name.Trim());
+        return row >= 0 ? row : Math.Max(0, Row(ThemeName.Default));
+    }
 
     /// <summary>The new-profile-mode picker under the settings list: one <see cref="NewProfileModeLabel"/> row per <see cref="NewProfileMode.Names"/> entry, the saved one under the cursor.</summary>
     private async Task<bool> PickNewProfileModeAsync(AppSettingsData saved, CancellationToken cancellationToken)

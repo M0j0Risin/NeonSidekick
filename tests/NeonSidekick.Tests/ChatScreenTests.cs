@@ -16273,7 +16273,8 @@ public partial class ChatScreenTests : IDisposable
         _console.Profile.Width = 120;
         _geometry = new ScreenGeometry(() => null);   // the pane: the side column is the menu pane's
         _settings.Update(d => d.TtsOutput = false);
-        string next = ThemeCatalog.BuiltIn.Themes[1].Name;
+        var names = ThemeCatalog.BuiltIn.Names;
+        string next = names[names.ToList().IndexOf("synthwave") + 1];   // the row under the one in force, A to Z
         PushLine("/theme");
         _console.Input.PushKey(Keys.Down);
         _console.Input.PushKey(Keys.Escape);
@@ -16325,14 +16326,18 @@ public partial class ChatScreenTests : IDisposable
     }
 
     [Fact]
-    public async Task Theme_TheList_ShowsTheUsersThemesLast_AndPicksOne()
+    public async Task Theme_TheList_SortsTheUsersThemesIn_AndPicksOne()
     {
         using var theme = new ThemeScope();
         _settings.Update(d => d.TtsOutput = false);
         WriteUserTheme("dracula.json", """{ "description": "vampire purple" }""");
         WriteUserTheme("broken.json", """{ "base": "nothing" }""");
         PushLine("/theme");
-        _console.Input.PushKey(Keys.Up);        // wraps to the last row: dracula
+        for (int i = 0; i < 7; i++)
+        {
+            _console.Input.PushKey(Keys.Up);    // from synthwave up past replicant … grid to dracula, after cyberpunk A to Z (2026-10-03)
+        }
+
         _console.Input.PushKey(Keys.Enter);
         PushLine("/exit");
 
@@ -16353,8 +16358,10 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains("  ✗ " + SettingsMenu.ThemeNameError("matrix", [.. ThemeName.Names, "dracula"]), output);
-        Assert.EndsWith("abyssal or dracula, or nothing to pick from a list.", SettingsMenu.ThemeNameError("matrix", [.. ThemeName.Names, "dracula"]));
+        string[] names = [.. ThemeName.Names.Append("dracula").Order(StringComparer.Ordinal)];   // one list A to Z (2026-10-03)
+        Assert.Contains("  ✗ " + SettingsMenu.ThemeNameError("matrix", names), output);
+        Assert.Contains("cyberpunk, dracula, grid", SettingsMenu.ThemeNameError("matrix", names));
+        Assert.EndsWith("synthwave or vaporwave, or nothing to pick from a list.", SettingsMenu.ThemeNameError("matrix", names));
     }
 
     [Fact]
@@ -16378,7 +16385,7 @@ public partial class ChatScreenTests : IDisposable
         var scan = ThemeCatalog.Scan(_settings.ThemesDirectory);
         Assert.Empty(scan.Problems);
         Assert.Equal(ThemePalette.Nostromo.Colors(), scan.Themes.Single(t => t.Name == "nostromo-custom").Colors());
-        Assert.Equal(ThemePalette.Nostromo.Colors(), scan.Themes[0].Colors());   // synthwave's place, nostromo's look
+        Assert.Equal(ThemePalette.Nostromo.Colors(), scan.Themes.Single(t => t.Name == "synthwave").Colors());   // synthwave's name, nostromo's look
         Assert.Same(ThemePalette.Synthwave, Theme.Current);   // nothing put in force
         Assert.Equal(0, Refreshes(output));
     }
@@ -16404,10 +16411,10 @@ public partial class ChatScreenTests : IDisposable
         using var theme = new ThemeScope();
         _settings.Update(d => d.TtsOutput = false);
         PushLine("/theme");
-        _console.Input.PushKey(Keys.Down);
-        _console.Input.PushKey(Keys.Down);
-        _console.Input.PushKey(Keys.Down);
-        _console.Input.PushKey(Keys.Enter);     // noir
+        _console.Input.PushKey(Keys.Up);
+        _console.Input.PushKey(Keys.Up);
+        _console.Input.PushKey(Keys.Up);
+        _console.Input.PushKey(Keys.Enter);     // from synthwave up past replicant and nostromo: noir (A to Z, 2026-10-03)
         PushLine("/exit");
 
         string output = await RunAsync();
@@ -16431,16 +16438,16 @@ public partial class ChatScreenTests : IDisposable
 
         _console.Input.PushKey(Keys.Enter);     // Theme, the last row: its picker
         _console.Input.PushKey(Keys.Down);
-        _console.Input.PushKey(Keys.Enter);     // netrunner
+        _console.Input.PushKey(Keys.Enter);     // vaporwave, under synthwave A to Z (2026-10-03)
         _console.Input.PushKey(Keys.Escape);
         PushLine("again");
         PushLine("/exit");
 
         string output = await RunAsync();
 
-        Assert.Equal("netrunner", _settings.Current.Theme);
-        Assert.Same(ThemePalette.Netrunner, Theme.Current);
-        Assert.Contains("  · Theme: netrunner", output);
+        Assert.Equal("vaporwave", _settings.Current.Theme);
+        Assert.Same(ThemePalette.Vaporwave, Theme.Current);
+        Assert.Contains("  · Theme: vaporwave", output);
         Assert.Equal(2, _chat.Requests.Count);
         Assert.Equal("again", UserText(_chat.Requests[1]));   // the fresh start forgot "hi"
     }
@@ -20327,9 +20334,9 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(ReasoningLevel.Levels, Texts(ChatScreen.ArgumentItems("/reasoning", "", sources)));
         Assert.Equal([new CompletionItem("high", ReasoningLevel.Describe("high"))], ChatScreen.ArgumentItems("/reasoning", "h", sources));
 
-        // /theme (2026-09-23): the names with their notes, in menu order, then export (2026-10-01).
+        // /theme (2026-09-23): the names with their notes, in menu order (A to Z since 2026-10-03), then export (2026-10-01).
         Assert.Equal([.. ThemeName.Names, ThemeText.ExportWord], Texts(ChatScreen.ArgumentItems("/theme", "", sources)));
-        Assert.Equal(["netrunner", "nostromo", "noir"], Texts(ChatScreen.ArgumentItems("/theme", "n", sources)));
+        Assert.Equal(["netrunner", "noir", "nostromo"], Texts(ChatScreen.ArgumentItems("/theme", "n", sources)));   // A to Z since 2026-10-03
         Assert.Equal([new CompletionItem("netrunner", "green phosphor")], ChatScreen.ArgumentItems("/theme", "ne", sources));
         Assert.Equal(PerfBarMode.Words, Texts(ChatScreen.ArgumentItems("/perf", "", sources)));
         // The commands whose argument is a path of their own keep their list over a mention (2026-09-30).

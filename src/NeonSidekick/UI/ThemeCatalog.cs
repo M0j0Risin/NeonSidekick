@@ -16,14 +16,15 @@ public sealed record ThemeScan(IReadOnlyList<ThemePalette> Themes, IReadOnlyList
 }
 
 /// <summary>
-/// Every theme the operator can pick (2026-10-01, the user's ask): the built-ins in <see cref="ThemePalette.All"/>'s
-/// order, then the user's themes — every <c>*.json</c> in <c>&lt;home&gt;/themes</c> (<see cref="DirectoryName"/>) and in its
-/// first-level subfolders (2026-10-02, the user's ask: a category folder of <c>assets/themes</c> dropped in whole; a dot-folder is
-/// skipped, a deeper one never read), in name order. Files are taken in <see cref="JsonFiles"/>' order, the folder's own first, so a
+/// Every theme the operator can pick (2026-10-01, the user's ask): the built-ins and the user's themes — every <c>*.json</c> in
+/// <c>&lt;home&gt;/themes</c> (<see cref="DirectoryName"/>) and in its first-level subfolders (2026-10-02, the user's ask: a
+/// category folder of <c>assets/themes</c> dropped in whole; a dot-folder is skipped, a deeper one never read) — as one list in
+/// name order (2026-10-03, the user's ask; the built-ins in <see cref="ThemePalette.All"/>'s order, then the user's, until then),
+/// so the pickers, <c>/theme</c>'s completion and its error all read A to Z. Files are taken in <see cref="JsonFiles"/>' order, the folder's own first, so a
 /// loose file keeps a name a subfolder's file also gives (that one is skipped as a duplicate, named by its path under the folder). Read afresh at every <see cref="Scan"/>, so a file dropped in or edited shows the next time a list opens
 /// with no restart (the <c>comfy</c> folder's habit; the files are small, so there is no cache). A file named like a
 /// built-in overrides it (later on 2026-10-01, the user's call; the file was skipped and the built-in won until then):
-/// it takes the built-in's place in the list, and every theme whose base names it, the default base included, builds on
+/// it is listed in the built-in's stead, and every theme whose base names it, the default base included, builds on
 /// the file. Only the override itself, when its base is its own name or left out, builds on the compiled built-in; an
 /// override that fails to load leaves the built-in in its place. A file is skipped, with a
 /// problem, when it cannot be read or parsed, when its name is no theme name or a name an earlier file took, and when its
@@ -37,8 +38,11 @@ public static class ThemeCatalog
 
     private const string Category = "Theme";
 
+    /// <summary>The built-ins in name order (2026-10-03).</summary>
+    public static readonly IReadOnlyList<ThemePalette> SortedBuiltIns = [.. ThemePalette.All.OrderBy(p => p.Name, StringComparer.Ordinal)];
+
     /// <summary>The built-ins alone: what a scan of no folder finds.</summary>
-    public static readonly ThemeScan BuiltIn = new(ThemePalette.All, []);
+    public static readonly ThemeScan BuiltIn = new(SortedBuiltIns, []);
 
     /// <summary>The themes of <paramref name="directory"/> (null or missing: the built-ins alone).</summary>
     public static ThemeScan Scan(string? directory)
@@ -57,7 +61,7 @@ public static class ThemeCatalog
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             problems.Add(new ThemeProblem(directory, ThemeText.Unreadable(ex.Message)));
-            return new ThemeScan(ThemePalette.All, problems);
+            return new ThemeScan(SortedBuiltIns, problems);
         }
 
         string Shown(string file) => Path.GetRelativePath(directory, file);
@@ -95,11 +99,11 @@ public static class ThemeCatalog
             Resolve(name);
         }
 
-        // An override that built takes its built-in's place; one that failed leaves the built-in there.
-        var themes = ThemePalette.All.Select(p => built.GetValueOrDefault(p.Name) ?? p).ToList();
-        themes.AddRange(built.Values.OfType<ThemePalette>()
-            .Where(p => !builtIns.ContainsKey(p.Name))
-            .OrderBy(p => p.Name, StringComparer.Ordinal));
+        // An override that built stands in for its built-in; one that failed leaves the built-in. All of them A to Z.
+        var themes = ThemePalette.All.Select(p => built.GetValueOrDefault(p.Name) ?? p)
+            .Concat(built.Values.OfType<ThemePalette>().Where(p => !builtIns.ContainsKey(p.Name)))
+            .OrderBy(p => p.Name, StringComparer.Ordinal)
+            .ToList();
         return new ThemeScan(themes, problems);
 
         // A user theme over its base, built once; null (with its problem said) when it cannot be.

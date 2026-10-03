@@ -51,7 +51,7 @@ public sealed class ThemeFileTests : IDisposable
 
         var scan = Scan();
 
-        Assert.Equal([.. ThemeName.Names, "aurora", "loose"], scan.Names);   // the user's themes in name order, wherever they sit
+        Assert.Equal(AToZ("aurora", "loose"), scan.Names);   // the user's themes in name order, wherever they sit
         Assert.Empty(scan.Problems);
     }
 
@@ -136,7 +136,7 @@ public sealed class ThemeFileTests : IDisposable
     }
 
     [Fact]
-    public void Scan_TheBuiltInsFirst_ThenTheUsersByName()
+    public void Scan_TheBuiltInsAndTheUsers_AToZ()
     {
         Write("zeta.json", """{ "colors": { "primary": "#010203" } }""");
         Write("Alpha.json", """{ "name": "alpha", "description": "first of mine" }""");
@@ -144,7 +144,8 @@ public sealed class ThemeFileTests : IDisposable
 
         var scan = Scan();
 
-        Assert.Equal([.. ThemeName.Names, "alpha", "zeta"], scan.Names);
+        Assert.Equal(AToZ("alpha", "zeta"), scan.Names);   // one list by name since 2026-10-03: alpha after abyssal, zeta last
+        Assert.Equal(["abyssal", "alpha", "cyberpunk"], scan.Names.Take(3));
         Assert.Empty(scan.Problems);
         Assert.Equal("first of mine", User("alpha").Description);
         Assert.Equal(ThemeText.CustomDescription, User("zeta").Description);   // none given
@@ -280,7 +281,7 @@ public sealed class ThemeFileTests : IDisposable
 
         var scan = Scan();
 
-        Assert.Equal([.. ThemeName.Names, "dup"], scan.Names);
+        Assert.Equal(AToZ("dup"), scan.Names);
         Assert.Equal([ThemeText.Duplicate("dup", "x.json")], ProblemsOf("y.json"));
         Assert.StartsWith("skipped: not a theme file", Assert.Single(ProblemsOf("broken.json")));
         Assert.Equal([ThemeText.BadName("bad name")], ProblemsOf("bad name.json"));
@@ -296,6 +297,9 @@ public sealed class ThemeFileTests : IDisposable
 
     private static int BuiltInIndex(string name) => Array.IndexOf(ThemeName.Names, name);
 
+    /// <summary>The built-ins' names and <paramref name="mine"/> as one list A to Z, the scan's order since 2026-10-03.</summary>
+    private static List<string> AToZ(params string[] mine) => [.. ThemeName.Names.Concat(mine).Order(StringComparer.Ordinal)];
+
     [Fact]
     public void AFileNamedLikeABuiltIn_TakesItsPlace_AndIsTheBaseTheOthersGet()
     {
@@ -305,11 +309,11 @@ public sealed class ThemeFileTests : IDisposable
         Write("plain.json", "{}");
 
         var scan = Scan();
-        var noir = scan.Themes[BuiltInIndex("noir")];
-        var synthwave = scan.Themes[0];
+        var noir = scan.Themes.Single(t => t.Name == "noir");
+        var synthwave = scan.Themes.Single(t => t.Name == "synthwave");
 
         Assert.Empty(scan.Problems);
-        Assert.Equal([.. ThemeName.Names, "mine", "plain"], scan.Names);   // in the built-in's place, not among the user's
+        Assert.Equal(AToZ("mine", "plain"), scan.Names);   // listed once, in the built-in's stead, by name like the rest
         Assert.Equal(Path.Combine(_dir, "noir.json"), noir.SourcePath);
         Assert.False(noir.IsBuiltIn);
         // With no base an override builds on its own built-in: noir with that primary, not synthwave with it.
@@ -440,7 +444,7 @@ public sealed class ThemeFileTests : IDisposable
             DiagnosticLog.Emitted -= capture;
         }
 
-        Assert.Contains("Theme='gone' is not one of synthwave, netrunner, nostromo, noir, cyberpunk, vaporwave, mainframe, grid, replicant, abyssal, other. Using synthwave.", Assert.Single(warnings).Message);
+        Assert.Contains("Theme='gone' is not one of abyssal, cyberpunk, grid, mainframe, netrunner, noir, nostromo, other, replicant, synthwave, vaporwave. Using synthwave.", Assert.Single(warnings).Message);
     }
 
     // ── Export ─────────────────────────────────────────────────────────────
@@ -619,11 +623,12 @@ public sealed class ThemeFileTests : IDisposable
 
         Assert.Empty(scan.Problems);
         Assert.Equal(ThemeName.Names, scan.Names);
-        for (int i = 0; i < ThemePalette.All.Count; i++)
+        foreach (var builtIn in ThemePalette.All)
         {
-            Assert.False(scan.Themes[i].IsBuiltIn, scan.Themes[i].Name);
-            Assert.Equal(ThemePalette.All[i].Colors(), scan.Themes[i].Colors());
-            Assert.Equal(ThemePalette.All[i].GradientStops, scan.Themes[i].GradientStops);
+            var file = scan.Themes.Single(t => t.Name == builtIn.Name);
+            Assert.False(file.IsBuiltIn, file.Name);
+            Assert.Equal(builtIn.Colors(), file.Colors());
+            Assert.Equal(builtIn.GradientStops, file.GradientStops);
         }
     }
 

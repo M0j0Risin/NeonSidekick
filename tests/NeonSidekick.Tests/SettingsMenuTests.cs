@@ -1789,7 +1789,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("synthwave [#9A8BB8]default theme[/]", SettingsMenu.ThemeLabel("synthwave"));
         Assert.Equal("noir      [#9A8BB8]greyscale[/]", SettingsMenu.ThemeLabel("noir"));
         Assert.Equal("nostromo  [#9A8BB8]amber phosphor[/]", SettingsMenu.ThemeLabel("nostromo"));
-        Assert.Equal("No theme named \"matrix\". /theme takes synthwave, netrunner, nostromo, noir, cyberpunk, vaporwave, mainframe, grid, replicant or abyssal, or nothing to pick from a list.", SettingsMenu.ThemeNameError("matrix"));
+        Assert.Equal("No theme named \"matrix\". /theme takes abyssal, cyberpunk, grid, mainframe, netrunner, noir, nostromo, replicant, synthwave or vaporwave, or nothing to pick from a list.", SettingsMenu.ThemeNameError("matrix"));
         Assert.Equal("Theme: noir (already in force)", SettingsMenu.ThemeAlreadyNotice("noir"));
         // A user theme's longer name widens the column (2026-10-01).
         var mine = ThemePalette.Synthwave with { Name = "a-much-longer-name", Description = "mine", SourcePath = "x.json" };
@@ -1805,16 +1805,32 @@ public partial class SettingsMenuTests : IDisposable
         using var scope = new ThemeScope();
         Down(Array.IndexOf(Enum.GetValues<SettingsField>(), SettingsField.Theme));   // the last row until the ComfyUI rows came after it (2026-09-24)
         Push(Keys.Enter);                           // Theme: the picker opens on synthwave
-        Push(Keys.Down, Keys.Enter);                // netrunner
+        Push(Keys.Down, Keys.Enter);                // vaporwave, after it A to Z (2026-10-03)
         Push(Keys.Escape);
 
         Assert.Equal(SettingsChanges.Theme, await _menu.ShowAsync(CancellationToken.None));
 
-        Assert.Equal("netrunner", _settings.Current.Theme);
-        Assert.Same(ThemePalette.Netrunner, Theme.Current);
+        Assert.Equal("vaporwave", _settings.Current.Theme);
+        Assert.Same(ThemePalette.Vaporwave, Theme.Current);
         Assert.Contains(Breadcrumb("Theme"), _console.Output);
-        Assert.Contains("  · Theme: netrunner", _console.Output);
+        Assert.Contains("  · Theme: vaporwave", _console.Output);
         Assert.Equal(0, _synth.ListCalls);          // no server is consulted
+    }
+
+    /// <summary>An unknown saved theme opens the picker on the default's row, not the first (abyssal since the list is A to Z, 2026-10-03).</summary>
+    [Fact]
+    public async Task Theme_AnUnknownSavedName_OpensThePickerOnTheDefault()
+    {
+        using var scope = new ThemeScope();
+        _settings.Update(d => d.Theme = "matrix");
+        Down(Array.IndexOf(Enum.GetValues<SettingsField>(), SettingsField.Theme));
+        Push(Keys.Enter);                           // Theme: the picker
+        Push(Keys.Enter);                           // the row under the cursor
+        Push(Keys.Escape);
+
+        await _menu.ShowAsync(CancellationToken.None);
+
+        Assert.Equal("synthwave", _settings.Current.Theme);
     }
 
     [Fact]

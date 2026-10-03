@@ -8,12 +8,14 @@ namespace NeonSidekick.Tests;
 public class ThemeNameTests
 {
     [Fact]
-    public void Names_ArePinned_InMenuOrder_SynthwaveFirstAndTheDefault()
+    public void Names_ArePinned_AToZ_SynthwaveTheDefault()
     {
-        Assert.Equal(new[] { "synthwave", "netrunner", "nostromo", "noir", "cyberpunk", "vaporwave", "mainframe", "grid", "replicant", "abyssal" }, ThemeName.Names);
+        // A to Z since 2026-10-03 (the user's ask); All keeps the compiled order, synthwave first.
+        Assert.Equal(new[] { "abyssal", "cyberpunk", "grid", "mainframe", "netrunner", "noir", "nostromo", "replicant", "synthwave", "vaporwave" }, ThemeName.Names);
         Assert.Equal("synthwave", ThemeName.Default);
         Assert.Equal(ThemeName.Default, new AppSettingsData().Theme);
-        Assert.Equal(ThemePalette.All.Select(p => p.Name), ThemeName.Names);
+        Assert.Equal(ThemePalette.All.Select(p => p.Name).Order(StringComparer.Ordinal), ThemeName.Names);
+        Assert.Same(ThemePalette.Synthwave, ThemePalette.All[0]);
     }
 
     [Theory]
@@ -75,7 +77,7 @@ public class ThemeNameTests
         }
 
         var warning = Assert.Single(warnings);
-        Assert.Contains("Theme='matrix' is not one of synthwave, netrunner, nostromo, noir, cyberpunk, vaporwave, mainframe, grid, replicant, abyssal. Using synthwave.", warning.Message);
+        Assert.Contains("Theme='matrix' is not one of abyssal, cyberpunk, grid, mainframe, netrunner, noir, nostromo, replicant, synthwave, vaporwave. Using synthwave.", warning.Message);
     }
 
     [Fact]

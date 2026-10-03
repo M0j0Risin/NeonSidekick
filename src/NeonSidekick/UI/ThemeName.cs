@@ -16,8 +16,8 @@ public static class ThemeName
     /// <summary>The compiled default, pinned by <c>AppSettingsTests</c>.</summary>
     public const string Default = "synthwave";
 
-    /// <summary>The built-ins' names in menu order (<see cref="ThemePalette.All"/>'s); a scan's own are <see cref="ThemeScan.Names"/>.</summary>
-    public static readonly string[] Names = ThemePalette.All.Select(p => p.Name).ToArray();
+    /// <summary>The built-ins' names in menu order, A to Z since 2026-10-03 (<see cref="ThemePalette.All"/>'s until then); a scan's own are <see cref="ThemeScan.Names"/>.</summary>
+    public static readonly string[] Names = ThemePalette.All.Select(p => p.Name).Order(StringComparer.Ordinal).ToArray();
 
     private const string Category = "Theme";
 
