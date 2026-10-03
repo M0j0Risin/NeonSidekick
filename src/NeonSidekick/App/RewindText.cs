@@ -20,8 +20,11 @@ public static class RewindText
     /// <summary>The picker's key hints. Pinned.</summary>
     public const string Keys = "Enter = rewind to before this message · ESC = back";
 
-    /// <summary>The picker's caption over the rows. Pinned.</summary>
-    public const string Caption = "The picked message and everything after it leave the conversation, and its text comes back to the input. Files and commands are not undone.";
+    /// <summary>
+    /// The picker's caption over the rows (2026-10-03, the user's wording). What is not undone is the confirmation's to say
+    /// (<see cref="ConfirmCaption"/>), naming the tools.
+    /// </summary>
+    public const string Caption = "Rewinds the conversation to the response just before the picked message.";
 
     /// <summary>With no turn the history can go back to (none yet, or only a compact's summary). Pinned.</summary>
     public const string NothingNotice = "(" + NoticeGlyphs.Rewind + "nothing to rewind)";
