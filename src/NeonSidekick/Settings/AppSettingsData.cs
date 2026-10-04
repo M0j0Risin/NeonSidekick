@@ -847,7 +847,8 @@ public sealed class AppSettingsData
     /// The seconds <c>/botchat</c> rests after a reply when no voice plays (2026-09-26, the user's ask: with TTS off the
     /// replies came back-to-back, too fast to read): the next bot answers after this pause, as it would after a voice.
     /// A line sent meanwhile joins the chat and ends the pause, the next bot answering at once (2026-10-04, the user's ask;
-    /// until then the pause ran out first), and ESC there ends the chat. <see cref="MinBotChatNonTtsDelaySeconds"/>
+    /// until then the pause ran out first), as does a line queued under the reply before the pause began (later the same
+    /// day), and ESC there ends the chat. <see cref="MinBotChatNonTtsDelaySeconds"/>
     /// (0, off) to <see cref="MaxBotChatNonTtsDelaySeconds"/>; a hand-edited value outside is clamped at use. Read per
     /// reply. The Botchat tab of <c>/settings</c>. No variable.
     /// </summary>

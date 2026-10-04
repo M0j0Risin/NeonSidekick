@@ -380,6 +380,44 @@ public partial class ChatScreenTests
         Assert.Equal("User: hi bots", _chat.Requests[1][^1].Text.Split("\n\n")[^1]);
     }
 
+    /// <summary>
+    /// A line queued under the reply, before the pause began, ends it too (later on 2026-10-04, the user's report: it waited
+    /// the pause out, the reply's drain having used up its wake): echoed, and the next bot asked with it, the clock never moved.
+    /// </summary>
+    [Fact]
+    public async Task BotChat_TtsOff_ALineQueuedUnderTheReply_SkipsThePause_AndGoesToTheNextBot()
+    {
+        BotChatFixture();
+        _settings.Update(d => d.BotChatNonTtsDelaySeconds = 5);
+        _console.Profile.Height = 40;
+        _geometry = new ScreenGeometry(() => null);
+        _chat.EnqueueText("Hello ", "from Neon.");
+        _chat.EnqueueText("Hello, user.");
+        _chat.BeforeUpdate = async (i, _) =>
+        {
+            if (_chat.Requests.Count == 1 && i == 1)
+            {
+                PushLine("hi bots");
+                // Queued before the reply ends, so the pause starts with the line already waiting.
+                for (int wait = 0; wait < 1000 && !Output.Contains(ChatScreen.QueuedHintPart(1), StringComparison.Ordinal); wait++)
+                {
+                    await Task.Delay(10, CancellationToken.None);
+                }
+            }
+            else if (_chat.Requests.Count == 2 && i == 0)
+            {
+                PushLine("/exit");
+            }
+        };
+        PushLine("/botchat");
+
+        string output = await RunAsync();
+
+        Assert.Contains("› hi bots", output);
+        Assert.Equal(2, _chat.Requests.Count);
+        Assert.Equal("User: hi bots", _chat.Requests[1][^1].Text.Split("\n\n")[^1]);
+    }
+
     /// <summary>ESC during the pause (2026-09-26) finds no voice to stop and nothing replying: the chat ends, no second request.</summary>
     [Fact]
     public async Task BotChat_TtsOff_EscDuringThePause_EndsTheChat()

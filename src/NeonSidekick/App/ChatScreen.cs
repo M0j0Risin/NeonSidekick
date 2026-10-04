@@ -12497,6 +12497,8 @@ internal sealed partial class ChatScreen
     /// <paramref name="playing"/> is null and the wait is <paramref name="pause"/> on the screen's clock, watched the same
     /// way; ESC there finds no voice to stop, so the ladder ends the chat. A line the user sends during the pause ends it
     /// (2026-10-04, the user's ask): the line joins the chat and the next bot answers at once, not when the clock runs out.
+    /// So does a line queued under the reply before the pause began (later on 2026-10-04, the user's report: it waited the
+    /// pause out, since the reply's drain had used up its wake), so the queue is read before the first wait.
     /// The pause's own token is cancelled then, never <c>waitCts</c>, whose cancellation means the chat's end.</para>
     /// </summary>
     private async Task<bool> WaitForBotSpeechAsync(SpeechOutput? playing, List<BotChatLine> lines, List<(BotParticipant Bot, Task<ComfyGeneration?> Job)> pictures, BotEscLadder ladder, int turnId, CancellationToken cancellationToken, TimeSpan pause = default)
@@ -12527,10 +12529,9 @@ internal sealed partial class ChatScreen
             // A talk asked for (2026-10-02, ChatScreen.BotVoice) ends the wait too: the chat listens before the next bot.
             while (!done.IsCompleted && !waitCts.IsCancellationRequested && !_botTalk)
             {
-                var signal = Volatile.Read(ref _actSignal).Task;
-                // A picture still rendering (Botchat image async, 2026-09-25) is drawn the moment it is done, under the voice.
-                Task picture = pictures.Count > 0 ? pictures[0].Job : cancelled;
-                await Task.WhenAny(done, signal, cancelled, picture).ConfigureAwait(false);
+                // The queue is read before the first wait (2026-10-04): a line queued under the reply woke a signal the
+                // reply's own drain has since replaced, so it would otherwise wait out the pause. The drain re-arms the
+                // signal before the take, so a line queued after it still wakes the wait below.
                 await DrainActsAsync().ConfigureAwait(false);
                 bool joined = TakeInterjections(lines);
                 ShowReadyBotPictures(pictures);
@@ -12539,6 +12540,11 @@ internal sealed partial class ChatScreen
                     // The pause gives way to the user's line (2026-10-04); a voice still plays to its end.
                     break;
                 }
+
+                var signal = Volatile.Read(ref _actSignal).Task;
+                // A picture still rendering (Botchat image async, 2026-09-25) is drawn the moment it is done, under the voice.
+                Task picture = pictures.Count > 0 ? pictures[0].Job : cancelled;
+                await Task.WhenAny(done, signal, cancelled, picture).ConfigureAwait(false);
             }
         }
         finally
