@@ -1152,7 +1152,7 @@ Type `/` to list every command with a summary; after a command and a space, its 
 
 * A delay after the count waits after each reply: `/loop infinite 1m check the build` (one word, up to 24 hours). ESC or Ctrl+C stops the loop.
 * A cancelled, withdrawn or failed turn ends it.
-* The message may be `/imagine …` or `/speak …`, run with no model in between (`/loop infinite 5s /imagine score_9, 1girl`). `/speak` waits for each reading; only the last pass's pictures go with your next message. No other command can be looped.
+* The message may be `/imagine …` or `/speak …`, run with no model in between (`/loop infinite 5s /imagine score_9, 1girl`). `/speak` waits for each reading; only the last pass's pictures go with your next message. No other command can be looped. Between the passes the input line works as during a reply.
 
 #### Benchmark tests
 
@@ -1179,12 +1179,13 @@ Type `/` to list every command with a summary; after a command and a space, its 
 
 #### Imagine options
 
-* The picture is drawn in the transcript, saved in *ComfyUI output folder*, and handed to the model with your next message. The model gets it as a JPEG (a transparent picture stays PNG), so every request after carries a fraction of the bytes; the file saved is the server's own.
+* It runs behind the input line: the line stays yours while ComfyUI works, so you can chat, open panes or start another. A picture done within half a second is drawn at once; a longer one says so, shows 🖼️ (🎨 from a picture) on the hint row, and is drawn when it is done, in the order sent. Double-click that 🖼️ / 🎨 to cancel; ESC does not reach it.
+* The picture is drawn in the transcript, saved in *ComfyUI output folder*, and handed to the model with your next message (a message sent before it is done goes without it). The model gets it as a JPEG (a transparent picture stays PNG), so every request after carries a fraction of the bytes; the file saved is the server's own.
 * The first word names the workflow when it matches one; otherwise an offered workflow is used.
 * `-- <negative>` sets the negative; `--no-negative` sends none, not even the workflow's default.
 * `--count` is capped by *ComfyUI max pictures per call*.
 * `--image2` / `--image3` feed multi-picture workflows; a workflow with no prompt runs on its pictures alone (`/imagine faceswap --image a.png --image2 b.png`).
-* `/loop` repeats it: `/loop 10 30s /imagine …`.
+* `/loop` repeats it: `/loop 10 30s /imagine …`. A looped one runs in the foreground under a spinner, and ESC ends the loop; as during a reply, panes open and quick commands run meanwhile, and a message waits for the loop's end.
 
 #### Folder picker
 

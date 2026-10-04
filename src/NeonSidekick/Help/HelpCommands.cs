@@ -126,7 +126,7 @@ public static class HelpCommands
         ]),
         new("/imagine",
         [
-            new("/imagine [workflow] <prompt> [-- <negative> | --no-negative] [--seed N] [--size WxH] [--steps N] [--cfg X] [--denoise X] [--image <path>] [--image2 <path>] [--image3 <path>] [--count N]", "Generate a picture on ComfyUI from your own prompt, sent exactly as typed, with no model in between. See Imagine options."),
+            new("/imagine [workflow] <prompt> [-- <negative> | --no-negative] [--seed N] [--size WxH] [--steps N] [--cfg X] [--denoise X] [--image <path>] [--image2 <path>] [--image3 <path>] [--count N]", "Generate a picture on ComfyUI from your own prompt, sent exactly as typed, with no model in between. It runs behind the input line and is drawn when done; double-click 🖼️ on the hint row to cancel. See Imagine options."),
         ]),
         new("/interrupt",
         [

@@ -324,6 +324,12 @@ public static class ComfyText
     /// </summary>
     public const string CancelledByUser = "Error: the user cancelled this image generation. Do not generate it again unless the user asks.";
 
+    /// <summary>
+    /// <c>/imagine</c>'s notice when its generation outlasts the half-second grace and goes behind the input line (2026-10-04, the
+    /// user's report: the line was held until it ended), so the missing spinner reads as running, and how to stop it. Pinned.
+    /// </summary>
+    public const string ImagineInBackground = "(generating behind the input line: the picture shows here when it is done; double-click the 🖼️ / 🎨 on the hint row to cancel)";
+
     /// <summary><c>/imagine</c> with both a negative after <c>--</c> and <c>--no-negative</c> (later on 2026-09-24). Pinned.</summary>
     public const string NegativeAndNoNegative = "give a negative after -- or --no-negative, not both";
 

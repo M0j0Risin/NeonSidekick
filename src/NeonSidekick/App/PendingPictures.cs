@@ -6,7 +6,9 @@ namespace NeonSidekick.App;
 /// <summary>
 /// The <c>/botchat</c> pictures still on their way to ComfyUI with <c>Botchat image async</c> on (2026-09-27, the user's
 /// ask: nothing on the hint row said a generation was running while the next bot answered). One entry per generation from
-/// its send — a paced one waiting its turn in <see cref="BotPicturePacer"/> too — until its task ends, however it ends.
+/// its send — a paced one waiting its turn in <see cref="BotPicturePacer"/> too — until its task ends, however it ends. Since
+/// 2026-10-04 an <c>/imagine</c> too (the user's report: it held the input line while it ran), counted from its send, so one
+/// left behind the line shows on the strip and its double-click cancels it.
 /// <see cref="Glyph"/> is what the hint row's strip shows (<see cref="ChatScreen.StripGlyphs"/>), read per draw and on the
 /// tick from any thread, so every member is under one lock.
 /// </summary>

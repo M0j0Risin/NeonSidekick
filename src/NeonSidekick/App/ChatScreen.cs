@@ -596,9 +596,6 @@ internal sealed partial class ChatScreen
     private readonly ComfyStudio _comfy;
     private readonly IReadOnlyList<AIFunction> _comfyTools;
 
-    // What /imagine made since the last message (2026-09-24): the result lines and the pictures, handed to the model with the next one.
-    private readonly List<string> _imagineNotes = [];
-    private readonly List<ImageAttachment> _imagineImages = [];
     private readonly Interpreters _interpreters;
     private readonly ShellRunner _runner;
     private readonly ProcessRegistry _processes;
@@ -7287,136 +7284,7 @@ internal sealed partial class ChatScreen
         _transcript.Picture(picture, RegisterPicture(image, sandbox: true));
     }
 
-    // ── /imagine and /comfy (2026-09-24) ────────────────────────────────────
-
-    /// <summary>
-    /// <c>/imagine [workflow] &lt;prompt&gt; [-- &lt;negative&gt;] [--seed N] …</c> (2026-09-24, the user's ask: their own prompts —
-    /// <c>score_9, score_8_up, …</c> — sent as typed, no model in between): the prompt straight to ComfyUI through the same
-    /// engine as <c>generate_image</c> (<see cref="ComfyStudio"/>), under a spinner ESC cancels, the picture drawn as large as the
-    /// window allows (several as a strip), the result line a notice. The result and the pictures ride with the next message
-    /// (<see cref="TakeImagineNotes"/>), so the model knows what was made and can look at it. Refused mid-turn; not headless.
-    ///
-    /// <para>Under <c>/loop</c> (2026-09-25, the user's ask: <c>/loop infinite 1s /imagine …</c> with no model in between)
-    /// <paramref name="loopBase"/> is how much was queued when the loop began: each pass trims the queue back to it first, so
-    /// the next message carries the last pass's pictures alone, never an infinite loop's pile. Every picture is still drawn,
-    /// saved and put in the strip. The outcome tells the loop whether to go on.</para>
-    /// </summary>
-    private async Task<LoopPass> HandleImagineAsync(string args, CancellationToken cancellationToken, (int Notes, int Images)? loopBase = null)
-    {
-        var (request, error) = ComfyImagine.Parse(args, _comfy.Catalog.Workflows, ComfyStudio.MaxCountOf(_effective()));
-        if (request is null)
-        {
-            _transcript.Error(error!);
-            return LoopPass.Failed;
-        }
-
-        using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        using var stop = new CancellationTokenSource();
-        _queuedClicks.Reset();
-        var watcher = _keys.WatchAsync(cts, stop.Token, null, null, LiveLineHook, spend: SpendScroll, onClick: _pane.Enabled ? HintClickLine : null, editor: LiveEditor);
-        ComfyGeneration? generation = null;
-        bool cancelled = false;
-        bool drained = false;
-        try
-        {
-            generation = await _transcript.WithSpinnerAsync(ComfyText.GeneratingLabelFor(request.ImageCount), () => _comfy.GenerateAsync(request, cts.Token)).ConfigureAwait(false);
-        }
-        catch (OperationCanceledException)
-        {
-            // Esc (cts), or the hint row's double-click (2026-09-28, ComfyStudio.Drain), whose own notice says so.
-            cancelled = true;
-            drained = !cts.IsCancellationRequested;
-        }
-        finally
-        {
-            stop.Cancel();
-            await watcher.ConfigureAwait(false);
-        }
-
-        LoopPass pass;
-        if (cancelled || generation is null)
-        {
-            if (!drained)
-            {
-                _transcript.Notice(ComfyText.Cancelled);
-            }
-
-            pass = LoopPass.Cancelled;
-        }
-        else if (!generation.Ok)
-        {
-            _transcript.Error(generation.Text);
-            pass = LoopPass.Failed;
-        }
-        else
-        {
-            ComfyLines(generation.Text, line => _transcript.Notice(ComfyText.GlyphFor(request.ImageCount) + line));
-            // The strip first: the picture's window box then leaves its rows.
-            AddToPictureStrip(generation.Images);
-            ShowPictures(generation.Images);
-            if (loopBase is { } keep)
-            {
-                // The last looped pass's batch goes; what was queued before the loop stays.
-                TrimTo(_imagineNotes, keep.Notes);
-                TrimTo(_imagineImages, keep.Images);
-            }
-
-            _imagineNotes.Add(ComfyText.ImagineNote(generation.Text));
-            _imagineImages.AddRange(generation.Images);
-            pass = LoopPass.Ok;
-        }
-
-        DrainDiagnostics();
-        return pass;
-
-        static void TrimTo<T>(List<T> list, int count)
-        {
-            if (list.Count > count)
-            {
-                list.RemoveRange(count, list.Count - count);
-            }
-        }
-    }
-
-    /// <summary>
-    /// The box of a picture as large as the transcript allows: <see cref="ThumbnailSize.Fit"/> over the console's size less
-    /// the pane's rows. <c>/view</c>'s, a lone <c>/imagine</c> picture's, and every thumbnail's under <c>fullsize</c> (2026-09-24).
-    /// </summary>
-    private ThumbnailBox WindowBox() =>
-        ThumbnailSize.Fit(_pane.Profile.Width, _pane.Profile.Height, _pane.Enabled ? ScreenPane.PaneRows + _pane.InputRows + _pane.ToolbarRows + _pane.PerfRows + _pane.StripRows : 0);
-
-    /// <summary>One picture as large as the window allows (the <c>/view</c> box), several as a thumbnail strip.</summary>
-    private void ShowPictures(IReadOnlyList<ImageAttachment> images)
-    {
-        if (images.Count == 1)
-        {
-            var box = WindowBox();
-            if (ImageThumbnail.Read(images[0], box.Columns, box.MaxRows) is { } picture)
-            {
-                _transcript.Picture(picture, RegisterPicture(images[0], sandbox: true));
-            }
-
-            return;
-        }
-
-        var (tiles, ids) = ReadThumbnails(images, ThumbnailSize.Resolve(_effective(), WindowBox()), sandbox: true);
-        _transcript.Images(tiles, ids);
-    }
-
-    /// <summary>The message as the model gets it (2026-09-24): the <c>/imagine</c> notes since the last one ahead of the text, their pictures after the user's own; then the notes are spent.</summary>
-    private (string Text, IReadOnlyList<ImageAttachment> Images) TakeImagineNotes(string text, IReadOnlyList<ImageAttachment> images)
-    {
-        if (_imagineNotes.Count == 0)
-        {
-            return (text, images);
-        }
-
-        string notes = string.Join("\n", _imagineNotes);
-        IReadOnlyList<ImageAttachment> all = [.. images, .. _imagineImages];
-        _imagineNotes.Clear();
-        _imagineImages.Clear();
-        return (notes + "\n\n" + text, all);
-    }
+    // ── /comfy (2026-09-24; /imagine is ChatScreen.Imagine.cs) ────────────────────────────────────
 
     /// <summary>The first verb <c>/comfy</c> took (later still on 2026-09-24). Pinned.</summary>
     public const string ComfyEditWord = "edit";
@@ -8254,7 +8122,7 @@ internal sealed partial class ChatScreen
                         }
                         else if (hint.Hit.Zone == ScreenPane.HintZone.Strip && ComfyText.IsGeneratingLabel(hint.Hit.Glyph))
                         {
-                            // A /botchat picture still rendering (2026-09-28): its cancel, as on the busy row; nothing when it just ended.
+                            // A /botchat picture or an /imagine behind the line (2026-10-04) still rendering (2026-09-28): its cancel, as on the busy row; nothing when it just ended.
                             DrainPictures();
                         }
                         else if (hint.Hit.Zone == ScreenPane.HintZone.Strip && BackgroundJobs.KindOfGlyph(hint.Hit.Glyph) is { } job)
@@ -8471,7 +8339,7 @@ internal sealed partial class ChatScreen
         }
 
         Volatile.Write(ref _alertSignal, alert);
-        if (_timers.HasAlerts || _processes.HasAlerts || LearnPending || _jobs.HasCompletions)
+        if (_timers.HasAlerts || _processes.HasAlerts || LearnPending || _jobs.HasCompletions || ImagineReady)
         {
             // Queued between the loop's drain and this arm: the read returns at once.
             alert.Cancel();
@@ -8607,6 +8475,8 @@ internal sealed partial class ChatScreen
     private async Task<bool> AnnounceAlertsAsync(CancellationToken cancellationToken)
     {
         DrainLearn();
+        // The /imagine pictures that ended behind the line (2026-10-04).
+        DrainImagine();
         PrintProcessAlerts();
         var sentences = new List<string>();
         while (_timers.TryTakeAlert(out var alert))
@@ -10412,7 +10282,7 @@ internal sealed partial class ChatScreen
                 return false;
 
             case SlashCommand.Imagine:
-                _ = await HandleImagineAsync(args, cancellationToken).ConfigureAwait(false);
+                await HandleImagineAsync(args, cancellationToken).ConfigureAwait(false);
                 return false;
 
             case SlashCommand.Comfy:
@@ -11346,11 +11216,12 @@ internal sealed partial class ChatScreen
     /// <summary>
     /// <c>/loop</c> over one of <see cref="LoopableCommands"/> (2026-09-25, the user's ask: <c>/loop infinite 1s /imagine …</c>
     /// went to the model as a message): the command run straight, pass after pass, no model in between and no user row
-    /// echoed — the command's own lines are the pass. <c>/imagine</c> under its own ESC watcher, its queue for the next message
-    /// kept to the last pass's pictures (the base taken here, before the first); <c>/speak</c> waits for the reading's audio to
-    /// end, under ESC, so the next pass does not cut it short. A cancelled or failed pass ends the loop, as a failed reply ends
-    /// a message loop. Between passes the delay as ever, or — none named — <see cref="LoopCommandMinGap"/>, watched and
-    /// unannounced, so an instant pass cannot spin past ESC.
+    /// echoed — the command's own lines are the pass. <c>/imagine</c> in the foreground under ESC (<see cref="ImaginePassAsync"/>,
+    /// not behind the line as a plain one is), its queue for the next message kept to the last pass's pictures (the base taken
+    /// here, before the first); <c>/speak</c> waits for the reading's audio to end, under ESC, so the next pass does not cut it
+    /// short. A cancelled or failed pass ends the loop, as a failed reply ends a message loop. Between passes the delay as ever,
+    /// or — none named — <see cref="LoopCommandMinGap"/>, watched and unannounced, so an instant pass cannot spin past ESC; the
+    /// reply's own watch since 2026-10-04 (<see cref="LoopWaitAsync"/>), so a pane or a queued message need not wait for the loop's end.
     /// </summary>
     private async Task RunLoopedCommandAsync(SlashCommand command, string args, int? count, TimeSpan? delay, CancellationToken cancellationToken)
     {
@@ -11365,8 +11236,7 @@ internal sealed partial class ChatScreen
                     _transcript.Notice(LoopWaitNotice(wait));
                 }
 
-                if (await WaitUnderWatchAsync(ct => Task.Delay(wait, _time, ct), KeySource.IsTurnCancel, cancellationToken, pointer: true).ConfigureAwait(false)
-                    || cancellationToken.IsCancellationRequested)
+                if (await LoopWaitAsync(wait, cancellationToken).ConfigureAwait(false) || cancellationToken.IsCancellationRequested)
                 {
                     _transcript.Notice(LoopCommandStoppedNotice(n - 1));
                     return;
@@ -11375,7 +11245,7 @@ internal sealed partial class ChatScreen
 
             _transcript.Notice(LoopTurnNotice(n, count));
             var pass = command == SlashCommand.Imagine
-                ? await HandleImagineAsync(args, cancellationToken, loopBase).ConfigureAwait(false)
+                ? await ImaginePassAsync(args, loopBase, cancellationToken).ConfigureAwait(false)
                 : await SpeakPassAsync(args, cancellationToken).ConfigureAwait(false);
             if (pass != LoopPass.Ok || cancellationToken.IsCancellationRequested)
             {
