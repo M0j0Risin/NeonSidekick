@@ -97,6 +97,34 @@ public class ThemePreviewTests
     }
 
     [Fact]
+    public void TheCard_ShowsAnEditsDiff_ItsRowsOnThePalettesOwnSlabs_ToTheMargin()
+    {
+        // 2026-10-03, the user's ask: a removed and an added line, as the transcript draws an edit.
+        using var scope = new ThemeScope();
+        var other = ThemePalette.All.First(p => p.Good != ThemePalette.Synthwave.Good && p.Bad != ThemePalette.Synthwave.Bad);
+        var styles = Theme.StylesOf(other);
+        var rows = ThemePreview.Lines(other, 72, 60, Banner, "1.2.3").Select(line => Row(line, 72)).ToList();
+        var texts = rows.Select(Text).ToList();
+
+        int note = texts.FindIndex(t => t.Contains(ThemeText.PreviewDiffNote, StringComparison.Ordinal));
+        Assert.True(note > 0);
+        Assert.Contains(DiffView.Elbow + "Added 1 line, removed 1 line", texts[note + 1]);
+        Assert.StartsWith(" " + DiffView.Indent + "3 - string seal = " + ThemeText.PreviewDiffOld + ";", texts[note + 2]);
+        Assert.StartsWith(" " + DiffView.Indent + "3 + string seal = " + ThemeText.PreviewDiffNew + ";", texts[note + 3]);
+
+        foreach (var (row, slot) in new[] { (rows[note + 2], ThemeStyleSlot.DiffRemoved), (rows[note + 3], ThemeStyleSlot.DiffAdded) })
+        {
+            var slab = styles(slot).Background;
+            Assert.NotEqual(Theme.StylesOf(ThemePalette.Synthwave)(slot).Background, slab);
+            // The margin and the indent on the card's own background, then the slab from the number to the right margin.
+            var onSlab = row.Skip(2).Take(row.Count - 3).ToList();
+            Assert.All(onSlab, s => Assert.Equal(slab, s.Style.Background));
+            Assert.Equal(72 - 2 - DiffView.Indent.Length, Segment.CellCount(onSlab));
+            Assert.Equal(other.Bg, row[^1].Style.Background);
+        }
+    }
+
+    [Fact]
     public void NoRows_IsNoLines()
     {
         Assert.Empty(ThemePreview.Lines(ThemePalette.Synthwave, 40, 0, Banner, "1.2.3"));

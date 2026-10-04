@@ -265,7 +265,7 @@ Settings that an environment variable or flag can override for one launch are li
 | Show image thumbnails | Draws a small thumbnail of each picture you send, each one a tool fetches or makes, and each `/botchat` picture. `/view` and `/imagine` always draw theirs. | on |
 | Image thumbnail size | `tiny` (32×8), `small` (48×12), `medium` (64×16), `large` (80×20), `xlarge` (96×24) columns × rows, or `fullsize` (as large as the transcript allows). | `small` |
 | Copy user prompt | `/copy` includes your prompt above the reply. | on |
-| Theme | `abyssal`, `cyberpunk`, `grid`, `mainframe`, `netrunner`, `noir`, `nostromo`, `replicant`, `synthwave`, `vaporwave`, and your own (see [Custom themes](#custom-themes)), sorted by name. A wide enough window previews the highlighted theme (on the terminal's own background when *Themed background* is off). | `synthwave` |
+| Theme | `abyssal`, `cyberpunk`, `grid`, `mainframe`, `netrunner`, `noir`, `nostromo`, `replicant`, `synthwave`, `vaporwave`, and your own (see [Custom themes](#custom-themes)), sorted by name. A wide enough window previews the highlighted theme (on the terminal's own background when *Themed background* is off); a typed letter jumps to the next theme starting with it. | `synthwave` |
 | Themed background | Gives the terminal the theme's background while the app runs. Off, the terminal profile's own background (colour, acrylic or picture) stays. | on |
 | Themed external windows | The picture viewer, the camera's window and the log window wear the theme (dark title bar and theme colours). Off, they stay black. | on |
 | Welcome splash | Pictures under the banner at startup until your first line: `fullsize`, `tiled` or `disabled`. See Welcome splash below. | `fullsize` |
@@ -990,7 +990,7 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | `/sys` | Shows the system prompt and the tools sent to the model. |
 | `/tb [on \| off]` | Hides the toolbar, or brings it back with its last items (the default seven the first time). |
 | `/test [id \| reasoning \| structured \| long \| all \| history]` | Runs benchmark tests against the connected model. Alone, lists them with their last verdicts. See Benchmark tests. |
-| `/theme [name]` | Switches the colour theme, built-in or [custom](#custom-themes); alone, opens a picker with a live preview (79+ columns). Nothing changes until Enter; during a reply it waits. `/theme export <name> [new-name]` writes a theme to the `themes` folder to edit. |
+| `/theme [name]` | Switches the colour theme, built-in or [custom](#custom-themes); alone, opens a picker with a live preview (79+ columns); a typed letter jumps to the next theme starting with it. Nothing changes until Enter; during a reply it waits. `/theme export <name> [new-name]` writes a theme to the `themes` folder to edit. |
 | `/timer [duration [name] \| stop <name> \| stop all]` | Lists, starts (`10m`, `90s`, `1h30m`) or stops timers. |
 | `/tools` | Switches the model's tools and edits their settings (Web, Files, Shell, Ask, Camera, Claude, Home Assistant, Print, Obsidian, ComfyUI, SQL, Oracle, MySQL, UNC, Docker, GitLib). |
 | `/tools <group>` | Opens one group's switch: `shell` (the *Shell command policy* picker), `files`, `web`, `claude`, `docker`, `obsidian`, `sql`, `oracle`, `mysql`, `unc`, `ha`, `comfy`, `camera` or `print`. The toolbar's tool items run it. |

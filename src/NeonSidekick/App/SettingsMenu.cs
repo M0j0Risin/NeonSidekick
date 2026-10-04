@@ -915,6 +915,13 @@ internal sealed partial class SettingsMenu
     public const string SwitchKeys = "Enter = switch · ESC = back";
     public const string KeepKeys = "Enter = choose · ESC = keep";
 
+    /// <summary>
+    /// The theme pickers' hints (2026-10-03, the user's ask): <see cref="KeepKeys"/> and <see cref="PickKeys"/> with the letter
+    /// jump (<see cref="MenuPage.JumpNames"/>).
+    /// </summary>
+    public const string ThemeKeepKeys = "Enter = choose · A–Z = jump · ESC = keep";
+    public const string ThemePickKeys = "Enter = choose · A–Z = jump · ESC = back";
+
     /// <summary>The yes/no pane's hint (<see cref="ConfirmAsync"/>). Pinned.</summary>
     public const string ConfirmKeys = "y / n = pick · Enter = choose · ESC = no";
 
@@ -6802,7 +6809,7 @@ internal sealed partial class SettingsMenu
     private async Task<bool> PickThemeRowAsync(AppSettingsData saved, CancellationToken cancellationToken)
     {
         var themes = ScanThemes().Themes;
-        var page = new MenuPage(Crumb(FieldName(SettingsField.Theme)), ThemeRows(themes), PickKeys) { Side = ThemeSide(themes) };
+        var page = new MenuPage(Crumb(FieldName(SettingsField.Theme)), ThemeRows(themes), ThemePickKeys) { Side = ThemeSide(themes), JumpNames = ThemeNames(themes) };
         int? picked = await PickAsync(page, ThemeCursor(saved.Theme, themes), cancellationToken).ConfigureAwait(false);
         if (picked is not { } index)
         {
@@ -6853,7 +6860,7 @@ internal sealed partial class SettingsMenu
             return false;
         }
 
-        var page = new MenuPage(ThemeTitle, ThemeRows(scan.Themes), KeepKeys) { Side = ThemeSide(scan.Themes) };
+        var page = new MenuPage(ThemeTitle, ThemeRows(scan.Themes), ThemeKeepKeys) { Side = ThemeSide(scan.Themes), JumpNames = ThemeNames(scan.Themes) };
         int? picked = await PickOnceAsync(page, ThemeCursor(Theme.Current.Name, scan.Themes), cancellationToken).ConfigureAwait(false);
         return picked is { } index ? SaveTheme(scan.Themes[index]) : Unchanged();
     }
@@ -6956,6 +6963,9 @@ internal sealed partial class SettingsMenu
 
     /// <summary>One <see cref="ThemeLabel(string, IReadOnlyList{ThemePalette})"/> row per theme of <paramref name="themes"/>, in its order.</summary>
     private static List<string> ThemeRows(IReadOnlyList<ThemePalette> themes) => themes.Select(t => ThemeLabel(t.Name, themes)).ToList();
+
+    /// <summary>The names a typed letter jumps by (<see cref="MenuPage.JumpNames"/>), row for row with <see cref="ThemeRows"/>.</summary>
+    private static List<string> ThemeNames(IReadOnlyList<ThemePalette> themes) => themes.Select(t => t.Name).ToList();
 
     /// <summary>The row of <paramref name="name"/> among <paramref name="themes"/>; an unknown one reads as the default's (<see cref="ThemeName.Default"/>, no longer the first row since the list is A to Z, 2026-10-03), else the first.</summary>
     private static int ThemeCursor(string name, IReadOnlyList<ThemePalette> themes)

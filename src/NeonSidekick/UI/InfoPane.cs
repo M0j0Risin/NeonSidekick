@@ -71,6 +71,13 @@ public sealed class InfoPane
     private int _tallest;
     private int _tallestWidth = -1;
 
+    // The shown tab's laid-out lines, its index and the width (2026-10-03, the user's ask: a held arrow in /sys lagged, every
+    // press building the tab afresh — the prompt's facts, the skill scan — and wrapping all of it): a scroll draws from these;
+    // a tab switch, a new width or a new visit builds again. −1 = none this visit.
+    private List<SegmentLine>? _content;
+    private int _contentTab = -1;
+    private int _contentWidth = -1;
+
     /// <param name="mouse">Takes (true) or hands back (false) the console's mouse; null when the screen has none to take.</param>
     public InfoPane(ScreenPane pane, KeySource keys, Action<bool>? mouse = null)
     {
@@ -267,6 +274,9 @@ public sealed class InfoPane
         int active = Math.Clamp(initial, 0, tabs.Count - 1);
         _first = 0;
         _tallestWidth = -1;
+        _content = null;
+        _contentTab = -1;
+        _contentWidth = -1;
         _clicks.Reset();
         _mouse?.Invoke(true);
         try
@@ -345,15 +355,22 @@ public sealed class InfoPane
                     _clicks.Reset();
                     first = k.Key switch
                     {
-                        ConsoleKey.DownArrow => _first + 1,
-                        ConsoleKey.UpArrow => _first - 1,
-                        ConsoleKey.PageDown => _first + Math.Max(1, _shown),
-                        ConsoleKey.PageUp => _first - Math.Max(1, _shown),
                         ConsoleKey.End => int.MaxValue,
                         ConsoleKey.Home => 0,
-                        _ => _first,
+                        _ => _first + (ScrollStep(k) ?? 0),
                     };
                     first = Math.Clamp(first, 0, Math.Max(0, _count - _shown));
+
+                    // A held arrow's queued presses (2026-10-03, the user's ask): folded into this one move and drawn once, so
+                    // the pane stops where the key was let go instead of working off a backlog of redraws. Only bare keys are
+                    // taken: a chord stays for the pane read, which knows the command chords.
+                    if (ScrollStep(k) is not null)
+                    {
+                        while (_keys.TakeQueued(e => e is InputEvent.Key { Info: var q } && q.Modifiers == 0 && ScrollStep(q) is not null) is InputEvent.Key { Info: var more })
+                        {
+                            first = Math.Clamp(first + ScrollStep(more)!.Value, 0, Math.Max(0, _count - _shown));
+                        }
+                    }
                 }
 
                 if (next != active)
@@ -384,6 +401,16 @@ public sealed class InfoPane
         }
     }
 
+    /// <summary>The lines ↑, ↓, PgUp and PgDn move the view; null for every other key.</summary>
+    private int? ScrollStep(ConsoleKeyInfo key) => key.Key switch
+    {
+        ConsoleKey.DownArrow => 1,
+        ConsoleKey.UpArrow => -1,
+        ConsoleKey.PageDown => Math.Max(1, _shown),
+        ConsoleKey.PageUp => -Math.Max(1, _shown),
+        _ => null,
+    };
+
     private static string[] Titles(IReadOnlyList<InfoTab> tabs)
     {
         var titles = new string[tabs.Count];
@@ -404,7 +431,14 @@ public sealed class InfoPane
         _width = width;
         _stripRows = strip.Count;
         int capacity = _pane.MenuContentRows(height, 0) - HeaderRows - (_stripRows - 1);
-        var content = ScreenPane.RenderLines(tabs[active].Content(), _pane, width);
+        if (_content is null || _contentTab != active || _contentWidth != width)
+        {
+            _content = ScreenPane.RenderLines(tabs[active].Content(), _pane, width);
+            _contentTab = active;
+            _contentWidth = width;
+        }
+
+        var content = _content;
         _count = content.Count;
         (_first, _shown) = Viewport(_count, capacity, _first);
         if (_tallestWidth != width)

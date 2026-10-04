@@ -58,7 +58,14 @@ public static class ThemeText
     public const string PreviewBullet = "stop 0 colours the rule's left end";
     public const string PreviewQuote = "The rule samples five points.";
     public const string PreviewCodeLabel = "csharp";
-    public const string PreviewThinking = "thinking: the seal should be the only red.";
+    // A file edit's diff (2026-10-03, the user's ask): the note an edit_file of line 3 writes, then the code block's last line
+    // as it was and as it is. The summary over the rows is FileText.DiffSummary's own.
+    public const string PreviewDiffNote = "edited seal.cs (line 3; now 12 lines, 40 words)";
+    public const string PreviewDiffFile = "seal.cs";
+    public const int PreviewDiffLine = 3;
+    public const string PreviewDiffOld = "\"crimson\"";
+    public const string PreviewDiffNew = "\"inkwash\"";
+    public const string PreviewThinking ="thinking: the seal should be the only red.";
     public const string PreviewGood = "✓ 40 user themes loaded";
     public const string PreviewWarn = "! orphan.json: skipped, its base is no theme";
     public const string PreviewError = "✗ No theme named \"matrix\".";

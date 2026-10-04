@@ -177,6 +177,63 @@ public class MenuPaneTests : IDisposable
     }
 
     [Fact]
+    public async Task QueuedArrows_WalkAsOneMove_HighlightedOnce_AndWrap()
+    {
+        // 2026-10-03, the user's ask: a held arrow's queued presses are one move, drawn and reported once.
+        using var pane = Pane();
+        pane.Show();
+        var menu = new MenuPane(pane, _keys);
+        var highlighted = new List<int>();
+        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Up, Keys.Up, Keys.Enter);
+
+        Assert.Equal(new MenuPick(0, 2), await menu.PickAsync(Page("one", "two", "three"), 0, CancellationToken.None, highlighted.Add));
+
+        Assert.Equal([2], highlighted);   // 1, 2, 0 (wrapped), 1, 0, 2 (wrapped): only the last reported
+        menu.Close();
+    }
+
+    [Fact]
+    public async Task ALetter_JumpsToTheNextRowItsNameStartsWith_CyclingCaseFolded_WithJumpNamesOnly()
+    {
+        // 2026-10-03, the user's ask: the theme pickers jump by a typed letter, as the folder picker does.
+        using var pane = Pane();
+        pane.Show();
+        var menu = new MenuPane(pane, _keys);
+        var names = new[] { "aurora", "dracula", "solar", "synthwave", "tokyo" };
+        var page = Page(names) with { JumpNames = names };
+        var highlighted = new List<int>();
+
+        Push(Keys.Char('s'), Keys.Enter);
+        Assert.Equal(new MenuPick(0, 2), await menu.PickAsync(page, 0, CancellationToken.None, highlighted.Add));
+
+        Push(Keys.Char('s'), Keys.Char('S'), Keys.Char('s'), Keys.Char('s'), Keys.Enter);   // solar → synthwave → solar (wrapped) → synthwave
+        Assert.Equal(new MenuPick(0, 3), await menu.PickAsync(page, 0, CancellationToken.None));
+
+        // No other row starts with it: the cursor stays (z, and t on tokyo itself).
+        highlighted.Clear();
+        Push(Keys.Char('z'), Keys.Char('t'), Keys.Char('t'), Keys.Enter);
+        Assert.Equal(new MenuPick(0, 4), await menu.PickAsync(page, 0, CancellationToken.None, highlighted.Add));
+        Assert.Equal([4], highlighted);
+
+        // Without JumpNames a letter is swallowed.
+        Push(Keys.Char('s'), Keys.Enter);
+        Assert.Equal(new MenuPick(0, 0), await menu.PickAsync(Page(names), 0, CancellationToken.None));
+        menu.Close();
+    }
+
+    [Fact]
+    public void TypeAhead_FindsTheNextOtherRow_Wrapping_FromBeforeTheFirstToo()
+    {
+        string[] names = ["beta", "alpha", "bravo"];
+        Assert.Equal(2, TypeAhead.Next(3, i => names[i], 0, 'b'));
+        Assert.Equal(0, TypeAhead.Next(3, i => names[i], 2, 'B'));
+        Assert.Equal(-1, TypeAhead.Next(3, i => names[i], 1, 'a'));   // only the row itself
+        Assert.Equal(1, TypeAhead.Next(3, i => names[i], -1, 'a'));
+        Assert.Equal(0, TypeAhead.Next(3, i => names[i], -1, 'b'));   // before the first: row 0 is a candidate
+        Assert.Equal(-1, TypeAhead.Next(0, i => names[i], 0, 'a'));
+    }
+
+    [Fact]
     public async Task Backspace_MovesTheCursorToTheBackspaceRow_EnterStillPicks_ARepeatAndAPageWithoutOneDoNothing()
     {
         using var pane = Pane();
@@ -824,7 +881,7 @@ public class MenuPaneTests : IDisposable
         MenuPick? picked = await menu.PickAsync(Page("one", "two", "three"), 0, CancellationToken.None, heard.Add);
 
         Assert.Equal(new MenuPick(0, 0), picked);
-        Assert.Equal([1, 2, 1, 2, 0], heard);
+        Assert.Equal([1, 2, 0], heard);   // the queued Down, Down, Up one move to row 1 (2026-10-03), End, the click
 
         heard.Clear();
         input.Push(Keys.Down, Keys.Up, Keys.Escape);

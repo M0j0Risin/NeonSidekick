@@ -280,6 +280,7 @@ public class InfoPaneTests : IDisposable
         pane.Show();
         _console.Input.PushKey(Keys.Up);        // at the top already: no redraw
         _console.Input.PushKey(Keys.Down);      // 2..6
+        _console.Input.PushKey(Keys.Char('x')); // swallowed; keeps the PageDown from folding into the Down's move
         _console.Input.PushKey(Keys.PageDown);  // 7..11
         _console.Input.PushKey(Keys.End);       // 16..20
         _console.Input.PushKey(Keys.Down);      // at the end: no redraw
@@ -289,8 +290,8 @@ public class InfoPaneTests : IDisposable
 
         await new InfoPane(pane, Source()).ShowAsync(InfoPane.Title, [Tab("Long", Numbered(20))], 0, CancellationToken.None);
 
-        // The content is built once per draw: the no-op keys did not redraw.
-        Assert.Equal(6, _built.Count);
+        // The content is built once for the visit (2026-10-03): a scroll draws from the lines laid out at the open.
+        Assert.Equal(1, _built.Count);
         int a = Output.IndexOf("\nline2\nline3\nline4\nline5\nline6\n", StringComparison.Ordinal);
         int b = Output.IndexOf("\nline7\nline8\nline9\nline10\nline11\n", StringComparison.Ordinal);
         int c = Output.IndexOf("\nline16\nline17\nline18\nline19\nline20\n", StringComparison.Ordinal);
@@ -299,6 +300,34 @@ public class InfoPaneTests : IDisposable
         Assert.True(0 < a && a < b && b < c && c < d && d < e, Output);
         // The more row stays on every page, the last one included: it points both ways.
         Assert.Contains("\nline20\n" + MenuPane.MoreHint + "\n", Output);
+    }
+
+    [Fact]
+    public async Task QueuedScrollKeys_FoldIntoOneMove_DrawnOnce()
+    {
+        // 2026-10-03, the user's ask: a held arrow in /sys queued presses faster than the pane drew them. The queued run is
+        // one move and one draw, a page key in it too; a key that is not a scroll key ends the run.
+        using var pane = Pane();
+        pane.Show();
+        for (int i = 0; i < 5; i++)
+        {
+            _console.Input.PushKey(Keys.Down);
+        }
+
+        _console.Input.PushKey(Keys.PageDown);   // 5 + 5: 11..15
+        _console.Input.PushKey(Keys.Up);         // 10..14
+        _console.Input.PushKey(Keys.Char('x'));
+        _console.Input.PushKey(Keys.Up);         // after the run: 9..13, its own draw
+        _console.Input.PushKey(Keys.Escape);
+
+        await new InfoPane(pane, Source()).ShowAsync(InfoPane.Title, [Tab("Long", Numbered(20))], 0, CancellationToken.None);
+
+        Assert.Equal(1, _built.Count);
+        Assert.DoesNotContain("\nline2\nline3\nline4\nline5\nline6\n", Output);
+        Assert.DoesNotContain("\nline11\nline12\nline13\nline14\nline15\n", Output);
+        int run = Output.IndexOf("\nline10\nline11\nline12\nline13\nline14\n", StringComparison.Ordinal);
+        int after = Output.IndexOf("\nline9\nline10\nline11\nline12\nline13\n", StringComparison.Ordinal);
+        Assert.True(0 < run && run < after, Output);
     }
 
     [Fact]
@@ -344,7 +373,7 @@ public class InfoPaneTests : IDisposable
 
         await new InfoPane(pane, Source()).ShowAsync(InfoPane.Title, [Tab("Long", Numbered(20)), Tab("Short", "brief")], 0, CancellationToken.None);
 
-        Assert.Equal(["Long", "Short", "Long", "Short"], _built);
+        Assert.Equal(["Long", "Short", "Short"], _built);   // End draws from the lines built at the open (2026-10-03)
         Assert.Contains(Titled(InfoPane.Title + "   Long    Short ") + "\n \nbrief\n \n \n \n \n \n" + Rule(40) + "\n" + InfoPane.HintText + "\n", Output);
         Assert.EndsWith(Rule(40) + "\n› \n" + Rule(40) + "\nidle", Output);
     }
@@ -467,7 +496,7 @@ public class InfoPaneTests : IDisposable
 
         await new InfoPane(pane, keys).ShowAsync(InfoPane.Title, [Tab("One", "first"), Tab("Two", Numbered(20)), Tab("Three", "third")], 0, CancellationToken.None);
 
-        Assert.Equal(["One", "Two", "Three", "Two", "Two", "Three", "One"], _built);
+        Assert.Equal(["One", "Two", "Three", "Two", "Three", "One"], _built);   // End draws from Two's lines (2026-10-03)
         Assert.Contains("\n" + Titled(InfoPane.Title + "   One    Two    Three ") + "\n \nthird\n \n \n \n \n \n" + Rule(40), Output);
         Assert.EndsWith(Rule(40) + "\n› \n" + Rule(40) + "\nidle", Output);
     }
@@ -553,7 +582,7 @@ public class InfoPaneTests : IDisposable
 
         await new InfoPane(pane, keys).ShowAsync(InfoPane.Title, [Tab("Long", Numbered(20))], 0, CancellationToken.None);
 
-        Assert.Equal(6, _built.Count);
+        Assert.Equal(1, _built.Count);   // built at the open; every notch draws from those lines (2026-10-03)
         int a = Output.IndexOf("\nline4\nline5\nline6\nline7\nline8\n", StringComparison.Ordinal);
         int b = Output.IndexOf("\nline10\nline11\nline12\nline13\nline14\n", StringComparison.Ordinal);
         int c = Output.IndexOf("\nline16\nline17\nline18\nline19\nline20\n", StringComparison.Ordinal);

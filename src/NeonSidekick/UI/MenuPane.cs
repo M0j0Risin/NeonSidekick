@@ -87,6 +87,14 @@ public sealed record MenuPage(string Title, IReadOnlyList<string> Rows, string H
     public IReadOnlyDictionary<char, int>? Hotkeys { get; init; }
 
     /// <summary>
+    /// The name each row of <see cref="Rows"/> jumps by (2026-10-03, the user's ask: the theme pickers): a typed letter or digit
+    /// moves the cursor to the next stop after it whose name starts with that character, case folded, wrapping at the end
+    /// (<see cref="TypeAhead"/>, the folder picker's type-ahead), so a second press goes on to the next. Enter still picks; a
+    /// character no other row starts with does nothing. Null for none (every page but the themes').
+    /// </summary>
+    public IReadOnlyList<string>? JumpNames { get; init; }
+
+    /// <summary>
     /// The row Backspace moves the cursor to, exactly as the arrows would — Enter still picks; the
     /// <c>(none)</c> row of a picker that has one. Null for none (every other page).
     /// </summary>
@@ -351,6 +359,14 @@ public sealed class MenuPane : INoticeSink
         int side = Math.Min(SideMaxWidth, width - 1 - SideMinListWidth - SideGap);
         return side >= SideMinWidth ? side : 0;
     }
+
+    /// <summary>The row ↓ (+1) or ↑ (−1) moves the cursor; 0 for every other key. Pure.</summary>
+    private static int ArrowStep(ConsoleKeyInfo key) => key.Key switch
+    {
+        ConsoleKey.DownArrow => 1,
+        ConsoleKey.UpArrow => -1,
+        _ => 0,
+    };
 
     /// <summary>A status line: the transcript's glyph and colour for the kind. Escaped.</summary>
     public static string StatusMarkup(NoticeKind kind, string text) => kind switch
@@ -647,12 +663,25 @@ public sealed class MenuPane : INoticeSink
                 {
                     next = row;
                 }
+                else if (page.JumpNames is { } names && char.IsLetterOrDigit(k.KeyChar)
+                    && TypeAhead.Next(Math.Min(count, names.Count), i => page.IsStop(i) ? names[i] : "", _cursor, k.KeyChar) is int jump && jump >= 0)
+                {
+                    next = jump;
+                }
 
                 switch (k.Key)
                 {
-                    // Each move lands on a stop (2026-10-03): past a heading and its gap, the way it was going.
-                    case ConsoleKey.DownArrow: next = count == 0 ? 0 : page.StopFrom(_cursor + 1, +1, wrap: true); break;
-                    case ConsoleKey.UpArrow: next = count == 0 ? 0 : page.StopFrom(_cursor - 1, -1, wrap: true); break;
+                    // Each move lands on a stop (2026-10-03): past a heading and its gap, the way it was going. A held arrow's
+                    // queued presses (later that day, the user's ask) are walked here too and drawn once, at the row they end on.
+                    case ConsoleKey.DownArrow or ConsoleKey.UpArrow when count > 0:
+                        next = page.StopFrom(_cursor + ArrowStep(k), ArrowStep(k), wrap: true);
+                        while (_keys.TakeQueued(e => e is InputEvent.Key { Info: var q } && q.Modifiers == 0 && ArrowStep(q) != 0) is InputEvent.Key { Info: var more })
+                        {
+                            next = page.StopFrom(next + ArrowStep(more), ArrowStep(more), wrap: true);
+                        }
+
+                        break;
+                    case ConsoleKey.DownArrow or ConsoleKey.UpArrow: next = 0; break;
                     case ConsoleKey.Home: next = page.StopFrom(0, +1); break;
                     case ConsoleKey.End: next = page.StopFrom(count - 1, -1); break;
                     case ConsoleKey.PageDown: next = page.StopFrom(Math.Min(Math.Max(0, count - 1), _cursor + Math.Max(1, _shown)), +1); break;

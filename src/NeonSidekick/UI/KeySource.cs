@@ -321,6 +321,57 @@ public sealed class KeySource : IAnsiConsoleInput
     }
 
     /// <summary>
+    /// The next event when it is already waiting and <paramref name="match"/> takes it; else null, nothing taken, never waiting
+    /// (2026-10-03, the user's ask: a held arrow queued presses faster than a long pane drew them, and the pane went on
+    /// scrolling after the key was let go). A pane folds the queued run of its scroll keys into one move and draws once. An
+    /// event that does not match stays the next one read, in order; the kill switch's key is spent here as anywhere. Without
+    /// a keyboard, null: the reader's own next read is what says so.
+    /// </summary>
+    public InputEvent? TakeQueued(Func<InputEvent, bool> match)
+    {
+        ArgumentNullException.ThrowIfNull(match);
+        try
+        {
+            while (true)
+            {
+                bool buffered = _buffer.Count > 0;
+                var e = buffered ? _buffer.Peek() : _events.IsAvailable ? _events.Read() : null;
+                if (e is null)
+                {
+                    return null;
+                }
+
+                bool spent = SpentOnKillSwitch(e);
+                if (!spent && !match(e))
+                {
+                    // Not wanted: left at the buffer's head, or put there when it came off the source (the buffer was empty),
+                    // so it is still the next event read.
+                    if (!buffered)
+                    {
+                        _buffer.Enqueue(e);
+                    }
+
+                    return null;
+                }
+
+                if (buffered)
+                {
+                    _buffer.Dequeue();
+                }
+
+                if (!spent)
+                {
+                    return e;
+                }
+            }
+        }
+        catch (InvalidOperationException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
     /// <see cref="ReadInputAsync"/> for a reader under an open pane (the menu, the info pane, the folder picker, a typed value
     /// under its menu): a command chord (<see cref="Keys.ShortcutLine"/>) goes to <paramref name="pane"/>'s
     /// <see cref="ScreenPane.Chord"/> — done in place or ignored, and the next event read; or the whole stack dismissed, and

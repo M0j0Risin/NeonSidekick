@@ -9420,6 +9420,7 @@ public partial class ChatScreenTests : IDisposable
         for (int i = 0; i < 12; i++)
         {
             _console.Input.PushKey(Keys.PageDown);  // five lines a page, past the end: the extra presses are swallowed
+            _console.Input.PushKey(Keys.Char('x')); // swallowed; each page its own draw, not one queued run (2026-10-03)
         }
 
         _console.Input.PushKey(Keys.Escape);
@@ -16354,6 +16355,28 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains(ThemeText.PreviewNotice(next), output);
         Assert.Contains("  · " + SettingsMenu.UnchangedNotice, output);
         Assert.Same(ThemePalette.Synthwave, Theme.Current);
+    }
+
+    [Fact]
+    public async Task Theme_Bare_ALetterJumpsToTheNextThemeItStarts()
+    {
+        // 2026-10-03, the user's ask: a typed letter moves the picker to the next theme whose name starts with it.
+        using var theme = new ThemeScope();
+        _console.Profile.Width = 120;
+        _geometry = new ScreenGeometry(() => null);
+        _settings.Update(d => d.TtsOutput = false);
+        var names = ThemeCatalog.BuiltIn.Names.ToList();
+        char letter = names.First(n => n != "synthwave")[0];
+        int expected = TypeAhead.Next(names.Count, i => names[i], names.IndexOf("synthwave"), letter);
+        PushLine("/theme");
+        _console.Input.PushKey(Keys.Char(char.ToUpperInvariant(letter)));
+        _console.Input.PushKey(Keys.Enter);
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains(SettingsMenu.ThemeKeepKeys, output);
+        Assert.Equal(names[expected], Theme.Current.Name);
     }
 
     // ── The user's themes (2026-10-01) ─────────────────────────────────────

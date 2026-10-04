@@ -1,3 +1,5 @@
+using System.Globalization;
+using NeonSidekick.Files;
 using Spectre.Console;
 using Spectre.Console.Rendering;
 
@@ -7,7 +9,8 @@ namespace NeonSidekick.UI;
 /// The theme pickers' preview (2026-10-02, the user's ask: "show a preview of the theme in an area to the right of the list,
 /// like the Theme Atlas", without the screen starting over at every row): a small mock screen in one palette's own styles
 /// (<see cref="Theme.StylesOf"/>, never <see cref="Theme.Use"/>) — the banner and its rule in the gradient, a user line, a
-/// reply with bold, code, italic, a bullet and a quote, a highlighted code block, the thinking slab, the notice, good, warning
+/// reply with bold, code, italic, a bullet and a quote, a highlighted code block, a file edit's diff (2026-10-03, the user's ask:
+/// its note, summary and a removed and an added row on their slabs, as <see cref="DiffView"/> draws them), the thinking slab, the notice, good, warning
 /// and error lines, the pane rule, a highlighted menu row, the input row with a selection, the spinner and a paste label, the
 /// hint row and the ghost text. Every cell is on the palette's <see cref="ThemePalette.Bg"/>, the way the Atlas paints each
 /// screen: the card reads as the theme's own window, apart from the list beside it. With <c>Themed background</c> off
@@ -89,13 +92,31 @@ public static class ThemePreview
                 P(ThemeStyleSlot.MarkdownCodeBlock, "t "), P(ThemeStyleSlot.CodePunctuation, "*"), P(ThemeStyleSlot.MarkdownCodeBlock, " "),
                 P(ThemeStyleSlot.CodeNumber, "13"), P(ThemeStyleSlot.CodePunctuation, ")];"),
             ],
-            [
-                P(ThemeStyleSlot.CodeKeyword, "string"), P(ThemeStyleSlot.MarkdownCodeBlock, " seal "), P(ThemeStyleSlot.CodePunctuation, "="),
-                P(ThemeStyleSlot.MarkdownCodeBlock, " "), P(ThemeStyleSlot.CodeString, "\"inkwash\""), P(ThemeStyleSlot.CodePunctuation, ";"),
-            ],
+            Seal(ThemeText.PreviewDiffNew),
         ];
         int slab = code.Max(row => row.Sum(piece => TextCells.Width(piece.Text))) + SlabPad;
         Piece[] Slab(Piece[] row) => [.. row, P(ThemeStyleSlot.MarkdownCodeBlock, new string(' ', Math.Max(0, slab - row.Sum(piece => TextCells.Width(piece.Text)))))];
+
+        // The code block's last line as an edit changed it (2026-10-03, the user's ask), drawn as DiffView draws a row: the
+        // number and the sign on the slab, the code's own colours on it, the slab to the card's edge.
+        Piece[] Seal(string value) =>
+        [
+            P(ThemeStyleSlot.CodeKeyword, "string"), P(ThemeStyleSlot.MarkdownCodeBlock, " seal "), P(ThemeStyleSlot.CodePunctuation, "="),
+            P(ThemeStyleSlot.MarkdownCodeBlock, " "), P(ThemeStyleSlot.CodeString, value), P(ThemeStyleSlot.CodePunctuation, ";"),
+        ];
+        Piece[] DiffRow(char sign, ThemeStyleSlot slot, string value)
+        {
+            var on = s(slot);
+            string lead = ThemeText.PreviewDiffLine.ToString(CultureInfo.InvariantCulture) + " " + sign + " ";
+            var row = new List<Piece> { new(DiffView.Indent, Style.Plain), new(lead, on) };
+            row.AddRange(Seal(value).Select(piece => new Piece(piece.Text, new Style(piece.Style.Foreground, on.Background, piece.Style.Decoration))));
+            int used = row.Sum(piece => TextCells.Width(piece.Text));
+            row.Add(new Piece(new string(' ', Math.Max(0, inner - used)), new Style(background: on.Background)));
+            return [.. row];
+        }
+
+        string SealText(string value) => "string seal = " + value + ";\n";
+        var diff = FileDiff.Of(ThemeText.PreviewDiffFile, SealText(ThemeText.PreviewDiffOld), SealText(ThemeText.PreviewDiffNew))!;
 
         // The menu row: the highlight across the card, as the pane draws the cursor's row.
         string menuName = MenuPane.Pointer + p.Name.PadRight(Math.Max(10, p.Name.Length + 1));
@@ -121,6 +142,11 @@ public static class ThemePreview
             L(6, Slab(code[0])),
             L(4, Slab(code[1])),
             L(6, Slab(code[2])),
+            Empty(),
+            L(7, P(ThemeStyleSlot.DimText, TranscriptRenderer.ToolGlyph + ThemeText.PreviewDiffNote)),
+            L(6, P(ThemeStyleSlot.DimText, DiffView.Indent + DiffView.Elbow + FileText.DiffSummary(diff))),
+            L(5, DiffRow('-', ThemeStyleSlot.DiffRemoved, ThemeText.PreviewDiffOld)),
+            L(5, DiffRow('+', ThemeStyleSlot.DiffAdded, ThemeText.PreviewDiffNew)),
             Empty(),
             L(7, P(ThemeStyleSlot.Thinking, ThemeText.PreviewThinking)),
             Empty(),

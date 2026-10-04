@@ -350,26 +350,7 @@ public sealed class FolderTree
     /// The type-ahead: the next row after <paramref name="row"/>, wrapping at the end, whose
     /// name starts with <paramref name="c"/> (case folded); −1 when no other row does.
     /// </summary>
-    public int JumpFrom(int row, char c)
-    {
-        int count = _visible.Count;
-        if (count == 0)
-        {
-            return -1;
-        }
-
-        string prefix = c.ToString();
-        for (int step = 1; step < count; step++)
-        {
-            int i = ((row < 0 ? -1 : row) + step) % count;
-            if (i >= 0 && _visible[i].Name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
-            {
-                return i;
-            }
-        }
-
-        return -1;
-    }
+    public int JumpFrom(int row, char c) => UI.TypeAhead.Next(_visible.Count, i => _visible[i].Name, row, c);
 
     /// <summary><paramref name="full"/> is <paramref name="root"/> or a folder under it — at a separator, so <c>C:\x\files2</c> is not under <c>C:\x\files</c>.</summary>
     private bool IsUnder(string full, string root)

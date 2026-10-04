@@ -30,6 +30,34 @@ public class KeySourceTests
     }
 
     [Fact]
+    public async Task TakeQueued_TakesWaitingMatches_AndLeavesTheFirstOtherEventNextInOrder()
+    {
+        // 2026-10-03: a pane folds a held arrow's queued presses into one move.
+        var input = new TestConsoleInput();
+        var keys = new KeySource(input, FastPoll);
+        input.PushKey(Keys.Down);
+        input.PushKey(Keys.Down);
+        input.PushKey(Keys.Char('q'));
+        input.PushKey(Keys.Down);
+        static bool IsDown(InputEvent e) => e is InputEvent.Key { Info.Key: ConsoleKey.DownArrow };
+
+        Assert.NotNull(keys.TakeQueued(IsDown));
+        Assert.NotNull(keys.TakeQueued(IsDown));
+        Assert.Null(keys.TakeQueued(IsDown));   // the 'q' is not taken…
+        Assert.Null(keys.TakeQueued(IsDown));   // …and stays at the head
+        Assert.Equal('q', (await keys.ReadKeyAsync(CancellationToken.None))!.Value.KeyChar);
+        Assert.NotNull(keys.TakeQueued(IsDown));
+        Assert.Null(keys.TakeQueued(IsDown));   // nothing waiting: null, no wait
+    }
+
+    [Fact]
+    public void TakeQueued_WithoutAKeyboard_IsNull()
+    {
+        var keys = new KeySource(new ScriptedInput { NoKeyboard = true });
+        Assert.Null(keys.TakeQueued(_ => true));
+    }
+
+    [Fact]
     public void ChordLine_IsMarkedAsAChord_ATypedLineIsNot()
     {
         // Later on 2026-10-02: a window chord pressed again closes its window under a reply, the typed command never does.
