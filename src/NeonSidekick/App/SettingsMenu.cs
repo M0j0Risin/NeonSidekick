@@ -833,7 +833,7 @@ public enum SettingsField
     /// <summary>Typed, masked: the OpenAI API key, saved DPAPI-encrypted (<see cref="Settings.AppSettingsData.OpenAIApiKey"/>); empty clears it. Under the switch (2026-10-03); a reconnect.</summary>
     OpenAIApiKey,
 
-    /// <summary>Typed: the <c>max_completion_tokens</c> of every OpenAI API request, 0 for none (<see cref="Settings.AppSettingsData.OpenAIApiMaxTokens"/>). Under the key (2026-10-03); a reconnect.</summary>
+    /// <summary>Typed: the <c>max_output_tokens</c> of every OpenAI API request, 0 for none (<see cref="Settings.AppSettingsData.OpenAIApiMaxTokens"/>). Under the key (2026-10-03); a reconnect.</summary>
     OpenAIApiMaxTokens,
 
     /// <summary>Typed: the <c>OpenAI-Organization</c> header, empty for none (<see cref="Settings.AppSettingsData.OpenAIApiOrganization"/>). Under the output cap (2026-10-03); a reconnect.</summary>

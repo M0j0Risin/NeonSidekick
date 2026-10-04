@@ -383,7 +383,12 @@ public static class AnthropicRequest
                 case TextReasoningContent reasoning:
                     // A block's text may arrive in several pieces; the one that carries the signature closes it.
                     thinking.Append(reasoning.Text);
-                    if (reasoning.ProtectedData is { Length: > 0 } signature)
+                    if (reasoning.ProtectedData is { } openAI && openAI.StartsWith(OpenAIPlatform.OpenAIRequest.EncryptedPrefix, StringComparison.Ordinal))
+                    {
+                        // The OpenAI API's encrypted reasoning (2026-10-03, a conversation that switched servers): not this wire's.
+                        thinking.Clear();
+                    }
+                    else if (reasoning.ProtectedData is { Length: > 0 } signature)
                     {
                         if (keepThinking)
                         {

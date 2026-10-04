@@ -5,119 +5,104 @@ using NeonSidekick.App;
 using NeonSidekick.Llm;
 using NeonSidekick.Llm.Anthropic;
 using NeonSidekick.Llm.OpenAIPlatform;
+using NeonSidekick.Llm.Tools;
 using NeonSidekick.Settings;
 using NeonSidekick.Tests.Fakes;
 
 namespace NeonSidekick.Tests;
 
-/// <summary>The OpenAI API as a server (2026-10-03): the request shaping, the client, the usage and cost, the probe, the session, the settings.</summary>
+/// <summary>The OpenAI API as a server (2026-10-03): the Responses request, the stream, the client, the usage and cost, the probe, the session, the settings.</summary>
 public class OpenAIApiTests
 {
-    private const string Completions = "https://api.openai.com/v1/chat/completions";
+    private const string Responses = "https://api.openai.com/v1/responses";
 
     private static LlmEndpoint Endpoint(string model = "gpt-5.6-sol") => new(OpenAIApi.BaseUrl, model, "sk-openai-test", "configured");
 
-    private const string Head = "data: {\"id\":\"c1\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-5.6-sol\",";
+    /// <summary>The events as the API streams them (the shapes captured from gpt-5.4-nano on 2026-10-03), one per entry.</summary>
+    private static string Sse(params string[] events) =>
+        string.Concat(events.Select(e => "event: " + JsonDocument.Parse(e).RootElement.GetProperty("type").GetString() + "\ndata: " + e + "\n\n"));
 
-    /// <summary>A short answer, then the usage chunk, as the API streams it with <c>include_usage</c>.</summary>
-    private static string Stream(string usage = "{\"prompt_tokens\":10,\"completion_tokens\":2,\"total_tokens\":12}") =>
-        Head + "\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"Four.\"},\"finish_reason\":null}]}\n\n"
-        + Head + "\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}]}\n\n"
-        + Head + "\"choices\":[],\"usage\":" + usage + "}\n\n"
-        + "data: [DONE]\n\n";
+    private const string Created = "{\"type\":\"response.created\",\"response\":{\"id\":\"resp_1\",\"model\":\"gpt-5.6-sol-2026-06-01\",\"status\":\"in_progress\"}}";
 
-    private static (OpenAIApiChatClient Client, StubHttpMessageHandler Stub) Client(string model = "gpt-5.6-sol", int maxTokens = 0, string? organization = null, string? project = null, string? stream = null)
+    private static string Completed(string usage = "{\"input_tokens\":10,\"input_tokens_details\":{\"cached_tokens\":0},\"output_tokens\":2,\"output_tokens_details\":{\"reasoning_tokens\":0},\"total_tokens\":12}", string type = "response.completed", string incomplete = "null") =>
+        "{\"type\":\"" + type + "\",\"response\":{\"id\":\"resp_1\",\"model\":\"gpt-5.6-sol-2026-06-01\",\"status\":\"completed\",\"incomplete_details\":" + incomplete + ",\"usage\":" + usage + "}}";
+
+    private static string TextDelta(string text) => "{\"type\":\"response.output_text.delta\",\"item_id\":\"msg_1\",\"output_index\":0,\"content_index\":0,\"delta\":" + "\"" + JsonEncodedText.Encode(text) + "\"" + "}";
+
+    /// <summary>A reasoning item with a two-part summary, then a call: what a tool turn at a reasoning level streams.</summary>
+    private static string ToolTurn() => Sse(
+        Created,
+        "{\"type\":\"response.output_item.added\",\"item\":{\"id\":\"rs_1\",\"type\":\"reasoning\",\"summary\":[]},\"output_index\":0}",
+        "{\"type\":\"response.reasoning_summary_part.added\",\"item_id\":\"rs_1\",\"output_index\":0,\"summary_index\":0,\"part\":{\"type\":\"summary_text\",\"text\":\"\"}}",
+        "{\"type\":\"response.reasoning_summary_text.delta\",\"item_id\":\"rs_1\",\"output_index\":0,\"summary_index\":0,\"delta\":\"**Checking**\"}",
+        "{\"type\":\"response.reasoning_summary_part.added\",\"item_id\":\"rs_1\",\"output_index\":0,\"summary_index\":1,\"part\":{\"type\":\"summary_text\",\"text\":\"\"}}",
+        "{\"type\":\"response.reasoning_summary_text.delta\",\"item_id\":\"rs_1\",\"output_index\":0,\"summary_index\":1,\"delta\":\"Now the clock.\"}",
+        "{\"type\":\"response.output_item.done\",\"item\":{\"id\":\"rs_1\",\"type\":\"reasoning\",\"encrypted_content\":\"ENC123\",\"summary\":[{\"type\":\"summary_text\",\"text\":\"**Checking**\"}]},\"output_index\":0}",
+        "{\"type\":\"response.output_item.added\",\"item\":{\"id\":\"fc_1\",\"type\":\"function_call\",\"call_id\":\"call_1\",\"name\":\"get_current_time\",\"arguments\":\"\"},\"output_index\":1}",
+        "{\"type\":\"response.function_call_arguments.delta\",\"item_id\":\"fc_1\",\"output_index\":1,\"delta\":\"{\\\"timezone\\\":\"}",
+        "{\"type\":\"response.function_call_arguments.done\",\"item_id\":\"fc_1\",\"output_index\":1,\"arguments\":\"{\\\"timezone\\\":\\\"Asia/Tokyo\\\"}\"}",
+        "{\"type\":\"response.output_item.done\",\"item\":{\"id\":\"fc_1\",\"type\":\"function_call\",\"status\":\"completed\",\"call_id\":\"call_1\",\"name\":\"get_current_time\",\"arguments\":\"{\\\"timezone\\\":\\\"Asia/Tokyo\\\"}\"},\"output_index\":1}",
+        Completed("{\"input_tokens\":10000,\"input_tokens_details\":{\"cached_tokens\":8000,\"cache_write_tokens\":1000},\"output_tokens\":500,\"output_tokens_details\":{\"reasoning_tokens\":300},\"total_tokens\":10500}"));
+
+    private static string Answer(string text = "Four.") => Sse(Created, TextDelta(text), Completed());
+
+    private static (OpenAIApiChatClient Client, StubHttpMessageHandler Stub) Client(string model = "gpt-5.6-sol", int maxTokens = 0, params string[] streams)
     {
-        var stub = new StubHttpMessageHandler().Map(Completions, HttpStatusCode.OK, stream ?? Stream(), "text/event-stream");
-        return (new OpenAIApiChatClient(Endpoint(model), TimeSpan.FromSeconds(10), maxTokens, organization, project, new HttpClient(stub)), stub);
+        var queue = new Queue<string>(streams.Length == 0 ? [Answer()] : streams);
+        var stub = new StubHttpMessageHandler();
+        stub.Map(Responses, (_, _) => Task.FromResult(StubHttpMessageHandler.Json(HttpStatusCode.OK, queue.Count > 1 ? queue.Dequeue() : queue.Peek(), "text/event-stream")));
+        return (new OpenAIApiChatClient(Endpoint(model), TimeSpan.FromSeconds(10), maxTokens, httpClient: new HttpClient(stub), time: new ManualTimeProvider()), stub);
     }
 
-    private static async Task<JsonElement> SentBody(IEnumerable<ChatMessage> messages, ChatOptions? options, string model = "gpt-5.6-sol", int maxTokens = 0)
+    private static JsonElement Body(IReadOnlyList<ChatMessage> messages, ChatOptions? options = null, string model = "gpt-5.6-sol", int maxTokens = 0, bool withoutReasoning = false)
     {
-        var (client, stub) = Client(model, maxTokens);
-        using (client)
-        {
-            await foreach (var _ in client.GetStreamingResponseAsync(messages, options))
-            {
-            }
-        }
-
-        using var document = JsonDocument.Parse(Assert.Single(stub.Requests).Body!);
+        using var document = JsonDocument.Parse(OpenAIRequest.Write(messages, options, model, maxTokens, withoutReasoning));
         return document.RootElement.Clone();
     }
 
-    // ── The client ──────────────────────────────────────────────────────────
+    private static string[] Types(JsonElement body) =>
+        body.GetProperty("input").EnumerateArray().Select(i => i.GetProperty("type").GetString() + (i.TryGetProperty("role", out var role) ? ":" + role.GetString() : "")).ToArray();
+
+    // ── The request ─────────────────────────────────────────────────────────
 
     [Fact]
-    public async Task Client_SendsTheKeyAsABearer_AndTheOrganizationAndProject()
-    {
-        string? authorization = null, organization = null, project = null;
-        var stub = new StubHttpMessageHandler();
-        stub.Map(Completions, (request, _) =>
-        {
-            authorization = request.Headers.Authorization?.ToString();
-            organization = request.Headers.TryGetValues(OpenAIApi.OrganizationHeader, out var o) ? o.Single() : null;
-            project = request.Headers.TryGetValues(OpenAIApi.ProjectHeader, out var p) ? p.Single() : null;
-            return Task.FromResult(StubHttpMessageHandler.Json(HttpStatusCode.OK, Stream(), "text/event-stream"));
-        });
-        using var client = new OpenAIApiChatClient(Endpoint(), TimeSpan.FromSeconds(10), 0, "org-1", "proj-1", new HttpClient(stub));
-
-        await foreach (var _ in client.GetStreamingResponseAsync([new ChatMessage(ChatRole.User, "x")]))
-        {
-        }
-
-        Assert.Equal(("Bearer sk-openai-test", "org-1", "proj-1"), (authorization, organization, project));
-        Assert.Equal(OpenAIApi.BaseUrl, client.Endpoint.BaseUrl);
-    }
-
-    [Fact]
-    public async Task Client_NoOrganizationOrProject_SendsNeither()
-    {
-        bool any = true;
-        var stub = new StubHttpMessageHandler();
-        stub.Map(Completions, (request, _) =>
-        {
-            any = request.Headers.Contains(OpenAIApi.OrganizationHeader) || request.Headers.Contains(OpenAIApi.ProjectHeader);
-            return Task.FromResult(StubHttpMessageHandler.Json(HttpStatusCode.OK, Stream(), "text/event-stream"));
-        });
-        using var client = new OpenAIApiChatClient(Endpoint(), TimeSpan.FromSeconds(10), httpClient: new HttpClient(stub));
-
-        await client.GetStreamingResponseAsync([new ChatMessage(ChatRole.User, "x")]).ToListAsync();
-
-        Assert.False(any);
-    }
-
-    [Fact]
-    public async Task Request_LeavesOutTheLocalServersKnobs()
+    public void Request_IsStateless_TheSystemPromptIsTheInstructions_AndNoSamplingGoes()
     {
         var options = new ChatOptions
         {
             Temperature = 0.7f,
             TopP = 0.9f,
             TopK = 40,
-            PresencePenalty = 0.1f,
-            FrequencyPenalty = 0.2f,
-            Reasoning = new ReasoningOptions { Effort = ReasoningEffort.None },
+            Reasoning = new ReasoningOptions { Effort = ReasoningEffort.High },
             AdditionalProperties = new() { [OpenAICompatibleChatClient.PreserveThinkingKey] = true },
         };
 
-        var body = await SentBody([new ChatMessage(ChatRole.User, "x")], options, "gpt-5-mini");
+        var body = Body([new(ChatRole.System, "You are Neon."), new(ChatRole.User, "hi"), new(ChatRole.System, "Be brief.")], options, maxTokens: 4096);
 
-        foreach (string field in new[] { "temperature", "top_p", "top_k", "presence_penalty", "frequency_penalty", "min_p", "repetition_penalty", "repeat_penalty", OpenAICompatibleChatClient.TemplateKwargsField, "max_completion_tokens", "max_tokens" })
+        Assert.Equal("gpt-5.6-sol", body.GetProperty("model").GetString());
+        Assert.True(body.GetProperty("stream").GetBoolean());
+        Assert.False(body.GetProperty("store").GetBoolean());
+        Assert.Equal("You are Neon.\n\nBe brief.", body.GetProperty("instructions").GetString());
+        Assert.Equal(4096, body.GetProperty("max_output_tokens").GetInt32());
+        Assert.Equal("high", body.GetProperty("reasoning").GetProperty("effort").GetString());
+        Assert.Equal("auto", body.GetProperty("reasoning").GetProperty("summary").GetString());
+        Assert.Equal(["reasoning.encrypted_content"], body.GetProperty("include").EnumerateArray().Select(e => e.GetString()));
+        foreach (string field in new[] { "temperature", "top_p", "top_k", "chat_template_kwargs", "messages" })
         {
             Assert.False(body.TryGetProperty(field, out _), field);
         }
 
-        Assert.Equal("minimal", body.GetProperty("reasoning_effort").GetString());   // gpt-5's none
-        Assert.True(body.GetProperty("stream").GetBoolean());
+        Assert.Equal(["message:user"], Types(body));
     }
 
     [Fact]
-    public async Task Request_TheOutputCap_IsMaxCompletionTokens()
+    public void Request_NoLevel_SendsNoEffort_ButAsksForTheSummary_AndNoCapNoField()
     {
-        var body = await SentBody([new ChatMessage(ChatRole.User, "x")], null, maxTokens: 4096);
-        Assert.Equal(4096, body.GetProperty("max_completion_tokens").GetInt32());
-        Assert.False(body.TryGetProperty("reasoning_effort", out _));   // no level asked: the model's own
+        var body = Body([new(ChatRole.User, "x")]);
+        Assert.False(body.GetProperty("reasoning").TryGetProperty("effort", out _));
+        Assert.Equal("auto", body.GetProperty("reasoning").GetProperty("summary").GetString());
+        Assert.False(body.TryGetProperty("max_output_tokens", out _));
+        Assert.False(body.TryGetProperty("instructions", out _));
     }
 
     [Theory]
@@ -131,70 +116,258 @@ public class OpenAIApiTests
     [InlineData("gpt-5-nano", ReasoningEffort.Medium, "medium")]
     [InlineData("o4-mini", ReasoningEffort.None, "low")]
     [InlineData("gpt-7-future", ReasoningEffort.None, "low")]      // unknown: the newest kind
-    public async Task Request_ShapesTheReasoningLevelForTheModel(string model, ReasoningEffort effort, string expected)
+    public void Request_ShapesTheReasoningLevelForTheModel(string model, ReasoningEffort effort, string expected)
     {
         Assert.Equal(expected, OpenAIModelRules.For(model).EffortWord(effort));
-        var body = await SentBody([new ChatMessage(ChatRole.User, "x")], new ChatOptions { Reasoning = new ReasoningOptions { Effort = effort } }, model);
-        Assert.Equal(expected, body.GetProperty("reasoning_effort").GetString());
+        Assert.Equal(expected, Body([new(ChatRole.User, "x")], new ChatOptions { Reasoning = new ReasoningOptions { Effort = effort } }, model).GetProperty("reasoning").GetProperty("effort").GetString());
     }
 
     [Fact]
-    public async Task Request_AModelThatDoesNotReason_GetsNoEffort()
+    public void Request_AModelThatDoesNotReason_GetsNoReasoningAtAll()
     {
-        Assert.Null(OpenAIModelRules.For("gpt-4.1").EffortWord(ReasoningEffort.High));
-        var body = await SentBody([new ChatMessage(ChatRole.User, "x")], new ChatOptions { Reasoning = new ReasoningOptions { Effort = ReasoningEffort.High } }, "gpt-4o-mini");
-        Assert.False(body.TryGetProperty("reasoning_effort", out _));
+        var body = Body([new(ChatRole.User, "x")], new ChatOptions { Reasoning = new ReasoningOptions { Effort = ReasoningEffort.High } }, "gpt-4.1-mini");
+        Assert.False(body.TryGetProperty("reasoning", out _));
+        Assert.False(body.TryGetProperty("include", out _));
     }
 
     [Fact]
-    public async Task Request_SendsNoThinkingBack_AndDropsAnAllThinkingMessage()
+    public void Request_Tools_AreFunctions_NotStrict_AndANameTheApiRefusesIsSanitised()
+    {
+        var tool = AIFunctionFactoryFree("weird.tool/name", "Does it.");
+        var body = Body([new(ChatRole.User, "x")], new ChatOptions { Tools = [new GetCurrentTimeTool(TimeProvider.System), tool] });
+
+        var tools = body.GetProperty("tools").EnumerateArray().ToList();
+        Assert.Equal("function", tools[0].GetProperty("type").GetString());
+        Assert.Equal(GetCurrentTimeTool.ToolName, tools[0].GetProperty("name").GetString());
+        Assert.Equal(JsonValueKind.Object, tools[0].GetProperty("parameters").ValueKind);
+        Assert.False(tools[0].GetProperty("strict").GetBoolean());
+        Assert.Equal(AnthropicRequest.ToolName("weird.tool/name"), tools[1].GetProperty("name").GetString());
+    }
+
+    [Fact]
+    public void Request_TheToolLoop_ReasoningOnlyInFlight_CallsAnswered_AndThePhaseWorkedOut()
     {
         ChatMessage[] history =
         [
-            new(ChatRole.User, "go"),
-            new(ChatRole.Assistant, [new TextReasoningContent("hm"), new TextContent("Done.")]),
-            new(ChatRole.Assistant, [new TextReasoningContent("only thinking") { ProtectedData = "SIG" }]),
-            new(ChatRole.User, "again"),
+            new(ChatRole.User, "first"),
+            new(ChatRole.Assistant, [new TextReasoningContent("old"), new TextReasoningContent("") { ProtectedData = OpenAIRequest.EncryptedPrefix + "OLD" }, new TextContent("Done before.")]),
+            new(ChatRole.User, "now"),
+            new(ChatRole.Assistant, [new TextReasoningContent("hm"), new TextReasoningContent("") { ProtectedData = OpenAIRequest.EncryptedPrefix + "NEW" }, new TextContent("Let me look."), new FunctionCallContent("call_1", "get_current_time", new Dictionary<string, object?> { ["timezone"] = "UTC" })]),
+            new(ChatRole.Tool, [new FunctionResultContent("call_1", "12:00")]),
+            new(ChatRole.Assistant, [new TextReasoningContent("") { ProtectedData = "SIG-FROM-CLAUDE" }, new FunctionCallContent("call_2", "get_current_time")]),
         ];
 
-        var body = await SentBody(history, new ChatOptions { AdditionalProperties = new() { [OpenAICompatibleChatClient.PreserveThinkingKey] = true } });
+        var body = Body(history);
 
-        string text = body.GetRawText();
-        Assert.DoesNotContain("reasoning_content", text);
-        Assert.DoesNotContain("only thinking", text);
-        Assert.DoesNotContain("\"hm\"", text);
-        Assert.Equal(["user", "assistant", "user"], body.GetProperty("messages").EnumerateArray().Select(m => m.GetProperty("role").GetString()));
+        Assert.Equal(["message:user", "message:assistant", "message:user", "reasoning", "message:assistant", "function_call", "function_call_output", "function_call", "function_call_output"], Types(body));
+        var input = body.GetProperty("input").EnumerateArray().ToList();
+        Assert.Equal(OpenAIRequest.FinalAnswerPhase, input[1].GetProperty("phase").GetString());
+        Assert.Equal("NEW", input[3].GetProperty("encrypted_content").GetString());   // the old turn's went, as the Claude API's signed thinking
+        Assert.Equal(OpenAIRequest.CommentaryPhase, input[4].GetProperty("phase").GetString());   // text beside a call is the preamble
+        Assert.Equal("{\"timezone\":\"UTC\"}", input[5].GetProperty("arguments").GetString());
+        Assert.Equal(("call_1", "12:00"), (input[6].GetProperty("call_id").GetString(), input[6].GetProperty("output").GetString()));
+        Assert.Equal(("call_2", AnthropicRequest.MissingResult), (input[8].GetProperty("call_id").GetString(), input[8].GetProperty("output").GetString()));
+        Assert.DoesNotContain("SIG-FROM-CLAUDE", body.GetRawText());   // the Claude API's signature is not this wire's
+
+        var stripped = Body(history, withoutReasoning: true);
+        Assert.DoesNotContain("reasoning", Types(stripped));
     }
 
-    // ── Usage and cost ──────────────────────────────────────────────────────
+    [Fact]
+    public void Request_AResultWithNoCall_IsText_AndPicturesArePartsOfTheUserMessage()
+    {
+        var body = Body(
+        [
+            new(ChatRole.Tool, [new FunctionResultContent("ghost", "late")]),
+            new(ChatRole.User, [new TextContent("look"), new DataContent(new byte[] { 1, 2, 3 }, "image/png"), new DataContent(new byte[] { 4 }, "application/pdf") { Name = "a.pdf" }]),
+        ]);
+
+        var input = body.GetProperty("input").EnumerateArray().ToList();
+        Assert.Equal("Tool result: late", input[0].GetProperty("content")[0].GetProperty("text").GetString());
+        var parts = input[1].GetProperty("content").EnumerateArray().ToList();
+        Assert.Equal(["input_text", "input_image", "input_file"], parts.Select(p => p.GetProperty("type").GetString()));
+        Assert.Equal("data:image/png;base64,AQID", parts[1].GetProperty("image_url").GetString());
+        Assert.Equal(("a.pdf", "data:application/pdf;base64,BA=="), (parts[2].GetProperty("filename").GetString(), parts[2].GetProperty("file_data").GetString()));
+    }
 
     [Fact]
-    public async Task Usage_CarriesTheCacheWriteAndTheCost()
+    public void Request_AJsonSchema_IsTheTextFormat()
     {
-        const string Usage = "{\"prompt_tokens\":10000,\"completion_tokens\":500,\"total_tokens\":10500,\"prompt_tokens_details\":{\"cached_tokens\":8000,\"cache_write_tokens\":1000},\"completion_tokens_details\":{\"reasoning_tokens\":300}}";
-        var (client, _) = Client(stream: Stream(Usage));
-        using var _client = client;
-        var assistant = new Assistant(client, new ConversationHistory("sys"), new LlmTimeouts(TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(10)));
+        using var schema = JsonDocument.Parse("{\"type\":\"object\",\"properties\":{\"n\":{\"type\":\"integer\"}}}");
+        var body = Body([new(ChatRole.User, "x")], new ChatOptions { ResponseFormat = ChatResponseFormat.ForJsonSchema(schema.RootElement.Clone(), "answer") });
 
-        TurnEvent.Usage? reported = null;
-        await foreach (var evt in assistant.RunTurnAsync("q"))
+        var format = body.GetProperty("text").GetProperty("format");
+        Assert.Equal(("json_schema", "answer", false), (format.GetProperty("type").GetString(), format.GetProperty("name").GetString(), format.GetProperty("strict").GetBoolean()));
+        Assert.Equal("integer", format.GetProperty("schema").GetProperty("properties").GetProperty("n").GetProperty("type").GetString());
+    }
+
+    // ── The client and the stream ───────────────────────────────────────────
+
+    [Fact]
+    public async Task Client_SendsTheKeyAsABearer_AndTheOrganizationAndProject()
+    {
+        string? authorization = null, organization = null, project = null;
+        var stub = new StubHttpMessageHandler();
+        stub.Map(Responses, (request, _) =>
         {
-            if (evt is TurnEvent.Usage u) reported = u;
+            authorization = request.Headers.Authorization?.ToString();
+            organization = request.Headers.TryGetValues(OpenAIApi.OrganizationHeader, out var o) ? o.Single() : null;
+            project = request.Headers.TryGetValues(OpenAIApi.ProjectHeader, out var p) ? p.Single() : null;
+            return Task.FromResult(StubHttpMessageHandler.Json(HttpStatusCode.OK, Answer(), "text/event-stream"));
+        });
+        using var client = new OpenAIApiChatClient(Endpoint(), TimeSpan.FromSeconds(10), 0, " org-1 ", "proj-1", new HttpClient(stub));
+
+        var response = await client.GetResponseAsync([new ChatMessage(ChatRole.User, "x")]);
+
+        Assert.Equal(("Bearer sk-openai-test", "org-1", "proj-1"), (authorization, organization, project));
+        Assert.Equal("Four.", response.Text);
+        Assert.Equal(OpenAIApi.BaseUrl, client.Endpoint.BaseUrl);
+
+    }
+
+    [Fact]
+    public async Task Stream_TheSummaryTheCallAndTheUsage_BecomeTheUpdatesTheTurnLoopReads()
+    {
+        var (client, _) = Client(streams: ToolTurn());
+        using var _client = client;
+
+        var updates = await client.GetStreamingResponseAsync([new ChatMessage(ChatRole.User, "go")]).ToListAsync();
+
+        string thinking = string.Concat(updates.SelectMany(u => u.Contents).OfType<TextReasoningContent>().Select(r => r.Text));
+        Assert.Equal("**Checking**\n\nNow the clock.", thinking);
+        var signed = Assert.Single(updates.SelectMany(u => u.Contents).OfType<TextReasoningContent>(), r => r.ProtectedData is not null);
+        Assert.Equal(OpenAIRequest.EncryptedPrefix + "ENC123", signed.ProtectedData);
+        var call = Assert.Single(updates.SelectMany(u => u.Contents).OfType<FunctionCallContent>());
+        Assert.Equal(("call_1", GetCurrentTimeTool.ToolName), (call.CallId, call.Name));
+        Assert.Equal("Asia/Tokyo", ((JsonElement)call.Arguments!["timezone"]!).GetString());
+        Assert.Equal(ChatFinishReason.ToolCalls, updates[^1].FinishReason);
+
+        var tokens = TokenUsage.From(Assert.Single(updates.SelectMany(u => u.Contents).OfType<UsageContent>()).Details, TimeSpan.Zero, TimeSpan.Zero);
+        Assert.Equal((10_000L, 500L, 8000L, 1000L, 300L), (tokens.Input, tokens.Output, tokens.CacheRead, tokens.CacheWrite, tokens.Reasoning));
+        // gpt-5.6-sol: 1,000 uncached at $4, 8,000 read at $0.40, 1,000 written at $5, 500 out at $20 (per million).
+        Assert.Equal(0.004m + 0.0032m + 0.005m + 0.01m, tokens.CostUsd);
+    }
+
+    [Fact]
+    public async Task Stream_TheReasoningGoesBack_InTheNextRequestOfTheTurn()
+    {
+        var (client, stub) = Client("gpt-5.6-sol", 0, ToolTurn(), Answer("12:00 in Tokyo."));
+        using var _client = client;
+        var history = new List<ChatMessage> { new(ChatRole.User, "go") };
+
+        var first = await client.GetResponseAsync(history);
+        history.AddRange(first.Messages);
+        history.Add(new ChatMessage(ChatRole.Tool, [new FunctionResultContent("call_1", "12:00")]));
+        var second = await client.GetResponseAsync(history);
+
+        Assert.Equal("12:00 in Tokyo.", second.Text);
+        using var sent = JsonDocument.Parse(stub.Requests[1].Body!);
+        Assert.Equal(["message:user", "reasoning", "function_call", "function_call_output"], Types(sent.RootElement));
+        Assert.Contains("\"encrypted_content\":\"ENC123\"", stub.Requests[1].Body);
+    }
+
+    [Fact]
+    public async Task Stream_TheCap_IsALengthFinish_AFailureThrows_AndACutStreamThrows()
+    {
+        var (capped, _) = Client(streams: Sse(Created, TextDelta("Once upon"), Completed(type: "response.incomplete", incomplete: "{\"reason\":\"max_output_tokens\"}")));
+        using (capped)
+        {
+            var response = await capped.GetResponseAsync([new ChatMessage(ChatRole.User, "x")]);
+            Assert.Equal(ChatFinishReason.Length, response.FinishReason);
+            Assert.Equal("Once upon", response.Text);
         }
 
-        var tokens = Assert.IsType<TurnEvent.Usage>(reported).Tokens;
-        Assert.Equal((10_000L, 500L, 8000L, 1000L, 300L), (tokens.Input, tokens.Output, tokens.CacheRead, tokens.CacheWrite, tokens.Reasoning));
+        var (failed, _) = Client(streams: Sse(Created, "{\"type\":\"response.failed\",\"response\":{\"id\":\"resp_1\",\"error\":{\"code\":\"server_error\",\"message\":\"Something broke.\"}}}"));
+        using (failed)
+        {
+            var ex = await Assert.ThrowsAsync<OpenAIApiException>(() => failed.GetResponseAsync([new ChatMessage(ChatRole.User, "x")]));
+            Assert.Equal("server_error: Something broke.", ex.Message);
+        }
 
-        // gpt-5.6-sol: 1,000 uncached at $4, 8,000 read at $0.40, 1,000 written at $5, 500 out at $20 (per million).
-        Assert.Equal(0.0004m * 10 + 0.0032m + 0.005m + 0.01m, tokens.CostUsd);
+        var (cut, _) = Client(streams: Sse(Created, TextDelta("Once")));
+        using (cut)
+        {
+            var ex = await Assert.ThrowsAsync<IOException>(() => cut.GetResponseAsync([new ChatMessage(ChatRole.User, "x")]));
+            Assert.Equal(OpenAIApiChatClient.StreamCutMessage, ex.Message);
+        }
+    }
+
+    [Fact]
+    public async Task Client_ABadKey_SaysWhereTheKeyIsSet_AndIsNotRetried()
+    {
+        var stub = new StubHttpMessageHandler().Map(Responses, HttpStatusCode.Unauthorized, "{\"error\":{\"message\":\"Incorrect API key provided: sk-bad.\",\"type\":\"invalid_request_error\",\"code\":\"invalid_api_key\",\"param\":null},\"status\":401}");
+        using var client = new OpenAIApiChatClient(Endpoint(), TimeSpan.FromSeconds(10), httpClient: new HttpClient(stub));
+
+        var ex = await Assert.ThrowsAsync<OpenAIApiException>(() => client.GetResponseAsync([new ChatMessage(ChatRole.User, "x")]));
+
+        Assert.Equal((401, "invalid_api_key"), (ex.Status, ex.ErrorType));
+        Assert.Equal("HTTP 401: Incorrect API key provided: sk-bad." + OpenAIApiException.KeyHint, ex.Message);
+        Assert.Single(stub.Requests);
+    }
+
+    [Fact]
+    public async Task Client_ABusyApi_IsTriedOnceMore_ASpentQuotaIsNot()
+    {
+        var answers = new Queue<HttpResponseMessage>([StubHttpMessageHandler.Json((HttpStatusCode)429, "{\"error\":{\"code\":\"rate_limit_exceeded\",\"message\":\"Slow down.\"}}"), StubHttpMessageHandler.Json(HttpStatusCode.OK, Answer(), "text/event-stream")]);
+        var stub = new StubHttpMessageHandler();
+        stub.Map(Responses, (_, _) => Task.FromResult(answers.Dequeue()));
+        var time = new ManualTimeProvider();
+        using var client = new OpenAIApiChatClient(Endpoint(), TimeSpan.FromSeconds(10), httpClient: new HttpClient(stub), time: time);
+
+        var pending = client.GetResponseAsync([new ChatMessage(ChatRole.User, "x")]);
+        while (!pending.IsCompleted)
+        {
+            time.Advance(TimeSpan.FromSeconds(1));
+            await Task.Delay(10);
+        }
+
+        Assert.Equal("Four.", (await pending).Text);
+        Assert.Equal(2, stub.Requests.Count);
+        Assert.False(OpenAIApiChatClient.IsRetryable(429, "{\"error\":{\"code\":\"insufficient_quota\"}}"));
+        Assert.True(OpenAIApiChatClient.IsRetryable(503, ""));
+        Assert.False(OpenAIApiChatClient.IsRetryable(400, ""));
+    }
+
+    [Fact]
+    public async Task Client_RefusedReasoning_IsDroppedOnce_AndTheRequestSentAgain()
+    {
+        var answers = new Queue<HttpResponseMessage>([StubHttpMessageHandler.Json(HttpStatusCode.BadRequest, "{\"error\":{\"code\":\"invalid_encrypted_content\",\"message\":\"The encrypted content could not be verified.\"}}"), StubHttpMessageHandler.Json(HttpStatusCode.OK, Answer(), "text/event-stream")]);
+        var stub = new StubHttpMessageHandler();
+        stub.Map(Responses, (_, _) => Task.FromResult(answers.Dequeue()));
+        using var client = new OpenAIApiChatClient(Endpoint(), TimeSpan.FromSeconds(10), httpClient: new HttpClient(stub));
+        ChatMessage[] history =
+        [
+            new(ChatRole.User, "go"),
+            new(ChatRole.Assistant, [new TextReasoningContent("") { ProtectedData = OpenAIRequest.EncryptedPrefix + "ENC" }, new FunctionCallContent("call_1", "get_current_time")]),
+            new(ChatRole.Tool, [new FunctionResultContent("call_1", "12:00")]),
+        ];
+
+        await client.GetResponseAsync(history);
+
+        Assert.Equal(2, stub.Requests.Count);
+        Assert.Contains("ENC", stub.Requests[0].Body);
+        using var resent = JsonDocument.Parse(stub.Requests[1].Body!);
+        Assert.Equal(["message:user", "function_call", "function_call_output"], Types(resent.RootElement));
     }
 
     [Fact]
     public void Usage_AModelTheTableDoesNotName_HasNoCost()
     {
-        var details = new UsageDetails { InputTokenCount = 100, OutputTokenCount = 10 };
-        OpenAIApiChatClient.FillCost(details, null, "gpt-unknown");
+        using var usage = JsonDocument.Parse("{\"input_tokens\":100,\"output_tokens\":10}");
+        var details = OpenAIStream.Usage(usage.RootElement, "gpt-unknown");
         Assert.False(details.AdditionalCounts?.ContainsKey(AnthropicStream.CostKey) ?? false);
+        Assert.False(details.AdditionalCounts?.ContainsKey(AnthropicStream.CacheWriteKey) ?? false);
+        Assert.Equal(110, details.TotalTokenCount);
+    }
+
+    /// <summary>A declaration with a name of the caller's choosing, for the name sanitising (no <c>AIFunctionFactory</c>: reflection).</summary>
+    private static AIFunctionDeclaration AIFunctionFactoryFree(string name, string description) => new NamedDeclaration(name, description);
+
+    private sealed class NamedDeclaration(string name, string description) : AIFunctionDeclaration
+    {
+        public override string Name => name;
+
+        public override string Description => description;
     }
 
     [Theory]
@@ -257,6 +430,8 @@ public class OpenAIApiTests
     [InlineData("whisper-1", false)]
     [InlineData("davinci-002", false)]
     [InlineData("omni-moderation-latest", false)]
+    [InlineData("gpt-5.3-chat-latest", false)]   // listed but retired: a 404 (the live sweep, 2026-10-03)
+    [InlineData("gpt-live-1", false)]            // not a chat model
     public void ChatModel_IsToldByItsId(string id, bool chat) => Assert.Equal(chat, OpenAIModelRules.IsChatModel(id));
 
     [Theory]

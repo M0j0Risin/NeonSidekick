@@ -1,253 +1,254 @@
-using System.Buffers;
-using System.ClientModel.Primitives;
+using System.Globalization;
+using System.Net.Http.Headers;
 using System.Runtime.CompilerServices;
-using System.Text.Json;
+using System.Text;
 using Microsoft.Extensions.AI;
 using NeonSidekick.Diagnostics;
 using NeonSidekick.Llm.Anthropic;
-using OpenAI.Chat;
-using ChatFinishReason = Microsoft.Extensions.AI.ChatFinishReason;
-using ChatMessage = Microsoft.Extensions.AI.ChatMessage;
 
 namespace NeonSidekick.Llm.OpenAIPlatform;
 
 /// <summary>
-/// The OpenAI API's <see cref="IChatClient"/> (2026-10-03): Chat Completions through <see cref="OpenAICompatibleChatClient"/>
-/// — the wire every local server already speaks, tools, pictures and streamed usage included — with the request shaped for
-/// OpenAI's own server, which refuses what a local one shrugs off:
-/// <list type="bullet">
-/// <item>No sampling: <c>LLM sampling</c>'s temperature, top_p, penalties and raw fields are local-server knobs, and the
-/// reasoning models 400 on a temperature. Dropped, as the Claude API client ignores them.</item>
-/// <item>No <c>chat_template_kwargs</c> (the inner client's <c>none</c> switch, <c>LLM preserve thinking</c>): the API 400s on an
-/// unknown field. The reasoning level goes out as <c>reasoning_effort</c>, shaped per model (<see cref="OpenAIModelRules"/>)
-/// on a pre-built request, so the inner client adds nothing of its own.</item>
-/// <item>No <c>reasoning_content</c> sent back: the API streams no thinking text on Chat Completions, and thinking a local
-/// server or the Claude API left in the history earlier is not this wire's.</item>
-/// <item>The output cap (<c>OpenAI API max tokens</c>) as <c>max_completion_tokens</c>; 0 sends none.</item>
-/// </list>
-/// The usage report gains the cache write (GPT-5.6 on reports one) and the cost (<see cref="OpenAIPrice"/>) under
-/// <see cref="AnthropicStream.CacheWriteKey"/> and <see cref="AnthropicStream.CostKey"/>, the keys <see cref="TokenUsage.From"/>
-/// already reads for the Claude API.
+/// The OpenAI API's <see cref="IChatClient"/> (2026-10-03): one streamed <c>POST /v1/responses</c> per request, written by
+/// <see cref="OpenAIRequest"/> and read back by <see cref="OpenAIStream"/> — <see cref="AnthropicChatClient"/>'s shape, a
+/// hand-written client over <see cref="HttpClient"/>, since the SDK's Responses client and the MEAI adapter over it are
+/// evaluation-only and this project suppresses nothing.
+///
+/// <para>The first cut spoke Chat Completions through <see cref="OpenAICompatibleChatClient"/>; the live sweep the same day
+/// found GPT-5.4 and newer refuse function tools beside any <c>reasoning_effort</c> but <c>none</c> there ("use /v1/responses
+/// or set reasoning_effort to 'none'"), and GPT-6 Sol, 6.1 Sol and Astra — no <c>none</c> — every tool at all. The user's call:
+/// the Responses API for every model, which also streams a readable summary of the reasoning.</para>
+///
+/// <para>The key is a Bearer token; the organization and project go as the <c>OpenAI-Organization</c> / <c>OpenAI-Project</c>
+/// headers when set. One retry for the API's "come back shortly" answers (429 but a spent quota, 500, 502, 503) before anything
+/// streamed, after the <c>retry-after</c> it names; and one more, without the reasoning items, when the API refuses the
+/// encrypted reasoning sent back (another organization's key, an edited turn). Every other failure is an
+/// <see cref="OpenAIApiException"/> with the API's own message.</para>
 /// </summary>
 public sealed class OpenAIApiChatClient : IChatClient
 {
-    private const string Category = "LLM";
+    private const string Category = "Llm";
 
-    private readonly OpenAICompatibleChatClient _inner;
-    private readonly int _maxTokens;
+    private readonly HttpClient _http;
+    private readonly HttpClient? _ownedHttpClient;
+    private readonly TimeProvider _time;
+    private readonly Uri _responsesUrl;
+    private readonly string? _organization;
+    private readonly string? _project;
 
     /// <param name="endpoint">The OpenAI API endpoint, its key the OpenAI API's own (<see cref="ApiKeys.For"/>).</param>
-    /// <param name="requestTimeout">Per-request ceiling.</param>
+    /// <param name="requestTimeout">Per-request ceiling on an owned transport.</param>
     /// <param name="maxTokens"><c>OpenAI API max tokens</c>: 0 sends none, else clamped to the setting's range.</param>
     /// <param name="organization">The <c>OpenAI-Organization</c> header, or null for none.</param>
     /// <param name="project">The <c>OpenAI-Project</c> header, or null for none.</param>
-    /// <param name="httpClient">Optional transport (tests); stays the caller's to dispose.</param>
-    public OpenAIApiChatClient(LlmEndpoint endpoint, TimeSpan requestTimeout, int maxTokens = 0, string? organization = null, string? project = null, HttpClient? httpClient = null)
+    /// <param name="httpClient">Optional transport; tests pass one over a stub handler. It stays the caller's.</param>
+    /// <param name="time">The clock the retry waits on; tests pass a manual one.</param>
+    public OpenAIApiChatClient(LlmEndpoint endpoint, TimeSpan requestTimeout, int maxTokens = 0, string? organization = null, string? project = null, HttpClient? httpClient = null, TimeProvider? time = null)
     {
-        _inner = new OpenAICompatibleChatClient(endpoint, requestTimeout, httpClient, reasoningEstimate: null, organization: organization, project: project);
-        _maxTokens = maxTokens <= 0 ? 0 : Math.Clamp(maxTokens, Settings.AppSettingsData.MinOpenAIApiMaxTokens, Settings.AppSettingsData.MaxOpenAIApiMaxTokens);
+        ArgumentNullException.ThrowIfNull(endpoint);
+        if (string.IsNullOrWhiteSpace(endpoint.ModelId))
+        {
+            throw new ArgumentException("Model id must not be blank.", nameof(endpoint));
+        }
+
+        if (requestTimeout <= TimeSpan.Zero)
+        {
+            throw new ArgumentOutOfRangeException(nameof(requestTimeout), requestTimeout, "The request timeout must be positive.");
+        }
+
+        var v1 = LlmEndpoint.NormalizeBaseUrl(endpoint.BaseUrl);
+        Endpoint = endpoint with { BaseUrl = v1, ApiKey = endpoint.ApiKey?.Trim() ?? "" };
+        MaxTokens = maxTokens <= 0 ? 0 : Math.Clamp(maxTokens, Settings.AppSettingsData.MinOpenAIApiMaxTokens, Settings.AppSettingsData.MaxOpenAIApiMaxTokens);
+        _organization = string.IsNullOrWhiteSpace(organization) ? null : organization.Trim();
+        _project = string.IsNullOrWhiteSpace(project) ? null : project.Trim();
+        _responsesUrl = OpenAIApi.ResponsesUrl(v1);
+        _time = time ?? TimeProvider.System;
+        if (httpClient is null)
+        {
+            _ownedHttpClient = new HttpClient { Timeout = requestTimeout };
+            _http = _ownedHttpClient;
+        }
+        else
+        {
+            _http = httpClient;
+        }
     }
 
     /// <summary>The endpoint in use, base URL normalised to <c>/v1</c>.</summary>
-    public LlmEndpoint Endpoint => _inner.Endpoint;
+    public LlmEndpoint Endpoint { get; }
 
-    /// <summary>The output cap sent, or 0 for none.</summary>
-    internal int MaxTokens => _maxTokens;
-
-    /// <inheritdoc/>
-    public async Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
-    {
-        var response = await _inner.GetResponseAsync(WithoutThinking(messages), Shape(options, Endpoint.ModelId, _maxTokens), cancellationToken).ConfigureAwait(false);
-        if (response.Usage is { } usage)
-        {
-            FillCost(usage, response.RawRepresentation is ChatCompletion completion ? completion.Usage : null, response.ModelId ?? Endpoint.ModelId);
-        }
-
-        if (response.FinishReason == ChatFinishReason.Length)
-        {
-            DiagnosticLog.Warn(Category, OpenAIApiText.MaxTokensWarning(response.ModelId ?? Endpoint.ModelId));
-        }
-
-        return response;
-    }
+    /// <summary>The <c>max_output_tokens</c> every request carries, or 0 for none.</summary>
+    public int MaxTokens { get; }
 
     /// <inheritdoc/>
-    public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, [EnumeratorCancellation] CancellationToken cancellationToken = default)
-    {
-        await foreach (var update in _inner.GetStreamingResponseAsync(WithoutThinking(messages), Shape(options, Endpoint.ModelId, _maxTokens), cancellationToken).ConfigureAwait(false))
-        {
-            foreach (var content in update.Contents)
-            {
-                if (content is UsageContent usage)
-                {
-                    FillCost(usage.Details, usage.RawRepresentation as ChatTokenUsage, update.ModelId ?? Endpoint.ModelId);
-                }
-            }
+    public async Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default) =>
+        await GetStreamingResponseAsync(messages, options, cancellationToken).ToChatResponseAsync(cancellationToken).ConfigureAwait(false);
 
-            if (update.FinishReason == ChatFinishReason.Length)
-            {
-                DiagnosticLog.Warn(Category, OpenAIApiText.MaxTokensWarning(update.ModelId ?? Endpoint.ModelId));
-            }
-
-            yield return update;
-        }
-    }
-
-    /// <summary>
-    /// The request's options for the OpenAI API: the app's keys and the sampling taken off, the output cap set, and the
-    /// reasoning level moved onto a pre-built request as the model's word (none for a model that does not reason, or for no
-    /// level asked). A caller's own pre-built request is kept as it is (none of the app's callers makes one).
-    /// </summary>
-    internal static ChatOptions Shape(ChatOptions? options, string modelId, int maxTokens)
-    {
-        var shaped = options?.Clone() ?? new ChatOptions();
-        if (shaped.AdditionalProperties is { } properties)
-        {
-            var rest = new AdditionalPropertiesDictionary();
-            foreach (var (key, value) in properties)
-            {
-                if (key is not OpenAICompatibleChatClient.PreserveThinkingKey and not OpenAICompatibleChatClient.SamplingKey)
-                {
-                    rest[key] = value;
-                }
-            }
-
-            shaped.AdditionalProperties = rest.Count > 0 ? rest : null;
-        }
-
-        shaped.Temperature = null;
-        shaped.TopP = null;
-        shaped.TopK = null;
-        shaped.PresencePenalty = null;
-        shaped.FrequencyPenalty = null;
-        if (maxTokens > 0)
-        {
-            shaped.MaxOutputTokens = maxTokens;
-        }
-
-        string? word = OpenAIModelRules.For(modelId).EffortWord(shaped.Reasoning?.Effort);
-        shaped.Reasoning = null;
-        if (shaped.RawRepresentationFactory is null)
-        {
-            byte[] json = RequestJson(word);
-            shaped.RawRepresentationFactory = _ =>
-            {
-                var reader = new Utf8JsonReader(json);
-                return ((IJsonModel<ChatCompletionOptions>)new ChatCompletionOptions()).Create(ref reader, ModelReaderWriterOptions.Json);
-            };
-        }
-
-        return shaped;
-    }
-
-    /// <summary>
-    /// The pre-built request: <c>{"reasoning_effort":"…"}</c>, or <c>{}</c> with no word. Read through the SDK's own
-    /// <see cref="IJsonModel{T}"/> contract, as <see cref="OpenAICompatibleChatClient.RawFieldsJson"/> is: the SDK's typed
-    /// <c>ReasoningEffortLevel</c> is behind an evaluation-only diagnostic, and this project suppresses nothing. Always one,
-    /// so the inner client adds no raw fields of its own (it leaves a caller's pre-built request alone) and a JSON-schema
-    /// response format goes through the adapter's own mapping, OpenAI's strict shape.
-    /// </summary>
-    internal static byte[] RequestJson(string? reasoningEffort)
-    {
-        var buffer = new ArrayBufferWriter<byte>();
-        using (var writer = new Utf8JsonWriter(buffer))
-        {
-            writer.WriteStartObject();
-            if (reasoningEffort is not null)
-            {
-                writer.WriteString("reasoning_effort"u8, reasoningEffort);
-            }
-
-            writer.WriteEndObject();
-        }
-
-        return buffer.WrittenSpan.ToArray();
-    }
-
-    /// <summary>
-    /// <paramref name="messages"/> without their thinking: every <see cref="TextReasoningContent"/> taken off, and an assistant
-    /// message left with nothing at all dropped (one that was all thinking).
-    /// </summary>
-    internal static IEnumerable<ChatMessage> WithoutThinking(IEnumerable<ChatMessage> messages)
+    /// <inheritdoc/>
+    public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(
+        IEnumerable<ChatMessage> messages,
+        ChatOptions? options = null,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(messages);
-        foreach (var message in messages)
+        var list = messages as IReadOnlyList<ChatMessage> ?? messages.ToList();
+        byte[] body = OpenAIRequest.Write(list, options, Endpoint.ModelId, MaxTokens);
+        var reader = new OpenAIStream(Endpoint.ModelId, AnthropicChatClient.ToolNames(options?.Tools));
+
+        using var response = await SendAsync(body, () => OpenAIRequest.Write(list, options, Endpoint.ModelId, MaxTokens, withoutReasoning: true), cancellationToken).ConfigureAwait(false);
+        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
+        using var lines = new StreamReader(stream, Encoding.UTF8);
+        string? eventName = null;
+        var data = new StringBuilder();
+        while (await lines.ReadLineAsync(cancellationToken).ConfigureAwait(false) is { } line)
         {
-            if (!message.Contents.Any(c => c is TextReasoningContent))
+            if (line.Length == 0)
             {
-                yield return message;
+                if (data.Length > 0)
+                {
+                    foreach (var update in reader.Handle(eventName, data.ToString()))
+                    {
+                        yield return update;
+                    }
+                }
+
+                eventName = null;
+                data.Clear();
                 continue;
             }
 
-            var kept = message.Contents.Where(c => c is not TextReasoningContent).ToList();
-            if (kept.Count == 0 && message.Role == ChatRole.Assistant)
+            if (line.StartsWith("event:", StringComparison.Ordinal))
             {
+                eventName = line[6..].Trim();
+            }
+            else if (line.StartsWith("data:", StringComparison.Ordinal))
+            {
+                if (data.Length > 0)
+                {
+                    data.Append('\n');
+                }
+
+                data.Append(line.AsSpan(5).TrimStart());
+            }
+        }
+
+        if (data.Length > 0)
+        {
+            foreach (var update in reader.Handle(eventName, data.ToString()))
+            {
+                yield return update;
+            }
+        }
+
+        if (!reader.Stopped)
+        {
+            throw new IOException(StreamCutMessage);
+        }
+    }
+
+    /// <summary>What a stream that ended before <c>response.completed</c> says. Pinned.</summary>
+    public const string StreamCutMessage = "The OpenAI API stream ended before the reply did.";
+
+    /// <summary>The log line of the reasoning recovery. Pinned.</summary>
+    public const string ReasoningDroppedWarning = "The OpenAI API refused the reasoning sent back; retrying once without it.";
+
+    private async Task<HttpResponseMessage> SendAsync(byte[] body, Func<byte[]> withoutReasoning, CancellationToken cancellationToken)
+    {
+        bool retriedBusy = false;
+        bool stripped = false;
+        while (true)
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Post, _responsesUrl) { Content = new ByteArrayContent(body) };
+            request.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
+            OpenAIApi.AddHeaders(request, Endpoint.ApiKey, _organization, _project);
+            var response = await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
+            if (response.IsSuccessStatusCode)
+            {
+                return response;
+            }
+
+            int status = (int)response.StatusCode;
+            string text;
+            TimeSpan delay;
+            using (response)
+            {
+                text = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+                delay = AnthropicChatClient.RetryDelay(response);
+            }
+
+            if (!retriedBusy && IsRetryable(status, text))
+            {
+                retriedBusy = true;
+                DiagnosticLog.Warn(Category, $"The OpenAI API answered {status.ToString(CultureInfo.InvariantCulture)}; retrying once in {delay.TotalSeconds.ToString("0.#", CultureInfo.InvariantCulture)} s.");
+                await Task.Delay(delay, _time, cancellationToken).ConfigureAwait(false);
                 continue;
             }
 
-            var copy = message.Clone();
-            copy.Contents = kept;
-            copy.RawRepresentation = null;
-            yield return copy;
+            if (!stripped && IsReasoningRefusal(status, text))
+            {
+                byte[] plain = withoutReasoning();
+                if (!plain.AsSpan().SequenceEqual(body))
+                {
+                    DiagnosticLog.Warn(Category, ReasoningDroppedWarning);
+                    stripped = true;
+                    body = plain;
+                    continue;
+                }
+            }
+
+            throw new OpenAIApiException(status, ErrorCode(text), Assistant.ServerMessage(text));
         }
     }
 
-    /// <summary>
-    /// The cache write and the cost onto <paramref name="details"/>: the write from <c>prompt_tokens_details.cache_write_tokens</c>
-    /// (kept only when reported), the cost from <see cref="OpenAIPrice"/> for <paramref name="modelId"/> (none for a model the
-    /// table does not name).
-    /// </summary>
-    internal static void FillCost(UsageDetails details, ChatTokenUsage? raw, string? modelId)
+    /// <summary>429 (a rate limit, not a spent quota, which a retry cannot help), 500, 502 and 503: worth one more try.</summary>
+    internal static bool IsRetryable(int status, string body) =>
+        status is 500 or 502 or 503 || (status == 429 && !body.Contains("insufficient_quota", StringComparison.Ordinal));
+
+    /// <summary>A 400 whose message names the encrypted content or a reasoning item: the one the stripped retry answers.</summary>
+    internal static bool IsReasoningRefusal(int status, string body) =>
+        status == 400 && (body.Contains("encrypted", StringComparison.OrdinalIgnoreCase) || body.Contains("reasoning", StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>The <c>error.code</c> of an error body, else its <c>error.type</c>, else <c>error</c>.</summary>
+    private static string ErrorCode(string body)
     {
-        ArgumentNullException.ThrowIfNull(details);
-        long? cacheWrite = raw is null ? null : CacheWriteTokens(raw);
-        if (cacheWrite is { } written)
+        try
         {
-            (details.AdditionalCounts ??= [])[AnthropicStream.CacheWriteKey] = written;
+            using var document = System.Text.Json.JsonDocument.Parse(body);
+            if (document.RootElement.TryGetProperty("error"u8, out var error) && error.ValueKind == System.Text.Json.JsonValueKind.Object)
+            {
+                foreach (string name in new[] { "code", "type" })
+                {
+                    if (error.TryGetProperty(name, out var value) && value.ValueKind == System.Text.Json.JsonValueKind.String && value.GetString() is { Length: > 0 } word)
+                    {
+                        return word;
+                    }
+                }
+            }
+        }
+        catch (System.Text.Json.JsonException)
+        {
         }
 
-        if (OpenAIPrice.For(modelId) is { } price && details.InputTokenCount is not null)
-        {
-            decimal cost = price.Cost(details.InputTokenCount ?? 0, details.CachedInputTokenCount ?? 0, cacheWrite ?? 0, details.OutputTokenCount ?? 0);
-            (details.AdditionalCounts ??= [])[AnthropicStream.CostKey] = (long)Math.Round(cost * 1_000_000_000m);
-        }
-    }
-
-    /// <summary>
-    /// <c>usage.prompt_tokens_details.cache_write_tokens</c>, or null: the SDK keeps a field it does not model and writes it
-    /// back through its <see cref="IJsonModel{T}"/> contract (<see cref="OpenAICompatibleChatClient.TopLevelReasoningTokens"/>'s way).
-    /// </summary>
-    internal static long? CacheWriteTokens(ChatTokenUsage usage)
-    {
-        ArgumentNullException.ThrowIfNull(usage);
-        var buffer = new ArrayBufferWriter<byte>();
-        using (var writer = new Utf8JsonWriter(buffer))
-        {
-            ((IJsonModel<ChatTokenUsage>)usage).Write(writer, ModelReaderWriterOptions.Json);
-        }
-
-        using var document = JsonDocument.Parse(buffer.WrittenMemory);
-        return document.RootElement.TryGetProperty("prompt_tokens_details"u8, out var details)
-            && details.ValueKind == JsonValueKind.Object
-            && details.TryGetProperty("cache_write_tokens"u8, out var written)
-            && written.ValueKind == JsonValueKind.Number
-            && written.TryGetInt64(out long count)
-                ? count
-                : null;
+        return "error";
     }
 
     /// <inheritdoc/>
     public object? GetService(Type serviceType, object? serviceKey = null)
     {
         ArgumentNullException.ThrowIfNull(serviceType);
-        if (serviceKey is null && serviceType.IsInstanceOfType(this))
+        if (serviceKey is not null)
         {
-            return this;
+            return null;
         }
 
-        return _inner.GetService(serviceType, serviceKey);
+        if (serviceType == typeof(ChatClientMetadata))
+        {
+            return new ChatClientMetadata("openai", Endpoint.BaseUrl, Endpoint.ModelId);
+        }
+
+        return serviceType.IsInstanceOfType(this) ? this : null;
     }
 
     /// <inheritdoc/>
-    public void Dispose() => _inner.Dispose();
+    public void Dispose() => _ownedHttpClient?.Dispose();
 }

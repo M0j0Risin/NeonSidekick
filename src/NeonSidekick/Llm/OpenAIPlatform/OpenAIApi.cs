@@ -9,7 +9,8 @@ namespace NeonSidekick.Llm.OpenAIPlatform;
 /// <see cref="Anthropic.ClaudeApi"/>, the provider is told by the URL alone — a saved <see cref="AppSettingsData.LlmUrl"/>
 /// on <see cref="Host"/> is the OpenAI API — and its key is its own (<see cref="AppSettingsData.OpenAIApiKey"/>, DPAPI in
 /// the profile), never the <c>LLM API key</c> a local server gets nor the Claude API's (<see cref="ApiKeys.For"/>). Spoken
-/// to over Chat Completions, the wire every local server already speaks (<see cref="OpenAIApiChatClient"/>).
+/// to over the Responses API (<see cref="OpenAIApiChatClient"/>; Chat Completions for the first cut that day, until the live
+/// sweep found it refuses tools beside reasoning on GPT-5.4 and newer).
 /// </summary>
 public static class OpenAIApi
 {
@@ -27,6 +28,33 @@ public static class OpenAIApi
 
     /// <summary>The header naming the project a request is billed to (<see cref="AppSettingsData.OpenAIApiProject"/>).</summary>
     public const string ProjectHeader = "OpenAI-Project";
+
+    /// <summary><c>{v1}/responses</c>.</summary>
+    public static Uri ResponsesUrl(Uri v1Base)
+    {
+        ArgumentNullException.ThrowIfNull(v1Base);
+        return new Uri(v1Base.AbsoluteUri.TrimEnd('/') + "/responses");
+    }
+
+    /// <summary>The Bearer key and, when set, the organization and project headers on one request.</summary>
+    public static void AddHeaders(HttpRequestMessage request, string? apiKey, string? organization, string? project)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if (!string.IsNullOrWhiteSpace(apiKey))
+        {
+            request.Headers.TryAddWithoutValidation("Authorization", "Bearer " + apiKey.Trim());
+        }
+
+        if (!string.IsNullOrWhiteSpace(organization))
+        {
+            request.Headers.TryAddWithoutValidation(OrganizationHeader, organization.Trim());
+        }
+
+        if (!string.IsNullOrWhiteSpace(project))
+        {
+            request.Headers.TryAddWithoutValidation(ProjectHeader, project.Trim());
+        }
+    }
 
     /// <summary>Whether <paramref name="baseUrl"/> is the OpenAI API.</summary>
     public static bool IsOpenAIApi(Uri? baseUrl) =>

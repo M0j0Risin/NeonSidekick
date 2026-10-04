@@ -424,13 +424,13 @@ The Claude API and the Claude CLI as `/server` choices. `/claude` and `claude_ad
 
 #### OpenAI
 
-The OpenAI API as a `/server` choice, over Chat Completions.
+The OpenAI API as a `/server` choice, over the Responses API (stateless: nothing is stored on OpenAI's side).
 
 | Setting | What it does | Default |
 |---|---|---|
 | OpenAI API | Offers the OpenAI API on `/server` while a key is set. Off (or keyless) while it is the saved URL, the app scans as if the URL were blank. | off |
 | OpenAI API key | Your OpenAI key (`sk-…`), typed masked and saved encrypted (DPAPI). An empty entry clears it. | (none) |
-| OpenAI API max tokens | The output cap per request, reasoning included (`max_completion_tokens`). 0 sends none: the model's own limit. Else 1,024–128,000. | the model's own |
+| OpenAI API max tokens | The output cap per request, reasoning included (`max_output_tokens`). 0 sends none: the model's own limit. Else 1,024–128,000. | the model's own |
 | OpenAI API organization | The `OpenAI-Organization` header, for an account in several organizations. Empty sends none. | (none) |
 | OpenAI API project | The `OpenAI-Project` header. Empty sends none (a project key names its project already). | (none) |
 
@@ -438,8 +438,9 @@ The OpenAI API as a `/server` choice, over Chat Completions.
 
 * Every message is billed to the key's account. The key goes only to api.openai.com: never to a local server or the Claude API, and the *LLM API key* never goes to OpenAI. A saved `https://api.openai.com` URL now needs this switch and key.
 * Changing one of these settings reconnects when `/settings` closes.
-* *LLM reasoning* is sent as `reasoning_effort`, shaped per model: `none` is `minimal` on GPT-5 and `low` where a model has neither (o-series, GPT-6 Astra and Sol); `xhigh` is `high` before GPT-5.2; GPT-4.1 and GPT-4o get none. OpenAI streams no thinking text on Chat Completions, only its token count.
-* *LLM sampling* is not sent (the reasoning models refuse a temperature), nor are thinking blocks from earlier replies.
+* *LLM reasoning* is sent as `reasoning.effort`, shaped per model: `none` is `minimal` on GPT-5 and `low` where a model has neither (o-series, GPT-6 Astra and Sol); `xhigh` is `high` before GPT-5.2; GPT-4.1 and GPT-4o get none. The thinking shows as OpenAI's summary of it, and its encrypted form goes back within a tool loop, so the model keeps its reasoning across calls.
+* Every model takes tools at every level here; over Chat Completions, GPT-5.4 and newer refuse tools beside any reasoning, which is why this is the Responses API.
+* *LLM sampling* is not sent (the reasoning models refuse a temperature), nor is another server's thinking.
 * The context window comes from the app's model table (the model list names none); *LLM context length* overrides it. `/usage` adds *Cache* and *Cost* rows: an estimate at OpenAI's list prices of 2026-10-03, long-context prices past 272K prompt tokens, cache writes from GPT-5.6 on.
 
 #### LLM

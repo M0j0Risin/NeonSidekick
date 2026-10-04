@@ -61,9 +61,7 @@ public sealed class OpenAICompatibleChatClient : IChatClient
     /// <param name="requestTimeout">Per-request ceiling, already interlocked by <see cref="LlmTimeouts.Resolve"/>.</param>
     /// <param name="httpClient">Optional transport. Tests pass one over a stub handler; it stays the caller's to dispose.</param>
     /// <param name="reasoningEstimate">How a reasoning count the server did not report is estimated (<see cref="ReasoningEstimates"/>), read at each request; null estimates nothing.</param>
-    /// <param name="organization">The <c>OpenAI-Organization</c> header (2026-10-03, the OpenAI API's alone), or null for none.</param>
-    /// <param name="project">The <c>OpenAI-Project</c> header (2026-10-03, the OpenAI API's alone), or null for none.</param>
-    public OpenAICompatibleChatClient(LlmEndpoint endpoint, TimeSpan requestTimeout, HttpClient? httpClient = null, Func<ReasoningEstimate>? reasoningEstimate = null, string? organization = null, string? project = null)
+    public OpenAICompatibleChatClient(LlmEndpoint endpoint, TimeSpan requestTimeout, HttpClient? httpClient = null, Func<ReasoningEstimate>? reasoningEstimate = null)
     {
         ArgumentNullException.ThrowIfNull(endpoint);
         if (string.IsNullOrWhiteSpace(endpoint.ModelId))
@@ -93,8 +91,6 @@ public sealed class OpenAICompatibleChatClient : IChatClient
             // turn budget the ceiling exists to stay under. A transient failure surfaces as a
             // Notice and the user resends; that is cheaper than a silent five-minute stall.
             RetryPolicy = new ClientRetryPolicy(maxRetries: 0),
-            OrganizationId = string.IsNullOrWhiteSpace(organization) ? null : organization.Trim(),
-            ProjectId = string.IsNullOrWhiteSpace(project) ? null : project.Trim(),
         };
 
         if (httpClient is not null)
@@ -597,7 +593,7 @@ public sealed class OpenAICompatibleChatClient : IChatClient
     /// flight (after <see cref="ConversationHistory.InFlightStart"/>), or in any turn with <paramref name="preserveAll"/>,
     /// goes out as a clone whose <see cref="ChatMessage.RawRepresentation"/> is the SDK's own message built here with
     /// <c>reasoning_content</c> beside its text and calls: the adapter passes a raw message through as it is. A block
-    /// carrying <see cref="TextReasoningContent.ProtectedData"/> is the Claude API's and is not this wire's. Every other
+    /// carrying <see cref="TextReasoningContent.ProtectedData"/> is the Claude API's or the OpenAI API's and is not this wire's. Every other
     /// message is untouched, and the history's own messages are never changed.
     /// </summary>
     internal static IEnumerable<ChatMessage> WithReasoningBack(IEnumerable<ChatMessage> messages, bool preserveAll)

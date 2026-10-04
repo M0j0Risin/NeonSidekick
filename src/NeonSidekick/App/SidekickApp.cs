@@ -1958,7 +1958,7 @@ public sealed class SidekickApp
     /// The production chat client for <paramref name="endpoint"/> (2026-09-27): the Claude API's own client on its host
     /// (<see cref="Llm.Anthropic.ClaudeApi.IsClaudeApi(Uri?)"/>), with the output cap and caching the effective settings
     /// hold at the connect; the Claude CLI's (<see cref="Claude.ClaudeCliChatClient"/>, 2026-09-30) over this run's one
-    /// process on its sentinel; the OpenAI API's (<see cref="Llm.OpenAIPlatform.OpenAIApiChatClient"/>, 2026-10-03) on its host, with
+    /// process on its sentinel; the OpenAI API's (<see cref="Llm.OpenAIPlatform.OpenAIApiChatClient"/>, 2026-10-03, the Responses API) on its host, with
     /// the output cap, organization and project held at the connect; the OpenAI-compatible one everywhere else. Every connect and every <c>/botchat</c> link
     /// comes through here, so the provider is the URL's wherever it came from.
     /// </summary>
@@ -1978,7 +1978,7 @@ public sealed class SidekickApp
             var settings = EffectiveSettings;
             return new Llm.OpenAIPlatform.OpenAIApiChatClient(
                 endpoint, timeouts.Request, settings.OpenAIApiMaxTokens,
-                Llm.OpenAIPlatform.OpenAIApi.Organization(settings), Llm.OpenAIPlatform.OpenAIApi.Project(settings));
+                Llm.OpenAIPlatform.OpenAIApi.Organization(settings), Llm.OpenAIPlatform.OpenAIApi.Project(settings), time: _time);
         }
 
         if (!Llm.Anthropic.ClaudeApi.IsClaudeApi(endpoint.BaseUrl))

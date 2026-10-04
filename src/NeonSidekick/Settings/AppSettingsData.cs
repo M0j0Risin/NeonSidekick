@@ -2175,8 +2175,8 @@ public sealed class AppSettingsData
     /// Whether the OpenAI API is offered as a server (2026-10-03, the user's ask: OpenAI's own API as one more <c>/server</c>
     /// choice, the Claude API's twin, off by default — every message costs money on the key's account). Offered only while a
     /// key is set too (<see cref="Llm.OpenAIPlatform.OpenAIApi.Offered"/>): then <c>/server</c> and the startup picker list an
-    /// <c>OpenAI API</c> row, and picking it saves <see cref="Llm.OpenAIPlatform.OpenAIApi.BaseUrl"/> as the LLM URL. Spoken to over Chat
-    /// Completions (<see cref="Llm.OpenAIPlatform.OpenAIApiChatClient"/>). <c>/settings</c>' OpenAI tab's first row; a reconnect. Variable
+    /// <c>OpenAI API</c> row, and picking it saves <see cref="Llm.OpenAIPlatform.OpenAIApi.BaseUrl"/> as the LLM URL. Spoken to over the
+    /// Responses API (<see cref="Llm.OpenAIPlatform.OpenAIApiChatClient"/>). <c>/settings</c>' OpenAI tab's first row; a reconnect. Variable
     /// <see cref="EnvironmentOverrides.OpenAIApiVariable"/>.
     /// </summary>
     public bool OpenAIApi { get; set; }
@@ -2191,7 +2191,7 @@ public sealed class AppSettingsData
     public string OpenAIApiKey { get; set; } = "";
 
     /// <summary>
-    /// The <c>max_completion_tokens</c> every OpenAI API request carries (2026-10-03, the user's ask), reasoning counted inside
+    /// The <c>max_output_tokens</c> every OpenAI API request carries (2026-10-03, the user's ask), reasoning counted inside
     /// it; 0 (the default) sends none and the model's own ceiling applies. Else <see cref="MinOpenAIApiMaxTokens"/> to
     /// <see cref="MaxOpenAIApiMaxTokens"/>; a reply that reaches it stops short. A reconnect. No variable.
     /// </summary>

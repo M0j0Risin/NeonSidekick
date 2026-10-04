@@ -120,15 +120,18 @@ public class LiveOpenAIApiTests(ITestOutputHelper output)
         string model = CheapModels.First(listed.Contains);
         using var client = LiveOpenAIApi.Client(model, maxTokens: 1024);
 
-        var response = await client.GetResponseAsync([new ChatMessage(ChatRole.User, "Count from 1 to 5000, one number per line.")], new ChatOptions { Reasoning = new ReasoningOptions { Effort = ReasoningEffort.None } });
+        var response = await client.GetResponseAsync([new ChatMessage(ChatRole.User, "Write a 3000-word short story about a lighthouse keeper.")], new ChatOptions { Reasoning = new ReasoningOptions { Effort = ReasoningEffort.None } });
 
         Assert.True(response.Usage?.OutputTokenCount <= 1024, $"{response.Usage?.OutputTokenCount} tokens");
         Assert.Equal(ChatFinishReason.Length, response.FinishReason);
     }
 
-    /// <summary>Every listed chat model at the lowest and highest level: the rules' words are accepted (a 400 is the failure).</summary>
+    /// <summary>
+    /// Every listed chat model at no level, the lowest and the highest, with a tool offered as every turn offers them: the
+    /// rules' words are accepted (a 400 is the failure).
+    /// </summary>
     [LiveOpenAIApiSweepFact]
-    public async Task EveryListedModel_TakesItsReasoningWords()
+    public async Task EveryListedModel_TakesItsReasoningWords_WithTools()
     {
         var failures = new List<string>();
         foreach (string model in await LiveOpenAIApi.ModelsAsync())
@@ -138,7 +141,8 @@ public class LiveOpenAIApiTests(ITestOutputHelper output)
                 using var client = LiveOpenAIApi.Client(model, maxTokens: 1024);
                 try
                 {
-                    await client.GetResponseAsync([new ChatMessage(ChatRole.User, "Say hi.")], new ChatOptions { Reasoning = effort is { } level ? new ReasoningOptions { Effort = level } : null });
+                    var options = new ChatOptions { Tools = [new GetCurrentTimeTool(TimeProvider.System)], Reasoning = effort is { } level ? new ReasoningOptions { Effort = level } : null };
+                    await client.GetResponseAsync([new ChatMessage(ChatRole.User, "Say hi.")], options);
                     output.WriteLine($"ok   {model} {effort?.ToString() ?? "default"} → {OpenAIModelRules.For(model).EffortWord(effort) ?? "(none sent)"}");
                 }
                 catch (Exception ex)

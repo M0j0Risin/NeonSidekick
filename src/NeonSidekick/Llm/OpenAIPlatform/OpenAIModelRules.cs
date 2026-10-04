@@ -78,9 +78,10 @@ public sealed record OpenAIModelRules(bool Reasons, string? NoneWord, bool Suppo
     }
 
     /// <summary>
-    /// Whether <paramref name="modelId"/> answers Chat Completions, so <c>/server</c> and <c>/model</c> list it: the GPT and
+    /// Whether <paramref name="modelId"/> is a chat model the app can use, so <c>/server</c> and <c>/model</c> list it: the GPT and
     /// o-series text models, not the audio, realtime, speech, transcription, image, video, search, embedding, moderation or
-    /// legacy-completion ones, nor the <c>-pro</c> models (served by the Responses API alone) — the account's list holds them all.
+    /// legacy-completion ones, nor the <c>-pro</c> and <c>codex</c> models (left out of the live sweep of 2026-10-03: the first take minutes and many times the price per reply,
+    /// the second are coding-agent models), nor the retired <c>-chat-latest</c> ids and <c>gpt-live</c> the list still names — the account's list holds them all.
     /// </summary>
     public static bool IsChatModel(string? modelId)
     {
@@ -98,11 +99,12 @@ public sealed record OpenAIModelRules(bool Reasons, string? NoneWord, bool Suppo
             }
         }
 
-        return !id.EndsWith("-pro", StringComparison.Ordinal) && !id.Contains("-pro-", StringComparison.Ordinal);
+        return !id.EndsWith("-pro", StringComparison.Ordinal) && !id.Contains("-pro-", StringComparison.Ordinal)
+            && !id.EndsWith("-chat-latest", StringComparison.Ordinal);   // listed but retired: a 404 "deprecated" (the live sweep, 2026-10-03)
     }
 
     private static readonly string[] ExcludedWords =
-        ["audio", "realtime", "tts", "transcribe", "image", "dall-e", "whisper", "sora", "search", "embedding", "moderation", "instruct", "codex", "computer-use", "deep-research", "babbage", "davinci", "gpt-3.5"];
+        ["audio", "realtime", "gpt-live", "tts", "transcribe", "image", "dall-e", "whisper", "sora", "search", "embedding", "moderation", "instruct", "codex", "computer-use", "deep-research", "babbage", "davinci", "gpt-3.5"];
 
     /// <summary>
     /// The prompt a model takes, in tokens, for the context window the app compacts against (the API's <c>/v1/models</c> names
